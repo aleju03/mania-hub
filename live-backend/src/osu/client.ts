@@ -293,6 +293,10 @@ export class OsuApiClient {
     return this.getJson(`/beatmaps/${beatmapId}`, caller);
   }
 
+  async getBeatmapset(beatmapsetId: number, caller = "unknown"): Promise<Record<string, unknown>> {
+    return this.getJson(`/beatmapsets/${beatmapsetId}`, caller);
+  }
+
   async getBeatmapFile(beatmapId: number, caller = "unknown"): Promise<string> {
     const safeBeatmapId = Math.floor(beatmapId);
     if (!Number.isFinite(safeBeatmapId) || safeBeatmapId <= 0) throw new Error("Invalid beatmap ID");

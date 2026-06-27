@@ -37,6 +37,11 @@ export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | 
     activityScoreRefs: Number((await exec(db, "delete from player_activity_score_refs where day < ?", [activityCutoffDay])).rowsAffected ?? 0),
     activityMaps: Number((await exec(db, "delete from player_activity_maps where day < ?", [activityCutoffDay])).rowsAffected ?? 0),
     activityDays: Number((await exec(db, "delete from player_activity_days where day < ?", [activityCutoffDay])).rowsAffected ?? 0),
+    // Discord "last map in channel" memory is only useful while fresh, so 30d is
+    // plenty; stale rows just mean /pb asks the user to run /recent again.
+    discordChannelContext: Number((await exec(db, "delete from discord_channel_map_context where updated_at < ?", [daysAgo(30)])).rowsAffected ?? 0),
+    // Cached .osu files re-download cheaply when missing; 90d caps the table.
+    beatmapOsuFiles: Number((await exec(db, "delete from beatmap_osu_files where fetched_at < ?", [daysAgo(90)])).rowsAffected ?? 0),
   };
   const storageBefore = await getLocalDbStorage(config);
   const emergency = storageBefore.overLimit ? await pruneForLocalDbLimit(db, config, storageBefore) : {};

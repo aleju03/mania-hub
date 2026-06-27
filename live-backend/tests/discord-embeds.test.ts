@@ -14,7 +14,10 @@ import {
   meEmbed,
   newMapAlertEmbed,
   noticeBody,
+  pbEmbed,
   playerEmbed,
+  randomFarmEmbed,
+  randomFavEmbed,
   rankingsEmbed,
   recentScoresEmbed,
   replayEmbed,
@@ -23,12 +26,34 @@ import {
   topPlayEmbed,
   topPlaysListEmbed,
   trackerListEmbed,
-  watchListEmbed,
   whoamiEmbed,
 } from "../src/discord/embeds.js";
 import type { LeanTrackerScore } from "../src/shared/types.js";
+import { FLAG_IS_COMPONENTS_V2, toComponentsV2Body } from "../src/discord/components.js";
+import type { DiscordComponent, DiscordMessageBody } from "../src/discord/rest.js";
 
 const SITE = "https://mania-tracker.com";
+
+// Mirrors the converter's own component-count accounting so the test verifies the
+// real V2 payload stays inside Discord's structural caps.
+function countV2(component: DiscordComponent): number {
+  let count = 1;
+  for (const child of component.components ?? []) count += countV2(child);
+  if (component.accessory) count += countV2(component.accessory);
+  for (const item of component.items ?? []) {
+    if (item.media?.url) count += 1;
+  }
+  return count;
+}
+function v2Text(components: DiscordComponent[] | undefined): string {
+  let text = "";
+  for (const component of components ?? []) {
+    if (typeof component.content === "string") text += component.content;
+    if (component.components) text += v2Text(component.components);
+    if (component.accessory) text += v2Text([component.accessory]);
+  }
+  return text;
+}
 
 function makeScore(overrides: Partial<OscScore> = {}): OscScore {
   return {
@@ -184,16 +209,30 @@ describe("discord embeds", () => {
   });
 
   it("renders dan estimate states and attaches an emblem", () => {
-    const ready = danEmbed(99, { displayName: "10th Dan", label: "10", family: "jack", confidence: 0.8 }, false, SITE).embeds?.[0];
+    const map = { id: 99, url: "https://osu.ppy.sh/b/99", title: "Test Artist - Test Song", version: "Insane" };
+    const ready = danEmbed(map, { displayName: "10th Dan", label: "10", family: "jack", confidence: 0.8 }, false, SITE).embeds?.[0];
     expect(ready?.description).toContain("10th Dan");
     expect(ready?.description).toContain("Jack");
+    // The map name becomes the embed title and links to the canonical URL.
+    expect(ready?.title).toContain("Test Song");
+    expect(ready?.url).toBe("https://osu.ppy.sh/b/99");
     // svg emblem (numeric dan) is rasterized through the og route.
     expect(ready?.thumbnail?.url).toContain("kind=dan-emblem");
     // webp emblem (greek dan) links straight to the asset.
-    const greek = danEmbed(99, { displayName: "Gamma Dan", label: "gamma", family: "jack", confidence: 0.8 }, false, SITE).embeds?.[0];
+    const greek = danEmbed(map, { displayName: "Gamma Dan", label: "gamma", family: "jack", confidence: 0.8 }, false, SITE).embeds?.[0];
     expect(greek?.thumbnail?.url).toContain("/images/dans/reform/gamma.webp");
-    expect(danEmbed(99, null, true, SITE).embeds?.[0]?.description).toContain("Estimating");
-    expect(danEmbed(99, null, false, SITE).embeds?.[0]?.description).toContain("No dan estimate");
+    expect(danEmbed(map, null, true, SITE).embeds?.[0]?.description).toContain("Estimating");
+    expect(danEmbed(map, null, false, SITE).embeds?.[0]?.description).toContain("No dan estimate");
+  });
+
+  it("renders a personal best on the last map, and a no-score fallback", () => {
+    const beatmap = { id: 99, title: "Test Artist - Test Song", version: "Insane" };
+    const withScore = pbEmbed({ username: "Tester", userId: 42, beatmap, score: makeScore(), siteOrigin: SITE }).embeds?.[0];
+    expect(withScore?.title).toContain("Test Song");
+    expect(withScore?.description).toContain("612pp");
+    expect(withScore?.description).toContain("97.65%");
+    const none = pbEmbed({ username: "Tester", userId: 42, beatmap, score: null, siteOrigin: SITE }).embeds?.[0];
+    expect(none?.description).toContain("no score");
   });
 
   it("does not throw on missing optional score fields", () => {
@@ -222,8 +261,10 @@ describe("discord embeds", () => {
       rankingsEmbed([{ rank: 1, user: { id: 1, username: "A", country_code: "US" }, pp: 9000 }], "GLOBAL", SITE),
       farmEmbed(farmSnapshot, SITE),
       compareEmbed(profile("A"), profile("B"), SITE),
-      danEmbed(99, { displayName: "10th Dan", label: "10", family: "jack", confidence: 0.8 }, false, SITE),
+      danEmbed({ id: 99, url: "https://osu.ppy.sh/b/99", title: "Test Artist - Test Song", version: "Insane" }, { displayName: "10th Dan", label: "10", family: "jack", confidence: 0.8 }, false, SITE),
+      pbEmbed({ username: "Tester", userId: 42, beatmap: { id: 99, title: "Test Artist - Test Song", version: "Insane" }, score: makeScore(), siteOrigin: SITE }),
       helpEmbed(SITE),
+      helpEmbed(SITE, "players"),
       errorBody("oops"),
       noticeBody("hi"),
     ];
@@ -304,11 +345,23 @@ describe("newer surface embeds", () => {
     trackerListEmbed([leanScore], "CR", SITE),
     mapsListEmbed({ farmed, popular, tab: "farmed", country: "CR", keys: "4k", siteOrigin: SITE }),
     mapsListEmbed({ farmed, popular, tab: "popular", country: "GLOBAL", keys: "", siteOrigin: SITE }),
+    randomFarmEmbed(
+      { beatmapId: 501, version: "4K Another", difficultyRating: 6.2, cs: 4, bpm: 200, status: "ranked", title: "Blue Zenith", artist: "xi", creator: "Mapper", covers: { cover: "https://img/cover.jpg" }, playerCount: 12, avgPp: 700, maxPp: 850, dominantMod: "DT" },
+      "GLOBAL",
+      SITE,
+    ),
+    randomFavEmbed(
+      { id: 9001, title: "Blue Zenith", artist: "xi", creator: "Mapper", status: "loved", covers: { cover: "https://img/cover.jpg" }, maniaKeys: [4, 7], starMin: 5.2, starMax: 6.4, bpm: 200, patterns: ["jack", "chordjack"], globalFavouriteCount: 4200 },
+      "Kalkai",
+      3,
+      "CR",
+      SITE,
+    ),
     beatmapEmbed(beatmap, { displayName: "10th Dan", label: "10", family: "jack" }, SITE),
     replayEmbed(123456, SITE),
     newMapAlertEmbed({ beatmapId: 501, beatmapsetId: 9001, title: "Blue Zenith", artist: "xi", version: "4K Another", difficultyRating: 6.2, cs: 4, coverUrl: "https://img/c.jpg", rankedAtMs: Date.parse("2026-06-20T00:00:00Z") }, SITE),
     whoamiEmbed({ osuUsername: "Kalkai", osuUserId: 42, countryCode: "KR" }, SITE),
-    watchListEmbed([{ kind: "user", targetUsername: "Jakads", minPp: 500 }, { kind: "maps", targetUsername: null, minPp: 0 }]),
+    pbEmbed({ username: "Kalkai", userId: 42, beatmap: { id: 501, title: "xi - Blue Zenith", version: "4K Another" }, score: leanScore as unknown as OscScore, siteOrigin: SITE }),
   ];
 
   it("each produces at least one embed", () => {
@@ -338,5 +391,55 @@ describe("newer surface embeds", () => {
     const description = body.embeds?.[0]?.description ?? "";
     expect(description).toContain("Stream");
     expect(description.indexOf("Stream")).toBeLessThan(description.indexOf("LN"));
+  });
+
+  // The bot ships every message through toComponentsV2Body at the REST layer, so
+  // each real surface must produce a valid Components V2 payload: the flag set,
+  // legacy fields cleared, and inside Discord's structural and text caps.
+  it("converts every surface to a valid components v2 payload", () => {
+    for (const body of bodies as DiscordMessageBody[]) {
+      const v2 = toComponentsV2Body(body, { clearLegacy: true });
+      expect((v2.flags ?? 0) & FLAG_IS_COMPONENTS_V2).toBe(FLAG_IS_COMPONENTS_V2);
+      expect(v2.content).toBeNull();
+      expect(v2.embeds).toBeNull();
+      expect((v2.components ?? []).length).toBeGreaterThan(0);
+      const total = (v2.components ?? []).reduce((sum, component) => sum + countV2(component), 0);
+      expect(total).toBeLessThanOrEqual(40);
+      expect(v2Text(v2.components).length).toBeLessThanOrEqual(4000);
+    }
+  });
+
+  it("keeps converted sections and containers within Discord's structural rules", () => {
+    for (const body of bodies as DiscordMessageBody[]) {
+      const v2 = toComponentsV2Body(body, { clearLegacy: true });
+      const all: DiscordComponent[] = [];
+      const visit = (component: DiscordComponent): void => {
+        all.push(component);
+        for (const child of component.components ?? []) visit(child);
+        if (component.accessory) visit(component.accessory);
+      };
+      for (const component of v2.components ?? []) visit(component);
+      for (const component of all) {
+        if (component.type === 9) {
+          const texts = (component.components ?? []).filter((child) => child.type === 10);
+          expect(texts.length).toBeGreaterThanOrEqual(1);
+          expect(texts.length).toBeLessThanOrEqual(3);
+          expect(component.accessory).toBeTruthy();
+          expect([2, 11]).toContain(component.accessory?.type);
+        }
+        if (component.type === 17) {
+          expect((component.components ?? []).length).toBeLessThanOrEqual(10);
+          expect((component.components ?? []).some((child) => child.type === 17)).toBe(false);
+        }
+      }
+    }
+  });
+
+  it("converted payloads contain no emojis or em dashes", () => {
+    const forbidden = /[\u{1F300}-\u{1FAFF}\u{1F1E6}-\u{1F1FF}✅❌⚠]|—|▸/u;
+    for (const body of bodies as DiscordMessageBody[]) {
+      const v2 = toComponentsV2Body(body, { clearLegacy: true });
+      expect(JSON.stringify(v2.components)).not.toMatch(forbidden);
+    }
   });
 });

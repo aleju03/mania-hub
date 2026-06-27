@@ -124,6 +124,11 @@ function topPlayPayload(options: {
   ppGain: number;
   time: string;
   keys: number;
+  title?: string;
+  artist?: string;
+  version?: string;
+  accuracy?: number;
+  mods?: Array<{ acronym: string }>;
 }): string {
   return JSON.stringify({
     user: { id: options.userId, username: options.username, avatar_url: "", country_code: options.country },
@@ -131,9 +136,16 @@ function topPlayPayload(options: {
       id: options.scoreId,
       user_id: options.userId,
       pp: options.pp,
-      mods: [],
-      beatmap: { id: options.scoreId, beatmapset_id: options.scoreId, cs: options.keys, mode: "mania", version: `${options.keys}K` },
-      beatmapset: { id: options.scoreId, title: "Test Map", artist: "Test", covers: {} },
+      accuracy: options.accuracy ?? 0.98,
+      score: 1_000_000,
+      max_combo: 1000,
+      passed: true,
+      rank: "S",
+      statistics: {},
+      mods: options.mods ?? [],
+      beatmap: { id: options.scoreId, beatmapset_id: options.scoreId, cs: options.keys, mode: "mania", version: options.version ?? `${options.keys}K` },
+      beatmapset: { id: options.scoreId, title: options.title ?? "Test Map", artist: options.artist ?? "Test", covers: {} },
+      ended_at: options.time,
     },
     pp: options.pp,
     weightedPP: options.pp * 0.95,
@@ -294,6 +306,94 @@ describe("live backend", () => {
     expect(topFirst.items.map((play) => Math.round(play.score.pp ?? 0))).toEqual([300, 299]);
     expect(topSecond.total).toBe(3);
     expect(topSecond.items.map((play) => Math.round(play.score.pp ?? 0))).toEqual([298]);
+  });
+
+  it("searches, filters, and sorts my data feeds", async () => {
+    const { db, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    const base = scores[0];
+    const plays = [
+      { id: 9700, title: "Alpha Song", artist: "First Artist", version: "Calm 4K", keys: 4, pp: 250, accuracy: 0.975, mods: [], stars: 5.1 },
+      { id: 9701, title: "Beta Burst", artist: "Second Artist", version: "Sharp 7K", keys: 7, pp: 305, accuracy: 0.965, mods: [{ acronym: "DT" }], stars: 6.4 },
+      { id: 9702, title: "Gamma Fade", artist: "Third Artist", version: "Clean 4K", keys: 4, pp: 180, accuracy: 0.991, mods: [], stars: 4.8 },
+    ].map((play, index) => ({
+      ...base,
+      id: play.id,
+      beatmap_id: 570 + index,
+      pp: play.pp,
+      accuracy: play.accuracy,
+      mods: play.mods,
+      created_at: `2026-05-12T00:0${index}:00.000Z`,
+      ended_at: `2026-05-12T00:0${index}:30.000Z`,
+      beatmap: {
+        ...(base.beatmap ?? {}),
+        id: 570 + index,
+        beatmapset_id: 670 + index,
+        cs: play.keys,
+        difficulty_rating: play.stars,
+        mode: "mania",
+        status: "ranked",
+        bpm: 180,
+        max_combo: 1200,
+        version: play.version,
+        url: `https://osu.ppy.sh/beatmaps/${570 + index}`,
+      },
+      beatmapset: {
+        ...(base.beatmapset ?? {}),
+        id: 670 + index,
+        title: play.title,
+        artist: play.artist,
+        covers: base.beatmapset?.covers ?? {},
+      },
+    }));
+    await ingestor.ingestBatch(plays);
+
+    const betaTracked = await getUserTrackedFeed(db, 101, 10, 0, { search: "beta" });
+    expect(betaTracked.total).toBe(1);
+    expect(betaTracked.items[0].beatmapset.title).toBe("Beta Burst");
+    expect((await getUserTrackedFeed(db, 101, 10, 0, { key: 7 })).items.map((score) => score.id)).toEqual([9701]);
+    expect((await getUserTrackedFeed(db, 101, 10, 0, { mods: "modded" })).items.map((score) => score.id)).toEqual([9701]);
+    expect((await getUserTrackedFeed(db, 101, 10, 0, { sort: "pp_desc" })).items.map((score) => score.id)).toEqual([9701, 9700, 9702]);
+    expect((await getUserTrackedFeed(db, 101, 10, 0, { sort: "accuracy_desc" })).items.map((score) => score.id)).toEqual([9702, 9700, 9701]);
+
+    const topRows = [
+      { id: 9800, title: "Alpha Top", pp: 310, ppGain: 5, keys: 4, accuracy: 0.97, mods: [] },
+      { id: 9801, title: "Beta Top", pp: 260, ppGain: 35, keys: 7, accuracy: 0.995, mods: [{ acronym: "DT" }] },
+      { id: 9802, title: "Gamma Top", pp: 285, ppGain: 12, keys: 4, accuracy: 0.985, mods: [] },
+    ];
+    for (const [index, row] of topRows.entries()) {
+      await exec(
+        db,
+        `insert into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at)
+         values ('CR', ?, 101, ?, ?, ?, ?, ?)`,
+        [
+          row.id,
+          row.pp,
+          row.pp * 0.95,
+          row.ppGain,
+          topPlayPayload({
+            scoreId: row.id,
+            userId: 101,
+            username: "Tester",
+            country: "CR",
+            pp: row.pp,
+            ppGain: row.ppGain,
+            time: `2026-05-12T00:1${index}:00.000Z`,
+            keys: row.keys,
+            title: row.title,
+            accuracy: row.accuracy,
+            mods: row.mods,
+          }),
+          `2026-05-12T00:1${index}:00.000Z`,
+        ],
+      );
+    }
+
+    expect((await getUserTopPlaysFeed(db, 101, 10, 0, { search: "beta" })).items.map((play) => play.score.beatmapset.title)).toEqual(["Beta Top"]);
+    expect((await getUserTopPlaysFeed(db, 101, 10, 0, { key: 7 })).items.map((play) => play.score.id)).toEqual([9801]);
+    expect((await getUserTopPlaysFeed(db, 101, 10, 0, { mods: "modded" })).items.map((play) => play.score.id)).toEqual([9801]);
+    expect((await getUserTopPlaysFeed(db, 101, 10, 0, { sort: "gain_desc" })).items.map((play) => play.score.id)).toEqual([9801, 9802, 9800]);
+    expect((await getUserTopPlaysFeed(db, 101, 10, 0, { sort: "accuracy_desc" })).items.map((play) => play.score.id)).toEqual([9801, 9802, 9800]);
   });
 
   it("keeps archived activity refs in the my data tracked feed after raw score retention", async () => {

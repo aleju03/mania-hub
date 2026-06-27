@@ -694,7 +694,8 @@ async function migrateTrackerIndexes(db: Db): Promise<void> {
 async function migrateUserGoals(db: Db): Promise<void> {
   // Per-player goals that auto-complete from the ingest pipeline. Timestamps are epoch ms
   // (matching the pack tables); status is 'open' | 'completed'. beatmap_id scopes map goals,
-  // target_value carries pp / accuracy fraction, target_grade carries S/SS-style targets.
+  // target_value carries pp / accuracy fraction, target_count carries count goals, target_grade
+  // carries S/SS-style targets or the rank scope.
   await db.execute(`
     create table if not exists user_goals (
       id text primary key,
@@ -705,6 +706,7 @@ async function migrateUserGoals(db: Db): Promise<void> {
       beatmapset_id integer,
       beatmap_label text,
       target_value real,
+      target_count integer,
       target_grade text,
       note text,
       status text not null default 'open',
@@ -719,6 +721,21 @@ async function migrateUserGoals(db: Db): Promise<void> {
   const goalColumns = (await db.execute("pragma table_info(user_goals)")).rows.map((row) => String(row.name));
   if (!goalColumns.includes("beatmapset_id")) {
     await db.execute("alter table user_goals add column beatmapset_id integer");
+  }
+  if (!goalColumns.includes("target_count")) {
+    await db.execute("alter table user_goals add column target_count integer");
+  }
+  if (!goalColumns.includes("start_value")) {
+    // Baseline captured when a numeric-target goal is set, so its progress bar measures the climb
+    // from there (a "reach 15.5k" goal made at 15.1k starts near 0, not 97%). Backfill existing
+    // open pp goals from the player's current totals; map-accuracy baselines fill in on recreate.
+    await db.execute("alter table user_goals add column start_value real");
+    await db.execute(
+      "update user_goals set start_value = (select pp from users where users.user_id = user_goals.user_id) where status = 'open' and kind = 'reach_pp' and start_value is null",
+    );
+    await db.execute(
+      "update user_goals set start_value = (select max(pp) from user_top_scores where user_top_scores.user_id = user_goals.user_id) where status = 'open' and kind = 'play_pp' and start_value is null",
+    );
   }
   await db.execute(`
     create index if not exists idx_user_goals_user_status

@@ -30,9 +30,6 @@ interface DiscordStatus {
   recentInteractions?: Array<{ command: string; userId: string | null; guildId: string | null; at: number }>;
   commandCounts?: Record<string, number>;
   errorCount?: number;
-  alertsDelivered?: number;
-  dmFailures?: number;
-  trackedPlayers?: number;
 }
 
 interface DiscordSubscription {
@@ -46,20 +43,9 @@ interface DiscordSubscription {
   createdAt: string;
 }
 
-interface DiscordTracker {
-  id: number;
-  subscriberId: string;
-  kind: string;
-  targetOsuUserId: number;
-  targetUsername: string | null;
-  minPp: number;
-  createdAt: string;
-}
-
 interface DiscordAdminPayload {
   discord: DiscordStatus;
   subscriptions: DiscordSubscription[];
-  trackers?: DiscordTracker[];
   linkCount?: number;
 }
 
@@ -133,7 +119,6 @@ function DiscordAdminPage() {
 
   const status = data?.discord;
   const subscriptions = data?.subscriptions ?? [];
-  const trackers = data?.trackers ?? [];
 
   const [guilds, setGuilds] = useState<DiscordGuild[] | null>(null);
   const [guildsLoading, setGuildsLoading] = useState(false);
@@ -209,41 +194,57 @@ function DiscordAdminPage() {
           </section>
         ) : (
           <>
+            {/* Health: is the bot wired up and live, at a glance. */}
             <section className="rounded-xl border border-osu-b3/30 bg-osu-b4 p-4">
-              <h3 className="text-[12px] font-semibold text-white">Status</h3>
-              <p className="mb-2 text-[11px] text-osu-l3">How the bot is configured on the backend right now.</p>
-              <div className="text-[12px]">
-                <StatusRow label="Configured" hint="Application ID and public key are set, so Discord can reach the bot." value={<Pill ok={status.configured} />} />
-                <StatusRow label="Bot token" hint="The secret that lets the backend register commands and post feed messages." value={<Pill ok={status.hasBotToken} okText="present" badText="missing" />} />
-                <StatusRow label="Feeds" hint="Whether new top plays and snipes get auto-posted to subscribed channels." value={<Pill ok={status.feedsEnabled} okText="on" badText="off" />} />
-                <StatusRow label="Commands" hint="Number of slash commands the bot defines." value={<span className="text-osu-l2">{status.commandCount ?? 0}</span>} />
-                <StatusRow label="Application ID" hint="Your bot's public id (the one in the invite link)." value={<span className="font-mono text-[11px] text-osu-l2">{status.applicationId ?? "-"}</span>} />
-                <StatusRow label="Dev guild" hint="If set, commands register to just that one server, instantly. Empty = global (all servers, up to ~1h to appear)." value={<span className="font-mono text-[11px] text-osu-l2">{status.devGuildId ?? "-"}</span>} />
-                <StatusRow label="Linked accounts" hint="Players who ran /link to tie their osu! account to their Discord user." value={<span className="text-osu-l2">{data?.linkCount ?? 0}</span>} />
-                <StatusRow label="Tracked players" hint="Distinct osu! players currently watched by a personal /watch alert." value={<span className="text-osu-l2">{status.trackedPlayers ?? 0}</span>} />
-                <StatusRow label="Alerts delivered" hint="Personal DM and new-map alerts sent since the backend started." value={<span className="text-osu-l2">{status.alertsDelivered ?? 0}</span>} />
-                <StatusRow label="DM failures" hint="DM sends that failed for reasons other than closed DMs (those self-heal)." value={<span className="text-osu-l2">{status.dmFailures ?? 0}</span>} />
-                <StatusRow label="Handler errors" hint="Commands that threw while building a reply since startup." value={<span className="text-osu-l2">{status.errorCount ?? 0}</span>} />
+              <h3 className="mb-3 text-[12px] font-semibold text-white">Health</h3>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <HealthPill label="Reachable" ok={status.configured} okText="Configured" badText="Not configured" hint="Application ID and public key are set, so Discord can reach the bot." />
+                <HealthPill label="Bot token" ok={status.hasBotToken} okText="Present" badText="Missing" hint="The secret that lets the backend register commands and post feed messages." />
+                <HealthPill label="Live feeds" ok={status.feedsEnabled} okText="On" badText="Off" hint="Whether new top plays, snipes and farm maps auto-post to subscribed channels." />
               </div>
+            </section>
 
-              <div className="mt-4 rounded-lg border border-osu-b3/30 bg-osu-b5/60 p-3">
-                <button
-                  type="button"
-                  onClick={() => void registerCommands()}
-                  disabled={busy || !status.hasBotToken}
-                  className="rounded-lg bg-osu-pink/90 px-3.5 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-osu-pink disabled:opacity-50"
-                >
-                  Register commands
-                </button>
-                <p className="mt-2 text-[11px] leading-relaxed text-osu-l3">
-                  Pushes the {status.commandCount ?? 0} slash commands to Discord so they show up when users type{" "}
+            {/* At a glance: the numbers that say what the bot is doing. */}
+            <section className="rounded-xl border border-osu-b3/30 bg-osu-b4 p-4">
+              <h3 className="mb-3 text-[12px] font-semibold text-white">At a glance</h3>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                <Metric label="Commands" value={status.commandCount ?? 0} hint="Slash commands the bot defines." />
+                <Metric label="Servers" value={guilds ? guilds.length : "-"} hint="Discord servers the bot is in (loaded live, see below)." />
+                <Metric label="Linked accounts" value={data?.linkCount ?? 0} hint="Players who ran /link to tie their osu! account to their Discord user." />
+                <Metric label="Feed subscriptions" value={subscriptions.length} hint="Channels receiving a live feed via /subscribe." />
+                <Metric label="Handler errors" value={status.errorCount ?? 0} tone={(status.errorCount ?? 0) > 0 ? "bad" : "default"} hint="Commands that threw while building a reply since startup." />
+              </div>
+            </section>
+
+            {/* Configuration plus the one action that uses it. */}
+            <section className="rounded-xl border border-osu-b3/30 bg-osu-b4 p-4">
+              <h3 className="mb-3 text-[12px] font-semibold text-white">Configuration</h3>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <ConfigRow label="Application ID" value={status.applicationId ?? "-"} hint="Your bot's public id (the one in the invite link)." />
+                <ConfigRow
+                  label="Command scope"
+                  value={status.devGuildId ? `Dev guild ${status.devGuildId}` : "Global (all servers)"}
+                  hint={status.devGuildId ? "Commands register to this one server, instantly." : "Commands register to every server; new ones take up to ~1h to appear."}
+                />
+              </div>
+              <div className="mt-3 flex flex-col gap-3 border-t border-osu-b3/20 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="order-2 text-[11px] leading-relaxed text-osu-l3 sm:order-1 sm:max-w-[640px]">
+                  Pushes the {status.commandCount ?? 0} slash commands to Discord so they appear when users type{" "}
                   <code className="text-osu-pink-light">/</code>. Only needed after you add, rename or remove a command.{" "}
                   {!status.hasBotToken
                     ? "Set DISCORD_BOT_TOKEN on the backend first."
                     : status.devGuildId
-                      ? "Registers to your dev guild, so changes appear instantly in that server."
-                      : "Registering globally, so new or changed commands can take up to ~1h to appear. Set DISCORD_DEV_GUILD_ID for instant updates while testing."}
+                      ? "Registers to your dev guild, so changes appear instantly there."
+                      : "Registers globally, so changes can take up to ~1h. Set DISCORD_DEV_GUILD_ID for instant updates while testing."}
                 </p>
+                <button
+                  type="button"
+                  onClick={() => void registerCommands()}
+                  disabled={busy || !status.hasBotToken}
+                  className="order-1 shrink-0 rounded-lg bg-osu-pink/90 px-3.5 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-osu-pink disabled:opacity-50 sm:order-2"
+                >
+                  Register commands
+                </button>
               </div>
             </section>
 
@@ -345,42 +346,6 @@ function DiscordAdminPage() {
               )}
             </section>
 
-            <section className="rounded-xl border border-osu-b3/30 bg-osu-b4 p-4">
-              <h3 className="text-[12px] font-semibold text-white">
-                Personal alerts <span className="text-osu-l3">({trackers.length})</span>
-              </h3>
-              <p className="mb-3 text-[11px] text-osu-l3">
-                DM alerts users set up for themselves with <code className="text-osu-pink-light">/watch</code>: a specific player's
-                plays, or new farm maps. Delivered to the user's DMs, not a channel.
-              </p>
-              {trackers.length === 0 ? (
-                <p className="text-[12px] text-osu-l3">No one has set up a personal alert yet.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-[12px]">
-                    <thead className="text-[10px] uppercase tracking-wide text-osu-l3">
-                      <tr>
-                        <th className="py-1 pr-3 font-semibold">Kind</th>
-                        <th className="py-1 pr-3 font-semibold">Target</th>
-                        <th className="py-1 pr-3 font-semibold">Min pp</th>
-                        <th className="py-1 pr-3 font-semibold">Subscriber</th>
-                      </tr>
-                    </thead>
-                    <tbody className="text-osu-l2">
-                      {trackers.map((t) => (
-                        <tr key={t.id} className="border-t border-osu-b3/20">
-                          <td className="py-1.5 pr-3">{t.kind === "maps" ? "New maps" : "Player"}</td>
-                          <td className="py-1.5 pr-3">{t.kind === "maps" ? "-" : t.targetUsername ?? String(t.targetOsuUserId)}</td>
-                          <td className="py-1.5 pr-3">{t.minPp > 0 ? t.minPp : "-"}</td>
-                          <td className="py-1.5 pr-3 font-mono text-[11px] text-osu-l3">{t.subscriberId}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
-
             {status.commandCounts && Object.keys(status.commandCounts).length > 0 ? (
               <section className="rounded-xl border border-osu-b3/30 bg-osu-b4 p-4">
                 <h3 className="text-[12px] font-semibold text-white">Command usage</h3>
@@ -419,22 +384,38 @@ function DiscordAdminPage() {
   );
 }
 
-function StatusRow({ label, hint, value }: { label: string; hint?: string; value: React.ReactNode }) {
+// A single health indicator: a colored dot plus its current state. Hovering the
+// tile shows the longer explanation, keeping the strip scannable.
+function HealthPill({ label, ok, okText, badText, hint }: { label: string; ok?: boolean; okText: string; badText: string; hint?: string }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-osu-b3/15 py-2 last:border-0">
+    <div className="flex items-center gap-2.5 rounded-lg border border-osu-b3/25 bg-osu-b5/50 px-3 py-2.5" title={hint}>
+      <span className={`h-2 w-2 shrink-0 rounded-full ${ok ? "bg-emerald-400" : "bg-osu-l3/60"}`} />
       <div className="min-w-0">
-        <div className="text-osu-l2">{label}</div>
-        {hint ? <div className="mt-0.5 text-[10px] leading-snug text-osu-l3">{hint}</div> : null}
+        <div className="text-[11px] text-osu-l3">{label}</div>
+        <div className={`text-[12px] font-semibold ${ok ? "text-emerald-300" : "text-osu-l3"}`}>{ok ? okText : badText}</div>
       </div>
-      <div className="shrink-0 pt-0.5">{value}</div>
     </div>
   );
 }
 
-function Pill({ ok, okText = "yes", badText = "no" }: { ok?: boolean; okText?: string; badText?: string }) {
+// A big-number stat tile. tone colors a value that wants attention (e.g. handler
+// errors) once it climbs above zero.
+function Metric({ label, value, hint, tone = "default" }: { label: string; value: React.ReactNode; hint?: string; tone?: "default" | "warn" | "bad" }) {
+  const toneClass = tone === "bad" ? "text-rose-300" : tone === "warn" ? "text-amber-300" : "text-white";
   return (
-    <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${ok ? "bg-emerald-500/15 text-emerald-300" : "bg-osu-b3/60 text-osu-l3"}`}>
-      {ok ? okText : badText}
-    </span>
+    <div className="rounded-lg border border-osu-b3/25 bg-osu-b5/50 px-3 py-2.5" title={hint}>
+      <div className={`text-[20px] font-bold leading-none tabular-nums ${toneClass}`}>{value}</div>
+      <div className="mt-1.5 text-[11px] text-osu-l3">{label}</div>
+    </div>
+  );
+}
+
+// A labelled config value (monospace, wraps long ids). Hint on hover.
+function ConfigRow({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="rounded-lg border border-osu-b3/25 bg-osu-b5/50 px-3 py-2" title={hint}>
+      <div className="text-[10px] uppercase tracking-wide text-osu-l3">{label}</div>
+      <div className="mt-0.5 break-all font-mono text-[11px] text-osu-l2">{value}</div>
+    </div>
   );
 }

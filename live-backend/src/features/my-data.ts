@@ -22,6 +22,26 @@ export interface MyDataPage<T> {
   offset: number;
 }
 
+export type MyDataModFilter = "all" | "nomod" | "modded";
+export type MyDataArchiveFilter = "all" | "current" | "archived";
+export type MyDataTrackedSort = "recent_desc" | "recent_asc" | "pp_desc" | "accuracy_desc" | "stars_desc";
+export type MyDataTopPlaySort = "pp_desc" | "pp_asc" | "recent_desc" | "recent_asc" | "gain_desc" | "accuracy_desc";
+
+export interface MyDataTrackedFeedQuery {
+  search?: string | null;
+  key?: string | number | null;
+  mods?: string | null;
+  archive?: string | null;
+  sort?: string | null;
+}
+
+export interface MyDataTopPlaysQuery {
+  search?: string | null;
+  key?: string | number | null;
+  mods?: string | null;
+  sort?: string | null;
+}
+
 // "My Data": a logged-in player's personal dashboard. The page renders a tracker-style feed of
 // their own tracked plays plus insight panels; this module supplies the cross-cutting aggregates
 // that aren't on an osu! profile - personal records, a play-rhythm clock, a mods fingerprint - and
@@ -374,14 +394,121 @@ export async function getMyDataSummary(db: Db, userId: number): Promise<MyDataSu
   return summary;
 }
 
+type SqlArg = string | number;
+
+function normalizeSearch(value: string | null | undefined): string | null {
+  const search = value?.trim().slice(0, 80).toLowerCase();
+  return search ? search : null;
+}
+
+function normalizeKeyFilter(value: string | number | null | undefined): number | null {
+  if (value == null || value === "all") return null;
+  const key = Number(value);
+  return Number.isInteger(key) && key >= 1 && key <= 18 ? key : null;
+}
+
+function normalizeModFilter(value: string | null | undefined): MyDataModFilter | null {
+  return value === "nomod" || value === "modded" ? value : null;
+}
+
+function normalizeArchiveFilter(value: string | null | undefined): MyDataArchiveFilter | null {
+  return value === "current" || value === "archived" ? value : null;
+}
+
+function normalizeTrackedSort(value: string | null | undefined): MyDataTrackedSort {
+  return value === "recent_asc" || value === "pp_desc" || value === "accuracy_desc" || value === "stars_desc"
+    ? value
+    : "recent_desc";
+}
+
+function normalizeTopPlaySort(value: string | null | undefined): MyDataTopPlaySort {
+  return value === "pp_asc" || value === "recent_desc" || value === "recent_asc" || value === "gain_desc" || value === "accuracy_desc"
+    ? value
+    : "pp_desc";
+}
+
+function trackedOrderBy(sort: string | null | undefined): string {
+  switch (normalizeTrackedSort(sort)) {
+    case "recent_asc":
+      return "r.ended_at asc, r.score_identity asc";
+    case "pp_desc":
+      return "coalesce(se.pp, m.best_pp, 0) desc, r.ended_at desc, r.score_identity desc";
+    case "accuracy_desc":
+      return "coalesce(se.accuracy, m.best_accuracy, 0) desc, r.ended_at desc, r.score_identity desc";
+    case "stars_desc":
+      return "coalesce(b.difficulty_rating, 0) desc, r.ended_at desc, r.score_identity desc";
+    case "recent_desc":
+    default:
+      return "r.ended_at desc, r.score_identity desc";
+  }
+}
+
+function topPlayOrderBy(sort: string | null | undefined): string {
+  switch (normalizeTopPlaySort(sort)) {
+    case "pp_asc":
+      return "t.pp asc, t.detected_at asc, t.score_id asc";
+    case "recent_desc":
+      return "t.detected_at desc, t.score_id desc";
+    case "recent_asc":
+      return "t.detected_at asc, t.score_id asc";
+    case "gain_desc":
+      return "t.pp_gain desc, t.pp desc, t.detected_at desc";
+    case "accuracy_desc":
+      return "coalesce(cast(json_extract(t.payload_json, '$.score.accuracy') as real), 0) desc, t.pp desc, t.detected_at desc";
+    case "pp_desc":
+    default:
+      return "t.pp desc, t.detected_at desc, t.score_id desc";
+  }
+}
+
+function buildTrackedFeedSql(userId: number, query: MyDataTrackedFeedQuery = {}): { fromSql: string; whereSql: string; args: SqlArg[] } {
+  const where = ["r.user_id = ?"];
+  const args: SqlArg[] = [userId];
+  const search = normalizeSearch(query.search);
+  if (search) {
+    const like = `%${search}%`;
+    where.push(`(
+      lower(coalesce(bs.title, '')) like ?
+      or lower(coalesce(bs.artist, '')) like ?
+      or lower(coalesce(b.version, '')) like ?
+      or cast(r.beatmap_id as text) like ?
+    )`);
+    args.push(like, like, like, like);
+  }
+  const key = normalizeKeyFilter(query.key);
+  if (key != null) {
+    where.push("cast(round(coalesce(b.cs, 0)) as integer) = ?");
+    args.push(key);
+  }
+  const mods = normalizeModFilter(query.mods);
+  if (mods === "nomod") where.push("coalesce(json_array_length(se.score_json, '$.mods'), 0) = 0");
+  if (mods === "modded") where.push("coalesce(json_array_length(se.score_json, '$.mods'), 0) > 0");
+  const archive = normalizeArchiveFilter(query.archive);
+  if (archive === "current") where.push("se.score_json is not null");
+  if (archive === "archived") where.push("se.score_json is null");
+  return {
+    fromSql: `from player_activity_score_refs r
+     left join score_events se
+       on se.country = r.country and se.score_identity = r.score_identity
+     left join users u on u.user_id = r.user_id
+     left join beatmaps b on b.beatmap_id = r.beatmap_id
+     left join beatmapsets bs on bs.beatmapset_id = b.beatmapset_id
+     left join player_activity_maps m
+       on m.country = r.country and m.user_id = r.user_id and m.day = r.day and m.beatmap_id = r.beatmap_id`,
+    whereSql: where.join(" and "),
+    args,
+  };
+}
+
 /** A user-scoped tracker feed: every stored tracked play, lean-shaped for the row UI. */
-export async function getUserTrackedFeed(db: Db, userId: number, limit = 30, offset = 0): Promise<MyDataPage<MyDataTrackedPlay>> {
+export async function getUserTrackedFeed(db: Db, userId: number, limit = 30, offset = 0, query: MyDataTrackedFeedQuery = {}): Promise<MyDataPage<MyDataTrackedPlay>> {
   const safeLimit = Math.max(1, Math.floor(limit));
   const safeOffset = Math.max(0, Math.floor(offset));
+  const built = buildTrackedFeedSql(userId, query);
   const total = Number((await exec(
     db,
-    "select count(*) as count from player_activity_score_refs where user_id = ?",
-    [userId],
+    `select count(*) as count ${built.fromSql} where ${built.whereSql}`,
+    built.args,
   )).rows[0]?.count ?? 0);
   const rows = (await exec(
     db,
@@ -415,18 +542,11 @@ export async function getUserTrackedFeed(db: Db, userId: number, limit = 30, off
        m.best_accuracy,
        m.best_rank,
        m.play_count
-     from player_activity_score_refs r
-     left join score_events se
-       on se.country = r.country and se.score_identity = r.score_identity
-     left join users u on u.user_id = r.user_id
-     left join beatmaps b on b.beatmap_id = r.beatmap_id
-     left join beatmapsets bs on bs.beatmapset_id = b.beatmapset_id
-     left join player_activity_maps m
-       on m.country = r.country and m.user_id = r.user_id and m.day = r.day and m.beatmap_id = r.beatmap_id
-     where r.user_id = ?
-     order by r.ended_at desc, r.score_identity desc
+     ${built.fromSql}
+     where ${built.whereSql}
+     order by ${trackedOrderBy(query.sort)}
      limit ? offset ?`,
-    [userId, safeLimit, safeOffset],
+    [...built.args, safeLimit, safeOffset],
   )).rows;
   return { items: rows.flatMap(activityRefRowToTrackedPlay), total, limit: safeLimit, offset: safeOffset };
 }
@@ -535,18 +655,57 @@ function activityRowBeatmapset(row: Record<string, unknown>): OsuBeatmapset | un
  * UI plus the pp the play added. Stored scores are compacted, so beatmap/user metadata is
  * re-hydrated at read time (preserving order).
  */
-export async function getUserTopPlaysFeed(db: Db, userId: number, limit = 40, offset = 0): Promise<MyDataPage<MyDataTopPlay>> {
+const TOP_PLAY_BEATMAP_ID_SQL = "coalesce(cast(json_extract(t.payload_json, '$.score.beatmap.id') as integer), cast(json_extract(t.payload_json, '$.score.beatmap_id') as integer))";
+
+function buildTopPlaysSql(userId: number, query: MyDataTopPlaysQuery = {}): { fromSql: string; whereSql: string; args: SqlArg[] } {
+  const where = ["t.user_id = ?"];
+  const args: SqlArg[] = [userId];
+  const search = normalizeSearch(query.search);
+  if (search) {
+    const like = `%${search}%`;
+    where.push(`(
+      lower(coalesce(bs.title, json_extract(t.payload_json, '$.score.beatmapset.title'), '')) like ?
+      or lower(coalesce(bs.artist, json_extract(t.payload_json, '$.score.beatmapset.artist'), '')) like ?
+      or lower(coalesce(b.version, json_extract(t.payload_json, '$.score.beatmap.version'), '')) like ?
+      or cast(t.score_id as text) like ?
+      or cast(${TOP_PLAY_BEATMAP_ID_SQL} as text) like ?
+    )`);
+    args.push(like, like, like, like, like);
+  }
+  const key = normalizeKeyFilter(query.key);
+  if (key != null) {
+    where.push("cast(round(coalesce(cast(json_extract(t.payload_json, '$.score.beatmap.cs') as real), b.cs, 0)) as integer) = ?");
+    args.push(key);
+  }
+  const mods = normalizeModFilter(query.mods);
+  if (mods === "nomod") where.push("coalesce(json_array_length(t.payload_json, '$.score.mods'), 0) = 0");
+  if (mods === "modded") where.push("coalesce(json_array_length(t.payload_json, '$.score.mods'), 0) > 0");
+  return {
+    fromSql: `from top_play_events t
+     left join beatmaps b on b.beatmap_id = ${TOP_PLAY_BEATMAP_ID_SQL}
+     left join beatmapsets bs on bs.beatmapset_id = b.beatmapset_id`,
+    whereSql: where.join(" and "),
+    args,
+  };
+}
+
+export async function getUserTopPlaysFeed(db: Db, userId: number, limit = 40, offset = 0, query: MyDataTopPlaysQuery = {}): Promise<MyDataPage<MyDataTopPlay>> {
   const safeLimit = Math.max(1, Math.floor(limit));
   const safeOffset = Math.max(0, Math.floor(offset));
+  const built = buildTopPlaysSql(userId, query);
   const total = Number((await exec(
     db,
-    "select count(*) as count from top_play_events where user_id = ?",
-    [userId],
+    `select count(*) as count ${built.fromSql} where ${built.whereSql}`,
+    built.args,
   )).rows[0]?.count ?? 0);
   const rows = (await exec(
     db,
-    "select payload_json, pp_gain from top_play_events where user_id = ? order by pp desc limit ? offset ?",
-    [userId, safeLimit, safeOffset],
+    `select t.payload_json, t.pp_gain
+     ${built.fromSql}
+     where ${built.whereSql}
+     order by ${topPlayOrderBy(query.sort)}
+     limit ? offset ?`,
+    [...built.args, safeLimit, safeOffset],
   )).rows;
   const entries = rows
     .map((r) => ({ event: parseJson<CountryTopPlay>(String(r.payload_json ?? ""), {} as CountryTopPlay), ppGain: Number(r.pp_gain ?? 0) }))

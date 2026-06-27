@@ -16,6 +16,26 @@ export interface MyDataPage<T> {
   offset: number;
 }
 
+export type MyDataModFilter = "all" | "nomod" | "modded";
+export type MyDataArchiveFilter = "all" | "current" | "archived";
+export type MyDataTrackedSort = "recent_desc" | "recent_asc" | "pp_desc" | "accuracy_desc" | "stars_desc";
+export type MyDataTopPlaySort = "pp_desc" | "pp_asc" | "recent_desc" | "recent_asc" | "gain_desc" | "accuracy_desc";
+
+export interface MyDataFeedFilters {
+  query?: string;
+  key?: string;
+  mods?: MyDataModFilter;
+}
+
+export interface MyDataTrackedFeedParams extends MyDataFeedFilters {
+  archive?: MyDataArchiveFilter;
+  sort?: MyDataTrackedSort;
+}
+
+export interface MyDataTopPlaysParams extends MyDataFeedFilters {
+  sort?: MyDataTopPlaySort;
+}
+
 export interface MyDataTrackedPlay extends LeanTrackerScore {
   archived?: boolean;
   archivedExact?: boolean;
@@ -151,10 +171,22 @@ function emptyDashboard(): MyDataDashboard {
   };
 }
 
-async function fetchMyDataFeedRaw(cfg: MyDataBackendConfig, pageIndex: number): Promise<MyDataPage<MyDataTrackedPlay>> {
+function appendMyDataFilters(query: URLSearchParams, filters: MyDataTrackedFeedParams | MyDataTopPlaysParams | undefined): void {
+  const search = filters?.query?.trim();
+  if (search) query.set("q", search.slice(0, 80));
+  if (filters?.key && filters.key !== "all") query.set("key", filters.key);
+  if (filters?.mods && filters.mods !== "all") query.set("mods", filters.mods);
+  const archive = filters && "archive" in filters ? filters.archive : undefined;
+  if (archive && archive !== "all") query.set("archive", archive);
+  if (filters?.sort) query.set("sort", filters.sort);
+}
+
+async function fetchMyDataFeedRaw(cfg: MyDataBackendConfig, pageIndex: number, filters?: MyDataTrackedFeedParams): Promise<MyDataPage<MyDataTrackedPlay>> {
   try {
     const offset = pageIndex * MY_DATA_PAGE_SIZE;
-    const response = await fetch(`${cfg.base}/api/my-data/feed?userId=${cfg.userId}&limit=${MY_DATA_PAGE_SIZE}&offset=${offset}`, { headers: cfg.headers });
+    const query = new URLSearchParams({ userId: String(cfg.userId), limit: String(MY_DATA_PAGE_SIZE), offset: String(offset) });
+    appendMyDataFilters(query, filters);
+    const response = await fetch(`${cfg.base}/api/my-data/feed?${query.toString()}`, { headers: cfg.headers });
     if (!response.ok) return emptyPage(pageIndex);
     const body = (await response.json()) as { scores?: MyDataTrackedPlay[]; total?: number; limit?: number; offset?: number };
     return {
@@ -168,10 +200,12 @@ async function fetchMyDataFeedRaw(cfg: MyDataBackendConfig, pageIndex: number): 
   }
 }
 
-async function fetchMyDataTopPlaysRaw(cfg: MyDataBackendConfig, pageIndex: number): Promise<MyDataPage<MyDataTopPlay>> {
+async function fetchMyDataTopPlaysRaw(cfg: MyDataBackendConfig, pageIndex: number, filters?: MyDataTopPlaysParams): Promise<MyDataPage<MyDataTopPlay>> {
   try {
     const offset = pageIndex * MY_DATA_PAGE_SIZE;
-    const response = await fetch(`${cfg.base}/api/my-data/top-plays?userId=${cfg.userId}&limit=${MY_DATA_PAGE_SIZE}&offset=${offset}`, { headers: cfg.headers });
+    const query = new URLSearchParams({ userId: String(cfg.userId), limit: String(MY_DATA_PAGE_SIZE), offset: String(offset) });
+    appendMyDataFilters(query, filters);
+    const response = await fetch(`${cfg.base}/api/my-data/top-plays?${query.toString()}`, { headers: cfg.headers });
     if (!response.ok) return emptyPage(pageIndex);
     const body = (await response.json()) as { plays?: MyDataTopPlay[]; total?: number; limit?: number; offset?: number };
     return {
@@ -222,14 +256,61 @@ function readPageIndex(value: unknown): number {
   return Number.isInteger(pageIndex) && pageIndex > 0 ? Math.min(pageIndex, 100_000) : 0;
 }
 
+function readQuery(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim().slice(0, 80) : undefined;
+}
+
+function readKeyFilter(value: unknown): string | undefined {
+  if (value === "all" || value == null) return undefined;
+  const key = Number(value);
+  return Number.isInteger(key) && key >= 1 && key <= 18 ? String(key) : undefined;
+}
+
+function readModFilter(value: unknown): MyDataModFilter | undefined {
+  return value === "nomod" || value === "modded" ? value : undefined;
+}
+
+function readArchiveFilter(value: unknown): MyDataArchiveFilter | undefined {
+  return value === "current" || value === "archived" ? value : undefined;
+}
+
+function readTrackedSort(value: unknown): MyDataTrackedSort | undefined {
+  return value === "recent_asc" || value === "pp_desc" || value === "accuracy_desc" || value === "stars_desc" ? value : undefined;
+}
+
+function readTopPlaySort(value: unknown): MyDataTopPlaySort | undefined {
+  return value === "pp_asc" || value === "recent_desc" || value === "recent_asc" || value === "gain_desc" || value === "accuracy_desc" ? value : undefined;
+}
+
+function readTrackedParams(data: { pageIndex?: unknown; query?: unknown; key?: unknown; mods?: unknown; archive?: unknown; sort?: unknown } | undefined): MyDataTrackedFeedParams & { pageIndex: number } {
+  return {
+    pageIndex: readPageIndex(data?.pageIndex),
+    query: readQuery(data?.query),
+    key: readKeyFilter(data?.key),
+    mods: readModFilter(data?.mods),
+    archive: readArchiveFilter(data?.archive),
+    sort: readTrackedSort(data?.sort),
+  };
+}
+
+function readTopPlayParams(data: { pageIndex?: unknown; query?: unknown; key?: unknown; mods?: unknown; sort?: unknown } | undefined): MyDataTopPlaysParams & { pageIndex: number } {
+  return {
+    pageIndex: readPageIndex(data?.pageIndex),
+    query: readQuery(data?.query),
+    key: readKeyFilter(data?.key),
+    mods: readModFilter(data?.mods),
+    sort: readTopPlaySort(data?.sort),
+  };
+}
+
 export const fetchMyDataFeed = createServerFn({ method: "GET" })
-  .inputValidator((data: { pageIndex?: unknown } | undefined) => ({ pageIndex: readPageIndex(data?.pageIndex) }))
+  .inputValidator(readTrackedParams)
   .handler(async ({ data }): Promise<MyDataPage<MyDataTrackedPlay>> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     setResponseHeader("Cache-Control", "private, no-store");
     const cfg = await myDataBackend();
     if (!cfg) return emptyPage(data.pageIndex);
-    return fetchMyDataFeedRaw(cfg, data.pageIndex);
+    return fetchMyDataFeedRaw(cfg, data.pageIndex, data);
   });
 
 export const fetchMyDataDashboard = createServerFn({ method: "GET" })
@@ -272,13 +353,13 @@ export interface MyDataTopPlay {
 }
 
 export const fetchMyDataTopPlays = createServerFn({ method: "GET" })
-  .inputValidator((data: { pageIndex?: unknown } | undefined) => ({ pageIndex: readPageIndex(data?.pageIndex) }))
+  .inputValidator(readTopPlayParams)
   .handler(async ({ data }): Promise<MyDataPage<MyDataTopPlay>> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     setResponseHeader("Cache-Control", "private, no-store");
     const cfg = await myDataBackend();
     if (!cfg) return emptyPage(data.pageIndex);
-    return fetchMyDataTopPlaysRaw(cfg, data.pageIndex);
+    return fetchMyDataTopPlaysRaw(cfg, data.pageIndex, data);
   });
 
 export const fetchMyDataActivity = createServerFn({ method: "GET" })

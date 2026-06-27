@@ -1,13 +1,28 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Loader2, Search, X } from "lucide-react";
 
 import { PageHeader } from "../layout/PageHeader";
 import { Avatar } from "../ui/Avatar";
 import { CountryFlag } from "../ui/CountryFlag";
 import { OsuLogo } from "../ui/OsuLogo";
 import { useAuth } from "../../lib/auth-context";
-import { fetchMyDataDashboard, fetchMyDataFeed, fetchMyDataTopPlays, MY_DATA_PAGE_SIZE, type MyDataSummary, type MyDataPage, type MyDataTopPlay, type MyDataTrackedPlay } from "../../lib/my-data";
+import {
+  fetchMyDataDashboard,
+  fetchMyDataFeed,
+  fetchMyDataTopPlays,
+  MY_DATA_PAGE_SIZE,
+  type MyDataArchiveFilter,
+  type MyDataModFilter,
+  type MyDataSummary,
+  type MyDataPage,
+  type MyDataTopPlay,
+  type MyDataTopPlaysParams,
+  type MyDataTopPlaySort,
+  type MyDataTrackedFeedParams,
+  type MyDataTrackedPlay,
+  type MyDataTrackedSort,
+} from "../../lib/my-data";
 import { openLiveEventSource, type LivePlayerActivitySnapshot } from "../../lib/live-backend";
 import { getScoreTimestamp } from "../../lib/score";
 import { MeScoreRow } from "./MeScoreRow";
@@ -16,6 +31,36 @@ import { skillPatternEntries, type SkillPatternEntry } from "./skill-patterns";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const KEY_LABEL: Record<number, string> = { 1: "1K", 2: "2K", 3: "3K", 4: "4K", 5: "5K", 6: "6K", 7: "7K", 8: "8K", 9: "9K", 10: "10K" };
+type FeedTabId = "tracked" | "top";
+
+const MOD_FILTER_OPTIONS: Array<{ value: MyDataModFilter; label: string }> = [
+  { value: "all", label: "All mods" },
+  { value: "nomod", label: "No mods" },
+  { value: "modded", label: "Modded" },
+];
+
+const ARCHIVE_FILTER_OPTIONS: Array<{ value: MyDataArchiveFilter; label: string }> = [
+  { value: "all", label: "All rows" },
+  { value: "current", label: "Current" },
+  { value: "archived", label: "Archived" },
+];
+
+const TRACKED_SORT_OPTIONS: Array<{ value: MyDataTrackedSort; label: string }> = [
+  { value: "recent_desc", label: "Newest" },
+  { value: "recent_asc", label: "Oldest" },
+  { value: "pp_desc", label: "PP" },
+  { value: "accuracy_desc", label: "Accuracy" },
+  { value: "stars_desc", label: "Stars" },
+];
+
+const TOP_SORT_OPTIONS: Array<{ value: MyDataTopPlaySort; label: string }> = [
+  { value: "pp_desc", label: "PP" },
+  { value: "pp_asc", label: "Low PP" },
+  { value: "recent_desc", label: "Newest" },
+  { value: "recent_asc", label: "Oldest" },
+  { value: "gain_desc", label: "PP gain" },
+  { value: "accuracy_desc", label: "Accuracy" },
+];
 
 function PageShell({ children }: { children: React.ReactNode }) {
   return (
@@ -73,21 +118,84 @@ function formatHour(h: number): string {
   return `${base}${period}`;
 }
 
-function aggregatePlaystyle(activity: LivePlayerActivitySnapshot | null): Record<string, number> | null {
-  if (!activity?.available) return null;
-  const acc: Record<string, number> = {};
-  let totalWeight = 0;
+interface KeymodePlaystyle {
+  keyCount: number | null;
+  entries: SkillPatternEntry[];
+  analyzedPlays: number;
+}
+
+// 4K and 7K are effectively different games, so the fingerprint is built per keymode rather than
+// averaged into one cross-keymode blur. Each day's keyMode.patterns is already the day's per-keymode
+// average, so combining across days just weights by that keymode's analyzed plays.
+function aggregatePlaystyleByKeymode(activity: LivePlayerActivitySnapshot | null): KeymodePlaystyle[] {
+  if (!activity?.available) return [];
+  const buckets = new Map<string, { keyCount: number | null; acc: Record<string, number>; weight: number }>();
   for (const day of activity.days) {
-    const skills = day.skills;
-    const weight = skills?.analyzedPlays ?? 0;
-    if (!skills || weight <= 0) continue;
-    for (const [key, value] of Object.entries(skills.patterns)) acc[key] = (acc[key] ?? 0) + (Number(value) || 0) * weight;
-    totalWeight += weight;
+    for (const mode of day.skills?.keyModes ?? []) {
+      const weight = mode.analyzedPlays ?? 0;
+      if (weight <= 0) continue;
+      const id = String(mode.keyCount);
+      let bucket = buckets.get(id);
+      if (!bucket) {
+        bucket = { keyCount: mode.keyCount, acc: {}, weight: 0 };
+        buckets.set(id, bucket);
+      }
+      for (const [key, value] of Object.entries(mode.patterns)) bucket.acc[key] = (bucket.acc[key] ?? 0) + (Number(value) || 0) * weight;
+      bucket.weight += weight;
+    }
   }
-  if (totalWeight === 0) return null;
-  const out: Record<string, number> = {};
-  for (const [key, value] of Object.entries(acc)) out[key] = value / totalWeight;
-  return out;
+  const total = [...buckets.values()].reduce((sum, bucket) => sum + bucket.weight, 0);
+  if (total === 0) return [];
+  const modes: KeymodePlaystyle[] = [];
+  for (const bucket of buckets.values()) {
+    const patterns: Record<string, number> = {};
+    for (const [key, value] of Object.entries(bucket.acc)) patterns[key] = value / bucket.weight;
+    const entries = skillPatternEntries(patterns, bucket.keyCount).slice(0, 6);
+    if (entries.length > 0) modes.push({ keyCount: bucket.keyCount, entries, analyzedPlays: bucket.weight });
+  }
+  modes.sort((a, b) => b.analyzedPlays - a.analyzedPlays);
+  // Drop trickle keymodes (a few stray plays in an off-keymode) so the toggle only offers modes the
+  // player meaningfully plays; always keep at least the dominant one.
+  const minWeight = Math.max(5, total * 0.1);
+  const qualifying = modes.filter((mode) => mode.analyzedPlays >= minWeight);
+  return qualifying.length > 0 ? qualifying : modes.slice(0, 1);
+}
+
+function normalizedQuery(value: string): string | undefined {
+  const query = value.trim().toLowerCase();
+  return query ? query : undefined;
+}
+
+function feedFilterKey(filters: MyDataTrackedFeedParams | MyDataTopPlaysParams): string {
+  return [
+    filters.query ?? "",
+    filters.key ?? "all",
+    filters.mods ?? "all",
+    "archive" in filters ? filters.archive ?? "all" : "all",
+    filters.sort ?? "",
+  ].join("|");
+}
+
+function scoreHasMods(score: MyDataTrackedPlay): boolean {
+  return (score.mods ?? []).length > 0;
+}
+
+function scoreMatchesTrackedFilters(score: MyDataTrackedPlay, filters: MyDataTrackedFeedParams): boolean {
+  if (filters.archive === "archived" && !score.archived) return false;
+  if (filters.archive === "current" && score.archived) return false;
+  if (filters.key && filters.key !== "all" && Math.round(score.beatmap?.cs ?? 0) !== Number(filters.key)) return false;
+  if (filters.mods === "nomod" && scoreHasMods(score)) return false;
+  if (filters.mods === "modded" && !scoreHasMods(score)) return false;
+  const query = normalizedQuery(filters.query ?? "");
+  if (!query) return true;
+  const haystack = [
+    score.beatmapset?.title,
+    score.beatmapset?.artist,
+    score.beatmap?.version,
+    score.beatmap?.id,
+    score.beatmapset?.id,
+  ].filter((part) => part != null).join(" ").toLowerCase();
+  return haystack.includes(query);
 }
 
 export function MyDataPanel() {
@@ -98,7 +206,14 @@ export function MyDataPanel() {
   const [summary, setSummary] = useState<MyDataSummary | null>(null);
   const [feed, setFeed] = useState<MyDataTrackedPlay[]>([]);
   const [topPlays, setTopPlays] = useState<MyDataTopPlay[]>([]);
-  const [feedTab, setFeedTab] = useState<"tracked" | "top">("tracked");
+  const [feedTab, setFeedTab] = useState<FeedTabId>("tracked");
+  const [feedQuery, setFeedQuery] = useState("");
+  const [debouncedFeedQuery, setDebouncedFeedQuery] = useState("");
+  const [keyFilter, setKeyFilter] = useState("all");
+  const [modFilter, setModFilter] = useState<MyDataModFilter>("all");
+  const [archiveFilter, setArchiveFilter] = useState<MyDataArchiveFilter>("all");
+  const [trackedSort, setTrackedSort] = useState<MyDataTrackedSort>("recent_desc");
+  const [topSort, setTopSort] = useState<MyDataTopPlaySort>("pp_desc");
   const [trackedPageIndex, setTrackedPageIndex] = useState(0);
   const [topPageIndex, setTopPageIndex] = useState(0);
   const [trackedTotal, setTrackedTotal] = useState(0);
@@ -109,6 +224,8 @@ export function MyDataPanel() {
   const [activity, setActivity] = useState<LivePlayerActivitySnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const newKeysRef = useRef<Set<string>>(new Set());
+  const filterFetchReadyRef = useRef(false);
+  const trackedFiltersRef = useRef<MyDataTrackedFeedParams>({ key: "all", mods: "all", archive: "all", sort: "recent_desc" });
 
   const applyTrackedPage = useCallback((page: MyDataPage<MyDataTrackedPlay>) => {
     setFeed(page.items);
@@ -124,6 +241,50 @@ export function MyDataPanel() {
     setTopPageIndex(Math.floor(page.offset / Math.max(1, page.limit)));
   }, []);
 
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedFeedQuery(feedQuery.trim()), 250);
+    return () => window.clearTimeout(timeout);
+  }, [feedQuery]);
+
+  useEffect(() => {
+    filterFetchReadyRef.current = false;
+  }, [viewer?.id]);
+
+  const keyFilterOptions = useMemo(() => {
+    const keys = new Set<number>([4, 7]);
+    for (const stat of summary?.keyStats ?? []) keys.add(stat.keyCount);
+    return [
+      { value: "all", label: "All keys" },
+      ...[...keys].sort((a, b) => a - b).map((key) => ({ value: String(key), label: KEY_LABEL[key] ?? `${key}K` })),
+    ];
+  }, [summary?.keyStats]);
+
+  const trackedFilters = useMemo<MyDataTrackedFeedParams>(() => ({
+    query: debouncedFeedQuery || undefined,
+    key: keyFilter,
+    mods: modFilter,
+    archive: archiveFilter,
+    sort: trackedSort,
+  }), [archiveFilter, debouncedFeedQuery, keyFilter, modFilter, trackedSort]);
+
+  const topFilters = useMemo<MyDataTopPlaysParams>(() => ({
+    query: debouncedFeedQuery || undefined,
+    key: keyFilter,
+    mods: modFilter,
+    sort: topSort,
+  }), [debouncedFeedQuery, keyFilter, modFilter, topSort]);
+
+  const trackedFiltersKey = useMemo(() => feedFilterKey(trackedFilters), [trackedFilters]);
+  const topFiltersKey = useMemo(() => feedFilterKey(topFilters), [topFilters]);
+  const activeFiltersKey = feedTab === "tracked" ? trackedFiltersKey : topFiltersKey;
+  const hasActiveFeedControls = feedTab === "tracked"
+    ? !!debouncedFeedQuery || keyFilter !== "all" || modFilter !== "all" || archiveFilter !== "all" || trackedSort !== "recent_desc"
+    : !!debouncedFeedQuery || keyFilter !== "all" || modFilter !== "all" || topSort !== "pp_desc";
+
+  useEffect(() => {
+    trackedFiltersRef.current = trackedFilters;
+  }, [trackedFilters]);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -133,6 +294,7 @@ export function MyDataPanel() {
       applyTrackedPage(dashboard.trackedPage);
       applyTopPage(dashboard.topPlayPage);
       setActivity(dashboard.activity);
+      filterFetchReadyRef.current = false;
       if (next?.tracked) {
         // Default to the tab that actually has something to show.
         if (dashboard.trackedPage.total === 0 && dashboard.topPlayPage.total > 0) setFeedTab("top");
@@ -144,6 +306,7 @@ export function MyDataPanel() {
       setActivity(null);
       applyTrackedPage({ items: [], total: 0, limit: MY_DATA_PAGE_SIZE, offset: 0 });
       applyTopPage({ items: [], total: 0, limit: MY_DATA_PAGE_SIZE, offset: 0 });
+      filterFetchReadyRef.current = false;
     } finally {
       setLoading(false);
     }
@@ -152,20 +315,20 @@ export function MyDataPanel() {
   const loadTrackedPage = useCallback(async (pageIndex: number) => {
     setPageLoading("tracked");
     try {
-      applyTrackedPage(await fetchMyDataFeed({ data: { pageIndex } }));
+      applyTrackedPage(await fetchMyDataFeed({ data: { pageIndex, ...trackedFilters } }));
     } finally {
       setPageLoading(null);
     }
-  }, [applyTrackedPage]);
+  }, [applyTrackedPage, trackedFilters]);
 
   const loadTopPage = useCallback(async (pageIndex: number) => {
     setPageLoading("top");
     try {
-      applyTopPage(await fetchMyDataTopPlays({ data: { pageIndex } }));
+      applyTopPage(await fetchMyDataTopPlays({ data: { pageIndex, ...topFilters } }));
     } finally {
       setPageLoading(null);
     }
-  }, [applyTopPage]);
+  }, [applyTopPage, topFilters]);
 
   useEffect(() => {
     if (!viewer) {
@@ -174,6 +337,16 @@ export function MyDataPanel() {
     }
     void load();
   }, [viewer, load]);
+
+  useEffect(() => {
+    if (!viewer || !summary?.tracked || loading) return;
+    if (!filterFetchReadyRef.current) {
+      filterFetchReadyRef.current = true;
+      return;
+    }
+    if (feedTab === "tracked") void loadTrackedPage(0);
+    else void loadTopPage(0);
+  }, [activeFiltersKey, feedTab, loading, summary?.tracked, viewer?.id]);
 
   // Live feed: tracker_score events for the viewer's country, filtered to their own plays.
   useEffect(() => {
@@ -184,12 +357,14 @@ export function MyDataPanel() {
       try {
         const score = JSON.parse((event as MessageEvent).data) as MyDataTrackedPlay;
         if (score.user_id !== viewer.id || !score.passed) return;
+        const filters = trackedFiltersRef.current;
+        if (!scoreMatchesTrackedFilters(score, filters)) return;
         const key = `${score.beatmap?.id}-${getScoreTimestamp(score)}-${score.pp}`;
         setFeed((prev) => {
           if (prev.some((s) => `${s.beatmap?.id}-${getScoreTimestamp(s)}-${s.pp}` === key)) return prev;
           newKeysRef.current.add(key);
           setTrackedTotal((total) => total + 1);
-          if (trackedPageIndex !== 0) return prev;
+          if (trackedPageIndex !== 0 || filters.sort !== "recent_desc") return prev;
           return [score, ...prev].slice(0, trackedLimit);
         });
       } catch {
@@ -200,7 +375,13 @@ export function MyDataPanel() {
     return () => source.close();
   }, [viewer, summary?.tracked, trackedLimit, trackedPageIndex]);
 
-  const playstyle = useMemo(() => skillPatternEntries(aggregatePlaystyle(activity)).slice(0, 6), [activity]);
+  const playstyleModes = useMemo(() => aggregatePlaystyleByKeymode(activity), [activity]);
+  const [playstyleKey, setPlaystyleKey] = useState<number | null>(null);
+  const activePlaystyle = useMemo(
+    () => (playstyleModes.length > 0 ? playstyleModes.find((mode) => mode.keyCount === playstyleKey) ?? playstyleModes[0] : null),
+    [playstyleModes, playstyleKey],
+  );
+  const playstyle = activePlaystyle?.entries ?? [];
   const highlightStats = useMemo(() => {
     if (!summary) return [];
     const stats: Array<{ key: string; label: string; value: string; sub?: string; accent: string }> = [];
@@ -319,14 +500,32 @@ export function MyDataPanel() {
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <div className="lg:col-span-2">
-              <div className="mb-2 flex items-center gap-1.5">
-                <FeedTab active={feedTab === "tracked"} onClick={() => setFeedTab("tracked")}>Tracked</FeedTab>
-                <FeedTab active={feedTab === "top"} onClick={() => setFeedTab("top")}>Top plays</FeedTab>
+              <div className="mb-2 space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <FeedTab active={feedTab === "tracked"} onClick={() => setFeedTab("tracked")}>Tracked</FeedTab>
+                  <FeedTab active={feedTab === "top"} onClick={() => setFeedTab("top")}>Top plays</FeedTab>
+                </div>
+                <FeedControls
+                  tab={feedTab}
+                  query={feedQuery}
+                  keyFilter={keyFilter}
+                  keyOptions={keyFilterOptions}
+                  modFilter={modFilter}
+                  archiveFilter={archiveFilter}
+                  trackedSort={trackedSort}
+                  topSort={topSort}
+                  onQueryChange={setFeedQuery}
+                  onKeyFilterChange={setKeyFilter}
+                  onModFilterChange={setModFilter}
+                  onArchiveFilterChange={setArchiveFilter}
+                  onTrackedSortChange={setTrackedSort}
+                  onTopSortChange={setTopSort}
+                />
               </div>
               {feedTab === "tracked" ? (
                 feed.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-osu-b3/30 bg-osu-b4/40 p-8 text-center text-[13px] text-osu-f1">
-                    No tracked plays. Play some ranked maps and they show up here live{topTotal > 0 ? ", or check your top plays" : ""}.
+                    {hasActiveFeedControls ? "No tracked plays match those controls." : <>No tracked plays. Play some ranked maps and they show up here live{topTotal > 0 ? ", or check your top plays" : ""}.</>}
                   </div>
                 ) : (
                   <div className="space-y-1.5">
@@ -345,7 +544,7 @@ export function MyDataPanel() {
                 )
               ) : topPlays.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-osu-b3/30 bg-osu-b4/40 p-8 text-center text-[13px] text-osu-f1">
-                  No top plays recorded yet. As you set new personal bests while tracked, they're saved here.
+                  {hasActiveFeedControls ? "No top plays match those controls." : "No top plays recorded yet. As you set new personal bests while tracked, they're saved here."}
                 </div>
               ) : (
                 <div className="space-y-1.5">
@@ -364,7 +563,11 @@ export function MyDataPanel() {
             </div>
 
             <div className="space-y-4">
-              <InsightCard title="Patterns you're best at" accent={playstyle[0]?.color ?? "#8f6bd8"}>
+              <InsightCard
+                title="Patterns you're best at"
+                accent={playstyle[0]?.color ?? "#8f6bd8"}
+                right={playstyleModes.length > 1 ? <KeymodeToggle modes={playstyleModes} active={activePlaystyle?.keyCount ?? null} onChange={setPlaystyleKey} /> : undefined}
+              >
                 {playstyle.length > 0 ? (
                   <>
                     <div className="mb-2.5 text-[12px] text-osu-l2">
@@ -431,6 +634,172 @@ export function MyDataPanel() {
         </>
       )}
     </PageShell>
+  );
+}
+
+function FeedControls({
+  tab,
+  query,
+  keyFilter,
+  keyOptions,
+  modFilter,
+  archiveFilter,
+  trackedSort,
+  topSort,
+  onQueryChange,
+  onKeyFilterChange,
+  onModFilterChange,
+  onArchiveFilterChange,
+  onTrackedSortChange,
+  onTopSortChange,
+}: {
+  tab: FeedTabId;
+  query: string;
+  keyFilter: string;
+  keyOptions: Array<{ value: string; label: string }>;
+  modFilter: MyDataModFilter;
+  archiveFilter: MyDataArchiveFilter;
+  trackedSort: MyDataTrackedSort;
+  topSort: MyDataTopPlaySort;
+  onQueryChange: (value: string) => void;
+  onKeyFilterChange: (value: string) => void;
+  onModFilterChange: (value: MyDataModFilter) => void;
+  onArchiveFilterChange: (value: MyDataArchiveFilter) => void;
+  onTrackedSortChange: (value: MyDataTrackedSort) => void;
+  onTopSortChange: (value: MyDataTopPlaySort) => void;
+}) {
+  const sortOptions = tab === "tracked" ? TRACKED_SORT_OPTIONS : TOP_SORT_OPTIONS;
+  const sortValue = tab === "tracked" ? trackedSort : topSort;
+  return (
+    <div className="grid grid-cols-2 gap-2 rounded-lg border border-osu-b3/20 bg-osu-b4 p-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+      <div className="relative col-span-2 min-w-0 sm:col-span-1">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-osu-f1" />
+        <input
+          type="text"
+          value={query}
+          onChange={(event) => onQueryChange(event.currentTarget.value)}
+          placeholder="search maps..."
+          aria-label="Search maps"
+          className="h-8 w-full rounded-md border border-osu-b3/30 bg-osu-b5/70 pl-8 pr-8 text-[12px] text-white outline-none transition-colors placeholder:text-osu-f1/70 focus:border-osu-pink/40"
+        />
+        {query ? (
+          <button
+            type="button"
+            aria-label="Clear search"
+            onClick={() => onQueryChange("")}
+            className="absolute right-1.5 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-white"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
+      </div>
+      <div className="col-span-2 flex min-w-0 flex-wrap items-center gap-1.5 sm:col-span-1 sm:justify-end">
+        <ControlDropdown ariaLabel="Keymode filter" value={keyFilter} options={keyOptions} onChange={onKeyFilterChange} />
+        <ControlDropdown ariaLabel="Mod filter" value={modFilter} options={MOD_FILTER_OPTIONS} onChange={(value) => onModFilterChange(value as MyDataModFilter)} />
+        {tab === "tracked" ? (
+          <ControlDropdown ariaLabel="Archive filter" value={archiveFilter} options={ARCHIVE_FILTER_OPTIONS} onChange={(value) => onArchiveFilterChange(value as MyDataArchiveFilter)} />
+        ) : null}
+        <ControlDropdown
+          ariaLabel="Sort plays"
+          value={sortValue}
+          options={sortOptions}
+          onChange={(value) => {
+            if (tab === "tracked") onTrackedSortChange(value as MyDataTrackedSort);
+            else onTopSortChange(value as MyDataTopPlaySort);
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ControlDropdown({
+  ariaLabel,
+  value,
+  options,
+  onChange,
+}: {
+  ariaLabel: string;
+  value: string;
+  options: Array<{ value: string; label: string }>;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+  const active = options.find((option) => option.value === value) ?? options[0];
+  const isFiltered = value !== options[0]?.value;
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target;
+      if (target instanceof Node && ref.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("touchstart", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("touchstart", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((next) => !next)}
+        className={`flex h-8 min-w-[96px] max-w-[132px] items-center justify-between gap-1.5 rounded-md border px-2 text-[11px] font-semibold transition-colors duration-[120ms] cursor-pointer ${
+          isFiltered
+            ? "border-osu-pink/40 bg-osu-pink/15 text-white"
+            : "border-osu-b3/30 bg-osu-b5/70 text-osu-l2 hover:border-osu-pink/30 hover:text-white"
+        }`}
+      >
+        <span className="truncate">{active?.label ?? "Any"}</span>
+        <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-osu-f1 transition-transform duration-150 ${open ? "rotate-180" : ""}`} strokeWidth={2.4} />
+      </button>
+      {open ? (
+        <div
+          role="listbox"
+          aria-label={ariaLabel}
+          className="absolute right-0 top-full z-50 mt-1 min-w-full overflow-hidden rounded-lg border border-osu-b3/50 bg-osu-b5 py-1 shadow-[0_12px_26px_rgba(0,0,0,0.48)]"
+        >
+          {options.map((option) => {
+            const selected = option.value === value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                onClick={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+                className={`flex h-8 w-full min-w-[116px] items-center gap-2 px-2.5 text-left text-[11px] font-semibold transition-colors duration-[120ms] cursor-pointer ${
+                  selected
+                    ? "bg-osu-pink/15 text-osu-pink-light"
+                    : "text-osu-l2 hover:bg-osu-b4 hover:text-white"
+                }`}
+              >
+                <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+                  {selected ? <Check className="h-3.5 w-3.5" strokeWidth={2.6} /> : null}
+                </span>
+                <span className="whitespace-nowrap">{option.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -530,6 +899,28 @@ function FeedTab({ active, onClick, children }: { active: boolean; onClick: () =
     >
       {children}
     </button>
+  );
+}
+
+function KeymodeToggle({ modes, active, onChange }: { modes: KeymodePlaystyle[]; active: number | null; onChange: (keyCount: number | null) => void }) {
+  return (
+    <span className="inline-flex gap-1">
+      {modes.map((mode) => {
+        const label = mode.keyCount == null ? "?" : KEY_LABEL[mode.keyCount] ?? `${mode.keyCount}K`;
+        return (
+          <button
+            key={mode.keyCount ?? "unknown"}
+            type="button"
+            onClick={() => onChange(mode.keyCount)}
+            className={`rounded px-1.5 py-0.5 text-[10px] font-bold tabular-nums transition-colors cursor-pointer ${
+              mode.keyCount === active ? "bg-osu-pink/15 text-osu-pink-light" : "text-osu-l3 hover:text-osu-l1"
+            }`}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </span>
   );
 }
 

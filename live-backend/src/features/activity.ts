@@ -9,6 +9,7 @@ import { DAN_PRIMARY_FAMILIES, type DanFeatureMetrics } from "../dan/dan-estimat
 import type { JobQueue } from "../jobs/queue.js";
 import { errorContext, logWarn } from "../logger.js";
 import { OsuApiClient } from "../osu/client.js";
+import { getCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
 import { addDayKeyDays, getCountryTimezone, getZonedDayKey } from "../shared/country-timezones.js";
 import { getDisplayedAccuracy, getDisplayedRank, getScoreTimestamp, nowIso } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
@@ -502,7 +503,7 @@ async function getActivityBeatmapFile(
     }
   }
 
-  return osu.getBeatmapFile(beatmapId, "job:analyze_activity_beatmap");
+  return getCachedBeatmapFile(db, osu, beatmapId, "job:analyze_activity_beatmap");
 }
 
 async function readActivityBeatmapArchiveMeta(

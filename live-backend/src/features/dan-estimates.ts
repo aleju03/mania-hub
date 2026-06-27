@@ -6,6 +6,7 @@ import { parseManiaBeatmap, type ManiaBeatmap } from "../dan/beatmap-parser.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { logWarn } from "../logger.js";
 import type { OsuApiClient } from "../osu/client.js";
+import { getCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
 import { nowIso } from "../shared/score.js";
 
 const MAX_DAN_ESTIMATE_BATCH = 32;
@@ -160,7 +161,7 @@ async function computeAndStoreDanEstimate(
   if (cached.found) return cached.value;
 
   const starRating = request.starRating ?? await readBeatmapStarRating(db, request.beatmapId);
-  const map = await getParsedDanBeatmap(osu, request.beatmapId, caller);
+  const map = await getParsedDanBeatmap(db, osu, request.beatmapId, caller);
   if (map.keyCount !== 4) {
     await storeUnsupportedDanEstimate(db, request);
     return null;
@@ -218,7 +219,7 @@ async function computeAndStoreDanEstimate(
   return lean;
 }
 
-async function getParsedDanBeatmap(osu: OsuApiClient, beatmapId: number, caller: string): Promise<ManiaBeatmap> {
+async function getParsedDanBeatmap(db: Db, osu: OsuApiClient, beatmapId: number, caller: string): Promise<ManiaBeatmap> {
   const cached = parsedDanBeatmapCache.get(beatmapId);
   if (cached) {
     parsedDanBeatmapCache.delete(beatmapId);
@@ -230,7 +231,7 @@ async function getParsedDanBeatmap(osu: OsuApiClient, beatmapId: number, caller:
   if (inflight) return inflight;
 
   const promise = (async () => {
-    const osuFile = await osu.getBeatmapFile(beatmapId, caller);
+    const osuFile = await getCachedBeatmapFile(db, osu, beatmapId, caller);
     const map = parseManiaBeatmap(osuFile);
     parsedDanBeatmapCache.set(beatmapId, map);
 

@@ -42,6 +42,27 @@ const RANKINGS_SORT_CHOICES = [
   { name: "7-day rank gain", value: "7d" },
 ];
 
+const STATUS_CHOICES = [
+  { name: "Ranked", value: "ranked" },
+  { name: "Loved", value: "loved" },
+  { name: "Graveyard", value: "graveyard" },
+  { name: "Other", value: "other" },
+];
+
+// Umbrella pattern buckets, matching the Maps random tab. Each expands to its
+// sibling patterns in the handler (e.g. "jack" also matches chordjack/longjack).
+const PATTERN_CHOICES = [
+  { name: "Jack", value: "jack" },
+  { name: "Chordjack", value: "chordjack" },
+  { name: "Stream", value: "stream" },
+  { name: "Jumpstream", value: "jumpstream" },
+  { name: "Stamina", value: "stamina" },
+  { name: "Tech", value: "tech" },
+  { name: "LN", value: "ln" },
+  { name: "SV", value: "sv" },
+  { name: "Tiebreaker", value: "tiebreaker" },
+];
+
 // A username option. Optional everywhere: when omitted, the command falls back
 // to the caller's linked osu! account (see /link). Autocomplete surfaces the
 // caller's own linked name so picking "yourself" is one keystroke.
@@ -67,6 +88,28 @@ const keysOption = {
   description: "Key mode",
   required: false,
   choices: KEYS_CHOICES,
+};
+
+const statusOption = {
+  type: OPT_STRING,
+  name: "status",
+  description: "Map status",
+  required: false,
+  choices: STATUS_CHOICES,
+};
+
+const starsMinOption = {
+  type: OPT_NUMBER,
+  name: "stars_min",
+  description: "Minimum star rating",
+  required: false,
+};
+
+const starsMaxOption = {
+  type: OPT_NUMBER,
+  name: "stars_max",
+  description: "Maximum star rating",
+  required: false,
 };
 
 // Lets a caller keep a reply private (only they see it). Off by default so
@@ -134,13 +177,40 @@ export const DISCORD_COMMANDS: DiscordCommandDefinition[] = [
   },
   {
     ...ANY_INSTALL,
-    name: "compare",
+    name: "vs",
+    // Both players are optional at the schema level: Discord rejects a required
+    // option placed after an optional one (and the bulk command registration is
+    // atomic, so one bad command 400s them all). player1 defaults to the caller's
+    // linked account; the handler requires player2 and errors clearly if it's
+    // missing.
     description: "Compare two mania players head to head",
     options: [
       { type: OPT_STRING, name: "player1", description: "First player (defaults to your linked account)", required: false, autocomplete: true },
-      { type: OPT_STRING, name: "player2", description: "Second osu! username or id", required: true, autocomplete: true },
+      { type: OPT_STRING, name: "player2", description: "Other player's osu! username or id (required)", required: false, autocomplete: true },
       hiddenOption,
     ],
+  },
+  // Score lookup on the last map shown in the channel (from /recent, /map, ...).
+  // Registered under three names so people can reach for whichever they know;
+  // all run the same handler. /c is the quick alias, /pb and /compare are the
+  // common osu!-bot spellings.
+  {
+    ...ANY_INSTALL,
+    name: "pb",
+    description: "Your best score on the last map shown in this channel",
+    options: [usernameOption(), hiddenOption],
+  },
+  {
+    ...ANY_INSTALL,
+    name: "c",
+    description: "Your best score on the last map shown in this channel",
+    options: [usernameOption(), hiddenOption],
+  },
+  {
+    ...ANY_INSTALL,
+    name: "compare",
+    description: "Your best score on the last map shown in this channel",
+    options: [usernameOption(), hiddenOption],
   },
 
   // --- Browse (country / global) -----------------------------------------
@@ -189,6 +259,25 @@ export const DISCORD_COMMANDS: DiscordCommandDefinition[] = [
     options: [countryOption, hiddenOption],
   },
 
+  // --- Random map pickers -------------------------------------------------
+  // Both default to the global board; an explicit country narrows the pool.
+  {
+    ...ANY_INSTALL,
+    name: "randomfarm",
+    description: "Pick a random popular farm map (defaults to the global farm board)",
+    options: [countryOption, keysOption, statusOption, starsMinOption, starsMaxOption,
+      { type: OPT_NUMBER, name: "min_pp", description: "Only maps farmed for at least this pp", required: false },
+      hiddenOption],
+  },
+  {
+    ...ANY_INSTALL,
+    name: "randomfav",
+    description: "Pick a random favourited map, like the Maps random tab",
+    options: [countryOption, keysOption, statusOption,
+      { type: OPT_STRING, name: "pattern", description: "Pattern type", required: false, choices: PATTERN_CHOICES },
+      starsMinOption, starsMaxOption, hiddenOption],
+  },
+
   // --- Beatmap tools ------------------------------------------------------
   {
     ...ANY_INSTALL,
@@ -215,39 +304,6 @@ export const DISCORD_COMMANDS: DiscordCommandDefinition[] = [
     options: [
       { type: OPT_STRING, name: "score", description: "Score id or osu! score URL", required: true },
       hiddenOption,
-    ],
-  },
-
-  // --- Personal alerts (DMs) ---------------------------------------------
-  {
-    ...ANY_INSTALL,
-    name: "watch",
-    description: "Get DM alerts for a player's plays or for new farm maps",
-    options: [
-      {
-        type: OPT_SUB_COMMAND,
-        name: "user",
-        description: "DM me when a player gains pp or sets a big ranked play",
-        options: [
-          { type: OPT_STRING, name: "username", description: "osu! username or id to watch", required: true, autocomplete: true },
-          { type: OPT_NUMBER, name: "min_pp", description: "Also alert on any ranked play at or above this pp", required: false },
-        ],
-      },
-      {
-        type: OPT_SUB_COMMAND,
-        name: "maps",
-        description: "DM me when a new farm map starts producing pp gains",
-        options: [],
-      },
-      { type: OPT_SUB_COMMAND, name: "list", description: "List the alerts you have set up", options: [] },
-      {
-        type: OPT_SUB_COMMAND,
-        name: "stop",
-        description: "Stop one of your alerts",
-        options: [
-          { type: OPT_STRING, name: "target", description: "Which alert to stop", required: true, autocomplete: true },
-        ],
-      },
     ],
   },
 
@@ -287,9 +343,9 @@ export const DISCORD_COMMANDS: DiscordCommandDefinition[] = [
 // Commands that require the Manage Server permission to run.
 export const MANAGE_GUILD_COMMANDS = new Set(["subscribe", "unsubscribe"]);
 
-// Replies that are always private to the caller (identity + personal alert
-// management). Everything else is public unless the caller passes hidden:true.
-export const ALWAYS_EPHEMERAL_COMMANDS = new Set(["link", "unlink", "whoami", "watch"]);
+// Replies that are always private to the caller (identity management).
+// Everything else is public unless the caller passes hidden:true.
+export const ALWAYS_EPHEMERAL_COMMANDS = new Set(["link", "unlink", "whoami"]);
 
 // ---------------------------------------------------------------------------
 // Interaction payload shapes (only what we read).
@@ -321,7 +377,22 @@ export interface DiscordInteraction {
     custom_id?: string;
     component_type?: number;
     options?: InteractionOption[];
+    // Present on modal submits: action rows wrapping the submitted text inputs.
+    components?: Array<{ type: number; components?: Array<{ type: number; custom_id?: string; value?: string }> }>;
   };
+}
+
+// Reads a submitted value from a modal interaction by its text-input custom_id.
+export function modalFieldValue(interaction: DiscordInteraction, customId: string): string | undefined {
+  for (const row of interaction.data?.components ?? []) {
+    for (const field of row.components ?? []) {
+      if (field.custom_id === customId) {
+        const text = (field.value ?? "").trim();
+        return text.length ? text : undefined;
+      }
+    }
+  }
+  return undefined;
 }
 
 // Interaction types
@@ -329,6 +400,7 @@ export const INTERACTION_PING = 1;
 export const INTERACTION_APPLICATION_COMMAND = 2;
 export const INTERACTION_MESSAGE_COMPONENT = 3;
 export const INTERACTION_APPLICATION_COMMAND_AUTOCOMPLETE = 4;
+export const INTERACTION_MODAL_SUBMIT = 5;
 // Response types
 export const RESPONSE_PONG = 1;
 export const RESPONSE_CHANNEL_MESSAGE = 4;
@@ -336,14 +408,17 @@ export const RESPONSE_DEFERRED_CHANNEL_MESSAGE = 5;
 export const RESPONSE_DEFERRED_UPDATE_MESSAGE = 6;
 export const RESPONSE_UPDATE_MESSAGE = 7;
 export const RESPONSE_AUTOCOMPLETE_RESULT = 8;
+export const RESPONSE_MODAL = 9;
 // Message flags
 export const FLAG_EPHEMERAL = 1 << 6;
 // Permissions
 const PERMISSION_MANAGE_GUILD = 1n << 5n;
 const PERMISSION_ADMINISTRATOR = 1n << 3n;
 
-// Returns the subcommand name when the command uses subcommands (e.g. /watch
-// user), otherwise undefined.
+// Returns the subcommand name when a command is invoked with one (e.g.
+// `/group sub`), otherwise undefined. No current command uses subcommands, but
+// the option readers still descend through one so a future grouped command
+// works without changes.
 export function subcommandName(interaction: DiscordInteraction): string | undefined {
   const top = interaction.data?.options ?? [];
   const first = top[0];

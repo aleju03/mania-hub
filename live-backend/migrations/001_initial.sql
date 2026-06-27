@@ -544,10 +544,10 @@ create table if not exists discord_user_links (
 create index if not exists idx_discord_user_links_osu
   on discord_user_links(osu_user_id);
 
--- Discord bot: personal alerts a user sets up for themselves, delivered to their
--- DMs. kind 'user' watches one osu! player (new top plays plus ranked scores at
--- or above min_pp). kind 'maps' alerts on new farm maps. For 'maps' rows the
--- target_osu_user_id is 0 so the unique key collapses duplicates per subscriber.
+-- DEPRECATED, no longer read or written: the personal DM-alert feature (/watch)
+-- was removed in favour of channel-only feeds. The table is left in place so
+-- existing databases keep their schema unchanged (boot only runs create-if-not-
+-- exists, never drop), but no code touches it.
 create table if not exists discord_user_trackers (
   id integer primary key autoincrement,
   subscriber_id text not null,
@@ -568,4 +568,27 @@ create index if not exists idx_discord_user_trackers_target
 create table if not exists discord_alerted_maps (
   beatmap_id integer primary key,
   alerted_at text not null
+);
+
+-- Discord bot: remembers the last beatmap shown in a channel (from /recent, /map,
+-- /dan, ...) so /pb, /c and /compare can look up a player's score on that map
+-- without re-typing it. One row per channel, overwritten as new maps are shown.
+-- Pruned by retention since stale rows are harmless to drop.
+create table if not exists discord_channel_map_context (
+  channel_id text primary key,
+  beatmap_id integer not null,
+  beatmapset_id integer,
+  title text,
+  version text,
+  updated_at text not null
+);
+
+-- Persistent cache of raw .osu beatmap files, keyed by beatmap (difficulty) id.
+-- The dan estimator and activity analyzer both parse these, so caching the download
+-- avoids re-fetching the same chart from osu.ppy.sh on a cold compute or after a
+-- cache-version bump. Pruned by retention and the global DB size cap.
+create table if not exists beatmap_osu_files (
+  beatmap_id integer primary key,
+  content text not null,
+  fetched_at text not null
 );

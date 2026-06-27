@@ -41,6 +41,9 @@ export interface DiscordComponent {
   items?: Array<{ media: { url: string }; description?: string; spoiler?: boolean }>;
   accessory?: DiscordComponent;
   spoiler?: boolean;
+  // Separator (type 14): draws an optional divider line with small/large spacing.
+  divider?: boolean;
+  spacing?: number;
 }
 
 export interface DiscordMessageBody {
@@ -197,21 +200,6 @@ export class DiscordRest {
   /** Fetches the bot application (used to validate the token from the admin page). */
   getApplication(): Promise<{ id: string; name: string; bot?: { username?: string } }> {
     return this.request({ method: "GET", path: "/applications/@me", auth: "bot" });
-  }
-
-  /**
-   * Opens (or returns the existing) DM channel with a user. Discord is
-   * idempotent here and caches the channel, so the id can be reused for later
-   * sends. Needs the bot token. Fails (50007) if the user blocks DMs or shares
-   * no surface with the bot; the caller treats that as an unreachable recipient.
-   */
-  createDmChannel(userId: string): Promise<{ id: string }> {
-    return this.request({
-      method: "POST",
-      path: "/users/@me/channels",
-      body: { recipient_id: userId },
-      auth: "bot",
-    });
   }
 
   /**

@@ -4,6 +4,8 @@ import { ModBadge } from "../ui/ModBadge";
 import { Avatar } from "../ui/Avatar";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../../lib/cache";
 import { GLOBAL_SCOPE_CODE, getCountryName, isGlobalScope } from "../../lib/country";
+import { useAuth } from "../../lib/auth-context";
+import type { AuthViewer } from "../../lib/auth-shared";
 import { fetchLiveRankingsSnapshot, type LiveGlobalRankingEntry } from "../../lib/live-backend";
 import { getRankings } from "../../lib/osu";
 import type { LeanRankingEntry, RankingsResponse } from "../../lib/types";
@@ -54,6 +56,7 @@ interface ShowcaseSample {
   countryLabel: string;
   commandCountry: string;
   isGlobal: boolean;
+  viewer: ShowcasePlayer | null;
   players: ShowcasePlayer[];
   leaderboard: ShowcasePlayer[];
 }
@@ -114,7 +117,7 @@ function seededShuffle<T>(items: T[], seedText: string): T[] {
 function fallbackPlayers(country: string): ShowcasePlayer[] {
   const scope = isGlobalScope(country) ? GLOBAL_SCOPE_CODE : country.toUpperCase();
   const countryCode = isGlobalScope(scope) ? "" : scope;
-  return Array.from({ length: 6 }, (_, index) => {
+  return Array.from({ length: 10 }, (_, index) => {
     const rank = index + 1;
     return {
       id: 0,
@@ -167,10 +170,37 @@ function uniquePlayers(players: ShowcasePlayer[]): ShowcasePlayer[] {
   return unique;
 }
 
+function viewerToPlayer(viewer: AuthViewer | null, sourcePlayers: ShowcasePlayer[]): ShowcasePlayer | null {
+  if (!viewer) return null;
+
+  const matched = sourcePlayers.find((player) => player.id === viewer.id);
+  const countryCode = viewer.countryCode?.trim().toUpperCase() || matched?.countryCode || "";
+  if (matched) {
+    return {
+      ...matched,
+      username: viewer.username || matched.username,
+      countryCode,
+    };
+  }
+
+  return {
+    id: viewer.id,
+    username: viewer.username,
+    countryCode,
+    pp: 0,
+    globalRank: null,
+    countryRank: null,
+    accuracy: null,
+    playCount: null,
+  };
+}
+
 function buildShowcaseSample(
   country: string,
   rankings: RankingsResponse | null,
   liveRankings: LiveGlobalRankingEntry[] | null,
+  viewer: AuthViewer | null,
+  seedText: string,
 ): ShowcaseSample {
   const normalizedCountry = country.toUpperCase();
   const isGlobal = isGlobalScope(normalizedCountry);
@@ -184,9 +214,16 @@ function buildShowcaseSample(
       .filter((entry) => entry.user.is_active !== false)
       .map((entry, index) => countryEntryToPlayer(entry, index, normalizedCountry));
   const fallback = fallbackPlayers(normalizedCountry);
-  const shuffled = seededShuffle(uniquePlayers(sourcePlayers), `${normalizedCountry}:${sourcePlayers.map((p) => p.id).join(":")}`);
-  const players = shuffled.slice(0, 6);
-  while (players.length < 6) players.push(fallback[players.length]);
+  const viewerPlayer = viewerToPlayer(viewer, sourcePlayers);
+  const poolPlayers = viewerPlayer
+    ? sourcePlayers.filter((player) => player.id !== viewerPlayer.id)
+    : sourcePlayers;
+  const shuffled = seededShuffle(
+    uniquePlayers(poolPlayers),
+    `${normalizedCountry}:${seedText}:${sourcePlayers.map((p) => p.id).join(":")}`,
+  );
+  const players = shuffled.slice(0, 8);
+  while (players.length < 8) players.push(fallback[players.length]);
 
   const leaderboard = sourcePlayers.length > 0
     ? sourcePlayers.slice(0, 4)
@@ -197,6 +234,7 @@ function buildShowcaseSample(
     countryLabel,
     commandCountry,
     isGlobal,
+    viewer: viewerPlayer,
     players,
     leaderboard,
   };
@@ -209,7 +247,7 @@ function buildShowcaseSample(
 function BotAvatar({ size = 40 }: { size?: number }) {
   return (
     <img
-      src="/logo512.png"
+      src="/images/discord/bot-avatar.png"
       alt="maniabot"
       className="shrink-0 rounded-full object-cover"
       style={{ width: size, height: size }}
@@ -313,6 +351,18 @@ function PageButtons({ canPrev = false }: { canPrev?: boolean }) {
   );
 }
 
+// The grey secondary "Reroll" button the random pickers attach above their link
+// buttons, so the preview reads as "click for another pick".
+function RerollPill() {
+  return (
+    <div className="pt-1">
+      <span className="inline-flex items-center rounded px-2.5 py-1 text-[11px] font-semibold" style={{ backgroundColor: D.btn, color: D.white }}>
+        Reroll
+      </span>
+    </div>
+  );
+}
+
 // Muted middot separator, matching the bot's inline list style.
 function Dot() {
   return <span style={{ color: D.muted }}>•</span>;
@@ -331,10 +381,6 @@ function TextReply({ accent, children }: { accent: string; children: ReactNode }
 }
 
 // Discord's "ephemeral" footer, for replies only the invoker can see.
-function EphemeralHint() {
-  return <div className="pt-1 text-[10px]" style={{ color: D.muted }}>Only you can see this</div>;
-}
-
 // One play, rendered with the real osu grade icon + mod badges.
 function ScoreLine({ grade, title, version, mods, acc, pp, keys, gain }: {
   grade: string; title: string; version: string; mods: string[]; acc: string; pp: string; keys?: string; gain?: string;
@@ -523,18 +569,36 @@ function ManiacardArt({ player }: { player: ShowcasePlayer }) {
 // ---------------------------------------------------------------------------
 
 function buildCommands(sample: ShowcaseSample): Command[] {
-  const [main, rival, third, fourth, fifth] = sample.players;
-  const rankFor = (player: ShowcasePlayer, index: number): number =>
+  const fallback = fallbackPlayers(sample.commandCountry)[0];
+  const pick = (index: number): ShowcasePlayer => sample.players[index] ?? sample.viewer ?? fallback;
+  const self = sample.viewer ?? pick(0);
+  const profile = pick(0);
+  const recent = pick(1);
+  const card = pick(2);
+  const activity = pick(3);
+  const goals = pick(4);
+  const pb = pick(5);
+  const farm = pick(6);
+  const replay = pick(7);
+  const rival = sample.viewer ? pick(0) : pick(1);
+  const feed = pick(2);
+  const third = pick(2);
+  const fourth = pick(3);
+  const fifth = pick(4);
+  const rankFor = (player: ShowcasePlayer, index: number): number | null =>
     sample.isGlobal
-      ? player.globalRank ?? index + 1
-      : player.countryRank ?? index + 1;
+      ? player.globalRank ?? (player.id > 0 ? null : index + 1)
+      : player.countryRank ?? (player.id > 0 ? null : index + 1);
   const playPp = (player: ShowcasePlayer, fallback: number): string =>
     `${Math.max(300, Math.round((player.pp > 0 ? player.pp : fallback) * 0.065))}pp`;
-  const goalTarget = Math.max(1000, Math.ceil((main.pp + 700) / 1000) * 1000);
-  const goalPercent = main.pp > 0 ? Math.min(99, Math.max(1, Math.round((main.pp / goalTarget) * 100))) : 75;
-  const mainRank = rankFor(main, 0);
+  const rankWins = (a: number | null, b: number | null): boolean => a != null && (b == null || a <= b);
+  const numberWins = (a: number | null | undefined, b: number | null | undefined): boolean =>
+    a != null && (b == null || a >= b);
+  const goalTarget = Math.max(1000, Math.ceil((goals.pp + 700) / 1000) * 1000);
+  const goalPercent = goals.pp > 0 ? Math.min(99, Math.max(1, Math.round((goals.pp / goalTarget) * 100))) : 75;
+  const selfRank = rankFor(self, 0);
   const rivalRank = rankFor(rival, 1);
-  const mainAccuracy = main.accuracy ?? 99.4;
+  const selfAccuracy = self.accuracy ?? 99.4;
   const rivalAccuracy = rival.accuracy ?? 99.2;
   const rankingsTitle = sample.isGlobal ? "Global mania rankings" : `${sample.countryName} mania rankings`;
   const latestScoresTitle = sample.isGlobal ? "Latest tracked scores" : `Latest scores in ${sample.countryLabel}`;
@@ -543,11 +607,11 @@ function buildCommands(sample: ShowcaseSample): Command[] {
 
   return [
     {
-      id: "link", label: "/link", invocation: `/link ${commandName(main)}`, group: "You", accent: PINK,
+      id: "link", label: "/link", invocation: `/link ${commandName(self)}`, group: "You", accent: PINK,
       blurb: "Save your osu! account so every other command knows who you are.",
       render: () => (
         <TextReply accent={PINK}>
-          Linked to <b style={{ color: D.white }}>{main.username}</b>. Commands now default to this account.
+          Linked to <b style={{ color: D.white }}>{self.username}</b>. Commands now default to this account.
         </TextReply>
       ),
     },
@@ -556,13 +620,13 @@ function buildCommands(sample: ShowcaseSample): Command[] {
       blurb: "Your personal dashboard: ranks, pp, activity totals and goal progress.",
       render: () => (
         <Embed accent={PINK}>
-          <EmbedAuthor name={main.username} userId={userIdForAvatar(main)} />
+          <EmbedAuthor name={self.username} userId={userIdForAvatar(self)} />
           <Fields items={[
-            { name: "Global", value: formatRank(main.globalRank) },
-            { name: countryFieldName(main), value: formatRank(main.countryRank) },
-            { name: "pp", value: <b style={{ color: D.white }}>{formatPp(main.pp)}</b> },
+            { name: "Global", value: formatRank(self.globalRank) },
+            { name: countryFieldName(self), value: formatRank(self.countryRank) },
+            { name: "pp", value: <b style={{ color: D.white }}>{formatPp(self.pp)}</b> },
             { name: "Active days", value: "128" },
-            { name: "Sessions", value: formatNumber(Math.max(1, Math.round((main.playCount ?? 24000) / 45))) },
+            { name: "Sessions", value: formatNumber(Math.max(1, Math.round((self.playCount ?? 24000) / 45))) },
             { name: "Top plays", value: "100" },
           ]} />
           <Lead>Highlights</Lead>
@@ -578,21 +642,21 @@ function buildCommands(sample: ShowcaseSample): Command[] {
       ),
     },
     {
-      id: "player", label: "/player", invocation: `/player ${commandName(main)}`, group: "Players", accent: PINK,
+      id: "player", label: "/player", invocation: `/player ${commandName(profile)}`, group: "Players", accent: PINK,
       blurb: "Full profile card with ranks, pp and top plays. The username is optional once you link.",
       render: () => (
         <Embed accent={PINK}>
-          <EmbedAuthor name={main.username} userId={userIdForAvatar(main)} />
+          <EmbedAuthor name={profile.username} userId={userIdForAvatar(profile)} />
           <Fields items={[
-            { name: "Global", value: formatRank(main.globalRank) },
-            { name: countryFieldName(main), value: formatRank(main.countryRank) },
-            { name: "pp", value: <b style={{ color: D.white }}>{formatPp(main.pp)}</b> },
-            { name: "Accuracy", value: formatAccuracy(main.accuracy) },
-            { name: "Play count", value: formatNumber(main.playCount) },
+            { name: "Global", value: formatRank(profile.globalRank) },
+            { name: countryFieldName(profile), value: formatRank(profile.countryRank) },
+            { name: "pp", value: <b style={{ color: D.white }}>{formatPp(profile.pp)}</b> },
+            { name: "Accuracy", value: formatAccuracy(profile.accuracy) },
+            { name: "Play count", value: formatNumber(profile.playCount) },
             { name: "Level", value: "103" },
           ]} />
           <Lead>Top plays</Lead>
-          <ScoreLine grade="X" title="Blue Zenith" version="4K Black Another" keys="4K" mods={["HD", "DT"]} acc="100%" pp={playPp(main, 13000)} />
+          <ScoreLine grade="X" title="Blue Zenith" version="4K Black Another" keys="4K" mods={["HD", "DT"]} acc="100%" pp={playPp(profile, 13000)} />
           <ScoreLine grade="S" title="FREEDOM DiVE" version="4K Another" keys="4K" mods={["DT"]} acc="99.2%" pp={playPp(rival, 11500)} />
           <ScoreLine grade="S" title="Everything Will Freeze" version="[7K] SHD" keys="7K" mods={[]} acc="98.7%" pp={playPp(third, 10000)} />
           <Footer text="maniabot" />
@@ -605,10 +669,10 @@ function buildCommands(sample: ShowcaseSample): Command[] {
       blurb: "Latest plays, pass or fail, paginated with Prev and Next.",
       render: () => (
         <Embed accent={PINK}>
-          <EmbedAuthor name={main.username} userId={userIdForAvatar(main)} />
+          <EmbedAuthor name={recent.username} userId={userIdForAvatar(recent)} />
           <Lead>Recent plays</Lead>
           <ScoreLine grade="A" title="Yomi yori" version="4K Master" keys="4K" mods={["HD"]} acc="97.1%" pp="-" />
-          <ScoreLine grade="S" title="Aleph-0" version="4K Ultra" keys="4K" mods={[]} acc="98.9%" pp={playPp(main, 9400)} />
+          <ScoreLine grade="S" title="Aleph-0" version="4K Ultra" keys="4K" mods={[]} acc="98.9%" pp={playPp(recent, 9400)} />
           <ScoreLine grade="F" title="Cyber Induction" version="4K SHD" keys="4K" mods={["DT"]} acc="91.0%" pp="-" />
           <Footer text="Page 1 • maniabot" />
           <PageButtons />
@@ -616,12 +680,12 @@ function buildCommands(sample: ShowcaseSample): Command[] {
       ),
     },
     {
-      id: "maniacard", label: "/maniacard", invocation: `/maniacard ${commandName(main)}`, group: "Players", accent: GOLD,
+      id: "maniacard", label: "/maniacard", invocation: `/maniacard ${commandName(card)}`, group: "Players", accent: GOLD,
       blurb: "A shareable skill-tier card: control, speed and precision under a tier badge, with star rating.",
       render: () => (
         <Embed accent={GOLD}>
-          <EmbedAuthor name={main.username} userId={userIdForAvatar(main)} />
-          <ManiacardArt player={main} />
+          <EmbedAuthor name={card.username} userId={userIdForAvatar(card)} />
+          <ManiacardArt player={card} />
           <Footer text="maniabot" />
           <Buttons items={["View card", "osu! profile"]} />
         </Embed>
@@ -632,11 +696,11 @@ function buildCommands(sample: ShowcaseSample): Command[] {
       blurb: "Play habits and a playstyle breakdown: active days, sessions and skill mix.",
       render: () => (
         <Embed accent={PINK}>
-          <EmbedAuthor name={main.username} userId={userIdForAvatar(main)} />
+          <EmbedAuthor name={activity.username} userId={userIdForAvatar(activity)} />
           <Fields items={[
             { name: "Active days", value: "128" },
-            { name: "Total plays", value: formatNumber(main.playCount) },
-            { name: "Sessions", value: formatNumber(Math.max(1, Math.round((main.playCount ?? 24000) / 45))) },
+            { name: "Total plays", value: formatNumber(activity.playCount) },
+            { name: "Sessions", value: formatNumber(Math.max(1, Math.round((activity.playCount ?? 24000) / 45))) },
             { name: "Plays/session", value: "45" },
             { name: "Current streak", value: "9 days" },
             { name: "Year", value: "2026" },
@@ -658,11 +722,11 @@ function buildCommands(sample: ShowcaseSample): Command[] {
       blurb: "Track pp and accuracy goals and how close each one is.",
       render: () => (
         <Embed accent={PINK}>
-          <EmbedAuthor name={main.username} userId={userIdForAvatar(main)} />
+          <EmbedAuthor name={goals.username} userId={userIdForAvatar(goals)} />
           <Lead>Open goals</Lead>
           <div className="space-y-1 text-[12px]" style={{ color: D.text }}>
             <div className="flex flex-wrap items-center gap-1.5">
-              <span style={{ color: D.muted }}>-</span> <span>Reach <b style={{ color: D.white }}>{formatPp(goalTarget)}</b></span> <span style={{ color: D.muted }}>({formatPp(main.pp)}, {goalPercent}%)</span>
+              <span style={{ color: D.muted }}>-</span> <span>Reach <b style={{ color: D.white }}>{formatPp(goalTarget)}</b></span> <span style={{ color: D.muted }}>({formatPp(goals.pp)}, {goalPercent}%)</span>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
               <span style={{ color: D.muted }}>-</span> <span><b style={{ color: D.white }}>99.00%</b> on <span style={{ color: D.link }}>Blue Zenith [4K Another]</span></span> <span style={{ color: D.muted }}>(best 98.20%, 80%)</span>
@@ -674,28 +738,47 @@ function buildCommands(sample: ShowcaseSample): Command[] {
       ),
     },
     {
-      id: "compare", label: "/compare", invocation: `/compare ${commandName(rival)}`, group: "Players", accent: PINK,
+      id: "vs", label: "/vs", invocation: `/vs ${commandName(rival)}`, group: "Players", accent: PINK,
       blurb: "Two players head to head, winner bolded per stat. Leave the first name out to compare against yourself.",
       render: () => (
         <Embed accent={PINK}>
-          <EmbedTitle>{main.username} vs {rival.username}</EmbedTitle>
+          <EmbedTitle>{self.username} vs {rival.username}</EmbedTitle>
           <div className="space-y-1 text-[12px]" style={{ color: D.text }}>
-            <div>pp: <Winner active={main.pp >= rival.pp}>{formatPp(main.pp)}</Winner> vs <Winner active={rival.pp > main.pp}>{formatPp(rival.pp)}</Winner></div>
-            <div>Global rank: <Winner active={(main.globalRank ?? Infinity) <= (rival.globalRank ?? Infinity)}>{formatRank(main.globalRank)}</Winner> vs <Winner active={(rival.globalRank ?? Infinity) < (main.globalRank ?? Infinity)}>{formatRank(rival.globalRank)}</Winner></div>
-            <div>Country rank: <Winner active={mainRank <= rivalRank}>{formatRank(mainRank)}</Winner> vs <Winner active={rivalRank < mainRank}>{formatRank(rivalRank)}</Winner></div>
-            <div>Accuracy: <Winner active={mainAccuracy >= rivalAccuracy}>{formatAccuracy(mainAccuracy)}</Winner> vs <Winner active={rivalAccuracy > mainAccuracy}>{formatAccuracy(rivalAccuracy)}</Winner></div>
+            <div>pp: <Winner active={numberWins(self.pp, rival.pp)}>{formatPp(self.pp)}</Winner> vs <Winner active={numberWins(rival.pp, self.pp)}>{formatPp(rival.pp)}</Winner></div>
+            <div>Global rank: <Winner active={rankWins(self.globalRank, rival.globalRank)}>{formatRank(self.globalRank)}</Winner> vs <Winner active={rankWins(rival.globalRank, self.globalRank)}>{formatRank(rival.globalRank)}</Winner></div>
+            <div>Country rank: <Winner active={rankWins(selfRank, rivalRank)}>{formatRank(selfRank)}</Winner> vs <Winner active={rankWins(rivalRank, selfRank)}>{formatRank(rivalRank)}</Winner></div>
+            <div>Accuracy: <Winner active={numberWins(selfAccuracy, rivalAccuracy)}>{formatAccuracy(selfAccuracy)}</Winner> vs <Winner active={numberWins(rivalAccuracy, selfAccuracy)}>{formatAccuracy(rivalAccuracy)}</Winner></div>
           </div>
           <Footer text="maniabot" />
-          <Buttons items={[main.username, rival.username]} />
+          <Buttons items={[self.username, rival.username]} />
         </Embed>
       ),
     },
     {
-      id: "farm", label: "/farm", invocation: `/farm ${commandName(main)} 4k`, group: "Players", accent: PINK,
+      id: "pb", label: "/pb", invocation: "/pb", group: "Players", accent: GOLD,
+      blurb: "Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else.",
+      render: () => (
+        <Embed accent={GOLD}>
+          <EmbedAuthor name={pb.username} userId={userIdForAvatar(pb)} />
+          <EmbedTitle>Blue Zenith [4K Black Another]</EmbedTitle>
+          <div className="flex items-center gap-2 text-[12px]">
+            <GradeImg grade="X" size={20} />
+            <ModBadge mod="DT" size={0.5} />
+            <span style={{ color: D.muted }}>99.4%</span>
+            <span style={{ color: D.muted }}>1,532x</span>
+            <b style={{ color: D.white }}>{playPp(pb, 13000)}</b>
+          </div>
+          <Footer text="maniabot" />
+          <Buttons items={["Beatmap", pb.username]} />
+        </Embed>
+      ),
+    },
+    {
+      id: "farm", label: "/farm", invocation: `/farm ${commandName(farm)} 4k`, group: "Players", accent: PINK,
       blurb: "PP-gain map recommendations tuned to a player.",
       render: () => (
         <Embed accent={PINK}>
-          <EmbedAuthor name={main.username} userId={userIdForAvatar(main)} />
+          <EmbedAuthor name={farm.username} userId={userIdForAvatar(farm)} />
           <Lead>Farm picks</Lead>
           <div className="space-y-1 pt-0.5 text-[12px]" style={{ color: D.text }}>
             <div className="flex flex-wrap items-center gap-1.5"><span style={{ color: D.muted }}>1.</span> <span style={{ color: D.link }}>Output</span> <ModBadge mod="DT" size={0.45} /> <Dot /> <b style={{ color: D.white }}>+42pp</b></div>
@@ -717,7 +800,7 @@ function buildCommands(sample: ShowcaseSample): Command[] {
             {sample.leaderboard.map((player, index) => (
               <RankRow
                 key={`${player.username}-${index}`}
-                rank={rankFor(player, index)}
+                rank={rankFor(player, index) ?? index + 1}
                 name={player.username}
                 userId={userIdForAvatar(player)}
                 pp={formatPp(player.pp)}
@@ -753,7 +836,7 @@ function buildCommands(sample: ShowcaseSample): Command[] {
         <Embed accent={GOLD}>
           <EmbedTitle>{latestScoresTitle}</EmbedTitle>
           <div className="pt-1">
-            <TrackerRow grade="X" player={main.username} title="Blue Zenith" mods={["DT"]} acc="99.4%" pp={playPp(main, 13000)} />
+            <TrackerRow grade="X" player={profile.username} title="Blue Zenith" mods={["DT"]} acc="99.4%" pp={playPp(profile, 13000)} />
             <TrackerRow grade="S" player={rival.username} title="FREEDOM DiVE" mods={["HD"]} acc="98.9%" pp={playPp(rival, 10800)} />
             <TrackerRow grade="A" player={third.username} title="Cyber Induction" mods={[]} acc="96.2%" pp={playPp(third, 9000)} />
             <TrackerRow grade="S" player={fourth.username} title="Aleph-0" mods={["DT"]} acc="98.1%" pp={playPp(fourth, 8300)} />
@@ -777,6 +860,54 @@ function buildCommands(sample: ShowcaseSample): Command[] {
           <Footer text="Page 1 • maniabot" />
           <Buttons items={["All maps"]} />
           <PageButtons />
+        </Embed>
+      ),
+    },
+    {
+      id: "randomfarm", label: "/randomfarm", invocation: `/randomfarm ${sample.commandCountry} keys:4k`, group: "Browse", accent: PINK,
+      blurb: "Roll a random popular farm map. Defaults to the global farm board; filter by keys, status, star range or minimum pp. Reroll for another.",
+      render: () => (
+        <Embed accent={PINK}>
+          <EmbedTitle>xi - Blue Zenith [4K Black Another]</EmbedTitle>
+          <div className="text-[12px]" style={{ color: D.text }}>
+            Random farm pick. <b style={{ color: D.white }}>12</b> players farm this in {sample.countryLabel}, mostly <span style={{ color: GOLD }}>+DT</span>.
+          </div>
+          <Fields items={[
+            { name: "Stars", value: <span style={{ color: GOLD }}>6.20★</span> },
+            { name: "Keys", value: "4K" },
+            { name: "BPM", value: "200" },
+            { name: "Status", value: "Ranked" },
+            { name: "Avg pp", value: <b style={{ color: D.white }}>700pp</b> },
+            { name: "Max pp", value: "850pp" },
+          ]} />
+          <Cover src={COVER_A} />
+          <Footer text={scopeFooter} />
+          <RerollPill />
+          <Buttons items={["Beatmap", "Farm detail"]} />
+        </Embed>
+      ),
+    },
+    {
+      id: "randomfav", label: "/randomfav", invocation: `/randomfav ${sample.commandCountry} pattern:Jack`, group: "Browse", accent: PINK,
+      blurb: "Roll a random favourited map, the same pool as the Maps random tab. Filter by keys, status, pattern or star range, then reroll for another.",
+      render: () => (
+        <Embed accent={PINK}>
+          <EmbedTitle>xi - Blue Zenith</EmbedTitle>
+          <div className="text-[12px]" style={{ color: D.text }}>
+            Random favourite pick. Favourited by <b style={{ color: D.white }}>{profile.username}</b> and <b style={{ color: D.white }}>23</b> others in {sample.countryLabel}.
+          </div>
+          <Fields items={[
+            { name: "Stars", value: <span style={{ color: GOLD }}>6.20★</span> },
+            { name: "Keys", value: "4K 7K" },
+            { name: "Status", value: "Loved" },
+            { name: "BPM", value: "200" },
+            { name: "Global favs", value: "4,200" },
+            { name: "Patterns", value: "Jack, Chordjack" },
+          ]} />
+          <Cover src={COVER_A} />
+          <Footer text={scopeFooter} />
+          <RerollPill />
+          <Buttons items={["Beatmap", "Random maps"]} />
         </Embed>
       ),
     },
@@ -829,13 +960,13 @@ function buildCommands(sample: ShowcaseSample): Command[] {
         <Embed accent={PINK}>
           <EmbedTitle>Replay viewer</EmbedTitle>
           <div className="text-[12px]" style={{ color: D.text }}>
-            <b style={{ color: D.white }}>{main.username}</b> on <span style={{ color: D.link }}>Blue Zenith [4K Black Another]</span>
+            <b style={{ color: D.white }}>{replay.username}</b> on <span style={{ color: D.link }}>Blue Zenith [4K Black Another]</span>
           </div>
           <div className="flex items-center gap-2 text-[12px]">
             <GradeImg grade="X" size={20} />
             <ModBadge mod="DT" size={0.5} />
             <span style={{ color: D.muted }}>99.4%</span>
-            <b style={{ color: D.white }}>{playPp(main, 13000)}</b>
+            <b style={{ color: D.white }}>{playPp(replay, 13000)}</b>
           </div>
           <Footer text="maniabot" />
           <Buttons items={["Watch replay"]} />
@@ -843,20 +974,8 @@ function buildCommands(sample: ShowcaseSample): Command[] {
       ),
     },
     {
-      id: "watch-user", label: "/watch user", invocation: `/watch user ${commandName(main)} min_pp:500`, group: "Alerts", accent: GREEN,
-      blurb: "Get a DM whenever a player you follow lands a new top play.",
-      render: () => (
-        <>
-          <TextReply accent={GREEN}>
-            Watching <b style={{ color: D.white }}>{main.username}</b>. You will get a DM on each new top play and on any ranked play at or above <b style={{ color: D.white }}>500pp</b>.
-          </TextReply>
-          <EphemeralHint />
-        </>
-      ),
-    },
-    {
-      id: "alert-maps", label: "Farm map alert", invocation: "auto-posted", group: "Alerts", accent: GREEN,
-      blurb: "New farm maps, delivered by DM with /watch maps or to a channel with /subscribe.",
+      id: "alert-maps", label: "Farm map alert", invocation: "auto-posted", group: "Feeds", accent: GREEN,
+      blurb: "New farm maps, auto-posted to any channel that ran /subscribe feed:new maps.",
       render: () => (
         <Embed accent={GREEN}>
           <EmbedTitle>New farm map</EmbedTitle>
@@ -873,11 +992,11 @@ function buildCommands(sample: ShowcaseSample): Command[] {
       ),
     },
     {
-      id: "feed-top", label: "Top-play feed", invocation: "auto-posted", group: "Alerts", accent: GOLD,
+      id: "feed-top", label: "Top-play feed", invocation: "auto-posted", group: "Feeds", accent: GOLD,
       blurb: "When someone lands a new top play, it drops in your channel automatically.",
       render: () => (
         <Embed accent={GOLD}>
-          <EmbedAuthor name={third.username} userId={userIdForAvatar(third)} />
+          <EmbedAuthor name={feed.username} userId={userIdForAvatar(feed)} />
           <EmbedTitle>New top play</EmbedTitle>
           <div className="text-[12px]" style={{ color: D.text }}>
             <span style={{ color: D.link }}>UNDEAD CORPORATION - Everything Will Freeze [4K Black Another]</span>
@@ -886,17 +1005,17 @@ function buildCommands(sample: ShowcaseSample): Command[] {
             <GradeImg grade="X" size={20} />
             <ModBadge mod="HD" size={0.5} /><ModBadge mod="DT" size={0.5} />
             <span style={{ color: D.muted }}>99.21%</span>
-            <b style={{ color: D.white }}>{playPp(third, 12000)}</b>
+            <b style={{ color: D.white }}>{playPp(feed, 12000)}</b>
             <span style={{ color: GOLD }}>(+35pp)</span>
           </div>
           <Cover src={COVER_A} />
           <Footer text={scopeFooter} />
-          <Buttons items={["Beatmap", third.username]} />
+          <Buttons items={["Beatmap", feed.username]} />
         </Embed>
       ),
     },
     {
-      id: "subscribe", label: "/subscribe", invocation: `/subscribe feed:Top plays country:${sample.commandCountry} min_pp:600`, group: "Alerts", accent: GREEN,
+      id: "subscribe", label: "/subscribe", invocation: `/subscribe feed:Top plays country:${sample.commandCountry} min_pp:600`, group: "Feeds", accent: GREEN,
       blurb: "Turn a feed on for the current channel (needs Manage Server).",
       render: () => (
         <TextReply accent={GREEN}>
@@ -907,10 +1026,11 @@ function buildCommands(sample: ShowcaseSample): Command[] {
   ];
 }
 
-const GROUPS = ["You", "Players", "Browse", "Beatmaps", "Alerts"];
+const GROUPS = ["You", "Players", "Browse", "Beatmaps", "Feeds"];
 const DEFAULT_COMMAND_ID = "link";
 
 export function CommandShowcase() {
+  const auth = useAuth();
   const selectedCountry = useSelectedCountry();
   const selectedIsGlobal = isGlobalScope(selectedCountry);
   const cachedRankings = useAppStore((state) => state.rankingsByCountry[selectedCountry] ?? null);
@@ -918,6 +1038,11 @@ export function CommandShowcase() {
   const setRankings = useAppStore((state) => state.setRankings);
   const [liveRankings, setLiveRankings] = useState<LiveGlobalRankingEntry[] | null>(null);
   const [selectedId, setSelectedId] = useState(DEFAULT_COMMAND_ID);
+  const [sampleSeed, setSampleSeed] = useState("");
+
+  useEffect(() => {
+    setSampleSeed(`${selectedCountry}:${Date.now()}:${Math.random()}`);
+  }, [selectedCountry]);
 
   useEffect(() => {
     let cancelled = false;
@@ -955,8 +1080,10 @@ export function CommandShowcase() {
       selectedCountry,
       selectedIsGlobal ? null : cachedRankings,
       liveRankings,
+      auth.viewer,
+      sampleSeed,
     ),
-    [cachedRankings, liveRankings, selectedCountry, selectedIsGlobal],
+    [auth.viewer, cachedRankings, liveRankings, sampleSeed, selectedCountry, selectedIsGlobal],
   );
   const commands = useMemo(() => buildCommands(sample), [sample]);
   const selected = commands.find((c) => c.id === selectedId) ?? commands[0];

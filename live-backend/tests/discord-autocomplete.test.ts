@@ -6,7 +6,6 @@ import { createDb, migrate, type Db } from "../src/db.js";
 import type { Config } from "../src/config.js";
 import { handleAutocomplete } from "../src/discord/autocomplete.js";
 import { setUserLink } from "../src/discord/identity.js";
-import { addUserTracker, MAPS_TRACKER_TARGET } from "../src/discord/trackers.js";
 import type { DiscordInteraction } from "../src/discord/commands.js";
 
 // getCountryRegistry only reads trackedCountries and countryWarmTtlMs.
@@ -66,17 +65,12 @@ describe("username autocomplete", () => {
     ], "nolink"));
     expect(choices).toEqual([]);
   });
-});
 
-describe("watch target autocomplete", () => {
-  it("lists the caller's existing alerts from a subcommand", async () => {
-    await addUserTracker(db, { subscriberId: "u1", kind: "user", targetOsuUserId: 7, targetUsername: "Jakads", minPp: 500 });
-    await addUserTracker(db, { subscriberId: "u1", kind: "maps", targetOsuUserId: MAPS_TRACKER_TARGET, targetUsername: null, minPp: 0 });
-    const choices = await handleAutocomplete({ db, config }, commandInteraction("watch", [
-      { name: "stop", type: 1, options: [{ name: "target", type: 3, value: "", focused: true }] },
+  it("suggests the linked account for the /vs player options too", async () => {
+    await setUserLink(db, { discordUserId: "u1", osuUserId: 124493, osuUsername: "Kalkai", countryCode: "KR" });
+    const choices = await handleAutocomplete({ db, config }, commandInteraction("vs", [
+      { name: "player1", type: 3, value: "", focused: true },
     ]));
-    const values = choices.map((c) => c.value);
-    expect(values).toContain("Jakads");
-    expect(values).toContain("maps");
+    expect(choices.some((c) => c.value === "Kalkai")).toBe(true);
   });
 });

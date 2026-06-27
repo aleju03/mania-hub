@@ -2,6 +2,7 @@ import type { CountryTopPlay, LeanTrackerScore, OscScore, OsuMod, SnipeEvent } f
 import { getDisplayedAccuracy, getDisplayedRank, getModAcronyms } from "../shared/score.js";
 import { GLOBAL_COUNTRY_CODE, isGlobalCountry } from "../countries.js";
 import type { DiscordComponent, DiscordEmbed, DiscordMessageBody } from "./rest.js";
+import { helpNavRow, linkAccountRow } from "./components.js";
 
 // osu! pink, matching the site accent.
 export const OSU_PINK = 0xff66ab;
@@ -233,6 +234,54 @@ export function recentScoresEmbed(
   };
 }
 
+export interface PbBeatmapRef {
+  id: number;
+  url?: string;
+  title: string | null;
+  version: string | null;
+}
+
+// A player's best score on a specific map, for /pb, /c and /compare. The map
+// comes from the channel's "last shown map" memory, so the caller never retypes
+// it.
+export function pbEmbed(params: {
+  username: string;
+  userId: number;
+  beatmap: PbBeatmapRef;
+  score: OscScore | null;
+  siteOrigin: string;
+}): DiscordMessageBody {
+  const { username, userId, beatmap, score, siteOrigin } = params;
+  const mapUrl = beatmap.url || `${OSU_BASE}/b/${beatmap.id}`;
+  const heading = truncate(
+    `${beatmap.title ?? `Beatmap ${beatmap.id}`}${beatmap.version ? ` [${beatmap.version}]` : ""}`,
+    200,
+  );
+  const embed: DiscordEmbed = {
+    author: { name: username, url: userId ? osuProfileUrl(userId) : undefined },
+    title: heading,
+    url: mapUrl,
+    color: OSU_PINK,
+    footer: { text: BOT_NAME },
+  };
+  if (score) {
+    const combo = score.max_combo != null ? ` • ${formatInt(score.max_combo)}x` : "";
+    const pp = score.pp != null ? ` • **${formatPp(score.pp)}**` : "";
+    embed.description = `\`${getDisplayedRank(score)}\` ${formatMods(score.mods)} • ${formatAcc(getDisplayedAccuracy(score))}${combo}${pp}`;
+    const when = score.ended_at || score.created_at;
+    if (when) embed.timestamp = when;
+  } else {
+    embed.description = `**${username}** has no score on this map.`;
+  }
+  return {
+    embeds: [embed],
+    components: linkButtonRow([
+      { label: "Beatmap", url: mapUrl },
+      { label: username, url: siteProfileUrl(siteOrigin, username) },
+    ]),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Top play (live feed + /top)
 // ---------------------------------------------------------------------------
@@ -398,42 +447,109 @@ export function compareEmbed(
   };
 }
 
-export function helpEmbed(siteOrigin: string): DiscordMessageBody {
+// Help is a small hub: a row of category buttons swaps the body in place (no new
+// message), and a primary button opens the link modal so the one bit of setup
+// that needs typing happens in a popup, not a slash command with an argument.
+export const HELP_CATEGORIES: Array<{ id: string; label: string }> = [
+  { id: "start", label: "Start" },
+  { id: "players", label: "Players" },
+  { id: "browse", label: "Browse" },
+  { id: "beatmaps", label: "Beatmaps" },
+  { id: "feeds", label: "Feeds" },
+];
+
+function helpCategoryBody(category: string): { title: string; lines: string[] } {
+  switch (category) {
+    case "players":
+      return {
+        title: "Players",
+        lines: [
+          "Profiles, scores and head-to-heads. Leave the username off to use your linked account.",
+          "",
+          "`/me` your dashboard",
+          "`/player [user]` profile card  •  `/maniacard [user]` skill card",
+          "`/recent [user]` latest plays  •  `/activity [user]` playstyle  •  `/goals [user]`",
+          "`/farm [user] [keys]` pp-gain picks",
+          "`/vs [player1] <player2>` two players head to head",
+          "`/pb [user]` your best score on the last map shown here (also `/c`, `/compare`)",
+        ],
+      };
+    case "browse":
+      return {
+        title: "Browse",
+        lines: [
+          "Country and global boards. Country defaults to the home country, rankings to Global.",
+          "",
+          "`/rankings [country] [sort]` leaderboard",
+          "`/top [country] [range] [keys]` notable top plays",
+          "`/tracker [country]` latest live scores",
+          "`/maps [country] [tab] [keys]` most farmed / played",
+          "`/snipes [country]` recent leaderboard snipes",
+          "`/randomfarm [filters]` a random popular farm map",
+          "`/randomfav [filters]` a random favourited map",
+        ],
+      };
+    case "beatmaps":
+      return {
+        title: "Beatmaps",
+        lines: [
+          "Paste a beatmap link or id. For dan and map use a difficulty id (the number after",
+          "`#mania/` in a beatmapset URL), or the full URL and the bot resolves it.",
+          "",
+          "`/dan <beatmap>` dan-level estimate",
+          "`/map <beatmap>` details, dan and farm value",
+          "`/replay <score>` watch a replay in the browser",
+        ],
+      };
+    case "feeds":
+      return {
+        title: "Server feeds",
+        lines: [
+          "Auto-post live events into a channel. Managing feeds needs the Manage Server permission.",
+          "",
+          "`/subscribe <feed> [country] [min_pp]` start a feed (top plays / snipes / new maps)",
+          "`/unsubscribe <feed> [country]` stop one",
+          "`/subscriptions` list this server's feeds",
+        ],
+      };
+    default:
+      return {
+        title: BOT_NAME,
+        lines: [
+          "osu!mania stats, rankings and live feeds as slash commands.",
+          "",
+          "**1.** Tap **Link your osu! account** below (or run `/link <user>`).",
+          "**2.** Now commands like `/recent`, `/me` and `/farm` default to you, no username needed.",
+          "**3.** Type `/` in any channel, or use the buttons above to browse what the bot can do.",
+          "",
+          "`/whoami` check your link  •  `/unlink` remove it",
+        ],
+      };
+  }
+}
+
+export function helpEmbed(siteOrigin: string, category = "start"): DiscordMessageBody {
+  const { title, lines } = helpCategoryBody(category);
   const embed: DiscordEmbed = {
-    title: BOT_NAME,
+    title,
     url: siteOrigin,
     color: OSU_PINK,
-    description: [
-      "osu!mania stats, rankings, alerts and live feeds. Link your account once and most commands work with no username.",
-      "",
-      "**You**",
-      "`/link <user>` save your osu! account  •  `/whoami`  •  `/unlink`",
-      "`/me` your dashboard  •  `/recent [user]`  •  `/activity [user]`  •  `/goals [user]`",
-      "",
-      "**Players**",
-      "`/player [user]` profile  •  `/maniacard [user]` skill card  •  `/compare [a] <b>`  •  `/farm [user] [keys]`",
-      "",
-      "**Browse**",
-      "`/rankings [country] [sort]`  •  `/top [country] [range] [keys]`  •  `/tracker [country]`  •  `/maps [country] [tab] [keys]`",
-      "",
-      "**Beatmaps**",
-      "`/dan <beatmap>`  •  `/map <beatmap>`  •  `/replay <score>`",
-      "",
-      "**DM alerts**",
-      "`/watch user <user> [min_pp]` ping me on their plays  •  `/watch maps` new farm maps  •  `/watch list`  •  `/watch stop <target>`",
-      "",
-      "**Server feeds** (Manage Server)",
-      "`/subscribe <feed> [country] [min_pp]`  •  `/unsubscribe <feed> [country]`  •  `/subscriptions`",
-    ].join("\n"),
+    description: lines.join("\n"),
     footer: { text: BOT_NAME },
   };
   return {
     embeds: [embed],
-    components: linkButtonRow([
-      { label: "Open Mania Hub", url: siteOrigin },
-      { label: "Privacy", url: `${siteOrigin}/privacy` },
-      { label: "Terms", url: `${siteOrigin}/terms` },
-    ]),
+    components: [
+      helpNavRow(category, HELP_CATEGORIES),
+      {
+        type: 1,
+        components: [
+          { type: 2, style: 1, label: "Link your osu! account", custom_id: "mh|x|link" },
+          { type: 2, style: 5, label: "Open Mania Hub", url: siteOrigin },
+          { type: 2, style: 5, label: "Privacy", url: `${siteOrigin}/privacy` },
+        ],
+      },
+    ],
   };
 }
 
@@ -546,15 +662,28 @@ function titleCase(value: string): string {
   return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
 }
 
+export interface DanBeatmapRef {
+  id: number;
+  url?: string;
+  title?: string | null;
+  version?: string | null;
+}
+
 export function danEmbed(
-  beatmapId: number,
+  beatmap: DanBeatmapRef,
   estimate: { displayName?: string; label?: string; family?: string; confidence?: number } | null,
   pending: boolean,
   siteOrigin: string,
 ): DiscordMessageBody {
-  const mapUrl = `${OSU_BASE}/b/${beatmapId}`;
+  // Use the canonical beatmap URL when we have it (resolved from the API) and
+  // only fall back to /b/<id>; the old code hand-built /b/<id> from whatever
+  // number was typed, which 404s for a beatmapset id.
+  const mapUrl = beatmap.url || `${OSU_BASE}/b/${beatmap.id}`;
+  const heading = beatmap.title
+    ? truncate(`${beatmap.title}${beatmap.version ? ` [${beatmap.version}]` : ""}`, 200)
+    : "Dan estimate";
   const embed: DiscordEmbed = {
-    title: "Dan estimate",
+    title: heading,
     url: mapUrl,
     color: OSU_PINK,
     footer: { text: BOT_NAME },
@@ -569,7 +698,7 @@ export function danEmbed(
     if (emblem) embed.thumbnail = { url: emblem };
   } else {
     embed.description = pending
-      ? "Estimating this chart now, try again in a few seconds. If it stays like this the beatmap id may be invalid."
+      ? "Estimating this chart now, try again in a few seconds."
       : "No dan estimate available for this beatmap (ranked mania 4K only).";
   }
   return { embeds: [embed], components: linkButtonRow([{ label: "Beatmap", url: mapUrl }]) };
@@ -769,6 +898,7 @@ interface GoalLike {
   kind: string;
   beatmapLabel: string | null;
   targetValue: number | null;
+  targetCount?: number | null;
   targetGrade: string | null;
   status: string;
   progress?: { pct: number | null; detail: string | null } | null;
@@ -779,6 +909,7 @@ function goalHeadline(goal: GoalLike): string {
   switch (goal.kind) {
     case "reach_pp": return `Reach ${formatInt(goal.targetValue)}pp`;
     case "play_pp": return `Land a ${formatInt(goal.targetValue)}pp play`;
+    case "play_pp_count": return `Have ${formatInt(goal.targetCount ?? 0)} ${formatInt(goal.targetValue)}pp+ plays`;
     case "accuracy": return `${acc(goal.targetValue)} on ${goal.beatmapLabel ?? "a map"}`;
     case "pass": return `Pass ${goal.beatmapLabel ?? "a map"}`;
     case "grade": return `Get ${goal.targetGrade ?? "?"} on ${goal.beatmapLabel ?? "a map"}`;
@@ -964,6 +1095,126 @@ export function beatmapEmbed(
 }
 
 // ---------------------------------------------------------------------------
+// Random map pickers (/randomfarm, /randomfav)
+// ---------------------------------------------------------------------------
+
+// A range like "5.20-6.40" for a multi-difficulty set, or a single value when
+// the set has one mania difficulty (the common case). Hyphen, never a dash.
+function formatStarRange(min: number | null | undefined, max: number | null | undefined): string {
+  const lo = min != null && Number.isFinite(min) ? min : null;
+  const hi = max != null && Number.isFinite(max) ? max : null;
+  if (lo == null && hi == null) return "-";
+  if (lo != null && hi != null && Math.abs(lo - hi) > 0.01) return `${lo.toFixed(2)}-${hi.toFixed(2)}★`;
+  return `${(hi ?? lo ?? 0).toFixed(2)}★`;
+}
+
+interface RandomFarmLike {
+  beatmapId: number;
+  version?: string;
+  difficultyRating?: number | null;
+  cs?: number | null;
+  bpm?: number | null;
+  status?: string;
+  title: string;
+  artist: string;
+  creator?: string;
+  covers?: Record<string, string | undefined>;
+  playerCount: number;
+  avgPp: number;
+  maxPp: number;
+  dominantMod?: "DT" | "HT" | null;
+}
+
+export function randomFarmEmbed(map: RandomFarmLike, country: string | null, siteOrigin: string): DiscordMessageBody {
+  const mapUrl = `${OSU_BASE}/b/${map.beatmapId}`;
+  const cover = map.covers?.["cover@2x"] ?? map.covers?.cover ?? map.covers?.["card@2x"] ?? map.covers?.card;
+  const fields = [
+    { name: "Stars", value: map.difficultyRating != null ? `${map.difficultyRating.toFixed(2)}★` : "-", inline: true },
+    { name: "Keys", value: map.cs != null ? `${Math.round(map.cs)}K` : "-", inline: true },
+    { name: "BPM", value: map.bpm != null ? formatInt(map.bpm) : "-", inline: true },
+    { name: "Status", value: map.status ? titleCase(map.status) : "-", inline: true },
+    { name: "Avg pp", value: formatPp(map.avgPp), inline: true },
+    { name: "Max pp", value: formatPp(map.maxPp), inline: true },
+  ];
+  const farmers = `${formatInt(map.playerCount)} ${map.playerCount === 1 ? "player farms" : "players farm"} this in ${scopeLabel(country)}`
+    + (map.dominantMod ? `, mostly +${map.dominantMod}` : "");
+  const embed: DiscordEmbed = {
+    author: map.creator ? { name: `mapped by ${map.creator}` } : undefined,
+    title: truncate(`${map.artist} - ${map.title} [${map.version ?? ""}]`, 240),
+    url: mapUrl,
+    color: OSU_PINK,
+    description: `Random farm pick. ${farmers}.`,
+    fields,
+    image: cover ? { url: cover } : undefined,
+    footer: { text: `${scopeLabel(country)} • ${BOT_NAME}` },
+  };
+  return {
+    embeds: [embed],
+    components: linkButtonRow([
+      { label: "Beatmap", url: mapUrl },
+      { label: "Farm detail", url: `${siteOrigin}/farm-helper/map/${map.beatmapId}` },
+    ]),
+  };
+}
+
+interface RandomFavLike {
+  id: number;
+  title: string;
+  artist: string;
+  creator?: string;
+  status?: string;
+  covers?: Record<string, string | undefined>;
+  maniaKeys?: number[];
+  starMin?: number | null;
+  starMax?: number | null;
+  bpm?: number | null;
+  patterns?: string[];
+  globalFavouriteCount?: number;
+}
+
+export function randomFavEmbed(
+  set: RandomFavLike,
+  pickedBy: string,
+  scopeFavCount: number,
+  country: string | null,
+  siteOrigin: string,
+): DiscordMessageBody {
+  const setUrl = `${OSU_BASE}/beatmapsets/${set.id}#mania`;
+  const cover = set.covers?.["cover@2x"] ?? set.covers?.cover ?? set.covers?.["card@2x"] ?? set.covers?.card;
+  const keys = [...new Set((set.maniaKeys ?? []).map((k) => `${Math.round(k)}K`))];
+  const patterns = (set.patterns ?? []).slice(0, 4).map(patternLabel);
+  const fields = [
+    { name: "Stars", value: formatStarRange(set.starMin, set.starMax), inline: true },
+    { name: "Keys", value: keys.length ? keys.join(" ") : "-", inline: true },
+    { name: "Status", value: set.status ? titleCase(set.status) : "-", inline: true },
+    { name: "BPM", value: set.bpm != null ? formatInt(set.bpm) : "-", inline: true },
+    { name: "Global favs", value: formatInt(set.globalFavouriteCount), inline: true },
+    { name: "Patterns", value: patterns.length ? patterns.join(", ") : "-", inline: true },
+  ];
+  const others = Math.max(0, scopeFavCount - 1);
+  const favNote = others > 0
+    ? `Favourited by ${pickedBy} and ${formatInt(others)} other${others === 1 ? "" : "s"} in ${scopeLabel(country)}.`
+    : `Favourited by ${pickedBy} in ${scopeLabel(country)}.`;
+  const embed: DiscordEmbed = {
+    author: set.creator ? { name: `mapped by ${set.creator}` } : undefined,
+    title: truncate(`${set.artist} - ${set.title}`, 240),
+    url: setUrl,
+    color: OSU_PINK,
+    description: `Random favourite pick. ${favNote}`,
+    fields,
+    image: cover ? { url: cover } : undefined,
+    footer: { text: `${scopeLabel(country)} • ${BOT_NAME}` },
+  };
+  return {
+    embeds: [embed],
+    components: linkButtonRow([
+      { label: "Beatmap", url: setUrl },
+      { label: "Random maps", url: `${countryLink(siteOrigin, "/maps", country)}&tab=random` },
+    ]),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Replay (/replay)
 // ---------------------------------------------------------------------------
 
@@ -983,7 +1234,7 @@ export function replayEmbed(scoreId: number, siteOrigin: string): DiscordMessage
 }
 
 // ---------------------------------------------------------------------------
-// New farm map alert (feed + DM)
+// New farm map alert (channel feed)
 // ---------------------------------------------------------------------------
 
 export interface NewMapAlert {
@@ -1038,42 +1289,8 @@ export function newMapAlertEmbed(map: NewMapAlert, siteOrigin: string): DiscordM
   };
 }
 
-// A tracked player's ranked score that cleared the watcher's pp threshold but
-// was not necessarily a new top play (those reuse topPlayEmbed). Sent to DMs.
-export function trackedScoreAlertEmbed(score: LeanTrackerScore, siteOrigin: string): DiscordMessageBody {
-  const set = score.beatmapset;
-  const name = set ? `${set.artist} - ${set.title}` : `Beatmap ${score.beatmap_id ?? score.id}`;
-  const version = score.beatmap?.version ? ` [${score.beatmap.version}]` : "";
-  const mapUrl = score.beatmap?.url ?? `${OSU_BASE}/b/${score.beatmap_id ?? score.id}`;
-  const stars = score.beatmap?.difficulty_rating != null ? `${score.beatmap.difficulty_rating.toFixed(2)}★` : "";
-  const keys = score.beatmap?.cs != null ? `${Math.round(score.beatmap.cs)}K` : "";
-  const cover = set?.covers?.["cover@2x"] ?? set?.covers?.cover;
-  const username = score.user?.username ?? "Player";
-  const embed: DiscordEmbed = {
-    author: { name: username, url: score.user?.id ? osuProfileUrl(score.user.id) : undefined, icon_url: score.user?.avatar_url || undefined },
-    title: "Ranked play",
-    color: OSU_PINK,
-    description: [
-      mapUrl ? `**[${truncate(`${name}${version}`, 200)}](${mapUrl})**` : `**${name}${version}**`,
-      `\`${score.rank || "?"}\` ${formatMods(score.mods)} • ${formatAcc(score.accuracy)} • **${formatPp(score.pp)}**`,
-      [keys, stars].filter(Boolean).join(" • "),
-    ].filter(Boolean).join("\n"),
-    image: cover ? { url: cover } : undefined,
-    footer: { text: BOT_NAME },
-    timestamp: score.ended_at || undefined,
-  };
-  return {
-    embeds: [embed],
-    components: linkButtonRow([
-      { label: "Beatmap", url: mapUrl },
-      { label: username, url: siteProfileUrl(siteOrigin, username) },
-    ]),
-    allowed_mentions: { parse: [] },
-  };
-}
-
 // ---------------------------------------------------------------------------
-// Identity + watch management (small confirmation embeds)
+// Identity (small confirmation embeds)
 // ---------------------------------------------------------------------------
 
 export function whoamiEmbed(link: { osuUsername: string; osuUserId: number; countryCode: string | null }, siteOrigin: string): DiscordMessageBody {
@@ -1090,23 +1307,6 @@ export function whoamiEmbed(link: { osuUsername: string; osuUserId: number; coun
   };
 }
 
-export function watchListEmbed(
-  watches: Array<{ kind: string; targetUsername: string | null; minPp: number }>,
-): DiscordMessageBody {
-  const lines = watches.map((w) => {
-    if (w.kind === "maps") return "- New farm maps";
-    const pp = w.minPp > 0 ? ` (also ranked plays at or above ${Math.round(w.minPp)}pp)` : "";
-    return `- Player **${w.targetUsername ?? "?"}**${pp}`;
-  });
-  const embed: DiscordEmbed = {
-    title: "Your alerts",
-    color: OSU_PINK,
-    description: lines.length ? lines.join("\n") : "You have no alerts set up. Use `/watch user` or `/watch maps`.",
-    footer: { text: `${BOT_NAME} • alerts arrive in your DMs` },
-  };
-  return { embeds: [embed], flags: 1 << 6 };
-}
-
 // ---------------------------------------------------------------------------
 // Plain helpers for simple text responses
 // ---------------------------------------------------------------------------
@@ -1117,4 +1317,11 @@ export function errorBody(message: string): DiscordMessageBody {
 
 export function noticeBody(message: string): DiscordMessageBody {
   return { content: message, embeds: [], components: [], allowed_mentions: { parse: [] } };
+}
+
+// Like errorBody, but with a one-click "Link your osu! account" button. Used
+// when a command needs a linked account and none is set, so the fix is a button
+// + modal instead of asking the user to type /link.
+export function linkPromptBody(message: string): DiscordMessageBody {
+  return { content: message, embeds: [], components: [linkAccountRow()], allowed_mentions: { parse: [] } };
 }

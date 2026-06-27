@@ -1,4 +1,4 @@
-import type { DiscordComponent, DiscordMessageBody } from "./rest.js";
+import type { DiscordComponent, DiscordEmbedField, DiscordMessageBody } from "./rest.js";
 import type { DiscordInteraction, InteractionOption } from "./commands.js";
 
 // Stateless message-component support. This bot keeps no per-message state, so a
@@ -15,12 +15,20 @@ const MAX_CUSTOM_ID = 100;
 const OPT_STRING = 3;
 const OPT_INTEGER = 4;
 const ACTION_ROW = 1;
+const BUTTON_PRIMARY = 1;
 const BUTTON_SECONDARY = 2;
+const BUTTON_LINK = 5;
+const TEXT_INPUT = 4;
+const TEXT_INPUT_SHORT = 1;
 const SECTION = 9;
 const TEXT_DISPLAY = 10;
 const THUMBNAIL = 11;
 const MEDIA_GALLERY = 12;
+const SEPARATOR = 14;
 const CONTAINER = 17;
+
+// Separator spacing: 1 = small, 2 = large.
+const SEPARATOR_SPACING_SMALL = 1;
 
 export const FLAG_IS_COMPONENTS_V2 = 1 << 15;
 
@@ -38,7 +46,7 @@ export interface DecodedComponentId {
 
 // Commands whose handlers are safe to re-run from a component click. Anything
 // else decodes to null and gets an "expired" notice instead of executing.
-export const COMPONENT_COMMANDS = new Set(["rankings", "top", "tracker", "maps", "recent", "player"]);
+export const COMPONENT_COMMANDS = new Set(["rankings", "top", "tracker", "maps", "recent", "player", "randomfarm", "randomfav"]);
 
 export function encodeComponentId(cmd: string, action: ComponentAction, page: number, params: Record<string, string>): string {
   const qs = new URLSearchParams();
@@ -98,6 +106,13 @@ export function refreshRow(cmd: string, params: Record<string, string>): Discord
   return { type: ACTION_ROW, components: [button("Refresh", encodeComponentId(cmd, "r", 1, params), false)] };
 }
 
+// Like refreshRow, but worded for a random picker: re-running the handler draws
+// a fresh map, so "refresh" reads as "reroll". The encoded filters carry over so
+// a reroll stays within the same scope and constraints.
+export function rerollRow(cmd: string, params: Record<string, string>): DiscordComponent {
+  return { type: ACTION_ROW, components: [button("Reroll", encodeComponentId(cmd, "r", 1, params), false)] };
+}
+
 // Puts the nav row above the body's existing link-button row, keeping within
 // Discord's 5-action-row ceiling.
 export function withNavRow(body: DiscordMessageBody, navRow: DiscordComponent): DiscordMessageBody {
@@ -119,6 +134,88 @@ export function componentToCommandInteraction(
   }));
   options.push({ name: "page", type: OPT_INTEGER, value: decoded.page });
   return { ...interaction, type: 2, data: { name: decoded.cmd, options } };
+}
+
+// --- Stateless button actions (open a modal / swap the help view) ----------
+// Some buttons do something other than re-run a slash command. They share the
+// "mh|" prefix but put an "x" (action) marker in the command slot, which
+// decodeComponentId rejects (x is not a COMPONENT_COMMAND), so the rerun and
+// action schemes never collide.
+const COMPONENT_BUTTON = 2;
+const ACTION_MARKER = "x";
+export const LINK_MODAL_ID = `${COMPONENT_PREFIX}|${ACTION_MARKER}|linksubmit`;
+export const LINK_MODAL_FIELD = "username";
+
+export type DecodedAction = { kind: "link" } | { kind: "help"; category: string };
+
+export interface DiscordModalData {
+  custom_id: string;
+  title: string;
+  components: Array<{ type: number; components: Array<Record<string, unknown>> }>;
+}
+
+export function decodeActionId(customId: string | undefined): DecodedAction | null {
+  if (!customId || !customId.startsWith(`${COMPONENT_PREFIX}|${ACTION_MARKER}|`)) return null;
+  const parts = customId.split("|");
+  if (parts[2] === "link") return { kind: "link" };
+  if (parts[2] === "help") return { kind: "help", category: parts[3] || "start" };
+  return null;
+}
+
+// A primary button that opens the "link your account" modal. Used on the help
+// hub and on "no account linked" notices so setup is one click, not a typed
+// command with an argument.
+export function linkButton(label = "Link your osu! account"): DiscordComponent {
+  return { type: COMPONENT_BUTTON, style: BUTTON_PRIMARY, label, custom_id: `${COMPONENT_PREFIX}|${ACTION_MARKER}|link` };
+}
+
+export function linkAccountRow(label?: string): DiscordComponent {
+  return { type: ACTION_ROW, components: [linkButton(label)] };
+}
+
+// Row of help-category buttons; the active category renders disabled so it reads
+// as "you are here".
+export function helpNavRow(active: string, categories: Array<{ id: string; label: string }>): DiscordComponent {
+  return {
+    type: ACTION_ROW,
+    components: categories.slice(0, 5).map((cat) => ({
+      type: COMPONENT_BUTTON,
+      style: BUTTON_SECONDARY,
+      label: cat.label,
+      custom_id: `${COMPONENT_PREFIX}|${ACTION_MARKER}|help|${cat.id}`,
+      disabled: cat.id === active,
+    })),
+  };
+}
+
+// A link-style button that opens a URL (e.g. "Add to Discord" / site links).
+export function urlButton(label: string, url: string): DiscordComponent {
+  return { type: COMPONENT_BUTTON, style: BUTTON_LINK, label, url };
+}
+
+// The modal Discord pops when the link button is clicked.
+export function linkModal(): DiscordModalData {
+  return {
+    custom_id: LINK_MODAL_ID,
+    title: "Link your osu! account",
+    components: [
+      {
+        type: ACTION_ROW,
+        components: [
+          {
+            type: TEXT_INPUT,
+            custom_id: LINK_MODAL_FIELD,
+            style: TEXT_INPUT_SHORT,
+            label: "osu! username or id",
+            min_length: 1,
+            max_length: 64,
+            required: true,
+            placeholder: "e.g. mrekk",
+          },
+        ],
+      },
+    ],
+  };
 }
 
 interface TextBudget {
@@ -169,11 +266,50 @@ function textSection(content: string, accessoryUrl: string | undefined): Discord
   };
 }
 
+// Discord renders <t:unix:R> as a live, locale-aware relative time ("2 minutes
+// ago"), which beats a frozen UTC string and updates client-side as time passes.
 function formatTimestamp(value: string | undefined): string | null {
   if (!value) return null;
   const time = Date.parse(value);
   if (!Number.isFinite(time)) return null;
-  return new Date(time).toISOString().replace("T", " ").slice(0, 16);
+  return `<t:${Math.floor(time / 1000)}:R>`;
+}
+
+// Collapses a field cell to a single code-block-safe line: no newlines (which
+// would break alignment) and no backticks (which would terminate the fence).
+function cellText(value: string): string {
+  return value.replace(/[\r\n]+/g, " ").replaceAll("`", "'").trim();
+}
+
+// Renders embed fields for V2. Components V2 has no inline-field column grid, so
+// a run of consecutive inline fields becomes one fenced monospace block with each
+// label padded to a shared width, which keeps the stat grid lined up. A non-inline
+// field flushes the run and renders as its own labelled markdown block so longer
+// prose values keep their formatting.
+function renderFields(fields: DiscordEmbedField[]): string {
+  const blocks: string[] = [];
+  let run: DiscordEmbedField[] = [];
+  const flush = (): void => {
+    if (!run.length) return;
+    const width = Math.max(...run.map((field) => cellText(field.name).length));
+    const lines = run.map((field) => `${cellText(field.name).padEnd(width)}  ${cellText(field.value)}`);
+    blocks.push("```\n" + lines.join("\n") + "\n```");
+    run = [];
+  };
+  for (const field of fields) {
+    if (field.inline) {
+      run.push(field);
+    } else {
+      flush();
+      blocks.push(`**${field.name}**\n${field.value}`);
+    }
+  }
+  flush();
+  return blocks.join("\n");
+}
+
+function separator(): DiscordComponent {
+  return { type: SEPARATOR, divider: true, spacing: SEPARATOR_SPACING_SMALL };
 }
 
 function embedText(embed: NonNullable<DiscordMessageBody["embeds"]>[number]): string {
@@ -187,12 +323,7 @@ function embedText(embed: NonNullable<DiscordMessageBody["embeds"]>[number]): st
     blocks.push(embed.url);
   }
   if (embed.description) blocks.push(embed.description);
-  if (embed.fields?.length) {
-    blocks.push(embed.fields.map((field) => {
-      const name = `**${field.name}**`;
-      return field.inline ? `${name}: ${field.value}` : `${name}\n${field.value}`;
-    }).join("\n"));
-  }
+  if (embed.fields?.length) blocks.push(renderFields(embed.fields));
   const footer = [embed.footer?.text, formatTimestamp(embed.timestamp)].filter(Boolean).join(" • ");
   if (footer) blocks.push(`-# ${footer}`);
   return blocks.join("\n\n");
@@ -201,8 +332,17 @@ function embedText(embed: NonNullable<DiscordMessageBody["embeds"]>[number]): st
 function embedContainer(embed: NonNullable<DiscordMessageBody["embeds"]>[number], budget: TextBudget): DiscordComponent | null {
   const components: DiscordComponent[] = [];
   const text = takeText(embedText(embed), budget);
-  if (text) components.push(textSection(text, embed.thumbnail?.url));
-  if (embed.image?.url) components.push(mediaGallery(embed.image.url, embed.title));
+  // Prefer an explicit thumbnail; fall back to the author avatar so player-keyed
+  // cards (top play, snipe) still show a face on the right, which the classic
+  // embed showed via author.icon_url.
+  const accessoryUrl = embed.thumbnail?.url ?? embed.author?.icon_url;
+  if (text) components.push(textSection(text, accessoryUrl));
+  if (embed.image?.url) {
+    // A divider between the text block and the banner image gives the card the
+    // breathing room embeds got for free; skip it when there is no text above.
+    if (components.length) components.push(separator());
+    components.push(mediaGallery(embed.image.url, embed.title));
+  }
   if (components.length === 0) return null;
   return {
     type: CONTAINER,

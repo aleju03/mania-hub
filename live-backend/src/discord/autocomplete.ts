@@ -2,7 +2,6 @@ import type { Db } from "../db.js";
 import type { Config } from "../config.js";
 import { getCountryRegistry, GLOBAL_COUNTRY_CODE } from "../countries.js";
 import { getUserLink } from "./identity.js";
-import { listUserTrackers } from "./trackers.js";
 import { focusedOption, invokerId, type DiscordInteraction } from "./commands.js";
 
 export interface AutocompleteChoice {
@@ -59,30 +58,12 @@ async function usernameChoices(deps: AutocompleteDeps, interaction: DiscordInter
   if (id) {
     const link = await getUserLink(deps.db, id).catch(() => null);
     if (link) choices.push({ name: `${link.osuUsername} (you)`, value: link.osuUsername });
-    const trackers = await listUserTrackers(deps.db, id).catch(() => []);
-    for (const tracker of trackers) {
-      if (tracker.kind === "user" && tracker.targetUsername && !choices.some((c) => c.value === tracker.targetUsername)) {
-        choices.push({ name: `${tracker.targetUsername} (watched)`, value: tracker.targetUsername });
-      }
-    }
   }
   // Always let the typed text be submittable as its own choice.
   const trimmed = typed.trim();
   if (trimmed && !choices.some((c) => c.value.toLowerCase() === trimmed.toLowerCase())) {
     choices.unshift({ name: trimmed, value: trimmed });
   }
-  return filterByTyped(choices, typed);
-}
-
-async function watchTargetChoices(deps: AutocompleteDeps, interaction: DiscordInteraction, typed: string): Promise<AutocompleteChoice[]> {
-  const id = invokerId(interaction);
-  if (!id) return [];
-  const trackers = await listUserTrackers(deps.db, id).catch(() => []);
-  const choices: AutocompleteChoice[] = trackers.map((tracker) =>
-    tracker.kind === "maps"
-      ? { name: "New farm maps", value: "maps" }
-      : { name: `Player: ${tracker.targetUsername ?? "?"}`, value: tracker.targetUsername ?? "" },
-  ).filter((c) => c.value);
   return filterByTyped(choices, typed);
 }
 
@@ -98,7 +79,6 @@ export async function handleAutocomplete(deps: AutocompleteDeps, interaction: Di
     if (focused.name === "username" || focused.name === "player1" || focused.name === "player2") {
       return await usernameChoices(deps, interaction, typed);
     }
-    if (focused.name === "target") return await watchTargetChoices(deps, interaction, typed);
   } catch {
     return [];
   }

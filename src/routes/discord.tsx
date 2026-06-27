@@ -66,18 +66,12 @@ function Hero({ info }: { info: DiscordPublicInfo }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-osu-b3/30 bg-osu-b4">
       <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:p-6">
-        <div
-          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-white shadow-lg"
-          style={{ backgroundColor: BLURPLE }}
-        >
-          <DiscordLogo className="h-8 w-8" />
-        </div>
         <div className="min-w-0 flex-1">
           <h1 className="text-[17px] font-bold text-white">maniabot</h1>
           <p className="mt-1 text-[13px] leading-relaxed text-osu-l2">
             Every osu!mania lookup as a slash command. Link your account once with <code className="text-osu-pink-light">/link</code> and
-            commands like <code className="text-osu-pink-light">/recent</code> work with no username. Feeds auto-post to channels, and{" "}
-            <code className="text-osu-pink-light">/watch</code> DMs you when a player pops off or a new map gets ranked.
+            commands like <code className="text-osu-pink-light">/recent</code> work with no username. Live feeds auto-post new top plays,
+            snipes and farm maps straight into any channel.
           </p>
         </div>
         {info.configured && info.inviteUrl ? (
@@ -85,7 +79,7 @@ function Hero({ info }: { info: DiscordPublicInfo }) {
             href={info.inviteUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-5 py-3 text-[13px] font-bold text-white shadow-lg transition-[filter,transform] hover:brightness-110 active:scale-[0.98]"
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-[14px] font-bold text-white shadow-lg transition-[filter,transform] hover:brightness-110 active:scale-[0.98]"
             style={{ backgroundColor: BLURPLE }}
           >
             <DiscordLogo className="h-5 w-5" />
@@ -98,7 +92,7 @@ function Hero({ info }: { info: DiscordPublicInfo }) {
         <ol className="grid gap-px border-t border-osu-b3/30 bg-osu-b3/30 text-[12px] sm:grid-cols-3">
           <HowStep n={1} text="Click Add to Discord and pick a server where you have Manage Server." />
           <HowStep n={2} text="Authorize. The bot needs to send messages and embed links." />
-          <HowStep n={3} text={(<>Type <code className="text-osu-pink-light">/</code> in any channel to see every command.</>)} />
+          <HowStep n={3} text={(<>Type <code className="text-osu-pink-light">/help</code> for a guided tour, or <code className="text-osu-pink-light">/</code> to see every command.</>)} />
         </ol>
       ) : (
         <SetupNote />
@@ -133,11 +127,7 @@ function FeedsCard({ feedsEnabled }: { feedsEnabled: boolean }) {
         <code className="text-osu-pink-light">/subscribe feed:top plays country:&lt;CR&gt;</code>{" "}
         to auto-post new top plays as they happen. Other feeds: snipes and new farm maps. Add{" "}
         <code className="text-osu-pink-light">min_pp</code> to only post big scores. Managing feeds needs
-        the Manage Server permission.
-      </p>
-      <p className="mt-2 text-[12px] leading-relaxed text-osu-l2">
-        For yourself, <code className="text-osu-pink-light">/watch user &lt;player&gt;</code> DMs you on their pp gains and big ranked
-        plays, and <code className="text-osu-pink-light">/watch maps</code> DMs you when a new map starts producing pp gains. No Manage Server needed.
+        the Manage Server permission. Everything the bot does stays in the channel, it never sends DMs.
       </p>
       {!feedsEnabled ? (
         <p className="mt-2 text-[11px] text-osu-l3">Feeds are currently disabled on the backend.</p>

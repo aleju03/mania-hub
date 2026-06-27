@@ -7,15 +7,16 @@ import { getDisplayedAccuracy, getDisplayedRank, getScoreIdentity, nowIso } from
 import type { OscScore } from "../shared/types.js";
 
 // User goals: a logged-in player sets a target ("96% on map X", "reach 5000pp", "pass map Y",
-// "land a 300pp play") and it auto-completes the moment ingest sees a matching play. Detection
-// hooks straight into the score pipeline, so the magic is real-time. The owner is always the
-// osu!-verified viewer id forwarded from the login cookie (see roster-self-track bridge); the
-// browser never names a different user.
+// "land a 300pp play", "have 50 600pp+ plays") and it auto-completes the moment ingest sees a
+// matching play or a stored projection already satisfies a "have" goal. Detection hooks straight
+// into the score pipeline, so the magic is real-time. The owner is always the osu!-verified viewer
+// id forwarded from the login cookie (see roster-self-track bridge); the browser never names a
+// different user.
 
-export type GoalKind = "reach_pp" | "play_pp" | "accuracy" | "pass" | "grade";
+export type GoalKind = "reach_pp" | "play_pp" | "play_pp_count" | "accuracy" | "pass" | "grade" | "reach_rank";
 export type GoalStatus = "open" | "completed";
 
-export const GOAL_KINDS: readonly GoalKind[] = ["reach_pp", "play_pp", "accuracy", "pass", "grade"];
+export const GOAL_KINDS: readonly GoalKind[] = ["reach_pp", "play_pp", "play_pp_count", "accuracy", "pass", "grade", "reach_rank"];
 export const GOAL_MAP_KINDS: readonly GoalKind[] = ["accuracy", "pass", "grade"];
 export const GOAL_TARGET_GRADES: readonly string[] = ["A", "S", "SS"];
 
@@ -40,6 +41,7 @@ export interface UserGoalInput {
   beatmapsetId?: number | null;
   beatmapLabel?: string | null;
   targetValue?: number | null;
+  targetCount?: number | null;
   targetGrade?: string | null;
   note?: string | null;
 }
@@ -48,10 +50,12 @@ export interface GoalProgress {
   /** Current value in the goal's own unit (pp, accuracy fraction, or grade ordinal). */
   current: number | null;
   target: number | null;
-  /** 0-100 for a progress bar, or null when a bar doesn't apply (e.g. pass goals). */
+  /** 0-100 for a progress bar, or null when a bar doesn't apply (e.g. pass / grade goals). */
   pct: number | null;
   /** Human hint, e.g. "best 94.20%", "best A", "played 3x". */
   detail: string | null;
+  /** Best grade letter so far on a grade goal's map (A/S/SS), for a best-vs-target badge row. */
+  currentGrade?: string | null;
 }
 
 export interface UserGoal {
@@ -63,7 +67,10 @@ export interface UserGoal {
   beatmapsetId: number | null;
   beatmapLabel: string | null;
   targetValue: number | null;
+  targetCount: number | null;
   targetGrade: string | null;
+  /** Player's value in the goal's unit at the moment it was set; progress is measured from here. */
+  startValue: number | null;
   note: string | null;
   status: GoalStatus;
   createdAt: number;
@@ -93,7 +100,9 @@ function rowToGoal(row: Record<string, unknown>): UserGoal {
     beatmapsetId: num(row.beatmapset_id),
     beatmapLabel: row.beatmap_label == null ? null : String(row.beatmap_label),
     targetValue: num(row.target_value),
+    targetCount: num(row.target_count),
     targetGrade: row.target_grade == null ? null : String(row.target_grade),
+    startValue: num(row.start_value),
     note: row.note == null ? null : String(row.note),
     status: String(row.status) as GoalStatus,
     createdAt: Number(row.created_at),
@@ -307,12 +316,125 @@ async function bestSinglePpPlay(db: Db, userId: number): Promise<{ pp: number; s
     .sort((a, b) => b.pp - a.pp)[0] ?? null;
 }
 
+interface PpPlayCountSummary {
+  count: number;
+  bestPp: number | null;
+  bestContext: GoalCompletionContext | null;
+}
+
+function officialScoreKey(score: Partial<Pick<OscScore, "id" | "legacy_score_id">>): string | null {
+  const id = Number(score.legacy_score_id ?? score.id);
+  return Number.isFinite(id) && id > 0 ? `official:${id}` : null;
+}
+
+function scoreKey(score: OscScore, fallback: string): string {
+  return officialScoreKey(score) ?? fallback;
+}
+
+function positivePp(value: unknown): number | null {
+  const pp = Number(value);
+  return Number.isFinite(pp) && pp > 0 ? pp : null;
+}
+
+async function ppPlayCountSummary(db: Db, userId: number, threshold: number, extra?: { score: OscScore; country: string | null }): Promise<PpPlayCountSummary> {
+  const seen = new Set<string>();
+  let bestPp: number | null = null;
+  let bestContext: GoalCompletionContext | null = null;
+
+  const add = (key: string, pp: number | null, context: GoalCompletionContext): void => {
+    if (pp == null || pp < threshold || seen.has(key)) return;
+    seen.add(key);
+    if (bestPp == null || pp > bestPp) {
+      bestPp = pp;
+      bestContext = context;
+    }
+  };
+
+  const topRows = (await exec(
+    db,
+    "select score_id, pp, score_json from user_top_scores where user_id = ? and pp is not null and pp >= ?",
+    [userId, threshold],
+  )).rows;
+  topRows.forEach((row, index) => {
+    const pp = positivePp(row.pp);
+    const score = parseJson<OscScore | null>(row.score_json, null);
+    const scoreId = Number(row.score_id);
+    const key = score
+      ? scoreKey(score, Number.isFinite(scoreId) && scoreId > 0 ? `official:${scoreId}` : `top:${userId}:${index}`)
+      : Number.isFinite(scoreId) && scoreId > 0 ? `official:${scoreId}` : `top:${userId}:${index}`;
+    add(key, pp, {
+      value: null,
+      scoreIdentity: key.startsWith("official:") ? key : null,
+      beatmapId: score?.beatmap_id ?? score?.beatmap?.id ?? null,
+      country: score?.user?.country_code ?? null,
+    });
+  });
+
+  const snapshotRow = (await exec(db, "select best_scores_json from profile_snapshots where user_id = ?", [userId])).rows[0];
+  const snapshotScores = parseJson<OscScore[]>(snapshotRow?.best_scores_json, []);
+  snapshotScores.forEach((score, index) => {
+    const pp = positivePp(score.pp);
+    const key = scoreKey(score, `profile:${userId}:${index}`);
+    add(key, pp, {
+      value: null,
+      scoreIdentity: officialScoreKey(score),
+      beatmapId: score.beatmap_id ?? score.beatmap?.id ?? null,
+      country: score.user?.country_code ?? null,
+    });
+  });
+
+  const eventRows = (await exec(
+    db,
+    "select pp, score_identity, beatmap_id, country, score_json from score_events where user_id = ? and pp is not null and pp >= ?",
+    [userId, threshold],
+  )).rows;
+  eventRows.forEach((row, index) => {
+    const pp = positivePp(row.pp);
+    const score = parseJson<OscScore | null>(row.score_json, null);
+    const storedIdentity = row.score_identity == null ? null : String(row.score_identity);
+    const key = storedIdentity ?? (score ? scoreKey(score, `event:${userId}:${index}`) : `event:${userId}:${index}`);
+    add(key, pp, {
+      value: null,
+      scoreIdentity: storedIdentity ?? officialScoreKey(score ?? {}),
+      beatmapId: row.beatmap_id == null ? score?.beatmap_id ?? score?.beatmap?.id ?? null : Number(row.beatmap_id),
+      country: row.country == null ? score?.user?.country_code ?? null : String(row.country),
+    });
+  });
+
+  if (extra?.score) {
+    const pp = positivePp(extra.score.pp);
+    const identity = getScoreIdentity(extra.score);
+    add(identity, pp, {
+      value: null,
+      scoreIdentity: identity,
+      beatmapId: extra.score.beatmap_id ?? extra.score.beatmap?.id ?? null,
+      country: extra.country ?? extra.score.user?.country_code ?? null,
+    });
+  }
+
+  return { count: seen.size, bestPp, bestContext };
+}
+
 async function getUserPpAndCountry(db: Db, userId: number): Promise<{ pp: number; country: string | null }> {
   const row = (await exec(db, "select pp, country_code from users where user_id = ?", [userId])).rows[0];
   return {
     pp: Number(row?.pp ?? 0),
     country: row?.country_code ? String(row.country_code).toUpperCase() : null,
   };
+}
+
+// reach_rank carries its scope (global vs country leaderboard) in target_grade, since a rank goal
+// never has a real grade. A null/other value means global.
+function rankScopeOf(targetGrade: string | null): "global" | "country" {
+  return targetGrade === "country" ? "country" : "global";
+}
+
+/** Player's current standing on the chosen leaderboard, or null when not yet tracked. */
+async function getUserRank(db: Db, userId: number, scope: "global" | "country"): Promise<number | null> {
+  const column = scope === "country" ? "country_rank" : "global_rank";
+  const row = (await exec(db, `select ${column} as rank from users where user_id = ?`, [userId])).rows[0];
+  const rank = row?.rank == null ? null : Number(row.rank);
+  return rank != null && Number.isFinite(rank) && rank > 0 ? rank : null;
 }
 
 /** The player's best result so far on one beatmap, aggregated across their tracked days. */
@@ -335,10 +457,29 @@ async function historicalCompletionForGoal(db: Db, goal: UserGoal): Promise<Goal
       }
       return null;
     }
+    case "reach_rank": {
+      const rank = await getUserRank(db, goal.userId, rankScopeOf(goal.targetGrade));
+      if (goal.targetValue != null && rank != null && rank <= goal.targetValue) {
+        const user = await getUserPpAndCountry(db, goal.userId);
+        return { value: rank, scoreIdentity: null, beatmapId: null, country: user.country ?? goal.country };
+      }
+      return null;
+    }
     case "play_pp": {
-      const best = await bestSinglePpPlay(db, goal.userId);
-      if (best && goal.targetValue != null && best.pp >= goal.targetValue) {
-        return { value: best.pp, scoreIdentity: best.scoreIdentity, beatmapId: best.beatmapId, country: best.country ?? goal.country };
+      // A single-play PP goal means "land another play worth this much from now", not "have ever
+      // landed one". Historical PP milestones live in play_pp_count instead.
+      return null;
+    }
+    case "play_pp_count": {
+      if (goal.targetValue == null || goal.targetCount == null) return null;
+      const summary = await ppPlayCountSummary(db, goal.userId, goal.targetValue);
+      if (summary.count >= goal.targetCount) {
+        return {
+          value: summary.count,
+          scoreIdentity: summary.bestContext?.scoreIdentity ?? null,
+          beatmapId: summary.bestContext?.beatmapId ?? null,
+          country: summary.bestContext?.country ?? goal.country,
+        };
       }
       return null;
     }
@@ -388,8 +529,26 @@ export async function reconcileGoalsForUser(db: Db, events: LiveEventLog, userId
   if (anyCompleted) await dropFromIndexIfDone(db, userId);
 }
 
-function pctOf(current: number, target: number): number | null {
-  return target > 0 ? Math.max(0, Math.min(100, Math.round((current / target) * 100))) : null;
+/**
+ * Progress from the baseline captured when the goal was set toward its target, as 0-99. Measuring
+ * from the start (not absolute zero) means a "reach 15.5k" goal set at 15.1k begins near 0 instead
+ * of 97%, and accuracy bars (which would otherwise cluster at ~99%) spread across the real gap.
+ * Capped at 99: an open goal is by definition not yet complete, so it must never read 100.
+ */
+function pctTowards(start: number | null, current: number | null, target: number | null): number | null {
+  if (current == null || target == null || target <= 0) return null;
+  const base = start != null && start < target ? start : 0;
+  if (target <= base) return null;
+  const raw = ((current - base) / (target - base)) * 100;
+  return Math.max(0, Math.min(99, Math.floor(raw)));
+}
+
+/** Like pctTowards but for ranks, where lower is better: climb from the start rank down to target. */
+function pctTowardsRank(start: number | null, current: number | null, target: number | null): number | null {
+  if (current == null || target == null || target <= 0) return null;
+  if (start == null || start <= target) return null;
+  const raw = ((start - current) / (start - target)) * 100;
+  return Math.max(0, Math.min(99, Math.floor(raw)));
 }
 
 /** How close the player currently is to an open goal, for a progress bar + hint. Best-effort. */
@@ -398,21 +557,47 @@ export async function computeGoalProgress(db: Db, goal: UserGoal): Promise<GoalP
     case "reach_pp": {
       const pp = Number((await exec(db, "select pp from users where user_id = ?", [goal.userId])).rows[0]?.pp ?? 0);
       const target = goal.targetValue ?? 0;
-      return { current: pp || null, target: target || null, pct: pp && target ? pctOf(pp, target) : null, detail: pp ? `now ${Math.round(pp).toLocaleString()}pp` : null };
+      return { current: pp || null, target: target || null, pct: pctTowards(goal.startValue, pp || null, target || null), detail: pp ? `now ${Math.round(pp).toLocaleString()}pp` : null };
+    }
+    case "reach_rank": {
+      const rank = await getUserRank(db, goal.userId, rankScopeOf(goal.targetGrade));
+      const target = goal.targetValue ?? 0;
+      return {
+        current: rank,
+        target: target || null,
+        pct: pctTowardsRank(goal.startValue, rank, target || null),
+        detail: rank != null ? `now #${Math.round(rank).toLocaleString()}` : "rank not tracked yet",
+      };
     }
     case "play_pp": {
-      const best = Number((await exec(db, "select max(pp) as pp from user_top_scores where user_id = ?", [goal.userId])).rows[0]?.pp ?? 0);
+      const best = await bestSinglePpPlay(db, goal.userId);
+      const bestPp = best?.pp ?? 0;
       const target = goal.targetValue ?? 0;
-      return { current: best || null, target: target || null, pct: best && target ? pctOf(best, target) : null, detail: best ? `best ${Math.round(best)}pp` : null };
+      return { current: bestPp || null, target: target || null, pct: null, detail: bestPp ? `best ${Math.round(bestPp)}pp` : null };
+    }
+    case "play_pp_count": {
+      const targetPp = goal.targetValue ?? 0;
+      const targetCount = goal.targetCount ?? 0;
+      if (!(targetPp > 0) || !(targetCount > 0)) return { current: null, target: targetCount || null, pct: null, detail: null };
+      const summary = await ppPlayCountSummary(db, goal.userId, targetPp);
+      const pct = Math.max(0, Math.min(99, Math.floor((summary.count / targetCount) * 100)));
+      return {
+        current: summary.count,
+        target: targetCount,
+        pct,
+        detail: `${Math.round(summary.bestPp ?? targetPp)}pp best`,
+      };
     }
     case "accuracy": {
       if (!goal.beatmapId) return { current: null, target: goal.targetValue, pct: null, detail: null };
       const b = await bestOnBeatmap(db, goal.userId, goal.beatmapId);
       const target = goal.targetValue ?? 0;
+      // No baseline (older goal, or never played at creation) -> show the best-so-far hint with no
+      // misleading bar rather than a near-full one, since raw acc/target always sits around 99%.
       return {
         current: b.acc,
         target: target || null,
-        pct: b.acc != null && target ? pctOf(b.acc, target) : b.plays ? 0 : null,
+        pct: goal.startValue != null ? pctTowards(goal.startValue, b.acc, target || null) : null,
         detail: b.acc != null ? `best ${(b.acc * 100).toFixed(2)}%` : b.plays ? `played ${b.plays}x` : "not played yet",
       };
     }
@@ -420,11 +605,14 @@ export async function computeGoalProgress(db: Db, goal: UserGoal): Promise<GoalP
       if (!goal.beatmapId) return { current: null, target: null, pct: null, detail: null };
       const b = await bestOnBeatmap(db, goal.userId, goal.beatmapId);
       const target = gradeRank(goal.targetGrade);
+      // Grade is categorical: a percentage (A is 3/4 of S) reads as accuracy and confuses. Surface
+      // the current best grade as the hint and let the card show best-vs-target badges instead.
       return {
         current: b.gradeRank >= 0 ? b.gradeRank : null,
         target: target >= 0 ? target : null,
-        pct: b.gradeRank >= 0 && target > 0 ? pctOf(b.gradeRank, target) : b.plays ? 0 : null,
+        pct: null,
         detail: b.bestRank ? `best ${b.bestRank}` : b.plays ? `played ${b.plays}x` : "not played yet",
+        currentGrade: b.bestRank,
       };
     }
     case "pass": {
@@ -443,16 +631,43 @@ export async function listUserGoalsWithProgress(db: Db, userId: number): Promise
   return Promise.all(goals.map(async (goal) => (goal.status === "open" ? { ...goal, progress: await computeGoalProgress(db, goal) } : goal)));
 }
 
+/** The player's current value in the goal's unit, captured so the progress bar climbs from here. */
+async function goalStartValue(db: Db, input: UserGoalInput): Promise<number | null> {
+  switch (input.kind) {
+    case "reach_pp": {
+      const { pp } = await getUserPpAndCountry(db, input.userId);
+      return pp > 0 ? pp : null;
+    }
+    case "play_pp": {
+      return null;
+    }
+    case "play_pp_count": {
+      const target = input.targetValue ?? 0;
+      if (!(target > 0)) return null;
+      return (await ppPlayCountSummary(db, input.userId, target)).count;
+    }
+    case "accuracy": {
+      if (!input.beatmapId) return null;
+      return (await bestOnBeatmap(db, input.userId, input.beatmapId)).acc;
+    }
+    case "reach_rank":
+      return getUserRank(db, input.userId, rankScopeOf(input.targetGrade ?? null));
+    default:
+      return null;
+  }
+}
+
 export async function createUserGoal(db: Db, queue: JobQueue, input: UserGoalInput): Promise<UserGoal> {
   const id = randomUUID();
   const now = Date.now();
   const label = input.beatmapLabel ? input.beatmapLabel.slice(0, BEATMAP_LABEL_MAX) : null;
   const note = input.note ? input.note.slice(0, NOTE_MAX) : null;
+  const startValue = await goalStartValue(db, input);
   await exec(
     db,
     `insert into user_goals
-       (id, user_id, country, kind, beatmap_id, beatmapset_id, beatmap_label, target_value, target_grade, note, status, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)`,
+       (id, user_id, country, kind, beatmap_id, beatmapset_id, beatmap_label, target_value, target_count, target_grade, start_value, note, status, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)`,
     [
       id,
       input.userId,
@@ -462,7 +677,9 @@ export async function createUserGoal(db: Db, queue: JobQueue, input: UserGoalInp
       input.beatmapsetId ?? null,
       label,
       input.targetValue ?? null,
+      input.targetCount ?? null,
       input.targetGrade ?? null,
+      startValue,
       note,
       now,
       now,
@@ -513,6 +730,7 @@ async function completeGoal(db: Db, events: LiveEventLog, goal: UserGoal, ctx: G
           beatmapId: ctx.beatmapId,
           beatmapLabel: goal.beatmapLabel,
           targetValue: goal.targetValue,
+          targetCount: goal.targetCount,
           targetGrade: goal.targetGrade,
           value: ctx.value,
           completedAt: now,
@@ -526,9 +744,10 @@ async function completeGoal(db: Db, events: LiveEventLog, goal: UserGoal, ctx: G
 
 /**
  * Score-triggered evaluation: called from ingest for every inserted score. Completes the
- * play-shaped goals (pass / accuracy / grade on a specific map, or "land an X pp play"). Total-pp
- * goals are handled separately because overall pp is not known at ingest time. Map/accuracy/grade
- * goals require a passed score, so a mid-map fail with momentarily-high accuracy never counts.
+ * play-shaped goals (pass / accuracy / grade on a specific map, "land an X pp play", or count a
+ * stack of Xpp+ plays). Total-pp goals are handled separately because overall pp is not known at
+ * ingest time. Map/accuracy/grade goals require a passed score, so a mid-map fail with
+ * momentarily-high accuracy never counts.
  */
 export async function evaluateScoreGoals(db: Db, events: LiveEventLog, score: OscScore, countries: string[]): Promise<void> {
   const userId = Number(score.user_id);
@@ -575,8 +794,20 @@ export async function evaluateScoreGoals(db: Db, events: LiveEventLog, score: Os
           value = pp;
         }
         break;
+      case "play_pp_count":
+        if (pp != null && goal.targetValue != null && goal.targetCount != null && pp >= goal.targetValue) {
+          const summary = await ppPlayCountSummary(db, userId, goal.targetValue, { score, country });
+          if (summary.count >= goal.targetCount) {
+            matched = true;
+            value = summary.count;
+          }
+        }
+        break;
       case "reach_pp":
         // total-pp goals are evaluated by evaluatePpGoals, not from a single score.
+        break;
+      case "reach_rank":
+        // rank goals settle from stored user projections.
         break;
     }
     if (matched && (await completeGoal(db, events, goal, { value, scoreIdentity, beatmapId: goal.beatmapId ?? beatmapId, country }))) {

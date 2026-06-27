@@ -6,6 +6,7 @@ import {
   FLAG_IS_COMPONENTS_V2,
   paginationRow,
   refreshRow,
+  rerollRow,
   toComponentsV2Body,
   withNavRow,
 } from "../src/discord/components.js";
@@ -68,6 +69,23 @@ describe("refresh row", () => {
     expect(row.components).toHaveLength(1);
     const decoded = decodeComponentId(row.components?.[0].custom_id);
     expect(decoded).toEqual({ cmd: "player", action: "r", page: 1, params: { username: "kalkai" } });
+  });
+});
+
+describe("reroll row", () => {
+  it("re-runs the random picker, dropping empty filters", () => {
+    const row = rerollRow("randomfarm", { country: "GLOBAL", keys: "4k", status: "", stars_min: "", stars_max: "", min_pp: "500" });
+    expect(row.components).toHaveLength(1);
+    const decoded = decodeComponentId(row.components?.[0].custom_id);
+    expect(decoded).toEqual({ cmd: "randomfarm", action: "r", page: 1, params: { country: "GLOBAL", keys: "4k", min_pp: "500" } });
+  });
+
+  it("stays within the 100-char custom_id limit with every filter set", () => {
+    // Worst case: longest scope, status, pattern and a star range all populated.
+    const row = rerollRow("randomfav", { country: "GLOBAL", keys: "7k", status: "graveyard", pattern: "chordjack", stars_min: "9", stars_max: "9" });
+    const id = row.components?.[0].custom_id ?? "";
+    expect(id.length).toBeLessThanOrEqual(100);
+    expect(decodeComponentId(id)?.cmd).toBe("randomfav");
   });
 });
 
@@ -156,5 +174,112 @@ describe("components v2 body conversion", () => {
     const total = (body.components ?? []).map(textContent).join("").length;
     expect(total).toBeLessThanOrEqual(3900);
     expect(JSON.stringify(body.components)).toContain("...");
+  });
+});
+
+describe("components v2 rendering quality", () => {
+  type V2 = NonNullable<DiscordMessageBody["components"]>[number];
+  function walk(components: V2[] | undefined): V2[] {
+    const out: V2[] = [];
+    const visit = (component: V2 | undefined): void => {
+      if (!component) return;
+      out.push(component);
+      for (const child of component.components ?? []) visit(child);
+      if (component.accessory) visit(component.accessory);
+    };
+    for (const component of components ?? []) visit(component);
+    return out;
+  }
+  function allText(components: V2[] | undefined): string {
+    return walk(components)
+      .filter((component) => typeof component.content === "string")
+      .map((component) => component.content as string)
+      .join("\n");
+  }
+
+  it("renders a run of inline fields as one aligned monospace block", () => {
+    const body = toComponentsV2Body({
+      embeds: [{
+        color: 0xff66ab,
+        fields: [
+          { name: "Global", value: "#1,234", inline: true },
+          { name: "Country (CR)", value: "#5", inline: true },
+          { name: "pp", value: "8,123pp", inline: true },
+        ],
+      }],
+    });
+    const text = allText(body.components);
+    // One code fence wraps the whole run (not one block per field).
+    expect(text.match(/```/g)?.length).toBe(2);
+    // Labels are padded to the widest ("Country (CR)" = 12) then a two-space gap.
+    expect(text).toMatch(/Global {8}#1,234/);
+    expect(text).toContain("Country (CR)  #5");
+    expect(text).toMatch(/pp {12}8,123pp/);
+  });
+
+  it("uses the author avatar as the section thumbnail when no embed thumbnail is set", () => {
+    const body = toComponentsV2Body({
+      embeds: [{
+        author: { name: "Kalkai", url: "https://osu.ppy.sh/users/1", icon_url: "https://a.ppy.sh/1.png" },
+        description: "hello",
+        color: 1,
+      }],
+    });
+    const thumbs = walk(body.components).filter((component) => component.type === 11);
+    expect(thumbs).toHaveLength(1);
+    expect(thumbs[0].media?.url).toBe("https://a.ppy.sh/1.png");
+    const section = walk(body.components).find((component) => component.type === 9);
+    expect(section?.accessory?.type).toBe(11);
+  });
+
+  it("prefers an explicit embed thumbnail over the author avatar", () => {
+    const body = toComponentsV2Body({
+      embeds: [{
+        author: { name: "Kalkai", icon_url: "https://a.ppy.sh/avatar.png" },
+        thumbnail: { url: "https://a.ppy.sh/emblem.png" },
+        description: "hi",
+      }],
+    });
+    const thumbs = walk(body.components).filter((component) => component.type === 11);
+    expect(thumbs).toHaveLength(1);
+    expect(thumbs[0].media?.url).toBe("https://a.ppy.sh/emblem.png");
+  });
+
+  it("converts an embed timestamp into a relative timestamp token", () => {
+    const iso = "2026-06-26T00:00:00.000Z";
+    const unix = Math.floor(Date.parse(iso) / 1000);
+    const body = toComponentsV2Body({ embeds: [{ description: "x", timestamp: iso, footer: { text: "maniabot" } }] });
+    expect(allText(body.components)).toContain(`<t:${unix}:R>`);
+  });
+
+  it("inserts a divider between the text block and a banner image", () => {
+    const body = toComponentsV2Body({ embeds: [{ description: "x", image: { url: "https://img/c.jpg" }, color: 1 }] });
+    const container = body.components?.find((component) => component.type === 17);
+    const types = (container?.components ?? []).map((component) => component.type);
+    expect(types).toContain(14);
+    expect(types.indexOf(14)).toBeGreaterThan(0);
+    expect(types.indexOf(14)).toBeLessThan(types.indexOf(12));
+  });
+
+  it("does not add a leading separator for an image-only embed", () => {
+    const body = toComponentsV2Body({ embeds: [{ image: { url: "https://img/c.jpg" }, color: 1 }] });
+    const container = body.components?.find((component) => component.type === 17);
+    expect(container?.components?.[0]?.type).toBe(12);
+    expect((container?.components ?? []).some((component) => component.type === 14)).toBe(false);
+  });
+
+  it("emits separator spacing as an integer enum and divider as a boolean", () => {
+    const body = toComponentsV2Body({ embeds: [{ description: "x", image: { url: "https://i/c.jpg" } }] });
+    const sep = walk(body.components).find((component) => component.type === 14);
+    expect(typeof sep?.spacing).toBe("number");
+    expect(sep?.spacing).toBe(1);
+    expect(typeof sep?.divider).toBe("boolean");
+  });
+
+  it("sanitizes newlines and backticks inside code-block cells", () => {
+    const body = toComponentsV2Body({ embeds: [{ fields: [{ name: "x", value: "a`b\nc", inline: true }] }] });
+    const text = allText(body.components);
+    expect(text).toContain("a'b c");
+    expect(text).not.toContain("a`b");
   });
 });

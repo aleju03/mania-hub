@@ -9,7 +9,7 @@ import { dbHealth, exec, getSqliteBusyRetryStats, parseJson } from "../db.js";
 import { getPlayerActivityAvailability, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../features/activity.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
 import { GOAL_KINDS, GOAL_MAP_KINDS, GOAL_TARGET_GRADES, createUserGoal, deleteUserGoal, getUserGoal, listUserGoalsWithProgress, reconcileGoalsForUser, type GoalKind, type UserGoalInput } from "../features/goals.js";
-import { getMyDataSummary, getUserTopPlaysFeed, getUserTrackedFeed } from "../features/my-data.js";
+import { getMyDataSummary, getUserTopPlaysFeed, getUserTrackedFeed, type MyDataTopPlaysQuery, type MyDataTrackedFeedQuery } from "../features/my-data.js";
 import { FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapshot, type FarmHelperKeyMode, type FarmHelperView } from "../features/farm-helper.js";
 import type { ScoreSpeedBucket } from "../shared/score.js";
 import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalRankingsSnapshot, type GlobalRankingsSort } from "../features/global-rankings.js";
@@ -43,7 +43,6 @@ import { addManualRosterMember, enqueueRosterRefreshes, removeManualRosterMember
 import { getLocalDbStorage, runRetention } from "../retention.js";
 import { getDiscordPublicInfo, type DiscordRuntime } from "../discord/index.js";
 import { listAllSubscriptions, removeSubscriptionById } from "../discord/subscriptions.js";
-import { listAllUserTrackers } from "../discord/trackers.js";
 import { countUserLinks } from "../discord/identity.js";
 
 const HIDDEN_ADMIN_WORKER_LANE_NAMES = new Set([
@@ -303,7 +302,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
       return true;
     }
-    const body = parseJson<{ userId?: unknown; id?: unknown; kind?: unknown; country?: unknown; beatmapId?: unknown; beatmapsetId?: unknown; beatmapLabel?: unknown; targetValue?: unknown; targetGrade?: unknown; note?: unknown }>((await readBody(req)) || "{}", {});
+    const body = parseJson<{ userId?: unknown; id?: unknown; kind?: unknown; country?: unknown; beatmapId?: unknown; beatmapsetId?: unknown; beatmapLabel?: unknown; targetValue?: unknown; targetCount?: unknown; targetGrade?: unknown; note?: unknown }>((await readBody(req)) || "{}", {});
     const userId = Number(body.userId);
     if (!Number.isInteger(userId) || userId <= 0) {
       sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
@@ -354,6 +353,15 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         return true;
       }
       input.targetGrade = grade;
+    } else if (kind === "play_pp_count") {
+      const target = Number(body.targetValue);
+      const count = Number(body.targetCount);
+      if (!(target > 0) || !(Number.isInteger(count) && count > 0)) {
+        sendJson(req, res, ctx, 400, { error: "invalid_target" });
+        return true;
+      }
+      input.targetValue = target;
+      input.targetCount = count;
     } else if (kind === "play_pp" || kind === "reach_pp") {
       const target = Number(body.targetValue);
       if (!(target > 0)) {
@@ -361,6 +369,15 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         return true;
       }
       input.targetValue = target;
+    } else if (kind === "reach_rank") {
+      const target = Number(body.targetValue);
+      if (!(Number.isInteger(target) && target > 0)) {
+        sendJson(req, res, ctx, 400, { error: "invalid_target" });
+        return true;
+      }
+      input.targetValue = target;
+      // Scope (global vs country leaderboard) rides in target_grade, since a rank goal has no grade.
+      input.targetGrade = String(body.targetGrade ?? "global").toLowerCase() === "country" ? "country" : "global";
     }
     if (typeof body.note === "string") input.note = body.note;
     const created = await createUserGoal(ctx.db, ctx.queue, input);
@@ -436,7 +453,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     const limit = clampLimit(url.searchParams.get("limit"), 12, 60);
     const offset = clampInteger(url.searchParams.get("offset"), 0, 1_000_000, 0);
-    const page = await getUserTrackedFeed(ctx.db, userId, limit, offset);
+    const page = await getUserTrackedFeed(ctx.db, userId, limit, offset, readMyDataTrackedQuery(url.searchParams));
     sendJson(req, res, ctx, 200, { scores: page.items, total: page.total, limit: page.limit, offset: page.offset });
     return true;
   }
@@ -456,7 +473,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     const limit = clampLimit(url.searchParams.get("limit"), 12, 60);
     const offset = clampInteger(url.searchParams.get("offset"), 0, 1_000_000, 0);
-    const page = await getUserTopPlaysFeed(ctx.db, userId, limit, offset);
+    const page = await getUserTopPlaysFeed(ctx.db, userId, limit, offset, readMyDataTopPlaysQuery(url.searchParams));
     sendJson(req, res, ctx, 200, { plays: page.items, total: page.total, limit: page.limit, offset: page.offset });
     return true;
   }
@@ -1136,7 +1153,6 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       ok: true,
       discord: ctx.discord?.status() ?? { enabled: false },
       subscriptions: await listAllSubscriptions(ctx.db),
-      trackers: await listAllUserTrackers(ctx.db),
       linkCount: await countUserLinks(ctx.db),
     });
     return true;
@@ -2145,6 +2161,25 @@ function clampLimit(raw: string | null, fallback: number, max: number): number {
 function clampInteger(raw: string | null, min: number, max: number, fallback: number): number {
   const value = Number(raw ?? fallback);
   return Number.isFinite(value) ? Math.max(min, Math.min(max, Math.floor(value))) : fallback;
+}
+
+function readMyDataTrackedQuery(params: URLSearchParams): MyDataTrackedFeedQuery {
+  return {
+    search: params.get("q"),
+    key: params.get("key"),
+    mods: params.get("mods"),
+    archive: params.get("archive"),
+    sort: params.get("sort"),
+  };
+}
+
+function readMyDataTopPlaysQuery(params: URLSearchParams): MyDataTopPlaysQuery {
+  return {
+    search: params.get("q"),
+    key: params.get("key"),
+    mods: params.get("mods"),
+    sort: params.get("sort"),
+  };
 }
 
 function parseTrackerSnapshotFilters(params: URLSearchParams): TrackerSnapshotFilters {

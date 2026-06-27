@@ -131,6 +131,61 @@ describe("play pp goals", () => {
     expect((await getUserGoal(db, below.id))?.status).toBe("open");
     expect((await getUserGoal(db, nullPp.id))?.status).toBe("open");
   });
+
+  it("does not complete from older stored top scores", async () => {
+    await exec(
+      db,
+      `insert into user_top_scores (user_id, score_id, position, score_json, pp, weighted_pp, ended_at, refreshed_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [USER, 777, 0, JSON.stringify(scoreWith({ id: 777, pp: 252.4, passed: true })), 252.4, 252.4, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"],
+    );
+    const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "play_pp", targetValue: 200 });
+    await reconcileGoalsForUser(db, events, USER);
+    expect((await getUserGoal(db, goal.id))?.status).toBe("open");
+  });
+});
+
+describe("pp play count goals", () => {
+  it("completes when a fresh qualifying score reaches the count target", async () => {
+    const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "play_pp_count", targetValue: 200, targetCount: 1 });
+    await evaluateScoreGoals(db, events, scoreWith({ pp: 252.4, passed: true }), ["CR"]);
+    const done = await getUserGoal(db, goal.id);
+    expect(done?.status).toBe("completed");
+    expect(done?.completedValue).toBe(1);
+  });
+
+  it("reconciles against stored top scores", async () => {
+    await exec(
+      db,
+      `insert into user_top_scores (user_id, score_id, position, score_json, pp, weighted_pp, ended_at, refreshed_at)
+       values
+        (?, ?, ?, ?, ?, ?, ?, ?),
+        (?, ?, ?, ?, ?, ?, ?, ?),
+        (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        USER, 777, 0, JSON.stringify(scoreWith({ id: 777, pp: 640, passed: true })), 640, 640, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z",
+        USER, 778, 1, JSON.stringify(scoreWith({ id: 778, pp: 615, passed: true })), 615, 584.25, "2026-01-02T00:00:00Z", "2026-01-02T00:00:00Z",
+        USER, 779, 2, JSON.stringify(scoreWith({ id: 779, pp: 590, passed: true })), 590, 532.48, "2026-01-03T00:00:00Z", "2026-01-03T00:00:00Z",
+      ],
+    );
+    const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "play_pp_count", targetValue: 600, targetCount: 2 });
+    await reconcileGoalsForUser(db, events, USER);
+    const done = await getUserGoal(db, goal.id);
+    expect(done?.status).toBe("completed");
+    expect(done?.completedValue).toBe(2);
+  });
+
+  it("stays open while the known count is below target", async () => {
+    await exec(
+      db,
+      `insert into user_top_scores (user_id, score_id, position, score_json, pp, weighted_pp, ended_at, refreshed_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [USER, 777, 0, JSON.stringify(scoreWith({ id: 777, pp: 640, passed: true })), 640, 640, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"],
+    );
+    const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "play_pp_count", targetValue: 600, targetCount: 2 });
+    await reconcileGoalsForUser(db, events, USER);
+    expect((await getUserGoal(db, goal.id))?.status).toBe("open");
+  });
 });
 
 describe("reach pp goals", () => {
@@ -160,6 +215,41 @@ describe("reach pp goals", () => {
   });
 });
 
+describe("reach rank goals", () => {
+  async function seedUser(globalRank: number, countryRank: number): Promise<void> {
+    await exec(
+      db,
+      "insert into users (user_id, username, avatar_url, country_code, pp, global_rank, country_rank, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?)",
+      [USER, "tester", "https://a.ppy.sh/101", "CR", 6000, globalRank, countryRank, new Date().toISOString()],
+    );
+  }
+
+  it("completes when the global rank reaches the target", async () => {
+    await seedUser(480, 3);
+    const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "reach_rank", targetValue: 500, targetGrade: "global" });
+    await reconcileGoalsForUser(db, events, USER);
+    const done = await getUserGoal(db, goal.id);
+    expect(done?.status).toBe("completed");
+    expect(done?.completedValue).toBe(480);
+  });
+
+  it("reads the country leaderboard when the scope is country", async () => {
+    await seedUser(9000, 1);
+    const globalGoal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "reach_rank", targetValue: 500, targetGrade: "global" });
+    const countryGoal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "reach_rank", targetValue: 1, targetGrade: "country" });
+    await reconcileGoalsForUser(db, events, USER);
+    expect((await getUserGoal(db, globalGoal.id))?.status).toBe("open"); // #9000 global is short of #500
+    expect((await getUserGoal(db, countryGoal.id))?.status).toBe("completed"); // but country #1 clears
+  });
+
+  it("stays open while the rank is worse than the target", async () => {
+    await seedUser(1200, 5);
+    const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "reach_rank", targetValue: 1000, targetGrade: "global" });
+    await reconcileGoalsForUser(db, events, USER);
+    expect((await getUserGoal(db, goal.id))?.status).toBe("open");
+  });
+});
+
 describe("goal crud", () => {
   it("lists open goals before completed and only for the owner", async () => {
     // A goal on a different map stays open; the play_pp goal is completed by the score below.
@@ -186,21 +276,6 @@ describe("goal crud", () => {
 });
 
 describe("historical goal reconciliation", () => {
-  it("completes play_pp goals from stored top scores created before the goal", async () => {
-    await exec(
-      db,
-      `insert into user_top_scores (user_id, score_id, position, score_json, pp, weighted_pp, ended_at, refreshed_at)
-       values (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [USER, 777, 0, JSON.stringify(scoreWith({ id: 777, pp: 252.4, passed: true })), 252.4, 252.4, "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z"],
-    );
-    const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "play_pp", targetValue: 200 });
-    await reconcileGoalsForUser(db, events, USER);
-    const done = await getUserGoal(db, goal.id);
-    expect(done?.status).toBe("completed");
-    expect(done?.completedValue).toBeCloseTo(252.4, 1);
-    expect(done?.completedScoreId).toBe("official:777");
-  });
-
   it("completes map goals from stored activity created before the goal", async () => {
     await exec(
       db,

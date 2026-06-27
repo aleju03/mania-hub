@@ -4,17 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, migrate, type Db } from "../src/db.js";
 import { getUserLink, removeUserLink, setUserLink } from "../src/discord/identity.js";
-import {
-  addUserTracker,
-  countMapTrackers,
-  getTrackedOsuUserIds,
-  listMapTrackers,
-  listTrackersForOsuUser,
-  listUserTrackers,
-  MAPS_TRACKER_TARGET,
-  removeTrackersForSubscriber,
-  removeUserTracker,
-} from "../src/discord/trackers.js";
+import { getChannelMapContext, setChannelMapContext } from "../src/discord/channel-context.js";
 
 let dir = "";
 let db: Db;
@@ -52,52 +42,25 @@ describe("identity links", () => {
   });
 });
 
-describe("personal trackers", () => {
-  it("adds a user tracker and finds it by osu user id", async () => {
-    await addUserTracker(db, { subscriberId: "d1", kind: "user", targetOsuUserId: 7, targetUsername: "x", minPp: 500 });
-    const forUser = await listTrackersForOsuUser(db, 7);
-    expect(forUser).toHaveLength(1);
-    expect(forUser[0].subscriberId).toBe("d1");
-    expect(forUser[0].minPp).toBe(500);
-    expect(await getTrackedOsuUserIds(db)).toEqual(new Set([7]));
+describe("channel map context", () => {
+  it("stores and reads the last map shown in a channel", async () => {
+    await setChannelMapContext(db, "chan1", { beatmapId: 3729619, beatmapsetId: 1817883, title: "REOL - Makiba", version: "EXHAUST" });
+    const ctx = await getChannelMapContext(db, "chan1");
+    expect(ctx?.beatmapId).toBe(3729619);
+    expect(ctx?.beatmapsetId).toBe(1817883);
+    expect(ctx?.title).toBe("REOL - Makiba");
+    expect(ctx?.version).toBe("EXHAUST");
   });
 
-  it("upserts a user tracker on (subscriber, kind, target) and updates min_pp", async () => {
-    await addUserTracker(db, { subscriberId: "d1", kind: "user", targetOsuUserId: 7, targetUsername: "x", minPp: 0 });
-    await addUserTracker(db, { subscriberId: "d1", kind: "user", targetOsuUserId: 7, targetUsername: "x", minPp: 800 });
-    const list = await listUserTrackers(db, "d1");
-    expect(list).toHaveLength(1);
-    expect(list[0].minPp).toBe(800);
+  it("overwrites the context on a new map", async () => {
+    await setChannelMapContext(db, "chan1", { beatmapId: 1, beatmapsetId: null, title: null, version: null });
+    await setChannelMapContext(db, "chan1", { beatmapId: 2, beatmapsetId: 9, title: "B", version: "X" });
+    expect((await getChannelMapContext(db, "chan1"))?.beatmapId).toBe(2);
   });
 
-  it("collapses duplicate maps trackers per subscriber via the sentinel target", async () => {
-    await addUserTracker(db, { subscriberId: "d1", kind: "maps", targetOsuUserId: MAPS_TRACKER_TARGET, targetUsername: null, minPp: 0 });
-    await addUserTracker(db, { subscriberId: "d1", kind: "maps", targetOsuUserId: MAPS_TRACKER_TARGET, targetUsername: null, minPp: 0 });
-    expect(await countMapTrackers(db)).toBe(1);
-    const maps = await listMapTrackers(db);
-    expect(maps).toHaveLength(1);
-    expect(maps[0].subscriberId).toBe("d1");
-  });
-
-  it("keeps a user tracker and a maps tracker separate for one subscriber", async () => {
-    await addUserTracker(db, { subscriberId: "d1", kind: "user", targetOsuUserId: 7, targetUsername: "x", minPp: 0 });
-    await addUserTracker(db, { subscriberId: "d1", kind: "maps", targetOsuUserId: MAPS_TRACKER_TARGET, targetUsername: null, minPp: 0 });
-    expect(await listUserTrackers(db, "d1")).toHaveLength(2);
-  });
-
-  it("removes a single tracker and all of a subscriber's trackers", async () => {
-    await addUserTracker(db, { subscriberId: "d1", kind: "user", targetOsuUserId: 7, targetUsername: "x", minPp: 0 });
-    await addUserTracker(db, { subscriberId: "d1", kind: "maps", targetOsuUserId: MAPS_TRACKER_TARGET, targetUsername: null, minPp: 0 });
-    expect(await removeUserTracker(db, { subscriberId: "d1", kind: "user", targetOsuUserId: 7 })).toBe(true);
-    expect(await listUserTrackers(db, "d1")).toHaveLength(1);
-    expect(await removeTrackersForSubscriber(db, "d1")).toBe(1);
-    expect(await listUserTrackers(db, "d1")).toHaveLength(0);
-  });
-
-  it("tracks multiple subscribers watching the same player", async () => {
-    await addUserTracker(db, { subscriberId: "d1", kind: "user", targetOsuUserId: 7, targetUsername: "x", minPp: 0 });
-    await addUserTracker(db, { subscriberId: "d2", kind: "user", targetOsuUserId: 7, targetUsername: "x", minPp: 300 });
-    expect(await listTrackersForOsuUser(db, 7)).toHaveLength(2);
-    expect(await getTrackedOsuUserIds(db)).toEqual(new Set([7]));
+  it("ignores a missing channel id and returns null when none is set", async () => {
+    await setChannelMapContext(db, undefined, { beatmapId: 5, beatmapsetId: null, title: null, version: null });
+    expect(await getChannelMapContext(db, undefined)).toBeNull();
+    expect(await getChannelMapContext(db, "never-set")).toBeNull();
   });
 });

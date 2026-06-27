@@ -9,7 +9,7 @@ import { getGlobalRankingsSnapshot } from "../features/global-rankings.js";
 import { getTopPlaysSnapshot } from "../features/top-plays.js";
 import { getFarmHelperSnapshot, FarmHelperUserNotFoundError, type FarmHelperKeyMode } from "../features/farm-helper.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
-import { getMapsSnapshot } from "../features/maps.js";
+import { getMapsRandomBeatmapsets, getMapsSnapshot } from "../features/maps.js";
 import { getTrackerSnapshot } from "../features/tracker.js";
 import { getPlayerActivitySnapshot } from "../features/activity.js";
 import { listUserGoalsWithProgress } from "../features/goals.js";
@@ -22,7 +22,6 @@ import {
   invokerId,
   numberOption,
   stringOption,
-  subcommandName,
   type DiscordInteraction,
 } from "./commands.js";
 import {
@@ -34,35 +33,34 @@ import {
   removeSubscription,
 } from "./subscriptions.js";
 import { getUserLink, removeUserLink, setUserLink } from "./identity.js";
-import {
-  addUserTracker,
-  listUserTrackers,
-  MAPS_TRACKER_TARGET,
-  removeUserTracker,
-} from "./trackers.js";
-import { paginationRow, refreshRow, withNavRow } from "./components.js";
+import { getChannelMapContext, setChannelMapContext, type ChannelMapContext } from "./channel-context.js";
+import { paginationRow, refreshRow, rerollRow, withNavRow } from "./components.js";
 import {
   activityEmbed,
   beatmapEmbed,
   compareEmbed,
   countryLabel,
+  type DanBeatmapRef,
   danEmbed,
   errorBody,
   farmEmbed,
   goalsEmbed,
   helpEmbed,
+  linkPromptBody,
   maniacardEmbed,
   mapsListEmbed,
   meEmbed,
   noticeBody,
+  pbEmbed,
   playerEmbed,
+  randomFarmEmbed,
+  randomFavEmbed,
   rankingsEmbed,
   recentScoresEmbed,
   replayEmbed,
   snipesListEmbed,
   topPlaysListEmbed,
   trackerListEmbed,
-  watchListEmbed,
   whoamiEmbed,
 } from "./embeds.js";
 import { getSnipesSnapshot } from "../features/snipes.js";
@@ -75,9 +73,6 @@ export interface HandlerDeps {
   // Called after a feed subscription is added/removed so the runtime can refresh
   // its cached "any subscriptions?" fast-path flag.
   onSubscriptionsChanged?: () => void;
-  // Called after a personal tracker is added/removed so the runtime can refresh
-  // its cached set of watched osu! user ids.
-  onTrackersChanged?: () => void;
 }
 
 export type CommandHandler = (deps: HandlerDeps, interaction: DiscordInteraction) => Promise<DiscordMessageBody>;
@@ -119,19 +114,167 @@ function pageOf(interaction: DiscordInteraction): number {
   return value != null && value >= 1 ? Math.floor(value) : 1;
 }
 
-function parseBeatmapId(raw: string): number | null {
-  const trimmed = raw.trim();
-  if (/^\d+$/.test(trimmed)) return Number(trimmed);
-  // Diff-specific links: .../beatmapsets/123#mania/456 -> the trailing id.
-  const hash = trimmed.match(/#\w+\/(\d+)/);
-  if (hash) return Number(hash[1]);
-  const path = trimmed.match(/\/(?:beatmaps|b)\/(\d+)/);
-  if (path) return Number(path[1]);
-  const last = trimmed.match(/(\d+)\s*$/);
-  return last ? Number(last[1]) : null;
+// The channel an interaction happened in, if any. Bot-DM / private-channel
+// installs may lack a channel id; "last map" memory simply no-ops there.
+function channelIdOf(interaction: DiscordInteraction): string | undefined {
+  return interaction.channel_id ?? interaction.channel?.id;
 }
 
+interface BeatmapRef {
+  kind: "beatmap" | "beatmapset";
+  id: number;
+}
+
+// Classifies a beatmap input. A difficulty-specific URL (.../#mania/456) or a
+// /beatmaps|/b/456 path is a beatmap (difficulty) id; a bare /beatmapsets/123
+// with no diff hash is a set id. A bare number is treated as a beatmap id first,
+// and the resolver falls back to a set lookup if that 404s.
+function parseBeatmapRef(raw: string): BeatmapRef | null {
+  const trimmed = raw.trim();
+  const hash = trimmed.match(/#\w+\/(\d+)/);
+  if (hash) return { kind: "beatmap", id: Number(hash[1]) };
+  const beatmapPath = trimmed.match(/\/(?:beatmaps|b)\/(\d+)/);
+  if (beatmapPath) return { kind: "beatmap", id: Number(beatmapPath[1]) };
+  const setPath = trimmed.match(/\/beatmapsets\/(\d+)/);
+  if (setPath) return { kind: "beatmapset", id: Number(setPath[1]) };
+  if (/^\d+$/.test(trimmed)) return { kind: "beatmap", id: Number(trimmed) };
+  const last = trimmed.match(/(\d+)\s*$/);
+  return last ? { kind: "beatmap", id: Number(last[1]) } : null;
+}
+
+interface ResolvedBeatmap extends DanBeatmapRef {
+  id: number;
+  url: string;
+  title: string | null;
+  version: string | null;
+  beatmapsetId: number | null;
+  // The full beatmap record from /beatmaps/{id}, set only when the resolver
+  // fetched it directly (bare id / difficulty URL), so /map can reuse it instead
+  // of fetching the same beatmap twice.
+  raw?: Record<string, unknown>;
+}
+
+function toResolvedBeatmap(beatmap: Record<string, unknown>): ResolvedBeatmap {
+  const id = Number(beatmap.id ?? 0);
+  const set = (beatmap.beatmapset ?? null) as { id?: number; title?: string; artist?: string } | null;
+  const title = set?.title ? `${set.artist ?? ""} - ${set.title}`.trim().replace(/^- /, "") : null;
+  return {
+    id,
+    url: typeof beatmap.url === "string" && beatmap.url ? beatmap.url : `${OSU_BASE}/b/${id}`,
+    title,
+    version: beatmap.version == null ? null : String(beatmap.version),
+    beatmapsetId: beatmap.beatmapset_id == null ? (set?.id ?? null) : Number(beatmap.beatmapset_id),
+  };
+}
+
+// Resolves a beatmapset to its single mania difficulty, or throws a guidance
+// error listing the difficulty ids when there is more than one (so the user
+// re-runs with the specific id) or none.
+async function resolveFromBeatmapset(deps: HandlerDeps, beatmapsetId: number): Promise<ResolvedBeatmap> {
+  const set = await deps.osu.getBeatmapset(beatmapsetId, "discord:resolve-beatmapset");
+  const setMeta = { id: Number((set as { id?: number }).id ?? beatmapsetId), title: (set as { title?: string }).title, artist: (set as { artist?: string }).artist };
+  const all = (Array.isArray((set as { beatmaps?: unknown[] }).beatmaps) ? (set as { beatmaps: Record<string, unknown>[] }).beatmaps : [])
+    .filter((b) => b.mode === "mania" || Number(b.mode_int) === 3);
+  if (all.length === 0) {
+    throw new UserFacingError("That beatmapset has no osu!mania difficulties.");
+  }
+  if (all.length === 1) {
+    return toResolvedBeatmap({ ...all[0], beatmapset: setMeta });
+  }
+  const sorted = [...all].sort((a, b) => Number(a.difficulty_rating ?? 0) - Number(b.difficulty_rating ?? 0));
+  const lines = sorted.slice(0, 12).map((b) => {
+    const stars = Number(b.difficulty_rating ?? 0).toFixed(2);
+    const keys = b.cs == null ? "" : `${Math.round(Number(b.cs))}K `;
+    return `\`${Number(b.id)}\` ${keys}${b.version ?? ""} (${stars}★)`;
+  });
+  throw new UserFacingError(
+    `That's a beatmapset with several mania difficulties. Re-run with a difficulty id (the number after \`#mania/\` in the URL):\n${lines.join("\n")}`,
+  );
+}
+
+// Turns whatever the user typed into a concrete mania beatmap, resolving set ids
+// and validating the id against the API so the embed never links to a 404.
+async function resolveBeatmapForTools(deps: HandlerDeps, raw: string): Promise<ResolvedBeatmap> {
+  const ref = parseBeatmapRef(raw);
+  if (!ref || !Number.isFinite(ref.id) || ref.id <= 0) {
+    throw new UserFacingError(`Couldn't read a beatmap id from \`${raw}\`.`);
+  }
+  if (ref.kind === "beatmapset") {
+    try {
+      return await resolveFromBeatmapset(deps, ref.id);
+    } catch (error) {
+      if (error instanceof OsuApiError && error.status === 404) {
+        throw new UserFacingError(`Couldn't find a beatmapset with id \`${ref.id}\`.`);
+      }
+      throw error;
+    }
+  }
+  try {
+    const beatmap = await deps.osu.getBeatmap(ref.id, "discord:resolve-beatmap");
+    return { ...toResolvedBeatmap(beatmap), raw: beatmap };
+  } catch (error) {
+    if (error instanceof OsuApiError && error.status === 404) {
+      // The number was not a beatmap id; it may be a beatmapset id.
+      try {
+        return await resolveFromBeatmapset(deps, ref.id);
+      } catch (setError) {
+        if (setError instanceof OsuApiError && setError.status === 404) {
+          throw new UserFacingError(`Couldn't find a beatmap or beatmapset with id \`${ref.id}\`.`);
+        }
+        throw setError;
+      }
+    }
+    throw error;
+  }
+}
+
+// Resolves the target player for a score lookup to a numeric osu! user id plus a
+// display name (the /pb family needs the id for the per-beatmap scores call).
+async function resolveTargetUser(deps: HandlerDeps, interaction: DiscordInteraction): Promise<{ userId: number; username: string }> {
+  const explicit = stringOption(interaction, "username");
+  if (explicit) {
+    const user = await deps.osu.getUserByKey(explicit, "discord:pb");
+    const userId = Number((user as { id?: number }).id ?? 0);
+    if (!userId) throw new UserFacingError(`Couldn't find an osu! player matching \`${explicit}\`.`);
+    return { userId, username: String((user as { username?: string }).username ?? explicit) };
+  }
+  const discordId = invokerId(interaction);
+  if (discordId) {
+    const link = await getUserLink(deps.db, discordId);
+    if (link) return { userId: link.osuUserId, username: link.osuUsername };
+  }
+  throw new NoLinkError("No osu! account linked yet. Run `/link <username>`, or pass a username.");
+}
+
+function pickBestScore(scores: OscScore[]): OscScore | null {
+  if (!scores.length) return null;
+  return [...scores].sort((a, b) => (b.pp ?? 0) - (a.pp ?? 0) || getAcc(b) - getAcc(a))[0] ?? null;
+}
+
+function getAcc(score: OscScore): number {
+  const value = Number(score.accuracy ?? 0);
+  return value <= 1 ? value * 100 : value;
+}
+
+// Extracts the "last map shown" context from a score row, for the /pb family.
+function scoreToContext(score: OscScore | undefined): ChannelMapContext | null {
+  if (!score) return null;
+  const beatmapId = Number(score.beatmap?.id ?? score.beatmap_id ?? 0);
+  if (!beatmapId) return null;
+  const set = score.beatmapset;
+  return {
+    beatmapId,
+    beatmapsetId: Number(score.beatmap?.beatmapset_id ?? set?.id ?? 0) || null,
+    title: set ? `${set.artist} - ${set.title}` : null,
+    version: score.beatmap?.version ?? null,
+  };
+}
+
+const OSU_BASE = "https://osu.ppy.sh";
+
 function friendlyError(error: unknown, subject: string): DiscordMessageBody {
+  // A missing link is a setup gap, not a failure: offer the one-click link button.
+  if (error instanceof NoLinkError) return linkPromptBody(error.message);
   if (error instanceof UserFacingError) return errorBody(error.message);
   if (error instanceof FarmHelperUserNotFoundError) return errorBody(`Couldn't find an osu! player matching \`${subject}\`.`);
   if (error instanceof OsuApiError) {
@@ -214,7 +357,7 @@ const meHandler: CommandHandler = async (deps, interaction) => {
   const id = invokerId(interaction);
   if (!id) return errorBody("Could not identify your Discord account.");
   const link = await getUserLink(deps.db, id);
-  if (!link) return errorBody("No osu! account linked. Run `/link <username>` first.");
+  if (!link) return linkPromptBody("No osu! account linked yet. Link one with the button below, or run `/link <username>`.");
   try {
     const summary = await getMyDataSummary(deps.db, link.osuUserId);
     return meEmbed(
@@ -282,6 +425,11 @@ const recentHandler: CommandHandler = async (deps, interaction) => {
     const scores = (section.payload as OscScore[]) ?? [];
     const slice = scores.slice((page - 1) * pageSize, page * pageSize);
     const hasNext = scores.length > page * pageSize;
+    // Remember the top map on the page being shown so /pb, /c and /compare look
+    // up scores on a map the channel is actually looking at (not always the most
+    // recent play when the caller paged forward).
+    const context = scoreToContext(slice[0]);
+    if (context) await setChannelMapContext(deps.db, channelIdOf(interaction), context).catch(() => {});
     const body = recentScoresEmbed(username, userId, slice, deps.config.discordSiteOrigin);
     return withNavRow(body, paginationRow("recent", page, hasNext, { username }));
   } catch (error) {
@@ -345,7 +493,7 @@ const compareHandler: CommandHandler = async (deps, interaction) => {
   } else {
     const id = invokerId(interaction);
     const link = id ? await getUserLink(deps.db, id) : null;
-    if (!link) return errorBody("Provide two usernames, or `/link` your account and pass just the other player.");
+    if (!link) return linkPromptBody("Pass two usernames, or link your account with the button below and just give the other player.");
     keyA = String(link.osuUserId);
   }
   try {
@@ -356,6 +504,34 @@ const compareHandler: CommandHandler = async (deps, interaction) => {
     return compareEmbed(snapA, snapB, deps.config.discordSiteOrigin);
   } catch (error) {
     return friendlyError(error, `${a ?? "you"} / ${b}`);
+  }
+};
+
+// /pb, /c, /compare: a player's best score on the last map shown in this channel.
+const pbHandler: CommandHandler = async (deps, interaction) => {
+  const context = await getChannelMapContext(deps.db, channelIdOf(interaction));
+  if (!context) {
+    return errorBody("No recent map in this channel yet. Run `/recent`, `/map` or `/dan` first, then use `/pb`.");
+  }
+  const subject = stringOption(interaction, "username") ?? "your linked account";
+  try {
+    const { userId, username } = await resolveTargetUser(deps, interaction);
+    const scores = await deps.osu
+      .getBeatmapUserScoresAll(context.beatmapId, userId, "discord:pb")
+      .catch((error) => {
+        // No score on the map reads as 404 from the osu! API; treat it as "no score".
+        if (error instanceof OsuApiError && error.status === 404) return [] as OscScore[];
+        throw error;
+      });
+    return pbEmbed({
+      username,
+      userId,
+      beatmap: { id: context.beatmapId, title: context.title, version: context.version },
+      score: pickBestScore(scores),
+      siteOrigin: deps.config.discordSiteOrigin,
+    });
+  } catch (error) {
+    return friendlyError(error, subject);
   }
 };
 
@@ -470,12 +646,18 @@ const mapsHandler: CommandHandler = async (deps, interaction) => {
 const danHandler: CommandHandler = async (deps, interaction) => {
   const raw = stringOption(interaction, "beatmap");
   if (!raw) return errorBody("Provide a beatmap id or osu! beatmap URL.");
-  const beatmapId = parseBeatmapId(raw);
-  if (!beatmapId) return errorBody(`Couldn't read a beatmap id from \`${raw}\`.`);
   try {
+    const beatmap = await resolveBeatmapForTools(deps, raw);
+    const beatmapId = beatmap.id;
+    await setChannelMapContext(deps.db, channelIdOf(interaction), {
+      beatmapId,
+      beatmapsetId: beatmap.beatmapsetId,
+      title: beatmap.title,
+      version: beatmap.version,
+    }).catch(() => {});
     const batch = await getDanEstimateBatch(deps.db, deps.queue, deps.osu, [{ beatmapId, rate: 1 }], { computeMissing: true });
     const key = String(beatmapId);
-    return danEmbed(beatmapId, batch.results[key] ?? null, batch.pending.includes(key), deps.config.discordSiteOrigin);
+    return danEmbed(beatmap, batch.results[key] ?? null, batch.pending.includes(key), deps.config.discordSiteOrigin);
   } catch (error) {
     return friendlyError(error, raw);
   }
@@ -484,13 +666,22 @@ const danHandler: CommandHandler = async (deps, interaction) => {
 const mapHandler: CommandHandler = async (deps, interaction) => {
   const raw = stringOption(interaction, "beatmap");
   if (!raw) return errorBody("Provide a beatmap id or osu! beatmap URL.");
-  const beatmapId = parseBeatmapId(raw);
-  if (!beatmapId) return errorBody(`Couldn't read a beatmap id from \`${raw}\`.`);
   try {
-    const beatmap = await deps.osu.getBeatmap(beatmapId, "discord:map");
+    const beatmap = await resolveBeatmapForTools(deps, raw);
+    const beatmapId = beatmap.id;
+    await setChannelMapContext(deps.db, channelIdOf(interaction), {
+      beatmapId,
+      beatmapsetId: beatmap.beatmapsetId,
+      title: beatmap.title,
+      version: beatmap.version,
+    }).catch(() => {});
+    // resolveBeatmapForTools already fetched the full beatmap for the common
+    // bare-id / difficulty-URL path; reuse it and only fetch when it came from a
+    // beatmapset resolution (where raw is unset).
+    const full = beatmap.raw ?? await deps.osu.getBeatmap(beatmapId, "discord:map");
     const batch = await getDanEstimateBatch(deps.db, deps.queue, deps.osu, [{ beatmapId, rate: 1 }], { computeMissing: true }).catch(() => null);
     const estimate = batch?.results?.[String(beatmapId)] ?? null;
-    return beatmapEmbed(beatmap as unknown as Parameters<typeof beatmapEmbed>[0], estimate, deps.config.discordSiteOrigin);
+    return beatmapEmbed(full as unknown as Parameters<typeof beatmapEmbed>[0], estimate, deps.config.discordSiteOrigin);
   } catch (error) {
     return friendlyError(error, raw);
   }
@@ -503,63 +694,6 @@ const replayHandler: CommandHandler = async (deps, interaction) => {
   const scoreId = match ? Number(match[1]) : NaN;
   if (!Number.isFinite(scoreId) || scoreId <= 0) return errorBody(`Couldn't read a score id from \`${raw}\`.`);
   return replayEmbed(scoreId, deps.config.discordSiteOrigin);
-};
-
-// ---------------------------------------------------------------------------
-// Personal alerts (/watch)
-// ---------------------------------------------------------------------------
-
-const watchHandler: CommandHandler = async (deps, interaction) => {
-  const id = invokerId(interaction);
-  if (!id) return errorBody("Could not identify your Discord account.");
-  const sub = subcommandName(interaction);
-
-  if (sub === "list") {
-    const trackers = await listUserTrackers(deps.db, id);
-    return watchListEmbed(trackers);
-  }
-
-  if (sub === "maps") {
-    await addUserTracker(deps.db, { subscriberId: id, kind: "maps", targetOsuUserId: MAPS_TRACKER_TARGET, targetUsername: null, minPp: 0 });
-    deps.onTrackersChanged?.();
-    return noticeBody("You will get a DM when a new farm map starts producing pp gains. Make sure your DMs are open. Use `/watch stop` to cancel.");
-  }
-
-  if (sub === "stop") {
-    const target = stringOption(interaction, "target");
-    if (!target) return errorBody("Tell me what to stop: a player's name, or `maps`.");
-    if (target.toLowerCase() === "maps" || target.toLowerCase() === "new ranked maps" || target.toLowerCase() === "new farm maps") {
-      const removed = await removeUserTracker(deps.db, { subscriberId: id, kind: "maps", targetOsuUserId: MAPS_TRACKER_TARGET });
-      if (removed) deps.onTrackersChanged?.();
-      return noticeBody(removed ? "Stopped new-farm-map alerts." : "You were not watching new farm maps.");
-    }
-    const trackers = await listUserTrackers(deps.db, id);
-    const match = trackers.find(
-      (t) => t.kind === "user" && (t.targetUsername?.toLowerCase() === target.toLowerCase() || String(t.targetOsuUserId) === target),
-    );
-    if (!match) return errorBody(`You are not watching \`${target}\`.`);
-    const removed = await removeUserTracker(deps.db, { subscriberId: id, kind: "user", targetOsuUserId: match.targetOsuUserId });
-    if (removed) deps.onTrackersChanged?.();
-    return noticeBody(removed ? `Stopped watching **${match.targetUsername ?? target}**.` : `You are not watching \`${target}\`.`);
-  }
-
-  // Default subcommand: user
-  const key = stringOption(interaction, "username");
-  if (!key) return errorBody("Provide the osu! player to watch.");
-  const minPp = Math.max(0, Math.floor(numberOption(interaction, "min_pp") ?? 0));
-  if (!deps.config.discordBotToken) return errorBody("Alerts need the bot token configured on the backend.");
-  try {
-    const user = await deps.osu.getUserByKey(key, "discord:watch");
-    const osuUserId = Number((user as { id?: number }).id ?? 0);
-    const osuUsername = String((user as { username?: string }).username ?? key);
-    if (!osuUserId) return errorBody(`Couldn't find an osu! player matching \`${key}\`.`);
-    await addUserTracker(deps.db, { subscriberId: id, kind: "user", targetOsuUserId: osuUserId, targetUsername: osuUsername, minPp });
-    deps.onTrackersChanged?.();
-    const ppNote = minPp > 0 ? ` and on any ranked play at or above ${minPp}pp` : "";
-    return noticeBody(`Watching **${osuUsername}**. You will get a DM on each new top play${ppNote}. Keep your DMs open. Use \`/watch stop\` to cancel.`);
-  } catch (error) {
-    return friendlyError(error, key);
-  }
 };
 
 // ---------------------------------------------------------------------------
@@ -634,6 +768,157 @@ const snipesHandler: CommandHandler = async (deps, interaction) => {
   }
 };
 
+// --- Random map pickers (/randomfarm, /randomfav) --------------------------
+
+// Umbrella pattern buckets expand to their canonical siblings, matching the
+// Maps random tab (RANDOM_PATTERN_MATCHES in src/routes/maps.tsx).
+const RANDOM_PATTERN_MATCHES: Record<string, string[]> = {
+  jack: ["jack", "chordjack", "longjack", "speedjack", "minijack"],
+  chordjack: ["chordjack"],
+  stream: ["stream", "jumpstream", "chordstream", "handstream", "dumpstream"],
+  jumpstream: ["jumpstream"],
+  stamina: ["stamina"],
+  tech: ["tech"],
+  ln: ["ln"],
+  sv: ["sv"],
+  tiebreaker: ["tiebreaker"],
+};
+
+function statusBucket(status: string | null | undefined): "ranked" | "loved" | "graveyard" | "other" {
+  const s = (status ?? "").toLowerCase();
+  if (s === "ranked" || s === "approved") return "ranked";
+  if (s === "loved") return "loved";
+  if (s === "graveyard") return "graveyard";
+  return "other";
+}
+
+function weightedPick<T>(items: T[], weight: (item: T) => number): T {
+  let total = 0;
+  for (const item of items) total += Math.max(0, weight(item));
+  if (total <= 0) return items[Math.floor(Math.random() * items.length)];
+  let r = Math.random() * total;
+  for (const item of items) {
+    r -= Math.max(0, weight(item));
+    if (r <= 0) return item;
+  }
+  return items[items.length - 1];
+}
+
+function numStr(value: number | undefined): string {
+  return value != null && Number.isFinite(value) ? String(value) : "";
+}
+
+function randomEmptyNotice(country: string): string {
+  return `No maps match those filters in ${countryLabel(country)}. Loosen the filters and try again.`;
+}
+
+const randomFarmHandler: CommandHandler = async (deps, interaction) => {
+  // No country defaults to the global farm board; an explicit code narrows it.
+  const country = resolveCountry(deps, stringOption(interaction, "country"), true);
+  const keysRaw = stringOption(interaction, "keys");
+  const status = stringOption(interaction, "status");
+  const starsMin = numberOption(interaction, "stars_min");
+  const starsMax = numberOption(interaction, "stars_max");
+  const minPp = numberOption(interaction, "min_pp");
+  try {
+    const snapshot = await getMapsSnapshot(deps.db, deps.queue, country, MAPS_MAX_AGE_MS, "core");
+    const data = snapshot.value;
+    if (!data) return noticeBody(`Maps for ${countryLabel(country)} are still generating, try again shortly.`);
+    const pool = data.farmed.filter((m) => {
+      if (keysRaw === "4k" && Math.round(m.cs) !== 4) return false;
+      if (keysRaw === "7k" && Math.round(m.cs) !== 7) return false;
+      if (status && statusBucket(m.status) !== status) return false;
+      if (starsMin != null && (m.difficultyRating ?? 0) < starsMin) return false;
+      if (starsMax != null && (m.difficultyRating ?? Number.MAX_VALUE) > starsMax) return false;
+      if (minPp != null && (m.maxPp ?? 0) < minPp) return false;
+      return true;
+    });
+    if (pool.length === 0) return noticeBody(randomEmptyNotice(country));
+    // "Popular" bias: a map farmed by more players is likelier to surface.
+    const pick = weightedPick(pool, (m) => Math.max(1, m.playerCount));
+    const params = {
+      country, keys: keysRaw ?? "", status: status ?? "",
+      stars_min: numStr(starsMin), stars_max: numStr(starsMax), min_pp: numStr(minPp),
+    };
+    return withNavRow(randomFarmEmbed(pick, country, deps.config.discordSiteOrigin), rerollRow("randomfarm", params));
+  } catch (error) {
+    return friendlyError(error, country);
+  }
+};
+
+// The favourites/random pool is a heavy multi-thousand-row hydration (GLOBAL
+// ships tens of thousands of sets). Cache it briefly so rerolls and back-to-back
+// /randomfav calls reuse it instead of re-reading (and re-blocking the libsql
+// event loop) each time.
+type RandomFavPool = Awaited<ReturnType<typeof getMapsSnapshot>>["value"];
+const randomFavPoolCache = new Map<string, { at: number; value: RandomFavPool }>();
+const RANDOM_FAV_POOL_TTL_MS = 60_000;
+
+async function loadRandomFavPool(deps: HandlerDeps, country: string): Promise<RandomFavPool> {
+  const now = Date.now();
+  const cached = randomFavPoolCache.get(country);
+  if (cached && now - cached.at < RANDOM_FAV_POOL_TTL_MS) return cached.value;
+  const snapshot = await getMapsSnapshot(deps.db, deps.queue, country, MAPS_MAX_AGE_MS, "random");
+  randomFavPoolCache.set(country, { at: now, value: snapshot.value });
+  if (randomFavPoolCache.size > 8) {
+    const oldest = randomFavPoolCache.keys().next().value;
+    if (oldest !== undefined) randomFavPoolCache.delete(oldest);
+  }
+  return snapshot.value;
+}
+
+const randomFavHandler: CommandHandler = async (deps, interaction) => {
+  const country = resolveCountry(deps, stringOption(interaction, "country"), true);
+  const keysRaw = stringOption(interaction, "keys");
+  const status = stringOption(interaction, "status");
+  const pattern = stringOption(interaction, "pattern");
+  const starsMin = numberOption(interaction, "stars_min");
+  const starsMax = numberOption(interaction, "stars_max");
+  const patternMatches = pattern ? RANDOM_PATTERN_MATCHES[pattern] ?? null : null;
+  try {
+    const data = await loadRandomFavPool(deps, country);
+    if (!data || !data.favouritesByPlayer?.length || !data.beatmapsetsPool) {
+      return noticeBody(`Favourite maps for ${countryLabel(country)} are still generating, try again shortly.`);
+    }
+    // One eligible row per (player, favourited set): sampling a row uniformly
+    // makes each favourite equally likely, mirroring the Maps random tab and
+    // surfacing widely-favourited sets more often as a side-effect.
+    const rows: Array<{ playerName: string; setId: number }> = [];
+    const scopeFavCounts = new Map<number, number>();
+    for (const player of data.favouritesByPlayer) {
+      for (const setId of player.beatmapsetIds) {
+        const set = data.beatmapsetsPool[setId];
+        if (!set) continue;
+        scopeFavCounts.set(setId, (scopeFavCounts.get(setId) ?? 0) + 1);
+        if (status && statusBucket(set.status) !== status) continue;
+        const keys = set.maniaKeys ?? [];
+        if (keysRaw === "4k" && !keys.some((k) => Math.round(k) === 4)) continue;
+        if (keysRaw === "7k" && !keys.some((k) => Math.round(k) === 7)) continue;
+        if (patternMatches && !(set.patterns ?? []).some((p) => patternMatches.includes(p))) continue;
+        if (starsMin != null && (set.starMax ?? 0) < starsMin) continue;
+        if (starsMax != null && (set.starMin ?? Number.MAX_VALUE) > starsMax) continue;
+        rows.push({ playerName: player.username, setId });
+      }
+    }
+    if (rows.length === 0) return noticeBody(randomEmptyNotice(country));
+    const pick = rows[Math.floor(Math.random() * rows.length)];
+    // The random pool ships without covers/difficulties; fetch the full set for
+    // art, falling back to the lean record if the read comes back empty.
+    const lean = data.beatmapsetsPool[pick.setId];
+    const full = (await getMapsRandomBeatmapsets(deps.db, [pick.setId]).catch(() => []))[0] ?? lean;
+    const params = {
+      country, keys: keysRaw ?? "", status: status ?? "", pattern: pattern ?? "",
+      stars_min: numStr(starsMin), stars_max: numStr(starsMax),
+    };
+    return withNavRow(
+      randomFavEmbed(full, pick.playerName, scopeFavCounts.get(pick.setId) ?? 1, country, deps.config.discordSiteOrigin),
+      rerollRow("randomfav", params),
+    );
+  } catch (error) {
+    return friendlyError(error, country);
+  }
+};
+
 const helpHandler: CommandHandler = async (deps) => helpEmbed(deps.config.discordSiteOrigin);
 
 export const COMMAND_HANDLERS: Record<string, CommandHandler> = {
@@ -647,7 +932,10 @@ export const COMMAND_HANDLERS: Record<string, CommandHandler> = {
   activity: activityHandler,
   goals: goalsHandler,
   farm: farmHandler,
-  compare: compareHandler,
+  vs: compareHandler,
+  pb: pbHandler,
+  c: pbHandler,
+  compare: pbHandler,
   rankings: rankingsHandler,
   top: topHandler,
   tracker: trackerHandler,
@@ -655,10 +943,11 @@ export const COMMAND_HANDLERS: Record<string, CommandHandler> = {
   dan: danHandler,
   map: mapHandler,
   replay: replayHandler,
-  watch: watchHandler,
   subscribe: subscribeHandler,
   unsubscribe: unsubscribeHandler,
   subscriptions: subscriptionsHandler,
   snipes: snipesHandler,
+  randomfarm: randomFarmHandler,
+  randomfav: randomFavHandler,
   help: helpHandler,
 };

@@ -4,7 +4,7 @@ import type { Db } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { OsuApiClient } from "../osu/client.js";
 import type { EventSink } from "../live/event-log.js";
-import type { CountryTopPlay, LeanTrackerScore, LiveEvent, SnipeEvent } from "../shared/types.js";
+import type { CountryTopPlay, LiveEvent, SnipeEvent } from "../shared/types.js";
 import { logInfo, logWarn } from "../logger.js";
 import { DiscordRest, DiscordRestError } from "./rest.js";
 import { verifyDiscordSignature } from "./verify.js";
@@ -15,19 +15,22 @@ import {
   INTERACTION_APPLICATION_COMMAND,
   INTERACTION_APPLICATION_COMMAND_AUTOCOMPLETE,
   INTERACTION_MESSAGE_COMPONENT,
+  INTERACTION_MODAL_SUBMIT,
   INTERACTION_PING,
   invokerId,
   isEphemeralCommand,
   MANAGE_GUILD_COMMANDS,
+  modalFieldValue,
   RESPONSE_AUTOCOMPLETE_RESULT,
   RESPONSE_CHANNEL_MESSAGE,
   RESPONSE_DEFERRED_CHANNEL_MESSAGE,
   RESPONSE_DEFERRED_UPDATE_MESSAGE,
+  RESPONSE_MODAL,
   RESPONSE_PONG,
   type DiscordInteraction,
 } from "./commands.js";
 import { COMMAND_HANDLERS, type HandlerDeps } from "./handlers.js";
-import { newMapAlertEmbed, snipeEmbed, topPlayEmbed, trackedScoreAlertEmbed, type NewMapAlert } from "./embeds.js";
+import { helpEmbed, newMapAlertEmbed, snipeEmbed, topPlayEmbed, type NewMapAlert } from "./embeds.js";
 import {
   countSubscriptions,
   countSubscriptionsByFeed,
@@ -36,16 +39,17 @@ import {
   removeSubscriptionsForChannel,
   type FeedType,
 } from "./subscriptions.js";
-import {
-  countMapTrackers,
-  getTrackedOsuUserIds,
-  listMapTrackers,
-  listTrackersForOsuUser,
-  removeTrackersForSubscriber,
-} from "./trackers.js";
 import { claimMapAlert, getBeatmapRankedInfo, getFarmMapSignal, isWithinRecency } from "./new-maps.js";
 import { handleAutocomplete } from "./autocomplete.js";
-import { componentToCommandInteraction, decodeComponentId, toComponentsV2Body } from "./components.js";
+import {
+  componentToCommandInteraction,
+  decodeActionId,
+  decodeComponentId,
+  LINK_MODAL_FIELD,
+  LINK_MODAL_ID,
+  linkModal,
+  toComponentsV2Body,
+} from "./components.js";
 import { GLOBAL_COUNTRY_CODE } from "../countries.js";
 import { mapWithConcurrency } from "./util.js";
 
@@ -55,8 +59,6 @@ const FEED_POST_CONCURRENCY = 8;
 
 const MAX_INTERACTION_BODY_BYTES = 256 * 1024;
 const RECENT_INTERACTIONS_LIMIT = 25;
-// Bounds the in-memory dedupe of per-user DM alerts (subscriber+score pairs).
-const USER_ALERT_DEDUPE_MAX = 5_000;
 
 export interface DiscordStatus {
   enabled: boolean;
@@ -70,9 +72,6 @@ export interface DiscordStatus {
   // Lightweight observability for the admin dashboard.
   commandCounts: Record<string, number>;
   errorCount: number;
-  alertsDelivered: number;
-  dmFailures: number;
-  trackedPlayers: number;
 }
 
 export interface DiscordGuildSummary {
@@ -146,22 +145,18 @@ export function createDiscordRuntime(opts: DiscordRuntimeOptions): DiscordRuntim
   const publicKey = config.discordPublicKey;
   const rest = new DiscordRest(config.discordApplicationId, config.discordBotToken);
   const recent: DiscordStatus["recentInteractions"] = [];
-  const counters = { commands: {} as Record<string, number>, errors: 0, alertsDelivered: 0, dmFailures: 0 };
+  const counters = { commands: {} as Record<string, number>, errors: 0 };
 
   // Fast-path flag: when no channel anywhere is subscribed, skip the per-event
   // subscription lookup entirely. Starts pessimistic (false = do the query) until
   // the first count loads, and is refreshed on every subscription mutation, so it
   // never causes a missed post. No background timer is involved.
   let knownEmpty = false;
-  // Cache of osu! user ids any "user" tracker watches, plus whether any
-  // destination wants new-map alerts. Keep the per-score hot path off the DB.
-  let trackedUserIds = new Set<number>();
+  // Whether any channel is subscribed to the new-map feed, so the per-top-play
+  // hot path can skip the new-map evaluation entirely when nobody wants it.
   let wantsNewMaps = false;
-  // Process-lifetime caches: DM channel ids, beatmaps already evaluated for new
-  // map alerts, and recently delivered per-user alerts (subscriber:scoreId).
-  const dmChannelCache = new Map<string, string>();
+  // Process-lifetime cache of beatmaps already evaluated for a new-map alert.
   const seenMapsForAlert = new Set<number>();
-  const recentUserAlerts = new Set<string>();
 
   async function refreshEmptyFlag(): Promise<void> {
     try {
@@ -170,26 +165,17 @@ export function createDiscordRuntime(opts: DiscordRuntimeOptions): DiscordRuntim
       knownEmpty = false;
     }
   }
-  async function refreshTrackerCaches(): Promise<void> {
+  async function refreshNewMapFlag(): Promise<void> {
     try {
-      trackedUserIds = await getTrackedOsuUserIds(opts.db);
-      const [maps, newMapSubs] = await Promise.all([
-        countMapTrackers(opts.db),
-        countSubscriptionsByFeed(opts.db, "new_map"),
-      ]);
-      wantsNewMaps = maps > 0 || newMapSubs > 0;
+      wantsNewMaps = (await countSubscriptionsByFeed(opts.db, "new_map")) > 0;
     } catch (error) {
-      // Keep previous caches on error rather than going dark, but surface it:
-      // a stale cache gates alert delivery on the hot path.
-      logWarn("discord_tracker_cache_refresh_failed", { error: errorMessage(error) });
+      // Keep the previous value on error rather than going dark.
+      logWarn("discord_newmap_cache_refresh_failed", { error: errorMessage(error) });
     }
   }
   function notifySubscriptionsChanged(): void {
     void refreshEmptyFlag();
-    void refreshTrackerCaches();
-  }
-  function notifyTrackersChanged(): void {
-    void refreshTrackerCaches();
+    void refreshNewMapFlag();
   }
 
   const deps: HandlerDeps = {
@@ -198,7 +184,6 @@ export function createDiscordRuntime(opts: DiscordRuntimeOptions): DiscordRuntim
     queue: opts.queue,
     config,
     onSubscriptionsChanged: notifySubscriptionsChanged,
-    onTrackersChanged: notifyTrackersChanged,
   };
 
   function recordInteraction(command: string, interaction: DiscordInteraction): void {
@@ -231,6 +216,15 @@ export function createDiscordRuntime(opts: DiscordRuntimeOptions): DiscordRuntim
       );
     } catch (error) {
       logWarn("discord_followup_failed", { command: name, error: errorMessage(error) });
+    }
+  }
+
+  // Swaps the help message to a different category in place (deferred update).
+  async function updateHelpView(interaction: DiscordInteraction, category: string): Promise<void> {
+    try {
+      await rest.editOriginalInteractionResponse(interaction.token, helpEmbed(config.discordSiteOrigin, category));
+    } catch (error) {
+      logWarn("discord_help_nav_failed", { error: errorMessage(error) });
     }
   }
 
@@ -283,6 +277,20 @@ export function createDiscordRuntime(opts: DiscordRuntimeOptions): DiscordRuntim
     }
 
     if (interaction.type === INTERACTION_MESSAGE_COMPONENT) {
+      // Action buttons (open the link modal, swap the help view) come first; they
+      // are not slash-command reruns.
+      const action = decodeActionId(interaction.data?.custom_id);
+      if (action?.kind === "link") {
+        // Opening a modal must be the direct interaction response, never deferred.
+        sendJson(res, 200, { type: RESPONSE_MODAL, data: linkModal() });
+        return true;
+      }
+      if (action?.kind === "help") {
+        recordInteraction("help", interaction);
+        sendJson(res, 200, { type: RESPONSE_DEFERRED_UPDATE_MESSAGE });
+        void updateHelpView(interaction, action.category);
+        return true;
+      }
       const decoded = decodeComponentId(interaction.data?.custom_id);
       if (!decoded) {
         sendJson(res, 200, {
@@ -296,6 +304,27 @@ export function createDiscordRuntime(opts: DiscordRuntimeOptions): DiscordRuntim
       recordInteraction(decoded.cmd, interaction);
       sendJson(res, 200, { type: RESPONSE_DEFERRED_UPDATE_MESSAGE });
       void dispatchCommand(componentToCommandInteraction(interaction, decoded));
+      return true;
+    }
+
+    if (interaction.type === INTERACTION_MODAL_SUBMIT) {
+      if (interaction.data?.custom_id === LINK_MODAL_ID) {
+        const key = modalFieldValue(interaction, LINK_MODAL_FIELD);
+        recordInteraction("link", interaction);
+        sendJson(res, 200, { type: RESPONSE_DEFERRED_CHANNEL_MESSAGE, data: { flags: FLAG_EPHEMERAL } });
+        // Reuse the /link handler exactly by synthesizing its command interaction.
+        const synthetic: DiscordInteraction = {
+          ...interaction,
+          type: INTERACTION_APPLICATION_COMMAND,
+          data: { name: "link", options: key ? [{ name: "username", type: 3, value: key }] : [] },
+        };
+        void dispatchCommand(synthetic);
+        return true;
+      }
+      sendJson(res, 200, {
+        type: RESPONSE_CHANNEL_MESSAGE,
+        data: toComponentsV2Body({ content: "Unsupported form.", flags: FLAG_EPHEMERAL, allowed_mentions: { parse: [] } }),
+      });
       return true;
     }
 
@@ -376,90 +405,6 @@ export function createDiscordRuntime(opts: DiscordRuntimeOptions): DiscordRuntim
       }
     });
     if (healed) notifySubscriptionsChanged();
-  }
-
-  // --- DM delivery ---------------------------------------------------------
-
-  // Sends a DM to a user, caching the DM channel. Returns "unreachable" when the
-  // user has DMs closed / has blocked the bot (50007 / 403), so the caller can
-  // drop their trackers.
-  async function sendDm(subscriberId: string, body: Parameters<DiscordRest["createChannelMessage"]>[1]): Promise<"ok" | "unreachable" | "error"> {
-    try {
-      let channelId = dmChannelCache.get(subscriberId);
-      if (!channelId) {
-        const channel = await rest.createDmChannel(subscriberId);
-        channelId = channel.id;
-        dmChannelCache.set(subscriberId, channelId);
-      }
-      await rest.createChannelMessage(channelId, body);
-      return "ok";
-    } catch (error) {
-      dmChannelCache.delete(subscriberId);
-      if (error instanceof DiscordRestError && (error.status === 403 || discordErrorCode(error) === 50007)) {
-        return "unreachable";
-      }
-      counters.dmFailures += 1;
-      logWarn("discord_dm_failed", { error: errorMessage(error) });
-      return "error";
-    }
-  }
-
-  // Delivers a per-user alert DM, deduped by subscriber+score so the top_play
-  // and tracker_score events for one score never double-send.
-  async function deliverUserAlert(subscriberId: string, scoreId: number, body: Parameters<DiscordRest["createChannelMessage"]>[1]): Promise<void> {
-    const key = `${subscriberId}:${scoreId}`;
-    if (recentUserAlerts.has(key)) return;
-    if (recentUserAlerts.size >= USER_ALERT_DEDUPE_MAX) recentUserAlerts.clear();
-    recentUserAlerts.add(key);
-    const result = await sendDm(subscriberId, body);
-    if (result === "ok") counters.alertsDelivered += 1;
-    // A transient failure should not permanently suppress a later retry for the
-    // same score (e.g. the paired top_play / tracker_score event).
-    if (result === "error") recentUserAlerts.delete(key);
-    if (result === "unreachable") {
-      await removeTrackersForSubscriber(opts.db, subscriberId).catch(() => {});
-      notifyTrackersChanged();
-      logInfo("discord_tracker_self_healed", { reason: "dm_unreachable" });
-    }
-  }
-
-  // --- Per-user trackers ---------------------------------------------------
-
-  async function handleTopPlayTrackers(event: LiveEvent): Promise<void> {
-    const payload = event.payload as CountryTopPlay;
-    const userId = Number(payload.user?.id ?? 0);
-    if (!userId || !trackedUserIds.has(userId)) return;
-    const trackers = await listTrackersForOsuUser(opts.db, userId);
-    if (trackers.length === 0) return;
-    // Every confirmed top play is a real pp gain, which is the baseline a user
-    // tracker always wants.
-    const body = topPlayEmbed(payload, event.country, config.discordSiteOrigin);
-    // Key on the stable identity so the top_play and tracker_score events for the
-    // same play collapse to one DM even when their score ids differ (legacy plays).
-    const scoreId = Number(payload.score?.legacy_score_id ?? payload.score?.id ?? 0);
-    for (const tracker of trackers) {
-      await deliverUserAlert(tracker.subscriberId, scoreId, body);
-    }
-  }
-
-  async function handleScoreTrackers(score: LeanTrackerScore): Promise<void> {
-    const userId = Number(score.user_id ?? score.user?.id ?? 0);
-    if (!userId || !trackedUserIds.has(userId)) return;
-    const pp = score.pp;
-    if (pp == null) return;
-    const trackers = (await listTrackersForOsuUser(opts.db, userId)).filter((t) => t.minPp > 0 && pp >= t.minPp);
-    if (trackers.length === 0) return;
-    // The big-play alert is only for ranked maps; the lean score lacks status, so
-    // confirm it from the beatmaps table (cheap and gated to tracked players).
-    const beatmapId = Number(score.beatmap?.id ?? score.beatmap_id ?? 0);
-    const beatmapsetId = Number(score.beatmap?.beatmapset_id ?? score.beatmapset?.id ?? 0);
-    const info = beatmapId ? await getBeatmapRankedInfo(opts.db, beatmapId, beatmapsetId) : null;
-    if (!info || info.status !== "ranked") return;
-    const body = trackedScoreAlertEmbed(score, config.discordSiteOrigin);
-    const scoreId = Number(score.legacy_score_id ?? score.id ?? 0);
-    for (const tracker of trackers) {
-      await deliverUserAlert(tracker.subscriberId, scoreId, body);
-    }
   }
 
   // --- New farm map alerts ------------------------------------------------
@@ -544,28 +489,18 @@ export function createDiscordRuntime(opts: DiscordRuntimeOptions): DiscordRuntim
 
   async function deliverNewMapAlert(alert: NewMapAlert): Promise<void> {
     const body = newMapAlertEmbed(alert, config.discordSiteOrigin);
-    // Channel feeds (all stored under GLOBAL for new_map).
+    // Channel feeds only (all stored under GLOBAL for new_map).
     const subs = await listMatchingSubscriptions(opts.db, "new_map", GLOBAL_COUNTRY_CODE);
     if (subs.length > 0) {
       await fanOutChannelPosts(dedupeSubscriptionsByChannel(subs).map((sub) => sub.channelId), body);
-    }
-    // Personal DM watchers (one alert per map, so no per-subscriber dedupe).
-    const watchers = await listMapTrackers(opts.db);
-    for (const watcher of watchers) {
-      const result = await sendDm(watcher.subscriberId, body);
-      if (result === "ok") counters.alertsDelivered += 1;
-      if (result === "unreachable") {
-        await removeTrackersForSubscriber(opts.db, watcher.subscriberId).catch(() => {});
-        notifyTrackersChanged();
-      }
     }
   }
 
   // --- Event sink ----------------------------------------------------------
 
-  // The channel feed, per-user trackers and new-map alert are independent
-  // surfaces; a failure in one must not skip the others. They stay sequential to
-  // preserve rate-limit friendliness.
+  // The channel feed and the new-map alert are independent surfaces; a failure in
+  // one must not skip the other. They stay sequential to preserve rate-limit
+  // friendliness.
   async function runIsolated(surface: string, fn: () => Promise<void>): Promise<void> {
     try {
       await fn();
@@ -577,20 +512,16 @@ export function createDiscordRuntime(opts: DiscordRuntimeOptions): DiscordRuntim
   async function handleEvent(event: LiveEvent): Promise<void> {
     if (event.type === "top_play") {
       if (!knownEmpty) await runIsolated("feed", () => postFeedEvent(event));
-      await runIsolated("user_tracker", () => handleTopPlayTrackers(event));
       await runIsolated("new_map", () => maybeAlertNewFarmMap(event.payload as CountryTopPlay));
     } else if (event.type === "snipe") {
       if (!knownEmpty) await runIsolated("feed", () => postFeedEvent(event));
-    } else if (event.type === "tracker_score") {
-      const score = event.payload as LeanTrackerScore;
-      await runIsolated("user_tracker", () => handleScoreTrackers(score));
     }
   }
 
   const feedSink: EventSink = (event) => {
     if (!config.enableDiscordFeeds) return;
     if (!rest.hasBotToken()) return;
-    if (event.type !== "top_play" && event.type !== "snipe" && event.type !== "tracker_score") return;
+    if (event.type !== "top_play" && event.type !== "snipe") return;
     void handleEvent(event).catch((error) => logWarn("discord_feed_failed", { error: errorMessage(error) }));
   };
 
@@ -606,9 +537,6 @@ export function createDiscordRuntime(opts: DiscordRuntimeOptions): DiscordRuntim
       recentInteractions: recent.slice(-RECENT_INTERACTIONS_LIMIT),
       commandCounts: { ...counters.commands },
       errorCount: counters.errors,
-      alertsDelivered: counters.alertsDelivered,
-      dmFailures: counters.dmFailures,
-      trackedPlayers: trackedUserIds.size,
     };
   }
 
@@ -633,7 +561,7 @@ export function createDiscordRuntime(opts: DiscordRuntimeOptions): DiscordRuntim
   // Load the fast-path caches once at startup (non-blocking); until they resolve
   // the feed takes the safe path of querying per event.
   void refreshEmptyFlag();
-  void refreshTrackerCaches();
+  void refreshNewMapFlag();
 
   return { handleInteraction, registerCommands, listGuilds, feedSink, status, notifySubscriptionsChanged };
 }

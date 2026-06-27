@@ -4,7 +4,7 @@ import { createServerFn } from "@tanstack/react-start";
 // cookie server-side and forwards that id with the admin token (the roster-self-track pattern), so
 // a logged-in user can only ever read or mutate their own goals. The browser never sends a user id.
 
-export type GoalKind = "reach_pp" | "play_pp" | "accuracy" | "pass" | "grade";
+export type GoalKind = "reach_pp" | "play_pp" | "play_pp_count" | "accuracy" | "pass" | "grade" | "reach_rank";
 export type GoalStatus = "open" | "completed";
 
 export interface GoalProgress {
@@ -12,6 +12,8 @@ export interface GoalProgress {
   target: number | null;
   pct: number | null;
   detail: string | null;
+  /** Best grade letter so far on a grade goal's map (A/S/SS), for a best-vs-target badge row. */
+  currentGrade?: string | null;
 }
 
 export interface UserGoal {
@@ -23,6 +25,7 @@ export interface UserGoal {
   beatmapsetId: number | null;
   beatmapLabel: string | null;
   targetValue: number | null;
+  targetCount: number | null;
   targetGrade: string | null;
   note: string | null;
   status: GoalStatus;
@@ -40,6 +43,7 @@ export interface CreateGoalInput {
   beatmapsetId?: number | null;
   beatmapLabel?: string | null;
   targetValue?: number | null;
+  targetCount?: number | null;
   targetGrade?: string | null;
   note?: string | null;
 }
@@ -157,6 +161,7 @@ export const createGoal = createServerFn({ method: "POST" })
           beatmapsetId: data.beatmapsetId ?? null,
           beatmapLabel: data.beatmapLabel ?? null,
           targetValue: data.targetValue ?? null,
+          targetCount: data.targetCount ?? null,
           targetGrade: data.targetGrade ?? null,
           note: data.note ?? null,
         }),
