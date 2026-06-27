@@ -446,8 +446,13 @@ function ScoresPage() {
     run({ force: true, limit: TRACKER_LIVE_MIN_SNAPSHOT_LIMIT });
   }, [liveBackendEnabled, reconcileLiveSnapshot, selectedCountry, windowActive]);
 
+  // Unlike the other live surfaces, the tracker feed stays connected while the
+  // window is unfocused so new scores keep popping in on a second monitor while
+  // you play. The per-frame work (animations, home canvas, 3D card) is what
+  // pauses on blur; this SSE feed only does work when a score actually arrives,
+  // so it is intentionally not gated on windowActive.
   useEffect(() => {
-    if (!liveBackendEnabled || !windowActive) return;
+    if (!liveBackendEnabled) return;
     const source = openLiveEventSource(selectedCountry);
     if (!source) return;
     source.addEventListener("tracker_score", (event) => {
@@ -475,7 +480,7 @@ function ScoresPage() {
       }
     });
     return () => source.close();
-  }, [addFeedScores, filter, gradeFilter, keyFilter, liveBackendEnabled, missFilter, page, reconcileLiveSnapshot, selectedCountry, setTrackerPpGains, trackerSort, trackerSortDirection, useLiveBackendFilteredScores, windowActive]);
+  }, [addFeedScores, filter, gradeFilter, keyFilter, liveBackendEnabled, missFilter, page, reconcileLiveSnapshot, selectedCountry, setTrackerPpGains, trackerSort, trackerSortDirection, useLiveBackendFilteredScores]);
 
   useEffect(() => {
     initialLoadedCountryRef.current = selectedCountry;
