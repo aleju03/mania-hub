@@ -319,29 +319,6 @@ function celebrationLabel(data: GoalCompletedPayload): string {
   return describeGoal(synthetic);
 }
 
-// A representative open goal rendered (inert) in the empty state so a first-timer sees the payoff -
-// the ring filling and the current -> target readout - before they have set anything of their own.
-const SAMPLE_GOAL: UserGoal = {
-  id: "__sample__",
-  userId: 0,
-  country: null,
-  kind: "reach_pp",
-  beatmapId: null,
-  beatmapsetId: null,
-  beatmapLabel: null,
-  targetValue: 16000,
-  targetCount: null,
-  targetGrade: null,
-  note: null,
-  status: "open",
-  createdAt: 0,
-  completedAt: null,
-  completedValue: null,
-  completedScoreId: null,
-  completedBeatmapId: null,
-  progress: { current: 15200, target: 16000, pct: 60, detail: "now 15,200pp" },
-};
-
 export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_METRICS }: { initialSuggestionMetrics?: GoalSuggestionMetrics }) {
   const auth = useAuth();
   const location = useLocation();
@@ -1119,13 +1096,10 @@ function GoalSections({ loading, open, done, onDelete, onAgain }: { loading: boo
 
   if (open.length === 0 && done.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-osu-b3/35 bg-osu-b4/30 px-5 py-8">
+      <div className="rounded-2xl border border-dashed border-osu-b3/35 bg-osu-b4/30 px-5 py-12">
         <div className="text-center">
           <div className="text-[14px] font-bold text-osu-l2">No goals tracked yet</div>
-          <div className="mx-auto mt-1 max-w-sm text-[12.5px] leading-5 text-osu-f1">Pick a target above. Progress updates as your mania plays land, like this:</div>
-        </div>
-        <div className="mx-auto mt-4 max-w-md select-none">
-          <GoalCard goal={SAMPLE_GOAL} onDelete={() => {}} sample />
+          <div className="mx-auto mt-1 max-w-sm text-[12.5px] leading-5 text-osu-f1">Pick a target above. Progress updates as your mania plays land.</div>
         </div>
       </div>
     );
@@ -1364,10 +1338,10 @@ function GoalMedia({ goal, accent, href }: { goal: UserGoal; accent: string; hre
   );
 }
 
-function GoalCard({ goal, onDelete, sample = false }: { goal: UserGoal; onDelete: () => void; sample?: boolean }) {
+function GoalCard({ goal, onDelete }: { goal: UserGoal; onDelete: () => void }) {
   const meta = goalMeta(goal.kind);
   const accent = meta.accent;
-  const href = sample ? null : beatmapHref(goal.beatmapId);
+  const href = beatmapHref(goal.beatmapId);
 
   return (
     <article className="group relative flex items-center gap-3.5 rounded-2xl border border-osu-b3/30 bg-osu-b4 p-3.5">
@@ -1397,18 +1371,14 @@ function GoalCard({ goal, onDelete, sample = false }: { goal: UserGoal; onDelete
         </div>
       </div>
 
-      {sample ? (
-        <span className="shrink-0 self-start rounded-md border border-osu-b3/40 bg-osu-b5/60 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-osu-f1">example</span>
-      ) : (
-        <button
-          type="button"
-          onClick={onDelete}
-          aria-label="Delete goal"
-          className="-mr-1 -mt-1 shrink-0 self-start rounded-md p-1 text-osu-f1/60 transition-colors hover:bg-osu-red/10 hover:text-osu-red-light"
-        >
-          <CloseGlyph />
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={onDelete}
+        aria-label="Delete goal"
+        className="-mr-1 -mt-1 shrink-0 self-start rounded-md p-1 text-osu-f1/60 transition-colors hover:bg-osu-red/10 hover:text-osu-red-light"
+      >
+        <CloseGlyph />
+      </button>
     </article>
   );
 }
