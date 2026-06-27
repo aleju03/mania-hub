@@ -495,8 +495,11 @@ function HomePage() {
     windowActive,
   ]);
 
+  // Stays connected while unfocused so the recent-scores strip and popoffs keep
+  // updating on a second monitor during play (same rationale as the tracker
+  // feed). Snapshot fetches and timers stay gated on windowActive.
   useEffect(() => {
-    if (!liveBackendEnabled || !windowActive) return;
+    if (!liveBackendEnabled) return;
     const source = openLiveEventSource(selectedCountry);
     if (!source) return;
     source.addEventListener("tracker_score", (event) => {
@@ -517,7 +520,7 @@ function HomePage() {
       setLoadingPopoffs(false);
     });
     return () => source.close();
-  }, [addFeedScores, liveBackendEnabled, selectedCountry, selectedIsGlobal, setHomePopoffs, setHomeRecentScores, windowActive]);
+  }, [addFeedScores, liveBackendEnabled, selectedCountry, selectedIsGlobal, setHomePopoffs, setHomeRecentScores]);
 
   useEffect(() => {
     let cancelled = false;

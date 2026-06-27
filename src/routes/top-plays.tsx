@@ -369,8 +369,11 @@ function PopOffsPage() {
     };
   }, [dir, keys, liveBackendEnabled, livePagePopoffs.length, mergePopoffs, page, popoffsFetchedAt, popoffsWindow, range, selectedCountry, selectedPlayerIds, setCachedPopoffs, sort, windowActive]);
 
+  // Stays connected while unfocused so new top plays still appear on a second
+  // monitor during play (same rationale as the tracker feed). top_play is
+  // low-frequency, so this is cheap; snapshot fetches and timers stay gated.
   useEffect(() => {
-    if (!liveBackendEnabled || !windowActive) return;
+    if (!liveBackendEnabled) return;
     const source = openLiveEventSource(selectedCountry);
     if (!source) return;
     source.addEventListener("top_play", (event) => {
@@ -382,7 +385,7 @@ function PopOffsPage() {
       setScanStartedAt(null);
     });
     return () => source.close();
-  }, [liveBackendEnabled, mergePopoffs, popoffs, popoffsWindow, range, selectedCountry, setCachedPopoffs, windowActive]);
+  }, [liveBackendEnabled, mergePopoffs, popoffs, popoffsWindow, range, selectedCountry, setCachedPopoffs]);
 
   useEffect(() => {
     if (scanStartedAt == null) {
