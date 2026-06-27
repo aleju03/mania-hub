@@ -29,6 +29,7 @@ import { fetchLiveTopPlaysSnapshot, isLiveBackendConfigured, openLiveEventSource
 import { CountryWarming } from "../components/CountryWarming";
 import { LiveDataEmptyState } from "../components/LiveDataEmptyState";
 import { useCountryWarming } from "../lib/use-country-warming";
+import { useWindowActive } from "../lib/window-activity";
 
 type PopOff = CountryTopPlay;
 
@@ -180,7 +181,16 @@ function PopOffsPage() {
   const countryName = getCountryName(selectedCountry);
   const selectedIsGlobal = isGlobalScope(selectedCountry);
   const liveBackendEnabled = isLiveBackendConfigured();
+  const windowActive = useWindowActive();
   const { warming } = useCountryWarming(selectedCountry);
+  const wasWindowActiveRef = useRef(windowActive);
+
+  useEffect(() => {
+    if (!wasWindowActiveRef.current && windowActive) {
+      currentLiveSnapshotKeyRef.current = null;
+    }
+    wasWindowActiveRef.current = windowActive;
+  }, [windowActive]);
 
   useEffect(() => {
     setPlayersError(null);
@@ -296,7 +306,7 @@ function PopOffsPage() {
   }, []);
 
   useEffect(() => {
-    if (!liveBackendEnabled) return;
+    if (!liveBackendEnabled || !windowActive) return;
     const selectedPlayersKey = selectedPlayerIds.join(",");
     const snapshotKey = `${selectedCountry}:${range}:${sort}:${dir}:${keys}:${page}:${selectedPlayersKey}`;
     const cacheNeedsRefresh = shouldRefreshTopPlays({
@@ -357,10 +367,10 @@ function PopOffsPage() {
     return () => {
       cancelled = true;
     };
-  }, [dir, keys, liveBackendEnabled, livePagePopoffs.length, mergePopoffs, page, popoffsFetchedAt, popoffsWindow, range, selectedCountry, selectedPlayerIds, setCachedPopoffs, sort]);
+  }, [dir, keys, liveBackendEnabled, livePagePopoffs.length, mergePopoffs, page, popoffsFetchedAt, popoffsWindow, range, selectedCountry, selectedPlayerIds, setCachedPopoffs, sort, windowActive]);
 
   useEffect(() => {
-    if (!liveBackendEnabled) return;
+    if (!liveBackendEnabled || !windowActive) return;
     const source = openLiveEventSource(selectedCountry);
     if (!source) return;
     source.addEventListener("top_play", (event) => {
@@ -372,7 +382,7 @@ function PopOffsPage() {
       setScanStartedAt(null);
     });
     return () => source.close();
-  }, [liveBackendEnabled, mergePopoffs, popoffs, popoffsWindow, range, selectedCountry, setCachedPopoffs]);
+  }, [liveBackendEnabled, mergePopoffs, popoffs, popoffsWindow, range, selectedCountry, setCachedPopoffs, windowActive]);
 
   useEffect(() => {
     if (scanStartedAt == null) {

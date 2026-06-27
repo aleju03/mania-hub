@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import { isWindowActive, subscribeWindowActivity } from "../../lib/window-activity";
 
 const NOTE_IMAGES: { src: string; aspect: "square" | "bar"; tint: string }[] = [
   { src: "/images/notes/arrow-down-gray.png", aspect: "square", tint: "rgba(225, 225, 235, 0.36)" },
@@ -203,8 +204,8 @@ export function ManiaRain() {
       rafRef.current = requestAnimationFrame(animateRef.current);
     };
 
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
+    const handleWindowActivityChange = () => {
+      if (!isWindowActive()) {
         stopAnimation();
       } else {
         ensureCanvasSize(true);
@@ -312,13 +313,13 @@ export function ManiaRain() {
     };
 
     window.addEventListener("resize", handleResize, { passive: true });
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    startAnimation();
+    const unsubscribeWindowActivity = subscribeWindowActivity(handleWindowActivityChange);
+    if (isWindowActive()) startAnimation();
 
     return () => {
       stopAnimation();
       window.removeEventListener("resize", handleResize);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      unsubscribeWindowActivity();
     };
   }, [ensureCanvasSize]);
 

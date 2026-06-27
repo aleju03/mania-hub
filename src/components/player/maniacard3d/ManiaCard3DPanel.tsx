@@ -4,6 +4,7 @@ import { MANIA_TIER_STYLES, type NextManiaCardTier } from "#/lib/maniacard";
 import { ManiaCardRenderer } from "./ManiaCardRenderer";
 import { buildManiaCardRenderData, getManiaCardRenderDataSignature } from "./renderData";
 import type { ManiaCardPanelProps, ManiaCardReadyData } from "./types";
+import { isWindowActive, subscribeWindowActivity } from "#/lib/window-activity";
 
 function useReducedMotion() {
   const [reduced, setReduced] = useState(false);
@@ -207,6 +208,7 @@ export function ManiaCard3DPanel({ user, scores, loading }: ManiaCardPanelProps)
           },
         });
         rendererRef.current = renderer;
+        renderer.setWindowActive(isWindowActive());
 
         const resize = () => renderer?.resize();
         if (typeof ResizeObserver === "function") {
@@ -225,6 +227,12 @@ export function ManiaCard3DPanel({ user, scores, loading }: ManiaCardPanelProps)
 
     return cleanup;
   }, [data.status, loading, reducedMotion]);
+
+  useEffect(() => {
+    const apply = () => rendererRef.current?.setWindowActive(isWindowActive());
+    apply();
+    return subscribeWindowActivity(apply);
+  }, []);
 
   useEffect(() => {
     if (loading || data.status !== "ready") {

@@ -22,6 +22,7 @@ import { fetchLiveSnipesSnapshot, isLiveBackendConfigured, openLiveEventSource }
 import { CountryWarming } from "../components/CountryWarming";
 import { SnipesNotTracked } from "../components/SnipesNotTracked";
 import { useCountryWarming } from "../lib/use-country-warming";
+import { useWindowActive } from "../lib/window-activity";
 
 type KeyFilter = SnipesKeyFilter;
 type RangeFilter = SnipesRange;
@@ -126,6 +127,7 @@ function SnipesPage() {
   const refreshInProgressRef = useRef(false);
   const hasRestoredRememberedFiltersRef = useRef(false);
   const liveBackendEnabled = isLiveBackendConfigured();
+  const windowActive = useWindowActive();
   const selectedIsGlobal = isGlobalScope(selectedCountry);
   const { warming, featureTier } = useCountryWarming(selectedCountry);
   // Country is below the snipes tier: the backend won't seed/update snipe
@@ -209,7 +211,7 @@ function SnipesPage() {
   }, [liveBackendEnabled, scanStartedAt, selectedCountry, setSnipes]);
 
   useEffect(() => {
-    if (!liveBackendEnabled || selectedIsGlobal) return;
+    if (!liveBackendEnabled || selectedIsGlobal || !windowActive) return;
     let cancelled = false;
     const requestedCountry = selectedCountry;
     fetchLiveSnipesSnapshot(requestedCountry)
@@ -228,10 +230,10 @@ function SnipesPage() {
     return () => {
       cancelled = true;
     };
-  }, [liveBackendEnabled, selectedCountry, selectedIsGlobal, setSnipes, snipes.length]);
+  }, [liveBackendEnabled, selectedCountry, selectedIsGlobal, setSnipes, snipes.length, windowActive]);
 
   useEffect(() => {
-    if (!liveBackendEnabled || selectedIsGlobal) return;
+    if (!liveBackendEnabled || selectedIsGlobal || !windowActive) return;
     const source = openLiveEventSource(selectedCountry);
     if (!source) return;
     source.addEventListener("snipe", (event) => {
@@ -249,7 +251,7 @@ function SnipesPage() {
       setScanStartedAt(null);
     });
     return () => source.close();
-  }, [liveBackendEnabled, selectedCountry, selectedIsGlobal, setSnipes, snipes]);
+  }, [liveBackendEnabled, selectedCountry, selectedIsGlobal, setSnipes, snipes, windowActive]);
 
   const searchRef = useRef(search);
   searchRef.current = search;

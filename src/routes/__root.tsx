@@ -28,6 +28,7 @@ import { activateLiveCountryOnServer, fetchLiveBackendBootstrap } from "../lib/l
 import type { LiveBackendStatus, LiveCountryFeaturesSnapshot } from "../lib/live-backend";
 import { BackendOfflineScreen } from "../components/BackendOfflineScreen";
 import { seedCountryTierCache } from "../lib/use-country-warming";
+import { isWindowActive, subscribeWindowActivity } from "../lib/window-activity";
 import appCss from "../styles.css?url";
 
 /* Origin is resolved through a configured canonical URL first, then through
@@ -484,6 +485,7 @@ function RootLayout() {
     <InitialCountryContext.Provider value={initialCountry}>
       <AuthContext.Provider value={auth}>
         <PostHogProvider>
+          <WindowActivityAttribute />
           {backendStatus === "offline" ? (
             <main className="flex-1 flex">
               <BackendOfflineScreen />
@@ -524,6 +526,22 @@ function RootLayout() {
       </AuthContext.Provider>
     </InitialCountryContext.Provider>
   );
+}
+
+function WindowActivityAttribute() {
+  useEffect(() => {
+    const update = () => {
+      document.documentElement.dataset.windowActive = isWindowActive() ? "true" : "false";
+    };
+    update();
+    const unsubscribe = subscribeWindowActivity(update);
+    return () => {
+      unsubscribe();
+      delete document.documentElement.dataset.windowActive;
+    };
+  }, []);
+
+  return null;
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {

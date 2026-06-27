@@ -41,6 +41,7 @@ import { fetchLiveTrackerSnapshot, isLiveBackendConfigured, openLiveEventSource 
 import { CountryWarming } from "../components/CountryWarming";
 import { LiveDataEmptyState } from "../components/LiveDataEmptyState";
 import { useCountryWarming } from "../lib/use-country-warming";
+import { useWindowActive } from "../lib/window-activity";
 
 const TRACKER_SNAPSHOT_LOADER_TIMEOUT_MS = 2500;
 const TRACKER_PAGE_SIZE = 45;
@@ -320,6 +321,7 @@ function ScoresPage() {
   const pollRequestIdRef = useRef(0);
   const appliedSnapshotKeyRef = useRef<string | null>(null);
   const liveBackendEnabled = isLiveBackendConfigured();
+  const windowActive = useWindowActive();
   const { warming } = useCountryWarming(selectedCountry);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const handleToggleExpand = useCallback((key: string) => {
@@ -374,9 +376,10 @@ function ScoresPage() {
   }, [snapshot, selectedCountry, setRankings, setTrackedUserIds, addFeedScores, setTrackerPpGains]);
 
   useEffect(() => {
+    if (!windowActive) return;
     const id = window.setInterval(() => setTimeTick((value) => value + 1), 30_000);
     return () => window.clearInterval(id);
-  }, []);
+  }, [windowActive]);
 
   useEffect(() => {
     for (const score of feedScores) {
@@ -433,8 +436,7 @@ function ScoresPage() {
   }, [addFeedScores, markFeedScoresFetched, setTrackerPpGains]);
 
   useEffect(() => {
-    if (!liveBackendEnabled) return;
-    let cancelled = false;
+    if (!liveBackendEnabled || !windowActive) return;
     const requestedCountry = selectedCountry;
     const run = (options: { force?: boolean; limit?: number } = {}) => {
       reconcileLiveSnapshot(requestedCountry, options).catch(() => {
@@ -442,20 +444,10 @@ function ScoresPage() {
       });
     };
     run({ force: true, limit: TRACKER_LIVE_MIN_SNAPSHOT_LIMIT });
-    const onVisibility = () => {
-      if (!cancelled && document.visibilityState === "visible") {
-        run({ limit: TRACKER_LIVE_RECONCILE_LIMIT });
-      }
-    };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      cancelled = true;
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, [liveBackendEnabled, reconcileLiveSnapshot, selectedCountry]);
+  }, [liveBackendEnabled, reconcileLiveSnapshot, selectedCountry, windowActive]);
 
   useEffect(() => {
-    if (!liveBackendEnabled) return;
+    if (!liveBackendEnabled || !windowActive) return;
     const source = openLiveEventSource(selectedCountry);
     if (!source) return;
     source.addEventListener("tracker_score", (event) => {
@@ -483,7 +475,7 @@ function ScoresPage() {
       }
     });
     return () => source.close();
-  }, [addFeedScores, filter, gradeFilter, keyFilter, liveBackendEnabled, missFilter, page, reconcileLiveSnapshot, selectedCountry, setTrackerPpGains, trackerSort, trackerSortDirection, useLiveBackendFilteredScores]);
+  }, [addFeedScores, filter, gradeFilter, keyFilter, liveBackendEnabled, missFilter, page, reconcileLiveSnapshot, selectedCountry, setTrackerPpGains, trackerSort, trackerSortDirection, useLiveBackendFilteredScores, windowActive]);
 
   useEffect(() => {
     initialLoadedCountryRef.current = selectedCountry;
@@ -674,7 +666,7 @@ function ScoresPage() {
 
   const poll = useCallback(async () => {
     if (liveBackendEnabled) return;
-    if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+    if (!windowActive) return;
     if (pollInFlightRef.current) return;
     pollInFlightRef.current = true;
     const requestId = ++pollRequestIdRef.current;
@@ -691,20 +683,16 @@ function ScoresPage() {
         setPolling(false);
       }
     }
-  }, [liveBackendEnabled, addFeedScores, markFeedScoresFetched, selectedCountry, setTrackerPpGains, setTrackedUserIds]);
+  }, [liveBackendEnabled, addFeedScores, markFeedScoresFetched, selectedCountry, setTrackerPpGains, setTrackedUserIds, windowActive]);
 
   useEffect(() => {
-    if (liveBackendEnabled) return;
+    if (liveBackendEnabled || !windowActive) return;
+    void poll();
     const id = setInterval(poll, 60_000);
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") void poll();
-    };
-    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       clearInterval(id);
-      document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [poll, liveBackendEnabled]);
+  }, [poll, liveBackendEnabled, windowActive]);
 
   useEffect(() => {
     setExpandedKey(null);
@@ -864,9 +852,9 @@ function ScoresPage() {
     updateTrackerSearch({ page: 0 });
   };
   useEffect(() => {
-    if (!liveBackendEnabled || !hasActiveScoreFilters || useLiveBackendFilteredScores || feedScores.length >= TRACKER_FEED_SCORE_LIMIT) return;
+    if (!liveBackendEnabled || !windowActive || !hasActiveScoreFilters || useLiveBackendFilteredScores || feedScores.length >= TRACKER_FEED_SCORE_LIMIT) return;
     void reconcileLiveSnapshot(selectedCountry, { force: true, limit: TRACKER_FEED_SCORE_LIMIT });
-  }, [feedScores.length, hasActiveScoreFilters, liveBackendEnabled, reconcileLiveSnapshot, selectedCountry, useLiveBackendFilteredScores]);
+  }, [feedScores.length, hasActiveScoreFilters, liveBackendEnabled, reconcileLiveSnapshot, selectedCountry, useLiveBackendFilteredScores, windowActive]);
   const missButtonLabel = missFilter === "fc_choke" ? "Choke" : "FC";
   const mobileMissButtonLabel = missFilter === "fc_choke" ? "Ch" : "FC";
   const missButtonTitle = missFilter === "fc"

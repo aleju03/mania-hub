@@ -80,6 +80,7 @@ import {
   triStateActive,
 } from "../lib/maps-random-filter";
 import type { TriStateMode } from "../lib/maps-random-filter";
+import { useWindowActive } from "../lib/window-activity";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -1014,6 +1015,7 @@ function MapsPage() {
   const isDevMode = auth.canUseDevFeatures;
   const canUseAdminFeatures = auth.canUseAdminFeatures;
   const liveBackendEnabled = isLiveBackendConfigured();
+  const windowActive = useWindowActive();
   const { warming } = useCountryWarming(selectedCountry);
   const updateMapsSearch = useCallback((patch: Partial<MapsSearch>) => {
     const current = mapsSearchRef.current;
@@ -1155,7 +1157,7 @@ function MapsPage() {
   }, [loadingMaps, loadedSections]);
 
   useEffect(() => {
-    if (!liveBackendEnabled) return;
+    if (!liveBackendEnabled || !windowActive) return;
     if (!liveMapsPageParams || !liveMapsPageRequestKey) return;
 
     setLiveMapsAttempted(false);
@@ -1208,10 +1210,10 @@ function MapsPage() {
       cancelled = true;
       if (pollTimer) clearTimeout(pollTimer);
     };
-  }, [liveBackendEnabled, liveMapsPageParams, liveMapsPageRequestKey, rememberLiveMapsPage, selectedCountry]);
+  }, [liveBackendEnabled, liveMapsPageParams, liveMapsPageRequestKey, rememberLiveMapsPage, selectedCountry, windowActive]);
 
   useEffect(() => {
-    if (!liveBackendEnabled) return;
+    if (!liveBackendEnabled || !windowActive) return;
     if (!liveMapsPageParams || !liveMapsPageRequestKey) return;
     const source = openLiveEventSource(selectedCountry);
     if (!source) return;
@@ -1240,7 +1242,7 @@ function MapsPage() {
       if (refreshTimer) clearTimeout(refreshTimer);
       source.close();
     };
-  }, [liveBackendEnabled, liveMapsPageParams, liveMapsPageRequestKey, rememberLiveMapsPage, selectedCountry]);
+  }, [liveBackendEnabled, liveMapsPageParams, liveMapsPageRequestKey, rememberLiveMapsPage, selectedCountry, windowActive]);
 
   // The Random tab still needs the heavy beatmapsetsPool, so it is fetched
   // only when Random is opened. Normal map browsing uses the paged endpoint.

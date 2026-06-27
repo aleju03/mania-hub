@@ -1,6 +1,7 @@
 import { motion, useMotionValue, useSpring } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import type { PackTypeDef } from "#/lib/packs";
+import { useWindowActive } from "#/lib/window-activity";
 import {
   createPackFrontCanvas,
   DEFAULT_PACK_ART_STYLE,
@@ -95,6 +96,7 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
   const artStyleRef = useRef<PackArtStyle | null>(null);
   const reducedMotionRef = useRef(reducedMotion);
   reducedMotionRef.current = reducedMotion;
+  const windowActive = useWindowActive();
 
   const rotateX = useSpring(useMotionValue(0), { stiffness: 200, damping: 22 });
   const rotateY = useSpring(useMotionValue(0), { stiffness: 200, damping: 22 });
@@ -700,8 +702,8 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
             transformStyle: "preserve-3d",
             touchAction: "none",
           }}
-          animate={reducedMotion || ripping ? undefined : { y: [0, -7, 0] }}
-          transition={reducedMotion || ripping ? undefined : { duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
+          animate={reducedMotion || ripping || !windowActive ? undefined : { y: [0, -7, 0] }}
+          transition={reducedMotion || ripping || !windowActive ? undefined : { duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
           onPointerMove={onPointerMoveTilt}
           onPointerLeave={onPointerLeaveTilt}
         >

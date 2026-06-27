@@ -179,6 +179,20 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
 }
 .score-enter { animation: score-in 240ms ease-out; }
 
+:root[data-window-active="false"] .animate-spin,
+:root[data-window-active="false"] .animate-pulse,
+:root[data-window-active="false"] .animate-ping,
+:root[data-window-active="false"] .animate-bounce,
+:root[data-window-active="false"] [class*="animate-["],
+:root[data-window-active="false"] .skeleton-pulse,
+:root[data-window-active="false"] .peak-rank-tier {
+  animation-play-state: paused !important;
+}
+
+:root[data-window-active="false"] .score-enter {
+  animation: none !important;
+}
+
 @keyframes indeterminate {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(300%); }

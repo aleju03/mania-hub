@@ -115,6 +115,7 @@ export class ManiaCardRenderer {
   private textures: CardTextureSet | null = null;
   private frameId: number | null = null;
   private disposed = false;
+  private windowActive = true;
   private dataRequestId = 0;
   private readyTextureRequestId = 0;
   private dragStart: { x: number; y: number; rotation: Rotation2D } | null = null;
@@ -304,6 +305,17 @@ export class ManiaCardRenderer {
     this.start();
   }
 
+  setWindowActive(active: boolean) {
+    if (this.disposed || this.windowActive === active) return;
+    this.windowActive = active;
+    if (active) {
+      this.start();
+    } else if (this.frameId !== null) {
+      cancelAnimationFrame(this.frameId);
+      this.frameId = null;
+    }
+  }
+
   dispose(options: RendererDisposeOptions = {}) {
     if (this.disposed) return;
     this.disposed = true;
@@ -352,6 +364,7 @@ export class ManiaCardRenderer {
 
   private start() {
     if (this.frameId !== null) return;
+    if (!this.windowActive) return;
     const tick = (time: number) => {
       if (this.disposed) return;
       this.frameId = null;

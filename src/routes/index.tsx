@@ -23,6 +23,7 @@ import { useAppStore, useHasHydrated, useHiddenUserIds, useSelectedCountry } fro
 import { DEFAULT_DESCRIPTION, pageSeo } from "../lib/seo";
 import { seedPlayerShellFromRankingEntry, seedPlayerShellsFromRankingEntries } from "../lib/player-shell-cache";
 import { readGlobalTopPlayersCache, readGlobalTopPlayersMemoryCache, writeGlobalTopPlayersCache } from "../lib/global-top-players-cache";
+import { useWindowActive } from "../lib/window-activity";
 
 export const Route = createFileRoute("/")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -301,6 +302,7 @@ function HomePage() {
   const popoffsFetchedAt = useAppStore((state) => state.homePopoffsFetchedAtByCountry[selectedCountry]) ?? null;
   const topPlaysRange = useAppStore((state) => state.topPlaysRangeByCountry[selectedCountry] ?? "7d");
   const liveBackendEnabled = isLiveBackendConfigured();
+  const windowActive = useWindowActive();
   const { warming } = useCountryWarming(selectedCountry);
   const hydrated = useHasHydrated();
   const hiddenUserIds = useHiddenUserIds();
@@ -416,6 +418,11 @@ function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
+    if (!windowActive) {
+      return () => {
+        cancelled = true;
+      };
+    }
     const shouldRefreshScores =
       !recentScoresFetchedAt || isCacheStale(recentScoresFetchedAt, CLIENT_CACHE_TTL.homeRecentScores);
 
@@ -485,10 +492,11 @@ function HomePage() {
     addFeedScores,
     markFeedScoresFetched,
     liveBackendEnabled,
+    windowActive,
   ]);
 
   useEffect(() => {
-    if (!liveBackendEnabled) return;
+    if (!liveBackendEnabled || !windowActive) return;
     const source = openLiveEventSource(selectedCountry);
     if (!source) return;
     source.addEventListener("tracker_score", (event) => {
@@ -509,10 +517,15 @@ function HomePage() {
       setLoadingPopoffs(false);
     });
     return () => source.close();
-  }, [addFeedScores, liveBackendEnabled, selectedCountry, selectedIsGlobal, setHomePopoffs, setHomeRecentScores]);
+  }, [addFeedScores, liveBackendEnabled, selectedCountry, selectedIsGlobal, setHomePopoffs, setHomeRecentScores, windowActive]);
 
   useEffect(() => {
     let cancelled = false;
+    if (!windowActive) {
+      return () => {
+        cancelled = true;
+      };
+    }
     const cachedGlobalPopoffsIncludeOld = selectedIsGlobal && popoffs.some((popoff) => !isHomeGlobalPopoffRecent(popoff));
     const shouldRefreshPopoffs =
       !popoffsFetchedAt || isCacheStale(popoffsFetchedAt, CLIENT_CACHE_TTL.homePopoffs) || cachedGlobalPopoffsIncludeOld;
@@ -587,6 +600,7 @@ function HomePage() {
     selectedIsGlobal,
     setHomePopoffs,
     liveBackendEnabled,
+    windowActive,
   ]);
 
   const visibleRanking = useMemo(

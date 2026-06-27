@@ -12,6 +12,7 @@ import type { ManiaCardTier, ManiaSkills } from "#/lib/maniacard";
 import { tierRank, type PulledCard } from "#/lib/pack-collection";
 import { fetchPackPlayerScores, type PackPlayer } from "#/lib/packs";
 import type { OsuScore } from "#/lib/types";
+import { useWindowActive } from "#/lib/window-activity";
 import { CountryFlag } from "../ui/CountryFlag";
 import { ManiaCardRenderer } from "../player/maniacard3d/ManiaCardRenderer";
 import { buildManiaCardRenderData } from "../player/maniacard3d/renderData";
@@ -233,6 +234,7 @@ function DraggableStackBackCard({
 }
 
 export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }: RevealStageProps) {
+  const windowActive = useWindowActive();
   const hostRef = useRef<HTMLDivElement | null>(null);
   const backCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const rendererRef = useRef<ManiaCardRenderer | null>(null);
@@ -625,12 +627,12 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
                     y: position * 6,
                     rotate: position * 1.4,
                     scale:
-                      isTop && phase === "preparing" && !reducedMotion
+                      isTop && phase === "preparing" && !reducedMotion && windowActive
                         ? [STACK_CARD_SCALE, STACK_CARD_SCALE * 1.025, STACK_CARD_SCALE]
                         : STACK_CARD_SCALE,
                   }}
                   transition={
-                    isTop && phase === "preparing" && !reducedMotion
+                    isTop && phase === "preparing" && !reducedMotion && windowActive
                       ? { scale: { duration: 0.9, repeat: Infinity, ease: "easeInOut" }, default: { duration: 0.25 } }
                       : { duration: 0.25 }
                   }
