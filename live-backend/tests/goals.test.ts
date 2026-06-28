@@ -12,6 +12,7 @@ import {
   evaluateScoreGoals,
   getUserGoal,
   listUserGoals,
+  listUserGoalsWithProgress,
   reconcileGoalsForUser,
   reconcilePpGoalsForUser,
   refreshGoalUserIndex,
@@ -98,6 +99,34 @@ describe("pass goals", () => {
   });
 });
 
+describe("fc goals", () => {
+  it("completes on a passed score with no misses", async () => {
+    const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "fc", beatmapId: MAP });
+    await evaluateScoreGoals(db, events, scoreWith({ passed: true, statistics: { count_miss: 0 } }), ["CR"]);
+    const done = await getUserGoal(db, goal.id);
+    expect(done?.status).toBe("completed");
+    expect(done?.completedBeatmapId).toBe(MAP);
+  });
+
+  it("stays open when the passed score has misses", async () => {
+    const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "fc", beatmapId: MAP });
+    await evaluateScoreGoals(db, events, scoreWith({ passed: true, statistics: { count_miss: 3 } }), ["CR"]);
+    expect((await getUserGoal(db, goal.id))?.status).toBe("open");
+  });
+
+  it("stays open on a no-miss fail", async () => {
+    const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "fc", beatmapId: MAP });
+    await evaluateScoreGoals(db, events, scoreWith({ passed: false, rank: "F", statistics: { count_miss: 0 } }), ["CR"]);
+    expect((await getUserGoal(db, goal.id))?.status).toBe("open");
+  });
+
+  it("ignores a no-miss pass on a different beatmap", async () => {
+    const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "fc", beatmapId: MAP });
+    await evaluateScoreGoals(db, events, scoreWith({ beatmap_id: 999, passed: true, statistics: { count_miss: 0 } }), ["CR"]);
+    expect((await getUserGoal(db, goal.id))?.status).toBe("open");
+  });
+});
+
 describe("grade goals", () => {
   it("completes when the achieved grade meets or beats the target", async () => {
     const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "grade", beatmapId: MAP, targetGrade: "A" });
@@ -142,6 +171,32 @@ describe("play pp goals", () => {
     const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "play_pp", targetValue: 200 });
     await reconcileGoalsForUser(db, events, USER);
     expect((await getUserGoal(db, goal.id))?.status).toBe("open");
+  });
+});
+
+describe("play pp progress", () => {
+  it("reports the best play from the profile snapshot, not just live-tracked plays", async () => {
+    // PB (927) lives in the cached profile best-100; a smaller live play (798) is all score_events
+    // knows about. The "best so far" hint must reflect the real PB.
+    await exec(
+      db,
+      `insert into profile_snapshots (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        USER,
+        "tester",
+        "{}",
+        JSON.stringify([scoreWith({ id: 555, pp: 927, passed: true }), scoreWith({ id: 556, pp: 700, passed: true })]),
+        100,
+        "2026-01-01T00:00:00Z",
+        "2026-01-01T00:00:00Z",
+        "2026-01-01T00:00:00Z",
+      ],
+    );
+    await evaluateScoreGoals(db, events, scoreWith({ id: 999, pp: 798, passed: true }), ["CR"]);
+    const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "play_pp", targetValue: 1000 });
+    const withProgress = (await listUserGoalsWithProgress(db, USER)).find((g) => g.id === goal.id);
+    expect(withProgress?.progress?.current).toBeCloseTo(927, 0);
   });
 });
 

@@ -52,7 +52,8 @@ function PageShell({ children }: { children: ReactNode }) {
   );
 }
 
-type GoalScope = "pp" | "pp-count" | "rank" | "map-acc" | "map" | "map-grade";
+type GoalScope = "pp" | "pp-count" | "rank" | "map-acc" | "map" | "map-grade" | "map-fc";
+type GoalGroup = "profile" | "map";
 type RankScope = "global" | "country";
 
 interface GoalTypeMeta {
@@ -60,6 +61,7 @@ interface GoalTypeMeta {
   label: string;
   hint: string;
   description: string;
+  group: GoalGroup;
   scope: GoalScope;
   accent: string;
   iconSrc: string;
@@ -72,6 +74,7 @@ const GOAL_TYPES: GoalTypeMeta[] = [
     label: "Reach pp",
     hint: "total performance",
     description: "Climb to a specific total pp number.",
+    group: "profile",
     scope: "pp",
     accent: "#e173a6",
     iconSrc: ICONS.rankings,
@@ -82,6 +85,7 @@ const GOAL_TYPES: GoalTypeMeta[] = [
     label: "Big play",
     hint: "single score",
     description: "Land another single play worth a target pp amount.",
+    group: "profile",
     scope: "pp",
     accent: "#d8a657",
     iconSrc: ICONS.contests,
@@ -92,6 +96,7 @@ const GOAL_TYPES: GoalTypeMeta[] = [
     label: "PP count",
     hint: "score stack",
     description: "Own a target number of plays above a pp amount.",
+    group: "profile",
     scope: "pp-count",
     accent: "#8ccf7e",
     iconSrc: ICONS.contests,
@@ -102,36 +107,51 @@ const GOAL_TYPES: GoalTypeMeta[] = [
     label: "Rank",
     hint: "leaderboard climb",
     description: "Climb to a global or country rank.",
+    group: "profile",
     scope: "rank",
     accent: "#56b6c2",
     iconSrc: ICONS.rankings,
     placeholder: "500",
   },
   {
-    kind: "accuracy",
-    label: "Accuracy",
-    hint: "map target",
-    description: "Hit a specific accuracy on a certain map.",
-    scope: "map-acc",
-    accent: "#7fb89a",
-    iconSrc: ICONS.search,
-    placeholder: "96",
-  },
-  {
     kind: "pass",
     label: "Pass",
     hint: "clear a map",
     description: "Clear a certain map.",
+    group: "map",
     scope: "map",
     accent: "#6f9bd8",
     iconSrc: ICONS.beatmapsets,
     placeholder: "map",
   },
   {
+    kind: "fc",
+    label: "FC",
+    hint: "full combo",
+    description: "Full-combo a certain map (no misses).",
+    group: "map",
+    scope: "map-fc",
+    accent: "#e8956b",
+    iconSrc: ICONS.contests,
+    placeholder: "map",
+  },
+  {
+    kind: "accuracy",
+    label: "Accuracy",
+    hint: "map target",
+    description: "Hit a specific accuracy on a certain map.",
+    group: "map",
+    scope: "map-acc",
+    accent: "#7fb89a",
+    iconSrc: ICONS.search,
+    placeholder: "96",
+  },
+  {
     kind: "grade",
     label: "Grade",
     hint: "map badge",
     description: "Getting a specific rank on a certain map.",
+    group: "map",
     scope: "map-grade",
     accent: "#b06bc0",
     iconSrc: ICONS.tournaments,
@@ -142,11 +162,8 @@ const GOAL_TYPES: GoalTypeMeta[] = [
 const GRADES = ["A", "S", "SS"] as const;
 
 interface GoalSuggestionLabels {
-  reachPpExample: string;
   reachPpPlaceholder: string;
-  playPpExample: string;
   playPpPlaceholder: string;
-  ppCountExample: string;
   ppCountPlaceholder: string;
 }
 
@@ -199,10 +216,6 @@ function nf(value: number): string {
   return Math.round(value).toLocaleString();
 }
 
-function formatPp(value: number): string {
-  return `${nf(value)}pp`;
-}
-
 function reachPpSuggestion(currentPp: number | null): number | null {
   if (currentPp == null) return null;
   const step = currentPp >= 10_000 ? 250 : currentPp >= 5_000 ? 100 : 50;
@@ -220,11 +233,8 @@ function buildGoalSuggestionLabels(metrics: GoalSuggestionMetrics): GoalSuggesti
   const reach = reachPpSuggestion(metrics.currentPp);
   const play = playPpSuggestion(metrics.lowestTopPlayPp, metrics.currentPp);
   return {
-    reachPpExample: reach == null ? "target pp" : formatPp(reach),
     reachPpPlaceholder: reach == null ? "" : String(Math.round(reach)),
-    playPpExample: play == null ? "top play" : formatPp(play),
     playPpPlaceholder: play == null ? "" : String(Math.round(play)),
-    ppCountExample: "50 plays",
     ppCountPlaceholder: "50",
   };
 }
@@ -250,6 +260,8 @@ function describeGoal(goal: UserGoal): string {
       return `${trimZeros(((goal.targetValue ?? 0) * 100).toFixed(2))}% on ${map}`;
     case "pass":
       return `Pass ${map}`;
+    case "fc":
+      return `FC ${map}`;
     case "grade":
       return `Get ${goal.targetGrade ?? "S"} on ${map}`;
     default:
@@ -264,27 +276,6 @@ function completedDetail(goal: UserGoal): string | null {
   if ((goal.kind === "play_pp" || goal.kind === "reach_pp") && goal.completedValue != null) return `cleared ${date} · ${nf(goal.completedValue)}pp`;
   if (goal.kind === "play_pp_count" && goal.completedValue != null) return `cleared ${date} · ${nf(goal.completedValue)} plays`;
   return `cleared ${date}`;
-}
-
-function typeExample(type: GoalTypeMeta, suggestions: GoalSuggestionLabels): string {
-  switch (type.kind) {
-    case "reach_pp":
-      return suggestions.reachPpExample;
-    case "reach_rank":
-      return "global / country";
-    case "play_pp":
-      return suggestions.playPpExample;
-    case "play_pp_count":
-      return suggestions.ppCountExample;
-    case "accuracy":
-      return "96%";
-    case "pass":
-      return "clear it";
-    case "grade":
-      return "S / SS";
-    default:
-      return type.hint;
-  }
 }
 
 function beatmapHref(beatmapId: number | null | undefined): string | null {
@@ -333,7 +324,7 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
   const suggestions = useMemo(() => buildGoalSuggestionLabels(suggestionMetrics), [suggestionMetrics]);
   const scope = active.scope;
   const accent = active.accent;
-  const needsMap = scope === "map-acc" || scope === "map" || scope === "map-grade";
+  const needsMap = scope.startsWith("map");
 
   const [ppTarget, setPpTarget] = useState("");
   const [ppCountTarget, setPpCountTarget] = useState("");
@@ -683,7 +674,7 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
             <img src={viewer.avatarUrl} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-osu-b3/45" loading="lazy" />
             <div className="min-w-0">
               <div className="truncate text-[13px] font-bold text-white">{viewer.username}</div>
-              <div className="text-[9.5px] font-bold uppercase tracking-[0.16em] text-osu-f1">{viewer.countryCode ? `${viewer.countryCode} · ` : ""}goal tracker</div>
+              <div className="text-[9.5px] font-bold uppercase tracking-[0.16em] text-osu-f1">goal tracker</div>
             </div>
             <div className="ml-auto flex items-center gap-4 sm:gap-6">
               <Stat label="current pp" value={suggestionMetrics.currentPp != null ? nf(suggestionMetrics.currentPp) : "—"} tone="pp" />
@@ -695,7 +686,7 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
           <div className="h-px bg-osu-b3/25" />
 
           <div className="space-y-4 p-4 sm:p-5">
-            <TypeSelector kind={kind} onSwitch={switchKind} suggestions={suggestions} />
+            <TypeSelector kind={kind} onSwitch={switchKind} />
 
             <div className="flex flex-col gap-3.5 lg:flex-row lg:items-start lg:justify-between lg:gap-5">
               <div className="min-w-0 flex-1">
@@ -746,6 +737,13 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
                   {scope === "map" ? (
                     <>
                       <span>Pass</span>
+                      {mapSlot}
+                    </>
+                  ) : null}
+
+                  {scope === "map-fc" ? (
+                    <>
+                      <span>FC</span>
                       {mapSlot}
                     </>
                   ) : null}
@@ -812,7 +810,7 @@ const COMPOSER_TRIANGLES: Array<{ p: string; o: number }> = [
 
 function ComposerTriangles() {
   return (
-    <svg viewBox="0 0 1200 360" preserveAspectRatio="xMidYMid slice" className="h-full w-full text-osu-pink" aria-hidden="true">
+    <svg viewBox="0 20 1200 360" preserveAspectRatio="xMidYMid slice" className="h-full w-full text-osu-pink" aria-hidden="true">
       {COMPOSER_TRIANGLES.map((triangle, index) => (
         <polygon key={index} points={triangle.p} fill="currentColor" fillOpacity={triangle.o} />
       ))}
@@ -829,32 +827,42 @@ function Stat({ label, value, tone = "default" }: { label: string; value: string
   );
 }
 
-function TypeSelector({ kind, onSwitch, suggestions }: { kind: GoalKind; onSwitch: (next: GoalKind) => void; suggestions: GoalSuggestionLabels }) {
+// Goal kinds split into two groups so eight types don't read as one undifferentiated strip: the
+// profile climbs (pp / rank, no map) and the per-map challenges. Compact icon+label chips, no
+// per-button example line; the composer sentence below carries the specifics once a type is picked.
+const TYPE_GROUPS: Array<{ key: GoalGroup; label: string }> = [
+  { key: "profile", label: "profile" },
+  { key: "map", label: "on a map" },
+];
+
+function TypeSelector({ kind, onSwitch }: { kind: GoalKind; onSwitch: (next: GoalKind) => void }) {
   return (
-    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 lg:grid-cols-7">
-      {GOAL_TYPES.map((type) => {
-        const selected = kind === type.kind;
-        return (
-          <button
-            key={type.kind}
-            type="button"
-            aria-pressed={selected}
-            onClick={() => onSwitch(type.kind)}
-            style={selected ? { backgroundColor: `${type.accent}1f`, borderColor: `${type.accent}80` } : undefined}
-            className={`group flex items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition-colors ${
-              selected ? "text-white" : "border-osu-b3/30 bg-osu-b5/40 text-osu-l2 hover:border-osu-b3/55 hover:bg-osu-b3/25 hover:text-white"
-            }`}
-          >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-osu-b3/35 bg-osu-b4/70" style={{ color: type.accent }}>
-              <OsuAssetIcon src={type.iconSrc} className="h-4 w-4 opacity-90" />
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate text-[12px] font-bold leading-tight">{type.label}</span>
-              <span className="block truncate text-[10px] font-semibold text-osu-f1">{typeExample(type, suggestions)}</span>
-            </span>
-          </button>
-        );
-      })}
+    <div className="space-y-2.5">
+      {TYPE_GROUPS.map((group) => (
+        <div key={group.key}>
+          <div className="mb-1.5 text-[9px] font-extrabold uppercase tracking-[0.16em] text-osu-f1">{group.label}</div>
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+            {GOAL_TYPES.filter((type) => type.group === group.key).map((type) => {
+              const selected = kind === type.kind;
+              return (
+                <button
+                  key={type.kind}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => onSwitch(type.kind)}
+                  style={selected ? { backgroundColor: `${type.accent}1f`, borderColor: `${type.accent}80`, color: "#fff" } : undefined}
+                  className={`flex w-full items-center justify-center gap-1.5 rounded-lg border px-2.5 py-2 text-[12px] font-bold transition-colors ${
+                    selected ? "" : "border-osu-b3/30 bg-osu-b5/40 text-osu-l2 hover:border-osu-b3/55 hover:bg-osu-b3/25 hover:text-white"
+                  }`}
+                >
+                  <OsuAssetIcon src={type.iconSrc} className="h-3.5 w-3.5 shrink-0" style={{ color: type.accent }} />
+                  {type.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -1334,6 +1342,11 @@ function GoalMedia({ goal, accent, href }: { goal: UserGoal; accent: string; hre
           <GradeImg grade={goal.targetGrade ?? "S"} size={30} className="h-[18px] w-auto" />
         </span>
       ) : null}
+      {goal.kind === "fc" ? (
+        <span className="pointer-events-none absolute -bottom-1 -right-1 flex items-center justify-center rounded-full bg-osu-b6 px-1.5 py-0.5 text-[9px] font-extrabold leading-none ring-1 ring-osu-b3/50" style={{ color: accent }}>
+          FC
+        </span>
+      ) : null}
     </span>
   );
 }
@@ -1440,7 +1453,7 @@ function ClearedChip({ goal, onDelete, onAgain }: { goal: UserGoal; onDelete: ()
 
 function CelebrationTriangles() {
   return (
-    <svg viewBox="0 0 1200 360" preserveAspectRatio="xMidYMid slice" className="h-full w-full text-osu-green-light" aria-hidden="true">
+    <svg viewBox="0 20 1200 360" preserveAspectRatio="xMidYMid slice" className="h-full w-full text-osu-green-light" aria-hidden="true">
       {COMPOSER_TRIANGLES.map((triangle, index) => (
         <polygon key={index} points={triangle.p} fill="currentColor" fillOpacity={triangle.o} />
       ))}

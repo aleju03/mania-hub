@@ -3,7 +3,7 @@ import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { LiveEventLog } from "../live/event-log.js";
-import { getDisplayedAccuracy, getDisplayedRank, getScoreIdentity, nowIso } from "../shared/score.js";
+import { getDisplayedAccuracy, getDisplayedRank, getScoreIdentity, isFullCombo, nowIso } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
 
 // User goals: a logged-in player sets a target ("96% on map X", "reach 5000pp", "pass map Y",
@@ -13,11 +13,11 @@ import type { OscScore } from "../shared/types.js";
 // id forwarded from the login cookie (see roster-self-track bridge); the browser never names a
 // different user.
 
-export type GoalKind = "reach_pp" | "play_pp" | "play_pp_count" | "accuracy" | "pass" | "grade" | "reach_rank";
+export type GoalKind = "reach_pp" | "play_pp" | "play_pp_count" | "accuracy" | "pass" | "grade" | "fc" | "reach_rank";
 export type GoalStatus = "open" | "completed";
 
-export const GOAL_KINDS: readonly GoalKind[] = ["reach_pp", "play_pp", "play_pp_count", "accuracy", "pass", "grade", "reach_rank"];
-export const GOAL_MAP_KINDS: readonly GoalKind[] = ["accuracy", "pass", "grade"];
+export const GOAL_KINDS: readonly GoalKind[] = ["reach_pp", "play_pp", "play_pp_count", "accuracy", "pass", "grade", "fc", "reach_rank"];
+export const GOAL_MAP_KINDS: readonly GoalKind[] = ["accuracy", "pass", "grade", "fc"];
 export const GOAL_TARGET_GRADES: readonly string[] = ["A", "S", "SS"];
 
 const BEATMAP_LABEL_MAX = 200;
@@ -201,6 +201,8 @@ interface BeatmapHistory {
   passContext: BeatmapHistoryContext | null;
   accuracyContext: BeatmapHistoryContext | null;
   gradeContext: BeatmapHistoryContext | null;
+  /** First full-combo pass found; only resolvable from rows that still carry score_json. */
+  fcContext: BeatmapHistoryContext | null;
 }
 
 /** The player's best passed result so far on one beatmap, with activity fallback for old rows. */
@@ -219,6 +221,7 @@ async function bestPassedOnBeatmap(db: Db, userId: number, beatmapId: number): P
     passContext: null,
     accuracyContext: null,
     gradeContext: null,
+    fcContext: null,
   };
 
   const scoreRows = (await exec(
@@ -242,6 +245,7 @@ async function bestPassedOnBeatmap(db: Db, userId: number, beatmapId: number): P
       country: row.country == null ? null : String(row.country),
     };
     if (!history.passContext) history.passContext = { ...context, value: 1 };
+    if (score && !history.fcContext && isFullCombo(score)) history.fcContext = { ...context, value: 1 };
     if (Number.isFinite(accuracy) && (history.bestAccuracy == null || accuracy > history.bestAccuracy)) {
       history.bestAccuracy = accuracy;
       history.accuracyContext = { ...context, value: accuracy };
@@ -308,6 +312,21 @@ async function bestSinglePpPlay(db: Db, userId: number): Promise<{ pp: number; s
       scoreIdentity: Number.isFinite(scoreId) && scoreId > 0 ? `official:${scoreId}` : null,
       beatmapId: score?.beatmap_id ?? score?.beatmap?.id ?? null,
       country: score?.user?.country_code ?? null,
+    });
+  }
+
+  // profile_snapshots holds the cached best-100 from the player's profile, which can include a PB
+  // that predates live tracking and isn't in user_top_scores yet. Without this source the "best so
+  // far" hint on a play_pp goal would only reflect recently-seen plays (e.g. 798pp instead of 927).
+  const snapshotRow = (await exec(db, "select best_scores_json from profile_snapshots where user_id = ?", [userId])).rows[0];
+  for (const score of parseJson<OscScore[]>(snapshotRow?.best_scores_json, [])) {
+    const pp = positivePp(score.pp);
+    if (pp == null) continue;
+    candidates.push({
+      pp,
+      scoreIdentity: officialScoreKey(score),
+      beatmapId: score.beatmap_id ?? score.beatmap?.id ?? null,
+      country: score.user?.country_code ?? null,
     });
   }
 
@@ -490,6 +509,13 @@ async function historicalCompletionForGoal(db: Db, goal: UserGoal): Promise<Goal
         ? { ...history.passContext, country: history.passContext.country ?? goal.country }
         : null;
     }
+    case "fc": {
+      if (!goal.beatmapId) return null;
+      const history = await bestPassedOnBeatmap(db, goal.userId, goal.beatmapId);
+      return history.fcContext
+        ? { ...history.fcContext, country: history.fcContext.country ?? goal.country }
+        : null;
+    }
     case "accuracy": {
       if (!goal.beatmapId || goal.targetValue == null) return null;
       const history = await bestPassedOnBeatmap(db, goal.userId, goal.beatmapId);
@@ -619,6 +645,11 @@ export async function computeGoalProgress(db: Db, goal: UserGoal): Promise<GoalP
       if (!goal.beatmapId) return { current: null, target: null, pct: null, detail: null };
       const b = await bestOnBeatmap(db, goal.userId, goal.beatmapId);
       return { current: b.plays || null, target: null, pct: null, detail: b.plays ? `played ${b.plays}x, not passed` : "not played yet" };
+    }
+    case "fc": {
+      if (!goal.beatmapId) return { current: null, target: null, pct: null, detail: null };
+      const b = await bestOnBeatmap(db, goal.userId, goal.beatmapId);
+      return { current: b.plays || null, target: null, pct: null, detail: b.plays ? `played ${b.plays}x, no FC yet` : "not played yet" };
     }
     default:
       return { current: null, target: null, pct: null, detail: null };
@@ -772,6 +803,12 @@ export async function evaluateScoreGoals(db: Db, events: LiveEventLog, score: Os
     switch (goal.kind) {
       case "pass":
         if (goal.beatmapId === beatmapId && passed) {
+          matched = true;
+          value = 1;
+        }
+        break;
+      case "fc":
+        if (goal.beatmapId === beatmapId && isFullCombo(score)) {
           matched = true;
           value = 1;
         }

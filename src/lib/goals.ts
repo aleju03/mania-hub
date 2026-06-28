@@ -4,7 +4,7 @@ import { createServerFn } from "@tanstack/react-start";
 // cookie server-side and forwards that id with the admin token (the roster-self-track pattern), so
 // a logged-in user can only ever read or mutate their own goals. The browser never sends a user id.
 
-export type GoalKind = "reach_pp" | "play_pp" | "play_pp_count" | "accuracy" | "pass" | "grade" | "reach_rank";
+export type GoalKind = "reach_pp" | "play_pp" | "play_pp_count" | "accuracy" | "pass" | "grade" | "fc" | "reach_rank";
 export type GoalStatus = "open" | "completed";
 
 export interface GoalProgress {

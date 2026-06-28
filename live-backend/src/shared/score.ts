@@ -40,6 +40,21 @@ function getHitCounts(stats: OsuScoreStatistics | null | undefined) {
   };
 }
 
+/** Miss count, lazer (count_miss) or stable (miss). */
+export function getMissCount(score: ScoreLike): number {
+  const stats = score.statistics ?? {};
+  return stats.count_miss ?? stats.miss ?? 0;
+}
+
+/**
+ * Mania full combo: a passed play with zero misses. In osu!mania combo only ever breaks on a miss
+ * (100s/50s keep the chain), so no misses is exactly a full combo and we needn't compare max_combo
+ * against the beatmap's note count (which isn't always loaded at evaluation time).
+ */
+export function isFullCombo(score: ScoreLike): boolean {
+  return Boolean(score.passed) && getMissCount(score) === 0;
+}
+
 function calculateStableAccuracy(stats: OsuScoreStatistics): number {
   const counts = getHitCounts(stats);
   const total = counts.countMax + counts.count300 + counts.count200 + counts.count100 + counts.count50 + counts.countMiss;

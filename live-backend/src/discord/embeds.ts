@@ -912,6 +912,7 @@ function goalHeadline(goal: GoalLike): string {
     case "play_pp_count": return `Have ${formatInt(goal.targetCount ?? 0)} ${formatInt(goal.targetValue)}pp+ plays`;
     case "accuracy": return `${acc(goal.targetValue)} on ${goal.beatmapLabel ?? "a map"}`;
     case "pass": return `Pass ${goal.beatmapLabel ?? "a map"}`;
+    case "fc": return `FC ${goal.beatmapLabel ?? "a map"}`;
     case "grade": return `Get ${goal.targetGrade ?? "?"} on ${goal.beatmapLabel ?? "a map"}`;
     default: return goal.beatmapLabel ?? "Goal";
   }
