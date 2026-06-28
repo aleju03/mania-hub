@@ -14,6 +14,7 @@ import { DEFAULT_SNIPES_FILTERS, useAppStore, useHasHydrated, useSelectedCountry
 import { readCountryFromSearchStr } from "../../lib/country-search";
 import { getCountryFlagGradient, getCountryFlagUrl, getCountryName, isGlobalScope, isSupportedCountryCode } from "../../lib/country";
 import { isLiveBackendConfigured } from "../../lib/live-backend";
+import { showPlayerCountryFlagState } from "../../lib/player-profile-navigation";
 import { getCachedCountryTier, useCountryWarming } from "../../lib/use-country-warming";
 import { useDynamicFavicon } from "../../lib/favicon";
 
@@ -801,7 +802,11 @@ export function Nav() {
             className="w-52"
             placeholder="find player..."
             onSearch={handleSearch}
-            onSelect={(u) => navigate({ to: "/player/$username", params: { username: u.username } })}
+            onSelect={(u) => navigate({
+              to: "/player/$username",
+              params: { username: u.username },
+              state: showPlayerCountryFlagState,
+            })}
           />
           <button
             type="button"
@@ -887,7 +892,11 @@ export function Nav() {
                   onSearch={handleSearch}
                   onSelect={(u) => {
                     setMenuOpen(false);
-                    navigate({ to: "/player/$username", params: { username: u.username } });
+                    navigate({
+                      to: "/player/$username",
+                      params: { username: u.username },
+                      state: showPlayerCountryFlagState,
+                    });
                   }}
                 />
               </div>

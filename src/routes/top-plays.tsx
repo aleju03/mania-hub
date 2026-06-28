@@ -23,6 +23,7 @@ import { useAppStore, useHiddenUserIds, useSelectedCountry, type CachedPopoff, t
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { pageSeo } from "../lib/seo";
 import { hasTopPlaysCache, shouldRefreshTopPlays } from "../lib/top-plays-cache";
+import { showPlayerCountryFlagState } from "../lib/player-profile-navigation";
 import { getReplaySearch } from "../lib/replay-navigation";
 import { startProgressPoll } from "../lib/progress-poll";
 import { fetchLiveTopPlaysSnapshot, isLiveBackendConfigured, openLiveEventSource, type LiveTopPlaysPpGain } from "../lib/live-backend";
@@ -1035,7 +1036,11 @@ function PopOffsPage() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate({ to: "/player/$username", params: { username: p.user.username } });
+                          navigate({
+                            to: "/player/$username",
+                            params: { username: p.user.username },
+                            ...(selectedIsGlobal ? { state: showPlayerCountryFlagState } : {}),
+                          });
                         }}
                         className="cursor-pointer"
                         title={`Open ${p.user.username}'s profile`}
@@ -1050,7 +1055,11 @@ function PopOffsPage() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigate({ to: "/player/$username", params: { username: p.user.username } });
+                                navigate({
+                                  to: "/player/$username",
+                                  params: { username: p.user.username },
+                                  ...(selectedIsGlobal ? { state: showPlayerCountryFlagState } : {}),
+                                });
                               }}
                               className="cursor-pointer min-w-0"
                             >

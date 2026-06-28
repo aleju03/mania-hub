@@ -47,6 +47,7 @@ import { useAuth } from "../../lib/auth-context";
 import { addSelfToRoster } from "../../lib/roster-self-track";
 import { GradeImg } from "../../components/ui/GradeImg";
 import { OsuLogo } from "../../components/ui/OsuLogo";
+import { CountryFlag } from "../../components/ui/CountryFlag";
 import { ModBadge } from "../../components/ui/ModBadge";
 import { LazerBadge } from "../../components/ui/LazerBadge";
 import { DanBadge } from "../../components/ui/DanBadge";
@@ -58,6 +59,8 @@ import { calculateUserProfileInsights } from "../../lib/profile-insights";
 import { readPlayerShell } from "../../lib/player-shell-cache";
 import { pageSeo, playerOgImagePath } from "../../lib/seo";
 import { getRankTierClass } from "../../lib/rankings";
+import { getCountryName, isSupportedCountryCode } from "../../lib/country";
+import { preservePlayerCountryFlagState } from "../../lib/player-profile-navigation";
 
 // The BBCode editor (toolbar + parser + preview) only loads when someone
 // actually opens it; the about tab itself stays light.
@@ -195,6 +198,15 @@ function getPlayerTabFromPathname(pathname: string): PlayerTab {
   if (tabSlug === "maniacard") return "card";
   if (tabSlug === "activity") return normalizePlayerTab("activity");
   return "best";
+}
+
+function readLegacyShowCountryFlag(searchStr: string): boolean {
+  const value = new URLSearchParams(searchStr).get("showCountry");
+  return value === "true" || value === "1";
+}
+
+function hasLegacyShowCountryParam(searchStr: string): boolean {
+  return new URLSearchParams(searchStr).has("showCountry");
 }
 
 export type PlayerLoaderData = {
@@ -881,17 +893,45 @@ function PlayerDefaultRoute() {
   const { username } = Route.useParams();
   const loaderData = Route.useLoaderData();
   const location = useLocation();
-  return <PlayerProfilePage username={username} loaderData={loaderData} initialTab={getPlayerTabFromPathname(location.pathname)} />;
+  const legacyShowCountryFlag = readLegacyShowCountryFlag(location.searchStr);
+  const hasLegacyShowCountry = hasLegacyShowCountryParam(location.searchStr);
+
+  useEffect(() => {
+    if (!hasLegacyShowCountry || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    params.delete("showCountry");
+    const nextSearch = params.toString();
+    const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}${window.location.hash}`;
+    window.history.replaceState(
+      {
+        ...window.history.state,
+        ...(legacyShowCountryFlag ? { showPlayerCountryFlag: true } : {}),
+      },
+      "",
+      nextUrl,
+    );
+  }, [hasLegacyShowCountry, legacyShowCountryFlag]);
+
+  return (
+    <PlayerProfilePage
+      username={username}
+      loaderData={loaderData}
+      initialTab={getPlayerTabFromPathname(location.pathname)}
+      showCountryFlag={location.state.showPlayerCountryFlag === true || legacyShowCountryFlag}
+    />
+  );
 }
 
 export function PlayerProfilePage({
   username,
   loaderData,
   initialTab,
+  showCountryFlag = false,
 }: {
   username: string;
   loaderData: PlayerLoaderData;
   initialTab: PlayerTab;
+  showCountryFlag?: boolean;
 }) {
   const navigate = useNavigate();
   const loaderSnapshot = loaderData?.cachedSnapshot ?? null;
@@ -1332,8 +1372,12 @@ export function PlayerProfilePage({
   const handleTabChange = useCallback((nextTab: PlayerTab) => {
     const normalizedTab = normalizePlayerTab(nextTab);
     setTab(normalizedTab);
-    void navigate({ to: getPlayerTabPath(username, normalizedTab), resetScroll: false });
-  }, [navigate, username]);
+    void navigate({
+      to: getPlayerTabPath(username, normalizedTab),
+      state: preservePlayerCountryFlagState(showCountryFlag),
+      resetScroll: false,
+    });
+  }, [navigate, showCountryFlag, username]);
 
   const handleBestSortChange = useCallback((nextSort: BestSort) => {
     setBestSort(nextSort);
@@ -1389,6 +1433,11 @@ export function PlayerProfilePage({
           : "empty";
 
   const avatarSrc = user.avatar_url;
+  const profileCountryCode = isSupportedCountryCode(user.country_code)
+    ? user.country_code.trim().toUpperCase()
+    : null;
+  const profileCountryName = profileCountryCode ? getCountryName(profileCountryCode) : null;
+  const showProfileCountryFlag = showCountryFlag && profileCountryCode && profileCountryName;
 
   return (
     <div className="flex-1">
@@ -1879,8 +1928,19 @@ export function PlayerProfilePage({
               />
             </button>
             <div className="pb-1 flex-1 min-w-0">
-              <h1 className="text-3xl font-bold text-white truncate">
-                <UsernameText username={user.username} avatarUrl={user.avatar_url} className="text-2xl sm:text-[34px] font-black text-white" />
+              <h1 className="flex min-w-0 items-center gap-3 text-3xl font-bold text-white">
+                <UsernameText username={user.username} avatarUrl={user.avatar_url} className="min-w-0 truncate text-2xl sm:text-[34px] font-black text-white" />
+                {showProfileCountryFlag ? (
+                  <Link
+                    to="/"
+                    search={{ country: profileCountryCode }}
+                    className="inline-flex shrink-0 translate-y-[3px] items-center rounded-[3px] ring-1 ring-white/20 transition hover:ring-osu-pink-light/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-osu-pink-light"
+                    title={`Open ${profileCountryName} home`}
+                    aria-label={`Open ${profileCountryName} home`}
+                  >
+                    <CountryFlag code={profileCountryCode} size="md" decorative />
+                  </Link>
+                ) : null}
               </h1>
               <div className="flex items-center gap-3 mt-1">
                 <a

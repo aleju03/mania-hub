@@ -23,6 +23,7 @@ import { useAppStore, useHasHydrated, useHiddenUserIds, useSelectedCountry } fro
 import { DEFAULT_DESCRIPTION, pageSeo } from "../lib/seo";
 import { seedPlayerShellFromRankingEntry, seedPlayerShellsFromRankingEntries } from "../lib/player-shell-cache";
 import { readGlobalTopPlayersCache, readGlobalTopPlayersMemoryCache, writeGlobalTopPlayersCache } from "../lib/global-top-players-cache";
+import { showPlayerCountryFlagState } from "../lib/player-profile-navigation";
 import { useWindowActive } from "../lib/window-activity";
 
 export const Route = createFileRoute("/")({
@@ -792,7 +793,11 @@ function HomePage() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.06 }}
                   className={`group bg-osu-b4 min-h-[180px] p-5 cursor-pointer text-center flex flex-col items-center justify-center relative isolate overflow-hidden ${getFeaturedPopoffSpanClass(i, featuredPopoffs.length)}`}
-                  onClick={() => navigate({ to: "/player/$username", params: { username: p.user.username } })}>
+                  onClick={() => navigate({
+                    to: "/player/$username",
+                    params: { username: p.user.username },
+                    ...(selectedIsGlobal ? { state: showPlayerCountryFlagState } : {}),
+                  })}>
                   {p.score.beatmapsetId && (
                     <>
                       <img
@@ -863,7 +868,11 @@ function HomePage() {
               displayedRecentScores.map((s: LeanHomeScore, i: number) => (
                 <motion.div key={s.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.04 }}
                   className="flex items-center gap-3 px-4 py-2.5 hover:bg-osu-b3/50 transition-colors cursor-pointer"
-                  onClick={() => navigate({ to: "/player/$username", params: { username: s.user.username } })}>
+                  onClick={() => navigate({
+                    to: "/player/$username",
+                    params: { username: s.user.username },
+                    ...(selectedIsGlobal ? { state: showPlayerCountryFlagState } : {}),
+                  })}>
                     <GradeImg grade={s.displayRank} size={22} />
                   <Avatar url={s.user.avatar_url} size={26} />
                   <div className="flex-1 min-w-0">

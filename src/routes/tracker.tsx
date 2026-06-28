@@ -37,6 +37,7 @@ import { TRACKER_FEED_SCORE_LIMIT, TRACKER_PP_GAIN_CLIENT_TTL, useAppStore, useH
 import type { LeanTrackerScore } from "../lib/types";
 import { parseCountrySearchParam } from "../lib/country-search";
 import { getReplaySearch } from "../lib/replay-navigation";
+import { showPlayerCountryFlagState } from "../lib/player-profile-navigation";
 import { fetchLiveTrackerSnapshot, isLiveBackendConfigured, openLiveEventSource } from "../lib/live-backend";
 import { CountryWarming } from "../components/CountryWarming";
 import { LiveDataEmptyState } from "../components/LiveDataEmptyState";
@@ -1595,7 +1596,11 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
           onClick={(e) => {
             e.stopPropagation();
             if (!score.user?.username) return;
-            window.location.href = `/player/${encodeURIComponent(score.user.username)}`;
+            navigate({
+              to: "/player/$username",
+              params: { username: score.user.username },
+              ...(showCountryFlag ? { state: showPlayerCountryFlagState } : {}),
+            });
           }}
           className="cursor-pointer"
           title={score.user?.username ? `Open ${score.user.username}'s profile` : undefined}
@@ -1611,7 +1616,11 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  window.location.href = `/player/${encodeURIComponent(score.user.username)}`;
+                                  navigate({
+                                    to: "/player/$username",
+                                    params: { username: score.user.username },
+                                    ...(showCountryFlag ? { state: showPlayerCountryFlagState } : {}),
+                                  });
                                 }}
                                 className="cursor-pointer min-w-0"
                               >
