@@ -486,7 +486,12 @@ export class WorkerRunner {
     const cutoff = new Date(Date.now() - 30 * 60_000).toISOString();
     const row = (await exec(
       this.db,
-      "select 1 from score_events where user_id = ? and ended_at >= ? and source like 'osc_%' limit 1",
+      `select 1
+       from score_events
+       where user_id = ?
+         and ended_at >= ?
+         and (source like 'osc_%' or source in ('osu_scores_fallback', 'osu_recent', 'osu_recent_fallback'))
+       limit 1`,
       [userId, cutoff],
     )).rows[0];
     return !!row;

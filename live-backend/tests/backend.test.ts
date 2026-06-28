@@ -1571,9 +1571,23 @@ describe("live backend", () => {
     expect((await events.replay("US", 0)).some((event) => event.type === "tracker_score")).toBe(true);
   });
 
-  it("does not keep recent polling alive from osu recent rows alone", async () => {
+  it("keeps recent polling alive from fresh osu recent rows", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-12T00:05:00.000Z"));
+    const { db, queue, events, ingestor } = await setup(["CR"]);
+    const [recentScore] = await fixture<OscScore[]>("scores.json");
+    await queue.enqueue("reconcile_user_recent_scores", "recent:user:101", { userId: 101 }, { priority: 100 });
+    const osu = { getUserRecentScores: vi.fn(async () => [{ ...recentScore, ended_at: "2026-05-12T00:04:00.000Z", created_at: "2026-05-12T00:04:00.000Z" }]) };
+    const worker = new WorkerRunner(db, queue, events, osu as never, ingestor, "test-worker");
+
+    await worker.runOnce();
+
+    expect(Number((await exec(db, "select count(*) as count from jobs where dedupe_key like 'recent:user:101:next:%'")).rows[0].count)).toBe(1);
+  });
+
+  it("stops recent polling when the latest osu recent row is stale", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-12T00:35:01.000Z"));
     const { db, queue, events, ingestor } = await setup(["CR"]);
     const [recentScore] = await fixture<OscScore[]>("scores.json");
     await queue.enqueue("reconcile_user_recent_scores", "recent:user:101", { userId: 101 }, { priority: 100 });
@@ -1595,6 +1609,27 @@ describe("live backend", () => {
       `insert into score_events
        (score_id, score_identity, legacy_score_id, user_id, country, beatmap_id, ruleset_id, score_json, pp, total_score, accuracy, rank, passed, processed, is_lazer, has_replay, ended_at, received_at, source)
        values (?, ?, null, ?, 'CR', ?, 3, ?, ?, ?, ?, ?, 1, 0, 0, 0, ?, ?, 'osc_socket')`,
+      [score.id, "official:9001", score.user_id, score.beatmap_id ?? score.beatmap?.id ?? 501, JSON.stringify(score), score.pp, score.total_score ?? score.score, score.accuracy, score.rank, "2026-05-12T00:04:00.000Z", new Date().toISOString()],
+    );
+    await queue.enqueue("reconcile_user_recent_scores", "recent:user:101", { userId: 101 }, { priority: 100 });
+    const osu = { getUserRecentScores: vi.fn(async () => []) };
+    const worker = new WorkerRunner(db, queue, events, osu as never, ingestor, "test-worker");
+
+    await worker.runOnce();
+
+    expect(Number((await exec(db, "select count(*) as count from jobs where dedupe_key like 'recent:user:101:next:%'")).rows[0].count)).toBe(1);
+  });
+
+  it("keeps recent polling alive while osu scores fallback rows are active", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-12T00:05:00.000Z"));
+    const { db, queue, events, ingestor } = await setup(["CR"]);
+    const [score] = await fixture<OscScore[]>("scores.json");
+    await exec(
+      db,
+      `insert into score_events
+       (score_id, score_identity, legacy_score_id, user_id, country, beatmap_id, ruleset_id, score_json, pp, total_score, accuracy, rank, passed, processed, is_lazer, has_replay, ended_at, received_at, source)
+       values (?, ?, null, ?, 'CR', ?, 3, ?, ?, ?, ?, ?, 1, 0, 0, 0, ?, ?, 'osu_scores_fallback')`,
       [score.id, "official:9001", score.user_id, score.beatmap_id ?? score.beatmap?.id ?? 501, JSON.stringify(score), score.pp, score.total_score ?? score.score, score.accuracy, score.rank, "2026-05-12T00:04:00.000Z", new Date().toISOString()],
     );
     await queue.enqueue("reconcile_user_recent_scores", "recent:user:101", { userId: 101 }, { priority: 100 });
