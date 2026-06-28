@@ -1177,13 +1177,19 @@ function getPrimaryLnActivitySubtype(patterns: Record<string, number>): string |
   return best;
 }
 
-function getCurrentActivityStreak(days: PlayerActivityDay[], year: number, todayKey: string): number {
+export function getCurrentActivityStreak(days: PlayerActivityDay[], year: number, todayKey: string): number {
   const selectedYear = clampYear(year);
   const cursorKey = todayKey.startsWith(`${selectedYear}-`) ? todayKey : `${selectedYear}-12-31`;
   const startKey = `${selectedYear}-01-01`;
   const active = new Set(days.filter((day) => day.scoreCount > 0).map((day) => day.date));
   let streak = 0;
-  for (let key = cursorKey; key >= startKey; key = addDayKeyDays(key, -1)) {
+  let key = cursorKey;
+  // The current local day is still in progress; an empty "today" shouldn't zero
+  // out a streak the player is otherwise keeping. Start counting from yesterday.
+  if (key === todayKey && !active.has(key)) {
+    key = addDayKeyDays(key, -1);
+  }
+  for (; key >= startKey; key = addDayKeyDays(key, -1)) {
     if (!active.has(key)) break;
     streak++;
   }
