@@ -1,4 +1,4 @@
-const CACHE_NAME = "static-v2";
+const CACHE_NAME = "static-v5";
 
 const PRECACHE_URLS = [
   // Fonts
@@ -118,6 +118,7 @@ const PRECACHE_URLS = [
   "/images/icons/store.svg",
   "/images/icons/supporter.svg",
   "/images/icons/tournaments.svg",
+  "/images/discord/bot-favicon.png",
   // Note images
   "/images/notes/arrow-down-gray.png",
   "/images/notes/arrow-down-green.png",
@@ -149,6 +150,7 @@ const PRECACHE_URLS = [
   // Favicons
   "/favicon.svg",
   "/favicon.ico",
+  "/favicon.webp",
 ];
 
 self.addEventListener("install", (event) => {

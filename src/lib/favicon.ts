@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { normalizeCountryScope } from "./country";
+import { isGlobalScope, normalizeCountryScope } from "./country";
+import { SITE_FAVICON_HREF, SITE_FAVICON_VERSION } from "./seo";
 
 function setFaviconHref(href: string, type = "image/png"): void {
   if (typeof document === "undefined") return;
@@ -24,6 +25,10 @@ function setFaviconHref(href: string, type = "image/png"): void {
 export function useDynamicFavicon(countryCode: string | null | undefined): void {
   useEffect(() => {
     const code = normalizeCountryScope(countryCode);
-    setFaviconHref(`/api/favicon?code=${code}&v=2`);
+    setFaviconHref(
+      isGlobalScope(code)
+        ? SITE_FAVICON_HREF
+        : `/api/favicon?code=${code}&v=${SITE_FAVICON_VERSION}`,
+    );
   }, [countryCode]);
 }

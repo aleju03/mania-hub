@@ -42,6 +42,7 @@ import { isReplayVideoStorageConfigured } from "../replay-video/r2.js";
 import { addManualRosterMember, enqueueRosterRefreshes, removeManualRosterMember } from "../rosters/country-rosters.js";
 import { getLocalDbStorage, runRetention } from "../retention.js";
 import { getDiscordPublicInfo, type DiscordRuntime } from "../discord/index.js";
+import { getDiscordShowcase } from "../discord/showcase.js";
 import { listAllSubscriptions, removeSubscriptionById } from "../discord/subscriptions.js";
 import { countUserLinks } from "../discord/identity.js";
 
@@ -163,6 +164,22 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   if (url.pathname === "/api/discord/info") {
     res.setHeader("cache-control", "public, max-age=60");
     sendJson(req, res, ctx, 200, getDiscordPublicInfo(ctx.config));
+    return true;
+  }
+  // Real-data backing for the /discord command showcase. Costly (it reads
+  // profiles, boards, maps and dan), so it lives behind the costly rate bucket
+  // and is cached server-side per country; `fresh=1` bypasses the cache for the
+  // page's manual refresh. It only ever surfaces public top-board players, so it
+  // takes no user id (no arbitrary-user lookups).
+  if (url.pathname === "/api/discord/showcase") {
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    if (!checkRate(req, res, ctx, "publicCostly")) return true;
+    const fresh = url.searchParams.get("fresh") === "1";
+    res.setHeader("cache-control", "public, max-age=300");
+    sendJson(req, res, ctx, 200, await getDiscordShowcase(ctx, country, fresh));
     return true;
   }
   const profileRoute = parseProfileRoute(url.pathname);

@@ -23,7 +23,7 @@ import {
 } from "../lib/country-cookie";
 import { PostHogProvider } from "../lib/posthog-provider";
 import { getCanonicalOrigin } from "../lib/origin";
-import { DEFAULT_DESCRIPTION, SITE_NAME, websiteJsonLd } from "../lib/seo";
+import { DEFAULT_DESCRIPTION, SITE_FAVICON_HREF, SITE_NAME, websiteJsonLd } from "../lib/seo";
 import { activateLiveCountryOnServer, fetchLiveBackendBootstrap } from "../lib/live-backend";
 import type { LiveBackendStatus, LiveCountryFeaturesSnapshot } from "../lib/live-backend";
 import { BackendOfflineScreen } from "../components/BackendOfflineScreen";
@@ -293,7 +293,7 @@ export const Route = createRootRoute({
       { name: "theme-color", content: "#1a1517" },
     ],
     links: [
-      { rel: "icon", type: "image/svg+xml", sizes: "any", href: "/favicon.svg" },
+      { rel: "icon", type: "image/png", sizes: "1024x1024", href: SITE_FAVICON_HREF },
       { rel: "manifest", href: "/manifest.json" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },

@@ -1,4 +1,7 @@
 export const SITE_NAME = "Mania Tracker";
+export const SITE_FAVICON_URL = "/images/discord/bot-favicon.png";
+export const SITE_FAVICON_VERSION = "5";
+export const SITE_FAVICON_HREF = `${SITE_FAVICON_URL}?v=${SITE_FAVICON_VERSION}`;
 
 export const DEFAULT_DESCRIPTION =
   "See what's happening in osu!mania with live scores, country rankings, top plays, map stats, player profiles, and replays.";

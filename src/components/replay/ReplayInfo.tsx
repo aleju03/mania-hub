@@ -46,6 +46,11 @@ export function ReplayInfo({ replay, score, beatmap, fallbackBeatmapsetId, share
   const displayName = playerProfile?.username?.trim() || h.playerName;
   const avatarSrc = avatarImageSrc(playerProfile?.avatarUrl, playerProfile?.id ?? undefined);
   const playerCoverUrl = playerProfile?.coverUrl;
+  // Slim cover is osu!'s thin banner crop (the others are tall covers or small
+  // thumbnails), so it matches this header strip and the player banner's aspect.
+  const beatmapCoverUrl = beatmapsetId
+    ? `https://assets.ppy.sh/beatmaps/${beatmapsetId}/covers/slimcover@2x.jpg`
+    : undefined;
   // Over a banner the muted label washes out, so brighten it and outline both
   // label + name with a shadow. Without a banner keep the plain muted look that
   // matches the other stat labels.
@@ -53,13 +58,20 @@ export function ReplayInfo({ replay, score, beatmap, fallbackBeatmapsetId, share
     ? "text-white/80 [text-shadow:0_1px_3px_rgba(0,0,0,0.95)]"
     : "text-osu-f1";
   const playerNameShadow = playerCoverUrl ? " [text-shadow:0_1px_3px_rgba(0,0,0,0.85)]" : "";
+  // The map title now sits over the beatmap's slim cover when one exists, so brighten
+  // its label and shadow the text the same way the player side does over its banner.
+  const mapLabelClass = beatmapCoverUrl
+    ? "text-white/80 [text-shadow:0_1px_3px_rgba(0,0,0,0.95)]"
+    : "text-osu-f1";
+  const mapTextShadow = beatmapCoverUrl ? " [text-shadow:0_1px_3px_rgba(0,0,0,0.85)]" : "";
 
   return (
     <>
       <div className="sm:hidden relative overflow-hidden bg-osu-b4 rounded-xl p-3 mb-3 border border-osu-b3/20">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
+            <div className="relative flex items-center gap-2">
+              <BeatmapBanner coverUrl={beatmapCoverUrl} fade={BEATMAP_BANNER_FADE_COMPACT} />
               <div className="relative -mt-3 -ml-3 pt-3 pl-3 pb-1.5 pr-12 min-w-0">
                 <PlayerBanner coverUrl={playerCoverUrl} />
                 <div className="relative flex items-center gap-2 min-w-0">
@@ -70,16 +82,16 @@ export function ReplayInfo({ replay, score, beatmap, fallbackBeatmapsetId, share
                   </div>
                 </div>
               </div>
-              <div className="h-7 w-px bg-osu-b3/40" />
-              <div className="min-w-0 flex-1">
-                <div className="text-[8px] uppercase tracking-wider text-osu-f1">Map</div>
+              <div className="relative h-7 w-px bg-osu-b3/40" />
+              <div className="relative min-w-0 flex-1">
+                <div className={`text-[8px] uppercase tracking-wider ${mapLabelClass}`}>Map</div>
                 {beatmap ? (
                   mapUrl ? (
-                    <a href={mapUrl} target="_blank" rel="noopener noreferrer" className="block truncate text-xs font-semibold text-osu-l2" title={`${beatmap.title} [${beatmap.version}]`}>
+                    <a href={mapUrl} target="_blank" rel="noopener noreferrer" className={`block truncate text-xs font-semibold text-osu-l2${mapTextShadow}`} title={`${beatmap.title} [${beatmap.version}]`}>
                       {beatmap.title} [{beatmap.version}]
                     </a>
                   ) : (
-                    <div className="truncate text-xs font-semibold text-osu-l2" title={`${beatmap.title} [${beatmap.version}]`}>{beatmap.title} [{beatmap.version}]</div>
+                    <div className={`truncate text-xs font-semibold text-osu-l2${mapTextShadow}`} title={`${beatmap.title} [${beatmap.version}]`}>{beatmap.title} [{beatmap.version}]</div>
                   )
                 ) : (
                   <div className="truncate text-xs font-semibold text-osu-l2">Replay loaded</div>
@@ -136,15 +148,18 @@ export function ReplayInfo({ replay, score, beatmap, fallbackBeatmapsetId, share
             </div>
           </div>
           {beatmap && (
-            <div className="min-w-0">
-              <div className="text-[9px] uppercase tracking-wider text-osu-f1">Map</div>
-              {mapUrl ? (
-                <a href={mapUrl} target="_blank" rel="noopener noreferrer" className="block truncate text-sm font-medium text-osu-l2 hover:text-osu-pink-light transition-colors" title={`${beatmap.title} [${beatmap.version}]`}>
-                  {beatmap.title} [{beatmap.version}]
-                </a>
-              ) : (
-                <div className="truncate text-sm font-medium text-osu-l2" title={`${beatmap.title} [${beatmap.version}]`}>{beatmap.title} [{beatmap.version}]</div>
-              )}
+            <div className="relative self-stretch -my-4 py-4 flex flex-col justify-center min-w-0">
+              <BeatmapBanner coverUrl={beatmapCoverUrl} fade={BEATMAP_BANNER_FADE_MAP} className="absolute inset-y-0 -left-20 right-0" />
+              <div className="relative">
+                <div className={`text-[9px] uppercase tracking-wider ${mapLabelClass}`}>Map</div>
+                {mapUrl ? (
+                  <a href={mapUrl} target="_blank" rel="noopener noreferrer" className={`block truncate text-sm font-medium text-osu-l2 hover:text-osu-pink-light transition-colors${mapTextShadow}`} title={`${beatmap.title} [${beatmap.version}]`}>
+                    {beatmap.title} [{beatmap.version}]
+                  </a>
+                ) : (
+                  <div className={`truncate text-sm font-medium text-osu-l2${mapTextShadow}`} title={`${beatmap.title} [${beatmap.version}]`}>{beatmap.title} [{beatmap.version}]</div>
+                )}
+              </div>
             </div>
           )}
           <div className="col-span-1 lg:col-span-1 flex flex-wrap items-center justify-end gap-x-4 sm:gap-x-6 gap-y-2 min-w-0">
@@ -187,6 +202,33 @@ function PlayerBanner({ coverUrl }: { coverUrl?: string }) {
     >
       <div
         className="absolute inset-0 bg-cover bg-center opacity-60"
+        style={{ backgroundImage: `url(${coverUrl})` }}
+      />
+      <div className="absolute inset-0 bg-osu-b4/30" />
+    </div>
+  );
+}
+
+// Beatmap cover, mirrored against the player banner. On desktop it's scoped to the map
+// column (bled left to meet the player cover's fade) so it physically can't reach the
+// stat columns at any width; the mask dissolves it in from that seam and back out
+// before the column's right edge. The compact variant fills the mobile top row, which
+// has no stats beside it.
+// Front-loaded fade-in (already ~half strength a fifth of the way across) so the cover
+// catches the player banner mid-dissolve and fills the seam instead of dipping dark.
+const BEATMAP_BANNER_FADE_MAP = "linear-gradient(to right, transparent 0%, rgba(0,0,0,0.55) 22%, #000 46%, #000 82%, transparent 100%)";
+const BEATMAP_BANNER_FADE_COMPACT = "linear-gradient(to right, transparent 18%, #000 44%, #000 82%, transparent 100%)";
+
+function BeatmapBanner({ coverUrl, fade, className = "absolute inset-0" }: { coverUrl?: string; fade: string; className?: string }) {
+  if (!coverUrl) return null;
+  return (
+    <div
+      className={`pointer-events-none ${className}`}
+      style={{ maskImage: fade, WebkitMaskImage: fade }}
+      aria-hidden="true"
+    >
+      <div
+        className="absolute inset-0 bg-cover bg-center opacity-50"
         style={{ backgroundImage: `url(${coverUrl})` }}
       />
       <div className="absolute inset-0 bg-osu-b4/30" />

@@ -35,7 +35,7 @@ function getTimestampMs(score: OsuScore): number {
   return timestamp ? new Date(timestamp).getTime() : 0;
 }
 
-function buildPpDistribution(ppValues: number[]): UserProfileInsights["ppDistribution"] {
+export function buildPpDistribution(ppValues: number[]): UserProfileInsights["ppDistribution"] {
   if (!ppValues.length) return [];
 
   const top = Math.max(...ppValues);

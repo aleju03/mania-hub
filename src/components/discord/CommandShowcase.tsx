@@ -6,7 +6,19 @@ import { CLIENT_CACHE_TTL, isCacheStale } from "../../lib/cache";
 import { GLOBAL_SCOPE_CODE, getCountryName, isGlobalScope } from "../../lib/country";
 import { useAuth } from "../../lib/auth-context";
 import type { AuthViewer } from "../../lib/auth-shared";
-import { fetchLiveRankingsSnapshot, type LiveGlobalRankingEntry } from "../../lib/live-backend";
+import {
+  fetchDiscordShowcase,
+  fetchLiveRankingsSnapshot,
+  type DiscordShowcase,
+  type DiscordShowcasePlayer,
+  type DiscordShowcaseScore,
+  type LiveGlobalRankingEntry,
+} from "../../lib/live-backend";
+import {
+  discordShowcaseCacheKey,
+  readDiscordShowcaseCache,
+  writeDiscordShowcaseCache,
+} from "../../lib/discord-showcase-cache";
 import { getRankings } from "../../lib/osu";
 import type { LeanRankingEntry, RankingsResponse } from "../../lib/types";
 import { useAppStore, useSelectedCountry } from "../../store";
@@ -61,6 +73,22 @@ interface ShowcaseSample {
   leaderboard: ShowcasePlayer[];
 }
 
+// A single rendered score line, shared by the real-data and synthetic paths.
+type ScoreRow = { grade: string; title: string; version: string; mods: string[]; acc: string; pp: string; keys?: string; gain?: string };
+
+// Resolves the dan emblem asset for a real estimate. The showcase is a web page,
+// so it links the raw svg/webp directly (reform 1-10 svg, greek webp, LN 1-16
+// svg), unlike the bot which rasterizes svg through the OG route for Discord.
+const GREEK_DANS = new Set(["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta"]);
+function danEmblemSrc(label: string | null | undefined, familyKey: string | null | undefined): string {
+  if (!label) return "/images/dans/reform/10.svg";
+  if (familyKey === "ln" && /^(1[0-6]|[1-9])$/.test(label)) return `/images/dans/ln/${label}.svg`;
+  if (/^([1-9]|10)$/.test(label)) return `/images/dans/reform/${label}.svg`;
+  const lower = label.toLowerCase();
+  if (GREEK_DANS.has(lower)) return `/images/dans/reform/${lower}.webp`;
+  return "/images/dans/reform/10.svg";
+}
+
 const NUMBER_FORMAT = new Intl.NumberFormat("en-US");
 
 function formatNumber(value: number | null | undefined): string {
@@ -76,18 +104,16 @@ function formatRank(value: number | null | undefined): string {
 }
 
 function formatAccuracy(value: number | null | undefined): string {
-  return Number.isFinite(value) && Number(value) > 0 ? `${Number(value).toFixed(2)}%` : "-";
+  if (!Number.isFinite(value) || Number(value) <= 0) return "-";
+  // Player hit_accuracy arrives 0-100; tolerate a 0-1 fraction too, matching the
+  // backend's accuracy formatter.
+  const pct = Number(value) <= 1 ? Number(value) * 100 : Number(value);
+  return `${pct.toFixed(2)}%`;
 }
 
 function commandName(player: ShowcasePlayer): string {
   if (player.id <= 0) return "player";
   return player.username.trim() || "player";
-}
-
-function countryFieldName(player: ShowcasePlayer): string {
-  return player.countryCode && !isGlobalScope(player.countryCode)
-    ? `Country (${player.countryCode})`
-    : "Country";
 }
 
 function userIdForAvatar(player: ShowcasePlayer): number | undefined {
@@ -121,7 +147,7 @@ function fallbackPlayers(country: string): ShowcasePlayer[] {
     const rank = index + 1;
     return {
       id: 0,
-      username: index === 0 ? "Loading player..." : `Player ${rank}`,
+      username: `Player ${rank}`,
       countryCode,
       pp: 13000 - index * 850,
       globalRank: 40 + index * 57,
@@ -568,7 +594,7 @@ function ManiacardArt({ player }: { player: ShowcasePlayer }) {
 // Command previews
 // ---------------------------------------------------------------------------
 
-function buildCommands(sample: ShowcaseSample): Command[] {
+function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Command[] {
   const fallback = fallbackPlayers(sample.commandCountry)[0];
   const pick = (index: number): ShowcasePlayer => sample.players[index] ?? sample.viewer ?? fallback;
   const self = sample.viewer ?? pick(0);
@@ -605,13 +631,136 @@ function buildCommands(sample: ShowcaseSample): Command[] {
   const mapsTitle = sample.isGlobal ? "Most farmed maps globally" : `Most farmed maps in ${sample.countryLabel}`;
   const scopeFooter = `${sample.countryLabel} • maniabot`;
 
+  // ----- Real captured data (live backend) with synthetic fallbacks ---------
+  // Each player-centric command renders a DIFFERENT pool player (matching the
+  // backend's per-index detail capture), so the previews don't all show the same
+  // person. Each command prefers its fx.* section and falls back to the
+  // hardcoded mock + sampled player when the fixture is missing.
+  const pLink = fx?.players?.[0] ?? null;     // /link, /me, /vs left
+  const pProfile = fx?.players?.[1] ?? null;  // /player, /pb, /replay, /vs right
+  const pRecent = fx?.players?.[2] ?? null;   // /recent
+  const pCard = fx?.players?.[3] ?? null;     // /maniacard
+  const pActivity = fx?.players?.[4] ?? null; // /activity
+  const pGoals = fx?.players?.[5] ?? null;    // /goals
+  const pFarm = fx?.players?.[6] ?? null;     // /farm
+  const authorName = (p: DiscordShowcasePlayer | null, sampled: ShowcasePlayer): string => p?.username ?? sampled.username;
+  const authorAvatar = (p: DiscordShowcasePlayer | null, sampled: ShowcasePlayer): number | undefined => p?.id ?? userIdForAvatar(sampled);
+  const countryField = (code: string): string => (code && !isGlobalScope(code) ? `Country (${code})` : "Country");
+  const fxScore = (s: DiscordShowcaseScore): ScoreRow => ({
+    grade: s.grade, title: s.title, version: s.version, mods: s.mods, acc: s.acc, pp: s.pp, keys: s.keys || undefined, gain: s.gain,
+  });
+
+  const playerName = pProfile?.username ?? commandName(profile);
+  const cardArtPlayer: ShowcasePlayer = pCard ? { ...card, id: pCard.id, username: pCard.username } : card;
+
+  const playerTop: ScoreRow[] = fx?.topPlays?.length
+    ? fx.topPlays.slice(0, 3).map(fxScore)
+    : [
+      { grade: "X", title: "xi - Blue Zenith", version: "4K Black Another", keys: "4K", mods: ["HD", "DT"], acc: "100%", pp: playPp(profile, 13000) },
+      { grade: "S", title: "xi - FREEDOM DiVE", version: "4K Another", keys: "4K", mods: ["DT"], acc: "99.2%", pp: playPp(rival, 11500) },
+      { grade: "S", title: "UNDEAD CORPORATION - Everything Will Freeze", version: "[7K] SHD", keys: "7K", mods: [], acc: "98.7%", pp: playPp(third, 10000) },
+    ];
+  const recentRows: ScoreRow[] = fx?.recent?.length
+    ? fx.recent.slice(0, 3).map(fxScore)
+    : [
+      { grade: "A", title: "Yomi yori", version: "4K Master", keys: "4K", mods: ["HD"], acc: "97.1%", pp: "-" },
+      { grade: "S", title: "Aleph-0", version: "4K Ultra", keys: "4K", mods: [], acc: "98.9%", pp: playPp(recent, 9400) },
+      { grade: "F", title: "Cyber Induction", version: "4K SHD", keys: "4K", mods: ["DT"], acc: "91.0%", pp: "-" },
+    ];
+
+  const me = fx?.me ?? null;
+  const meSessions = me ? formatNumber(me.sessions) : formatNumber(Math.max(1, Math.round((self.playCount ?? 24000) / 45)));
+
+  const act = fx?.activity ?? null;
+  const activityPatterns = act?.patterns?.length
+    ? act.patterns
+    : [{ label: "Stream", pct: 42 }, { label: "Jack", pct: 21 }, { label: "LN", pct: 18 }, { label: "Chordjack", pct: 11 }];
+
+  // /goals and /farm are a fixed example (top players rarely have site goals or
+  // 4K farm recs); only the player identity above varies.
+  const goalsOpen = [
+    { headline: `Reach ${formatPp(goalTarget)}`, trailer: `${formatPp(goals.pp)}, ${goalPercent}%` },
+    { headline: "99.00% on Blue Zenith [4K Another]", trailer: "best 98.20%, 80%" },
+  ];
+  const goalsFooter = "2 open • 5 done • maniabot";
+
+  const farmRecs = [
+    { index: 1, title: "Output", mods: ["DT"], gain: "+42pp" },
+    { index: 2, title: "The Sun The Moon The Star", mods: [], gain: "+37pp" },
+    { index: 3, title: "Singularity", mods: ["HD"], gain: "+31pp" },
+  ];
+  const farmKeyMode = "4k";
+
+  const vsTitle = fx?.vs?.title ?? `${self.username} vs ${rival.username}`;
+  const vsRows = fx?.vs?.rows?.length
+    ? fx.vs.rows
+    : [
+      { label: "pp", a: formatPp(self.pp), b: formatPp(rival.pp), aWins: numberWins(self.pp, rival.pp), bWins: numberWins(rival.pp, self.pp) },
+      { label: "Global rank", a: formatRank(self.globalRank), b: formatRank(rival.globalRank), aWins: rankWins(self.globalRank, rival.globalRank), bWins: rankWins(rival.globalRank, self.globalRank) },
+      { label: "Country rank", a: formatRank(selfRank), b: formatRank(rivalRank), aWins: rankWins(selfRank, rivalRank), bWins: rankWins(rivalRank, selfRank) },
+      { label: "Accuracy", a: formatAccuracy(selfAccuracy), b: formatAccuracy(rivalAccuracy), aWins: numberWins(selfAccuracy, rivalAccuracy), bWins: numberWins(rivalAccuracy, selfAccuracy) },
+    ];
+  const vsLeftName = fx?.vs ? (pLink?.username ?? self.username) : self.username;
+  const vsRightName = pProfile?.username ?? rival.username;
+
+  const pbView = {
+    title: fx?.pb?.mapTitle ?? "Blue Zenith [4K Black Another]",
+    grade: fx?.pb?.grade ?? "X",
+    mods: fx?.pb?.mods ?? ["DT"],
+    acc: fx?.pb?.acc ?? "99.4%",
+    combo: fx?.pb?.combo ?? "1,532x",
+    pp: fx?.pb?.pp ?? playPp(pb, 13000),
+  };
+
+  const rankRows = fx?.rankings?.length
+    ? fx.rankings.slice(0, 4).map((r) => ({ rank: r.rank, name: r.username, userId: r.userId > 0 ? r.userId : undefined, pp: r.pp }))
+    : sample.leaderboard.slice(0, 4).map((p, index) => ({ rank: rankFor(p, index) ?? index + 1, name: p.username, userId: userIdForAvatar(p), pp: formatPp(p.pp) }));
+
+  const topRows = fx?.topList?.length
+    ? fx.topList.slice(0, 3)
+    : [
+      { username: third.username, userId: 0, title: "Blue Zenith", mods: ["DT"], pp: playPp(third, 12000), gain: "+35" as string | undefined },
+      { username: fourth.username, userId: 0, title: "Aleph-0", mods: ["HD"], pp: playPp(fourth, 10500), gain: undefined as string | undefined },
+      { username: fifth.username, userId: 0, title: "Cytus II", mods: [], pp: playPp(fifth, 9800), gain: undefined as string | undefined },
+    ];
+
+  const trackerRows = fx?.tracker?.length
+    ? fx.tracker.slice(0, 4).map((t) => ({ grade: t.grade, player: t.username, title: t.title, mods: t.mods, acc: t.acc, pp: t.pp }))
+    : [
+      { grade: "X", player: profile.username, title: "Blue Zenith", mods: ["DT"], acc: "99.4%", pp: playPp(profile, 13000) },
+      { grade: "S", player: rival.username, title: "FREEDOM DiVE", mods: ["HD"], acc: "98.9%", pp: playPp(rival, 10800) },
+      { grade: "A", player: third.username, title: "Cyber Induction", mods: [], acc: "96.2%", pp: playPp(third, 9000) },
+      { grade: "S", player: fourth.username, title: "Aleph-0", mods: ["DT"], acc: "98.1%", pp: playPp(fourth, 8300) },
+    ];
+
+  const mapRows = fx?.mapsFarmed?.length
+    ? fx.mapsFarmed.slice(0, 3)
+    : [
+      { rank: 1, title: "Blue Zenith [4K Another]", stars: "6.20", avg: "700pp", players: "12" },
+      { rank: 2, title: "FREEDOM DiVE [4K Another]", stars: "5.90", avg: "640pp", players: "10" },
+      { rank: 3, title: "Aleph-0 [4K Ultra]", stars: "6.05", avg: "612pp", players: "9" },
+    ];
+
+  const rf = fx?.randomFarm ?? null;
+  const rfMod = rf ? rf.dominantMod : "DT";
+  const dan = fx?.dan ?? null;
+  const danEmblem = danEmblemSrc(dan?.label, dan?.familyKey);
+  const rv = fx?.randomFav ?? null;
+  const rvOthers = rv ? rv.others : 23;
+  const rvPickedBy = rv?.pickedBy ?? profile.username;
+  const mapInfo = fx?.map ?? null;
+  const feedTop = fx?.feedTopPlay ?? null;
+  const feedNew = fx?.feedNewMap ?? null;
+  const coverOf = (cover: string | null | undefined): string => cover || COVER_A;
+  const linkUsername = pLink?.username ?? (self.id > 0 ? self.username : null);
+
   return [
     {
-      id: "link", label: "/link", invocation: `/link ${commandName(self)}`, group: "You", accent: PINK,
+      id: "link", label: "/link", invocation: linkUsername ? `/link ${linkUsername}` : "/link", group: "You", accent: PINK,
       blurb: "Save your osu! account so every other command knows who you are.",
       render: () => (
         <TextReply accent={PINK}>
-          Linked to <b style={{ color: D.white }}>{self.username}</b>. Commands now default to this account.
+          {linkUsername ? <>Linked to <b style={{ color: D.white }}>{linkUsername}</b>.</> : "Linked."} Commands now default to this account.
         </TextReply>
       ),
     },
@@ -620,21 +769,21 @@ function buildCommands(sample: ShowcaseSample): Command[] {
       blurb: "Your personal dashboard: ranks, pp, activity totals and goal progress.",
       render: () => (
         <Embed accent={PINK}>
-          <EmbedAuthor name={self.username} userId={userIdForAvatar(self)} />
+          <EmbedAuthor name={authorName(pLink, self)} userId={authorAvatar(pLink, self)} />
           <Fields items={[
-            { name: "Global", value: formatRank(self.globalRank) },
-            { name: countryFieldName(self), value: formatRank(self.countryRank) },
-            { name: "pp", value: <b style={{ color: D.white }}>{formatPp(self.pp)}</b> },
-            { name: "Active days", value: "128" },
-            { name: "Sessions", value: formatNumber(Math.max(1, Math.round((self.playCount ?? 24000) / 45))) },
-            { name: "Top plays", value: "100" },
+            { name: "Global", value: formatRank(me?.globalRank ?? self.globalRank) },
+            { name: countryField((me?.countryCode ?? pLink?.countryCode ?? self.countryCode) || ""), value: formatRank(me?.countryRank ?? self.countryRank) },
+            { name: "pp", value: <b style={{ color: D.white }}>{formatPp(me?.pp ?? self.pp)}</b> },
+            { name: "Active days", value: me ? formatNumber(me.activeDays) : "128" },
+            { name: "Sessions", value: meSessions },
+            { name: "Top plays", value: me ? formatNumber(me.topPlayCount) : "100" },
           ]} />
           <Lead>Highlights</Lead>
           <div className="space-y-0.5 text-[12px]" style={{ color: D.text }}>
-            <div><span style={{ color: D.muted }}>Biggest day</span> <b style={{ color: D.white }}>210 plays</b></div>
-            <div><span style={{ color: D.muted }}>Longest streak</span> <b style={{ color: D.white }}>14 days</b></div>
-            <div><span style={{ color: D.muted }}>pp gained while tracked</span> <b style={{ color: GOLD }}>+540</b></div>
-            <div><span style={{ color: D.muted }}>Goals</span> <b style={{ color: D.white }}>2 open, 5 done</b></div>
+            <div><span style={{ color: D.muted }}>Biggest day</span> <b style={{ color: D.white }}>{me?.biggestDay ?? "210 plays"}</b></div>
+            <div><span style={{ color: D.muted }}>Longest streak</span> <b style={{ color: D.white }}>{me?.longestStreak ?? "14 days"}</b></div>
+            <div><span style={{ color: D.muted }}>pp gained while tracked</span> <b style={{ color: GOLD }}>{me?.ppGained ?? "+540"}</b></div>
+            <div><span style={{ color: D.muted }}>Goals</span> <b style={{ color: D.white }}>{me?.goalsLine ?? "2 open, 5 done"}</b></div>
           </div>
           <Footer text="maniabot" />
           <Buttons items={["My Data", "osu! profile"]} />
@@ -642,23 +791,21 @@ function buildCommands(sample: ShowcaseSample): Command[] {
       ),
     },
     {
-      id: "player", label: "/player", invocation: `/player ${commandName(profile)}`, group: "Players", accent: PINK,
+      id: "player", label: "/player", invocation: `/player ${playerName}`, group: "Players", accent: PINK,
       blurb: "Full profile card with ranks, pp and top plays. The username is optional once you link.",
       render: () => (
         <Embed accent={PINK}>
-          <EmbedAuthor name={profile.username} userId={userIdForAvatar(profile)} />
+          <EmbedAuthor name={authorName(pProfile, profile)} userId={authorAvatar(pProfile, profile)} />
           <Fields items={[
-            { name: "Global", value: formatRank(profile.globalRank) },
-            { name: countryFieldName(profile), value: formatRank(profile.countryRank) },
-            { name: "pp", value: <b style={{ color: D.white }}>{formatPp(profile.pp)}</b> },
-            { name: "Accuracy", value: formatAccuracy(profile.accuracy) },
-            { name: "Play count", value: formatNumber(profile.playCount) },
-            { name: "Level", value: "103" },
+            { name: "Global", value: formatRank(pProfile?.globalRank ?? profile.globalRank) },
+            { name: countryField((pProfile?.countryCode ?? profile.countryCode) || ""), value: formatRank(pProfile?.countryRank ?? profile.countryRank) },
+            { name: "pp", value: <b style={{ color: D.white }}>{formatPp(pProfile?.pp ?? profile.pp)}</b> },
+            { name: "Accuracy", value: formatAccuracy(pProfile?.accuracy ?? profile.accuracy) },
+            { name: "Play count", value: formatNumber(pProfile?.playCount ?? profile.playCount) },
+            { name: "Level", value: pProfile?.level != null ? String(pProfile.level) : "103" },
           ]} />
           <Lead>Top plays</Lead>
-          <ScoreLine grade="X" title="Blue Zenith" version="4K Black Another" keys="4K" mods={["HD", "DT"]} acc="100%" pp={playPp(profile, 13000)} />
-          <ScoreLine grade="S" title="FREEDOM DiVE" version="4K Another" keys="4K" mods={["DT"]} acc="99.2%" pp={playPp(rival, 11500)} />
-          <ScoreLine grade="S" title="Everything Will Freeze" version="[7K] SHD" keys="7K" mods={[]} acc="98.7%" pp={playPp(third, 10000)} />
+          {playerTop.map((s, i) => <ScoreLine key={i} {...s} />)}
           <Footer text="maniabot" />
           <Buttons items={["Mania Hub", "osu! profile"]} />
         </Embed>
@@ -669,23 +816,21 @@ function buildCommands(sample: ShowcaseSample): Command[] {
       blurb: "Latest plays, pass or fail, paginated with Prev and Next.",
       render: () => (
         <Embed accent={PINK}>
-          <EmbedAuthor name={recent.username} userId={userIdForAvatar(recent)} />
+          <EmbedAuthor name={authorName(pRecent, recent)} userId={authorAvatar(pRecent, recent)} />
           <Lead>Recent plays</Lead>
-          <ScoreLine grade="A" title="Yomi yori" version="4K Master" keys="4K" mods={["HD"]} acc="97.1%" pp="-" />
-          <ScoreLine grade="S" title="Aleph-0" version="4K Ultra" keys="4K" mods={[]} acc="98.9%" pp={playPp(recent, 9400)} />
-          <ScoreLine grade="F" title="Cyber Induction" version="4K SHD" keys="4K" mods={["DT"]} acc="91.0%" pp="-" />
+          {recentRows.map((s, i) => <ScoreLine key={i} {...s} />)}
           <Footer text="Page 1 • maniabot" />
           <PageButtons />
         </Embed>
       ),
     },
     {
-      id: "maniacard", label: "/maniacard", invocation: `/maniacard ${commandName(card)}`, group: "Players", accent: GOLD,
+      id: "maniacard", label: "/maniacard", invocation: `/maniacard ${pCard?.username ?? commandName(card)}`, group: "Players", accent: GOLD,
       blurb: "A shareable skill-tier card: control, speed and precision under a tier badge, with star rating.",
       render: () => (
         <Embed accent={GOLD}>
-          <EmbedAuthor name={card.username} userId={userIdForAvatar(card)} />
-          <ManiacardArt player={card} />
+          <EmbedAuthor name={authorName(pCard, card)} userId={authorAvatar(pCard, card)} />
+          <ManiacardArt player={cardArtPlayer} />
           <Footer text="maniabot" />
           <Buttons items={["View card", "osu! profile"]} />
         </Embed>
@@ -696,21 +841,21 @@ function buildCommands(sample: ShowcaseSample): Command[] {
       blurb: "Play habits and a playstyle breakdown: active days, sessions and skill mix.",
       render: () => (
         <Embed accent={PINK}>
-          <EmbedAuthor name={activity.username} userId={userIdForAvatar(activity)} />
+          <EmbedAuthor name={authorName(pActivity, activity)} userId={authorAvatar(pActivity, activity)} />
           <Fields items={[
-            { name: "Active days", value: "128" },
-            { name: "Total plays", value: formatNumber(activity.playCount) },
-            { name: "Sessions", value: formatNumber(Math.max(1, Math.round((activity.playCount ?? 24000) / 45))) },
-            { name: "Plays/session", value: "45" },
-            { name: "Current streak", value: "9 days" },
-            { name: "Year", value: "2026" },
+            { name: "Active days", value: act ? formatNumber(act.activeDays) : "128" },
+            { name: "Total plays", value: act ? formatNumber(act.totalPlays) : formatNumber(activity.playCount) },
+            { name: "Sessions", value: act ? formatNumber(act.sessions) : formatNumber(Math.max(1, Math.round((activity.playCount ?? 24000) / 45))) },
+            { name: "Plays/session", value: act ? formatNumber(act.playsPerSession) : "45" },
+            { name: "Current streak", value: act ? `${act.currentStreak} days` : "9 days" },
+            { name: "Year", value: act ? String(act.year) : "2026" },
           ]} />
           <Lead>Playstyle</Lead>
           <div className="flex flex-wrap items-center gap-1.5 text-[12px]" style={{ color: D.text }}>
-            <span>Stream <b style={{ color: D.white }}>42%</b></span> <Dot />
-            <span>Jack <b style={{ color: D.white }}>21%</b></span> <Dot />
-            <span>LN <b style={{ color: D.white }}>18%</b></span> <Dot />
-            <span>Chordjack <b style={{ color: D.white }}>11%</b></span>
+            {activityPatterns.flatMap((p, i) => {
+              const node = <span key={p.label}>{p.label} <b style={{ color: D.white }}>{p.pct}%</b></span>;
+              return i === 0 ? [node] : [<Dot key={`${p.label}-dot`} />, node];
+            })}
           </div>
           <Footer text="maniabot" />
           <Buttons items={["Activity"]} />
@@ -722,35 +867,34 @@ function buildCommands(sample: ShowcaseSample): Command[] {
       blurb: "Track pp and accuracy goals and how close each one is.",
       render: () => (
         <Embed accent={PINK}>
-          <EmbedAuthor name={goals.username} userId={userIdForAvatar(goals)} />
+          <EmbedAuthor name={authorName(pGoals, goals)} userId={authorAvatar(pGoals, goals)} />
           <Lead>Open goals</Lead>
           <div className="space-y-1 text-[12px]" style={{ color: D.text }}>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span style={{ color: D.muted }}>-</span> <span>Reach <b style={{ color: D.white }}>{formatPp(goalTarget)}</b></span> <span style={{ color: D.muted }}>({formatPp(goals.pp)}, {goalPercent}%)</span>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span style={{ color: D.muted }}>-</span> <span><b style={{ color: D.white }}>99.00%</b> on <span style={{ color: D.link }}>Blue Zenith [4K Another]</span></span> <span style={{ color: D.muted }}>(best 98.20%, 80%)</span>
-            </div>
+            {goalsOpen.map((g, i) => (
+              <div key={i} className="flex flex-wrap items-center gap-1.5">
+                <span style={{ color: D.muted }}>-</span> <span style={{ color: D.white }}>{g.headline}</span>
+                {g.trailer ? <span style={{ color: D.muted }}>({g.trailer})</span> : null}
+              </div>
+            ))}
           </div>
-          <Footer text="2 open • 5 done • maniabot" />
+          <Footer text={goalsFooter} />
           <Buttons items={["Goals"]} />
         </Embed>
       ),
     },
     {
-      id: "vs", label: "/vs", invocation: `/vs ${commandName(rival)}`, group: "Players", accent: PINK,
+      id: "vs", label: "/vs", invocation: `/vs ${vsRightName}`, group: "Players", accent: PINK,
       blurb: "Two players head to head, winner bolded per stat. Leave the first name out to compare against yourself.",
       render: () => (
         <Embed accent={PINK}>
-          <EmbedTitle>{self.username} vs {rival.username}</EmbedTitle>
+          <EmbedTitle>{vsTitle}</EmbedTitle>
           <div className="space-y-1 text-[12px]" style={{ color: D.text }}>
-            <div>pp: <Winner active={numberWins(self.pp, rival.pp)}>{formatPp(self.pp)}</Winner> vs <Winner active={numberWins(rival.pp, self.pp)}>{formatPp(rival.pp)}</Winner></div>
-            <div>Global rank: <Winner active={rankWins(self.globalRank, rival.globalRank)}>{formatRank(self.globalRank)}</Winner> vs <Winner active={rankWins(rival.globalRank, self.globalRank)}>{formatRank(rival.globalRank)}</Winner></div>
-            <div>Country rank: <Winner active={rankWins(selfRank, rivalRank)}>{formatRank(selfRank)}</Winner> vs <Winner active={rankWins(rivalRank, selfRank)}>{formatRank(rivalRank)}</Winner></div>
-            <div>Accuracy: <Winner active={numberWins(selfAccuracy, rivalAccuracy)}>{formatAccuracy(selfAccuracy)}</Winner> vs <Winner active={numberWins(rivalAccuracy, selfAccuracy)}>{formatAccuracy(rivalAccuracy)}</Winner></div>
+            {vsRows.map((r) => (
+              <div key={r.label}>{r.label}: <Winner active={r.aWins}>{r.a}</Winner> vs <Winner active={r.bWins}>{r.b}</Winner></div>
+            ))}
           </div>
           <Footer text="maniabot" />
-          <Buttons items={[self.username, rival.username]} />
+          <Buttons items={[vsLeftName, vsRightName]} />
         </Embed>
       ),
     },
@@ -759,33 +903,36 @@ function buildCommands(sample: ShowcaseSample): Command[] {
       blurb: "Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else.",
       render: () => (
         <Embed accent={GOLD}>
-          <EmbedAuthor name={pb.username} userId={userIdForAvatar(pb)} />
-          <EmbedTitle>Blue Zenith [4K Black Another]</EmbedTitle>
+          <EmbedAuthor name={authorName(pProfile, pb)} userId={authorAvatar(pProfile, pb)} />
+          <EmbedTitle>{pbView.title}</EmbedTitle>
           <div className="flex items-center gap-2 text-[12px]">
-            <GradeImg grade="X" size={20} />
-            <ModBadge mod="DT" size={0.5} />
-            <span style={{ color: D.muted }}>99.4%</span>
-            <span style={{ color: D.muted }}>1,532x</span>
-            <b style={{ color: D.white }}>{playPp(pb, 13000)}</b>
+            <GradeImg grade={pbView.grade} size={20} />
+            {pbView.mods.length ? pbView.mods.map((m) => <ModBadge key={m} mod={m} size={0.5} />) : <span className="text-[9px]" style={{ color: D.muted }}>nomod</span>}
+            <span style={{ color: D.muted }}>{pbView.acc}</span>
+            <span style={{ color: D.muted }}>{pbView.combo}</span>
+            <b style={{ color: D.white }}>{pbView.pp}</b>
           </div>
           <Footer text="maniabot" />
-          <Buttons items={["Beatmap", pb.username]} />
+          <Buttons items={["Beatmap", pProfile?.username ?? pb.username]} />
         </Embed>
       ),
     },
     {
-      id: "farm", label: "/farm", invocation: `/farm ${commandName(farm)} 4k`, group: "Players", accent: PINK,
+      id: "farm", label: "/farm", invocation: `/farm ${pFarm?.username ?? commandName(farm)} ${farmKeyMode}`, group: "Players", accent: PINK,
       blurb: "PP-gain map recommendations tuned to a player.",
       render: () => (
         <Embed accent={PINK}>
-          <EmbedAuthor name={farm.username} userId={userIdForAvatar(farm)} />
+          <EmbedAuthor name={authorName(pFarm, farm)} userId={authorAvatar(pFarm, farm)} />
           <Lead>Farm picks</Lead>
           <div className="space-y-1 pt-0.5 text-[12px]" style={{ color: D.text }}>
-            <div className="flex flex-wrap items-center gap-1.5"><span style={{ color: D.muted }}>1.</span> <span style={{ color: D.link }}>Output</span> <ModBadge mod="DT" size={0.45} /> <Dot /> <b style={{ color: D.white }}>+42pp</b></div>
-            <div className="flex flex-wrap items-center gap-1.5"><span style={{ color: D.muted }}>2.</span> <span style={{ color: D.link }}>The Sun The Moon The Star</span> <Dot /> <b style={{ color: D.white }}>+37pp</b></div>
-            <div className="flex flex-wrap items-center gap-1.5"><span style={{ color: D.muted }}>3.</span> <span style={{ color: D.link }}>Singularity</span> <ModBadge mod="HD" size={0.45} /> <Dot /> <b style={{ color: D.white }}>+31pp</b></div>
+            {farmRecs.map((r) => (
+              <div key={r.index} className="flex flex-wrap items-center gap-1.5">
+                <span style={{ color: D.muted }}>{r.index}.</span> <span style={{ color: D.link }}>{r.title}</span>{" "}
+                {r.mods.map((m) => <ModBadge key={m} mod={m} size={0.45} />)} <Dot /> <b style={{ color: D.white }}>{r.gain}</b>
+              </div>
+            ))}
           </div>
-          <Footer text="4K • maniabot" />
+          <Footer text={`${farmKeyMode.toUpperCase()} • maniabot`} />
           <Buttons items={["Farm Helper"]} />
         </Embed>
       ),
@@ -797,14 +944,8 @@ function buildCommands(sample: ShowcaseSample): Command[] {
         <Embed accent={PINK}>
           <EmbedTitle>{rankingsTitle}</EmbedTitle>
           <div className="pt-1">
-            {sample.leaderboard.map((player, index) => (
-              <RankRow
-                key={`${player.username}-${index}`}
-                rank={rankFor(player, index) ?? index + 1}
-                name={player.username}
-                userId={userIdForAvatar(player)}
-                pp={formatPp(player.pp)}
-              />
+            {rankRows.map((r, index) => (
+              <RankRow key={`${r.name}-${index}`} rank={r.rank} name={r.name} userId={r.userId} pp={r.pp} />
             ))}
           </div>
           <Footer text="Page 1 • maniabot" />
@@ -820,9 +961,13 @@ function buildCommands(sample: ShowcaseSample): Command[] {
         <Embed accent={GOLD}>
           <EmbedTitle>Recent top plays</EmbedTitle>
           <div className="space-y-1 pt-1 text-[12px]" style={{ color: D.text }}>
-            <div className="flex flex-wrap items-center gap-1.5"><b style={{ color: D.white }}>{third.username}</b> <Dot /> <span style={{ color: D.link }}>Blue Zenith</span> <ModBadge mod="DT" size={0.45} /> <Dot /> <b style={{ color: D.white }}>{playPp(third, 12000)}</b> <span style={{ color: GOLD }}>(+35)</span></div>
-            <div className="flex flex-wrap items-center gap-1.5"><b style={{ color: D.white }}>{fourth.username}</b> <Dot /> <span style={{ color: D.link }}>Aleph-0</span> <ModBadge mod="HD" size={0.45} /> <Dot /> <b style={{ color: D.white }}>{playPp(fourth, 10500)}</b></div>
-            <div className="flex flex-wrap items-center gap-1.5"><b style={{ color: D.white }}>{fifth.username}</b> <Dot /> <span style={{ color: D.link }}>Cytus II</span> <Dot /> <b style={{ color: D.white }}>{playPp(fifth, 9800)}</b></div>
+            {topRows.map((r, i) => (
+              <div key={i} className="flex flex-wrap items-center gap-1.5">
+                <b style={{ color: D.white }}>{r.username}</b> <Dot /> <span style={{ color: D.link }}>{r.title}</span>{" "}
+                {r.mods.map((m) => <ModBadge key={m} mod={m} size={0.45} />)} <Dot /> <b style={{ color: D.white }}>{r.pp}</b>
+                {r.gain ? <span style={{ color: GOLD }}>({r.gain})</span> : null}
+              </div>
+            ))}
           </div>
           <Footer text={scopeFooter} />
           <Buttons items={["Top plays"]} />
@@ -836,10 +981,7 @@ function buildCommands(sample: ShowcaseSample): Command[] {
         <Embed accent={GOLD}>
           <EmbedTitle>{latestScoresTitle}</EmbedTitle>
           <div className="pt-1">
-            <TrackerRow grade="X" player={profile.username} title="Blue Zenith" mods={["DT"]} acc="99.4%" pp={playPp(profile, 13000)} />
-            <TrackerRow grade="S" player={rival.username} title="FREEDOM DiVE" mods={["HD"]} acc="98.9%" pp={playPp(rival, 10800)} />
-            <TrackerRow grade="A" player={third.username} title="Cyber Induction" mods={[]} acc="96.2%" pp={playPp(third, 9000)} />
-            <TrackerRow grade="S" player={fourth.username} title="Aleph-0" mods={["DT"]} acc="98.1%" pp={playPp(fourth, 8300)} />
+            {trackerRows.map((t, i) => <TrackerRow key={i} grade={t.grade} player={t.player} title={t.title} mods={t.mods} acc={t.acc} pp={t.pp} />)}
           </div>
           <Footer text="Page 1 • maniabot" />
           <PageButtons />
@@ -853,9 +995,7 @@ function buildCommands(sample: ShowcaseSample): Command[] {
         <Embed accent={PINK}>
           <EmbedTitle>{mapsTitle}</EmbedTitle>
           <div className="pt-1">
-            <MapRow rank={1} title="Blue Zenith [4K Another]" stars="6.20" avg="700pp" players="12" />
-            <MapRow rank={2} title="FREEDOM DiVE [4K Another]" stars="5.90" avg="640pp" players="10" />
-            <MapRow rank={3} title="Aleph-0 [4K Ultra]" stars="6.05" avg="612pp" players="9" />
+            {mapRows.map((m) => <MapRow key={m.rank} rank={m.rank} title={m.title} stars={m.stars} avg={m.avg} players={m.players} />)}
           </div>
           <Footer text="Page 1 • maniabot" />
           <Buttons items={["All maps"]} />
@@ -868,19 +1008,20 @@ function buildCommands(sample: ShowcaseSample): Command[] {
       blurb: "Roll a random popular farm map. Defaults to the global farm board; filter by keys, status, star range or minimum pp. Reroll for another.",
       render: () => (
         <Embed accent={PINK}>
-          <EmbedTitle>xi - Blue Zenith [4K Black Another]</EmbedTitle>
+          <EmbedTitle>{rf?.title ?? "xi - Blue Zenith [4K Black Another]"}</EmbedTitle>
           <div className="text-[12px]" style={{ color: D.text }}>
-            Random farm pick. <b style={{ color: D.white }}>12</b> players farm this in {sample.countryLabel}, mostly <span style={{ color: GOLD }}>+DT</span>.
+            Random farm pick. <b style={{ color: D.white }}>{rf ? rf.players : 12}</b> players farm this in {sample.countryLabel}
+            {rfMod ? <>, mostly <span style={{ color: GOLD }}>+{rfMod}</span></> : null}.
           </div>
           <Fields items={[
-            { name: "Stars", value: <span style={{ color: GOLD }}>6.20★</span> },
-            { name: "Keys", value: "4K" },
-            { name: "BPM", value: "200" },
-            { name: "Status", value: "Ranked" },
-            { name: "Avg pp", value: <b style={{ color: D.white }}>700pp</b> },
-            { name: "Max pp", value: "850pp" },
+            { name: "Stars", value: <span style={{ color: GOLD }}>{rf ? rf.stars : "6.20"}★</span> },
+            { name: "Keys", value: rf?.keys || "4K" },
+            { name: "BPM", value: rf?.bpm ?? "200" },
+            { name: "Status", value: rf?.status ?? "Ranked" },
+            { name: "Avg pp", value: <b style={{ color: D.white }}>{rf?.avgPp ?? "700pp"}</b> },
+            { name: "Max pp", value: rf?.maxPp ?? "850pp" },
           ]} />
-          <Cover src={COVER_A} />
+          <Cover src={coverOf(rf?.cover)} />
           <Footer text={scopeFooter} />
           <RerollPill />
           <Buttons items={["Beatmap", "Farm detail"]} />
@@ -892,19 +1033,20 @@ function buildCommands(sample: ShowcaseSample): Command[] {
       blurb: "Roll a random favourited map, the same pool as the Maps random tab. Filter by keys, status, pattern or star range, then reroll for another.",
       render: () => (
         <Embed accent={PINK}>
-          <EmbedTitle>xi - Blue Zenith</EmbedTitle>
+          <EmbedTitle>{rv?.title ?? "xi - Blue Zenith"}</EmbedTitle>
           <div className="text-[12px]" style={{ color: D.text }}>
-            Random favourite pick. Favourited by <b style={{ color: D.white }}>{profile.username}</b> and <b style={{ color: D.white }}>23</b> others in {sample.countryLabel}.
+            Random favourite pick. Favourited by <b style={{ color: D.white }}>{rvPickedBy}</b>
+            {rvOthers > 0 ? <> and <b style={{ color: D.white }}>{formatNumber(rvOthers)}</b> {rvOthers === 1 ? "other" : "others"}</> : null} in {sample.countryLabel}.
           </div>
           <Fields items={[
-            { name: "Stars", value: <span style={{ color: GOLD }}>6.20★</span> },
-            { name: "Keys", value: "4K 7K" },
-            { name: "Status", value: "Loved" },
-            { name: "BPM", value: "200" },
-            { name: "Global favs", value: "4,200" },
-            { name: "Patterns", value: "Jack, Chordjack" },
+            { name: "Stars", value: <span style={{ color: GOLD }}>{rv ? rv.stars : "6.20"}★</span> },
+            { name: "Keys", value: rv?.keys || "4K 7K" },
+            { name: "Status", value: rv?.status ?? "Loved" },
+            { name: "BPM", value: rv?.bpm ?? "200" },
+            { name: "Global favs", value: rv?.globalFavs ?? "4,200" },
+            { name: "Patterns", value: rv?.patterns ?? "Jack, Chordjack" },
           ]} />
-          <Cover src={COVER_A} />
+          <Cover src={coverOf(rv?.cover)} />
           <Footer text={scopeFooter} />
           <RerollPill />
           <Buttons items={["Beatmap", "Random maps"]} />
@@ -920,13 +1062,13 @@ function buildCommands(sample: ShowcaseSample): Command[] {
             <div>
               <EmbedTitle>Dan estimate</EmbedTitle>
               <div className="mt-1 space-y-0.5 text-[12px]" style={{ color: D.text }}>
-                <div className="text-[15px] font-bold" style={{ color: D.white }}>10th Dan</div>
-                <div>Family: Jack</div>
-                <div>Confidence: 82%</div>
+                <div className="text-[15px] font-bold" style={{ color: D.white }}>{dan?.displayName ?? "10th Dan"}</div>
+                <div>Family: {dan?.family ?? "Jack"}</div>
+                <div>Confidence: {dan?.confidence ?? "82%"}</div>
               </div>
             </div>
             {/* Real dan emblem, shown as the embed thumbnail. */}
-            <img src="/images/dans/reform/10.svg" alt="" className="h-14 w-14 shrink-0 object-contain" loading="lazy" />
+            <img src={danEmblem} alt="" className="h-14 w-14 shrink-0 object-contain" loading="lazy" />
           </div>
           <Footer text="maniabot" />
           <Buttons items={["Beatmap"]} />
@@ -938,16 +1080,16 @@ function buildCommands(sample: ShowcaseSample): Command[] {
       blurb: "Beatmap card: stars, keys, status, BPM, length and dan.",
       render: () => (
         <Embed accent={PINK}>
-          <EmbedTitle>xi - Blue Zenith [4K Black Another]</EmbedTitle>
+          <EmbedTitle>{mapInfo?.title ?? "xi - Blue Zenith [4K Black Another]"}</EmbedTitle>
           <Fields items={[
-            { name: "Stars", value: <span style={{ color: GOLD }}>6.20★</span> },
-            { name: "Keys", value: "4K" },
-            { name: "Status", value: "Ranked" },
-            { name: "BPM", value: "200" },
-            { name: "Length", value: "4:18" },
-            { name: "Dan", value: "10th" },
+            { name: "Stars", value: <span style={{ color: GOLD }}>{mapInfo ? mapInfo.stars : "6.20"}★</span> },
+            { name: "Keys", value: mapInfo?.keys || "4K" },
+            { name: "Status", value: mapInfo?.status ?? "Ranked" },
+            { name: "BPM", value: mapInfo?.bpm ?? "200" },
+            { name: "Length", value: mapInfo?.length ?? "4:18" },
+            { name: "Dan", value: mapInfo?.dan ?? "10th" },
           ]} />
-          <Cover src={COVER_A} />
+          <Cover src={coverOf(mapInfo?.cover)} />
           <Footer text="maniabot" />
           <Buttons items={["Beatmap", "Farm detail"]} />
         </Embed>
@@ -960,13 +1102,13 @@ function buildCommands(sample: ShowcaseSample): Command[] {
         <Embed accent={PINK}>
           <EmbedTitle>Replay viewer</EmbedTitle>
           <div className="text-[12px]" style={{ color: D.text }}>
-            <b style={{ color: D.white }}>{replay.username}</b> on <span style={{ color: D.link }}>Blue Zenith [4K Black Another]</span>
+            <b style={{ color: D.white }}>{pProfile?.username ?? replay.username}</b> on <span style={{ color: D.link }}>{pbView.title}</span>
           </div>
           <div className="flex items-center gap-2 text-[12px]">
-            <GradeImg grade="X" size={20} />
-            <ModBadge mod="DT" size={0.5} />
-            <span style={{ color: D.muted }}>99.4%</span>
-            <b style={{ color: D.white }}>{playPp(replay, 13000)}</b>
+            <GradeImg grade={pbView.grade} size={20} />
+            {pbView.mods.length ? pbView.mods.map((m) => <ModBadge key={m} mod={m} size={0.5} />) : <span className="text-[9px]" style={{ color: D.muted }}>nomod</span>}
+            <span style={{ color: D.muted }}>{pbView.acc}</span>
+            <b style={{ color: D.white }}>{pbView.pp}</b>
           </div>
           <Footer text="maniabot" />
           <Buttons items={["Watch replay"]} />
@@ -980,12 +1122,12 @@ function buildCommands(sample: ShowcaseSample): Command[] {
         <Embed accent={GREEN}>
           <EmbedTitle>New farm map</EmbedTitle>
           <div className="text-[12px]" style={{ color: D.text }}>
-            <span style={{ color: D.link }}>xi - Blue Zenith [4K Black Another]</span>
+            <span style={{ color: D.link }}>{feedNew?.title ?? "xi - Blue Zenith [4K Black Another]"}</span>
           </div>
           <div className="flex flex-wrap items-center gap-1.5 text-[12px]" style={{ color: D.muted }}>
-            <span>4K</span> <Dot /> <span style={{ color: GOLD }}>6.20★</span> <Dot /> <span>ranked 2026-06-20</span>
+            <span>{feedNew?.keys || "4K"}</span> <Dot /> <span style={{ color: GOLD }}>{feedNew ? feedNew.stars : "6.20"}★</span> <Dot /> <span>ranked 2026-06-20</span>
           </div>
-          <Cover src={COVER_A} />
+          <Cover src={coverOf(feedNew?.cover)} />
           <Footer text="maniabot" />
           <Buttons items={["Beatmap", "Maps"]} />
         </Embed>
@@ -996,21 +1138,21 @@ function buildCommands(sample: ShowcaseSample): Command[] {
       blurb: "When someone lands a new top play, it drops in your channel automatically.",
       render: () => (
         <Embed accent={GOLD}>
-          <EmbedAuthor name={feed.username} userId={userIdForAvatar(feed)} />
+          <EmbedAuthor name={feedTop?.username ?? feed.username} userId={feedTop?.userId ?? userIdForAvatar(feed)} />
           <EmbedTitle>New top play</EmbedTitle>
           <div className="text-[12px]" style={{ color: D.text }}>
-            <span style={{ color: D.link }}>UNDEAD CORPORATION - Everything Will Freeze [4K Black Another]</span>
+            <span style={{ color: D.link }}>{feedTop?.title ?? "UNDEAD CORPORATION - Everything Will Freeze [4K Black Another]"}</span>
           </div>
           <div className="flex items-center gap-2 text-[12px]">
-            <GradeImg grade="X" size={20} />
-            <ModBadge mod="HD" size={0.5} /><ModBadge mod="DT" size={0.5} />
-            <span style={{ color: D.muted }}>99.21%</span>
-            <b style={{ color: D.white }}>{playPp(feed, 12000)}</b>
-            <span style={{ color: GOLD }}>(+35pp)</span>
+            <GradeImg grade={feedTop?.grade ?? "X"} size={20} />
+            {(feedTop ? feedTop.mods : ["HD", "DT"]).map((m) => <ModBadge key={m} mod={m} size={0.5} />)}
+            <span style={{ color: D.muted }}>{feedTop?.acc ?? "99.21%"}</span>
+            <b style={{ color: D.white }}>{feedTop?.pp ?? playPp(feed, 12000)}</b>
+            {(feedTop ? feedTop.gain : "+35pp") ? <span style={{ color: GOLD }}>({feedTop ? feedTop.gain : "+35pp"})</span> : null}
           </div>
-          <Cover src={COVER_A} />
+          <Cover src={coverOf(feedTop?.cover)} />
           <Footer text={scopeFooter} />
-          <Buttons items={["Beatmap", feed.username]} />
+          <Buttons items={["Beatmap", feedTop?.username ?? feed.username]} />
         </Embed>
       ),
     },
@@ -1039,9 +1181,34 @@ export function CommandShowcase() {
   const [liveRankings, setLiveRankings] = useState<LiveGlobalRankingEntry[] | null>(null);
   const [selectedId, setSelectedId] = useState(DEFAULT_COMMAND_ID);
   const [sampleSeed, setSampleSeed] = useState("");
+  const [fixture, setFixture] = useState<DiscordShowcase | null>(null);
 
   useEffect(() => {
     setSampleSeed(`${selectedCountry}:${Date.now()}:${Math.random()}`);
+  }, [selectedCountry]);
+
+  // Real captured data for the previews. Cached in localStorage so it isn't
+  // refetched every visit: a fresh entry is used as-is, a stale one is shown
+  // while a background refresh runs, and a miss falls back to the synthetic mock
+  // until the fetch resolves.
+  useEffect(() => {
+    let cancelled = false;
+    const cacheKey = discordShowcaseCacheKey(selectedCountry);
+    const cached = readDiscordShowcaseCache(cacheKey);
+    setFixture(cached?.data ?? null);
+    if (cached && !isCacheStale(cached.fetchedAt, CLIENT_CACHE_TTL.discordShowcase)) {
+      return () => { cancelled = true; };
+    }
+    fetchDiscordShowcase(selectedCountry)
+      .then((data) => {
+        if (cancelled) return;
+        setFixture(data);
+        writeDiscordShowcaseCache(cacheKey, data);
+      })
+      .catch(() => {
+        // Backend offline / not configured: the synthetic mock keeps the page usable.
+      });
+    return () => { cancelled = true; };
   }, [selectedCountry]);
 
   useEffect(() => {
@@ -1085,7 +1252,10 @@ export function CommandShowcase() {
     ),
     [auth.viewer, cachedRankings, liveRankings, sampleSeed, selectedCountry, selectedIsGlobal],
   );
-  const commands = useMemo(() => buildCommands(sample), [sample]);
+  // Only treat the fixture as live data when it actually matches the selected
+  // country (guards the brief window after switching country, or a stray refresh).
+  const activeFixture = fixture && fixture.country === selectedCountry.toUpperCase() ? fixture : null;
+  const commands = useMemo(() => buildCommands(sample, activeFixture), [sample, activeFixture]);
   const selected = commands.find((c) => c.id === selectedId) ?? commands[0];
 
   return (

@@ -55,7 +55,7 @@ import { ScoreRowSkeleton, Skeleton } from "../../components/ui/LoadingSkeleton"
 import { UsernameText } from "../../components/ui/UsernameText";
 import { ManiaCard3DPanel as ManiaCardPanel } from "../../components/player/maniacard3d/ManiaCard3DPanel";
 import type { InsightScoreSnapshot, OsuCovers, OsuManiaVariant, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
-import { calculateUserProfileInsights } from "../../lib/profile-insights";
+import { buildPpDistribution, calculateUserProfileInsights } from "../../lib/profile-insights";
 import { readPlayerShell } from "../../lib/player-shell-cache";
 import { pageSeo, playerOgImagePath } from "../../lib/seo";
 import { getRankTierClass } from "../../lib/rankings";
@@ -973,12 +973,35 @@ export function PlayerProfilePage({
   const [ppDistributionMode, setPpDistributionModeState] = useState<PpDistributionMode>(() =>
     readPpDistributionModePreference(),
   );
+  const [ppKeyFilter, setPpKeyFilter] = useState<KeyFilter>("all");
   const [recentHasMore, setRecentHasMore] = useState(false);
   const [bestVisibleCount, setBestVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
   const [recentVisibleCount, setRecentVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
   const tabsRailRef = useRef<HTMLDivElement | null>(null);
   const loadedProfileKeyRef = useRef<string | null>(null);
-  const ppCumulativeDistribution = useMemo(() => buildPpCumulativeDistribution(best), [best]);
+  const ppManiaBestScores = useMemo(
+    () => best.filter((score) => score.beatmap?.mode === "mania"),
+    [best],
+  );
+  const ppAvailableKeyModes = useMemo(
+    () => getAvailableKeyModes(ppManiaBestScores),
+    [ppManiaBestScores],
+  );
+  const ppKeyFilterActive: KeyFilter =
+    ppKeyFilter !== "all" && !ppAvailableKeyModes.includes(ppKeyFilter) ? "all" : ppKeyFilter;
+  const ppModalDistribution = useMemo(() => {
+    const scoped = ppManiaBestScores.filter((score) => matchesKeyFilter(score, ppKeyFilterActive));
+    const ppValues = scoped
+      .map((score) => score.pp)
+      .filter((pp): pp is number => pp != null && pp > 0)
+      .sort((a, b) => b - a);
+    return {
+      bands: buildPpDistribution(ppValues),
+      cumulative: buildPpCumulativeDistribution(scoped),
+      top: ppValues[0] ?? null,
+      bottom: ppValues.length ? ppValues[ppValues.length - 1] : null,
+    };
+  }, [ppManiaBestScores, ppKeyFilterActive]);
   const setPpDistributionMode = useCallback((mode: PpDistributionMode) => {
     setPpDistributionModeState(mode);
     writePpDistributionModePreference(mode);
@@ -1810,8 +1833,11 @@ export function PlayerProfilePage({
               </button>
               <div className="relative z-10 max-h-[85vh] overflow-y-auto p-5 [scrollbar-gutter:stable]">
                 {(() => {
-                  const ppDistribution = profileInsights.ppDistribution;
-                  const ppTotal = ppDistribution[0]?.total ?? profileInsights.sampleSize;
+                  const ppDistribution = ppModalDistribution.bands;
+                  const ppCumulativeDistribution = ppModalDistribution.cumulative;
+                  const ppTotal = ppDistribution[0]?.total ?? 0;
+                  const ppTop = ppModalDistribution.top ?? profileInsights.ppRange.top;
+                  const ppBottom = ppModalDistribution.bottom ?? profileInsights.ppRange.bottom;
                   const showCumulative = ppDistributionMode === "cumulative" && ppCumulativeDistribution.length > 0;
                   const ppRows = showCumulative
                     ? ppCumulativeDistribution.map((entry, index) => ({
@@ -1859,11 +1885,21 @@ export function PlayerProfilePage({
                         </div>
                       </div>
 
+                      {ppAvailableKeyModes.length > 1 && (
+                        <div className="mt-3">
+                          <KeyModeControl
+                            availableKeyModes={ppAvailableKeyModes}
+                            keyFilter={ppKeyFilterActive}
+                            onChangeKeyFilter={setPpKeyFilter}
+                          />
+                        </div>
+                      )}
+
                       <div className="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                        <span className="text-2xl font-bold text-osu-pink-light tabular-nums">{Math.round(profileInsights.ppRange.top)}</span>
+                        <span className="text-2xl font-bold text-osu-pink-light tabular-nums">{Math.round(ppTop)}</span>
                         <span className="text-[11px] text-osu-f1">top pp</span>
                         <span className="text-osu-f1/40">/</span>
-                        <span className="text-xl font-bold text-white tabular-nums">{Math.round(profileInsights.ppRange.bottom)}</span>
+                        <span className="text-xl font-bold text-white tabular-nums">{Math.round(ppBottom)}</span>
                         <span className="text-[11px] text-osu-f1">bottom pp</span>
                       </div>
 

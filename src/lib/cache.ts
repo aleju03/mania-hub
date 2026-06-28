@@ -7,6 +7,7 @@ export const CLIENT_CACHE_TTL = {
   scoresFeed: 60 * 1000,
   mapsData: 7 * 24 * 60 * 60 * 1000,
   snipes: 6 * 60 * 60 * 1000,
+  discordShowcase: 60 * 60 * 1000,
 } as const;
 
 export function isCacheStale(fetchedAt: number | null | undefined, ttl: number): boolean {
