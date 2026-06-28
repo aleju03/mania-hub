@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import {
   acquireCacheLock,
-  fetchBeatmapFile,
+  fetchBeatmapFileWithMeta,
   fetchWithCacheLock,
   osuFetch,
   osuFetchBinary,
@@ -260,8 +260,7 @@ export const getBeatmapFile = createServerFn({ method: "GET" })
   })
   .handler(async ({ data }: { data: { beatmapId: number; beatmapsetId: number | null } }) => {
     noStore();
-    const osuFile = await fetchBeatmapFile(data.beatmapId, data.beatmapsetId);
-    return { content: osuFile };
+    return await fetchBeatmapFileWithMeta(data.beatmapId, data.beatmapsetId);
   });
 
 export const getScore = createServerFn({ method: "GET" })

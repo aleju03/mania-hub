@@ -90,6 +90,7 @@ interface ReplaySearch {
 
 type PlayerScoreGroups = { best: OsuScore[]; firsts: OsuScore[]; pinned: OsuScore[]; recent: OsuScore[] };
 type PlayerScoreGroupLoading = Record<keyof PlayerScoreGroups, boolean>;
+type ReplayBeatmapFileStatus = "unknown" | "cached" | "fetched" | "unavailable";
 
 type FullscreenDocument = Document & {
   webkitFullscreenElement?: Element | null;
@@ -390,13 +391,17 @@ function shouldUseServerReplayVideoRender(): boolean {
   return import.meta.env.VITE_REPLAY_VIDEO_SERVER_RENDER === "1";
 }
 
-function getReplayLoadingCopy(step: ReplayLoadingStep, elapsedMs: number): { title: string; detail: string } {
+function getReplayLoadingCopy(step: ReplayLoadingStep, elapsedMs: number, beatmapFileStatus: ReplayBeatmapFileStatus): { title: string; detail: string } {
   const elapsedSeconds = Math.floor(elapsedMs / 1000);
   const elapsedLabel = elapsedSeconds >= 4 ? ` (${elapsedSeconds}s)` : "";
   const slowDetail = elapsedMs >= 12_000
-    ? "Still waiting on osu! replay data. First-time downloads are slower, but cached replays open faster next time."
+    ? beatmapFileStatus === "cached"
+      ? "Still waiting on replay data. The chart file is already cached."
+      : "Still waiting on replay data. First-time loads are slower, but cached files open faster next time."
     : elapsedMs >= 6_000
-      ? "Still working. This usually means the replay download or beatmap file is taking a moment."
+      ? beatmapFileStatus === "cached"
+        ? "Still working. The chart file came from cache; the replay data is taking a moment."
+        : "Still working. This usually means replay data or the beatmap file is taking a moment."
       : null;
 
   if (slowDetail) {
@@ -413,9 +418,27 @@ function getReplayLoadingCopy(step: ReplayLoadingStep, elapsedMs: number): { tit
         detail: "Confirming replay availability and key count.",
       };
     case "assets":
+      if (beatmapFileStatus === "cached") {
+        return {
+          title: `Loading replay and cached beatmap${elapsedLabel}`,
+          detail: "Reading the chart from cache while the replay data is parsed.",
+        };
+      }
+      if (beatmapFileStatus === "fetched") {
+        return {
+          title: `Loading replay${elapsedLabel}`,
+          detail: "The chart file is ready; parsing replay data and preparing the viewer.",
+        };
+      }
+      if (beatmapFileStatus === "unavailable") {
+        return {
+          title: `Loading replay${elapsedLabel}`,
+          detail: "Parsing replay data; the chart file is not available yet.",
+        };
+      }
       return {
-        title: `Downloading replay and beatmap${elapsedLabel}`,
-        detail: "Fetching the .osr, parsing frames, and loading the chart file.",
+        title: `Loading replay and beatmap${elapsedLabel}`,
+        detail: "Fetching the .osr, parsing frames, and checking the chart file.",
       };
     case "viewer":
       return {
@@ -423,14 +446,26 @@ function getReplayLoadingCopy(step: ReplayLoadingStep, elapsedMs: number): { tit
         detail: "Unpacking frames and getting the renderer ready.",
       };
     case "upload":
+      if (beatmapFileStatus === "cached") {
+        return {
+          title: `Reading replay and cached beatmap${elapsedLabel}`,
+          detail: "Parsing the upload and reading the chart file from cache.",
+        };
+      }
       return {
         title: `Reading replay file${elapsedLabel}`,
         detail: "Parsing the upload and matching it to a beatmap.",
       };
     case "shared-upload":
+      if (beatmapFileStatus === "cached") {
+        return {
+          title: `Loading shared replay and cached beatmap${elapsedLabel}`,
+          detail: "Opening the shared replay and reading the chart file from cache.",
+        };
+      }
       return {
         title: `Loading shared replay${elapsedLabel}`,
-        detail: "Downloading the shared .osr and matching it to a beatmap.",
+        detail: "Opening the shared replay and matching it to a beatmap.",
       };
   }
 }
@@ -595,6 +630,7 @@ function ReplayPage() {
   const [loadedUploadId, setLoadedUploadId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [replayLoadingStep, setReplayLoadingStep] = useState<ReplayLoadingStep>("score");
+  const [replayBeatmapFileStatus, setReplayBeatmapFileStatus] = useState<ReplayBeatmapFileStatus>("unknown");
   const [replayLoadingStartedAt, setReplayLoadingStartedAt] = useState(0);
   const [replayLoadingElapsedMs, setReplayLoadingElapsedMs] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -645,7 +681,7 @@ function ReplayPage() {
   );
   const normalizedPlayerParam = normalizeReplayPlayerParam(playerParam);
   const playerSearchScoreId = parseReplayScoreInput(playerSearchQuery);
-  const replayLoadingCopy = getReplayLoadingCopy(replayLoadingStep, replayLoadingElapsedMs);
+  const replayLoadingCopy = getReplayLoadingCopy(replayLoadingStep, replayLoadingElapsedMs, replayBeatmapFileStatus);
 
   useEffect(() => {
     if (!loading || replayLoadingStartedAt <= 0) {
@@ -703,6 +739,7 @@ function ReplayPage() {
   const loadReplay = useCallback(async (sid: number, initialScore?: OsuScore | null) => {
     setError(null);
     setReplayLoadingStep("score");
+    setReplayBeatmapFileStatus("unknown");
     setReplayLoadingStartedAt(Date.now());
     setReplayLoadingElapsedMs(0);
     setLoading(true);
@@ -743,11 +780,23 @@ function ReplayPage() {
       // Fetch replay with the effective key count from score API, and beatmap file in parallel.
       // xK mods only apply to converted beatmaps, matching osu!lazer's ManiaKeyMod converter hook.
       const keyCount = score?.beatmap ? getEffectiveManiaKeyCount(score.beatmap, score.mods) ?? undefined : undefined;
+      if (!score?.beatmap?.id) {
+        setReplayBeatmapFileStatus("unavailable");
+      }
+      const beatmapFilePromise = score?.beatmap?.id
+        ? getBeatmapFile({ data: { beatmapId: score.beatmap.id, beatmapsetId: score.beatmapset?.id } })
+          .then((result) => {
+            setReplayBeatmapFileStatus(result.cacheStatus === "hit" ? "cached" : "fetched");
+            return result;
+          })
+          .catch(() => {
+            setReplayBeatmapFileStatus("unavailable");
+            return null;
+          })
+        : Promise.resolve(null);
       const [parsed, bmResult] = await Promise.all([
         getReplayParsed({ data: { scoreId: sid, mode: "mania", keyCount } }),
-        score?.beatmap?.id
-          ? getBeatmapFile({ data: { beatmapId: score.beatmap.id, beatmapsetId: score.beatmapset?.id } }).catch(() => null)
-          : Promise.resolve(null),
+        beatmapFilePromise,
       ]);
 
       setReplayLoadingStep("viewer");
@@ -984,8 +1033,17 @@ function ReplayPage() {
     const beatmapsetId = beatmapMeta.beatmapset_id ?? beatmapMeta.beatmapset?.id;
     const fallbackScoreId = extractReplayScoreIdFromFilename(options.filename);
     const scoreId = uploaded.scoreId ?? fallbackScoreId;
+    const beatmapFilePromise = getBeatmapFile({ data: { beatmapId: beatmapMeta.id, beatmapsetId } })
+      .then((result) => {
+        setReplayBeatmapFileStatus(result.cacheStatus === "hit" ? "cached" : "fetched");
+        return result;
+      })
+      .catch((error) => {
+        setReplayBeatmapFileStatus("unavailable");
+        throw error;
+      });
     const [bmResult, uploadedScore] = await Promise.all([
-      getBeatmapFile({ data: { beatmapId: beatmapMeta.id, beatmapsetId } }),
+      beatmapFilePromise,
       scoreId
         ? getScore({ data: { scoreId, mode: "mania" } }).catch(() => null)
         : Promise.resolve(null),
@@ -1014,6 +1072,7 @@ function ReplayPage() {
   const loadSharedUploadedReplay = useCallback(async (id: string) => {
     setError(null);
     setReplayLoadingStep("shared-upload");
+    setReplayBeatmapFileStatus("unknown");
     setReplayLoadingStartedAt(Date.now());
     setReplayLoadingElapsedMs(0);
     setLoading(true);
@@ -1054,6 +1113,7 @@ function ReplayPage() {
     }
 
     setReplayLoadingStep("upload");
+    setReplayBeatmapFileStatus("unknown");
     setReplayLoadingStartedAt(Date.now());
     setReplayLoadingElapsedMs(0);
     setLoading(true);
@@ -1354,6 +1414,9 @@ function ReplayPage() {
     setScoreInfo(null);
     setUploadedReplayMods([]);
     setUploadedBeatmapsetId(undefined);
+    setUploadedReplayShareUrl(null);
+    setLoadedUploadId(null);
+    setReplayBeatmapFileStatus("unknown");
 
     const backNavigation = getReplayBackNavigation({ canGoBack, playerParam, tab: tab === "beatmap" || tab === "upload" ? tab : undefined });
     if (backNavigation.type === "history") {
@@ -1409,6 +1472,7 @@ function ReplayPage() {
                   setBeatmapSearchLoading(false);
                   setUploadedReplayShareUrl(null);
                   setLoadedUploadId(null);
+                  setReplayBeatmapFileStatus("unknown");
                   clearTimeout(beatmapTimerRef.current);
                   beatmapSearchRequestRef.current += 1;
                   setError(null);
