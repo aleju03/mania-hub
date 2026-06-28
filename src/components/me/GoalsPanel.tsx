@@ -356,10 +356,15 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
     if (celebrationTimer.current) clearTimeout(celebrationTimer.current);
   }, []);
 
+  // Goals deleted this session, so a concurrent reload (focus, the goal_completed SSE, or a load
+  // that was already in flight when the trash was clicked) can't resurrect a row we just removed.
+  // Deleted ids are unique uuids and never reissued, so leaving them in the set is harmless.
+  const pendingDeletes = useRef<Set<string>>(new Set());
+
   const load = useCallback(async () => {
     try {
       const result = await fetchMyGoals();
-      setGoals(result.goals);
+      setGoals(result.goals.filter((goal) => !pendingDeletes.current.has(goal.id)));
     } catch {
       setGoals([]);
     } finally {
@@ -593,10 +598,18 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
 
   const remove = useCallback(
     async (id: string) => {
+      pendingDeletes.current.add(id);
       setGoals((prev) => prev.filter((goal) => goal.id !== id));
+      let ok = false;
       try {
-        await deleteGoal({ data: { id } });
+        ok = (await deleteGoal({ data: { id } })).ok;
       } catch {
+        ok = false;
+      }
+      // Backend rejected the delete (or the request failed): drop the guard and resync so the goal
+      // comes back rather than silently lingering only in the database.
+      if (!ok) {
+        pendingDeletes.current.delete(id);
         void load();
       }
     },
