@@ -608,18 +608,6 @@ export function MyDataPanel() {
                 </InsightCard>
               ) : null}
 
-              {summary && summary.keyStats.length > 0 ? (
-                <InsightCard title="Per keymode" accent="#7fb89a">
-                  <div className="space-y-1.5">
-                    {summary.keyStats.map((k) => (
-                      <div key={k.keyCount} className="flex items-center justify-between text-[12px]">
-                        <span className="font-semibold text-osu-l2">{KEY_LABEL[k.keyCount] ?? `${k.keyCount}K`}</span>
-                        <span className="text-osu-f1 tabular-nums">{Math.round(k.weightedPp).toLocaleString()}pp</span>
-                      </div>
-                    ))}
-                  </div>
-                </InsightCard>
-              ) : null}
             </div>
           </div>
 
