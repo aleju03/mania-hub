@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "node --env-file-if-exists=.env --import tsx src/server.ts",
+    "dev:watch": "node --watch --env-file-if-exists=.env --import tsx src/server.ts",
     "start": "node dist/server.js",
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",

@@ -1196,10 +1196,13 @@ export function CommandShowcase() {
     const cacheKey = discordShowcaseCacheKey(selectedCountry);
     const cached = readDiscordShowcaseCache(cacheKey);
     setFixture(cached?.data ?? null);
-    if (cached && !isCacheStale(cached.fetchedAt, CLIENT_CACHE_TTL.discordShowcase)) {
+    // In dev, always refetch with fresh=1 so showcase edits show up on a reload:
+    // it skips the localStorage short-circuit AND busts the backend's hour-long
+    // in-memory cache. Prod keeps the fresh cached entry as-is (no extra fetch).
+    if (!import.meta.env.DEV && cached && !isCacheStale(cached.fetchedAt, CLIENT_CACHE_TTL.discordShowcase)) {
       return () => { cancelled = true; };
     }
-    fetchDiscordShowcase(selectedCountry)
+    fetchDiscordShowcase(selectedCountry, import.meta.env.DEV ? { fresh: true } : undefined)
       .then((data) => {
         if (cancelled) return;
         setFixture(data);

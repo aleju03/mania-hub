@@ -233,6 +233,30 @@ function bestCover(covers: Record<string, string | undefined> | undefined): stri
   return covers["cover@2x"] ?? covers.cover ?? covers["card@2x"] ?? covers.card ?? covers.list ?? null;
 }
 
+// Stable 32-bit hash (FNV-1a) used to pick a deterministic but scope-varied entry
+// from a popularity-ranked pool.
+function hashSeed(seed: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h;
+}
+
+// /randomfarm and /randomfav are reroll commands, so previewing the single
+// most-farmed / most-favourited map reads as "the one map everyone knows" rather
+// than a real roll. Pick a deeper entry instead: skip the top few universally
+// known hits and land somewhere in the popular-but-not-obvious band. Deterministic
+// per scope (stable cached preview) yet varied across countries via the seed, and
+// it falls back to the deepest entry available when the pool is short.
+function pickDeeperEntry<T>(ranked: T[], seed: string, skip: number, span: number): T | null {
+  if (ranked.length === 0) return null;
+  if (ranked.length <= skip) return ranked[ranked.length - 1];
+  const window = Math.min(span, ranked.length - skip);
+  return ranked[skip + (hashSeed(seed) % window)];
+}
+
 const PATTERN_LABELS: Record<string, string> = {
   stream: "Stream", jumpstream: "Jumpstream", handstream: "Handstream", jacks: "Jacks",
   jack: "Jacks", chordjack: "Chordjack", chordjacks: "Chordjacks", stamina: "Stamina",
@@ -470,22 +494,28 @@ async function buildShowcase(
     players: NUMBER.format(m.playerCount),
   }));
 
-  // A representative beatmap for /map, /dan, /randomfarm: prefer a 4K farmed map
-  // so the dan estimate (ranked 4K only) actually resolves.
+  // A representative beatmap for /map + /dan: prefer a 4K farmed map so the dan
+  // estimate (ranked 4K only) actually resolves against a cached, popular map.
   const focusFarmed = farmed.find((m) => Math.round(m.cs) === 4) ?? farmed[0] ?? null;
 
-  const randomFarm: ShowcaseRandomFarm | null = focusFarmed
+  // /randomfarm shows a deeper 4K pick than focusFarmed so the preview reads as a
+  // genuine roll instead of the single most-farmed map. Still 4K to match the
+  // keys:4k filter on the example, with the popular focus map as a last resort.
+  const farmed4k = farmed.filter((m) => Math.round(m.cs) === 4);
+  const rollFarmed = pickDeeperEntry(farmed4k.length ? farmed4k : farmed, `farm:${country}`, 8, 18) ?? focusFarmed;
+
+  const randomFarm: ShowcaseRandomFarm | null = rollFarmed
     ? {
-      title: `${focusFarmed.artist} - ${focusFarmed.title} [${focusFarmed.version}]`,
-      stars: focusFarmed.difficultyRating != null ? focusFarmed.difficultyRating.toFixed(2) : "-",
-      keys: keyLabel(focusFarmed.cs),
-      bpm: focusFarmed.bpm != null ? NUMBER.format(Math.round(focusFarmed.bpm)) : "-",
-      status: focusFarmed.status ? titleCase(focusFarmed.status) : "-",
-      avgPp: fmtScorePp(focusFarmed.avgPp),
-      maxPp: fmtScorePp(focusFarmed.maxPp),
-      players: focusFarmed.playerCount,
-      dominantMod: focusFarmed.dominantMod ?? null,
-      cover: bestCover(focusFarmed.covers),
+      title: `${rollFarmed.artist} - ${rollFarmed.title} [${rollFarmed.version}]`,
+      stars: rollFarmed.difficultyRating != null ? rollFarmed.difficultyRating.toFixed(2) : "-",
+      keys: keyLabel(rollFarmed.cs),
+      bpm: rollFarmed.bpm != null ? NUMBER.format(Math.round(rollFarmed.bpm)) : "-",
+      status: rollFarmed.status ? titleCase(rollFarmed.status) : "-",
+      avgPp: fmtScorePp(rollFarmed.avgPp),
+      maxPp: fmtScorePp(rollFarmed.maxPp),
+      players: rollFarmed.playerCount,
+      dominantMod: rollFarmed.dominantMod ?? null,
+      cover: bestCover(rollFarmed.covers),
     }
     : null;
 
@@ -678,16 +708,14 @@ async function buildRandomFav(db: Db, queue: JobQueue, country: string): Promise
     }
   }
   if (favCounts.size === 0) return null;
-  // Deterministic pick (the most-favourited set in scope) so the cached preview
-  // is stable; the real command rerolls but the showcase wants a steady example.
-  let pickSetId = -1;
-  let bestCount = 0;
-  for (const [setId, count] of favCounts) {
-    if (count > bestCount) {
-      bestCount = count;
-      pickSetId = setId;
-    }
-  }
+  // Deterministic pick so the cached preview is stable, but a deeper one than the
+  // single most-favourited set (which is always the obvious classic) so the
+  // example reads as a real reroll. Rank by fav count desc, setId as a stable
+  // tiebreak, then take a popular-but-not-#1 entry.
+  const rankedFavs = [...favCounts.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]);
+  const picked = pickDeeperEntry(rankedFavs, `fav:${country}`, 8, 18) ?? rankedFavs[0];
+  const pickSetId = picked[0];
+  const pickCount = picked[1];
   // The random pool ships lean (no covers/patterns); fetch the full set for art
   // and pattern tags, exactly like the /randomfav handler, falling back to lean.
   const lean = data.beatmapsetsPool[pickSetId];
@@ -709,7 +737,7 @@ async function buildRandomFav(db: Db, queue: JobQueue, country: string): Promise
     globalFavs: NUMBER.format(set.globalFavouriteCount ?? 0),
     patterns: patterns.length ? patterns.join(", ") : "-",
     pickedBy: firstFavBy.get(pickSetId) ?? "a player",
-    others: Math.max(0, bestCount - 1),
+    others: Math.max(0, pickCount - 1),
     cover: bestCover(set.covers),
   };
 }
