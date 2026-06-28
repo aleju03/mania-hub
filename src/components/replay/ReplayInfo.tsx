@@ -71,7 +71,7 @@ export function ReplayInfo({ replay, score, beatmap, fallbackBeatmapsetId, share
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <div className="relative flex items-center gap-2">
-              <BeatmapBanner coverUrl={beatmapCoverUrl} fade={BEATMAP_BANNER_FADE_COMPACT} />
+              <BeatmapBanner coverUrl={beatmapCoverUrl} fade={BEATMAP_BANNER_FADE_COMPACT} className="absolute -top-3 bottom-0 left-0 right-0" />
               <div className="relative -mt-3 -ml-3 pt-3 pl-3 pb-1.5 pr-12 min-w-0">
                 <PlayerBanner coverUrl={playerCoverUrl} />
                 <div className="relative flex items-center gap-2 min-w-0">
