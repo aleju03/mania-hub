@@ -209,7 +209,7 @@ interface ProfileUser {
 
 export function playerEmbed(
   snapshot: { user: Record<string, unknown>; bestScores?: OscScore[]; projection?: { projectedPp?: number | null; basePp?: number | null } },
-  siteOrigin: string,
+  _siteOrigin: string,
 ): DiscordMessageBody {
   const user = snapshot.user as unknown as ProfileUser;
   const stats = user.statistics ?? {};
@@ -255,7 +255,6 @@ export function playerEmbed(
   return {
     embeds: [embed],
     components: linkButtonRow([
-      { label: "Mania Hub", url: siteProfileUrl(siteOrigin, username) },
       { label: "osu! profile", url: userId ? osuProfileUrl(userId) : "" },
     ]),
   };
@@ -298,7 +297,7 @@ export function recentScoresEmbed(
   username: string,
   userId: number,
   scores: OscScore[],
-  siteOrigin: string,
+  _siteOrigin: string,
 ): DiscordMessageBody {
   const list = scores.slice(0, 5);
   let description = "No recent mania plays found.";
@@ -322,7 +321,7 @@ export function recentScoresEmbed(
   };
   return {
     embeds: [embed],
-    components: linkButtonRow([{ label: "Mania Hub", url: siteProfileUrl(siteOrigin, username) }]),
+    components: [],
   };
 }
 
@@ -648,7 +647,6 @@ export function helpEmbed(siteOrigin: string, category = "start"): DiscordMessag
         type: 1,
         components: [
           { type: 2, style: 1, label: "Link your osu! account", custom_id: "mh|x|link" },
-          { type: 2, style: 5, label: "Open Mania Hub", url: siteOrigin },
           { type: 2, style: 5, label: "Privacy", url: `${siteOrigin}/privacy` },
         ],
       },

@@ -910,7 +910,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
           <Lead>Top plays</Lead>
           {playerTop.map((s, i) => <ScoreLine key={i} {...s} />)}
           <Footer text="maniabot" />
-          <Buttons items={["Mania Hub", "osu! profile"]} />
+          <Buttons items={["osu! profile"]} />
         </Embed>
       ),
     },
