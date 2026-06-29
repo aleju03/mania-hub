@@ -339,6 +339,7 @@ function normalizeAdminPath(input: unknown): string {
     "/api/admin/osc-smoke",
     "/api/admin/run-osc-backfill",
     "/api/admin/discord/register-commands",
+    "/api/admin/discord/register-emojis",
   ]);
   if (exact.has(path)) return path;
   if (url.pathname === "/api/admin/discord/remove-subscription") {
