@@ -30,6 +30,7 @@ import {
   type DiscordInteraction,
 } from "./commands.js";
 import { COMMAND_HANDLERS, type HandlerDeps } from "./handlers.js";
+import { loadEmojiRegistry, registerEmojis, type EmojiRegistrationResult } from "./emojis.js";
 import { helpEmbed, newMapAlertEmbed, snipeEmbed, topPlayEmbed, type NewMapAlert } from "./embeds.js";
 import {
   countSubscriptions,
@@ -84,6 +85,9 @@ export interface DiscordGuildSummary {
 export interface DiscordRuntime {
   handleInteraction(req: IncomingMessage, res: ServerResponse): Promise<boolean>;
   registerCommands(): Promise<{ global: number; guild: number | null }>;
+  // Uploads the grade pill + mod icon emojis to the application so embeds can
+  // render them inline. Idempotent; pass force to re-upload after changing the art.
+  registerEmojis(force?: boolean): Promise<EmojiRegistrationResult>;
   // Which servers the bot is actually a member of (live from Discord, needs the
   // bot token). Distinct from feed subscriptions, which only cover channels that
   // opted into a feed.
@@ -345,6 +349,10 @@ export function createDiscordRuntime(opts: DiscordRuntimeOptions): DiscordRuntim
     return true;
   }
 
+  async function doRegisterEmojis(force = false): Promise<EmojiRegistrationResult> {
+    return registerEmojis(rest, opts.db, config.discordSiteOrigin, { force });
+  }
+
   async function registerCommands(): Promise<{ global: number; guild: number | null }> {
     if (!rest.hasBotToken()) {
       throw new Error("DISCORD_BOT_TOKEN is required to register commands.");
@@ -562,8 +570,11 @@ export function createDiscordRuntime(opts: DiscordRuntimeOptions): DiscordRuntim
   // the feed takes the safe path of querying per event.
   void refreshEmptyFlag();
   void refreshNewMapFlag();
+  // Load any previously-registered custom emojis so embeds can render them; until
+  // this resolves (or if none are registered) embeds use their text fallbacks.
+  void loadEmojiRegistry(opts.db);
 
-  return { handleInteraction, registerCommands, listGuilds, feedSink, status, notifySubscriptionsChanged };
+  return { handleInteraction, registerCommands, registerEmojis: doRegisterEmojis, listGuilds, feedSink, status, notifySubscriptionsChanged };
 }
 
 // Discord error codes that unambiguously mean the channel/guild no longer

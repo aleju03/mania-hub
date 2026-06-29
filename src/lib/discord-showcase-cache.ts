@@ -9,7 +9,9 @@
 
 import type { DiscordShowcase } from "./live-backend";
 
-const STORAGE_KEY = "mania-hub-discord-showcase-v1";
+// v2: payload gained detailed-score fields (combo/score/stars/hits/cover) and a
+// snipe feed example; bumping the key drops pre-overhaul cached entries.
+const STORAGE_KEY = "mania-hub-discord-showcase-v2";
 const MAX_ENTRIES = 6;
 
 interface CachedEntry {

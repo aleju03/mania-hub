@@ -1191,6 +1191,24 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     return true;
   }
+  if (url.pathname === "/api/admin/discord/register-emojis") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (!ctx.discord) {
+      sendJson(req, res, ctx, 400, { error: "discord_not_configured" });
+      return true;
+    }
+    try {
+      const force = url.searchParams.get("force") === "1";
+      const result = await ctx.discord.registerEmojis(force);
+      sendJson(req, res, ctx, 200, { ok: true, ...result });
+    } catch (error) {
+      sendJson(req, res, ctx, 200, { ok: false, error: error instanceof Error ? error.message : String(error) });
+    }
+    return true;
+  }
   if (url.pathname === "/api/admin/discord/guilds") {
     if (!isAdmin(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });

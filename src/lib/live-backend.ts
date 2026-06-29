@@ -1223,6 +1223,15 @@ async function fetchLiveJson<T>(path: string, init?: RequestInit): Promise<T> {
 // directly, and every section is nullable: a missing one falls back to the
 // page's synthetic mock rather than breaking the preview.
 
+export interface DiscordShowcaseScoreHits {
+  max: number;
+  n300: number;
+  n200: number;
+  n100: number;
+  n50: number;
+  miss: number;
+}
+
 export interface DiscordShowcaseScore {
   grade: string;
   title: string;
@@ -1232,6 +1241,28 @@ export interface DiscordShowcaseScore {
   acc: string;
   pp: string;
   gain?: string;
+  combo?: string;
+  score?: string;
+  stars?: string;
+  hits?: DiscordShowcaseScoreHits;
+  cover?: string;
+}
+
+export interface DiscordShowcaseSnipe {
+  sniper: string;
+  sniperId: number;
+  victim: string;
+  fromRank: number | null;
+  title: string;
+  grade: string;
+  mods: string[];
+  acc: string;
+  pp: string;
+  score: string;
+  victimScore: string | null;
+  keys: string;
+  stars: string;
+  cover: string | null;
 }
 
 export interface DiscordShowcasePlayer {
@@ -1244,6 +1275,10 @@ export interface DiscordShowcasePlayer {
   accuracy: number | null;
   playCount: number | null;
   level: number | null;
+  ssCount?: number | null;
+  sCount?: number | null;
+  aCount?: number | null;
+  topMod?: string | null;
 }
 
 export interface DiscordShowcaseRankRow {
@@ -1369,7 +1404,25 @@ export interface DiscordShowcase {
   randomFav: DiscordShowcaseRandomFav | null;
   map: DiscordShowcaseBeatmap | null;
   dan: { displayName: string; family: string; confidence: string; label: string; familyKey: string } | null;
-  feedTopPlay: { username: string; userId: number; title: string; grade: string; mods: string[]; acc: string; pp: string; gain: string; cover: string | null } | null;
+  feedTopPlay:
+    | {
+      username: string;
+      userId: number;
+      title: string;
+      grade: string;
+      mods: string[];
+      keys: string;
+      acc: string;
+      pp: string;
+      gain: string;
+      combo: string | null;
+      score: string | null;
+      stars: string | null;
+      hits: DiscordShowcaseScoreHits | null;
+      cover: string | null;
+    }
+    | null;
+  feedSnipe: DiscordShowcaseSnipe | null;
   feedNewMap: { title: string; keys: string; stars: string; cover: string | null } | null;
 }
 

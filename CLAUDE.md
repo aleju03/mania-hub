@@ -60,7 +60,7 @@ Feature modules (`src/features/`), one per surface (full per-feature models in A
 - `my-data.ts`: the signed-in player's dashboard projections (reads existing projections, owns no table); backs `/my-data`.
 - `pack-wallets.ts`: synced maniacard pack economy (`pack_wallets`, `pack_collection_cards`); backs `/packs`.
 
-Discord bot (`src/discord/`): optional HTTP-interactions bot (maniabot), gated by `ENABLE_DISCORD_BOT` / `ENABLE_DISCORD_FEEDS`; slash commands plus per-channel subscription feeds, frontend `/discord` and `/admin/discord`. Details in AGENTS.md.
+Discord bot (`src/discord/`): optional HTTP-interactions bot (maniabot), gated by `ENABLE_DISCORD_BOT` / `ENABLE_DISCORD_FEEDS`; slash commands plus per-channel subscription feeds, frontend `/discord` and `/admin/discord`. Replies are Components V2 and use custom application emojis for grade pills / mod icons (`discord/emojis.ts`, built by `scripts/build-discord-emojis.mjs`, uploaded via the admin "Register emojis" action, with plain-text fallbacks). Keep embeds free of decorative unicode emoji (enforced by `discord-embeds.test.ts`). Details in AGENTS.md.
 
 HTTP (`src/http/snapshots.ts`): snapshot, profile, dan-estimate, audio, replay-video, and country endpoints, plus admin endpoints under `/api/admin/*` gated by `LIVE_ADMIN_TOKEN` (full list in AGENTS.md). Note: some per-user endpoints (goals, my-data, roster self opt-in/out, pack wallet/collection) and the osu! proxies are also `LIVE_ADMIN_TOKEN`-gated and called server-to-server, with the frontend injecting the token plus the osu!-verified viewer id so a user only touches their own data. Per-IP rate limiting via `src/http/abuse-guard.ts`; CORS from `ALLOWED_ORIGINS`.
 

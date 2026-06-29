@@ -583,6 +583,18 @@ create table if not exists discord_channel_map_context (
   updated_at text not null
 );
 
+-- Discord bot: maps a custom application-emoji name (e.g. grade_x, mod_dt) to the
+-- emoji id Discord assigned when it was uploaded, so embeds can render osu! grade
+-- pills and mod icons inline as a reference. Populated by the admin register-emojis
+-- action. Embeds fall back to plain text for any name not present here, so an empty
+-- table just means the bot reads exactly as it did before emojis existed.
+create table if not exists discord_emojis (
+  name text primary key,
+  emoji_id text not null,
+  animated integer not null default 0,
+  updated_at text not null
+);
+
 -- Persistent cache of raw .osu beatmap files, keyed by beatmap (difficulty) id.
 -- The dan estimator and activity analyzer both parse these, so caching the download
 -- avoids re-fetching the same chart from osu.ppy.sh on a cold compute or after a

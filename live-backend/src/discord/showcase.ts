@@ -17,8 +17,16 @@ import type { Db } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { GLOBAL_COUNTRY_CODE, isGlobalCountry } from "../countries.js";
-import { getDisplayedAccuracy, getDisplayedRank, getModAcronyms } from "../shared/score.js";
+import {
+  getDisplayedAccuracy,
+  getDisplayedRank,
+  getDisplayedTotalScore,
+  getModAcronyms,
+  getScoreHitCounts,
+  isFullCombo,
+} from "../shared/score.js";
 import type { CountryTopPlay, LeanTrackerScore, OscScore } from "../shared/types.js";
+import { getSnipesSnapshot } from "../features/snipes.js";
 import { getPlayerProfileSnapshot, getPlayerRecentScores } from "../features/player-profiles.js";
 import { getCountryRankingsSnapshot, getGlobalRankingsSnapshot } from "../features/global-rankings.js";
 import { getTopPlaysSnapshot } from "../features/top-plays.js";
@@ -33,7 +41,19 @@ import { logWarn } from "../logger.js";
 // Payload shape (mirrored on the frontend in src/lib/live-backend.ts)
 // ---------------------------------------------------------------------------
 
+// Judgement breakdown for a single score (the owo-style hit counts row).
+export interface ShowcaseScoreHits {
+  max: number; // 320
+  n300: number;
+  n200: number;
+  n100: number;
+  n50: number;
+  miss: number;
+}
+
 // One score line: grade icon, map title + difficulty, key mode, mods, acc, pp.
+// The combo / score / stars / hits fields back the detailed single-score card the
+// bot now shows for the most recent play, /pb and the top-play feed.
 export interface ShowcaseScore {
   grade: string;
   title: string;
@@ -43,6 +63,11 @@ export interface ShowcaseScore {
   acc: string;
   pp: string;
   gain?: string;
+  combo?: string;
+  score?: string;
+  stars?: string;
+  hits?: ShowcaseScoreHits;
+  cover?: string;
 }
 
 export interface ShowcasePlayer {
@@ -55,6 +80,12 @@ export interface ShowcasePlayer {
   accuracy: number | null;
   playCount: number | null;
   level: number | null;
+  // Grade tallies (SS = ss+ssh, S = s+sh) and the player's most-used mod, only
+  // captured for the profile player used by the /player preview.
+  ssCount?: number | null;
+  sCount?: number | null;
+  aCount?: number | null;
+  topMod?: string | null;
 }
 
 export interface ShowcaseRankRow {
@@ -159,6 +190,23 @@ export interface ShowcaseRandomFav {
   cover: string | null;
 }
 
+export interface ShowcaseSnipe {
+  sniper: string;
+  sniperId: number;
+  victim: string;
+  fromRank: number | null;
+  title: string;
+  grade: string;
+  mods: string[];
+  acc: string;
+  pp: string;
+  score: string;
+  victimScore: string | null;
+  keys: string;
+  stars: string;
+  cover: string | null;
+}
+
 export interface ShowcaseDiscordPayload {
   country: string;
   isGlobal: boolean;
@@ -185,7 +233,25 @@ export interface ShowcaseDiscordPayload {
   randomFav: ShowcaseRandomFav | null;
   map: ShowcaseBeatmap | null;
   dan: { displayName: string; family: string; confidence: string; label: string; familyKey: string } | null;
-  feedTopPlay: { username: string; userId: number; title: string; grade: string; mods: string[]; acc: string; pp: string; gain: string; cover: string | null } | null;
+  feedTopPlay:
+    | {
+      username: string;
+      userId: number;
+      title: string;
+      grade: string;
+      mods: string[];
+      keys: string;
+      acc: string;
+      pp: string;
+      gain: string;
+      combo: string | null;
+      score: string | null;
+      stars: string | null;
+      hits: ShowcaseScoreHits | null;
+      cover: string | null;
+    }
+    | null;
+  feedSnipe: ShowcaseSnipe | null;
   feedNewMap: { title: string; keys: string; stars: string; cover: string | null } | null;
 }
 
@@ -275,6 +341,8 @@ function scoreTitle(score: OscScore): { title: string; version: string } {
 
 function toShowcaseScore(score: OscScore, gain?: number): ShowcaseScore {
   const { title, version } = scoreTitle(score);
+  const total = getDisplayedTotalScore(score);
+  const h = getScoreHitCounts(score);
   const out: ShowcaseScore = {
     grade: getDisplayedRank(score),
     title,
@@ -283,6 +351,11 @@ function toShowcaseScore(score: OscScore, gain?: number): ShowcaseScore {
     mods: getModAcronyms(score.mods),
     acc: fmtAcc(getDisplayedAccuracy(score)),
     pp: fmtScorePp(score.pp),
+    combo: score.max_combo != null ? `${NUMBER.format(score.max_combo)}x${isFullCombo(score) ? " FC" : ""}` : undefined,
+    score: total != null ? NUMBER.format(total) : undefined,
+    stars: score.beatmap?.difficulty_rating != null ? score.beatmap.difficulty_rating.toFixed(2) : undefined,
+    hits: { max: h.max, n300: h.great, n200: h.good, n100: h.ok, n50: h.meh, miss: h.miss },
+    cover: bestCover(score.beatmapset?.covers) ?? undefined,
   };
   if (gain != null && gain > 0) out.gain = `+${Math.round(gain)}pp`;
   return out;
@@ -299,12 +372,14 @@ interface ProfileUserShape {
     hit_accuracy?: number | null;
     play_count?: number | null;
     level?: { current?: number | null } | null;
+    grade_counts?: { ss?: number; ssh?: number; s?: number; sh?: number; a?: number } | null;
   } | null;
 }
 
 function toShowcasePlayer(user: Record<string, unknown>): ShowcasePlayer {
   const u = user as ProfileUserShape;
   const stats = u.statistics ?? {};
+  const gc = stats.grade_counts;
   return {
     id: Number(u.id ?? 0),
     username: String(u.username ?? "player"),
@@ -315,7 +390,27 @@ function toShowcasePlayer(user: Record<string, unknown>): ShowcasePlayer {
     accuracy: stats.hit_accuracy ?? null,
     playCount: stats.play_count ?? null,
     level: stats.level?.current == null ? null : Math.round(stats.level.current),
+    ssCount: gc ? (gc.ss ?? 0) + (gc.ssh ?? 0) : null,
+    sCount: gc ? (gc.s ?? 0) + (gc.sh ?? 0) : null,
+    aCount: gc ? gc.a ?? 0 : null,
   };
+}
+
+// The mod a player uses most across the given scores, or null when all nomod.
+function showcaseMostUsedMod(scores: OscScore[]): string | null {
+  const counts = new Map<string, number>();
+  for (const score of scores) {
+    for (const mod of getModAcronyms(score.mods)) counts.set(mod, (counts.get(mod) ?? 0) + 1);
+  }
+  let top: string | null = null;
+  let topCount = 0;
+  for (const [mod, count] of counts) {
+    if (count > topCount) {
+      top = mod;
+      topCount = count;
+    }
+  }
+  return top;
 }
 
 // ---------------------------------------------------------------------------
@@ -427,7 +522,10 @@ async function buildShowcase(
 
   // players[1]: full profile -> top plays (and a richer stat block incl. level).
   const profile = idAt(1) ? await safe("profile", () => getPlayerProfileSnapshot(db, osu, String(idAt(1)))) : null;
-  if (profile && players[1]) players[1] = toShowcasePlayer(profile.user);
+  if (profile && players[1]) {
+    players[1] = toShowcasePlayer(profile.user);
+    players[1].topMod = showcaseMostUsedMod(profile.bestScores ?? []);
+  }
   const topPlays: ShowcaseScore[] = (profile?.bestScores ?? []).slice(0, 5).map((s) => toShowcaseScore(s));
 
   // players[1]'s best play is, by definition, their personal best on its map, so
@@ -523,19 +621,52 @@ async function buildShowcase(
     ? (() => {
       const ev = popoffs[0];
       const { title, version } = scoreTitle(ev.score);
+      const detail = toShowcaseScore(ev.score);
       return {
         username: ev.user.username,
         userId: Number(ev.user.id),
         title: version ? `${title} [${version}]` : title,
-        grade: getDisplayedRank(ev.score),
-        mods: getModAcronyms(ev.score.mods),
-        acc: fmtAcc(getDisplayedAccuracy(ev.score)),
-        pp: fmtScorePp(ev.score.pp),
+        grade: detail.grade,
+        mods: detail.mods,
+        keys: detail.keys,
+        acc: detail.acc,
+        pp: detail.pp,
         gain: ev.ppGain > 0 ? `+${Math.round(ev.ppGain)}pp` : "",
+        combo: detail.combo ?? null,
+        score: detail.score ?? null,
+        stars: detail.stars ?? null,
+        hits: detail.hits ?? null,
         cover: bestCover(ev.score.beatmapset?.covers),
       };
     })()
     : null;
+
+  // /snipes feed: most recent leaderboard snipe in the country. Snipes are
+  // per-country, so the GLOBAL scope has none to show.
+  const feedSnipe: ShowcaseSnipe | null = isGlobal
+    ? null
+    : await safe("feed_snipe", async () => {
+      const snap = await getSnipesSnapshot(db, country, 5);
+      const ev = snap.events?.[0];
+      if (!ev) return null;
+      return {
+        sniper: ev.sniper.username,
+        sniperId: Number(ev.sniper.id),
+        victim: ev.victim.username,
+        fromRank: ev.boardRank ?? null,
+        title: `${ev.beatmapset.artist} - ${ev.beatmapset.title} [${ev.beatmap.version}]`,
+        grade: ev.rank,
+        // Snipe mods already arrive as plain acronym strings; just drop Classic.
+        mods: ev.mods.filter((m) => m && m.toUpperCase() !== "CL"),
+        acc: fmtAcc(ev.accuracy),
+        pp: fmtScorePp(ev.pp),
+        score: NUMBER.format(ev.totalScore),
+        victimScore: ev.victimTotalScore != null ? NUMBER.format(ev.victimTotalScore) : null,
+        keys: keyLabel(ev.beatmap.cs),
+        stars: ev.beatmap.difficulty_rating != null ? ev.beatmap.difficulty_rating.toFixed(2) : "-",
+        cover: ev.beatmapset.cover_url || null,
+      };
+    });
 
   const feedNewMap = focusFarmed
     ? {
@@ -611,6 +742,7 @@ async function buildShowcase(
     map,
     dan,
     feedTopPlay,
+    feedSnipe,
     feedNewMap,
   };
 }

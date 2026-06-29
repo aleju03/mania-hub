@@ -210,6 +210,41 @@ export class DiscordRest {
   listGuilds(): Promise<Array<{ id: string; name?: string; icon?: string | null; approximate_member_count?: number }>> {
     return this.request({ method: "GET", path: "/users/@me/guilds?with_counts=true&limit=200", auth: "bot" });
   }
+
+  /** Lists the application's custom emojis (the grade pills + mod icons we upload). */
+  async listApplicationEmojis(): Promise<DiscordApplicationEmoji[]> {
+    const body = await this.request<{ items?: DiscordApplicationEmoji[] }>({
+      method: "GET",
+      path: `/applications/${this.applicationId}/emojis`,
+      auth: "bot",
+    });
+    return Array.isArray(body?.items) ? body.items : [];
+  }
+
+  /** Uploads one application emoji. `image` is a data URI (data:image/png;base64,...). */
+  createApplicationEmoji(name: string, image: string): Promise<DiscordApplicationEmoji> {
+    return this.request({
+      method: "POST",
+      path: `/applications/${this.applicationId}/emojis`,
+      body: { name, image },
+      auth: "bot",
+    });
+  }
+
+  /** Removes one application emoji (used when force-replacing a changed asset). */
+  deleteApplicationEmoji(emojiId: string): Promise<unknown> {
+    return this.request({
+      method: "DELETE",
+      path: `/applications/${this.applicationId}/emojis/${emojiId}`,
+      auth: "bot",
+    });
+  }
+}
+
+export interface DiscordApplicationEmoji {
+  id: string;
+  name: string;
+  animated?: boolean;
 }
 
 // Defense-in-depth: every message the bot sends suppresses mention parsing by

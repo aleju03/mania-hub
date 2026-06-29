@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { GradeImg } from "../ui/GradeImg";
 import { ModBadge } from "../ui/ModBadge";
 import { Avatar } from "../ui/Avatar";
@@ -12,6 +12,8 @@ import {
   type DiscordShowcase,
   type DiscordShowcasePlayer,
   type DiscordShowcaseScore,
+  type DiscordShowcaseScoreHits,
+  type DiscordShowcaseSnipe,
   type LiveGlobalRankingEntry,
 } from "../../lib/live-backend";
 import {
@@ -38,6 +40,11 @@ const BLURPLE = "#5865F2";
 const PINK = "#ff66ab";
 const GOLD = "#ffcc33";
 const GREEN = "#3ba55d";
+const SNIPE = "#ff4d6d";
+// Positive pp gains read green (osu! convention), distinct from the gold accents.
+const GAIN = "#5ee08a";
+// osu!mania judgement colours, mirroring JUDGMENT_COLORS in ReplayCanvas.
+const JUDGEMENT = { max: "#b3f5ff", n300: "#ffcc22", n200: "#88da20", n100: "#5a8fff", n50: "#cc8800", miss: "#ff4444" };
 
 // Local header art stands in for beatmap cover banners.
 const COVER_A = "/images/headers/generic.jpg";
@@ -73,8 +80,23 @@ interface ShowcaseSample {
   leaderboard: ShowcasePlayer[];
 }
 
-// A single rendered score line, shared by the real-data and synthetic paths.
-type ScoreRow = { grade: string; title: string; version: string; mods: string[]; acc: string; pp: string; keys?: string; gain?: string };
+// A single rendered score line, shared by the real-data and synthetic paths. The
+// combo / score / stars / hits / cover fields back the detailed single-score card.
+type ScoreRow = {
+  grade: string;
+  title: string;
+  version: string;
+  mods: string[];
+  acc: string;
+  pp: string;
+  keys?: string;
+  gain?: string;
+  combo?: string;
+  score?: string;
+  stars?: string;
+  hits?: DiscordShowcaseScoreHits;
+  cover?: string;
+};
 
 // Resolves the dan emblem asset for a real estimate. The showcase is a web page,
 // so it links the raw svg/webp directly (reform 1-10 svg, greek webp, LN 1-16
@@ -427,16 +449,75 @@ function ScoreLine({ grade, title, version, mods, acc, pp, keys, gain }: {
       <div className="shrink-0 text-right text-[12px] tabular-nums">
         <span style={{ color: D.muted }}>{acc}</span>{" "}
         <span className="font-bold" style={{ color: D.white }}>{pp}</span>
-        {gain ? <span style={{ color: GOLD }}> {gain}</span> : null}
+        {gain ? <span style={{ color: GAIN }}> {gain}</span> : null}
       </div>
     </div>
   );
 }
 
+// The judgement breakdown row (320/300/200/100/50/miss) the bot prints as an
+// inline code chip on detailed scores.
+function HitBreakdown({ hits }: { hits: DiscordShowcaseScoreHits }) {
+  const cells: Array<{ label: string; value: number; color: string }> = [
+    { label: "320", value: hits.max, color: JUDGEMENT.max },
+    { label: "300", value: hits.n300, color: JUDGEMENT.n300 },
+    { label: "200", value: hits.n200, color: JUDGEMENT.n200 },
+    { label: "100", value: hits.n100, color: JUDGEMENT.n100 },
+    { label: "50", value: hits.n50, color: JUDGEMENT.n50 },
+    { label: "miss", value: hits.miss, color: JUDGEMENT.miss },
+  ];
+  return (
+    <div className="grid grid-cols-6 gap-x-2 rounded px-2.5 py-2 text-center" style={{ backgroundColor: D.field }}>
+      {cells.map((cell) => (
+        <div key={cell.label} className="flex flex-col items-center leading-tight">
+          <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: cell.color }}>{cell.label}</span>
+          <span className="text-[13px] font-bold tabular-nums" style={{ color: D.white }}>{formatNumber(cell.value)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// The owo-style detailed card body for a single score: grade + mods, stars and
+// keys, then accuracy / combo / score, the judgement breakdown, and pp.
+function DetailedScore({ grade, mods, stars, keys, acc, combo, score, hits, pp, gain }: {
+  grade: string; mods: string[]; stars?: string; keys?: string; acc: string; combo?: string; score?: string; hits?: DiscordShowcaseScoreHits; pp: string; gain?: string;
+}) {
+  return (
+    <div className="space-y-1.5 pt-0.5">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <GradeImg grade={grade} size={22} />
+        {mods.length ? mods.map((m) => <ModBadge key={m} mod={m} size={0.5} />) : <span className="text-[9px]" style={{ color: D.muted }}>nomod</span>}
+        {stars ? <span className="text-[12px] font-semibold" style={{ color: GOLD }}>{stars}★</span> : null}
+        {keys ? <span className="rounded px-1 text-[8px] font-bold" style={{ backgroundColor: D.field, color: GOLD }}>{keys}</span> : null}
+      </div>
+      <div className="flex flex-wrap items-baseline gap-x-2.5 text-[12px]">
+        <span className="text-[15px] font-bold tabular-nums" style={{ color: D.white }}>{acc}</span>
+        {combo ? <span className="tabular-nums" style={{ color: D.text }}>{combo}</span> : null}
+        {score ? <span className="tabular-nums" style={{ color: D.muted }}>{score}</span> : null}
+      </div>
+      {hits ? <HitBreakdown hits={hits} /> : null}
+      <div className="text-[13px]">
+        <span className="font-bold" style={{ color: D.white }}>{pp}</span>
+        {gain ? <span style={{ color: GAIN }}> {gain}</span> : null}
+      </div>
+    </div>
+  );
+}
+
+// Gold / silver / bronze for the podium; everyone else gets the neutral chip.
+const MEDAL_COLORS = ["#ffcc33", "#c7ccd6", "#cd7f32"];
+
 function RankRow({ rank, name, userId, pp }: { rank: number; name: string; userId?: number; pp: string }) {
+  const medal = rank >= 1 && rank <= 3 ? MEDAL_COLORS[rank - 1] : null;
   return (
     <div className="flex items-center gap-2 py-0.5 text-[12px]">
-      <span className="w-7 shrink-0 rounded text-center text-[11px] font-bold tabular-nums" style={{ backgroundColor: D.field, color: D.muted }}>#{rank}</span>
+      <span
+        className="w-7 shrink-0 rounded text-center text-[11px] font-bold tabular-nums"
+        style={medal ? { backgroundColor: `${medal}26`, color: medal } : { backgroundColor: D.field, color: D.muted }}
+      >
+        #{rank}
+      </span>
       <Avatar userId={userId} size={20} />
       <span className="font-semibold" style={{ color: D.white }}>{name}</span>
       <span className="ml-auto font-bold tabular-nums" style={{ color: D.text }}>{pp}</span>
@@ -648,9 +729,14 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
   const countryField = (code: string): string => (code && !isGlobalScope(code) ? `Country (${code})` : "Country");
   const fxScore = (s: DiscordShowcaseScore): ScoreRow => ({
     grade: s.grade, title: s.title, version: s.version, mods: s.mods, acc: s.acc, pp: s.pp, keys: s.keys || undefined, gain: s.gain,
+    combo: s.combo, score: s.score, stars: s.stars, hits: s.hits, cover: s.cover,
   });
 
   const playerName = pProfile?.username ?? commandName(profile);
+  const playerSs = formatNumber(pProfile?.ssCount ?? 312);
+  const playerS = formatNumber(pProfile?.sCount ?? 540);
+  const playerA = formatNumber(pProfile?.aCount ?? 88);
+  const playerTopMod = pProfile?.topMod ?? "DT";
   const cardArtPlayer: ShowcasePlayer = pCard ? { ...card, id: pCard.id, username: pCard.username } : card;
 
   const playerTop: ScoreRow[] = fx?.topPlays?.length
@@ -663,9 +749,12 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
   const recentRows: ScoreRow[] = fx?.recent?.length
     ? fx.recent.slice(0, 3).map(fxScore)
     : [
-      { grade: "A", title: "Yomi yori", version: "4K Master", keys: "4K", mods: ["HD"], acc: "97.1%", pp: "-" },
-      { grade: "S", title: "Aleph-0", version: "4K Ultra", keys: "4K", mods: [], acc: "98.9%", pp: playPp(recent, 9400) },
-      { grade: "F", title: "Cyber Induction", version: "4K SHD", keys: "4K", mods: ["DT"], acc: "91.0%", pp: "-" },
+      {
+        grade: "A", title: "Yomi yori", version: "4K Master", keys: "4K", mods: ["HD"], acc: "97.14%", pp: "-",
+        combo: "1,204x", score: "986,540", stars: "5.80", hits: { max: 1180, n300: 96, n200: 14, n100: 6, n50: 1, miss: 3 },
+      },
+      { grade: "S", title: "Aleph-0", version: "4K Ultra", keys: "4K", mods: [], acc: "98.90%", pp: playPp(recent, 9400) },
+      { grade: "F", title: "Cyber Induction", version: "4K SHD", keys: "4K", mods: ["DT"], acc: "91.04%", pp: "-" },
     ];
 
   const me = fx?.me ?? null;
@@ -704,12 +793,17 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
   const vsRightName = pProfile?.username ?? rival.username;
 
   const pbView = {
-    title: fx?.pb?.mapTitle ?? "Blue Zenith [4K Black Another]",
+    title: fx?.pb?.mapTitle ?? "xi - Blue Zenith [4K Black Another]",
     grade: fx?.pb?.grade ?? "X",
     mods: fx?.pb?.mods ?? ["DT"],
-    acc: fx?.pb?.acc ?? "99.4%",
-    combo: fx?.pb?.combo ?? "1,532x",
+    acc: fx?.pb?.acc ?? "99.41%",
+    combo: fx?.pb?.combo ?? "1,532x FC",
+    score: fx?.pb?.score ?? "4,231,560",
+    stars: fx?.pb?.stars ?? "6.20",
+    keys: fx?.pb?.keys || "4K",
     pp: fx?.pb?.pp ?? playPp(pb, 13000),
+    hits: fx?.pb?.hits ?? { max: 1480, n300: 48, n200: 3, n100: 1, n50: 0, miss: 0 },
+    cover: fx?.pb?.cover,
   };
 
   const rankRows = fx?.rankings?.length
@@ -750,6 +844,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
   const rvPickedBy = rv?.pickedBy ?? profile.username;
   const mapInfo = fx?.map ?? null;
   const feedTop = fx?.feedTopPlay ?? null;
+  const feedSnipe: DiscordShowcaseSnipe | null = fx?.feedSnipe ?? null;
   const feedNew = fx?.feedNewMap ?? null;
   const coverOf = (cover: string | null | undefined): string => cover || COVER_A;
   const linkUsername = pLink?.username ?? (self.id > 0 ? self.username : null);
@@ -782,7 +877,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
           <div className="space-y-0.5 text-[12px]" style={{ color: D.text }}>
             <div><span style={{ color: D.muted }}>Biggest day</span> <b style={{ color: D.white }}>{me?.biggestDay ?? "210 plays"}</b></div>
             <div><span style={{ color: D.muted }}>Longest streak</span> <b style={{ color: D.white }}>{me?.longestStreak ?? "14 days"}</b></div>
-            <div><span style={{ color: D.muted }}>pp gained while tracked</span> <b style={{ color: GOLD }}>{me?.ppGained ?? "+540"}</b></div>
+            <div><span style={{ color: D.muted }}>pp gained while tracked</span> <b style={{ color: GAIN }}>{me?.ppGained ?? "+540"}</b></div>
             <div><span style={{ color: D.muted }}>Goals</span> <b style={{ color: D.white }}>{me?.goalsLine ?? "2 open, 5 done"}</b></div>
           </div>
           <Footer text="maniabot" />
@@ -804,6 +899,14 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
             { name: "Play count", value: formatNumber(pProfile?.playCount ?? profile.playCount) },
             { name: "Level", value: pProfile?.level != null ? String(pProfile.level) : "103" },
           ]} />
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-0.5 text-[12px]">
+            <span className="flex items-center gap-1"><GradeImg grade="X" size={16} /> <b style={{ color: D.white }}>{playerSs}</b></span>
+            <span className="flex items-center gap-1"><GradeImg grade="S" size={16} /> <b style={{ color: D.white }}>{playerS}</b></span>
+            <span className="flex items-center gap-1"><GradeImg grade="A" size={16} /> <b style={{ color: D.white }}>{playerA}</b></span>
+            <Dot />
+            <span style={{ color: D.muted }}>Top mod</span>
+            {playerTopMod ? <ModBadge mod={playerTopMod} size={0.5} /> : <span style={{ color: D.muted }}>NM</span>}
+          </div>
           <Lead>Top plays</Lead>
           {playerTop.map((s, i) => <ScoreLine key={i} {...s} />)}
           <Footer text="maniabot" />
@@ -813,16 +916,35 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
     },
     {
       id: "recent", label: "/recent", invocation: "/recent", group: "Players", accent: PINK,
-      blurb: "Latest plays, pass or fail, paginated with Prev and Next.",
-      render: () => (
-        <Embed accent={PINK}>
-          <EmbedAuthor name={authorName(pRecent, recent)} userId={authorAvatar(pRecent, recent)} />
-          <Lead>Recent plays</Lead>
-          {recentRows.map((s, i) => <ScoreLine key={i} {...s} />)}
-          <Footer text="Page 1 • maniabot" />
-          <PageButtons />
-        </Embed>
-      ),
+      blurb: "Latest play in full (grade, mods, judgements, pp), with the earlier ones below. Paginated with Prev and Next.",
+      render: () => {
+        const [latest, ...earlier] = recentRows;
+        return (
+          <Embed accent={PINK}>
+            <EmbedAuthor name={authorName(pRecent, recent)} userId={authorAvatar(pRecent, recent)} />
+            {latest ? (
+              <>
+                <div className="text-[12px] font-semibold">
+                  <span style={{ color: D.link }}>{latest.title}</span>{" "}
+                  <span style={{ color: D.muted }}>[{latest.version}]</span>
+                </div>
+                <DetailedScore {...latest} />
+                {earlier.length ? (
+                  <>
+                    <Lead>Earlier plays</Lead>
+                    {earlier.map((s, i) => <ScoreLine key={i} {...s} />)}
+                  </>
+                ) : null}
+                <Cover src={coverOf(latest.cover)} />
+              </>
+            ) : (
+              <div className="text-[12px]" style={{ color: D.muted }}>No recent mania plays found.</div>
+            )}
+            <Footer text="maniabot" />
+            <PageButtons />
+          </Embed>
+        );
+      },
     },
     {
       id: "maniacard", label: "/maniacard", invocation: `/maniacard ${pCard?.username ?? commandName(card)}`, group: "Players", accent: GOLD,
@@ -884,13 +1006,20 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
     },
     {
       id: "vs", label: "/vs", invocation: `/vs ${vsRightName}`, group: "Players", accent: PINK,
-      blurb: "Two players head to head, winner bolded per stat. Leave the first name out to compare against yourself.",
+      blurb: "Two players side by side as an aligned table, the leader bolded per stat. Leave the first name out to compare against yourself.",
       render: () => (
         <Embed accent={PINK}>
           <EmbedTitle>{vsTitle}</EmbedTitle>
-          <div className="space-y-1 text-[12px]" style={{ color: D.text }}>
+          <div className="grid items-baseline gap-x-3 gap-y-1 text-[12px]" style={{ gridTemplateColumns: "auto 1fr 1fr", color: D.text }}>
+            <span />
+            <span className="truncate text-right font-semibold" style={{ color: D.white }}>{vsLeftName}</span>
+            <span className="truncate text-right font-semibold" style={{ color: D.white }}>{vsRightName}</span>
             {vsRows.map((r) => (
-              <div key={r.label}>{r.label}: <Winner active={r.aWins}>{r.a}</Winner> vs <Winner active={r.bWins}>{r.b}</Winner></div>
+              <Fragment key={r.label}>
+                <span style={{ color: D.muted }}>{r.label}</span>
+                <span className="text-right tabular-nums"><Winner active={r.aWins}>{r.a}</Winner></span>
+                <span className="text-right tabular-nums"><Winner active={r.bWins}>{r.b}</Winner></span>
+              </Fragment>
             ))}
           </div>
           <Footer text="maniabot" />
@@ -905,13 +1034,18 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
         <Embed accent={GOLD}>
           <EmbedAuthor name={authorName(pProfile, pb)} userId={authorAvatar(pProfile, pb)} />
           <EmbedTitle>{pbView.title}</EmbedTitle>
-          <div className="flex items-center gap-2 text-[12px]">
-            <GradeImg grade={pbView.grade} size={20} />
-            {pbView.mods.length ? pbView.mods.map((m) => <ModBadge key={m} mod={m} size={0.5} />) : <span className="text-[9px]" style={{ color: D.muted }}>nomod</span>}
-            <span style={{ color: D.muted }}>{pbView.acc}</span>
-            <span style={{ color: D.muted }}>{pbView.combo}</span>
-            <b style={{ color: D.white }}>{pbView.pp}</b>
-          </div>
+          <DetailedScore
+            grade={pbView.grade}
+            mods={pbView.mods}
+            stars={pbView.stars}
+            keys={pbView.keys}
+            acc={pbView.acc}
+            combo={pbView.combo}
+            score={pbView.score}
+            hits={pbView.hits}
+            pp={pbView.pp}
+          />
+          <Cover src={coverOf(pbView.cover)} />
           <Footer text="maniabot" />
           <Buttons items={["Beatmap", pProfile?.username ?? pb.username]} />
         </Embed>
@@ -965,7 +1099,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
               <div key={i} className="flex flex-wrap items-center gap-1.5">
                 <b style={{ color: D.white }}>{r.username}</b> <Dot /> <span style={{ color: D.link }}>{r.title}</span>{" "}
                 {r.mods.map((m) => <ModBadge key={m} mod={m} size={0.45} />)} <Dot /> <b style={{ color: D.white }}>{r.pp}</b>
-                {r.gain ? <span style={{ color: GOLD }}>({r.gain})</span> : null}
+                {r.gain ? <span style={{ color: GAIN }}>({r.gain})</span> : null}
               </div>
             ))}
           </div>
@@ -1135,26 +1269,63 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
     },
     {
       id: "feed-top", label: "Top-play feed", invocation: "auto-posted", group: "Feeds", accent: GOLD,
-      blurb: "When someone lands a new top play, it drops in your channel automatically.",
+      blurb: "When someone lands a new top play, it drops in your channel automatically, in full detail.",
       render: () => (
         <Embed accent={GOLD}>
           <EmbedAuthor name={feedTop?.username ?? feed.username} userId={feedTop?.userId ?? userIdForAvatar(feed)} />
           <EmbedTitle>New top play</EmbedTitle>
-          <div className="text-[12px]" style={{ color: D.text }}>
+          <div className="text-[12px] font-semibold">
             <span style={{ color: D.link }}>{feedTop?.title ?? "UNDEAD CORPORATION - Everything Will Freeze [4K Black Another]"}</span>
           </div>
-          <div className="flex items-center gap-2 text-[12px]">
-            <GradeImg grade={feedTop?.grade ?? "X"} size={20} />
-            {(feedTop ? feedTop.mods : ["HD", "DT"]).map((m) => <ModBadge key={m} mod={m} size={0.5} />)}
-            <span style={{ color: D.muted }}>{feedTop?.acc ?? "99.21%"}</span>
-            <b style={{ color: D.white }}>{feedTop?.pp ?? playPp(feed, 12000)}</b>
-            {(feedTop ? feedTop.gain : "+35pp") ? <span style={{ color: GOLD }}>({feedTop ? feedTop.gain : "+35pp"})</span> : null}
-          </div>
+          <DetailedScore
+            grade={feedTop?.grade ?? "X"}
+            mods={feedTop?.mods ?? ["HD", "DT"]}
+            stars={feedTop?.stars ?? "6.85"}
+            keys={feedTop?.keys || "4K"}
+            acc={feedTop?.acc ?? "99.21%"}
+            combo={feedTop?.combo ?? "2,104x"}
+            score={feedTop?.score ?? "5,920,140"}
+            hits={feedTop?.hits ?? { max: 2040, n300: 52, n200: 8, n100: 3, n50: 0, miss: 1 }}
+            pp={feedTop?.pp ?? playPp(feed, 12000)}
+            gain={feedTop?.gain ?? "+35pp"}
+          />
           <Cover src={coverOf(feedTop?.cover)} />
           <Footer text={scopeFooter} />
           <Buttons items={["Beatmap", feedTop?.username ?? feed.username]} />
         </Embed>
       ),
+    },
+    {
+      id: "feed-snipe", label: "Snipe feed", invocation: "auto-posted", group: "Feeds", accent: SNIPE,
+      blurb: "When someone overtakes a country leaderboard score, the snipe lands in your channel.",
+      render: () => {
+        // Only the synthetic (no-fixture) path shows the example rank; a real
+        // snipe with a null board rank correctly omits the "from #N" suffix.
+        const fromRank = feedSnipe ? feedSnipe.fromRank : 2;
+        const author = `${feedSnipe?.sniper ?? third.username} sniped ${feedSnipe?.victim ?? fourth.username}${fromRank ? ` from #${fromRank}` : ""}`;
+        return (
+          <Embed accent={SNIPE}>
+            <EmbedAuthor name={author} userId={feedSnipe?.sniperId ?? userIdForAvatar(third)} />
+            <EmbedTitle>{feedSnipe?.title ?? "xi - FREEDOM DiVE [4K Another]"}</EmbedTitle>
+            <div className="flex flex-wrap items-center gap-2 text-[12px]">
+              <GradeImg grade={feedSnipe?.grade ?? "X"} size={20} />
+              {(feedSnipe?.mods ?? ["DT"]).map((m) => <ModBadge key={m} mod={m} size={0.5} />)}
+              <span style={{ color: D.muted }}>{feedSnipe?.acc ?? "99.32%"}</span>
+              <b style={{ color: D.white }}>{feedSnipe?.pp ?? "612pp"}</b>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 text-[12px]" style={{ color: D.text }}>
+              <span style={{ color: D.muted }}>Score</span> <b style={{ color: D.white }}>{feedSnipe?.score ?? "4,512,300"}</b>
+              <span style={{ color: D.muted }}>vs {feedSnipe?.victimScore ?? "4,498,110"}</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 text-[12px]" style={{ color: D.muted }}>
+              <span>{feedSnipe?.keys || "4K"}</span> <Dot /> <span style={{ color: GOLD }}>{feedSnipe?.stars ?? "5.90"}★</span>
+            </div>
+            <Cover src={coverOf(feedSnipe?.cover)} />
+            <Footer text={scopeFooter} />
+            <Buttons items={["Beatmap", "Snipes"]} />
+          </Embed>
+        );
+      },
     },
     {
       id: "subscribe", label: "/subscribe", invocation: `/subscribe feed:Top plays country:${sample.commandCountry} min_pp:600`, group: "Feeds", accent: GREEN,

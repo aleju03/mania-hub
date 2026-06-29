@@ -46,6 +46,34 @@ export function getMissCount(score: ScoreLike): number {
   return stats.count_miss ?? stats.miss ?? 0;
 }
 
+export interface ScoreHitCounts {
+  /** Perfect / rainbow 300 (geki). */
+  max: number;
+  great: number; // 300
+  good: number; // 200 (katu)
+  ok: number; // 100
+  meh: number; // 50
+  miss: number;
+}
+
+/**
+ * Mania judgement breakdown (max/300/200/100/50/miss), normalising the lazer
+ * (count_*) and stable (perfect/great/...) statistic shapes the same way the
+ * accuracy/grade helpers do. Used by the Discord bot to print an owo-style
+ * `{ 320 / 300 / 200 / 100 / 50 / miss }` line.
+ */
+export function getScoreHitCounts(score: ScoreLike): ScoreHitCounts {
+  const counts = getHitCounts(score.statistics);
+  return {
+    max: counts.countMax,
+    great: counts.count300,
+    good: counts.count200,
+    ok: counts.count100,
+    meh: counts.count50,
+    miss: counts.countMiss,
+  };
+}
+
 /**
  * Mania full combo: a passed play with zero misses. In osu!mania combo only ever breaks on a miss
  * (100s/50s keep the chain), so no misses is exactly a full combo and we needn't compare max_combo

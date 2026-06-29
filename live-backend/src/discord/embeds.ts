@@ -1,8 +1,16 @@
 import type { CountryTopPlay, LeanTrackerScore, OscScore, OsuMod, SnipeEvent } from "../shared/types.js";
-import { getDisplayedAccuracy, getDisplayedRank, getModAcronyms } from "../shared/score.js";
+import {
+  getDisplayedAccuracy,
+  getDisplayedRank,
+  getDisplayedTotalScore,
+  getModAcronyms,
+  getScoreHitCounts,
+  isFullCombo,
+} from "../shared/score.js";
 import { GLOBAL_COUNTRY_CODE, isGlobalCountry } from "../countries.js";
 import type { DiscordComponent, DiscordEmbed, DiscordMessageBody } from "./rest.js";
 import { helpNavRow, linkAccountRow } from "./components.js";
+import { gradeEmoji, modsEmoji } from "./emojis.js";
 
 // osu! pink, matching the site accent.
 export const OSU_PINK = 0xff66ab;
@@ -26,12 +34,18 @@ export function countryLabel(code: string | null | undefined): string {
   return cc;
 }
 
-function formatMods(mods: OsuMod[] | string[] | undefined): string {
-  if (!mods || mods.length === 0) return "NM";
-  const acronyms = typeof mods[0] === "string"
-    ? (mods as string[]).filter((m) => m && m.toUpperCase() !== "CL")
+// Normalises a score's mods (OsuMod objects or plain acronym strings) to a clean
+// uppercase acronym list, dropping the no-op Classic mod, matching getModAcronyms.
+function modAcronyms(mods: OsuMod[] | string[] | undefined): string[] {
+  if (!mods || mods.length === 0) return [];
+  return typeof mods[0] === "string"
+    ? (mods as string[]).map((m) => m.toUpperCase()).filter((m) => m && m !== "CL")
     : getModAcronyms(mods as OsuMod[]);
-  return acronyms.length ? `+${acronyms.join("")}` : "NM";
+}
+
+// Mods as inline icons when registered, otherwise the `+HDDT` / `NM` text glyph.
+function formatMods(mods: OsuMod[] | string[] | undefined): string {
+  return modsEmoji(modAcronyms(mods));
 }
 
 function formatPp(pp: number | null | undefined): string {
@@ -105,9 +119,40 @@ function scoreLine(score: OscScore): string {
   const head = url ? `[${title}](${url})` : title;
   const mods = formatMods(score.mods);
   const acc = formatAcc(getDisplayedAccuracy(score));
-  const grade = getDisplayedRank(score);
   const pp = score.pp != null ? ` • **${formatPp(score.pp)}**` : "";
-  return `\`${grade}\` ${head} ${mods} • ${acc}${pp}`;
+  return `${gradeEmoji(getDisplayedRank(score))} ${head} ${mods} • ${acc}${pp}`;
+}
+
+// A full single-score card body (the owo-style block): grade + mod icons, star
+// rating and key mode, then accuracy / combo / score, the judgement breakdown,
+// and pp. Returned with the score's cover so the caller can use it as the embed
+// image. Used wherever one score is the subject (/pb, the top-play feed).
+function detailedScore(score: OscScore, opts: { gain?: number } = {}): { text: string; cover: string | undefined } {
+  const meta = [
+    `${gradeEmoji(getDisplayedRank(score))} ${formatMods(score.mods)}`,
+    [
+      score.beatmap?.difficulty_rating != null ? `${score.beatmap.difficulty_rating.toFixed(2)}★` : "",
+      keyCount(score.beatmap?.cs),
+    ].filter(Boolean).join(" • "),
+  ].filter(Boolean).join("   ");
+
+  const combo = score.max_combo != null
+    ? `${formatInt(score.max_combo)}x${isFullCombo(score) ? " FC" : ""}`
+    : "";
+  const total = getDisplayedTotalScore(score);
+  const line2 = [`**${formatAcc(getDisplayedAccuracy(score))}**`, combo || null, total != null ? formatInt(total) : null]
+    .filter(Boolean)
+    .join(" • ");
+
+  const h = getScoreHitCounts(score);
+  const breakdown = "`"
+    + `320 ${formatInt(h.max)} • 300 ${formatInt(h.great)} • 200 ${formatInt(h.good)} • 100 ${formatInt(h.ok)} • 50 ${formatInt(h.meh)} • miss ${formatInt(h.miss)}`
+    + "`";
+
+  const gain = opts.gain != null && opts.gain > 0 ? ` (+${Math.round(opts.gain)}pp)` : "";
+  const ppLine = `**${formatPp(score.pp)}**${gain}`;
+
+  return { text: [meta, line2, breakdown, ppLine].join("\n"), cover: bestCover(score) };
 }
 
 // ---------------------------------------------------------------------------
@@ -121,6 +166,37 @@ interface ProfileUserStats {
   hit_accuracy?: number | null;
   play_count?: number | null;
   level?: { current?: number | null } | null;
+  grade_counts?: { ss?: number; ssh?: number; s?: number; sh?: number; a?: number } | null;
+}
+
+// "SS 1,234  S 567  A 89" with grade pills, folding the silver (HD/FL) variants
+// into their base grade. Returns null when the player has no graded plays.
+function gradeCountLine(stats: ProfileUserStats): string | null {
+  const gc = stats.grade_counts;
+  if (!gc) return null;
+  const ss = (gc.ss ?? 0) + (gc.ssh ?? 0);
+  const s = (gc.s ?? 0) + (gc.sh ?? 0);
+  const a = gc.a ?? 0;
+  if (ss + s + a <= 0) return null;
+  return `${gradeEmoji("X")} ${formatInt(ss)}  ${gradeEmoji("S")} ${formatInt(s)}  ${gradeEmoji("A")} ${formatInt(a)}`;
+}
+
+// The mod a player leans on most across the scores provided, or null when every
+// play is nomod / no scores are available.
+function mostUsedMod(scores: OscScore[]): string | null {
+  const counts = new Map<string, number>();
+  for (const score of scores) {
+    for (const mod of modAcronyms(score.mods)) counts.set(mod, (counts.get(mod) ?? 0) + 1);
+  }
+  let top: string | null = null;
+  let topCount = 0;
+  for (const [mod, count] of counts) {
+    if (count > topCount) {
+      top = mod;
+      topCount = count;
+    }
+  }
+  return top;
 }
 
 interface ProfileUser {
@@ -152,9 +228,14 @@ export function playerEmbed(
     { name: "Level", value: stats.level?.current == null ? "-" : String(Math.round(stats.level.current)), inline: true },
   ];
 
-  const description = best.length
-    ? `**Top plays**\n${best.map(scoreLine).join("\n")}`
-    : undefined;
+  const topMod = mostUsedMod(snapshot.bestScores ?? []);
+  const metaLine = [gradeCountLine(stats), topMod ? `Top mod ${modsEmoji([topMod])}` : null]
+    .filter(Boolean)
+    .join("  •  ");
+  const description = [
+    metaLine || null,
+    best.length ? `**Top plays**\n${best.map(scoreLine).join("\n")}` : null,
+  ].filter(Boolean).join("\n\n") || undefined;
 
   const embed: DiscordEmbed = {
     author: {
@@ -220,12 +301,23 @@ export function recentScoresEmbed(
   siteOrigin: string,
 ): DiscordMessageBody {
   const list = scores.slice(0, 5);
+  let description = "No recent mania plays found.";
+  let cover: string | undefined;
+  if (list.length) {
+    const [latest, ...rest] = list;
+    const detail = detailedScore(latest);
+    cover = detail.cover;
+    const mapUrl = beatmapUrl(latest);
+    const head = mapUrl ? `**[${beatmapTitle(latest)}](${mapUrl})**` : `**${beatmapTitle(latest)}**`;
+    const blocks = [head, detail.text];
+    if (rest.length) blocks.push(`**Earlier plays**\n${rest.map(scoreLine).join("\n")}`);
+    description = blocks.join("\n");
+  }
   const embed: DiscordEmbed = {
     author: { name: username, url: userId ? osuProfileUrl(userId) : undefined },
     color: OSU_PINK,
-    description: list.length
-      ? `**Recent plays**\n${list.map(scoreLine).join("\n")}`
-      : "No recent mania plays found.",
+    description,
+    image: cover ? { url: cover } : undefined,
     footer: { text: BOT_NAME },
   };
   return {
@@ -265,9 +357,9 @@ export function pbEmbed(params: {
     footer: { text: BOT_NAME },
   };
   if (score) {
-    const combo = score.max_combo != null ? ` • ${formatInt(score.max_combo)}x` : "";
-    const pp = score.pp != null ? ` • **${formatPp(score.pp)}**` : "";
-    embed.description = `\`${getDisplayedRank(score)}\` ${formatMods(score.mods)} • ${formatAcc(getDisplayedAccuracy(score))}${combo}${pp}`;
+    const detail = detailedScore(score);
+    embed.description = detail.text;
+    if (detail.cover) embed.image = { url: detail.cover };
     const when = score.ended_at || score.created_at;
     if (when) embed.timestamp = when;
   } else {
@@ -288,13 +380,8 @@ export function pbEmbed(params: {
 
 export function topPlayEmbed(event: CountryTopPlay, country: string | null, siteOrigin: string): DiscordMessageBody {
   const score = event.score;
-  const gain = event.ppGain > 0 ? ` (+${Math.round(event.ppGain)}pp)` : "";
-  const mods = formatMods(score.mods);
-  const acc = formatAcc(getDisplayedAccuracy(score));
-  const grade = getDisplayedRank(score);
-  const stars = score.beatmap?.difficulty_rating != null ? `${score.beatmap.difficulty_rating.toFixed(2)}★` : "";
-  const keys = keyCount(score.beatmap?.cs);
   const mapUrl = beatmapUrl(score);
+  const detail = detailedScore(score, { gain: event.ppGain });
 
   const embed: DiscordEmbed = {
     author: {
@@ -306,10 +393,9 @@ export function topPlayEmbed(event: CountryTopPlay, country: string | null, site
     color: TOP_PLAY_GOLD,
     description: [
       mapUrl ? `**[${beatmapTitle(score)}](${mapUrl})**` : `**${beatmapTitle(score)}**`,
-      `\`${grade}\` ${mods} • ${acc} • **${formatPp(score.pp)}**${gain}`,
-      [keys, stars].filter(Boolean).join(" • "),
-    ].filter(Boolean).join("\n"),
-    image: bestCover(score) ? { url: bestCover(score) as string } : undefined,
+      detail.text,
+    ].join("\n"),
+    image: detail.cover ? { url: detail.cover } : undefined,
     footer: { text: `${countryLabel(country)} • ${BOT_NAME}` },
     timestamp: event.time || undefined,
   };
@@ -345,7 +431,7 @@ export function snipeEmbed(event: SnipeEvent, country: string | null, siteOrigin
     url: event.beatmap.url || undefined,
     color: SNIPE_RED,
     description: [
-      `\`${event.rank}\` ${mods} • ${acc} • ${formatPp(event.pp)}`,
+      `${gradeEmoji(event.rank)} ${mods} • ${acc} • **${formatPp(event.pp)}**`,
       `Score **${formatInt(event.totalScore)}**${event.victimTotalScore != null ? ` vs ${formatInt(event.victimTotalScore)}` : ""}`,
       [keys, stars].filter(Boolean).join(" • "),
     ].filter(Boolean).join("\n"),
@@ -371,7 +457,7 @@ export function topPlaysListEmbed(popoffs: CountryTopPlay[], country: string | n
     const url = beatmapUrl(p.score);
     const head = url ? `[${truncate(map, 70)}](${url})` : truncate(map, 70);
     const gain = p.ppGain > 0 ? ` (+${Math.round(p.ppGain)})` : "";
-    return `**${p.user.username}** • ${head} ${formatMods(p.score.mods)} • **${formatPp(p.score.pp)}**${gain}`;
+    return `${gradeEmoji(getDisplayedRank(p.score))} **${p.user.username}** • ${head} ${formatMods(p.score.mods)} • **${formatPp(p.score.pp)}**${gain}`;
   });
   const embed: DiscordEmbed = {
     title: "Recent top plays",
@@ -416,26 +502,43 @@ export function compareEmbed(
     const v = pick(u.statistics ?? {});
     return v == null ? null : Number(v);
   };
-  const row = (label: string, pick: (s: ProfileUserStats) => number | null | undefined, fmt: (n: number | null) => string, lowerWins = false) => {
+  // A monospace table reads as a real head-to-head and fills the embed width
+  // instead of leaving the right half empty. Column-aligned, with each player's
+  // name as a header. A leading ">" flags the leading value per stat (winner-bold
+  // is impossible inside a code block).
+  const cell = (
+    pick: (s: ProfileUserStats) => number | null | undefined,
+    fmt: (n: number | null) => string,
+    lowerWins = false,
+  ): [string, string] => {
     const va = stat(ua, pick);
     const vb = stat(ub, pick);
-    let mark = ["", ""];
+    let aWins = false;
+    let bWins = false;
     if (va != null && vb != null && va !== vb) {
-      const aWins = lowerWins ? va < vb : va > vb;
-      mark = aWins ? ["**", ""] : ["", "**"];
+      aWins = lowerWins ? va < vb : va > vb;
+      bWins = !aWins;
     }
-    return `${label}: ${mark[0]}${fmt(va)}${mark[0]}  vs  ${mark[1]}${fmt(vb)}${mark[1]}`;
+    return [`${aWins ? ">" : " "}${fmt(va)}`, `${bWins ? ">" : " "}${fmt(vb)}`];
   };
+  const rows: Array<[string, [string, string]]> = [
+    ["pp", cell((s) => s.pp, (n) => (n == null ? "-" : `${formatInt(n)}pp`))],
+    ["Global", cell((s) => s.global_rank, formatRank, true)],
+    ["Country", cell((s) => s.country_rank, formatRank, true)],
+    ["Accuracy", cell((s) => s.hit_accuracy, (n) => (n == null ? "-" : formatAcc(n)))],
+    ["Plays", cell((s) => s.play_count, formatInt)],
+  ];
+  const nameA = truncate(ua.username ?? "Player 1", 12);
+  const nameB = truncate(ub.username ?? "Player 2", 12);
+  const labelW = Math.max(...rows.map((r) => r[0].length));
+  const aW = Math.max(nameA.length, ...rows.map((r) => r[1][0].length));
+  const bW = Math.max(nameB.length, ...rows.map((r) => r[1][1].length));
+  const header = `${"".padEnd(labelW)}   ${nameA.padStart(aW)}   ${nameB.padStart(bW)}`;
+  const lines = rows.map(([label, [va, vb]]) => `${label.padEnd(labelW)}   ${va.padStart(aW)}   ${vb.padStart(bW)}`);
   const embed: DiscordEmbed = {
     title: `${ua.username ?? "?"} vs ${ub.username ?? "?"}`,
     color: OSU_PINK,
-    description: [
-      row("pp", (s) => s.pp, (n) => (n == null ? "-" : `${formatInt(n)}pp`)),
-      row("Global rank", (s) => s.global_rank, formatRank, true),
-      row("Country rank", (s) => s.country_rank, formatRank, true),
-      row("Accuracy", (s) => s.hit_accuracy, (n) => (n == null ? "-" : formatAcc(n))),
-      row("Play count", (s) => s.play_count, formatInt),
-    ].join("\n"),
+    description: "```\n" + [header, ...lines].join("\n") + "\n```",
     footer: { text: BOT_NAME },
   };
   return {
@@ -575,7 +678,7 @@ export function rankingsEmbed(
     // country board it is redundant with the title.
     const cc = (e.user.country_code ?? "").toUpperCase();
     const place = global && cc ? ` ${cc} •` : " •";
-    return `\`#${e.rank}\` **${e.user.username}**${place} ${formatInt(e.pp)}pp`;
+    return `\`#${e.rank}\` **${e.user.username}**${place} **${formatInt(e.pp)}pp**`;
   });
   const scope = global ? "Global" : countryLabel(country);
   const embed: DiscordEmbed = {
@@ -612,7 +715,7 @@ export function farmEmbed(
 ): DiscordMessageBody {
   const list = snapshot.recs.slice(0, 8);
   const lines = list.map((r, i) => {
-    const mods = r.recommendedMods?.length ? `+${r.recommendedMods.join("")}` : "NM";
+    const mods = modsEmoji(r.recommendedMods ?? []);
     const name = truncate(`${r.artist} - ${r.title} [${r.version}]`, 80);
     const head = r.mapUrl ? `[${name}](${r.mapUrl})` : name;
     return `\`${i + 1}.\` ${head} ${mods} • **+${Math.round(r.estimatedPpGain)}pp**`;
@@ -961,11 +1064,10 @@ function trackerScoreLine(score: LeanTrackerScore): string {
   const title = truncate(`${name}${version}`, 58);
   const url = score.beatmap?.url ?? (score.beatmap_id ? `${OSU_BASE}/b/${score.beatmap_id}` : undefined);
   const head = url ? `[${title}](${url})` : title;
-  const grade = score.rank || "?";
   const mods = formatMods(score.mods);
-  const acc = formatAcc(score.accuracy);
+  const acc = formatAcc(getDisplayedAccuracy(score));
   const pp = score.pp != null ? ` • **${formatPp(score.pp)}**` : "";
-  return `\`${grade}\` **${truncate(score.user?.username ?? "?", 18)}** ${head} ${mods} • ${acc}${pp}`;
+  return `${gradeEmoji(getDisplayedRank(score))} **${truncate(score.user?.username ?? "?", 18)}** ${head} ${mods} • ${acc}${pp}`;
 }
 
 export function trackerListEmbed(

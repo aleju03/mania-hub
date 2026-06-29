@@ -102,6 +102,28 @@ function DiscordAdminPage() {
     }
   }, []);
 
+  const registerEmojis = useCallback(async () => {
+    setBusy(true);
+    setMessage(null);
+    setError(null);
+    try {
+      const res = await runLiveBackendAdminAction({ data: { path: "/api/admin/discord/register-emojis" } });
+      const body = res.body
+        ? (JSON.parse(res.body) as { ok?: boolean; total?: number; created?: number; reused?: number; failed?: number; error?: string })
+        : null;
+      if (body && body.ok === false) {
+        setError(body.error ?? "Emoji registration failed.");
+      } else {
+        const failedNote = body?.failed ? `, ${body.failed} failed` : "";
+        setMessage(`Registered emojis: ${body?.created ?? 0} new, ${body?.reused ?? 0} reused${failedNote} of ${body?.total ?? 0}.`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
   const removeSubscription = useCallback(async (id: number) => {
     setBusy(true);
     setMessage(null);
@@ -244,6 +266,22 @@ function DiscordAdminPage() {
                   className="order-1 shrink-0 rounded-lg bg-osu-pink/90 px-3.5 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-osu-pink disabled:opacity-50 sm:order-2"
                 >
                   Register commands
+                </button>
+              </div>
+              <div className="mt-3 flex flex-col gap-3 border-t border-osu-b3/20 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="order-2 text-[11px] leading-relaxed text-osu-l3 sm:order-1 sm:max-w-[640px]">
+                  Uploads the osu! grade pills and mod icons as custom emojis so scores render with real
+                  badges instead of plain text. Run it once after the frontend is deployed (the icons are
+                  fetched from it), and again only if the icon art changes.{" "}
+                  {!status.hasBotToken ? "Set DISCORD_BOT_TOKEN on the backend first." : "Idempotent: existing emojis are reused."}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void registerEmojis()}
+                  disabled={busy || !status.hasBotToken}
+                  className="order-1 shrink-0 rounded-lg border border-osu-pink/40 bg-osu-pink/10 px-3.5 py-2 text-[12px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/20 disabled:opacity-50 sm:order-2"
+                >
+                  Register emojis
                 </button>
               </div>
             </section>
