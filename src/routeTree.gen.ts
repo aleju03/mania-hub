@@ -32,6 +32,7 @@ import { Route as ApiSitemapRouteImport } from './routes/api/sitemap'
 import { Route as ApiReplayUploadRouteImport } from './routes/api/replay-upload'
 import { Route as ApiOgRouteImport } from './routes/api/og'
 import { Route as ApiFaviconRouteImport } from './routes/api/favicon'
+import { Route as ApiCatboxUploadRouteImport } from './routes/api/catbox-upload'
 import { Route as ApiBackgroundRouteImport } from './routes/api/background'
 import { Route as ApiAvatarRouteImport } from './routes/api/avatar'
 import { Route as ApiAudioRouteImport } from './routes/api/audio'
@@ -166,6 +167,11 @@ const ApiFaviconRoute = ApiFaviconRouteImport.update({
   path: '/api/favicon',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCatboxUploadRoute = ApiCatboxUploadRouteImport.update({
+  id: '/api/catbox-upload',
+  path: '/api/catbox-upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiBackgroundRoute = ApiBackgroundRouteImport.update({
   id: '/api/background',
   path: '/api/background',
@@ -284,6 +290,7 @@ export interface FileRoutesByFullPath {
   '/api/audio': typeof ApiAudioRoute
   '/api/avatar': typeof ApiAvatarRoute
   '/api/background': typeof ApiBackgroundRoute
+  '/api/catbox-upload': typeof ApiCatboxUploadRoute
   '/api/favicon': typeof ApiFaviconRoute
   '/api/og': typeof ApiOgRoute
   '/api/replay-upload': typeof ApiReplayUploadRoute
@@ -327,6 +334,7 @@ export interface FileRoutesByTo {
   '/api/audio': typeof ApiAudioRoute
   '/api/avatar': typeof ApiAvatarRoute
   '/api/background': typeof ApiBackgroundRoute
+  '/api/catbox-upload': typeof ApiCatboxUploadRoute
   '/api/favicon': typeof ApiFaviconRoute
   '/api/og': typeof ApiOgRoute
   '/api/replay-upload': typeof ApiReplayUploadRoute
@@ -371,6 +379,7 @@ export interface FileRoutesById {
   '/api/audio': typeof ApiAudioRoute
   '/api/avatar': typeof ApiAvatarRoute
   '/api/background': typeof ApiBackgroundRoute
+  '/api/catbox-upload': typeof ApiCatboxUploadRoute
   '/api/favicon': typeof ApiFaviconRoute
   '/api/og': typeof ApiOgRoute
   '/api/replay-upload': typeof ApiReplayUploadRoute
@@ -416,6 +425,7 @@ export interface FileRouteTypes {
     | '/api/audio'
     | '/api/avatar'
     | '/api/background'
+    | '/api/catbox-upload'
     | '/api/favicon'
     | '/api/og'
     | '/api/replay-upload'
@@ -459,6 +469,7 @@ export interface FileRouteTypes {
     | '/api/audio'
     | '/api/avatar'
     | '/api/background'
+    | '/api/catbox-upload'
     | '/api/favicon'
     | '/api/og'
     | '/api/replay-upload'
@@ -502,6 +513,7 @@ export interface FileRouteTypes {
     | '/api/audio'
     | '/api/avatar'
     | '/api/background'
+    | '/api/catbox-upload'
     | '/api/favicon'
     | '/api/og'
     | '/api/replay-upload'
@@ -546,6 +558,7 @@ export interface RootRouteChildren {
   ApiAudioRoute: typeof ApiAudioRoute
   ApiAvatarRoute: typeof ApiAvatarRoute
   ApiBackgroundRoute: typeof ApiBackgroundRoute
+  ApiCatboxUploadRoute: typeof ApiCatboxUploadRoute
   ApiFaviconRoute: typeof ApiFaviconRoute
   ApiOgRoute: typeof ApiOgRoute
   ApiReplayUploadRoute: typeof ApiReplayUploadRoute
@@ -718,6 +731,13 @@ declare module '@tanstack/react-router' {
       path: '/api/favicon'
       fullPath: '/api/favicon'
       preLoaderRoute: typeof ApiFaviconRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/catbox-upload': {
+      id: '/api/catbox-upload'
+      path: '/api/catbox-upload'
+      fullPath: '/api/catbox-upload'
+      preLoaderRoute: typeof ApiCatboxUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/background': {
@@ -918,6 +938,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAudioRoute: ApiAudioRoute,
   ApiAvatarRoute: ApiAvatarRoute,
   ApiBackgroundRoute: ApiBackgroundRoute,
+  ApiCatboxUploadRoute: ApiCatboxUploadRoute,
   ApiFaviconRoute: ApiFaviconRoute,
   ApiOgRoute: ApiOgRoute,
   ApiReplayUploadRoute: ApiReplayUploadRoute,

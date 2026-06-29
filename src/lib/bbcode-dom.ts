@@ -80,9 +80,11 @@ export function editableWrapMarkup(kind: EditableWrapKind, param?: string): { op
 }
 
 function boxButtonHtml(title: string): string {
+  // Titles may carry nested bbcode (osu allows e.g. [box=[color=#fff]Hi[/color]]),
+  // so render them rather than escaping to text; serializeBox walks them back.
   return '<button type="button" class="js-spoilerbox__link bbcode-spoilerbox__link" contenteditable="false" data-bb-skip="1" tabindex="-1">'
     + '<span class="bbcode-spoilerbox__link-icon"></span>'
-    + `<span class="bbcode-spoilerbox__link-text" data-bb-role="box-title" contenteditable="true">${escapeBBHtml(title)}</span>`
+    + `<span class="bbcode-spoilerbox__link-text" data-bb-role="box-title" contenteditable="true">${bbcodeToEditableHtml(title)}</span>`
     + "</button>";
 }
 
@@ -229,7 +231,8 @@ function serializeList(el: Element): string {
 
 function serializeBox(el: Element): string {
   const titleEl = el.querySelector('[data-bb-role="box-title"]');
-  const title = (titleEl?.textContent ?? "").replace(/\u00a0/g, " ").trim();
+  // Serialize the title's children so nested bbcode (e.g. [color]) round-trips.
+  const title = (titleEl ? serializeChildren(titleEl) : "").replace(/\u00a0/g, " ").trim();
   const body = el.querySelector(":scope > .js-spoilerbox__body");
   const inner = body ? serializeChildren(body) : serializeChildren(el);
   const isSpoilerbox = el.getAttribute("data-bb") === "spoilerbox" && title === "SPOILER";

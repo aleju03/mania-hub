@@ -450,11 +450,34 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
   cursor: text; min-width: 1.5rem; outline: none;
 }
 .bbcode-editor-surface a { cursor: text; }
-.bbcode-editor-surface a[data-bb="url"] { cursor: pointer; }
+/* Links read as editable text so the caret lands where you click inside them;
+   right-click (or the inspector) handles link actions instead. */
+.bbcode-editor-surface a[data-bb="url"] { cursor: text; }
 .bbcode-editor-surface a.is-selected {
   border-radius: 0.2rem;
   background: rgba(255, 102, 170, 0.14);
   box-shadow: 0 0 0 1px rgba(255, 102, 170, 0.5);
+}
+.bbcode-editor-surface img { cursor: pointer; }
+.bbcode-editor-surface img.is-selected {
+  outline: 2px solid var(--color-osu-pink);
+  outline-offset: 1px;
+  border-radius: 0.15rem;
+}
+.bbcode-upload-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.1rem 0.5rem;
+  margin: 0 0.15rem;
+  border-radius: 0.3rem;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-osu-l2);
+  background: var(--color-osu-b5);
+  border: 1px dashed rgba(255, 102, 170, 0.5);
+  vertical-align: middle;
+  user-select: none;
 }
 .bbcode-editor-surface .imagemap__link {
   pointer-events: auto; cursor: pointer;

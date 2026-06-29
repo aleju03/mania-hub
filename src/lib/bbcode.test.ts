@@ -129,6 +129,16 @@ describe("parseBBCode", () => {
     expect(single("[box=]content[/box]")).toMatchObject({ type: "box", title: "" });
   });
 
+  it("captures a balanced box title that contains nested bbcode", () => {
+    // osu! allows e.g. [box=[color=#fff]Hi[/color]]; the inner ']' must not end
+    // the open tag, and the body must not absorb the title's closing tags.
+    expect(single("[box=[color=#69FFDC]Set-Up[/color]]content[/box]")).toMatchObject({
+      type: "box",
+      title: "[color=#69FFDC]Set-Up[/color]",
+      children: [{ type: "text", text: "content" }],
+    });
+  });
+
   it("records which boundary newlines block tags trimmed", () => {
     expect(parseBBCode("[notice]\ncontent\n[/notice]\nafter")[0]).toMatchObject({
       type: "notice",

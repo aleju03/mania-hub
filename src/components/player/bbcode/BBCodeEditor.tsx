@@ -6,6 +6,10 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type ChangeEvent as ReactChangeEvent,
+  type ClipboardEvent as ReactClipboardEvent,
+  type DragEvent as ReactDragEvent,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import {
@@ -17,8 +21,12 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsDownUp,
+  ClipboardPaste,
   Code,
   Copy,
+  Crop,
+  Eraser,
+  ExternalLink,
   EyeOff,
   Heading1,
   Image,
@@ -30,8 +38,11 @@ import {
   Megaphone,
   Music,
   Palette,
+  Pencil,
   Plus,
   Rainbow,
+  Replace,
+  Scissors,
   Strikethrough,
   TextQuote,
   Trash2,
@@ -50,8 +61,11 @@ import {
   type EditableWrapKind,
 } from "../../../lib/bbcode-dom";
 import { getUser, searchUsers } from "../../../lib/osu";
+import { isUploadableImage, uploadImageToCatbox } from "../../../lib/catbox-upload";
 import { SearchInput } from "../../ui/SearchInput";
 import { BBCodePreview } from "./BBCodePreview";
+import { BBCodeContextMenu, type ContextMenuItem, type ContextMenuState } from "./BBCodeContextMenu";
+import { ImageEditorModal, type ImageEditorSource } from "./ImageEditorModal";
 
 const DRAFT_KEY_PREFIX = "mania-hub-bbcode-draft-v1:";
 const DRAFT_SAVE_DEBOUNCE_MS = 400;
@@ -127,6 +141,81 @@ interface SelectionSnapshot {
   start: number;
   end: number;
   text: string;
+}
+
+interface ImageSelection {
+  src: string;
+  href: string;
+}
+
+function rgbToHex(value: string): string | null {
+  const match = /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})/.exec(value.trim());
+  if (!match) return null;
+  return `#${match.slice(1, 4).map((channel) => Number(channel).toString(16).padStart(2, "0")).join("").toUpperCase()}`;
+}
+
+/** Reads an explicit color off one element (our spans stamp data-bb-color),
+    resolving named colors like "green" to a hex the color picker can show. */
+function readElementColor(el: HTMLElement): string | null {
+  const attr = el.getAttribute("data-bb-color");
+  if (attr) {
+    const hex = normalizeHexColor(attr);
+    if (hex) return hex;
+    // Named color: resolve via the element's computed color (it carries it).
+    const computed = typeof window !== "undefined" ? rgbToHex(window.getComputedStyle(el).color) : null;
+    return computed ?? attr.toUpperCase();
+  }
+  const inline = el.style?.color;
+  if (inline) return rgbToHex(inline) ?? normalizeHexColor(inline);
+  return null;
+}
+
+/** Reads an explicit [size] percent off one element. */
+function readElementSize(el: HTMLElement): number | null {
+  const attr = el.getAttribute("data-bb-size");
+  if (attr) {
+    const value = Number(attr);
+    return Number.isFinite(value) ? value : null;
+  }
+  const match = /^(\d+)%$/.exec(el.style?.fontSize ?? "");
+  return match ? Number(match[1]) : null;
+}
+
+/** caretRangeFromPoint with a Firefox (caretPositionFromPoint) fallback. */
+function caretRangeFromPoint(x: number, y: number): Range | null {
+  const doc = document as Document & {
+    caretRangeFromPoint?: (x: number, y: number) => Range | null;
+    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+  };
+  if (typeof doc.caretRangeFromPoint === "function") return doc.caretRangeFromPoint(x, y);
+  const pos = doc.caretPositionFromPoint?.(x, y);
+  if (pos) {
+    const range = document.createRange();
+    range.setStart(pos.offsetNode, pos.offset);
+    range.collapse(true);
+    return range;
+  }
+  return null;
+}
+
+/** Walks ancestors from a selection node up to (not including) the surface. */
+function climbForValue<T>(node: Node | null, root: HTMLElement, read: (el: HTMLElement) => T | null): T | null {
+  let el: HTMLElement | null = node
+    ? (node.nodeType === 3 ? node.parentElement : (node as HTMLElement))
+    : null;
+  while (el && el !== root && root.contains(el)) {
+    const value = read(el);
+    if (value != null) return value;
+    el = el.parentElement;
+  }
+  return null;
+}
+
+// Placeholder dropped into code-mode source while an image uploads; stripped
+// from anything serialized/persisted so a stray token never reaches output.
+const UPLOAD_TOKEN_PATTERN = /\[uploading image #up-\d+\]/g;
+function stripUploadTokens(value: string): string {
+  return value.replace(UPLOAD_TOKEN_PATTERN, "");
 }
 
 function readDraft(key: string): string | null {
@@ -388,6 +477,19 @@ export function BBCodeEditor({
   const [inlineStates, setInlineStates] = useState({ bold: false, italic: false, underline: false, strike: false });
   const [imagemapSelection, setImagemapSelection] = useState<ImagemapSelection | null>(null);
   const [linkSelection, setLinkSelection] = useState<LinkSelection | null>(null);
+  const [imageSelection, setImageSelection] = useState<ImageSelection | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [imageEditorState, setImageEditorState] = useState<{ source: ImageEditorSource } | null>(null);
+  const [imageEditorBusy, setImageEditorBusy] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<{ kind: "uploading" | "error"; message?: string } | null>(null);
+  // Color/size of the current visual selection, for toolbar state + dialog prefill.
+  const [selectionColor, setSelectionColor] = useState<string | null>(null);
+  const [selectionSize, setSelectionSize] = useState<number | null>(null);
+  const [focusImageLinkTick, setFocusImageLinkTick] = useState(0);
+  // Height of the floating inspector/dialog overlay, so the surface can pad its
+  // top by that much: the overlay never reflows the page, yet content under it
+  // stays reachable by scrolling instead of being hidden at the very top.
+  const [overlayHeight, setOverlayHeight] = useState(0);
   // Caret offset in the raw-source textarea; the preview highlights its node.
   const [caretOffset, setCaretOffset] = useState<number | null>(null);
   // Bumped whenever the visual surface must be rebuilt from `source`.
@@ -398,10 +500,23 @@ export function BBCodeEditor({
   const imagemapElementRef = useRef<HTMLElement | null>(null);
   const imagemapDragRef = useRef<ImagemapDragState | null>(null);
   const linkElementRef = useRef<HTMLAnchorElement | null>(null);
+  const imageElementRef = useRef<HTMLImageElement | null>(null);
+  const imageEditorTargetRef = useRef<HTMLImageElement | null>(null);
+  const replaceTargetRef = useRef<HTMLImageElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const imageLinkInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadCounter = useRef(0);
+  const selectionColorRef = useRef<string | null>(null);
+  const selectionSizeRef = useRef<number | null>(null);
+  const overlayObserverRef = useRef<ResizeObserver | null>(null);
   const sourceRef = useRef(source);
   const selectionRef = useRef<SelectionSnapshot>({ start: 0, end: 0, text: "" });
   const visualRangeRef = useRef<Range | null>(null);
   const visualSyncHandle = useRef<number | null>(null);
+  // Latest edit mode, so an in-flight upload resolves into the surface that is
+  // actually mounted when it finishes (not the one captured at paste time).
+  const editModeRef = useRef(editMode);
+  editModeRef.current = editMode;
   const deferredSource = useDeferredValue(source);
   const deferredCaretOffset = useDeferredValue(caretOffset);
 
@@ -426,8 +541,11 @@ export function BBCodeEditor({
     el.innerHTML = bbcodeToEditableHtml(sourceRef.current);
     imagemapElementRef.current = null;
     linkElementRef.current = null;
+    imageElementRef.current = null;
     setImagemapSelection(null);
     setLinkSelection(null);
+    setImageSelection(null);
+    setContextMenu(null);
   }, [editMode, visualEpoch]);
 
   const flushVisual = useCallback((): string => {
@@ -494,6 +612,8 @@ export function BBCodeEditor({
   const updateSelectedLinkText = useCallback((text: string) => {
     const anchor = linkElementRef.current;
     if (!anchor) return;
+    // Setting textContent would delete a wrapped <img>; leave image-links alone.
+    if (anchor.querySelector("img")) return;
     anchor.textContent = text;
     if (text !== (anchor.getAttribute("href") ?? "")) {
       anchor.removeAttribute("data-bare");
@@ -527,6 +647,68 @@ export function BBCodeEditor({
     imagemapElementRef.current = null;
     setImagemapSelection(null);
   }, []);
+
+  const clearImageSelection = useCallback(() => {
+    visualRef.current
+      ?.querySelectorAll<HTMLImageElement>("img.is-selected")
+      .forEach((img) => img.classList.remove("is-selected"));
+    imageElementRef.current = null;
+    setImageSelection(null);
+  }, []);
+
+  const selectImage = useCallback((img: HTMLImageElement) => {
+    clearLinkSelection();
+    clearImagemapSelection();
+    visualRef.current
+      ?.querySelectorAll<HTMLImageElement>("img.is-selected")
+      .forEach((other) => other.classList.remove("is-selected"));
+    img.classList.add("is-selected");
+    imageElementRef.current = img;
+    const anchor = img.closest<HTMLAnchorElement>('a[data-bb="url"]');
+    setImageSelection({
+      src: img.getAttribute("src") ?? "",
+      href: anchor?.getAttribute("href") ?? "",
+    });
+  }, [clearImagemapSelection, clearLinkSelection]);
+
+  /**
+   * Puts a real DOM range around the selected image (or its sole-wrapping link)
+   * so toolbar wraps like [centre] act on the image instead of dropping the
+   * placeholder word at a stray caret. Returns true if an image was selected.
+   */
+  const selectImageRange = useCallback((): boolean => {
+    const img = imageElementRef.current;
+    const el = visualRef.current;
+    if (!img || !img.isConnected || !el || !el.contains(img)) return false;
+    el.focus();
+    const selection = window.getSelection();
+    if (!selection) return false;
+    const anchor = img.closest<HTMLAnchorElement>('a[data-bb="url"]');
+    const target = anchor && anchor.querySelectorAll("img").length === 1 && (anchor.textContent ?? "").trim() === ""
+      ? anchor
+      : img;
+    const range = document.createRange();
+    range.selectNode(target);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return true;
+  }, []);
+
+  // After a wrap replaces a selected image node, re-point to the fresh element.
+  const resyncImageAfterWrap = useCallback(() => {
+    const stale = imageElementRef.current;
+    if (!stale || stale.isConnected) return;
+    const fresh = visualRef.current?.querySelector<HTMLImageElement>("img.is-selected");
+    if (!fresh) {
+      clearImageSelection();
+      return;
+    }
+    imageElementRef.current = fresh;
+    setImageSelection({
+      src: fresh.getAttribute("src") ?? "",
+      href: fresh.closest<HTMLAnchorElement>('a[data-bb="url"]')?.getAttribute("href") ?? "",
+    });
+  }, [clearImageSelection]);
 
   const selectImagemapArea = useCallback((areaEl: HTMLElement) => {
     const mapEl = areaEl.closest<HTMLElement>('.imagemap[data-bb="imagemap"]');
@@ -618,14 +800,15 @@ export function BBCodeEditor({
     if (!root || !target) return;
     if (!mapEl || !root.contains(mapEl)) {
       if (imagemapSelection && root.contains(target)) clearImagemapSelection();
-      const anchor = target.closest<HTMLAnchorElement>("a");
-      const linkKind = anchor?.getAttribute("data-bb");
-      if (anchor && root.contains(anchor) && (!linkKind || linkKind === "url")) {
+      const img = target.closest<HTMLImageElement>("img");
+      if (img && root.contains(img) && !img.closest(".bbcode-editor-embed")) {
         event.preventDefault();
-        selectLink(anchor);
-      } else if (linkSelection && root.contains(target)) {
-        clearLinkSelection();
+        selectImage(img);
+        return;
       }
+      if (imageSelection && root.contains(target)) clearImageSelection();
+      // Link selection is driven by the caret (selectionchange) instead of being
+      // stolen here, so clicking inside link text drops the cursor where clicked.
       return;
     }
 
@@ -657,14 +840,14 @@ export function BBCodeEditor({
     document.addEventListener("pointerup", stopImagemapDrag);
     document.addEventListener("pointercancel", stopImagemapDrag);
   }, [
+    clearImageSelection,
     clearImagemapSelection,
-    clearLinkSelection,
     handleImagemapPointerMove,
+    imageSelection,
     imagemapSelection,
-    linkSelection,
     pickImagemapAreaAtPoint,
+    selectImage,
     selectImagemapArea,
-    selectLink,
     stopImagemapDrag,
   ]);
 
@@ -721,7 +904,7 @@ export function BBCodeEditor({
   }, [clearImagemapSelection, imagemapSelection, scheduleVisualSync, selectImagemapArea]);
 
   useEffect(() => {
-    const handle = window.setTimeout(() => writeDraft(draftKey, source), DRAFT_SAVE_DEBOUNCE_MS);
+    const handle = window.setTimeout(() => writeDraft(draftKey, stripUploadTokens(source)), DRAFT_SAVE_DEBOUNCE_MS);
     return () => window.clearTimeout(handle);
   }, [draftKey, source]);
 
@@ -737,34 +920,68 @@ export function BBCodeEditor({
     return () => window.clearTimeout(handle);
   }, [confirmReset]);
 
-  // Reflect the caret's inline formatting in the toolbar while visually editing.
+  // Reflect the caret's inline formatting, color, size and link in the toolbar
+  // and inspectors while visually editing.
   useEffect(() => {
     if (editMode !== "visual") return;
     const handler = () => {
       const el = visualRef.current;
       const selection = window.getSelection();
       if (!el || !selection || selection.rangeCount === 0 || !el.contains(selection.anchorNode)) return;
+      // Bail out of state updates when nothing changed so caret moves don't
+      // re-render the whole editor on every keystroke.
       try {
-        setInlineStates({
+        const next = {
           bold: document.queryCommandState("bold"),
           italic: document.queryCommandState("italic"),
           underline: document.queryCommandState("underline"),
           strike: document.queryCommandState("strikeThrough"),
-        });
+        };
+        setInlineStates((prev) =>
+          prev.bold === next.bold && prev.italic === next.italic && prev.underline === next.underline && prev.strike === next.strike
+            ? prev
+            : next,
+        );
       } catch {
         // queryCommandState can throw on detached selections; keep last state.
+      }
+      const node = selection.focusNode ?? selection.anchorNode;
+      const color = climbForValue(node, el, readElementColor);
+      const size = climbForValue(node, el, readElementSize);
+      selectionColorRef.current = color;
+      selectionSizeRef.current = size;
+      setSelectionColor((prev) => (prev === color ? prev : color));
+      setSelectionSize((prev) => (prev === size ? prev : size));
+      // Show the link under the caret in the inspector (without stealing clicks).
+      const anchor = climbForValue<HTMLAnchorElement>(node, el, (cur) =>
+        cur.tagName === "A" && cur.getAttribute("data-bb") === "url" ? (cur as HTMLAnchorElement) : null,
+      );
+      if (anchor) {
+        if (linkElementRef.current !== anchor) selectLink(anchor);
+        else {
+          // Keep the inspector's Text field synced while typing in the link.
+          const text = anchor.textContent ?? "";
+          setLinkSelection((prev) => (prev && prev.text !== text ? { ...prev, text } : prev));
+        }
+      } else if (linkElementRef.current) {
+        clearLinkSelection();
       }
     };
     document.addEventListener("selectionchange", handler);
     return () => document.removeEventListener("selectionchange", handler);
-  }, [editMode]);
+  }, [clearLinkSelection, editMode, selectLink]);
 
   const switchMode = useCallback((next: EditMode) => {
     if (next === editMode) return;
     if (editMode === "visual") flushVisual();
     setDialog(null);
+    // Inspectors point at DOM in the surface we're leaving; drop them so the
+    // overlay doesn't float stale controls over the other mode.
+    clearLinkSelection();
+    clearImageSelection();
+    clearImagemapSelection();
     setEditMode(next);
-  }, [editMode, flushVisual]);
+  }, [clearImageSelection, clearImagemapSelection, clearLinkSelection, editMode, flushVisual]);
 
   // ---- visual-mode selection helpers -------------------------------------
 
@@ -870,13 +1087,18 @@ export function BBCodeEditor({
   }, [insertVisualHtml, restoreVisualRange, scheduleVisualSync]);
 
   const wrapVisual = useCallback((kind: EditableWrapKind, param: string | undefined, placeholder: string) => {
+    // A selected image has no text range, so target its DOM node directly;
+    // otherwise the wrap would drop `placeholder` at a stray caret.
+    const onImage = selectImageRange();
     ensureVisualSelection();
     const inner = visualSelectionHtml() || escapeBBHtml(placeholder);
     const { open, close } = editableWrapMarkup(kind, param);
     insertVisualHtml(open + inner + close);
-  }, [ensureVisualSelection, insertVisualHtml, visualSelectionHtml]);
+    if (onImage) resyncImageAfterWrap();
+  }, [ensureVisualSelection, insertVisualHtml, resyncImageAfterWrap, selectImageRange, visualSelectionHtml]);
 
   const execVisual = useCallback((command: string) => {
+    selectImageRange();
     ensureVisualSelection();
     try {
       document.execCommand(command);
@@ -884,7 +1106,7 @@ export function BBCodeEditor({
       // Unsupported command; nothing sensible to fall back to.
     }
     scheduleVisualSync();
-  }, [ensureVisualSelection, scheduleVisualSync]);
+  }, [ensureVisualSelection, scheduleVisualSync, selectImageRange]);
 
   // ---- code-mode selection helpers ----------------------------------------
 
@@ -990,6 +1212,10 @@ export function BBCodeEditor({
         setUrlField("");
       } else if (next === "box") {
         setTextField("");
+      } else if (next === "color") {
+        if (selectionColorRef.current) setHexField(selectionColorRef.current);
+      } else if (next === "size") {
+        if (selectionSizeRef.current != null) setCustomSize(String(selectionSizeRef.current));
       }
       return next;
     });
@@ -1019,7 +1245,7 @@ export function BBCodeEditor({
   }, [editMode]);
 
   const copyBBCode = useCallback(() => {
-    const value = editMode === "visual" ? flushVisual() : sourceRef.current;
+    const value = stripUploadTokens(editMode === "visual" ? flushVisual() : sourceRef.current);
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(value).then(() => setCopied(true)).catch(() => {});
     }
@@ -1078,7 +1304,401 @@ export function BBCodeEditor({
     return { text, colors };
   }, [gradientMirror, gradientStops, textField]);
 
+  // ---- images: upload, link, replace, crop ---------------------------------
+
+  const insertImageMarkup = useCallback((url: string) => {
+    if (editMode === "visual") insertVisualHtml(bbcodeToEditableHtml(`[img]${url}[/img]`));
+    else insertSnippet(`[img]${url}[/img]`);
+  }, [editMode, insertSnippet, insertVisualHtml]);
+
+  /** Uploads a pasted/dropped image, swapping an in-flight placeholder for it. */
+  const uploadImageFile = useCallback(async (file: Blob) => {
+    if (!isUploadableImage(file)) {
+      setUploadStatus({ kind: "error", message: "That file isn't a supported image." });
+      return;
+    }
+    const id = `up-${(uploadCounter.current += 1)}`;
+    const mode = editMode;
+    const token = `[uploading image #${id}]`;
+    setUploadStatus({ kind: "uploading" });
+    if (mode === "visual") {
+      insertVisualHtml(
+        `<span class="bbcode-upload-chip" data-upload-id="${id}" data-bb-skip="1" contenteditable="false">Uploading image…</span>`,
+      );
+    } else {
+      const el = textareaRef.current;
+      if (el) insertAtSelection(el, token);
+    }
+    try {
+      const url = await uploadImageToCatbox(file);
+      // Resolve against the surface that is actually mounted now, not `mode`:
+      // the user may have switched Visual<->BBCode while the upload was in flight.
+      const chip = visualRef.current?.querySelector<HTMLElement>(`[data-upload-id="${id}"]`);
+      if (chip) {
+        const img = document.createElement("img");
+        img.setAttribute("src", url);
+        img.setAttribute("alt", "");
+        img.setAttribute("loading", "lazy");
+        chip.replaceWith(img);
+        flushVisual();
+        selectImage(img);
+      } else if (sourceRef.current.includes(token)) {
+        updateSource(sourceRef.current.replace(token, `[img]${url}[/img]`));
+        // Rebuild the visual surface if we've since switched to it, so the
+        // literal token text can't linger and get serialized back.
+        if (editModeRef.current === "visual") setVisualEpoch((epoch) => epoch + 1);
+      } else if (editModeRef.current === "visual") {
+        insertVisualHtml(bbcodeToEditableHtml(`[img]${url}[/img]`));
+      } else {
+        insertSnippet(`[img]${url}[/img]`);
+      }
+      setUploadStatus(null);
+    } catch (error) {
+      const chip = visualRef.current?.querySelector(`[data-upload-id="${id}"]`);
+      if (chip) {
+        chip.remove();
+        flushVisual();
+      } else if (sourceRef.current.includes(token)) {
+        updateSource(sourceRef.current.replace(token, ""));
+        if (editModeRef.current === "visual") setVisualEpoch((epoch) => epoch + 1);
+      }
+      setUploadStatus({ kind: "error", message: error instanceof Error ? error.message : "Upload failed." });
+    }
+  }, [editMode, flushVisual, insertSnippet, insertVisualHtml, selectImage, updateSource]);
+
+  /** Wraps/updates/unwraps the [url] around the selected image. */
+  const mutateImageLinkDom = useCallback((value: string) => {
+    const img = imageElementRef.current;
+    if (!img) return;
+    const existing = img.closest<HTMLAnchorElement>('a[data-bb="url"]');
+    const trimmed = value.trim();
+    if (existing) {
+      if (trimmed) {
+        existing.setAttribute("href", trimmed);
+        existing.setAttribute("title", trimmed);
+      } else {
+        const fragment = document.createDocumentFragment();
+        while (existing.firstChild) fragment.appendChild(existing.firstChild);
+        existing.replaceWith(fragment);
+      }
+    } else if (/^https?:\/\/\S+/i.test(trimmed)) {
+      const anchor = document.createElement("a");
+      anchor.setAttribute("href", trimmed);
+      anchor.setAttribute("data-bb", "url");
+      anchor.setAttribute("title", trimmed);
+      img.replaceWith(anchor);
+      anchor.appendChild(img);
+    }
+    scheduleVisualSync();
+  }, [scheduleVisualSync]);
+
+  const updateImageLink = useCallback((value: string) => {
+    setImageSelection((sel) => (sel ? { ...sel, href: value } : sel));
+    mutateImageLinkDom(value);
+  }, [mutateImageLinkDom]);
+
+  const deleteSelectedImage = useCallback(() => {
+    const img = imageElementRef.current;
+    if (!img) return;
+    const anchor = img.closest<HTMLAnchorElement>('a[data-bb="url"]');
+    // Remove the wrapping link too if it only existed to wrap this image.
+    if (anchor && (anchor.textContent ?? "").trim() === "" && anchor.querySelectorAll("img").length === 1) {
+      anchor.remove();
+    } else {
+      img.remove();
+    }
+    clearImageSelection();
+    flushVisual();
+  }, [clearImageSelection, flushVisual]);
+
+  const openImageEditor = useCallback((img: HTMLImageElement) => {
+    imageEditorTargetRef.current = img;
+    setImageEditorState({ source: { url: img.getAttribute("src") ?? "" } });
+  }, []);
+
+  const applyImageEdit = useCallback(async (blob: Blob) => {
+    setImageEditorBusy(true);
+    try {
+      const url = await uploadImageToCatbox(blob);
+      const img = imageEditorTargetRef.current;
+      if (img && img.isConnected) {
+        img.setAttribute("src", url);
+        setImageSelection((sel) => (sel ? { ...sel, src: url } : sel));
+        flushVisual();
+      } else {
+        // Target was removed (surface rebuilt) while editing: insert fresh.
+        insertImageMarkup(url);
+      }
+      imageEditorTargetRef.current = null;
+      setImageEditorState(null);
+    } finally {
+      setImageEditorBusy(false);
+    }
+  }, [flushVisual, insertImageMarkup]);
+
+  const triggerReplaceImage = useCallback((img: HTMLImageElement) => {
+    replaceTargetRef.current = img;
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleReplaceFile = useCallback(async (event: ReactChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    const img = replaceTargetRef.current;
+    replaceTargetRef.current = null;
+    if (!file || !img) return;
+    if (!isUploadableImage(file)) {
+      setUploadStatus({ kind: "error", message: "That file isn't a supported image." });
+      return;
+    }
+    setUploadStatus({ kind: "uploading" });
+    try {
+      const url = await uploadImageToCatbox(file);
+      if (img.isConnected) {
+        img.setAttribute("src", url);
+        setImageSelection((sel) => (sel ? { ...sel, src: url } : sel));
+        flushVisual();
+      } else {
+        insertImageMarkup(url);
+      }
+      setUploadStatus(null);
+    } catch (error) {
+      setUploadStatus({ kind: "error", message: error instanceof Error ? error.message : "Upload failed." });
+    }
+  }, [flushVisual, insertImageMarkup]);
+
+  // ---- clipboard, paste, drop ----------------------------------------------
+
+  const copySelection = useCallback(() => {
+    try { document.execCommand("copy"); } catch { /* clipboard blocked */ }
+  }, []);
+
+  const cutSelection = useCallback(() => {
+    try { document.execCommand("cut"); } catch { /* clipboard blocked */ }
+    scheduleVisualSync();
+  }, [scheduleVisualSync]);
+
+  const insertPlainText = useCallback((text: string) => {
+    if (editMode === "visual") {
+      restoreVisualRange();
+      insertVisualHtml(escapeBBHtml(text).replace(/\n/g, "<br>"));
+    } else {
+      const el = textareaRef.current;
+      if (el) insertAtSelection(el, text);
+    }
+  }, [editMode, insertVisualHtml, restoreVisualRange]);
+
+  // Context-menu paste: route images through catbox, drop text inline.
+  const pasteFromClipboard = useCallback(async () => {
+    try {
+      if (navigator.clipboard?.read) {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          const imageType = item.types.find((type) => type.startsWith("image/"));
+          if (imageType) {
+            await uploadImageFile(await item.getType(imageType));
+            return;
+          }
+        }
+        const textItem = items.find((item) => item.types.includes("text/plain"));
+        if (textItem) {
+          insertPlainText(await (await textItem.getType("text/plain")).text());
+          return;
+        }
+      }
+      const text = await navigator.clipboard?.readText?.();
+      if (text) insertPlainText(text);
+    } catch {
+      setUploadStatus({ kind: "error", message: "Couldn't read the clipboard. Use Ctrl+V instead." });
+    }
+  }, [insertPlainText, uploadImageFile]);
+
+  const handlePaste = useCallback((event: ReactClipboardEvent<HTMLElement>) => {
+    const items = event.clipboardData?.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (item.kind === "file" && item.type.startsWith("image/")) {
+        const file = item.getAsFile();
+        if (file) {
+          event.preventDefault();
+          void uploadImageFile(file);
+          return;
+        }
+      }
+    }
+  }, [uploadImageFile]);
+
+  const handleDragOver = useCallback((event: ReactDragEvent<HTMLElement>) => {
+    if (Array.from(event.dataTransfer?.items ?? []).some((item) => item.kind === "file")) {
+      event.preventDefault();
+    }
+  }, []);
+
+  const handleDrop = useCallback((event: ReactDragEvent<HTMLElement>) => {
+    const file = Array.from(event.dataTransfer?.files ?? []).find((entry) => entry.type.startsWith("image/"));
+    if (!file) return;
+    event.preventDefault();
+    if (editMode === "visual") {
+      const range = caretRangeFromPoint(event.clientX, event.clientY);
+      const selection = window.getSelection();
+      if (range && selection && visualRef.current?.contains(range.startContainer)) {
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+    }
+    void uploadImageFile(file);
+  }, [editMode, uploadImageFile]);
+
+  // ---- right-click context menu --------------------------------------------
+
+  const buildImageMenuItems = useCallback((img: HTMLImageElement): ContextMenuItem[] => {
+    const src = img.getAttribute("src") ?? "";
+    const anchor = img.closest<HTMLAnchorElement>('a[data-bb="url"]');
+    const items: ContextMenuItem[] = [
+      { label: "Resize / crop…", icon: <Crop size={14} />, onSelect: () => openImageEditor(img) },
+      { label: "Replace image…", icon: <Replace size={14} />, onSelect: () => triggerReplaceImage(img) },
+      {
+        label: anchor ? "Edit link…" : "Add link…",
+        icon: anchor ? <Pencil size={14} /> : <Link size={14} />,
+        onSelect: () => { selectImage(img); setFocusImageLinkTick((tick) => tick + 1); },
+      },
+    ];
+    if (anchor) {
+      items.push({ label: "Remove link", icon: <Unlink size={14} />, onSelect: () => { selectImage(img); updateImageLink(""); } });
+    }
+    items.push(
+      { separator: true },
+      { label: "Copy image URL", icon: <Copy size={14} />, disabled: !src, onSelect: () => { void navigator.clipboard?.writeText?.(src); } },
+      { label: "Open image in new tab", icon: <ExternalLink size={14} />, disabled: !src, onSelect: () => { window.open(src, "_blank", "noopener,noreferrer"); } },
+      { separator: true },
+      { label: "Delete image", icon: <Trash2 size={14} />, danger: true, onSelect: () => { selectImage(img); deleteSelectedImage(); } },
+    );
+    return items;
+  }, [deleteSelectedImage, openImageEditor, selectImage, triggerReplaceImage, updateImageLink]);
+
+  const buildLinkMenuItems = useCallback((anchor: HTMLAnchorElement): ContextMenuItem[] => {
+    const href = anchor.getAttribute("href") ?? "";
+    return [
+      { label: "Edit link…", icon: <Pencil size={14} />, onSelect: () => selectLink(anchor) },
+      { label: "Open link", icon: <ExternalLink size={14} />, disabled: !href, onSelect: () => { window.open(href, "_blank", "noopener,noreferrer"); } },
+      { label: "Copy link URL", icon: <Copy size={14} />, disabled: !href, onSelect: () => { void navigator.clipboard?.writeText?.(href); } },
+      { separator: true },
+      { label: "Remove link", icon: <Unlink size={14} />, onSelect: () => { selectLink(anchor); removeSelectedLink(); } },
+    ];
+  }, [removeSelectedLink, selectLink]);
+
+  const buildTextMenuItems = useCallback((): ContextMenuItem[] => {
+    const selection = window.getSelection();
+    const hasSelection = !!selection && !selection.isCollapsed && selection.toString().length > 0;
+    return [
+      { label: "Cut", icon: <Scissors size={14} />, disabled: !hasSelection, onSelect: cutSelection },
+      { label: "Copy", icon: <Copy size={14} />, disabled: !hasSelection, onSelect: copySelection },
+      { label: "Paste", icon: <ClipboardPaste size={14} />, onSelect: () => { void pasteFromClipboard(); } },
+      { separator: true },
+      { label: "Bold", icon: <Bold size={14} />, onSelect: () => applyInline("bold", "b", "text") },
+      { label: "Italic", icon: <Italic size={14} />, onSelect: () => applyInline("italic", "i", "text") },
+      { label: "Underline", icon: <Underline size={14} />, onSelect: () => applyInline("underline", "u", "text") },
+      { label: "Text color…", icon: <Palette size={14} />, onSelect: () => openDialog("color") },
+      { label: "Add link…", icon: <Link size={14} />, onSelect: () => openDialog("link") },
+      { separator: true },
+      { label: "Clear formatting", icon: <Eraser size={14} />, onSelect: () => execVisual("removeFormat") },
+    ];
+  }, [applyInline, copySelection, cutSelection, execVisual, openDialog, pasteFromClipboard]);
+
+  const handleVisualContextMenu = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    const root = visualRef.current;
+    const target = event.target as HTMLElement | null;
+    if (!root || !target || !root.contains(target)) return;
+    event.preventDefault();
+    // Snapshot the right-click caret so a later Paste lands where clicked.
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0 && root.contains(selection.anchorNode)) {
+      visualRangeRef.current = selection.getRangeAt(0).cloneRange();
+    }
+    const mapEl = target.closest<HTMLElement>('.imagemap[data-bb="imagemap"]');
+    const img = target.closest<HTMLImageElement>("img");
+    const anchor = target.closest<HTMLAnchorElement>('a[data-bb="url"]');
+    let items: ContextMenuItem[];
+    if (img && root.contains(img) && !img.closest(".bbcode-editor-embed") && !mapEl) {
+      selectImage(img);
+      items = buildImageMenuItems(img);
+    } else if (anchor && root.contains(anchor)) {
+      items = buildLinkMenuItems(anchor);
+    } else {
+      items = buildTextMenuItems();
+    }
+    setContextMenu({ x: event.clientX, y: event.clientY, items });
+  }, [buildImageMenuItems, buildLinkMenuItems, buildTextMenuItems, selectImage]);
+
+  // Focus the image-link field when the context menu asks to edit it.
+  useEffect(() => {
+    if (focusImageLinkTick === 0) return;
+    imageLinkInputRef.current?.focus();
+    imageLinkInputRef.current?.select();
+  }, [focusImageLinkTick]);
+
+  // Measure the floating overlay so the surface can offset its content by it.
+  const setOverlayNode = useCallback((node: HTMLDivElement | null) => {
+    overlayObserverRef.current?.disconnect();
+    overlayObserverRef.current = null;
+    if (!node) {
+      setOverlayHeight(0);
+      return;
+    }
+    setOverlayHeight(node.offsetHeight);
+    if (typeof ResizeObserver !== "undefined") {
+      overlayObserverRef.current = new ResizeObserver(() => setOverlayHeight(node.offsetHeight));
+      overlayObserverRef.current.observe(node);
+    }
+  }, []);
+
+  useEffect(() => () => overlayObserverRef.current?.disconnect(), []);
+
+  const surfacePadTop = overlayHeight ? overlayHeight + 12 : undefined;
+
   const charCount = source.length;
+
+  const renderImageInspector = (): ReactNode => {
+    if (!imageSelection) return null;
+    return (
+      <div className="flex flex-wrap items-end gap-2.5 px-4 py-3 border-b border-osu-b3/30 bg-osu-b5/50">
+        <div className="self-center pr-1 text-[11px] font-semibold uppercase tracking-wide text-osu-f1">Image</div>
+        <DialogField label="Link URL (optional)">
+          <input
+            ref={imageLinkInputRef}
+            type="text"
+            value={imageSelection.href}
+            onChange={(event) => updateImageLink(event.target.value)}
+            placeholder="https://... wraps the image in a link"
+            className={`${dialogInputClass} w-72`}
+          />
+        </DialogField>
+        <button
+          type="button"
+          onClick={() => imageElementRef.current && openImageEditor(imageElementRef.current)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-osu-b4/70 border border-osu-b3/40 text-[12px] font-semibold text-osu-l2 hover:bg-osu-b3 hover:text-white transition-colors cursor-pointer"
+        >
+          <Crop size={14} /> Resize / crop
+        </button>
+        <button
+          type="button"
+          onClick={() => imageElementRef.current && triggerReplaceImage(imageElementRef.current)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-osu-b4/70 border border-osu-b3/40 text-[12px] font-semibold text-osu-l2 hover:bg-osu-b3 hover:text-white transition-colors cursor-pointer"
+        >
+          <Replace size={14} /> Replace
+        </button>
+        <button
+          type="button"
+          title="Remove image"
+          aria-label="Remove image"
+          onClick={deleteSelectedImage}
+          className="grid h-8 w-8 place-items-center rounded-md border border-osu-red/40 bg-osu-red/10 text-osu-red-light hover:bg-osu-red/20 hover:text-white transition-colors cursor-pointer"
+        >
+          <Trash2 size={15} />
+        </button>
+      </div>
+    );
+  };
 
   const renderImagemapInspector = (): ReactNode => {
     if (!imagemapSelection) return null;
@@ -1187,14 +1807,27 @@ export function BBCodeEditor({
     switch (dialog) {
       case "color": {
         const applyColor = (color: string) =>
-          applyAndClose(() => applyWrap("color", color, `[color=${color}]`, "[/color]", "text"));
+          applyAndClose(() => {
+            if (editMode === "visual") {
+              const text = selectedDialogText();
+              if (text) {
+                // Replace in place (keeps inner bold/links, swaps an old color span)
+                // instead of nesting a fresh [color] around the selection.
+                const inner = visualSelectionHtml() || escapeBBHtml(text);
+                const { open, close } = editableWrapMarkup("color", color);
+                replaceVisualSelectionHtml(text, open + inner + close);
+                return;
+              }
+            }
+            applyWrap("color", color, `[color=${color}]`, "[/color]", "text");
+          });
+        const activeHex = normalizeHexColor(hexField);
         return (
           <form
             className="flex flex-wrap items-end gap-3"
             onSubmit={(event) => {
               event.preventDefault();
-              const color = normalizeHexColor(hexField);
-              if (color) applyColor(color);
+              if (activeHex) applyColor(activeHex);
             }}
           >
             <div className="flex items-center gap-1.5">
@@ -1204,7 +1837,11 @@ export function BBCodeEditor({
                   type="button"
                   title={swatch}
                   onClick={() => applyColor(swatch)}
-                  className="w-6 h-6 rounded-md border border-osu-b3/60 cursor-pointer hover:scale-110 transition-transform"
+                  className={`w-6 h-6 rounded-md cursor-pointer hover:scale-110 transition-transform ${
+                    activeHex === swatch
+                      ? "border-2 border-osu-c1 ring-2 ring-osu-pink/70"
+                      : "border border-osu-b3/60"
+                  }`}
                   style={{ backgroundColor: swatch }}
                 />
               ))}
@@ -1656,9 +2293,9 @@ export function BBCodeEditor({
         <ToolButton label="Strikethrough" active={editMode === "visual" && inlineStates.strike} onClick={() => applyInline("strikeThrough", "s", "text")}><Strikethrough size={15} /></ToolButton>
         <ToolButton label="Spoiler text" onClick={() => applyWrap("spoiler", undefined, "[spoiler]", "[/spoiler]", "secret")}><EyeOff size={15} /></ToolButton>
         <ToolDivider />
-        <ToolButton label="Text color" active={dialog === "color"} onClick={() => openDialog("color")}><Palette size={15} /></ToolButton>
+        <ToolButton label="Text color" active={dialog === "color" || (editMode === "visual" && selectionColor != null)} onClick={() => openDialog("color")}><Palette size={15} /></ToolButton>
         <ToolButton label="Gradient text" active={dialog === "gradient"} onClick={() => openDialog("gradient")}><Rainbow size={15} /></ToolButton>
-        <ToolButton label="Text size" active={dialog === "size"} onClick={() => openDialog("size")}><ALargeSmall size={15} /></ToolButton>
+        <ToolButton label="Text size" active={dialog === "size" || (editMode === "visual" && selectionSize != null)} onClick={() => openDialog("size")}><ALargeSmall size={15} /></ToolButton>
         <ToolDivider />
         <ToolButton label="Link" active={dialog === "link"} onClick={() => openDialog("link")}><Link size={15} /></ToolButton>
         <ToolButton label="Image" active={dialog === "image"} onClick={() => openDialog("image")}><Image size={15} /></ToolButton>
@@ -1696,14 +2333,6 @@ export function BBCodeEditor({
         </div>
       </div>
 
-      {renderImagemapInspector()}
-      {renderLinkInspector()}
-
-      {/* Tool dialog */}
-      {dialog ? (
-        <div className="px-4 py-3 border-b border-osu-b3/30 bg-osu-b5/50">{renderDialog()}</div>
-      ) : null}
-
       {restoredDraft ? (
         <div className="flex items-center gap-2 px-4 py-2 border-b border-osu-b3/30 text-[12px] text-osu-yellow">
           Restored an unsaved draft from this browser.
@@ -1722,6 +2351,48 @@ export function BBCodeEditor({
         </div>
       ) : null}
 
+      <div className="relative">
+        {/* Inspectors, upload status and tool dialogs float over the editing
+            surface, so opening one never reflows the page below the editor. */}
+        {(imagemapSelection || linkSelection || imageSelection || uploadStatus || dialog) ? (
+          <div ref={setOverlayNode} className="absolute inset-x-0 top-0 z-20 max-h-full overflow-y-auto bg-osu-b4 shadow-lg shadow-black/30">
+            {renderImagemapInspector()}
+            {renderLinkInspector()}
+            {renderImageInspector()}
+
+            {uploadStatus ? (
+              <div
+                className={`flex items-center gap-2 px-4 py-2 border-b border-osu-b3/30 text-[12px] ${
+                  uploadStatus.kind === "error" ? "text-osu-red" : "text-osu-l2"
+                }`}
+              >
+                {uploadStatus.kind === "uploading" ? (
+                  <>
+                    <span className="h-3.5 w-3.5 rounded-full border-2 border-osu-pink/40 border-t-osu-pink animate-spin" />
+                    Uploading image to catbox.moe...
+                  </>
+                ) : (
+                  <>
+                    <span>{uploadStatus.message}</span>
+                    <button
+                      type="button"
+                      onClick={() => setUploadStatus(null)}
+                      className="underline text-osu-f1 hover:text-osu-l2 cursor-pointer"
+                    >
+                      dismiss
+                    </button>
+                  </>
+                )}
+              </div>
+            ) : null}
+
+            {/* Tool dialog */}
+            {dialog ? (
+              <div className="px-4 py-3 border-b border-osu-b3/30 bg-osu-b5/50">{renderDialog()}</div>
+            ) : null}
+          </div>
+        ) : null}
+
       {editMode === "visual" ? (
         <div
           ref={visualRef}
@@ -1729,9 +2400,14 @@ export function BBCodeEditor({
           suppressContentEditableWarning
           spellCheck={false}
           onPointerDown={handleVisualPointerDown}
+          onContextMenu={handleVisualContextMenu}
+          onPaste={handlePaste}
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
           onInput={scheduleVisualSync}
           onBlur={() => flushVisual()}
-          data-placeholder="Write your page here. Select text and use the toolbar to format it."
+          data-placeholder="Write your page here. Select text and use the toolbar to format it. Right-click for more, or paste an image to upload it."
+          style={{ paddingTop: surfacePadTop, scrollPaddingTop: surfacePadTop }}
           className={`${paneHeightClass} bbcode-content bbcode-editor-surface overflow-y-auto px-4 py-3 text-sm text-osu-l2 focus:outline-none`}
         />
       ) : (
@@ -1762,13 +2438,20 @@ export function BBCodeEditor({
                   setCaretOffset(event.target.selectionStart);
                 }}
                 onSelect={(event) => setCaretOffset(event.currentTarget.selectionStart)}
+                onPaste={handlePaste}
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
                 spellCheck={false}
                 placeholder="Write BBCode here, or paste your current me! page source..."
+                style={{ paddingTop: surfacePadTop }}
                 className={`${paneHeightClass} w-full resize-none bg-transparent px-4 py-3 text-[13px] leading-relaxed font-mono text-osu-l2 placeholder:text-osu-f1 focus:outline-none`}
               />
             </div>
             <div className={`${mobilePane === "preview" ? "block" : "hidden"} lg:block bg-osu-b5/40`}>
-              <div className={`${paneHeightClass} bbcode-content bbcode-preview-surface overflow-y-auto px-4 py-3 text-sm text-osu-l2`}>
+              <div
+                style={{ paddingTop: surfacePadTop }}
+                className={`${paneHeightClass} bbcode-content bbcode-preview-surface overflow-y-auto px-4 py-3 text-sm text-osu-l2`}
+              >
                 <BBCodePreview
                   source={deferredSource}
                   highlightOffset={deferredCaretOffset}
@@ -1779,6 +2462,7 @@ export function BBCodeEditor({
           </div>
         </>
       )}
+      </div>
 
       {/* Footer */}
       <div className="flex items-center gap-3 px-4 py-2 border-t border-osu-b3/30 text-[12px] text-osu-f1">
@@ -1796,6 +2480,30 @@ export function BBCodeEditor({
             : (baseSource ? "Reset to current page" : "Clear editor")}
         </button>
       </div>
+
+      {/* Hidden picker for "Replace image". */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleReplaceFile}
+      />
+
+      <BBCodeContextMenu menu={contextMenu} onClose={() => setContextMenu(null)} />
+
+      {imageEditorState ? (
+        <ImageEditorModal
+          source={imageEditorState.source}
+          busy={imageEditorBusy}
+          onApply={applyImageEdit}
+          onCancel={() => {
+            if (imageEditorBusy) return;
+            imageEditorTargetRef.current = null;
+            setImageEditorState(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

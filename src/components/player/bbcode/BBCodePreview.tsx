@@ -76,7 +76,7 @@ function SpoilerBox({
   highlighted,
   highlightRef,
 }: {
-  title: string | null;
+  title: ReactNode;
   children: ReactNode;
   highlighted?: boolean;
   highlightRef?: Ref<HTMLDivElement>;
@@ -93,7 +93,7 @@ function SpoilerBox({
         onClick={() => setOpen((value) => !value)}
       >
         <span className="bbcode-spoilerbox__link-icon" />
-        {title ?? "SPOILER"}
+        {title}
       </button>
       <div className="js-spoilerbox__body bbcode-spoilerbox__body">{children}</div>
     </div>
@@ -198,12 +198,17 @@ function renderNodeContent(node: BBNode, key: string, ctx: HighlightCtx): ReactN
           {renderNodes(node.children, key, ctx)}
         </blockquote>
       );
-    case "box":
+    case "box": {
+      // A box title can carry nested bbcode (e.g. [color]); render it too.
+      const title: ReactNode = node.title != null
+        ? renderNodes(parseBBCode(node.title), `${key}-title`, { target: null, targetRef: () => {} })
+        : "SPOILER";
       return (
-        <SpoilerBox key={key} title={node.title} highlighted={node === ctx.target} highlightRef={ctx.targetRef}>
+        <SpoilerBox key={key} title={title} highlighted={node === ctx.target} highlightRef={ctx.targetRef}>
           {renderNodes(node.children, key, ctx)}
         </SpoilerBox>
       );
+    }
     case "code":
       return node.inline
         ? <code key={key}>{node.code}</code>

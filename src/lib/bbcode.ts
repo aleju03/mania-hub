@@ -343,6 +343,26 @@ function trimTrailingBlockNewline(frame: ContainerFrame): boolean {
   return false;
 }
 
+/**
+ * osu! allows nested bbcode inside a [box=...] title (e.g.
+ * [box=[color=#fff]Hi[/color]]), so the title's own ']' must not end the tag.
+ * Scans from just after `[box=` for the ']' that closes the box-open tag,
+ * balancing inner brackets. Returns null if it never balances on this line.
+ */
+function scanBalancedBoxTitle(source: string, start: number): { title: string; end: number } | null {
+  let depth = 0;
+  for (let i = start; i < source.length; i += 1) {
+    const ch = source[i];
+    if (ch === "\n") return null;
+    if (ch === "[") depth += 1;
+    else if (ch === "]") {
+      if (depth === 0) return { title: source.slice(start, i), end: i + 1 };
+      depth -= 1;
+    }
+  }
+  return null;
+}
+
 export function parseBBCode(source: string, options?: { spans?: boolean }): BBNode[] {
   const normalized = source.replace(/\r\n?/g, "\n");
   const root: ContainerFrame = { tag: "", param: null, children: [], openSource: "", openStart: 0 };
@@ -410,9 +430,20 @@ export function parseBBCode(source: string, options?: { spans?: boolean }): BBNo
     if (!isClose) {
       const frame = openContainer(name, rawParam ?? null, tagSource, match.index);
       if (!frame) { emitLiteral(); continue; }
+      let openEnd = TAG_PATTERN.lastIndex;
+      // A box title can hold nested bbcode whose ']' must not end the open tag.
+      if (name === "box" && rawParam != null && rawParam.includes("[")) {
+        const titleStart = match.index + 1 + rawName.length + 1;
+        const scan = scanBalancedBoxTitle(normalized, titleStart);
+        if (scan && scan.end > openEnd) {
+          frame.param = scan.title;
+          frame.openSource = normalized.slice(match.index, scan.end);
+          openEnd = scan.end;
+        }
+      }
       pushText(top().children, normalized.slice(cursor, match.index), cursor);
       stack.push(frame);
-      cursor = TAG_PATTERN.lastIndex;
+      cursor = openEnd;
       if (BLOCK_TAGS.has(name)) {
         const trimmed = trimLeadingNewline(normalized, cursor);
         frame.afterOpenTrimmed = trimmed !== cursor;

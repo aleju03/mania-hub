@@ -75,6 +75,9 @@ describe("bbcode editable DOM round-trip", () => {
     expectIdentity("[box=my title]\ncontent\n[/box]");
     expectIdentity("[spoilerbox]\nsecret\n[/spoilerbox]");
     expectIdentity("[box=]\nempty label\n[/box]");
+    // Titles carrying nested bbcode must render coloured and round-trip intact.
+    expectIdentity("[box=[color=#69FFDC]Set-Up[/color]]\ncontent\n[/box]");
+    expectIdentity("[box=[b]Bold[/b] title]\nbody\n[/box]");
   });
 
   it("keeps code blocks and inline code verbatim", () => {
