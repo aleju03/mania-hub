@@ -8,7 +8,7 @@ import type { Db } from "../db.js";
 import { dbHealth, exec, getSqliteBusyRetryStats, parseJson } from "../db.js";
 import { getPlayerActivityAvailability, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../features/activity.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
-import { GOAL_KINDS, GOAL_MAP_KINDS, GOAL_TARGET_GRADES, createUserGoal, deleteUserGoal, getUserGoal, listUserGoalsWithProgress, reconcileGoalsForUser, type GoalKind, type UserGoalInput } from "../features/goals.js";
+import { GOAL_KINDS, GOAL_MAP_KINDS, GOAL_SPEED_BUCKETS, GOAL_TARGET_GRADES, createUserGoal, deleteUserGoal, getUserGoal, listUserGoalsWithProgress, reconcileGoalsForUser, type GoalKind, type GoalSpeedBucket, type UserGoalInput } from "../features/goals.js";
 import { getMyDataSummary, getUserTopPlaysFeed, getUserTrackedFeed, type MyDataTopPlaysQuery, type MyDataTrackedFeedQuery } from "../features/my-data.js";
 import { FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapshot, type FarmHelperKeyMode, type FarmHelperView } from "../features/farm-helper.js";
 import type { ScoreSpeedBucket } from "../shared/score.js";
@@ -319,7 +319,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
       return true;
     }
-    const body = parseJson<{ userId?: unknown; id?: unknown; kind?: unknown; country?: unknown; beatmapId?: unknown; beatmapsetId?: unknown; beatmapLabel?: unknown; targetValue?: unknown; targetCount?: unknown; targetGrade?: unknown; note?: unknown }>((await readBody(req)) || "{}", {});
+    const body = parseJson<{ userId?: unknown; id?: unknown; kind?: unknown; country?: unknown; beatmapId?: unknown; beatmapsetId?: unknown; beatmapLabel?: unknown; targetValue?: unknown; targetCount?: unknown; targetGrade?: unknown; speedBucket?: unknown; note?: unknown }>((await readBody(req)) || "{}", {});
     const userId = Number(body.userId);
     if (!Number.isInteger(userId) || userId <= 0) {
       sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
@@ -353,6 +353,12 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       const beatmapsetId = Number(body.beatmapsetId);
       input.beatmapsetId = Number.isInteger(beatmapsetId) && beatmapsetId > 0 ? beatmapsetId : null;
       input.beatmapLabel = typeof body.beatmapLabel === "string" ? body.beatmapLabel : null;
+      const speedBucket = typeof body.speedBucket === "string" ? body.speedBucket.trim().toLowerCase() : "normal";
+      if (!GOAL_SPEED_BUCKETS.includes(speedBucket as GoalSpeedBucket)) {
+        sendJson(req, res, ctx, 400, { error: "invalid_speed_bucket" });
+        return true;
+      }
+      input.speedBucket = speedBucket as GoalSpeedBucket;
     }
     if (kind === "accuracy") {
       let target = Number(body.targetValue);

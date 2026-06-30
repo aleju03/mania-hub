@@ -3,7 +3,8 @@ import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { LiveEventLog } from "../live/event-log.js";
-import { getDisplayedAccuracy, getDisplayedRank, getScoreIdentity, isFullCombo, nowIso } from "../shared/score.js";
+import { getDisplayedAccuracy, getDisplayedRank, getModAcronyms, getScoreIdentity, getScoreSpeedBucket, isFullCombo, nowIso } from "../shared/score.js";
+import type { ScoreSpeedBucket } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
 
 // User goals: a logged-in player sets a target ("96% on map X", "reach 5000pp", "pass map Y",
@@ -15,10 +16,12 @@ import type { OscScore } from "../shared/types.js";
 
 export type GoalKind = "reach_pp" | "play_pp" | "play_pp_count" | "accuracy" | "pass" | "grade" | "fc" | "reach_rank";
 export type GoalStatus = "open" | "completed";
+export type GoalSpeedBucket = ScoreSpeedBucket;
 
 export const GOAL_KINDS: readonly GoalKind[] = ["reach_pp", "play_pp", "play_pp_count", "accuracy", "pass", "grade", "fc", "reach_rank"];
 export const GOAL_MAP_KINDS: readonly GoalKind[] = ["accuracy", "pass", "grade", "fc"];
 export const GOAL_TARGET_GRADES: readonly string[] = ["A", "S", "SS"];
+export const GOAL_SPEED_BUCKETS: readonly GoalSpeedBucket[] = ["normal", "ht", "dt"];
 
 const BEATMAP_LABEL_MAX = 200;
 const NOTE_MAX = 280;
@@ -33,6 +36,18 @@ function gradeRank(grade: string | null | undefined): number {
   return GRADE_RANK[grade.toUpperCase()] ?? -1;
 }
 
+function normalizeGoalSpeedBucket(value: unknown): GoalSpeedBucket | null {
+  return GOAL_SPEED_BUCKETS.includes(value as GoalSpeedBucket) ? value as GoalSpeedBucket : null;
+}
+
+function goalSpeedBucket(goal: Pick<UserGoal | UserGoalInput, "speedBucket">): GoalSpeedBucket {
+  return normalizeGoalSpeedBucket(goal.speedBucket) ?? "normal";
+}
+
+function scoreSpeedBucket(score: Pick<OscScore, "mods">): GoalSpeedBucket {
+  return getScoreSpeedBucket(getModAcronyms(score.mods));
+}
+
 export interface UserGoalInput {
   userId: number;
   country: string | null;
@@ -43,6 +58,7 @@ export interface UserGoalInput {
   targetValue?: number | null;
   targetCount?: number | null;
   targetGrade?: string | null;
+  speedBucket?: GoalSpeedBucket | null;
   note?: string | null;
 }
 
@@ -69,6 +85,7 @@ export interface UserGoal {
   targetValue: number | null;
   targetCount: number | null;
   targetGrade: string | null;
+  speedBucket: GoalSpeedBucket | null;
   /** Player's value in the goal's unit at the moment it was set; progress is measured from here. */
   startValue: number | null;
   note: string | null;
@@ -102,6 +119,7 @@ function rowToGoal(row: Record<string, unknown>): UserGoal {
     targetValue: num(row.target_value),
     targetCount: num(row.target_count),
     targetGrade: row.target_grade == null ? null : String(row.target_grade),
+    speedBucket: normalizeGoalSpeedBucket(row.speed_bucket),
     startValue: num(row.start_value),
     note: row.note == null ? null : String(row.note),
     status: String(row.status) as GoalStatus,
@@ -171,6 +189,52 @@ async function dropFromIndexIfDone(db: Db, userId: number): Promise<void> {
   if (!remaining) goalUserIds.delete(userId);
 }
 
+async function reopenInvalidMapGoalCompletions(db: Db, userId: number): Promise<boolean> {
+  const rows = (await exec(
+    db,
+    `select g.id as goal_id, g.speed_bucket, se.score_json
+     from user_goals g
+     join score_events se
+       on se.user_id = g.user_id
+      and se.score_identity = g.completed_score_id
+     where g.user_id = ?
+       and g.status = 'completed'
+       and g.kind in ('accuracy', 'pass', 'grade', 'fc')
+       and g.completed_score_id is not null`,
+    [userId],
+  )).rows;
+  const invalidGoalIds = new Set<string>();
+  for (const row of rows) {
+    const score = parseJson<OscScore | null>(row.score_json, null);
+    const targetSpeed = normalizeGoalSpeedBucket(row.speed_bucket) ?? "normal";
+    if (score && scoreSpeedBucket(score) !== targetSpeed) invalidGoalIds.add(String(row.goal_id));
+  }
+  if (invalidGoalIds.size === 0) return false;
+
+  const now = Date.now();
+  let reopened = false;
+  for (const goalId of invalidGoalIds) {
+    const res = await exec(
+      db,
+      `update user_goals
+       set status = 'open',
+           completed_at = null,
+           completed_value = null,
+           completed_score_id = null,
+           completed_beatmap_id = null,
+           updated_at = ?
+       where id = ? and user_id = ? and status = 'completed'`,
+      [now, goalId, userId],
+    );
+    if (res.rowsAffected > 0) reopened = true;
+  }
+  if (reopened) {
+    noteGoalUserActive(userId);
+    await bumpGoalIndexVersion(db).catch(() => {});
+  }
+  return reopened;
+}
+
 export async function getUserGoal(db: Db, goalId: string): Promise<UserGoal | null> {
   const row = (await exec(db, "select * from user_goals where id = ?", [goalId])).rows[0];
   return row ? rowToGoal(row as Record<string, unknown>) : null;
@@ -206,7 +270,7 @@ interface BeatmapHistory {
 }
 
 /** The player's best passed result so far on one beatmap, with activity fallback for old rows. */
-async function bestPassedOnBeatmap(db: Db, userId: number, beatmapId: number): Promise<BeatmapHistory> {
+async function bestPassedOnBeatmap(db: Db, userId: number, beatmapId: number, speedBucket: GoalSpeedBucket = "normal"): Promise<BeatmapHistory> {
   const activityRows = (await exec(
     db,
     "select best_accuracy, best_rank, play_count, country from player_activity_maps where user_id = ? and beatmap_id = ?",
@@ -226,7 +290,7 @@ async function bestPassedOnBeatmap(db: Db, userId: number, beatmapId: number): P
 
   const scoreRows = (await exec(
     db,
-    `select score_identity, country, beatmap_id, accuracy, rank, score_json
+    `select score_identity, country, beatmap_id, score_json
      from score_events
      where user_id = ? and beatmap_id = ? and passed = 1
      order by ended_at desc
@@ -235,8 +299,9 @@ async function bestPassedOnBeatmap(db: Db, userId: number, beatmapId: number): P
   )).rows;
   for (const row of scoreRows) {
     const score = parseJson<OscScore | null>(row.score_json, null);
-    const accuracy = score ? getDisplayedAccuracy(score) : Number(row.accuracy ?? 0);
-    const rank = score ? getDisplayedRank(score) : String(row.rank ?? "");
+    if (!score || scoreSpeedBucket(score) !== speedBucket) continue;
+    const accuracy = getDisplayedAccuracy(score);
+    const rank = getDisplayedRank(score);
     const rankValue = gradeRank(rank);
     const context = {
       value: null,
@@ -257,24 +322,9 @@ async function bestPassedOnBeatmap(db: Db, userId: number, beatmapId: number): P
     }
   }
 
-  // score_events is retained short-term; player_activity_maps keeps older per-map bests.
-  for (const row of activityRows) {
-    const rank = row.best_rank == null ? null : String(row.best_rank);
-    const rankValue = gradeRank(rank);
-    if (rankValue < 0) continue;
-    const country = row.country == null ? null : String(row.country);
-    const accuracy = row.best_accuracy == null ? null : Number(row.best_accuracy);
-    if (!history.passContext) history.passContext = { value: 1, scoreIdentity: null, beatmapId, country };
-    if (accuracy != null && Number.isFinite(accuracy) && (history.bestAccuracy == null || accuracy > history.bestAccuracy)) {
-      history.bestAccuracy = accuracy;
-      history.accuracyContext = { value: accuracy, scoreIdentity: null, beatmapId, country };
-    }
-    if (rankValue > history.bestGradeRank) {
-      history.bestGradeRank = rankValue;
-      history.bestRank = rank;
-      history.gradeContext = { value: rankValue, scoreIdentity: null, beatmapId, country };
-    }
-  }
+  // score_events is retained short-term; player_activity_maps keeps older per-map play counts.
+  // Activity rows are useful for "played" hints, but they are mod-blind. Do not let them prove
+  // completion of base-rate map goals, because rate-changed scores would be indistinguishable.
 
   return history;
 }
@@ -457,8 +507,8 @@ async function getUserRank(db: Db, userId: number, scope: "global" | "country"):
 }
 
 /** The player's best result so far on one beatmap, aggregated across their tracked days. */
-async function bestOnBeatmap(db: Db, userId: number, beatmapId: number): Promise<{ acc: number | null; gradeRank: number; bestRank: string | null; plays: number }> {
-  const history = await bestPassedOnBeatmap(db, userId, beatmapId);
+async function bestOnBeatmap(db: Db, userId: number, beatmapId: number, speedBucket: GoalSpeedBucket = "normal"): Promise<{ acc: number | null; gradeRank: number; bestRank: string | null; plays: number }> {
+  const history = await bestPassedOnBeatmap(db, userId, beatmapId, speedBucket);
   return {
     acc: history.bestAccuracy,
     gradeRank: history.bestGradeRank,
@@ -504,28 +554,28 @@ async function historicalCompletionForGoal(db: Db, goal: UserGoal): Promise<Goal
     }
     case "pass": {
       if (!goal.beatmapId) return null;
-      const history = await bestPassedOnBeatmap(db, goal.userId, goal.beatmapId);
+      const history = await bestPassedOnBeatmap(db, goal.userId, goal.beatmapId, goalSpeedBucket(goal));
       return history.passContext
         ? { ...history.passContext, country: history.passContext.country ?? goal.country }
         : null;
     }
     case "fc": {
       if (!goal.beatmapId) return null;
-      const history = await bestPassedOnBeatmap(db, goal.userId, goal.beatmapId);
+      const history = await bestPassedOnBeatmap(db, goal.userId, goal.beatmapId, goalSpeedBucket(goal));
       return history.fcContext
         ? { ...history.fcContext, country: history.fcContext.country ?? goal.country }
         : null;
     }
     case "accuracy": {
       if (!goal.beatmapId || goal.targetValue == null) return null;
-      const history = await bestPassedOnBeatmap(db, goal.userId, goal.beatmapId);
+      const history = await bestPassedOnBeatmap(db, goal.userId, goal.beatmapId, goalSpeedBucket(goal));
       return history.accuracyContext && history.bestAccuracy != null && history.bestAccuracy >= goal.targetValue
         ? { ...history.accuracyContext, country: history.accuracyContext.country ?? goal.country }
         : null;
     }
     case "grade": {
       if (!goal.beatmapId) return null;
-      const history = await bestPassedOnBeatmap(db, goal.userId, goal.beatmapId);
+      const history = await bestPassedOnBeatmap(db, goal.userId, goal.beatmapId, goalSpeedBucket(goal));
       const target = gradeRank(goal.targetGrade);
       return target >= 0 && history.gradeContext && history.bestGradeRank >= target
         ? { ...history.gradeContext, country: history.gradeContext.country ?? goal.country }
@@ -537,6 +587,9 @@ async function historicalCompletionForGoal(db: Db, goal: UserGoal): Promise<Goal
 }
 
 export async function reconcileGoalsForUser(db: Db, events: LiveEventLog, userId: number, kinds: readonly GoalKind[] = GOAL_KINDS): Promise<void> {
+  if (kinds.some((kind) => GOAL_MAP_KINDS.includes(kind))) {
+    await reopenInvalidMapGoalCompletions(db, userId).catch(() => {});
+  }
   if (!await userMightHaveGoals(db, userId)) return;
   const placeholders = kinds.map(() => "?").join(",") || "null";
   const rows = (await exec(
@@ -616,7 +669,7 @@ export async function computeGoalProgress(db: Db, goal: UserGoal): Promise<GoalP
     }
     case "accuracy": {
       if (!goal.beatmapId) return { current: null, target: goal.targetValue, pct: null, detail: null };
-      const b = await bestOnBeatmap(db, goal.userId, goal.beatmapId);
+      const b = await bestOnBeatmap(db, goal.userId, goal.beatmapId, goalSpeedBucket(goal));
       const target = goal.targetValue ?? 0;
       // No baseline (older goal, or never played at creation) -> show the best-so-far hint with no
       // misleading bar rather than a near-full one, since raw acc/target always sits around 99%.
@@ -629,7 +682,7 @@ export async function computeGoalProgress(db: Db, goal: UserGoal): Promise<GoalP
     }
     case "grade": {
       if (!goal.beatmapId) return { current: null, target: null, pct: null, detail: null };
-      const b = await bestOnBeatmap(db, goal.userId, goal.beatmapId);
+      const b = await bestOnBeatmap(db, goal.userId, goal.beatmapId, goalSpeedBucket(goal));
       const target = gradeRank(goal.targetGrade);
       // Grade is categorical: a percentage (A is 3/4 of S) reads as accuracy and confuses. Surface
       // the current best grade as the hint and let the card show best-vs-target badges instead.
@@ -643,12 +696,12 @@ export async function computeGoalProgress(db: Db, goal: UserGoal): Promise<GoalP
     }
     case "pass": {
       if (!goal.beatmapId) return { current: null, target: null, pct: null, detail: null };
-      const b = await bestOnBeatmap(db, goal.userId, goal.beatmapId);
+      const b = await bestOnBeatmap(db, goal.userId, goal.beatmapId, goalSpeedBucket(goal));
       return { current: b.plays || null, target: null, pct: null, detail: b.plays ? `played ${b.plays}x, not passed` : "not played yet" };
     }
     case "fc": {
       if (!goal.beatmapId) return { current: null, target: null, pct: null, detail: null };
-      const b = await bestOnBeatmap(db, goal.userId, goal.beatmapId);
+      const b = await bestOnBeatmap(db, goal.userId, goal.beatmapId, goalSpeedBucket(goal));
       return { current: b.plays || null, target: null, pct: null, detail: b.plays ? `played ${b.plays}x, no FC yet` : "not played yet" };
     }
     default:
@@ -658,6 +711,7 @@ export async function computeGoalProgress(db: Db, goal: UserGoal): Promise<GoalP
 
 /** Goals list with per-open-goal progress attached (completed goals carry no progress). */
 export async function listUserGoalsWithProgress(db: Db, userId: number): Promise<UserGoal[]> {
+  await reopenInvalidMapGoalCompletions(db, userId).catch(() => {});
   const goals = await listUserGoals(db, userId);
   return Promise.all(goals.map(async (goal) => (goal.status === "open" ? { ...goal, progress: await computeGoalProgress(db, goal) } : goal)));
 }
@@ -679,7 +733,7 @@ async function goalStartValue(db: Db, input: UserGoalInput): Promise<number | nu
     }
     case "accuracy": {
       if (!input.beatmapId) return null;
-      return (await bestOnBeatmap(db, input.userId, input.beatmapId)).acc;
+      return (await bestOnBeatmap(db, input.userId, input.beatmapId, goalSpeedBucket(input))).acc;
     }
     case "reach_rank":
       return getUserRank(db, input.userId, rankScopeOf(input.targetGrade ?? null));
@@ -697,8 +751,8 @@ export async function createUserGoal(db: Db, queue: JobQueue, input: UserGoalInp
   await exec(
     db,
     `insert into user_goals
-       (id, user_id, country, kind, beatmap_id, beatmapset_id, beatmap_label, target_value, target_count, target_grade, start_value, note, status, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)`,
+       (id, user_id, country, kind, beatmap_id, beatmapset_id, beatmap_label, target_value, target_count, target_grade, speed_bucket, start_value, note, status, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)`,
     [
       id,
       input.userId,
@@ -710,6 +764,7 @@ export async function createUserGoal(db: Db, queue: JobQueue, input: UserGoalInp
       input.targetValue ?? null,
       input.targetCount ?? null,
       input.targetGrade ?? null,
+      GOAL_MAP_KINDS.includes(input.kind) ? goalSpeedBucket(input) : null,
       startValue,
       note,
       now,
@@ -763,6 +818,7 @@ async function completeGoal(db: Db, events: LiveEventLog, goal: UserGoal, ctx: G
           targetValue: goal.targetValue,
           targetCount: goal.targetCount,
           targetGrade: goal.targetGrade,
+          speedBucket: goal.speedBucket,
           value: ctx.value,
           completedAt: now,
         },
@@ -789,6 +845,7 @@ export async function evaluateScoreGoals(db: Db, events: LiveEventLog, score: Os
 
   const beatmapId = Number(score.beatmap_id ?? score.beatmap?.id);
   const passed = Boolean(score.passed);
+  const speedBucket = scoreSpeedBucket(score);
   const accuracy = getDisplayedAccuracy(score);
   const achievedGrade = gradeRank(getDisplayedRank(score));
   const pp = score.pp ?? null;
@@ -800,27 +857,28 @@ export async function evaluateScoreGoals(db: Db, events: LiveEventLog, score: Os
     const goal = rowToGoal(raw as Record<string, unknown>);
     let matched = false;
     let value: number | null = null;
+    const speedMatched = speedBucket === goalSpeedBucket(goal);
     switch (goal.kind) {
       case "pass":
-        if (goal.beatmapId === beatmapId && passed) {
+        if (speedMatched && goal.beatmapId === beatmapId && passed) {
           matched = true;
           value = 1;
         }
         break;
       case "fc":
-        if (goal.beatmapId === beatmapId && isFullCombo(score)) {
+        if (speedMatched && goal.beatmapId === beatmapId && isFullCombo(score)) {
           matched = true;
           value = 1;
         }
         break;
       case "accuracy":
-        if (goal.beatmapId === beatmapId && passed && goal.targetValue != null && accuracy >= goal.targetValue) {
+        if (speedMatched && goal.beatmapId === beatmapId && passed && goal.targetValue != null && accuracy >= goal.targetValue) {
           matched = true;
           value = accuracy;
         }
         break;
       case "grade":
-        if (goal.beatmapId === beatmapId && passed && achievedGrade >= gradeRank(goal.targetGrade)) {
+        if (speedMatched && goal.beatmapId === beatmapId && passed && achievedGrade >= gradeRank(goal.targetGrade)) {
           matched = true;
           value = achievedGrade;
         }

@@ -737,7 +737,7 @@ async function migrateUserGoals(db: Db): Promise<void> {
   // Per-player goals that auto-complete from the ingest pipeline. Timestamps are epoch ms
   // (matching the pack tables); status is 'open' | 'completed'. beatmap_id scopes map goals,
   // target_value carries pp / accuracy fraction, target_count carries count goals, target_grade
-  // carries S/SS-style targets or the rank scope.
+  // carries S/SS-style targets or the rank scope, speed_bucket carries normal/ht/dt for map goals.
   await db.execute(`
     create table if not exists user_goals (
       id text primary key,
@@ -750,6 +750,7 @@ async function migrateUserGoals(db: Db): Promise<void> {
       target_value real,
       target_count integer,
       target_grade text,
+      speed_bucket text,
       note text,
       status text not null default 'open',
       created_at integer not null,
@@ -766,6 +767,9 @@ async function migrateUserGoals(db: Db): Promise<void> {
   }
   if (!goalColumns.includes("target_count")) {
     await db.execute("alter table user_goals add column target_count integer");
+  }
+  if (!goalColumns.includes("speed_bucket")) {
+    await db.execute("alter table user_goals add column speed_bucket text");
   }
   if (!goalColumns.includes("start_value")) {
     // Baseline captured when a numeric-target goal is set, so its progress bar measures the climb

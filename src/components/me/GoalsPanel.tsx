@@ -4,6 +4,7 @@ import { useLocation } from "@tanstack/react-router";
 
 import { PageHeader } from "../layout/PageHeader";
 import { GradeImg } from "../ui/GradeImg";
+import { ModBadge } from "../ui/ModBadge";
 import { OsuLogo } from "../ui/OsuLogo";
 import { useAuth } from "../../lib/auth-context";
 import { getBeatmapsetForBeatmap, searchBeatmaps } from "../../lib/osu";
@@ -16,6 +17,7 @@ import {
   fetchMyGoals,
   type CreateGoalInput,
   type GoalKind,
+  type GoalSpeedBucket,
   type GoalSuggestionMetrics,
   type UserGoal,
 } from "../../lib/goals";
@@ -55,6 +57,13 @@ function PageShell({ children }: { children: ReactNode }) {
 type GoalScope = "pp" | "pp-count" | "rank" | "map-acc" | "map" | "map-grade" | "map-fc";
 type GoalGroup = "profile" | "map";
 type RankScope = "global" | "country";
+
+const GOAL_SPEED_OPTIONS: GoalSpeedBucket[] = ["normal", "ht", "dt"];
+const GOAL_SPEED_LABELS: Record<GoalSpeedBucket, string> = {
+  normal: "Normal",
+  ht: "HT/DC",
+  dt: "DT/NC",
+};
 
 interface GoalTypeMeta {
   kind: GoalKind;
@@ -171,6 +180,14 @@ function goalMeta(kind: GoalKind) {
   return GOAL_TYPES.find((t) => t.kind === kind) ?? GOAL_TYPES[0];
 }
 
+function goalSpeedBucket(goal: Pick<UserGoal, "speedBucket">): GoalSpeedBucket {
+  return goal.speedBucket === "ht" || goal.speedBucket === "dt" ? goal.speedBucket : "normal";
+}
+
+function goalSpeedLabel(goal: Pick<UserGoal, "speedBucket">): string {
+  return GOAL_SPEED_LABELS[goalSpeedBucket(goal)];
+}
+
 interface ResolvedMap {
   id: number;
   beatmapsetId: number;
@@ -257,13 +274,13 @@ function describeGoal(goal: UserGoal): string {
     case "play_pp_count":
       return `Have ${nf(goal.targetCount ?? 0)} ${Math.round(goal.targetValue ?? 0)}pp+ plays`;
     case "accuracy":
-      return `${trimZeros(((goal.targetValue ?? 0) * 100).toFixed(2))}% on ${map}`;
+      return `${trimZeros(((goal.targetValue ?? 0) * 100).toFixed(2))}% ${goalSpeedLabel(goal)} on ${map}`;
     case "pass":
-      return `Pass ${map}`;
+      return `Pass ${map} (${goalSpeedLabel(goal)})`;
     case "fc":
-      return `FC ${map}`;
+      return `FC ${map} (${goalSpeedLabel(goal)})`;
     case "grade":
-      return `Get ${goal.targetGrade ?? "S"} on ${map}`;
+      return `Get ${goal.targetGrade ?? "S"} ${goalSpeedLabel(goal)} on ${map}`;
     default:
       return "Goal";
   }
@@ -295,6 +312,7 @@ interface GoalCompletedPayload {
   targetValue?: number | null;
   targetCount?: number | null;
   targetGrade?: string | null;
+  speedBucket?: GoalSpeedBucket | null;
   beatmapLabel?: string | null;
 }
 
@@ -306,6 +324,7 @@ function celebrationLabel(data: GoalCompletedPayload): string {
     targetValue: data.targetValue ?? null,
     targetCount: data.targetCount ?? null,
     targetGrade: data.targetGrade ?? null,
+    speedBucket: data.speedBucket ?? null,
   } as UserGoal;
   return describeGoal(synthetic);
 }
@@ -330,6 +349,7 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
   const [ppCountTarget, setPpCountTarget] = useState("");
   const [accPct, setAccPct] = useState("");
   const [grade, setGrade] = useState<(typeof GRADES)[number]>("S");
+  const [speedBucket, setSpeedBucket] = useState<GoalSpeedBucket>("normal");
   const [rankScope, setRankScope] = useState<RankScope>("global");
   const [rankTarget, setRankTarget] = useState("");
 
@@ -515,6 +535,7 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
     setAccPct("");
     setPpCountTarget("");
     setRankTarget("");
+    setSpeedBucket("normal");
   };
 
   // "Go again" from a cleared goal: refill the composer with its shape. Single-play PP goals keep
@@ -527,6 +548,7 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
     setAccPct("");
     setPpTarget("");
     setPpCountTarget("");
+    setSpeedBucket(goal.speedBucket ?? "normal");
     if (goal.kind === "reach_pp") {
       const next = reachPpSuggestion(suggestionMetrics.currentPp) ?? goal.targetValue ?? null;
       if (next != null) setPpTarget(String(Math.round(next)));
@@ -574,6 +596,7 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
       input.beatmapId = resolved.id;
       input.beatmapsetId = resolved.beatmapsetId;
       input.beatmapLabel = resolved.label;
+      input.speedBucket = speedBucket;
       if (scope === "map-acc") input.targetValue = Number(accPct) / 100;
       if (scope === "map-grade") input.targetGrade = grade;
     }
@@ -587,6 +610,7 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
       setPpCountTarget("");
       setAccPct("");
       setRankTarget("");
+      setSpeedBucket("normal");
       resetMapPicker();
       await load();
     } catch {
@@ -594,7 +618,7 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
     } finally {
       setCreating(false);
     }
-  }, [canSubmit, kind, scope, ppTarget, ppCountTarget, accPct, rankTarget, rankScope, grade, resolved, load, resetMapPicker]);
+  }, [canSubmit, kind, scope, ppTarget, ppCountTarget, accPct, rankTarget, rankScope, grade, speedBucket, resolved, load, resetMapPicker]);
 
   const remove = useCallback(
     async (id: string) => {
@@ -742,6 +766,7 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
                     <>
                       <span>Hit</span>
                       <NumberToken value={accPct} onChange={setAccPct} placeholder={active.placeholder} suffix="%" accent={accent} width="4rem" decimal ariaLabel="Target accuracy" />
+                      <SpeedToken value={speedBucket} onChange={setSpeedBucket} accent={accent} />
                       <span>accuracy on</span>
                       {mapSlot}
                     </>
@@ -750,6 +775,8 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
                   {scope === "map" ? (
                     <>
                       <span>Pass</span>
+                      <SpeedToken value={speedBucket} onChange={setSpeedBucket} accent={accent} />
+                      <span>on</span>
                       {mapSlot}
                     </>
                   ) : null}
@@ -757,6 +784,8 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
                   {scope === "map-fc" ? (
                     <>
                       <span>FC</span>
+                      <SpeedToken value={speedBucket} onChange={setSpeedBucket} accent={accent} />
+                      <span>on</span>
                       {mapSlot}
                     </>
                   ) : null}
@@ -765,6 +794,7 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
                     <>
                       <span>Earn</span>
                       <GradeToken value={grade} onChange={setGrade} accent={accent} />
+                      <SpeedToken value={speedBucket} onChange={setSpeedBucket} accent={accent} />
                       <span>on</span>
                       {mapSlot}
                     </>
@@ -937,6 +967,56 @@ function RankScopeToggle({ value, onChange, accent }: { value: RankScope; onChan
           </button>
         );
       })}
+    </span>
+  );
+}
+
+function SpeedToken({ value, onChange, accent }: { value: GoalSpeedBucket; onChange: (speed: GoalSpeedBucket) => void; accent: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-lg border border-osu-b3/45 bg-osu-b5/55 p-1 align-middle">
+      {GOAL_SPEED_OPTIONS.map((option) => {
+        const selected = option === value;
+        return (
+          <button
+            key={option}
+            type="button"
+            onClick={() => onChange(option)}
+            aria-pressed={selected}
+            aria-label={`${GOAL_SPEED_LABELS[option]} speed`}
+            title={GOAL_SPEED_LABELS[option]}
+            className={`flex h-8 min-w-10 items-center justify-center rounded-md px-1.5 transition ${
+              selected ? "opacity-100" : "opacity-45 hover:opacity-85"
+            }`}
+            style={selected ? { backgroundColor: `${accent}26` } : undefined}
+          >
+            <SpeedIconRun speed={option} />
+          </button>
+        );
+      })}
+    </span>
+  );
+}
+
+function SpeedIconRun({ speed }: { speed: GoalSpeedBucket }) {
+  if (speed === "ht") {
+    return (
+      <span className="flex items-center gap-0.5" aria-hidden="true">
+        <ModBadge mod="HT" size={0.72} />
+        <ModBadge mod="DC" size={0.72} />
+      </span>
+    );
+  }
+  if (speed === "dt") {
+    return (
+      <span className="flex items-center gap-0.5" aria-hidden="true">
+        <ModBadge mod="DT" size={0.72} />
+        <ModBadge mod="NC" size={0.72} />
+      </span>
+    );
+  }
+  return (
+    <span className="flex items-center" aria-hidden="true">
+      <ModBadge mod="NM" size={0.72} color="#b9a7dc" />
     </span>
   );
 }

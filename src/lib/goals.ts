@@ -6,6 +6,7 @@ import { createServerFn } from "@tanstack/react-start";
 
 export type GoalKind = "reach_pp" | "play_pp" | "play_pp_count" | "accuracy" | "pass" | "grade" | "fc" | "reach_rank";
 export type GoalStatus = "open" | "completed";
+export type GoalSpeedBucket = "normal" | "ht" | "dt";
 
 export interface GoalProgress {
   current: number | null;
@@ -27,6 +28,7 @@ export interface UserGoal {
   targetValue: number | null;
   targetCount: number | null;
   targetGrade: string | null;
+  speedBucket: GoalSpeedBucket | null;
   note: string | null;
   status: GoalStatus;
   createdAt: number;
@@ -45,6 +47,7 @@ export interface CreateGoalInput {
   targetValue?: number | null;
   targetCount?: number | null;
   targetGrade?: string | null;
+  speedBucket?: GoalSpeedBucket | null;
   note?: string | null;
 }
 
@@ -163,6 +166,7 @@ export const createGoal = createServerFn({ method: "POST" })
           targetValue: data.targetValue ?? null,
           targetCount: data.targetCount ?? null,
           targetGrade: data.targetGrade ?? null,
+          speedBucket: data.speedBucket ?? null,
           note: data.note ?? null,
         }),
       });

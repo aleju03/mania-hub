@@ -54,6 +54,37 @@ async function goalCompletedEvents(): Promise<number> {
   return (await exec(db, "select count(*) as n from live_event_log where type = 'goal_completed'")).rows[0]?.n as number;
 }
 
+async function insertScoreEvent(score: OscScore, country = "CR", identity = `test:${score.id}`): Promise<void> {
+  const endedAt = score.ended_at ?? "2026-01-01T00:00:00Z";
+  await exec(
+    db,
+    `insert into score_events
+       (score_id, score_identity, legacy_score_id, user_id, country, beatmap_id, ruleset_id, score_json, pp, total_score, accuracy, rank, passed, processed, is_lazer, has_replay, ended_at, received_at, source)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      score.id,
+      identity,
+      score.legacy_score_id ?? null,
+      score.user_id,
+      country,
+      score.beatmap_id ?? score.beatmap?.id ?? MAP,
+      score.ruleset_id ?? 3,
+      JSON.stringify(score),
+      score.pp,
+      score.total_score ?? score.score,
+      score.accuracy,
+      score.rank,
+      score.passed ? 1 : 0,
+      score.processed ? 1 : 0,
+      1,
+      score.has_replay || score.replay ? 1 : 0,
+      endedAt,
+      endedAt,
+      "test",
+    ],
+  );
+}
+
 describe("accuracy goals", () => {
   it("completes the instant a passed score clears the target", async () => {
     const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "accuracy", beatmapId: MAP, targetValue: 0.96 });
@@ -82,6 +113,31 @@ describe("accuracy goals", () => {
     const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "accuracy", beatmapId: MAP, targetValue: 0.9 });
     await evaluateScoreGoals(db, events, scoreWith({ accuracy: 0.99, passed: false, rank: "F" }), ["CR"]);
     expect((await getUserGoal(db, goal.id))?.status).toBe("open");
+  });
+
+  it("does not complete a plain map goal from a Daycore score", async () => {
+    const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "accuracy", beatmapId: MAP, targetValue: 0.95 });
+    await evaluateScoreGoals(
+      db,
+      events,
+      scoreWith({ id: 9101, accuracy: 0.9618, passed: true, rank: "S", mods: [{ acronym: "DC", settings: { speed_change: 0.9 } }] }),
+      ["CR"],
+    );
+    expect((await getUserGoal(db, goal.id))?.status).toBe("open");
+
+    await evaluateScoreGoals(db, events, scoreWith({ id: 9102, accuracy: 0.951, passed: true, rank: "S", mods: [] }), ["CR"]);
+    expect((await getUserGoal(db, goal.id))?.status).toBe("completed");
+  });
+
+  it("lets a map goal target the HT speed bucket", async () => {
+    const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "accuracy", beatmapId: MAP, targetValue: 0.95, speedBucket: "ht" });
+    await evaluateScoreGoals(db, events, scoreWith({ id: 9111, accuracy: 0.99, passed: true, rank: "S", mods: [] }), ["CR"]);
+    expect((await getUserGoal(db, goal.id))?.status).toBe("open");
+
+    await evaluateScoreGoals(db, events, scoreWith({ id: 9112, accuracy: 0.961, passed: true, rank: "S", mods: [{ acronym: "HT" }] }), ["CR"]);
+    const done = await getUserGoal(db, goal.id);
+    expect(done?.status).toBe("completed");
+    expect(done?.speedBucket).toBe("ht");
   });
 });
 
@@ -331,7 +387,7 @@ describe("goal crud", () => {
 });
 
 describe("historical goal reconciliation", () => {
-  it("completes map goals from stored activity created before the goal", async () => {
+  it("does not complete map goals from mod-blind stored activity", async () => {
     await exec(
       db,
       `insert into player_activity_maps
@@ -343,9 +399,58 @@ describe("historical goal reconciliation", () => {
     const grade = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "grade", beatmapId: MAP, targetGrade: "A" });
     const pass = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "pass", beatmapId: MAP });
     await reconcileGoalsForUser(db, events, USER);
+    expect((await getUserGoal(db, accuracy.id))?.status).toBe("open");
+    expect((await getUserGoal(db, grade.id))?.status).toBe("open");
+    expect((await getUserGoal(db, pass.id))?.status).toBe("open");
+  });
+
+  it("completes map goals from stored base-rate score events", async () => {
+    await insertScoreEvent(scoreWith({ id: 9201, accuracy: 0.9825, rank: "S", passed: true, mods: [] }));
+    const accuracy = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "accuracy", beatmapId: MAP, targetValue: 0.98 });
+    const grade = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "grade", beatmapId: MAP, targetGrade: "A" });
+    const pass = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "pass", beatmapId: MAP });
+    await reconcileGoalsForUser(db, events, USER);
     expect((await getUserGoal(db, accuracy.id))?.status).toBe("completed");
     expect((await getUserGoal(db, grade.id))?.status).toBe("completed");
     expect((await getUserGoal(db, pass.id))?.status).toBe("completed");
+  });
+
+  it("does not complete map goals from stored rate-changed score events", async () => {
+    await insertScoreEvent(
+      scoreWith({ id: 9301, accuracy: 0.9618, rank: "S", passed: true, mods: [{ acronym: "DC", settings: { speed_change: 0.9 } }] }),
+    );
+    const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "accuracy", beatmapId: MAP, targetValue: 0.95 });
+    await reconcileGoalsForUser(db, events, USER);
+    expect((await getUserGoal(db, goal.id))?.status).toBe("open");
+  });
+
+  it("completes stored HT speed-bucket map goals from stored HT score events", async () => {
+    await insertScoreEvent(scoreWith({ id: 9351, accuracy: 0.9618, rank: "S", passed: true, mods: [{ acronym: "HT" }] }));
+    const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "accuracy", beatmapId: MAP, targetValue: 0.95, speedBucket: "ht" });
+    await reconcileGoalsForUser(db, events, USER);
+    expect((await getUserGoal(db, goal.id))?.status).toBe("completed");
+  });
+
+  it("reopens a completed map goal when its retained completion score was rate-changed", async () => {
+    await insertScoreEvent(
+      scoreWith({ id: 9401, accuracy: 0.9618, rank: "S", passed: true, mods: [{ acronym: "DC", settings: { speed_change: 0.9 } }] }),
+      "CR",
+      "bad-completion",
+    );
+    const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "accuracy", beatmapId: MAP, targetValue: 0.95 });
+    await exec(
+      db,
+      `update user_goals
+       set status = 'completed', completed_at = ?, completed_value = ?, completed_score_id = ?, completed_beatmap_id = ?, updated_at = ?
+       where id = ?`,
+      [Date.now(), 0.9618, "bad-completion", MAP, Date.now(), goal.id],
+    );
+
+    await reconcileGoalsForUser(db, events, USER);
+    const reopened = await getUserGoal(db, goal.id);
+    expect(reopened?.status).toBe("open");
+    expect(reopened?.completedScoreId).toBeNull();
+    expect(reopened?.completedValue).toBeNull();
   });
 });
 
