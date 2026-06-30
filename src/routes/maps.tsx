@@ -20,7 +20,6 @@ import { getCountryName } from "../lib/country";
 import { formatNumber, formatDuration, formatTimeAgo } from "../lib/format";
 import { MANIA_PATTERN_LABELS } from "../lib/mania-patterns";
 import { PageHeader } from "../components/layout/PageHeader";
-import { PageTabs } from "../components/layout/PageTabs";
 import { Avatar } from "../components/ui/Avatar";
 import { OsuLogo } from "../components/ui/OsuLogo";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
@@ -302,7 +301,7 @@ const RANDOM_PATTERN_LABEL: Record<RandomPattern, string> = {
   tech: "Tech",
   ln: "LN",
   sv: "SV",
-  tiebreaker: "Tiebreaker",
+  tiebreaker: "Tournament",
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -1696,11 +1695,13 @@ function MapsPage() {
 
   const paginated = tab === "random" ? [] : liveBackendPaged ? currentList : currentList.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: "farmed", label: "most farmed" },
-    { id: "popular", label: "widely played" },
-    { id: "favourites", label: "community favorites" },
-    { id: "random", label: "random picks" },
+  // The three rankings are one surface seen through different lenses, so they
+  // share a segmented control. "random picks" is a distinct interaction and
+  // stays a sibling tab (see the view bar below).
+  const browseLenses: { id: Exclude<Tab, "random">; label: string }[] = [
+    { id: "farmed", label: "Farmed" },
+    { id: "popular", label: "Most Played" },
+    { id: "favourites", label: "Favourites" },
   ];
 
   const isLoading = loadingPlayers || (liveBackendPaged ? liveMapsPagePending : loadingMaps) || currentMapsSectionLoading;
@@ -2245,13 +2246,46 @@ function MapsPage() {
 
       {!warming && (
       <>
-      <PageTabs
-        items={tabs}
-        value={tab}
-        onChange={(t) => {
-          updateMapsSearch({ tab: t, page: 0 });
-        }}
-      />
+      {/* ── View bar: the three rankings grouped into one segmented control,
+          with the distinct "random picks" view kept as a sibling tab ─────── */}
+      <div className="bg-osu-d5 border-b border-osu-b3/30">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-5 flex items-center gap-2.5 overflow-x-auto scrollbar-hide">
+          <div className="flex items-center gap-0.5 rounded-lg bg-osu-b4/70 p-0.5">
+            {browseLenses.map((lens) => (
+              <button
+                key={lens.id}
+                onClick={() => updateMapsSearch({ tab: lens.id, page: 0 })}
+                aria-pressed={tab === lens.id}
+                className={`rounded-md px-3 py-1 text-[12px] font-medium whitespace-nowrap transition-colors duration-[120ms] cursor-pointer ${
+                  tab === lens.id
+                    ? "bg-osu-pink/20 text-osu-pink-light"
+                    : "text-osu-f1 hover:text-osu-l2"
+                }`}
+              >
+                {lens.label}
+              </button>
+            ))}
+          </div>
+
+          <span aria-hidden="true" className="h-4 w-px shrink-0 bg-osu-b3/40" />
+
+          <button
+            onClick={() => updateMapsSearch({ tab: "random", page: 0 })}
+            aria-pressed={tab === "random"}
+            className={`relative px-3 py-2.5 text-[12px] font-medium whitespace-nowrap cursor-pointer transition-colors duration-[120ms] ${
+              tab === "random" ? "text-osu-c1" : "text-osu-f1 hover:text-osu-l2"
+            }`}
+          >
+            random picks
+            {tab === "random" && (
+              <span
+                aria-hidden="true"
+                className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-osu-h1"
+              />
+            )}
+          </button>
+        </div>
+      </div>
 
       {/* ── Filter bar ───────────────────────────────────────────────── */}
       <div className="bg-osu-d5 border-b border-osu-b3/20">
