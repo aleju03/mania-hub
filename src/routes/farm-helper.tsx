@@ -127,6 +127,18 @@ function farmHelperRequestKey(subjectKey: string | null, keyMode: LiveFarmHelper
   return `${subjectKey?.trim().toLowerCase() ?? ""}\u0000${keyMode}\u0000${view}`;
 }
 
+function getFarmHelperShellSnapshot(
+  snapshots: Map<string, LiveFarmHelperSnapshot>,
+  subjectKey: string | null,
+  keyMode: LiveFarmHelperKeyMode,
+): LiveFarmHelperSnapshot | null {
+  return (
+    snapshots.get(farmHelperRequestKey(subjectKey, keyMode, "gain"))
+    ?? snapshots.get(farmHelperRequestKey(subjectKey, keyMode, "popular"))
+    ?? null
+  );
+}
+
 const searchPlayers = async (q: string) => {
   const res = await searchUsers({ data: { query: q } });
   return (res.user?.data ?? [])
@@ -182,8 +194,7 @@ function FarmHelperPage() {
   const auth = useAuth();
   const liveEnabled = isLiveBackendConfigured();
 
-  const [snapshot, setSnapshot] = useState<LiveFarmHelperSnapshot | null>(null);
-  const [snapshotRequestKey, setSnapshotRequestKey] = useState<string | null>(null);
+  const [snapshotsByRequestKey, setSnapshotsByRequestKey] = useState<Map<string, LiveFarmHelperSnapshot>>(() => new Map());
   const [error, setError] = useState<string | null>(null);
 
   const subjectKey = search.user ?? null;
@@ -196,8 +207,10 @@ function FarmHelperPage() {
   const page = search.page ?? 0;
   const [query, setQuery] = useState("");
   const requestKey = farmHelperRequestKey(subjectKey, keyMode, view);
-  const visibleSnapshot = snapshotRequestKey === requestKey ? snapshot : null;
+  const visibleSnapshot = snapshotsByRequestKey.get(requestKey) ?? null;
+  const shellSnapshot = visibleSnapshot ?? getFarmHelperShellSnapshot(snapshotsByRequestKey, subjectKey, keyMode);
   const waitingForCurrentSnapshot = liveEnabled && !!subjectKey && !visibleSnapshot && !error;
+  const waitingForInitialSnapshot = waitingForCurrentSnapshot && !shellSnapshot;
 
   const navigateFarmHelper = (
     patch: {
@@ -253,8 +266,7 @@ function FarmHelperPage() {
 
   useEffect(() => {
     if (!liveEnabled || !subjectKey) {
-      setSnapshot(null);
-      setSnapshotRequestKey(null);
+      setSnapshotsByRequestKey(new Map());
       return;
     }
     let cancelled = false;
@@ -268,15 +280,16 @@ function FarmHelperPage() {
     })
       .then((data) => {
         if (cancelled) return;
-        setSnapshot(data);
-        setSnapshotRequestKey(requestKey);
+        setSnapshotsByRequestKey((current) => {
+          const next = new Map(current);
+          next.set(requestKey, data);
+          return next;
+        });
         recordRecentPlayer({ userId: data.userId, username: data.username, avatarUrl: data.avatarUrl });
       })
       .catch((err: unknown) => {
         if (cancelled) return;
         if (isAbortError(err)) return;
-        setSnapshot(null);
-        setSnapshotRequestKey(null);
         const message = err instanceof Error ? err.message : String(err);
         setError(message.includes("404") ? "not-found" : "failed");
       })
@@ -349,25 +362,25 @@ function FarmHelperPage() {
             />
           ) : !subjectKey ? (
             <PlayerPicker viewer={auth.viewer} onPick={setSubject} />
-          ) : waitingForCurrentSnapshot ? (
+          ) : waitingForInitialSnapshot ? (
             <LoadingState />
-          ) : error === "not-found" ? (
+          ) : error === "not-found" && !shellSnapshot ? (
             <EmptyNotice
               eyebrow="not found"
               title={`Couldn't find "${subjectKey}"`}
               body="Check the spelling, or search for the player again."
               action={<ChangeSubjectButton onPick={setSubject} />}
             />
-          ) : error ? (
+          ) : error && !shellSnapshot ? (
             <EmptyNotice
               eyebrow="error"
               title="Couldn't build recommendations"
               body="Something went wrong loading this player's farm data. Try again in a moment."
               action={<ChangeSubjectButton onPick={setSubject} />}
             />
-          ) : visibleSnapshot ? (
+          ) : shellSnapshot ? (
             <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
-              <TargetPanel snapshot={visibleSnapshot} onChangePlayer={() => setSubject(null)} />
+              <TargetPanel snapshot={shellSnapshot} onChangePlayer={() => setSubject(null)} />
 
               <div ref={listRef} className="min-w-0 scroll-mt-4">
                 <div className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4">
@@ -378,11 +391,24 @@ function FarmHelperPage() {
                           {view === "popular" ? "popular at your level" : "recommendations"}
                         </div>
                         <div className="mt-0.5 text-sm font-semibold text-osu-c1">
-                          {formatPp(recs.length)} map{recs.length === 1 ? "" : "s"}
-                          {view === "popular" ? (
-                            <span className="font-normal text-osu-f1"> · what nearby players farm</span>
+                          {visibleSnapshot ? (
+                            <>
+                              {formatPp(recs.length)} map{recs.length === 1 ? "" : "s"}
+                              {view === "popular" ? (
+                                <span className="font-normal text-osu-f1"> · what nearby players farm</span>
+                              ) : (
+                                <span className="font-normal text-osu-f1"> · +{formatPp(totalGain(recs))}pp on the table</span>
+                              )}
+                            </>
+                          ) : error ? (
+                            <span className="font-normal text-osu-f1">couldn't load maps</span>
                           ) : (
-                            <span className="font-normal text-osu-f1"> · +{formatPp(totalGain(recs))}pp on the table</span>
+                            <div className="inline-flex items-center gap-2 align-middle">
+                              <Skeleton className="h-4 w-16" />
+                              <span className="font-normal text-osu-f1">
+                                {view === "popular" ? "what nearby players farm" : "checking pp on the table"}
+                              </span>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -407,12 +433,26 @@ function FarmHelperPage() {
                             page: 0,
                           });
                         }}
-                        counts={countReasons(visibleSnapshot.recs)}
+                        counts={countReasons(visibleSnapshot?.recs ?? [])}
                       />
                     </div>
                   </div>
 
-                  {recs.length === 0 ? (
+                  {!visibleSnapshot ? (
+                    error ? (
+                      <EmptyNotice
+                        eyebrow={error === "not-found" ? "not found" : "error"}
+                        title={error === "not-found" ? "Couldn't load this view" : "Couldn't build recommendations"}
+                        body={
+                          error === "not-found"
+                            ? "The saved player panel can stay here, but this view did not return fresh map data."
+                            : "Something went wrong loading these maps. Try the toggle again in a moment."
+                        }
+                      />
+                    ) : (
+                      <RecommendationsSkeleton layout={layout} />
+                    )
+                  ) : recs.length === 0 ? (
                     <EmptyNotice
                       eyebrow={query ? "no matches" : "all caught up"}
                       title={
@@ -459,7 +499,7 @@ function FarmHelperPage() {
                   )}
                 </div>
 
-                {pageCount > 1 ? (
+                {visibleSnapshot && pageCount > 1 ? (
                   <div
                     className="sticky bottom-0 z-10 -mx-4 mt-6 border-t border-osu-b3/30 bg-osu-b5/90 px-4 py-2 backdrop-blur-sm after:absolute after:left-0 after:right-0 after:top-full after:h-4 after:bg-osu-b5/90 after:backdrop-blur-sm after:content-[''] sm:-mx-5 sm:px-5 [&>div]:!mt-0 relative"
                     style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom, 0px))" }}
@@ -476,7 +516,7 @@ function FarmHelperPage() {
 
       <FarmersModal
         rec={farmersFor?.rec ?? null}
-        userKey={visibleSnapshot ? String(visibleSnapshot.userId) : null}
+        userKey={shellSnapshot ? String(shellSnapshot.userId) : null}
         keyMode={farmersFor?.keyMode ?? keyMode}
         onClose={() => setFarmersFor(null)}
       />
@@ -1490,6 +1530,26 @@ function LoadingState() {
   );
 }
 
+function RecommendationsSkeleton({ layout }: { layout: LayoutMode }) {
+  if (layout === "grid") {
+    return (
+      <div className="grid grid-cols-2 gap-2.5 bg-osu-b5 p-2.5 sm:grid-cols-3 xl:grid-cols-4">
+        {Array.from({ length: GRID_PAGE_SIZE }).map((_, i) => (
+          <RecCardSkeleton key={i} />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="divide-y divide-osu-b3/20">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <RecRowSkeleton key={i} index={i} />
+      ))}
+    </div>
+  );
+}
+
 function FilterGroupSkeleton({ labelWidth, buttonWidths }: { labelWidth: string; buttonWidths: string[] }) {
   return (
     <div className="flex items-center gap-1.5">
@@ -1498,6 +1558,31 @@ function FilterGroupSkeleton({ labelWidth, buttonWidths }: { labelWidth: string;
         {buttonWidths.map((width, index) => (
           <Skeleton key={index} className={`h-7 ${width} rounded-none border-r border-osu-b3/25 last:border-r-0`} />
         ))}
+      </div>
+    </div>
+  );
+}
+
+function RecCardSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4">
+      <Skeleton className="h-[90px] w-full rounded-none" />
+      <div className="px-2.5 py-2">
+        <div className="flex items-center gap-1.5">
+          <Skeleton className="h-3 w-24 min-w-0 flex-1" />
+          <Skeleton className="h-3 w-10 shrink-0" />
+        </div>
+        <div className="mt-2 flex items-center gap-3">
+          <Skeleton className="h-3 w-12" />
+          <Skeleton className="h-3 w-14" />
+          <Skeleton className="h-3 w-10" />
+        </div>
+        <div className="mt-2 flex items-center gap-1">
+          <Skeleton className="h-[18px] w-[18px] rounded-full" />
+          <Skeleton className="h-[18px] w-[18px] rounded-full" />
+          <Skeleton className="h-[18px] w-[18px] rounded-full" />
+          <Skeleton className="ml-1 h-2.5 w-8" />
+        </div>
       </div>
     </div>
   );
