@@ -59,6 +59,7 @@ export interface ScoreUser {
 
 export interface OscScore {
   id: number;
+  best_id?: number | null;
   legacy_score_id?: number | null;
   user_id: number;
   accuracy: number;

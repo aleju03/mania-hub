@@ -583,7 +583,9 @@ async function projectTopPlays(
     const row = rows[rowIndex];
     const eventScore = rawTopPlayScores[rowIndex] ? topPlayScores[topPlayScoreIndex++] : null;
     if (!eventScore || eventScore.user_id !== userId || eventScore.pp == null || eventScore.pp <= 0) continue;
-    scores = applyTopPlayEvent(scores, eventScore);
+    const nextScores = applyTopPlayEvent(scores, eventScore);
+    if (nextScores === scores) continue;
+    scores = nextScores;
     if (isAtOrBefore(row.detected_at, ppProjectionBaselineAt)) ppBaselineScores = scores;
     provenanceByScoreId[eventScore.id] = "live_top_play_event";
     appliedTopPlayEvents += 1;
@@ -591,7 +593,9 @@ async function projectTopPlays(
 
   for (const recentScore of recentScores.sort(compareScoresByTimeAsc)) {
     if (!isProfileRecentTopScoreCandidate(recentScore, userId) || !isScoreAfter(recentScore, snapshotFetchedAt)) continue;
-    scores = applyTopPlayEvent(scores, recentScore);
+    const nextScores = applyTopPlayEvent(scores, recentScore);
+    if (nextScores === scores) continue;
+    scores = nextScores;
     if (isAtOrBefore(getScoreTimestamp(recentScore), ppProjectionBaselineAt)) ppBaselineScores = applyTopPlayEvent(ppBaselineScores, recentScore);
     provenanceByScoreId[recentScore.id] = "profile_recent_score";
     appliedRecentScores += 1;
@@ -610,11 +614,18 @@ function compareScoresByTimeAsc(a: OscScore, b: OscScore): number {
 function isProfileRecentTopScoreCandidate(score: OscScore, userId: number): boolean {
   return score.user_id === userId
     && score.id > 0
+    && isProfileRecentScoreBestOnMap(score)
     && score.passed === true
     && score.pp != null
     && score.pp > 0
     && (score.beatmap?.mode === "mania" || score.ruleset_id === 3)
     && scoreHasPublicLeaderboard(score);
+}
+
+function isProfileRecentScoreBestOnMap(score: OscScore): boolean {
+  if (score.best_id == null || score.best_id <= 0) return true;
+  const officialId = score.legacy_score_id != null && score.legacy_score_id > 0 ? score.legacy_score_id : score.id;
+  return score.best_id === score.id || score.best_id === officialId;
 }
 
 function isScoreAfter(score: OscScore, cutoff: string): boolean {
@@ -631,7 +642,11 @@ function applyTopPlayEvent(scores: OscScore[], eventScore: OscScore): OscScore[]
     next[existingIndex] = eventScore;
     return next;
   }
-  return [...scores.filter((score) => !isReplacedSameBeatmapScore(score, eventScore)), eventScore];
+
+  const sameBeatmapScores = scores.filter((score) => isSameBeatmapScore(score, eventScore));
+  if (sameBeatmapScores.length === 0) return [...scores, eventScore];
+  if (sameBeatmapScores.some((score) => !isReplacedSameBeatmapScore(score, eventScore))) return scores;
+  return [...scores.filter((score) => !isSameBeatmapScore(score, eventScore)), eventScore];
 }
 
 function rankBestScores(scores: OscScore[]): OscScore[] {
@@ -659,14 +674,22 @@ function isAtOrBefore(value: unknown, cutoff: string): boolean {
 }
 
 function isReplacedSameBeatmapScore(score: OscScore, eventScore: OscScore): boolean {
+  if (!isSameBeatmapScore(score, eventScore)) return false;
+  if (score.id === eventScore.id) return true;
+  const scorePp = score.pp ?? 0;
+  const eventPp = eventScore.pp ?? 0;
+  if (eventPp !== scorePp) return eventPp > scorePp;
+  const scoreTime = Date.parse(getScoreTimestamp(score));
+  const eventTime = Date.parse(getScoreTimestamp(eventScore));
+  if (Number.isFinite(scoreTime) && Number.isFinite(eventTime)) return eventTime >= scoreTime;
+  return true;
+}
+
+function isSameBeatmapScore(score: OscScore, eventScore: OscScore): boolean {
   const beatmapId = score.beatmap_id ?? score.beatmap?.id;
   const eventBeatmapId = eventScore.beatmap_id ?? eventScore.beatmap?.id;
   if (!beatmapId || beatmapId !== eventBeatmapId) return false;
-  if (score.id === eventScore.id) return true;
-  const scoreTime = Date.parse(getScoreTimestamp(score));
-  const eventTime = Date.parse(getScoreTimestamp(eventScore));
-  if (Number.isFinite(scoreTime) && Number.isFinite(eventTime) && scoreTime > eventTime) return false;
-  return (score.pp ?? 0) <= (eventScore.pp ?? 0);
+  return true;
 }
 
 function dedupeScores(scores: OscScore[]): OscScore[] {

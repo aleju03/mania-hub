@@ -93,6 +93,127 @@ describe("player profile snapshots", () => {
     expect(snapshot?.projection.provenanceByScoreId[3]).toBeUndefined();
   });
 
+  it("does not overlay a fresh recent score that is not the player's map best", async () => {
+    const snapshotFetchedAt = "2026-06-01T03:28:53Z";
+    const existingMapBest = score({
+      id: 10,
+      beatmapId: 101,
+      title: "Existing map PB",
+      pp: 120,
+      endedAt: snapshotFetchedAt,
+    });
+    const recentNonPb = score({
+      id: 11,
+      beatmapId: 101,
+      title: "Recent non-PB",
+      pp: 118,
+      endedAt: "2026-06-07T22:23:05Z",
+      bestId: existingMapBest.id,
+    });
+
+    await exec(
+      db,
+      `insert into profile_snapshots
+       (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        USER_ID,
+        "mnshiny",
+        JSON.stringify({
+          id: USER_ID,
+          username: "MnShiny",
+          country_code: "CR",
+          avatar_url: "https://example.test/avatar.png",
+          statistics: { pp: 1000 },
+        }),
+        JSON.stringify([existingMapBest]),
+        200,
+        snapshotFetchedAt,
+        snapshotFetchedAt,
+        snapshotFetchedAt,
+      ],
+    );
+    await exec(
+      db,
+      `insert into profile_section_cache (cache_key, user_id, section, payload_json, fetched_at, updated_at)
+       values (?, ?, ?, ?, ?, ?)`,
+      [
+        `recent:${USER_ID}`,
+        USER_ID,
+        "recent",
+        JSON.stringify([recentNonPb]),
+        "2026-06-07T22:25:00Z",
+        "2026-06-07T22:25:00Z",
+      ],
+    );
+
+    const snapshot = await getCachedPlayerProfileSnapshot(db, "MnShiny");
+
+    expect(snapshot?.bestScores.map((entry) => entry.id)).toEqual([10]);
+    expect(snapshot?.projection.appliedRecentScores).toBe(0);
+    expect(snapshot?.projection.provenanceByScoreId[11]).toBeUndefined();
+  });
+
+  it("does not append a same-map recent score below the cached map best", async () => {
+    const snapshotFetchedAt = "2026-06-01T03:28:53Z";
+    const existingMapBest = score({
+      id: 20,
+      beatmapId: 101,
+      title: "Existing map PB",
+      pp: 120,
+      endedAt: snapshotFetchedAt,
+    });
+    const recentLowerPp = score({
+      id: 21,
+      beatmapId: 101,
+      title: "Recent lower PP",
+      pp: 118,
+      endedAt: "2026-06-07T22:23:05Z",
+    });
+
+    await exec(
+      db,
+      `insert into profile_snapshots
+       (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        USER_ID,
+        "mnshiny",
+        JSON.stringify({
+          id: USER_ID,
+          username: "MnShiny",
+          country_code: "CR",
+          avatar_url: "https://example.test/avatar.png",
+          statistics: { pp: 1000 },
+        }),
+        JSON.stringify([existingMapBest]),
+        200,
+        snapshotFetchedAt,
+        snapshotFetchedAt,
+        snapshotFetchedAt,
+      ],
+    );
+    await exec(
+      db,
+      `insert into profile_section_cache (cache_key, user_id, section, payload_json, fetched_at, updated_at)
+       values (?, ?, ?, ?, ?, ?)`,
+      [
+        `recent:${USER_ID}`,
+        USER_ID,
+        "recent",
+        JSON.stringify([recentLowerPp]),
+        "2026-06-07T22:25:00Z",
+        "2026-06-07T22:25:00Z",
+      ],
+    );
+
+    const snapshot = await getCachedPlayerProfileSnapshot(db, "MnShiny");
+
+    expect(snapshot?.bestScores.map((entry) => entry.id)).toEqual([20]);
+    expect(snapshot?.projection.appliedRecentScores).toBe(0);
+    expect(snapshot?.projection.provenanceByScoreId[21]).toBeUndefined();
+  });
+
   it("hydrates compact cached best-score snapshots from normalized metadata", async () => {
     const snapshotFetchedAt = "2026-06-01T03:28:53Z";
     const best = score({
@@ -192,10 +313,12 @@ function score(options: {
   title: string;
   pp: number;
   endedAt: string;
+  bestId?: number | null;
   passed?: boolean;
 }): OscScore {
   return {
     id: options.id,
+    best_id: options.bestId,
     legacy_score_id: options.id + 1000,
     user_id: USER_ID,
     accuracy: 0.98,
