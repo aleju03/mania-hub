@@ -21,7 +21,7 @@ const PATTERN_VARIANTS: Array<{ canonical: string; variants: string[]; sources?:
   { canonical: "sv", variants: ["sv", "scroll velocity"] },
   { canonical: "bracket", variants: ["bracket", "brackets"] },
   { canonical: "speed", variants: ["speed"], sources: ["version", "title"] },
-  { canonical: "tiebreaker", variants: ["tiebreaker", "tb"] },
+  { canonical: "tiebreaker", variants: ["tiebreaker", "tb", "mwc", "grandfinals", "world cup"] },
 ];
 
 // Drop the generic label when a more specific sibling is already detected.
@@ -45,6 +45,7 @@ function isPackTitle(title: string): boolean {
 function sourceHasVariant(text: string, variant: string): boolean {
   const tokens = text.toLowerCase().split(/[^a-z0-9]+/g).filter(Boolean);
   if (tokens.length === 0) return false;
+  if (variant === "world cup") return tokens.includes("world") && tokens.includes("cup");
   if (!variant.includes(" ")) return tokens.includes(variant);
 
   for (let i = 0; i < tokens.length - 1; i++) {
@@ -111,5 +112,5 @@ export const MANIA_PATTERN_LABELS: Record<string, string> = {
   sv: "SV",
   bracket: "Bracket",
   speed: "Speed",
-  tiebreaker: "Tiebreaker",
+  tiebreaker: "Tournament",
 };

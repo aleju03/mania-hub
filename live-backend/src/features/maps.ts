@@ -4162,7 +4162,7 @@ const PATTERN_VARIANTS: Array<{ canonical: string; variants: string[]; sources?:
   { canonical: "sv", variants: ["sv", "scroll velocity"] },
   { canonical: "bracket", variants: ["bracket", "brackets"] },
   { canonical: "speed", variants: ["speed"], sources: ["version", "title"] },
-  { canonical: "tiebreaker", variants: ["tiebreaker", "tb"] },
+  { canonical: "tiebreaker", variants: ["tiebreaker", "tb", "mwc", "grandfinals", "world cup"] },
 ];
 
 const SUBSUMED: Record<string, string[]> = {
@@ -4203,6 +4203,7 @@ function isPackTitle(title: string): boolean {
 
 function sourceHasVariant(text: string, variant: string): boolean {
   const tokens = text.toLowerCase().split(/[^a-z0-9]+/g).filter(Boolean);
+  if (variant === "world cup") return tokens.includes("world") && tokens.includes("cup");
   if (!variant.includes(" ")) return tokens.includes(variant);
   for (let index = 0; index < tokens.length - 1; index++) {
     if (`${tokens[index]} ${tokens[index + 1]}` === variant) return true;

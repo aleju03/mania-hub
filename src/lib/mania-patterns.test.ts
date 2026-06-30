@@ -23,4 +23,12 @@ describe("detectManiaPatterns", () => {
   it("detects speed from pack titles", () => {
     expect(detectManiaPatterns("", ["At the Speed of Light"], "Speed Pack")).toEqual(["speed"]);
   });
+
+  it("detects tournament/tiebreaker tags", () => {
+    expect(detectManiaPatterns("mwc", ["4K Hard"])).toContain("tiebreaker");
+    expect(detectManiaPatterns("grandfinals", ["4K Hard"])).toContain("tiebreaker");
+    expect(detectManiaPatterns("world ranked cup", ["4K Hard"])).toContain("tiebreaker");
+    expect(detectManiaPatterns("world", ["4K Hard"])).not.toContain("tiebreaker");
+    expect(detectManiaPatterns("cup", ["4K Hard"])).not.toContain("tiebreaker");
+  });
 });

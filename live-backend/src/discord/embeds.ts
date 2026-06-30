@@ -841,6 +841,7 @@ const PATTERN_LABELS: Record<string, string> = {
   jack: "Jacks", chordjack: "Chordjack", chordjacks: "Chordjacks", stamina: "Stamina",
   tech: "Tech", technical: "Technical", speed: "Speed", ln: "LN", longnote: "LN",
   jumptrill: "Jumptrill", bracket: "Bracket", coordination: "Coordination", hybrid: "Hybrid",
+  tiebreaker: "Tournament",
 };
 function patternLabel(key: string): string {
   return PATTERN_LABELS[key.toLowerCase()] ?? titleCase(key);

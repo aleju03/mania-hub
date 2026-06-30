@@ -60,7 +60,7 @@ const PATTERN_CHOICES = [
   { name: "Tech", value: "tech" },
   { name: "LN", value: "ln" },
   { name: "SV", value: "sv" },
-  { name: "Tiebreaker", value: "tiebreaker" },
+  { name: "Tournament", value: "tiebreaker" },
 ];
 
 // A username option. Optional everywhere: when omitted, the command falls back
