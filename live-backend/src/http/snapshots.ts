@@ -1254,6 +1254,8 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       "jobs",
       "score_events",
       "country_beatmap_scores",
+      "country_beatmap_score_pbs",
+      "country_beatmap_score_pb_state",
       "user_top_scores",
       "top_play_events",
       "snipe_events",

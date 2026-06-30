@@ -4,7 +4,7 @@ import { EventEmitter } from "node:events";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, exec, migrate } from "../src/db.js";
-import { getSnipesSnapshot } from "../src/features/snipes.js";
+import { getSnipesSnapshot, updateSnipeProjection } from "../src/features/snipes.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../src/features/activity.js";
 import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, globalMapsFarmedRefreshRunAfter, recordMapsFarmedScore, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores, type MapsPageQuery } from "../src/features/maps.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores } from "../src/features/player-profiles.js";
@@ -643,6 +643,8 @@ describe("live backend", () => {
     await exec(db, "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values ('US', 202, 1, 'test', 1, '2026-01-01T00:00:00.000Z')");
     await exec(db, "insert into country_rank_snapshots (country, user_id, country_rank, global_rank, pp, captured_at) values ('CR', 101, 1, 10, 1000, '2026-01-01T00:00:00.000Z')");
     await exec(db, "insert into country_beatmap_scores (country, beatmap_id, lane_key, user_id, score_id, total_score, pp, accuracy, rank, mods_json, is_lazer, has_replay, ended_at, updated_at) values ('CR', 501, '4K:NM', 101, 9001, 999999, 100, 0.99, 'S', '[]', 1, 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')");
+    await exec(db, "insert into country_beatmap_score_pbs (country, beatmap_id, lane_key, user_id, score_identity, score_id, total_score, pp, accuracy, rank, mods_json, is_lazer, has_replay, ended_at, updated_at) values ('CR', 501, '4K:NM', 101, 'official:9001', 9001, 999999, 100, 0.99, 'S', '[]', 1, 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')");
+    await exec(db, "insert into country_beatmap_score_pb_state (country, beatmap_id, lane_key, user_id, verified_at) values ('CR', 501, '4K:NM', 101, '2026-01-01T00:00:00.000Z')");
     await exec(db, "insert into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at) values ('CR', 9001, 101, 100, 95, 20, '{}', '2026-01-01T00:00:00.000Z')");
     await exec(db, "insert into snipe_events (country, beatmap_id, lane_key, score_id, sniper_id, victim_id, board_rank, payload_json, detected_at) values ('CR', 501, '4K:NM', 9001, 101, 202, 1, '{}', '2026-01-01T00:00:00.000Z')");
     await exec(db, "insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at) values ('CR', '{}', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')");
@@ -656,7 +658,7 @@ describe("live backend", () => {
     const deleted = await deleteCountryData(db, "CR");
 
     expect(deleted.country_registry).toBe(1);
-    for (const table of ["country_registry", "country_rosters", "country_rank_snapshots", "score_events", "country_beatmap_scores", "top_play_events", "snipe_events", "country_maps_snapshots", "country_maps_farmed_scores", "country_maps_most_played", "country_maps_favourite_sets", "live_event_log"]) {
+    for (const table of ["country_registry", "country_rosters", "country_rank_snapshots", "score_events", "country_beatmap_scores", "country_beatmap_score_pbs", "country_beatmap_score_pb_state", "top_play_events", "snipe_events", "country_maps_snapshots", "country_maps_farmed_scores", "country_maps_most_played", "country_maps_favourite_sets", "live_event_log"]) {
       expect(Number((await exec(db, `select count(*) as count from ${table} where country = 'CR'`)).rows[0].count)).toBe(0);
     }
     expect(Number((await exec(db, "select count(*) as count from country_rosters where country = 'US'")).rows[0].count)).toBe(1);
@@ -3248,6 +3250,12 @@ describe("live backend", () => {
     expect(snipes.events[0].score_id).toBe(current.id);
     expect(snipes.events[0].victim.id).toBe(303);
     expect(snipes.events[0].victimTotalScore).toBe(900);
+    expect(osu.getBeatmapUserScoresAll).toHaveBeenCalledTimes(2);
+    const pbRows = (await exec(
+      db,
+      "select user_id, total_score from country_beatmap_score_pbs where country = 'CR' and beatmap_id = 501 and lane_key = 'normal:lazer' order by user_id, total_score",
+    )).rows;
+    expect(pbRows.map((row) => `${row.user_id}:${row.total_score}`)).toEqual(["101:800", "101:1000", "303:900"]);
   });
 
   it("does not count improving an already leading score as a snipe", async () => {
@@ -3280,6 +3288,94 @@ describe("live backend", () => {
       "select total_score from country_beatmap_scores where country = 'CR' and beatmap_id = 501 and lane_key = 'normal:lazer' and user_id = 101",
     )).rows[0];
     expect(Number(updatedLeader.total_score)).toBe(987654);
+  });
+
+  it("uses osu self history to suppress self-improvement snipe false positives", async () => {
+    const { db, events } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    const now = new Date().toISOString();
+    await exec(db, "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values ('CR', 101, 1, 'osu_rankings', 1, ?)", [now]);
+    await exec(
+      db,
+      `insert into users (user_id, username, avatar_url, country_code, updated_at)
+       values
+         (202, 'Happy', 'https://assets.example/happy.png', 'CR', ?),
+         (303, 'Runner Up', 'https://assets.example/runner-up.png', 'CR', ?)`,
+      [now, now],
+    );
+    await exec(
+      db,
+      `insert into country_beatmap_scores (country, beatmap_id, lane_key, user_id, score_id, total_score, pp, accuracy, rank, mods_json, is_lazer, has_replay, ended_at, updated_at)
+       values ('CR', 501, 'normal:lazer', 303, 7000, 824000, 680, 0.95, 'S', '[]', 1, 1, '2026-05-06T00:00:00.000Z', ?)`,
+      [now],
+    );
+
+    const priorSelf: OscScore = {
+      ...scores[0],
+      id: 8001,
+      total_score: 850775,
+      score: 850775,
+      pp: 724,
+      accuracy: 0.9636,
+      ended_at: "2026-04-23T00:00:00.000Z",
+      created_at: "2026-04-23T00:00:00.000Z",
+    };
+    const warmup: OscScore = {
+      ...scores[0],
+      id: 9003,
+      total_score: 830578,
+      score: 830578,
+      pp: 700,
+      accuracy: 0.9589,
+      ended_at: "2026-05-12T00:01:00.000Z",
+      created_at: "2026-05-12T00:01:00.000Z",
+    };
+    const improvement: OscScore = {
+      ...scores[0],
+      id: 9004,
+      total_score: 860531,
+      score: 860531,
+      pp: 733,
+      accuracy: 0.9662,
+      ended_at: "2026-05-12T00:10:00.000Z",
+      created_at: "2026-05-12T00:10:00.000Z",
+    };
+    const selfHistory = {
+      getBeatmapUserScoresAll: vi.fn(async () => [warmup, priorSelf]),
+    };
+
+    await expect(updateSnipeProjection(db, events, "CR", warmup, selfHistory)).resolves.toBeNull();
+    expect(Number((await exec(db, "select count(*) as count from snipe_events")).rows[0].count)).toBe(0);
+    expect(Number((await exec(
+      db,
+      "select total_score from country_beatmap_scores where country = 'CR' and beatmap_id = 501 and lane_key = 'normal:lazer' and user_id = 101",
+    )).rows[0].total_score)).toBe(850775);
+    expect(Number((await exec(
+      db,
+      "select count(*) as count from country_beatmap_score_pbs where country = 'CR' and beatmap_id = 501 and lane_key = 'normal:lazer' and user_id = 101",
+    )).rows[0].count)).toBe(1);
+
+    // Simulate a board that already learned the warmup as the player's best before this fix.
+    await exec(
+      db,
+      "update country_beatmap_scores set score_id = 9003, total_score = 830578, pp = 700, accuracy = 0.9589, ended_at = '2026-05-12T00:01:00.000Z' where country = 'CR' and beatmap_id = 501 and lane_key = 'normal:lazer' and user_id = 101",
+    );
+    await exec(
+      db,
+      `insert into country_beatmap_scores (country, beatmap_id, lane_key, user_id, score_id, total_score, pp, accuracy, rank, mods_json, is_lazer, has_replay, ended_at, updated_at)
+       values ('CR', 501, 'normal:lazer', 202, 7001, 832329, 690, 0.96, 'S', '[]', 1, 1, '2026-05-06T00:00:00.000Z', ?)`,
+      [now],
+    );
+
+    await expect(updateSnipeProjection(db, events, "CR", improvement, selfHistory)).resolves.toBeNull();
+
+    const snipes = await getSnipesSnapshot(db, "CR", 10);
+    expect(snipes.events).toHaveLength(0);
+    expect(selfHistory.getBeatmapUserScoresAll).toHaveBeenCalledTimes(1);
+    expect(Number((await exec(
+      db,
+      "select total_score from country_beatmap_scores where country = 'CR' and beatmap_id = 501 and lane_key = 'normal:lazer' and user_id = 101",
+    )).rows[0].total_score)).toBe(860531);
   });
 
   it("keeps manual opt-in members tracked across a roster refresh and clears any stale rank", async () => {

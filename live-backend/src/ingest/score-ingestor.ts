@@ -4,7 +4,7 @@ import { exec, execBatch, json } from "../db.js";
 import { canSeedSnipesForCountry, getActiveCountryCodes, markCountryScoreSeen } from "../countries.js";
 import { recordPlayerActivity, removePlayerActivityScore } from "../features/activity.js";
 import { maybeEnqueueMapsFarmedRefresh } from "../features/maps.js";
-import { updateSnipeProjection } from "../features/snipes.js";
+import { updateSnipeProjection, type SnipeSelfHistoryProvider } from "../features/snipes.js";
 import { maybeEnqueueTopPlayRefresh } from "../features/top-plays.js";
 import { getHydratedScoreByIdentity } from "../features/tracker.js";
 import { evaluateScoreGoals } from "../features/goals.js";
@@ -31,6 +31,7 @@ export class ScoreIngestor {
     private readonly queue: JobQueue,
     private readonly events: LiveEventLog,
     private readonly config: Pick<Config, "topPlayMarginPp" | "trackedCountries" | "countryWarmTtlMs" | "osuClientId" | "osuClientSecret"> & Partial<Pick<Config, "prewarmCountries" | "mapsWarmCountries">>,
+    private readonly snipeSelfHistory?: SnipeSelfHistoryProvider,
   ) {}
 
   async ingestBatch(scores: OscScore[], source = "osc_socket", options: ScoreIngestOptions = {}): Promise<{ inserted: number; skipped: number }> {
@@ -48,7 +49,7 @@ export class ScoreIngestor {
     if (!score.beatmap || !score.beatmapset || !score.user) return;
     if (!await canSeedSnipesForCountry(this.db, this.config, country)) return;
     if (this.canUseOsuApi() && await this.enqueueSnipeSeedIfNeeded(country, score)) return;
-    await updateSnipeProjection(this.db, this.events, country, score);
+    await updateSnipeProjection(this.db, this.events, country, score, this.snipeSelfHistory);
   }
 
   async ingestScore(score: OscScore, source = "osc_socket", options: ScoreIngestOptions = {}): Promise<boolean> {
@@ -177,7 +178,7 @@ export class ScoreIngestor {
         if (!snipeScore) continue;
         if (!await canSeedSnipesForCountry(this.db, this.config, country)) continue;
         if (canUseOsuApi && await this.enqueueSnipeSeedIfNeeded(country, snipeScore)) continue;
-        await updateSnipeProjection(this.db, this.events, country, snipeScore);
+        await updateSnipeProjection(this.db, this.events, country, snipeScore, this.snipeSelfHistory);
       }
     }
     return true;

@@ -144,6 +144,8 @@ export async function deleteCountryData(db: Db, country: string): Promise<Record
   await deleteFrom("country_rank_snapshots");
   await deleteFrom("score_events");
   await deleteFrom("country_beatmap_scores");
+  await deleteFrom("country_beatmap_score_pbs");
+  await deleteFrom("country_beatmap_score_pb_state");
   await deleteFrom("top_play_events");
   await deleteFrom("snipe_events");
   await deleteFrom("country_maps_snapshots");

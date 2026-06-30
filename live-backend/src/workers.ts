@@ -5,7 +5,7 @@ import { exec, json, parseJson } from "./db.js";
 import { computeBeatmapActivitySkillVector } from "./features/activity.js";
 import { computeDanEstimateJob } from "./features/dan-estimates.js";
 import { MapsRosterNotReadyError, enqueueGlobalMapsRefresh, globalMapsFarmedRefreshRunAfter, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores } from "./features/maps.js";
-import { updateSnipeProjection } from "./features/snipes.js";
+import { recordSnipeScoreHistory, updateSnipeProjection } from "./features/snipes.js";
 import { confirmTopPlay, TopPlayConfirmationPendingError } from "./features/top-plays.js";
 import { getHydratedScoresForMetadata } from "./features/tracker.js";
 import type { ClaimOptions, Job, JobQueue } from "./jobs/queue.js";
@@ -439,7 +439,7 @@ export class WorkerRunner {
         return a.score.id - b.score.id;
       });
     for (const row of rows) {
-      await updateSnipeProjection(this.db, this.events, row.country, row.score);
+      await updateSnipeProjection(this.db, this.events, row.country, row.score, this.osu);
     }
   }
 
@@ -508,6 +508,7 @@ export class WorkerRunner {
     for (const row of roster) {
       const userId = Number(row.user_id);
       const scores = await this.getSnipeSeedScores(payload.beatmapId, userId);
+      await recordSnipeScoreHistory(this.db, payload.country, payload.beatmapId, payload.laneKey, userId, scores, { excludeIdentities: replayScoreIdentities });
       for (const score of scores) {
         if (replayScoreIdentities.has(getScoreIdentity(score))) continue;
         const totalScore = getDisplayedTotalScore(score);

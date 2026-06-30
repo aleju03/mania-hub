@@ -133,6 +133,34 @@ create table if not exists country_beatmap_scores (
   primary key (country, beatmap_id, lane_key, user_id)
 );
 
+create table if not exists country_beatmap_score_pbs (
+  country text not null,
+  beatmap_id integer not null,
+  lane_key text not null,
+  user_id integer not null,
+  score_identity text not null,
+  score_id integer not null,
+  total_score integer not null,
+  pp real,
+  accuracy real,
+  rank text,
+  mods_json text not null,
+  is_lazer integer not null,
+  has_replay integer not null,
+  ended_at text not null,
+  updated_at text not null,
+  primary key (country, beatmap_id, lane_key, user_id, score_identity)
+);
+
+create table if not exists country_beatmap_score_pb_state (
+  country text not null,
+  beatmap_id integer not null,
+  lane_key text not null,
+  user_id integer not null,
+  verified_at text not null,
+  primary key (country, beatmap_id, lane_key, user_id)
+);
+
 create table if not exists user_top_scores (
   user_id integer not null,
   score_id integer not null,
@@ -445,6 +473,8 @@ create index if not exists idx_score_events_user_time on score_events(user_id, e
 create index if not exists idx_score_events_beatmap_time on score_events(beatmap_id, ended_at desc);
 create index if not exists idx_score_events_passed_time on score_events(ended_at desc) where passed = 1;
 create index if not exists idx_country_beatmap_scores_rank on country_beatmap_scores(country, beatmap_id, lane_key, total_score desc);
+create index if not exists idx_country_beatmap_score_pbs_lookup on country_beatmap_score_pbs(country, beatmap_id, lane_key, user_id, ended_at desc, total_score desc);
+create index if not exists idx_country_beatmap_score_pb_state_lookup on country_beatmap_score_pb_state(country, beatmap_id, lane_key, user_id);
 create index if not exists idx_top_play_events_country_time on top_play_events(country, detected_at desc);
 create index if not exists idx_top_play_events_country_pp on top_play_events(country, pp desc, detected_at desc);
 create index if not exists idx_top_play_events_time on top_play_events(detected_at desc);

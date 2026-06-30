@@ -89,6 +89,7 @@ export async function migrate(db: Db): Promise<void> {
   await migratePlayerActivity(db);
   await migratePackCollectionCards(db);
   await migrateTrackerIndexes(db);
+  await migrateSnipePersonalBests(db);
   await migrateUserGoals(db);
 }
 
@@ -688,6 +689,47 @@ async function migrateTrackerIndexes(db: Db): Promise<void> {
   await db.execute(`
     create index if not exists idx_top_play_events_user_pp
       on top_play_events(user_id, pp desc)
+  `);
+}
+
+async function migrateSnipePersonalBests(db: Db): Promise<void> {
+  await db.execute(`
+    create table if not exists country_beatmap_score_pbs (
+      country text not null,
+      beatmap_id integer not null,
+      lane_key text not null,
+      user_id integer not null,
+      score_identity text not null,
+      score_id integer not null,
+      total_score integer not null,
+      pp real,
+      accuracy real,
+      rank text,
+      mods_json text not null,
+      is_lazer integer not null,
+      has_replay integer not null,
+      ended_at text not null,
+      updated_at text not null,
+      primary key (country, beatmap_id, lane_key, user_id, score_identity)
+    )
+  `);
+  await db.execute(`
+    create index if not exists idx_country_beatmap_score_pbs_lookup
+      on country_beatmap_score_pbs(country, beatmap_id, lane_key, user_id, ended_at desc, total_score desc)
+  `);
+  await db.execute(`
+    create table if not exists country_beatmap_score_pb_state (
+      country text not null,
+      beatmap_id integer not null,
+      lane_key text not null,
+      user_id integer not null,
+      verified_at text not null,
+      primary key (country, beatmap_id, lane_key, user_id)
+    )
+  `);
+  await db.execute(`
+    create index if not exists idx_country_beatmap_score_pb_state_lookup
+      on country_beatmap_score_pb_state(country, beatmap_id, lane_key, user_id)
   `);
 }
 

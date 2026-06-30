@@ -37,6 +37,8 @@ const REQUIRED_SCHEMA_TABLES = [
   "beatmaps",
   "beatmapsets",
   "country_beatmap_scores",
+  "country_beatmap_score_pbs",
+  "country_beatmap_score_pb_state",
   "country_maps_snapshots",
   "top_play_events",
   "profile_snapshots",
@@ -88,7 +90,7 @@ export async function createApp() {
   });
   const osu = new OsuApiClient(config, fetch, logOsuCall, { sharedLimiter: sharedOsuLimiter });
   const scoresFallbackOsu = new OsuApiClient(getScoresFallbackOsuConfig(config), fetch, logOsuCall, { sharedLimiter: sharedOsuLimiter });
-  const ingestor = new ScoreIngestor(db, queue, events, config);
+  const ingestor = new ScoreIngestor(db, queue, events, config, osu.hasCredentials() ? osu : undefined);
   const abuse = new AbuseGuard();
   const countryClients = new CountryClientTracker();
   const osc = new OscSocketClient(
