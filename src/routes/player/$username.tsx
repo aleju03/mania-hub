@@ -380,8 +380,9 @@ export const Route = createFileRoute("/player/$username")({
 type KeyFilter = "all" | string;
 export type ModFilterMode = "include" | "exclude";
 type ModFilterState = Record<string, ModFilterMode>;
-type BestSort = "pp" | "newest" | "oldest";
-type BestAgeSort = Exclude<BestSort, "pp">;
+type BestPpSort = "pp-desc" | "pp-asc";
+type BestAgeSort = "newest" | "oldest";
+type BestSort = BestPpSort | BestAgeSort;
 type PpDistributionMode = "bands" | "cumulative";
 type PpCumulativeDistributionRow = {
   threshold: number;
@@ -512,9 +513,24 @@ function matchesModFilter(score: OsuScore, modFilter: ModFilterState): boolean {
   return true;
 }
 
+function getSortablePp(score: OsuScore): number | null {
+  return typeof score.pp === "number" && Number.isFinite(score.pp) ? score.pp : null;
+}
+
 function sortBestScores(scores: OsuScore[], sort: BestSort): OsuScore[] {
-  if (sort === "pp") return scores;
   const copy = [...scores];
+  if (sort === "pp-desc" || sort === "pp-asc") {
+    copy.sort((a, b) => {
+      const aPp = getSortablePp(a);
+      const bPp = getSortablePp(b);
+      if (aPp == null && bPp == null) return 0;
+      if (aPp == null) return 1;
+      if (bPp == null) return -1;
+      return sort === "pp-desc" ? bPp - aPp : aPp - bPp;
+    });
+    return copy;
+  }
+
   copy.sort((a, b) => {
     const diff = getScoreTimeMs(b) - getScoreTimeMs(a);
     return sort === "newest" ? diff : -diff;
@@ -960,7 +976,8 @@ export function PlayerProfilePage({
   const [tab, setTab] = useState<PlayerTab>(() => normalizePlayerTab(initialTab));
   const [keyFilter, setKeyFilter] = useState<KeyFilter>("all");
   const [bestModFilter, setBestModFilter] = useState<ModFilterState>({});
-  const [bestSort, setBestSort] = useState<BestSort>("pp");
+  const [bestSort, setBestSort] = useState<BestSort>("pp-desc");
+  const [bestPpSort, setBestPpSort] = useState<BestPpSort>("pp-desc");
   const [bestAgeSort, setBestAgeSort] = useState<BestAgeSort>("newest");
   const [bestWindowLoaded, setBestWindowLoaded] = useState(() => loaderBestScores.length > 0);
   const [waitingForSnapshotBest, setWaitingForSnapshotBest] = useState(() => loaderBestScores.length === 0);
@@ -1043,8 +1060,12 @@ export function PlayerProfilePage({
   }, [avatarOpen, modModalOpen, bpmModalOpen, ppModalOpen]);
 
   useEffect(() => {
-    const activeTab = tabsRailRef.current?.querySelector<HTMLButtonElement>(`[data-player-tab="${tab}"]`);
-    activeTab?.scrollIntoView({ block: "nearest", inline: "center" });
+    const rail = tabsRailRef.current;
+    const activeTab = rail?.querySelector<HTMLButtonElement>(`[data-player-tab="${tab}"]`);
+    if (!rail || !activeTab) return;
+
+    const targetLeft = activeTab.offsetLeft - (rail.clientWidth - activeTab.offsetWidth) / 2;
+    rail.scrollTo({ left: Math.max(0, targetLeft), behavior: "smooth" });
   }, [tab]);
 
   useEffect(() => {
@@ -1083,7 +1104,8 @@ export function PlayerProfilePage({
     setTab(normalizePlayerTab(initialTab));
     setKeyFilter("all");
     setBestModFilter({});
-    setBestSort("pp");
+    setBestSort("pp-desc");
+    setBestPpSort("pp-desc");
     setBestAgeSort("newest");
     setUserError(null);
     setBestError(null);
@@ -1404,7 +1426,11 @@ export function PlayerProfilePage({
 
   const handleBestSortChange = useCallback((nextSort: BestSort) => {
     setBestSort(nextSort);
-    if (nextSort !== "pp") setBestAgeSort(nextSort);
+    if (nextSort === "pp-desc" || nextSort === "pp-asc") {
+      setBestPpSort(nextSort);
+    } else {
+      setBestAgeSort(nextSort);
+    }
   }, []);
 
   if (loadingUser && !user) {
@@ -2209,6 +2235,7 @@ export function PlayerProfilePage({
               onReverseCycleMod={reverseCycleBestMod}
               onClearMods={() => setBestModFilter({})}
               sort={bestSort}
+              ppSort={bestPpSort}
               ageSort={bestAgeSort}
               onChangeSort={handleBestSortChange}
             />
@@ -3932,6 +3959,7 @@ function BestScoresControlBar({
   onReverseCycleMod,
   onClearMods,
   sort,
+  ppSort,
   ageSort,
   onChangeSort,
 }: {
@@ -3944,6 +3972,7 @@ function BestScoresControlBar({
   onReverseCycleMod: (mod: string) => void;
   onClearMods: () => void;
   sort: BestSort;
+  ppSort: BestPpSort;
   ageSort: BestAgeSort;
   onChangeSort: (sort: BestSort) => void;
 }) {
@@ -3990,7 +4019,7 @@ function BestScoresControlBar({
             />
           </div>
         )}
-        <BestSortControl sort={sort} ageSort={ageSort} onChangeSort={onChangeSort} />
+        <BestSortControl sort={sort} ppSort={ppSort} ageSort={ageSort} onChangeSort={onChangeSort} />
       </div>
     </div>
   );
@@ -3998,13 +4027,20 @@ function BestScoresControlBar({
 
 function BestSortControl({
   sort,
+  ppSort,
   ageSort,
   onChangeSort,
 }: {
   sort: BestSort;
+  ppSort: BestPpSort;
   ageSort: BestAgeSort;
   onChangeSort: (sort: BestSort) => void;
 }) {
+  const ppActive = sort === "pp-desc" || sort === "pp-asc";
+  const ppArrow = ppSort === "pp-asc" ? "↑" : "↓";
+  const nextPpSort: BestPpSort = ppActive
+    ? (ppSort === "pp-desc" ? "pp-asc" : "pp-desc")
+    : ppSort;
   const ageActive = sort === "newest" || sort === "oldest";
   const ageArrow = ageSort === "oldest" ? "↑" : "↓";
   const nextAgeSort: BestAgeSort = ageActive
@@ -4017,14 +4053,15 @@ function BestSortControl({
       <div className="flex items-center gap-0.5 rounded-lg bg-osu-b4/60 border border-osu-b3/20 p-0.5 sm:gap-1 sm:p-1">
         <button
           type="button"
-          onClick={() => onChangeSort("pp")}
-          className={`px-2 py-1.5 rounded-md text-[10px] font-semibold transition-colors cursor-pointer sm:px-3 sm:text-[11px] ${sort === "pp"
+          onClick={() => onChangeSort(nextPpSort)}
+          title={ppSort === "pp-asc" ? "Lowest PP first" : "Highest PP first"}
+          className={`px-2 py-1.5 rounded-md text-[10px] font-semibold transition-colors cursor-pointer sm:px-3 sm:text-[11px] ${ppActive
               ? "bg-osu-pink/15 text-osu-pink-light"
               : "text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3/50"
             }`}
         >
-          <span className="sm:hidden">PP</span>
-          <span className="hidden sm:inline">Top PP</span>
+          <span className="sm:hidden">PP {ppArrow}</span>
+          <span className="hidden sm:inline">PP {ppArrow}</span>
         </button>
         <button
           type="button"
@@ -4592,16 +4629,31 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
           {score.beatmapset?.artist} &middot; {formatTimeAgo(getScoreTimestamp(score))}
         </span>
         {/* Mobile-only metadata row */}
-        <div className="flex items-center gap-2 mt-0.5 sm:hidden">
-          <div className="flex gap-0.5">
-            {getModDisplayList(score.mods).map((m) => (
-              <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
-            ))}
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 sm:hidden">
+          <div className="flex max-w-full flex-shrink-0 flex-wrap items-center gap-1">
+            <div className="flex flex-wrap items-center gap-0.5">
+              {getModDisplayList(score.mods).map((m) => (
+                <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} size={0.82} />
+              ))}
+            </div>
+            <DanBadge score={score} />
           </div>
-          <DanBadge score={score} />
-          <span className="text-xs text-osu-l2">{formatAccuracy(display.accuracy)}</span>
-          <span className="text-xs text-osu-f1">{formatNumber(score.max_combo)}x</span>
-          {hasPp && <span className="text-sm font-bold ml-auto">{formatPP(score.pp)}</span>}
+          <div className="ml-auto flex flex-shrink-0 items-center gap-1.5">
+            <span className="whitespace-nowrap text-xs text-osu-l2 tabular-nums">{formatAccuracy(display.accuracy)}</span>
+            <span className="whitespace-nowrap text-xs text-osu-f1 tabular-nums">{formatNumber(score.max_combo)}x</span>
+            {hasPp && <span className="whitespace-nowrap text-sm font-bold tabular-nums">{formatPP(score.pp)}</span>}
+            {canReplay && (
+              <Link
+                to="/replay"
+                search={{ scoreId: score.id, beatmapsetId: score.beatmapset?.id }}
+                title="Watch replay"
+                aria-label="Watch replay"
+                className="pointer-events-auto inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded bg-osu-pink/20 text-[9px] font-semibold leading-none text-osu-pink-light transition-colors hover:bg-osu-pink/30"
+              >
+                <span aria-hidden="true">&#9654;</span>
+              </Link>
+            )}
+          </div>
         </div>
       </div>
       {/* Desktop metadata */}
@@ -4624,9 +4676,18 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
   );
 
   return (
-    <div className="player-score-row relative flex items-center gap-2 sm:gap-3 py-2.5 px-3 rounded-lg bg-osu-b4/50 hover:bg-osu-b4 transition-colors duration-[120ms]">
+    <div className={`player-score-row relative flex items-center gap-2 sm:gap-3 py-2.5 px-3 rounded-lg bg-osu-b4/50 hover:bg-osu-b4 transition-colors duration-[120ms] ${linkUrl ? "cursor-pointer" : ""}`}>
+      {linkUrl && (
+        <a
+          href={linkUrl}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={`Open ${score.beatmapset?.title || "score"} on osu!`}
+          className="absolute inset-0 z-0 rounded-lg"
+        />
+      )}
       {/* Mobile inline position number */}
-      <span className="sm:hidden text-xs text-osu-f1 font-bold flex-shrink-0">{position}.</span>
+      <span className="pointer-events-none relative z-10 sm:hidden text-xs text-osu-f1 font-bold flex-shrink-0">{position}.</span>
       {/* Desktop hover position number */}
       <div
         className="score-position-indicator pointer-events-none absolute -left-14 top-1/2 -translate-y-1/2 w-10 text-right text-white/90 opacity-0 translate-x-2 transition-all duration-150 ease-out hidden sm:block"
@@ -4634,25 +4695,16 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
       >
         <span className="block text-[24px] leading-none">{position}</span>
       </div>
-      {linkUrl ? (
-        <a
-          href={linkUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 cursor-pointer"
-        >
-          {content}
-        </a>
-      ) : (
-        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-          {content}
-        </div>
-      )}
+      <div className="pointer-events-none relative z-10 flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+        {content}
+      </div>
       {canReplay && (
         <Link
           to="/replay"
           search={{ scoreId: score.id, beatmapsetId: score.beatmapset?.id }}
-          className="hidden sm:block px-2.5 py-1.5 rounded-md bg-osu-pink/15 text-[10px] font-semibold text-osu-pink-light border border-osu-pink/20 hover:bg-osu-pink/25 transition-colors flex-shrink-0"
+          title="Watch replay"
+          aria-label="Watch replay"
+          className="pointer-events-auto relative z-20 hidden flex-shrink-0 rounded-md border border-osu-pink/20 bg-osu-pink/15 px-2.5 py-1.5 text-[10px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/25 sm:block"
         >
           Replay
         </Link>
