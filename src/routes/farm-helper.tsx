@@ -123,6 +123,10 @@ function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === "AbortError";
 }
 
+function farmHelperRequestKey(subjectKey: string | null, keyMode: LiveFarmHelperKeyMode, view: LiveFarmHelperView): string {
+  return `${subjectKey?.trim().toLowerCase() ?? ""}\u0000${keyMode}\u0000${view}`;
+}
+
 const searchPlayers = async (q: string) => {
   const res = await searchUsers({ data: { query: q } });
   return (res.user?.data ?? [])
@@ -179,7 +183,7 @@ function FarmHelperPage() {
   const liveEnabled = isLiveBackendConfigured();
 
   const [snapshot, setSnapshot] = useState<LiveFarmHelperSnapshot | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [snapshotRequestKey, setSnapshotRequestKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const subjectKey = search.user ?? null;
@@ -191,6 +195,9 @@ function FarmHelperPage() {
   const sortDir: SortDirection = search.dir ?? "desc";
   const page = search.page ?? 0;
   const [query, setQuery] = useState("");
+  const requestKey = farmHelperRequestKey(subjectKey, keyMode, view);
+  const visibleSnapshot = snapshotRequestKey === requestKey ? snapshot : null;
+  const waitingForCurrentSnapshot = liveEnabled && !!subjectKey && !visibleSnapshot && !error;
 
   const navigateFarmHelper = (
     patch: {
@@ -247,11 +254,11 @@ function FarmHelperPage() {
   useEffect(() => {
     if (!liveEnabled || !subjectKey) {
       setSnapshot(null);
+      setSnapshotRequestKey(null);
       return;
     }
     let cancelled = false;
     const controller = new AbortController();
-    setLoading(true);
     setError(null);
     fetchLiveFarmHelperSnapshot(subjectKey, {
       keyMode,
@@ -262,29 +269,28 @@ function FarmHelperPage() {
       .then((data) => {
         if (cancelled) return;
         setSnapshot(data);
+        setSnapshotRequestKey(requestKey);
         recordRecentPlayer({ userId: data.userId, username: data.username, avatarUrl: data.avatarUrl });
       })
       .catch((err: unknown) => {
         if (cancelled) return;
         if (isAbortError(err)) return;
         setSnapshot(null);
+        setSnapshotRequestKey(null);
         const message = err instanceof Error ? err.message : String(err);
         setError(message.includes("404") ? "not-found" : "failed");
       })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
     return () => {
       cancelled = true;
       controller.abort();
     };
-  }, [liveEnabled, subjectKey, keyMode, view]);
+  }, [liveEnabled, subjectKey, keyMode, view, requestKey]);
 
   const [farmersFor, setFarmersFor] = useState<{ rec: LiveFarmHelperRec; keyMode: LiveFarmHelperKeyMode } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   const recs = useMemo(() => {
-    if (!snapshot) return [];
+    if (!visibleSnapshot) return [];
     const q = query.trim().toLowerCase();
     const matchesQuery = (rec: LiveFarmHelperRec) =>
       !q
@@ -292,7 +298,7 @@ function FarmHelperPage() {
       || rec.artist.toLowerCase().includes(q)
       || rec.creator.toLowerCase().includes(q)
       || rec.version.toLowerCase().includes(q);
-    const filtered = snapshot.recs.filter(
+    const filtered = visibleSnapshot.recs.filter(
       (rec) => (reasonFilter === "all" || rec.reason === reasonFilter) && matchesQuery(rec),
     );
     const sorted = [...filtered];
@@ -312,7 +318,7 @@ function FarmHelperPage() {
       return (bySelected || byGain || byFit || byPlayers || byStars) * direction;
     });
     return sorted;
-  }, [snapshot, query, reasonFilter, sortMode, sortDir]);
+  }, [visibleSnapshot, query, reasonFilter, sortMode, sortDir]);
 
   const pageSize = layout === "grid" ? GRID_PAGE_SIZE : PAGE_SIZE;
   const pageCount = Math.ceil(recs.length / pageSize);
@@ -343,7 +349,7 @@ function FarmHelperPage() {
             />
           ) : !subjectKey ? (
             <PlayerPicker viewer={auth.viewer} onPick={setSubject} />
-          ) : loading && !snapshot ? (
+          ) : waitingForCurrentSnapshot ? (
             <LoadingState />
           ) : error === "not-found" ? (
             <EmptyNotice
@@ -359,9 +365,9 @@ function FarmHelperPage() {
               body="Something went wrong loading this player's farm data. Try again in a moment."
               action={<ChangeSubjectButton onPick={setSubject} />}
             />
-          ) : snapshot ? (
+          ) : visibleSnapshot ? (
             <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
-              <TargetPanel snapshot={snapshot} onChangePlayer={() => setSubject(null)} />
+              <TargetPanel snapshot={visibleSnapshot} onChangePlayer={() => setSubject(null)} />
 
               <div ref={listRef} className="min-w-0 scroll-mt-4">
                 <div className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4">
@@ -401,7 +407,7 @@ function FarmHelperPage() {
                             page: 0,
                           });
                         }}
-                        counts={countReasons(snapshot.recs)}
+                        counts={countReasons(visibleSnapshot.recs)}
                       />
                     </div>
                   </div>
@@ -430,10 +436,10 @@ function FarmHelperPage() {
                         <RecCard
                           key={`${rec.beatmapId}:${rec.speedBucket}`}
                           rec={rec}
-                          userKey={String(snapshot.userId)}
-                          userName={snapshot.username}
-                          keyMode={snapshot.keyMode}
-                          onShowFarmers={() => setFarmersFor({ rec, keyMode: snapshot.keyMode })}
+                          userKey={String(visibleSnapshot.userId)}
+                          userName={visibleSnapshot.username}
+                          keyMode={visibleSnapshot.keyMode}
+                          onShowFarmers={() => setFarmersFor({ rec, keyMode: visibleSnapshot.keyMode })}
                         />
                       ))}
                     </div>
@@ -443,10 +449,10 @@ function FarmHelperPage() {
                         <RecRow
                           key={`${rec.beatmapId}:${rec.speedBucket}`}
                           rec={rec}
-                          userKey={String(snapshot.userId)}
-                          userName={snapshot.username}
-                          keyMode={snapshot.keyMode}
-                          onShowFarmers={() => setFarmersFor({ rec, keyMode: snapshot.keyMode })}
+                          userKey={String(visibleSnapshot.userId)}
+                          userName={visibleSnapshot.username}
+                          keyMode={visibleSnapshot.keyMode}
+                          onShowFarmers={() => setFarmersFor({ rec, keyMode: visibleSnapshot.keyMode })}
                         />
                       ))}
                     </div>
@@ -470,7 +476,7 @@ function FarmHelperPage() {
 
       <FarmersModal
         rec={farmersFor?.rec ?? null}
-        userKey={snapshot ? String(snapshot.userId) : null}
+        userKey={visibleSnapshot ? String(visibleSnapshot.userId) : null}
         keyMode={farmersFor?.keyMode ?? keyMode}
         onClose={() => setFarmersFor(null)}
       />
