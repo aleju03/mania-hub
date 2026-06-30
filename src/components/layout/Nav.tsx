@@ -1,5 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { ChevronDown, Database, Globe, LogIn, LogOut, Settings, Target, UserRound } from "lucide-react";
 import { SearchInput } from "../ui/SearchInput";
@@ -84,6 +84,7 @@ export function Nav() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [mobileAccountOpen, setMobileAccountOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const [mobileOpenGroups, setMobileOpenGroups] = useState<Set<string>>(() => new Set());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const fallbackCountry = useSelectedCountry();
   const setSelectedCountry = useAppStore((state) => state.setSelectedCountry);
@@ -224,6 +225,14 @@ export function Nav() {
     if (!menuOpen) setMobileAccountOpen(false);
   }, [menuOpen]);
 
+  // When the drawer opens, expand whichever group owns the current page so the
+  // active item is visible without a tap.
+  useEffect(() => {
+    if (menuOpen && activeTopId) {
+      setMobileOpenGroups((prev) => (prev.has(activeTopId) ? prev : new Set(prev).add(activeTopId)));
+    }
+  }, [menuOpen, activeTopId]);
+
   useEffect(() => {
     if (!adminMenuOpen) return;
 
@@ -342,7 +351,15 @@ export function Nav() {
     openGroupNow(top.id);
   };
 
-  const renderMobileLink = (leaf: NavLeaf) => (
+  const toggleMobileGroup = (id: string) =>
+    setMobileOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const renderMobileLink = (leaf: NavLeaf, opts?: { nested?: boolean }) => (
     <Link
       key={leaf.id}
       to={leaf.to}
@@ -350,10 +367,12 @@ export function Nav() {
       preload={leaf.id === "tracker" ? false : "intent"}
       onClick={() => setMenuOpen(false)}
       draggable={false}
-      className={`flex items-center gap-3 px-5 py-3 text-sm font-medium capitalize transition-colors duration-[120ms] ${
+      className={`flex items-center gap-3 border-l-3 py-3 text-sm font-medium capitalize transition-colors duration-[120ms] ${
+        opts?.nested ? "pl-9 pr-5 text-[13px]" : "px-5"
+      } ${
         current?.id === leaf.id
-          ? "text-white bg-osu-pink/10 border-l-3 border-osu-yellow"
-          : "text-osu-pink-light hover:text-white hover:bg-osu-b4/50 border-l-3 border-transparent"
+          ? "border-osu-yellow bg-osu-pink/10 text-white"
+          : "border-transparent text-osu-pink-light hover:bg-osu-b4/50 hover:text-white"
       }`}
     >
       {leaf.label}
@@ -877,11 +896,42 @@ export function Nav() {
                     if (top.id === "snipes" && !showSnipesLink) return null;
                     return renderMobileLink(NAV_LEAVES[top.id]);
                   }
-                  // Flat list on mobile: no category labels in the drawer.
-                  return top.items
-                    .map((id) => NAV_LEAVES[id])
-                    .filter(isLeafVisible)
-                    .map((leaf) => renderMobileLink(leaf));
+                  const groupItems = top.items.map((id) => NAV_LEAVES[id]).filter(isLeafVisible);
+                  if (groupItems.length === 0) return null;
+                  const expanded = mobileOpenGroups.has(top.id);
+                  return (
+                    <div key={top.id}>
+                      <button
+                        type="button"
+                        onClick={() => toggleMobileGroup(top.id)}
+                        aria-expanded={expanded}
+                        className={`flex w-full cursor-pointer items-center justify-between gap-3 border-l-3 px-5 py-3 text-sm font-medium capitalize transition-colors duration-[120ms] ${
+                          activeTopId === top.id
+                            ? "border-osu-yellow text-white"
+                            : "border-transparent text-osu-pink-light hover:bg-osu-b4/50 hover:text-white"
+                        }`}
+                      >
+                        <span>{top.label}</span>
+                        <ChevronDown
+                          className={`h-4 w-4 shrink-0 opacity-70 transition-transform duration-150 ${expanded ? "rotate-180" : ""}`}
+                          strokeWidth={2.5}
+                        />
+                      </button>
+                      <AnimatePresence initial={false}>
+                        {expanded ? (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2, ease: "easeOut" }}
+                            className="overflow-hidden bg-osu-b6/40"
+                          >
+                            {groupItems.map((leaf) => renderMobileLink(leaf, { nested: true }))}
+                          </motion.div>
+                        ) : null}
+                      </AnimatePresence>
+                    </div>
+                  );
                 })}
               </div>
 
