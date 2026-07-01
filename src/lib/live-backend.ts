@@ -468,10 +468,16 @@ export interface LiveBackendStorageBreakdown {
   capturedAt: string;
 }
 
+export interface LiveBackendStorageBreakdownResponse {
+  storage: LiveBackendStorageBreakdown | null;
+  scanning?: boolean;
+  stale?: boolean;
+}
+
 // Per-table DB storage for the admin storage modal. Admin-gated; the token is
 // injected server-side (never in the browser), mirroring fetchLiveBackendAdminStatus.
 export const fetchLiveBackendStorageBreakdown = createServerFn({ method: "GET" })
-  .handler(async (): Promise<{ storage: LiveBackendStorageBreakdown | null }> => {
+  .handler(async (): Promise<LiveBackendStorageBreakdownResponse> => {
     await requireAdminAccess("Server storage breakdown");
     const base = getServerLiveBackendUrl();
     if (!base) throw new Error("LIVE_BACKEND_URL is not configured.");
@@ -490,12 +496,120 @@ export const fetchLiveBackendStorageBreakdown = createServerFn({ method: "GET" }
     } finally {
       clearTimeout(timeout);
     }
-    const body = await response.json() as { storage: LiveBackendStorageBreakdown | null };
+    const body = await response.json() as LiveBackendStorageBreakdownResponse & { error?: unknown };
     if (!response.ok) {
       const message = body && typeof body === "object" && "error" in body
         ? String((body as { error?: unknown }).error)
         : `Server ${response.status} for /api/admin/storage-breakdown`;
       throw new Error(message);
+    }
+    return { storage: body.storage ?? null, scanning: !!body.scanning, stale: !!body.stale };
+  });
+
+export type LiveBackendTableCell = string | number | boolean | null;
+
+export interface LiveBackendTablePreview {
+  table: string;
+  columns: Array<{ name: string; type: string }>;
+  totalRows: number;
+  limit: number;
+  offset: number;
+  rows: Array<Record<string, LiveBackendTableCell>>;
+}
+
+// One page of rows from a single backend table, for the storage modal's table
+// browser. Admin-gated; the token is injected server-side (never in the
+// browser), mirroring fetchLiveBackendStorageBreakdown.
+export const fetchLiveBackendTableRows = createServerFn({ method: "GET" })
+  .inputValidator((data: { table?: unknown; limit?: unknown; offset?: unknown; search?: unknown }) => {
+    const table = typeof data?.table === "string" ? data.table.trim() : "";
+    if (!/^[A-Za-z0-9_]+$/.test(table)) throw new Error("Invalid table name.");
+    const limit = Math.min(Math.max(Math.trunc(Number(data?.limit)) || 25, 1), 100);
+    const offset = Math.max(Math.trunc(Number(data?.offset)) || 0, 0);
+    const search = typeof data?.search === "string" ? data.search.trim().slice(0, 100) : "";
+    return { table, limit, offset, search };
+  })
+  .handler(async ({ data }): Promise<LiveBackendTablePreview | null> => {
+    await requireAdminAccess("Server table rows");
+    const base = getServerLiveBackendUrl();
+    if (!base) throw new Error("LIVE_BACKEND_URL is not configured.");
+    const headers: HeadersInit = {};
+    if (process.env.LIVE_ADMIN_TOKEN) {
+      headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+    }
+    const params = new URLSearchParams({
+      table: data.table,
+      limit: String(data.limit),
+      offset: String(data.offset),
+    });
+    if (data.search) params.set("search", data.search);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), LIVE_BACKEND_ADMIN_STATUS_TIMEOUT_MS);
+    let response: Response;
+    try {
+      response = await fetch(`${base}/api/admin/table-rows?${params.toString()}`, { headers, signal: controller.signal });
+    } catch (err) {
+      if (isAbortError(err)) throw new Error("Table read timed out.");
+      throw err;
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (response.status === 404) return null;
+    const body = await response.json() as LiveBackendTablePreview & { error?: unknown };
+    if (!response.ok) {
+      const message = body && typeof body === "object" && "error" in body
+        ? String((body as { error?: unknown }).error)
+        : `Server ${response.status} for /api/admin/table-rows`;
+      throw new Error(message);
+    }
+    return body;
+  });
+
+export interface LiveBackendUserActiveResult {
+  ok: boolean;
+  userId: number;
+  username: string | null;
+  active: boolean;
+  untrackedRosters?: number;
+  deletedJobs?: number;
+  retrackedRosters?: number;
+}
+
+// Admin soft-deactivate / reactivate for a single player (the reversible
+// "delete this cheater" button). Admin-gated; the token is injected server-side.
+// Accepts a user id or a username; the backend resolves and 404s if unknown.
+export const setLiveBackendUserActive = createServerFn({ method: "POST" })
+  .inputValidator((data: { userId?: unknown; username?: unknown; active?: unknown }) => {
+    const userId = Number(data?.userId);
+    const username = typeof data?.username === "string" ? data.username.trim().slice(0, 60) : "";
+    if ((!Number.isInteger(userId) || userId <= 0) && !username) {
+      throw new Error("Provide a user id or username.");
+    }
+    return {
+      userId: Number.isInteger(userId) && userId > 0 ? userId : null,
+      username: username || null,
+      active: data?.active === true,
+    };
+  })
+  .handler(async ({ data }): Promise<LiveBackendUserActiveResult> => {
+    await requireAdminAccess("Server set user active");
+    const base = getServerLiveBackendUrl();
+    if (!base) throw new Error("LIVE_BACKEND_URL is not configured.");
+    const headers: HeadersInit = { "content-type": "application/json" };
+    if (process.env.LIVE_ADMIN_TOKEN) {
+      headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+    }
+    const response = await fetch(`${base}/api/admin/set-user-active`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ userId: data.userId, username: data.username, active: data.active }),
+    });
+    const body = await response.json() as LiveBackendUserActiveResult & { error?: unknown };
+    if (!response.ok) {
+      const message = body && typeof body === "object" && "error" in body
+        ? String((body as { error?: unknown }).error)
+        : `Server ${response.status} for /api/admin/set-user-active`;
+      throw new Error(message === "user_not_found" ? "No user with that id or username." : message);
     }
     return body;
   });

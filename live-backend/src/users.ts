@@ -47,3 +47,43 @@ export async function isUserKnownInactive(db: Db, userId: number): Promise<boole
   const row = (await exec(db, "select is_active from users where user_id = ? limit 1", [userId])).rows[0];
   return row != null && Number(row.is_active ?? 1) === 0;
 }
+
+// Inverse of markUserMissing: flip the user back to active and re-track the
+// roster rows we untracked. We do NOT null-restore ranks or re-enrich here (a
+// roster refresh does that, and auto-re-enriching a genuinely banned user would
+// just 404 and flip them straight back to inactive).
+export async function reactivateUser(db: Db, userId: number): Promise<{ retrackedRosters: number }> {
+  const safeUserId = Math.floor(userId);
+  if (!Number.isFinite(safeUserId) || safeUserId <= 0) throw new Error("Invalid user id");
+  const now = nowIso();
+  await exec(db, "update users set is_active = 1, updated_at = ? where user_id = ?", [now, safeUserId]);
+  const rosterResult = await exec(
+    db,
+    "update country_rosters set is_tracked = 1, refreshed_at = ? where user_id = ? and is_tracked = 0",
+    [now, safeUserId],
+  );
+  return { retrackedRosters: Number(rosterResult.rowsAffected ?? 0) };
+}
+
+export interface UserActiveResult {
+  userId: number;
+  username: string | null;
+  active: boolean;
+  untrackedRosters?: number;
+  deletedJobs?: number;
+  retrackedRosters?: number;
+}
+
+// Admin toggle behind the "deactivate user" button: reuse the same soft-delete
+// the ban-detection path uses (markUserMissing) so a manual deactivate behaves
+// exactly like an automatic one, and is fully reversible via reactivateUser.
+export async function setUserActive(db: Db, userId: number, active: boolean, reason: string): Promise<UserActiveResult> {
+  const row = (await exec(db, "select username from users where user_id = ? limit 1", [userId])).rows[0];
+  const username = row?.username == null ? null : String(row.username);
+  if (!active) {
+    const result = await markUserMissing(db, userId, reason);
+    return { userId, username, active: false, ...result };
+  }
+  const result = await reactivateUser(db, userId);
+  return { userId, username, active: true, ...result };
+}

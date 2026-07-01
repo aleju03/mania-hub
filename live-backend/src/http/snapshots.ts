@@ -44,7 +44,8 @@ import {
 } from "../replay-video/exports.js";
 import { isReplayVideoStorageConfigured } from "../replay-video/r2.js";
 import { addManualRosterMember, enqueueRosterRefreshes, removeManualRosterMember } from "../rosters/country-rosters.js";
-import { getLocalDbStorage, getStorageBreakdown, runRetention } from "../retention.js";
+import { getLocalDbStorage, getStorageBreakdownSnapshot, getTablePreview, runRetention } from "../retention.js";
+import { setUserActive } from "../users.js";
 import { getDiscordPublicInfo, type DiscordRuntime } from "../discord/index.js";
 import { getDiscordShowcase } from "../discord/showcase.js";
 import { listAllSubscriptions, removeSubscriptionById } from "../discord/subscriptions.js";
@@ -272,7 +273,54 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
-    sendJson(req, res, ctx, 200, { storage: await getStorageBreakdown(ctx.db, ctx.config) });
+    sendJson(req, res, ctx, 200, await getStorageBreakdownSnapshot(ctx.db, ctx.config));
+    return true;
+  }
+  if (url.pathname === "/api/admin/table-rows") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    const table = url.searchParams.get("table") ?? "";
+    const limit = Number(url.searchParams.get("limit"));
+    const offset = Number(url.searchParams.get("offset"));
+    const search = url.searchParams.get("search") ?? "";
+    const preview = await getTablePreview(ctx.db, table, limit, offset, search);
+    if (!preview) {
+      sendJson(req, res, ctx, 404, { error: "unknown_table" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, preview);
+    return true;
+  }
+  if (url.pathname === "/api/admin/set-user-active") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<{ userId?: unknown; username?: unknown; active?: unknown }>((await readBody(req)) || "{}", {});
+    const active = body.active === true || body.active === 1 || body.active === "1";
+    let userId = Number(body.userId);
+    let userRow = Number.isInteger(userId) && userId > 0
+      ? (await exec(ctx.db, "select user_id, username from users where user_id = ? limit 1", [userId])).rows[0]
+      : undefined;
+    if (!userRow) {
+      const username = typeof body.username === "string" ? body.username.trim() : "";
+      if (username) {
+        userRow = (await exec(ctx.db, "select user_id, username from users where lower(username) = lower(?) limit 1", [username])).rows[0];
+        if (userRow) userId = Number(userRow.user_id);
+      }
+    }
+    if (!userRow || !Number.isInteger(userId) || userId <= 0) {
+      sendJson(req, res, ctx, 404, { error: "user_not_found" });
+      return true;
+    }
+    const result = await setUserActive(ctx.db, userId, active, "admin: manual toggle");
+    sendJson(req, res, ctx, 200, { ok: true, ...result });
     return true;
   }
   if (url.pathname === "/api/roster/self-add" || url.pathname === "/api/roster/self-remove") {

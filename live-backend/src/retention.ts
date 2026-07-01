@@ -100,8 +100,16 @@ export interface StorageBreakdown {
   capturedAt: string;
 }
 
+export interface StorageBreakdownSnapshot {
+  storage: StorageBreakdown | null;
+  scanning: boolean;
+  stale: boolean;
+}
+
 let storageBreakdownCache: { at: number; value: StorageBreakdown } | null = null;
-const STORAGE_BREAKDOWN_TTL_MS = 60_000;
+let storageBreakdownInFlight: Promise<StorageBreakdown | null> | null = null;
+const STORAGE_BREAKDOWN_TTL_MS = 5 * 60_000;
+const STORAGE_BREAKDOWN_WAIT_MS = 2_500;
 
 // Per-table storage from the dbstat virtual table (table b-tree + its indexes,
 // aggregated by owning table). dbstat walks page metadata, so this is not free on
@@ -115,6 +123,48 @@ export async function getStorageBreakdown(
   if (storageBreakdownCache && nowMs - storageBreakdownCache.at < STORAGE_BREAKDOWN_TTL_MS) {
     return storageBreakdownCache.value;
   }
+  return getOrStartStorageBreakdownScan(db, config);
+}
+
+export async function getStorageBreakdownSnapshot(
+  db: Db,
+  config: Pick<Config, "databaseUrl" | "maxLocalDbBytes">,
+): Promise<StorageBreakdownSnapshot> {
+  const nowMs = Date.now();
+  if (storageBreakdownCache && nowMs - storageBreakdownCache.at < STORAGE_BREAKDOWN_TTL_MS) {
+    return { storage: storageBreakdownCache.value, scanning: false, stale: false };
+  }
+
+  const alreadyScanning = !!storageBreakdownInFlight;
+  const scan = getOrStartStorageBreakdownScan(db, config);
+  const result = await settleWithin(scan, alreadyScanning ? 250 : STORAGE_BREAKDOWN_WAIT_MS);
+  if (result.settled) {
+    return { storage: result.value, scanning: false, stale: false };
+  }
+
+  return {
+    storage: storageBreakdownCache?.value ?? null,
+    scanning: true,
+    stale: !!storageBreakdownCache,
+  };
+}
+
+function getOrStartStorageBreakdownScan(
+  db: Db,
+  config: Pick<Config, "databaseUrl" | "maxLocalDbBytes">,
+): Promise<StorageBreakdown | null> {
+  if (storageBreakdownInFlight) return storageBreakdownInFlight;
+  storageBreakdownInFlight = scanStorageBreakdown(db, config).finally(() => {
+    storageBreakdownInFlight = null;
+  });
+  return storageBreakdownInFlight;
+}
+
+async function scanStorageBreakdown(
+  db: Db,
+  config: Pick<Config, "databaseUrl" | "maxLocalDbBytes">,
+): Promise<StorageBreakdown | null> {
+  const nowMs = Date.now();
   let rows;
   try {
     rows = (await exec(
@@ -145,6 +195,144 @@ export async function getStorageBreakdown(
   };
   storageBreakdownCache = { at: nowMs, value };
   return value;
+}
+
+// -----------------------------------------------------------------------------
+// Admin table browser: read one page of rows from any real table so the storage
+// modal can drill from "this table is 768 MB" into "here is what a row actually
+// looks like". Admin-only and strictly read-only. Table identifiers cannot be
+// bound as SQL parameters, so the name is validated against sqlite_master (and
+// shape-checked to a bare identifier) before it is ever interpolated.
+// -----------------------------------------------------------------------------
+
+export type TableCell = string | number | boolean | null;
+
+export interface TablePreviewColumn {
+  name: string;
+  type: string;
+}
+
+export interface TablePreview {
+  table: string;
+  columns: TablePreviewColumn[];
+  totalRows: number;
+  limit: number;
+  offset: number;
+  rows: Array<Record<string, TableCell>>;
+}
+
+const TABLE_PREVIEW_MAX_LIMIT = 100;
+// Longest cell handed back verbatim; longer strings (big JSON blobs) are clipped
+// so a single fat row cannot balloon the response.
+const TABLE_CELL_MAX_CHARS = 20_000;
+
+async function tableExists(db: Db, table: string): Promise<boolean> {
+  if (!/^[A-Za-z0-9_]+$/.test(table)) return false;
+  const rows = (await exec(
+    db,
+    "select 1 from sqlite_master where type = 'table' and name = ? limit 1",
+    [table],
+  )).rows;
+  return rows.length > 0;
+}
+
+export async function getTablePreview(
+  db: Db,
+  table: string,
+  limit: number,
+  offset: number,
+  search = "",
+): Promise<TablePreview | null> {
+  if (!(await tableExists(db, table))) return null;
+  const safeLimit = Math.min(Math.max(Math.trunc(limit) || 25, 1), TABLE_PREVIEW_MAX_LIMIT);
+  const safeOffset = Math.max(Math.trunc(offset) || 0, 0);
+  // `table` is now a validated bare identifier; quote it defensively anyway.
+  const quoted = `"${table}"`;
+  const columns: TablePreviewColumn[] = (await exec(db, `pragma table_info(${quoted})`)).rows.map((row) => ({
+    name: String(row.name),
+    type: String(row.type ?? "").toUpperCase(),
+  }));
+  const { where, args } = buildTableSearch(columns, search);
+  const totalRows = Number((await exec(db, `select count(*) as n from ${quoted} ${where}`, args)).rows[0]?.n ?? 0);
+  // Newest first: every table here carries a rowid, and ORDER BY rowid is
+  // index-free and cheap even on the multi-GB tables.
+  const result = await exec(
+    db,
+    `select * from ${quoted} ${where} order by rowid desc limit ? offset ?`,
+    [...args, safeLimit, safeOffset],
+  );
+  const rows = result.rows.map((row) => {
+    const record: Record<string, TableCell> = {};
+    for (const col of columns) {
+      record[col.name] = normalizeCell((row as Record<string, unknown>)[col.name]);
+    }
+    return record;
+  });
+  return { table, columns, totalRows, limit: safeLimit, offset: safeOffset, rows };
+}
+
+// Free-text search over a table: substring-match every short text column (LIKE),
+// and exact-match id columns when the query is a number, so "jaza77" and a raw
+// user id both work. Big *_json blob columns are skipped so we never scan the
+// multi-GB payloads. Returns `where 0` (no matches) when a query targets nothing
+// searchable, so a search never silently falls back to "all rows".
+function buildTableSearch(columns: TablePreviewColumn[], search: string): { where: string; args: (string | number)[] } {
+  const query = search.trim();
+  if (!query) return { where: "", args: [] };
+  const conditions: string[] = [];
+  const args: (string | number)[] = [];
+  const like = `%${query.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
+  for (const col of columns) {
+    const isTextish = col.type === "" || /TEXT|CHAR|CLOB/.test(col.type);
+    if (isTextish && !col.name.endsWith("_json")) {
+      conditions.push(`"${col.name}" like ? escape '\\'`);
+      args.push(like);
+    }
+  }
+  if (/^\d+$/.test(query)) {
+    const asInt = Number(query);
+    if (Number.isSafeInteger(asInt)) {
+      for (const col of columns) {
+        if (col.type.includes("INT") && (col.name === "id" || col.name.endsWith("_id"))) {
+          conditions.push(`"${col.name}" = ?`);
+          args.push(asInt);
+        }
+      }
+    }
+  }
+  if (conditions.length === 0) return { where: "where 0", args: [] };
+  return { where: `where (${conditions.join(" or ")})`, args };
+}
+
+function normalizeCell(value: unknown): TableCell {
+  if (value == null) return null;
+  if (typeof value === "string") {
+    return value.length > TABLE_CELL_MAX_CHARS
+      ? `${value.slice(0, TABLE_CELL_MAX_CHARS)}... (+${value.length - TABLE_CELL_MAX_CHARS} more chars)`
+      : value;
+  }
+  if (typeof value === "number" || typeof value === "boolean") return value;
+  if (typeof value === "bigint") {
+    return value >= BigInt(Number.MIN_SAFE_INTEGER) && value <= BigInt(Number.MAX_SAFE_INTEGER)
+      ? Number(value)
+      : value.toString();
+  }
+  if (value instanceof Uint8Array) return `<blob: ${value.byteLength} bytes>`;
+  return String(value);
+}
+
+async function settleWithin<T>(promise: Promise<T>, timeoutMs: number): Promise<{ settled: true; value: T } | { settled: false }> {
+  let timeout: NodeJS.Timeout | null = null;
+  try {
+    return await Promise.race([
+      promise.then((value) => ({ settled: true as const, value })),
+      new Promise<{ settled: false }>((resolve) => {
+        timeout = setTimeout(() => resolve({ settled: false }), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
 }
 
 async function pruneForLocalDbLimit(db: Db, config: Pick<Config, "targetLocalDbBytes">, storage: LocalDbStorage): Promise<Record<string, number>> {

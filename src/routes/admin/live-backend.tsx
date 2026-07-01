@@ -1,16 +1,21 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { Activity, Check, ChevronDown, ChevronRight, Crosshair, Database, HelpCircle, History, Monitor, Pause, Play, Radio, RefreshCw, Server, Signal, Smartphone, Trash2, UserRound, Wifi, WifiOff, X } from "lucide-react";
+import { Activity, ArrowLeft, Ban, Check, ChevronDown, ChevronRight, Crosshair, Database, HelpCircle, History, Monitor, Pause, Play, Radio, RefreshCw, RotateCcw, Search, Server, Signal, Smartphone, Table2, Trash2, UserRound, Wifi, WifiOff, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { canUseAdminFeatures } from "../../lib/auth-shared";
 import { requireAdminAccess } from "../../lib/auth";
 import {
   fetchLiveBackendAdminStatus,
   fetchLiveBackendStorageBreakdown,
+  fetchLiveBackendTableRows,
   getLiveBackendUrl,
   openLiveEventSource,
   runLiveBackendAdminAction,
+  setLiveBackendUserActive,
   type LiveBackendStorageBreakdown,
+  type LiveBackendTableCell,
+  type LiveBackendTablePreview,
+  type LiveBackendUserActiveResult,
   type LiveEventName,
 } from "../../lib/live-backend";
 import { formatNumber, formatTimeAgo } from "../../lib/format";
@@ -1162,6 +1167,10 @@ function LiveBackendPage() {
                 status?.worker?.paused ? "/api/admin/resume-workers" : "/api/admin/pause-workers",
               )}
             />
+          </Section>
+
+          <Section title="Users" subtitle="Soft-deactivate a banned or cheating player, or reactivate one. Reversible: this untracks them and marks them inactive, it does not delete their rows.">
+            <UserModerationCard />
           </Section>
             </>
           ) : (
@@ -2412,11 +2421,21 @@ function KpiCard({
 function StorageBreakdownModal({ status, onClose }: { status: LiveBackendStatus | null; onClose: () => void }) {
   const [data, setData] = useState<LiveBackendStorageBreakdown | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [stale, setStale] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [selectedTable, setSelectedTable] = useState<string | null>(null);
+  const [showAllTables, setShowAllTables] = useState(false);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key !== "Escape") return;
+      // Escape steps back out of a table view first, then closes the modal.
+      setSelectedTable((current) => {
+        if (current) return null;
+        onClose();
+        return current;
+      });
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -2424,25 +2443,38 @@ function StorageBreakdownModal({ status, onClose }: { status: LiveBackendStatus 
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
-    fetchLiveBackendStorageBreakdown()
-      .then((res) => {
-        if (cancelled) return;
-        setData(res.storage);
-        setLoading(false);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : "Could not load storage.");
-        setLoading(false);
-      });
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const load = (initial: boolean) => {
+      if (initial) setLoading(true);
+      setError(null);
+      fetchLiveBackendStorageBreakdown()
+        .then((res) => {
+          if (cancelled) return;
+          if (res.storage) setData(res.storage);
+          setScanning(!!res.scanning);
+          setStale(!!res.stale);
+          setLoading(false);
+          if (res.scanning) {
+            timer = setTimeout(() => load(false), 2_500);
+          }
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setError(err instanceof Error ? err.message : "Could not load storage.");
+          setScanning(false);
+          setLoading(false);
+        });
+    };
+    load(true);
     return () => {
       cancelled = true;
+      if (timer) clearTimeout(timer);
     };
   }, []);
 
-  const fileTotal = (status?.storage?.bytes ?? 0) + (status?.storage?.walBytes ?? 0);
+  const dbFileBytes = data?.fileBytes ?? status?.storage?.bytes ?? null;
+  const walBytes = data?.walBytes ?? status?.storage?.walBytes ?? null;
+  const fileTotal = dbFileBytes != null || walBytes != null ? (dbFileBytes ?? 0) + (walBytes ?? 0) : null;
   const maxBytes = data?.maxBytes ?? status?.storage?.maxBytes ?? 0;
   const TOP_N = 14;
   const rows = data?.tables ?? [];
@@ -2451,67 +2483,652 @@ function StorageBreakdownModal({ status, onClose }: { status: LiveBackendStatus 
   const restBytes = rest.reduce((sum, table) => sum + table.bytes, 0);
   const largest = shown[0]?.bytes ?? 1;
   const totalTableBytes = data?.tableBytes ?? 0;
+  const unassignedBytes = fileTotal == null || totalTableBytes <= 0 ? null : Math.max(fileTotal - totalTableBytes, 0);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/65 px-4" onClick={onClose}>
-      <div className="w-full max-w-[560px] overflow-hidden rounded-lg border border-osu-b3/40 bg-osu-b5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
-        <div className="flex items-center gap-3 border-b border-osu-b3/20 px-4 pt-3 pb-2.5">
-          <Database className="h-4 w-4 flex-shrink-0 text-osu-c2" />
+      <div className="flex max-h-[85vh] w-full max-w-[560px] flex-col overflow-hidden rounded-lg border border-osu-b3/40 bg-osu-b5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        {selectedTable ? (
+          <TableBrowserView
+            table={selectedTable}
+            sizeBytes={rows.find((row) => row.name === selectedTable)?.bytes ?? null}
+            onBack={() => setSelectedTable(null)}
+            onClose={onClose}
+          />
+        ) : (
+          <>
+            <div className="flex items-center gap-3 border-b border-osu-b3/20 px-4 pt-3 pb-2.5">
+              <Database className="h-4 w-4 flex-shrink-0 text-osu-c2" />
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-osu-c2">Database storage</div>
+                <div className="text-[10px] text-osu-f1">
+                  {formatBytes(fileTotal)} file + WAL of {formatBytes(maxBytes)} limit{data ? ` · ${formatBytes(totalTableBytes)} table pages · ${data.tables.length} tables` : ""}
+                  {scanning ? " · scanning" : stale ? " · cached" : ""}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-shrink-0 rounded-md border border-osu-b3/30 bg-osu-b4/60 px-2.5 py-1 text-[11px] text-osu-l2 transition-colors duration-[120ms] hover:bg-osu-b3/60 hover:text-white cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              {(loading || (scanning && !data)) ? (
+                <div className="py-12 text-center text-[12px] text-osu-f1">Scanning tables...</div>
+              ) : error ? (
+                <div className="py-12 text-center text-[12px] text-osu-red-light">{error}</div>
+              ) : !data || shown.length === 0 ? (
+                <div className="py-12 text-center text-[12px] text-osu-f1">Per-table sizes are not available on this database build.</div>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  {shown.map((table) => {
+                    const pct = totalTableBytes > 0 ? (table.bytes / totalTableBytes) * 100 : 0;
+                    const width = largest > 0 ? (table.bytes / largest) * 100 : 0;
+                    return (
+                      <button
+                        key={table.name}
+                        type="button"
+                        onClick={() => setSelectedTable(table.name)}
+                        className="group rounded-md bg-osu-b4/30 px-2.5 py-1.5 text-left transition-colors hover:bg-osu-b4/60 cursor-pointer"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            <span className="truncate font-mono text-[11px] text-osu-l2 group-hover:text-white">{table.name}</span>
+                            <ChevronRight className="h-3 w-3 flex-shrink-0 text-osu-f1/50 transition-transform group-hover:translate-x-0.5 group-hover:text-osu-c2" />
+                          </span>
+                          <span className="flex-shrink-0 text-[11px] tabular-nums text-white">
+                            {formatBytes(table.bytes)} <span className="text-osu-f1">· {pct.toFixed(1)}%</span>
+                          </span>
+                        </div>
+                        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-osu-b5/70">
+                          <div className="h-full rounded-full bg-osu-pink" style={{ width: `${Math.max(width, 1.5)}%` }} />
+                        </div>
+                      </button>
+                    );
+                  })}
+                  {rest.length > 0 ? (
+                    showAllTables ? (
+                      <div className="flex flex-col gap-1 rounded-md bg-osu-b4/20 p-1.5">
+                        {rest.map((table) => (
+                          <button
+                            key={table.name}
+                            type="button"
+                            onClick={() => setSelectedTable(table.name)}
+                            className="flex items-center justify-between gap-3 rounded px-2 py-1 text-left transition-colors hover:bg-osu-b4/60 cursor-pointer"
+                          >
+                            <span className="truncate font-mono text-[11px] text-osu-f1 hover:text-osu-l2">{table.name}</span>
+                            <span className="flex-shrink-0 text-[10px] tabular-nums text-osu-f1">{formatBytes(table.bytes)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllTables(true)}
+                        className="flex items-center justify-between gap-3 rounded-md px-2.5 py-1.5 text-[11px] text-osu-f1 transition-colors hover:text-osu-l2 cursor-pointer"
+                      >
+                        <span className="flex items-center gap-1"><ChevronDown className="h-3 w-3" /> {rest.length} smaller {rest.length === 1 ? "table" : "tables"}</span>
+                        <span className="tabular-nums">
+                          {formatBytes(restBytes)} · {totalTableBytes > 0 ? ((restBytes / totalTableBytes) * 100).toFixed(1) : "0"}%
+                        </span>
+                      </button>
+                    )
+                  ) : null}
+                  <div className="mt-1 text-[9px] leading-relaxed text-osu-f1">
+                    Click a table to read its newest rows. Sizes total {formatBytes(totalTableBytes)} of table b-tree/index pages, grouped by owning table{data.capturedAt ? ` · measured ${formatTimeAgo(data.capturedAt)}` : ""}. File/WAL outside these rows: {formatBytes(unassignedBytes)}.
+                    {scanning ? " Refreshing in the background." : ""}
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Read-only drill-in from the storage list: pages the newest rows of one table
+// and renders each as a labelled record card (JSON columns pretty-printed,
+// long/blob cells clipped) so the data is legible without a SQL client.
+function TableBrowserView({
+  table,
+  sizeBytes,
+  onBack,
+  onClose,
+}: {
+  table: string;
+  sizeBytes: number | null;
+  onBack: () => void;
+  onClose: () => void;
+}) {
+  const [data, setData] = useState<LiveBackendTablePreview | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const PAGE = 25;
+
+  // Debounce keystrokes into the query that actually drives fetches.
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchInput.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  const load = useCallback((offset: number, append: boolean) => {
+    if (append) setLoadingMore(true);
+    else setLoading(true);
+    setError(null);
+    fetchLiveBackendTableRows({ data: { table, limit: PAGE, offset, search } })
+      .then((res) => {
+        if (!res) {
+          setError("Table not found.");
+          return;
+        }
+        setData((prev) => (append && prev ? { ...res, rows: [...prev.rows, ...res.rows] } : res));
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : "Could not read table."))
+      .finally(() => {
+        setLoading(false);
+        setLoadingMore(false);
+      });
+  }, [table, search]);
+
+  useEffect(() => {
+    setData(null);
+    load(0, false);
+  }, [load]);
+
+  const rows = data?.rows ?? [];
+  const hasMore = data ? rows.length < data.totalRows : false;
+  const searching = search.length > 0;
+
+  return (
+    <>
+      <div className="flex items-center gap-2.5 border-b border-osu-b3/20 px-3 pt-3 pb-2.5">
+        <button
+          type="button"
+          onClick={onBack}
+          className="flex flex-shrink-0 items-center gap-1 rounded-md border border-osu-b3/30 bg-osu-b4/60 px-2 py-1 text-[11px] text-osu-l2 transition-colors hover:bg-osu-b3/60 hover:text-white cursor-pointer"
+        >
+          <ArrowLeft className="h-3 w-3" /> Tables
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <Table2 className="h-3.5 w-3.5 flex-shrink-0 text-osu-c2" />
+            <span className="truncate font-mono text-[12px] font-semibold text-white">{table}</span>
+          </div>
+          <div className="text-[10px] text-osu-f1">
+            {data
+              ? searching
+                ? `${formatNumber(data.totalRows)} ${data.totalRows === 1 ? "match" : "matches"}`
+                : `${formatNumber(data.totalRows)} ${data.totalRows === 1 ? "row" : "rows"} · ${data.columns.length} columns`
+              : "Reading..."}
+            {sizeBytes != null && !searching ? ` · ${formatBytes(sizeBytes)}` : ""}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex-shrink-0 rounded-md border border-osu-b3/30 bg-osu-b4/60 px-2.5 py-1 text-[11px] text-osu-l2 transition-colors hover:bg-osu-b3/60 hover:text-white cursor-pointer"
+        >
+          Close
+        </button>
+      </div>
+      <div className="flex items-center gap-2 border-b border-osu-b3/20 px-3 py-2">
+        <Search className="h-3.5 w-3.5 flex-shrink-0 text-osu-f1" />
+        <input
+          value={searchInput}
+          onChange={(event) => setSearchInput(event.target.value)}
+          placeholder="Search this table (username, title, id...)"
+          className="min-w-0 flex-1 bg-transparent text-[12px] text-osu-l2 placeholder:text-osu-f1/50 focus:outline-none"
+        />
+        {searchInput ? (
+          <button type="button" onClick={() => setSearchInput("")} className="flex-shrink-0 text-osu-f1 hover:text-white cursor-pointer" title="Clear">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        {loading ? (
+          <div className="py-12 text-center text-[12px] text-osu-f1">{searching ? "Searching..." : "Reading rows..."}</div>
+        ) : error ? (
+          <div className="py-12 text-center text-[12px] text-osu-red-light">{error}</div>
+        ) : rows.length === 0 ? (
+          <div className="py-12 text-center text-[12px] text-osu-f1">{searching ? `No rows match "${search}".` : "This table is empty."}</div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {rows.map((row, index) => (
+              <TableRowCard key={index} columns={data!.columns} row={row} index={index} />
+            ))}
+            {hasMore ? (
+              <button
+                type="button"
+                disabled={loadingMore}
+                onClick={() => load(rows.length, true)}
+                className="mt-1 rounded-md border border-osu-b3/30 bg-osu-b4/40 px-3 py-2 text-[11px] text-osu-l2 transition-colors hover:bg-osu-b4/70 hover:text-white disabled:opacity-50 cursor-pointer"
+              >
+                {loadingMore ? "Loading..." : `Load more (${formatNumber(rows.length)} of ${formatNumber(data!.totalRows)})`}
+              </button>
+            ) : (
+              <div className="mt-1 text-center text-[10px] text-osu-f1">
+                {searching
+                  ? `All ${formatNumber(rows.length)} ${rows.length === 1 ? "match" : "matches"} shown.`
+                  : rows.length === data!.totalRows ? "All rows shown." : `Showing newest ${formatNumber(rows.length)}.`}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+// One DB row, presented like the entity it represents instead of a raw column
+// dump: a player/map header (avatar or cover art + name + the key-stat badges),
+// a compact multi-column grid for the remaining scalar fields, and JSON blobs
+// collapsed at the bottom. The extraction is convention-based (avatar_url,
+// username, covers_json, stars/bpm/pp, ...) so it lights up across every table
+// that shares those column names, including fields nested inside *_json.
+function TableRowCard({
+  columns,
+  row,
+  index,
+}: {
+  columns: LiveBackendTablePreview["columns"];
+  row: Record<string, LiveBackendTableCell>;
+  index: number;
+}) {
+  const entity = useMemo(() => extractRowEntity(row), [row]);
+  const scalars = columns.filter((col) => !entity.consumed.has(col.name) && !isWideCell(row[col.name]));
+  const wides = columns.filter((col) => !entity.consumed.has(col.name) && isWideCell(row[col.name]));
+  const hasHeader = !!(entity.avatar || entity.cover || entity.title || entity.badges.length);
+  const userId = resolveUserId(row);
+  const initialActive = typeof row["is_active"] === "number" ? row["is_active"] !== 0 : null;
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-osu-b3/25 bg-osu-b4/25">
+      {hasHeader ? (
+        <div className="flex items-center gap-2.5 border-b border-osu-b3/15 bg-osu-b4/40 px-3 py-2">
+          {entity.avatar ? (
+            <img src={entity.avatar} alt="" className="h-9 w-9 flex-shrink-0 rounded-full bg-osu-b5 object-cover" />
+          ) : entity.cover ? (
+            <div className="h-9 w-16 flex-shrink-0 overflow-hidden rounded bg-osu-b5">
+              <img src={entity.cover} alt="" className="h-full w-full object-cover" />
+            </div>
+          ) : null}
           <div className="min-w-0 flex-1">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-osu-c2">Database storage</div>
-            <div className="text-[10px] text-osu-f1">
-              {formatBytes(fileTotal)} of {formatBytes(maxBytes)} used{data ? ` · ${data.tables.length} tables` : ""}
+            {entity.title ? <div className="truncate text-[13px] font-semibold text-white">{entity.title}</div> : null}
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[10px] text-osu-f1">
+              {entity.subtitle ? <span className="truncate">{entity.subtitle}</span> : null}
+              {entity.subtitle && entity.badges.length ? <span className="text-osu-b3">·</span> : null}
+              {entity.badges.map((badge, badgeIndex) => (
+                <span key={badgeIndex} className="inline-flex items-center gap-1 rounded bg-osu-b5/70 px-1.5 py-0.5 text-osu-l2">
+                  {badge.country ? <CountryFlag code={badge.country} size="xs" decorative /> : null}
+                  {badge.label ? <span className="text-osu-f1">{badge.label}</span> : null}
+                  <span className="tabular-nums">{badge.value}</span>
+                </span>
+              ))}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-shrink-0 rounded-md border border-osu-b3/30 bg-osu-b4/60 px-2.5 py-1 text-[11px] text-osu-l2 transition-colors duration-[120ms] hover:bg-osu-b3/60 hover:text-white cursor-pointer"
-          >
-            Close
-          </button>
+          {userId ? (
+            <UserActiveButton userId={userId} username={entity.title} initialActive={initialActive} />
+          ) : null}
+          <span className="flex-shrink-0 self-start text-[9px] tabular-nums text-osu-f1/50">#{index + 1}</span>
         </div>
-        <div className="max-h-[70vh] overflow-y-auto p-3">
-          {loading ? (
-            <div className="py-12 text-center text-[12px] text-osu-f1">Scanning tables...</div>
-          ) : error ? (
-            <div className="py-12 text-center text-[12px] text-osu-red-light">{error}</div>
-          ) : !data || shown.length === 0 ? (
-            <div className="py-12 text-center text-[12px] text-osu-f1">Per-table sizes are not available on this database build.</div>
-          ) : (
-            <div className="flex flex-col gap-1.5">
-              {shown.map((table) => {
-                const pct = totalTableBytes > 0 ? (table.bytes / totalTableBytes) * 100 : 0;
-                const width = largest > 0 ? (table.bytes / largest) * 100 : 0;
-                return (
-                  <div key={table.name} className="rounded-md bg-osu-b4/30 px-2.5 py-1.5">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="truncate font-mono text-[11px] text-osu-l2">{table.name}</span>
-                      <span className="flex-shrink-0 text-[11px] tabular-nums text-white">
-                        {formatBytes(table.bytes)} <span className="text-osu-f1">· {pct.toFixed(1)}%</span>
-                      </span>
-                    </div>
-                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-osu-b5/70">
-                      <div className="h-full rounded-full bg-osu-pink" style={{ width: `${Math.max(width, 1.5)}%` }} />
-                    </div>
-                  </div>
-                );
-              })}
-              {rest.length > 0 ? (
-                <div className="flex items-center justify-between gap-3 rounded-md px-2.5 py-1.5 text-[11px] text-osu-f1">
-                  <span>+ {rest.length} smaller {rest.length === 1 ? "table" : "tables"}</span>
-                  <span className="tabular-nums">
-                    {formatBytes(restBytes)} · {totalTableBytes > 0 ? ((restBytes / totalTableBytes) * 100).toFixed(1) : "0"}%
-                  </span>
-                </div>
-              ) : null}
-              <div className="mt-1 text-[9px] leading-relaxed text-osu-f1">
-                Table b-tree plus its indexes, grouped by owning table{data.capturedAt ? ` · measured ${formatTimeAgo(data.capturedAt)}` : ""}. Percentages are each table's share of on-disk table data.
-              </div>
-            </div>
-          )}
+      ) : (
+        <div className="border-b border-osu-b3/15 px-3 py-1 text-[9px] font-semibold uppercase tracking-wider text-osu-f1/60">Row {index + 1}</div>
+      )}
+      {scalars.length ? (
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 p-2.5 sm:grid-cols-3">
+          {scalars.map((col) => <ScalarCell key={col.name} col={col} value={row[col.name]} />)}
+        </div>
+      ) : null}
+      {wides.length ? (
+        <div className="flex flex-col gap-1 border-t border-osu-b3/10 p-2">
+          {wides.map((col) => <WideField key={col.name} col={col} value={row[col.name]} />)}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// The osu! user id a row belongs to, if any: a top-level user_id/osu_user_id
+// column, or the id nested inside a user_json/profile_json blob.
+function resolveUserId(row: Record<string, LiveBackendTableCell>): number | null {
+  for (const key of ["user_id", "osu_user_id"]) {
+    const value = Number(row[key]);
+    if (Number.isInteger(value) && value > 0) return value;
+  }
+  for (const key of ["user_json", "profile_json"]) {
+    const raw = row[key];
+    if (typeof raw !== "string") continue;
+    try {
+      const parsed = JSON.parse(raw) as { id?: unknown };
+      const id = Number(parsed?.id);
+      if (Number.isInteger(id) && id > 0) return id;
+    } catch { /* not a user blob */ }
+  }
+  return null;
+}
+
+// The reversible "delete this cheater" control on a player row: soft-deactivate
+// (untrack from rosters + mark inactive, the same path ban-detection uses) or
+// reactivate. Two-step confirm since it hits prod, but nothing is deleted.
+function UserActiveButton({ userId, username, initialActive }: { userId: number; username: string | null; initialActive: boolean | null }) {
+  const [active, setActive] = useState<boolean | null>(initialActive);
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<LiveBackendUserActiveResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  // When state is unknown (row has no is_active column), assume active so the
+  // primary offered action is Deactivate.
+  const isActive = active ?? true;
+
+  const run = (next: boolean) => {
+    setBusy(true);
+    setError(null);
+    setLiveBackendUserActive({ data: { userId, active: next } })
+      .then((res) => { setResult(res); setActive(res.active); setConfirming(false); })
+      .catch((err) => setError(err instanceof Error ? err.message : "Action failed."))
+      .finally(() => setBusy(false));
+  };
+
+  if (result) {
+    return (
+      <span className="flex-shrink-0 self-start text-[10px] text-osu-f1">
+        {busy ? "..." : result.active ? "reactivated" : "deactivated"}
+        <button type="button" disabled={busy} onClick={() => run(!result.active)} className="ml-1 text-osu-c2 hover:text-white disabled:opacity-50 cursor-pointer">undo</button>
+      </span>
+    );
+  }
+
+  if (confirming) {
+    return (
+      <span className="flex flex-shrink-0 items-center gap-1 self-start">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => run(!isActive)}
+          className={`rounded px-1.5 py-0.5 text-[10px] font-semibold text-white disabled:opacity-50 cursor-pointer ${isActive ? "bg-osu-red hover:bg-osu-red-light" : "bg-osu-green hover:bg-osu-green-light"}`}
+        >
+          {busy ? "..." : isActive ? "Confirm deactivate" : "Confirm reactivate"}
+        </button>
+        <button type="button" disabled={busy} onClick={() => setConfirming(false)} className="rounded px-1 py-0.5 text-[10px] text-osu-f1 hover:text-white cursor-pointer">cancel</button>
+      </span>
+    );
+  }
+
+  return (
+    <span className="flex flex-shrink-0 flex-col items-end gap-0.5 self-start">
+      <button
+        type="button"
+        onClick={() => setConfirming(true)}
+        title={isActive ? `Deactivate ${username ?? `user ${userId}`}` : `Reactivate ${username ?? `user ${userId}`}`}
+        className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] transition-colors cursor-pointer ${
+          isActive
+            ? "border-osu-red/40 text-osu-red-light hover:bg-osu-red/20"
+            : "border-osu-green/40 text-osu-green-light hover:bg-osu-green/20"
+        }`}
+      >
+        {isActive ? <Ban className="h-3 w-3" /> : <RotateCcw className="h-3 w-3" />}
+        {isActive ? "Deactivate" : "Reactivate"}
+      </button>
+      {error ? <span className="text-[9px] text-osu-red-light">{error}</span> : null}
+    </span>
+  );
+}
+
+// A short scalar field in the grid: tiny column label over a formatted value.
+// pat_* pattern weights (0..1) render as a mini bar so map rows read visually.
+function ScalarCell({ col, value }: { col: { name: string; type: string }; value: LiveBackendTableCell }) {
+  if (col.name.startsWith("pat_") && typeof value === "number" && Number.isFinite(value)) {
+    const pct = Math.max(0, Math.min(1, value)) * 100;
+    return (
+      <div>
+        <div className="truncate font-mono text-[9px] text-osu-c2/80" title={col.name}>{col.name.replace("pat_", "")}</div>
+        <div className="mt-1 flex items-center gap-1.5">
+          <div className="h-1 flex-1 overflow-hidden rounded-full bg-osu-b5/70">
+            <div className="h-full rounded-full bg-osu-pink" style={{ width: `${pct}%` }} />
+          </div>
+          <span className="tabular-nums text-[10px] text-osu-l2">{value.toFixed(2)}</span>
         </div>
       </div>
+    );
+  }
+  return (
+    <div className="min-w-0">
+      <div className="truncate font-mono text-[9px] text-osu-c2/80" title={`${col.name}${col.type ? ` (${col.type})` : ""}`}>{col.name}</div>
+      <div className="mt-0.5 break-words text-[11px] text-osu-l2">{formatScalar(col.name, value)}</div>
+    </div>
+  );
+}
+
+const BOOLEAN_COLUMNS = new Set(["is_active", "is_tracked", "passed", "processed", "pinned", "keep_warm", "preserve"]);
+
+function formatScalar(name: string, value: LiveBackendTableCell): React.ReactNode {
+  if (value === null) return <span className="italic text-osu-f1/40">null</span>;
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "number") {
+    if ((value === 0 || value === 1) && (/^(is_|has_)/.test(name) || BOOLEAN_COLUMNS.has(name))) {
+      return value === 1 ? "Yes" : "No";
+    }
+    if (Number.isInteger(value) && Math.abs(value) >= 10_000) {
+      return <span className="tabular-nums" title={String(value)}>{formatNumber(value)}</span>;
+    }
+    return <span className="tabular-nums">{String(value)}</span>;
+  }
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) return <span title={value}>{formatTimeAgo(value)}</span>;
+  return <span>{value}</span>;
+}
+
+// A large/JSON field, collapsed by default so it never dominates the card. Opens
+// into a pretty-printed, scrollable block.
+function WideField({ col, value }: { col: { name: string; type: string }; value: LiveBackendTableCell }) {
+  const [open, setOpen] = useState(false);
+  const pretty = typeof value === "string" ? tryPrettyJson(value) : null;
+  const text = pretty ?? String(value ?? "");
+  const preview = text.replace(/\s+/g, " ").trim().slice(0, 90);
+  return (
+    <div className="rounded border border-osu-b3/15 bg-osu-b5/40">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-1.5 px-2 py-1 text-left cursor-pointer">
+        {open ? <ChevronDown className="h-3 w-3 flex-shrink-0 text-osu-f1" /> : <ChevronRight className="h-3 w-3 flex-shrink-0 text-osu-f1" />}
+        <span className="flex-shrink-0 font-mono text-[10px] text-osu-c2">{col.name}</span>
+        {!open ? <span className="truncate text-[10px] text-osu-f1/80">{preview}</span> : null}
+      </button>
+      {open ? (
+        <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words px-2 pb-2 font-mono text-[10px] leading-relaxed text-osu-l2">{text}</pre>
+      ) : null}
+    </div>
+  );
+}
+
+type JsonObject = Record<string, unknown>;
+
+interface RowEntity {
+  avatar: string | null;
+  cover: string | null;
+  title: string | null;
+  subtitle: string | null;
+  badges: Array<{ label: string; value: string; country?: string }>;
+  consumed: Set<string>;
+}
+
+// Pull a human-facing header out of an arbitrary DB row using column-name
+// conventions shared across the schema, reaching into user_json/profile_json for
+// player rows where the identity lives inside the blob.
+function extractRowEntity(row: Record<string, LiveBackendTableCell>): RowEntity {
+  const consumed = new Set<string>();
+  const asStr = (value: unknown): string | null =>
+    typeof value === "string" ? (value.trim() || null) : typeof value === "number" ? String(value) : null;
+
+  let nested: JsonObject = {};
+  for (const key of ["user_json", "profile_json"]) {
+    const raw = row[key];
+    if (typeof raw !== "string") continue;
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) { nested = parsed as JsonObject; break; }
+    } catch { /* leave nested empty */ }
+  }
+  const stats = nested.statistics && typeof nested.statistics === "object" ? (nested.statistics as JsonObject) : {};
+  const deepValue = (keys: string[]): unknown => {
+    for (const key of keys) if (row[key] != null) return row[key];
+    for (const key of keys) if (nested[key] != null) return nested[key];
+    for (const key of keys) if (stats[key] != null) return stats[key];
+    return null;
+  };
+
+  const avatar = asStr(deepValue(["avatar_url"]));
+  if (avatar && row["avatar_url"] != null) consumed.add("avatar_url");
+
+  let title: string | null = null;
+  let subtitle: string | null = null;
+  const username = asStr(deepValue(["username"]));
+  if (username) {
+    title = username;
+    if (row["username"] != null) consumed.add("username");
+  } else if (asStr(row["username_key"])) {
+    title = asStr(row["username_key"]);
+    consumed.add("username_key");
+  } else if (asStr(row["title"])) {
+    const artist = asStr(row["artist"]);
+    title = artist ? `${artist} - ${asStr(row["title"])}` : asStr(row["title"]);
+    consumed.add("title");
+    if (artist) consumed.add("artist");
+    const version = asStr(row["version"]);
+    const creator = asStr(row["creator"]);
+    if (version) { subtitle = version; consumed.add("version"); }
+    if (creator) { subtitle = subtitle ? `${subtitle} · mapped by ${creator}` : `mapped by ${creator}`; consumed.add("creator"); }
+  } else {
+    const name = asStr(deepValue(["name", "display_name"]));
+    if (name) title = name;
+  }
+
+  let cover: string | null = null;
+  const coverSource = row["covers_json"] ?? (typeof nested.covers === "object" ? JSON.stringify(nested.covers) : null);
+  if (typeof coverSource === "string") {
+    try {
+      const covers = JSON.parse(coverSource) as JsonObject;
+      const url = covers["cover@2x"] ?? covers.cover ?? covers.card ?? covers.list ?? covers.slimcover;
+      if (typeof url === "string") { cover = url; if (row["covers_json"] != null) consumed.add("covers_json"); }
+    } catch { /* not a cover object */ }
+  }
+
+  const badges: RowEntity["badges"] = [];
+  const addBadge = (label: string, keys: string[], format: (value: unknown) => string | null, isCountry = false) => {
+    const value = deepValue(keys);
+    if (value == null || value === "") return;
+    const formatted = format(value);
+    if (formatted == null) return;
+    badges.push(isCountry ? { label, value: formatted, country: formatted } : { label, value: formatted });
+    for (const key of keys) if (row[key] != null) { consumed.add(key); break; }
+  };
+
+  addBadge("", ["country_code", "country"], (value) => {
+    const code = String(value).toUpperCase();
+    return /^[A-Z]{2}$/.test(code) ? code : null;
+  }, true);
+  addBadge("pp", ["pp"], (value) => (Number.isFinite(Number(value)) ? `${Math.round(Number(value))}pp` : null));
+  addBadge("global", ["global_rank"], (value) => (Number(value) > 0 ? `#${formatNumber(Number(value))}` : null));
+  addBadge("country", ["country_rank"], (value) => (Number(value) > 0 ? `#${formatNumber(Number(value))}` : null));
+  addBadge("", ["key_count"], (value) => (Number(value) > 0 ? `${Number(value)}K` : null));
+  addBadge("", ["stars", "difficulty_rating"], (value) => (Number.isFinite(Number(value)) ? `${Number(value).toFixed(2)}★` : null));
+  addBadge("", ["bpm"], (value) => (Number(value) > 0 ? `${Math.round(Number(value))} BPM` : null));
+  addBadge("", ["status"], (value) => (typeof value === "string" && value ? value : null));
+
+  return { avatar, cover, title, subtitle, badges, consumed };
+}
+
+// A cell is "wide" (rendered as a collapsed block, not a grid chip) when it is a
+// JSON object/array string or just a long string.
+function isWideCell(value: LiveBackendTableCell): boolean {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  if (trimmed[0] === "{" || trimmed[0] === "[") {
+    try { JSON.parse(trimmed); return true; } catch { /* not JSON */ }
+  }
+  return value.length > 100;
+}
+
+// Pretty-print a value only when it is genuinely a JSON object/array string;
+// leaves plain strings (and JSON scalars like a bare number) untouched.
+function tryPrettyJson(value: string): string | null {
+  const trimmed = value.trim();
+  if (trimmed.length < 2) return null;
+  const first = trimmed[0];
+  if (first !== "{" && first !== "[") return null;
+  try {
+    return JSON.stringify(JSON.parse(trimmed), null, 2);
+  } catch {
+    return null;
+  }
+}
+
+// Danger-zone counterpart to the row button: deactivate/reactivate a player by
+// id or username without hunting for their row in the table browser.
+function UserModerationCard() {
+  const [query, setQuery] = useState("");
+  const [busy, setBusy] = useState<"deactivate" | "reactivate" | null>(null);
+  const [result, setResult] = useState<LiveBackendUserActiveResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = (active: boolean) => {
+    const trimmed = query.trim();
+    if (!trimmed) { setError("Enter a user id or username."); return; }
+    const asId = Number(trimmed);
+    const payload = Number.isInteger(asId) && asId > 0 ? { userId: asId, active } : { username: trimmed, active };
+    setBusy(active ? "reactivate" : "deactivate");
+    setError(null);
+    setResult(null);
+    setLiveBackendUserActive({ data: payload })
+      .then((res) => setResult(res))
+      .catch((err) => setError(err instanceof Error ? err.message : "Action failed."))
+      .finally(() => setBusy(null));
+  };
+
+  return (
+    <div className="rounded-lg border border-osu-b3/30 bg-osu-b4/30 p-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => { if (event.key === "Enter") submit(false); }}
+          placeholder="User id or username"
+          className="min-w-0 flex-1 rounded-md border border-osu-b3/40 bg-osu-b5 px-2.5 py-1.5 text-[12px] text-osu-l2 placeholder:text-osu-f1/50 focus:border-osu-c2/60 focus:outline-none"
+        />
+        <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={busy !== null}
+            onClick={() => submit(false)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-osu-red/40 bg-osu-red/15 px-3 py-1.5 text-[12px] text-osu-red-light transition-colors hover:bg-osu-red/30 disabled:opacity-50 cursor-pointer"
+          >
+            <Ban className="h-3.5 w-3.5" /> {busy === "deactivate" ? "..." : "Deactivate"}
+          </button>
+          <button
+            type="button"
+            disabled={busy !== null}
+            onClick={() => submit(true)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-osu-green/40 bg-osu-green/15 px-3 py-1.5 text-[12px] text-osu-green-light transition-colors hover:bg-osu-green/30 disabled:opacity-50 cursor-pointer"
+          >
+            <RotateCcw className="h-3.5 w-3.5" /> {busy === "reactivate" ? "..." : "Reactivate"}
+          </button>
+        </div>
+      </div>
+      {error ? <div className="mt-2 text-[11px] text-osu-red-light">{error}</div> : null}
+      {result ? (
+        <div className="mt-2 text-[11px] text-osu-f1">
+          {result.username ?? `User ${result.userId}`} (#{result.userId}) is now{" "}
+          <span className={result.active ? "text-osu-green-light" : "text-osu-red-light"}>{result.active ? "active" : "inactive"}</span>
+          {result.active
+            ? result.retrackedRosters ? ` · re-tracked ${result.retrackedRosters} roster${result.retrackedRosters === 1 ? "" : "s"}` : ""
+            : `${result.untrackedRosters ? ` · untracked ${result.untrackedRosters} roster${result.untrackedRosters === 1 ? "" : "s"}` : ""}${result.deletedJobs ? ` · cleared ${result.deletedJobs} pending job${result.deletedJobs === 1 ? "" : "s"}` : ""}`}.
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -4102,7 +4719,10 @@ function OsuFileBackfillPanel({
   const active = !!backfill?.active;
   const tone = getOsuFileBackfillTone(backfill);
   const statusLabel = getOsuFileBackfillStatusLabel(backfill);
-  const startLabel = backfill?.stalled ? "Resume .osu backfill" : backfill?.status === "cancelled" ? "Restart .osu backfill" : "Start .osu backfill";
+  const complete = !!backfill && backfill.missing === 0 && backfill.totalAnalyzed > 0;
+  const showStartAction = !complete && (!active || backfill?.stalled);
+  const showPauseAction = active && !backfill?.stalled;
+  const startLabel = backfill?.stalled || backfill?.status === "cancelled" ? "Resume .osu backfill" : "Start .osu backfill";
   const cancellable = !!backfill && (
     backfill.active
     || backfill.status === "queued"
@@ -4136,25 +4756,28 @@ function OsuFileBackfillPanel({
             {backfill?.lastError ? <span className="max-w-full truncate text-osu-yellow">last: {backfill.lastError}</span> : null}
           </div>
         </div>
-        <div className={cancellable ? "grid grid-cols-1 gap-2 sm:grid-cols-2 lg:w-[330px]" : "grid grid-cols-1 gap-2 lg:w-[170px]"}>
-          <AdminButton
-            label={startLabel}
-            description="Queue a paced background job that downloads missing .osu chart files and stores them compressed in SQLite."
-            icon={<Database className="h-3.5 w-3.5" />}
-            busy={busy === "osu-file-backfill"}
-            onClick={onStart}
-          />
-          {cancellable ? (
-            <AdminButton
-              label="Cancel backfill"
-              description="Stop queued .osu cache backfill batches. A running batch may finish before the cancellation is observed."
-              icon={<X className="h-3.5 w-3.5" />}
-              busy={busy === "cancel-osu-file-backfill"}
-              onClick={onCancel}
-              danger
-            />
-          ) : null}
-        </div>
+        {showStartAction || showPauseAction ? (
+          <div className={showStartAction && showPauseAction ? "grid grid-cols-1 gap-2 sm:grid-cols-2 lg:w-[330px]" : "grid grid-cols-1 gap-2 lg:w-[170px]"}>
+            {showStartAction ? (
+              <AdminButton
+                label={startLabel}
+                description="Queue a paced background job that downloads missing .osu chart files and stores them compressed in SQLite."
+                icon={<Database className="h-3.5 w-3.5" />}
+                busy={busy === "osu-file-backfill"}
+                onClick={onStart}
+              />
+            ) : null}
+            {cancellable && showPauseAction ? (
+              <AdminButton
+                label="Pause backfill"
+                description="Pause queued .osu cache backfill batches. The running batch may finish first, and cached files stay stored."
+                icon={<Pause className="h-3.5 w-3.5" />}
+                busy={busy === "cancel-osu-file-backfill"}
+                onClick={onCancel}
+              />
+            ) : null}
+          </div>
+        ) : null}
       </div>
       {active ? (
         <div className="mt-2 text-[10px] text-osu-f1">
@@ -4189,7 +4812,7 @@ function getOsuFileBackfillStatusLabel(backfill: LiveBackendStatus["osuFileBackf
   if (backfill.stalled) return "stalled";
   if (backfill.status === "queued") return "queued";
   if (backfill.status === "running") return "running";
-  if (backfill.status === "cancelled") return "cancelled";
+  if (backfill.status === "cancelled") return "paused";
   if (backfill.status === "failed") return "failed";
   return "idle";
 }
