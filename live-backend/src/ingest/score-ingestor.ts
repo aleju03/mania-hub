@@ -9,7 +9,7 @@ import { maybeEnqueueTopPlayRefresh } from "../features/top-plays.js";
 import { getHydratedScoreByIdentity } from "../features/tracker.js";
 import { evaluateScoreGoals } from "../features/goals.js";
 import type { JobQueue } from "../jobs/queue.js";
-import { hasPendingRecentReconcileJob, RECENT_RECONCILE_JOB_TYPE, requeueDeferredRecentReconcileJobs } from "../jobs/recent-reconcile.js";
+import { hasPendingRecentReconcileJob, promotePendingRecentReconcileJobs, RECENT_RECONCILE_JOB_TYPE } from "../jobs/recent-reconcile.js";
 import type { LiveEventLog } from "../live/event-log.js";
 import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedTotalScore, getModAcronyms, getScoreIdentity, isLazerScore, nowIso, scoreHasPublicLeaderboard, scoreHasReplay, toLeanTrackerScore } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
@@ -261,7 +261,7 @@ export class ScoreIngestor {
     if (!Number.isFinite(scoreTime) || Date.now() - scoreTime > 30 * 60_000) return;
     const userId = score.user_id;
     const dedupeKey = `recent:user:${userId}`;
-    if (await requeueDeferredRecentReconcileJobs(this.db, userId) > 0) return;
+    if (await promotePendingRecentReconcileJobs(this.db, userId) > 0) return;
     if (await hasPendingRecentReconcileJob(this.db, userId)) return;
     const row = (await exec(
       this.db,

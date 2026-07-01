@@ -5,6 +5,38 @@ import type { JobStatus } from "./queue.js";
 
 export const RECENT_RECONCILE_JOB_TYPE = "reconcile_user_recent_scores";
 
+// A fresh score means the user's recent-score list is worth refreshing now:
+// osu! can flip fields such as has_replay shortly after oSC emits the score.
+export async function promotePendingRecentReconcileJobs(db: Db, userId: number, priority = 70): Promise<number> {
+  const safeUserId = Math.floor(userId);
+  if (!Number.isFinite(safeUserId) || safeUserId <= 0) return 0;
+  const now = nowIso();
+  const result = await exec(
+    db,
+    `update jobs
+     set status = 'queued',
+         priority = max(priority, ?),
+         run_after = ?,
+         locked_by = null,
+         locked_until = null,
+         last_error = null,
+         updated_at = ?
+     where type = ?
+       and status in ('queued', 'failed', 'deferred_pressure')
+       and (payload_json = ? or dedupe_key = ? or dedupe_key like ?)`,
+    [
+      priority,
+      now,
+      now,
+      RECENT_RECONCILE_JOB_TYPE,
+      json({ userId: safeUserId }),
+      `recent:user:${safeUserId}`,
+      `recent:user:${safeUserId}:%`,
+    ],
+  );
+  return Number(result.rowsAffected ?? 0);
+}
+
 // Pressure-deferred jobs only reactivate when queue depth drops below the
 // recovery threshold, which a busy queue can fail to reach for hours. A fresh
 // score from the user is a stronger signal: revive their parked reconcile so

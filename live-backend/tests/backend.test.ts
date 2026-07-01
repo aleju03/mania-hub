@@ -846,6 +846,31 @@ describe("live backend", () => {
     expect(body.queueDepth).toBeUndefined();
   });
 
+  it("keeps health checks lightweight instead of building the full status body", async () => {
+    const { db, queue, events } = await setup();
+    const response = mockRes();
+
+    await routeHttp(mockReq("GET", "/healthz"), response.res, {
+      db,
+      queue,
+      events,
+      config: baseConfig({
+        databaseUrl: `file:${join(dir, "test.db")}`,
+      }),
+      osu: { limiter: { state: () => ({ hardPerMinute: 60, usedLastMinute: 0, byCaller: [], byPath: [] }) } },
+      oscStatus: () => ({ connected: true, lastBatchAt: "2026-05-12T00:00:00.000Z", lastError: null }),
+    } as never);
+
+    const body = JSON.parse(response.writes.join(""));
+    expect(response.res.statusCode).toBe(200);
+    expect(body).toMatchObject({ ok: true, role: "all" });
+    expect(body.at).toEqual(expect.any(String));
+    expect(body.db).toBeUndefined();
+    expect(body.queueDepth).toBeUndefined();
+    expect(body.queueSummary).toBeUndefined();
+    expect(body.countries).toBeUndefined();
+  });
+
   it("clears stale job errors when a retry succeeds", async () => {
     const { db, queue } = await setup();
     await queue.enqueue("refresh_user_top_scores", "top:test", { userId: 101, scoreId: 9001, country: "CR" });
@@ -1277,6 +1302,30 @@ describe("live backend", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].dedupe_key).toBe("recent:user:101:next:123");
     expect(rows[0].status).toBe("queued");
+    expect(Date.parse(String(rows[0].run_after))).toBeLessThanOrEqual(Date.now());
+  });
+
+  it("promotes a queued delayed recent reconciliation after fresh oSC ingestion", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-12T00:05:00.000Z"));
+    const { db, ingestor } = await setup();
+    const [score] = await fixture<OscScore[]>("scores.json");
+    const now = new Date().toISOString();
+    const delayedUntil = new Date(Date.now() + 10 * 60_000).toISOString();
+    await exec(
+      db,
+      `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at, last_error)
+       values ('reconcile_user_recent_scores', 'recent:user:101:next:123', 'queued', 25, ?, 0, '{"userId":101}', ?, ?, null)`,
+      [delayedUntil, now, now],
+    );
+
+    await ingestor.ingestBatch([{ ...score, id: 9101, ended_at: "2026-05-12T00:04:00.000Z", created_at: "2026-05-12T00:04:00.000Z" }]);
+
+    const rows = (await exec(db, "select dedupe_key, status, priority, run_after from jobs where type = 'reconcile_user_recent_scores'")).rows;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].dedupe_key).toBe("recent:user:101:next:123");
+    expect(rows[0].status).toBe("queued");
+    expect(Number(rows[0].priority)).toBe(70);
     expect(Date.parse(String(rows[0].run_after))).toBeLessThanOrEqual(Date.now());
   });
 

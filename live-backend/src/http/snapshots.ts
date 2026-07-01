@@ -149,12 +149,12 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     return true;
   }
   if (url.pathname === "/healthz") {
-    sendJson(req, res, ctx, 200, await statusBody(ctx));
+    sendJson(req, res, ctx, 200, healthBody(ctx));
     return true;
   }
   if (url.pathname === "/readyz") {
     const ok = await dbHealth(ctx.db);
-    sendJson(req, res, ctx, ok ? 200 : 503, await statusBody(ctx));
+    sendJson(req, res, ctx, ok ? 200 : 503, healthBody(ctx, { db: ok }));
     return true;
   }
   if (url.pathname === "/api/status") {
@@ -1469,6 +1469,16 @@ async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: b
     catchup: await countryCatchupStatus(ctx),
     worker: options.includeWorkerActivity ? adminWorkerStatus(worker) : publicWorkerStatus(worker),
     ...(snapshotStats ? { snapshotStats } : {}),
+  };
+}
+
+function healthBody(ctx: HttpContext, options: { db?: boolean } = {}) {
+  const db = options.db;
+  return {
+    ok: db ?? true,
+    ...(db == null ? {} : { db }),
+    role: ctx.config.role ?? "all",
+    at: new Date().toISOString(),
   };
 }
 
