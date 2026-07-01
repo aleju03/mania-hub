@@ -233,6 +233,7 @@ type RawBeatmap = {
   mode?: string;
   status?: string;
   cs?: number;
+  convert?: boolean;
   bpm?: number;
   total_length?: number;
   version?: string;
@@ -871,7 +872,7 @@ async function hydrateCompactMapsSnapshot(db: Db, value: StoredCountryMapsData):
   const farmed = value.farmed.flatMap((entry): MapsFarmedEntry[] => {
     const beatmap = allBeatmaps.get(entry.beatmapId);
     const beatmapset = beatmap ? beatmapsets.get(beatmap.beatmapsetId) : undefined;
-    if (!beatmap || !beatmapset) return [];
+    if (!isNativeManiaMapsBeatmap(beatmap) || !beatmapset) return [];
     return [{
       beatmapId: entry.beatmapId,
       version: beatmap.version,
@@ -904,7 +905,7 @@ async function hydrateCompactMapsSnapshot(db: Db, value: StoredCountryMapsData):
   const mostPlayed = value.mostPlayed.flatMap((entry): MapsAggregatedBeatmap[] => {
     const beatmap = allBeatmaps.get(entry.beatmapId);
     const beatmapset = beatmap ? beatmapsets.get(beatmap.beatmapsetId) : undefined;
-    if (!beatmap || !beatmapset) return [];
+    if (!isNativeManiaMapsBeatmap(beatmap) || !beatmapset) return [];
     return [{
       beatmapId: entry.beatmapId,
       version: beatmap.version,
@@ -942,14 +943,16 @@ async function hydrateCompactMapsSnapshot(db: Db, value: StoredCountryMapsData):
 
   const poolBeatmapsBySet = new Map<number, MapsBeatmapMetadata[]>();
   for (const beatmap of poolBeatmaps) {
+    if (!isNativeManiaMapsBeatmap(beatmap)) continue;
     const current = poolBeatmapsBySet.get(beatmap.beatmapsetId) ?? [];
     current.push(beatmap);
     poolBeatmapsBySet.set(beatmap.beatmapsetId, current);
   }
   const beatmapsetsPool = Object.fromEntries(value.beatmapsetsPool.flatMap((id): Array<[number, MapsFavouriteBeatmapset]> => {
     const beatmapset = beatmapsets.get(id);
-    if (!beatmapset) return [];
-    return [[id, buildPoolBeatmapset(id, beatmapset, poolBeatmapsBySet.get(id) ?? [])]];
+    const beatmaps = poolBeatmapsBySet.get(id) ?? [];
+    if (!beatmapset || beatmaps.length === 0) return [];
+    return [[id, buildPoolBeatmapset(id, beatmapset, beatmaps)]];
   }));
 
   return hydrateMapsSnapshotUsers(db, {
@@ -1000,6 +1003,7 @@ function buildPoolBeatmapset(
   options: { trimCovers?: boolean } = {},
 ): MapsFavouriteBeatmapset {
   const maniaBeatmaps = poolBeatmaps
+    .filter(isNativeManiaMapsBeatmap)
     .map((beatmap) => ({
       id: beatmap.beatmapId,
       version: beatmap.version,
@@ -1049,7 +1053,8 @@ export async function getMapsRandomBeatmapsets(db: Db, ids: number[]): Promise<M
   }
   return cleanIds.flatMap((id) => {
     const beatmapset = beatmapsets.get(id);
-    return beatmapset ? [buildPoolBeatmapset(id, beatmapset, beatmapsBySet.get(id) ?? [], { trimCovers: true })] : [];
+    const beatmaps = beatmapsBySet.get(id) ?? [];
+    return beatmapset && beatmaps.length > 0 ? [buildPoolBeatmapset(id, beatmapset, beatmaps, { trimCovers: true })] : [];
   });
 }
 
@@ -1317,7 +1322,7 @@ async function hydrateCompactFarmedEntries(
   return entries.flatMap((entry): MapsFarmedEntry[] => {
     const beatmap = beatmaps.get(entry.beatmapId);
     const beatmapset = beatmap ? beatmapsets.get(beatmap.beatmapsetId) : undefined;
-    if (!beatmap || !beatmapset) return [];
+    if (!isNativeManiaMapsBeatmap(beatmap) || !beatmapset) return [];
     return [{
       beatmapId: entry.beatmapId,
       version: beatmap.version,
@@ -1358,7 +1363,7 @@ async function hydrateCompactMostPlayedEntries(
   return entries.flatMap((entry): MapsAggregatedBeatmap[] => {
     const beatmap = beatmaps.get(entry.beatmapId);
     const beatmapset = beatmap ? beatmapsets.get(beatmap.beatmapsetId) : undefined;
-    if (!beatmap || !beatmapset) return [];
+    if (!isNativeManiaMapsBeatmap(beatmap) || !beatmapset) return [];
     return [{
       beatmapId: entry.beatmapId,
       version: beatmap.version,
@@ -1637,48 +1642,6 @@ function filterSortFarmedMaps(items: MapsFarmedEntry[], query: MapsPageQuery): M
     });
 }
 
-function filterSortStoredFarmedMaps(items: StoredMapsFarmedEntry[], query: MapsPageQuery): StoredMapsFarmedEntry[] {
-  return items
-    .map((entry) => {
-      if (query.pp <= 0) return entry;
-      const players = entry.players.filter((player) => Number(player.pp ?? 0) >= query.pp);
-      const maxPp = Math.max(...players.map((player) => Number(player.pp ?? 0)), 0);
-      if (players.length < 2 && maxPp < FARMED_SINGLE_PLAYER_PP_MIN) return null;
-      return {
-        ...entry,
-        players,
-        playerCount: players.length,
-        avgPp: players.length > 0
-          ? players.reduce((sum, player) => sum + Number(player.pp ?? 0), 0) / players.length
-          : 0,
-        maxPp,
-        // pp filter narrows the roster, so recompute the dominant over the kept players.
-        dominantMod: getDominantStoredMapsSpeedMod(players),
-      };
-    })
-    .filter((entry): entry is StoredMapsFarmedEntry => {
-      if (!entry) return false;
-      if (query.mod === "all") return true;
-      const dominant = resolveStoredDominantMod(entry.dominantMod, () => getDominantStoredMapsSpeedMod(entry.players));
-      if (query.mod === "dt") return dominant === "DT";
-      if (query.mod === "ht") return dominant === "HT";
-      return dominant === null;
-    })
-    .sort((a, b) => {
-      const flip = query.dir === "asc" ? -1 : 1;
-      const aPlayerCount = Number(a.playerCount ?? a.players.length);
-      const bPlayerCount = Number(b.playerCount ?? b.players.length);
-      const aAvgPp = Number(a.avgPp ?? 0);
-      const bAvgPp = Number(b.avgPp ?? 0);
-      const aMaxPp = Number(a.maxPp ?? 0);
-      const bMaxPp = Number(b.maxPp ?? 0);
-      if (query.farmedSort === "players") return (bPlayerCount - aPlayerCount) * flip || bAvgPp - aAvgPp;
-      if (query.farmedSort === "avg-pp") return (bAvgPp - aAvgPp) * flip;
-      if (query.farmedSort === "max-pp") return (bMaxPp - aMaxPp) * flip;
-      return (getLatestStoredFarmedPlayTime(b) - getLatestStoredFarmedPlayTime(a)) * flip || bPlayerCount - aPlayerCount || bAvgPp - aAvgPp;
-    });
-}
-
 interface MapsFarmedPageMetadata {
   beatmapId: number;
   cs: number;
@@ -1694,9 +1657,6 @@ async function filterSortStoredFarmedMapsForPage(
   items: StoredMapsFarmedEntry[],
   query: MapsPageQuery,
 ): Promise<StoredMapsFarmedEntry[]> {
-  const needsMetadata = query.key !== "all" || query.q.trim() !== "" || query.farmedSort === "stars";
-  if (!needsMetadata) return filterSortStoredFarmedMaps(items, query);
-
   const metadata = await readMapsFarmedPageMetadataByIds(db, items.map((entry) => entry.beatmapId));
   return items
     .map((entry) => {
@@ -2400,6 +2360,7 @@ interface MapsBeatmapMetadata {
   beatmapId: number;
   beatmapsetId: number;
   mode: string;
+  convert?: boolean;
   status: string;
   cs: number;
   difficultyRating: number;
@@ -2622,10 +2583,23 @@ function mapsBeatmapStatement(
 async function readMapsBeatmapsByIds(db: Db, ids: number[]): Promise<Map<number, MapsBeatmapMetadata>> {
   const rows = await selectRowsByIntegerSet(
     db,
-    `select beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, total_length, version, url
-     from maps_beatmaps
-     where beatmap_id in`,
+    `select
+       b.beatmap_id,
+       b.beatmapset_id,
+       coalesce(json_extract(raw.metadata_json, '$.mode'), b.mode) as mode,
+       coalesce(json_extract(raw.metadata_json, '$.convert'), 0) as convert,
+       b.status,
+       b.cs,
+       b.difficulty_rating,
+       b.bpm,
+       b.total_length,
+       b.version,
+       b.url
+     from maps_beatmaps b
+     left join beatmaps raw on raw.beatmap_id = b.beatmap_id
+     where b.beatmap_id in`,
     ids,
+    `and ${nativeManiaBeatmapSql("b")}`,
   );
   return new Map(rows.map((row) => {
     const beatmap = rowToMapsBeatmapMetadata(row);
@@ -2636,10 +2610,23 @@ async function readMapsBeatmapsByIds(db: Db, ids: number[]): Promise<Map<number,
 async function readMapsBeatmapsByBeatmapsetIds(db: Db, ids: number[]): Promise<MapsBeatmapMetadata[]> {
   const rows = await selectRowsByIntegerSet(
     db,
-    `select beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, total_length, version, url
-     from maps_beatmaps
-     where beatmapset_id in`,
+    `select
+       b.beatmap_id,
+       b.beatmapset_id,
+       coalesce(json_extract(raw.metadata_json, '$.mode'), b.mode) as mode,
+       coalesce(json_extract(raw.metadata_json, '$.convert'), 0) as convert,
+       b.status,
+       b.cs,
+       b.difficulty_rating,
+       b.bpm,
+       b.total_length,
+       b.version,
+       b.url
+     from maps_beatmaps b
+     left join beatmaps raw on raw.beatmap_id = b.beatmap_id
+     where b.beatmapset_id in`,
     ids,
+    `and ${nativeManiaBeatmapSql("b")}`,
   );
   return rows.map(rowToMapsBeatmapMetadata);
 }
@@ -2656,9 +2643,11 @@ async function readMapsFarmedPageMetadataByIds(db: Db, ids: number[]): Promise<M
        bs.artist,
        bs.creator
      from maps_beatmaps b
+     left join beatmaps raw on raw.beatmap_id = b.beatmap_id
      left join maps_beatmapsets bs on bs.beatmapset_id = b.beatmapset_id
      where b.beatmap_id in`,
     ids,
+    `and ${nativeManiaBeatmapSql("b")}`,
   );
   return new Map(rows.map((row) => {
     const beatmapId = Number(row.beatmap_id);
@@ -2707,9 +2696,11 @@ async function readMapsRandomPoolByBeatmapsetIds(db: Db, ids: number[]): Promise
        group_concat(distinct b.cs) as key_values
      from maps_beatmapsets bs
      left join maps_beatmaps b on b.beatmapset_id = bs.beatmapset_id
+     left join beatmaps raw on raw.beatmap_id = b.beatmap_id
      where bs.beatmapset_id in`,
     ids,
-    `group by
+    `and ${nativeManiaBeatmapSql("b")}
+     group by
        bs.beatmapset_id,
        bs.title,
        bs.artist,
@@ -2759,12 +2750,30 @@ async function selectRowsByIntegerSet(db: Db, sqlPrefix: string, values: number[
   return rows;
 }
 
+function readBoolean(value: unknown): boolean {
+  return value === true || value === 1 || value === "1" || value === "true";
+}
+
+function nativeManiaBeatmapSql(beatmapAlias: string, rawAlias = "raw"): string {
+  return `coalesce(json_extract(${rawAlias}.metadata_json, '$.convert'), 0) != 1
+    and coalesce(json_extract(${rawAlias}.metadata_json, '$.mode'), ${beatmapAlias}.mode, '') = 'mania'`;
+}
+
+function isNativeManiaRawBeatmap(beatmap: RawBeatmap | OscScore["beatmap"] | undefined): beatmap is RawBeatmap | NonNullable<OscScore["beatmap"]> {
+  return !!beatmap && beatmap.mode === "mania" && !readBoolean(beatmap.convert);
+}
+
+function isNativeManiaMapsBeatmap(beatmap: Pick<MapsBeatmapMetadata, "mode" | "convert"> | undefined): beatmap is MapsBeatmapMetadata {
+  return !!beatmap && beatmap.mode === "mania" && !beatmap.convert;
+}
+
 function rowToMapsBeatmapMetadata(row: Record<string, unknown>): MapsBeatmapMetadata {
   const beatmapId = Number(row.beatmap_id);
   return {
     beatmapId,
     beatmapsetId: Number(row.beatmapset_id),
     mode: String(row.mode ?? "mania"),
+    convert: readBoolean(row.convert),
     status: String(row.status ?? ""),
     cs: Number(row.cs ?? 0),
     difficultyRating: Number(row.difficulty_rating ?? 0),
@@ -2971,7 +2980,8 @@ async function readCountryFarmedOverlaySection(
          u.avatar_url,
          u.country_code,
          coalesce(b.beatmapset_id, mb.beatmapset_id) as beatmapset_id,
-         coalesce(b.mode, mb.mode) as mode,
+         coalesce(json_extract(b.metadata_json, '$.mode'), b.mode, mb.mode) as mode,
+         coalesce(json_extract(b.metadata_json, '$.convert'), 0) as convert,
          coalesce(b.status, mb.status) as beatmap_status,
          coalesce(b.cs, mb.cs) as cs,
          coalesce(b.difficulty_rating, mb.difficulty_rating) as difficulty_rating,
@@ -3117,7 +3127,7 @@ async function replaceUserMapsUserLibrary(
   ];
 
   for (const mp of mostPlayed) {
-    if (mp.beatmap?.mode !== "mania" || !mp.beatmapset) continue;
+    if (!isNativeManiaRawBeatmap(mp.beatmap) || !mp.beatmapset) continue;
     const beatmapId = Number(mp.beatmap_id ?? mp.beatmap.id);
     const beatmapsetId = Number(mp.beatmapset.id ?? mp.beatmap.beatmapset_id ?? 0);
     const count = Math.floor(Number(mp.count ?? 0));
@@ -3214,7 +3224,7 @@ async function replaceUserMapsUserLibrary(
 function rawFavouriteBeatmapsetToPoolEntry(fav: RawBeatmapset): MapsFavouriteBeatmapset | null {
   const id = Number(fav.id ?? 0);
   const maniaBeatmaps = (fav.beatmaps ?? [])
-    .filter((beatmap) => beatmap.mode === "mania" && Number.isSafeInteger(Number(beatmap.id)) && Number(beatmap.id) > 0);
+    .filter((beatmap) => isNativeManiaRawBeatmap(beatmap) && Number.isSafeInteger(Number(beatmap.id)) && Number(beatmap.id) > 0);
   if (!Number.isSafeInteger(id) || id <= 0 || maniaBeatmaps.length === 0) return null;
 
   const keys = new Set<number>();
@@ -3280,7 +3290,8 @@ async function readCountryMostPlayedSection(db: Db, country: string, users: Maps
          u.username,
          u.avatar_url,
          b.beatmapset_id,
-         b.mode,
+         coalesce(json_extract(raw.metadata_json, '$.mode'), b.mode) as mode,
+         coalesce(json_extract(raw.metadata_json, '$.convert'), 0) as convert,
          b.status as beatmap_status,
          b.cs,
          b.difficulty_rating,
@@ -3297,6 +3308,7 @@ async function readCountryMostPlayedSection(db: Db, country: string, users: Maps
        from country_maps_most_played mp
        left join users u on u.user_id = mp.user_id
        left join maps_beatmaps b on b.beatmap_id = mp.beatmap_id
+       left join beatmaps raw on raw.beatmap_id = mp.beatmap_id
        left join maps_beatmapsets bs on bs.beatmapset_id = b.beatmapset_id
        where mp.country = ? and mp.user_id in (${placeholders})`,
       [country, ...chunk.map((user) => user.id)],
@@ -3317,6 +3329,7 @@ async function readCountryMostPlayedSection(db: Db, country: string, users: Maps
       || !Number.isFinite(count) || count <= 0
       || !Number.isSafeInteger(beatmapsetId) || beatmapsetId <= 0
       || String(row.mode ?? "mania") !== "mania"
+      || readBoolean(row.convert)
       || row.version == null
       || row.title == null
       || row.artist == null
@@ -3741,7 +3754,8 @@ async function applyMapsFarmedOverlay(
        u.avatar_url,
        u.country_code,
        coalesce(b.beatmapset_id, mb.beatmapset_id) as beatmapset_id,
-       coalesce(b.mode, mb.mode) as mode,
+       coalesce(json_extract(b.metadata_json, '$.mode'), b.mode, mb.mode) as mode,
+       coalesce(json_extract(b.metadata_json, '$.convert'), 0) as convert,
        coalesce(b.status, mb.status) as beatmap_status,
        coalesce(b.cs, mb.cs) as cs,
        coalesce(b.difficulty_rating, mb.difficulty_rating) as difficulty_rating,
@@ -3875,6 +3889,8 @@ function farmedOverlayColumnRowToEntry(row: Record<string, unknown>): { entry: M
     return null;
   }
 
+  if (String(row.mode ?? "mania") !== "mania" || readBoolean(row.convert)) return null;
+
   const status = String(row.beatmapset_status ?? row.beatmap_status ?? "");
   if (status && status.toLowerCase() !== "ranked") return null;
   const player = {
@@ -3949,6 +3965,7 @@ function rowMapsBeatmap(row: Record<string, unknown>): OscScore["beatmap"] | und
     beatmapset_id: beatmapsetId,
     difficulty_rating: Number(row.difficulty_rating ?? 0),
     mode: String(row.mode ?? "mania"),
+    convert: readBoolean(row.convert),
     status: row.beatmap_status == null ? undefined : String(row.beatmap_status),
     cs: Number(row.cs ?? 0),
     bpm: Number(row.bpm ?? 0),
@@ -4003,6 +4020,7 @@ function finalizeFarmedEntry(entry: MapsFarmedEntry): void {
 function isPotentialFarmedScore(score: OscScore): boolean {
   if (score.pp == null || score.pp <= 0) return false;
   if (score.beatmap && score.beatmap.mode !== "mania") return false;
+  if (score.beatmap?.convert) return false;
   if (score.ranked === false) return false;
   const knownStatus = String(score.beatmapset?.status ?? score.beatmap?.status ?? "").toLowerCase();
   return knownStatus === "" || knownStatus === "ranked";

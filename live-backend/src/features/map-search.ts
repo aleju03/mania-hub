@@ -158,7 +158,8 @@ const SOURCE_SELECT = `
   join beatmaps b on b.beatmap_id = sv.beatmap_id
   join beatmapsets s on s.beatmapset_id = b.beatmapset_id
   where sv.analysis_version = ? and sv.status = 'ready'
-    and json_extract(b.metadata_json, '$.mode') = 'mania'`;
+    and json_extract(b.metadata_json, '$.mode') = 'mania'
+    and coalesce(json_extract(b.metadata_json, '$.convert'), 0) != 1`;
 
 function intOr(value: unknown, fallback = 0): number {
   const n = Math.round(Number(value));
@@ -303,6 +304,7 @@ async function enqueueBuild(queue: JobQueue, cursor: number): Promise<void> {
 }
 
 const NON_MANIA_PRUNED_KEY = "map_search_index_nonmania_pruned:v1";
+const CONVERTS_PRUNED_KEY = "map_search_index_converts_pruned:v1";
 
 // One-time cleanup: earlier builds indexed osu!std maps whose scores were played as
 // mania converts. The `convert` flag is absent on a natively-fetched std beatmap, so
@@ -326,10 +328,32 @@ async function pruneNonManiaOnce(db: Db, queue: JobQueue): Promise<void> {
   await queue.enqueue("rebuild_map_collections", "rebuild_map_collections", {}, { priority: -12, replaceDone: true });
 }
 
+// A second cleanup for rows like Kimi no Sei: osu! reports these as mania rows
+// with `convert: true`, so the native-mode cleanup above does not catch them.
+async function pruneConvertsOnce(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [CONVERTS_PRUNED_KEY])).rows[0];
+  if (done) return;
+  await exec(
+    db,
+    `delete from map_search_index
+     where beatmap_id in (
+       select i.beatmap_id
+       from map_search_index i
+       join beatmaps b on b.beatmap_id = i.beatmap_id
+       where coalesce(json_extract(b.metadata_json, '$.convert'), 0) = 1
+          or coalesce(json_extract(b.metadata_json, '$.mode'), b.mode, '') != 'mania'
+     )`,
+  );
+  const now = nowIso();
+  await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)", [CONVERTS_PRUNED_KEY, json({ at: now }), now]);
+  await queue.enqueue("rebuild_map_collections", "rebuild_map_collections", {}, { priority: -12, replaceDone: true });
+}
+
 // Boot/periodic watchdog: kick off the build when missing, and resume a chain
 // that died mid-way (crash between batches) from the last indexed id.
 export async function ensureMapSearchIndexSeeded(db: Db, queue: JobQueue): Promise<void> {
   await pruneNonManiaOnce(db, queue);
+  await pruneConvertsOnce(db, queue);
   if (await isMapSearchIndexBuilt(db)) return;
   if (await hasPendingBuildJob(db)) return;
   await enqueueBuild(queue, await maxIndexedBeatmapId(db));
@@ -393,7 +417,17 @@ function orClause(values: string[], lookup: Record<string, string>): string | nu
 }
 
 function buildWhere(query: MapSearchQuery): { sql: string; args: InValue[] } {
-  const conditions: string[] = [];
+  const conditions: string[] = [
+    `not exists (
+      select 1
+      from beatmaps b
+      where b.beatmap_id = map_search_index.beatmap_id
+        and (
+          coalesce(json_extract(b.metadata_json, '$.convert'), 0) = 1
+          or coalesce(json_extract(b.metadata_json, '$.mode'), b.mode, '') != 'mania'
+        )
+    )`,
+  ];
   const args: InValue[] = [];
 
   const keyClause = orClause(query.keys, KEY_CLAUSES);
@@ -489,7 +523,18 @@ export async function getMapSearchEntriesByIds(db: Db, ids: number[]): Promise<M
     const placeholders = chunk.map(() => "?").join(", ");
     const rows = (await exec(
       db,
-      `select ${SELECT_COLUMNS} from map_search_index where beatmap_id in (${placeholders})`,
+      `select ${SELECT_COLUMNS}
+       from map_search_index
+       where beatmap_id in (${placeholders})
+         and not exists (
+           select 1
+           from beatmaps b
+           where b.beatmap_id = map_search_index.beatmap_id
+             and (
+               coalesce(json_extract(b.metadata_json, '$.convert'), 0) = 1
+               or coalesce(json_extract(b.metadata_json, '$.mode'), b.mode, '') != 'mania'
+             )
+         )`,
       chunk,
     )).rows;
     for (const row of rows) {

@@ -40,6 +40,7 @@ interface SeedMap {
   playcount?: number;
   totalLength?: number;
   mode?: string;
+  convert?: boolean;
   primary: string;
   patterns: Record<string, number>;
 }
@@ -80,6 +81,7 @@ async function seedMap(db: Db, map: SeedMap): Promise<void> {
         count_sliders: 50,
         total_length: map.totalLength ?? 120,
         status: map.status ?? "ranked",
+        convert: map.convert ?? false,
       }),
       now,
     ],
@@ -118,13 +120,16 @@ describe("map search index", () => {
     expect(streamKeyed.items[0].patterns.stream).toBe(1);
   });
 
-  it("excludes osu!std convert maps from the pool", async () => {
+  it("excludes converted maps from the pool", async () => {
     const db = await makeDb();
     await seedMap(db, { beatmapId: 1, beatmapsetId: 10, primary: "stream", patterns: { stream: 1 } });
     // A std map whose scores were played as a mania convert: its native mode is osu,
     // so it must never enter the pool even though it has a ready skill vector. The
     // `convert` flag is absent on such rows, so the native mode is the only reliable tell.
     await seedMap(db, { beatmapId: 2, beatmapsetId: 20, mode: "osu", primary: "jack", patterns: { jack: 1 } });
+    // Some API responses use mode=mania plus convert=true for the same class of
+    // map. Kimi no Sei looked like this in the local DB, so reject this too.
+    await seedMap(db, { beatmapId: 3, beatmapsetId: 30, mode: "mania", convert: true, primary: "tech", patterns: { tech: 1 } });
     await buildAll(db);
 
     const all = await getMapSearchPage(db, baseQuery());

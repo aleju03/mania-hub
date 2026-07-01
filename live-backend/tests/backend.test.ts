@@ -5016,7 +5016,7 @@ describe("live backend", () => {
         [user[0], user[1], `https://assets.example/${user[0]}.png`, now],
       );
     }
-    for (const id of [10, 20, 30]) {
+    for (const id of [10, 20, 30, 40]) {
       await exec(
         db,
         `insert into maps_beatmapsets
@@ -5034,6 +5034,13 @@ describe("live backend", () => {
     }
     await exec(
       db,
+      `insert into beatmaps
+         (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, max_combo, version, url, metadata_json, updated_at)
+       values (41, 40, 'mania', 'ranked', 4, 8, 180, 1000, '[4K] convert', 'https://osu.ppy.sh/beatmaps/41', ?, ?)`,
+      [JSON.stringify({ mode: "mania", convert: true }), now],
+    );
+    await exec(
+      db,
       `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
        values ('CR', ?, ?, ?)`,
       [
@@ -5043,8 +5050,12 @@ describe("live backend", () => {
             { beatmapId: 11, playerCount: farmedPlayers.length, avgPp: 494.5, maxPp: 500, players: farmedPlayers },
             { beatmapId: 21, playerCount: 2, avgPp: 410, maxPp: 420, players: [{ id: 101, mods: [], pp: 420, scoreUrl: null, playedAt: older }, { id: 102, mods: [], pp: 400, scoreUrl: null, playedAt: older }] },
             { beatmapId: 31, playerCount: 1, avgPp: 550, maxPp: 550, players: [{ id: 103, mods: ["DT"], pp: 550, scoreUrl: null, playedAt: newer }] },
+            { beatmapId: 41, playerCount: 2, avgPp: 800, maxPp: 810, players: [{ id: 104, mods: [], pp: 810, scoreUrl: null, playedAt: newer }, { id: 105, mods: [], pp: 790, scoreUrl: null, playedAt: newer }] },
           ],
-          mostPlayed: [],
+          mostPlayed: [
+            { beatmapId: 11, totalPlays: 20, playerCount: 2, players: [{ id: 101, count: 11 }, { id: 102, count: 9 }] },
+            { beatmapId: 41, totalPlays: 999, playerCount: 2, players: [{ id: 104, count: 500 }, { id: 105, count: 499 }] },
+          ],
           favourites: [],
           favouritesByPlayer: [],
           beatmapsetsPool: [],
@@ -5126,6 +5137,23 @@ describe("live backend", () => {
 
     expect(searchPage.value?.total).toBe(1);
     expect(searchPage.value?.items[0]).toMatchObject({ beatmapId: 31, title: "Set 30" });
+
+    const popularPage = await getMapsPageSnapshot(db, queue, "CR", 7 * 24 * 60 * 60 * 1000, {
+      tab: "popular",
+      page: 0,
+      pageSize: 2,
+      key: "all",
+      beatmapSort: "players",
+      farmedSort: "players",
+      dir: "desc",
+      status: "all",
+      pp: 0,
+      mod: "all",
+      q: "",
+    });
+
+    expect(popularPage.value?.total).toBe(1);
+    expect(popularPage.value?.items[0]).toMatchObject({ beatmapId: 11, title: "Set 10" });
 
     const response = mockRes();
     await routeHttp(
