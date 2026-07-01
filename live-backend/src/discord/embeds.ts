@@ -920,7 +920,7 @@ export function meEmbed(summary: MeSummary, siteOrigin: string): DiscordMessageB
   return {
     embeds: [embed],
     components: linkButtonRow([
-      { label: "My Data", url: `${siteOrigin}/my-data` },
+      { label: "My Stats", url: `${siteOrigin}/my-stats` },
       { label: "osu! profile", url: summary.userId ? osuProfileUrl(summary.userId) : "" },
     ]),
   };

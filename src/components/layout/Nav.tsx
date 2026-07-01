@@ -1,7 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { ChevronDown, Database, Globe, LogIn, LogOut, Settings, Target, UserRound } from "lucide-react";
+import { BarChart3, ChevronDown, Globe, LogIn, LogOut, Settings, Target, UserRound } from "lucide-react";
 import { SearchInput } from "../ui/SearchInput";
 import { Avatar } from "../ui/Avatar";
 import { CountryFlag } from "../ui/CountryFlag";
@@ -771,13 +771,13 @@ export function Nav() {
                         Profile
                       </Link>
                       <Link
-                        to="/my-data"
+                        to="/my-stats"
                         onClick={() => setUserMenuOpen(false)}
                         className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors"
                         role="menuitem"
                       >
-                        <Database className="h-3.5 w-3.5" />
-                        My Data
+                        <BarChart3 className="h-3.5 w-3.5" />
+                        My Stats
                       </Link>
                       <Link
                         to="/goals"
@@ -987,15 +987,15 @@ export function Nav() {
                           Profile
                         </Link>
                         <Link
-                          to="/my-data"
+                          to="/my-stats"
                           onClick={() => {
                             setMobileAccountOpen(false);
                             setMenuOpen(false);
                           }}
                           className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[11px] font-medium text-osu-l2 transition-colors duration-[80ms] hover:bg-osu-b3/50 hover:text-white"
                         >
-                          <Database className="h-3.5 w-3.5 shrink-0 opacity-75" />
-                          My Data
+                          <BarChart3 className="h-3.5 w-3.5 shrink-0 opacity-75" />
+                          My Stats
                         </Link>
                         <Link
                           to="/goals"

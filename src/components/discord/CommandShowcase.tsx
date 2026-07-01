@@ -881,7 +881,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
             <div><span style={{ color: D.muted }}>Goals</span> <b style={{ color: D.white }}>{me?.goalsLine ?? "2 open, 5 done"}</b></div>
           </div>
           <Footer text="maniabot" />
-          <Buttons items={["My Data", "osu! profile"]} />
+          <Buttons items={["My Stats", "osu! profile"]} />
         </Embed>
       ),
     },

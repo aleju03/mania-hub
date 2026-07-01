@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { LegalDocument, LegalParagraph, LegalSection } from "#/components/legal/LegalDocument";
 
-const UPDATED_AT = "June 27, 2026";
+const UPDATED_AT = "July 1, 2026";
 
 export const Route = createFileRoute("/privacy")({
   head: () => ({
@@ -23,8 +23,8 @@ function PrivacyPage() {
       <LegalSection title="Overview">
         <LegalParagraph>
           Mania Tracker is an osu!mania community site built around public osu! data, cached
-          projections, user preferences, and optional Discord bot features. This policy explains
-          the data used to operate the site and bot.
+          projections, and user preferences. This policy explains the data used to operate the
+          site.
         </LegalParagraph>
       </LegalSection>
 
@@ -42,48 +42,39 @@ function PrivacyPage() {
           session is active.
         </LegalParagraph>
         <LegalParagraph>
+          Some signed-in features store data on the server, tied to your osu! user ID: goals you
+          create (goal type, target, progress, and status), your card pack wallet and collection
+          (pulled cards and pull times), and roster opt-in or opt-out choices. The My Stats
+          dashboard does not store anything extra; it only shows you data the site already holds
+          about your account.
+        </LegalParagraph>
+        <LegalParagraph>
           The browser stores preferences and caches in localStorage, including theme settings,
           selected country, hidden users, replay viewer preferences, map filters, and similar
           client-side state. You can clear this data through your browser storage controls.
         </LegalParagraph>
       </LegalSection>
 
-      <LegalSection title="Discord Bot">
-        <LegalParagraph>
-          Mania Tracker's Discord bot, maniabot, uses Discord slash-command interactions to answer
-          osu!mania lookup commands and to manage optional server live feeds. The bot does not read
-          ordinary Discord message content.
-        </LegalParagraph>
-        <LegalParagraph>
-          When you use a bot command, Discord sends the command name, command options, Discord user
-          ID, and, when used in a server, guild ID, channel ID, and permission information needed to
-          process the command. Command options can include osu! usernames or user IDs, beatmap IDs
-          or URLs, country codes, feed type, key mode, and minimum PP thresholds.
-        </LegalParagraph>
-        <LegalParagraph>
-          Live feed subscriptions store the Discord guild ID, channel ID, selected country, feed
-          type, minimum PP threshold, Discord user ID that created or updated the subscription, and
-          creation time. These records are used to post configured top-play or snipe feed messages
-          to the chosen channel.
-        </LegalParagraph>
-        <LegalParagraph>
-          For bot administration and debugging, the live backend may keep a small in-memory summary
-          of recent bot interactions, including command name, Discord user ID, guild ID, and time.
-          This summary is not durable storage and is cleared when the backend restarts.
-        </LegalParagraph>
-      </LegalSection>
-
       <LegalSection title="Analytics And Logs">
         <LegalParagraph>
-          If analytics are configured, Mania Tracker may send page views and interaction events to
-          PostHog through the site's sync endpoint. Those events can include route names, selected
-          country, referrer, browser language, screen size, and route-specific identifiers such as
-          a viewed player, score, beatmapset, or maps tab.
+          Mania Tracker uses PostHog to count page views and feature usage. Events are sent
+          through the site's own endpoint and can include the visited route, selected country,
+          referrer, browser language, screen size, and route context such as a viewed player,
+          score, beatmapset, or maps tab.
         </LegalParagraph>
         <LegalParagraph>
-          The server may process request metadata such as IP address, user agent, timestamps,
-          rate-limit activity, and upstream API call information to operate the site, prevent
-          abuse, debug errors, and monitor service health.
+          Analytics groups page views from the same browser using a random visitor ID stored in
+          localStorage. The ID is not derived from or linked to your osu! account, and clearing
+          site data removes it. PostHog receives the request IP address and browser user agent
+          with each event for its country and device breakdowns; Mania Tracker itself stores
+          neither.
+        </LegalParagraph>
+        <LegalParagraph>
+          To prevent abuse, the server counts requests per IP address for rate limiting and caps
+          concurrent live connections per IP. These counters live in memory only: the backend
+          does not write IP addresses or user agents to its database or logs. Hosting providers
+          keep standard request logs, and the server records operational details such as job
+          activity, upstream osu! API calls, and errors to monitor service health.
         </LegalParagraph>
       </LegalSection>
 
@@ -93,11 +84,6 @@ function PrivacyPage() {
           to run the site, including hosting, storage, analytics, osu! API services, and community
           score-data services. Public osu! data may be cached and re-displayed as part of the
           site's community features.
-        </LegalParagraph>
-        <LegalParagraph>
-          Discord command responses and live-feed messages are sent back to Discord and are visible
-          according to the channel, server, direct message, or interaction context where the bot is
-          used. Discord processes that data under Discord's own terms and privacy policy.
         </LegalParagraph>
       </LegalSection>
 
@@ -116,19 +102,12 @@ function PrivacyPage() {
         <LegalParagraph>
           Durable public projections such as rankings, maps, top plays, snipes, cached profile
           data, and historical aggregates may be kept longer because they are what the site uses
-          to serve those features.
+          to serve those features. Goals and card pack collections are kept while your account
+          uses those features.
         </LegalParagraph>
         <LegalParagraph>
-          Discord live-feed subscriptions are kept until they are removed with the bot's unsubscribe
-          command, removed by an admin tool, cleaned up after the bot loses access to the channel,
-          or no longer needed to provide the feature. Discord command payloads are used to answer
-          the command and are not stored as durable command history, apart from feed subscription
-          records, normal server logs, and the short in-memory interaction summary described above.
-        </LegalParagraph>
-        <LegalParagraph>
-          To remove a Discord live feed, use the bot's unsubscribe command in the channel or remove
-          the bot from the server. For privacy, deletion, attribution, takedown, or data concerns,
-          contact the maintainer through the public osu! profile linked in the footer.
+          For privacy, deletion, attribution, takedown, or data concerns, contact the maintainer
+          through the public osu! profile linked in the footer.
         </LegalParagraph>
       </LegalSection>
     </LegalDocument>

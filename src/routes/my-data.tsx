@@ -1,14 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-import { MyDataPanel } from "../components/me/MyDataPanel";
-
+// Old URL for the My Stats page; kept as a redirect for bookmarks and stale links.
 export const Route = createFileRoute("/my-data")({
-  head: () => ({
-    meta: [
-      { title: "My Data" },
-      { name: "description", content: "" },
-      { name: "robots", content: "noindex, nofollow" },
-    ],
-  }),
-  component: MyDataPanel,
+  beforeLoad: () => {
+    throw redirect({ to: "/my-stats", replace: true });
+  },
 });

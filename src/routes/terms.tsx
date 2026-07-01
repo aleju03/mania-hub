@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { LegalDocument, LegalParagraph, LegalSection } from "#/components/legal/LegalDocument";
 
-const UPDATED_AT = "June 27, 2026";
+const UPDATED_AT = "July 1, 2026";
 
 export const Route = createFileRoute("/terms")({
   head: () => ({
@@ -38,26 +38,8 @@ function TermsPage() {
 
       <LegalSection title="osu! Login">
         <LegalParagraph>
-          When osu! login is available, Mania Tracker uses osu! OAuth to identify the signed-in
-          osu! account. Mania Tracker does not receive or manage your osu! password.
-        </LegalParagraph>
-      </LegalSection>
-
-      <LegalSection title="Discord Bot">
-        <LegalParagraph>
-          Mania Tracker may provide a Discord companion bot, maniabot, for osu!mania lookups and
-          optional live-feed posts. Use of the bot is also subject to Discord's own terms, policies,
-          permissions, and server rules.
-        </LegalParagraph>
-        <LegalParagraph>
-          Server managers who configure live feeds are responsible for choosing appropriate channels
-          and permissions. Bot command responses and feed posts may be visible to anyone who can
-          access the channel or interaction context where they are posted.
-        </LegalParagraph>
-        <LegalParagraph>
-          Please do not use the bot to spam channels, harass users, evade moderation, or overload
-          Mania Tracker, Discord, osu!, ppy, or community data services. Feed features may be
-          changed, limited, disabled, or removed if they cause abuse or operational issues.
+          Mania Tracker uses osu! OAuth to identify the signed-in osu! account. Mania Tracker
+          does not receive or manage your osu! password.
         </LegalParagraph>
       </LegalSection>
 

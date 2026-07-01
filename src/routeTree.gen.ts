@@ -18,6 +18,7 @@ import { Route as ReplayRouteImport } from './routes/replay'
 import { Route as RankingsRouteImport } from './routes/rankings'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PacksRouteImport } from './routes/packs'
+import { Route as MyStatsRouteImport } from './routes/my-stats'
 import { Route as MyDataRouteImport } from './routes/my-data'
 import { Route as MapsRouteImport } from './routes/maps'
 import { Route as LegalRouteImport } from './routes/legal'
@@ -95,6 +96,11 @@ const PrivacyRoute = PrivacyRouteImport.update({
 const PacksRoute = PacksRouteImport.update({
   id: '/packs',
   path: '/packs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MyStatsRoute = MyStatsRouteImport.update({
+  id: '/my-stats',
+  path: '/my-stats',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MyDataRoute = MyDataRouteImport.update({
@@ -272,6 +278,7 @@ export interface FileRoutesByFullPath {
   '/legal': typeof LegalRoute
   '/maps': typeof MapsRoute
   '/my-data': typeof MyDataRoute
+  '/my-stats': typeof MyStatsRoute
   '/packs': typeof PacksRoute
   '/privacy': typeof PrivacyRoute
   '/rankings': typeof RankingsRoute
@@ -316,6 +323,7 @@ export interface FileRoutesByTo {
   '/legal': typeof LegalRoute
   '/maps': typeof MapsRoute
   '/my-data': typeof MyDataRoute
+  '/my-stats': typeof MyStatsRoute
   '/packs': typeof PacksRoute
   '/privacy': typeof PrivacyRoute
   '/rankings': typeof RankingsRoute
@@ -361,6 +369,7 @@ export interface FileRoutesById {
   '/legal': typeof LegalRoute
   '/maps': typeof MapsRoute
   '/my-data': typeof MyDataRoute
+  '/my-stats': typeof MyStatsRoute
   '/packs': typeof PacksRoute
   '/privacy': typeof PrivacyRoute
   '/rankings': typeof RankingsRoute
@@ -407,6 +416,7 @@ export interface FileRouteTypes {
     | '/legal'
     | '/maps'
     | '/my-data'
+    | '/my-stats'
     | '/packs'
     | '/privacy'
     | '/rankings'
@@ -451,6 +461,7 @@ export interface FileRouteTypes {
     | '/legal'
     | '/maps'
     | '/my-data'
+    | '/my-stats'
     | '/packs'
     | '/privacy'
     | '/rankings'
@@ -495,6 +506,7 @@ export interface FileRouteTypes {
     | '/legal'
     | '/maps'
     | '/my-data'
+    | '/my-stats'
     | '/packs'
     | '/privacy'
     | '/rankings'
@@ -540,6 +552,7 @@ export interface RootRouteChildren {
   LegalRoute: typeof LegalRoute
   MapsRoute: typeof MapsRoute
   MyDataRoute: typeof MyDataRoute
+  MyStatsRoute: typeof MyStatsRoute
   PacksRoute: typeof PacksRoute
   PrivacyRoute: typeof PrivacyRoute
   RankingsRoute: typeof RankingsRoute
@@ -633,6 +646,13 @@ declare module '@tanstack/react-router' {
       path: '/packs'
       fullPath: '/packs'
       preLoaderRoute: typeof PacksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/my-stats': {
+      id: '/my-stats'
+      path: '/my-stats'
+      fullPath: '/my-stats'
+      preLoaderRoute: typeof MyStatsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/my-data': {
@@ -920,6 +940,7 @@ const rootRouteChildren: RootRouteChildren = {
   LegalRoute: LegalRoute,
   MapsRoute: MapsRoute,
   MyDataRoute: MyDataRoute,
+  MyStatsRoute: MyStatsRoute,
   PacksRoute: PacksRoute,
   PrivacyRoute: PrivacyRoute,
   RankingsRoute: RankingsRoute,

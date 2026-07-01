@@ -65,7 +65,7 @@ const TOP_SORT_OPTIONS: Array<{ value: MyDataTopPlaySort; label: string }> = [
 function PageShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen">
-      <PageHeader iconSrc="/images/icons/profile.svg" title="my data" />
+      <PageHeader iconSrc="/images/icons/profile.svg" title="my stats" />
       <div className="bg-osu-b5 min-h-[80vh]">
         <div className="mx-auto max-w-[1080px] px-3 py-5 sm:px-5 sm:py-7 space-y-5">{children}</div>
       </div>
