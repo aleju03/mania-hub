@@ -487,8 +487,8 @@ export function BBCodeEditor({
   const [selectionSize, setSelectionSize] = useState<number | null>(null);
   const [focusImageLinkTick, setFocusImageLinkTick] = useState(0);
   // Height of the floating inspector/dialog overlay, so the surface can pad its
-  // top by that much: the overlay never reflows the page, yet content under it
-  // stays reachable by scrolling instead of being hidden at the very top.
+  // bottom by that much: bottom padding never shifts content at the current
+  // scroll position, and anything the overlay covers stays reachable by scroll.
   const [overlayHeight, setOverlayHeight] = useState(0);
   // Caret offset in the raw-source textarea; the preview highlights its node.
   const [caretOffset, setCaretOffset] = useState<number | null>(null);
@@ -1654,7 +1654,29 @@ export function BBCodeEditor({
 
   useEffect(() => () => overlayObserverRef.current?.disconnect(), []);
 
-  const surfacePadTop = overlayHeight ? overlayHeight + 12 : undefined;
+  const surfacePadBottom = overlayHeight ? overlayHeight + 12 : undefined;
+
+  // If the bottom-docked overlay covers the selected element, scroll the
+  // surface just enough to bring it back into view above the overlay.
+  useEffect(() => {
+    if (!overlayHeight) return;
+    const surface = visualRef.current;
+    if (!surface) return;
+    const el = imageSelection
+      ? imageElementRef.current
+      : imagemapSelection
+        ? imagemapElementRef.current
+        : linkSelection
+          ? linkElementRef.current
+          : null;
+    if (!el || !surface.contains(el)) return;
+    const surfaceRect = surface.getBoundingClientRect();
+    const rect = el.getBoundingClientRect();
+    const visibleBottom = surfaceRect.bottom - overlayHeight;
+    if (rect.bottom <= visibleBottom) return;
+    const delta = Math.min(rect.bottom - visibleBottom + 12, Math.max(0, rect.top - surfaceRect.top));
+    if (delta > 0) surface.scrollTop += delta;
+  }, [overlayHeight, imageSelection, imagemapSelection, linkSelection]);
 
   const charCount = source.length;
 
@@ -2352,10 +2374,11 @@ export function BBCodeEditor({
       ) : null}
 
       <div className="relative">
-        {/* Inspectors, upload status and tool dialogs float over the editing
-            surface, so opening one never reflows the page below the editor. */}
+        {/* Inspectors, upload status and tool dialogs dock to the bottom of the
+            editing surface as an overlay: nothing above them reflows or shifts,
+            and the surface's bottom padding keeps covered content scrollable. */}
         {(imagemapSelection || linkSelection || imageSelection || uploadStatus || dialog) ? (
-          <div ref={setOverlayNode} className="absolute inset-x-0 top-0 z-20 max-h-full overflow-y-auto bg-osu-b4 shadow-lg shadow-black/30">
+          <div ref={setOverlayNode} className="absolute inset-x-0 bottom-0 z-20 max-h-full overflow-y-auto bg-osu-b4 border-t border-osu-b3/40 shadow-[0_-8px_24px_rgba(0,0,0,0.35)]">
             {renderImagemapInspector()}
             {renderLinkInspector()}
             {renderImageInspector()}
@@ -2407,7 +2430,7 @@ export function BBCodeEditor({
           onInput={scheduleVisualSync}
           onBlur={() => flushVisual()}
           data-placeholder="Write your page here. Select text and use the toolbar to format it. Right-click for more, or paste an image to upload it."
-          style={{ paddingTop: surfacePadTop, scrollPaddingTop: surfacePadTop }}
+          style={{ paddingBottom: surfacePadBottom, scrollPaddingBottom: surfacePadBottom }}
           className={`${paneHeightClass} bbcode-content bbcode-editor-surface overflow-y-auto px-4 py-3 text-sm text-osu-l2 focus:outline-none`}
         />
       ) : (
@@ -2443,13 +2466,13 @@ export function BBCodeEditor({
                 onDragOver={handleDragOver}
                 spellCheck={false}
                 placeholder="Write BBCode here, or paste your current me! page source..."
-                style={{ paddingTop: surfacePadTop }}
+                style={{ paddingBottom: surfacePadBottom }}
                 className={`${paneHeightClass} w-full resize-none bg-transparent px-4 py-3 text-[13px] leading-relaxed font-mono text-osu-l2 placeholder:text-osu-f1 focus:outline-none`}
               />
             </div>
             <div className={`${mobilePane === "preview" ? "block" : "hidden"} lg:block bg-osu-b5/40`}>
               <div
-                style={{ paddingTop: surfacePadTop }}
+                style={{ paddingBottom: surfacePadBottom }}
                 className={`${paneHeightClass} bbcode-content bbcode-preview-surface overflow-y-auto px-4 py-3 text-sm text-osu-l2`}
               >
                 <BBCodePreview
