@@ -32,11 +32,10 @@ const SHEDDABLE_TYPES = [
   "osc_backfill",
   "osc_country_catchup",
 ];
-// Note: build_map_search_index / rebuild_map_collections are intentionally NOT
-// sheddable. They live in their own claimLimit:1 "map-search-index" lane (no osu!
-// API, cursor-batched), which is all the backpressure they need. Shedding them
-// starved the one-time index build on a busy prod queue that sits above the soft
-// pressure cap, leaving search + collections permanently empty.
+// Note: build_map_search_index / rebuild_map_collections are deliberately not here.
+// They are reserved-lane types (see RESERVED_LANE_TYPES) so they drain steadily
+// under sustained pressure; shedding them starved the index build on a busy prod
+// queue that sits above the soft-pressure cap, leaving search + collections empty.
 
 const ACTIVE_TYPE_CAPS: Record<string, number> = {
   refresh_user_top_scores: 80,
@@ -49,6 +48,12 @@ const ACTIVE_TYPE_CAPS: Record<string, number> = {
 // osu! API token bucket still governs their actual request rate.
 const RESERVED_LANE_TYPES: Record<string, number> = {
   analyze_activity_beatmap: 10,
+  // Background index maintenance. A reserve of 1 keeps each draining steadily even
+  // while the shared queue sits above the soft-pressure cap (a busy prod queue
+  // otherwise starves them forever). They touch no osu! API and self-serialise with
+  // the claimLimit:1 map-search-index worker lane.
+  build_map_search_index: 1,
+  rebuild_map_collections: 1,
 };
 
 export class JobQueue {
