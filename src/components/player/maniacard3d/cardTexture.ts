@@ -124,8 +124,7 @@ function drawBack(
   context.save();
   clipCard(context);
   drawTierBackground(context, data);
-  drawBackMicroTrianglePattern(context);
-  drawTrianglePattern(context, 0.16);
+  drawBackOsuTriangles(context);
   drawBackRadialOverlays(context);
   drawBackFrame(context, data);
   drawBackTopPlate(context);
@@ -142,48 +141,42 @@ function clipCard(context: CanvasRenderingContext2D) {
   context.clip();
 }
 
-// Tiled micro-triangle texture covering the whole back (mirrors the CSS
-// mc-back-micro-tris pattern: 48x42 tile, ×2 for our texture = 96x84). We
-// filter out triangles whose vertices land outside the rounded card body so
-// none get half-cut by the rounded corner clip.
-function drawBackMicroTrianglePattern(context: CanvasRenderingContext2D) {
-  const tileWidth = 96;
-  const tileHeight = 84;
-  const cols = Math.ceil(CARD_TEXTURE_WIDTH / tileWidth) + 1;
-  const rows = Math.ceil(CARD_TEXTURE_HEIGHT / tileHeight) + 1;
-
-  const maybeDrawTri = (points: Array<[number, number]>, fill: string) => {
-    for (const [px, py] of points) {
-      if (!isInsideRoundedCard(px, py, 6)) return;
-    }
-    polygon(context, points, fill);
-  };
-
+// osu!-style triangle motif for the card back: a deliberate composition of a
+// few LARGE interlocking up/down triangles whose vertices share one
+// equilateral grid (side 500, row height 433 on the 1000x1400 texture), in
+// three flat white tones. Two double-size anchors bleed off the edges and are
+// drawn first, behind the mids; two half-size accents subdivide larger shapes.
+// The card clip is already applied, so edge bleed trims cleanly.
+function drawBackOsuTriangles(context: CanvasRenderingContext2D) {
+  const FAINT = 0.04;
+  const MID = 0.065;
+  const BRIGHT = 0.1;
+  // Grid rows: y = -132, 301, 734, 1167, 1600; columns every 250px.
+  const shapes: Array<{ points: Array<[number, number]>; alpha: number }> = [
+    // Anchors (side 1000)
+    { points: [[250, -132], [-250, 734], [750, 734]], alpha: FAINT },
+    { points: [[250, 734], [1250, 734], [750, 1600]], alpha: FAINT },
+    // Band 1 (top)
+    { points: [[250, -132], [0, 301], [500, 301]], alpha: MID },
+    { points: [[250, -132], [750, -132], [500, 301]], alpha: FAINT },
+    { points: [[750, -132], [500, 301], [1000, 301]], alpha: BRIGHT },
+    // Band 2
+    { points: [[-250, 301], [250, 301], [0, 734]], alpha: MID },
+    { points: [[750, 301], [1250, 301], [1000, 734]], alpha: BRIGHT },
+    // Band 3
+    { points: [[0, 734], [500, 734], [250, 1167]], alpha: MID },
+    { points: [[750, 734], [500, 1167], [1000, 1167]], alpha: FAINT },
+    // Band 4 (bottom)
+    { points: [[0, 1167], [-250, 1600], [250, 1600]], alpha: BRIGHT },
+    { points: [[250, 1167], [750, 1167], [500, 1600]], alpha: FAINT },
+    { points: [[1000, 1167], [750, 1600], [1250, 1600]], alpha: MID },
+    // Half-size accents subdividing two of the mids
+    { points: [[625, 84.5], [875, 84.5], [750, 301]], alpha: BRIGHT },
+    { points: [[250, 734], [125, 950.5], [375, 950.5]], alpha: BRIGHT },
+  ];
   context.save();
-  context.globalAlpha = 0.84;
-  for (let row = 0; row < rows; row += 1) {
-    for (let col = 0; col < cols; col += 1) {
-      const ox = col * tileWidth;
-      const oy = row * tileHeight;
-      // 24,3 45,39 3,39 -> ×2: 48,6 90,78 6,78
-      maybeDrawTri([
-        [ox + 48, oy + 6],
-        [ox + 90, oy + 78],
-        [ox + 6, oy + 78],
-      ], "rgba(255,255,255,0.052)");
-      // 3,18 15,39 -9,39 -> ×2: 6,36 30,78 -18,78
-      maybeDrawTri([
-        [ox + 6, oy + 36],
-        [ox + 30, oy + 78],
-        [ox - 18, oy + 78],
-      ], "rgba(0,0,0,0.055)");
-      // 45,18 57,39 33,39 -> ×2: 90,36 114,78 66,78
-      maybeDrawTri([
-        [ox + 90, oy + 36],
-        [ox + 114, oy + 78],
-        [ox + 66, oy + 78],
-      ], "rgba(255,255,255,0.035)");
-    }
+  for (const shape of shapes) {
+    polygon(context, shape.points, `rgba(255,255,255,${shape.alpha})`);
   }
   context.restore();
 }

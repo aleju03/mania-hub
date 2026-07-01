@@ -41,22 +41,39 @@ float random(vec2 value) {
   return fract(sin(dot(value, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
+// Contribution of the triangle owned by grid cell id, evaluated in absolute
+// grid space so a shape can extend past its own cell without being cut.
+float triangleCell(vec2 p, vec2 id) {
+  float variant = random(id);
+  // Higher threshold than the old sliced version (0.22): whole triangles lit
+  // by the 3x3 scan cover more area each, so fewer cells keep the overall
+  // sparkle density where it was tuned.
+  float sparse = step(0.5, variant);
+  vec2 center = id + vec2(
+    0.22 + random(id + vec2(7.1, 2.9)) * 0.58,
+    0.18 + random(id + vec2(3.7, 9.4)) * 0.62
+  );
+  float scale = 0.44 + random(id + vec2(11.2, 5.8)) * 0.24;
+  vec2 local = vec2((p.x - center.x) / scale, (p.y - center.y) / (scale * 1.18));
+  float tri = max(abs(local.x) * 0.92 + local.y * 0.82, -local.y * 0.56);
+  float shape = 1.0 - smoothstep(0.46, 0.51, tri);
+  return shape * sparse * mix(0.45, 1.0, variant);
+}
+
 float triangleWave(vec2 uv, vec2 grid, float offset) {
   vec2 p = uv * grid;
   p.y -= offset;
   vec2 id = floor(p);
-  float variant = random(id);
-  float sparse = step(0.22, variant);
-  vec2 center = vec2(
-    0.22 + random(id + vec2(7.1, 2.9)) * 0.58,
-    0.18 + random(id + vec2(3.7, 9.4)) * 0.62
-  );
-  vec2 cell = fract(p);
-  float scale = 0.44 + random(id + vec2(11.2, 5.8)) * 0.24;
-  vec2 local = vec2((cell.x - center.x) / scale, (cell.y - center.y) / (scale * 1.18));
-  float tri = max(abs(local.x) * 0.92 + local.y * 0.82, -local.y * 0.56);
-  float shape = 1.0 - smoothstep(0.46, 0.51, tri);
-  return shape * sparse * mix(0.45, 1.0, variant);
+  // Triangles are larger than their cells, so a fragment can be covered by a
+  // neighbor cell's shape. Scanning the 3x3 neighborhood keeps every triangle
+  // whole instead of slicing it at the fract() cell boundary.
+  float value = 0.0;
+  for (int dy = -1; dy <= 1; dy += 1) {
+    for (int dx = -1; dx <= 1; dx += 1) {
+      value = max(value, triangleCell(p, id + vec2(float(dx), float(dy))));
+    }
+  }
+  return value;
 }
 
 // Drifting, twinkling starfield (replaces the triangle flecks on World
