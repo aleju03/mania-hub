@@ -11,8 +11,39 @@ type PresetKind =
   | "rankings"
   | "player"
   | "maps"
+  | "maps-search"
+  | "maps-collections"
   | "farm-helper"
+  | "packs"
+  | "bbcode"
+  | "discord"
   | "replay";
+
+/* Kinds that render one fixed card with no inputs. The preview just
+   requests `?kind=X`; title/subtitle only affect the embed mocks. */
+const STATIC_KINDS: ReadonlySet<PresetKind> = new Set([
+  "maps-search",
+  "maps-collections",
+  "farm-helper",
+  "packs",
+  "bbcode",
+  "discord",
+]);
+
+const STATIC_KIND_NOTES: Record<string, string> = {
+  "maps-search":
+    "Static map-search card: paper search bar with a typed query, result rows with real cover thumbnails from the maps snapshot (abstract title bars), star/keymode chips, and the search tab's filter stickers.",
+  "maps-collections":
+    "Static collections card: three stacks of cover cards labelled with real pattern archetypes and star buckets (the collections tab's grouping). Covers come from the maps snapshot pool.",
+  "farm-helper":
+    "Static farm helper card: reason stickers (missing / improve / old pb) in the app's accent colors, pp-gain tags, grade badges, and the global mania top 50 as the dim avatar backdrop.",
+  packs:
+    "Static card-packs card: five mini maniacards fanned by rarity tier using the real tier gradients and triangle texture, each with a mystery \"?\" player slot.",
+  bbcode:
+    "Static bbcode-editor card: dark code pane with highlighted BBCode markup next to a paper preview pane showing the rendered result.",
+  discord:
+    "Static maniabot card: Discord-style chat panel (slash command in, embed reply out) with the bot avatar, a blurple title sticker, and real command chips. Page is dev-gated but the card ships ready.",
+};
 
 type Preset = {
   key: string;
@@ -23,6 +54,9 @@ type Preset = {
   path: string;
   username?: string;
   scoreId?: number;
+  /* The page renders its <title> without the "- Mania Tracker" suffix
+     (pageSeo appendSiteName: false); keep the embed mocks in sync. */
+  rawTitle?: boolean;
   /* When true, the preset mirrors a route that bakes `?country=XX` into
      its og:image URL. The preview then attaches the currently selected
      country so the endpoint renders the country scoreboard instead of
@@ -72,12 +106,54 @@ const PRESETS: Preset[] = [
     countryAware: true,
   },
   {
+    key: "maps-search",
+    label: "Maps - search",
+    kind: "maps-search",
+    title: "Map search",
+    subtitle: "Search every ranked osu!mania map by title, keymode, stars, and status.",
+    path: "/maps?tab=search",
+  },
+  {
+    key: "maps-collections",
+    label: "Maps - collections",
+    kind: "maps-collections",
+    title: "Map collections",
+    subtitle: "Browse curated osu!mania map collections grouped by pattern and star rating.",
+    path: "/maps?tab=collections",
+  },
+  {
     key: "farm-helper",
     label: "Farm Helper",
     kind: "farm-helper",
     title: "Farm Helper",
     subtitle: "Find osu!mania farm maps worth playing, based on nearby players, missing clears, improvable scores, and old PBs.",
     path: "/farm-helper",
+  },
+  {
+    key: "packs",
+    label: "Card Packs",
+    kind: "packs",
+    title: "Card Packs",
+    subtitle: "Tear open a booster pack of five maniacards: random osu!mania players minted as collectible cards with skill stats and rarity tiers.",
+    path: "/packs",
+  },
+  {
+    key: "bbcode",
+    label: "BBCode Editor",
+    kind: "bbcode",
+    title: "BBCode editor",
+    subtitle: "Write and preview osu! profile BBCode for your me! page, with a live preview and one-click copy.",
+    path: "/bbcode",
+  },
+  {
+    key: "discord",
+    label: "Discord (maniabot)",
+    kind: "discord",
+    title: "maniabot - Mania Hub for Discord",
+    subtitle: "Every osu!mania lookup as a slash command, plus live feeds that post new top plays, snipes, and farm maps into any channel.",
+    path: "/discord",
+    rawTitle: true,
+    noindex: true,
   },
   {
     key: "player",
@@ -199,7 +275,7 @@ function OgPreviewPage() {
       });
       return `/api/og?${params.toString()}`;
     }
-    if (kind === "farm-helper") {
+    if (STATIC_KINDS.has(kind)) {
       const params = new URLSearchParams({
         kind,
         t: String(cacheBuster),
@@ -234,7 +310,7 @@ function OgPreviewPage() {
     ? `${username} - ${SITE_NAME}`
     : kind === "replay"
       ? replayMockTitle || fallbackReplayTitle
-      : title === SITE_NAME
+      : title === SITE_NAME || currentPreset.rawTitle
         ? title
         : `${title} - ${SITE_NAME}`;
   const mockSubtitle = kind === "player"
@@ -317,12 +393,10 @@ function OgPreviewPage() {
               mosaic of cover art from the country's favourites pool
             </span>
           </div>
-        ) : kind === "farm-helper" ? (
+        ) : STATIC_KINDS.has(kind) ? (
           <div className="text-[11px] text-osu-f1/80 leading-relaxed">
-            Static farm helper card: reason stickers (missing / improve / old pb)
-            in the app's accent colors, pp-gain tags, grade badges, and the
-            global mania top 50 as the dim avatar backdrop. No inputs; title and
-            subtitle here only affect the embed mock below.
+            {STATIC_KIND_NOTES[kind]} No inputs; title and subtitle here only
+            affect the embed mocks below.
           </div>
         ) : (
           <div className="space-y-3">

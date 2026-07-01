@@ -44,6 +44,7 @@ export const Route = createFileRoute("/packs")({
     description: "Tear open a booster pack of five maniacards: random osu!mania players minted as collectible cards with skill stats and rarity tiers.",
     path: "/packs",
     origin: match.context.origin,
+    imageKind: "packs",
   }),
   component: PacksPage,
 });

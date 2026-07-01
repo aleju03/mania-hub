@@ -16,6 +16,7 @@ export const Route = createFileRoute("/bbcode")({
         "Write and preview osu! profile BBCode for your me! page, with a live preview and one-click copy.",
       path: "/bbcode",
       origin: match.context.origin,
+      imageKind: "bbcode",
     }),
   component: BBCodePage,
 });

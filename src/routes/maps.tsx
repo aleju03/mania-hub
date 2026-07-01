@@ -939,6 +939,21 @@ function hasValidMapsDataShape(data: CountryMapsData | null): data is CountryMap
 
 export const Route = createFileRoute("/maps")({
   head: ({ match }) => {
+    // Search + collections are global catalog views with their own OG
+    // cards; the country-scoped lenses share the country mosaic below.
+    const tab = match.search.tab;
+    if (tab === "search" || tab === "collections") {
+      const isSearch = tab === "search";
+      return pageSeo({
+        title: isSearch ? "Map search" : "Map collections",
+        description: isSearch
+          ? "Search every ranked osu!mania map by title, keymode, stars, and status."
+          : "Browse curated osu!mania map collections grouped by pattern and star rating.",
+        path: withSearchParams("/maps", { tab }),
+        origin: match.context.origin,
+        imageKind: isSearch ? "maps-search" : "maps-collections",
+      });
+    }
     const country = match.search.country;
     const countryName = country ? getCountryName(country) : null;
     return pageSeo({

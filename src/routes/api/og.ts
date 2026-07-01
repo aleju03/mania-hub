@@ -17,6 +17,7 @@ import { getDisplayedRank, getManiaJudgementCounts, getModAcronyms } from "../..
 import { getCachedOgImage, putOgImage } from "../../lib/r2-cache";
 import { OG_IMAGE_VERSION } from "../../lib/seo";
 import { computeManiaSkills, getManiaCardTier, MANIA_TIER_STYLES } from "../../lib/maniacard";
+import type { ManiaCardTier } from "../../lib/maniacard";
 import type { OsuCovers, OsuScore } from "../../lib/types";
 
 const WIDTH = 1200;
@@ -2966,6 +2967,1127 @@ async function renderFarmHelperOg(request: Request): Promise<Response> {
   return response;
 }
 
+/* Maps search layout: the global catalog's search tab. A paper search
+   bar with a typed query and caret, three result-row cards with real
+   cover thumbnails (title/artist stay abstract bars — no fake beatmap
+   names), and the search tab's filter chips as small stickers. Cover
+   art comes from the same maps snapshot pool the other cards use;
+   missing pool just means dark thumbnail blocks. */
+function magnifierDataUrl(color: string): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="40" cy="40" r="26" fill="none" stroke="${color}" stroke-width="11"/><line x1="60" y1="60" x2="88" y2="88" stroke="${color}" stroke-width="13" stroke-linecap="round"/></svg>`;
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+}
+
+function searchResultRow(props: {
+  cover: string | null;
+  titleBarWidth: number;
+  subBarWidth: number;
+  stars: string;
+  keymode: string;
+  keymodeColor: string;
+  rotate: number;
+  top: number;
+  left: number;
+  key: string;
+}) {
+  const { cover, titleBarWidth, subBarWidth, stars, keymode, keymodeColor, rotate, top, left, key } = props;
+  return h(
+    "div",
+    {
+      key,
+      style: {
+        position: "absolute",
+        top: `${top}px`,
+        left: `${left}px`,
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        width: "660px",
+        padding: "16px 22px",
+        background: "#f3ece4",
+        boxSizing: "border-box",
+        transform: `rotate(${rotate}deg)`,
+        gap: "20px",
+      },
+    },
+    [
+      h(
+        "div",
+        {
+          key: "thumb",
+          style: {
+            display: "flex",
+            width: "128px",
+            height: "72px",
+            background: PHOTO_BG_COLOR,
+            overflow: "hidden",
+            flexShrink: 0,
+          },
+        },
+        cover
+          ? h("img", {
+              src: cover,
+              style: { width: "128px", height: "72px", objectFit: "cover" },
+            })
+          : null,
+      ),
+      // Abstract title + artist bars, farm-helper style: honest
+      // placeholders instead of invented beatmap names.
+      h(
+        "div",
+        {
+          key: "bars",
+          style: {
+            display: "flex",
+            flexDirection: "column",
+            flex: "1",
+            gap: "12px",
+          },
+        },
+        [
+          h("div", {
+            key: "title",
+            style: { display: "flex", width: `${titleBarWidth}px`, height: "16px", borderRadius: "8px", background: "#cfc4b8" },
+          }),
+          h("div", {
+            key: "sub",
+            style: { display: "flex", width: `${subBarWidth}px`, height: "12px", borderRadius: "6px", background: "#ddd3c8" },
+          }),
+        ],
+      ),
+      h(
+        "div",
+        {
+          key: "stars",
+          style: {
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: "6px",
+            flexShrink: 0,
+          },
+        },
+        [
+          h("img", { key: "icon", src: starDataUrl("#b3830f"), style: { width: "22px", height: "22px" } }),
+          h("div", { key: "num", style: { fontSize: "24px", fontWeight: 900, color: "#1a1317" } }, stars),
+        ],
+      ),
+      h(
+        "div",
+        {
+          key: "keys",
+          style: {
+            display: "flex",
+            padding: "5px 12px",
+            background: keymodeColor,
+            color: "#1a1317",
+            fontSize: "22px",
+            fontWeight: 900,
+            lineHeight: "1.0",
+            flexShrink: 0,
+          },
+        },
+        keymode,
+      ),
+    ],
+  );
+}
+
+async function renderMapsSearchOg(request: Request): Promise<Response> {
+  const [[regularFont, heavyFont], pool] = await Promise.all([
+    loadOgFonts(request),
+    fetchMapsOgPoolFromLiveBackend("CR", "favourites"),
+  ]);
+
+  const rng = mulberry32(hashString("maps-search"));
+  const covers = pool ? shuffle(pool.covers, rng) : [];
+
+  // Illustrative rows: star ratings + keymodes mirror the search tab's
+  // filters (keys, stars); the bars stand in for title/artist.
+  const rows = [
+    { stars: "6.12", keymode: "4K", keymodeColor: "#66ccff", titleBarWidth: 260, subBarWidth: 170, rotate: -1.0, top: 178, left: 440 },
+    { stars: "4.87", keymode: "7K", keymodeColor: "#c98bff", titleBarWidth: 220, subBarWidth: 190, rotate: 0.9, top: 316, left: 470 },
+    { stars: "5.43", keymode: "4K", keymodeColor: "#66ccff", titleBarWidth: 280, subBarWidth: 150, rotate: -0.7, top: 454, left: 450 },
+  ];
+
+  // Filter-chip stickers on the left rail: the real search filters.
+  const chips = [
+    { text: "4K", background: "#66ccff", top: 250, left: 96, rotate: -5 },
+    { text: "7K", background: "#c98bff", top: 252, left: 196, rotate: 4 },
+    { text: "ranked", background: "#f3ece4", top: 330, left: 110, rotate: -3 },
+    { text: "loved", background: "#ff99cc", top: 402, left: 150, rotate: 5 },
+  ];
+
+  const response = new ImageResponse(
+    h(
+      "div",
+      {
+        style: {
+          width: `${WIDTH}px`,
+          height: `${HEIGHT}px`,
+          display: "flex",
+          position: "relative",
+          overflow: "hidden",
+          background: SURFACE_COLOR,
+          fontFamily: '"Torus OG"',
+          color: "#ffffff",
+        },
+      },
+      [
+        // Search bar: paper card with magnifier, typed query, and caret.
+        h(
+          "div",
+          {
+            key: "searchbar",
+            style: {
+              position: "absolute",
+              top: "48px",
+              left: "440px",
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "center",
+              width: "680px",
+              padding: "20px 26px",
+              background: "#f3ece4",
+              boxSizing: "border-box",
+              transform: "rotate(-1.2deg)",
+              gap: "18px",
+            },
+          },
+          [
+            h("img", { key: "mag", src: magnifierDataUrl("#1a1317"), style: { width: "38px", height: "38px" } }),
+            h(
+              "div",
+              { key: "query", style: { fontSize: "36px", fontWeight: 900, color: "#1a1317", lineHeight: "1.0" } },
+              "chordjack 4k",
+            ),
+            h("div", {
+              key: "caret",
+              style: { display: "flex", width: "6px", height: "40px", background: "#ff66aa" },
+            }),
+          ],
+        ),
+
+        ...rows.map((row, i) =>
+          searchResultRow({
+            key: `row-${i}`,
+            cover: covers[i] ?? null,
+            titleBarWidth: row.titleBarWidth,
+            subBarWidth: row.subBarWidth,
+            stars: row.stars,
+            keymode: row.keymode,
+            keymodeColor: row.keymodeColor,
+            rotate: row.rotate,
+            top: row.top,
+            left: row.left,
+          }),
+        ),
+
+        ...chips.map((chip, i) =>
+          sticker({
+            key: `chip-${i}`,
+            text: chip.text,
+            fontSize: 26,
+            background: chip.background,
+            color: "#1a1317",
+            paddingX: 14,
+            paddingY: 10,
+            rotate: chip.rotate,
+            top: chip.top,
+            left: chip.left,
+          }),
+        ),
+
+        // Title sticker, top-left.
+        sticker({
+          key: "title",
+          text: "map search",
+          subText: "EVERY RANKED MANIA MAP",
+          fontSize: 58,
+          background: "#ff66aa",
+          color: "#1a1317",
+          paddingX: 26,
+          paddingY: 18,
+          rotate: -3,
+          top: 60,
+          left: 60,
+        }),
+
+        sticker({
+          key: "brand",
+          text: "Mania Tracker",
+          fontSize: 16,
+          background: "#f3ece4",
+          color: "#1a1317",
+          paddingX: 10,
+          paddingY: 6,
+          rotate: -2,
+          top: 560,
+          left: 74,
+        }),
+      ],
+    ),
+    { width: WIDTH, height: HEIGHT, fonts: ogFontList(regularFont, heavyFont) },
+  );
+  response.headers.set("Cache-Control", OG_CACHE_HEADER);
+  return response;
+}
+
+/* Maps collections layout: three stacks of cover cards, one per pattern
+   collection, labelled with real pattern archetypes and star buckets
+   (the collections tab's actual grouping). Each stack is two tilted
+   backing covers under a captioned polaroid, so it reads as "sets of
+   maps" at a glance. */
+function collectionStack(props: {
+  covers: Array<string | null>;
+  label: string;
+  bucket: string;
+  badge?: string;
+  badgeColor?: string;
+  top: number;
+  left: number;
+  key: string;
+}) {
+  const { covers, label, bucket, badge, badgeColor, top, left, key } = props;
+  const backSize = 210;
+  const backHeight = Math.round(backSize * 0.56);
+  const back = (cover: string | null, dx: number, dy: number, rotate: number, backKey: string) =>
+    h(
+      "div",
+      {
+        key: backKey,
+        style: {
+          position: "absolute",
+          top: `${top + dy}px`,
+          left: `${left + dx}px`,
+          display: "flex",
+          width: `${backSize + 20}px`,
+          height: `${backHeight + 20}px`,
+          padding: "10px",
+          background: POLAROID_FRAME_COLOR,
+          boxSizing: "border-box",
+          transform: `rotate(${rotate}deg)`,
+        },
+      },
+      h(
+        "div",
+        { style: { display: "flex", width: `${backSize}px`, height: `${backHeight}px`, background: PHOTO_BG_COLOR, overflow: "hidden" } },
+        cover
+          ? h("img", { src: cover, style: { width: `${backSize}px`, height: `${backHeight}px`, objectFit: "cover" } })
+          : null,
+      ),
+    );
+
+  return [
+    back(covers[1] ?? null, -26, 26, -7, `${key}-b1`),
+    back(covers[2] ?? null, 60, 40, 6, `${key}-b2`),
+    polaroid({
+      key: `${key}-front`,
+      imgSrc: covers[0] ?? "",
+      variant: "flag",
+      caption: label,
+      subCaption: bucket,
+      captionFontSize: 30,
+      size: 250,
+      rotate: -1.5,
+      top,
+      left,
+      badge,
+      badgeColor,
+    }),
+  ];
+}
+
+async function renderMapsCollectionsOg(request: Request): Promise<Response> {
+  const [[regularFont, heavyFont], pool] = await Promise.all([
+    loadOgFonts(request),
+    fetchMapsOgPoolFromLiveBackend("CR", "favourites"),
+  ]);
+
+  const rng = mulberry32(hashString("maps-collections"));
+  const covers = pool ? shuffle(pool.covers, rng) : [];
+
+  // Real collection groupings: pattern archetype x star bucket.
+  const stacks = [
+    { label: "jumpstream", bucket: "4-5 stars", top: 200, left: 96 },
+    { label: "chordjack", bucket: "5-6 stars", top: 168, left: 470, badge: "24 maps", badgeColor: "#ff66aa" },
+    { label: "long notes", bucket: "3-4 stars", top: 212, left: 844 },
+  ];
+
+  const response = new ImageResponse(
+    h(
+      "div",
+      {
+        style: {
+          width: `${WIDTH}px`,
+          height: `${HEIGHT}px`,
+          display: "flex",
+          position: "relative",
+          overflow: "hidden",
+          background: SURFACE_COLOR,
+          fontFamily: '"Torus OG"',
+          color: "#ffffff",
+        },
+      },
+      [
+        ...stacks.flatMap((stack, i) =>
+          collectionStack({
+            key: `stack-${i}`,
+            covers: [covers[i * 3] ?? null, covers[i * 3 + 1] ?? null, covers[i * 3 + 2] ?? null],
+            label: stack.label,
+            bucket: stack.bucket,
+            badge: stack.badge,
+            badgeColor: stack.badgeColor,
+            top: stack.top,
+            left: stack.left,
+          }),
+        ),
+
+        sticker({
+          key: "title",
+          text: "collections",
+          subText: "MANIA MAPS BY PATTERN AND STARS",
+          fontSize: 58,
+          background: "#ff66aa",
+          color: "#1a1317",
+          paddingX: 26,
+          paddingY: 18,
+          rotate: -3,
+          top: 44,
+          left: 60,
+        }),
+
+        sticker({
+          key: "brand",
+          text: "Mania Tracker",
+          fontSize: 16,
+          background: "#f3ece4",
+          color: "#1a1317",
+          paddingX: 10,
+          paddingY: 6,
+          rotate: 2,
+          top: 566,
+          left: 1006,
+        }),
+      ],
+    ),
+    { width: WIDTH, height: HEIGHT, fonts: ogFontList(regularFont, heavyFont) },
+  );
+  response.headers.set("Cache-Control", OG_CACHE_HEADER);
+  return response;
+}
+
+/* Card packs layout: a hand of five mini maniacards fanned out, one per
+   rarity tier, using the real tier gradients + triangle texture from
+   the in-app card (that colour ramp IS the tier identity). The player
+   slot on each card is a "?" — you don't know who you'll pull until
+   you tear the pack open. */
+/* Badge tile + mania glyph baked into one SVG. Satori misplaces img
+   elements nested inside rotated containers (the glyph drifted or
+   vanished per-card in the fan), but imgs that are DIRECT children of
+   the rotated card render correctly — so the whole badge ships as a
+   single flat image. */
+function packBadgeDataUrl(): string {
+  const scale = (52 / 1080).toFixed(5);
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 88 88">` +
+    `<rect x="1.5" y="1.5" width="85" height="85" rx="20" fill="#000000" fill-opacity="0.22" stroke="#ffffff" stroke-opacity="0.34" stroke-width="3"/>` +
+    `<g transform="translate(18,18) scale(${scale}) translate(40,40) matrix(1,0,0,-1,0,860)"><path d="${MANIA_GLYPH_D}" fill="#ffffff"/></g>` +
+    `</svg>`;
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+}
+
+function packCard(props: {
+  tier: ManiaCardTier;
+  rotate: number;
+  top: number;
+  left: number;
+  showLabel?: boolean;
+  key: string;
+}) {
+  const { tier, rotate, top, left, showLabel = false, key } = props;
+  const style = MANIA_TIER_STYLES[tier];
+  const W = 220;
+  const H = 312;
+  // Everything except the full-bleed texture lives in normal flow:
+  // Satori misplaces absolutely-positioned imgs inside rotated
+  // subtrees (the badge/stars drifted per-card), while flow imgs
+  // render correctly — same reason the polaroid covers work.
+  return h(
+    "div",
+    {
+      key,
+      style: {
+        position: "absolute",
+        top: `${top}px`,
+        left: `${left}px`,
+        display: "flex",
+        flexDirection: "column",
+        width: `${W}px`,
+        height: `${H}px`,
+        padding: "14px",
+        borderRadius: "16px",
+        border: "3px solid rgba(255,255,255,0.30)",
+        boxSizing: "border-box",
+        background: style.badgeGradient,
+        overflow: "hidden",
+        transform: `rotate(${rotate}deg)`,
+        boxShadow: `0 0 34px ${style.glowColor}`,
+      },
+    },
+    [
+      h("img", {
+        key: "tris",
+        src: triangleOverlayDataUrl(W, H),
+        style: { position: "absolute", top: "0", left: "0", width: `${W}px`, height: `${H}px` },
+      }),
+      // Mini mode badge + blank name plate, echoing the full card's header.
+      h(
+        "div",
+        {
+          key: "header",
+          style: { display: "flex", flexDirection: "row", alignItems: "center", gap: "10px" },
+        },
+        [
+          h("img", { key: "badge", src: packBadgeDataUrl(), style: { width: "44px", height: "44px" } }),
+          h("div", {
+            key: "plate",
+            style: { display: "flex", flex: "1", height: "22px", borderRadius: "7px", background: "rgba(0,0,0,0.32)" },
+          }),
+        ],
+      ),
+      // Mystery player slot.
+      h(
+        "div",
+        {
+          key: "slot",
+          style: {
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            alignSelf: "center",
+            marginTop: "18px",
+            width: "160px",
+            height: "150px",
+            borderRadius: "12px",
+            background: "rgba(0,0,0,0.28)",
+            border: "3px solid rgba(255,255,255,0.16)",
+            boxSizing: "border-box",
+          },
+        },
+        h(
+          "div",
+          { style: { fontSize: "84px", fontWeight: 900, color: "rgba(255,255,255,0.55)", lineHeight: "1.0" } },
+          "?",
+        ),
+      ),
+      // Tier label only on the fully visible top card — on the covered
+      // cards the fan would chop the text mid-word, so the rarity ramp
+      // is carried by the colours (and the sticker legend).
+      showLabel
+        ? h(
+            "div",
+            {
+              key: "tier",
+              style: {
+                display: "flex",
+                justifyContent: "center",
+                marginTop: "22px",
+                fontSize: "26px",
+                fontWeight: 900,
+                color: "#ffffff",
+                textShadow: `0 0 16px ${style.glowColor}, 0 2px 4px rgba(0,0,0,0.5)`,
+              },
+            },
+            style.label,
+          )
+        : null,
+    ],
+  );
+}
+
+async function renderPacksOg(request: Request): Promise<Response> {
+  const [regularFont, heavyFont] = await loadOgFonts(request);
+
+  // Rarity ramp fanned left to right (five of the nine tiers, in
+  // order); world class — the top of the ladder — lands on top (Satori
+  // stacks by DOM order) and is the only card with a readable label.
+  // Tilts stay within ~7deg: Satori offsets images inside rotated
+  // subtrees proportionally to the angle, so steeper fans smear the
+  // badge art off the cards.
+  const fan: Array<{ tier: ManiaCardTier; rotate: number; top: number; left: number; showLabel?: boolean }> = [
+    { tier: "common", rotate: -7, top: 200, left: 548 },
+    { tier: "rare", rotate: -3.5, top: 176, left: 654 },
+    { tier: "legendary", rotate: 0, top: 164, left: 760 },
+    { tier: "ascendant", rotate: 3.5, top: 176, left: 866 },
+    { tier: "worldClass", rotate: 7, top: 200, left: 950, showLabel: true },
+  ];
+
+  const response = new ImageResponse(
+    h(
+      "div",
+      {
+        style: {
+          width: `${WIDTH}px`,
+          height: `${HEIGHT}px`,
+          display: "flex",
+          position: "relative",
+          overflow: "hidden",
+          background: SURFACE_COLOR,
+          fontFamily: '"Torus OG"',
+          color: "#ffffff",
+        },
+      },
+      [
+        ...fan.map((slot, i) =>
+          packCard({
+            key: `card-${i}`,
+            tier: slot.tier,
+            rotate: slot.rotate,
+            top: slot.top,
+            left: slot.left,
+            showLabel: slot.showLabel,
+          }),
+        ),
+
+        sticker({
+          key: "title",
+          text: "card packs",
+          subText: "FIVE MANIACARDS PER PACK",
+          fontSize: 72,
+          background: "#ff66aa",
+          color: "#1a1317",
+          paddingX: 30,
+          paddingY: 22,
+          rotate: -2,
+          top: 236,
+          left: 70,
+        }),
+
+        // Rarity-ramp legend for the fan's colour run.
+        sticker({
+          key: "ramp",
+          text: "common to world class",
+          fontSize: 24,
+          background: "#f3ece4",
+          color: "#1a1317",
+          paddingX: 14,
+          paddingY: 10,
+          rotate: 2,
+          top: 404,
+          left: 96,
+        }),
+
+        sticker({
+          key: "brand",
+          text: "Mania Tracker",
+          fontSize: 16,
+          background: "#f3ece4",
+          color: "#1a1317",
+          paddingX: 10,
+          paddingY: 6,
+          rotate: -2,
+          top: 560,
+          left: 74,
+        }),
+      ],
+    ),
+    { width: WIDTH, height: HEIGHT, fonts: ogFontList(regularFont, heavyFont) },
+  );
+  response.headers.set("Cache-Control", OG_CACHE_HEADER);
+  return response;
+}
+
+/* BBCode editor layout: the editor's split view as two cards — a dark
+   code pane with highlighted BBCode markup on the left, and a paper
+   preview pane showing the rendered result on the right. The two small
+   corner stickers spell out the relationship. */
+function bbcodeLine(key: string, tokens: Array<{ text: string; color: string; bold?: boolean }>) {
+  return h(
+    "div",
+    { key, style: { display: "flex", flexDirection: "row" } },
+    tokens.map((token, i) =>
+      h(
+        "div",
+        {
+          key: `t-${i}`,
+          style: {
+            fontSize: "24px",
+            fontWeight: token.bold ? 900 : 400,
+            color: token.color,
+            lineHeight: "1.0",
+            whiteSpace: "pre",
+          },
+        },
+        token.text,
+      ),
+    ),
+  );
+}
+
+async function renderBBCodeOg(request: Request): Promise<Response> {
+  const [regularFont, heavyFont] = await loadOgFonts(request);
+
+  const TAG = "#66ccff";
+  const ATTR = "#ffcc22";
+  const TEXT = "#e8e3ec";
+  const PINK = "#ff66aa";
+
+  const response = new ImageResponse(
+    h(
+      "div",
+      {
+        style: {
+          width: `${WIDTH}px`,
+          height: `${HEIGHT}px`,
+          display: "flex",
+          position: "relative",
+          overflow: "hidden",
+          background: SURFACE_COLOR,
+          fontFamily: '"Torus OG"',
+          color: "#ffffff",
+        },
+      },
+      [
+        // Code pane.
+        h(
+          "div",
+          {
+            key: "code",
+            style: {
+              position: "absolute",
+              top: "224px",
+              left: "90px",
+              display: "flex",
+              flexDirection: "column",
+              width: "480px",
+              height: "320px",
+              padding: "34px 30px",
+              background: PHOTO_BG_COLOR,
+              border: "1px solid rgba(255,255,255,0.10)",
+              borderRadius: "10px",
+              boxSizing: "border-box",
+              transform: "rotate(-1.4deg)",
+              gap: "26px",
+            },
+          },
+          [
+            bbcodeLine("l1", [
+              { text: "[b]", color: TAG },
+              { text: "new top play!", color: TEXT, bold: true },
+              { text: "[/b]", color: TAG },
+            ]),
+            bbcodeLine("l2", [
+              { text: "[color=", color: TAG },
+              { text: "#ff66aa", color: ATTR },
+              { text: "]", color: TAG },
+              { text: "mania time", color: PINK },
+              { text: "[/color]", color: TAG },
+            ]),
+            bbcodeLine("l3", [
+              { text: "[img]", color: TAG },
+              { text: "maniacard.png", color: ATTR },
+              { text: "[/img]", color: TAG },
+            ]),
+            bbcodeLine("l4", [
+              { text: "[url]", color: TAG },
+              { text: "mania-tracker.com", color: ATTR },
+              { text: "[/url]", color: TAG },
+            ]),
+          ],
+        ),
+
+        // Preview pane: the same content, rendered.
+        h(
+          "div",
+          {
+            key: "preview",
+            style: {
+              position: "absolute",
+              top: "236px",
+              left: "664px",
+              display: "flex",
+              flexDirection: "column",
+              width: "440px",
+              height: "320px",
+              padding: "34px 32px",
+              background: "#f3ece4",
+              boxSizing: "border-box",
+              transform: "rotate(1.2deg)",
+              gap: "20px",
+            },
+          },
+          [
+            h(
+              "div",
+              { key: "p1", style: { fontSize: "28px", fontWeight: 900, color: "#1a1317", lineHeight: "1.0" } },
+              "new top play!",
+            ),
+            h(
+              "div",
+              { key: "p2", style: { fontSize: "26px", fontWeight: 900, color: PINK, lineHeight: "1.0" } },
+              "mania time",
+            ),
+            // Image placeholder standing in for maniacard.png.
+            h("div", {
+              key: "p3",
+              style: { display: "flex", width: "220px", height: "84px", borderRadius: "6px", background: "#cfc4b8" },
+            }),
+            h(
+              "div",
+              {
+                key: "p4",
+                style: { fontSize: "22px", fontWeight: 900, color: PINK, lineHeight: "1.0", textDecoration: "underline" },
+              },
+              "mania-tracker.com",
+            ),
+          ],
+        ),
+
+        // Corner labels tying the panes together.
+        sticker({
+          key: "write",
+          text: "you write",
+          fontSize: 22,
+          background: "#f3ece4",
+          color: "#1a1317",
+          paddingX: 12,
+          paddingY: 8,
+          rotate: -3,
+          top: 196,
+          left: 112,
+        }),
+        sticker({
+          key: "shows",
+          text: "your profile shows",
+          fontSize: 22,
+          background: "#ff99cc",
+          color: "#1a1317",
+          paddingX: 12,
+          paddingY: 8,
+          rotate: 2,
+          top: 208,
+          left: 686,
+        }),
+
+        sticker({
+          key: "title",
+          text: "bbcode editor",
+          subText: "WRITE / PREVIEW / COPY",
+          fontSize: 64,
+          background: "#ff66aa",
+          color: "#1a1317",
+          paddingX: 28,
+          paddingY: 20,
+          rotate: -3,
+          top: 52,
+          left: 60,
+        }),
+
+        sticker({
+          key: "brand",
+          text: "Mania Tracker",
+          fontSize: 16,
+          background: "#f3ece4",
+          color: "#1a1317",
+          paddingX: 10,
+          paddingY: 6,
+          rotate: 2,
+          top: 566,
+          left: 1006,
+        }),
+      ],
+    ),
+    { width: WIDTH, height: HEIGHT, fonts: ogFontList(regularFont, heavyFont) },
+  );
+  response.headers.set("Cache-Control", OG_CACHE_HEADER);
+  return response;
+}
+
+/* Discord (maniabot) layout: a Discord-style chat panel — someone runs
+   a slash command, maniabot answers with an embed — next to a blurple
+   title sticker and a few real command chips. The panel stays untilted
+   so it reads as an app window, not a scrapbook card. */
+const DISCORD_BLURPLE = "#5865F2";
+const DISCORD_SURFACE = "#313338";
+const DISCORD_EMBED = "#2b2d31";
+const DISCORD_MUTED = "#4e5058";
+
+function discordUserRow(key: string, command: string) {
+  return h(
+    "div",
+    { key, style: { display: "flex", flexDirection: "row", gap: "16px" } },
+    [
+      h("div", {
+        key: "avatar",
+        style: { display: "flex", width: "44px", height: "44px", borderRadius: "22px", background: DISCORD_MUTED, flexShrink: 0 },
+      }),
+      h(
+        "div",
+        { key: "body", style: { display: "flex", flexDirection: "column", gap: "10px", paddingTop: "4px" } },
+        [
+          h("div", {
+            key: "name",
+            style: { display: "flex", width: "110px", height: "12px", borderRadius: "6px", background: DISCORD_MUTED },
+          }),
+          h(
+            "div",
+            {
+              key: "cmd",
+              style: {
+                display: "flex",
+                padding: "6px 12px",
+                borderRadius: "6px",
+                background: "rgba(88,101,242,0.30)",
+                color: "#c9cdfb",
+                fontSize: "24px",
+                fontWeight: 900,
+                lineHeight: "1.0",
+              },
+            },
+            command,
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
+async function renderDiscordOg(request: Request): Promise<Response> {
+  const [regularFont, heavyFont] = await loadOgFonts(request);
+  const botAvatarUrl = new URL("/images/discord/bot-avatar.png", getAssetOrigin(request)).toString();
+
+  const response = new ImageResponse(
+    h(
+      "div",
+      {
+        style: {
+          width: `${WIDTH}px`,
+          height: `${HEIGHT}px`,
+          display: "flex",
+          position: "relative",
+          overflow: "hidden",
+          background: SURFACE_COLOR,
+          fontFamily: '"Torus OG"',
+          color: "#ffffff",
+        },
+      },
+      [
+        // Chat panel.
+        h(
+          "div",
+          {
+            key: "chat",
+            style: {
+              position: "absolute",
+              top: "64px",
+              left: "510px",
+              display: "flex",
+              flexDirection: "column",
+              width: "620px",
+              height: "502px",
+              padding: "28px 30px",
+              borderRadius: "14px",
+              background: DISCORD_SURFACE,
+              boxSizing: "border-box",
+              gap: "24px",
+            },
+          },
+          [
+            discordUserRow("user1", "/maniacard"),
+
+            // maniabot reply with embed.
+            h(
+              "div",
+              { key: "bot", style: { display: "flex", flexDirection: "row", gap: "16px" } },
+              [
+                h("img", {
+                  key: "avatar",
+                  src: botAvatarUrl,
+                  style: { width: "44px", height: "44px", borderRadius: "22px", flexShrink: 0 },
+                }),
+                h(
+                  "div",
+                  { key: "body", style: { display: "flex", flexDirection: "column", gap: "10px", paddingTop: "2px" } },
+                  [
+                    h(
+                      "div",
+                      { key: "name", style: { display: "flex", flexDirection: "row", alignItems: "center", gap: "8px" } },
+                      [
+                        h("div", { key: "n", style: { fontSize: "22px", fontWeight: 900, color: "#ffffff", lineHeight: "1.0" } }, "maniabot"),
+                        h(
+                          "div",
+                          {
+                            key: "badge",
+                            style: {
+                              display: "flex",
+                              padding: "3px 7px",
+                              borderRadius: "4px",
+                              background: DISCORD_BLURPLE,
+                              color: "#ffffff",
+                              fontSize: "13px",
+                              fontWeight: 900,
+                              lineHeight: "1.0",
+                              letterSpacing: "0.04em",
+                            },
+                          },
+                          "APP",
+                        ),
+                      ],
+                    ),
+                    h(
+                      "div",
+                      {
+                        key: "embed",
+                        style: {
+                          display: "flex",
+                          flexDirection: "row",
+                          borderRadius: "8px",
+                          overflow: "hidden",
+                          background: DISCORD_EMBED,
+                        },
+                      },
+                      [
+                        h("div", { key: "bar", style: { display: "flex", width: "5px", background: "#ff66aa", flexShrink: 0 } }),
+                        h(
+                          "div",
+                          { key: "content", style: { display: "flex", flexDirection: "column", padding: "18px 22px", gap: "14px", width: "440px" } },
+                          [
+                            h("div", {
+                              key: "title",
+                              style: { display: "flex", width: "240px", height: "14px", borderRadius: "7px", background: DISCORD_MUTED },
+                            }),
+                            h(
+                              "div",
+                              { key: "stats", style: { display: "flex", flexDirection: "row", alignItems: "center", gap: "16px" } },
+                              [
+                                h("img", { key: "grade", src: gradeImgUrl(request, "S"), style: { width: "64px", height: "32px" } }),
+                                h("div", { key: "pp", style: { fontSize: "30px", fontWeight: 900, color: "#ff66aa", lineHeight: "1.0" } }, "+264pp"),
+                                h("div", { key: "acc", style: { fontSize: "22px", color: "#b5bac1", lineHeight: "1.0" } }, "98.12%"),
+                              ],
+                            ),
+                            h("div", {
+                              key: "body1",
+                              style: { display: "flex", width: "330px", height: "10px", borderRadius: "5px", background: "#3f4147" },
+                            }),
+                            h("div", {
+                              key: "body2",
+                              style: { display: "flex", width: "260px", height: "10px", borderRadius: "5px", background: "#3f4147" },
+                            }),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            discordUserRow("user2", "/farm"),
+
+            // Message input bar pinned to the panel's bottom.
+            h(
+              "div",
+              {
+                key: "input",
+                style: {
+                  display: "flex",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginTop: "auto",
+                  padding: "12px 16px",
+                  borderRadius: "10px",
+                  background: "#383a40",
+                  gap: "14px",
+                },
+              },
+              [
+                h("div", {
+                  key: "plus",
+                  style: { display: "flex", width: "26px", height: "26px", borderRadius: "13px", background: DISCORD_MUTED, flexShrink: 0 },
+                }),
+                h("div", {
+                  key: "ph",
+                  style: { display: "flex", width: "190px", height: "12px", borderRadius: "6px", background: DISCORD_MUTED },
+                }),
+              ],
+            ),
+          ],
+        ),
+
+        // Blurple title sticker.
+        sticker({
+          key: "title",
+          text: "maniabot",
+          subText: "MANIA HUB FOR DISCORD",
+          fontSize: 72,
+          background: DISCORD_BLURPLE,
+          color: "#ffffff",
+          paddingX: 30,
+          paddingY: 22,
+          rotate: -2,
+          top: 150,
+          left: 70,
+        }),
+
+        // Real slash-command chips.
+        sticker({
+          key: "cmd1",
+          text: "/recent",
+          fontSize: 24,
+          background: "#f3ece4",
+          color: DISCORD_BLURPLE,
+          paddingX: 14,
+          paddingY: 10,
+          rotate: -4,
+          top: 330,
+          left: 90,
+        }),
+        sticker({
+          key: "cmd2",
+          text: "/rankings",
+          fontSize: 24,
+          background: "#f3ece4",
+          color: DISCORD_BLURPLE,
+          paddingX: 14,
+          paddingY: 10,
+          rotate: 3,
+          top: 392,
+          left: 170,
+        }),
+        sticker({
+          key: "cmd3",
+          text: "/snipes",
+          fontSize: 24,
+          background: "#f3ece4",
+          color: DISCORD_BLURPLE,
+          paddingX: 14,
+          paddingY: 10,
+          rotate: -2,
+          top: 456,
+          left: 104,
+        }),
+
+        sticker({
+          key: "brand",
+          text: "Mania Tracker",
+          fontSize: 16,
+          background: "#f3ece4",
+          color: "#1a1317",
+          paddingX: 10,
+          paddingY: 6,
+          rotate: -2,
+          top: 574,
+          left: 74,
+        }),
+      ],
+    ),
+    { width: WIDTH, height: HEIGHT, fonts: ogFontList(regularFont, heavyFont) },
+  );
+  response.headers.set("Cache-Control", OG_CACHE_HEADER);
+  return response;
+}
+
 /* Title-only fallback. Used as a last resort if the polaroid default
    render fails, and for any odd preview-tool presets that pass a raw
    title without a country. The description lives in the HTML <meta>
@@ -3139,6 +4261,24 @@ export const Route = createFileRoute("/api/og")({
             return await serveOg(`farm-helper:v${version}`, () => renderFarmHelperOg(request));
           } catch (err) {
             console.warn("[og] farm-helper render failed, falling back", err);
+          }
+        }
+
+        // Static tool cards: global surfaces with no inputs, one shared
+        // image per kind per version.
+        const staticKindRenderers: Record<string, (request: Request) => Promise<Response>> = {
+          "maps-search": renderMapsSearchOg,
+          "maps-collections": renderMapsCollectionsOg,
+          packs: renderPacksOg,
+          bbcode: renderBBCodeOg,
+          discord: renderDiscordOg,
+        };
+        const staticRender = kind ? staticKindRenderers[kind] : undefined;
+        if (kind && staticRender) {
+          try {
+            return await serveOg(`${kind}:v${version}`, () => staticRender(request));
+          } catch (err) {
+            console.warn(`[og] ${kind} render failed, falling back`, err);
           }
         }
 

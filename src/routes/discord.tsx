@@ -5,13 +5,17 @@ import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { CommandShowcase } from "../components/discord/CommandShowcase";
 import { canUseDevFeatures } from "../lib/auth-shared";
 import { fetchDiscordPublicInfo, type DiscordPublicInfo } from "../lib/live-backend";
+import { pageSeo } from "../lib/seo";
 
 export const Route = createFileRoute("/discord")({
-  head: () => ({
-    meta: [
-      { title: "maniabot - Mania Hub for Discord" },
-      { name: "robots", content: "noindex, nofollow" },
-    ],
+  head: ({ match }) => pageSeo({
+    title: "maniabot - Mania Hub for Discord",
+    appendSiteName: false,
+    description: "Every osu!mania lookup as a slash command, plus live feeds that post new top plays, snipes, and farm maps into any channel.",
+    path: "/discord",
+    origin: match.context.origin,
+    imageKind: "discord",
+    noindex: true,
   }),
   beforeLoad: ({ context }) => {
     if (!canUseDevFeatures(context.auth)) {
