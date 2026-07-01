@@ -86,8 +86,17 @@ export interface MapSearchEntry {
   covers: Record<string, string> | null;
 }
 
+// A search result row: one per beatmapset. The top-level fields describe the
+// representative diff (the one that ranks best under the current sort) and
+// `diffs` carries every filter-matching diff of the set, easiest first, so the
+// UI can show the spread and switch diffs without another request.
+export interface MapSearchSetEntry extends MapSearchEntry {
+  diffCount: number;
+  diffs: MapSearchEntry[];
+}
+
 export interface MapSearchPage {
-  items: MapSearchEntry[];
+  items: MapSearchSetEntry[];
   total: number;
   page: number;
   pageSize: number;
@@ -491,7 +500,11 @@ function buildWhere(query: MapSearchQuery): { sql: string; args: InValue[] } {
 export async function getMapSearchPage(db: Db, query: MapSearchQuery): Promise<MapSearchPage> {
   const where = buildWhere(query);
 
-  const totalRow = (await exec(db, `select count(*) as total from map_search_index ${where.sql}`, where.args)).rows[0];
+  const totalRow = (await exec(
+    db,
+    `select count(distinct beatmapset_id) as total from map_search_index ${where.sql}`,
+    where.args,
+  )).rows[0];
   const total = intOr(totalRow?.total, 0);
 
   const orderColumn = SORT_COLUMNS[query.sort] ?? "play_count";
@@ -501,15 +514,54 @@ export async function getMapSearchPage(db: Db, query: MapSearchQuery): Promise<M
   const page = Math.max(0, Math.floor(query.page));
   const offset = page * pageSize;
 
+  // One row per beatmapset: rank the set's matching diffs under the current
+  // sort and keep the best one as the card's representative. ranked_date is
+  // selected explicitly because the date sort orders on it but SELECT_COLUMNS
+  // doesn't carry it.
   const rows = (await exec(
     db,
-    `select ${SELECT_COLUMNS} from map_search_index ${where.sql}
+    `select * from (
+       select ${SELECT_COLUMNS}, ranked_date,
+         row_number() over (
+           partition by beatmapset_id
+           order by ${orderColumn} ${orderDir}, beatmap_id asc
+         ) as diff_rank
+       from map_search_index ${where.sql}
+     )
+     where diff_rank = 1
      order by ${orderColumn} ${orderDir}, beatmap_id asc
      limit ? offset ?`,
     [...where.args, pageSize, offset],
   )).rows;
 
-  return { items: rows.map(rowToEntry), total, page, pageSize };
+  // Second pass: every matching diff of the page's sets, easiest first. Covers
+  // are dropped from the nested diffs since they duplicate the set's own.
+  const setIds = [...new Set(rows.map((row) => intOr(row.beatmapset_id)))].filter((id) => id > 0);
+  const diffsBySet = new Map<number, MapSearchEntry[]>();
+  if (setIds.length > 0) {
+    const placeholders = setIds.map(() => "?").join(", ");
+    const setClause = where.sql ? `${where.sql} and` : "where";
+    const diffRows = (await exec(
+      db,
+      `select ${SELECT_COLUMNS} from map_search_index ${setClause} beatmapset_id in (${placeholders})
+       order by key_count asc, stars asc, beatmap_id asc`,
+      [...where.args, ...setIds],
+    )).rows;
+    for (const row of diffRows) {
+      const entry = { ...rowToEntry(row), covers: null };
+      const list = diffsBySet.get(entry.beatmapsetId);
+      if (list) list.push(entry);
+      else diffsBySet.set(entry.beatmapsetId, [entry]);
+    }
+  }
+
+  const items = rows.map((row) => {
+    const entry = rowToEntry(row);
+    const diffs = diffsBySet.get(entry.beatmapsetId) ?? [{ ...entry, covers: null }];
+    return { ...entry, diffCount: diffs.length, diffs };
+  });
+
+  return { items, total, page, pageSize };
 }
 
 // Fetch index entries for a set of beatmap ids (used by collection detail).

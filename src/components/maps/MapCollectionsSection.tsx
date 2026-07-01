@@ -226,7 +226,7 @@ function CollectionDetail({ id, onBack, liveBackendEnabled }: { id: string; onBa
 
 export function MapCollectionsSection({ selectedCollectionId, onSelect, liveBackendEnabled }: Props) {
   return (
-    <div className="bg-osu-d5 min-h-[60vh]">
+    <div className="bg-osu-b5 min-h-[60vh]">
       <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-4">
         {selectedCollectionId ? (
           <CollectionDetail id={selectedCollectionId} onBack={() => onSelect("")} liveBackendEnabled={liveBackendEnabled} />

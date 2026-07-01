@@ -32,6 +32,47 @@ export function patternLabel(pattern: string): string {
   return PATTERN_LABEL[pattern] ?? pattern;
 }
 
+// osu-web's difficulty colour spectrum, interpolated linearly between the
+// official stops so diff dots read the same as on the osu! site.
+const STAR_COLOR_STOPS: Array<[number, number, number, number]> = [
+  [0.1, 0x42, 0x90, 0xfb],
+  [1.25, 0x4f, 0xc0, 0xff],
+  [2.0, 0x4f, 0xff, 0xd5],
+  [2.5, 0x7c, 0xff, 0x4f],
+  [3.3, 0xf6, 0xf0, 0x5c],
+  [4.2, 0xff, 0x80, 0x68],
+  [4.9, 0xff, 0x4e, 0x6f],
+  [5.8, 0xc6, 0x45, 0xb8],
+  [6.7, 0x65, 0x63, 0xde],
+  [7.7, 0x18, 0x15, 0x8e],
+  [9.0, 0x00, 0x00, 0x00],
+];
+
+export function starRatingColor(stars: number): string {
+  const first = STAR_COLOR_STOPS[0];
+  const last = STAR_COLOR_STOPS[STAR_COLOR_STOPS.length - 1];
+  if (!Number.isFinite(stars) || stars <= first[0]) return `rgb(${first[1]}, ${first[2]}, ${first[3]})`;
+  if (stars >= last[0]) return `rgb(${last[1]}, ${last[2]}, ${last[3]})`;
+  for (let i = 1; i < STAR_COLOR_STOPS.length; i++) {
+    const [hiStars, hr, hg, hb] = STAR_COLOR_STOPS[i];
+    if (stars > hiStars) continue;
+    const [loStars, lr, lg, lb] = STAR_COLOR_STOPS[i - 1];
+    const t = (stars - loStars) / (hiStars - loStars);
+    const r = Math.round(lr + (hr - lr) * t);
+    const g = Math.round(lg + (hg - lg) * t);
+    const b = Math.round(lb + (hb - lb) * t);
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+  return `rgb(${last[1]}, ${last[2]}, ${last[3]})`;
+}
+
+// The matching diffs of a search entry's set, easiest first. Collection items
+// and older payloads carry no diff list, so the entry stands alone.
+export function entryDiffs(entry: LiveMapSearchEntry): LiveMapSearchEntry[] {
+  if (!entry.diffs || entry.diffs.length === 0) return [entry];
+  return [...entry.diffs].sort((a, b) => a.keyCount - b.keyCount || a.stars - b.stars || a.beatmapId - b.beatmapId);
+}
+
 export function mapCoverUrl(entry: Pick<LiveMapSearchEntry, "covers" | "beatmapsetId">): string {
   return (
     entry.covers?.card ??
@@ -72,9 +113,32 @@ function secondaryPatterns(entry: LiveMapSearchEntry): string[] {
     .map(([key]) => key);
 }
 
+// For a multi-diff card the tags describe the set: each distinct dominant
+// pattern across the matching diffs, most common first.
+function setPatterns(diffs: LiveMapSearchEntry[]): string[] {
+  const counts = new Map<string, number>();
+  for (const diff of diffs) {
+    if (!PATTERN_LABEL[diff.primaryPattern]) continue;
+    counts.set(diff.primaryPattern, (counts.get(diff.primaryPattern) ?? 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([key]) => key);
+}
+
+function keyModeLabel(diffs: LiveMapSearchEntry[]): string {
+  const modes = [...new Set(diffs.map((diff) => diff.keyCount))].sort((a, b) => a - b);
+  if (modes.length > 2) return `${modes[0]}K–${modes[modes.length - 1]}K`;
+  return modes.map((keys) => `${keys}K`).join("·");
+}
+
+const MAX_DIFF_DOTS = 8;
+
 export function SearchCard({ entry, onOpen }: { entry: LiveMapSearchEntry; onOpen?: (entry: LiveMapSearchEntry) => void }) {
   const pill = statusPill(entry.status);
-  const secondaries = secondaryPatterns(entry);
+  const diffs = entryDiffs(entry);
+  const multi = diffs.length > 1;
+  const starLo = Math.min(...diffs.map((diff) => diff.stars));
+  const starHi = Math.max(...diffs.map((diff) => diff.stars));
+  const patternTags = multi ? setPatterns(diffs) : [entry.primaryPattern, ...secondaryPatterns(entry)];
   const clickable = !!onOpen;
 
   return (
@@ -90,10 +154,12 @@ export function SearchCard({ entry, onOpen }: { entry: LiveMapSearchEntry; onOpe
         <img src={mapCoverUrl(entry)} alt="" className="w-full h-[90px] object-cover" loading="lazy" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
         <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/60 text-[9px] font-bold text-white">
-          {entry.keyCount}K
+          {keyModeLabel(diffs)}
         </span>
         <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/60 text-[9px] font-bold text-osu-yellow">
-          {"★"}{entry.stars.toFixed(2)}
+          {multi && starHi - starLo >= 0.05
+            ? `★${starLo.toFixed(1)}–${starHi.toFixed(1)}`
+            : `★${entry.stars.toFixed(2)}`}
         </span>
         {pill && (
           <span className={`absolute bottom-1.5 right-1.5 px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase leading-none ${pill.className}`}>
@@ -108,16 +174,36 @@ export function SearchCard({ entry, onOpen }: { entry: LiveMapSearchEntry; onOpe
 
       <div className="px-2.5 py-2 flex flex-col gap-1.5 flex-1">
         <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-osu-l2 truncate flex-1">[{entry.version}]</span>
+          {multi ? (
+            <span className="flex min-w-0 flex-1 items-center gap-1.5">
+              <span className="flex items-center gap-[3px]">
+                {diffs.slice(0, MAX_DIFF_DOTS).map((diff) => (
+                  <span
+                    key={diff.beatmapId}
+                    className="h-2 w-2 rounded-full ring-1 ring-white/15"
+                    style={{ background: starRatingColor(diff.stars) }}
+                    title={`[${diff.version}] ★${diff.stars.toFixed(2)}`}
+                  />
+                ))}
+              </span>
+              <span className="truncate text-[10px] text-osu-l2">{diffs.length} diffs</span>
+            </span>
+          ) : (
+            <span className="text-[10px] text-osu-l2 truncate flex-1">[{entry.version}]</span>
+          )}
           <span className="text-[9px] text-osu-f1 flex-shrink-0">{formatDuration(entry.length)}</span>
         </div>
 
         <div className="flex flex-wrap items-center gap-1">
-          <span className="px-1.5 py-0.5 rounded bg-osu-pink/20 text-osu-pink-light text-[9px] font-semibold leading-none">
-            {patternLabel(entry.primaryPattern)}
-          </span>
-          {secondaries.map((pattern) => (
-            <span key={pattern} className="px-1.5 py-0.5 rounded bg-osu-b3/50 text-osu-f1 text-[9px] leading-none">
+          {patternTags.map((pattern, index) => (
+            <span
+              key={pattern}
+              className={
+                index === 0
+                  ? "px-1.5 py-0.5 rounded bg-osu-pink/20 text-osu-pink-light text-[9px] font-semibold leading-none"
+                  : "px-1.5 py-0.5 rounded bg-osu-b3/50 text-osu-f1 text-[9px] leading-none"
+              }
+            >
               {patternLabel(pattern)}
             </span>
           ))}

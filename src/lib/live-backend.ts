@@ -1201,6 +1201,11 @@ export interface LiveMapSearchEntry {
   primaryPattern: string;
   patterns: Record<string, number>;
   covers: Record<string, string> | null;
+  // Search results are one entry per beatmapset: the top-level fields describe
+  // the representative diff and `diffs` lists every filter-matching diff of the
+  // set (easiest first). Absent on collection items, which are already deduped.
+  diffCount?: number;
+  diffs?: LiveMapSearchEntry[];
 }
 
 export interface LiveMapSearchResult {

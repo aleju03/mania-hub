@@ -162,6 +162,33 @@ describe("map search index", () => {
     expect(hit.items[0].beatmapId).toBe(1);
   });
 
+  it("groups results by beatmapset with matching diffs attached", async () => {
+    const db = await makeDb();
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, stars: 4.2, playcount: 500, version: "Hard", primary: "stream", patterns: { stream: 1 } });
+    await seedMap(db, { beatmapId: 2, beatmapsetId: 10, stars: 5.4, playcount: 900, version: "Insane", primary: "stream", patterns: { stream: 1 } });
+    await seedMap(db, { beatmapId: 3, beatmapsetId: 20, stars: 3.1, playcount: 700, version: "Normal", primary: "jack", patterns: { jack: 1 } });
+    await buildAll(db);
+
+    // One row per set; the most-played diff represents under the playcount sort.
+    const byPlays = await getMapSearchPage(db, baseQuery());
+    expect(byPlays.total).toBe(2);
+    expect(byPlays.items.map((item) => item.beatmapId)).toEqual([2, 3]);
+    expect(byPlays.items[0].diffCount).toBe(2);
+    expect(byPlays.items[0].diffs.map((diff) => diff.beatmapId)).toEqual([1, 2]);
+    expect(byPlays.items[1].diffCount).toBe(1);
+
+    // Under stars asc the easiest diff represents the set instead.
+    const byStars = await getMapSearchPage(db, { ...baseQuery(), sort: "stars", dir: "asc" });
+    expect(byStars.items.map((item) => item.beatmapId)).toEqual([3, 1]);
+
+    // Filters narrow the attached diffs too: only the 5★+ diff of set 10 matches.
+    const hardOnly = await getMapSearchPage(db, { ...baseQuery(), starMin: 5 });
+    expect(hardOnly.total).toBe(1);
+    expect(hardOnly.items[0].beatmapId).toBe(2);
+    expect(hardOnly.items[0].diffCount).toBe(1);
+    expect(hardOnly.items[0].diffs.map((diff) => diff.beatmapId)).toEqual([2]);
+  });
+
   it("builds pattern collections deduped by beatmapset", async () => {
     const db = await makeDb();
     // Two diffs of set 10 + one diff of set 20, all stream-primary 4K in the 4-5 bucket.

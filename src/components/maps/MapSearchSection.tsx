@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { createPortal } from "react-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   fetchLiveMapSearch,
   type LiveMapSearchEntry,
@@ -126,12 +127,260 @@ function StatusChip({ id, label, active, onClick }: { id: string; label: string;
   );
 }
 
+// Custom sort dropdown for the mobile toolbar, styled like the random tab's
+// difficulty picker so it doesn't fall back to the OS-native select look.
+function SortSelect({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const selected = SORT_OPTIONS.find((option) => option.id === value) ?? SORT_OPTIONS[0];
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label="Sort by"
+        className={`inline-flex items-center gap-1.5 rounded-md pl-3 pr-2 py-2 text-[12.5px] font-semibold cursor-pointer transition-colors ${
+          open ? "bg-osu-b3 text-osu-l1" : "bg-osu-b4 text-osu-l2"
+        }`}
+      >
+        {selected.label}
+        <svg
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          className={`h-3.5 w-3.5 shrink-0 transition-transform duration-200 ${open ? "rotate-180 text-osu-pink-light" : "text-osu-f1"}`}
+          aria-hidden="true"
+        >
+          <path d="M5.25 7.5 10 12.25 14.75 7.5H5.25Z" />
+        </svg>
+      </button>
+
+      <div
+        role="listbox"
+        className={`absolute right-0 top-full z-50 mt-1.5 min-w-[160px] overflow-hidden rounded-lg border border-osu-pink/20 bg-osu-b4/95 shadow-xl shadow-black/40 backdrop-blur-md transition-all duration-200 origin-top ${
+          open ? "opacity-100 scale-y-100 translate-y-0 pointer-events-auto" : "opacity-0 scale-y-95 -translate-y-1 pointer-events-none"
+        }`}
+      >
+        <div className="p-1">
+          {SORT_OPTIONS.map((option) => {
+            const isSelected = option.id === value;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                onClick={() => {
+                  onChange(option.id);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] font-semibold transition-colors cursor-pointer ${
+                  isSelected ? "bg-osu-pink/15 text-osu-pink-light" : "text-osu-l2 hover:bg-osu-b3 hover:text-white"
+                }`}
+              >
+                <span className={`flex h-3 w-3 shrink-0 items-center justify-center transition-all ${isSelected ? "opacity-100" : "opacity-0 scale-75"}`}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3 text-osu-pink">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </span>
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DirButton({ dir, onToggle }: { dir: string; onToggle: () => void }) {
+  return (
+    <motion.button
+      type="button"
+      whileTap={{ scale: 0.94 }}
+      onClick={onToggle}
+      className="inline-flex items-center justify-center rounded-md px-2.5 py-2 bg-osu-b4 text-osu-l2 hover:bg-osu-b3 hover:text-osu-l1 transition-colors cursor-pointer"
+      title={dir === "asc" ? "Ascending" : "Descending"}
+      aria-label={dir === "asc" ? "Ascending" : "Descending"}
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
+        {dir === "asc" ? <path d="M12 19V5m-6 6 6-6 6 6" /> : <path d="M12 5v14m-6-6 6 6 6-6" />}
+      </svg>
+    </motion.button>
+  );
+}
+
 function ChipGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-2">
       <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{label}</span>
       <div className="flex flex-wrap gap-2">{children}</div>
     </div>
+  );
+}
+
+// The Keys/Status chip groups and range sliders, shared between the desktop
+// inline row and the mobile filter sheet.
+type ApplyFn = (patch: Partial<MapSearchUiState>) => void;
+
+function KeysChips({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
+  return (
+    <ChipGroup label="Keys">
+      {KEY_OPTIONS.map((option) => (
+        <Chip key={option.id} active={ui.keys.includes(option.id)} onClick={() => apply({ keys: toggle(ui.keys, option.id), page: 0 })}>
+          {option.label}
+        </Chip>
+      ))}
+    </ChipGroup>
+  );
+}
+
+function StatusChips({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
+  return (
+    <ChipGroup label="Status">
+      {STATUS_OPTIONS.map((option) => (
+        <StatusChip
+          key={option.id}
+          id={option.id}
+          label={option.label}
+          active={ui.statuses.includes(option.id)}
+          onClick={() => apply({ statuses: toggle(ui.statuses, option.id), page: 0 })}
+        />
+      ))}
+    </ChipGroup>
+  );
+}
+
+function StarSlider({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
+  return (
+    <RangeSlider lo={0} hi={15} min={ui.starMin} max={ui.starMax} step={0.1} ariaLabel="Star rating" format={(v) => `${v.toFixed(1)}★`} onChange={(min, max) => apply({ starMin: min, starMax: max, page: 0 })} />
+  );
+}
+
+function BpmSlider({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
+  return (
+    <RangeSlider lo={0} hi={400} min={ui.bpmMin} max={ui.bpmMax} step={5} ariaLabel="BPM" onChange={(min, max) => apply({ bpmMin: min, bpmMax: max, page: 0 })} />
+  );
+}
+
+function LengthSlider({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
+  return (
+    <RangeSlider lo={0} hi={600} min={ui.lenMin} max={ui.lenMax} step={5} ariaLabel="Length" format={(v) => formatDuration(v)} onChange={(min, max) => apply({ lenMin: min, lenMax: max, page: 0 })} />
+  );
+}
+
+// Bottom sheet holding the secondary filters on phones. Filters apply live (the
+// dimmed grid updates behind the scrim); the pink button just closes the sheet.
+function MobileFilterSheet({
+  open,
+  onClose,
+  ui,
+  apply,
+  onClear,
+  hasActiveFilters,
+  resultsLabel,
+}: {
+  open: boolean;
+  onClose: () => void;
+  ui: MapSearchUiState;
+  apply: ApplyFn;
+  onClear: () => void;
+  hasActiveFilters: boolean;
+  resultsLabel: string;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [open, onClose]);
+
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          key="map-filter-sheet"
+          className="fixed inset-0 z-[120] sm:hidden"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.12 }}
+        >
+          <div className="absolute inset-0 bg-black/70" onClick={onClose} />
+          <motion.div
+            className="absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-2xl bg-osu-b5 ring-1 ring-white/10"
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+          >
+            <div className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-osu-b3" aria-hidden="true" />
+            <span className="px-4 pt-2 text-[13px] font-bold text-osu-l1">Filters</span>
+            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-3.5">
+              <KeysChips ui={ui} apply={apply} />
+              <StatusChips ui={ui} apply={apply} />
+              <ChipGroup label="Difficulty">
+                <StarSlider ui={ui} apply={apply} />
+              </ChipGroup>
+              <ChipGroup label="BPM">
+                <BpmSlider ui={ui} apply={apply} />
+              </ChipGroup>
+              <ChipGroup label="Length">
+                <LengthSlider ui={ui} apply={apply} />
+              </ChipGroup>
+            </div>
+            <div className="flex items-center justify-between gap-3 border-t border-osu-b3/20 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+              <button
+                type="button"
+                onClick={onClear}
+                disabled={!hasActiveFilters}
+                className={`text-[12px] transition-colors ${
+                  hasActiveFilters ? "text-osu-f1 hover:text-osu-pink-light cursor-pointer" : "text-osu-f1/40 cursor-default"
+                }`}
+              >
+                Clear all
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-md bg-osu-pink px-4 py-2 text-[12.5px] font-bold text-white hover:bg-osu-pink-light transition-colors cursor-pointer"
+              >
+                {resultsLabel}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body,
   );
 }
 
@@ -187,6 +436,9 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
   const [ui, setUi] = useState<MapSearchUiState>(state);
   const [searchInput, setSearchInput] = useState(state.q);
   const [showMore, setShowMore] = useState(state.bpmMin > 0 || state.bpmMax > 0 || state.lenMin > 0 || state.lenMax > 0);
+  // On phones the secondary filters live in a bottom sheet behind the toolbar's
+  // Filters button; its badge carries the active count.
+  const [showFilters, setShowFilters] = useState(false);
   const [result, setResult] = useState<LiveMapSearchResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -285,11 +537,10 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
   const effectiveError = liveBackendEnabled ? error : "Search needs the live backend running.";
   const hasLoadedResult = result !== null || lastResultRef.current !== null;
   const showLoadingSkeleton = !effectiveError && liveBackendEnabled && (loading || !hasLoadedResult) && items.length === 0;
-  const countLabel = showLoadingSkeleton
-    ? "Loading maps..."
-    : loading && hasLoadedResult
-      ? `${formatNumber(total)} maps · updating`
-      : `${formatNumber(total)} maps`;
+  // No "updating" suffix while refreshing: the label sits next to a flex-1
+  // input, so any width change resizes the search bar. It dims instead.
+  const countLabel = showLoadingSkeleton ? "Loading maps..." : `${formatNumber(total)} maps`;
+  const countRefreshing = loading && hasLoadedResult;
 
   const hasActiveFilters =
     ui.q.trim() !== "" ||
@@ -299,6 +550,15 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
     ui.starMin > 0 || ui.starMax > 0 ||
     ui.bpmMin > 0 || ui.bpmMax > 0 ||
     ui.lenMin > 0 || ui.lenMax > 0;
+
+  // How many collapsed filters are active, for the mobile toggle's badge.
+  // Patterns stay visible above the toggle, so they don't count.
+  const collapsedFilterCount =
+    ui.keys.length +
+    ui.statuses.length +
+    (ui.starMin > 0 || ui.starMax > 0 ? 1 : 0) +
+    (ui.bpmMin > 0 || ui.bpmMax > 0 ? 1 : 0) +
+    (ui.lenMin > 0 || ui.lenMax > 0 ? 1 : 0);
 
   const clearFilters = () => {
     setSearchInput("");
@@ -310,7 +570,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
   };
 
   return (
-    <div className="bg-osu-d5 min-h-[60vh]">
+    <div className="bg-osu-b5 min-h-[60vh]">
       <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-4 flex flex-col gap-4">
         {/* Search bar */}
         <div className="flex items-center gap-3">
@@ -327,7 +587,11 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
               className="w-full bg-osu-b4 border border-osu-b3/30 rounded-lg pl-10 pr-3 py-2.5 text-[14px] text-osu-l1 placeholder:text-osu-f1/55 focus:outline-none focus:border-osu-pink/50 transition-colors"
             />
           </div>
-          <span className="shrink-0 text-[12px] text-osu-f1 tabular-nums" role="status" aria-live="polite">
+          <span
+            className={`shrink-0 text-[12px] text-osu-f1 tabular-nums transition-opacity duration-150 ${countRefreshing ? "opacity-45" : ""}`}
+            role="status"
+            aria-live="polite"
+          >
             {countLabel}
           </span>
         </div>
@@ -338,75 +602,101 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
           <PatternPicker selected={ui.patterns} onToggle={(pattern) => apply({ patterns: toggle(ui.patterns, pattern), page: 0 })} />
         </div>
 
-        <div className="flex flex-wrap gap-x-10 gap-y-4">
-          <ChipGroup label="Keys">
-            {KEY_OPTIONS.map((option) => (
-              <Chip key={option.id} active={ui.keys.includes(option.id)} onClick={() => apply({ keys: toggle(ui.keys, option.id), page: 0 })}>
-                {option.label}
-              </Chip>
-            ))}
-          </ChipGroup>
-          <ChipGroup label="Status">
-            {STATUS_OPTIONS.map((option) => (
-              <StatusChip
-                key={option.id}
-                id={option.id}
-                label={option.label}
-                active={ui.statuses.includes(option.id)}
-                onClick={() => apply({ statuses: toggle(ui.statuses, option.id), page: 0 })}
-              />
-            ))}
-          </ChipGroup>
+        {/* Mobile toolbar: secondary filters collapse behind a toggle, sort is a dropdown */}
+        <div className="flex items-center gap-2 sm:hidden">
+          <button
+            type="button"
+            onClick={() => setShowFilters(true)}
+            aria-haspopup="dialog"
+            aria-expanded={showFilters}
+            className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-[12.5px] font-semibold cursor-pointer transition-colors bg-osu-b4 text-osu-l2 hover:bg-osu-b3 hover:text-osu-l1"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden="true">
+              <path d="M3 6h18M7 12h10M10 18h4" />
+            </svg>
+            Filters
+            {collapsedFilterCount > 0 && (
+              <span className="rounded-full bg-osu-pink px-1.5 text-[10px] font-bold leading-4 text-white tabular-nums">
+                {collapsedFilterCount}
+              </span>
+            )}
+          </button>
+          <div className="ml-auto">
+            <SortSelect value={ui.sort} onChange={(id) => apply({ sort: id, page: 0 })} />
+          </div>
+          <DirButton dir={ui.dir} onToggle={() => apply({ dir: ui.dir === "asc" ? "desc" : "asc", page: 0 })} />
         </div>
 
-        <ChipGroup label="Difficulty">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-            <RangeSlider lo={0} hi={15} min={ui.starMin} max={ui.starMax} step={0.1} ariaLabel="Star rating" format={(v) => `${v.toFixed(1)}★`} onChange={(min, max) => apply({ starMin: min, starMax: max, page: 0 })} />
-            <button type="button" onClick={() => setShowMore((value) => !value)} className="text-[11.5px] text-osu-f1 hover:text-osu-pink-light transition-colors cursor-pointer">
-              {showMore ? "− bpm & length" : "+ bpm & length"}
-            </button>
-          </div>
-        </ChipGroup>
-
-        {showMore && (
+        {/* Secondary filters: inline on sm+, in the bottom sheet on phones */}
+        <div className="hidden sm:flex flex-col gap-4">
           <div className="flex flex-wrap gap-x-10 gap-y-4">
-            <ChipGroup label="BPM">
-              <RangeSlider lo={0} hi={400} min={ui.bpmMin} max={ui.bpmMax} step={5} ariaLabel="BPM" onChange={(min, max) => apply({ bpmMin: min, bpmMax: max, page: 0 })} />
-            </ChipGroup>
-            <ChipGroup label="Length">
-              <RangeSlider lo={0} hi={600} min={ui.lenMin} max={ui.lenMax} step={5} ariaLabel="Length" format={(v) => formatDuration(v)} onChange={(min, max) => apply({ lenMin: min, lenMax: max, page: 0 })} />
+            <KeysChips ui={ui} apply={apply} />
+            <StatusChips ui={ui} apply={apply} />
+            <ChipGroup label="Difficulty">
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                <StarSlider ui={ui} apply={apply} />
+                <button type="button" onClick={() => setShowMore((value) => !value)} className="text-[11.5px] text-osu-f1 hover:text-osu-pink-light transition-colors cursor-pointer">
+                  {showMore ? "− bpm & length" : "+ bpm & length"}
+                </button>
+              </div>
             </ChipGroup>
           </div>
-        )}
 
-        {/* Sort + actions */}
-        <div className="flex flex-wrap items-end justify-between gap-3 border-t border-osu-b3/15 pt-3.5">
-          <ChipGroup label="Sort by">
-            {SORT_OPTIONS.map((option) => (
-              <Chip key={option.id} active={ui.sort === option.id} onClick={() => apply({ sort: option.id, page: 0 })}>
-                {option.label}
-              </Chip>
-            ))}
-            <motion.button
-              type="button"
-              whileTap={{ scale: 0.94 }}
-              onClick={() => apply({ dir: ui.dir === "asc" ? "desc" : "asc", page: 0 })}
-              className="inline-flex items-center justify-center rounded-md px-2.5 py-1.5 bg-osu-b4 text-osu-l2 hover:bg-osu-b3 hover:text-osu-l1 transition-colors cursor-pointer"
-              title={ui.dir === "asc" ? "Ascending" : "Descending"}
-              aria-label={ui.dir === "asc" ? "Ascending" : "Descending"}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
-                {ui.dir === "asc" ? <path d="M12 19V5m-6 6 6-6 6 6" /> : <path d="M12 5v14m-6-6 6 6 6-6" />}
-              </svg>
-            </motion.button>
-          </ChipGroup>
-          <div className="flex items-center gap-3 pb-1">
-            {hasActiveFilters && (
-              <button type="button" onClick={clearFilters} className="text-[12px] text-osu-f1 hover:text-osu-pink-light transition-colors cursor-pointer">
-                Clear all
-              </button>
-            )}
+          {showMore && (
+            <div className="flex flex-wrap gap-x-10 gap-y-4">
+              <ChipGroup label="BPM">
+                <BpmSlider ui={ui} apply={apply} />
+              </ChipGroup>
+              <ChipGroup label="Length">
+                <LengthSlider ui={ui} apply={apply} />
+              </ChipGroup>
+            </div>
+          )}
+        </div>
+
+        {/* Sort + actions (desktop; phones sort from the toolbar above). Plain
+            text links like osu-web's listing: the active sort is white with a
+            direction caret, and clicking it again flips the direction. */}
+        <div className="hidden sm:flex flex-wrap items-center justify-between gap-3 border-t border-osu-b3/15 pt-3.5">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Sort by</span>
+            {SORT_OPTIONS.map((option) => {
+              const isActive = ui.sort === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() =>
+                    isActive
+                      ? apply({ dir: ui.dir === "asc" ? "desc" : "asc", page: 0 })
+                      : apply({ sort: option.id, page: 0 })
+                  }
+                  aria-pressed={isActive}
+                  title={isActive ? "Flip direction" : undefined}
+                  className={`inline-flex items-center gap-1 text-[12.5px] font-semibold transition-colors cursor-pointer ${
+                    isActive ? "text-white" : "text-osu-f1 hover:text-osu-pink-light"
+                  }`}
+                >
+                  {option.label}
+                  {isActive && (
+                    <svg
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      className={`h-3 w-3 text-osu-pink-light transition-transform duration-150 ${ui.dir === "asc" ? "rotate-180" : ""}`}
+                      aria-hidden="true"
+                    >
+                      <path d="M5.25 7.5 10 12.25 14.75 7.5H5.25Z" />
+                    </svg>
+                  )}
+                </button>
+              );
+            })}
           </div>
+          {hasActiveFilters && (
+            <button type="button" onClick={clearFilters} className="text-[12px] text-osu-f1 hover:text-osu-pink-light transition-colors cursor-pointer">
+              Clear all
+            </button>
+          )}
         </div>
 
         {/* Results */}
@@ -429,6 +719,15 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
           </div>
         )}
       </div>
+      <MobileFilterSheet
+        open={showFilters}
+        onClose={() => setShowFilters(false)}
+        ui={ui}
+        apply={apply}
+        onClear={clearFilters}
+        hasActiveFilters={hasActiveFilters}
+        resultsLabel={`Show ${formatNumber(total)} maps`}
+      />
       <MapDetailModal entry={detail} onClose={() => setDetail(null)} />
     </div>
   );
