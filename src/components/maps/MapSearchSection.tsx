@@ -7,12 +7,14 @@ import {
 } from "../../lib/live-backend";
 import { formatDuration, formatNumber } from "../../lib/format";
 import { Pagination } from "../ui/Pagination";
+import { Skeleton } from "../ui/LoadingSkeleton";
 import { MapDetailModal } from "./MapDetailModal";
 import { PatternPicker } from "./PatternPicker";
 import { RangeSlider } from "./RangeSlider";
 import { SearchCard } from "./SearchCard";
 
 const SEARCH_PAGE_SIZE = 24;
+const SEARCH_INITIAL_SKELETON_COUNT = 12;
 const SEARCH_DEBOUNCE_MS = 300;
 
 const KEY_OPTIONS = [
@@ -56,7 +58,6 @@ export interface MapSearchUiState {
   bpmMax: number;
   lenMin: number;
   lenMax: number;
-  countryOnly: boolean;
   sort: string;
   dir: string;
   page: number;
@@ -65,7 +66,6 @@ export interface MapSearchUiState {
 interface Props {
   state: MapSearchUiState;
   onChange: (patch: Partial<MapSearchUiState>) => void;
-  country: string;
   liveBackendEnabled: boolean;
 }
 
@@ -82,7 +82,7 @@ function stateKey(s: MapSearchUiState): string {
     [...s.statuses].sort(),
     [...s.patterns].sort(),
     s.starMin, s.starMax, s.bpmMin, s.bpmMax, s.lenMin, s.lenMax,
-    s.countryOnly, s.sort, s.dir, s.page,
+    s.sort, s.dir, s.page,
   ]);
 }
 
@@ -135,7 +135,53 @@ function ChipGroup({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
-export function MapSearchSection({ state, onChange, country, liveBackendEnabled }: Props) {
+function SearchCardSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4">
+      <div className="relative h-[90px]">
+        <Skeleton className="h-full w-full rounded-none" />
+        <Skeleton className="absolute left-1.5 top-1.5 h-4 w-8 rounded" />
+        <Skeleton className="absolute right-1.5 top-1.5 h-4 w-12 rounded" />
+        <Skeleton className="absolute bottom-1.5 right-1.5 h-4 w-14 rounded-full" />
+        <div className="absolute bottom-1.5 left-2.5 right-20 flex flex-col gap-1">
+          <Skeleton className="h-3 w-4/5" />
+          <Skeleton className="h-2.5 w-1/2" />
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-1.5 px-2.5 py-2">
+        <div className="flex items-center justify-between gap-2">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-2.5 w-8" />
+        </div>
+        <div className="flex items-center gap-1">
+          <Skeleton className="h-4 w-12 rounded" />
+          <Skeleton className="h-4 w-14 rounded" />
+          <Skeleton className="h-4 w-12 rounded" />
+        </div>
+        <div className="flex items-center justify-between gap-2 pt-1">
+          <Skeleton className="h-2.5 w-16" />
+          <div className="flex items-center gap-1.5">
+            <Skeleton className="h-4 w-10 rounded" />
+            <Skeleton className="h-4 w-10 rounded" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SearchCardGridSkeleton() {
+  return (
+    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4" aria-hidden="true">
+      {Array.from({ length: SEARCH_INITIAL_SKELETON_COUNT }).map((_, index) => (
+        <SearchCardSkeleton key={index} />
+      ))}
+    </div>
+  );
+}
+
+export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props) {
   // Local source of truth so a tap updates the grid on the same frame; the URL
   // still syncs underneath (shareable links, back/forward) without gating the fetch.
   const [ui, setUi] = useState<MapSearchUiState>(state);
@@ -186,12 +232,13 @@ export function MapSearchSection({ state, onChange, country, liveBackendEnabled 
   }, [searchInput, ui.q]);
 
   const requestKey = useMemo(
-    () => JSON.stringify({ ...ui, country: ui.countryOnly ? country : null }),
-    [ui, country],
+    () => JSON.stringify(ui),
+    [ui],
   );
 
   useEffect(() => {
     if (!liveBackendEnabled) {
+      setLoading(false);
       setError("Search needs the live backend running.");
       return;
     }
@@ -209,7 +256,7 @@ export function MapSearchSection({ state, onChange, country, liveBackendEnabled 
       bpmMax: ui.bpmMax > 0 ? ui.bpmMax : null,
       lenMin: ui.lenMin > 0 ? ui.lenMin : null,
       lenMax: ui.lenMax > 0 ? ui.lenMax : null,
-      country: ui.countryOnly ? country : null,
+      country: null,
       sort: ui.sort,
       dir: ui.dir,
       page: ui.page,
@@ -235,6 +282,14 @@ export function MapSearchSection({ state, onChange, country, liveBackendEnabled 
   const items = result?.items ?? lastResultRef.current?.items ?? [];
   const total = result?.total ?? lastResultRef.current?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / SEARCH_PAGE_SIZE));
+  const effectiveError = liveBackendEnabled ? error : "Search needs the live backend running.";
+  const hasLoadedResult = result !== null || lastResultRef.current !== null;
+  const showLoadingSkeleton = !effectiveError && liveBackendEnabled && (loading || !hasLoadedResult) && items.length === 0;
+  const countLabel = showLoadingSkeleton
+    ? "Loading maps..."
+    : loading && hasLoadedResult
+      ? `${formatNumber(total)} maps · updating`
+      : `${formatNumber(total)} maps`;
 
   const hasActiveFilters =
     ui.q.trim() !== "" ||
@@ -243,15 +298,14 @@ export function MapSearchSection({ state, onChange, country, liveBackendEnabled 
     ui.patterns.length > 0 ||
     ui.starMin > 0 || ui.starMax > 0 ||
     ui.bpmMin > 0 || ui.bpmMax > 0 ||
-    ui.lenMin > 0 || ui.lenMax > 0 ||
-    ui.countryOnly;
+    ui.lenMin > 0 || ui.lenMax > 0;
 
   const clearFilters = () => {
     setSearchInput("");
     apply({
       q: "", keys: [], statuses: [], patterns: [],
       starMin: 0, starMax: 0, bpmMin: 0, bpmMax: 0, lenMin: 0, lenMax: 0,
-      countryOnly: false, page: 0,
+      page: 0,
     });
   };
 
@@ -273,7 +327,9 @@ export function MapSearchSection({ state, onChange, country, liveBackendEnabled 
               className="w-full bg-osu-b4 border border-osu-b3/30 rounded-lg pl-10 pr-3 py-2.5 text-[14px] text-osu-l1 placeholder:text-osu-f1/55 focus:outline-none focus:border-osu-pink/50 transition-colors"
             />
           </div>
-          <span className="shrink-0 text-[12px] text-osu-f1 tabular-nums">{formatNumber(total)} maps</span>
+          <span className="shrink-0 text-[12px] text-osu-f1 tabular-nums" role="status" aria-live="polite">
+            {countLabel}
+          </span>
         </div>
 
         {/* Pattern — the headline filter, each shown as a mini note-chart */}
@@ -345,11 +401,6 @@ export function MapSearchSection({ state, onChange, country, liveBackendEnabled 
             </motion.button>
           </ChipGroup>
           <div className="flex items-center gap-3 pb-1">
-            {country && country !== "GLOBAL" && (
-              <Chip active={ui.countryOnly} onClick={() => apply({ countryOnly: !ui.countryOnly, page: 0 })}>
-                {country} only
-              </Chip>
-            )}
             {hasActiveFilters && (
               <button type="button" onClick={clearFilters} className="text-[12px] text-osu-f1 hover:text-osu-pink-light transition-colors cursor-pointer">
                 Clear all
@@ -359,12 +410,16 @@ export function MapSearchSection({ state, onChange, country, liveBackendEnabled 
         </div>
 
         {/* Results */}
-        {error ? (
-          <div className="py-16 text-center text-[13px] text-osu-f1">{error}</div>
+        {effectiveError ? (
+          <div className="py-16 text-center text-[13px] text-osu-f1">{effectiveError}</div>
+        ) : showLoadingSkeleton ? (
+          <div className="transition-opacity" aria-busy="true">
+            <SearchCardGridSkeleton />
+          </div>
         ) : items.length === 0 && !loading ? (
           <div className="py-16 text-center text-[13px] text-osu-f1">No maps match these filters.</div>
         ) : (
-          <div className={loading ? "opacity-60 transition-opacity" : "transition-opacity"}>
+          <div className={loading ? "opacity-60 transition-opacity" : "transition-opacity"} aria-busy={loading}>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
               {items.map((entry: LiveMapSearchEntry) => (
                 <SearchCard key={entry.beatmapId} entry={entry} onOpen={setDetail} />

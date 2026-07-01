@@ -96,11 +96,11 @@ export function SearchCard({ entry, onOpen }: { entry: LiveMapSearchEntry; onOpe
           {"★"}{entry.stars.toFixed(2)}
         </span>
         {pill && (
-          <span className={`absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-full text-[8px] font-extrabold uppercase leading-none ${pill.className}`}>
+          <span className={`absolute bottom-1.5 right-1.5 px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase leading-none ${pill.className}`}>
             {pill.label}
           </span>
         )}
-        <div className="absolute bottom-0 left-0 right-0 px-2.5 pb-1.5 pr-14">
+        <div className="absolute bottom-0 left-0 right-0 px-2.5 pb-1.5 pr-20">
           <div className="text-[12px] font-semibold text-white truncate leading-tight drop-shadow-lg">{entry.title}</div>
           <div className="text-[10px] text-white/70 truncate leading-tight drop-shadow-lg">{entry.artist}</div>
         </div>

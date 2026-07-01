@@ -1010,7 +1010,7 @@ export const Route = createFileRoute("/maps")({
     sLenMin: clampSearchNumber(search.sLenMin, 0, 100000),
     sLenMax: clampSearchNumber(search.sLenMax, 0, 100000),
     sPatterns: sanitizeSearchCsv(search.sPatterns, SEARCH_PATTERN_VALUES),
-    sCountryOnly: typeof search.sCountryOnly === "boolean" ? search.sCountryOnly : DEFAULT_MAPS_SEARCH.sCountryOnly,
+    sCountryOnly: false,
     sSort: SEARCH_SORT_VALUES.includes(String(search.sSort)) ? String(search.sSort) : DEFAULT_MAPS_SEARCH.sSort,
     sDir: search.sDir === "asc" ? "asc" : DEFAULT_MAPS_SEARCH.sDir,
     col: typeof search.col === "string" ? search.col.slice(0, 80) : DEFAULT_MAPS_SEARCH.col,
@@ -1796,7 +1796,6 @@ function MapsPage() {
     bpmMax: mapsSearch.sBpmMax,
     lenMin: mapsSearch.sLenMin,
     lenMax: mapsSearch.sLenMax,
-    countryOnly: mapsSearch.sCountryOnly,
     sort: mapsSearch.sSort,
     dir: mapsSearch.sDir,
     page: mapsSearch.page,
@@ -1813,7 +1812,6 @@ function MapsPage() {
     if (patch.bpmMax !== undefined) next.sBpmMax = patch.bpmMax;
     if (patch.lenMin !== undefined) next.sLenMin = patch.lenMin;
     if (patch.lenMax !== undefined) next.sLenMax = patch.lenMax;
-    if (patch.countryOnly !== undefined) next.sCountryOnly = patch.countryOnly;
     if (patch.sort !== undefined) next.sSort = patch.sort;
     if (patch.dir !== undefined) next.sDir = patch.dir;
     if (patch.page !== undefined) next.page = patch.page;
@@ -2440,7 +2438,6 @@ function MapsPage() {
           <MapSearchSection
             state={searchUiState}
             onChange={updateSearchUi}
-            country={selectedCountry}
             liveBackendEnabled={liveBackendEnabled}
           />
         ) : (
