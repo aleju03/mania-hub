@@ -28,6 +28,8 @@ import { pageSeo } from "../lib/seo";
 const PAGE_SIZE = 10;
 const GRID_PAGE_SIZE = 12;
 const POPULAR_LIMIT = 100;
+const FARM_HELPER_KEY_MODES = ["any", "4k", "7k"] as const;
+const FARM_HELPER_VIEWS = ["gain", "popular"] as const;
 
 type ReasonFilter = "all" | "missing" | "improve" | "stale";
 type SortMode = "gain" | "popularity" | "players" | "difficulty" | "recent";
@@ -127,16 +129,30 @@ function farmHelperRequestKey(subjectKey: string | null, keyMode: LiveFarmHelper
   return `${subjectKey?.trim().toLowerCase() ?? ""}\u0000${keyMode}\u0000${view}`;
 }
 
+function orderedUnique<T extends string>(values: readonly T[]): T[] {
+  const seen = new Set<T>();
+  return values.filter((value) => {
+    if (seen.has(value)) return false;
+    seen.add(value);
+    return true;
+  });
+}
+
 function getFarmHelperShellSnapshot(
   snapshots: Map<string, LiveFarmHelperSnapshot>,
   subjectKey: string | null,
   keyMode: LiveFarmHelperKeyMode,
+  view: LiveFarmHelperView,
 ): LiveFarmHelperSnapshot | null {
-  return (
-    snapshots.get(farmHelperRequestKey(subjectKey, keyMode, "gain"))
-    ?? snapshots.get(farmHelperRequestKey(subjectKey, keyMode, "popular"))
-    ?? null
-  );
+  const keyModes = orderedUnique([keyMode, ...FARM_HELPER_KEY_MODES]);
+  const views = orderedUnique([view, ...FARM_HELPER_VIEWS]);
+  for (const candidateKeyMode of keyModes) {
+    for (const candidateView of views) {
+      const snapshot = snapshots.get(farmHelperRequestKey(subjectKey, candidateKeyMode, candidateView));
+      if (snapshot) return snapshot;
+    }
+  }
+  return null;
 }
 
 const searchPlayers = async (q: string) => {
@@ -208,7 +224,7 @@ function FarmHelperPage() {
   const [query, setQuery] = useState("");
   const requestKey = farmHelperRequestKey(subjectKey, keyMode, view);
   const visibleSnapshot = snapshotsByRequestKey.get(requestKey) ?? null;
-  const shellSnapshot = visibleSnapshot ?? getFarmHelperShellSnapshot(snapshotsByRequestKey, subjectKey, keyMode);
+  const shellSnapshot = visibleSnapshot ?? getFarmHelperShellSnapshot(snapshotsByRequestKey, subjectKey, keyMode, view);
   const waitingForCurrentSnapshot = liveEnabled && !!subjectKey && !visibleSnapshot && !error;
   const waitingForInitialSnapshot = waitingForCurrentSnapshot && !shellSnapshot;
 
@@ -380,7 +396,11 @@ function FarmHelperPage() {
             />
           ) : shellSnapshot ? (
             <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
-              <TargetPanel snapshot={shellSnapshot} onChangePlayer={() => setSubject(null)} />
+              <TargetPanel
+                snapshot={shellSnapshot}
+                refreshing={waitingForCurrentSnapshot}
+                onChangePlayer={() => setSubject(null)}
+              />
 
               <div ref={listRef} className="min-w-0 scroll-mt-4">
                 <div className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4">
@@ -836,9 +856,11 @@ function removeRecentPlayer(userId: number): void {
 
 function TargetPanel({
   snapshot,
+  refreshing = false,
   onChangePlayer,
 }: {
   snapshot: LiveFarmHelperSnapshot;
+  refreshing?: boolean;
   onChangePlayer: () => void;
 }) {
   const mapCount = snapshot.recs.length;
@@ -870,23 +892,36 @@ function TargetPanel({
                 <UsernameText username={snapshot.username} avatarUrl={snapshot.avatarUrl} />
               </Link>
               <div className="text-[12px] font-semibold tabular-nums text-osu-c1">{formatPp(snapshot.pp)}pp</div>
-              <div className="text-[11px] text-osu-f1">{peerBandRangeLabel(snapshot)}</div>
+              {refreshing ? (
+                <Skeleton className="mt-1 h-2.5 w-28 max-w-full" />
+              ) : (
+                <div className="text-[11px] text-osu-f1">{peerBandRangeLabel(snapshot)}</div>
+              )}
             </div>
           </div>
         </div>
 
         <div className="border-t border-osu-b3/20 px-4 py-4">
           <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">potential pp gain</div>
-          <div className="mt-1 text-3xl font-black leading-none tabular-nums text-osu-pink">
-            +{formatPp(snapshot.totalPotentialPp)}
-            <span className="ml-1 text-base font-bold text-osu-pink/70">pp</span>
-          </div>
-          {mapCount > 0 ? (
-            <div className="mt-2 text-[11px] text-osu-f1">
-              across {formatPp(mapCount)} map{mapCount === 1 ? "" : "s"}
-              {biggest > 0 ? ` · biggest +${formatPp(biggest)}pp` : ""}
+          {refreshing ? (
+            <div className="mt-2 space-y-2">
+              <Skeleton className="h-8 w-32" />
+              <Skeleton className="h-2.5 w-44 max-w-full" />
             </div>
-          ) : null}
+          ) : (
+            <>
+              <div className="mt-1 text-3xl font-black leading-none tabular-nums text-osu-pink">
+                +{formatPp(snapshot.totalPotentialPp)}
+                <span className="ml-1 text-base font-bold text-osu-pink/70">pp</span>
+              </div>
+              {mapCount > 0 ? (
+                <div className="mt-2 text-[11px] text-osu-f1">
+                  across {formatPp(mapCount)} map{mapCount === 1 ? "" : "s"}
+                  {biggest > 0 ? ` · biggest +${formatPp(biggest)}pp` : ""}
+                </div>
+              ) : null}
+            </>
+          )}
         </div>
       </div>
 
