@@ -3652,6 +3652,33 @@ describe("live backend", () => {
     expect(fetchImpl.mock.calls.filter(([input]) => String(input).includes("/api/v2/users/123/mania"))).toHaveLength(1);
   });
 
+  it("identifies direct beatmap file mirror requests", async () => {
+    const osuFile = "osu file format v14\n\n[HitObjects]\n64,192,1000,1,0,0:0:0:0:\n";
+    const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const headers = init?.headers as Record<string, string> | undefined;
+      expect(headers?.["user-agent"]).toContain("mania-hub");
+      if (String(input) === "https://osu.ppy.sh/osu/123") {
+        return new Response("", { status: 200, headers: { "content-type": "text/html" } });
+      }
+      if (String(input) === "https://catboy.best/osu/123") {
+        return new Response(osuFile, { status: 200, headers: { "content-type": "text/plain" } });
+      }
+      return new Response("not found", { status: 404 });
+    });
+    const osu = new OsuApiClient({
+      osuClientId: "",
+      osuClientSecret: "",
+      osuApiHardPerMinute: 60_000,
+      osuApiTargetPerMinute: 60_000,
+    }, fetchImpl as typeof fetch);
+
+    await expect(osu.getBeatmapFile(123, "test:beatmap-file")).resolves.toBe(osuFile);
+    expect(fetchImpl.mock.calls.map(([input]) => String(input))).toEqual([
+      "https://osu.ppy.sh/osu/123",
+      "https://catboy.best/osu/123",
+    ]);
+  });
+
   it("can force osu! user lookup by numeric username", async () => {
     const fetchImpl = vi.fn(async (input: string | URL | Request) => {
       const url = String(input);

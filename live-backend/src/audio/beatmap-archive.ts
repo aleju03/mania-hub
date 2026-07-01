@@ -9,6 +9,10 @@ const MAX_ARCHIVE_BYTES = 120 * 1024 * 1024;
 const MAX_EXTRACTED_FILE_BYTES = 60 * 1024 * 1024;
 const MAX_OSU_FILE_BYTES = 16 * 1024 * 1024;
 const MAX_ARCHIVE_OSU_CANDIDATES = 128;
+const ARCHIVE_FETCH_HEADERS = {
+  "user-agent": "mania-hub/1.0 (+https://mania-tracker.com)",
+  accept: "application/zip,application/octet-stream,*/*;q=0.8",
+} as const;
 
 type ArchiveSource = {
   name: string;
@@ -207,7 +211,7 @@ function parseContentRange(header: string | null): { start: number; end: number;
 async function fetchRangeBuffer(url: string, range: string, limitBytes: number, signal: AbortSignal): Promise<RangeBuffer> {
   const response = await fetch(url, {
     signal,
-    headers: { Range: range },
+    headers: { ...ARCHIVE_FETCH_HEADERS, Range: range },
   });
 
   if (response.status !== 206) {
@@ -450,7 +454,7 @@ async function resolveArchiveRangeUrl(source: (typeof ARCHIVE_SOURCES)[number], 
   const response = await fetch(url, {
     signal,
     redirect: "manual",
-    headers: { Range: "bytes=0-0" },
+    headers: { ...ARCHIVE_FETCH_HEADERS, Range: "bytes=0-0" },
   });
   await response.body?.cancel().catch(() => {});
 
@@ -635,7 +639,10 @@ async function extractArchiveFileByFullArchive(beatmapsetId: string, filename: s
     const timeout = setTimeout(() => controller.abort(), ARCHIVE_FETCH_TIMEOUT_MS);
     let shouldCooldown = false;
     try {
-      const archiveResponse = await withArchiveSourceSlot(source.name, () => fetch(source.url(beatmapsetId), { signal: controller.signal }));
+      const archiveResponse = await withArchiveSourceSlot(source.name, () => fetch(source.url(beatmapsetId), {
+        signal: controller.signal,
+        headers: ARCHIVE_FETCH_HEADERS,
+      }));
       if (!archiveResponse.ok) {
         shouldCooldown = shouldCooldownArchiveSource(archiveResponse.status);
         throw new Error(`${source.name} returned ${archiveResponse.status}`);
@@ -674,7 +681,10 @@ async function extractBeatmapOsuFileByFullArchive(
     const timeout = setTimeout(() => controller.abort(), ARCHIVE_FETCH_TIMEOUT_MS);
     let shouldCooldown = false;
     try {
-      const archiveResponse = await withArchiveSourceSlot(source.name, () => fetch(source.url(beatmapsetId), { signal: controller.signal }));
+      const archiveResponse = await withArchiveSourceSlot(source.name, () => fetch(source.url(beatmapsetId), {
+        signal: controller.signal,
+        headers: ARCHIVE_FETCH_HEADERS,
+      }));
       if (!archiveResponse.ok) {
         shouldCooldown = shouldCooldownArchiveSource(archiveResponse.status);
         throw new Error(`${source.name} returned ${archiveResponse.status}`);

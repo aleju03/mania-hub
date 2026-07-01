@@ -2,6 +2,10 @@ import type { Config } from "../config.js";
 import type { OscScore } from "../shared/types.js";
 
 const BEATMAP_FILE_FETCH_TIMEOUT_MS = 15_000;
+const BEATMAP_FILE_FETCH_HEADERS = {
+  "user-agent": "mania-hub/1.0 (+https://mania-tracker.com)",
+  accept: "text/plain,*/*;q=0.8",
+} as const;
 
 export type LimiterLane = "interactive" | "job" | "bulk" | "default";
 
@@ -457,7 +461,10 @@ export class OsuApiClient {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), BEATMAP_FILE_FETCH_TIMEOUT_MS);
       try {
-        const response = await this.fetchImpl(url, { signal: controller.signal });
+        const response = await this.fetchImpl(url, {
+          signal: controller.signal,
+          headers: BEATMAP_FILE_FETCH_HEADERS,
+        });
         if (!response.ok) {
           const retryAfterMs = parseRetryAfterMs(response.headers.get("retry-after"));
           if (response.status === 429) this.limiter.pause(retryAfterMs ?? 60_000);
