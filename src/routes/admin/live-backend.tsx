@@ -6,9 +6,11 @@ import { canUseAdminFeatures } from "../../lib/auth-shared";
 import { requireAdminAccess } from "../../lib/auth";
 import {
   fetchLiveBackendAdminStatus,
+  fetchLiveBackendStorageBreakdown,
   getLiveBackendUrl,
   openLiveEventSource,
   runLiveBackendAdminAction,
+  type LiveBackendStorageBreakdown,
   type LiveEventName,
 } from "../../lib/live-backend";
 import { formatNumber, formatTimeAgo } from "../../lib/format";
@@ -761,6 +763,7 @@ function LiveBackendPage() {
   const requestIdRef = useRef(0);
   const loadInFlightCountryRef = useRef<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const [storageOpen, setStorageOpen] = useState(false);
 
   const countryCode = useMemo(() => country.trim().toUpperCase().slice(0, 2) || DEFAULT_COUNTRY, [country]);
 
@@ -1005,6 +1008,7 @@ function LiveBackendPage() {
                 hint={formatStorageHint(status)}
                 tone={statusLoaded ? status.storage?.overLimit ? "bad" : status.db ? "good" : "bad" : "neutral"}
                 icon={<Database className="h-4 w-4" />}
+                onClick={() => setStorageOpen(true)}
               />
               <KpiCard
                 label="oSC feed"
@@ -1036,6 +1040,8 @@ function LiveBackendPage() {
               />
             </div>
           </Section>
+
+          {storageOpen ? <StorageBreakdownModal status={status} onClose={() => setStorageOpen(false)} /> : null}
 
           <Section title="Status" subtitle="Process, ingest, roster, and country snapshots">
             <StatusCard status={status} connectionState={connectionState} country={countryCode} snapshots={snapshots} />
@@ -2337,12 +2343,14 @@ function KpiCard({
   hint,
   tone,
   icon,
+  onClick,
 }: {
   label: string;
   value: string;
   hint: string;
   tone: StatusTone;
   icon: React.ReactNode;
+  onClick?: () => void;
 }) {
   const toneClass = {
     good: "text-osu-green-light bg-osu-green-light/10 border-osu-green-light/25",
@@ -2350,14 +2358,132 @@ function KpiCard({
     bad: "text-osu-red-light bg-osu-red/10 border-osu-red/30",
     neutral: "text-white bg-osu-b4/40 border-osu-b3/30",
   }[tone];
-  return (
-    <div className={`rounded-lg border px-4 py-3 ${toneClass}`}>
+  const inner = (
+    <>
       <div className="flex items-center justify-between gap-3">
         <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</div>
         <div className="text-current opacity-90">{icon}</div>
       </div>
       <div className="text-2xl font-bold tracking-tight leading-none mt-2 text-current">{value}</div>
       <div className="text-[10px] text-osu-f1 mt-1.5 truncate">{hint}</div>
+    </>
+  );
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={`rounded-lg border px-4 py-3 text-left w-full transition-[filter] hover:brightness-125 cursor-pointer ${toneClass}`}>
+        {inner}
+      </button>
+    );
+  }
+  return <div className={`rounded-lg border px-4 py-3 ${toneClass}`}>{inner}</div>;
+}
+
+// Modal opened from the Database KPI: per-table storage distribution, fetched on
+// demand from /api/admin/storage-breakdown (dbstat). Bars are sized relative to the
+// largest table; the percentage is each table's share of on-disk table data.
+function StorageBreakdownModal({ status, onClose }: { status: LiveBackendStatus | null; onClose: () => void }) {
+  const [data, setData] = useState<LiveBackendStorageBreakdown | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    fetchLiveBackendStorageBreakdown()
+      .then((res) => {
+        if (cancelled) return;
+        setData(res.storage);
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : "Could not load storage.");
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const fileTotal = (status?.storage?.bytes ?? 0) + (status?.storage?.walBytes ?? 0);
+  const maxBytes = data?.maxBytes ?? status?.storage?.maxBytes ?? 0;
+  const TOP_N = 14;
+  const rows = data?.tables ?? [];
+  const shown = rows.slice(0, TOP_N);
+  const rest = rows.slice(TOP_N);
+  const restBytes = rest.reduce((sum, table) => sum + table.bytes, 0);
+  const largest = shown[0]?.bytes ?? 1;
+  const totalTableBytes = data?.tableBytes ?? 0;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/65 px-4" onClick={onClose}>
+      <div className="w-full max-w-[560px] overflow-hidden rounded-lg border border-osu-b3/40 bg-osu-b5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-center gap-3 border-b border-osu-b3/20 px-4 pt-3 pb-2.5">
+          <Database className="h-4 w-4 flex-shrink-0 text-osu-c2" />
+          <div className="min-w-0 flex-1">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-osu-c2">Database storage</div>
+            <div className="text-[10px] text-osu-f1">
+              {formatBytes(fileTotal)} of {formatBytes(maxBytes)} used{data ? ` · ${data.tables.length} tables` : ""}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-shrink-0 rounded-md border border-osu-b3/30 bg-osu-b4/60 px-2.5 py-1 text-[11px] text-osu-l2 transition-colors duration-[120ms] hover:bg-osu-b3/60 hover:text-white cursor-pointer"
+          >
+            Close
+          </button>
+        </div>
+        <div className="max-h-[70vh] overflow-y-auto p-3">
+          {loading ? (
+            <div className="py-12 text-center text-[12px] text-osu-f1">Scanning tables...</div>
+          ) : error ? (
+            <div className="py-12 text-center text-[12px] text-osu-red-light">{error}</div>
+          ) : !data || shown.length === 0 ? (
+            <div className="py-12 text-center text-[12px] text-osu-f1">Per-table sizes are not available on this database build.</div>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              {shown.map((table) => {
+                const pct = totalTableBytes > 0 ? (table.bytes / totalTableBytes) * 100 : 0;
+                const width = largest > 0 ? (table.bytes / largest) * 100 : 0;
+                return (
+                  <div key={table.name} className="rounded-md bg-osu-b4/30 px-2.5 py-1.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="truncate font-mono text-[11px] text-osu-l2">{table.name}</span>
+                      <span className="flex-shrink-0 text-[11px] tabular-nums text-white">
+                        {formatBytes(table.bytes)} <span className="text-osu-f1">· {pct.toFixed(1)}%</span>
+                      </span>
+                    </div>
+                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-osu-b5/70">
+                      <div className="h-full rounded-full bg-osu-pink" style={{ width: `${Math.max(width, 1.5)}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+              {rest.length > 0 ? (
+                <div className="flex items-center justify-between gap-3 rounded-md px-2.5 py-1.5 text-[11px] text-osu-f1">
+                  <span>+ {rest.length} smaller {rest.length === 1 ? "table" : "tables"}</span>
+                  <span className="tabular-nums">
+                    {formatBytes(restBytes)} · {totalTableBytes > 0 ? ((restBytes / totalTableBytes) * 100).toFixed(1) : "0"}%
+                  </span>
+                </div>
+              ) : null}
+              <div className="mt-1 text-[9px] leading-relaxed text-osu-f1">
+                Table b-tree plus its indexes, grouped by owning table{data.capturedAt ? ` · measured ${formatTimeAgo(data.capturedAt)}` : ""}. Percentages are each table's share of on-disk table data.
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

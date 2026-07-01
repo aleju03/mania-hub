@@ -40,8 +40,6 @@ export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | 
     // Discord "last map in channel" memory is only useful while fresh, so 30d is
     // plenty; stale rows just mean /pb asks the user to run /recent again.
     discordChannelContext: Number((await exec(db, "delete from discord_channel_map_context where updated_at < ?", [daysAgo(30)])).rowsAffected ?? 0),
-    // Cached .osu files re-download cheaply when missing; 90d caps the table.
-    beatmapOsuFiles: Number((await exec(db, "delete from beatmap_osu_files where fetched_at < ?", [daysAgo(90)])).rowsAffected ?? 0),
   };
   const storageBefore = await getLocalDbStorage(config);
   const emergency = storageBefore.overLimit ? await pruneForLocalDbLimit(db, config, storageBefore) : {};
@@ -91,6 +89,62 @@ export async function getLocalDbStorage(config: Pick<Config, "databaseUrl" | "ma
     targetBytes: Math.min(config.targetLocalDbBytes, config.maxLocalDbBytes),
     overLimit: filePath != null && totalBytes > config.maxLocalDbBytes,
   };
+}
+
+export interface StorageBreakdown {
+  tables: Array<{ name: string; bytes: number }>;
+  tableBytes: number;
+  fileBytes: number | null;
+  walBytes: number | null;
+  maxBytes: number;
+  capturedAt: string;
+}
+
+let storageBreakdownCache: { at: number; value: StorageBreakdown } | null = null;
+const STORAGE_BREAKDOWN_TTL_MS = 60_000;
+
+// Per-table storage from the dbstat virtual table (table b-tree + its indexes,
+// aggregated by owning table). dbstat walks page metadata, so this is not free on
+// a multi-GB file: it is admin-only, on-demand, and cached for a minute. Returns
+// null if this libsql build lacks dbstat rather than throwing.
+export async function getStorageBreakdown(
+  db: Db,
+  config: Pick<Config, "databaseUrl" | "maxLocalDbBytes">,
+): Promise<StorageBreakdown | null> {
+  const nowMs = Date.now();
+  if (storageBreakdownCache && nowMs - storageBreakdownCache.at < STORAGE_BREAKDOWN_TTL_MS) {
+    return storageBreakdownCache.value;
+  }
+  let rows;
+  try {
+    rows = (await exec(
+      db,
+      `select m.tbl_name as name, sum(d.pgsize) as bytes
+       from dbstat d
+       join sqlite_master m on m.name = d.name
+       where m.type in ('table', 'index')
+       group by m.tbl_name
+       order by bytes desc`,
+    )).rows;
+  } catch {
+    return null;
+  }
+  const tables = rows.map((row) => ({ name: String(row.name), bytes: Number(row.bytes ?? 0) }));
+  const tableBytes = tables.reduce((sum, table) => sum + table.bytes, 0);
+  const filePath = localDbFilePath(config.databaseUrl);
+  const [fileBytes, walBytes] = filePath
+    ? await Promise.all([fileSize(filePath), fileSize(`${filePath}-wal`)])
+    : [null, null];
+  const value: StorageBreakdown = {
+    tables,
+    tableBytes,
+    fileBytes,
+    walBytes,
+    maxBytes: config.maxLocalDbBytes,
+    capturedAt: new Date(nowMs).toISOString(),
+  };
+  storageBreakdownCache = { at: nowMs, value };
+  return value;
 }
 
 async function pruneForLocalDbLimit(db: Db, config: Pick<Config, "targetLocalDbBytes">, storage: LocalDbStorage): Promise<Record<string, number>> {

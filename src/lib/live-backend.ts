@@ -457,6 +457,47 @@ export const fetchLiveBackendAdminStatus = createServerFn({ method: "GET" })
     return body;
   });
 
+export interface LiveBackendStorageBreakdown {
+  tables: Array<{ name: string; bytes: number }>;
+  tableBytes: number;
+  fileBytes: number | null;
+  walBytes: number | null;
+  maxBytes: number;
+  capturedAt: string;
+}
+
+// Per-table DB storage for the admin storage modal. Admin-gated; the token is
+// injected server-side (never in the browser), mirroring fetchLiveBackendAdminStatus.
+export const fetchLiveBackendStorageBreakdown = createServerFn({ method: "GET" })
+  .handler(async (): Promise<{ storage: LiveBackendStorageBreakdown | null }> => {
+    await requireAdminAccess("Server storage breakdown");
+    const base = getServerLiveBackendUrl();
+    if (!base) throw new Error("LIVE_BACKEND_URL is not configured.");
+    const headers: HeadersInit = {};
+    if (process.env.LIVE_ADMIN_TOKEN) {
+      headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), LIVE_BACKEND_ADMIN_STATUS_TIMEOUT_MS);
+    let response: Response;
+    try {
+      response = await fetch(`${base}/api/admin/storage-breakdown`, { headers, signal: controller.signal });
+    } catch (err) {
+      if (isAbortError(err)) throw new Error("Storage breakdown timed out.");
+      throw err;
+    } finally {
+      clearTimeout(timeout);
+    }
+    const body = await response.json() as { storage: LiveBackendStorageBreakdown | null };
+    if (!response.ok) {
+      const message = body && typeof body === "object" && "error" in body
+        ? String((body as { error?: unknown }).error)
+        : `Server ${response.status} for /api/admin/storage-breakdown`;
+      throw new Error(message);
+    }
+    return body;
+  });
+
 export interface DiscordPublicInfo {
   configured: boolean;
   applicationId: string | null;

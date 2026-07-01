@@ -42,7 +42,7 @@ import {
 } from "../replay-video/exports.js";
 import { isReplayVideoStorageConfigured } from "../replay-video/r2.js";
 import { addManualRosterMember, enqueueRosterRefreshes, removeManualRosterMember } from "../rosters/country-rosters.js";
-import { getLocalDbStorage, runRetention } from "../retention.js";
+import { getLocalDbStorage, getStorageBreakdown, runRetention } from "../retention.js";
 import { getDiscordPublicInfo, type DiscordRuntime } from "../discord/index.js";
 import { getDiscordShowcase } from "../discord/showcase.js";
 import { listAllSubscriptions, removeSubscriptionById } from "../discord/subscriptions.js";
@@ -263,6 +263,14 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     sendJson(req, res, ctx, 200, await statusBody(ctx, { includeWorkerActivity: true, snapshotCountry: country }));
+    return true;
+  }
+  if (url.pathname === "/api/admin/storage-breakdown") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { storage: await getStorageBreakdown(ctx.db, ctx.config) });
     return true;
   }
   if (url.pathname === "/api/roster/self-add" || url.pathname === "/api/roster/self-remove") {
