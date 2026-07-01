@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, migrate, type Db } from "../src/db.js";
-import { getPackWallet, listPackCollectionCards, savePackWallet } from "../src/features/pack-wallets.js";
+import { getPackWallet, listPackCollectionCards, listPackCollectionOwnedUserIds, savePackWallet } from "../src/features/pack-wallets.js";
 
 let dir = "";
 let db: Db;
@@ -95,6 +95,7 @@ describe("pack wallets", () => {
     const page = await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 });
     expect(page.total).toBe(1);
     expect(page.cards[0]).toMatchObject({ userId: 42, username: "delta", copies: 2, recycledCopies: 0 });
+    expect(await listPackCollectionOwnedUserIds(db, USER_ID)).toEqual([42]);
   });
 
   it("treats full wallet imports as snapshots and post-strip imports as deltas", async () => {

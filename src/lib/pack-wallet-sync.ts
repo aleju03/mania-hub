@@ -151,6 +151,23 @@ export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
     };
   });
 
+export const fetchServerPackCollectionOwnedIds = createServerFn({ method: "GET" }).handler(
+  async (): Promise<number[] | null> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const target = await getSyncTarget();
+    if (!target) return null;
+    const url = new URL(target.url.replace("/api/pack-wallet/", "/api/pack-collection/"));
+    url.searchParams.set("ownedIds", "1");
+    const response = await fetch(url, { headers: target.headers });
+    if (!response.ok) throw new Error(`Pack collection owned ids fetch failed (${response.status}).`);
+    const body = (await response.json()) as { userIds?: unknown };
+    return Array.isArray(body.userIds)
+      ? body.userIds.map((id) => Math.floor(Number(id) || 0)).filter((id) => id > 0)
+      : [];
+  },
+);
+
 export type ServerPackRecycleMode = "duplicates" | "whole" | "all_duplicates" | "whole_matching";
 
 export const recycleServerPackCollection = createServerFn({ method: "POST" })

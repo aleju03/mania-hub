@@ -407,6 +407,20 @@ export async function listPackCollectionCards(
   };
 }
 
+export async function listPackCollectionOwnedUserIds(db: Db, userId: number): Promise<number[]> {
+  const rows = (await exec(
+    db,
+    `select card_user_id
+     from pack_collection_cards
+     where owner_user_id = ? and copies > 0
+     order by card_user_id asc`,
+    [userId],
+  )).rows;
+  return rows
+    .map((row) => Number(row.card_user_id))
+    .filter((id) => Number.isInteger(id) && id > 0);
+}
+
 export function shardValueForStoredTier(tier: string | null): number {
   return TIER_SHARD_VALUES[tier ?? "unrated"] ?? 1;
 }

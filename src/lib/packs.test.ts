@@ -292,7 +292,7 @@ describe("tracked pool draws", () => {
   });
 });
 
-describe("wild guarantee", () => {
+describe("shard pack duplicate protection", () => {
   const poolIdFor = (position: number) => 100_000 + position;
 
   it("picks an unowned, unused player inside the draw slice", () => {
@@ -311,10 +311,10 @@ describe("wild guarantee", () => {
     expect(pickUnownedPoolEntry([page], 50, owned, new Set(), mulberry32(1))).toBeNull();
   });
 
-  it("always lands at least one unowned card when the pool has them", async () => {
+  it("fills every slot with unowned cards when the pool has enough missing cards", async () => {
     const total = 300;
     // Only the last row of each page is unowned (2% of the pool), so most
-    // seeds draw five owned players and exercise the swap path.
+    // seeds draw owned players and exercise the full-slice scan path.
     const owned = new Set(
       Array.from({ length: total }, (_, index) => index + 1)
         .filter((position) => position % RANKINGS_PAGE_SIZE !== 0)
@@ -327,22 +327,41 @@ describe("wild guarantee", () => {
       });
       expect(players).toHaveLength(PACK_SIZE);
       expect(new Set(players.map((player) => player.user.id)).size).toBe(PACK_SIZE);
-      expect(players.some((player) => !owned.has(player.user.id))).toBe(true);
+      expect(players.every((player) => !owned.has(player.user.id))).toBe(true);
     }
   });
 
-  it("leaves a draw untouched when it already holds an unowned card", async () => {
+  it("keeps only unavoidable repeats when the slice is almost complete", async () => {
     const total = 300;
-    const owned = new Set<number>([poolIdFor(1)]);
+    const missing = new Set([7, 150, 299].map(poolIdFor));
+    const owned = new Set(
+      Array.from({ length: total }, (_, index) => poolIdFor(index + 1))
+        .filter((userId) => !missing.has(userId)),
+    );
+    const { fetchPage } = makePoolFetcher(total);
+    const { players } = await drawPackPlayersFromPool(mulberry32(17), fetchPage, {
+      ownedUserIds: owned,
+    });
+    expect(players).toHaveLength(PACK_SIZE);
+    expect(new Set(players.map((player) => player.user.id)).size).toBe(PACK_SIZE);
+    const unowned = players.filter((player) => !owned.has(player.user.id)).map((player) => player.user.id);
+    expect(new Set(unowned)).toEqual(missing);
+    expect(players.filter((player) => owned.has(player.user.id))).toHaveLength(PACK_SIZE - missing.size);
+  });
+
+  it("leaves a draw untouched when the collection is empty", async () => {
+    const total = 300;
+    const owned = new Set<number>();
     const { fetchPage, calls } = makePoolFetcher(total);
     const { players } = await drawPackPlayersFromPool(mulberry32(9), fetchPage, {
       ownedUserIds: owned,
     });
-    expect(players.some((player) => !owned.has(player.user.id))).toBe(true);
-    // No re-roll fetches happen: the pages fetched match a guarantee-free draw.
+    expect(players.every((player) => !owned.has(player.user.id))).toBe(true);
+    // No replacement fetches happen: the pages fetched match a guarantee-free draw.
     const { fetchPage: plainFetch, calls: plainCalls } = makePoolFetcher(total);
-    await drawPackPlayersFromPool(mulberry32(9), plainFetch);
+    const { players: plainPlayers } = await drawPackPlayersFromPool(mulberry32(9), plainFetch);
     expect(calls).toEqual(plainCalls);
+    expect(players.map((player) => player.user.id)).toEqual(plainPlayers.map((player) => player.user.id));
   });
 });
 
@@ -364,8 +383,8 @@ describe("pack type lineup", () => {
     for (let index = 1; index < sorted.length; index += 1) {
       expect(sorted[index].topFraction).toBeLessThanOrEqual(sorted[index - 1].topFraction);
     }
-    // Wild's identity over standard is the new-card guarantee.
-    expect(packTypeById("wild").guaranteesNew).toBe(true);
+    // Every shard pack protects against duplicates; Standard stays random.
+    for (const type of shardPacks) expect(type.guaranteesNew).toBe(true);
     expect(packTypeById("standard").guaranteesNew).toBeUndefined();
   });
 });

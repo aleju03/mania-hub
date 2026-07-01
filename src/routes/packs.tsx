@@ -25,6 +25,7 @@ import {
   readPendingPack,
   writePendingPack,
 } from "../lib/pack-pending";
+import { fetchServerPackCollectionOwnedIds } from "../lib/pack-wallet-sync";
 import {
   drawPackPlayers,
   fetchPackPlayerScores,
@@ -130,6 +131,21 @@ function canAffordPack(wallet: PackWallet | null, type: PackTypeDef): boolean {
   return wallet.shards >= type.cost.amount;
 }
 
+async function getDuplicateProtectionOwnedIds(
+  type: PackTypeDef,
+  wallet: PackWallet | null,
+  syncStatus: "local" | "syncing" | "synced",
+): Promise<Set<number> | undefined> {
+  if (!type.guaranteesNew || !wallet) return undefined;
+  const owned = new Set(ownedCards(wallet).map((card) => card.userId));
+  if (syncStatus === "local") return owned;
+
+  const serverOwnedIds = await fetchServerPackCollectionOwnedIds();
+  if (!serverOwnedIds) throw new Error("Synced collection is unavailable.");
+  for (const userId of serverOwnedIds) owned.add(userId);
+  return owned;
+}
+
 /* Thumbnail renders of each pack type's foil art, generated once. */
 function usePackArtThumbs(): Partial<Record<PackTypeId, string>> {
   const [thumbs, setThumbs] = useState<Partial<Record<PackTypeId, string>>>({});
@@ -223,8 +239,7 @@ function PackTypeSelector({
         })}
       </div>
       <div className="mt-4 text-center text-[11px] text-osu-f1">
-        {selectedType.blurb}. Every opened pack banks {PACK_OPEN_SHARD_REWARD} shards; recycling
-        duplicate cards adds more.
+        {selectedType.blurb}. +{PACK_OPEN_SHARD_REWARD} shards per pack; recycle dupes for more.
       </div>
     </div>
   );
@@ -272,24 +287,23 @@ function PacksPage() {
     }
     const type = packTypeById(packTypeId);
     const currentWallet = walletApi.wallet;
-    drawPackPlayers(Math.random, {
-      topFraction: type.topFraction,
-      ownedUserIds:
-        type.guaranteesNew && currentWallet
-          ? new Set(ownedCards(currentWallet).map((card) => card.userId))
-          : undefined,
-    })
-      .then((draw) => {
+    void (async () => {
+      try {
+        const ownedUserIds = await getDuplicateProtectionOwnedIds(type, currentWallet, walletApi.syncStatus);
+        const draw = await drawPackPlayers(Math.random, {
+          topFraction: type.topFraction,
+          ownedUserIds,
+        });
         if (cancelled) return;
         walletApi.notePoolTotal(draw.poolTotal);
         if (isLiveBackendConfigured()) {
           void warmLivePackPlayers(draw.players.map((player) => player.user.id)).catch(() => {});
         }
         setCards(buildCardStates(draw.players));
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) setDealError(true);
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
