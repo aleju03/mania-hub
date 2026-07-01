@@ -2,19 +2,29 @@ import type { Db } from "../db.js";
 import { exec } from "../db.js";
 import type { OsuApiClient } from "./client.js";
 import { nowIso } from "../shared/score.js";
+import { gzip, gunzip } from "node:zlib";
+import { promisify } from "node:util";
 
-// Persistent cache for raw .osu files. The dan estimator and activity analyzer
-// both download and parse a chart's .osu file; without this they re-fetch from
-// osu.ppy.sh every time a map is computed cold (including after a cache-version
-// bump that recomputes every dan). The dan/activity RESULTS are already cached in
-// their own tables, so this only fires on a genuine cold parse, but it keeps
-// those cold paths off the rate-limited osu! API. Stored rows are pruned by
-// retention and bounded by the global DB size cap.
+// Durable cache for compressed .osu files. The dan estimator and activity
+// analyzer both parse a chart's .osu text; keeping the chart text itself means a
+// detector/cache-version bump can reprocess known maps without re-downloading
+// every chart from osu.ppy.sh.
 
-// Treat a cached file as good for this long. .osu files are immutable per
-// beatmap id in practice (a real edit gets a new id), so this is mostly a
-// freshness backstop rather than a correctness requirement.
-const MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
+const gzipAsync = promisify(gzip);
+const gunzipAsync = promisify(gunzip);
+const COMPRESSION = "gzip";
+const TOUCH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
+
+export interface StoreCachedBeatmapFileOptions {
+  beatmapsetId?: number | null;
+  source?: string;
+}
+
+export interface MarkCachedBeatmapFileUnavailableOptions {
+  beatmapsetId?: number | null;
+  error?: string;
+  source?: string;
+}
 
 export async function getCachedBeatmapFile(
   db: Db,
@@ -25,36 +35,175 @@ export async function getCachedBeatmapFile(
   const safeId = Math.floor(beatmapId);
   if (!Number.isFinite(safeId) || safeId <= 0) throw new Error("Invalid beatmap ID");
 
-  const cached = await readCachedFile(db, safeId);
+  const cached = await readCachedBeatmapFile(db, safeId);
   if (cached) return cached;
 
   const content = await osu.getBeatmapFile(safeId, caller);
-  // Best-effort store: a failed write must not fail the compute that needs the
-  // file, so swallow write errors (e.g. a transient DB lock).
-  await storeFile(db, safeId, content).catch(() => {});
+  const beatmapsetId = await readKnownBeatmapsetId(db, safeId).catch(() => null);
+  await storeCachedBeatmapFile(db, safeId, content, { beatmapsetId, source: "osu_api" }).catch(() => {});
   return content;
 }
 
-async function readCachedFile(db: Db, beatmapId: number): Promise<string | null> {
+export async function readCachedBeatmapFile(db: Db, beatmapId: number): Promise<string | null> {
+  const safeId = Math.floor(beatmapId);
+  if (!Number.isFinite(safeId) || safeId <= 0) return null;
+
   const row = (await exec(
     db,
-    "select content, fetched_at from beatmap_osu_files where beatmap_id = ? limit 1",
-    [beatmapId],
+    `select content, content_blob, compression, fetched_at, last_used_at
+     from beatmap_osu_files
+     where beatmap_id = ?
+     limit 1`,
+    [safeId],
   ).catch(() => ({ rows: [] as Record<string, unknown>[] }))).rows[0];
   if (!row) return null;
-  const fetchedAt = Date.parse(String(row.fetched_at ?? ""));
-  if (Number.isFinite(fetchedAt) && Date.now() - fetchedAt > MAX_AGE_MS) return null;
-  const content = row.content == null ? "" : String(row.content);
+
+  const storedBlob = await readCompressedContent(row).catch(() => null);
+  if (storedBlob) {
+    await touchCachedBeatmapFile(db, safeId, row).catch(() => {});
+    return storedBlob;
+  }
+
+  const legacyContent = row.content == null ? "" : String(row.content);
+  if (!legacyContent) return null;
+  await storeCachedBeatmapFile(db, safeId, legacyContent, { source: "legacy_raw" }).catch(() => {});
+  return legacyContent;
+}
+
+export async function storeCachedBeatmapFile(
+  db: Db,
+  beatmapId: number,
+  content: string,
+  options: StoreCachedBeatmapFileOptions = {},
+): Promise<void> {
+  if (!content) return;
+  const safeId = Math.floor(beatmapId);
+  if (!Number.isFinite(safeId) || safeId <= 0) throw new Error("Invalid beatmap ID");
+
+  const raw = Buffer.from(content, "utf8");
+  const compressed = await gzipAsync(raw);
+  const now = nowIso();
+  await exec(
+    db,
+    `insert into beatmap_osu_files (
+       beatmap_id, beatmapset_id, compression, content_blob, content,
+       raw_bytes, compressed_bytes, source, fetched_at, last_used_at
+     )
+     values (?, ?, ?, ?, '', ?, ?, ?, ?, ?)
+     on conflict(beatmap_id) do update set
+       beatmapset_id = coalesce(excluded.beatmapset_id, beatmap_osu_files.beatmapset_id),
+       compression = excluded.compression,
+       content_blob = excluded.content_blob,
+       content = '',
+       raw_bytes = excluded.raw_bytes,
+       compressed_bytes = excluded.compressed_bytes,
+       source = excluded.source,
+       error = null,
+       fetched_at = excluded.fetched_at,
+       last_used_at = excluded.last_used_at`,
+    [
+      safeId,
+      normalizeBeatmapsetId(options.beatmapsetId),
+      COMPRESSION,
+      compressed,
+      raw.byteLength,
+      compressed.byteLength,
+      normalizeSource(options.source),
+      now,
+      now,
+    ],
+  );
+}
+
+export async function markCachedBeatmapFileUnavailable(
+  db: Db,
+  beatmapId: number,
+  options: MarkCachedBeatmapFileUnavailableOptions = {},
+): Promise<void> {
+  const safeId = Math.floor(beatmapId);
+  if (!Number.isFinite(safeId) || safeId <= 0) throw new Error("Invalid beatmap ID");
+  const now = nowIso();
+  await exec(
+    db,
+    `insert into beatmap_osu_files (
+       beatmap_id, beatmapset_id, compression, content_blob, content,
+       raw_bytes, compressed_bytes, source, error, fetched_at, last_used_at
+     )
+     values (?, ?, ?, null, '', 0, 0, ?, ?, ?, ?)
+     on conflict(beatmap_id) do update set
+       beatmapset_id = coalesce(excluded.beatmapset_id, beatmap_osu_files.beatmapset_id),
+       content_blob = null,
+       content = '',
+       raw_bytes = 0,
+       compressed_bytes = 0,
+       source = excluded.source,
+       error = excluded.error,
+       fetched_at = excluded.fetched_at,
+       last_used_at = excluded.last_used_at`,
+    [
+      safeId,
+      normalizeBeatmapsetId(options.beatmapsetId),
+      COMPRESSION,
+      normalizeSource(options.source ?? "unavailable"),
+      truncateError(options.error),
+      now,
+      now,
+    ],
+  );
+}
+
+async function readCompressedContent(row: Record<string, unknown>): Promise<string | null> {
+  const blob = toBuffer(row.content_blob);
+  if (!blob || blob.byteLength === 0) return null;
+  const compression = String(row.compression ?? "");
+  if (compression !== COMPRESSION) return null;
+  const raw = await gunzipAsync(blob);
+  const content = raw.toString("utf8");
   return content.length ? content : null;
 }
 
-async function storeFile(db: Db, beatmapId: number, content: string): Promise<void> {
-  if (!content) return;
-  await exec(
+async function touchCachedBeatmapFile(db: Db, beatmapId: number, row: Record<string, unknown>): Promise<void> {
+  const lastUsedAt = Date.parse(String(row.last_used_at ?? row.fetched_at ?? ""));
+  if (Number.isFinite(lastUsedAt) && Date.now() - lastUsedAt < TOUCH_INTERVAL_MS) return;
+  await exec(db, "update beatmap_osu_files set last_used_at = ? where beatmap_id = ?", [nowIso(), beatmapId]);
+}
+
+async function readKnownBeatmapsetId(db: Db, beatmapId: number): Promise<number | null> {
+  const row = (await exec(
     db,
-    `insert into beatmap_osu_files (beatmap_id, content, fetched_at)
-     values (?, ?, ?)
-     on conflict(beatmap_id) do update set content = excluded.content, fetched_at = excluded.fetched_at`,
-    [beatmapId, content, nowIso()],
-  );
+    `select beatmapset_id
+     from beatmaps
+     where beatmap_id = ?
+     union all
+     select beatmapset_id
+     from maps_beatmaps
+     where beatmap_id = ?
+     limit 1`,
+    [beatmapId, beatmapId],
+  )).rows[0];
+  return normalizeBeatmapsetId(row?.beatmapset_id == null ? null : Number(row.beatmapset_id));
+}
+
+function toBuffer(value: unknown): Buffer | null {
+  if (Buffer.isBuffer(value)) return value;
+  if (value instanceof ArrayBuffer) return Buffer.from(value);
+  if (ArrayBuffer.isView(value)) return Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+  return null;
+}
+
+function normalizeBeatmapsetId(value: number | null | undefined): number | null {
+  if (value == null) return null;
+  const safe = Math.floor(Number(value));
+  return Number.isSafeInteger(safe) && safe > 0 ? safe : null;
+}
+
+function normalizeSource(value: string | undefined): string {
+  const source = (value ?? "unknown").trim().replace(/[^a-zA-Z0-9:_-]+/g, "_").slice(0, 48);
+  return source || "unknown";
+}
+
+function truncateError(value: string | undefined): string | null {
+  if (value == null) return null;
+  const error = value.trim();
+  return error ? error.slice(0, 500) : null;
 }

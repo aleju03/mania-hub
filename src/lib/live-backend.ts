@@ -338,6 +338,8 @@ function normalizeAdminPath(input: unknown): string {
     "/api/admin/run-retention",
     "/api/admin/osc-smoke",
     "/api/admin/run-osc-backfill",
+    "/api/admin/osu-file-backfill/start",
+    "/api/admin/osu-file-backfill/cancel",
     "/api/admin/discord/register-commands",
     "/api/admin/discord/register-emojis",
   ]);

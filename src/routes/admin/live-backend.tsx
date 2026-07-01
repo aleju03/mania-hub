@@ -67,6 +67,32 @@ interface LiveBackendStatus {
     unavailable: number;
     searchIndexed: number;
   };
+  osuFileBackfill?: {
+    runId: string | null;
+    status: "idle" | "queued" | "running" | "done" | "cancelled" | "failed";
+    active: boolean;
+    stalled: boolean;
+    batchSize: number;
+    totalAnalyzed: number;
+    cached: number;
+    unavailable: number;
+    missing: number;
+    percent: number;
+    processed: number;
+    stored: number;
+    failed: number;
+    lastBeatmapId: number;
+    lastError: string | null;
+    startedAt: string | null;
+    updatedAt: string;
+    finishedAt: string | null;
+    jobs: {
+      queued: number;
+      running: number;
+      failed: number;
+      deferred: number;
+    };
+  };
   countries?: Array<{
     country: string;
     status: "active" | "warm" | "paused";
@@ -1129,6 +1155,8 @@ function LiveBackendPage() {
               onRunRetention={() => void runAdminAction("retention", "/api/admin/run-retention")}
               onOscSmoke={() => void runAdminAction("osc-smoke", "/api/admin/osc-smoke")}
               onRunOscBackfill={() => void runAdminAction("osc-backfill", "/api/admin/run-osc-backfill")}
+              onStartOsuFileBackfill={() => void runAdminAction("osu-file-backfill", "/api/admin/osu-file-backfill/start")}
+              onCancelOsuFileBackfill={() => void runAdminAction("cancel-osu-file-backfill", "/api/admin/osu-file-backfill/cancel")}
               onToggleWorkers={() => void runAdminAction(
                 status?.worker?.paused ? "resume-workers" : "pause-workers",
                 status?.worker?.paused ? "/api/admin/resume-workers" : "/api/admin/pause-workers",
@@ -3986,6 +4014,8 @@ function ControlsCard({
   onRunRetention,
   onOscSmoke,
   onRunOscBackfill,
+  onStartOsuFileBackfill,
+  onCancelOsuFileBackfill,
   onToggleWorkers,
 }: {
   status: LiveBackendStatus | null;
@@ -3995,10 +4025,18 @@ function ControlsCard({
   onRunRetention: () => void;
   onOscSmoke: () => void;
   onRunOscBackfill: () => void;
+  onStartOsuFileBackfill: () => void;
+  onCancelOsuFileBackfill: () => void;
   onToggleWorkers: () => void;
 }) {
   return (
     <div className="space-y-3">
+      <OsuFileBackfillPanel
+        backfill={status?.osuFileBackfill ?? null}
+        busy={busy}
+        onStart={onStartOsuFileBackfill}
+        onCancel={onCancelOsuFileBackfill}
+      />
       <div className="rounded-lg border border-osu-b3/30 bg-osu-b4/30 p-3">
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           <AdminButton
@@ -4047,6 +4085,113 @@ function ControlsCard({
       </div>
     </div>
   );
+}
+
+function OsuFileBackfillPanel({
+  backfill,
+  busy,
+  onStart,
+  onCancel,
+}: {
+  backfill: LiveBackendStatus["osuFileBackfill"] | null;
+  busy: string | null;
+  onStart: () => void;
+  onCancel: () => void;
+}) {
+  const percent = Math.max(0, Math.min(100, backfill?.percent ?? 0));
+  const active = !!backfill?.active;
+  const tone = getOsuFileBackfillTone(backfill);
+  const statusLabel = getOsuFileBackfillStatusLabel(backfill);
+  const startLabel = backfill?.stalled ? "Resume .osu backfill" : backfill?.status === "cancelled" ? "Restart .osu backfill" : "Start .osu backfill";
+  const cancellable = !!backfill && (
+    backfill.active
+    || backfill.status === "queued"
+    || backfill.status === "running"
+    || (backfill.jobs.queued + backfill.jobs.running + backfill.jobs.failed + backfill.jobs.deferred) > 0
+  );
+
+  return (
+    <div className="rounded-lg border border-osu-b3/30 bg-osu-b4/30 p-3">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className={`h-2 w-2 rounded-full ${toneDotClass(tone)}`} />
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-osu-c2">Durable .osu cache</div>
+            <div className="rounded-full border border-osu-b3/30 bg-osu-b5/60 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-osu-f1">
+              {statusLabel}
+            </div>
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2 text-[10px] text-osu-f1 sm:grid-cols-4">
+            <BackfillMetric label="Cached" value={formatNumber(backfill?.cached ?? 0)} />
+            <BackfillMetric label="Missing" value={formatNumber(backfill?.missing ?? 0)} />
+            <BackfillMetric label="Unavailable" value={formatNumber(backfill?.unavailable ?? 0)} />
+            <BackfillMetric label="Processed" value={formatNumber(backfill?.processed ?? 0)} />
+          </div>
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-osu-b5/70">
+            <div className="h-full rounded-full bg-osu-c2 transition-[width] duration-300" style={{ width: `${percent}%` }} />
+          </div>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-osu-f1">
+            <span>{percent.toFixed(1)}% of {formatNumber(backfill?.totalAnalyzed ?? 0)} analyzed maps covered</span>
+            {backfill?.updatedAt ? <span>updated {formatTimeAgo(backfill.updatedAt)}</span> : null}
+            {backfill?.lastError ? <span className="max-w-full truncate text-osu-yellow">last: {backfill.lastError}</span> : null}
+          </div>
+        </div>
+        <div className={cancellable ? "grid grid-cols-1 gap-2 sm:grid-cols-2 lg:w-[330px]" : "grid grid-cols-1 gap-2 lg:w-[170px]"}>
+          <AdminButton
+            label={startLabel}
+            description="Queue a paced background job that downloads missing .osu chart files and stores them compressed in SQLite."
+            icon={<Database className="h-3.5 w-3.5" />}
+            busy={busy === "osu-file-backfill"}
+            onClick={onStart}
+          />
+          {cancellable ? (
+            <AdminButton
+              label="Cancel backfill"
+              description="Stop queued .osu cache backfill batches. A running batch may finish before the cancellation is observed."
+              icon={<X className="h-3.5 w-3.5" />}
+              busy={busy === "cancel-osu-file-backfill"}
+              onClick={onCancel}
+              danger
+            />
+          ) : null}
+        </div>
+      </div>
+      {active ? (
+        <div className="mt-2 text-[10px] text-osu-f1">
+          Queue: {formatNumber(backfill?.jobs.queued ?? 0)} queued, {formatNumber(backfill?.jobs.running ?? 0)} running, {formatNumber(backfill?.jobs.failed ?? 0)} retrying.
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function BackfillMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-osu-b3/20 bg-osu-b5/50 px-2.5 py-1.5">
+      <div className="text-[8px] font-semibold uppercase tracking-wider text-osu-f1">{label}</div>
+      <div className="mt-0.5 text-[12px] font-semibold text-osu-c2">{value}</div>
+    </div>
+  );
+}
+
+function getOsuFileBackfillTone(backfill: LiveBackendStatus["osuFileBackfill"] | null | undefined): StatusTone {
+  if (!backfill) return "neutral";
+  if (backfill.status === "done" || backfill.missing === 0) return "good";
+  if (backfill.status === "running" || backfill.status === "queued") return backfill.stalled ? "warn" : "good";
+  if (backfill.status === "cancelled") return "warn";
+  if (backfill.status === "failed") return "bad";
+  return "neutral";
+}
+
+function getOsuFileBackfillStatusLabel(backfill: LiveBackendStatus["osuFileBackfill"] | null | undefined): string {
+  if (!backfill) return "unknown";
+  if (backfill.missing === 0) return "complete";
+  if (backfill.stalled) return "stalled";
+  if (backfill.status === "queued") return "queued";
+  if (backfill.status === "running") return "running";
+  if (backfill.status === "cancelled") return "cancelled";
+  if (backfill.status === "failed") return "failed";
+  return "idle";
 }
 
 function AdminButton({

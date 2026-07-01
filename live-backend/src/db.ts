@@ -91,6 +91,7 @@ export async function migrate(db: Db): Promise<void> {
   await migrateTrackerIndexes(db);
   await migrateSnipePersonalBests(db);
   await migrateUserGoals(db);
+  await migrateBeatmapOsuFileCache(db);
   await migrateMapSearchIndex(db);
   await migrateMapCollections(db);
 }
@@ -793,6 +794,53 @@ async function migrateUserGoals(db: Db): Promise<void> {
     create index if not exists idx_user_goals_user_beatmap
       on user_goals(user_id, status, beatmap_id)
   `);
+}
+
+async function migrateBeatmapOsuFileCache(db: Db): Promise<void> {
+  await db.execute(`
+    create table if not exists beatmap_osu_files (
+      beatmap_id integer primary key,
+      beatmapset_id integer,
+      compression text not null default 'gzip',
+      content_blob blob,
+      content text not null default '',
+      raw_bytes integer not null default 0,
+      compressed_bytes integer not null default 0,
+      source text not null default 'unknown',
+      error text,
+      fetched_at text not null,
+      last_used_at text not null
+    )
+  `);
+
+  const columns = (await db.execute("pragma table_info(beatmap_osu_files)")).rows.map((row) => String(row.name));
+  if (!columns.includes("beatmapset_id")) {
+    await db.execute("alter table beatmap_osu_files add column beatmapset_id integer");
+  }
+  if (!columns.includes("compression")) {
+    await db.execute("alter table beatmap_osu_files add column compression text not null default 'gzip'");
+  }
+  if (!columns.includes("content_blob")) {
+    await db.execute("alter table beatmap_osu_files add column content_blob blob");
+  }
+  if (!columns.includes("raw_bytes")) {
+    await db.execute("alter table beatmap_osu_files add column raw_bytes integer not null default 0");
+  }
+  if (!columns.includes("compressed_bytes")) {
+    await db.execute("alter table beatmap_osu_files add column compressed_bytes integer not null default 0");
+  }
+  if (!columns.includes("source")) {
+    await db.execute("alter table beatmap_osu_files add column source text not null default 'unknown'");
+  }
+  if (!columns.includes("error")) {
+    await db.execute("alter table beatmap_osu_files add column error text");
+  }
+  if (!columns.includes("last_used_at")) {
+    await db.execute("alter table beatmap_osu_files add column last_used_at text");
+    await db.execute("update beatmap_osu_files set last_used_at = fetched_at where last_used_at is null");
+  }
+  await db.execute("update beatmap_osu_files set raw_bytes = length(content) where raw_bytes = 0 and content is not null and length(content) > 0");
+  await db.execute("update beatmap_osu_files set last_used_at = fetched_at where last_used_at is null");
 }
 
 async function migrateMapSearchIndex(db: Db): Promise<void> {

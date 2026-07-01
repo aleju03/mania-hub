@@ -7,6 +7,7 @@ import { activateCountry, deleteCountryData, getCountryRegistry, GLOBAL_COUNTRY_
 import type { Db } from "../db.js";
 import { dbHealth, exec, getSqliteBusyRetryStats, parseJson } from "../db.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION, getPlayerActivityAvailability, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../features/activity.js";
+import { cancelBeatmapOsuFileBackfill, getBeatmapOsuFileBackfillStatus, startBeatmapOsuFileBackfill } from "../features/beatmap-osu-file-backfill.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
 import { GOAL_KINDS, GOAL_MAP_KINDS, GOAL_SPEED_BUCKETS, GOAL_TARGET_GRADES, createUserGoal, deleteUserGoal, getUserGoal, listUserGoalsWithProgress, reconcileGoalsForUser, type GoalKind, type GoalSpeedBucket, type UserGoalInput } from "../features/goals.js";
 import { getMyDataSummary, getUserTopPlaysFeed, getUserTrackedFeed, type MyDataTopPlaysQuery, type MyDataTrackedFeedQuery } from "../features/my-data.js";
@@ -29,6 +30,7 @@ import type { LiveEventLog } from "../live/event-log.js";
 import { readRuntimeStatus, setWorkersPaused, type RuntimeStatusSnapshot } from "../live/runtime-status.js";
 import type { OscStatus } from "../osc/client.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
+import { getCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
 import { cancelOscCountryCatchup, enqueueOscBackfill, enqueueOscCountryCatchup } from "../osc/backfill.js";
 import {
   cancelReplayVideoExport,
@@ -913,7 +915,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     try {
-      const content = await ctx.osu.getBeatmapFile(Math.floor(beatmapId), normalizeCaller(url.searchParams.get("caller")));
+      const content = await getCachedBeatmapFile(ctx.db, ctx.osu, Math.floor(beatmapId), normalizeCaller(url.searchParams.get("caller")));
       sendCors(req, res, ctx);
       res.statusCode = 200;
       res.setHeader("content-type", "text/plain; charset=utf-8");
@@ -1205,6 +1207,26 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     sendJson(req, res, ctx, 200, { ok: true });
     return true;
   }
+  if (url.pathname === "/api/admin/osu-file-backfill/start") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (!ctx.config.enableOsuApiJobs) {
+      sendJson(req, res, ctx, 409, { error: "osu_api_jobs_disabled" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true, backfill: await startBeatmapOsuFileBackfill(ctx.db, ctx.queue) });
+    return true;
+  }
+  if (url.pathname === "/api/admin/osu-file-backfill/cancel") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true, backfill: await cancelBeatmapOsuFileBackfill(ctx.db) });
+    return true;
+  }
   if (url.pathname === "/api/admin/discord/status") {
     if (!isAdmin(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
@@ -1358,6 +1380,7 @@ async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: b
     queueSummary: await ctx.queue.summary(),
     roster: await rosterSummary(ctx.db),
     analysis: await analysisStats(ctx.db),
+    osuFileBackfill: await getBeatmapOsuFileBackfillStatus(ctx.db),
     rate,
     sqliteBusy,
     scoresFallback: await scoresFallbackStatus(ctx, mirror),

@@ -48,6 +48,10 @@ const ACTIVE_TYPE_CAPS: Record<string, number> = {
 // osu! API token bucket still governs their actual request rate.
 const RESERVED_LANE_TYPES: Record<string, number> = {
   analyze_activity_beatmap: 10,
+  // The backfill chains its next batch from inside the currently running job,
+  // so reserve one slot for the runner and one for the queued continuation.
+  // The worker lane still claims only one job at a time.
+  backfill_beatmap_osu_files: 2,
   // Background index maintenance. A reserve of 1 keeps each draining steadily even
   // while the shared queue sits above the soft-pressure cap (a busy prod queue
   // otherwise starves them forever). They touch no osu! API and self-serialise with

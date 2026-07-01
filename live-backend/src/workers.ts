@@ -2,6 +2,7 @@ import type { Db } from "./db.js";
 import { readConfig } from "./config.js";
 import { canSeedSnipesForCountry } from "./countries.js";
 import { exec, json, parseJson } from "./db.js";
+import { BEATMAP_OSU_FILE_BACKFILL_JOB, runBeatmapOsuFileBackfillJob } from "./features/beatmap-osu-file-backfill.js";
 import { computeBeatmapActivitySkillVector } from "./features/activity.js";
 import { computeDanEstimateJob } from "./features/dan-estimates.js";
 import { runMapSearchIndexBuildJob } from "./features/map-search.js";
@@ -83,6 +84,12 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     intervalMs: 1_500,
   },
   {
+    name: "osu-file-cache",
+    jobTypes: [BEATMAP_OSU_FILE_BACKFILL_JOB],
+    claimLimit: 1,
+    intervalMs: 1_500,
+  },
+  {
     name: "snipe-seed",
     jobTypes: ["seed_snipe_board"],
     claimLimit: 1,
@@ -121,6 +128,7 @@ const OSU_API_JOB_TYPES = new Set([
   "reconcile_user_recent_scores",
   "compute_dan_estimate",
   "analyze_activity_beatmap",
+  BEATMAP_OSU_FILE_BACKFILL_JOB,
 ]);
 
 export class WorkerRunner {
@@ -309,6 +317,10 @@ export class WorkerRunner {
     }
     if (job.type === "analyze_activity_beatmap") {
       await computeBeatmapActivitySkillVector(this.db, this.osu, job.payload as { beatmapId: number });
+      return;
+    }
+    if (job.type === BEATMAP_OSU_FILE_BACKFILL_JOB) {
+      await runBeatmapOsuFileBackfillJob(this.db, this.queue, this.osu, job.payload as { runId: string; cursor?: number });
       return;
     }
     if (job.type === "build_map_search_index") {

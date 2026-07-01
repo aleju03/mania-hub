@@ -625,12 +625,21 @@ create table if not exists discord_emojis (
   updated_at text not null
 );
 
--- Persistent cache of raw .osu beatmap files, keyed by beatmap (difficulty) id.
--- The dan estimator and activity analyzer both parse these, so caching the download
--- avoids re-fetching the same chart from osu.ppy.sh on a cold compute or after a
--- cache-version bump. Pruned by retention and the global DB size cap.
+-- Durable cache of compressed .osu beatmap files, keyed by beatmap (difficulty)
+-- id. The dan estimator and activity analyzer both parse these, so keeping the
+-- chart text itself lets cache-version/algorithm bumps reprocess known maps
+-- without re-downloading every chart. The content column is a legacy raw-text
+-- fallback retained for older DBs. New writes use content_blob.
 create table if not exists beatmap_osu_files (
   beatmap_id integer primary key,
-  content text not null,
-  fetched_at text not null
+  beatmapset_id integer,
+  compression text not null default 'gzip',
+  content_blob blob,
+  content text not null default '',
+  raw_bytes integer not null default 0,
+  compressed_bytes integer not null default 0,
+  source text not null default 'unknown',
+  error text,
+  fetched_at text not null,
+  last_used_at text not null
 );

@@ -9,7 +9,7 @@ import { DAN_PRIMARY_FAMILIES, type DanFeatureMetrics } from "../dan/dan-estimat
 import type { JobQueue } from "../jobs/queue.js";
 import { errorContext, logWarn } from "../logger.js";
 import { OsuApiClient } from "../osu/client.js";
-import { getCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
+import { getCachedBeatmapFile, readCachedBeatmapFile, storeCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
 import { addDayKeyDays, getCountryTimezone, getZonedDayKey } from "../shared/country-timezones.js";
 import { getDisplayedAccuracy, getDisplayedRank, getScoreTimestamp, nowIso } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
@@ -491,6 +491,9 @@ async function getActivityBeatmapFile(
   osu: Pick<OsuApiClient, "getBeatmapFile">,
   beatmapId: number,
 ): Promise<string> {
+  const cached = await readCachedBeatmapFile(db, beatmapId);
+  if (cached) return cached;
+
   if (osu instanceof OsuApiClient) {
     const archiveMeta = await readActivityBeatmapArchiveMeta(db, beatmapId);
     if (archiveMeta) {
@@ -498,6 +501,10 @@ async function getActivityBeatmapFile(
         const file = await extractBeatmapOsuFileFromArchive(String(archiveMeta.beatmapsetId), beatmapId, {
           version: archiveMeta.version,
         });
+        await storeCachedBeatmapFile(db, beatmapId, file.text, {
+          beatmapsetId: archiveMeta.beatmapsetId,
+          source: "beatmap_archive",
+        }).catch(() => {});
         return file.text;
       } catch (error) {
         logWarn("activity_beatmap_archive_fetch_failed", {

@@ -49,6 +49,7 @@ const REQUIRED_SCHEMA_TABLES = [
   "pack_collection_cards",
   "api_rate_limit_reservations",
   "user_goals",
+  "beatmap_osu_files",
   "map_search_index",
   "map_collections",
   "map_collection_members",

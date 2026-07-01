@@ -15,6 +15,8 @@
     "compact:maps-farmed:dist": "node --env-file-if-exists=.env dist/maintenance/compact-maps-farmed-overlay.js",
     "compact:storage": "node --max-old-space-size=768 --expose-gc --env-file-if-exists=.env --import tsx src/maintenance/compact-storage.ts",
     "compact:storage:dist": "node --max-old-space-size=768 --expose-gc --env-file-if-exists=.env dist/maintenance/compact-storage.js",
+    "backfill:osu-files": "node --env-file-if-exists=.env --import tsx src/maintenance/backfill-beatmap-osu-files.ts",
+    "backfill:osu-files:dist": "node --env-file-if-exists=.env dist/maintenance/backfill-beatmap-osu-files.js",
     "smoke:osc": "node --env-file-if-exists=.env --import tsx src/smoke-osc.ts"
   },
   "dependencies": {
