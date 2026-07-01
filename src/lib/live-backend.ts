@@ -1022,6 +1022,105 @@ export async function fetchLiveMapsBeatmapsets(
   return result.beatmapsets ?? [];
 }
 
+// ---------------------------------------------------------------------------
+// Global map search + collections (catalog-wide, country-agnostic)
+// ---------------------------------------------------------------------------
+
+export interface LiveMapSearchEntry {
+  beatmapId: number;
+  beatmapsetId: number;
+  title: string;
+  artist: string;
+  creator: string;
+  version: string;
+  status: string;
+  keyCount: number;
+  stars: number;
+  bpm: number;
+  length: number;
+  playCount: number;
+  lnCount: number;
+  primaryPattern: string;
+  patterns: Record<string, number>;
+  covers: Record<string, string> | null;
+}
+
+export interface LiveMapSearchResult {
+  items: LiveMapSearchEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface LiveMapSearchParams {
+  q: string;
+  keys: string[];
+  statuses: string[];
+  patterns: string[];
+  starMin: number | null;
+  starMax: number | null;
+  bpmMin: number | null;
+  bpmMax: number | null;
+  lenMin: number | null;
+  lenMax: number | null;
+  country: string | null;
+  sort: string;
+  dir: string;
+  page: number;
+  pageSize: number;
+}
+
+export interface LiveMapCollectionSummary {
+  id: string;
+  recipeId: string;
+  kind: string;
+  title: string;
+  description: string | null;
+  keyCount: number | null;
+  pattern: string | null;
+  sortOrder: number;
+  coverSetId: number | null;
+  memberCount: number;
+  refreshedAt: string;
+}
+
+export interface LiveMapCollectionDetail extends LiveMapCollectionSummary {
+  items: LiveMapSearchEntry[];
+}
+
+export async function fetchLiveMapSearch(params: LiveMapSearchParams): Promise<LiveMapSearchResult> {
+  const query = new URLSearchParams({
+    sort: params.sort,
+    dir: params.dir,
+    page: String(params.page),
+    pageSize: String(params.pageSize),
+  });
+  if (params.q.trim()) query.set("q", params.q.trim());
+  if (params.keys.length) query.set("keys", params.keys.join(","));
+  if (params.statuses.length) query.set("statuses", params.statuses.join(","));
+  if (params.patterns.length) query.set("patterns", params.patterns.join(","));
+  if (params.starMin != null) query.set("starMin", String(params.starMin));
+  if (params.starMax != null) query.set("starMax", String(params.starMax));
+  if (params.bpmMin != null) query.set("bpmMin", String(params.bpmMin));
+  if (params.bpmMax != null) query.set("bpmMax", String(params.bpmMax));
+  if (params.lenMin != null) query.set("lenMin", String(params.lenMin));
+  if (params.lenMax != null) query.set("lenMax", String(params.lenMax));
+  if (params.country) query.set("country", params.country);
+  return fetchLiveJson(`/api/snapshots/maps-search?${query.toString()}`);
+}
+
+export async function fetchLiveMapCollections(): Promise<LiveMapCollectionSummary[]> {
+  const result = await fetchLiveJson<{ collections: LiveMapCollectionSummary[] }>("/api/snapshots/map-collections");
+  return result.collections ?? [];
+}
+
+export async function fetchLiveMapCollection(id: string): Promise<LiveMapCollectionDetail | null> {
+  const result = await fetchLiveJson<{ collection: LiveMapCollectionDetail | null }>(
+    `/api/snapshots/map-collection?id=${encodeURIComponent(id)}`,
+  );
+  return result.collection ?? null;
+}
+
 export interface LiveGlobalRankingEntry {
   rank: number;
   user: { id: number; username: string; avatar_url: string; cover_url: string; country_code: string };
@@ -1286,12 +1385,14 @@ export interface DiscordShowcaseRankRow {
   rank: number;
   username: string;
   userId: number;
+  countryCode: string;
   pp: string;
 }
 
 export interface DiscordShowcaseTopRow {
   username: string;
   userId: number;
+  grade: string;
   title: string;
   mods: string[];
   pp: string;

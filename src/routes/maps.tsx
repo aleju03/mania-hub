@@ -24,6 +24,8 @@ import { Avatar } from "../components/ui/Avatar";
 import { OsuLogo } from "../components/ui/OsuLogo";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { ModGlyph } from "../components/maps/ModGlyph";
+import { MapSearchSection, type MapSearchUiState } from "../components/maps/MapSearchSection";
+import { MapCollectionsSection } from "../components/maps/MapCollectionsSection";
 import { ModBadge } from "../components/ui/ModBadge";
 import { Pagination } from "../components/ui/Pagination";
 import type {
@@ -83,7 +85,7 @@ import { useWindowActive } from "../lib/window-activity";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type Tab = "farmed" | "popular" | "favourites" | "random";
+type Tab = "farmed" | "popular" | "favourites" | "random" | "search" | "collections";
 type KeyFilter = "all" | "4k" | "7k" | "other";
 type BeatmapSort = "plays" | "players" | "stars" | "length";
 type FarmedSort = "players" | "avg-pp" | "max-pp" | "stars" | "recent";
@@ -110,6 +112,23 @@ type MapsSearch = {
   rStarsMax: number;
   rWeight: RandomWeight;
   rAvoidRepeats: boolean;
+  // Global catalog Search tab (s-prefixed so they never collide with the
+  // country-scoped tabs or the r-prefixed random fields).
+  sQ: string;
+  sKeys: string;
+  sStatuses: string;
+  sStarMin: number;
+  sStarMax: number;
+  sBpmMin: number;
+  sBpmMax: number;
+  sLenMin: number;
+  sLenMax: number;
+  sPatterns: string;
+  sCountryOnly: boolean;
+  sSort: string;
+  sDir: string;
+  // Collections tab: selected pack id ("" = browse grid).
+  col: string;
   country: string | undefined;
 };
 
@@ -189,8 +208,44 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
   rStarsMax: 0,
   rWeight: "favourites",
   rAvoidRepeats: false,
+  sQ: "",
+  sKeys: "",
+  sStatuses: "",
+  sStarMin: 0,
+  sStarMax: 0,
+  sBpmMin: 0,
+  sBpmMax: 0,
+  sLenMin: 0,
+  sLenMax: 0,
+  sPatterns: "",
+  sCountryOnly: false,
+  sSort: "playcount",
+  sDir: "desc",
+  col: "",
   country: undefined,
 };
+
+const SEARCH_KEY_VALUES = ["4k", "7k", "other"];
+const SEARCH_STATUS_VALUES = ["ranked", "loved", "graveyard", "other"];
+const SEARCH_PATTERN_VALUES = ["jack", "stream", "jumpstream", "handstream", "stamina", "chordjack", "tech", "ln"];
+const SEARCH_SORT_VALUES = ["playcount", "stars", "bpm", "length", "date", "relevance"];
+const ENABLE_MAP_CATALOG_DEV_TABS = ["1", "true", "yes", "on"].includes(
+  String(import.meta.env.VITE_DEV_MODE ?? "").trim().toLowerCase(),
+);
+
+// Search range fields use 0 as "unset"; clamp anything else into [min, max].
+function clampSearchNumber(raw: unknown, min: number, max: number): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(max, Math.max(min, n));
+}
+
+// Multi-select facets ride in the URL as a CSV; keep only allowed tokens.
+function sanitizeSearchCsv(raw: unknown, allowed: string[]): string {
+  if (typeof raw !== "string" || !raw) return "";
+  const allowedSet = new Set(allowed);
+  return [...new Set(raw.toLowerCase().split(",").map((value) => value.trim()).filter((value) => allowedSet.has(value)))].join(",");
+}
 
 type RandomPickSettings = Pick<MapsSearch, "rWeight" | "rAvoidRepeats">;
 type LiveMapsPageState = LiveMapsPageValue & { requestKey: string };
@@ -900,7 +955,13 @@ export const Route = createFileRoute("/maps")({
     middlewares: [stripSearchParams(DEFAULT_MAPS_SEARCH)],
   },
   validateSearch: (search: Record<string, unknown>): MapsSearch => ({
-    tab: search.tab === "popular" || search.tab === "favourites" || search.tab === "random" ? search.tab : DEFAULT_MAPS_SEARCH.tab,
+    tab:
+      search.tab === "popular" ||
+      search.tab === "favourites" ||
+      search.tab === "random" ||
+      (ENABLE_MAP_CATALOG_DEV_TABS && (search.tab === "search" || search.tab === "collections"))
+        ? search.tab
+        : DEFAULT_MAPS_SEARCH.tab,
     page: Math.max(0, Math.floor(Number(search.page) || DEFAULT_MAPS_SEARCH.page)),
     key: search.key === "4k" || search.key === "7k" || search.key === "other" ? search.key : DEFAULT_MAPS_SEARCH.key,
     beatmapSort: search.beatmapSort === "players" || search.beatmapSort === "plays" || search.beatmapSort === "stars" || search.beatmapSort === "length" ? search.beatmapSort : DEFAULT_MAPS_SEARCH.beatmapSort,
@@ -939,6 +1000,20 @@ export const Route = createFileRoute("/maps")({
     })(),
     rWeight: search.rWeight === "players" || search.rWeight === "favourites" ? search.rWeight : DEFAULT_MAPS_SEARCH.rWeight,
     rAvoidRepeats: typeof search.rAvoidRepeats === "boolean" ? search.rAvoidRepeats : DEFAULT_MAPS_SEARCH.rAvoidRepeats,
+    sQ: typeof search.sQ === "string" ? search.sQ.slice(0, 120) : DEFAULT_MAPS_SEARCH.sQ,
+    sKeys: sanitizeSearchCsv(search.sKeys, SEARCH_KEY_VALUES),
+    sStatuses: sanitizeSearchCsv(search.sStatuses, SEARCH_STATUS_VALUES),
+    sStarMin: clampSearchNumber(search.sStarMin, 0, 20),
+    sStarMax: clampSearchNumber(search.sStarMax, 0, 20),
+    sBpmMin: clampSearchNumber(search.sBpmMin, 0, 2000),
+    sBpmMax: clampSearchNumber(search.sBpmMax, 0, 2000),
+    sLenMin: clampSearchNumber(search.sLenMin, 0, 100000),
+    sLenMax: clampSearchNumber(search.sLenMax, 0, 100000),
+    sPatterns: sanitizeSearchCsv(search.sPatterns, SEARCH_PATTERN_VALUES),
+    sCountryOnly: typeof search.sCountryOnly === "boolean" ? search.sCountryOnly : DEFAULT_MAPS_SEARCH.sCountryOnly,
+    sSort: SEARCH_SORT_VALUES.includes(String(search.sSort)) ? String(search.sSort) : DEFAULT_MAPS_SEARCH.sSort,
+    sDir: search.sDir === "asc" ? "asc" : DEFAULT_MAPS_SEARCH.sDir,
+    col: typeof search.col === "string" ? search.col.slice(0, 80) : DEFAULT_MAPS_SEARCH.col,
     country: parseCountrySearchParam(search.country),
   }),
   component: MapsPage,
@@ -992,6 +1067,8 @@ function MapsPage() {
   const [detailsOpen, setDetailsOpen] = useState<MapDetails | null>(null);
   const fetchingMapsRef = useRef(false);
   const tab = mapsSearch.tab;
+  // Search + Collections are global catalog views, not country-scoped lenses.
+  const isGlobalCatalogTab = ENABLE_MAP_CATALOG_DEV_TABS && (tab === "search" || tab === "collections");
   const page = mapsSearch.page;
   const keyFilter = mapsSearch.key;
   const beatmapSort = mapsSearch.beatmapSort;
@@ -1015,7 +1092,9 @@ function MapsPage() {
   const canUseAdminFeatures = auth.canUseAdminFeatures;
   const liveBackendEnabled = isLiveBackendConfigured();
   const windowActive = useWindowActive();
-  const { warming } = useCountryWarming(selectedCountry);
+  // Global catalog tabs must not activate/warm a country: passing GLOBAL makes
+  // the hook short-circuit (no activateLiveCountryOnce side effect).
+  const { warming } = useCountryWarming(isGlobalCatalogTab ? "GLOBAL" : selectedCountry);
   const updateMapsSearch = useCallback((patch: Partial<MapsSearch>) => {
     const current = mapsSearchRef.current;
     const nextSearch = { ...current, ...patch };
@@ -1044,7 +1123,7 @@ function MapsPage() {
   }, [randomPattern]);
   const totalRandomActive = triStateActive(randomStatus) + triStateActive(randomKey) + triStateActive(randomPattern) + (rStars > 0 || rStarsMax > 0 ? 1 : 0);
   const countryName = getCountryName(selectedCountry);
-  const liveMapsBrowseTab = tab === "random" ? null : (tab as LiveMapsBrowseTab);
+  const liveMapsBrowseTab = tab === "random" || isGlobalCatalogTab ? null : (tab as LiveMapsBrowseTab);
   const liveMapsPageParams = useMemo(() => liveMapsBrowseTab ? {
     tab: liveMapsBrowseTab,
     page,
@@ -1698,11 +1777,48 @@ function MapsPage() {
   // The three rankings are one surface seen through different lenses, so they
   // share a segmented control. "random picks" is a distinct interaction and
   // stays a sibling tab (see the view bar below).
-  const browseLenses: { id: Exclude<Tab, "random">; label: string }[] = [
+  const browseLenses: { id: Exclude<Tab, "random" | "search" | "collections">; label: string }[] = [
     { id: "farmed", label: "Farmed" },
     { id: "popular", label: "Most Played" },
     { id: "favourites", label: "Favourites" },
   ];
+
+  // Bridge the route's s-prefixed params <-> the Search section's UI state.
+  const csvToArray = (value: string): string[] => (value ? value.split(",").filter(Boolean) : []);
+  const searchUiState: MapSearchUiState = useMemo(() => ({
+    q: mapsSearch.sQ,
+    keys: csvToArray(mapsSearch.sKeys),
+    statuses: csvToArray(mapsSearch.sStatuses),
+    patterns: csvToArray(mapsSearch.sPatterns),
+    starMin: mapsSearch.sStarMin,
+    starMax: mapsSearch.sStarMax,
+    bpmMin: mapsSearch.sBpmMin,
+    bpmMax: mapsSearch.sBpmMax,
+    lenMin: mapsSearch.sLenMin,
+    lenMax: mapsSearch.sLenMax,
+    countryOnly: mapsSearch.sCountryOnly,
+    sort: mapsSearch.sSort,
+    dir: mapsSearch.sDir,
+    page: mapsSearch.page,
+  }), [mapsSearch]);
+  const updateSearchUi = useCallback((patch: Partial<MapSearchUiState>) => {
+    const next: Partial<MapsSearch> = {};
+    if (patch.q !== undefined) next.sQ = patch.q;
+    if (patch.keys !== undefined) next.sKeys = patch.keys.join(",");
+    if (patch.statuses !== undefined) next.sStatuses = patch.statuses.join(",");
+    if (patch.patterns !== undefined) next.sPatterns = patch.patterns.join(",");
+    if (patch.starMin !== undefined) next.sStarMin = patch.starMin;
+    if (patch.starMax !== undefined) next.sStarMax = patch.starMax;
+    if (patch.bpmMin !== undefined) next.sBpmMin = patch.bpmMin;
+    if (patch.bpmMax !== undefined) next.sBpmMax = patch.bpmMax;
+    if (patch.lenMin !== undefined) next.sLenMin = patch.lenMin;
+    if (patch.lenMax !== undefined) next.sLenMax = patch.lenMax;
+    if (patch.countryOnly !== undefined) next.sCountryOnly = patch.countryOnly;
+    if (patch.sort !== undefined) next.sSort = patch.sort;
+    if (patch.dir !== undefined) next.sDir = patch.dir;
+    if (patch.page !== undefined) next.page = patch.page;
+    updateMapsSearch(next);
+  }, [updateMapsSearch]);
 
   const isLoading = loadingPlayers || (liveBackendPaged ? liveMapsPagePending : loadingMaps) || currentMapsSectionLoading;
 
@@ -2162,8 +2278,8 @@ function MapsPage() {
     <div className="flex-1">
       <PageHeader
         iconSrc="/images/icons/rankings.svg"
-        title={`${countryName} mania maps`}
-        right={
+        title={isGlobalCatalogTab ? "Mania maps" : `${countryName} mania maps`}
+        right={isGlobalCatalogTab ? null : (
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             {isLoading && !error && (
               <div className="flex items-center gap-1.5">
@@ -2239,7 +2355,7 @@ function MapsPage() {
               </div>
             )}
           </div>
-        }
+        )}
       />
 
       {warming && <CountryWarming country={selectedCountry} />}
@@ -2284,8 +2400,60 @@ function MapsPage() {
               />
             )}
           </button>
+
+          {ENABLE_MAP_CATALOG_DEV_TABS && (
+            <>
+              <span aria-hidden="true" className="h-4 w-px shrink-0 bg-osu-b3/40" />
+
+              <button
+                onClick={() => updateMapsSearch({ tab: "search", page: 0 })}
+                aria-pressed={tab === "search"}
+                className={`relative px-3 py-2.5 text-[12px] font-medium whitespace-nowrap cursor-pointer transition-colors duration-[120ms] ${
+                  tab === "search" ? "text-osu-c1" : "text-osu-f1 hover:text-osu-l2"
+                }`}
+              >
+                search
+                {tab === "search" && (
+                  <span aria-hidden="true" className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-osu-h1" />
+                )}
+              </button>
+
+              <button
+                onClick={() => updateMapsSearch({ tab: "collections", page: 0 })}
+                aria-pressed={tab === "collections"}
+                className={`relative px-3 py-2.5 text-[12px] font-medium whitespace-nowrap cursor-pointer transition-colors duration-[120ms] ${
+                  tab === "collections" ? "text-osu-c1" : "text-osu-f1 hover:text-osu-l2"
+                }`}
+              >
+                collections
+                {tab === "collections" && (
+                  <span aria-hidden="true" className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-osu-h1" />
+                )}
+              </button>
+            </>
+          )}
         </div>
       </div>
+
+      {isGlobalCatalogTab && (
+        tab === "search" ? (
+          <MapSearchSection
+            state={searchUiState}
+            onChange={updateSearchUi}
+            country={selectedCountry}
+            liveBackendEnabled={liveBackendEnabled}
+          />
+        ) : (
+          <MapCollectionsSection
+            selectedCollectionId={mapsSearch.col}
+            onSelect={(id) => updateMapsSearch({ col: id })}
+            liveBackendEnabled={liveBackendEnabled}
+          />
+        )
+      )}
+
+      {!isGlobalCatalogTab && (
+      <>
 
       {/* ── Filter bar ───────────────────────────────────────────────── */}
       <div className="bg-osu-d5 border-b border-osu-b3/20">
@@ -2846,6 +3014,8 @@ function MapsPage() {
           )}
         </div>
       </div>
+      </>
+      )}
       </>
       )}
 

@@ -57,6 +57,14 @@ interface LiveBackendStatus {
     newestError: string | null;
   }>;
   roster?: Array<{ country: string; users: number; refreshedAt: string | null }>;
+  analysis?: {
+    version: number;
+    analyzed: number;
+    running: number;
+    failed: number;
+    unavailable: number;
+    searchIndexed: number;
+  };
   countries?: Array<{
     country: string;
     status: "active" | "warm" | "paused";
@@ -2563,6 +2571,7 @@ function getScoresFallbackStatus(status: LiveBackendStatus | null): ScoresFallba
 function StatusCard({ status, connectionState, country, snapshots }: { status: LiveBackendStatus | null; connectionState: ConnectionState; country: string; snapshots: SnapshotStats }) {
   const [openKey, setOpenKey] = useState<string | null>(null);
   const roster = status?.roster?.find((entry) => entry.country === country);
+  const analysis = status?.analysis;
   const oscFeed = getOscFeedStatus(status);
   const fallback = getScoresFallbackStatus(status);
   const fallbackResult = status?.scoresFallback?.result;
@@ -2672,6 +2681,27 @@ function StatusCard({ status, connectionState, country, snapshots }: { status: L
           <SnapshotRow label="Tracker" value={snapshots.trackerScores} fetchedAt={snapshots.trackerFetchedAt} suffix="scores" />
           <SnapshotRow label="Top plays" value={snapshots.topPlays} fetchedAt={snapshots.topPlaysFetchedAt} suffix="events" />
           <SnapshotRow label="Snipes" value={snapshots.snipes} fetchedAt={snapshots.snipesFetchedAt} suffix="events" />
+        </>
+      ),
+    },
+    {
+      key: "analysis",
+      title: "Map analysis",
+      tone: analysis ? "good" : "neutral",
+      stats: [
+        { label: "Analyzed", value: analysis ? `${formatNumber(analysis.analyzed)} maps` : "—", tone: analysis ? "good" : "neutral" },
+        { label: "Searchable", value: analysis ? `${formatNumber(analysis.searchIndexed)} indexed` : "—" },
+      ],
+      detail: (
+        <>
+          <div className="rounded-md bg-osu-b4/30 px-3 py-2 text-[10px] leading-relaxed text-osu-f1">
+            Chart-pattern analysis coverage{analysis ? ` (analysis v${analysis.version})` : ""}. Analyzed maps have a ready skill vector and form the pool behind pattern search and collections; searchable maps are the subset denormalized into the search index.
+          </div>
+          <DetailRow label="Analyzed" value={analysis ? `${formatNumber(analysis.analyzed)} maps` : "—"} tone={analysis ? "good" : "neutral"} />
+          <DetailRow label="Searchable (indexed)" value={analysis ? formatNumber(analysis.searchIndexed) : "—"} />
+          <DetailRow label="In progress" value={analysis ? formatNumber(analysis.running) : "—"} tone={analysis && analysis.running > 0 ? "warn" : "neutral"} />
+          <DetailRow label="Failed" value={analysis ? formatNumber(analysis.failed) : "—"} tone={analysis && analysis.failed > 0 ? "warn" : "neutral"} />
+          <DetailRow label="Unavailable" value={analysis ? formatNumber(analysis.unavailable) : "—"} />
         </>
       ),
     },

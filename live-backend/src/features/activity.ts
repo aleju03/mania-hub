@@ -460,6 +460,12 @@ export async function computeBeatmapActivitySkillVector(
         computedAt,
       ],
     );
+    // Keep the global search index live: a freshly analyzed map becomes
+    // searchable without waiting for the next full rebuild. Best-effort, and a
+    // dynamic import so the search module's static dep on this one stays acyclic.
+    await import("./map-search.js")
+      .then((module) => module.upsertMapSearchIndexRow(db, beatmapId))
+      .catch(() => {});
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const failedAt = nowIso();

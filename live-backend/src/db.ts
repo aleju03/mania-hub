@@ -91,6 +91,8 @@ export async function migrate(db: Db): Promise<void> {
   await migrateTrackerIndexes(db);
   await migrateSnipePersonalBests(db);
   await migrateUserGoals(db);
+  await migrateMapSearchIndex(db);
+  await migrateMapCollections(db);
 }
 
 export async function dbHealth(db: Db): Promise<boolean> {
@@ -790,5 +792,86 @@ async function migrateUserGoals(db: Db): Promise<void> {
   await db.execute(`
     create index if not exists idx_user_goals_user_beatmap
       on user_goals(user_id, status, beatmap_id)
+  `);
+}
+
+async function migrateMapSearchIndex(db: Db): Promise<void> {
+  // Denormalized, indexed projection of every chart-analyzed mania beatmap, built
+  // from beatmap_skill_vectors joined to beatmaps/beatmapsets. Backs the global
+  // /maps Search section. Materialized (not queried on-the-fly with json_extract)
+  // because libsql is synchronous and a 54k-row JSON scan blocks the event loop
+  // for ~115ms per request. Durable projection, never pruned by retention.
+  await db.execute(`
+    create table if not exists map_search_index (
+      beatmap_id integer primary key,
+      beatmapset_id integer not null,
+      analysis_version integer not null,
+      title text not null,
+      artist text not null,
+      creator text,
+      version text not null,
+      search_text text not null,
+      key_count integer not null,
+      stars real not null,
+      bpm real not null,
+      length integer not null,
+      status text not null,
+      play_count integer not null default 0,
+      pass_count integer not null default 0,
+      ln_count integer not null default 0,
+      primary_pattern text not null,
+      pat_jack real not null default 0,
+      pat_stream real not null default 0,
+      pat_jumpstream real not null default 0,
+      pat_handstream real not null default 0,
+      pat_stamina real not null default 0,
+      pat_chordjack real not null default 0,
+      pat_tech real not null default 0,
+      pat_ln real not null default 0,
+      covers_json text,
+      ranked_date text,
+      updated_at text not null
+    )
+  `);
+  await db.execute("create index if not exists idx_map_search_key_stars on map_search_index(key_count, stars)");
+  await db.execute("create index if not exists idx_map_search_key_plays on map_search_index(key_count, play_count desc)");
+  await db.execute("create index if not exists idx_map_search_key_bpm on map_search_index(key_count, bpm)");
+  await db.execute("create index if not exists idx_map_search_key_length on map_search_index(key_count, length)");
+  await db.execute("create index if not exists idx_map_search_primary on map_search_index(primary_pattern, key_count, stars)");
+  await db.execute("create index if not exists idx_map_search_status on map_search_index(status, key_count, stars)");
+}
+
+async function migrateMapCollections(db: Db): Promise<void> {
+  // Auto-generated map packs (pattern x key x star bucket) materialized from
+  // map_search_index by code-defined recipes. Members are deduped by beatmapset
+  // so a pack is not twelve diffs of one mapset. Durable projection.
+  await db.execute(`
+    create table if not exists map_collections (
+      id text primary key,
+      recipe_id text not null,
+      kind text not null,
+      title text not null,
+      description text,
+      key_count integer,
+      sort_order integer not null default 0,
+      cover_set_id integer,
+      member_count integer not null default 0,
+      refreshed_at text not null,
+      updated_at text not null
+    )
+  `);
+  await db.execute(`
+    create table if not exists map_collection_members (
+      collection_id text not null,
+      beatmap_id integer not null,
+      position integer not null,
+      score real not null,
+      added_at text not null,
+      primary key (collection_id, beatmap_id)
+    )
+  `);
+  await db.execute(`
+    create index if not exists idx_map_collection_members_pos
+      on map_collection_members(collection_id, position)
   `);
 }

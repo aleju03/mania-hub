@@ -31,6 +31,8 @@ const SHEDDABLE_TYPES = [
   "refresh_country_roster",
   "osc_backfill",
   "osc_country_catchup",
+  "build_map_search_index",
+  "rebuild_map_collections",
 ];
 
 const ACTIVE_TYPE_CAPS: Record<string, number> = {

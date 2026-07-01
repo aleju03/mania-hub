@@ -6,7 +6,7 @@ import { handleBeatmapAudioRequest } from "../audio/http.js";
 import { activateCountry, deleteCountryData, getCountryRegistry, GLOBAL_COUNTRY_CODE, isCountryFeatureAtLeast, isGlobalCountry, setCountryFeatureTier, setCountryPaused, setCountryStatus, type CountryFeatureTier, type CountryRegistryStatus } from "../countries.js";
 import type { Db } from "../db.js";
 import { dbHealth, exec, getSqliteBusyRetryStats, parseJson } from "../db.js";
-import { getPlayerActivityAvailability, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../features/activity.js";
+import { ACTIVITY_SKILL_ANALYSIS_VERSION, getPlayerActivityAvailability, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../features/activity.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
 import { GOAL_KINDS, GOAL_MAP_KINDS, GOAL_SPEED_BUCKETS, GOAL_TARGET_GRADES, createUserGoal, deleteUserGoal, getUserGoal, listUserGoalsWithProgress, reconcileGoalsForUser, type GoalKind, type GoalSpeedBucket, type UserGoalInput } from "../features/goals.js";
 import { getMyDataSummary, getUserTopPlaysFeed, getUserTrackedFeed, type MyDataTopPlaysQuery, type MyDataTrackedFeedQuery } from "../features/my-data.js";
@@ -14,6 +14,8 @@ import { FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapsho
 import type { ScoreSpeedBucket } from "../shared/score.js";
 import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalRankingsSnapshot, type GlobalRankingsSort } from "../features/global-rankings.js";
 import { enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRefreshProgress, getMapsSnapshot, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery } from "../features/maps.js";
+import { getMapSearchPage, MAP_SEARCH_PATTERNS, type MapSearchQuery, type MapSearchSort } from "../features/map-search.js";
+import { getMapCollection, getMapCollections } from "../features/map-collections.js";
 import { getPackWallet, listPackCollectionCards, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, warmProfileSnapshots } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
@@ -594,6 +596,34 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     // cache far longer than the live tabs.
     res.setHeader("cache-control", "public, max-age=600, stale-while-revalidate=1800");
     sendJson(req, res, ctx, 200, { beatmapsets: await getMapsRandomBeatmapsets(ctx.db, ids) });
+    return true;
+  }
+  if (url.pathname === "/api/snapshots/maps-search") {
+    // Global catalog search over every chart-analyzed map. No country activation;
+    // an optional ?country= intersects with that roster's farmed/played maps.
+    const snapshot = await getMapSearchPage(ctx.db, parseMapSearchQuery(url.searchParams));
+    res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
+    sendJson(req, res, ctx, 200, snapshot);
+    return true;
+  }
+  if (url.pathname === "/api/snapshots/map-collections") {
+    res.setHeader("cache-control", "public, max-age=300, stale-while-revalidate=900");
+    sendJson(req, res, ctx, 200, { collections: await getMapCollections(ctx.db) });
+    return true;
+  }
+  if (url.pathname === "/api/snapshots/map-collection") {
+    const id = (url.searchParams.get("id") ?? "").trim();
+    if (!id) {
+      sendJson(req, res, ctx, 400, { error: "missing_id" });
+      return true;
+    }
+    const collection = await getMapCollection(ctx.db, id);
+    if (!collection) {
+      sendJson(req, res, ctx, 404, { error: "not_found" });
+      return true;
+    }
+    res.setHeader("cache-control", "public, max-age=300, stale-while-revalidate=900");
+    sendJson(req, res, ctx, 200, { collection });
     return true;
   }
   if (url.pathname === "/api/snapshots/rankings") {
@@ -1319,6 +1349,7 @@ async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: b
     queuePressure: await ctx.queue.pressure(),
     queueSummary: await ctx.queue.summary(),
     roster: await rosterSummary(ctx.db),
+    analysis: await analysisStats(ctx.db),
     rate,
     sqliteBusy,
     scoresFallback: await scoresFallbackStatus(ctx, mirror),
@@ -1328,6 +1359,30 @@ async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: b
     catchup: await countryCatchupStatus(ctx),
     worker: options.includeWorkerActivity ? adminWorkerStatus(worker) : publicWorkerStatus(worker),
     ...(snapshotStats ? { snapshotStats } : {}),
+  };
+}
+
+// Beatmap chart-analysis progress: how many maps have a ready skill vector at the
+// current analysis version (the pool that powers pattern search + collections),
+// plus what is still in flight, failed, or un-analyzable, and how many are indexed.
+async function analysisStats(db: Db) {
+  const [vectors, indexed] = await Promise.all([
+    exec(
+      db,
+      "select status, count(*) as count from beatmap_skill_vectors where analysis_version = ? group by status",
+      [ACTIVITY_SKILL_ANALYSIS_VERSION],
+    ),
+    exec(db, "select count(*) as count from map_search_index"),
+  ]);
+  const byStatus: Record<string, number> = {};
+  for (const row of vectors.rows) byStatus[String(row.status)] = Number(row.count ?? 0);
+  return {
+    version: ACTIVITY_SKILL_ANALYSIS_VERSION,
+    analyzed: byStatus.ready ?? 0,
+    running: byStatus.running ?? 0,
+    failed: byStatus.failed ?? 0,
+    unavailable: byStatus.unavailable ?? 0,
+    searchIndexed: Number(indexed.rows[0]?.count ?? 0),
   };
 }
 
@@ -1951,6 +2006,56 @@ function parseMapsPageQuery(params: URLSearchParams): MapsPageQuery {
     mod,
     q: (params.get("q") ?? "").trim().slice(0, 120),
   };
+}
+
+function parseMapSearchQuery(params: URLSearchParams): MapSearchQuery {
+  const rawSort = params.get("sort");
+  const sort: MapSearchSort =
+    rawSort === "stars" || rawSort === "bpm" || rawSort === "length" || rawSort === "playcount" || rawSort === "date" || rawSort === "relevance"
+      ? rawSort
+      : "playcount";
+  const stars = parseSearchRange(params, "starMin", "starMax", 0, 20);
+  const bpm = parseSearchRange(params, "bpmMin", "bpmMax", 0, 2000);
+  const length = parseSearchRange(params, "lenMin", "lenMax", 0, 100_000);
+  const rawCountry = (params.get("country") ?? "").trim().toUpperCase();
+  const country = /^[A-Z]{2}$/.test(rawCountry) ? rawCountry : null;
+  return {
+    q: (params.get("q") ?? "").trim().slice(0, 120),
+    keys: parseCsvSubset(params.get("keys"), ["4k", "7k", "other"]),
+    statuses: parseCsvSubset(params.get("statuses"), ["ranked", "loved", "graveyard", "other"]),
+    patterns: parseCsvSubset(params.get("patterns"), MAP_SEARCH_PATTERNS),
+    starMin: stars.min,
+    starMax: stars.max,
+    bpmMin: bpm.min,
+    bpmMax: bpm.max,
+    lenMin: length.min,
+    lenMax: length.max,
+    country,
+    sort,
+    dir: params.get("dir") === "asc" ? "asc" : "desc",
+    page: clampInteger(params.get("page"), 0, 10_000, 0),
+    pageSize: clampInteger(params.get("pageSize"), 1, 48, 24),
+  };
+}
+
+function parseCsvSubset(raw: string | null, allowed: string[]): string[] {
+  if (!raw) return [];
+  const allowedSet = new Set(allowed);
+  return [...new Set(raw.toLowerCase().split(",").map((value) => value.trim()).filter((value) => allowedSet.has(value)))];
+}
+
+function parseSearchRange(params: URLSearchParams, minKey: string, maxKey: string, lo: number, hi: number): { min: number | null; max: number | null } {
+  let min = optionalBoundedNumber(params.get(minKey), lo, hi);
+  let max = optionalBoundedNumber(params.get(maxKey), lo, hi);
+  if (min != null && max != null && min > max) [min, max] = [max, min];
+  return { min, max };
+}
+
+function optionalBoundedNumber(raw: string | null, lo: number, hi: number): number | null {
+  if (raw == null || raw.trim() === "") return null;
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return null;
+  return Math.max(lo, Math.min(hi, value));
 }
 
 function parseMapsPlayersKind(raw: string | null): MapsPlayersKind | null {

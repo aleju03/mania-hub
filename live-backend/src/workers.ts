@@ -4,6 +4,8 @@ import { canSeedSnipesForCountry } from "./countries.js";
 import { exec, json, parseJson } from "./db.js";
 import { computeBeatmapActivitySkillVector } from "./features/activity.js";
 import { computeDanEstimateJob } from "./features/dan-estimates.js";
+import { runMapSearchIndexBuildJob } from "./features/map-search.js";
+import { rebuildMapCollections } from "./features/map-collections.js";
 import { MapsRosterNotReadyError, enqueueGlobalMapsRefresh, globalMapsFarmedRefreshRunAfter, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores } from "./features/maps.js";
 import { recordSnipeScoreHistory, updateSnipeProjection } from "./features/snipes.js";
 import { confirmTopPlay, TopPlayConfirmationPendingError } from "./features/top-plays.js";
@@ -97,6 +99,14 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     jobTypes: ["replay_video_export"],
     claimLimit: 1,
     intervalMs: 1_000,
+  },
+  {
+    // One slow lane for the global map search index build and the collections
+    // rebuild. Pure background work (no osu! API) that yields to everything else.
+    name: "map-search-index",
+    jobTypes: ["build_map_search_index", "rebuild_map_collections"],
+    claimLimit: 1,
+    intervalMs: 2_000,
   },
 ];
 
@@ -299,6 +309,16 @@ export class WorkerRunner {
     }
     if (job.type === "analyze_activity_beatmap") {
       await computeBeatmapActivitySkillVector(this.db, this.osu, job.payload as { beatmapId: number });
+      return;
+    }
+    if (job.type === "build_map_search_index") {
+      await runMapSearchIndexBuildJob(this.db, this.queue, job.payload as { cursor?: number }, async () => {
+        await this.queue.enqueue("rebuild_map_collections", "rebuild_map_collections", {}, { priority: -12, replaceDone: true });
+      });
+      return;
+    }
+    if (job.type === "rebuild_map_collections") {
+      await rebuildMapCollections(this.db);
       return;
     }
     if (job.type === "enrich_user") {
@@ -615,6 +635,10 @@ function getRetryDelayMs(type: string, attempts: number, error: unknown): number
               ? 10 * 60_000
               : type === "replay_video_export"
                 ? 60_000
+              : type === "build_map_search_index"
+                ? 60_000
+              : type === "rebuild_map_collections"
+                ? 5 * 60_000
                 : 30 * 60_000;
   return Math.min(base * 2 ** Math.min(5, nextAttempt - 1), 60 * 60_000);
 }

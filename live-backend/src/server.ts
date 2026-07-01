@@ -8,6 +8,8 @@ import { JobQueue } from "./jobs/queue.js";
 import { LiveEventLog } from "./live/event-log.js";
 import { startRuntimeStatusMirror } from "./live/runtime-status.js";
 import { deferMapsRefreshesWaitingForRoster, enqueueGlobalMapsRefreshIfDue, enqueueMapsRefreshIfDue } from "./features/maps.js";
+import { ensureMapSearchIndexSeeded } from "./features/map-search.js";
+import { enqueueMapCollectionsRebuildIfDue } from "./features/map-collections.js";
 import { startGoalUserIndexRefresh } from "./features/goals.js";
 import { AbuseGuard } from "./http/abuse-guard.js";
 import { CountryClientTracker } from "./live/country-clients.js";
@@ -47,6 +49,9 @@ const REQUIRED_SCHEMA_TABLES = [
   "pack_collection_cards",
   "api_rate_limit_reservations",
   "user_goals",
+  "map_search_index",
+  "map_collections",
+  "map_collection_members",
 ];
 
 export async function createApp() {
@@ -146,7 +151,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const runServing = role !== "worker";
 
   if (runWorkers) {
-    if (app.config.enableWorkers) app.worker.start();
+    if (app.config.enableWorkers) {
+      app.worker.start();
+      // Pure background work (no osu! API): kick off / resume the global map
+      // search index build so Search and Collections have data to serve.
+      void ensureMapSearchIndexSeeded(app.db, app.queue).catch((error) => console.warn("[map-search] seed failed", error));
+    }
     if (app.config.enableScheduledRefreshes && app.config.enableOsuApiJobs) {
       startRosterScheduler(app.db, app.queue, app.config);
       startMapsScheduler(app.db, app.queue, app.config);
@@ -280,6 +290,15 @@ function startMapsScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: Job
     // their freshest data. It depends only on stored snapshots, no osu! calls.
     await enqueueGlobalMapsRefreshIfDue(db, queue, config.mapsRefreshIntervalMs).catch((error) => {
       console.warn("[maps] scheduled global refresh failed", error);
+    });
+    // Watchdog the global search index (resumes a build that died mid-chain) and
+    // refresh the auto-generated collections on the same cadence. Neither needs
+    // the osu! API; they read from the search index.
+    await ensureMapSearchIndexSeeded(db, queue).catch((error) => {
+      console.warn("[map-search] watchdog seed failed", error);
+    });
+    await enqueueMapCollectionsRebuildIfDue(db, queue, config.mapsRefreshIntervalMs).catch((error) => {
+      console.warn("[map-collections] scheduled rebuild failed", error);
     });
     setTimeout(tick, config.mapsRefreshIntervalMs).unref();
   };
