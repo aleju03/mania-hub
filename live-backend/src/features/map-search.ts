@@ -158,7 +158,7 @@ const SOURCE_SELECT = `
   join beatmaps b on b.beatmap_id = sv.beatmap_id
   join beatmapsets s on s.beatmapset_id = b.beatmapset_id
   where sv.analysis_version = ? and sv.status = 'ready'
-    and coalesce(json_extract(b.metadata_json, '$.convert'), 0) = 0`;
+    and json_extract(b.metadata_json, '$.mode') = 'mania'`;
 
 function intOr(value: unknown, fallback = 0): number {
   const n = Math.round(Number(value));
@@ -302,30 +302,34 @@ async function enqueueBuild(queue: JobQueue, cursor: number): Promise<void> {
   await queue.enqueue(MAP_SEARCH_BUILD_JOB, `${MAP_SEARCH_BUILD_JOB}:${cursor}`, { cursor }, { priority: BUILD_JOB_PRIORITY });
 }
 
-const CONVERTS_PRUNED_KEY = "map_search_index_converts_pruned:v1";
+const NON_MANIA_PRUNED_KEY = "map_search_index_nonmania_pruned:v1";
 
-// One-time cleanup: earlier builds indexed auto-generated converts (osu!std maps
-// auto-converted to mania). Only maps made for mania belong in the pool, so drop
-// them once and rebuild collections so the packs lose them too.
-async function pruneConvertsOnce(db: Db, queue: JobQueue): Promise<void> {
-  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [CONVERTS_PRUNED_KEY])).rows[0];
+// One-time cleanup: earlier builds indexed osu!std maps whose scores were played as
+// mania converts. The `convert` flag is absent on a natively-fetched std beatmap, so
+// filtering on it missed them; the reliable signal is the beatmap's native mode. Drop
+// every non-mania indexed row once and rebuild collections so the packs lose them too.
+async function pruneNonManiaOnce(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [NON_MANIA_PRUNED_KEY])).rows[0];
   if (done) return;
   await exec(
     db,
     `delete from map_search_index
      where beatmap_id in (
-       select beatmap_id from beatmaps where coalesce(json_extract(metadata_json, '$.convert'), 0) = 1
+       select i.beatmap_id
+       from map_search_index i
+       join beatmaps b on b.beatmap_id = i.beatmap_id
+       where coalesce(json_extract(b.metadata_json, '$.mode'), '') != 'mania'
      )`,
   );
   const now = nowIso();
-  await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)", [CONVERTS_PRUNED_KEY, json({ at: now }), now]);
+  await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)", [NON_MANIA_PRUNED_KEY, json({ at: now }), now]);
   await queue.enqueue("rebuild_map_collections", "rebuild_map_collections", {}, { priority: -12, replaceDone: true });
 }
 
 // Boot/periodic watchdog: kick off the build when missing, and resume a chain
 // that died mid-way (crash between batches) from the last indexed id.
 export async function ensureMapSearchIndexSeeded(db: Db, queue: JobQueue): Promise<void> {
-  await pruneConvertsOnce(db, queue);
+  await pruneNonManiaOnce(db, queue);
   if (await isMapSearchIndexBuilt(db)) return;
   if (await hasPendingBuildJob(db)) return;
   await enqueueBuild(queue, await maxIndexedBeatmapId(db));

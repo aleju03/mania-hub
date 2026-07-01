@@ -39,6 +39,7 @@ interface SeedMap {
   version?: string;
   playcount?: number;
   totalLength?: number;
+  mode?: string;
   primary: string;
   patterns: Record<string, number>;
 }
@@ -73,6 +74,7 @@ async function seedMap(db: Db, map: SeedMap): Promise<void> {
       map.bpm ?? 180,
       map.version ?? "Normal",
       json({
+        mode: map.mode ?? "mania",
         playcount: map.playcount ?? 1000,
         passcount: 100,
         count_sliders: 50,
@@ -114,6 +116,20 @@ describe("map search index", () => {
     expect(streamKeyed.items[0].beatmapId).toBe(1);
     expect(streamKeyed.items[0].primaryPattern).toBe("stream");
     expect(streamKeyed.items[0].patterns.stream).toBe(1);
+  });
+
+  it("excludes osu!std convert maps from the pool", async () => {
+    const db = await makeDb();
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, primary: "stream", patterns: { stream: 1 } });
+    // A std map whose scores were played as a mania convert: its native mode is osu,
+    // so it must never enter the pool even though it has a ready skill vector. The
+    // `convert` flag is absent on such rows, so the native mode is the only reliable tell.
+    await seedMap(db, { beatmapId: 2, beatmapsetId: 20, mode: "osu", primary: "jack", patterns: { jack: 1 } });
+    await buildAll(db);
+
+    const all = await getMapSearchPage(db, baseQuery());
+    expect(all.total).toBe(1);
+    expect(all.items[0].beatmapId).toBe(1);
   });
 
   it("multi-selects patterns (union) and filters by star range", async () => {
