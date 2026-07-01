@@ -20,7 +20,7 @@ import { cancelOscCountryCatchup, enqueueOscCountryCatchup, OscBackfill } from "
 import { OscSocketClient } from "../src/osc/client.js";
 import { runScoresFallbackPage, shouldRunScoresFallback } from "../src/osc/scores-fallback.js";
 import { addManualRosterMember, refreshCountryRoster, removeManualRosterMember } from "../src/rosters/country-rosters.js";
-import { activateCountry, canSeedSnipesForCountry, deleteCountryData, getActiveCountryCodes, getIndexedCountryCodes, getMapsWarmCountryCodes, setCountryFeatureTier, setCountryPaused, setCountryStatus, touchCountryRequest } from "../src/countries.js";
+import { activateCountry, canSeedSnipesForCountry, deleteCountryData, getActiveCountryCodes, getIndexedCountryCodes, getMapsWarmCountryCodes, getRosterRefreshCountryCodes, setCountryFeatureTier, setCountryPaused, setCountryStatus, touchCountryRequest } from "../src/countries.js";
 import { CountryClientTracker } from "../src/live/country-clients.js";
 import { ScoreIngestor } from "../src/ingest/score-ingestor.js";
 import { JobQueue } from "../src/jobs/queue.js";
@@ -583,6 +583,54 @@ describe("live backend", () => {
 
     expect(await getIndexedCountryCodes(db, config)).not.toContain("MX");
     expect(Number((await exec(db, "select keep_warm from country_registry where country = 'MX'")).rows[0].keep_warm)).toBe(0);
+  });
+
+  it("keeps TTL-reduced live countries ingesting with a slower roster refresh cadence", async () => {
+    const { db, queue, events } = await setup(["CR"]);
+    const config = {
+      trackedCountries: ["CR"],
+      countryWarmTtlMs: 60 * 60 * 1000,
+      rosterRefreshIntervalMs: 60 * 60 * 1000,
+    };
+    const idleRosterIntervalMs = 3 * 24 * 60 * 60 * 1000;
+    const refreshedAt = "2026-05-30T00:00:00.000Z";
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(refreshedAt));
+
+    await activateCountry(db, queue, config, "MX");
+    await exec(
+      db,
+      "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values ('MX', 101, 1, 'osu_rankings', 1, ?)",
+      [refreshedAt],
+    );
+    await exec(db, "update country_registry set last_roster_refresh_at = ? where country = 'MX'", [refreshedAt]);
+
+    vi.setSystemTime(new Date("2026-05-30T02:00:00.000Z"));
+    expect(await getIndexedCountryCodes(db, config)).not.toContain("MX");
+    expect(await getMapsWarmCountryCodes(db, config)).not.toContain("MX");
+    expect(await getActiveCountryCodes(db, config)).toEqual(expect.arrayContaining(["MX"]));
+    expect(await getRosterRefreshCountryCodes(db, config, {
+      warmIntervalMs: config.rosterRefreshIntervalMs,
+      idleIntervalMs: idleRosterIntervalMs,
+    })).not.toContain("MX");
+
+    const ingestor = new ScoreIngestor(db, queue, events, {
+      topPlayMarginPp: 5,
+      trackedCountries: ["CR"],
+      countryWarmTtlMs: config.countryWarmTtlMs,
+      osuClientId: "test-client",
+      osuClientSecret: "test-secret",
+    });
+    const scores = await fixture<OscScore[]>("scores.json");
+    if (!scores[0].user) throw new Error("fixture score is missing user data");
+    await ingestor.ingestBatch([{ ...scores[0], id: 9901, user: { ...scores[0].user, country_code: "MX" } }]);
+    expect(Number((await exec(db, "select count(*) as count from score_events where country = 'MX'")).rows[0].count)).toBe(1);
+
+    vi.setSystemTime(new Date("2026-06-03T00:00:00.000Z"));
+    expect(await getRosterRefreshCountryCodes(db, config, {
+      warmIntervalMs: config.rosterRefreshIntervalMs,
+      idleIntervalMs: idleRosterIntervalMs,
+    })).toContain("MX");
   });
 
   it("keeps prewarmed countries below live and snipes until they are requested", async () => {

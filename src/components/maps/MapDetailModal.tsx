@@ -180,11 +180,17 @@ export function MapDetailModal({ entry, onClose }: { entry: LiveMapSearchEntry |
               {/* Actions */}
               <div className="flex flex-wrap items-center gap-2">
                 <a
-                  href={osuDirectUrl(entry.beatmapsetId)}
+                  href={osuBeatmapUrl(entry)}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 rounded-md bg-osu-pink px-3 py-2 text-[12px] font-bold text-white hover:bg-osu-pink-light transition-colors"
                 >
-                  <OsuLogo className="h-3.5 w-3.5" />
-                  Open in osu!
+                  osu! web
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3" aria-hidden="true">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg>
                 </a>
                 <a
                   href={oszDownloadUrl(entry.beatmapsetId)}
@@ -198,17 +204,11 @@ export function MapDetailModal({ entry, onClose }: { entry: LiveMapSearchEntry |
                   Download .osz
                 </a>
                 <a
-                  href={osuBeatmapUrl(entry)}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href={osuDirectUrl(entry.beatmapsetId)}
                   className="inline-flex items-center gap-1.5 rounded-md bg-osu-b3/70 px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-osu-b3 hover:text-white transition-colors"
                 >
-                  osu! web
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3" aria-hidden="true">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                    <polyline points="15 3 21 3 21 9" />
-                    <line x1="10" y1="14" x2="21" y2="3" />
-                  </svg>
+                  <OsuLogo className="h-3.5 w-3.5" />
+                  Open in osu!
                 </a>
               </div>
             </div>

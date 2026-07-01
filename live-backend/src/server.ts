@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { readConfig } from "./config.js";
-import { ensurePinnedCountries, getIndexedCountryCodes, getMapsWarmCountryCodes } from "./countries.js";
+import { ensurePinnedCountries, getIndexedCountryCodes, getMapsWarmCountryCodes, getRosterRefreshCountryCodes } from "./countries.js";
 import { createDb, getSqliteBusyRetryStats, logApiCall, migrate } from "./db.js";
 import { routeHttp, sendNotFound } from "./http/snapshots.js";
 import { ScoreIngestor } from "./ingest/score-ingestor.js";
@@ -55,6 +55,8 @@ const REQUIRED_SCHEMA_TABLES = [
   "map_collection_members",
 ];
 
+const IDLE_COUNTRY_ROSTER_REFRESH_INTERVAL_MS = 3 * 24 * 60 * 60 * 1000;
+
 export async function createApp() {
   const config = readConfig();
   const db = await createDb(config);
@@ -105,7 +107,14 @@ export async function createApp() {
     config.enableOscBackfill ? () => enqueueOscBackfill(queue, db, config) : undefined,
   );
   if (!isServerRole && config.enableOsuApiJobs && config.enableStartupRosterRefresh && osu.hasCredentials()) {
-    await enqueueRosterRefreshes(queue, await getIndexedCountryCodes(db, config));
+    const startupRosterCountries = new Set(await getIndexedCountryCodes(db, config));
+    for (const country of await getRosterRefreshCountryCodes(db, config, {
+      warmIntervalMs: config.rosterRefreshIntervalMs,
+      idleIntervalMs: IDLE_COUNTRY_ROSTER_REFRESH_INTERVAL_MS,
+    })) {
+      startupRosterCountries.add(country);
+    }
+    await enqueueRosterRefreshes(queue, [...startupRosterCountries]);
   }
   const worker = new WorkerRunner(db, queue, events, osu, ingestor);
   const discord = createDiscordRuntime({ db, osu, queue, config });
@@ -272,7 +281,10 @@ function startQueuePressureScheduler(queue: JobQueue): void {
 
 function startRosterScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: JobQueue, config: ReturnType<typeof readConfig>): void {
   const tick = async () => {
-    const countries = await getIndexedCountryCodes(db, config);
+    const countries = await getRosterRefreshCountryCodes(db, config, {
+      warmIntervalMs: config.rosterRefreshIntervalMs,
+      idleIntervalMs: IDLE_COUNTRY_ROSTER_REFRESH_INTERVAL_MS,
+    });
     await enqueueRosterRefreshes(queue, countries).catch((error) => {
       console.warn("[roster] scheduled refresh failed", error);
     });

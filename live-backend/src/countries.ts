@@ -231,7 +231,33 @@ export async function getMapsWarmCountryCodes(db: Db, config: CountryWarmConfig)
 }
 
 export async function getActiveCountryCodes(db: Db, config: CountryWarmConfig): Promise<string[]> {
-  return getCountryCodesWithFeature(db, config, "live");
+  return getCountryCodesWithFeature(db, config, "live", { includeIdle: true });
+}
+
+export async function getRosterRefreshCountryCodes(
+  db: Db,
+  config: CountryWarmConfig,
+  intervals: { warmIntervalMs: number; idleIntervalMs: number },
+): Promise<string[]> {
+  await ensurePinnedCountries(db, config);
+  const rows = (await exec(
+    db,
+    `select cr.*, count(ro.user_id) as users
+     from country_registry cr
+     left join country_rosters ro on ro.country = cr.country and ro.is_tracked = 1
+     group by cr.country
+     order by cr.pinned desc, cr.last_requested_at desc`,
+  )).rows;
+  const countries: string[] = [];
+  for (const row of rows) {
+    const registry = rowToCountryRegistry(row, config);
+    if (registry.status === "paused") continue;
+    const intervalMs = registry.isWarm ? intervals.warmIntervalMs : intervals.idleIntervalMs;
+    if (isRosterRefreshDue(row.last_roster_refresh_at, Number(row.users ?? 0), intervalMs)) {
+      countries.push(registry.country);
+    }
+  }
+  return countries;
 }
 
 export async function canSeedSnipesForCountry(db: Db, config: CountryWarmConfig, country: string): Promise<boolean> {
@@ -303,7 +329,12 @@ function normalizeCountry(country: string): string {
   return country.trim().toUpperCase().slice(0, 2);
 }
 
-async function getCountryCodesWithFeature(db: Db, config: CountryWarmConfig, minimumTier: CountryFeatureTier): Promise<string[]> {
+async function getCountryCodesWithFeature(
+  db: Db,
+  config: CountryWarmConfig,
+  minimumTier: CountryFeatureTier,
+  options: { includeIdle?: boolean } = {},
+): Promise<string[]> {
   await ensurePinnedCountries(db, config);
   const countries = new Set<string>();
   const rows = (await exec(
@@ -318,7 +349,7 @@ async function getCountryCodesWithFeature(db: Db, config: CountryWarmConfig, min
       countries.delete(registry.country);
       continue;
     }
-    if (!registry.isWarm) continue;
+    if (!options.includeIdle && !registry.isWarm) continue;
     if (isCountryFeatureAtLeast(registry.featureTier, minimumTier)) countries.add(registry.country);
   }
   return [...countries];
@@ -369,6 +400,12 @@ async function shouldRefreshRoster(db: Db, country: string, intervalMs: number):
     [country],
   )).rows[0];
   if (!row || Number(row.users ?? 0) === 0) return true;
-  if (row.last_roster_refresh_at == null) return true;
-  return new Date(String(row.last_roster_refresh_at)).getTime() < Date.now() - intervalMs;
+  return isRosterRefreshDue(row.last_roster_refresh_at, Number(row.users ?? 0), intervalMs);
+}
+
+function isRosterRefreshDue(lastRosterRefreshAt: unknown, users: number, intervalMs: number): boolean {
+  if (users === 0) return true;
+  if (lastRosterRefreshAt == null) return true;
+  const refreshedAt = new Date(String(lastRosterRefreshAt)).getTime();
+  return !Number.isFinite(refreshedAt) || refreshedAt < Date.now() - Math.max(0, intervalMs);
 }

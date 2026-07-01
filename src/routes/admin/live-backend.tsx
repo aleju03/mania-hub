@@ -3525,7 +3525,7 @@ const DEFAULT_COUNTRY_TIER_FILTERS: Record<CountryFeatureTier, boolean> = {
 const COUNTRY_STATUS_OPTIONS: Array<{ value: CountryDisplayStatus; label: string; dot: string }> = [
   { value: "active", label: "Active", dot: "bg-osu-green-light" },
   { value: "warm", label: "Warm", dot: "bg-osu-yellow" },
-  { value: "idle", label: "Idle", dot: "bg-osu-red-light" },
+  { value: "idle", label: "Reduced", dot: "bg-osu-red-light" },
   { value: "paused", label: "Paused", dot: "bg-osu-red-light" },
 ];
 const COUNTRY_LIFECYCLE_OPTIONS: Array<{ value: CountryLifecycleStatus; label: string; tone: string; dot: string; blurb: string }> = [
@@ -4177,7 +4177,7 @@ function CountryRow({
           })}
         </div>
         {displayStatus === "idle" ? (
-          <span className={`text-[10px] font-semibold uppercase tracking-wider ${statusTone}`}>idle by TTL</span>
+          <span className={`text-[10px] font-semibold uppercase tracking-wider ${statusTone}`}>reduced by TTL</span>
         ) : null}
       </div>
       <div className="mt-2 flex items-center gap-2">
