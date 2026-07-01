@@ -783,6 +783,46 @@ export async function createUserGoal(db: Db, queue: JobQueue, input: UserGoalInp
   return goal;
 }
 
+export type UserGoalTargetPatch = Pick<UserGoalInput, "targetValue" | "targetCount" | "targetGrade" | "speedBucket">;
+
+/**
+ * Edit an open goal's targets in place, keeping its identity (kind, map) and creation history.
+ * The progress baseline is preserved unless the edit changes what the baseline was measured
+ * against (speed bucket on an accuracy goal, leaderboard scope on a rank goal, pp threshold on a
+ * count goal) - in those cases it is recomputed so the bar doesn't climb from a stale reference.
+ */
+export async function updateUserGoal(db: Db, userId: number, goalId: string, patch: UserGoalTargetPatch): Promise<UserGoal | null> {
+  const goal = await getUserGoal(db, goalId);
+  if (!goal || goal.userId !== userId || goal.status !== "open") return null;
+  const nextSpeed = GOAL_MAP_KINDS.includes(goal.kind) ? goalSpeedBucket(patch) : null;
+  const next: UserGoalInput = {
+    userId: goal.userId,
+    country: goal.country,
+    kind: goal.kind,
+    beatmapId: goal.beatmapId,
+    beatmapsetId: goal.beatmapsetId,
+    beatmapLabel: goal.beatmapLabel,
+    targetValue: patch.targetValue ?? null,
+    targetCount: patch.targetCount ?? null,
+    targetGrade: patch.targetGrade ?? null,
+    speedBucket: nextSpeed,
+  };
+  const baselineChanged =
+    (goal.kind === "accuracy" && goalSpeedBucket(goal) !== goalSpeedBucket(next)) ||
+    (goal.kind === "reach_rank" && rankScopeOf(goal.targetGrade) !== rankScopeOf(next.targetGrade ?? null)) ||
+    (goal.kind === "play_pp_count" && goal.targetValue !== next.targetValue);
+  const startValue = baselineChanged ? await goalStartValue(db, next) : goal.startValue;
+  const res = await exec(
+    db,
+    `update user_goals
+     set target_value = ?, target_count = ?, target_grade = ?, speed_bucket = ?, start_value = ?, updated_at = ?
+     where id = ? and user_id = ? and status = 'open'`,
+    [next.targetValue ?? null, next.targetCount ?? null, next.targetGrade ?? null, nextSpeed, startValue, Date.now(), goalId, userId],
+  );
+  if (res.rowsAffected === 0) return null;
+  return getUserGoal(db, goalId);
+}
+
 export async function deleteUserGoal(db: Db, userId: number, goalId: string): Promise<boolean> {
   const res = await exec(db, "delete from user_goals where id = ? and user_id = ?", [goalId, userId]);
   const ok = res.rowsAffected > 0;

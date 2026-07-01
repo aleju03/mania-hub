@@ -18,6 +18,7 @@ import {
   buildManiaCardRenderData,
   buildManiaCardRenderDataFromSkills,
 } from "../player/maniacard3d/renderData";
+import { CardSpotlight, type CardSpotlightTarget } from "./CardSpotlight";
 import { renderCardSkeletonThumbnail, renderCardThumbnailBlob } from "./cardSnapshot";
 import {
   cardThumbnailKeyForCollectionCard,
@@ -472,6 +473,9 @@ export function CollectionPanel({
   // second click too.
   const [menu, setMenu] = useState<{ card: CollectedCard; x: number; y: number } | null>(null);
   const [menuConfirm, setMenuConfirm] = useState(false);
+  // Clicking a tile lifts the card to center stage instead of navigating;
+  // the spotlight offers the profile link.
+  const [spotlight, setSpotlight] = useState<CardSpotlightTarget | null>(null);
   // Select mode: tiles toggle instead of navigating, and the floating bar
   // recycles every selected card at once (all copies, second click confirms).
   const [selecting, setSelecting] = useState(false);
@@ -1085,14 +1089,21 @@ export function CollectionPanel({
                     )}
                   </button>
                 ) : (
-                  <Link
-                    to="/player/$username"
-                    params={{ username: card.username }}
-                    className="block transition-transform duration-150 hover:-translate-y-1"
-                    aria-label={`Open ${card.username}'s profile`}
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      setSpotlight({
+                        card,
+                        thumbnail,
+                        rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
+                      });
+                    }}
+                    className="block w-full transition-transform duration-150 hover:-translate-y-1 cursor-pointer"
+                    aria-label={`View ${card.username}'s card`}
                   >
                     <CollectionCardTile card={card} thumbnail={thumbnail} onApplyMint={onApplyMint} />
-                  </Link>
+                  </button>
                 )}
                 {selecting ? null : card.copies > 1 ? (
                   <button
@@ -1345,6 +1356,8 @@ export function CollectionPanel({
           </div>
         </>
       )}
+
+      <CardSpotlight target={spotlight} onClose={() => setSpotlight(null)} />
     </section>
   );
 }

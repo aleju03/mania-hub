@@ -16,6 +16,7 @@ import {
   reconcileGoalsForUser,
   reconcilePpGoalsForUser,
   refreshGoalUserIndex,
+  updateUserGoal,
 } from "../src/features/goals.js";
 import type { OscScore } from "../src/shared/types.js";
 
@@ -374,6 +375,63 @@ describe("goal crud", () => {
     expect(mine[0].status).toBe("open"); // open sorts first
     expect(mine.some((g) => g.id === completed.id && g.status === "completed")).toBe(true);
     expect(mine.every((g) => g.userId === USER)).toBe(true);
+  });
+
+  it("edits an open goal's target while keeping the progress baseline", async () => {
+    await exec(
+      db,
+      "insert into users (user_id, username, avatar_url, country_code, pp, updated_at) values (?, ?, ?, ?, ?, ?)",
+      [USER, "tester", "https://a.ppy.sh/101", "CR", 6000, new Date().toISOString()],
+    );
+    const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "reach_pp", targetValue: 7000 });
+    expect(goal.startValue).toBe(6000);
+    const updated = await updateUserGoal(db, USER, goal.id, { targetValue: 8000 });
+    expect(updated?.targetValue).toBe(8000);
+    expect(updated?.startValue).toBe(6000); // baseline survives a plain target edit
+    expect(updated?.status).toBe("open");
+  });
+
+  it("rejects edits by non-owners and on completed goals", async () => {
+    const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "play_pp", targetValue: 200 });
+    expect(await updateUserGoal(db, 999, goal.id, { targetValue: 300 })).toBeNull();
+    await evaluateScoreGoals(db, events, scoreWith({ pp: 252.4, passed: true }), ["CR"]);
+    expect(await updateUserGoal(db, USER, goal.id, { targetValue: 300 })).toBeNull();
+    expect((await getUserGoal(db, goal.id))?.targetValue).toBe(200);
+  });
+
+  it("recomputes the rank baseline when the leaderboard scope changes", async () => {
+    await exec(
+      db,
+      "insert into users (user_id, username, avatar_url, country_code, pp, global_rank, country_rank, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?)",
+      [USER, "tester", "https://a.ppy.sh/101", "CR", 6000, 480, 3, new Date().toISOString()],
+    );
+    const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "reach_rank", targetValue: 400, targetGrade: "global" });
+    expect(goal.startValue).toBe(480);
+    const updated = await updateUserGoal(db, USER, goal.id, { targetValue: 2, targetGrade: "country" });
+    expect(updated?.targetGrade).toBe("country");
+    expect(updated?.startValue).toBe(3); // global baseline is meaningless on the country board
+  });
+
+  it("recomputes the accuracy baseline when the speed bucket changes", async () => {
+    await insertScoreEvent(scoreWith({ id: 9501, accuracy: 0.97, rank: "S", passed: true, mods: [] }));
+    await insertScoreEvent(scoreWith({ id: 9502, accuracy: 0.93, rank: "A", passed: true, mods: [{ acronym: "DT" }] }));
+    const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "accuracy", beatmapId: MAP, targetValue: 0.98 });
+    expect(goal.startValue).toBeCloseTo(0.97, 3);
+    const updated = await updateUserGoal(db, USER, goal.id, { targetValue: 0.98, speedBucket: "dt" });
+    expect(updated?.speedBucket).toBe("dt");
+    expect(updated?.startValue).toBeCloseTo(0.93, 3);
+  });
+
+  it("completes on the next reconcile when the target is edited below the current value", async () => {
+    await exec(
+      db,
+      "insert into users (user_id, username, avatar_url, country_code, pp, updated_at) values (?, ?, ?, ?, ?, ?)",
+      [USER, "tester", "https://a.ppy.sh/101", "CR", 6000, new Date().toISOString()],
+    );
+    const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "reach_pp", targetValue: 9000 });
+    await updateUserGoal(db, USER, goal.id, { targetValue: 5500 });
+    await reconcileGoalsForUser(db, events, USER);
+    expect((await getUserGoal(db, goal.id))?.status).toBe("completed");
   });
 
   it("deletes only the owner's goal", async () => {

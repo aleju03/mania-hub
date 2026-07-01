@@ -51,6 +51,14 @@ export interface CreateGoalInput {
   note?: string | null;
 }
 
+export interface UpdateGoalInput {
+  id: string;
+  targetValue?: number | null;
+  targetCount?: number | null;
+  targetGrade?: string | null;
+  speedBucket?: GoalSpeedBucket | null;
+}
+
 export interface GoalsListResult {
   available: boolean;
   goals: UserGoal[];
@@ -168,6 +176,33 @@ export const createGoal = createServerFn({ method: "POST" })
           targetGrade: data.targetGrade ?? null,
           speedBucket: data.speedBucket ?? null,
           note: data.note ?? null,
+        }),
+      });
+      const body = (await response.json().catch(() => ({}))) as { ok?: boolean; goal?: UserGoal };
+      return { ok: response.ok && body.ok === true, goal: body.goal ?? null };
+    } catch {
+      return { ok: false, goal: null };
+    }
+  });
+
+export const updateGoal = createServerFn({ method: "POST" })
+  .inputValidator((data: UpdateGoalInput) => data)
+  .handler(async ({ data }): Promise<{ ok: boolean; goal: UserGoal | null }> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const cfg = await resolveGoalsBackend();
+    if (!cfg) return { ok: false, goal: null };
+    try {
+      const response = await fetch(`${cfg.base}/api/goals/update`, {
+        method: "POST",
+        headers: cfg.headers,
+        body: JSON.stringify({
+          userId: cfg.userId,
+          id: data.id,
+          targetValue: data.targetValue ?? null,
+          targetCount: data.targetCount ?? null,
+          targetGrade: data.targetGrade ?? null,
+          speedBucket: data.speedBucket ?? null,
         }),
       });
       const body = (await response.json().catch(() => ({}))) as { ok?: boolean; goal?: UserGoal };

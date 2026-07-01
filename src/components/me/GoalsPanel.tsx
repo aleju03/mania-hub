@@ -1,24 +1,27 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { Pencil } from "lucide-react";
 import { useLocation } from "@tanstack/react-router";
 
 import { PageHeader } from "../layout/PageHeader";
+import { COMPOSER_TRIANGLES } from "./GoalToasts";
 import { GradeImg } from "../ui/GradeImg";
 import { ModBadge } from "../ui/ModBadge";
 import { OsuLogo } from "../ui/OsuLogo";
 import { useAuth } from "../../lib/auth-context";
 import { getBeatmapsetForBeatmap, searchBeatmaps } from "../../lib/osu";
-import { openLiveEventSource } from "../../lib/live-backend";
+import { describeGoal, GOAL_SPEED_LABELS, goalSpeedBucket, nf, trimZeros } from "../../lib/goal-format";
+import { isGoalDeleted, queueGoalDelete, subscribeGoalsChanged } from "../../lib/goal-toasts";
 import {
   createGoal,
-  deleteGoal,
   EMPTY_GOAL_SUGGESTION_METRICS,
   fetchMyGoalSuggestionMetrics,
   fetchMyGoals,
+  updateGoal,
   type CreateGoalInput,
   type GoalKind,
   type GoalSpeedBucket,
   type GoalSuggestionMetrics,
+  type UpdateGoalInput,
   type UserGoal,
 } from "../../lib/goals";
 import type { OsuBeatmap, OsuBeatmapset } from "../../lib/types";
@@ -59,11 +62,6 @@ type GoalGroup = "profile" | "map";
 type RankScope = "global" | "country";
 
 const GOAL_SPEED_OPTIONS: GoalSpeedBucket[] = ["normal", "ht", "dt"];
-const GOAL_SPEED_LABELS: Record<GoalSpeedBucket, string> = {
-  normal: "Normal",
-  ht: "HT/DC",
-  dt: "DT/NC",
-};
 
 interface GoalTypeMeta {
   kind: GoalKind;
@@ -180,14 +178,6 @@ function goalMeta(kind: GoalKind) {
   return GOAL_TYPES.find((t) => t.kind === kind) ?? GOAL_TYPES[0];
 }
 
-function goalSpeedBucket(goal: Pick<UserGoal, "speedBucket">): GoalSpeedBucket {
-  return goal.speedBucket === "ht" || goal.speedBucket === "dt" ? goal.speedBucket : "normal";
-}
-
-function goalSpeedLabel(goal: Pick<UserGoal, "speedBucket">): string {
-  return GOAL_SPEED_LABELS[goalSpeedBucket(goal)];
-}
-
 interface ResolvedMap {
   id: number;
   beatmapsetId: number;
@@ -216,10 +206,6 @@ function readBeatmapIdFromInput(value: string): number | null {
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
-function trimZeros(s: string): string {
-  return s.replace(/\.?0+$/, "");
-}
-
 function clampPct(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.min(100, Math.max(0, Math.round(value)));
@@ -227,10 +213,6 @@ function clampPct(value: number): number {
 
 function roundUpToStep(value: number, step: number): number {
   return Math.ceil(value / step) * step;
-}
-
-function nf(value: number): string {
-  return Math.round(value).toLocaleString();
 }
 
 function reachPpSuggestion(currentPp: number | null): number | null {
@@ -262,30 +244,6 @@ function progressPct(goal: UserGoal): number | null {
   return clampPct(goal.progress.pct);
 }
 
-function describeGoal(goal: UserGoal): string {
-  const map = goal.beatmapLabel ?? (goal.beatmapId ? `map #${goal.beatmapId}` : "a map");
-  switch (goal.kind) {
-    case "reach_pp":
-      return `Reach ${nf(goal.targetValue ?? 0)} total pp`;
-    case "reach_rank":
-      return `Reach ${goal.targetGrade === "country" ? "country" : "global"} rank #${nf(goal.targetValue ?? 0)}`;
-    case "play_pp":
-      return `Land a ${Math.round(goal.targetValue ?? 0)}pp play`;
-    case "play_pp_count":
-      return `Have ${nf(goal.targetCount ?? 0)} ${Math.round(goal.targetValue ?? 0)}pp+ plays`;
-    case "accuracy":
-      return `${trimZeros(((goal.targetValue ?? 0) * 100).toFixed(2))}% ${goalSpeedLabel(goal)} on ${map}`;
-    case "pass":
-      return `Pass ${map} (${goalSpeedLabel(goal)})`;
-    case "fc":
-      return `FC ${map} (${goalSpeedLabel(goal)})`;
-    case "grade":
-      return `Get ${goal.targetGrade ?? "S"} ${goalSpeedLabel(goal)} on ${map}`;
-    default:
-      return "Goal";
-  }
-}
-
 function completedDetail(goal: UserGoal): string | null {
   if (goal.status !== "completed" || !goal.completedAt) return null;
   const date = new Date(goal.completedAt).toLocaleDateString();
@@ -299,34 +257,15 @@ function beatmapHref(beatmapId: number | null | undefined): string | null {
   return beatmapId ? `https://osu.ppy.sh/beatmaps/${beatmapId}` : null;
 }
 
-interface Celebration {
-  id: number;
-  kind: GoalKind;
-  label: string;
-  targetGrade: string | null;
-}
-
-interface GoalCompletedPayload {
-  userId?: number;
-  kind?: GoalKind;
-  targetValue?: number | null;
-  targetCount?: number | null;
-  targetGrade?: string | null;
-  speedBucket?: GoalSpeedBucket | null;
-  beatmapLabel?: string | null;
-}
-
-function celebrationLabel(data: GoalCompletedPayload): string {
-  const synthetic = {
-    kind: data.kind ?? "reach_pp",
-    beatmapLabel: data.beatmapLabel ?? null,
-    beatmapId: null,
-    targetValue: data.targetValue ?? null,
-    targetCount: data.targetCount ?? null,
-    targetGrade: data.targetGrade ?? null,
-    speedBucket: data.speedBucket ?? null,
-  } as UserGoal;
-  return describeGoal(synthetic);
+// Mirrors the backend list order (open first, newest activity first) so an undone delete slots
+// back where it was without waiting for the resync.
+function sortGoals(goals: UserGoal[]): UserGoal[] {
+  return [...goals].sort((a, b) => {
+    const aOpen = a.status === "open" ? 0 : 1;
+    const bOpen = b.status === "open" ? 0 : 1;
+    if (aOpen !== bOpen) return aOpen - bOpen;
+    return (b.completedAt ?? b.createdAt) - (a.completedAt ?? a.createdAt);
+  });
 }
 
 export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_METRICS }: { initialSuggestionMetrics?: GoalSuggestionMetrics }) {
@@ -363,28 +302,12 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  const [celebration, setCelebration] = useState<Celebration | null>(null);
-  const celebrationSeq = useRef(0);
-  const celebrationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const celebrate = useCallback((data: GoalCompletedPayload) => {
-    celebrationSeq.current += 1;
-    setCelebration({ id: celebrationSeq.current, kind: data.kind ?? "reach_pp", label: celebrationLabel(data), targetGrade: data.targetGrade ?? null });
-    if (celebrationTimer.current) clearTimeout(celebrationTimer.current);
-    celebrationTimer.current = setTimeout(() => setCelebration(null), 6500);
-  }, []);
-  useEffect(() => () => {
-    if (celebrationTimer.current) clearTimeout(celebrationTimer.current);
-  }, []);
-
-  // Goals deleted this session, so a concurrent reload (focus, the goal_completed SSE, or a load
-  // that was already in flight when the trash was clicked) can't resurrect a row we just removed.
-  // Deleted ids are unique uuids and never reissued, so leaving them in the set is harmless.
-  const pendingDeletes = useRef<Set<string>>(new Set());
-
   const load = useCallback(async () => {
     try {
       const result = await fetchMyGoals();
-      setGoals(result.goals.filter((goal) => !pendingDeletes.current.has(goal.id)));
+      // A load that was in flight when a delete was clicked (focus, SSE) must not resurrect the
+      // row; the goal-toasts store tracks every id deleted this session.
+      setGoals(result.goals.filter((goal) => !isGoalDeleted(goal.id)));
     } catch {
       setGoals([]);
     } finally {
@@ -416,29 +339,23 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
 
   const loadRef = useRef(load);
   loadRef.current = load;
+  // Reload on window focus and whenever the root goal machinery reports a change: the viewer's
+  // goal_completed SSE (owned by GoalToasts), an undo restore, or a failed delete commit.
   useEffect(() => {
     if (!viewer) return;
     const onFocus = () => void loadRef.current();
     window.addEventListener("focus", onFocus);
-    const source = viewer.countryCode ? openLiveEventSource(viewer.countryCode) : null;
-    if (source) {
-      source.addEventListener("goal_completed", (event) => {
-        try {
-          const data = JSON.parse((event as MessageEvent).data) as GoalCompletedPayload;
-          if (data.userId === viewer.id) {
-            celebrate(data);
-            void loadRef.current();
-          }
-        } catch {
-          void loadRef.current();
-        }
-      });
-    }
+    const unsubscribe = subscribeGoalsChanged((restored) => {
+      if (restored && restored.length > 0) {
+        setGoals((prev) => sortGoals([...prev, ...restored.filter((goal) => !prev.some((g) => g.id === goal.id))]));
+      }
+      void loadRef.current();
+    });
     return () => {
       window.removeEventListener("focus", onFocus);
-      source?.close();
+      unsubscribe();
     };
-  }, [viewer, celebrate]);
+  }, [viewer]);
 
   const resetMapPicker = useCallback(() => {
     setMapQuery("");
@@ -620,21 +537,23 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
     }
   }, [canSubmit, kind, scope, ppTarget, ppCountTarget, accPct, rankTarget, rankScope, grade, speedBucket, resolved, load, resetMapPicker]);
 
-  const remove = useCallback(
-    async (id: string) => {
-      pendingDeletes.current.add(id);
-      setGoals((prev) => prev.filter((goal) => goal.id !== id));
-      let ok = false;
+  // Hide the card and hand the delete to the goal-toasts store: it waits out the undo window (the
+  // window keeps counting across navigation, with the undo bar rendered from the root layout) and
+  // only then sends the backend delete.
+  const remove = useCallback((goal: UserGoal) => {
+    setGoals((prev) => prev.filter((g) => g.id !== goal.id));
+    queueGoalDelete(goal, describeGoal(goal));
+  }, []);
+
+  const update = useCallback(
+    async (input: UpdateGoalInput): Promise<boolean> => {
       try {
-        ok = (await deleteGoal({ data: { id } })).ok;
+        const result = await updateGoal({ data: input });
+        if (!result.ok) return false;
+        await load();
+        return true;
       } catch {
-        ok = false;
-      }
-      // Backend rejected the delete (or the request failed): drop the guard and resync so the goal
-      // comes back rather than silently lingering only in the database.
-      if (!ok) {
-        pendingDeletes.current.delete(id);
-        void load();
+        return false;
       }
     },
     [load],
@@ -825,31 +744,10 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
         </div>
       </section>
 
-      <GoalSections loading={loading} open={open} done={done} onDelete={remove} onAgain={goAgain} />
-      <CelebrationToast celebration={celebration} onDismiss={() => setCelebration(null)} />
+      <GoalSections loading={loading} open={open} done={done} onDelete={remove} onUpdate={update} onAgain={goAgain} />
     </PageShell>
   );
 }
-
-const COMPOSER_TRIANGLES: Array<{ p: string; o: number }> = [
-  { p: "-150,200 0,20 150,200", o: 0.05 },
-  { p: "150,200 300,20 450,200", o: 0.07 },
-  { p: "450,200 600,20 750,200", o: 0.04 },
-  { p: "750,200 900,20 1050,200", o: 0.06 },
-  { p: "1050,200 1200,20 1350,200", o: 0.045 },
-  { p: "0,20 300,20 150,200", o: 0.03 },
-  { p: "300,20 600,20 450,200", o: 0.05 },
-  { p: "600,20 900,20 750,200", o: 0.035 },
-  { p: "900,20 1200,20 1050,200", o: 0.055 },
-  { p: "-150,380 0,200 150,380", o: 0.035 },
-  { p: "150,380 300,200 450,380", o: 0.05 },
-  { p: "450,380 600,200 750,380", o: 0.03 },
-  { p: "750,380 900,200 1050,380", o: 0.045 },
-  { p: "0,200 300,200 150,380", o: 0.055 },
-  { p: "300,200 600,200 450,380", o: 0.035 },
-  { p: "600,200 900,200 750,380", o: 0.05 },
-  { p: "900,200 1200,200 1050,380", o: 0.03 },
-];
 
 function ComposerTriangles() {
   return (
@@ -1185,7 +1083,21 @@ function MapSearchRow({
   );
 }
 
-function GoalSections({ loading, open, done, onDelete, onAgain }: { loading: boolean; open: UserGoal[]; done: UserGoal[]; onDelete: (id: string) => void | Promise<void>; onAgain: (goal: UserGoal) => void }) {
+function GoalSections({
+  loading,
+  open,
+  done,
+  onDelete,
+  onUpdate,
+  onAgain,
+}: {
+  loading: boolean;
+  open: UserGoal[];
+  done: UserGoal[];
+  onDelete: (goal: UserGoal) => void;
+  onUpdate: (input: UpdateGoalInput) => Promise<boolean>;
+  onAgain: (goal: UserGoal) => void;
+}) {
   if (loading) {
     return (
       <div className="flex items-center justify-center gap-2 rounded-2xl border border-osu-b3/25 bg-osu-b4/50 py-16 text-[13px] text-osu-f1">
@@ -1213,7 +1125,7 @@ function GoalSections({ loading, open, done, onDelete, onAgain }: { loading: boo
         {open.length > 0 ? (
           <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
             {open.map((goal) => (
-              <GoalCard key={goal.id} goal={goal} onDelete={() => void onDelete(goal.id)} />
+              <GoalCard key={goal.id} goal={goal} onDelete={() => onDelete(goal)} onUpdate={onUpdate} />
             ))}
           </div>
         ) : (
@@ -1226,7 +1138,7 @@ function GoalSections({ loading, open, done, onDelete, onAgain }: { loading: boo
           <SectionLabel title="Cleared" count={done.length} />
           <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
             {done.map((goal) => (
-              <ClearedChip key={goal.id} goal={goal} onDelete={() => void onDelete(goal.id)} onAgain={() => onAgain(goal)} />
+              <ClearedChip key={goal.id} goal={goal} onDelete={() => onDelete(goal)} onAgain={() => onAgain(goal)} />
             ))}
           </div>
         </div>
@@ -1444,48 +1356,228 @@ function GoalMedia({ goal, accent, href }: { goal: UserGoal; accent: string; hre
   );
 }
 
-function GoalCard({ goal, onDelete }: { goal: UserGoal; onDelete: () => void }) {
+function GoalCard({ goal, onDelete, onUpdate }: { goal: UserGoal; onDelete: () => void; onUpdate: (input: UpdateGoalInput) => Promise<boolean> }) {
   const meta = goalMeta(goal.kind);
   const accent = meta.accent;
   const href = beatmapHref(goal.beatmapId);
+  const [editing, setEditing] = useState(false);
 
   return (
     <article className="group relative flex items-center gap-3.5 rounded-2xl border border-osu-b3/30 bg-osu-b4 p-3.5">
       <GoalMedia goal={goal} accent={accent} href={href} />
 
-      <div className="min-w-0 flex-1">
-        <div className="text-[10px] font-extrabold uppercase tracking-[0.14em]" style={{ color: accent }}>
-          {meta.label}
-        </div>
-        {href ? (
-          <a
-            href={href}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-1 block truncate text-[14px] font-bold text-white transition-colors hover:text-osu-pink-light hover:underline"
-            title={`Open ${goal.beatmapLabel ?? describeGoal(goal)} on osu!`}
-          >
-            {describeGoal(goal)}
-          </a>
-        ) : (
-          <div className="mt-1 truncate text-[14px] font-bold text-white" title={describeGoal(goal)}>
-            {describeGoal(goal)}
+      {editing ? (
+        <GoalEditor
+          goal={goal}
+          onSave={async (input) => {
+            const ok = await onUpdate(input);
+            if (ok) setEditing(false);
+            return ok;
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      ) : (
+        <div className="min-w-0 flex-1">
+          <div className="text-[10px] font-extrabold uppercase tracking-[0.14em]" style={{ color: accent }}>
+            {meta.label}
           </div>
-        )}
-        <div className="mt-1.5">
-          <GoalReadout goal={goal} />
+          {href ? (
+            <a
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 block truncate text-[14px] font-bold text-white transition-colors hover:text-osu-pink-light hover:underline"
+              title={`Open ${goal.beatmapLabel ?? describeGoal(goal)} on osu!`}
+            >
+              {describeGoal(goal)}
+            </a>
+          ) : (
+            <div className="mt-1 truncate text-[14px] font-bold text-white" title={describeGoal(goal)}>
+              {describeGoal(goal)}
+            </div>
+          )}
+          <div className="mt-1.5">
+            <GoalReadout goal={goal} />
+          </div>
         </div>
-      </div>
+      )}
 
-      <button
-        type="button"
-        onClick={onDelete}
-        aria-label="Delete goal"
-        className="-mr-1 -mt-1 shrink-0 self-start rounded-md p-1 text-osu-f1/60 transition-colors hover:bg-osu-red/10 hover:text-osu-red-light"
-      >
-        <CloseGlyph />
-      </button>
+      <div className="-mr-1 -mt-1 flex shrink-0 items-center gap-0.5 self-start">
+        {!editing ? (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            aria-label="Edit goal"
+            className="rounded-md p-1 text-osu-f1/60 transition-colors hover:bg-osu-b3/40 hover:text-white"
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={onDelete}
+          aria-label="Delete goal"
+          className="rounded-md p-1 text-osu-f1/60 transition-colors hover:bg-osu-red/10 hover:text-osu-red-light"
+        >
+          <CloseGlyph />
+        </button>
+      </div>
     </article>
+  );
+}
+
+// Inline editor for an open goal. The kind and map are fixed (a different map is a different
+// goal); the targets are the same tokens the composer uses, so the sentence reads identically.
+function GoalEditor({ goal, onSave, onCancel }: { goal: UserGoal; onSave: (input: UpdateGoalInput) => Promise<boolean>; onCancel: () => void }) {
+  const meta = goalMeta(goal.kind);
+  const accent = meta.accent;
+  const [value, setValue] = useState<string>(() => {
+    if (goal.targetValue == null) return "";
+    if (goal.kind === "accuracy") return trimZeros((goal.targetValue * 100).toFixed(2));
+    return String(Math.round(goal.targetValue));
+  });
+  const [count, setCount] = useState<string>(goal.targetCount != null ? String(goal.targetCount) : "");
+  const [grade, setGrade] = useState<(typeof GRADES)[number]>(
+    goal.targetGrade && (GRADES as readonly string[]).includes(goal.targetGrade) ? (goal.targetGrade as (typeof GRADES)[number]) : "S",
+  );
+  const [speed, setSpeed] = useState<GoalSpeedBucket>(goalSpeedBucket(goal));
+  const [rankScope, setRankScope] = useState<RankScope>(goal.targetGrade === "country" ? "country" : "global");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(false);
+
+  const canSave = (() => {
+    if (saving) return false;
+    switch (goal.kind) {
+      case "reach_pp":
+      case "play_pp":
+      case "reach_rank":
+        return Number(value) > 0;
+      case "play_pp_count":
+        return Number(value) > 0 && Number.isInteger(Number(count)) && Number(count) > 0;
+      case "accuracy":
+        return Number(value) > 0 && Number(value) <= 100;
+      default:
+        return true;
+    }
+  })();
+
+  const save = async () => {
+    if (!canSave) return;
+    setSaving(true);
+    setError(false);
+    const input: UpdateGoalInput = { id: goal.id };
+    switch (goal.kind) {
+      case "reach_pp":
+      case "play_pp":
+        input.targetValue = Number(value);
+        break;
+      case "play_pp_count":
+        input.targetValue = Number(value);
+        input.targetCount = Number(count);
+        break;
+      case "reach_rank":
+        input.targetValue = Number(value);
+        input.targetGrade = rankScope;
+        break;
+      case "accuracy":
+        input.targetValue = Number(value) / 100;
+        input.speedBucket = speed;
+        break;
+      case "grade":
+        input.targetGrade = grade;
+        input.speedBucket = speed;
+        break;
+      default:
+        input.speedBucket = speed;
+        break;
+    }
+    const ok = await onSave(input);
+    if (!ok) {
+      setError(true);
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="min-w-0 flex-1">
+      <div className="text-[10px] font-extrabold uppercase tracking-[0.14em]" style={{ color: accent }}>
+        {meta.label}
+      </div>
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-2 text-[13.5px] font-semibold text-osu-l2">
+        {goal.kind === "reach_pp" ? (
+          <>
+            <span>Reach</span>
+            <NumberToken value={value} onChange={setValue} placeholder={meta.placeholder} suffix="pp" accent={accent} width="6.5rem" ariaLabel="Target total pp" />
+            <span>total pp</span>
+          </>
+        ) : null}
+        {goal.kind === "play_pp" ? (
+          <>
+            <span>Land a play worth</span>
+            <NumberToken value={value} onChange={setValue} placeholder={meta.placeholder} suffix="pp" accent={accent} width="5rem" ariaLabel="Play worth at least" />
+          </>
+        ) : null}
+        {goal.kind === "play_pp_count" ? (
+          <>
+            <span>Have</span>
+            <NumberToken value={count} onChange={setCount} placeholder="50" accent={accent} width="4rem" ariaLabel="Target play count" />
+            <span>plays worth</span>
+            <NumberToken value={value} onChange={setValue} placeholder="600" suffix="pp" accent={accent} width="5rem" ariaLabel="Minimum pp per play" />
+            <span>or more</span>
+          </>
+        ) : null}
+        {goal.kind === "reach_rank" ? (
+          <>
+            <span>Reach</span>
+            <RankScopeToggle value={rankScope} onChange={setRankScope} accent={accent} />
+            <span>rank</span>
+            <NumberToken value={value} onChange={setValue} placeholder={meta.placeholder} prefix="#" accent={accent} width="5rem" ariaLabel="Target rank" />
+          </>
+        ) : null}
+        {goal.kind === "accuracy" ? (
+          <>
+            <span>Hit</span>
+            <NumberToken value={value} onChange={setValue} placeholder={meta.placeholder} suffix="%" accent={accent} width="4rem" decimal ariaLabel="Target accuracy" />
+            <SpeedToken value={speed} onChange={setSpeed} accent={accent} />
+          </>
+        ) : null}
+        {goal.kind === "grade" ? (
+          <>
+            <span>Earn</span>
+            <GradeToken value={grade} onChange={setGrade} accent={accent} />
+            <SpeedToken value={speed} onChange={setSpeed} accent={accent} />
+          </>
+        ) : null}
+        {goal.kind === "pass" ? (
+          <>
+            <span>Pass</span>
+            <SpeedToken value={speed} onChange={setSpeed} accent={accent} />
+          </>
+        ) : null}
+        {goal.kind === "fc" ? (
+          <>
+            <span>FC</span>
+            <SpeedToken value={speed} onChange={setSpeed} accent={accent} />
+          </>
+        ) : null}
+      </div>
+      <div className="mt-2 flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={!canSave}
+          style={canSave ? { backgroundColor: `${accent}24`, borderColor: `${accent}80`, color: "#fff" } : undefined}
+          className="inline-flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[12px] font-bold transition hover:brightness-110 disabled:cursor-default disabled:border-osu-b3/30 disabled:bg-osu-b5/40 disabled:text-osu-f1/55 disabled:hover:brightness-100"
+        >
+          {saving ? <Spinner className="h-3.5 w-3.5" /> : null}
+          Save
+        </button>
+        <button type="button" onClick={onCancel} className="h-8 rounded-lg px-2.5 text-[12px] font-bold text-osu-f1 transition-colors hover:bg-osu-b3/40 hover:text-white">
+          Cancel
+        </button>
+        {error ? <span className="text-[11px] font-semibold text-osu-red-light">Couldn't save. Try again.</span> : null}
+      </div>
+    </div>
   );
 }
 
@@ -1541,73 +1633,5 @@ function ClearedChip({ goal, onDelete, onAgain }: { goal: UserGoal; onDelete: ()
         <CloseGlyph />
       </button>
     </article>
-  );
-}
-
-function CelebrationTriangles() {
-  return (
-    <svg viewBox="0 20 1200 360" preserveAspectRatio="xMidYMid slice" className="h-full w-full text-osu-green-light" aria-hidden="true">
-      {COMPOSER_TRIANGLES.map((triangle, index) => (
-        <polygon key={index} points={triangle.p} fill="currentColor" fillOpacity={triangle.o} />
-      ))}
-    </svg>
-  );
-}
-
-// One-shot "goal cleared" beat: pops in on the goal_completed SSE for the viewer, runs an osu-green
-// burst with the cleared goal, then ticks down a bar and dismisses itself. Not a section animation -
-// a deliberate moment for an earned milestone.
-function CelebrationToast({ celebration, onDismiss }: { celebration: Celebration | null; onDismiss: () => void }) {
-  return (
-    <AnimatePresence>
-      {celebration ? (
-        <motion.div
-          key={celebration.id}
-          initial={{ opacity: 0, y: 28, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 14, scale: 0.97 }}
-          transition={{ type: "spring", stiffness: 340, damping: 26 }}
-          className="fixed inset-x-0 bottom-5 z-[80] flex justify-center px-4"
-          role="status"
-          aria-live="polite"
-        >
-          <div className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-osu-green/45 bg-osu-b4 shadow-[0_20px_70px_rgba(0,0,0,0.55)]">
-            <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl opacity-70">
-              <CelebrationTriangles />
-            </div>
-            <div className="relative flex items-center gap-3 p-3.5">
-              <motion.span
-                initial={{ scale: 0.5 }}
-                animate={{ scale: [0.5, 1.18, 1] }}
-                transition={{ duration: 0.5, times: [0, 0.6, 1], ease: "easeOut" }}
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-osu-green/15 ring-1 ring-osu-green/40"
-              >
-                {celebration.kind === "grade" && celebration.targetGrade ? (
-                  <GradeImg grade={celebration.targetGrade} size={44} className="h-6 w-auto" />
-                ) : (
-                  <OsuLogo className="h-6 w-6 text-osu-green-light" />
-                )}
-              </motion.span>
-              <div className="min-w-0 flex-1">
-                <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-osu-green-light">goal cleared</div>
-                <div className="mt-0.5 truncate text-[13.5px] font-bold text-white" title={celebration.label}>
-                  {celebration.label}
-                </div>
-              </div>
-              <button type="button" onClick={onDismiss} aria-label="Dismiss" className="shrink-0 self-start rounded-md p-1 text-osu-f1/70 transition-colors hover:bg-osu-b3/60 hover:text-white">
-                <CloseGlyph />
-              </button>
-            </div>
-            <motion.div
-              initial={{ scaleX: 1 }}
-              animate={{ scaleX: 0 }}
-              transition={{ duration: 6.5, ease: "linear" }}
-              style={{ transformOrigin: "left" }}
-              className="h-0.5 bg-osu-green/60"
-            />
-          </div>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
   );
 }

@@ -9,7 +9,7 @@ import { dbHealth, exec, getSqliteBusyRetryStats, parseJson } from "../db.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION, getPlayerActivityAvailability, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../features/activity.js";
 import { cancelBeatmapOsuFileBackfill, getBeatmapOsuFileBackfillStatus, startBeatmapOsuFileBackfill } from "../features/beatmap-osu-file-backfill.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
-import { GOAL_KINDS, GOAL_MAP_KINDS, GOAL_SPEED_BUCKETS, GOAL_TARGET_GRADES, createUserGoal, deleteUserGoal, getUserGoal, listUserGoalsWithProgress, reconcileGoalsForUser, type GoalKind, type GoalSpeedBucket, type UserGoalInput } from "../features/goals.js";
+import { GOAL_KINDS, GOAL_MAP_KINDS, GOAL_SPEED_BUCKETS, GOAL_TARGET_GRADES, createUserGoal, deleteUserGoal, getUserGoal, listUserGoalsWithProgress, reconcileGoalsForUser, updateUserGoal, type GoalKind, type GoalSpeedBucket, type UserGoalInput, type UserGoalTargetPatch } from "../features/goals.js";
 import { getMyDataSummary, getUserTopPlaysFeed, getUserTrackedFeed, type MyDataTopPlaysQuery, type MyDataTrackedFeedQuery } from "../features/my-data.js";
 import { FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapshot, type FarmHelperKeyMode, type FarmHelperView } from "../features/farm-helper.js";
 import type { ScoreSpeedBucket } from "../shared/score.js";
@@ -351,7 +351,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     sendJson(req, res, ctx, result.ok ? 200 : 409, result);
     return true;
   }
-  if (url.pathname === "/api/goals" || url.pathname === "/api/goals/create" || url.pathname === "/api/goals/delete") {
+  if (url.pathname === "/api/goals" || url.pathname === "/api/goals/create" || url.pathname === "/api/goals/update" || url.pathname === "/api/goals/delete") {
     // All goal endpoints are admin-token gated: the frontend server fn injects the osu!-verified
     // viewer id (the roster/pack-wallet bridge), so a user only ever reads or mutates their own
     // goals. The browser can never name a different user id here.
@@ -395,6 +395,32 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, ok ? 200 : 404, { ok });
       return true;
     }
+    if (url.pathname === "/api/goals/update") {
+      const id = typeof body.id === "string" ? body.id : "";
+      if (!id) {
+        sendJson(req, res, ctx, 400, { error: "invalid_goal" });
+        return true;
+      }
+      const existing = await getUserGoal(ctx.db, id);
+      if (!existing || existing.userId !== userId || existing.status !== "open") {
+        sendJson(req, res, ctx, 404, { ok: false, error: "goal_not_editable" });
+        return true;
+      }
+      const targets = parseGoalTargets(existing.kind, body);
+      if ("error" in targets) {
+        sendJson(req, res, ctx, 400, { error: targets.error });
+        return true;
+      }
+      const updated = await updateUserGoal(ctx.db, userId, id, targets.fields);
+      if (!updated) {
+        sendJson(req, res, ctx, 404, { ok: false, error: "goal_not_editable" });
+        return true;
+      }
+      // A lowered target may already be satisfied by stored projections; settle it right away.
+      await reconcileGoalsForUser(ctx.db, ctx.events, userId, [existing.kind]).catch(() => {});
+      sendJson(req, res, ctx, 200, { ok: true, goal: (await getUserGoal(ctx.db, id)) ?? updated });
+      return true;
+    }
     // create
     const kind = String(body.kind ?? "") as GoalKind;
     if (!GOAL_KINDS.includes(kind)) {
@@ -413,55 +439,13 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       const beatmapsetId = Number(body.beatmapsetId);
       input.beatmapsetId = Number.isInteger(beatmapsetId) && beatmapsetId > 0 ? beatmapsetId : null;
       input.beatmapLabel = typeof body.beatmapLabel === "string" ? body.beatmapLabel : null;
-      const speedBucket = typeof body.speedBucket === "string" ? body.speedBucket.trim().toLowerCase() : "normal";
-      if (!GOAL_SPEED_BUCKETS.includes(speedBucket as GoalSpeedBucket)) {
-        sendJson(req, res, ctx, 400, { error: "invalid_speed_bucket" });
-        return true;
-      }
-      input.speedBucket = speedBucket as GoalSpeedBucket;
     }
-    if (kind === "accuracy") {
-      let target = Number(body.targetValue);
-      // Accept either a fraction (0.96) or a percent (96); normalise to a 0-1 fraction.
-      if (target > 1 && target <= 100) target = target / 100;
-      if (!(target > 0 && target <= 1)) {
-        sendJson(req, res, ctx, 400, { error: "invalid_target" });
-        return true;
-      }
-      input.targetValue = target;
-    } else if (kind === "grade") {
-      const grade = String(body.targetGrade ?? "").toUpperCase();
-      if (!GOAL_TARGET_GRADES.includes(grade)) {
-        sendJson(req, res, ctx, 400, { error: "invalid_grade" });
-        return true;
-      }
-      input.targetGrade = grade;
-    } else if (kind === "play_pp_count") {
-      const target = Number(body.targetValue);
-      const count = Number(body.targetCount);
-      if (!(target > 0) || !(Number.isInteger(count) && count > 0)) {
-        sendJson(req, res, ctx, 400, { error: "invalid_target" });
-        return true;
-      }
-      input.targetValue = target;
-      input.targetCount = count;
-    } else if (kind === "play_pp" || kind === "reach_pp") {
-      const target = Number(body.targetValue);
-      if (!(target > 0)) {
-        sendJson(req, res, ctx, 400, { error: "invalid_target" });
-        return true;
-      }
-      input.targetValue = target;
-    } else if (kind === "reach_rank") {
-      const target = Number(body.targetValue);
-      if (!(Number.isInteger(target) && target > 0)) {
-        sendJson(req, res, ctx, 400, { error: "invalid_target" });
-        return true;
-      }
-      input.targetValue = target;
-      // Scope (global vs country leaderboard) rides in target_grade, since a rank goal has no grade.
-      input.targetGrade = String(body.targetGrade ?? "global").toLowerCase() === "country" ? "country" : "global";
+    const targets = parseGoalTargets(kind, body);
+    if ("error" in targets) {
+      sendJson(req, res, ctx, 400, { error: targets.error });
+      return true;
     }
+    Object.assign(input, targets.fields);
     if (typeof body.note === "string") input.note = body.note;
     const created = await createUserGoal(ctx.db, ctx.queue, input);
     // A just-created goal may already be satisfied by the player's stored tracker/top-play data.
@@ -1400,6 +1384,47 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     return true;
   }
   return false;
+}
+
+/** Per-kind goal target validation shared by /api/goals/create and /api/goals/update. */
+function parseGoalTargets(
+  kind: GoalKind,
+  body: { targetValue?: unknown; targetCount?: unknown; targetGrade?: unknown; speedBucket?: unknown },
+): { error: string } | { fields: UserGoalTargetPatch } {
+  const fields: UserGoalTargetPatch = {};
+  if (GOAL_MAP_KINDS.includes(kind)) {
+    const speedBucket = typeof body.speedBucket === "string" ? body.speedBucket.trim().toLowerCase() : "normal";
+    if (!GOAL_SPEED_BUCKETS.includes(speedBucket as GoalSpeedBucket)) return { error: "invalid_speed_bucket" };
+    fields.speedBucket = speedBucket as GoalSpeedBucket;
+  }
+  if (kind === "accuracy") {
+    let target = Number(body.targetValue);
+    // Accept either a fraction (0.96) or a percent (96); normalise to a 0-1 fraction.
+    if (target > 1 && target <= 100) target = target / 100;
+    if (!(target > 0 && target <= 1)) return { error: "invalid_target" };
+    fields.targetValue = target;
+  } else if (kind === "grade") {
+    const grade = String(body.targetGrade ?? "").toUpperCase();
+    if (!GOAL_TARGET_GRADES.includes(grade)) return { error: "invalid_grade" };
+    fields.targetGrade = grade;
+  } else if (kind === "play_pp_count") {
+    const target = Number(body.targetValue);
+    const count = Number(body.targetCount);
+    if (!(target > 0) || !(Number.isInteger(count) && count > 0)) return { error: "invalid_target" };
+    fields.targetValue = target;
+    fields.targetCount = count;
+  } else if (kind === "play_pp" || kind === "reach_pp") {
+    const target = Number(body.targetValue);
+    if (!(target > 0)) return { error: "invalid_target" };
+    fields.targetValue = target;
+  } else if (kind === "reach_rank") {
+    const target = Number(body.targetValue);
+    if (!(Number.isInteger(target) && target > 0)) return { error: "invalid_target" };
+    fields.targetValue = target;
+    // Scope (global vs country leaderboard) rides in target_grade, since a rank goal has no grade.
+    fields.targetGrade = String(body.targetGrade ?? "global").toLowerCase() === "country" ? "country" : "global";
+  }
+  return { fields };
 }
 
 async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: boolean; snapshotCountry?: string } = {}) {
