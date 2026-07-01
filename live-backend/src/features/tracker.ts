@@ -16,6 +16,7 @@ export interface TrackerSnapshotOptions {
   filters?: TrackerSnapshotFilters;
   sort?: "recent" | "stars";
   sortDirection?: "asc" | "desc";
+  userIds?: number[];
 }
 
 // Grade/miss/ranked filters live inside score_json, so the hydrated path has
@@ -45,6 +46,15 @@ export async function getTrackerSnapshot(
   if (global && options.since) {
     clauses.push("se.ended_at >= ?");
     args.push(options.since);
+  }
+  const userIds = [...new Set(
+    (options.userIds ?? [])
+      .map((id) => Math.floor(Number(id)))
+      .filter((id) => Number.isInteger(id) && id > 0),
+  )];
+  if (userIds.length > 0) {
+    clauses.push(`se.user_id in (${userIds.map(() => "?").join(",")})`);
+    args.push(...userIds);
   }
   const whereSql = clauses.join(" and ");
   const sort = options.sort ?? "recent";

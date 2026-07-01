@@ -805,7 +805,7 @@ export interface LiveTrackerSnapshotFilters {
 export async function fetchLiveTrackerSnapshot(
   country: string,
   limit = 100,
-  options?: { observe?: boolean; offset?: number; hours?: number; filters?: LiveTrackerSnapshotFilters; sort?: "recent" | "stars"; sortDirection?: "asc" | "desc" },
+  options?: { observe?: boolean; offset?: number; hours?: number; filters?: LiveTrackerSnapshotFilters; sort?: "recent" | "stars"; sortDirection?: "asc" | "desc"; userIds?: number[] },
 ): Promise<LiveTrackerSnapshot> {
   const query = new URLSearchParams({ country, limit: String(limit) });
   if (options?.observe) query.set("observe", "1");
@@ -817,6 +817,7 @@ export async function fetchLiveTrackerSnapshot(
   if (options?.filters?.miss) query.set("miss", options.filters.miss);
   if (options?.sort && options.sort !== "recent") query.set("sort", options.sort);
   if (options?.sortDirection && options.sortDirection !== "desc") query.set("sortDirection", options.sortDirection);
+  if (options?.userIds && options.userIds.length > 0) query.set("userIds", options.userIds.join(","));
   return fetchLiveJson(`/api/snapshots/tracker?${query.toString()}`);
 }
 

@@ -2252,12 +2252,23 @@ describe("live backend", () => {
     await exec(
       db,
       `insert into score_events (score_id, score_identity, user_id, country, beatmap_id, ruleset_id, score_json, passed, processed, is_lazer, has_replay, ended_at, received_at, source)
+       select 9150, 'global-other-user', 202, 'US', beatmap_id, ruleset_id,
+         json_set(score_json, '$.id', 9150, '$.user_id', 202, '$.user.id', 202, '$.user.username', 'Other Player', '$.user.country_code', 'US'),
+         passed, processed, is_lazer, has_replay, ended_at, received_at, source
+       from score_events where country = 'CR' limit 1`,
+    );
+    const userFilteredGlobalSnapshot = await getTrackerSnapshot(db, "GLOBAL", 10, 0, { userIds: [202] });
+    expect(userFilteredGlobalSnapshot.scores.map((score) => score.user_id)).toEqual([202]);
+    expect(userFilteredGlobalSnapshot.total).toBe(1);
+    await exec(
+      db,
+      `insert into score_events (score_id, score_identity, user_id, country, beatmap_id, ruleset_id, score_json, passed, processed, is_lazer, has_replay, ended_at, received_at, source)
        select 9200, 'global-old', user_id, 'MX', beatmap_id, ruleset_id, score_json, passed, processed, is_lazer, has_replay, '2026-05-10T00:00:00.000Z', received_at, source
        from score_events where country = 'CR' limit 1`,
     );
     const windowedGlobalSnapshot = await getTrackerSnapshot(db, "GLOBAL", 10, 0, { since: "2026-05-12T00:01:00.000Z" });
-    expect(windowedGlobalSnapshot.scores).toHaveLength(2);
-    expect(windowedGlobalSnapshot.total).toBe(2);
+    expect(windowedGlobalSnapshot.scores).toHaveLength(3);
+    expect(windowedGlobalSnapshot.total).toBe(3);
     const countrySnapshotIgnoresGlobalWindow = await getTrackerSnapshot(db, "CR", 10, 0, { since: "2026-05-12T00:03:00.000Z" });
     expect(countrySnapshotIgnoresGlobalWindow.scores).toHaveLength(1);
     await exec(
@@ -5296,7 +5307,9 @@ describe("live backend", () => {
     await exec(
       db,
       `insert into score_events (score_id, score_identity, user_id, country, beatmap_id, ruleset_id, score_json, passed, processed, is_lazer, has_replay, ended_at, received_at, source)
-       select 9400, 'global-cache', user_id, 'US', beatmap_id, ruleset_id, score_json, passed, processed, is_lazer, has_replay, ended_at, received_at, source
+       select 9400, 'global-cache', 202, 'US', beatmap_id, ruleset_id,
+         json_set(score_json, '$.id', 9400, '$.user_id', 202, '$.user.id', 202, '$.user.username', 'Cache Player', '$.user.country_code', 'US'),
+         passed, processed, is_lazer, has_replay, ended_at, received_at, source
        from score_events where country = 'CR' limit 1`,
     );
 
@@ -5305,6 +5318,11 @@ describe("live backend", () => {
     const secondBody = JSON.parse(second.writes.join(""));
     expect(secondBody.scores).toHaveLength(1);
     expect(secondBody.fetchedAt).toBe(firstBody.fetchedAt);
+
+    const filtered = mockRes();
+    await routeHttp(mockReq("GET", "/api/snapshots/tracker?country=GLOBAL&limit=77&userIds=202", { "x-real-ip": "203.0.113.30" }), filtered.res, ctx);
+    const filteredBody = JSON.parse(filtered.writes.join(""));
+    expect(filteredBody.scores.map((score: { user_id: number }) => score.user_id)).toEqual([202]);
 
     const third = mockRes();
     await routeHttp(mockReq("GET", "/api/snapshots/tracker?country=GLOBAL&limit=78", { "x-real-ip": "203.0.113.30" }), third.res, ctx);

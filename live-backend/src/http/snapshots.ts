@@ -541,15 +541,17 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     const filters = parseTrackerSnapshotFilters(url.searchParams);
     const sort = parseTrackerSnapshotSort(url.searchParams);
     const sortDirection = parseTrackerSnapshotSortDirection(url.searchParams);
+    const userIds = parseUserIds(url.searchParams.get("userIds"));
     const produceSnapshot = () => getTrackerSnapshot(ctx.db, country, limit, offset, {
       since: windowHours > 0 ? new Date(Date.now() - windowHours * 60 * 60 * 1000).toISOString() : undefined,
       filters,
       sort,
       sortDirection,
+      userIds,
     });
     const snapshot = global
       ? await getCachedGlobalTrackerSnapshot(
-          [windowHours, limit, offset, filters.score ?? "", filters.grade ?? "", filters.key ?? "", filters.miss ?? "", sort, sortDirection].join("|"),
+          [windowHours, limit, offset, filters.score ?? "", filters.grade ?? "", filters.key ?? "", filters.miss ?? "", sort, sortDirection, userIds.join(",")].join("|"),
           produceSnapshot,
         )
       : await produceSnapshot();

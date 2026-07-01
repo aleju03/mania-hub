@@ -226,7 +226,7 @@ function sortTrackerScores(scores: LeanTrackerScore[], sort: TrackerSort, direct
   return [...scores].sort((a, b) => compareTrackerScores(a, b, sort, direction));
 }
 
-function getLiveTrackerSnapshotOptions(country: string, options: { offset?: number; filters?: TrackerBackendFilterOptions; sort?: TrackerSort; sortDirection?: TrackerSortDirection } = {}): { offset?: number; hours?: number; filters?: TrackerBackendFilterOptions; sort?: TrackerSort; sortDirection?: TrackerSortDirection } {
+function getLiveTrackerSnapshotOptions(country: string, options: { offset?: number; filters?: TrackerBackendFilterOptions; sort?: TrackerSort; sortDirection?: TrackerSortDirection; userIds?: number[] } = {}): { offset?: number; hours?: number; filters?: TrackerBackendFilterOptions; sort?: TrackerSort; sortDirection?: TrackerSortDirection; userIds?: number[] } {
   return isGlobalScope(country) ? { ...options, hours: TRACKER_GLOBAL_WINDOW_HOURS } : options;
 }
 
@@ -342,8 +342,10 @@ function ScoresPage() {
     || keyFilter !== "all"
     || missFilter !== "all";
   const useLiveBackendFilteredScores = liveBackendEnabled
-    && ((selectedIsGlobal && hasBackendScoreFilters) || trackerSort !== "recent")
-    && selectedPlayerIds.length === 0
+    && (
+      (selectedIsGlobal && (hasBackendScoreFilters || selectedPlayerIds.length > 0))
+      || (trackerSort !== "recent" && selectedPlayerIds.length === 0)
+    )
     && hiddenUserIds.size === 0;
   const trackerUsers = useMemo(
     () => rankings?.ranking
@@ -468,7 +470,8 @@ function ScoresPage() {
           if (current == null) return current;
           return getLiveTrackerTotal(selectedCountry, current + 1);
         });
-        if (useLiveBackendFilteredScores && scoreMatchesTrackerFilters(score, { filter, gradeFilter, keyFilter, missFilter })) {
+        const scoreMatchesSelectedPlayerFilter = selectedPlayerIds.length === 0 || selectedPlayerIds.includes(score.user_id);
+        if (useLiveBackendFilteredScores && scoreMatchesSelectedPlayerFilter && scoreMatchesTrackerFilters(score, { filter, gradeFilter, keyFilter, missFilter })) {
           setLiveFilteredTotal((current) => current == null ? current : current + 1);
           setLiveFilteredScores((current) => page === 0 ? sortTrackerScores([score, ...current], trackerSort, trackerSortDirection).slice(0, TRACKER_PAGE_SIZE) : current);
         }
@@ -481,7 +484,7 @@ function ScoresPage() {
       }
     });
     return () => source.close();
-  }, [addFeedScores, filter, gradeFilter, keyFilter, liveBackendEnabled, missFilter, page, reconcileLiveSnapshot, selectedCountry, setTrackerPpGains, trackerSort, trackerSortDirection, useLiveBackendFilteredScores]);
+  }, [addFeedScores, filter, gradeFilter, keyFilter, liveBackendEnabled, missFilter, page, reconcileLiveSnapshot, selectedCountry, selectedPlayerIds, setTrackerPpGains, trackerSort, trackerSortDirection, useLiveBackendFilteredScores]);
 
   useEffect(() => {
     initialLoadedCountryRef.current = selectedCountry;
@@ -714,6 +717,7 @@ function ScoresPage() {
   );
 
   const selectedPlayerIdSet = useMemo(() => new Set(selectedPlayerIds), [selectedPlayerIds]);
+  const selectedPlayersKey = selectedPlayerIds.join(",");
 
   const updateTrackerSearch = useCallback((patch: Partial<{ country: string | undefined; page: number | undefined; sort: TrackerSort; sortDirection: TrackerSortDirection }>) => {
     const nextPage = patch.page ?? page;
@@ -873,7 +877,7 @@ function ScoresPage() {
       ? "Sorting highest star rating first - left click for ascending, right click to clear"
       : "Sorting lowest star rating first - left click to clear, right click for descending"
     : "Left click for highest star rating first, right click for lowest first";
-  const listKey = `${filter}:${gradeFilter}:${keyFilter}:${missFilter}:${trackerSort}:${trackerSortDirection}`;
+  const listKey = `${filter}:${gradeFilter}:${keyFilter}:${missFilter}:${trackerSort}:${trackerSortDirection}:${selectedPlayersKey}`;
   const liveTrackerAvailableCount = liveTrackerTotal == null
     ? (selectedIsGlobal ? filtered.length : TRACKER_FEED_SCORE_LIMIT)
     : getLiveTrackerTotal(selectedCountry, liveTrackerTotal);
@@ -900,7 +904,7 @@ function ScoresPage() {
     && filtered.length < requiredScoreCountForPage;
   const currentLivePageSnapshotKey = `${selectedCountry}:${livePageOffset}:${expectedLivePageSize}`;
   const backendTrackerFilters = getBackendTrackerFilters({ filter, gradeFilter, keyFilter, missFilter });
-  const currentLiveFilteredSnapshotKey = `${selectedCountry}:${livePageOffset}:${expectedLivePageSize}:${filter}:${gradeFilter}:${keyFilter}:${missFilter}:${trackerSort}:${trackerSortDirection}`;
+  const currentLiveFilteredSnapshotKey = `${selectedCountry}:${livePageOffset}:${expectedLivePageSize}:${filter}:${gradeFilter}:${keyFilter}:${missFilter}:${trackerSort}:${trackerSortDirection}:${selectedPlayersKey}`;
   const hasLivePageSnapshot = needsLivePageSnapshot
     && livePageSnapshotKey === currentLivePageSnapshotKey;
   const hasLiveFilteredSnapshot = useLiveBackendFilteredScores
@@ -959,6 +963,7 @@ function ScoresPage() {
         filters: backendTrackerFilters,
         sort: trackerSort,
         sortDirection: trackerSortDirection,
+        userIds: selectedPlayerIds,
       }),
     )
       .then((snapshot) => {
@@ -990,6 +995,8 @@ function ScoresPage() {
     liveFilteredTotal,
     livePageOffset,
     missFilter,
+    selectedPlayerIds,
+    selectedPlayersKey,
     selectedCountry,
     setTrackerPpGains,
     trackerSort,
