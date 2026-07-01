@@ -31,9 +31,12 @@ const SHEDDABLE_TYPES = [
   "refresh_country_roster",
   "osc_backfill",
   "osc_country_catchup",
-  "build_map_search_index",
-  "rebuild_map_collections",
 ];
+// Note: build_map_search_index / rebuild_map_collections are intentionally NOT
+// sheddable. They live in their own claimLimit:1 "map-search-index" lane (no osu!
+// API, cursor-batched), which is all the backpressure they need. Shedding them
+// starved the one-time index build on a busy prod queue that sits above the soft
+// pressure cap, leaving search + collections permanently empty.
 
 const ACTIVE_TYPE_CAPS: Record<string, number> = {
   refresh_user_top_scores: 80,
