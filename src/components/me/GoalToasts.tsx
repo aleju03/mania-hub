@@ -5,6 +5,7 @@ import { GradeImg } from "../ui/GradeImg";
 import { OsuLogo } from "../ui/OsuLogo";
 import { useAuth } from "../../lib/auth-context";
 import { openLiveEventSource } from "../../lib/live-backend";
+import { playGoalClearedSound } from "../../lib/ui-sounds";
 import { celebrationLabel, type GoalCompletedPayload } from "../../lib/goal-format";
 import {
   getGoalDeleteToast,
@@ -43,6 +44,7 @@ export function GoalToasts() {
         if (data.userId !== viewerId) return;
         celebrationSeq.current += 1;
         setCelebration({ id: celebrationSeq.current, kind: data.kind ?? "reach_pp", label: celebrationLabel(data), targetGrade: data.targetGrade ?? null });
+        playGoalClearedSound();
         if (celebrationTimer.current) clearTimeout(celebrationTimer.current);
         celebrationTimer.current = setTimeout(() => setCelebration(null), 6500);
         notifyGoalsChanged();

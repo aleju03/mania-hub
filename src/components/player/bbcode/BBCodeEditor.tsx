@@ -798,6 +798,15 @@ export function BBCodeEditor({
     const mapEl = target?.closest?.<HTMLElement>('.imagemap[data-bb="imagemap"]') ?? null;
     const root = visualRef.current;
     if (!root || !target) return;
+    // Box header chip: the triangle/button toggles the box open or closed;
+    // clicks on the title text still edit it. `is-open` is view-only state,
+    // so collapsing never changes the serialized BBCode.
+    const boxLink = target.closest<HTMLElement>(".js-spoilerbox__link");
+    if (boxLink && root.contains(boxLink) && !target.closest('[data-bb-role="box-title"]')) {
+      event.preventDefault();
+      boxLink.closest(".js-spoilerbox")?.classList.toggle("is-open");
+      return;
+    }
     if (!mapEl || !root.contains(mapEl)) {
       if (imagemapSelection && root.contains(target)) clearImagemapSelection();
       const img = target.closest<HTMLImageElement>("img");
@@ -1086,16 +1095,44 @@ export function BBCodeEditor({
     insertVisualHtml(html);
   }, [insertVisualHtml, restoreVisualRange, scheduleVisualSync]);
 
+  /**
+   * Grows the live selection over inline ancestors ([b]/[url]/[color] spans)
+   * whose entire content is selected. cloneContents on a selection that sits
+   * inside a single text node returns bare text, and insertHTML then deletes
+   * the emptied ancestors - so wrapping a fully-selected bold link in
+   * [centre] would strip the bold and the link without this.
+   */
+  const expandSelectionOverInlineWrappers = useCallback(() => {
+    const el = visualRef.current;
+    const selection = window.getSelection();
+    if (!el || !selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    if (range.collapsed || !el.contains(range.commonAncestorContainer)) return;
+    const INLINE_TAGS = new Set(["A", "B", "STRONG", "I", "EM", "U", "INS", "S", "DEL", "STRIKE", "SPAN", "CODE", "FONT"]);
+    for (;;) {
+      const container = range.commonAncestorContainer;
+      const parent = container.nodeType === 3 ? container.parentElement : container as Element;
+      if (!parent || parent === el || !el.contains(parent) || !INLINE_TAGS.has(parent.tagName)) break;
+      const cover = document.createRange();
+      cover.selectNodeContents(parent);
+      if (cover.toString() !== range.toString()) break;
+      range.selectNode(parent);
+    }
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }, []);
+
   const wrapVisual = useCallback((kind: EditableWrapKind, param: string | undefined, placeholder: string) => {
     // A selected image has no text range, so target its DOM node directly;
     // otherwise the wrap would drop `placeholder` at a stray caret.
     const onImage = selectImageRange();
     ensureVisualSelection();
+    expandSelectionOverInlineWrappers();
     const inner = visualSelectionHtml() || escapeBBHtml(placeholder);
     const { open, close } = editableWrapMarkup(kind, param);
     insertVisualHtml(open + inner + close);
     if (onImage) resyncImageAfterWrap();
-  }, [ensureVisualSelection, insertVisualHtml, resyncImageAfterWrap, selectImageRange, visualSelectionHtml]);
+  }, [ensureVisualSelection, expandSelectionOverInlineWrappers, insertVisualHtml, resyncImageAfterWrap, selectImageRange, visualSelectionHtml]);
 
   const execVisual = useCallback((command: string) => {
     selectImageRange();
@@ -2231,10 +2268,10 @@ export function BBCodeEditor({
                 rel="noopener noreferrer"
                 className="text-osu-pink-light hover:text-osu-pink underline"
               >
-                {username}'s osu! page
+                your osu! page
               </a>
             ) : (
-              "your osu! profile page"
+              "your osu! page"
             )}.
           </div>
         </div>

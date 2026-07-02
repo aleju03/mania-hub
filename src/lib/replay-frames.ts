@@ -1,5 +1,5 @@
 import type { ReplayFrame } from "./types";
-import { normalizeReplayScrollSpeed } from "./replay-scroll-speed";
+import { normalizeReplayScrollSpeed } from "./replay-scroll-speed.ts";
 
 export const MANIA_REPLAY_KEY_MASK = (1 << 20) - 1;
 const STABLE_MANIA_SCROLL_SPEED_BPM_SCALE = 100;

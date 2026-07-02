@@ -715,7 +715,14 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
                 <SearchCard key={entry.beatmapId} entry={entry} onOpen={setDetail} />
               ))}
             </div>
-            <Pagination page={ui.page} totalPages={totalPages} onPageChange={(p) => apply({ page: p })} />
+            {totalPages > 1 && (
+              <div
+                className="sticky bottom-0 z-10 -mx-4 sm:-mx-5 mt-6 px-4 sm:px-5 py-2 bg-osu-b5/90 backdrop-blur-sm border-t border-osu-b3/30 [&>div]:!mt-0 relative after:absolute after:left-0 after:right-0 after:top-full after:h-4 after:bg-osu-b5/90 after:backdrop-blur-sm after:content-['']"
+                style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom, 0px))" }}
+              >
+                <Pagination page={ui.page} totalPages={totalPages} onPageChange={(p) => apply({ page: p })} />
+              </div>
+            )}
           </div>
         )}
       </div>

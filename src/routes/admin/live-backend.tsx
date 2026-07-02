@@ -324,6 +324,10 @@ const ANALYTICS_MIN_RANGE_HOURS = 1;
 const ANALYTICS_MAX_RANGE_HOURS = 720;
 const ANALYTICS_RANGE_STEPS = [1, 2, 3, 4, 5, 6, 8, 12, 18, 24, 36, 48, 72, 168, 336, 720] as const;
 const ANALYTICS_RANGE_PRESETS = [1, 3, 6, 12, 24, 168, 720] as const;
+// HogQL requires an explicit LIMIT (defaults to 100 without one); this is a
+// safety cap, not a display cap - the card shows everything in the range and
+// only truncates if a range somehow exceeds it.
+const ANALYTICS_RECENT_EVENTS_LIMIT = 1000;
 const ANALYTICS_CACHE_FRESH_MS = 30_000;
 const ANALYTICS_COLD_RESPONSE_BUDGET_MS = 1_500;
 const ANALYTICS_ERROR_RETRY_MS = 30_000;
@@ -572,7 +576,7 @@ async function fetchAnalyticsMonitorDataFromPostHog({
     ),
     runQuery(
       "recent activity",
-      `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id, properties.maps_tab, properties.rankings_page, properties.profile_username, properties.replay_player, properties.replay_score_id, properties.$screen_width, properties.$viewport_width, properties.$current_url, properties.farm_helper_user, properties.pack_type, properties.pack_username, properties.farm_map_title, properties.farm_map_user FROM events WHERE timestamp > ${since} AND distinct_id != 'server'${recentCountryClause} AND (properties.$pathname IS NULL OR properties.$pathname NOT LIKE '/admin/%') AND NOT (event = '$pageview' AND properties.$pathname = '/') ORDER BY timestamp DESC LIMIT 30`,
+      `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id, properties.maps_tab, properties.rankings_page, properties.profile_username, properties.replay_player, properties.replay_score_id, properties.$screen_width, properties.$viewport_width, properties.$current_url, properties.farm_helper_user, properties.pack_type, properties.pack_username, properties.farm_map_title, properties.farm_map_user FROM events WHERE timestamp > ${since} AND distinct_id != 'server'${recentCountryClause} AND (properties.$pathname IS NULL OR properties.$pathname NOT LIKE '/admin/%') AND NOT (event = '$pageview' AND properties.$pathname = '/') ORDER BY timestamp DESC LIMIT ${ANALYTICS_RECENT_EVENTS_LIMIT}`,
     ),
     runQuery(
       "physical countries",
@@ -1758,16 +1762,39 @@ const VISITOR_COLORS = [
   { bg: "bg-osu-red-light/15", text: "text-osu-red-light", dot: "bg-osu-red-light" },
 ] as const;
 
-function buildVisitorPalette(rows: AnalyticsRecentEventRow[]): Map<string, { slot: number; label: string }> {
-  const palette = new Map<string, { slot: number; label: string }>();
-  let nextSlot = 0;
+interface AnalyticsVisitorGroup {
+  distinctId: string;
+  slot: number;
+  label: string;
+  country: string | null;
+  deviceKind: AnalyticsDeviceKind;
+  events: AnalyticsRecentEventRow[];
+}
+
+// Rows arrive newest-first, so visitors come out ordered by most recent
+// activity and each trail reads top-down from latest to earliest.
+function buildVisitorGroups(rows: AnalyticsRecentEventRow[]): AnalyticsVisitorGroup[] {
+  const groups = new Map<string, AnalyticsVisitorGroup>();
   for (const row of rows) {
-    const id = row.distinctId;
-    if (!id || palette.has(id)) continue;
-    palette.set(id, { slot: nextSlot, label: `V${nextSlot + 1}` });
-    nextSlot += 1;
+    const id = row.distinctId || "unknown";
+    let group = groups.get(id);
+    if (!group) {
+      const slot = groups.size;
+      group = {
+        distinctId: id,
+        slot,
+        label: `V${slot + 1}`,
+        country: row.country,
+        deviceKind: row.deviceKind,
+        events: [],
+      };
+      groups.set(id, group);
+    }
+    if (!group.country && row.country) group.country = row.country;
+    if (group.deviceKind === "unknown" && row.deviceKind !== "unknown") group.deviceKind = row.deviceKind;
+    group.events.push(row);
   }
-  return palette;
+  return Array.from(groups.values());
 }
 
 function AnalyticsVisitorDeviceIcon({ deviceKind }: { deviceKind: AnalyticsDeviceKind }) {
@@ -1801,7 +1828,7 @@ function AnalyticsRecentEventsCard({
   loading?: boolean;
   onCountryChange: (country: string | null) => void;
 }) {
-  const visitorPalette = useMemo(() => buildVisitorPalette(rows), [rows]);
+  const groups = useMemo(() => buildVisitorGroups(rows), [rows]);
   const countryOptions = useMemo(() => {
     const byCountry = new Map<string, AnalyticsCountryRow>();
     countries.forEach((entry) => {
@@ -1813,11 +1840,24 @@ function AnalyticsRecentEventsCard({
     }
     return Array.from(byCountry.values());
   }, [countries, country]);
-  const visitorCount = visitorPalette.size;
+  const [toggled, setToggled] = useState<Set<string>>(new Set());
+  const toggle = useCallback((id: string) => {
+    setToggled((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+  const visitorCount = groups.length;
   const countryLabel = country ? ` in ${getCountryName(country) || country}` : "";
+  const truncated = rows.length >= ANALYTICS_RECENT_EVENTS_LIMIT;
   const subtitle = loading
     ? `loading${countryLabel || " all countries"}...`
-    : `last ${rows.length}${countryLabel} from ${visitorCount} visitor${visitorCount === 1 ? "" : "s"}`;
+    : `${truncated ? "last " : ""}${rows.length} event${rows.length === 1 ? "" : "s"}${countryLabel} from ${visitorCount} visitor${visitorCount === 1 ? "" : "s"}`;
+  // A lone visitor starts expanded (toggling still collapses it); with
+  // several visitors everything starts collapsed.
+  const defaultOpen = groups.length === 1;
   return (
     <SectionCard
       title="Recent activity"
@@ -1840,48 +1880,68 @@ function AnalyticsRecentEventsCard({
         <AnalyticsEmptyMessage text={country ? "No events captured for this country in the selected range." : "No events captured yet."} />
       ) : (
         <div className="space-y-1 h-full max-h-[420px] overflow-y-auto pr-1">
-          {rows.map((row, index) => {
-            const entry = row.distinctId ? visitorPalette.get(row.distinctId) : undefined;
-            const color = entry ? VISITOR_COLORS[entry.slot % VISITOR_COLORS.length] : null;
-            const visitorLabel = entry?.label ?? "—";
-            const href = analyticsViewHref(row.viewUrl);
-            const inspectionHref = href ? analyticsInspectionHref(href) : null;
-            const rowClass = "flex items-center gap-2 text-[10px] py-1.5 px-2 rounded-md hover:bg-osu-b3/30 transition-colors duration-[100ms]";
-            const rowTitle = href
-              ? `open ${href}${row.distinctId ? ` · visitor id: ${row.distinctId}` : ""}`
-              : row.distinctId
-                ? `visitor id: ${row.distinctId}${row.path ? ` · ${row.path}` : ""}`
-                : row.path || "";
-            const content = (
-              <>
-                <span className={`w-1 self-stretch rounded-full flex-shrink-0 ${color?.dot ?? "bg-osu-b3/40"}`} />
-                <span className="text-osu-f1 font-mono w-20 flex-shrink-0">{row.timestamp || "—"}</span>
-                {row.country ? (
-                  <CountryFlag code={row.country} size="xs" />
-                ) : (
-                  <span className="h-[10px] w-[15px] rounded-[1px] bg-osu-b3/40 flex-shrink-0" />
-                )}
-                <AnalyticsVisitorDeviceIcon deviceKind={row.deviceKind} />
-                <span className="text-osu-c2 truncate flex-1 group-hover:underline">{formatAnalyticsRecentEventLabel(row)}</span>
-                <span className={`font-mono font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${color ? `${color.bg} ${color.text}` : "text-osu-f1"}`}>
-                  {visitorLabel}
-                </span>
-              </>
-            );
-            return href ? (
-              <a
-                key={`${row.timestamp}-${index}`}
-                href={inspectionHref ?? href}
-                target="_blank"
-                rel="noreferrer"
-                className={`group cursor-pointer ${rowClass}`}
-                title={rowTitle}
-              >
-                {content}
-              </a>
-            ) : (
-              <div key={`${row.timestamp}-${index}`} className={rowClass} title={rowTitle}>
-                {content}
+          {groups.map((group) => {
+            const color = VISITOR_COLORS[group.slot % VISITOR_COLORS.length];
+            const open = toggled.has(group.distinctId) !== defaultOpen;
+            const latest = group.events[0];
+            return (
+              <div key={group.distinctId} className="rounded-md border border-osu-b3/20 bg-osu-b5/40 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => toggle(group.distinctId)}
+                  title={`visitor id: ${group.distinctId}`}
+                  className="w-full flex items-center gap-2 text-[10px] py-1.5 px-2 text-left hover:bg-osu-b3/30 transition-colors duration-[100ms] cursor-pointer"
+                >
+                  <span className={`w-1 self-stretch rounded-full flex-shrink-0 ${color.dot}`} />
+                  <span className={`font-mono font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${color.bg} ${color.text}`}>
+                    {group.label}
+                  </span>
+                  {group.country ? (
+                    <CountryFlag code={group.country} size="xs" />
+                  ) : (
+                    <span className="h-[10px] w-[15px] rounded-[1px] bg-osu-b3/40 flex-shrink-0" />
+                  )}
+                  <AnalyticsVisitorDeviceIcon deviceKind={group.deviceKind} />
+                  <span className="text-osu-c2 truncate flex-1">{formatAnalyticsRecentEventLabel(latest)}</span>
+                  <span className="text-osu-f1 flex-shrink-0">
+                    {group.events.length} event{group.events.length === 1 ? "" : "s"}
+                  </span>
+                  <span className="text-osu-f1 font-mono flex-shrink-0">{latest.timestamp || "—"}</span>
+                  <ChevronDown className={`h-3 w-3 flex-shrink-0 text-osu-f1 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
+                </button>
+                {open ? (
+                  <div className="border-t border-osu-b3/20 py-0.5">
+                    {group.events.map((row, index) => {
+                      const href = analyticsViewHref(row.viewUrl);
+                      const inspectionHref = href ? analyticsInspectionHref(href) : null;
+                      const rowClass = "flex items-center gap-2 text-[10px] py-1 pl-5 pr-2 hover:bg-osu-b3/30 transition-colors duration-[100ms]";
+                      const content = (
+                        <>
+                          <span className="text-osu-f1 font-mono w-20 flex-shrink-0">{row.timestamp || "—"}</span>
+                          <span className="text-osu-c2 truncate flex-1 group-hover:underline">
+                            {formatAnalyticsRecentEventLabel(row)}
+                          </span>
+                        </>
+                      );
+                      return href ? (
+                        <a
+                          key={`${row.timestamp}-${index}`}
+                          href={inspectionHref ?? href}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={`group cursor-pointer ${rowClass}`}
+                          title={`open ${href}`}
+                        >
+                          {content}
+                        </a>
+                      ) : (
+                        <div key={`${row.timestamp}-${index}`} className={rowClass} title={row.path || ""}>
+                          {content}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
               </div>
             );
           })}

@@ -1167,6 +1167,92 @@ export function simulateManiaReplayJudgements(
       }
 
       if (matchedSegmentIndex === -1) {
+        // Lazer holds can still earn a user-triggered tail judgement after the
+        // head timed out: DrawableHoldNote.OnPressed calls beginHoldAt before
+        // Head.UpdateResult() decides whether the input is consumed, so a
+        // press that falls through to a later note (or to nothing) still
+        // starts holding this note, and the non-consuming OnReleased then
+        // fires Tail.UpdateResult() on every held note in the column. The
+        // press must be no earlier than the head miss window (guaranteed by
+        // the segment cursor) and no later than the tail's raw Meh window;
+        // the release judges via the 1.5x lenience windows and is capped to
+        // Meh because the head was not hit.
+        if (isLazer && isLN) {
+          const tailDeadline = note.endTime + windows.meh * RELEASE_WINDOW_LENIENCE;
+          let regrabTail: { judgment: Judgment; offsetMs: number; time: number } | null = null;
+          for (let s = segmentCursor; s < columnSegments.length; s++) {
+            const segment = columnSegments[s];
+            if (segment.start > note.endTime + windows.meh) break;
+            if (segment.end > tailDeadline) break;
+
+            // Note lock (OrderedHitPolicy.IsHittable): the press only reaches
+            // this hold if it lands strictly before the next alive object's
+            // start time. Approximate "alive" as not yet timed out at press
+            // time.
+            let nextAliveStart: number | null = null;
+            for (let p = notePosition + 1; p < columnNotes.length; p++) {
+              const laterNote = notes[columnNotes[p]];
+              if (segment.start <= laterNote.time + windows.meh) {
+                nextAliveStart = laterNote.time;
+                break;
+              }
+            }
+            if (nextAliveStart != null) {
+              if (segment.start >= nextAliveStart) continue;
+              // A successful hit on the next object triggers
+              // OrderedHitPolicy.HandleHit, which force-misses every earlier
+              // unjudged nested object ending before it - including this
+              // tail. Only presses that miss (or fall short of) the next
+              // object's hit window leave the tail judgeable.
+              if (nextAliveStart - segment.start <= windows.meh && note.endTime < nextAliveStart) break;
+            }
+
+            const rawTailJudgment = getJudgmentForOffset(
+              (segment.end - note.endTime) / RELEASE_WINDOW_LENIENCE,
+              windows,
+            );
+            if (rawTailJudgment === 0) continue;
+            regrabTail = {
+              judgment: capLazerTailJudgment(rawTailJudgment, true),
+              offsetMs: segment.end - note.endTime,
+              time: segment.end,
+            };
+            break;
+          }
+          if (regrabTail) {
+            const headTimeoutTime = note.time + windows.meh;
+            events.push({
+              column,
+              judgment: 6,
+              noteIndex,
+              offsetMs: windows.meh,
+              part: "hold-head",
+              time: headTimeoutTime,
+            });
+            events.push({
+              column,
+              judgment: regrabTail.judgment,
+              noteIndex,
+              offsetMs: regrabTail.offsetMs,
+              part: "hold-tail",
+              time: regrabTail.time,
+            });
+            noteStates[noteIndex] = {
+              bodyBreakTime: null,
+              displayJudgment: regrabTail.judgment,
+              displayTime: regrabTail.time,
+              headJudgment: 6,
+              headOffsetMs: windows.meh,
+              headTime: headTimeoutTime,
+              releaseTime: regrabTail.time,
+              tailJudgment: regrabTail.judgment,
+              tailOffsetMs: regrabTail.offsetMs,
+              tailTime: regrabTail.time,
+            };
+            continue;
+          }
+        }
+
         let timedOutHeldSegmentIndex = -1;
         if (
           !isLazer

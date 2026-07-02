@@ -449,7 +449,7 @@ html[data-custom-cursor="true"] * {
   color: var(--color-osu-f1);
   pointer-events: none;
 }
-.bbcode-editor-surface .js-spoilerbox__link { cursor: default; }
+.bbcode-editor-surface .js-spoilerbox__link { cursor: pointer; }
 .bbcode-editor-surface .js-spoilerbox__link .bbcode-spoilerbox__link-text {
   cursor: text; min-width: 1.5rem; outline: none;
 }

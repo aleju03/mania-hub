@@ -11,6 +11,7 @@ import { useAuth } from "../../lib/auth-context";
 import { getBeatmapsetForBeatmap, searchBeatmaps } from "../../lib/osu";
 import { describeGoal, GOAL_SPEED_LABELS, goalSpeedBucket, nf, trimZeros } from "../../lib/goal-format";
 import { isGoalDeleted, queueGoalDelete, subscribeGoalsChanged } from "../../lib/goal-toasts";
+import { playGoalDeletedSound } from "../../lib/ui-sounds";
 import {
   createGoal,
   EMPTY_GOAL_SUGGESTION_METRICS,
@@ -250,6 +251,7 @@ function completedDetail(goal: UserGoal): string | null {
   if (goal.kind === "accuracy" && goal.completedValue != null) return `cleared ${date} · ${(goal.completedValue * 100).toFixed(2)}%`;
   if ((goal.kind === "play_pp" || goal.kind === "reach_pp") && goal.completedValue != null) return `cleared ${date} · ${nf(goal.completedValue)}pp`;
   if (goal.kind === "play_pp_count" && goal.completedValue != null) return `cleared ${date} · ${nf(goal.completedValue)} plays`;
+  if (goal.kind === "reach_rank" && goal.completedValue != null) return `cleared ${date} · #${nf(goal.completedValue)}`;
   return `cleared ${date}`;
 }
 
@@ -449,6 +451,9 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
     setKind(next);
     setCreateError(null);
     resetMapPicker();
+    // ppTarget means a different thing per kind (total pp vs single-play pp vs count threshold),
+    // so it must not survive a type switch.
+    setPpTarget("");
     setAccPct("");
     setPpCountTarget("");
     setRankTarget("");
@@ -542,6 +547,7 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
   // only then sends the backend delete.
   const remove = useCallback((goal: UserGoal) => {
     setGoals((prev) => prev.filter((g) => g.id !== goal.id));
+    playGoalDeletedSound();
     queueGoalDelete(goal, describeGoal(goal));
   }, []);
 
@@ -1584,6 +1590,8 @@ function GoalEditor({ goal, onSave, onCancel }: { goal: UserGoal; onSave: (input
 function ClearedChip({ goal, onDelete, onAgain }: { goal: UserGoal; onDelete: () => void; onAgain: () => void }) {
   const meta = goalMeta(goal.kind);
   const cover = coverUrl(goal.beatmapsetId);
+  // reach_pp / play_pp_count can't be repeated (they only go up); "again" prefills the next milestone.
+  const movesToNextMilestone = goal.kind === "reach_pp" || goal.kind === "play_pp_count";
   return (
     <article className="group relative flex items-center gap-3 rounded-xl border border-osu-b3/25 bg-osu-b4/50 p-2.5">
       <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-osu-b5">
@@ -1620,9 +1628,9 @@ function ClearedChip({ goal, onDelete, onAgain }: { goal: UserGoal; onDelete: ()
         type="button"
         onClick={onAgain}
         className="shrink-0 self-start rounded-md px-1.5 py-1 text-[10.5px] font-bold text-osu-f1 transition-colors hover:bg-osu-pink/10 hover:text-osu-pink-light"
-        title="Set this goal again"
+        title={movesToNextMilestone ? "Set the next milestone" : "Set this goal again"}
       >
-        go again
+        {movesToNextMilestone ? "aim higher" : "go again"}
       </button>
       <button
         type="button"

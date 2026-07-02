@@ -237,6 +237,81 @@ describe("mania replay judgement helpers", () => {
     ]);
   });
 
+  it("lazer mode lets a mid-body press re-grab a hold with a timed-out head", () => {
+    // DrawableHoldNote.OnPressed calls beginHoldAt before Head.UpdateResult()
+    // consumes the input, so a press after the head miss still starts holding
+    // and the release judges the tail, capped to Meh by the head miss.
+    const ruleset = getManiaReplayRuleset(true, []);
+    const windows = getManiaReplayHitWindows(8, ruleset);
+    const notes: ManiaNote[] = [{ column: 0, time: 1000, endTime: 2000, isHold: true }];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 1500, keyState: 1 },
+      { time: 1990, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 2500);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "lazer");
+
+    expect(simulated.events).toEqual([
+      expect.objectContaining({ part: "hold-head", judgment: 6, time: 1127.5 }),
+      expect.objectContaining({ part: "hold-tail", judgment: 5, time: 1990, offsetMs: -10 }),
+    ]);
+  });
+
+  it("lazer mode blocks the re-grab when the press lands at or past the next alive note", () => {
+    // OrderedHitPolicy.IsHittable: the hold is only pressable strictly before
+    // the next alive object's start time.
+    const ruleset = getManiaReplayRuleset(true, []);
+    const windows = getManiaReplayHitWindows(8, ruleset);
+    const notes: ManiaNote[] = [
+      { column: 0, time: 1000, endTime: 2000, isHold: true },
+      { column: 0, time: 2100, endTime: 2100, isHold: false },
+    ];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 2110, keyState: 1 },
+      { time: 2150, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 2500);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "lazer");
+
+    expect(simulated.events.filter((event) => event.part === "hold-tail")).toEqual([
+      expect.objectContaining({ judgment: 6, time: 2191.25 }),
+    ]);
+    expect(simulated.events.filter((event) => event.part === "note")).toEqual([
+      expect.objectContaining({ judgment: 1, time: 2110 }),
+    ]);
+  });
+
+  it("lazer mode force-misses the tail when the re-grab press hits the next note", () => {
+    // OrderedHitPolicy.HandleHit: a successful hit force-misses earlier
+    // unjudged nested objects, so a press that hits the next note cannot save
+    // this tail even though it began holding first.
+    const ruleset = getManiaReplayRuleset(true, []);
+    const windows = getManiaReplayHitWindows(8, ruleset);
+    const notes: ManiaNote[] = [
+      { column: 0, time: 1000, endTime: 2000, isHold: true },
+      { column: 0, time: 2100, endTime: 2100, isHold: false },
+    ];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 2050, keyState: 1 },
+      { time: 2140, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 2500);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "lazer");
+
+    expect(simulated.events.filter((event) => event.part === "hold-tail")).toEqual([
+      expect.objectContaining({ judgment: 6, time: 2191.25 }),
+    ]);
+    expect(simulated.events.filter((event) => event.part === "note")).toEqual([
+      expect.objectContaining({ judgment: 3, time: 2050 }),
+    ]);
+  });
+
   it("stable mode emits a single combined judgement for a perfectly held LN", () => {
     const ruleset = getManiaReplayRuleset(false, []);
     const windows = getManiaReplayHitWindows(8, ruleset);
