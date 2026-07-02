@@ -394,78 +394,57 @@ function shouldUseServerReplayVideoRender(): boolean {
 function getReplayLoadingCopy(step: ReplayLoadingStep, elapsedMs: number, beatmapFileStatus: ReplayBeatmapFileStatus): { title: string; detail: string } {
   const elapsedSeconds = Math.floor(elapsedMs / 1000);
   const elapsedLabel = elapsedSeconds >= 4 ? ` (${elapsedSeconds}s)` : "";
-  const slowDetail = elapsedMs >= 12_000
-    ? beatmapFileStatus === "cached"
-      ? "Still waiting on replay data. The chart file is already cached."
-      : "Still waiting on replay data. First-time loads are slower, but cached files open faster next time."
-    : elapsedMs >= 6_000
-      ? beatmapFileStatus === "cached"
-        ? "Still working. The chart file came from cache; the replay data is taking a moment."
-        : "Still working. This usually means replay data or the beatmap file is taking a moment."
-      : null;
+  const chartReady = beatmapFileStatus === "cached" || beatmapFileStatus === "fetched";
 
-  if (slowDetail) {
+  if (elapsedMs >= 8_000) {
+    const isUpload = step === "upload" || step === "shared-upload";
     return {
-      title: `Loading replay${elapsedLabel}`,
-      detail: slowDetail,
+      title: `Still loading${elapsedLabel}`,
+      detail: isUpload
+        ? "Matching the replay to its beatmap is taking a while. Give it a few more seconds."
+        : chartReady
+          ? "The chart is ready, just waiting on osu! to send the replay."
+          : "osu! is slow to send the replay right now. It usually comes through.",
     };
   }
 
   switch (step) {
     case "score":
       return {
-        title: `Checking score details${elapsedLabel}`,
-        detail: "Confirming replay availability and key count.",
+        title: `Looking up the score${elapsedLabel}`,
+        detail: "Making sure a replay is available.",
       };
     case "assets":
-      if (beatmapFileStatus === "cached") {
-        return {
-          title: `Loading replay and cached beatmap${elapsedLabel}`,
-          detail: "Reading the chart from cache while the replay data is parsed.",
-        };
-      }
-      if (beatmapFileStatus === "fetched") {
-        return {
-          title: `Loading replay${elapsedLabel}`,
-          detail: "The chart file is ready; parsing replay data and preparing the viewer.",
-        };
-      }
       if (beatmapFileStatus === "unavailable") {
         return {
-          title: `Loading replay${elapsedLabel}`,
-          detail: "Parsing replay data; the chart file is not available yet.",
+          title: `Downloading replay${elapsedLabel}`,
+          detail: "The chart file isn't available, so only the replay will load.",
+        };
+      }
+      if (chartReady) {
+        return {
+          title: `Downloading replay${elapsedLabel}`,
+          detail: "The chart is ready, just fetching the replay data.",
         };
       }
       return {
-        title: `Loading replay and beatmap${elapsedLabel}`,
-        detail: "Fetching the .osr, parsing frames, and checking the chart file.",
+        title: `Downloading replay and beatmap${elapsedLabel}`,
+        detail: "Fetching the replay and the chart file.",
       };
     case "viewer":
       return {
-        title: `Preparing replay viewer${elapsedLabel}`,
-        detail: "Unpacking frames and getting the renderer ready.",
+        title: `Almost there${elapsedLabel}`,
+        detail: "Setting up the viewer.",
       };
     case "upload":
-      if (beatmapFileStatus === "cached") {
-        return {
-          title: `Reading replay and cached beatmap${elapsedLabel}`,
-          detail: "Parsing the upload and reading the chart file from cache.",
-        };
-      }
       return {
-        title: `Reading replay file${elapsedLabel}`,
-        detail: "Parsing the upload and matching it to a beatmap.",
+        title: `Reading the replay file${elapsedLabel}`,
+        detail: "Parsing the file and finding its beatmap.",
       };
     case "shared-upload":
-      if (beatmapFileStatus === "cached") {
-        return {
-          title: `Loading shared replay and cached beatmap${elapsedLabel}`,
-          detail: "Opening the shared replay and reading the chart file from cache.",
-        };
-      }
       return {
-        title: `Loading shared replay${elapsedLabel}`,
-        detail: "Opening the shared replay and matching it to a beatmap.",
+        title: `Opening shared replay${elapsedLabel}`,
+        detail: "Fetching the replay and finding its beatmap.",
       };
   }
 }

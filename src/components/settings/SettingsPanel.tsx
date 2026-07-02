@@ -8,6 +8,14 @@ import { PageTabs } from "../layout/PageTabs";
 import { Avatar } from "../ui/Avatar";
 import { CountryFlag } from "../ui/CountryFlag";
 import { ReplaySkinSettingsModal } from "../replay/ReplaySkinSettingsModal";
+import {
+  ReplaySkinColorWheel,
+  ReplaySkinValueSlider,
+  hexToRgbParts,
+  hsvToRgb,
+  rgbPartsToHex,
+  rgbToHsv,
+} from "../replay/ReplaySkinColorPanel";
 import { searchUsers } from "../../lib/osu";
 import { HIDDEN_USERS_LIMIT } from "../../store";
 import type { HiddenUser } from "../../store";
@@ -39,6 +47,21 @@ import {
 } from "../../lib/replay-overlays";
 import type { ReplaySkinSettings, ReplaySkinStyle } from "../../lib/replay-skin";
 import type { ReplayOverlaySettings } from "../../lib/replay-overlays";
+import { normalizeEditableHex } from "../../lib/replay-preferences";
+import {
+  CURSOR_COLOR_PRESETS,
+  CURSOR_GLOW_MAX,
+  CURSOR_GLOW_MIN,
+  CURSOR_SIZE_MAX,
+  CURSOR_SIZE_MIN,
+  CURSOR_TRAIL_THICKNESS_MAX,
+  CURSOR_TRAIL_THICKNESS_MIN,
+  DEFAULT_CURSOR_SETTINGS,
+  normalizeCursorSettings,
+  readCursorSettings,
+  writeCursorSettings,
+} from "../../lib/cursor";
+import type { CursorSettings } from "../../lib/cursor";
 import { useAppStore } from "../../store";
 
 const MANIA_ARROW_ICON_STYLE: CSSProperties = {
@@ -66,11 +89,12 @@ const STYLE_LABELS: Record<ReplaySkinStyle, string> = {
   arrows: "Arrows",
 };
 
-type TabId = "skin" | "viewer" | "hidden";
+type TabId = "skin" | "viewer" | "hidden" | "appearance";
 const TABS: { id: TabId; label: string }[] = [
   { id: "skin", label: "skin & layout" },
   { id: "viewer", label: "playback" },
   { id: "hidden", label: "hidden players" },
+  { id: "appearance", label: "appearance" },
 ];
 
 type Variant = "page" | "drawer";
@@ -87,7 +111,22 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
   const [skinSettings, setSkinSettings] = useState(readReplaySkinSettings);
   const [overlaySettings, setOverlaySettings] = useState(readReplayOverlaySettings);
   const [skinSettingsOpen, setSkinSettingsOpen] = useState(false);
+  /* Starts at defaults on both server and first client render (the appearance
+     panel renders a different subtree when the cursor is enabled, so reading
+     localStorage during render would break hydration); real values load after
+     mount. */
+  const [cursorSettings, setCursorSettings] = useState(DEFAULT_CURSOR_SETTINGS);
   const [activeTab, setActiveTab] = useState<TabId>("skin");
+
+  useEffect(() => {
+    setCursorSettings(readCursorSettings());
+  }, []);
+
+  const updateCursor = (patch: Partial<CursorSettings>) => {
+    const next = normalizeCursorSettings({ ...cursorSettings, ...patch });
+    setCursorSettings(next);
+    writeCursorSettings(next);
+  };
 
   const saveSkinSettings = (settings: ReplaySkinSettings) => {
     const normalized = normalizeReplaySkinSettings(settings);
@@ -118,6 +157,8 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
     writeReplaySkinSettings(DEFAULT_REPLAY_SKIN_SETTINGS);
     setOverlaySettings(DEFAULT_REPLAY_OVERLAY_SETTINGS);
     writeReplayOverlaySettings(DEFAULT_REPLAY_OVERLAY_SETTINGS);
+    setCursorSettings(DEFAULT_CURSOR_SETTINGS);
+    writeCursorSettings(DEFAULT_CURSOR_SETTINGS);
   };
 
   const resetButton = (
@@ -133,6 +174,9 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
 
   const body = (
     <>
+      {activeTab === "appearance" ? (
+        <AppearancePanel cursorSettings={cursorSettings} onUpdateCursor={updateCursor} />
+      ) : null}
       {activeTab === "skin" ? (
         <SkinPanel
           skinSettings={skinSettings}
@@ -236,6 +280,190 @@ function PanelGroup({ label, children, action }: { label: string; children: Reac
       </div>
       <div className="space-y-3">{children}</div>
     </section>
+  );
+}
+
+function AppearancePanel({
+  cursorSettings,
+  onUpdateCursor,
+}: {
+  cursorSettings: CursorSettings;
+  onUpdateCursor: (patch: Partial<CursorSettings>) => void;
+}) {
+  return (
+    <div className="space-y-6">
+      <PanelGroup
+        label="Custom cursor"
+        action={<Switch checked={cursorSettings.enabled} onChange={(enabled) => onUpdateCursor({ enabled })} />}
+      >
+        <p className="text-[12px] leading-relaxed text-osu-f1">
+          Replaces the mouse cursor with an osu!-style cursor across the site. Desktop only.
+        </p>
+        {cursorSettings.enabled ? (
+          <>
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-semibold text-osu-l1">Color</span>
+              <ColorSwatchRow value={cursorSettings.color} onChange={(color) => onUpdateCursor({ color })} />
+            </div>
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-semibold text-osu-l1">Size</span>
+              <PercentSlider
+                value={cursorSettings.size}
+                min={CURSOR_SIZE_MIN}
+                max={CURSOR_SIZE_MAX}
+                step={10}
+                onChange={(size) => onUpdateCursor({ size })}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-semibold text-osu-l1">Glow</span>
+              <PercentSlider
+                value={cursorSettings.glow}
+                min={CURSOR_GLOW_MIN}
+                max={CURSOR_GLOW_MAX}
+                step={5}
+                onChange={(glow) => onUpdateCursor({ glow })}
+                hint="How far the colored glow reaches around the cursor core."
+              />
+            </div>
+            <div className="space-y-3 rounded-lg border border-osu-b3/40 bg-osu-b5/40 px-3 py-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[12px] font-semibold text-osu-l1">Cursor trail</div>
+                  <div className="text-[11px] text-osu-f1">Leaves a short fading trail behind the cursor.</div>
+                </div>
+                <Switch checked={cursorSettings.trail} onChange={(trail) => onUpdateCursor({ trail })} />
+              </div>
+              {cursorSettings.trail ? (
+                <>
+                  <div className="space-y-1.5">
+                    <span className="text-[11px] font-semibold text-osu-l1">Trail color</span>
+                    <ColorSwatchRow
+                      value={cursorSettings.trailColor}
+                      onChange={(trailColor) => onUpdateCursor({ trailColor })}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <span className="text-[11px] font-semibold text-osu-l1">Trail thickness</span>
+                    <PercentSlider
+                      value={cursorSettings.trailThickness}
+                      min={CURSOR_TRAIL_THICKNESS_MIN}
+                      max={CURSOR_TRAIL_THICKNESS_MAX}
+                      step={5}
+                      onChange={(trailThickness) => onUpdateCursor({ trailThickness })}
+                    />
+                  </div>
+                </>
+              ) : null}
+            </div>
+            <p className="text-[11px] text-osu-f1/80">
+              Hold <kbd className="rounded border border-osu-b3/60 bg-osu-b5/80 px-1.5 py-0.5 font-bold text-osu-pink-light">C</kbd>{" "}
+              and move the cursor to draw smoke, just like mid-play drawing in osu!. It fades out on its own.
+            </p>
+          </>
+        ) : null}
+      </PanelGroup>
+    </div>
+  );
+}
+
+function ColorSwatchRow({ value, onChange }: { value: string; onChange: (color: string) => void }) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const isPreset = CURSOR_COLOR_PRESETS.some((preset) => preset.value === value);
+  const [r, g, b] = hexToRgbParts(value);
+  const [h, s, v] = rgbToHsv(r, g, b);
+
+  const setHsv = (nextH: number, nextS: number, nextV: number) => {
+    const [nr, ng, nb] = hsvToRgb(nextH, nextS, nextV);
+    onChange(rgbPartsToHex(nr, ng, nb));
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {CURSOR_COLOR_PRESETS.map((preset) => {
+          const active = preset.value === value;
+          return (
+            <button
+              key={preset.value}
+              type="button"
+              title={preset.label}
+              aria-label={preset.label}
+              aria-pressed={active}
+              onClick={() => onChange(preset.value)}
+              className={`h-8 w-8 cursor-pointer rounded-full border-2 transition-transform hover:scale-110 ${
+                active ? "border-white" : "border-transparent"
+              }`}
+              style={{ backgroundColor: preset.value }}
+            />
+          );
+        })}
+        <button
+          type="button"
+          title="Custom color"
+          aria-label="Custom color"
+          aria-expanded={pickerOpen}
+          onClick={() => setPickerOpen((open) => !open)}
+          className={`relative h-8 w-8 cursor-pointer overflow-hidden rounded-full border-2 p-0 transition-transform hover:scale-110 ${
+            pickerOpen || !isPreset ? "border-white" : "border-transparent"
+          }`}
+        >
+          <span
+            aria-hidden="true"
+            className="absolute inset-0 rounded-full"
+            style={{
+              background: "conic-gradient(#ff4444, #ffdd44, #66dd44, #44ddff, #4466ff, #dd44ff, #ff4444)",
+              clipPath: "circle(50% at 50% 50%)",
+            }}
+          />
+        </button>
+      </div>
+      {pickerOpen ? (
+        <div className="w-fit rounded-lg border border-osu-b3/40 bg-osu-b5/40 px-4 pt-4 pb-3">
+          <ReplaySkinColorWheel
+            hue={h}
+            saturation={s}
+            value={v}
+            onChange={(nextH, nextS) => setHsv(nextH, nextS, v)}
+          />
+          <ReplaySkinValueSlider hue={h} saturation={s} value={v} onChange={(nextV) => setHsv(h, s, nextV)} />
+          <div className="mt-3 flex items-center gap-2">
+            <span className="h-7 w-7 shrink-0 rounded-md border border-white/30" style={{ backgroundColor: value }} />
+            <input
+              type="text"
+              value={value}
+              onChange={(event) => {
+                const normalized = normalizeEditableHex(event.target.value);
+                if (normalized) onChange(normalized);
+              }}
+              spellCheck={false}
+              aria-label="Custom color hex"
+              className="h-7 w-24 rounded-md border border-osu-b3/50 bg-osu-b5 px-2 font-mono text-[11px] text-osu-c1 outline-none transition-colors focus:border-osu-pink/60"
+            />
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function Switch({ checked, onChange }: { checked: boolean; onChange: (checked: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={`inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border p-0.5 transition-colors ${
+        checked ? "border-osu-pink bg-osu-pink" : "border-osu-b3/60 bg-osu-b5/80"
+      }`}
+    >
+      <span
+        className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+          checked ? "translate-x-4" : "translate-x-0"
+        }`}
+      />
+    </button>
   );
 }
 

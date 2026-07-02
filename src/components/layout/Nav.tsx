@@ -27,6 +27,7 @@ const NAV_LEAVES = {
   tracker: { id: "tracker", to: "/tracker", label: "tracker" },
   maps: { id: "maps", to: "/maps", label: "maps" },
   packs: { id: "packs", to: "/packs", label: "packs" },
+  skins: { id: "skins", to: "/skins", label: "skins" },
   snipes: { id: "snipes", to: "/snipes", label: "snipes" },
   "farm-helper": { id: "farm-helper", to: "/farm-helper", label: "farm helper" },
   replay: { id: "replay", to: "/replay", label: "watch replays" },
@@ -47,6 +48,7 @@ const NAV_TOP: NavTop[] = [
   { kind: "group", id: "players", label: "players", items: ["tracker", "rankings", "top-plays"] },
   { kind: "link", id: "maps" },
   { kind: "link", id: "packs" },
+  { kind: "link", id: "skins" },
   { kind: "link", id: "snipes" },
   { kind: "group", id: "tools", label: "tools", items: ["farm-helper", "replay", "bbcode", "discord"] },
 ];
@@ -121,6 +123,8 @@ export function Nav() {
     // Discord bot is dev-gated for now: visible in local dev and on the dev
     // preview host, hidden in production.
     if (leaf.id === "discord") return devMode;
+    // Skins is dev-gated while unfinished; the route 404s outside dev too.
+    if (leaf.id === "skins") return devMode;
     if (leaf.id === "snipes") return showSnipesLink;
     return true;
   };
@@ -551,8 +555,8 @@ export function Nav() {
           <div ref={linksContainerRef} className="relative hidden md:flex items-center gap-1">
             {NAV_TOP.map((top) => {
               if (top.kind === "link") {
-                if (top.id === "snipes" && !showSnipesLink) return null;
                 const leaf = NAV_LEAVES[top.id];
+                if (!isLeafVisible(leaf)) return null;
                 return (
                   <Link
                     key={top.id}
@@ -893,7 +897,7 @@ export function Nav() {
               <div className="py-2">
                 {NAV_TOP.map((top) => {
                   if (top.kind === "link") {
-                    if (top.id === "snipes" && !showSnipesLink) return null;
+                    if (!isLeafVisible(NAV_LEAVES[top.id])) return null;
                     return renderMobileLink(NAV_LEAVES[top.id]);
                   }
                   const groupItems = top.items.map((id) => NAV_LEAVES[id]).filter(isLeafVisible);

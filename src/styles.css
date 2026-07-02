@@ -98,6 +98,10 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
 ) {
   cursor: pointer;
 }
+html[data-custom-cursor="true"],
+html[data-custom-cursor="true"] * {
+  cursor: none !important;
+}
 @media (hover: hover) and (pointer: fine) {
   .player-score-row:hover .score-position-indicator {
     opacity: 1;

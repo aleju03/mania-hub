@@ -13,6 +13,7 @@ import { Route as TrackerRouteImport } from './routes/tracker'
 import { Route as TopPlaysRouteImport } from './routes/top-plays'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SnipesRouteImport } from './routes/snipes'
+import { Route as SkinsRouteImport } from './routes/skins'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ReplayRouteImport } from './routes/replay'
 import { Route as RankingsRouteImport } from './routes/rankings'
@@ -27,6 +28,7 @@ import { Route as FarmHelperRouteImport } from './routes/farm-helper'
 import { Route as DiscordRouteImport } from './routes/discord'
 import { Route as BbcodeRouteImport } from './routes/bbcode'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SkinsIdRouteImport } from './routes/skins_.$id'
 import { Route as PlayerUsernameRouteImport } from './routes/player/$username'
 import { Route as ApiSyncRouteImport } from './routes/api/sync'
 import { Route as ApiSitemapRouteImport } from './routes/api/sitemap'
@@ -71,6 +73,11 @@ const TermsRoute = TermsRouteImport.update({
 const SnipesRoute = SnipesRouteImport.update({
   id: '/snipes',
   path: '/snipes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SkinsRoute = SkinsRouteImport.update({
+  id: '/skins',
+  path: '/skins',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -141,6 +148,11 @@ const BbcodeRoute = BbcodeRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SkinsIdRoute = SkinsIdRouteImport.update({
+  id: '/skins_/$id',
+  path: '/skins/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PlayerUsernameRoute = PlayerUsernameRouteImport.update({
@@ -284,6 +296,7 @@ export interface FileRoutesByFullPath {
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
   '/settings': typeof SettingsRoute
+  '/skins': typeof SkinsRoute
   '/snipes': typeof SnipesRoute
   '/terms': typeof TermsRoute
   '/top-plays': typeof TopPlaysRoute
@@ -304,6 +317,7 @@ export interface FileRoutesByFullPath {
   '/api/sitemap': typeof ApiSitemapRoute
   '/api/sync': typeof ApiSyncRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
+  '/skins/$id': typeof SkinsIdRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
   '/farm-helper/map/$beatmapId': typeof FarmHelperMapBeatmapIdRoute
@@ -329,6 +343,7 @@ export interface FileRoutesByTo {
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
   '/settings': typeof SettingsRoute
+  '/skins': typeof SkinsRoute
   '/snipes': typeof SnipesRoute
   '/terms': typeof TermsRoute
   '/top-plays': typeof TopPlaysRoute
@@ -349,6 +364,7 @@ export interface FileRoutesByTo {
   '/api/sitemap': typeof ApiSitemapRoute
   '/api/sync': typeof ApiSyncRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
+  '/skins/$id': typeof SkinsIdRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
   '/farm-helper/map/$beatmapId': typeof FarmHelperMapBeatmapIdRoute
@@ -375,6 +391,7 @@ export interface FileRoutesById {
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
   '/settings': typeof SettingsRoute
+  '/skins': typeof SkinsRoute
   '/snipes': typeof SnipesRoute
   '/terms': typeof TermsRoute
   '/top-plays': typeof TopPlaysRoute
@@ -395,6 +412,7 @@ export interface FileRoutesById {
   '/api/sitemap': typeof ApiSitemapRoute
   '/api/sync': typeof ApiSyncRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
+  '/skins_/$id': typeof SkinsIdRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
   '/farm-helper/map/$beatmapId': typeof FarmHelperMapBeatmapIdRoute
@@ -422,6 +440,7 @@ export interface FileRouteTypes {
     | '/rankings'
     | '/replay'
     | '/settings'
+    | '/skins'
     | '/snipes'
     | '/terms'
     | '/top-plays'
@@ -442,6 +461,7 @@ export interface FileRouteTypes {
     | '/api/sitemap'
     | '/api/sync'
     | '/player/$username'
+    | '/skins/$id'
     | '/api/auth/logout'
     | '/api/auth/osu'
     | '/farm-helper/map/$beatmapId'
@@ -467,6 +487,7 @@ export interface FileRouteTypes {
     | '/rankings'
     | '/replay'
     | '/settings'
+    | '/skins'
     | '/snipes'
     | '/terms'
     | '/top-plays'
@@ -487,6 +508,7 @@ export interface FileRouteTypes {
     | '/api/sitemap'
     | '/api/sync'
     | '/player/$username'
+    | '/skins/$id'
     | '/api/auth/logout'
     | '/api/auth/osu'
     | '/farm-helper/map/$beatmapId'
@@ -512,6 +534,7 @@ export interface FileRouteTypes {
     | '/rankings'
     | '/replay'
     | '/settings'
+    | '/skins'
     | '/snipes'
     | '/terms'
     | '/top-plays'
@@ -532,6 +555,7 @@ export interface FileRouteTypes {
     | '/api/sitemap'
     | '/api/sync'
     | '/player/$username'
+    | '/skins_/$id'
     | '/api/auth/logout'
     | '/api/auth/osu'
     | '/farm-helper/map/$beatmapId'
@@ -558,6 +582,7 @@ export interface RootRouteChildren {
   RankingsRoute: typeof RankingsRoute
   ReplayRoute: typeof ReplayRoute
   SettingsRoute: typeof SettingsRoute
+  SkinsRoute: typeof SkinsRoute
   SnipesRoute: typeof SnipesRoute
   TermsRoute: typeof TermsRoute
   TopPlaysRoute: typeof TopPlaysRoute
@@ -578,6 +603,7 @@ export interface RootRouteChildren {
   ApiSitemapRoute: typeof ApiSitemapRoute
   ApiSyncRoute: typeof ApiSyncRoute
   PlayerUsernameRoute: typeof PlayerUsernameRouteWithChildren
+  SkinsIdRoute: typeof SkinsIdRoute
   ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
   ApiAuthOsuRoute: typeof ApiAuthOsuRouteWithChildren
   VideosIdFilenameRoute: typeof VideosIdFilenameRoute
@@ -611,6 +637,13 @@ declare module '@tanstack/react-router' {
       path: '/snipes'
       fullPath: '/snipes'
       preLoaderRoute: typeof SnipesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/skins': {
+      id: '/skins'
+      path: '/skins'
+      fullPath: '/skins'
+      preLoaderRoute: typeof SkinsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -709,6 +742,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/skins_/$id': {
+      id: '/skins_/$id'
+      path: '/skins/$id'
+      fullPath: '/skins/$id'
+      preLoaderRoute: typeof SkinsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/player/$username': {
@@ -946,6 +986,7 @@ const rootRouteChildren: RootRouteChildren = {
   RankingsRoute: RankingsRoute,
   ReplayRoute: ReplayRoute,
   SettingsRoute: SettingsRoute,
+  SkinsRoute: SkinsRoute,
   SnipesRoute: SnipesRoute,
   TermsRoute: TermsRoute,
   TopPlaysRoute: TopPlaysRoute,
@@ -966,6 +1007,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiSitemapRoute: ApiSitemapRoute,
   ApiSyncRoute: ApiSyncRoute,
   PlayerUsernameRoute: PlayerUsernameRouteWithChildren,
+  SkinsIdRoute: SkinsIdRoute,
   ApiAuthLogoutRoute: ApiAuthLogoutRoute,
   ApiAuthOsuRoute: ApiAuthOsuRouteWithChildren,
   VideosIdFilenameRoute: VideosIdFilenameRoute,

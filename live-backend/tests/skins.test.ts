@@ -1,0 +1,400 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import JSZip from "jszip";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createDb, exec, migrate, type Db } from "../src/db.js";
+import {
+  appendSkinScreenshot,
+  attachSkinOsk,
+  attachSkinPreview,
+  createPendingSkin,
+  deleteSkin,
+  finishSkin,
+  getSkin,
+  getSkinForUpload,
+  listExpiredPendingSkins,
+  listSkins,
+  setSkinHidden,
+  SKIN_DESCRIPTION_MAX_LENGTH,
+  SKIN_MAX_PENDING_PER_USER,
+  SKIN_MAX_PER_USER,
+  SKIN_MAX_SCREENSHOTS,
+  toSkinSummary,
+} from "../src/features/skins.js";
+import { runRetention } from "../src/retention.js";
+import { sniffImage, validateOskBuffer } from "../src/skins/validate-osk.js";
+import { oskFilename, skinOskKey, skinPreviewKey } from "../src/skins/r2.js";
+
+let dir = "";
+let db: Db;
+
+const OWNER = { ownerUserId: 101, ownerUsername: "delta", name: "Cloudy Skies" };
+
+beforeEach(async () => {
+  dir = await mkdtemp(join(tmpdir(), "mania-skins-"));
+  db = await createDb({ databaseUrl: `file:${join(dir, "test.db")}` });
+  await migrate(db);
+});
+
+afterEach(async () => {
+  if (dir) await rm(dir, { recursive: true, force: true });
+});
+
+async function createPublishedSkin(input: {
+  ownerUserId: number;
+  ownerUsername: string;
+  name: string;
+  keymodes?: number[];
+}): Promise<string> {
+  const created = await createPendingSkin(db, {
+    ownerUserId: input.ownerUserId,
+    ownerUsername: input.ownerUsername,
+    name: input.name,
+  });
+  if (!created.ok) throw new Error(`createPendingSkin failed: ${created.error}`);
+  await attachSkinOsk(db, created.id, {
+    key: skinOskKey(created.id, input.name),
+    url: `https://cdn.example/skins/${created.id}/skin.osk`,
+    sizeBytes: 1024,
+    sha256: "ab".repeat(32),
+    keymodes: input.keymodes ?? [4],
+    accentColor: "#ff66aa",
+  });
+  await attachSkinPreview(db, created.id, {
+    key: skinPreviewKey(created.id, "webp"),
+    url: `https://cdn.example/skins/${created.id}/preview.webp`,
+    width: 1280,
+    height: 720,
+  });
+  const finished = await finishSkin(db, created.id, created.token);
+  if (!finished.ok) throw new Error(`finishSkin failed: ${finished.error}`);
+  return created.id;
+}
+
+describe("skins feature", () => {
+  it("creates a pending skin with a ticket and publishes through the upload flow", async () => {
+    const created = await createPendingSkin(db, OWNER);
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    const pending = await getSkin(db, created.id);
+    expect(pending?.status).toBe("pending");
+    expect(pending?.uploadToken).toBe(created.token);
+
+    expect(await getSkinForUpload(db, created.id, created.token)).not.toBeNull();
+    expect(await getSkinForUpload(db, created.id, "wrong-token")).toBeNull();
+
+    // finish requires the .osk and the composed preview
+    expect(await finishSkin(db, created.id, created.token)).toEqual({ ok: false, error: "missing_osk" });
+    await attachSkinOsk(db, created.id, {
+      key: skinOskKey(created.id, OWNER.name),
+      url: "https://cdn.example/skin.osk",
+      sizeBytes: 2048,
+      sha256: "cd".repeat(32),
+      keymodes: [4, 7],
+      accentColor: "#aabbcc",
+    });
+    expect(await finishSkin(db, created.id, created.token)).toEqual({ ok: false, error: "missing_preview" });
+    await attachSkinPreview(db, created.id, { key: "skins/x/preview.webp", url: "https://cdn.example/preview.webp", width: 1280, height: 720 });
+
+    const finished = await finishSkin(db, created.id, created.token);
+    expect(finished.ok).toBe(true);
+    if (!finished.ok) return;
+    expect(finished.skin.status).toBe("published");
+    expect(finished.skin.keymodes).toEqual([4, 7]);
+    expect(finished.skin.name).toBe("Cloudy Skies");
+    expect("uploadToken" in finished.skin).toBe(false);
+
+    const published = await getSkin(db, created.id);
+    expect(published?.uploadToken).toBeNull();
+    expect(published?.publishedAt).toBeTruthy();
+
+    // a published skin's ticket is gone: further upload calls are rejected
+    expect(await getSkinForUpload(db, created.id, created.token)).toBeNull();
+  });
+
+  it("rejects empty names and strips control characters", async () => {
+    expect(await createPendingSkin(db, { ...OWNER, name: "   " })).toEqual({ ok: false, error: "invalid_name" });
+    const created = await createPendingSkin(db, { ...OWNER, name: "a\u0000b\u001fc" });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    expect((await getSkin(db, created.id))?.name).toBe("a b c");
+  });
+
+  it("stores an optional description, keeping line breaks but not control characters", async () => {
+    const created = await createPendingSkin(db, {
+      ...OWNER,
+      description: "  For 4K jacks.\r\n\r\n\r\nArrow  notes,   dark\u0007 HUD.\n  ".repeat(20),
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const row = await getSkin(db, created.id);
+    expect(row?.description?.startsWith("For 4K jacks.\n\nArrow notes, dark HUD.")).toBe(true);
+    expect(row?.description).not.toMatch(/\n{3,}|\r|\u0007| {2}/);
+    expect((row?.description ?? "").length).toBeLessThanOrEqual(SKIN_DESCRIPTION_MAX_LENGTH);
+    expect(toSkinSummary(row!).description).toBe(row?.description);
+
+    // omitted or blank descriptions stay null
+    const bare = await createPendingSkin(db, { ...OWNER, ownerUserId: 909, name: "No blurb", description: "  \n " });
+    expect(bare.ok).toBe(true);
+    if (!bare.ok) return;
+    const bareRow = await getSkin(db, bare.id);
+    expect(bareRow?.description).toBeNull();
+    expect(toSkinSummary(bareRow!).description).toBeNull();
+  });
+
+  it("enforces per-user pending and total caps", async () => {
+    for (let i = 0; i < SKIN_MAX_PENDING_PER_USER; i += 1) {
+      const created = await createPendingSkin(db, { ...OWNER, name: `Pending ${i}` });
+      expect(created.ok).toBe(true);
+    }
+    expect(await createPendingSkin(db, { ...OWNER, name: "One too many" })).toEqual({ ok: false, error: "pending_limit" });
+
+    // a different user is unaffected
+    expect((await createPendingSkin(db, { ...OWNER, ownerUserId: 202, name: "Other user" })).ok).toBe(true);
+
+    // total cap counts all statuses
+    await exec(db, "delete from skins where owner_user_id = ?", [OWNER.ownerUserId]);
+    for (let i = 0; i < SKIN_MAX_PER_USER; i += 1) {
+      await createPublishedSkin({ ownerUserId: OWNER.ownerUserId, ownerUsername: OWNER.ownerUsername, name: `Skin ${i}` });
+    }
+    expect(await createPendingSkin(db, { ...OWNER, name: "Over the total cap" })).toEqual({ ok: false, error: "skin_limit" });
+  });
+
+  it("rejects expired tickets", async () => {
+    const created = await createPendingSkin(db, OWNER);
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    await exec(db, "update skins set token_expires_at = ? where id = ?", [new Date(Date.now() - 1000).toISOString(), created.id]);
+    expect(await getSkinForUpload(db, created.id, created.token)).toBeNull();
+    expect(await finishSkin(db, created.id, created.token)).toEqual({ ok: false, error: "not_found" });
+  });
+
+  it("caps screenshots per skin", async () => {
+    const created = await createPendingSkin(db, OWNER);
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    for (let i = 0; i < SKIN_MAX_SCREENSHOTS; i += 1) {
+      const appended = await appendSkinScreenshot(db, created.id, {
+        key: `skins/${created.id}/shot-${i}.webp`,
+        url: `https://cdn.example/shot-${i}.webp`,
+        width: 1920,
+        height: 1080,
+      });
+      expect(appended).toEqual({ ok: true, index: i });
+    }
+    expect(await appendSkinScreenshot(db, created.id, { key: "skins/x/shot-4.webp", url: "https://cdn.example/shot-4.webp", width: null, height: null }))
+      .toEqual({ ok: false, error: "screenshot_limit" });
+  });
+
+  it("lists published skins newest-first with search, keymode filter, and pagination", async () => {
+    await createPublishedSkin({ ownerUserId: 1, ownerUsername: "alpha", name: "Rainbow Road", keymodes: [4] });
+    await createPublishedSkin({ ownerUserId: 2, ownerUsername: "bravo", name: "Midnight 100% Flow", keymodes: [4, 7] });
+    await createPublishedSkin({ ownerUserId: 3, ownerUsername: "charlie", name: "Circles", keymodes: [7] });
+    // pending rows never show up in the public list
+    await createPendingSkin(db, { ...OWNER, name: "Hidden pending" });
+
+    const all = await listSkins(db, {});
+    expect(all.total).toBe(3);
+    expect(all.skins.map((skin) => skin.name)).toEqual(["Circles", "Midnight 100% Flow", "Rainbow Road"]);
+
+    // search hits name and uploader username, case-insensitively
+    expect((await listSkins(db, { q: "rainbow" })).total).toBe(1);
+    expect((await listSkins(db, { q: "BRAVO" })).total).toBe(1);
+    expect((await listSkins(db, { q: "charlie" })).total).toBe(1);
+
+    // LIKE wildcards in the query are escaped, not interpreted
+    expect((await listSkins(db, { q: "100%" })).total).toBe(1);
+    expect((await listSkins(db, { q: "%" })).total).toBe(1);
+    expect((await listSkins(db, { q: "_" })).total).toBe(0);
+
+    expect((await listSkins(db, { keymode: 7 })).skins.map((skin) => skin.name)).toEqual(["Circles", "Midnight 100% Flow"]);
+    expect((await listSkins(db, { keymode: 9 })).total).toBe(0);
+
+    const paged = await listSkins(db, { page: 1, pageSize: 2 });
+    expect(paged.total).toBe(3);
+    expect(paged.skins).toHaveLength(1);
+  });
+
+  it("hides and unhides skins, excluding hidden ones from the public list", async () => {
+    const id = await createPublishedSkin({ ownerUserId: 1, ownerUsername: "alpha", name: "Soon Hidden" });
+    expect(await setSkinHidden(db, id, true)).toBe(true);
+    expect((await listSkins(db, {})).total).toBe(0);
+    expect((await listSkins(db, { includeHidden: true })).total).toBe(1);
+    expect(await setSkinHidden(db, id, false)).toBe(true);
+    expect((await listSkins(db, {})).total).toBe(1);
+    // pending rows cannot be hidden
+    const created = await createPendingSkin(db, OWNER);
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    expect(await setSkinHidden(db, created.id, true)).toBe(false);
+  });
+
+  it("deletes a skin and returns its storage keys", async () => {
+    const id = await createPublishedSkin({ ownerUserId: 1, ownerUsername: "alpha", name: "Doomed" });
+    await appendSkinScreenshot(db, id, { key: `skins/${id}/shot-0.webp`, url: "https://cdn.example/shot-0.webp", width: null, height: null });
+    const deleted = await deleteSkin(db, id);
+    expect(deleted?.keys).toHaveLength(3);
+    expect(deleted?.keys.every((key) => key.startsWith("skins/"))).toBe(true);
+    expect(await getSkin(db, id)).toBeNull();
+    expect(await deleteSkin(db, id)).toBeNull();
+  });
+
+  it("counts downloads for published skins only", async () => {
+    const id = await createPublishedSkin({ ownerUserId: 1, ownerUsername: "alpha", name: "Popular" });
+    const { recordSkinDownload } = await import("../src/features/skins.js");
+    expect(await recordSkinDownload(db, id)).toContain("skin.osk");
+    expect(await recordSkinDownload(db, id)).toContain("skin.osk");
+    expect((await getSkin(db, id))?.downloadCount).toBe(2);
+
+    await setSkinHidden(db, id, true);
+    expect(await recordSkinDownload(db, id)).toBeNull();
+    expect((await getSkin(db, id))?.downloadCount).toBe(2);
+
+    const pending = await createPendingSkin(db, OWNER);
+    expect(pending.ok).toBe(true);
+    if (!pending.ok) return;
+    expect(await recordSkinDownload(db, pending.id)).toBeNull();
+    expect(await recordSkinDownload(db, "missing")).toBeNull();
+  });
+
+  it("prunes only long-expired pending uploads through retention", async () => {
+    const keep = await createPendingSkin(db, { ...OWNER, name: "Fresh pending" });
+    const expired = await createPendingSkin(db, { ...OWNER, name: "Abandoned" });
+    const published = await createPublishedSkin({ ownerUserId: 9, ownerUsername: "keeper", name: "Durable" });
+    expect(keep.ok && expired.ok).toBe(true);
+    if (!keep.ok || !expired.ok) return;
+    await exec(db, "update skins set token_expires_at = ? where id = ?", [
+      new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      expired.id,
+    ]);
+
+    expect((await listExpiredPendingSkins(db, new Date(Date.now() - 60 * 60 * 1000).toISOString())).map((skin) => skin.id))
+      .toEqual([expired.id]);
+
+    const results = await runRetention(db, {
+      databaseUrl: `file:${join(dir, "test.db")}`,
+      scoreEventRetentionDays: 14,
+      liveEventRetentionDays: 7,
+      doneJobRetentionDays: 2,
+      apiCallLogRetentionDays: 7,
+      replayVideoJobRetentionDays: 2,
+      rankSnapshotRetentionDays: 14,
+      activityRetentionYears: 2,
+      replayVideoWorkDir: join(dir, "replay-video-jobs"),
+      maxLocalDbBytes: Number.MAX_SAFE_INTEGER,
+      targetLocalDbBytes: Number.MAX_SAFE_INTEGER,
+    });
+
+    expect(results.skinsPendingExpired).toBe(1);
+    expect(await getSkin(db, expired.id)).toBeNull();
+    expect((await getSkin(db, keep.id))?.status).toBe("pending");
+    expect((await getSkin(db, published))?.status).toBe("published");
+  });
+});
+
+async function buildOsk(files: Record<string, string | Buffer>): Promise<Buffer> {
+  const zip = new JSZip();
+  for (const [path, content] of Object.entries(files)) {
+    zip.file(path, content);
+  }
+  return zip.generateAsync({ type: "nodebuffer" });
+}
+
+const VALID_SKIN_INI = `[General]
+Name: Cloudy Skies
+Author: sona
+
+[Mania]
+Keys: 4
+ColourLight1: 255,102,170
+NoteImage0: mania-note1
+
+[Mania]
+Keys: 7
+Colour1: 12,12,12
+`;
+
+describe("validateOskBuffer", () => {
+  it("accepts a real .osk and derives name, author, and sorted keymodes", async () => {
+    const buffer = await buildOsk({ "skin.ini": VALID_SKIN_INI, "mania-note1.png": Buffer.from([0x89, 0x50]) });
+    const result = await validateOskBuffer(buffer);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.info.name).toBe("Cloudy Skies");
+    expect(result.info.author).toBe("sona");
+    expect(result.info.keymodes).toEqual([4, 7]);
+    expect(result.info.accentColor).toBe("#ff66aa");
+    expect(result.info.sha256).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("finds skin.ini nested in a folder and ignores case", async () => {
+    const buffer = await buildOsk({ "My Skin/SKIN.INI": VALID_SKIN_INI });
+    const result = await validateOskBuffer(buffer);
+    expect(result.ok).toBe(true);
+  });
+
+  it("rejects non-zip bytes", async () => {
+    expect(await validateOskBuffer(Buffer.from("plain text"))).toEqual({ ok: false, error: "not_a_zip" });
+    expect(await validateOskBuffer(Buffer.from([0x50, 0x4b, 0x05, 0x06]))).toEqual({ ok: false, error: "not_a_zip" });
+  });
+
+  it("rejects a zip without skin.ini", async () => {
+    const buffer = await buildOsk({ "readme.txt": "no skin here" });
+    expect(await validateOskBuffer(buffer)).toEqual({ ok: false, error: "missing_skin_ini" });
+  });
+
+  it("rejects a skin.ini without valid mania keymodes", async () => {
+    const noMania = await buildOsk({ "skin.ini": "[General]\nName: x\n" });
+    expect(await validateOskBuffer(noMania)).toEqual({ ok: false, error: "no_mania_keymodes" });
+    const badKeys = await buildOsk({ "skin.ini": "[Mania]\nKeys: 26\n\n[Mania]\nKeys: 0\n" });
+    expect(await validateOskBuffer(badKeys)).toEqual({ ok: false, error: "no_mania_keymodes" });
+  });
+
+  it("neutralises crafted path-traversal entry names", async () => {
+    // Patch the entry name bytes ("AA/" -> "../") after generating to mimic a
+    // crafted zip. JSZip sanitises the name on load ("../escape.txt" loads as
+    // "escape.txt"), so the archive validates without any traversal name ever
+    // surfacing; the unsafe_paths guard in validateOskBuffer stays as
+    // defense-in-depth should that behaviour change.
+    const buffer = await buildOsk({ "skin.ini": VALID_SKIN_INI, "AA/escape.txt": "nope" });
+    const patched = Buffer.from(buffer.toString("latin1").replaceAll("AA/escape.txt", "../escape.txt"), "latin1");
+    const result = await validateOskBuffer(patched);
+    expect(result.ok).toBe(true);
+  });
+
+  it("aborts on an oversized skin.ini instead of decompressing it", async () => {
+    const buffer = await buildOsk({ "skin.ini": `${VALID_SKIN_INI}\n// ${"a".repeat(2 * 1024 * 1024)}` });
+    expect(await validateOskBuffer(buffer)).toEqual({ ok: false, error: "skin_ini_too_large" });
+  });
+
+  it("skips near-black accent candidates", async () => {
+    const buffer = await buildOsk({
+      "skin.ini": "[Mania]\nKeys: 4\nColourLight1: 5,5,5\nColour1: 200,40,120\n",
+    });
+    const result = await validateOskBuffer(buffer);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.info.accentColor).toBe("#c82878");
+  });
+});
+
+describe("sniffImage", () => {
+  it("recognises png, jpeg, and webp magic bytes only", () => {
+    expect(sniffImage(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))?.ext).toBe("png");
+    expect(sniffImage(Buffer.from([0xff, 0xd8, 0xff, 0xe0]))?.ext).toBe("jpeg");
+    expect(sniffImage(Buffer.concat([Buffer.from("RIFF"), Buffer.alloc(4), Buffer.from("WEBP")]))?.ext).toBe("webp");
+    expect(sniffImage(Buffer.from("<svg xmlns='http://www.w3.org/2000/svg'/>"))).toBeNull();
+    expect(sniffImage(Buffer.from("GIF89a"))).toBeNull();
+  });
+});
+
+describe("skin storage keys", () => {
+  it("builds safe keys from user-controlled names", () => {
+    expect(oskFilename("../../etc/passwd")).toBe("passwd.osk");
+    expect(oskFilename("My Cool Skin v2.osk")).toBe("My Cool Skin v2.osk");
+    expect(skinOskKey("abc-123", "x/y")).toBe("skins/abc-123/y.osk");
+    expect(skinPreviewKey("abc-123", "svg")).toBe("skins/abc-123/preview.png");
+  });
+});

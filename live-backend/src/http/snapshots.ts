@@ -43,6 +43,10 @@ import {
   writeReplayVideoUpload,
 } from "../replay-video/exports.js";
 import { isReplayVideoStorageConfigured } from "../replay-video/r2.js";
+import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, finishSkin, getSkin, getSkinForUpload, listSkins, recordSkinDownload, setSkinHidden, SKIN_MAX_SCREENSHOTS, toSkinSummary } from "../features/skins.js";
+import { deleteSkinObjects, isSkinStorageConfigured, skinOskKey, skinPreviewKey, skinScreenshotKey, uploadSkinObject } from "../skins/r2.js";
+import { sniffImage, validateOskBuffer } from "../skins/validate-osk.js";
+import { errorContext, logInfo, logWarn } from "../logger.js";
 import { addManualRosterMember, enqueueRosterRefreshes, removeManualRosterMember } from "../rosters/country-rosters.js";
 import { getLocalDbStorage, getStorageBreakdownSnapshot, getTablePreview, runRetention } from "../retention.js";
 import { setUserActive } from "../users.js";
@@ -1031,6 +1035,248 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     sendJson(req, res, ctx, 400, { error: "Unknown replay video job action." });
+    return true;
+  }
+  if (url.pathname === "/api/skins/list") {
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const includeHidden = url.searchParams.get("includeHidden") === "1" && isAdmin(req, ctx);
+    const keymode = Number(url.searchParams.get("k"));
+    const page = Number(url.searchParams.get("page") ?? 0);
+    const pageSize = Number(url.searchParams.get("pageSize") ?? 24);
+    if (!includeHidden) res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
+    sendJson(req, res, ctx, 200, await listSkins(ctx.db, {
+      q: (url.searchParams.get("q") ?? "").slice(0, 80),
+      keymode: Number.isInteger(keymode) && keymode >= 1 && keymode <= 10 ? keymode : null,
+      page: Number.isFinite(page) ? page : 0,
+      pageSize: Number.isFinite(pageSize) ? pageSize : 24,
+      includeHidden,
+    }));
+    return true;
+  }
+  if (url.pathname === "/api/skins/get") {
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const id = url.searchParams.get("id") ?? "";
+    const skin = id ? await getSkin(ctx.db, id) : null;
+    const admin = isAdmin(req, ctx);
+    if (!skin || (!admin && skin.status !== "published")) {
+      sendJson(req, res, ctx, 404, { error: "not_found" });
+      return true;
+    }
+    if (!admin) res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
+    sendJson(req, res, ctx, 200, { skin: toSkinSummary(skin) });
+    return true;
+  }
+  if (url.pathname === "/api/skins/download") {
+    // Redirect-through download so each grab counts, then the R2 public URL
+    // serves the actual bytes with ContentDisposition: attachment.
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const id = url.searchParams.get("id") ?? "";
+    const target = id ? await recordSkinDownload(ctx.db, id) : null;
+    if (!target) {
+      sendJson(req, res, ctx, 404, { error: "not_found" });
+      return true;
+    }
+    sendCors(req, res, ctx);
+    res.statusCode = 302;
+    res.setHeader("location", target);
+    res.setHeader("cache-control", "no-store");
+    res.end();
+    return true;
+  }
+  if (url.pathname === "/api/skins/start") {
+    // Admin-token gated: the frontend server fn forwards the osu!-verified viewer id with the
+    // shared admin token (the goals/pack-wallet bridge), so uploads are always attributed to
+    // the logged-in user. The browser then talks to /api/skins/upload with the minted ticket.
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    if (!isSkinStorageConfigured(ctx.config)) {
+      sendJson(req, res, ctx, 503, { error: "skin_storage_not_configured" });
+      return true;
+    }
+    const body = parseJson<{ userId?: unknown; username?: unknown; name?: unknown; description?: unknown }>((await readBody(req)) || "{}", {});
+    const userId = Number(body.userId);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
+      return true;
+    }
+    const result = await createPendingSkin(ctx.db, {
+      ownerUserId: userId,
+      ownerUsername: typeof body.username === "string" ? body.username : "",
+      name: typeof body.name === "string" ? body.name : "",
+      description: typeof body.description === "string" ? body.description : null,
+    });
+    if (!result.ok) {
+      sendJson(req, res, ctx, result.error === "invalid_name" ? 400 : 429, { ok: false, error: result.error });
+      return true;
+    }
+    logInfo("skin_upload_start", { id: result.id, ownerUserId: userId });
+    sendJson(req, res, ctx, 200, { ok: true, id: result.id, token: result.token, expiresAt: result.expiresAt });
+    return true;
+  }
+  if (url.pathname === "/api/skins/upload" || url.pathname === "/api/skins/finish") {
+    // Ticket-authenticated: the token minted by /api/skins/start is the credential, so the
+    // browser can POST the 65MB .osk directly here without the Vercel body-size ceiling.
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    if (!checkRate(req, res, ctx, "skinUpload")) return true;
+    if (!checkRate(req, res, ctx, "publicCostly")) return true;
+    if (!isSkinStorageConfigured(ctx.config)) {
+      sendJson(req, res, ctx, 503, { error: "skin_storage_not_configured" });
+      return true;
+    }
+    const id = url.searchParams.get("id") ?? "";
+    const token = url.searchParams.get("token") ?? "";
+    if (url.pathname === "/api/skins/finish") {
+      const result = await finishSkin(ctx.db, id, token);
+      if (!result.ok) {
+        const status = result.error === "not_found" ? 403 : 400;
+        sendJson(req, res, ctx, status, { ok: false, error: result.error === "not_found" ? "invalid_ticket" : result.error });
+        return true;
+      }
+      logInfo("skin_upload_finish", { id, ownerUserId: result.skin.ownerUserId, keymodes: result.skin.keymodes });
+      sendJson(req, res, ctx, 200, { ok: true, skin: result.skin });
+      return true;
+    }
+    const skin = id && token ? await getSkinForUpload(ctx.db, id, token) : null;
+    if (!skin) {
+      sendJson(req, res, ctx, 403, { ok: false, error: "invalid_ticket" });
+      return true;
+    }
+    const part = url.searchParams.get("part") ?? "";
+    if (part === "osk") {
+      const buffer = await readBodyBuffer(req, ctx.config.skinOskMaxBytes);
+      const validation = await validateOskBuffer(buffer);
+      if (!validation.ok) {
+        sendJson(req, res, ctx, 400, { ok: false, error: "invalid_osk", reason: validation.error });
+        return true;
+      }
+      const key = skinOskKey(skin.id, skin.name);
+      const uploaded = await uploadSkinObject(ctx.config, key, buffer, "application/octet-stream", "attachment");
+      await attachSkinOsk(ctx.db, skin.id, {
+        key,
+        url: uploaded.url,
+        sizeBytes: uploaded.sizeBytes,
+        sha256: validation.info.sha256,
+        keymodes: validation.info.keymodes,
+        accentColor: validation.info.accentColor,
+      });
+      logInfo("skin_upload_osk", { id: skin.id, ownerUserId: skin.ownerUserId, sizeBytes: uploaded.sizeBytes, keymodes: validation.info.keymodes });
+      sendJson(req, res, ctx, 200, { ok: true, keymodes: validation.info.keymodes });
+      return true;
+    }
+    if (part === "preview" || part === "screenshot") {
+      if (part === "screenshot" && skin.screenshots.length >= SKIN_MAX_SCREENSHOTS) {
+        sendJson(req, res, ctx, 400, { ok: false, error: "screenshot_limit" });
+        return true;
+      }
+      const buffer = await readBodyBuffer(req, ctx.config.skinImageMaxBytes);
+      const sniffed = sniffImage(buffer);
+      if (!sniffed) {
+        sendJson(req, res, ctx, 400, { ok: false, error: "invalid_image" });
+        return true;
+      }
+      const width = parseImageDimension(url.searchParams.get("w"));
+      const height = parseImageDimension(url.searchParams.get("h"));
+      if (part === "preview") {
+        const key = skinPreviewKey(skin.id, sniffed.ext);
+        const uploaded = await uploadSkinObject(ctx.config, key, buffer, sniffed.mime, "inline");
+        await attachSkinPreview(ctx.db, skin.id, { key, url: uploaded.url, width, height });
+      } else {
+        const key = skinScreenshotKey(skin.id, skin.screenshots.length, sniffed.ext);
+        const uploaded = await uploadSkinObject(ctx.config, key, buffer, sniffed.mime, "inline");
+        const appended = await appendSkinScreenshot(ctx.db, skin.id, { key, url: uploaded.url, width, height });
+        if (!appended.ok) {
+          await deleteSkinObjects(ctx.config, [key]).catch(() => {});
+          sendJson(req, res, ctx, 400, { ok: false, error: appended.error });
+          return true;
+        }
+      }
+      sendJson(req, res, ctx, 200, { ok: true });
+      return true;
+    }
+    sendJson(req, res, ctx, 400, { ok: false, error: "invalid_part" });
+    return true;
+  }
+  if (url.pathname === "/api/skins/delete") {
+    // Admin-token gated owner delete: the frontend server fn forwards the osu!-verified viewer
+    // id, and the ownership check below keeps a user from deleting anyone else's skin.
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<{ userId?: unknown; id?: unknown }>((await readBody(req)) || "{}", {});
+    const userId = Number(body.userId);
+    const id = typeof body.id === "string" ? body.id : "";
+    if (!Number.isInteger(userId) || userId <= 0 || !id) {
+      sendJson(req, res, ctx, 400, { error: "invalid_request" });
+      return true;
+    }
+    const skin = await getSkin(ctx.db, id);
+    if (!skin || skin.ownerUserId !== userId) {
+      sendJson(req, res, ctx, 404, { ok: false, error: "not_found" });
+      return true;
+    }
+    const deleted = await deleteSkin(ctx.db, id);
+    if (deleted) {
+      await deleteSkinObjects(ctx.config, deleted.keys).catch((error) => {
+        logWarn("skin_delete_r2_failed", { id, ...errorContext(error) });
+      });
+    }
+    logInfo("skin_deleted", { id, ownerUserId: userId, by: "owner" });
+    sendJson(req, res, ctx, 200, { ok: true });
+    return true;
+  }
+  if (url.pathname === "/api/admin/skins/moderate") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<{ id?: unknown; action?: unknown }>((await readBody(req)) || "{}", {});
+    const id = typeof body.id === "string" ? body.id : "";
+    const action = typeof body.action === "string" ? body.action : "";
+    if (!id || !["hide", "unhide", "delete"].includes(action)) {
+      sendJson(req, res, ctx, 400, { error: "invalid_request" });
+      return true;
+    }
+    if (action === "delete") {
+      const deleted = await deleteSkin(ctx.db, id);
+      if (deleted) {
+        await deleteSkinObjects(ctx.config, deleted.keys).catch((error) => {
+          logWarn("skin_delete_r2_failed", { id, ...errorContext(error) });
+        });
+        logInfo("skin_deleted", { id, by: "admin" });
+      }
+      sendJson(req, res, ctx, deleted ? 200 : 404, { ok: Boolean(deleted) });
+      return true;
+    }
+    const ok = await setSkinHidden(ctx.db, id, action === "hide");
+    if (ok) logInfo("skin_moderated", { id, action });
+    sendJson(req, res, ctx, ok ? 200 : 404, { ok });
     return true;
   }
   if (url.pathname === "/api/admin/ingest-fixture") {
@@ -2539,6 +2785,11 @@ function isAdmin(req: IncomingMessage, ctx: HttpContext): boolean {
 
 async function readBody(req: IncomingMessage): Promise<string> {
   return (await readBodyBuffer(req)).toString("utf8");
+}
+
+function parseImageDimension(value: string | null): number | null {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 && parsed <= 8192 ? parsed : null;
 }
 
 const DEFAULT_BODY_LIMIT_BYTES = 1024 * 1024;

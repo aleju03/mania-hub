@@ -24,6 +24,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1045.0",
     "@libsql/client": "^0.17.3",
     "ffmpeg-static": "^5.3.0",
+    "jszip": "^3.10.1",
     "playwright-core": "^1.60.0",
     "sanitize-html": "^2.17.4",
     "socket.io-client": "^4.8.1"

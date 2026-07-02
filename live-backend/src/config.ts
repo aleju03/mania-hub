@@ -45,6 +45,7 @@ export interface Config {
   sseMaxConnectionsPerIp: number;
   sseMaxConnectionsTotal: number;
   replayVideoRatePerMinute: number;
+  skinUploadRatePerMinute: number;
   osuApiTargetPerMinute: number;
   osuApiHardPerMinute: number;
   oscJsonTargetPerMinute: number;
@@ -72,6 +73,8 @@ export interface Config {
   targetLocalDbBytes: number;
   replayVideoPublicEnabled: boolean;
   replayVideoUploadMaxBytes: number;
+  skinOskMaxBytes: number;
+  skinImageMaxBytes: number;
   replayVideoOptimize: boolean;
   replayVideoOptimizeCrf: number;
   replayVideoOptimizePreset: string;
@@ -214,6 +217,7 @@ export function readConfig(): Config {
     sseMaxConnectionsPerIp: readInt("SSE_MAX_CONNECTIONS_PER_IP", 6),
     sseMaxConnectionsTotal: readInt("SSE_MAX_CONNECTIONS_TOTAL", 500),
     replayVideoRatePerMinute: readInt("REPLAY_VIDEO_RATE_PER_MINUTE", 2),
+    skinUploadRatePerMinute: readInt("SKIN_UPLOAD_RATE_PER_MINUTE", 12),
     osuApiTargetPerMinute: readInt("OSU_API_TARGET_PER_MINUTE", 45),
     osuApiHardPerMinute: readInt("OSU_API_HARD_PER_MINUTE", 60),
     oscJsonTargetPerMinute: readInt("OSC_JSON_TARGET_PER_MINUTE", 30),
@@ -241,6 +245,8 @@ export function readConfig(): Config {
     targetLocalDbBytes: readInt("TARGET_LOCAL_DB_BYTES", 8 * 1024 * 1024 * 1024),
     replayVideoPublicEnabled: readBool("REPLAY_VIDEO_PUBLIC_ENABLED", false),
     replayVideoUploadMaxBytes: readInt("REPLAY_VIDEO_UPLOAD_MAX_BYTES", 600 * 1024 * 1024),
+    skinOskMaxBytes: readInt("SKIN_OSK_MAX_BYTES", 50 * 1024 * 1024),
+    skinImageMaxBytes: readInt("SKIN_IMAGE_MAX_BYTES", 4 * 1024 * 1024),
     replayVideoOptimize: readBool("REPLAY_VIDEO_OPTIMIZE", true),
     replayVideoOptimizeCrf: readBoundedInt("REPLAY_VIDEO_OPTIMIZE_CRF", 20, 16, 28),
     replayVideoOptimizePreset: process.env.REPLAY_VIDEO_OPTIMIZE_PRESET || "slow",

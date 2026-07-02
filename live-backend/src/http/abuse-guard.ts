@@ -9,7 +9,8 @@ export type AbuseBucket =
   | "countryActivateNew"
   | "danEstimate"
   | "sseConnect"
-  | "replayVideo";
+  | "replayVideo"
+  | "skinUpload";
 
 export type RateLimitResult =
   | { allowed: true }
@@ -150,6 +151,8 @@ function limitForBucket(config: Config, bucket: AbuseBucket): number {
       return Math.max(1, config.sseConnectRatePerMinute ?? 30);
     case "replayVideo":
       return Math.max(1, config.replayVideoRatePerMinute ?? 2);
+    case "skinUpload":
+      return Math.max(1, config.skinUploadRatePerMinute ?? 12);
   }
 }
 

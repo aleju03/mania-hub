@@ -32,6 +32,7 @@ interface ResolvedZipAsset {
 
 export interface ReplaySkinImportSummary {
   name: string;
+  author: string | null;
   keymodes: number[];
   selectedKeyCount: number | null;
   noteAssets: number;
@@ -122,6 +123,7 @@ export async function importReplaySkinFromOsk(
     settings: nextSettings,
     summary: {
       name: parsed.name ?? stripExtension(file.name),
+      author: parsed.author,
       keymodes: maniaBlocks.map((entry) => entry.keys),
       selectedKeyCount: selectedBlock.keys,
       noteAssets,

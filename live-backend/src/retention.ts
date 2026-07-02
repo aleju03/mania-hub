@@ -3,7 +3,9 @@ import { resolve } from "node:path";
 import type { Config } from "./config.js";
 import type { Db } from "./db.js";
 import { exec } from "./db.js";
-import { logInfo } from "./logger.js";
+import { deleteSkin, listExpiredPendingSkins } from "./features/skins.js";
+import { logInfo, logWarn, errorContext } from "./logger.js";
+import { deleteSkinObjects, type SkinStorageConfig } from "./skins/r2.js";
 
 export interface LocalDbStorage {
   filePath: string | null;
@@ -14,7 +16,7 @@ export interface LocalDbStorage {
   overLimit: boolean;
 }
 
-export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | "scoreEventRetentionDays" | "liveEventRetentionDays" | "doneJobRetentionDays" | "apiCallLogRetentionDays" | "replayVideoJobRetentionDays" | "rankSnapshotRetentionDays" | "activityRetentionYears" | "replayVideoWorkDir" | "maxLocalDbBytes" | "targetLocalDbBytes">): Promise<Record<string, number>> {
+export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | "scoreEventRetentionDays" | "liveEventRetentionDays" | "doneJobRetentionDays" | "apiCallLogRetentionDays" | "replayVideoJobRetentionDays" | "rankSnapshotRetentionDays" | "activityRetentionYears" | "replayVideoWorkDir" | "maxLocalDbBytes" | "targetLocalDbBytes"> & SkinStorageConfig): Promise<Record<string, number>> {
   const scoreCutoff = daysAgo(config.scoreEventRetentionDays);
   const liveCutoff = daysAgo(config.liveEventRetentionDays);
   const doneJobCutoff = daysAgo(config.doneJobRetentionDays);
@@ -27,7 +29,21 @@ export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | 
     "select id from replay_video_exports where status in ('done', 'failed', 'cancelled') and updated_at < ?",
     [replayVideoCutoff],
   )).rows.map((row) => String(row.id));
+  // Abandoned skin uploads: pending rows whose ticket expired over an hour ago
+  // never got finished, so the row and any half-uploaded R2 objects go away.
+  // Published/hidden skins are durable and never pruned.
+  const expiredPendingSkins = await listExpiredPendingSkins(db, new Date(Date.now() - 60 * 60 * 1000).toISOString());
+  let skinsPendingExpired = 0;
+  for (const skin of expiredPendingSkins) {
+    if (await deleteSkin(db, skin.id)) skinsPendingExpired += 1;
+  }
+  if (expiredPendingSkins.length > 0) {
+    await deleteSkinObjects(config, expiredPendingSkins.flatMap((skin) => skin.keys)).catch((error) => {
+      logWarn("retention_skin_r2_cleanup_failed", errorContext(error));
+    });
+  }
   const results = {
+    skinsPendingExpired,
     scoreEvents: Number((await exec(db, "delete from score_events where received_at < ?", [scoreCutoff])).rowsAffected ?? 0),
     liveEvents: Number((await exec(db, "delete from live_event_log where created_at < ?", [liveCutoff])).rowsAffected ?? 0),
     doneJobs: Number((await exec(db, "delete from jobs where status = 'done' and updated_at < ?", [doneJobCutoff])).rowsAffected ?? 0),

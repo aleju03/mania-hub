@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import { readCursorSettings, segmentHitsCircle, subscribeCursorSettings } from "../../lib/cursor";
 import { isWindowActive, subscribeWindowActivity } from "../../lib/window-activity";
 
 const NOTE_IMAGES: { src: string; aspect: "square" | "bar"; tint: string }[] = [
@@ -38,6 +39,27 @@ interface FallingNote {
   isLN: boolean;
   lnHeight: number;
 }
+
+/* Easter egg: with the custom cursor enabled, a fast swipe through a note
+   slices it into two halves that fly apart. */
+interface NoteFragment {
+  imgIndex: number;
+  x: number;
+  y: number;
+  size: number;
+  noteRotation: number;
+  sliceAngle: number;
+  side: 1 | -1;
+  vx: number;
+  vy: number;
+  spin: number;
+  opacity: number;
+  age: number;
+}
+
+const FRAGMENT_LIFETIME_S = 0.7;
+const FRAGMENT_CAP = 36;
+const SLICE_MIN_SPEED_PX_PER_MS = 0.35;
 
 let cachedNoteImages: HTMLImageElement[] | null = null;
 let lnScratchCanvas: HTMLCanvasElement | null = null;
@@ -104,14 +126,14 @@ function resetNote(note: FallingNote, canvasW: number, canvasH: number) {
 
 function drawFallbackNote(
   context: CanvasRenderingContext2D,
-  note: FallingNote,
+  imgIndex: number,
   drawWidth: number,
   drawHeight: number,
   tint: string,
 ) {
   context.fillStyle = tint;
 
-  if (NOTE_IMAGES[note.imgIndex].aspect === "bar") {
+  if (NOTE_IMAGES[imgIndex].aspect === "bar") {
     context.beginPath();
     context.roundRect(-drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight, drawHeight / 2);
     context.fill();
@@ -130,6 +152,14 @@ export function ManiaRain() {
   const rafRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number | null>(null);
   const animateRef = useRef<(time: number) => void>(() => undefined);
+  const fragmentsRef = useRef<NoteFragment[]>([]);
+  const sliceEnabledRef = useRef(false);
+  const pointerRef = useRef<{ x: number; y: number; t: number; has: boolean }>({
+    x: 0,
+    y: 0,
+    t: 0,
+    has: false,
+  });
 
   const ensureCanvasSize = useCallback((preservePositions: boolean) => {
     const canvas = canvasRef.current;
@@ -184,6 +214,64 @@ export function ManiaRain() {
   useEffect(() => {
     imagesRef.current = getNoteImages();
     ensureCanvasSize(false);
+
+    sliceEnabledRef.current = readCursorSettings().enabled;
+    const unsubscribeCursorSettings = subscribeCursorSettings((settings) => {
+      sliceEnabledRef.current = settings.enabled;
+    });
+
+    const spawnFragments = (note: FallingNote, sliceAngle: number) => {
+      const fragments = fragmentsRef.current;
+      const perpX = Math.cos(sliceAngle + Math.PI / 2);
+      const perpY = Math.sin(sliceAngle + Math.PI / 2);
+      for (const side of [1, -1] as const) {
+        const speed = 55 + Math.random() * 55;
+        fragments.push({
+          imgIndex: note.imgIndex,
+          x: note.x,
+          y: note.y,
+          size: note.size,
+          noteRotation: note.rotation,
+          sliceAngle,
+          side,
+          vx: perpX * speed * side,
+          vy: perpY * speed * side + note.speed,
+          spin: (Math.random() - 0.5) * 5,
+          opacity: Math.min(0.5, Math.max(0.28, note.opacity * 4)),
+          age: 0,
+        });
+      }
+      while (fragments.length > FRAGMENT_CAP) fragments.shift();
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!sliceEnabledRef.current || event.pointerType === "touch") return;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      const now = performance.now();
+      const prev = pointerRef.current;
+      const elapsed = now - prev.t;
+      // Slicing needs a held primary button, not just a pass-over.
+      if (prev.has && elapsed < 120 && (event.buttons & 1) === 1) {
+        const speed = Math.hypot(x - prev.x, y - prev.y) / Math.max(1, elapsed);
+        if (speed >= SLICE_MIN_SPEED_PX_PER_MS) {
+          // A fast button-held swipe is a slice gesture, not a text selection;
+          // drop the selection the drag keeps painting across the page.
+          window.getSelection()?.removeAllRanges();
+          const sliceAngle = Math.atan2(y - prev.y, x - prev.x);
+          for (const note of notesRef.current) {
+            if (segmentHitsCircle(prev.x, prev.y, x, y, note.x, note.y, note.size * 0.6 + 4)) {
+              spawnFragments(note, sliceAngle);
+              resetNote(note, canvas.width, canvas.height);
+            }
+          }
+        }
+      }
+      pointerRef.current = { x, y, t: now, has: true };
+    };
 
     const handleResize = () => {
       ensureCanvasSize(true);
@@ -280,13 +368,13 @@ export function ManiaRain() {
             if (imageReady) {
               sctx.drawImage(image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
             } else {
-              drawFallbackNote(sctx, note, drawWidth, drawHeight, "rgba(0,0,0,1)");
+              drawFallbackNote(sctx, note.imgIndex, drawWidth, drawHeight, "rgba(0,0,0,1)");
             }
             sctx.globalCompositeOperation = "source-over";
             if (imageReady) {
               sctx.drawImage(image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
             } else {
-              drawFallbackNote(sctx, note, drawWidth, drawHeight, NOTE_IMAGES[note.imgIndex].tint);
+              drawFallbackNote(sctx, note.imgIndex, drawWidth, drawHeight, NOTE_IMAGES[note.imgIndex].tint);
             }
             sctx.restore();
 
@@ -303,23 +391,70 @@ export function ManiaRain() {
           if (imageReady) {
             context.drawImage(image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
           } else {
-            drawFallbackNote(context, note, drawWidth, drawHeight, NOTE_IMAGES[note.imgIndex].tint);
+            drawFallbackNote(context, note.imgIndex, drawWidth, drawHeight, NOTE_IMAGES[note.imgIndex].tint);
           }
           context.restore();
         }
       }
 
+      const fragments = fragmentsRef.current;
+      for (let i = fragments.length - 1; i >= 0; i--) {
+        const fragment = fragments[i];
+        fragment.age += dt;
+        if (fragment.age >= FRAGMENT_LIFETIME_S) {
+          fragments.splice(i, 1);
+          continue;
+        }
+        fragment.x += fragment.vx * dt;
+        fragment.y += fragment.vy * dt;
+        fragment.vy += 260 * dt;
+        fragment.noteRotation += fragment.spin * dt;
+
+        const image = imagesRef.current[fragment.imgIndex];
+        const isBar = NOTE_IMAGES[fragment.imgIndex].aspect === "bar";
+        const drawWidth = isBar ? fragment.size * 1.4 : fragment.size;
+        const drawHeight = isBar ? fragment.size * 0.3 : fragment.size;
+        const imageReady = image?.complete && image.naturalWidth > 0;
+        const fade = 1 - fragment.age / FRAGMENT_LIFETIME_S;
+        const gap = 1.5 + fragment.age * 16;
+        const ext = fragment.size;
+
+        context.save();
+        context.globalAlpha = fragment.opacity * fade;
+        context.translate(fragment.x, fragment.y);
+        context.rotate(fragment.sliceAngle);
+        context.translate(0, fragment.side * gap);
+        context.beginPath();
+        // Clip to one half-plane of the slice line (the x-axis in this space).
+        if (fragment.side > 0) {
+          context.rect(-ext, 0, ext * 2, ext);
+        } else {
+          context.rect(-ext, -ext, ext * 2, ext);
+        }
+        context.clip();
+        context.rotate(fragment.noteRotation - fragment.sliceAngle);
+        if (imageReady) {
+          context.drawImage(image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+        } else {
+          drawFallbackNote(context, fragment.imgIndex, drawWidth, drawHeight, NOTE_IMAGES[fragment.imgIndex].tint);
+        }
+        context.restore();
+      }
+
       rafRef.current = requestAnimationFrame(animateRef.current);
     };
 
+    window.addEventListener("pointermove", handlePointerMove, { passive: true });
     window.addEventListener("resize", handleResize, { passive: true });
     const unsubscribeWindowActivity = subscribeWindowActivity(handleWindowActivityChange);
     if (isWindowActive()) startAnimation();
 
     return () => {
       stopAnimation();
+      window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("resize", handleResize);
       unsubscribeWindowActivity();
+      unsubscribeCursorSettings();
     };
   }, [ensureCanvasSize]);
 

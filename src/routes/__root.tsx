@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { Coffee, X } from "lucide-react";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest, setCookie } from "@tanstack/react-start/server";
+import { CustomCursor } from "../components/layout/CustomCursor";
 import { Nav } from "../components/layout/Nav";
 import { RouteLoadingBar } from "../components/layout/RouteLoadingBar";
 import { GoalToasts } from "../components/me/GoalToasts";
@@ -487,6 +488,7 @@ function RootLayout() {
       <AuthContext.Provider value={auth}>
         <PostHogProvider>
           <WindowActivityAttribute />
+          <CustomCursor />
           {backendStatus === "offline" ? (
             <main className="flex-1 flex">
               <BackendOfflineScreen />

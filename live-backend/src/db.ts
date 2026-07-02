@@ -94,6 +94,7 @@ export async function migrate(db: Db): Promise<void> {
   await migrateBeatmapOsuFileCache(db);
   await migrateMapSearchIndex(db);
   await migrateMapCollections(db);
+  await migrateSkins(db);
 }
 
 export async function dbHealth(db: Db): Promise<boolean> {
@@ -793,6 +794,58 @@ async function migrateUserGoals(db: Db): Promise<void> {
   await db.execute(`
     create index if not exists idx_user_goals_user_beatmap
       on user_goals(user_id, status, beatmap_id)
+  `);
+}
+
+async function migrateSkins(db: Db): Promise<void> {
+  // Community skin uploads. A row is created in 'pending' status when an upload
+  // ticket is minted (upload_token + token_expires_at are the ticket); the .osk,
+  // composed preview, and screenshots attach to it, and finish flips it to
+  // 'published'. Keymodes are server-derived from skin.ini, never client-asserted.
+  // Timestamps are ISO text (matching replay_video_exports). Retention prunes
+  // expired pending rows; published/hidden rows are durable.
+  await db.execute(`
+    create table if not exists skins (
+      id text primary key,
+      owner_user_id integer not null,
+      owner_username text not null,
+      name text not null,
+      description text,
+      keymodes_json text not null default '[]',
+      download_count integer not null default 0,
+      accent_color text,
+      search_text text not null default '',
+      status text not null default 'pending',
+      upload_token text,
+      token_expires_at text,
+      osk_key text,
+      osk_size_bytes integer,
+      osk_sha256 text,
+      osk_url text,
+      preview_key text,
+      preview_url text,
+      preview_width integer,
+      preview_height integer,
+      screenshots_json text not null default '[]',
+      created_at text not null,
+      updated_at text not null,
+      published_at text
+    )
+  `);
+  const skinColumns = (await db.execute("pragma table_info(skins)")).rows.map((row) => String(row.name));
+  if (!skinColumns.includes("download_count")) {
+    await db.execute("alter table skins add column download_count integer not null default 0");
+  }
+  if (!skinColumns.includes("description")) {
+    await db.execute("alter table skins add column description text");
+  }
+  await db.execute(`
+    create index if not exists idx_skins_status_published
+      on skins(status, published_at desc)
+  `);
+  await db.execute(`
+    create index if not exists idx_skins_owner
+      on skins(owner_user_id, created_at desc)
   `);
 }
 

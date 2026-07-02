@@ -53,6 +53,7 @@ const REQUIRED_SCHEMA_TABLES = [
   "map_search_index",
   "map_collections",
   "map_collection_members",
+  "skins",
 ];
 
 const IDLE_COUNTRY_ROSTER_REFRESH_INTERVAL_MS = 3 * 24 * 60 * 60 * 1000;

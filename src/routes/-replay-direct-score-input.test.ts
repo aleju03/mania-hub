@@ -23,9 +23,9 @@ describe("replay direct score input", () => {
     const routeSource = fs.readFileSync(path.resolve(__dirname, "replay.tsx"), "utf8");
 
     expect(routeSource).toContain("getReplayLoadingCopy");
-    expect(routeSource).toContain("Checking score details");
+    expect(routeSource).toContain("Looking up the score");
     expect(routeSource).toContain("Downloading replay and beatmap");
-    expect(routeSource).toContain("Still waiting on osu! replay data");
+    expect(routeSource).toContain("waiting on osu! to send the replay");
     expect(routeSource).toContain("loadReplay(scoreId, loaderData.score)");
   });
 });

@@ -130,7 +130,7 @@ export function ReplaySkinColorPanel({ value, onChange }: { value: string; onCha
 
 const COLOR_WHEEL_SIZE = 132;
 
-function ReplaySkinColorWheel({
+export function ReplaySkinColorWheel({
   hue,
   saturation,
   value,
@@ -250,7 +250,7 @@ function ReplaySkinColorWheel({
   );
 }
 
-function ReplaySkinValueSlider({
+export function ReplaySkinValueSlider({
   hue,
   saturation,
   value,
