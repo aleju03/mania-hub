@@ -10,6 +10,7 @@ export const BEATMAP_OSU_FILE_BACKFILL_JOB = "backfill_beatmap_osu_files";
 
 const META_KEY = "beatmap_osu_file_backfill_state";
 const BATCH_SIZE = 12;
+const BATCH_FETCH_CONCURRENCY = 4;
 const JOB_PRIORITY = -8;
 const CACHE_COUNTS_TTL_MS = 15_000;
 
@@ -33,6 +34,16 @@ interface BackfillState {
 interface BackfillJobPayload {
   runId: string;
   cursor?: number;
+}
+
+interface BackfillBeatmapResult {
+  beatmapId: number;
+  processed: number;
+  stored: number;
+  failed: number;
+  unavailable: number;
+  lastError: string | null;
+  cancelled: boolean;
 }
 
 interface CacheCounts {
@@ -193,56 +204,44 @@ export async function runBeatmapOsuFileBackfillJob(
     return;
   }
 
-  let processed = 0;
-  let stored = 0;
-  let failed = 0;
-  let unavailable = 0;
-  let lastBeatmapId = cursor;
-  let lastError: string | null = null;
+  let stopBatch = false;
+  const results = await mapWithConcurrency(beatmapIds, BATCH_FETCH_CONCURRENCY, async (beatmapId) => {
+    if (stopBatch) return cancelledBeatmapResult(beatmapId);
 
-  for (const beatmapId of beatmapIds) {
     const latest = await readState(db);
     if (latest.runId !== payload.runId || latest.status === "cancelled") {
-      await writeState(db, {
-        ...latest,
-        status: "cancelled",
-        updatedAt: nowIso(),
-        finishedAt: latest.finishedAt ?? nowIso(),
-      });
-      return;
+      stopBatch = true;
+      return cancelledBeatmapResult(beatmapId);
     }
 
-    processed++;
-    lastBeatmapId = beatmapId;
-    try {
-      await getCachedBeatmapFile(db, osu, beatmapId, "job:backfill_beatmap_osu_files");
-      if (await hasCompressedCachedFile(db, beatmapId)) {
-        stored++;
-      } else {
-        failed++;
-        lastError = `Store failed for beatmap ${beatmapId}`;
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (isTerminalBeatmapFileError(message)) {
-        await markCachedBeatmapFileUnavailable(db, beatmapId, {
-          error: message,
-          source: "unavailable",
-        }).catch(() => {});
-        unavailable++;
-        lastError = message;
-      } else {
-        failed++;
-        lastError = message;
-      }
-    }
-  }
+    return processBackfillBeatmap(db, osu, beatmapId);
+  });
 
   const latest = await readState(db);
   if (latest.runId !== payload.runId) return;
+  if (latest.status === "cancelled" || results.some((result) => result.cancelled)) {
+    await writeState(db, {
+      ...latest,
+      status: "cancelled",
+      updatedAt: nowIso(),
+      finishedAt: latest.finishedAt ?? nowIso(),
+    });
+    return;
+  }
+
+  const processed = results.reduce((sum, result) => sum + result.processed, 0);
+  const stored = results.reduce((sum, result) => sum + result.stored, 0);
+  const failed = results.reduce((sum, result) => sum + result.failed, 0);
+  const unavailable = results.reduce((sum, result) => sum + result.unavailable, 0);
+  const lastBeatmapId = results.reduce((max, result) => result.processed ? Math.max(max, result.beatmapId) : max, cursor);
+  let lastError: string | null = null;
+  for (const result of results) {
+    lastError = result.lastError ?? lastError;
+  }
+
   const updated: BackfillState = {
     ...latest,
-    status: latest.status === "cancelled" ? "cancelled" : "running",
+    status: "running",
     processed: latest.processed + processed,
     stored: latest.stored + stored,
     failed: latest.failed + failed,
@@ -250,10 +249,9 @@ export async function runBeatmapOsuFileBackfillJob(
     lastBeatmapId,
     lastError: lastError ?? latest.lastError,
     updatedAt: nowIso(),
-    finishedAt: latest.status === "cancelled" ? nowIso() : null,
+    finishedAt: null,
   };
   await writeState(db, updated);
-  if (updated.status === "cancelled") return;
 
   const counts = await readCacheCounts(db);
   if (counts.missing <= 0) {
@@ -262,6 +260,53 @@ export async function runBeatmapOsuFileBackfillJob(
   }
 
   await enqueueBackfillJob(queue, payload.runId, lastBeatmapId);
+}
+
+async function processBackfillBeatmap(db: Db, osu: OsuApiClient, beatmapId: number): Promise<BackfillBeatmapResult> {
+  try {
+    await getCachedBeatmapFile(db, osu, beatmapId, "job:backfill_beatmap_osu_files");
+    if (await hasCompressedCachedFile(db, beatmapId)) {
+      return beatmapResult(beatmapId, { stored: 1 });
+    }
+    return beatmapResult(beatmapId, { failed: 1, lastError: `Store failed for beatmap ${beatmapId}` });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (isTerminalBeatmapFileError(message)) {
+      await markCachedBeatmapFileUnavailable(db, beatmapId, {
+        error: message,
+        source: "unavailable",
+      }).catch(() => {});
+      return beatmapResult(beatmapId, { unavailable: 1, lastError: message });
+    }
+    return beatmapResult(beatmapId, { failed: 1, lastError: message });
+  }
+}
+
+function beatmapResult(
+  beatmapId: number,
+  result: Partial<Omit<BackfillBeatmapResult, "beatmapId" | "processed" | "cancelled">>,
+): BackfillBeatmapResult {
+  return {
+    beatmapId,
+    processed: 1,
+    stored: result.stored ?? 0,
+    failed: result.failed ?? 0,
+    unavailable: result.unavailable ?? 0,
+    lastError: result.lastError ?? null,
+    cancelled: false,
+  };
+}
+
+function cancelledBeatmapResult(beatmapId: number): BackfillBeatmapResult {
+  return {
+    beatmapId,
+    processed: 0,
+    stored: 0,
+    failed: 0,
+    unavailable: 0,
+    lastError: null,
+    cancelled: true,
+  };
 }
 
 async function finishRun(db: Db, runId: string, status: "done" | "failed", error: string | null): Promise<void> {
@@ -392,6 +437,24 @@ async function hasCompressedCachedFile(db: Db, beatmapId: number): Promise<boole
     [beatmapId],
   )).rows[0];
   return !!row;
+}
+
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  worker: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(Math.max(1, concurrency), items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor++;
+      const item = items[index];
+      if (item !== undefined) results[index] = await worker(item);
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
 
 function normalizeState(value: Partial<BackfillState> | null): BackfillState {

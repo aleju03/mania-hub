@@ -109,6 +109,38 @@ describe("beatmap .osu file backfill", () => {
       await cleanup();
     }
   });
+
+  it("fetches beatmap files concurrently inside a batch", async () => {
+    const { db, queue, cleanup } = await setupDb();
+    try {
+      for (let beatmapId = 301; beatmapId <= 306; beatmapId++) {
+        await seedReadyVector(db, beatmapId);
+      }
+      let activeFetches = 0;
+      let maxActiveFetches = 0;
+      const osu = {
+        getBeatmapFile: async (beatmapId: number) => {
+          activeFetches++;
+          maxActiveFetches = Math.max(maxActiveFetches, activeFetches);
+          await wait(20);
+          activeFetches--;
+          return buildBeatmapFile(beatmapId);
+        },
+      };
+
+      await startBeatmapOsuFileBackfill(db, queue);
+      const [job] = await queue.claim("test-worker", 1, { types: [BEATMAP_OSU_FILE_BACKFILL_JOB] });
+      await runBeatmapOsuFileBackfillJob(db, queue, osu as never, job.payload as { runId: string; cursor?: number });
+      await queue.complete(job.id);
+
+      const status = await getBeatmapOsuFileBackfillStatus(db);
+      expect(status.status).toBe("done");
+      expect(status.cached).toBe(6);
+      expect(maxActiveFetches).toBeGreaterThan(1);
+    } finally {
+      await cleanup();
+    }
+  });
 });
 
 async function setupDb(): Promise<{ db: Awaited<ReturnType<typeof createDb>>; queue: JobQueue; cleanup: () => Promise<void> }> {
@@ -129,6 +161,10 @@ async function seedReadyVector(db: Awaited<ReturnType<typeof createDb>>, beatmap
      values (?, 4, 'ready', '{}', '2026-01-01T00:00:00.000Z')`,
     [beatmapId],
   );
+}
+
+async function wait(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function buildBeatmapFile(beatmapId: number): string {
