@@ -10,7 +10,7 @@ export const REPLAY_BEATMAP_HITSOUNDS_STORAGE_KEY = "mania-hub-replay-beatmap-hi
 export const REPLAY_COMBOBREAK_SOUND_STORAGE_KEY = "mania-hub-replay-combobreak-sound";
 export const DEFAULT_REPLAY_VOLUME = 0.5;
 export const DEFAULT_REPLAY_BG_DIM = 80;
-export const DEFAULT_REPLAY_HITSOUND_VOLUME = 0.5;
+export const DEFAULT_REPLAY_HITSOUND_VOLUME = 0.1;
 
 function parseStoredNumber(value: unknown, fallback: number): number {
   if (value == null) return fallback;
