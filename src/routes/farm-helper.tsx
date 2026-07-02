@@ -1278,7 +1278,7 @@ function RecRow({
               +{formatPp(rec.estimatedPpGain)}
               <span className="text-xs font-bold text-osu-pink/70">pp</span>
             </div>
-            <div className="mt-1 text-[10px] text-osu-f1">{formatPp(rec.benchmarkPp)}pp benchmark</div>
+            <div className="mt-1 text-[10px] text-osu-f1">if you get {formatPp(rec.benchmarkPp)}pp</div>
           </div>
           <a
             href={rec.mapUrl}
