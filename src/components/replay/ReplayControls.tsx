@@ -18,8 +18,13 @@ interface ReplayControlsProps {
   modRate: number;
   audioEnabled: boolean;
   volume: number;
-  hitsoundsEnabled: boolean;
-  hitsoundVolume: number;
+  // False when no note references the map's own samples; the beatmap channel
+  // can never sound then, so its mixer row is hidden.
+  beatmapHitsoundsAvailable: boolean;
+  beatmapHitsoundsOn: boolean;
+  beatmapHitsoundVolume: number;
+  keypressHitsoundsOn: boolean;
+  keypressHitsoundVolume: number;
   showInputOverlay: boolean;
   inputOverlayOnly: boolean;
   inputOverlayKeyHistory: boolean;
@@ -37,8 +42,10 @@ interface ReplayControlsProps {
   onSetSpeed: (speed: number) => void;
   onToggleAudio: () => void;
   onSetVolume: (volume: number) => void;
-  onSetHitsoundVolume: (volume: number) => void;
-  onToggleHitsounds: () => void;
+  onSetBeatmapHitsoundVolume: (volume: number) => void;
+  onToggleBeatmapHitsounds: () => void;
+  onSetKeypressHitsoundVolume: (volume: number) => void;
+  onToggleKeypressHitsounds: () => void;
   onToggleInputOverlay: () => void;
   onToggleInputOverlayOnly: () => void;
   onToggleInputOverlayKeyHistory: () => void;
@@ -97,8 +104,11 @@ export function ReplayControls({
   modRate,
   audioEnabled,
   volume,
-  hitsoundsEnabled,
-  hitsoundVolume,
+  beatmapHitsoundsAvailable,
+  beatmapHitsoundsOn,
+  beatmapHitsoundVolume,
+  keypressHitsoundsOn,
+  keypressHitsoundVolume,
   showInputOverlay,
   inputOverlayOnly,
   inputOverlayKeyHistory,
@@ -116,8 +126,10 @@ export function ReplayControls({
   onSetSpeed,
   onToggleAudio,
   onSetVolume,
-  onSetHitsoundVolume,
-  onToggleHitsounds,
+  onSetBeatmapHitsoundVolume,
+  onToggleBeatmapHitsounds,
+  onSetKeypressHitsoundVolume,
+  onToggleKeypressHitsounds,
   onToggleInputOverlay,
   onToggleInputOverlayOnly,
   onToggleInputOverlayKeyHistory,
@@ -422,12 +434,21 @@ export function ReplayControls({
                       onChange={onSetVolume}
                       onToggle={onToggleAudio}
                     />
+                    {beatmapHitsoundsAvailable && (
+                      <VolumeMixerRow
+                        label="Beatmap hitsounds"
+                        display={beatmapHitsoundsOn ? `${Math.round(beatmapHitsoundVolume * 100)}%` : "off"}
+                        value={beatmapHitsoundsOn ? beatmapHitsoundVolume : 0}
+                        onChange={onSetBeatmapHitsoundVolume}
+                        onToggle={onToggleBeatmapHitsounds}
+                      />
+                    )}
                     <VolumeMixerRow
-                      label="Hitsounds"
-                      display={hitsoundsEnabled ? `${Math.round(hitsoundVolume * 100)}%` : "off"}
-                      value={hitsoundsEnabled ? hitsoundVolume : 0}
-                      onChange={onSetHitsoundVolume}
-                      onToggle={onToggleHitsounds}
+                      label={beatmapHitsoundsAvailable ? "Key hitsounds" : "Hitsounds"}
+                      display={keypressHitsoundsOn ? `${Math.round(keypressHitsoundVolume * 100)}%` : "off"}
+                      value={keypressHitsoundsOn ? keypressHitsoundVolume : 0}
+                      onChange={onSetKeypressHitsoundVolume}
+                      onToggle={onToggleKeypressHitsounds}
                     />
                   </div>
                 </motion.div>

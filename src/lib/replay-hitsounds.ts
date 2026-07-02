@@ -193,7 +193,10 @@ const DEFAULT_SAMPLE_FILES = [
   "combobreak.mp3",
 ];
 
-const MAX_CONCURRENT_SOURCES = 24;
+// Polyphony cap. The default samples carry long reverb tails (~0.8-1.2s), so
+// dense chords keep many voices alive at once; hitting the cap steals the
+// oldest (quietest) voice rather than dropping the new sound.
+const MAX_CONCURRENT_SOURCES = 48;
 
 function normalizeSampleKey(name: string): string {
   return name
@@ -206,18 +209,28 @@ function sampleBaseName(key: string): string {
   return key.slice(key.lastIndexOf("/") + 1);
 }
 
+interface ActiveVoice {
+  source: AudioBufferSourceNode;
+  gain: GainNode;
+}
+
+// Two independent output channels: samples resolved from the beatmap folder
+// (keysounds, custom banks) vs press feedback from the skin/default samples.
+export type HitsoundChannel = "beatmap" | "keypress";
+
 export class ReplayHitsoundPlayer {
   private context: AudioContext | null = null;
-  private masterGain: GainNode | null = null;
+  private channelGains: Record<HitsoundChannel, GainNode> | null = null;
   private raw = new Map<string, ArrayBuffer>();
   private decoded = new Map<string, AudioBuffer | null>();
   private decoding = new Set<string>();
-  private activeSources = 0;
+  private activeVoices: ActiveVoice[] = [];
   private enabled = true;
   private muted = false;
   private comboBreakEnabled = true;
   private useBeatmapSamples = true;
-  private volume = 0.5;
+  private keypressSoundsEnabled = true;
+  private channelVolumes: Record<HitsoundChannel, number> = { beatmap: 0.5, keypress: 0.5 };
   private defaultsLoaded: Promise<void> | null = null;
 
   setEnabled(enabled: boolean): void {
@@ -237,9 +250,13 @@ export class ReplayHitsoundPlayer {
     this.useBeatmapSamples = use;
   }
 
-  setVolume(volume: number): void {
-    this.volume = Math.max(0, Math.min(1, volume));
-    if (this.masterGain) this.masterGain.gain.value = this.volume;
+  setKeypressSoundsEnabled(enabled: boolean): void {
+    this.keypressSoundsEnabled = enabled;
+  }
+
+  setChannelVolume(channel: HitsoundChannel, volume: number): void {
+    this.channelVolumes[channel] = Math.max(0, Math.min(1, volume));
+    if (this.channelGains) this.channelGains[channel].gain.value = this.channelVolumes[channel];
   }
 
   loadDefaultSamples(): Promise<void> {
@@ -296,25 +313,32 @@ export class ReplayHitsoundPlayer {
     for (const play of plays) {
       const key = this.resolvePlayKey(play);
       if (!key) continue;
+      const channel: HitsoundChannel = key.startsWith("beatmap:") ? "beatmap" : "keypress";
+      // "Key press hitsounds off" silences skin/default feedback while the
+      // map's own samples keep playing.
+      if (channel === "keypress" && !this.keypressSoundsEnabled) continue;
       const mappedVolume = Math.max(play.volume, HITSOUND_MINIMUM_VOLUME) / 100;
-      this.playBuffer(key, mappedVolume);
+      this.playBuffer(key, mappedVolume, channel);
     }
   }
 
   playComboBreak(): void {
     if (!this.enabled || this.muted || !this.comboBreakEnabled) return;
     const key = this.resolveSampleKey("combobreak", null);
-    if (key) this.playBuffer(key, 1);
+    // Gated only by its own toggle, but it rides the key press channel volume
+    // since it is feedback, not part of the map's sound design.
+    if (key) this.playBuffer(key, 1, "keypress");
   }
 
   destroy(): void {
     this.raw.clear();
     this.decoded.clear();
     this.decoding.clear();
+    this.activeVoices = [];
     if (this.context) {
       void this.context.close().catch(() => {});
       this.context = null;
-      this.masterGain = null;
+      this.channelGains = null;
     }
   }
 
@@ -325,9 +349,16 @@ export class ReplayHitsoundPlayer {
         ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!Ctor) return null;
       this.context = new Ctor({ latencyHint: "interactive" });
-      this.masterGain = this.context.createGain();
-      this.masterGain.gain.value = this.volume;
-      this.masterGain.connect(this.context.destination);
+      const makeChannel = (volume: number) => {
+        const gain = this.context!.createGain();
+        gain.gain.value = volume;
+        gain.connect(this.context!.destination);
+        return gain;
+      };
+      this.channelGains = {
+        beatmap: makeChannel(this.channelVolumes.beatmap),
+        keypress: makeChannel(this.channelVolumes.keypress),
+      };
     }
     return this.context;
   }
@@ -403,11 +434,10 @@ export class ReplayHitsoundPlayer {
     return null;
   }
 
-  private playBuffer(key: string, volume: number): void {
+  private playBuffer(key: string, volume: number, channel: HitsoundChannel): void {
     const context = this.ensureContext();
-    const masterGain = this.masterGain;
-    if (!context || !masterGain || context.state !== "running") return;
-    if (this.activeSources >= MAX_CONCURRENT_SOURCES) return;
+    const channelGain = this.channelGains?.[channel];
+    if (!context || !channelGain || context.state !== "running") return;
 
     const buffer = this.decoded.get(key);
     if (buffer === undefined) {
@@ -416,22 +446,39 @@ export class ReplayHitsoundPlayer {
     }
     if (buffer === null) return;
 
+    // At the polyphony cap, steal the oldest voice (short fade to avoid a
+    // click) instead of dropping the new sound; skipping new hitsounds makes
+    // dense charts pulse audibly.
+    while (this.activeVoices.length >= MAX_CONCURRENT_SOURCES) {
+      const oldest = this.activeVoices.shift();
+      if (!oldest) break;
+      try {
+        oldest.gain.gain.setTargetAtTime(0, context.currentTime, 0.005);
+        oldest.source.stop(context.currentTime + 0.03);
+      } catch {
+        // Already stopped; its onended cleanup has run or will run.
+      }
+    }
+
     const source = context.createBufferSource();
     source.buffer = buffer;
     const gain = context.createGain();
     gain.gain.value = volume;
     source.connect(gain);
-    gain.connect(masterGain);
-    this.activeSources++;
+    gain.connect(channelGain);
+    const voice: ActiveVoice = { source, gain };
+    this.activeVoices.push(voice);
     source.onended = () => {
-      this.activeSources = Math.max(0, this.activeSources - 1);
+      const index = this.activeVoices.indexOf(voice);
+      if (index !== -1) this.activeVoices.splice(index, 1);
       source.disconnect();
       gain.disconnect();
     };
     try {
       source.start();
     } catch {
-      this.activeSources = Math.max(0, this.activeSources - 1);
+      const index = this.activeVoices.indexOf(voice);
+      if (index !== -1) this.activeVoices.splice(index, 1);
     }
   }
 }

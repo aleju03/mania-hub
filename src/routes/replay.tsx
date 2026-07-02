@@ -1581,6 +1581,10 @@ function ReplayViewer({
   const [audioReady, setAudioReady] = useState(false);
   const [pendingPlay, setPendingPlay] = useState(false);
   const [buffering, setBuffering] = useState(false);
+  // Full copy of the song downloaded in the background once playback starts;
+  // the <audio> element is swapped to this blob: URL so network hiccups can't
+  // stall the replay mid-play.
+  const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
   const [bgSrc, setBgSrc] = useState<string | null>(null);
   const [localReplayVideoExportAvailable, setLocalReplayVideoExportAvailable] = useState(false);
   const [videoExport, setVideoExport] = useState<ReplayVideoExportState>({
@@ -1608,6 +1612,10 @@ function ReplayViewer({
   const skinSettingsRef = useRef<ReplaySkinSettings>(skinSettings);
   const overlaySettingsRef = useRef<ReplayOverlaySettings>(overlaySettings);
   const shouldResumeAudioRef = useRef(false);
+  const audioBlobUrlRef = useRef<string | null>(null);
+  const audioBlobFetchKeyRef = useRef<string | null>(null);
+  const audioBlobAbortRef = useRef<AbortController | null>(null);
+  const audioResyncDoneRef = useRef<string | null>(null);
   const volumeRef = useRef(volume);
   const recoveredVideoScoreIdRef = useRef<number | null>(null);
   const replayEndAudioFadeActiveRef = useRef(false);
@@ -1828,6 +1836,10 @@ function ReplayViewer({
   const audioUrl = effectiveBeatmapsetId && beatmap?.audioFilename
     ? getBeatmapAudioUrl(effectiveBeatmapsetId, beatmap.audioFilename)
     : null;
+  // What the <audio> element actually plays: the local blob once downloaded,
+  // the streaming URL until then. Everything else (video export, hitsounds)
+  // keeps using audioUrl.
+  const effectiveAudioSrc = audioBlobUrl ?? audioUrl;
   const coverUrl = scoreInfo?.beatmapset?.covers?.["cover@2x"] || scoreInfo?.beatmapset?.covers?.cover || null;
   const coverProxyUrl = effectiveBeatmapsetId
     ? `/api/background?beatmapsetId=${encodeURIComponent(String(effectiveBeatmapsetId))}`
@@ -1949,6 +1961,80 @@ function ReplayViewer({
     audioUrlActiveRef.current = !!audioUrl;
   }, [audioUrl, cancelReplayEndAudioFade]);
 
+  // When the song changes (or on unmount), drop the background full-download
+  // state: abort an in-flight fetch and release the previous blob.
+  useEffect(() => {
+    return () => {
+      audioBlobAbortRef.current?.abort();
+      audioBlobAbortRef.current = null;
+      audioBlobFetchKeyRef.current = null;
+      audioResyncDoneRef.current = null;
+      if (audioBlobUrlRef.current) {
+        URL.revokeObjectURL(audioBlobUrlRef.current);
+        audioBlobUrlRef.current = null;
+      }
+      setAudioBlobUrl(null);
+    };
+  }, [audioUrl]);
+
+  // Once playback starts, download the whole song in the background and hand
+  // the <audio> element a local blob: URL. Streaming keeps startup instant;
+  // the blob makes mid-play network stalls impossible afterwards.
+  useEffect(() => {
+    if (!audioUrl || !audioEnabled || !isPlaying || audioError) return;
+    if (audioBlobFetchKeyRef.current === audioUrl) return;
+    audioBlobFetchKeyRef.current = audioUrl;
+    const controller = new AbortController();
+    audioBlobAbortRef.current = controller;
+    void (async () => {
+      try {
+        const response = await fetch(audioUrl, { signal: controller.signal });
+        if (!response.ok) throw new Error(`audio download failed (${response.status})`);
+        const blob = await response.blob();
+        if (controller.signal.aborted) return;
+        const objectUrl = URL.createObjectURL(blob);
+        audioBlobUrlRef.current = objectUrl;
+        setAudioBlobUrl(objectUrl);
+      } catch {
+        // Streaming playback keeps working; allow another attempt on the
+        // next pause/play cycle.
+        if (audioBlobFetchKeyRef.current === audioUrl) {
+          audioBlobFetchKeyRef.current = null;
+        }
+      }
+    })();
+  }, [audioUrl, audioEnabled, isPlaying, audioError]);
+
+  // Swapping the element's src (streaming -> blob, or back after a blob
+  // failure) runs the media load algorithm, which resets position, rate, and
+  // pause state. Once the new source's metadata is in, put the element back
+  // where the renderer is and resume if the replay is running.
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !effectiveAudioSrc) return;
+    if (audioResyncDoneRef.current === effectiveAudioSrc) return;
+    const resync = () => {
+      if (audioResyncDoneRef.current === effectiveAudioSrc) return;
+      audioResyncDoneRef.current = effectiveAudioSrc;
+      const r = rendererRef.current;
+      if (r) audio.currentTime = r.time / 1000;
+      audio.playbackRate = effectiveRate;
+      setAudioPreservesPitch(audio, audioPreservesPitch);
+      if (!replayEndAudioFadeActiveRef.current) audio.volume = volume;
+      if (isPlaying && audioEnabled && r?.isPlaying) {
+        audio.play().catch(() => {
+          shouldResumeAudioRef.current = true;
+        });
+      }
+    };
+    if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) {
+      resync();
+      return;
+    }
+    audio.addEventListener("loadedmetadata", resync, { once: true });
+    return () => audio.removeEventListener("loadedmetadata", resync);
+  }, [effectiveAudioSrc, effectiveRate, audioPreservesPitch, volume, isPlaying, audioEnabled]);
+
   useEffect(() => {
     volumeRef.current = volume;
   }, [volume]);
@@ -2005,8 +2091,10 @@ function ReplayViewer({
     hitsoundPlayerRef.current = player;
     const initial = readReplayAudioSettings();
     player.setEnabled(initial.hitsoundsEnabled);
-    player.setVolume(initial.hitsoundVolume);
     player.setUseBeatmapSamples(initial.beatmapHitsounds);
+    player.setChannelVolume("beatmap", initial.beatmapHitsoundVolume);
+    player.setKeypressSoundsEnabled(initial.keypressHitsounds);
+    player.setChannelVolume("keypress", initial.keypressHitsoundVolume);
     player.setComboBreakEnabled(initial.comboBreakSound);
     void player.loadDefaultSamples();
 
@@ -2034,14 +2122,25 @@ function ReplayViewer({
     const player = hitsoundPlayerRef.current;
     if (!player) return;
     player.setEnabled(audioSettings.hitsoundsEnabled);
-    player.setVolume(audioSettings.hitsoundVolume);
     player.setUseBeatmapSamples(audioSettings.beatmapHitsounds);
+    player.setChannelVolume("beatmap", audioSettings.beatmapHitsoundVolume);
+    player.setKeypressSoundsEnabled(audioSettings.keypressHitsounds);
+    player.setChannelVolume("keypress", audioSettings.keypressHitsoundVolume);
     player.setComboBreakEnabled(audioSettings.comboBreakSound);
   }, [audioSettings]);
 
   useEffect(() => {
     hitsoundPlayerRef.current?.setMuted(!audioEnabled);
   }, [audioEnabled]);
+
+  // Whether any note references the beatmapset's own samples (keysounds or
+  // custom bank indices). Nothing can play on the beatmap hitsound channel
+  // without them, so this also decides whether that mixer row is shown.
+  const hasBeatmapHitsounds = useMemo(
+    () => beatmap != null && beatmap.notes.some((note) =>
+      note.sample != null && (note.sample.filename != null || note.sample.index >= 1)),
+    [beatmap],
+  );
 
   // Fetch the beatmapset's own hitsound files (keysounds / custom bank
   // samples) when the chart references them.
@@ -2050,9 +2149,7 @@ function ReplayViewer({
     if (!player || !beatmap) return;
     player.setBeatmapSamples(null);
     if (!audioSettings.hitsoundsEnabled || !audioSettings.beatmapHitsounds) return;
-    const needsBeatmapSamples = beatmap.notes.some((note) =>
-      note.sample != null && (note.sample.filename != null || note.sample.index >= 1));
-    if (!needsBeatmapSamples || !effectiveBeatmapsetId) return;
+    if (!hasBeatmapHitsounds || !effectiveBeatmapsetId) return;
     const url = getBeatmapHitsoundsUrl(effectiveBeatmapsetId, beatmap.audioFilename || null);
     if (!url) return;
 
@@ -2078,7 +2175,7 @@ function ReplayViewer({
     return () => {
       cancelled = true;
     };
-  }, [beatmap, effectiveBeatmapsetId, audioSettings.hitsoundsEnabled, audioSettings.beatmapHitsounds]);
+  }, [beatmap, hasBeatmapHitsounds, effectiveBeatmapsetId, audioSettings.hitsoundsEnabled, audioSettings.beatmapHitsounds]);
 
   // Create renderer
   useEffect(() => {
@@ -2464,6 +2561,16 @@ function ReplayViewer({
 
 
   const handleAudioError = () => {
+    // A failing blob copy shouldn't kill audio: fall back to streaming from
+    // the network and don't retry the blob for this song
+    // (audioBlobFetchKeyRef stays set).
+    if (audioBlobUrl) {
+      audioResyncDoneRef.current = null;
+      audioBlobUrlRef.current = null;
+      URL.revokeObjectURL(audioBlobUrl);
+      setAudioBlobUrl(null);
+      return;
+    }
     cancelReplayEndAudioFade();
     setAudioError("Couldn't load the song audio for this replay.");
     shouldResumeAudioRef.current = false;
@@ -2974,11 +3081,14 @@ function ReplayViewer({
         )}
       </div>
 
-      {/* Audio element (hidden) — streamed from /api/audio with Range requests so the browser only pulls what it plays */}
+      {/* Audio element (hidden). Starts streaming from /api/audio with Range
+          requests (only pulls what it plays), then swaps to a fully-downloaded
+          blob: URL once playback begins so a flaky connection can't stall the
+          replay mid-play. */}
       {audioUrl && (
         <audio
           ref={audioRef}
-          src={audioUrl}
+          src={audioBlobUrl ?? audioUrl}
           preload="metadata"
           onError={handleAudioError}
         />
@@ -2996,8 +3106,11 @@ function ReplayViewer({
         modRate={modRate}
         audioEnabled={audioEnabled}
         volume={volume}
-        hitsoundsEnabled={audioSettings.hitsoundsEnabled}
-        hitsoundVolume={audioSettings.hitsoundVolume}
+        beatmapHitsoundsAvailable={hasBeatmapHitsounds}
+        beatmapHitsoundsOn={audioSettings.hitsoundsEnabled && audioSettings.beatmapHitsounds}
+        beatmapHitsoundVolume={audioSettings.beatmapHitsoundVolume}
+        keypressHitsoundsOn={audioSettings.hitsoundsEnabled && audioSettings.keypressHitsounds}
+        keypressHitsoundVolume={audioSettings.keypressHitsoundVolume}
         showInputOverlay={showInputOverlay}
         inputOverlayOnly={inputOverlayOnly}
         inputOverlayKeyHistory={inputOverlayKeyHistory}
@@ -3028,17 +3141,42 @@ function ReplayViewer({
           if (!audioEnabled && normalized > 0) setAudioEnabled(true);
           if (audioRef.current && !replayEndAudioFadeActiveRef.current) audioRef.current.volume = normalized;
         }}
-        onSetHitsoundVolume={(nextVolume) => {
+        onSetBeatmapHitsoundVolume={(nextVolume) => {
           const normalized = Math.max(0, Math.min(1, nextVolume));
           setAudioSettings((current) => ({
             ...current,
-            hitsoundVolume: normalized,
-            // Dragging the slider up from "off" re-enables hitsounds.
-            hitsoundsEnabled: normalized > 0 ? true : current.hitsoundsEnabled,
+            beatmapHitsoundVolume: normalized,
+            // Dragging the slider up from "off" re-enables the channel.
+            ...(normalized > 0 ? { beatmapHitsounds: true, hitsoundsEnabled: true } : {}),
           }));
         }}
-        onToggleHitsounds={() => {
-          setAudioSettings((current) => ({ ...current, hitsoundsEnabled: !current.hitsoundsEnabled }));
+        onToggleBeatmapHitsounds={() => {
+          setAudioSettings((current) => {
+            const nextOn = !(current.hitsoundsEnabled && current.beatmapHitsounds);
+            return {
+              ...current,
+              beatmapHitsounds: nextOn,
+              hitsoundsEnabled: nextOn ? true : current.hitsoundsEnabled,
+            };
+          });
+        }}
+        onSetKeypressHitsoundVolume={(nextVolume) => {
+          const normalized = Math.max(0, Math.min(1, nextVolume));
+          setAudioSettings((current) => ({
+            ...current,
+            keypressHitsoundVolume: normalized,
+            ...(normalized > 0 ? { keypressHitsounds: true, hitsoundsEnabled: true } : {}),
+          }));
+        }}
+        onToggleKeypressHitsounds={() => {
+          setAudioSettings((current) => {
+            const nextOn = !(current.hitsoundsEnabled && current.keypressHitsounds);
+            return {
+              ...current,
+              keypressHitsounds: nextOn,
+              hitsoundsEnabled: nextOn ? true : current.hitsoundsEnabled,
+            };
+          });
         }}
         onToggleInputOverlay={() => setShowInputOverlay((value) => !value)}
         onToggleInputOverlayOnly={() => setInputOverlayOnly((value) => !value)}

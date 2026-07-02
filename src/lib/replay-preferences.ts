@@ -5,8 +5,12 @@ export const REPLAY_INPUT_KEY_HISTORY_STORAGE_KEY = "mania-hub-replay-input-key-
 export const REPLAY_INPUT_COLOR_STORAGE_KEY = "mania-hub-replay-input-color";
 export const REPLAY_BG_DIM_STORAGE_KEY = "mania-hub-replay-bg-dim";
 export const REPLAY_HITSOUNDS_STORAGE_KEY = "mania-hub-replay-hitsounds";
+// Historical key: held the single hitsound volume before the beatmap/key
+// press split; now stores the key press channel so old values carry over.
 export const REPLAY_HITSOUND_VOLUME_STORAGE_KEY = "mania-hub-replay-hitsound-volume";
 export const REPLAY_BEATMAP_HITSOUNDS_STORAGE_KEY = "mania-hub-replay-beatmap-hitsounds";
+export const REPLAY_BEATMAP_HITSOUND_VOLUME_STORAGE_KEY = "mania-hub-replay-beatmap-hitsound-volume";
+export const REPLAY_KEYPRESS_HITSOUNDS_STORAGE_KEY = "mania-hub-replay-keypress-hitsounds";
 export const REPLAY_COMBOBREAK_SOUND_STORAGE_KEY = "mania-hub-replay-combobreak-sound";
 export const DEFAULT_REPLAY_VOLUME = 0.5;
 export const DEFAULT_REPLAY_BG_DIM = 80;
@@ -127,14 +131,27 @@ export function writeReplayHitsoundsEnabled(enabled: boolean): void {
   writeStoredBoolean(REPLAY_HITSOUNDS_STORAGE_KEY, enabled);
 }
 
-export function readReplayHitsoundVolume(): number {
+export function readReplayKeypressHitsoundVolume(): number {
   if (typeof window === "undefined") return DEFAULT_REPLAY_HITSOUND_VOLUME;
   return normalizeReplayHitsoundVolume(window.localStorage.getItem(REPLAY_HITSOUND_VOLUME_STORAGE_KEY));
 }
 
-export function writeReplayHitsoundVolume(volume: number): void {
+export function writeReplayKeypressHitsoundVolume(volume: number): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(REPLAY_HITSOUND_VOLUME_STORAGE_KEY, String(normalizeReplayHitsoundVolume(volume)));
+}
+
+export function readReplayBeatmapHitsoundVolume(): number {
+  if (typeof window === "undefined") return DEFAULT_REPLAY_HITSOUND_VOLUME;
+  const stored = window.localStorage.getItem(REPLAY_BEATMAP_HITSOUND_VOLUME_STORAGE_KEY);
+  // Pre-split preference: both channels start at the old single volume.
+  if (stored == null) return readReplayKeypressHitsoundVolume();
+  return normalizeReplayHitsoundVolume(stored);
+}
+
+export function writeReplayBeatmapHitsoundVolume(volume: number): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(REPLAY_BEATMAP_HITSOUND_VOLUME_STORAGE_KEY, String(normalizeReplayHitsoundVolume(volume)));
 }
 
 export function readReplayBeatmapHitsounds(): boolean {
@@ -143,6 +160,14 @@ export function readReplayBeatmapHitsounds(): boolean {
 
 export function writeReplayBeatmapHitsounds(enabled: boolean): void {
   writeStoredBoolean(REPLAY_BEATMAP_HITSOUNDS_STORAGE_KEY, enabled);
+}
+
+export function readReplayKeypressHitsounds(): boolean {
+  return readStoredBoolean(REPLAY_KEYPRESS_HITSOUNDS_STORAGE_KEY, true);
+}
+
+export function writeReplayKeypressHitsounds(enabled: boolean): void {
+  writeStoredBoolean(REPLAY_KEYPRESS_HITSOUNDS_STORAGE_KEY, enabled);
 }
 
 export function readReplayComboBreakSound(): boolean {
@@ -155,23 +180,31 @@ export function writeReplayComboBreakSound(enabled: boolean): void {
 
 export interface ReplayAudioSettings {
   hitsoundsEnabled: boolean;
-  hitsoundVolume: number;
+  // Samples from the beatmap folder (keysounds, custom bank samples).
   beatmapHitsounds: boolean;
+  beatmapHitsoundVolume: number;
+  // Press feedback resolved from the skin or the bundled defaults.
+  keypressHitsounds: boolean;
+  keypressHitsoundVolume: number;
   comboBreakSound: boolean;
 }
 
 export function readReplayAudioSettings(): ReplayAudioSettings {
   return {
     hitsoundsEnabled: readReplayHitsoundsEnabled(),
-    hitsoundVolume: readReplayHitsoundVolume(),
     beatmapHitsounds: readReplayBeatmapHitsounds(),
+    beatmapHitsoundVolume: readReplayBeatmapHitsoundVolume(),
+    keypressHitsounds: readReplayKeypressHitsounds(),
+    keypressHitsoundVolume: readReplayKeypressHitsoundVolume(),
     comboBreakSound: readReplayComboBreakSound(),
   };
 }
 
 export function writeReplayAudioSettings(settings: ReplayAudioSettings): void {
   writeReplayHitsoundsEnabled(settings.hitsoundsEnabled);
-  writeReplayHitsoundVolume(settings.hitsoundVolume);
   writeReplayBeatmapHitsounds(settings.beatmapHitsounds);
+  writeReplayBeatmapHitsoundVolume(settings.beatmapHitsoundVolume);
+  writeReplayKeypressHitsounds(settings.keypressHitsounds);
+  writeReplayKeypressHitsoundVolume(settings.keypressHitsoundVolume);
   writeReplayComboBreakSound(settings.comboBreakSound);
 }

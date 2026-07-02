@@ -766,6 +766,7 @@ def main() -> int:
         "hitEventCount": 0,
         "lastErrorMessage": None,
         "missEventCount": 0,
+        "resetCount": 0,
         "sampleCount": 0,
         "sourceChangeCount": 0,
         "scoreboardChangeCount": 0,
@@ -775,6 +776,8 @@ def main() -> int:
     previous_signature = None
     previous_source_signature = None
     previous_hit_error_count: int | None = None
+    previous_state_name: str | None = None
+    previous_total_hits: int | None = None
     queued_initial_raw = initial_raw
     config = merge_config({}, extract_config(initial_raw))
     final_play: dict[str, Any] | None = None
@@ -799,7 +802,7 @@ def main() -> int:
             "includeRawHitErrors": None if args.no_raw or args.full_raw else ("all" if args.full_hit_errors else "count-or-scoreboard-changes"),
             "intervalMs": args.interval,
             "label": args.label,
-            "schemaVersion": 4,
+            "schemaVersion": 5,
             "startedAt": started_at,
             "tool": "replay_capture_stable.py",
         })
@@ -823,7 +826,9 @@ def main() -> int:
                     should_write = args.all or scoreboard_changed or source_changed or delta is not None
 
                     config = merge_config(config, extract_config(raw))
-                    config = merge_config(config, {"beatmap": normalized["beatmap"]})
+                    # Merge beatmap identity per field so a poll that blanks some
+                    # of it (main menu, map change) cannot clobber known values.
+                    config["beatmap"] = merge_config(config.get("beatmap") or {}, normalized["beatmap"])
 
                     stats["sampleCount"] += 1
                     if scoreboard_changed:
@@ -833,12 +838,48 @@ def main() -> int:
                     if delta:
                         stats["countChangeCount"] += 1
 
+                    # A new play makes the final-state trackers stale. Entering
+                    # the play state, or hit totals dropping while playing (a
+                    # retry, or a backwards seek while watching a replay), starts
+                    # a fresh play segment: preserve the finished segment's final
+                    # block in a reset row, then wipe the trackers. The results
+                    # screen clearing the hit-error array is NOT a reset; state
+                    # is no longer "play" there, so the finals survive it.
+                    state_name = normalized["stateName"]
+                    total_hits = normalized["totalHits"] or 0
+                    entered_play = state_name == "play" and previous_state_name != "play"
+                    replay_restarted = (
+                        state_name == "play"
+                        and previous_state_name == "play"
+                        and previous_total_hits is not None
+                        and total_hits < previous_total_hits
+                    )
+                    if (entered_play or replay_restarted) and (final_play_total > 0 or final_hit_errors):
+                        write_json_line(handle, {
+                            "type": "reset",
+                            "capturedAt": utc_now(),
+                            "elapsedMs": round(elapsed_ms, 3),
+                            "final": build_final(result_snapshot, final_play, final_unstable_rate, final_hit_errors),
+                            "reason": "restart" if replay_restarted else "entered-play",
+                            "sequence": stats["sampleCount"],
+                        })
+                        stats["resetCount"] += 1
+                        final_play = None
+                        final_play_total = -1
+                        final_unstable_rate = None
+                        final_hit_errors = []
+                        result_snapshot = None
+                        # Rebase the hit-event stream conservatively: entries
+                        # already in the array on this poll are not replayed.
+                        previous_hit_error_count = None
+                        if not args.quiet:
+                            print(f"[capture] play segment reset ({'restart' if replay_restarted else 'entered play'})", flush=True)
+
                     # Track the authoritative final state. The snapshot with the
                     # most total hits is the end of play; the results screen (when
                     # present) is preferred for counts/accuracy/score at summary
                     # time. UR and the full hit-error array only exist while
                     # playing, so keep the last non-null UR and the longest array.
-                    total_hits = normalized["totalHits"] or 0
                     if total_hits >= final_play_total:
                         final_play_total = total_hits
                         final_play = {
@@ -891,7 +932,7 @@ def main() -> int:
                                 "elapsedMs": round(elapsed_ms, 3),
                                 "mapTime": normalized.get("currentTime"),
                             })
-                            stats["missEventCount"] += 1
+                            stats["missEventCount"] += delta["countMiss"]
 
                     if should_write:
                         row = {
@@ -916,6 +957,8 @@ def main() -> int:
                     previous_counts = normalized["counts"]
                     previous_signature = signature
                     previous_source_signature = source_sig
+                    previous_state_name = state_name
+                    previous_total_hits = total_hits
                 except Exception as exc:
                     message = str(exc)
                     stats["errorCount"] += 1
@@ -953,7 +996,7 @@ def main() -> int:
         print(
             f"Samples polled {stats['sampleCount']}, samples written {stats['writtenSamples']}, "
             f"count changes {stats['countChangeCount']}, hit events {stats['hitEventCount']}, "
-            f"misses {stats['missEventCount']}, errors {stats['errorCount']}."
+            f"misses {stats['missEventCount']}, resets {stats['resetCount']}, errors {stats['errorCount']}."
         )
 
     return 0

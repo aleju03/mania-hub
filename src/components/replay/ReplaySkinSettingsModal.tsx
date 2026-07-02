@@ -147,6 +147,27 @@ function fallbackPreviewBarColors(keyCount: number): string[] {
     ?? Array.from({ length: keyCount }, (_, i) => `#${Math.floor(0xffffff * (0.45 + 0.55 * Math.sin((i / keyCount) * Math.PI))).toString(16).padStart(6, "0")}`);
 }
 
+function HitsoundVolumeSlider({ value, onChange }: { value: number; onChange: (volume: number) => void }) {
+  const percent = Math.round(value * 100);
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={1}
+        value={percent}
+        onChange={(event) => onChange(Number(event.target.value) / 100)}
+        className="h-1.5 w-full cursor-pointer appearance-none rounded-full accent-osu-pink"
+        style={{
+          background: `linear-gradient(90deg, var(--color-osu-pink, #e83c90) 0%, var(--color-osu-pink, #e83c90) ${percent}%, rgba(38, 38, 51, 0.9) ${percent}%, rgba(38, 38, 51, 0.9) 100%)`,
+        }}
+      />
+      <span className="w-8 shrink-0 text-right text-xs font-semibold tabular-nums text-osu-f1">{percent}%</span>
+    </div>
+  );
+}
+
 function getColumnArrowDirection(col: number, keyCount: number): ArrowDirection {
   if (keyCount <= 1) return "down";
   if (col === 0) return "left";
@@ -1331,33 +1352,41 @@ export function ReplaySkinSettingsModal({
 
                 <div className={`space-y-4 ${audioSettings.hitsoundsEnabled ? "" : "pointer-events-none opacity-40"}`}>
                   <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-sm font-semibold text-osu-l1">
-                      <span>Hitsound volume</span>
-                      <span className="text-xs font-semibold text-osu-f1">{Math.round(audioSettings.hitsoundVolume * 100)}%</span>
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <span className="text-sm font-semibold text-osu-l1">Beatmap hitsounds</span>
+                        <div className="text-[10px] text-osu-f1">The map's own samples and keysounds, when it has them.</div>
+                      </div>
+                      <ReplaySkinSwitch
+                        checked={audioSettings.beatmapHitsounds}
+                        onChange={(checked) => updateAudioSettings({ beatmapHitsounds: checked })}
+                      />
                     </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      step={1}
-                      value={Math.round(audioSettings.hitsoundVolume * 100)}
-                      onChange={(event) => updateAudioSettings({ hitsoundVolume: Number(event.target.value) / 100 })}
-                      className="h-1.5 w-full cursor-pointer appearance-none rounded-full accent-osu-pink"
-                      style={{
-                        background: `linear-gradient(90deg, var(--color-osu-pink, #e83c90) 0%, var(--color-osu-pink, #e83c90) ${audioSettings.hitsoundVolume * 100}%, rgba(38, 38, 51, 0.9) ${audioSettings.hitsoundVolume * 100}%, rgba(38, 38, 51, 0.9) 100%)`,
-                      }}
-                    />
+                    <div className={audioSettings.beatmapHitsounds ? "" : "pointer-events-none opacity-40"}>
+                      <HitsoundVolumeSlider
+                        value={audioSettings.beatmapHitsoundVolume}
+                        onChange={(volume) => updateAudioSettings({ beatmapHitsoundVolume: volume })}
+                      />
+                    </div>
                   </div>
 
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <span className="text-sm font-semibold text-osu-l1">Beatmap hitsounds</span>
-                      <div className="text-[10px] text-osu-f1">Use the map's own samples and keysounds when it has them.</div>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <span className="text-sm font-semibold text-osu-l1">Key press hitsounds</span>
+                        <div className="text-[10px] text-osu-f1">Press feedback from your skin or the default samples. Turn off to hear only the map's own hitsounds.</div>
+                      </div>
+                      <ReplaySkinSwitch
+                        checked={audioSettings.keypressHitsounds}
+                        onChange={(checked) => updateAudioSettings({ keypressHitsounds: checked })}
+                      />
                     </div>
-                    <ReplaySkinSwitch
-                      checked={audioSettings.beatmapHitsounds}
-                      onChange={(checked) => updateAudioSettings({ beatmapHitsounds: checked })}
-                    />
+                    <div className={audioSettings.keypressHitsounds ? "" : "pointer-events-none opacity-40"}>
+                      <HitsoundVolumeSlider
+                        value={audioSettings.keypressHitsoundVolume}
+                        onChange={(volume) => updateAudioSettings({ keypressHitsoundVolume: volume })}
+                      />
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-between gap-3">

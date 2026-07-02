@@ -2,11 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_REPLAY_BG_DIM,
   DEFAULT_REPLAY_VOLUME,
+  DEFAULT_REPLAY_HITSOUND_VOLUME,
   REPLAY_BG_DIM_STORAGE_KEY,
+  REPLAY_BEATMAP_HITSOUND_VOLUME_STORAGE_KEY,
+  REPLAY_HITSOUND_VOLUME_STORAGE_KEY,
   REPLAY_VOLUME_STORAGE_KEY,
   normalizeReplayBackgroundDim,
   normalizeReplayVolume,
   readReplayBackgroundDim,
+  readReplayBeatmapHitsoundVolume,
   readReplayVolume,
   writeReplayBackgroundDim,
   writeReplayVolume,
@@ -47,6 +51,18 @@ describe("replay preferences", () => {
     expect(normalizeReplayVolume("0")).toBe(0);
     expect(normalizeReplayBackgroundDim(0)).toBe(0);
     expect(normalizeReplayBackgroundDim("0")).toBe(0);
+  });
+
+  it("falls back to the pre-split hitsound volume for the beatmap channel", () => {
+    expect(readReplayBeatmapHitsoundVolume()).toBe(DEFAULT_REPLAY_HITSOUND_VOLUME);
+
+    // A user who tuned the old single slider keeps that level on both channels.
+    window.localStorage.setItem(REPLAY_HITSOUND_VOLUME_STORAGE_KEY, "0.35");
+    expect(readReplayBeatmapHitsoundVolume()).toBe(0.35);
+
+    // Once the split volume is stored, it wins over the legacy key.
+    window.localStorage.setItem(REPLAY_BEATMAP_HITSOUND_VOLUME_STORAGE_KEY, "0.8");
+    expect(readReplayBeatmapHitsoundVolume()).toBe(0.8);
   });
 
   it("writes normalized preference values", () => {
