@@ -85,6 +85,7 @@ export function Nav() {
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [mobileAccountOpen, setMobileAccountOpen] = useState(false);
+  const [mobileCountryOpen, setMobileCountryOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [mobileOpenGroups, setMobileOpenGroups] = useState<Set<string>>(() => new Set());
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -226,7 +227,10 @@ export function Nav() {
   }, [location.pathname]);
 
   useEffect(() => {
-    if (!menuOpen) setMobileAccountOpen(false);
+    if (!menuOpen) {
+      setMobileAccountOpen(false);
+      setMobileCountryOpen(false);
+    }
   }, [menuOpen]);
 
   // When the drawer opens, expand whichever group owns the current page so the
@@ -956,13 +960,26 @@ export function Nav() {
               </div>
 
               <div className="border-t border-osu-b3/30 px-4 py-3 space-y-2">
-                <CountrySelector className="w-full" selectedCountry={selectedCountry} onSelect={handleCountrySelect} showGlobal={liveBackendConfigured} />
+                <CountrySelector
+                  className="w-full"
+                  selectedCountry={selectedCountry}
+                  onSelect={handleCountrySelect}
+                  showGlobal={liveBackendConfigured}
+                  open={mobileCountryOpen}
+                  onOpenChange={(next) => {
+                    setMobileCountryOpen(next);
+                    if (next) setMobileAccountOpen(false);
+                  }}
+                />
                 <ThemePicker variant="mobile" />
                 {auth.viewer ? (
                   <div className="relative">
                     <button
                       type="button"
-                      onClick={() => setMobileAccountOpen((open) => !open)}
+                      onClick={() => {
+                        setMobileAccountOpen((open) => !open);
+                        setMobileCountryOpen(false);
+                      }}
                       className="flex w-full items-center gap-2.5 rounded-lg border border-osu-b3/30 bg-osu-b4/60 px-2.5 py-1.5 text-osu-l2 transition-colors duration-[120ms] hover:border-osu-b3/60 hover:bg-osu-b4/80"
                       aria-label="Account menu"
                       aria-expanded={mobileAccountOpen}

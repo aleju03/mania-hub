@@ -18,6 +18,9 @@ interface CountrySelectorProps {
   // The Global aggregate is only meaningful when the server is wired up,
   // so the nav opts in based on that.
   showGlobal?: boolean;
+  // Optional controlled open state so a parent can coordinate with sibling dropdowns.
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 type CountryOption = (typeof COUNTRY_OPTIONS)[number];
@@ -37,8 +40,15 @@ export function CountrySelector({
   onSelect,
   className = "",
   showGlobal = false,
+  open: openProp,
+  onOpenChange,
 }: CountrySelectorProps) {
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = openProp ?? uncontrolledOpen;
+  const setOpen = (value: boolean) => {
+    if (openProp === undefined) setUncontrolledOpen(value);
+    onOpenChange?.(value);
+  };
   const [search, setSearch] = useState("");
   const [notTrackedOpen, setNotTrackedOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -79,6 +89,14 @@ export function CountrySelector({
 
     return items;
   }, [notTrackedOpen, search, showGlobal]);
+
+  // Reset transient state whenever the dropdown closes (including a controlled close)
+  useEffect(() => {
+    if (!open) {
+      setSearch("");
+      setNotTrackedOpen(false);
+    }
+  }, [open]);
 
   // Close on click outside
   useEffect(() => {
