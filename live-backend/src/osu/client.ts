@@ -554,7 +554,7 @@ function getTotalScoreKey(score: OscScore): number {
   return score.legacy_total_score ?? score.classic_total_score ?? score.total_score ?? score.score ?? 0;
 }
 
-function isLikelyBeatmapFile(content: string): boolean {
+export function isLikelyBeatmapFile(content: string): boolean {
   const trimmed = content.trimStart();
   return trimmed.startsWith("osu file format") && content.includes("[HitObjects]");
 }

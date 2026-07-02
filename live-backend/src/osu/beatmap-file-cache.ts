@@ -1,6 +1,7 @@
 import type { Db } from "../db.js";
 import { exec } from "../db.js";
-import type { OsuApiClient } from "./client.js";
+import { extractBeatmapOsuFileFromArchive } from "../audio/beatmap-archive.js";
+import { isLikelyBeatmapFile, OsuApiClient } from "./client.js";
 import { nowIso } from "../shared/score.js";
 import { gzip, gunzip } from "node:zlib";
 import { promisify } from "node:util";
@@ -26,11 +27,22 @@ export interface MarkCachedBeatmapFileUnavailableOptions {
   source?: string;
 }
 
+export interface CachedBeatmapFileOptions {
+  allowArchive?: boolean;
+  allowDirect?: boolean;
+}
+
+interface BeatmapArchiveMeta {
+  beatmapsetId: number;
+  version: string | null;
+}
+
 export async function getCachedBeatmapFile(
   db: Db,
   osu: Pick<OsuApiClient, "getBeatmapFile">,
   beatmapId: number,
   caller: string,
+  options: CachedBeatmapFileOptions = {},
 ): Promise<string> {
   const safeId = Math.floor(beatmapId);
   if (!Number.isFinite(safeId) || safeId <= 0) throw new Error("Invalid beatmap ID");
@@ -38,8 +50,31 @@ export async function getCachedBeatmapFile(
   const cached = await readCachedBeatmapFile(db, safeId);
   if (cached) return cached;
 
+  let archiveError: unknown = null;
+  const allowArchive = options.allowArchive ?? osu instanceof OsuApiClient;
+  const archiveMeta = allowArchive ? await readBeatmapArchiveMeta(db, safeId).catch(() => null) : null;
+  if (allowArchive) {
+    if (archiveMeta) {
+      try {
+        const archiveContent = await readBeatmapFileFromArchive(archiveMeta, safeId);
+        await storeCachedBeatmapFile(db, safeId, archiveContent, {
+          beatmapsetId: archiveMeta.beatmapsetId,
+          source: "beatmap_archive",
+        }).catch(() => {});
+        return archiveContent;
+      } catch (error) {
+        archiveError = error;
+      }
+    }
+  }
+
+  if (options.allowDirect === false) {
+    const suffix = archiveError instanceof Error ? `: ${archiveError.message}` : archiveError ? `: ${String(archiveError)}` : "";
+    throw new Error(`Beatmap ${safeId} is not cached and could not be fetched from archives${suffix}`);
+  }
+
   const content = await osu.getBeatmapFile(safeId, caller);
-  const beatmapsetId = await readKnownBeatmapsetId(db, safeId).catch(() => null);
+  const beatmapsetId = archiveMeta?.beatmapsetId ?? await readKnownBeatmapsetId(db, safeId).catch(() => null);
   await storeCachedBeatmapFile(db, safeId, content, { beatmapsetId, source: "osu_api" }).catch(() => {});
   return content;
 }
@@ -68,6 +103,35 @@ export async function readCachedBeatmapFile(db: Db, beatmapId: number): Promise<
   if (!legacyContent) return null;
   await storeCachedBeatmapFile(db, safeId, legacyContent, { source: "legacy_raw" }).catch(() => {});
   return legacyContent;
+}
+
+async function readBeatmapFileFromArchive(archiveMeta: BeatmapArchiveMeta, beatmapId: number): Promise<string> {
+  const file = await extractBeatmapOsuFileFromArchive(String(archiveMeta.beatmapsetId), beatmapId, {
+    version: archiveMeta.version,
+  });
+  if (!isLikelyBeatmapFile(file.text)) throw new Error("archive returned an invalid .osu file");
+  return file.text;
+}
+
+async function readBeatmapArchiveMeta(db: Db, beatmapId: number): Promise<BeatmapArchiveMeta | null> {
+  const row = (await exec(
+    db,
+    `select beatmapset_id, version
+     from beatmaps
+     where beatmap_id = ?
+     union all
+     select beatmapset_id, version
+     from maps_beatmaps
+     where beatmap_id = ?
+     limit 1`,
+    [beatmapId, beatmapId],
+  )).rows[0];
+  if (!row) return null;
+
+  const beatmapsetId = normalizeBeatmapsetId(row.beatmapset_id == null ? null : Number(row.beatmapset_id));
+  if (beatmapsetId == null) return null;
+  const version = typeof row.version === "string" && row.version.trim() ? row.version : null;
+  return { beatmapsetId, version };
 }
 
 export async function storeCachedBeatmapFile(

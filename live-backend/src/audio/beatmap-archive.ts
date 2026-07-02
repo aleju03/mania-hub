@@ -65,6 +65,16 @@ type ZipDirectoryEntry = {
   localHeaderOffset: number;
 };
 
+class ArchiveHttpStatusError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ArchiveHttpStatusError";
+  }
+}
+
 export interface BeatmapArchiveOsuFile {
   path: string;
   text: string;
@@ -216,7 +226,7 @@ async function fetchRangeBuffer(url: string, range: string, limitBytes: number, 
 
   if (response.status !== 206) {
     await response.body?.cancel().catch(() => {});
-    throw new Error(`range request returned ${response.status}`);
+    throw new ArchiveHttpStatusError(response.status, `range request returned ${response.status}`);
   }
 
   const contentRange = parseContentRange(response.headers.get("content-range"));
@@ -464,8 +474,13 @@ async function resolveArchiveRangeUrl(source: (typeof ARCHIVE_SOURCES)[number], 
     return new URL(location, url).toString();
   }
   if (response.status === 206) return url;
-  if (!response.ok) throw new Error(`redirect probe returned ${response.status}`);
+  if (!response.ok) throw new ArchiveHttpStatusError(response.status, `redirect probe returned ${response.status}`);
   throw new Error(`redirect probe returned ${response.status}`);
+}
+
+function shouldCooldownArchiveError(error: unknown): boolean {
+  if (error instanceof ArchiveHttpStatusError) return shouldCooldownArchiveSource(error.status);
+  return error instanceof Error && error.name === "AbortError";
 }
 
 function isArchiveOsuEntry(entry: ZipDirectoryEntry): boolean {
@@ -578,9 +593,7 @@ async function extractArchiveFileByRange(beatmapsetId: string, filename: string)
         return extractArchiveFileByRangeFromUrl(rangeUrl, filename, controller.signal);
       });
     } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        cooldownArchiveSource(source.name);
-      }
+      if (shouldCooldownArchiveError(error)) cooldownArchiveSource(source.name);
       const message = error instanceof Error ? error.message : String(error);
       errors.push(`${source.name}: ${message}`);
     } finally {
@@ -610,9 +623,7 @@ async function extractBeatmapOsuFileByRange(
         return findBeatmapOsuFileByRangeFromUrl(rangeUrl, beatmapId, hints, controller.signal);
       });
     } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") {
-        cooldownArchiveSource(source.name);
-      }
+      if (shouldCooldownArchiveError(error)) cooldownArchiveSource(source.name);
       const message = error instanceof Error ? error.message : String(error);
       errors.push(`${source.name}: ${message}`);
     } finally {

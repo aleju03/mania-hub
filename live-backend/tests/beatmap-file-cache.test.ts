@@ -1,11 +1,20 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, exec, migrate } from "../src/db.js";
+import { extractBeatmapOsuFileFromArchive } from "../src/audio/beatmap-archive.js";
 import { getCachedBeatmapFile, readCachedBeatmapFile } from "../src/osu/beatmap-file-cache.js";
 
+vi.mock("../src/audio/beatmap-archive.js", () => ({
+  extractBeatmapOsuFileFromArchive: vi.fn(),
+}));
+
 describe("beatmap .osu file cache", () => {
+  beforeEach(() => {
+    vi.mocked(extractBeatmapOsuFileFromArchive).mockReset();
+  });
+
   it("stores fetched .osu files as compressed blobs and serves later reads from DB", async () => {
     const { db, cleanup } = await setupDb();
     try {
@@ -61,6 +70,60 @@ describe("beatmap .osu file cache", () => {
       await cleanup();
     }
   });
+
+  it("stores archive .osu files without calling the direct osu API", async () => {
+    const { db, cleanup } = await setupDb();
+    try {
+      const osuFile = buildBeatmapFile();
+      vi.mocked(extractBeatmapOsuFileFromArchive).mockResolvedValueOnce({
+        path: "Artist - Title (Mapper) [Archive 4K].osu",
+        text: osuFile,
+      });
+      const osu = {
+        getBeatmapFile: vi.fn(async () => buildBeatmapFile()),
+      };
+
+      await insertBeatmapMeta(db, 789, 456, "Archive 4K");
+      await expect(getCachedBeatmapFile(db, osu, 789, "test:archive", { allowArchive: true })).resolves.toBe(osuFile);
+
+      expect(osu.getBeatmapFile).not.toHaveBeenCalled();
+      expect(extractBeatmapOsuFileFromArchive).toHaveBeenCalledWith("456", 789, { version: "Archive 4K" });
+      const row = (await exec(
+        db,
+        "select beatmapset_id, source, compressed_bytes from beatmap_osu_files where beatmap_id = 789",
+      )).rows[0];
+      expect(Number(row.beatmapset_id)).toBe(456);
+      expect(row.source).toBe("beatmap_archive");
+      expect(Number(row.compressed_bytes)).toBeGreaterThan(0);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it("falls back to direct osu fetches when archive extraction fails", async () => {
+    const { db, cleanup } = await setupDb();
+    try {
+      const osuFile = buildBeatmapFile();
+      vi.mocked(extractBeatmapOsuFileFromArchive).mockRejectedValueOnce(new Error("archive unavailable"));
+      const osu = {
+        getBeatmapFile: vi.fn(async () => osuFile),
+      };
+
+      await insertBeatmapMeta(db, 790, 457, "Direct 4K");
+      await expect(getCachedBeatmapFile(db, osu, 790, "test:direct", { allowArchive: true })).resolves.toBe(osuFile);
+
+      expect(osu.getBeatmapFile).toHaveBeenCalledOnce();
+      const row = (await exec(
+        db,
+        "select beatmapset_id, source, compressed_bytes from beatmap_osu_files where beatmap_id = 790",
+      )).rows[0];
+      expect(Number(row.beatmapset_id)).toBe(457);
+      expect(row.source).toBe("osu_api");
+      expect(Number(row.compressed_bytes)).toBeGreaterThan(0);
+    } finally {
+      await cleanup();
+    }
+  });
 });
 
 async function setupDb(): Promise<{ db: Awaited<ReturnType<typeof createDb>>; cleanup: () => Promise<void> }> {
@@ -103,4 +166,16 @@ OverallDifficulty:8
 [HitObjects]
 ${notes}
 `;
+}
+
+async function insertBeatmapMeta(db: Awaited<ReturnType<typeof createDb>>, beatmapId: number, beatmapsetId: number, version: string): Promise<void> {
+  await exec(
+    db,
+    `insert into beatmaps (
+       beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm,
+       max_combo, version, url, metadata_json, updated_at
+     )
+     values (?, ?, 'mania', 'ranked', 4, 1, 180, 1000, ?, null, null, '2026-01-01T00:00:00.000Z')`,
+    [beatmapId, beatmapsetId, version],
+  );
 }
