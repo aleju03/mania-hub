@@ -2,7 +2,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createDb, exec, migrate } from "../src/db.js";
+import { createDb, exec, json, migrate } from "../src/db.js";
+import { INTERACTIVE_PAUSE_CAP_MS } from "../src/osu/client.js";
 import { SqliteSharedRateLimiter } from "../src/osu/shared-rate-limiter.js";
 
 const dirs: string[] = [];
@@ -21,6 +22,7 @@ async function setupLimiters(options: { targetPerMinute: number; hardPerMinute: 
   await migrate(dbA);
   const dbB = await createDb({ databaseUrl });
   return {
+    db: dbA,
     first: new SqliteSharedRateLimiter(dbA, options),
     second: new SqliteSharedRateLimiter(dbB, options),
   };
@@ -77,6 +79,57 @@ describe("sqlite shared osu! rate limiter", () => {
     const interactiveStart = await second.reserve("getUser", "/users/1/mania", "interactive");
 
     expect(interactiveStart).toBe(startedAt);
+  });
+
+  it("caps the shared 429 pause for interactive lanes while jobs wait it out", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-01T00:00:00.000Z"));
+    const { first, second } = await setupLimiters({ targetPerMinute: 1000, hardPerMinute: 1000 });
+    await first.pause(60_000);
+
+    let interactiveResolved = false;
+    let jobResolved = false;
+    const interactive = second.reserve("getUser", "/users/1/mania", "interactive").then(() => {
+      interactiveResolved = true;
+    });
+    const job = second.reserve("job:enrich_user", "/users/2/mania", "job").then(() => {
+      jobResolved = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(INTERACTIVE_PAUSE_CAP_MS + 5);
+    await interactive;
+    expect(interactiveResolved).toBe(true);
+    expect(jobResolved).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    await job;
+    expect(jobResolved).toBe(true);
+  });
+
+  it("honours a legacy bare-number pause value", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-01T00:00:00.000Z"));
+    const { db, first } = await setupLimiters({ targetPerMinute: 1000, hardPerMinute: 1000 });
+    await exec(
+      db,
+      "insert into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      ["control:osu_rate_limit_paused_until", json(Date.now() + 30_000), new Date().toISOString()],
+    );
+
+    // Legacy shape assumes the default 60s pause, so a 30s-out deadline reads
+    // as 30s into the pause: past the interactive cap, still paused for jobs.
+    const interactiveStart = await first.reserve("getUser", "/users/1/mania", "interactive");
+    expect(interactiveStart).toBe(Date.now());
+
+    let jobResolved = false;
+    const job = first.reserve("job:enrich_user", "/users/2/mania", "job").then(() => {
+      jobResolved = true;
+    });
+    await vi.advanceTimersByTimeAsync(29_000);
+    expect(jobResolved).toBe(false);
+    await vi.advanceTimersByTimeAsync(2_000);
+    await job;
+    expect(jobResolved).toBe(true);
   });
 
   it("serializes concurrent reservations on one local connection", async () => {

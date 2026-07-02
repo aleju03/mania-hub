@@ -253,17 +253,28 @@ function assertReplayCacheKey(storageKey: string): void {
   }
 }
 
+// Roots the admin bucket browser may operate on: the evictable replay cache
+// plus durable skin uploads the live backend writes under skins/. Cache
+// eviction and every non-admin path stay locked to replay-cache/ only.
+const ADMIN_BROWSABLE_PREFIXES = [REPLAY_CACHE_PREFIX, "skins/"];
+
+function assertAdminBrowsableKey(storageKey: string): void {
+  if (!ADMIN_BROWSABLE_PREFIXES.some((prefix) => storageKey.startsWith(prefix))) {
+    throw new Error(`Refusing to touch R2 key "${storageKey}" outside replay-cache/ or skins/`);
+  }
+}
+
 export function normalizeR2AdminPrefix(prefix: string | undefined | null): string {
   const raw = (prefix ?? "").trim().replace(/^\/+/, "");
   if (!raw) return REPLAY_CACHE_PREFIX;
   const normalized = raw.endsWith("/") ? raw : `${raw}/`;
-  assertReplayCacheKey(normalized);
+  assertAdminBrowsableKey(normalized);
   return normalized;
 }
 
 export function normalizeR2AdminObjectKey(key: string): string {
   const normalized = key.trim().replace(/^\/+/, "");
-  assertReplayCacheKey(normalized);
+  assertAdminBrowsableKey(normalized);
   if (!normalized || normalized.endsWith("/")) {
     throw new Error("Choose a file key, not a folder prefix.");
   }
@@ -302,7 +313,9 @@ async function mapWithConcurrency<T, U>(
 }
 
 async function signGetUrl(storageKey: string, mimeType?: string): Promise<string> {
-  assertReplayCacheKey(storageKey);
+  // Read-only signing may reach any admin-browsable root; every mutating
+  // cache path still asserts the stricter replay-cache/ guard itself.
+  assertAdminBrowsableKey(storageKey);
   const r2 = getClient();
   if (!r2) throw new Error("R2 replay cache is not configured");
 
@@ -1009,8 +1022,8 @@ export async function getR2AdminPrefixSummary(prefixInput: string): Promise<R2Ad
   const r2 = getClient();
   if (!r2) throw new Error("R2 replay cache is not configured");
   const prefix = normalizeR2AdminPrefix(prefixInput);
-  if (prefix === REPLAY_CACHE_PREFIX) {
-    throw new Error("Refusing to summarize the replay-cache root prefix for deletion.");
+  if (ADMIN_BROWSABLE_PREFIXES.includes(prefix)) {
+    throw new Error("Refusing to summarize a root prefix for deletion.");
   }
   return getR2PrefixSummaryInternal(r2, prefix);
 }
@@ -1049,8 +1062,8 @@ export async function deleteR2AdminPrefix(prefixInput: string): Promise<R2AdminD
   if (!r2) throw new Error("R2 replay cache is not configured");
 
   const prefix = normalizeR2AdminPrefix(prefixInput);
-  if (prefix === REPLAY_CACHE_PREFIX) {
-    throw new Error("Refusing to delete the replay-cache root prefix.");
+  if (ADMIN_BROWSABLE_PREFIXES.includes(prefix)) {
+    throw new Error("Refusing to delete a root prefix.");
   }
 
   let continuationToken: string | undefined;

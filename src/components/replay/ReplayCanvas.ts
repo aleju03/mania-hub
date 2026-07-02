@@ -10,6 +10,8 @@ import { DEFAULT_REPLAY_COMBO_FONT_SET, DEFAULT_REPLAY_JUDGEMENT_SET, DEFAULT_RE
 import type { ReplayComboFontStyle, ReplaySkinColumnAssets, ReplaySkinImageAsset, ReplaySkinKeymodeProfile, ReplaySkinSettings } from "../../lib/replay-skin";
 import type { ReplayHitCounts } from "../../lib/replay-validation";
 import { buildStableReplayComboEvents, resolveReplayJudgementEvents } from "../../lib/replay-validation";
+import type { HitsoundAnchor, ReplayHitsoundTrigger } from "../../lib/replay-hitsounds";
+import { buildComboBreakSoundTimes, buildHitsoundAnchorsByColumn, selectHitsoundAnchor } from "../../lib/replay-hitsounds";
 import { MANIA_FLASHLIGHT_DIM_ALPHA, dampManiaHiddenCoverageReference, getManiaFlashlightBand, getManiaHiddenAlphaAtY, getManiaHiddenCoverageReference, getManiaHiddenCoverageReferencePx, getManiaHiddenFadePx } from "../../lib/replay-visibility-mods";
 import { formatPixiRendererType } from "./renderer-debug";
 
@@ -64,6 +66,9 @@ const MANIA_DEFAULT_HIT_POSITION = (480 - 402) * 1.6;
 const MANIA_HIT_TARGET_POSITION = REPLAY_SKIN_DEFAULT_HIT_POSITION;
 const MANIA_BAR_NOTE_HEIGHT_RATIO = 0.22;
 const BACKGROUND_OVERSCAN_SCALE = 1.02;
+// Events crossed more than this far behind the playback clock (lag spikes,
+// tab switches) stay silent instead of firing as a burst.
+const HITSOUND_MAX_LATENESS_MS = 200;
 
 type ArrowDirection = "left" | "right" | "up" | "down";
 
@@ -377,6 +382,11 @@ export class ManiaReplayRenderer {
   private comboAnimationKind: "hit" | "break" | null = null;
   private statsScanIndex = 0;
   private comboScanIndex = 0;
+  private hitsoundTrigger: ReplayHitsoundTrigger | null = null;
+  private hitsoundAnchorsByColumn: HitsoundAnchor[][] = [];
+  private comboBreakSoundTimes: number[] = [];
+  private hitsoundPressCursors: number[] = [];
+  private comboBreakSoundCursor = 0;
   private judgmentCounts: number[] = [0, 0, 0, 0, 0, 0, 0];
   private leftHandMisses = 0;
   private rightHandMisses = 0;
@@ -531,6 +541,7 @@ export class ManiaReplayRenderer {
       ? this.judgmentEvents[this.judgmentEvents.length - 1].time
       : 0;
     this.totalDuration = Math.max(this.totalDuration, lastJudgementTime);
+    this.buildHitsoundTimeline();
 
     this.measureCanvas();
     this.installTextFontInvalidation();
@@ -618,7 +629,82 @@ export class ManiaReplayRenderer {
     this.lastJudgment = 0;
     this.lastJudgmentTime = 0;
     this.keyStateCursor = 0;
+    this.resetHitsoundCursors(time);
     this.advanceStats(time);
+  }
+
+  setHitsoundTrigger(trigger: ReplayHitsoundTrigger | null) {
+    this.hitsoundTrigger = trigger;
+    // Skip everything up to the current position so attaching mid-playback
+    // doesn't fire a backlog of sounds.
+    this.resetHitsoundCursors(this.currentTime);
+  }
+
+  private buildHitsoundTimeline() {
+    this.hitsoundAnchorsByColumn = buildHitsoundAnchorsByColumn(
+      this.notes,
+      this.noteStates,
+      this.keyCount,
+      this.hitWindows.miss,
+      this.ruleset.isConvert,
+    );
+    this.comboBreakSoundTimes = buildComboBreakSoundTimes(this.comboEvents, this.initialCombo);
+    this.resetHitsoundCursors(this.currentTime);
+  }
+
+  // Position the hitsound cursors just past `time` without firing anything.
+  private resetHitsoundCursors(time: number) {
+    this.hitsoundPressCursors = Array.from({ length: this.keyCount }, (_, col) => {
+      const presses = this.keypressTimesByColumn[col] ?? [];
+      let lo = 0;
+      let hi = presses.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (presses[mid] <= time) lo = mid + 1;
+        else hi = mid;
+      }
+      return lo;
+    });
+
+    const breaks = this.comboBreakSoundTimes;
+    let lo = 0;
+    let hi = breaks.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (breaks[mid] <= time) lo = mid + 1;
+      else hi = mid;
+    }
+    this.comboBreakSoundCursor = lo;
+  }
+
+  // Fire key/combo-break sounds for events crossed since the last frame.
+  private fireHitsounds() {
+    const trigger = this.hitsoundTrigger;
+    if (!trigger) return;
+    const time = this.currentTime;
+
+    for (let col = 0; col < this.keyCount; col++) {
+      const presses = this.keypressTimesByColumn[col] ?? [];
+      let cursor = this.hitsoundPressCursors[col] ?? presses.length;
+      while (cursor < presses.length && presses[cursor] <= time) {
+        const pressTime = presses[cursor];
+        cursor++;
+        if (time - pressTime > HITSOUND_MAX_LATENESS_MS * this.playbackSpeed * this.modRate) continue;
+        const anchor = selectHitsoundAnchor(this.hitsoundAnchorsByColumn[col] ?? [], pressTime, this.hitWindows.miss);
+        if (anchor && anchor.plays.length > 0) trigger.playSamples(anchor.plays);
+      }
+      this.hitsoundPressCursors[col] = cursor;
+    }
+
+    while (
+      this.comboBreakSoundCursor < this.comboBreakSoundTimes.length &&
+      this.comboBreakSoundTimes[this.comboBreakSoundCursor] <= time
+    ) {
+      const breakTime = this.comboBreakSoundTimes[this.comboBreakSoundCursor];
+      this.comboBreakSoundCursor++;
+      if (time - breakTime > HITSOUND_MAX_LATENESS_MS * this.playbackSpeed * this.modRate) continue;
+      trigger.playComboBreak();
+    }
   }
 
   private advanceStats(upToTime?: number) {
@@ -1056,6 +1142,7 @@ export class ManiaReplayRenderer {
       ? this.judgmentEvents[this.judgmentEvents.length - 1].time
       : 0;
     this.totalDuration = Math.max(this.totalDuration, lastJudgementTime);
+    this.buildHitsoundTimeline();
 
     this.currentTime = 0;
     this.hudSnapshotTime = -Infinity;
@@ -1637,6 +1724,7 @@ export class ManiaReplayRenderer {
       this._isPlaying = false;
     }
     this.advanceStats();
+    this.fireHitsounds();
     this.updateFpsCounter(now);
     this.render();
     if (this._isPlaying) this.animFrameId = requestAnimationFrame(() => this.tick());

@@ -446,7 +446,9 @@ create table if not exists api_call_log (
   caller text not null,
   path text not null,
   target_id integer,
-  started_at text not null
+  started_at text not null,
+  duration_ms integer,
+  status integer
 );
 
 create table if not exists api_call_targets (

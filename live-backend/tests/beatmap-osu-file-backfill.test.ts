@@ -110,6 +110,42 @@ describe("beatmap .osu file backfill", () => {
     }
   });
 
+  it("times out a hung beatmap fetch instead of wedging the batch", async () => {
+    const { db, queue, cleanup } = await setupDb();
+    try {
+      await seedReadyVector(db, 501);
+      await seedReadyVector(db, 502);
+      const osu = {
+        getBeatmapFile: (beatmapId: number) => {
+          if (beatmapId === 501) return new Promise<string>(() => {});
+          return Promise.resolve(buildBeatmapFile(beatmapId));
+        },
+      };
+
+      await startBeatmapOsuFileBackfill(db, queue);
+      const [job] = await queue.claim("test-worker", 1, { types: [BEATMAP_OSU_FILE_BACKFILL_JOB] });
+      await runBeatmapOsuFileBackfillJob(
+        db,
+        queue,
+        osu as never,
+        job.payload as { runId: string; cursor?: number },
+        { fetchTimeoutMs: 50 },
+      );
+      await queue.complete(job.id);
+
+      const status = await getBeatmapOsuFileBackfillStatus(db);
+      expect(status.status).toBe("running");
+      expect(status.cached).toBe(1);
+      expect(status.failed).toBe(1);
+      expect(status.missing).toBe(1);
+      expect(status.lastError).toContain("Timed out fetching .osu file for beatmap 501");
+      // The run keeps chaining jobs instead of hanging the lane on the hung fetch.
+      expect(status.jobs.queued).toBe(1);
+    } finally {
+      await cleanup();
+    }
+  });
+
   it("fetches beatmap files concurrently inside a batch", async () => {
     const { db, queue, cleanup } = await setupDb();
     try {

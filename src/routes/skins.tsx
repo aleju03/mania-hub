@@ -11,7 +11,7 @@ import { OsuLogo } from "../components/ui/OsuLogo";
 import { useAuth } from "../lib/auth-context";
 import { canUseDevFeatures } from "../lib/auth-shared";
 import { isLiveBackendConfigured } from "../lib/live-backend";
-import { fetchSkinsListDirect, SKINS_PAGE_SIZE, type SkinsListResult, type SkinSummary } from "../lib/skins";
+import { fetchSkinsListDirect, SKINS_PAGE_SIZE, type SkinsListResult, type SkinsSort, type SkinSummary } from "../lib/skins";
 import { pageSeo } from "../lib/seo";
 
 // All fields optional at the type level so links can target /skins without a
@@ -19,19 +19,29 @@ import { pageSeo } from "../lib/seo";
 interface SkinsSearch {
   q?: string;
   page?: number;
+  sort?: SkinsSort;
+  k?: number;
 }
 
 const DEFAULT_SKINS_SEARCH = {
   q: "",
   page: 0,
+  sort: "newest" as SkinsSort,
+  k: 0,
 };
+
+// 0 means no keymode filter; chips cover the keymodes skins realistically declare.
+const KEYMODE_FILTERS = [4, 5, 6, 7, 8, 9, 10];
 
 export function parseSkinsSearch(search: Record<string, unknown>): SkinsSearch {
   const q = typeof search.q === "string" ? search.q.slice(0, 80) : DEFAULT_SKINS_SEARCH.q;
   const page = Number(search.page);
+  const k = Number(search.k);
   return {
     q,
     page: Number.isInteger(page) && page > 0 ? page : DEFAULT_SKINS_SEARCH.page,
+    sort: search.sort === "downloads" ? "downloads" : DEFAULT_SKINS_SEARCH.sort,
+    k: Number.isInteger(k) && k >= 1 && k <= 10 ? k : DEFAULT_SKINS_SEARCH.k,
   };
 }
 
@@ -60,7 +70,7 @@ export const Route = createFileRoute("/skins")({
 });
 
 function SkinsPage() {
-  const { q = "", page = 0 } = Route.useSearch();
+  const { q = "", page = 0, sort = "newest", k = 0 } = Route.useSearch();
   const navigate = useNavigate();
   const location = useLocation();
   const auth = useAuth();
@@ -76,11 +86,11 @@ function SkinsPage() {
     (patch: SkinsSearch) => {
       void navigate({
         to: "/skins",
-        search: { q, page: 0, ...patch },
+        search: { q, sort, k, page: 0, ...patch },
         replace: true,
       });
     },
-    [navigate, q],
+    [navigate, q, sort, k],
   );
 
   // Debounced text search: typing updates local state, the URL follows.
@@ -102,7 +112,7 @@ function SkinsPage() {
     const controller = new AbortController();
     setLoading(true);
     setFailed(false);
-    fetchSkinsListDirect({ q, page }, { signal: controller.signal })
+    fetchSkinsListDirect({ q, page, sort, k }, { signal: controller.signal })
       .then((result) => {
         setData(result);
         setLoading(false);
@@ -113,16 +123,16 @@ function SkinsPage() {
         setLoading(false);
       });
     return () => controller.abort();
-  }, [q, page, reloadTick]);
+  }, [q, page, sort, k, reloadTick]);
 
   const handlePublished = useCallback((skin: SkinSummary) => {
     // Land the fresh skin at the top of an unfiltered first page.
     setData((previous) =>
-      previous && page === 0 && !q
+      previous && page === 0 && !q && !k
         ? { ...previous, total: previous.total + 1, skins: [skin, ...previous.skins].slice(0, SKINS_PAGE_SIZE) }
         : previous,
     );
-  }, [page, q]);
+  }, [page, q, k]);
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
   const loginHref = `/api/auth/osu?next=${encodeURIComponent(`${location.pathname}${location.searchStr}`)}`;
@@ -136,16 +146,16 @@ function SkinsPage() {
       className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-osu-pink px-4 py-1.5 text-[12.5px] font-bold text-white transition cursor-pointer hover:brightness-110 sm:w-auto"
     >
       <Upload className="h-3.5 w-3.5" aria-hidden="true" />
-      Publish a skin
+      Upload skin
     </button>
   ) : auth.loginAvailable ? (
     <a
       href={loginHref}
       className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-osu-pink/45 bg-osu-pink/15 px-4 py-1.5 text-[12.5px] font-bold text-osu-pink-light transition-colors hover:bg-osu-pink/25 hover:text-white sm:w-auto"
-      title="Log in with osu! to publish a skin"
+      title="Log in with osu! to upload a skin"
     >
       <OsuLogo className="h-3.5 w-3.5" />
-      Log in to publish
+      Log in to upload
     </a>
   ) : null;
 
@@ -187,14 +197,55 @@ function SkinsPage() {
                   className="w-full rounded-lg border border-osu-b3/30 bg-osu-b4 py-2.5 pl-10 pr-3 text-[14px] text-osu-l1 transition-colors placeholder:text-osu-f1/55 focus:border-osu-pink/50 focus:outline-none"
                 />
               </div>
-              {data && !loading && (
+              <div className="flex shrink-0 overflow-hidden rounded-lg border border-osu-b3/30" role="group" aria-label="Sort skins">
+                {([["newest", "Newest"], ["downloads", "Most downloaded"]] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => applySearch({ sort: value })}
+                    aria-pressed={sort === value}
+                    className={`px-3 py-2.5 text-[12px] font-semibold transition-colors cursor-pointer ${
+                      sort === value ? "bg-osu-b3 text-white" : "bg-osu-b4 text-osu-f1 hover:text-osu-l1"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {data && (
                 <span className="shrink-0 text-[12px] text-osu-f1 tabular-nums" role="status" aria-live="polite">
                   {data.total.toLocaleString()} {data.total === 1 ? "skin" : "skins"}
                 </span>
               )}
             </div>
 
-            {loading ? (
+            <div className="mb-4 flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter by keymode">
+              <button
+                type="button"
+                onClick={() => applySearch({ k: 0 })}
+                aria-pressed={k === 0}
+                className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors cursor-pointer ${
+                  k === 0 ? "bg-osu-pink text-white" : "border border-osu-b3/30 bg-osu-b4 text-osu-f1 hover:text-osu-l1"
+                }`}
+              >
+                All
+              </button>
+              {KEYMODE_FILTERS.map((keys) => (
+                <button
+                  key={keys}
+                  type="button"
+                  onClick={() => applySearch({ k: k === keys ? 0 : keys })}
+                  aria-pressed={k === keys}
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-bold tabular-nums transition-colors cursor-pointer ${
+                    k === keys ? "bg-osu-pink text-white" : "border border-osu-b3/30 bg-osu-b4 text-osu-f1 hover:text-osu-l1"
+                  }`}
+                >
+                  {keys}K
+                </button>
+              ))}
+            </div>
+
+            {loading && !data ? (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {Array.from({ length: 6 }, (_, index) => (
                   <div key={index} className="overflow-hidden rounded-xl border border-osu-b3/40 bg-osu-b4">
@@ -220,9 +271,9 @@ function SkinsPage() {
               </div>
             ) : skins.length === 0 ? (
               <div className="mx-auto max-w-md px-4 py-16 text-center">
-                <div className="text-sm font-bold text-white">{q ? "No skins match" : "No skins yet"}</div>
+                <div className="text-sm font-bold text-white">{q || k ? "No skins match" : "No skins yet"}</div>
                 <p className="mt-2 text-[12px] leading-relaxed text-osu-f1">
-                  {q ? "Clear the search, or publish the skin yourself." : "The first published skin lands here."}
+                  {q || k ? "Clear the filters, or upload the skin yourself." : "The first uploaded skin lands here."}
                 </p>
               </div>
             ) : (

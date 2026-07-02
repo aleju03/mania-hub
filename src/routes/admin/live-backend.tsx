@@ -166,8 +166,8 @@ interface LiveBackendStatus {
   } | null;
   apiCallHistory?: {
     windowMinutes: number;
-    byCaller: Array<{ caller: string; count: number }>;
-    byPath: Array<{ path: string; count: number }>;
+    byCaller: Array<{ caller: string; count: number; avgMs?: number | null; maxMs?: number | null; errors?: number }>;
+    byPath: Array<{ path: string; count: number; avgMs?: number | null; maxMs?: number | null; errors?: number }>;
   };
   worker?: {
     paused: boolean;
@@ -4465,6 +4465,18 @@ function EventRow({ event }: { event: LiveEventRow }) {
   );
 }
 
+function formatCallMs(ms: number): string {
+  if (ms >= 10_000) return `${(ms / 1000).toFixed(0)}s`;
+  if (ms >= 1_000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${Math.round(ms)}ms`;
+}
+
+function rateRowHint(row: { avgMs?: number | null; maxMs?: number | null }): string | undefined {
+  if (row.avgMs == null) return undefined;
+  const avg = formatCallMs(row.avgMs);
+  return row.maxMs != null && row.maxMs > row.avgMs ? `${avg} · max ${formatCallMs(row.maxMs)}` : avg;
+}
+
 function RateBreakdownCard({ status }: { status: LiveBackendStatus | null }) {
   const callers = status?.rate.byCaller ?? [];
   const paths = status?.rate.byPath ?? [];
@@ -4486,7 +4498,7 @@ function RateBreakdownCard({ status }: { status: LiveBackendStatus | null }) {
         <div>
           <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">Callers, last {windowMin}m</div>
           <RateRows
-            rows={historyCallers.map((row) => ({ label: row.caller, count: row.count }))}
+            rows={historyCallers.map((row) => ({ label: row.caller, count: row.count, hint: rateRowHint(row), errors: row.errors }))}
             max={max}
             empty="No persisted calls in the recent window."
           />
@@ -4494,7 +4506,9 @@ function RateBreakdownCard({ status }: { status: LiveBackendStatus | null }) {
         <div>
           <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">Paths, last {windowMin}m</div>
           <RateRows
-            rows={(paths.length ? paths : historyPaths).map((row) => ({ label: row.path, count: row.count }))}
+            rows={(paths.length
+              ? paths.map((row) => ({ label: row.path, count: row.count }))
+              : historyPaths.map((row) => ({ label: row.path, count: row.count, hint: rateRowHint(row), errors: row.errors })))}
             max={max}
             empty="No recent paths."
           />
@@ -4504,7 +4518,7 @@ function RateBreakdownCard({ status }: { status: LiveBackendStatus | null }) {
   );
 }
 
-function RateRows({ rows, max, empty }: { rows: Array<{ label: string; count: number }>; max: number; empty: string }) {
+function RateRows({ rows, max, empty }: { rows: Array<{ label: string; count: number; hint?: string; errors?: number }>; max: number; empty: string }) {
   if (rows.length === 0) return <div className="text-[11px] text-osu-f1 py-3">{empty}</div>;
   return (
     <div className="space-y-1.5">
@@ -4516,6 +4530,8 @@ function RateRows({ rows, max, empty }: { rows: Array<{ label: string; count: nu
           />
           <div className="relative flex items-center gap-2 px-2.5 py-1.5">
             <span className="min-w-0 flex-1 truncate text-[10px] font-mono text-osu-c2">{row.label}</span>
+            {row.errors ? <span className="text-[10px] font-semibold text-osu-red flex-shrink-0">{row.errors} err</span> : null}
+            {row.hint ? <span className="text-[10px] text-osu-f1 flex-shrink-0">{row.hint}</span> : null}
             <span className="text-[11px] font-bold text-osu-yellow">{row.count}</span>
           </div>
         </div>

@@ -57,9 +57,13 @@ function tierAccentRgb(tier: ManiaCardTier): string {
 export function CardSpotlight({
   target,
   onClose,
+  onExitComplete,
 }: {
   target: CardSpotlightTarget | null;
   onClose: () => void;
+  /* Fires once the close flight has landed back in the grid slot, so the
+     owner can reveal the source tile again without a duplicate frame. */
+  onExitComplete?: () => void;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<ManiaCardRenderer | null>(null);
@@ -179,7 +183,7 @@ export function CardSpotlight({
     target?.thumbnail ?? (tier ? renderCardSkeletonThumbnail(tier, 600) : null);
 
   return createPortal(
-    <AnimatePresence>
+    <AnimatePresence onExitComplete={onExitComplete}>
       {target && card && layout && from && (
         <div key={`spotlight-${card.userId}`} className="fixed inset-0 z-[120]">
           <motion.div

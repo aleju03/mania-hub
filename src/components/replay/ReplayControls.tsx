@@ -18,6 +18,8 @@ interface ReplayControlsProps {
   modRate: number;
   audioEnabled: boolean;
   volume: number;
+  hitsoundsEnabled: boolean;
+  hitsoundVolume: number;
   showInputOverlay: boolean;
   inputOverlayOnly: boolean;
   inputOverlayKeyHistory: boolean;
@@ -35,6 +37,8 @@ interface ReplayControlsProps {
   onSetSpeed: (speed: number) => void;
   onToggleAudio: () => void;
   onSetVolume: (volume: number) => void;
+  onSetHitsoundVolume: (volume: number) => void;
+  onToggleHitsounds: () => void;
   onToggleInputOverlay: () => void;
   onToggleInputOverlayOnly: () => void;
   onToggleInputOverlayKeyHistory: () => void;
@@ -93,6 +97,8 @@ export function ReplayControls({
   modRate,
   audioEnabled,
   volume,
+  hitsoundsEnabled,
+  hitsoundVolume,
   showInputOverlay,
   inputOverlayOnly,
   inputOverlayKeyHistory,
@@ -110,6 +116,8 @@ export function ReplayControls({
   onSetSpeed,
   onToggleAudio,
   onSetVolume,
+  onSetHitsoundVolume,
+  onToggleHitsounds,
   onToggleInputOverlay,
   onToggleInputOverlayOnly,
   onToggleInputOverlayKeyHistory,
@@ -140,6 +148,13 @@ export function ReplayControls({
   const cancelScrollSpeedCommitRef = useRef(false);
   const wasVideoExportingRef = useRef(videoExporting);
   const videoMenuRef = useRef<HTMLDivElement>(null);
+  const volumeMixerRef = useRef<HTMLDivElement>(null);
+  const [volumeMixerOpen, setVolumeMixerOpen] = useState(false);
+  const [volumeMixerAlignRight, setVolumeMixerAlignRight] = useState(false);
+  // On touch devices hover is synthetic (fires with the tap), so the speaker
+  // button becomes the mixer toggle there instead of an instant mute.
+  const [isCoarsePointer] = useState(() =>
+    typeof window !== "undefined" && (window.matchMedia?.("(pointer: coarse)").matches ?? false));
   const sliderClass = "h-1 appearance-none bg-osu-b3 rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink";
 
   useEffect(() => {
@@ -162,6 +177,33 @@ export function ReplayControls({
       document.removeEventListener("keydown", onKey);
     };
   }, [videoMenuOpen]);
+
+  const openVolumeMixer = () => {
+    const el = volumeMixerRef.current;
+    if (el && typeof window !== "undefined") {
+      // Flip to right-alignment when the panel would clip the viewport edge.
+      setVolumeMixerAlignRight(el.getBoundingClientRect().left + 200 > window.innerWidth - 8);
+    }
+    setVolumeMixerOpen(true);
+  };
+
+  // Touch devices never fire mouseleave, so close the mixer on outside taps.
+  useEffect(() => {
+    if (!volumeMixerOpen) return;
+    const onDocPointer = (event: PointerEvent) => {
+      const el = volumeMixerRef.current;
+      if (el && !el.contains(event.target as Node)) setVolumeMixerOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setVolumeMixerOpen(false);
+    };
+    document.addEventListener("pointerdown", onDocPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDocPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [volumeMixerOpen]);
 
   useEffect(() => {
     const completedExport = wasVideoExportingRef.current && !videoExporting && Boolean(videoExportUrl);
@@ -331,8 +373,23 @@ export function ReplayControls({
         <div className="w-px h-5 bg-osu-b3/40 hidden sm:block" />
 
         {audioUrl && (
-          <div className="flex items-center gap-1.5">
-            <button onClick={onToggleAudio} className="w-7 h-7 rounded flex items-center justify-center cursor-pointer transition-colors hover:bg-osu-b3/50">
+          <div
+            ref={volumeMixerRef}
+            className="relative flex items-center gap-1.5"
+            onMouseEnter={isCoarsePointer ? undefined : openVolumeMixer}
+            onMouseLeave={isCoarsePointer ? undefined : () => setVolumeMixerOpen(false)}
+          >
+            <button
+              onClick={() => {
+                if (isCoarsePointer) {
+                  if (volumeMixerOpen) setVolumeMixerOpen(false);
+                  else openVolumeMixer();
+                } else {
+                  onToggleAudio();
+                }
+              }}
+              className="w-7 h-7 rounded flex items-center justify-center cursor-pointer transition-colors hover:bg-osu-b3/50"
+            >
               <VolumeIcon muted={!audioEnabled || volume === 0} low={volume < 0.5} />
             </button>
             <input
@@ -342,8 +399,40 @@ export function ReplayControls({
               step={0.05}
               value={audioEnabled ? volume : 0}
               onChange={(e) => onSetVolume(Number(e.target.value))}
-              className={`w-12 sm:w-16 ${sliderClass}`}
+              // On touch devices the speaker opens the mixer popover, which
+              // already has both sliders; the inline one just wastes bar space.
+              className={`w-12 sm:w-16 pointer-coarse:hidden ${sliderClass}`}
             />
+            <AnimatePresence>
+              {volumeMixerOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 4 }}
+                  transition={{ duration: 0.1 }}
+                  // pb instead of mb keeps the gap hoverable so the popover
+                  // survives the pointer travelling up into it.
+                  className={`absolute bottom-full z-50 pb-1.5 ${volumeMixerAlignRight ? "right-0" : "left-0"}`}
+                >
+                  <div className="w-48 space-y-3 rounded-lg border border-osu-b2 bg-osu-b3 p-3 shadow-2xl">
+                    <VolumeMixerRow
+                      label="Music"
+                      display={audioEnabled ? `${Math.round(volume * 100)}%` : "muted"}
+                      value={audioEnabled ? volume : 0}
+                      onChange={onSetVolume}
+                      onToggle={onToggleAudio}
+                    />
+                    <VolumeMixerRow
+                      label="Hitsounds"
+                      display={hitsoundsEnabled ? `${Math.round(hitsoundVolume * 100)}%` : "off"}
+                      value={hitsoundsEnabled ? hitsoundVolume : 0}
+                      onChange={onSetHitsoundVolume}
+                      onToggle={onToggleHitsounds}
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         )}
 
@@ -626,6 +715,49 @@ export function ReplayControls({
           <span className="text-[10px] text-osu-f1 tabular-nums w-7">{bgDim}%</span>
         </div>
       </div>
+    </div>
+  );
+}
+
+function VolumeMixerRow({
+  label,
+  display,
+  value,
+  onChange,
+  onToggle,
+}: {
+  label: string;
+  display: string;
+  value: number;
+  onChange: (value: number) => void;
+  onToggle: () => void;
+}) {
+  const fill = Math.round(Math.max(0, Math.min(1, value)) * 100);
+  return (
+    <div>
+      <div className="mb-1.5 flex items-baseline justify-between">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">{label}</span>
+        <button
+          type="button"
+          onClick={onToggle}
+          title={value > 0 ? "Mute" : "Unmute"}
+          className="cursor-pointer text-xs font-semibold tabular-nums text-white transition-colors hover:text-osu-pink-light"
+        >
+          {display}
+        </button>
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={1}
+        step={0.01}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="h-1.5 w-full cursor-pointer appearance-none rounded-full [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink"
+        style={{
+          background: `linear-gradient(90deg, var(--color-osu-pink, #e83c90) 0%, var(--color-osu-pink, #e83c90) ${fill}%, rgba(38, 38, 51, 0.9) ${fill}%, rgba(38, 38, 51, 0.9) 100%)`,
+        }}
+      />
     </div>
   );
 }

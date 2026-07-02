@@ -13,8 +13,16 @@ export interface SkinScreenshot {
   height: number | null;
 }
 
+export interface SkinKeymodePreview extends SkinScreenshot {
+  keys: number;
+}
+
 export interface SkinSummary {
   id: string;
+  // URL slug ("pl0x-aleju03-mix"), assigned at publish; null only on rows
+  // published before slugs existed and not yet backfilled. Page links prefer
+  // it; API endpoints (download, delete, moderate) keep using the id.
+  slug: string | null;
   name: string;
   description: string | null;
   ownerUserId: number;
@@ -25,9 +33,11 @@ export interface SkinSummary {
   previewUrl: string | null;
   previewWidth: number | null;
   previewHeight: number | null;
+  previews: SkinKeymodePreview[];
   screenshots: SkinScreenshot[];
   oskUrl: string | null;
   oskSizeBytes: number | null;
+  oskSha256: string | null;
   status: "pending" | "published" | "hidden";
   publishedAt: string | null;
 }
@@ -45,9 +55,13 @@ export const SKIN_OSK_MAX_BYTES = 50 * 1024 * 1024;
 export const SKIN_SCREENSHOT_MAX_BYTES = 4 * 1024 * 1024;
 export const SKIN_MAX_SCREENSHOTS = 4;
 
+export type SkinsSort = "newest" | "downloads";
+
 export interface SkinsListParams {
   q?: string;
   page?: number;
+  sort?: SkinsSort;
+  k?: number;
 }
 
 export async function fetchSkinsListDirect(params: SkinsListParams, init?: RequestInit): Promise<SkinsListResult> {
@@ -57,6 +71,8 @@ export async function fetchSkinsListDirect(params: SkinsListParams, init?: Reque
   const q = params.q?.trim() ?? "";
   if (q) query.set("q", q.slice(0, 80));
   if (params.page) query.set("page", String(params.page));
+  if (params.sort === "downloads") query.set("sort", "downloads");
+  if (params.k && Number.isInteger(params.k) && params.k >= 1 && params.k <= 10) query.set("k", String(params.k));
   query.set("pageSize", String(SKINS_PAGE_SIZE));
   const response = await fetch(`${base}/api/skins/list?${query.toString()}`, { credentials: "omit", ...init });
   if (!response.ok) throw new Error(`Server ${response.status}`);
@@ -65,8 +81,10 @@ export async function fetchSkinsListDirect(params: SkinsListParams, init?: Reque
 
 export const fetchSkinById = createServerFn({ method: "GET" })
   .inputValidator((data: { id?: unknown }) => {
+    // Accepts a slug or a raw row id; slugs with the short-id collision
+    // fallback can run past 64 chars, hence the wider cap.
     const id = typeof data.id === "string" ? data.id.trim() : "";
-    if (!id || id.length > 64) throw new Error("Invalid skin id.");
+    if (!id || id.length > 80) throw new Error("Invalid skin id.");
     return { id };
   })
   .handler(async ({ data }): Promise<SkinSummary | null> => {
@@ -98,7 +116,7 @@ export const fetchSkinById = createServerFn({ method: "GET" })
 
 export type StartSkinUploadResult =
   | { ok: true; id: string; token: string; expiresAt: string }
-  | { ok: false; error: "not_logged_in" | "unavailable" | "invalid_name" | "pending_limit" | "skin_limit" };
+  | { ok: false; error: "not_logged_in" | "unavailable" | "storage_not_configured" | "invalid_name" | "pending_limit" | "skin_limit" };
 
 interface SkinsBackend {
   base: string;
@@ -142,6 +160,9 @@ export const startSkinUpload = createServerFn({ method: "POST" })
       }
       if (body?.error === "invalid_name" || body?.error === "pending_limit" || body?.error === "skin_limit") {
         return { ok: false, error: body.error };
+      }
+      if (body?.error === "skin_storage_not_configured") {
+        return { ok: false, error: "storage_not_configured" };
       }
       return { ok: false, error: "unavailable" };
     } catch {
@@ -215,6 +236,12 @@ export function uploadSkinPart(options: {
   blob: Blob;
   width?: number | null;
   height?: number | null;
+  // For part=preview: which keymode this render shows, and whether it is the
+  // card cover. The cover also carries the note-art accent sampled during the
+  // render, which beats the skin.ini colours parsed server-side.
+  keys?: number;
+  cover?: boolean;
+  accent?: string;
   onProgress?: (sentBytes: number, totalBytes: number) => void;
 }): Promise<void> {
   const base = getLiveBackendUrl();
@@ -222,6 +249,9 @@ export function uploadSkinPart(options: {
   const query = new URLSearchParams({ id: options.id, token: options.token, part: options.part });
   if (options.width) query.set("w", String(Math.round(options.width)));
   if (options.height) query.set("h", String(Math.round(options.height)));
+  if (options.keys) query.set("keys", String(Math.round(options.keys)));
+  if (options.cover) query.set("cover", "1");
+  if (options.accent && /^#[0-9a-f]{6}$/i.test(options.accent)) query.set("accent", options.accent);
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${base}/api/skins/upload?${query.toString()}`);

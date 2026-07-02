@@ -70,7 +70,7 @@ describe("buildSkinPreviewPattern", () => {
   it("keeps all notes inside their columns and above the hit line", () => {
     for (const keys of [1, 4, 7, 10]) {
       const pattern = buildSkinPreviewPattern(keys);
-      const hitLineY = SKIN_PREVIEW_HEIGHT * 0.86;
+      const hitLineY = SKIN_PREVIEW_HEIGHT * 0.9;
       for (const tap of pattern.taps) {
         expect(tap.column).toBeGreaterThanOrEqual(0);
         expect(tap.column).toBeLessThan(keys);
@@ -82,7 +82,9 @@ describe("buildSkinPreviewPattern", () => {
         expect(ln.column).toBeLessThan(keys);
         expect(ln.tailY).toBeLessThan(ln.headY);
       }
-      expect(pattern.taps.length).toBeGreaterThan(4);
+      // 1K has a single column mostly claimed by the long note; real keymodes
+      // (4K+) place plenty more.
+      expect(pattern.taps.length).toBeGreaterThanOrEqual(keys === 1 ? 4 : 6);
     }
   });
 

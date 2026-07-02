@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { performance } from "node:perf_hooks";
 import { brotliCompress, constants as zlibConstants, gzip } from "node:zlib";
 import type { Config } from "../config.js";
-import { handleBeatmapAudioRequest } from "../audio/http.js";
+import { handleBeatmapAudioRequest, handleBeatmapHitsoundsRequest } from "../audio/http.js";
 import { activateCountry, deleteCountryData, getCountryRegistry, GLOBAL_COUNTRY_CODE, isCountryFeatureAtLeast, isGlobalCountry, setCountryFeatureTier, setCountryPaused, setCountryStatus, type CountryFeatureTier, type CountryRegistryStatus } from "../countries.js";
 import type { Db } from "../db.js";
 import { dbHealth, exec, getSqliteBusyRetryStats, parseJson } from "../db.js";
@@ -43,8 +43,8 @@ import {
   writeReplayVideoUpload,
 } from "../replay-video/exports.js";
 import { isReplayVideoStorageConfigured } from "../replay-video/r2.js";
-import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, finishSkin, getSkin, getSkinForUpload, listSkins, recordSkinDownload, setSkinHidden, SKIN_MAX_SCREENSHOTS, toSkinSummary } from "../features/skins.js";
-import { deleteSkinObjects, isSkinStorageConfigured, skinOskKey, skinPreviewKey, skinScreenshotKey, uploadSkinObject } from "../skins/r2.js";
+import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, finishSkin, getSkin, getSkinByRef, getSkinForUpload, listSkins, recordSkinDownload, setSkinAccent, setSkinHidden, SKIN_MAX_SCREENSHOTS, toSkinSummary, upsertSkinKeymodePreview } from "../features/skins.js";
+import { deleteSkinObjects, getSkinObject, isSkinStorageConfigured, skinKeymodePreviewKey, skinOskKey, skinPreviewKey, skinScreenshotKey, uploadSkinObject } from "../skins/r2.js";
 import { sniffImage, validateOskBuffer } from "../skins/validate-osk.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
 import { addManualRosterMember, enqueueRosterRefreshes, removeManualRosterMember } from "../rosters/country-rosters.js";
@@ -132,6 +132,10 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   }
   if (url.pathname === "/api/audio") {
     await handleBeatmapAudioRequest(req, res, ctx.config, url);
+    return true;
+  }
+  if (url.pathname === "/api/hitsounds") {
+    await handleBeatmapHitsoundsRequest(req, res, ctx.config, url);
     return true;
   }
   // Discord posts interactions server-to-server (no Origin header, bursty). It
@@ -1053,6 +1057,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       page: Number.isFinite(page) ? page : 0,
       pageSize: Number.isFinite(pageSize) ? pageSize : 24,
       includeHidden,
+      sort: url.searchParams.get("sort") === "downloads" ? "downloads" : "newest",
     }));
     return true;
   }
@@ -1062,7 +1067,8 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     const id = url.searchParams.get("id") ?? "";
-    const skin = id ? await getSkin(ctx.db, id) : null;
+    // Accepts the slug from a pretty URL or a raw row id from a pre-slug link.
+    const skin = id ? await getSkinByRef(ctx.db, id) : null;
     const admin = isAdmin(req, ctx);
     if (!skin || (!admin && skin.status !== "published")) {
       sendJson(req, res, ctx, 404, { error: "not_found" });
@@ -1090,6 +1096,39 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     res.setHeader("location", target);
     res.setHeader("cache-control", "no-store");
     res.end();
+    return true;
+  }
+  if (url.pathname.startsWith("/api/skins/file/")) {
+    // Streams a skin's stored objects (.osk, preview, screenshots) from R2
+    // when no public bucket URL is configured. Only keys recorded on the
+    // skin row are reachable, so the shared bucket stays private.
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    if (!checkRate(req, res, ctx, "publicApi")) return true;
+    const parts = url.pathname.split("/").filter(Boolean);
+    const id = decodeURIComponent(parts[3] ?? "");
+    const filename = decodeURIComponent(parts[4] ?? "");
+    const skin = id && filename ? await getSkin(ctx.db, id) : null;
+    const visible = skin && (skin.status === "published" || isAdmin(req, ctx));
+    const key = visible
+      ? [skin.oskKey, skin.previewKey, ...skin.previews.map((preview) => preview.key), ...skin.screenshots.map((shot) => shot.key)]
+          .find((candidate): candidate is string => Boolean(candidate && candidate.split("/").pop() === filename))
+      : undefined;
+    const object = key ? await getSkinObject(ctx.config, key) : null;
+    if (!object) {
+      sendJson(req, res, ctx, 404, { error: "not_found" });
+      return true;
+    }
+    sendCors(req, res, ctx);
+    res.statusCode = 200;
+    res.setHeader("content-type", object.contentType);
+    if (object.contentLength != null) res.setHeader("content-length", String(object.contentLength));
+    if (object.contentDisposition) res.setHeader("content-disposition", object.contentDisposition);
+    res.setHeader("cache-control", "public, max-age=86400, s-maxage=31536000, immutable");
+    object.body.on("error", () => res.destroy());
+    object.body.pipe(res);
     return true;
   }
   if (url.pathname === "/api/skins/start") {
@@ -1195,9 +1234,35 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       const width = parseImageDimension(url.searchParams.get("w"));
       const height = parseImageDimension(url.searchParams.get("h"));
       if (part === "preview") {
-        const key = skinPreviewKey(skin.id, sniffed.ext);
-        const uploaded = await uploadSkinObject(ctx.config, key, buffer, sniffed.mime, "inline");
-        await attachSkinPreview(ctx.db, skin.id, { key, url: uploaded.url, width, height });
+        // The renderer samples the accent from the note art itself, which is
+        // more faithful than the skin.ini colours the .osk validation reads.
+        const accent = url.searchParams.get("accent");
+        if (accent && /^#[0-9a-f]{6}$/i.test(accent)) await setSkinAccent(ctx.db, skin.id, accent);
+        // With keys=N the render is stored as that keymode's preview (one per
+        // keymode, replace on repeat); cover=1 also makes it the card cover.
+        // Without keys it degrades to the single-cover flow.
+        const keysParam = Math.round(Number(url.searchParams.get("keys")));
+        const keys = Number.isInteger(keysParam) && keysParam >= 1 && keysParam <= 10 ? keysParam : null;
+        if (keys != null) {
+          const key = skinKeymodePreviewKey(skin.id, keys, sniffed.ext);
+          const uploaded = await uploadSkinObject(ctx.config, key, buffer, sniffed.mime, "inline");
+          const isCover = url.searchParams.get("cover") === "1";
+          const upserted = await upsertSkinKeymodePreview(
+            ctx.db,
+            skin.id,
+            { keys, key, url: uploaded.url, width, height },
+            isCover,
+          );
+          if (!upserted.ok) {
+            await deleteSkinObjects(ctx.config, [key]).catch(() => {});
+            sendJson(req, res, ctx, 400, { ok: false, error: upserted.error });
+            return true;
+          }
+        } else {
+          const key = skinPreviewKey(skin.id, sniffed.ext);
+          const uploaded = await uploadSkinObject(ctx.config, key, buffer, sniffed.mime, "inline");
+          await attachSkinPreview(ctx.db, skin.id, { key, url: uploaded.url, width, height });
+        }
       } else {
         const key = skinScreenshotKey(skin.id, skin.screenshots.length, sniffed.ext);
         const uploaded = await uploadSkinObject(ctx.config, key, buffer, sniffed.mime, "inline");
@@ -1982,7 +2047,9 @@ async function apiCallHistory(db: Db) {
   const [byCaller, byPath] = await Promise.all([
     exec(
       db,
-      `select coalesce(t.caller, l.caller) as caller, count(*) as count
+      `select coalesce(t.caller, l.caller) as caller, count(*) as count,
+              round(avg(l.duration_ms)) as avg_ms, max(l.duration_ms) as max_ms,
+              sum(case when l.status >= 400 then 1 else 0 end) as errors
        from api_call_log l
        left join api_call_targets t on t.id = l.target_id
        where l.provider = 'osu' and l.started_at >= ?
@@ -1993,7 +2060,9 @@ async function apiCallHistory(db: Db) {
     ),
     exec(
       db,
-      `select coalesce(t.path, l.path) as path, count(*) as count
+      `select coalesce(t.path, l.path) as path, count(*) as count,
+              round(avg(l.duration_ms)) as avg_ms, max(l.duration_ms) as max_ms,
+              sum(case when l.status >= 400 then 1 else 0 end) as errors
        from api_call_log l
        left join api_call_targets t on t.id = l.target_id
        where l.provider = 'osu' and l.started_at >= ?
@@ -2003,10 +2072,16 @@ async function apiCallHistory(db: Db) {
       [since],
     ),
   ]);
+  const stats = (row: Record<string, unknown>) => ({
+    count: Number(row.count),
+    avgMs: row.avg_ms == null ? null : Number(row.avg_ms),
+    maxMs: row.max_ms == null ? null : Number(row.max_ms),
+    errors: Number(row.errors ?? 0),
+  });
   return {
     windowMinutes: 15,
-    byCaller: byCaller.rows.map((row) => ({ caller: String(row.caller), count: Number(row.count) })),
-    byPath: byPath.rows.map((row) => ({ path: String(row.path), count: Number(row.count) })),
+    byCaller: byCaller.rows.map((row) => ({ caller: String(row.caller), ...stats(row) })),
+    byPath: byPath.rows.map((row) => ({ path: String(row.path), ...stats(row) })),
   };
 }
 

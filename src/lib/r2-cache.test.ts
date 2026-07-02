@@ -12,13 +12,20 @@ describe("R2 admin key normalization", () => {
     expect(normalizeR2AdminPrefix("replay-cache/videos/abc/")).toBe("replay-cache/videos/abc/");
   });
 
-  it("rejects prefixes outside the replay cache", () => {
-    expect(() => normalizeR2AdminPrefix("other-cache/")).toThrow(/non replay-cache/);
+  it("accepts the skins root and its subfolders", () => {
+    expect(normalizeR2AdminPrefix("skins")).toBe("skins/");
+    expect(normalizeR2AdminPrefix("/skins/some-id")).toBe("skins/some-id/");
+  });
+
+  it("rejects prefixes outside the browsable roots", () => {
+    expect(() => normalizeR2AdminPrefix("other-cache/")).toThrow(/outside replay-cache\/ or skins\//);
+    expect(() => normalizeR2AdminPrefix("skins-old/")).toThrow(/outside replay-cache\/ or skins\//);
   });
 
   it("accepts file keys and rejects folder keys", () => {
     expect(normalizeR2AdminObjectKey("/replay-cache/replays/123.osr")).toBe("replay-cache/replays/123.osr");
+    expect(normalizeR2AdminObjectKey("skins/some-id/preview-4k.webp")).toBe("skins/some-id/preview-4k.webp");
     expect(() => normalizeR2AdminObjectKey("replay-cache/replays/")).toThrow(/file key/);
-    expect(() => normalizeR2AdminObjectKey("outside.txt")).toThrow(/non replay-cache/);
+    expect(() => normalizeR2AdminObjectKey("outside.txt")).toThrow(/outside replay-cache\/ or skins\//);
   });
 });

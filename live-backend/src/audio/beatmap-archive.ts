@@ -56,7 +56,7 @@ type RangeBuffer = {
   totalBytes: number;
 };
 
-type ZipDirectoryEntry = {
+export type ZipDirectoryEntry = {
   path: string;
   compressedSize: number;
   uncompressedSize: number;
@@ -97,18 +97,53 @@ async function wait(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function withArchiveSourceSlot<T>(source: ArchiveSourceName, task: () => Promise<T>): Promise<T> {
+function archiveAbortError(): Error {
+  const error = new Error("archive request timed out");
+  error.name = "AbortError";
+  return error;
+}
+
+// Settles when the task settles or the signal aborts, whichever comes first.
+// A fetch promise that outlives its abort signal must not keep the per-source
+// queue slot claimed.
+function raceWithAbort<T>(task: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) {
+    task.catch(() => {});
+    return Promise.reject(archiveAbortError());
+  }
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      task.catch(() => {});
+      reject(archiveAbortError());
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    task.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
+async function withArchiveSourceSlot<T>(source: ArchiveSourceName, signal: AbortSignal, task: () => Promise<T>): Promise<T> {
   const state = getArchiveSourceState(source);
   const previous = state.tail.catch(() => {});
   let release!: () => void;
   state.tail = new Promise<void>((resolve) => {
     release = resolve;
   });
-  await previous;
-  await wait(Math.max(0, state.nextAvailableAt - Date.now()));
-  state.nextAvailableAt = Date.now() + ARCHIVE_SOURCE_MIN_INTERVAL_MS;
   try {
-    return await task();
+    await previous;
+    if (signal.aborted) throw archiveAbortError();
+    await wait(Math.max(0, state.nextAvailableAt - Date.now()));
+    if (signal.aborted) throw archiveAbortError();
+    state.nextAvailableAt = Date.now() + ARCHIVE_SOURCE_MIN_INTERVAL_MS;
+    return await raceWithAbort(task(), signal);
   } finally {
     release();
   }
@@ -162,6 +197,14 @@ export function __setArchiveSourceStateForTest(
 
 export function __getArchiveSourceOrderForTest(now: number): ArchiveSourceName[] {
   return getArchiveSourceOrder(now).map((source) => source.name);
+}
+
+export function __withArchiveSourceSlotForTest<T>(
+  source: ArchiveSourceName,
+  signal: AbortSignal,
+  task: () => Promise<T>,
+): Promise<T> {
+  return withArchiveSourceSlot(source, signal, task);
 }
 
 async function readResponseBufferWithLimit(response: Response, limitBytes: number): Promise<ArrayBuffer> {
@@ -588,7 +631,7 @@ async function extractArchiveFileByRange(beatmapsetId: string, filename: string)
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), ARCHIVE_FETCH_TIMEOUT_MS);
     try {
-      return await withArchiveSourceSlot(source.name, async () => {
+      return await withArchiveSourceSlot(source.name, controller.signal, async () => {
         const rangeUrl = await resolveArchiveRangeUrl(source, beatmapsetId, controller.signal);
         return extractArchiveFileByRangeFromUrl(rangeUrl, filename, controller.signal);
       });
@@ -618,7 +661,7 @@ async function extractBeatmapOsuFileByRange(
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), ARCHIVE_FETCH_TIMEOUT_MS);
     try {
-      return await withArchiveSourceSlot(source.name, async () => {
+      return await withArchiveSourceSlot(source.name, controller.signal, async () => {
         const rangeUrl = await resolveArchiveRangeUrl(source, beatmapsetId, controller.signal);
         return findBeatmapOsuFileByRangeFromUrl(rangeUrl, beatmapId, hints, controller.signal);
       });
@@ -650,7 +693,7 @@ async function extractArchiveFileByFullArchive(beatmapsetId: string, filename: s
     const timeout = setTimeout(() => controller.abort(), ARCHIVE_FETCH_TIMEOUT_MS);
     let shouldCooldown = false;
     try {
-      const archiveResponse = await withArchiveSourceSlot(source.name, () => fetch(source.url(beatmapsetId), {
+      const archiveResponse = await withArchiveSourceSlot(source.name, controller.signal, () => fetch(source.url(beatmapsetId), {
         signal: controller.signal,
         headers: ARCHIVE_FETCH_HEADERS,
       }));
@@ -692,7 +735,7 @@ async function extractBeatmapOsuFileByFullArchive(
     const timeout = setTimeout(() => controller.abort(), ARCHIVE_FETCH_TIMEOUT_MS);
     let shouldCooldown = false;
     try {
-      const archiveResponse = await withArchiveSourceSlot(source.name, () => fetch(source.url(beatmapsetId), {
+      const archiveResponse = await withArchiveSourceSlot(source.name, controller.signal, () => fetch(source.url(beatmapsetId), {
         signal: controller.signal,
         headers: ARCHIVE_FETCH_HEADERS,
       }));
@@ -743,4 +786,170 @@ export async function extractBeatmapOsuFileFromArchive(
   }
 
   return extractBeatmapOsuFileByFullArchive(beatmapsetId, beatmapId, hints);
+}
+
+// Hitsound extraction: every hitsound-sized audio file in the archive, for
+// the replay viewer's keysound/custom-sample playback.
+
+export interface BeatmapArchiveHitsoundFile {
+  path: string;
+  data: Buffer;
+}
+
+const HITSOUND_FILE_EXTENSIONS = [".wav", ".ogg", ".mp3"] as const;
+const MAX_HITSOUND_FILE_BYTES = Math.round(1.5 * 1024 * 1024);
+const MAX_HITSOUND_TOTAL_BYTES = 24 * 1024 * 1024;
+const MAX_HITSOUND_FILES = 400;
+// Above this many files, per-entry range requests cost more than one full
+// archive download.
+const MAX_HITSOUND_RANGE_EXTRACTIONS = 16;
+
+function getFilenameStem(path: string): string {
+  const base = path.replace(/\\/g, "/").split("/").pop() ?? path;
+  const dot = base.lastIndexOf(".");
+  return (dot > 0 ? base.slice(0, dot) : base).toLowerCase();
+}
+
+// Selects the archive entries worth bundling. `excludeBasename` is the set's
+// music filename; it is skipped by stem so `audio.mp3` also excludes
+// `audio.ogg`. Smaller files sort first so keysounds survive the caps.
+export function selectHitsoundArchiveEntries(
+  entries: ZipDirectoryEntry[],
+  excludeBasename?: string | null,
+): { selected: ZipDirectoryEntry[]; dropped: number } {
+  const excludedStem = excludeBasename ? getFilenameStem(excludeBasename) : null;
+  const matching = entries.filter((entry) => {
+    if (entry.path.endsWith("/") || entry.path.includes("..")) return false;
+    const lower = entry.path.toLowerCase();
+    if (!HITSOUND_FILE_EXTENSIONS.some((ext) => lower.endsWith(ext))) return false;
+    if (entry.uncompressedSize <= 0 || entry.uncompressedSize > MAX_HITSOUND_FILE_BYTES) return false;
+    if (entry.compressedSize > MAX_HITSOUND_FILE_BYTES) return false;
+    if ((entry.flags & 0x1) !== 0) return false;
+    if (entry.compressionMethod !== 0 && entry.compressionMethod !== 8) return false;
+    if (excludedStem && getFilenameStem(entry.path) === excludedStem) return false;
+    return true;
+  });
+
+  matching.sort((left, right) => left.uncompressedSize - right.uncompressedSize || left.path.localeCompare(right.path));
+
+  const selected: ZipDirectoryEntry[] = [];
+  let totalBytes = 0;
+  for (const entry of matching) {
+    if (selected.length >= MAX_HITSOUND_FILES) break;
+    if (totalBytes + entry.uncompressedSize > MAX_HITSOUND_TOTAL_BYTES) break;
+    selected.push(entry);
+    totalBytes += entry.uncompressedSize;
+  }
+  return { selected, dropped: matching.length - selected.length };
+}
+
+async function extractHitsoundsByRange(
+  beatmapsetId: string,
+  excludeBasename: string | null,
+): Promise<{ files: BeatmapArchiveHitsoundFile[]; dropped: number }> {
+  const errors: string[] = [];
+  for (const source of getArchiveSourceOrder()) {
+    if (isArchiveSourceCoolingDown(source.name)) {
+      errors.push(`${source.name}: cooling down`);
+      continue;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), ARCHIVE_FETCH_TIMEOUT_MS);
+    try {
+      return await withArchiveSourceSlot(source.name, controller.signal, async () => {
+        const rangeUrl = await resolveArchiveRangeUrl(source, beatmapsetId, controller.signal);
+        const entries = await readZipDirectoryEntriesByRangeFromUrl(rangeUrl, controller.signal);
+        const { selected, dropped } = selectHitsoundArchiveEntries(entries, excludeBasename);
+        if (selected.length === 0) return { files: [], dropped };
+        if (selected.length > MAX_HITSOUND_RANGE_EXTRACTIONS) {
+          throw new Error(`too many hitsound files for range extraction (${selected.length})`);
+        }
+        const files: BeatmapArchiveHitsoundFile[] = [];
+        for (const entry of selected) {
+          files.push({
+            path: entry.path.replace(/\\/g, "/"),
+            data: await extractZipEntryByRangeFromUrl(rangeUrl, entry, controller.signal, entry.path, MAX_HITSOUND_FILE_BYTES),
+          });
+        }
+        return { files, dropped };
+      });
+    } catch (error) {
+      if (shouldCooldownArchiveError(error)) cooldownArchiveSource(source.name);
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`${source.name}: ${message}`);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  throw new Error(`Archive hitsound range extraction failed for beatmapset ${beatmapsetId} (${errors.join("; ")})`);
+}
+
+async function extractHitsoundsByFullArchive(
+  beatmapsetId: string,
+  excludeBasename: string | null,
+): Promise<{ files: BeatmapArchiveHitsoundFile[]; dropped: number }> {
+  const errors: string[] = [];
+  for (const source of getArchiveSourceOrder()) {
+    if (isArchiveSourceCoolingDown(source.name)) {
+      errors.push(`${source.name}: cooling down`);
+      continue;
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), ARCHIVE_FETCH_TIMEOUT_MS);
+    let shouldCooldown = false;
+    try {
+      const archiveResponse = await withArchiveSourceSlot(source.name, controller.signal, () => fetch(source.url(beatmapsetId), {
+        signal: controller.signal,
+        headers: ARCHIVE_FETCH_HEADERS,
+      }));
+      if (!archiveResponse.ok) {
+        shouldCooldown = shouldCooldownArchiveSource(archiveResponse.status);
+        throw new Error(`${source.name} returned ${archiveResponse.status}`);
+      }
+
+      const archiveBuffer = await readResponseBufferWithLimit(archiveResponse, MAX_ARCHIVE_BYTES);
+      if (!isLikelyZip(archiveBuffer)) {
+        throw new Error(`${source.name} returned a non-zip response`);
+      }
+      const { selected, dropped } = selectHitsoundArchiveEntries(readZipDirectoryEntriesFromBuffer(archiveBuffer), excludeBasename);
+      const files: BeatmapArchiveHitsoundFile[] = [];
+      let failed = 0;
+      for (const entry of selected) {
+        try {
+          files.push({
+            path: entry.path.replace(/\\/g, "/"),
+            data: extractZipEntryFromBuffer(archiveBuffer, entry, entry.path, MAX_HITSOUND_FILE_BYTES),
+          });
+        } catch {
+          failed++;
+        }
+      }
+      return { files, dropped: dropped + failed };
+    } catch (error) {
+      if (shouldCooldown || (error instanceof Error && error.name === "AbortError")) {
+        cooldownArchiveSource(source.name);
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`${source.name}: ${message}`);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  throw new Error(`Archive hitsound fetch failed for beatmapset ${beatmapsetId} (${errors.join("; ")})`);
+}
+
+export async function extractBeatmapArchiveHitsounds(
+  beatmapsetId: string,
+  options: { excludeBasename?: string | null } = {},
+): Promise<{ files: BeatmapArchiveHitsoundFile[]; dropped: number }> {
+  const excludeBasename = options.excludeBasename ?? null;
+  try {
+    return await extractHitsoundsByRange(beatmapsetId, excludeBasename);
+  } catch {
+    // Mirrors without range support (or keysounded maps with many files) go
+    // through a single guarded full-archive fetch instead.
+  }
+
+  return extractHitsoundsByFullArchive(beatmapsetId, excludeBasename);
 }

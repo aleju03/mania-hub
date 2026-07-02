@@ -202,7 +202,10 @@ function readBoundedEnvInt(name: string, fallback: number, min: number, max: num
   return Math.max(min, Math.min(max, Math.floor(value)));
 }
 
-export async function logApiCall(db: Db, entry: { provider: string; caller: string; path: string; startedAt: string }): Promise<void> {
+export async function logApiCall(
+  db: Db,
+  entry: { provider: string; caller: string; path: string; startedAt: string; durationMs?: number | null; status?: number | null },
+): Promise<void> {
   await exec(
     db,
     `insert or ignore into api_call_targets (provider, caller, path)
@@ -216,8 +219,8 @@ export async function logApiCall(db: Db, entry: { provider: string; caller: stri
   )).rows[0];
   await exec(
     db,
-    "insert into api_call_log (provider, caller, path, target_id, started_at) values (?, '', '', ?, ?)",
-    [entry.provider, Number(row.id), entry.startedAt],
+    "insert into api_call_log (provider, caller, path, target_id, started_at, duration_ms, status) values (?, '', '', ?, ?, ?, ?)",
+    [entry.provider, Number(row.id), entry.startedAt, entry.durationMs ?? null, entry.status ?? null],
   );
 }
 
@@ -470,6 +473,12 @@ async function migrateApiCallTargets(db: Db): Promise<void> {
   const columns = (await db.execute("pragma table_info(api_call_log)")).rows.map((row) => String(row.name));
   if (!columns.includes("target_id")) {
     await db.execute("alter table api_call_log add column target_id integer");
+  }
+  if (!columns.includes("duration_ms")) {
+    await db.execute("alter table api_call_log add column duration_ms integer");
+  }
+  if (!columns.includes("status")) {
+    await db.execute("alter table api_call_log add column status integer");
   }
   await db.execute(`
     create index if not exists idx_api_call_log_target_time
@@ -839,6 +848,20 @@ async function migrateSkins(db: Db): Promise<void> {
   if (!skinColumns.includes("description")) {
     await db.execute("alter table skins add column description text");
   }
+  if (!skinColumns.includes("previews_json")) {
+    // Per-keymode playfield previews: [{keys, key, url, width, height}].
+    // preview_* stays the card cover (one of these, chosen by the uploader).
+    await db.execute("alter table skins add column previews_json text not null default '[]'");
+  }
+  if (!skinColumns.includes("slug")) {
+    // URL slug assigned at publish time (null while pending). Backfilled for
+    // already-published rows by backfillSkinSlugs at boot.
+    await db.execute("alter table skins add column slug text");
+  }
+  await db.execute(`
+    create unique index if not exists idx_skins_slug
+      on skins(slug) where slug is not null
+  `);
   await db.execute(`
     create index if not exists idx_skins_status_published
       on skins(status, published_at desc)

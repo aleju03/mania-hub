@@ -30,7 +30,9 @@ import { buildKeypressHeatmap } from "../lib/replay-keypress-heatmap";
 import { parseReplayScoreInput } from "../lib/replay-score-input";
 import { getReplayScoreAvailability } from "../lib/replay-score-availability";
 import { buildReplaySeoTitle, type ReplaySeoScore } from "../lib/replay-seo";
-import { getBeatmapAudioUrl } from "../lib/audio-url";
+import { getBeatmapAudioUrl, getBeatmapHitsoundsUrl } from "../lib/audio-url";
+import { ReplayHitsoundPlayer } from "../lib/replay-hitsounds";
+import { REPLAY_SKIN_SOUNDS_CHANGE_EVENT, readReplaySkinSounds } from "../lib/replay-skin-sounds";
 import { DEFAULT_REPLAY_SCROLL_SPEED, REPLAY_SCROLL_SPEED_CHANGE_EVENT, normalizeReplayScrollSpeed, readReplayScrollSpeed, writeReplayScrollSpeed } from "../lib/replay-scroll-speed";
 import {
   REPLAY_OVERLAY_SETTINGS_CHANGE_EVENT,
@@ -57,18 +59,21 @@ import {
   normalizeReplayBackgroundDim,
   normalizeReplayInputColor,
   normalizeReplayVolume,
+  readReplayAudioSettings,
   readReplayBackgroundDim,
   readReplayInputColor,
   readReplayInputKeyHistory,
   readReplayInputOnly,
   readReplayInputOverlay,
   readReplayVolume,
+  writeReplayAudioSettings,
   writeReplayBackgroundDim,
   writeReplayInputColor,
   writeReplayInputKeyHistory,
   writeReplayInputOnly,
   writeReplayInputOverlay,
   writeReplayVolume,
+  type ReplayAudioSettings,
 } from "../lib/replay-preferences";
 import type { ManiaBeatmap } from "../lib/beatmap-parser";
 import type { ReplaySkinSettings } from "../lib/replay-skin";
@@ -1562,6 +1567,8 @@ function ReplayViewer({
   const [bgDim, setBgDim] = useState(readReplayBackgroundDim);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [volume, setVolume] = useState(readReplayVolume);
+  const [audioSettings, setAudioSettings] = useState<ReplayAudioSettings>(readReplayAudioSettings);
+  const hitsoundPlayerRef = useRef<ReplayHitsoundPlayer | null>(null);
   const [showInputOverlay, setShowInputOverlay] = useState(readReplayInputOverlay);
   const [inputOverlayOnly, setInputOverlayOnly] = useState(readReplayInputOnly);
   const [inputOverlayKeyHistory, setInputOverlayKeyHistory] = useState(readReplayInputKeyHistory);
@@ -1991,6 +1998,88 @@ function ReplayViewer({
     rendererRef.current?.setOverlaySettings(overlaySettings);
   }, [overlaySettings]);
 
+  // Hitsound player: lives for the whole viewer session, independent of
+  // renderer recreations. Sample sources load in the background.
+  useEffect(() => {
+    const player = new ReplayHitsoundPlayer();
+    hitsoundPlayerRef.current = player;
+    const initial = readReplayAudioSettings();
+    player.setEnabled(initial.hitsoundsEnabled);
+    player.setVolume(initial.hitsoundVolume);
+    player.setUseBeatmapSamples(initial.beatmapHitsounds);
+    player.setComboBreakEnabled(initial.comboBreakSound);
+    void player.loadDefaultSamples();
+
+    let cancelled = false;
+    const loadSkinSounds = () => {
+      void readReplaySkinSounds().then((record) => {
+        if (cancelled) return;
+        player.setSkinSamples(record ? new Map(Object.entries(record.samples)) : null);
+      });
+    };
+    loadSkinSounds();
+    window.addEventListener(REPLAY_SKIN_SOUNDS_CHANGE_EVENT, loadSkinSounds);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener(REPLAY_SKIN_SOUNDS_CHANGE_EVENT, loadSkinSounds);
+      hitsoundPlayerRef.current = null;
+      player.destroy();
+    };
+  }, []);
+
+  // Keep the player in sync with the audio settings and the transport mute.
+  useEffect(() => {
+    writeReplayAudioSettings(audioSettings);
+    const player = hitsoundPlayerRef.current;
+    if (!player) return;
+    player.setEnabled(audioSettings.hitsoundsEnabled);
+    player.setVolume(audioSettings.hitsoundVolume);
+    player.setUseBeatmapSamples(audioSettings.beatmapHitsounds);
+    player.setComboBreakEnabled(audioSettings.comboBreakSound);
+  }, [audioSettings]);
+
+  useEffect(() => {
+    hitsoundPlayerRef.current?.setMuted(!audioEnabled);
+  }, [audioEnabled]);
+
+  // Fetch the beatmapset's own hitsound files (keysounds / custom bank
+  // samples) when the chart references them.
+  useEffect(() => {
+    const player = hitsoundPlayerRef.current;
+    if (!player || !beatmap) return;
+    player.setBeatmapSamples(null);
+    if (!audioSettings.hitsoundsEnabled || !audioSettings.beatmapHitsounds) return;
+    const needsBeatmapSamples = beatmap.notes.some((note) =>
+      note.sample != null && (note.sample.filename != null || note.sample.index >= 1));
+    if (!needsBeatmapSamples || !effectiveBeatmapsetId) return;
+    const url = getBeatmapHitsoundsUrl(effectiveBeatmapsetId, beatmap.audioFilename || null);
+    if (!url) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(url);
+        if (!response.ok || cancelled) return;
+        const bundle = await response.arrayBuffer();
+        if (cancelled || bundle.byteLength === 0) return;
+        const { default: JSZip } = await import("jszip");
+        const zip = await JSZip.loadAsync(bundle);
+        const samples = new Map<string, ArrayBuffer>();
+        for (const entry of Object.values(zip.files)) {
+          if (entry.dir) continue;
+          samples.set(entry.name, await entry.async("arraybuffer"));
+        }
+        if (!cancelled && samples.size > 0) player.setBeatmapSamples(samples);
+      } catch {
+        // Beatmap hitsounds are best-effort; skin/default samples still play.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [beatmap, effectiveBeatmapsetId, audioSettings.hitsoundsEnabled, audioSettings.beatmapHitsounds]);
+
   // Create renderer
   useEffect(() => {
     if (!canvasRef.current || replay.frames.length === 0) return;
@@ -2054,6 +2143,7 @@ function ReplayViewer({
         });
         renderer.setSkinSettings(skinSettingsRef.current);
         renderer.setOverlaySettings(overlaySettingsRef.current);
+        renderer.setHitsoundTrigger?.(hitsoundPlayerRef.current);
         rendererRef.current = renderer;
 
         // Install the audio-driven clock. When audio is enabled and actually
@@ -2302,6 +2392,8 @@ function ReplayViewer({
     const r = rendererRef.current;
     if (!r) return;
     cancelReplayEndAudioFade();
+    // User gesture: let the hitsound AudioContext start producing sound.
+    hitsoundPlayerRef.current?.resume();
     if (r.time >= r.duration) r.seek(0);
     r.play();
     setIsPlaying(true);
@@ -2411,6 +2503,7 @@ function ReplayViewer({
     }
     if (scrubResumeOnReleaseRef.current) {
       scrubResumeOnReleaseRef.current = false;
+      hitsoundPlayerRef.current?.resume();
       r.play();
       setIsPlaying(true);
       if (audioRef.current && audioEnabled) {
@@ -2903,6 +2996,8 @@ function ReplayViewer({
         modRate={modRate}
         audioEnabled={audioEnabled}
         volume={volume}
+        hitsoundsEnabled={audioSettings.hitsoundsEnabled}
+        hitsoundVolume={audioSettings.hitsoundVolume}
         showInputOverlay={showInputOverlay}
         inputOverlayOnly={inputOverlayOnly}
         inputOverlayKeyHistory={inputOverlayKeyHistory}
@@ -2932,6 +3027,18 @@ function ReplayViewer({
           setVolume(normalized);
           if (!audioEnabled && normalized > 0) setAudioEnabled(true);
           if (audioRef.current && !replayEndAudioFadeActiveRef.current) audioRef.current.volume = normalized;
+        }}
+        onSetHitsoundVolume={(nextVolume) => {
+          const normalized = Math.max(0, Math.min(1, nextVolume));
+          setAudioSettings((current) => ({
+            ...current,
+            hitsoundVolume: normalized,
+            // Dragging the slider up from "off" re-enables hitsounds.
+            hitsoundsEnabled: normalized > 0 ? true : current.hitsoundsEnabled,
+          }));
+        }}
+        onToggleHitsounds={() => {
+          setAudioSettings((current) => ({ ...current, hitsoundsEnabled: !current.hitsoundsEnabled }));
         }}
         onToggleInputOverlay={() => setShowInputOverlay((value) => !value)}
         onToggleInputOverlayOnly={() => setInputOverlayOnly((value) => !value)}
@@ -2963,6 +3070,7 @@ function ReplayViewer({
             keyCount={replay.keyCount}
             onSave={applySkinSettings}
             onSaveOverlays={applyOverlaySettings}
+            onAudioSettingsChange={setAudioSettings}
             onClose={() => setSkinSettingsOpen(false)}
           />
         )}

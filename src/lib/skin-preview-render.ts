@@ -4,18 +4,23 @@ import { getReplaySkinProfile } from "./replay-skin";
 // Composes the browse-card preview for an uploaded skin: a fixed 1280x720
 // playfield snippet rendered from the skin's own note/receptor/LN assets, with
 // flat-colour fallbacks where the skin has none. Sprite sizing and anchoring
-// mirror ReplayCanvas (noteHeightScale-based heights, no clamping, heads grow
-// up from the anchor and LN tails grow down from theirs) so Percy-style skins
-// with huge sprite images render the way they do in game. The note pattern is
-// seeded by the key count only, so every skin renders the same "chart" and
-// previews stay comparable side by side. The image doubles as the OG card.
+// follow osu!stable, not naive image-fitting: note heights come from
+// noteHeightScale, LN bodies cascade at natural aspect from the tail end
+// (stable's default NoteBodyStyle, which is what makes Percy-style 40000px
+// body images show their baked-in rounded cap instead of squashing it flat),
+// the body ends under the head's visual centre, and key images stretch from
+// the hit line to the bottom edge. The note pattern is seeded by the key
+// count only, so every skin renders the same "chart" and previews stay
+// comparable side by side. The image doubles as the OG card.
 
 export const SKIN_PREVIEW_WIDTH = 1280;
 export const SKIN_PREVIEW_HEIGHT = 720;
 const PREVIEW_BACKGROUND = "#16121d";
 const STAGE_MAX_FRACTION = 0.42;
 const LANE_MAX_PIXELS = 150;
-const HIT_LINE_FRACTION = 0.86;
+// The game's HitPosition for mania skins sits around 440-450 of 480 (~92-94%);
+// 0.9 keeps that proportion while leaving the key area readable on a card.
+const HIT_LINE_FRACTION = 0.9;
 const SCROLL_TOP_FRACTION = 0.04;
 
 export interface SkinPreviewLayout {
@@ -109,9 +114,11 @@ export function buildSkinPreviewPattern(keyCount: number, options: SkinPreviewPa
   const lnColumns = keys >= 2
     ? [Math.floor(random() * keys), (Math.floor(random() * (keys - 1)) + 1 + Math.floor(keys / 2)) % keys]
     : [0];
+  // Long enough that Percy-style bodies (transparent lead-in at the tail)
+  // still show a good stretch of body between cap and head.
   const longNotes: SkinPreviewLongNote[] = lnColumns.slice(0, 2).map((column, index) => {
-    const headY = hitLineY - usable * (0.1 + 0.34 * index + random() * 0.06);
-    const length = Math.max(noteHeight * 2.2, usable * (0.16 + random() * 0.12));
+    const headY = hitLineY - usable * (0.08 + 0.4 * index + random() * 0.06);
+    const length = Math.max(noteHeight * 2.6, usable * (0.26 + random() * 0.12));
     return { column, headY, tailY: Math.max(scrollTop, headY - length) };
   });
 
@@ -139,9 +146,43 @@ export interface SkinPreviewRenderResult {
   width: number;
   height: number;
   mime: string;
+  // The sampled note-art accent actually used in the render; more faithful
+  // than the skin.ini colours the backend parses out of the .osk.
+  accent: string;
 }
 
-export async function renderSkinPreview(settings: ReplaySkinSettings, keyCount: number): Promise<SkinPreviewRenderResult> {
+export interface SkinPreviewRenderOptions {
+  // A decoded, same-origin (or otherwise canvas-safe) beatmap background;
+  // drawn cover-fit and dimmed behind the stage. Without one the backdrop
+  // falls back to flat accent-tinted triangles.
+  background?: HTMLImageElement | null;
+}
+
+// Real ranked mania sets whose covers back the preview like in-game map art.
+// All verified to have a fullsize cover on assets.ppy.sh.
+const SKIN_PREVIEW_BACKGROUND_SETS = [
+  2556057, 2297326, 2127200, 1049506, 712142, 2344640, 849169,
+  2076003, 2045674, 1297881, 2485019, 1112479, 2519924, 2383217,
+];
+
+// Picks a random map cover and loads it through the same-origin
+// /api/background proxy (assets.ppy.sh sends no CORS headers, so a direct
+// load would taint the canvas). Resolves null when nothing loads; the
+// renderer then uses its flat fallback backdrop.
+export async function loadSkinPreviewBackground(): Promise<HTMLImageElement | null> {
+  const pool = [...SKIN_PREVIEW_BACKGROUND_SETS].sort(() => Math.random() - 0.5).slice(0, 3);
+  for (const setId of pool) {
+    const image = await decodeImage(`/api/background?beatmapsetId=${setId}&inline=1&cover=fullsize`).catch(() => null);
+    if (image) return image;
+  }
+  return null;
+}
+
+export async function renderSkinPreview(
+  settings: ReplaySkinSettings,
+  keyCount: number,
+  options: SkinPreviewRenderOptions = {},
+): Promise<SkinPreviewRenderResult> {
   const profile = getReplaySkinProfile(settings, keyCount);
   const layout = computeSkinPreviewLayout(profile, keyCount);
   const images = await decodeProfileImages(profile);
@@ -153,7 +194,11 @@ export async function renderSkinPreview(settings: ReplaySkinSettings, keyCount: 
 
   const upscroll = settings.upscroll;
   const mapY = (y: number) => (upscroll ? SKIN_PREVIEW_HEIGHT - y : y);
-  const accent = firstTruthy(profile.tapColors) ?? profile.tapColor ?? "#ff66ab";
+  // Accent from the note art itself: skin.ini colours are unreliable (many
+  // skins leave them black while the actual sprites carry the identity).
+  const accent = sampleAccentColor(profile, images)
+    ?? cleanAccentCandidate(firstTruthy(profile.tapColors) ?? profile.tapColor)
+    ?? "#ff66ab";
   const keys = Math.max(1, Math.floor(keyCount));
   // Mirrors ReplayCanvas.getNoteAssetHeight: sprite height comes from the
   // aspect ratio at the skin's WidthForNoteHeightScale, not the lane width.
@@ -162,16 +207,13 @@ export async function renderSkinPreview(settings: ReplaySkinSettings, keyCount: 
     Math.max(1, (image.naturalHeight || 1) * (noteScaleWidth / (image.naturalWidth || 1)));
   const fallbackNoteHeight = (laneWidth: number) => Math.max(10, laneWidth * 0.3);
 
-  // Receptors extend downward from the judgment line at full aspect height
-  // (stable behaviour), so the line moves up until the tallest one fits.
-  const receptorHeights = Array.from({ length: keys }, (_, col) => {
-    const assets = profile.assets.columns[col] ?? {};
-    const asset = assets.receptor ?? assets.receptorPressed;
-    const image = asset ? images.get(asset.src) : undefined;
-    return image ? fitHeight(image, layout.laneWidths[col]) : Math.max(6, SKIN_PREVIEW_HEIGHT * 0.012);
-  });
-  const maxReceptorHeight = Math.min(Math.max(...receptorHeights), SKIN_PREVIEW_HEIGHT * 0.3);
-  const judgmentY = Math.min(layout.hitLineY, SKIN_PREVIEW_HEIGHT - maxReceptorHeight - 8);
+  // Judgment line straight from the skin's HitPosition. settings.hitPosition
+  // is in the replay viewer's 768-space, measured from the bottom edge;
+  // convert back to skin units (480-space) and scale with the stage zoom so
+  // note/receptor/hit-gap proportions stay exactly as in game. Clamped so a
+  // degenerate HitPosition still leaves a usable field.
+  const hitGap = Math.max(0, Math.min(768, settings.hitPosition)) * (480 / 768) * layout.scale;
+  const judgmentY = Math.max(SKIN_PREVIEW_HEIGHT * 0.75, Math.min(SKIN_PREVIEW_HEIGHT * 0.95, SKIN_PREVIEW_HEIGHT - hitGap));
 
   // Tap visual height drives pattern spacing so notes never stack.
   const tapHeights = Array.from({ length: keys }, (_, col) => {
@@ -186,11 +228,18 @@ export async function renderSkinPreview(settings: ReplaySkinSettings, keyCount: 
     noteHeight: patternNoteHeight,
   });
 
-  ctx.fillStyle = PREVIEW_BACKGROUND;
-  ctx.fillRect(0, 0, SKIN_PREVIEW_WIDTH, SKIN_PREVIEW_HEIGHT);
+  // Map background behind the field, dimmed like in game; the flat triangle
+  // backdrop stands in when no cover was loaded.
+  if (options.background) {
+    drawCoverFit(ctx, options.background);
+    ctx.fillStyle = "rgba(6, 4, 10, 0.72)";
+    ctx.fillRect(0, 0, SKIN_PREVIEW_WIDTH, SKIN_PREVIEW_HEIGHT);
+  } else {
+    drawPreviewBackdrop(ctx, accent);
+  }
 
-  // Stage: flat dark field with hairline separators and accent edges.
-  ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+  // Stage: dark but slightly translucent, like a dimmed in-game playfield.
+  ctx.fillStyle = "rgba(4, 3, 8, 0.72)";
   ctx.fillRect(layout.stageX, 0, layout.stageWidth, SKIN_PREVIEW_HEIGHT);
   ctx.fillStyle = "rgba(255, 255, 255, 0.06)";
   for (let col = 1; col < keys; col += 1) {
@@ -200,7 +249,12 @@ export async function renderSkinPreview(settings: ReplaySkinSettings, keyCount: 
   ctx.fillRect(layout.stageX - 2, 0, 2, SKIN_PREVIEW_HEIGHT);
   ctx.fillRect(layout.stageX + layout.stageWidth, 0, 2, SKIN_PREVIEW_HEIGHT);
 
-  // Receptors sit on the judgment line; one column renders pressed for life.
+  // Key images: width stretched to the lane, height at the texture's NATIVE
+  // size in the game's 768-unit space (pixel height / @2x scale, then into
+  // 480-space), bottom-anchored at the screen edge. This is the lazer legacy
+  // key-area rule and it matches gameplay pixel-for-pixel: pl0x's 400px @2x
+  // key renders 125 skin-units tall, putting its ring exactly note-sized with
+  // its bottom on the hit line. One column renders pressed for life.
   const pressedColumn = Math.min(1, keys - 1);
   const judgmentLineY = mapY(judgmentY);
   for (let col = 0; col < keys; col += 1) {
@@ -210,9 +264,18 @@ export async function renderSkinPreview(settings: ReplaySkinSettings, keyCount: 
     const laneX = layout.laneXs[col];
     const laneWidth = layout.laneWidths[col];
     if (image) {
-      const height = fitHeight(image, laneWidth);
-      const top = upscroll ? judgmentLineY - height : judgmentLineY;
-      ctx.drawImage(image, laneX, top, laneWidth, height);
+      const assetScale = asset?.scale && asset.scale > 0 ? asset.scale : 1;
+      const nativeHeight = (asset?.height && asset.height > 0 ? asset.height : image.naturalHeight || 1) / assetScale;
+      const height = Math.max(1, nativeHeight * (480 / 768) * layout.scale);
+      if (upscroll) {
+        // The game flips the stage for upscroll: key art hangs from the top.
+        ctx.save();
+        ctx.scale(1, -1);
+        ctx.drawImage(image, laneX, -height, laneWidth, height);
+        ctx.restore();
+      } else {
+        ctx.drawImage(image, laneX, SKIN_PREVIEW_HEIGHT - height, laneWidth, height);
+      }
     } else {
       const height = Math.max(6, SKIN_PREVIEW_HEIGHT * 0.012);
       const top = upscroll ? judgmentLineY - height - 2 : judgmentLineY + 2;
@@ -235,7 +298,104 @@ export async function renderSkinPreview(settings: ReplaySkinSettings, keyCount: 
   drawJudgementAndCombo(ctx, profile, images, layout);
 
   const blob = await canvasToBlob(canvas);
-  return { blob, width: SKIN_PREVIEW_WIDTH, height: SKIN_PREVIEW_HEIGHT, mime: blob.type || "image/png" };
+  return { blob, width: SKIN_PREVIEW_WIDTH, height: SKIN_PREVIEW_HEIGHT, mime: blob.type || "image/png", accent };
+}
+
+// Average the opaque pixels of the first tap/LN-head sprite to get the
+// skin's visual accent; returns null when the art is effectively greyscale
+// black (then skin.ini colours get their chance).
+function sampleAccentColor(
+  profile: ReplaySkinKeymodeProfile,
+  images: Map<string, HTMLImageElement>,
+): string | null {
+  for (const column of profile.assets.columns) {
+    for (const asset of [column?.tap, column?.lnHead]) {
+      const image = asset ? images.get(asset.src) : undefined;
+      if (!image) continue;
+      try {
+        const sample = document.createElement("canvas");
+        sample.width = 12;
+        sample.height = 12;
+        const sampleCtx = sample.getContext("2d", { willReadFrequently: true });
+        if (!sampleCtx) return null;
+        sampleCtx.drawImage(image, 0, 0, 12, 12);
+        const data = sampleCtx.getImageData(0, 0, 12, 12).data;
+        let r = 0;
+        let g = 0;
+        let b = 0;
+        let weight = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          const alpha = data[i + 3] / 255;
+          if (alpha < 0.4) continue;
+          r += data[i] * alpha;
+          g += data[i + 1] * alpha;
+          b += data[i + 2] * alpha;
+          weight += alpha;
+        }
+        if (weight < 4) continue;
+        const color = toHexColor(r / weight, g / weight, b / weight);
+        if (color) return color;
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
+function cleanAccentCandidate(color: string | null): string | null {
+  if (!color) return null;
+  const match = /^#([0-9a-f]{6})$/i.exec(color.trim());
+  if (!match) return null;
+  const value = parseInt(match[1], 16);
+  return toHexColor((value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff);
+}
+
+// Rejects near-black (no tint to give); keeps everything else as-is.
+function toHexColor(r: number, g: number, b: number): string | null {
+  if (Math.max(r, g, b) < 40) return null;
+  const to = (channel: number) => Math.max(0, Math.min(255, Math.round(channel))).toString(16).padStart(2, "0");
+  return `#${to(r)}${to(g)}${to(b)}`;
+}
+
+function drawCoverFit(ctx: CanvasRenderingContext2D, image: HTMLImageElement): void {
+  const sourceWidth = image.naturalWidth || 1;
+  const sourceHeight = image.naturalHeight || 1;
+  const scale = Math.max(SKIN_PREVIEW_WIDTH / sourceWidth, SKIN_PREVIEW_HEIGHT / sourceHeight);
+  const width = sourceWidth * scale;
+  const height = sourceHeight * scale;
+  ctx.drawImage(image, (SKIN_PREVIEW_WIDTH - width) / 2, (SKIN_PREVIEW_HEIGHT - height) / 2, width, height);
+}
+
+function drawPreviewBackdrop(ctx: CanvasRenderingContext2D, accent: string): void {
+  // Accent-tinted base so the whole backdrop carries the skin's hue.
+  ctx.fillStyle = PREVIEW_BACKGROUND;
+  ctx.fillRect(0, 0, SKIN_PREVIEW_WIDTH, SKIN_PREVIEW_HEIGHT);
+  ctx.globalAlpha = 0.14;
+  ctx.fillStyle = accent;
+  ctx.fillRect(0, 0, SKIN_PREVIEW_WIDTH, SKIN_PREVIEW_HEIGHT);
+
+  const random = mulberry32(0x5eed);
+  for (let i = 0; i < 12; i += 1) {
+    // Large flat-shaded triangles spread across the width; overlaps read as
+    // interlocking shapes once the alphas stack. A few lighter ones give the
+    // tonal variety of dimmed artwork.
+    const size = SKIN_PREVIEW_HEIGHT * (0.45 + random() * 0.6);
+    const centerX = SKIN_PREVIEW_WIDTH * ((i + random() * 0.9) / 12);
+    const centerY = SKIN_PREVIEW_HEIGHT * (0.05 + random() * 0.9);
+    const up = random() > 0.4;
+    const light = random() > 0.7;
+    const half = size / 2;
+    ctx.globalAlpha = light ? 0.05 + random() * 0.05 : 0.08 + random() * 0.1;
+    ctx.fillStyle = light ? "#ffffff" : accent;
+    ctx.beginPath();
+    ctx.moveTo(centerX, up ? centerY - half : centerY + half);
+    ctx.lineTo(centerX - half, up ? centerY + half : centerY - half);
+    ctx.lineTo(centerX + half, up ? centerY + half : centerY - half);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
 }
 
 function drawTapNote(
@@ -285,16 +445,43 @@ function drawLongNote(
   const tailImage = assets.lnTail ? images.get(assets.lnTail.src) : undefined;
   const headEndY = mapY(ln.headY);
   const tailEndY = mapY(ln.tailY);
+  const headHeight = headImage ? noteAssetHeight(headImage) : Math.max(10, laneWidth * 0.3);
 
-  // Percy trim, as in ReplayCanvas: pull the body end back so oversized
+  // Percy trim, as in ReplayCanvas: pull the body's tail end back so oversized
   // LN sprites read at their intended length.
   const trim = settings.percy ? Math.min(20, laneWidth * 0.35) : 0;
-  const tailDelta = upscroll ? -trim : trim;
-  const bodyTop = Math.min(headEndY, tailEndY + tailDelta);
-  const bodyBottom = Math.max(headEndY, tailEndY + tailDelta);
+  const tailSideY = tailEndY + (upscroll ? -trim : trim);
+  // The body runs to the head's visual centre (how the game reads: the head
+  // sprite fully covers the body's end, so nothing pokes out under a circle).
+  const headSideY = upscroll ? headEndY + headHeight / 2 : headEndY - headHeight / 2;
+  const bodyTop = Math.min(tailSideY, headSideY);
+  const bodyBottom = Math.max(tailSideY, headSideY);
 
   if (bodyImage && bodyBottom > bodyTop) {
-    ctx.drawImage(bodyImage, laneX, bodyTop, laneWidth, bodyBottom - bodyTop);
+    // Cascade, not stretch (stable's default NoteBodyStyle): the image runs at
+    // natural aspect from the tail end toward the head, tiling if it is
+    // shorter than the span. Percy bodies are one huge tile whose rounded cap
+    // (and "appears shorter" transparent lead-in) lands at the tail. Draw via
+    // source slices so the destination rect never exceeds the visible span:
+    // Chromium quietly rasterises multi-thousand-pixel upscales through a
+    // capped intermediate, which would squash the cap flat.
+    const sourceWidth = bodyImage.naturalWidth || 1;
+    const sourceHeight = bodyImage.naturalHeight || 1;
+    const scale = laneWidth / sourceWidth;
+    ctx.save();
+    if (upscroll) {
+      // Tail end is at the bottom: flip the span so the cap edge lands there.
+      ctx.translate(0, bodyTop + bodyBottom);
+      ctx.scale(1, -1);
+    }
+    let y = bodyTop;
+    while (y < bodyBottom - 0.01) {
+      const sliceRows = Math.min(sourceHeight, (bodyBottom - y) / scale);
+      const sliceHeight = Math.max(1, sliceRows * scale);
+      ctx.drawImage(bodyImage, 0, 0, sourceWidth, sliceRows, laneX, y, laneWidth, sliceHeight);
+      y += sliceHeight;
+    }
+    ctx.restore();
   } else if (bodyBottom > bodyTop) {
     ctx.fillStyle = settings.lnBodyColor || "#8b8b93";
     ctx.globalAlpha = 0.9;
@@ -303,7 +490,7 @@ function drawLongNote(
   }
 
   // The tail sprite grows toward the head from its anchor (down on
-  // downscroll), full aspect height: this is what keeps Percy caps round.
+  // downscroll) at full aspect height, as in ReplayCanvas.
   if (tailImage) {
     const tailHeight = noteAssetHeight(tailImage);
     const tailTop = upscroll ? tailEndY - tailHeight : tailEndY;
@@ -311,14 +498,12 @@ function drawLongNote(
   }
 
   if (headImage) {
-    const headHeight = noteAssetHeight(headImage);
     const headTop = upscroll ? headEndY : headEndY - headHeight;
     ctx.drawImage(headImage, laneX, headTop, laneWidth, headHeight);
   } else {
-    const height = Math.max(10, laneWidth * 0.3);
-    const top = upscroll ? headEndY : headEndY - height;
+    const top = upscroll ? headEndY : headEndY - headHeight;
     ctx.fillStyle = profile.lnHeadColors[ln.column] || profile.lnHeadColor || "#ffffff";
-    fillRoundedRect(ctx, laneX + 1, top, laneWidth - 2, height, 4);
+    fillRoundedRect(ctx, laneX + 1, top, laneWidth - 2, headHeight, 4);
   }
 }
 
@@ -389,12 +574,6 @@ function decodeImage(src: string): Promise<HTMLImageElement> {
     image.onerror = () => reject(new Error("Failed to decode image."));
     image.src = src;
   });
-}
-
-function fitHeight(image: HTMLImageElement, targetWidth: number): number {
-  const width = image.naturalWidth || 1;
-  const height = image.naturalHeight || 1;
-  return height * (targetWidth / width);
 }
 
 function fillRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number): void {

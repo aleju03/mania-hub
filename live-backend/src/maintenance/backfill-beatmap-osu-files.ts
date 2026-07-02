@@ -45,6 +45,8 @@ const osu = new OsuApiClient(config, fetch, (entry) => {
     caller: entry.caller,
     path: entry.path,
     startedAt: new Date(entry.startedAt).toISOString(),
+    durationMs: entry.durationMs,
+    status: entry.status,
   }).catch(() => {});
 }, { sharedLimiter });
 

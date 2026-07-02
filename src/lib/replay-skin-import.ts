@@ -39,18 +39,34 @@ export interface ReplaySkinImportSummary {
   receptorAssets: number;
   judgementAssets: number;
   comboDigits: number;
+  soundAssets: number;
 }
 
 export interface ReplaySkinImportResult {
   settings: ReplaySkinSettings;
   summary: ReplaySkinImportSummary;
+  // Hitsound samples keyed by lowercased name without extension, only
+  // populated when options.extractSounds is set.
+  sounds: Record<string, ArrayBuffer>;
 }
+
+// The gameplay samples the replay viewer can play. Skins ship many more
+// sounds (menu clicks, applause, ...) that are irrelevant here.
+const SKIN_SOUND_NAMES = [
+  ...["normal", "soft", "drum"].flatMap((bank) =>
+    ["hitnormal", "hitwhistle", "hitfinish", "hitclap"].map((name) => `${bank}-${name}`),
+  ),
+  "combobreak",
+];
+const SKIN_SOUND_EXTENSIONS = ["wav", "ogg", "mp3"];
+const MAX_SKIN_SOUND_BYTES = 1.5 * 1024 * 1024;
 
 export async function importReplaySkinFromOsk(
   file: File,
   options: {
     targetKeyCount: number;
     baseSettings?: ReplaySkinSettings;
+    extractSounds?: boolean;
   },
 ): Promise<ReplaySkinImportResult> {
   const zip = await JSZip.loadAsync(file);
@@ -119,6 +135,8 @@ export async function importReplaySkinFromOsk(
     version: 2,
   });
 
+  const sounds = options.extractSounds ? await extractSkinSounds(lookup) : {};
+
   return {
     settings: nextSettings,
     summary: {
@@ -130,8 +148,50 @@ export async function importReplaySkinFromOsk(
       receptorAssets,
       judgementAssets,
       comboDigits,
+      soundAssets: Object.keys(sounds).length,
     },
+    sounds,
   };
+}
+
+export interface ReplaySkinSoundsImportResult {
+  name: string;
+  sounds: Record<string, ArrayBuffer>;
+}
+
+// Sounds-only import used by the Audio tab: pulls the gameplay samples out of
+// a .osk without touching the visual skin settings. skin.ini is optional here,
+// it is only read for the skin's display name.
+export async function importReplaySkinSoundsFromOsk(file: File): Promise<ReplaySkinSoundsImportResult> {
+  const zip = await JSZip.loadAsync(file);
+  const skinIni = await readSkinIni(zip);
+  const parsed = skinIni ? parseSkinIni(skinIni) : null;
+  const sounds = await extractSkinSounds(buildZipLookup(zip));
+  return { name: parsed?.name ?? stripExtension(file.name), sounds };
+}
+
+async function extractSkinSounds(lookup: Map<string, JSZip.JSZipObject>): Promise<Record<string, ArrayBuffer>> {
+  const sounds: Record<string, ArrayBuffer> = {};
+
+  for (const name of SKIN_SOUND_NAMES) {
+    for (const ext of SKIN_SOUND_EXTENSIONS) {
+      const path = `${name}.${ext}`;
+      const file = lookup.get(path)
+        ?? [...lookup.entries()].find(([key]) => key.endsWith(`/${path}`))?.[1];
+      if (!file) continue;
+      try {
+        const data = await file.async("arraybuffer");
+        // A zero-byte sample is an intentional "silence this sound" override.
+        if (data.byteLength > MAX_SKIN_SOUND_BYTES) continue;
+        sounds[name] = data;
+        break;
+      } catch {
+        // Skip unreadable entries; the sample falls back to the defaults.
+      }
+    }
+  }
+
+  return sounds;
 }
 
 async function readSkinIni(zip: JSZip): Promise<string | null> {
@@ -378,8 +438,21 @@ function buildAssetCandidates(reference: string): Array<{ path: string; mime: st
 async function readImageAsset(_zip: JSZip, resolved: ResolvedZipAsset): Promise<ReplaySkinImageAsset | undefined> {
   const data = await resolved.file.async("base64");
   if (!data) return undefined;
-  const src = `data:${resolved.mime};base64,${data}`;
-  const size = await readImageSize(src).catch(() => null);
+  let src = `data:${resolved.mime};base64,${data}`;
+  let size: { width: number; height: number } | null = null;
+  // Some skins ship TIFFs renamed to .png (Percy-style LN bodies especially;
+  // osu!stable decodes by content, so they work in game). Browsers cannot
+  // decode TIFF at all, so transcode the common Photoshop flavour to PNG here.
+  // "SUkq" / "TU0AK" are the base64 spellings of the II*/MM* TIFF magic.
+  if (data.startsWith("SUkq") || data.startsWith("TU0AK")) {
+    const decoded = decodeUncompressedTiff(base64ToBytes(data));
+    const transcoded = decoded ? rgbaToPngDataUrl(decoded) : null;
+    if (decoded && transcoded) {
+      src = transcoded;
+      size = { width: decoded.width, height: decoded.height };
+    }
+  }
+  if (!size) size = await readImageSize(src).catch(() => null);
   return {
     name: basename(resolved.path),
     path: normalizeZipPath(resolved.path),
@@ -388,6 +461,127 @@ async function readImageAsset(_zip: JSZip, resolved: ResolvedZipAsset): Promise<
     height: size?.height,
     scale: resolved.scale,
   };
+}
+
+interface DecodedTiff {
+  width: number;
+  height: number;
+  rgba: Uint8ClampedArray<ArrayBuffer>;
+}
+
+// Minimal TIFF reader for the skin case above: 8-bit RGB/RGBA, chunky layout,
+// uncompressed strips (what Photoshop writes by default). Anything fancier
+// returns null and the asset stays as-is.
+export function decodeUncompressedTiff(bytes: Uint8Array): DecodedTiff | null {
+  if (bytes.length < 8) return null;
+  const little = bytes[0] === 0x49 && bytes[1] === 0x49;
+  if (!little && !(bytes[0] === 0x4d && bytes[1] === 0x4d)) return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (view.getUint16(2, little) !== 42) return null;
+
+  const readTag = (entry: number): number[] | null => {
+    const type = view.getUint16(entry + 2, little);
+    const count = view.getUint32(entry + 4, little);
+    const sizes: Record<number, number> = { 1: 1, 3: 2, 4: 4 };
+    const size = sizes[type];
+    if (!size || count === 0 || count > 65536) return null;
+    const total = size * count;
+    const at = total <= 4 ? entry + 8 : view.getUint32(entry + 8, little);
+    if (at + total > bytes.length) return null;
+    const values: number[] = [];
+    for (let i = 0; i < count; i += 1) {
+      const offset = at + i * size;
+      values.push(size === 1 ? view.getUint8(offset) : size === 2 ? view.getUint16(offset, little) : view.getUint32(offset, little));
+    }
+    return values;
+  };
+
+  const ifd = view.getUint32(4, little);
+  if (ifd + 2 > bytes.length) return null;
+  const entryCount = view.getUint16(ifd, little);
+  const tags = new Map<number, number[]>();
+  for (let i = 0; i < entryCount; i += 1) {
+    const entry = ifd + 2 + i * 12;
+    if (entry + 12 > bytes.length) return null;
+    const values = readTag(entry);
+    if (values) tags.set(view.getUint16(entry, little), values);
+  }
+
+  const width = tags.get(256)?.[0] ?? 0;
+  const height = tags.get(257)?.[0] ?? 0;
+  const bits = tags.get(258) ?? [];
+  const compression = tags.get(259)?.[0] ?? 1;
+  const photometric = tags.get(262)?.[0] ?? 2;
+  const samples = tags.get(277)?.[0] ?? bits.length;
+  const planar = tags.get(284)?.[0] ?? 1;
+  const premultiplied = tags.get(338)?.[0] === 1;
+  const stripOffsets = tags.get(273) ?? [];
+  const stripCounts = tags.get(279) ?? [];
+  const rowsPerStrip = tags.get(278)?.[0] ?? height;
+
+  if (compression !== 1 || photometric !== 2 || planar !== 1) return null;
+  if ((samples !== 3 && samples !== 4) || bits.some((b) => b !== 8)) return null;
+  if (width <= 0 || height <= 0 || width > 65000 || height > 65000 || width * height > 50_000_000) return null;
+  if (stripOffsets.length === 0 || stripOffsets.length !== stripCounts.length) return null;
+
+  const rgba = new Uint8ClampedArray(width * height * 4);
+  const bytesPerRow = width * samples;
+  let row = 0;
+  for (let strip = 0; strip < stripOffsets.length && row < height; strip += 1) {
+    const start = stripOffsets[strip];
+    const available = Math.min(stripCounts[strip], bytes.length - start);
+    const rows = Math.min(Math.floor(available / bytesPerRow), rowsPerStrip, height - row);
+    if (rows <= 0) return null;
+    for (let r = 0; r < rows; r += 1) {
+      let source = start + r * bytesPerRow;
+      let target = (row + r) * width * 4;
+      for (let x = 0; x < width; x += 1) {
+        rgba[target] = bytes[source];
+        rgba[target + 1] = bytes[source + 1];
+        rgba[target + 2] = bytes[source + 2];
+        rgba[target + 3] = samples === 4 ? bytes[source + 3] : 255;
+        source += samples;
+        target += 4;
+      }
+    }
+    row += rows;
+  }
+  if (row < height) return null;
+
+  if (premultiplied && samples === 4) {
+    for (let i = 0; i < rgba.length; i += 4) {
+      const alpha = rgba[i + 3];
+      if (alpha > 0 && alpha < 255) {
+        rgba[i] = Math.min(255, Math.round((rgba[i] * 255) / alpha));
+        rgba[i + 1] = Math.min(255, Math.round((rgba[i + 1] * 255) / alpha));
+        rgba[i + 2] = Math.min(255, Math.round((rgba[i + 2] * 255) / alpha));
+      }
+    }
+  }
+
+  return { width, height, rgba };
+}
+
+function rgbaToPngDataUrl(decoded: DecodedTiff): string | null {
+  if (typeof document === "undefined") return null;
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = decoded.width;
+    canvas.height = decoded.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.putImageData(new ImageData(decoded.rgba, decoded.width, decoded.height), 0, 0);
+    return canvas.toDataURL("image/png");
+  } catch {
+    return null;
+  }
+}
+
+function base64ToBytes(data: string): Uint8Array {
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
 }
 
 function readImageSize(src: string): Promise<{ width: number; height: number }> {

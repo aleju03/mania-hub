@@ -25,10 +25,16 @@ vi.mock("../src/skins/r2.js", async (importOriginal) => {
       url: `https://cdn.test/${key}`,
     })),
     deleteSkinObjects: vi.fn(async () => {}),
+    getSkinObject: vi.fn(async (_config: unknown, key: string) => ({
+      body: Readable.from([Buffer.from(`object:${key}`)]),
+      contentType: key.endsWith(".osk") ? "application/octet-stream" : "image/webp",
+      contentLength: 8,
+      contentDisposition: key.endsWith(".osk") ? 'attachment; filename="skin.osk"' : null,
+    })),
   };
 });
 
-import { deleteSkinObjects, uploadSkinObject } from "../src/skins/r2.js";
+import { deleteSkinObjects, getSkinObject, uploadSkinObject } from "../src/skins/r2.js";
 
 let dir = "";
 let db: Db;
@@ -93,7 +99,8 @@ function bodyReq(method: string, url: string, body: Buffer | string, headers: In
 function mockRes() {
   const writes: string[] = [];
   const headers: Record<string, string> = {};
-  const res = {
+  // An EventEmitter base so Readable.pipe() (the /api/skins/file stream) works.
+  const res = Object.assign(new EventEmitter(), {
     statusCode: 200,
     setHeader: (key: string, value: number | string | readonly string[]) => {
       headers[key.toLowerCase()] = Array.isArray(value) ? value.join(",") : String(value);
@@ -103,22 +110,33 @@ function mockRes() {
       res.statusCode = status;
       return res;
     },
-    write: (chunk: string) => {
+    write: (chunk: string | Buffer) => {
       writes.push(String(chunk));
       return true;
     },
+    destroy: () => {},
     end: (chunk?: string | Buffer) => {
       if (chunk != null) writes.push(String(chunk));
     },
-  } as unknown as ServerResponse & { statusCode: number };
+  }) as unknown as ServerResponse & { statusCode: number };
   return { res, writes, headers };
 }
 
 async function call(req: IncomingMessage) {
   const response = mockRes();
   await routeHttp(req, response.res, ctx());
+  // Let a piped stream (the file endpoint) flush before reading writes.
+  await new Promise((resolve) => setImmediate(resolve));
   const raw = response.writes.join("");
-  return { status: response.res.statusCode, body: raw ? JSON.parse(raw) : null, headers: response.headers };
+  // Same loose typing JSON.parse gave the original helper; binary responses
+  // (the file endpoint) fall back to the raw string.
+  let body: ReturnType<typeof JSON.parse> = null;
+  try {
+    body = raw ? JSON.parse(raw) : null;
+  } catch {
+    body = raw;
+  }
+  return { status: response.res.statusCode, body, headers: response.headers };
 }
 
 async function buildOskBuffer(): Promise<Buffer> {
@@ -237,6 +255,31 @@ describe("skins HTTP endpoints", () => {
     expect(vi.mocked(deleteSkinObjects)).toHaveBeenCalled();
     const deletedKeys = vi.mocked(deleteSkinObjects).mock.calls.at(-1)?.[1] as string[];
     expect(deletedKeys.some((key) => key.endsWith(".osk"))).toBe(true);
+  });
+
+  it("streams stored objects through /api/skins/file with key allow-listing", async () => {
+    const { id, token } = await startUpload();
+    await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=osk`, await buildOskBuffer()));
+    await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=preview`, PNG_BYTES));
+    await call(mockReq("POST", `/api/skins/finish?id=${id}&token=${token}`));
+
+    const osk = await call(mockReq("GET", `/api/skins/file/${id}/${encodeURIComponent("Cloudy Skies.osk")}`));
+    expect(osk.status).toBe(200);
+    expect(osk.headers["content-type"]).toBe("application/octet-stream");
+    expect(String(osk.body)).toContain(`object:skins/${id}/`);
+
+    const preview = await call(mockReq("GET", `/api/skins/file/${id}/preview.png`));
+    expect(preview.status).toBe(200);
+    expect(preview.headers["cache-control"]).toContain("immutable");
+
+    // only keys recorded on the row are reachable
+    expect((await call(mockReq("GET", `/api/skins/file/${id}/other.osk`))).status).toBe(404);
+    expect(vi.mocked(getSkinObject)).not.toHaveBeenCalledWith(expect.anything(), expect.stringContaining("other"));
+
+    // hidden skins stream for admins only
+    await call(bodyReq("POST", "/api/admin/skins/moderate", JSON.stringify({ id, action: "hide" }), ADMIN));
+    expect((await call(mockReq("GET", `/api/skins/file/${id}/preview.png`))).status).toBe(404);
+    expect((await call(mockReq("GET", `/api/skins/file/${id}/preview.png`, ADMIN))).status).toBe(200);
   });
 
   it("rejects oversized osk uploads before buffering", async () => {

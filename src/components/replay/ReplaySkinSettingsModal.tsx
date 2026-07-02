@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { createPortal } from "react-dom";
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, ChevronDown, Copy, FileArchive, GripHorizontal, Pencil, Plus, Settings, Trash2, Upload, X } from "lucide-react";
+import { Check, ChevronDown, Copy, GripHorizontal, Pencil, Plus, Settings, Trash2, Upload, X } from "lucide-react";
 
 import { ReplaySkinColorPanel } from "./ReplaySkinColorPanel";
 import {
@@ -46,8 +46,10 @@ import {
   replayStagePositionToOsuManiaPosition,
   writeReplaySkinPresets,
 } from "#/lib/replay-skin";
-import { importReplaySkinFromOsk } from "#/lib/replay-skin-import";
+import { importReplaySkinSoundsFromOsk } from "#/lib/replay-skin-import";
 import type { ReplaySkinImageAsset, ReplaySkinJudgementAssets, ReplaySkinKeymodeProfile, ReplaySkinPreset, ReplaySkinSettings, ReplaySkinStyle } from "#/lib/replay-skin";
+import { readReplayAudioSettings, writeReplayAudioSettings, type ReplayAudioSettings } from "#/lib/replay-preferences";
+import { clearReplaySkinSounds, readReplaySkinSounds, writeReplaySkinSounds } from "#/lib/replay-skin-sounds";
 
 const MANIA_ARROW_ICON_STYLE: CSSProperties = {
   WebkitMask: "url('/images/notes/mania-arrow-right.svg') center / contain no-repeat",
@@ -87,7 +89,7 @@ const PREVIEW_BAR_COLUMN_COLORS: Record<number, string[]> = {
 type ColorTarget = "tap" | "lnHead" | "lnBody" | "outline";
 type OverrideKind = "tap" | "lnHead";
 type PreviewMode = "tap" | "ln";
-type ReplaySkinSettingsTab = "style" | "layout" | "hud" | "overlays";
+type ReplaySkinSettingsTab = "style" | "layout" | "hud" | "overlays" | "audio";
 type ArrowDirection = "left" | "right" | "up" | "down";
 
 type SelectionMode = "replace" | "toggle" | "range";
@@ -158,6 +160,8 @@ interface ReplaySkinSettingsModalProps {
   keyCount: number;
   onSave: (settings: ReplaySkinSettings) => void;
   onSaveOverlays: (settings: ReplayOverlaySettings) => void;
+  // Audio settings apply immediately (not part of the draft/save flow).
+  onAudioSettingsChange?: (settings: ReplayAudioSettings) => void;
   onClose: () => void;
 }
 
@@ -167,10 +171,10 @@ export function ReplaySkinSettingsModal({
   keyCount,
   onSave,
   onSaveOverlays,
+  onAudioSettingsChange,
   onClose,
 }: ReplaySkinSettingsModalProps) {
   const modalRef = useRef<HTMLDivElement | null>(null);
-  const oskInputRef = useRef<HTMLInputElement | null>(null);
   const matchedInitialPresetRef = useRef(false);
   const [windowRect, setWindowRect] = useState<WindowRect | null>(() => {
     if (typeof window === "undefined") return null;
@@ -201,10 +205,14 @@ export function ReplaySkinSettingsModal({
     onSubmit: (value: string) => void;
   } | null>(null);
   const [keyDialog, setKeyDialog] = useState<{ title: string; value: string } | null>(null);
-  const [importingOsk, setImportingOsk] = useState(false);
   const [selectedKeyCount, setSelectedKeyCount] = useState(() => Math.max(1, Math.min(10, keyCount)));
   const [activeColor, setActiveColor] = useState<ColorTarget | null>(null);
   const [activeTab, setActiveTab] = useState<ReplaySkinSettingsTab>(() => readWindowTab());
+  const [audioSettings, setAudioSettings] = useState<ReplayAudioSettings>(readReplayAudioSettings);
+  const [skinSoundsInfo, setSkinSoundsInfo] = useState<{ name: string | null; keys: string[] } | null>(null);
+  const skinSoundsInputRef = useRef<HTMLInputElement | null>(null);
+  const [importingSkinSounds, setImportingSkinSounds] = useState(false);
+  const soundPreviewContextRef = useRef<AudioContext | null>(null);
   const [columnEditorOpen, setColumnEditorOpen] = useState(false);
   const [overrideKind, setOverrideKind] = useState<OverrideKind>("tap");
   const [barColorOverrideBackup, setBarColorOverrideBackup] = useState<string[]>([]);
@@ -212,9 +220,11 @@ export function ReplaySkinSettingsModal({
   const [previewMode, setPreviewMode] = useState<PreviewMode>("tap");
   const profile = getReplaySkinProfile(draft, selectedKeyCount);
   const isCompactWindow = (windowRect?.w ?? WINDOW_DEFAULT_WIDTH) < WINDOW_COMPACT_WIDTH;
+  // Tabs without a note preview span the full window width.
+  const isFullWidthTab = activeTab === "overlays" || activeTab === "audio";
   const previewPaneWidth = Math.round(Math.max(WINDOW_PREVIEW_MIN_WIDTH, Math.min(WINDOW_PREVIEW_MAX_WIDTH, (windowRect?.w ?? WINDOW_DEFAULT_WIDTH) * WINDOW_PREVIEW_WIDTH_RATIO)));
-  const previewContentWidth = isCompactWindow || activeTab === "overlays" ? undefined : previewPaneWidth - WINDOW_PREVIEW_HORIZONTAL_PADDING;
-  const contentGridStyle: CSSProperties | undefined = !isCompactWindow && activeTab !== "overlays"
+  const previewContentWidth = isCompactWindow || isFullWidthTab ? undefined : previewPaneWidth - WINDOW_PREVIEW_HORIZONTAL_PADDING;
+  const contentGridStyle: CSSProperties | undefined = !isCompactWindow && !isFullWidthTab
     ? { gridTemplateColumns: `minmax(0, 1fr) ${previewPaneWidth}px` }
     : undefined;
   const [columnWidthInput, setColumnWidthInput] = useState(() => String(profile.columnWidth));
@@ -262,6 +272,91 @@ export function ReplaySkinSettingsModal({
   useEffect(() => {
     writeWindowTab(activeTab);
   }, [activeTab]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void readReplaySkinSounds().then((record) => {
+      if (cancelled) return;
+      setSkinSoundsInfo(record ? { name: record.skinName, keys: Object.keys(record.samples) } : null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => () => {
+    const context = soundPreviewContextRef.current;
+    soundPreviewContextRef.current = null;
+    if (context) void context.close().catch(() => {});
+  }, []);
+
+  const previewSkinSound = async (key: string) => {
+    const record = await readReplaySkinSounds();
+    const data = record?.samples[key];
+    if (!data) return;
+    let context = soundPreviewContextRef.current;
+    if (!context) {
+      const Ctor = window.AudioContext
+        ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Ctor) return;
+      context = new Ctor();
+      soundPreviewContextRef.current = context;
+    }
+    if (context.state === "suspended") void context.resume().catch(() => {});
+    try {
+      // decodeAudioData detaches the buffer, so decode a copy.
+      const buffer = await context.decodeAudioData(data.slice(0));
+      const source = context.createBufferSource();
+      source.buffer = buffer;
+      source.connect(context.destination);
+      source.start();
+    } catch {
+      // Zero-byte "silence" overrides and unreadable samples preview as nothing.
+    }
+  };
+
+  const updateAudioSettings = (patch: Partial<ReplayAudioSettings>) => {
+    setAudioSettings((current) => {
+      const next = { ...current, ...patch };
+      writeReplayAudioSettings(next);
+      onAudioSettingsChange?.(next);
+      return next;
+    });
+  };
+
+  const clearImportedSkinSounds = () => {
+    void clearReplaySkinSounds();
+    setSkinSoundsInfo(null);
+    pushStatus("Removed imported skin hitsounds");
+  };
+
+  const importSkinSoundsOsk = async (file: File) => {
+    setImportingSkinSounds(true);
+    try {
+      const result = await importReplaySkinSoundsFromOsk(file);
+      const count = Object.keys(result.sounds).length;
+      if (count === 0) {
+        pushStatus("No gameplay hitsounds were found in that .osk", "error");
+        return;
+      }
+      const stored = await writeReplaySkinSounds({
+        skinName: result.name,
+        updatedAt: Date.now(),
+        samples: result.sounds,
+      });
+      if (!stored) {
+        pushStatus("The skin hitsounds could not be stored", "error");
+        return;
+      }
+      setSkinSoundsInfo({ name: result.name, keys: Object.keys(result.sounds) });
+      pushStatus(`Imported ${count} hitsounds from ${result.name}`);
+    } catch (error) {
+      pushStatus(error instanceof Error ? error.message : "Failed to import .osk", "error");
+    } finally {
+      setImportingSkinSounds(false);
+      if (skinSoundsInputRef.current) skinSoundsInputRef.current.value = "";
+    }
+  };
 
   useEffect(() => {
     setSelectedColumns((current) => {
@@ -632,34 +727,6 @@ export function ReplaySkinSettingsModal({
     });
   };
 
-  const importOsk = async (file: File) => {
-    setImportingOsk(true);
-    pushStatus(`Importing ${file.name}…`);
-    try {
-      const result = await importReplaySkinFromOsk(file, {
-        targetKeyCount: selectedKeyCount,
-        baseSettings: draft,
-      });
-      setDraft(result.settings);
-      setSelectedPresetId(DRAFT_PRESET_ID);
-      setDraftPresetName(result.summary.name);
-      setActiveColor(null);
-      const pieces = [
-        `${result.summary.selectedKeyCount ?? selectedKeyCount}K`,
-        `${result.summary.noteAssets} note`,
-        `${result.summary.receptorAssets} receptor`,
-        `${result.summary.judgementAssets} judgement`,
-        `${result.summary.comboDigits} combo`,
-      ];
-      pushStatus(`Imported ${result.summary.name} (${pieces.join(", ")})`);
-    } catch (error) {
-      pushStatus(error instanceof Error ? error.message : "Failed to import .osk", "error");
-    } finally {
-      setImportingOsk(false);
-      if (oskInputRef.current) oskInputRef.current.value = "";
-    }
-  };
-
   const save = () => {
     const normalized = normalizeReplaySkinSettings(draft);
     const normalizedOverlays = normalizeReplayOverlaySettings(overlayDraft);
@@ -872,7 +939,6 @@ export function ReplaySkinSettingsModal({
     outline: "Outline color",
   };
   const showDevOverlayReset = activeTab === "overlays" && import.meta.env.DEV;
-  const showDevOskImport = import.meta.env.DEV;
   const comboFontOptions = REPLAY_COMBO_FONT_SETS.map((set, index) => ({
     value: set,
     label: `Set ${index + 1}`,
@@ -935,6 +1001,7 @@ export function ReplaySkinSettingsModal({
               ["layout", "Layout"],
               ["hud", "HUD"],
               ["overlays", "Overlays"],
+              ["audio", "Audio"],
             ] as const).map(([tab, label]) => (
               <button
                 key={tab}
@@ -957,11 +1024,11 @@ export function ReplaySkinSettingsModal({
         </div>
 
         <div
-          className={`grid min-h-0 flex-1 ${isCompactWindow || activeTab === "overlays" ? "grid-cols-1 overflow-y-auto" : ""}`}
+          className={`grid min-h-0 flex-1 ${isCompactWindow || isFullWidthTab ? "grid-cols-1 overflow-y-auto" : ""}`}
           style={contentGridStyle}
         >
           <div className={`space-y-4 ${isCompactWindow ? "overflow-visible p-4 sm:p-5" : "overflow-y-auto p-5"}`}>
-            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_110px]">
+            <div className={`grid gap-3 md:grid-cols-[minmax(0,1fr)_110px] ${activeTab === "audio" ? "hidden" : ""}`}>
               <div className="min-w-0 space-y-2">
                 <FancySelect
                   label="Skin preset"
@@ -990,24 +1057,6 @@ export function ReplaySkinSettingsModal({
                   <PresetIconButton label="Import share code" onClick={importShareKey}>
                     <Upload className="h-3.5 w-3.5" />
                   </PresetIconButton>
-                  {showDevOskImport ? (
-                    <>
-                      <PresetTextButton label="Import .osk skin" onClick={() => oskInputRef.current?.click()} disabled={importingOsk}>
-                        <FileArchive className="h-3.5 w-3.5" />
-                        Skin
-                      </PresetTextButton>
-                      <input
-                        ref={oskInputRef}
-                        type="file"
-                        accept=".osk,.zip,application/zip"
-                        className="hidden"
-                        onChange={(event) => {
-                          const file = event.currentTarget.files?.[0];
-                          if (file) void importOsk(file);
-                        }}
-                      />
-                    </>
-                  ) : null}
                 </div>
               </div>
               <FancySelect
@@ -1256,7 +1305,7 @@ export function ReplaySkinSettingsModal({
                   />
                 </div>
               </section>
-            ) : (
+            ) : activeTab === "overlays" ? (
               <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {REPLAY_OVERLAY_IDS.map((id) => (
                   <ReplayOverlaySettingsRow
@@ -1267,11 +1316,128 @@ export function ReplaySkinSettingsModal({
                   />
                 ))}
               </section>
+            ) : (
+              <section className="max-w-xl space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <span className="text-sm font-semibold text-osu-l1">Hitsounds</span>
+                    <div className="text-[10px] text-osu-f1">Key presses play the note's hitsound, like in game. Misses trigger the combo break sound.</div>
+                  </div>
+                  <ReplaySkinSwitch
+                    checked={audioSettings.hitsoundsEnabled}
+                    onChange={(checked) => updateAudioSettings({ hitsoundsEnabled: checked })}
+                  />
+                </div>
+
+                <div className={`space-y-4 ${audioSettings.hitsoundsEnabled ? "" : "pointer-events-none opacity-40"}`}>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-sm font-semibold text-osu-l1">
+                      <span>Hitsound volume</span>
+                      <span className="text-xs font-semibold text-osu-f1">{Math.round(audioSettings.hitsoundVolume * 100)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={Math.round(audioSettings.hitsoundVolume * 100)}
+                      onChange={(event) => updateAudioSettings({ hitsoundVolume: Number(event.target.value) / 100 })}
+                      className="h-1.5 w-full cursor-pointer appearance-none rounded-full accent-osu-pink"
+                      style={{
+                        background: `linear-gradient(90deg, var(--color-osu-pink, #e83c90) 0%, var(--color-osu-pink, #e83c90) ${audioSettings.hitsoundVolume * 100}%, rgba(38, 38, 51, 0.9) ${audioSettings.hitsoundVolume * 100}%, rgba(38, 38, 51, 0.9) 100%)`,
+                      }}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <span className="text-sm font-semibold text-osu-l1">Beatmap hitsounds</span>
+                      <div className="text-[10px] text-osu-f1">Use the map's own samples and keysounds when it has them.</div>
+                    </div>
+                    <ReplaySkinSwitch
+                      checked={audioSettings.beatmapHitsounds}
+                      onChange={(checked) => updateAudioSettings({ beatmapHitsounds: checked })}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <span className="text-sm font-semibold text-osu-l1">Combo break sound</span>
+                      <div className="text-[10px] text-osu-f1">Plays when a combo above 20 is lost.</div>
+                    </div>
+                    <ReplaySkinSwitch
+                      checked={audioSettings.comboBreakSound}
+                      onChange={(checked) => updateAudioSettings({ comboBreakSound: checked })}
+                    />
+                  </div>
+
+                  <div className="rounded-lg border border-osu-b3/50 bg-osu-b5/35 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <span className="text-sm font-semibold text-osu-l1">Skin hitsounds</span>
+                        <div className="truncate text-[10px] text-osu-f1">
+                          {skinSoundsInfo
+                            ? `${skinSoundsInfo.keys.length} ${skinSoundsInfo.keys.length === 1 ? "sound" : "sounds"} from ${skinSoundsInfo.name ?? "an imported skin"}`
+                            : "Import a .osk to play its hitsounds. Without them, the default osu! samples play."}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => skinSoundsInputRef.current?.click()}
+                          disabled={importingSkinSounds}
+                          className="cursor-pointer rounded-lg bg-osu-b3/50 px-3 py-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white disabled:cursor-default disabled:opacity-50"
+                        >
+                          {importingSkinSounds ? "Importing…" : "Import .osk"}
+                        </button>
+                        {skinSoundsInfo ? (
+                          <button
+                            type="button"
+                            onClick={clearImportedSkinSounds}
+                            className="cursor-pointer rounded-lg bg-osu-b3/50 px-3 py-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
+                          >
+                            Remove
+                          </button>
+                        ) : null}
+                      </div>
+                      <input
+                        ref={skinSoundsInputRef}
+                        type="file"
+                        accept=".osk,.zip,application/zip"
+                        className="hidden"
+                        onChange={(event) => {
+                          const file = event.currentTarget.files?.[0];
+                          if (file) void importSkinSoundsOsk(file);
+                        }}
+                      />
+                    </div>
+                    {skinSoundsInfo && skinSoundsInfo.keys.length > 0 ? (
+                      <div className="mt-2.5 space-y-1.5">
+                        <div className="flex flex-wrap gap-1">
+                          {skinSoundsInfo.keys.map((key) => (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => void previewSkinSound(key)}
+                              className="cursor-pointer rounded-md bg-osu-b3/40 px-2 py-1 font-mono text-[10px] text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
+                            >
+                              {key}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="text-[10px] text-osu-f1/70">Click a sound to preview it. Each note plays the sample its map assigns, so all of these can be heard in a replay.</div>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="text-[10px] text-osu-f1">Audio settings apply immediately.</div>
+              </section>
             )}
           </div>
 
           <div
-            className={`${isCompactWindow ? "border-t border-osu-b3/50 p-4 sm:p-5" : "overflow-y-auto border-l border-osu-b3/50 p-5"} ${activeTab === "overlays" ? "hidden" : ""}`}
+            className={`${isCompactWindow ? "border-t border-osu-b3/50 p-4 sm:p-5" : "overflow-y-auto border-l border-osu-b3/50 p-5"} ${isFullWidthTab ? "hidden" : ""}`}
           >
             <div className="mb-2 flex items-center justify-between gap-2">
               <span className="text-sm font-semibold text-white">Preview</span>
@@ -1312,7 +1478,7 @@ export function ReplaySkinSettingsModal({
         </div>
 
         <div className="flex shrink-0 items-center gap-2 border-t border-osu-b3/50 px-5 py-4">
-          {activeTab !== "overlays" ? (
+          {activeTab !== "overlays" && activeTab !== "audio" ? (
             <button
               onClick={() => {
                 setDraft(DEFAULT_REPLAY_SKIN_SETTINGS);
@@ -2775,7 +2941,7 @@ type WindowRect = { x: number; y: number; w: number; h: number };
 type ResizeDirection = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 
 function isReplaySkinSettingsTab(value: unknown): value is ReplaySkinSettingsTab {
-  return value === "style" || value === "layout" || value === "hud" || value === "overlays";
+  return value === "style" || value === "layout" || value === "hud" || value === "overlays" || value === "audio";
 }
 
 function readWindowTab(): ReplaySkinSettingsTab {

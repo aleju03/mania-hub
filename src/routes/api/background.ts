@@ -37,7 +37,10 @@ export const Route = createFileRoute("/api/background")({
         }
 
         if (!filename) {
-          const target = `${OSU_COVER_BASE}/${beatmapsetId}/covers/cover@2x.jpg`;
+          // fullsize is the original map background (good for canvas work,
+          // e.g. skin preview backdrops); the default stays the wide banner.
+          const coverFile = url.searchParams.get("cover") === "fullsize" ? "fullsize.jpg" : "cover@2x.jpg";
+          const target = `${OSU_COVER_BASE}/${beatmapsetId}/covers/${coverFile}`;
           if (inline) {
             const response = await fetch(target);
             if (!response.ok) {

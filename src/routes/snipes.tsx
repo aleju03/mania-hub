@@ -504,7 +504,7 @@ function SnipesPage() {
   if (selectedIsGlobal) {
     return (
       <div className="flex-1">
-        <PageHeader iconSrc="/images/icons/sniper.webp" title="Global mania snipes" />
+        <PageHeader iconSrc="/images/icons/snipes.svg" title="Global mania snipes" />
         <div className="relative max-w-[1200px] mx-auto px-4 sm:px-5 py-12 sm:py-20">
           <div className="mx-auto max-w-md rounded-xl border border-osu-b3/30 bg-osu-b4/80 px-6 py-10 text-center backdrop-blur-sm">
             <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-osu-pink/15 text-osu-pink-light">
@@ -533,7 +533,7 @@ function SnipesPage() {
   return (
     <div className="flex-1">
       <PageHeader
-        iconSrc="/images/icons/sniper.webp"
+        iconSrc="/images/icons/snipes.svg"
         title={`${countryName} mania snipes`}
         right={
           <div className="flex items-center gap-2">

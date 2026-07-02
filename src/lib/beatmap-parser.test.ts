@@ -193,6 +193,95 @@ CircleSize:6.5
     expect(beatmap.notes.map((note) => note.column)).toEqual([0, 3]);
   });
 
+  it("resolves note hitsound samples from object fields and timing points", () => {
+    const beatmap = parseManiaBeatmap(`
+osu file format v14
+
+[General]
+SampleSet: Soft
+
+[Difficulty]
+CircleSize:4
+
+[TimingPoints]
+0,500,4,2,0,70,1,0
+2000,-100,4,3,2,45,0,0
+
+[HitObjects]
+64,192,1000,1,0,0:0:0:0:
+192,192,1000,5,7,1:2:3:80:
+320,192,2500,1,0,0:0:0:0:
+448,192,2500,128,0,3000:0:0:0:0:
+64,192,3500,1,2,0:0:0:0:go.wav
+`);
+
+    const [plain, custom, inherited, hold, keysound] = beatmap.notes;
+
+    // Object left everything unspecified: timing point at 0 supplies soft bank, volume 70.
+    expect(plain.sample).toEqual({
+      bank: "soft",
+      additionBank: "soft",
+      index: 0,
+      volume: 70,
+      additions: 0,
+      normalIsLayered: false,
+      filename: undefined,
+    });
+
+    // Object specifies banks/index/volume and has whistle+finish additions with the normal flag set.
+    expect(custom.sample).toEqual({
+      bank: "normal",
+      additionBank: "soft",
+      index: 3,
+      volume: 80,
+      additions: 6,
+      normalIsLayered: false,
+      filename: undefined,
+    });
+
+    // Inherited (green) timing point at 2000 changes bank to drum, index 2, volume 45.
+    expect(inherited.sample).toEqual({
+      bank: "drum",
+      additionBank: "drum",
+      index: 2,
+      volume: 45,
+      additions: 0,
+      normalIsLayered: false,
+      filename: undefined,
+    });
+
+    // Hold note: extras start with endTime; sample resolves at the END time's control point.
+    expect(hold.endTime).toBe(3000);
+    expect(hold.sample?.bank).toBe("drum");
+    expect(hold.sample?.volume).toBe(45);
+
+    // Keysound filename is carried; whistle-only bitmask marks the hitnormal as layered.
+    expect(keysound.sample?.filename).toBe("go.wav");
+    expect(keysound.sample?.additions).toBe(2);
+    expect(keysound.sample?.normalIsLayered).toBe(true);
+  });
+
+  it("keeps samples attached to notes after time sorting", () => {
+    const beatmap = parseManiaBeatmap(`
+osu file format v14
+
+[Difficulty]
+CircleSize:4
+
+[TimingPoints]
+0,500,4,1,0,100,1,0
+
+[HitObjects]
+64,192,2000,1,8,0:0:0:0:
+192,192,1000,1,4,0:0:0:0:
+`);
+
+    expect(beatmap.notes[0].time).toBe(1000);
+    expect(beatmap.notes[0].sample?.additions).toBe(4);
+    expect(beatmap.notes[1].time).toBe(2000);
+    expect(beatmap.notes[1].sample?.additions).toBe(8);
+  });
+
   it("normalizes fractional key counts without fractional note columns", () => {
     const beatmap = parseManiaBeatmap(`
 osu file format v14

@@ -1,4 +1,5 @@
 import type { ReplayHitCounts } from "./replay-validation";
+import type { ReplayHitsoundTrigger } from "./replay-hitsounds";
 import type { ReplayOverlaySettings } from "./replay-overlays";
 import type { ReplaySkinSettings } from "./replay-skin";
 import type { ReplayFrame, ReplayLifeBarFrame, OsuScore } from "./types";
@@ -47,6 +48,7 @@ export interface ReplayRendererLike {
   setOverlaySettings: (settings: ReplayOverlaySettings) => void;
   setSkinSettings: (settings: ReplaySkinSettings) => void;
   setSpeed: (value: number) => void;
+  setHitsoundTrigger?: (trigger: ReplayHitsoundTrigger | null) => void;
   ready: () => Promise<void>;
 }
 

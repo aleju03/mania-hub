@@ -13,6 +13,10 @@ const BATCH_SIZE = 12;
 const BATCH_FETCH_CONCURRENCY = 4;
 const JOB_PRIORITY = -8;
 const CACHE_COUNTS_TTL_MS = 15_000;
+// Hard per-beatmap watchdog. Archive mirrors and the osu! API limiter both
+// have their own timeouts, but a fetch promise that never settles would
+// otherwise hold the only osu-file-cache lane forever.
+const BEATMAP_FETCH_TIMEOUT_MS = 5 * 60 * 1000;
 
 type BackfillRunStatus = "idle" | "queued" | "running" | "done" | "cancelled" | "failed";
 
@@ -181,6 +185,7 @@ export async function runBeatmapOsuFileBackfillJob(
   queue: JobQueue,
   osu: OsuApiClient,
   payload: BackfillJobPayload,
+  options: { fetchTimeoutMs?: number } = {},
 ): Promise<void> {
   const state = await readState(db);
   if (!payload?.runId || state.runId !== payload.runId) return;
@@ -214,7 +219,7 @@ export async function runBeatmapOsuFileBackfillJob(
       return cancelledBeatmapResult(beatmapId);
     }
 
-    return processBackfillBeatmap(db, osu, beatmapId);
+    return processBackfillBeatmap(db, osu, beatmapId, options.fetchTimeoutMs ?? BEATMAP_FETCH_TIMEOUT_MS);
   });
 
   const latest = await readState(db);
@@ -262,9 +267,18 @@ export async function runBeatmapOsuFileBackfillJob(
   await enqueueBackfillJob(queue, payload.runId, lastBeatmapId);
 }
 
-async function processBackfillBeatmap(db: Db, osu: OsuApiClient, beatmapId: number): Promise<BackfillBeatmapResult> {
+async function processBackfillBeatmap(
+  db: Db,
+  osu: OsuApiClient,
+  beatmapId: number,
+  fetchTimeoutMs: number,
+): Promise<BackfillBeatmapResult> {
   try {
-    await getCachedBeatmapFile(db, osu, beatmapId, "job:backfill_beatmap_osu_files");
+    await withTimeout(
+      getCachedBeatmapFile(db, osu, beatmapId, "job:backfill_beatmap_osu_files"),
+      fetchTimeoutMs,
+      `Timed out fetching .osu file for beatmap ${beatmapId} after ${Math.round(fetchTimeoutMs / 1000)}s`,
+    );
     if (await hasCompressedCachedFile(db, beatmapId)) {
       return beatmapResult(beatmapId, { stored: 1 });
     }
@@ -437,6 +451,20 @@ async function hasCompressedCachedFile(db: Db, beatmapId: number): Promise<boole
     [beatmapId],
   )).rows[0];
   return !!row;
+}
+
+async function withTimeout<T>(task: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), Math.max(1, timeoutMs));
+    timer.unref?.();
+  });
+  try {
+    return await Promise.race([task, timeout]);
+  } finally {
+    clearTimeout(timer);
+    task.catch(() => {});
+  }
 }
 
 async function mapWithConcurrency<T, R>(

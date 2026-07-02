@@ -1,13 +1,14 @@
 import { Link } from "@tanstack/react-router";
 import { Download } from "lucide-react";
 import { formatTimeAgo } from "../../lib/format";
-import type { SkinSummary } from "../../lib/skins";
+import { formatSkinFileSize, type SkinSummary } from "../../lib/skins";
+import { Avatar } from "../ui/Avatar";
 
 const MAX_KEYMODE_TAGS = 3;
 const FALLBACK_ACCENT = "#ff66ab";
 
-export function SkinKeymodeTags({ keymodes, overlay = false }: { keymodes: number[]; overlay?: boolean }) {
-  const shown = keymodes.slice(0, MAX_KEYMODE_TAGS);
+export function SkinKeymodeTags({ keymodes, overlay = false, max = MAX_KEYMODE_TAGS }: { keymodes: number[]; overlay?: boolean; max?: number }) {
+  const shown = keymodes.slice(0, max);
   const rest = keymodes.length - shown.length;
   const pill = overlay
     ? "rounded bg-black/65 px-1.5 py-0.5 text-[10px] font-bold text-white/90 tabular-nums"
@@ -29,7 +30,7 @@ export function SkinCard({ skin }: { skin: SkinSummary }) {
   return (
     <Link
       to="/skins/$id"
-      params={{ id: skin.id }}
+      params={{ id: skin.slug ?? skin.id }}
       className="group relative block overflow-hidden rounded-xl border border-osu-b3/40 bg-osu-b4"
     >
       {/* Accent-tinted hover border, colour taken from the skin's own notes. */}
@@ -60,16 +61,25 @@ export function SkinCard({ skin }: { skin: SkinSummary }) {
       </div>
       <div className="h-[3px] w-full" style={{ backgroundColor: accent }} aria-hidden="true" />
       <div className="px-3 py-2.5">
-        <div className="truncate text-[13.5px] font-bold leading-tight text-white">{skin.name}</div>
+        <div className="flex items-baseline justify-between gap-2">
+          <div className="truncate text-[13.5px] font-bold leading-tight text-white">{skin.name}</div>
+          <span className="flex shrink-0 items-center gap-1 text-[11px] text-osu-f1">
+            <Download className="h-3 w-3" aria-hidden="true" />
+            <span className="tabular-nums">{skin.downloadCount.toLocaleString()}</span>
+          </span>
+        </div>
         <div className="mt-1 flex items-center gap-1.5 text-[11px] text-osu-f1">
-          <Download className="h-3 w-3" aria-hidden="true" />
-          <span className="tabular-nums">{skin.downloadCount.toLocaleString()}</span>
+          <Avatar userId={skin.ownerUserId} size={14} shape="circle" />
+          <span className="truncate font-semibold text-osu-l2">{skin.ownerUsername}</span>
           {skin.publishedAt && (
             <>
               <span aria-hidden="true">·</span>
               <span suppressHydrationWarning>{formatTimeAgo(skin.publishedAt)}</span>
             </>
           )}
+          {skin.oskSizeBytes ? (
+            <span className="ml-auto shrink-0 tabular-nums">{formatSkinFileSize(skin.oskSizeBytes)}</span>
+          ) : null}
         </div>
       </div>
     </Link>

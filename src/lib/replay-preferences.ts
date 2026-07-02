@@ -4,8 +4,13 @@ export const REPLAY_INPUT_ONLY_STORAGE_KEY = "mania-hub-replay-input-only";
 export const REPLAY_INPUT_KEY_HISTORY_STORAGE_KEY = "mania-hub-replay-input-key-history";
 export const REPLAY_INPUT_COLOR_STORAGE_KEY = "mania-hub-replay-input-color";
 export const REPLAY_BG_DIM_STORAGE_KEY = "mania-hub-replay-bg-dim";
+export const REPLAY_HITSOUNDS_STORAGE_KEY = "mania-hub-replay-hitsounds";
+export const REPLAY_HITSOUND_VOLUME_STORAGE_KEY = "mania-hub-replay-hitsound-volume";
+export const REPLAY_BEATMAP_HITSOUNDS_STORAGE_KEY = "mania-hub-replay-beatmap-hitsounds";
+export const REPLAY_COMBOBREAK_SOUND_STORAGE_KEY = "mania-hub-replay-combobreak-sound";
 export const DEFAULT_REPLAY_VOLUME = 0.5;
 export const DEFAULT_REPLAY_BG_DIM = 80;
+export const DEFAULT_REPLAY_HITSOUND_VOLUME = 0.5;
 
 function parseStoredNumber(value: unknown, fallback: number): number {
   if (value == null) return fallback;
@@ -96,4 +101,77 @@ export function readReplayInputColor(): string {
 export function writeReplayInputColor(color: string): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(REPLAY_INPUT_COLOR_STORAGE_KEY, normalizeReplayInputColor(color));
+}
+
+function readStoredBoolean(key: string, fallback: boolean): boolean {
+  if (typeof window === "undefined") return fallback;
+  const stored = window.localStorage.getItem(key);
+  return stored == null ? fallback : stored === "true";
+}
+
+function writeStoredBoolean(key: string, value: boolean): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(key, String(value));
+}
+
+export function normalizeReplayHitsoundVolume(value: unknown): number {
+  const parsed = parseStoredNumber(value, DEFAULT_REPLAY_HITSOUND_VOLUME);
+  return Math.min(1, Math.max(0, parsed));
+}
+
+export function readReplayHitsoundsEnabled(): boolean {
+  return readStoredBoolean(REPLAY_HITSOUNDS_STORAGE_KEY, true);
+}
+
+export function writeReplayHitsoundsEnabled(enabled: boolean): void {
+  writeStoredBoolean(REPLAY_HITSOUNDS_STORAGE_KEY, enabled);
+}
+
+export function readReplayHitsoundVolume(): number {
+  if (typeof window === "undefined") return DEFAULT_REPLAY_HITSOUND_VOLUME;
+  return normalizeReplayHitsoundVolume(window.localStorage.getItem(REPLAY_HITSOUND_VOLUME_STORAGE_KEY));
+}
+
+export function writeReplayHitsoundVolume(volume: number): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(REPLAY_HITSOUND_VOLUME_STORAGE_KEY, String(normalizeReplayHitsoundVolume(volume)));
+}
+
+export function readReplayBeatmapHitsounds(): boolean {
+  return readStoredBoolean(REPLAY_BEATMAP_HITSOUNDS_STORAGE_KEY, true);
+}
+
+export function writeReplayBeatmapHitsounds(enabled: boolean): void {
+  writeStoredBoolean(REPLAY_BEATMAP_HITSOUNDS_STORAGE_KEY, enabled);
+}
+
+export function readReplayComboBreakSound(): boolean {
+  return readStoredBoolean(REPLAY_COMBOBREAK_SOUND_STORAGE_KEY, true);
+}
+
+export function writeReplayComboBreakSound(enabled: boolean): void {
+  writeStoredBoolean(REPLAY_COMBOBREAK_SOUND_STORAGE_KEY, enabled);
+}
+
+export interface ReplayAudioSettings {
+  hitsoundsEnabled: boolean;
+  hitsoundVolume: number;
+  beatmapHitsounds: boolean;
+  comboBreakSound: boolean;
+}
+
+export function readReplayAudioSettings(): ReplayAudioSettings {
+  return {
+    hitsoundsEnabled: readReplayHitsoundsEnabled(),
+    hitsoundVolume: readReplayHitsoundVolume(),
+    beatmapHitsounds: readReplayBeatmapHitsounds(),
+    comboBreakSound: readReplayComboBreakSound(),
+  };
+}
+
+export function writeReplayAudioSettings(settings: ReplayAudioSettings): void {
+  writeReplayHitsoundsEnabled(settings.hitsoundsEnabled);
+  writeReplayHitsoundVolume(settings.hitsoundVolume);
+  writeReplayBeatmapHitsounds(settings.beatmapHitsounds);
+  writeReplayComboBreakSound(settings.comboBreakSound);
 }

@@ -1,7 +1,7 @@
 import { Upload, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { importReplaySkinFromOsk, type ReplaySkinImportResult } from "../../lib/replay-skin-import";
-import { renderSkinPreview } from "../../lib/skin-preview-render";
+import { loadSkinPreviewBackground, renderSkinPreview } from "../../lib/skin-preview-render";
 import {
   finishSkinUpload,
   formatSkinFileSize,
@@ -28,6 +28,14 @@ interface ProcessedScreenshot {
   width: number;
   height: number;
   url: string;
+}
+
+interface RenderedPreview {
+  blob: Blob;
+  width: number;
+  height: number;
+  url: string;
+  accent: string;
 }
 
 interface UploadTicket {
@@ -60,15 +68,19 @@ export function SkinUploadPanel({
   const [error, setError] = useState<string | null>(null);
 
   const [selectedKeymode, setSelectedKeymode] = useState(4);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const previewBlobRef = useRef<{ blob: Blob; width: number; height: number } | null>(null);
+  // One rendered playfield per keymode; the selected keymode is the cover.
+  const [previews, setPreviews] = useState<Map<number, RenderedPreview>>(new Map());
   const [previewBusy, setPreviewBusy] = useState(false);
+  const previewUrlsRef = useRef<string[]>([]);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [screenshots, setScreenshots] = useState<ProcessedScreenshot[]>([]);
 
   const ticketRef = useRef<UploadTicket | null>(null);
+  // One random map cover per picked file, shared by every keymode render so
+  // switching keymodes never swaps the backdrop.
+  const backgroundRef = useRef<Promise<HTMLImageElement | null> | null>(null);
   const [progress, setProgress] = useState({ done: 0, total: 0, label: "" });
   const [published, setPublished] = useState<SkinSummary | null>(null);
 
@@ -76,9 +88,7 @@ export function SkinUploadPanel({
   const screenshotInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => () => {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-  }, [previewUrl]);
-  useEffect(() => () => {
+    previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
     screenshots.forEach((shot) => URL.revokeObjectURL(shot.url));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -99,7 +109,11 @@ export function SkinUploadPanel({
       setDescription("");
       const keymodes = result.summary.keymodes;
       setSelectedKeymode(keymodes.includes(4) ? 4 : keymodes[0] ?? 4);
+      previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      previewUrlsRef.current = [];
+      setPreviews(new Map());
       ticketRef.current = null;
+      backgroundRef.current = loadSkinPreviewBackground();
       setStep("form");
     } catch (importError) {
       setError(importError instanceof Error ? importError.message : "This .osk could not be read.");
@@ -108,22 +122,26 @@ export function SkinUploadPanel({
     }
   }, []);
 
-  // Re-render the composed preview whenever the keymode selection changes.
+  // Render every supported keymode once per picked file (4K first so the hero
+  // fills fast); switching keymodes afterwards just swaps images.
   useEffect(() => {
     if (!imported) return;
     let cancelled = false;
     setPreviewBusy(true);
-    renderSkinPreview(imported.settings, selectedKeymode)
-      .then((render) => {
+    (async () => {
+      const background = await Promise.resolve(backgroundRef.current).catch(() => null);
+      const keymodes = [...imported.summary.keymodes].sort((a, b) => (a === 4 ? -1 : b === 4 ? 1 : a - b));
+      for (const keys of keymodes) {
         if (cancelled) return;
-        previewBlobRef.current = { blob: render.blob, width: render.width, height: render.height };
-        setPreviewUrl((previous) => {
-          if (previous) URL.revokeObjectURL(previous);
-          return URL.createObjectURL(render.blob);
-        });
-      })
+        const render = await renderSkinPreview(imported.settings, keys, { background });
+        if (cancelled) return;
+        const url = URL.createObjectURL(render.blob);
+        previewUrlsRef.current.push(url);
+        setPreviews((previous) => new Map(previous).set(keys, { blob: render.blob, width: render.width, height: render.height, url, accent: render.accent }));
+      }
+    })()
       .catch(() => {
-        if (!cancelled) setError("The preview could not be rendered.");
+        if (!cancelled) setError("The previews could not be rendered.");
       })
       .finally(() => {
         if (!cancelled) setPreviewBusy(false);
@@ -131,7 +149,7 @@ export function SkinUploadPanel({
     return () => {
       cancelled = true;
     };
-  }, [imported, selectedKeymode]);
+  }, [imported]);
 
   const addScreenshots = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -157,14 +175,15 @@ export function SkinUploadPanel({
   }, []);
 
   const publish = useCallback(async () => {
-    const preview = previewBlobRef.current;
-    if (!file || !preview) return;
+    const previewEntries = [...previews.entries()].sort(([a], [b]) => a - b);
+    if (!file || previewEntries.length === 0 || !previews.get(selectedKeymode)) return;
     const trimmedName = name.trim();
     if (!trimmedName) {
       setError("The skin needs a name.");
       return;
     }
     setError(null);
+    setProgress({ done: 0, total: 0, label: "Preparing the upload." });
     setStep("uploading");
     try {
       // Reuse a still-valid ticket across retries so a network blip does not
@@ -179,21 +198,29 @@ export function SkinUploadPanel({
         ticketRef.current = { id: started.id, token: started.token };
       }
       const ticket = ticketRef.current;
-      const totalBytes = preview.blob.size + screenshots.reduce((sum, shot) => sum + shot.blob.size, 0) + file.size;
+      const totalBytes = previewEntries.reduce((sum, [, preview]) => sum + preview.blob.size, 0)
+        + screenshots.reduce((sum, shot) => sum + shot.blob.size, 0)
+        + file.size;
       let doneBytes = 0;
       const report = (label: string, sent: number) => setProgress({ done: doneBytes + sent, total: totalBytes, label });
 
-      report("Uploading the preview.", 0);
-      await uploadSkinPart({
-        id: ticket.id,
-        token: ticket.token,
-        part: "preview",
-        blob: preview.blob,
-        width: preview.width,
-        height: preview.height,
-        onProgress: (sent) => report("Uploading the preview.", sent),
-      });
-      doneBytes += preview.blob.size;
+      for (const [keys, preview] of previewEntries) {
+        const label = `Uploading the ${keys}K preview.`;
+        report(label, 0);
+        await uploadSkinPart({
+          id: ticket.id,
+          token: ticket.token,
+          part: "preview",
+          blob: preview.blob,
+          width: preview.width,
+          height: preview.height,
+          keys,
+          cover: keys === selectedKeymode,
+          accent: keys === selectedKeymode ? preview.accent : undefined,
+          onProgress: (sent) => report(label, sent),
+        });
+        doneBytes += preview.blob.size;
+      }
 
       for (let index = 0; index < screenshots.length; index += 1) {
         const shot = screenshots[index];
@@ -237,20 +264,46 @@ export function SkinUploadPanel({
       }
       setStep("form");
     }
-  }, [file, name, description, onPublished, screenshots]);
+  }, [file, name, description, onPublished, previews, screenshots, selectedKeymode]);
 
   if (step === "done" && published) {
     return (
       <PanelShell onClose={onClose}>
-        <div className="flex flex-col items-center gap-3 py-6 text-center">
+        <div className="flex flex-col items-center gap-3 py-5 text-center">
+          {published.previewUrl && (
+            <img
+              src={published.previewUrl}
+              alt={`${published.name} cover`}
+              className="aspect-video w-full max-w-[420px] rounded-lg border border-osu-b3/40 object-cover"
+            />
+          )}
           <div className="text-sm font-bold text-white">{published.name} is live.</div>
-          <div className="text-[12px] text-osu-f1">The skin page is ready to share.</div>
-          <a
-            href={`/skins/${published.id}`}
-            className="rounded-full bg-osu-pink px-5 py-2 text-[13px] font-bold text-white transition hover:brightness-110"
-          >
-            View the skin page
-          </a>
+          <div className="text-[12px] text-osu-f1">
+            {published.keymodes.length > 1
+              ? `Previews for ${published.keymodes.map((keys) => `${keys}K`).join(", ")} are on the skin page.`
+              : "The skin page is ready to share."}
+          </div>
+          <div className="flex items-center gap-3">
+            <a
+              href={`/skins/${published.slug ?? published.id}`}
+              className="rounded-full bg-osu-pink px-5 py-2 text-[13px] font-bold text-white transition hover:brightness-110"
+            >
+              View the skin page
+            </a>
+            <button
+              type="button"
+              onClick={() => {
+                setPublished(null);
+                setFile(null);
+                setImported(null);
+                setError(null);
+                setStep("pick");
+              }}
+              className="text-[12px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1"
+            >
+              Upload another
+            </button>
+          </div>
         </div>
       </PanelShell>
     );
@@ -304,7 +357,7 @@ export function SkinUploadPanel({
               <div className="text-sm font-semibold text-white">
                 {dragActive ? "Drop to read it" : "Drop an .osk here, or click to browse"}
               </div>
-              <div className="mt-1 text-[11px] text-osu-f1">Skins up to 50 MB publish instantly under your osu! name.</div>
+              <div className="mt-1 text-[11px] text-osu-f1">Up to 50 MB.</div>
             </div>
           </div>
         </button>
@@ -323,6 +376,17 @@ export function SkinUploadPanel({
   const keymodes = imported?.summary.keymodes ?? [];
   const uploading = step === "uploading";
   const percent = progress.total > 0 ? Math.min(100, Math.round((progress.done / progress.total) * 100)) : 0;
+  const heroPreview = previews.get(selectedKeymode);
+  const summary = imported?.summary;
+  const contentsLine = summary
+    ? [
+        `${summary.noteAssets} note images`,
+        `${summary.receptorAssets} key images`,
+        summary.comboDigits > 0 ? "combo font" : null,
+        summary.judgementAssets > 0 ? "judgements" : null,
+        summary.soundAssets > 0 ? `${summary.soundAssets} hitsounds` : null,
+      ].filter(Boolean).join(" · ")
+    : "";
 
   return (
     <PanelShell onClose={uploading ? undefined : onClose}>
@@ -330,40 +394,49 @@ export function SkinUploadPanel({
         <div className="min-w-0">
           <div className="relative overflow-hidden rounded-xl border border-osu-b3/40 bg-osu-b5">
             <div className="aspect-video w-full">
-              {previewUrl ? (
-                <img src={previewUrl} alt="Skin preview" className="h-full w-full object-cover" />
+              {heroPreview ? (
+                <img src={heroPreview.url} alt={`${selectedKeymode}K preview`} className="h-full w-full object-cover" />
               ) : (
-                <div className="flex h-full items-center justify-center text-[12px] text-osu-f1">Rendering the preview...</div>
+                <div className="flex h-full items-center justify-center text-[12px] text-osu-f1">Rendering the {selectedKeymode}K playfield...</div>
               )}
             </div>
-            {previewBusy && previewUrl && (
-              <div className="absolute right-2 top-2 rounded bg-osu-b5/80 px-2 py-0.5 text-[10px] font-semibold text-osu-f1">
-                rendering
-              </div>
-            )}
           </div>
-          {keymodes.length > 1 && (
-            <div className="mt-2.5 flex flex-wrap items-center gap-2">
-              {keymodes.map((keys) => (
+          {/* Every keymode read from the skin, rendered with the skin's own
+              notes; the selected one becomes the browse-card cover. */}
+          <div className="mt-2.5 flex flex-wrap items-start gap-2">
+            {keymodes.map((keys) => {
+              const preview = previews.get(keys);
+              const selected = selectedKeymode === keys;
+              return (
                 <button
                   key={keys}
                   type="button"
                   disabled={uploading}
                   onClick={() => setSelectedKeymode(keys)}
-                  aria-pressed={selectedKeymode === keys}
-                  className={`rounded-md px-3 py-1.5 text-[12.5px] font-semibold transition-colors duration-100 cursor-pointer disabled:cursor-default ${
-                    selectedKeymode === keys ? "bg-osu-pink text-white" : "bg-osu-b4 text-osu-l2 hover:bg-osu-b3 hover:text-osu-l1"
+                  aria-pressed={selected}
+                  className={`w-[104px] overflow-hidden rounded-lg border text-left transition-colors duration-100 cursor-pointer disabled:cursor-default ${
+                    selected ? "border-osu-pink" : "border-osu-b3/40 hover:border-osu-f1/40"
                   }`}
                 >
-                  {keys}K
+                  <div className="aspect-video w-full bg-osu-b5">
+                    {preview ? (
+                      <img src={preview.url} alt={`${keys}K thumbnail`} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-[10px] text-osu-f1/60">rendering</div>
+                    )}
+                  </div>
+                  <div className={`px-1.5 py-0.5 text-[10.5px] font-bold tabular-nums ${selected ? "bg-osu-pink text-white" : "bg-osu-b4 text-osu-l2"}`}>
+                    {keys}K{selected ? " · cover" : ""}
+                  </div>
                 </button>
-              ))}
-              <span className="text-[11px] text-osu-f1">The selected keymode becomes the cover.</span>
+              );
+            })}
+          </div>
+          {contentsLine && (
+            <div className="mt-2 text-[11px] text-osu-f1" title="Read from the skin file">
+              {contentsLine}
             </div>
           )}
-          <div className="mt-1.5 text-[11px] text-osu-f1">
-            Keymode tags are read from the skin file{keymodes.length > 0 ? `: ${keymodes.map((keys) => `${keys}K`).join(", ")}` : ""}.
-          </div>
         </div>
 
         <div className="flex min-w-0 flex-col gap-3.5">
@@ -450,10 +523,10 @@ export function SkinUploadPanel({
                 <button
                   type="button"
                   onClick={() => void publish()}
-                  disabled={previewBusy || !previewBlobRef.current}
+                  disabled={previewBusy || !heroPreview}
                   className="rounded-full bg-osu-pink px-6 py-2 text-[13px] font-bold text-white transition cursor-pointer hover:brightness-110 disabled:cursor-default disabled:opacity-50"
                 >
-                  Publish skin
+                  Upload skin
                 </button>
                 <button
                   type="button"
@@ -478,7 +551,7 @@ function PanelShell({ children, onClose }: { children: React.ReactNode; onClose?
   return (
     <section className="rounded-2xl border border-osu-b3/30 bg-osu-b4 p-4 sm:p-5">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-osu-pink-light">publish a skin</span>
+        <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-osu-pink-light">upload a skin</span>
         {onClose && (
           <button
             type="button"
@@ -494,7 +567,7 @@ function PanelShell({ children, onClose }: { children: React.ReactNode; onClose?
   );
 }
 
-function startErrorMessage(code: "not_logged_in" | "unavailable" | "invalid_name" | "pending_limit" | "skin_limit"): string {
+function startErrorMessage(code: "not_logged_in" | "unavailable" | "storage_not_configured" | "invalid_name" | "pending_limit" | "skin_limit"): string {
   switch (code) {
     case "not_logged_in":
       return "The session expired. Log in with osu! again to publish.";
@@ -504,8 +577,10 @@ function startErrorMessage(code: "not_logged_in" | "unavailable" | "invalid_name
       return "An upload is already in progress. Finish it or wait a few minutes.";
     case "skin_limit":
       return "The limit of 30 published skins per account is reached.";
+    case "storage_not_configured":
+      return "Skin storage is not configured on the server (R2 credentials are missing).";
     default:
-      return "Publishing is not available right now.";
+      return "Uploads are not available right now.";
   }
 }
 

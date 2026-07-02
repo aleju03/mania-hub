@@ -1,6 +1,7 @@
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import type { LimiterLane, SharedLimiter } from "./client.js";
+import { INTERACTIVE_PAUSE_CAP_MS } from "./client.js";
 
 const WINDOW_MS = 60_000;
 const PRUNE_AFTER_MS = 5 * 60_000;
@@ -34,18 +35,19 @@ export class SqliteSharedRateLimiter implements SharedLimiter {
 
   async pause(ms: number): Promise<void> {
     if (!Number.isFinite(ms) || ms <= 0) return;
-    const pausedUntil = Date.now() + Math.ceil(ms);
+    const now = Date.now();
+    const pausedUntil = now + Math.ceil(ms);
     await exec(
       this.db,
       `insert into live_meta (key, value_json, updated_at)
        values (?, ?, ?)
        on conflict(key) do update set
          value_json = case
-           when cast(json_extract(live_meta.value_json, '$') as integer) > ? then live_meta.value_json
+           when coalesce(json_extract(live_meta.value_json, '$.until'), cast(live_meta.value_json as integer)) > ? then live_meta.value_json
            else excluded.value_json
          end,
          updated_at = excluded.updated_at`,
-      [PAUSE_KEY, json(pausedUntil), new Date().toISOString(), pausedUntil],
+      [PAUSE_KEY, json({ until: pausedUntil, at: now }), new Date().toISOString(), pausedUntil],
     ).catch(() => undefined);
   }
 
@@ -58,7 +60,7 @@ export class SqliteSharedRateLimiter implements SharedLimiter {
     )).rows[0];
     return {
       usedLastMinute: Number(row?.count ?? 0),
-      pausedMs: Math.max(0, await this.readPausedUntil() - now),
+      pausedMs: Math.max(0, (await this.readPause()).until - now),
       targetPerMinute: this.targetPerMinute,
       hardPerMinute: this.hardPerMinute,
     };
@@ -72,7 +74,12 @@ export class SqliteSharedRateLimiter implements SharedLimiter {
       [this.provider, now - PRUNE_AFTER_MS],
     );
 
-    const pausedUntil = await this.readPausedUntil();
+    const pause = await this.readPause();
+    // Interactive calls resume after a short cooldown instead of sitting out
+    // the whole 429 pause (mirrors TokenBucketLimiter.nextWaitMs).
+    const pausedUntil = lane === "interactive"
+      ? Math.min(pause.until, pause.at + INTERACTIVE_PAUSE_CAP_MS)
+      : pause.until;
     let waitMs = pausedUntil > now ? pausedUntil - now : 0;
 
     const windowRows = (await exec(
@@ -126,9 +133,15 @@ export class SqliteSharedRateLimiter implements SharedLimiter {
     }
   }
 
-  private async readPausedUntil(): Promise<number> {
+  private async readPause(): Promise<{ until: number; at: number }> {
     const row = (await exec(this.db, "select value_json from live_meta where key = ?", [PAUSE_KEY])).rows[0];
-    return parseJson<number>(row?.value_json, 0);
+    const value = parseJson<number | { until?: number; at?: number }>(row?.value_json, 0);
+    if (typeof value === "number") {
+      // Legacy shape: a bare pausedUntil timestamp. The pause start is unknown,
+      // so assume the default 60s pause length.
+      return { until: value, at: value - 60_000 };
+    }
+    return { until: Number(value?.until ?? 0), at: Number(value?.at ?? 0) };
   }
 }
 

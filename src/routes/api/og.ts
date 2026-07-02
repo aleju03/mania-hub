@@ -3382,19 +3382,25 @@ async function renderMapsCollectionsOg(request: Request): Promise<Response> {
    the in-app card (that colour ramp IS the tier identity). The player
    slot on each card is a "?" — you don't know who you'll pull until
    you tear the pack open. */
-/* Badge tile + mania glyph baked into one SVG. Satori misplaces img
-   elements nested inside rotated containers (the glyph drifted or
-   vanished per-card in the fan), but imgs that are DIRECT children of
-   the rotated card render correctly — so the whole badge ships as a
-   single flat image. */
+/* Badge tile + mania glyph baked into one padded SVG. Satori can clip image
+   contents strangely inside rotated cards; the extra transparent margin gives
+   that clipping room so the rounded badge corners and real glyph survive. */
 function packBadgeDataUrl(): string {
   const scale = (52 / 1080).toFixed(5);
   const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 88 88">` +
-    `<rect x="1.5" y="1.5" width="85" height="85" rx="20" fill="#000000" fill-opacity="0.22" stroke="#ffffff" stroke-opacity="0.34" stroke-width="3"/>` +
-    `<g transform="translate(18,18) scale(${scale}) translate(40,40) matrix(1,0,0,-1,0,860)"><path d="${MANIA_GLYPH_D}" fill="#ffffff"/></g>` +
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">` +
+    `<rect x="21.5" y="21.5" width="85" height="85" rx="20" fill="#000000" fill-opacity="0.22" stroke="#ffffff" stroke-opacity="0.34" stroke-width="3"/>` +
+    `<g transform="translate(38,38) scale(${scale}) translate(40,40) matrix(1,0,0,-1,0,860)"><path d="${MANIA_GLYPH_D}" fill="#ffffff"/></g>` +
     `</svg>`;
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+}
+
+function packBadge(key: string) {
+  return h("img", {
+    key,
+    src: packBadgeDataUrl(),
+    style: { position: "absolute", top: "8px", left: "8px", width: "64px", height: "64px" },
+  });
 }
 
 function packCard(props: {
@@ -3409,10 +3415,8 @@ function packCard(props: {
   const style = MANIA_TIER_STYLES[tier];
   const W = 220;
   const H = 312;
-  // Everything except the full-bleed texture lives in normal flow:
-  // Satori misplaces absolutely-positioned imgs inside rotated
-  // subtrees (the badge/stars drifted per-card), while flow imgs
-  // render correctly — same reason the polaroid covers work.
+  // Keep images as direct children of the rotated card. Nested images drift
+  // under Satori transforms, while direct images stay anchored.
   return h(
     "div",
     {
@@ -3422,10 +3426,8 @@ function packCard(props: {
         top: `${top}px`,
         left: `${left}px`,
         display: "flex",
-        flexDirection: "column",
         width: `${W}px`,
         height: `${H}px`,
-        padding: "14px",
         borderRadius: "16px",
         border: "3px solid rgba(255,255,255,0.30)",
         boxSizing: "border-box",
@@ -3442,31 +3444,31 @@ function packCard(props: {
         style: { position: "absolute", top: "0", left: "0", width: `${W}px`, height: `${H}px` },
       }),
       // Mini mode badge + blank name plate, echoing the full card's header.
-      h(
-        "div",
-        {
-          key: "header",
-          style: { display: "flex", flexDirection: "row", alignItems: "center", gap: "10px" },
+      packBadge("badge"),
+      h("div", {
+        key: "plate",
+        style: {
+          position: "absolute",
+          top: "29px",
+          left: "74px",
+          width: "124px",
+          height: "22px",
+          borderRadius: "7px",
+          background: "rgba(0,0,0,0.32)",
         },
-        [
-          h("img", { key: "badge", src: packBadgeDataUrl(), style: { width: "44px", height: "44px" } }),
-          h("div", {
-            key: "plate",
-            style: { display: "flex", flex: "1", height: "22px", borderRadius: "7px", background: "rgba(0,0,0,0.32)" },
-          }),
-        ],
-      ),
+      }),
       // Mystery player slot.
       h(
         "div",
         {
           key: "slot",
           style: {
+            position: "absolute",
+            top: "78px",
+            left: "30px",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            alignSelf: "center",
-            marginTop: "18px",
             width: "160px",
             height: "150px",
             borderRadius: "12px",
@@ -3490,9 +3492,12 @@ function packCard(props: {
             {
               key: "tier",
               style: {
+                position: "absolute",
+                top: "248px",
+                left: "0",
+                width: "100%",
                 display: "flex",
                 justifyContent: "center",
-                marginTop: "22px",
                 fontSize: "26px",
                 fontWeight: 900,
                 color: "#ffffff",

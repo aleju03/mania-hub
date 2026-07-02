@@ -11,6 +11,7 @@ import { deferMapsRefreshesWaitingForRoster, enqueueGlobalMapsRefreshIfDue, enqu
 import { ensureMapSearchIndexSeeded } from "./features/map-search.js";
 import { enqueueMapCollectionsRebuildIfDue } from "./features/map-collections.js";
 import { startGoalUserIndexRefresh } from "./features/goals.js";
+import { backfillSkinSlugs } from "./features/skins.js";
 import { AbuseGuard } from "./http/abuse-guard.js";
 import { CountryClientTracker } from "./live/country-clients.js";
 import { handleSse } from "./live/sse.js";
@@ -69,6 +70,9 @@ export async function createApp() {
     await waitForSchema(db);
   } else {
     await migrate(db);
+    // Data backfill rides with schema ownership: assign slugs to skins
+    // published before the slug column existed.
+    await backfillSkinSlugs(db);
   }
   const rateLimitDb = await createDb(config);
   const queue = new JobQueue(db);
@@ -84,12 +88,14 @@ export async function createApp() {
     // by a separate server-role process within a refresh interval).
     startGoalUserIndexRefresh(db);
   }
-  const logOsuCall = (entry: { caller: string; path: string; startedAt: number }) => {
+  const logOsuCall = (entry: { caller: string; path: string; startedAt: number; durationMs?: number | null; status?: number | null }) => {
     void logApiCall(db, {
       provider: "osu",
       caller: entry.caller,
       path: entry.path,
       startedAt: new Date(entry.startedAt).toISOString(),
+      durationMs: entry.durationMs,
+      status: entry.status,
     }).catch(() => {});
   };
   const sharedOsuLimiter = new SqliteSharedRateLimiter(rateLimitDb, {

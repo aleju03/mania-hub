@@ -3,6 +3,7 @@ import type { InValue } from "@libsql/client";
 import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
 import { nowIso } from "../shared/score.js";
+import { slugifySkinName } from "../skins/slug.js";
 
 // Community skin uploads. The upload ticket is the pending row itself:
 // createPendingSkin mints upload_token + token_expires_at, the browser attaches
@@ -24,8 +25,13 @@ export interface SkinScreenshot {
   height: number | null;
 }
 
+export interface SkinKeymodePreview extends SkinScreenshot {
+  keys: number;
+}
+
 export interface SkinRow {
   id: string;
+  slug: string | null;
   ownerUserId: number;
   ownerUsername: string;
   name: string;
@@ -44,6 +50,7 @@ export interface SkinRow {
   previewUrl: string | null;
   previewWidth: number | null;
   previewHeight: number | null;
+  previews: SkinKeymodePreview[];
   screenshots: SkinScreenshot[];
   createdAt: string;
   updatedAt: string;
@@ -52,6 +59,7 @@ export interface SkinRow {
 
 export interface SkinSummary {
   id: string;
+  slug: string | null;
   name: string;
   description: string | null;
   ownerUserId: number;
@@ -62,9 +70,11 @@ export interface SkinSummary {
   previewUrl: string | null;
   previewWidth: number | null;
   previewHeight: number | null;
+  previews: Array<{ keys: number; url: string; width: number | null; height: number | null }>;
   screenshots: Array<{ url: string; width: number | null; height: number | null }>;
   oskUrl: string | null;
   oskSizeBytes: number | null;
+  oskSha256: string | null;
   status: "pending" | "published" | "hidden";
   publishedAt: string | null;
 }
@@ -116,6 +126,8 @@ export async function getSkinForUpload(db: Db, id: string, token: string): Promi
   return row;
 }
 
+// accent_color coalesces: the .osk uploads last, and its skin.ini colour must
+// not clobber a sampled accent already set by the preview upload.
 export async function attachSkinOsk(
   db: Db,
   id: string,
@@ -125,7 +137,7 @@ export async function attachSkinOsk(
     db,
     `update skins set
        osk_key = ?, osk_url = ?, osk_size_bytes = ?, osk_sha256 = ?,
-       keymodes_json = ?, accent_color = ?, updated_at = ?
+       keymodes_json = ?, accent_color = coalesce(accent_color, ?), updated_at = ?
      where id = ?`,
     [patch.key, patch.url, patch.sizeBytes, patch.sha256, JSON.stringify(patch.keymodes), patch.accentColor, nowIso(), id],
   );
@@ -141,6 +153,41 @@ export async function attachSkinPreview(
     "update skins set preview_key = ?, preview_url = ?, preview_width = ?, preview_height = ?, updated_at = ? where id = ?",
     [patch.key, patch.url, patch.width, patch.height, nowIso(), id],
   );
+}
+
+// The uploader samples the accent from the note art while rendering previews;
+// that beats the skin.ini colours attachSkinOsk parses (often black or wrong).
+export async function setSkinAccent(db: Db, id: string, accentColor: string): Promise<void> {
+  if (!/^#[0-9a-f]{6}$/i.test(accentColor)) return;
+  await exec(
+    db,
+    "update skins set accent_color = ?, updated_at = ? where id = ?",
+    [accentColor.toLowerCase(), nowIso(), id],
+  );
+}
+
+export type UpsertPreviewResult = { ok: true } | { ok: false; error: "preview_limit" | "not_found" };
+
+// One playfield preview per keymode; re-uploading the same keymode replaces
+// its entry. When isCover is set the entry also becomes the card cover.
+export async function upsertSkinKeymodePreview(
+  db: Db,
+  id: string,
+  entry: SkinKeymodePreview,
+  isCover: boolean,
+): Promise<UpsertPreviewResult> {
+  const row = await getSkin(db, id);
+  if (!row) return { ok: false, error: "not_found" };
+  const next = [...row.previews.filter((preview) => preview.keys !== entry.keys), entry]
+    .sort((a, b) => a.keys - b.keys);
+  if (next.length > 10) return { ok: false, error: "preview_limit" };
+  await exec(
+    db,
+    "update skins set previews_json = ?, updated_at = ? where id = ?",
+    [JSON.stringify(next), nowIso(), id],
+  );
+  if (isCover) await attachSkinPreview(db, id, entry);
+  return { ok: true };
 }
 
 export type AppendScreenshotResult =
@@ -170,17 +217,57 @@ export async function finishSkin(db: Db, id: string, token: string): Promise<Fin
   if (!row.oskKey || !row.oskUrl) return { ok: false, error: "missing_osk" };
   if (!row.previewKey || !row.previewUrl) return { ok: false, error: "missing_preview" };
   const now = nowIso();
+  const slug = row.slug ?? await uniqueSkinSlug(db, row.name, id);
   await exec(
     db,
     `update skins set
-       status = 'published', published_at = ?, upload_token = null, token_expires_at = null, updated_at = ?
+       status = 'published', slug = ?, published_at = ?, upload_token = null, token_expires_at = null, updated_at = ?
      where id = ?`,
-    [now, now, id],
+    [slug, now, now, id],
   );
   const published = await getSkin(db, id);
   return published
     ? { ok: true, skin: toSkinSummary(published) }
     : { ok: false, error: "not_found" };
+}
+
+// Slugs are assigned once, at publish time, so abandoned pending uploads never
+// reserve names. Collisions get -2, -3, ...; the short-id fallback is only a
+// backstop against pathological name reuse.
+async function uniqueSkinSlug(db: Db, name: string, excludeId: string): Promise<string> {
+  const base = slugifySkinName(name);
+  let candidate = base;
+  for (let suffix = 2; suffix <= 50; suffix += 1) {
+    const clash = (await exec(
+      db,
+      "select id from skins where slug = ? and id != ? limit 1",
+      [candidate, excludeId],
+    )).rows[0];
+    if (!clash) return candidate;
+    candidate = `${base}-${suffix}`;
+  }
+  return `${base}-${excludeId.slice(0, 8)}`;
+}
+
+// One-time boot backfill for rows published before slugs existed.
+export async function backfillSkinSlugs(db: Db): Promise<number> {
+  const rows = (await exec(
+    db,
+    "select id, name from skins where slug is null and status != 'pending'",
+  )).rows;
+  for (const row of rows) {
+    const id = String(row.id);
+    const slug = await uniqueSkinSlug(db, String(row.name ?? ""), id);
+    await exec(db, "update skins set slug = ? where id = ?", [slug, id]);
+  }
+  return rows.length;
+}
+
+// Detail-page lookup: accepts the slug from a pretty URL or a raw id from a
+// pre-slug link, so old shared URLs keep resolving.
+export async function getSkinByRef(db: Db, ref: string): Promise<SkinRow | null> {
+  const row = (await exec(db, "select * from skins where id = ? or slug = ? limit 1", [ref, ref])).rows[0];
+  return row ? rowToSkin(row as Record<string, unknown>) : null;
 }
 
 export interface SkinsListQuery {
@@ -189,6 +276,7 @@ export interface SkinsListQuery {
   page?: number;
   pageSize?: number;
   includeHidden?: boolean;
+  sort?: "newest" | "downloads";
 }
 
 export interface SkinsListResult {
@@ -216,11 +304,14 @@ export async function listSkins(db: Db, query: SkinsListQuery): Promise<SkinsLis
   }
   const whereSql = where.join(" and ");
 
+  const orderSql = query.sort === "downloads"
+    ? "download_count desc, published_at desc, created_at desc"
+    : "published_at desc, created_at desc";
   const totalRow = (await exec(db, `select count(*) as total from skins where ${whereSql}`, args)).rows[0];
   const rows = (await exec(
     db,
     `select * from skins where ${whereSql}
-     order by published_at desc, created_at desc
+     order by ${orderSql}
      limit ? offset ?`,
     [...args, pageSize, page * pageSize],
   )).rows;
@@ -278,6 +369,7 @@ export async function listExpiredPendingSkins(db: Db, cutoffIso: string): Promis
 export function toSkinSummary(row: SkinRow): SkinSummary {
   return {
     id: row.id,
+    slug: row.slug,
     name: row.name,
     description: row.description,
     ownerUserId: row.ownerUserId,
@@ -288,16 +380,18 @@ export function toSkinSummary(row: SkinRow): SkinSummary {
     previewUrl: row.previewUrl,
     previewWidth: row.previewWidth,
     previewHeight: row.previewHeight,
+    previews: row.previews.map(({ keys, url, width, height }) => ({ keys, url, width, height })),
     screenshots: row.screenshots.map(({ url, width, height }) => ({ url, width, height })),
     oskUrl: row.oskUrl,
     oskSizeBytes: row.oskSizeBytes,
+    oskSha256: row.oskSha256,
     status: row.status,
     publishedAt: row.publishedAt,
   };
 }
 
 function storageKeysOf(row: SkinRow): string[] {
-  return [row.oskKey, row.previewKey, ...row.screenshots.map((shot) => shot.key)]
+  return [row.oskKey, row.previewKey, ...row.previews.map((preview) => preview.key), ...row.screenshots.map((shot) => shot.key)]
     .filter((key): key is string => Boolean(key));
 }
 
@@ -305,6 +399,7 @@ function rowToSkin(row: Record<string, unknown>): SkinRow {
   const status = row.status === "published" || row.status === "hidden" ? row.status : "pending";
   return {
     id: String(row.id),
+    slug: textOrNull(row.slug),
     ownerUserId: Number(row.owner_user_id) || 0,
     ownerUsername: String(row.owner_username ?? ""),
     name: String(row.name ?? ""),
@@ -323,6 +418,7 @@ function rowToSkin(row: Record<string, unknown>): SkinRow {
     previewUrl: textOrNull(row.preview_url),
     previewWidth: numberOrNull(row.preview_width),
     previewHeight: numberOrNull(row.preview_height),
+    previews: normalizeKeymodePreviews(parseJson<unknown>(String(row.previews_json ?? "[]"), [])),
     screenshots: normalizeScreenshots(parseJson<unknown>(String(row.screenshots_json ?? "[]"), [])),
     createdAt: String(row.created_at ?? ""),
     updatedAt: String(row.updated_at ?? ""),
@@ -351,6 +447,22 @@ function normalizeScreenshots(value: unknown): SkinScreenshot[] {
       return { key, url, width: numberOrNull(raw.width), height: numberOrNull(raw.height) };
     })
     .filter((entry): entry is SkinScreenshot => Boolean(entry));
+}
+
+function normalizeKeymodePreviews(value: unknown): SkinKeymodePreview[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const raw = entry as Record<string, unknown>;
+      const keys = Math.round(Number(raw.keys));
+      const key = textOrNull(raw.key);
+      const url = textOrNull(raw.url);
+      if (!key || !url || !Number.isInteger(keys) || keys < 1 || keys > 10) return null;
+      return { keys, key, url, width: numberOrNull(raw.width), height: numberOrNull(raw.height) };
+    })
+    .filter((entry): entry is SkinKeymodePreview => Boolean(entry))
+    .sort((a, b) => a.keys - b.keys);
 }
 
 function buildSearchText(name: string, ownerUsername: string): string {

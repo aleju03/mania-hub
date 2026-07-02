@@ -27,6 +27,13 @@ type SortKey = "name" | "size" | "modified";
 type SortDirection = "asc" | "desc";
 
 const ROOT_PREFIX = "replay-cache/";
+// The browsable bucket roots; must stay in sync with ADMIN_BROWSABLE_PREFIXES
+// in r2-cache.ts. replay-cache/ is evictable cache, skins/ holds the durable
+// skin uploads written by the live backend.
+const ROOTS = [
+  { label: "replay-cache", prefix: ROOT_PREFIX },
+  { label: "skins", prefix: "skins/" },
+];
 const PAGE_SIZE = 25;
 
 const listR2Objects = createServerFn({ method: "GET" })
@@ -188,12 +195,15 @@ function detectPreviewKind(name: string): { kind: PreviewKind; mimeType?: string
   }
 }
 
+// Sub-path crumbs below the active root; the roots themselves render as the
+// switcher in front of them.
 function pathCrumbs(prefix: string): Array<{ label: string; prefix: string }> {
   const parts = prefix.replace(/\/+$/, "").split("/").filter(Boolean);
-  const crumbs = [{ label: "replay-cache", prefix: ROOT_PREFIX }];
-  if (parts[0] !== "replay-cache") return crumbs;
+  const root = ROOTS.find((entry) => entry.prefix === `${parts[0] ?? ""}/`);
+  if (!root) return [];
 
-  let current = "replay-cache/";
+  const crumbs: Array<{ label: string; prefix: string }> = [];
+  let current = root.prefix;
   for (const part of parts.slice(1)) {
     current += `${part}/`;
     crumbs.push({ label: part, prefix: current });
@@ -390,7 +400,7 @@ function R2AdminPage() {
           <SectionCard
             title="Bucket browser"
             subtitle={listing?.bucket ? `bucket: ${listing.bucket}` : "browse and prune cached objects"}
-            right={<Crumbs crumbs={crumbs} onNavigate={goToPrefix} />}
+            right={<Crumbs prefix={prefix} crumbs={crumbs} onNavigate={goToPrefix} />}
           >
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
               <SearchInput value={queryInput} onChange={setQueryInput} />
@@ -621,19 +631,40 @@ function SectionCard({
 }
 
 function Crumbs({
+  prefix,
   crumbs,
   onNavigate,
 }: {
+  prefix: string;
   crumbs: Array<{ label: string; prefix: string }>;
   onNavigate: (prefix: string) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-0.5 text-[12px] font-mono">
+    <div className="flex flex-wrap items-center gap-1 text-[12px] font-mono">
+      <div className="flex items-center gap-0.5 rounded-md border border-osu-b3/30 bg-osu-b4/40 p-0.5">
+        {ROOTS.map((root) => {
+          const active = prefix.startsWith(root.prefix);
+          return (
+            <button
+              key={root.prefix}
+              type="button"
+              onClick={() => onNavigate(root.prefix)}
+              className={`px-2 py-0.5 rounded transition-colors duration-[120ms] cursor-pointer ${
+                active
+                  ? "bg-osu-pink/15 text-white"
+                  : "text-osu-l2 hover:text-white hover:bg-osu-b3/40"
+              }`}
+            >
+              {root.label}
+            </button>
+          );
+        })}
+      </div>
       {crumbs.map((crumb, index) => {
         const isLast = index === crumbs.length - 1;
         return (
           <div key={crumb.prefix} className="flex items-center gap-0.5">
-            {index > 0 ? <span className="text-osu-f1/60 px-0.5">/</span> : null}
+            <span className="text-osu-f1/60 px-0.5">/</span>
             <button
               type="button"
               onClick={() => onNavigate(crumb.prefix)}
@@ -1018,6 +1049,13 @@ function DeleteDialog({
           <div className="rounded-md bg-osu-b4/60 border border-osu-b3/20 px-2.5 py-1.5 text-[10px] font-mono text-osu-l2 break-all">
             {pending.kind === "prefix" ? pending.prefix : pending.key}
           </div>
+
+          {(pending.kind === "prefix" ? pending.prefix : pending.key).startsWith("skins/") ? (
+            <div className="rounded-md border border-osu-yellow/25 bg-osu-yellow/10 px-2.5 py-2 text-[11px] text-osu-c2">
+              Skin files are indexed by the live backend database; deleting them here strands the skin page.
+              Delete the skin from its own page instead, and keep this for orphan cleanup.
+            </div>
+          ) : null}
 
           {pending.kind === "prefix" ? (
             <>

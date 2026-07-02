@@ -80,6 +80,16 @@ function replayEndpointPath(endpointKind: ReplayEndpointKind, mode: string, scor
     : `/scores/${scoreId}/download`;
 }
 
+// Stable mania score ids sit around 6.6e8 and grow slowly; lazer-era solo
+// score ids (what tracker/top-plays links carry) are in the billions. Probing
+// the endpoint that matches the id range first avoids a guaranteed 404 round
+// trip against the osu! API on the first view of a score.
+const LAZER_SCORE_ID_MIN = 1_000_000_000;
+
+function defaultEndpointOrder(scoreId: number): ReplayEndpointKind[] {
+  return scoreId >= LAZER_SCORE_ID_MIN ? ["modern", "legacy"] : ["legacy", "modern"];
+}
+
 function replaySleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -90,9 +100,8 @@ async function downloadReplay(
 ): Promise<ReplayDownload> {
   const endpointKinds: ReplayEndpointKind[] = preferredEndpointKind
     ? [preferredEndpointKind, preferredEndpointKind === "legacy" ? "modern" : "legacy"]
-    : ["legacy", "modern"];
+    : defaultEndpointOrder(data.scoreId);
   let firstError: unknown = null;
-  let lastError: unknown = null;
 
   for (const endpointKind of endpointKinds) {
     try {
@@ -105,11 +114,12 @@ async function downloadReplay(
       };
     } catch (error) {
       firstError ??= error;
-      lastError = error;
     }
   }
 
-  throw (preferredEndpointKind ? firstError : lastError) ?? new Error("Failed to download replay");
+  // The first endpoint tried is the one expected to match the score id, so
+  // its error is the informative one; the fallback usually just 404s.
+  throw firstError ?? new Error("Failed to download replay");
 }
 
 async function getReplayBuffer(data: { scoreId: number; mode: string }): Promise<Buffer> {

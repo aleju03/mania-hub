@@ -1,4 +1,5 @@
-import { DeleteObjectsCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import type { Readable } from "node:stream";
+import { DeleteObjectsCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import type { Config } from "../config.js";
 
 const REPLAY_CACHE_BUCKET = "mania-hub-replay-cache";
@@ -14,13 +15,19 @@ export type UploadedSkinObject = {
   url: string;
 };
 
+export type SkinObjectStream = {
+  body: Readable;
+  contentType: string;
+  contentLength: number | null;
+  contentDisposition: string | null;
+};
+
 export function isSkinStorageConfigured(config: SkinStorageConfig): boolean {
   return !!(
     config.r2Endpoint &&
     config.r2AccessKeyId &&
     config.r2SecretAccessKey &&
-    config.r2Bucket &&
-    config.r2PublicBaseUrl
+    config.r2Bucket
   );
 }
 
@@ -30,6 +37,10 @@ export function skinOskKey(id: string, name: string): string {
 
 export function skinPreviewKey(id: string, ext: string): string {
   return `${SKINS_PREFIX}${safeId(id)}/preview.${safeExt(ext)}`;
+}
+
+export function skinKeymodePreviewKey(id: string, keys: number, ext: string): string {
+  return `${SKINS_PREFIX}${safeId(id)}/preview-${Math.max(1, Math.min(10, Math.floor(keys)))}k.${safeExt(ext)}`;
 }
 
 export function skinScreenshotKey(id: string, index: number, ext: string): string {
@@ -43,7 +54,7 @@ export function oskFilename(name: string): string {
 }
 
 export async function uploadSkinObject(
-  config: SkinStorageConfig,
+  config: SkinStorageConfig & Pick<Config, "livePublicOrigin">,
   key: string,
   buffer: Buffer,
   contentType: string,
@@ -59,12 +70,43 @@ export async function uploadSkinObject(
     CacheControl: "public, max-age=31536000, immutable",
     ContentDisposition: `${disposition}; filename="${filename}"`,
   }));
-  const publicBase = config.r2PublicBaseUrl!.replace(/\/+$/, "");
   return {
     storageKey: key,
     sizeBytes: buffer.length,
-    url: `${publicBase}/${key.split("/").map(encodeURIComponent).join("/")}`,
+    url: skinObjectUrl(config, key),
   };
+}
+
+// Public R2 URL when a public base is configured, otherwise the backend's own
+// /api/skins/file endpoint streams the object (keeps the shared bucket
+// private and makes local dev work with just the R2 credentials).
+function skinObjectUrl(config: SkinStorageConfig & Pick<Config, "livePublicOrigin">, key: string): string {
+  const encodedKey = key.split("/").map(encodeURIComponent).join("/");
+  const publicBase = config.r2PublicBaseUrl?.replace(/\/+$/, "");
+  if (publicBase) return `${publicBase}/${encodedKey}`;
+  const origin = config.livePublicOrigin.replace(/\/+$/, "");
+  const [, id, filename] = key.split("/");
+  return `${origin}/api/skins/file/${encodeURIComponent(id ?? "")}/${encodeURIComponent(filename ?? "")}`;
+}
+
+export async function getSkinObject(config: SkinStorageConfig, key: string): Promise<SkinObjectStream | null> {
+  if (!key.startsWith(SKINS_PREFIX) || !isSkinStorageConfigured(config)) return null;
+  const client = getClient(config);
+  try {
+    const object = await client.send(new GetObjectCommand({
+      Bucket: requireBucket(config),
+      Key: key,
+    }));
+    if (!object.Body) return null;
+    return {
+      body: object.Body as Readable,
+      contentType: object.ContentType ?? "application/octet-stream",
+      contentLength: object.ContentLength ?? null,
+      contentDisposition: object.ContentDisposition ?? null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function deleteSkinObjects(config: SkinStorageConfig, keys: string[]): Promise<void> {

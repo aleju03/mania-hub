@@ -8,23 +8,28 @@ import {
   appendSkinScreenshot,
   attachSkinOsk,
   attachSkinPreview,
+  backfillSkinSlugs,
   createPendingSkin,
   deleteSkin,
   finishSkin,
   getSkin,
+  getSkinByRef,
   getSkinForUpload,
   listExpiredPendingSkins,
   listSkins,
+  setSkinAccent,
   setSkinHidden,
   SKIN_DESCRIPTION_MAX_LENGTH,
   SKIN_MAX_PENDING_PER_USER,
   SKIN_MAX_PER_USER,
   SKIN_MAX_SCREENSHOTS,
   toSkinSummary,
+  upsertSkinKeymodePreview,
 } from "../src/features/skins.js";
 import { runRetention } from "../src/retention.js";
 import { sniffImage, validateOskBuffer } from "../src/skins/validate-osk.js";
 import { oskFilename, skinOskKey, skinPreviewKey } from "../src/skins/r2.js";
+import { slugifySkinName } from "../src/skins/slug.js";
 
 let dir = "";
 let db: Db;
@@ -72,7 +77,82 @@ async function createPublishedSkin(input: {
   return created.id;
 }
 
+describe("skin slugs", () => {
+  it("slugifies names to lowercase ascii kebab-case", () => {
+    expect(slugifySkinName("pl0x Aleju03 mix")).toBe("pl0x-aleju03-mix");
+    expect(slugifySkinName("  Café ~Zwölf~ 7K!!  ")).toBe("cafe-zwolf-7k");
+    expect(slugifySkinName("★彡")).toBe("skin");
+    expect(slugifySkinName("a".repeat(120))).toHaveLength(60);
+  });
+
+  it("assigns a unique slug at publish and resolves it via getSkinByRef", async () => {
+    const first = await createPublishedSkin({ ownerUserId: 1, ownerUsername: "delta", name: "Cloudy Skies" });
+    const second = await createPublishedSkin({ ownerUserId: 2, ownerUsername: "echo", name: "Cloudy  Skies!" });
+
+    expect((await getSkin(db, first))?.slug).toBe("cloudy-skies");
+    expect((await getSkin(db, second))?.slug).toBe("cloudy-skies-2");
+
+    expect((await getSkinByRef(db, "cloudy-skies"))?.id).toBe(first);
+    expect((await getSkinByRef(db, "cloudy-skies-2"))?.id).toBe(second);
+    // Pre-slug links carry the raw id; both forms keep resolving.
+    expect((await getSkinByRef(db, first))?.id).toBe(first);
+    expect(await getSkinByRef(db, "no-such-skin")).toBeNull();
+  });
+
+  it("backfills slugs for rows published before the column existed", async () => {
+    const id = await createPublishedSkin({ ownerUserId: 3, ownerUsername: "foxtrot", name: "Old Upload" });
+    await exec(db, "update skins set slug = null where id = ?", [id]);
+
+    expect(await backfillSkinSlugs(db)).toBe(1);
+    expect((await getSkin(db, id))?.slug).toBe("old-upload");
+    // Pending rows stay slugless until they publish.
+    const pending = await createPendingSkin(db, OWNER);
+    if (!pending.ok) throw new Error("pending failed");
+    expect(await backfillSkinSlugs(db)).toBe(0);
+    expect((await getSkin(db, pending.id))?.slug).toBeNull();
+  });
+});
+
 describe("skins feature", () => {
+  it("keeps the client-sampled accent over the skin.ini colour from the .osk", async () => {
+    const created = await createPendingSkin(db, OWNER);
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    // The previews upload first and carry the note-art accent; malformed
+    // values are ignored, valid ones are normalized to lowercase.
+    await setSkinAccent(db, created.id, "red");
+    expect((await getSkin(db, created.id))?.accentColor).toBeNull();
+    await setSkinAccent(db, created.id, "#BBDFFF");
+    expect((await getSkin(db, created.id))?.accentColor).toBe("#bbdfff");
+
+    // The .osk uploads last; its skin.ini colour must not clobber the sample.
+    await attachSkinOsk(db, created.id, {
+      key: skinOskKey(created.id, OWNER.name),
+      url: "https://cdn.example/skin.osk",
+      sizeBytes: 2048,
+      sha256: "cd".repeat(32),
+      keymodes: [4],
+      accentColor: "#ff0000",
+    });
+    expect((await getSkin(db, created.id))?.accentColor).toBe("#bbdfff");
+  });
+
+  it("falls back to the skin.ini colour when no accent was sampled", async () => {
+    const created = await createPendingSkin(db, OWNER);
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    await attachSkinOsk(db, created.id, {
+      key: skinOskKey(created.id, OWNER.name),
+      url: "https://cdn.example/skin.osk",
+      sizeBytes: 2048,
+      sha256: "cd".repeat(32),
+      keymodes: [4],
+      accentColor: "#ff0000",
+    });
+    expect((await getSkin(db, created.id))?.accentColor).toBe("#ff0000");
+  });
+
   it("creates a pending skin with a ticket and publishes through the upload flow", async () => {
     const created = await createPendingSkin(db, OWNER);
     expect(created.ok).toBe(true);
@@ -162,6 +242,35 @@ describe("skins feature", () => {
     expect(await createPendingSkin(db, { ...OWNER, name: "Over the total cap" })).toEqual({ ok: false, error: "skin_limit" });
   });
 
+  it("keeps one preview per keymode, marks the cover, and sorts by downloads", async () => {
+    const created = await createPendingSkin(db, OWNER);
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    for (const [keys, cover] of [[4, false], [7, true], [4, false]] as Array<[number, boolean]>) {
+      const upserted = await upsertSkinKeymodePreview(db, created.id, {
+        keys,
+        key: `skins/${created.id}/preview-${keys}k.webp`,
+        url: `https://cdn.example/preview-${keys}k.webp`,
+        width: 1280,
+        height: 720,
+      }, cover);
+      expect(upserted).toEqual({ ok: true });
+    }
+    const row = await getSkin(db, created.id);
+    expect(row?.previews.map((preview) => preview.keys)).toEqual([4, 7]);
+    // the cover follows the entry uploaded with isCover
+    expect(row?.previewUrl).toBe("https://cdn.example/preview-7k.webp");
+    expect(toSkinSummary(row!).previews).toHaveLength(2);
+
+    // downloads sort puts the most-downloaded first regardless of recency
+    await exec(db, "delete from skins");
+    const first = await createPublishedSkin({ ownerUserId: 1, ownerUsername: "alpha", name: "Old But Gold" });
+    await createPublishedSkin({ ownerUserId: 2, ownerUsername: "bravo", name: "Fresh" });
+    await exec(db, "update skins set download_count = 50 where id = ?", [first]);
+    const byDownloads = await listSkins(db, { sort: "downloads" });
+    expect(byDownloads.skins.map((skin) => skin.name)).toEqual(["Old But Gold", "Fresh"]);
+  });
+
   it("rejects expired tickets", async () => {
     const created = await createPendingSkin(db, OWNER);
     expect(created.ok).toBe(true);
@@ -194,6 +303,11 @@ describe("skins feature", () => {
     await createPublishedSkin({ ownerUserId: 3, ownerUsername: "charlie", name: "Circles", keymodes: [7] });
     // pending rows never show up in the public list
     await createPendingSkin(db, { ...OWNER, name: "Hidden pending" });
+    // Publishing back to back can land in the same millisecond; spread the
+    // timestamps so newest-first ordering is deterministic.
+    await exec(db, "update skins set published_at = '2026-01-01T00:00:01Z' where name = 'Rainbow Road'");
+    await exec(db, "update skins set published_at = '2026-01-01T00:00:02Z' where name = 'Midnight 100% Flow'");
+    await exec(db, "update skins set published_at = '2026-01-01T00:00:03Z' where name = 'Circles'");
 
     const all = await listSkins(db, {});
     expect(all.total).toBe(3);
