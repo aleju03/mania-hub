@@ -238,6 +238,7 @@ export class JobQueue {
            limit 1
          ) as newest_error
        from jobs j
+       where j.status in ('queued', 'running', 'failed', 'deferred_pressure')
        group by j.status, j.type
        order by count desc`,
     )).rows;

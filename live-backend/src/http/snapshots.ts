@@ -1433,7 +1433,7 @@ function parseGoalTargets(
 
 async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: boolean; snapshotCountry?: string } = {}) {
   const db = await dbHealth(ctx.db);
-  const last = (await exec(ctx.db, "select max(created_at) as created_at from live_event_log")).rows[0]?.created_at ?? null;
+  const last = (await exec(ctx.db, "select created_at from live_event_log order by sequence desc limit 1")).rows[0]?.created_at ?? null;
   // In a split deployment the worker runs in another process, so its live
   // status (lanes, OSC feed, osu! limiter) is mirrored to the DB. Prefer that
   // mirror in server-only mode; fall back to in-process state for "all" mode.
@@ -1459,7 +1459,7 @@ async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: b
     queueSummary: await ctx.queue.summary(),
     roster: await rosterSummary(ctx.db),
     analysis: await analysisStats(ctx.db),
-    osuFileBackfill: await getBeatmapOsuFileBackfillStatus(ctx.db),
+    osuFileBackfill: await getBeatmapOsuFileBackfillStatus(ctx.db, { cacheCounts: true }),
     rate,
     sqliteBusy,
     scoresFallback: await scoresFallbackStatus(ctx, mirror),

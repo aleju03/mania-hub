@@ -11,6 +11,7 @@ export const BEATMAP_OSU_FILE_BACKFILL_JOB = "backfill_beatmap_osu_files";
 const META_KEY = "beatmap_osu_file_backfill_state";
 const BATCH_SIZE = 12;
 const JOB_PRIORITY = -8;
+const CACHE_COUNTS_TTL_MS = 15_000;
 
 type BackfillRunStatus = "idle" | "queued" | "running" | "done" | "cancelled" | "failed";
 
@@ -41,6 +42,11 @@ interface CacheCounts {
   missing: number;
 }
 
+interface CachedCacheCounts {
+  expiresAt: number;
+  value: CacheCounts;
+}
+
 interface JobCounts {
   queued: number;
   running: number;
@@ -55,10 +61,15 @@ export interface BeatmapOsuFileBackfillStatus extends BackfillState, CacheCounts
   jobs: JobCounts;
 }
 
-export async function getBeatmapOsuFileBackfillStatus(db: Db): Promise<BeatmapOsuFileBackfillStatus> {
+const cacheCountsByDb = new WeakMap<Db, CachedCacheCounts>();
+
+export async function getBeatmapOsuFileBackfillStatus(
+  db: Db,
+  options: { cacheCounts?: boolean } = {},
+): Promise<BeatmapOsuFileBackfillStatus> {
   const [state, counts, jobs] = await Promise.all([
     readState(db),
-    readCacheCounts(db),
+    options.cacheCounts ? readCachedCacheCounts(db) : readCacheCounts(db),
     readJobCounts(db),
   ]);
   const activeJobs = jobs.queued + jobs.running + jobs.failed + jobs.deferred;
@@ -314,6 +325,15 @@ async function readCacheCounts(db: Db): Promise<CacheCounts> {
     unavailable,
     missing: Math.max(0, totalAnalyzed - cached - unavailable),
   };
+}
+
+async function readCachedCacheCounts(db: Db): Promise<CacheCounts> {
+  const now = Date.now();
+  const cached = cacheCountsByDb.get(db);
+  if (cached && cached.expiresAt > now) return cached.value;
+  const value = await readCacheCounts(db);
+  cacheCountsByDb.set(db, { value, expiresAt: now + CACHE_COUNTS_TTL_MS });
+  return value;
 }
 
 async function readJobCounts(db: Db): Promise<JobCounts> {

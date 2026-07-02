@@ -883,7 +883,7 @@ describe("live backend", () => {
     expect(row.last_error).toBeNull();
   });
 
-  it("omits historical completed job errors from queue summaries", async () => {
+  it("omits historical completed jobs from queue summaries", async () => {
     const { db, queue } = await setup();
     await queue.enqueue("refresh_user_top_scores", "top:done", { userId: 101, scoreId: 9001, country: "CR" });
     const doneJob = (await queue.claim("test-worker"))[0];
@@ -898,7 +898,7 @@ describe("live backend", () => {
     const doneRow = summary.find((row) => row.status === "done" && row.type === "refresh_user_top_scores");
     const failedRow = summary.find((row) => row.status === "failed" && row.type === "refresh_user_top_scores");
 
-    expect(doneRow?.newestError).toBeNull();
+    expect(doneRow).toBeUndefined();
     expect(failedRow?.newestError).toBe("current failure");
   });
 
