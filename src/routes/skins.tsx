@@ -1,10 +1,11 @@
 import { createFileRoute, notFound, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
 import { Upload } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { ManiaRain } from "../components/home/ManiaRain";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { PageHeader } from "../components/layout/PageHeader";
 import { SkinCard } from "../components/skins/SkinCard";
-import { SkinUploadPanel } from "../components/skins/SkinUploadPanel";
+import { SkinUploadModal } from "../components/skins/SkinUploadModal";
 import { Pagination } from "../components/ui/Pagination";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { OsuLogo } from "../components/ui/OsuLogo";
@@ -30,7 +31,7 @@ const DEFAULT_SKINS_SEARCH = {
   k: 0,
 };
 
-// 0 means no keymode filter; chips cover the keymodes skins realistically declare.
+// 0 means no keymode filter; the options cover the keymodes skins realistically declare.
 const KEYMODE_FILTERS = [4, 5, 6, 7, 8, 9, 10];
 
 export function parseSkinsSearch(search: Record<string, unknown>): SkinsSearch {
@@ -68,6 +69,40 @@ export const Route = createFileRoute("/skins")({
   validateSearch: parseSkinsSearch,
   component: SkinsPage,
 });
+
+// osu-web beatmapsets-listing filter row: micro-label on the left, options as
+// plain text links, the active one white.
+function FilterRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+      <span className="w-14 shrink-0 text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{label}</span>
+      <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3.5 gap-y-1">{children}</div>
+    </div>
+  );
+}
+
+function FilterOption({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`text-[12.5px] font-semibold tabular-nums transition-colors cursor-pointer ${
+        active ? "text-white" : "text-osu-f1 hover:text-osu-pink-light"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
 
 function SkinsPage() {
   const { q = "", page = 0, sort = "newest", k = 0 } = Route.useSearch();
@@ -141,8 +176,7 @@ function SkinsPage() {
   const headerAction = auth.viewer ? (
     <button
       type="button"
-      onClick={() => setShowUploader((open) => !open)}
-      aria-expanded={showUploader}
+      onClick={() => setShowUploader(true)}
       className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-osu-pink px-4 py-1.5 text-[12.5px] font-bold text-white transition cursor-pointer hover:brightness-110 sm:w-auto"
     >
       <Upload className="h-3.5 w-3.5" aria-hidden="true" />
@@ -163,18 +197,19 @@ function SkinsPage() {
     <div className="relative flex min-h-screen flex-col">
       <div className="relative z-10 flex flex-1 flex-col overflow-clip bg-osu-b5">
         <OsuTriangleBackdrop />
+        {/* The home page's falling notes; skins are about notes, after all. */}
+        <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+          <ManiaRain />
+        </div>
         <div className="relative z-10 flex flex-1 flex-col">
-          <PageHeader iconSrc="/images/icons/skins.svg" title="Skins" right={headerAction} />
+          <PageHeader iconSrc="/images/icons/skins.svg" title="osu!mania skins" right={headerAction} />
 
-          <div className="mx-auto w-full max-w-[1200px] flex-1 px-4 py-5 sm:px-5">
-            {showUploader && auth.viewer && (
-              <div className="mb-5">
-                <SkinUploadPanel onPublished={handlePublished} onClose={() => setShowUploader(false)} />
-              </div>
-            )}
-
-            <div className="mb-4 flex items-center gap-3">
-              <div className="relative flex-1">
+          {/* Search strip, the beatmapsets-listing pattern: big search box with
+              filter rows as plain text options below it. No surface of its own
+              so the falling notes show through, like the home hero. */}
+          <div className="border-b border-osu-b3/30">
+            <div className="mx-auto w-full max-w-[1200px] px-4 py-3.5 sm:px-5">
+              <div className="relative">
                 <svg
                   viewBox="0 0 24 24"
                   fill="none"
@@ -197,60 +232,46 @@ function SkinsPage() {
                   className="w-full rounded-lg border border-osu-b3/30 bg-osu-b4 py-2.5 pl-10 pr-3 text-[14px] text-osu-l1 transition-colors placeholder:text-osu-f1/55 focus:border-osu-pink/50 focus:outline-none"
                 />
               </div>
-              <div className="flex shrink-0 overflow-hidden rounded-lg border border-osu-b3/30" role="group" aria-label="Sort skins">
-                {([["newest", "Newest"], ["downloads", "Most downloaded"]] as const).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => applySearch({ sort: value })}
-                    aria-pressed={sort === value}
-                    className={`px-3 py-2.5 text-[12px] font-semibold transition-colors cursor-pointer ${
-                      sort === value ? "bg-osu-b3 text-white" : "bg-osu-b4 text-osu-f1 hover:text-osu-l1"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
+
+              <div className="mt-3 flex flex-col gap-1.5">
+                <FilterRow label="keys">
+                  <FilterOption active={k === 0} onClick={() => applySearch({ k: 0 })}>
+                    any
+                  </FilterOption>
+                  {KEYMODE_FILTERS.map((keys) => (
+                    <FilterOption key={keys} active={k === keys} onClick={() => applySearch({ k: k === keys ? 0 : keys })}>
+                      {keys}K
+                    </FilterOption>
+                  ))}
+                </FilterRow>
+                <FilterRow label="sort by">
+                  <FilterOption active={sort === "newest"} onClick={() => applySearch({ sort: "newest" })}>
+                    newest
+                  </FilterOption>
+                  <FilterOption active={sort === "downloads"} onClick={() => applySearch({ sort: "downloads" })}>
+                    most downloaded
+                  </FilterOption>
+                  {data && (
+                    <span
+                      className={`ml-auto text-[12px] text-osu-f1 tabular-nums transition-opacity ${loading ? "opacity-45" : ""}`}
+                      role="status"
+                      aria-live="polite"
+                    >
+                      {data.total.toLocaleString()} {data.total === 1 ? "skin" : "skins"}
+                    </span>
+                  )}
+                </FilterRow>
               </div>
-              {data && (
-                <span className="shrink-0 text-[12px] text-osu-f1 tabular-nums" role="status" aria-live="polite">
-                  {data.total.toLocaleString()} {data.total === 1 ? "skin" : "skins"}
-                </span>
-              )}
             </div>
+          </div>
 
-            <div className="mb-4 flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter by keymode">
-              <button
-                type="button"
-                onClick={() => applySearch({ k: 0 })}
-                aria-pressed={k === 0}
-                className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors cursor-pointer ${
-                  k === 0 ? "bg-osu-pink text-white" : "border border-osu-b3/30 bg-osu-b4 text-osu-f1 hover:text-osu-l1"
-                }`}
-              >
-                All
-              </button>
-              {KEYMODE_FILTERS.map((keys) => (
-                <button
-                  key={keys}
-                  type="button"
-                  onClick={() => applySearch({ k: k === keys ? 0 : keys })}
-                  aria-pressed={k === keys}
-                  className={`rounded-full px-2.5 py-1 text-[11px] font-bold tabular-nums transition-colors cursor-pointer ${
-                    k === keys ? "bg-osu-pink text-white" : "border border-osu-b3/30 bg-osu-b4 text-osu-f1 hover:text-osu-l1"
-                  }`}
-                >
-                  {keys}K
-                </button>
-              ))}
-            </div>
-
+          <div className="mx-auto w-full max-w-[1200px] flex-1 px-4 py-5 sm:px-5">
             {loading && !data ? (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {Array.from({ length: 6 }, (_, index) => (
-                  <div key={index} className="overflow-hidden rounded-xl border border-osu-b3/40 bg-osu-b4">
+                {Array.from({ length: 9 }, (_, index) => (
+                  <div key={index} className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4">
                     <Skeleton className="aspect-video w-full rounded-none" />
-                    <div className="space-y-1.5 px-3 py-2.5">
+                    <div className="space-y-1.5 px-2.5 py-2">
                       <Skeleton className="h-3.5 w-36" />
                       <Skeleton className="h-3 w-24" />
                     </div>
@@ -277,18 +298,24 @@ function SkinsPage() {
                 </p>
               </div>
             ) : (
-              <>
+              <div className={loading ? "opacity-60 transition-opacity" : "transition-opacity"} aria-busy={loading}>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {skins.map((skin) => (
                     <SkinCard key={skin.id} skin={skin} />
                   ))}
                 </div>
                 <Pagination page={page} totalPages={totalPages} onPageChange={(next) => applySearch({ page: next })} />
-              </>
+              </div>
             )}
           </div>
         </div>
       </div>
+
+      <SkinUploadModal
+        open={showUploader && !!auth.viewer}
+        onClose={() => setShowUploader(false)}
+        onPublished={handlePublished}
+      />
     </div>
   );
 }

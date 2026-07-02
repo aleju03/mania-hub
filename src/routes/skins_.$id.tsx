@@ -1,9 +1,10 @@
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
 import { Download, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { ManiaRain } from "../components/home/ManiaRain";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { PageHeader } from "../components/layout/PageHeader";
-import { SkinKeymodeTags } from "../components/skins/SkinCard";
+import { SKIN_FALLBACK_ACCENT, SkinKeymodeTags } from "../components/skins/SkinCard";
 import { Avatar } from "../components/ui/Avatar";
 import { useAuth } from "../lib/auth-context";
 import { canUseDevFeatures } from "../lib/auth-shared";
@@ -119,12 +120,16 @@ function SkinDetailPage() {
     <div className="relative flex min-h-screen flex-col">
       <div className="relative z-10 flex flex-1 flex-col overflow-clip bg-osu-b5">
         <OsuTriangleBackdrop />
+        {/* Same falling notes as /skins so the two pages read as one surface. */}
+        <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+          <ManiaRain />
+        </div>
         <div className="relative z-10 flex flex-1 flex-col">
           <PageHeader
             iconSrc="/images/icons/skins.svg"
             title={
               <Link to="/skins" search={{}} className="transition-colors hover:text-white">
-                Skins
+                osu!mania skins
               </Link>
             }
           />
@@ -145,7 +150,7 @@ function SkinDetailPage() {
             ) : (
               <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
                 <div className="min-w-0">
-                  <div className="overflow-hidden rounded-2xl border border-osu-b3/40 bg-osu-b4">
+                  <div className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4">
                     {hero ? (
                       <img
                         src={hero.url}
@@ -159,6 +164,12 @@ function SkinDetailPage() {
                         No preview available.
                       </div>
                     )}
+                    {/* Accent bar, same note-art colour the browse card carries. */}
+                    <div
+                      className="h-[3px] w-full"
+                      style={{ backgroundColor: skin.accentColor ?? SKIN_FALLBACK_ACCENT }}
+                      aria-hidden="true"
+                    />
                   </div>
                   {gallery.length > 1 && (
                     <div className="mt-3 flex flex-wrap gap-2">
@@ -191,7 +202,7 @@ function SkinDetailPage() {
                 </div>
 
                 <div className="flex min-w-0 flex-col gap-4">
-                  <div className="rounded-2xl border border-osu-b3/40 bg-osu-b4 px-4 py-4">
+                  <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 px-4 py-4">
                     <div className="flex flex-wrap items-center gap-2">
                       <h1 className="text-[18px] font-bold leading-tight text-white">{skin.name}</h1>
                       {skin.status === "hidden" && (
@@ -233,7 +244,7 @@ function SkinDetailPage() {
                     )}
                   </div>
 
-                  <dl className="rounded-2xl border border-osu-b3/40 bg-osu-b4 px-4 py-1 text-[12.5px]">
+                  <dl className="rounded-xl border border-osu-b3/20 bg-osu-b4 px-4 py-1 text-[12.5px]">
                     <FactRow label="Keymodes">
                       <SkinKeymodeTags keymodes={skin.keymodes} max={10} />
                     </FactRow>
@@ -255,7 +266,7 @@ function SkinDetailPage() {
                   </dl>
 
                   {(isOwner || auth.isAdmin) && (
-                    <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-osu-b3/40 bg-osu-b4 px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-osu-b3/20 bg-osu-b4 px-4 py-3">
                       <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
                         {auth.isAdmin && !isOwner ? "Moderation" : "Your skin"}
                       </span>

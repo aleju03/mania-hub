@@ -1,17 +1,18 @@
 import { Link } from "@tanstack/react-router";
 import { Download } from "lucide-react";
+import type { CSSProperties } from "react";
 import { formatTimeAgo } from "../../lib/format";
 import { formatSkinFileSize, type SkinSummary } from "../../lib/skins";
 import { Avatar } from "../ui/Avatar";
 
 const MAX_KEYMODE_TAGS = 3;
-const FALLBACK_ACCENT = "#ff66ab";
+export const SKIN_FALLBACK_ACCENT = "#ff66ab";
 
 export function SkinKeymodeTags({ keymodes, overlay = false, max = MAX_KEYMODE_TAGS }: { keymodes: number[]; overlay?: boolean; max?: number }) {
   const shown = keymodes.slice(0, max);
   const rest = keymodes.length - shown.length;
   const pill = overlay
-    ? "rounded bg-black/65 px-1.5 py-0.5 text-[10px] font-bold text-white/90 tabular-nums"
+    ? "rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-bold text-white/90 tabular-nums"
     : "rounded bg-osu-b5/80 px-1.5 py-0.5 text-[10px] font-bold text-osu-l2 tabular-nums";
   return (
     <div className="flex shrink-0 items-center gap-1">
@@ -26,19 +27,14 @@ export function SkinKeymodeTags({ keymodes, overlay = false, max = MAX_KEYMODE_T
 }
 
 export function SkinCard({ skin }: { skin: SkinSummary }) {
-  const accent = skin.accentColor ?? FALLBACK_ACCENT;
+  const accent = skin.accentColor ?? SKIN_FALLBACK_ACCENT;
   return (
     <Link
       to="/skins/$id"
       params={{ id: skin.slug ?? skin.id }}
-      className="group relative block overflow-hidden rounded-xl border border-osu-b3/40 bg-osu-b4"
+      style={{ "--skin-accent": accent } as CSSProperties}
+      className="group flex flex-col overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4 transition-[border-color,box-shadow] hover:border-(--skin-accent) hover:shadow-[0_0_18px_-8px_var(--skin-accent)]"
     >
-      {/* Accent-tinted hover border, colour taken from the skin's own notes. */}
-      <div
-        className="pointer-events-none absolute inset-0 z-10 rounded-xl border-2 opacity-0 transition-opacity duration-100 group-hover:opacity-100"
-        style={{ borderColor: accent }}
-        aria-hidden="true"
-      />
       <div className="relative aspect-video w-full bg-osu-b5">
         {skin.previewUrl ? (
           <img
@@ -50,25 +46,26 @@ export function SkinCard({ skin }: { skin: SkinSummary }) {
             className="h-full w-full object-cover transition-[filter] duration-150 group-hover:brightness-110"
           />
         ) : null}
-        <div className="absolute right-2 top-2">
+        <div className="absolute right-1.5 top-1.5">
           <SkinKeymodeTags keymodes={skin.keymodes} overlay />
         </div>
         {skin.status === "hidden" && (
-          <span className="absolute left-2 top-2 rounded bg-black/65 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white/80">
+          <span className="absolute left-1.5 top-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-extrabold uppercase leading-none tracking-wide text-white/80">
             hidden
           </span>
         )}
       </div>
-      <div className="h-[3px] w-full" style={{ backgroundColor: accent }} aria-hidden="true" />
-      <div className="px-3 py-2.5">
+      {/* Accent bar, colour sampled from the skin's own note art. */}
+      <div className="h-[3px] w-full shrink-0" style={{ backgroundColor: accent }} aria-hidden="true" />
+      <div className="flex flex-1 flex-col gap-1 px-2.5 py-2">
         <div className="flex items-baseline justify-between gap-2">
-          <div className="truncate text-[13.5px] font-bold leading-tight text-white">{skin.name}</div>
+          <div className="truncate text-[13px] font-bold leading-tight text-white">{skin.name}</div>
           <span className="flex shrink-0 items-center gap-1 text-[11px] text-osu-f1">
             <Download className="h-3 w-3" aria-hidden="true" />
             <span className="tabular-nums">{skin.downloadCount.toLocaleString()}</span>
           </span>
         </div>
-        <div className="mt-1 flex items-center gap-1.5 text-[11px] text-osu-f1">
+        <div className="flex items-center gap-1.5 text-[11px] text-osu-f1">
           <Avatar userId={skin.ownerUserId} size={14} shape="circle" />
           <span className="truncate font-semibold text-osu-l2">{skin.ownerUsername}</span>
           {skin.publishedAt && (

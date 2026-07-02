@@ -446,6 +446,10 @@ export function ManiaRain() {
 
     window.addEventListener("pointermove", handlePointerMove, { passive: true });
     window.addEventListener("resize", handleResize, { passive: true });
+    // The parent can also grow without a window resize (async content below
+    // the fold); track it so the rain always covers the full page height.
+    const parentObserver = canvasRef.current?.parentElement ? new ResizeObserver(handleResize) : null;
+    if (parentObserver && canvasRef.current?.parentElement) parentObserver.observe(canvasRef.current.parentElement);
     const unsubscribeWindowActivity = subscribeWindowActivity(handleWindowActivityChange);
     if (isWindowActive()) startAnimation();
 
@@ -453,6 +457,7 @@ export function ManiaRain() {
       stopAnimation();
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("resize", handleResize);
+      parentObserver?.disconnect();
       unsubscribeWindowActivity();
       unsubscribeCursorSettings();
     };
