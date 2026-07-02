@@ -6,7 +6,7 @@ import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName, isGlobalScope } from "../lib/country";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { formatNumber, formatAccuracy } from "../lib/format";
-import { getCrRankChanges, getGlobalRankChange } from "../lib/rankings";
+import { compareRankDeltaValues, getCrRankChanges, getGlobalRankChange } from "../lib/rankings";
 import { Avatar } from "../components/ui/Avatar";
 import { CountryFlag } from "../components/ui/CountryFlag";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -374,14 +374,15 @@ function RankingsPage() {
         case "7d": {
           const aH = rankHistories[a.entry.user.id];
           const bH = rankHistories[b.entry.user.id];
-          aVal = liveRankDeltas[a.entry.user.id]?.globalChange ?? getGlobalRankChange(aH) ?? -99999;
-          bVal = liveRankDeltas[b.entry.user.id]?.globalChange ?? getGlobalRankChange(bH) ?? -99999;
-          break;
+          const aDelta = liveRankDeltas[a.entry.user.id]?.globalChange ?? getGlobalRankChange(aH);
+          const bDelta = liveRankDeltas[b.entry.user.id]?.globalChange ?? getGlobalRankChange(bH);
+          return compareRankDeltaValues(aDelta, bDelta, sortDir) || a.originalRank - b.originalRank;
         }
-        case "cr7d":
-          aVal = liveCountryRankChanges[a.entry.user.id] ?? countryRankChanges[a.entry.user.id] ?? -99999;
-          bVal = liveCountryRankChanges[b.entry.user.id] ?? countryRankChanges[b.entry.user.id] ?? -99999;
-          break;
+        case "cr7d": {
+          const aDelta = liveCountryRankChanges[a.entry.user.id] ?? countryRankChanges[a.entry.user.id];
+          const bDelta = liveCountryRankChanges[b.entry.user.id] ?? countryRankChanges[b.entry.user.id];
+          return compareRankDeltaValues(aDelta, bDelta, sortDir) || a.originalRank - b.originalRank;
+        }
         case "accuracy":
           aVal = a.entry.hit_accuracy;
           bVal = b.entry.hit_accuracy;

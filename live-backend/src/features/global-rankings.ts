@@ -183,7 +183,6 @@ function sortGlobalRankingEntries(
     return dir === "desc" ? entries : [...entries].reverse();
   }
 
-  const flip = dir === "desc" ? 1 : -1;
   return [...entries].sort((a, b) => {
     switch (sort) {
       case "player":
@@ -191,9 +190,9 @@ function sortGlobalRankingEntries(
           ? a.user.username.localeCompare(b.user.username)
           : b.user.username.localeCompare(a.user.username);
       case "7d":
-        return ((b.global_change ?? -99999) - (a.global_change ?? -99999)) * flip || a.rank - b.rank;
+        return compareRankDeltaValues(a.global_change, b.global_change, dir) || a.rank - b.rank;
       case "cr7d":
-        return ((b.country_change ?? -99999) - (a.country_change ?? -99999)) * flip || a.rank - b.rank;
+        return compareRankDeltaValues(a.country_change, b.country_change, dir) || a.rank - b.rank;
       case "accuracy":
         return compareAccuracy(a, b, dir);
       case "playcount":
@@ -208,6 +207,20 @@ function sortGlobalRankingEntries(
         return a.rank - b.rank;
     }
   });
+}
+
+export function compareRankDeltaValues(
+  a: number | null | undefined,
+  b: number | null | undefined,
+  dir: GlobalRankingsSortDirection,
+): number {
+  const aValue = typeof a === "number" && Number.isFinite(a) ? a : null;
+  const bValue = typeof b === "number" && Number.isFinite(b) ? b : null;
+  if (aValue !== null && bValue === null) return -1;
+  if (aValue === null && bValue !== null) return 1;
+  if (aValue === null || bValue === null) return 0;
+
+  return dir === "desc" ? bValue - aValue : aValue - bValue;
 }
 
 function hasIncompleteStats(entry: GlobalRankingEntry): boolean {
