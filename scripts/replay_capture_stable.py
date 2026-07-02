@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Capture osu!stable replay truth from a local tosu/gosumemory JSON API.
+"""Capture osu! replay truth from a local tosu/gosumemory JSON API.
+
+Works for osu!stable (tosu or gosumemory) and osu!lazer (tosu only; gosumemory
+cannot read lazer). Logs the final judgement histogram, the full hit-error
+array, a per-hit / per-miss event stream, and the mods/OD/rate config a replay
+simulator needs to reproduce the score.
 
 This script is intentionally standalone: it only uses Python's standard
 library, so it can be copied to Windows and run outside the Mania Hub project.
@@ -130,18 +135,23 @@ def counts_from_hit_object(hits: dict[str, Any]) -> dict[str, int]:
 
 
 def hit_error_array(root: Any) -> list[float]:
-    value = get_path(root, "play.hitErrorArray")
-    if not isinstance(value, list):
-        value = get_path(root, "gameplay.hitErrorArray")
-    if not isinstance(value, list):
-        return []
-
-    result = []
-    for item in value:
-        number = as_number(item)
-        if number is not None:
-            result.append(number)
-    return result
+    # tosu v2 nests this under play.hits; gosumemory under gameplay.hits. The
+    # older flat play.hitErrorArray path is kept last as a fallback.
+    for path in (
+        "play.hits.hitErrorArray",
+        "play.hitErrorArray",
+        "gameplay.hits.hitErrorArray",
+        "gameplay.hitErrorArray",
+    ):
+        value = get_path(root, path)
+        if isinstance(value, list):
+            result = []
+            for item in value:
+                number = as_number(item)
+                if number is not None:
+                    result.append(number)
+            return result
+    return []
 
 
 def pick_hit_counts(root: Any) -> dict[str, int]:
@@ -244,6 +254,200 @@ def normalize_accuracy(value: float | None) -> float | None:
     return value * 100 if 0 < value <= 1 else value
 
 
+def extract_unstable_rate(root: Any) -> float | None:
+    return number_from_paths(root, (
+        "play.hits.unstableRate",
+        "play.unstableRate",
+        "gameplay.hits.unstableRate",
+        "resultsScreen.unstableRate",
+    ))
+
+
+def split_mod_string(text: str) -> list[str]:
+    text = text.strip()
+    if not text:
+        return []
+    if any(sep in text for sep in (",", " ", "+", "|", "-")):
+        parts = re.split(r"[,\s+|-]+", text)
+    else:
+        # Packed acronym strings ("HDDT") split into two-character codes.
+        parts = re.findall(r"[A-Za-z0-9]{2}", text)
+    return [part.upper() for part in parts if part]
+
+
+def mod_acronyms_from_value(mods: Any) -> list[str]:
+    if isinstance(mods, str):
+        return split_mod_string(mods)
+    if isinstance(mods, list):
+        acronyms: list[str] = []
+        for item in mods:
+            if isinstance(item, dict):
+                value = item.get("acronym") or item.get("Acronym") or item.get("mod")
+                if value:
+                    acronyms.append(str(value).upper())
+            elif isinstance(item, str):
+                acronyms.extend(split_mod_string(item))
+        return acronyms
+    if isinstance(mods, dict):
+        array = mods.get("array")
+        if isinstance(array, list):
+            acronyms = mod_acronyms_from_value(array)
+            if acronyms:
+                return acronyms
+        for key in ("name", "str", "acronyms", "list"):
+            value = mods.get(key)
+            if isinstance(value, str) and value:
+                return split_mod_string(value)
+    return []
+
+
+def extract_mod_acronyms(root: Any) -> list[str]:
+    for path in ("play.mods", "resultsScreen.mods", "menu.mods", "mods"):
+        acronyms = mod_acronyms_from_value(get_path(root, path))
+        if acronyms:
+            return acronyms
+    return []
+
+
+def speed_multiplier_from_mods(mods: Any) -> float | None:
+    if isinstance(mods, dict):
+        array = mods.get("array")
+        if isinstance(array, list):
+            return speed_multiplier_from_mods(array)
+    if isinstance(mods, list):
+        for item in mods:
+            if not isinstance(item, dict):
+                continue
+            settings = item.get("settings")
+            if isinstance(settings, dict):
+                for key in ("speed_change", "speedChange", "rate"):
+                    value = as_number(settings.get(key))
+                    if value:
+                        return value
+    return None
+
+
+def extract_speed_multiplier(root: Any, acronyms: list[str]) -> float | None:
+    # Prefer an explicit rate from lazer mod settings (DT/HT can carry a custom
+    # speed_change), then fall back to the standard mod rates.
+    for path in ("play.mods", "resultsScreen.mods", "menu.mods", "mods"):
+        rate = speed_multiplier_from_mods(get_path(root, path))
+        if rate is not None:
+            return rate
+    mod_set = set(acronyms)
+    if mod_set & {"DT", "NC"}:
+        return 1.5
+    if mod_set & {"HT", "DC"}:
+        return 0.75
+    return None
+
+
+def stat_pair(value: Any) -> tuple[float | None, float | None]:
+    # tosu v2 reports some stats as {original, converted}; older shapes are flat.
+    if isinstance(value, dict):
+        return as_number(value.get("original")), as_number(value.get("converted"))
+    number = as_number(value)
+    return number, number
+
+
+def extract_stat(root: Any, paths: tuple[str, ...]) -> tuple[float | None, float | None]:
+    for path in paths:
+        value = get_path(root, path)
+        if value is not None:
+            base, converted = stat_pair(value)
+            if base is not None or converted is not None:
+                return base, converted
+    return None, None
+
+
+def extract_config(root: Any) -> dict[str, Any]:
+    # Everything a replay simulator needs to reproduce the hit windows: the mod
+    # list (HR/EZ scale, DT/HT rate, CL/classic vs lazer windows), the BASE
+    # (unmodded) OD, and the key count. OD is captured unmodded on purpose: a
+    # simulator applies the mod multipliers itself, so feeding it the
+    # mod-converted OD would double-apply. odConverted is kept as a cross-check.
+    acronyms = extract_mod_acronyms(root)
+    od_base, od_converted = extract_stat(root, ("beatmap.stats.od", "beatmap.stats.OD", "menu.bm.stats.OD", "beatmap.od"))
+    key_base, _ = extract_stat(root, ("beatmap.stats.cs", "beatmap.stats.CS", "menu.bm.stats.CS", "beatmap.cs"))
+    return {
+        "mods": acronyms,
+        "speedMultiplier": extract_speed_multiplier(root, acronyms),
+        "od": od_base,
+        "odConverted": od_converted,
+        "keyCount": int(round(key_base)) if key_base is not None else None,
+        "beatmapMode": string_from_paths(root, ("beatmap.mode", "menu.gameMode"))
+            or number_from_paths(root, ("beatmap.mode", "menu.gameMode")),
+    }
+
+
+def merge_config(base: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
+    # Keep the best-known value per field across polls: mods appear during play,
+    # OD/CS at song select, so accumulate non-empty values rather than clobber.
+    for key, value in incoming.items():
+        if value is None:
+            continue
+        if isinstance(value, list) and not value:
+            continue
+        base[key] = value
+    return base
+
+
+def unambiguous_bucket(delta: dict[str, int] | None, new_hits: int) -> str | None:
+    # Only attribute a judgement bucket to new hits when it is unambiguous: a
+    # single non-miss count increased by exactly the number of new errors. When
+    # several buckets moved in one poll the mapping is left to the analysis layer.
+    if not delta:
+        return None
+    non_miss = {key: value for key, value in delta.items() if key != "countMiss" and value > 0}
+    if len(non_miss) == 1:
+        (key, value), = non_miss.items()
+        if value == new_hits:
+            return key
+    return None
+
+
+def error_stats(errors: list[float]) -> dict[str, Any]:
+    if not errors:
+        return {"count": 0, "mean": None, "stdev": None, "unstableRate": None}
+    count = len(errors)
+    mean = sum(errors) / count
+    variance = sum((value - mean) ** 2 for value in errors) / count
+    stdev = variance ** 0.5
+    return {
+        "count": count,
+        "mean": round(mean, 3),
+        "stdev": round(stdev, 3),
+        "unstableRate": round(stdev * 10, 3),
+    }
+
+
+def build_final(
+    result: dict[str, Any] | None,
+    final_play: dict[str, Any] | None,
+    unstable_rate: float | None,
+    hit_errors: list[float],
+) -> dict[str, Any]:
+    def pick(key: str) -> Any:
+        if isinstance(result, dict) and result.get(key) is not None:
+            return result.get(key)
+        if isinstance(final_play, dict):
+            return final_play.get(key)
+        return None
+
+    counts = pick("counts")
+    return {
+        "accuracy": pick("accuracy"),
+        "counts": counts,
+        "errorStats": error_stats(hit_errors),
+        "hitErrorArray": hit_errors,
+        "hitErrorCount": len(hit_errors),
+        "maxCombo": pick("maxCombo"),
+        "score": pick("score"),
+        "totalHits": counts_total(counts) if isinstance(counts, dict) else None,
+        "unstableRate": unstable_rate,
+    }
+
+
 def normalize_snapshot(raw: Any) -> dict[str, Any]:
     counts = pick_hit_counts(raw)
     errors = hit_error_array(raw)
@@ -311,6 +515,7 @@ def normalize_snapshot(raw: Any) -> dict[str, Any]:
             "menu.state",
         )),
         "totalHits": counts_total(counts),
+        "unstableRate": extract_unstable_rate(raw),
     }
 
 
@@ -365,21 +570,11 @@ def scoreboard_signature(snapshot: dict[str, Any]) -> str:
 
 
 def source_signature(snapshot: dict[str, Any]) -> str:
-    leaderboard = []
-    for entry in snapshot.get("leaderboard") or []:
-        leaderboard.append({
-            "counts": entry.get("counts"),
-            "id": entry.get("id"),
-            "maxCombo": entry.get("maxCombo"),
-            "position": entry.get("position"),
-            "score": entry.get("score"),
-        })
-
-    result = snapshot.get("resultScreen")
+    # Leaderboard is intentionally excluded: for a single-replay watch it churns
+    # constantly and would inflate writes without adding replay-truth signal.
     return json.dumps({
         "hitErrorTotal": snapshot.get("hitErrorTotal"),
-        "leaderboard": leaderboard[:8],
-        "resultScreen": result,
+        "resultScreen": snapshot.get("resultScreen"),
         "sliderBreaks": snapshot.get("sliderBreaks"),
     }, sort_keys=True, separators=(",", ":"))
 
@@ -495,10 +690,12 @@ def print_live_change(snapshot: dict[str, Any], delta: dict[str, int] | None) ->
     combo_text = f"{int(combo)}x" if isinstance(combo, (int, float)) else "combo ?"
     score = snapshot.get("score")
     score_text = str(int(score)) if isinstance(score, (int, float)) else "score ?"
+    ur = snapshot.get("unstableRate")
+    ur_text = f" UR {ur:.1f}" if isinstance(ur, (int, float)) and ur > 0 else ""
     delta_text = f" | {format_delta(delta)}" if delta else ""
     print(
         f"[{format_replay_time(snapshot.get('currentTime'))}] "
-        f"{accuracy_text} {combo_text} {score_text} | "
+        f"{accuracy_text} {combo_text} {score_text}{ur_text} | "
         f"{format_counts(snapshot.get('counts', {}))}{delta_text}",
         flush=True,
     )
@@ -530,6 +727,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--full-hit-errors", action="store_true", help="With compact raw output, repeat the full hit-error array on every written row.")
     parser.add_argument("--no-raw", action="store_true", help="Omit compact raw API snapshots from NDJSON rows.")
     parser.add_argument("--quiet", action="store_true", help="Do not print live scoreboard changes.")
+    parser.add_argument("--no-hit-events", action="store_true", help="Do not emit the per-hit / per-miss event rows (keep only samples).")
     parser.add_argument("--timeout", type=float, default=750, help="HTTP timeout in milliseconds. Default: 750")
     return parser
 
@@ -565,18 +763,25 @@ def main() -> int:
     stats = {
         "countChangeCount": 0,
         "errorCount": 0,
+        "hitEventCount": 0,
         "lastErrorMessage": None,
+        "missEventCount": 0,
         "sampleCount": 0,
         "sourceChangeCount": 0,
         "scoreboardChangeCount": 0,
         "writtenSamples": 0,
     }
-    first_snapshot = None
-    last_snapshot = None
     previous_counts = None
     previous_signature = None
     previous_source_signature = None
+    previous_hit_error_count: int | None = None
     queued_initial_raw = initial_raw
+    config = merge_config({}, extract_config(initial_raw))
+    final_play: dict[str, Any] | None = None
+    final_play_total = -1
+    final_unstable_rate: float | None = None
+    final_hit_errors: list[float] = []
+    result_snapshot: dict[str, Any] | None = None
 
     if not args.quiet:
         print(f"Capturing {endpoint_url}")
@@ -587,12 +792,14 @@ def main() -> int:
         write_json_line(handle, {
             "type": "start",
             "baseUrl": args.base_url,
+            "config": config,
             "endpoint": endpoint_url,
+            "hitEvents": not args.no_hit_events,
             "includeRaw": "none" if args.no_raw else ("full" if args.full_raw else "compact"),
             "includeRawHitErrors": None if args.no_raw or args.full_raw else ("all" if args.full_hit_errors else "count-or-scoreboard-changes"),
             "intervalMs": args.interval,
             "label": args.label,
-            "schemaVersion": 3,
+            "schemaVersion": 4,
             "startedAt": started_at,
             "tool": "replay_capture_stable.py",
         })
@@ -607,12 +814,16 @@ def main() -> int:
                     raw = queued_initial_raw if queued_initial_raw is not None else fetch_json(endpoint_url, args.timeout / 1000)
                     queued_initial_raw = None
                     normalized = normalize_snapshot(raw)
+                    errors = hit_error_array(raw)
                     signature = scoreboard_signature(normalized)
                     source_sig = source_signature(normalized)
                     delta = count_delta(previous_counts, normalized["counts"])
                     scoreboard_changed = previous_signature is None or signature != previous_signature
                     source_changed = previous_source_signature is None or source_sig != previous_source_signature
                     should_write = args.all or scoreboard_changed or source_changed or delta is not None
+
+                    config = merge_config(config, extract_config(raw))
+                    config = merge_config(config, {"beatmap": normalized["beatmap"]})
 
                     stats["sampleCount"] += 1
                     if scoreboard_changed:
@@ -621,9 +832,66 @@ def main() -> int:
                         stats["sourceChangeCount"] += 1
                     if delta:
                         stats["countChangeCount"] += 1
-                    if first_snapshot is None:
-                        first_snapshot = normalized
-                    last_snapshot = normalized
+
+                    # Track the authoritative final state. The snapshot with the
+                    # most total hits is the end of play; the results screen (when
+                    # present) is preferred for counts/accuracy/score at summary
+                    # time. UR and the full hit-error array only exist while
+                    # playing, so keep the last non-null UR and the longest array.
+                    total_hits = normalized["totalHits"] or 0
+                    if total_hits >= final_play_total:
+                        final_play_total = total_hits
+                        final_play = {
+                            "accuracy": normalized["accuracy"],
+                            "counts": normalized["counts"],
+                            "maxCombo": normalized["maxCombo"],
+                            "score": normalized["score"],
+                        }
+                    if normalized["unstableRate"] is not None:
+                        final_unstable_rate = normalized["unstableRate"]
+                    if normalized["resultScreen"] is not None:
+                        result_snapshot = normalized["resultScreen"]
+                    if len(errors) > len(final_hit_errors):
+                        final_hit_errors = errors
+
+                    # Per-hit event stream. The hit-error array is append-only
+                    # during a play, so entries added since the last poll are this
+                    # interval's hits, in order. Misses never append here (they are
+                    # emitted from the count delta below); several hits inside one
+                    # poll share a mapTime, but their offsets stay exact.
+                    if not args.no_hit_events:
+                        if previous_hit_error_count is None or len(errors) < previous_hit_error_count:
+                            # First sample, or an array reset (retry / new map /
+                            # results clear): rebase without replaying old hits.
+                            previous_hit_error_count = len(errors)
+                        elif len(errors) > previous_hit_error_count:
+                            new_errors = errors[previous_hit_error_count:]
+                            bucket = unambiguous_bucket(delta, len(new_errors))
+                            map_time = normalized.get("currentTime")
+                            captured_at = utc_now()
+                            for offset_index, error_ms in enumerate(new_errors):
+                                write_json_line(handle, {
+                                    "type": "hit",
+                                    "bucket": bucket,
+                                    "capturedAt": captured_at,
+                                    "elapsedMs": round(elapsed_ms, 3),
+                                    "errorMs": error_ms,
+                                    "index": previous_hit_error_count + offset_index,
+                                    "mapTime": map_time,
+                                })
+                                stats["hitEventCount"] += 1
+                            previous_hit_error_count = len(errors)
+
+                        if previous_counts is not None and delta and delta.get("countMiss", 0) > 0:
+                            write_json_line(handle, {
+                                "type": "miss",
+                                "capturedAt": utc_now(),
+                                "comboAfter": normalized.get("combo"),
+                                "count": delta["countMiss"],
+                                "elapsedMs": round(elapsed_ms, 3),
+                                "mapTime": normalized.get("currentTime"),
+                            })
+                            stats["missEventCount"] += 1
 
                     if should_write:
                         row = {
@@ -666,11 +934,11 @@ def main() -> int:
         finally:
             summary = {
                 "type": "summary",
+                "config": config,
                 "durationMs": round((time.perf_counter() - start) * 1000, 3),
                 "endedAt": utc_now(),
                 "endpoint": endpoint_url,
-                "firstSnapshot": first_snapshot,
-                "lastSnapshot": last_snapshot,
+                "final": build_final(result_snapshot, final_play, final_unstable_rate, final_hit_errors),
                 "outPath": str(out_path),
                 "startedAt": started_at,
                 "stats": stats,
@@ -684,8 +952,8 @@ def main() -> int:
         print(f"Summary written: {summary_path}")
         print(
             f"Samples polled {stats['sampleCount']}, samples written {stats['writtenSamples']}, "
-            f"count changes {stats['countChangeCount']}, source changes {stats['sourceChangeCount']}, "
-            f"errors {stats['errorCount']}."
+            f"count changes {stats['countChangeCount']}, hit events {stats['hitEventCount']}, "
+            f"misses {stats['missEventCount']}, errors {stats['errorCount']}."
         )
 
     return 0

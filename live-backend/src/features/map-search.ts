@@ -11,7 +11,12 @@ import { nowIso } from "../shared/score.js";
 // plus stars/bpm/length/key/status without scanning JSON on every request.
 
 export const MAP_SEARCH_BUILD_JOB = "build_map_search_index";
-const BUILD_META_KEY = `map_search_index_built:v${ACTIVITY_SKILL_ANALYSIS_VERSION}`;
+// Bump BUILD_REVISION to force a full re-upsert of the index after a fix to how
+// indexed fields are derived (r2: length was stored as the source row's column
+// count for every map). The rebuild is pure DB work, no osu! API.
+const BUILD_REVISION = 2;
+const BUILD_META_KEY = `map_search_index_built:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
+const BUILD_CURSOR_KEY = `map_search_index_build_cursor:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
 const BUILD_BATCH_SIZE = 400;
 const BUILD_BATCHES_PER_RUN = 3;
 const BUILD_JOB_PRIORITY = -10;
@@ -156,7 +161,7 @@ const SOURCE_SELECT = `
     json_extract(b.metadata_json, '$.playcount') as play_count,
     json_extract(b.metadata_json, '$.passcount') as pass_count,
     json_extract(b.metadata_json, '$.count_sliders') as ln_count,
-    json_extract(b.metadata_json, '$.total_length') as length,
+    json_extract(b.metadata_json, '$.total_length') as total_length,
     json_extract(b.metadata_json, '$.status') as meta_status,
     s.title as title,
     s.artist as artist,
@@ -203,7 +208,10 @@ function buildIndexUpsert(row: Record<string, unknown>): DbStatement | null {
     intOr(row.cs),
     realOr(row.difficulty_rating),
     realOr(row.bpm),
-    intOr(row.length),
+    // Read via the total_length alias: libsql rows are array-like, so a column
+    // selected as `length` is shadowed by the row's own length property (the
+    // column count), which silently wrote 19 for every map.
+    intOr(row.total_length),
     status,
     intOr(row.play_count),
     intOr(row.pass_count),
@@ -251,7 +259,13 @@ export async function upsertMapSearchIndexRow(db: Db, beatmapId: number): Promis
   const id = Math.floor(Number(beatmapId));
   if (!Number.isFinite(id) || id <= 0) return;
   const row = (await exec(db, `${SOURCE_SELECT} and sv.beatmap_id = ? limit 1`, [ACTIVITY_SKILL_ANALYSIS_VERSION, id])).rows[0];
-  if (!row) return;
+  if (!row) {
+    // The map no longer qualifies (e.g. a metadata refresh reclassified it as a
+    // convert): drop any stale index row. Reads trust the index outright, so
+    // write paths own keeping it clean.
+    await exec(db, "delete from map_search_index where beatmap_id = ?", [id]);
+    return;
+  }
   const statement = buildIndexUpsert(row);
   if (statement) await exec(db, statement.sql, statement.args);
 }
@@ -303,46 +317,40 @@ async function hasPendingBuildJob(db: Db): Promise<boolean> {
   return !!row;
 }
 
-async function maxIndexedBeatmapId(db: Db): Promise<number> {
-  const row = (await exec(db, "select max(beatmap_id) as max_id from map_search_index")).rows[0];
-  return intOr(row?.max_id, 0);
+// Build progress is tracked explicitly (not inferred from max(beatmap_id)) so a
+// BUILD_REVISION bump re-upserts existing rows from the start instead of
+// "resuming" past them. The key carries the revision, so a bump resets to 0.
+async function readBuildCursor(db: Db): Promise<number> {
+  const row = (await exec(db, "select value_json from live_meta where key = ? limit 1", [BUILD_CURSOR_KEY])).rows[0];
+  const parsed = row ? parseJson<{ cursor?: number } | null>(row.value_json, null) : null;
+  const cursor = Math.floor(Number(parsed?.cursor ?? 0));
+  return Number.isFinite(cursor) && cursor > 0 ? cursor : 0;
+}
+
+async function writeBuildCursor(db: Db, cursor: number): Promise<void> {
+  const now = nowIso();
+  await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)", [BUILD_CURSOR_KEY, json({ cursor }), now]);
 }
 
 async function enqueueBuild(queue: JobQueue, cursor: number): Promise<void> {
   await queue.enqueue(MAP_SEARCH_BUILD_JOB, `${MAP_SEARCH_BUILD_JOB}:${cursor}`, { cursor }, { priority: BUILD_JOB_PRIORITY });
 }
 
-const NON_MANIA_PRUNED_KEY = "map_search_index_nonmania_pruned:v1";
-const CONVERTS_PRUNED_KEY = "map_search_index_converts_pruned:v1";
+const STALE_PRUNE_KEY = "map_search_index_stale_pruned:v1";
+const STALE_PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
-// One-time cleanup: earlier builds indexed osu!std maps whose scores were played as
-// mania converts. The `convert` flag is absent on a natively-fetched std beatmap, so
-// filtering on it missed them; the reliable signal is the beatmap's native mode. Drop
-// every non-mania indexed row once and rebuild collections so the packs lose them too.
-async function pruneNonManiaOnce(db: Db, queue: JobQueue): Promise<void> {
-  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [NON_MANIA_PRUNED_KEY])).rows[0];
-  if (done) return;
-  await exec(
-    db,
-    `delete from map_search_index
-     where beatmap_id in (
-       select i.beatmap_id
-       from map_search_index i
-       join beatmaps b on b.beatmap_id = i.beatmap_id
-       where coalesce(json_extract(b.metadata_json, '$.mode'), '') != 'mania'
-     )`,
-  );
-  const now = nowIso();
-  await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)", [NON_MANIA_PRUNED_KEY, json({ at: now }), now]);
-  await queue.enqueue("rebuild_map_collections", "rebuild_map_collections", {}, { priority: -12, replaceDone: true });
-}
-
-// A second cleanup for rows like Kimi no Sei: osu! reports these as mania rows
-// with `convert: true`, so the native-mode cleanup above does not catch them.
-async function pruneConvertsOnce(db: Db, queue: JobQueue): Promise<void> {
-  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [CONVERTS_PRUNED_KEY])).rows[0];
-  if (done) return;
-  await exec(
+// Daily cleanup of rows whose beatmap turned out to be a convert or non-mania
+// (osu!std maps played as mania converts show up either with a non-mania native
+// mode or as mania rows with `convert: true`, like Kimi no Sei). Search queries
+// trust the index outright - probing beatmaps.metadata_json per row at read
+// time cost ~40% of every request - so staleness is handled here instead.
+async function pruneStaleRows(db: Db, queue: JobQueue): Promise<void> {
+  const row = (await exec(db, "select updated_at from live_meta where key = ? limit 1", [STALE_PRUNE_KEY])).rows[0];
+  if (row) {
+    const last = Date.parse(String(row.updated_at));
+    if (Number.isFinite(last) && Date.now() - last < STALE_PRUNE_INTERVAL_MS) return;
+  }
+  const result = await exec(
     db,
     `delete from map_search_index
      where beatmap_id in (
@@ -354,18 +362,19 @@ async function pruneConvertsOnce(db: Db, queue: JobQueue): Promise<void> {
      )`,
   );
   const now = nowIso();
-  await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)", [CONVERTS_PRUNED_KEY, json({ at: now }), now]);
-  await queue.enqueue("rebuild_map_collections", "rebuild_map_collections", {}, { priority: -12, replaceDone: true });
+  await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)", [STALE_PRUNE_KEY, json({ at: now }), now]);
+  if (result.rowsAffected > 0) {
+    await queue.enqueue("rebuild_map_collections", "rebuild_map_collections", {}, { priority: -12, replaceDone: true });
+  }
 }
 
 // Boot/periodic watchdog: kick off the build when missing, and resume a chain
 // that died mid-way (crash between batches) from the last indexed id.
 export async function ensureMapSearchIndexSeeded(db: Db, queue: JobQueue): Promise<void> {
-  await pruneNonManiaOnce(db, queue);
-  await pruneConvertsOnce(db, queue);
+  await pruneStaleRows(db, queue);
   if (await isMapSearchIndexBuilt(db)) return;
   if (await hasPendingBuildJob(db)) return;
-  await enqueueBuild(queue, await maxIndexedBeatmapId(db));
+  await enqueueBuild(queue, await readBuildCursor(db));
 }
 
 // The build job handler: a few short batches per invocation, then either chains
@@ -389,6 +398,7 @@ export async function runMapSearchIndexBuildJob(
     // Yield between batches so ingest/SSE get the event loop back.
     await new Promise<void>((resolve) => setImmediate(resolve));
   }
+  await writeBuildCursor(db, cursor);
   await enqueueBuild(queue, cursor);
 }
 
@@ -399,92 +409,88 @@ export async function getMapSearchIndexStamp(db: Db): Promise<string> {
 
 // ── Query ────────────────────────────────────────────────────────────────────
 
+// `length` is aliased on the way out: libsql rows are array-like, so reading
+// row.length would return the column count instead of the column.
 const SELECT_COLUMNS = `
   beatmap_id, beatmapset_id, title, artist, creator, version, status, key_count,
-  stars, bpm, length, play_count, ln_count, primary_pattern,
+  stars, bpm, length as length_seconds, play_count, ln_count, primary_pattern,
   pat_jack, pat_stream, pat_jumpstream, pat_handstream, pat_stamina, pat_chordjack, pat_tech, pat_ln,
   covers_json`;
 
-const KEY_CLAUSES: Record<string, string> = {
-  "4k": "key_count = 4",
-  "7k": "key_count = 7",
-  other: "key_count not in (4, 7)",
+const KEY_CLAUSES: Record<string, (p: string) => string> = {
+  "4k": (p) => `${p}key_count = 4`,
+  "7k": (p) => `${p}key_count = 7`,
+  other: (p) => `${p}key_count not in (4, 7)`,
 };
 
-const STATUS_CLAUSES: Record<string, string> = {
-  ranked: "status in ('ranked', 'approved')",
-  loved: "status = 'loved'",
-  graveyard: "status = 'graveyard'",
-  other: "status not in ('ranked', 'approved', 'loved', 'graveyard')",
+const STATUS_CLAUSES: Record<string, (p: string) => string> = {
+  ranked: (p) => `${p}status in ('ranked', 'approved')`,
+  loved: (p) => `${p}status = 'loved'`,
+  graveyard: (p) => `${p}status = 'graveyard'`,
+  other: (p) => `${p}status not in ('ranked', 'approved', 'loved', 'graveyard')`,
 };
 
 // OR the selected options within a facet (so "4K or 7K" widens), then the facets
 // AND together. Empty selection = no clause = all.
-function orClause(values: string[], lookup: Record<string, string>): string | null {
-  const clauses = [...new Set(values)].map((value) => lookup[value]).filter(Boolean);
+function orClause(values: string[], lookup: Record<string, (p: string) => string>, p: string): string | null {
+  const clauses = [...new Set(values)].map((value) => lookup[value]?.(p)).filter(Boolean);
   return clauses.length > 0 ? `(${clauses.join(" or ")})` : null;
 }
 
-function buildWhere(query: MapSearchQuery): { sql: string; args: InValue[] } {
-  const conditions: string[] = [
-    `not exists (
-      select 1
-      from beatmaps b
-      where b.beatmap_id = map_search_index.beatmap_id
-        and (
-          coalesce(json_extract(b.metadata_json, '$.convert'), 0) = 1
-          or coalesce(json_extract(b.metadata_json, '$.mode'), b.mode, '') != 'mania'
-        )
-    )`,
-  ];
+// Filter conditions with an optional column prefix ("i." / "j.") so the page
+// query can apply the same filter set to both sides of its dedup anti-join.
+// No metadata probes here: the index is kept convert/non-mania-free at write
+// time (build filter, upsert delete, daily prune), so reads trust it as-is.
+function buildWhereParts(query: MapSearchQuery, p = ""): { conditions: string[]; args: InValue[] } {
+  const conditions: string[] = [];
   const args: InValue[] = [];
 
-  const keyClause = orClause(query.keys, KEY_CLAUSES);
+  const keyClause = orClause(query.keys, KEY_CLAUSES, p);
   if (keyClause) conditions.push(keyClause);
 
-  const statusClause = orClause(query.statuses, STATUS_CLAUSES);
+  const statusClause = orClause(query.statuses, STATUS_CLAUSES, p);
   if (statusClause) conditions.push(statusClause);
 
   for (const term of query.q.toLowerCase().split(/\s+/).filter(Boolean).slice(0, 6)) {
-    conditions.push("search_text like ? escape '\\'");
+    conditions.push(`${p}search_text like ? escape '\\'`);
     args.push(`%${term.replace(/[%_\\]/g, (c) => `\\${c}`)}%`);
   }
 
   if (query.starMin != null) {
-    conditions.push("stars >= ?");
+    conditions.push(`${p}stars >= ?`);
     args.push(query.starMin);
   }
   if (query.starMax != null) {
-    conditions.push("stars <= ?");
+    conditions.push(`${p}stars <= ?`);
     args.push(query.starMax);
   }
   if (query.bpmMin != null) {
-    conditions.push("bpm >= ?");
+    conditions.push(`${p}bpm >= ?`);
     args.push(query.bpmMin);
   }
   if (query.bpmMax != null) {
-    conditions.push("bpm <= ?");
+    conditions.push(`${p}bpm <= ?`);
     args.push(query.bpmMax);
   }
   if (query.lenMin != null) {
-    conditions.push("length >= ?");
+    conditions.push(`${p}length >= ?`);
     args.push(query.lenMin);
   }
   if (query.lenMax != null) {
-    conditions.push("length <= ?");
+    conditions.push(`${p}length <= ?`);
     args.push(query.lenMax);
   }
 
   // Pattern picks match the map's dominant pattern: select chordjack -> chordjack maps.
   const patterns = [...new Set(query.patterns)].filter((pattern) => PATTERN_COLUMNS[pattern]);
   if (patterns.length > 0) {
-    conditions.push(`primary_pattern in (${patterns.map(() => "?").join(", ")})`);
+    conditions.push(`${p}primary_pattern in (${patterns.map(() => "?").join(", ")})`);
     args.push(...patterns);
   }
 
   if (query.country) {
     conditions.push(
-      `beatmap_id in (
+      `${p}beatmap_id in (
         select beatmap_id from country_maps_farmed_scores where country = ?
         union
         select beatmap_id from country_maps_most_played where country = ?
@@ -493,17 +499,17 @@ function buildWhere(query: MapSearchQuery): { sql: string; args: InValue[] } {
     args.push(query.country, query.country);
   }
 
-  const sql = conditions.length > 0 ? `where ${conditions.join(" and ")}` : "";
-  return { sql, args };
+  return { conditions, args };
 }
 
 export async function getMapSearchPage(db: Db, query: MapSearchQuery): Promise<MapSearchPage> {
-  const where = buildWhere(query);
+  const flat = buildWhereParts(query);
+  const flatWhere = flat.conditions.length > 0 ? `where ${flat.conditions.join(" and ")}` : "";
 
   const totalRow = (await exec(
     db,
-    `select count(distinct beatmapset_id) as total from map_search_index ${where.sql}`,
-    where.args,
+    `select count(distinct beatmapset_id) as total from map_search_index ${flatWhere}`,
+    flat.args,
   )).rows[0];
   const total = intOr(totalRow?.total, 0);
 
@@ -514,24 +520,40 @@ export async function getMapSearchPage(db: Db, query: MapSearchQuery): Promise<M
   const page = Math.max(0, Math.floor(query.page));
   const offset = page * pageSize;
 
-  // One row per beatmapset: rank the set's matching diffs under the current
-  // sort and keep the best one as the card's representative. ranked_date is
-  // selected explicitly because the date sort orders on it but SELECT_COLUMNS
-  // doesn't carry it.
+  // One row per beatmapset: a diff represents its set unless a sibling diff that
+  // also matches the filters sorts strictly better. This anti-join shape (rather
+  // than ranking with a window function) lets SQLite walk the (sort column,
+  // beatmap_id) index already in order and stop at the page boundary, where the
+  // window variant had to rank and sort the whole filtered corpus per request.
+  // The tiebreak follows the sort direction so one index serves both scans.
+  // ranked_date is nullable: null-vs-null compares as unknown and would leak
+  // every diff of an undated set past the anti-join, so it compares through
+  // coalesce; the raw column still drives ORDER BY (same order: '' and null
+  // both sort before every real date) to keep the index usable. It is also
+  // selected explicitly because SELECT_COLUMNS doesn't carry it.
+  const cmp = orderDir === "asc" ? "<" : ">";
+  const orderRef = (alias: string) =>
+    orderColumn === "ranked_date" ? `coalesce(${alias}.ranked_date, '')` : `${alias}.${orderColumn}`;
+  const outer = buildWhereParts(query, "i.");
+  const sibling = buildWhereParts(query, "j.");
+  const pageConditions = [
+    ...outer.conditions,
+    `not exists (
+       select 1 from map_search_index j
+       where j.beatmapset_id = i.beatmapset_id
+         ${sibling.conditions.map((condition) => `and ${condition}`).join(" ")}
+         and (${orderRef("j")} ${cmp} ${orderRef("i")}
+           or (${orderRef("j")} = ${orderRef("i")} and j.beatmap_id ${cmp} i.beatmap_id))
+     )`,
+  ];
   const rows = (await exec(
     db,
-    `select * from (
-       select ${SELECT_COLUMNS}, ranked_date,
-         row_number() over (
-           partition by beatmapset_id
-           order by ${orderColumn} ${orderDir}, beatmap_id asc
-         ) as diff_rank
-       from map_search_index ${where.sql}
-     )
-     where diff_rank = 1
-     order by ${orderColumn} ${orderDir}, beatmap_id asc
+    `select ${SELECT_COLUMNS}, ranked_date
+     from map_search_index i
+     where ${pageConditions.join(" and ")}
+     order by i.${orderColumn} ${orderDir}, i.beatmap_id ${orderDir}
      limit ? offset ?`,
-    [...where.args, pageSize, offset],
+    [...outer.args, ...sibling.args, pageSize, offset],
   )).rows;
 
   // Second pass: every matching diff of the page's sets, easiest first. Covers
@@ -540,12 +562,12 @@ export async function getMapSearchPage(db: Db, query: MapSearchQuery): Promise<M
   const diffsBySet = new Map<number, MapSearchEntry[]>();
   if (setIds.length > 0) {
     const placeholders = setIds.map(() => "?").join(", ");
-    const setClause = where.sql ? `${where.sql} and` : "where";
+    const diffConditions = [...flat.conditions, `beatmapset_id in (${placeholders})`];
     const diffRows = (await exec(
       db,
-      `select ${SELECT_COLUMNS} from map_search_index ${setClause} beatmapset_id in (${placeholders})
+      `select ${SELECT_COLUMNS} from map_search_index where ${diffConditions.join(" and ")}
        order by key_count asc, stars asc, beatmap_id asc`,
-      [...where.args, ...setIds],
+      [...flat.args, ...setIds],
     )).rows;
     for (const row of diffRows) {
       const entry = { ...rowToEntry(row), covers: null };
@@ -577,16 +599,7 @@ export async function getMapSearchEntriesByIds(db: Db, ids: number[]): Promise<M
       db,
       `select ${SELECT_COLUMNS}
        from map_search_index
-       where beatmap_id in (${placeholders})
-         and not exists (
-           select 1
-           from beatmaps b
-           where b.beatmap_id = map_search_index.beatmap_id
-             and (
-               coalesce(json_extract(b.metadata_json, '$.convert'), 0) = 1
-               or coalesce(json_extract(b.metadata_json, '$.mode'), b.mode, '') != 'mania'
-             )
-         )`,
+       where beatmap_id in (${placeholders})`,
       chunk,
     )).rows;
     for (const row of rows) {
@@ -615,7 +628,7 @@ function rowToEntry(row: Record<string, unknown>): MapSearchEntry {
     keyCount: intOr(row.key_count),
     stars: realOr(row.stars),
     bpm: realOr(row.bpm),
-    length: intOr(row.length),
+    length: intOr(row.length_seconds),
     playCount: intOr(row.play_count),
     lnCount: intOr(row.ln_count),
     primaryPattern: String(row.primary_pattern ?? "unknown"),

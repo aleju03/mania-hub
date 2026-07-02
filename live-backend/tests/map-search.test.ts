@@ -137,6 +137,25 @@ describe("map search index", () => {
     expect(all.items[0].beatmapId).toBe(1);
   });
 
+  it("indexes the map's real length and filters/sorts by it", async () => {
+    const db = await makeDb();
+    // Regression: libsql rows are array-like, so selecting the column as bare
+    // `length` read the row's column count (19) for every map instead.
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, totalLength: 95, primary: "stream", patterns: { stream: 1 } });
+    await seedMap(db, { beatmapId: 2, beatmapsetId: 20, totalLength: 240, primary: "jack", patterns: { jack: 1 } });
+    await buildAll(db);
+
+    const all = await getMapSearchPage(db, baseQuery());
+    expect(all.items.find((item) => item.beatmapId === 1)?.length).toBe(95);
+
+    const short = await getMapSearchPage(db, { ...baseQuery(), lenMax: 120 });
+    expect(short.total).toBe(1);
+    expect(short.items[0].beatmapId).toBe(1);
+
+    const bounded = await getMapSearchPage(db, { ...baseQuery(), lenMin: 120, lenMax: 300, sort: "length", dir: "asc" });
+    expect(bounded.items.map((item) => item.beatmapId)).toEqual([2]);
+  });
+
   it("multi-selects patterns (union) and filters by star range", async () => {
     const db = await makeDb();
     await seedMap(db, { beatmapId: 1, beatmapsetId: 10, stars: 3.0, primary: "tech", patterns: { tech: 1 } });

@@ -963,6 +963,19 @@ async function migrateMapSearchIndex(db: Db): Promise<void> {
   await db.execute("create index if not exists idx_map_search_key_length on map_search_index(key_count, length)");
   await db.execute("create index if not exists idx_map_search_primary on map_search_index(primary_pattern, key_count, stars)");
   await db.execute("create index if not exists idx_map_search_status on map_search_index(status, key_count, stars)");
+  // The search page dedups sets with a per-row sibling anti-join and pages with
+  // an ordered index walk, so it needs beatmapset_id for the probes plus one
+  // (sort column, beatmap_id) index per sort. The explicit beatmap_id column
+  // matters: it lets both scan directions satisfy ORDER BY without a temp sort.
+  await db.execute("create index if not exists idx_map_search_set on map_search_index(beatmapset_id)");
+  await db.execute("create index if not exists idx_map_search_plays_id on map_search_index(play_count, beatmap_id)");
+  await db.execute("create index if not exists idx_map_search_stars_id on map_search_index(stars, beatmap_id)");
+  await db.execute("create index if not exists idx_map_search_bpm_id on map_search_index(bpm, beatmap_id)");
+  await db.execute("create index if not exists idx_map_search_length_id on map_search_index(length, beatmap_id)");
+  await db.execute("create index if not exists idx_map_search_date_id on map_search_index(ranked_date, beatmap_id)");
+  // Fresh planner stats so SQLite picks the ordered-scan + anti-join plan over
+  // the older key_count-prefixed indexes. Cheap (<100ms) at boot.
+  await db.execute("analyze map_search_index");
 }
 
 async function migrateMapCollections(db: Db): Promise<void> {
