@@ -227,12 +227,12 @@ export function MapDetailModal({ entry, onClose }: { entry: LiveMapSearchEntry |
                 />
 
                 {/* Actions */}
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap">
                   <a
                     href={osuBeatmapUrl(active)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-md bg-osu-pink px-3 py-2 text-[12px] font-bold text-white hover:bg-osu-pink-light transition-colors"
+                    className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-osu-pink px-3 py-2 text-[12px] font-bold text-white hover:bg-osu-pink-light transition-colors sm:justify-start sm:px-3"
                   >
                     osu! web
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3" aria-hidden="true">
@@ -243,7 +243,7 @@ export function MapDetailModal({ entry, onClose }: { entry: LiveMapSearchEntry |
                   </a>
                   <a
                     href={oszDownloadUrl(entry.beatmapsetId)}
-                    className="inline-flex items-center gap-1.5 rounded-md bg-osu-b3/70 px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-osu-b3 hover:text-white transition-colors"
+                    className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-osu-b3/70 px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-osu-b3 hover:text-white transition-colors sm:justify-start sm:px-3"
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden="true">
                       <path d="M12 3v10" />
@@ -254,7 +254,7 @@ export function MapDetailModal({ entry, onClose }: { entry: LiveMapSearchEntry |
                   </a>
                   <a
                     href={osuDirectUrl(entry.beatmapsetId)}
-                    className="inline-flex items-center gap-1.5 rounded-md bg-osu-b3/70 px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-osu-b3 hover:text-white transition-colors"
+                    className="hidden items-center gap-1.5 whitespace-nowrap rounded-md bg-osu-b3/70 px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-osu-b3 hover:text-white transition-colors sm:inline-flex"
                   >
                     <OsuLogo className="h-3.5 w-3.5" />
                     Open in osu!

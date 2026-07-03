@@ -65,9 +65,19 @@ export function SkinCard({ skin }: { skin: SkinSummary }) {
             <span className="tabular-nums">{skin.downloadCount.toLocaleString()}</span>
           </span>
         </div>
+        {/* Primary credit goes to whoever made the skin; the uploader (with
+            avatar) only fronts the card when no author is known. */}
         <div className="flex items-center gap-1.5 text-[11px] text-osu-f1">
-          <Avatar userId={skin.ownerUserId} size={14} shape="circle" />
-          <span className="truncate font-semibold text-osu-l2">{skin.ownerUsername}</span>
+          {skin.author ? (
+            <span className="truncate">
+              by <span className="font-semibold text-osu-l2">{skin.author}</span>
+            </span>
+          ) : (
+            <>
+              <Avatar userId={skin.ownerUserId} size={14} shape="circle" />
+              <span className="truncate font-semibold text-osu-l2">{skin.ownerUsername}</span>
+            </>
+          )}
           {skin.publishedAt && (
             <>
               <span aria-hidden="true">·</span>

@@ -67,6 +67,9 @@ export async function importReplaySkinFromOsk(
     targetKeyCount: number;
     baseSettings?: ReplaySkinSettings;
     extractSounds?: boolean;
+    // Parse progress over the asset references the skin.ini declares (the
+    // slow part is extracting and decoding each image out of the zip).
+    onProgress?: (done: number, total: number) => void;
   },
 ): Promise<ReplaySkinImportResult> {
   const zip = await JSZip.loadAsync(file);
@@ -100,6 +103,18 @@ export async function importReplaySkinFromOsk(
   let judgementAssets = 0;
   let comboDigits = 0;
 
+  // One tick per resolveAssetReference call; undefined references resolve
+  // instantly, so the bar sprints through them and crawls on real decodes.
+  const totalReferences = maniaBlocks.reduce((sum, { block, keys }) => {
+    const comboPrefix = block.FontCombo || parsed.fonts.ComboPrefix || "";
+    return sum + keys * 6 + 6 + (comboPrefix ? 11 : 0);
+  }, 0);
+  let doneReferences = 0;
+  const onTick = options.onProgress
+    ? () => options.onProgress?.((doneReferences += 1), totalReferences)
+    : undefined;
+  options.onProgress?.(0, totalReferences);
+
   for (const { block, keys } of maniaBlocks) {
     const imported = await buildProfileFromManiaBlock({
       zip,
@@ -109,6 +124,7 @@ export async function importReplaySkinFromOsk(
       fonts: parsed.fonts,
       baseProfile: getReplaySkinProfile(nextSettings, keys),
       keys,
+      onTick,
     });
     keymodeProfiles[String(keys)] = imported.profile;
     noteAssets += imported.noteAssets;
@@ -255,6 +271,7 @@ async function buildProfileFromManiaBlock({
   fonts,
   baseProfile,
   keys,
+  onTick,
 }: {
   zip: JSZip;
   lookup: Map<string, JSZip.JSZipObject>;
@@ -263,6 +280,7 @@ async function buildProfileFromManiaBlock({
   fonts: Record<string, string>;
   baseProfile: ReplaySkinKeymodeProfile;
   keys: number;
+  onTick?: () => void;
 }): Promise<{
   profile: ReplaySkinKeymodeProfile;
   noteAssets: number;
@@ -272,6 +290,16 @@ async function buildProfileFromManiaBlock({
 }> {
   const columnWidths = parseNumberList(block.ColumnWidth);
   const columnSpacings = parseNumberList(block.ColumnSpacing);
+  // keys+1 boundary lines, outer stage edges included. Absent means stable's
+  // default (2-unit lines everywhere); stable also keeps the 2-unit default
+  // for boundaries the list does not reach, so pad short lists with 2s.
+  const parsedLineWidths = parseNumberList(block.ColumnLineWidth);
+  const columnLineWidths = block.ColumnLineWidth != null
+    ? Array.from({ length: keys + 1 }, (_, index) => clampInteger(parsedLineWidths[index] ?? 2, 0, 20))
+    : [];
+  const columnLineColor = parseColorWithAlpha(block.ColourColumnLine) ?? "";
+  const judgementLineValue = parseNumber(block.JudgementLine);
+  const judgementLine = judgementLineValue == null ? true : judgementLineValue !== 0;
   const columnWidth = clampInteger(columnWidths[0] ?? parseNumber(block.ColumnWidth) ?? baseProfile.columnWidth, 20, 160);
   const columnSpacing = clampInteger(columnSpacings[0] ?? parseNumber(block.ColumnSpacing) ?? baseProfile.columnSpacing, 0, 40);
   const noteHeightScale = clampInteger(
@@ -289,14 +317,20 @@ async function buildProfileFromManiaBlock({
   let noteAssets = 0;
   let receptorAssets = 0;
 
+  const resolveTracked = async (reference: string | undefined): Promise<ReplaySkinImageAsset | undefined> => {
+    const asset = await resolveAssetReference(zip, lookup, assetCache, reference);
+    onTick?.();
+    return asset;
+  };
+
   for (let col = 0; col < keys; col += 1) {
     const column: ReplaySkinColumnAssets = {};
-    const tap = await resolveAssetReference(zip, lookup, assetCache, block[`NoteImage${col}`]);
-    const lnHead = await resolveAssetReference(zip, lookup, assetCache, block[`NoteImage${col}H`]);
-    const lnBody = await resolveAssetReference(zip, lookup, assetCache, block[`NoteImage${col}L`]);
-    const lnTail = await resolveAssetReference(zip, lookup, assetCache, block[`NoteImage${col}T`]);
-    const receptor = await resolveAssetReference(zip, lookup, assetCache, block[`KeyImage${col}`]);
-    const receptorPressed = await resolveAssetReference(zip, lookup, assetCache, block[`KeyImage${col}D`]);
+    const tap = await resolveTracked(block[`NoteImage${col}`]);
+    const lnHead = await resolveTracked(block[`NoteImage${col}H`]);
+    const lnBody = await resolveTracked(block[`NoteImage${col}L`]);
+    const lnTail = await resolveTracked(block[`NoteImage${col}T`]);
+    const receptor = await resolveTracked(block[`KeyImage${col}`]);
+    const receptorPressed = await resolveTracked(block[`KeyImage${col}D`]);
     if (tap) column.tap = tap;
     if (lnHead) column.lnHead = lnHead;
     if (lnBody) column.lnBody = lnBody;
@@ -318,7 +352,13 @@ async function buildProfileFromManiaBlock({
     ["Hit300", "hit300"],
     ["Hit300g", "hit300g"],
   ] as const) {
-    const asset = await resolveAssetReference(zip, lookup, assetCache, block[skinKey]);
+    // Stable falls back to the default filenames when the block sets no Hit*
+    // reference; the animated first frame outranks the static image (skinners
+    // often blank the static copy but keep the animation).
+    const asset = (await resolveAssetReference(zip, lookup, assetCache, block[skinKey]))
+      ?? (await resolveAssetReference(zip, lookup, assetCache, `mania-${outputKey}-0`))
+      ?? (await resolveAssetReference(zip, lookup, assetCache, `mania-${outputKey}`));
+    onTick?.();
     if (asset) {
       judgements[outputKey] = asset;
       judgementAssets += 1;
@@ -329,10 +369,10 @@ async function buildProfileFromManiaBlock({
   const comboOverlap = clampInteger(parseNumber(fonts.ComboOverlap) ?? 0, -80, 80);
   const comboDigitsAssets = comboPrefix
     ? await Promise.all(Array.from({ length: 10 }, (_, digit) =>
-        resolveAssetReference(zip, lookup, assetCache, `${comboPrefix}-${digit}`),
+        resolveTracked(`${comboPrefix}-${digit}`),
       ))
     : [];
-  const comboX = comboPrefix ? await resolveAssetReference(zip, lookup, assetCache, `${comboPrefix}-x`) : undefined;
+  const comboX = comboPrefix ? await resolveTracked(`${comboPrefix}-x`) : undefined;
   const comboDigits = comboDigitsAssets.filter(Boolean).length;
   const combo = comboDigits > 0 || comboX
     ? {
@@ -354,6 +394,9 @@ async function buildProfileFromManiaBlock({
       columnSpacing,
       columnWidths,
       columnSpacings,
+      columnLineWidths,
+      columnLineColor,
+      judgementLine,
       noteHeightScale,
       assets: {
         columns,
@@ -633,6 +676,17 @@ function parseColor(value: string | undefined): string | null {
   const parts = value.split(",").map((part) => Number(part.trim()));
   if (parts.length < 3 || parts.slice(0, 3).some((part) => !Number.isFinite(part))) return null;
   return `#${parts.slice(0, 3).map((part) => clampInteger(part, 0, 255).toString(16).padStart(2, "0")).join("")}`;
+}
+
+// Like parseColor but keeps a non-opaque alpha channel as #rrggbbaa; column
+// lines commonly rely on skin.ini alpha (e.g. "255,255,255,150").
+function parseColorWithAlpha(value: string | undefined): string | null {
+  const rgb = parseColor(value);
+  if (!rgb || !value) return rgb;
+  const alphaPart = Number(value.split(",")[3]?.trim());
+  if (!Number.isFinite(alphaPart)) return rgb;
+  const alpha = clampInteger(alphaPart, 0, 255);
+  return alpha >= 255 ? rgb : `${rgb}${alpha.toString(16).padStart(2, "0")}`;
 }
 
 function clampInteger(value: number, min: number, max: number): number {

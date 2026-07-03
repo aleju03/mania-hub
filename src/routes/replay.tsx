@@ -8,7 +8,7 @@ import { getEffectiveManiaKeyCount, getScoreDisplayValues, getScoreRate, modShif
 import { useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
 import { PageHeader } from "../components/layout/PageHeader";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
-import { ReplayBrowseView } from "../components/replay/ReplayBrowseView";
+import { MissingBeatmapPanel, ReplayBrowseView } from "../components/replay/ReplayBrowseView";
 import type { ReplayBrowseMode } from "../components/replay/ReplayBrowseView";
 import { ReplayControls, ReplayProgressBar } from "../components/replay/ReplayControls";
 import type { ReplayVideoExportOptions } from "../components/replay/ReplayControls";
@@ -41,7 +41,9 @@ import {
   writeReplayOverlaySettings,
 } from "../lib/replay-overlays";
 import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
-import { extractReplayScoreIdFromFilename, parseUploadedReplayBuffer } from "../lib/replay-upload";
+import { extractReplayScoreIdFromFilename, parseUploadedReplayBuffer, type UploadedReplayParseResult } from "../lib/replay-upload";
+import { matchLocalBeatmapFile } from "../lib/replay-local-beatmap";
+import type { BeatmapChecksumLookupResult } from "../lib/osu/replay";
 import { startProgressPoll } from "../lib/progress-poll";
 import {
   fetchLiveGlobalRankings,
@@ -161,6 +163,32 @@ type UploadedReplayDownload = {
 };
 
 type ReplayLoadingStep = "score" | "assets" | "viewer" | "upload" | "shared-upload";
+
+type UploadedReplayOpenOptions = {
+  uploadId: string;
+  shareUrl: string;
+  source: "owner" | "shared";
+  filename?: string | null;
+};
+
+// An uploaded .osr whose beatmap couldn't be fetched (unsubmitted/deleted map,
+// or all download sources failed). Kept around so the viewer can finish
+// loading once the user supplies the map as a local .osz/.osu.
+type PendingBeatmapUpload = {
+  checksum: string;
+  reason: "unlisted" | "file-unavailable";
+  beatmapMeta: BeatmapChecksumLookupResult | null;
+  uploaded: UploadedReplayParseResult;
+  scoreId: number | null;
+  options: UploadedReplayOpenOptions;
+};
+
+type LocalBeatmapAssets = {
+  audioUrl: string | null;
+  backgroundUrl: string | null;
+};
+
+const EMPTY_LOCAL_BEATMAP_ASSETS: LocalBeatmapAssets = { audioUrl: null, backgroundUrl: null };
 
 declare global {
   interface Window {
@@ -396,6 +424,13 @@ function shouldUseServerReplayVideoRender(): boolean {
   return import.meta.env.VITE_REPLAY_VIDEO_SERVER_RENDER === "1";
 }
 
+function formatMissingBeatmapLabel(beatmapMeta: BeatmapChecksumLookupResult): string {
+  const set = beatmapMeta.beatmapset;
+  const title = [set?.artist, set?.title].filter(Boolean).join(" - ");
+  const version = beatmapMeta.version ? ` [${beatmapMeta.version}]` : "";
+  return `${title || `beatmap #${beatmapMeta.id}`}${version}`;
+}
+
 function getReplayLoadingCopy(step: ReplayLoadingStep, elapsedMs: number, beatmapFileStatus: ReplayBeatmapFileStatus): { title: string; detail: string } {
   const elapsedSeconds = Math.floor(elapsedMs / 1000);
   const elapsedLabel = elapsedSeconds >= 4 ? ` (${elapsedSeconds}s)` : "";
@@ -612,6 +647,15 @@ function ReplayPage() {
   const [uploadedBeatmapsetId, setUploadedBeatmapsetId] = useState<number | undefined>(undefined);
   const [uploadedReplayShareUrl, setUploadedReplayShareUrl] = useState<string | null>(null);
   const [loadedUploadId, setLoadedUploadId] = useState<string | null>(null);
+  // Set when the user backs out of an uploadId (clear/cancel) so the
+  // shared-load effect doesn't reload it during the render gap between the
+  // state reset and the navigation that removes ?uploadId from the URL.
+  const dismissedUploadIdRef = useRef<string | null>(null);
+  const [pendingBeatmapUpload, setPendingBeatmapUpload] = useState<PendingBeatmapUpload | null>(null);
+  const [localBeatmapError, setLocalBeatmapError] = useState<string | null>(null);
+  const [localBeatmapLoading, setLocalBeatmapLoading] = useState(false);
+  const [localBeatmapAssets, setLocalBeatmapAssets] = useState<LocalBeatmapAssets>(EMPTY_LOCAL_BEATMAP_ASSETS);
+  const localBeatmapAssetUrlsRef = useRef<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [replayLoadingStep, setReplayLoadingStep] = useState<ReplayLoadingStep>("score");
   const [replayBeatmapFileStatus, setReplayBeatmapFileStatus] = useState<ReplayBeatmapFileStatus>("unknown");
@@ -1003,9 +1047,17 @@ function ReplayPage() {
     navigate({ to: "/replay", search: { scoreId: parsedScoreId } });
   };
 
+  // Local .osz assets are blob object URLs; revoke the previous batch whenever
+  // they are replaced or cleared.
+  const applyLocalBeatmapAssets = useCallback((assets: LocalBeatmapAssets) => {
+    for (const url of localBeatmapAssetUrlsRef.current) URL.revokeObjectURL(url);
+    localBeatmapAssetUrlsRef.current = [assets.audioUrl, assets.backgroundUrl].filter((url): url is string => !!url);
+    setLocalBeatmapAssets(assets);
+  }, []);
+
   const openUploadedReplayBuffer = useCallback(async (
     buffer: ArrayBuffer,
-    options: { uploadId: string; shareUrl: string; source: "owner" | "shared"; filename?: string | null },
+    options: UploadedReplayOpenOptions,
   ) => {
     const uploaded = await parseUploadedReplayBuffer(buffer);
     const checksum = uploaded.replay.header.beatmapHash;
@@ -1013,25 +1065,46 @@ function ReplayPage() {
       throw new Error("This replay does not include a beatmap checksum.");
     }
 
-    const beatmapMeta = await lookupBeatmapByChecksum({ data: { checksum } });
-    const beatmapsetId = beatmapMeta.beatmapset_id ?? beatmapMeta.beatmapset?.id;
     const fallbackScoreId = extractReplayScoreIdFromFilename(options.filename);
     const scoreId = uploaded.scoreId ?? fallbackScoreId;
-    const beatmapFilePromise = getBeatmapFile({ data: { beatmapId: beatmapMeta.id, beatmapsetId } })
-      .then((result) => {
-        setReplayBeatmapFileStatus(result.cacheStatus === "hit" ? "cached" : "fetched");
-        return result;
-      })
-      .catch((error) => {
-        setReplayBeatmapFileStatus("unavailable");
-        throw error;
+
+    // The replay itself is fine; only the chart is missing. Park it and ask
+    // the user for the map instead of surfacing a raw fetch error.
+    const enterPendingBeatmapUpload = (reason: PendingBeatmapUpload["reason"], beatmapMeta: BeatmapChecksumLookupResult | null) => {
+      setPendingBeatmapUpload({ checksum, reason, beatmapMeta, uploaded, scoreId, options });
+      setLocalBeatmapError(null);
+      setUploadedReplayShareUrl(options.shareUrl);
+      setLoadedUploadId(options.uploadId);
+      track("replay_upload_beatmap_missing", {
+        replay_upload_id: options.uploadId,
+        replay_beatmap_checksum: checksum,
+        replay_missing_reason: reason,
+        replay_player: uploaded.replay.header.playerName,
       });
-    const [bmResult, uploadedScore] = await Promise.all([
-      beatmapFilePromise,
-      scoreId
-        ? getScore({ data: { scoreId, mode: "mania" } }).catch(() => null)
-        : Promise.resolve(null),
-    ]);
+    };
+
+    const beatmapMeta = await lookupBeatmapByChecksum({ data: { checksum } });
+    if (!beatmapMeta) {
+      enterPendingBeatmapUpload("unlisted", null);
+      return;
+    }
+
+    const beatmapsetId = beatmapMeta.beatmapset_id ?? beatmapMeta.beatmapset?.id;
+    const scorePromise = scoreId
+      ? getScore({ data: { scoreId, mode: "mania" } }).catch(() => null)
+      : Promise.resolve(null);
+
+    let bmResult: Awaited<ReturnType<typeof getBeatmapFile>>;
+    try {
+      bmResult = await getBeatmapFile({ data: { beatmapId: beatmapMeta.id, beatmapsetId } });
+      setReplayBeatmapFileStatus(bmResult.cacheStatus === "hit" ? "cached" : "fetched");
+    } catch {
+      setReplayBeatmapFileStatus("unavailable");
+      enterPendingBeatmapUpload("file-unavailable", beatmapMeta);
+      return;
+    }
+
+    const uploadedScore = await scorePromise;
     const uploadedMods = uploadedScore?.mods ?? uploaded.mods;
     const effectiveKeyCount = getEffectiveManiaKeyCount(beatmapMeta, uploadedMods) ?? uploaded.replay.keyCount;
     setReplay({
@@ -1053,6 +1126,58 @@ function ReplayPage() {
     });
   }, []);
 
+  // Second half of the missing-beatmap flow: the user supplied an .osz/.osu,
+  // match it against the replay's checksum and finish loading the viewer.
+  const handleLocalBeatmapFile = useCallback(async (file: File) => {
+    const pending = pendingBeatmapUpload;
+    if (!pending || localBeatmapLoading) return;
+    setLocalBeatmapLoading(true);
+    setLocalBeatmapError(null);
+    try {
+      const match = await matchLocalBeatmapFile(file, pending.checksum);
+      const uploadedScore = pending.scoreId
+        ? await getScore({ data: { scoreId: pending.scoreId, mode: "mania" } }).catch(() => null)
+        : null;
+      const localMods = uploadedScore?.mods ?? pending.uploaded.mods;
+      // With osu! metadata, key count resolves like the normal upload path;
+      // for a map osu! doesn't know, the chart's own CS decides.
+      const metaKeyCount = pending.beatmapMeta
+        ? getEffectiveManiaKeyCount(pending.beatmapMeta, localMods) ?? pending.uploaded.replay.keyCount
+        : undefined;
+      const parsedBeatmap = parseCachedManiaBeatmap(pending.beatmapMeta?.id ?? 0, match.content, { keyCount: metaKeyCount });
+      applyLocalBeatmapAssets({
+        audioUrl: match.audioBlob ? URL.createObjectURL(match.audioBlob) : null,
+        backgroundUrl: match.backgroundBlob ? URL.createObjectURL(match.backgroundBlob) : null,
+      });
+      setReplay({ ...pending.uploaded.replay, keyCount: parsedBeatmap.keyCount });
+      setBeatmap(parsedBeatmap);
+      setScoreInfo(uploadedScore);
+      setUploadedReplayMods(localMods);
+      setUploadedBeatmapsetId(pending.beatmapMeta ? pending.beatmapMeta.beatmapset_id ?? pending.beatmapMeta.beatmapset?.id : undefined);
+      setPendingBeatmapUpload(null);
+      track("replay_upload_local_beatmap", {
+        replay_upload_id: pending.options.uploadId,
+        replay_missing_reason: pending.reason,
+        replay_local_beatmap_file: file.name,
+        replay_player: pending.uploaded.replay.header.playerName,
+      });
+    } catch (e) {
+      setLocalBeatmapError(e instanceof Error ? e.message : "Couldn't read that beatmap file.");
+    } finally {
+      setLocalBeatmapLoading(false);
+    }
+  }, [applyLocalBeatmapAssets, localBeatmapLoading, pendingBeatmapUpload]);
+
+  const handleCancelPendingBeatmapUpload = useCallback(() => {
+    dismissedUploadIdRef.current = pendingBeatmapUpload?.options.uploadId ?? uploadId ?? null;
+    setPendingBeatmapUpload(null);
+    setLocalBeatmapError(null);
+    setUploadedReplayShareUrl(null);
+    setLoadedUploadId(null);
+    setBrowseMode("upload");
+    navigate({ to: "/replay", search: { tab: "upload" }, replace: true });
+  }, [navigate, pendingBeatmapUpload, uploadId]);
+
   const loadSharedUploadedReplay = useCallback(async (id: string) => {
     setError(null);
     setReplayLoadingStep("shared-upload");
@@ -1066,6 +1191,9 @@ function ReplayPage() {
     setUploadedReplayMods([]);
     setUploadedBeatmapsetId(undefined);
     setUploadedReplayShareUrl(null);
+    setPendingBeatmapUpload(null);
+    setLocalBeatmapError(null);
+    applyLocalBeatmapAssets(EMPTY_LOCAL_BEATMAP_ASSETS);
 
     try {
       const upload = await fetchUploadedReplayBuffer(id);
@@ -1083,7 +1211,7 @@ function ReplayPage() {
     } finally {
       setLoading(false);
     }
-  }, [openUploadedReplayBuffer]);
+  }, [applyLocalBeatmapAssets, openUploadedReplayBuffer]);
 
   const handleUploadReplay = async (file: File) => {
     setError(null);
@@ -1108,6 +1236,9 @@ function ReplayPage() {
     setUploadedBeatmapsetId(undefined);
     setUploadedReplayShareUrl(null);
     setLoadedUploadId(null);
+    setPendingBeatmapUpload(null);
+    setLocalBeatmapError(null);
+    applyLocalBeatmapAssets(EMPTY_LOCAL_BEATMAP_ASSETS);
 
     try {
       const buffer = await file.arrayBuffer();
@@ -1130,10 +1261,17 @@ function ReplayPage() {
   };
 
   useEffect(() => {
-    if (scoreId || !uploadId) return;
-    if (loadedUploadId === uploadId && replay) return;
+    if (!uploadId) {
+      // The dismissal only needs to survive until ?uploadId leaves the URL;
+      // clearing it here lets the same share link load again later.
+      dismissedUploadIdRef.current = null;
+      return;
+    }
+    if (scoreId) return;
+    if (dismissedUploadIdRef.current === uploadId) return;
+    if (loadedUploadId === uploadId && (replay || pendingBeatmapUpload)) return;
     void loadSharedUploadedReplay(uploadId);
-  }, [loadedUploadId, loadSharedUploadedReplay, replay, scoreId, uploadId]);
+  }, [loadedUploadId, loadSharedUploadedReplay, pendingBeatmapUpload, replay, scoreId, uploadId]);
 
   useEffect(() => {
     clearTimeout(scorePreviewTimerRef.current);
@@ -1393,6 +1531,7 @@ function ReplayPage() {
   }, [beatmapScorePage, loadingBeatmapScores, selectedDiffId, selectedCountry, selectedIsGlobal]);
 
   const handleClearReplay = () => {
+    dismissedUploadIdRef.current = uploadId ?? null;
     setReplay(null);
     setBeatmap(null);
     setScoreInfo(null);
@@ -1401,6 +1540,9 @@ function ReplayPage() {
     setUploadedReplayShareUrl(null);
     setLoadedUploadId(null);
     setReplayBeatmapFileStatus("unknown");
+    setPendingBeatmapUpload(null);
+    setLocalBeatmapError(null);
+    applyLocalBeatmapAssets(EMPTY_LOCAL_BEATMAP_ASSETS);
 
     const backNavigation = getReplayBackNavigation({ canGoBack, playerParam, tab: tab === "beatmap" || tab === "upload" ? tab : undefined });
     if (backNavigation.type === "history") {
@@ -1432,7 +1574,19 @@ function ReplayPage() {
             ) : replay ? (
               <motion.div key="viewer" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
                 <ReplayInfo replay={replay} score={scoreInfo} beatmap={beatmap} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} shareUrl={uploadedReplayShareUrl ?? undefined} playerProfile={playerProfile} onClear={handleClearReplay} />
-                <ReplayViewer replay={replay} beatmap={beatmap} scoreInfo={scoreInfo} replayMods={uploadedReplayMods} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} initialTime={initialTime} />
+                <ReplayViewer replay={replay} beatmap={beatmap} scoreInfo={scoreInfo} replayMods={uploadedReplayMods} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} initialTime={initialTime} localAudioUrl={localBeatmapAssets.audioUrl} localBackgroundUrl={localBeatmapAssets.backgroundUrl} />
+              </motion.div>
+            ) : pendingBeatmapUpload ? (
+              <motion.div key="missing-beatmap" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                <MissingBeatmapPanel
+                  reason={pendingBeatmapUpload.reason}
+                  beatmapLabel={pendingBeatmapUpload.beatmapMeta ? formatMissingBeatmapLabel(pendingBeatmapUpload.beatmapMeta) : null}
+                  playerName={pendingBeatmapUpload.uploaded.replay.header.playerName}
+                  error={localBeatmapError}
+                  loading={localBeatmapLoading}
+                  onPickFile={handleLocalBeatmapFile}
+                  onCancel={handleCancelPendingBeatmapUpload}
+                />
               </motion.div>
             ) : (
               <ReplayBrowseView
@@ -1440,6 +1594,7 @@ function ReplayPage() {
                 error={error}
                 selectedCountry={selectedCountry}
                 onModeChange={(mode) => {
+                  dismissedUploadIdRef.current = uploadId ?? null;
                   setBrowseMode(mode);
                   playerScoreRequestRef.current += 1;
                   setPlayerScoreGroups(null);
@@ -1457,6 +1612,9 @@ function ReplayPage() {
                   setUploadedReplayShareUrl(null);
                   setLoadedUploadId(null);
                   setReplayBeatmapFileStatus("unknown");
+                  setPendingBeatmapUpload(null);
+                  setLocalBeatmapError(null);
+                  applyLocalBeatmapAssets(EMPTY_LOCAL_BEATMAP_ASSETS);
                   clearTimeout(beatmapTimerRef.current);
                   beatmapSearchRequestRef.current += 1;
                   setError(null);
@@ -1517,6 +1675,8 @@ function ReplayViewer({
   replayMods,
   fallbackBeatmapsetId,
   initialTime,
+  localAudioUrl,
+  localBackgroundUrl,
 }: {
   replay: ServerReplay;
   beatmap: ManiaBeatmap | null;
@@ -1524,6 +1684,10 @@ function ReplayViewer({
   replayMods?: OsuMod[];
   fallbackBeatmapsetId?: number;
   initialTime?: number;
+  // Blob object URLs extracted from a user-supplied .osz when the beatmap
+  // isn't downloadable from osu! or the mirrors.
+  localAudioUrl?: string | null;
+  localBackgroundUrl?: string | null;
 }) {
   const auth = useAuth();
   const canvasContainerRef = useRef<HTMLDivElement>(null);
@@ -1833,9 +1997,12 @@ function ReplayViewer({
 
   // Build full audio URL from the server archive extractor using beatmapset ID + audio filename from .osu.
   const effectiveBeatmapsetId = scoreInfo?.beatmapset?.id ?? fallbackBeatmapsetId;
-  const audioUrl = effectiveBeatmapsetId && beatmap?.audioFilename
+  // The remote URL is kept separate because server-side video export muxes
+  // audio on the backend, which can't read a local blob: URL.
+  const remoteAudioUrl = effectiveBeatmapsetId && beatmap?.audioFilename
     ? getBeatmapAudioUrl(effectiveBeatmapsetId, beatmap.audioFilename)
     : null;
+  const audioUrl = localAudioUrl ?? remoteAudioUrl;
   // What the <audio> element actually plays: the local blob once downloaded,
   // the streaming URL until then. Everything else (video export, hitsounds)
   // keeps using audioUrl.
@@ -1844,9 +2011,9 @@ function ReplayViewer({
   const coverProxyUrl = effectiveBeatmapsetId
     ? `/api/background?beatmapsetId=${encodeURIComponent(String(effectiveBeatmapsetId))}`
     : null;
-  const beatmapBackgroundUrl = effectiveBeatmapsetId && beatmap?.backgroundFilename
+  const beatmapBackgroundUrl = localBackgroundUrl ?? (effectiveBeatmapsetId && beatmap?.backgroundFilename
     ? `/api/background?beatmapsetId=${encodeURIComponent(String(effectiveBeatmapsetId))}&filename=${encodeURIComponent(beatmap.backgroundFilename)}`
-    : null;
+    : null);
 
   // Prefer the map's real background from the beatmap archive, then fall back to the set cover.
   useEffect(() => {
@@ -2831,7 +2998,9 @@ function ReplayViewer({
         width,
         height,
         frameCount,
-        audioUrl: audioEnabled && audioUrl && !audioError ? new URL(audioUrl, window.location.origin).toString() : null,
+        // Only a server-reachable URL works here; the backend muxes the audio
+        // and can't fetch a local blob: URL.
+        audioUrl: audioEnabled && remoteAudioUrl && !audioError ? new URL(remoteAudioUrl, window.location.origin).toString() : null,
         audioStartSeconds: startTime / 1000,
         sourceDurationSeconds: sourceDurationMs / 1000,
         effectiveRate,
@@ -2913,7 +3082,7 @@ function ReplayViewer({
   }, [
     audioEnabled,
     audioError,
-    audioUrl,
+    remoteAudioUrl,
     bgDim,
     bgSrc,
     effectiveRate,

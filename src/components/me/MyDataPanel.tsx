@@ -26,6 +26,7 @@ import {
 import { openLiveEventSource, type LivePlayerActivitySnapshot } from "../../lib/live-backend";
 import { getScoreTimestamp } from "../../lib/score";
 import { MeScoreRow } from "./MeScoreRow";
+import { ModBadge } from "../ui/ModBadge";
 import { RosterOptInCard } from "./RosterOptInCard";
 import { skillPatternEntries, type SkillPatternEntry } from "./skill-patterns";
 
@@ -583,26 +584,16 @@ export function MyDataPanel() {
 
               {summary && summary.rhythm.sampleSize > 0 ? (
                 <InsightCard title="When you play" accent="#57aeba" right={summary.rhythm.timezone}>
-                  <RhythmChart byHour={summary.rhythm.byHour} />
-                  <div className="mt-2 text-[12px] text-osu-l2">
-                    {summary.rhythm.peakHour != null ? (
-                      <>Most active around <span className="font-semibold text-white">{formatHour(summary.rhythm.peakHour)}</span></>
-                    ) : null}
-                    {summary.rhythm.peakDay != null ? (
-                      <>, mostly on <span className="font-semibold text-white">{DAY_NAMES[summary.rhythm.peakDay]}s</span></>
-                    ) : null}
-                  </div>
+                  <RhythmChart byHour={summary.rhythm.byHour} peakHour={summary.rhythm.peakHour} peakDay={summary.rhythm.peakDay} />
                 </InsightCard>
               ) : null}
 
               {summary && summary.mods.sample > 0 ? (
                 <InsightCard title="Mods" accent="#d8a657">
-                  <div className="flex flex-wrap gap-1.5">
-                    <span className="rounded-md border border-osu-b3/40 bg-osu-b5/60 px-2 py-1 text-[11px] text-osu-l2 tabular-nums">nomod {summary.mods.noModPct}%</span>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <ModUsage mod="NM" pct={summary.mods.noModPct} />
                     {summary.mods.top.map((m) => (
-                      <span key={m.mod} className="rounded-md border border-osu-b3/40 bg-osu-b5/60 px-2 py-1 text-[11px] text-osu-l2 tabular-nums">
-                        {m.mod} {m.pct}%
-                      </span>
+                      <ModUsage key={m.mod} mod={m.mod} pct={m.pct} />
                     ))}
                   </div>
                 </InsightCard>
@@ -1017,18 +1008,57 @@ function PlaystyleBars({ entries }: { entries: SkillPatternEntry[] }) {
   );
 }
 
-function RhythmChart({ byHour }: { byHour: number[] }) {
-  const max = Math.max(1, ...byHour);
+function ModUsage({ mod, pct }: { mod: string; pct: number }) {
   return (
-    <div className="flex h-12 items-end gap-[2px]">
-      {byHour.map((count, hour) => (
-        <div
-          key={hour}
-          className="flex-1 rounded-sm bg-osu-pink/45"
-          style={{ height: `${Math.max(4, (count / max) * 100)}%` }}
-          title={`${formatHour(hour)}: ${count} plays`}
-        />
-      ))}
+    <div className="flex items-center gap-1.5" title={`${mod === "NM" ? "No mod" : mod}: ${pct}% of plays`}>
+      <ModBadge mod={mod} size={0.85} color={mod === "NM" ? "#a8b2bf" : undefined} />
+      <span className="text-[11px] text-osu-l2 tabular-nums">{pct}%</span>
+    </div>
+  );
+}
+
+function RhythmChart({ byHour, peakHour, peakDay }: { byHour: number[]; peakHour: number | null; peakDay: number | null }) {
+  const [hovered, setHovered] = useState<number | null>(null);
+  const max = Math.max(1, ...byHour);
+  const total = byHour.reduce((sum, count) => sum + count, 0);
+  return (
+    <div onMouseLeave={() => setHovered(null)}>
+      <div className="flex h-12 items-stretch gap-[2px]">
+        {byHour.map((count, hour) => (
+          <button
+            type="button"
+            key={hour}
+            className="flex flex-1 cursor-pointer items-end outline-none"
+            onMouseEnter={() => setHovered(hour)}
+            onFocus={() => setHovered(hour)}
+            onBlur={() => setHovered((prev) => (prev === hour ? null : prev))}
+            aria-label={`${formatHour(hour)}: ${count} ${count === 1 ? "play" : "plays"}`}
+          >
+            <div
+              className={`w-full rounded-sm ${hovered === hour ? "bg-osu-pink" : "bg-osu-pink/45"}`}
+              style={{ height: `${Math.max(4, (count / max) * 100)}%` }}
+            />
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 text-[12px] text-osu-l2">
+        {hovered != null ? (
+          <>
+            <span className="font-semibold text-white">{formatHour(hovered)}</span>
+            {" "}&middot; {byHour[hovered]} {byHour[hovered] === 1 ? "play" : "plays"}
+            {total > 0 ? <span className="text-osu-f1"> ({Math.round((byHour[hovered] / total) * 100)}%)</span> : null}
+          </>
+        ) : (
+          <>
+            {peakHour != null ? (
+              <>Most active around <span className="font-semibold text-white">{formatHour(peakHour)}</span></>
+            ) : null}
+            {peakDay != null ? (
+              <>, mostly on <span className="font-semibold text-white">{DAY_NAMES[peakDay]}s</span></>
+            ) : null}
+          </>
+        )}
+      </div>
     </div>
   );
 }

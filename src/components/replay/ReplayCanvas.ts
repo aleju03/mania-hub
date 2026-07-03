@@ -1875,6 +1875,37 @@ export class ManiaReplayRenderer {
     } else {
       this.rectInto(g, playfieldX, 0, playfieldWidth, h, "#ffffff", 0.15, 2);
     }
+
+    this.renderSkinColumnLines(g, layout);
+  }
+
+  // skin.ini column lines (ColumnLineWidth + ColourColumnLine): keys+1
+  // boundary lines including the outer stage edges, in skin 480-space units.
+  // Only drawn when the imported skin set the key explicitly, so built-in
+  // styles and older imports keep their current look.
+  private renderSkinColumnLines(g: Graphics, layout: Layout) {
+    const widths = this.skinProfile.columnLineWidths;
+    if (widths.length === 0) return;
+    const { h, playfieldX, playfieldWidth } = layout;
+    const rawColor = this.skinProfile.columnLineColor || "#ffffff";
+    const color = rawColor.slice(0, 7);
+    const alpha = rawColor.length === 9 ? parseInt(rawColor.slice(7, 9), 16) / 255 : 1;
+    for (let boundary = 0; boundary <= this.keyCount; boundary++) {
+      const units = widths[boundary] ?? 0;
+      if (units <= 0) continue;
+      const lineWidth = Math.max(1, units * layout.layoutScale);
+      let x: number;
+      if (boundary === 0) {
+        x = playfieldX;
+      } else if (boundary === this.keyCount) {
+        x = playfieldX + playfieldWidth - lineWidth;
+      } else {
+        const previous = this.getColumnLayout(boundary - 1, layout);
+        const current = this.getColumnLayout(boundary, layout);
+        x = (previous.x + previous.width + current.x) / 2 - lineWidth / 2;
+      }
+      this.fillRectInto(g, x, 0, lineWidth, h, color, alpha);
+    }
   }
 
   private renderHealthBar(layout: Layout) {

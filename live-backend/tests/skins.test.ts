@@ -58,13 +58,16 @@ async function createPublishedSkin(input: {
     name: input.name,
   });
   if (!created.ok) throw new Error(`createPendingSkin failed: ${created.error}`);
-  await attachSkinOsk(db, created.id, {
+  const pendingRow = await getSkin(db, created.id);
+  if (!pendingRow) throw new Error("pending skin row missing");
+  await attachSkinOsk(db, pendingRow, {
     key: skinOskKey(created.id, input.name),
     url: `https://cdn.example/skins/${created.id}/skin.osk`,
     sizeBytes: 1024,
     sha256: "ab".repeat(32),
     keymodes: input.keymodes ?? [4],
     accentColor: "#ff66aa",
+    iniAuthor: null,
   });
   await attachSkinPreview(db, created.id, {
     key: skinPreviewKey(created.id, "webp"),
@@ -127,13 +130,14 @@ describe("skins feature", () => {
     expect((await getSkin(db, created.id))?.accentColor).toBe("#bbdfff");
 
     // The .osk uploads last; its skin.ini colour must not clobber the sample.
-    await attachSkinOsk(db, created.id, {
+    await attachSkinOsk(db, (await getSkin(db, created.id))!, {
       key: skinOskKey(created.id, OWNER.name),
       url: "https://cdn.example/skin.osk",
       sizeBytes: 2048,
       sha256: "cd".repeat(32),
       keymodes: [4],
       accentColor: "#ff0000",
+      iniAuthor: null,
     });
     expect((await getSkin(db, created.id))?.accentColor).toBe("#bbdfff");
   });
@@ -142,13 +146,14 @@ describe("skins feature", () => {
     const created = await createPendingSkin(db, OWNER);
     expect(created.ok).toBe(true);
     if (!created.ok) return;
-    await attachSkinOsk(db, created.id, {
+    await attachSkinOsk(db, (await getSkin(db, created.id))!, {
       key: skinOskKey(created.id, OWNER.name),
       url: "https://cdn.example/skin.osk",
       sizeBytes: 2048,
       sha256: "cd".repeat(32),
       keymodes: [4],
       accentColor: "#ff0000",
+      iniAuthor: null,
     });
     expect((await getSkin(db, created.id))?.accentColor).toBe("#ff0000");
   });
@@ -167,13 +172,14 @@ describe("skins feature", () => {
 
     // finish requires the .osk and the composed preview
     expect(await finishSkin(db, created.id, created.token)).toEqual({ ok: false, error: "missing_osk" });
-    await attachSkinOsk(db, created.id, {
+    await attachSkinOsk(db, (await getSkin(db, created.id))!, {
       key: skinOskKey(created.id, OWNER.name),
       url: "https://cdn.example/skin.osk",
       sizeBytes: 2048,
       sha256: "cd".repeat(32),
       keymodes: [4, 7],
       accentColor: "#aabbcc",
+      iniAuthor: null,
     });
     expect(await finishSkin(db, created.id, created.token)).toEqual({ ok: false, error: "missing_preview" });
     await attachSkinPreview(db, created.id, { key: "skins/x/preview.webp", url: "https://cdn.example/preview.webp", width: 1280, height: 720 });
@@ -192,6 +198,46 @@ describe("skins feature", () => {
 
     // a published skin's ticket is gone: further upload calls are rejected
     expect(await getSkinForUpload(db, created.id, created.token)).toBeNull();
+  });
+
+  it("credits the skin author: form value wins, skin.ini fills the gap, search matches it", async () => {
+    // No form author: the skin.ini Author lands on the row at osk attach.
+    const fromIni = await createPendingSkin(db, OWNER);
+    expect(fromIni.ok).toBe(true);
+    if (!fromIni.ok) return;
+    await attachSkinOsk(db, (await getSkin(db, fromIni.id))!, {
+      key: skinOskKey(fromIni.id, OWNER.name),
+      url: "https://cdn.example/skin.osk",
+      sizeBytes: 2048,
+      sha256: "cd".repeat(32),
+      keymodes: [4],
+      accentColor: null,
+      iniAuthor: "  Guden  ",
+    });
+    expect((await getSkin(db, fromIni.id))?.author).toBe("Guden");
+
+    // A form author survives the ini author from the .osk.
+    const fromForm = await createPendingSkin(db, { ...OWNER, name: "another skin", author: "pl0x" });
+    expect(fromForm.ok).toBe(true);
+    if (!fromForm.ok) return;
+    await attachSkinOsk(db, (await getSkin(db, fromForm.id))!, {
+      key: skinOskKey(fromForm.id, "another skin"),
+      url: "https://cdn.example/skin2.osk",
+      sizeBytes: 2048,
+      sha256: "cd".repeat(32),
+      keymodes: [4],
+      accentColor: null,
+      iniAuthor: "Guden",
+    });
+    const formRow = await getSkin(db, fromForm.id);
+    expect(formRow?.author).toBe("pl0x");
+
+    // The author is searchable once published.
+    await attachSkinPreview(db, fromForm.id, { key: "skins/y/preview.webp", url: "https://cdn.example/p.webp", width: 1280, height: 720 });
+    await finishSkin(db, fromForm.id, fromForm.token);
+    const byAuthor = await listSkins(db, { q: "pl0x" });
+    expect(byAuthor.skins.map((skin) => skin.id)).toEqual([fromForm.id]);
+    expect(byAuthor.skins[0].author).toBe("pl0x");
   });
 
   it("rejects empty names and strips control characters", async () => {

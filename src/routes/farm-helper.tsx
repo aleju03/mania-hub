@@ -27,7 +27,9 @@ import { pageSeo } from "../lib/seo";
 
 const PAGE_SIZE = 10;
 const GRID_PAGE_SIZE = 12;
-const POPULAR_LIMIT = 100;
+// Ask for the server max so the reason filters ("missing", "old") see the full
+// ranked list instead of whatever cracked the overall top of a shorter slice.
+const SNAPSHOT_LIMIT = 200;
 const FARM_HELPER_KEY_MODES = ["any", "4k", "7k"] as const;
 const FARM_HELPER_VIEWS = ["gain", "popular"] as const;
 
@@ -291,7 +293,7 @@ function FarmHelperPage() {
     fetchLiveFarmHelperSnapshot(subjectKey, {
       keyMode,
       view,
-      limit: view === "popular" ? POPULAR_LIMIT : undefined,
+      limit: SNAPSHOT_LIMIT,
       signal: controller.signal,
     })
       .then((data) => {
@@ -348,6 +350,12 @@ function FarmHelperPage() {
     });
     return sorted;
   }, [visibleSnapshot, query, reasonFilter, sortMode, sortDir]);
+
+  // Only meaningful when no client-side filter narrows the list; then recs is
+  // exactly the server's (possibly truncated) slice and "X of Y" is honest.
+  const isClientFiltered = reasonFilter !== "all" || query.trim().length > 0;
+  const totalQualifying = visibleSnapshot?.totalQualifying ?? 0;
+  const serverTruncated = !isClientFiltered && totalQualifying > (visibleSnapshot?.recs.length ?? 0);
 
   const pageSize = layout === "grid" ? GRID_PAGE_SIZE : PAGE_SIZE;
   const pageCount = Math.ceil(recs.length / pageSize);
@@ -413,7 +421,9 @@ function FarmHelperPage() {
                         <div className="mt-0.5 text-sm font-semibold text-osu-c1">
                           {visibleSnapshot ? (
                             <>
-                              {formatPp(recs.length)} map{recs.length === 1 ? "" : "s"}
+                              {serverTruncated
+                                ? `${formatPp(recs.length)} of ${formatPp(totalQualifying)} maps`
+                                : `${formatPp(recs.length)} map${recs.length === 1 ? "" : "s"}`}
                               {view === "popular" ? (
                                 <span className="font-normal text-osu-f1"> · what nearby players farm</span>
                               ) : (

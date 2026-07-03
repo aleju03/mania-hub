@@ -217,7 +217,7 @@ export function SearchCard({ entry, onOpen }: { entry: LiveMapSearchEntry; onOpe
             <a
               href={osuDirectUrl(entry.beatmapsetId)}
               onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-osu-b3/50 text-osu-l2 text-[9px] hover:bg-osu-b3 transition-colors"
+              className="hidden items-center gap-1 px-1.5 py-0.5 rounded bg-osu-b3/50 text-osu-l2 text-[9px] hover:bg-osu-b3 transition-colors sm:inline-flex"
               title="Open in osu! client"
             >
               <OsuLogo className="h-2.5 w-2.5" />

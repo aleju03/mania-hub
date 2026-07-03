@@ -24,6 +24,9 @@ export interface SkinSummary {
   // it; API endpoints (download, delete, moderate) keep using the id.
   slug: string | null;
   name: string;
+  // Who made the skin (skin.ini Author or uploader-provided); distinct from
+  // the uploader and the primary credit on cards.
+  author: string | null;
   description: string | null;
   ownerUserId: number;
   ownerUsername: string;
@@ -50,6 +53,7 @@ export interface SkinsListResult {
 }
 
 export const SKINS_PAGE_SIZE = 24;
+export const SKIN_AUTHOR_MAX_LENGTH = 64;
 export const SKIN_DESCRIPTION_MAX_LENGTH = 500;
 export const SKIN_OSK_MAX_BYTES = 50 * 1024 * 1024;
 export const SKIN_SCREENSHOT_MAX_BYTES = 4 * 1024 * 1024;
@@ -64,6 +68,33 @@ export interface SkinsListParams {
   k?: number;
 }
 
+// The list endpoint is browser-cached (max-age=60 + stale-while-revalidate
+// 300), which made a just-deleted skin linger on /skins even across reloads.
+// Mutations stamp a deadline; until it passes, list fetches skip the HTTP
+// cache and revalidate against the backend.
+const SKINS_LIST_STALE_UNTIL_KEY = "mania-hub-skins-list-stale-until";
+const SKINS_LIST_CACHE_WINDOW_MS = 6 * 60 * 1000;
+
+export function markSkinsListStale(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(SKINS_LIST_STALE_UNTIL_KEY, String(Date.now() + SKINS_LIST_CACHE_WINDOW_MS));
+  } catch {
+    // Private-mode storage failures just fall back to cached lists.
+  }
+}
+
+function skinsListCacheMode(): RequestCache | undefined {
+  if (typeof window === "undefined") return undefined;
+  try {
+    const until = Number(window.sessionStorage.getItem(SKINS_LIST_STALE_UNTIL_KEY));
+    if (Number.isFinite(until) && until > Date.now()) return "no-cache";
+  } catch {
+    // Unreadable storage: keep default caching.
+  }
+  return undefined;
+}
+
 export async function fetchSkinsListDirect(params: SkinsListParams, init?: RequestInit): Promise<SkinsListResult> {
   const base = getLiveBackendUrl();
   if (!base) throw new Error("Server is not configured.");
@@ -74,7 +105,7 @@ export async function fetchSkinsListDirect(params: SkinsListParams, init?: Reque
   if (params.sort === "downloads") query.set("sort", "downloads");
   if (params.k && Number.isInteger(params.k) && params.k >= 1 && params.k <= 10) query.set("k", String(params.k));
   query.set("pageSize", String(SKINS_PAGE_SIZE));
-  const response = await fetch(`${base}/api/skins/list?${query.toString()}`, { credentials: "omit", ...init });
+  const response = await fetch(`${base}/api/skins/list?${query.toString()}`, { credentials: "omit", cache: skinsListCacheMode(), ...init });
   if (!response.ok) throw new Error(`Server ${response.status}`);
   return response.json() as Promise<SkinsListResult>;
 }
@@ -137,8 +168,9 @@ async function resolveSkinsBackend(): Promise<SkinsBackend | null> {
 }
 
 export const startSkinUpload = createServerFn({ method: "POST" })
-  .inputValidator((data: { name?: unknown; description?: unknown }) => ({
+  .inputValidator((data: { name?: unknown; author?: unknown; description?: unknown }) => ({
     name: typeof data.name === "string" ? data.name.slice(0, 80) : "",
+    author: typeof data.author === "string" ? data.author.slice(0, SKIN_AUTHOR_MAX_LENGTH) : "",
     description: typeof data.description === "string" ? data.description.slice(0, SKIN_DESCRIPTION_MAX_LENGTH) : "",
   }))
   .handler(async ({ data }): Promise<StartSkinUploadResult> => {
@@ -150,7 +182,7 @@ export const startSkinUpload = createServerFn({ method: "POST" })
       const response = await fetch(`${cfg.base}/api/skins/start`, {
         method: "POST",
         headers: cfg.headers,
-        body: JSON.stringify({ userId: cfg.userId, username: cfg.username, name: data.name, description: data.description }),
+        body: JSON.stringify({ userId: cfg.userId, username: cfg.username, name: data.name, author: data.author, description: data.description }),
       });
       const body = (await response.json().catch(() => null)) as
         | { ok?: boolean; id?: string; token?: string; expiresAt?: string; error?: string }
@@ -308,6 +340,46 @@ export function uploadErrorMessage(code: string, status?: number): string {
 export function skinDownloadUrl(id: string): string | null {
   const base = getLiveBackendUrl();
   return base ? `${base}/api/skins/download?id=${encodeURIComponent(id)}` : null;
+}
+
+// CORS-safe .osk fetch for in-page features (asset explorer, map preview):
+// the backend streams the stored object by filename without counting it as a
+// download the way /api/skins/download does.
+export function skinOskFileUrl(skin: Pick<SkinSummary, "id" | "oskUrl">): string | null {
+  const base = getLiveBackendUrl();
+  const filename = skin.oskUrl?.split("/").pop();
+  return base && filename
+    ? `${base}/api/skins/file/${encodeURIComponent(skin.id)}/${encodeURIComponent(filename)}`
+    : null;
+}
+
+// Maps eligible for the skin page's in-browser player. The backend only
+// returns charts whose .osu and audio are already cached, so playback starts
+// instantly and never triggers a beatmap archive download.
+export interface SkinPreviewMap {
+  beatmapId: number;
+  beatmapsetId: number;
+  title: string;
+  artist: string;
+  creator: string | null;
+  version: string;
+  keys: number;
+  difficultyRating: number;
+  totalLength: number;
+  audioFilename: string;
+}
+
+export async function fetchSkinPreviewMaps(q: string, keys?: number | null, init?: RequestInit): Promise<SkinPreviewMap[]> {
+  const base = getLiveBackendUrl();
+  if (!base) return [];
+  const query = new URLSearchParams();
+  const trimmed = q.trim();
+  if (trimmed) query.set("q", trimmed.slice(0, 80));
+  if (keys && Number.isInteger(keys) && keys >= 1 && keys <= 10) query.set("keys", String(keys));
+  const response = await fetch(`${base}/api/skins/preview-maps?${query.toString()}`, { credentials: "omit", ...init });
+  if (!response.ok) throw new Error(`Server ${response.status}`);
+  const body = (await response.json()) as { maps?: SkinPreviewMap[] };
+  return body.maps ?? [];
 }
 
 export function formatSkinFileSize(bytes: number | null | undefined): string {

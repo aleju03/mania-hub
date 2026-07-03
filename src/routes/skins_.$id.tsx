@@ -5,11 +5,13 @@ import { ManiaRain } from "../components/home/ManiaRain";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { PageHeader } from "../components/layout/PageHeader";
 import { SKIN_FALLBACK_ACCENT, SkinKeymodeTags } from "../components/skins/SkinCard";
+import { SkinAssetExplorer } from "../components/skins/SkinAssetExplorer";
+import { SkinMapPreview } from "../components/skins/SkinMapPreview";
 import { Avatar } from "../components/ui/Avatar";
 import { useAuth } from "../lib/auth-context";
 import { canUseDevFeatures } from "../lib/auth-shared";
 import { formatTimeAgo } from "../lib/format";
-import { deleteMySkin, fetchSkinById, formatKeymodes, formatSkinFileSize, moderateSkin, skinDownloadUrl, type SkinSummary } from "../lib/skins";
+import { deleteMySkin, fetchSkinById, formatKeymodes, formatSkinFileSize, markSkinsListStale, moderateSkin, skinDownloadUrl, type SkinSummary } from "../lib/skins";
 import { pageSeo } from "../lib/seo";
 
 export const Route = createFileRoute("/skins_/$id")({
@@ -109,6 +111,9 @@ function SkinDetailPage() {
       : await moderateSkin({ data: { id: skin.id, action: "delete" } }).catch(() => ({ ok: false }));
     setBusy(false);
     if (result.ok) {
+      // The browse list is browser-cached; force the next fetches to
+      // revalidate so the deleted skin does not linger.
+      markSkinsListStale();
       void navigate({ to: "/skins", search: {} });
     } else {
       setActionError("The delete failed. Try again.");
@@ -199,6 +204,8 @@ function SkinDetailPage() {
                       ))}
                     </div>
                   )}
+                  <SkinMapPreview skin={skin} />
+                  <SkinAssetExplorer skin={skin} />
                 </div>
 
                 <div className="flex min-w-0 flex-col gap-4">
@@ -212,6 +219,14 @@ function SkinDetailPage() {
                       )}
                     </div>
                     <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12.5px] text-osu-f1">
+                      {skin.author && (
+                        <>
+                          <span>
+                            by <span className="font-semibold text-osu-l2">{skin.author}</span>
+                          </span>
+                          <span aria-hidden="true">·</span>
+                        </>
+                      )}
                       <span>uploaded by</span>
                       <Link
                         to="/player/$username"

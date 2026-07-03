@@ -1,14 +1,24 @@
 import { AnimatePresence, motion } from "framer-motion";
+import JSZip from "jszip";
 import { Upload, X } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { importReplaySkinFromOsk, type ReplaySkinImportResult } from "../../lib/replay-skin-import";
-import { loadSkinPreviewBackground, renderSkinPreview } from "../../lib/skin-preview-render";
+import { buildSkinAssetGroups, type SkinAssetGroup } from "../../lib/skin-asset-explorer";
+import { SkinAssetTile } from "./SkinAssetExplorer";
+import {
+  loadSkinPreviewBackgroundForSet,
+  renderSkinPreview,
+  SKIN_PREVIEW_BACKGROUND_SETS,
+  skinPreviewBackgroundThumbUrl,
+} from "../../lib/skin-preview-render";
 import {
   finishSkinUpload,
   formatSkinFileSize,
+  markSkinsListStale,
   SKIN_DESCRIPTION_MAX_LENGTH,
   SKIN_MAX_SCREENSHOTS,
+  SKIN_AUTHOR_MAX_LENGTH,
   SKIN_OSK_MAX_BYTES,
   SKIN_SCREENSHOT_MAX_BYTES,
   SkinUploadError,
@@ -44,6 +54,13 @@ interface RenderedPreview {
 interface UploadTicket {
   id: string;
   token: string;
+}
+
+// "flat" is the accent-tinted triangle backdrop the renderer falls back to.
+type PreviewBackdrop = number | "flat";
+
+function randomPreviewBackdrop(): PreviewBackdrop {
+  return SKIN_PREVIEW_BACKGROUND_SETS[Math.floor(Math.random() * SKIN_PREVIEW_BACKGROUND_SETS.length)] ?? "flat";
 }
 
 // Canvas port of lazer's Triangles drawable (osu.Game/Graphics/Backgrounds/
@@ -211,6 +228,10 @@ export function SkinUploadModal({
   const [file, setFile] = useState<File | null>(null);
   const [imported, setImported] = useState<ReplaySkinImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Local parse progress after a drop: extracting and decoding the skin's
+  // assets takes seconds on big .osk files. percent is null until the archive
+  // is open and the reference count is known.
+  const [reading, setReading] = useState<{ name: string; percent: number | null } | null>(null);
 
   const [selectedKeymode, setSelectedKeymode] = useState(4);
   // One rendered playfield per keymode; the selected keymode is the cover.
@@ -219,14 +240,52 @@ export function SkinUploadModal({
   const previewUrlsRef = useRef<string[]>([]);
 
   const [name, setName] = useState("");
+  // Who made the skin, prefilled from skin.ini's Author; the browse cards
+  // credit this instead of the uploader.
+  const [author, setAuthor] = useState("");
   const [description, setDescription] = useState("");
   const [screenshots, setScreenshots] = useState<ProcessedScreenshot[]>([]);
   const screenshotUrlsRef = useRef<string[]>([]);
 
+  // What the archive ships, grouped by osu!'s known asset names; shown under
+  // the previews so uploaders can sanity-check what was detected. The zip
+  // stays around so a chip can expand into the actual thumbnails.
+  const [assetGroups, setAssetGroups] = useState<SkinAssetGroup[] | null>(null);
+  const assetZipRef = useRef<JSZip | null>(null);
+  const assetUrlsRef = useRef<Map<string, string>>(new Map());
+
+  const revokeAssetUrls = useCallback(() => {
+    assetUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    assetUrlsRef.current.clear();
+  }, []);
+
+  // Same one-object-URL-per-path registry as the skin page explorer.
+  const resolveAssetUrl = useCallback(async (path: string): Promise<string | null> => {
+    const existing = assetUrlsRef.current.get(path);
+    if (existing) return existing;
+    const entry = assetZipRef.current?.file(path);
+    if (!entry) return null;
+    try {
+      const blob = await entry.async("blob");
+      const url = URL.createObjectURL(blob);
+      const raced = assetUrlsRef.current.get(path);
+      if (raced) {
+        URL.revokeObjectURL(url);
+        return raced;
+      }
+      assetUrlsRef.current.set(path, url);
+      return url;
+    } catch {
+      return null;
+    }
+  }, []);
+
   const ticketRef = useRef<UploadTicket | null>(null);
-  // One random map cover per picked file, shared by every keymode render so
-  // switching keymodes never swaps the backdrop.
-  const backgroundRef = useRef<Promise<HTMLImageElement | null> | null>(null);
+  // The backdrop behind the rendered previews: one of the curated map covers
+  // or the flat triangle fallback. Starts on a random cover, user-swappable;
+  // every keymode render shares the choice. Loaded covers memoize per set.
+  const [backdrop, setBackdrop] = useState<PreviewBackdrop>(randomPreviewBackdrop);
+  const backgroundCacheRef = useRef<Map<number, Promise<HTMLImageElement | null>>>(new Map());
   const [progress, setProgress] = useState({ done: 0, total: 0, label: "" });
   const [published, setPublished] = useState<SkinSummary | null>(null);
 
@@ -240,7 +299,8 @@ export function SkinUploadModal({
     previewUrlsRef.current = [];
     screenshotUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
     screenshotUrlsRef.current = [];
-  }, []);
+    revokeAssetUrls();
+  }, [revokeAssetUrls]);
 
   useEffect(() => revokeAllUrls, [revokeAllUrls]);
 
@@ -253,11 +313,14 @@ export function SkinUploadModal({
     setError(null);
     setPreviews(new Map());
     setName("");
+    setAuthor("");
     setDescription("");
     setScreenshots([]);
     setPublished(null);
+    setAssetGroups(null);
+    setBackdrop(randomPreviewBackdrop());
     ticketRef.current = null;
-    backgroundRef.current = null;
+    assetZipRef.current = null;
   }, [revokeAllUrls]);
 
   // Closing mid-form keeps the picked file for a reopen; closing the done
@@ -320,11 +383,25 @@ export function SkinUploadModal({
       setError(`This file is ${formatSkinFileSize(picked.size)}. The limit is 50 MB.`);
       return;
     }
+    setReading({ name: picked.name, percent: null });
     try {
-      const result = await importReplaySkinFromOsk(picked, { targetKeyCount: 4 });
+      let lastPercent = -1;
+      const result = await importReplaySkinFromOsk(picked, {
+        targetKeyCount: 4,
+        onProgress: (done, total) => {
+          // State updates only on whole-percent changes; a big skin ticks
+          // hundreds of times.
+          const percent = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+          if (percent !== lastPercent) {
+            lastPercent = percent;
+            setReading({ name: picked.name, percent });
+          }
+        },
+      });
       setFile(picked);
       setImported(result);
       setName(result.summary.name.slice(0, 80));
+      setAuthor((result.summary.author ?? "").slice(0, SKIN_AUTHOR_MAX_LENGTH));
       setDescription("");
       const keymodes = result.summary.keymodes;
       setSelectedKeymode(keymodes.includes(4) ? 4 : keymodes[0] ?? 4);
@@ -332,23 +409,49 @@ export function SkinUploadModal({
       previewUrlsRef.current = [];
       setPreviews(new Map());
       ticketRef.current = null;
-      backgroundRef.current = loadSkinPreviewBackground();
       setStep("form");
+      // Asset detection reads only the zip's central directory plus name
+      // matching, so it fills in quickly after the form appears.
+      setAssetGroups(null);
+      revokeAssetUrls();
+      assetZipRef.current = null;
+      void JSZip.loadAsync(picked)
+        .then((zip) => {
+          const files = Object.values(zip.files)
+            .filter((entry) => !entry.dir)
+            .map((entry) => ({
+              path: entry.name,
+              size: (entry as unknown as { _data?: { uncompressedSize?: number } })._data?.uncompressedSize ?? 1,
+            }));
+          assetZipRef.current = zip;
+          setAssetGroups(buildSkinAssetGroups(files));
+        })
+        .catch(() => setAssetGroups([]));
     } catch (importError) {
       setError(importError instanceof Error ? importError.message : "This .osk could not be read.");
     } finally {
+      setReading(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
-  }, []);
+  }, [revokeAssetUrls]);
 
-  // Render every supported keymode once per picked file (4K first so the hero
-  // fills fast); switching keymodes afterwards just swaps images.
+  // Render every supported keymode once per picked file and again when the
+  // backdrop changes (4K first so the hero fills fast); switching keymodes
+  // afterwards just swaps images.
   useEffect(() => {
     if (!imported) return;
     let cancelled = false;
     setPreviewBusy(true);
     (async () => {
-      const background = await Promise.resolve(backgroundRef.current).catch(() => null);
+      let background: HTMLImageElement | null = null;
+      if (backdrop !== "flat") {
+        let promise = backgroundCacheRef.current.get(backdrop);
+        if (!promise) {
+          promise = loadSkinPreviewBackgroundForSet(backdrop);
+          backgroundCacheRef.current.set(backdrop, promise);
+        }
+        background = await promise.catch(() => null);
+      }
       const keymodes = [...imported.summary.keymodes].sort((a, b) => (a === 4 ? -1 : b === 4 ? 1 : a - b));
       for (const keys of keymodes) {
         if (cancelled) return;
@@ -356,7 +459,14 @@ export function SkinUploadModal({
         if (cancelled) return;
         const url = URL.createObjectURL(render.blob);
         previewUrlsRef.current.push(url);
-        setPreviews((previous) => new Map(previous).set(keys, { blob: render.blob, width: render.width, height: render.height, url, accent: render.accent }));
+        setPreviews((previous) => {
+          const replaced = previous.get(keys);
+          if (replaced) {
+            URL.revokeObjectURL(replaced.url);
+            previewUrlsRef.current = previewUrlsRef.current.filter((candidate) => candidate !== replaced.url);
+          }
+          return new Map(previous).set(keys, { blob: render.blob, width: render.width, height: render.height, url, accent: render.accent });
+        });
       }
     })()
       .catch(() => {
@@ -368,7 +478,7 @@ export function SkinUploadModal({
     return () => {
       cancelled = true;
     };
-  }, [imported]);
+  }, [imported, backdrop]);
 
   const addScreenshots = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -415,7 +525,7 @@ export function SkinUploadModal({
       // Reuse a still-valid ticket across retries so a network blip does not
       // burn the per-user pending-upload budget.
       if (!ticketRef.current) {
-        const started = await startSkinUpload({ data: { name: trimmedName, description: description.trim() } });
+        const started = await startSkinUpload({ data: { name: trimmedName, author: author.trim(), description: description.trim() } });
         if (!started.ok) {
           setStep("form");
           setError(startErrorMessage(started.error));
@@ -478,6 +588,7 @@ export function SkinUploadModal({
       report("Publishing.", 0);
 
       const skin = await finishSkinUpload(ticket.id, ticket.token);
+      markSkinsListStale();
       setPublished(skin);
       setStep("done");
       onPublished(skin);
@@ -490,7 +601,7 @@ export function SkinUploadModal({
       }
       setStep("form");
     }
-  }, [file, name, description, onPublished, previews, screenshots, selectedKeymode]);
+  }, [file, name, author, description, onPublished, previews, screenshots, selectedKeymode]);
 
   const uploading = step === "uploading";
 
@@ -542,6 +653,7 @@ export function SkinUploadModal({
                     dragActive={dragActive}
                     setDragActive={setDragActive}
                     error={error}
+                    reading={reading}
                     fileInputRef={fileInputRef}
                     onFiles={handleOskFiles}
                   />
@@ -552,10 +664,16 @@ export function SkinUploadModal({
                     uploading={uploading}
                     previews={previews}
                     previewBusy={previewBusy}
+                    backdrop={backdrop}
+                    setBackdrop={setBackdrop}
+                    assetGroups={assetGroups}
+                    resolveAssetUrl={resolveAssetUrl}
                     selectedKeymode={selectedKeymode}
                     setSelectedKeymode={setSelectedKeymode}
                     name={name}
                     setName={setName}
+                    author={author}
+                    setAuthor={setAuthor}
                     description={description}
                     setDescription={setDescription}
                     screenshots={screenshots}
@@ -582,27 +700,31 @@ function PickStep({
   dragActive,
   setDragActive,
   error,
+  reading,
   fileInputRef,
   onFiles,
 }: {
   dragActive: boolean;
   setDragActive: (active: boolean) => void;
   error: string | null;
+  reading: { name: string; percent: number | null } | null;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   onFiles: (files: FileList | null) => Promise<void>;
 }) {
+  const busy = reading !== null;
   return (
     <>
       <button
         type="button"
+        disabled={busy}
         onClick={() => fileInputRef.current?.click()}
         onDragEnter={(event) => {
           event.preventDefault();
-          setDragActive(true);
+          if (!busy) setDragActive(true);
         }}
         onDragOver={(event) => {
           event.preventDefault();
-          setDragActive(true);
+          if (!busy) setDragActive(true);
         }}
         onDragLeave={(event) => {
           event.preventDefault();
@@ -611,24 +733,45 @@ function PickStep({
         onDrop={(event) => {
           event.preventDefault();
           setDragActive(false);
-          void onFiles(event.dataTransfer.files);
+          if (!busy) void onFiles(event.dataTransfer.files);
         }}
-        className={`relative block w-full overflow-hidden rounded-xl border transition-colors cursor-pointer ${
-          dragActive ? "border-osu-pink/70 bg-osu-b5" : "border-osu-b3/60 bg-osu-b4 hover:border-osu-pink/45"
+        className={`relative block w-full overflow-hidden rounded-xl border transition-colors ${
+          busy
+            ? "border-osu-b3/60 bg-osu-b4 cursor-default"
+            : dragActive
+              ? "border-osu-pink/70 bg-osu-b5 cursor-pointer"
+              : "border-osu-b3/60 bg-osu-b4 cursor-pointer hover:border-osu-pink/45"
         }`}
       >
         <DropTriangles active={dragActive} />
         <div className="relative z-10 flex min-h-[240px] flex-col items-center justify-center gap-2.5 px-6 py-10 text-center">
-          <Upload
-            className={`h-8 w-8 transition-colors ${dragActive ? "text-osu-pink-light" : "text-osu-f1"}`}
-            aria-hidden="true"
-          />
-          <div>
-            <div className="text-sm font-semibold text-white">
-              {dragActive ? "Drop to read it" : "Drop an .osk here, or click to browse"}
+          {reading ? (
+            <div className="w-full max-w-[340px]">
+              <div className="truncate text-sm font-semibold text-white">Reading {reading.name}</div>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-osu-b5">
+                <div
+                  className="h-full bg-osu-pink transition-[width] duration-100"
+                  style={{ width: `${reading.percent ?? 2}%` }}
+                />
+              </div>
+              <div className="mt-1.5 text-[11px] tabular-nums text-osu-f1">
+                {reading.percent == null ? "Opening the archive..." : `Decoding the skin's images, ${reading.percent}%`}
+              </div>
             </div>
-            <div className="mt-1 text-[11px] text-osu-f1">Up to 50 MB.</div>
-          </div>
+          ) : (
+            <>
+              <Upload
+                className={`h-8 w-8 transition-colors ${dragActive ? "text-osu-pink-light" : "text-osu-f1"}`}
+                aria-hidden="true"
+              />
+              <div>
+                <div className="text-sm font-semibold text-white">
+                  {dragActive ? "Drop to read it" : "Drop an .osk here, or click to browse"}
+                </div>
+                <div className="mt-1 text-[11px] text-osu-f1">Up to 50 MB.</div>
+              </div>
+            </>
+          )}
         </div>
       </button>
       <input
@@ -684,10 +827,16 @@ function FormStep({
   uploading,
   previews,
   previewBusy,
+  backdrop,
+  setBackdrop,
+  assetGroups,
+  resolveAssetUrl,
   selectedKeymode,
   setSelectedKeymode,
   name,
   setName,
+  author,
+  setAuthor,
   description,
   setDescription,
   screenshots,
@@ -704,10 +853,16 @@ function FormStep({
   uploading: boolean;
   previews: Map<number, RenderedPreview>;
   previewBusy: boolean;
+  backdrop: PreviewBackdrop;
+  setBackdrop: (backdrop: PreviewBackdrop) => void;
+  assetGroups: SkinAssetGroup[] | null;
+  resolveAssetUrl: (path: string) => Promise<string | null>;
   selectedKeymode: number;
   setSelectedKeymode: (keys: number) => void;
   name: string;
   setName: (name: string) => void;
+  author: string;
+  setAuthor: (author: string) => void;
   description: string;
   setDescription: (description: string) => void;
   screenshots: ProcessedScreenshot[];
@@ -722,16 +877,18 @@ function FormStep({
   const keymodes = imported?.summary.keymodes ?? [];
   const percent = progress.total > 0 ? Math.min(100, Math.round((progress.done / progress.total) * 100)) : 0;
   const heroPreview = previews.get(selectedKeymode);
-  const summary = imported?.summary;
-  const contentsLine = summary
-    ? [
-        `${summary.noteAssets} note images`,
-        `${summary.receptorAssets} key images`,
-        summary.comboDigits > 0 ? "combo font" : null,
-        summary.judgementAssets > 0 ? "judgements" : null,
-        summary.soundAssets > 0 ? `${summary.soundAssets} hitsounds` : null,
-      ].filter(Boolean).join(" · ")
-    : "";
+  // Keymodes whose [Mania] block resolved no note images render with flat
+  // colour fallbacks; flag them so a broken block is obvious before publish.
+  const keymodesWithoutNoteArt = useMemo(() => {
+    if (!imported) return new Set<number>();
+    const missing = new Set<number>();
+    for (const keys of imported.summary.keymodes) {
+      const profile = imported.settings.keymodeProfiles[String(keys)];
+      const hasNoteArt = profile?.assets.columns.some((column) => column.tap || column.lnHead || column.lnBody);
+      if (!hasNoteArt) missing.add(keys);
+    }
+    return missing;
+  }, [imported]);
 
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
@@ -751,6 +908,7 @@ function FormStep({
           {keymodes.map((keys) => {
             const preview = previews.get(keys);
             const selected = selectedKeymode === keys;
+            const missingNoteArt = keymodesWithoutNoteArt.has(keys);
             return (
               <button
                 key={keys}
@@ -758,6 +916,7 @@ function FormStep({
                 disabled={uploading}
                 onClick={() => setSelectedKeymode(keys)}
                 aria-pressed={selected}
+                title={missingNoteArt ? `The ${keys}K block resolves no note images; the preview shows flat colours.` : undefined}
                 className={`w-[104px] overflow-hidden rounded-lg border text-left transition-colors duration-100 cursor-pointer disabled:cursor-default ${
                   selected ? "border-osu-pink" : "border-osu-b3/40 hover:border-osu-f1/40"
                 }`}
@@ -769,17 +928,60 @@ function FormStep({
                     <div className="flex h-full items-center justify-center text-[10px] text-osu-f1/60">rendering</div>
                   )}
                 </div>
-                <div className={`px-1.5 py-0.5 text-[10.5px] font-bold tabular-nums ${selected ? "bg-osu-pink text-white" : "bg-osu-b4 text-osu-l2"}`}>
+                <div className={`flex items-center gap-1 px-1.5 py-0.5 text-[10.5px] font-bold tabular-nums ${selected ? "bg-osu-pink text-white" : "bg-osu-b4 text-osu-l2"}`}>
                   {keys}K{selected ? " · cover" : ""}
+                  {missingNoteArt && <span className={selected ? "text-white/80" : "text-osu-yellow"} aria-hidden="true">!</span>}
                 </div>
               </button>
             );
           })}
         </div>
-        {contentsLine && (
-          <div className="mt-2 text-[11px] text-osu-f1" title="Read from the skin file">
-            {contentsLine}
+        {keymodesWithoutNoteArt.has(selectedKeymode) && (
+          <p className="mt-2 text-[11px] font-semibold text-osu-yellow">
+            The {selectedKeymode}K block resolves no note images, so this preview uses flat colours.
+          </p>
+        )}
+
+        <div className="mt-3 flex flex-col gap-1.5">
+          <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Preview backdrop</span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              disabled={uploading || previewBusy}
+              onClick={() => setBackdrop("flat")}
+              aria-pressed={backdrop === "flat"}
+              title="Flat backdrop tinted with the skin's accent"
+              className={`grid h-8 w-[52px] place-items-center rounded border text-[10px] font-bold text-osu-l2 transition-colors cursor-pointer disabled:cursor-default ${
+                backdrop === "flat" ? "border-osu-pink bg-osu-b5" : "border-osu-b3/40 bg-osu-b5 hover:border-osu-f1/40"
+              }`}
+            >
+              flat
+            </button>
+            {SKIN_PREVIEW_BACKGROUND_SETS.map((setId) => (
+              <button
+                key={setId}
+                type="button"
+                disabled={uploading || previewBusy}
+                onClick={() => setBackdrop(setId)}
+                aria-pressed={backdrop === setId}
+                aria-label={`Use map cover ${setId} as the backdrop`}
+                className={`h-8 w-[52px] overflow-hidden rounded border transition-colors cursor-pointer disabled:cursor-default ${
+                  backdrop === setId ? "border-osu-pink" : "border-osu-b3/40 hover:border-osu-f1/40"
+                }`}
+              >
+                <img
+                  src={skinPreviewBackgroundThumbUrl(setId)}
+                  alt=""
+                  loading="lazy"
+                  className="h-full w-full object-cover"
+                />
+              </button>
+            ))}
           </div>
+        </div>
+
+        {assetGroups && assetGroups.length > 0 && (
+          <DetectedAssets groups={assetGroups} resolve={resolveAssetUrl} />
         )}
       </div>
 
@@ -797,6 +999,20 @@ function FormStep({
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
+            Made by <span className="normal-case tracking-normal text-osu-f1/70">(from skin.ini, credited on the card)</span>
+          </span>
+          <input
+            type="text"
+            value={author}
+            maxLength={SKIN_AUTHOR_MAX_LENGTH}
+            disabled={uploading}
+            onChange={(event) => setAuthor(event.target.value)}
+            placeholder="The skin's original creator"
+            className="w-full rounded-lg border border-osu-b3/30 bg-osu-b4 px-3 py-2 text-[13.5px] text-osu-l1 transition-colors placeholder:text-osu-f1/45 focus:border-osu-pink/50 focus:outline-none"
+          />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
             Description <span className="normal-case tracking-normal text-osu-f1/70">(optional)</span>
           </span>
           <textarea
@@ -805,7 +1021,7 @@ function FormStep({
             rows={3}
             disabled={uploading}
             onChange={(event) => setDescription(event.target.value)}
-            placeholder="What the skin is for, what changed in this edit..."
+            placeholder="What you changed, where the parts are from, best keymodes..."
             className="w-full resize-y rounded-lg border border-osu-b3/30 bg-osu-b4 px-3 py-2 text-[13px] leading-relaxed text-osu-l1 transition-colors placeholder:text-osu-f1/45 focus:border-osu-pink/50 focus:outline-none"
           />
         </label>
@@ -884,6 +1100,52 @@ function FormStep({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// Chip-per-group summary of the archive; clicking a chip expands it into the
+// same asset tiles the skin page explorer renders, so uploaders can inspect
+// everything before publishing.
+function DetectedAssets({
+  groups,
+  resolve,
+}: {
+  groups: SkinAssetGroup[];
+  resolve: (path: string) => Promise<string | null>;
+}) {
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const open = groups.find((group) => group.key === openGroup) ?? null;
+
+  return (
+    <div className="mt-3 flex flex-col gap-1.5">
+      <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Detected in the .osk</span>
+      <div className="flex flex-wrap gap-1.5" title="Grouped by osu!'s known asset names; click a group to see its files">
+        {groups.map((group) => {
+          const selected = group.key === openGroup;
+          return (
+            <button
+              key={group.key}
+              type="button"
+              onClick={() => setOpenGroup(selected ? null : group.key)}
+              aria-pressed={selected}
+              className={`rounded px-2 py-0.5 text-[11px] transition-colors cursor-pointer ${
+                selected ? "bg-osu-pink text-white" : "bg-osu-b5 text-osu-l2 hover:text-white"
+              }`}
+            >
+              {group.title.toLowerCase()}{" "}
+              <span className={`font-bold tabular-nums ${selected ? "text-white" : "text-osu-l1"}`}>{group.entries.length}</span>
+            </button>
+          );
+        })}
+      </div>
+      {open && (
+        <div className="mt-1 flex max-h-[240px] flex-wrap gap-2 overflow-y-auto rounded-lg border border-osu-b3/30 bg-osu-b5/40 p-2.5">
+          {open.entries.map((entry) => (
+            <SkinAssetTile key={entry.primaryPath} entry={entry} resolve={resolve} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

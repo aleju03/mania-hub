@@ -1,5 +1,5 @@
 import type { ReplaySkinKeymodeProfile, ReplaySkinSettings } from "./replay-skin";
-import { getReplaySkinProfile } from "./replay-skin";
+import { getReplaySkinProfile, OSU_MANIA_DEFAULT_COLUMN_LINE_WIDTH } from "./replay-skin";
 
 // Composes the browse-card preview for an uploaded skin: a fixed 1280x720
 // playfield snippet rendered from the skin's own note/receptor/LN assets, with
@@ -16,8 +16,11 @@ import { getReplaySkinProfile } from "./replay-skin";
 export const SKIN_PREVIEW_WIDTH = 1280;
 export const SKIN_PREVIEW_HEIGHT = 720;
 const PREVIEW_BACKGROUND = "#16121d";
-const STAGE_MAX_FRACTION = 0.42;
-const LANE_MAX_PIXELS = 150;
+// Safety cap only: the true stage width comes from the game's 480-unit
+// vertical space (a 65-wide column is 65/480 of the screen height), which on
+// a 16:9 canvas reproduces the in-game proportions exactly. Ultra-wide skins
+// (10K at max column width) still get clamped so the stage fits the card.
+const STAGE_MAX_FRACTION = 0.94;
 // The game's HitPosition for mania skins sits around 440-450 of 480 (~92-94%);
 // 0.9 keeps that proportion while leaving the key area readable on a card.
 const HIT_LINE_FRACTION = 0.9;
@@ -70,8 +73,8 @@ export function computeSkinPreviewLayout(
   const spacing = Math.max(0, profile.columnSpacing);
   const rawStage = rawWidths.reduce((sum, width) => sum + width, 0) + spacing * (keys - 1);
   const maxStage = canvasWidth * STAGE_MAX_FRACTION;
-  const widestLane = Math.max(...rawWidths);
-  const scale = Math.min(maxStage / rawStage, LANE_MAX_PIXELS / widestLane);
+  // In-game scale: skin units are 480ths of the screen height.
+  const scale = Math.min(canvasHeight / 480, maxStage / rawStage);
   const laneWidths = rawWidths.map((width) => width * scale);
   const scaledSpacing = spacing * scale;
   const stageWidth = laneWidths.reduce((sum, width) => sum + width, 0) + scaledSpacing * (keys - 1);
@@ -159,20 +162,31 @@ export interface SkinPreviewRenderOptions {
 }
 
 // Real ranked mania sets whose covers back the preview like in-game map art.
-// All verified to have a fullsize cover on assets.ppy.sh.
-const SKIN_PREVIEW_BACKGROUND_SETS = [
-  2556057, 2297326, 2127200, 1049506, 712142, 2344640, 849169,
+// All verified to have a fullsize cover on assets.ppy.sh. Exported so the
+// upload modal can offer them as a backdrop picker.
+export const SKIN_PREVIEW_BACKGROUND_SETS = [
+  2556057, 2297326, 2127200, 476691, 712142, 2344640, 849169,
   2076003, 2045674, 1297881, 2485019, 1112479, 2519924, 2383217,
 ];
 
-// Picks a random map cover and loads it through the same-origin
-// /api/background proxy (assets.ppy.sh sends no CORS headers, so a direct
-// load would taint the canvas). Resolves null when nothing loads; the
-// renderer then uses its flat fallback backdrop.
+// Small direct thumbnail for picker rows; plain <img> display needs no CORS.
+export function skinPreviewBackgroundThumbUrl(setId: number): string {
+  return `https://assets.ppy.sh/beatmaps/${setId}/covers/card.jpg`;
+}
+
+// Loads one set's cover through the same-origin /api/background proxy
+// (assets.ppy.sh sends no CORS headers, so a direct load would taint the
+// canvas). Resolves null when the cover cannot load; the renderer then uses
+// its flat triangle backdrop.
+export function loadSkinPreviewBackgroundForSet(setId: number): Promise<HTMLImageElement | null> {
+  return decodeImage(`/api/background?beatmapsetId=${setId}&inline=1&cover=fullsize`).catch(() => null);
+}
+
+// Random pick with fallbacks, for callers that do not care which cover.
 export async function loadSkinPreviewBackground(): Promise<HTMLImageElement | null> {
   const pool = [...SKIN_PREVIEW_BACKGROUND_SETS].sort(() => Math.random() - 0.5).slice(0, 3);
   for (const setId of pool) {
-    const image = await decodeImage(`/api/background?beatmapsetId=${setId}&inline=1&cover=fullsize`).catch(() => null);
+    const image = await loadSkinPreviewBackgroundForSet(setId);
     if (image) return image;
   }
   return null;
@@ -241,13 +255,9 @@ export async function renderSkinPreview(
   // Stage: dark but slightly translucent, like a dimmed in-game playfield.
   ctx.fillStyle = "rgba(4, 3, 8, 0.72)";
   ctx.fillRect(layout.stageX, 0, layout.stageWidth, SKIN_PREVIEW_HEIGHT);
-  ctx.fillStyle = "rgba(255, 255, 255, 0.06)";
-  for (let col = 1; col < keys; col += 1) {
-    ctx.fillRect(layout.laneXs[col] - 0.5, 0, 1, SKIN_PREVIEW_HEIGHT);
-  }
-  ctx.fillStyle = accent;
-  ctx.fillRect(layout.stageX - 2, 0, 2, SKIN_PREVIEW_HEIGHT);
-  ctx.fillRect(layout.stageX + layout.stageWidth, 0, 2, SKIN_PREVIEW_HEIGHT);
+  // Column lines exactly as skin.ini declares them (ColumnLineWidth +
+  // ColourColumnLine), instead of invented separators or accent side borders.
+  drawColumnLines(ctx, profile, layout);
 
   // Key images: width stretched to the lane, height at the texture's NATIVE
   // size in the game's 768-unit space (pixel height / @2x scale, then into
@@ -284,9 +294,12 @@ export async function renderSkinPreview(
     }
   }
 
-  // Hit line across the stage under the notes.
-  ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
-  ctx.fillRect(layout.stageX, judgmentLineY - 1, layout.stageWidth, 2);
+  // The white line at HitPosition, only when skin.ini asks for it
+  // (JudgementLine, default on); circle and arrow skins turn it off.
+  if (profile.judgementLine) {
+    ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
+    ctx.fillRect(layout.stageX, judgmentLineY - 1, layout.stageWidth, 2);
+  }
 
   for (const ln of pattern.longNotes) {
     drawLongNote(ctx, profile, images, layout, ln, settings, noteAssetHeight, mapY);
@@ -299,6 +312,38 @@ export async function renderSkinPreview(
 
   const blob = await canvasToBlob(canvas);
   return { blob, width: SKIN_PREVIEW_WIDTH, height: SKIN_PREVIEW_HEIGHT, mime: blob.type || "image/png", accent };
+}
+
+// skin.ini column lines: keys+1 boundaries, outer stage edges included. An
+// empty columnLineWidths means the skin never set the key, which in stable
+// renders the 2-unit default at every boundary; explicit zeros hide lines.
+function drawColumnLines(
+  ctx: CanvasRenderingContext2D,
+  profile: Pick<ReplaySkinKeymodeProfile, "columnLineWidths" | "columnLineColor">,
+  layout: SkinPreviewLayout,
+): void {
+  const keys = layout.laneWidths.length;
+  const widths = profile.columnLineWidths;
+  const lineWidth = (boundary: number) =>
+    widths.length > 0 ? (widths[boundary] ?? 0) : OSU_MANIA_DEFAULT_COLUMN_LINE_WIDTH;
+  ctx.fillStyle = profile.columnLineColor || "#ffffff";
+  for (let boundary = 0; boundary <= keys; boundary += 1) {
+    const units = lineWidth(boundary);
+    if (units <= 0) continue;
+    const width = Math.max(1, units * layout.scale);
+    let x: number;
+    if (boundary === 0) {
+      x = layout.stageX;
+    } else if (boundary === keys) {
+      x = layout.stageX + layout.stageWidth - width;
+    } else {
+      // Centre the line in the gap between the two lanes (zero-width when
+      // there is no column spacing).
+      const gapCenter = (layout.laneXs[boundary - 1] + layout.laneWidths[boundary - 1] + layout.laneXs[boundary]) / 2;
+      x = gapCenter - width / 2;
+    }
+    ctx.fillRect(x, 0, width, SKIN_PREVIEW_HEIGHT);
+  }
 }
 
 // Average the opaque pixels of the first tap/LN-head sprite to get the
@@ -515,11 +560,20 @@ function drawJudgementAndCombo(
 ): void {
   const centerX = layout.stageX + layout.stageWidth / 2;
   const averageLane = layout.stageWidth / Math.max(1, layout.laneWidths.length);
+  // The MAX judgement, exactly as the skin defines it: a skin that ships a
+  // transparent 300g hides perfect hits in game, so the preview stays empty
+  // there too. hit300 only stands in when the skin has no 300g asset at all.
   const judgementAsset = profile.assets.judgements.hit300g ?? profile.assets.judgements.hit300;
   const judgementImage = judgementAsset ? images.get(judgementAsset.src) : undefined;
+  const judgementScale = judgementAsset?.scale && judgementAsset.scale > 0 ? judgementAsset.scale : 1;
   if (judgementImage) {
-    const width = Math.min(layout.stageWidth * 0.55, judgementImage.naturalWidth);
-    const height = judgementImage.naturalHeight * (width / judgementImage.naturalWidth);
+    // Native texture pixels in the game's 768-unit space (the key-area rule),
+    // so @2x art draws at half its pixel size and tiny textures stay tiny
+    // like they do in game. Capped for absurdly wide art.
+    const nativeWidth = (judgementImage.naturalWidth || 1) / judgementScale;
+    const nativeHeight = (judgementImage.naturalHeight || 1) / judgementScale;
+    const width = Math.min(layout.stageWidth * 0.9, nativeWidth * (480 / 768) * layout.scale);
+    const height = nativeHeight * (width / nativeWidth);
     ctx.drawImage(judgementImage, centerX - width / 2, SKIN_PREVIEW_HEIGHT * 0.52 - height / 2, width, height);
   }
 

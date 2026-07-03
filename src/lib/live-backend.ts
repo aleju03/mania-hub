@@ -992,6 +992,9 @@ export interface LiveFarmHelperSnapshot {
   view: LiveFarmHelperView;
   peerBand: { mode: string; count: number; farmDataCount: number; minPp: number; maxPp: number };
   totalPotentialPp: number;
+  // Optional: older backend builds don't send it. Count of qualifying recs
+  // before server-side truncation to the requested limit.
+  totalQualifying?: number;
   recs: LiveFarmHelperRec[];
   generatedAt: string;
 }

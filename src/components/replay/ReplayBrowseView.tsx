@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronLeft, ChevronRight, FileDown, Link2, Upload } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileDown, Link2, LoaderCircle, Upload } from "lucide-react";
 
 import { avatarImageSrc } from "#/components/ui/Avatar";
 import { GradeImg } from "#/components/ui/GradeImg";
@@ -303,6 +303,150 @@ function UploadReplayBrowser({
           <Link2 className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
           <span>Uploading gives you a share link for the replay.</span>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Recovery screen for an uploaded .osr whose beatmap can't be fetched from
+// osu! or the mirrors: explains why and takes the map as a local .osz/.osu.
+export function MissingBeatmapPanel({
+  reason,
+  beatmapLabel,
+  playerName,
+  error,
+  loading,
+  onPickFile,
+  onCancel,
+}: {
+  reason: "unlisted" | "file-unavailable";
+  beatmapLabel: string | null;
+  playerName: string;
+  error: string | null;
+  loading: boolean;
+  onPickFile: (file: File) => void;
+  onCancel: () => void;
+}) {
+  const [dragActive, setDragActive] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleFiles = useCallback((files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    onPickFile(file);
+    if (inputRef.current) inputRef.current.value = "";
+  }, [onPickFile]);
+
+  const who = playerName ? `${playerName}'s replay` : "The replay";
+  const detail = reason === "unlisted"
+    ? `${who} loaded, but its beatmap isn't on osu! (unsubmitted or deleted), so the chart can't be downloaded.`
+    : `${who} loaded, but the chart file for ${beatmapLabel ?? "this map"} can't be downloaded right now.`;
+
+  return (
+    <div className="mx-auto max-w-xl">
+      <h3 className="mb-3 text-center text-sm font-semibold uppercase tracking-wider text-osu-f1">
+        This replay needs its beatmap
+      </h3>
+
+      <p className="mb-4 text-center text-xs leading-relaxed text-osu-f1">
+        {detail} If you have the map, drop its .osz here and the replay plays from your copy.
+      </p>
+
+      <button
+        type="button"
+        disabled={loading}
+        onClick={() => inputRef.current?.click()}
+        onDragEnter={(event) => {
+          event.preventDefault();
+          setDragActive(true);
+        }}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setDragActive(true);
+        }}
+        onDragLeave={(event) => {
+          event.preventDefault();
+          setDragActive(false);
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDragActive(false);
+          if (!loading) handleFiles(event.dataTransfer.files);
+        }}
+        className={`relative block w-full overflow-hidden rounded-xl border transition-colors ${
+          loading
+            ? "cursor-wait border-osu-b3/60 bg-osu-b4"
+            : dragActive
+              ? "cursor-pointer border-osu-pink/70 bg-osu-b5"
+              : "cursor-pointer border-osu-b3/60 bg-osu-b4 hover:border-osu-pink/45"
+        }`}
+      >
+        <svg
+          viewBox="0 0 640 260"
+          preserveAspectRatio="xMidYMid slice"
+          className={`pointer-events-none absolute inset-0 h-full w-full transition-[color,opacity] duration-150 ${
+            dragActive ? "text-osu-pink-light opacity-100" : "text-osu-pink opacity-80"
+          }`}
+          aria-hidden="true"
+        >
+          {UPLOAD_BG_TRIANGLES.map((triangle, index) => (
+            <polygon
+              key={index}
+              points={triangle.points}
+              fill="currentColor"
+              fillOpacity={triangle.opacity}
+            />
+          ))}
+        </svg>
+
+        <div className="relative z-10 flex min-h-[204px] flex-col items-center justify-center gap-2.5 px-6 py-10 text-center">
+          {loading ? (
+            <LoaderCircle className="h-8 w-8 animate-spin text-osu-pink-light" aria-hidden="true" />
+          ) : (
+            <Upload
+              className={`h-8 w-8 transition-colors ${dragActive ? "text-osu-pink-light" : "text-osu-f1"}`}
+              aria-hidden="true"
+            />
+          )}
+          <div>
+            <div className="text-sm font-semibold text-white">
+              {loading
+                ? "Checking the difficulties"
+                : dragActive
+                  ? "Drop to check it"
+                  : "Drag the map's .osz here, or click to browse"}
+            </div>
+            <div className="mt-1 text-[11px] text-osu-f1">
+              {loading ? "Matching against the replay's checksum." : "The exact .osu file works too."}
+            </div>
+          </div>
+        </div>
+      </button>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".osz,.osu,.zip,application/octet-stream"
+        className="sr-only"
+        onChange={(event) => handleFiles(event.target.files)}
+      />
+
+      {error && (
+        <p className="mt-3 rounded-lg bg-osu-red/10 px-4 py-2 text-center text-xs text-osu-red-light">{error}</p>
+      )}
+
+      <p className="mt-3 text-center text-[11px] text-osu-f1">
+        The map stays in your browser. Anyone opening the share link is asked for it too.
+      </p>
+
+      <div className="mt-4 text-center">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="cursor-pointer text-xs font-semibold text-osu-f1 transition-colors hover:text-white"
+        >
+          Choose a different replay
+        </button>
       </div>
     </div>
   );

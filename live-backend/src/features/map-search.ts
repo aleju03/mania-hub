@@ -333,7 +333,11 @@ async function writeBuildCursor(db: Db, cursor: number): Promise<void> {
 }
 
 async function enqueueBuild(queue: JobQueue, cursor: number): Promise<void> {
-  await queue.enqueue(MAP_SEARCH_BUILD_JOB, `${MAP_SEARCH_BUILD_JOB}:${cursor}`, { cursor }, { priority: BUILD_JOB_PRIORITY });
+  // replaceDone matters: a revision-bumped rebuild reuses the same per-cursor
+  // dedupe keys as the previous completed build, and without it the enqueue
+  // silently no-ops against those done rows until retention prunes them (which
+  // is exactly how the r2 rebuild failed to start on prod).
+  await queue.enqueue(MAP_SEARCH_BUILD_JOB, `${MAP_SEARCH_BUILD_JOB}:${cursor}`, { cursor }, { priority: BUILD_JOB_PRIORITY, replaceDone: true });
 }
 
 const STALE_PRUNE_KEY = "map_search_index_stale_pruned:v1";

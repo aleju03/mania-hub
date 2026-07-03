@@ -11,9 +11,10 @@ import {
 describe("computeSkinPreviewLayout", () => {
   const profile = { columnWidth: 36, columnWidths: [], columnSpacing: 0 };
 
-  it("centers the stage and keeps it within the width budget", () => {
+  it("centers the stage and scales lanes like the game (skin units are 480ths of the height)", () => {
     const layout = computeSkinPreviewLayout(profile, 4);
-    expect(layout.stageWidth).toBeLessThanOrEqual(SKIN_PREVIEW_WIDTH * 0.42 + 0.001);
+    // 36-unit columns at a 720-high canvas: 36 * (720 / 480) = 54px each.
+    expect(layout.laneWidths[0]).toBeCloseTo(36 * (SKIN_PREVIEW_HEIGHT / 480), 5);
     const left = layout.stageX;
     const right = SKIN_PREVIEW_WIDTH - (layout.stageX + layout.stageWidth);
     expect(Math.abs(left - right)).toBeLessThan(0.001);
@@ -21,11 +22,10 @@ describe("computeSkinPreviewLayout", () => {
     expect(layout.laneWidths).toHaveLength(4);
   });
 
-  it("caps individual lane width for low key counts", () => {
-    const layout = computeSkinPreviewLayout({ columnWidth: 400, columnWidths: [], columnSpacing: 0 }, 2);
-    for (const width of layout.laneWidths) {
-      expect(width).toBeLessThanOrEqual(150.001);
-    }
+  it("clamps ultra-wide stages to the canvas", () => {
+    const layout = computeSkinPreviewLayout({ columnWidth: 160, columnWidths: [], columnSpacing: 0 }, 10);
+    expect(layout.stageWidth).toBeLessThanOrEqual(SKIN_PREVIEW_WIDTH * 0.94 + 0.001);
+    expect(layout.stageX).toBeGreaterThanOrEqual(0);
   });
 
   it("honours per-column widths from the skin", () => {

@@ -15,6 +15,7 @@ export const SKIN_MAX_PENDING_PER_USER = 2;
 export const SKIN_MAX_SCREENSHOTS = 4;
 export const SKIN_TOKEN_TTL_MS = 30 * 60_000;
 export const SKIN_NAME_MAX_LENGTH = 80;
+export const SKIN_AUTHOR_MAX_LENGTH = 64;
 export const SKIN_DESCRIPTION_MAX_LENGTH = 500;
 const SKIN_LIST_MAX_PAGE_SIZE = 50;
 
@@ -35,6 +36,9 @@ export interface SkinRow {
   ownerUserId: number;
   ownerUsername: string;
   name: string;
+  // Who made the skin (skin.ini Author or uploader-provided); distinct from
+  // the uploader.
+  author: string | null;
   description: string | null;
   keymodes: number[];
   accentColor: string | null;
@@ -61,6 +65,7 @@ export interface SkinSummary {
   id: string;
   slug: string | null;
   name: string;
+  author: string | null;
   description: string | null;
   ownerUserId: number;
   ownerUsername: string;
@@ -85,11 +90,12 @@ export type CreatePendingSkinResult =
 
 export async function createPendingSkin(
   db: Db,
-  input: { ownerUserId: number; ownerUsername: string; name: string; description?: string | null },
+  input: { ownerUserId: number; ownerUsername: string; name: string; author?: string | null; description?: string | null },
 ): Promise<CreatePendingSkinResult> {
   const name = cleanText(input.name, SKIN_NAME_MAX_LENGTH);
   if (!name) return { ok: false, error: "invalid_name" };
   const ownerUsername = cleanText(input.ownerUsername, 32) || `user ${input.ownerUserId}`;
+  const author = cleanText(input.author ?? "", SKIN_AUTHOR_MAX_LENGTH) || null;
   const description = cleanMultilineText(input.description ?? "", SKIN_DESCRIPTION_MAX_LENGTH) || null;
 
   const counts = (await exec(
@@ -110,10 +116,10 @@ export async function createPendingSkin(
   await exec(
     db,
     `insert into skins (
-       id, owner_user_id, owner_username, name, description, search_text,
+       id, owner_user_id, owner_username, name, author, description, search_text,
        status, upload_token, token_expires_at, created_at, updated_at
-     ) values (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`,
-    [id, input.ownerUserId, ownerUsername, name, description, buildSearchText(name, ownerUsername), token, expiresAt, now, now],
+     ) values (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`,
+    [id, input.ownerUserId, ownerUsername, name, author, description, buildSearchText(name, ownerUsername, author), token, expiresAt, now, now],
   );
   return { ok: true, id, token, expiresAt };
 }
@@ -130,16 +136,20 @@ export async function getSkinForUpload(db: Db, id: string, token: string): Promi
 // not clobber a sampled accent already set by the preview upload.
 export async function attachSkinOsk(
   db: Db,
-  id: string,
-  patch: { key: string; url: string; sizeBytes: number; sha256: string; keymodes: number[]; accentColor: string | null },
+  skin: SkinRow,
+  patch: { key: string; url: string; sizeBytes: number; sha256: string; keymodes: number[]; accentColor: string | null; iniAuthor: string | null },
 ): Promise<void> {
+  // An author typed in the upload form wins; skin.ini's Author fills the gap.
+  const author = skin.author ?? (cleanText(patch.iniAuthor ?? "", SKIN_AUTHOR_MAX_LENGTH) || null);
   await exec(
     db,
     `update skins set
        osk_key = ?, osk_url = ?, osk_size_bytes = ?, osk_sha256 = ?,
-       keymodes_json = ?, accent_color = coalesce(accent_color, ?), updated_at = ?
+       keymodes_json = ?, accent_color = coalesce(accent_color, ?),
+       author = ?, search_text = ?, updated_at = ?
      where id = ?`,
-    [patch.key, patch.url, patch.sizeBytes, patch.sha256, JSON.stringify(patch.keymodes), patch.accentColor, nowIso(), id],
+    [patch.key, patch.url, patch.sizeBytes, patch.sha256, JSON.stringify(patch.keymodes), patch.accentColor,
+     author, buildSearchText(skin.name, skin.ownerUsername, author), nowIso(), skin.id],
   );
 }
 
@@ -371,6 +381,7 @@ export function toSkinSummary(row: SkinRow): SkinSummary {
     id: row.id,
     slug: row.slug,
     name: row.name,
+    author: row.author,
     description: row.description,
     ownerUserId: row.ownerUserId,
     ownerUsername: row.ownerUsername,
@@ -403,6 +414,7 @@ function rowToSkin(row: Record<string, unknown>): SkinRow {
     ownerUserId: Number(row.owner_user_id) || 0,
     ownerUsername: String(row.owner_username ?? ""),
     name: String(row.name ?? ""),
+    author: textOrNull(row.author),
     description: textOrNull(row.description),
     keymodes: normalizeKeymodes(parseJson<unknown>(String(row.keymodes_json ?? "[]"), [])),
     accentColor: textOrNull(row.accent_color),
@@ -465,8 +477,8 @@ function normalizeKeymodePreviews(value: unknown): SkinKeymodePreview[] {
     .sort((a, b) => a.keys - b.keys);
 }
 
-function buildSearchText(name: string, ownerUsername: string): string {
-  return [name, ownerUsername].join(" ").replace(/\s+/g, " ").trim().toLowerCase();
+function buildSearchText(name: string, ownerUsername: string, author: string | null): string {
+  return [name, author ?? "", ownerUsername].join(" ").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 function tokenMatches(expected: string, provided: string): boolean {

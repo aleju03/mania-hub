@@ -75,6 +75,9 @@ describe("replay skin settings", () => {
           columnSpacing: 2,
           columnWidths: [],
           columnSpacings: [],
+          columnLineWidths: [],
+          columnLineColor: "",
+          judgementLine: true,
           noteHeightScale: 50,
           assets: {
             columns: [],
@@ -217,6 +220,26 @@ describe("replay skin settings", () => {
     expect(code.startsWith("mhreplay3.")).toBe(true);
     expect(code.length).toBeLessThan(180);
     expect(payload?.name).toBe("insano");
+    expect(payload?.settings).toEqual(settings);
+  });
+
+  it("round-trips column line widths, colour, and judgement line through v3 share codes", () => {
+    const settings = normalizeReplaySkinSettings({
+      keymodeProfiles: {
+        8: {
+          columnWidths: [65, 65, 65, 65, 65, 65, 65, 65],
+          columnLineWidths: [0, 1, 0, 0, 0, 0, 0, 0, 0],
+          columnLineColor: "#ffffff96",
+          judgementLine: false,
+        },
+      },
+    });
+    const profile = settings.keymodeProfiles["8"];
+    expect(profile.columnLineWidths).toEqual([0, 1, 0, 0, 0, 0, 0, 0, 0]);
+    expect(profile.columnLineColor).toBe("#ffffff96");
+    expect(profile.judgementLine).toBe(false);
+
+    const payload = parseReplaySkinShareKey(createReplaySkinShareKey("lines", settings));
     expect(payload?.settings).toEqual(settings);
   });
 

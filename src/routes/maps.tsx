@@ -3912,7 +3912,7 @@ function MapDetailsContent({
         </a>
         <a
           href={osuDirectUrl}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-osu-b3/70 hover:bg-osu-b3 text-white/85 hover:text-white text-[12px] font-semibold transition-colors cursor-pointer"
+          className="hidden items-center gap-1.5 px-3 py-2 rounded-lg bg-osu-b3/70 hover:bg-osu-b3 text-white/85 hover:text-white text-[12px] font-semibold transition-colors cursor-pointer sm:inline-flex"
           title="Open in osu! client"
         >
           <OsuLogo className="h-[14px] w-[14px]" />

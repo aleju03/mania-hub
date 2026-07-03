@@ -6,7 +6,7 @@ import { join } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createDb, exec, json, migrate, type Db } from "../src/db.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION } from "../src/features/activity.js";
-import { buildMapSearchIndexBatch, getMapSearchPage, type MapSearchQuery } from "../src/features/map-search.js";
+import { buildMapSearchIndexBatch, ensureMapSearchIndexSeeded, getMapSearchPage, MAP_SEARCH_BUILD_JOB, type MapSearchQuery } from "../src/features/map-search.js";
 import { getMapCollection, getMapCollections, rebuildMapCollections } from "../src/features/map-collections.js";
 import { routeHttp } from "../src/http/snapshots.js";
 import { JobQueue } from "../src/jobs/queue.js";
@@ -206,6 +206,26 @@ describe("map search index", () => {
     expect(hardOnly.items[0].beatmapId).toBe(2);
     expect(hardOnly.items[0].diffCount).toBe(1);
     expect(hardOnly.items[0].diffs.map((diff) => diff.beatmapId)).toEqual([2]);
+  });
+
+  it("re-seeds the build even when a previous build left done jobs on the same cursors", async () => {
+    const db = await makeDb();
+    const queue = new JobQueue(db);
+    // Regression: a completed build leaves done jobs keyed build_map_search_index:<cursor>.
+    // A later rebuild (e.g. a BUILD_REVISION bump) reuses cursor 0, and without
+    // replaceDone the enqueue silently no-ops against that done row.
+    await queue.enqueue(MAP_SEARCH_BUILD_JOB, `${MAP_SEARCH_BUILD_JOB}:0`, { cursor: 0 });
+    const [job] = await queue.claim("test-worker", 1);
+    expect(job.type).toBe(MAP_SEARCH_BUILD_JOB);
+    await queue.complete(job.id);
+
+    await ensureMapSearchIndexSeeded(db, queue);
+    const row = (await exec(
+      db,
+      "select status from jobs where dedupe_key = ? limit 1",
+      [`${MAP_SEARCH_BUILD_JOB}:0`],
+    )).rows[0];
+    expect(String(row?.status)).toBe("queued");
   });
 
   it("builds pattern collections deduped by beatmapset", async () => {

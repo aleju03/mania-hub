@@ -3063,10 +3063,10 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
                 <div className="mt-4 rounded-lg border border-osu-b3/20 bg-osu-b5/35 p-3 sm:mt-5 sm:p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-[11px] font-bold uppercase text-osu-f1 sm:text-xs">Day pattern mix</div>
-                    <div className="text-[10px] text-osu-f1 sm:text-[11px]">by keymode</div>
+                    <div className="text-[10px] text-osu-f1 sm:text-[11px]">intensity 0-100</div>
                   </div>
                   {modalDay.skills && modalDay.skills.analyzedPlays > 0 ? (
-                    <ActivityPatternMix skills={modalDay.skills} />
+                    <ActivityPatternMix key={modalDay.date} skills={modalDay.skills} />
                   ) : dayDetailLoading ? (
                     <div className="mt-3 space-y-2">
                       <Skeleton className="h-3 rounded-full" />
@@ -3107,57 +3107,77 @@ function ActivityPatternMix({ skills }: { skills: ActivitySkillReadout }) {
       analyzedPlays: skills.analyzedPlays,
       totalPlays: skills.totalPlays,
     }];
+  const [selectedKeyModeIndex, setSelectedKeyModeIndex] = useState(0);
+  const activeIndex = Math.min(selectedKeyModeIndex, keyModes.length - 1);
+  const activeKeyMode = keyModes[activeIndex];
+  const entries = getActivityPatternEntries(activeKeyMode.patterns, activeKeyMode.keyCount).slice(0, 6);
   return (
-    <div className="mt-3 space-y-3">
-      {keyModes.map((keyMode, index) => (
-        <div key={`${keyMode.keyCount ?? "unknown"}:${index}`} className="rounded-md bg-osu-b4/45 p-2">
-          <div className="mb-2 flex items-center justify-between gap-3 text-[10px]">
-            <span className="font-black text-osu-l2">{formatActivityKeyCount(keyMode.keyCount) ?? "Unknown keys"}</span>
-            <span className="text-osu-f1">
-              {formatNumber(keyMode.analyzedPlays)} {keyMode.analyzedPlays === 1 ? "play" : "plays"}
-            </span>
-          </div>
-          <ActivityPatternBars patterns={keyMode.patterns} keyCount={keyMode.keyCount} />
-          {keyMode.analyzedPlays < keyMode.totalPlays && (
-            <div className="pt-1 text-[10px] text-osu-f1">
-              {formatNumber(keyMode.analyzedPlays)} of {formatNumber(keyMode.totalPlays)} plays analyzed
+    <div className="mt-3">
+      {keyModes.length > 1 && (
+        <div className="mb-3 flex flex-wrap gap-1">
+          {keyModes.map((keyMode, index) => {
+            const selected = index === activeIndex;
+            return (
+              <button
+                key={`${keyMode.keyCount ?? "unknown"}:${index}`}
+                type="button"
+                onClick={() => setSelectedKeyModeIndex(index)}
+                className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition-colors ${selected
+                    ? "bg-osu-pink text-white"
+                    : "bg-osu-b4/60 text-osu-f1 hover:bg-osu-b3/55 hover:text-osu-l2"
+                  }`}
+              >
+                {formatActivityKeyCount(keyMode.keyCount) ?? "Other"}
+                <span className={`ml-1 font-semibold ${selected ? "text-white/75" : "text-osu-f1/80"}`}>
+                  {formatNumber(keyMode.analyzedPlays)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {entries.length > 0 ? (
+        <div className="space-y-2.5">
+          {entries.map(({ key, label, value }) => (
+            <div key={key}>
+              <div className="mb-1 flex items-baseline justify-between gap-3">
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-osu-l2">
+                  <span className="h-2 w-2 shrink-0 rounded-[2px]" style={{ backgroundColor: getActivitySkillColor(key) }} />
+                  {label}
+                </span>
+                <span className="text-xs font-black text-white">{value}</span>
+              </div>
+              <div className="h-2 rounded-full bg-osu-b3/35">
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: `${value}%`, backgroundColor: getActivitySkillColor(key) }}
+                />
+              </div>
             </div>
-          )}
+          ))}
         </div>
-      ))}
-    </div>
-  );
-}
-
-function ActivityPatternBars({ patterns, keyCount }: { patterns: LivePlayerActivityPatterns; keyCount: number | null }) {
-  return (
-    <div className="space-y-2">
-      {getActivityPatternEntries(patterns, keyCount).slice(0, 6).map(({ key, label, value }) => (
-        <div key={key}>
-          <div className="mb-1 flex justify-between text-[11px]">
-            <span className="font-semibold text-osu-l2">{label}</span>
-            <span className="text-osu-f1">{value}%</span>
-          </div>
-          <div className="h-1.5 rounded-full bg-osu-b3/35">
-            <div
-              className="h-full rounded-full"
-              style={{ width: `${value}%`, backgroundColor: getActivitySkillColor(key) }}
-            />
-          </div>
+      ) : (
+        <div className="text-[11px] text-osu-f1">No pattern signal for this keymode yet.</div>
+      )}
+      {activeKeyMode.analyzedPlays < activeKeyMode.totalPlays && (
+        <div className="mt-2 text-[10px] text-osu-f1">
+          {formatNumber(activeKeyMode.analyzedPlays)} of {formatNumber(activeKeyMode.totalPlays)} plays analyzed
         </div>
-      ))}
+      )}
     </div>
   );
 }
 
 function ActivitySessionFlow({ day, timezone }: { day: ActivityDay; timezone: string }) {
-  const [selectedSegmentKey, setSelectedSegmentKey] = useState<string | null>(null);
   if (day.timeline.length === 0) return null;
   const sessions = groupActivityTimelineBySession(day.timeline).map(mergeActivitySessionSegments);
   const flowLabel = formatActivityKeyFlow(day.timeline);
   const timezoneHint = getActivityTimezoneHint(timezone, day.timeline[0]?.startAt);
-  const showKeymodeStrip = new Set(day.timeline.map((segment) => segment.keyCount ?? 0)).size > 1;
-  const legend = getActivityFlowLegend(day.timeline);
+  const multiKeymode = new Set(day.timeline.map((segment) => segment.keyCount ?? 0)).size > 1;
+  const totalPlayedLabel = formatActivityDuration(sessions.reduce((sum, session) => {
+    const elapsed = Date.parse(session[session.length - 1].endAt) - Date.parse(session[0].startAt);
+    return sum + Math.max(0, Number.isFinite(elapsed) ? elapsed : 0);
+  }, 0));
   return (
     <div className="mt-4 rounded-lg border border-osu-b3/20 bg-osu-b5/35 p-3 sm:mt-5 sm:p-4">
       <div className="flex items-center justify-between gap-3">
@@ -3165,92 +3185,137 @@ function ActivitySessionFlow({ day, timezone }: { day: ActivityDay; timezone: st
           Session flow
           {timezoneHint ? <span className="ml-1.5 font-semibold normal-case text-osu-f1/70">{timezoneHint}</span> : null}
         </div>
-        <div className="text-[10px] font-semibold text-osu-l2 sm:text-[11px]">{flowLabel}</div>
+        <div className="text-[10px] font-semibold text-osu-l2 sm:text-[11px]">
+          {flowLabel}
+          {totalPlayedLabel ? <span className="font-normal text-osu-f1"> · {totalPlayedLabel} played</span> : null}
+        </div>
       </div>
-      <div className="mt-3 space-y-2.5">
+      <ActivityDayClock sessions={sessions} timezone={timezone} dayKey={day.date} />
+      <div className="mt-4 space-y-3.5">
         {sessions.map((session) => {
           const sessionPlays = session.reduce((sum, segment) => sum + segment.playCount, 0);
           const first = session[0];
           const last = session[session.length - 1];
           const startDateLabel = formatActivitySessionDate(first.startAt, day.date, timezone);
-          const selected = session.find((segment) => segment.key === selectedSegmentKey) ?? null;
+          const elapsed = Date.parse(last.endAt) - Date.parse(first.startAt);
+          const durationLabel = formatActivityDuration(Number.isFinite(elapsed) ? elapsed : 0);
           return (
             <div key={first.key}>
-              <div className="mb-1 flex items-center justify-between gap-3 text-[10px] text-osu-f1">
-                <span>
-                  {startDateLabel ? <span className="font-semibold text-osu-l2">{startDateLabel} · </span> : null}
+              <div className="mb-1.5 flex items-baseline justify-between gap-3">
+                <span className="text-[11px] font-semibold text-osu-l2">
+                  {startDateLabel ? `${startDateLabel} · ` : null}
                   {formatActivityTime(first.startAt, timezone)} - {formatActivityTime(last.endAt, timezone)}
+                  {durationLabel ? <span className="font-normal text-osu-f1"> · {durationLabel}</span> : null}
                 </span>
-                <span>{formatNumber(sessionPlays)} {sessionPlays === 1 ? "play" : "plays"}</span>
+                <span className="text-[10px] text-osu-f1">
+                  {formatNumber(sessionPlays)} {sessionPlays === 1 ? "play" : "plays"}
+                </span>
               </div>
-              <div className="flex h-7 overflow-hidden rounded-md bg-osu-b4/70">
+              <div className="flex h-2.5 overflow-hidden rounded-full bg-osu-b4/70">
+                {session.map((segment) => (
+                  <div
+                    key={segment.key}
+                    title={formatActivitySegmentTitle(segment, timezone)}
+                    className="min-w-0 border-r border-black/25 last:border-r-0"
+                    style={{
+                      flexBasis: 0,
+                      flexGrow: Math.max(1, segment.playCount),
+                      backgroundColor: getActivityTimelineSegmentColor(segment),
+                    }}
+                  />
+                ))}
+              </div>
+              <div className="mt-1.5 flex flex-wrap gap-1">
                 {session.map((segment) => {
-                  const isSelected = segment.key === selectedSegmentKey;
+                  const known = segment.primarySkill !== "unknown";
+                  const label = known ? getActivitySkillLabel(segment.primarySkill, segment.keyCount) : "Unanalyzed";
+                  const keyLabel = multiKeymode ? formatActivityKeyCount(segment.keyCount) : null;
                   return (
-                    <button
+                    <span
                       key={segment.key}
-                      type="button"
                       title={formatActivitySegmentTitle(segment, timezone)}
-                      onClick={() => setSelectedSegmentKey(isSelected ? null : segment.key)}
-                      className={`flex min-w-0 items-center justify-center border-r border-black/20 px-1 last:border-r-0 ${isSelected ? "ring-1 ring-inset ring-white/80" : ""}`}
-                      style={{
-                        flexBasis: 0,
-                        flexGrow: Math.max(1, segment.playCount),
-                        backgroundColor: getActivityTimelineSegmentColor(segment),
-                      }}
+                      className="flex items-center gap-1 rounded bg-osu-b4/60 px-1.5 py-1 text-[10px] leading-none"
                     >
-                      {segment.playCount / sessionPlays >= 0.08 ? (
-                        <span className="truncate text-[9px] font-black leading-none text-white/95">
-                          {formatActivityFlowSegmentLabel(segment)}
-                        </span>
-                      ) : null}
-                    </button>
+                      <span
+                        className="h-1.5 w-1.5 shrink-0 rounded-[2px]"
+                        style={{ backgroundColor: getActivityTimelineSegmentColor(segment) }}
+                      />
+                      <span className={`font-semibold ${known ? "text-osu-l2" : "text-osu-f1"}`}>
+                        {label}
+                        {keyLabel ? ` ${keyLabel}` : null}
+                      </span>
+                      <span className="text-osu-f1">{formatNumber(segment.playCount)}</span>
+                    </span>
                   );
                 })}
               </div>
-              {showKeymodeStrip ? (
-                <div className="mt-1 flex">
-                  {groupActivityKeymodeRuns(session).map((run) => {
-                    const label = formatActivityKeyCount(run.keyCount);
-                    return (
-                      <div
-                        key={run.key}
-                        className="flex min-w-0 items-center gap-1 overflow-hidden px-1"
-                        style={{ flexBasis: 0, flexGrow: run.weight }}
-                      >
-                        <span className="h-px min-w-1 flex-1 bg-osu-b3/60" />
-                        {label ? <span className="text-[8px] font-bold leading-none text-osu-f1">{label}</span> : null}
-                        <span className="h-px min-w-1 flex-1 bg-osu-b3/60" />
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : null}
-              {selected ? (
-                <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-osu-f1">
-                  <span
-                    className="h-2 w-2 shrink-0 rounded-[2px]"
-                    style={{ backgroundColor: getActivityTimelineSegmentColor(selected) }}
-                  />
-                  <span>{formatActivitySegmentTitle(selected, timezone)}</span>
-                </div>
-              ) : null}
             </div>
           );
         })}
       </div>
-      {legend.length > 0 ? (
-        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-osu-f1">
-          {legend.slice(0, 5).map((entry) => (
-            <span key={entry.label} className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-[2px]" style={{ backgroundColor: entry.color }} />
-              <span className="font-semibold text-osu-l2">{entry.label}</span>
-              <span>{formatNumber(entry.plays)}</span>
-            </span>
-          ))}
-          {legend.length > 5 ? <span>+ {legend.length - 5} more</span> : null}
-        </div>
-      ) : null}
+    </div>
+  );
+}
+
+// Marks where each session sits in the player's local day so "played in the
+// evening" is visible without reading the time labels. Sessions bleeding past
+// the day boundary (stale pre-timezone data) clamp to the day's edges.
+function ActivityDayClock({ sessions, timezone, dayKey }: {
+  sessions: ActivityTimelineSegment[][];
+  timezone: string;
+  dayKey: string;
+}) {
+  const blocks = sessions
+    .map((session) => {
+      const first = session[0];
+      const last = session[session.length - 1];
+      const startKey = getZonedDateKey(new Date(first.startAt), timezone);
+      const endKey = getZonedDateKey(new Date(last.endAt), timezone);
+      const startMin = startKey === dayKey
+        ? getZonedMinutesOfDay(first.startAt, timezone)
+        : startKey < dayKey ? 0 : null;
+      const endMin = endKey === dayKey
+        ? getZonedMinutesOfDay(last.endAt, timezone)
+        : endKey > dayKey ? ACTIVITY_MINUTES_PER_DAY : null;
+      if (startMin == null || endMin == null) return null;
+      let end = Math.max(startMin, endMin);
+      let start = startMin;
+      if (end - start < ACTIVITY_DAY_CLOCK_MIN_MINUTES) {
+        end = Math.min(ACTIVITY_MINUTES_PER_DAY, start + ACTIVITY_DAY_CLOCK_MIN_MINUTES);
+        start = end - ACTIVITY_DAY_CLOCK_MIN_MINUTES;
+      }
+      const plays = session.reduce((sum, segment) => sum + segment.playCount, 0);
+      return {
+        key: first.key,
+        left: (start / ACTIVITY_MINUTES_PER_DAY) * 100,
+        width: ((end - start) / ACTIVITY_MINUTES_PER_DAY) * 100,
+        title: `${formatActivityTime(first.startAt, timezone)} - ${formatActivityTime(last.endAt, timezone)} · ${formatNumber(plays)} ${plays === 1 ? "play" : "plays"}`,
+      };
+    })
+    .filter((block): block is NonNullable<typeof block> => block != null);
+  if (blocks.length === 0) return null;
+  return (
+    <div className="mt-3">
+      <div className="relative h-2 rounded-full bg-osu-b4/70">
+        {[25, 50, 75].map((percent) => (
+          <span key={percent} className="absolute inset-y-0 w-px bg-osu-b3/40" style={{ left: `${percent}%` }} />
+        ))}
+        {blocks.map((block) => (
+          <span
+            key={block.key}
+            title={block.title}
+            className="absolute inset-y-0 rounded-full bg-osu-pink"
+            style={{ left: `${block.left}%`, width: `${block.width}%` }}
+          />
+        ))}
+      </div>
+      <div className="mt-1 flex justify-between text-[9px] leading-none text-osu-f1">
+        <span>12 AM</span>
+        <span>6 AM</span>
+        <span>12 PM</span>
+        <span>6 PM</span>
+        <span>12 AM</span>
+      </div>
     </div>
   );
 }
@@ -3524,22 +3589,6 @@ function getActivitySkillColor(skill: LivePlayerActivityPrimarySkill): string {
   return getActivityPatternMeta(skill, null).color;
 }
 
-// Weights mirror the bar cells' flexGrow so run boundaries line up exactly
-// with the segment boundaries above them.
-function groupActivityKeymodeRuns(session: ActivityTimelineSegment[]): { key: string; keyCount: number | null; weight: number }[] {
-  const runs: { key: string; keyCount: number | null; weight: number }[] = [];
-  for (const segment of session) {
-    const prev = runs[runs.length - 1];
-    const weight = Math.max(1, segment.playCount);
-    if (prev && prev.keyCount === segment.keyCount) {
-      prev.weight += weight;
-    } else {
-      runs.push({ key: segment.key, keyCount: segment.keyCount, weight });
-    }
-  }
-  return runs;
-}
-
 function getActivityTimelineSegmentColor(segment: ActivityTimelineSegment): string {
   return getActivitySkillColor(segment.primarySkill);
 }
@@ -3549,24 +3598,12 @@ function getActivitySkillLabel(skill: LivePlayerActivityPrimarySkill, keyCount: 
   return getActivityPatternMeta(skill, keyCount).label;
 }
 
-function getActivitySkillShortLabel(skill: LivePlayerActivityPrimarySkill, keyCount: number | null): string {
-  if (skill === "mixed") return "Hyb";
-  return getActivityPatternMeta(skill, keyCount).shortLabel;
-}
-
 function formatActivityKeyFlow(segments: ActivityTimelineSegment[]): string {
   const labels = [...new Set(segments
     .map((segment) => formatActivityKeyCount(segment.keyCount))
     .filter((label): label is string => label != null))];
   if (labels.length === 0) return "mixed keys";
   return labels.join(" / ");
-}
-
-function formatActivityFlowSegmentLabel(segment: ActivityTimelineSegment): string {
-  const skill = segment.primarySkill === "unknown"
-    ? null
-    : getActivitySkillShortLabel(segment.primarySkill, segment.keyCount);
-  return [skill, formatNumber(segment.playCount)].filter(Boolean).join(" ");
 }
 
 // Adjacent same-keymode same-skill segments read as one block; merging them
@@ -3601,21 +3638,6 @@ function mergeActivityPatterns(
     out[key] = ((Number(left?.[key]) || 0) * leftPlays + (Number(right?.[key]) || 0) * rightPlays) / total;
   }
   return out;
-}
-
-function getActivityFlowLegend(segments: ActivityTimelineSegment[]): { label: string; color: string; plays: number }[] {
-  const entries = new Map<string, { label: string; color: string; plays: number; known: boolean }>();
-  for (const segment of segments) {
-    const known = segment.primarySkill !== "unknown";
-    const label = known ? getActivitySkillLabel(segment.primarySkill, segment.keyCount) : "Unanalyzed";
-    const entry = entries.get(label) ?? { label, color: getActivityTimelineSegmentColor(segment), plays: 0, known };
-    entry.plays += segment.playCount;
-    entries.set(label, entry);
-  }
-  const list = [...entries.values()]
-    .sort((a, b) => Number(b.known) - Number(a.known) || b.plays - a.plays);
-  // A legend that only says "Unanalyzed" decodes nothing.
-  return list.some((entry) => entry.known) ? list : [];
 }
 
 function createDevActivityPatterns(skill: LivePlayerActivityPrimarySkill, keyCount: number | null): LivePlayerActivityPatterns {
@@ -3801,6 +3823,36 @@ function formatActivityTime(value: string, timeZone: string): string {
     return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone });
   } catch {
     return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  }
+}
+
+const ACTIVITY_MINUTES_PER_DAY = 24 * 60;
+// Below this a session block on the day clock is an invisible sliver.
+const ACTIVITY_DAY_CLOCK_MIN_MINUTES = 8;
+
+function formatActivityDuration(ms: number): string | null {
+  if (!Number.isFinite(ms) || ms <= 0) return null;
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 1) return "<1m";
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours === 0) return `${rest}m`;
+  if (rest === 0) return `${hours}h`;
+  return `${hours}h ${rest}m`;
+}
+
+function getZonedMinutesOfDay(value: string, timeZone: string): number | null {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return null;
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", { timeZone, hourCycle: "h23", hour: "2-digit", minute: "2-digit" })
+      .formatToParts(date);
+    const hour = Number(parts.find((part) => part.type === "hour")?.value);
+    const minute = Number(parts.find((part) => part.type === "minute")?.value);
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+    return hour * 60 + minute;
+  } catch {
+    return date.getHours() * 60 + date.getMinutes();
   }
 }
 

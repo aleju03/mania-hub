@@ -858,6 +858,11 @@ async function migrateSkins(db: Db): Promise<void> {
     // already-published rows by backfillSkinSlugs at boot.
     await db.execute("alter table skins add column slug text");
   }
+  if (!skinColumns.includes("author")) {
+    // Who made the skin (skin.ini Author or uploader-provided), as opposed to
+    // who uploaded it; primary attribution on the browse cards.
+    await db.execute("alter table skins add column author text");
+  }
   await db.execute(`
     create unique index if not exists idx_skins_slug
       on skins(slug) where slug is not null

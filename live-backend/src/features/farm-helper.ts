@@ -75,6 +75,9 @@ export interface FarmHelperSnapshot {
   view: FarmHelperView;
   peerBand: { mode: string; count: number; farmDataCount: number; minPp: number; maxPp: number };
   totalPotentialPp: number;
+  // How many recommendations qualified before truncating to `limit`, so the UI
+  // can say "showing 100 of 214" instead of implying the list is complete.
+  totalQualifying: number;
   recs: FarmHelperRec[];
   generatedAt: string;
 }
@@ -92,8 +95,8 @@ export class FarmHelperUserNotFoundError extends Error {
   }
 }
 
-const DEFAULT_LIMIT = 60;
-const MAX_LIMIT = 100;
+export const FARM_HELPER_DEFAULT_LIMIT = 100;
+export const FARM_HELPER_MAX_LIMIT = 200;
 const MIN_PEERS = 12;
 const MIN_KEYMODE_PROXY_SCORES = 8;
 const PEER_MIN_COUNT = 3;
@@ -350,6 +353,7 @@ async function buildSnapshot(
     view: ctx.view,
     peerBand: emptyBand,
     totalPotentialPp: 0,
+    totalQualifying: 0,
     recs: [],
     generatedAt,
   };
@@ -526,6 +530,7 @@ async function buildSnapshot(
   return {
     ...coveredSnapshot,
     totalPotentialPp: round2(top.reduce((sum, rec) => sum + rec.estimatedPpGain, 0)),
+    totalQualifying: ranked.length,
     recs: top,
   };
 }
@@ -1149,8 +1154,8 @@ function clamp01(value: number): number {
 }
 
 function clampLimit(raw: number | undefined): number {
-  if (raw == null || !Number.isFinite(raw)) return DEFAULT_LIMIT;
-  return Math.max(1, Math.min(MAX_LIMIT, Math.floor(raw)));
+  if (raw == null || !Number.isFinite(raw)) return FARM_HELPER_DEFAULT_LIMIT;
+  return Math.max(1, Math.min(FARM_HELPER_MAX_LIMIT, Math.floor(raw)));
 }
 
 function round2(value: number): number {

@@ -21,6 +21,7 @@ const fileMap: Record<string, string> = {
   "5K": "five-keys", "6K": "six-keys", "7K": "seven-keys", "8K": "eight-keys",
   "9K": "nine-keys", "10K": "ten-keys",
   AL: "alternate", MO: "moving-fast", TP2: "target-practice",
+  NM: "no-mod",
 };
 
 const typeColor: Record<string, string> = {

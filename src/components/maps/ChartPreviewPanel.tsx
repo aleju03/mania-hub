@@ -70,12 +70,16 @@ export function ChartPreviewPanel({
   playbackRate = 1,
   className = "",
   flatBackdrop = false,
+  skinSettingsOverride = null,
 }: {
   beatmapset: MapsFavouriteBeatmapset;
   selectedBeatmapId: number | null;
   playbackRate?: number;
   className?: string;
   flatBackdrop?: boolean;
+  // Render with these skin settings instead of the viewer's own replay skin
+  // (the skin page previews an uploaded skin, not the local one).
+  skinSettingsOverride?: ReplaySkinSettings | null;
 }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioStartSecondsRef = useRef(0);
@@ -656,6 +660,7 @@ export function ChartPreviewPanel({
             readySignal={seekRevision}
             onReady={markReady}
             onEnded={finishPreview}
+            skinSettingsOverride={skinSettingsOverride}
           />
         ) : null}
       </div>
@@ -993,11 +998,13 @@ function ChartPreviewRenderer({
   readySignal,
   onReady,
   onEnded,
+  skinSettingsOverride = null,
 }: {
   beatmap: ManiaBeatmap | null;
   startTimeMs: number;
   timeScale: number;
   windowMs: number;
+  skinSettingsOverride?: ReplaySkinSettings | null;
   isPlaying: boolean;
   resetWhenIdle: boolean;
   getClock: () => { time: number; stalled: boolean } | null;
@@ -1012,7 +1019,10 @@ function ChartPreviewRenderer({
   const isPlayingRef = useRef(isPlaying);
   const getClockRef = useRef(getClock);
   const scrollSpeedRef = useRef(scrollSpeed);
-  const [skinSettings, setSkinSettings] = useState(readReplaySkinSettings);
+  const [localSkinSettings, setLocalSkinSettings] = useState(readReplaySkinSettings);
+  const skinSettings = skinSettingsOverride ?? localSkinSettings;
+  const skinSettingsRef = useRef(skinSettings);
+  skinSettingsRef.current = skinSettings;
   const [canvasReady, setCanvasReady] = useState(false);
   const initialCombo = useMemo(() => beatmap ? getPreviewInitialCombo(beatmap, startTimeMs) : 0, [beatmap, startTimeMs]);
   const notes = useMemo(() => beatmap ? getPreviewNotes(beatmap, startTimeMs, timeScale, windowMs) : [], [beatmap, startTimeMs, timeScale, windowMs]);
@@ -1029,7 +1039,7 @@ function ChartPreviewRenderer({
 
   useEffect(() => {
     const refreshSharedReplaySettings = () => {
-      setSkinSettings(readReplaySkinSettings());
+      setLocalSkinSettings(readReplaySkinSettings());
     };
     window.addEventListener("storage", refreshSharedReplaySettings);
     window.addEventListener(REPLAY_SKIN_SETTINGS_CHANGE_EVENT, refreshSharedReplaySettings);
@@ -1075,11 +1085,11 @@ function ChartPreviewRenderer({
           barePlayfield: true,
           showHealthBar: false,
           scrollVelocities,
-          skinSettings,
+          skinSettings: skinSettingsRef.current,
         },
       ) as PreviewRendererLike;
       renderer.setScrollSpeed(scrollSpeedRef.current);
-      renderer.setSkinSettings(skinSettings);
+      renderer.setSkinSettings(skinSettingsRef.current);
       renderer.setExternalClock(() => getClockRef.current());
       rendererRef.current = renderer;
       handleResize = () => renderer?.resize();

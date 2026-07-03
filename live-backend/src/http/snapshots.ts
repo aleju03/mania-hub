@@ -11,7 +11,7 @@ import { cancelBeatmapOsuFileBackfill, getBeatmapOsuFileBackfillStatus, startBea
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
 import { GOAL_KINDS, GOAL_MAP_KINDS, GOAL_SPEED_BUCKETS, GOAL_TARGET_GRADES, createUserGoal, deleteUserGoal, getUserGoal, listUserGoalsWithProgress, reconcileGoalsForUser, updateUserGoal, type GoalKind, type GoalSpeedBucket, type UserGoalInput, type UserGoalTargetPatch } from "../features/goals.js";
 import { getMyDataSummary, getUserTopPlaysFeed, getUserTrackedFeed, type MyDataTopPlaysQuery, type MyDataTrackedFeedQuery } from "../features/my-data.js";
-import { FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapshot, type FarmHelperKeyMode, type FarmHelperView } from "../features/farm-helper.js";
+import { FARM_HELPER_DEFAULT_LIMIT, FARM_HELPER_MAX_LIMIT, FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapshot, type FarmHelperKeyMode, type FarmHelperView } from "../features/farm-helper.js";
 import type { ScoreSpeedBucket } from "../shared/score.js";
 import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalRankingsSnapshot, type GlobalRankingsSort } from "../features/global-rankings.js";
 import { enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRefreshProgress, getMapsSnapshot, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery } from "../features/maps.js";
@@ -44,6 +44,7 @@ import {
 } from "../replay-video/exports.js";
 import { isReplayVideoStorageConfigured } from "../replay-video/r2.js";
 import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, finishSkin, getSkin, getSkinByRef, getSkinForUpload, listSkins, recordSkinDownload, setSkinAccent, setSkinHidden, SKIN_MAX_SCREENSHOTS, toSkinSummary, upsertSkinKeymodePreview } from "../features/skins.js";
+import { listSkinPreviewMaps } from "../skins/preview-maps.js";
 import { deleteSkinObjects, getSkinObject, isSkinStorageConfigured, skinKeymodePreviewKey, skinOskKey, skinPreviewKey, skinScreenshotKey, uploadSkinObject } from "../skins/r2.js";
 import { sniffImage, validateOskBuffer } from "../skins/validate-osk.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
@@ -725,7 +726,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       const snapshot = await getFarmHelperSnapshot(ctx.db, ctx.osu, userKey, {
         keyMode: parseFarmHelperKeyMode(url.searchParams.get("key")),
         view: parseFarmHelperView(url.searchParams.get("view")),
-        limit: clampInteger(url.searchParams.get("limit"), 1, 100, 60),
+        limit: clampInteger(url.searchParams.get("limit"), 1, FARM_HELPER_MAX_LIMIT, FARM_HELPER_DEFAULT_LIMIT),
       });
       res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
       sendJson(req, res, ctx, 200, snapshot);
@@ -1078,6 +1079,25 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     sendJson(req, res, ctx, 200, { skin: toSkinSummary(skin) });
     return true;
   }
+  if (url.pathname === "/api/skins/preview-maps") {
+    // Maps eligible for the skin page's in-browser player: .osu text cached
+    // in beatmap_osu_files and audio already extracted to R2, so picking one
+    // never triggers a beatmap archive download.
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const limit = Number(url.searchParams.get("limit") ?? 24);
+    const keys = Number(url.searchParams.get("keys"));
+    const maps = await listSkinPreviewMaps(ctx.db, ctx.config, {
+      q: (url.searchParams.get("q") ?? "").slice(0, 80),
+      keys: Number.isInteger(keys) && keys >= 1 && keys <= 10 ? keys : null,
+      limit: Number.isFinite(limit) ? limit : 24,
+    });
+    res.setHeader("cache-control", "public, max-age=120, stale-while-revalidate=600");
+    sendJson(req, res, ctx, 200, { maps });
+    return true;
+  }
   if (url.pathname === "/api/skins/download") {
     // Redirect-through download so each grab counts, then the R2 public URL
     // serves the actual bytes with ContentDisposition: attachment.
@@ -1147,7 +1167,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 503, { error: "skin_storage_not_configured" });
       return true;
     }
-    const body = parseJson<{ userId?: unknown; username?: unknown; name?: unknown; description?: unknown }>((await readBody(req)) || "{}", {});
+    const body = parseJson<{ userId?: unknown; username?: unknown; name?: unknown; author?: unknown; description?: unknown }>((await readBody(req)) || "{}", {});
     const userId = Number(body.userId);
     if (!Number.isInteger(userId) || userId <= 0) {
       sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
@@ -1157,6 +1177,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       ownerUserId: userId,
       ownerUsername: typeof body.username === "string" ? body.username : "",
       name: typeof body.name === "string" ? body.name : "",
+      author: typeof body.author === "string" ? body.author : null,
       description: typeof body.description === "string" ? body.description : null,
     });
     if (!result.ok) {
@@ -1208,13 +1229,14 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       }
       const key = skinOskKey(skin.id, skin.name);
       const uploaded = await uploadSkinObject(ctx.config, key, buffer, "application/octet-stream", "attachment");
-      await attachSkinOsk(ctx.db, skin.id, {
+      await attachSkinOsk(ctx.db, skin, {
         key,
         url: uploaded.url,
         sizeBytes: uploaded.sizeBytes,
         sha256: validation.info.sha256,
         keymodes: validation.info.keymodes,
         accentColor: validation.info.accentColor,
+        iniAuthor: validation.info.author,
       });
       logInfo("skin_upload_osk", { id: skin.id, ownerUserId: skin.ownerUserId, sizeBytes: uploaded.sizeBytes, keymodes: validation.info.keymodes });
       sendJson(req, res, ctx, 200, { ok: true, keymodes: validation.info.keymodes });
@@ -2322,20 +2344,27 @@ function setServerTiming(req: IncomingMessage, res: ServerResponse): void {
 // a rebuild stalls; the refresh itself is enqueued on cache misses (inside
 // getMapsSnapshot) and on the activatePublicCountry path.
 //
-// The two sections cache differently. "core" only caches settled responses
-// (no refresh in flight) because its body flips when the rebuild lands.
-// "random" caches even mid-refresh: its pool is identical for a given
-// refreshed_at regardless of staleness flags, and GLOBAL is permanently
-// "behind sources" (any country refresh or ingested score re-stales it), so
-// requiring a settled state would keep GLOBAL — a ~10s hydrate of ~45k sets —
-// uncached forever, which is exactly what made the Random tab crawl.
+// Responses cache even while a refresh is in flight, just for a much shorter
+// window. On prod the maps refresh jobs sit parked under queue pressure, so
+// "wait for a settled state" degenerated into "never cache anything" and every
+// request re-paid the full parse/hydrate (~0.3-1s). The refreshed_at in the
+// key still invalidates the moment a rebuild actually lands; the short TTL
+// only bounds how long the body's volatile isStale / refreshQueued / progress
+// flags can lag (the UI polls live progress from /maps-progress anyway).
+// "random" caches at the full TTL even mid-refresh: its pool is identical for
+// a given refreshed_at regardless of staleness flags, and GLOBAL is
+// permanently "behind sources" (any country refresh or ingested score
+// re-stales it), so a settled-state requirement would keep GLOBAL — a ~10s
+// hydrate of ~45k sets — uncached forever, which is what made Random crawl.
 const MAPS_RESPONSE_CACHE_TTL_MS = 60 * 60_000;
 const MAPS_RESPONSE_CACHE_MAX_ENTRIES = 32;
 const MAPS_PAGE_RESPONSE_CACHE_TTL_MS = 10 * 60_000;
 const MAPS_PAGE_RESPONSE_CACHE_MAX_ENTRIES = 128;
+const MAPS_REFRESHING_RESPONSE_CACHE_TTL_MS = 30_000;
 
 interface MapsResponseCacheEntry extends PreparedJsonResponse {
   storedAt: number;
+  ttlMs: number;
 }
 
 const mapsResponseCache = new Map<string, MapsResponseCacheEntry>();
@@ -2343,7 +2372,7 @@ const mapsPageResponseCache = new Map<string, MapsResponseCacheEntry>();
 
 function pruneMapsResponseCache(now: number): void {
   for (const [key, entry] of mapsResponseCache) {
-    if (now - entry.storedAt > MAPS_RESPONSE_CACHE_TTL_MS) mapsResponseCache.delete(key);
+    if (now - entry.storedAt > entry.ttlMs) mapsResponseCache.delete(key);
   }
   // Map iterates in insertion order, so the first key is the oldest entry.
   while (mapsResponseCache.size > MAPS_RESPONSE_CACHE_MAX_ENTRIES) {
@@ -2355,7 +2384,7 @@ function pruneMapsResponseCache(now: number): void {
 
 function pruneMapsPageResponseCache(now: number): void {
   for (const [key, entry] of mapsPageResponseCache) {
-    if (now - entry.storedAt > MAPS_PAGE_RESPONSE_CACHE_TTL_MS) mapsPageResponseCache.delete(key);
+    if (now - entry.storedAt > entry.ttlMs) mapsPageResponseCache.delete(key);
   }
   while (mapsPageResponseCache.size > MAPS_PAGE_RESPONSE_CACHE_MAX_ENTRIES) {
     const oldest = mapsPageResponseCache.keys().next().value;
@@ -2593,7 +2622,7 @@ async function handleMapsPageSnapshot(
 
   if (cacheKey) {
     const cached = mapsPageResponseCache.get(cacheKey);
-    if (cached && now - cached.storedAt <= MAPS_PAGE_RESPONSE_CACHE_TTL_MS) {
+    if (cached && now - cached.storedAt <= cached.ttlMs) {
       writePreparedJson(req, res, ctx, cached);
       return;
     }
@@ -2604,8 +2633,9 @@ async function handleMapsPageSnapshot(
   const prepared = await prepareJsonResponse(status, snapshot, encoding);
   writePreparedJson(req, res, ctx, prepared);
 
-  if (cacheKey && status === 200 && snapshot.value && !snapshot.refreshQueued) {
-    mapsPageResponseCache.set(cacheKey, { ...prepared, storedAt: now });
+  if (cacheKey && status === 200 && snapshot.value) {
+    const ttlMs = snapshot.refreshQueued ? MAPS_REFRESHING_RESPONSE_CACHE_TTL_MS : MAPS_PAGE_RESPONSE_CACHE_TTL_MS;
+    mapsPageResponseCache.set(cacheKey, { ...prepared, storedAt: now, ttlMs });
   }
 }
 
@@ -2635,7 +2665,7 @@ async function handleMapsSnapshot(
 
   if (cacheKey) {
     const cached = mapsResponseCache.get(cacheKey);
-    if (cached && now - cached.storedAt <= MAPS_RESPONSE_CACHE_TTL_MS) {
+    if (cached && now - cached.storedAt <= cached.ttlMs) {
       writePreparedJson(req, res, ctx, cached);
       return;
     }
@@ -2674,13 +2704,14 @@ async function buildMapsSnapshotResponse(
   const prepared = await prepareJsonResponse(status, snapshot, encoding);
 
   // Only cache populated 200s — never the cold "still building" 202/null state,
-  // whose body changes the moment the first real snapshot lands. "core" also
-  // waits for a settled refresh; "random" must not (see the cache comment).
-  const cacheable = section === "random"
-    ? status === 200 && snapshot.value != null
-    : status === 200 && snapshot.value != null && !snapshot.refreshQueued;
-  if (cacheKey && cacheable) {
-    mapsResponseCache.set(cacheKey, { ...prepared, storedAt: now });
+  // whose body changes the moment the first real snapshot lands. A "core"
+  // response with a refresh in flight caches briefly; "random" ignores the
+  // refresh state entirely (see the cache comment).
+  if (cacheKey && status === 200 && snapshot.value != null) {
+    const ttlMs = section === "core" && snapshot.refreshQueued
+      ? MAPS_REFRESHING_RESPONSE_CACHE_TTL_MS
+      : MAPS_RESPONSE_CACHE_TTL_MS;
+    mapsResponseCache.set(cacheKey, { ...prepared, storedAt: now, ttlMs });
   }
   return prepared;
 }

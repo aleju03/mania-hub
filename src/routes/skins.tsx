@@ -227,7 +227,7 @@ function SkinsPage() {
                   type="text"
                   value={searchInput}
                   onChange={(event) => setSearchInput(event.target.value)}
-                  placeholder="Search skin or uploader"
+                  placeholder="Search skin, creator, or uploader"
                   aria-label="Search skins"
                   className="w-full rounded-lg border border-osu-b3/30 bg-osu-b4 py-2.5 pl-10 pr-3 text-[14px] text-osu-l1 transition-colors placeholder:text-osu-f1/55 focus:border-osu-pink/50 focus:outline-none"
                 />

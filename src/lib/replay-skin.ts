@@ -108,6 +108,16 @@ export interface ReplaySkinKeymodeProfile {
   columnSpacing: number;
   columnWidths: number[];
   columnSpacings: number[];
+  // skin.ini ColumnLineWidth: keys+1 boundary line widths in 480-space units
+  // (outer edges included). Empty means the key was absent, which in stable
+  // falls back to 2-unit lines at every boundary.
+  columnLineWidths: number[];
+  // skin.ini ColourColumnLine as #rrggbb or #rrggbbaa; "" means skin default
+  // (opaque white).
+  columnLineColor: string;
+  // skin.ini JudgementLine: the white line at HitPosition. Circle/arrow skins
+  // almost always turn it off; stable defaults it on.
+  judgementLine: boolean;
   noteHeightScale: number;
   assets: ReplaySkinKeymodeAssets;
 }
@@ -293,9 +303,17 @@ export const DEFAULT_REPLAY_SKIN_PROFILE: ReplaySkinKeymodeProfile = {
   columnSpacing: REPLAY_SKIN_DEFAULT_COLUMN_SPACING,
   columnWidths: [],
   columnSpacings: [],
+  columnLineWidths: [],
+  columnLineColor: "",
+  judgementLine: true,
   noteHeightScale: REPLAY_SKIN_DEFAULT_COLUMN_WIDTH,
   assets: EMPTY_REPLAY_SKIN_ASSETS,
 };
+
+export const REPLAY_SKIN_MAX_COLUMN_LINE_WIDTH = 20;
+// osu!stable draws 2-unit column lines at every boundary when a skin does not
+// set ColumnLineWidth at all.
+export const OSU_MANIA_DEFAULT_COLUMN_LINE_WIDTH = 2;
 
 export const DEFAULT_REPLAY_SKIN_SETTINGS: ReplaySkinSettings = {
   version: 2,
@@ -359,6 +377,14 @@ function normalizeHexColor(value: unknown): string | null {
   }
   if (/^#[0-9a-f]{6}$/i.test(trimmed)) return trimmed.toLowerCase();
   return null;
+}
+
+// Column lines keep their skin.ini alpha, so #rrggbbaa is allowed here on top
+// of the #rrggbb the other colour fields use.
+function normalizeLineColor(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim().toLowerCase();
+  return /^#[0-9a-f]{6}([0-9a-f]{2})?$/.test(trimmed) ? trimmed : "";
 }
 
 function normalizeColumnColors(value: unknown): string[] {
@@ -554,6 +580,9 @@ function normalizeKeymodeProfile(value: unknown, fallback?: Partial<ReplaySkinKe
     columnSpacing: normalizeColumnSpacing(raw.columnSpacing ?? fallback?.columnSpacing),
     columnWidths,
     columnSpacings: normalizeNumberList(raw.columnSpacings, REPLAY_SKIN_MIN_COLUMN_SPACING, REPLAY_SKIN_MAX_COLUMN_SPACING),
+    columnLineWidths: normalizeNumberList(raw.columnLineWidths, 0, REPLAY_SKIN_MAX_COLUMN_LINE_WIDTH, REPLAY_SKIN_MAX_COLUMNS + 1),
+    columnLineColor: normalizeLineColor(raw.columnLineColor),
+    judgementLine: typeof raw.judgementLine === "boolean" ? raw.judgementLine : true,
     noteHeightScale: normalizeNoteHeightScale(raw.noteHeightScale ?? fallback?.noteHeightScale, smallestColumnWidth),
     assets: normalizeKeymodeAssets(raw.assets),
   };
@@ -812,6 +841,9 @@ function compactKeymodeProfileV3(profile: ReplaySkinKeymodeProfile): Record<stri
   if (profile.columnSpacing !== DEFAULT_REPLAY_SKIN_PROFILE.columnSpacing) out.i = profile.columnSpacing;
   if (profile.columnWidths.length > 0) out.j = profile.columnWidths;
   if (profile.columnSpacings.length > 0) out.k = profile.columnSpacings;
+  if (profile.columnLineWidths.length > 0) out.n = profile.columnLineWidths;
+  if (profile.columnLineColor) out.o = compactColor(profile.columnLineColor);
+  if (!profile.judgementLine) out.p = 0;
   if (profile.noteHeightScale !== DEFAULT_REPLAY_SKIN_PROFILE.noteHeightScale) out.l = profile.noteHeightScale;
   const hasAssets = profile.assets.columns.length > 0
     || profile.assets.combo !== null
@@ -832,9 +864,17 @@ function expandKeymodeProfileV3(value: unknown): Record<string, unknown> {
     columnSpacing: raw.i,
     columnWidths: raw.j,
     columnSpacings: raw.k,
+    columnLineWidths: raw.n,
+    columnLineColor: expandLineColor(raw.o),
+    judgementLine: expandBoolean(raw.p),
     noteHeightScale: raw.l,
     assets: raw.m,
   };
+}
+
+function expandLineColor(value: unknown): unknown {
+  if (typeof value === "string" && /^[0-9a-f]{6}([0-9a-f]{2})?$/i.test(value)) return `#${value}`;
+  return value;
 }
 
 function compactReplaySkinSettingsV3(settings: ReplaySkinSettings): Record<string, unknown> {

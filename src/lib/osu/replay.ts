@@ -248,13 +248,20 @@ export const getReplayParsed = createServerFn({ method: "GET" })
 
 export const lookupBeatmapByChecksum = createServerFn({ method: "GET" })
   .inputValidator(normalizeBeatmapChecksumPayload)
-  .handler(async ({ data }: { data: { checksum: string } }) => {
+  .handler(async ({ data }: { data: { checksum: string } }): Promise<BeatmapChecksumLookupResult | null> => {
     edgeCache(300, 3600);
-    return osuFetch<BeatmapChecksumLookupResult>(
-      "/beatmaps/lookup",
-      { checksum: data.checksum },
-      { caller: "lookupBeatmapByChecksum" },
-    );
+    try {
+      return await osuFetch<BeatmapChecksumLookupResult>(
+        "/beatmaps/lookup",
+        { checksum: data.checksum },
+        { caller: "lookupBeatmapByChecksum" },
+      );
+    } catch (error) {
+      // 404 means the checksum is unknown to osu! (unsubmitted or deleted
+      // map), which callers handle by asking for a local .osz instead.
+      if (error instanceof Error && error.message.includes("] 404 ")) return null;
+      throw error;
+    }
   });
 
 export const getBeatmapFile = createServerFn({ method: "GET" })
