@@ -31,7 +31,7 @@ Do not start dev servers or run builds unprompted; the user usually has servers 
 | Backend tests + build | `cd live-backend && npm run verify` |
 | oSC smoke test | `cd live-backend && npm run smoke:osc` |
 | Backend DB compaction | `cd live-backend && npm run compact:storage` (also `compact:maps-farmed`) |
-| Sync prod DB to local | `npm run live-db:sync-from-vps` (`--dry-run` supported) |
+| Sync prod DB to local | `npm run live-db:update` (fresh VPS snapshot); `npm run live-db:sync-from-vps` reuses the newest existing backup (`--dry-run` supported) |
 | Dan benchmark/analyze | `npm run dan:benchmark`, `npm run dan:analyze` |
 
 Minimum verification: for live backend changes run `npm test` and `npx tsc --noEmit` inside `live-backend/`; for type-sensitive frontend changes run `npx tsc --noEmit` at the root.

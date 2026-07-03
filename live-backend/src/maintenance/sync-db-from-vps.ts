@@ -17,6 +17,9 @@ interface Options {
   keepDownload: boolean;
   quickCheck: boolean;
   backupLocal: boolean;
+  fresh: boolean;
+  compressSnapshot: boolean;
+  keepRemoteSnapshots: number;
 }
 
 interface RemoteCandidate {
@@ -43,9 +46,18 @@ if (options.dryRun) {
 
 const localDbPath = resolveLocalDbPath(options);
 const localSidecars = [localDbPath, `${localDbPath}-wal`, `${localDbPath}-shm`];
+
+if (options.dryRun && options.fresh) {
+  console.log(`Would create a fresh snapshot of the live DB on ${options.remote} (sqlite3 .backup${options.compressSnapshot ? " + zstd" : ""}), download it, and replace ${localDbPath}.`);
+  console.log(`Would then prune remote online-* snapshots, keeping the newest ${options.keepRemoteSnapshots}.`);
+  process.exit(0);
+}
+
 const remoteBackup = options.remoteBackup
   ? await resolveRemotePath(options.remote, options.remoteBackup)
-  : await findLatestRemoteBackup(options);
+  : options.fresh
+    ? await createRemoteSnapshot(options)
+    : await findLatestRemoteBackup(options);
 
 console.log(`Remote: ${options.remote}`);
 console.log(`Remote backup: ${remoteBackup.path} (${formatBytes(remoteBackup.sizeBytes)}, ${new Date(remoteBackup.modifiedAtMs).toISOString()})`);
@@ -90,6 +102,10 @@ try {
   await replaceLocalDatabase(preparedPath, localDbPath);
   console.log("Local live-backend database updated.");
 
+  if (options.fresh) {
+    await pruneRemoteSnapshots(options);
+  }
+
   if (!options.keepDownload) {
     await rm(workDir, { force: true, recursive: true });
   } else {
@@ -114,6 +130,9 @@ function parseOptions(args: string[]): Options {
     keepDownload: false,
     quickCheck: true,
     backupLocal: false,
+    fresh: false,
+    compressSnapshot: true,
+    keepRemoteSnapshots: 2,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -149,6 +168,20 @@ function parseOptions(args: string[]): Options {
       case "--skip-quick-check":
         options.quickCheck = false;
         break;
+      case "--fresh":
+        options.fresh = true;
+        break;
+      case "--no-compress":
+        options.compressSnapshot = false;
+        break;
+      case "--keep-remote": {
+        const value = Number(readValue(args, ++index, arg));
+        if (!Number.isInteger(value) || value < 1) {
+          throw new Error("--keep-remote requires an integer >= 1.");
+        }
+        options.keepRemoteSnapshots = value;
+        break;
+      }
       case "--help":
       case "-h":
         printUsage();
@@ -174,6 +207,11 @@ function printUsage(): void {
   npm run db:sync-from-vps -- [options]
 
 Options:
+  --fresh                Create a fresh snapshot of the live DB on the VPS first (sqlite3 .backup),
+                         then download that instead of the newest pre-existing backup. After a
+                         successful sync, remote online-* snapshots are pruned (see --keep-remote).
+  --no-compress          With --fresh, skip zstd compression of the remote snapshot.
+  --keep-remote N        With --fresh, how many online-* snapshots to keep on the VPS. Default: 2.
   --dry-run              Show the remote backup that would be used.
   --remote USER@HOST     SSH target. Default: ${DEFAULT_REMOTE}
   --remote-dir PATH      Remote live-backend directory. Default: ${DEFAULT_REMOTE_DIR}
@@ -213,6 +251,60 @@ async function resolveRemotePath(remote: string, path: string): Promise<RemoteCa
     sizeBytes: Number(sizeBytes),
     path: remotePath,
   };
+}
+
+async function createRemoteSnapshot(options: Options): Promise<RemoteCandidate> {
+  const command = [
+    "set -eu",
+    `root=${shellPath(options.remoteDir)}`,
+    "db=\"$root/data/mania-hub-live.db\"",
+    "[ -f \"$db\" ] || { echo \"Remote live DB not found: $db\" >&2; exit 2; }",
+    "command -v sqlite3 >/dev/null 2>&1 || { echo \"sqlite3 is required on the VPS to create a fresh snapshot.\" >&2; exit 2; }",
+    "stamp=$(date -u +%Y%m%d-%H%M%S)",
+    "dir=\"$root/data/backups/online-$stamp\"",
+    "mkdir -p \"$dir\"",
+    "out=\"$dir/mania-hub-live.db\"",
+    "sqlite3 \"$db\" '.timeout 30000' \".backup '$out'\"",
+    ...(options.compressSnapshot
+      ? [
+          "if command -v zstd >/dev/null 2>&1; then",
+          "  zstd -q -3 --rm \"$out\"",
+          "  out=\"$out.zst\"",
+          "fi",
+        ]
+      : []),
+    "printf '%s\\t%s\\t%s\\n' \"$(stat -c %Y \"$out\")\" \"$(stat -c %s \"$out\")\" \"$out\"",
+  ].join("\n");
+
+  console.log("Creating a fresh snapshot of the live DB on the VPS (sqlite3 .backup, safe while the backend is running)...");
+  const result = await runCapture("ssh", [options.remote, command], [0]);
+  const line = result.stdout.trim().split("\n").pop() ?? "";
+  const [modifiedAtSeconds, sizeBytes, remotePath] = line.split("\t");
+  if (!remotePath) {
+    throw new Error("Failed to create the remote snapshot: unexpected output from the VPS.");
+  }
+  return {
+    modifiedAtMs: Number(modifiedAtSeconds) * 1000,
+    sizeBytes: Number(sizeBytes),
+    path: remotePath,
+  };
+}
+
+async function pruneRemoteSnapshots(options: Options): Promise<void> {
+  const command = [
+    "set -eu",
+    `root=${shellPath(options.remoteDir)}`,
+    "cd \"$root/data/backups\" 2>/dev/null || exit 0",
+    "ls -1d online-* 2>/dev/null | sort -r | tail -n +" + (options.keepRemoteSnapshots + 1) + " | while read -r name; do",
+    "  rm -rf -- \"./$name\"",
+    "  echo \"$name\"",
+    "done",
+  ].join("\n");
+  const result = await runCapture("ssh", [options.remote, command], [0]);
+  const pruned = result.stdout.trim().split("\n").filter(Boolean);
+  if (pruned.length > 0) {
+    console.log(`Pruned ${pruned.length} old remote snapshot(s): ${pruned.join(", ")} (keeping the newest ${options.keepRemoteSnapshots}).`);
+  }
 }
 
 async function findLatestRemoteBackup(options: Options): Promise<RemoteCandidate> {

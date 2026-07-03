@@ -48,7 +48,7 @@ The user often keeps local servers running; do not start dev servers or builds u
 - Live backend dev: `cd live-backend && npm run dev`. Tests: `npm test`. Typecheck: `npx tsc --noEmit`. Tests + build: `npm run verify`.
 - oSC smoke: `cd live-backend && npm run smoke:osc`.
 - Backend DB compaction: `cd live-backend && npm run compact:storage` (full VACUUM/GC) or `npm run compact:maps-farmed` (rebuild maps-farmed overlay).
-- Sync prod DB to local: `npm run live-db:sync-from-vps` (root wrapper) or `cd live-backend && npm run db:sync-from-vps`. Downloads the latest VPS DB backup and replaces the local SQLite DB; supports `--dry-run`/`--force`.
+- Sync prod DB to local: `npm run live-db:update` (root wrapper for `db:sync-from-vps --fresh`) creates a fresh snapshot on the VPS via sqlite3 `.backup` + zstd, downloads it, replaces the local SQLite DB, and prunes old remote `online-*` snapshots (keeps 2, `--keep-remote N`). `npm run live-db:sync-from-vps` reuses the newest pre-existing backup instead; supports `--dry-run`/`--force`. Run these from a dev PC, never on the VPS (they overwrite the local DB).
 - Dan tooling: `npm run dan:benchmark`, `npm run dan:analyze`.
 - Old Turso schema init/shell: `npm run db:init`, `npm run db:inspect`.
 
