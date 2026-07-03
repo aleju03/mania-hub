@@ -1,7 +1,7 @@
 import { createClient } from "@libsql/client";
 import { spawn } from "node:child_process";
 import { createWriteStream } from "node:fs";
-import { access, chmod, copyFile, mkdir, mkdtemp, rename, rm, stat } from "node:fs/promises";
+import { access, chmod, copyFile, mkdir, mkdtemp, readdir, rename, rm, stat } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { readConfig } from "../config.js";
@@ -72,6 +72,7 @@ await assertLocalDbNotOpen(localSidecars, options.force);
 
 const downloadRoot = join(dirname(localDbPath), DOWNLOAD_DIR_NAME);
 await mkdir(downloadRoot, { recursive: true });
+await cleanupStaleRuns(downloadRoot);
 const workDir = await mkdtemp(join(downloadRoot, "run-"));
 const downloadedPath = join(workDir, basename(remoteBackup.path));
 const preparedPath = join(workDir, "mania-hub-live.db");
@@ -112,9 +113,7 @@ try {
     console.log(`Kept downloaded files in ${workDir}`);
   }
 } catch (error) {
-  if (!options.keepDownload) {
-    await rm(workDir, { force: true, recursive: true }).catch(() => undefined);
-  }
+  console.error(`Sync failed; keeping downloaded files in ${workDir} (cleaned up automatically on the next run).`);
   throw error;
 }
 
@@ -381,8 +380,18 @@ ${result.stdout.trim()}
 Stop the local live backend first, or rerun with --force if you are certain it is safe.`);
 }
 
+async function cleanupStaleRuns(downloadRoot: string): Promise<void> {
+  const entries = await readdir(downloadRoot).catch(() => [] as string[]);
+  for (const entry of entries) {
+    if (entry.startsWith("run-")) {
+      await rm(join(downloadRoot, entry), { force: true, recursive: true }).catch(() => undefined);
+    }
+  }
+}
+
 async function commandExists(command: string): Promise<boolean> {
-  const result = await runCapture("sh", ["-c", `command -v ${shellQuote(command)} >/dev/null 2>&1`], [0, 1]);
+  // dash (Ubuntu /bin/sh) exits 127 for a missing command, bash exits 1.
+  const result = await runCapture("sh", ["-c", `command -v ${shellQuote(command)} >/dev/null 2>&1`], [0, 1, 126, 127]);
   return result.code === 0;
 }
 
