@@ -183,7 +183,7 @@ export class PackScene {
 
     const pmrem = new PMREMGenerator(this.renderer);
     const studio = createStudioEnvironment();
-    const environment = pmrem.fromScene(studio.studio, 0.06);
+    const environment = pmrem.fromScene(studio.studio, 0.035);
     this.environmentTexture = environment.texture;
     this.scene.environment = environment.texture;
     pmrem.dispose();

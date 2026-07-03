@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyManiaReplayModsToNotes, buildReplaySegments, calculateReplayAccuracy, getManiaReplayHitWindows, getManiaReplayRuleset, simulateManiaReplayJudgements } from "./mania-replay-judgement";
+import { applyManiaReplayModsToNotes, buildReplaySegments, calculateReplayAccuracy, getManiaRandomColumnMap, getManiaReplayHitWindows, getManiaReplayRuleset, simulateManiaReplayJudgements } from "./mania-replay-judgement";
 import type { ManiaNote } from "./beatmap-parser";
 import type { ReplayFrame } from "./types";
 
@@ -69,6 +69,82 @@ describe("mania replay judgement helpers", () => {
     ]);
     expect(applyManiaReplayModsToNotes(notes, 4, [])).toEqual(notes);
     expect(applyManiaReplayModsToNotes(notes, 4, [])).not.toBe(notes);
+  });
+
+  it("inverts mania notes into holds for the IN mod like lazer's ManiaModInvert", () => {
+    // 500ms beat (120 BPM): the hold reaches a 1/4 beat (125ms) short of the
+    // next object unless that would halve the gap.
+    const timingPoints = [{ time: 0, beatLength: 500 }];
+    const notes: ManiaNote[] = [
+      { column: 0, time: 1000, endTime: 1000, isHold: false },
+      { column: 0, time: 2000, endTime: 2000, isHold: false },
+      { column: 0, time: 2200, endTime: 2600, isHold: true },
+      { column: 1, time: 1500, endTime: 1500, isHold: false },
+    ];
+
+    expect(applyManiaReplayModsToNotes(notes, 4, ["IN"], { timingPoints })).toEqual([
+      // 1000 -> 2000 gap: 1000 - 125 = 875ms hold.
+      { column: 0, time: 1000, endTime: 1875, isHold: true, sample: undefined },
+      // 2000 -> 2200 gap: max(100, 200 - 125) = 100ms hold; the hold's own end
+      // is ignored as a location, and the last object per column is dropped.
+      { column: 0, time: 2000, endTime: 2100, isHold: true, sample: undefined },
+    ]);
+  });
+
+  it("replaces holds with notes for the HO mod", () => {
+    const notes: ManiaNote[] = [
+      { column: 0, time: 1000, endTime: 1400, isHold: true },
+      { column: 1, time: 1200, endTime: 1200, isHold: false },
+    ];
+
+    expect(applyManiaReplayModsToNotes(notes, 4, ["HO"])).toEqual([
+      { column: 0, time: 1000, endTime: 1000, isHold: false },
+      { column: 1, time: 1200, endTime: 1200, isHold: false },
+    ]);
+  });
+
+  it("reproduces .NET's seeded System.Random for the RD column shuffle", () => {
+    // new Random(0).Next() yields 1559595546, 1755192844, 1649316166, ... -
+    // the shuffle must be bit-exact with lazer's ManiaModRandom.
+    const map = getManiaRandomColumnMap(4, 0);
+    expect(new Set(map).size).toBe(4);
+    // Keys drawn per column: [1559595546, 1755192844, 1649316166, 1198642031]
+    // -> sorted column order [3, 0, 2, 1].
+    expect(map).toEqual([3, 0, 2, 1]);
+
+    const notes: ManiaNote[] = [
+      { column: 0, time: 1000, endTime: 1000, isHold: false },
+      { column: 3, time: 1100, endTime: 1500, isHold: true },
+    ];
+    expect(applyManiaReplayModsToNotes(notes, 4, [{ acronym: "RD", settings: { seed: 0 } }])).toEqual([
+      { column: 3, time: 1000, endTime: 1000, isHold: false },
+      { column: 1, time: 1100, endTime: 1500, isHold: true },
+    ]);
+    // Without a seed the shuffle is unknowable; columns stay put.
+    expect(applyManiaReplayModsToNotes(notes, 4, ["RD"])).toEqual(notes);
+  });
+
+  it("awards Perfect tails while holding through the tail with the NR mod", () => {
+    const ruleset = getManiaReplayRuleset(true, []);
+    const windows = getManiaReplayHitWindows(8, ruleset);
+    const notes: ManiaNote[] = [{ column: 0, time: 1000, endTime: 1600, isHold: true }];
+    // Head on time, released 120ms late: normally a worse-than-Perfect tail,
+    // but NR judges Perfect the moment the tail is reached while held.
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 1000, keyState: 1 },
+      { time: 1720, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 2500);
+    const withNoRelease = simulateManiaReplayJudgements(notes, segments, 1, windows, "lazer", {
+      lazerNoReleaseTails: true,
+    });
+
+    expect(withNoRelease.events).toEqual([
+      expect.objectContaining({ part: "hold-head", judgment: 1, time: 1000 }),
+      expect.objectContaining({ part: "hold-tail", judgment: 1, time: 1600, offsetMs: 0 }),
+    ]);
   });
 
   it("stable mode misses tap notes after the late OK window instead of awarding late 50s", () => {

@@ -41,6 +41,11 @@ export interface ManiaScrollVelocity {
   multiplier: number;
 }
 
+export interface ManiaTimingPoint {
+  time: number;
+  beatLength: number;
+}
+
 export interface ManiaBreakPeriod {
   startTime: number;
   endTime: number;
@@ -65,6 +70,9 @@ export interface ManiaBeatmap {
   backgroundFilename: string;
   breakPeriods: ManiaBreakPeriod[];
   scrollVelocities: ManiaScrollVelocity[];
+  /** Uninherited (red line) timing points, sorted by time. Used by chart-altering
+   *  mods (e.g. Invert) that need the beat length at a given time. */
+  timingPoints?: ManiaTimingPoint[];
 }
 
 export interface ParseManiaBeatmapOptions {
@@ -702,5 +710,6 @@ export function parseManiaBeatmap(content: string, options: ParseManiaBeatmapOpt
     backgroundFilename,
     breakPeriods,
     scrollVelocities: buildManiaScrollVelocities(timingPoints, controlPoints, totalLength),
+    timingPoints: [...timingPoints].sort((a, b) => a.time - b.time),
   };
 }

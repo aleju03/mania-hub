@@ -1,11 +1,13 @@
 import type { ManiaNote } from "./beatmap-parser";
 import type { ReplayFrame, ReplayLifeBarFrame } from "./types";
-import type { Judgment, ReplayAccuracyMode, ReplayJudgementEvent, ReplayNoteState } from "./mania-replay-judgement.ts";
+import type { Judgment, ManiaReplayMod, ManiaReplayTimingPoint, ReplayAccuracyMode, ReplayJudgementEvent, ReplayNoteState } from "./mania-replay-judgement.ts";
 import {
   applyManiaReplayModsToNotes,
   buildReplaySegments,
   calculateReplayAccuracy,
   getManiaReplayHitWindows,
+  getManiaReplayModAcronym,
+  getManiaReplayModSetting,
   getManiaReplayRuleset,
   simulateManiaReplayJudgements,
 } from "./mania-replay-judgement.ts";
@@ -53,10 +55,11 @@ export interface ReplayValidationInput {
   keyCount: number;
   legacyReplayFrameRounding?: boolean;
   lifeBarFrames?: ReplayLifeBarFrame[];
-  mods?: string[];
+  mods?: ManiaReplayMod[];
   notes: ManiaNote[];
   od: number;
   resolveLegacyFrameAmbiguity?: boolean;
+  timingPoints?: ManiaReplayTimingPoint[];
 }
 
 export function emptyReplayHitCounts(): ReplayHitCounts {
@@ -678,9 +681,15 @@ export function diffReplayHitCounts(
 }
 
 export function validateReplaySimulation(input: ReplayValidationInput): ReplayValidationResult {
-  const ruleset = getManiaReplayRuleset(input.isLazer ?? false, input.mods ?? [], input.isConvert ?? false);
-  const notes = applyManiaReplayModsToNotes(input.notes, input.keyCount, input.mods ?? []);
-  const hitWindows = getManiaReplayHitWindows(input.od, ruleset);
+  const mods = input.mods ?? [];
+  const modAcronyms = mods.map(getManiaReplayModAcronym);
+  const ruleset = getManiaReplayRuleset(input.isLazer ?? false, modAcronyms, input.isConvert ?? false);
+  const notes = applyManiaReplayModsToNotes(input.notes, input.keyCount, mods, {
+    timingPoints: input.timingPoints,
+  });
+  const difficultyAdjustMod = mods[modAcronyms.indexOf("DA")];
+  const overriddenOd = Number(getManiaReplayModSetting(difficultyAdjustMod, ["overall_difficulty", "overallDifficulty"]));
+  const hitWindows = getManiaReplayHitWindows(Number.isFinite(overriddenOd) ? overriddenOd : input.od, ruleset);
   const frameDuration = input.frames.length > 0 ? input.frames[input.frames.length - 1].time : 0;
   const noteDuration = notes.length > 0 ? Math.max(...notes.map((note) => note.endTime)) : 0;
   const totalDuration = Math.max(frameDuration, noteDuration + hitWindows.miss * 1.5);
@@ -692,6 +701,7 @@ export function validateReplaySimulation(input: ReplayValidationInput): ReplayVa
     hitWindows,
     ruleset.accuracyMode,
     {
+      lazerNoReleaseTails: modAcronyms.includes("NR"),
       legacyReplayFrameRounding: input.legacyReplayFrameRounding ?? false,
       speedMultiplier: ruleset.speedMultiplier,
     },

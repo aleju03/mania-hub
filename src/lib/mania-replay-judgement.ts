@@ -41,6 +41,9 @@ export interface ReplayJudgementEvent {
 }
 
 export interface ManiaReplaySimulationOptions {
+  /** Lazer No Release (NR): a hold still held when its tail is reached is
+   *  awarded Perfect immediately (capped to Meh after a hold break). */
+  lazerNoReleaseTails?: boolean;
   stableBodyBreakCapJudgment?: Judgment | null;
   stableColumnInputOwnership?: boolean;
   legacyReplayFrameRounding?: boolean;
@@ -171,18 +174,183 @@ export function getManiaReplayRuleset(
   };
 }
 
+export type ManiaReplayMod = string | {
+  acronym?: string;
+  settings?: Record<string, string | number | boolean>;
+};
+
+export interface ManiaReplayTimingPoint {
+  time: number;
+  beatLength: number;
+}
+
+export interface ManiaReplayChartContext {
+  timingPoints?: ManiaReplayTimingPoint[];
+}
+
+export function getManiaReplayModAcronym(mod: ManiaReplayMod): string {
+  return (typeof mod === "string" ? mod : mod.acronym ?? "").toUpperCase();
+}
+
+export function getManiaReplayModSetting(
+  mod: ManiaReplayMod | undefined,
+  names: string[],
+): unknown {
+  if (!mod || typeof mod === "string") return undefined;
+  const settings = mod.settings;
+  if (!settings) return undefined;
+  for (const name of names) {
+    if (name in settings) return settings[name];
+  }
+  return undefined;
+}
+
+// ControlPointInfo.TimingPointAt: last timing point at or before `time`; falls
+// back to the first point, or the default beat length when the map has none.
+const DEFAULT_TIMING_BEAT_LENGTH = 1000;
+
+function timingBeatLengthAt(
+  timingPoints: ManiaReplayTimingPoint[] | undefined,
+  time: number,
+): number {
+  if (!timingPoints || timingPoints.length === 0) return DEFAULT_TIMING_BEAT_LENGTH;
+  let active = timingPoints[0];
+  for (const point of timingPoints) {
+    if (point.time > time) break;
+    active = point;
+  }
+  return active.beatLength;
+}
+
+// Port of .NET's seeded System.Random (Knuth subtractive generator). Lazer's
+// Random mod shuffles columns with `new Random((int)seed)`, so replaying the
+// shuffle requires bit-exact Next() values.
+class CSharpRandom {
+  private seedArray: number[] = new Array(56).fill(0);
+  private inext = 0;
+  private inextp = 21;
+
+  constructor(seed: number) {
+    seed = seed | 0;
+    const subtraction = seed === -2147483648 ? 2147483647 : Math.abs(seed);
+    // The `| 0` casts reproduce C#'s wrapping int arithmetic; seeds above
+    // 161803398 make intermediate values overflow int32 in .NET.
+    let mj = (161803398 - subtraction) | 0;
+    this.seedArray[55] = mj;
+    let mk = 1;
+    let ii = 0;
+    for (let i = 1; i < 55; i++) {
+      ii += 21;
+      if (ii >= 55) ii -= 55;
+      this.seedArray[ii] = mk;
+      mk = (mj - mk) | 0;
+      if (mk < 0) mk += 2147483647;
+      mj = this.seedArray[ii];
+    }
+    for (let k = 1; k < 5; k++) {
+      for (let i = 1; i < 56; i++) {
+        let n = i + 30;
+        if (n >= 55) n -= 55;
+        this.seedArray[i] = (this.seedArray[i] - this.seedArray[1 + n]) | 0;
+        if (this.seedArray[i] < 0) this.seedArray[i] += 2147483647;
+      }
+    }
+  }
+
+  next(): number {
+    let locINext = this.inext + 1;
+    if (locINext >= 56) locINext = 1;
+    let locINextp = this.inextp + 1;
+    if (locINextp >= 56) locINextp = 1;
+    let retVal = this.seedArray[locINext] - this.seedArray[locINextp];
+    if (retVal === 2147483647) retVal--;
+    if (retVal < 0) retVal += 2147483647;
+    this.seedArray[locINext] = retVal;
+    this.inext = locINext;
+    this.inextp = locINextp;
+    return retVal;
+  }
+}
+
+// ManiaModRandom: Enumerable.Range(0, columns).OrderBy(_ => rng.Next()) - keys
+// are drawn once per column in order, then stable-sorted.
+export function getManiaRandomColumnMap(keyCount: number, seed: number): number[] {
+  const rng = new CSharpRandom(seed);
+  return Array.from({ length: keyCount }, (_, column) => ({ column, key: rng.next() }))
+    .sort((a, b) => a.key - b.key || a.column - b.column)
+    .map((entry) => entry.column);
+}
+
+// ManiaModInvert: every object start in a column becomes a hold that reaches
+// (almost) to the next object start; the last object in each column is dropped.
+function applyManiaInvertMod(
+  notes: ManiaNote[],
+  timingPoints: ManiaReplayTimingPoint[] | undefined,
+): ManiaNote[] {
+  const columns = new Map<number, ManiaNote[]>();
+  for (const note of notes) {
+    const columnNotes = columns.get(note.column);
+    if (columnNotes) columnNotes.push(note);
+    else columns.set(note.column, [note]);
+  }
+
+  const result: ManiaNote[] = [];
+  for (const columnNotes of columns.values()) {
+    const locations = [...columnNotes].sort((a, b) => a.time - b.time);
+    for (let i = 0; i < locations.length - 1; i++) {
+      const location = locations[i];
+      const nextStart = locations[i + 1].time;
+      const beatLength = timingBeatLengthAt(timingPoints, nextStart);
+
+      // Decrease the duration by at most a 1/4 beat to ensure there's no
+      // instantaneous notes.
+      const fullDuration = nextStart - location.time;
+      const duration = Math.max(fullDuration / 2, fullDuration - beatLength / 4);
+
+      result.push({
+        column: location.column,
+        time: location.time,
+        endTime: location.time + duration,
+        isHold: true,
+        // The head keeps the object's samples; the release is silent.
+        sample: location.sample,
+      });
+    }
+  }
+
+  return result.sort((a, b) => a.time - b.time);
+}
+
 export function applyManiaReplayModsToNotes(
   notes: ManiaNote[],
   keyCount: number,
-  mods: string[] = [],
+  mods: ManiaReplayMod[] = [],
+  context: ManiaReplayChartContext = {},
 ): ManiaNote[] {
-  const modSet = new Set(mods.map((mod) => mod.toUpperCase()));
-  if (!modSet.has("MR")) return [...notes];
+  const acronyms = mods.map(getManiaReplayModAcronym);
+  let result = [...notes];
 
-  return notes.map((note) => ({
-    ...note,
-    column: keyCount - 1 - note.column,
-  }));
+  // Lazer applies IApplicableAfterBeatmapConversion mods (Hold Off, Invert -
+  // mutually incompatible) before IApplicableToBeatmap mods (Random, Mirror).
+  if (acronyms.includes("HO")) {
+    result = result.map((note) => (note.isHold ? { ...note, endTime: note.time, isHold: false } : note));
+  } else if (acronyms.includes("IN")) {
+    result = applyManiaInvertMod(result, context.timingPoints);
+  }
+
+  for (let i = 0; i < mods.length; i++) {
+    if (acronyms[i] === "RD") {
+      const rawSeed = Number(getManiaReplayModSetting(mods[i], ["seed"]));
+      // Without the seed the shuffle is unknowable; leave columns untouched.
+      if (!Number.isFinite(rawSeed)) continue;
+      const columnMap = getManiaRandomColumnMap(keyCount, rawSeed);
+      result = result.map((note) => ({ ...note, column: columnMap[note.column] ?? note.column }));
+    } else if (acronyms[i] === "MR") {
+      result = result.map((note) => ({ ...note, column: keyCount - 1 - note.column }));
+    }
+  }
+
+  return result;
 }
 
 export function getManiaReplayHitWindows(
@@ -935,6 +1103,7 @@ export function simulateManiaReplayJudgements(
   const events: ReplayJudgementEvent[] = [];
   const notesByColumn: number[][] = Array.from({ length: keyCount }, () => []);
   const isLazer = accuracyMode === "lazer";
+  const noReleaseTails = isLazer && Boolean(options.lazerNoReleaseTails);
   const stableTransitionMedian = !isLazer && options.legacyReplayFrameRounding
     ? getStableTransitionMedian(segments)
     : 0;
@@ -1183,7 +1352,7 @@ export function simulateManiaReplayJudgements(
           for (let s = segmentCursor; s < columnSegments.length; s++) {
             const segment = columnSegments[s];
             if (segment.start > note.endTime + windows.meh) break;
-            if (segment.end > tailDeadline) break;
+            if (!noReleaseTails && segment.end > tailDeadline) break;
 
             // Note lock (OrderedHitPolicy.IsHittable): the press only reaches
             // this hold if it lands strictly before the next alive object's
@@ -1206,6 +1375,18 @@ export function simulateManiaReplayJudgements(
               // object's hit window leave the tail judgeable.
               if (nextAliveStart - segment.start <= windows.meh && note.endTime < nextAliveStart) break;
             }
+
+            // No Release: once the re-grab is holding at the tail, Perfect is
+            // applied immediately (capped to Meh because the head was missed).
+            if (noReleaseTails && segment.end >= note.endTime) {
+              regrabTail = {
+                judgment: capLazerTailJudgment(1, true),
+                offsetMs: 0,
+                time: Math.max(segment.start, note.endTime),
+              };
+              break;
+            }
+            if (segment.end > tailDeadline) break;
 
             const rawTailJudgment = getJudgmentForOffset(
               (segment.end - note.endTime) / RELEASE_WINDOW_LENIENCE,
@@ -1413,6 +1594,18 @@ export function simulateManiaReplayJudgements(
         while (scanIndex < columnSegments.length) {
           const segment = columnSegments[scanIndex];
           releaseTime = Math.max(releaseTime, segment.end);
+
+          // No Release: NoReleaseDrawableHoldNoteTail applies Perfect as soon
+          // as the tail is reached while the key is down (a press between the
+          // tail and its late Meh window re-holds and judges immediately too),
+          // capped to Meh after a head miss or hold break.
+          if (noReleaseTails && segment.end >= note.endTime && segment.start <= tailDeadline) {
+            const hasComboBreak = bodyBreakTime != null || headMissed;
+            tailJudgment = capLazerTailJudgment(1, hasComboBreak);
+            tailOffsetMs = 0;
+            tailTime = Math.max(segment.start, note.endTime);
+            break;
+          }
 
           if (segment.end > tailDeadline) {
             tailJudgment = 6;

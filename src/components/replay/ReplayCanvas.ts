@@ -1,6 +1,6 @@
 import { Application, Assets, Container, FillGradient, Graphics, GraphicsPath, Matrix, Sprite, Text, Texture } from "pixi.js";
 import type { ReplayFrame, ReplayLifeBarFrame } from "../../lib/types";
-import type { ManiaNote, ManiaScrollVelocity } from "../../lib/beatmap-parser";
+import type { ManiaNote, ManiaScrollVelocity, ManiaTimingPoint } from "../../lib/beatmap-parser";
 import type { Judgment, ManiaReplayHitWindows, ManiaReplayRuleset, ReplayJudgementEvent, ReplayNoteState } from "../../lib/mania-replay-judgement";
 import { applyManiaReplayModsToNotes, buildReplaySegments, calculateReplayAccuracy, getManiaReplayHitWindows, getManiaReplayRuleset, simulateManiaReplayJudgements } from "../../lib/mania-replay-judgement";
 import { DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
@@ -168,6 +168,14 @@ function parseModNumberSetting(value: unknown, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+// Cover's direction setting is lazer's CoverExpandDirection enum:
+// 0 = AgainstScroll (over the receptors), 1 = AlongScroll (over the spawn edge).
+function parseCoverDirectionAlongScroll(value: unknown): boolean {
+  if (typeof value === "number") return value === 1;
+  if (typeof value === "string") return value.trim().toLowerCase() === "alongscroll" || value.trim() === "1";
+  return false;
+}
+
 interface RendererOptions {
   backgroundImage?: HTMLImageElement;
   backgroundDim?: number;
@@ -180,6 +188,7 @@ interface RendererOptions {
   inputOverlayKeyHistory?: boolean;
   mods?: ReplayRendererMod[];
   speedMultiplier?: number;
+  timingPoints?: ManiaTimingPoint[];
   transparentBackground?: boolean;
   hideHud?: boolean;
   hidePerformanceStats?: boolean;
@@ -300,6 +309,9 @@ export class ManiaReplayRenderer {
   private inputOverlayColor = "#a855f7";
   private inputOverlayKeyHistory = false;
   private hasHiddenMod = false;
+  private hasFadeInMod = false;
+  private coverMod: { coverage: number; alongScroll: boolean } | null = null;
+  private hasVisibilityMod = false;
   private hasFlashlightMod = false;
   private flashlightComboBasedSize = false;
   private flashlightSizeMultiplier = 1;
@@ -455,6 +467,15 @@ export class ManiaReplayRenderer {
           ? 0.75
           : 1;
     this.hasHiddenMod = mods.has("HD");
+    this.hasFadeInMod = mods.has("FI");
+    const coverInputMod = inputMods.find((m) => getModAcronym(m) === "CO");
+    this.coverMod = coverInputMod != null
+      ? {
+          coverage: Math.min(0.8, Math.max(0.2, parseModNumberSetting(getModSetting(coverInputMod, ["coverage"]), 0.5))),
+          alongScroll: parseCoverDirectionAlongScroll(getModSetting(coverInputMod, ["direction"])),
+        }
+      : null;
+    this.hasVisibilityMod = this.hasHiddenMod || this.hasFadeInMod || this.coverMod != null;
     this.hasFlashlightMod = mods.has("FL");
     this.flashlightComboBasedSize = parseModBooleanSetting(
       getModSetting(flashlightMod, ["combo_based_size", "comboBasedSize", "combo_based", "comboBased"]),
@@ -464,12 +485,16 @@ export class ManiaReplayRenderer {
       getModSetting(flashlightMod, ["size_multiplier", "sizeMultiplier", "flashlight_size", "flashlightSize"]),
       1,
     );
-    this.notes = applyManiaReplayModsToNotes(notes, keyCount, [...mods]);
+    this.notes = applyManiaReplayModsToNotes(notes, keyCount, inputMods, {
+      timingPoints: options?.timingPoints,
+    });
     this.ruleset = getManiaReplayRuleset(options?.isLazer ?? false, [...mods], options?.isConvert ?? false, this.modRate);
 
     this.backgroundImage = options?.backgroundImage ?? null;
     this.backgroundDim = options?.backgroundDim ?? 80;
-    this.od = options?.od ?? 8;
+    const difficultyAdjustMod = inputMods.find((m) => getModAcronym(m) === "DA");
+    const overriddenOd = Number(getModSetting(difficultyAdjustMod, ["overall_difficulty", "overallDifficulty"]));
+    this.od = Number.isFinite(overriddenOd) ? overriddenOd : options?.od ?? 8;
     this.showInputOverlay = options?.showInputOverlay ?? false;
     this.inputOverlayOnly = options?.inputOverlayOnly ?? false;
     this.inputOverlayColor = options?.inputOverlayColor ?? "#a855f7";
@@ -488,18 +513,20 @@ export class ManiaReplayRenderer {
     this.overlaySettings = normalizeReplayOverlaySettings(options?.overlaySettings);
     this.onOverlaySettingsChange = options?.onOverlaySettingsChange ?? null;
     this.updateSkinCache();
-    this.scrollVelocities = options?.scrollVelocities ?? [];
+    // Constant Speed removes every BPM/SV-driven scroll change; the renderer's
+    // base scroll is already constant-time, so dropping the SVs is the mod.
+    this.scrollVelocities = mods.has("CS") ? [] : options?.scrollVelocities ?? [];
     this.prepareScrollVelocities();
     this.receptorFlashTimestamps = new Array(keyCount).fill(0);
     this.hitWindows = getManiaReplayHitWindows(this.od, this.ruleset);
 
     const frameDuration = frames.length > 0 ? frames[frames.length - 1].time : 0;
-    const noteDuration = notes.length > 0 ? Math.max(...notes.map((n) => n.endTime)) : 0;
+    const noteDuration = this.notes.length > 0 ? Math.max(...this.notes.map((n) => n.endTime)) : 0;
     const replayTailGrace = this.hitWindows.miss * 1.5;
     this.totalDuration = Math.max(frameDuration, noteDuration + replayTailGrace);
 
     this.maxHoldDuration = 0;
-    for (const n of notes) {
+    for (const n of this.notes) {
       if (n.isHold) this.maxHoldDuration = Math.max(this.maxHoldDuration, n.endTime - n.time);
     }
 
@@ -511,6 +538,7 @@ export class ManiaReplayRenderer {
       this.hitWindows,
       this.ruleset.accuracyMode,
       {
+        lazerNoReleaseTails: mods.has("NR"),
         legacyReplayFrameRounding: this.ruleset.accuracyMode === "stable",
         speedMultiplier: this.ruleset.speedMultiplier,
       },
@@ -3601,7 +3629,8 @@ export class ManiaReplayRenderer {
   }
 
   private updateHiddenCoverage() {
-    if (!this.hasHiddenMod) return;
+    // Hidden and Fade In share lazer's combo-scaled coverage; Cover is fixed.
+    if (!this.hasHiddenMod && !this.hasFadeInMod) return;
 
     const elapsed = this.currentTime - this.hiddenCoverageUpdatedAt;
     const target = getManiaHiddenCoverageReference(this.combo);
@@ -3615,6 +3644,9 @@ export class ManiaReplayRenderer {
   }
 
   private getHiddenCoveragePx(layout: Layout): number {
+    // Cover uses lazer's plain PlayfieldCoveringWrapper: the covered area is a
+    // direct proportion of the playfield with no legacy hit-position scaling.
+    if (this.coverMod != null) return layout.h * this.coverMod.coverage;
     return getManiaHiddenCoverageReferencePx({
       coverageReference: this.hiddenCoverageReference,
       hitPosition: this.skinSettings.hitPosition ?? MANIA_HIT_TARGET_POSITION,
@@ -3623,8 +3655,21 @@ export class ManiaReplayRenderer {
     });
   }
 
+  // Fade In covers the spawn edge (AlongScroll); Hidden covers the receptor
+  // side (AgainstScroll); Cover picks a side via its direction setting.
+  private coverIsAlongScroll(): boolean {
+    if (this.coverMod != null) return this.coverMod.alongScroll;
+    return this.hasFadeInMod;
+  }
+
   private getHiddenAlphaAtY(y: number, layout?: Layout): number {
-    if (!layout || !this.hasHiddenMod) return 1;
+    if (!layout || !this.hasVisibilityMod) return 1;
+    if (this.coverIsAlongScroll()) {
+      const distanceFromSpawn = this.skinSettings.upscroll ? layout.h - y : y;
+      const coveragePx = this.getHiddenCoveragePx(layout);
+      const fadePx = Math.max(1, getManiaHiddenFadePx(layout.h));
+      return Math.max(0, Math.min(1, (distanceFromSpawn - coveragePx) / fadePx));
+    }
     return getManiaHiddenAlphaAtY({
       coveragePx: this.getHiddenCoveragePx(layout),
       fadePx: getManiaHiddenFadePx(layout.h),
@@ -3639,7 +3684,7 @@ export class ManiaReplayRenderer {
   }
 
   private getHiddenAlphaForVerticalSpan(top: number, bottom: number, layout?: Layout): number {
-    if (!layout || !this.hasHiddenMod) return 1;
+    if (!layout || !this.hasVisibilityMod) return 1;
     return (
       this.getHiddenAlphaAtY(top, layout) +
       this.getHiddenAlphaAtY((top + bottom) / 2, layout) +
@@ -3660,7 +3705,7 @@ export class ManiaReplayRenderer {
     visibilityLayout?: Layout,
   ) {
     if (w <= 0 || h <= 0 || alpha <= 0) return;
-    const useVisibility = !!visibilityLayout && this.hasHiddenMod;
+    const useVisibility = !!visibilityLayout && this.hasVisibilityMod;
     if (!useVisibility && (fadeHeight <= 0 || y >= fadeHeight)) {
       this.roundRect(x, y, w, h, radius, color, alpha);
       return;
@@ -3754,7 +3799,7 @@ export class ManiaReplayRenderer {
     visibilityLayout?: Layout,
   ) {
     if (w <= 0 || h <= 0 || alpha <= 0) return;
-    const useVisibility = !!visibilityLayout && this.hasHiddenMod;
+    const useVisibility = !!visibilityLayout && this.hasVisibilityMod;
     if (!useVisibility && (fadeHeight <= 0 || y >= fadeHeight)) {
       this.fillRect(x, y, w, h, color, alpha);
       return;

@@ -283,9 +283,31 @@ export function SkinUploadModal({
   const ticketRef = useRef<UploadTicket | null>(null);
   // The backdrop behind the rendered previews: one of the curated map covers
   // or the flat triangle fallback. Starts on a random cover, user-swappable;
-  // every keymode render shares the choice. Loaded covers memoize per set.
+  // every keymode render shares the choice. Covers memoize per set: the
+  // promise map dedupes in-flight loads, the image map records settled
+  // results so the render effect can tell "already decoded" apart from
+  // "still downloading" without awaiting.
   const [backdrop, setBackdrop] = useState<PreviewBackdrop>(randomPreviewBackdrop);
-  const backgroundCacheRef = useRef<Map<number, Promise<HTMLImageElement | null>>>(new Map());
+  const backgroundPromisesRef = useRef<Map<number, Promise<HTMLImageElement | null>>>(new Map());
+  const backgroundImagesRef = useRef<Map<number, HTMLImageElement | null>>(new Map());
+
+  const ensureBackdropImage = useCallback((setId: number): Promise<HTMLImageElement | null> => {
+    let promise = backgroundPromisesRef.current.get(setId);
+    if (!promise) {
+      promise = loadSkinPreviewBackgroundForSet(setId).catch(() => null);
+      backgroundPromisesRef.current.set(setId, promise);
+      void promise.then((image) => backgroundImagesRef.current.set(setId, image));
+    }
+    return promise;
+  }, []);
+
+  // Warm the chosen cover as soon as the modal opens: picking and parsing the
+  // .osk takes a while, which hides the download so the first render rarely
+  // has to wait for it.
+  useEffect(() => {
+    if (!open || backdrop === "flat") return;
+    void ensureBackdropImage(backdrop);
+  }, [open, backdrop, ensureBackdropImage]);
   const [progress, setProgress] = useState({ done: 0, total: 0, label: "" });
   const [published, setPublished] = useState<SkinSummary | null>(null);
 
@@ -437,22 +459,15 @@ export function SkinUploadModal({
 
   // Render every supported keymode once per picked file and again when the
   // backdrop changes (4K first so the hero fills fast); switching keymodes
-  // afterwards just swaps images.
+  // afterwards just swaps images. A cover that is still downloading never
+  // blocks: the first pass renders on the flat backdrop right away and a
+  // second pass swaps the cover in once it lands.
   useEffect(() => {
     if (!imported) return;
     let cancelled = false;
     setPreviewBusy(true);
-    (async () => {
-      let background: HTMLImageElement | null = null;
-      if (backdrop !== "flat") {
-        let promise = backgroundCacheRef.current.get(backdrop);
-        if (!promise) {
-          promise = loadSkinPreviewBackgroundForSet(backdrop);
-          backgroundCacheRef.current.set(backdrop, promise);
-        }
-        background = await promise.catch(() => null);
-      }
-      const keymodes = [...imported.summary.keymodes].sort((a, b) => (a === 4 ? -1 : b === 4 ? 1 : a - b));
+    const keymodes = [...imported.summary.keymodes].sort((a, b) => (a === 4 ? -1 : b === 4 ? 1 : a - b));
+    const renderAll = async (background: HTMLImageElement | null) => {
       for (const keys of keymodes) {
         if (cancelled) return;
         const render = await renderSkinPreview(imported.settings, keys, { background });
@@ -468,6 +483,22 @@ export function SkinUploadModal({
           return new Map(previous).set(keys, { blob: render.blob, width: render.width, height: render.height, url, accent: render.accent });
         });
       }
+    };
+    (async () => {
+      if (backdrop === "flat") {
+        await renderAll(null);
+        return;
+      }
+      const promise = ensureBackdropImage(backdrop);
+      if (backgroundImagesRef.current.has(backdrop)) {
+        // Already settled (null means the load failed: stay flat, no retry).
+        await renderAll(backgroundImagesRef.current.get(backdrop) ?? null);
+        return;
+      }
+      await renderAll(null);
+      const background = await promise;
+      if (cancelled || !background) return;
+      await renderAll(background);
     })()
       .catch(() => {
         if (!cancelled) setError("The previews could not be rendered.");
@@ -478,7 +509,7 @@ export function SkinUploadModal({
     return () => {
       cancelled = true;
     };
-  }, [imported, backdrop]);
+  }, [imported, backdrop, ensureBackdropImage]);
 
   const addScreenshots = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return;

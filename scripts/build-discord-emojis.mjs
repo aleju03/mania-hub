@@ -35,12 +35,13 @@ const GRADES = {
   f: "GradeSmall-F",
 };
 
-// Difficulty colour buckets, mirroring osu!-web / the in-app ModBadge.
+// Difficulty colour buckets, mirroring osu!-web / the in-app ModBadge
+// (lazer's ModType categories: increase/reduction/conversion/automation/fun/system).
 const RED = "#ff5b6b"; // difficulty increase
 const GREEN = "#9fd84a"; // difficulty reduction
-const BLUE = "#54c8ff"; // automation / conversion / fun
-const YELLOW = "#ffcc22"; // scoring
-const PURPLE = "#b18bff"; // special
+const PURPLE = "#b18bff"; // conversion
+const PINK = "#ff66ab"; // fun
+const YELLOW = "#ffcc22"; // system / scoring
 
 // Mod acronym (lowercase, emoji name `mod_<acr>`) -> { file, colour }. Curated to
 // the mods that actually show up on osu!mania scores plus the key-conversion
@@ -51,43 +52,45 @@ const MODS = {
   nc: { file: "mod-nightcore", color: RED },
   hd: { file: "mod-hidden", color: RED },
   fi: { file: "mod-fade-in", color: RED },
+  co: { file: "mod-cover", color: RED },
   hr: { file: "mod-hard-rock", color: RED },
   fl: { file: "mod-flashlight", color: RED },
   sd: { file: "mod-sudden-death", color: RED },
   pf: { file: "mod-perfect", color: RED },
   ac: { file: "mod-accuracy-challenge", color: RED },
-  mu: { file: "mod-muted", color: RED },
   // Difficulty reduction
   ez: { file: "mod-easy", color: GREEN },
   nf: { file: "mod-no-fail", color: GREEN },
   ht: { file: "mod-half-time", color: GREEN },
   dc: { file: "mod-daycore", color: GREEN },
   nr: { file: "mod-no-release", color: GREEN },
-  ho: { file: "mod-hold-off", color: GREEN },
-  // Conversion / automation / fun
-  mr: { file: "mod-mirror", color: BLUE },
-  rd: { file: "mod-random", color: BLUE },
-  in: { file: "mod-invert", color: BLUE },
-  cs: { file: "mod-constant-speed", color: BLUE },
-  as: { file: "mod-adaptive-speed", color: BLUE },
-  wu: { file: "mod-wind-up", color: BLUE },
-  wd: { file: "mod-wind-down", color: BLUE },
-  sy: { file: "mod-synesthesia", color: BLUE },
-  da: { file: "mod-difficulty-adjust", color: BLUE },
-  // Scoring / special
-  sv2: { file: "mod-score-v2", color: YELLOW },
+  // Conversion
+  mr: { file: "mod-mirror", color: PURPLE },
+  rd: { file: "mod-random", color: PURPLE },
+  in: { file: "mod-invert", color: PURPLE },
+  ho: { file: "mod-hold-off", color: PURPLE },
+  cs: { file: "mod-constant-speed", color: PURPLE },
+  da: { file: "mod-difficulty-adjust", color: PURPLE },
   cl: { file: "mod-classic", color: PURPLE },
+  // Fun
+  as: { file: "mod-adaptive-speed", color: PINK },
+  wu: { file: "mod-wind-up", color: PINK },
+  wd: { file: "mod-wind-down", color: PINK },
+  mu: { file: "mod-muted", color: PINK },
+  sy: { file: "mod-synesthesia", color: PINK },
+  // System / scoring
+  sv2: { file: "mod-score-v2", color: YELLOW },
   // Key conversion
-  "1k": { file: "mod-one-key", color: BLUE },
-  "2k": { file: "mod-two-keys", color: BLUE },
-  "3k": { file: "mod-three-keys", color: BLUE },
-  "4k": { file: "mod-four-keys", color: BLUE },
-  "5k": { file: "mod-five-keys", color: BLUE },
-  "6k": { file: "mod-six-keys", color: BLUE },
-  "7k": { file: "mod-seven-keys", color: BLUE },
-  "8k": { file: "mod-eight-keys", color: BLUE },
-  "9k": { file: "mod-nine-keys", color: BLUE },
-  "10k": { file: "mod-ten-keys", color: BLUE },
+  "1k": { file: "mod-one-key", color: PURPLE },
+  "2k": { file: "mod-two-keys", color: PURPLE },
+  "3k": { file: "mod-three-keys", color: PURPLE },
+  "4k": { file: "mod-four-keys", color: PURPLE },
+  "5k": { file: "mod-five-keys", color: PURPLE },
+  "6k": { file: "mod-six-keys", color: PURPLE },
+  "7k": { file: "mod-seven-keys", color: PURPLE },
+  "8k": { file: "mod-eight-keys", color: PURPLE },
+  "9k": { file: "mod-nine-keys", color: PURPLE },
+  "10k": { file: "mod-ten-keys", color: PURPLE },
 };
 
 // Square emoji canvas. Discord scales emoji down to ~24-48px, so 128 keeps them

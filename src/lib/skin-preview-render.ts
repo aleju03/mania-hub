@@ -174,12 +174,18 @@ export function skinPreviewBackgroundThumbUrl(setId: number): string {
   return `https://assets.ppy.sh/beatmaps/${setId}/covers/card.jpg`;
 }
 
-// Loads one set's cover through the same-origin /api/background proxy
+// Loads one set's cover from the pre-shrunk static copies in
+// public/images/skin-preview-backdrops (~50-190 KB each, built by
+// scripts/build-skin-preview-backdrops.mjs; rerun it when the set list
+// changes). Same-origin, so the canvas stays clean. A missing copy falls
+// back to proxying the multi-MB original through /api/background
 // (assets.ppy.sh sends no CORS headers, so a direct load would taint the
-// canvas). Resolves null when the cover cannot load; the renderer then uses
-// its flat triangle backdrop.
+// canvas), and resolves null when nothing loads; the renderer then uses its
+// flat triangle backdrop.
 export function loadSkinPreviewBackgroundForSet(setId: number): Promise<HTMLImageElement | null> {
-  return decodeImage(`/api/background?beatmapsetId=${setId}&inline=1&cover=fullsize`).catch(() => null);
+  return decodeImage(`/images/skin-preview-backdrops/${setId}.webp`)
+    .catch(() => decodeImage(`/api/background?beatmapsetId=${setId}&inline=1&cover=fullsize`))
+    .catch(() => null);
 }
 
 // Random pick with fallbacks, for callers that do not care which cover.

@@ -4,7 +4,7 @@ const fileMap: Record<string, string> = {
   EZ: "easy", NF: "no-fail", HT: "half-time", NC: "nightcore",
   SD: "sudden-death", PF: "perfect", RX: "relax", AP: "autopilot",
   CL: "classic", SO: "spun-out", TD: "touch-device", MR: "mirror",
-  FI: "fade-in", RD: "random", CO: "co-op", AT: "autoplay",
+  FI: "fade-in", RD: "random", AT: "autoplay",
   SV2: "score-v2",
   // Lazer mods
   AC: "accuracy-challenge", AD: "approach-different", AS: "adaptive-speed",
@@ -16,7 +16,7 @@ const fileMap: Record<string, string> = {
   NR: "no-release", NS: "no-scope", RP: "repel", SG: "single-tap",
   SI: "spin-in", SR: "simplified-rhythm", ST: "strict-tracking",
   SW: "swap", SY: "synesthesia", TC: "traceable", TP: "transform",
-  WG: "wiggle", WD: "wind-down", WU: "wind-up",
+  WG: "wiggle", WD: "wind-down", WU: "wind-up", CO: "cover",
   "1K": "one-key", "2K": "two-keys", "3K": "three-keys", "4K": "four-keys",
   "5K": "five-keys", "6K": "six-keys", "7K": "seven-keys", "8K": "eight-keys",
   "9K": "nine-keys", "10K": "ten-keys",
@@ -24,18 +24,32 @@ const fileMap: Record<string, string> = {
   NM: "no-mod",
 };
 
+// Category colors follow lazer's OsuColour.ForModType / osu-web's mod badges:
+// Red1 / Lime1 / Purple1 / Blue1 / Pink1 / yellow.
 const typeColor: Record<string, string> = {
   // Difficulty increase (red)
   HR: "#ff6666", DT: "#ff6666", FL: "#ff6666", HD: "#ff6666", NC: "#ff6666",
-  FI: "#ff6666", SD: "#ff6666", PF: "#ff6666", AC: "#ff6666", BL: "#ff6666",
-  ST: "#ff6666", MU: "#ff6666",
-  // Difficulty decrease (green)
-  EZ: "#b3d944", NF: "#b3d944", HT: "#b3d944", DC: "#b3d944", NR: "#b3d944",
-  // Automation / fun (blue)
-  AP: "#66ccff", RX: "#66ccff", SO: "#66ccff", RD: "#66ccff", AT: "#66ccff",
-  CN: "#66ccff", MR: "#66ccff", AS: "#66ccff", CS: "#66ccff",
-  // Special (pink/purple/yellow)
-  TD: "#ff66aa", CL: "#aa88ff", CO: "#ffcc22", SV2: "#ffcc22",
+  FI: "#ff6666", CO: "#ff6666", SD: "#ff6666", PF: "#ff6666", AC: "#ff6666",
+  BL: "#ff6666", ST: "#ff6666",
+  // Difficulty reduction (lime)
+  EZ: "#b2ff66", NF: "#b2ff66", HT: "#b2ff66", DC: "#b2ff66", NR: "#b2ff66",
+  // Conversion (purple)
+  MR: "#8c66ff", RD: "#8c66ff", IN: "#8c66ff", HO: "#8c66ff", CS: "#8c66ff",
+  DS: "#8c66ff", DA: "#8c66ff", CL: "#8c66ff", SW: "#8c66ff", SG: "#8c66ff",
+  AL: "#8c66ff", SR: "#8c66ff", TP2: "#8c66ff",
+  "1K": "#8c66ff", "2K": "#8c66ff", "3K": "#8c66ff", "4K": "#8c66ff",
+  "5K": "#8c66ff", "6K": "#8c66ff", "7K": "#8c66ff", "8K": "#8c66ff",
+  "9K": "#8c66ff", "10K": "#8c66ff",
+  // Automation (blue)
+  AP: "#66ccff", RX: "#66ccff", SO: "#66ccff", AT: "#66ccff", CN: "#66ccff",
+  // Fun (pink)
+  WU: "#ff66ab", WD: "#ff66ab", AS: "#ff66ab", MU: "#ff66ab", SY: "#ff66ab",
+  AD: "#ff66ab", BR: "#ff66ab", BU: "#ff66ab", BM: "#ff66ab", DF: "#ff66ab",
+  DP: "#ff66ab", FF: "#ff66ab", FR: "#ff66ab", GR: "#ff66ab", MG: "#ff66ab",
+  NS: "#ff66ab", RP: "#ff66ab", SI: "#ff66ab", TC: "#ff66ab", TP: "#ff66ab",
+  WG: "#ff66ab",
+  // System (yellow)
+  TD: "#ffcc22", SV2: "#ffcc22",
 };
 
 const iconInset: Record<string, number> = {
