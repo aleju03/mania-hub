@@ -419,8 +419,12 @@ async function streamCommandToFile(command: string, args: string[], outputPath: 
     stdio: ["ignore", "pipe", "inherit"],
   });
   if (!child.stdout) throw new Error(`Failed to read stdout from ${command}.`);
+  // Attach the exit listener before awaiting the stream: if the process has
+  // already exited by the time we start waiting, the close event never fires
+  // again and the promise would hang forever (silent "unsettled top-level await").
+  const exitCode = waitForExit(child);
   await pipeline(child.stdout, createWriteStream(outputPath, { mode: 0o600 }));
-  const code = await waitForExit(child);
+  const code = await exitCode;
   if (code !== 0) throw new Error(`${command} exited with code ${code}.`);
 }
 
@@ -512,6 +516,10 @@ async function runInherit(command: string, args: string[]): Promise<void> {
 
 function waitForExit(child: ReturnType<typeof spawn>): Promise<number> {
   return new Promise((resolve, reject) => {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      resolve(child.exitCode ?? 1);
+      return;
+    }
     child.once("error", reject);
     child.once("close", (code) => resolve(code ?? 1));
   });
