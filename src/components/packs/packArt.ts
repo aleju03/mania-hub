@@ -1,12 +1,13 @@
 import { drawManiaGlyph } from "../player/maniacard3d/cardTexture";
 
+// Real booster proportions: ~72x122mm, so width/height ~0.6.
 export const PACK_ART_WIDTH = 600;
-export const PACK_ART_HEIGHT = 840;
+export const PACK_ART_HEIGHT = 1000;
 export const PACK_ASPECT = PACK_ART_WIDTH / PACK_ART_HEIGHT;
 
 // Crimp band heights and the tear line, as fractions of the pack height.
 // PackStage reads these so the DOM tear interaction lines up with the art.
-export const PACK_CRIMP_FRACTION = 0.072;
+export const PACK_CRIMP_FRACTION = 0.078;
 export const PACK_TEAR_FRACTION = 0.16;
 
 const FONT = "Torus, Arial, sans-serif";
@@ -78,6 +79,31 @@ export function createPackFrontCanvas(
   drawTearPerforation(context, width, height);
   drawSideWelds(context, width, height);
 
+  return canvas;
+}
+
+/* Plain foil back for the 3D pack: same stock, crimps, and welds, no print.
+   Only seen at glancing angles and through the torn gap. */
+export function createPackBackCanvas(): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = PACK_ART_WIDTH;
+  canvas.height = PACK_ART_HEIGHT;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("2D canvas is unavailable");
+
+  const width = PACK_ART_WIDTH;
+  const height = PACK_ART_HEIGHT;
+  const base = context.createLinearGradient(0, 0, width * 0.4, height);
+  base.addColorStop(0, "#171226");
+  base.addColorStop(0.5, "#100c1e");
+  base.addColorStop(1, "#080512");
+  context.fillStyle = base;
+  context.fillRect(0, 0, width, height);
+
+  drawSheen(context, width, height);
+  drawCrimp(context, width, height, 0);
+  drawCrimp(context, width, height, height - PACK_CRIMP_FRACTION * height);
+  drawSideWelds(context, width, height);
   return canvas;
 }
 

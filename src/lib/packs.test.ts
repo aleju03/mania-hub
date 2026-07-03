@@ -1,12 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { LiveGlobalRankingEntry } from "./live-backend";
-import type { LeanRankingEntry } from "./types";
+import type { LeanRankingEntry, OsuScore } from "./types";
 import {
   DEEP_COUNTRY_POOL,
   DEEP_MAX_RANK,
   DEEP_MIN_RANK,
   drawDeepPackEntry,
   drawPackPlayersFromPool,
+  fetchPackPlayerScores,
   isDeepRank,
   liveEntryToPackPlayer,
   MAX_PACK_RANK,
@@ -27,6 +28,24 @@ import {
   sortIntoRevealOrder,
   toPackPlayer,
 } from "./packs";
+import {
+  fetchLivePlayerCachedProfileSnapshotDirect,
+  fetchLivePlayerProfileSnapshotDirect,
+  isLiveBackendConfigured,
+} from "./live-backend";
+import { getUserScoresBestWindow } from "./osu";
+
+vi.mock("./live-backend", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./live-backend")>()),
+  isLiveBackendConfigured: vi.fn(() => true),
+  fetchLivePlayerCachedProfileSnapshotDirect: vi.fn(),
+  fetchLivePlayerProfileSnapshotDirect: vi.fn(),
+}));
+
+vi.mock("./osu", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./osu")>()),
+  getUserScoresBestWindow: vi.fn(),
+}));
 
 function mulberry32(seed: number): () => number {
   let state = seed >>> 0;
@@ -394,5 +413,54 @@ describe("reveal order", () => {
     const players = [makeEntry(40), makeEntry(9000), makeEntry(700)].map(toPackPlayer);
     const ordered = sortIntoRevealOrder(players);
     expect(ordered.map((player) => player.globalRank)).toEqual([9000, 700, 40]);
+  });
+});
+
+describe("fetchPackPlayerScores", () => {
+  const cachedFetch = vi.mocked(fetchLivePlayerCachedProfileSnapshotDirect);
+  const directFetch = vi.mocked(fetchLivePlayerProfileSnapshotDirect);
+  const osuWindowFetch = vi.mocked(getUserScoresBestWindow);
+
+  function snapshotWith(scores: OsuScore[]) {
+    return { bestScores: scores } as Awaited<ReturnType<typeof fetchLivePlayerProfileSnapshotDirect>>;
+  }
+
+  const scores = [{ id: 1, pp: 100 } as OsuScore];
+
+  beforeEach(() => {
+    vi.mocked(isLiveBackendConfigured).mockReturnValue(true);
+    cachedFetch.mockReset();
+    directFetch.mockReset();
+    osuWindowFetch.mockReset();
+  });
+
+  it("serves stored best scores from the cached snapshot without touching the blocking endpoint", async () => {
+    cachedFetch.mockResolvedValue(snapshotWith(scores));
+    await expect(fetchPackPlayerScores(101)).resolves.toEqual(scores);
+    expect(directFetch).not.toHaveBeenCalled();
+    expect(osuWindowFetch).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the blocking snapshot when nothing is cached", async () => {
+    cachedFetch.mockResolvedValue(null);
+    directFetch.mockResolvedValue(snapshotWith(scores));
+    await expect(fetchPackPlayerScores(101)).resolves.toEqual(scores);
+    expect(directFetch).toHaveBeenCalledTimes(1);
+    expect(osuWindowFetch).not.toHaveBeenCalled();
+  });
+
+  it("treats an empty cached best-score list as cold instead of minting a blank card", async () => {
+    cachedFetch.mockResolvedValue(snapshotWith([]));
+    directFetch.mockResolvedValue(snapshotWith(scores));
+    await expect(fetchPackPlayerScores(101)).resolves.toEqual(scores);
+    expect(directFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("degrades to the direct osu! window when the backend errors end to end", async () => {
+    cachedFetch.mockRejectedValue(new Error("backend down"));
+    directFetch.mockRejectedValue(new Error("backend down"));
+    osuWindowFetch.mockResolvedValue(scores);
+    await expect(fetchPackPlayerScores(101)).resolves.toEqual(scores);
+    expect(osuWindowFetch).toHaveBeenCalledWith({ data: { userId: 101, totalLimit: 200, parallel: true } });
   });
 });

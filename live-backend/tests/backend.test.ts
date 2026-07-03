@@ -165,12 +165,14 @@ afterEach(async () => {
 
 describe("live backend", () => {
   it("migrates a fresh DB and ingests mocked oSC idempotently", async () => {
-    const { db, queue, ingestor } = await setup();
+    const { db, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");
     expect(await ingestor.ingestBatch(scores)).toEqual({ inserted: 1, skipped: 1 });
     expect(await ingestor.ingestBatch(scores)).toEqual({ inserted: 0, skipped: 2 });
     expect(Number((await exec(db, "select count(*) as count from score_events")).rows[0].count)).toBe(1);
-    expect(await queue.depth()).toBeGreaterThanOrEqual(1);
+    // Ingest fans out follow-up jobs; count rows directly since reserved-lane
+    // types (e.g. snipe seeding) are invisible to the shared depth measure.
+    expect(Number((await exec(db, "select count(*) as count from jobs where status = 'queued'")).rows[0].count)).toBeGreaterThanOrEqual(1);
   });
 
   it("projects tracked player activity by year without double-counting duplicate ingestion", async () => {
@@ -902,17 +904,54 @@ describe("live backend", () => {
     expect(failedRow?.newestError).toBe("current failure");
   });
 
-  it("parks sheddable jobs when queue pressure is high", async () => {
+  it("keeps snipe seeding runnable under queue pressure instead of parking it", async () => {
+    // Regression for the prod incident where seed_snipe_board was globally
+    // sheddable: the queue's steady state sat at the soft-pressure cap, so
+    // every seed job was born deferred and new snipe boards stopped for a day.
     const { db, queue } = await setup();
     for (let index = 0; index < 80; index += 1) {
       await queue.enqueue("refresh_user_top_scores", `top:pressure:${index}`, { userId: index + 1, scoreId: 10_000 + index, country: "CR" });
     }
 
-    await queue.enqueue("refresh_user_maps_farmed_scores", "maps-farmed:CR:101", { country: "CR", userId: 101 });
+    await queue.enqueue("seed_snipe_board", "snipe-seed:CR:501", { country: "CR", beatmapId: 501 });
+    const seeded = (await exec(db, "select status from jobs where dedupe_key = 'snipe-seed:CR:501'")).rows[0];
+    expect(seeded.status).toBe("queued");
 
-    const parked = (await exec(db, "select status from jobs where type = 'refresh_user_maps_farmed_scores'")).rows[0];
-    expect(parked.status).toBe("deferred_pressure");
-    expect(await queue.depth()).toBe(80);
+    // Beyond the reserve, seed jobs still park instead of piling up runnable.
+    await queue.enqueue("seed_snipe_board", "snipe-seed:CR:502", { country: "CR", beatmapId: 502 });
+    const overflow = (await exec(db, "select status, last_error from jobs where dedupe_key = 'snipe-seed:CR:502'")).rows[0];
+    expect(overflow.status).toBe("deferred_pressure");
+    expect(String(overflow.last_error)).toContain("reserve");
+  });
+
+  it("tops the snipe seed reserve back up from the parked backlog under sustained pressure", async () => {
+    const { db, queue } = await setup();
+    const now = new Date().toISOString();
+    for (let index = 0; index < 120; index += 1) {
+      await exec(
+        db,
+        `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at)
+         values ('refresh_user_top_scores', ?, 'queued', 50, ?, 0, '{}', ?, ?)`,
+        [`top:pressure:${index}`, now, now, now],
+      );
+    }
+    for (let index = 0; index < 5; index += 1) {
+      await exec(
+        db,
+        `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at)
+         values ('seed_snipe_board', ?, 'deferred_pressure', 20, ?, 0, '{}', ?, ?)`,
+        [`snipe-seed:CR:${index}`, now, now, now],
+      );
+    }
+
+    await queue.shedPressure();
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'seed_snipe_board' and status = 'queued'")).rows[0].count)).toBe(1);
+
+    const [job] = await queue.claim("snipe-worker", 1, { types: ["seed_snipe_board"] });
+    await queue.complete(job.id);
+    await queue.shedPressure();
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'seed_snipe_board' and status = 'queued'")).rows[0].count)).toBe(1);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'seed_snipe_board' and status = 'deferred_pressure'")).rows[0].count)).toBe(3);
   });
 
   it("keeps global maps refresh runnable during queue pressure", async () => {
@@ -970,7 +1009,7 @@ describe("live backend", () => {
     ]);
   });
 
-  it("parks queued low-priority work when critical jobs arrive above target depth", async () => {
+  it("trims a runnable reserved-lane backlog to its reserve and keeps it out of shared depth", async () => {
     const { db, queue } = await setup();
     const now = new Date().toISOString();
     for (let index = 0; index < 120; index += 1) {
@@ -984,9 +1023,11 @@ describe("live backend", () => {
 
     await queue.enqueue("enrich_user", "user:101", { userId: 101 }, { priority: 100 });
 
-    expect(await queue.depth()).toBe(100);
-    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'enrich_user'")).rows[0].count)).toBe(1);
-    expect(Number((await exec(db, "select count(*) as count from jobs where status = 'deferred_pressure'")).rows[0].count)).toBe(21);
+    // The farmed-score flood is invisible to the shared pool: depth counts
+    // only the enrich job, and the flood is trimmed back to its reserve of 2.
+    expect(await queue.depth()).toBe(1);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_user_maps_farmed_scores' and status = 'queued'")).rows[0].count)).toBe(2);
+    expect(Number((await exec(db, "select count(*) as count from jobs where status = 'deferred_pressure'")).rows[0].count)).toBe(118);
   });
 
   it("parks excess noisy top-play and recent-reconcile backlogs during emergency pressure", async () => {
@@ -1024,8 +1065,8 @@ describe("live backend", () => {
       await exec(
         db,
         `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at)
-         values ('refresh_user_maps_farmed_scores', ?, 'deferred_pressure', 35, ?, 0, '{}', ?, ?)`,
-        [`maps-farmed:CR:${index}`, now, now, now],
+         values ('enrich_user', ?, 'deferred_pressure', 35, ?, 0, '{}', ?, ?)`,
+        [`user:${index}`, now, now, now],
       );
     }
 
@@ -1048,10 +1089,10 @@ describe("live backend", () => {
       );
     }
 
-    await queue.enqueue("refresh_user_maps_farmed_scores", "maps-farmed:CR:123", { country: "CR", userId: 123 }, { priority: 5 });
+    await queue.enqueue("enrich_user", "user:123", { userId: 123 }, { priority: 5 });
 
-    const farmedJob = (await exec(db, "select status from jobs where type = 'refresh_user_maps_farmed_scores'")).rows[0];
-    expect(farmedJob.status).toBe("queued");
+    const enrichJob = (await exec(db, "select status from jobs where type = 'enrich_user'")).rows[0];
+    expect(enrichJob.status).toBe("queued");
     expect(await queue.depth()).toBe(1);
   });
 
@@ -2489,6 +2530,33 @@ describe("live backend", () => {
     expect(await confirmTopPlay(db, events, osu, { userId: 101, scoreId: 9001, country: "CR" })).toBe(false);
   });
 
+  it("persists the fetched best-score window into user_top_scores", async () => {
+    const { db, events, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    await ingestor.ingestBatch([scores[0]]);
+    const best = await fixture<OscScore[]>("top-best.json");
+    const osu = {
+      getBeatmapUserScoresAll: async (_beatmapId: number, _userId: number, _caller?: string) => [],
+      getUserBestScores: async (_userId: number, _caller?: string) => best,
+    };
+    await confirmTopPlay(db, events, osu, { userId: 101, scoreId: 9001, country: "CR" });
+
+    const rows = (await exec(db, "select score_id, position, pp, score_json from user_top_scores where user_id = 101 order by position asc")).rows;
+    expect(rows.length).toBe(best.length);
+    expect(Number(rows[0].score_id)).toBe(best[0].id);
+    expect(Number(rows[0].position)).toBe(1);
+    expect(Number(rows[0].pp)).toBeCloseTo(best[0].pp ?? 0);
+    const storedScore = JSON.parse(String(rows[0].score_json)) as Partial<OscScore>;
+    expect(storedScore.user).toBeUndefined();
+    expect(storedScore.beatmapset).toBeUndefined();
+
+    // The projection is what lets a player with no stored profile snapshot
+    // (a pack draw hitting the cached-snapshot endpoint) serve best scores
+    // without an osu! API call.
+    const cached = await getCachedPlayerProfileSnapshot(db, "101");
+    expect(new Set(cached?.bestScores.map((score) => score.id))).toEqual(new Set(best.map((score) => score.id)));
+  });
+
   it("preserves full user statistics when confirmed top-play score users are partial", async () => {
     const { db, events } = await setup();
     const now = new Date().toISOString();
@@ -2992,7 +3060,7 @@ describe("live backend", () => {
     expect(getUser).toHaveBeenCalledTimes(1);
   });
 
-  it("deduplicates repeated best-score ids without storing top-score rows", async () => {
+  it("deduplicates repeated best-score ids in the stored top-score rows", async () => {
     const { db, events, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");
     await ingestor.ingestBatch([scores[0]]);
@@ -3004,8 +3072,8 @@ describe("live backend", () => {
 
     await expect(confirmTopPlay(db, events, osu, { userId: 101, scoreId: 9001, country: "CR" })).resolves.toBe(true);
 
-    const cached = (await exec(db, "select count(*) as count from user_top_scores where user_id = 101")).rows[0];
-    expect(Number(cached.count)).toBe(0);
+    const cached = (await exec(db, "select score_id from user_top_scores where user_id = 101 order by position asc")).rows;
+    expect(cached.map((row) => Number(row.score_id))).toEqual([9001, 9002]);
     const user = (await exec(db, "select top_play_min_pp, top_scores_refreshed_at from users where user_id = 101")).rows[0];
     expect(Number(user.top_play_min_pp)).toBe(0);
     expect(String(user.top_scores_refreshed_at)).toMatch(/^\d{4}-\d{2}-\d{2}T/);
@@ -3035,7 +3103,7 @@ describe("live backend", () => {
     expect(Number(user.top_play_min_pp)).toBe(201);
     expect(String(user.top_scores_refreshed_at)).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     const cached = (await exec(db, "select count(*) as count from user_top_scores where user_id = 101")).rows[0];
-    expect(Number(cached.count)).toBe(0);
+    expect(Number(cached.count)).toBe(100);
   });
 
   it("confirms oSC top plays by legacy score id when osu! best scores use the stable id", async () => {

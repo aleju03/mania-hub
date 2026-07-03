@@ -30,7 +30,8 @@ describe("replay skin settings UI", () => {
     expect(source).toContain("Skin preset");
     expect(source).toContain("New preset");
     expect(source).toContain("Share code");
-    expect(source).toContain("showDevOskImport = import.meta.env.DEV");
+    // The dev-gated visual .osk skin import was removed; .osk import now pulls hitsounds only.
+    expect(source).toContain("importReplaySkinSoundsFromOsk");
     expect(source).toContain("Import .osk");
     expect(source).not.toContain("Overwrite preset");
     expect(source).not.toContain("Current draft");

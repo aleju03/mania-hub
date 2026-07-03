@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { LoaderCircle, Maximize2, Minimize2, Pause, Play } from "lucide-react";
 import { getReplayParsed, getBeatmapFile, getScore, getUser, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores, lookupBeatmapByChecksum } from "../lib/osu";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
-import { getEffectiveManiaKeyCount, getScoreDisplayValues, getScoreRate, modShiftsPitchWithRate, scoreHasReplay } from "../lib/score";
+import { getEffectiveManiaKeyCount, getManiaKeyModCount, getManiaParseKeyCount, getScoreDisplayValues, getScoreRate, modShiftsPitchWithRate, scoreHasReplay } from "../lib/score";
 import { useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
 import { PageHeader } from "../components/layout/PageHeader";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
@@ -828,15 +828,21 @@ function ReplayPage() {
       ]);
 
       setReplayLoadingStep("viewer");
+      // Converts re-run the lazer conversion from the .osu file, so the parsed
+      // chart's key count is authoritative (keymods included).
+      const parseKeyCount = score?.beatmap ? getManiaParseKeyCount(score.beatmap, score.mods) ?? undefined : undefined;
+      const parsedBeatmap = bmResult
+        ? parseCachedManiaBeatmap(score?.beatmap?.id ?? 0, bmResult.content, { keyCount: parseKeyCount })
+        : null;
       setReplay({
         header: parsed.header,
         frames: unpackReplayFrames(parsed.framesPacked),
         lifeBarFrames: parsed.lifeBarFrames ?? [],
-        keyCount: keyCount ?? parsed.keyCount,
+        keyCount: parsedBeatmap?.keyCount ?? keyCount ?? parsed.keyCount,
         stableScrollSpeedScale: parsed.stableScrollSpeedScale,
       });
-      if (bmResult) {
-        setBeatmap(parseCachedManiaBeatmap(score?.beatmap?.id ?? 0, bmResult.content, { keyCount }));
+      if (parsedBeatmap) {
+        setBeatmap(parsedBeatmap);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load replay");
@@ -1106,12 +1112,15 @@ function ReplayPage() {
 
     const uploadedScore = await scorePromise;
     const uploadedMods = uploadedScore?.mods ?? uploaded.mods;
-    const effectiveKeyCount = getEffectiveManiaKeyCount(beatmapMeta, uploadedMods) ?? uploaded.replay.keyCount;
+    // Prefer the score's beatmap object (mania endpoints mark converts); the
+    // checksum lookup reports the map's original mode instead.
+    const parseKeyCount = getManiaParseKeyCount(uploadedScore?.beatmap ?? beatmapMeta, uploadedMods) ?? undefined;
+    const parsedBeatmap = parseCachedManiaBeatmap(beatmapMeta.id, bmResult.content, { keyCount: parseKeyCount });
     setReplay({
       ...uploaded.replay,
-      keyCount: effectiveKeyCount,
+      keyCount: parsedBeatmap.keyCount,
     });
-    setBeatmap(parseCachedManiaBeatmap(beatmapMeta.id, bmResult.content, { keyCount: effectiveKeyCount }));
+    setBeatmap(parsedBeatmap);
     setScoreInfo(uploadedScore);
     setUploadedReplayMods(uploadedMods);
     setUploadedBeatmapsetId(beatmapsetId);
@@ -1140,10 +1149,11 @@ function ReplayPage() {
         : null;
       const localMods = uploadedScore?.mods ?? pending.uploaded.mods;
       // With osu! metadata, key count resolves like the normal upload path;
-      // for a map osu! doesn't know, the chart's own CS decides.
+      // for a map osu! doesn't know, the chart's own CS (or, for a std file,
+      // the convert formula plus any xK keymod) decides.
       const metaKeyCount = pending.beatmapMeta
-        ? getEffectiveManiaKeyCount(pending.beatmapMeta, localMods) ?? pending.uploaded.replay.keyCount
-        : undefined;
+        ? getManiaParseKeyCount(uploadedScore?.beatmap ?? pending.beatmapMeta, localMods) ?? undefined
+        : getManiaKeyModCount(localMods) ?? undefined;
       const parsedBeatmap = parseCachedManiaBeatmap(pending.beatmapMeta?.id ?? 0, match.content, { keyCount: metaKeyCount });
       applyLocalBeatmapAssets({
         audioUrl: match.audioBlob ? URL.createObjectURL(match.audioBlob) : null,
@@ -2368,7 +2378,7 @@ function ReplayViewer({
           replay.keyCount,
           beatmap?.notes ?? [],
           {
-            isConvert: scoreInfo?.beatmap?.convert ?? false,
+            isConvert: (scoreInfo?.beatmap?.convert ?? false) || (beatmap?.isConvert ?? false),
             isLazer: replayUsesLazerScoring,
             od: beatmap?.od,
             showInputOverlay: showInputOverlayRef.current,
@@ -2456,7 +2466,7 @@ function ReplayViewer({
         rendererRef.current = null;
       }
     };
-  }, [replay, beatmap, initialTime, modRate, effectiveReplayMods, replayUsesLazerScoring, scoreInfo?.beatmap?.convert, applyOverlaySettings]);
+  }, [replay, beatmap, initialTime, modRate, effectiveReplayMods, replayUsesLazerScoring, scoreInfo?.beatmap?.convert, beatmap?.isConvert, applyOverlaySettings]);
 
   // Detect when the renderer reaches the end on its own (no more frames) and
   // flip isPlaying back. ReplayProgressBar polls the renderer independently
@@ -2929,7 +2939,7 @@ function ReplayViewer({
         replay.keyCount,
         beatmap?.notes ?? [],
         {
-          isConvert: scoreInfo?.beatmap?.convert ?? false,
+          isConvert: (scoreInfo?.beatmap?.convert ?? false) || (beatmap?.isConvert ?? false),
           isLazer: replayUsesLazerScoring,
           od: beatmap?.od,
           showInputOverlay: exportShowInputOverlay,

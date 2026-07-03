@@ -198,6 +198,7 @@ CircleSize:6.5
 osu file format v14
 
 [General]
+Mode: 3
 SampleSet: Soft
 
 [Difficulty]
@@ -265,6 +266,9 @@ CircleSize:4
     const beatmap = parseManiaBeatmap(`
 osu file format v14
 
+[General]
+Mode: 3
+
 [Difficulty]
 CircleSize:4
 
@@ -285,6 +289,9 @@ CircleSize:4
   it("normalizes fractional key counts without fractional note columns", () => {
     const beatmap = parseManiaBeatmap(`
 osu file format v14
+
+[General]
+Mode: 3
 
 [Difficulty]
 CircleSize:3.3

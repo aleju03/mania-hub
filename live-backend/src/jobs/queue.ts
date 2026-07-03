@@ -24,18 +24,17 @@ const QUEUE_SOFT_PRESSURE_DEPTH = 80;
 const QUEUE_RECOVERY_DEPTH = 60;
 const PRESSURE_DEFER_MS = 30 * 60_000;
 
-const SHEDDABLE_TYPES = [
-  "refresh_user_maps_farmed_scores",
-  "refresh_country_maps",
-  "seed_snipe_board",
-  "refresh_country_roster",
-  "osc_backfill",
-  "osc_country_catchup",
-];
-// Note: build_map_search_index / rebuild_map_collections are deliberately not here.
-// They are reserved-lane types (see RESERVED_LANE_TYPES) so they drain steadily
-// under sustained pressure; shedding them starved the index build on a busy prod
-// queue that sits above the soft-pressure cap, leaving search + collections empty.
+// Empty by design. Globally-sheddable background types repeatedly starved on
+// prod: the queue's steady state sits AT the soft-pressure cap (recent-score
+// reconciliation refills it as fast as the osu! API budget drains it), so
+// "defer until pressure clears" meant "defer forever". It killed the map
+// search index build first, then collections, then snipe seeding. Every
+// former member now runs as a reserved-lane type below: a small always-
+// runnable reserve with the overflow parked, which guarantees a trickle of
+// progress under any pressure. Only add a type here if it has no dedicated
+// lane or reserve AND losing it entirely under sustained pressure is
+// acceptable.
+const SHEDDABLE_TYPES: string[] = [];
 
 const ACTIVE_TYPE_CAPS: Record<string, number> = {
   refresh_user_top_scores: 80,
@@ -58,6 +57,22 @@ const RESERVED_LANE_TYPES: Record<string, number> = {
   // the claimLimit:1 map-search-index worker lane.
   build_map_search_index: 1,
   rebuild_map_collections: 1,
+  // The pack-pool snapshot warm chains its next batch from inside the running
+  // job, so reserve a slot for the runner and one for the continuation.
+  warm_profile_pool: 2,
+  // Formerly sheddable (see the SHEDDABLE_TYPES note): each starved on prod
+  // whenever the queue hovered at the soft-pressure cap. Snipe seeding was the
+  // observed incident (boards for new beatmaps stopped for a day); the others
+  // fail the same way, just more quietly (stale farm data, rotting rosters,
+  // score gaps after a socket outage).
+  seed_snipe_board: 1,
+  refresh_country_maps: 1,
+  refresh_user_maps_farmed_scores: 2,
+  refresh_country_roster: 2,
+  // Both backfills chain their next page from inside the running job:
+  // runner + queued continuation.
+  osc_backfill: 2,
+  osc_country_catchup: 2,
 };
 
 export class JobQueue {

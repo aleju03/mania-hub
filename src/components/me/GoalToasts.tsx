@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { GradeImg } from "../ui/GradeImg";
 import { OsuLogo } from "../ui/OsuLogo";
 import { useAuth } from "../../lib/auth-context";
+import { fetchMyGoals } from "../../lib/goals";
 import { openLiveEventSource } from "../../lib/live-backend";
 import { playGoalClearedSound } from "../../lib/ui-sounds";
 import { celebrationLabel, type GoalCompletedPayload } from "../../lib/goal-format";
@@ -52,6 +53,15 @@ export function GoalToasts() {
         notifyGoalsChanged();
       }
     });
+    // Settle pending completions once per session: the goals read endpoint reconciles
+    // stat-shaped goals server-side, so a goal that became satisfied while the player was
+    // away pops here on whatever page they landed on, not only /goals. Runs after the
+    // stream is open so the resulting goal_completed event cannot slip past the listener.
+    const settle = () => {
+      void fetchMyGoals().catch(() => {});
+    };
+    if (source.readyState === EventSource.OPEN) settle();
+    else source.addEventListener("open", settle, { once: true });
     return () => source.close();
   }, [viewerId, viewerCountry]);
 

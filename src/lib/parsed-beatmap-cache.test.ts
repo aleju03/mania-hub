@@ -5,6 +5,7 @@ const BEATMAP_CONTENT = `
 osu file format v14
 
 [General]
+Mode: 3
 PreviewTime: 1000
 
 [Metadata]

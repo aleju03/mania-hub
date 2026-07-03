@@ -15,6 +15,7 @@ import {
   listUserGoalsWithProgress,
   reconcileGoalsForUser,
   reconcilePpGoalsForUser,
+  reconcileStatGoalsForCountry,
   refreshGoalUserIndex,
   updateUserGoal,
 } from "../src/features/goals.js";
@@ -358,6 +359,41 @@ describe("reach rank goals", () => {
     await seedUser(1200, 5);
     const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "reach_rank", targetValue: 1000, targetGrade: "global" });
     await reconcileGoalsForUser(db, events, USER);
+    expect((await getUserGoal(db, goal.id))?.status).toBe("open");
+  });
+});
+
+describe("roster-refresh stat goal reconcile", () => {
+  async function seedRosterUser(country = "CR"): Promise<void> {
+    await exec(
+      db,
+      "insert into users (user_id, username, avatar_url, country_code, pp, global_rank, country_rank, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?)",
+      [USER, "tester", "https://a.ppy.sh/101", country, 6000, 480, 3, new Date().toISOString()],
+    );
+    await exec(
+      db,
+      "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values (?, ?, 3, 'osu_rankings', 1, ?)",
+      [country, USER, new Date().toISOString()],
+    );
+  }
+
+  it("settles reach_pp and reach_rank goals for the country's roster members", async () => {
+    await seedRosterUser();
+    const ppGoal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "reach_pp", targetValue: 5500 });
+    const rankGoal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "reach_rank", targetValue: 500, targetGrade: "global" });
+    const mapGoal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "pass", beatmapId: MAP });
+    await reconcileStatGoalsForCountry(db, events, "CR");
+    expect((await getUserGoal(db, ppGoal.id))?.status).toBe("completed");
+    expect((await getUserGoal(db, rankGoal.id))?.status).toBe("completed");
+    // Map goals settle from the score pipeline, not the roster refresh.
+    expect((await getUserGoal(db, mapGoal.id))?.status).toBe("open");
+    expect(await goalCompletedEvents()).toBe(2);
+  });
+
+  it("ignores goal owners outside the refreshed country's roster", async () => {
+    await seedRosterUser("CR");
+    const goal = await createUserGoal(db, queue, { userId: USER, country: "CR", kind: "reach_pp", targetValue: 5500 });
+    await reconcileStatGoalsForCountry(db, events, "US");
     expect((await getUserGoal(db, goal.id))?.status).toBe("open");
   });
 });

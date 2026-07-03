@@ -11,6 +11,7 @@ import { deferMapsRefreshesWaitingForRoster, enqueueGlobalMapsRefreshIfDue, enqu
 import { ensureMapSearchIndexSeeded } from "./features/map-search.js";
 import { enqueueMapCollectionsRebuildIfDue } from "./features/map-collections.js";
 import { startGoalUserIndexRefresh } from "./features/goals.js";
+import { enqueueProfilePoolWarmIfIdle } from "./features/profile-pool-warm.js";
 import { backfillSkinSlugs } from "./features/skins.js";
 import { AbuseGuard } from "./http/abuse-guard.js";
 import { CountryClientTracker } from "./live/country-clients.js";
@@ -177,6 +178,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     if (app.config.enableScheduledRefreshes && app.config.enableOsuApiJobs) {
       startRosterScheduler(app.db, app.queue, app.config);
       startMapsScheduler(app.db, app.queue, app.config);
+      startProfilePoolWarmScheduler(app.db, app.queue);
     }
     startRetentionScheduler(app.db, app.config);
     startQueuePressureScheduler(app.queue);
@@ -298,6 +300,19 @@ function startRosterScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: J
     setTimeout(tick, config.rosterRefreshIntervalMs).unref();
   };
   setTimeout(tick, config.rosterRefreshIntervalMs).unref();
+}
+
+// Seeds and watchdogs the pack-pool snapshot warm chain: the job re-enqueues
+// itself while cold pool players remain, so this tick only has to (re)start a
+// chain that has never run, finished (new roster entrants went cold), or died.
+function startProfilePoolWarmScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: JobQueue): void {
+  const tick = async () => {
+    await enqueueProfilePoolWarmIfIdle(db, queue).catch((error) => {
+      console.warn("[profile-pool-warm] scheduled seed failed", error);
+    });
+    setTimeout(tick, 30 * 60_000).unref();
+  };
+  setTimeout(tick, 60_000).unref();
 }
 
 function startMapsScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: JobQueue, config: ReturnType<typeof readConfig>): void {

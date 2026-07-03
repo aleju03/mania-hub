@@ -979,3 +979,24 @@ export async function evaluatePpGoals(db: Db, events: LiveEventLog, userId: numb
 export async function reconcilePpGoalsForUser(db: Db, events: LiveEventLog, userId: number): Promise<void> {
   await reconcileGoalsForUser(db, events, userId, ["reach_pp"]);
 }
+
+/**
+ * Roster-refresh follow-up: the roster refresh is what lands fresh pp / rank projections for a
+ * country's players, so it is the natural moment to settle their stat-shaped goals. Without this,
+ * a "reach N total pp" goal whose crossing the top-play path missed (bonus pp is not in the
+ * weighted top-200 total, and the stored pp may be stale at confirmation time) stays open until
+ * the player happens to open the goals page.
+ */
+export async function reconcileStatGoalsForCountry(db: Db, events: LiveEventLog, country: string): Promise<void> {
+  const rows = (await exec(
+    db,
+    `select distinct g.user_id as goal_user_id
+     from user_goals g
+     join country_rosters r on r.user_id = g.user_id and r.country = ?
+     where g.status = 'open' and g.kind in ('reach_pp', 'reach_rank')`,
+    [country.toUpperCase()],
+  )).rows;
+  for (const row of rows) {
+    await reconcileGoalsForUser(db, events, Number(row.goal_user_id), ["reach_pp", "reach_rank"]).catch(() => {});
+  }
+}

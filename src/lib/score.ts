@@ -78,12 +78,33 @@ export function getManiaKeyModCount(mods: OsuMod[] | undefined): number | null {
   return null;
 }
 
+/** Whether a beatmap object represents a convert rather than a native mania chart.
+ *  The mania score endpoints return convert beatmaps with mode "mania" and
+ *  convert: true; raw beatmap lookups report the original mode instead. */
+export function isManiaConvertBeatmap(
+  beatmap: (Pick<OsuBeatmap, "mode"> & Partial<Pick<OsuBeatmap, "convert">>) | null | undefined,
+): boolean {
+  if (!beatmap) return false;
+  return beatmap.convert === true || (beatmap.mode != null && beatmap.mode !== "mania");
+}
+
 export function getEffectiveManiaKeyCount(
   beatmap: (Pick<OsuBeatmap, "cs" | "mode"> & Partial<Pick<OsuBeatmap, "convert">>) | null | undefined,
   mods: OsuMod[] | undefined,
 ): number | null {
   const keyModCount = getManiaKeyModCount(mods);
-  if (keyModCount != null && beatmap?.mode !== "mania") return keyModCount;
+  if (keyModCount != null && isManiaConvertBeatmap(beatmap)) return keyModCount;
+  return getBeatmapKeyCount(beatmap);
+}
+
+/** Key count to pass when parsing this score's .osu chart. Converts only honor
+ *  the xK keymod (null lets the convert column formula decide, since the chart
+ *  itself knows it is a Mode 0 file); native mania charts use the API key count. */
+export function getManiaParseKeyCount(
+  beatmap: (Pick<OsuBeatmap, "cs" | "mode"> & Partial<Pick<OsuBeatmap, "convert">>) | null | undefined,
+  mods: OsuMod[] | undefined,
+): number | null {
+  if (isManiaConvertBeatmap(beatmap)) return getManiaKeyModCount(mods);
   return getBeatmapKeyCount(beatmap);
 }
 

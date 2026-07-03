@@ -5,10 +5,12 @@ import { exec, json, parseJson } from "./db.js";
 import { BEATMAP_OSU_FILE_BACKFILL_JOB, runBeatmapOsuFileBackfillJob } from "./features/beatmap-osu-file-backfill.js";
 import { computeBeatmapActivitySkillVector } from "./features/activity.js";
 import { computeDanEstimateJob } from "./features/dan-estimates.js";
+import { reconcileStatGoalsForCountry } from "./features/goals.js";
 import { runMapSearchIndexBuildJob } from "./features/map-search.js";
 import { rebuildMapCollections } from "./features/map-collections.js";
 import { MapsRosterNotReadyError, enqueueGlobalMapsRefresh, globalMapsFarmedRefreshRunAfter, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores } from "./features/maps.js";
 import { recordSnipeScoreHistory, updateSnipeProjection } from "./features/snipes.js";
+import { PROFILE_POOL_WARM_JOB, runProfilePoolWarmJob } from "./features/profile-pool-warm.js";
 import { confirmTopPlay, TopPlayConfirmationPendingError } from "./features/top-plays.js";
 import { getHydratedScoresForMetadata } from "./features/tracker.js";
 import type { ClaimOptions, Job, JobQueue } from "./jobs/queue.js";
@@ -90,6 +92,15 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     intervalMs: 1_500,
   },
   {
+    // Drip-warms profile snapshots for pack-pool players with no stored best
+    // scores, so pack reveals never block on a live osu! fetch. Self-chains
+    // with a long runAfter; the lane just needs to pick each link up.
+    name: "profile-pool-warm",
+    jobTypes: [PROFILE_POOL_WARM_JOB],
+    claimLimit: 1,
+    intervalMs: 5_000,
+  },
+  {
     name: "snipe-seed",
     jobTypes: ["seed_snipe_board"],
     claimLimit: 1,
@@ -129,6 +140,7 @@ const OSU_API_JOB_TYPES = new Set([
   "compute_dan_estimate",
   "analyze_activity_beatmap",
   BEATMAP_OSU_FILE_BACKFILL_JOB,
+  PROFILE_POOL_WARM_JOB,
 ]);
 
 export class WorkerRunner {
@@ -273,6 +285,10 @@ export class WorkerRunner {
       await confirmTopPlay(this.db, this.events, this.osu, job.payload as { userId: number; scoreId: number; country: string });
       return;
     }
+    if (job.type === PROFILE_POOL_WARM_JOB) {
+      await runProfilePoolWarmJob(this.db, this.queue, this.osu, job.payload as { seq?: number });
+      return;
+    }
     if (job.type === "refresh_user_maps_farmed_scores") {
       const result = await refreshUserMapsFarmedScores(this.db, this.osu, job.payload as { userId: number; country: string });
       await enqueueGlobalMapsRefresh(this.queue, { priority: 15, replaceDone: true, runAfter: globalMapsFarmedRefreshRunAfter() });
@@ -300,6 +316,9 @@ export class WorkerRunner {
     if (job.type === "refresh_country_roster") {
       const payload = job.payload as { country: string };
       await refreshCountryRoster(this.db, this.osu, payload.country, "job:refresh_country_roster");
+      // Fresh pp/rank projections just landed for this roster: settle reach_pp / reach_rank goals
+      // now so completion reaches browsers over SSE instead of waiting for a goals-page visit.
+      await reconcileStatGoalsForCountry(this.db, this.events, payload.country).catch(() => {});
       return;
     }
     if (job.type === "refresh_country_maps") {

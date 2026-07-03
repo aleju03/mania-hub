@@ -304,7 +304,7 @@ async function getStoredUserTopScores(db: Db, userId: number): Promise<OscScore[
    profile coalesce the same way. */
 const inflightSnapshotFetches = new Map<string, Promise<ProfileSnapshotRow>>();
 
-function fetchAndStoreProfileSnapshotShared(
+export function fetchAndStoreProfileSnapshotShared(
   db: Db,
   osu: Pick<OsuApiClient, "getUserByKey" | "getUserBestScoresWindow">,
   key: string,

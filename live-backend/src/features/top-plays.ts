@@ -4,7 +4,7 @@ import { exec, json, parseJson } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { calculateApproxPpGainMap, calculateReplacementPpGain, calculateWeightedPp, calculateWeightedPpTotal, getScoreTimestamp, nowIso, scoreHasPublicLeaderboard } from "../shared/score.js";
 import { evaluatePpGoals } from "./goals.js";
-import { compactScoreForStorage, hydrateScoresDisplayMetadata, persistScoresDisplayMetadata } from "../shared/score-storage.js";
+import { compactScoreForStorage, hydrateScoresDisplayMetadata, persistScoresDisplayMetadata, replaceUserTopScores } from "../shared/score-storage.js";
 import type { CountryTopPlay, OscScore, ScoreUser } from "../shared/types.js";
 import type { LiveEventLog } from "../live/event-log.js";
 import type { OsuApiClient } from "../osu/client.js";
@@ -77,6 +77,12 @@ export async function confirmTopPlay(
   const bestScores = dedupeScoresById(await getUserBestScoresForPpGain(osu, payload.userId));
   const refreshedAt = nowIso();
   await updateUserTopPlayThreshold(db, payload.userId, bestScores, refreshedAt);
+  // The window was fetched anyway, so store it: user_top_scores is what lets
+  // cached profile snapshots and pack cards serve this player's best scores
+  // without their own osu! API fetch. Persisted before the confirmation
+  // checks so even an unconfirmed refresh leaves the projection populated.
+  await persistScoresDisplayMetadata(db, bestScores, refreshedAt);
+  await replaceUserTopScores(db, payload.userId, bestScores, refreshedAt);
   const confirmation = await getTopPlayConfirmationScoreIdCandidates(db, payload);
   const confirmedIndex = bestScores.findIndex((score) => confirmation.ids.has(score.id));
   if (confirmedIndex < 0) {
@@ -98,7 +104,6 @@ export async function confirmTopPlay(
     ppGain,
     time: score.ended_at ?? score.created_at ?? refreshedAt,
   };
-  await persistScoresDisplayMetadata(db, [score], refreshedAt);
   const inserted = await exec(
     db,
     `insert or ignore into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at)

@@ -15,6 +15,37 @@ export function compactScoresForStorage(scores: OscScore[]): OscScore[] {
   return scores.map(compactScoreForStorage);
 }
 
+/* Replaces a user's user_top_scores projection with a freshly fetched
+   best-scores window. This projection is what serves best scores without an
+   osu! API call (cached profile snapshots, pack card minting, goal
+   baselines) for players who have no stored profile snapshot. Callers should
+   persist display metadata for the same scores so hydration has user/beatmap
+   rows to join against. */
+export async function replaceUserTopScores(db: Db, userId: number, bestScores: OscScore[], refreshedAt: string): Promise<void> {
+  const statements: DbStatement[] = [
+    { sql: "delete from user_top_scores where user_id = ?", args: [userId] },
+  ];
+  bestScores.forEach((score, index) => {
+    if (!Number.isSafeInteger(score.id) || score.id <= 0) return;
+    const pp = typeof score.pp === "number" && Number.isFinite(score.pp) ? score.pp : null;
+    statements.push({
+      sql: `insert or replace into user_top_scores (user_id, score_id, position, score_json, pp, weighted_pp, ended_at, refreshed_at)
+            values (?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        userId,
+        score.id,
+        index + 1,
+        json(compactScoreForStorage(score)),
+        pp,
+        pp == null ? null : pp * 0.95 ** index,
+        score.ended_at ?? score.created_at ?? null,
+        refreshedAt,
+      ],
+    });
+  });
+  await execBatch(db, statements);
+}
+
 export async function persistScoresDisplayMetadata(db: Db, scores: OscScore[], updatedAt: string): Promise<void> {
   const statements: DbStatement[] = [];
   const seenUsers = new Set<number>();

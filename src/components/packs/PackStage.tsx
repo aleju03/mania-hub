@@ -1,8 +1,9 @@
-import { motion, useMotionValue, useSpring } from "framer-motion";
+import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import type { PackTypeDef } from "#/lib/packs";
 import { useWindowActive } from "#/lib/window-activity";
 import {
+  createPackBackCanvas,
   createPackFrontCanvas,
   DEFAULT_PACK_ART_STYLE,
   drawPackSubtitle,
@@ -12,6 +13,7 @@ import {
   PACK_TEAR_FRACTION,
   type PackArtStyle,
 } from "./packArt";
+import { PackScene } from "./packScene";
 import { playPackRip, playSlashTick } from "./packSfx";
 
 // The cut is tracked in vertical columns; each cut column remembers the y
@@ -33,7 +35,9 @@ const CUT_MIN_Y = 0.09;
 const CUT_MAX_Y = 0.24;
 // How far the foil's freshly cut edge gapes away from the body, as a
 // fraction of pack height. The foil is stiff: it eases to this and holds.
-const MAX_LIFT_FRACTION = 0.028;
+// Kept small: the opening reads through the real hole in the front shell,
+// not through a huge flap.
+const MAX_LIFT_FRACTION = 0.02;
 // Blade trail: how long a trail point lives and how many are kept. Short
 // lifetimes make the streak chase the cursor instead of trailing a rope.
 const TRAIL_LIFE_MS = 220;
@@ -67,10 +71,14 @@ function clampNumber(value: number, min: number, max: number) {
 export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const packRef = useRef<HTMLDivElement | null>(null);
+  // Offscreen 2D canvas the cut renders into; the 3D scene shows it as the
+  // front texture of the pack mesh.
   const liveCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const artCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [packArt, setPackArt] = useState<string | null>(null);
-  const [ripClips, setRipClips] = useState<{ strip: string; body: string } | null>(null);
+  const backCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const sceneRef = useRef<PackScene | null>(null);
+  const [artReady, setArtReady] = useState(false);
+  const [ripping, setRipping] = useState(false);
   const [sparks, setSparks] = useState<SlashSpark[]>([]);
 
   const slashRef = useRef<{ lastX: number; lastYFrac: number; lastSparkX: number } | null>(null);
@@ -85,7 +93,6 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
   const liftCurrentRef = useRef<Float32Array>(new Float32Array(BIN_COUNT));
   const settlingRef = useRef(false);
   const cutCountRef = useRef(0);
-  const sizeRef = useRef<{ w: number; h: number; dpr: number } | null>(null);
   const rafRef = useRef<number | null>(null);
   const trailCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const trailPointsRef = useRef<Array<{ x: number; y: number; t: number }>>([]);
@@ -98,13 +105,9 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
   reducedMotionRef.current = reducedMotion;
   const windowActive = useWindowActive();
 
-  const rotateX = useSpring(useMotionValue(0), { stiffness: 200, damping: 22 });
-  const rotateY = useSpring(useMotionValue(0), { stiffness: 200, damping: 22 });
-
   const recomputeCutFields = () => {
-    const size = sizeRef.current;
     const bins = binsRef.current;
-    const maxLift = (size ? size.h : 420) * MAX_LIFT_FRACTION;
+    const maxLift = PACK_ART_HEIGHT * MAX_LIFT_FRACTION;
 
     // Smoothed display curve: weighted average of nearby cut columns.
     const smooth = smoothYRef.current;
@@ -153,12 +156,12 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
   const drawFrame = () => {
     const canvas = liveCanvasRef.current;
     const art = artCanvasRef.current;
-    const size = sizeRef.current;
-    if (!canvas || !art || !size) return;
+    if (!canvas || !art) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const { w, h, dpr } = size;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const w = PACK_ART_WIDTH;
+    const h = PACK_ART_HEIGHT;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, w, h);
 
     // Ease the gape toward its target; the foil settles rigidly, no flutter.
@@ -175,6 +178,7 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
 
     if (cutCountRef.current === 0) {
       ctx.drawImage(art, 0, 0, w, h);
+      sceneRef.current?.markArtDirty();
       return;
     }
 
@@ -217,29 +221,12 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
       }
     }
 
-    // Pass 2: dark slit interior, filled as one smooth shape per cut run.
-    ctx.fillStyle = "rgba(10, 7, 22, 0.92)";
-    let runStart = -1;
-    const fillRun = (from: number, to: number) => {
-      ctx.beginPath();
-      ctx.moveTo(from * sliceW, edgeY[from]);
-      for (let s = from; s <= to; s += 1) ctx.lineTo((s + 0.5) * sliceW, edgeY[s]);
-      ctx.lineTo((to + 1) * sliceW, edgeY[to]);
-      ctx.lineTo((to + 1) * sliceW, bodyY[to] + 2);
-      for (let s = to; s >= from; s -= 1) ctx.lineTo((s + 0.5) * sliceW, bodyY[s] + 2);
-      ctx.lineTo(from * sliceW, bodyY[from] + 2);
-      ctx.closePath();
-      ctx.fill();
-    };
-    for (let s = 0; s < sliceCount; s += 1) {
-      if (cut[s] && runStart === -1) runStart = s;
-      if ((!cut[s] || s === sliceCount - 1) && runStart !== -1) {
-        fillRun(runStart, cut[s] ? s : s - 1);
-        runStart = -1;
-      }
-    }
+    // The gap between the lifted foil edge and the body stays TRANSPARENT:
+    // the front shell gets a real hole (the material alpha-tests it away)
+    // and the pack's dark inside shows through with true parallax, instead
+    // of a painted-on dark band.
 
-    // Pass 3: foil above the cut. Top edge stays sealed at the crimp, the
+    // Pass 2: foil above the cut. Top edge stays sealed at the crimp, the
     // cut edge gapes by the lift, so each column squashes slightly.
     for (let s = 0; s < sliceCount; s += 1) {
       if (!cut[s]) continue;
@@ -251,7 +238,8 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
       ctx.drawImage(art, sx, 0, sw, sy, x0, 0, dw, Math.max(2, edgeY[s]));
     }
 
-    // Pass 4: glow plus a bright sliver along the freshly cut edge.
+    // Pass 3: a thin sliver of light along the freshly cut foil edge - just
+    // enough to say "cut edge", no glow (a glow reads as painted-on).
     const strokeRun = (from: number, to: number) => {
       ctx.beginPath();
       ctx.moveTo(from * sliceW, edgeY[from]);
@@ -262,24 +250,18 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
     ctx.save();
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    runStart = -1;
+    ctx.lineWidth = 1.4;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.55)";
+    let runStart = -1;
     for (let s = 0; s < sliceCount; s += 1) {
       if (cut[s] && runStart === -1) runStart = s;
       if ((!cut[s] || s === sliceCount - 1) && runStart !== -1) {
-        const runEnd = cut[s] ? s : s - 1;
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-        ctx.shadowColor = "rgba(167, 139, 250, 0.9)";
-        ctx.shadowBlur = 9;
-        strokeRun(runStart, runEnd);
-        ctx.shadowBlur = 0;
-        ctx.lineWidth = 1;
-        ctx.strokeStyle = "rgba(240, 236, 255, 0.95)";
-        strokeRun(runStart, runEnd);
+        strokeRun(runStart, cut[s] ? s : s - 1);
         runStart = -1;
       }
     }
     ctx.restore();
+    sceneRef.current?.markArtDirty();
   };
 
   const ensureLoop = () => {
@@ -300,6 +282,44 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
     };
   }, []);
 
+  // 3D pack: a bulged foil pouch mesh textured with the live cut canvas.
+  // Declared before the art effect so the texture canvas exists by the time
+  // the first art draw runs.
+  useEffect(() => {
+    const host = packRef.current;
+    if (!host) return;
+    const live = document.createElement("canvas");
+    live.width = PACK_ART_WIDTH;
+    live.height = PACK_ART_HEIGHT;
+    liveCanvasRef.current = live;
+    const back = createPackBackCanvas();
+    backCanvasRef.current = back;
+    const scene = new PackScene({
+      host,
+      textureCanvas: live,
+      backCanvas: back,
+      reducedMotion: reducedMotionRef.current,
+    });
+    sceneRef.current = scene;
+    const onResize = () => scene.resize();
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      scene.dispose();
+      sceneRef.current = null;
+      liveCanvasRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    sceneRef.current?.setWindowActive(windowActive);
+  }, [windowActive]);
+
+  useEffect(() => {
+    sceneRef.current?.setReducedMotion(reducedMotion);
+  }, [reducedMotion]);
+
   useEffect(() => {
     const nextStyle: PackArtStyle = packType
       ? { accent: packType.accent, subtitle: packType.artSubtitle }
@@ -307,7 +327,7 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
     const previousStyle = artStyleRef.current;
     artStyleRef.current = nextStyle;
     const next = createPackFrontCanvas(nextStyle);
-    setPackArt(next.toDataURL("image/png"));
+    setArtReady(true);
     if (artFadeRafRef.current !== null) {
       cancelAnimationFrame(artFadeRafRef.current);
       artFadeRafRef.current = null;
@@ -469,27 +489,6 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
   }, [reducedMotion]);
 
   useEffect(() => {
-    if (!packArt) return;
-    const sync = () => {
-      const root = packRef.current;
-      const canvas = liveCanvasRef.current;
-      if (!root || !canvas) return;
-      const w = root.offsetWidth;
-      const h = root.offsetHeight;
-      if (!w || !h) return;
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.round(w * dpr);
-      canvas.height = Math.round(h * dpr);
-      sizeRef.current = { w, h, dpr };
-      recomputeCutFields();
-      drawFrame();
-    };
-    sync();
-    window.addEventListener("resize", sync);
-    return () => window.removeEventListener("resize", sync);
-  }, [packArt]);
-
-  useEffect(() => {
     if (sparks.length === 0) return;
     const timer = window.setTimeout(() => setSparks([]), 700);
     return () => window.clearTimeout(timer);
@@ -509,19 +508,50 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
     }
   };
 
-  const buildClipPaths = () => {
+  /* Splits the pack along the recorded cut into transparent canvases: the
+     torn-off strip and remaining body of the front print, plus the back
+     foil's remaining body - a real slash goes through both layers, so the
+     back shell has to lose its top too. The 3D scene maps them onto the
+     pouch geometry for the rip animation. */
+  const buildRipCanvases = (art: HTMLCanvasElement, back: HTMLCanvasElement) => {
+    const width = PACK_ART_WIDTH;
+    const height = PACK_ART_HEIGHT;
     const bins = binsRef.current;
-    const points: string[] = [];
+    const points: Array<[number, number]> = [];
     for (let i = 0; i <= BIN_COUNT; i += 1) {
       const a = bins[Math.max(0, i - 1)];
       const b = bins[Math.min(BIN_COUNT - 1, i)];
-      const xPct = (i / BIN_COUNT) * 100;
-      const yPct = ((a + b) / 2) * 100 + (random01(i * 17.31 + 3.7) - 0.5) * 1.1;
-      points.push(`${xPct.toFixed(2)}% ${yPct.toFixed(2)}%`);
+      const x = (i / BIN_COUNT) * width;
+      const y = ((a + b) / 2 + (random01(i * 17.31 + 3.7) - 0.5) * 0.011) * height;
+      points.push([x, y]);
     }
+    const stripPath = new Path2D();
+    stripPath.moveTo(0, 0);
+    stripPath.lineTo(width, 0);
+    for (let i = points.length - 1; i >= 0; i -= 1) stripPath.lineTo(points[i][0], points[i][1]);
+    stripPath.closePath();
+    const bodyPath = new Path2D();
+    bodyPath.moveTo(points[0][0], points[0][1]);
+    for (let i = 1; i < points.length; i += 1) bodyPath.lineTo(points[i][0], points[i][1]);
+    bodyPath.lineTo(width, height);
+    bodyPath.lineTo(0, height);
+    bodyPath.closePath();
+    const clip = (source: HTMLCanvasElement, path: Path2D) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return canvas;
+      ctx.save();
+      ctx.clip(path);
+      ctx.drawImage(source, 0, 0);
+      ctx.restore();
+      return canvas;
+    };
     return {
-      strip: `polygon(0% 0%, 100% 0%, ${[...points].reverse().join(", ")})`,
-      body: `polygon(${points.join(", ")}, 100% 100%, 0% 100%)`,
+      strip: clip(art, stripPath),
+      body: clip(art, bodyPath),
+      backBody: clip(back, bodyPath),
     };
   };
 
@@ -535,17 +565,16 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
       rafRef.current = null;
     }
     fillUncutBins();
-    setRipClips(buildClipPaths());
-    rotateX.set(0);
-    rotateY.set(0);
+    const art = artCanvasRef.current;
+    const back = backCanvasRef.current;
+    if (art && back) sceneRef.current?.beginRip(buildRipCanvases(art, back));
+    setRipping(true);
     window.setTimeout(onOpened, reducedMotion ? 220 : 880);
   };
 
   const setCutSpan = (xa: number, yaFrac: number, xb: number, ybFrac: number) => {
-    const size = sizeRef.current;
-    if (!size) return;
-    const binA = clampNumber(Math.floor((xa / size.w) * BIN_COUNT), 0, BIN_COUNT - 1);
-    const binB = clampNumber(Math.floor((xb / size.w) * BIN_COUNT), 0, BIN_COUNT - 1);
+    const binA = clampNumber(Math.floor((xa / PACK_ART_WIDTH) * BIN_COUNT), 0, BIN_COUNT - 1);
+    const binB = clampNumber(Math.floor((xb / PACK_ART_WIDTH) * BIN_COUNT), 0, BIN_COUNT - 1);
     const low = Math.min(binA, binB);
     const high = Math.max(binA, binB);
     const bins = binsRef.current;
@@ -589,43 +618,43 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
     if (!rect) return;
     const nx = (event.clientX - rect.left) / rect.width - 0.5;
     const ny = (event.clientY - rect.top) / rect.height - 0.5;
-    rotateY.set(nx * 16);
-    rotateX.set(ny * -12);
+    sceneRef.current?.setTiltTarget(ny * -12, nx * 16);
   };
 
   const onPointerLeaveTilt = () => {
     if (slashRef.current || rippingRef.current) return;
-    rotateY.set(0);
-    rotateX.set(0);
+    sceneRef.current?.setTiltTarget(0, 0);
   };
 
   /* Advances the blade gesture at a viewport point: starts a slash when the
-     blade enters the tear band, extends the cut while slashing. */
+     blade enters the tear band, extends the cut while slashing. The point is
+     mapped onto the tilted pack's plane by the 3D scene; x is tracked in
+     texture pixels. */
   const cutAtPoint = (clientX: number, clientY: number) => {
     if (rippingRef.current) return;
-    const rect = packRef.current?.getBoundingClientRect();
-    if (!rect || rect.width === 0) return;
-    const ny = (clientY - rect.top) / rect.height;
+    const point = sceneRef.current?.pointerToPack(clientX, clientY);
+    if (!point) return;
+    const ny = point.v;
     const slash = slashRef.current;
     if (!slash) {
       if (ny < TEAR_BAND_TOP || ny > TEAR_BAND_BOTTOM) return;
       // Horizontal slack so a swipe that starts off the pack still bites.
-      if (clientX < rect.left - 60 || clientX > rect.right + 60) return;
-      const x = clampNumber(clientX - rect.left, 0, rect.width);
+      if (point.u < -0.2 || point.u > 1.2) return;
+      const x = clampNumber(point.u, 0, 1) * PACK_ART_WIDTH;
       const yFrac = clampNumber(ny, CUT_MIN_Y, CUT_MAX_Y);
       slashRef.current = { lastX: x, lastYFrac: yFrac, lastSparkX: x };
       setCutSpan(x, yFrac, x, yFrac);
       ensureLoop();
       return;
     }
-    const x = clampNumber(clientX - rect.left, 0, rect.width);
+    const x = clampNumber(point.u, 0, 1) * PACK_ART_WIDTH;
     const yFrac = clampNumber(ny, CUT_MIN_Y, CUT_MAX_Y);
     setCutSpan(slash.lastX, slash.lastYFrac, x, yFrac);
     slash.lastX = x;
     slash.lastYFrac = yFrac;
-    if (Math.abs(x - slash.lastSparkX) > 18) {
+    if (Math.abs(x - slash.lastSparkX) > 35) {
       slash.lastSparkX = x;
-      spawnSparks(x, yFrac * rect.height);
+      spawnSparks(clientX, clientY);
     }
     if (cutCountRef.current / BIN_COUNT >= TEAR_COMPLETE_COVERAGE) triggerRip();
   };
@@ -669,15 +698,6 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const ripping = ripClips !== null;
-
-  const stripExit = reducedMotion
-    ? { opacity: 0 }
-    : { y: -170, x: 90, rotate: -14, opacity: 0 };
-  const bodyExit = reducedMotion
-    ? { opacity: 0 }
-    : { y: 46, scale: 0.9, opacity: 0 };
-
   return (
     // pan-y: vertical swipes still scroll the page on touch, horizontal
     // swipes are the blade and never turn into a scroll.
@@ -690,95 +710,59 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
           aria-hidden="true"
         />
       )}
-      <div style={{ perspective: 1100 }}>
-        <motion.div
-          ref={packRef}
-          className="relative select-none"
-          style={{
-            width: "min(310px, 76vw)",
-            aspectRatio: `${PACK_ASPECT}`,
-            rotateX,
-            rotateY,
-            transformStyle: "preserve-3d",
-            touchAction: "none",
-          }}
-          animate={reducedMotion || ripping || !windowActive ? undefined : { y: [0, -7, 0] }}
-          transition={reducedMotion || ripping || !windowActive ? undefined : { duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
-          onPointerMove={onPointerMoveTilt}
-          onPointerLeave={onPointerLeaveTilt}
-        >
-          {packArt ? (
-            <>
-              {/* Live pack: canvas redraws the foil with the cut path and gape */}
-              <canvas
-                ref={liveCanvasRef}
-                className="absolute inset-0 h-full w-full"
-                style={{
-                  filter: "drop-shadow(0 18px 40px rgba(0,0,0,0.55))",
-                  visibility: ripping ? "hidden" : "visible",
-                }}
-              />
-              {ripping && ripClips && (
-                <>
-                  {/* Torn-off top strip, clipped along the user's cut */}
-                  <motion.div
-                    className="absolute inset-0 z-10"
-                    style={{
-                      backgroundImage: `url(${packArt})`,
-                      backgroundSize: "100% 100%",
-                      clipPath: ripClips.strip,
-                      filter: "drop-shadow(0 6px 14px rgba(0,0,0,0.45))",
-                    }}
-                    initial={{ y: 0, x: 0, rotate: 0, opacity: 1 }}
-                    animate={stripExit}
-                    transition={{ duration: reducedMotion ? 0.18 : 0.62, ease: [0.2, 0.7, 0.3, 1] }}
-                  />
-                  {/* Pack body */}
-                  <motion.div
-                    className="absolute inset-0"
-                    style={{
-                      backgroundImage: `url(${packArt})`,
-                      backgroundSize: "100% 100%",
-                      clipPath: ripClips.body,
-                      filter: "drop-shadow(0 18px 40px rgba(0,0,0,0.55))",
-                    }}
-                    initial={{ y: 0, scale: 1, opacity: 1 }}
-                    animate={bodyExit}
-                    transition={{ duration: reducedMotion ? 0.18 : 0.5, delay: reducedMotion ? 0 : 0.22, ease: "easeIn" }}
-                  />
-                </>
-              )}
-              {/* Slash sparks */}
-              {sparks.map((spark) => (
-                <motion.div
-                  key={spark.id}
-                  className="absolute z-30 rounded-full pointer-events-none"
-                  style={{
-                    left: spark.x,
-                    top: spark.y,
-                    width: spark.size,
-                    height: spark.size,
-                    background: "rgb(221, 214, 254)",
-                    boxShadow: "0 0 8px rgba(196,181,253,0.9)",
-                  }}
-                  initial={{ opacity: 1, x: 0, y: 0, scale: 1 }}
-                  animate={{
-                    opacity: 0,
-                    x: Math.cos(spark.angle) * spark.distance,
-                    y: Math.sin(spark.angle) * spark.distance,
-                    scale: 0.4,
-                  }}
-                  transition={{ duration: 0.55, ease: "easeOut" }}
-                />
-              ))}
-            </>
-          ) : (
-            <div className="absolute inset-0 rounded-xl bg-osu-b4/50 animate-pulse" />
-          )}
-        </motion.div>
+      {/* Slash sparks, viewport-anchored like the trail */}
+      {sparks.length > 0 && (
+        <div className="pointer-events-none fixed inset-0 z-30" aria-hidden="true">
+          {sparks.map((spark) => (
+            <motion.div
+              key={spark.id}
+              className="absolute rounded-full"
+              style={{
+                left: spark.x,
+                top: spark.y,
+                width: spark.size,
+                height: spark.size,
+                background: "rgb(221, 214, 254)",
+                boxShadow: "0 0 8px rgba(196,181,253,0.9)",
+              }}
+              initial={{ opacity: 1, x: 0, y: 0, scale: 1 }}
+              animate={{
+                opacity: 0,
+                x: Math.cos(spark.angle) * spark.distance,
+                y: Math.sin(spark.angle) * spark.distance,
+                scale: 0.4,
+              }}
+              transition={{ duration: 0.55, ease: "easeOut" }}
+            />
+          ))}
+        </div>
+      )}
+      {/* Host for the 3D pack; the scene's canvas overflows it on purpose so
+          the tilted pack and the torn strip never clip */}
+      <div
+        ref={packRef}
+        className="relative select-none"
+        style={{
+          // Narrower than the old squat pack: the 0.6 aspect makes it taller,
+          // so this keeps roughly the same on-screen height.
+          width: "min(270px, 66vw)",
+          aspectRatio: `${PACK_ASPECT}`,
+          touchAction: "none",
+        }}
+        onPointerMove={onPointerMoveTilt}
+        onPointerLeave={onPointerLeaveTilt}
+      >
+        {!artReady && <div className="absolute inset-0 rounded-xl bg-osu-b4/50 animate-pulse" />}
       </div>
+      {/* Ground shadow under the floating pack */}
+      <motion.div
+        aria-hidden="true"
+        className="pointer-events-none mt-2 h-5 w-[min(210px,52vw)] rounded-[50%] bg-black/55 blur-lg"
+        animate={ripping ? { opacity: 0 } : undefined}
+        transition={{ duration: 0.5 }}
+      />
 
-      <div className="mt-7 text-center" aria-live="polite">
+      <div className="mt-5 text-center" aria-live="polite">
         <div className="text-sm font-semibold text-white">
           {ripping ? "Opening..." : "Slash across the dotted line to open"}
         </div>

@@ -1,5 +1,6 @@
 import {
   fetchLiveGlobalRankings,
+  fetchLivePlayerCachedProfileSnapshotDirect,
   fetchLivePlayerProfileSnapshotDirect,
   isLiveBackendConfigured,
   type LiveGlobalRankingEntry,
@@ -563,10 +564,23 @@ export async function drawPackPlayersFromOsuApi(rng: () => number = Math.random)
 export async function fetchPackPlayerScores(userId: number): Promise<OsuScore[]> {
   if (isLiveBackendConfigured()) {
     try {
-      // Best scores from the backend's profile snapshot (24h cache); the
-      // same data the profile maniacard tab renders from. An EMPTY cached
-      // list falls through to the live window - it usually means the
-      // snapshot was computed before the player's plays were fetched, and
+      // Stored best scores (profile snapshot or the user_top_scores
+      // projection): a pure DB read on the backend, so a card flips
+      // instantly for any player the backend has ever fetched. Staleness is
+      // fine for minting a card, and the deal-time warm refreshes cold or
+      // expired players in the background anyway.
+      const cached = await fetchLivePlayerCachedProfileSnapshotDirect(String(userId));
+      if (cached && Array.isArray(cached.bestScores) && cached.bestScores.length > 0) {
+        return cached.bestScores;
+      }
+    } catch {
+      // Fall through to the blocking snapshot fetch below.
+    }
+    try {
+      // Truly cold player: this waits on the backend's live osu! fetch, but
+      // coalesces with the deal-time warm's in-flight request for the same
+      // player. An EMPTY bestScores list falls through to the direct osu!
+      // window - it usually means the player's plays were never fetched, and
       // returning it would mint a blank card.
       const snapshot = await fetchLivePlayerProfileSnapshotDirect(String(userId));
       if (snapshot && Array.isArray(snapshot.bestScores) && snapshot.bestScores.length > 0) {
