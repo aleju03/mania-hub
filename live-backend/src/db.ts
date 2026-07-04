@@ -63,6 +63,11 @@ async function applyConnectionPragmas(db: Db, config: PragmaConfig): Promise<voi
     `pragma busy_timeout = ${busyTimeoutMs}`,
     `pragma synchronous = ${/^(OFF|NORMAL|FULL|EXTRA)$/.test(synchronous) ? synchronous : "NORMAL"}`,
     `pragma wal_autocheckpoint = 1000`,
+    // The WAL file never shrinks on its own: checkpoints reset the write cursor
+    // but leave the file at its high-water mark (a past write burst left it at
+    // ~1GB, slowing WAL recovery on every restart). This trims it back after
+    // each successful checkpoint reset without ever blocking readers/writers.
+    `pragma journal_size_limit = ${64 * 1024 * 1024}`,
   ];
   // Negative cache_size is in KiB of memory (positive is in pages).
   if (cacheMb > 0) pragmas.push(`pragma cache_size = ${-cacheMb * 1024}`);
