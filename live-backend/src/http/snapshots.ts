@@ -1831,13 +1831,71 @@ function parseGoalTargets(
   return { fields };
 }
 
+// Short-lived cache over the assembled status body. A request that lands in a
+// write-lock window (retention delete pass, WAL checkpoint) would otherwise sit
+// in per-statement busy retries until the frontend's 30s abort; serving the
+// last snapshot for a few seconds sidesteps that, and concurrent requests
+// coalesce onto the in-flight build instead of piling on the DB. Keyed by ctx
+// (one long-lived object per server boot) so test contexts don't share entries.
+const STATUS_BODY_TTL_MS = 5_000;
+const statusBodyCacheByCtx = new WeakMap<HttpContext, Map<string, { builtAt: number; promise: Promise<Record<string, unknown>> }>>();
+
 async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: boolean; snapshotCountry?: string } = {}) {
-  const db = await dbHealth(ctx.db);
-  const last = (await exec(ctx.db, "select created_at from live_event_log order by sequence desc limit 1")).rows[0]?.created_at ?? null;
+  let cache = statusBodyCacheByCtx.get(ctx);
+  if (!cache) {
+    cache = new Map();
+    statusBodyCacheByCtx.set(ctx, cache);
+  }
+  const key = `${options.includeWorkerActivity ? "admin" : "public"}:${options.snapshotCountry ?? ""}`;
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.builtAt < STATUS_BODY_TTL_MS) return cached.promise;
+  const promise = buildStatusBody(ctx, options);
+  cache.set(key, { builtAt: Date.now(), promise });
+  promise.catch(() => {
+    if (cache.get(key)?.promise === promise) cache.delete(key);
+  });
+  return promise;
+}
+
+async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivity?: boolean; snapshotCountry?: string }): Promise<Record<string, unknown>> {
   // In a split deployment the worker runs in another process, so its live
   // status (lanes, OSC feed, osu! limiter) is mirrored to the DB. Prefer that
   // mirror in server-only mode; fall back to in-process state for "all" mode.
   const mirror = ctx.config.role === "server" ? await readRuntimeStatus(ctx.db) : null;
+  // The reads are independent, so they run concurrently: latency is the slowest
+  // query, and a write-lock window is waited out once rather than once per
+  // query down a sequential chain.
+  const [
+    db,
+    lastEvent,
+    storage,
+    queueDepth,
+    queuePressure,
+    queueSummary,
+    roster,
+    analysis,
+    osuFileBackfill,
+    scoresFallback,
+    apiCalls,
+    countries,
+    catchup,
+    snapshotStats,
+  ] = await Promise.all([
+    dbHealth(ctx.db),
+    exec(ctx.db, "select created_at from live_event_log order by sequence desc limit 1"),
+    getLocalDbStorage(ctx.config),
+    ctx.queue.depth(),
+    ctx.queue.pressure(),
+    ctx.queue.summary(),
+    rosterSummary(ctx.db),
+    analysisStats(ctx.db),
+    getBeatmapOsuFileBackfillStatus(ctx.db, { cacheCounts: true }),
+    scoresFallbackStatus(ctx, mirror),
+    apiCallHistory(ctx.db),
+    countryRegistryStatus(ctx),
+    countryCatchupStatus(ctx),
+    options.snapshotCountry ? adminSnapshotStats(ctx.db, options.snapshotCountry) : Promise.resolve(undefined),
+  ]);
   const worker = (mirror?.worker as WorkerStatus | null | undefined) ?? ctx.workerStatus?.() ?? null;
   const osc = (mirror?.osc as OscStatus | undefined) ?? ctx.oscStatus();
   const rate = mirror?.osuRate ?? ctx.osu.limiter.state();
@@ -1845,28 +1903,25 @@ async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: b
     server: getSqliteBusyRetryStats(),
     worker: mirror?.sqliteBusy ?? (ctx.config.role === "server" ? null : getSqliteBusyRetryStats()),
   };
-  const snapshotStats = options.snapshotCountry
-    ? await adminSnapshotStats(ctx.db, options.snapshotCountry)
-    : undefined;
   return {
     ok: db,
     db,
-    storage: await getLocalDbStorage(ctx.config),
+    storage,
     osc,
-    lastEventAt: last,
-    queueDepth: await ctx.queue.depth(),
-    queuePressure: await ctx.queue.pressure(),
-    queueSummary: await ctx.queue.summary(),
-    roster: await rosterSummary(ctx.db),
-    analysis: await analysisStats(ctx.db),
-    osuFileBackfill: await getBeatmapOsuFileBackfillStatus(ctx.db, { cacheCounts: true }),
+    lastEventAt: lastEvent.rows[0]?.created_at ?? null,
+    queueDepth,
+    queuePressure,
+    queueSummary,
+    roster,
+    analysis,
+    osuFileBackfill,
     rate,
     sqliteBusy,
-    scoresFallback: await scoresFallbackStatus(ctx, mirror),
+    scoresFallback,
     abuse: ctx.abuse?.state() ?? null,
-    apiCallHistory: await apiCallHistory(ctx.db),
-    countries: await countryRegistryStatus(ctx),
-    catchup: await countryCatchupStatus(ctx),
+    apiCallHistory: apiCalls,
+    countries,
+    catchup,
     worker: options.includeWorkerActivity ? adminWorkerStatus(worker) : publicWorkerStatus(worker),
     ...(snapshotStats ? { snapshotStats } : {}),
   };
