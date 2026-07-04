@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 
-import { addSelfToRoster } from "../../lib/roster-self-track";
+import { addSelfToRoster, type RosterSelfTrackResult } from "../../lib/roster-self-track";
+import { showTrackingStartedToast } from "./TrackingToasts";
 
 // Offer a logged-in but untracked player the chance to add their own osu! account to their
 // country's roster, after which the ingest pipeline starts recording their plays (and goals can
@@ -10,10 +11,13 @@ export function RosterOptInCard({
   title = "Start tracking your plays",
   description = "Plays are recorded automatically for the top 100 of each country. You're not in it yet, but you can add yourself to the tracker.",
   onTracked,
+  performAction,
 }: {
   title?: string;
   description?: string;
   onTracked?: () => void;
+  // Dev previews inject a fake action so the card can be exercised without touching the backend.
+  performAction?: () => Promise<RosterSelfTrackResult>;
 }) {
   const [status, setStatus] = useState<"idle" | "pending" | "done" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
@@ -22,9 +26,10 @@ export function RosterOptInCard({
     setStatus("pending");
     setMessage(null);
     try {
-      const result = await addSelfToRoster();
+      const result = await (performAction ?? addSelfToRoster)();
       if (result.ok) {
         setStatus("done");
+        showTrackingStartedToast();
         onTracked?.();
         return;
       }
@@ -40,7 +45,7 @@ export function RosterOptInCard({
       setStatus("error");
       setMessage("Couldn't turn on tracking right now. Try again in a moment.");
     }
-  }, [onTracked]);
+  }, [onTracked, performAction]);
 
   if (status === "done") {
     return (

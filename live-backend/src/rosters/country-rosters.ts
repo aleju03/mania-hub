@@ -148,8 +148,9 @@ export async function addManualRosterMember(
   }
   const alreadyManual = existing != null && String(existing.source) === "manual" && Number(existing.is_tracked) === 1;
   if (!alreadyManual) {
-    // Bound the per-country opt-in count: every manual member joins the fallback-poll rotation
-    // and accrues activity jobs, so this caps the recurring cost.
+    // Optional emergency brake (off by default): manual rows are durable and never age out, so
+    // this is the only unbounded roster growth path. Per-member recurring cost is otherwise
+    // proportional to how much they play, not to roster size.
     const cap = Math.max(0, Math.floor(config.manualRosterMaxPerCountry));
     if (cap > 0) {
       const countRow = (await exec(

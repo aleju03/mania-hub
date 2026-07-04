@@ -45,6 +45,7 @@ import {
 } from "../../lib/score";
 import { useAuth } from "../../lib/auth-context";
 import { addSelfToRoster } from "../../lib/roster-self-track";
+import { showTrackingStartedToast } from "../../components/me/TrackingToasts";
 import { GradeImg } from "../../components/ui/GradeImg";
 import { OsuLogo } from "../../components/ui/OsuLogo";
 import { CountryFlag } from "../../components/ui/CountryFlag";
@@ -2667,6 +2668,7 @@ function ActivityOptInEmptyState({
       const result = await addSelfToRoster();
       if (result.ok) {
         setStatus("done");
+        showTrackingStartedToast();
         onTracked?.();
         return;
       }

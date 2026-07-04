@@ -30,6 +30,7 @@ import { Route as BbcodeRouteImport } from './routes/bbcode'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SkinsIdRouteImport } from './routes/skins_.$id'
 import { Route as PlayerUsernameRouteImport } from './routes/player/$username'
+import { Route as DevOptInPreviewRouteImport } from './routes/dev.opt-in-preview'
 import { Route as ApiSyncRouteImport } from './routes/api/sync'
 import { Route as ApiSitemapRouteImport } from './routes/api/sitemap'
 import { Route as ApiReplayUploadRouteImport } from './routes/api/replay-upload'
@@ -158,6 +159,11 @@ const SkinsIdRoute = SkinsIdRouteImport.update({
 const PlayerUsernameRoute = PlayerUsernameRouteImport.update({
   id: '/player/$username',
   path: '/player/$username',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevOptInPreviewRoute = DevOptInPreviewRouteImport.update({
+  id: '/dev/opt-in-preview',
+  path: '/dev/opt-in-preview',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSyncRoute = ApiSyncRouteImport.update({
@@ -316,6 +322,7 @@ export interface FileRoutesByFullPath {
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/sitemap': typeof ApiSitemapRoute
   '/api/sync': typeof ApiSyncRoute
+  '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
   '/skins/$id': typeof SkinsIdRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
@@ -363,6 +370,7 @@ export interface FileRoutesByTo {
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/sitemap': typeof ApiSitemapRoute
   '/api/sync': typeof ApiSyncRoute
+  '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
   '/skins/$id': typeof SkinsIdRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
@@ -411,6 +419,7 @@ export interface FileRoutesById {
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/sitemap': typeof ApiSitemapRoute
   '/api/sync': typeof ApiSyncRoute
+  '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
   '/skins_/$id': typeof SkinsIdRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
@@ -460,6 +469,7 @@ export interface FileRouteTypes {
     | '/api/replay-upload'
     | '/api/sitemap'
     | '/api/sync'
+    | '/dev/opt-in-preview'
     | '/player/$username'
     | '/skins/$id'
     | '/api/auth/logout'
@@ -507,6 +517,7 @@ export interface FileRouteTypes {
     | '/api/replay-upload'
     | '/api/sitemap'
     | '/api/sync'
+    | '/dev/opt-in-preview'
     | '/player/$username'
     | '/skins/$id'
     | '/api/auth/logout'
@@ -554,6 +565,7 @@ export interface FileRouteTypes {
     | '/api/replay-upload'
     | '/api/sitemap'
     | '/api/sync'
+    | '/dev/opt-in-preview'
     | '/player/$username'
     | '/skins_/$id'
     | '/api/auth/logout'
@@ -602,6 +614,7 @@ export interface RootRouteChildren {
   ApiReplayUploadRoute: typeof ApiReplayUploadRoute
   ApiSitemapRoute: typeof ApiSitemapRoute
   ApiSyncRoute: typeof ApiSyncRoute
+  DevOptInPreviewRoute: typeof DevOptInPreviewRoute
   PlayerUsernameRoute: typeof PlayerUsernameRouteWithChildren
   SkinsIdRoute: typeof SkinsIdRoute
   ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
@@ -756,6 +769,13 @@ declare module '@tanstack/react-router' {
       path: '/player/$username'
       fullPath: '/player/$username'
       preLoaderRoute: typeof PlayerUsernameRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dev/opt-in-preview': {
+      id: '/dev/opt-in-preview'
+      path: '/dev/opt-in-preview'
+      fullPath: '/dev/opt-in-preview'
+      preLoaderRoute: typeof DevOptInPreviewRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/sync': {
@@ -1006,6 +1026,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiReplayUploadRoute: ApiReplayUploadRoute,
   ApiSitemapRoute: ApiSitemapRoute,
   ApiSyncRoute: ApiSyncRoute,
+  DevOptInPreviewRoute: DevOptInPreviewRoute,
   PlayerUsernameRoute: PlayerUsernameRouteWithChildren,
   SkinsIdRoute: SkinsIdRoute,
   ApiAuthLogoutRoute: ApiAuthLogoutRoute,

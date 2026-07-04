@@ -228,7 +228,11 @@ export function readConfig(): Config {
     rosterRefreshIntervalMs: readInt("ROSTER_REFRESH_INTERVAL_MS", 6 * 60 * 60 * 1000),
     rosterRankingPages: readInt("ROSTER_RANKING_PAGES", 2),
     rosterSize: readInt("ROSTER_SIZE", 100),
-    manualRosterMaxPerCountry: readInt("MANUAL_ROSTER_MAX_PER_COUNTRY", 50),
+    // 0 disables the per-country opt-in cap. Tracked members cost API budget in proportion to
+    // how much they play (the fallback poller is one global cursor, per-user jobs fire on their
+    // scores), so the cap exists only as an emergency brake to set via env if opt-in growth ever
+    // becomes a problem: manual rows are durable and nothing ages them out.
+    manualRosterMaxPerCountry: readInt("MANUAL_ROSTER_MAX_PER_COUNTRY", 0),
     mapsRefreshIntervalMs: readInt("MAPS_REFRESH_INTERVAL_MS", 7 * 24 * 60 * 60 * 1000),
     oscBackfillMaxAgeMs: readInt("OSC_BACKFILL_MAX_AGE_MS", 24 * 60 * 60 * 1000),
     oscBackfillPageLimit: Math.min(readInt("OSC_BACKFILL_PAGE_LIMIT", 1000), 1000),

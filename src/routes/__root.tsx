@@ -8,6 +8,7 @@ import { CustomCursor } from "../components/layout/CustomCursor";
 import { Nav } from "../components/layout/Nav";
 import { RouteLoadingBar } from "../components/layout/RouteLoadingBar";
 import { GoalToasts } from "../components/me/GoalToasts";
+import { TrackingToasts } from "../components/me/TrackingToasts";
 import { AuthContext } from "../lib/auth-context";
 import { getCurrentAuth } from "../lib/auth";
 import { InitialCountryContext } from "../lib/country-context";
@@ -501,6 +502,7 @@ function RootLayout() {
                 <Outlet />
               </main>
               <GoalToasts />
+              <TrackingToasts />
             </>
           )}
           <footer className="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1 px-4 py-2 text-center text-[10px] text-osu-pink-light/30">

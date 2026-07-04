@@ -81,6 +81,41 @@ export function playGoalClearedSound(): void {
 }
 
 /**
+ * "Tracking started": two quick rising sine notes (E5 then B5, each with a quiet octave partial),
+ * the second ringing out - a soft "you're connected" chime, warmer and smaller than the
+ * goal-cleared ta-da. ~0.6s.
+ */
+export function playTrackingStartedSound(): void {
+  withAudioContext((ctx) => {
+    const t0 = ctx.currentTime + 0.02;
+    const master = ctx.createGain();
+    master.gain.value = 0.13;
+    master.connect(ctx.destination);
+
+    const notes: Array<{ frequency: number; offset: number; ring: number }> = [
+      { frequency: 659.25, offset: 0, ring: 0.18 },
+      { frequency: 987.77, offset: 0.11, ring: 0.55 },
+    ];
+    for (const note of notes) {
+      const start = t0 + note.offset;
+      for (const [mult, level] of [[1, 0.6], [2, 0.16]] as const) {
+        const osc = ctx.createOscillator();
+        osc.type = "sine";
+        osc.frequency.value = note.frequency * mult;
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(level, start + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + note.ring);
+        osc.connect(gain);
+        gain.connect(master);
+        osc.start(start);
+        osc.stop(start + note.ring + 0.05);
+      }
+    }
+  });
+}
+
+/**
  * "Goal deleted": a short airy "puff" - band-passed noise sweeping down with a faint descending
  * tick on top, ~0.12s. Deliberately no low end (nothing below ~500Hz): an earlier sine-blip take
  * reached 150Hz and read as a physical thud instead of a dismissal.
