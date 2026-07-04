@@ -12,7 +12,7 @@ const META_KEY = "beatmap_osu_file_backfill_state";
 const BATCH_SIZE = 12;
 const BATCH_FETCH_CONCURRENCY = 4;
 const JOB_PRIORITY = -8;
-const CACHE_COUNTS_TTL_MS = 15_000;
+const CACHE_COUNTS_TTL_MS = 10 * 60_000;
 // Hard per-beatmap watchdog. Archive mirrors and the osu! API limiter both
 // have their own timeouts, but a fetch promise that never settles would
 // otherwise hold the only osu-file-cache lane forever.
@@ -389,13 +389,31 @@ async function readCacheCounts(db: Db): Promise<CacheCounts> {
   };
 }
 
+// Counting the cache means ~70k point lookups into beatmap_osu_files, the
+// largest table in the DB (inline blobs), which is 30s+ of random IO when the
+// page cache is cold. The status endpoint can't afford that inline, so expired
+// counts are served stale while a single-flight refresh runs in the background;
+// only the very first call after boot pays the scan.
+const cacheCountsRefreshByDb = new WeakMap<Db, Promise<CacheCounts>>();
+
 async function readCachedCacheCounts(db: Db): Promise<CacheCounts> {
-  const now = Date.now();
   const cached = cacheCountsByDb.get(db);
-  if (cached && cached.expiresAt > now) return cached.value;
-  const value = await readCacheCounts(db);
-  cacheCountsByDb.set(db, { value, expiresAt: now + CACHE_COUNTS_TTL_MS });
-  return value;
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+  let refresh = cacheCountsRefreshByDb.get(db);
+  if (!refresh) {
+    refresh = readCacheCounts(db).then((value) => {
+      cacheCountsByDb.set(db, { value, expiresAt: Date.now() + CACHE_COUNTS_TTL_MS });
+      return value;
+    }).finally(() => {
+      cacheCountsRefreshByDb.delete(db);
+    });
+    cacheCountsRefreshByDb.set(db, refresh);
+  }
+  if (cached) {
+    refresh.catch(() => undefined);
+    return cached.value;
+  }
+  return refresh;
 }
 
 async function readJobCounts(db: Db): Promise<JobCounts> {
