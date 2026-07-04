@@ -22,7 +22,7 @@
   <rect x="22" y="130" width="12" height="20" rx="2.5" fill="#a6a6ad"/>
   <rect x="246" y="130" width="12" height="20" rx="2.5" fill="#a6a6ad"/>
   <g transform="translate(140 140) scale(1.08)" filter="url(#gsh)">
-    <path d="M -56 -38 L -40 -52 V 52" fill="none" stroke="#fff" stroke-width="21" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M 8 -52 H 15 Q 40 -52 40 -27 V 27 Q 40 52 15 52 H 4 Q -21 52 -21 27 V -14 Q -21 -22 -16 -27 L 8 -52" fill="none" stroke="#fff" stroke-width="21" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M -66 -43 L -47 -52 V 43 L -66 52 Z" fill="#fff" fill-rule="evenodd" stroke="#fff" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M 2 -52 H 56 Q 66 -52 66 -42 V 42 Q 66 52 56 52 H -28 Q -38 52 -38 42 V -21 L 2 -52 Z M -17 -13 V 24 Q -17 31 -10 31 H 38 Q 45 31 45 24 V -24 Q 45 -31 38 -31 H 2 L -17 -13 Z" fill="#fff" fill-rule="evenodd" stroke="#fff" stroke-width="5" stroke-linejoin="round"/>
   </g>
 </svg>

@@ -73,7 +73,8 @@ const SEVENK_DAN_LABELS = new Set([
 
 function getDanImageSrc(label: string, family?: string, keyCount?: number): string | null {
   if (keyCount === 7) {
-    return SEVENK_DAN_LABELS.has(label) ? `/images/dans/7k/${label}.svg` : null;
+    if (!SEVENK_DAN_LABELS.has(label)) return null;
+    return family === "ln" ? `/images/dans/7k/ln-${label}.svg` : `/images/dans/7k/${label}.svg`;
   }
   if (keyCount != null && keyCount !== 4) {
     // other keymodes have their own dan courses; the 4K logos would be wrong

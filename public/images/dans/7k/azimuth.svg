@@ -22,6 +22,6 @@
   <rect x="22" y="130" width="12" height="20" rx="2.5" fill="#a6a6ad"/>
   <rect x="246" y="130" width="12" height="20" rx="2.5" fill="#a6a6ad"/>
   <g transform="translate(140 140) scale(1.08)" filter="url(#gsh)">
-    <text x="0" y="48" text-anchor="middle" font-family="Georgia, 'Times New Roman', 'DejaVu Serif', serif" font-style="italic" font-size="158" fill="#fff">ψ</text>
+    <text x="0" y="36" text-anchor="middle" font-family="Georgia, 'Times New Roman', 'DejaVu Serif', serif" font-style="italic" font-size="158" fill="#fff">ψ</text>
   </g>
 </svg>
