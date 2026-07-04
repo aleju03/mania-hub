@@ -102,12 +102,13 @@ function DiscordAdminPage() {
     }
   }, []);
 
-  const registerEmojis = useCallback(async () => {
+  const registerEmojis = useCallback(async (force = false) => {
     setBusy(true);
     setMessage(null);
     setError(null);
     try {
-      const res = await runLiveBackendAdminAction({ data: { path: "/api/admin/discord/register-emojis" } });
+      const path = force ? "/api/admin/discord/register-emojis?force=1" : "/api/admin/discord/register-emojis";
+      const res = await runLiveBackendAdminAction({ data: { path } });
       const body = res.body
         ? (JSON.parse(res.body) as { ok?: boolean; total?: number; created?: number; reused?: number; failed?: number; error?: string })
         : null;
@@ -275,14 +276,25 @@ function DiscordAdminPage() {
                   fetched from it), and again only if the icon art changes.{" "}
                   {!status.hasBotToken ? "Set DISCORD_BOT_TOKEN on the backend first." : "Idempotent: existing emojis are reused."}
                 </p>
-                <button
-                  type="button"
-                  onClick={() => void registerEmojis()}
-                  disabled={busy || !status.hasBotToken}
-                  className="order-1 shrink-0 rounded-lg border border-osu-pink/40 bg-osu-pink/10 px-3.5 py-2 text-[12px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/20 disabled:opacity-50 sm:order-2"
-                >
-                  Register emojis
-                </button>
+                <div className="order-1 flex shrink-0 items-center gap-2 sm:order-2">
+                  <button
+                    type="button"
+                    onClick={() => void registerEmojis()}
+                    disabled={busy || !status.hasBotToken}
+                    className="shrink-0 rounded-lg border border-osu-pink/40 bg-osu-pink/10 px-3.5 py-2 text-[12px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/20 disabled:opacity-50"
+                  >
+                    Register emojis
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void registerEmojis(true)}
+                    disabled={busy || !status.hasBotToken}
+                    title="Deletes and re-uploads every emoji so changed art takes effect. Plain register reuses existing emojis by name and keeps the old art."
+                    className="shrink-0 rounded-lg border border-osu-b3/40 bg-osu-b3/20 px-3.5 py-2 text-[12px] font-semibold text-osu-l2 transition-colors hover:bg-osu-b3/40 disabled:opacity-50"
+                  >
+                    Replace art
+                  </button>
+                </div>
               </div>
             </section>
 

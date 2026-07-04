@@ -112,7 +112,12 @@ async function getWasmModule(requestedVersion = DEFAULT_ETTERNA_VERSION, keycoun
 
     if (!wasmModulePromiseByVersion.has(version)) {
         wasmModulePromiseByVersion.set(version, loader({
-            locateFile: (path) => new URL(`./versions/${path}`, import.meta.url).toString(),
+            // The `.wasm` suffix must stay outside the interpolation: Vite globs
+            // the template into build assets, and a bare `${path}` matches
+            // ./versions/* and copies the raw glue .js files (and this folder's
+            // index.js, dangling imports included) into the bundle output.
+            // Emscripten only ever asks locateFile for the wasm binary.
+            locateFile: (path) => new URL(`./versions/${path.replace(/\.wasm$/, "")}.wasm`, import.meta.url).toString(),
         }));
     }
     return {
