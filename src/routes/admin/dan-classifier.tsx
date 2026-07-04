@@ -66,7 +66,19 @@ function extractBeatmapId(query: string): number | null {
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
-function getDanImageSrc(label: string, family?: string): string | null {
+const SEVENK_DAN_LABELS = new Set([
+  "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
+  "gamma", "azimuth", "zenith", "stellium",
+]);
+
+function getDanImageSrc(label: string, family?: string, keyCount?: number): string | null {
+  if (keyCount === 7) {
+    return SEVENK_DAN_LABELS.has(label) ? `/images/dans/7k/${label}.svg` : null;
+  }
+  if (keyCount != null && keyCount !== 4) {
+    // other keymodes have their own dan courses; the 4K logos would be wrong
+    return null;
+  }
   if (family === "ln" && /^(1[0-6]|[1-9])$/.test(label)) {
     return `/images/dans/ln/${label}.svg`;
   }
@@ -1051,9 +1063,9 @@ function AnalysisPanel({ selected, onFetchFromOsu }: AnalysisPanelProps) {
 
       {primary ? (
         <div className="mt-4 flex items-center gap-4">
-          {getDanImageSrc(primary.label, primary.kind === "ln" ? "ln" : undefined) ? (
+          {getDanImageSrc(primary.label, primary.kind === "ln" ? "ln" : undefined, classification.keyCount) ? (
             <img
-              src={getDanImageSrc(primary.label, primary.kind === "ln" ? "ln" : undefined) ?? undefined}
+              src={getDanImageSrc(primary.label, primary.kind === "ln" ? "ln" : undefined, classification.keyCount) ?? undefined}
               alt=""
               className="h-16 w-16 shrink-0 object-contain drop-shadow-[0_10px_24px_rgba(0,0,0,0.45)] sm:h-20 sm:w-20"
             />

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 280" role="img" aria-label="7K 0th dan">
+  <defs>
+    <pattern id="hatch" patternUnits="userSpaceOnUse" width="9" height="9" patternTransform="rotate(45)">
+      <rect width="9" height="9" fill="none"/>
+      <rect width="3.4" height="9" fill="rgba(0,0,0,0.17)"/>
+    </pattern>
+    <radialGradient id="vig" cx="50%" cy="46%" r="56%">
+      <stop offset="0.62" stop-color="rgba(0,0,0,0)"/>
+      <stop offset="1" stop-color="rgba(0,0,0,0.28)"/>
+    </radialGradient>
+    <filter id="gsh" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity="0.55"/>
+    </filter>
+  </defs>
+  <circle cx="140" cy="140" r="119" fill="none" stroke="#8e8e95" stroke-width="3" stroke-dasharray="205 169" stroke-dashoffset="55" opacity="0.6"/>
+  <circle cx="140" cy="140" r="96" fill="#4c4c50"/>
+  <circle cx="140" cy="140" r="96" fill="url(#hatch)"/>
+  <circle cx="140" cy="140" r="96" fill="url(#vig)"/>
+  <circle cx="140" cy="140" r="104" fill="none" stroke="#a8a8af" stroke-width="8"/>
+  <circle cx="140" cy="140" r="99.5" fill="none" stroke="rgba(0,0,0,0.35)" stroke-width="2"/>
+  <circle cx="140" cy="140" r="108.5" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.5"/>
+  <rect x="22" y="130" width="12" height="20" rx="2.5" fill="#a6a6ad"/>
+  <rect x="246" y="130" width="12" height="20" rx="2.5" fill="#a6a6ad"/>
+  <g transform="translate(140 140) scale(1.08)" filter="url(#gsh)">
+    <path d="M -1 -52 H 6 Q 33 -52 33 -25 V 25 Q 33 52 6 52 H -6 Q -33 52 -33 25 V -16 Q -33 -24 -27 -30 L -1 -52" fill="none" stroke="#fff" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
