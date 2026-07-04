@@ -3,6 +3,7 @@ import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, use
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { Dices } from "lucide-react";
 import {
   getRankings,
   getCountryMapsFarmed,
@@ -1790,13 +1791,13 @@ function MapsPage() {
   const paginated = tab === "random" ? [] : liveBackendPaged ? currentList : currentList.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   // The three rankings are one surface seen through different lenses, so they
-  // share a segmented control. "random picks" is a distinct interaction and
-  // stays a sibling tab (see the view bar below).
-  const browseLenses: { id: Exclude<Tab, "random" | "search" | "collections">; label: string }[] = [
+  // share a segmented control. "random" draws from the favourites pool, so it
+  // renders fused onto the Favourites segment (see the view bar below).
+  const browseLenses: { id: Exclude<Tab, "favourites" | "random" | "search" | "collections">; label: string }[] = [
     { id: "farmed", label: "Farmed" },
     { id: "popular", label: "Most Played" },
-    { id: "favourites", label: "Favourites" },
   ];
+  const favouritesFamilyActive = tab === "favourites" || tab === "random";
 
   // Bridge the route's s-prefixed params <-> the Search section's UI state.
   const csvToArray = (value: string): string[] => (value ? value.split(",").filter(Boolean) : []);
@@ -2375,10 +2376,11 @@ function MapsPage() {
 
       {!warming && (
       <>
-      {/* ── View bar: the three rankings grouped into one segmented control,
-          with the distinct "random picks" view kept as a sibling tab ─────── */}
+      {/* ── View bar: the rankings grouped into one segmented control.
+          "random" is a shuffle of the favourites pool, so it renders as the
+          right half of a split Favourites segment ─────────────────────────── */}
       <div className="bg-osu-d5 border-b border-osu-b3/30">
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-5 flex items-center gap-2.5 overflow-x-auto scrollbar-hide">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-2 flex items-center gap-2.5 overflow-x-auto scrollbar-hide">
           <div className="flex items-center gap-0.5 rounded-lg bg-osu-b4/70 p-0.5">
             {browseLenses.map((lens) => (
               <button
@@ -2394,25 +2396,46 @@ function MapsPage() {
                 {lens.label}
               </button>
             ))}
-          </div>
 
-          <span aria-hidden="true" className="h-4 w-px shrink-0 bg-osu-b3/40" />
-
-          <button
-            onClick={() => updateMapsSearch({ tab: "random", page: 0 })}
-            aria-pressed={tab === "random"}
-            className={`relative px-3 py-2.5 text-[12px] font-medium whitespace-nowrap cursor-pointer transition-colors duration-[120ms] ${
-              tab === "random" ? "text-osu-c1" : "text-osu-f1 hover:text-osu-l2"
-            }`}
-          >
-            random picks
-            {tab === "random" && (
+            <div
+              className={`flex items-center rounded-md transition-colors duration-[120ms] ${
+                favouritesFamilyActive ? "bg-osu-pink/20" : ""
+              }`}
+            >
+              <button
+                onClick={() => updateMapsSearch({ tab: "favourites", page: 0 })}
+                aria-pressed={tab === "favourites"}
+                className={`rounded-md px-3 py-1 text-[12px] font-medium whitespace-nowrap transition-colors duration-[120ms] cursor-pointer ${
+                  tab === "favourites"
+                    ? "text-osu-pink-light"
+                    : favouritesFamilyActive
+                      ? "text-osu-pink-light/50 hover:text-osu-pink-light"
+                      : "text-osu-f1 hover:text-osu-l2"
+                }`}
+              >
+                Favourites
+              </button>
               <span
                 aria-hidden="true"
-                className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-osu-h1"
+                className={`h-3 w-px shrink-0 ${favouritesFamilyActive ? "bg-osu-pink-light/25" : "bg-osu-b3/40"}`}
               />
-            )}
-          </button>
+              <button
+                onClick={() => updateMapsSearch({ tab: "random", page: 0 })}
+                aria-pressed={tab === "random"}
+                title="Random picks from the favourites pool"
+                className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-[12px] font-medium whitespace-nowrap transition-colors duration-[120ms] cursor-pointer ${
+                  tab === "random"
+                    ? "text-osu-pink-light"
+                    : favouritesFamilyActive
+                      ? "text-osu-pink-light/50 hover:text-osu-pink-light"
+                      : "text-osu-f1 hover:text-osu-l2"
+                }`}
+              >
+                <Dices className="h-3 w-3" aria-hidden="true" />
+                Random
+              </button>
+            </div>
+          </div>
 
           {ENABLE_MAP_CATALOG_DEV_TABS && (
             <>
