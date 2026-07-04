@@ -806,7 +806,7 @@ export function ChartPreviewPanel({
         </div>
       </div>
 
-      {error ? (
+      {error && requested ? (
         <div className="absolute inset-x-3 top-3 z-40 rounded-md bg-black/65 px-2 py-1 text-[10px] text-rose-300">
           {error}
         </div>
