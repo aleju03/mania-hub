@@ -4271,6 +4271,75 @@ describe("live backend", () => {
     expect(osu.getUserFavourites).toHaveBeenCalledWith(101, 10, "job:refresh_country_maps:favourites");
   });
 
+  it("keeps known maps_beatmaps cs/bpm when most_played returns compact beatmaps", async () => {
+    const { db } = await setup();
+    const now = "2026-05-12T11:45:00.000Z";
+    await exec(
+      db,
+      `insert into users (user_id, username, avatar_url, country_code, updated_at)
+       values (101, 'Maps Alpha', 'https://assets.example/101.png', 'CR', ?)`,
+      [now],
+    );
+    await exec(
+      db,
+      `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+       values ('CR', 101, 1, 'test', 1, ?)`,
+      [now],
+    );
+    // A previous richer payload (best scores/favourites) already recorded keymode and bpm.
+    await exec(
+      db,
+      `insert into maps_beatmaps (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, total_length, version, url, updated_at)
+       values (90001, 90000, 'mania', 'ranked', 4, 5.5, 180, 120, '4K Popular', 'https://osu.ppy.sh/beatmaps/90001', ?)`,
+      [now],
+    );
+    // Real most_played beatmaps are compact: no cs, no bpm, no url.
+    const compactSet = { id: 90_000, title: "Popular Set", artist: "Artist", creator: "Mapper", status: "ranked", covers: {}, play_count: 200, favourite_count: 20 };
+    const mostPlayed = [
+      {
+        beatmap_id: 90_001,
+        count: 7,
+        beatmap: { id: 90_001, beatmapset_id: 90_000, mode: "mania", status: "ranked", difficulty_rating: 5.5, total_length: 120, version: "4K Popular" },
+        beatmapset: compactSet,
+      },
+      {
+        beatmap_id: 90_002,
+        count: 3,
+        beatmap: { id: 90_002, beatmapset_id: 90_000, mode: "mania", status: "ranked", difficulty_rating: 4.4, total_length: 90, version: "4K Other" },
+        beatmapset: compactSet,
+      },
+    ];
+    // Favourites make the refresh produce "usable" data; their beatmaps are full objects.
+    const favourite = {
+      id: 91_000,
+      title: "Favourite Set",
+      artist: "Fav Artist",
+      creator: "Fav Mapper",
+      covers: {},
+      status: "ranked",
+      play_count: 300,
+      favourite_count: 50,
+      preview_url: "",
+      bpm: 190,
+      tags: "",
+      beatmaps: [{ id: 91_001, mode: "mania", status: "ranked", cs: 7, difficulty_rating: 6.2, bpm: 190, total_length: 150, version: "7K Fav", url: "https://osu.ppy.sh/beatmaps/91001" }],
+    };
+    const osu = {
+      getUserBestScoresWindow: vi.fn(async () => []),
+      getUserMostPlayed: vi.fn(async () => mostPlayed),
+      getUserFavourites: vi.fn(async () => [favourite]),
+    };
+
+    await refreshCountryMaps(db, osu, { country: "CR" });
+
+    const rows = (await exec(db, "select beatmap_id, cs, bpm from maps_beatmaps where beatmap_id in (90001, 90002) order by beatmap_id")).rows;
+    // The known map keeps its values; the never-enriched map stores null, not a fake 0.
+    expect(Number(rows[0].cs)).toBe(4);
+    expect(Number(rows[0].bpm)).toBe(180);
+    expect(rows[1].cs).toBeNull();
+    expect(rows[1].bpm).toBeNull();
+  });
+
   it("reports queued progress for cold maps snapshots", async () => {
     const { db, queue } = await setup();
 

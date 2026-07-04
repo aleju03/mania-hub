@@ -2569,9 +2569,11 @@ function mapsBeatmapStatement(
       value.beatmapsetId,
       value.mode,
       value.status || null,
-      value.cs ?? null,
+      // 0 is never a real keymode/bpm (snapshot hydration bakes unknowns as 0);
+      // store null so the coalesce above keeps or later heals the real value.
+      value.cs || null,
       value.difficultyRating,
-      value.bpm ?? null,
+      value.bpm || null,
       value.totalLength,
       value.version,
       value.url,
@@ -3153,9 +3155,11 @@ async function replaceUserMapsUserLibrary(
       beatmapsetId,
       mode: "mania",
       status: String(mp.beatmap.status ?? mp.beatmapset.status ?? ""),
-      cs: Number(mp.beatmap.cs ?? 0),
+      // most_played returns compact beatmaps with no cs/bpm; leave them unset
+      // so the upsert keeps values learned from richer payloads.
+      cs: mp.beatmap.cs == null ? undefined : Number(mp.beatmap.cs),
       difficultyRating: Number(mp.beatmap.difficulty_rating ?? 0),
-      bpm: Number(mp.beatmap.bpm ?? 0),
+      bpm: mp.beatmap.bpm == null ? undefined : Number(mp.beatmap.bpm),
       totalLength: getTotalLength(mp.beatmap),
       version: String(mp.beatmap.version ?? ""),
       url: String(mp.beatmap.url ?? `https://osu.ppy.sh/beatmaps/${beatmapId}`),
