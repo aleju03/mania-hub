@@ -13,6 +13,8 @@ import { parseManiaBeatmap, type ManiaBeatmap } from "../src/lib/beatmap-parser.
 import { estimateDan } from "../src/lib/dan-estimator.ts";
 import { getLnReferenceComparisonMetrics, getLnReferenceNeighbors } from "../src/lib/dan-estimator/ln.ts";
 import { estimateDanielDan } from "../src/lib/daniel-estimator.ts";
+import { estimateLeoBlackDan } from "../src/lib/leoblack-estimator.ts";
+import { classifyChart } from "../src/lib/chart-classifier.ts";
 import type { DanEstimate, DanFeatureMetrics } from "../src/lib/dan-estimator/types.ts";
 import {
   type DanBenchmarkFamily,
@@ -33,7 +35,7 @@ import {
   fetchBeatmapFile,
 } from "./_dan-shared.ts";
 
-type ClassifierId = "aleju" | "daniel";
+type ClassifierId = "unified" | "aleju" | "daniel" | "leoblack";
 type MatchKind = "exact" | "base" | "wrong" | "unlabeled";
 
 interface CliOptions {
@@ -190,7 +192,7 @@ function usage(exitCode = 2): never {
     "",
     "Options:",
     "  --family normal|ln|ranked Benchmark family. Default: normal",
-    "  --classifier aleju|daniel  Estimator to run. Default: aleju",
+    "  --classifier unified|aleju|daniel|leoblack  Estimator to run. Default: unified (the production classifier); the rest are baselines",
     "  --rate N                 Playback rate. Default: 1",
     "  --set IDS                Comma-separated beatmapset IDs to run",
     "  --beatmap IDS            Comma-separated beatmap IDs/diffs to run",
@@ -263,7 +265,7 @@ function parseArgs(argv: string[]): CliOptions {
     beatmapIds: null,
     beatmapsetIds: null,
     cacheDir: DEFAULT_CACHE_DIR,
-    classifier: "aleju",
+    classifier: "unified",
     compareFiles: null,
     debug: false,
     expectedLabels: null,
@@ -298,7 +300,7 @@ function parseArgs(argv: string[]): CliOptions {
       options.familySpecified = true;
     } else if (arg === "--classifier") {
       const value = argv[++i];
-      if (value !== "aleju" && value !== "daniel") usage();
+      if (value !== "unified" && value !== "aleju" && value !== "daniel" && value !== "leoblack") usage();
       options.classifier = value;
     } else if (arg === "--rate") {
       const value = Number(argv[++i]);
@@ -360,6 +362,7 @@ function splitVariant(label: string): { base: string; variant: string } {
 
 function runClassifier(
   classifier: ClassifierId,
+  family: DanBenchmarkFamily,
   text: string,
   rate: number,
   starRating: number | null,
@@ -376,7 +379,20 @@ function runClassifier(
     title: map.title,
     version: map.version,
   };
-  const estimate = classifier === "daniel" ? estimateDanielDan(map, input) : estimateDan(map, input);
+  let estimate: DanEstimate;
+  if (classifier === "unified") {
+    const classification = classifyChart(map, text, { ...input, preferFamily: family === "ln" ? "ln" : "rc" });
+    if (!classification.estimate) {
+      throw new Error(`unified classifier produced no dan verdict (${classification.verdictText ?? "no verdict"})`);
+    }
+    estimate = classification.estimate;
+  } else if (classifier === "daniel") {
+    estimate = estimateDanielDan(map, input);
+  } else if (classifier === "leoblack") {
+    estimate = estimateLeoBlackDan(map, text, { ...input, preferFamily: family === "ln" ? "ln" : "rc" });
+  } else {
+    estimate = estimateDan(map, input);
+  }
   return { estimate, map, version: map.version, title: map.title, artist: map.artist };
 }
 
@@ -1228,6 +1244,7 @@ async function main(): Promise<void> {
     try {
       const { estimate, map, version, title, artist } = runClassifier(
         options.classifier,
+        options.family,
         meta.text,
         options.rate,
         meta.starRating,

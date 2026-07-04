@@ -1,30 +1,36 @@
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import JSZip from "jszip";
-import { Check, ClipboardList, Copy, FileSpreadsheet, RotateCcw, Search, UserRound, X } from "lucide-react";
+import { Check, ClipboardList, Copy, Download, FileSpreadsheet, RotateCcw, X } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { parseManiaBeatmap } from "../../lib/beatmap-parser";
-import { filterBeatmapSearchResults } from "../../lib/beatmap-search";
-import { analyzeManiaPatterns, estimateDan } from "../../lib/dan-estimator";
-import { estimateDanielDan } from "../../lib/daniel-estimator";
-import { formatNumber } from "../../lib/format";
-import { getBeatmapFile, getBeatmapset, getBeatmapsetForBeatmap, getUser, getUserScoresBestWindow, searchBeatmaps, searchBeatmapsByMappers } from "../../lib/osu";
-import type { DanEstimate, ManiaPatternAnalysis } from "../../lib/dan-estimator";
-import type { OsuBeatmap, OsuBeatmapset, OsuScore } from "../../lib/types";
-import { canUseAdminFeatures, canUseDevFeatures } from "../../lib/auth-shared";
+import { parseManiaBeatmap } from "#/lib/beatmap-parser";
+import { classifyChart } from "#/lib/chart-classifier";
+import type { ChartClassification, DanVerdictHalf } from "#/lib/chart-classifier";
+import { canUseAdminFeatures, canUseDevFeatures } from "#/lib/auth-shared";
 import {
   type DanBenchmarkFamily,
   getBenchmarkBeatmapIds,
   getBenchmarkBeatmapsetIds,
+  getBenchmarkBeatmapStarRating,
+  getBenchmarkExpectedLabelOverride,
   getBenchmarkLabelOptions,
-} from "../../lib/dan-benchmark-sets";
-import { getDanBenchmarkHiddenDiffs, getDanBenchmarkLabels, setDanBenchmarkHiddenDiff, setDanBenchmarkLabel } from "../../lib/dan-benchmark";
+} from "#/lib/dan-benchmark-sets";
+import { getDanBenchmarkHiddenDiffs, getDanBenchmarkLabels, setDanBenchmarkHiddenDiff, setDanBenchmarkLabel } from "#/lib/dan-benchmark";
+import {
+  getDanClassifierChartBatch,
+  getDanClassifierChartFile,
+  getDanClassifierSets,
+} from "#/lib/dan-classifier-admin";
+import type { DanClassifierSetMeta } from "#/lib/dan-classifier-admin";
+import { fetchLiveMapSearch } from "#/lib/live-backend";
+import type { LiveMapSearchEntry } from "#/lib/live-backend";
 
-type DanClassifierId = "aleju" | "daniel";
+type PreferFamily = "rc" | "ln" | "auto";
 
-const DAN_CLASSIFIERS: Array<{ id: DanClassifierId; label: string }> = [
-  { id: "aleju", label: "aleju" },
-  { id: "daniel", label: "Daniel" },
-];
+const VERDICT_SOURCE_LABELS: Record<DanVerdictHalf["source"], string> = {
+  "leoblack-mixed": "LeoBlack Mixed",
+  "leoblack-sunny-table": "Sunny table",
+  "inhouse-ln-knn": "LN kNN",
+};
 
 const DAN_IMAGE_EXTENSIONS: Record<string, "webp" | "svg"> = {
   "1": "svg",
@@ -45,77 +51,6 @@ const DAN_IMAGE_EXTENSIONS: Record<string, "webp" | "svg"> = {
   zeta: "webp",
   eta: "webp",
 };
-const NON_MAPPER_SEARCH_TOKENS = new Set([
-  "4k",
-  "7k",
-  "9k",
-  "dan",
-  "map",
-  "maps",
-  "mania",
-  "osu",
-  "rate",
-  "x",
-]);
-
-function extractMapperCandidates(query: string): string[] {
-  const tokens = query
-    .trim()
-    .split(/\s+/)
-    .map((token) => token.replace(/^[^\w[\]-]+|[^\w[\]-]+$/g, ""))
-    .filter((token) => /^[\w[\]-]{3,24}$/.test(token))
-    .filter((token) => !NON_MAPPER_SEARCH_TOKENS.has(token.toLowerCase()));
-  const lastToken = tokens.at(-1);
-  const likelyUserTokens = tokens.filter((token) => /[\d_[\]-]/.test(token));
-
-  return [...new Set([...(lastToken ? [lastToken] : []), ...likelyUserTokens])].slice(0, 3);
-}
-
-function mergeBeatmapsets(...groups: OsuBeatmapset[][]): OsuBeatmapset[] {
-  const beatmapsetsById = new Map<number, OsuBeatmapset>();
-  for (const group of groups) {
-    for (const beatmapset of group) {
-      const existing = beatmapsetsById.get(beatmapset.id);
-      if (!existing) {
-        beatmapsetsById.set(beatmapset.id, beatmapset);
-        continue;
-      }
-
-      const existingBeatmaps = existing.beatmaps ?? [];
-      const beatmapsById = new Map(existingBeatmaps.map((beatmap) => [beatmap.id, beatmap]));
-      for (const beatmap of beatmapset.beatmaps ?? []) {
-        if (!beatmapsById.has(beatmap.id)) beatmapsById.set(beatmap.id, beatmap);
-      }
-      beatmapsetsById.set(beatmapset.id, {
-        ...existing,
-        beatmaps: [...beatmapsById.values()],
-      });
-    }
-  }
-  return [...beatmapsetsById.values()];
-}
-
-function topPlayScoresToBeatmapsets(scores: OsuScore[]): OsuBeatmapset[] {
-  const beatmapsetsById = new Map<number, OsuBeatmapset>();
-  const seenBeatmaps = new Set<number>();
-
-  for (const score of scores) {
-    const beatmap = score.beatmap;
-    const beatmapset = score.beatmapset;
-    if (!beatmap || !beatmapset || beatmap.mode !== "mania" || ![4, 6, 7].includes(Math.round(beatmap.cs)) || seenBeatmaps.has(beatmap.id)) {
-      continue;
-    }
-
-    seenBeatmaps.add(beatmap.id);
-    const existing = beatmapsetsById.get(beatmapset.id);
-    beatmapsetsById.set(beatmapset.id, {
-      ...beatmapset,
-      beatmaps: [...(existing?.beatmaps ?? []), beatmap],
-    });
-  }
-
-  return [...beatmapsetsById.values()];
-}
 
 function extractBeatmapsetId(query: string): number | null {
   const beatmapsetUrlMatch = query.match(/beatmapsets\/(\d+)/i);
@@ -140,8 +75,8 @@ function getDanImageSrc(label: string, family?: string): string | null {
   return extension ? `/images/dans/reform/${label}.${extension}` : null;
 }
 
-function isNumericDanLabel(label: string): boolean {
-  return /^(10|[1-9])$/.test(label);
+function cleanVersionLabel(version: string): string {
+  return version.replace(/\s*\[\d+[Kk]\]\s*/g, " ").trim();
 }
 
 async function copyTextToClipboard(text: string): Promise<boolean> {
@@ -153,6 +88,40 @@ async function copyTextToClipboard(text: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+// setTimeout is throttled to 1s+ in background tabs, which would crawl the
+// benchmark loop when the tab loses focus; MessageChannel messages are not.
+function yieldToUi(): Promise<void> {
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => resolve();
+    channel.port2.postMessage(null);
+  });
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+function chunkArray<T>(items: readonly T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
 }
 
 type BenchmarkExportAction = "excel" | "markdown";
@@ -462,48 +431,6 @@ function downloadTextFile(filename: string, contents: string, type: string): voi
   downloadBlobFile(filename, new Blob([contents], { type }));
 }
 
-async function runEstimate(
-  beatmapset: OsuBeatmapset,
-  beatmap: OsuBeatmap,
-  classifierId: DanClassifierId,
-  rate: number,
-): Promise<DanEstimate> {
-  const file = await getBeatmapFile({ data: { beatmapId: beatmap.id } });
-  const parsed = parseManiaBeatmap(file.content);
-  if (parsed.keyCount !== 4) {
-    throw new Error("Dan estimates are currently only supported for 4K beatmaps.");
-  }
-  const estimateInput = {
-    starRating: beatmap.difficulty_rating,
-    totalLength: beatmap.total_length,
-    title: beatmapset.title,
-    version: beatmap.version,
-    rate,
-  };
-  return classifierId === "daniel"
-    ? estimateDanielDan(parsed, estimateInput)
-    : estimateDan(parsed, estimateInput);
-}
-
-async function runPatternAnalysis(
-  beatmapset: OsuBeatmapset,
-  beatmap: OsuBeatmap,
-  rate: number,
-): Promise<ManiaPatternAnalysis> {
-  const file = await getBeatmapFile({ data: { beatmapId: beatmap.id } });
-  const parsed = parseManiaBeatmap(file.content);
-  if (![4, 6, 7].includes(parsed.keyCount)) {
-    throw new Error("Pattern analysis currently supports 4K, 6K, and 7K beatmaps.");
-  }
-  return analyzeManiaPatterns(parsed, {
-    starRating: beatmap.difficulty_rating,
-    totalLength: beatmap.total_length,
-    title: beatmapset.title,
-    version: beatmap.version,
-    rate,
-  });
-}
-
 type DanVariant = "--" | "-" | "" | "+" | "++";
 const DAN_VARIANT_OPTIONS: DanVariant[] = ["--", "-", "", "+", "++"];
 
@@ -517,23 +444,35 @@ function joinExpectedLabel(base: string, variant: DanVariant): string {
   return `${base}${variant}`;
 }
 
-async function mapWithConcurrencyClient<T, R>(
-  items: readonly T[],
-  concurrency: number,
-  worker: (item: T, index: number) => Promise<R>,
-): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let cursor = 0;
-  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
-    while (true) {
-      const i = cursor++;
-      if (i >= items.length) return;
-      results[i] = await worker(items[i], i);
-    }
-  });
-  await Promise.all(workers);
-  return results;
+interface AnalyzeTarget {
+  beatmapId: number;
+  title: string | null;
+  artist: string | null;
+  version: string | null;
+  starRating: number | null;
+  preferFamily: PreferFamily;
 }
+
+interface SelectedChartState {
+  target: AnalyzeTarget;
+  status: "loading" | "not-cached" | "ready" | "error";
+  classification: ChartClassification | null;
+  osuText: string | null;
+  rateUsed: number;
+  title: string | null;
+  artist: string | null;
+  version: string | null;
+  error: string | null;
+}
+
+type SearchResults =
+  | {
+      kind: "sets";
+      sets: DanClassifierSetMeta[];
+      missingBeatmapsetId: number | null;
+      missingBeatmapId: number | null;
+    }
+  | { kind: "text"; items: LiveMapSearchEntry[]; total: number };
 
 export const Route = createFileRoute("/admin/dan-classifier")({
   head: () => ({
@@ -557,83 +496,92 @@ function DanClassifierPage() {
   const [view, setView] = useState<"search" | "benchmark">("search");
   const [benchmarkFamily, setBenchmarkFamily] = useState<DanBenchmarkFamily>("normal");
   const [query, setQuery] = useState("");
-  const [playerQuery, setPlayerQuery] = useState("");
   const [rate, setRate] = useState(1);
-  const [classifier, setClassifier] = useState<DanClassifierId>("aleju");
-  const [results, setResults] = useState<OsuBeatmapset[]>([]);
-  const [showingPlayerMaps, setShowingPlayerMaps] = useState(false);
+  const [results, setResults] = useState<SearchResults | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [playerMapsLoading, setPlayerMapsLoading] = useState(false);
-  const [loadedPlayerName, setLoadedPlayerName] = useState<string | null>(null);
-  const [selectedSet, setSelectedSet] = useState<OsuBeatmapset | null>(null);
-  const [selectedBeatmap, setSelectedBeatmap] = useState<OsuBeatmap | null>(null);
-  const [estimate, setEstimate] = useState<DanEstimate | null>(null);
-  const [patternAnalysis, setPatternAnalysis] = useState<ManiaPatternAnalysis | null>(null);
-  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<SelectedChartState | null>(null);
   const [copiedBeatmapId, setCopiedBeatmapId] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const searchRequestRef = useRef(0);
+  const analyzeRequestRef = useRef(0);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const rateRef = useRef(rate);
+  rateRef.current = rate;
 
   useEffect(() => {
-    if (query.trim().length < 2) {
-      if (!showingPlayerMaps) {
-        setResults([]);
-      }
+    const trimmed = query.trim();
+    clearTimeout(searchTimerRef.current);
+    if (trimmed.length < 2) {
+      setResults(null);
       setSearchLoading(false);
+      setSearchError(null);
       return;
     }
 
     setSearchLoading(true);
-    clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(async () => {
+    setSearchError(null);
+    const requestId = ++searchRequestRef.current;
+    searchTimerRef.current = setTimeout(async () => {
       try {
-        const directBeatmapsetId = extractBeatmapsetId(query);
-        const directBeatmapId = extractBeatmapId(query);
-        const [relevanceResponse, updatedResponse, directBeatmapset, directBeatmapParentSet] = await Promise.all([
-          searchBeatmaps({
+        const beatmapsetId = extractBeatmapsetId(trimmed);
+        const beatmapId = extractBeatmapId(trimmed);
+        if (beatmapsetId != null || beatmapId != null) {
+          const result = await getDanClassifierSets({
             data: {
-              query,
-              sort: "relevance_desc",
-              status: "any",
+              beatmapsetIds: beatmapsetId != null ? [beatmapsetId] : [],
+              beatmapIds: beatmapId != null ? [beatmapId] : [],
             },
-          }),
-          searchBeatmaps({
-            data: {
-              query,
-              sort: "updated_desc",
-              status: "any",
-            },
-          }).catch(() => ({ beatmapsets: [] })),
-          directBeatmapsetId
-            ? getBeatmapset({ data: { beatmapsetId: directBeatmapsetId } }).catch(() => null)
-            : Promise.resolve(null),
-          directBeatmapId
-            ? getBeatmapsetForBeatmap({ data: { beatmapId: directBeatmapId } }).catch(() => null)
-            : Promise.resolve(null),
-        ]);
-        const mapperCandidates = extractMapperCandidates(query);
-        const mapperResponse = mapperCandidates.length > 0
-          ? await searchBeatmapsByMappers({ data: { usernames: mapperCandidates } })
-          : { beatmapsets: [] };
-        const searchedResults = filterBeatmapSearchResults(
-          mergeBeatmapsets(relevanceResponse.beatmapsets, updatedResponse.beatmapsets, mapperResponse.beatmapsets),
-          query,
-        );
-        setResults(mergeBeatmapsets(
-          directBeatmapset ? [directBeatmapset] : [],
-          directBeatmapParentSet ? [directBeatmapParentSet] : [],
-          searchedResults,
-        ).slice(0, 12));
+          });
+          if (searchRequestRef.current !== requestId) return;
+          const seenSetIds = new Set<number>();
+          const sets: DanClassifierSetMeta[] = [];
+          for (const set of result.sets) {
+            if (seenSetIds.has(set.beatmapsetId)) continue;
+            seenSetIds.add(set.beatmapsetId);
+            sets.push(set);
+          }
+          setResults({
+            kind: "sets",
+            sets,
+            missingBeatmapsetId: sets.length === 0 && beatmapsetId != null && result.missingBeatmapsetIds.includes(beatmapsetId)
+              ? beatmapsetId
+              : null,
+            missingBeatmapId: sets.length === 0 && beatmapId != null && result.missingBeatmapIds.includes(beatmapId)
+              ? beatmapId
+              : null,
+          });
+        } else {
+          const result = await fetchLiveMapSearch({
+            q: trimmed,
+            keys: [],
+            statuses: [],
+            patterns: [],
+            starMin: null,
+            starMax: null,
+            bpmMin: null,
+            bpmMax: null,
+            lenMin: null,
+            lenMax: null,
+            country: null,
+            sort: "relevance",
+            dir: "desc",
+            page: 0,
+            pageSize: 12,
+          });
+          if (searchRequestRef.current !== requestId) return;
+          setResults({ kind: "text", items: result.items, total: result.total });
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not search beatmaps.");
+        if (searchRequestRef.current !== requestId) return;
+        setSearchError(err instanceof Error ? err.message : "Could not search the local catalog.");
       } finally {
-        setSearchLoading(false);
+        if (searchRequestRef.current === requestId) setSearchLoading(false);
       }
     }, 300);
 
-    return () => clearTimeout(timerRef.current);
-  }, [query, showingPlayerMaps]);
+    return () => clearTimeout(searchTimerRef.current);
+  }, [query]);
 
   useEffect(() => () => clearTimeout(copiedTimerRef.current), []);
 
@@ -643,61 +591,62 @@ function DanClassifierPage() {
     }
   }, [canUseBenchmark, view]);
 
-  const selectedTitle = useMemo(() => {
-    if (!selectedSet || !selectedBeatmap) return null;
-    return `${selectedSet.artist} - ${selectedSet.title} [${selectedBeatmap.version}]`;
-  }, [selectedBeatmap, selectedSet]);
-
-  const analyzeBeatmap = useCallback(async (beatmapset: OsuBeatmapset, beatmap: OsuBeatmap, classifierId: DanClassifierId = classifier) => {
-    setSelectedSet(beatmapset);
-    setSelectedBeatmap(beatmap);
-    setEstimate(null);
-    setPatternAnalysis(null);
-    setError(null);
-    setAnalysisLoading(true);
-
-    try {
-      if (view === "benchmark") {
-        const result = await runEstimate(beatmapset, beatmap, classifierId, rate);
-        setEstimate(result);
-      } else {
-        const result = await runPatternAnalysis(beatmapset, beatmap, rate);
-        setPatternAnalysis(result);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not analyze this beatmap.");
-    } finally {
-      setAnalysisLoading(false);
-    }
-  }, [classifier, rate, view]);
-
-  async function loadPlayerTopPlayMaps() {
-    const key = playerQuery.trim();
-    if (key.length < 2) {
-      setError("Enter a player username or ID.");
-      return;
-    }
-
-    setPlayerMapsLoading(true);
-    setError(null);
+  const analyzeTarget = useCallback(async (target: AnalyzeTarget, allowOsuFetch = false) => {
+    const requestId = ++analyzeRequestRef.current;
+    const rateUsed = rateRef.current;
+    setSelected({
+      target,
+      status: "loading",
+      classification: null,
+      osuText: null,
+      rateUsed,
+      title: target.title,
+      artist: target.artist,
+      version: target.version,
+      error: null,
+    });
 
     try {
-      const user = await getUser({ data: { key } });
-      const scores = await getUserScoresBestWindow({ data: { userId: user.id, totalLimit: 100 } });
-      const beatmapsets = topPlayScoresToBeatmapsets(scores);
-      setLoadedPlayerName(user.username);
-      setShowingPlayerMaps(true);
-      setResults(beatmapsets);
-      setQuery("");
-      if (beatmapsets.length === 0) {
-        setError(`${user.username} has no 4K, 6K, or 7K mania maps in their top plays.`);
+      const file = await getDanClassifierChartFile({ data: { beatmapId: target.beatmapId, allowOsuFetch } });
+      if (analyzeRequestRef.current !== requestId) return;
+      if (file.notCached || file.content == null) {
+        setSelected((prev) => (
+          prev && prev.target.beatmapId === target.beatmapId ? { ...prev, status: "not-cached" } : prev
+        ));
+        return;
       }
+      // let the spinner paint before the synchronous classify
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      if (analyzeRequestRef.current !== requestId) return;
+      const map = parseManiaBeatmap(file.content);
+      const classification = classifyChart(map, file.content, {
+        rate: rateUsed,
+        starRating: target.starRating ?? 0,
+        title: map.title,
+        version: map.version,
+        preferFamily: target.preferFamily,
+      });
+      if (analyzeRequestRef.current !== requestId) return;
+      setSelected({
+        target,
+        status: "ready",
+        classification,
+        osuText: file.content,
+        rateUsed,
+        title: target.title ?? map.title,
+        artist: target.artist ?? map.artist,
+        version: target.version ?? map.version,
+        error: null,
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load this player's top plays.");
-    } finally {
-      setPlayerMapsLoading(false);
+      if (analyzeRequestRef.current !== requestId) return;
+      setSelected((prev) => (
+        prev && prev.target.beatmapId === target.beatmapId
+          ? { ...prev, status: "error", error: err instanceof Error ? err.message : "Could not analyze this chart." }
+          : prev
+      ));
     }
-  }
+  }, []);
 
   const copyBeatmapId = useCallback(async (beatmapId: number) => {
     const copied = await copyTextToClipboard(String(beatmapId));
@@ -707,6 +656,8 @@ function DanClassifierPage() {
     clearTimeout(copiedTimerRef.current);
     copiedTimerRef.current = setTimeout(() => setCopiedBeatmapId(null), 1200);
   }, []);
+
+  const selectedBeatmapId = selected?.target.beatmapId ?? null;
 
   return (
     <main className="min-h-screen overflow-x-clip bg-osu-b5 text-osu-c1">
@@ -719,7 +670,7 @@ function DanClassifierPage() {
             Pattern Analyzer
           </h1>
           <div className="mt-2 text-sm text-osu-f1">
-            Search a mania beatmap, fetch its .osu file, and classify the main 4K, 6K, or 7K patterns from chart pressure.
+            Search the local map catalog and classify chart patterns and dan verdicts. Chart files come from the live backend; osu! is only fetched on explicit request.
           </div>
         </div>
 
@@ -732,7 +683,7 @@ function DanClassifierPage() {
 
         <div
           className={`mt-6 grid min-w-0 gap-6 items-start ${
-            view === "benchmark" && !selectedBeatmap
+            view === "benchmark" && !selected
               ? "lg:grid-cols-1"
               : "lg:grid-cols-[minmax(0,1fr)_360px]"
           }`}
@@ -743,13 +694,8 @@ function DanClassifierPage() {
               <input
                 type="text"
                 value={query}
-                onChange={(event) => {
-                  setQuery(event.target.value);
-                  setLoadedPlayerName(null);
-                  setShowingPlayerMaps(false);
-                  setError(null);
-                }}
-                placeholder="Search beatmap..."
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search beatmap, or paste a link or id..."
                 className="w-full px-4 py-3 rounded-lg bg-osu-b5 text-osu-c1 text-sm placeholder:text-osu-f1 border border-osu-b3/50 focus:border-osu-h1/40 focus:outline-none transition-colors shadow-[inset_0_1px_3px_rgba(0,0,0,0.3)]"
               />
               {searchLoading && (
@@ -779,131 +725,201 @@ function DanClassifierPage() {
               <div className="text-xs text-osu-f1">x</div>
             </div>
 
-            <div className="mt-4 rounded-lg border border-osu-b3/30 bg-osu-b5/60 p-3">
-              <label className="text-[11px] uppercase tracking-wide text-osu-f1 font-bold" htmlFor="dan-player-top-plays">
-                Player top plays
-              </label>
-              <div className="mt-2 flex min-w-0 flex-col gap-2 sm:flex-row">
-                <div className="relative min-w-0 flex-1">
-                  <UserRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-osu-f1" />
-                  <input
-                    id="dan-player-top-plays"
-                    type="text"
-                    value={playerQuery}
-                    onChange={(event) => {
-                      setPlayerQuery(event.target.value);
-                      setError(null);
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") void loadPlayerTopPlayMaps();
-                    }}
-                    placeholder="Username or ID..."
-                    className="w-full rounded-md border border-osu-b3/50 bg-osu-b5 py-2 pl-9 pr-3 text-sm text-osu-c1 shadow-[inset_0_1px_3px_rgba(0,0,0,0.3)] transition-colors placeholder:text-osu-f1 focus:border-osu-h1/40 focus:outline-none"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void loadPlayerTopPlayMaps()}
-                  disabled={playerMapsLoading}
-                  className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-osu-pink/30 bg-osu-pink/20 px-3 text-xs font-black text-white transition-colors hover:border-osu-pink/60 hover:bg-osu-pink/30 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {playerMapsLoading ? (
-                    <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                  ) : (
-                    <Search className="h-4 w-4" />
-                  )}
-                  Load 4K/6K/7K maps
-                </button>
-              </div>
-              {loadedPlayerName && !playerMapsLoading ? (
-                <div className="mt-2 text-[11px] text-osu-f1">
-                  Showing 4K/6K/7K maps from {loadedPlayerName}'s top plays.
-                </div>
-              ) : null}
-            </div>
-
-            {error && (
+            {searchError && (
               <div className="mt-4 rounded-lg border border-osu-red/30 bg-osu-red/10 px-4 py-3 text-sm text-osu-red">
-                {error}
+                {searchError}
               </div>
             )}
 
             <div className="mt-5 space-y-3">
-              {results.map((beatmapset) => {
-                const maniaDiffs = (beatmapset.beatmaps ?? [])
-                  .filter((beatmap) => beatmap.mode === "mania")
-                  .sort((a, b) => a.cs - b.cs || a.difficulty_rating - b.difficulty_rating);
-                const coverUrl = beatmapset.covers?.["cover@2x"] || beatmapset.covers?.cover;
-                const copiedMapId = beatmapset.id;
+              {results?.kind === "sets" ? (
+                <>
+                  {(results.missingBeatmapsetId != null || results.missingBeatmapId != null) && (
+                    <div className="rounded-lg border border-osu-b3/30 bg-osu-b5/60 px-4 py-3">
+                      <div className="text-sm text-osu-f1">
+                        {results.missingBeatmapsetId != null && results.missingBeatmapId != null
+                          ? `#${results.missingBeatmapId} is not in the local DB as a beatmap or beatmapset.`
+                          : results.missingBeatmapsetId != null
+                            ? `Beatmapset #${results.missingBeatmapsetId} is not in the local DB.`
+                            : `Beatmap #${results.missingBeatmapId} is not in the local DB.`}
+                      </div>
+                      {results.missingBeatmapId != null && (
+                        <button
+                          type="button"
+                          onClick={() => void analyzeTarget({
+                            beatmapId: results.missingBeatmapId as number,
+                            title: null,
+                            artist: null,
+                            version: null,
+                            starRating: null,
+                            preferFamily: "auto",
+                          }, true)}
+                          className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-md border border-osu-pink/30 bg-osu-pink/20 px-3 py-1.5 text-[11px] font-black text-white transition-colors hover:border-osu-pink/60 hover:bg-osu-pink/30"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          Analyze via osu! fetch
+                        </button>
+                      )}
+                    </div>
+                  )}
 
-                return (
-                  <div key={beatmapset.id} className="relative min-w-0 overflow-hidden rounded-lg border border-osu-b3/30 bg-osu-b5">
-                    {coverUrl && (
-                      <img src={coverUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-35" loading="lazy" />
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-r from-osu-b5 via-osu-b5/90 to-osu-b5/65" />
-                    <div className="relative p-4">
-                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="text-sm font-black text-white truncate">{beatmapset.title}</div>
-                          <div className="mt-1 text-[11px] text-osu-f1 truncate">
-                            {beatmapset.artist} // {beatmapset.creator} // Playcount {formatNumber(beatmapset.play_count)}
+                  {results.sets.map((set) => {
+                    const maniaDiffs = set.diffs
+                      .filter((diff) => diff.mode === "mania")
+                      .sort((a, b) => (a.keyCount ?? 0) - (b.keyCount ?? 0) || (a.starRating ?? 0) - (b.starRating ?? 0));
+
+                    return (
+                      <div key={set.beatmapsetId} className="min-w-0 rounded-lg border border-osu-b3/30 bg-osu-b5 p-4">
+                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-sm font-black text-white truncate">{set.title ?? `Set #${set.beatmapsetId}`}</div>
+                            <div className="mt-1 text-[11px] text-osu-f1 truncate">{set.artist ?? "Unknown artist"}</div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void copyBeatmapId(set.beatmapsetId)}
+                              className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-osu-b3/40 bg-osu-b4/40 text-osu-l2 transition-colors hover:border-osu-l2/40 hover:text-white"
+                              title={`Copy beatmapset ID ${set.beatmapsetId}`}
+                              aria-label={`Copy beatmapset ID ${set.beatmapsetId}`}
+                            >
+                              {copiedBeatmapId === set.beatmapsetId ? (
+                                <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                              ) : (
+                                <Copy className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                            <a
+                              href={`https://osu.ppy.sh/beatmapsets/${set.beatmapsetId}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[11px] font-bold text-osu-l2 hover:text-white transition-colors"
+                            >
+                              osu!
+                            </a>
                           </div>
                         </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => void copyBeatmapId(copiedMapId)}
-                            className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-white/10 bg-black/35 text-osu-l2 backdrop-blur-sm transition-colors hover:border-osu-l2/40 hover:bg-black/55 hover:text-white"
-                            title={`Copy beatmapset ID ${copiedMapId}`}
-                            aria-label={`Copy beatmapset ID ${copiedMapId}`}
-                          >
-                            {copiedBeatmapId === copiedMapId ? (
-                              <Check className="h-3.5 w-3.5" strokeWidth={3} />
-                            ) : (
-                              <Copy className="h-3.5 w-3.5" />
-                            )}
-                          </button>
-                          <a
-                            href={`https://osu.ppy.sh/beatmapsets/${beatmapset.id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[11px] font-bold text-osu-l2 hover:text-white transition-colors"
-                          >
-                            osu!
-                          </a>
+
+                        <div className="mt-3 flex min-w-0 flex-wrap gap-1.5 overflow-hidden">
+                          {maniaDiffs.map((diff) => (
+                            <button
+                              key={diff.beatmapId}
+                              type="button"
+                              onClick={() => void analyzeTarget({
+                                beatmapId: diff.beatmapId,
+                                title: set.title,
+                                artist: set.artist,
+                                version: diff.version,
+                                starRating: diff.starRating,
+                                preferFamily: "auto",
+                              })}
+                              title={diff.cached ? undefined : "Chart not cached in local DB"}
+                              className={`inline-flex max-w-full min-w-0 items-center gap-1 overflow-hidden px-2.5 py-1 rounded-md text-left text-[11px] cursor-pointer transition-colors border ${
+                                selectedBeatmapId === diff.beatmapId
+                                  ? "bg-osu-pink/30 border-osu-pink/60 text-white"
+                                  : "bg-osu-b4/50 hover:bg-osu-b4 text-osu-c1"
+                              } ${diff.cached ? "border-osu-b3/40" : "border-dashed border-osu-b3/60"}`}
+                            >
+                              <span className="shrink-0 text-osu-yellow font-semibold">{diff.keyCount != null ? `${diff.keyCount}K` : "?K"}</span>
+                              <span className="min-w-0 truncate">{cleanVersionLabel(diff.version)}</span>
+                              {diff.starRating != null ? (
+                                <span className="shrink-0 text-osu-l2">&#9733;{diff.starRating.toFixed(2)}</span>
+                              ) : null}
+                            </button>
+                          ))}
+                          {maniaDiffs.length === 0 ? (
+                            <div className="text-[11px] text-osu-f1">No mania diffs in the local DB for this set.</div>
+                          ) : null}
                         </div>
                       </div>
+                    );
+                  })}
+                </>
+              ) : results?.kind === "text" ? (
+                <>
+                  {results.items.map((item) => {
+                    const diffs = item.diffs && item.diffs.length > 0 ? item.diffs : [item];
+                    const coverUrl = item.covers?.["cover@2x"] || item.covers?.cover || null;
 
-                      <div className="mt-3 flex min-w-0 flex-wrap gap-1.5 overflow-hidden">
-                        {maniaDiffs.map((beatmap) => (
-                          <button
-                            key={beatmap.id}
-                            type="button"
-                            onClick={() => analyzeBeatmap(beatmapset, beatmap)}
-                            className={`inline-flex max-w-full min-w-0 items-center gap-1 overflow-hidden px-2.5 py-1 rounded-md text-left text-[11px] cursor-pointer transition-colors border backdrop-blur-sm ${
-                              selectedBeatmap?.id === beatmap.id
-                                ? "bg-osu-pink/30 border-osu-pink/60 text-white"
-                                : "bg-black/40 hover:bg-black/60 border-white/10 text-white/90"
-                            }`}
-                          >
-                            <span className="shrink-0 text-osu-yellow font-semibold">{beatmap.cs}K</span>
-                            <span className="min-w-0 truncate">{beatmap.version.replace(/\s*\[\d+[Kk]\]\s*/g, " ").trim()}</span>
-                            <span className="shrink-0 text-osu-l2">&#9733;{beatmap.difficulty_rating.toFixed(2)}</span>
-                          </button>
-                        ))}
+                    return (
+                      <div key={item.beatmapsetId} className="relative min-w-0 overflow-hidden rounded-lg border border-osu-b3/30 bg-osu-b5">
+                        {coverUrl && (
+                          <img src={coverUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-25" loading="lazy" />
+                        )}
+                        <div className="absolute inset-0 bg-osu-b5/80" />
+                        <div className="relative p-4">
+                          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-sm font-black text-white truncate">{item.title}</div>
+                              <div className="mt-1 text-[11px] text-osu-f1 truncate">
+                                {item.artist} // {item.creator} // {item.status}
+                              </div>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => void copyBeatmapId(item.beatmapsetId)}
+                                className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-white/10 bg-black/35 text-osu-l2 transition-colors hover:border-osu-l2/40 hover:bg-black/55 hover:text-white"
+                                title={`Copy beatmapset ID ${item.beatmapsetId}`}
+                                aria-label={`Copy beatmapset ID ${item.beatmapsetId}`}
+                              >
+                                {copiedBeatmapId === item.beatmapsetId ? (
+                                  <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                                ) : (
+                                  <Copy className="h-3.5 w-3.5" />
+                                )}
+                              </button>
+                              <a
+                                href={`https://osu.ppy.sh/beatmapsets/${item.beatmapsetId}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[11px] font-bold text-osu-l2 hover:text-white transition-colors"
+                              >
+                                osu!
+                              </a>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 flex min-w-0 flex-wrap gap-1.5 overflow-hidden">
+                            {diffs.map((diff) => (
+                              <button
+                                key={diff.beatmapId}
+                                type="button"
+                                onClick={() => void analyzeTarget({
+                                  beatmapId: diff.beatmapId,
+                                  title: item.title,
+                                  artist: item.artist,
+                                  version: diff.version,
+                                  starRating: diff.stars,
+                                  preferFamily: "auto",
+                                })}
+                                className={`inline-flex max-w-full min-w-0 items-center gap-1 overflow-hidden px-2.5 py-1 rounded-md text-left text-[11px] cursor-pointer transition-colors border ${
+                                  selectedBeatmapId === diff.beatmapId
+                                    ? "bg-osu-pink/30 border-osu-pink/60 text-white"
+                                    : "bg-black/40 hover:bg-black/60 border-white/10 text-white/90"
+                                }`}
+                              >
+                                <span className="shrink-0 text-osu-yellow font-semibold">{diff.keyCount}K</span>
+                                <span className="min-w-0 truncate">{cleanVersionLabel(diff.version)}</span>
+                                <span className="shrink-0 text-osu-l2">&#9733;{diff.stars.toFixed(2)}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                );
-              })}
+                    );
+                  })}
 
-              {!searchLoading && query.trim().length >= 2 && results.length === 0 && (
-                <div className="py-12 text-center text-sm text-osu-f1">No mania beatmaps found.</div>
-              )}
+                  {!searchLoading && results.items.length === 0 && (
+                    <div className="py-12 text-center text-sm text-osu-f1">No maps in the local catalog match this search.</div>
+                  )}
+                </>
+              ) : null}
 
-              {query.trim().length < 2 && results.length === 0 && (
-                <div className="py-12 text-center text-sm text-osu-f1">Start typing to search osu!mania maps.</div>
+              {query.trim().length < 2 && (
+                <div className="py-12 text-center text-sm text-osu-f1">
+                  Type to search the local catalog, or paste a beatmap link or id.
+                </div>
               )}
             </div>
           </section>
@@ -911,37 +927,30 @@ function DanClassifierPage() {
             <BenchmarkView
               family={benchmarkFamily}
               onFamilyChange={setBenchmarkFamily}
-              classifier={classifier}
-              onClassifierChange={setClassifier}
               rate={rate}
               onRateChange={setRate}
-              selectedBeatmapId={selectedBeatmap?.id ?? null}
-              onAnalyze={analyzeBeatmap}
+              selectedBeatmapId={selectedBeatmapId}
+              onAnalyze={analyzeTarget}
               onCopyId={copyBeatmapId}
               copiedBeatmapId={copiedBeatmapId}
             />
           )}
 
-          {!(view === "benchmark" && !selectedBeatmap) && (
+          {!(view === "benchmark" && !selected) && (
           <aside className="min-w-0 rounded-lg border border-osu-b3/30 bg-osu-b4/35 p-4 sm:p-5 lg:sticky lg:top-24">
             <div className="flex items-start justify-between gap-2">
               <div>
                 <div className="text-[11px] uppercase tracking-[0.14em] text-osu-f1 font-bold">
-                  {view === "benchmark" ? "Estimate" : "Patterns"}
+                  Analysis
                 </div>
                 <div className="mt-1 text-[11px] font-bold text-osu-yellow">
-                  {view === "benchmark" ? DAN_CLASSIFIERS.find((option) => option.id === classifier)?.label : "4K / 6K / 7K"}
+                  unified classifier
                 </div>
               </div>
-              {view === "benchmark" && selectedBeatmap ? (
+              {view === "benchmark" && selected ? (
                 <button
                   type="button"
-                  onClick={() => {
-                    setSelectedSet(null);
-                    setSelectedBeatmap(null);
-                    setEstimate(null);
-                    setPatternAnalysis(null);
-                  }}
+                  onClick={() => setSelected(null)}
                   className="cursor-pointer rounded-md border border-osu-b3/40 bg-osu-b5/60 px-2 py-1 text-[10px] text-osu-f1 hover:text-white hover:border-osu-b3 transition-colors"
                   title="Close detail"
                 >
@@ -949,151 +958,299 @@ function DanClassifierPage() {
                 </button>
               ) : null}
             </div>
-            {analysisLoading ? (
-              <div className="mt-8 flex flex-col items-center gap-3 py-10">
-                <div className="w-7 h-7 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
-                <div className="text-sm text-osu-f1">Analyzing .osu file...</div>
-              </div>
-            ) : patternAnalysis && view !== "benchmark" ? (
-              <div className="mt-4 min-w-0">
-                <div className="text-sm text-osu-f1 truncate">{selectedTitle}</div>
-                <div className="mt-4">
-                  <div className="text-3xl font-black leading-none text-white sm:text-4xl">
-                    {patternAnalysis.primary?.label ?? "Unknown"}
-                  </div>
-                  <div className="mt-2 text-sm font-bold text-osu-yellow">
-                    {patternAnalysis.keyCount}K pattern profile
-                  </div>
-                </div>
-
-                <div className="mt-5 grid grid-cols-1 gap-2 min-[380px]:grid-cols-2">
-                  <Metric label="Notes" value={patternAnalysis.metrics.noteCount.toLocaleString()} />
-                  <Metric label="Keys" value={`${patternAnalysis.metrics.keyCount}K`} />
-                  <Metric label="Peak 5s" value={`${patternAnalysis.metrics.peakNps5s.toFixed(1)} n/s`} />
-                  <Metric label="Sustain 10s" value={`${patternAnalysis.metrics.sustainedNps10s.toFixed(1)} n/s`} />
-                  <Metric label="Chords" value={`${Math.round(patternAnalysis.metrics.chordRatio * 100)}%`} />
-                  <Metric label="LNs" value={`${Math.round(patternAnalysis.metrics.holdRatio * 100)}%`} />
-                </div>
-
-                <div className="mt-5 space-y-2">
-                  {patternAnalysis.patterns.map((pattern) => (
-                    <div key={pattern.id}>
-                      <div className="flex justify-between gap-3 text-[11px] font-bold text-osu-f1">
-                        <span>{pattern.label}</span>
-                        <span>{Math.round(pattern.confidence * 100)}%</span>
-                      </div>
-                      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-osu-b5">
-                        <div
-                          className="h-full rounded-full bg-osu-pink"
-                          style={{ width: `${Math.min(100, Math.max(4, pattern.confidence * 100))}%` }}
-                        />
-                      </div>
-                      <div className="mt-1 truncate text-[10px] text-osu-f1/80">{pattern.evidence}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {patternAnalysis.warnings.length > 0 && (
-                  <div className="mt-5 rounded-lg border border-osu-yellow/25 bg-osu-yellow/10 px-3 py-2 text-[11px] text-osu-yellow">
-                    {patternAnalysis.warnings.join(" ")}
-                  </div>
-                )}
-
-                {selectedSet && selectedBeatmap && (
-                  <Link
-                    to="/replay"
-                    search={{ tab: "beatmap" }}
-                    className="mt-5 block text-center px-3 py-2 rounded-lg bg-osu-b5 text-[11px] font-bold text-osu-l2 border border-osu-b3/40 hover:text-white hover:border-osu-b3 transition-colors"
-                  >
-                    Find replays for this map
-                  </Link>
-                )}
-              </div>
-            ) : estimate ? (
-              <div className="mt-4 min-w-0">
-                <div className="text-sm text-osu-f1 truncate">{selectedTitle}</div>
-                <div className="mt-4 flex items-center gap-4">
-                  {getDanImageSrc(estimate.label, estimate.family) ? (
-                    <img
-                      src={getDanImageSrc(estimate.label, estimate.family) ?? undefined}
-                      alt=""
-                      className="h-16 w-16 shrink-0 object-contain drop-shadow-[0_10px_24px_rgba(0,0,0,0.45)] sm:h-20 sm:w-20"
-                    />
-                  ) : null}
-                  <div className="min-w-0">
-                    {!isNumericDanLabel(estimate.label) && (
-                      <div className="truncate text-3xl font-black leading-none text-white sm:text-4xl">{estimate.displayName}</div>
-                    )}
-                    <div className={`${isNumericDanLabel(estimate.label) ? "" : "mt-2"} text-sm font-bold text-osu-yellow`}>
-                      {estimate.family}
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-2 text-sm text-osu-f1">
-                  SR proxy {estimate.estimatedSr.toFixed(2)} · raw dan {estimate.rawDan.toFixed(2)}
-                </div>
-
-                <div className="mt-5 grid grid-cols-1 gap-2 min-[380px]:grid-cols-2">
-                  <Metric label="Notes" value={estimate.metrics.noteCount.toLocaleString()} />
-                  <Metric label="Keys" value={`${estimate.metrics.keyCount}K`} />
-                  <Metric label="Peak 5s" value={`${estimate.metrics.peakNps5s.toFixed(1)} n/s`} />
-                  <Metric label="Sustain 10s" value={`${estimate.metrics.sustainedNps10s.toFixed(1)} n/s`} />
-                  <Metric label="Chords" value={`${Math.round(estimate.metrics.chordRatio * 100)}%`} />
-                  <Metric label="LNs" value={`${Math.round(estimate.metrics.holdRatio * 100)}%`} />
-                </div>
-
-                <div className="mt-5 space-y-2">
-                  {(() => {
-                    const scores = Object.entries(estimate.skillScores)
-                      .filter(([skill]) => skill !== "dan") as Array<[string, number]>;
-                    const values = scores.map(([, score]) => score);
-                    const minScore = Math.min(...values);
-                    const maxScore = Math.max(...values);
-                    const spread = Math.max(0.001, maxScore - minScore);
-
-                    return scores.map(([skill, score]) => (
-                      <div key={skill}>
-                        <div className="flex justify-between text-[11px] font-bold text-osu-f1">
-                          <span className="capitalize">{skill}</span>
-                          <span>{score.toFixed(2)}</span>
-                        </div>
-                        <div className="mt-1 h-1.5 rounded-full bg-osu-b5 overflow-hidden">
-                          <div
-                            className="h-full rounded-full bg-osu-pink"
-                            style={{ width: `${Math.min(100, Math.max(4, ((score - minScore) / spread) * 96 + 4))}%` }}
-                          />
-                        </div>
-                      </div>
-                    ));
-                  })()}
-                </div>
-
-                {estimate.warnings.length > 0 && (
-                  <div className="mt-5 rounded-lg border border-osu-yellow/25 bg-osu-yellow/10 px-3 py-2 text-[11px] text-osu-yellow">
-                    {estimate.warnings.join(" ")}
-                  </div>
-                )}
-
-                {selectedSet && selectedBeatmap && (
-                  <Link
-                    to="/replay"
-                    search={{ tab: "beatmap" }}
-                    className="mt-5 block text-center px-3 py-2 rounded-lg bg-osu-b5 text-[11px] font-bold text-osu-l2 border border-osu-b3/40 hover:text-white hover:border-osu-b3 transition-colors"
-                  >
-                    Find replays for this map
-                  </Link>
-                )}
-              </div>
-            ) : (
-              <div className="mt-8 py-10 text-center text-sm text-osu-f1">
-                Pick a difficulty to analyze its patterns.
-              </div>
-            )}
+            <AnalysisPanel
+              selected={selected}
+              onFetchFromOsu={(target) => void analyzeTarget(target, true)}
+            />
           </aside>
           )}
         </div>
       </div>
     </main>
+  );
+}
+
+interface AnalysisPanelProps {
+  selected: SelectedChartState | null;
+  onFetchFromOsu: (target: AnalyzeTarget) => void;
+}
+
+function AnalysisPanel({ selected, onFetchFromOsu }: AnalysisPanelProps) {
+  if (!selected) {
+    return (
+      <div className="mt-8 py-10 text-center text-sm text-osu-f1">
+        Pick a difficulty to classify it.
+      </div>
+    );
+  }
+
+  const heading = selected.title
+    ? `${selected.artist ? `${selected.artist} - ` : ""}${selected.title}${selected.version ? ` [${selected.version}]` : ""}`
+    : `Beatmap #${selected.target.beatmapId}`;
+
+  if (selected.status === "loading") {
+    return (
+      <div className="mt-8 flex flex-col items-center gap-3 py-10">
+        <div className="w-7 h-7 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
+        <div className="text-sm text-osu-f1">Classifying chart...</div>
+      </div>
+    );
+  }
+
+  if (selected.status === "not-cached") {
+    return (
+      <div className="mt-4 min-w-0">
+        <div className="text-sm text-osu-f1 break-words">{heading}</div>
+        <div className="mt-5 rounded-lg border border-osu-b3/40 bg-osu-b5/60 px-4 py-5 text-center">
+          <div className="text-sm font-bold text-osu-c1">Not cached</div>
+          <div className="mt-1 text-[11px] text-osu-f1">
+            This chart is not in the local DB. Fetching hits the osu! API once.
+          </div>
+          <button
+            type="button"
+            onClick={() => onFetchFromOsu(selected.target)}
+            className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-md border border-osu-pink/30 bg-osu-pink/20 px-3 py-2 text-xs font-black text-white transition-colors hover:border-osu-pink/60 hover:bg-osu-pink/30"
+          >
+            <Download className="h-4 w-4" />
+            Fetch from osu!
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (selected.status === "error") {
+    return (
+      <div className="mt-4 min-w-0">
+        <div className="text-sm text-osu-f1 break-words">{heading}</div>
+        <div className="mt-4 rounded-lg border border-osu-red/30 bg-osu-red/10 px-4 py-3 text-sm text-osu-red">
+          {selected.error ?? "Could not analyze this chart."}
+        </div>
+      </div>
+    );
+  }
+
+  const classification = selected.classification;
+  if (!classification) return null;
+  const primary = classification.primary;
+  const halves = [classification.rc, classification.ln].filter((half): half is DanVerdictHalf => half != null);
+  const report = classification.clusters?.report ?? null;
+
+  return (
+    <div className="mt-4 min-w-0">
+      <div className="text-sm text-osu-f1 break-words">{heading}</div>
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-osu-f1">
+        <span className="rounded border border-osu-b3/40 bg-osu-b5 px-1.5 py-0.5 font-bold text-osu-yellow">
+          {classification.keyCount}K
+        </span>
+        {selected.target.starRating != null ? (
+          <span className="tabular-nums text-osu-l2">&#9733;{selected.target.starRating.toFixed(2)}</span>
+        ) : null}
+        <span className="tabular-nums">{selected.rateUsed.toFixed(2)}x</span>
+      </div>
+
+      {primary ? (
+        <div className="mt-4 flex items-center gap-4">
+          {getDanImageSrc(primary.label, primary.kind === "ln" ? "ln" : undefined) ? (
+            <img
+              src={getDanImageSrc(primary.label, primary.kind === "ln" ? "ln" : undefined) ?? undefined}
+              alt=""
+              className="h-16 w-16 shrink-0 object-contain drop-shadow-[0_10px_24px_rgba(0,0,0,0.45)] sm:h-20 sm:w-20"
+            />
+          ) : null}
+          <div className="min-w-0">
+            <div className="truncate text-3xl font-black leading-none text-white sm:text-4xl">{primary.displayName}</div>
+            <div className="mt-2 text-sm font-bold text-osu-yellow">
+              {primary.kind === "ln" ? "LN dan" : "RC dan"}
+              <span className="ml-2 font-normal text-osu-f1">{Math.round(primary.confidence * 100)}% confidence</span>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4 text-sm text-osu-f1">
+          {[4, 6, 7].includes(classification.keyCount)
+            ? "No dan verdict for this chart."
+            : "No dan verdict: dan tables only exist for 4K, 6K, and 7K. Patterns below still apply."}
+        </div>
+      )}
+
+      {halves.length > 0 ? (
+        <div className="mt-4 space-y-1.5">
+          {halves.map((half) => (
+            <VerdictHalfRow key={half.kind} half={half} />
+          ))}
+        </div>
+      ) : null}
+
+      {classification.vibro ? (
+        <div className="mt-3 inline-flex items-center rounded border border-osu-yellow/30 bg-osu-yellow/10 px-2 py-1 text-[11px] font-bold text-osu-yellow">
+          vibro detected - RC verdict inflated
+        </div>
+      ) : null}
+
+      <div className="mt-5 grid grid-cols-1 gap-2 min-[380px]:grid-cols-2">
+        <Metric label="Sunny SR" value={classification.sunnySr != null ? classification.sunnySr.toFixed(2) : "--"} />
+        <Metric label="LN ratio" value={`${Math.round(classification.lnRatio * 100)}%`} />
+        {report ? <Metric label="Category" value={report.Category} /> : null}
+        {report ? <Metric label="Mode" value={report.ModeTag} /> : null}
+        {report && report.SVAmount > 0 ? <Metric label="SVs" value={String(report.SVAmount)} /> : null}
+      </div>
+
+      {classification.clusters && classification.clusters.topFiveClusters.length > 0 ? (
+        <div className="mt-5">
+          <div className="text-[11px] uppercase tracking-wide text-osu-f1 font-bold">Clusters</div>
+          <div className="mt-2 space-y-1.5">
+            {classification.clusters.topFiveClusters.map((cluster, index) => {
+              const duration = classification.clusters?.report.Duration ?? 0;
+              const share = duration > 0 ? Math.min(100, (cluster.Amount / duration) * 100) : 0;
+              return (
+                <div key={index} className="flex items-baseline justify-between gap-3 text-[11px]">
+                  <span className="min-w-0 truncate text-osu-c1">{cluster.format(selected.rateUsed)}</span>
+                  <span className="shrink-0 tabular-nums text-osu-f1">{share.toFixed(0)}%</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {selected.osuText != null && [4, 6, 7].includes(classification.keyCount) ? (
+        <MsdSection
+          beatmapId={selected.target.beatmapId}
+          osuText={selected.osuText}
+          keyCount={classification.keyCount}
+          rate={selected.rateUsed}
+        />
+      ) : null}
+
+      {classification.warnings.length > 0 ? (
+        <ul className="mt-5 space-y-1 text-[11px] text-osu-f1/80">
+          {classification.warnings.map((warning, index) => (
+            <li key={index}>{warning}</li>
+          ))}
+        </ul>
+      ) : null}
+
+      {classification.verdictText ? (
+        <div className="mt-4 break-words font-mono text-[10px] text-osu-f1/70">{classification.verdictText}</div>
+      ) : null}
+
+      <Link
+        to="/replay"
+        search={{ tab: "beatmap" }}
+        className="mt-5 block text-center px-3 py-2 rounded-lg bg-osu-b5 text-[11px] font-bold text-osu-l2 border border-osu-b3/40 hover:text-white hover:border-osu-b3 transition-colors"
+      >
+        Find replays for this map
+      </Link>
+    </div>
+  );
+}
+
+const MSD_SKILLSETS = ["Stream", "Jumpstream", "Handstream", "Stamina", "JackSpeed", "Chordjack", "Technical"] as const;
+
+interface MsdSectionState {
+  status: "loading" | "ready" | "error";
+  values: Record<string, number> | null;
+  version: string | null;
+  error: string | null;
+}
+
+function MsdSection({ beatmapId, osuText, keyCount, rate }: {
+  beatmapId: number;
+  osuText: string;
+  keyCount: number;
+  rate: number;
+}) {
+  const [state, setState] = useState<MsdSectionState>({ status: "loading", values: null, version: null, error: null });
+
+  useEffect(() => {
+    let cancelled = false;
+    setState({ status: "loading", values: null, version: null, error: null });
+    (async () => {
+      try {
+        const { analyzeEtternaFromText } = await import("#/lib/leoblack/ett/index.js");
+        const result = await analyzeEtternaFromText(osuText, { musicRate: rate, keyOverride: keyCount });
+        if (cancelled) return;
+        setState({ status: "ready", values: result.values, version: result.etternaVersion ?? null, error: null });
+      } catch (err) {
+        if (cancelled) return;
+        setState({
+          status: "error",
+          values: null,
+          version: null,
+          error: err instanceof Error ? err.message : "MSD calculation failed.",
+        });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [beatmapId, osuText, keyCount, rate]);
+
+  const rows = state.values
+    ? MSD_SKILLSETS
+        .map((name) => ({ name, value: state.values?.[name] ?? 0 }))
+        .sort((a, b) => b.value - a.value)
+    : [];
+  const maxValue = rows.reduce((max, row) => Math.max(max, row.value), 0);
+
+  return (
+    <div className="mt-5">
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="text-[11px] uppercase tracking-wide text-osu-f1 font-bold">MSD</div>
+        {state.version ? (
+          <span className="text-[10px] text-osu-f1/70">MinaCalc {state.version}</span>
+        ) : null}
+      </div>
+      {state.status === "loading" ? (
+        <div className="mt-2 text-[11px] text-osu-f1/70">calculating...</div>
+      ) : null}
+      {state.status === "error" ? (
+        <div className="mt-2 text-[11px] text-osu-f1/70">{state.error}</div>
+      ) : null}
+      {state.status === "ready" && state.values ? (
+        <>
+          <div className="mt-2 flex items-baseline justify-between gap-3 text-[12px] font-bold text-osu-c1">
+            <span>Overall</span>
+            <span className="tabular-nums">{(state.values.Overall ?? 0).toFixed(2)}</span>
+          </div>
+          <div className="mt-2 space-y-2">
+            {rows.map((row) => (
+              <div key={row.name}>
+                <div className="flex justify-between gap-3 text-[11px] font-bold text-osu-f1">
+                  <span>{row.name}</span>
+                  <span className="tabular-nums">{row.value.toFixed(2)}</span>
+                </div>
+                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-osu-b5">
+                  <div
+                    className="h-full rounded-full bg-osu-pink"
+                    style={{ width: `${maxValue > 0 ? Math.max(4, (row.value / maxValue) * 100) : 4}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function VerdictHalfRow({ half }: { half: DanVerdictHalf }) {
+  return (
+    <div className="rounded-md border border-osu-b3/30 bg-osu-b5 px-2.5 py-1.5">
+      <div className="flex min-w-0 items-center gap-2 text-[11px]">
+        <span className="w-6 shrink-0 font-bold uppercase tracking-wide text-osu-yellow">{half.kind}</span>
+        <span className="min-w-0 truncate font-black text-white">{half.displayName}</span>
+        <span className="shrink-0 rounded border border-osu-b3/40 bg-osu-b4/60 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-osu-f1">
+          {VERDICT_SOURCE_LABELS[half.source]}
+        </span>
+        <span className="ml-auto shrink-0 tabular-nums text-osu-f1">raw {half.rawDan.toFixed(2)}</span>
+      </div>
+      {half.boundary ? (
+        <div className="mt-1 text-[10px] text-osu-f1/80">
+          {half.boundary === "below" ? "below table range" : "above table range"}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -1123,32 +1280,75 @@ function ViewTab({ active, onClick, children }: { active: boolean; onClick: () =
   );
 }
 
+type BenchmarkRowStatus = "pending" | "classifying" | "ready" | "not-cached" | "error";
+
 interface BenchmarkRow {
+  beatmapId: number;
   beatmapsetId: number;
-  beatmapset: OsuBeatmapset | null;
-  beatmap: OsuBeatmap | null;
-  estimate: DanEstimate | null;
-  status: "pending" | "loading" | "ready" | "error";
+  version: string;
+  starRating: number;
+  content: string | null;
+  classification: ChartClassification | null;
+  status: BenchmarkRowStatus;
   error: string | null;
 }
 
 interface BenchmarkSetState {
   beatmapsetId: number;
-  beatmapset: OsuBeatmapset | null;
-  status: "pending" | "loading" | "ready" | "error";
-  error: string | null;
+  title: string;
+  artist: string | null;
   rows: BenchmarkRow[];
+}
+
+interface BenchmarkFamilyState {
+  sets: BenchmarkSetState[];
+  missingIds: number[];
+  contentsLoaded: boolean;
+  classifiedAtRate: number | null;
+}
+
+// Metadata for one benchmark family from the live backend's local projections.
+async function loadBenchmarkFamilyMeta(family: DanBenchmarkFamily): Promise<BenchmarkFamilyState> {
+  const rankedIds = getBenchmarkBeatmapIds(family);
+  const setOrder = getBenchmarkBeatmapsetIds(family);
+  const result = family === "ranked"
+    ? await getDanClassifierSets({ data: { beatmapIds: [...(rankedIds ?? new Set<number>())] } })
+    : await getDanClassifierSets({ data: { beatmapsetIds: setOrder } });
+
+  const orderIndex = new Map(setOrder.map((id, index) => [id, index]));
+  const sets: BenchmarkSetState[] = result.sets
+    .map((set) => ({
+      beatmapsetId: set.beatmapsetId,
+      title: set.title ?? `Set #${set.beatmapsetId}`,
+      artist: set.artist,
+      rows: set.diffs
+        .filter((diff) => diff.mode === "mania" && diff.keyCount === 4)
+        .filter((diff) => !rankedIds || rankedIds.has(diff.beatmapId))
+        .map((diff): BenchmarkRow => ({
+          beatmapId: diff.beatmapId,
+          beatmapsetId: diff.beatmapsetId,
+          version: diff.version,
+          starRating: diff.starRating ?? getBenchmarkBeatmapStarRating(diff.beatmapId) ?? 0,
+          content: null,
+          classification: null,
+          status: diff.cached ? "pending" : "not-cached",
+          error: null,
+        }))
+        .sort((a, b) => a.starRating - b.starRating),
+    }))
+    .sort((a, b) => (orderIndex.get(a.beatmapsetId) ?? Number.MAX_SAFE_INTEGER) - (orderIndex.get(b.beatmapsetId) ?? Number.MAX_SAFE_INTEGER));
+
+  const missingIds = family === "ranked" ? result.missingBeatmapIds : result.missingBeatmapsetIds;
+  return { sets, missingIds, contentsLoaded: false, classifiedAtRate: null };
 }
 
 interface BenchmarkViewProps {
   family: DanBenchmarkFamily;
   onFamilyChange: (family: DanBenchmarkFamily) => void;
-  classifier: DanClassifierId;
-  onClassifierChange: (classifier: DanClassifierId) => void;
   rate: number;
   onRateChange: (rate: number) => void;
   selectedBeatmapId: number | null;
-  onAnalyze: (set: OsuBeatmapset, beatmap: OsuBeatmap) => void;
+  onAnalyze: (target: AnalyzeTarget) => void;
   onCopyId: (id: number) => void;
   copiedBeatmapId: number | null;
 }
@@ -1156,8 +1356,6 @@ interface BenchmarkViewProps {
 function BenchmarkView({
   family,
   onFamilyChange,
-  classifier,
-  onClassifierChange,
   rate,
   onRateChange,
   selectedBeatmapId,
@@ -1165,9 +1363,14 @@ function BenchmarkView({
   onCopyId,
   copiedBeatmapId,
 }: BenchmarkViewProps) {
-  // family-keyed cache so switching tabs doesn't re-fetch
-  const cacheRef = useRef<Map<DanBenchmarkFamily, BenchmarkSetState[]>>(new Map());
-  const [sets, setSets] = useState<BenchmarkSetState[]>([]);
+  // family-keyed cache so switching tabs doesn't re-fetch metadata or chart texts
+  const cacheRef = useRef<Map<DanBenchmarkFamily, BenchmarkFamilyState>>(new Map());
+  const familyRef = useRef(family);
+  familyRef.current = family;
+  const [familyState, setFamilyState] = useState<BenchmarkFamilyState | null>(null);
+  const [chartsProgress, setChartsProgress] = useState<{ loaded: number; total: number } | null>(null);
+  const [metaLoading, setMetaLoading] = useState(false);
+  const [metaError, setMetaError] = useState<string | null>(null);
   const [expectedLabelsByFamily, setExpectedLabelsByFamily] = useState<Record<DanBenchmarkFamily, Map<number, string>>>({
     normal: new Map(),
     ln: new Map(),
@@ -1181,11 +1384,38 @@ function BenchmarkView({
   const [labelsLoaded, setLabelsLoaded] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
   const [exportState, setExportState] = useState<BenchmarkExportState>({ action: null, status: "idle" });
+  const [fetchMissingProgress, setFetchMissingProgress] = useState<{ done: number; total: number } | null>(null);
+  const fetchMissingBusyRef = useRef(false);
   const exportTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const expectedLabels = expectedLabelsByFamily[family];
   const hiddenSet = hiddenByFamily[family];
   const labelOptions = useMemo(() => getBenchmarkLabelOptions(family), [family]);
+
+  const commitFamilyState = useCallback((fam: DanBenchmarkFamily, next: BenchmarkFamilyState) => {
+    cacheRef.current.set(fam, next);
+    if (familyRef.current === fam) setFamilyState(next);
+  }, []);
+
+  const patchRows = useCallback((fam: DanBenchmarkFamily, patches: Map<number, Partial<BenchmarkRow>>) => {
+    const current = cacheRef.current.get(fam);
+    if (!current || patches.size === 0) return;
+    let changedAny = false;
+    const sets = current.sets.map((set) => {
+      let changed = false;
+      const rows = set.rows.map((row) => {
+        const patch = patches.get(row.beatmapId);
+        if (!patch) return row;
+        changed = true;
+        return { ...row, ...patch };
+      });
+      if (!changed) return set;
+      changedAny = true;
+      return { ...set, rows };
+    });
+    if (!changedAny) return;
+    commitFamilyState(fam, { ...current, sets });
+  }, [commitFamilyState]);
 
   // load expected labels + hidden diffs for every family once
   useEffect(() => {
@@ -1221,149 +1451,199 @@ function BenchmarkView({
 
   useEffect(() => () => clearTimeout(exportTimerRef.current), []);
 
-  // run estimates whenever family/classifier/rate changes
+  // load metadata + cached chart texts, then classify client-side.
+  // Chart texts come from the live backend's local DB; nothing here hits osu!.
   useEffect(() => {
     let cancelled = false;
-    let estimateFlushTimer: ReturnType<typeof setTimeout> | null = null;
-    let queuedEstimateUpdates: Array<{ beatmapsetId: number; beatmapId: number; patch: Partial<BenchmarkRow> }> = [];
-    const flushEstimateUpdates = () => {
-      if (estimateFlushTimer) {
-        clearTimeout(estimateFlushTimer);
-        estimateFlushTimer = null;
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+    let queuedPatches = new Map<number, Partial<BenchmarkRow>>();
+
+    const flush = () => {
+      if (flushTimer) {
+        clearTimeout(flushTimer);
+        flushTimer = null;
       }
-      if (queuedEstimateUpdates.length === 0 || cancelled) return;
-      const updates = queuedEstimateUpdates;
-      queuedEstimateUpdates = [];
-      setSets((prev) => applyRowUpdates(prev, updates));
-      const cachedFamily = cacheRef.current.get(family);
-      if (cachedFamily) {
-        cacheRef.current.set(family, applyRowUpdates(cachedFamily, updates));
-      }
+      if (queuedPatches.size === 0) return;
+      const patches = queuedPatches;
+      queuedPatches = new Map();
+      patchRows(family, patches);
     };
-    const queueEstimateUpdate = (
-      beatmapsetId: number,
-      beatmapId: number,
-      patch: Partial<BenchmarkRow>,
-    ) => {
-      queuedEstimateUpdates.push({ beatmapsetId, beatmapId, patch });
-      if (!estimateFlushTimer) {
-        estimateFlushTimer = setTimeout(flushEstimateUpdates, 80);
-      }
+    const queuePatch = (beatmapId: number, patch: Partial<BenchmarkRow>) => {
+      queuedPatches.set(beatmapId, { ...(queuedPatches.get(beatmapId) ?? {}), ...patch });
+      if (!flushTimer) flushTimer = setTimeout(flush, 80);
     };
-    const cached = cacheRef.current.get(family);
 
-    if (cached) {
-      setSets(cached);
-      // re-estimate when classifier/rate change
-      void runEstimatesForSets(cached);
-      return () => {
-        cancelled = true;
-        flushEstimateUpdates();
-      };
-    }
+    void run();
 
-    const ids = getBenchmarkBeatmapsetIds(family);
-    const targetBeatmapIds = getBenchmarkBeatmapIds(family);
-    const initial: BenchmarkSetState[] = ids.map((id) => ({
-      beatmapsetId: id,
-      beatmapset: null,
-      status: "pending",
-      error: null,
-      rows: [],
-    }));
-    setSets(initial);
-
-    void (async () => {
-      const fetched = await mapWithConcurrencyClient(ids, 4, async (id) => {
+    async function run() {
+      let cache = cacheRef.current.get(family) ?? null;
+      if (cache) {
+        setFamilyState(cache);
+        setMetaError(null);
+      } else {
+        setFamilyState(null);
+        setMetaLoading(true);
+        setMetaError(null);
         try {
-          const beatmapset = await getBeatmapset({ data: { beatmapsetId: id } });
-          return { id, beatmapset, error: null as string | null };
+          cache = await loadBenchmarkFamilyMeta(family);
         } catch (err) {
-          return { id, beatmapset: null as OsuBeatmapset | null, error: err instanceof Error ? err.message : "Failed to fetch beatmapset." };
+          if (!cancelled) {
+            setMetaError(err instanceof Error ? err.message : "Could not load benchmark metadata.");
+            setMetaLoading(false);
+          }
+          return;
         }
-      });
-      if (cancelled) return;
-
-      const next: BenchmarkSetState[] = fetched.map(({ id, beatmapset, error }) => {
-        if (!beatmapset) {
-          return {
-            beatmapsetId: id,
-            beatmapset: null,
-            status: "error" as const,
-            error: error ?? "Failed to fetch beatmapset.",
-            rows: [],
-          };
-        }
-        const maniaDiffs = (beatmapset.beatmaps ?? [])
-          .filter((bm) => bm.mode === "mania" && bm.cs === 4)
-          .filter((bm) => !targetBeatmapIds || targetBeatmapIds.has(bm.id))
-          .sort((a, b) => a.difficulty_rating - b.difficulty_rating);
-        return {
-          beatmapsetId: id,
-          beatmapset,
-          status: "ready" as const,
-          error: null,
-          rows: maniaDiffs.map((bm) => ({
-            beatmapsetId: id,
-            beatmapset,
-            beatmap: bm,
-            estimate: null,
-            status: "pending" as const,
-            error: null,
-          })),
-        };
-      });
-
-      cacheRef.current.set(family, next);
-      setSets(next);
-      await runEstimatesForSets(next);
-    })();
-
-    async function runEstimatesForSets(target: BenchmarkSetState[]) {
-      const allRows: Array<{ setIndex: number; rowIndex: number; row: BenchmarkRow }> = [];
-      target.forEach((set, setIndex) => {
-        set.rows.forEach((row, rowIndex) => {
-          allRows.push({ setIndex, rowIndex, row });
-        });
-      });
-
-      // mark all loading at once
-      if (!cancelled) {
-        setSets((prev) => prev.map((set) => ({
-          ...set,
-          rows: set.rows.map((row) => ({ ...row, status: "loading", estimate: null, error: null })),
-        })));
+        if (cancelled) return;
+        setMetaLoading(false);
+        commitFamilyState(family, cache);
       }
 
-      await mapWithConcurrencyClient(allRows, 4, async ({ row }) => {
-        if (!row.beatmapset || !row.beatmap) return;
+      if (!cache.contentsLoaded) {
+        const allIds = cache.sets.flatMap((set) => set.rows.map((row) => row.beatmapId));
+        setChartsProgress({ loaded: 0, total: allIds.length });
+        let loadedCharts = 0;
+        await Promise.all(chunkArray(allIds, 50).map(async (chunk) => {
+          try {
+            const batch = await withTimeout(
+              getDanClassifierChartBatch({ data: { ids: chunk } }),
+              30_000,
+              "Chart batch",
+            );
+            if (cancelled) return;
+            const patches = new Map<number, Partial<BenchmarkRow>>();
+            for (const file of batch.files) {
+              patches.set(file.beatmapId, { content: file.content, status: "pending", error: null });
+            }
+            for (const beatmapId of batch.missing) {
+              patches.set(beatmapId, { content: null, status: "not-cached", error: null });
+            }
+            patchRows(family, patches);
+          } catch (err) {
+            if (cancelled) return;
+            const message = err instanceof Error ? err.message : "Chart batch failed.";
+            const patches = new Map<number, Partial<BenchmarkRow>>();
+            for (const beatmapId of chunk) patches.set(beatmapId, { status: "error", error: message });
+            patchRows(family, patches);
+          } finally {
+            loadedCharts += chunk.length;
+            if (!cancelled) setChartsProgress({ loaded: loadedCharts, total: allIds.length });
+          }
+        }));
+        setChartsProgress(null);
+        const loaded = cacheRef.current.get(family);
+        if (!loaded || cancelled) return;
+        commitFamilyState(family, { ...loaded, contentsLoaded: true });
+      }
+
+      const current = cacheRef.current.get(family);
+      if (!current || cancelled) return;
+      if (current.classifiedAtRate === rate) return;
+
+      const targets: BenchmarkRow[] = [];
+      const resetPatches = new Map<number, Partial<BenchmarkRow>>();
+      for (const set of current.sets) {
+        for (const row of set.rows) {
+          if (row.content == null) continue;
+          targets.push(row);
+          resetPatches.set(row.beatmapId, { status: "classifying", classification: null, error: null });
+        }
+      }
+      patchRows(family, resetPatches);
+
+      const preferFamily: PreferFamily = family === "ln" ? "ln" : "rc";
+      for (const row of targets) {
+        if (cancelled) return;
+        // classifyChart is synchronous and can take a few hundred ms; yield between charts
+        await yieldToUi();
+        if (cancelled) return;
+        const content = row.content;
+        if (content == null) continue;
         try {
-          const estimate = await runEstimate(row.beatmapset, row.beatmap, classifier, rate);
-          if (cancelled) return;
-          queueEstimateUpdate(row.beatmapsetId, row.beatmap.id, {
-            estimate,
-            status: "ready",
-            error: null,
+          const map = parseManiaBeatmap(content);
+          const classification = classifyChart(map, content, {
+            rate,
+            starRating: row.starRating,
+            title: map.title,
+            version: map.version,
+            preferFamily,
           });
+          queuePatch(row.beatmapId, { classification, status: "ready", error: null });
         } catch (err) {
-          if (cancelled) return;
-          const message = err instanceof Error ? err.message : "Could not estimate.";
-          queueEstimateUpdate(row.beatmapsetId, row.beatmap!.id, {
-            estimate: null,
+          queuePatch(row.beatmapId, {
+            classification: null,
             status: "error",
-            error: message,
+            error: err instanceof Error ? err.message : "Classification failed.",
           });
         }
-      });
-      flushEstimateUpdates();
+      }
+      flush();
+      const done = cacheRef.current.get(family);
+      if (done && !cancelled) {
+        commitFamilyState(family, { ...done, classifiedAtRate: rate });
+      }
     }
 
     return () => {
       cancelled = true;
-      flushEstimateUpdates();
+      flush();
+      setChartsProgress(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [family, classifier, rate]);
+  }, [family, rate]);
+
+  // The only osu! API path on this page: explicitly fetch charts missing from
+  // the local DB, one at a time, then classify them.
+  const handleFetchMissing = useCallback(async () => {
+    if (fetchMissingBusyRef.current) return;
+    const fam = family;
+    const currentRate = rate;
+    const cache = cacheRef.current.get(fam);
+    if (!cache) return;
+    const hidden = hiddenByFamily[fam];
+    const targets: Array<{ beatmapId: number; starRating: number }> = [];
+    for (const set of cache.sets) {
+      for (const row of set.rows) {
+        if (row.status === "not-cached" && !hidden.has(row.beatmapId)) {
+          targets.push({ beatmapId: row.beatmapId, starRating: row.starRating });
+        }
+      }
+    }
+    if (targets.length === 0) return;
+
+    fetchMissingBusyRef.current = true;
+    setFetchMissingProgress({ done: 0, total: targets.length });
+    const preferFamily: PreferFamily = fam === "ln" ? "ln" : "rc";
+    let done = 0;
+    for (const target of targets) {
+      try {
+        patchRows(fam, new Map<number, Partial<BenchmarkRow>>([
+          [target.beatmapId, { status: "classifying", error: null }],
+        ]));
+        const file = await getDanClassifierChartFile({ data: { beatmapId: target.beatmapId, allowOsuFetch: true } });
+        if (file.content == null) throw new Error("Chart not available.");
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        const map = parseManiaBeatmap(file.content);
+        const classification = classifyChart(map, file.content, {
+          rate: currentRate,
+          starRating: target.starRating,
+          title: map.title,
+          version: map.version,
+          preferFamily,
+        });
+        patchRows(fam, new Map<number, Partial<BenchmarkRow>>([
+          [target.beatmapId, { content: file.content, classification, status: "ready", error: null }],
+        ]));
+      } catch (err) {
+        patchRows(fam, new Map<number, Partial<BenchmarkRow>>([
+          [target.beatmapId, { status: "error", error: err instanceof Error ? err.message : "osu! fetch failed." }],
+        ]));
+      }
+      done += 1;
+      setFetchMissingProgress({ done, total: targets.length });
+    }
+    fetchMissingBusyRef.current = false;
+    setFetchMissingProgress(null);
+  }, [family, rate, hiddenByFamily, patchRows]);
 
   const handleToggleHidden = useCallback(async (beatmapId: number, hidden: boolean) => {
     setHiddenByFamily((prev) => {
@@ -1404,70 +1684,39 @@ function BenchmarkView({
     }
   }, [family]);
 
+  // Export uses the loaded family caches; families not opened yet only get
+  // metadata rows from the local DB (no chart fetches, no osu! API).
   async function buildExportDataset(): Promise<BenchmarkExportDataset> {
-    const datasets = await Promise.all(BENCHMARK_EXPORT_FAMILIES.map(async (fam) => {
-      const cached = cacheRef.current.get(fam);
-      if (cached) return { family: fam, sets: cached };
-
-      const ids = getBenchmarkBeatmapsetIds(fam);
-      const targetBeatmapIds = getBenchmarkBeatmapIds(fam);
-      const fetched = await mapWithConcurrencyClient(ids, 4, async (id) => {
-        try {
-          const beatmapset = await getBeatmapset({ data: { beatmapsetId: id } });
-          return { id, beatmapset, error: null as string | null };
-        } catch (err) {
-          return { id, beatmapset: null as OsuBeatmapset | null, error: err instanceof Error ? err.message : "Failed" };
-        }
-      });
-      const setsState: BenchmarkSetState[] = fetched.map(({ id, beatmapset, error }) => ({
-        beatmapsetId: id,
-        beatmapset,
-        status: beatmapset ? "ready" : "error",
-        error,
-        rows: beatmapset
-          ? (beatmapset.beatmaps ?? [])
-              .filter((bm) => bm.mode === "mania" && bm.cs === 4)
-              .filter((bm) => !targetBeatmapIds || targetBeatmapIds.has(bm.id))
-              .sort((a, b) => a.difficulty_rating - b.difficulty_rating)
-              .map((bm) => ({
-                beatmapsetId: id,
-                beatmapset,
-                beatmap: bm,
-                estimate: null,
-                status: "pending" as const,
-                error: null,
-              }))
-          : [],
-      }));
-      cacheRef.current.set(fam, setsState);
-      return { family: fam, sets: setsState };
-    }));
-
     const dataset: BenchmarkExportDataset = { normal: [], ln: [], ranked: [] };
 
-    for (const { family: fam, sets: famSets } of datasets) {
-      for (const set of famSets) {
-        if (!set.beatmapset) continue;
+    for (const fam of BENCHMARK_EXPORT_FAMILIES) {
+      let cache = cacheRef.current.get(fam) ?? null;
+      if (!cache) {
+        cache = await loadBenchmarkFamilyMeta(fam);
+        cacheRef.current.set(fam, cache);
+      }
+      for (const set of cache.sets) {
         for (const row of set.rows) {
-          if (!row.beatmap) continue;
-          if (hiddenByFamily[fam].has(row.beatmap.id)) continue;
-          const expectedDan = expectedLabelsByFamily[fam].get(row.beatmap.id) ?? null;
-          const detectedDan = row.estimate?.displayName ?? row.estimate?.label ?? null;
-          const detectedBase = row.estimate?.label ?? null;
+          if (hiddenByFamily[fam].has(row.beatmapId)) continue;
+          const expectedDan = expectedLabelsByFamily[fam].get(row.beatmapId)
+            ?? getBenchmarkExpectedLabelOverride(fam, row.beatmapsetId, row.beatmapId, row.version);
+          const estimate = row.classification?.estimate ?? null;
+          const detectedDan = estimate?.displayName ?? estimate?.label ?? null;
+          const detectedBase = estimate?.label ?? null;
           const expectedBase = expectedDan ? splitExpectedLabel(expectedDan).base : null;
           dataset[fam].push({
             family: fam,
-            beatmapsetId: set.beatmapset.id,
-            beatmapId: row.beatmap.id,
-            title: set.beatmapset.title,
-            version: row.beatmap.version,
-            sr: row.beatmap.difficulty_rating,
-            srProxy: row.estimate?.estimatedSr ?? null,
-            rawDan: row.estimate?.rawDan ?? null,
-            confidence: row.estimate?.confidence ?? null,
-            expectedDan,
+            beatmapsetId: row.beatmapsetId,
+            beatmapId: row.beatmapId,
+            title: set.title,
+            version: row.version,
+            sr: row.starRating,
+            srProxy: estimate?.estimatedSr ?? null,
+            rawDan: estimate?.rawDan ?? null,
+            confidence: estimate?.confidence ?? null,
+            expectedDan: expectedDan ?? null,
             detectedDan,
-            detectedFamily: row.estimate?.family ?? null,
+            detectedFamily: estimate?.family ?? null,
             match: expectedBase && detectedBase ? expectedBase === detectedBase : null,
           });
         }
@@ -1507,32 +1756,38 @@ function BenchmarkView({
     }
   }
 
-  const isVisibleRow = (row: BenchmarkRow) => row.beatmap !== null && !hiddenSet.has(row.beatmap.id);
-  const totalDiffs = sets.reduce((sum, set) => sum + set.rows.filter(isVisibleRow).length, 0);
-  const hiddenCount = sets.reduce((sum, set) => sum + set.rows.filter((row) => row.beatmap !== null && hiddenSet.has(row.beatmap.id)).length, 0);
-  const readyCount = sets.reduce(
-    (sum, set) => sum + set.rows.filter((row) => isVisibleRow(row) && row.status === "ready").length,
-    0,
-  );
-  const exactMatchCount = sets.reduce((sum, set) => sum + set.rows.filter((row) => {
-    if (!isVisibleRow(row)) return false;
-    if (row.status !== "ready" || !row.estimate || !row.beatmap) return false;
-    const expected = expectedLabels.get(row.beatmap.id);
-    return expected ? expected === row.estimate.displayName : false;
-  }).length, 0);
-  const baseMatchCount = sets.reduce((sum, set) => sum + set.rows.filter((row) => {
-    if (!isVisibleRow(row)) return false;
-    if (row.status !== "ready" || !row.estimate || !row.beatmap) return false;
-    const expected = expectedLabels.get(row.beatmap.id);
-    if (!expected) return false;
-    if (expected === row.estimate.displayName) return false;
-    return splitExpectedLabel(expected).base === row.estimate.label;
-  }).length, 0);
-  const labeledCount = sets.reduce((sum, set) => sum + set.rows.filter((row) => isVisibleRow(row) && row.beatmap && expectedLabels.has(row.beatmap.id)).length, 0);
+  const getEffectiveExpected = useCallback((row: BenchmarkRow): string => {
+    return expectedLabels.get(row.beatmapId)
+      ?? getBenchmarkExpectedLabelOverride(family, row.beatmapsetId, row.beatmapId, row.version)
+      ?? "";
+  }, [expectedLabels, family]);
+
+  const sets = familyState?.sets ?? [];
+  const allRows = sets.flatMap((set) => set.rows);
+  const visibleRows = allRows.filter((row) => !hiddenSet.has(row.beatmapId));
+  const totalDiffs = visibleRows.length;
+  const hiddenCount = allRows.length - visibleRows.length;
+  const readyCount = visibleRows.filter((row) => row.status === "ready").length;
+  const notCachedCount = visibleRows.filter((row) => row.status === "not-cached").length;
+
+  let exactMatchCount = 0;
+  let baseMatchCount = 0;
+  let labeledCount = 0;
+  for (const row of visibleRows) {
+    if (row.status !== "ready") continue;
+    const estimate = row.classification?.estimate;
+    if (!estimate) continue;
+    const expected = getEffectiveExpected(row);
+    if (!expected) continue;
+    labeledCount += 1;
+    if (expected === `${estimate.label}${estimate.variant ?? ""}`) exactMatchCount += 1;
+    else if (splitExpectedLabel(expected).base === estimate.label) baseMatchCount += 1;
+  }
   const matchedCount = exactMatchCount + baseMatchCount;
   const wrongCount = Math.max(0, labeledCount - matchedCount);
   const modelAccuracy = labeledCount > 0 ? (matchedCount / labeledCount) * 100 : 0;
   const exactAccuracy = labeledCount > 0 ? (exactMatchCount / labeledCount) * 100 : 0;
+
   const exportBusy = exportState.status === "working";
   const getExportButtonStatus = (action: BenchmarkExportAction): BenchmarkExportStatus => (
     exportState.action === action ? exportState.status : "idle"
@@ -1561,18 +1816,6 @@ function BenchmarkView({
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2 text-[11px] text-osu-f1 sm:gap-3">
           <label className="flex items-center gap-1.5">
-            <span className="uppercase tracking-wide font-bold">Classifier</span>
-            <select
-              value={classifier}
-              onChange={(event) => onClassifierChange(event.target.value as DanClassifierId)}
-              className="rounded border border-osu-b3/50 bg-osu-b5 px-1.5 py-0.5 text-osu-c1 focus:border-osu-h1/40 focus:outline-none cursor-pointer"
-            >
-              {DAN_CLASSIFIERS.map((option) => (
-                <option key={option.id} value={option.id}>{option.label}</option>
-              ))}
-            </select>
-          </label>
-          <label className="flex items-center gap-1.5">
             <span className="uppercase tracking-wide font-bold">Rate</span>
             <input
               type="number"
@@ -1588,8 +1831,28 @@ function BenchmarkView({
             />
           </label>
           <div>
-            <span className="font-bold text-osu-c1">{readyCount}</span>/{totalDiffs}
+            {chartsProgress ? (
+              <span>loading charts {chartsProgress.loaded}/{chartsProgress.total}</span>
+            ) : readyCount < totalDiffs - notCachedCount ? (
+              <span>classifying <span className="font-bold text-osu-c1">{readyCount}</span>/{totalDiffs}</span>
+            ) : (
+              <span><span className="font-bold text-osu-c1">{readyCount}</span>/{totalDiffs}</span>
+            )}
           </div>
+          {notCachedCount > 0 || fetchMissingProgress ? (
+            <button
+              type="button"
+              onClick={() => void handleFetchMissing()}
+              disabled={fetchMissingProgress != null}
+              className="inline-flex items-center gap-1 whitespace-nowrap rounded border border-osu-pink/40 bg-osu-pink/15 px-2 py-0.5 font-bold uppercase tracking-wide text-white transition-colors cursor-pointer hover:bg-osu-pink/25 disabled:cursor-not-allowed disabled:opacity-70"
+              title="Fetch uncached charts from the osu! API, one at a time"
+            >
+              <Download className="h-3 w-3" />
+              {fetchMissingProgress
+                ? `fetching ${fetchMissingProgress.done}/${fetchMissingProgress.total}`
+                : `fetch missing from osu! (${notCachedCount})`}
+            </button>
+          ) : null}
           {labeledCount > 0 && labelsLoaded ? (
             <>
               <div title={`${exactMatchCount} exact, ${baseMatchCount} base-only, ${wrongCount} wrong`}>
@@ -1626,7 +1889,7 @@ function BenchmarkView({
               onClick={() => void handleExportDataset("excel")}
               disabled={exportBusy}
               className={`inline-flex items-center gap-1 whitespace-nowrap rounded border px-2 py-0.5 font-bold uppercase tracking-wide transition-colors cursor-pointer disabled:cursor-not-allowed ${getExportButtonClass("excel")}`}
-              title="Download dataset (both families) as a styled Excel workbook"
+              title="Download dataset (all families) as a styled Excel workbook"
             >
               <FileSpreadsheet className="h-3 w-3" />
               {getExportButtonText("excel")}
@@ -1636,7 +1899,7 @@ function BenchmarkView({
               onClick={() => void handleExportDataset("markdown")}
               disabled={exportBusy}
               className={`inline-flex items-center gap-1 whitespace-nowrap rounded border px-2 py-0.5 font-bold uppercase tracking-wide transition-colors cursor-pointer disabled:cursor-not-allowed ${getExportButtonClass("markdown")}`}
-              title="Copy dataset (both families) as Markdown tables"
+              title="Copy dataset (all families) as Markdown tables"
             >
               <ClipboardList className="h-3 w-3" />
               {getExportButtonText("markdown")}
@@ -1645,24 +1908,42 @@ function BenchmarkView({
         </div>
       </div>
 
-      <div className="mt-3 grid gap-3 lg:grid-cols-2">
-        {sets.map((set) => (
-          <BenchmarkSetBlock
-            key={set.beatmapsetId}
-            set={set}
-            labelOptions={labelOptions}
-            expectedLabels={expectedLabels}
-            hiddenSet={hiddenSet}
-            showHidden={showHidden}
-            onToggleHidden={handleToggleHidden}
-            onExpectedChange={handleExpectedChange}
-            onAnalyze={onAnalyze}
-            onCopyId={onCopyId}
-            copiedBeatmapId={copiedBeatmapId}
-            selectedBeatmapId={selectedBeatmapId}
-          />
-        ))}
-      </div>
+      {familyState && familyState.missingIds.length > 0 ? (
+        <div className="mt-3 px-2 text-[11px] text-osu-f1">
+          Not in local DB: {familyState.missingIds.join(", ")}
+        </div>
+      ) : null}
+
+      {metaError ? (
+        <div className="mt-4 rounded-lg border border-osu-red/30 bg-osu-red/10 px-4 py-3 text-sm text-osu-red">
+          {metaError}
+        </div>
+      ) : metaLoading || !familyState ? (
+        <div className="mt-8 flex flex-col items-center gap-3 py-10">
+          <div className="w-7 h-7 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
+          <div className="text-sm text-osu-f1">Loading benchmark sets from the local DB...</div>
+        </div>
+      ) : (
+        <div className="mt-3 grid gap-3 lg:grid-cols-2">
+          {sets.map((set) => (
+            <BenchmarkSetBlock
+              key={set.beatmapsetId}
+              set={set}
+              family={family}
+              labelOptions={labelOptions}
+              expectedLabels={expectedLabels}
+              hiddenSet={hiddenSet}
+              showHidden={showHidden}
+              onToggleHidden={handleToggleHidden}
+              onExpectedChange={handleExpectedChange}
+              onAnalyze={onAnalyze}
+              onCopyId={onCopyId}
+              copiedBeatmapId={copiedBeatmapId}
+              selectedBeatmapId={selectedBeatmapId}
+            />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -1681,47 +1962,16 @@ function SubTab({ active, onClick, children }: { active: boolean; onClick: () =>
   );
 }
 
-function applyRowUpdates(
-  sets: BenchmarkSetState[],
-  updates: Array<{ beatmapsetId: number; beatmapId: number; patch: Partial<BenchmarkRow> }>,
-): BenchmarkSetState[] {
-  if (updates.length === 0) return sets;
-  const patchesByKey = new Map<string, Partial<BenchmarkRow>>();
-  for (const update of updates) {
-    const key = `${update.beatmapsetId}:${update.beatmapId}`;
-    patchesByKey.set(key, {
-      ...(patchesByKey.get(key) ?? {}),
-      ...update.patch,
-    });
-  }
-
-  let changedSets = false;
-  const nextSets = sets.map((set) => {
-    let changedRows = false;
-    const rows = set.rows.map((row) => {
-      if (!row.beatmap) return row;
-      const patch = patchesByKey.get(`${set.beatmapsetId}:${row.beatmap.id}`);
-      if (!patch) return row;
-      changedRows = true;
-      return { ...row, ...patch };
-    });
-    if (!changedRows) return set;
-    changedSets = true;
-    return { ...set, rows };
-  });
-
-  return changedSets ? nextSets : sets;
-}
-
 interface BenchmarkSetBlockProps {
   set: BenchmarkSetState;
+  family: DanBenchmarkFamily;
   labelOptions: string[];
   expectedLabels: Map<number, string>;
   hiddenSet: Set<number>;
   showHidden: boolean;
   onToggleHidden: (beatmapId: number, hidden: boolean) => void;
   onExpectedChange: (beatmapId: number, value: string) => void;
-  onAnalyze: (set: OsuBeatmapset, beatmap: OsuBeatmap) => void;
+  onAnalyze: (target: AnalyzeTarget) => void;
   onCopyId: (id: number) => void;
   copiedBeatmapId: number | null;
   selectedBeatmapId: number | null;
@@ -1729,6 +1979,7 @@ interface BenchmarkSetBlockProps {
 
 const BenchmarkSetBlock = memo(function BenchmarkSetBlock({
   set,
+  family,
   labelOptions,
   expectedLabels,
   hiddenSet,
@@ -1740,46 +1991,32 @@ const BenchmarkSetBlock = memo(function BenchmarkSetBlock({
   copiedBeatmapId,
   selectedBeatmapId,
 }: BenchmarkSetBlockProps) {
-  if (set.status === "error") {
-    return (
-      <div className="rounded-md border border-osu-red/30 bg-osu-red/10 px-3 py-2 text-[11px] text-osu-red">
-        Set #{set.beatmapsetId}: {set.error ?? "Failed to load."}
-      </div>
-    );
-  }
-
-  if (set.status === "pending" || !set.beatmapset) {
-    return (
-      <div className="rounded-md border border-osu-b3/30 bg-osu-b5/40 px-3 py-2 text-[11px] text-osu-f1">
-        Loading set #{set.beatmapsetId}...
-      </div>
-    );
-  }
-
-  const beatmapset = set.beatmapset;
-  const coverUrl = beatmapset.covers?.["cover@2x"] || beatmapset.covers?.cover || null;
+  const visibleRows = set.rows.filter((row) => {
+    if (hiddenSet.has(row.beatmapId)) return showHidden;
+    return true;
+  });
 
   return (
     <div className="min-w-0 rounded-md border border-osu-b3/30 bg-osu-b5/40 overflow-hidden [content-visibility:auto] [contain-intrinsic-size:360px]">
       <div className="flex min-w-0 items-center gap-2 px-2.5 py-1.5 text-[11px] border-b border-osu-b3/20 bg-osu-b5/60">
-        <span className="min-w-0 truncate text-white font-bold">{beatmapset.title}</span>
-        <span className="shrink-0 text-osu-f1 truncate">// {beatmapset.creator}</span>
+        <span className="min-w-0 truncate text-white font-bold">{set.title}</span>
+        {set.artist ? <span className="shrink-0 text-osu-f1 truncate">// {set.artist}</span> : null}
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
           <button
             type="button"
-            onClick={() => onCopyId(beatmapset.id)}
+            onClick={() => onCopyId(set.beatmapsetId)}
             className="inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded text-osu-l2 hover:text-white transition-colors"
-            title={`Copy beatmapset ID ${beatmapset.id}`}
-            aria-label={`Copy beatmapset ID ${beatmapset.id}`}
+            title={`Copy beatmapset ID ${set.beatmapsetId}`}
+            aria-label={`Copy beatmapset ID ${set.beatmapsetId}`}
           >
-            {copiedBeatmapId === beatmapset.id ? (
+            {copiedBeatmapId === set.beatmapsetId ? (
               <Check className="h-3 w-3" strokeWidth={3} />
             ) : (
               <Copy className="h-3 w-3" />
             )}
           </button>
           <a
-            href={`https://osu.ppy.sh/beatmapsets/${beatmapset.id}`}
+            href={`https://osu.ppy.sh/beatmapsets/${set.beatmapsetId}`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-osu-l2 hover:text-white transition-colors"
@@ -1789,67 +2026,75 @@ const BenchmarkSetBlock = memo(function BenchmarkSetBlock({
         </div>
       </div>
 
-      {(() => {
-        if (set.rows.length === 0) {
-          return <div className="px-2.5 py-2 text-[11px] text-osu-f1">No 4K mania diffs.</div>;
-        }
-        const visibleRows = set.rows.filter((row) => {
-          if (!row.beatmap) return true;
-          if (hiddenSet.has(row.beatmap.id)) return showHidden;
-          return true;
-        });
-        if (visibleRows.length === 0) {
-          return <div className="px-2.5 py-2 text-[11px] text-osu-f1 italic">All diffs hidden.</div>;
-        }
-        return (
-          <div className={`grid gap-1.5 p-1.5 ${visibleRows.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
-            {visibleRows.map((row) => (
-              <BenchmarkDiffRow
-                key={row.beatmap?.id ?? Math.random()}
-                row={row}
-                coverUrl={coverUrl}
-                labelOptions={labelOptions}
-                expected={row.beatmap ? expectedLabels.get(row.beatmap.id) ?? "" : ""}
-                isHidden={row.beatmap ? hiddenSet.has(row.beatmap.id) : false}
-                onToggleHidden={onToggleHidden}
-                onExpectedChange={onExpectedChange}
-                onAnalyze={onAnalyze}
-                isSelected={row.beatmap?.id === selectedBeatmapId}
-              />
-            ))}
-          </div>
-        );
-      })()}
+      {set.rows.length === 0 ? (
+        <div className="px-2.5 py-2 text-[11px] text-osu-f1">No 4K mania diffs in the local DB.</div>
+      ) : visibleRows.length === 0 ? (
+        <div className="px-2.5 py-2 text-[11px] text-osu-f1 italic">All diffs hidden.</div>
+      ) : (
+        <div className={`grid gap-1.5 p-1.5 ${visibleRows.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
+          {visibleRows.map((row) => (
+            <BenchmarkDiffRow
+              key={row.beatmapId}
+              row={row}
+              setTitle={set.title}
+              setArtist={set.artist}
+              family={family}
+              labelOptions={labelOptions}
+              expected={
+                expectedLabels.get(row.beatmapId)
+                ?? getBenchmarkExpectedLabelOverride(family, row.beatmapsetId, row.beatmapId, row.version)
+                ?? ""
+              }
+              isHidden={hiddenSet.has(row.beatmapId)}
+              onToggleHidden={onToggleHidden}
+              onExpectedChange={onExpectedChange}
+              onAnalyze={onAnalyze}
+              isSelected={row.beatmapId === selectedBeatmapId}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 });
 
 interface BenchmarkDiffRowProps {
   row: BenchmarkRow;
-  coverUrl: string | null;
+  setTitle: string;
+  setArtist: string | null;
+  family: DanBenchmarkFamily;
   labelOptions: string[];
   expected: string;
   isHidden: boolean;
   onToggleHidden: (beatmapId: number, hidden: boolean) => void;
   onExpectedChange: (beatmapId: number, value: string) => void;
-  onAnalyze: (set: OsuBeatmapset, beatmap: OsuBeatmap) => void;
+  onAnalyze: (target: AnalyzeTarget) => void;
   isSelected: boolean;
 }
 
-const BenchmarkDiffRow = memo(function BenchmarkDiffRow({ row, coverUrl, labelOptions, expected, isHidden, onToggleHidden, onExpectedChange, onAnalyze, isSelected }: BenchmarkDiffRowProps) {
-  if (!row.beatmap || !row.beatmapset) return null;
-  const beatmap = row.beatmap;
-  const beatmapset = row.beatmapset;
-
-  const estimateLabel = row.estimate?.label ?? null;
-  const estimateDisplay = row.estimate?.displayName ?? estimateLabel;
-  const estimateFamily = row.estimate?.family ?? null;
+const BenchmarkDiffRow = memo(function BenchmarkDiffRow({
+  row,
+  setTitle,
+  setArtist,
+  family,
+  labelOptions,
+  expected,
+  isHidden,
+  onToggleHidden,
+  onExpectedChange,
+  onAnalyze,
+  isSelected,
+}: BenchmarkDiffRowProps) {
+  const estimate = row.classification?.estimate ?? null;
+  const estimateLabel = estimate?.label ?? null;
+  const estimateDisplay = estimate?.displayName ?? estimateLabel;
+  const estimateFamily = estimate?.family ?? null;
   const estimateImage = estimateLabel ? getDanImageSrc(estimateLabel, estimateFamily ?? undefined) : null;
 
   const expectedSplit = expected ? splitExpectedLabel(expected) : { base: "", variant: "" as DanVariant };
 
   let matchState: "exact" | "base" | "wrong" | "unset" = "unset";
-  if (expected && estimateLabel) {
+  if (expected && estimateLabel && row.status === "ready") {
     if (expected === estimateDisplay) matchState = "exact";
     else if (expectedSplit.base === estimateLabel) matchState = "base";
     else matchState = "wrong";
@@ -1867,18 +2112,13 @@ const BenchmarkDiffRow = memo(function BenchmarkDiffRow({ row, coverUrl, labelOp
 
   return (
     <div className={`group relative flex min-w-0 flex-col overflow-hidden rounded-md border bg-osu-b5 ${tileBorder} ${isHidden ? "opacity-50" : ""} transition-colors`}>
-      {coverUrl ? (
-        <img src={coverUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-30 transition-opacity group-hover:opacity-40" loading="lazy" decoding="async" />
-      ) : null}
-      <div className="absolute inset-0 bg-gradient-to-r from-osu-b5/95 via-osu-b5/75 to-osu-b5/40" />
-
       <button
         type="button"
         onClick={(event) => {
           event.stopPropagation();
-          onToggleHidden(beatmap.id, !isHidden);
+          onToggleHidden(row.beatmapId, !isHidden);
         }}
-        className={`absolute right-1 top-1 z-10 inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded text-osu-f1 transition-all hover:bg-osu-b5/70 hover:text-white ${
+        className={`absolute right-1 top-1 z-10 inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded text-osu-f1 transition-all hover:bg-osu-b4/70 hover:text-white ${
           isHidden ? "opacity-100" : "opacity-0 group-hover:opacity-100"
         }`}
         title={isHidden ? "Restore diff" : "Hide diff from benchmark"}
@@ -1889,11 +2129,18 @@ const BenchmarkDiffRow = memo(function BenchmarkDiffRow({ row, coverUrl, labelOp
 
       <button
         type="button"
-        onClick={() => onAnalyze(beatmapset, beatmap)}
+        onClick={() => onAnalyze({
+          beatmapId: row.beatmapId,
+          title: setTitle,
+          artist: setArtist,
+          version: row.version,
+          starRating: row.starRating > 0 ? row.starRating : null,
+          preferFamily: family === "ln" ? "ln" : "rc",
+        })}
         className="relative flex min-w-0 cursor-pointer items-center gap-3 px-2.5 pt-2.5 pb-2 text-left"
       >
         <div className="flex h-12 w-12 shrink-0 items-center justify-center">
-          {row.status === "loading" ? (
+          {row.status === "pending" || row.status === "classifying" ? (
             <span className="inline-block h-5 w-5 rounded-full border-2 border-osu-pink/40 border-t-osu-pink animate-spin" />
           ) : row.status === "error" ? (
             <span className="text-[10px] font-bold text-osu-red" title={row.error ?? "Error"}>ERR</span>
@@ -1907,16 +2154,20 @@ const BenchmarkDiffRow = memo(function BenchmarkDiffRow({ row, coverUrl, labelOp
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-1.5 min-w-0">
-            <span className="text-sm font-black text-white truncate">
-              {row.estimate?.displayName ?? estimateLabel ?? "--"}
-            </span>
-            {estimateFamily ? (
+            {row.status === "not-cached" ? (
+              <span className="text-sm font-bold text-osu-f1 italic">not cached</span>
+            ) : (
+              <span className="text-sm font-black text-white truncate">
+                {estimateDisplay ?? "--"}
+              </span>
+            )}
+            {estimateFamily && row.status === "ready" ? (
               <span className="text-[9px] uppercase tracking-wide text-osu-yellow font-bold">{estimateFamily}</span>
             ) : null}
           </div>
           <div className="mt-0.5 flex items-start gap-1.5 text-[10px] text-osu-f1">
-            <span className="shrink-0 tabular-nums text-osu-l2 leading-tight">&#9733;{beatmap.difficulty_rating.toFixed(2)}</span>
-            <span className="min-w-0 leading-tight line-clamp-2 break-words">{beatmap.version.replace(/\s*\[\d+[Kk]\]\s*/g, " ").trim()}</span>
+            <span className="shrink-0 tabular-nums text-osu-l2 leading-tight">&#9733;{row.starRating.toFixed(2)}</span>
+            <span className="min-w-0 leading-tight line-clamp-2 break-words">{cleanVersionLabel(row.version)}</span>
           </div>
         </div>
       </button>
@@ -1927,13 +2178,13 @@ const BenchmarkDiffRow = memo(function BenchmarkDiffRow({ row, coverUrl, labelOp
           onChange={(event) => {
             const nextBase = event.target.value;
             if (!nextBase) {
-              onExpectedChange(beatmap.id, "");
+              onExpectedChange(row.beatmapId, "");
               return;
             }
-            onExpectedChange(beatmap.id, joinExpectedLabel(nextBase, expectedSplit.variant));
+            onExpectedChange(row.beatmapId, joinExpectedLabel(nextBase, expectedSplit.variant));
           }}
           onClick={(event) => event.stopPropagation()}
-          className="flex-1 min-w-0 rounded border border-osu-b3/50 bg-osu-b5/80 backdrop-blur-sm px-1.5 py-0.5 text-[11px] text-osu-c1 focus:border-osu-h1/40 focus:outline-none cursor-pointer"
+          className="flex-1 min-w-0 rounded border border-osu-b3/50 bg-osu-b5/80 px-1.5 py-0.5 text-[11px] text-osu-c1 focus:border-osu-h1/40 focus:outline-none cursor-pointer"
           title="Expected dan (base)"
         >
           <option value="">expected --</option>
@@ -1946,11 +2197,11 @@ const BenchmarkDiffRow = memo(function BenchmarkDiffRow({ row, coverUrl, labelOp
           onChange={(event) => {
             const nextVariant = event.target.value as DanVariant;
             if (!expectedSplit.base) return;
-            onExpectedChange(beatmap.id, joinExpectedLabel(expectedSplit.base, nextVariant));
+            onExpectedChange(row.beatmapId, joinExpectedLabel(expectedSplit.base, nextVariant));
           }}
           onClick={(event) => event.stopPropagation()}
           disabled={!expectedSplit.base}
-          className="w-12 shrink-0 rounded border border-osu-b3/50 bg-osu-b5/80 backdrop-blur-sm px-1 py-0.5 text-[11px] text-osu-c1 focus:border-osu-h1/40 focus:outline-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed text-center"
+          className="w-12 shrink-0 rounded border border-osu-b3/50 bg-osu-b5/80 px-1 py-0.5 text-[11px] text-osu-c1 focus:border-osu-h1/40 focus:outline-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed text-center"
           title="Expected dan (variant)"
         >
           {DAN_VARIANT_OPTIONS.map((option) => (
@@ -1974,7 +2225,9 @@ const BenchmarkDiffRow = memo(function BenchmarkDiffRow({ row, coverUrl, labelOp
                 ? `Base match: expected ${expected}, got ${estimateDisplay}`
                 : matchState === "wrong"
                   ? `Wrong base: expected ${expected}, got ${estimateDisplay}`
-                  : "No expected dan set"
+                  : row.status === "not-cached"
+                    ? "Not cached; excluded from accuracy"
+                    : "No expected dan set"
           }
         >
           {matchState === "exact" ? <Check className="h-3 w-3" strokeWidth={3} /> : matchState === "base" ? "~" : matchState === "wrong" ? "!" : ""}

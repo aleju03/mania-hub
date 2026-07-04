@@ -962,12 +962,25 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     try {
-      const content = await getCachedBeatmapFile(ctx.db, ctx.osu, Math.floor(beatmapId), normalizeCaller(url.searchParams.get("caller")));
+      // cachedOnly=1 serves from beatmap_osu_files / stored archives without ever
+      // calling the osu! API; callers opt back into the network with a plain request.
+      const cachedOnly = url.searchParams.get("cachedOnly") === "1";
+      const content = await getCachedBeatmapFile(
+        ctx.db,
+        ctx.osu,
+        Math.floor(beatmapId),
+        normalizeCaller(url.searchParams.get("caller")),
+        cachedOnly ? { allowArchive: true, allowDirect: false } : {},
+      );
       sendCors(req, res, ctx);
       res.statusCode = 200;
       res.setHeader("content-type", "text/plain; charset=utf-8");
       res.end(content);
     } catch (error) {
+      if (url.searchParams.get("cachedOnly") === "1") {
+        sendJson(req, res, ctx, 404, { error: "not_cached" });
+        return true;
+      }
       sendOsuError(req, res, ctx, error);
     }
     return true;
@@ -1576,6 +1589,60 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     await enqueueOscBackfill(ctx.queue, ctx.db, ctx.config);
     sendJson(req, res, ctx, 200, { ok: true });
+    return true;
+  }
+  if (url.pathname === "/api/admin/dan-classifier/files") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<{ ids?: unknown }>((await readBody(req)) || "{}", {});
+    const ids = [...new Set(normalizeIdList(body.ids))].slice(0, 50);
+    if (!ids.length) {
+      sendJson(req, res, ctx, 400, { error: "invalid_ids" });
+      return true;
+    }
+    const files: Array<{ beatmapId: number; content: string }> = [];
+    const missing: number[] = [];
+    for (const beatmapId of ids) {
+      try {
+        // cached-only: an archive fallback here can stall the whole batch for
+        // minutes on one uncached chart (full .osz download from mirrors, which
+        // may be stale and not even contain the diff). Uncached charts come back
+        // as missing and go through the explicit fetch-missing path instead.
+        const content = await getCachedBeatmapFile(ctx.db, ctx.osu, beatmapId, "dan_classifier_admin", {
+          allowArchive: false,
+          allowDirect: false,
+        });
+        files.push({ beatmapId, content });
+      } catch {
+        missing.push(beatmapId);
+      }
+    }
+    sendJson(req, res, ctx, 200, { files, missing });
+    return true;
+  }
+  if (url.pathname === "/api/admin/dan-classifier/sets") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<{ beatmapsetIds?: unknown; beatmapIds?: unknown }>((await readBody(req)) || "{}", {});
+    const beatmapsetIds = [...new Set(normalizeIdList(body.beatmapsetIds))].slice(0, 100);
+    const beatmapIds = [...new Set(normalizeIdList(body.beatmapIds))].slice(0, 400);
+    if (!beatmapsetIds.length && !beatmapIds.length) {
+      sendJson(req, res, ctx, 400, { error: "invalid_ids" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, await getDanClassifierSets(ctx.db, beatmapsetIds, beatmapIds));
     return true;
   }
   if (url.pathname === "/api/admin/osu-file-backfill/start") {
@@ -2887,6 +2954,117 @@ function sendOsuError(req: IncomingMessage, res: ServerResponse, ctx: HttpContex
 function isAdmin(req: IncomingMessage, ctx: HttpContext): boolean {
   if (!ctx.config.liveAdminToken) return ctx.config.nodeEnv !== "production";
   return req.headers.authorization === `Bearer ${ctx.config.liveAdminToken}`;
+}
+
+function normalizeIdList(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+  const out: number[] = [];
+  for (const entry of value) {
+    const id = Math.floor(Number(entry));
+    if (Number.isFinite(id) && id > 0) out.push(id);
+  }
+  return out;
+}
+
+interface DanClassifierDiff {
+  beatmapId: number;
+  beatmapsetId: number;
+  version: string;
+  starRating: number | null;
+  keyCount: number | null;
+  mode: string;
+  cached: boolean;
+}
+
+// Set/diff metadata for the dan-classifier admin page, resolved purely from the
+// local beatmaps/beatmapsets/beatmap_osu_files projections (no osu! API).
+async function getDanClassifierSets(
+  db: Db,
+  beatmapsetIds: number[],
+  beatmapIds: number[],
+): Promise<{
+  sets: Array<{ beatmapsetId: number; title: string | null; artist: string | null; diffs: DanClassifierDiff[] }>;
+  missingBeatmapsetIds: number[];
+  missingBeatmapIds: number[];
+}> {
+  const missingBeatmapIds: number[] = [];
+  const setIds = new Set<number>(beatmapsetIds);
+
+  if (beatmapIds.length) {
+    const placeholders = beatmapIds.map(() => "?").join(",");
+    const rows = (await exec(
+      db,
+      `select beatmap_id, beatmapset_id from beatmaps where beatmap_id in (${placeholders})`,
+      beatmapIds,
+    )).rows;
+    const found = new Map<number, number>();
+    for (const row of rows) {
+      found.set(Number(row.beatmap_id), Number(row.beatmapset_id));
+    }
+    for (const beatmapId of beatmapIds) {
+      const setId = found.get(beatmapId);
+      if (setId && setId > 0) setIds.add(setId);
+      else missingBeatmapIds.push(beatmapId);
+    }
+  }
+
+  const requestedSetIds = [...setIds];
+  const diffsBySet = new Map<number, DanClassifierDiff[]>();
+  if (requestedSetIds.length) {
+    const placeholders = requestedSetIds.map(() => "?").join(",");
+    const rows = (await exec(
+      db,
+      `select b.beatmap_id, b.beatmapset_id, b.version, b.difficulty_rating, b.cs, b.mode,
+              case when f.beatmap_id is not null and (f.content_blob is not null or f.content != '') then 1 else 0 end as has_file
+       from beatmaps b
+       left join beatmap_osu_files f on f.beatmap_id = b.beatmap_id
+       where b.beatmapset_id in (${placeholders}) and b.mode = 'mania'
+       order by b.beatmapset_id, b.difficulty_rating`,
+      requestedSetIds,
+    )).rows;
+    for (const row of rows) {
+      const setId = Number(row.beatmapset_id);
+      const diffs = diffsBySet.get(setId) ?? [];
+      diffs.push({
+        beatmapId: Number(row.beatmap_id),
+        beatmapsetId: setId,
+        version: row.version == null ? "" : String(row.version),
+        starRating: row.difficulty_rating == null ? null : Number(row.difficulty_rating),
+        keyCount: row.cs == null ? null : Number(row.cs),
+        mode: String(row.mode ?? "mania"),
+        cached: Number(row.has_file) === 1,
+      });
+      diffsBySet.set(setId, diffs);
+    }
+  }
+
+  const meta = new Map<number, { title: string | null; artist: string | null }>();
+  const setIdsWithDiffs = [...diffsBySet.keys()];
+  if (setIdsWithDiffs.length) {
+    const placeholders = setIdsWithDiffs.map(() => "?").join(",");
+    const rows = (await exec(
+      db,
+      `select beatmapset_id, title, artist from beatmapsets where beatmapset_id in (${placeholders})`,
+      setIdsWithDiffs,
+    )).rows;
+    for (const row of rows) {
+      meta.set(Number(row.beatmapset_id), {
+        title: row.title == null ? null : String(row.title),
+        artist: row.artist == null ? null : String(row.artist),
+      });
+    }
+  }
+
+  return {
+    sets: setIdsWithDiffs.map((setId) => ({
+      beatmapsetId: setId,
+      title: meta.get(setId)?.title ?? null,
+      artist: meta.get(setId)?.artist ?? null,
+      diffs: diffsBySet.get(setId) ?? [],
+    })),
+    missingBeatmapsetIds: requestedSetIds.filter((setId) => !diffsBySet.has(setId)),
+    missingBeatmapIds,
+  };
 }
 
 async function readBody(req: IncomingMessage): Promise<string> {
