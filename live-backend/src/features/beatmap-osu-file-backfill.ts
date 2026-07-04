@@ -94,6 +94,7 @@ export async function getBeatmapOsuFileBackfillStatus(
   return {
     ...state,
     ...counts,
+    lastError: state.status === "done" ? null : state.lastError,
     active,
     stalled,
     percent: counts.totalAnalyzed > 0 ? Math.min(100, Math.max(0, (counts.cached + counts.unavailable) / counts.totalAnalyzed * 100)) : 100,
@@ -252,7 +253,9 @@ export async function runBeatmapOsuFileBackfillJob(
     failed: latest.failed + failed,
     unavailable: latest.unavailable + unavailable,
     lastBeatmapId,
-    lastError: lastError ?? latest.lastError,
+    // Only carry the freshest batch's error: a clean batch clears the banner
+    // instead of pinning a long-resolved failure for the rest of the run.
+    lastError,
     updatedAt: nowIso(),
     finishedAt: null,
   };
@@ -330,7 +333,7 @@ async function finishRun(db: Db, runId: string, status: "done" | "failed", error
   await writeState(db, {
     ...state,
     status,
-    lastError: error ?? state.lastError,
+    lastError: status === "done" ? error : error ?? state.lastError,
     updatedAt: now,
     finishedAt: now,
   });

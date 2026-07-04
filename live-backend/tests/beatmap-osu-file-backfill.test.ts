@@ -65,7 +65,9 @@ describe("beatmap .osu file backfill", () => {
       expect(status.cached).toBe(0);
       expect(status.unavailable).toBe(1);
       expect(status.missing).toBe(0);
-      expect(status.lastError).toContain("404001");
+      // Finished runs don't keep surfacing the last error; the per-map detail
+      // stays queryable on the beatmap_osu_files row below.
+      expect(status.lastError).toBeNull();
 
       const row = (await exec(db, "select source, error from beatmap_osu_files where beatmap_id = 404001")).rows[0];
       expect(row.source).toBe("unavailable");
@@ -105,6 +107,87 @@ describe("beatmap .osu file backfill", () => {
       expect(done.status).toBe("done");
       expect(done.cached).toBe(13);
       expect(done.missing).toBe(0);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it("clears a stale lastError once a later batch succeeds", async () => {
+    const { db, queue, cleanup } = await setupDb();
+    try {
+      for (let beatmapId = 601; beatmapId <= 613; beatmapId++) {
+        await seedReadyVector(db, beatmapId);
+      }
+      let failNext = true;
+      const osu = {
+        getBeatmapFile: async (beatmapId: number) => {
+          if (beatmapId === 601 && failNext) {
+            failNext = false;
+            throw new Error("mirror hiccup");
+          }
+          return buildBeatmapFile(beatmapId);
+        },
+      };
+
+      await startBeatmapOsuFileBackfill(db, queue);
+      const [firstJob] = await queue.claim("test-worker", 1, { types: [BEATMAP_OSU_FILE_BACKFILL_JOB] });
+      await runBeatmapOsuFileBackfillJob(db, queue, osu as never, firstJob.payload as { runId: string; cursor?: number });
+      await queue.complete(firstJob.id);
+
+      const afterFirstBatch = await getBeatmapOsuFileBackfillStatus(db);
+      expect(afterFirstBatch.status).toBe("running");
+      expect(afterFirstBatch.failed).toBe(1);
+      expect(afterFirstBatch.lastError).toContain("mirror hiccup");
+
+      const [secondJob] = await queue.claim("test-worker", 1, { types: [BEATMAP_OSU_FILE_BACKFILL_JOB] });
+      await runBeatmapOsuFileBackfillJob(db, queue, osu as never, secondJob.payload as { runId: string; cursor?: number });
+      await queue.complete(secondJob.id);
+
+      const afterSecondBatch = await getBeatmapOsuFileBackfillStatus(db);
+      expect(afterSecondBatch.status).toBe("running");
+      expect(afterSecondBatch.lastError).toBeNull();
+
+      // The cursor wraps back around and retries the transient failure to completion.
+      const [thirdJob] = await queue.claim("test-worker", 1, { types: [BEATMAP_OSU_FILE_BACKFILL_JOB] });
+      await runBeatmapOsuFileBackfillJob(db, queue, osu as never, thirdJob.payload as { runId: string; cursor?: number });
+      await queue.complete(thirdJob.id);
+
+      const done = await getBeatmapOsuFileBackfillStatus(db);
+      expect(done.status).toBe("done");
+      expect(done.cached).toBe(13);
+      expect(done.missing).toBe(0);
+      expect(done.lastError).toBeNull();
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it("hides a stale lastError persisted by an already-finished run", async () => {
+    const { db, cleanup } = await setupDb();
+    try {
+      await exec(
+        db,
+        `insert into live_meta (key, value_json, updated_at)
+         values ('beatmap_osu_file_backfill_state', ?, '2026-01-01T00:00:00.000Z')`,
+        [JSON.stringify({
+          runId: "legacy-run",
+          status: "done",
+          batchSize: 12,
+          processed: 100,
+          stored: 99,
+          failed: 0,
+          unavailable: 1,
+          lastBeatmapId: 5473366,
+          lastError: "Failed to fetch .osu file for beatmap 5473366: osu (invalid .osu file); catboy (404)",
+          startedAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+          finishedAt: "2026-01-01T00:00:00.000Z",
+        })],
+      );
+
+      const status = await getBeatmapOsuFileBackfillStatus(db);
+      expect(status.status).toBe("done");
+      expect(status.lastError).toBeNull();
     } finally {
       await cleanup();
     }
