@@ -10,6 +10,7 @@ import { formatDuration, formatNumber } from "../../lib/format";
 import { Pagination } from "../ui/Pagination";
 import { Skeleton } from "../ui/LoadingSkeleton";
 import { MapDetailModal } from "./MapDetailModal";
+import { useMapPreviewAudio } from "./MapPreviewAudio";
 import { PatternPicker } from "./PatternPicker";
 import { RangeSlider } from "./RangeSlider";
 import { SearchCard } from "./SearchCard";
@@ -387,32 +388,32 @@ function MobileFilterSheet({
 function SearchCardSkeleton() {
   return (
     <div className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4">
-      <div className="relative h-[90px]">
+      <div className="relative h-[100px]">
         <Skeleton className="h-full w-full rounded-none" />
-        <Skeleton className="absolute left-1.5 top-1.5 h-4 w-8 rounded" />
-        <Skeleton className="absolute right-1.5 top-1.5 h-4 w-12 rounded" />
-        <Skeleton className="absolute bottom-1.5 right-1.5 h-4 w-14 rounded-full" />
-        <div className="absolute bottom-1.5 left-2.5 right-20 flex flex-col gap-1">
-          <Skeleton className="h-3 w-4/5" />
-          <Skeleton className="h-2.5 w-1/2" />
+        <Skeleton className="absolute left-2 top-2 h-[18px] w-9 rounded" />
+        <Skeleton className="absolute right-2 top-2 h-[18px] w-14 rounded" />
+        <Skeleton className="absolute bottom-2 right-2 h-[18px] w-16 rounded-full" />
+        <div className="absolute bottom-2 left-3 right-20 flex flex-col gap-1.5">
+          <Skeleton className="h-3.5 w-4/5" />
+          <Skeleton className="h-3 w-1/2" />
         </div>
       </div>
 
-      <div className="flex flex-col gap-1.5 px-2.5 py-2">
+      <div className="flex flex-col gap-2 px-3 py-2.5">
         <div className="flex items-center justify-between gap-2">
-          <Skeleton className="h-3 w-20" />
-          <Skeleton className="h-2.5 w-8" />
+          <Skeleton className="h-3.5 w-24" />
+          <Skeleton className="h-3 w-9" />
         </div>
         <div className="flex items-center gap-1">
-          <Skeleton className="h-4 w-12 rounded" />
-          <Skeleton className="h-4 w-14 rounded" />
-          <Skeleton className="h-4 w-12 rounded" />
+          <Skeleton className="h-5 w-14 rounded" />
+          <Skeleton className="h-5 w-16 rounded" />
+          <Skeleton className="h-5 w-14 rounded" />
         </div>
         <div className="flex items-center justify-between gap-2 pt-1">
-          <Skeleton className="h-2.5 w-16" />
+          <Skeleton className="h-3 w-20" />
           <div className="flex items-center gap-1.5">
-            <Skeleton className="h-4 w-10 rounded" />
-            <Skeleton className="h-4 w-10 rounded" />
+            <Skeleton className="h-5 w-12 rounded" />
+            <Skeleton className="h-5 w-12 rounded" />
           </div>
         </div>
       </div>
@@ -422,7 +423,7 @@ function SearchCardSkeleton() {
 
 function SearchCardGridSkeleton() {
   return (
-    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4" aria-hidden="true">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4" aria-hidden="true">
       {Array.from({ length: SEARCH_INITIAL_SKELETON_COUNT }).map((_, index) => (
         <SearchCardSkeleton key={index} />
       ))}
@@ -443,6 +444,9 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<LiveMapSearchEntry | null>(null);
+  // Shared audio for the per-card preview buttons; one card playing at a time.
+  const preview = useMapPreviewAudio();
+  const { stop: stopPreview } = preview;
   const lastResultRef = useRef<LiveMapSearchResult | null>(null);
   const uiRef = useRef(ui);
   uiRef.current = ui;
@@ -487,6 +491,11 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
     () => JSON.stringify(ui),
     [ui],
   );
+
+  // A filter/page change swaps the grid out from under the playing card.
+  useEffect(() => {
+    stopPreview();
+  }, [requestKey, stopPreview]);
 
   useEffect(() => {
     if (!liveBackendEnabled) {
@@ -710,9 +719,18 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
           <div className="py-16 text-center text-[13px] text-osu-f1">No maps match these filters.</div>
         ) : (
           <div className={loading ? "opacity-60 transition-opacity" : "transition-opacity"} aria-busy={loading}>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {items.map((entry: LiveMapSearchEntry) => (
-                <SearchCard key={entry.beatmapId} entry={entry} onOpen={setDetail} />
+                <SearchCard
+                  key={entry.beatmapId}
+                  entry={entry}
+                  preview={preview}
+                  onOpen={(opened) => {
+                    // The detail modal has its own audio; don't play over it.
+                    stopPreview();
+                    setDetail(opened);
+                  }}
+                />
               ))}
             </div>
             {totalPages > 1 && (

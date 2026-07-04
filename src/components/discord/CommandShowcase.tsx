@@ -713,15 +713,8 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
       : player.countryRank ?? (player.id > 0 ? null : index + 1);
   const playPp = (player: ShowcasePlayer, fallback: number): string =>
     `${Math.max(300, Math.round((player.pp > 0 ? player.pp : fallback) * 0.065))}pp`;
-  const rankWins = (a: number | null, b: number | null): boolean => a != null && (b == null || a <= b);
-  const numberWins = (a: number | null | undefined, b: number | null | undefined): boolean =>
-    a != null && (b == null || a >= b);
   const goalTarget = Math.max(1000, Math.ceil((goals.pp + 700) / 1000) * 1000);
   const goalPercent = goals.pp > 0 ? Math.min(99, Math.max(1, Math.round((goals.pp / goalTarget) * 100))) : 75;
-  const selfRank = rankFor(self, 0);
-  const rivalRank = rankFor(rival, 1);
-  const selfAccuracy = self.accuracy ?? 99.4;
-  const rivalAccuracy = rival.accuracy ?? 99.2;
   const rankingsTitle = sample.isGlobal ? "Global mania rankings" : `${sample.countryName} mania rankings`;
   const latestScoresTitle = sample.isGlobal ? "Latest tracked scores" : `Latest scores in ${sample.countryLabel}`;
   const mapsTitle = sample.isGlobal ? "Most farmed maps globally" : `Most farmed maps in ${sample.countryLabel}`;
@@ -795,15 +788,29 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
   ];
   const farmKeyMode = "4k";
 
-  const vsTitle = fx?.vs?.title ?? `${self.username} vs ${rival.username}`;
+  // Mirrors the bot's side-by-side compare: pp headline with global rank, best
+  // play, 4K/7K weighted-pp split, and a neutral pp-gap closer. No winner
+  // bolding, no tally.
+  const vsSide = (p: ShowcasePlayer): string =>
+    p.globalRank != null ? `${formatPp(p.pp)} (${formatRank(p.globalRank)})` : formatPp(p.pp);
+  const vsSplit = (p: ShowcasePlayer, fallback: number, share: number): string =>
+    formatPp(Math.round((p.pp > 0 ? p.pp : fallback) * share));
+  const vsTitle = fx?.vs?.title ?? `${self.username} • ${rival.username}`;
   const vsRows = fx?.vs?.rows?.length
     ? fx.vs.rows
     : [
-      { label: "pp", a: formatPp(self.pp), b: formatPp(rival.pp), aWins: numberWins(self.pp, rival.pp), bWins: numberWins(rival.pp, self.pp) },
-      { label: "Global rank", a: formatRank(self.globalRank), b: formatRank(rival.globalRank), aWins: rankWins(self.globalRank, rival.globalRank), bWins: rankWins(rival.globalRank, self.globalRank) },
-      { label: "Country rank", a: formatRank(selfRank), b: formatRank(rivalRank), aWins: rankWins(selfRank, rivalRank), bWins: rankWins(rivalRank, selfRank) },
-      { label: "Accuracy", a: formatAccuracy(selfAccuracy), b: formatAccuracy(rivalAccuracy), aWins: numberWins(selfAccuracy, rivalAccuracy), bWins: numberWins(rivalAccuracy, selfAccuracy) },
+      { label: "pp", a: vsSide(self), b: vsSide(rival) },
+      { label: "Best play", a: playPp(self, 13000), b: playPp(rival, 11500) },
+      { label: "4K", a: vsSplit(self, 13000, 0.93), b: vsSplit(rival, 11500, 0.88) },
+      { label: "7K", a: vsSplit(self, 13000, 0.22), b: vsSplit(rival, 11500, 0.34) },
     ];
+  const vsGap = fx?.vs?.rows?.length
+    ? fx.vs.gap
+    : self.pp > 0 && rival.pp > 0
+      ? Math.round(Math.abs(self.pp - rival.pp)) === 0
+        ? "Dead even on pp."
+        : `${Math.abs(Math.round(self.pp - rival.pp)).toLocaleString("en-US")}pp apart.`
+      : null;
   const vsLeftName = fx?.vs ? (pLink?.username ?? self.username) : self.username;
   const vsRightName = pProfile?.username ?? rival.username;
 
@@ -1020,33 +1027,22 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
     },
     {
       id: "vs", label: "/vs", invocation: `/vs ${vsRightName}`, group: "Players", accent: PINK,
-      blurb: "Two players stat by stat, the leader in bold with a final tally. Leave the first name out to compare against yourself.",
-      render: () => {
-        // One markdown line per stat, the leading value bold, then a tally line
-        // naming the overall leader - exactly the bot's compare layout.
-        const aScore = vsRows.filter((r) => r.aWins).length;
-        const bScore = vsRows.filter((r) => r.bWins).length;
-        const leader = aScore === bScore ? null : aScore > bScore ? vsLeftName : vsRightName;
-        return (
-          <Embed accent={PINK}>
-            <EmbedTitle>{vsTitle}</EmbedTitle>
-            <div className="space-y-0.5 text-[12px]" style={{ color: D.text }}>
-              {vsRows.map((r) => (
-                <div key={r.label}>
-                  {r.label}: {r.aWins ? <b style={{ color: D.white }}>{r.a}</b> : r.a} vs {r.bWins ? <b style={{ color: D.white }}>{r.b}</b> : r.b}
-                </div>
-              ))}
-              <div className="pt-1.5">
-                {leader
-                  ? <><b style={{ color: D.white }}>{leader}</b> leads {Math.max(aScore, bScore)}-{Math.min(aScore, bScore)}.</>
-                  : "Dead even."}
-              </div>
-            </div>
-            <Footer text="maniabot" />
-            <Buttons items={[vsLeftName, vsRightName]} />
-          </Embed>
-        );
-      },
+      blurb: "Two players side by side: pp with rank, best play and the 4K/7K split, closed by the pp gap. Leave the first name out to compare from your linked account.",
+      render: () => (
+        // One plain line per stat in title order (left value = left player),
+        // then the neutral pp-gap closer - exactly the bot's compare layout.
+        <Embed accent={PINK}>
+          <EmbedTitle>{vsTitle}</EmbedTitle>
+          <div className="space-y-0.5 text-[12px]" style={{ color: D.text }}>
+            {vsRows.map((r) => (
+              <div key={r.label}>{r.label}: {r.a} • {r.b}</div>
+            ))}
+            {vsGap ? <div className="pt-1.5">{vsGap}</div> : null}
+          </div>
+          <Footer text="maniabot" />
+          <Buttons items={[vsLeftName, vsRightName]} />
+        </Embed>
+      ),
     },
     {
       id: "pb", label: "/pb", invocation: "/pb", group: "Players", accent: PINK,

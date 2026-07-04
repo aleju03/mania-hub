@@ -46,6 +46,14 @@ UI dependencies. The `.d.ts` files, this file, and the TS facades
   repo, and the algorithm itself ships in ppy/osu under MIT.
 - `cvtFlag` is upstream's IN/HO note-conversion toggle (invert-to-LN / holds-off), not
   an osu!std convert flag.
+- Don't try to speed up the Mixed chain by precomputing Daniel/Sunny in the facade and
+  passing `precomputedDanielResult`/`precomputedSunnyResult` from outside. Mixed already
+  computes Sunny once and shares it, and Roxy shares its Daniel/Azusa references
+  internally - but Roxy runs everything on *canonicalized* beatmap timing
+  (`canonicalizeOsuTiming`), so an externally computed Daniel sees different input and
+  shifts the meta numerics on charts with unusual timing (caught as a 1-in-186 corpus
+  drift, 2026-07-04). The chain has no redundant engine runs to remove; per-classify cost
+  (~70ms median, ~570ms on 16k-note dan courses) is genuine algorithm work.
 
 ## Benchmark vs our labels (2026-07-03, `dan_benchmark_labels` in Turso)
 

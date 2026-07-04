@@ -1,6 +1,7 @@
 import type { LiveMapSearchEntry } from "../../lib/live-backend";
 import { formatDuration, formatNumber } from "../../lib/format";
 import { OsuLogo } from "../ui/OsuLogo";
+import { MapPreviewButton, MapPreviewProgressBar, type MapPreviewAudio } from "./MapPreviewAudio";
 
 // Shared presentation for a single chart-analyzed map across the global Search
 // results and inside Collection detail. Country-agnostic: no player avatars,
@@ -75,10 +76,11 @@ export function entryDiffs(entry: LiveMapSearchEntry): LiveMapSearchEntry[] {
 
 export function mapCoverUrl(entry: Pick<LiveMapSearchEntry, "covers" | "beatmapsetId">): string {
   return (
+    entry.covers?.["card@2x"] ??
     entry.covers?.card ??
     entry.covers?.list ??
     entry.covers?.cover ??
-    `https://assets.ppy.sh/beatmaps/${entry.beatmapsetId}/covers/card.jpg`
+    `https://assets.ppy.sh/beatmaps/${entry.beatmapsetId}/covers/card@2x.jpg`
   );
 }
 
@@ -130,9 +132,17 @@ function keyModeLabel(diffs: LiveMapSearchEntry[]): string {
   return modes.map((keys) => `${keys}K`).join("·");
 }
 
-const MAX_DIFF_DOTS = 8;
+const MAX_DIFF_DOTS = 10;
 
-export function SearchCard({ entry, onOpen }: { entry: LiveMapSearchEntry; onOpen?: (entry: LiveMapSearchEntry) => void }) {
+export function SearchCard({
+  entry,
+  onOpen,
+  preview,
+}: {
+  entry: LiveMapSearchEntry;
+  onOpen?: (entry: LiveMapSearchEntry) => void;
+  preview?: MapPreviewAudio;
+}) {
   const pill = statusPill(entry.status);
   const diffs = entryDiffs(entry);
   const multi = diffs.length > 1;
@@ -151,28 +161,29 @@ export function SearchCard({ entry, onOpen }: { entry: LiveMapSearchEntry; onOpe
       title={clickable ? "View details" : undefined}
     >
       <div className="relative rounded-t-xl overflow-hidden">
-        <img src={mapCoverUrl(entry)} alt="" className="w-full h-[90px] object-cover" loading="lazy" />
+        <img src={mapCoverUrl(entry)} alt="" className="w-full h-[100px] object-cover" loading="lazy" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-        <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/60 text-[9px] font-bold text-white">
+        <span className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/60 text-[10px] font-bold text-white">
           {keyModeLabel(diffs)}
         </span>
-        <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/60 text-[9px] font-bold text-osu-yellow">
+        <span className="absolute top-2 right-2 px-2 py-0.5 rounded bg-black/60 text-[10px] font-bold text-osu-yellow">
           {multi && starHi - starLo >= 0.05
             ? `★${starLo.toFixed(1)}–${starHi.toFixed(1)}`
             : `★${entry.stars.toFixed(2)}`}
         </span>
         {pill && (
-          <span className={`absolute bottom-1.5 right-1.5 px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase leading-none ${pill.className}`}>
+          <span className={`absolute bottom-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase leading-none ${pill.className}`}>
             {pill.label}
           </span>
         )}
-        <div className="absolute bottom-0 left-0 right-0 px-2.5 pb-1.5 pr-20">
-          <div className="text-[12px] font-semibold text-white truncate leading-tight drop-shadow-lg">{entry.title}</div>
-          <div className="text-[10px] text-white/70 truncate leading-tight drop-shadow-lg">{entry.artist}</div>
+        <div className="absolute bottom-0 left-0 right-0 px-3 pb-2 pr-20">
+          <div className="text-[13px] font-semibold text-white truncate leading-tight drop-shadow-lg">{entry.title}</div>
+          <div className="text-[11px] text-white/70 truncate leading-tight drop-shadow-lg">{entry.artist}</div>
         </div>
+        {preview && preview.playingSetId === entry.beatmapsetId && <MapPreviewProgressBar preview={preview} />}
       </div>
 
-      <div className="px-2.5 py-2 flex flex-col gap-1.5 flex-1">
+      <div className="px-3 py-2.5 flex flex-col gap-2 flex-1">
         <div className="flex items-center gap-1.5">
           {multi ? (
             <span className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -180,18 +191,18 @@ export function SearchCard({ entry, onOpen }: { entry: LiveMapSearchEntry; onOpe
                 {diffs.slice(0, MAX_DIFF_DOTS).map((diff) => (
                   <span
                     key={diff.beatmapId}
-                    className="h-2 w-2 rounded-full ring-1 ring-white/15"
+                    className="h-2.5 w-2.5 rounded-full ring-1 ring-white/15"
                     style={{ background: starRatingColor(diff.stars) }}
                     title={`[${diff.version}] ★${diff.stars.toFixed(2)}`}
                   />
                 ))}
               </span>
-              <span className="truncate text-[10px] text-osu-l2">{diffs.length} diffs</span>
+              <span className="truncate text-[11px] text-osu-l2">{diffs.length} diffs</span>
             </span>
           ) : (
-            <span className="text-[10px] text-osu-l2 truncate flex-1">[{entry.version}]</span>
+            <span className="text-[11px] text-osu-l2 truncate flex-1">[{entry.version}]</span>
           )}
-          <span className="text-[9px] text-osu-f1 flex-shrink-0">{formatDuration(entry.length)}</span>
+          <span className="text-[10px] text-osu-f1 flex-shrink-0">{formatDuration(entry.length)}</span>
         </div>
 
         <div className="flex flex-wrap items-center gap-1">
@@ -200,8 +211,8 @@ export function SearchCard({ entry, onOpen }: { entry: LiveMapSearchEntry; onOpe
               key={pattern}
               className={
                 index === 0
-                  ? "px-1.5 py-0.5 rounded bg-osu-pink/20 text-osu-pink-light text-[9px] font-semibold leading-none"
-                  : "px-1.5 py-0.5 rounded bg-osu-b3/50 text-osu-f1 text-[9px] leading-none"
+                  ? "px-2 py-1 rounded bg-osu-pink/20 text-osu-pink-light text-[10px] font-semibold leading-none"
+                  : "px-2 py-1 rounded bg-osu-b3/50 text-osu-f1 text-[10px] leading-none"
               }
             >
               {patternLabel(pattern)}
@@ -210,26 +221,29 @@ export function SearchCard({ entry, onOpen }: { entry: LiveMapSearchEntry; onOpe
         </div>
 
         <div className="flex items-center justify-between gap-2 mt-auto pt-1">
-          <span className="text-[9px] text-osu-f1 truncate" title={`${entry.creator ? `mapped by ${entry.creator} · ` : ""}${formatNumber(entry.playCount)} plays`}>
-            {formatNumber(entry.playCount)} plays
+          <span className="flex min-w-0 items-center gap-1.5">
+            {preview && <MapPreviewButton beatmapsetId={entry.beatmapsetId} preview={preview} />}
+            <span className="text-[10px] text-osu-f1 truncate" title={`${entry.creator ? `mapped by ${entry.creator} · ` : ""}${formatNumber(entry.playCount)} plays`}>
+              {formatNumber(entry.playCount)} plays
+            </span>
           </span>
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <a
               href={osuDirectUrl(entry.beatmapsetId)}
               onClick={(e) => e.stopPropagation()}
-              className="hidden items-center gap-1 px-1.5 py-0.5 rounded bg-osu-b3/50 text-osu-l2 text-[9px] hover:bg-osu-b3 transition-colors sm:inline-flex"
+              className="hidden items-center gap-1 px-2 py-1 rounded bg-osu-b3/50 text-osu-l2 text-[10px] hover:bg-osu-b3 transition-colors sm:inline-flex"
               title="Open in osu! client"
             >
-              <OsuLogo className="h-2.5 w-2.5" />
+              <OsuLogo className="h-3 w-3" />
               osu!
             </a>
             <a
               href={oszDownloadUrl(entry.beatmapsetId)}
               onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-osu-pink/20 text-osu-pink-light text-[9px] font-semibold hover:bg-osu-pink/30 transition-colors"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded bg-osu-pink/20 text-osu-pink-light text-[10px] font-semibold hover:bg-osu-pink/30 transition-colors"
               title="Download .osz"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" className="h-2.5 w-2.5" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3" aria-hidden="true">
                 <path d="M12 3v10" />
                 <path d="m7 10 5 4 5-4" />
                 <path d="M5 20h14" />

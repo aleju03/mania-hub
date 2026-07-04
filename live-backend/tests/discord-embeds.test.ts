@@ -244,19 +244,28 @@ describe("discord embeds", () => {
     expect(topPlaysListEmbed([topPlay()], "GLOBAL", SITE).embeds?.[0]?.thumbnail?.url).toBe("https://a/42.png");
   });
 
-  it("renders a head-to-head compare with a verdict line", () => {
+  it("renders a side-by-side compare with no winner marking or tally", () => {
     const embed = compareEmbed(profile("A"), profile("B"), SITE).embeds?.[0];
-    expect(embed?.title).toBe("A vs B");
-    expect(embed?.description).toContain("pp");
-    // Identical stats -> every row ties.
-    expect(embed?.description).toContain("Dead even.");
-    // A clear winner gets bolded values and the tally line.
+    expect(embed?.title).toBe("A • B");
+    // pp headline carries the global rank; the best play comes from bestScores.
+    expect(embed?.description).toContain("pp: 8,123pp (#1,234) • 8,123pp (#1,234)");
+    expect(embed?.description).toContain("Best play: 612pp • 612pp");
+    // Identical pp reads as a tie; nothing is bolded, nobody "leads".
+    expect(embed?.description).toContain("Dead even on pp.");
+    expect(embed?.description).not.toContain("**");
+    expect(embed?.description).not.toContain("leads");
+    // Keymode weighted pp renders per side, "-" for players outside the pool,
+    // and the closing line is a neutral pp gap.
     const strong = profile("A");
     (strong.user.statistics as Record<string, unknown>).pp = 20000;
-    (strong.user.statistics as Record<string, unknown>).global_rank = 10;
-    const decided = compareEmbed(strong, profile("B"), SITE).embeds?.[0];
-    expect(decided?.description).toContain("**20,000pp**");
-    expect(decided?.description).toContain("**A** leads 2-0.");
+    const decided = compareEmbed(strong, profile("B"), SITE, {
+      four: { a: 18000, b: null },
+      seven: { a: 1200, b: 9000 },
+    }).embeds?.[0];
+    expect(decided?.description).toContain("4K: 18,000pp • -");
+    expect(decided?.description).toContain("7K: 1,200pp • 9,000pp");
+    expect(decided?.description).toContain("11,877pp apart.");
+    expect(decided?.description).not.toContain("leads");
   });
 
   it("renders dan estimate states and attaches an emblem", () => {

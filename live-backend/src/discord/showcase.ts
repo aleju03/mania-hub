@@ -14,6 +14,7 @@
 
 import type { Config } from "../config.js";
 import type { Db } from "../db.js";
+import { exec } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { GLOBAL_COUNTRY_CODE, isGlobalCountry } from "../countries.js";
@@ -27,6 +28,7 @@ import {
 } from "../shared/score.js";
 import type { CountryTopPlay, LeanTrackerScore, OscScore } from "../shared/types.js";
 import { getSnipesSnapshot } from "../features/snipes.js";
+import { readFarmHelperKeyStatsForUsers } from "../features/farm-helper-key-stats.js";
 import { getPlayerProfileSnapshot, getPlayerRecentScores } from "../features/player-profiles.js";
 import { getCountryRankingsSnapshot, getGlobalRankingsSnapshot } from "../features/global-rankings.js";
 import { getTopPlaysSnapshot } from "../features/top-plays.js";
@@ -151,8 +153,6 @@ export interface ShowcaseVsRow {
   label: string;
   a: string;
   b: string;
-  aWins: boolean;
-  bWins: boolean;
 }
 
 export interface ShowcaseBeatmap {
@@ -226,7 +226,7 @@ export interface ShowcaseDiscordPayload {
   pb: (ShowcaseScore & { mapTitle: string; combo: string }) | null;
   me: ShowcaseMe | null;
   activity: ShowcaseActivity | null;
-  vs: { title: string; rows: ShowcaseVsRow[] } | null;
+  vs: { title: string; rows: ShowcaseVsRow[]; gap: string | null } | null;
   rankings: ShowcaseRankRow[];
   topList: ShowcaseTopRow[];
   tracker: ShowcaseTrackerRow[];
@@ -725,7 +725,7 @@ async function buildShowcase(
     : null;
 
   // /vs compares players[0] and players[1].
-  const vs = players[0] && players[1] ? buildVs(players[0], players[1]) : null;
+  const vs = players[0] && players[1] ? await safe("vs", () => buildVs(db, players[0], players[1])) : null;
 
   return {
     country,
@@ -805,27 +805,36 @@ async function buildActivity(db: Db, queue: JobQueue, userId: number, country: s
   };
 }
 
-function buildVs(a: ShowcasePlayer, b: ShowcasePlayer): { title: string; rows: ShowcaseVsRow[] } {
-  const row = (label: string, av: number | null, bv: number | null, fmt: (n: number | null) => string, lowerWins = false): ShowcaseVsRow => {
-    let aWins = false;
-    let bWins = false;
-    if (av != null && bv != null && av !== bv) {
-      const aBeats = lowerWins ? av < bv : av > bv;
-      aWins = aBeats;
-      bWins = !aBeats;
-    }
-    return { label, a: fmt(av), b: fmt(bv), aWins, bWins };
+// Mirrors compareEmbed's side-by-side read: pp headline with global rank, best
+// single play, the 4K/7K weighted-pp split, and a neutral pp-gap line. No
+// winner marking anywhere.
+async function buildVs(db: Db, a: ShowcasePlayer, b: ShowcasePlayer): Promise<{ title: string; rows: ShowcaseVsRow[]; gap: string | null }> {
+  const headline = (p: ShowcasePlayer): string =>
+    p.globalRank == null ? fmtPp(p.pp) : `${fmtPp(p.pp)} (#${NUMBER.format(p.globalRank)})`;
+  const bestOf = async (userId: number): Promise<number | null> => {
+    const row = (await exec(db, "select max(pp) as best_pp from user_top_scores where user_id = ?", [userId])).rows[0];
+    const value = row ? Number(row.best_pp) : Number.NaN;
+    return Number.isFinite(value) && value > 0 ? value : null;
   };
-  return {
-    title: `${a.username} vs ${b.username}`,
-    rows: [
-      row("pp", a.pp, b.pp, fmtPp),
-      row("Global rank", a.globalRank, b.globalRank, (n) => (n == null ? "-" : `#${NUMBER.format(n)}`), true),
-      row("Country rank", a.countryRank, b.countryRank, (n) => (n == null ? "-" : `#${NUMBER.format(n)}`), true),
-      row("Accuracy", a.accuracy, b.accuracy, fmtAcc),
-      row("Play count", a.playCount, b.playCount, (n) => (n == null ? "-" : NUMBER.format(n))),
-    ],
-  };
+  const [k4, k7, bestA, bestB] = await Promise.all([
+    readFarmHelperKeyStatsForUsers(db, 4, [a.id, b.id]),
+    readFarmHelperKeyStatsForUsers(db, 7, [a.id, b.id]),
+    bestOf(a.id),
+    bestOf(b.id),
+  ]);
+  const rows: ShowcaseVsRow[] = [{ label: "pp", a: headline(a), b: headline(b) }];
+  if (bestA != null || bestB != null) rows.push({ label: "Best play", a: fmtScorePp(bestA), b: fmtScorePp(bestB) });
+  for (const [label, stats] of [["4K", k4], ["7K", k7]] as const) {
+    const va = stats.get(a.id)?.weightedPp ?? null;
+    const vb = stats.get(b.id)?.weightedPp ?? null;
+    if (va != null || vb != null) rows.push({ label, a: fmtPp(va), b: fmtPp(vb) });
+  }
+  const gap = a.pp != null && b.pp != null
+    ? Math.round(Math.abs(a.pp - b.pp)) === 0
+      ? "Dead even on pp."
+      : `${NUMBER.format(Math.round(Math.abs(a.pp - b.pp)))}pp apart.`
+    : null;
+  return { title: `${a.username} • ${b.username}`, rows, gap };
 }
 
 // Sample one favourited set from the random pool, plus who favourited it, in the

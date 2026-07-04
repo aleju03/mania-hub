@@ -183,7 +183,7 @@ export const DISCORD_COMMANDS: DiscordCommandDefinition[] = [
     // atomic, so one bad command 400s them all). player1 defaults to the caller's
     // linked account; the handler requires player2 and errors clearly if it's
     // missing.
-    description: "Compare two mania players head to head",
+    description: "Compare two mania players side by side",
     options: [
       { type: OPT_STRING, name: "player1", description: "First player (defaults to your linked account)", required: false, autocomplete: true },
       { type: OPT_STRING, name: "player2", description: "Other player's osu! username or id (required)", required: false, autocomplete: true },

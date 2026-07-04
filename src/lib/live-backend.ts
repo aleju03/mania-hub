@@ -1611,8 +1611,6 @@ export interface DiscordShowcaseVsRow {
   label: string;
   a: string;
   b: string;
-  aWins: boolean;
-  bWins: boolean;
 }
 
 export interface DiscordShowcaseBeatmap {
@@ -1664,7 +1662,7 @@ export interface DiscordShowcase {
   pb: (DiscordShowcaseScore & { mapTitle: string; combo: string }) | null;
   me: DiscordShowcaseMe | null;
   activity: DiscordShowcaseActivity | null;
-  vs: { title: string; rows: DiscordShowcaseVsRow[] } | null;
+  vs: { title: string; rows: DiscordShowcaseVsRow[]; gap: string | null } | null;
   rankings: DiscordShowcaseRankRow[];
   topList: DiscordShowcaseTopRow[];
   tracker: DiscordShowcaseTrackerRow[];

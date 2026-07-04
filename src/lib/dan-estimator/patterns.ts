@@ -2,7 +2,7 @@ import type { ManiaBeatmap, ManiaNote } from "../beatmap-parser";
 import { extractDanFeatures } from "./features";
 import { getInputRate } from "./labels";
 import { clamp01, minGate, quantile } from "./math";
-import type { DanEstimateInput, ManiaPatternAnalysis, ManiaPatternHit, ManiaPatternId } from "./types";
+import type { DanEstimateInput, DanFeatureExtractionResult, ManiaPatternAnalysis, ManiaPatternHit, ManiaPatternId } from "./types";
 
 export const MANIA_PATTERN_ANALYZER_LABELS: Record<ManiaPatternId, string> = {
   jack: "Jack",
@@ -252,9 +252,13 @@ function compactPercent(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
 
-export function analyzeManiaPatterns(map: ManiaBeatmap, input: DanEstimateInput = {}): ManiaPatternAnalysis {
+export function analyzeManiaPatterns(
+  map: ManiaBeatmap,
+  input: DanEstimateInput = {},
+  precomputedFeatures?: DanFeatureExtractionResult,
+): ManiaPatternAnalysis {
   const rate = getInputRate(input);
-  const features = extractDanFeatures(map, input, rate);
+  const features = precomputedFeatures ?? extractDanFeatures(map, input, rate);
   const { metrics, orderedRows } = features;
   const stats = getRowPatternStats(orderedRows, metrics.keyCount);
   const rowCount = Math.max(1, stats.rowCount);

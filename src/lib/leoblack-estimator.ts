@@ -178,7 +178,7 @@ export function estimateLeoBlackDan(map: ManiaBeatmap, osuText: string, input: L
   }
 
   const rate = getInputRate(input);
-  const mixed = runMixedEstimatorFromText(osuText, { speedRate: rate });
+  const mixed = runLeoBlackMixed(osuText, { speedRate: rate });
   const verdict = String(mixed.estDiff ?? "").trim();
   if (!verdict || /^Invalid\b/i.test(verdict) || /^Unknown\b/i.test(verdict)) {
     throw new Error(`LeoBlack estimator could not classify this chart (${verdict || "empty verdict"}).`);
@@ -248,6 +248,15 @@ export function estimateLeoBlackDan(map: ManiaBeatmap, osuText: string, input: L
   };
 }
 
+// NOTE on dedupe: the vendored Mixed chain already shares its expensive work.
+// Mixed computes Sunny once and threads it to Roxy/Azusa via
+// precomputedSunnyResult, and Roxy computes its Daniel/Azusa references once
+// and shares them internally. Do NOT precompute Daniel here and pass it via
+// precomputedDanielResult: Roxy canonicalizes the beatmap timing before running
+// its references, so an externally computed Daniel sees subtly different input
+// and shifts the meta numerics on charts with unusual timing (verified on the
+// dan corpus). The pass-through below is the fastest form that keeps output
+// byte-identical to upstream.
 export function runLeoBlackMixed(osuText: string, options: LeoBlackEstimatorOptions = {}): LeoBlackReworkResult {
   return runMixedEstimatorFromText(osuText, options);
 }

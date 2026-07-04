@@ -4,7 +4,9 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { CommandShowcase } from "../components/discord/CommandShowcase";
 import { canUseDevFeatures } from "../lib/auth-shared";
+import { isGlobalScope } from "../lib/country";
 import { fetchDiscordPublicInfo, type DiscordPublicInfo } from "../lib/live-backend";
+import { useSelectedCountry } from "../store";
 import { pageSeo } from "../lib/seo";
 
 export const Route = createFileRoute("/discord")({
@@ -69,8 +71,13 @@ function DiscordToolPage() {
 function Hero({ info }: { info: DiscordPublicInfo }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-osu-b3/30 bg-osu-b4">
-      <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:p-6">
-        <div className="min-w-0 flex-1">
+      <div className="relative flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:p-6">
+        <img
+          src="/images/discord/maniabot-hero-bg.webp"
+          alt=""
+          className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover object-[50%_30%] opacity-30"
+        />
+        <div className="relative min-w-0 flex-1">
           <h1 className="text-[17px] font-bold text-white">maniabot</h1>
           <p className="mt-1 text-[13px] leading-relaxed text-osu-l2">
             Every osu!mania lookup as a slash command. Link your account once with <code className="text-osu-pink-light">/link</code> and
@@ -83,7 +90,7 @@ function Hero({ info }: { info: DiscordPublicInfo }) {
             href={info.inviteUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-[14px] font-bold text-white shadow-lg transition-[filter,transform] hover:brightness-110 active:scale-[0.98]"
+            className="relative inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-[14px] font-bold text-white shadow-lg transition-[filter,transform] hover:brightness-110 active:scale-[0.98]"
             style={{ backgroundColor: BLURPLE }}
           >
             <DiscordLogo className="h-5 w-5" />
@@ -120,6 +127,8 @@ function HowStep({ n, text }: { n: number; text: React.ReactNode }) {
 }
 
 function FeedsCard({ feedsEnabled }: { feedsEnabled: boolean }) {
+  const scope = useSelectedCountry();
+  const country = isGlobalScope(scope) ? "global" : scope;
   return (
     <section className="rounded-xl border border-osu-b3/30 bg-osu-b4 p-4">
       <div className="mb-2 flex items-center gap-2">
@@ -127,11 +136,11 @@ function FeedsCard({ feedsEnabled }: { feedsEnabled: boolean }) {
         <h3 className="text-[12px] font-semibold text-white">Live feeds</h3>
       </div>
       <p className="text-[12px] leading-relaxed text-osu-l2">
-        In any channel, run{" "}
-        <code className="text-osu-pink-light">/subscribe feed:top plays country:&lt;CR&gt;</code>{" "}
-        to auto-post new top plays as they happen. Other feeds: snipes and new farm maps. Add{" "}
-        <code className="text-osu-pink-light">min_pp</code> to only post big scores. Managing feeds needs
-        the Manage Server permission. Everything the bot does stays in the channel, it never sends DMs.
+        <code className="text-osu-pink-light">/subscribe feed:Top plays country:{country}</code> posts every
+        new {country} top play into the channel it's run in. The other feeds are snipes and new farm maps, and{" "}
+        <code className="text-osu-pink-light">min_pp</code> skips scores below a threshold.{" "}
+        <code className="text-osu-pink-light">/subscriptions</code> lists a server's active feeds,{" "}
+        <code className="text-osu-pink-light">/unsubscribe</code> stops one. Subscribing needs Manage Server.
       </p>
       {!feedsEnabled ? (
         <p className="mt-2 text-[11px] text-osu-l3">Feeds are currently disabled on the backend.</p>

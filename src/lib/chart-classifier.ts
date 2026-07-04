@@ -187,7 +187,7 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
   const warnings: string[] = [];
 
   const features = extractDanFeatures(map, input, rate);
-  const patterns = analyzeManiaPatterns(map, input);
+  const patterns = analyzeManiaPatterns(map, input, features);
 
   let clusters: ChartClassification["clusters"] = null;
   try {

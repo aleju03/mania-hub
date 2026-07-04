@@ -8,6 +8,7 @@ import { getPlayerProfileSnapshot, getPlayerRecentScores } from "../features/pla
 import { getGlobalRankingsSnapshot } from "../features/global-rankings.js";
 import { getTopPlaysSnapshot } from "../features/top-plays.js";
 import { getFarmHelperSnapshot, FarmHelperUserNotFoundError, type FarmHelperKeyMode } from "../features/farm-helper.js";
+import { readFarmHelperKeyStatsForUsers, type FarmHelperKeyStat } from "../features/farm-helper-key-stats.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
 import { getMapsRandomBeatmapsets, getMapsSnapshot } from "../features/maps.js";
 import { getTrackerSnapshot } from "../features/tracker.js";
@@ -501,7 +502,21 @@ const compareHandler: CommandHandler = async (deps, interaction) => {
       getPlayerProfileSnapshot(deps.db, deps.osu, keyA),
       getPlayerProfileSnapshot(deps.db, deps.osu, b),
     ]);
-    return compareEmbed(snapA, snapB, deps.config.discordSiteOrigin);
+    // The 4K/7K weighted-pp split comes from the farm-helper projections.
+    // Players outside the pool render as "-"; a failed read just drops the
+    // keymode lines instead of failing the whole command.
+    const idA = Number((snapA.user as { id?: number }).id ?? 0);
+    const idB = Number((snapB.user as { id?: number }).id ?? 0);
+    const empty = new Map<number, FarmHelperKeyStat>();
+    const [k4, k7] = await Promise.all([
+      readFarmHelperKeyStatsForUsers(deps.db, 4, [idA, idB]).catch(() => empty),
+      readFarmHelperKeyStatsForUsers(deps.db, 7, [idA, idB]).catch(() => empty),
+    ]);
+    const keyPp = {
+      four: { a: k4.get(idA)?.weightedPp ?? null, b: k4.get(idB)?.weightedPp ?? null },
+      seven: { a: k7.get(idA)?.weightedPp ?? null, b: k7.get(idB)?.weightedPp ?? null },
+    };
+    return compareEmbed(snapA, snapB, deps.config.discordSiteOrigin, keyPp);
   } catch (error) {
     return friendlyError(error, `${a ?? "you"} / ${b}`);
   }

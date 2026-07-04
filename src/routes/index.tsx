@@ -419,15 +419,19 @@ function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
-    if (!windowActive) {
-      return () => {
-        cancelled = true;
-      };
-    }
     const shouldRefreshScores =
       !recentScoresFetchedAt || isCacheStale(recentScoresFetchedAt, CLIENT_CACHE_TTL.homeRecentScores);
 
     if (!shouldRefreshScores) {
+      setLoadingScores(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    // An unfocused tab defers refreshes, but the initial fill still runs so a
+    // page opened in the background doesn't sit on skeletons until focus.
+    if (!windowActive && recentScores.length > 0) {
       setLoadingScores(false);
       return () => {
         cancelled = true;
@@ -498,7 +502,8 @@ function HomePage() {
 
   // Stays connected while unfocused so the recent-scores strip and popoffs keep
   // updating on a second monitor during play (same rationale as the tracker
-  // feed). Snapshot fetches and timers stay gated on windowActive.
+  // feed). Snapshot refreshes stay gated on windowActive; only the initial
+  // fill runs unfocused.
   useEffect(() => {
     if (!liveBackendEnabled) return;
     const source = openLiveEventSource(selectedCountry);
@@ -525,16 +530,20 @@ function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
-    if (!windowActive) {
-      return () => {
-        cancelled = true;
-      };
-    }
     const cachedGlobalPopoffsIncludeOld = selectedIsGlobal && popoffs.some((popoff) => !isHomeGlobalPopoffRecent(popoff));
     const shouldRefreshPopoffs =
       !popoffsFetchedAt || isCacheStale(popoffsFetchedAt, CLIENT_CACHE_TTL.homePopoffs) || cachedGlobalPopoffsIncludeOld;
 
     if (!shouldRefreshPopoffs) {
+      setLoadingPopoffs(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    // An unfocused tab defers refreshes, but the initial fill still runs so a
+    // page opened in the background doesn't sit on skeletons until focus.
+    if (!windowActive && displayablePopoffsCount > 0) {
       setLoadingPopoffs(false);
       return () => {
         cancelled = true;

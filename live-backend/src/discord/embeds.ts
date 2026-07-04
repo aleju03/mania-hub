@@ -549,57 +549,59 @@ export function snipesListEmbed(events: SnipeEvent[], country: string | null, si
   };
 }
 
+// Per-keymode weighted pp for one side of a /vs, null when the player is not
+// in the farm-helper pool for that keymode.
+export interface CompareKeyPpSides {
+  a: number | null;
+  b: number | null;
+}
+
+// /vs is a side-by-side read, not a scoreboard: no per-row winner bolding and
+// no tally naming who "leads". pp (with global rank) is the headline, the best
+// single play shows the ceiling, and the 4K/7K weighted-pp split is the
+// mania-meaningful part - two players with the same profile pp can be playing
+// entirely different games. Values keep title order: left is player 1.
 export function compareEmbed(
-  a: { user: Record<string, unknown> },
-  b: { user: Record<string, unknown> },
+  a: { user: Record<string, unknown>; bestScores?: OscScore[] },
+  b: { user: Record<string, unknown>; bestScores?: OscScore[] },
   siteOrigin: string,
+  keyPp?: { four: CompareKeyPpSides; seven: CompareKeyPpSides },
 ): DiscordMessageBody {
   const ua = a.user as unknown as ProfileUser;
   const ub = b.user as unknown as ProfileUser;
-  const stat = (u: ProfileUser, pick: (s: ProfileUserStats) => number | null | undefined): number | null => {
-    const v = pick(u.statistics ?? {});
-    return v == null ? null : Number(v);
+  const sa = ua.statistics ?? {};
+  const sb = ub.statistics ?? {};
+  const num = (v: number | null | undefined): number | null => (v == null ? null : Number(v));
+  const totalPp = (n: number | null): string => (n == null ? "-" : `${formatInt(n)}pp`);
+  const headline = (s: ProfileUserStats): string => {
+    const rank = num(s.global_rank);
+    return rank == null ? totalPp(num(s.pp)) : `${totalPp(num(s.pp))} (#${formatInt(rank)})`;
   };
-  // One markdown line per stat, the leading value in bold: reads like a
-  // scoreboard instead of a code dump. A tally line calls the overall leader.
-  let aScore = 0;
-  let bScore = 0;
-  const row = (
-    label: string,
-    pick: (s: ProfileUserStats) => number | null | undefined,
-    fmt: (n: number | null) => string,
-    lowerWins = false,
-  ): string => {
-    const va = stat(ua, pick);
-    const vb = stat(ub, pick);
-    let aWins = false;
-    let bWins = false;
-    if (va != null && vb != null && va !== vb) {
-      aWins = lowerWins ? va < vb : va > vb;
-      bWins = !aWins;
-      if (aWins) aScore += 1;
-      else bScore += 1;
+  const bestPp = (scores?: OscScore[]): number | null => {
+    let best: number | null = null;
+    for (const score of scores ?? []) {
+      if (score.pp != null && (best == null || score.pp > best)) best = score.pp;
     }
-    const left = aWins ? `**${fmt(va)}**` : fmt(va);
-    const right = bWins ? `**${fmt(vb)}**` : fmt(vb);
-    return `${label}: ${left} vs ${right}`;
+    return best;
   };
-  const lines = [
-    row("pp", (s) => s.pp, (n) => (n == null ? "-" : `${formatInt(n)}pp`)),
-    row("Global rank", (s) => s.global_rank, formatRank, true),
-    row("Country rank", (s) => s.country_rank, formatRank, true),
-    row("Accuracy", (s) => s.hit_accuracy, (n) => (n == null ? "-" : formatAcc(n))),
-    row("Play count", (s) => s.play_count, formatInt),
-  ];
+  const lines = [`pp: ${headline(sa)} • ${headline(sb)}`];
+  const bestA = bestPp(a.bestScores);
+  const bestB = bestPp(b.bestScores);
+  if (bestA != null || bestB != null) lines.push(`Best play: ${formatPp(bestA)} • ${formatPp(bestB)}`);
+  if (keyPp) {
+    if (keyPp.four.a != null || keyPp.four.b != null) lines.push(`4K: ${totalPp(keyPp.four.a)} • ${totalPp(keyPp.four.b)}`);
+    if (keyPp.seven.a != null || keyPp.seven.b != null) lines.push(`7K: ${totalPp(keyPp.seven.a)} • ${totalPp(keyPp.seven.b)}`);
+  }
+  const ppA = num(sa.pp);
+  const ppB = num(sb.pp);
+  const gap = ppA != null && ppB != null ? Math.abs(ppA - ppB) : null;
+  const gapLine = gap == null ? null : Math.round(gap) === 0 ? "Dead even on pp." : `${formatInt(gap)}pp apart.`;
   const nameA = ua.username ?? "Player 1";
   const nameB = ub.username ?? "Player 2";
-  const verdict = aScore === bScore
-    ? "Dead even."
-    : `**${aScore > bScore ? nameA : nameB}** leads ${Math.max(aScore, bScore)}-${Math.min(aScore, bScore)}.`;
   const embed: DiscordEmbed = {
-    title: `${nameA} vs ${nameB}`,
+    title: `${nameA} • ${nameB}`,
     color: OSU_PINK,
-    description: [...lines, "", verdict].join("\n"),
+    description: (gapLine ? [...lines, "", gapLine] : lines).join("\n"),
     footer: { text: BOT_NAME },
   };
   return {
@@ -634,7 +636,7 @@ function helpCategoryBody(category: string): { title: string; lines: string[] } 
           "`/player [user]` profile card  •  `/maniacard [user]` skill card",
           "`/recent [user]` latest plays  •  `/activity [user]` playstyle  •  `/goals [user]`",
           "`/farm [user] [keys]` pp-gain picks",
-          "`/vs [player1] <player2>` two players head to head",
+          "`/vs [player1] <player2>` two players side by side",
           "`/pb [user]` your best score on the last map shown here (also `/c`, `/compare`)",
         ],
       };
