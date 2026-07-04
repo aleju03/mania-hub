@@ -93,6 +93,19 @@ const MODS = {
   "10k": { file: "mod-ten-keys", color: PURPLE },
 };
 
+// Judgement pills (emoji name `hit_<key>`): a rounded plate in the replay-HUD
+// judgement colour with the label in a darkened same-hue tone (the osu-web mod
+// badge treatment), used for the score hit breakdown. Colours mirror
+// JUDGMENT_COLORS in src/components/replay/ReplayCanvas.ts.
+const HITS = {
+  320: { color: "#b3f5ff", label: "320" },
+  300: { color: "#ffcc22", label: "300" },
+  200: { color: "#88da20", label: "200" },
+  100: { color: "#5a8fff", label: "100" },
+  50: { color: "#cc8800", label: "50" },
+  miss: { color: "#ff4444", label: "miss" },
+};
+
 // Square emoji canvas. Discord scales emoji down to ~24-48px, so 128 keeps them
 // crisp while the PNGs stay tiny (well under the 256KB cap).
 const SIZE = 128;
@@ -157,6 +170,30 @@ async function buildMod(name, def) {
   return sharp(plate).composite([{ input: glyph, gravity: "centre" }]).png().toBuffer();
 }
 
+// Darkens a #rrggbb colour toward black, for the label on a coloured plate
+// (readable on light plates like the 320 cyan, where white text washes out).
+function darken(hex, factor = 0.32) {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = (shift) => Math.round(((n >> shift) & 0xff) * factor);
+  return `#${[16, 8, 0].map((shift) => ch(shift).toString(16).padStart(2, "0")).join("")}`;
+}
+
+// A judgement pill at the grade pill's 2:1 aspect so it matches line height:
+// coloured plate, bold darkened-same-hue label.
+async function buildHit(def) {
+  const w = SIZE;
+  const h = SIZE / 2;
+  const fontSize = def.label.length > 3 ? 34 : 42;
+  const svg = Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">` +
+      `<rect x="3" y="3" width="${w - 6}" height="${h - 6}" rx="${h / 2 - 3}" fill="${def.color}"/>` +
+      `<text x="50%" y="50%" dy="0.36em" text-anchor="middle" font-family="Exo, 'Exo 2', sans-serif" ` +
+      `font-size="${fontSize}" font-weight="800" fill="${darken(def.color)}">${def.label}</text>` +
+      `</svg>`,
+  );
+  return sharp(svg, { density: 300 }).resize(w, h).png().toBuffer();
+}
+
 async function main() {
   await mkdir(OUT_DIR, { recursive: true });
   let count = 0;
@@ -169,6 +206,11 @@ async function main() {
     const png = await buildMod(name, def);
     if (!png) continue;
     await writeFile(join(OUT_DIR, `mod_${name}.png`), png);
+    count += 1;
+  }
+  for (const [name, def] of Object.entries(HITS)) {
+    const png = await buildHit(def);
+    await writeFile(join(OUT_DIR, `hit_${name}.png`), png);
     count += 1;
   }
   console.log(`Wrote ${count} emoji PNGs to ${OUT_DIR}`);

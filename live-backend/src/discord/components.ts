@@ -275,25 +275,26 @@ function formatTimestamp(value: string | undefined): string | null {
   return `<t:${Math.floor(time / 1000)}:R>`;
 }
 
-// Collapses a field cell to a single code-block-safe line: no newlines (which
-// would break alignment) and no backticks (which would terminate the fence).
+// Collapses a field cell to one clean line: no newlines (which would break the
+// paired layout) and no backticks (they'd start a code span mid-line).
 function cellText(value: string): string {
   return value.replace(/[\r\n]+/g, " ").replaceAll("`", "'").trim();
 }
 
 // Renders embed fields for V2. Components V2 has no inline-field column grid, so
-// a run of consecutive inline fields becomes one fenced monospace block with each
-// label padded to a shared width, which keeps the stat grid lined up. A non-inline
-// field flushes the run and renders as its own labelled markdown block so longer
-// prose values keep their formatting.
+// a run of consecutive inline fields becomes owo-style markdown stat lines, two
+// `**Label:** value` pairs per line. A non-inline field flushes the run and
+// renders as its own labelled markdown block so longer prose values keep their
+// formatting.
 function renderFields(fields: DiscordEmbedField[]): string {
   const blocks: string[] = [];
   let run: DiscordEmbedField[] = [];
   const flush = (): void => {
     if (!run.length) return;
-    const width = Math.max(...run.map((field) => cellText(field.name).length));
-    const lines = run.map((field) => `${cellText(field.name).padEnd(width)}  ${cellText(field.value)}`);
-    blocks.push("```\n" + lines.join("\n") + "\n```");
+    const pairs = run.map((field) => `**${cellText(field.name)}:** ${cellText(field.value)}`);
+    const lines: string[] = [];
+    for (let i = 0; i < pairs.length; i += 2) lines.push(pairs.slice(i, i + 2).join(" • "));
+    blocks.push(lines.join("\n"));
     run = [];
   };
   for (const field of fields) {

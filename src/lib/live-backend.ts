@@ -1568,6 +1568,7 @@ export interface DiscordShowcaseTopRow {
 export interface DiscordShowcaseTrackerRow {
   grade: string;
   username: string;
+  userId: number;
   title: string;
   mods: string[];
   acc: string;

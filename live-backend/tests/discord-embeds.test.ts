@@ -30,6 +30,7 @@ import {
 } from "../src/discord/embeds.js";
 import type { LeanTrackerScore } from "../src/shared/types.js";
 import { FLAG_IS_COMPONENTS_V2, toComponentsV2Body } from "../src/discord/components.js";
+import { setEmojiRegistry } from "../src/discord/emojis.js";
 import type { DiscordComponent, DiscordMessageBody } from "../src/discord/rest.js";
 
 const SITE = "https://mania-tracker.com";
@@ -146,6 +147,9 @@ describe("discord embeds", () => {
     expect(embed?.description).toContain("+35pp");
     expect(embed?.description).toContain("+DTHD");
     expect(embed?.description).toContain("97.65%");
+    // Cover art rides top-right as the thumbnail, never as a bottom banner.
+    expect(embed?.thumbnail?.url).toBe("https://img/list.jpg");
+    expect(embed?.image).toBeUndefined();
     // Has a beatmap link button.
     expect(JSON.stringify(body.components)).toContain("https://osu.ppy.sh/b/99");
   });
@@ -156,6 +160,9 @@ describe("discord embeds", () => {
     expect(embed?.author?.name).toContain("from #1");
     expect(embed?.description).toContain("99.12%");
     expect(embed?.description).toContain("+DT");
+    // Square list cover reconstructed from the beatmapset id, as the thumbnail.
+    expect(embed?.thumbnail?.url).toBe("https://assets.ppy.sh/beatmaps/7/covers/list@2x.jpg");
+    expect(embed?.image).toBeUndefined();
   });
 
   it("renders a profile card with ranks and pp", () => {
@@ -193,8 +200,33 @@ describe("discord embeds", () => {
   it("renders recent scores list and an empty fallback", () => {
     const withScores = recentScoresEmbed("Tester", 42, [makeScore()], SITE).embeds?.[0];
     expect(withScores?.description).toContain("Test Song");
+    expect(withScores?.thumbnail?.url).toBe("https://img/list.jpg");
+    expect(withScores?.image).toBeUndefined();
     const empty = recentScoresEmbed("Tester", 42, [], SITE).embeds?.[0];
     expect(empty?.description).toContain("No recent");
+  });
+
+  it("omits the pp line entirely for a play without pp", () => {
+    const noPp = recentScoresEmbed("Tester", 42, [makeScore({ pp: null })], SITE).embeds?.[0];
+    expect(noPp?.description).not.toContain("**-**");
+  });
+
+  it("renders the hit breakdown as judgement pills when registered, mono chip otherwise", () => {
+    const fallback = recentScoresEmbed("Tester", 42, [makeScore()], SITE).embeds?.[0];
+    expect(fallback?.description).toContain("`320 ");
+    setEmojiRegistry(["320", "300", "200", "100", "50", "miss"].map((key, index) => ({
+      name: `hit_${key}`,
+      emojiId: String(9000 + index),
+      animated: false,
+    })));
+    try {
+      const withPills = recentScoresEmbed("Tester", 42, [makeScore()], SITE).embeds?.[0];
+      expect(withPills?.description).toContain("<:hit_320:9000>");
+      expect(withPills?.description).toContain("<:hit_miss:9005>");
+      expect(withPills?.description).not.toContain("`320 ");
+    } finally {
+      setEmojiRegistry([]);
+    }
   });
 
   it("renders list embeds for /top and /snipes", () => {
@@ -202,10 +234,19 @@ describe("discord embeds", () => {
     expect(snipesListEmbed([snipe()], "CR", SITE).embeds?.[0]?.description).toContain("Sniper");
   });
 
-  it("renders a head-to-head compare", () => {
+  it("renders a head-to-head compare with a verdict line", () => {
     const embed = compareEmbed(profile("A"), profile("B"), SITE).embeds?.[0];
     expect(embed?.title).toBe("A vs B");
     expect(embed?.description).toContain("pp");
+    // Identical stats -> every row ties.
+    expect(embed?.description).toContain("Dead even.");
+    // A clear winner gets bolded values and the tally line.
+    const strong = profile("A");
+    (strong.user.statistics as Record<string, unknown>).pp = 20000;
+    (strong.user.statistics as Record<string, unknown>).global_rank = 10;
+    const decided = compareEmbed(strong, profile("B"), SITE).embeds?.[0];
+    expect(decided?.description).toContain("**20,000pp**");
+    expect(decided?.description).toContain("**A** leads 2-0.");
   });
 
   it("renders dan estimate states and attaches an emblem", () => {
@@ -368,6 +409,14 @@ describe("newer surface embeds", () => {
     for (const body of bodies) {
       expect(Array.isArray(body.embeds)).toBe(true);
       expect((body.embeds ?? []).length).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  // The maniacard is the one embed whose image IS the content; every other card
+  // keeps its art in the thumbnail slot so replies stay compact.
+  it("never attaches a bottom banner image", () => {
+    for (const body of bodies) {
+      expect(body.embeds?.[0]?.image).toBeUndefined();
     }
   });
 

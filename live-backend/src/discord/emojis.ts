@@ -32,9 +32,17 @@ const MOD_KEYS = [
   "1k", "2k", "3k", "4k", "5k", "6k", "7k", "8k", "9k", "10k",
 ];
 
-/** Every emoji name the bot wants registered, grades first then mods. */
+// Judgement pill names (emoji name = `hit_<key>`), for the score hit breakdown.
+// Mirrors the HITS map in scripts/build-discord-emojis.mjs.
+const HIT_KEYS = ["320", "300", "200", "100", "50", "miss"];
+
+/** Every emoji name the bot wants registered: grades, mods, then hit pills. */
 export function emojiCatalog(): string[] {
-  return [...GRADE_KEYS.map((g) => `grade_${g}`), ...MOD_KEYS.map((m) => `mod_${m}`)];
+  return [
+    ...GRADE_KEYS.map((g) => `grade_${g}`),
+    ...MOD_KEYS.map((m) => `mod_${m}`),
+    ...HIT_KEYS.map((h) => `hit_${h}`),
+  ];
 }
 
 // In-memory name -> "<:name:id>" reference. Empty until loadEmojiRegistry / a
@@ -90,6 +98,16 @@ export function modsEmoji(acronyms: string[]): string {
   const refs = acronyms.map((acr) => emojiRef(`mod_${acr.toLowerCase()}`));
   if (refs.every((ref): ref is string => Boolean(ref))) return refs.join("");
   return modsLabel(acronyms);
+}
+
+/** Judgement pill for a hit key ("320".."50", "miss"), or null when unregistered. */
+export function hitEmoji(key: string): string | null {
+  return emojiRef(`hit_${key.toLowerCase()}`);
+}
+
+/** True when the full judgement pill set is registered (all-or-nothing render). */
+export function hasHitEmojis(): boolean {
+  return HIT_KEYS.every((key) => registry.has(`hit_${key}`));
 }
 
 // ---------------------------------------------------------------------------

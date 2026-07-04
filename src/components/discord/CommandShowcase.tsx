@@ -1,7 +1,6 @@
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { GradeImg } from "../ui/GradeImg";
 import { ModBadge } from "../ui/ModBadge";
-import { Avatar } from "../ui/Avatar";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../../lib/cache";
 import { GLOBAL_SCOPE_CODE, getCountryName, isGlobalScope } from "../../lib/country";
 import { useAuth } from "../../lib/auth-context";
@@ -22,6 +21,7 @@ import {
   writeDiscordShowcaseCache,
 } from "../../lib/discord-showcase-cache";
 import { getRankings } from "../../lib/osu";
+import { useCountryWarming } from "../../lib/use-country-warming";
 import type { LeanRankingEntry, RankingsResponse } from "../../lib/types";
 import { useAppStore, useSelectedCountry } from "../../store";
 
@@ -41,10 +41,6 @@ const PINK = "#ff66ab";
 const GOLD = "#ffcc33";
 const GREEN = "#3ba55d";
 const SNIPE = "#ff4d6d";
-// Positive pp gains read green (osu! convention), distinct from the gold accents.
-const GAIN = "#5ee08a";
-// osu!mania judgement colours, mirroring JUDGMENT_COLORS in ReplayCanvas.
-const JUDGEMENT = { max: "#b3f5ff", n300: "#ffcc22", n200: "#88da20", n100: "#5a8fff", n50: "#cc8800", miss: "#ff4444" };
 
 // Local header art stands in for beatmap cover banners.
 const COVER_A = "/images/headers/generic.jpg";
@@ -318,38 +314,62 @@ function FauxMessage({ invocation, children }: { invocation: string; children: R
   );
 }
 
-function Embed({ accent, children }: { accent: string; children: ReactNode }) {
+// A Components V2 container: accent bar, and an optional thumbnail accessory
+// that sits top-right beside the content (Discord has no top-left slot). The
+// accessory narrows the whole column slightly, close enough to the real layout.
+function Embed({ accent, thumb, children }: { accent: string; thumb?: ReactNode; children: ReactNode }) {
   return (
     <div className="max-w-[460px] overflow-hidden rounded" style={{ backgroundColor: D.embed, borderLeft: `4px solid ${accent}` }}>
-      <div className="space-y-2 p-3">{children}</div>
+      <div className="flex items-start gap-3 p-3">
+        <div className="min-w-0 flex-1 space-y-2">{children}</div>
+        {thumb ? <div className="shrink-0 pt-0.5">{thumb}</div> : null}
+      </div>
     </div>
   );
 }
 
-function EmbedAuthor({ name, userId }: { name: string; userId?: number }) {
-  return (
-    <div className="flex items-center gap-2">
-      {userId ? <Avatar userId={userId} size={24} /> : null}
-      <span className="text-[13px] font-semibold" style={{ color: D.white }}>{name}</span>
-    </div>
-  );
+// The V2 thumbnail accessory: a small rounded square, cover art or avatar.
+function Thumb({ src }: { src: string }) {
+  return <img src={src} alt="" className="h-16 w-16 rounded-lg object-cover" loading="lazy" />;
 }
 
-function EmbedTitle({ children, accent }: { children: ReactNode; accent?: string }) {
-  return <div className="text-[14px] font-bold" style={{ color: accent ?? D.white }}>{children}</div>;
+function AvatarThumb({ userId }: { userId?: number }) {
+  if (!userId) return <div className="h-16 w-16 rounded-lg bg-osu-b6" />;
+  return <img src={`/api/avatar?u=${userId}`} alt="" className="h-16 w-16 rounded-lg object-cover" loading="lazy" />;
+}
+
+// The author line converts to a "### [name](url)" heading in V2, so it renders
+// as bold link-coloured text, no inline avatar (the avatar moves to the
+// thumbnail slot when the card has no cover art).
+function EmbedAuthor({ name }: { name: string }) {
+  return <div className="text-[14px] font-bold" style={{ color: D.link }}>{name}</div>;
+}
+
+// Titles render white unless the embed carries a URL, in which case the whole
+// heading is a masked link and Discord paints it link-blue.
+function EmbedTitle({ children, linked }: { children: ReactNode; linked?: boolean }) {
+  return <div className="text-[14px] font-bold" style={{ color: linked ? D.link : D.white }}>{children}</div>;
 }
 
 function Lead({ children }: { children: ReactNode }) {
   return <div className="pt-0.5 text-[12px] font-semibold" style={{ color: D.white }}>{children}</div>;
 }
 
-function Fields({ items }: { items: Array<{ name: string; value: ReactNode }> }) {
+// Inline fields render as owo-style markdown stat lines in V2: two
+// `**Label:** value` pairs per line. Bold labels, plain values, no colours.
+function Fields({ items }: { items: Array<{ name: string; value: string }> }) {
+  const lines: Array<Array<{ name: string; value: string }>> = [];
+  for (let i = 0; i < items.length; i += 2) lines.push(items.slice(i, i + 2));
   return (
-    <div className="grid grid-cols-3 gap-y-2 gap-x-3">
-      {items.map((f) => (
-        <div key={f.name}>
-          <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: D.muted }}>{f.name}</div>
-          <div className="text-[12px]" style={{ color: D.text }}>{f.value}</div>
+    <div className="space-y-0.5 text-[12px]" style={{ color: D.text }}>
+      {lines.map((pair, i) => (
+        <div key={i}>
+          {pair.map((f, j) => (
+            <Fragment key={f.name}>
+              {j > 0 ? <span> • </span> : null}
+              <b style={{ color: D.white }}>{f.name}:</b> {f.value}
+            </Fragment>
+          ))}
         </div>
       ))}
     </div>
@@ -358,10 +378,6 @@ function Fields({ items }: { items: Array<{ name: string; value: ReactNode }> })
 
 function Footer({ text }: { text: string }) {
   return <div className="pt-1 text-[10px]" style={{ color: D.muted }}>{text}</div>;
-}
-
-function Cover({ src }: { src: string }) {
-  return <img src={src} alt="" className="mt-1 h-28 w-full rounded object-cover" loading="lazy" />;
 }
 
 function Buttons({ items }: { items: string[] }) {
@@ -416,21 +432,15 @@ function Dot() {
   return <span style={{ color: D.muted }}>•</span>;
 }
 
-function Winner({ active, children }: { active: boolean; children: ReactNode }) {
-  return active ? <b style={{ color: D.white }}>{children}</b> : <>{children}</>;
+// Confirmations and errors are plain text messages, not embeds: no container,
+// no accent bar, exactly as Components V2 renders a bare content reply.
+function TextReply({ children }: { children: ReactNode }) {
+  return <div className="max-w-[460px] text-[13px]" style={{ color: D.text }}>{children}</div>;
 }
 
-function TextReply({ accent, children }: { accent: string; children: ReactNode }) {
-  return (
-    <div className="rounded px-3 py-2 text-[13px]" style={{ backgroundColor: D.embed, borderLeft: `3px solid ${accent}`, color: D.text }}>
-      {children}
-    </div>
-  );
-}
-
-// Discord's "ephemeral" footer, for replies only the invoker can see.
-// One play, rendered with the real osu grade icon + mod badges.
-function ScoreLine({ grade, title, version, mods, acc, pp, keys, gain }: {
+// One play, rendered with the real osu grade + mod emojis the bot registers.
+// Everything else is markdown Discord can do: link-blue title, bold pp.
+function ScoreLine({ grade, title, version, mods, acc, pp, gain }: {
   grade: string; title: string; version: string; mods: string[]; acc: string; pp: string; keys?: string; gain?: string;
 }) {
   return (
@@ -440,7 +450,6 @@ function ScoreLine({ grade, title, version, mods, acc, pp, keys, gain }: {
         <div className="flex items-center gap-1.5">
           <span className="truncate text-[12px] font-medium" style={{ color: D.link }}>{title}</span>
           <span className="shrink-0 text-[10px]" style={{ color: D.muted }}>[{version}]</span>
-          {keys ? <span className="shrink-0 rounded px-1 text-[8px] font-bold" style={{ backgroundColor: D.field, color: GOLD }}>{keys}</span> : null}
         </div>
         <div className="mt-0.5 flex items-center gap-1">
           {mods.length ? mods.map((m) => <ModBadge key={m} mod={m} size={0.5} />) : <span className="text-[9px]" style={{ color: D.muted }}>nomod</span>}
@@ -449,30 +458,26 @@ function ScoreLine({ grade, title, version, mods, acc, pp, keys, gain }: {
       <div className="shrink-0 text-right text-[12px] tabular-nums">
         <span style={{ color: D.muted }}>{acc}</span>{" "}
         <span className="font-bold" style={{ color: D.white }}>{pp}</span>
-        {gain ? <span style={{ color: GAIN }}> {gain}</span> : null}
+        {gain ? <span style={{ color: D.text }}> ({gain})</span> : null}
       </div>
     </div>
   );
 }
 
-// The judgement breakdown row (320/300/200/100/50/miss) the bot prints as an
-// inline code chip on detailed scores.
+// The judgement breakdown, rendered with the bot's registered judgement pill
+// emojis (coloured 320/300/... plates) followed by plain counts.
 function HitBreakdown({ hits }: { hits: DiscordShowcaseScoreHits }) {
-  const cells: Array<{ label: string; value: number; color: string }> = [
-    { label: "320", value: hits.max, color: JUDGEMENT.max },
-    { label: "300", value: hits.n300, color: JUDGEMENT.n300 },
-    { label: "200", value: hits.n200, color: JUDGEMENT.n200 },
-    { label: "100", value: hits.n100, color: JUDGEMENT.n100 },
-    { label: "50", value: hits.n50, color: JUDGEMENT.n50 },
-    { label: "miss", value: hits.miss, color: JUDGEMENT.miss },
+  const cells: Array<[string, number]> = [
+    ["320", hits.max], ["300", hits.n300], ["200", hits.n200],
+    ["100", hits.n100], ["50", hits.n50], ["miss", hits.miss],
   ];
   return (
-    <div className="grid grid-cols-6 gap-x-2 rounded px-2.5 py-2 text-center" style={{ backgroundColor: D.field }}>
-      {cells.map((cell) => (
-        <div key={cell.label} className="flex flex-col items-center leading-tight">
-          <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: cell.color }}>{cell.label}</span>
-          <span className="text-[13px] font-bold tabular-nums" style={{ color: D.white }}>{formatNumber(cell.value)}</span>
-        </div>
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]" style={{ color: D.text }}>
+      {cells.map(([key, value]) => (
+        <span key={key} className="flex items-center gap-1">
+          <img src={`/images/discord/emojis/hit_${key}.png`} alt={key} className="h-[13px] w-auto" loading="lazy" />
+          <span className="tabular-nums">{formatNumber(value)}</span>
+        </span>
       ))}
     </div>
   );
@@ -488,8 +493,8 @@ function DetailedScore({ grade, mods, stars, keys, acc, combo, score, hits, pp, 
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <GradeImg grade={grade} size={22} />
         {mods.length ? mods.map((m) => <ModBadge key={m} mod={m} size={0.5} />) : <span className="text-[9px]" style={{ color: D.muted }}>nomod</span>}
-        {stars ? <span className="text-[12px] font-semibold" style={{ color: GOLD }}>{stars}★</span> : null}
-        {keys ? <span className="rounded px-1 text-[8px] font-bold" style={{ backgroundColor: D.field, color: GOLD }}>{keys}</span> : null}
+        {stars ? <span className="text-[12px]" style={{ color: D.text }}>{stars}★</span> : null}
+        {keys ? <span className="text-[12px]" style={{ color: D.muted }}>• {keys}</span> : null}
       </div>
       <div className="flex flex-wrap items-baseline gap-x-2.5 text-[12px]">
         <span className="text-[15px] font-bold tabular-nums" style={{ color: D.white }}>{acc}</span>
@@ -497,30 +502,26 @@ function DetailedScore({ grade, mods, stars, keys, acc, combo, score, hits, pp, 
         {score ? <span className="tabular-nums" style={{ color: D.muted }}>{score}</span> : null}
       </div>
       {hits ? <HitBreakdown hits={hits} /> : null}
-      <div className="text-[13px]">
-        <span className="font-bold" style={{ color: D.white }}>{pp}</span>
-        {gain ? <span style={{ color: GAIN }}> {gain}</span> : null}
-      </div>
+      {pp !== "-" || gain ? (
+        <div className="text-[13px]">
+          <span className="font-bold" style={{ color: D.white }}>{pp}</span>
+          {gain ? <span style={{ color: D.text }}> ({gain})</span> : null}
+        </div>
+      ) : null}
     </div>
   );
 }
 
-// Gold / silver / bronze for the podium; everyone else gets the neutral chip.
-const MEDAL_COLORS = ["#ffcc33", "#c7ccd6", "#cd7f32"];
-
-function RankRow({ rank, name, userId, pp }: { rank: number; name: string; userId?: number; pp: string }) {
-  const medal = rank >= 1 && rank <= 3 ? MEDAL_COLORS[rank - 1] : null;
+// One leaderboard line, exactly as the bot writes it: a `#N` code chip, bold
+// name, bold pp. No avatars or medal colours; Discord text can't do either.
+function RankRow({ rank, name, pp }: { rank: number; name: string; pp: string }) {
   return (
     <div className="flex items-center gap-2 py-0.5 text-[12px]">
-      <span
-        className="w-7 shrink-0 rounded text-center text-[11px] font-bold tabular-nums"
-        style={medal ? { backgroundColor: `${medal}26`, color: medal } : { backgroundColor: D.field, color: D.muted }}
-      >
+      <span className="w-8 shrink-0 rounded text-center font-mono text-[11px] tabular-nums" style={{ backgroundColor: D.field, color: D.text }}>
         #{rank}
       </span>
-      <Avatar userId={userId} size={20} />
-      <span className="font-semibold" style={{ color: D.white }}>{name}</span>
-      <span className="ml-auto font-bold tabular-nums" style={{ color: D.text }}>{pp}</span>
+      <span className="font-bold" style={{ color: D.white }}>{name}</span>
+      <span className="ml-auto font-bold tabular-nums" style={{ color: D.white }}>{pp}</span>
     </div>
   );
 }
@@ -547,9 +548,9 @@ function MapRow({ rank, title, stars, avg, players }: {
 }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5 py-0.5 text-[12px]" style={{ color: D.text }}>
-      <span className="w-6 shrink-0 rounded text-center text-[11px] font-bold tabular-nums" style={{ backgroundColor: D.field, color: D.muted }}>#{rank}</span>
+      <span className="w-6 shrink-0 rounded text-center font-mono text-[11px] tabular-nums" style={{ backgroundColor: D.field, color: D.text }}>#{rank}</span>
       <span className="truncate" style={{ color: D.link }}>{title}</span>
-      <span style={{ color: GOLD }}>{stars}★</span>
+      <span>{stars}★</span>
       <Dot />
       <span style={{ color: D.muted }}>avg <b style={{ color: D.white }}>{avg}</b></span>
       <Dot />
@@ -686,7 +687,6 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
   const goals = pick(4);
   const pb = pick(5);
   const farm = pick(6);
-  const replay = pick(7);
   const rival = sample.viewer ? pick(0) : pick(1);
   const feed = pick(2);
   const third = pick(2);
@@ -813,18 +813,18 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
   const topRows = fx?.topList?.length
     ? fx.topList.slice(0, 3)
     : [
-      { username: third.username, userId: 0, title: "Blue Zenith", mods: ["DT"], pp: playPp(third, 12000), gain: "+35" as string | undefined },
-      { username: fourth.username, userId: 0, title: "Aleph-0", mods: ["HD"], pp: playPp(fourth, 10500), gain: undefined as string | undefined },
-      { username: fifth.username, userId: 0, title: "Cytus II", mods: [], pp: playPp(fifth, 9800), gain: undefined as string | undefined },
+      { username: third.username, userId: third.id, grade: "X", title: "Blue Zenith", mods: ["DT"], pp: playPp(third, 12000), gain: "+35" as string | undefined },
+      { username: fourth.username, userId: fourth.id, grade: "S", title: "Aleph-0", mods: ["HD"], pp: playPp(fourth, 10500), gain: undefined as string | undefined },
+      { username: fifth.username, userId: fifth.id, grade: "S", title: "Cytus II", mods: [], pp: playPp(fifth, 9800), gain: undefined as string | undefined },
     ];
 
   const trackerRows = fx?.tracker?.length
-    ? fx.tracker.slice(0, 4).map((t) => ({ grade: t.grade, player: t.username, title: t.title, mods: t.mods, acc: t.acc, pp: t.pp }))
+    ? fx.tracker.slice(0, 4).map((t) => ({ grade: t.grade, player: t.username, userId: t.userId, title: t.title, mods: t.mods, acc: t.acc, pp: t.pp }))
     : [
-      { grade: "X", player: profile.username, title: "Blue Zenith", mods: ["DT"], acc: "99.4%", pp: playPp(profile, 13000) },
-      { grade: "S", player: rival.username, title: "FREEDOM DiVE", mods: ["HD"], acc: "98.9%", pp: playPp(rival, 10800) },
-      { grade: "A", player: third.username, title: "Cyber Induction", mods: [], acc: "96.2%", pp: playPp(third, 9000) },
-      { grade: "S", player: fourth.username, title: "Aleph-0", mods: ["DT"], acc: "98.1%", pp: playPp(fourth, 8300) },
+      { grade: "X", player: profile.username, userId: profile.id, title: "Blue Zenith", mods: ["DT"], acc: "99.4%", pp: playPp(profile, 13000) },
+      { grade: "S", player: rival.username, userId: rival.id, title: "FREEDOM DiVE", mods: ["HD"], acc: "98.9%", pp: playPp(rival, 10800) },
+      { grade: "A", player: third.username, userId: third.id, title: "Cyber Induction", mods: [], acc: "96.2%", pp: playPp(third, 9000) },
+      { grade: "S", player: fourth.username, userId: fourth.id, title: "Aleph-0", mods: ["DT"], acc: "98.1%", pp: playPp(fourth, 8300) },
     ];
 
   const mapRows = fx?.mapsFarmed?.length
@@ -854,7 +854,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
       id: "link", label: "/link", invocation: linkUsername ? `/link ${linkUsername}` : "/link", group: "You", accent: PINK,
       blurb: "Save your osu! account so every other command knows who you are.",
       render: () => (
-        <TextReply accent={PINK}>
+        <TextReply>
           {linkUsername ? <>Linked to <b style={{ color: D.white }}>{linkUsername}</b>.</> : "Linked."} Commands now default to this account.
         </TextReply>
       ),
@@ -863,12 +863,12 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
       id: "me", label: "/me", invocation: "/me", group: "You", accent: PINK,
       blurb: "Your personal dashboard: ranks, pp, activity totals and goal progress.",
       render: () => (
-        <Embed accent={PINK}>
-          <EmbedAuthor name={authorName(pLink, self)} userId={authorAvatar(pLink, self)} />
+        <Embed accent={PINK} thumb={<AvatarThumb userId={authorAvatar(pLink, self)} />}>
+          <EmbedAuthor name={authorName(pLink, self)} />
           <Fields items={[
             { name: "Global", value: formatRank(me?.globalRank ?? self.globalRank) },
             { name: countryField((me?.countryCode ?? pLink?.countryCode ?? self.countryCode) || ""), value: formatRank(me?.countryRank ?? self.countryRank) },
-            { name: "pp", value: <b style={{ color: D.white }}>{formatPp(me?.pp ?? self.pp)}</b> },
+            { name: "pp", value: formatPp(me?.pp ?? self.pp) },
             { name: "Active days", value: me ? formatNumber(me.activeDays) : "128" },
             { name: "Sessions", value: meSessions },
             { name: "Top plays", value: me ? formatNumber(me.topPlayCount) : "100" },
@@ -877,7 +877,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
           <div className="space-y-0.5 text-[12px]" style={{ color: D.text }}>
             <div><span style={{ color: D.muted }}>Biggest day</span> <b style={{ color: D.white }}>{me?.biggestDay ?? "210 plays"}</b></div>
             <div><span style={{ color: D.muted }}>Longest streak</span> <b style={{ color: D.white }}>{me?.longestStreak ?? "14 days"}</b></div>
-            <div><span style={{ color: D.muted }}>pp gained while tracked</span> <b style={{ color: GAIN }}>{me?.ppGained ?? "+540"}</b></div>
+            <div><span style={{ color: D.muted }}>pp gained while tracked</span> <b style={{ color: D.white }}>{me?.ppGained ?? "+540"}</b></div>
             <div><span style={{ color: D.muted }}>Goals</span> <b style={{ color: D.white }}>{me?.goalsLine ?? "2 open, 5 done"}</b></div>
           </div>
           <Footer text="maniabot" />
@@ -889,12 +889,12 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
       id: "player", label: "/player", invocation: `/player ${playerName}`, group: "Players", accent: PINK,
       blurb: "Full profile card with ranks, pp and top plays. The username is optional once you link.",
       render: () => (
-        <Embed accent={PINK}>
-          <EmbedAuthor name={authorName(pProfile, profile)} userId={authorAvatar(pProfile, profile)} />
+        <Embed accent={PINK} thumb={<AvatarThumb userId={authorAvatar(pProfile, profile)} />}>
+          <EmbedAuthor name={authorName(pProfile, profile)} />
           <Fields items={[
             { name: "Global", value: formatRank(pProfile?.globalRank ?? profile.globalRank) },
             { name: countryField((pProfile?.countryCode ?? profile.countryCode) || ""), value: formatRank(pProfile?.countryRank ?? profile.countryRank) },
-            { name: "pp", value: <b style={{ color: D.white }}>{formatPp(pProfile?.pp ?? profile.pp)}</b> },
+            { name: "pp", value: formatPp(pProfile?.pp ?? profile.pp) },
             { name: "Accuracy", value: formatAccuracy(pProfile?.accuracy ?? profile.accuracy) },
             { name: "Play count", value: formatNumber(pProfile?.playCount ?? profile.playCount) },
             { name: "Level", value: pProfile?.level != null ? String(pProfile.level) : "103" },
@@ -920,8 +920,8 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
       render: () => {
         const [latest, ...earlier] = recentRows;
         return (
-          <Embed accent={PINK}>
-            <EmbedAuthor name={authorName(pRecent, recent)} userId={authorAvatar(pRecent, recent)} />
+          <Embed accent={PINK} thumb={latest ? <Thumb src={coverOf(latest.cover)} /> : undefined}>
+            <EmbedAuthor name={authorName(pRecent, recent)} />
             {latest ? (
               <>
                 <div className="text-[12px] font-semibold">
@@ -935,7 +935,6 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
                     {earlier.map((s, i) => <ScoreLine key={i} {...s} />)}
                   </>
                 ) : null}
-                <Cover src={coverOf(latest.cover)} />
               </>
             ) : (
               <div className="text-[12px]" style={{ color: D.muted }}>No recent mania plays found.</div>
@@ -947,11 +946,11 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
       },
     },
     {
-      id: "maniacard", label: "/maniacard", invocation: `/maniacard ${pCard?.username ?? commandName(card)}`, group: "Players", accent: GOLD,
+      id: "maniacard", label: "/maniacard", invocation: `/maniacard ${pCard?.username ?? commandName(card)}`, group: "Players", accent: PINK,
       blurb: "A shareable skill-tier card: control, speed and precision under a tier badge, with star rating.",
       render: () => (
-        <Embed accent={GOLD}>
-          <EmbedAuthor name={authorName(pCard, card)} userId={authorAvatar(pCard, card)} />
+        <Embed accent={PINK}>
+          <EmbedAuthor name={authorName(pCard, card)} />
           <ManiacardArt player={cardArtPlayer} />
           <Footer text="maniabot" />
           <Buttons items={["View card", "osu! profile"]} />
@@ -962,8 +961,8 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
       id: "activity", label: "/activity", invocation: "/activity", group: "Players", accent: PINK,
       blurb: "Play habits and a playstyle breakdown: active days, sessions and skill mix.",
       render: () => (
-        <Embed accent={PINK}>
-          <EmbedAuthor name={authorName(pActivity, activity)} userId={authorAvatar(pActivity, activity)} />
+        <Embed accent={PINK} thumb={<AvatarThumb userId={authorAvatar(pActivity, activity)} />}>
+          <EmbedAuthor name={authorName(pActivity, activity)} />
           <Fields items={[
             { name: "Active days", value: act ? formatNumber(act.activeDays) : "128" },
             { name: "Total plays", value: act ? formatNumber(act.totalPlays) : formatNumber(activity.playCount) },
@@ -988,8 +987,8 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
       id: "goals", label: "/goals", invocation: "/goals", group: "Players", accent: PINK,
       blurb: "Track pp and accuracy goals and how close each one is.",
       render: () => (
-        <Embed accent={PINK}>
-          <EmbedAuthor name={authorName(pGoals, goals)} userId={authorAvatar(pGoals, goals)} />
+        <Embed accent={PINK} thumb={<AvatarThumb userId={authorAvatar(pGoals, goals)} />}>
+          <EmbedAuthor name={authorName(pGoals, goals)} />
           <Lead>Open goals</Lead>
           <div className="space-y-1 text-[12px]" style={{ color: D.text }}>
             {goalsOpen.map((g, i) => (
@@ -1006,34 +1005,41 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
     },
     {
       id: "vs", label: "/vs", invocation: `/vs ${vsRightName}`, group: "Players", accent: PINK,
-      blurb: "Two players side by side as an aligned table, the leader bolded per stat. Leave the first name out to compare against yourself.",
-      render: () => (
-        <Embed accent={PINK}>
-          <EmbedTitle>{vsTitle}</EmbedTitle>
-          <div className="grid items-baseline gap-x-3 gap-y-1 text-[12px]" style={{ gridTemplateColumns: "auto 1fr 1fr", color: D.text }}>
-            <span />
-            <span className="truncate text-right font-semibold" style={{ color: D.white }}>{vsLeftName}</span>
-            <span className="truncate text-right font-semibold" style={{ color: D.white }}>{vsRightName}</span>
-            {vsRows.map((r) => (
-              <Fragment key={r.label}>
-                <span style={{ color: D.muted }}>{r.label}</span>
-                <span className="text-right tabular-nums"><Winner active={r.aWins}>{r.a}</Winner></span>
-                <span className="text-right tabular-nums"><Winner active={r.bWins}>{r.b}</Winner></span>
-              </Fragment>
-            ))}
-          </div>
-          <Footer text="maniabot" />
-          <Buttons items={[vsLeftName, vsRightName]} />
-        </Embed>
-      ),
+      blurb: "Two players stat by stat, the leader in bold with a final tally. Leave the first name out to compare against yourself.",
+      render: () => {
+        // One markdown line per stat, the leading value bold, then a tally line
+        // naming the overall leader - exactly the bot's compare layout.
+        const aScore = vsRows.filter((r) => r.aWins).length;
+        const bScore = vsRows.filter((r) => r.bWins).length;
+        const leader = aScore === bScore ? null : aScore > bScore ? vsLeftName : vsRightName;
+        return (
+          <Embed accent={PINK}>
+            <EmbedTitle>{vsTitle}</EmbedTitle>
+            <div className="space-y-0.5 text-[12px]" style={{ color: D.text }}>
+              {vsRows.map((r) => (
+                <div key={r.label}>
+                  {r.label}: {r.aWins ? <b style={{ color: D.white }}>{r.a}</b> : r.a} vs {r.bWins ? <b style={{ color: D.white }}>{r.b}</b> : r.b}
+                </div>
+              ))}
+              <div className="pt-1.5">
+                {leader
+                  ? <><b style={{ color: D.white }}>{leader}</b> leads {Math.max(aScore, bScore)}-{Math.min(aScore, bScore)}.</>
+                  : "Dead even."}
+              </div>
+            </div>
+            <Footer text="maniabot" />
+            <Buttons items={[vsLeftName, vsRightName]} />
+          </Embed>
+        );
+      },
     },
     {
-      id: "pb", label: "/pb", invocation: "/pb", group: "Players", accent: GOLD,
+      id: "pb", label: "/pb", invocation: "/pb", group: "Players", accent: PINK,
       blurb: "Your best score on the last map someone showed in the channel (from /recent, /map, ...). Also /c and /compare. Pass a name to look up someone else.",
       render: () => (
-        <Embed accent={GOLD}>
-          <EmbedAuthor name={authorName(pProfile, pb)} userId={authorAvatar(pProfile, pb)} />
-          <EmbedTitle>{pbView.title}</EmbedTitle>
+        <Embed accent={PINK} thumb={<Thumb src={coverOf(pbView.cover)} />}>
+          <EmbedAuthor name={authorName(pProfile, pb)} />
+          <EmbedTitle linked>{pbView.title}</EmbedTitle>
           <DetailedScore
             grade={pbView.grade}
             mods={pbView.mods}
@@ -1045,7 +1051,6 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
             hits={pbView.hits}
             pp={pbView.pp}
           />
-          <Cover src={coverOf(pbView.cover)} />
           <Footer text="maniabot" />
           <Buttons items={["Beatmap", pProfile?.username ?? pb.username]} />
         </Embed>
@@ -1055,8 +1060,8 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
       id: "farm", label: "/farm", invocation: `/farm ${pFarm?.username ?? commandName(farm)} ${farmKeyMode}`, group: "Players", accent: PINK,
       blurb: "PP-gain map recommendations tuned to a player.",
       render: () => (
-        <Embed accent={PINK}>
-          <EmbedAuthor name={authorName(pFarm, farm)} userId={authorAvatar(pFarm, farm)} />
+        <Embed accent={PINK} thumb={<AvatarThumb userId={authorAvatar(pFarm, farm)} />}>
+          <EmbedAuthor name={authorName(pFarm, farm)} />
           <Lead>Farm picks</Lead>
           <div className="space-y-1 pt-0.5 text-[12px]" style={{ color: D.text }}>
             {farmRecs.map((r) => (
@@ -1075,11 +1080,11 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
       id: "rankings", label: "/rankings", invocation: `/rankings ${sample.commandCountry}`, group: "Browse", accent: PINK,
       blurb: "Country (or global) leaderboard, top players by pp.",
       render: () => (
-        <Embed accent={PINK}>
+        <Embed accent={PINK} thumb={rankRows[0]?.userId ? <AvatarThumb userId={rankRows[0].userId} /> : undefined}>
           <EmbedTitle>{rankingsTitle}</EmbedTitle>
           <div className="pt-1">
             {rankRows.map((r, index) => (
-              <RankRow key={`${r.name}-${index}`} rank={r.rank} name={r.name} userId={r.userId} pp={r.pp} />
+              <RankRow key={`${r.name}-${index}`} rank={r.rank} name={r.name} pp={r.pp} />
             ))}
           </div>
           <Footer text="Page 1 • maniabot" />
@@ -1092,14 +1097,15 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
       id: "top", label: "/top", invocation: `/top ${sample.commandCountry}`, group: "Browse", accent: GOLD,
       blurb: "Recent notable top plays across a country.",
       render: () => (
-        <Embed accent={GOLD}>
+        <Embed accent={GOLD} thumb={topRows[0]?.userId ? <AvatarThumb userId={topRows[0].userId} /> : undefined}>
           <EmbedTitle>Recent top plays</EmbedTitle>
           <div className="space-y-1 pt-1 text-[12px]" style={{ color: D.text }}>
             {topRows.map((r, i) => (
               <div key={i} className="flex flex-wrap items-center gap-1.5">
+                {r.grade ? <GradeImg grade={r.grade} size={18} /> : null}
                 <b style={{ color: D.white }}>{r.username}</b> <Dot /> <span style={{ color: D.link }}>{r.title}</span>{" "}
                 {r.mods.map((m) => <ModBadge key={m} mod={m} size={0.45} />)} <Dot /> <b style={{ color: D.white }}>{r.pp}</b>
-                {r.gain ? <span style={{ color: GAIN }}>({r.gain})</span> : null}
+                {r.gain ? <span>({r.gain})</span> : null}
               </div>
             ))}
           </div>
@@ -1109,10 +1115,10 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
       ),
     },
     {
-      id: "tracker", label: "/tracker", invocation: `/tracker ${sample.commandCountry}`, group: "Browse", accent: GOLD,
+      id: "tracker", label: "/tracker", invocation: `/tracker ${sample.commandCountry}`, group: "Browse", accent: PINK,
       blurb: "The live score feed for a country, newest first.",
       render: () => (
-        <Embed accent={GOLD}>
+        <Embed accent={PINK} thumb={trackerRows[0]?.userId ? <AvatarThumb userId={trackerRows[0].userId} /> : undefined}>
           <EmbedTitle>{latestScoresTitle}</EmbedTitle>
           <div className="pt-1">
             {trackerRows.map((t, i) => <TrackerRow key={i} grade={t.grade} player={t.player} title={t.title} mods={t.mods} acc={t.acc} pp={t.pp} />)}
@@ -1141,21 +1147,20 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
       id: "randomfarm", label: "/randomfarm", invocation: `/randomfarm ${sample.commandCountry} keys:4k`, group: "Browse", accent: PINK,
       blurb: "Roll a random popular farm map. Defaults to the global farm board; filter by keys, status, star range or minimum pp. Reroll for another.",
       render: () => (
-        <Embed accent={PINK}>
-          <EmbedTitle>{rf?.title ?? "xi - Blue Zenith [4K Black Another]"}</EmbedTitle>
+        <Embed accent={PINK} thumb={<Thumb src={coverOf(rf?.cover)} />}>
+          <EmbedTitle linked>{rf?.title ?? "xi - Blue Zenith [4K Black Another]"}</EmbedTitle>
           <div className="text-[12px]" style={{ color: D.text }}>
             Random farm pick. <b style={{ color: D.white }}>{rf ? rf.players : 12}</b> players farm this in {sample.countryLabel}
-            {rfMod ? <>, mostly <span style={{ color: GOLD }}>+{rfMod}</span></> : null}.
+            {rfMod ? <>, mostly +{rfMod}</> : null}.
           </div>
           <Fields items={[
-            { name: "Stars", value: <span style={{ color: GOLD }}>{rf ? rf.stars : "6.20"}★</span> },
+            { name: "Stars", value: `${rf ? rf.stars : "6.20"}★` },
             { name: "Keys", value: rf?.keys || "4K" },
             { name: "BPM", value: rf?.bpm ?? "200" },
             { name: "Status", value: rf?.status ?? "Ranked" },
-            { name: "Avg pp", value: <b style={{ color: D.white }}>{rf?.avgPp ?? "700pp"}</b> },
+            { name: "Avg pp", value: rf?.avgPp ?? "700pp" },
             { name: "Max pp", value: rf?.maxPp ?? "850pp" },
           ]} />
-          <Cover src={coverOf(rf?.cover)} />
           <Footer text={scopeFooter} />
           <RerollPill />
           <Buttons items={["Beatmap", "Farm detail"]} />
@@ -1166,21 +1171,20 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
       id: "randomfav", label: "/randomfav", invocation: `/randomfav ${sample.commandCountry} pattern:Jack`, group: "Browse", accent: PINK,
       blurb: "Roll a random favourited map, the same pool as the Maps random tab. Filter by keys, status, pattern or star range, then reroll for another.",
       render: () => (
-        <Embed accent={PINK}>
-          <EmbedTitle>{rv?.title ?? "xi - Blue Zenith"}</EmbedTitle>
+        <Embed accent={PINK} thumb={<Thumb src={coverOf(rv?.cover)} />}>
+          <EmbedTitle linked>{rv?.title ?? "xi - Blue Zenith"}</EmbedTitle>
           <div className="text-[12px]" style={{ color: D.text }}>
             Random favourite pick. Favourited by <b style={{ color: D.white }}>{rvPickedBy}</b>
             {rvOthers > 0 ? <> and <b style={{ color: D.white }}>{formatNumber(rvOthers)}</b> {rvOthers === 1 ? "other" : "others"}</> : null} in {sample.countryLabel}.
           </div>
           <Fields items={[
-            { name: "Stars", value: <span style={{ color: GOLD }}>{rv ? rv.stars : "6.20"}★</span> },
+            { name: "Stars", value: `${rv ? rv.stars : "6.20"}★` },
             { name: "Keys", value: rv?.keys || "4K 7K" },
             { name: "Status", value: rv?.status ?? "Loved" },
             { name: "BPM", value: rv?.bpm ?? "200" },
             { name: "Global favs", value: rv?.globalFavs ?? "4,200" },
             { name: "Patterns", value: rv?.patterns ?? "Jack, Chordjack" },
           ]} />
-          <Cover src={coverOf(rv?.cover)} />
           <Footer text={scopeFooter} />
           <RerollPill />
           <Buttons items={["Beatmap", "Random maps"]} />
@@ -1191,18 +1195,12 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
       id: "dan", label: "/dan", invocation: "/dan 1234567", group: "Beatmaps", accent: PINK,
       blurb: "Estimate a chart's dan level, with its dan emblem.",
       render: () => (
-        <Embed accent={PINK}>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <EmbedTitle>Dan estimate</EmbedTitle>
-              <div className="mt-1 space-y-0.5 text-[12px]" style={{ color: D.text }}>
-                <div className="text-[15px] font-bold" style={{ color: D.white }}>{dan?.displayName ?? "10th Dan"}</div>
-                <div>Family: {dan?.family ?? "Jack"}</div>
-                <div>Confidence: {dan?.confidence ?? "82%"}</div>
-              </div>
-            </div>
-            {/* Real dan emblem, shown as the embed thumbnail. */}
-            <img src={danEmblem} alt="" className="h-14 w-14 shrink-0 object-contain" loading="lazy" />
+        <Embed accent={PINK} thumb={<img src={danEmblem} alt="" className="h-16 w-16 object-contain" loading="lazy" />}>
+          <EmbedTitle linked>{mapInfo?.title ?? "xi - Blue Zenith [4K Black Another]"}</EmbedTitle>
+          <div className="space-y-0.5 text-[12px]" style={{ color: D.text }}>
+            <div className="text-[15px] font-bold" style={{ color: D.white }}>{dan?.displayName ?? "10th Dan"}</div>
+            <div>Family: {dan?.family ?? "Jack"}</div>
+            <div>Confidence: {dan?.confidence ?? "82%"}</div>
           </div>
           <Footer text="maniabot" />
           <Buttons items={["Beatmap"]} />
@@ -1213,17 +1211,16 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
       id: "map", label: "/map", invocation: "/map 1234567", group: "Beatmaps", accent: PINK,
       blurb: "Beatmap card: stars, keys, status, BPM, length and dan.",
       render: () => (
-        <Embed accent={PINK}>
-          <EmbedTitle>{mapInfo?.title ?? "xi - Blue Zenith [4K Black Another]"}</EmbedTitle>
+        <Embed accent={PINK} thumb={<Thumb src={coverOf(mapInfo?.cover)} />}>
+          <EmbedTitle linked>{mapInfo?.title ?? "xi - Blue Zenith [4K Black Another]"}</EmbedTitle>
           <Fields items={[
-            { name: "Stars", value: <span style={{ color: GOLD }}>{mapInfo ? mapInfo.stars : "6.20"}★</span> },
+            { name: "Stars", value: `${mapInfo ? mapInfo.stars : "6.20"}★` },
             { name: "Keys", value: mapInfo?.keys || "4K" },
             { name: "Status", value: mapInfo?.status ?? "Ranked" },
             { name: "BPM", value: mapInfo?.bpm ?? "200" },
             { name: "Length", value: mapInfo?.length ?? "4:18" },
             { name: "Dan", value: mapInfo?.dan ?? "10th" },
           ]} />
-          <Cover src={coverOf(mapInfo?.cover)} />
           <Footer text="maniabot" />
           <Buttons items={["Beatmap", "Farm detail"]} />
         </Embed>
@@ -1234,15 +1231,11 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
       blurb: "Open the in-browser replay viewer for a score.",
       render: () => (
         <Embed accent={PINK}>
-          <EmbedTitle>Replay viewer</EmbedTitle>
+          <EmbedTitle linked>Replay viewer</EmbedTitle>
           <div className="text-[12px]" style={{ color: D.text }}>
-            <b style={{ color: D.white }}>{pProfile?.username ?? replay.username}</b> on <span style={{ color: D.link }}>{pbView.title}</span>
-          </div>
-          <div className="flex items-center gap-2 text-[12px]">
-            <GradeImg grade={pbView.grade} size={20} />
-            {pbView.mods.length ? pbView.mods.map((m) => <ModBadge key={m} mod={m} size={0.5} />) : <span className="text-[9px]" style={{ color: D.muted }}>nomod</span>}
-            <span style={{ color: D.muted }}>{pbView.acc}</span>
-            <b style={{ color: D.white }}>{pbView.pp}</b>
+            Watch score <code className="rounded px-1 font-mono text-[11px]" style={{ backgroundColor: D.field }}>1234567</code> in the Mania Hub replay viewer.
+            <br />
+            Adjust skin, scroll speed and overlays, or export it to video.
           </div>
           <Footer text="maniabot" />
           <Buttons items={["Watch replay"]} />
@@ -1250,18 +1243,17 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
       ),
     },
     {
-      id: "alert-maps", label: "Farm map alert", invocation: "auto-posted", group: "Feeds", accent: GREEN,
+      id: "alert-maps", label: "Farm map alert", invocation: "auto-posted", group: "Feeds", accent: GOLD,
       blurb: "New farm maps, auto-posted to any channel that ran /subscribe feed:new maps.",
       render: () => (
-        <Embed accent={GREEN}>
+        <Embed accent={GOLD} thumb={<Thumb src={coverOf(feedNew?.cover)} />}>
           <EmbedTitle>New farm map</EmbedTitle>
-          <div className="text-[12px]" style={{ color: D.text }}>
+          <div className="text-[12px] font-semibold">
             <span style={{ color: D.link }}>{feedNew?.title ?? "xi - Blue Zenith [4K Black Another]"}</span>
           </div>
           <div className="flex flex-wrap items-center gap-1.5 text-[12px]" style={{ color: D.muted }}>
-            <span>{feedNew?.keys || "4K"}</span> <Dot /> <span style={{ color: GOLD }}>{feedNew ? feedNew.stars : "6.20"}★</span> <Dot /> <span>ranked 2026-06-20</span>
+            <span>{feedNew?.keys || "4K"}</span> <Dot /> <span>{feedNew ? feedNew.stars : "6.20"}★</span> <Dot /> <span>ranked 3 days ago</span>
           </div>
-          <Cover src={coverOf(feedNew?.cover)} />
           <Footer text="maniabot" />
           <Buttons items={["Beatmap", "Maps"]} />
         </Embed>
@@ -1271,8 +1263,8 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
       id: "feed-top", label: "Top-play feed", invocation: "auto-posted", group: "Feeds", accent: GOLD,
       blurb: "When someone lands a new top play, it drops in your channel automatically, in full detail.",
       render: () => (
-        <Embed accent={GOLD}>
-          <EmbedAuthor name={feedTop?.username ?? feed.username} userId={feedTop?.userId ?? userIdForAvatar(feed)} />
+        <Embed accent={GOLD} thumb={<Thumb src={coverOf(feedTop?.cover)} />}>
+          <EmbedAuthor name={feedTop?.username ?? feed.username} />
           <EmbedTitle>New top play</EmbedTitle>
           <div className="text-[12px] font-semibold">
             <span style={{ color: D.link }}>{feedTop?.title ?? "UNDEAD CORPORATION - Everything Will Freeze [4K Black Another]"}</span>
@@ -1289,7 +1281,6 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
             pp={feedTop?.pp ?? playPp(feed, 12000)}
             gain={feedTop?.gain ?? "+35pp"}
           />
-          <Cover src={coverOf(feedTop?.cover)} />
           <Footer text={scopeFooter} />
           <Buttons items={["Beatmap", feedTop?.username ?? feed.username]} />
         </Embed>
@@ -1304,9 +1295,9 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
         const fromRank = feedSnipe ? feedSnipe.fromRank : 2;
         const author = `${feedSnipe?.sniper ?? third.username} sniped ${feedSnipe?.victim ?? fourth.username}${fromRank ? ` from #${fromRank}` : ""}`;
         return (
-          <Embed accent={SNIPE}>
-            <EmbedAuthor name={author} userId={feedSnipe?.sniperId ?? userIdForAvatar(third)} />
-            <EmbedTitle>{feedSnipe?.title ?? "xi - FREEDOM DiVE [4K Another]"}</EmbedTitle>
+          <Embed accent={SNIPE} thumb={<Thumb src={coverOf(feedSnipe?.cover)} />}>
+            <EmbedAuthor name={author} />
+            <EmbedTitle linked>{feedSnipe?.title ?? "xi - FREEDOM DiVE [4K Another]"}</EmbedTitle>
             <div className="flex flex-wrap items-center gap-2 text-[12px]">
               <GradeImg grade={feedSnipe?.grade ?? "X"} size={20} />
               {(feedSnipe?.mods ?? ["DT"]).map((m) => <ModBadge key={m} mod={m} size={0.5} />)}
@@ -1318,9 +1309,8 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
               <span style={{ color: D.muted }}>vs {feedSnipe?.victimScore ?? "4,498,110"}</span>
             </div>
             <div className="flex flex-wrap items-center gap-1.5 text-[12px]" style={{ color: D.muted }}>
-              <span>{feedSnipe?.keys || "4K"}</span> <Dot /> <span style={{ color: GOLD }}>{feedSnipe?.stars ?? "5.90"}★</span>
+              <span>{feedSnipe?.keys || "4K"}</span> <Dot /> <span>{feedSnipe?.stars ?? "5.90"}★</span>
             </div>
-            <Cover src={coverOf(feedSnipe?.cover)} />
             <Footer text={scopeFooter} />
             <Buttons items={["Beatmap", "Snipes"]} />
           </Embed>
@@ -1331,7 +1321,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
       id: "subscribe", label: "/subscribe", invocation: `/subscribe feed:Top plays country:${sample.commandCountry} min_pp:600`, group: "Feeds", accent: GREEN,
       blurb: "Turn a feed on for the current channel (needs Manage Server).",
       render: () => (
-        <TextReply accent={GREEN}>
+        <TextReply>
           This channel will now receive <b style={{ color: D.white }}>Top plays</b> for {sample.countryLabel} (600pp and up). Make sure the bot can send messages here.
         </TextReply>
       ),
@@ -1429,7 +1419,14 @@ export function CommandShowcase() {
   // Only treat the fixture as live data when it actually matches the selected
   // country (guards the brief window after switching country, or a stray refresh).
   const activeFixture = fixture && fixture.country === selectedCountry.toUpperCase() ? fixture : null;
-  const commands = useMemo(() => buildCommands(sample, activeFixture), [sample, activeFixture]);
+  // Snipe boards only exist for snipes-tier countries, so advertising the snipe
+  // feed anywhere else (including Global) would oversell the bot. Hidden until
+  // the tier is known to be snipes.
+  const { featureTier } = useCountryWarming(selectedCountry);
+  const commands = useMemo(() => {
+    const all = buildCommands(sample, activeFixture);
+    return featureTier === "snipes" ? all : all.filter((cmd) => cmd.id !== "feed-snipe");
+  }, [sample, activeFixture, featureTier]);
   const selected = commands.find((c) => c.id === selectedId) ?? commands[0];
 
   return (
@@ -1442,12 +1439,13 @@ export function CommandShowcase() {
         Tell the bot who you are once with <code className="font-semibold text-white">/link</code>. After that, lookups like <code className="font-semibold text-white">/recent</code> default to your account, no username needed.
       </p>
 
-      <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
-        {/* Command picker: horizontal scroll on mobile, sidebar on desktop */}
-        <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 lg:mx-0 lg:flex-col lg:overflow-visible lg:px-0">
+      <div className="space-y-4">
+        {/* Command picker: one wrapping chip row per group, so the whole list
+            stays a compact band instead of a tall sidebar. */}
+        <div className="space-y-1">
           {GROUPS.map((group) => (
-            <div key={group} className="contents lg:block">
-              <div className="hidden px-1 pt-2 text-[9px] font-semibold uppercase tracking-wider text-osu-f1 lg:block">{group}</div>
+            <div key={group} className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+              <span className="w-16 shrink-0 text-right text-[9px] font-semibold uppercase tracking-wider text-osu-f1">{group}</span>
               {commands.filter((c) => c.group === group).map((cmd) => {
                 const active = cmd.id === selectedId;
                 return (
@@ -1455,11 +1453,11 @@ export function CommandShowcase() {
                     key={cmd.id}
                     type="button"
                     onClick={() => setSelectedId(cmd.id)}
-                    className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-left text-[12px] font-semibold transition-colors ${
+                    className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1 text-[12px] font-semibold transition-colors ${
                       active ? "bg-osu-pink/15 text-white" : "text-osu-l2 hover:bg-osu-b3/50 hover:text-white"
                     }`}
                   >
-                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: cmd.accent }} />
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: cmd.accent }} />
                     {cmd.label}
                   </button>
                 );

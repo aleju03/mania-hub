@@ -4,6 +4,8 @@ import {
   emojiRef,
   gradeEmoji,
   hasEmojis,
+  hasHitEmojis,
+  hitEmoji,
   modsEmoji,
   modsLabel,
   setEmojiRegistry,
@@ -14,14 +16,33 @@ import {
 afterEach(() => setEmojiRegistry([]));
 
 describe("discord emoji registry", () => {
-  it("lists grades then mods in the catalog", () => {
+  it("lists grades, mods and hit pills in the catalog", () => {
     const catalog = emojiCatalog();
     expect(catalog).toContain("grade_x");
     expect(catalog).toContain("grade_f");
     expect(catalog).toContain("mod_dt");
     expect(catalog).toContain("mod_4k");
+    expect(catalog).toContain("hit_320");
+    expect(catalog).toContain("hit_miss");
     // No duplicates.
     expect(new Set(catalog).size).toBe(catalog.length);
+  });
+
+  it("treats hit pills as all-or-nothing", () => {
+    expect(hasHitEmojis()).toBe(false);
+    expect(hitEmoji("320")).toBeNull();
+    const partial = ["320", "300", "200", "100", "50"].map((key, index) => ({
+      name: `hit_${key}`,
+      emojiId: String(1000 + index),
+      animated: false,
+    }));
+    setEmojiRegistry(partial);
+    // miss missing -> the breakdown must fall back to text.
+    expect(hasHitEmojis()).toBe(false);
+    setEmojiRegistry([...partial, { name: "hit_miss", emojiId: "1005", animated: false }]);
+    expect(hasHitEmojis()).toBe(true);
+    expect(hitEmoji("320")).toBe("<:hit_320:1000>");
+    expect(hitEmoji("miss")).toBe("<:hit_miss:1005>");
   });
 
   it("falls back to text glyphs when nothing is registered", () => {

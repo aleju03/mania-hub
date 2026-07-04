@@ -10,7 +10,7 @@ import {
 import { GLOBAL_COUNTRY_CODE, isGlobalCountry } from "../countries.js";
 import type { DiscordComponent, DiscordEmbed, DiscordMessageBody } from "./rest.js";
 import { helpNavRow, linkAccountRow } from "./components.js";
-import { gradeEmoji, modsEmoji } from "./emojis.js";
+import { gradeEmoji, hasHitEmojis, hitEmoji, modsEmoji } from "./emojis.js";
 
 // osu! pink, matching the site accent.
 export const OSU_PINK = 0xff66ab;
@@ -84,11 +84,23 @@ function beatmapUrl(score: OscScore): string | undefined {
   return undefined;
 }
 
-// Widest available beatmap cover, for a banner-style embed image.
-function bestCover(score: OscScore): string | undefined {
-  const covers = score.beatmapset?.covers;
+// Square beatmap cover for the embed thumbnail (the small top-right image the
+// big osu! bots use). The list crops are square; wide crops are a last resort
+// since Discord letterboxes them inside the thumbnail slot.
+function squareCover(covers: Record<string, string | undefined> | null | undefined): string | undefined {
   if (!covers) return undefined;
-  return covers["cover@2x"] ?? covers.cover ?? covers["card@2x"] ?? covers.card ?? covers.list ?? undefined;
+  return covers["list@2x"] ?? covers.list ?? covers["card@2x"] ?? covers.card ?? covers["cover@2x"] ?? covers.cover ?? undefined;
+}
+
+function scoreThumb(score: OscScore): string | undefined {
+  return squareCover(score.beatmapset?.covers);
+}
+
+// Square cover reconstructed from a beatmapset id, for events that only carry a
+// wide cover_url (snipes, new-map alerts). assets.ppy.sh serves every crop.
+function setListCover(beatmapsetId: number | null | undefined): string | undefined {
+  if (!beatmapsetId) return undefined;
+  return `https://assets.ppy.sh/beatmaps/${beatmapsetId}/covers/list@2x.jpg`;
 }
 
 function keyCount(cs: number | undefined): string {
@@ -97,6 +109,13 @@ function keyCount(cs: number | undefined): string {
 
 function osuProfileUrl(userId: number): string {
   return `${OSU_BASE}/users/${userId}/mania`;
+}
+
+// Canonical osu! avatar URL. Used as the author icon on player-keyed cards whose
+// snapshot doesn't carry avatar_url; in Components V2 it becomes the top-right
+// accessory when the card has no cover thumbnail.
+function osuAvatarUrl(userId: number): string | undefined {
+  return userId > 0 ? `https://a.ppy.sh/${userId}` : undefined;
 }
 
 function siteProfileUrl(siteOrigin: string, username: string): string {
@@ -125,9 +144,10 @@ function scoreLine(score: OscScore): string {
 
 // A full single-score card body (the owo-style block): grade + mod icons, star
 // rating and key mode, then accuracy / combo / score, the judgement breakdown,
-// and pp. Returned with the score's cover so the caller can use it as the embed
-// image. Used wherever one score is the subject (/pb, the top-play feed).
-function detailedScore(score: OscScore, opts: { gain?: number } = {}): { text: string; cover: string | undefined } {
+// and pp. Returned with the score's square cover so the caller can use it as the
+// embed thumbnail (the small top-right image, never a bottom banner). Used
+// wherever one score is the subject (/pb, the top-play feed).
+function detailedScore(score: OscScore, opts: { gain?: number } = {}): { text: string; thumb: string | undefined } {
   const meta = [
     `${gradeEmoji(getDisplayedRank(score))} ${formatMods(score.mods)}`,
     [
@@ -145,14 +165,26 @@ function detailedScore(score: OscScore, opts: { gain?: number } = {}): { text: s
     .join(" • ");
 
   const h = getScoreHitCounts(score);
-  const breakdown = "`"
+  // Judgement pills when registered (coloured 320/300/... emojis, far more
+  // scannable than a wall of numbers); the mono chip is the unregistered fallback.
+  const breakdown = hasHitEmojis()
+    ? [
+      `${hitEmoji("320")} ${formatInt(h.max)}`,
+      `${hitEmoji("300")} ${formatInt(h.great)}`,
+      `${hitEmoji("200")} ${formatInt(h.good)}`,
+      `${hitEmoji("100")} ${formatInt(h.ok)}`,
+      `${hitEmoji("50")} ${formatInt(h.meh)}`,
+      `${hitEmoji("miss")} ${formatInt(h.miss)}`,
+    ].join(" ")
+    : "`"
     + `320 ${formatInt(h.max)} • 300 ${formatInt(h.great)} • 200 ${formatInt(h.good)} • 100 ${formatInt(h.ok)} • 50 ${formatInt(h.meh)} • miss ${formatInt(h.miss)}`
     + "`";
 
   const gain = opts.gain != null && opts.gain > 0 ? ` (+${Math.round(opts.gain)}pp)` : "";
-  const ppLine = `**${formatPp(score.pp)}**${gain}`;
+  // No pp line at all for unranked/failed plays; a lone "-" is just noise.
+  const ppLine = score.pp != null ? `**${formatPp(score.pp)}**${gain}` : null;
 
-  return { text: [meta, line2, breakdown, ppLine].join("\n"), cover: bestCover(score) };
+  return { text: [meta, line2, breakdown, ppLine].filter(Boolean).join("\n"), thumb: scoreThumb(score) };
 }
 
 // ---------------------------------------------------------------------------
@@ -273,11 +305,12 @@ export function maniacardEmbed(
   const cardUrl = `${siteOrigin}/api/og?kind=maniacard&username=${encodeURIComponent(username)}`;
   const pageUrl = `${siteOrigin}/player/${encodeURIComponent(username)}/maniacard`;
 
+  // No author avatar here: the card art already shows the player, so a second
+  // face in the thumbnail slot is redundant.
   const embed: DiscordEmbed = {
     author: {
       name: username,
       url: userId ? osuProfileUrl(userId) : undefined,
-      icon_url: user.avatar_url || undefined,
     },
     color: OSU_PINK,
     image: { url: cardUrl },
@@ -301,11 +334,13 @@ export function recentScoresEmbed(
 ): DiscordMessageBody {
   const list = scores.slice(0, 5);
   let description = "No recent mania plays found.";
-  let cover: string | undefined;
+  let thumb: string | undefined;
+  let when: string | undefined;
   if (list.length) {
     const [latest, ...rest] = list;
     const detail = detailedScore(latest);
-    cover = detail.cover;
+    thumb = detail.thumb;
+    when = latest.ended_at || latest.created_at || undefined;
     const mapUrl = beatmapUrl(latest);
     const head = mapUrl ? `**[${beatmapTitle(latest)}](${mapUrl})**` : `**${beatmapTitle(latest)}**`;
     const blocks = [head, detail.text];
@@ -313,11 +348,12 @@ export function recentScoresEmbed(
     description = blocks.join("\n");
   }
   const embed: DiscordEmbed = {
-    author: { name: username, url: userId ? osuProfileUrl(userId) : undefined },
+    author: { name: username, url: userId ? osuProfileUrl(userId) : undefined, icon_url: osuAvatarUrl(userId) },
     color: OSU_PINK,
     description,
-    image: cover ? { url: cover } : undefined,
+    thumbnail: thumb ? { url: thumb } : undefined,
     footer: { text: BOT_NAME },
+    timestamp: when,
   };
   return {
     embeds: [embed],
@@ -349,7 +385,7 @@ export function pbEmbed(params: {
     200,
   );
   const embed: DiscordEmbed = {
-    author: { name: username, url: userId ? osuProfileUrl(userId) : undefined },
+    author: { name: username, url: userId ? osuProfileUrl(userId) : undefined, icon_url: osuAvatarUrl(userId) },
     title: heading,
     url: mapUrl,
     color: OSU_PINK,
@@ -358,7 +394,7 @@ export function pbEmbed(params: {
   if (score) {
     const detail = detailedScore(score);
     embed.description = detail.text;
-    if (detail.cover) embed.image = { url: detail.cover };
+    if (detail.thumb) embed.thumbnail = { url: detail.thumb };
     const when = score.ended_at || score.created_at;
     if (when) embed.timestamp = when;
   } else {
@@ -394,7 +430,7 @@ export function topPlayEmbed(event: CountryTopPlay, country: string | null, site
       mapUrl ? `**[${beatmapTitle(score)}](${mapUrl})**` : `**${beatmapTitle(score)}**`,
       detail.text,
     ].join("\n"),
-    image: detail.cover ? { url: detail.cover } : undefined,
+    thumbnail: detail.thumb ? { url: detail.thumb } : undefined,
     footer: { text: `${countryLabel(country)} • ${BOT_NAME}` },
     timestamp: event.time || undefined,
   };
@@ -434,7 +470,10 @@ export function snipeEmbed(event: SnipeEvent, country: string | null, siteOrigin
       `Score **${formatInt(event.totalScore)}**${event.victimTotalScore != null ? ` vs ${formatInt(event.victimTotalScore)}` : ""}`,
       [keys, stars].filter(Boolean).join(" • "),
     ].filter(Boolean).join("\n"),
-    image: event.beatmapset.cover_url ? { url: event.beatmapset.cover_url } : undefined,
+    thumbnail: (() => {
+      const url = setListCover(event.beatmapset_id) ?? event.beatmapset.cover_url;
+      return url ? { url } : undefined;
+    })(),
     footer: { text: `${countryLabel(country)} • ${BOT_NAME}` },
     timestamp: event.timestamp || undefined,
   };
@@ -458,10 +497,14 @@ export function topPlaysListEmbed(popoffs: CountryTopPlay[], country: string | n
     const gain = p.ppGain > 0 ? ` (+${Math.round(p.ppGain)})` : "";
     return `${gradeEmoji(getDisplayedRank(p.score))} **${p.user.username}** • ${head} ${formatMods(p.score.mods)} • **${formatPp(p.score.pp)}**${gain}`;
   });
+  // Per-row avatars are impossible in V2 text, so the freshest popoff's player
+  // takes the one thumbnail slot and gives the card a face.
+  const featured = list[0]?.user;
   const embed: DiscordEmbed = {
     title: "Recent top plays",
     color: TOP_PLAY_GOLD,
     description: lines.length ? lines.join("\n") : "No recent top plays found.",
+    thumbnail: featured ? { url: featured.avatar_url || osuAvatarUrl(featured.id) || "" } : undefined,
     footer: { text: `${countryLabel(country)} • ${BOT_NAME}` },
   };
   return {
@@ -478,10 +521,12 @@ export function snipesListEmbed(events: SnipeEvent[], country: string | null, si
     const head = url ? `[${truncate(map, 60)}](${url})` : truncate(map, 60);
     return `**${e.sniper.username}** sniped ${e.victim.username} • ${head} • ${formatAcc(e.accuracy)}`;
   });
+  const sniper = list[0]?.sniper;
   const embed: DiscordEmbed = {
     title: "Recent snipes",
     color: SNIPE_RED,
     description: lines.length ? lines.join("\n") : "No recent snipes found.",
+    thumbnail: sniper ? { url: sniper.avatar_url || osuAvatarUrl(sniper.id) || "" } : undefined,
     footer: { text: `${countryLabel(country)} • ${BOT_NAME}` },
   };
   return {
@@ -501,15 +546,16 @@ export function compareEmbed(
     const v = pick(u.statistics ?? {});
     return v == null ? null : Number(v);
   };
-  // A monospace table reads as a real head-to-head and fills the embed width
-  // instead of leaving the right half empty. Column-aligned, with each player's
-  // name as a header. A leading ">" flags the leading value per stat (winner-bold
-  // is impossible inside a code block).
-  const cell = (
+  // One markdown line per stat, the leading value in bold: reads like a
+  // scoreboard instead of a code dump. A tally line calls the overall leader.
+  let aScore = 0;
+  let bScore = 0;
+  const row = (
+    label: string,
     pick: (s: ProfileUserStats) => number | null | undefined,
     fmt: (n: number | null) => string,
     lowerWins = false,
-  ): [string, string] => {
+  ): string => {
     const va = stat(ua, pick);
     const vb = stat(ub, pick);
     let aWins = false;
@@ -517,27 +563,29 @@ export function compareEmbed(
     if (va != null && vb != null && va !== vb) {
       aWins = lowerWins ? va < vb : va > vb;
       bWins = !aWins;
+      if (aWins) aScore += 1;
+      else bScore += 1;
     }
-    return [`${aWins ? ">" : " "}${fmt(va)}`, `${bWins ? ">" : " "}${fmt(vb)}`];
+    const left = aWins ? `**${fmt(va)}**` : fmt(va);
+    const right = bWins ? `**${fmt(vb)}**` : fmt(vb);
+    return `${label}: ${left} vs ${right}`;
   };
-  const rows: Array<[string, [string, string]]> = [
-    ["pp", cell((s) => s.pp, (n) => (n == null ? "-" : `${formatInt(n)}pp`))],
-    ["Global", cell((s) => s.global_rank, formatRank, true)],
-    ["Country", cell((s) => s.country_rank, formatRank, true)],
-    ["Accuracy", cell((s) => s.hit_accuracy, (n) => (n == null ? "-" : formatAcc(n)))],
-    ["Plays", cell((s) => s.play_count, formatInt)],
+  const lines = [
+    row("pp", (s) => s.pp, (n) => (n == null ? "-" : `${formatInt(n)}pp`)),
+    row("Global rank", (s) => s.global_rank, formatRank, true),
+    row("Country rank", (s) => s.country_rank, formatRank, true),
+    row("Accuracy", (s) => s.hit_accuracy, (n) => (n == null ? "-" : formatAcc(n))),
+    row("Play count", (s) => s.play_count, formatInt),
   ];
-  const nameA = truncate(ua.username ?? "Player 1", 12);
-  const nameB = truncate(ub.username ?? "Player 2", 12);
-  const labelW = Math.max(...rows.map((r) => r[0].length));
-  const aW = Math.max(nameA.length, ...rows.map((r) => r[1][0].length));
-  const bW = Math.max(nameB.length, ...rows.map((r) => r[1][1].length));
-  const header = `${"".padEnd(labelW)}   ${nameA.padStart(aW)}   ${nameB.padStart(bW)}`;
-  const lines = rows.map(([label, [va, vb]]) => `${label.padEnd(labelW)}   ${va.padStart(aW)}   ${vb.padStart(bW)}`);
+  const nameA = ua.username ?? "Player 1";
+  const nameB = ub.username ?? "Player 2";
+  const verdict = aScore === bScore
+    ? "Dead even."
+    : `**${aScore > bScore ? nameA : nameB}** leads ${Math.max(aScore, bScore)}-${Math.min(aScore, bScore)}.`;
   const embed: DiscordEmbed = {
-    title: `${ua.username ?? "?"} vs ${ub.username ?? "?"}`,
+    title: `${nameA} vs ${nameB}`,
     color: OSU_PINK,
-    description: "```\n" + [header, ...lines].join("\n") + "\n```",
+    description: [...lines, "", verdict].join("\n"),
     footer: { text: BOT_NAME },
   };
   return {
@@ -683,6 +731,8 @@ export function rankingsEmbed(
     title: `${scope} mania rankings`,
     color: OSU_PINK,
     description: lines.length ? lines.join("\n") : "No ranked players found.",
+    // The current #1 of the board fills the thumbnail slot.
+    thumbnail: list[0] ? { url: osuAvatarUrl(list[0].user.id) ?? "" } : undefined,
     footer: { text: BOT_NAME },
   };
   const linkCountry = country ? country.toUpperCase() : GLOBAL_COUNTRY_CODE;
@@ -719,7 +769,7 @@ export function farmEmbed(
     return `\`${i + 1}.\` ${head} ${mods} • **+${Math.round(r.estimatedPpGain)}pp**`;
   });
   const embed: DiscordEmbed = {
-    author: { name: snapshot.username, url: snapshot.userId ? osuProfileUrl(snapshot.userId) : undefined },
+    author: { name: snapshot.username, url: snapshot.userId ? osuProfileUrl(snapshot.userId) : undefined, icon_url: osuAvatarUrl(snapshot.userId) },
     color: OSU_PINK,
     description: lines.length
       ? `**Farm picks**\n${lines.join("\n")}`
@@ -980,7 +1030,7 @@ export function activityEmbed(
     ? `**Playstyle**\n${patterns.map((p) => `${p.label} ${p.pct}%`).join("  •  ")}`
     : "No playstyle breakdown yet. Keep playing tracked maps to build one.";
   const embed: DiscordEmbed = {
-    author: { name: username, url: userId ? osuProfileUrl(userId) : undefined },
+    author: { name: username, url: userId ? osuProfileUrl(userId) : undefined, icon_url: osuAvatarUrl(userId) },
     color: OSU_PINK,
     fields,
     description,
@@ -1041,7 +1091,7 @@ export function goalsEmbed(
       ? "No open goals right now."
       : "No goals set yet. Create them on the goals page.";
   const embed: DiscordEmbed = {
-    author: { name: username, url: userId ? osuProfileUrl(userId) : undefined },
+    author: { name: username, url: userId ? osuProfileUrl(userId) : undefined, icon_url: osuAvatarUrl(userId) },
     color: OSU_PINK,
     description,
     footer: { text: `${open.length} open • ${completed} done • ${BOT_NAME}` },
@@ -1075,10 +1125,12 @@ export function trackerListEmbed(
   siteOrigin: string,
 ): DiscordMessageBody {
   const lines = scores.map(trackerScoreLine);
+  const latestUser = scores[0]?.user;
   const embed: DiscordEmbed = {
     title: `Latest scores in ${scopeLabel(country)}`,
     color: OSU_PINK,
     description: lines.length ? joinClamped(lines) : "No recent scores found.",
+    thumbnail: latestUser ? { url: latestUser.avatar_url || osuAvatarUrl(latestUser.id) || "" } : undefined,
     footer: { text: BOT_NAME },
   };
   return {
@@ -1168,7 +1220,7 @@ export function beatmapEmbed(
   const set = beatmap.beatmapset ?? {};
   const title = `${set.artist ?? "Unknown"} - ${set.title ?? "Unknown"}`;
   const mapUrl = beatmap.url || `${OSU_BASE}/b/${beatmap.id}`;
-  const cover = set.covers?.["cover@2x"] ?? set.covers?.cover ?? set.covers?.["card@2x"] ?? set.covers?.card;
+  const cover = squareCover(set.covers);
   const danText = estimate ? (estimate.displayName ?? estimate.label ?? "-") : "-";
   const fields = [
     { name: "Stars", value: beatmap.difficulty_rating != null ? `${beatmap.difficulty_rating.toFixed(2)}★` : "-", inline: true },
@@ -1184,7 +1236,7 @@ export function beatmapEmbed(
     url: mapUrl,
     color: OSU_PINK,
     fields,
-    image: cover ? { url: cover } : undefined,
+    thumbnail: cover ? { url: cover } : undefined,
     footer: { text: BOT_NAME },
   };
   return {
@@ -1229,7 +1281,7 @@ interface RandomFarmLike {
 
 export function randomFarmEmbed(map: RandomFarmLike, country: string | null, siteOrigin: string): DiscordMessageBody {
   const mapUrl = `${OSU_BASE}/b/${map.beatmapId}`;
-  const cover = map.covers?.["cover@2x"] ?? map.covers?.cover ?? map.covers?.["card@2x"] ?? map.covers?.card;
+  const cover = squareCover(map.covers);
   const fields = [
     { name: "Stars", value: map.difficultyRating != null ? `${map.difficultyRating.toFixed(2)}★` : "-", inline: true },
     { name: "Keys", value: map.cs != null ? `${Math.round(map.cs)}K` : "-", inline: true },
@@ -1247,7 +1299,7 @@ export function randomFarmEmbed(map: RandomFarmLike, country: string | null, sit
     color: OSU_PINK,
     description: `Random farm pick. ${farmers}.`,
     fields,
-    image: cover ? { url: cover } : undefined,
+    thumbnail: cover ? { url: cover } : undefined,
     footer: { text: `${scopeLabel(country)} • ${BOT_NAME}` },
   };
   return {
@@ -1282,7 +1334,7 @@ export function randomFavEmbed(
   siteOrigin: string,
 ): DiscordMessageBody {
   const setUrl = `${OSU_BASE}/beatmapsets/${set.id}#mania`;
-  const cover = set.covers?.["cover@2x"] ?? set.covers?.cover ?? set.covers?.["card@2x"] ?? set.covers?.card;
+  const cover = squareCover(set.covers) ?? setListCover(set.id);
   const keys = [...new Set((set.maniaKeys ?? []).map((k) => `${Math.round(k)}K`))];
   const patterns = (set.patterns ?? []).slice(0, 4).map(patternLabel);
   const fields = [
@@ -1304,7 +1356,7 @@ export function randomFavEmbed(
     color: OSU_PINK,
     description: `Random favourite pick. ${favNote}`,
     fields,
-    image: cover ? { url: cover } : undefined,
+    thumbnail: cover ? { url: cover } : undefined,
     footer: { text: `${scopeLabel(country)} • ${BOT_NAME}` },
   };
   return {
@@ -1361,7 +1413,8 @@ export function newMapAlertEmbed(map: NewMapAlert, siteOrigin: string): DiscordM
   const meta = [
     map.cs != null ? `${Math.round(map.cs)}K` : "",
     map.difficultyRating != null ? `${map.difficultyRating.toFixed(2)}★` : "",
-    map.rankedAtMs != null ? `ranked ${new Date(map.rankedAtMs).toISOString().slice(0, 10)}` : "",
+    // <t:..:R> renders client-side as a live "3 days ago", beating a frozen date.
+    map.rankedAtMs != null ? `ranked <t:${Math.floor(map.rankedAtMs / 1000)}:R>` : "",
     map.farmedUserCount != null ? `${map.farmedUserCount} players gained pp` : "",
   ].filter(Boolean).join(" • ");
   const signal = map.farmedUserCount != null
@@ -1378,7 +1431,10 @@ export function newMapAlertEmbed(map: NewMapAlert, siteOrigin: string): DiscordM
       meta,
       signal,
     ].filter(Boolean).join("\n"),
-    image: map.coverUrl ? { url: map.coverUrl } : undefined,
+    thumbnail: (() => {
+      const url = setListCover(map.beatmapsetId) ?? map.coverUrl ?? undefined;
+      return url ? { url } : undefined;
+    })(),
     footer: { text: BOT_NAME },
   };
   return {
@@ -1397,7 +1453,7 @@ export function newMapAlertEmbed(map: NewMapAlert, siteOrigin: string): DiscordM
 
 export function whoamiEmbed(link: { osuUsername: string; osuUserId: number; countryCode: string | null }, siteOrigin: string): DiscordMessageBody {
   const embed: DiscordEmbed = {
-    author: { name: link.osuUsername, url: osuProfileUrl(link.osuUserId) },
+    author: { name: link.osuUsername, url: osuProfileUrl(link.osuUserId), icon_url: osuAvatarUrl(link.osuUserId) },
     color: OSU_PINK,
     description: `You are linked to **${link.osuUsername}**${link.countryCode ? ` (${link.countryCode.toUpperCase()})` : ""}.\nCommands like \`/recent\` use this account when you do not pass a username.`,
     footer: { text: BOT_NAME },

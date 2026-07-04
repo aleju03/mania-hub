@@ -197,7 +197,7 @@ describe("components v2 rendering quality", () => {
       .join("\n");
   }
 
-  it("renders a run of inline fields as one aligned monospace block", () => {
+  it("renders a run of inline fields as owo-style stat pairs, two per line", () => {
     const body = toComponentsV2Body({
       embeds: [{
         color: 0xff66ab,
@@ -209,12 +209,12 @@ describe("components v2 rendering quality", () => {
       }],
     });
     const text = allText(body.components);
-    // One code fence wraps the whole run (not one block per field).
-    expect(text.match(/```/g)?.length).toBe(2);
-    // Labels are padded to the widest ("Country (CR)" = 12) then a two-space gap.
-    expect(text).toMatch(/Global {8}#1,234/);
-    expect(text).toContain("Country (CR)  #5");
-    expect(text).toMatch(/pp {12}8,123pp/);
+    // No code fence: stat pairs are plain markdown, bold label + value.
+    expect(text).not.toContain("```");
+    expect(text).toContain("**Global:** #1,234 • **Country (CR):** #5");
+    expect(text).toContain("**pp:** 8,123pp");
+    // The odd pair starts its own line rather than extending the first.
+    expect(text).not.toContain("#5 • **pp:**");
   });
 
   it("uses the author avatar as the section thumbnail when no embed thumbnail is set", () => {
@@ -276,7 +276,7 @@ describe("components v2 rendering quality", () => {
     expect(typeof sep?.divider).toBe("boolean");
   });
 
-  it("sanitizes newlines and backticks inside code-block cells", () => {
+  it("sanitizes newlines and backticks inside field cells", () => {
     const body = toComponentsV2Body({ embeds: [{ fields: [{ name: "x", value: "a`b\nc", inline: true }] }] });
     const text = allText(body.components);
     expect(text).toContain("a'b c");

@@ -98,6 +98,7 @@ export interface ShowcaseRankRow {
 export interface ShowcaseTopRow {
   username: string;
   userId: number;
+  grade: string;
   title: string;
   mods: string[];
   pp: string;
@@ -107,6 +108,7 @@ export interface ShowcaseTopRow {
 export interface ShowcaseTrackerRow {
   grade: string;
   username: string;
+  userId: number;
   title: string;
   mods: string[];
   acc: string;
@@ -563,6 +565,7 @@ async function buildShowcase(
     return {
       username: p.user.username,
       userId: Number(p.user.id),
+      grade: getDisplayedRank(p.score),
       title,
       mods: getModAcronyms(p.score.mods),
       pp: fmtScorePp(p.score.pp),
@@ -576,6 +579,7 @@ async function buildShowcase(
     return {
       grade: getDisplayedRank(s),
       username: s.user?.username ?? "?",
+      userId: Number(s.user?.id ?? s.user_id ?? 0),
       title: set ? `${set.artist} - ${set.title}` : `Beatmap ${s.beatmap_id ?? s.id}`,
       mods: getModAcronyms(s.mods),
       acc: fmtAcc(getDisplayedAccuracy(s)),
@@ -819,6 +823,7 @@ function buildVs(a: ShowcasePlayer, b: ShowcasePlayer): { title: string; rows: S
       row("Global rank", a.globalRank, b.globalRank, (n) => (n == null ? "-" : `#${NUMBER.format(n)}`), true),
       row("Country rank", a.countryRank, b.countryRank, (n) => (n == null ? "-" : `#${NUMBER.format(n)}`), true),
       row("Accuracy", a.accuracy, b.accuracy, fmtAcc),
+      row("Play count", a.playCount, b.playCount, (n) => (n == null ? "-" : NUMBER.format(n))),
     ],
   };
 }
