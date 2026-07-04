@@ -599,11 +599,13 @@ class HitCircleGenerator extends LegacyGenerator {
         p2 = Math.min(p2, 0.1);
         p3 = 0;
         p4 = 0;
+        p5 = 0;
         break;
       case 4:
         p2 = Math.min(p2, 0.23);
         p3 = Math.min(p3, 0.04);
         p4 = 0;
+        p5 = 0;
         break;
       case 5:
         p3 = Math.min(p3, 0.15);

@@ -14,7 +14,7 @@ import {
   type ConvertTimingPoint,
   type StdConvertBeatmap,
   type StdHitObject,
-} from "./mania-convert";
+} from "./mania-convert.ts";
 
 export type ManiaSampleBank = "normal" | "soft" | "drum";
 
@@ -677,6 +677,14 @@ export function parseManiaBeatmap(content: string, options: ParseManiaBeatmapOpt
     };
   }
 
+  // Converts scroll at constant speed in stable/lazer: green-line SVs only set
+  // mania scroll speed when the .osu file itself is taiko/mania (lazer's
+  // LegacyBeatmapDecoder gates EffectControlPoint.ScrollSpeed on the file
+  // ruleset). BPM-driven scroll changes from red lines still apply.
+  const scrollControlPoints = mode === 0
+    ? controlPoints.map((point) => (point.kind === "effect" ? { ...point, scrollSpeed: 1 } : point))
+    : controlPoints;
+
   // Calculate BPM from first timing point
   const bpm = timingPoints.length > 0 ? Math.round(60000 / timingPoints[0].beatLength) : 0;
 
@@ -709,7 +717,7 @@ export function parseManiaBeatmap(content: string, options: ParseManiaBeatmapOpt
     previewTime,
     backgroundFilename,
     breakPeriods,
-    scrollVelocities: buildManiaScrollVelocities(timingPoints, controlPoints, totalLength),
+    scrollVelocities: buildManiaScrollVelocities(timingPoints, scrollControlPoints, totalLength),
     timingPoints: [...timingPoints].sort((a, b) => a.time - b.time),
   };
 }

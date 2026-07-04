@@ -94,6 +94,11 @@ describe("ManiaReplayRenderer initialization", () => {
     expect(source).toContain("tailResolved && !stableMissedHoldStillHeld");
     expect(source).not.toContain("lateStableHoldHead");
     expect(source).toContain("const shouldLetPassLine = missedStableHoldHead || (awaitingJudgment && note.time < this.currentTime - 10);");
+    // Late-hit taps scroll below the receptors until their actual hit time;
+    // timed-out taps scroll off the bottom instead of vanishing at the line.
+    expect(source).not.toContain("if (note.time < this.currentTime - 10 && !headResolved) continue;");
+    expect(source).toContain("const tapMissScrollsPast = !note.isHold && noteState.headJudgment === 6 && noteState.headTime > note.time;");
+    expect(source).toContain("if (headResolved && !tapMissScrollsPast && (!note.isHold || (tailResolved && !stableMissedHoldStillHeld))) continue;");
     expect(source).toContain("allowLegacyScoreReconciliation: false");
     expect(source).not.toContain("allowLegacyScoreReconciliation: this.ruleset.accuracyMode === \"stable\"");
     expect(source).toContain("return calculateReplayAccuracy(this.judgmentCounts, this.ruleset.accuracyMode);");

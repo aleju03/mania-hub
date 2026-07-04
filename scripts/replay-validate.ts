@@ -9,7 +9,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ScoreDecoder } from "osu-parsers";
 import { parseManiaBeatmap } from "../src/lib/beatmap-parser.ts";
-import { getModAcronyms, isLazerScore } from "../src/lib/score.ts";
+import { getManiaParseKeyCount, getModAcronyms, isLazerScore } from "../src/lib/score.ts";
 import { decodeStableManiaReplayFrames } from "../src/lib/replay-frames.ts";
 import type { OsuScore } from "../src/lib/types.ts";
 import type { ReplayFrame } from "../src/lib/types.ts";
@@ -292,7 +292,9 @@ function decodeFrames(decodedScore: any): ReplayFrame[] {
 
 async function validateScoreId(scoreId: number, options: CliOptions): Promise<ReplayValidationResult & { scoreId: number; title: string; version: string; player: string; mods: string[]; keyCount: number }> {
   const fixture = await loadFixture(scoreId, options);
-  const beatmap = parseManiaBeatmap(fixture.beatmapContent);
+  // Converts only honor the xK keymod; the convert column formula decides otherwise.
+  const parseKeyCount = getManiaParseKeyCount(fixture.score.beatmap, fixture.score.mods) ?? undefined;
+  const beatmap = parseManiaBeatmap(fixture.beatmapContent, { keyCount: parseKeyCount });
   const decoder = new ScoreDecoder();
   const decoded = await decoder.decodeFromBuffer(fixture.replayBuffer);
   const frames = decodeFrames(decoded);

@@ -31,7 +31,7 @@ import {
   replayHitCountsToArray,
   resolveReplayJudgementEvents,
 } from "../src/lib/replay-validation.ts";
-import { getModAcronyms, isLazerScore } from "../src/lib/score.ts";
+import { getManiaParseKeyCount, getModAcronyms, isLazerScore } from "../src/lib/score.ts";
 import { decodeStableManiaReplayFrames } from "../src/lib/replay-frames.ts";
 import type { OsuScore, ReplayFrame } from "../src/lib/types.ts";
 
@@ -852,7 +852,9 @@ async function simulateScore(options: CliOptions) {
   }
 
   const score = JSON.parse(scoreText) as OsuScore;
-  const beatmap = parseManiaBeatmap(beatmapContent);
+  // Converts only honor the xK keymod; the convert column formula decides otherwise.
+  const parseKeyCount = getManiaParseKeyCount(score.beatmap, score.mods) ?? undefined;
+  const beatmap = parseManiaBeatmap(beatmapContent, { keyCount: parseKeyCount });
   const decoded = await new ScoreDecoder().decodeFromBuffer(replayBuffer);
   const frames = decodeFrames(decoded);
   const mods = getModAcronyms(score.mods, false);

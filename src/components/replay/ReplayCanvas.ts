@@ -1996,7 +1996,9 @@ export class ManiaReplayRenderer {
     const velocityWindow = timeWindow / this.scrollVelocityMinMultiplier;
     const visibleMinTime = this.currentTime - velocityWindow * 0.2;
     const visibleMaxTime = this.currentTime + velocityWindow * 1.1;
-    const searchMinTime = Math.min(visibleMinTime, this.currentTime - velocityWindow * 0.4);
+    // 0.6 keeps late-hit and timed-out notes in the loop until they are fully
+    // below the bottom edge, even with a raised (skin) hit position.
+    const searchMinTime = Math.min(visibleMinTime, this.currentTime - velocityWindow * 0.6);
     const searchMaxTime = visibleMaxTime;
     const startIdx = this.binarySearchNoteIndex(searchMinTime - this.maxHoldDuration);
 
@@ -2013,8 +2015,11 @@ export class ManiaReplayRenderer {
         && this.ruleset.accuracyMode === "stable"
         && noteState.headJudgment === 6
         && (this.currentTime < noteState.releaseTime || this.isColumnEffectivelyHeldAtTime(col, this.currentTime));
+      // Timed-out tap misses (headTime past the note time means no press consumed
+      // it) keep scrolling below the receptors until offscreen, like the client.
+      const tapMissScrollsPast = !note.isHold && noteState.headJudgment === 6 && noteState.headTime > note.time;
 
-      if (headResolved && (!note.isHold || (tailResolved && !stableMissedHoldStillHeld))) continue;
+      if (headResolved && !tapMissScrollsPast && (!note.isHold || (tailResolved && !stableMissedHoldStillHeld))) continue;
 
       const { x: colX, width: colWidth } = this.getColumnLayout(col, layout);
       const x = colX + 3;
@@ -2138,8 +2143,9 @@ export class ManiaReplayRenderer {
         const barBodyBottom = Math.max(bodyHeadY, bodyTailY);
         this.barLnBodyWithTopFade(x, barBodyTop, barWidth, barBodyBottom - barBodyTop, color, bodyAlpha, noteFadeHeight, 0.55, layout);
       } else {
-        if (note.time < this.currentTime - 10 && !headResolved) continue;
-
+        // Unjudged taps keep scrolling past the receptors until the actual hit
+        // (headTime) despawns them; falling behind on a dense section visibly
+        // piles the notes up below the line like stable does.
         const noteY = judgmentY + getVisualDelta(note.time) * pixelsPerMs * (this.skinSettings.upscroll ? 1 : -1);
         if (noteY > h + 20 || noteY < -20) continue;
 

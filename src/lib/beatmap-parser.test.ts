@@ -9,6 +9,7 @@ osu file format v14
 [General]
 AudioFilename: audio.mp3
 PreviewTime: 1000
+Mode: 3
 
 [Metadata]
 Title:Test
@@ -41,6 +42,9 @@ OverallDifficulty:8
     const beatmap = parseManiaBeatmap(`
 osu file format v14
 
+[General]
+Mode: 3
+
 [Metadata]
 Title:Test
 Artist:Tester
@@ -68,6 +72,9 @@ OverallDifficulty:8
   it("keeps stable replay scroll-speed BPM on the gameplay base timing", () => {
     const beatmap = parseManiaBeatmap(`
 osu file format v14
+
+[General]
+Mode: 3
 
 [Metadata]
 Title:Test
@@ -97,6 +104,9 @@ OverallDifficulty:8
     const beatmap = parseManiaBeatmap(`
 osu file format v14
 
+[General]
+Mode: 3
+
 [Metadata]
 Title:Test
 Artist:Tester
@@ -125,6 +135,9 @@ OverallDifficulty:8
     const beatmap = parseManiaBeatmap(`
 osu file format v14
 
+[General]
+Mode: 3
+
 [Metadata]
 Title:Test
 Artist:Tester
@@ -147,6 +160,43 @@ OverallDifficulty:8
 `);
 
     expect(beatmap.scrollVelocities).toEqual([]);
+  });
+
+  it("ignores green-line SVs for std converts but keeps BPM scroll changes", () => {
+    const convert = parseManiaBeatmap(`
+osu file format v14
+
+[General]
+Mode: 0
+
+[Metadata]
+Title:Test
+Artist:Tester
+Creator:Mapper
+Version:Convert SV
+
+[Difficulty]
+CircleSize:4
+OverallDifficulty:8
+
+[TimingPoints]
+0,500,4,1,0,100,1,0
+1000,-50,4,1,0,100,0,0
+1500,-200,4,1,0,100,0,0
+3000,250,4,1,0,100,1,0
+
+[HitObjects]
+64,192,1200,1,0,0:0:0:0:
+64,192,1800,1,0,0:0:0:0:
+64,192,3500,1,0,0:0:0:0:
+`);
+
+    expect(convert.isConvert).toBe(true);
+    // Green lines (SV 2 at 1000, SV 0.5 at 1500) are ignored; only the red-line
+    // BPM change at 3000 (120 -> 240 BPM) moves the scroll speed.
+    expect(convert.scrollVelocities).toEqual([
+      { time: 3000, multiplier: 2 },
+    ]);
   });
 
   it("parses explicit break periods from events", () => {
