@@ -338,6 +338,21 @@ function AvatarThumb({ userId }: { userId?: number }) {
   return <img src={`/api/avatar?u=${userId}`} alt="" className="h-16 w-16 rounded-lg object-cover" loading="lazy" />;
 }
 
+// Country-scoped list cards put osu!'s flag raster in the thumbnail slot;
+// Discord letterboxes the wide flag inside the square accessory, mirrored here.
+function FlagThumb({ country }: { country: string }) {
+  return (
+    <div className="flex h-16 w-16 items-center justify-center">
+      <img
+        src={`https://osu.ppy.sh/images/flags/${country.toUpperCase()}.png`}
+        alt=""
+        className="max-h-full max-w-full rounded-sm"
+        loading="lazy"
+      />
+    </div>
+  );
+}
+
 // The author line converts to a "### [name](url)" heading in V2, so it renders
 // as bold link-coloured text, no inline avatar (the avatar moves to the
 // thumbnail slot when the card has no cover art).
@@ -1080,7 +1095,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
       id: "rankings", label: "/rankings", invocation: `/rankings ${sample.commandCountry}`, group: "Browse", accent: PINK,
       blurb: "Country (or global) leaderboard, top players by pp.",
       render: () => (
-        <Embed accent={PINK} thumb={rankRows[0]?.userId ? <AvatarThumb userId={rankRows[0].userId} /> : undefined}>
+        <Embed accent={PINK} thumb={!sample.isGlobal ? <FlagThumb country={sample.commandCountry} /> : rankRows[0]?.userId ? <AvatarThumb userId={rankRows[0].userId} /> : undefined}>
           <EmbedTitle>{rankingsTitle}</EmbedTitle>
           <div className="pt-1">
             {rankRows.map((r, index) => (
@@ -1097,7 +1112,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
       id: "top", label: "/top", invocation: `/top ${sample.commandCountry}`, group: "Browse", accent: GOLD,
       blurb: "Recent notable top plays across a country.",
       render: () => (
-        <Embed accent={GOLD} thumb={topRows[0]?.userId ? <AvatarThumb userId={topRows[0].userId} /> : undefined}>
+        <Embed accent={GOLD} thumb={!sample.isGlobal ? <FlagThumb country={sample.commandCountry} /> : topRows[0]?.userId ? <AvatarThumb userId={topRows[0].userId} /> : undefined}>
           <EmbedTitle>Recent top plays</EmbedTitle>
           <div className="space-y-1 pt-1 text-[12px]" style={{ color: D.text }}>
             {topRows.map((r, i) => (
@@ -1118,7 +1133,7 @@ function buildCommands(sample: ShowcaseSample, fx: DiscordShowcase | null): Comm
       id: "tracker", label: "/tracker", invocation: `/tracker ${sample.commandCountry}`, group: "Browse", accent: PINK,
       blurb: "The live score feed for a country, newest first.",
       render: () => (
-        <Embed accent={PINK} thumb={trackerRows[0]?.userId ? <AvatarThumb userId={trackerRows[0].userId} /> : undefined}>
+        <Embed accent={PINK} thumb={!sample.isGlobal ? <FlagThumb country={sample.commandCountry} /> : trackerRows[0]?.userId ? <AvatarThumb userId={trackerRows[0].userId} /> : undefined}>
           <EmbedTitle>{latestScoresTitle}</EmbedTitle>
           <div className="pt-1">
             {trackerRows.map((t, i) => <TrackerRow key={i} grade={t.grade} player={t.player} title={t.title} mods={t.mods} acc={t.acc} pp={t.pp} />)}

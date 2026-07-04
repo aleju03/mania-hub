@@ -118,6 +118,17 @@ function osuAvatarUrl(userId: number): string | undefined {
   return userId > 0 ? `https://a.ppy.sh/${userId}` : undefined;
 }
 
+// osu!'s own flag raster for a country code (redirects to assets.ppy.sh
+// old-flags; Discord's media proxy follows it). Country-scoped list cards use
+// the flag as their thumbnail so the card reads as the country's board rather
+// than putting one arbitrary player's face on it. GLOBAL has no flag; callers
+// fall back to a player avatar.
+function countryFlagThumb(country: string | null | undefined): string | undefined {
+  const code = (country ?? "").toUpperCase();
+  if (!code || isGlobalCountry(code)) return undefined;
+  return `https://osu.ppy.sh/images/flags/${code}.png`;
+}
+
 function siteProfileUrl(siteOrigin: string, username: string): string {
   return `${siteOrigin}/player/${encodeURIComponent(username)}`;
 }
@@ -497,14 +508,16 @@ export function topPlaysListEmbed(popoffs: CountryTopPlay[], country: string | n
     const gain = p.ppGain > 0 ? ` (+${Math.round(p.ppGain)})` : "";
     return `${gradeEmoji(getDisplayedRank(p.score))} **${p.user.username}** • ${head} ${formatMods(p.score.mods)} • **${formatPp(p.score.pp)}**${gain}`;
   });
-  // Per-row avatars are impossible in V2 text, so the freshest popoff's player
-  // takes the one thumbnail slot and gives the card a face.
+  // Country boards get the flag in the one thumbnail slot; the global board has
+  // no flag, so the freshest popoff's player gives the card a face instead
+  // (per-row avatars are impossible in V2 text).
   const featured = list[0]?.user;
+  const flag = countryFlagThumb(country);
   const embed: DiscordEmbed = {
     title: "Recent top plays",
     color: TOP_PLAY_GOLD,
     description: lines.length ? lines.join("\n") : "No recent top plays found.",
-    thumbnail: featured ? { url: featured.avatar_url || osuAvatarUrl(featured.id) || "" } : undefined,
+    thumbnail: flag ? { url: flag } : featured ? { url: featured.avatar_url || osuAvatarUrl(featured.id) || "" } : undefined,
     footer: { text: `${countryLabel(country)} • ${BOT_NAME}` },
   };
   return {
@@ -522,11 +535,12 @@ export function snipesListEmbed(events: SnipeEvent[], country: string | null, si
     return `**${e.sniper.username}** sniped ${e.victim.username} • ${head} • ${formatAcc(e.accuracy)}`;
   });
   const sniper = list[0]?.sniper;
+  const snipeFlag = countryFlagThumb(country);
   const embed: DiscordEmbed = {
     title: "Recent snipes",
     color: SNIPE_RED,
     description: lines.length ? lines.join("\n") : "No recent snipes found.",
-    thumbnail: sniper ? { url: sniper.avatar_url || osuAvatarUrl(sniper.id) || "" } : undefined,
+    thumbnail: snipeFlag ? { url: snipeFlag } : sniper ? { url: sniper.avatar_url || osuAvatarUrl(sniper.id) || "" } : undefined,
     footer: { text: `${countryLabel(country)} • ${BOT_NAME}` },
   };
   return {
@@ -731,8 +745,12 @@ export function rankingsEmbed(
     title: `${scope} mania rankings`,
     color: OSU_PINK,
     description: lines.length ? lines.join("\n") : "No ranked players found.",
-    // The current #1 of the board fills the thumbnail slot.
-    thumbnail: list[0] ? { url: osuAvatarUrl(list[0].user.id) ?? "" } : undefined,
+    // Country boards show the flag; the global board shows its current #1.
+    thumbnail: (() => {
+      const flag = countryFlagThumb(country);
+      if (flag) return { url: flag };
+      return list[0] ? { url: osuAvatarUrl(list[0].user.id) ?? "" } : undefined;
+    })(),
     footer: { text: BOT_NAME },
   };
   const linkCountry = country ? country.toUpperCase() : GLOBAL_COUNTRY_CODE;
@@ -1126,11 +1144,12 @@ export function trackerListEmbed(
 ): DiscordMessageBody {
   const lines = scores.map(trackerScoreLine);
   const latestUser = scores[0]?.user;
+  const trackerFlag = countryFlagThumb(country);
   const embed: DiscordEmbed = {
     title: `Latest scores in ${scopeLabel(country)}`,
     color: OSU_PINK,
     description: lines.length ? joinClamped(lines) : "No recent scores found.",
-    thumbnail: latestUser ? { url: latestUser.avatar_url || osuAvatarUrl(latestUser.id) || "" } : undefined,
+    thumbnail: trackerFlag ? { url: trackerFlag } : latestUser ? { url: latestUser.avatar_url || osuAvatarUrl(latestUser.id) || "" } : undefined,
     footer: { text: BOT_NAME },
   };
   return {

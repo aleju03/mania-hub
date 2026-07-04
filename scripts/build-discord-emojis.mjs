@@ -5,9 +5,10 @@
 // resulting PNGs are committed under public/images/discord/emojis/. The backend
 // fetches them over HTTP from the site origin at registration time.
 //
-// Grades keep their native colored-pill look. Mods are composited the osu! way:
-// a rounded plate in the mod's difficulty colour with the glyph knocked out in
-// white, so a mod reads at a glance even at emoji size on Discord's dark theme.
+// Grades keep their native colored-pill look. Mods reproduce the real osu!
+// mod badge (src/components/ui/ModBadge.tsx): the mod-icon.svg plate shape
+// tinted the lazer ModType colour, with the glyph in the darkened same-hue
+// tone lazer uses (color-mix(in srgb-linear, black, colour 10%)).
 //
 // Run from the repo root:  node scripts/build-discord-emojis.mjs
 // Re-run after changing the source art or the catalog below.
@@ -35,11 +36,11 @@ const GRADES = {
   f: "GradeSmall-F",
 };
 
-// Difficulty colour buckets, mirroring osu!-web / the in-app ModBadge
-// (lazer's ModType categories: increase/reduction/conversion/automation/fun/system).
-const RED = "#ff5b6b"; // difficulty increase
-const GREEN = "#9fd84a"; // difficulty reduction
-const PURPLE = "#b18bff"; // conversion
+// Difficulty colour buckets, matching the in-app ModBadge / lazer's
+// OsuColour.ForModType exactly (increase/reduction/conversion/fun/system).
+const RED = "#ff6666"; // difficulty increase
+const GREEN = "#b2ff66"; // difficulty reduction
+const PURPLE = "#8c66ff"; // conversion
 const PINK = "#ff66ab"; // fun
 const YELLOW = "#ffcc22"; // system / scoring
 
@@ -106,11 +107,15 @@ const HITS = {
   miss: { color: "#ff4444", label: "miss" },
 };
 
-// Square emoji canvas. Discord scales emoji down to ~24-48px, so 128 keeps them
-// crisp while the PNGs stay tiny (well under the 256KB cap).
+// Discord scales an emoji to the line height preserving aspect, so each shape
+// is rendered at its native aspect: grade pills 2:1, mod badges at the
+// mod-icon.svg plate's 10:7 (the frontend ModBadge is 36x24 with the same
+// plate contain-fitted). 128px wide keeps them crisp at any emoji size while
+// the PNGs stay tiny (well under the 256KB cap).
 const SIZE = 128;
-const PLATE_RADIUS = 30;
-const GLYPH = 92; // glyph box inside the plate
+const MOD_W = 120;
+const MOD_H = 84; // 10:7, mod-icon.svg's native viewBox aspect
+const MOD_GLYPH_INSET = 4; // ModBadge's 1px inset on a 24px-tall badge, scaled
 
 async function svgExists(path) {
   try {
@@ -133,22 +138,41 @@ async function buildGrade(name, file) {
     .toBuffer();
 }
 
-// White silhouette of a mod glyph: render the svg, then recolour every opaque
-// pixel to white keeping its alpha. The source mods are tinted shapes the app
-// uses as masks, so only their alpha matters here.
-async function whiteGlyph(svg) {
+// Silhouette of an svg tinted to a flat colour: render it, then recolour every
+// pixel keeping its alpha. The plate and mod sources are shapes the app uses as
+// masks, so only their alpha matters here.
+async function tintedSilhouette(svg, hex, width, height) {
   const rendered = await sharp(svg, { density: 600 })
-    .resize(GLYPH, GLYPH, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .resize(width, height, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
   const { data, info } = rendered;
+  const n = parseInt(hex.slice(1), 16);
+  const rgb = [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff];
   for (let i = 0; i < data.length; i += info.channels) {
-    data[i] = 255;
-    data[i + 1] = 255;
-    data[i + 2] = 255;
+    data[i] = rgb[0];
+    data[i + 1] = rgb[1];
+    data[i + 2] = rgb[2];
   }
   return sharp(data, { raw: { width: info.width, height: info.height, channels: info.channels } }).png().toBuffer();
+}
+
+function srgbToLinear(c) {
+  const s = c / 255;
+  return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+}
+
+function linearToSrgb(l) {
+  const s = l <= 0.0031308 ? l * 12.92 : 1.055 * l ** (1 / 2.4) - 0.055;
+  return Math.min(255, Math.max(0, Math.round(s * 255)));
+}
+
+// The glyph tone ModBadge uses: color-mix(in srgb-linear, black, colour 10%).
+function glyphTone(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const mix = (shift) => linearToSrgb(srgbToLinear((n >> shift) & 0xff) * 0.1);
+  return `#${[16, 8, 0].map((shift) => mix(shift).toString(16).padStart(2, "0")).join("")}`;
 }
 
 async function buildMod(name, def) {
@@ -160,13 +184,13 @@ async function buildMod(name, def) {
       return null;
     }
   }
-  const plateSvg = Buffer.from(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}">` +
-      `<rect x="6" y="6" width="${SIZE - 12}" height="${SIZE - 12}" rx="${PLATE_RADIUS}" fill="${def.color}"/>` +
-      `</svg>`,
+  const plate = await tintedSilhouette(await readFile(join(MOD_DIR, "mod-icon.svg")), def.color, MOD_W, MOD_H);
+  const glyph = await tintedSilhouette(
+    await readFile(modPath),
+    glyphTone(def.color),
+    MOD_W - MOD_GLYPH_INSET * 2,
+    MOD_H - MOD_GLYPH_INSET * 2,
   );
-  const plate = await sharp(plateSvg).png().toBuffer();
-  const glyph = await whiteGlyph(await readFile(modPath));
   return sharp(plate).composite([{ input: glyph, gravity: "centre" }]).png().toBuffer();
 }
 

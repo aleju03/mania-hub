@@ -234,6 +234,16 @@ describe("discord embeds", () => {
     expect(snipesListEmbed([snipe()], "CR", SITE).embeds?.[0]?.description).toContain("Sniper");
   });
 
+  it("puts the country flag in the thumbnail slot for country lists, a player face for global", () => {
+    const flag = "https://osu.ppy.sh/images/flags/CR.png";
+    expect(topPlaysListEmbed([topPlay()], "CR", SITE).embeds?.[0]?.thumbnail?.url).toBe(flag);
+    expect(snipesListEmbed([snipe()], "CR", SITE).embeds?.[0]?.thumbnail?.url).toBe(flag);
+    expect(rankingsEmbed([{ rank: 1, user: { id: 1, username: "A", country_code: "CR" }, pp: 9000 }], "cr", SITE).embeds?.[0]?.thumbnail?.url).toBe(flag);
+    // The global board has no flag; its current #1 gives the card a face instead.
+    expect(rankingsEmbed([{ rank: 1, user: { id: 1, username: "A", country_code: "US" }, pp: 9000 }], "GLOBAL", SITE).embeds?.[0]?.thumbnail?.url).toBe("https://a.ppy.sh/1");
+    expect(topPlaysListEmbed([topPlay()], "GLOBAL", SITE).embeds?.[0]?.thumbnail?.url).toBe("https://a/42.png");
+  });
+
   it("renders a head-to-head compare with a verdict line", () => {
     const embed = compareEmbed(profile("A"), profile("B"), SITE).embeds?.[0];
     expect(embed?.title).toBe("A vs B");
