@@ -17,7 +17,7 @@ import {
 } from "../lib/osu";
 import type { CountryMapsFarmedSection, CountryMapsFavouritesSection } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
-import { getCountryName } from "../lib/country";
+import { getCountryName, isGlobalScope } from "../lib/country";
 import { formatNumber, formatDuration, formatTimeAgo } from "../lib/format";
 import { MANIA_PATTERN_LABELS } from "../lib/mania-patterns";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -191,8 +191,14 @@ function weightedPick<T>(items: T[], weight: (item: T) => number): T {
   return items[items.length - 1];
 }
 
+const ENABLE_MAP_CATALOG_DEV_TABS = ["1", "true", "yes", "on"].includes(
+  String(import.meta.env.VITE_DEV_MODE ?? "").trim().toLowerCase(),
+);
+
 const DEFAULT_MAPS_SEARCH: MapsSearch = {
-  tab: "farmed",
+  // Search leads the view bar when the catalog tabs are enabled, so it is
+  // also the landing tab; without the flag the country lenses are all there is.
+  tab: ENABLE_MAP_CATALOG_DEV_TABS ? "search" : "farmed",
   page: 0,
   key: "all",
   beatmapSort: "players",
@@ -230,9 +236,6 @@ const SEARCH_KEY_VALUES = ["4k", "7k", "other"];
 const SEARCH_STATUS_VALUES = ["ranked", "loved", "graveyard", "other"];
 const SEARCH_PATTERN_VALUES = ["jack", "stream", "jumpstream", "handstream", "stamina", "chordjack", "tech", "ln"];
 const SEARCH_SORT_VALUES = ["playcount", "stars", "bpm", "length", "date", "relevance"];
-const ENABLE_MAP_CATALOG_DEV_TABS = ["1", "true", "yes", "on"].includes(
-  String(import.meta.env.VITE_DEV_MODE ?? "").trim().toLowerCase(),
-);
 
 // Search range fields use 0 as "unset"; clamp anything else into [min, max].
 function clampSearchNumber(raw: unknown, min: number, max: number): number {
@@ -972,6 +975,7 @@ export const Route = createFileRoute("/maps")({
   },
   validateSearch: (search: Record<string, unknown>): MapsSearch => ({
     tab:
+      search.tab === "farmed" ||
       search.tab === "popular" ||
       search.tab === "favourites" ||
       search.tab === "random" ||
@@ -1139,6 +1143,16 @@ function MapsPage() {
   }, [randomPattern]);
   const totalRandomActive = triStateActive(randomStatus) + triStateActive(randomKey) + triStateActive(randomPattern) + (rStars > 0 || rStarsMax > 0 ? 1 : 0);
   const countryName = getCountryName(selectedCountry);
+  // Header title tracks the active lens; search/collections keep "Mania maps".
+  const scopeSuffix = isGlobalScope(selectedCountry) ? "globally" : `in ${countryName}`;
+  const lensTitle =
+    tab === "popular"
+      ? `Most played ${scopeSuffix}`
+      : tab === "favourites"
+        ? `Favourites ${scopeSuffix}`
+        : tab === "random"
+          ? `Random picks ${scopeSuffix}`
+          : `Most farmed ${scopeSuffix}`;
   const liveMapsBrowseTab = tab === "random" || isGlobalCatalogTab ? null : (tab as LiveMapsBrowseTab);
   const liveMapsPageParams = useMemo(() => liveMapsBrowseTab ? {
     tab: liveMapsBrowseTab,
@@ -1251,15 +1265,23 @@ function MapsPage() {
   }, [loadingMaps, loadedSections]);
 
   useEffect(() => {
-    if (!liveBackendEnabled || !windowActive) return;
+    if (!liveBackendEnabled) return;
     if (!liveMapsPageParams || !liveMapsPageRequestKey) return;
+
+    const cachedPage = liveMapsPageCacheRef.current.get(liveMapsPageRequestKey) ?? null;
+    // An unfocused tab defers refreshes, but the initial fill still runs so a
+    // page opened in the background doesn't sit on skeletons until focus.
+    if (!windowActive && cachedPage) {
+      setLoadingMaps(false);
+      setLoadedSections(2);
+      return;
+    }
 
     setLiveMapsAttempted(false);
     setMapsFirstBuild(false);
     setLiveMapsRefreshing(false);
     setLiveMapsProgress(null);
     let cancelled = false;
-    const cachedPage = liveMapsPageCacheRef.current.get(liveMapsPageRequestKey) ?? null;
     setLoadingMaps(!cachedPage);
     setLoadedSections(cachedPage ? 2 : 0);
     let pollTimer: ReturnType<typeof setTimeout> | null = null;
@@ -2292,7 +2314,7 @@ function MapsPage() {
     <div className="flex-1">
       <PageHeader
         iconSrc="/images/icons/rankings.svg"
-        title={isGlobalCatalogTab ? "Mania maps" : `${countryName} mania maps`}
+        title={isGlobalCatalogTab ? "Mania maps" : lensTitle}
         right={isGlobalCatalogTab ? null : (
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             {isLoading && !error && (
@@ -2381,6 +2403,38 @@ function MapsPage() {
           right half of a split Favourites segment ─────────────────────────── */}
       <div className="bg-osu-d5 border-b border-osu-b3/30">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-2 flex items-center gap-2.5 overflow-x-auto scrollbar-hide">
+          {ENABLE_MAP_CATALOG_DEV_TABS && (
+            <>
+              <button
+                onClick={() => updateMapsSearch({ tab: "search", page: 0 })}
+                aria-pressed={tab === "search"}
+                className={`relative px-3 py-2.5 text-[12px] font-medium whitespace-nowrap cursor-pointer transition-colors duration-[120ms] ${
+                  tab === "search" ? "text-osu-c1" : "text-osu-f1 hover:text-osu-l2"
+                }`}
+              >
+                search
+                {tab === "search" && (
+                  <span aria-hidden="true" className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-osu-h1" />
+                )}
+              </button>
+
+              <button
+                onClick={() => updateMapsSearch({ tab: "collections", page: 0 })}
+                aria-pressed={tab === "collections"}
+                className={`relative px-3 py-2.5 text-[12px] font-medium whitespace-nowrap cursor-pointer transition-colors duration-[120ms] ${
+                  tab === "collections" ? "text-osu-c1" : "text-osu-f1 hover:text-osu-l2"
+                }`}
+              >
+                collections
+                {tab === "collections" && (
+                  <span aria-hidden="true" className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-osu-h1" />
+                )}
+              </button>
+
+              <span aria-hidden="true" className="h-4 w-px shrink-0 bg-osu-b3/40" />
+            </>
+          )}
+
           <div className="flex items-center gap-0.5 rounded-lg bg-osu-b4/70 p-0.5">
             {browseLenses.map((lens) => (
               <button
@@ -2436,38 +2490,6 @@ function MapsPage() {
               </button>
             </div>
           </div>
-
-          {ENABLE_MAP_CATALOG_DEV_TABS && (
-            <>
-              <span aria-hidden="true" className="h-4 w-px shrink-0 bg-osu-b3/40" />
-
-              <button
-                onClick={() => updateMapsSearch({ tab: "search", page: 0 })}
-                aria-pressed={tab === "search"}
-                className={`relative px-3 py-2.5 text-[12px] font-medium whitespace-nowrap cursor-pointer transition-colors duration-[120ms] ${
-                  tab === "search" ? "text-osu-c1" : "text-osu-f1 hover:text-osu-l2"
-                }`}
-              >
-                search
-                {tab === "search" && (
-                  <span aria-hidden="true" className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-osu-h1" />
-                )}
-              </button>
-
-              <button
-                onClick={() => updateMapsSearch({ tab: "collections", page: 0 })}
-                aria-pressed={tab === "collections"}
-                className={`relative px-3 py-2.5 text-[12px] font-medium whitespace-nowrap cursor-pointer transition-colors duration-[120ms] ${
-                  tab === "collections" ? "text-osu-c1" : "text-osu-f1 hover:text-osu-l2"
-                }`}
-              >
-                collections
-                {tab === "collections" && (
-                  <span aria-hidden="true" className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-osu-h1" />
-                )}
-              </button>
-            </>
-          )}
         </div>
       </div>
 

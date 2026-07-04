@@ -32,6 +32,7 @@ import type { LiveBackendStatus, LiveCountryFeaturesSnapshot } from "../lib/live
 import { BackendOfflineScreen } from "../components/BackendOfflineScreen";
 import { seedCountryTierCache } from "../lib/use-country-warming";
 import { isWindowActive, subscribeWindowActivity } from "../lib/window-activity";
+import { reapplyThemeToDom } from "../store";
 import appCss from "../styles.css?url";
 
 /* Origin is resolved through a configured canonical URL first, then through
@@ -488,6 +489,7 @@ function RootLayout() {
     <InitialCountryContext.Provider value={initialCountry}>
       <AuthContext.Provider value={auth}>
         <PostHogProvider>
+          <ThemeRecovery />
           <WindowActivityAttribute />
           <CustomCursor />
           {backendStatus === "offline" ? (
@@ -532,6 +534,17 @@ function RootLayout() {
       </AuthContext.Provider>
     </InitialCountryContext.Provider>
   );
+}
+
+// Mount effects run after hydration commits, including the client-render
+// fallback React takes on a hydration mismatch, which resets <html>'s
+// attributes and strips the theme vars the pre-hydration script set
+// (see reapplyThemeToDom).
+function ThemeRecovery() {
+  useEffect(() => {
+    reapplyThemeToDom();
+  }, []);
+  return null;
 }
 
 function WindowActivityAttribute() {

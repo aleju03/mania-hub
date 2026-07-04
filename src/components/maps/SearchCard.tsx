@@ -1,7 +1,7 @@
 import type { LiveMapSearchEntry } from "../../lib/live-backend";
 import { formatDuration, formatNumber } from "../../lib/format";
 import { OsuLogo } from "../ui/OsuLogo";
-import { MapPreviewButton, MapPreviewProgressBar, type MapPreviewAudio } from "./MapPreviewAudio";
+import { MapPreviewButton, type MapPreviewAudio } from "./MapPreviewAudio";
 
 // Shared presentation for a single chart-analyzed map across the global Search
 // results and inside Collection detail. Country-agnostic: no player avatars,
@@ -180,7 +180,6 @@ export function SearchCard({
           <div className="text-[13px] font-semibold text-white truncate leading-tight drop-shadow-lg">{entry.title}</div>
           <div className="text-[11px] text-white/70 truncate leading-tight drop-shadow-lg">{entry.artist}</div>
         </div>
-        {preview && preview.playingSetId === entry.beatmapsetId && <MapPreviewProgressBar preview={preview} />}
       </div>
 
       <div className="px-3 py-2.5 flex flex-col gap-2 flex-1">

@@ -518,7 +518,7 @@ function SnipesPage() {
             </p>
             <Link
               to="/maps"
-              search={{ country: selectedCountry, page: 0 } as never}
+              search={{ tab: "farmed", country: selectedCountry, page: 0 } as never}
               className="mt-5 inline-flex items-center gap-1.5 rounded-lg bg-osu-pink/20 px-3.5 py-2 text-[12px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/30 hover:text-white"
             >
               <Globe className="h-3.5 w-3.5" strokeWidth={2.4} />

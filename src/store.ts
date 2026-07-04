@@ -81,6 +81,19 @@ function applyThemeSatToDom(sat: number): void {
   document.documentElement.style.setProperty("--theme-sat", String(sat / 100));
 }
 
+// React 19 treats <html> as a singleton host element: when hydration hits a
+// mismatch anywhere and falls back to a client render, re-acquiring the
+// singleton resets its attributes to the rendered props, which strips the
+// inline --theme-hue/--theme-sat the bootstrap script (and syncThemeToDom)
+// painted. suppressHydrationWarning only silences the warning; it does not
+// prevent the reset. Called from a mount effect in __root.tsx, which runs
+// after any such recovery commit, so the stored theme wins again.
+export function reapplyThemeToDom(): void {
+  const { themeHue, themeSaturation } = useAppStore.getState();
+  applyThemeHueToDom(themeHue);
+  applyThemeSatToDom(themeSaturation);
+}
+
 function clampThemeSat(value: unknown): number {
   const n = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(n)) return DEFAULT_THEME_SAT;

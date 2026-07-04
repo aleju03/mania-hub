@@ -410,7 +410,10 @@ function SearchCardSkeleton() {
           <Skeleton className="h-5 w-14 rounded" />
         </div>
         <div className="flex items-center justify-between gap-2 pt-1">
-          <Skeleton className="h-3 w-20" />
+          <div className="flex items-center gap-1.5">
+            <Skeleton className="h-7 w-7 rounded-full" />
+            <Skeleton className="h-3 w-14" />
+          </div>
           <div className="flex items-center gap-1.5">
             <Skeleton className="h-5 w-12 rounded" />
             <Skeleton className="h-5 w-12 rounded" />
@@ -423,7 +426,7 @@ function SearchCardSkeleton() {
 
 function SearchCardGridSkeleton() {
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4" aria-hidden="true">
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4" aria-hidden="true">
       {Array.from({ length: SEARCH_INITIAL_SKELETON_COUNT }).map((_, index) => (
         <SearchCardSkeleton key={index} />
       ))}
@@ -719,7 +722,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
           <div className="py-16 text-center text-[13px] text-osu-f1">No maps match these filters.</div>
         ) : (
           <div className={loading ? "opacity-60 transition-opacity" : "transition-opacity"} aria-busy={loading}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {items.map((entry: LiveMapSearchEntry) => (
                 <SearchCard
                   key={entry.beatmapId}
