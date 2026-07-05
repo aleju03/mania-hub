@@ -113,6 +113,15 @@ interface CollectionRecipe {
   sortOrder: number;
 }
 
+// 4K jack has no Delta+ population: dense jack at that level is chorded, so
+// the router files every legit chart under chordjack (e.g. Homu's Delta
+// training pack), leaving the single-column-primary residue - a ~30-chart pool
+// of misestimated troll/vibro files. 7K keeps its top bucket; its 14+ pool is
+// real boss-tier jack content.
+function skipDanBucket(pattern: string, keyCount: number, bucket: DifficultyBucket): boolean {
+  return pattern === "jack" && keyCount === 4 && bucket.id === "d14plus";
+}
+
 function buildRecipes(): CollectionRecipe[] {
   const recipes: CollectionRecipe[] = [];
   let order = 0;
@@ -120,6 +129,7 @@ function buildRecipes(): CollectionRecipe[] {
     const label = PATTERN_LABELS[pattern] ?? pattern;
     for (const keyCount of COLLECTION_KEYS) {
       for (const bucket of DAN_BUCKETS) {
+        if (skipDanBucket(pattern, keyCount, bucket)) continue;
         const rangeText = danBucketText(bucket, keyCount, pattern);
         recipes.push({
           id: `pattern:${pattern}:${keyCount}k:dan:${bucket.id}`,
