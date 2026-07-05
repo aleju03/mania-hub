@@ -124,7 +124,13 @@ async function loadWasmModule(loader, wasmFileName) {
         ]);
         const globalScope = globalThis;
         if (typeof globalScope.__dirname === "undefined") {
-            globalScope.__dirname = urlModule.fileURLToPath(new URL("./versions/", import.meta.url));
+            // No `new URL("./versions/", ...)` here: Vite resolves the directory
+            // literal to versions/index.js and copies that file verbatim into the
+            // build assets, whose dangling relative imports then fail the
+            // verify-build-assets check. The glue only needs __dirname defined
+            // (it dereferences it at factory time); it never reads files from it
+            // because wasmBinary is handed over below.
+            globalScope.__dirname = urlModule.fileURLToPath(import.meta.url).replace(/[^/\\]*$/, "") + "versions/";
         }
         if (typeof globalScope.require === "undefined") {
             globalScope.require = moduleModule.createRequire(import.meta.url);
