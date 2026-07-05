@@ -14,7 +14,7 @@ afterEach(async () => {
   dirs.length = 0;
 });
 
-async function setupLimiters(options: { targetPerMinute: number; hardPerMinute: number }) {
+async function setupLimiters(options: { targetPerMinute: number; hardPerMinute: number; maxReserveWaitMs?: number }) {
   const dir = await mkdtemp(join(tmpdir(), "mania-osu-shared-limiter-"));
   dirs.push(dir);
   const databaseUrl = `file:${join(dir, "test.db")}`;
@@ -67,6 +67,23 @@ describe("sqlite shared osu! rate limiter", () => {
     await vi.advanceTimersByTimeAsync(2);
 
     expect(await secondStart).toBeGreaterThanOrEqual(startedAt + 1_000);
+  });
+
+  it("gives up reserving after maxReserveWaitMs instead of starving forever", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-01T00:00:00.000Z"));
+    const { first, second } = await setupLimiters({ targetPerMinute: 1, hardPerMinute: 1, maxReserveWaitMs: 30_000 });
+
+    await first.reserve("job:first", "/first", "job");
+    // The single per-minute slot is taken for the next 60s, so this reserve
+    // can never land within its 30s budget and must reject, not hang.
+    const outcome = second.reserve("job:second", "/second", "job").then(
+      () => "resolved",
+      (error: unknown) => String(error),
+    );
+
+    await vi.advanceTimersByTimeAsync(30_001);
+    expect(await outcome).toContain("starved");
   });
 
   it("lets interactive calls bypass shared target spacing while respecting the hard cap", async () => {

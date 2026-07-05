@@ -1,6 +1,7 @@
 import sanitizeHtml from "sanitize-html";
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
+import { errorContext, logWarn } from "../logger.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { calculateWeightedPpTotal, getScoreIdentity, getScoreTimestamp, nowIso, scoreHasPublicLeaderboard } from "../shared/score.js";
 import { compactScoresForStorage, hydrateScoresDisplayMetadata, persistScoresDisplayMetadata } from "../shared/score-storage.js";
@@ -413,11 +414,17 @@ function refreshProfileSnapshotInBackground(
   row: ProfileSnapshotRow,
 ): void {
   void fetchAndStoreProfileSnapshotShared(db, osu, key).catch(async (error) => {
+    // Recording the failure must never itself throw: when the refresh died to
+    // writer saturation (SQLITE_BUSY past the retry budget) this bookkeeping
+    // write tends to hit the same wall, and a rejection escaping this voided
+    // chain is an unhandled rejection that kills the whole process.
     await exec(db, "update profile_snapshots set refresh_error = ?, updated_at = ? where user_id = ?", [
       error instanceof Error ? error.message : String(error),
       nowIso(),
       row.user_id,
-    ]);
+    ]).catch((recordError) => {
+      logWarn("profile_refresh_error_record_failed", { user_id: row.user_id, ...errorContext(recordError) });
+    });
   });
 }
 

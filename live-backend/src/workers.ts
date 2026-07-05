@@ -35,7 +35,21 @@ interface WorkerLane {
   jobTypes?: string[];
   claimLimit: number;
   intervalMs: number;
+  // Watchdog ceiling for a single job invocation; see DEFAULT_JOB_WATCHDOG_MS.
+  jobTimeoutMs?: number;
 }
+
+// A job whose promise never settles (a starved osu! API slot, a wedged render
+// subprocess) would otherwise park its lane forever: the lane tick awaits its
+// claimed jobs before scheduling the next claim, and most job types have no
+// other consumer to reclaim them. The watchdog rejects the await so the job
+// takes the normal fail-with-backoff path and the lane keeps ticking. The
+// abandoned promise stays running detached; its eventual settlement is ignored
+// (job handlers are idempotent upserts). Jobs are designed short (long work
+// self-chains in batches), so ten minutes only ever fires on a genuine hang.
+const DEFAULT_JOB_WATCHDOG_MS = 10 * 60_000;
+
+export class JobWatchdogTimeoutError extends Error {}
 
 interface WorkerActiveJob {
   id: number;
@@ -121,16 +135,20 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     intervalMs: 1_000,
   },
   {
+    // Renders and finalization legitimately run for many minutes (headless
+    // Chrome, ffmpeg mux, R2 upload), so give them a wider watchdog ceiling.
     name: "replay-video-render",
     jobTypes: ["replay_video_server_render"],
     claimLimit: 1,
     intervalMs: 1_000,
+    jobTimeoutMs: 45 * 60_000,
   },
   {
     name: "replay-video-finalize",
     jobTypes: ["replay_video_export"],
     claimLimit: 1,
     intervalMs: 1_000,
+    jobTimeoutMs: 45 * 60_000,
   },
   {
     // One slow lane for the global map search index build and the collections
@@ -244,7 +262,7 @@ export class WorkerRunner {
     this.activeJobs.set(lane, [...(this.activeJobs.get(lane) ?? []), activeJob]);
     try {
       logInfo("job_start", { job_id: job.id, type: job.type, lane, worker_id: workerId, attempts: job.attempts + 1 });
-      await this.handle(job);
+      await this.handleWithWatchdog(job, lane);
       await this.queue.complete(job.id);
       logInfo("job_done", { job_id: job.id, type: job.type, lane, worker_id: workerId });
       await this.events.append("job_status", null, { id: job.id, type: job.type, status: "done" }, `job:${job.id}:done:${job.attempts}`);
@@ -268,6 +286,24 @@ export class WorkerRunner {
       } else {
         this.activeJobs.delete(lane);
       }
+    }
+  }
+
+  private async handleWithWatchdog(job: Job, lane: string): Promise<void> {
+    const timeoutMs = this.lanes.find((candidate) => candidate.name === lane)?.jobTimeoutMs ?? DEFAULT_JOB_WATCHDOG_MS;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    try {
+      await Promise.race([
+        this.handle(job),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => {
+            reject(new JobWatchdogTimeoutError(`job watchdog: ${job.type} still running after ${timeoutMs}ms, releasing the lane`));
+          }, timeoutMs);
+          timer.unref?.();
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
     }
   }
 

@@ -6,30 +6,47 @@ import { INTERACTIVE_PAUSE_CAP_MS } from "./client.js";
 const WINDOW_MS = 60_000;
 const PRUNE_AFTER_MS = 5 * 60_000;
 const PAUSE_KEY = "control:osu_rate_limit_paused_until";
+// Reservation is a retry loop with no queue: every other caller (in this
+// process or the sibling server/worker process) that lands a reservation
+// pushes the next background slot further out, so under sustained API
+// saturation one unlucky caller can starve indefinitely. That starvation
+// parked a whole worker lane in prod (the lane awaits its job, the job awaits
+// this reserve). Give up after this long instead; the caller's own retry
+// machinery (job backoff, HTTP error) handles it far more gracefully than an
+// await that never settles.
+const DEFAULT_MAX_RESERVE_WAIT_MS = 10 * 60_000;
 
 export interface SqliteSharedRateLimiterOptions {
   provider?: string;
   targetPerMinute: number;
   hardPerMinute: number;
+  maxReserveWaitMs?: number;
 }
 
 export class SqliteSharedRateLimiter implements SharedLimiter {
   private readonly provider: string;
   private readonly targetPerMinute: number;
   private readonly hardPerMinute: number;
+  private readonly maxReserveWaitMs: number;
   private reservationTail: Promise<void> = Promise.resolve();
 
   constructor(private readonly db: Db, options: SqliteSharedRateLimiterOptions) {
     this.provider = options.provider ?? "osu";
     this.targetPerMinute = Math.max(1, Math.floor(options.targetPerMinute));
     this.hardPerMinute = Math.max(1, Math.floor(options.hardPerMinute));
+    this.maxReserveWaitMs = Math.max(1, Math.floor(options.maxReserveWaitMs ?? DEFAULT_MAX_RESERVE_WAIT_MS));
   }
 
   async reserve(caller: string, path: string, lane: LimiterLane): Promise<number> {
+    const deadline = Date.now() + this.maxReserveWaitMs;
     for (;;) {
       const waitMs = await this.withReservationLock(() => this.tryReserve(caller, path, lane));
       if (waitMs <= 0) return Date.now();
-      await sleep(waitMs);
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) {
+        throw new Error(`osu! API shared limiter starved ${caller} ${path} for ${this.maxReserveWaitMs}ms`);
+      }
+      await sleep(Math.min(waitMs, remainingMs));
     }
   }
 

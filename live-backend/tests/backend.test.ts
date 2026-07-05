@@ -1012,6 +1012,25 @@ describe("live backend", () => {
     ]);
   });
 
+  it("fails a hung job via the lane watchdog instead of parking the lane", async () => {
+    const { db, queue, events, ingestor } = await setup();
+
+    await queue.enqueue("enrich_user", "user:101", { userId: 101 });
+
+    const lane = { name: "fast", jobTypes: ["enrich_user"], claimLimit: 1, intervalMs: 750, jobTimeoutMs: 25 };
+    const worker = new WorkerRunner(db, queue, events, {} as never, ingestor, "test-worker", [lane]);
+    // A handler whose promise never settles (a starved API slot in prod).
+    (worker as unknown as { handle: () => Promise<void> }).handle = () => new Promise<void>(() => {});
+
+    await (worker as unknown as { runLaneOnce: (lane: typeof lane) => Promise<void> }).runLaneOnce(lane);
+
+    const job = (await exec(db, "select status, last_error from jobs where type = 'enrich_user'")).rows[0];
+    expect(job.status).toBe("failed");
+    expect(String(job.last_error)).toContain("watchdog");
+    // The lane is free again: no active job left behind.
+    expect(worker.status().lanes[0].activeJobs).toEqual([]);
+  });
+
   it("trims a runnable reserved-lane backlog to its reserve and keeps it out of shared depth", async () => {
     const { db, queue } = await setup();
     const now = new Date().toISOString();
