@@ -250,6 +250,60 @@ export async function getFarmHelperSnapshot(
   return snapshot;
 }
 
+export interface FarmHelperBacktestOptions {
+  asOf: number;
+  keyMode?: FarmHelperKeyMode;
+  view?: FarmHelperView;
+  limit?: number;
+}
+
+// Offline backtest entry point. Reconstructs a farm-helper snapshot "as of" a
+// past cutoff from stored data only (no osu! API, no top-level cache), so the
+// maintenance harness can score recommendation quality before and after each
+// redesign stage. The subject's best scores are filtered by ended_at here; peer
+// farmed rows are filtered by played_at inside buildSnapshot. Never call this on
+// the HTTP path: it takes an already-resolved profile and skips all caching.
+export async function buildFarmHelperSnapshotForBacktest(
+  db: Db,
+  user: Record<string, unknown>,
+  bestScores: OscScore[],
+  options: FarmHelperBacktestOptions,
+): Promise<FarmHelperSnapshot> {
+  const requestedKeyMode = options.keyMode ?? "any";
+  const view = options.view ?? "gain";
+  const limit = clampLimit(options.limit);
+  const asOf = options.asOf;
+
+  const statistics = asRecord(user.statistics);
+  const subjectPp = numberOr(statistics.pp, 0);
+  const subjectVariantPps = getVariantPps(statistics);
+  const subjectVariantPp = getVariantPp(subjectVariantPps, requestedKeyMode);
+  const username = String(user.username ?? "");
+  const avatarUrl = String(user.avatar_url ?? "");
+  const coverUrl = String(user.cover_url ?? asRecord(user.cover).url ?? "");
+
+  const asOfScores = bestScores.filter((score) => {
+    const endedAt = score.ended_at;
+    if (!endedAt) return true;
+    const ms = Date.parse(endedAt);
+    return !Number.isFinite(ms) || ms <= asOf;
+  });
+
+  return buildSnapshot(db, asOfScores, {
+    userId: Number(user.id ?? 0),
+    username,
+    avatarUrl,
+    coverUrl,
+    subjectPp,
+    subjectVariantPp,
+    subjectVariantPps,
+    requestedKeyMode,
+    view,
+    limit,
+    asOf,
+  });
+}
+
 async function resolveProfile(db: Db, osu: ProfileOsuClient, rawKey: string) {
   try {
     return await getPlayerProfileSnapshot(db, osu, rawKey);
@@ -273,9 +327,15 @@ async function buildSnapshot(
     requestedKeyMode: FarmHelperKeyMode;
     view: FarmHelperView;
     limit: number;
+    // Internal-only "as of" cutoff (epoch ms) used exclusively by the offline
+    // backtest harness to reconstruct a historical snapshot: subject best scores
+    // are pre-filtered by the caller, peer farmed rows are filtered by played_at,
+    // and all in-memory caches are bypassed. Never set on the HTTP path.
+    asOf?: number;
   },
 ): Promise<FarmHelperSnapshot> {
   const isPopular = ctx.view === "popular";
+  const asOf = ctx.asOf;
   const generatedAt = nowIso();
   // Per-beatmap best pp the subject already has in their top plays, and the flat
   // pp list used as the baseline for net-weighted-pp gain estimation.
@@ -315,7 +375,7 @@ async function buildSnapshot(
     ? getAnyPrimaryKeyModes(subjectModeStatsByKey, ctx.subjectVariantPps)
     : new Set<ConcreteFarmHelperKeyMode>();
   const anyOffKeySupport = keyMode === "any"
-    ? await collectAnyOffKeyCandidateSupport(db, ctx, subjectModeStatsByKey, anyPrimaryKeyModes)
+    ? await collectAnyOffKeyCandidateSupport(db, ctx, subjectModeStatsByKey, anyPrimaryKeyModes, asOf)
     : null;
 
   const fitStars = rankedScores
@@ -333,6 +393,7 @@ async function buildSnapshot(
   // --- Peers: nearest-by-pp players across all countries, then band-filter ---
   const { peers, mode: peerMode } = await selectPeerBand(db, ctx.userId, ctx.subjectPp, keyMode, subjectPeerPp, {
     strictKeyMode: keyMode !== "any",
+    asOf,
   });
 
   const emptyBand = {
@@ -361,7 +422,7 @@ async function buildSnapshot(
 
   // --- Candidate aggregation from peers' farmed maps ---
   const peerIds = peers.map((p) => p.userId);
-  const peerFarmed = await aggregatePeerFarmedMaps(db, peerIds);
+  const peerFarmed = await aggregatePeerFarmedMaps(db, peerIds, asOf);
   const peerSampleSize = peerFarmed.farmDataPeerCount;
   const coveredSnapshot: FarmHelperSnapshot = {
     ...baseSnapshot,
@@ -579,8 +640,13 @@ async function selectPeerBand(
   subjectPp: number,
   keyMode: FarmHelperKeyMode,
   subjectModePp: number,
-  options: { strictKeyMode?: boolean } = {},
+  options: { strictKeyMode?: boolean; asOf?: number } = {},
 ): Promise<{ peers: Array<{ userId: number; pp: number }>; mode: string }> {
+  // The backtest bypasses the cache entirely: peer selection itself is as-of
+  // independent (it reads current pp/key-stats), but skipping the cache keeps
+  // one subject's run from leaking into another and honors the harness contract.
+  if (options.asOf != null) return computePeerBand(db, userId, subjectPp, keyMode, subjectModePp, options);
+
   const cache = getPeerBandCache(db);
   const strictKey = options.strictKeyMode ? "strict" : "fallback";
   const cacheKey = `${userId}:${roundCacheNumber(subjectPp)}:${keyMode}:${roundCacheNumber(subjectModePp)}:${strictKey}`;
@@ -748,7 +814,7 @@ export async function getFarmHelperFarmers(
   return { beatmapId, total, farmers };
 }
 
-async function aggregatePeerFarmedMaps(db: Db, peerIds: number[]): Promise<PeerFarmedAggregation> {
+async function aggregatePeerFarmedMaps(db: Db, peerIds: number[], asOf?: number): Promise<PeerFarmedAggregation> {
   const byPeerLane = new Map<string, CanonicalFarmedScore>();
   for (let i = 0; i < peerIds.length; i += 900) {
     const chunk = peerIds.slice(i, i + 900);
@@ -764,6 +830,10 @@ async function aggregatePeerFarmedMaps(db: Db, peerIds: number[]): Promise<PeerF
     for (const row of rows) {
       const farmed = parseFarmedScoreRow(row);
       if (!farmed) continue;
+      // Backtest as-of reconstruction: a farmed row only counts if it was set on
+      // or before the cutoff. Rows with an unknown played_at (playedAtMs === 0)
+      // are kept (better slight leakage than dropping most of the pool).
+      if (asOf != null && farmed.playedAtMs > 0 && farmed.playedAtMs > asOf) continue;
       keepBestFarmedScore(byPeerLane, farmed);
     }
   }
@@ -847,6 +917,7 @@ async function collectAnyOffKeyCandidateSupport(
   },
   subjectModeStatsByKey: Record<ConcreteFarmHelperKeyMode, { weightedPp: number; topPp: number; scoreCount: number }>,
   primaryModes: Set<ConcreteFarmHelperKeyMode>,
+  asOf?: number,
 ): Promise<Map<ConcreteFarmHelperKeyMode, Set<string>>> {
   const support = new Map<ConcreteFarmHelperKeyMode, Set<string>>();
   for (const mode of FARM_HELPER_CONCRETE_KEY_MODES) {
@@ -854,10 +925,10 @@ async function collectAnyOffKeyCandidateSupport(
     const subjectModePp = ctx.subjectVariantPps[mode] ?? subjectModeStatsByKey[mode].weightedPp;
     if (!Number.isFinite(subjectModePp) || subjectModePp <= 0) continue;
 
-    const { peers } = await selectPeerBand(db, ctx.userId, ctx.subjectPp, mode, subjectModePp, { strictKeyMode: true });
+    const { peers } = await selectPeerBand(db, ctx.userId, ctx.subjectPp, mode, subjectModePp, { strictKeyMode: true, asOf });
     if (peers.length === 0) continue;
 
-    const peerFarmed = await aggregatePeerFarmedMaps(db, peers.map((peer) => peer.userId));
+    const peerFarmed = await aggregatePeerFarmedMaps(db, peers.map((peer) => peer.userId), asOf);
     const peerSampleSize = peerFarmed.farmDataPeerCount;
     if (peerSampleSize === 0) continue;
 

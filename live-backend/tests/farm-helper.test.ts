@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
-import { FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapshot } from "../src/features/farm-helper.js";
+import { buildFarmHelperSnapshotForBacktest, FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapshot } from "../src/features/farm-helper.js";
 import { calculateWeightedPpTotal, nowIso } from "../src/shared/score.js";
 import { OsuApiError, type OsuApiClient } from "../src/osu/client.js";
 import type { OscScore, OsuMod } from "../src/shared/types.js";
@@ -723,5 +723,43 @@ describe("farm helper", () => {
     } as unknown as Pick<OsuApiClient, "getUser" | "getUserByKey" | "getUserBestScoresWindow">;
 
     await expect(getFarmHelperSnapshot(db, osu, "ghost")).rejects.toBeInstanceOf(FarmHelperUserNotFoundError);
+  });
+
+  it("backtest reconstruction filters peer farmed rows and subject scores by the asOf cutoff", async () => {
+    const BM_PAST = 20;
+    const BM_FUTURE = 21;
+    const asOf = Date.parse("2024-06-01T00:00:00Z");
+
+    const bestScores = buildSubjectBestScores();
+    // A subject score set AFTER the cutoff must be ignored, so BM_PAST stays a
+    // "missing" recommendation rather than looking already-owned.
+    bestScores.push(subjectScore(BM_PAST, 900, "2024-07-15T00:00:00Z"));
+
+    await insertBeatmapMeta(BM_PAST);
+    await insertBeatmapMeta(BM_FUTURE);
+    for (let i = 0; i < 15; i += 1) {
+      const id = 200 + i;
+      await insertUser(id, SUBJECT_PP, i < 8 ? "CR" : "US");
+      // BM_PAST farmed before the cutoff (kept), BM_FUTURE after (dropped).
+      await insertFarmed("CR", id, BM_PAST, 620, "2024-05-01T00:00:00Z", [], "2024-05-01T00:00:00Z");
+      await insertFarmed("CR", id, BM_FUTURE, 620, "2024-07-01T00:00:00Z", [], "2024-07-01T00:00:00Z");
+    }
+
+    const user = {
+      id: SUBJECT_ID,
+      username: "Subject",
+      avatar_url: "https://a.ppy.sh/1",
+      statistics: { pp: SUBJECT_PP, variants: [] },
+    };
+
+    const snapshot = await buildFarmHelperSnapshotForBacktest(db, user, bestScores, { asOf, view: "gain", limit: 100 });
+
+    const byBeatmap = new Map(snapshot.recs.map((rec) => [rec.beatmapId, rec]));
+    // The future-only map has no peer support as of the cutoff -> not recommended.
+    expect(byBeatmap.has(BM_FUTURE)).toBe(false);
+    // The past map survives, and the subject's post-cutoff score is ignored.
+    const past = byBeatmap.get(BM_PAST);
+    expect(past?.reason).toBe("missing");
+    expect(past?.subjectPp).toBeNull();
   });
 });
