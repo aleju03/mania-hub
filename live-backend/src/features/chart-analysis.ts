@@ -274,15 +274,26 @@ export async function enqueueChartAnalysisBackfill(
   const missingClause = options.includeFailed
     ? "(a.beatmap_id is null or a.status in ('failed'))"
     : "a.beatmap_id is null";
+  // Prioritize charts the farm helper actually ranks: analyze the most-farmed
+  // maps first so the ~half of farmed maps still missing analysis close their
+  // coverage gap before the long tail of never-farmed charts. The farm-count
+  // derived table scans the (beatmap_id, ...) index; this runs at most once per
+  // ~20s top-up, so the sort cost is background, not a hot path.
   const rows = (await exec(
     db,
     `select f.beatmap_id as beatmap_id
      from beatmap_osu_files f
      left join beatmap_chart_analysis a
        on a.beatmap_id = f.beatmap_id and a.analysis_version = ?
+     left join (
+       select beatmap_id, count(*) as farm_count
+       from country_maps_farmed_scores
+       group by beatmap_id
+     ) fc on fc.beatmap_id = f.beatmap_id
      where f.error is null
        and (f.content != '' or f.content_blob is not null)
        and ${missingClause}
+     order by coalesce(fc.farm_count, 0) desc, f.beatmap_id
      limit ?`,
     [CHART_ANALYSIS_VERSION, safeLimit],
   )).rows;
