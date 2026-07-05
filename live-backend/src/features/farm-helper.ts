@@ -5,8 +5,9 @@ import { calculateWeightedPpTotal, extractManiaVariantPps, getModAcronyms, getSc
 import type { OscScore } from "../shared/types.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { calibrateProxy, getKeyModePeerPool, type FarmHelperKeyCount } from "./farm-helper-key-stats.js";
-import { aggregateShape, computeShapeWeights, readChartShapes, readPeerShapes, SHAPE_MIN_CHARTS, type ChartShape, type UserShape } from "./farm-helper-shape.js";
+import { aggregateShape, computeShapeWeights, MSD_SKILLSETS, readChartMsd, readChartShapes, readPeerShapes, shapeSimilarity, SHAPE_MIN_CHARTS, type ChartShape, type UserShape } from "./farm-helper-shape.js";
 import { enqueueMissingChartAnalyses } from "./chart-analysis.js";
+import { getPlayerSkillBreakdown } from "./player-skills.js";
 import type { JobQueue } from "../jobs/queue.js";
 
 // Farm Helper recommends maps a player should farm, ranked by estimated pp gain.
@@ -57,6 +58,10 @@ export interface FarmHelperRec {
   peerCount: number;
   peerSampleSize: number;
   peerFraction: number;
+  // Shape similarity between the subject and this chart in [0,1], or null when
+  // either side has no comparable shape. Distinct from peerFraction: this is
+  // "is this my kind of chart", not "how many peers farm it".
+  patternFit: number | null;
   peerPpMedian: number;
   peerPpP75: number;
   latestPeerPlayedAt: string | null;
@@ -115,6 +120,13 @@ const PROXY_CONFIDENCE = 0.85;
 const MIN_EFFECTIVE_PEERS = 12;
 const KNN_MAX_PEERS = 400;
 const KNN_WIDEN_MODES = ["knn", "knn_wide", "knn_wider", "knn_widest"] as const;
+// Feasibility gate (Stage 4): drop a 4K chart from the gain view when its
+// dominant MSD skillset exceeds the subject's rating for it by this margin.
+// TODO(farm-helper-v2 7.3): stored MSD is 4K at 1.0x only, so the gate is limited
+// to the "normal" speed lane. When chart analysis stores MSD at 1.5x/0.75x (next
+// CHART_ANALYSIS_VERSION bump), extend the gate to the DT/HT lanes.
+const FEASIBILITY_MSD_MARGIN = 3.0;
+const FEASIBILITY_MIN_ANALYZED_PLAYS = 30;
 const PEER_MIN_COUNT = 3;
 const PEER_MIN_FRACTION = 0.12;
 // Popular mode is a browse view, so the popularity floor is lower than the
@@ -431,8 +443,10 @@ async function buildSnapshot(
 
   // Chart-shape weighting: down-weight peers whose farm charts look unlike the
   // subject's, so an LN main and a jack main at the same pp get different recs.
+  // The returned subject shape also drives per-candidate patternFit below.
+  let subjectShape: UserShape | null = null;
   if (peers.length > 0) {
-    await applyShapeWeighting(db, peers, rankedScores, keyMode, subjectModeStatsByKey, ctx.subjectVariantPps, ctx.queue);
+    subjectShape = await applyShapeWeighting(db, peers, rankedScores, keyMode, subjectModeStatsByKey, ctx.subjectVariantPps, ctx.queue);
   }
 
   const emptyBand = {
@@ -482,6 +496,12 @@ async function buildSnapshot(
   const beatmapMeta = await readBeatmapMeta(db, beatmapIds);
   const beatmapsetIds = [...new Set([...beatmapMeta.values()].map((m) => m.beatmapsetId))];
   const beatmapsetMeta = await readBeatmapsetMeta(db, beatmapsetIds);
+  // Per-candidate chart shapes drive patternFit (ranking). Only needed when the
+  // subject has a shape to compare against.
+  const candidateShapes = subjectShape ? await readChartShapes(db, beatmapIds) : new Map<number, ChartShape>();
+  // Feasibility gate (gain view only): the subject's 4K skill ratings vs each
+  // chart's dominant MSD skillset. Fetched once, never blocks or computes inline.
+  const feasibility = isPopular ? null : await buildFeasibilityContext(db, ctx.userId, beatmapIds, ctx.queue);
 
   type ScoredRec = FarmHelperRec & { difficultyFit: number; recencyFit: number };
   const scored: ScoredRec[] = [];
@@ -490,6 +510,11 @@ async function buildSnapshot(
     if (!meta) continue;
     if (keyMode !== "any" && meta.keys !== (keyMode === "7k" ? 7 : 4)) continue;
     if (!isPopular && hasFit && (meta.stars < starLo - STAR_BUFFER || meta.stars > starHi + STAR_BUFFER)) continue;
+    // Feasibility: a chart whose dominant MSD skillset outstrips the subject's
+    // rating for it is not realistically farmable now, so drop it in the gain
+    // view (popular still browses it). 4K + 1.0x lane only, since stored MSD is
+    // 4K at 1.0x; other lanes fall through to the existing pp caps.
+    if (feasibility && meta.keys === 4 && agg.speedBucket === "normal" && isChartInfeasible(agg.beatmapId, feasibility)) continue;
 
     // Benchmark quantiles are weighted by the symmetric benchmark kernel (wB) so
     // an up-skewed discovery cohort cannot inflate the "if you get X" target.
@@ -552,6 +577,8 @@ async function buildSnapshot(
     const setMeta = beatmapsetMeta.get(meta.beatmapsetId);
     const difficultyFit = hasFit ? clamp01(1 - Math.abs(meta.stars - starMid) / starSpread) : 0.5;
     const recencyFit = clamp01(1 - (Date.now() - agg.latestUpdatedMs) / STALE_ACTIVE_MS);
+    const chartShape = candidateShapes.get(agg.beatmapId);
+    const patternFit = subjectShape && chartShape ? computePatternFit(subjectShape, chartShape) : null;
 
     scored.push({
       beatmapId: agg.beatmapId,
@@ -577,6 +604,7 @@ async function buildSnapshot(
       peerCount: agg.entries.length,
       peerSampleSize,
       peerFraction: round2(agg.entries.length / peerSampleSize),
+      patternFit: patternFit == null ? null : round2(patternFit),
       peerPpMedian: round2(median),
       peerPpP75: round2(p75),
       latestPeerPlayedAt: dateMsToIso(Math.max(0, ...agg.playedAtMs)),
@@ -612,10 +640,13 @@ async function buildSnapshot(
   } else {
     const maxGain = Math.max(...ranked.map((r) => r.estimatedPpGain), 1);
     for (const rec of ranked) {
+      // patternFit (shape match) replaces the star-proximity difficultyFit as the
+      // fit term when available; difficultyFit is the fallback for shapeless charts.
+      const fit = rec.patternFit ?? rec.difficultyFit;
       rec.rankScore = round2(
         0.5 * (rec.estimatedPpGain / maxGain)
-        + 0.25 * rec.peerFraction
-        + 0.15 * rec.difficultyFit
+        + 0.2 * rec.peerFraction
+        + 0.2 * fit
         + 0.1 * rec.recencyFit,
       );
     }
@@ -964,9 +995,9 @@ async function applyShapeWeighting(
   subjectModeStatsByKey: Record<ConcreteFarmHelperKeyMode, { weightedPp: number }>,
   subjectVariantPps: Partial<Record<ConcreteFarmHelperKeyMode, number>>,
   queue?: JobQueue,
-): Promise<void> {
+): Promise<UserShape | null> {
   const shapeKeyMode = pickShapeKeyMode(keyMode, subjectModeStatsByKey, subjectVariantPps);
-  if (!shapeKeyMode) return;
+  if (!shapeKeyMode) return null;
 
   const { shape: subjectShape, uncovered } = await computeSubjectShape(db, rankedScores, shapeKeyMode);
   // Self-heal: enqueue chart analysis for the subject's un-analyzed top plays so
@@ -974,7 +1005,7 @@ async function applyShapeWeighting(
   if (queue && uncovered.length > 0) {
     void enqueueMissingChartAnalyses(db, queue, uncovered).catch(() => {});
   }
-  if (!subjectShape) return;
+  if (!subjectShape) return null;
 
   const userIds = peers.map((p) => p.userId);
   const peerShapes = await readPeerShapes(db, userIds, keyModeToKeys(shapeKeyMode));
@@ -984,6 +1015,9 @@ async function applyShapeWeighting(
     peer.wD *= wS;
     peer.wB *= wS;
   }
+  // Returned so the candidate loop can score per-map patternFit against the same
+  // subject shape.
+  return subjectShape;
 }
 
 // The keymode whose shape drives weighting: the explicit request, or (for "any")
@@ -1026,6 +1060,48 @@ async function computeSubjectShape(
     entries.push({ shape, weight: 0.95 ** rank * (score.pp as number) });
   });
   return { shape: aggregateShape(entries), uncovered };
+}
+
+// patternFit: shape cosine clamped to [0,1] (pat/msd vectors are non-negative),
+// or null when the shapes are not comparable.
+function computePatternFit(subjectShape: UserShape, chartShape: ChartShape): number | null {
+  const sim = shapeSimilarity(subjectShape, chartShape);
+  return sim == null ? null : clamp01(sim);
+}
+
+interface FeasibilityContext {
+  ratings: Record<string, number>;
+  chartMsd: Map<number, number[]>;
+}
+
+// Builds the feasibility context (subject 4K skill ratings + candidate raw MSD).
+// Returns null (gate disabled) without a queue (backtest), when the subject has
+// no ready 4K skill rating with enough analyzed plays, or when no candidate has
+// MSD. Reading the ratings enqueues a recompute if stale; it never blocks.
+async function buildFeasibilityContext(
+  db: Db,
+  userId: number,
+  beatmapIds: number[],
+  queue?: JobQueue,
+): Promise<FeasibilityContext | null> {
+  if (!queue) return null;
+  const breakdown = await getPlayerSkillBreakdown(db, queue, userId);
+  if (breakdown.status !== "ready") return null;
+  const mode4k = breakdown.modes.find((mode) => mode.keyCount === 4);
+  if (!mode4k || mode4k.analyzedPlays < FEASIBILITY_MIN_ANALYZED_PLAYS) return null;
+  const chartMsd = await readChartMsd(db, beatmapIds);
+  if (chartMsd.size === 0) return null;
+  return { ratings: mode4k.ratings, chartMsd };
+}
+
+function isChartInfeasible(beatmapId: number, ctx: FeasibilityContext): boolean {
+  const msd = ctx.chartMsd.get(beatmapId);
+  if (!msd || msd.length !== MSD_SKILLSETS.length) return false;
+  let dominantIdx = 0;
+  for (let i = 1; i < msd.length; i++) if (msd[i] > msd[dominantIdx]) dominantIdx = i;
+  const rating = ctx.ratings[MSD_SKILLSETS[dominantIdx]];
+  if (!Number.isFinite(rating)) return false;
+  return msd[dominantIdx] > rating + FEASIBILITY_MSD_MARGIN;
 }
 
 async function collectAnyOffKeyCandidateSupport(

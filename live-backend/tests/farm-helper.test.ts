@@ -140,22 +140,44 @@ async function insertBeatmapMeta(beatmapId: number, keys = 4, stars = 5): Promis
 }
 
 // Pattern-mix order: jack, stream, jumpstream, handstream, stamina, chordjack, tech, ln.
-async function insertSearchIndex(beatmapId: number, pat: number[], keyCount = 4): Promise<void> {
+async function insertSearchIndex(beatmapId: number, pat: number[], keyCount = 4, msdValues?: Record<string, number>): Promise<void> {
+  const msdJson = msdValues ? JSON.stringify({ etternaVersion: "test", values: { ...msdValues, Overall: Math.max(...Object.values(msdValues)) } }) : null;
+  const msdOverall = msdValues ? Math.max(...Object.values(msdValues)) : null;
   await exec(
     db,
     `insert into map_search_index
        (beatmap_id, beatmapset_id, analysis_version, title, artist, creator, version, search_text,
         key_count, stars, bpm, length, status, primary_pattern,
-        pat_jack, pat_stream, pat_jumpstream, pat_handstream, pat_stamina, pat_chordjack, pat_tech, pat_ln, updated_at)
+        pat_jack, pat_stream, pat_jumpstream, pat_handstream, pat_stamina, pat_chordjack, pat_tech, pat_ln,
+        msd_json, msd_overall, updated_at)
      values (?, ?, 1, ?, 'Artist', 'Mapper', 'Insane', '', ?, 5, 180, 120, 'ranked', 'stream',
-             ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      on conflict(beatmap_id) do update set
        pat_jack = excluded.pat_jack, pat_stream = excluded.pat_stream, pat_jumpstream = excluded.pat_jumpstream,
        pat_handstream = excluded.pat_handstream, pat_stamina = excluded.pat_stamina, pat_chordjack = excluded.pat_chordjack,
-       pat_tech = excluded.pat_tech, pat_ln = excluded.pat_ln`,
-    [beatmapId, beatmapId + 100, `Map ${beatmapId}`, keyCount, ...pat, nowIso()],
+       pat_tech = excluded.pat_tech, pat_ln = excluded.pat_ln, msd_json = excluded.msd_json, msd_overall = excluded.msd_overall`,
+    [beatmapId, beatmapId + 100, `Map ${beatmapId}`, keyCount, ...pat, msdJson, msdOverall, nowIso()],
   );
 }
+
+async function seedSubjectSkillRatings(userId: number, keyCount: number, ratings: Record<string, number>, analyzedPlays: number): Promise<void> {
+  const modesJson = JSON.stringify({
+    totalPlays: analyzedPlays,
+    analyzedPlays,
+    pendingPlays: 0,
+    unsupportedPlays: 0,
+    modes: [{ keyCount, analyzedPlays, ratings, patterns: [] }],
+  });
+  const now = nowIso();
+  await exec(
+    db,
+    `insert into player_skill_ratings (user_id, analysis_version, status, plays_json, modes_json, computed_at, updated_at)
+     values (?, 3, 'ready', '[]', ?, ?, ?)`,
+    [userId, modesJson, now, now],
+  );
+}
+
+const stubQueue = { enqueue: async () => {} } as unknown as Parameters<typeof getFarmHelperSnapshot>[4];
 
 async function seedPeers(): Promise<void> {
   const recent = nowIso();
@@ -792,6 +814,45 @@ describe("farm helper", () => {
     // midpoint an unweighted cohort would produce.
     expect(rec).toBeDefined();
     expect(rec?.peerPpMedian).toBeLessThan(550);
+    // With a comparable subject and chart shape, patternFit is a real number.
+    expect(rec?.patternFit).not.toBeNull();
+    expect(rec?.patternFit ?? 0).toBeGreaterThan(0.5);
+  });
+
+  it("drops charts whose dominant skill outstrips the subject rating from gain, keeps feasible ones", async () => {
+    const recent = nowIso();
+    const hard = 9900; // dominant Technical 30, above the subject's 15 + margin
+    const easy = 9901; // dominant Technical 15, within reach
+    const support = Array.from({ length: 8 }, (_, i) => 9910 + i);
+    const bestScores = [
+      subjectScore(9990, 500, recent, 4, 5),
+      ...support.map((beatmapId, i) => subjectScore(beatmapId, 450 - i * 5, recent, 4, 5)),
+    ];
+    const msd = (technical: number) => ({ Stream: 10, Jumpstream: 10, Handstream: 10, Stamina: 10, JackSpeed: 10, Chordjack: 10, Technical: technical });
+
+    await insertBeatmapMeta(hard, 4, 5);
+    await insertBeatmapMeta(easy, 4, 5);
+    await insertSearchIndex(hard, [0, 0, 0, 0, 0, 0, 1, 0], 4, msd(30));
+    await insertSearchIndex(easy, [0, 0, 0, 0, 0, 0, 1, 0], 4, msd(15));
+    for (const beatmapId of support) await insertBeatmapMeta(beatmapId, 4, 5);
+
+    for (let i = 0; i < 12; i += 1) {
+      const id = 9920 + i;
+      await insertUser(id, 10_000, "CR", `MsdPeer${i}`);
+      await insertFarmed("CR", id, hard, 500, recent);
+      await insertFarmed("CR", id, easy, 500, recent);
+      for (const beatmapId of support) await insertFarmed("CR", id, beatmapId, 400, recent);
+    }
+    await seedSubjectSkillRatings(SUBJECT_ID, 4, msd(15), 50);
+    const osu = makeOsuStub(bestScores, 10_000, { "4k": 3000 });
+
+    const gain = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" }, stubQueue);
+    expect(gain.recs.some((rec) => rec.beatmapId === easy)).toBe(true);
+    expect(gain.recs.some((rec) => rec.beatmapId === hard)).toBe(false);
+
+    // The over-MSD chart is still browsable in popular (the gate is gain-only).
+    const popular = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k", view: "popular" }, stubQueue);
+    expect(popular.recs.some((rec) => rec.beatmapId === hard)).toBe(true);
   });
 
   it("computes key-mode peer distance on mode pp, not identical total pp", async () => {
@@ -834,6 +895,9 @@ describe("farm helper", () => {
     expect(rec?.peerCount).toBe(12);
     expect(rec?.topPeers.every((peer) => peer.username.startsWith("MatchPeer"))).toBe(true);
     expect(rec?.topPeers.some((peer) => peer.username.startsWith("OffPeer"))).toBe(false);
+    // No chart shapes seeded here -> patternFit is null and ranking falls back to
+    // the star-proximity difficultyFit.
+    expect(rec?.patternFit).toBeNull();
   });
 
   it("backtest reconstruction filters peer farmed rows and subject scores by the asOf cutoff", async () => {

@@ -13,7 +13,7 @@ const PAT_COLUMNS = [
 ] as const;
 // MinaCalc skillsets (excluding Overall), normalized by Overall to capture shape
 // rather than level. 4K only (msd is a 4K MinaCalc output).
-const MSD_SKILLSETS = ["Stream", "Jumpstream", "Handstream", "Stamina", "JackSpeed", "Chordjack", "Technical"] as const;
+export const MSD_SKILLSETS = ["Stream", "Jumpstream", "Handstream", "Stamina", "JackSpeed", "Chordjack", "Technical"] as const;
 
 export const SHAPE_MIN_CHARTS = 10;
 export const SHAPE_MSD_MIN_CHARTS = 10;
@@ -21,10 +21,13 @@ export const SHAPE_FLOOR = 0.3;
 export const SHAPE_SPAN = 0.7;
 const SHAPE_NEUTRAL_DEFAULT = 0.65;
 
-export interface ChartShape {
+// A pattern-mix vector and (4K) normalized MSD vector. Either may be null.
+export interface ShapeVectors {
   pat: number[] | null;
   msd: number[] | null;
 }
+
+export type ChartShape = ShapeVectors;
 
 export interface UserShape {
   pat: number[] | null;
@@ -121,7 +124,7 @@ function weightedAverageVector(
 // Cosine-based shape similarity in [-1, 1] (in practice [0, 1] for non-negative
 // vectors). Combines pat and msd when both sides carry them; null when neither
 // axis is comparable (missing vectors or a zero vector with no direction).
-export function shapeSimilarity(a: UserShape, b: UserShape): number | null {
+export function shapeSimilarity(a: ShapeVectors, b: ShapeVectors): number | null {
   const cosPat = a.pat && b.pat ? cosine(a.pat, b.pat) : null;
   const cosMsd = a.msd && b.msd ? cosine(a.msd, b.msd) : null;
   if (cosPat != null && cosMsd != null) return 0.5 * cosPat + 0.5 * cosMsd;
@@ -190,6 +193,35 @@ export async function readPeerShapes(db: Db, userIds: number[], keyCount: number
       if (!Number.isSafeInteger(userId) || userId <= 0) continue;
       const shape = parseUserShape(row.shape_json);
       if (shape) result.set(userId, shape);
+    }
+  }
+  return result;
+}
+
+// Raw (un-normalized) MSD skillset vectors for 4K charts, in MSD_SKILLSETS order.
+// Used by the feasibility gate, which compares a chart's dominant raw skillset
+// against the subject's skill rating (both on the MinaCalc scale).
+export async function readChartMsd(db: Db, beatmapIds: number[]): Promise<Map<number, number[]>> {
+  const ids = [...new Set(beatmapIds.filter((id) => Number.isSafeInteger(id) && id > 0))];
+  const result = new Map<number, number[]>();
+  for (let i = 0; i < ids.length; i += 900) {
+    const chunk = ids.slice(i, i + 900);
+    if (chunk.length === 0) continue;
+    const placeholders = chunk.map(() => "?").join(",");
+    const rows = (await exec(
+      db,
+      `select beatmap_id, key_count, msd_json from map_search_index where beatmap_id in (${placeholders})`,
+      chunk,
+    )).rows;
+    for (const row of rows) {
+      const beatmapId = Number(row.beatmap_id);
+      if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0) continue;
+      if (Number(row.key_count) !== 4 || row.msd_json == null) continue;
+      const parsed = parseJson<{ values?: Record<string, number> }>(row.msd_json, {});
+      const values = parsed?.values;
+      if (!values || typeof values !== "object") continue;
+      const vector = MSD_SKILLSETS.map((skill) => Number(values[skill]));
+      if (vector.every((v) => Number.isFinite(v))) result.set(beatmapId, vector);
     }
   }
   return result;
