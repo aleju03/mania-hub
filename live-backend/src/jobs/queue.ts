@@ -47,6 +47,10 @@ const ACTIVE_TYPE_CAPS: Record<string, number> = {
 // osu! API token bucket still governs their actual request rate.
 const RESERVED_LANE_TYPES: Record<string, number> = {
   analyze_activity_beatmap: 10,
+  analyze_beatmap_chart: 10,
+  // Self-chaining top-up runner for the chart-analysis backfill: one slot for
+  // the runner and one for the queued continuation.
+  chart_analysis_backfill: 2,
   // The backfill chains its next batch from inside the currently running job,
   // so reserve one slot for the runner and one for the queued continuation.
   // The worker lane still claims only one job at a time.
@@ -136,6 +140,20 @@ export class JobQueue {
         [workerId, lockedUntil, now, Number(row.id), now, now],
       );
       if (result.rowsAffected > 0) jobs.push(rowToJob(row));
+    }
+    // A reserved-lane type whose lane comes up short refills itself from its
+    // deferred pool right away. shedPressure() also refills, but it only runs
+    // on enqueues and a 60s tick; during a backfill the lane drains its small
+    // reserve in seconds and would otherwise sit starved between refills.
+    if (jobs.length < limit && options.types) {
+      for (const type of options.types) {
+        const reserve = RESERVED_LANE_TYPES[type];
+        if (reserve == null) continue;
+        const activeOfType = await activeDepth(this.db, type);
+        if (activeOfType < reserve) {
+          await this.reactivateDeferred(reserve - activeOfType, type);
+        }
+      }
     }
     return jobs;
   }

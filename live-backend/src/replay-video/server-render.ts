@@ -11,6 +11,7 @@ export type ServerReplayRenderRequest = {
   resolution: "720p" | "1080p";
   fps: 30 | 48 | 60;
   bgDim?: number;
+  blackPlayfield?: boolean;
   scrollSpeed?: number;
   showInputOverlay?: boolean;
   inputOverlayOnly?: boolean;

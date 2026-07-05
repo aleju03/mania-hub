@@ -33,6 +33,7 @@ interface ReplayControlsProps {
   skinSettingsOpen: boolean;
   scrollSpeed: number;
   bgDim: number;
+  blackPlayfield: boolean;
   videoExporting?: boolean;
   videoExportProgress?: number;
   videoExportError?: string | null;
@@ -53,6 +54,7 @@ interface ReplayControlsProps {
   onOpenSkinSettings: () => void;
   onSetScrollSpeed: (speed: number) => void;
   onSetBgDim: (dim: number) => void;
+  onToggleBlackPlayfield: () => void;
   onPointerDown: () => void;
   onPointerUp: () => void;
   onSeek: (timeMs: number) => void;
@@ -117,6 +119,7 @@ export function ReplayControls({
   skinSettingsOpen,
   scrollSpeed,
   bgDim,
+  blackPlayfield,
   videoExporting = false,
   videoExportProgress = 0,
   videoExportError = null,
@@ -137,6 +140,7 @@ export function ReplayControls({
   onOpenSkinSettings,
   onSetScrollSpeed,
   onSetBgDim,
+  onToggleBlackPlayfield,
   onPointerDown,
   onPointerUp,
   onSeek,
@@ -723,6 +727,17 @@ export function ReplayControls({
         </div>
 
         <div className="flex items-center gap-2 ml-0 sm:ml-auto w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={onToggleBlackPlayfield}
+            title="Fill the playfield with a solid black background"
+            aria-pressed={blackPlayfield}
+            className={`px-2 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors ${
+              blackPlayfield ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
+            }`}
+          >
+            Black field
+          </button>
           <span className="text-[10px] text-osu-f1">BG Dim</span>
           <input
             type="range"

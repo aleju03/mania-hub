@@ -45,7 +45,7 @@ Ingest flow (`src/ingest/score-ingestor.ts`):
 2. Filter to mania; detect country via `country_rosters` (oSC payloads lack country).
 3. Raw rows land in `score_events`; metadata upserts into `users` / `beatmaps` / `beatmapsets`; projections and follow-up jobs fan out per enabled feature tier.
 
-Job queue (`src/jobs/queue.ts` + `src/workers.ts`): jobs table with priority, dedupe keys, per-type backoff, and pressure shedding (low-priority types defer when queue depth is high). Workers run in 9 dedicated lanes (fast enrichment, osc-backfill, osc-country-catchup, maps-refresh, dan-estimates, activity-analysis, snipe-seed, replay-video render, replay-video finalize). Job types (user/beatmap enrichment, roster + top-score + maps refreshes, snipe seeding, activity and dan analysis, oSC catch-up, replay-video render/export) are enumerated in AGENTS.md.
+Job queue (`src/jobs/queue.ts` + `src/workers.ts`): jobs table with priority, dedupe keys, per-type backoff, and pressure shedding (low-priority types defer when queue depth is high). Workers run in dedicated lanes (fast enrichment, osc-backfill, osc-country-catchup, maps-refresh, dan-estimates, activity-analysis incl. chart analysis, snipe-seed, replay-video render, replay-video finalize, and more). Job types (user/beatmap enrichment, roster + top-score + maps refreshes, snipe seeding, activity and dan analysis, oSC catch-up, replay-video render/export) are enumerated in AGENTS.md.
 
 Feature modules (`src/features/`), one per surface (full per-feature models in AGENTS.md):
 - `tracker.ts`: live score timeline with filters.
@@ -58,6 +58,7 @@ Feature modules (`src/features/`), one per surface (full per-feature models in A
 - `global-rankings.ts`, `rank-snapshots.ts`, `player-profiles.ts`: global ranking snapshot (union of tracked rosters by pp), 7-day rank deltas, and cached profile snapshots.
 - `goals.ts`: per-user goals (`user_goals`) that auto-complete off the score pipeline; backs `/goals`.
 - `my-data.ts`: the signed-in player's dashboard projections (reads existing projections, owns no table); backs `/my-data`.
+- `player-skills.ts`: Etterna-style per-keymode skillset ratings from the player's top plays (per-play MinaCalc SSRs at the played rate, `player_skill_ratings`); backs the my-stats "Skill rating" card.
 - `pack-wallets.ts`: synced maniacard pack economy (`pack_wallets`, `pack_collection_cards`); backs `/packs`.
 
 Discord bot (`src/discord/`): optional HTTP-interactions bot (maniabot), gated by `ENABLE_DISCORD_BOT` / `ENABLE_DISCORD_FEEDS`; slash commands plus per-channel subscription feeds, frontend `/discord` and `/admin/discord`. Replies are Components V2 and use custom application emojis for grade pills / mod icons (`discord/emojis.ts`, built by `scripts/build-discord-emojis.mjs`, uploaded via the admin "Register emojis" action, with plain-text fallbacks). Keep embeds free of decorative unicode emoji (enforced by `discord-embeds.test.ts`). Details in AGENTS.md.

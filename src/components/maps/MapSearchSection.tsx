@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useDragControls } from "framer-motion";
 import {
   fetchLiveMapSearch,
   type LiveMapSearchEntry,
@@ -11,9 +11,12 @@ import { Pagination } from "../ui/Pagination";
 import { Skeleton } from "../ui/LoadingSkeleton";
 import { MapDetailModal } from "./MapDetailModal";
 import { useMapPreviewAudio } from "./MapPreviewAudio";
-import { PatternPicker } from "./PatternPicker";
+import { PatternPicker, validPatternIds } from "./PatternPicker";
+import { playPatternHit } from "./patternSfx";
 import { RangeSlider } from "./RangeSlider";
+import { danScaleImage, danScaleLabel, type DanScaleContext } from "../../lib/dan-images";
 import { SearchCard } from "./SearchCard";
+import { StarRangePill } from "./StarRangePill";
 
 const SEARCH_PAGE_SIZE = 24;
 const SEARCH_INITIAL_SKELETON_COUNT = 12;
@@ -60,6 +63,8 @@ export interface MapSearchUiState {
   bpmMax: number;
   lenMin: number;
   lenMax: number;
+  danMin: number | null;
+  danMax: number | null;
   sort: string;
   dir: string;
   page: number;
@@ -83,10 +88,18 @@ function stateKey(s: MapSearchUiState): string {
     [...s.keys].sort(),
     [...s.statuses].sort(),
     [...s.patterns].sort(),
-    s.starMin, s.starMax, s.bpmMin, s.bpmMax, s.lenMin, s.lenMax,
+    s.starMin, s.starMax, s.bpmMin, s.bpmMax, s.lenMin, s.lenMax, s.danMin, s.danMax,
     s.sort, s.dir, s.page,
   ]);
 }
+
+// Keys and the dan trigger speak the pattern/status chip language (outlined
+// when off, filled when on) in the theme accent, so they read as their own
+// facet family without going flat white.
+const ACCENT_CHIP_TEXT = "var(--color-osu-pink-light)";
+const ACCENT_CHIP_FILL = "var(--color-osu-pink)";
+const accentChipRing = (alpha: number) =>
+  `inset 0 0 0 1.5px color-mix(in srgb, var(--color-osu-pink) ${alpha}%, transparent)`;
 
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
@@ -94,11 +107,15 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      whileTap={{ scale: 0.94 }}
-      transition={{ type: "spring", stiffness: 600, damping: 32 }}
-      className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12.5px] font-semibold cursor-pointer transition-colors duration-100 ${
-        active ? "bg-osu-pink text-white" : "bg-osu-b4 text-osu-l2 hover:bg-osu-b3 hover:text-osu-l1"
-      }`}
+      whileHover={{ scale: 1.03 }}
+      whileTap={{ scale: 0.95 }}
+      transition={{ type: "spring", stiffness: 600, damping: 30 }}
+      className="rounded-md px-3.5 py-1.5 text-[12.5px] font-bold cursor-pointer transition-colors duration-150"
+      style={
+        active
+          ? { background: ACCENT_CHIP_FILL, color: "#11111a" }
+          : { background: "transparent", color: ACCENT_CHIP_TEXT, boxShadow: accentChipRing(35) }
+      }
     >
       {children}
     </motion.button>
@@ -244,10 +261,17 @@ function ChipGroup({ label, children }: { label: string; children: React.ReactNo
 type ApplyFn = (patch: Partial<MapSearchUiState>) => void;
 
 function KeysChips({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
+  // A keymode switch changes the pattern vocabulary; drop pattern picks the
+  // new keymode can't express so no filter survives without a visible chip.
+  const toggleKey = (id: string) => {
+    const keys = toggle(ui.keys, id);
+    const valid = validPatternIds(keys);
+    apply({ keys, patterns: ui.patterns.filter((pattern) => valid.has(pattern)), page: 0 });
+  };
   return (
     <ChipGroup label="Keys">
       {KEY_OPTIONS.map((option) => (
-        <Chip key={option.id} active={ui.keys.includes(option.id)} onClick={() => apply({ keys: toggle(ui.keys, option.id), page: 0 })}>
+        <Chip key={option.id} active={ui.keys.includes(option.id)} onClick={() => toggleKey(option.id)}>
           {option.label}
         </Chip>
       ))}
@@ -273,7 +297,7 @@ function StatusChips({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
 
 function StarSlider({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
   return (
-    <RangeSlider lo={0} hi={15} min={ui.starMin} max={ui.starMax} step={0.1} ariaLabel="Star rating" format={(v) => `${v.toFixed(1)}★`} onChange={(min, max) => apply({ starMin: min, starMax: max, page: 0 })} />
+    <StarRangePill lo={0} hi={15} min={ui.starMin} max={ui.starMax} step={0.1} ariaLabel="Star rating" onChange={(min, max) => apply({ starMin: min, starMax: max, page: 0 })} />
   );
 }
 
@@ -286,6 +310,264 @@ function BpmSlider({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
 function LengthSlider({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
   return (
     <RangeSlider lo={0} hi={600} min={ui.lenMin} max={ui.lenMax} step={5} ariaLabel="Length" format={(v) => formatDuration(v)} onChange={(min, max) => apply({ lenMin: min, lenMax: max, page: 0 })} />
+  );
+}
+
+// Which dan ladder annotates the numeric bounds: 7K courses when the key facet
+// is exactly 7K, the LN ladder when the pattern facet is LN-flavoured,
+// otherwise the 4K reform ladder. The filter itself is the classifier's
+// numeric rawDan, so it works across families; only the labels/logos adapt.
+function danSliderContext(ui: MapSearchUiState): DanScaleContext {
+  const sevenKey = ui.keys.length === 1 && ui.keys[0] === "7k";
+  const lnFlavoured = ui.patterns.some((pattern) => pattern === "ln" || pattern.startsWith("ln"));
+  if (sevenKey) return lnFlavoured ? "7k-ln" : "7k";
+  return lnFlavoured ? "ln" : "reform";
+}
+
+// The ladder's badge rows: numeric courses on top, boss/greek courses below.
+// Values are integer dan levels on the classifier's rawDan axis.
+function danLadderRows(context: DanScaleContext): number[][] {
+  const seq = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
+  if (context === "7k" || context === "7k-ln") return [seq(0, 10), seq(11, 14)];
+  if (context === "ln") return [seq(1, 8), seq(9, 16)];
+  return [seq(1, 10), seq(11, 20)];
+}
+
+function danReadout(value: number, context: DanScaleContext): string {
+  const label = danScaleLabel(value, context);
+  if (!/^\d+$/.test(label)) return label;
+  const n = Number(label);
+  const suffix = n % 10 === 1 && n !== 11 ? "st" : n % 10 === 2 && n !== 12 ? "nd" : n % 10 === 3 && n !== 13 ? "rd" : "th";
+  return `${n}${suffix} dan`;
+}
+
+// The badge wall: tap a badge to filter to exactly that dan, tap it again to
+// clear, or drag across badges to paint a range (shift-click extends from the
+// current selection). Unselected badges sit dimmed and desaturated; the
+// selection pops to full color. A fixed-height readout under the wall names
+// whatever is hovered or selected, so the layout never moves. Only charts with
+// a stored chart analysis match while set.
+function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
+  const context = danSliderContext(ui);
+  const rows = danLadderRows(context);
+  const selection = ui.danMin != null && ui.danMax != null ? { lo: ui.danMin, hi: ui.danMax } : null;
+  const [drag, setDrag] = useState<{ anchor: number; current: number } | null>(null);
+  const [hovered, setHovered] = useState<number | null>(null);
+  const dragRef = useRef(drag);
+  dragRef.current = drag;
+
+  const commit = (lo: number | null, hi: number | null) => {
+    playPatternHit(lo != null);
+    apply({ danMin: lo, danMax: hi, page: 0 });
+  };
+  const toggleSingle = (level: number) => {
+    if (selection && selection.lo === level && selection.hi === level) commit(null, null);
+    else commit(level, level);
+  };
+
+  const dragging = drag != null;
+  useEffect(() => {
+    if (!dragging) return;
+    const onMove = (event: PointerEvent) => {
+      const target = document.elementFromPoint(event.clientX, event.clientY);
+      const badge = target instanceof Element ? target.closest("[data-dan-level]") : null;
+      if (!badge) return;
+      const level = Number(badge.getAttribute("data-dan-level"));
+      setDrag((state) => (state && state.current !== level ? { ...state, current: level } : state));
+    };
+    const onUp = () => {
+      const state = dragRef.current;
+      setDrag(null);
+      if (!state) return;
+      if (state.anchor === state.current) toggleSingle(state.anchor);
+      else commit(Math.min(state.anchor, state.current), Math.max(state.anchor, state.current));
+    };
+    // A vertical touch pan cancels the pointer: abort without applying.
+    const onCancel = () => setDrag(null);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onCancel);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dragging]);
+
+  // Live paint while dragging, committed selection otherwise.
+  const paint = drag
+    ? { lo: Math.min(drag.anchor, drag.current), hi: Math.max(drag.anchor, drag.current) }
+    : selection;
+
+  return (
+    <div className="flex flex-col gap-1.5 select-none" style={{ touchAction: "pan-y" }} onPointerLeave={() => setHovered(null)}>
+      {rows.map((row, rowIndex) => (
+        <div key={rowIndex} className="flex items-center gap-1 sm:gap-1.5">
+          {row.map((level) => {
+            const active = paint != null && level >= paint.lo && level <= paint.hi;
+            const src = danScaleImage(level, context);
+            const label = danScaleLabel(level, context);
+            return (
+              <motion.button
+                key={`${context}:${level}`}
+                type="button"
+                data-dan-level={level}
+                title={danReadout(level, context)}
+                aria-pressed={active}
+                onPointerDown={(event) => {
+                  if (event.button !== 0 && event.pointerType === "mouse") return;
+                  if (event.shiftKey && selection) {
+                    // Extend: anchor at the selection edge farthest from the tap.
+                    const anchor = Math.abs(level - selection.lo) >= Math.abs(level - selection.hi) ? selection.lo : selection.hi;
+                    setDrag({ anchor, current: level });
+                    return;
+                  }
+                  setDrag({ anchor: level, current: level });
+                }}
+                onClick={(event) => {
+                  // Pointer commits handle mouse/touch; this is the keyboard path.
+                  if (event.detail === 0) toggleSingle(level);
+                }}
+                onPointerEnter={(event) => {
+                  if (event.pointerType === "mouse") setHovered(level);
+                }}
+                onPointerLeave={() => setHovered((value) => (value === level ? null : value))}
+                animate={{ scale: active ? 1.12 : 1 }}
+                transition={{ type: "spring", stiffness: 560, damping: 24 }}
+                className={`grid h-7 w-7 sm:h-8 sm:w-8 shrink-0 cursor-pointer place-items-center transition-[opacity,filter] duration-150 ${
+                  active ? "opacity-100" : hovered === level ? "opacity-90 grayscale-[20%]" : "opacity-40 grayscale-[45%]"
+                }`}
+              >
+                {src ? (
+                  <img
+                    src={src}
+                    alt={label}
+                    draggable={false}
+                    loading="lazy"
+                    className={`h-full w-full object-contain ${
+                      active ? "drop-shadow-[0_0_6px_rgba(255,102,171,0.4)]" : "drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
+                    }`}
+                  />
+                ) : (
+                  <span className="grid h-6 w-6 place-items-center rounded-full bg-osu-b3 ring-1 ring-white/20 text-[11px] font-black text-osu-l1">
+                    {label}
+                  </span>
+                )}
+              </motion.button>
+            );
+          })}
+        </div>
+      ))}
+      <div className="flex h-4 items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-osu-f1/70">
+        <span>
+          {hovered != null
+            ? danReadout(hovered, context)
+            : paint
+              ? paint.lo === paint.hi
+                ? danReadout(paint.lo, context)
+                : `${danReadout(paint.lo, context)} to ${danReadout(paint.hi, context)}`
+              : "any"}
+        </span>
+        {selection != null && drag == null && (
+          <button
+            type="button"
+            onClick={() => commit(null, null)}
+            className="lowercase text-osu-f1/50 hover:text-osu-pink-light transition-colors cursor-pointer"
+          >
+            clear
+          </button>
+        )}
+        <span className="ml-auto font-normal lowercase text-osu-f1/40">rough estimate, may be off</span>
+      </div>
+    </div>
+  );
+}
+
+// A selected dan at chip scale for the collapsed trigger.
+function DanMini({ level, context }: { level: number; context: DanScaleContext }) {
+  const src = danScaleImage(level, context);
+  const label = danScaleLabel(level, context);
+  return src ? (
+    <img src={src} alt={label} className="h-5 w-5 shrink-0 object-contain" loading="lazy" />
+  ) : (
+    <span className="text-[11px] font-black leading-none text-osu-l1">{label}</span>
+  );
+}
+
+// Estimated-dan filter. Collapsed it is a plain chip showing the selection
+// (badge art, or "Any"); clicking opens the badge wall as a floating panel
+// anchored under it, overlay-style so the filter row never grows. The mobile
+// sheet renders the wall inline instead (inline prop): it is a vertical
+// surface where the wall fits naturally and a flyout would clip its scroll.
+function DanPicker({ ui, apply, inline = false }: { ui: MapSearchUiState; apply: ApplyFn; inline?: boolean }) {
+  const context = danSliderContext(ui);
+  const selection = ui.danMin != null && ui.danMax != null ? { lo: ui.danMin, hi: ui.danMax } : null;
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent | TouchEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("touchstart", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("touchstart", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  if (inline) return <DanBadgeWall ui={ui} apply={apply} />;
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        className="inline-flex min-w-[84px] items-center justify-between gap-2 rounded-md px-3 py-1.5 text-[12.5px] font-bold cursor-pointer transition-colors duration-150"
+        style={{
+          background: open ? "color-mix(in srgb, var(--color-osu-pink) 12%, transparent)" : "transparent",
+          color: ACCENT_CHIP_TEXT,
+          boxShadow: accentChipRing(open ? 90 : selection ? 65 : 35),
+        }}
+      >
+        {selection ? (
+          <span className="inline-flex items-center gap-1.5">
+            <DanMini level={selection.lo} context={context} />
+            {selection.hi !== selection.lo && (
+              <>
+                <span className="text-[10px] opacity-70">to</span>
+                <DanMini level={selection.hi} context={context} />
+              </>
+            )}
+          </span>
+        ) : (
+          <span>Any</span>
+        )}
+        <svg
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          className={`h-3.5 w-3.5 shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          aria-hidden="true"
+        >
+          <path d="M5.25 7.5 10 12.25 14.75 7.5H5.25Z" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute left-0 top-[calc(100%+6px)] z-30 w-max max-w-[min(440px,92vw)] rounded-lg bg-osu-b4 p-3 ring-1 ring-white/10 shadow-xl">
+          <DanBadgeWall ui={ui} apply={apply} />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -308,6 +590,8 @@ function MobileFilterSheet({
   hasActiveFilters: boolean;
   resultsLabel: string;
 }) {
+  const dragControls = useDragControls();
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -342,14 +626,30 @@ function MobileFilterSheet({
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ duration: 0.2, ease: "easeOut" }}
+            drag="y"
+            dragListener={false}
+            dragControls={dragControls}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.6 }}
+            onDragEnd={(_, info) => {
+              if (info.offset.y > 120 || info.velocity.y > 600) onClose();
+            }}
           >
-            <div className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-osu-b3" aria-hidden="true" />
-            <span className="px-4 pt-2 text-[13px] font-bold text-osu-l1">Filters</span>
+            <div
+              className="shrink-0 cursor-grab touch-none pt-2 active:cursor-grabbing"
+              onPointerDown={(e) => dragControls.start(e)}
+            >
+              <div className="mx-auto h-1 w-9 rounded-full bg-osu-b3" aria-hidden="true" />
+              <span className="block px-4 pt-2 text-[13px] font-bold text-osu-l1">Filters</span>
+            </div>
             <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-3.5">
               <KeysChips ui={ui} apply={apply} />
               <StatusChips ui={ui} apply={apply} />
               <ChipGroup label="Difficulty">
                 <StarSlider ui={ui} apply={apply} />
+              </ChipGroup>
+              <ChipGroup label="Dan (est.)">
+                <DanPicker ui={ui} apply={apply} inline />
               </ChipGroup>
               <ChipGroup label="BPM">
                 <BpmSlider ui={ui} apply={apply} />
@@ -520,6 +820,8 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
       bpmMax: ui.bpmMax > 0 ? ui.bpmMax : null,
       lenMin: ui.lenMin > 0 ? ui.lenMin : null,
       lenMax: ui.lenMax > 0 ? ui.lenMax : null,
+      danMin: ui.danMin,
+      danMax: ui.danMax,
       country: null,
       sort: ui.sort,
       dir: ui.dir,
@@ -561,7 +863,8 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
     ui.patterns.length > 0 ||
     ui.starMin > 0 || ui.starMax > 0 ||
     ui.bpmMin > 0 || ui.bpmMax > 0 ||
-    ui.lenMin > 0 || ui.lenMax > 0;
+    ui.lenMin > 0 || ui.lenMax > 0 ||
+    ui.danMin != null || ui.danMax != null;
 
   // How many collapsed filters are active, for the mobile toggle's badge.
   // Patterns stay visible above the toggle, so they don't count.
@@ -570,13 +873,15 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
     ui.statuses.length +
     (ui.starMin > 0 || ui.starMax > 0 ? 1 : 0) +
     (ui.bpmMin > 0 || ui.bpmMax > 0 ? 1 : 0) +
-    (ui.lenMin > 0 || ui.lenMax > 0 ? 1 : 0);
+    (ui.lenMin > 0 || ui.lenMax > 0 ? 1 : 0) +
+    (ui.danMin != null || ui.danMax != null ? 1 : 0);
 
   const clearFilters = () => {
     setSearchInput("");
     apply({
       q: "", keys: [], statuses: [], patterns: [],
       starMin: 0, starMax: 0, bpmMin: 0, bpmMax: 0, lenMin: 0, lenMax: 0,
+      danMin: null, danMax: null,
       page: 0,
     });
   };
@@ -596,8 +901,20 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
               onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Search title, artist, mapper, or difficulty"
               aria-label="Search maps"
-              className="w-full bg-osu-b4 border border-osu-b3/30 rounded-lg pl-10 pr-3 py-2.5 text-[14px] text-osu-l1 placeholder:text-osu-f1/55 focus:outline-none focus:border-osu-pink/50 transition-colors"
+              className={`w-full bg-osu-b4 border border-osu-b3/30 rounded-lg pl-10 py-2.5 text-[14px] text-osu-l1 placeholder:text-osu-f1/55 focus:outline-none focus:border-osu-pink/50 transition-colors ${searchInput ? "pr-10" : "pr-3"}`}
             />
+            {searchInput && (
+              <button
+                type="button"
+                onClick={() => setSearchInput("")}
+                aria-label="Clear search"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-md text-osu-f1/55 hover:text-osu-l1 hover:bg-osu-b3 transition-colors cursor-pointer"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+            )}
           </div>
           <span
             className={`shrink-0 text-[12px] text-osu-f1 tabular-nums transition-opacity duration-150 ${countRefreshing ? "opacity-45" : ""}`}
@@ -611,7 +928,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
         {/* Pattern — the headline filter, each shown as a mini note-chart */}
         <div className="flex flex-col gap-2">
           <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Pattern</span>
-          <PatternPicker selected={ui.patterns} onToggle={(pattern) => apply({ patterns: toggle(ui.patterns, pattern), page: 0 })} />
+          <PatternPicker selected={ui.patterns} keys={ui.keys} onToggle={(pattern) => apply({ patterns: toggle(ui.patterns, pattern), page: 0 })} />
         </div>
 
         {/* Mobile toolbar: secondary filters collapse behind a toggle, sort is a dropdown */}
@@ -651,6 +968,9 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
                   {showMore ? "− bpm & length" : "+ bpm & length"}
                 </button>
               </div>
+            </ChipGroup>
+            <ChipGroup label="Dan (est.)">
+              <DanPicker ui={ui} apply={apply} />
             </ChipGroup>
           </div>
 

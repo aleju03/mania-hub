@@ -21,6 +21,7 @@ import { CountryFlag } from "../components/ui/CountryFlag";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { Pagination } from "../components/ui/Pagination";
 import { ModBadge } from "../components/ui/ModBadge";
+import { StarRatingBadge } from "../components/maps/SearchCard";
 import { UsernameText } from "../components/ui/UsernameText";
 import { useAuth } from "../lib/auth-context";
 import { pageSeo } from "../lib/seo";
@@ -1339,10 +1340,8 @@ function RecCard({
           <div className="h-[90px] w-full bg-osu-b6" />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" aria-hidden="true" />
-        <span className="absolute left-1.5 top-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-bold text-white">{rec.keys}K</span>
-        <span className="absolute right-1.5 top-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-bold tabular-nums text-osu-yellow">
-          {"★"}{rec.stars.toFixed(2)}
-        </span>
+        <span className="absolute left-1.5 top-1.5 inline-flex items-center rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold leading-none tabular-nums text-white">{rec.keys}K</span>
+        <StarRatingBadge stars={rec.stars} className="absolute right-1.5 top-1.5" />
         {gain >= 1 ? (
           <span className="absolute bottom-1.5 right-1.5 rounded bg-osu-pink/90 px-1.5 py-0.5 text-[9px] font-bold tabular-nums text-white">
             +{formatPp(gain)}pp

@@ -1204,6 +1204,12 @@ export interface LiveMapSearchEntry {
   primaryPattern: string;
   patterns: Record<string, number>;
   covers: Record<string, string> | null;
+  // From the unified chart analysis; null until the chart's analysis job lands.
+  dan?: { label: string; family: string; rawDan: number } | null;
+  msd?: Record<string, number> | null;
+  // Vibro-like chart per the classifier: ratings are unreliable and dan-scoped
+  // searches skip these server-side.
+  vibro?: boolean;
   // Search results are one entry per beatmapset: the top-level fields describe
   // the representative diff and `diffs` lists every filter-matching diff of the
   // set (easiest first). Absent on collection items, which are already deduped.
@@ -1229,6 +1235,8 @@ export interface LiveMapSearchParams {
   bpmMax: number | null;
   lenMin: number | null;
   lenMax: number | null;
+  danMin: number | null;
+  danMax: number | null;
   country: string | null;
   sort: string;
   dir: string;
@@ -1271,6 +1279,8 @@ export async function fetchLiveMapSearch(params: LiveMapSearchParams): Promise<L
   if (params.bpmMax != null) query.set("bpmMax", String(params.bpmMax));
   if (params.lenMin != null) query.set("lenMin", String(params.lenMin));
   if (params.lenMax != null) query.set("lenMax", String(params.lenMax));
+  if (params.danMin != null) query.set("danMin", String(params.danMin));
+  if (params.danMax != null) query.set("danMax", String(params.danMax));
   if (params.country) query.set("country", params.country);
   return fetchLiveJson(`/api/snapshots/maps-search?${query.toString()}`);
 }
@@ -1285,6 +1295,45 @@ export async function fetchLiveMapCollection(id: string): Promise<LiveMapCollect
     `/api/snapshots/map-collection?id=${encodeURIComponent(id)}`,
   );
   return result.collection ?? null;
+}
+
+export interface LiveChartAnalysisPatternHit {
+  id: string;
+  label: string;
+  score: number;
+  confidence: number;
+}
+
+export interface LiveChartAnalysisCluster {
+  label: string;
+  pattern: string;
+  bpm: number;
+  mixed: boolean;
+  amount: number;
+  importance: number;
+}
+
+// The stored lean chart classification for one beatmap: detected pattern hits
+// in the in-house vocabulary plus the LeoBlack cluster readout. Backs the map
+// detail modal's keymode-honest pattern strip for non-4K charts.
+export interface LiveChartAnalysisDetail {
+  beatmapId: number;
+  status: string;
+  keyCount: number | null;
+  patterns: LiveChartAnalysisPatternHit[];
+  clusters: LiveChartAnalysisCluster[];
+  clusterCategory: string | null;
+  modeTag: string | null;
+  verdictText: string | null;
+  lnRatio: number | null;
+}
+
+export async function fetchLiveChartAnalysis(beatmapId: number): Promise<LiveChartAnalysisDetail | null> {
+  try {
+    return await fetchLiveJson<LiveChartAnalysisDetail>(`/api/chart-analysis?beatmapId=${beatmapId}`);
+  } catch {
+    return null;
+  }
 }
 
 export interface LiveGlobalRankingEntry {

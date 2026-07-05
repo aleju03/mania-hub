@@ -72,22 +72,19 @@ interface LiveBackendStatus {
     unavailable: number;
     searchIndexed: number;
   };
-  osuFileBackfill?: {
+  chartAnalysisBackfill?: {
     runId: string | null;
-    status: "idle" | "queued" | "running" | "done" | "cancelled" | "failed";
+    status: "idle" | "running" | "done" | "cancelled";
     active: boolean;
     stalled: boolean;
-    batchSize: number;
-    totalAnalyzed: number;
-    cached: number;
+    version: number;
+    eligible: number;
+    ready: number;
     unavailable: number;
-    missing: number;
-    percent: number;
-    processed: number;
-    stored: number;
     failed: number;
-    lastBeatmapId: number;
-    lastError: string | null;
+    remaining: number;
+    percent: number;
+    enqueued: number;
     startedAt: string | null;
     updatedAt: string;
     finishedAt: string | null;
@@ -1164,8 +1161,8 @@ function LiveBackendPage() {
               onRunRetention={() => void runAdminAction("retention", "/api/admin/run-retention")}
               onOscSmoke={() => void runAdminAction("osc-smoke", "/api/admin/osc-smoke")}
               onRunOscBackfill={() => void runAdminAction("osc-backfill", "/api/admin/run-osc-backfill")}
-              onStartOsuFileBackfill={() => void runAdminAction("osu-file-backfill", "/api/admin/osu-file-backfill/start")}
-              onCancelOsuFileBackfill={() => void runAdminAction("cancel-osu-file-backfill", "/api/admin/osu-file-backfill/cancel")}
+              onStartChartAnalysis={() => void runAdminAction("chart-analysis-backfill", "/api/admin/chart-analysis/start")}
+              onCancelChartAnalysis={() => void runAdminAction("cancel-chart-analysis-backfill", "/api/admin/chart-analysis/cancel")}
               onToggleWorkers={() => void runAdminAction(
                 status?.worker?.paused ? "resume-workers" : "pause-workers",
                 status?.worker?.paused ? "/api/admin/resume-workers" : "/api/admin/pause-workers",
@@ -4707,8 +4704,8 @@ function ControlsCard({
   onRunRetention,
   onOscSmoke,
   onRunOscBackfill,
-  onStartOsuFileBackfill,
-  onCancelOsuFileBackfill,
+  onStartChartAnalysis,
+  onCancelChartAnalysis,
   onToggleWorkers,
 }: {
   status: LiveBackendStatus | null;
@@ -4718,17 +4715,17 @@ function ControlsCard({
   onRunRetention: () => void;
   onOscSmoke: () => void;
   onRunOscBackfill: () => void;
-  onStartOsuFileBackfill: () => void;
-  onCancelOsuFileBackfill: () => void;
+  onStartChartAnalysis: () => void;
+  onCancelChartAnalysis: () => void;
   onToggleWorkers: () => void;
 }) {
   return (
     <div className="space-y-3">
-      <OsuFileBackfillPanel
-        backfill={status?.osuFileBackfill ?? null}
+      <ChartAnalysisBackfillPanel
+        backfill={status?.chartAnalysisBackfill ?? null}
         busy={busy}
-        onStart={onStartOsuFileBackfill}
-        onCancel={onCancelOsuFileBackfill}
+        onStart={onStartChartAnalysis}
+        onCancel={onCancelChartAnalysis}
       />
       <div className="rounded-lg border border-osu-b3/30 bg-osu-b4/30 p-3">
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
@@ -4780,31 +4777,31 @@ function ControlsCard({
   );
 }
 
-function OsuFileBackfillPanel({
+// Chart-analysis backfill: one click starts a self-chaining runner that keeps
+// the analysis queue topped up from the cached .osu corpus; progress is
+// analyzed-vs-eligible. Local CPU work only, no osu! API budget.
+function ChartAnalysisBackfillPanel({
   backfill,
   busy,
   onStart,
   onCancel,
 }: {
-  backfill: LiveBackendStatus["osuFileBackfill"] | null;
+  backfill: LiveBackendStatus["chartAnalysisBackfill"] | null;
   busy: string | null;
   onStart: () => void;
   onCancel: () => void;
 }) {
   const percent = Math.max(0, Math.min(100, backfill?.percent ?? 0));
   const active = !!backfill?.active;
-  const tone = getOsuFileBackfillTone(backfill);
-  const statusLabel = getOsuFileBackfillStatusLabel(backfill);
-  const complete = !!backfill && backfill.missing === 0 && backfill.totalAnalyzed > 0;
+  const complete = !!backfill && backfill.remaining === 0 && backfill.eligible > 0;
+  const tone: StatusTone = complete ? "good" : active ? (backfill?.stalled ? "bad" : "good") : backfill?.status === "cancelled" ? "warn" : "neutral";
+  const statusLabel = complete
+    ? "complete"
+    : active
+      ? backfill?.stalled ? "stalled" : "running"
+      : backfill?.status === "cancelled" ? "paused" : backfill?.status ?? "idle";
   const showStartAction = !complete && (!active || backfill?.stalled);
   const showPauseAction = active && !backfill?.stalled;
-  const startLabel = backfill?.stalled || backfill?.status === "cancelled" ? "Resume .osu backfill" : "Start .osu backfill";
-  const cancellable = !!backfill && (
-    backfill.active
-    || backfill.status === "queued"
-    || backfill.status === "running"
-    || (backfill.jobs.queued + backfill.jobs.running + backfill.jobs.failed + backfill.jobs.deferred) > 0
-  );
 
   return (
     <div className="rounded-lg border border-osu-b3/30 bg-osu-b4/30 p-3">
@@ -4812,43 +4809,42 @@ function OsuFileBackfillPanel({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className={`h-2 w-2 rounded-full ${toneDotClass(tone)}`} />
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-osu-c2">Durable .osu cache</div>
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-osu-c2">Chart analysis (MSD + dan)</div>
             <div className="rounded-full border border-osu-b3/30 bg-osu-b5/60 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-osu-f1">
               {statusLabel}
             </div>
           </div>
           <div className="mt-2 grid grid-cols-2 gap-2 text-[10px] text-osu-f1 sm:grid-cols-4">
-            <BackfillMetric label="Cached" value={formatNumber(backfill?.cached ?? 0)} />
-            <BackfillMetric label="Missing" value={formatNumber(backfill?.missing ?? 0)} />
-            <BackfillMetric label="Unavailable" value={formatNumber(backfill?.unavailable ?? 0)} />
-            <BackfillMetric label="Processed" value={formatNumber(backfill?.processed ?? 0)} />
+            <BackfillMetric label="Analyzed" value={formatNumber(backfill?.ready ?? 0)} />
+            <BackfillMetric label="Remaining" value={formatNumber(backfill?.remaining ?? 0)} />
+            <BackfillMetric label="Skipped" value={formatNumber(backfill?.unavailable ?? 0)} />
+            <BackfillMetric label="Failed" value={formatNumber(backfill?.failed ?? 0)} />
           </div>
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-osu-b5/70">
             <div className="h-full rounded-full bg-osu-c2 transition-[width] duration-300" style={{ width: `${percent}%` }} />
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-osu-f1">
-            <span>{percent.toFixed(1)}% of {formatNumber(backfill?.totalAnalyzed ?? 0)} analyzed maps covered</span>
+            <span>{percent.toFixed(1)}% of {formatNumber(backfill?.eligible ?? 0)} cached charts analyzed (v{backfill?.version ?? 1})</span>
             {backfill?.updatedAt ? <span>updated {formatTimeAgo(backfill.updatedAt)}</span> : null}
-            {backfill?.lastError ? <span className="max-w-full truncate text-osu-yellow">last: {backfill.lastError}</span> : null}
           </div>
         </div>
         {showStartAction || showPauseAction ? (
-          <div className={showStartAction && showPauseAction ? "grid grid-cols-1 gap-2 sm:grid-cols-2 lg:w-[330px]" : "grid grid-cols-1 gap-2 lg:w-[170px]"}>
+          <div className="grid grid-cols-1 gap-2 lg:w-[190px]">
             {showStartAction ? (
               <AdminButton
-                label={startLabel}
-                description="Queue a paced background job that downloads missing .osu chart files and stores them compressed in SQLite."
+                label={backfill?.status === "cancelled" || backfill?.stalled ? "Resume chart analysis" : "Analyze cached charts"}
+                description="Self-chaining background run: classifier verdict, pattern clusters, and MinaCalc MSD for every cached chart. Local CPU only."
                 icon={<Database className="h-3.5 w-3.5" />}
-                busy={busy === "osu-file-backfill"}
+                busy={busy === "chart-analysis-backfill"}
                 onClick={onStart}
               />
             ) : null}
-            {cancellable && showPauseAction ? (
+            {showPauseAction ? (
               <AdminButton
-                label="Pause backfill"
-                description="Pause queued .osu cache backfill batches. The running batch may finish first, and cached files stay stored."
+                label="Pause chart analysis"
+                description="Drop queued analysis jobs and stop the runner. Already-analyzed charts stay stored; resume any time."
                 icon={<Pause className="h-3.5 w-3.5" />}
-                busy={busy === "cancel-osu-file-backfill"}
+                busy={busy === "cancel-chart-analysis-backfill"}
                 onClick={onCancel}
               />
             ) : null}
@@ -4857,7 +4853,7 @@ function OsuFileBackfillPanel({
       </div>
       {active ? (
         <div className="mt-2 text-[10px] text-osu-f1">
-          Queue: {formatNumber(backfill?.jobs.queued ?? 0)} queued, {formatNumber(backfill?.jobs.running ?? 0)} running, {formatNumber(backfill?.jobs.failed ?? 0)} retrying.
+          Queue: {formatNumber(backfill?.jobs.queued ?? 0)} queued, {formatNumber(backfill?.jobs.running ?? 0)} running, {formatNumber(backfill?.jobs.failed ?? 0)} retrying. Enqueued so far: {formatNumber(backfill?.enqueued ?? 0)}.
         </div>
       ) : null}
     </div>
@@ -4871,26 +4867,6 @@ function BackfillMetric({ label, value }: { label: string; value: string }) {
       <div className="mt-0.5 text-[12px] font-semibold text-osu-c2">{value}</div>
     </div>
   );
-}
-
-function getOsuFileBackfillTone(backfill: LiveBackendStatus["osuFileBackfill"] | null | undefined): StatusTone {
-  if (!backfill) return "neutral";
-  if (backfill.status === "done" || backfill.missing === 0) return "good";
-  if (backfill.status === "running" || backfill.status === "queued") return backfill.stalled ? "warn" : "good";
-  if (backfill.status === "cancelled") return "warn";
-  if (backfill.status === "failed") return "bad";
-  return "neutral";
-}
-
-function getOsuFileBackfillStatusLabel(backfill: LiveBackendStatus["osuFileBackfill"] | null | undefined): string {
-  if (!backfill) return "unknown";
-  if (backfill.missing === 0) return "complete";
-  if (backfill.stalled) return "stalled";
-  if (backfill.status === "queued") return "queued";
-  if (backfill.status === "running") return "running";
-  if (backfill.status === "cancelled") return "paused";
-  if (backfill.status === "failed") return "failed";
-  return "idle";
 }
 
 function AdminButton({

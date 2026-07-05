@@ -645,3 +645,41 @@ create table if not exists beatmap_osu_files (
   fetched_at text not null,
   last_used_at text not null
 );
+
+-- Unified chart analysis per beatmap at 1.0x (classifier verdict + pattern
+-- clusters + Etterna MSD skillsets), keyed by analysis_version so a version
+-- bump reprocesses every chart from the cached .osu text
+create table if not exists beatmap_chart_analysis (
+  beatmap_id integer not null,
+  analysis_version integer not null,
+  status text not null,
+  key_count integer,
+  primary_label text,
+  primary_family text,
+  raw_dan real,
+  msd_overall real,
+  classification_json text,
+  msd_json text,
+  error text,
+  computed_at text,
+  updated_at text not null,
+  primary key (beatmap_id, analysis_version)
+);
+
+create index if not exists idx_beatmap_chart_analysis_status_updated on beatmap_chart_analysis(status, updated_at desc);
+
+-- Per-player Etterna-style skillset ratings aggregated from the player's osu!
+-- top plays (per-play MinaCalc SSRs at the played rate), keyed by
+-- analysis_version so a version bump lazily recomputes every player
+create table if not exists player_skill_ratings (
+  user_id integer not null,
+  analysis_version integer not null,
+  status text not null,
+  modes_json text,
+  plays_json text,
+  source_fetched_at text,
+  error text,
+  computed_at text,
+  updated_at text not null,
+  primary key (user_id, analysis_version)
+);

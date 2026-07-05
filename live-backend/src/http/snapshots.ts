@@ -8,14 +8,16 @@ import type { Db } from "../db.js";
 import { dbHealth, exec, getSqliteBusyRetryStats, parseJson } from "../db.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION, getPlayerActivityAvailability, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../features/activity.js";
 import { cancelBeatmapOsuFileBackfill, getBeatmapOsuFileBackfillStatus, startBeatmapOsuFileBackfill } from "../features/beatmap-osu-file-backfill.js";
+import { CHART_ANALYSIS_VERSION, cancelChartAnalysisBackfill, enqueueChartAnalysisBackfill, getChartAnalysisBackfillStatus, startChartAnalysisBackfill } from "../features/chart-analysis.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
 import { GOAL_KINDS, GOAL_MAP_KINDS, GOAL_SPEED_BUCKETS, GOAL_TARGET_GRADES, createUserGoal, deleteUserGoal, getUserGoal, listUserGoalsWithProgress, reconcileGoalsForUser, updateUserGoal, type GoalKind, type GoalSpeedBucket, type UserGoalInput, type UserGoalTargetPatch } from "../features/goals.js";
 import { getMyDataSummary, getUserTopPlaysFeed, getUserTrackedFeed, type MyDataTopPlaysQuery, type MyDataTrackedFeedQuery } from "../features/my-data.js";
+import { getPlayerSkillBreakdown } from "../features/player-skills.js";
 import { FARM_HELPER_DEFAULT_LIMIT, FARM_HELPER_MAX_LIMIT, FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapshot, type FarmHelperKeyMode, type FarmHelperView } from "../features/farm-helper.js";
 import type { ScoreSpeedBucket } from "../shared/score.js";
 import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalRankingsSnapshot, type GlobalRankingsSort } from "../features/global-rankings.js";
 import { enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRefreshProgress, getMapsSnapshot, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery } from "../features/maps.js";
-import { getMapSearchPage, MAP_SEARCH_PATTERNS, type MapSearchQuery, type MapSearchSort } from "../features/map-search.js";
+import { getMapSearchPage, MAP_SEARCH_PATTERNS, MAP_SEARCH_SUB_PATTERNS, type MapSearchQuery, type MapSearchSort } from "../features/map-search.js";
 import { getMapCollection, getMapCollections } from "../features/map-collections.js";
 import { getPackWallet, listPackCollectionCards, listPackCollectionOwnedUserIds, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, warmProfileSnapshots } from "../features/player-profiles.js";
@@ -496,21 +498,36 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     const limit = clampLimit(url.searchParams.get("limit"), 12, 60);
     const trackedOffset = clampInteger(url.searchParams.get("trackedOffset"), 0, 1_000_000, 0);
     const topOffset = clampInteger(url.searchParams.get("topOffset"), 0, 1_000_000, 0);
-    const year = clampInteger(url.searchParams.get("year"), 2007, 2100, new Date().getFullYear());
     const summary = await getMyDataSummary(ctx.db, userId);
     const emptyTrackedPage = { items: [], total: 0, limit, offset: trackedOffset };
     const emptyTopPlayPage = { items: [], total: 0, limit, offset: topOffset };
     if (!summary.tracked) {
-      sendJson(req, res, ctx, 200, { summary, trackedPage: emptyTrackedPage, topPlayPage: emptyTopPlayPage, activity: null });
+      sendJson(req, res, ctx, 200, { summary, trackedPage: emptyTrackedPage, topPlayPage: emptyTopPlayPage, skills: null });
       return true;
     }
-    const activityCountry = summary.countryCode ?? summary.trackedCountries[0] ?? GLOBAL_COUNTRY_CODE;
-    const [trackedPage, topPlayPage, activity] = await Promise.all([
+    const [trackedPage, topPlayPage, skills] = await Promise.all([
       getUserTrackedFeed(ctx.db, userId, limit, trackedOffset),
       getUserTopPlaysFeed(ctx.db, userId, limit, topOffset),
-      getPlayerActivitySnapshot(ctx.db, ctx.queue, userId, activityCountry, year).catch(() => null),
+      getPlayerSkillBreakdown(ctx.db, ctx.queue, userId).catch(() => null),
     ]);
-    sendJson(req, res, ctx, 200, { summary, trackedPage, topPlayPage, activity });
+    sendJson(req, res, ctx, 200, { summary, trackedPage, topPlayPage, skills });
+    return true;
+  }
+  if (url.pathname === "/api/my-data/skills") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const userId = Number(url.searchParams.get("userId"));
+    if (!Number.isInteger(userId) || userId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, await getPlayerSkillBreakdown(ctx.db, ctx.queue, userId));
     return true;
   }
   if (url.pathname === "/api/my-data/feed") {
@@ -790,6 +807,42 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }));
     return true;
   }
+  if (url.pathname === "/api/chart-analysis") {
+    // The stored lean classification for one beatmap: detected pattern hits in
+    // the in-house vocabulary plus the LeoBlack cluster readout. Feeds the map
+    // detail modal's keymode-honest pattern strip (MSD skillset names are 4K
+    // vocabulary). Single-PK read; the global publicApi limiter covers it.
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const beatmapId = Number(url.searchParams.get("beatmapId"));
+    if (!Number.isInteger(beatmapId) || beatmapId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_beatmap_id" });
+      return true;
+    }
+    const row = (await exec(
+      ctx.db,
+      `select status, key_count, classification_json from beatmap_chart_analysis
+       where beatmap_id = ? and analysis_version = ? limit 1`,
+      [beatmapId, CHART_ANALYSIS_VERSION],
+    )).rows[0];
+    const classification = row?.status === "ready"
+      ? parseJson<Record<string, unknown> | null>(String(row.classification_json ?? ""), null)
+      : null;
+    sendJson(req, res, ctx, 200, {
+      beatmapId,
+      status: row ? String(row.status) : "missing",
+      keyCount: row?.key_count == null ? null : Number(row.key_count),
+      patterns: Array.isArray(classification?.patterns) ? classification.patterns : [],
+      clusters: Array.isArray(classification?.clusters) ? classification.clusters : [],
+      clusterCategory: typeof classification?.clusterCategory === "string" ? classification.clusterCategory : null,
+      modeTag: typeof classification?.modeTag === "string" ? classification.modeTag : null,
+      verdictText: typeof classification?.verdictText === "string" ? classification.verdictText : null,
+      lnRatio: Number.isFinite(Number(classification?.lnRatio)) ? Number(classification?.lnRatio) : null,
+    });
+    return true;
+  }
   if (url.pathname === "/api/osu/v2") {
     if (!isAdmin(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
@@ -811,7 +864,11 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         res.end(buffer);
         return true;
       }
-      sendJson(req, res, ctx, 200, await ctx.osu.getJson(path, caller));
+      if (body.body !== undefined) {
+        sendJson(req, res, ctx, 200, await ctx.osu.postJson(path, normalizeOsuApiBody(body.body), caller));
+      } else {
+        sendJson(req, res, ctx, 200, await ctx.osu.getJson(path, caller));
+      }
     } catch (error) {
       sendOsuError(req, res, ctx, error);
     }
@@ -1645,6 +1702,37 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     sendJson(req, res, ctx, 200, await getDanClassifierSets(ctx.db, beatmapsetIds, beatmapIds));
     return true;
   }
+  if (url.pathname === "/api/admin/chart-analysis/backfill") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    const limit = Number(url.searchParams.get("limit") ?? "");
+    const enqueued = await enqueueChartAnalysisBackfill(
+      ctx.db,
+      ctx.queue,
+      Number.isFinite(limit) && limit > 0 ? limit : undefined,
+      { includeFailed: true },
+    );
+    sendJson(req, res, ctx, 200, { ok: true, enqueued });
+    return true;
+  }
+  if (url.pathname === "/api/admin/chart-analysis/start") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true, backfill: await startChartAnalysisBackfill(ctx.db, ctx.queue) });
+    return true;
+  }
+  if (url.pathname === "/api/admin/chart-analysis/cancel") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true, backfill: await cancelChartAnalysisBackfill(ctx.db) });
+    return true;
+  }
   if (url.pathname === "/api/admin/osu-file-backfill/start") {
     if (!isAdmin(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
@@ -1875,6 +1963,7 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
     roster,
     analysis,
     osuFileBackfill,
+    chartAnalysisBackfill,
     scoresFallback,
     apiCalls,
     countries,
@@ -1890,6 +1979,7 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
     rosterSummary(ctx.db),
     analysisStats(ctx.db),
     getBeatmapOsuFileBackfillStatus(ctx.db, { cacheCounts: true }),
+    getChartAnalysisBackfillStatus(ctx.db, { cacheCounts: true }),
     scoresFallbackStatus(ctx, mirror),
     apiCallHistory(ctx.db),
     countryRegistryStatus(ctx),
@@ -1915,6 +2005,7 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
     roster,
     analysis,
     osuFileBackfill,
+    chartAnalysisBackfill,
     rate,
     sqliteBusy,
     scoresFallback,
@@ -2609,19 +2700,22 @@ function parseMapSearchQuery(params: URLSearchParams): MapSearchQuery {
   const stars = parseSearchRange(params, "starMin", "starMax", 0, 20);
   const bpm = parseSearchRange(params, "bpmMin", "bpmMax", 0, 2000);
   const length = parseSearchRange(params, "lenMin", "lenMax", 0, 100_000);
+  const dan = parseSearchRange(params, "danMin", "danMax", -2, 21);
   const rawCountry = (params.get("country") ?? "").trim().toUpperCase();
   const country = /^[A-Z]{2}$/.test(rawCountry) ? rawCountry : null;
   return {
     q: (params.get("q") ?? "").trim().slice(0, 120),
     keys: parseCsvSubset(params.get("keys"), ["4k", "7k", "other"]),
     statuses: parseCsvSubset(params.get("statuses"), ["ranked", "loved", "graveyard", "other"]),
-    patterns: parseCsvSubset(params.get("patterns"), MAP_SEARCH_PATTERNS),
+    patterns: parseCsvSubset(params.get("patterns"), [...MAP_SEARCH_PATTERNS, ...MAP_SEARCH_SUB_PATTERNS]),
     starMin: stars.min,
     starMax: stars.max,
     bpmMin: bpm.min,
     bpmMax: bpm.max,
     lenMin: length.min,
     lenMax: length.max,
+    danMin: dan.min,
+    danMax: dan.max,
     country,
     sort,
     dir: params.get("dir") === "asc" ? "asc" : "desc",
@@ -2986,6 +3080,16 @@ function normalizeOsuApiPath(rawPath: unknown, rawParams: unknown): string {
     }
   }
   return `${url.pathname}${url.search}`;
+}
+
+// Forwarded verbatim as the JSON body of a POST-only osu! v2 read (e.g.
+// /beatmaps/{id}/attributes); size-capped so the proxy can't relay junk.
+function normalizeOsuApiBody(raw: unknown): Record<string, unknown> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("Invalid osu! API body.");
+  }
+  if (JSON.stringify(raw).length > 2000) throw new Error("Invalid osu! API body.");
+  return raw as Record<string, unknown>;
 }
 
 function normalizeCaller(raw: unknown): string {

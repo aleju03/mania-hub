@@ -4,6 +4,7 @@ export const REPLAY_INPUT_ONLY_STORAGE_KEY = "mania-hub-replay-input-only";
 export const REPLAY_INPUT_KEY_HISTORY_STORAGE_KEY = "mania-hub-replay-input-key-history";
 export const REPLAY_INPUT_COLOR_STORAGE_KEY = "mania-hub-replay-input-color";
 export const REPLAY_BG_DIM_STORAGE_KEY = "mania-hub-replay-bg-dim";
+export const REPLAY_BLACK_PLAYFIELD_STORAGE_KEY = "mania-hub-replay-black-playfield";
 export const REPLAY_HITSOUNDS_STORAGE_KEY = "mania-hub-replay-hitsounds";
 // Historical key: held the single hitsound volume before the beatmap/key
 // press split; now stores the key press channel so old values carry over.
@@ -62,6 +63,16 @@ export function readReplayBackgroundDim(): number {
 export function writeReplayBackgroundDim(dim: number): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(REPLAY_BG_DIM_STORAGE_KEY, String(normalizeReplayBackgroundDim(dim)));
+}
+
+// Fills the playfield lanes with a solid black background instead of letting
+// the dimmed cover art show through (the gutters still show the cover).
+export function readReplayBlackPlayfield(): boolean {
+  return readStoredBoolean(REPLAY_BLACK_PLAYFIELD_STORAGE_KEY, false);
+}
+
+export function writeReplayBlackPlayfield(enabled: boolean): void {
+  writeStoredBoolean(REPLAY_BLACK_PLAYFIELD_STORAGE_KEY, enabled);
 }
 
 export function readReplayInputOverlay(): boolean {

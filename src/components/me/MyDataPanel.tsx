@@ -10,10 +10,13 @@ import { useAuth } from "../../lib/auth-context";
 import {
   fetchMyDataDashboard,
   fetchMyDataFeed,
+  fetchMyDataSkills,
   fetchMyDataTopPlays,
   MY_DATA_PAGE_SIZE,
   type MyDataArchiveFilter,
   type MyDataModFilter,
+  type MyDataSkillBreakdown,
+  type MyDataSkillMode,
   type MyDataSummary,
   type MyDataPage,
   type MyDataTopPlay,
@@ -23,12 +26,11 @@ import {
   type MyDataTrackedPlay,
   type MyDataTrackedSort,
 } from "../../lib/my-data";
-import { openLiveEventSource, type LivePlayerActivitySnapshot } from "../../lib/live-backend";
+import { openLiveEventSource } from "../../lib/live-backend";
 import { getScoreTimestamp } from "../../lib/score";
 import { MeScoreRow } from "./MeScoreRow";
 import { ModBadge } from "../ui/ModBadge";
 import { RosterOptInCard } from "./RosterOptInCard";
-import { skillPatternEntries, type SkillPatternEntry } from "./skill-patterns";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const KEY_LABEL: Record<number, string> = { 1: "1K", 2: "2K", 3: "3K", 4: "4K", 5: "5K", 6: "6K", 7: "7K", 8: "8K", 9: "9K", 10: "10K" };
@@ -119,46 +121,38 @@ function formatHour(h: number): string {
   return `${base}${period}`;
 }
 
-interface KeymodePlaystyle {
-  keyCount: number | null;
-  entries: SkillPatternEntry[];
-  analyzedPlays: number;
-}
+// Etterna's skillset taxonomy (from the MinaCalc analysis), with colors from
+// the same palette the old pattern fingerprint used. Native for 4K only.
+const MSD_SKILLSET_META: Array<{ key: string; label: string; color: string }> = [
+  { key: "Stream", label: "Stream", color: "#8f6bd8" },
+  { key: "Jumpstream", label: "Jumpstream", color: "#6f87d8" },
+  { key: "Handstream", label: "Handstream", color: "#b06bc0" },
+  { key: "Stamina", label: "Stamina", color: "#ad6b5d" },
+  { key: "JackSpeed", label: "Jackspeed", color: "#c66f84" },
+  { key: "Chordjack", label: "Chordjack", color: "#c59a5c" },
+  { key: "Technical", label: "Technical", color: "#83a86f" },
+];
 
-// 4K and 7K are effectively different games, so the fingerprint is built per keymode rather than
-// averaged into one cross-keymode blur. Each day's keyMode.patterns is already the day's per-keymode
-// average, so combining across days just weights by that keymode's analyzed plays.
-function aggregatePlaystyleByKeymode(activity: LivePlayerActivitySnapshot | null): KeymodePlaystyle[] {
-  if (!activity?.available) return [];
-  const buckets = new Map<string, { keyCount: number | null; acc: Record<string, number>; weight: number }>();
-  for (const day of activity.days) {
-    for (const mode of day.skills?.keyModes ?? []) {
-      const weight = mode.analyzedPlays ?? 0;
-      if (weight <= 0) continue;
-      const id = String(mode.keyCount);
-      let bucket = buckets.get(id);
-      if (!bucket) {
-        bucket = { keyCount: mode.keyCount, acc: {}, weight: 0 };
-        buckets.set(id, bucket);
-      }
-      for (const [key, value] of Object.entries(mode.patterns)) bucket.acc[key] = (bucket.acc[key] ?? 0) + (Number(value) || 0) * weight;
-      bucket.weight += weight;
-    }
-  }
-  const total = [...buckets.values()].reduce((sum, bucket) => sum + bucket.weight, 0);
-  if (total === 0) return [];
-  const modes: KeymodePlaystyle[] = [];
-  for (const bucket of buckets.values()) {
-    const patterns: Record<string, number> = {};
-    for (const [key, value] of Object.entries(bucket.acc)) patterns[key] = value / bucket.weight;
-    const entries = skillPatternEntries(patterns, bucket.keyCount).slice(0, 6);
-    if (entries.length > 0) modes.push({ keyCount: bucket.keyCount, entries, analyzedPlays: bucket.weight });
-  }
-  modes.sort((a, b) => b.analyzedPlays - a.analyzedPlays);
-  // Drop trickle keymodes (a few stray plays in an off-keymode) so the toggle only offers modes the
-  // player meaningfully plays; always keep at least the dominant one.
-  const minWeight = Math.max(5, total * 0.1);
-  const qualifying = modes.filter((mode) => mode.analyzedPlays >= minWeight);
+// Non-4K axes come from the in-house pattern detector instead (MinaCalc's
+// skillset names are 4K vocabulary): each value is the aggregate of the
+// player's Overall SSRs on charts tagged with that pattern. Family ids only;
+// subtypes (speedjack, lnrelease, ...) stay a maps-page concern.
+const PATTERN_RATING_META: Array<{ key: string; label: string; color: string }> = [
+  { key: "chordstream", label: "Chordstream", color: "#5ab2f2" },
+  { key: "bracket", label: "Bracket", color: "#f3c24a" },
+  { key: "delay", label: "Delay", color: "#46c7b8" },
+  { key: "stream", label: "Stream", color: "#8f6bd8" },
+  { key: "jack", label: "Jack", color: "#ec6a9c" },
+  { key: "chordjack", label: "Chordjack", color: "#c59a5c" },
+  { key: "tech", label: "Tech", color: "#83cf6b" },
+  { key: "ln", label: "LN", color: "#f07474" },
+];
+
+// Drop trickle keymodes (a few stray plays in an off-keymode) so the toggle only offers modes the
+// player meaningfully plays; always keep at least the dominant one.
+function qualifyingSkillModes(skills: MyDataSkillBreakdown | null): MyDataSkillMode[] {
+  const modes = skills?.modes ?? [];
+  const qualifying = modes.filter((mode) => mode.analyzedPlays >= 3);
   return qualifying.length > 0 ? qualifying : modes.slice(0, 1);
 }
 
@@ -222,7 +216,7 @@ export function MyDataPanel() {
   const [trackedLimit, setTrackedLimit] = useState(MY_DATA_PAGE_SIZE);
   const [topLimit, setTopLimit] = useState(MY_DATA_PAGE_SIZE);
   const [pageLoading, setPageLoading] = useState<"tracked" | "top" | null>(null);
-  const [activity, setActivity] = useState<LivePlayerActivitySnapshot | null>(null);
+  const [skills, setSkills] = useState<MyDataSkillBreakdown | null>(null);
   const [loading, setLoading] = useState(true);
   const newKeysRef = useRef<Set<string>>(new Set());
   const filterFetchReadyRef = useRef(false);
@@ -294,7 +288,7 @@ export function MyDataPanel() {
       setSummary(next);
       applyTrackedPage(dashboard.trackedPage);
       applyTopPage(dashboard.topPlayPage);
-      setActivity(dashboard.activity);
+      setSkills(dashboard.skills);
       filterFetchReadyRef.current = false;
       if (next?.tracked) {
         // Default to the tab that actually has something to show.
@@ -304,7 +298,7 @@ export function MyDataPanel() {
       }
     } catch {
       setSummary(null);
-      setActivity(null);
+      setSkills(null);
       applyTrackedPage({ items: [], total: 0, limit: MY_DATA_PAGE_SIZE, offset: 0 });
       applyTopPage({ items: [], total: 0, limit: MY_DATA_PAGE_SIZE, offset: 0 });
       filterFetchReadyRef.current = false;
@@ -376,13 +370,35 @@ export function MyDataPanel() {
     return () => source.close();
   }, [viewer, summary?.tracked, trackedLimit, trackedPageIndex]);
 
-  const playstyleModes = useMemo(() => aggregatePlaystyleByKeymode(activity), [activity]);
-  const [playstyleKey, setPlaystyleKey] = useState<number | null>(null);
-  const activePlaystyle = useMemo(
-    () => (playstyleModes.length > 0 ? playstyleModes.find((mode) => mode.keyCount === playstyleKey) ?? playstyleModes[0] : null),
-    [playstyleModes, playstyleKey],
+  const skillModes = useMemo(() => qualifyingSkillModes(skills), [skills]);
+  const [skillModeKey, setSkillModeKey] = useState<number | null>(null);
+  const activeSkillMode = useMemo(
+    () => (skillModes.length > 0 ? skillModes.find((mode) => mode.keyCount === skillModeKey) ?? skillModes[0] : null),
+    [skillModes, skillModeKey],
   );
-  const playstyle = activePlaystyle?.entries ?? [];
+
+  // The first compute after a deploy (or a fresh top-play stack) runs as a
+  // background job; poll until it lands instead of asking for a page reload.
+  useEffect(() => {
+    if (!viewer || !summary?.tracked || skills?.status !== "pending") return;
+    let attempts = 0;
+    let cancelled = false;
+    const interval = window.setInterval(() => {
+      attempts += 1;
+      if (attempts > 24) {
+        window.clearInterval(interval);
+        return;
+      }
+      void fetchMyDataSkills().then((next) => {
+        if (cancelled || !next) return;
+        setSkills(next);
+      }).catch(() => {});
+    }, 5_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [viewer, summary?.tracked, skills?.status]);
   const highlightStats = useMemo(() => {
     if (!summary) return [];
     const stats: Array<{ key: string; label: string; value: string; sub?: string; accent: string }> = [];
@@ -565,21 +581,11 @@ export function MyDataPanel() {
 
             <div className="space-y-4">
               <InsightCard
-                title="Patterns you're best at"
-                accent={playstyle[0]?.color ?? "#8f6bd8"}
-                right={playstyleModes.length > 1 ? <KeymodeToggle modes={playstyleModes} active={activePlaystyle?.keyCount ?? null} onChange={setPlaystyleKey} /> : undefined}
+                title="Skill rating"
+                accent={skillRatingAccent(activeSkillMode)}
+                right={skillModes.length > 1 ? <KeymodeToggle modes={skillModes} active={activeSkillMode?.keyCount ?? null} onChange={setSkillModeKey} /> : undefined}
               >
-                {playstyle.length > 0 ? (
-                  <>
-                    <div className="mb-2.5 text-[12px] text-osu-l2">
-                      You lean <span className="font-semibold text-white">{playstyle[0].label}</span>
-                      {playstyle[1] ? <> &amp; <span className="font-semibold text-white">{playstyle[1].label}</span></> : null}
-                    </div>
-                    <PlaystyleRadar entries={playstyle} />
-                  </>
-                ) : (
-                  <div className="text-[12px] text-osu-f1">Pattern analysis builds up as your tracked plays get analyzed. Check back after a few sessions.</div>
-                )}
+                <SkillRatingCardBody skills={skills} mode={activeSkillMode} />
               </InsightCard>
 
               {summary && summary.rhythm.sampleSize > 0 ? (
@@ -881,7 +887,7 @@ function FeedTab({ active, onClick, children }: { active: boolean; onClick: () =
   );
 }
 
-function KeymodeToggle({ modes, active, onChange }: { modes: KeymodePlaystyle[]; active: number | null; onChange: (keyCount: number | null) => void }) {
+function KeymodeToggle({ modes, active, onChange }: { modes: Array<{ keyCount: number | null }>; active: number | null; onChange: (keyCount: number | null) => void }) {
   return (
     <span className="inline-flex gap-1">
       {modes.map((mode) => {
@@ -912,98 +918,76 @@ function HeaderStat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function radarPoint(index: number, count: number, radius: number, center: number): { x: number; y: number } {
-  const angle = -Math.PI / 2 + (index * Math.PI * 2) / count;
-  return {
-    x: center + Math.cos(angle) * radius,
-    y: center + Math.sin(angle) * radius,
-  };
+// 4K speaks MinaCalc's native skillsets; other keymodes speak the in-house
+// pattern vocabulary (falling back to the MSD names while tags are missing).
+function skillModeEntries(mode: MyDataSkillMode): Array<{ key: string; label: string; color: string; value: number }> {
+  if (mode.keyCount !== 4) {
+    const byId = new Map((mode.patterns ?? []).map((entry) => [entry.id, entry.rating]));
+    const patternEntries = PATTERN_RATING_META
+      .map((meta) => ({ ...meta, value: Number(byId.get(meta.key) ?? 0) }))
+      .filter((entry) => entry.value >= 1)
+      .sort((a, b) => b.value - a.value);
+    if (patternEntries.length > 0) return patternEntries;
+  }
+  const entries = MSD_SKILLSET_META
+    .map((meta) => ({ ...meta, value: Number(mode.ratings[meta.key] ?? 0) }))
+    // The 6K/7K calc engine returns ~0 for skillsets it does not rate
+    // (Technical); a 0.15 sliver next to 20+ bars is noise, not signal.
+    .filter((entry) => entry.value >= 1);
+  // Etterna's taxonomy has no LN skillset, so the 4K card grafts in the LN
+  // pattern axis (same rating scale: Overall SSRs on LN-tagged charts).
+  const ln = (mode.patterns ?? []).find((entry) => entry.id === "ln");
+  if (ln && ln.rating >= 1) entries.push({ key: "ln", label: "LN", color: "#f07474", value: ln.rating });
+  return entries.sort((a, b) => b.value - a.value);
 }
 
-function radarPoints(count: number, radius: number, center: number): string {
-  return Array.from({ length: count }, (_, index) => {
-    const point = radarPoint(index, count, radius, center);
-    return `${point.x.toFixed(2)},${point.y.toFixed(2)}`;
-  }).join(" ");
+function skillRatingAccent(mode: MyDataSkillMode | null): string {
+  if (!mode) return "#8f6bd8";
+  return skillModeEntries(mode)[0]?.color ?? "#8f6bd8";
 }
 
-function PlaystyleRadar({ entries }: { entries: SkillPatternEntry[] }) {
-  const axes = entries.slice(0, 6);
-  if (axes.length < 3) return <PlaystyleBars entries={axes} />;
-
-  const center = 120;
-  const radius = 54;
-  const fillColor = axes[0]?.color ?? "#8f6bd8";
-  const valuePoints = axes.map((entry, index) => {
-    const strength = Math.max(0, Math.min(100, entry.value)) / 100;
-    const point = radarPoint(index, axes.length, radius * strength, center);
-    return `${point.x.toFixed(2)},${point.y.toFixed(2)}`;
-  }).join(" ");
-
+function SkillRatingCardBody({ skills, mode }: { skills: MyDataSkillBreakdown | null; mode: MyDataSkillMode | null }) {
+  if (!skills || skills.status === "pending") {
+    return <div className="text-[12px] text-osu-f1">Your top plays are being rated by the chart analyzer. The first pass takes a minute or two.</div>;
+  }
+  if (skills.status === "failed") {
+    return <div className="text-[12px] text-osu-f1">Rating your top plays failed. It retries automatically, check back in a bit.</div>;
+  }
+  if (!mode || mode.analyzedPlays === 0) {
+    return <div className="text-[12px] text-osu-f1">None of your top plays could be rated yet. Converts and unusual keymodes are skipped.</div>;
+  }
+  const entries = skillModeEntries(mode);
+  const overall = Number(mode.ratings.Overall ?? 0);
+  const max = entries[0]?.value ?? 1;
   return (
-    <div className="space-y-3">
-      <svg viewBox="0 0 240 240" role="img" aria-label="Playstyle radar chart" className="mx-auto block aspect-square w-full max-w-[250px]">
-        <title>Playstyle radar chart</title>
-        {[0.25, 0.5, 0.75, 1].map((scale) => (
-          <polygon
-            key={scale}
-            points={radarPoints(axes.length, radius * scale, center)}
-            fill="none"
-            stroke="rgba(255,255,255,0.08)"
-            strokeWidth="1"
-          />
-        ))}
-        {axes.map((entry, index) => {
-          const edge = radarPoint(index, axes.length, radius, center);
-          const value = radarPoint(index, axes.length, radius * (Math.max(0, Math.min(100, entry.value)) / 100), center);
-          const label = radarPoint(index, axes.length, radius + 30, center);
-          return (
-            <g key={entry.key}>
-              <line x1={center} y1={center} x2={edge.x} y2={edge.y} stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
-              <circle cx={value.x} cy={value.y} r="3" fill={entry.color} />
-              <text
-                x={label.x}
-                y={label.y}
-                textAnchor={Math.abs(label.x - center) < 4 ? "middle" : label.x > center ? "start" : "end"}
-                dominantBaseline="middle"
-                fill={entry.color}
-                fontSize="9.5"
-                fontWeight="700"
-              >
-                {entry.label}
-              </text>
-            </g>
-          );
-        })}
-        <polygon points={valuePoints} fill={fillColor} fillOpacity="0.24" stroke={fillColor} strokeWidth="2.5" strokeLinejoin="round" />
-      </svg>
-      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-        {axes.map((entry) => (
-          <div key={entry.key} className="flex min-w-0 items-center gap-1.5 text-[11px]">
-            <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: entry.color }} />
-            <span className="min-w-0 truncate font-semibold text-osu-l2">{entry.label}</span>
-            <span className="ml-auto shrink-0 text-osu-f1 tabular-nums">{entry.value}%</span>
+    <div>
+      {entries[0] ? (
+        <div className="mb-2.5 text-[12px] text-osu-l2">
+          You&apos;re strongest in <span className="font-semibold text-white">{entries[0].label}</span>
+        </div>
+      ) : null}
+      <div className="mb-3 flex items-baseline gap-2">
+        <span className="text-[26px] font-bold leading-none text-white tabular-nums">{overall.toFixed(2)}</span>
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-l3">overall</span>
+      </div>
+      <div className="space-y-2">
+        {entries.map((entry) => (
+          <div key={entry.key} className="flex items-center gap-2">
+            <span className="w-[74px] shrink-0 text-[11px] font-semibold text-osu-l2">{entry.label}</span>
+            <span className="h-1.5 min-w-0 flex-1 rounded-full bg-osu-b3/35">
+              <span
+                className="block h-full rounded-full"
+                style={{ width: `${Math.max(4, (entry.value / max) * 100)}%`, backgroundColor: entry.color }}
+              />
+            </span>
+            <span className="w-[42px] shrink-0 text-right text-[11px] text-osu-f1 tabular-nums">{entry.value.toFixed(2)}</span>
           </div>
         ))}
       </div>
-    </div>
-  );
-}
-
-function PlaystyleBars({ entries }: { entries: SkillPatternEntry[] }) {
-  return (
-    <div className="space-y-2">
-      {entries.map((entry) => (
-        <div key={entry.key}>
-          <div className="mb-1 flex justify-between text-[11px]">
-            <span className="font-semibold text-osu-l2">{entry.label}</span>
-            <span className="text-osu-f1 tabular-nums">{entry.value}%</span>
-          </div>
-          <div className="h-1.5 rounded-full bg-osu-b3/35">
-            <div className="h-full rounded-full" style={{ width: `${entry.value}%`, backgroundColor: entry.color }} />
-          </div>
-        </div>
-      ))}
+      <div className="mt-3 text-[10px] text-osu-f1">
+        rated from {mode.analyzedPlays} of your top {skills.totalPlays} plays, DT and HT at their real rate
+        {skills.pendingPlays > 0 ? <> &middot; {skills.pendingPlays} still analyzing</> : null}
+      </div>
     </div>
   );
 }

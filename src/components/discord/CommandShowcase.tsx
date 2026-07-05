@@ -1451,28 +1451,31 @@ export function CommandShowcase() {
       </p>
 
       <div className="space-y-4">
-        {/* Command picker: one wrapping chip row per group, so the whole list
-            stays a compact band instead of a tall sidebar. */}
-        <div className="space-y-1">
+        {/* Command picker: a right-aligned group label opens each row, with the
+            chips in their own wrapping block so wrapped rows align under the
+            first chip instead of raggedly stacking under the label. */}
+        <div className="space-y-1.5">
           {GROUPS.map((group) => (
-            <div key={group} className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-              <span className="w-16 shrink-0 text-right text-[9px] font-semibold uppercase tracking-wider text-osu-f1">{group}</span>
-              {commands.filter((c) => c.group === group).map((cmd) => {
-                const active = cmd.id === selectedId;
-                return (
-                  <button
-                    key={cmd.id}
-                    type="button"
-                    onClick={() => setSelectedId(cmd.id)}
-                    className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1 text-[12px] font-semibold transition-colors ${
-                      active ? "bg-osu-pink/15 text-white" : "text-osu-l2 hover:bg-osu-b3/50 hover:text-white"
-                    }`}
-                  >
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: cmd.accent }} />
-                    {cmd.label}
-                  </button>
-                );
-              })}
+            <div key={group} className="flex items-start gap-x-2">
+              <span className="w-16 shrink-0 pt-1.5 text-right text-[9px] font-semibold uppercase tracking-wider text-osu-f1">{group}</span>
+              <div className="flex min-w-0 flex-1 flex-wrap gap-x-1.5 gap-y-1">
+                {commands.filter((c) => c.group === group).map((cmd) => {
+                  const active = cmd.id === selectedId;
+                  return (
+                    <button
+                      key={cmd.id}
+                      type="button"
+                      onClick={() => setSelectedId(cmd.id)}
+                      className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1 text-[12px] font-semibold transition-colors ${
+                        active ? "bg-osu-pink/15 text-white" : "text-osu-l2 hover:bg-osu-b3/50 hover:text-white"
+                      }`}
+                    >
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: cmd.accent }} />
+                      {cmd.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           ))}
         </div>

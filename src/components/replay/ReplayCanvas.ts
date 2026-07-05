@@ -190,6 +190,7 @@ interface RendererOptions {
   speedMultiplier?: number;
   timingPoints?: ManiaTimingPoint[];
   transparentBackground?: boolean;
+  blackPlayfield?: boolean;
   hideHud?: boolean;
   hidePerformanceStats?: boolean;
   showCombo?: boolean;
@@ -316,6 +317,7 @@ export class ManiaReplayRenderer {
   private flashlightComboBasedSize = false;
   private flashlightSizeMultiplier = 1;
   private transparentBackground = false;
+  private blackPlayfield = false;
   private hideHud = false;
   private hidePerformanceStats = false;
   private showCombo = false;
@@ -500,6 +502,7 @@ export class ManiaReplayRenderer {
     this.inputOverlayColor = options?.inputOverlayColor ?? "#a855f7";
     this.inputOverlayKeyHistory = options?.inputOverlayKeyHistory ?? false;
     this.transparentBackground = options?.transparentBackground ?? false;
+    this.blackPlayfield = options?.blackPlayfield ?? false;
     this.hideHud = options?.hideHud ?? false;
     this.hidePerformanceStats = options?.hidePerformanceStats ?? false;
     this.showCombo = options?.showCombo ?? false;
@@ -1226,6 +1229,13 @@ export class ManiaReplayRenderer {
     if (!this._isPlaying) this.render();
   }
 
+  setBlackPlayfield(on: boolean) {
+    if (this.blackPlayfield === on) return;
+    this.blackPlayfield = on;
+    this.staticDirty = true;
+    if (!this._isPlaying) this.render();
+  }
+
   setBackgroundImage(img: HTMLImageElement | null) {
     if (img === this.backgroundImage) return;
     const shouldFade = this.backgroundImage && img;
@@ -1883,7 +1893,7 @@ export class ManiaReplayRenderer {
     if (!this.barePlayfield) {
       this.fillRectInto(g, 0, 0, playfieldX, h, "#000000", 0.24);
       this.fillRectInto(g, playfieldX + playfieldWidth, 0, w - playfieldX - playfieldWidth, h, "#000000", 0.24);
-      this.fillRectInto(g, playfieldX, 0, playfieldWidth, h, "#000000", 0.12);
+      this.fillRectInto(g, playfieldX, 0, playfieldWidth, h, "#000000", this.blackPlayfield ? 1 : 0.12);
 
       for (let col = 0; showColumnDividers && col < this.keyCount; col++) {
         const { x, width } = this.getColumnLayout(col, layout);

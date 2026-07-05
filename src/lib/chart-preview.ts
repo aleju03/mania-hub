@@ -241,18 +241,42 @@ export function buildAutoplayFrames(
   windowMs = RANDOM_REPLAY_PREVIEW_MS,
 ): ReplayFrame[] {
   const window = Math.max(0, windowMs);
-  const events: Array<{ time: number; column: number; pressed: boolean }> = [];
+  // Notes in the lookahead tail are rendered and judged, so they must be
+  // played too, or every preview ends on a string of phantom misses.
+  const playEnd = window + RANDOM_REPLAY_PREVIEW_LOOKAHEAD_MS;
 
-  for (const note of notes) {
-    if (note.time > window) continue;
+  // Build presses per column, in time order, so each release clamps to
+  // strictly before the next same-column press. Judgement needs a fresh press
+  // edge per note; the old fixed 48ms tap hold (and hold tails ending exactly
+  // on the next head) swallowed the re-press whenever the gap was tighter,
+  // and frame coalescing turned the collision into a straight miss - the
+  // "autoplay" broke combo on any dense jack/LN chart.
+  const byColumn = new Map<number, Array<{ start: number; end: number }>>();
+  const ordered = [...notes].sort((a, b) => a.time - b.time || a.endTime - b.endTime);
+  for (const note of ordered) {
+    if (note.time > playEnd) continue;
     const column = Math.max(0, Math.min(keyCount - 1, note.column));
+    let presses = byColumn.get(column);
+    if (!presses) byColumn.set(column, (presses = []));
     const start = Math.max(0, Math.round(note.time));
+    const previous = presses[presses.length - 1];
+    if (previous) {
+      // Stacked duplicates can't both get a press edge at ms resolution.
+      if (start <= previous.start) continue;
+      previous.end = Math.max(previous.start + 1, Math.min(previous.end, start - 1));
+    }
     const end = Math.max(start + 1, Math.round(note.isHold ? note.endTime : note.time + RANDOM_REPLAY_TAP_HOLD_MS));
-    events.push({ time: start, column, pressed: true });
-    events.push({ time: Math.min(window, end), column, pressed: false });
+    presses.push({ start, end });
   }
 
-  events.sort((a, b) => a.time - b.time || (a.pressed === b.pressed ? 0 : a.pressed ? -1 : 1));
+  const events: Array<{ time: number; column: number; pressed: boolean }> = [];
+  for (const [column, presses] of byColumn) {
+    for (const press of presses) {
+      events.push({ time: press.start, column, pressed: true });
+      events.push({ time: press.end, column, pressed: false });
+    }
+  }
+  events.sort((a, b) => a.time - b.time);
 
   const frames: ReplayFrame[] = [{ time: 0, keyState: 0 }];
   let keyState = 0;
@@ -266,6 +290,7 @@ export function buildAutoplayFrames(
     }
     frames.push({ time, keyState });
   }
-  frames.push({ time: window, keyState: 0 });
+  const lastEventTime = events.length > 0 ? events[events.length - 1].time : 0;
+  frames.push({ time: Math.max(playEnd, lastEventTime), keyState: 0 });
   return frames;
 }

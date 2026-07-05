@@ -16,6 +16,18 @@ export const PATTERN_LABEL: Record<string, string> = {
   chordjack: "Chordjack",
   tech: "Tech",
   ln: "LN",
+  // subfamilies from the pattern analyzer (filterable via detected tags)
+  speedjack: "Speedjack",
+  handjack: "Handjack",
+  dumpstream: "Dumpstream",
+  quadstream: "Quadstream",
+  chordstream: "Chordstream",
+  delay: "Delay",
+  bracket: "Bracket",
+  lngeneral: "LN General",
+  lnrelease: "LN Release",
+  lninverse: "LN Inverse",
+  lntech: "LN Tech",
 };
 
 export const PATTERN_COLOR: Record<string, string> = {
@@ -27,14 +39,27 @@ export const PATTERN_COLOR: Record<string, string> = {
   chordjack: "#b483f0",
   tech: "#83cf6b",
   ln: "#f07474",
+  // subfamilies inherit their family's color
+  speedjack: "#ec6a9c",
+  handjack: "#ec6a9c",
+  dumpstream: "#5ab2f2",
+  quadstream: "#5ab2f2",
+  chordstream: "#5ab2f2",
+  delay: "#5ab2f2",
+  bracket: "#5ab2f2",
+  lngeneral: "#f07474",
+  lnrelease: "#f07474",
+  lninverse: "#f07474",
+  lntech: "#f07474",
 };
 
 export function patternLabel(pattern: string): string {
   return PATTERN_LABEL[pattern] ?? pattern;
 }
 
-// osu-web's difficulty colour spectrum, interpolated linearly between the
-// official stops so diff dots read the same as on the osu! site.
+// osu-web's difficulty colour spectrum, interpolated between the official
+// stops with gamma-2.2 RGB (d3 interpolateRgb.gamma(2.2), same as osu-web)
+// so diff dots read the same as on the osu! site.
 const STAR_COLOR_STOPS: Array<[number, number, number, number]> = [
   [0.1, 0x42, 0x90, 0xfb],
   [1.25, 0x4f, 0xc0, 0xff],
@@ -59,12 +84,45 @@ export function starRatingColor(stars: number): string {
     if (stars > hiStars) continue;
     const [loStars, lr, lg, lb] = STAR_COLOR_STOPS[i - 1];
     const t = (stars - loStars) / (hiStars - loStars);
-    const r = Math.round(lr + (hr - lr) * t);
-    const g = Math.round(lg + (hg - lg) * t);
-    const b = Math.round(lb + (hb - lb) * t);
-    return `rgb(${r}, ${g}, ${b})`;
+    const GAMMA = 2.2;
+    const mix = (a: number, b: number) =>
+      Math.round(Math.pow(Math.pow(a, GAMMA) + (Math.pow(b, GAMMA) - Math.pow(a, GAMMA)) * t, 1 / GAMMA));
+    return `rgb(${mix(lr, hr)}, ${mix(lg, hg)}, ${mix(lb, hb)})`;
   }
   return `rgb(${last[1]}, ${last[2]}, ${last[3]})`;
+}
+
+// CSS gradient of the spectrum across [lo, hi] stars, for painting slider
+// tracks. Stops past the last defined star (9.0) stay black, like osu-web.
+// `position` maps a star value to its 0..1 spot in the gradient, for tracks
+// that don't lay stars out linearly (defaults to linear).
+export function starSpectrumGradient(lo: number, hi: number, position?: (stars: number) => number): string {
+  const span = hi - lo || 1;
+  const pos = position ?? ((stars: number) => (stars - lo) / span);
+  const stops = [`${starRatingColor(lo)} 0%`];
+  for (const [stars] of STAR_COLOR_STOPS) {
+    if (stars <= lo || stars >= hi) continue;
+    stops.push(`${starRatingColor(stars)} ${(pos(stars) * 100).toFixed(2)}%`);
+  }
+  stops.push(`${starRatingColor(hi)} 100%`);
+  return `linear-gradient(to right, ${stops.join(", ")})`;
+}
+
+// osu-web's difficulty-badge: pill filled with the spectrum colour, dark text
+// that flips to the expert-plus yellow at 6.5★ and above.
+export function StarRatingBadge({ stars, label, className = "" }: { stars: number; label?: string; className?: string }) {
+  const textColor = stars >= 6.5 ? "hsl(45, 100%, 70%)" : "hsl(200, 10%, 10%)";
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold leading-none tabular-nums ${className}`}
+      style={{ background: starRatingColor(stars), color: textColor }}
+    >
+      <svg viewBox="0 0 24 24" className="h-[9px] w-[9px]" fill="currentColor" aria-hidden="true">
+        <path d="M12 1.7l3.1 6.9 7.2.8-5.4 5 1.5 7.2L12 17.9l-6.4 3.7 1.5-7.2-5.4-5 7.2-.8L12 1.7z" />
+      </svg>
+      {label ?? stars.toFixed(2)}
+    </span>
+  );
 }
 
 // The matching diffs of a search entry's set, easiest first. Collection items
@@ -104,6 +162,8 @@ function statusPill(status: string): { label: string; className: string } | null
   if (s === "ranked" || s === "approved") return { label: "ranked", className: "bg-[#6cf27f] text-black" };
   if (s === "loved") return { label: "loved", className: "bg-[#f26fa6] text-black" };
   if (s === "qualified") return { label: "qualified", className: "bg-[#66ccff] text-black" };
+  if (s === "graveyard") return { label: "graveyard", className: "bg-[#4a4a52] text-white" };
+  if (s === "pending" || s === "wip") return { label: "pending", className: "bg-[#f2b56c] text-black" };
   return null;
 }
 
@@ -149,6 +209,7 @@ export function SearchCard({
   const starLo = Math.min(...diffs.map((diff) => diff.stars));
   const starHi = Math.max(...diffs.map((diff) => diff.stars));
   const patternTags = multi ? setPatterns(diffs) : [entry.primaryPattern, ...secondaryPatterns(entry)];
+  const vibro = diffs.some((diff) => diff.vibro) || entry.vibro === true;
   const clickable = !!onOpen;
 
   return (
@@ -161,16 +222,22 @@ export function SearchCard({
       title={clickable ? "View details" : undefined}
     >
       <div className="relative rounded-t-xl overflow-hidden">
-        <img src={mapCoverUrl(entry)} alt="" className="w-full h-[100px] object-cover" loading="lazy" />
+        <img
+          src={mapCoverUrl(entry)}
+          alt=""
+          className="w-full h-[100px] object-cover"
+          loading="lazy"
+          onError={(e) => { e.currentTarget.style.visibility = "hidden"; }}
+        />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-        <span className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/60 text-[10px] font-bold text-white">
+        <span className="absolute top-2 left-2 inline-flex items-center rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold leading-none tabular-nums text-white">
           {keyModeLabel(diffs)}
         </span>
-        <span className="absolute top-2 right-2 px-2 py-0.5 rounded bg-black/60 text-[10px] font-bold text-osu-yellow">
-          {multi && starHi - starLo >= 0.05
-            ? `★${starLo.toFixed(1)}–${starHi.toFixed(1)}`
-            : `★${entry.stars.toFixed(2)}`}
-        </span>
+        <StarRatingBadge
+          stars={multi ? starHi : entry.stars}
+          label={multi && starHi - starLo >= 0.05 ? `${starLo.toFixed(1)}–${starHi.toFixed(1)}` : undefined}
+          className="absolute top-2 right-2"
+        />
         {pill && (
           <span className={`absolute bottom-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase leading-none ${pill.className}`}>
             {pill.label}
@@ -217,6 +284,14 @@ export function SearchCard({
               {patternLabel(pattern)}
             </span>
           ))}
+          {vibro && (
+            <span
+              className="px-2 py-1 rounded bg-[#ffb02e]/15 text-[#ffcf70] text-[10px] font-semibold leading-none"
+              title="Vibro chart: difficulty estimates are unreliable"
+            >
+              Vibro
+            </span>
+          )}
         </div>
 
         <div className="flex items-center justify-between gap-2 mt-auto pt-1">

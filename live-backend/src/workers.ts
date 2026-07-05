@@ -4,12 +4,14 @@ import { canSeedSnipesForCountry } from "./countries.js";
 import { exec, json, parseJson } from "./db.js";
 import { BEATMAP_OSU_FILE_BACKFILL_JOB, runBeatmapOsuFileBackfillJob } from "./features/beatmap-osu-file-backfill.js";
 import { computeBeatmapActivitySkillVector } from "./features/activity.js";
+import { CHART_ANALYSIS_BACKFILL_JOB, CHART_ANALYSIS_JOB, VIBRO_RECOMPUTE_JOB, computeBeatmapChartAnalysis, runChartAnalysisBackfillJob, runVibroRecomputeJob } from "./features/chart-analysis.js";
 import { computeDanEstimateJob } from "./features/dan-estimates.js";
 import { reconcileStatGoalsForCountry } from "./features/goals.js";
 import { runMapSearchIndexBuildJob } from "./features/map-search.js";
 import { rebuildMapCollections } from "./features/map-collections.js";
 import { MapsRosterNotReadyError, enqueueGlobalMapsRefresh, globalMapsFarmedRefreshRunAfter, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores } from "./features/maps.js";
 import { recordSnipeScoreHistory, updateSnipeProjection } from "./features/snipes.js";
+import { PLAYER_SKILLS_JOB, computePlayerSkillsJob } from "./features/player-skills.js";
 import { PROFILE_POOL_WARM_JOB, runProfilePoolWarmJob } from "./features/profile-pool-warm.js";
 import { confirmTopPlay, TopPlayConfirmationPendingError } from "./features/top-plays.js";
 import { getHydratedScoresForMetadata } from "./features/tracker.js";
@@ -74,8 +76,10 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     intervalMs: 1_000,
   },
   {
+    // Player skill ratings share this lane: both are MinaCalc-bound work and
+    // the wasm calls are serialized anyway, so a second lane would not help.
     name: "dan-estimates",
-    jobTypes: ["compute_dan_estimate"],
+    jobTypes: ["compute_dan_estimate", PLAYER_SKILLS_JOB],
     claimLimit: 2,
     intervalMs: 1_000,
   },
@@ -84,6 +88,16 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     jobTypes: ["analyze_activity_beatmap"],
     claimLimit: 1,
     intervalMs: 1_500,
+  },
+  {
+    // One CPU-heavy per-beatmap analysis at a time (classifier + MinaCalc,
+    // ~0.1-0.3s each). The interval is what sets the 67k-chart backfill pace;
+    // the work is local (cached .osu text), no osu! API pressure. Tunable via
+    // CHART_ANALYSIS_LANE_INTERVAL_MS so a local backfill can run flat out.
+    name: "chart-analysis",
+    jobTypes: [CHART_ANALYSIS_JOB, CHART_ANALYSIS_BACKFILL_JOB, VIBRO_RECOMPUTE_JOB],
+    claimLimit: 1,
+    intervalMs: readConfig().chartAnalysisLaneIntervalMs,
   },
   {
     name: "osu-file-cache",
@@ -139,6 +153,10 @@ const OSU_API_JOB_TYPES = new Set([
   "reconcile_user_recent_scores",
   "compute_dan_estimate",
   "analyze_activity_beatmap",
+  // CHART_ANALYSIS_JOB and PLAYER_SKILLS_JOB are deliberately absent: both are
+  // local CPU work over cached .osu text. They only skip their network fetch
+  // fallbacks when osu API jobs are disabled, instead of being skipped
+  // wholesale here.
   BEATMAP_OSU_FILE_BACKFILL_JOB,
   PROFILE_POOL_WARM_JOB,
 ]);
@@ -336,6 +354,22 @@ export class WorkerRunner {
     }
     if (job.type === "analyze_activity_beatmap") {
       await computeBeatmapActivitySkillVector(this.db, this.osu, job.payload as { beatmapId: number });
+      return;
+    }
+    if (job.type === PLAYER_SKILLS_JOB) {
+      await computePlayerSkillsJob(this.db, this.osu, this.queue, job.payload as { userId: number });
+      return;
+    }
+    if (job.type === CHART_ANALYSIS_JOB) {
+      await computeBeatmapChartAnalysis(this.db, this.osu, job.payload as { beatmapId: number });
+      return;
+    }
+    if (job.type === CHART_ANALYSIS_BACKFILL_JOB) {
+      await runChartAnalysisBackfillJob(this.db, this.queue, job.payload as { runId?: string; tick?: number });
+      return;
+    }
+    if (job.type === VIBRO_RECOMPUTE_JOB) {
+      await runVibroRecomputeJob(this.db, this.queue, job.payload as { cursor?: number });
       return;
     }
     if (job.type === BEATMAP_OSU_FILE_BACKFILL_JOB) {
@@ -656,7 +690,7 @@ function getRetryDelayMs(type: string, attempts: number, error: unknown): number
       ? 60_000
     : type === "refresh_country_maps"
       ? 10 * 60_000
-      : type === "compute_dan_estimate" || type === "analyze_activity_beatmap"
+      : type === "compute_dan_estimate" || type === "analyze_activity_beatmap" || type === CHART_ANALYSIS_JOB
         ? 5 * 60_000
         : type === "enrich_user"
           ? 60_000

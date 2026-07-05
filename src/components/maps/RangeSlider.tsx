@@ -68,10 +68,10 @@ export function RangeSlider({ lo, hi, min, max, step, onChange, format, ariaLabe
           step={step}
           value={localMin}
           onChange={(e) => {
-            const value = Math.min(Number(e.target.value), localMax - step);
+            const value = Math.max(lo, Math.min(Number(e.target.value), localMax - step));
             draggingRef.current = true;
             setDragging(true);
-            setLocalMin(Math.max(lo, value));
+            setLocalMin(value);
           }}
           onMouseUp={commit}
           onTouchEnd={commit}
@@ -87,10 +87,10 @@ export function RangeSlider({ lo, hi, min, max, step, onChange, format, ariaLabe
           step={step}
           value={localMax}
           onChange={(e) => {
-            const value = Math.max(Number(e.target.value), localMin + step);
+            const value = Math.min(hi, Math.max(Number(e.target.value), localMin + step));
             draggingRef.current = true;
             setDragging(true);
-            setLocalMax(Math.min(hi, value));
+            setLocalMax(value);
           }}
           onMouseUp={commit}
           onTouchEnd={commit}

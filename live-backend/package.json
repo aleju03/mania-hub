@@ -17,6 +17,11 @@
     "compact:storage:dist": "node --max-old-space-size=768 --expose-gc --env-file-if-exists=.env dist/maintenance/compact-storage.js",
     "backfill:osu-files": "node --env-file-if-exists=.env --import tsx src/maintenance/backfill-beatmap-osu-files.ts",
     "backfill:osu-files:dist": "node --env-file-if-exists=.env dist/maintenance/backfill-beatmap-osu-files.js",
+    "export:chart-analysis": "node --env-file-if-exists=.env --import tsx src/maintenance/export-chart-analysis.ts",
+    "import:chart-analysis": "node --env-file-if-exists=.env --import tsx src/maintenance/import-chart-analysis.ts",
+    "import:chart-analysis:dist": "node --env-file-if-exists=.env dist/maintenance/import-chart-analysis.js",
+    "recompute:vibro": "node --env-file-if-exists=.env --import tsx src/maintenance/recompute-vibro.ts",
+    "recompute:vibro:dist": "node --env-file-if-exists=.env dist/maintenance/recompute-vibro.js",
     "smoke:osc": "node --env-file-if-exists=.env --import tsx src/smoke-osc.ts"
   },
   "dependencies": {

@@ -115,3 +115,40 @@ export interface DanFeatureExtractionResult {
   metrics: DanFeatureMetrics;
   warnings: string[];
 }
+
+export type ManiaPatternId =
+  | "jack"
+  | "chordjack"
+  | "speedjack"
+  | "handjack"
+  | "tech"
+  | "stream"
+  | "dumpstream"
+  | "jumpstream"
+  | "handstream"
+  | "quadstream"
+  | "delay"
+  | "bracket"
+  | "chordstream"
+  | "ln"
+  | "lngeneral"
+  | "lnrelease"
+  | "lninverse"
+  | "lntech";
+
+export interface ManiaPatternHit {
+  id: ManiaPatternId;
+  label: string;
+  score: number;
+  confidence: number;
+  evidence: string;
+}
+
+export interface ManiaPatternAnalysis {
+  keyCount: number;
+  primary: ManiaPatternHit | null;
+  patterns: ManiaPatternHit[];
+  allPatterns: ManiaPatternHit[];
+  metrics: DanFeatureMetrics;
+  warnings: string[];
+}

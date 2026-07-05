@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { Check, Copy } from "lucide-react";
+import { StarRatingBadge } from "#/components/maps/SearchCard";
 import { avatarImageSrc } from "#/components/ui/Avatar";
+import { ModBadge } from "#/components/ui/ModBadge";
 import { formatDate } from "#/lib/format";
-import { getDisplayedAccuracy, getScoreTimestamp, isLazerScore } from "#/lib/score";
+import { getDisplayedAccuracy, getModDisplayList, getScoreTimestamp, isLazerScore } from "#/lib/score";
 import type { ManiaBeatmap } from "#/lib/beatmap-parser";
 import type { ServerReplay } from "#/lib/replay-types";
-import type { OsuScore } from "#/lib/types";
+import type { OsuMod, OsuScore } from "#/lib/types";
 
 // Avatar + banner resolved from the replay's player so the info bar carries the
 // player's identity instead of a bare name. Seeded from the score's embedded
@@ -21,13 +23,17 @@ interface ReplayInfoProps {
   replay: ServerReplay;
   score: OsuScore | null;
   beatmap: ManiaBeatmap | null;
+  /** Mod-adjusted star rating (rate mods applied); null while unknown. */
+  stars?: number | null;
+  /** The play's mods (from the API score, or the parsed replay for uploads). */
+  mods?: OsuMod[];
   fallbackBeatmapsetId?: number;
   shareUrl?: string;
   playerProfile?: ReplayPlayerProfile | null;
   onClear: () => void;
 }
 
-export function ReplayInfo({ replay, score, beatmap, fallbackBeatmapsetId, shareUrl, playerProfile, onClear }: ReplayInfoProps) {
+export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatmapsetId, shareUrl, playerProfile, onClear }: ReplayInfoProps) {
   const h = replay.header;
   const totalHits = h.countGeki + h.count300 + h.countKatu + h.count100 + h.count50;
   const accuracy = score
@@ -64,6 +70,7 @@ export function ReplayInfo({ replay, score, beatmap, fallbackBeatmapsetId, share
     ? "text-white/80 [text-shadow:0_1px_3px_rgba(0,0,0,0.95)]"
     : "text-osu-f1";
   const mapTextShadow = beatmapCoverUrl ? " [text-shadow:0_1px_3px_rgba(0,0,0,0.85)]" : "";
+  const displayMods = getModDisplayList(mods);
 
   return (
     <>
@@ -72,7 +79,7 @@ export function ReplayInfo({ replay, score, beatmap, fallbackBeatmapsetId, share
           <div className="min-w-0 flex-1">
             <div className="relative flex items-center gap-2">
               <BeatmapBanner coverUrl={beatmapCoverUrl} fade={BEATMAP_BANNER_FADE_COMPACT} className="absolute -top-3 bottom-0 left-0 right-0" />
-              <div className="relative -mt-3 -ml-3 pt-3 pl-3 pb-1.5 pr-12 min-w-0">
+              <div className="relative -mt-3 -ml-3 pt-3 pl-3 pb-1.5 pr-6 min-w-0">
                 <PlayerBanner coverUrl={playerCoverUrl} />
                 <div className="relative flex items-center gap-2 min-w-0">
                   <PlayerAvatar src={avatarSrc} name={displayName} size={32} />
@@ -85,17 +92,27 @@ export function ReplayInfo({ replay, score, beatmap, fallbackBeatmapsetId, share
               <div className="relative h-7 w-px bg-osu-b3/40" />
               <div className="relative min-w-0 flex-1">
                 <div className={`text-[8px] uppercase tracking-wider ${mapLabelClass}`}>Map</div>
-                {beatmap ? (
-                  mapUrl ? (
-                    <a href={mapUrl} target="_blank" rel="noopener noreferrer" className={`block truncate text-xs font-semibold text-osu-l2${mapTextShadow}`} title={`${beatmap.title} [${beatmap.version}]`}>
-                      {beatmap.title} [{beatmap.version}]
-                    </a>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  {beatmap ? (
+                    mapUrl ? (
+                      <a href={mapUrl} target="_blank" rel="noopener noreferrer" className={`min-w-0 truncate text-xs font-semibold text-osu-l2${mapTextShadow}`} title={`${beatmap.title} [${beatmap.version}]`}>
+                        {beatmap.title} [{beatmap.version}]
+                      </a>
+                    ) : (
+                      <div className={`min-w-0 truncate text-xs font-semibold text-osu-l2${mapTextShadow}`} title={`${beatmap.title} [${beatmap.version}]`}>{beatmap.title} [{beatmap.version}]</div>
+                    )
                   ) : (
-                    <div className={`truncate text-xs font-semibold text-osu-l2${mapTextShadow}`} title={`${beatmap.title} [${beatmap.version}]`}>{beatmap.title} [{beatmap.version}]</div>
-                  )
-                ) : (
-                  <div className="truncate text-xs font-semibold text-osu-l2">Replay loaded</div>
-                )}
+                    <div className="min-w-0 truncate text-xs font-semibold text-osu-l2">Replay loaded</div>
+                  )}
+                  {stars != null && <StarRatingBadge stars={stars} className="shrink-0" />}
+                  {displayMods.length > 0 && (
+                    <div className="flex shrink-0 items-center gap-0.5">
+                      {displayMods.map((mod, index) => (
+                        <ModBadge key={`${mod.acronym}-${index}`} mod={mod.acronym} rate={mod.rate} size={0.55} />
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -140,7 +157,7 @@ export function ReplayInfo({ replay, score, beatmap, fallbackBeatmapsetId, share
 
       <div className="hidden sm:block relative overflow-hidden bg-osu-b4 rounded-xl p-4 mb-4 border border-osu-b3/20">
         <div className="grid grid-cols-[minmax(56px,max-content)_minmax(0,1fr)_auto] lg:grid-cols-[minmax(64px,max-content)_minmax(160px,1fr)_auto_auto] items-center gap-x-4 sm:gap-x-6 gap-y-2">
-          <div className="relative -my-4 -ml-4 py-4 pl-4 pr-14 min-w-0">
+          <div className="relative -my-4 -ml-4 py-4 pl-4 pr-2 min-w-0">
             <PlayerBanner coverUrl={playerCoverUrl} />
             <div className="relative flex items-center gap-2.5 min-w-0">
               <PlayerAvatar src={avatarSrc} name={displayName} size={36} />
@@ -149,16 +166,29 @@ export function ReplayInfo({ replay, score, beatmap, fallbackBeatmapsetId, share
           </div>
           {beatmap && (
             <div className="relative self-stretch -my-4 py-4 flex flex-col justify-center min-w-0">
-              <BeatmapBanner coverUrl={beatmapCoverUrl} fade={BEATMAP_BANNER_FADE_MAP} className="absolute inset-y-0 -left-20 right-0" />
+              {/* The map column starts 24px further left than it used to (the player
+                  block gave up padding), so bleed the cover 24px less to keep its
+                  on-screen position unchanged. */}
+              <BeatmapBanner coverUrl={beatmapCoverUrl} fade={BEATMAP_BANNER_FADE_MAP} className="absolute inset-y-0 -left-14 right-0" />
               <div className="relative">
                 <div className={`text-[9px] uppercase tracking-wider ${mapLabelClass}`}>Map</div>
-                {mapUrl ? (
-                  <a href={mapUrl} target="_blank" rel="noopener noreferrer" className={`block truncate text-sm font-medium text-osu-l2 hover:text-osu-pink-light transition-colors${mapTextShadow}`} title={`${beatmap.title} [${beatmap.version}]`}>
-                    {beatmap.title} [{beatmap.version}]
-                  </a>
-                ) : (
-                  <div className={`truncate text-sm font-medium text-osu-l2${mapTextShadow}`} title={`${beatmap.title} [${beatmap.version}]`}>{beatmap.title} [{beatmap.version}]</div>
-                )}
+                <div className="flex items-center gap-2 min-w-0">
+                  {mapUrl ? (
+                    <a href={mapUrl} target="_blank" rel="noopener noreferrer" className={`min-w-0 truncate text-sm font-medium text-osu-l2 hover:text-osu-pink-light transition-colors${mapTextShadow}`} title={`${beatmap.title} [${beatmap.version}]`}>
+                      {beatmap.title} [{beatmap.version}]
+                    </a>
+                  ) : (
+                    <div className={`min-w-0 truncate text-sm font-medium text-osu-l2${mapTextShadow}`} title={`${beatmap.title} [${beatmap.version}]`}>{beatmap.title} [{beatmap.version}]</div>
+                  )}
+                  {stars != null && <StarRatingBadge stars={stars} className="shrink-0" />}
+                  {displayMods.length > 0 && (
+                    <div className="flex shrink-0 items-center gap-0.5">
+                      {displayMods.map((mod, index) => (
+                        <ModBadge key={`${mod.acronym}-${index}`} mod={mod.acronym} rate={mod.rate} size={0.75} />
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}

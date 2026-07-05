@@ -58,6 +58,10 @@ export interface Config {
   rosterSize: number;
   manualRosterMaxPerCountry: number;
   mapsRefreshIntervalMs: number;
+  // Tick interval for the chart-analysis worker lane. Sets the backfill pace:
+  // each tick runs one classify+MSD job (~0.1-0.3s of local CPU). The default
+  // keeps prod gentle; lower it for a fast local backfill.
+  chartAnalysisLaneIntervalMs: number;
   oscBackfillMaxAgeMs: number;
   oscBackfillPageLimit: number;
   oscBackfillMaxPages: number;
@@ -234,6 +238,7 @@ export function readConfig(): Config {
     // becomes a problem: manual rows are durable and nothing ages them out.
     manualRosterMaxPerCountry: readInt("MANUAL_ROSTER_MAX_PER_COUNTRY", 0),
     mapsRefreshIntervalMs: readInt("MAPS_REFRESH_INTERVAL_MS", 7 * 24 * 60 * 60 * 1000),
+    chartAnalysisLaneIntervalMs: readBoundedInt("CHART_ANALYSIS_LANE_INTERVAL_MS", 500, 25, 60_000),
     oscBackfillMaxAgeMs: readInt("OSC_BACKFILL_MAX_AGE_MS", 24 * 60 * 60 * 1000),
     oscBackfillPageLimit: Math.min(readInt("OSC_BACKFILL_PAGE_LIMIT", 1000), 1000),
     oscBackfillMaxPages: readInt("OSC_BACKFILL_MAX_PAGES", 200),

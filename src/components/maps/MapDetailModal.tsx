@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import type { LiveMapSearchEntry } from "../../lib/live-backend";
+import { fetchLiveChartAnalysis, type LiveChartAnalysisCluster, type LiveChartAnalysisDetail, type LiveMapSearchEntry } from "../../lib/live-backend";
 import type { MapsFavouriteBeatmapset } from "../../lib/types";
 import { formatDuration, formatNumber } from "../../lib/format";
 import { OsuLogo } from "../ui/OsuLogo";
 import { ChartPreviewPanel } from "./ChartPreviewPanel";
 import { PatternRadar } from "./PatternRadar";
+import { danBareLabel, getDanImageSrc } from "../../lib/dan-images";
 import {
   PATTERN_COLOR,
   entryDiffs,
@@ -15,6 +16,7 @@ import {
   osuDirectUrl,
   oszDownloadUrl,
   patternLabel,
+  StarRatingBadge,
   starRatingColor,
 } from "./SearchCard";
 
@@ -58,6 +60,155 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
+// Skillset order used when every value ties (never in practice); display sorts
+// by value, Overall stays the headline.
+const MSD_SKILLSETS = ["Stream", "Jumpstream", "Handstream", "Stamina", "JackSpeed", "Chordjack", "Technical"];
+
+/** The +/- tier suffix of a dan verdict ("2--" -> "--"), which badge art can't show. */
+function danSuffix(label: string): string {
+  return label.match(/[+-]+$/)?.[0] ?? "";
+}
+
+// MSD skillset breakdown + the classifier's dan verdict, as a compact stat
+// strip in the same value-over-label language as the BPM/LENGTH/PLAYS row.
+// Sorted by value with the top skillset tinted; no bars, the numbers carry it.
+// The skillset names are MinaCalc's 4K taxonomy for every keymode; the
+// ClustersBlock below is where charts speak their own keymode's language.
+function MsdBlock({ entry }: { entry: LiveMapSearchEntry }) {
+  const msd = entry.msd ?? null;
+  if (!msd) return null;
+  const skillsets = MSD_SKILLSETS
+    .map((name) => ({ name, value: Number(msd[name] ?? 0) }))
+    // The 6K/7K calc engine returns ~0 for skillsets it does not rate
+    // (Technical); a 0.18 next to real values reads as data, so drop it.
+    .filter(({ value }) => value >= 1)
+    .sort((a, b) => b.value - a.value);
+  const overall = Number(msd.Overall ?? 0);
+  const topName = skillsets[0]?.name;
+
+  const dan = entry.dan ?? null;
+  const danImage = dan
+    ? getDanImageSrc(danBareLabel(dan.label), dan.family === "ln" ? "ln" : undefined, entry.keyCount)
+    : null;
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-baseline justify-between">
+        <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">MSD</span>
+        {entry.vibro && (
+          <span className="text-[9.5px] font-semibold text-[#ffcf70]">vibro chart, estimates unreliable</span>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-lg bg-osu-b4/40 px-3.5 py-2.5">
+        {/* Verdict group: dan badge + Overall, split from the skillset grid. */}
+        <div className="flex items-center gap-4 sm:border-r sm:border-white/10 sm:pr-5">
+          {dan && (
+            <div className="flex flex-col items-center">
+              {/* The logo IS the number; the +/- tier suffix rides top-right like an exponent. */}
+              <span className="flex items-start gap-[2px] leading-none">
+                {danImage ? (
+                  <img src={danImage} alt={dan.label} className="h-10 w-10 object-contain" loading="lazy" />
+                ) : (
+                  <span className="text-[16px] font-bold leading-none text-osu-l1">{dan.label}</span>
+                )}
+                {danImage && danSuffix(dan.label) ? (
+                  <span className="mt-0.5 text-[13px] font-bold leading-none text-osu-l1">{danSuffix(dan.label)}</span>
+                ) : null}
+              </span>
+              <span className="mt-1 text-[9px] uppercase tracking-wide text-osu-f1/70">
+                {dan.family === "ln" ? "LN dan est." : "dan est."}
+              </span>
+            </div>
+          )}
+          <div className="flex flex-col">
+            <span className="text-[18px] font-bold tabular-nums leading-none text-osu-l1">{overall.toFixed(2)}</span>
+            <span className="mt-1 text-[9px] uppercase tracking-wide text-osu-f1/70">Overall</span>
+          </div>
+        </div>
+        {/* Even columns keep the values aligned no matter how long the labels run. */}
+        <div className="grid min-w-0 flex-1 basis-[260px] grid-cols-[repeat(auto-fit,minmax(78px,1fr))] gap-x-3 gap-y-2.5">
+          {skillsets.map(({ name, value }) => (
+            <div key={name} className="flex flex-col">
+              <span
+                className={`text-[14px] font-semibold tabular-nums leading-none ${
+                  name === topName ? "text-osu-pink-light" : value < 1 ? "text-osu-f1/45" : "text-osu-l2"
+                }`}
+              >
+                {value.toFixed(2)}
+              </span>
+              <span className="mt-1 text-[9px] uppercase tracking-wide text-osu-f1/55">
+                {name === "JackSpeed" ? "Jackspeed" : name}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// A cluster label is "~87BPM Mixed Light Chordstream"; the BPM becomes the
+// value (~ marks a mixed-BPM cluster), the rest is the pattern name.
+function clusterPatternName(cluster: LiveChartAnalysisCluster): string {
+  const stripped = cluster.label.replace(/^~?\d+\s*BPM\s+/i, "").replace(/^Mixed\s+/i, "").trim();
+  return stripped || cluster.pattern;
+}
+
+// LeoBlack clusters are keyed by (pattern, BPM), so a chart with dense
+// chordstream sections at three speeds yields three clusters. One pattern name
+// per strip is enough: same-named clusters merge into a BPM range.
+interface ClusterGroup {
+  name: string;
+  bpmMin: number;
+  bpmMax: number;
+  mixed: boolean;
+}
+
+function groupClusters(clusters: LiveChartAnalysisCluster[]): ClusterGroup[] {
+  const groups = new Map<string, ClusterGroup>();
+  for (const cluster of clusters) {
+    const name = clusterPatternName(cluster);
+    const bpm = Math.round(cluster.bpm);
+    const existing = groups.get(name);
+    if (existing) {
+      existing.bpmMin = Math.min(existing.bpmMin, bpm);
+      existing.bpmMax = Math.max(existing.bpmMax, bpm);
+      existing.mixed = existing.mixed || cluster.mixed;
+    } else {
+      groups.set(name, { name, bpmMin: bpm, bpmMax: bpm, mixed: cluster.mixed });
+    }
+  }
+  return [...groups.values()].slice(0, 4);
+}
+
+// The LeoBlack pattern clusters: what the chart is made of, in the analyzer's
+// own per-keymode vocabulary (7K says Light Chordstream / Brackets / Shield /
+// Jacky WC, 4K says Jumpstream / Rolls / ...). These are composition, not
+// difficulty, so the value per pattern is the BPM it runs at. One inline row,
+// importance-ordered with the dominant pattern tinted; no box of its own.
+function ClustersBlock({ analysis }: { analysis: LiveChartAnalysisDetail | null }) {
+  if (!analysis || analysis.status !== "ready" || analysis.clusters.length === 0) return null;
+  const groups = groupClusters(analysis.clusters);
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1.5">
+      <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Patterns</span>
+      {groups.map((group, index) => (
+        <span key={group.name} className="flex items-baseline gap-1.5">
+          <span
+            className={`text-[12.5px] font-semibold tabular-nums leading-none ${
+              index === 0 ? "text-osu-pink-light" : "text-osu-l2"
+            }`}
+          >
+            {group.bpmMin === group.bpmMax ? `${group.mixed ? "~" : ""}${group.bpmMin}` : `${group.bpmMin}-${group.bpmMax}`}
+            <span className="ml-0.5 text-[9px] font-normal text-osu-f1/55">bpm</span>
+          </span>
+          <span className="text-[9px] uppercase tracking-wide text-osu-f1/55">{group.name}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function MapDetailModal({ entry, onClose }: { entry: LiveMapSearchEntry | null; onClose: () => void }) {
   // Which diff of the set is in focus; defaults to the entry's representative.
   const [selectedDiffId, setSelectedDiffId] = useState<number | null>(null);
@@ -94,6 +245,25 @@ export function MapDetailModal({ entry, onClose }: { entry: LiveMapSearchEntry |
     [active],
   );
 
+  // Chart-analysis detail per diff, fetched lazily so the modal can show the
+  // LeoBlack cluster readout (the chart's own keymode vocabulary). Keyed by
+  // beatmap id: switching diffs and reopening the modal stay warm.
+  const [analysisByBeatmap, setAnalysisByBeatmap] = useState<Record<number, LiveChartAnalysisDetail | null>>({});
+  const activeBeatmapId = active?.beatmapId ?? null;
+  useEffect(() => {
+    if (activeBeatmapId == null) return;
+    if (analysisByBeatmap[activeBeatmapId] !== undefined) return;
+    let cancelled = false;
+    void fetchLiveChartAnalysis(activeBeatmapId).then((detail) => {
+      if (cancelled) return;
+      setAnalysisByBeatmap((prev) => ({ ...prev, [activeBeatmapId]: detail }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBeatmapId, analysisByBeatmap]);
+  const activeAnalysis = activeBeatmapId != null ? analysisByBeatmap[activeBeatmapId] ?? null : null;
+
   if (typeof document === "undefined") return null;
 
   // Same enter/exit recipe as the maps tabs' details modal: quick opacity
@@ -123,7 +293,12 @@ export function MapDetailModal({ entry, onClose }: { entry: LiveMapSearchEntry |
             <div className="relative z-10 flex min-h-0 flex-1 flex-col">
               {/* Header banner */}
               <div className="relative h-[92px] shrink-0">
-                <img src={mapCoverUrl(entry)} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                <img
+                  src={mapCoverUrl(entry)}
+                  alt=""
+                  className="absolute inset-0 h-full w-full object-cover"
+                  onError={(e) => { e.currentTarget.style.visibility = "hidden"; }}
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-osu-b5 via-osu-b5/70 to-black/40" />
                 <button
                   type="button"
@@ -137,8 +312,8 @@ export function MapDetailModal({ entry, onClose }: { entry: LiveMapSearchEntry |
                 </button>
                 <div className="absolute inset-x-0 bottom-0 p-3.5 pr-12">
                   <div className="flex items-center gap-2">
-                    <span className="rounded bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-white">{active.keyCount}K</span>
-                    <span className="rounded bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-osu-yellow">★{active.stars.toFixed(2)}</span>
+                    <span className="inline-flex items-center rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold leading-none tabular-nums text-white">{active.keyCount}K</span>
+                    <StarRatingBadge stars={active.stars} />
                     <span className="text-[10px] font-semibold uppercase tracking-wide text-white/70">{active.status}</span>
                   </div>
                   <h2 className="mt-1 text-[17px] font-bold text-white leading-tight truncate drop-shadow">{entry.title}</h2>
@@ -187,8 +362,13 @@ export function MapDetailModal({ entry, onClose }: { entry: LiveMapSearchEntry |
                   <Stat label="LN notes" value={formatNumber(active.lnCount)} />
                 </div>
 
+                {/* MSD skillsets when the chart analysis has landed; the old
+                    relative pattern mix stays as the fallback until then. */}
+                {active.msd ? <MsdBlock entry={active} /> : null}
+                <ClustersBlock analysis={activeAnalysis} />
+
                 {/* Pattern profile: radar + the raw numbers */}
-                {patterns.length > 0 && (
+                {!active.msd && patterns.length > 0 && (
                   <div className="flex flex-col gap-1.5">
                     <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Pattern profile</span>
                     <div className="grid items-center gap-3 rounded-lg bg-osu-b4/40 p-3 sm:grid-cols-[minmax(0,200px)_minmax(0,1fr)]">

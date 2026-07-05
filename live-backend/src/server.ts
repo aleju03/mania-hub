@@ -9,6 +9,7 @@ import { LiveEventLog } from "./live/event-log.js";
 import { startRuntimeStatusMirror } from "./live/runtime-status.js";
 import { deferMapsRefreshesWaitingForRoster, enqueueGlobalMapsRefreshIfDue, enqueueMapsRefreshIfDue } from "./features/maps.js";
 import { ensureMapSearchIndexSeeded } from "./features/map-search.js";
+import { ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
 import { enqueueMapCollectionsRebuildIfDue } from "./features/map-collections.js";
 import { startGoalUserIndexRefresh } from "./features/goals.js";
 import { enqueueProfilePoolWarmIfIdle } from "./features/profile-pool-warm.js";
@@ -172,8 +173,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     if (app.config.enableWorkers) {
       app.worker.start();
       // Pure background work (no osu! API): kick off / resume the global map
-      // search index build so Search and Collections have data to serve.
+      // search index build so Search and Collections have data to serve, and
+      // the one-shot vibro recompute sweep over stored chart analyses.
       void ensureMapSearchIndexSeeded(app.db, app.queue).catch((error) => console.warn("[map-search] seed failed", error));
+      void ensureVibroRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[vibro-recompute] seed failed", error));
     }
     if (app.config.enableScheduledRefreshes && app.config.enableOsuApiJobs) {
       startRosterScheduler(app.db, app.queue, app.config);

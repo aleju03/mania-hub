@@ -11,8 +11,7 @@ import {
 import type { ReplayEndpointKind } from "../r2-cache";
 import type { OsuBeatmap, OsuBeatmapset, OsuScore } from "../types";
 import {
-  edgeCache,
-  noStore
+  edgeCache
 } from "./server";
 import {
   normalizeBeatmapPayload,
@@ -276,7 +275,10 @@ export const getBeatmapFile = createServerFn({ method: "GET" })
     return { ...data, beatmapsetId };
   })
   .handler(async ({ data }: { data: { beatmapId: number; beatmapsetId: number | null } }) => {
-    noStore();
+    // The .osu content only changes when the map is updated, and it is already
+    // Turso-cached for 30 days; edge-cache it so repeat replay views skip the
+    // serverless + Turso round trip entirely.
+    edgeCache(3600, 86400);
     return await fetchBeatmapFileWithMeta(data.beatmapId, data.beatmapsetId);
   });
 

@@ -8,6 +8,7 @@ import { DAN_PRIMARY_FAMILIES, type DanFeatureMetrics } from "../dan/dan-estimat
 import type { JobQueue } from "../jobs/queue.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { getCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
+import { enqueueChartAnalysisIfNeeded, enqueueMissingChartAnalyses } from "./chart-analysis.js";
 import { addDayKeyDays, getCountryTimezone, getZonedDayKey } from "../shared/country-timezones.js";
 import { getDisplayedAccuracy, getDisplayedRank, getScoreTimestamp, nowIso } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
@@ -157,6 +158,7 @@ export async function recordPlayerActivity(
   }
   await upsertActivityMap(db, activity, score, now);
   await enqueueBeatmapSkillAnalysisIfNeeded(db, queue, activity.beatmapId);
+  await enqueueChartAnalysisIfNeeded(db, queue, activity.beatmapId);
   return { day: activity.day };
 }
 
@@ -408,6 +410,7 @@ async function enqueueMissingActivitySkillAnalyses(
     if (row && shouldSkipActivitySkillAnalysis(row)) continue;
     await enqueueActivitySkillAnalysis(queue, beatmapId);
   }
+  await enqueueMissingChartAnalyses(db, queue, beatmapIds);
 }
 
 export async function computeBeatmapActivitySkillVector(

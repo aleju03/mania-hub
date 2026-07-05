@@ -182,6 +182,34 @@ function splitVerdict(verdict: string): { rcText: string; lnText: string | null 
   return { rcText: parts[0] ?? "", lnText: parts.length >= 2 ? parts[parts.length - 1] : null };
 }
 
+// LN vibro: chart-wide staggered hold spam (the "gabe power" shape - dense LN
+// rolls you play by shaking, not reading). The longjack detector only sees
+// rice jack clusters, so these charts sailed through with inflated LN dans.
+// A p75 row gap this tight sustained over a whole chart is beyond any legit
+// LN chart: the densest ranked LN dumps (Denouement) sit at ~75ms rows, the
+// calibration corpus bottoms out at 54ms p50 / 76ms p75, vibro at 22ms.
+const LN_VIBRO_MIN_ROWS = 150;
+const LN_VIBRO_MIN_HOLD_RATIO = 0.5;
+const LN_VIBRO_MAX_P75_ROW_GAP_MS = 40;
+
+export function detectLnVibro(map: ManiaBeatmap, rate = 1): boolean {
+  let holds = 0;
+  const rowTimes = new Set<number>();
+  for (const note of map.notes) {
+    if (note.isHold && note.endTime > note.time) holds++;
+    rowTimes.add(note.time);
+  }
+  if (map.notes.length === 0 || rowTimes.size < LN_VIBRO_MIN_ROWS) return false;
+  if (holds / map.notes.length < LN_VIBRO_MIN_HOLD_RATIO) return false;
+  const times = [...rowTimes].sort((a, b) => a - b);
+  const gaps: number[] = [];
+  for (let index = 1; index < times.length; index++) gaps.push(times[index] - times[index - 1]);
+  gaps.sort((a, b) => a - b);
+  const p75 = gaps[Math.min(gaps.length - 1, Math.floor(gaps.length * 0.75))];
+  // Gaps are chart-time; a rate rescales what the player experiences.
+  return p75 <= LN_VIBRO_MAX_P75_ROW_GAP_MS * rate;
+}
+
 export function classifyChart(map: ManiaBeatmap, osuText: string, input: ClassifyChartInput = {}): ChartClassification {
   const rate = getInputRate(input);
   const warnings: string[] = [];
@@ -196,13 +224,18 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
     warnings.push(`Pattern clustering failed: ${error instanceof Error ? error.message : String(error)}.`);
   }
 
-  const vibro = clusters
+  const longjackVibro = clusters
     ? detectVibroFromLongjackPattern(
       clusters.report,
       PATTERNS_CONFIG.LONGJACK_VIBRO_RATIO_THRESHOLD,
       PATTERNS_CONFIG.LONGJACK_VIBRO_MIN_BPM / rate,
     )
     : false;
+  const lnVibro = detectLnVibro(map, rate);
+  const vibro = longjackVibro || lnVibro;
+  if (lnVibro) {
+    warnings.push("Staggered LN-spam (vibro) detected; LN difficulty is likely overestimated.");
+  }
 
   let mixed: LeoBlackReworkResult | null = null;
   try {
@@ -278,6 +311,9 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
     }
   }
   if (!ln) ln = lnFromTables;
+  // Mirror the RC vibro damping: an LN dan computed off hold density means
+  // little when the holds are vibro spam.
+  if (ln && lnVibro) ln = { ...ln, confidence: Math.min(ln.confidence, 0.35) };
 
   const prefer = input.preferFamily ?? "auto";
   const primary = prefer === "ln"

@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useCallback, useMemo, type PointerEvent as
 import { motion, AnimatePresence } from "framer-motion";
 import { LoaderCircle, Maximize2, Minimize2, Pause, Play } from "lucide-react";
 import { getReplayParsed, getBeatmapFile, getScore, getUser, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores, lookupBeatmapByChecksum } from "../lib/osu";
+import { calculateManiaStarRating } from "../lib/mania-star-rating";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
 import { getEffectiveManiaKeyCount, getManiaKeyModCount, getManiaParseKeyCount, getScoreDisplayValues, getScoreRate, modShiftsPitchWithRate, scoreHasReplay } from "../lib/score";
 import { useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
@@ -63,6 +64,7 @@ import {
   normalizeReplayVolume,
   readReplayAudioSettings,
   readReplayBackgroundDim,
+  readReplayBlackPlayfield,
   readReplayInputColor,
   readReplayInputKeyHistory,
   readReplayInputOnly,
@@ -70,6 +72,7 @@ import {
   readReplayVolume,
   writeReplayAudioSettings,
   writeReplayBackgroundDim,
+  writeReplayBlackPlayfield,
   writeReplayInputColor,
   writeReplayInputKeyHistory,
   writeReplayInputOnly,
@@ -141,6 +144,7 @@ type ReplayVideoExportState = {
 type ReplayVideoExportRequest = ReplayVideoExportOptions & {
   forceClientRender?: boolean;
   bgDim?: number;
+  blackPlayfield?: boolean;
   scrollSpeed?: number;
   showInputOverlay?: boolean;
   inputOverlayOnly?: boolean;
@@ -431,7 +435,7 @@ function formatMissingBeatmapLabel(beatmapMeta: BeatmapChecksumLookupResult): st
   return `${title || `beatmap #${beatmapMeta.id}`}${version}`;
 }
 
-function getReplayLoadingCopy(step: ReplayLoadingStep, elapsedMs: number, beatmapFileStatus: ReplayBeatmapFileStatus): { title: string; detail: string } {
+function getReplayLoadingCopy(step: ReplayLoadingStep, elapsedMs: number, beatmapFileStatus: ReplayBeatmapFileStatus, scoreJustSet: boolean): { title: string; detail: string } {
   const elapsedSeconds = Math.floor(elapsedMs / 1000);
   const elapsedLabel = elapsedSeconds >= 4 ? ` (${elapsedSeconds}s)` : "";
   const chartReady = beatmapFileStatus === "cached" || beatmapFileStatus === "fetched";
@@ -441,10 +445,12 @@ function getReplayLoadingCopy(step: ReplayLoadingStep, elapsedMs: number, beatma
     return {
       title: `Still loading${elapsedLabel}`,
       detail: isUpload
-        ? "Matching the replay to its beatmap is taking a while. Give it a few more seconds."
-        : chartReady
-          ? "The chart is ready, just waiting on osu! to send the replay."
-          : "osu! is slow to send the replay right now. It usually comes through.",
+        ? "Matching the replay to its beatmap."
+        : scoreJustSet
+          ? "This score is brand new. osu! takes a moment before the replay can be downloaded."
+          : chartReady
+            ? "Chart loaded. Still fetching the replay."
+            : "Still fetching the replay and chart.",
     };
   }
 
@@ -464,7 +470,7 @@ function getReplayLoadingCopy(step: ReplayLoadingStep, elapsedMs: number, beatma
       if (chartReady) {
         return {
           title: `Downloading replay${elapsedLabel}`,
-          detail: "The chart is ready, just fetching the replay data.",
+          detail: "Chart loaded. Fetching the replay.",
         };
       }
       return {
@@ -709,7 +715,21 @@ function ReplayPage() {
   );
   const normalizedPlayerParam = normalizeReplayPlayerParam(playerParam);
   const playerSearchScoreId = parseReplayScoreInput(playerSearchQuery);
-  const replayLoadingCopy = getReplayLoadingCopy(replayLoadingStep, replayLoadingElapsedMs, replayBeatmapFileStatus);
+  // Replays for scores set moments ago are usually still being processed by
+  // osu!; call that out instead of a generic slow-download message.
+  const scoreInfoSetAtMs = Date.parse(scoreInfo?.ended_at ?? scoreInfo?.created_at ?? "");
+  const scoreInfoJustSet = Number.isFinite(scoreInfoSetAtMs) && Date.now() - scoreInfoSetAtMs < 5 * 60_000;
+  const replayLoadingCopy = getReplayLoadingCopy(replayLoadingStep, replayLoadingElapsedMs, replayBeatmapFileStatus, scoreInfoJustSet);
+
+  // Star rating for the info bar, computed locally with the lazer diffcalc
+  // port on the parsed (convert/keymod-applied) chart at the play's actual
+  // rate. This matches in-game lazer for any rate, including custom
+  // speed_change values the osu! API attributes endpoint ignores.
+  const starMods = scoreInfo?.mods ?? uploadedReplayMods;
+  const starRating = useMemo(() => {
+    if (!beatmap || beatmap.notes.length === 0) return null;
+    return calculateManiaStarRating(beatmap.notes, beatmap.keyCount, getScoreRate(starMods));
+  }, [beatmap, starMods]);
 
   useEffect(() => {
     if (!loading || replayLoadingStartedAt <= 0) {
@@ -765,6 +785,11 @@ function ReplayPage() {
   }, [replay, scoreUserId, scoreUserName, scoreUserAvatar]);
 
   const loadReplay = useCallback(async (sid: number, initialScore?: OsuScore | null) => {
+    const loadStartMs = performance.now();
+    let scoreMs = 0;
+    let replayFetchMs = 0;
+    let beatmapFileMs = 0;
+    let beatmapFileFinalStatus: ReplayBeatmapFileStatus = "unknown";
     setError(null);
     setReplayLoadingStep("score");
     setReplayBeatmapFileStatus("unknown");
@@ -784,6 +809,7 @@ function ReplayPage() {
       const score = initialScore?.id === sid
         ? initialScore
         : await getScore({ data: { scoreId: sid, mode: "mania" } }).catch(() => null);
+      scoreMs = performance.now() - loadStartMs;
       if (score) {
         const availability = getReplayScoreAvailability(score);
         if (!availability.available) {
@@ -810,20 +836,30 @@ function ReplayPage() {
       const keyCount = score?.beatmap ? getEffectiveManiaKeyCount(score.beatmap, score.mods) ?? undefined : undefined;
       if (!score?.beatmap?.id) {
         setReplayBeatmapFileStatus("unavailable");
+        beatmapFileFinalStatus = "unavailable";
       }
+      const assetsStartMs = performance.now();
       const beatmapFilePromise = score?.beatmap?.id
         ? getBeatmapFile({ data: { beatmapId: score.beatmap.id, beatmapsetId: score.beatmapset?.id } })
           .then((result) => {
-            setReplayBeatmapFileStatus(result.cacheStatus === "hit" ? "cached" : "fetched");
+            beatmapFileMs = performance.now() - assetsStartMs;
+            beatmapFileFinalStatus = result.cacheStatus === "hit" ? "cached" : "fetched";
+            setReplayBeatmapFileStatus(beatmapFileFinalStatus);
             return result;
           })
           .catch(() => {
+            beatmapFileMs = performance.now() - assetsStartMs;
+            beatmapFileFinalStatus = "unavailable";
             setReplayBeatmapFileStatus("unavailable");
             return null;
           })
         : Promise.resolve(null);
       const [parsed, bmResult] = await Promise.all([
-        getReplayParsed({ data: { scoreId: sid, mode: "mania", keyCount } }),
+        getReplayParsed({ data: { scoreId: sid, mode: "mania", keyCount } })
+          .then((result) => {
+            replayFetchMs = performance.now() - assetsStartMs;
+            return result;
+          }),
         beatmapFilePromise,
       ]);
 
@@ -843,6 +879,22 @@ function ReplayPage() {
       });
       if (parsedBeatmap) {
         setBeatmap(parsedBeatmap);
+      }
+
+      // Loads that cross the "Still loading" threshold report where the time
+      // went, so slow-load complaints are diagnosable from PostHog instead of
+      // guesswork (score lookup vs replay fetch vs chart fetch vs parsing).
+      const totalMs = performance.now() - loadStartMs;
+      if (totalMs >= 5_000) {
+        track("replay_load_slow", {
+          replay_score_id: String(sid),
+          total_ms: Math.round(totalMs),
+          score_ms: Math.round(scoreMs),
+          replay_fetch_ms: Math.round(replayFetchMs),
+          beatmap_file_ms: Math.round(beatmapFileMs),
+          beatmap_file_status: beatmapFileFinalStatus,
+          had_initial_score: initialScore?.id === sid,
+        });
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load replay");
@@ -1583,7 +1635,7 @@ function ReplayPage() {
               </motion.div>
             ) : replay ? (
               <motion.div key="viewer" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <ReplayInfo replay={replay} score={scoreInfo} beatmap={beatmap} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} shareUrl={uploadedReplayShareUrl ?? undefined} playerProfile={playerProfile} onClear={handleClearReplay} />
+                <ReplayInfo replay={replay} score={scoreInfo} beatmap={beatmap} stars={starRating} mods={starMods} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} shareUrl={uploadedReplayShareUrl ?? undefined} playerProfile={playerProfile} onClear={handleClearReplay} />
                 <ReplayViewer replay={replay} beatmap={beatmap} scoreInfo={scoreInfo} replayMods={uploadedReplayMods} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} initialTime={initialTime} localAudioUrl={localBeatmapAssets.audioUrl} localBackgroundUrl={localBeatmapAssets.backgroundUrl} />
               </motion.div>
             ) : pendingBeatmapUpload ? (
@@ -1739,6 +1791,7 @@ function ReplayViewer({
   const audioPreservesPitch = !modShiftsPitchWithRate(effectiveReplayMods);
   const [scrollSpeed, setScrollSpeed] = useState(() => replayStableScrollSpeed ?? readReplayScrollSpeed());
   const [bgDim, setBgDim] = useState(readReplayBackgroundDim);
+  const [blackPlayfield, setBlackPlayfield] = useState(readReplayBlackPlayfield);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [volume, setVolume] = useState(readReplayVolume);
   const [audioSettings, setAudioSettings] = useState<ReplayAudioSettings>(readReplayAudioSettings);
@@ -1783,6 +1836,7 @@ function ReplayViewer({
   const inputOverlayColorRef = useRef("#a855f7");
   const scrollSpeedUserOverrideRef = useRef(false);
   const scrollSpeedRef = useRef(DEFAULT_REPLAY_SCROLL_SPEED);
+  const blackPlayfieldRef = useRef(false);
   const skinSettingsRef = useRef<ReplaySkinSettings>(skinSettings);
   const overlaySettingsRef = useRef<ReplayOverlaySettings>(overlaySettings);
   const shouldResumeAudioRef = useRef(false);
@@ -2250,6 +2304,11 @@ function ReplayViewer({
   }, [scrollSpeed]);
 
   useEffect(() => {
+    blackPlayfieldRef.current = blackPlayfield;
+    rendererRef.current?.setBlackPlayfield(blackPlayfield);
+  }, [blackPlayfield]);
+
+  useEffect(() => {
     skinSettingsRef.current = skinSettings;
     if (rendererRef.current) {
       rendererRef.current.setSkinSettings(skinSettings);
@@ -2386,6 +2445,7 @@ function ReplayViewer({
             speedMultiplier: modRate,
             timingPoints: beatmap?.timingPoints,
             transparentBackground: true,
+            blackPlayfield: blackPlayfieldRef.current,
             scrollVelocities: beatmap?.scrollVelocities,
             expectedCounts: getScoreExpectedCounts(scoreInfo, replay),
             lifeBarFrames: replay.lifeBarFrames,
@@ -2410,6 +2470,7 @@ function ReplayViewer({
         }
 
         renderer.setScrollSpeed(scrollSpeedRef.current);
+        renderer.setBlackPlayfield(blackPlayfieldRef.current);
         renderer.setShowInputOverlay(showInputOverlayRef.current);
         renderer.setInputOverlayOptions({
           only: inputOverlayOnlyRef.current,
@@ -2533,6 +2594,11 @@ function ReplayViewer({
     if (typeof window === "undefined") return;
     writeReplayBackgroundDim(bgDim);
   }, [bgDim]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    writeReplayBlackPlayfield(blackPlayfield);
+  }, [blackPlayfield]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -2844,6 +2910,7 @@ function ReplayViewer({
     const exportFps = options.fps ?? 48;
     const frameCount = Math.max(1, Math.ceil(outputDurationSeconds * exportFps));
     const exportBgDim = options.bgDim ?? bgDim;
+    const exportBlackPlayfield = options.blackPlayfield ?? blackPlayfield;
     const exportScrollSpeed = options.scrollSpeed ?? scrollSpeed;
     const exportShowInputOverlay = options.showInputOverlay ?? showInputOverlay;
     const exportInputOverlayOnly = options.inputOverlayOnly ?? inputOverlayOnly;
@@ -2882,6 +2949,7 @@ function ReplayViewer({
           sourceDurationSeconds: sourceDurationMs / 1000,
           effectiveRate,
           bgDim: exportBgDim,
+          blackPlayfield: exportBlackPlayfield,
           scrollSpeed: exportScrollSpeed,
           showInputOverlay: exportShowInputOverlay,
           inputOverlayOnly: exportInputOverlayOnly,
@@ -2948,6 +3016,7 @@ function ReplayViewer({
           speedMultiplier: modRate,
           timingPoints: beatmap?.timingPoints,
           transparentBackground: true,
+          blackPlayfield: exportBlackPlayfield,
           hidePerformanceStats: true,
           scrollVelocities: beatmap?.scrollVelocities,
           expectedCounts: getScoreExpectedCounts(scoreInfo, replay),
@@ -3300,6 +3369,7 @@ function ReplayViewer({
         skinSettingsOpen={skinSettingsOpen}
         scrollSpeed={scrollSpeed}
         bgDim={bgDim}
+        blackPlayfield={blackPlayfield}
         videoExporting={videoExport.exporting}
         videoExportProgress={videoExport.progress}
         videoExportError={videoExport.error}
@@ -3375,6 +3445,7 @@ function ReplayViewer({
           setBgDim(normalized);
           rendererRef.current?.setBackgroundDim(normalized);
         }}
+        onToggleBlackPlayfield={() => setBlackPlayfield((value) => !value)}
         onPointerDown={handleProgressPointerDown}
         onPointerUp={handleProgressPointerUp}
         onSeek={handleProgressSeek}

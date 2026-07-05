@@ -56,8 +56,36 @@ describe("chart preview helpers", () => {
       { time: 9_900, multiplier: 1.2 },
       { time: 10_800, multiplier: 0.75 },
     ]);
-    expect(frames.at(-1)).toEqual({ time: RANDOM_REPLAY_PREVIEW_MS, keyState: 0 });
-    expect(frames.every((frame) => frame.time <= RANDOM_REPLAY_PREVIEW_MS)).toBe(true);
+    // Lookahead notes are judged, so the autoplay presses them too instead of
+    // leaving them as phantom misses past the window cutoff.
+    expect(frames.some((frame) => frame.time === 10_800 && (frame.keyState & 0b10) !== 0)).toBe(true);
+    expect(frames.at(-1)).toEqual({ time: RANDOM_REPLAY_PREVIEW_MS + RANDOM_REPLAY_PREVIEW_LOOKAHEAD_MS, keyState: 0 });
+    expect(frames.every((frame) => frame.time <= RANDOM_REPLAY_PREVIEW_MS + RANDOM_REPLAY_PREVIEW_LOOKAHEAD_MS)).toBe(true);
+  });
+
+  it("gives every note a fresh press edge on dense same-column patterns", () => {
+    // Hold tail ending exactly on the next head (LN chains) and taps closer
+    // together than the 48ms tap hold: both used to swallow the second press
+    // entirely, so the autoplay missed notes it was supposed to hit.
+    const chain = buildAutoplayFrames(
+      [
+        { column: 0, time: 0, endTime: 1_000, isHold: true },
+        { column: 0, time: 1_000, endTime: 2_000, isHold: true },
+      ],
+      4,
+    );
+    expect(chain.some((frame) => frame.time === 999 && frame.keyState === 0)).toBe(true);
+    expect(chain.some((frame) => frame.time === 1_000 && frame.keyState === 1)).toBe(true);
+
+    const jacks = buildAutoplayFrames(
+      [
+        { column: 2, time: 500, endTime: 500, isHold: false },
+        { column: 2, time: 530, endTime: 530, isHold: false },
+      ],
+      4,
+    );
+    expect(jacks.some((frame) => frame.time === 529 && frame.keyState === 0)).toBe(true);
+    expect(jacks.some((frame) => frame.time === 530 && frame.keyState === 4)).toBe(true);
   });
 
   it("does not clamp already-active long notes into fake preview-start notes", () => {

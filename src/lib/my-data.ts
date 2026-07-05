@@ -1,6 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 
-import type { LivePlayerActivitySnapshot } from "./live-backend";
 import type { LeanTrackerScore } from "./types";
 
 // Bridge to the live-backend My Data endpoints. Resolves the osu! viewer from the signed login
@@ -45,7 +44,29 @@ export interface MyDataDashboard {
   summary: MyDataSummary | null;
   trackedPage: MyDataPage<MyDataTrackedPlay>;
   topPlayPage: MyDataPage<MyDataTopPlay>;
-  activity: LivePlayerActivitySnapshot | null;
+  skills: MyDataSkillBreakdown | null;
+}
+
+export interface MyDataSkillMode {
+  keyCount: number;
+  analyzedPlays: number;
+  ratings: Record<string, number>;
+  // Per-pattern ratings in the in-house pattern vocabulary (Overall SSRs
+  // aggregated over chart-analysis tags); the keymode-honest axes for non-4K.
+  patterns: Array<{ id: string; rating: number; plays: number }>;
+}
+
+// Etterna-style skillset ratings aggregated from the player's top plays by the
+// live backend's chart analyzer (MinaCalc SSRs at the played rate).
+export interface MyDataSkillBreakdown {
+  status: "pending" | "ready" | "failed";
+  version: number;
+  computedAt: string | null;
+  totalPlays: number;
+  analyzedPlays: number;
+  pendingPlays: number;
+  unsupportedPlays: number;
+  modes: MyDataSkillMode[];
 }
 
 export interface MyDataBeatmapRef {
@@ -167,7 +188,7 @@ function emptyDashboard(): MyDataDashboard {
     summary: null,
     trackedPage: emptyPage<MyDataTrackedPlay>(0),
     topPlayPage: emptyPage<MyDataTopPlay>(0),
-    activity: null,
+    skills: null,
   };
 }
 
@@ -219,36 +240,32 @@ async function fetchMyDataTopPlaysRaw(cfg: MyDataBackendConfig, pageIndex: numbe
   }
 }
 
-async function fetchMyDataActivityRaw(cfg: MyDataBackendConfig, country: string, year: number): Promise<LivePlayerActivitySnapshot | null> {
+async function fetchMyDataSkillsRaw(cfg: MyDataBackendConfig): Promise<MyDataSkillBreakdown | null> {
   try {
-    const query = new URLSearchParams({ country, year: String(year) });
-    const response = await fetch(`${cfg.base}/api/profiles/${cfg.userId}/activity?${query.toString()}`, {
-      headers: cfg.headers,
-    });
+    const response = await fetch(`${cfg.base}/api/my-data/skills?userId=${cfg.userId}`, { headers: cfg.headers });
     if (!response.ok) return null;
-    return (await response.json()) as LivePlayerActivitySnapshot;
+    return (await response.json()) as MyDataSkillBreakdown;
   } catch {
     return null;
   }
 }
 
-async function fetchMyDataDashboardFallback(cfg: MyDataBackendConfig, year: number): Promise<MyDataDashboard> {
+async function fetchMyDataDashboardFallback(cfg: MyDataBackendConfig): Promise<MyDataDashboard> {
   const summary = await fetchMyDataSummaryRaw(cfg);
   if (!summary?.tracked) {
     return {
       summary,
       trackedPage: emptyPage<MyDataTrackedPlay>(0),
       topPlayPage: emptyPage<MyDataTopPlay>(0),
-      activity: null,
+      skills: null,
     };
   }
-  const activityCountry = summary.countryCode ?? summary.trackedCountries[0] ?? "GLOBAL";
-  const [trackedPage, topPlayPage, activity] = await Promise.all([
+  const [trackedPage, topPlayPage, skills] = await Promise.all([
     fetchMyDataFeedRaw(cfg, 0),
     fetchMyDataTopPlaysRaw(cfg, 0),
-    fetchMyDataActivityRaw(cfg, activityCountry, year),
+    fetchMyDataSkillsRaw(cfg),
   ]);
-  return { summary, trackedPage, topPlayPage, activity };
+  return { summary, trackedPage, topPlayPage, skills };
 }
 
 function readPageIndex(value: unknown): number {
@@ -320,30 +337,28 @@ export const fetchMyDataDashboard = createServerFn({ method: "GET" })
     const cfg = await myDataBackend();
     if (!cfg) return emptyDashboard();
     try {
-      const year = new Date().getFullYear();
       const query = new URLSearchParams({
         userId: String(cfg.userId),
         limit: String(MY_DATA_PAGE_SIZE),
         trackedOffset: "0",
         topOffset: "0",
-        year: String(year),
       });
       const response = await fetch(`${cfg.base}/api/my-data/dashboard?${query.toString()}`, { headers: cfg.headers });
-      if (!response.ok) return fetchMyDataDashboardFallback(cfg, year);
+      if (!response.ok) return fetchMyDataDashboardFallback(cfg);
       const body = (await response.json()) as {
         summary?: MyDataSummary | null;
         trackedPage?: { items?: MyDataTrackedPlay[]; total?: number; limit?: number; offset?: number };
         topPlayPage?: { items?: MyDataTopPlay[]; total?: number; limit?: number; offset?: number };
-        activity?: LivePlayerActivitySnapshot | null;
+        skills?: MyDataSkillBreakdown | null;
       };
       return {
         summary: body.summary ?? null,
         trackedPage: readPageBody(body.trackedPage, 0),
         topPlayPage: readPageBody(body.topPlayPage, 0),
-        activity: body.activity ?? null,
+        skills: body.skills ?? null,
       };
     } catch {
-      return fetchMyDataDashboardFallback(cfg, new Date().getFullYear());
+      return fetchMyDataDashboardFallback(cfg);
     }
   });
 
@@ -362,20 +377,11 @@ export const fetchMyDataTopPlays = createServerFn({ method: "GET" })
     return fetchMyDataTopPlaysRaw(cfg, data.pageIndex, data);
   });
 
-export const fetchMyDataActivity = createServerFn({ method: "GET" })
-  .inputValidator((data: { country?: unknown; year?: unknown }) => {
-    const rawCountry = typeof data?.country === "string" ? data.country.trim().toUpperCase() : "GLOBAL";
-    const country = rawCountry === "GLOBAL" || /^[A-Z]{2}$/.test(rawCountry) ? rawCountry : "GLOBAL";
-    const rawYear = Number(data?.year);
-    const year = Number.isInteger(rawYear)
-      ? Math.max(2007, Math.min(2100, rawYear))
-      : new Date().getFullYear();
-    return { country, year };
-  })
-  .handler(async ({ data }): Promise<LivePlayerActivitySnapshot | null> => {
+export const fetchMyDataSkills = createServerFn({ method: "GET" })
+  .handler(async (): Promise<MyDataSkillBreakdown | null> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     setResponseHeader("Cache-Control", "private, no-store");
     const cfg = await myDataBackend();
     if (!cfg) return null;
-    return fetchMyDataActivityRaw(cfg, data.country, data.year);
+    return fetchMyDataSkillsRaw(cfg);
   });

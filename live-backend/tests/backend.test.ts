@@ -456,7 +456,10 @@ describe("live backend", () => {
     expect(body.trackedPage.items).toHaveLength(2);
     expect(body.topPlayPage).toMatchObject({ total: 1, limit: 2, offset: 0 });
     expect(body.topPlayPage.items).toHaveLength(1);
-    expect(body.activity).toMatchObject({ available: true, totalScores: 2 });
+    // No skill row exists yet: the dashboard reports pending and enqueues the compute.
+    expect(body.skills).toMatchObject({ status: "pending" });
+    const skillJobs = (await exec(db, "select count(*) as cnt from jobs where type = 'compute_player_skills'")).rows[0];
+    expect(Number(skillJobs.cnt)).toBe(1);
   });
 
   it("prefers official osu! variant pp for my data keymode stats", async () => {

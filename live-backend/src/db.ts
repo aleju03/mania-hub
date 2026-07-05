@@ -964,9 +964,28 @@ async function migrateMapSearchIndex(db: Db): Promise<void> {
       pat_ln real not null default 0,
       covers_json text,
       ranked_date text,
+      dan_label text,
+      dan_family text,
+      raw_dan real,
+      msd_json text,
+      pattern_tags text not null default '',
+      vibro integer not null default 0,
       updated_at text not null
     )
   `);
+  // Chart-analysis join columns arrived after the table shipped; add them to
+  // existing databases (fresh ones get them from the create above).
+  const mapSearchColumns = new Set((await db.execute("pragma table_info(map_search_index)")).rows.map((row) => String(row.name)));
+  if (!mapSearchColumns.has("dan_label")) {
+    await db.execute("alter table map_search_index add column dan_label text");
+    await db.execute("alter table map_search_index add column dan_family text");
+    await db.execute("alter table map_search_index add column raw_dan real");
+    await db.execute("alter table map_search_index add column msd_json text");
+    await db.execute("alter table map_search_index add column pattern_tags text not null default ''");
+  }
+  if (!mapSearchColumns.has("vibro")) {
+    await db.execute("alter table map_search_index add column vibro integer not null default 0");
+  }
   await db.execute("create index if not exists idx_map_search_key_stars on map_search_index(key_count, stars)");
   await db.execute("create index if not exists idx_map_search_key_plays on map_search_index(key_count, play_count desc)");
   await db.execute("create index if not exists idx_map_search_key_bpm on map_search_index(key_count, bpm)");
@@ -983,6 +1002,7 @@ async function migrateMapSearchIndex(db: Db): Promise<void> {
   await db.execute("create index if not exists idx_map_search_bpm_id on map_search_index(bpm, beatmap_id)");
   await db.execute("create index if not exists idx_map_search_length_id on map_search_index(length, beatmap_id)");
   await db.execute("create index if not exists idx_map_search_date_id on map_search_index(ranked_date, beatmap_id)");
+  await db.execute("create index if not exists idx_map_search_raw_dan on map_search_index(raw_dan, beatmap_id)");
   // Fresh planner stats so SQLite picks the ordered-scan + anti-join plan over
   // the older key_count-prefixed indexes. Cheap (<100ms) at boot.
   await db.execute("analyze map_search_index");

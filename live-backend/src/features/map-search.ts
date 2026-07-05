@@ -2,6 +2,7 @@ import type { InValue } from "@libsql/client";
 import type { Db } from "../db.js";
 import { exec, execBatch, json, parseJson, type DbStatement } from "../db.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION } from "./activity.js";
+import { CHART_ANALYSIS_VERSION } from "./chart-analysis.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { nowIso } from "../shared/score.js";
 
@@ -13,8 +14,9 @@ import { nowIso } from "../shared/score.js";
 export const MAP_SEARCH_BUILD_JOB = "build_map_search_index";
 // Bump BUILD_REVISION to force a full re-upsert of the index after a fix to how
 // indexed fields are derived (r2: length was stored as the source row's column
-// count for every map). The rebuild is pure DB work, no osu! API.
-const BUILD_REVISION = 2;
+// count for every map; r4: MSD-based 4K primaries, lnRatio LN routing, vibro).
+// The rebuild is pure DB work, no osu! API.
+const BUILD_REVISION = 4;
 const BUILD_META_KEY = `map_search_index_built:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
 const BUILD_CURSOR_KEY = `map_search_index_build_cursor:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
 const BUILD_BATCH_SIZE = 400;
@@ -34,6 +36,17 @@ const PATTERN_COLUMNS: Record<string, string> = {
   ln: "pat_ln",
 };
 export const MAP_SEARCH_PATTERNS = Object.keys(PATTERN_COLUMNS);
+
+// Subfamily ids from the in-house pattern analyzer, matched against the
+// space-delimited pattern_tags column (detected patterns from chart analysis)
+// rather than a dominance column: a subfamily is an attribute of the chart,
+// not its primary identity.
+export const MAP_SEARCH_SUB_PATTERNS = [
+  "speedjack", "handjack",
+  "dumpstream", "quadstream", "chordstream", "delay", "bracket",
+  "lngeneral", "lnrelease", "lninverse", "lntech",
+];
+const SUB_PATTERN_SET = new Set(MAP_SEARCH_SUB_PATTERNS);
 
 // Whitelisted column lookup for the pattern families. Returns null for anything
 // not in the canonical eight, so callers can safely interpolate the result.
@@ -65,6 +78,8 @@ export interface MapSearchQuery {
   bpmMax: number | null;
   lenMin: number | null;
   lenMax: number | null;
+  danMin: number | null;
+  danMax: number | null;
   country: string | null;
   sort: MapSearchSort;
   dir: SortDirection;
@@ -89,6 +104,12 @@ export interface MapSearchEntry {
   primaryPattern: string;
   patterns: Record<string, number>;
   covers: Record<string, string> | null;
+  /** Unified-classifier dan verdict, null until the chart analysis lands. */
+  dan: { label: string; family: string; rawDan: number } | null;
+  /** MinaCalc MSD skillset values at 1.0x, null until the chart analysis lands. */
+  msd: Record<string, number> | null;
+  /** Vibro-like chart per the classifier; ratings are unreliable, dan filters skip these. */
+  vibro: boolean;
 }
 
 // A search result row: one per beatmapset. The top-level fields describe the
@@ -145,6 +166,84 @@ function readPatternProfile(skillsJson: unknown): { primary: string; scores: Rec
   return { primary: normalizePrimary(rawPrimary, scores), scores };
 }
 
+// MinaCalc skillset -> family. LN has no MSD axis; it keeps the in-house score.
+const MSD_FAMILY_KEYS: Array<[msdKey: string, family: string]> = [
+  ["Stream", "stream"],
+  ["Jumpstream", "jumpstream"],
+  ["Handstream", "handstream"],
+  ["Stamina", "stamina"],
+  ["JackSpeed", "jack"],
+  ["Chordjack", "chordjack"],
+  ["Technical", "tech"],
+];
+
+function readMsdValues(msdJson: unknown): Record<string, number> | null {
+  const parsed = parseJson<{ values?: Record<string, unknown> } | null>(msdJson, null);
+  if (!parsed?.values || typeof parsed.values !== "object") return null;
+  return parsed.values as Record<string, number>;
+}
+
+// The chart's family identity, from the strongest available signal per row.
+//
+// The in-house activity scorer force-caps its chosen family to 1.0 and reads
+// dense chord charts as jump/handstream (Planet Shaper indexed as handstream
+// with MinaCalc saying Stamina 23.2 / Handstream 18.5), and it promotes any
+// holds-heavy hybrid to LN off a soft composite even when the classifier
+// routed the chart RC (lnRatio < 0.5). So:
+// - 4K with MSD: primary = top MinaCalc skillset (Etterna's own labeling),
+//   pat_* mix normalized against it so card tags agree with the modal.
+// - Every keymode with a chart analysis: LN primary iff lnRatio >= 0.5, the
+//   same threshold the classifier uses to route the dan verdict.
+// - No analysis yet: the skills_json profile as before.
+function derivePatternProfile(row: Record<string, unknown>): { primary: string; scores: Record<string, number> } {
+  const { primary, scores } = readPatternProfile(row.skills_json);
+  let result = primary;
+
+  if (intOr(row.cs) === 4) {
+    const msd = readMsdValues(row.ca_msd_json);
+    if (msd) {
+      const values = MSD_FAMILY_KEYS.map(([msdKey, family]) => {
+        const value = Number(msd[msdKey]);
+        return { family, value: Number.isFinite(value) && value > 0 ? value : 0 };
+      });
+      const top = values.reduce((best, entry) => (entry.value > best.value ? entry : best), values[0]);
+      if (top.value > 0) {
+        for (const entry of values) scores[entry.family] = clamp01(entry.value / top.value);
+        result = top.family;
+      }
+    }
+  }
+
+  const classification = parseJson<{ lnRatio?: unknown } | null>(row.ca_classification_json, null);
+  const lnRatio = classification != null && Number.isFinite(Number(classification.lnRatio)) ? Number(classification.lnRatio) : null;
+  if (lnRatio != null && lnRatio >= 0.5) {
+    result = "ln";
+    scores.ln = 1;
+  } else if (lnRatio != null && result === "ln") {
+    let best = "unknown";
+    let bestValue = 0;
+    for (const family of MAP_SEARCH_PATTERNS) {
+      if (family === "ln") continue;
+      if (scores[family] > bestValue) {
+        best = family;
+        bestValue = scores[family];
+      }
+    }
+    result = bestValue > 0 ? best : result;
+  }
+
+  return { primary: result, scores };
+}
+
+// The detected-pattern ids from the chart analysis, space-delimited with outer
+// spaces so subfamily filters can match with like '% id %'.
+function readPatternTags(classificationJson: unknown): string {
+  const parsed = parseJson<{ patterns?: Array<{ id?: unknown }> } | null>(classificationJson, null);
+  if (!parsed || !Array.isArray(parsed.patterns)) return "";
+  const ids = [...new Set(parsed.patterns.map((hit) => String(hit?.id ?? "")).filter(Boolean))];
+  return ids.length > 0 ? ` ${ids.join(" ")} ` : "";
+}
+
 // ── Source rows -> index rows ────────────────────────────────────────────────
 
 const SOURCE_SELECT = `
@@ -167,10 +266,18 @@ const SOURCE_SELECT = `
     s.artist as artist,
     s.creator as creator,
     s.covers_json as covers_json,
-    json_extract(s.metadata_json, '$.ranked_date') as ranked_date
+    json_extract(s.metadata_json, '$.ranked_date') as ranked_date,
+    ca.primary_label as ca_dan_label,
+    ca.primary_family as ca_dan_family,
+    ca.raw_dan as ca_raw_dan,
+    ca.msd_json as ca_msd_json,
+    ca.classification_json as ca_classification_json,
+    json_extract(ca.classification_json, '$.vibro') as ca_vibro
   from beatmap_skill_vectors sv
   join beatmaps b on b.beatmap_id = sv.beatmap_id
   join beatmapsets s on s.beatmapset_id = b.beatmapset_id
+  left join beatmap_chart_analysis ca
+    on ca.beatmap_id = sv.beatmap_id and ca.analysis_version = ${CHART_ANALYSIS_VERSION} and ca.status = 'ready'
   where sv.analysis_version = ? and sv.status = 'ready'
     and json_extract(b.metadata_json, '$.mode') = 'mania'
     and coalesce(json_extract(b.metadata_json, '$.convert'), 0) != 1`;
@@ -189,7 +296,7 @@ function buildIndexUpsert(row: Record<string, unknown>): DbStatement | null {
   const beatmapId = intOr(row.beatmap_id);
   const beatmapsetId = intOr(row.beatmapset_id);
   if (beatmapId <= 0 || beatmapsetId <= 0) return null;
-  const { primary, scores } = readPatternProfile(row.skills_json);
+  const { primary, scores } = derivePatternProfile(row);
   const title = String(row.title ?? "");
   const artist = String(row.artist ?? "");
   const creator = row.creator == null ? "" : String(row.creator);
@@ -227,6 +334,12 @@ function buildIndexUpsert(row: Record<string, unknown>): DbStatement | null {
     scores.ln,
     row.covers_json == null ? null : String(row.covers_json),
     row.ranked_date == null ? null : String(row.ranked_date),
+    row.ca_dan_label == null ? null : String(row.ca_dan_label),
+    row.ca_dan_family == null ? null : String(row.ca_dan_family),
+    row.ca_raw_dan == null ? null : realOr(row.ca_raw_dan),
+    row.ca_msd_json == null ? null : String(row.ca_msd_json),
+    readPatternTags(row.ca_classification_json),
+    intOr(row.ca_vibro) === 1 ? 1 : 0,
     nowIso(),
   ];
   return {
@@ -234,8 +347,9 @@ function buildIndexUpsert(row: Record<string, unknown>): DbStatement | null {
         beatmap_id, beatmapset_id, analysis_version, title, artist, creator, version,
         search_text, key_count, stars, bpm, length, status, play_count, pass_count, ln_count,
         primary_pattern, pat_jack, pat_stream, pat_jumpstream, pat_handstream, pat_stamina,
-        pat_chordjack, pat_tech, pat_ln, covers_json, ranked_date, updated_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        pat_chordjack, pat_tech, pat_ln, covers_json, ranked_date,
+        dan_label, dan_family, raw_dan, msd_json, pattern_tags, vibro, updated_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       on conflict(beatmap_id) do update set
         beatmapset_id = excluded.beatmapset_id,
         analysis_version = excluded.analysis_version,
@@ -248,6 +362,8 @@ function buildIndexUpsert(row: Record<string, unknown>): DbStatement | null {
         pat_handstream = excluded.pat_handstream, pat_stamina = excluded.pat_stamina, pat_chordjack = excluded.pat_chordjack,
         pat_tech = excluded.pat_tech, pat_ln = excluded.pat_ln,
         covers_json = excluded.covers_json, ranked_date = excluded.ranked_date,
+        dan_label = excluded.dan_label, dan_family = excluded.dan_family, raw_dan = excluded.raw_dan,
+        msd_json = excluded.msd_json, pattern_tags = excluded.pattern_tags, vibro = excluded.vibro,
         updated_at = excluded.updated_at`,
     args,
   };
@@ -340,6 +456,17 @@ async function enqueueBuild(queue: JobQueue, cursor: number): Promise<void> {
   await queue.enqueue(MAP_SEARCH_BUILD_JOB, `${MAP_SEARCH_BUILD_JOB}:${cursor}`, { cursor }, { priority: BUILD_JOB_PRIORITY, replaceDone: true });
 }
 
+/**
+ * Drop the build bookkeeping and start a full index rebuild from row zero.
+ * For out-of-band changes the incremental paths never see, e.g. bulk-importing
+ * beatmap_chart_analysis rows (chart-analysis transfer) whose per-beatmap
+ * index upserts never ran.
+ */
+export async function forceMapSearchIndexRebuild(db: Db, queue: JobQueue): Promise<void> {
+  await exec(db, "delete from live_meta where key in (?, ?)", [BUILD_META_KEY, BUILD_CURSOR_KEY]);
+  await enqueueBuild(queue, 0);
+}
+
 const STALE_PRUNE_KEY = "map_search_index_stale_pruned:v1";
 const STALE_PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
@@ -419,7 +546,7 @@ const SELECT_COLUMNS = `
   beatmap_id, beatmapset_id, title, artist, creator, version, status, key_count,
   stars, bpm, length as length_seconds, play_count, ln_count, primary_pattern,
   pat_jack, pat_stream, pat_jumpstream, pat_handstream, pat_stamina, pat_chordjack, pat_tech, pat_ln,
-  covers_json`;
+  covers_json, dan_label, dan_family, raw_dan, msd_json, vibro`;
 
 const KEY_CLAUSES: Record<string, (p: string) => string> = {
   "4k": (p) => `${p}key_count = 4`,
@@ -485,11 +612,41 @@ function buildWhereParts(query: MapSearchQuery, p = ""): { conditions: string[];
     args.push(query.lenMax);
   }
 
-  // Pattern picks match the map's dominant pattern: select chordjack -> chordjack maps.
-  const patterns = [...new Set(query.patterns)].filter((pattern) => PATTERN_COLUMNS[pattern]);
-  if (patterns.length > 0) {
-    conditions.push(`${p}primary_pattern in (${patterns.map(() => "?").join(", ")})`);
-    args.push(...patterns);
+  // Family picks match the map's dominant pattern (select chordjack -> chordjack
+  // maps); subfamily picks match detected-pattern tags. Within the facet the
+  // selections OR together, like every other facet.
+  const requested = [...new Set(query.patterns)];
+  const families = requested.filter((pattern) => PATTERN_COLUMNS[pattern]);
+  const subs = requested.filter((pattern) => SUB_PATTERN_SET.has(pattern));
+  const patternClauses: string[] = [];
+  if (families.length > 0) {
+    patternClauses.push(`${p}primary_pattern in (${families.map(() => "?").join(", ")})`);
+    args.push(...families);
+  }
+  for (const sub of subs) {
+    patternClauses.push(`${p}pattern_tags like ?`);
+    args.push(`% ${sub} %`);
+  }
+  if (patternClauses.length > 0) {
+    conditions.push(`(${patternClauses.join(" or ")})`);
+  }
+
+  // danMin/danMax are integer dan levels, inclusive of the whole dan: verdict
+  // "N" spans N±0.5 on raw_dan (tier offsets ±0.4, boundary halves ±0.5), so
+  // the bounds widen half a step. min == max matches exactly one dan.
+  // Vibro charts are excluded outright: their estimated dans are inflated
+  // (mash-heavy charts overrate on every engine), so a dan-scoped search
+  // returning them is noise. They stay reachable without the dan filter.
+  if (query.danMin != null) {
+    conditions.push(`${p}raw_dan >= ?`);
+    args.push(query.danMin - 0.5);
+  }
+  if (query.danMax != null) {
+    conditions.push(`${p}raw_dan <= ?`);
+    args.push(query.danMax + 0.5);
+  }
+  if (query.danMin != null || query.danMax != null) {
+    conditions.push(`${p}vibro = 0`);
   }
 
   if (query.country) {
@@ -621,6 +778,14 @@ function rowToEntry(row: Record<string, unknown>): MapSearchEntry {
     if (value > 0) patterns[key] = value;
   }
   const covers = row.covers_json == null ? null : parseJson<Record<string, string> | null>(row.covers_json, null);
+  const rawDan = row.raw_dan == null ? null : Number(row.raw_dan);
+  const dan = row.dan_label != null && rawDan != null && Number.isFinite(rawDan)
+    ? { label: String(row.dan_label), family: String(row.dan_family ?? "dan"), rawDan }
+    : null;
+  const msdParsed = row.msd_json == null
+    ? null
+    : parseJson<{ values?: Record<string, number> } | null>(row.msd_json, null);
+  const msd = msdParsed && msdParsed.values && typeof msdParsed.values === "object" ? msdParsed.values : null;
   return {
     beatmapId: intOr(row.beatmap_id),
     beatmapsetId: intOr(row.beatmapset_id),
@@ -638,5 +803,8 @@ function rowToEntry(row: Record<string, unknown>): MapSearchEntry {
     primaryPattern: String(row.primary_pattern ?? "unknown"),
     patterns,
     covers: covers && typeof covers === "object" ? covers : null,
+    dan,
+    msd,
+    vibro: intOr(row.vibro) === 1,
   };
 }

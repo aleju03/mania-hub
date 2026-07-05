@@ -3,6 +3,7 @@ import JSZip from "jszip";
 import { Check, ClipboardList, Copy, Download, FileSpreadsheet, RotateCcw, X } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseManiaBeatmap } from "#/lib/beatmap-parser";
+import { getDanImageSrc } from "#/lib/dan-images";
 import { classifyChart } from "#/lib/chart-classifier";
 import type { ChartClassification, DanVerdictHalf } from "#/lib/chart-classifier";
 import { canUseAdminFeatures, canUseDevFeatures } from "#/lib/auth-shared";
@@ -32,26 +33,6 @@ const VERDICT_SOURCE_LABELS: Record<DanVerdictHalf["source"], string> = {
   "inhouse-ln-knn": "LN kNN",
 };
 
-const DAN_IMAGE_EXTENSIONS: Record<string, "webp" | "svg"> = {
-  "1": "svg",
-  "2": "svg",
-  "3": "svg",
-  "4": "svg",
-  "5": "svg",
-  "6": "svg",
-  "7": "svg",
-  "8": "svg",
-  "9": "svg",
-  "10": "svg",
-  alpha: "webp",
-  beta: "webp",
-  gamma: "webp",
-  delta: "webp",
-  epsilon: "webp",
-  zeta: "webp",
-  eta: "webp",
-};
-
 function extractBeatmapsetId(query: string): number | null {
   const beatmapsetUrlMatch = query.match(/beatmapsets\/(\d+)/i);
   const numericQueryMatch = query.trim().match(/^(\d{5,})$/);
@@ -64,28 +45,6 @@ function extractBeatmapId(query: string): number | null {
   const numericQueryMatch = query.trim().match(/^(\d{5,})$/);
   const id = Number(beatmapUrlMatch?.[1] ?? numericQueryMatch?.[1]);
   return Number.isSafeInteger(id) && id > 0 ? id : null;
-}
-
-const SEVENK_DAN_LABELS = new Set([
-  "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
-  "gamma", "azimuth", "zenith", "stellium",
-]);
-
-function getDanImageSrc(label: string, family?: string, keyCount?: number): string | null {
-  if (keyCount === 7) {
-    if (!SEVENK_DAN_LABELS.has(label)) return null;
-    return family === "ln" ? `/images/dans/7k/ln-${label}.svg` : `/images/dans/7k/${label}.svg`;
-  }
-  if (keyCount != null && keyCount !== 4) {
-    // other keymodes have their own dan courses; the 4K logos would be wrong
-    return null;
-  }
-  if (family === "ln" && /^(1[0-6]|[1-9])$/.test(label)) {
-    return `/images/dans/ln/${label}.svg`;
-  }
-
-  const extension = DAN_IMAGE_EXTENSIONS[label];
-  return extension ? `/images/dans/reform/${label}.${extension}` : null;
 }
 
 function cleanVersionLabel(version: string): string {
@@ -576,6 +535,8 @@ function DanClassifierPage() {
             bpmMax: null,
             lenMin: null,
             lenMax: null,
+            danMin: null,
+            danMax: null,
             country: null,
             sort: "relevance",
             dir: "desc",

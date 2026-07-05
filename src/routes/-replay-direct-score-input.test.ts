@@ -25,7 +25,8 @@ describe("replay direct score input", () => {
     expect(routeSource).toContain("getReplayLoadingCopy");
     expect(routeSource).toContain("Looking up the score");
     expect(routeSource).toContain("Downloading replay and beatmap");
-    expect(routeSource).toContain("waiting on osu! to send the replay");
+    expect(routeSource).toContain("Still fetching the replay and chart");
+    expect(routeSource).toContain("replay_load_slow");
     expect(routeSource).toContain("loadReplay(scoreId, loaderData.score)");
   });
 });

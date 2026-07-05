@@ -1,7 +1,7 @@
 import type { Db } from "../db.js";
 import { exec } from "../db.js";
 import { DAN_ESTIMATE_CACHE_VERSION } from "../dan/dan-estimator/cache-version.js";
-import { estimateDan } from "../dan/dan-estimator.js";
+import { classifyChart } from "../dan/chart-classifier.js";
 import { parseManiaBeatmap, type ManiaBeatmap } from "../dan/beatmap-parser.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { logWarn } from "../logger.js";
@@ -16,8 +16,13 @@ const MIN_RATE_PERCENT = 50;
 const MAX_RATE_PERCENT = 200;
 const MAX_PARSED_DAN_BEATMAPS = 100;
 
-const parsedDanBeatmapCache = new Map<number, ManiaBeatmap>();
-const parsedDanBeatmapInflight = new Map<number, Promise<ManiaBeatmap>>();
+interface ParsedDanBeatmap {
+  map: ManiaBeatmap;
+  osuText: string;
+}
+
+const parsedDanBeatmapCache = new Map<number, ParsedDanBeatmap>();
+const parsedDanBeatmapInflight = new Map<number, Promise<ParsedDanBeatmap>>();
 
 export interface LeanDanEstimate {
   label: string;
@@ -161,16 +166,18 @@ async function computeAndStoreDanEstimate(
   if (cached.found) return cached.value;
 
   const starRating = request.starRating ?? await readBeatmapStarRating(db, request.beatmapId);
-  const map = await getParsedDanBeatmap(db, osu, request.beatmapId, caller);
-  if (map.keyCount !== 4) {
+  const { map, osuText } = await getParsedDanBeatmap(db, osu, request.beatmapId, caller);
+  const classification = classifyChart(map, osuText, {
+    starRating,
+    totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
+    version: map.version,
+    rate: request.rate !== 1 ? request.rate : undefined,
+  });
+  const estimate = classification.estimate;
+  if (!classification.supported || !estimate) {
     await storeUnsupportedDanEstimate(db, request);
     return null;
   }
-
-  const estimate = estimateDan(map, {
-    starRating,
-    rate: request.rate !== 1 ? request.rate : undefined,
-  });
   const lean: LeanDanEstimate = {
     label: estimate.label,
     variant: estimate.variant,
@@ -219,7 +226,7 @@ async function computeAndStoreDanEstimate(
   return lean;
 }
 
-async function getParsedDanBeatmap(db: Db, osu: OsuApiClient, beatmapId: number, caller: string): Promise<ManiaBeatmap> {
+async function getParsedDanBeatmap(db: Db, osu: OsuApiClient, beatmapId: number, caller: string): Promise<ParsedDanBeatmap> {
   const cached = parsedDanBeatmapCache.get(beatmapId);
   if (cached) {
     parsedDanBeatmapCache.delete(beatmapId);
@@ -232,7 +239,7 @@ async function getParsedDanBeatmap(db: Db, osu: OsuApiClient, beatmapId: number,
 
   const promise = (async () => {
     const osuFile = await getCachedBeatmapFile(db, osu, beatmapId, caller);
-    const map = parseManiaBeatmap(osuFile);
+    const map: ParsedDanBeatmap = { map: parseManiaBeatmap(osuFile), osuText: osuFile };
     parsedDanBeatmapCache.set(beatmapId, map);
 
     while (parsedDanBeatmapCache.size > MAX_PARSED_DAN_BEATMAPS) {
@@ -298,7 +305,7 @@ async function storeUnsupportedDanEstimate(db: Db, request: NormalizedDanEstimat
        estimator_version, beatmap_id, rate_percent, status, label, variant, display_name,
        raw_dan, family, confidence, star_rating, error, computed_at, updated_at
      )
-     values (?, ?, ?, 'unsupported', null, null, null, null, null, null, ?, 'not_4k', ?, ?)
+     values (?, ?, ?, 'unsupported', null, null, null, null, null, null, ?, 'unsupported_keymode', ?, ?)
      on conflict(estimator_version, beatmap_id, rate_percent) do update set
        status = excluded.status,
        label = excluded.label,

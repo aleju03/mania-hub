@@ -27,6 +27,7 @@ import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { ModGlyph } from "../components/maps/ModGlyph";
 import { MapSearchSection, type MapSearchUiState } from "../components/maps/MapSearchSection";
 import { MapCollectionsSection } from "../components/maps/MapCollectionsSection";
+import { StarRatingBadge } from "../components/maps/SearchCard";
 import { ModBadge } from "../components/ui/ModBadge";
 import { Pagination } from "../components/ui/Pagination";
 import type {
@@ -124,6 +125,8 @@ type MapsSearch = {
   sBpmMax: number;
   sLenMin: number;
   sLenMax: number;
+  sDanMin: number | null;
+  sDanMax: number | null;
   sPatterns: string;
   sCountryOnly: boolean;
   sSort: string;
@@ -224,6 +227,8 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
   sBpmMax: 0,
   sLenMin: 0,
   sLenMax: 0,
+  sDanMin: null,
+  sDanMax: null,
   sPatterns: "",
   sCountryOnly: false,
   sSort: "playcount",
@@ -234,7 +239,12 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
 
 const SEARCH_KEY_VALUES = ["4k", "7k", "other"];
 const SEARCH_STATUS_VALUES = ["ranked", "loved", "graveyard", "other"];
-const SEARCH_PATTERN_VALUES = ["jack", "stream", "jumpstream", "handstream", "stamina", "chordjack", "tech", "ln"];
+const SEARCH_PATTERN_VALUES = [
+  "jack", "stream", "jumpstream", "handstream", "stamina", "chordjack", "tech", "ln",
+  // subfamilies (matched against detected-pattern tags, not dominance)
+  "speedjack", "handjack", "dumpstream", "quadstream", "chordstream", "delay", "bracket",
+  "lngeneral", "lnrelease", "lninverse", "lntech",
+];
 const SEARCH_SORT_VALUES = ["playcount", "stars", "bpm", "length", "date", "relevance"];
 
 // Search range fields use 0 as "unset"; clamp anything else into [min, max].
@@ -242,6 +252,14 @@ function clampSearchNumber(raw: unknown, min: number, max: number): number {
   const n = Number(raw);
   if (!Number.isFinite(n) || n <= 0) return 0;
   return Math.min(max, Math.max(min, n));
+}
+
+// Dan levels use null as "unset" because level 0 is a real dan (7K 0th).
+function clampDanLevel(raw: unknown): number | null {
+  if (raw == null) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return null;
+  return Math.round(Math.min(20, Math.max(0, n)));
 }
 
 // Multi-select facets ride in the URL as a CSV; keep only allowed tokens.
@@ -1029,6 +1047,8 @@ export const Route = createFileRoute("/maps")({
     sBpmMax: clampSearchNumber(search.sBpmMax, 0, 2000),
     sLenMin: clampSearchNumber(search.sLenMin, 0, 100000),
     sLenMax: clampSearchNumber(search.sLenMax, 0, 100000),
+    sDanMin: clampDanLevel(search.sDanMin),
+    sDanMax: clampDanLevel(search.sDanMax),
     sPatterns: sanitizeSearchCsv(search.sPatterns, SEARCH_PATTERN_VALUES),
     sCountryOnly: false,
     sSort: SEARCH_SORT_VALUES.includes(String(search.sSort)) ? String(search.sSort) : DEFAULT_MAPS_SEARCH.sSort,
@@ -1834,6 +1854,8 @@ function MapsPage() {
     bpmMax: mapsSearch.sBpmMax,
     lenMin: mapsSearch.sLenMin,
     lenMax: mapsSearch.sLenMax,
+    danMin: mapsSearch.sDanMin,
+    danMax: mapsSearch.sDanMax,
     sort: mapsSearch.sSort,
     dir: mapsSearch.sDir,
     page: mapsSearch.page,
@@ -1850,6 +1872,8 @@ function MapsPage() {
     if (patch.bpmMax !== undefined) next.sBpmMax = patch.bpmMax;
     if (patch.lenMin !== undefined) next.sLenMin = patch.lenMin;
     if (patch.lenMax !== undefined) next.sLenMax = patch.lenMax;
+    if (patch.danMin !== undefined) next.sDanMin = patch.danMin;
+    if (patch.danMax !== undefined) next.sDanMax = patch.danMax;
     if (patch.sort !== undefined) next.sSort = patch.sort;
     if (patch.dir !== undefined) next.sDir = patch.dir;
     if (patch.page !== undefined) next.page = patch.page;
@@ -3866,15 +3890,11 @@ function MapDetailsContent({
           <BeatmapStatusBadge status={status} />
           <div className="flex flex-wrap justify-end gap-1.5">
             {keyCount && (
-              <span className="inline-flex items-center px-2 py-1 rounded-full bg-black/55 ring-1 ring-white/15 text-[10px] font-bold text-white">
+              <span className="inline-flex items-center rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold leading-none tabular-nums text-white">
                 {keyCount}K
               </span>
             )}
-            {stars !== null && (
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-black/55 ring-1 ring-white/15 text-[10px] font-bold text-osu-yellow">
-                <span>★</span>{stars.toFixed(2)}
-              </span>
-            )}
+            {stars !== null && <StarRatingBadge stars={stars} />}
           </div>
         </div>
         <div className="absolute inset-x-0 bottom-0 z-20 px-5 pb-5 sm:px-6">
@@ -4502,12 +4522,10 @@ function FarmedCard({
             </div>
           </div>
         )}
-        <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/60 text-[9px] font-bold text-white">
+        <span className="absolute top-1.5 left-1.5 inline-flex items-center rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold leading-none tabular-nums text-white">
           {map.cs}K
         </span>
-        <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/60 text-[9px] font-bold text-osu-yellow">
-          {"\u2605"}{map.difficultyRating.toFixed(2)}
-        </span>
+        <StarRatingBadge stars={map.difficultyRating} className="absolute top-1.5 right-1.5" />
         <div className="absolute bottom-0 left-0 right-0 px-2.5 pb-1.5">
           <div className="text-[12px] font-semibold text-white truncate leading-tight drop-shadow-lg">{map.title}</div>
           <div className="text-[10px] text-white/70 truncate leading-tight drop-shadow-lg">{map.artist}</div>
@@ -4571,11 +4589,9 @@ function MostPlayedCard({
         <img src={map.covers.card} alt="" className="w-full h-[90px] object-cover" loading="lazy" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
         {kc && (
-          <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/60 text-[9px] font-bold text-white">{kc}K</span>
+          <span className="absolute top-1.5 left-1.5 inline-flex items-center rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold leading-none tabular-nums text-white">{kc}K</span>
         )}
-        <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/60 text-[9px] font-bold text-osu-yellow">
-          {"\u2605"}{map.difficultyRating.toFixed(2)}
-        </span>
+        <StarRatingBadge stars={map.difficultyRating} className="absolute top-1.5 right-1.5" />
         <div className="absolute bottom-0 left-0 right-0 px-2.5 pb-1.5">
           <div className="text-[12px] font-semibold text-white truncate leading-tight drop-shadow-lg">{map.title}</div>
           <div className="text-[10px] text-white/70 truncate leading-tight drop-shadow-lg">{map.artist}</div>
@@ -5869,14 +5885,12 @@ function RandomCard({ bm, resolving = false }: { bm: MapsFavouriteBeatmapset; re
         <BeatmapStatusBadge status={bm.status} className="absolute top-3 left-3" />
         <div className="absolute top-3 right-3 flex max-w-[calc(100%-5.5rem)] flex-wrap items-center justify-end gap-1">
           {keys.map((k) => (
-            <span key={k} className="px-1.5 py-0.5 rounded bg-black/60 text-[10px] font-bold text-white">
+            <span key={k} className="inline-flex items-center rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold leading-none tabular-nums text-white">
               {k}K
             </span>
           ))}
           {starLabel && (
-            <span className="px-1.5 py-0.5 rounded bg-black/60 text-[10px] font-bold text-osu-yellow">
-              {"\u2605"}{starLabel}
-            </span>
+            <StarRatingBadge stars={typeof bm.starMax === "number" ? bm.starMax : 0} label={starLabel} />
           )}
         </div>
         <div className="absolute bottom-0 left-0 right-0 px-4 pb-3">

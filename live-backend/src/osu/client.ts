@@ -455,6 +455,34 @@ export class OsuApiClient {
     }));
   }
 
+  // Some v2 endpoints (e.g. /beatmaps/{id}/attributes) are POST-only despite
+  // being pure reads; coalesce on path+body so identical lookups share a call.
+  async postJson<T = unknown>(path: string, body: Record<string, unknown>, caller = "unknown"): Promise<T> {
+    if (!this.hasCredentials()) {
+      throw new Error("OSU_CLIENT_ID and OSU_CLIENT_SECRET are required for osu! API calls");
+    }
+    const bodyJson = JSON.stringify(body);
+    return this.coalesce(`json:POST:${path}:${bodyJson}`, () => this.limiter.schedule(caller, path, async () => {
+      const token = await this.getAccessToken();
+      const response = await this.fetchImpl(`https://osu.ppy.sh/api/v2${path}`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          accept: "application/json",
+          "content-type": "application/json",
+          "x-api-version": "20220705",
+        },
+        body: bodyJson,
+      });
+      if (!response.ok) {
+        const retryAfterMs = parseRetryAfterMs(response.headers.get("retry-after"));
+        if (response.status === 429) this.limiter.pause(retryAfterMs ?? 60_000);
+        throw new OsuApiError(response.status, path, retryAfterMs);
+      }
+      return response.json() as Promise<T>;
+    }));
+  }
+
   async getBinary(path: string, caller = "unknown"): Promise<ArrayBuffer> {
     if (!this.hasCredentials()) {
       throw new Error("OSU_CLIENT_ID and OSU_CLIENT_SECRET are required for osu! API calls");

@@ -40,6 +40,7 @@ export interface ReplayRendererLike {
   renderFrameAt?: (timeMs: number) => void | Promise<void>;
   seek: (timeMs: number) => void;
   setBackgroundDim: (value: number) => void;
+  setBlackPlayfield: (value: boolean) => void;
   setBackgroundImage: (image: HTMLImageElement | null) => void;
   setExternalClock: (cb: (() => { time: number; stalled: boolean } | null) | null) => void;
   setScrollSpeed: (value: number) => void;
