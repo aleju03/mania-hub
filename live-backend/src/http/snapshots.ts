@@ -17,7 +17,7 @@ import { FARM_HELPER_DEFAULT_LIMIT, FARM_HELPER_MAX_LIMIT, FarmHelperUserNotFoun
 import type { ScoreSpeedBucket } from "../shared/score.js";
 import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalRankingsSnapshot, type GlobalRankingsSort } from "../features/global-rankings.js";
 import { enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRefreshProgress, getMapsSnapshot, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery } from "../features/maps.js";
-import { getMapSearchPage, MAP_SEARCH_PATTERNS, MAP_SEARCH_SUB_PATTERNS, type MapSearchQuery, type MapSearchSort } from "../features/map-search.js";
+import { getMapSearchPage, getMapSearchSetEntry, MAP_SEARCH_PATTERNS, MAP_SEARCH_SUB_PATTERNS, type MapSearchQuery, type MapSearchSort } from "../features/map-search.js";
 import { getMapCollection, getMapCollections, getMapCollectionsRotation, rebuildMapCollections } from "../features/map-collections.js";
 import { getPackWallet, listPackCollectionCards, listPackCollectionOwnedUserIds, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, warmProfileSnapshots } from "../features/player-profiles.js";
@@ -699,6 +699,23 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     const snapshot = await getMapSearchPage(ctx.db, parseMapSearchQuery(url.searchParams));
     res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
     sendJson(req, res, ctx, 200, snapshot);
+    return true;
+  }
+  if (url.pathname === "/api/snapshots/map-search-entry") {
+    // Single shareable entry for /maps?map=<beatmapId> links; no country
+    // activation, same global catalog as maps-search.
+    const beatmapId = clampInteger(url.searchParams.get("beatmapId"), 1, Number.MAX_SAFE_INTEGER, 0);
+    if (beatmapId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_beatmap_id" });
+      return true;
+    }
+    const entry = await getMapSearchSetEntry(ctx.db, beatmapId);
+    if (!entry) {
+      sendJson(req, res, ctx, 404, { error: "not_found" });
+      return true;
+    }
+    res.setHeader("cache-control", "public, max-age=300, stale-while-revalidate=900");
+    sendJson(req, res, ctx, 200, { entry });
     return true;
   }
   if (url.pathname === "/api/snapshots/map-collections") {

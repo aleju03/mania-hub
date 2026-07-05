@@ -572,6 +572,255 @@ function orClause(values: string[], lookup: Record<string, (p: string) => string
   return clauses.length > 0 ? `(${clauses.join(" or ")})` : null;
 }
 
+// ── osu!-style search tokens ─────────────────────────────────────────────────
+//
+// The free-text box accepts osu! web filter syntax alongside plain keywords:
+//   keys=7 stars>5 bpm>=200 length<90s status=ranked creator=nanahira
+//   artist=camellia title=ghost difficulty=insane ranked>2019 dan>=10
+// Ops: = (also : and ==) plus >, >=, <, <= (>: and <: accepted) on numeric and
+// date fields, and != to negate. Quoted values keep spaces (creator="foo bar").
+// A recognized key with an unparsable value drops the token (so a half-typed
+// "status=" doesn't blank the results); unknown keys stay plain search terms.
+
+type TokenOp = "=" | "!=" | ">" | ">=" | "<" | "<=";
+
+type SearchTokenFilter =
+  // Equality on numerics matches the literal's precision as a half-open bucket:
+  // stars=5 is [5, 6), stars=5.3 is [5.3, 5.4), keys=6 is exactly 6.
+  | { kind: "numeric"; column: "key_count" | "stars" | "bpm" | "length"; op: TokenOp; value: number; step: number }
+  | { kind: "text"; column: "title" | "artist" | "creator" | "version"; negate: boolean; value: string }
+  | { kind: "status"; negate: boolean; statuses: string[] }
+  // Dates compare lexicographically against the ISO ranked_date; [start, end)
+  // spans the literal's precision (2019, 2019-06, or 2019-06-15).
+  | { kind: "date"; op: TokenOp; start: string; end: string }
+  // Dan levels widen ±0.5 on raw_dan like the facet, and exclude vibro charts.
+  | { kind: "dan"; op: TokenOp; value: number };
+
+export interface ParsedMapSearchText {
+  terms: string[];
+  filters: SearchTokenFilter[];
+}
+
+const TOKEN_RE = /^([a-zA-Z_]+)(>=|<=|>:|<:|==|!=|[:=><])(.*)$/;
+
+const NUMERIC_TOKEN_COLUMNS: Record<string, "key_count" | "stars" | "bpm"> = {
+  key: "key_count",
+  keys: "key_count",
+  cs: "key_count",
+  star: "stars",
+  stars: "stars",
+  sr: "stars",
+  bpm: "bpm",
+};
+
+const TEXT_TOKEN_COLUMNS: Record<string, "title" | "artist" | "creator" | "version"> = {
+  title: "title",
+  artist: "artist",
+  creator: "creator",
+  mapper: "creator",
+  difficulty: "version",
+  diff: "version",
+  version: "version",
+};
+
+// Token values -> index status column values ("ranked" folds in approved, same
+// as the facet; the rest map straight through to the osu! API statuses).
+const STATUS_TOKEN_VALUES: Record<string, string[]> = {
+  ranked: ["ranked", "approved"],
+  approved: ["approved"],
+  qualified: ["qualified"],
+  loved: ["loved"],
+  pending: ["pending"],
+  wip: ["wip"],
+  graveyard: ["graveyard"],
+};
+
+function normalizeTokenOp(raw: string): TokenOp {
+  if (raw === ":" || raw === "=" || raw === "==") return "=";
+  if (raw === ">:") return ">=";
+  if (raw === "<:") return "<=";
+  return raw as TokenOp;
+}
+
+// Seconds, with osu!'s s/m/h suffixes plus the natural m:ss form.
+function parseLengthSeconds(raw: string): number | null {
+  const colon = /^(\d+):(\d{1,2})$/.exec(raw);
+  if (colon) return Number(colon[1]) * 60 + Number(colon[2]);
+  const match = /^(\d+(?:\.\d+)?)(s|m|h)?$/.exec(raw);
+  if (!match) return null;
+  const unit = match[2] === "m" ? 60 : match[2] === "h" ? 3600 : 1;
+  return Math.round(Number(match[1]) * unit);
+}
+
+function parseDateRange(raw: string): { start: string; end: string } | null {
+  const match = /^(\d{4})(?:[-./](\d{1,2})(?:[-./](\d{1,2}))?)?$/.exec(raw);
+  if (!match) return null;
+  const year = Number(match[1]);
+  if (year < 1990 || year > 2100) return null;
+  const month = match[2] == null ? null : Number(match[2]);
+  const day = match[3] == null ? null : Number(match[3]);
+  if (month != null && (month < 1 || month > 12)) return null;
+  if (day != null && (day < 1 || day > 31)) return null;
+  const iso = (utc: number) => new Date(utc).toISOString().slice(0, 10);
+  const start = Date.UTC(year, (month ?? 1) - 1, day ?? 1);
+  const end = day != null
+    ? Date.UTC(year, (month as number) - 1, day + 1)
+    : month != null
+      ? Date.UTC(year, month, 1)
+      : Date.UTC(year + 1, 0, 1);
+  return { start: iso(start), end: iso(end) };
+}
+
+// null = not a filter token, keep as a plain search term; "drop" = recognized
+// key but unusable value/op, discard the token entirely.
+function parseSearchToken(token: string): SearchTokenFilter | "drop" | null {
+  const match = TOKEN_RE.exec(token);
+  if (!match) return null;
+  const key = match[1].toLowerCase();
+  const op = normalizeTokenOp(match[2]);
+  const value = match[3].replace(/"/g, "").trim();
+
+  const numericColumn = NUMERIC_TOKEN_COLUMNS[key];
+  if (numericColumn) {
+    // Tolerate the natural "keys=7k" spelling.
+    const raw = numericColumn === "key_count" ? value.replace(/k$/i, "") : value;
+    const parsed = /^(\d+)(?:\.(\d+))?$/.exec(raw);
+    if (!parsed) return "drop";
+    return { kind: "numeric", column: numericColumn, op, value: Number(raw), step: parsed[2] ? 10 ** -parsed[2].length : 1 };
+  }
+  if (key === "length" || key === "len") {
+    const seconds = parseLengthSeconds(value);
+    if (seconds == null) return "drop";
+    return { kind: "numeric", column: "length", op, value: seconds, step: 1 };
+  }
+  const textColumn = TEXT_TOKEN_COLUMNS[key];
+  if (textColumn) {
+    if ((op !== "=" && op !== "!=") || !value) return "drop";
+    return { kind: "text", column: textColumn, negate: op === "!=", value };
+  }
+  if (key === "status") {
+    if (op !== "=" && op !== "!=") return "drop";
+    const statuses = STATUS_TOKEN_VALUES[value.toLowerCase()];
+    if (!statuses) return "drop";
+    return { kind: "status", negate: op === "!=", statuses };
+  }
+  if (key === "ranked") {
+    const range = parseDateRange(value);
+    if (!range) return "drop";
+    return { kind: "date", op, start: range.start, end: range.end };
+  }
+  if (key === "dan") {
+    const level = Number(value);
+    if (!Number.isFinite(level)) return "drop";
+    return { kind: "dan", op, value: level };
+  }
+  return null;
+}
+
+// Split the raw query into plain search terms and structured token filters.
+// Quotes group spaces into one unit, both for filter values and free text
+// (searching "big black" as a single phrase).
+export function parseMapSearchText(q: string): ParsedMapSearchText {
+  const terms: string[] = [];
+  const filters: SearchTokenFilter[] = [];
+  for (const token of q.match(/(?:[^\s"]+|"[^"]*")+/g) ?? []) {
+    const filter = parseSearchToken(token);
+    if (filter === "drop") continue;
+    if (filter) {
+      if (filters.length < 12) filters.push(filter);
+      continue;
+    }
+    const term = token.replace(/"/g, "").toLowerCase();
+    if (term && terms.length < 6) terms.push(term);
+  }
+  return { terms, filters };
+}
+
+function escapeLike(value: string): string {
+  return value.replace(/[%_\\]/g, (c) => `\\${c}`);
+}
+
+// Columns hold original casing; LIKE is ASCII-case-insensitive in SQLite, which
+// covers creator/title tokens the same way the lowercased search_text blob does.
+function applyTokenFilter(filter: SearchTokenFilter, p: string, conditions: string[], args: InValue[]): void {
+  switch (filter.kind) {
+    case "numeric": {
+      const col = `${p}${filter.column}`;
+      if (filter.op === "=" || filter.op === "!=") {
+        const clause = `(${col} >= ? and ${col} < ?)`;
+        conditions.push(filter.op === "=" ? clause : `not ${clause}`);
+        args.push(filter.value, filter.value + filter.step);
+      } else {
+        conditions.push(`${col} ${filter.op} ?`);
+        args.push(filter.value);
+      }
+      return;
+    }
+    case "text": {
+      conditions.push(`${p}${filter.column} ${filter.negate ? "not like" : "like"} ? escape '\\'`);
+      args.push(`%${escapeLike(filter.value)}%`);
+      return;
+    }
+    case "status": {
+      const placeholders = filter.statuses.map(() => "?").join(", ");
+      conditions.push(`${p}status ${filter.negate ? "not in" : "in"} (${placeholders})`);
+      args.push(...filter.statuses);
+      return;
+    }
+    case "date": {
+      const col = `${p}ranked_date`;
+      if (filter.op === "=" || filter.op === "!=") {
+        const clause = `(${col} >= ? and ${col} < ?)`;
+        conditions.push(filter.op === "=" ? clause : `not ${clause}`);
+        args.push(filter.start, filter.end);
+      } else if (filter.op === ">") {
+        conditions.push(`${col} >= ?`);
+        args.push(filter.end);
+      } else if (filter.op === ">=") {
+        conditions.push(`${col} >= ?`);
+        args.push(filter.start);
+      } else if (filter.op === "<") {
+        conditions.push(`${col} < ?`);
+        args.push(filter.start);
+      } else {
+        conditions.push(`${col} < ?`);
+        args.push(filter.end);
+      }
+      return;
+    }
+    case "dan": {
+      const col = `${p}raw_dan`;
+      const lo = filter.value - 0.5;
+      const hi = filter.value + 0.5;
+      if (filter.op === "=" || filter.op === "!=") {
+        const clause = `(${col} >= ? and ${col} <= ?)`;
+        if (filter.op === "!=") {
+          conditions.push(`not ${clause}`);
+          args.push(lo, hi);
+          return;
+        }
+        conditions.push(clause);
+        args.push(lo, hi);
+      } else if (filter.op === ">") {
+        conditions.push(`${col} > ?`);
+        args.push(hi);
+      } else if (filter.op === ">=") {
+        conditions.push(`${col} >= ?`);
+        args.push(lo);
+      } else if (filter.op === "<") {
+        conditions.push(`${col} < ?`);
+        args.push(lo);
+      } else {
+        conditions.push(`${col} <= ?`);
+        args.push(hi);
+      }
+      // Same rationale as the dan facet: vibro dans are inflated noise.
+      conditions.push(`${p}vibro = 0`);
+      return;
+    }
+  }
+}
+
 // Filter conditions with an optional column prefix ("i." / "j.") so the page
 // query can apply the same filter set to both sides of its dedup anti-join.
 // No metadata probes here: the index is kept convert/non-mania-free at write
@@ -586,9 +835,13 @@ function buildWhereParts(query: MapSearchQuery, p = ""): { conditions: string[];
   const statusClause = orClause(query.statuses, STATUS_CLAUSES, p);
   if (statusClause) conditions.push(statusClause);
 
-  for (const term of query.q.toLowerCase().split(/\s+/).filter(Boolean).slice(0, 6)) {
+  const parsedText = parseMapSearchText(query.q);
+  for (const term of parsedText.terms) {
     conditions.push(`${p}search_text like ? escape '\\'`);
-    args.push(`%${term.replace(/[%_\\]/g, (c) => `\\${c}`)}%`);
+    args.push(`%${escapeLike(term)}%`);
+  }
+  for (const filter of parsedText.filters) {
+    applyTokenFilter(filter, p, conditions, args);
   }
 
   if (query.starMin != null) {
@@ -749,6 +1002,27 @@ export async function getMapSearchPage(db: Db, query: MapSearchQuery): Promise<M
   });
 
   return { items, total, page, pageSize };
+}
+
+// One set entry keyed off a single diff: the requested beatmap becomes the
+// representative and `diffs` carries every diff of its set, easiest first,
+// unfiltered. Backs the /maps?map=<beatmapId> share links.
+export async function getMapSearchSetEntry(db: Db, beatmapId: number): Promise<MapSearchSetEntry | null> {
+  const rows = (await exec(
+    db,
+    `select ${SELECT_COLUMNS} from map_search_index where beatmap_id = ?`,
+    [beatmapId],
+  )).rows;
+  if (rows.length === 0) return null;
+  const entry = rowToEntry(rows[0]);
+  const diffRows = (await exec(
+    db,
+    `select ${SELECT_COLUMNS} from map_search_index where beatmapset_id = ?
+     order by key_count asc, stars asc, beatmap_id asc`,
+    [entry.beatmapsetId],
+  )).rows;
+  const diffs = diffRows.map((row) => ({ ...rowToEntry(row), covers: null }));
+  return { ...entry, diffCount: diffs.length, diffs };
 }
 
 // Fetch index entries for a set of beatmap ids (used by collection detail).

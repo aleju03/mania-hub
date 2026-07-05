@@ -40,6 +40,7 @@ interface SeedMap {
   version?: string;
   playcount?: number;
   totalLength?: number;
+  rankedDate?: string;
   mode?: string;
   convert?: boolean;
   primary: string;
@@ -59,7 +60,7 @@ async function seedMap(db: Db, map: SeedMap): Promise<void> {
       map.creator ?? "Mapper",
       map.status ?? "ranked",
       json({ card: `https://example/${map.beatmapsetId}.jpg` }),
-      json({ ranked_date: "2020-01-01T00:00:00Z" }),
+      json({ ranked_date: map.rankedDate ?? "2020-01-01T00:00:00Z" }),
       now,
     ],
   );
@@ -180,6 +181,86 @@ describe("map search index", () => {
     const hit = await getMapSearchPage(db, { ...baseQuery(), q: "camellia" });
     expect(hit.total).toBe(1);
     expect(hit.items[0].beatmapId).toBe(1);
+  });
+
+  it("parses osu!-style tokens in the free-text query", async () => {
+    const db = await makeDb();
+    await seedMap(db, {
+      beatmapId: 1, beatmapsetId: 10, cs: 4, stars: 4.2, bpm: 150, totalLength: 95,
+      title: "Banger", creator: "Nanahira Fan", version: "Hard", primary: "stream", patterns: { stream: 1 },
+    });
+    await seedMap(db, {
+      beatmapId: 2, beatmapsetId: 20, cs: 7, stars: 6.1, bpm: 220, totalLength: 200, status: "loved",
+      title: "Calm", creator: "OtherMapper", version: "7K Insane", rankedDate: "2022-05-10T00:00:00Z",
+      primary: "jack", patterns: { jack: 1 },
+    });
+    await seedMap(db, {
+      beatmapId: 3, beatmapsetId: 30, cs: 6, stars: 5.0, bpm: 180, status: "graveyard",
+      title: "Third", primary: "tech", patterns: { tech: 1 },
+    });
+    await buildAll(db);
+
+    const ids = async (q: string) => {
+      const page = await getMapSearchPage(db, { ...baseQuery(), q });
+      return page.items.map((item) => item.beatmapId).sort();
+    };
+
+    // Numeric fields with comparison ops; equality buckets to the literal's precision.
+    expect(await ids("keys=7")).toEqual([2]);
+    expect(await ids("key=6")).toEqual([3]);
+    expect(await ids("cs=4")).toEqual([1]);
+    expect(await ids("keys=7k")).toEqual([2]);
+    expect(await ids("stars>5 bpm>200")).toEqual([2]);
+    expect(await ids("stars=4")).toEqual([1]);
+    expect(await ids("star>=5")).toEqual([2, 3]);
+    expect(await ids("bpm<180")).toEqual([1]);
+    // Length in seconds, with s/m suffixes and m:ss.
+    expect(await ids("length<100")).toEqual([1]);
+    expect(await ids("length<2m")).toEqual([1]);
+    expect(await ids("length>=1:40")).toEqual([2, 3]);
+    // Status equality and negation.
+    expect(await ids("status=ranked")).toEqual([1]);
+    expect(await ids("status=loved")).toEqual([2]);
+    expect(await ids("status!=graveyard")).toEqual([1, 2]);
+    // Text columns, quoted values, and aliases.
+    expect(await ids("creator=nanahira")).toEqual([1]);
+    expect(await ids('creator="nanahira fan"')).toEqual([1]);
+    expect(await ids("mapper=other")).toEqual([2]);
+    expect(await ids("diff=insane")).toEqual([2]);
+    expect(await ids("title=third")).toEqual([3]);
+    expect(await ids("artist!=artist")).toEqual([]);
+    // Ranked date at year/month precision (seeds default to 2020-01-01).
+    expect(await ids("ranked>=2022")).toEqual([2]);
+    expect(await ids("ranked=2020")).toEqual([1, 3]);
+    expect(await ids("ranked=2022-05")).toEqual([2]);
+    expect(await ids("ranked<2021")).toEqual([1, 3]);
+    // Tokens combine with plain terms; the `:` op works like `=`.
+    expect(await ids("banger keys:4")).toEqual([1]);
+    // Half-typed or invalid values drop the token instead of blanking results.
+    expect(await ids("status=")).toEqual([1, 2, 3]);
+    expect(await ids("status=asdf keys=")).toEqual([1, 2, 3]);
+    // Unknown keys stay plain text search.
+    expect(await ids("zzz=1")).toEqual([]);
+  });
+
+  it("filters by dan tokens with facet semantics (±0.5, vibro excluded)", async () => {
+    const db = await makeDb();
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, primary: "stream", patterns: { stream: 1 } });
+    await seedAnalysis(db, 1, { rawDan: 9.6, label: "10--" });
+    await seedMap(db, { beatmapId: 2, beatmapsetId: 20, primary: "jack", patterns: { jack: 1 } });
+    await seedAnalysis(db, 2, { rawDan: 10.2, label: "10", vibro: true });
+    await buildAll(db);
+
+    const ids = async (q: string) => {
+      const page = await getMapSearchPage(db, { ...baseQuery(), q });
+      return page.items.map((item) => item.beatmapId).sort();
+    };
+
+    expect(await ids("dan=10")).toEqual([1]);
+    expect(await ids("dan>=10")).toEqual([1]);
+    expect(await ids("dan=9")).toEqual([]);
+    expect(await ids("dan>=11")).toEqual([]);
+    expect(await ids("dan<10")).toEqual([]);
   });
 
   it("groups results by beatmapset with matching diffs attached", async () => {

@@ -1303,6 +1303,20 @@ export async function fetchLiveMapSearch(params: LiveMapSearchParams): Promise<L
   return fetchLiveJson(`/api/snapshots/maps-search?${query.toString()}`);
 }
 
+// Single set entry for /maps?map=<beatmapId> share links; the requested diff is
+// the representative and `diffs` carries the whole set. Null when the map is
+// unknown to the catalog (or the backend is unreachable).
+export async function fetchLiveMapSearchEntry(beatmapId: number): Promise<LiveMapSearchEntry | null> {
+  try {
+    const result = await fetchLiveJson<{ entry: LiveMapSearchEntry }>(
+      `/api/snapshots/map-search-entry?beatmapId=${Math.floor(beatmapId)}`,
+    );
+    return result.entry ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchLiveMapCollections(opts?: { fresh?: boolean }): Promise<LiveMapCollectionsResult> {
   // The snapshot carries a 5-min cache-control; after a manual admin rebuild we
   // bypass it with no-store so the new rotation shows immediately.

@@ -27,6 +27,7 @@ import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { ModGlyph } from "../components/maps/ModGlyph";
 import { MapSearchSection, type MapSearchUiState } from "../components/maps/MapSearchSection";
 import { MapCollectionsSection } from "../components/maps/MapCollectionsSection";
+import { MapDetailModal } from "../components/maps/MapDetailModal";
 import { StarRatingBadge } from "../components/maps/SearchCard";
 import { ModBadge } from "../components/ui/ModBadge";
 import { Pagination } from "../components/ui/Pagination";
@@ -61,6 +62,7 @@ import { REPLAY_SKIN_SETTINGS_CHANGE_EVENT, readReplaySkinSettings } from "../li
 import type { ReplaySkinSettings } from "../lib/replay-skin";
 import { useAuth } from "../lib/auth-context";
 import {
+  fetchLiveMapSearchEntry,
   fetchLiveMapsBeatmapsets,
   fetchLiveMapsPageSnapshot,
   fetchLiveMapsPlayersSnapshot,
@@ -71,7 +73,7 @@ import {
   runLiveBackendAdminAction,
 } from "../lib/live-backend";
 import { LIVE_MAPS_PLAYERS_PAGE_SIZE } from "../lib/live-backend";
-import type { LiveMapsBrowseTab, LiveMapsDetailsPlayer, LiveMapsPageValue, LiveMapsPlayersKind, LiveMapsRefreshProgress } from "../lib/live-backend";
+import type { LiveMapSearchEntry, LiveMapsBrowseTab, LiveMapsDetailsPlayer, LiveMapsPageValue, LiveMapsPlayersKind, LiveMapsRefreshProgress } from "../lib/live-backend";
 import { CountryWarming } from "../components/CountryWarming";
 import { useCountryWarming } from "../lib/use-country-warming";
 import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
@@ -133,6 +135,8 @@ type MapsSearch = {
   sDir: string;
   // Collections tab: selected pack id ("" = browse grid).
   col: string;
+  // Shared map link: beatmap id whose detail modal auto-opens (0 = none).
+  map: number;
   country: string | undefined;
 };
 
@@ -229,6 +233,7 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
   sSort: "playcount",
   sDir: "desc",
   col: "",
+  map: 0,
   country: undefined,
 };
 
@@ -1050,6 +1055,7 @@ export const Route = createFileRoute("/maps")({
     sSort: SEARCH_SORT_VALUES.includes(String(search.sSort)) ? String(search.sSort) : DEFAULT_MAPS_SEARCH.sSort,
     sDir: search.sDir === "asc" ? "asc" : DEFAULT_MAPS_SEARCH.sDir,
     col: typeof search.col === "string" ? search.col.slice(0, 80) : DEFAULT_MAPS_SEARCH.col,
+    map: Math.max(0, Math.floor(Number(search.map) || 0)),
     country: parseCountrySearchParam(search.country),
   }),
   component: MapsPage,
@@ -1144,6 +1150,25 @@ function MapsPage() {
       resetScroll: false,
     });
   }, [navigate]);
+  // Shared map link (?map=<beatmapId>): fetch that map's catalog entry and
+  // auto-open the detail modal on top of whatever tab is showing. Opening a
+  // map by clicking a card never touches the URL; only this param does.
+  const sharedMapId = mapsSearch.map;
+  const [sharedMapEntry, setSharedMapEntry] = useState<LiveMapSearchEntry | null>(null);
+  useEffect(() => {
+    if (!sharedMapId || !liveBackendEnabled) {
+      setSharedMapEntry(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchLiveMapSearchEntry(sharedMapId).then((entry) => {
+      if (!cancelled) setSharedMapEntry(entry);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [sharedMapId, liveBackendEnabled]);
+
   const randomStatus = useMemo(() => parseTriStateCsv(rStatusRaw, RANDOM_STATUS_OPTIONS), [rStatusRaw]);
   const randomKey = useMemo(() => parseTriStateCsv(rKeyRaw, RANDOM_KEY_OPTIONS), [rKeyRaw]);
   const randomPattern = useMemo(() => parseTriStateCsv(rPatternRaw, RANDOM_PATTERN_OPTIONS), [rPatternRaw]);
@@ -3096,6 +3121,10 @@ function MapsPage() {
         details={detailsOpen}
         country={selectedCountry}
         onClose={() => setDetailsOpen(null)}
+      />
+      <MapDetailModal
+        entry={sharedMapId > 0 ? sharedMapEntry : null}
+        onClose={() => updateMapsSearch({ map: 0 })}
       />
     </div>
   );

@@ -899,7 +899,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
               type="text"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search title, artist, mapper, or difficulty"
+              placeholder="Search title, artist, mapper, or filter: keys=7 stars>5 status=ranked"
               aria-label="Search maps"
               className={`w-full bg-osu-b4 border border-osu-b3/30 rounded-lg pl-10 py-2.5 text-[14px] text-osu-l1 placeholder:text-osu-f1/55 focus:outline-none focus:border-osu-pink/50 transition-colors ${searchInput ? "pr-10" : "pr-3"}`}
             />

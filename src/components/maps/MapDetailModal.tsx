@@ -225,9 +225,11 @@ function ClustersBlock({ analysis, pending }: { analysis: LiveChartAnalysisDetai
 export function MapDetailModal({ entry, onClose }: { entry: LiveMapSearchEntry | null; onClose: () => void }) {
   // Which diff of the set is in focus; defaults to the entry's representative.
   const [selectedDiffId, setSelectedDiffId] = useState<number | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
 
   useEffect(() => {
     setSelectedDiffId(entry ? entry.beatmapId : null);
+    setShareCopied(false);
   }, [entry]);
 
   useEffect(() => {
@@ -449,6 +451,25 @@ export function MapDetailModal({ entry, onClose }: { entry: LiveMapSearchEntry |
                     </svg>
                     Download .osz
                   </a>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // /maps?map=<id> reopens this modal for whoever gets the
+                      // link; the selected diff rides along in the id.
+                      const url = `${window.location.origin}/maps?map=${active.beatmapId}`;
+                      void navigator.clipboard?.writeText(url).then(() => {
+                        setShareCopied(true);
+                        window.setTimeout(() => setShareCopied(false), 1600);
+                      }).catch(() => {});
+                    }}
+                    className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-osu-b3/70 px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-osu-b3 hover:text-white transition-colors cursor-pointer sm:justify-start sm:px-3"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden="true">
+                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                    </svg>
+                    {shareCopied ? "Link copied!" : "Share"}
+                  </button>
                   <a
                     href={osuDirectUrl(entry.beatmapsetId)}
                     className="hidden items-center gap-1.5 whitespace-nowrap rounded-md bg-osu-b3/70 px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-osu-b3 hover:text-white transition-colors sm:inline-flex"
