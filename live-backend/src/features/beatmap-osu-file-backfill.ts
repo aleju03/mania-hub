@@ -365,18 +365,27 @@ async function writeState(db: Db, state: BackfillState): Promise<void> {
 }
 
 async function readCacheCounts(db: Db): Promise<CacheCounts> {
+  // "cached" tests compressed_bytes alone (not content_blob) so the whole
+  // aggregate is answered from idx_beatmap_osu_files_meta without touching
+  // the blob-laden table pages — the difference between milliseconds and a
+  // 10-40s scan that stalls the event loop. The writer only ever sets
+  // compressed_bytes together with content_blob (see cacheBeatmapFile), so
+  // compressed_bytes > 0 implies the blob is present. INDEXED BY is load-
+  // bearing: beatmap_id is the rowid, so the planner otherwise prefers table
+  // point lookups, which read the blob pages anyway.
   const rows = (await exec(
     db,
     `select
        count(*) as total,
-       sum(case when f.content_blob is not null and f.compressed_bytes > 0 then 1 else 0 end) as cached,
+       sum(case when f.compressed_bytes > 0 then 1 else 0 end) as cached,
        sum(case when f.source = 'unavailable' then 1 else 0 end) as unavailable
      from (
        select distinct beatmap_id
        from beatmap_skill_vectors
        where status = 'ready'
      ) v
-     left join beatmap_osu_files f on f.beatmap_id = v.beatmap_id`,
+     left join beatmap_osu_files as f indexed by idx_beatmap_osu_files_meta
+       on f.beatmap_id = v.beatmap_id`,
   )).rows[0];
   const totalAnalyzed = Number(rows?.total ?? 0);
   const cached = Number(rows?.cached ?? 0);

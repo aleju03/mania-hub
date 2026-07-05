@@ -495,14 +495,22 @@ async function writeBackfillState(db: Db, state: ChartBackfillState): Promise<vo
 }
 
 async function readBackfillCounts(db: Db): Promise<ChartBackfillCounts> {
+  // "eligible" tests compressed_bytes alone so the aggregate is answered from
+  // idx_beatmap_osu_files_meta without touching the blob-laden table pages
+  // (milliseconds instead of a 10-40s event-loop-stalling scan). The cache
+  // writer only ever stores files compressed (content stays '', and
+  // compressed_bytes is set together with content_blob), so this matches the
+  // picker's content/content_blob eligibility test for every stored row.
+  // INDEXED BY pins the covering-index scan so the planner can't fall back to
+  // the blob-laden table B-tree.
   const row = (await exec(
     db,
     `select
-       sum(case when f.error is null and (f.content != '' or f.content_blob is not null) then 1 else 0 end) as eligible,
+       sum(case when f.error is null and f.compressed_bytes > 0 then 1 else 0 end) as eligible,
        sum(case when a.status = 'ready' then 1 else 0 end) as ready,
        sum(case when a.status = 'unavailable' then 1 else 0 end) as unavailable,
        sum(case when a.status = 'failed' then 1 else 0 end) as failed
-     from beatmap_osu_files f
+     from beatmap_osu_files as f indexed by idx_beatmap_osu_files_meta
      left join beatmap_chart_analysis a
        on a.beatmap_id = f.beatmap_id and a.analysis_version = ?`,
     [CHART_ANALYSIS_VERSION],

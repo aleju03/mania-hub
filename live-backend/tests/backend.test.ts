@@ -4060,6 +4060,124 @@ describe("live backend", () => {
     expect((await request()).value?.farmed).toHaveLength(1);
   });
 
+  it("keeps the GLOBAL maps response cached while overlay and source stamps churn", async () => {
+    const { db, queue, events } = await setup();
+    const refreshedAt = new Date().toISOString();
+    await exec(
+      db,
+      `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
+       values ('GLOBAL', ?, ?, ?)`,
+      [
+        JSON.stringify({
+          farmed: [],
+          mostPlayed: [],
+          favourites: [],
+          favouritesByPlayer: [],
+          beatmapsetsPool: {},
+          generatedAt: refreshedAt,
+          farmedGeneratedAt: refreshedAt,
+          favouritesGeneratedAt: refreshedAt,
+        }),
+        refreshedAt,
+        refreshedAt,
+      ],
+    );
+    const ctx = {
+      db,
+      queue,
+      events,
+      config: baseConfig(),
+      osu: {},
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never;
+    const request = async () => {
+      const { res, writes } = mockRes();
+      await routeHttp(mockReq("GET", "/api/snapshots/maps?country=GLOBAL"), res, ctx);
+      return { status: res.statusCode, body: JSON.parse(writes.join("")) as { value: { farmed: unknown[] } | null } };
+    };
+
+    const first = await request();
+    expect(first.status).toBe(200);
+    expect(first.body.value?.farmed).toHaveLength(0);
+
+    // Churn the stamps that used to sit in the GLOBAL cache key: a fresher
+    // country refresh (sourceRefreshedAt) and a farmed-overlay update. Then
+    // corrupt the stored payload so a rebuild would fail — a still-good
+    // response proves it came from the cache. Under the old key every
+    // ingested score was a miss that re-paid the full GLOBAL hydrate.
+    const countryRefreshedAt = new Date(Date.now() + 1000).toISOString();
+    await exec(
+      db,
+      "insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at) values ('CR', '{}', ?, ?)",
+      [countryRefreshedAt, countryRefreshedAt],
+    );
+    const score = { ...(await fixture<OscScore[]>("scores.json"))[0], pp: 550 };
+    await recordMapsFarmedScore(db, "CR", score, countryRefreshedAt);
+    await exec(db, "update country_maps_snapshots set payload_json = ? where country = 'GLOBAL'", ["{not json"]);
+
+    const churned = await request();
+    expect(churned.status).toBe(200);
+    expect(churned.body.value?.farmed).toHaveLength(0);
+  });
+
+  it("serves the previous GLOBAL maps generation and swaps in the rebuild in the background", async () => {
+    const { db, queue, events } = await setup();
+    const writeGlobalPayload = (playerId: number, refreshedAt: string) =>
+      JSON.stringify({
+        farmed: [],
+        mostPlayed: [],
+        favourites: [],
+        favouritesByPlayer: [{
+          id: playerId,
+          username: `player-${playerId}`,
+          avatarUrl: "https://assets.example/player.png",
+          beatmapsetIds: [1],
+        }],
+        beatmapsetsPool: {},
+        generatedAt: refreshedAt,
+        farmedGeneratedAt: refreshedAt,
+        favouritesGeneratedAt: refreshedAt,
+      });
+    const firstRefreshedAt = new Date().toISOString();
+    await exec(
+      db,
+      `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
+       values ('GLOBAL', ?, ?, ?)`,
+      [writeGlobalPayload(101, firstRefreshedAt), firstRefreshedAt, firstRefreshedAt],
+    );
+    const ctx = {
+      db,
+      queue,
+      events,
+      config: baseConfig(),
+      osu: {},
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never;
+    const request = async () => {
+      const { res, writes } = mockRes();
+      await routeHttp(mockReq("GET", "/api/snapshots/maps?country=GLOBAL"), res, ctx);
+      const body = JSON.parse(writes.join("")) as { value: { favouritesByPlayer: Array<{ id: number }> } | null };
+      return body.value?.favouritesByPlayer[0]?.id;
+    };
+
+    expect(await request()).toBe(101);
+
+    const secondRefreshedAt = new Date(Date.now() + 1000).toISOString();
+    await exec(
+      db,
+      "update country_maps_snapshots set payload_json = ?, refreshed_at = ? where country = 'GLOBAL'",
+      [writeGlobalPayload(202, secondRefreshedAt), secondRefreshedAt],
+    );
+
+    // The first request after the generation bump still serves the previous
+    // body instantly (stale-while-revalidate)...
+    expect(await request()).toBe(101);
+    // ...while the single-flight background rebuild swaps the entry in.
+    await vi.waitFor(async () => {
+      expect(await request()).toBe(202);
+    });
+  });
+
   it("refreshes a player's farmed overlay from their top-200 best-score window", async () => {
     const { db } = await setup();
     const [baseScore] = await fixture<OscScore[]>("scores.json");

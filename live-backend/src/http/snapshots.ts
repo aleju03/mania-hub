@@ -103,8 +103,17 @@ export interface HttpContext {
 const REQUEST_STARTED_AT = Symbol("maniaHubRequestStartedAt");
 type TimedRequest = IncomingMessage & { [REQUEST_STARTED_AT]?: number };
 
+// Local libsql runs queries synchronously on the event loop, so one slow
+// handler stalls every other request on the process. Log anything slow so the
+// offender names itself instead of needing a live stall hunt. Streaming
+// endpoints are exempt: their handlers legitimately stay open for as long as
+// the client keeps reading.
+const SLOW_HTTP_LOG_MS = 2_000;
+const SLOW_HTTP_LOG_EXEMPT = new Set(["/api/live", "/api/audio", "/api/hitsounds"]);
+
 export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: HttpContext): Promise<boolean> {
-  (req as TimedRequest)[REQUEST_STARTED_AT] = performance.now();
+  const startedAt = performance.now();
+  (req as TimedRequest)[REQUEST_STARTED_AT] = startedAt;
   try {
     return await routeHttpUnsafe(req, res, ctx);
   } catch (error) {
@@ -113,6 +122,20 @@ export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: 
       return true;
     }
     throw error;
+  } finally {
+    const durationMs = performance.now() - startedAt;
+    if (durationMs >= SLOW_HTTP_LOG_MS) {
+      const pathname = (req.url ?? "/").split("?")[0];
+      if (!SLOW_HTTP_LOG_EXEMPT.has(pathname)) {
+        logWarn("slow_http_request", {
+          path: pathname,
+          method: req.method ?? "",
+          status: res.statusCode,
+          country: /[?&]country=([A-Za-z]{2,6})/.exec(req.url ?? "")?.[1]?.toUpperCase() ?? null,
+          duration_ms: Math.round(durationMs),
+        });
+      }
+    }
   }
 }
 
@@ -1922,14 +1945,34 @@ function parseGoalTargets(
   return { fields };
 }
 
-// Short-lived cache over the assembled status body. A request that lands in a
-// write-lock window (retention delete pass, WAL checkpoint) would otherwise sit
-// in per-statement busy retries until the frontend's 30s abort; serving the
-// last snapshot for a few seconds sidesteps that, and concurrent requests
-// coalesce onto the in-flight build instead of piling on the DB. Keyed by ctx
+// Stale-while-revalidate cache over the assembled status body. A request that
+// lands in a write-lock window (retention delete pass, WAL checkpoint) or
+// behind a slow rebuild would otherwise wait out the whole build and trip the
+// frontend's 30s abort; serving the last resolved body instantly keeps the
+// admin page loading in milliseconds while a single-flight rebuild (started at
+// most once per fresh window) refreshes it in the background. A body older
+// than the stale budget is no longer served — those requests wait on (and
+// coalesce onto) the rebuild, so the data can't lag unboundedly. Keyed by ctx
 // (one long-lived object per server boot) so test contexts don't share entries.
-const STATUS_BODY_TTL_MS = 5_000;
-const statusBodyCacheByCtx = new WeakMap<HttpContext, Map<string, { builtAt: number; promise: Promise<Record<string, unknown>> }>>();
+const STATUS_BODY_FRESH_MS = 5_000;
+const STATUS_BODY_STALE_SERVE_MS = 120_000;
+
+interface StatusBodyCacheEntry {
+  startedAt: number;
+  settled: boolean;
+  promise: Promise<Record<string, unknown>>;
+  body: Record<string, unknown> | null;
+  bodyAt: number;
+}
+
+const statusBodyCacheByCtx = new WeakMap<HttpContext, Map<string, StatusBodyCacheEntry>>();
+
+// Fire-and-forget warm-up for the status body and the expensive count caches
+// underneath it (osu-file / chart-analysis backfill counts), so the first
+// status request after a boot never pays the cold build in the foreground.
+export function warmStatusBodyCache(ctx: HttpContext): void {
+  void statusBody(ctx, {}).catch(() => undefined);
+}
 
 async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: boolean; snapshotCountry?: string } = {}) {
   let cache = statusBodyCacheByCtx.get(ctx);
@@ -1938,14 +1981,48 @@ async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: b
     statusBodyCacheByCtx.set(ctx, cache);
   }
   const key = `${options.includeWorkerActivity ? "admin" : "public"}:${options.snapshotCountry ?? ""}`;
-  const cached = cache.get(key);
-  if (cached && Date.now() - cached.builtAt < STATUS_BODY_TTL_MS) return cached.promise;
-  const promise = buildStatusBody(ctx, options);
-  cache.set(key, { builtAt: Date.now(), promise });
-  promise.catch(() => {
-    if (cache.get(key)?.promise === promise) cache.delete(key);
-  });
-  return promise;
+  const entry = cache.get(key);
+  const now = Date.now();
+  if (entry?.body) {
+    const bodyAge = now - entry.bodyAt;
+    if (bodyAge < STATUS_BODY_FRESH_MS) return entry.body;
+    if (bodyAge < STATUS_BODY_STALE_SERVE_MS) {
+      if (entry.settled && now - entry.startedAt >= STATUS_BODY_FRESH_MS) {
+        void startStatusBodyBuild(ctx, options, entry).catch(() => undefined);
+      }
+      return entry.body;
+    }
+  }
+  // No servable body: wait on the in-flight build if there is one, else build.
+  if (entry && !entry.settled) return entry.promise;
+  const next: StatusBodyCacheEntry = entry ?? {
+    startedAt: now,
+    settled: true,
+    promise: Promise.resolve({}),
+    body: null,
+    bodyAt: 0,
+  };
+  cache.set(key, next);
+  return startStatusBodyBuild(ctx, options, next);
+}
+
+function startStatusBodyBuild(
+  ctx: HttpContext,
+  options: { includeWorkerActivity?: boolean; snapshotCountry?: string },
+  entry: StatusBodyCacheEntry,
+): Promise<Record<string, unknown>> {
+  entry.startedAt = Date.now();
+  entry.settled = false;
+  entry.promise = buildStatusBody(ctx, options)
+    .then((body) => {
+      entry.body = body;
+      entry.bodyAt = Date.now();
+      return body;
+    })
+    .finally(() => {
+      entry.settled = true;
+    });
+  return entry.promise;
 }
 
 async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivity?: boolean; snapshotCountry?: string }): Promise<Record<string, unknown>> {
@@ -2577,36 +2654,125 @@ const MAPS_RESPONSE_CACHE_MAX_ENTRIES = 32;
 const MAPS_PAGE_RESPONSE_CACHE_TTL_MS = 10 * 60_000;
 const MAPS_PAGE_RESPONSE_CACHE_MAX_ENTRIES = 128;
 const MAPS_REFRESHING_RESPONSE_CACHE_TTL_MS = 30_000;
+// How long past its TTL a GLOBAL entry may still be served while a background
+// rebuild replaces it. GLOBAL hydrates are the expensive ones (~10s+ for
+// "core") and, with local libsql running queries synchronously on the event
+// loop, a foreground rebuild stalls every other request on the process — so
+// GLOBAL requests get the previous generation instantly and the rebuild runs
+// once, off the request path. Country entries don't opt in (staleServeMs 0):
+// their builds are sub-second and their responses must pick up farmed-overlay
+// changes immediately.
+const MAPS_GLOBAL_STALE_SERVE_MS = 45 * 60_000;
 
 interface MapsResponseCacheEntry extends PreparedJsonResponse {
   storedAt: number;
   ttlMs: number;
+  staleServeMs: number;
+  freshnessKey: string;
 }
 
-const mapsResponseCache = new Map<string, MapsResponseCacheEntry>();
-const mapsPageResponseCache = new Map<string, MapsResponseCacheEntry>();
+// Per-Db cache state so entries never leak across databases (one process holds
+// a single Db in production; tests spin up a fresh Db each). This matters now
+// that GLOBAL keys are stable across generations instead of embedding
+// refreshed_at.
+interface MapsResponseCacheState {
+  responses: Map<string, MapsResponseCacheEntry>;
+  pageResponses: Map<string, MapsResponseCacheEntry>;
+  inflight: Map<string, Promise<PreparedJsonResponse>>;
+  pageInflight: Map<string, Promise<PreparedJsonResponse>>;
+}
 
-function pruneMapsResponseCache(now: number): void {
-  for (const [key, entry] of mapsResponseCache) {
-    if (now - entry.storedAt > entry.ttlMs) mapsResponseCache.delete(key);
+const mapsResponseCacheByDb = new WeakMap<Db, MapsResponseCacheState>();
+
+function getMapsResponseCacheState(db: Db): MapsResponseCacheState {
+  let state = mapsResponseCacheByDb.get(db);
+  if (!state) {
+    state = { responses: new Map(), pageResponses: new Map(), inflight: new Map(), pageInflight: new Map() };
+    mapsResponseCacheByDb.set(db, state);
+  }
+  return state;
+}
+
+function pruneMapsResponseCacheMap(map: Map<string, MapsResponseCacheEntry>, maxEntries: number, now: number): void {
+  for (const [key, entry] of map) {
+    if (now - entry.storedAt > entry.ttlMs + entry.staleServeMs) map.delete(key);
   }
   // Map iterates in insertion order, so the first key is the oldest entry.
-  while (mapsResponseCache.size > MAPS_RESPONSE_CACHE_MAX_ENTRIES) {
-    const oldest = mapsResponseCache.keys().next().value;
+  while (map.size > maxEntries) {
+    const oldest = map.keys().next().value;
     if (oldest === undefined) break;
-    mapsResponseCache.delete(oldest);
+    map.delete(oldest);
   }
 }
 
-function pruneMapsPageResponseCache(now: number): void {
-  for (const [key, entry] of mapsPageResponseCache) {
-    if (now - entry.storedAt > entry.ttlMs) mapsPageResponseCache.delete(key);
+interface MapsResponseCachedServeOptions {
+  cache: Map<string, MapsResponseCacheEntry>;
+  inflight: Map<string, Promise<PreparedJsonResponse>>;
+  /** Stable cache key; null disables caching (no snapshot row yet). */
+  key: string | null;
+  /**
+   * Generation marker checked against the stored entry. When the key itself
+   * carries every input (country entries), pass a constant "".
+   */
+  freshnessKey: string;
+  /** 0 = never serve a stale/mismatched entry; rebuild in the foreground. */
+  staleServeMs: number;
+  build: () => Promise<{ prepared: PreparedJsonResponse; cacheTtlMs: number | null }>;
+}
+
+async function serveMapsResponseCached(
+  req: IncomingMessage,
+  res: ServerResponse,
+  ctx: HttpContext,
+  options: MapsResponseCachedServeOptions,
+): Promise<void> {
+  const { cache, inflight, key, freshnessKey, staleServeMs, build } = options;
+  if (!key) {
+    writePreparedJson(req, res, ctx, (await build()).prepared);
+    return;
   }
-  while (mapsPageResponseCache.size > MAPS_PAGE_RESPONSE_CACHE_MAX_ENTRIES) {
-    const oldest = mapsPageResponseCache.keys().next().value;
-    if (oldest === undefined) break;
-    mapsPageResponseCache.delete(oldest);
+  const now = Date.now();
+  const entry = cache.get(key);
+  if (entry) {
+    const age = now - entry.storedAt;
+    if (entry.freshnessKey === freshnessKey && age < entry.ttlMs) {
+      writePreparedJson(req, res, ctx, entry);
+      return;
+    }
+    if (staleServeMs > 0 && age < entry.ttlMs + staleServeMs) {
+      // Serve the previous generation immediately; replace it in the
+      // background, single-flight per key so a burst can't stack rebuilds.
+      if (!inflight.has(key)) {
+        void startMapsResponseBuild(options).catch(() => undefined);
+      }
+      writePreparedJson(req, res, ctx, entry);
+      return;
+    }
   }
+  // Coalesce concurrent misses: a burst of visitors right after a rebuild
+  // (or restart) must run the multi-second hydrate once, not once each.
+  const pending = inflight.get(key) ?? startMapsResponseBuild(options);
+  writePreparedJson(req, res, ctx, await pending);
+}
+
+function startMapsResponseBuild(options: MapsResponseCachedServeOptions): Promise<PreparedJsonResponse> {
+  const { cache, inflight, key, freshnessKey, staleServeMs, build } = options;
+  if (!key) return build().then(({ prepared }) => prepared);
+  const promise = build()
+    .then(({ prepared, cacheTtlMs }) => {
+      if (cacheTtlMs != null) {
+        // Delete-then-set keeps Map insertion order meaningful for the
+        // oldest-first size-cap eviction in the prune passes.
+        cache.delete(key);
+        cache.set(key, { ...prepared, storedAt: Date.now(), ttlMs: cacheTtlMs, staleServeMs, freshnessKey });
+      }
+      return prepared;
+    })
+    .finally(() => {
+      if (inflight.get(key) === promise) inflight.delete(key);
+    });
+  inflight.set(key, promise);
+  return promise;
 }
 
 // A global tracker snapshot is identical for every visitor but its query spans
@@ -2811,51 +2977,67 @@ async function handleMapsPageSnapshot(
   country: string,
   query: MapsPageQuery,
 ): Promise<void> {
-  const now = Date.now();
-  pruneMapsPageResponseCache(now);
+  const cacheState = getMapsResponseCacheState(ctx.db);
+  pruneMapsResponseCacheMap(cacheState.pageResponses, MAPS_PAGE_RESPONSE_CACHE_MAX_ENTRIES, Date.now());
   const encoding = negotiateEncoding(req);
+  const normalized = country.toUpperCase();
+  const global = isGlobalCountry(normalized);
 
   const meta = await getMapsSnapshotMeta(ctx.db, country);
+  // On GLOBAL the source/overlay stamps churn with every ingested score but
+  // never reach the response body (the farmed overlay is only applied to
+  // per-country snapshots), so keying on them made every GLOBAL request a
+  // cache miss that re-paid the full payload hydrate — a multi-second
+  // event-loop stall each time. GLOBAL keys therefore carry only the stable
+  // parts, with the row's own refreshed_at (bumped by the periodic global
+  // rebuild) as the entry's generation marker, replaced via stale-serve.
+  // Country responses do depend on the overlay, so their key keeps every
+  // stamp and invalidates the moment one changes, exactly as before.
   const farmedOverlayKey = query.tab === "farmed" ? meta.farmedOverlayUpdatedAt ?? "" : "";
   const sourceRefreshKey = meta.sourceRefreshedAt ?? "";
+  const queryKey = [
+    normalized,
+    query.tab,
+    query.page,
+    query.pageSize,
+    query.key,
+    query.beatmapSort,
+    query.farmedSort,
+    query.dir,
+    query.status,
+    query.pp,
+    query.mod,
+    query.q,
+    encoding ?? "identity",
+  ].join("|");
   const cacheKey = meta.refreshedAt
-    ? [
-        country.toUpperCase(),
-        query.tab,
-        query.page,
-        query.pageSize,
-        query.key,
-        query.beatmapSort,
-        query.farmedSort,
-        query.dir,
-        query.status,
-        query.pp,
-        query.mod,
-        query.q,
-        meta.refreshedAt,
-        sourceRefreshKey,
-        farmedOverlayKey,
-        encoding ?? "identity",
-      ].join("|")
+    ? global
+      ? queryKey
+      : `${queryKey}|${meta.refreshedAt}|${sourceRefreshKey}|${farmedOverlayKey}`
     : null;
 
-  if (cacheKey) {
-    const cached = mapsPageResponseCache.get(cacheKey);
-    if (cached && now - cached.storedAt <= cached.ttlMs) {
-      writePreparedJson(req, res, ctx, cached);
-      return;
-    }
-  }
-
-  const snapshot = await getMapsPageSnapshot(ctx.db, ctx.queue, country, ctx.config.mapsRefreshIntervalMs, query);
-  const status = snapshot.value ? 200 : 202;
-  const prepared = await prepareJsonResponse(status, snapshot, encoding);
-  writePreparedJson(req, res, ctx, prepared);
-
-  if (cacheKey && status === 200 && snapshot.value) {
-    const ttlMs = snapshot.refreshQueued ? MAPS_REFRESHING_RESPONSE_CACHE_TTL_MS : MAPS_PAGE_RESPONSE_CACHE_TTL_MS;
-    mapsPageResponseCache.set(cacheKey, { ...prepared, storedAt: now, ttlMs });
-  }
+  await serveMapsResponseCached(req, res, ctx, {
+    cache: cacheState.pageResponses,
+    inflight: cacheState.pageInflight,
+    key: cacheKey,
+    freshnessKey: global ? meta.refreshedAt ?? "" : "",
+    staleServeMs: global ? MAPS_GLOBAL_STALE_SERVE_MS : 0,
+    build: async () => {
+      const snapshot = await getMapsPageSnapshot(ctx.db, ctx.queue, country, ctx.config.mapsRefreshIntervalMs, query);
+      const status = snapshot.value ? 200 : 202;
+      const prepared = await prepareJsonResponse(status, snapshot, encoding);
+      // Only cache populated 200s — never the cold "still building" 202/null
+      // state. GLOBAL skips the short mid-refresh TTL: it is permanently
+      // "behind sources", so that TTL would degenerate into near-constant
+      // rebuilds; its generation marker invalidates entries instead.
+      const cacheTtlMs = status !== 200 || snapshot.value == null
+        ? null
+        : !global && snapshot.refreshQueued
+          ? MAPS_REFRESHING_RESPONSE_CACHE_TTL_MS
+          : MAPS_PAGE_RESPONSE_CACHE_TTL_MS;
+      return { prepared, cacheTtlMs };
+    },
+  });
 }
 
 async function handleMapsSnapshot(
@@ -2865,74 +3047,54 @@ async function handleMapsSnapshot(
   country: string,
   section: "core" | "random",
 ): Promise<void> {
-  const now = Date.now();
-  pruneMapsResponseCache(now);
+  const cacheState = getMapsResponseCacheState(ctx.db);
+  pruneMapsResponseCacheMap(cacheState.responses, MAPS_RESPONSE_CACHE_MAX_ENTRIES, Date.now());
 
   const encoding = negotiateEncoding(req);
+  const normalized = country.toUpperCase();
+  const global = isGlobalCountry(normalized);
   // Cheap timestamp-only read first: a cache hit must avoid getMapsSnapshot(),
   // which is itself the expensive payload_json parse/hydrate/slice path.
   const meta = await getMapsSnapshotMeta(ctx.db, country);
   // The random slice depends only on this row's pool ids plus beatmapset
-  // metadata, so its key is just refreshed_at. The cross-country source and
-  // farmed-overlay timestamps that key "core" churn with every ingested score
-  // on GLOBAL and would keep the random entry permanently cold.
+  // metadata, so refreshed_at alone marks its generation. Country "core" also
+  // depends on the farmed overlay, so its key keeps the source/overlay stamps
+  // and invalidates the moment either changes. GLOBAL "core" never applies
+  // the overlay, and those stamps churn with every ingested score anywhere —
+  // keying on them kept the GLOBAL entry permanently cold, so every request
+  // re-paid the ~10s+ hydrate of the full global payload, stalling the whole
+  // event loop each time. GLOBAL entries instead invalidate via refreshed_at
+  // and are replaced through stale-serve.
+  const base = `${normalized}|${section}|${encoding ?? "identity"}`;
   const cacheKey = meta.refreshedAt
-    ? section === "random"
-      ? `${country.toUpperCase()}|random|${encoding ?? "identity"}|${meta.refreshedAt}`
-      : `${country.toUpperCase()}|core|${encoding ?? "identity"}|${meta.refreshedAt}|${meta.sourceRefreshedAt ?? ""}|${meta.farmedOverlayUpdatedAt ?? ""}`
+    ? section === "random" || global
+      ? base
+      : `${base}|${meta.refreshedAt}|${meta.sourceRefreshedAt ?? ""}|${meta.farmedOverlayUpdatedAt ?? ""}`
     : null;
 
-  if (cacheKey) {
-    const cached = mapsResponseCache.get(cacheKey);
-    if (cached && now - cached.storedAt <= cached.ttlMs) {
-      writePreparedJson(req, res, ctx, cached);
-      return;
-    }
-    // Coalesce concurrent misses: a burst of visitors right after a rebuild
-    // (or restart) must run the multi-second hydrate once, not once each.
-    const inflight = mapsSnapshotInflight.get(cacheKey);
-    if (inflight) {
-      writePreparedJson(req, res, ctx, await inflight);
-      return;
-    }
-    const build = buildMapsSnapshotResponse(ctx, country, section, encoding, cacheKey, now);
-    mapsSnapshotInflight.set(cacheKey, build);
-    try {
-      writePreparedJson(req, res, ctx, await build);
-    } finally {
-      mapsSnapshotInflight.delete(cacheKey);
-    }
-    return;
-  }
-
-  writePreparedJson(req, res, ctx, await buildMapsSnapshotResponse(ctx, country, section, encoding, null, now));
-}
-
-const mapsSnapshotInflight = new Map<string, Promise<PreparedJsonResponse>>();
-
-async function buildMapsSnapshotResponse(
-  ctx: HttpContext,
-  country: string,
-  section: "core" | "random",
-  encoding: "br" | "gzip" | null,
-  cacheKey: string | null,
-  now: number,
-): Promise<PreparedJsonResponse> {
-  const snapshot = await getMapsSnapshot(ctx.db, ctx.queue, country, ctx.config.mapsRefreshIntervalMs, section);
-  const status = snapshot.value ? 200 : 202;
-  const prepared = await prepareJsonResponse(status, snapshot, encoding);
-
-  // Only cache populated 200s — never the cold "still building" 202/null state,
-  // whose body changes the moment the first real snapshot lands. A "core"
-  // response with a refresh in flight caches briefly; "random" ignores the
-  // refresh state entirely (see the cache comment).
-  if (cacheKey && status === 200 && snapshot.value != null) {
-    const ttlMs = section === "core" && snapshot.refreshQueued
-      ? MAPS_REFRESHING_RESPONSE_CACHE_TTL_MS
-      : MAPS_RESPONSE_CACHE_TTL_MS;
-    mapsResponseCache.set(cacheKey, { ...prepared, storedAt: now, ttlMs });
-  }
-  return prepared;
+  await serveMapsResponseCached(req, res, ctx, {
+    cache: cacheState.responses,
+    inflight: cacheState.inflight,
+    key: cacheKey,
+    freshnessKey: section === "random" || global ? meta.refreshedAt ?? "" : "",
+    staleServeMs: global ? MAPS_GLOBAL_STALE_SERVE_MS : 0,
+    build: async () => {
+      const snapshot = await getMapsSnapshot(ctx.db, ctx.queue, country, ctx.config.mapsRefreshIntervalMs, section);
+      const status = snapshot.value ? 200 : 202;
+      const prepared = await prepareJsonResponse(status, snapshot, encoding);
+      // Only cache populated 200s — never the cold "still building" 202/null
+      // state, whose body changes the moment the first real snapshot lands. A
+      // country "core" response with a refresh in flight caches briefly;
+      // "random" ignores the refresh state and GLOBAL is permanently
+      // mid-refresh, so both take the full TTL (see the cache comment).
+      const cacheTtlMs = status !== 200 || snapshot.value == null
+        ? null
+        : section === "core" && !global && snapshot.refreshQueued
+          ? MAPS_REFRESHING_RESPONSE_CACHE_TTL_MS
+          : MAPS_RESPONSE_CACHE_TTL_MS;
+      return { prepared, cacheTtlMs };
+    },
+  });
 }
 
 function negotiateEncoding(req: IncomingMessage): "br" | "gzip" | null {

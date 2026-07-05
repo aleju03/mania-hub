@@ -927,6 +927,12 @@ async function migrateBeatmapOsuFileCache(db: Db): Promise<void> {
   }
   await db.execute("update beatmap_osu_files set raw_bytes = length(content) where raw_bytes = 0 and content is not null and length(content) > 0");
   await db.execute("update beatmap_osu_files set last_used_at = fetched_at where last_used_at is null");
+  // Covering index for the status/backfill count scans. The table's B-tree
+  // pages are dominated by inline .osu blob content, so a "count the cached
+  // rows" aggregate that touches the table reads gigabytes (a 10-40s scan
+  // that, with synchronous local libsql, stalls the whole event loop); the
+  // same aggregate over this small index runs in milliseconds.
+  await db.execute("create index if not exists idx_beatmap_osu_files_meta on beatmap_osu_files (beatmap_id, compressed_bytes, source, error)");
 }
 
 async function migrateMapSearchIndex(db: Db): Promise<void> {
