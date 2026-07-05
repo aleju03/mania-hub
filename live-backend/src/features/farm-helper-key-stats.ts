@@ -1,8 +1,13 @@
 import type { Db } from "../db.js";
-import { exec, json } from "../db.js";
+import { exec, json, parseJson } from "../db.js";
 import { calculateWeightedPpTotal, nowIso } from "../shared/score.js";
+import { aggregateShape, readChartShapes, type ChartShape } from "./farm-helper-shape.js";
 
 export type FarmHelperKeyCount = 4 | 7;
+
+// Bumped when the seeded row shape changes so an existing DB rebuilds. v2 adds the
+// per-peer shape_json profile (Stage 3).
+const KEY_STATS_VERSION = 2;
 
 export interface FarmHelperKeyStat {
   userId: number;
@@ -16,15 +21,13 @@ const SEEDED_META_PREFIX = "farm_helper_key_stats_seeded:";
 const seedLocks = new WeakMap<Db, Map<FarmHelperKeyCount, Promise<void>>>();
 
 export async function ensureFarmHelperKeyStatsSeeded(db: Db, keyCount: FarmHelperKeyCount): Promise<void> {
-  const existing = (await exec(
-    db,
-    "select 1 from farm_helper_user_key_stats where key_count = ? limit 1",
-    [keyCount],
-  )).rows[0];
-  if (existing) return;
-
-  const seeded = (await exec(db, "select 1 from live_meta where key = ? limit 1", [seededMetaKey(keyCount)])).rows[0];
-  if (seeded) return;
+  // Version-driven: an existing DB seeded at an older version (or the legacy
+  // boolean marker, which reads as 1) rebuilds so shape_json gets populated.
+  const meta = (await exec(db, "select value_json from live_meta where key = ? limit 1", [seededMetaKey(keyCount)])).rows[0];
+  if (meta) {
+    const version = Number(parseJson<number | boolean>(meta.value_json, 0));
+    if (Number.isFinite(version) && version >= KEY_STATS_VERSION) return;
+  }
 
   let locks = seedLocks.get(db);
   if (!locks) seedLocks.set(db, (locks = new Map()));
@@ -281,7 +284,9 @@ export async function refreshFarmHelperKeyStatsForUser(db: Db, userId: number, u
      where s.user_id = ?`,
     [userId],
   )).rows;
-  await writeStats(db, collectStats(rows), updatedAt);
+  const stats = collectStats(rows);
+  const chartShapes = await readChartShapes(db, collectBeatmapIds(stats));
+  await writeStats(db, stats, updatedAt, chartShapes);
 }
 
 async function rebuildFarmHelperKeyStats(db: Db, keyCount: FarmHelperKeyCount): Promise<void> {
@@ -295,15 +300,17 @@ async function rebuildFarmHelperKeyStats(db: Db, keyCount: FarmHelperKeyCount): 
     [keyCount],
   )).rows;
 
+  const stats = collectStats(rows);
+  const chartShapes = await readChartShapes(db, collectBeatmapIds(stats));
   await exec(db, "delete from farm_helper_user_key_stats where key_count = ?", [keyCount]);
-  await writeStats(db, collectStats(rows), nowIso());
+  await writeStats(db, stats, nowIso(), chartShapes);
   const updatedAt = nowIso();
   await exec(
     db,
     `insert into live_meta (key, value_json, updated_at)
      values (?, ?, ?)
      on conflict(key) do update set value_json = excluded.value_json, updated_at = excluded.updated_at`,
-    [seededMetaKey(keyCount), json(true), updatedAt],
+    [seededMetaKey(keyCount), json(KEY_STATS_VERSION), updatedAt],
   );
 }
 
@@ -339,6 +346,7 @@ async function writeStats(
   db: Db,
   stats: Map<FarmHelperKeyCount, Map<number, { scores: Map<number, number>; sourceUpdatedAt: string }>>,
   updatedAt: string,
+  chartShapes: Map<number, ChartShape>,
 ): Promise<void> {
   for (const keyCount of KEY_COUNTS) {
     const byUser = stats.get(keyCount);
@@ -349,13 +357,14 @@ async function writeStats(
       await exec(
         db,
         `insert into farm_helper_user_key_stats
-           (key_count, user_id, weighted_pp, score_count, source_updated_at, updated_at)
-         values (?, ?, ?, ?, ?, ?)
+           (key_count, user_id, weighted_pp, score_count, source_updated_at, updated_at, shape_json)
+         values (?, ?, ?, ?, ?, ?, ?)
          on conflict(key_count, user_id) do update set
            weighted_pp = excluded.weighted_pp,
            score_count = excluded.score_count,
            source_updated_at = excluded.source_updated_at,
-           updated_at = excluded.updated_at`,
+           updated_at = excluded.updated_at,
+           shape_json = excluded.shape_json`,
         [
           keyCount,
           userId,
@@ -363,10 +372,39 @@ async function writeStats(
           values.length,
           userStats.sourceUpdatedAt || updatedAt,
           updatedAt,
+          computeUserShapeJson(userStats.scores, chartShapes),
         ],
       );
     }
   }
+}
+
+// Weight-averages the user's farmed charts' shapes, weighting each by its
+// weighted-pp contribution (0.95^rank * pp) so their strongest farm maps set the
+// profile. Returns null (stored as SQL NULL) when too few charts are covered.
+function computeUserShapeJson(scores: Map<number, number>, chartShapes: Map<number, ChartShape>): string | null {
+  const sorted = [...scores.entries()].sort((a, b) => b[1] - a[1]);
+  const entries: Array<{ shape: ChartShape; weight: number }> = [];
+  sorted.forEach(([beatmapId, pp], rank) => {
+    const shape = chartShapes.get(beatmapId);
+    if (!shape) return;
+    entries.push({ shape, weight: 0.95 ** rank * pp });
+  });
+  const userShape = aggregateShape(entries);
+  if (!userShape) return null;
+  return JSON.stringify({ pat: userShape.pat, msd: userShape.msd, n: userShape.n });
+}
+
+// Collects every distinct farmed beatmap id across the collected stats so their
+// chart shapes can be read in one batch before writing per-user profiles.
+function collectBeatmapIds(stats: Map<FarmHelperKeyCount, Map<number, { scores: Map<number, number>; sourceUpdatedAt: string }>>): number[] {
+  const ids = new Set<number>();
+  for (const byUser of stats.values()) {
+    for (const userStats of byUser.values()) {
+      for (const beatmapId of userStats.scores.keys()) ids.add(beatmapId);
+    }
+  }
+  return [...ids];
 }
 
 // The variant column is chosen from a validated keyCount (4 | 7), so the inlined

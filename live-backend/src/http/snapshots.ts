@@ -789,7 +789,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         keyMode: parseFarmHelperKeyMode(url.searchParams.get("key")),
         view: parseFarmHelperView(url.searchParams.get("view")),
         limit: clampInteger(url.searchParams.get("limit"), 1, FARM_HELPER_MAX_LIMIT, FARM_HELPER_DEFAULT_LIMIT),
-      });
+      }, ctx.queue);
       res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
       sendJson(req, res, ctx, 200, snapshot);
     } catch (error) {

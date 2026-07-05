@@ -91,6 +91,7 @@ export async function migrate(db: Db): Promise<void> {
   await migrateProfileSnapshots(db);
   await migrateMapsFarmedOverlay(db);
   await migrateUserVariantPp(db);
+  await migrateFarmHelperShape(db);
   await migrateApiCallTargets(db);
   await migrateApiRateLimitReservations(db);
   await migratePlayerActivity(db);
@@ -424,6 +425,15 @@ async function migrateUserVariantPp(db: Db): Promise<void> {
           on conflict(key) do update set value_json = excluded.value_json, updated_at = excluded.updated_at`,
     args: [backfillKey, json(true), new Date().toISOString()],
   });
+}
+
+// Per-peer chart-shape profile for the farm helper (Stage 3). Populated by the
+// key-stats seed rebuild and the per-user refresh; the column just needs to exist.
+async function migrateFarmHelperShape(db: Db): Promise<void> {
+  const columns = (await db.execute("pragma table_info(farm_helper_user_key_stats)")).rows.map((row) => String(row.name));
+  if (!columns.includes("shape_json")) {
+    await db.execute("alter table farm_helper_user_key_stats add column shape_json text");
+  }
 }
 
 async function migrateMapsFarmedOverlay(db: Db): Promise<void> {

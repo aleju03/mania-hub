@@ -5,6 +5,9 @@ import { calculateWeightedPpTotal, extractManiaVariantPps, getModAcronyms, getSc
 import type { OscScore } from "../shared/types.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { calibrateProxy, getKeyModePeerPool, type FarmHelperKeyCount } from "./farm-helper-key-stats.js";
+import { aggregateShape, computeShapeWeights, readChartShapes, readPeerShapes, SHAPE_MIN_CHARTS, type ChartShape, type UserShape } from "./farm-helper-shape.js";
+import { enqueueMissingChartAnalyses } from "./chart-analysis.js";
+import type { JobQueue } from "../jobs/queue.js";
 
 // Farm Helper recommends maps a player should farm, ranked by estimated pp gain.
 // The peer pool is GLOBAL: we compare the subject against same-pp players across
@@ -226,6 +229,7 @@ export async function getFarmHelperSnapshot(
   osu: ProfileOsuClient,
   rawKey: string,
   params: FarmHelperParams = {},
+  queue?: JobQueue,
 ): Promise<FarmHelperSnapshot> {
   const requestedKeyMode = params.keyMode ?? "any";
   const view = params.view ?? "gain";
@@ -265,6 +269,7 @@ export async function getFarmHelperSnapshot(
     requestedKeyMode,
     view,
     limit,
+    queue,
   });
 
   cache.set(cacheKey, { snapshot, expiresAt: now + CACHE_TTL_MS });
@@ -358,6 +363,9 @@ async function buildSnapshot(
     // are pre-filtered by the caller, peer farmed rows are filtered by played_at,
     // and all in-memory caches are bypassed. Never set on the HTTP path.
     asOf?: number;
+    // Optional queue for the fire-and-forget self-heal that enqueues chart
+    // analysis for the subject's uncovered top plays. Absent on the backtest path.
+    queue?: JobQueue;
   },
 ): Promise<FarmHelperSnapshot> {
   const isPopular = ctx.view === "popular";
@@ -420,6 +428,12 @@ async function buildSnapshot(
   const { peers, mode: peerMode } = await selectPeerBand(db, ctx.userId, ctx.subjectPp, keyMode, subjectPeerPp, {
     strictKeyMode: keyMode !== "any",
   });
+
+  // Chart-shape weighting: down-weight peers whose farm charts look unlike the
+  // subject's, so an LN main and a jack main at the same pp get different recs.
+  if (peers.length > 0) {
+    await applyShapeWeighting(db, peers, rankedScores, keyMode, subjectModeStatsByKey, ctx.subjectVariantPps, ctx.queue);
+  }
 
   const emptyBand = {
     mode: peerMode,
@@ -936,6 +950,82 @@ function keepBestFarmedScore(target: Map<string, CanonicalFarmedScore>, farmed: 
   if (!existing || farmed.pp > existing.pp || (farmed.pp === existing.pp && farmed.updatedAtMs > existing.updatedAtMs)) {
     target.set(key, farmed);
   }
+}
+
+// Folds a per-peer chart-shape weight into each cohort peer's kernel weights
+// (wD, wB). The subject shape is built from their top plays in the shape keymode;
+// peer shapes come from their stored profiles. Disabled (no-op) when the subject
+// has too few analyzed top plays to form a shape.
+async function applyShapeWeighting(
+  db: Db,
+  peers: WeightedPeer[],
+  rankedScores: OscScore[],
+  keyMode: FarmHelperKeyMode,
+  subjectModeStatsByKey: Record<ConcreteFarmHelperKeyMode, { weightedPp: number }>,
+  subjectVariantPps: Partial<Record<ConcreteFarmHelperKeyMode, number>>,
+  queue?: JobQueue,
+): Promise<void> {
+  const shapeKeyMode = pickShapeKeyMode(keyMode, subjectModeStatsByKey, subjectVariantPps);
+  if (!shapeKeyMode) return;
+
+  const { shape: subjectShape, uncovered } = await computeSubjectShape(db, rankedScores, shapeKeyMode);
+  // Self-heal: enqueue chart analysis for the subject's un-analyzed top plays so
+  // their shape (and coverage) improves on later requests. Fire-and-forget.
+  if (queue && uncovered.length > 0) {
+    void enqueueMissingChartAnalyses(db, queue, uncovered).catch(() => {});
+  }
+  if (!subjectShape) return;
+
+  const userIds = peers.map((p) => p.userId);
+  const peerShapes = await readPeerShapes(db, userIds, keyModeToKeys(shapeKeyMode));
+  const weights = computeShapeWeights(subjectShape, peerShapes, userIds);
+  for (const peer of peers) {
+    const wS = weights.get(peer.userId) ?? 1;
+    peer.wD *= wS;
+    peer.wB *= wS;
+  }
+}
+
+// The keymode whose shape drives weighting: the explicit request, or (for "any")
+// the subject's strongest keymode by variant/proxy pp. Null when the subject has
+// no keymode pp at all.
+function pickShapeKeyMode(
+  keyMode: FarmHelperKeyMode,
+  subjectModeStatsByKey: Record<ConcreteFarmHelperKeyMode, { weightedPp: number }>,
+  subjectVariantPps: Partial<Record<ConcreteFarmHelperKeyMode, number>>,
+): ConcreteFarmHelperKeyMode | null {
+  if (keyMode !== "any") return keyMode;
+  const candidates = FARM_HELPER_CONCRETE_KEY_MODES
+    .map((mode) => ({ mode, pp: subjectVariantPps[mode] ?? subjectModeStatsByKey[mode].weightedPp }))
+    .filter((c) => Number.isFinite(c.pp) && c.pp > 0);
+  if (candidates.length === 0) return null;
+  return candidates.reduce((best, c) => (c.pp > best.pp ? c : best)).mode;
+}
+
+async function computeSubjectShape(
+  db: Db,
+  rankedScores: OscScore[],
+  shapeKeyMode: ConcreteFarmHelperKeyMode,
+): Promise<{ shape: UserShape | null; uncovered: number[] }> {
+  const scored = rankedScores.filter((score) => scoreMatchesKeyMode(score, shapeKeyMode)).slice(0, 100);
+  const beatmapIds = scored
+    .map((score) => Number(score.beatmap_id ?? score.beatmap?.id ?? 0))
+    .filter((id) => Number.isSafeInteger(id) && id > 0);
+  if (beatmapIds.length < SHAPE_MIN_CHARTS) return { shape: null, uncovered: beatmapIds };
+  const chartShapes = await readChartShapes(db, beatmapIds);
+  const entries: Array<{ shape: ChartShape; weight: number }> = [];
+  const uncovered: number[] = [];
+  scored.forEach((score, rank) => {
+    const beatmapId = Number(score.beatmap_id ?? score.beatmap?.id ?? 0);
+    if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0) return;
+    const shape = chartShapes.get(beatmapId);
+    if (!shape) {
+      uncovered.push(beatmapId);
+      return;
+    }
+    entries.push({ shape, weight: 0.95 ** rank * (score.pp as number) });
+  });
+  return { shape: aggregateShape(entries), uncovered };
 }
 
 async function collectAnyOffKeyCandidateSupport(

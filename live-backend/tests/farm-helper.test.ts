@@ -139,6 +139,24 @@ async function insertBeatmapMeta(beatmapId: number, keys = 4, stars = 5): Promis
   );
 }
 
+// Pattern-mix order: jack, stream, jumpstream, handstream, stamina, chordjack, tech, ln.
+async function insertSearchIndex(beatmapId: number, pat: number[], keyCount = 4): Promise<void> {
+  await exec(
+    db,
+    `insert into map_search_index
+       (beatmap_id, beatmapset_id, analysis_version, title, artist, creator, version, search_text,
+        key_count, stars, bpm, length, status, primary_pattern,
+        pat_jack, pat_stream, pat_jumpstream, pat_handstream, pat_stamina, pat_chordjack, pat_tech, pat_ln, updated_at)
+     values (?, ?, 1, ?, 'Artist', 'Mapper', 'Insane', '', ?, 5, 180, 120, 'ranked', 'stream',
+             ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     on conflict(beatmap_id) do update set
+       pat_jack = excluded.pat_jack, pat_stream = excluded.pat_stream, pat_jumpstream = excluded.pat_jumpstream,
+       pat_handstream = excluded.pat_handstream, pat_stamina = excluded.pat_stamina, pat_chordjack = excluded.pat_chordjack,
+       pat_tech = excluded.pat_tech, pat_ln = excluded.pat_ln`,
+    [beatmapId, beatmapId + 100, `Map ${beatmapId}`, keyCount, ...pat, nowIso()],
+  );
+}
+
 async function seedPeers(): Promise<void> {
   const recent = nowIso();
   for (let i = 0; i < 15; i += 1) {
@@ -726,6 +744,54 @@ describe("farm helper", () => {
     } as unknown as Pick<OsuApiClient, "getUser" | "getUserByKey" | "getUserBestScoresWindow">;
 
     await expect(getFarmHelperSnapshot(db, osu, "ghost")).rejects.toBeInstanceOf(FarmHelperUserNotFoundError);
+  });
+
+  it("up-weights peers whose farm charts match the subject's shape (LN vs jack)", async () => {
+    const recent = nowIso();
+    const LN = [0, 0, 0, 0, 0, 0, 0, 1];
+    const JACK = [1, 0, 0, 0, 0, 0, 0, 0];
+    const target = 9700;
+
+    // Subject is an LN main: 10 LN-shaped 4K top plays, pinned to 3000 4K pp.
+    const subjectMaps = Array.from({ length: 10 }, (_, i) => 9800 + i);
+    const bestScores = subjectMaps.map((beatmapId, i) => subjectScore(beatmapId, 480 - i * 5, recent, 4, 5));
+    for (const beatmapId of subjectMaps) {
+      await insertBeatmapMeta(beatmapId, 4, 5);
+      await insertSearchIndex(beatmapId, LN);
+    }
+    await insertBeatmapMeta(target, 4, 5);
+    await insertSearchIndex(target, LN);
+
+    const lnSupport = Array.from({ length: 8 }, (_, i) => 9500 + i);
+    const jackSupport = Array.from({ length: 8 }, (_, i) => 9600 + i);
+    for (const beatmapId of lnSupport) { await insertBeatmapMeta(beatmapId, 4, 5); await insertSearchIndex(beatmapId, LN); }
+    for (const beatmapId of jackSupport) { await insertBeatmapMeta(beatmapId, 4, 5); await insertSearchIndex(beatmapId, JACK); }
+
+    // LN peers farm LN charts and clear the target at 400; jack peers farm jack
+    // charts and clear it at 800. Both cohorts sit near the subject's 4K pp.
+    for (let i = 0; i < 12; i += 1) {
+      const id = 9110 + i;
+      await insertUser(id, 10_000, "CR", `LnPeer${i}`);
+      await insertFarmed("CR", id, target, 400, recent);
+      for (const beatmapId of lnSupport) await insertFarmed("CR", id, beatmapId, 400, recent);
+    }
+    for (let i = 0; i < 12; i += 1) {
+      const id = 9210 + i;
+      await insertUser(id, 10_000, "US", `JackPeer${i}`);
+      await insertFarmed("US", id, target, 800, recent);
+      for (const beatmapId of jackSupport) await insertFarmed("US", id, beatmapId, 400, recent);
+    }
+
+    const osu = makeOsuStub(bestScores, 10_000, { "4k": 3000 });
+    const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" });
+    const rec = snapshot.recs.find((candidate) => candidate.beatmapId === target);
+
+    // The subject is missing the target, so its benchmark is the shape-weighted
+    // quantile of peer pps. LN peers (matching shape) dominate over jack peers,
+    // dragging the benchmark toward the LN cohort's 400 rather than the ~600
+    // midpoint an unweighted cohort would produce.
+    expect(rec).toBeDefined();
+    expect(rec?.peerPpMedian).toBeLessThan(550);
   });
 
   it("computes key-mode peer distance on mode pp, not identical total pp", async () => {
