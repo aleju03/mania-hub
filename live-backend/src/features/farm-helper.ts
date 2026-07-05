@@ -129,6 +129,10 @@ const FEASIBILITY_MSD_MARGIN = 3.0;
 const FEASIBILITY_MIN_ANALYZED_PLAYS = 30;
 const PEER_MIN_COUNT = 3;
 const PEER_MIN_FRACTION = 0.12;
+// A peer only counts toward the peerFraction denominator once it has farmed at
+// least this many maps, so the fraction is not deflated by peers who barely
+// appear in the farm data (the old denominator counted anyone with >= 1 row).
+const MIN_FARMED_FOR_SAMPLE = 5;
 // Popular mode is a browse view, so the popularity floor is lower than the
 // personalized view's and the difficulty/value gates are skipped entirely.
 const POPULAR_PEER_MIN_FRACTION = 0.05;
@@ -201,7 +205,12 @@ interface CandidateAgg {
 
 interface PeerFarmedAggregation {
   byBeatmap: Map<string, CandidateAgg>;
+  // Cohort peers with any farm data (>= 1 row).
   farmDataPeerCount: number;
+  // Cohort peers with a meaningful farm sample (>= MIN_FARMED_FOR_SAMPLE rows):
+  // the peerFraction denominator, both as a count and as a discovery-weight sum.
+  eligiblePeerCount: number;
+  eligibleWdSum: number;
 }
 
 interface CanonicalFarmedScore {
@@ -476,23 +485,27 @@ async function buildSnapshot(
 
   // --- Candidate aggregation from peers' farmed maps ---
   const peerFarmed = await aggregatePeerFarmedMaps(db, peers, asOf);
-  const peerSampleSize = peerFarmed.farmDataPeerCount;
+  // Displayed sample size is the meaningful-sample cohort; the fraction is a
+  // discovery-weight ratio, so distance and shape (folded into wD) both count.
+  const peerSampleSize = peerFarmed.eligiblePeerCount;
   const coveredSnapshot: FarmHelperSnapshot = {
     ...baseSnapshot,
-    peerBand: { ...baseSnapshot.peerBand, farmDataCount: peerSampleSize },
+    peerBand: { ...baseSnapshot.peerBand, farmDataCount: peerFarmed.farmDataPeerCount },
   };
-  if (peerSampleSize === 0) return coveredSnapshot;
+  if (peerFarmed.farmDataPeerCount === 0) return coveredSnapshot;
 
   const minPeerFraction = isPopular ? POPULAR_PEER_MIN_FRACTION : PEER_MIN_FRACTION;
-  const candidates: CandidateAgg[] = [];
+  const candidates: Array<{ agg: CandidateAgg; peerFraction: number }> = [];
   for (const agg of peerFarmed.byBeatmap.values()) {
     if (agg.entries.length < PEER_MIN_COUNT) continue;
-    if (agg.entries.length / peerSampleSize < minPeerFraction) continue;
-    candidates.push(agg);
+    const numeratorWd = agg.entries.reduce((sum, e) => sum + e.wD, 0);
+    const peerFraction = peerFarmed.eligibleWdSum > 0 ? Math.min(1, numeratorWd / peerFarmed.eligibleWdSum) : 0;
+    if (peerFraction < minPeerFraction) continue;
+    candidates.push({ agg, peerFraction });
   }
   if (candidates.length === 0) return coveredSnapshot;
 
-  const beatmapIds = candidates.map((c) => c.beatmapId);
+  const beatmapIds = candidates.map((c) => c.agg.beatmapId);
   const beatmapMeta = await readBeatmapMeta(db, beatmapIds);
   const beatmapsetIds = [...new Set([...beatmapMeta.values()].map((m) => m.beatmapsetId))];
   const beatmapsetMeta = await readBeatmapsetMeta(db, beatmapsetIds);
@@ -505,7 +518,7 @@ async function buildSnapshot(
 
   type ScoredRec = FarmHelperRec & { difficultyFit: number; recencyFit: number };
   const scored: ScoredRec[] = [];
-  for (const agg of candidates) {
+  for (const { agg, peerFraction } of candidates) {
     const meta = beatmapMeta.get(agg.beatmapId);
     if (!meta) continue;
     if (keyMode !== "any" && meta.keys !== (keyMode === "7k" ? 7 : 4)) continue;
@@ -603,7 +616,7 @@ async function buildSnapshot(
       subjectPlayedAt: subject?.endedAt ?? null,
       peerCount: agg.entries.length,
       peerSampleSize,
-      peerFraction: round2(agg.entries.length / peerSampleSize),
+      peerFraction: round2(peerFraction),
       patternFit: patternFit == null ? null : round2(patternFit),
       peerPpMedian: round2(median),
       peerPpP75: round2(p75),
@@ -914,11 +927,11 @@ async function aggregatePeerFarmedMaps(db: Db, peers: WeightedPeer[], asOf?: num
   }
 
   const byBeatmap = new Map<string, CandidateAgg>();
-  const farmDataPeerIds = new Set<number>();
+  const farmedRowsPerPeer = new Map<number, number>();
   for (const farmed of byPeerLane.values()) {
     const weights = weightById.get(farmed.userId);
     if (!weights) continue;
-    farmDataPeerIds.add(farmed.userId);
+    farmedRowsPerPeer.set(farmed.userId, (farmedRowsPerPeer.get(farmed.userId) ?? 0) + 1);
     const key = farmHelperLaneKey(farmed.beatmapId, farmed.speedBucket);
     let agg = byBeatmap.get(key);
     if (!agg) {
@@ -941,7 +954,15 @@ async function aggregatePeerFarmedMaps(db: Db, peers: WeightedPeer[], asOf?: num
     if (farmed.updatedAtMs > agg.latestUpdatedMs) agg.latestUpdatedMs = farmed.updatedAtMs;
     if (farmed.playedAtMs > 0) agg.playedAtMs.push(farmed.playedAtMs);
   }
-  return { byBeatmap, farmDataPeerCount: farmDataPeerIds.size };
+
+  // Denominator = peers with a meaningful farm sample. If none clear the bar (a
+  // tiny cohort where nobody has farmed much), fall back to every farm-data peer
+  // rather than stranding the whole cohort with a zero denominator.
+  const eligibleIds = [...farmedRowsPerPeer].filter(([, count]) => count >= MIN_FARMED_FOR_SAMPLE).map(([userId]) => userId);
+  const denominatorIds = eligibleIds.length > 0 ? eligibleIds : [...farmedRowsPerPeer.keys()];
+  let eligibleWdSum = 0;
+  for (const userId of denominatorIds) eligibleWdSum += weightById.get(userId)?.wD ?? 0;
+  return { byBeatmap, farmDataPeerCount: farmedRowsPerPeer.size, eligiblePeerCount: denominatorIds.length, eligibleWdSum };
 }
 
 function dateMsToIso(ms: number): string | null {
@@ -1125,13 +1146,14 @@ async function collectAnyOffKeyCandidateSupport(
     if (peers.length === 0) continue;
 
     const peerFarmed = await aggregatePeerFarmedMaps(db, peers, asOf);
-    const peerSampleSize = peerFarmed.farmDataPeerCount;
-    if (peerSampleSize === 0) continue;
+    if (peerFarmed.farmDataPeerCount === 0) continue;
 
-    const candidates = [...peerFarmed.byBeatmap.values()].filter((agg) => (
-      agg.entries.length >= PEER_MIN_COUNT
-      && agg.entries.length / peerSampleSize >= PEER_MIN_FRACTION
-    ));
+    const candidates = [...peerFarmed.byBeatmap.values()].filter((agg) => {
+      if (agg.entries.length < PEER_MIN_COUNT) return false;
+      const numeratorWd = agg.entries.reduce((sum, e) => sum + e.wD, 0);
+      const fraction = peerFarmed.eligibleWdSum > 0 ? numeratorWd / peerFarmed.eligibleWdSum : 0;
+      return fraction >= PEER_MIN_FRACTION;
+    });
     if (candidates.length === 0) continue;
 
     const beatmapMeta = await readBeatmapMeta(db, candidates.map((agg) => agg.beatmapId));

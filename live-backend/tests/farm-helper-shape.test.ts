@@ -65,9 +65,9 @@ describe("shapeSimilarity", () => {
     // cosPat = 0, cosMsd = 1 -> average 0.5.
     expect(shapeSimilarity(a, b)).toBeCloseTo(0.5, 6);
     // Only pat comparable -> cosPat only.
-    expect(shapeSimilarity(ln, { pat: JACK_VEC, msd: null, n: 10 })).toBeCloseTo(0, 6);
+    expect(shapeSimilarity(ln, { pat: JACK_VEC, msd: null })).toBeCloseTo(0, 6);
     // Neither comparable -> null.
-    expect(shapeSimilarity({ pat: null, msd: null, n: 0 }, ln)).toBeNull();
+    expect(shapeSimilarity({ pat: null, msd: null }, ln)).toBeNull();
   });
 });
 

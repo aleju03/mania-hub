@@ -1512,6 +1512,10 @@ function farmStatusLabel(rec: LiveFarmHelperRec): string {
 }
 
 function confidence(rec: LiveFarmHelperRec): number {
+  // Prefer the real shape match (patternFit): "how much this chart is your kind
+  // of chart". Older backends without patternFit fall back to the peer-popularity
+  // heuristic so the card still shows something sensible.
+  if (rec.patternFit != null) return Math.round(clampPct(rec.patternFit * 100));
   const peerScore = clampPct(rec.peerFraction * 100);
   const reasonBoost = rec.reason === "missing" ? 14 : rec.reason === "improve" ? 7 : 0;
   const difficultyPenalty = Math.max(0, rec.stars - 6) * 5;

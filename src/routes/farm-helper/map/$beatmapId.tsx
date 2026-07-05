@@ -376,7 +376,7 @@ function FarmMapDetailPage() {
                         <div className="grid min-w-[150px] gap-1.5">
                           <CompactRow label="your score" value={farmContext?.subjectPp != null ? `${formatPp(farmContext.subjectPp)}pp` : "not played"} />
                           <CompactRow label="target" value={farmContext?.benchmark != null ? `${formatPp(farmContext.benchmark)}pp` : "unknown"} />
-                          <CompactRow label="fit" value={farmContext?.peerFraction != null ? `${Math.round(farmContext.peerFraction * 100)}%` : "unknown"} />
+                          <CompactRow label="peers farming" value={farmContext?.peerFraction != null ? `${Math.round(farmContext.peerFraction * 100)}%` : "unknown"} />
                         </div>
                       </div>
                     </section>

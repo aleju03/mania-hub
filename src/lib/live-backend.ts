@@ -972,6 +972,9 @@ export interface LiveFarmHelperRec {
   peerCount: number;
   peerSampleSize: number;
   peerFraction: number;
+  // Shape match between the player and this chart in [0,1], or null when the
+  // backend has no comparable shape. Optional so older builds still parse.
+  patternFit?: number | null;
   peerPpMedian: number;
   peerPpP75: number;
   latestPeerPlayedAt: string | null;
@@ -991,7 +994,7 @@ export interface LiveFarmHelperSnapshot {
   pp: number;
   keyMode: LiveFarmHelperKeyMode;
   view: LiveFarmHelperView;
-  peerBand: { mode: string; count: number; farmDataCount: number; minPp: number; maxPp: number };
+  peerBand: { mode: string; count: number; farmDataCount: number; minPp: number; maxPp: number; effectiveCount?: number };
   totalPotentialPp: number;
   // Optional: older backend builds don't send it. Count of qualifying recs
   // before server-side truncation to the requested limit.

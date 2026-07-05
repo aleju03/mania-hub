@@ -373,20 +373,16 @@ describe("farm helper", () => {
     await insertBeatmapMeta(targetBeatmap, 4, 5);
     for (const beatmapId of supportBeatmaps) await insertBeatmapMeta(beatmapId, 4, 5);
 
-    for (let i = 0; i < 264; i += 1) {
+    // 300 peers at the same key-mode strength (so none are distance-discounted),
+    // all farming the same support set plus the target: exercises the cohort
+    // above the old 250 cap.
+    for (let i = 0; i < 300; i += 1) {
       const id = 3000 + i;
-      await insertUser(id, SUBJECT_PP + i, "CR", `KeyClosePeer${i}`);
+      await insertUser(id, SUBJECT_PP + i, "CR", `KeyPeer${i}`);
       for (let j = 0; j < supportBeatmaps.length; j += 1) {
         await insertFarmed("CR", id, supportBeatmaps[j], supportPps[j] ?? 0, recent);
       }
-    }
-    for (let i = 0; i < 36; i += 1) {
-      const id = 4000 + i;
-      await insertUser(id, SUBJECT_PP + 300 + i, "US", `KeyOuterPeer${i}`);
-      for (let j = 0; j < supportBeatmaps.length; j += 1) {
-        await insertFarmed("US", id, supportBeatmaps[j], supportPps[j] ?? 0, recent);
-      }
-      await insertFarmed("US", id, targetBeatmap, 620, recent);
+      await insertFarmed("CR", id, targetBeatmap, 620, recent);
     }
 
     const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { keyMode: "4k" });
@@ -396,9 +392,10 @@ describe("farm helper", () => {
     expect(snapshot.peerBand.count).toBe(300);
     expect(snapshot.peerBand.farmDataCount).toBe(300);
     expect(rec?.reason).toBe("missing");
-    expect(rec?.peerCount).toBe(36);
+    expect(rec?.peerCount).toBe(300);
     expect(rec?.peerSampleSize).toBe(300);
-    expect(rec?.peerFraction).toBe(0.12);
+    // Every eligible peer farms the target, so it holds the full weight mass.
+    expect(rec?.peerFraction).toBe(1);
   });
 
   it("returns an empty farmer list for a map nobody farmed", async () => {
