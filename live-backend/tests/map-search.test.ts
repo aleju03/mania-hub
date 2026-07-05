@@ -229,26 +229,95 @@ describe("map search index", () => {
     expect(String(row?.status)).toBe("queued");
   });
 
-  it("builds pattern collections deduped by beatmapset", async () => {
+  it("builds dan and MSD bucket collections deduped by beatmapset", async () => {
     const db = await makeDb();
-    // Two diffs of set 10 + one diff of set 20, all stream-primary 4K in the 4-5 bucket.
-    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, cs: 4, stars: 4.2, primary: "stream", patterns: { stream: 0.9 } });
-    await seedMap(db, { beatmapId: 2, beatmapsetId: 10, cs: 4, stars: 4.5, primary: "stream", patterns: { stream: 0.95 } });
-    await seedMap(db, { beatmapId: 3, beatmapsetId: 20, cs: 4, stars: 4.8, primary: "stream", patterns: { stream: 0.85 } });
+    // Six stream-primary 4K sets in the 7-8 dan / 18-22 MSD buckets; set 10 has
+    // two diffs to prove the dedupe. Analysis rows carry rawDan + MSD overall.
+    for (let i = 0; i < 6; i++) {
+      const beatmapId = i + 1;
+      await seedMap(db, { beatmapId, beatmapsetId: (i + 1) * 10, cs: 4, primary: "stream", patterns: { stream: 0.8 + i * 0.01 } });
+      await seedAnalysis(db, beatmapId, { rawDan: 7 + i * 0.2, label: "7", msdValues: { Overall: 19 + i * 0.3 } });
+    }
+    await seedMap(db, { beatmapId: 7, beatmapsetId: 10, cs: 4, primary: "stream", patterns: { stream: 0.99 } });
+    await seedAnalysis(db, 7, { rawDan: 7.1, label: "7", msdValues: { Overall: 19.1 } });
+    // Out-of-bucket (10th dan) and vibro charts must stay out of the 7-8 pack.
+    await seedMap(db, { beatmapId: 8, beatmapsetId: 80, cs: 4, primary: "stream", patterns: { stream: 0.9 } });
+    await seedAnalysis(db, 8, { rawDan: 10, label: "10", msdValues: { Overall: 26 } });
+    await seedMap(db, { beatmapId: 9, beatmapsetId: 90, cs: 4, primary: "stream", patterns: { stream: 0.9 } });
+    await seedAnalysis(db, 9, { rawDan: 7.5, label: "7+", vibro: true, msdValues: { Overall: 20 } });
     await buildAll(db);
     await rebuildMapCollections(db);
 
     const collections = await getMapCollections(db);
-    const stream45 = collections.find((c) => c.id === "pattern:stream:4k:4-5");
-    expect(stream45).toBeTruthy();
-    expect(stream45!.memberCount).toBe(2);
+    const dan78 = collections.find((c) => c.id === "pattern:stream:4k:dan:d7-8");
+    expect(dan78).toBeTruthy();
+    expect(dan78!.memberCount).toBe(6);
+    expect(dan78!.axis).toBe("dan");
+    expect(dan78!.bucketLo).toBe(7);
+    expect(dan78!.bucketHi).toBe(8);
+    expect(dan78!.coverSetIds.length).toBeGreaterThan(0);
 
-    const detail = await getMapCollection(db, "pattern:stream:4k:4-5");
+    const detail = await getMapCollection(db, "pattern:stream:4k:dan:d7-8");
     expect(detail).toBeTruthy();
-    expect(detail!.items.map((item) => item.beatmapsetId)).toEqual([10, 20]);
-    // Highest-metric diff kept for the deduped set.
-    expect(detail!.items[0].beatmapId).toBe(2);
-  });
+    expect(detail!.items.length).toBe(6);
+    // Set 10 contributes exactly one diff, and neither the 10th-dan chart nor
+    // the vibro chart leaks in.
+    const setIds = detail!.items.map((item) => item.beatmapsetId);
+    expect(new Set(setIds).size).toBe(setIds.length);
+    const ids = detail!.items.map((item) => item.beatmapId);
+    expect(ids).not.toContain(8);
+    expect(ids).not.toContain(9);
+    // Easiest-first ordering on the axis value.
+    const dans = detail!.items.map((item) => item.dan!.rawDan);
+    expect([...dans].sort((a, b) => a - b)).toEqual(dans);
+
+    const msd = collections.find((c) => c.id === "pattern:stream:4k:msd:m18-22");
+    expect(msd).toBeTruthy();
+    expect(msd!.axis).toBe("msd");
+    expect(msd!.memberCount).toBe(6);
+  }, 30000);
+
+  it("rotates membership per rebuild while retaining added_at, and drops stale recipes", async () => {
+    // Only fake Date: the rebuild yields on setImmediate between recipes, which
+    // a full fake-timer install would park forever.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2026-07-01T00:00:00Z"));
+      const db = await makeDb();
+      for (let i = 0; i < 6; i++) {
+        const beatmapId = i + 1;
+        await seedMap(db, { beatmapId, beatmapsetId: (i + 1) * 10, cs: 4, primary: "jack", patterns: { jack: 0.9 } });
+        await seedAnalysis(db, beatmapId, { rawDan: 9.2 + i * 0.1, label: "9" });
+      }
+      await buildAll(db);
+      // A leftover pack from the retired star-bucket scheme must vanish.
+      await exec(
+        db,
+        `insert into map_collections (id, recipe_id, kind, title, key_count, sort_order, member_count, refreshed_at, updated_at)
+         values ('pattern:jack:4k:4-5', 'pattern:jack:4k', 'pattern', 'old', 4, 0, 1, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`,
+      );
+      await rebuildMapCollections(db);
+
+      const first = await getMapCollection(db, "pattern:jack:4k:dan:d9-10");
+      expect(first).toBeTruthy();
+      // Fresh pack: every member is part of the first rotation.
+      expect(first!.newBeatmapIds.length).toBe(first!.items.length);
+      const stale = await getMapCollection(db, "pattern:jack:4k:4-5");
+      expect(stale).toBeNull();
+
+      vi.setSystemTime(new Date("2026-07-04T00:00:00Z"));
+      await rebuildMapCollections(db);
+      const second = await getMapCollection(db, "pattern:jack:4k:dan:d9-10");
+      expect(second).toBeTruthy();
+      expect(second!.refreshedAt).not.toBe(first!.refreshedAt);
+      // The pool has only these six sets, so every member is retained and none
+      // counts as new on the second rotation.
+      expect(second!.items.length).toBe(6);
+      expect(second!.newBeatmapIds).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  }, 30000);
 });
 
 describe("map search + collections HTTP", () => {
@@ -256,6 +325,13 @@ describe("map search + collections HTTP", () => {
     const db = await makeDb();
     await seedMap(db, { beatmapId: 1, beatmapsetId: 10, cs: 4, stars: 4.2, primary: "stream", patterns: { stream: 0.95 } });
     await seedMap(db, { beatmapId: 2, beatmapsetId: 20, cs: 7, stars: 5.0, primary: "jack", patterns: { jack: 1 } });
+    // Enough chordjack maps to publish a pack (MIN_MEMBERS); chordjack so the
+    // stream search assertion above stays at one hit.
+    for (let i = 0; i < 5; i++) {
+      const beatmapId = 100 + i;
+      await seedMap(db, { beatmapId, beatmapsetId: 1000 + i * 10, cs: 4, primary: "chordjack", patterns: { chordjack: 0.9 } });
+      await seedAnalysis(db, beatmapId, { rawDan: 7.2 + i * 0.1, label: "7" });
+    }
     await buildAll(db);
     await rebuildMapCollections(db);
 
@@ -280,6 +356,8 @@ describe("map search + collections HTTP", () => {
     expect(Array.isArray(listBody.collections)).toBe(true);
     const first = listBody.collections[0];
     expect(first.memberCount).toBeGreaterThan(0);
+    expect(listBody.rotation.refreshedAt).toBeTruthy();
+    expect(listBody.rotation.nextRefreshAt).toBeTruthy();
 
     const detail = mockRes();
     await routeHttp(mockReq("GET", `/api/snapshots/map-collection?id=${encodeURIComponent(first.id)}`), detail.res, ctx);
@@ -290,7 +368,7 @@ describe("map search + collections HTTP", () => {
     const missing = mockRes();
     await routeHttp(mockReq("GET", "/api/snapshots/map-collection?id=does-not-exist"), missing.res, ctx);
     expect(missing.res.statusCode).toBe(404);
-  });
+  }, 30000);
 });
 
 function httpConfig() {
@@ -301,6 +379,7 @@ function httpConfig() {
     trustProxyHeaders: true,
     publicApiRatePerMinute: 120,
     publicCostlyRatePerMinute: 30,
+    mapCollectionsRefreshIntervalMs: 3 * 24 * 60 * 60 * 1000,
   };
 }
 

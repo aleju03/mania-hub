@@ -3094,20 +3094,18 @@ function searchResultRow(props: {
 }
 
 async function renderMapsSearchOg(request: Request): Promise<Response> {
-  const [[regularFont, heavyFont], pool] = await Promise.all([
-    loadOgFonts(request),
-    fetchMapsOgPoolFromLiveBackend("CR", "favourites"),
-  ]);
+  const [regularFont, heavyFont] = await loadOgFonts(request);
 
-  const rng = mulberry32(hashString("maps-search"));
-  const covers = pool ? shuffle(pool.covers, rng) : [];
-
-  // Illustrative rows: star ratings + keymodes mirror the search tab's
-  // filters (keys, stars); the bars stand in for title/artist.
+  // The real top results for "chordjack 4k" (playcount sort): covers and star
+  // ratings are the genuine maps, so the example search holds up to scrutiny.
+  // The bars still stand in for title/artist, farm-helper style.
   const rows = [
-    { stars: "6.12", keymode: "4K", keymodeColor: "#66ccff", titleBarWidth: 260, subBarWidth: 170, rotate: -1.0, top: 178, left: 440 },
-    { stars: "4.87", keymode: "7K", keymodeColor: "#c98bff", titleBarWidth: 220, subBarWidth: 190, rotate: 0.9, top: 316, left: 470 },
-    { stars: "5.43", keymode: "4K", keymodeColor: "#66ccff", titleBarWidth: 280, subBarWidth: 150, rotate: -0.7, top: 454, left: 450 },
+    // davay rasskazhem (ily Frenchcore Remix) [4K] d-_-b
+    { cover: "https://assets.ppy.sh/beatmaps/2087660/covers/cover@2x.jpg", stars: "5.47", keymode: "4K", keymodeColor: "#66ccff", titleBarWidth: 260, subBarWidth: 170, rotate: -1.0, top: 178, left: 440 },
+    // tp na ame [4K] krip kripochek
+    { cover: "https://assets.ppy.sh/beatmaps/2004998/covers/cover@2x.jpg", stars: "5.26", keymode: "4K", keymodeColor: "#66ccff", titleBarWidth: 220, subBarWidth: 190, rotate: 0.9, top: 316, left: 470 },
+    // 166 - Suzuya Homerarete Nobiru Type Nandesu. [4K] Hydria's Insane
+    { cover: "https://assets.ppy.sh/beatmaps/717834/covers/cover@2x.jpg", stars: "4.04", keymode: "4K", keymodeColor: "#66ccff", titleBarWidth: 280, subBarWidth: 150, rotate: -0.7, top: 454, left: 450 },
   ];
 
   // Filter-chip stickers on the left rail: the real search filters.
@@ -3171,7 +3169,7 @@ async function renderMapsSearchOg(request: Request): Promise<Response> {
         ...rows.map((row, i) =>
           searchResultRow({
             key: `row-${i}`,
-            cover: covers[i] ?? null,
+            cover: row.cover,
             titleBarWidth: row.titleBarWidth,
             subBarWidth: row.subBarWidth,
             stars: row.stars,
@@ -3299,19 +3297,50 @@ function collectionStack(props: {
 }
 
 async function renderMapsCollectionsOg(request: Request): Promise<Response> {
-  const [[regularFont, heavyFont], pool] = await Promise.all([
-    loadOgFonts(request),
-    fetchMapsOgPoolFromLiveBackend("CR", "favourites"),
-  ]);
+  const [regularFont, heavyFont] = await loadOgFonts(request);
 
-  const rng = mulberry32(hashString("maps-collections"));
-  const covers = pool ? shuffle(pool.covers, rng) : [];
-
-  // Real collection groupings: pattern archetype x star bucket.
+  // Three real collections (pattern x keymode x dan bucket), each stack built
+  // from actual member covers of that collection, so the card's example
+  // groupings hold up to scrutiny.
   const stacks = [
-    { label: "jumpstream", bucket: "4-5 stars", top: 200, left: 96 },
-    { label: "chordjack", bucket: "5-6 stars", top: 168, left: 470, badge: "24 maps", badgeColor: "#ff66aa" },
-    { label: "long notes", bucket: "3-4 stars", top: 212, left: 844 },
+    {
+      // Jumpstream · 4K · 7-8 dan
+      label: "jumpstream",
+      bucket: "4K · 7-8 dan",
+      covers: [
+        "https://assets.ppy.sh/beatmaps/420394/covers/cover@2x.jpg",
+        "https://assets.ppy.sh/beatmaps/2203988/covers/cover@2x.jpg",
+        "https://assets.ppy.sh/beatmaps/1629872/covers/cover@2x.jpg",
+      ],
+      top: 200,
+      left: 96,
+    },
+    {
+      // Chordjack · 4K · 9-10 dan
+      label: "chordjack",
+      bucket: "4K · 9-10 dan",
+      covers: [
+        "https://assets.ppy.sh/beatmaps/1108344/covers/cover@2x.jpg",
+        "https://assets.ppy.sh/beatmaps/2024519/covers/cover@2x.jpg",
+        "https://assets.ppy.sh/beatmaps/500905/covers/cover@2x.jpg",
+      ],
+      top: 168,
+      left: 470,
+      badge: "40 maps",
+      badgeColor: "#ff66aa",
+    },
+    {
+      // LN · 7K · 7-8 dan
+      label: "long notes",
+      bucket: "7K · 7-8 dan",
+      covers: [
+        "https://assets.ppy.sh/beatmaps/1192129/covers/cover@2x.jpg",
+        "https://assets.ppy.sh/beatmaps/1052801/covers/cover@2x.jpg",
+        "https://assets.ppy.sh/beatmaps/686472/covers/cover@2x.jpg",
+      ],
+      top: 212,
+      left: 844,
+    },
   ];
 
   const response = new ImageResponse(
@@ -3333,7 +3362,7 @@ async function renderMapsCollectionsOg(request: Request): Promise<Response> {
         ...stacks.flatMap((stack, i) =>
           collectionStack({
             key: `stack-${i}`,
-            covers: [covers[i * 3] ?? null, covers[i * 3 + 1] ?? null, covers[i * 3 + 2] ?? null],
+            covers: stack.covers,
             label: stack.label,
             bucket: stack.bucket,
             badge: stack.badge,
@@ -3346,7 +3375,7 @@ async function renderMapsCollectionsOg(request: Request): Promise<Response> {
         sticker({
           key: "title",
           text: "collections",
-          subText: "MANIA MAPS BY PATTERN AND STARS",
+          subText: "MANIA MAPS BY PATTERN AND DAN",
           fontSize: 58,
           background: "#ff66aa",
           color: "#1a1317",
@@ -3899,7 +3928,7 @@ async function renderDiscordOg(request: Request): Promise<Response> {
             },
           },
           [
-            discordUserRow("user1", "/maniacard"),
+            discordUserRow("user1", "/recent"),
 
             // maniabot reply with embed.
             h(
@@ -3967,7 +3996,7 @@ async function renderDiscordOg(request: Request): Promise<Response> {
                               { key: "stats", style: { display: "flex", flexDirection: "row", alignItems: "center", gap: "16px" } },
                               [
                                 h("img", { key: "grade", src: gradeImgUrl(request, "S"), style: { width: "64px", height: "32px" } }),
-                                h("div", { key: "pp", style: { fontSize: "30px", fontWeight: 900, color: "#ff66aa", lineHeight: "1.0" } }, "+264pp"),
+                                h("div", { key: "pp", style: { fontSize: "30px", fontWeight: 900, color: "#ff66aa", lineHeight: "1.0" } }, "264pp"),
                                 h("div", { key: "acc", style: { fontSize: "22px", color: "#b5bac1", lineHeight: "1.0" } }, "98.12%"),
                               ],
                             ),
@@ -4038,7 +4067,7 @@ async function renderDiscordOg(request: Request): Promise<Response> {
         // Real slash-command chips.
         sticker({
           key: "cmd1",
-          text: "/recent",
+          text: "/maniacard",
           fontSize: 24,
           background: "#f3ece4",
           color: DISCORD_BLURPLE,

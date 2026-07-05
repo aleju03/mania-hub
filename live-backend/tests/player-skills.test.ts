@@ -7,9 +7,11 @@ import {
   PLAYER_SKILLS_VERSION,
   aggregateSsrs,
   computePlayerSkillRatings,
+  estimateWifeAccuracy,
   getPlayerSkillBreakdown,
   getRankedPlayRate,
   ssrGoalForAccuracy,
+  ssrGoalForScore,
 } from "../src/features/player-skills.js";
 import { storeCachedBeatmapFile } from "../src/osu/beatmap-file-cache.js";
 import { JobQueue } from "../src/jobs/queue.js";
@@ -134,6 +136,47 @@ describe("ssrGoalForAccuracy", () => {
   });
 });
 
+describe("estimateWifeAccuracy", () => {
+  it("splits high-accuracy plays by their MAX:300 ratio", () => {
+    const allMax = estimateWifeAccuracy({ perfect: 1000 });
+    const threeToOne = estimateWifeAccuracy({ perfect: 740, great: 247, good: 10, ok: 2, miss: 1 });
+    const oneToOne = estimateWifeAccuracy({ perfect: 494, great: 494, good: 8, ok: 2, meh: 1, miss: 1 });
+    expect(allMax).toBeGreaterThan(0.995);
+    expect(threeToOne).toBeGreaterThan(0.965);
+    expect(threeToOne).toBeLessThan(allMax!);
+    expect(oneToOne).toBeLessThan(threeToOne!);
+    expect(oneToOne).toBeGreaterThan(0.95);
+  });
+
+  it("punishes misses much harder than osu accuracy does", () => {
+    const sloppy = estimateWifeAccuracy({ perfect: 550, great: 380, good: 50, ok: 10, miss: 10 });
+    expect(sloppy).toBeLessThan(0.91);
+    expect(sloppy).toBeGreaterThan(0.85);
+  });
+
+  it("reads stable-style judgement names and rejects empty counts", () => {
+    const stable = estimateWifeAccuracy({ count_geki: 740, count_300: 247, count_katu: 10, count_100: 2, count_miss: 1 });
+    const lazer = estimateWifeAccuracy({ perfect: 740, great: 247, good: 10, ok: 2, miss: 1 });
+    expect(stable).toBe(lazer);
+    expect(estimateWifeAccuracy({})).toBeNull();
+    expect(estimateWifeAccuracy(undefined)).toBeNull();
+  });
+});
+
+describe("ssrGoalForScore", () => {
+  it("lets judgement-backed goals exceed the calc cap, bounded at 0.9975", () => {
+    expect(ssrGoalForScore({ accuracy: 1, statistics: { perfect: 1000 } })).toBe(0.9975);
+    const mixed = ssrGoalForScore({ accuracy: 0.995, statistics: { perfect: 740, great: 247, good: 10, ok: 2, miss: 1 } });
+    expect(mixed).toBeGreaterThan(0.965);
+    expect(mixed).toBeLessThan(0.9975);
+  });
+
+  it("falls back to capped accuracy when a score has no judgement counts", () => {
+    expect(ssrGoalForScore({ accuracy: 0.9999, statistics: {} })).toBe(0.965);
+    expect(ssrGoalForScore({ accuracy: 0.94, statistics: {} })).toBe(0.94);
+  });
+});
+
 describe("aggregateSsrs", () => {
   it("returns 0 for no scores and stays below a lone SSR", () => {
     expect(aggregateSsrs([])).toBe(0);
@@ -190,6 +233,33 @@ describe("computePlayerSkillRatings", () => {
       );
       expect(dt.plays[0].rate).toBe(1.5);
       expect(dt.plays[0].values.Overall).toBeGreaterThan(nomod.plays[0].values.Overall * 1.2);
+    });
+  });
+
+  it("rates above-cap plays by MAX:300 ratio instead of flattening them", async () => {
+    await withDb(async (db) => {
+      await storeCachedBeatmapFile(db, 101, buildStreamBeatmapFile(), { source: "test" });
+
+      // All three plays sit above the 0.965 calc cap in osu accuracy terms;
+      // without the wife estimate + extrapolation they would all rate equal.
+      const scores = [
+        play({ id: 1, beatmap_id: 101, accuracy: 1, statistics: { perfect: 700 } }),
+        play({ id: 2, beatmap_id: 101, accuracy: 0.996, statistics: { perfect: 525, great: 172, good: 2, miss: 1 } }),
+        play({ id: 3, beatmap_id: 101, accuracy: 0.993, statistics: { perfect: 346, great: 346, good: 6, ok: 1, miss: 1 } }),
+      ];
+      const result = await computePlayerSkillRatings(db, failingOsu, scores, []);
+      expect(result.summary.analyzedPlays).toBe(3);
+      const byId = new Map(result.plays.map((entry) => [entry.identity, entry]));
+      const ss = byId.get("official:1")!;
+      const high = byId.get("official:2")!;
+      const mid = byId.get("official:3")!;
+      expect(ss.goal).toBe(0.9975);
+      expect(high.goal).toBeGreaterThan(0.965);
+      expect(ss.values.Overall).toBeGreaterThan(high.values.Overall);
+      expect(high.values.Overall).toBeGreaterThan(mid.values.Overall);
+      // The extrapolation stays a nudge, not a runaway: an SS is worth a few
+      // percent over a capped-goal play, not another difficulty tier.
+      expect(ss.values.Overall).toBeLessThan(mid.values.Overall * 1.2);
     });
   });
 

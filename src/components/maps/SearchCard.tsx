@@ -198,10 +198,13 @@ export function SearchCard({
   entry,
   onOpen,
   preview,
+  isNew = false,
 }: {
   entry: LiveMapSearchEntry;
   onOpen?: (entry: LiveMapSearchEntry) => void;
   preview?: MapPreviewAudio;
+  /** Marks a map that entered its collection on the latest rotation. */
+  isNew?: boolean;
 }) {
   const pill = statusPill(entry.status);
   const diffs = entryDiffs(entry);
@@ -230,8 +233,15 @@ export function SearchCard({
           onError={(e) => { e.currentTarget.style.visibility = "hidden"; }}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-        <span className="absolute top-2 left-2 inline-flex items-center rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold leading-none tabular-nums text-white">
-          {keyModeLabel(diffs)}
+        <span className="absolute top-2 left-2 inline-flex items-center gap-1">
+          <span className="inline-flex items-center rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold leading-none tabular-nums text-white">
+            {keyModeLabel(diffs)}
+          </span>
+          {isNew && (
+            <span className="inline-flex items-center rounded-full bg-osu-pink px-2 py-0.5 text-[10px] font-extrabold uppercase leading-none text-white" title="New in this rotation">
+              new
+            </span>
+          )}
         </span>
         <StarRatingBadge
           stars={multi ? starHi : entry.stars}

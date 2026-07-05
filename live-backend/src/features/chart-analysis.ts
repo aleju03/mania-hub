@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import { parseManiaBeatmap } from "../dan/beatmap-parser.js";
-import { classifyChart, detectLnVibro, type ChartClassification, type DanVerdictHalf } from "../dan/chart-classifier.js";
+import { classifyChart, detectLnVibro, detectRiceVibro, type ChartClassification, type DanVerdictHalf } from "../dan/chart-classifier.js";
 import { computeMsd } from "../dan/msd.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { readConfig } from "../config.js";
@@ -542,15 +542,18 @@ async function readCachedBackfillCounts(db: Db): Promise<ChartBackfillCounts> {
 }
 
 // ── One-shot vibro recompute sweep ───────────────────────────────────────────
-// The LN-vibro detector arrived after the corpus was analyzed, so stored
-// analyses carry vibro=false for staggered LN spam. Re-running every analysis
-// (a CHART_ANALYSIS_VERSION bump) would burn hours of CPU to refresh one
-// boolean; instead a boot-seeded job sweeps holds-heavy candidates from the
-// cached .osu corpus once, patches classification_json and the search index in
-// place, and marks itself done in live_meta. Purely local work, no osu! API.
+// Vibro detectors arrive after the corpus was analyzed (v1: LN vibro; v2: rice
+// vibro for sustained jack hammering and 4K chord walls). Re-running every
+// analysis (a CHART_ANALYSIS_VERSION bump) would burn hours of CPU to refresh
+// one boolean; instead a boot-seeded job sweeps unflagged charts from the
+// cached .osu corpus once per meta-key version, patches classification_json
+// and the search index in place, and marks itself done in live_meta. Purely
+// local work, no osu! API.
 
 export const VIBRO_RECOMPUTE_JOB = "recompute_vibro_sweep";
-const VIBRO_RECOMPUTE_META_KEY = "vibro_recompute_done:v1";
+// v3: v2 was burned by a dev-watch restart that ran the sweep mid-edit with
+// the old holds-heavy candidate filter; the rice sweep needs the full corpus.
+const VIBRO_RECOMPUTE_META_KEY = "vibro_recompute_done:v3";
 const VIBRO_RECOMPUTE_CHUNK = 50;
 
 export interface VibroRecomputeChunkResult {
@@ -573,7 +576,6 @@ export async function recomputeVibroChunk(
      where a.analysis_version = ? and a.status = 'ready'
        and a.beatmap_id > ?
        and coalesce(json_extract(a.classification_json, '$.vibro'), 0) != 1
-       and coalesce(json_extract(a.classification_json, '$.lnRatio'), 0) >= 0.4
      order by a.beatmap_id
      limit ?`,
     [CHART_ANALYSIS_VERSION, Math.max(0, Math.floor(cursor)), Math.max(1, Math.floor(limit))],
@@ -588,7 +590,8 @@ export async function recomputeVibroChunk(
     if (!osuText) continue;
     let vibro = false;
     try {
-      vibro = detectLnVibro(parseManiaBeatmap(osuText));
+      const map = parseManiaBeatmap(osuText);
+      vibro = detectRiceVibro(map) || detectLnVibro(map);
     } catch {
       continue;
     }
@@ -635,6 +638,9 @@ export async function runVibroRecomputeJob(db: Db, queue: JobQueue, payload: { c
       "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
       [VIBRO_RECOMPUTE_META_KEY, json({ finishedAt: now }), now],
     );
+    // Freshly flagged charts must leave the auto-curated packs now, not on the
+    // next scheduled rotation.
+    await queue.enqueue("rebuild_map_collections", "rebuild_map_collections", {}, { priority: -12, replaceDone: true });
     return;
   }
   await enqueueVibroRecompute(queue, result.nextCursor);

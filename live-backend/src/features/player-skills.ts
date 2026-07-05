@@ -8,7 +8,7 @@ import { getCachedBeatmapFile, readCachedBeatmapFile } from "../osu/beatmap-file
 import type { OsuApiClient } from "../osu/client.js";
 import { fetchAndStoreProfileSnapshotShared, getCachedPlayerProfileSnapshot } from "./player-profiles.js";
 import { getScoreIdentity, nowIso } from "../shared/score.js";
-import type { OscScore, OsuMod } from "../shared/types.js";
+import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 
 // Etterna-style player skill ratings from the player's osu! top plays: each
 // play gets MinaCalc SSRs (the MSD skillsets computed at the play's music rate
@@ -25,8 +25,15 @@ import type { OscScore, OsuMod } from "../shared/types.js";
 // Rates come from ranked rate mods only: DT/NC is 1.5x, HT/DC is 0.75x. Custom
 // speed_change values are unranked (no pp), so a top play can never carry one;
 // if one shows up anyway it is skipped rather than mis-rated.
+//
+// The score goal is an estimated Wife3 percent from the play's judgement
+// counts, not raw osu! accuracy: osu! accuracy weighs MAX and 300 identically,
+// so nearly every top play sits at 97%+ and would saturate MinaCalc's 0.965
+// goal cap. The Wife estimate spreads that band back out (MAX:300 ratio is
+// the signal), and goals that still land above the cap get their SSRs
+// log-linearly extrapolated from the calc's own 0.93 -> 0.965 slope.
 
-export const PLAYER_SKILLS_VERSION = 2;
+export const PLAYER_SKILLS_VERSION = 3;
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
 export const SKILL_RATING_SKILLSETS = [
@@ -51,9 +58,34 @@ const PATTERN_RATING_MIN_PLAYS = 3;
 // Overall. A chart only counts toward a pattern it is meaningfully made of.
 const PATTERN_TAG_MIN_SCORE = 0.5;
 const SSR_GOAL_MIN = 0.8;
-// The calc clamps goals above 0.965 itself (Etterna's SSR cap); clamping here
-// too keeps the cached goal values canonical so recomputes can reuse them.
-const SSR_GOAL_CAP = 0.965;
+// The calc clamps goals above 0.965 internally (Etterna's SSR cap); goals
+// above it are served by extrapolating from the calc's slope between the MSD
+// baseline goal and the cap.
+const SSR_CALC_GOAL_CAP = 0.965;
+const SSR_EXTRAPOLATION_BASE_GOAL = 0.93;
+// Ceiling for Wife-estimated goals: an all-MAX play estimates ~0.998, and the
+// log-linear extrapolation should not be trusted much further past the cap
+// than the width of the slope window it was measured on.
+const SSR_GOAL_CAP = 0.9975;
+// Safety bound on the per-chart 0.93->0.965 slope used for extrapolation
+// (measured ~1.07-1.11 on real charts).
+const SSR_EXTRAPOLATION_MAX_SLOPE = 1.2;
+// Expected normalized Wife3 points per osu!mania judgement: Etterna's wife3
+// curve (J4: full points inside 5ms, erf falloff with dev 22.7 crossing zero
+// at 65ms, linear to the -2.75 miss weight at 180ms, all normalized to
+// marvelous = 1) averaged uniformly over each stable OD8 hit window (MAX
+// +-16.5ms, 300 +-40, 200 +-73, 100 +-103, 50 +-127). The MAX vs 300 split is
+// the load-bearing part: osu! accuracy scores both as 100%, Wife3 does not,
+// which is what lets two 99%+ plays with different MAX:300 ratios rate
+// differently.
+const EXPECTED_WIFE3_POINTS = {
+  perfect: 0.9994,
+  great: 0.9654,
+  good: 0.3713,
+  ok: -0.55,
+  meh: -1.1957,
+  miss: -2.75,
+} as const;
 // Etterna's rating_scaler from ScoreManager::CalcPlayerRating.
 const AGGREGATE_RATING_SCALER = 1.04;
 
@@ -132,7 +164,47 @@ function hasCustomSpeed(mod: OsuMod | string, defaultSpeed: number): boolean {
 
 export function ssrGoalForAccuracy(accuracy: number): number {
   const acc = Number.isFinite(accuracy) ? accuracy : 0.93;
-  return Math.round(Math.max(SSR_GOAL_MIN, Math.min(SSR_GOAL_CAP, acc)) * 10_000) / 10_000;
+  return Math.round(Math.max(SSR_GOAL_MIN, Math.min(SSR_CALC_GOAL_CAP, acc)) * 10_000) / 10_000;
+}
+
+/**
+ * Estimated Wife3 percent from a play's judgement counts (lazer or stable
+ * naming), or null when the score carries no counts.
+ */
+export function estimateWifeAccuracy(statistics: OsuScoreStatistics | undefined): number | null {
+  if (!statistics) return null;
+  const counts: Record<keyof typeof EXPECTED_WIFE3_POINTS, number> = {
+    perfect: readCount(statistics.perfect ?? statistics.count_geki),
+    great: readCount(statistics.great ?? statistics.count_300),
+    good: readCount(statistics.good ?? statistics.count_katu),
+    ok: readCount(statistics.ok ?? statistics.count_100),
+    meh: readCount(statistics.meh ?? statistics.count_50),
+    miss: readCount(statistics.miss ?? statistics.count_miss),
+  };
+  let total = 0;
+  let points = 0;
+  for (const [name, count] of Object.entries(counts) as Array<[keyof typeof EXPECTED_WIFE3_POINTS, number]>) {
+    total += count;
+    points += count * EXPECTED_WIFE3_POINTS[name];
+  }
+  return total > 0 ? points / total : null;
+}
+
+function readCount(value: number | undefined): number {
+  const count = Number(value ?? 0);
+  return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+}
+
+/**
+ * The SSR goal for a play: the Wife3 estimate when judgement counts exist,
+ * raw accuracy otherwise. Only the judgement path may exceed the calc's
+ * 0.965 cap; without a MAX:300 breakdown there is no evidence to
+ * differentiate high-accuracy plays on.
+ */
+export function ssrGoalForScore(score: Pick<OscScore, "accuracy" | "statistics">): number {
+  const wife = estimateWifeAccuracy(score.statistics);
+  if (wife == null) return ssrGoalForAccuracy(score.accuracy);
+  return Math.round(Math.max(SSR_GOAL_MIN, Math.min(SSR_GOAL_CAP, wife)) * 10_000) / 10_000;
 }
 
 // Abramowitz & Stegun 7.1.26 (|error| < 1.5e-7, plenty for the aggregation)
@@ -167,6 +239,36 @@ export function aggregateSsrs(values: number[]): number {
     res /= 2;
   }
   return Math.round(rating * AGGREGATE_RATING_SCALER * 100) / 100;
+}
+
+/**
+ * SSRs for a play at `goal`, running the calc once for goals it can serve
+ * directly and extending past its 0.965 cap by extrapolating each skillset
+ * along the chart's own 0.93 -> 0.965 log-slope. Returns the values plus how
+ * many calc runs it took (for event-loop breathing).
+ */
+async function computePlaySsrValues(
+  osuText: string,
+  options: { rate: number; keyCount: number; goal: number },
+): Promise<{ values: Record<string, number>; calcRuns: number } | null> {
+  const { rate, keyCount, goal } = options;
+  const capped = await computeMsd(osuText, { rate, keyCount, scoreGoal: Math.min(goal, SSR_CALC_GOAL_CAP) }).catch(() => null);
+  if (!capped) return null;
+  if (goal <= SSR_CALC_GOAL_CAP) return { values: capped.values, calcRuns: 1 };
+  const base = await computeMsd(osuText, { rate, keyCount, scoreGoal: SSR_EXTRAPOLATION_BASE_GOAL }).catch(() => null);
+  if (!base) return { values: capped.values, calcRuns: 1 };
+  const exponent = (goal - SSR_CALC_GOAL_CAP) / (SSR_CALC_GOAL_CAP - SSR_EXTRAPOLATION_BASE_GOAL);
+  const values: Record<string, number> = {};
+  for (const [name, atCap] of Object.entries(capped.values)) {
+    const atBase = Number(base.values[name] ?? 0);
+    if (!(atCap > 0) || !(atBase > 0) || atCap <= atBase) {
+      values[name] = atCap;
+      continue;
+    }
+    const slope = Math.min(atCap / atBase, SSR_EXTRAPOLATION_MAX_SLOPE);
+    values[name] = atCap * Math.pow(slope, exponent);
+  }
+  return { values, calcRuns: 2 };
 }
 
 function aggregateModeRatings(plays: StoredPlaySsr[]): Record<string, number> {
@@ -260,7 +362,7 @@ export async function computePlayerSkillRatings(
       unsupportedPlays += 1;
       continue;
     }
-    const goal = ssrGoalForAccuracy(score.accuracy);
+    const goal = ssrGoalForScore(score);
     const identity = getScoreIdentity(score);
     const previous = previousByIdentity.get(identity);
     if (previous && previous.beatmapId === beatmapId && previous.rate === rate && previous.goal === goal) {
@@ -284,16 +386,19 @@ export async function computePlayerSkillRatings(
       unsupportedPlays += 1;
       continue;
     }
-    const msd = await computeMsd(osuText, { rate, keyCount, scoreGoal: goal }).catch(() => null);
-    if (!msd) {
+    const ssr = await computePlaySsrValues(osuText, { rate, keyCount, goal });
+    if (!ssr) {
       unsupportedPlays += 1;
       continue;
     }
-    analyzed.push({ identity, beatmapId, keyCount, rate, goal, pp: score.pp ?? 0, values: msd.values, patterns: [] });
+    analyzed.push({ identity, beatmapId, keyCount, rate, goal, pp: score.pp ?? 0, values: ssr.values, patterns: [] });
     // Each calc run is a short synchronous wasm burst; breathe between bursts
     // so a 200-play first run does not starve the event loop.
-    calcRuns += 1;
-    if (calcRuns % 5 === 0) await new Promise<void>((resolve) => setImmediate(resolve));
+    calcRuns += ssr.calcRuns;
+    if (calcRuns >= 5) {
+      calcRuns = 0;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
   }
 
   // Tag lookup runs fresh every compute (never from the SSR cache): analysis

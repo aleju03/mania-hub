@@ -985,7 +985,7 @@ function SkillRatingCardBody({ skills, mode }: { skills: MyDataSkillBreakdown | 
         ))}
       </div>
       <div className="mt-3 text-[10px] text-osu-f1">
-        rated from {mode.analyzedPlays} of your top {skills.totalPlays} plays, DT and HT at their real rate
+        rated from {mode.analyzedPlays} of your top {skills.totalPlays} plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio
         {skills.pendingPlays > 0 ? <> &middot; {skills.pendingPlays} still analyzing</> : null}
       </div>
     </div>

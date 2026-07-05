@@ -1252,14 +1252,31 @@ export interface LiveMapCollectionSummary {
   description: string | null;
   keyCount: number | null;
   pattern: string | null;
+  /** Difficulty axis the pack is bucketed on: dan estimate or MSD overall. */
+  axis: "dan" | "msd" | null;
+  bucketLo: number | null;
+  bucketHi: number | null;
   sortOrder: number;
   coverSetId: number | null;
+  coverSetIds: number[];
   memberCount: number;
   refreshedAt: string;
 }
 
+export interface LiveMapCollectionsRotation {
+  refreshedAt: string | null;
+  nextRefreshAt: string | null;
+  intervalMs: number;
+}
+
+export interface LiveMapCollectionsResult {
+  collections: LiveMapCollectionSummary[];
+  rotation: LiveMapCollectionsRotation | null;
+}
+
 export interface LiveMapCollectionDetail extends LiveMapCollectionSummary {
   items: LiveMapSearchEntry[];
+  newBeatmapIds: number[];
 }
 
 export async function fetchLiveMapSearch(params: LiveMapSearchParams): Promise<LiveMapSearchResult> {
@@ -1285,9 +1302,9 @@ export async function fetchLiveMapSearch(params: LiveMapSearchParams): Promise<L
   return fetchLiveJson(`/api/snapshots/maps-search?${query.toString()}`);
 }
 
-export async function fetchLiveMapCollections(): Promise<LiveMapCollectionSummary[]> {
-  const result = await fetchLiveJson<{ collections: LiveMapCollectionSummary[] }>("/api/snapshots/map-collections");
-  return result.collections ?? [];
+export async function fetchLiveMapCollections(): Promise<LiveMapCollectionsResult> {
+  const result = await fetchLiveJson<LiveMapCollectionsResult>("/api/snapshots/map-collections");
+  return { collections: result.collections ?? [], rotation: result.rotation ?? null };
 }
 
 export async function fetchLiveMapCollection(id: string): Promise<LiveMapCollectionDetail | null> {

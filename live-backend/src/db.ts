@@ -968,6 +968,7 @@ async function migrateMapSearchIndex(db: Db): Promise<void> {
       dan_family text,
       raw_dan real,
       msd_json text,
+      msd_overall real,
       pattern_tags text not null default '',
       vibro integer not null default 0,
       updated_at text not null
@@ -985,6 +986,11 @@ async function migrateMapSearchIndex(db: Db): Promise<void> {
   }
   if (!mapSearchColumns.has("vibro")) {
     await db.execute("alter table map_search_index add column vibro integer not null default 0");
+  }
+  if (!mapSearchColumns.has("msd_overall")) {
+    // Plain real column for MSD-bucketed collections and future search sorts;
+    // backfilled by the r5 BUILD_REVISION re-upsert.
+    await db.execute("alter table map_search_index add column msd_overall real");
   }
   await db.execute("create index if not exists idx_map_search_key_stars on map_search_index(key_count, stars)");
   await db.execute("create index if not exists idx_map_search_key_plays on map_search_index(key_count, play_count desc)");
@@ -1009,9 +1015,10 @@ async function migrateMapSearchIndex(db: Db): Promise<void> {
 }
 
 async function migrateMapCollections(db: Db): Promise<void> {
-  // Auto-generated map packs (pattern x key x star bucket) materialized from
-  // map_search_index by code-defined recipes. Members are deduped by beatmapset
-  // so a pack is not twelve diffs of one mapset. Durable projection.
+  // Auto-generated map packs (pattern x key x difficulty bucket on the dan and
+  // MSD axes) materialized from map_search_index by code-defined recipes.
+  // Members are deduped by beatmapset so a pack is not twelve diffs of one
+  // mapset. Durable projection; membership rotates on every rebuild.
   await db.execute(`
     create table if not exists map_collections (
       id text primary key,
@@ -1020,13 +1027,26 @@ async function migrateMapCollections(db: Db): Promise<void> {
       title text not null,
       description text,
       key_count integer,
+      axis text,
+      bucket_lo real,
+      bucket_hi real,
       sort_order integer not null default 0,
       cover_set_id integer,
+      cover_sets_json text,
       member_count integer not null default 0,
       refreshed_at text not null,
       updated_at text not null
     )
   `);
+  // The dan/MSD bucket columns arrived with the collections rework; add them to
+  // databases created before it (fresh ones get them from the create above).
+  const collectionColumns = new Set((await db.execute("pragma table_info(map_collections)")).rows.map((row) => String(row.name)));
+  if (!collectionColumns.has("axis")) {
+    await db.execute("alter table map_collections add column axis text");
+    await db.execute("alter table map_collections add column bucket_lo real");
+    await db.execute("alter table map_collections add column bucket_hi real");
+    await db.execute("alter table map_collections add column cover_sets_json text");
+  }
   await db.execute(`
     create table if not exists map_collection_members (
       collection_id text not null,

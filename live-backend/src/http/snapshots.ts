@@ -18,7 +18,7 @@ import type { ScoreSpeedBucket } from "../shared/score.js";
 import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalRankingsSnapshot, type GlobalRankingsSort } from "../features/global-rankings.js";
 import { enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRefreshProgress, getMapsSnapshot, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery } from "../features/maps.js";
 import { getMapSearchPage, MAP_SEARCH_PATTERNS, MAP_SEARCH_SUB_PATTERNS, type MapSearchQuery, type MapSearchSort } from "../features/map-search.js";
-import { getMapCollection, getMapCollections } from "../features/map-collections.js";
+import { getMapCollection, getMapCollections, getMapCollectionsRotation } from "../features/map-collections.js";
 import { getPackWallet, listPackCollectionCards, listPackCollectionOwnedUserIds, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, warmProfileSnapshots } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
@@ -678,7 +678,10 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   }
   if (url.pathname === "/api/snapshots/map-collections") {
     res.setHeader("cache-control", "public, max-age=300, stale-while-revalidate=900");
-    sendJson(req, res, ctx, 200, { collections: await getMapCollections(ctx.db) });
+    sendJson(req, res, ctx, 200, {
+      collections: await getMapCollections(ctx.db),
+      rotation: await getMapCollectionsRotation(ctx.db, ctx.config.mapCollectionsRefreshIntervalMs),
+    });
     return true;
   }
   if (url.pathname === "/api/snapshots/map-collection") {

@@ -1022,7 +1022,7 @@ describe("live backend", () => {
     // A handler whose promise never settles (a starved API slot in prod).
     (worker as unknown as { handle: () => Promise<void> }).handle = () => new Promise<void>(() => {});
 
-    await (worker as unknown as { runLaneOnce: (lane: typeof lane) => Promise<void> }).runLaneOnce(lane);
+    await (worker as unknown as { runLaneOnce: (target: typeof lane) => Promise<void> }).runLaneOnce(lane);
 
     const job = (await exec(db, "select status, last_error from jobs where type = 'enrich_user'")).rows[0];
     expect(job.status).toBe("failed");

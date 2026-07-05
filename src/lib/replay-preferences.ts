@@ -68,7 +68,7 @@ export function writeReplayBackgroundDim(dim: number): void {
 // Fills the playfield lanes with a solid black background instead of letting
 // the dimmed cover art show through (the gutters still show the cover).
 export function readReplayBlackPlayfield(): boolean {
-  return readStoredBoolean(REPLAY_BLACK_PLAYFIELD_STORAGE_KEY, false);
+  return readStoredBoolean(REPLAY_BLACK_PLAYFIELD_STORAGE_KEY, true);
 }
 
 export function writeReplayBlackPlayfield(enabled: boolean): void {

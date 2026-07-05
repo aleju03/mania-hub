@@ -14,9 +14,10 @@ import { nowIso } from "../shared/score.js";
 export const MAP_SEARCH_BUILD_JOB = "build_map_search_index";
 // Bump BUILD_REVISION to force a full re-upsert of the index after a fix to how
 // indexed fields are derived (r2: length was stored as the source row's column
-// count for every map; r4: MSD-based 4K primaries, lnRatio LN routing, vibro).
+// count for every map; r4: MSD-based 4K primaries, lnRatio LN routing, vibro;
+// r5: msd_overall column for MSD-bucketed collections).
 // The rebuild is pure DB work, no osu! API.
-const BUILD_REVISION = 4;
+const BUILD_REVISION = 5;
 const BUILD_META_KEY = `map_search_index_built:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
 const BUILD_CURSOR_KEY = `map_search_index_build_cursor:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
 const BUILD_BATCH_SIZE = 400;
@@ -271,6 +272,7 @@ const SOURCE_SELECT = `
     ca.primary_family as ca_dan_family,
     ca.raw_dan as ca_raw_dan,
     ca.msd_json as ca_msd_json,
+    ca.msd_overall as ca_msd_overall,
     ca.classification_json as ca_classification_json,
     json_extract(ca.classification_json, '$.vibro') as ca_vibro
   from beatmap_skill_vectors sv
@@ -338,6 +340,7 @@ function buildIndexUpsert(row: Record<string, unknown>): DbStatement | null {
     row.ca_dan_family == null ? null : String(row.ca_dan_family),
     row.ca_raw_dan == null ? null : realOr(row.ca_raw_dan),
     row.ca_msd_json == null ? null : String(row.ca_msd_json),
+    row.ca_msd_overall == null ? null : realOr(row.ca_msd_overall),
     readPatternTags(row.ca_classification_json),
     intOr(row.ca_vibro) === 1 ? 1 : 0,
     nowIso(),
@@ -348,8 +351,8 @@ function buildIndexUpsert(row: Record<string, unknown>): DbStatement | null {
         search_text, key_count, stars, bpm, length, status, play_count, pass_count, ln_count,
         primary_pattern, pat_jack, pat_stream, pat_jumpstream, pat_handstream, pat_stamina,
         pat_chordjack, pat_tech, pat_ln, covers_json, ranked_date,
-        dan_label, dan_family, raw_dan, msd_json, pattern_tags, vibro, updated_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        dan_label, dan_family, raw_dan, msd_json, msd_overall, pattern_tags, vibro, updated_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       on conflict(beatmap_id) do update set
         beatmapset_id = excluded.beatmapset_id,
         analysis_version = excluded.analysis_version,
@@ -363,7 +366,8 @@ function buildIndexUpsert(row: Record<string, unknown>): DbStatement | null {
         pat_tech = excluded.pat_tech, pat_ln = excluded.pat_ln,
         covers_json = excluded.covers_json, ranked_date = excluded.ranked_date,
         dan_label = excluded.dan_label, dan_family = excluded.dan_family, raw_dan = excluded.raw_dan,
-        msd_json = excluded.msd_json, pattern_tags = excluded.pattern_tags, vibro = excluded.vibro,
+        msd_json = excluded.msd_json, msd_overall = excluded.msd_overall,
+        pattern_tags = excluded.pattern_tags, vibro = excluded.vibro,
         updated_at = excluded.updated_at`,
     args,
   };

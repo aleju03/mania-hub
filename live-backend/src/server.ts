@@ -181,6 +181,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     if (app.config.enableScheduledRefreshes && app.config.enableOsuApiJobs) {
       startRosterScheduler(app.db, app.queue, app.config);
       startMapsScheduler(app.db, app.queue, app.config);
+      startMapCollectionsScheduler(app.db, app.queue, app.config);
       startProfilePoolWarmScheduler(app.db, app.queue);
     }
     startRetentionScheduler(app.db, app.config);
@@ -329,16 +330,25 @@ function startMapsScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: Job
     await enqueueGlobalMapsRefreshIfDue(db, queue, config.mapsRefreshIntervalMs).catch((error) => {
       console.warn("[maps] scheduled global refresh failed", error);
     });
-    // Watchdog the global search index (resumes a build that died mid-chain) and
-    // refresh the auto-generated collections on the same cadence. Neither needs
-    // the osu! API; they read from the search index.
+    // Watchdog the global search index (resumes a build that died mid-chain).
+    // No osu! API involved; it reads from the search index.
     await ensureMapSearchIndexSeeded(db, queue).catch((error) => {
       console.warn("[map-search] watchdog seed failed", error);
-    });
-    await enqueueMapCollectionsRebuildIfDue(db, queue, config.mapsRefreshIntervalMs).catch((error) => {
-      console.warn("[map-collections] scheduled rebuild failed", error);
     });
     setTimeout(tick, config.mapsRefreshIntervalMs).unref();
   };
   setTimeout(tick, 10_000).unref();
+}
+
+// The collections rotation runs on its own (shorter) cadence than the weekly
+// maps tick, so the staleness check polls hourly and enqueues once a rotation
+// ages past the configured interval. Pure DB work off the search index.
+function startMapCollectionsScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: JobQueue, config: ReturnType<typeof readConfig>): void {
+  const tick = async () => {
+    await enqueueMapCollectionsRebuildIfDue(db, queue, config.mapCollectionsRefreshIntervalMs).catch((error) => {
+      console.warn("[map-collections] scheduled rebuild failed", error);
+    });
+    setTimeout(tick, 60 * 60_000).unref();
+  };
+  setTimeout(tick, 20_000).unref();
 }

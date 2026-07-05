@@ -101,6 +101,10 @@ export function ChartPreviewPanel({
   const [chartStartMs, setChartStartMs] = useState(0);
   const [chartPlaybackMs, setChartPlaybackMs] = useState(0);
   const [chartTimeScale, setChartTimeScale] = useState(1);
+  // Rate to apply to selected-file audio. Rate-variant sets render the 1.0x
+  // reference chart, whose own audio file is also 1.0x; playing the selected
+  // diff means speeding both up by the plan's time scale.
+  const [selectedFileAudioRate, setSelectedFileAudioRate] = useState(1);
   const [audioMode, setAudioMode] = useState<ReplayAudioMode>("set-preview");
   const [chartScrub, setChartScrub] = useState<{ ms: number; nonce: number } | null>(null);
   const [seekRevision, setSeekRevision] = useState(0);
@@ -130,7 +134,7 @@ export function ChartPreviewPanel({
     ? getBeatmapAudioUrl(audioBeatmapsetId, previewBeatmap.audioFilename)
     : null;
   const audioUrl = audioMode === "set-preview" ? previewUrl : fullAudioUrl;
-  const audioPlaybackRate = (audioMode === "set-preview" ? selectedDifficultyRate : 1) * previewPlaybackRate;
+  const audioPlaybackRate = (audioMode === "set-preview" ? selectedDifficultyRate : selectedFileAudioRate) * previewPlaybackRate;
   const clockRateDivisor = audioPlaybackRate;
   const preserveAudioPitch = Math.abs(audioPlaybackRate - 1) < 0.001;
   const applyAudioPlaybackSettings = useCallback((audio: HTMLAudioElement) => {
@@ -190,6 +194,7 @@ export function ChartPreviewPanel({
     setChartStartMs(0);
     setChartPlaybackMs(0);
     setChartTimeScale(1);
+    setSelectedFileAudioRate(1);
     setAudioMode("set-preview");
     setChartScrub(null);
     setSeekRevision(0);
@@ -221,6 +226,7 @@ export function ChartPreviewPanel({
       setChartStartMs(0);
       setChartPlaybackMs(0);
       setChartTimeScale(1);
+      setSelectedFileAudioRate(1);
       setAudioMode("set-preview");
       setReady(false);
       audioReadyRef.current = false;
@@ -261,6 +267,10 @@ export function ChartPreviewPanel({
         });
 
         setPreviewBeatmap(plan.beatmap);
+        // Whatever the mode, plan.beatmap's own audio file matches its note
+        // times 1:1, so selected-file playback speeds up by the plan's scale
+        // (the selected rate when the reference chart stands in, else 1).
+        setSelectedFileAudioRate(plan.timeScale);
         const scrubMs = chartScrub?.ms ?? null;
         if (scrubMs != null) {
           let chartEnd = 0;
@@ -271,7 +281,7 @@ export function ChartPreviewPanel({
           const nextStartMs = Math.min(Math.max(0, scrubMs), maxStart);
           setChartStartMs(nextStartMs);
           setChartPlaybackMs(nextStartMs);
-          setChartTimeScale(previewPlaybackRate);
+          setChartTimeScale(plan.timeScale * previewPlaybackRate);
           setAudioMode("selected-file");
         } else {
           setChartStartMs(plan.startTimeMs);

@@ -195,6 +195,90 @@ const LN_VIBRO_MIN_ROWS = 150;
 const LN_VIBRO_MIN_HOLD_RATIO = 0.5;
 const LN_VIBRO_MAX_P75_ROW_GAP_MS = 40;
 
+// Rice vibro measured directly from note timing, because the longjack-cluster
+// detector only fires on clusters labeled "Longjacks": chord-wall vibro reads
+// as chordjack/quadstream and sailed through (Tamania's "impossible vibro pack"
+// indexed as beta++ jack). Thresholds were calibrated against the local corpus:
+// vibro-titled packs vs ranked jack files and celebrated dense charts
+// (Gengaozo Innocence 1.05x, STRONG 280 1.1x, hurricanic 1.2x all stay clean).
+//
+// Tier 1 (any keymode): sustained same-column hammering. A run of 24+ hits with
+// gaps <= 92ms (~11/s) is beyond human jacking when a quarter of the chart's
+// column gaps are that fast; legit speedjack bursts stay under ~16 hits and
+// ranked jack files measure runs <= 6.
+const RICE_VIBRO_MIN_NOTES = 300;
+const RICE_VIBRO_COLUMN_GAP_MS = 92;
+const RICE_VIBRO_COLUMN_MIN_RUN = 24;
+const RICE_VIBRO_COLUMN_MIN_RATIO = 0.25;
+// Tier 2 (4K only): slower chord-wall vibro (~97-105ms quads you shake, not
+// jack). Needs both recurring 4-note wall rows and a chart soaked in fast
+// column repeats; dense legit 4K charts top out at ~3.3% wall rows.
+const RICE_VIBRO_WALL_GAP_MS = 105;
+const RICE_VIBRO_WALL_MIN_ROWS = 12;
+const RICE_VIBRO_WALL_MIN_ROW_RATIO = 0.035;
+const RICE_VIBRO_WALL_COLUMN_GAP_MS = 98;
+const RICE_VIBRO_WALL_COLUMN_MIN_RATIO = 0.4;
+
+function columnFastGaps(map: ManiaBeatmap, cutoffMs: number): { maxRun: number; ratio: number } {
+  const byColumn = new Map<number, number[]>();
+  for (const note of map.notes) {
+    const list = byColumn.get(note.column) ?? [];
+    list.push(note.time);
+    byColumn.set(note.column, list);
+  }
+  let maxRun = 0;
+  let fast = 0;
+  let total = 0;
+  for (const times of byColumn.values()) {
+    times.sort((a, b) => a - b);
+    let run = 0;
+    for (let index = 1; index < times.length; index++) {
+      const gap = times[index] - times[index - 1];
+      if (gap <= 0) continue;
+      total++;
+      if (gap <= cutoffMs) {
+        fast++;
+        run++;
+        if (run > maxRun) maxRun = run;
+      } else {
+        run = 0;
+      }
+    }
+  }
+  return { maxRun, ratio: total > 0 ? fast / total : 0 };
+}
+
+function quadWallRows(map: ManiaBeatmap, cutoffMs: number): { rows: number; ratio: number } {
+  const rowSizes = new Map<number, number>();
+  for (const note of map.notes) rowSizes.set(note.time, (rowSizes.get(note.time) ?? 0) + 1);
+  const times = [...rowSizes.keys()].sort((a, b) => a - b);
+  let rows = 0;
+  for (let index = 1; index < times.length; index++) {
+    const gap = times[index] - times[index - 1];
+    if (gap <= 0 || gap > cutoffMs) continue;
+    if ((rowSizes.get(times[index]) ?? 0) >= 4 && (rowSizes.get(times[index - 1]) ?? 0) >= 4) rows++;
+  }
+  return { rows, ratio: times.length > 1 ? rows / (times.length - 1) : 0 };
+}
+
+export function detectRiceVibro(map: ManiaBeatmap, rate = 1): boolean {
+  if (map.notes.length < RICE_VIBRO_MIN_NOTES) return false;
+
+  const sustained = columnFastGaps(map, RICE_VIBRO_COLUMN_GAP_MS * rate);
+  if (sustained.maxRun >= RICE_VIBRO_COLUMN_MIN_RUN && sustained.ratio >= RICE_VIBRO_COLUMN_MIN_RATIO) return true;
+
+  // The wall tier's chord-size floor assumes 4 columns; wider keymodes carry
+  // legit 4-note chords constantly, so it stays 4K-scoped.
+  if (map.keyCount === 4) {
+    const walls = quadWallRows(map, RICE_VIBRO_WALL_GAP_MS * rate);
+    if (walls.rows >= RICE_VIBRO_WALL_MIN_ROWS && walls.ratio >= RICE_VIBRO_WALL_MIN_ROW_RATIO) {
+      const fast = columnFastGaps(map, RICE_VIBRO_WALL_COLUMN_GAP_MS * rate);
+      if (fast.ratio >= RICE_VIBRO_WALL_COLUMN_MIN_RATIO) return true;
+    }
+  }
+  return false;
+}
+
 export function detectLnVibro(map: ManiaBeatmap, rate = 1): boolean {
   let holds = 0;
   const rowTimes = new Set<number>();
@@ -235,7 +319,8 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
     )
     : false;
   const lnVibro = detectLnVibro(map, rate);
-  const vibro = longjackVibro || lnVibro;
+  const riceVibro = detectRiceVibro(map, rate);
+  const vibro = longjackVibro || lnVibro || riceVibro;
   if (lnVibro) {
     warnings.push("Staggered LN-spam (vibro) detected; LN difficulty is likely overestimated.");
   }
