@@ -50,6 +50,8 @@ import { listSkinPreviewMaps } from "../skins/preview-maps.js";
 import { deleteSkinObjects, getSkinObject, isSkinStorageConfigured, skinKeymodePreviewKey, skinOskKey, skinPreviewKey, skinScreenshotKey, uploadSkinObject } from "../skins/r2.js";
 import { sniffImage, validateOskBuffer } from "../skins/validate-osk.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
+import { COMPRESSIBLE_MIN_BYTES, prepareJsonResponse, type PreparedJsonResponse } from "./prepared-json.js";
+import { getMapsSnapshotThread, MapsSnapshotBuildError, type MapsSnapshotThreadBuildRequest } from "./maps-snapshot-thread.js";
 import { addManualRosterMember, enqueueRosterRefreshes, removeManualRosterMember } from "../rosters/country-rosters.js";
 import { getLocalDbStorage, getStorageBreakdownSnapshot, getTablePreview, runRetention } from "../retention.js";
 import { setUserActive } from "../users.js";
@@ -2522,9 +2524,6 @@ function isDisallowedOrigin(req: IncomingMessage, ctx: Pick<HttpContext, "config
   return !!origin && !ctx.config.allowedOrigins.includes("*") && !ctx.config.allowedOrigins.includes(origin);
 }
 
-// Below this size compression costs more than it saves (sub-MTU payloads).
-const COMPRESSIBLE_MIN_BYTES = 1400;
-
 export function sendJson(req: IncomingMessage, res: ServerResponse, ctx: Pick<HttpContext, "config">, status: number, body: unknown): void {
   sendCors(req, res, ctx);
   res.statusCode = status;
@@ -2561,46 +2560,6 @@ export function sendJson(req: IncomingMessage, res: ServerResponse, ctx: Pick<Ht
   } else {
     gzip(json, { level: 6 }, finish);
   }
-}
-
-// A JSON response that has already been serialized (and possibly compressed),
-// so it can be stored and replayed without redoing that work.
-interface PreparedJsonResponse {
-  status: number;
-  encoding: "br" | "gzip" | null;
-  vary: boolean;
-  body: Buffer;
-}
-
-function compressJsonBuffer(encoding: "br" | "gzip", json: Buffer): Promise<Buffer | null> {
-  return new Promise((resolve) => {
-    const finish = (error: Error | null, compressed: Buffer): void => {
-      resolve(error ? null : compressed);
-    };
-    if (encoding === "br") {
-      brotliCompress(json, { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 5 } }, finish);
-    } else {
-      gzip(json, { level: 6 }, finish);
-    }
-  });
-}
-
-async function prepareJsonResponse(
-  status: number,
-  body: unknown,
-  encoding: "br" | "gzip" | null,
-): Promise<PreparedJsonResponse> {
-  const json = Buffer.from(JSON.stringify(body), "utf8");
-  if (json.length < COMPRESSIBLE_MIN_BYTES) {
-    return { status, encoding: null, vary: false, body: json };
-  }
-  if (!encoding) {
-    return { status, encoding: null, vary: true, body: json };
-  }
-  const compressed = await compressJsonBuffer(encoding, json);
-  return compressed
-    ? { status, encoding, vary: true, body: compressed }
-    : { status, encoding: null, vary: true, body: json };
 }
 
 function writePreparedJson(
@@ -2702,6 +2661,33 @@ function pruneMapsResponseCacheMap(map: Map<string, MapsResponseCacheEntry>, max
     const oldest = map.keys().next().value;
     if (oldest === undefined) break;
     map.delete(oldest);
+  }
+}
+
+// Try to run a GLOBAL maps build on the snapshot worker thread, where its
+// synchronous libsql reads and the ~136MB stringify can't stall the server's
+// event loop. Null means the thread genuinely can't run here (disabled, or it
+// never managed to spawn — e.g. under vitest) and the caller should build
+// inline. Anything that went wrong after the thread has been online (build
+// failure, timeout, crash, cooldown) throws MapsSnapshotBuildError instead:
+// re-running a build that heavy inline on the loop is exactly the stall the
+// thread exists to prevent, and the stale cache keeps serving meanwhile.
+async function buildGlobalMapsResponseOnThread(
+  ctx: HttpContext,
+  request: MapsSnapshotThreadBuildRequest,
+): Promise<PreparedJsonResponse | null> {
+  const thread = getMapsSnapshotThread(ctx.config);
+  if (!thread) return null;
+  if (!thread.available()) {
+    if (thread.inlineFallbackAllowed()) return null;
+    throw new MapsSnapshotBuildError("maps snapshot thread cooling down");
+  }
+  try {
+    return await thread.build(request);
+  } catch (error) {
+    if (error instanceof MapsSnapshotBuildError) throw error;
+    logWarn("maps_snapshot_thread_inline_fallback", errorContext(error));
+    return null;
   }
 }
 
@@ -3023,6 +3009,18 @@ async function handleMapsPageSnapshot(
     freshnessKey: global ? meta.refreshedAt ?? "" : "",
     staleServeMs: global ? MAPS_GLOBAL_STALE_SERVE_MS : 0,
     build: async () => {
+      if (global) {
+        const prepared = await buildGlobalMapsResponseOnThread(ctx, {
+          kind: "maps-page",
+          country,
+          query,
+          encoding,
+          maxAgeMs: ctx.config.mapsRefreshIntervalMs,
+        });
+        if (prepared) {
+          return { prepared, cacheTtlMs: prepared.status === 200 ? MAPS_PAGE_RESPONSE_CACHE_TTL_MS : null };
+        }
+      }
       const snapshot = await getMapsPageSnapshot(ctx.db, ctx.queue, country, ctx.config.mapsRefreshIntervalMs, query);
       const status = snapshot.value ? 200 : 202;
       const prepared = await prepareJsonResponse(status, snapshot, encoding);
@@ -3079,6 +3077,18 @@ async function handleMapsSnapshot(
     freshnessKey: section === "random" || global ? meta.refreshedAt ?? "" : "",
     staleServeMs: global ? MAPS_GLOBAL_STALE_SERVE_MS : 0,
     build: async () => {
+      if (global) {
+        const prepared = await buildGlobalMapsResponseOnThread(ctx, {
+          kind: "maps",
+          country,
+          section,
+          encoding,
+          maxAgeMs: ctx.config.mapsRefreshIntervalMs,
+        });
+        if (prepared) {
+          return { prepared, cacheTtlMs: prepared.status === 200 ? MAPS_RESPONSE_CACHE_TTL_MS : null };
+        }
+      }
       const snapshot = await getMapsSnapshot(ctx.db, ctx.queue, country, ctx.config.mapsRefreshIntervalMs, section);
       const status = snapshot.value ? 200 : 202;
       const prepared = await prepareJsonResponse(status, snapshot, encoding);
