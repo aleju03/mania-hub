@@ -23,6 +23,10 @@ const MEMBER_LIMIT = 40;
 const POOL_OVERFETCH = 400;
 // A pack with almost nothing in its bucket reads as broken; skip publishing it.
 const MIN_MEMBERS = 5;
+// Joke/meme charts are overwhelmingly sub-minute bursts (11s scream maps,
+// sound-effect dumps) and their difficulty estimates are noise; packs are for
+// playable charts, so anything under a minute stays out of every pool.
+const MIN_LENGTH_SECONDS = 60;
 
 const PATTERN_LABELS: Record<string, string> = {
   jack: "Jack",
@@ -264,10 +268,10 @@ export async function rebuildMapCollections(db: Db): Promise<void> {
       db,
       `select beatmap_id, beatmapset_id, covers_json, ${column} as metric, ${axisColumn} as axis_value
        from map_search_index
-       where key_count = ? and primary_pattern = ? and vibro = 0 and ${bucket.clauses.join(" and ")}
+       where key_count = ? and primary_pattern = ? and vibro = 0 and length >= ? and ${bucket.clauses.join(" and ")}
        order by ${column} desc, play_count desc
        limit ?`,
-      [recipe.keyCount, recipe.pattern, ...bucket.args, POOL_OVERFETCH],
+      [recipe.keyCount, recipe.pattern, MIN_LENGTH_SECONDS, ...bucket.args, POOL_OVERFETCH],
     )).rows;
 
     // Dedupe by set (keeping the highest-metric diff), then sample the rotation.

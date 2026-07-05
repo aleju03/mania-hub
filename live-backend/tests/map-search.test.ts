@@ -418,6 +418,26 @@ describe("map search index", () => {
     }
   }, 30000);
 
+  it("keeps sub-minute joke charts out of every pool", async () => {
+    const db = await makeDb();
+    // Five playable-length charts publish the pack; an 11-second scream map in
+    // the same bucket must not enter it even though its scores qualify.
+    for (let i = 0; i < 5; i++) {
+      const beatmapId = i + 1;
+      await seedMap(db, { beatmapId, beatmapsetId: (i + 1) * 10, cs: 4, primary: "jack", patterns: { jack: 0.9 } });
+      await seedAnalysis(db, beatmapId, { rawDan: 9.2 + i * 0.1, label: "9" });
+    }
+    await seedMap(db, { beatmapId: 6, beatmapsetId: 60, cs: 4, totalLength: 11, primary: "jack", patterns: { jack: 0.99 } });
+    await seedAnalysis(db, 6, { rawDan: 9.5, label: "9" });
+    await buildAll(db);
+    await rebuildMapCollections(db);
+
+    const detail = await getMapCollection(db, "pattern:jack:4k:dan:d9-10");
+    expect(detail).toBeTruthy();
+    expect(detail!.items.map((item) => item.beatmapId)).not.toContain(6);
+    expect(detail!.items.length).toBe(5);
+  }, 30000);
+
   it("keeps never-uploaded (?0) covers out of the collage", async () => {
     const db = await makeDb();
     // osu! constructs cover URLs for every set; a "?0" version means no
