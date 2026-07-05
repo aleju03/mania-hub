@@ -212,12 +212,26 @@ const RICE_VIBRO_COLUMN_MIN_RUN = 24;
 const RICE_VIBRO_COLUMN_MIN_RATIO = 0.25;
 // Tier 2 (4K only): slower chord-wall vibro (~97-105ms quads you shake, not
 // jack). Needs both recurring 4-note wall rows and a chart soaked in fast
-// column repeats; dense legit 4K charts top out at ~3.3% wall rows.
+// column repeats; dense legit 4K charts top out at ~3.3% wall rows, and the
+// legit charts that do carry wall rows keep their column repeats at 105ms+,
+// so their <=98ms column ratio measures 0.0 - the 0.32 floor has full margin.
 const RICE_VIBRO_WALL_GAP_MS = 105;
 const RICE_VIBRO_WALL_MIN_ROWS = 12;
 const RICE_VIBRO_WALL_MIN_ROW_RATIO = 0.035;
 const RICE_VIBRO_WALL_COLUMN_GAP_MS = 98;
-const RICE_VIBRO_WALL_COLUMN_MIN_RATIO = 0.4;
+const RICE_VIBRO_WALL_COLUMN_MIN_RATIO = 0.32;
+
+// Tier 3 (any keymode): burst-soak vibro. Packs full of 8-23-note same-column
+// bursts at <=100ms slip tiers 1-2 (runs too short for tier 1, no quad walls
+// for tier 2), but a chart where a fifth of all column gaps sit inside such
+// runs is nothing but bursts. Legit files with occasional speedjack stay far
+// under: the calibration corpus's densest unflagged charts (William Tell EX
+// piano rolls, Gengaozo 7K Z O) measure ~0.13, ranked jack files ~0.
+const RICE_VIBRO_BURST_MIN_NOTES = 200;
+const RICE_VIBRO_BURST_GAP_MS = 100;
+const RICE_VIBRO_BURST_MIN_RUN = 8;
+const RICE_VIBRO_BURST_MIN_RUNS = 4;
+const RICE_VIBRO_BURST_MIN_FRACTION = 0.2;
 
 function columnFastGaps(map: ManiaBeatmap, cutoffMs: number): { maxRun: number; ratio: number } {
   const byColumn = new Map<number, number[]>();
@@ -248,6 +262,40 @@ function columnFastGaps(map: ManiaBeatmap, cutoffMs: number): { maxRun: number; 
   return { maxRun, ratio: total > 0 ? fast / total : 0 };
 }
 
+// Same per-column scan, but measuring how much of the chart sits inside fast
+// runs of at least minRun hits (the tier-3 burst-soak signal).
+function columnBurstRuns(map: ManiaBeatmap, cutoffMs: number, minRun: number): { runs: number; fraction: number } {
+  const byColumn = new Map<number, number[]>();
+  for (const note of map.notes) {
+    const list = byColumn.get(note.column) ?? [];
+    list.push(note.time);
+    byColumn.set(note.column, list);
+  }
+  let runs = 0;
+  let inRuns = 0;
+  let total = 0;
+  for (const times of byColumn.values()) {
+    times.sort((a, b) => a - b);
+    let run = 0;
+    const flush = () => {
+      if (run >= minRun) {
+        runs++;
+        inRuns += run;
+      }
+      run = 0;
+    };
+    for (let index = 1; index < times.length; index++) {
+      const gap = times[index] - times[index - 1];
+      if (gap <= 0) continue;
+      total++;
+      if (gap <= cutoffMs) run++;
+      else flush();
+    }
+    flush();
+  }
+  return { runs, fraction: total > 0 ? inRuns / total : 0 };
+}
+
 function quadWallRows(map: ManiaBeatmap, cutoffMs: number): { rows: number; ratio: number } {
   const rowSizes = new Map<number, number>();
   for (const note of map.notes) rowSizes.set(note.time, (rowSizes.get(note.time) ?? 0) + 1);
@@ -262,19 +310,26 @@ function quadWallRows(map: ManiaBeatmap, cutoffMs: number): { rows: number; rati
 }
 
 export function detectRiceVibro(map: ManiaBeatmap, rate = 1): boolean {
-  if (map.notes.length < RICE_VIBRO_MIN_NOTES) return false;
+  if (map.notes.length >= RICE_VIBRO_MIN_NOTES) {
+    const sustained = columnFastGaps(map, RICE_VIBRO_COLUMN_GAP_MS * rate);
+    if (sustained.maxRun >= RICE_VIBRO_COLUMN_MIN_RUN && sustained.ratio >= RICE_VIBRO_COLUMN_MIN_RATIO) return true;
 
-  const sustained = columnFastGaps(map, RICE_VIBRO_COLUMN_GAP_MS * rate);
-  if (sustained.maxRun >= RICE_VIBRO_COLUMN_MIN_RUN && sustained.ratio >= RICE_VIBRO_COLUMN_MIN_RATIO) return true;
-
-  // The wall tier's chord-size floor assumes 4 columns; wider keymodes carry
-  // legit 4-note chords constantly, so it stays 4K-scoped.
-  if (map.keyCount === 4) {
-    const walls = quadWallRows(map, RICE_VIBRO_WALL_GAP_MS * rate);
-    if (walls.rows >= RICE_VIBRO_WALL_MIN_ROWS && walls.ratio >= RICE_VIBRO_WALL_MIN_ROW_RATIO) {
-      const fast = columnFastGaps(map, RICE_VIBRO_WALL_COLUMN_GAP_MS * rate);
-      if (fast.ratio >= RICE_VIBRO_WALL_COLUMN_MIN_RATIO) return true;
+    // The wall tier's chord-size floor assumes 4 columns; wider keymodes carry
+    // legit 4-note chords constantly, so it stays 4K-scoped.
+    if (map.keyCount === 4) {
+      const walls = quadWallRows(map, RICE_VIBRO_WALL_GAP_MS * rate);
+      if (walls.rows >= RICE_VIBRO_WALL_MIN_ROWS && walls.ratio >= RICE_VIBRO_WALL_MIN_ROW_RATIO) {
+        const fast = columnFastGaps(map, RICE_VIBRO_WALL_COLUMN_GAP_MS * rate);
+        if (fast.ratio >= RICE_VIBRO_WALL_COLUMN_MIN_RATIO) return true;
+      }
     }
+  }
+
+  // Tier 3 has its own lower size floor: TV-size burst packs sit under the
+  // tier-1 floor but their soak fraction is unambiguous.
+  if (map.notes.length >= RICE_VIBRO_BURST_MIN_NOTES) {
+    const bursts = columnBurstRuns(map, RICE_VIBRO_BURST_GAP_MS * rate, RICE_VIBRO_BURST_MIN_RUN);
+    if (bursts.runs >= RICE_VIBRO_BURST_MIN_RUNS && bursts.fraction >= RICE_VIBRO_BURST_MIN_FRACTION) return true;
   }
   return false;
 }

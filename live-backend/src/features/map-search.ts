@@ -886,6 +886,11 @@ function buildWhereParts(query: MapSearchQuery, p = ""): { conditions: string[];
   }
   if (patternClauses.length > 0) {
     conditions.push(`(${patternClauses.join(" or ")})`);
+    // Vibro charts are pattern noise: mash files classify as jack/chordjack/ln
+    // by density alone, so a pattern-scoped search returning them buries the
+    // real charts (same policy as the dan filter). They stay reachable
+    // without the pattern facet.
+    conditions.push(`${p}vibro = 0`);
   }
 
   // danMin/danMax are integer dan levels, inclusive of the whole dan: verdict

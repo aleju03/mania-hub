@@ -124,17 +124,22 @@ function SegmentedControl<T extends string | number>({
 }
 
 function CoverStrip({ setIds, className = "" }: { setIds: number[]; className?: string }) {
-  if (setIds.length === 0) return <div className={`bg-osu-b3/40 ${className}`} />;
+  // Covers can 404 even for sets the backend vetted (backgrounds removed after
+  // upload, e.g. DMCA). Dropping the failed image and re-flowing the collage
+  // beats leaving a blank cell.
+  const [failedSetIds, setFailedSetIds] = useState<ReadonlySet<number>>(() => new Set());
+  const visible = setIds.filter((setId) => !failedSetIds.has(setId));
+  if (visible.length === 0) return <div className={`bg-osu-b3/40 ${className}`} />;
   return (
-    <div className={`grid ${setIds.length >= 3 ? "grid-cols-3" : setIds.length === 2 ? "grid-cols-2" : "grid-cols-1"} gap-px ${className}`}>
-      {setIds.map((setId) => (
+    <div className={`grid ${visible.length >= 3 ? "grid-cols-3" : visible.length === 2 ? "grid-cols-2" : "grid-cols-1"} gap-px ${className}`}>
+      {visible.map((setId) => (
         <img
           key={setId}
           src={`https://assets.ppy.sh/beatmaps/${setId}/covers/card.jpg`}
           alt=""
           className="h-full w-full object-cover opacity-80"
           loading="lazy"
-          onError={(e) => { e.currentTarget.style.visibility = "hidden"; }}
+          onError={() => setFailedSetIds((prev) => new Set(prev).add(setId))}
         />
       ))}
     </div>

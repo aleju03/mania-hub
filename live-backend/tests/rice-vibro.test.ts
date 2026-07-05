@@ -59,13 +59,28 @@ describe("detectRiceVibro", () => {
   });
 
   it("leaves legit speedjack bursts alone (short runs)", () => {
-    // Thirty 12-note bursts at 90ms with 500ms breathers: hard, but jackable.
+    // Six 12-note bursts at 90ms inside an otherwise streamy chart: hard
+    // moments, but the file is not soaked in them (burst gaps stay a small
+    // fraction of all column gaps, the shape real speedjack files measure).
+    const notes: Note[] = [];
+    for (let burst = 0; burst < 6; burst++) {
+      const start = 1000 + burst * 20_000;
+      for (let index = 0; index < 12; index++) notes.push({ column: burst % 4, time: start + index * 90 });
+    }
+    for (let column = 0; column < 4; column++) notes.push(...filler(250, 2500, 450, column));
+    expect(detectRiceVibro(parseManiaBeatmap(buildOsuFile(notes)))).toBe(false);
+  });
+
+  it("flags charts soaked in medium-length bursts (tier 3)", () => {
+    // Thirty 12-note bursts at 90ms with 500ms breathers and little else:
+    // each run is too short for tier 1, but a chart that is nothing but
+    // 11/s same-column bursts plays as vibro (the "4k Vibro Pack" shape).
     const notes: Note[] = [];
     for (let burst = 0; burst < 30; burst++) {
       const start = 1000 + burst * (12 * 90 + 500);
       for (let index = 0; index < 12; index++) notes.push({ column: burst % 4, time: start + index * 90 });
     }
-    expect(detectRiceVibro(parseManiaBeatmap(buildOsuFile(notes)))).toBe(false);
+    expect(detectRiceVibro(parseManiaBeatmap(buildOsuFile(notes)))).toBe(true);
   });
 
   it("flags 4K quad walls hammered at ~96ms (tier 2)", () => {
@@ -91,11 +106,13 @@ describe("detectRiceVibro", () => {
   });
 
   it("keeps the quad-wall tier 4K-scoped", () => {
-    // The same wall shape in 7K: 4-note chords are everyday density there.
+    // Rotating 4-note chords at 96ms rows in 7K: everyday chordjack density
+    // there. Rotation keeps per-column runs short, the way real 7K charts
+    // spread chords across the wider field.
     const notes: Note[] = [];
     for (let row = 0; row < 120; row++) {
       const time = 1000 + row * 96;
-      for (let column = 0; column < 4; column++) notes.push({ column, time });
+      for (let offset = 0; offset < 4; offset++) notes.push({ column: (row + offset) % 7, time });
     }
     expect(detectRiceVibro(parseManiaBeatmap(buildOsuFile(notes, 7)))).toBe(false);
   });

@@ -43,6 +43,7 @@ interface SeedMap {
   rankedDate?: string;
   mode?: string;
   convert?: boolean;
+  covers?: Record<string, string>;
   primary: string;
   patterns: Record<string, number>;
 }
@@ -59,7 +60,7 @@ async function seedMap(db: Db, map: SeedMap): Promise<void> {
       map.artist ?? "Artist",
       map.creator ?? "Mapper",
       map.status ?? "ranked",
-      json({ card: `https://example/${map.beatmapsetId}.jpg` }),
+      json(map.covers ?? { card: `https://example/${map.beatmapsetId}.jpg` }),
       json({ ranked_date: map.rankedDate ?? "2020-01-01T00:00:00Z" }),
       now,
     ],
@@ -263,6 +264,23 @@ describe("map search index", () => {
     expect(await ids("dan<10")).toEqual([]);
   });
 
+  it("excludes vibro charts from pattern-facet searches", async () => {
+    const db = await makeDb();
+    // A mash chart classifies as ln-primary by density alone; the pattern
+    // facet must not surface it, but it stays reachable without the facet.
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, primary: "ln", patterns: { ln: 1 } });
+    await seedAnalysis(db, 1, { rawDan: 12.0, label: "12", vibro: true });
+    await seedMap(db, { beatmapId: 2, beatmapsetId: 20, primary: "ln", patterns: { ln: 0.9 } });
+    await seedAnalysis(db, 2, { rawDan: 8.0, label: "8" });
+    await buildAll(db);
+
+    const lnOnly = await getMapSearchPage(db, { ...baseQuery(), patterns: ["ln"] });
+    expect(lnOnly.items.map((item) => item.beatmapId)).toEqual([2]);
+
+    const all = await getMapSearchPage(db, baseQuery());
+    expect(all.total).toBe(2);
+  });
+
   it("groups results by beatmapset with matching diffs attached", async () => {
     const db = await makeDb();
     await seedMap(db, { beatmapId: 1, beatmapsetId: 10, stars: 4.2, playcount: 500, version: "Hard", primary: "stream", patterns: { stream: 1 } });
@@ -398,6 +416,38 @@ describe("map search index", () => {
     } finally {
       vi.useRealTimers();
     }
+  }, 30000);
+
+  it("keeps never-uploaded (?0) covers out of the collage", async () => {
+    const db = await makeDb();
+    // osu! constructs cover URLs for every set; a "?0" version means no
+    // background was ever uploaded and the asset 404s. Only set 10 has a real
+    // cover, so it must be the only collage candidate.
+    for (let i = 0; i < 5; i++) {
+      const beatmapId = i + 1;
+      const beatmapsetId = (i + 1) * 10;
+      await seedMap(db, {
+        beatmapId,
+        beatmapsetId,
+        cs: 4,
+        primary: "jack",
+        patterns: { jack: 0.9 },
+        covers: {
+          card: `https://assets.ppy.sh/beatmaps/${beatmapsetId}/covers/card.jpg?${i === 0 ? 1662071433 : 0}`,
+          list: `https://assets.ppy.sh/beatmaps/${beatmapsetId}/covers/list.jpg?${i === 0 ? 1662071433 : 0}`,
+        },
+      });
+      await seedAnalysis(db, beatmapId, { rawDan: 9.2 + i * 0.1, label: "9" });
+    }
+    await buildAll(db);
+    await rebuildMapCollections(db);
+
+    const collections = await getMapCollections(db);
+    const pack = collections.find((c) => c.id === "pattern:jack:4k:dan:d9-10");
+    expect(pack).toBeTruthy();
+    expect(pack!.memberCount).toBe(5);
+    expect(pack!.coverSetIds).toEqual([10]);
+    expect(pack!.coverSetId).toBe(10);
   }, 30000);
 });
 

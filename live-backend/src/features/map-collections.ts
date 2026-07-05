@@ -189,12 +189,15 @@ function intOr(value: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-// A set has usable cover art when osu! returned a non-empty covers object for
-// it; coverless sets are skipped so the collage never shows a blank tile.
+// A set has usable cover art when osu! returned covers with a real upload
+// version. The API constructs cover URLs for every set, so a non-empty object
+// proves nothing; a "?0" version query marks a set whose background was never
+// uploaded (the asset 404s and would render as a blank collage tile).
 function hasCoverArt(coversJson: unknown): boolean {
   if (coversJson == null) return false;
   const covers = parseJson<Record<string, string> | null>(String(coversJson), null);
-  return !!covers && typeof covers === "object" && Object.values(covers).some((url) => typeof url === "string" && url.length > 0);
+  if (!covers || typeof covers !== "object") return false;
+  return Object.values(covers).some((url) => typeof url === "string" && url.length > 0 && !url.endsWith("?0"));
 }
 
 // Deterministic PRNG for the rotation sample: same rebuild pass -> same packs,

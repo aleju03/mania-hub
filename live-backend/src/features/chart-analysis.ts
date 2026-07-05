@@ -561,7 +561,9 @@ async function readCachedBackfillCounts(db: Db): Promise<ChartBackfillCounts> {
 export const VIBRO_RECOMPUTE_JOB = "recompute_vibro_sweep";
 // v3: v2 was burned by a dev-watch restart that ran the sweep mid-edit with
 // the old holds-heavy candidate filter; the rice sweep needs the full corpus.
-const VIBRO_RECOMPUTE_META_KEY = "vibro_recompute_done:v3";
+// v4: rice tier 3 (burst-soak vibro) plus the relaxed tier-2 column-ratio
+// floor; the v3 corpus left 8-23-note burst packs unflagged.
+const VIBRO_RECOMPUTE_META_KEY = "vibro_recompute_done:v4";
 const VIBRO_RECOMPUTE_CHUNK = 50;
 
 export interface VibroRecomputeChunkResult {
