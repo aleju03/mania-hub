@@ -10,6 +10,16 @@ export interface FarmHelperKeyStat {
   scoreCount: number;
 }
 
+export interface FarmHelperKeyPeer {
+  userId: number;
+  pp: number;
+  // Farmed-coverage proxy pp (weighted_pp from the key-stats table).
+  modePp: number;
+  // Real osu! per-keymode variant pp, or null when the user's enrichment payload
+  // never carried a variants array (or had no positive pp for this keymode).
+  variantPp: number | null;
+}
+
 const KEY_COUNTS: FarmHelperKeyCount[] = [4, 7];
 const SEEDED_META_PREFIX = "farm_helper_key_stats_seeded:";
 
@@ -76,13 +86,13 @@ export async function queryFarmHelperKeyPeersWithinBand(
   subjectModePp: number,
   band: number,
   minScores: number,
-): Promise<Array<{ userId: number; pp: number; modePp: number }>> {
+): Promise<FarmHelperKeyPeer[]> {
   await ensureFarmHelperKeyStatsSeeded(db, keyCount);
   const minPp = Math.max(0, subjectModePp - band);
   const maxPp = subjectModePp + band;
   const rows = (await exec(
     db,
-    `select s.user_id, u.pp, s.weighted_pp
+    `select s.user_id, u.pp, s.weighted_pp, ${variantPpColumn(keyCount)} as variant_pp
      from farm_helper_user_key_stats s
      join users u on u.user_id = s.user_id
      where s.key_count = ?
@@ -103,11 +113,11 @@ export async function queryFarmHelperKeyPeersByDistance(
   userId: number,
   subjectModePp: number,
   minScores: number,
-): Promise<Array<{ userId: number; pp: number; modePp: number }>> {
+): Promise<FarmHelperKeyPeer[]> {
   await ensureFarmHelperKeyStatsSeeded(db, keyCount);
   const rows = (await exec(
     db,
-    `select s.user_id, u.pp, s.weighted_pp
+    `select s.user_id, u.pp, s.weighted_pp, ${variantPpColumn(keyCount)} as variant_pp
      from farm_helper_user_key_stats s
      join users u on u.user_id = s.user_id
      where s.key_count = ?
@@ -221,13 +231,25 @@ async function writeStats(
   }
 }
 
-function rowsToPeers(rows: Record<string, unknown>[]): Array<{ userId: number; pp: number; modePp: number }> {
+// The variant column is chosen from a validated keyCount (4 | 7), so the inlined
+// column name cannot be attacker-controlled.
+function variantPpColumn(keyCount: FarmHelperKeyCount): string {
+  return keyCount === 7 ? "u.pp_7k" : "u.pp_4k";
+}
+
+function rowsToPeers(rows: Record<string, unknown>[]): FarmHelperKeyPeer[] {
   return rows
-    .map((row) => ({
-      userId: Number(row.user_id),
-      pp: Number(row.pp),
-      modePp: Number(row.weighted_pp),
-    }))
+    .map((row) => {
+      const variantPpRaw = Number(row.variant_pp);
+      return {
+        userId: Number(row.user_id),
+        pp: Number(row.pp),
+        modePp: Number(row.weighted_pp),
+        // Real osu! per-keymode pp when the enrichment payload carried it, else
+        // null; Stage 2 prefers this over the farmed-coverage proxy (modePp).
+        variantPp: row.variant_pp != null && Number.isFinite(variantPpRaw) && variantPpRaw > 0 ? variantPpRaw : null,
+      };
+    })
     .filter((peer) => (
       Number.isSafeInteger(peer.userId)
       && peer.userId > 0

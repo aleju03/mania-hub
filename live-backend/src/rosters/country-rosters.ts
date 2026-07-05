@@ -1,5 +1,5 @@
 import type { Db } from "../db.js";
-import { exec, execBatch, json, type DbStatement } from "../db.js";
+import { exec, execBatch, json, variantPpUpdateStatement, type DbStatement } from "../db.js";
 import { readConfig, type Config } from "../config.js";
 import { getActiveCountryCodes, markCountryRosterRefreshed } from "../countries.js";
 import type { JobQueue } from "../jobs/queue.js";
@@ -72,6 +72,10 @@ export async function refreshCountryRoster(db: Db, osu: Pick<OsuApiClient, "getR
         args: [country, user.id, countryRank, globalRank, pp, now],
       },
     );
+    // Rankings payloads usually omit statistics.variants, so this is normally a
+    // no-op (leaves pp_4k/pp_7k untouched); it only writes when they are present.
+    const variantStatement = variantPpUpdateStatement(user.id, user.statistics);
+    if (variantStatement) statements.push(variantStatement);
     count++;
   }
   await execBatch(db, statements);

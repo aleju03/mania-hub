@@ -1,7 +1,7 @@
 import type { Db } from "./db.js";
 import { readConfig } from "./config.js";
 import { canSeedSnipesForCountry } from "./countries.js";
-import { exec, json, parseJson } from "./db.js";
+import { exec, json, parseJson, writeVariantPps } from "./db.js";
 import { BEATMAP_OSU_FILE_BACKFILL_JOB, runBeatmapOsuFileBackfillJob } from "./features/beatmap-osu-file-backfill.js";
 import { computeBeatmapActivitySkillVector } from "./features/activity.js";
 import { CHART_ANALYSIS_BACKFILL_JOB, CHART_ANALYSIS_JOB, VIBRO_RECOMPUTE_JOB, computeBeatmapChartAnalysis, runChartAnalysisBackfillJob, runVibroRecomputeJob } from "./features/chart-analysis.js";
@@ -432,6 +432,7 @@ export class WorkerRunner {
          on conflict(user_id) do update set username = excluded.username, avatar_url = excluded.avatar_url, country_code = excluded.country_code, profile_json = excluded.profile_json, updated_at = excluded.updated_at`,
         [payload.userId, String(user.username ?? `User ${payload.userId}`), String(user.avatar_url ?? ""), String(user.country_code ?? ""), json(user), nowIso()],
       );
+      await writeVariantPps(this.db, payload.userId, user.statistics);
       await this.processHydratedScores({ userId: payload.userId });
       return;
     }

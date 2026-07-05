@@ -1,7 +1,7 @@
 import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
 import { getPlayerProfileSnapshot } from "./player-profiles.js";
-import { calculateWeightedPpTotal, getModAcronyms, getScoreSpeedBucket, nowIso, type ScoreSpeedBucket } from "../shared/score.js";
+import { calculateWeightedPpTotal, extractManiaVariantPps, getModAcronyms, getScoreSpeedBucket, nowIso, type ScoreSpeedBucket } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { queryFarmHelperKeyPeersByDistance, queryFarmHelperKeyPeersWithinBand, type FarmHelperKeyCount } from "./farm-helper-key-stats.js";
@@ -1096,18 +1096,11 @@ function calculateSubjectKeyModeStats(scores: OscScore[], keyMode: FarmHelperKey
 }
 
 function getVariantPps(statistics: Record<string, unknown>): Partial<Record<"4k" | "7k", number>> {
+  const variantPps = extractManiaVariantPps(statistics);
   const result: Partial<Record<"4k" | "7k", number>> = {};
-  const variants = statistics.variants;
-  if (!Array.isArray(variants)) return result;
-
-  for (const variantValue of variants) {
-    const variant = asRecord(variantValue);
-    if (String(variant.mode ?? "") !== "mania") continue;
-    const keyMode = String(variant.variant ?? "").toLowerCase();
-    if (keyMode !== "4k" && keyMode !== "7k") continue;
-    const pp = numberOr(variant.pp, 0);
-    if (pp > 0) result[keyMode] = pp;
-  }
+  if (!variantPps) return result;
+  if (variantPps.pp4k != null) result["4k"] = variantPps.pp4k;
+  if (variantPps.pp7k != null) result["7k"] = variantPps.pp7k;
   return result;
 }
 
