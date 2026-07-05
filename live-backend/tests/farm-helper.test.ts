@@ -286,7 +286,7 @@ describe("farm helper", () => {
     const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { keyMode: "any" });
     const rec = snapshot.recs.find((candidate) => candidate.beatmapId === targetBeatmap);
 
-    expect(snapshot.peerBand.mode).toBe("pp_band");
+    expect(snapshot.peerBand.mode).toBe("knn");
     expect(snapshot.peerBand.count).toBe(300);
     expect(snapshot.peerBand.farmDataCount).toBe(36);
     expect(rec?.reason).toBe("missing");
@@ -352,7 +352,7 @@ describe("farm helper", () => {
     const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { keyMode: "4k" });
     const rec = snapshot.recs.find((candidate) => candidate.beatmapId === targetBeatmap);
 
-    expect(snapshot.peerBand.mode).toBe("4k_pp_proxy");
+    expect(snapshot.peerBand.mode).toBe("knn");
     expect(snapshot.peerBand.count).toBe(300);
     expect(snapshot.peerBand.farmDataCount).toBe(300);
     expect(rec?.reason).toBe("missing");
@@ -470,7 +470,10 @@ describe("farm helper", () => {
     const osu = makeOsuStub(bestScores, 12_341, { "4k": 12_341, "7k": 2_535 });
     const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "7k" });
 
-    expect(snapshot.peerBand.mode).toBe("7k_nearest");
+    // Strict key-mode requests never fall back to the total-pp pool: the peers
+    // have only a single 7k farmed score (below the proxy score-count floor), so
+    // the cohort is legitimately empty rather than borrowing total-pp neighbours.
+    expect(snapshot.peerBand.mode).toBe("knn");
     expect(snapshot.peerBand.count).toBe(0);
     expect(snapshot.recs).toEqual([]);
   });
@@ -565,7 +568,7 @@ describe("farm helper", () => {
     const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "7k" });
     const rec = snapshot.recs.find((candidate) => candidate.beatmapId === targetBeatmap);
 
-    expect(snapshot.peerBand.mode).toMatch(/^7k_pp_proxy/);
+    expect(snapshot.peerBand.mode).toMatch(/^knn/);
     expect(rec?.peerCount).toBe(12);
     expect(rec?.topPeers.every((peer) => peer.username.startsWith("Strong7kPeer"))).toBe(true);
     expect(rec?.topPeers.some((peer) => peer.username.startsWith("Low7kPeer"))).toBe(false);
@@ -603,7 +606,7 @@ describe("farm helper", () => {
     const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" });
     const rec = snapshot.recs.find((candidate) => candidate.beatmapId === targetBeatmap);
 
-    expect(snapshot.peerBand.mode).toMatch(/^4k_pp_proxy/);
+    expect(snapshot.peerBand.mode).toMatch(/^knn/);
     expect(rec?.peerCount).toBe(12);
     expect(rec?.benchmarkPp).toBe(430);
     expect(rec?.topPeers.every((peer) => peer.username.startsWith("KeyPeer"))).toBe(true);
@@ -650,7 +653,7 @@ describe("farm helper", () => {
 
     // The Any card samples the total-pp band -> the high-total-pp cohort.
     const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "any" });
-    expect(snapshot.peerBand.mode).toBe("pp_band");
+    expect(snapshot.peerBand.mode).toBe("knn");
     expect(snapshot.peerBand.count).toBe(12);
     expect(snapshot.peerBand.farmDataCount).toBe(12);
 
@@ -723,6 +726,48 @@ describe("farm helper", () => {
     } as unknown as Pick<OsuApiClient, "getUser" | "getUserByKey" | "getUserBestScoresWindow">;
 
     await expect(getFarmHelperSnapshot(db, osu, "ghost")).rejects.toBeInstanceOf(FarmHelperUserNotFoundError);
+  });
+
+  it("computes key-mode peer distance on mode pp, not identical total pp", async () => {
+    const recent = nowIso();
+    const targetBeatmap = 90;
+    const supportBeatmaps = Array.from({ length: 8 }, (_, i) => 9000 + i);
+    // Subject is a 4K player pinned to a 3000 4K variant pp; total pp is 10000,
+    // the SAME total as every seeded peer below.
+    const bestScores: OscScore[] = [
+      subjectScore(8999, 500, recent, 4, 5),
+      subjectScore(targetBeatmap, 300, recent, 4, 5),
+      ...supportBeatmaps.map((beatmapId, index) => subjectScore(beatmapId, 460 - index * 5, recent, 4, 5)),
+    ];
+
+    await insertBeatmapMeta(targetBeatmap, 4, 5);
+    await insertBeatmapMeta(8999, 4, 5);
+    for (const beatmapId of supportBeatmaps) await insertBeatmapMeta(beatmapId, 4, 5);
+
+    // "Match" peers: identical total pp, 4K farm strength near the subject.
+    for (let i = 0; i < 12; i += 1) {
+      const id = 9100 + i;
+      await insertUser(id, 10_000, "CR", `MatchPeer${i}`);
+      await insertFarmed("CR", id, targetBeatmap, 500, recent);
+      for (const beatmapId of supportBeatmaps) await insertFarmed("CR", id, beatmapId, 450, recent);
+    }
+    // "Off" peers: SAME total pp, far higher 4K farm strength. If distance used
+    // total pp they would tie with the match peers; on mode pp they fall outside.
+    for (let i = 0; i < 12; i += 1) {
+      const id = 9200 + i;
+      await insertUser(id, 10_000, "US", `OffPeer${i}`);
+      await insertFarmed("US", id, targetBeatmap, 1300, recent);
+      for (const beatmapId of supportBeatmaps) await insertFarmed("US", id, beatmapId, 1200, recent);
+    }
+
+    const osu = makeOsuStub(bestScores, 10_000, { "4k": 3000 });
+    const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" });
+    const rec = snapshot.recs.find((candidate) => candidate.beatmapId === targetBeatmap);
+
+    expect(snapshot.peerBand.count).toBe(12);
+    expect(rec?.peerCount).toBe(12);
+    expect(rec?.topPeers.every((peer) => peer.username.startsWith("MatchPeer"))).toBe(true);
+    expect(rec?.topPeers.some((peer) => peer.username.startsWith("OffPeer"))).toBe(false);
   });
 
   it("backtest reconstruction filters peer farmed rows and subject scores by the asOf cutoff", async () => {

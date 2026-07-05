@@ -10,16 +10,6 @@ export interface FarmHelperKeyStat {
   scoreCount: number;
 }
 
-export interface FarmHelperKeyPeer {
-  userId: number;
-  pp: number;
-  // Farmed-coverage proxy pp (weighted_pp from the key-stats table).
-  modePp: number;
-  // Real osu! per-keymode variant pp, or null when the user's enrichment payload
-  // never carried a variants array (or had no positive pp for this keymode).
-  variantPp: number | null;
-}
-
 const KEY_COUNTS: FarmHelperKeyCount[] = [4, 7];
 const SEEDED_META_PREFIX = "farm_helper_key_stats_seeded:";
 
@@ -79,42 +69,63 @@ export async function readFarmHelperKeyStatsForUsers(
   return result;
 }
 
-export async function queryFarmHelperKeyPeersWithinBand(
-  db: Db,
-  keyCount: FarmHelperKeyCount,
-  userId: number,
-  subjectModePp: number,
-  band: number,
-  minScores: number,
-): Promise<FarmHelperKeyPeer[]> {
-  await ensureFarmHelperKeyStatsSeeded(db, keyCount);
-  const minPp = Math.max(0, subjectModePp - band);
-  const maxPp = subjectModePp + band;
-  const rows = (await exec(
-    db,
-    `select s.user_id, u.pp, s.weighted_pp, ${variantPpColumn(keyCount)} as variant_pp
-     from farm_helper_user_key_stats s
-     join users u on u.user_id = s.user_id
-     where s.key_count = ?
-       and s.score_count >= ?
-       and s.weighted_pp between ? and ?
-       and s.user_id != ?
-       and u.pp is not null
-       and u.pp > 0
-     order by abs(s.weighted_pp - ?) asc`,
-    [keyCount, minScores, minPp, maxPp, userId, subjectModePp],
-  )).rows;
-  return rowsToPeers(rows);
+// --- Kernel-kNN peer pool + proxy calibration (Stage 2) ---
+
+const KEYMODE_MIN_PROXY_SCORES = 8;
+const CALIBRATION_DECILE_MIN_PAIRS = 300;
+const CALIBRATION_MIN_PAIRS = 50;
+const CALIBRATION_TTL_MS = 24 * 60 * 60_000;
+const POOL_CACHE_TTL_MS = 5 * 60_000;
+
+export interface RawKeyModePeer {
+  userId: number;
+  pp: number;
+  weightedPp: number;
+  variantPp: number | null;
 }
 
-export async function queryFarmHelperKeyPeersByDistance(
+export interface ProxyCalibrationBucket {
+  proxyCenter: number;
+  ratio: number;
+}
+
+// Maps the farmed-coverage proxy (weighted_pp) onto the real variant-pp scale so
+// proxy-matched peers sit at the right distance from a variant-matched subject.
+export interface ProxyCalibration {
+  keyCount: FarmHelperKeyCount;
+  pairs: number;
+  buckets: ProxyCalibrationBucket[] | null;
+  globalRatio: number | null;
+  computedAt: string;
+}
+
+interface CachedPool {
+  peers: RawKeyModePeer[];
+  calibration: ProxyCalibration;
+  expiresAt: number;
+}
+
+interface CachedCalibration {
+  calibration: ProxyCalibration;
+  expiresAt: number;
+}
+
+const poolCache = new WeakMap<Db, Map<FarmHelperKeyCount, CachedPool>>();
+const calibrationCache = new WeakMap<Db, Map<FarmHelperKeyCount, CachedCalibration>>();
+
+// Fetches every qualifying key-mode peer once per keyCount (subject-independent,
+// cached 5 min) alongside the proxy calibration. Per-subject kernel selection
+// then runs in JS, replacing the old per-subject band-ladder SQL.
+export async function getKeyModePeerPool(
   db: Db,
   keyCount: FarmHelperKeyCount,
-  userId: number,
-  subjectModePp: number,
-  minScores: number,
-): Promise<FarmHelperKeyPeer[]> {
+): Promise<{ peers: RawKeyModePeer[]; calibration: ProxyCalibration }> {
   await ensureFarmHelperKeyStatsSeeded(db, keyCount);
+  const cache = mapFor(poolCache, db);
+  const now = Date.now();
+  const cached = cache.get(keyCount);
+  if (cached && cached.expiresAt > now) return { peers: cached.peers, calibration: cached.calibration };
+
   const rows = (await exec(
     db,
     `select s.user_id, u.pp, s.weighted_pp, ${variantPpColumn(keyCount)} as variant_pp
@@ -122,13 +133,140 @@ export async function queryFarmHelperKeyPeersByDistance(
      join users u on u.user_id = s.user_id
      where s.key_count = ?
        and s.score_count >= ?
-       and s.user_id != ?
        and u.pp is not null
-       and u.pp > 0
-     order by abs(s.weighted_pp - ?) asc`,
-    [keyCount, minScores, userId, subjectModePp],
+       and u.pp > 0`,
+    [keyCount, KEYMODE_MIN_PROXY_SCORES],
   )).rows;
-  return rowsToPeers(rows);
+  const peers: RawKeyModePeer[] = [];
+  for (const row of rows) {
+    const userId = Number(row.user_id);
+    const pp = Number(row.pp);
+    const weightedPp = Number(row.weighted_pp);
+    if (!Number.isSafeInteger(userId) || userId <= 0) continue;
+    if (!Number.isFinite(pp) || pp <= 0) continue;
+    if (!Number.isFinite(weightedPp) || weightedPp <= 0) continue;
+    const variantRaw = Number(row.variant_pp);
+    const variantPp = row.variant_pp != null && Number.isFinite(variantRaw) && variantRaw > 0 ? variantRaw : null;
+    peers.push({ userId, pp, weightedPp, variantPp });
+  }
+  const calibration = await getProxyCalibration(db, keyCount);
+  cache.set(keyCount, { peers, calibration, expiresAt: now + POOL_CACHE_TTL_MS });
+  return { peers, calibration };
+}
+
+// Lazily computes (and caches 24h) the proxy->variant calibration from paired
+// users that have both a key-stat proxy and a real variant pp. Persisted to
+// live_meta purely for admin observability.
+export async function getProxyCalibration(db: Db, keyCount: FarmHelperKeyCount): Promise<ProxyCalibration> {
+  const cache = mapFor(calibrationCache, db);
+  const now = Date.now();
+  const cached = cache.get(keyCount);
+  if (cached && cached.expiresAt > now) return cached.calibration;
+
+  const rows = (await exec(
+    db,
+    `select s.weighted_pp, ${variantPpColumn(keyCount)} as variant_pp
+     from farm_helper_user_key_stats s
+     join users u on u.user_id = s.user_id
+     where s.key_count = ?
+       and s.score_count >= ?
+       and ${variantPpColumn(keyCount)} is not null
+       and ${variantPpColumn(keyCount)} > 0`,
+    [keyCount, KEYMODE_MIN_PROXY_SCORES],
+  )).rows;
+  const pairs: Array<{ proxy: number; variant: number }> = [];
+  for (const row of rows) {
+    const proxy = Number(row.weighted_pp);
+    const variant = Number(row.variant_pp);
+    if (Number.isFinite(proxy) && proxy > 0 && Number.isFinite(variant) && variant > 0) {
+      pairs.push({ proxy, variant });
+    }
+  }
+  const calibration = buildCalibration(keyCount, pairs);
+  cache.set(keyCount, { calibration, expiresAt: now + CALIBRATION_TTL_MS });
+  await persistCalibration(db, calibration);
+  return calibration;
+}
+
+function buildCalibration(keyCount: FarmHelperKeyCount, pairs: Array<{ proxy: number; variant: number }>): ProxyCalibration {
+  const computedAt = nowIso();
+  if (pairs.length >= CALIBRATION_DECILE_MIN_PAIRS) {
+    const sorted = [...pairs].sort((a, b) => a.proxy - b.proxy);
+    const buckets: ProxyCalibrationBucket[] = [];
+    const bucketCount = 10;
+    for (let i = 0; i < bucketCount; i++) {
+      const start = Math.floor((i * sorted.length) / bucketCount);
+      const end = Math.floor(((i + 1) * sorted.length) / bucketCount);
+      const slice = sorted.slice(start, end);
+      if (slice.length === 0) continue;
+      buckets.push({
+        proxyCenter: median(slice.map((p) => p.proxy)),
+        ratio: median(slice.map((p) => p.variant / p.proxy)),
+      });
+    }
+    if (buckets.length >= 2) return { keyCount, pairs: pairs.length, buckets, globalRatio: null, computedAt };
+  }
+  if (pairs.length >= CALIBRATION_MIN_PAIRS) {
+    return { keyCount, pairs: pairs.length, buckets: null, globalRatio: median(pairs.map((p) => p.variant / p.proxy)), computedAt };
+  }
+  return { keyCount, pairs: pairs.length, buckets: null, globalRatio: null, computedAt };
+}
+
+// Applies the calibration to a proxy weighted_pp. Piecewise-linear over the
+// decile bucket centers (clamped to the end buckets), else a global ratio, else
+// identity (too few pairs to trust any adjustment).
+export function calibrateProxy(calibration: ProxyCalibration, weightedPp: number): number {
+  if (!Number.isFinite(weightedPp) || weightedPp <= 0) return weightedPp;
+  const buckets = calibration.buckets;
+  if (buckets && buckets.length > 0) {
+    return weightedPp * interpolateRatio(buckets, weightedPp);
+  }
+  if (calibration.globalRatio != null && calibration.globalRatio > 0) {
+    return weightedPp * calibration.globalRatio;
+  }
+  return weightedPp;
+}
+
+function interpolateRatio(buckets: ProxyCalibrationBucket[], proxy: number): number {
+  if (proxy <= buckets[0].proxyCenter) return buckets[0].ratio;
+  const last = buckets[buckets.length - 1];
+  if (proxy >= last.proxyCenter) return last.ratio;
+  for (let i = 1; i < buckets.length; i++) {
+    const hi = buckets[i];
+    if (proxy <= hi.proxyCenter) {
+      const lo = buckets[i - 1];
+      const span = hi.proxyCenter - lo.proxyCenter;
+      const t = span > 0 ? (proxy - lo.proxyCenter) / span : 0;
+      return lo.ratio + t * (hi.ratio - lo.ratio);
+    }
+  }
+  return last.ratio;
+}
+
+async function persistCalibration(db: Db, calibration: ProxyCalibration): Promise<void> {
+  try {
+    await exec(
+      db,
+      `insert into live_meta (key, value_json, updated_at) values (?, ?, ?)
+       on conflict(key) do update set value_json = excluded.value_json, updated_at = excluded.updated_at`,
+      [`farm_helper_proxy_calibration:v1:${calibration.keyCount}`, json(calibration), calibration.computedAt],
+    );
+  } catch {
+    // Observability only; never fail peer selection because the meta write failed.
+  }
+}
+
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function mapFor<K, V>(weak: WeakMap<Db, Map<K, V>>, db: Db): Map<K, V> {
+  let map = weak.get(db);
+  if (!map) weak.set(db, (map = new Map()));
+  return map;
 }
 
 export async function refreshFarmHelperKeyStatsForUser(db: Db, userId: number, updatedAt = nowIso()): Promise<void> {
@@ -235,29 +373,6 @@ async function writeStats(
 // column name cannot be attacker-controlled.
 function variantPpColumn(keyCount: FarmHelperKeyCount): string {
   return keyCount === 7 ? "u.pp_7k" : "u.pp_4k";
-}
-
-function rowsToPeers(rows: Record<string, unknown>[]): FarmHelperKeyPeer[] {
-  return rows
-    .map((row) => {
-      const variantPpRaw = Number(row.variant_pp);
-      return {
-        userId: Number(row.user_id),
-        pp: Number(row.pp),
-        modePp: Number(row.weighted_pp),
-        // Real osu! per-keymode pp when the enrichment payload carried it, else
-        // null; Stage 2 prefers this over the farmed-coverage proxy (modePp).
-        variantPp: row.variant_pp != null && Number.isFinite(variantPpRaw) && variantPpRaw > 0 ? variantPpRaw : null,
-      };
-    })
-    .filter((peer) => (
-      Number.isSafeInteger(peer.userId)
-      && peer.userId > 0
-      && Number.isFinite(peer.pp)
-      && peer.pp > 0
-      && Number.isFinite(peer.modePp)
-      && peer.modePp > 0
-    ));
 }
 
 function uniqueUserIds(userIds: number[]): number[] {

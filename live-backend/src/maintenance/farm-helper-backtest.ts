@@ -256,9 +256,7 @@ async function main(): Promise<void> {
       }
     }
 
-    const effectiveCount = "effectiveCount" in snapshot.peerBand
-      ? Number((snapshot.peerBand as { effectiveCount: number }).effectiveCount)
-      : snapshot.peerBand.farmDataCount;
+    const effectiveCount = snapshot.peerBand.effectiveCount;
 
     results.push({
       userId: subject.userId,
