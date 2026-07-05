@@ -72,29 +72,6 @@ interface LiveBackendStatus {
     unavailable: number;
     searchIndexed: number;
   };
-  chartAnalysisBackfill?: {
-    runId: string | null;
-    status: "idle" | "running" | "done" | "cancelled";
-    active: boolean;
-    stalled: boolean;
-    version: number;
-    eligible: number;
-    ready: number;
-    unavailable: number;
-    failed: number;
-    remaining: number;
-    percent: number;
-    enqueued: number;
-    startedAt: string | null;
-    updatedAt: string;
-    finishedAt: string | null;
-    jobs: {
-      queued: number;
-      running: number;
-      failed: number;
-      deferred: number;
-    };
-  };
   countries?: Array<{
     country: string;
     status: "active" | "warm" | "paused";
@@ -1161,8 +1138,6 @@ function LiveBackendPage() {
               onRunRetention={() => void runAdminAction("retention", "/api/admin/run-retention")}
               onOscSmoke={() => void runAdminAction("osc-smoke", "/api/admin/osc-smoke")}
               onRunOscBackfill={() => void runAdminAction("osc-backfill", "/api/admin/run-osc-backfill")}
-              onStartChartAnalysis={() => void runAdminAction("chart-analysis-backfill", "/api/admin/chart-analysis/start")}
-              onCancelChartAnalysis={() => void runAdminAction("cancel-chart-analysis-backfill", "/api/admin/chart-analysis/cancel")}
               onToggleWorkers={() => void runAdminAction(
                 status?.worker?.paused ? "resume-workers" : "pause-workers",
                 status?.worker?.paused ? "/api/admin/resume-workers" : "/api/admin/pause-workers",
@@ -4704,8 +4679,6 @@ function ControlsCard({
   onRunRetention,
   onOscSmoke,
   onRunOscBackfill,
-  onStartChartAnalysis,
-  onCancelChartAnalysis,
   onToggleWorkers,
 }: {
   status: LiveBackendStatus | null;
@@ -4715,18 +4688,10 @@ function ControlsCard({
   onRunRetention: () => void;
   onOscSmoke: () => void;
   onRunOscBackfill: () => void;
-  onStartChartAnalysis: () => void;
-  onCancelChartAnalysis: () => void;
   onToggleWorkers: () => void;
 }) {
   return (
     <div className="space-y-3">
-      <ChartAnalysisBackfillPanel
-        backfill={status?.chartAnalysisBackfill ?? null}
-        busy={busy}
-        onStart={onStartChartAnalysis}
-        onCancel={onCancelChartAnalysis}
-      />
       <div className="rounded-lg border border-osu-b3/30 bg-osu-b4/30 p-3">
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           <AdminButton
@@ -4780,95 +4745,6 @@ function ControlsCard({
 // Chart-analysis backfill: one click starts a self-chaining runner that keeps
 // the analysis queue topped up from the cached .osu corpus; progress is
 // analyzed-vs-eligible. Local CPU work only, no osu! API budget.
-function ChartAnalysisBackfillPanel({
-  backfill,
-  busy,
-  onStart,
-  onCancel,
-}: {
-  backfill: LiveBackendStatus["chartAnalysisBackfill"] | null;
-  busy: string | null;
-  onStart: () => void;
-  onCancel: () => void;
-}) {
-  const percent = Math.max(0, Math.min(100, backfill?.percent ?? 0));
-  const active = !!backfill?.active;
-  const complete = !!backfill && backfill.remaining === 0 && backfill.eligible > 0;
-  const tone: StatusTone = complete ? "good" : active ? (backfill?.stalled ? "bad" : "good") : backfill?.status === "cancelled" ? "warn" : "neutral";
-  const statusLabel = complete
-    ? "complete"
-    : active
-      ? backfill?.stalled ? "stalled" : "running"
-      : backfill?.status === "cancelled" ? "paused" : backfill?.status ?? "idle";
-  const showStartAction = !complete && (!active || backfill?.stalled);
-  const showPauseAction = active && !backfill?.stalled;
-
-  return (
-    <div className="rounded-lg border border-osu-b3/30 bg-osu-b4/30 p-3">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className={`h-2 w-2 rounded-full ${toneDotClass(tone)}`} />
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-osu-c2">Chart analysis (MSD + dan)</div>
-            <div className="rounded-full border border-osu-b3/30 bg-osu-b5/60 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-osu-f1">
-              {statusLabel}
-            </div>
-          </div>
-          <div className="mt-2 grid grid-cols-2 gap-2 text-[10px] text-osu-f1 sm:grid-cols-4">
-            <BackfillMetric label="Analyzed" value={formatNumber(backfill?.ready ?? 0)} />
-            <BackfillMetric label="Remaining" value={formatNumber(backfill?.remaining ?? 0)} />
-            <BackfillMetric label="Skipped" value={formatNumber(backfill?.unavailable ?? 0)} />
-            <BackfillMetric label="Failed" value={formatNumber(backfill?.failed ?? 0)} />
-          </div>
-          <div className="mt-3 h-2 overflow-hidden rounded-full bg-osu-b5/70">
-            <div className="h-full rounded-full bg-osu-c2 transition-[width] duration-300" style={{ width: `${percent}%` }} />
-          </div>
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-osu-f1">
-            <span>{percent.toFixed(1)}% of {formatNumber(backfill?.eligible ?? 0)} cached charts analyzed (v{backfill?.version ?? 1})</span>
-            {backfill?.updatedAt ? <span>updated {formatTimeAgo(backfill.updatedAt)}</span> : null}
-          </div>
-        </div>
-        {showStartAction || showPauseAction ? (
-          <div className="grid grid-cols-1 gap-2 lg:w-[190px]">
-            {showStartAction ? (
-              <AdminButton
-                label={backfill?.status === "cancelled" || backfill?.stalled ? "Resume chart analysis" : "Analyze cached charts"}
-                description="Self-chaining background run: classifier verdict, pattern clusters, and MinaCalc MSD for every cached chart. Local CPU only."
-                icon={<Database className="h-3.5 w-3.5" />}
-                busy={busy === "chart-analysis-backfill"}
-                onClick={onStart}
-              />
-            ) : null}
-            {showPauseAction ? (
-              <AdminButton
-                label="Pause chart analysis"
-                description="Drop queued analysis jobs and stop the runner. Already-analyzed charts stay stored; resume any time."
-                icon={<Pause className="h-3.5 w-3.5" />}
-                busy={busy === "cancel-chart-analysis-backfill"}
-                onClick={onCancel}
-              />
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-      {active ? (
-        <div className="mt-2 text-[10px] text-osu-f1">
-          Queue: {formatNumber(backfill?.jobs.queued ?? 0)} queued, {formatNumber(backfill?.jobs.running ?? 0)} running, {formatNumber(backfill?.jobs.failed ?? 0)} retrying. Enqueued so far: {formatNumber(backfill?.enqueued ?? 0)}.
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function BackfillMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border border-osu-b3/20 bg-osu-b5/50 px-2.5 py-1.5">
-      <div className="text-[8px] font-semibold uppercase tracking-wider text-osu-f1">{label}</div>
-      <div className="mt-0.5 text-[12px] font-semibold text-osu-c2">{value}</div>
-    </div>
-  );
-}
-
 function AdminButton({
   label,
   description,

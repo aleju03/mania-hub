@@ -8,7 +8,7 @@ import type { Db } from "../db.js";
 import { dbHealth, exec, getSqliteBusyRetryStats, parseJson } from "../db.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION, getPlayerActivityAvailability, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../features/activity.js";
 import { cancelBeatmapOsuFileBackfill, getBeatmapOsuFileBackfillStatus, startBeatmapOsuFileBackfill } from "../features/beatmap-osu-file-backfill.js";
-import { CHART_ANALYSIS_VERSION, cancelChartAnalysisBackfill, enqueueChartAnalysisBackfill, getChartAnalysisBackfillStatus, startChartAnalysisBackfill } from "../features/chart-analysis.js";
+import { CHART_ANALYSIS_VERSION, cancelChartAnalysisBackfill, enqueueChartAnalysisBackfill, startChartAnalysisBackfill } from "../features/chart-analysis.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
 import { GOAL_KINDS, GOAL_MAP_KINDS, GOAL_SPEED_BUCKETS, GOAL_TARGET_GRADES, createUserGoal, deleteUserGoal, getUserGoal, listUserGoalsWithProgress, reconcileGoalsForUser, updateUserGoal, type GoalKind, type GoalSpeedBucket, type UserGoalInput, type UserGoalTargetPatch } from "../features/goals.js";
 import { getMyDataSummary, getUserTopPlaysFeed, getUserTrackedFeed, type MyDataTopPlaysQuery, type MyDataTrackedFeedQuery } from "../features/my-data.js";
@@ -2074,7 +2074,6 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
     roster,
     analysis,
     osuFileBackfill,
-    chartAnalysisBackfill,
     scoresFallback,
     apiCalls,
     countries,
@@ -2090,7 +2089,6 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
     rosterSummary(ctx.db),
     analysisStats(ctx.db),
     getBeatmapOsuFileBackfillStatus(ctx.db, { cacheCounts: true }),
-    getChartAnalysisBackfillStatus(ctx.db, { cacheCounts: true }),
     scoresFallbackStatus(ctx, mirror),
     apiCallHistory(ctx.db),
     countryRegistryStatus(ctx),
@@ -2116,7 +2114,6 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
     roster,
     analysis,
     osuFileBackfill,
-    chartAnalysisBackfill,
     rate,
     sqliteBusy,
     scoresFallback,

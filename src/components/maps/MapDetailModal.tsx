@@ -451,6 +451,13 @@ export function MapDetailModal({ entry, onClose }: { entry: LiveMapSearchEntry |
                     </svg>
                     Download .osz
                   </a>
+                  <a
+                    href={osuDirectUrl(entry.beatmapsetId)}
+                    className="hidden items-center gap-1.5 whitespace-nowrap rounded-md bg-osu-b3/70 px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-osu-b3 hover:text-white transition-colors sm:inline-flex"
+                  >
+                    <OsuLogo className="h-3.5 w-3.5" />
+                    Open in osu!
+                  </a>
                   <button
                     type="button"
                     onClick={() => {
@@ -470,13 +477,6 @@ export function MapDetailModal({ entry, onClose }: { entry: LiveMapSearchEntry |
                     </svg>
                     {shareCopied ? "Link copied!" : "Share"}
                   </button>
-                  <a
-                    href={osuDirectUrl(entry.beatmapsetId)}
-                    className="hidden items-center gap-1.5 whitespace-nowrap rounded-md bg-osu-b3/70 px-3 py-2 text-[12px] font-semibold text-osu-l2 hover:bg-osu-b3 hover:text-white transition-colors sm:inline-flex"
-                  >
-                    <OsuLogo className="h-3.5 w-3.5" />
-                    Open in osu!
-                  </a>
                 </div>
               </div>
             </div>
