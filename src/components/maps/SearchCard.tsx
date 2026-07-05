@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { LiveMapSearchEntry } from "../../lib/live-backend";
 import { formatDuration, formatNumber } from "../../lib/format";
 import { OsuLogo } from "../ui/OsuLogo";
@@ -207,6 +208,7 @@ export function SearchCard({
   isNew?: boolean;
 }) {
   const pill = statusPill(entry.status);
+  const [coverFailed, setCoverFailed] = useState(false);
   const diffs = entryDiffs(entry);
   const multi = diffs.length > 1;
   const starLo = Math.min(...diffs.map((diff) => diff.stars));
@@ -224,13 +226,24 @@ export function SearchCard({
       onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(entry); } } : undefined}
       title={clickable ? "View details" : undefined}
     >
-      <div className="relative rounded-t-xl overflow-hidden">
+      <div className="relative h-[100px] rounded-t-xl overflow-hidden">
+        <div className="absolute inset-0 bg-osu-b3/40" />
+        {coverFailed && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span
+              className="text-[13px] text-osu-f1/45"
+              style={{ fontFamily: '"Comic Sans MS", "Comic Neue", ui-rounded, cursive', fontStyle: "italic" }}
+            >
+              no bg
+            </span>
+          </div>
+        )}
         <img
           src={mapCoverUrl(entry)}
           alt=""
-          className="w-full h-[100px] object-cover"
+          className={`relative w-full h-[100px] object-cover ${coverFailed ? "invisible" : ""}`}
           loading="lazy"
-          onError={(e) => { e.currentTarget.style.visibility = "hidden"; }}
+          onError={() => setCoverFailed(true)}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
         <span className="absolute top-2 left-2 inline-flex items-center gap-1">

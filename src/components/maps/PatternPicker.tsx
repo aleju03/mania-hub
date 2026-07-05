@@ -58,12 +58,14 @@ function PatternChip({
   onToggle,
   small = false,
   attachRight = false,
+  className = "",
 }: {
   pattern: string;
   active: boolean;
   onToggle: (pattern: string) => void;
   small?: boolean;
   attachRight?: boolean;
+  className?: string;
 }) {
   const color = PATTERN_COLOR[pattern] ?? "#cfcfe6";
   // Bumped on each select so the burst ring remounts and replays.
@@ -86,8 +88,10 @@ function PatternChip({
       whileTap={{ scale: 0.95 }}
       transition={{ type: "spring", stiffness: 600, damping: 30 }}
       className={`relative font-bold cursor-pointer transition-colors duration-150 ${radius} ${
-        small ? "px-2.5 py-1 text-[11.5px]" : "px-3.5 py-1.5 text-[12.5px]"
-      }`}
+        small
+          ? "px-2.5 py-1 text-[11.5px]"
+          : "px-2 py-1 text-[11px] sm:px-3.5 sm:py-1.5 sm:text-[12.5px]"
+      } ${className}`}
       style={
         active
           ? { background: color, color: "#11111a" }
@@ -201,17 +205,34 @@ export function PatternPicker({
   }, [openFamily]);
 
   return (
-    <div ref={rootRef} className="flex flex-wrap gap-2">
+    // Mobile: a compact 3-column grid so the chips read as a tidy matrix instead
+    // of ragged wrapped rows, without eating vertical space. From sm up it
+    // relaxes back to the natural inline palette row.
+    <div ref={rootRef} className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap sm:gap-2">
       {options.map((pattern) => {
         const subs = subfamilies[pattern];
         if (!subs) {
-          return <PatternChip key={pattern} pattern={pattern} active={selected.includes(pattern)} onToggle={onToggle} />;
+          return (
+            <PatternChip
+              key={pattern}
+              pattern={pattern}
+              active={selected.includes(pattern)}
+              onToggle={onToggle}
+              className="w-full text-center sm:w-auto sm:text-left"
+            />
+          );
         }
         const open = openFamily === pattern;
         const selectedSubs = subs.filter((sub) => selected.includes(sub)).length;
         return (
-          <span key={pattern} className="relative inline-flex items-stretch gap-px">
-            <PatternChip pattern={pattern} active={selected.includes(pattern)} onToggle={onToggle} attachRight />
+          <span key={pattern} className="relative inline-flex w-full items-stretch gap-px sm:w-auto">
+            <PatternChip
+              pattern={pattern}
+              active={selected.includes(pattern)}
+              onToggle={onToggle}
+              attachRight
+              className="min-w-0 flex-1 text-center sm:flex-none sm:text-left"
+            />
             <SubfamilyCaret
               pattern={pattern}
               open={open}
@@ -233,7 +254,13 @@ export function PatternPicker({
         );
       })}
       {orphans.map((pattern) => (
-        <PatternChip key={pattern} pattern={pattern} active onToggle={onToggle} />
+        <PatternChip
+          key={pattern}
+          pattern={pattern}
+          active
+          onToggle={onToggle}
+          className="w-full text-center sm:w-auto sm:text-left"
+        />
       ))}
     </div>
   );

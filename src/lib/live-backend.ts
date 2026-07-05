@@ -342,6 +342,7 @@ function normalizeAdminPath(input: unknown): string {
     "/api/admin/osu-file-backfill/cancel",
     "/api/admin/discord/register-commands",
     "/api/admin/discord/register-emojis",
+    "/api/admin/rebuild-collections",
   ]);
   if (exact.has(path)) return path;
   if (url.pathname === "/api/admin/discord/remove-subscription") {
@@ -1302,8 +1303,11 @@ export async function fetchLiveMapSearch(params: LiveMapSearchParams): Promise<L
   return fetchLiveJson(`/api/snapshots/maps-search?${query.toString()}`);
 }
 
-export async function fetchLiveMapCollections(): Promise<LiveMapCollectionsResult> {
-  const result = await fetchLiveJson<LiveMapCollectionsResult>("/api/snapshots/map-collections");
+export async function fetchLiveMapCollections(opts?: { fresh?: boolean }): Promise<LiveMapCollectionsResult> {
+  // The snapshot carries a 5-min cache-control; after a manual admin rebuild we
+  // bypass it with no-store so the new rotation shows immediately.
+  const init = opts?.fresh ? { cache: "no-store" as const } : undefined;
+  const result = await fetchLiveJson<LiveMapCollectionsResult>("/api/snapshots/map-collections", init);
   return { collections: result.collections ?? [], rotation: result.rotation ?? null };
 }
 

@@ -189,6 +189,14 @@ function intOr(value: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+// A set has usable cover art when osu! returned a non-empty covers object for
+// it; coverless sets are skipped so the collage never shows a blank tile.
+function hasCoverArt(coversJson: unknown): boolean {
+  if (coversJson == null) return false;
+  const covers = parseJson<Record<string, string> | null>(String(coversJson), null);
+  return !!covers && typeof covers === "object" && Object.values(covers).some((url) => typeof url === "string" && url.length > 0);
+}
+
 // Deterministic PRNG for the rotation sample: same rebuild pass -> same packs,
 // next pass (new stamp) -> a fresh shuffle.
 function mulberry32(seed: number): () => number {
@@ -251,7 +259,7 @@ export async function rebuildMapCollections(db: Db): Promise<void> {
     // on them (same policy as the search dan filter).
     const rows = (await exec(
       db,
-      `select beatmap_id, beatmapset_id, ${column} as metric, ${axisColumn} as axis_value
+      `select beatmap_id, beatmapset_id, covers_json, ${column} as metric, ${axisColumn} as axis_value
        from map_search_index
        where key_count = ? and primary_pattern = ? and vibro = 0 and ${bucket.clauses.join(" and ")}
        order by ${column} desc, play_count desc
@@ -261,7 +269,7 @@ export async function rebuildMapCollections(db: Db): Promise<void> {
 
     // Dedupe by set (keeping the highest-metric diff), then sample the rotation.
     const seenSets = new Set<number>();
-    const pool: Array<{ beatmapId: number; beatmapsetId: number; score: number; axisValue: number }> = [];
+    const pool: Array<{ beatmapId: number; beatmapsetId: number; score: number; axisValue: number; hasCover: boolean }> = [];
     for (const row of rows) {
       const beatmapsetId = intOr(row.beatmapset_id);
       if (beatmapsetId > 0 && seenSets.has(beatmapsetId)) continue;
@@ -271,6 +279,7 @@ export async function rebuildMapCollections(db: Db): Promise<void> {
         beatmapsetId,
         score: Number(row.metric) || 0,
         axisValue: Number(row.axis_value) || 0,
+        hasCover: hasCoverArt(row.covers_json),
       });
     }
     shuffleInPlace(pool, mulberry32(hashSeed(`${recipe.id}:${now}`)));
@@ -298,7 +307,11 @@ export async function rebuildMapCollections(db: Db): Promise<void> {
           args: [recipe.id, member.beatmapId, index, member.score, previous.get(member.beatmapId) ?? now],
         });
       });
-      const coverSets = [...new Set(members.map((member) => member.beatmapsetId).filter((id) => id > 0))].slice(0, 3);
+      // Only sets that actually have cover art seed the collage thumbnail; a set
+      // with no uploaded cover would render as a blank tile in the frontend grid.
+      const coverSets = [
+        ...new Set(members.filter((member) => member.beatmapsetId > 0 && member.hasCover).map((member) => member.beatmapsetId)),
+      ].slice(0, 3);
       statements.push({
         sql: `insert into map_collections (
             id, recipe_id, kind, title, description, key_count, axis, bucket_lo, bucket_hi,

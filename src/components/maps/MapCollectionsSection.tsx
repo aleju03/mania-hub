@@ -2,11 +2,13 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import {
   fetchLiveMapCollection,
   fetchLiveMapCollections,
+  runLiveBackendAdminAction,
   type LiveMapCollectionDetail,
   type LiveMapCollectionsRotation,
   type LiveMapCollectionSummary,
   type LiveMapSearchEntry,
 } from "../../lib/live-backend";
+import { useAuth } from "../../lib/auth-context";
 import { formatNumber, formatTimeAgo } from "../../lib/format";
 import { danScaleImage, danScaleLabel, type DanScaleContext } from "../../lib/dan-images";
 import { MapDetailModal } from "./MapDetailModal";
@@ -174,6 +176,8 @@ function CollectionsBrowse({ onSelect, liveBackendEnabled }: { onSelect: (id: st
   const [error, setError] = useState<string | null>(null);
   const [keyFilter, setKeyFilter] = useState(4);
   const [axis, setAxis] = useState<Axis>("dan");
+  const [rebuilding, setRebuilding] = useState(false);
+  const canRebuild = useAuth().canUseAdminFeatures;
 
   useEffect(() => {
     if (!liveBackendEnabled) {
@@ -194,6 +198,25 @@ function CollectionsBrowse({ onSelect, liveBackendEnabled }: { onSelect: (id: st
       cancelled = true;
     };
   }, [liveBackendEnabled]);
+
+  // Admin-only: force a fresh rotation now instead of waiting for the scheduled
+  // rebuild. The backend runs the pass inline, so the refetch (cache-bypassed)
+  // shows the new sample right away.
+  const handleRebuild = async () => {
+    if (rebuilding) return;
+    setRebuilding(true);
+    try {
+      await runLiveBackendAdminAction({ data: { path: "/api/admin/rebuild-collections" } });
+      const data = await fetchLiveMapCollections({ fresh: true });
+      setCollections(data.collections);
+      setRotation(data.rotation);
+      setError(null);
+    } catch {
+      setError("Rebuild failed.");
+    } finally {
+      setRebuilding(false);
+    }
+  };
 
   // Rows from a backend that has not rebuilt in the dan/MSD format yet carry no
   // axis; they cannot render as difficulty buckets, so they don't render at all.
@@ -247,14 +270,26 @@ function CollectionsBrowse({ onSelect, liveBackendEnabled }: { onSelect: (id: st
             render={(option) => (option === "dan" ? "Dan est." : "MSD")}
           />
         </div>
-        <p className="text-[12px] text-osu-f1">
-          Every pack is a random sample of its difficulty bucket
-          {countdown ? (
-            <>
-              {" · "}next rotation <span className="font-semibold text-osu-l2">{countdown}</span>
-            </>
-          ) : null}
-        </p>
+        <div className="flex items-center gap-2.5">
+          <p className="text-[12px] text-osu-f1">
+            Every pack is a random sample of its difficulty bucket
+            {countdown ? (
+              <>
+                {" · "}next rotation <span className="font-semibold text-osu-l2">{countdown}</span>
+              </>
+            ) : null}
+          </p>
+          {canRebuild && (
+            <button
+              onClick={handleRebuild}
+              disabled={rebuilding}
+              className="shrink-0 rounded-lg border border-osu-red/30 bg-osu-red/20 px-2 py-1 text-[10px] font-semibold text-osu-red transition-colors hover:bg-osu-red/30 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+              title="Force a fresh collection rotation now (admin only)"
+            >
+              {rebuilding ? "Rebuilding..." : "Rebuild now"}
+            </button>
+          )}
+        </div>
       </div>
       {groups.length === 0 && <div className="py-12 text-center text-[13px] text-osu-f1">No {keyFilter}K collections yet.</div>}
       {groups.map(([pattern, list]) => (

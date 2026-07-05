@@ -18,7 +18,7 @@ import type { ScoreSpeedBucket } from "../shared/score.js";
 import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalRankingsSnapshot, type GlobalRankingsSort } from "../features/global-rankings.js";
 import { enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRefreshProgress, getMapsSnapshot, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery } from "../features/maps.js";
 import { getMapSearchPage, MAP_SEARCH_PATTERNS, MAP_SEARCH_SUB_PATTERNS, type MapSearchQuery, type MapSearchSort } from "../features/map-search.js";
-import { getMapCollection, getMapCollections, getMapCollectionsRotation } from "../features/map-collections.js";
+import { getMapCollection, getMapCollections, getMapCollectionsRotation, rebuildMapCollections } from "../features/map-collections.js";
 import { getPackWallet, listPackCollectionCards, listPackCollectionOwnedUserIds, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, warmProfileSnapshots } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
@@ -1581,6 +1581,18 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     await enqueueMapsRefresh(ctx.queue, country, { priority: 90, replaceDone: true });
     sendJson(req, res, ctx, 200, { ok: true, country });
+    return true;
+  }
+  if (url.pathname === "/api/admin/rebuild-collections") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    // Run inline (local index pass, no osu! API) so the response only returns
+    // once the packs are freshly rotated; the admin button can then refetch and
+    // immediately show the new sample instead of waiting on the queue.
+    await rebuildMapCollections(ctx.db);
+    sendJson(req, res, ctx, 200, { ok: true });
     return true;
   }
   if (url.pathname === "/api/admin/catch-up-country") {

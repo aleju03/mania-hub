@@ -100,14 +100,16 @@ function MsdBlock({ entry }: { entry: LiveMapSearchEntry }) {
         )}
       </div>
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-lg bg-osu-b4/40 px-3.5 py-2.5">
-        {/* Verdict group: dan badge + Overall, split from the skillset grid. */}
-        <div className="flex items-center gap-4 sm:border-r sm:border-white/10 sm:pr-5">
+        {/* Verdict group: dan badge + Overall, split from the skillset grid.
+            min-h keeps the row the badge's height even on diffs that have no
+            dan verdict, so switching diffs doesn't resize the MSD box. */}
+        <div className="flex min-h-10 items-center gap-4 sm:border-r sm:border-white/10 sm:pr-5">
           {dan && (
             <div className="flex flex-col items-center">
               {/* The logo IS the number; the +/- tier suffix rides top-right like an exponent. */}
               <span className="flex items-start gap-[2px] leading-none">
                 {danImage ? (
-                  <img src={danImage} alt={dan.label} className="h-10 w-10 object-contain" loading="lazy" />
+                  <img src={danImage} alt={dan.label} className="h-10 w-10 object-contain" />
                 ) : (
                   <span className="text-[16px] font-bold leading-none text-osu-l1">{dan.label}</span>
                 )}
@@ -186,14 +188,22 @@ function groupClusters(clusters: LiveChartAnalysisCluster[]): ClusterGroup[] {
 // Jacky WC, 4K says Jumpstream / Rolls / ...). These are composition, not
 // difficulty, so the value per pattern is the BPM it runs at. One inline row,
 // importance-ordered with the dominant pattern tinted; no box of its own.
-function ClustersBlock({ analysis }: { analysis: LiveChartAnalysisDetail | null }) {
-  if (!analysis || analysis.status !== "ready" || analysis.clusters.length === 0) return null;
-  const groups = groupClusters(analysis.clusters);
+function ClustersBlock({ analysis, pending }: { analysis: LiveChartAnalysisDetail | null; pending: boolean }) {
+  const groups =
+    analysis && analysis.status === "ready" && analysis.clusters.length > 0 ? groupClusters(analysis.clusters) : [];
+  // Done loading and genuinely nothing to show: collapse the row entirely.
+  if (!pending && groups.length === 0) return null;
+  // Fixed single-line height on desktop so the async result landing (or a diff
+  // with more/wider pattern groups) can't grow this row and re-center the whole
+  // centered modal. The pending "analyzing" state and the loaded state share the
+  // exact height, so switching to an un-cached diff no longer jumps. On mobile
+  // the card already sits at max-height (its scroll area absorbs changes), so we
+  // let the strip wrap there instead of clipping pattern info.
   return (
-    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1.5">
-      <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Patterns</span>
+    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1.5 overflow-hidden sm:h-[22px] sm:flex-nowrap">
+      <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Patterns</span>
       {groups.map((group, index) => (
-        <span key={group.name} className="flex items-baseline gap-1.5">
+        <span key={group.name} className="flex shrink-0 items-baseline gap-1.5">
           <span
             className={`text-[12.5px] font-semibold tabular-nums leading-none ${
               index === 0 ? "text-osu-pink-light" : "text-osu-l2"
@@ -205,6 +215,9 @@ function ClustersBlock({ analysis }: { analysis: LiveChartAnalysisDetail | null 
           <span className="text-[9px] uppercase tracking-wide text-osu-f1/55">{group.name}</span>
         </span>
       ))}
+      {pending && groups.length === 0 && (
+        <span className="text-[9px] uppercase tracking-wide text-osu-f1/35">analyzing…</span>
+      )}
     </div>
   );
 }
@@ -263,6 +276,10 @@ export function MapDetailModal({ entry, onClose }: { entry: LiveMapSearchEntry |
     };
   }, [activeBeatmapId, analysisByBeatmap]);
   const activeAnalysis = activeBeatmapId != null ? analysisByBeatmap[activeBeatmapId] ?? null : null;
+  // True while a freshly selected diff's analysis is still being fetched (its
+  // slot is `undefined`, not `null`). Used to hold the Patterns row's height so
+  // the async result landing can't grow the card and re-center the modal.
+  const analysisPending = activeBeatmapId != null && analysisByBeatmap[activeBeatmapId] === undefined;
 
   if (typeof document === "undefined") return null;
 
@@ -365,7 +382,7 @@ export function MapDetailModal({ entry, onClose }: { entry: LiveMapSearchEntry |
                 {/* MSD skillsets when the chart analysis has landed; the old
                     relative pattern mix stays as the fallback until then. */}
                 {active.msd ? <MsdBlock entry={active} /> : null}
-                <ClustersBlock analysis={activeAnalysis} />
+                <ClustersBlock analysis={activeAnalysis} pending={analysisPending} />
 
                 {/* Pattern profile: radar + the raw numbers */}
                 {!active.msd && patterns.length > 0 && (
