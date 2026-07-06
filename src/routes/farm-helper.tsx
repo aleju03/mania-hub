@@ -503,29 +503,38 @@ function FarmHelperPage() {
                     />
                   ) : layout === "grid" ? (
                     <div className="grid grid-cols-2 gap-2.5 bg-osu-b5 p-2.5 sm:grid-cols-3 xl:grid-cols-4">
-                      {pageRecs.map((rec) => (
-                        <RecCard
-                          key={`${rec.beatmapId}:${rec.speedBucket}`}
-                          rec={rec}
-                          userKey={String(visibleSnapshot.userId)}
-                          userName={visibleSnapshot.username}
-                          keyMode={visibleSnapshot.keyMode}
-                          onShowFarmers={() => setFarmersFor({ rec, keyMode: visibleSnapshot.keyMode })}
-                        />
-                      ))}
+                      {pageRecs.map((rec) => {
+                        // The card's cohort keymode drives both the who-farms modal
+                        // and the map-detail navigation, so both surfaces sample the
+                        // same cohort the card came from (decision 8).
+                        const cardKeyMode = farmersKeyMode(visibleSnapshot, rec);
+                        return (
+                          <RecCard
+                            key={`${rec.beatmapId}:${rec.speedBucket}`}
+                            rec={rec}
+                            userKey={String(visibleSnapshot.userId)}
+                            userName={visibleSnapshot.username}
+                            keyMode={cardKeyMode}
+                            onShowFarmers={() => setFarmersFor({ rec, keyMode: cardKeyMode })}
+                          />
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="divide-y divide-osu-b3/20">
-                      {pageRecs.map((rec) => (
-                        <RecRow
-                          key={`${rec.beatmapId}:${rec.speedBucket}`}
-                          rec={rec}
-                          userKey={String(visibleSnapshot.userId)}
-                          userName={visibleSnapshot.username}
-                          keyMode={visibleSnapshot.keyMode}
-                          onShowFarmers={() => setFarmersFor({ rec, keyMode: visibleSnapshot.keyMode })}
-                        />
-                      ))}
+                      {pageRecs.map((rec) => {
+                        const cardKeyMode = farmersKeyMode(visibleSnapshot, rec);
+                        return (
+                          <RecRow
+                            key={`${rec.beatmapId}:${rec.speedBucket}`}
+                            rec={rec}
+                            userKey={String(visibleSnapshot.userId)}
+                            userName={visibleSnapshot.username}
+                            keyMode={cardKeyMode}
+                            onShowFarmers={() => setFarmersFor({ rec, keyMode: cardKeyMode })}
+                          />
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -961,11 +970,37 @@ function timestampMs(value: string | null | undefined): number {
   return Number.isFinite(ms) ? ms : 0;
 }
 
+// The who-farms modal must sample the same cohort that generated the card. On the
+// merged Any view that is the card's own keymode cohort (decision 8); the total-pp
+// fallback and concrete views keep the snapshot keyMode.
+function farmersKeyMode(snapshot: LiveFarmHelperSnapshot, rec: LiveFarmHelperRec): LiveFarmHelperKeyMode {
+  if (snapshot.keyMode !== "any" || snapshot.peerBand.mode === "total_pp_fallback") return snapshot.keyMode;
+  if (rec.keys === 7) return "7k";
+  if (rec.keys === 4) return "4k";
+  return "any";
+}
+
+function peerBandRange(band: { count: number; minPp: number; maxPp: number }): string | null {
+  if (band.count <= 0 || band.minPp <= 0 || band.maxPp <= 0) return null;
+  if (Math.round(band.minPp) === Math.round(band.maxPp)) return formatCompactPp(band.minPp);
+  return `${formatCompactPp(band.minPp)}-${formatCompactPp(band.maxPp)}`;
+}
+
 function peerBandRangeLabel(snapshot: LiveFarmHelperSnapshot): string {
-  const { count, minPp, maxPp } = snapshot.peerBand;
-  if (count <= 0 || minPp <= 0 || maxPp <= 0) return "no pp range";
-  if (Math.round(minPp) === Math.round(maxPp)) return `compared to ${formatCompactPp(minPp)} pp`;
-  return `compared to ${formatCompactPp(minPp)}-${formatCompactPp(maxPp)} pp`;
+  // Merged Any view: show each keymode's own range (e.g. "4K 12.9k-15.6k · 7K
+  // 13.9k-16.9k") so a hybrid sees both cohorts they are compared against.
+  const perMode = snapshot.peerBands
+    ? (["4k", "7k"] as const)
+        .map((mode) => {
+          const band = snapshot.peerBands?.[mode];
+          const range = band ? peerBandRange(band) : null;
+          return range ? `${mode === "7k" ? "7K" : "4K"} ${range}` : null;
+        })
+        .filter((part): part is string => part != null)
+    : [];
+  if (perMode.length > 0) return `compared to ${perMode.join(" · ")} pp`;
+  const range = peerBandRange(snapshot.peerBand);
+  return range ? `compared to ${range} pp` : "no pp range";
 }
 
 function ChangeSubjectButton({ onPick }: { onPick: (key: string) => void }) {

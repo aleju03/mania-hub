@@ -985,6 +985,15 @@ export interface LiveFarmHelperRec {
   rankScore: number;
 }
 
+export interface LiveFarmHelperPeerBand {
+  mode: string;
+  count: number;
+  farmDataCount: number;
+  minPp: number;
+  maxPp: number;
+  effectiveCount?: number;
+}
+
 export interface LiveFarmHelperSnapshot {
   status: "ready";
   userId: number;
@@ -994,7 +1003,10 @@ export interface LiveFarmHelperSnapshot {
   pp: number;
   keyMode: LiveFarmHelperKeyMode;
   view: LiveFarmHelperView;
-  peerBand: { mode: string; count: number; farmDataCount: number; minPp: number; maxPp: number; effectiveCount?: number };
+  peerBand: LiveFarmHelperPeerBand;
+  // Per-keymode cohort summaries on the merged "any" view (absent on concrete
+  // views and the total-pp fallback). Optional so older builds still parse.
+  peerBands?: Partial<Record<"4k" | "7k", LiveFarmHelperPeerBand>>;
   totalPotentialPp: number;
   // Optional: older backend builds don't send it. Count of qualifying recs
   // before server-side truncation to the requested limit.
