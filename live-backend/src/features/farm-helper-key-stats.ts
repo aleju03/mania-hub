@@ -85,6 +85,10 @@ export interface RawKeyModePeer {
   pp: number;
   weightedPp: number;
   variantPp: number | null;
+  // Whether the stored profile has ever carried a variants block. False means
+  // the user was never variant-enriched, so an enrich_user fetch can still turn
+  // their proxy into a real variant pp (the cohort self-heal targets these).
+  hasVariantsProfile: boolean;
 }
 
 export interface ProxyCalibrationBucket {
@@ -129,9 +133,12 @@ export async function getKeyModePeerPool(
   const cached = cache.get(keyCount);
   if (cached && cached.expiresAt > now) return { peers: cached.peers, calibration: cached.calibration };
 
+  // The variants LIKE probe runs once per pool refresh (cached 5 min), not per
+  // request, so it stays off the hot path.
   const rows = (await exec(
     db,
-    `select s.user_id, u.pp, s.weighted_pp, ${variantPpColumn(keyCount)} as variant_pp
+    `select s.user_id, u.pp, s.weighted_pp, ${variantPpColumn(keyCount)} as variant_pp,
+            (u.profile_json is not null and u.profile_json like '%"variants"%') as has_variants_profile
      from farm_helper_user_key_stats s
      join users u on u.user_id = s.user_id
      where s.key_count = ?
@@ -150,7 +157,7 @@ export async function getKeyModePeerPool(
     if (!Number.isFinite(weightedPp) || weightedPp <= 0) continue;
     const variantRaw = Number(row.variant_pp);
     const variantPp = row.variant_pp != null && Number.isFinite(variantRaw) && variantRaw > 0 ? variantRaw : null;
-    peers.push({ userId, pp, weightedPp, variantPp });
+    peers.push({ userId, pp, weightedPp, variantPp, hasVariantsProfile: Number(row.has_variants_profile) === 1 });
   }
   const calibration = await getProxyCalibration(db, keyCount);
   cache.set(keyCount, { peers, calibration, expiresAt: now + POOL_CACHE_TTL_MS });

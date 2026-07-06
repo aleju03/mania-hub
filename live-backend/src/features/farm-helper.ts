@@ -186,6 +186,10 @@ interface WeightedPeer {
   modePp: number;
   wD: number;
   wB: number;
+  // True for calibrated-proxy peers that were never variant-enriched: an
+  // enrich_user fetch can still replace their proxy with real variant pp, so
+  // the cohort self-heal targets them.
+  needsVariantEnrich?: boolean;
 }
 
 type ProfileOsuClient = Pick<OsuApiClient, "getUser" | "getUserByKey" | "getUserBestScoresWindow">;
@@ -469,6 +473,13 @@ async function buildSnapshot(
     strictKeyMode: keyMode !== "any",
   });
 
+  // Cohort self-heal: proxy-only peers that were never variant-enriched can be
+  // badly mis-placed (an under-tracked 27k player whose 28 captured scores read
+  // as a 14.5k proxy). Enqueue their enrichment strongest-weight first so the
+  // players who actually pollute real cohorts get real variant pp ahead of the
+  // global pp-ordered drip. Fire-and-forget; never on the backtest path.
+  if (ctx.queue && asOf == null) enqueueVariantSelfHeal(ctx.queue, peers);
+
   // Chart-shape weighting: down-weight peers whose farm charts look unlike the
   // subject's, so an LN main and a jack main at the same pp get different recs.
   // Shapes are per concrete keymode: on "any", a hybrid subject's 4K candidates
@@ -744,6 +755,27 @@ interface CohortCandidate {
   pp: number;
   modePp: number;
   confidence: number;
+  needsVariantEnrich?: boolean;
+}
+
+// Enqueues enrich_user for the cohort's never-variant-enriched proxy peers,
+// strongest discovery weight first. The dedupe key matches organic enrichment,
+// so repeats within a queue cycle collapse; once the fetch stores a variants
+// block the peer stops qualifying (hasVariantsProfile flips true even when the
+// fetched profile carries no positive variant pp).
+const VARIANT_SELF_HEAL_MAX = 12;
+const VARIANT_SELF_HEAL_PRIORITY = 10;
+
+function enqueueVariantSelfHeal(queue: JobQueue, peers: WeightedPeer[]): void {
+  const targets = peers
+    .filter((peer) => peer.needsVariantEnrich)
+    .sort((a, b) => b.wD - a.wD)
+    .slice(0, VARIANT_SELF_HEAL_MAX);
+  for (const peer of targets) {
+    void queue
+      .enqueue("enrich_user", `user:${peer.userId}`, { userId: peer.userId }, { priority: VARIANT_SELF_HEAL_PRIORITY })
+      .catch(() => {});
+  }
 }
 
 // The same-pp comparison cohort as a kernel-weighted kNN: a candidate set (the
@@ -792,7 +824,13 @@ async function selectKeyModeKnn(
     // scale so proxy peers sit at the right distance from a variant subject.
     const modePp = hasVariant ? (peer.variantPp as number) : calibrateProxy(calibration, peer.weightedPp);
     if (!Number.isFinite(modePp) || modePp <= 0) continue;
-    candidates.push({ userId: peer.userId, pp: peer.pp, modePp, confidence: hasVariant ? 1 : PROXY_CONFIDENCE });
+    candidates.push({
+      userId: peer.userId,
+      pp: peer.pp,
+      modePp,
+      confidence: hasVariant ? 1 : PROXY_CONFIDENCE,
+      needsVariantEnrich: !hasVariant && !peer.hasVariantsProfile,
+    });
   }
   return kernelSelect(candidates, subjectModePp);
 }
@@ -856,7 +894,7 @@ function kernelSelect(candidates: CohortCandidate[], subjectModePp: number): { p
       const wD = c.confidence * triangular(d, DISCOVERY_KERNEL_DOWN * m, DISCOVERY_KERNEL_UP * m);
       if (wD <= 0) continue;
       const wB = c.confidence * triangular(d, BENCHMARK_KERNEL_HALF_WIDTH * m, BENCHMARK_KERNEL_HALF_WIDTH * m);
-      weighted.push({ userId: c.userId, pp: c.pp, modePp: c.modePp, wD, wB });
+      weighted.push({ userId: c.userId, pp: c.pp, modePp: c.modePp, wD, wB, needsVariantEnrich: c.needsVariantEnrich });
       effN += wD;
     }
     if (effN >= MIN_EFFECTIVE_PEERS) {
@@ -886,6 +924,7 @@ function kernelSelect(candidates: CohortCandidate[], subjectModePp: number): { p
         modePp: c.modePp,
         wD: Math.max(existing?.wD ?? 0, floor),
         wB: Math.max(existing?.wB ?? 0, floor),
+        needsVariantEnrich: c.needsVariantEnrich,
       });
     }
     weighted = [...merged.values()];

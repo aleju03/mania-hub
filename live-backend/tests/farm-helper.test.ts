@@ -1044,4 +1044,49 @@ describe("farm helper", () => {
     const gated = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" }, stubQueue);
     expect(gated.recs.some((rec) => rec.beatmapId === hard)).toBe(false);
   });
+
+  it("self-heals proxy-only cohort peers by enqueueing their variant enrichment", async () => {
+    const recent = nowIso();
+    const target = 9550;
+    const support = Array.from({ length: 8 }, (_, i) => 9560 + i);
+    const bestScores = [
+      subjectScore(9590, 700, recent, 4, 5),
+      ...support.map((beatmapId, i) => subjectScore(beatmapId, 500 - i * 5, recent, 4, 5)),
+    ];
+
+    await insertBeatmapMeta(target, 4, 5);
+    for (const beatmapId of support) await insertBeatmapMeta(beatmapId, 4, 5);
+
+    // 12 proxy-only peers (no pp_4k, no variants in profile_json) plus two
+    // controls: one with real variant pp, one whose profile already carries a
+    // variants block (a fetch cannot improve either).
+    const seedPeer = async (id: number, name: string) => {
+      await insertUser(id, 13_000, "CR", name);
+      await insertFarmed("CR", id, target, 520, recent);
+      for (const beatmapId of support) await insertFarmed("CR", id, beatmapId, 500, recent);
+    };
+    for (let i = 0; i < 12; i += 1) await seedPeer(9500 + i, `ProxyPeer${i}`);
+    await seedPeer(9540, "VariantPeer");
+    await exec(db, "update users set pp_4k = 3800 where user_id = 9540");
+    await seedPeer(9541, "ProfiledPeer");
+    await exec(db, `update users set profile_json = '{"statistics":{"variants":[]}}' where user_id = 9541`);
+
+    const enqueued: Array<{ type: string; key: string }> = [];
+    const captureQueue = {
+      enqueue: async (type: string, key: string) => {
+        enqueued.push({ type, key });
+      },
+    } as unknown as Parameters<typeof getFarmHelperSnapshot>[4];
+
+    const osu = makeOsuStub(bestScores, 15_000);
+    await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" }, captureQueue);
+
+    const enriches = enqueued.filter((entry) => entry.type === "enrich_user");
+    expect(enriches.length).toBeGreaterThan(0);
+    expect(enriches.some((entry) => entry.key === "user:9500")).toBe(true);
+    // Neither control peer qualifies: one already has variant pp, the other's
+    // profile shows the variants block was fetched and carried nothing usable.
+    expect(enriches.some((entry) => entry.key === "user:9540")).toBe(false);
+    expect(enriches.some((entry) => entry.key === "user:9541")).toBe(false);
+  });
 });
