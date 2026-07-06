@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion, useDragControls } from "framer-motion";
+import { motion, useDragControls } from "framer-motion";
 import {
   fetchLiveMapSearch,
   type LiveMapSearchEntry,
@@ -571,8 +571,63 @@ function DanPicker({ ui, apply, inline = false }: { ui: MapSearchUiState; apply:
   );
 }
 
+// The mobile toolbar's Filters trigger plus its bottom sheet. The open state
+// lives here, not in MapSearchSection, so toggling the sheet re-renders only
+// this control and not the card grid behind it (the other half of the phone
+// open/close jank).
+function MobileFilters({
+  ui,
+  apply,
+  onClear,
+  hasActiveFilters,
+  collapsedFilterCount,
+  resultsLabel,
+}: {
+  ui: MapSearchUiState;
+  apply: ApplyFn;
+  onClear: () => void;
+  hasActiveFilters: boolean;
+  collapsedFilterCount: number;
+  resultsLabel: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-[12.5px] font-semibold cursor-pointer transition-colors bg-osu-b4 text-osu-l2 hover:bg-osu-b3 hover:text-osu-l1"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden="true">
+          <path d="M3 6h18M7 12h10M10 18h4" />
+        </svg>
+        Filters
+        {collapsedFilterCount > 0 && (
+          <span className="rounded-full bg-osu-pink px-1.5 text-[10px] font-bold leading-4 text-white tabular-nums">
+            {collapsedFilterCount}
+          </span>
+        )}
+      </button>
+      <MobileFilterSheet
+        open={open}
+        onClose={() => setOpen(false)}
+        ui={ui}
+        apply={apply}
+        onClear={onClear}
+        hasActiveFilters={hasActiveFilters}
+        resultsLabel={resultsLabel}
+      />
+    </>
+  );
+}
+
 // Bottom sheet holding the secondary filters on phones. Filters apply live (the
 // dimmed grid updates behind the scrim); the pink button just closes the sheet.
+// The sheet stays mounted across open/close (translated offscreen, inert) so a
+// toggle only moves an existing compositor layer instead of mounting the badge
+// wall and sliders mid-animation, which dropped frames on phones.
 function MobileFilterSheet({
   open,
   onClose,
@@ -609,78 +664,77 @@ function MobileFilterSheet({
   if (typeof document === "undefined") return null;
 
   return createPortal(
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          key="map-filter-sheet"
-          className="fixed inset-0 z-[120] sm:hidden"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.12 }}
+    <div
+      className={`fixed inset-0 z-[120] sm:hidden ${open ? "" : "pointer-events-none"}`}
+      aria-hidden={!open}
+      inert={!open}
+    >
+      <motion.div
+        className="absolute inset-0 bg-black/70"
+        initial={false}
+        animate={{ opacity: open ? 1 : 0 }}
+        transition={{ duration: 0.15 }}
+        onClick={onClose}
+      />
+      <motion.div
+        className="absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-2xl bg-osu-b5 ring-1 ring-white/10"
+        style={{ willChange: "transform" }}
+        initial={false}
+        animate={{ y: open ? "0%" : "100%" }}
+        transition={{ duration: 0.26, ease: [0.32, 0.72, 0, 1] }}
+        drag="y"
+        dragListener={false}
+        dragControls={dragControls}
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={{ top: 0, bottom: 0.6 }}
+        onDragEnd={(_, info) => {
+          if (info.offset.y > 120 || info.velocity.y > 600) onClose();
+        }}
+      >
+        <div
+          className="shrink-0 cursor-grab touch-none pt-2 active:cursor-grabbing"
+          onPointerDown={(e) => dragControls.start(e)}
         >
-          <div className="absolute inset-0 bg-black/70" onClick={onClose} />
-          <motion.div
-            className="absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-2xl bg-osu-b5 ring-1 ring-white/10"
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-            drag="y"
-            dragListener={false}
-            dragControls={dragControls}
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={{ top: 0, bottom: 0.6 }}
-            onDragEnd={(_, info) => {
-              if (info.offset.y > 120 || info.velocity.y > 600) onClose();
-            }}
+          <div className="mx-auto h-1 w-9 rounded-full bg-osu-b3" aria-hidden="true" />
+          <span className="block px-4 pt-2 text-[13px] font-bold text-osu-l1">Filters</span>
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-3.5">
+          <KeysChips ui={ui} apply={apply} />
+          <StatusChips ui={ui} apply={apply} />
+          <ChipGroup label="Difficulty">
+            <StarSlider ui={ui} apply={apply} />
+          </ChipGroup>
+          <ChipGroup label="Dan (est.)">
+            <DanPicker ui={ui} apply={apply} inline />
+          </ChipGroup>
+          <ChipGroup label="BPM">
+            <BpmSlider ui={ui} apply={apply} />
+          </ChipGroup>
+          <ChipGroup label="Length">
+            <LengthSlider ui={ui} apply={apply} />
+          </ChipGroup>
+        </div>
+        <div className="flex items-center justify-between gap-3 border-t border-osu-b3/20 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <button
+            type="button"
+            onClick={onClear}
+            disabled={!hasActiveFilters}
+            className={`text-[12px] transition-colors ${
+              hasActiveFilters ? "text-osu-f1 hover:text-osu-pink-light cursor-pointer" : "text-osu-f1/40 cursor-default"
+            }`}
           >
-            <div
-              className="shrink-0 cursor-grab touch-none pt-2 active:cursor-grabbing"
-              onPointerDown={(e) => dragControls.start(e)}
-            >
-              <div className="mx-auto h-1 w-9 rounded-full bg-osu-b3" aria-hidden="true" />
-              <span className="block px-4 pt-2 text-[13px] font-bold text-osu-l1">Filters</span>
-            </div>
-            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-3.5">
-              <KeysChips ui={ui} apply={apply} />
-              <StatusChips ui={ui} apply={apply} />
-              <ChipGroup label="Difficulty">
-                <StarSlider ui={ui} apply={apply} />
-              </ChipGroup>
-              <ChipGroup label="Dan (est.)">
-                <DanPicker ui={ui} apply={apply} inline />
-              </ChipGroup>
-              <ChipGroup label="BPM">
-                <BpmSlider ui={ui} apply={apply} />
-              </ChipGroup>
-              <ChipGroup label="Length">
-                <LengthSlider ui={ui} apply={apply} />
-              </ChipGroup>
-            </div>
-            <div className="flex items-center justify-between gap-3 border-t border-osu-b3/20 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-              <button
-                type="button"
-                onClick={onClear}
-                disabled={!hasActiveFilters}
-                className={`text-[12px] transition-colors ${
-                  hasActiveFilters ? "text-osu-f1 hover:text-osu-pink-light cursor-pointer" : "text-osu-f1/40 cursor-default"
-                }`}
-              >
-                Clear all
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-md bg-osu-pink px-4 py-2 text-[12.5px] font-bold text-white hover:bg-osu-pink-light transition-colors cursor-pointer"
-              >
-                {resultsLabel}
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>,
+            Clear all
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md bg-osu-pink px-4 py-2 text-[12.5px] font-bold text-white hover:bg-osu-pink-light transition-colors cursor-pointer"
+          >
+            {resultsLabel}
+          </button>
+        </div>
+      </motion.div>
+    </div>,
     document.body,
   );
 }
@@ -740,9 +794,6 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
   const [ui, setUi] = useState<MapSearchUiState>(state);
   const [searchInput, setSearchInput] = useState(state.q);
   const [showMore, setShowMore] = useState(state.bpmMin > 0 || state.bpmMax > 0 || state.lenMin > 0 || state.lenMax > 0);
-  // On phones the secondary filters live in a bottom sheet behind the toolbar's
-  // Filters button; its badge carries the active count.
-  const [showFilters, setShowFilters] = useState(false);
   const [result, setResult] = useState<LiveMapSearchResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -933,23 +984,14 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
 
         {/* Mobile toolbar: secondary filters collapse behind a toggle, sort is a dropdown */}
         <div className="flex items-center gap-2 sm:hidden">
-          <button
-            type="button"
-            onClick={() => setShowFilters(true)}
-            aria-haspopup="dialog"
-            aria-expanded={showFilters}
-            className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-[12.5px] font-semibold cursor-pointer transition-colors bg-osu-b4 text-osu-l2 hover:bg-osu-b3 hover:text-osu-l1"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden="true">
-              <path d="M3 6h18M7 12h10M10 18h4" />
-            </svg>
-            Filters
-            {collapsedFilterCount > 0 && (
-              <span className="rounded-full bg-osu-pink px-1.5 text-[10px] font-bold leading-4 text-white tabular-nums">
-                {collapsedFilterCount}
-              </span>
-            )}
-          </button>
+          <MobileFilters
+            ui={ui}
+            apply={apply}
+            onClear={clearFilters}
+            hasActiveFilters={hasActiveFilters}
+            collapsedFilterCount={collapsedFilterCount}
+            resultsLabel={`Show ${formatNumber(total)} maps`}
+          />
           <div className="ml-auto">
             <SortSelect value={ui.sort} onChange={(id) => apply({ sort: id, page: 0 })} />
           </div>
@@ -1067,15 +1109,6 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
           </div>
         )}
       </div>
-      <MobileFilterSheet
-        open={showFilters}
-        onClose={() => setShowFilters(false)}
-        ui={ui}
-        apply={apply}
-        onClear={clearFilters}
-        hasActiveFilters={hasActiveFilters}
-        resultsLabel={`Show ${formatNumber(total)} maps`}
-      />
       <MapDetailModal entry={detail} onClose={() => setDetail(null)} />
     </div>
   );
