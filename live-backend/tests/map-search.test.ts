@@ -469,6 +469,81 @@ describe("map search index", () => {
     expect(pack!.coverSetIds).toEqual([10]);
     expect(pack!.coverSetId).toBe(10);
   }, 30000);
+
+  it("folds chordjack charts into the jack group and retires chordjack packs", async () => {
+    const db = await makeDb();
+    // Three jack-primary and three chordjack-primary sets in one bucket. The
+    // merged Jack shelf draws from both (neither family alone reaches
+    // MIN_MEMBERS), and no chordjack shelf publishes anymore.
+    for (let i = 0; i < 3; i++) {
+      const beatmapId = i + 1;
+      await seedMap(db, { beatmapId, beatmapsetId: (i + 1) * 10, cs: 4, primary: "jack", patterns: { jack: 0.9 } });
+      await seedAnalysis(db, beatmapId, { rawDan: 9.2 + i * 0.1, label: "9" });
+    }
+    for (let i = 0; i < 3; i++) {
+      const beatmapId = i + 4;
+      await seedMap(db, { beatmapId, beatmapsetId: (i + 4) * 10, cs: 4, primary: "chordjack", patterns: { chordjack: 0.9 } });
+      await seedAnalysis(db, beatmapId, { rawDan: 9.5 + i * 0.1, label: "9" });
+    }
+    await buildAll(db);
+    await rebuildMapCollections(db);
+
+    const detail = await getMapCollection(db, "pattern:jack:4k:dan:d9-10");
+    expect(detail).toBeTruthy();
+    expect(detail!.items.map((item) => item.beatmapId).sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6]);
+    const collections = await getMapCollections(db);
+    expect(collections.some((collection) => collection.id.startsWith("pattern:chordjack:"))).toBe(false);
+  }, 30000);
+
+  it("keeps blocklisted uploads (vibro packs, FNF rips) out of every pack", async () => {
+    const db = await makeDb();
+    for (let i = 0; i < 5; i++) {
+      const beatmapId = i + 1;
+      await seedMap(db, { beatmapId, beatmapsetId: (i + 1) * 10, cs: 4, primary: "jack", patterns: { jack: 0.9 } });
+      await seedAnalysis(db, beatmapId, { rawDan: 9.2 + i * 0.1, label: "9" });
+    }
+    // These pass every numeric filter (unflagged jumptrill-vibro measures
+    // clean) and must still stay out on their metadata alone.
+    const junk: Array<Partial<SeedMap> & { beatmapId: number; beatmapsetId: number }> = [
+      { beatmapId: 6, beatmapsetId: 60, title: "4k Vibro Pack 99", artist: "Various Artists" },
+      { beatmapId: 7, beatmapsetId: 70, title: "V.S. AGOTI (Insane) FULL WEEK", artist: "AGOTI" },
+      { beatmapId: 8, beatmapsetId: 80, title: "Friday Night Funkin vs AFLAC", artist: "By Aflac" },
+    ];
+    for (const map of junk) {
+      await seedMap(db, { ...map, cs: 4, primary: "jack", patterns: { jack: 0.99 } });
+      await seedAnalysis(db, map.beatmapId, { rawDan: 9.5, label: "9" });
+    }
+    await buildAll(db);
+    await rebuildMapCollections(db);
+
+    const detail = await getMapCollection(db, "pattern:jack:4k:dan:d9-10");
+    expect(detail).toBeTruthy();
+    expect(detail!.items.map((item) => item.beatmapId).sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5]);
+  }, 30000);
+
+  it("keeps one chart per song across different uploads of the same track", async () => {
+    const db = await makeDb();
+    for (let i = 0; i < 4; i++) {
+      const beatmapId = i + 1;
+      await seedMap(db, { beatmapId, beatmapsetId: (i + 1) * 10, cs: 4, primary: "jack", patterns: { jack: 0.9 } });
+      await seedAnalysis(db, beatmapId, { rawDan: 9.2 + i * 0.1, label: "9" });
+    }
+    // Three separate beatmapsets of the same song (one a cut version); only
+    // the strongest chart survives, so the set dedupe alone is not enough.
+    await seedMap(db, { beatmapId: 5, beatmapsetId: 50, cs: 4, title: "MAID OF FIRE", primary: "jack", patterns: { jack: 0.99 } });
+    await seedAnalysis(db, 5, { rawDan: 9.5, label: "9" });
+    await seedMap(db, { beatmapId: 6, beatmapsetId: 60, cs: 4, title: "MAID OF FIRE", primary: "jack", patterns: { jack: 0.95 } });
+    await seedAnalysis(db, 6, { rawDan: 9.5, label: "9" });
+    await seedMap(db, { beatmapId: 7, beatmapsetId: 70, cs: 4, title: "Maid of Fire (Cut Ver.)", primary: "jack", patterns: { jack: 0.93 } });
+    await seedAnalysis(db, 7, { rawDan: 9.5, label: "9" });
+    await buildAll(db);
+    await rebuildMapCollections(db);
+
+    const detail = await getMapCollection(db, "pattern:jack:4k:dan:d9-10");
+    expect(detail).toBeTruthy();
+    const ids = detail!.items.map((item) => item.beatmapId).sort((a, b) => a - b);
+    expect(ids).toEqual([1, 2, 3, 4, 5]);
+  }, 30000);
 });
 
 describe("map search + collections HTTP", () => {

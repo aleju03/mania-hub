@@ -28,12 +28,11 @@ interface Props {
 }
 
 const PATTERN_DESCRIPTION: Record<string, string> = {
-  jack: "Repeated notes hammered in the same column.",
+  jack: "Repeated notes hammered on the same columns — single jacks, chordjack, all of it.",
   stream: "Fast single-note runs flowing across the keys.",
   jumpstream: "Streams broken up by two-note jumps.",
   handstream: "Streams thickened with three-note hand chords.",
   stamina: "Long, dense charts that test endurance.",
-  chordjack: "Chords jackhammered across multiple columns.",
   tech: "Shifting, irregular patterns that punish bad reading.",
   ln: "Long-note and hold-heavy charts.",
 };
