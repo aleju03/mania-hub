@@ -35,11 +35,21 @@ export interface UserShape {
   n: number;
 }
 
-// Batch-reads chart shapes from map_search_index. Uses the real pat_* columns and
-// a single JSON.parse of msd_json per row (never json_extract in SQL).
-export async function readChartShapes(db: Db, beatmapIds: number[]): Promise<Map<number, ChartShape>> {
+// Chart shapes plus the raw (un-normalized) 4K MSD skillset vectors used by the
+// feasibility gate, from one map_search_index pass (one query + one JSON.parse
+// of msd_json per row, shared by both consumers).
+export interface ChartShapeData {
+  shapes: Map<number, ChartShape>;
+  rawMsd: Map<number, number[]>;
+}
+
+// Batch-reads chart shapes (and raw MSD) from map_search_index. Uses the real
+// pat_* columns and a single JSON.parse of msd_json per row (never json_extract
+// in SQL).
+export async function readChartShapeData(db: Db, beatmapIds: number[]): Promise<ChartShapeData> {
   const ids = [...new Set(beatmapIds.filter((id) => Number.isSafeInteger(id) && id > 0))];
-  const result = new Map<number, ChartShape>();
+  const shapes = new Map<number, ChartShape>();
+  const rawMsd = new Map<number, number[]>();
   const patCols = PAT_COLUMNS.join(", ");
   for (let i = 0; i < ids.length; i += 900) {
     const chunk = ids.slice(i, i + 900);
@@ -54,10 +64,16 @@ export async function readChartShapes(db: Db, beatmapIds: number[]): Promise<Map
     for (const row of rows) {
       const beatmapId = Number(row.beatmap_id);
       if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0) continue;
-      result.set(beatmapId, { pat: readPatVector(row), msd: readMsdVector(row) });
+      const msd = readMsdVectors(row);
+      shapes.set(beatmapId, { pat: readPatVector(row), msd: msd?.normalized ?? null });
+      if (msd?.raw) rawMsd.set(beatmapId, msd.raw);
     }
   }
-  return result;
+  return { shapes, rawMsd };
+}
+
+export async function readChartShapes(db: Db, beatmapIds: number[]): Promise<Map<number, ChartShape>> {
+  return (await readChartShapeData(db, beatmapIds)).shapes;
 }
 
 function readPatVector(row: Record<string, unknown>): number[] | null {
@@ -75,20 +91,44 @@ function readPatVector(row: Record<string, unknown>): number[] | null {
   return anyPresent ? vector : null;
 }
 
-function readMsdVector(row: Record<string, unknown>): number[] | null {
+// Raw MSD skillsets plus their Overall-normalized shape, from one msd_json
+// parse. 4K only (msd is a 4K MinaCalc output). `raw` requires every skillset to
+// be finite (the feasibility gate compares absolute values); `normalized` only
+// needs a positive Overall.
+function readMsdVectors(row: Record<string, unknown>): { raw: number[] | null; normalized: number[] | null } | null {
   if (Number(row.key_count) !== 4) return null;
   if (row.msd_json == null) return null;
   const parsed = parseJson<{ values?: Record<string, number> }>(row.msd_json, {});
   const values = parsed?.values;
   if (!values || typeof values !== "object") return null;
+  const raw = MSD_SKILLSETS.map((skill) => Number(values[skill]));
   const overall = Number(values.Overall ?? row.msd_overall);
-  if (!Number.isFinite(overall) || overall <= 0) return null;
-  const vector: number[] = [];
-  for (const skill of MSD_SKILLSETS) {
-    const raw = Number(values[skill]);
-    vector.push(Number.isFinite(raw) ? raw / overall : 0);
-  }
-  return vector;
+  const normalized = Number.isFinite(overall) && overall > 0
+    ? raw.map((v) => (Number.isFinite(v) ? v / overall : 0))
+    : null;
+  return { raw: raw.every((v) => Number.isFinite(v)) ? raw : null, normalized };
+}
+
+// Weight-averages a user's charts into a shape profile, weighting each chart by
+// its weighted-pp contribution (0.95^rank * pp) so their strongest maps set the
+// profile. `entries` must be sorted by pp descending; rank counts every entry
+// (covered or not) so the weights match the weighted-pp ranking. Shared by the
+// subject-side (top plays) and peer-side (farmed rows) profile builders.
+export function buildWeightedUserShape(
+  entries: Array<{ beatmapId: number; pp: number }>,
+  shapes: Map<number, ChartShape>,
+): { shape: UserShape | null; uncovered: number[] } {
+  const weighted: Array<{ shape: ChartShape; weight: number }> = [];
+  const uncovered: number[] = [];
+  entries.forEach(({ beatmapId, pp }, rank) => {
+    const shape = shapes.get(beatmapId);
+    if (!shape) {
+      uncovered.push(beatmapId);
+      return;
+    }
+    weighted.push({ shape, weight: 0.95 ** rank * pp });
+  });
+  return { shape: aggregateShape(weighted), uncovered };
 }
 
 // Weight-averages per-chart shapes into a user profile. `pat` is null unless at
@@ -193,35 +233,6 @@ export async function readPeerShapes(db: Db, userIds: number[], keyCount: number
       if (!Number.isSafeInteger(userId) || userId <= 0) continue;
       const shape = parseUserShape(row.shape_json);
       if (shape) result.set(userId, shape);
-    }
-  }
-  return result;
-}
-
-// Raw (un-normalized) MSD skillset vectors for 4K charts, in MSD_SKILLSETS order.
-// Used by the feasibility gate, which compares a chart's dominant raw skillset
-// against the subject's skill rating (both on the MinaCalc scale).
-export async function readChartMsd(db: Db, beatmapIds: number[]): Promise<Map<number, number[]>> {
-  const ids = [...new Set(beatmapIds.filter((id) => Number.isSafeInteger(id) && id > 0))];
-  const result = new Map<number, number[]>();
-  for (let i = 0; i < ids.length; i += 900) {
-    const chunk = ids.slice(i, i + 900);
-    if (chunk.length === 0) continue;
-    const placeholders = chunk.map(() => "?").join(",");
-    const rows = (await exec(
-      db,
-      `select beatmap_id, key_count, msd_json from map_search_index where beatmap_id in (${placeholders})`,
-      chunk,
-    )).rows;
-    for (const row of rows) {
-      const beatmapId = Number(row.beatmap_id);
-      if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0) continue;
-      if (Number(row.key_count) !== 4 || row.msd_json == null) continue;
-      const parsed = parseJson<{ values?: Record<string, number> }>(row.msd_json, {});
-      const values = parsed?.values;
-      if (!values || typeof values !== "object") continue;
-      const vector = MSD_SKILLSETS.map((skill) => Number(values[skill]));
-      if (vector.every((v) => Number.isFinite(v))) result.set(beatmapId, vector);
     }
   }
   return result;

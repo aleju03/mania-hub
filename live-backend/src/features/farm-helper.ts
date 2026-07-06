@@ -5,7 +5,7 @@ import { calculateWeightedPpTotal, extractManiaVariantPps, getModAcronyms, getSc
 import type { OscScore } from "../shared/types.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { calibrateProxy, getKeyModePeerPool, type FarmHelperKeyCount } from "./farm-helper-key-stats.js";
-import { aggregateShape, computeShapeWeights, MSD_SKILLSETS, readChartMsd, readChartShapes, readPeerShapes, shapeSimilarity, SHAPE_MIN_CHARTS, type ChartShape, type UserShape } from "./farm-helper-shape.js";
+import { buildWeightedUserShape, computeShapeWeights, MSD_SKILLSETS, readChartShapeData, readChartShapes, readPeerShapes, shapeSimilarity, SHAPE_MIN_CHARTS, type ChartShape, type UserShape } from "./farm-helper-shape.js";
 import { enqueueMissingChartAnalyses } from "./chart-analysis.js";
 import { getPlayerSkillBreakdown } from "./player-skills.js";
 import type { JobQueue } from "../jobs/queue.js";
@@ -120,6 +120,12 @@ const PROXY_CONFIDENCE = 0.85;
 const MIN_EFFECTIVE_PEERS = 12;
 const KNN_MAX_PEERS = 400;
 const KNN_WIDEN_MODES = ["knn", "knn_wide", "knn_wider", "knn_widest"] as const;
+// When even the widest kernel finds (nearly) nobody, fall back to the nearest
+// peers by mode-pp distance at a flat floor weight, so pp-isolated subjects (top
+// ranks, sparse keymodes) still get a cohort instead of an empty page. Mirrors
+// the old band ladder's unconditional "nearest" terminal mode.
+const SPARSE_FALLBACK_PEERS = 100;
+const SPARSE_FALLBACK_WEIGHT = 0.25;
 // Feasibility gate (Stage 4): drop a 4K chart from the gain view when its
 // dominant MSD skillset exceeds the subject's rating for it by this margin.
 // TODO(farm-helper-v2 7.3): stored MSD is 4K at 1.0x only, so the gate is limited
@@ -163,6 +169,13 @@ interface CachedFarmHelper {
 // per-subject peer-band cache is gone: the expensive fetch is the per-keyCount
 // pool, cached subject-independently inside farm-helper-key-stats.
 const farmHelperCache = new WeakMap<Db, Map<string, CachedFarmHelper>>();
+
+const TOTAL_PP_POOL_TTL_MS = 5 * 60_000;
+interface CachedTotalPpPool {
+  rows: Array<{ userId: number; pp: number }>;
+  expiresAt: number;
+}
+const totalPpPoolCache = new WeakMap<Db, CachedTotalPpPool>();
 
 // A cohort peer with both kernel weights. modePp is the effective mode pp used
 // for distance (real variant pp, calibrated proxy, or total pp for "any"); pp is
@@ -208,9 +221,12 @@ interface PeerFarmedAggregation {
   // Cohort peers with any farm data (>= 1 row).
   farmDataPeerCount: number;
   // Cohort peers with a meaningful farm sample (>= MIN_FARMED_FOR_SAMPLE rows):
-  // the peerFraction denominator, both as a count and as a discovery-weight sum.
+  // the peerFraction denominator, as a count, a discovery-weight sum, and the
+  // ids themselves (so deferred per-keymode shape weights can build their own
+  // per-mode denominator sums).
   eligiblePeerCount: number;
   eligibleWdSum: number;
+  denominatorIds: number[];
 }
 
 interface CanonicalFarmedScore {
@@ -270,7 +286,10 @@ export async function getFarmHelperSnapshot(
   const coverUrl = String(user.cover_url ?? asRecord(user.cover).url ?? "");
 
   const cache = getCache(db);
-  const cacheKey = `${userId}:${requestedKeyMode}:${view}:${limit}`;
+  // The queue flag is part of the key: snapshot content depends on it (the
+  // feasibility gate only runs with a queue), and queue-less callers (Discord)
+  // share this per-Db cache with the HTTP path.
+  const cacheKey = `${userId}:${requestedKeyMode}:${view}:${limit}:${queue ? "q" : "nq"}`;
   const now = Date.now();
   const cached = cache.get(cacheKey);
   if (cached && cached.expiresAt > now) {
@@ -452,11 +471,14 @@ async function buildSnapshot(
 
   // Chart-shape weighting: down-weight peers whose farm charts look unlike the
   // subject's, so an LN main and a jack main at the same pp get different recs.
-  // The returned subject shape also drives per-candidate patternFit below.
-  let subjectShape: UserShape | null = null;
+  // Shapes are per concrete keymode: on "any", a hybrid subject's 4K candidates
+  // are scored against their 4K shape and 7K candidates against their 7K shape,
+  // never one dominant-mode profile for everything.
+  let shapeCtx = emptyShapeContext();
   if (peers.length > 0) {
-    subjectShape = await applyShapeWeighting(db, peers, rankedScores, keyMode, subjectModeStatsByKey, ctx.subjectVariantPps, ctx.queue);
+    shapeCtx = await computeShapeContext(db, peers, rankedScores, keyMode, subjectModeStatsByKey, ctx.subjectVariantPps, ctx.queue);
   }
+  const hasSubjectShape = Object.keys(shapeCtx.subjectShapes).length > 0;
 
   const emptyBand = {
     mode: peerMode,
@@ -495,30 +517,48 @@ async function buildSnapshot(
   if (peerFarmed.farmDataPeerCount === 0) return coveredSnapshot;
 
   const minPeerFraction = isPopular ? POPULAR_PEER_MIN_FRACTION : PEER_MIN_FRACTION;
-  const candidates: Array<{ agg: CandidateAgg; peerFraction: number }> = [];
+  // With deferred per-keymode shape weights ("any" view), the exact fraction
+  // needs the candidate's keymode, which is only known once beatmap meta is
+  // read. Pre-gate on the kernel-only fraction at half strength here, then
+  // apply the exact shaped gate in the scoring loop.
+  const hasDeferredShapeWeights = Object.keys(shapeCtx.peerWeightsByMode).length > 0;
+  const preGateFraction = hasDeferredShapeWeights ? minPeerFraction * 0.5 : minPeerFraction;
+  const candidates: Array<{ agg: CandidateAgg; kernelFraction: number }> = [];
   for (const agg of peerFarmed.byBeatmap.values()) {
     if (agg.entries.length < PEER_MIN_COUNT) continue;
     const numeratorWd = agg.entries.reduce((sum, e) => sum + e.wD, 0);
-    const peerFraction = peerFarmed.eligibleWdSum > 0 ? Math.min(1, numeratorWd / peerFarmed.eligibleWdSum) : 0;
-    if (peerFraction < minPeerFraction) continue;
-    candidates.push({ agg, peerFraction });
+    const kernelFraction = peerFarmed.eligibleWdSum > 0 ? Math.min(1, numeratorWd / peerFarmed.eligibleWdSum) : 0;
+    if (kernelFraction < preGateFraction) continue;
+    candidates.push({ agg, kernelFraction });
   }
   if (candidates.length === 0) return coveredSnapshot;
+
+  // Shaped peerFraction denominators, one per keymode with deferred weights.
+  const wdById = new Map(peers.map((p) => [p.userId, p.wD]));
+  const eligibleWdSumByMode: Partial<Record<ConcreteFarmHelperKeyMode, number>> = {};
+  for (const mode of FARM_HELPER_CONCRETE_KEY_MODES) {
+    const weights = shapeCtx.peerWeightsByMode[mode];
+    if (!weights) continue;
+    let sum = 0;
+    for (const id of peerFarmed.denominatorIds) sum += (wdById.get(id) ?? 0) * (weights.get(id) ?? 1);
+    eligibleWdSumByMode[mode] = sum;
+  }
 
   const beatmapIds = candidates.map((c) => c.agg.beatmapId);
   const beatmapMeta = await readBeatmapMeta(db, beatmapIds);
   const beatmapsetIds = [...new Set([...beatmapMeta.values()].map((m) => m.beatmapsetId))];
   const beatmapsetMeta = await readBeatmapsetMeta(db, beatmapsetIds);
-  // Per-candidate chart shapes drive patternFit (ranking). Only needed when the
-  // subject has a shape to compare against.
-  const candidateShapes = subjectShape ? await readChartShapes(db, beatmapIds) : new Map<number, ChartShape>();
+  // One map_search_index pass serves both per-candidate patternFit (shapes) and
+  // the feasibility gate (raw MSD).
+  const chartData = hasSubjectShape || !isPopular ? await readChartShapeData(db, beatmapIds) : null;
+  const candidateShapes = hasSubjectShape && chartData ? chartData.shapes : new Map<number, ChartShape>();
   // Feasibility gate (gain view only): the subject's 4K skill ratings vs each
-  // chart's dominant MSD skillset. Fetched once, never blocks or computes inline.
-  const feasibility = isPopular ? null : await buildFeasibilityContext(db, ctx.userId, beatmapIds, ctx.queue);
+  // chart's dominant MSD skillset. Never blocks or computes inline.
+  const feasibility = isPopular || !chartData ? null : await buildFeasibilityContext(db, ctx.userId, chartData.rawMsd, ctx.queue);
 
   type ScoredRec = FarmHelperRec & { difficultyFit: number; recencyFit: number };
   const scored: ScoredRec[] = [];
-  for (const { agg, peerFraction } of candidates) {
+  for (const { agg, kernelFraction } of candidates) {
     const meta = beatmapMeta.get(agg.beatmapId);
     if (!meta) continue;
     if (keyMode !== "any" && meta.keys !== (keyMode === "7k" ? 7 : 4)) continue;
@@ -529,12 +569,28 @@ async function buildSnapshot(
     // 4K at 1.0x; other lanes fall through to the existing pp caps.
     if (feasibility && meta.keys === 4 && agg.speedBucket === "normal" && isChartInfeasible(agg.beatmapId, feasibility)) continue;
 
-    // Benchmark quantiles are weighted by the symmetric benchmark kernel (wB) so
-    // an up-skewed discovery cohort cannot inflate the "if you get X" target.
-    const benchPairs = agg.entries.map((e) => ({ v: e.pp, w: e.wB }));
+    const candidateKeyMode = beatmapKeyMode(meta.keys);
+    // Deferred ("any" view) shape weights for this candidate's own keymode: the
+    // fraction and benchmark weights below fold them in per candidate.
+    const modeShapeWeights = candidateKeyMode ? shapeCtx.peerWeightsByMode[candidateKeyMode] : undefined;
+    let peerFraction = kernelFraction;
+    if (hasDeferredShapeWeights) {
+      if (modeShapeWeights && candidateKeyMode) {
+        const den = eligibleWdSumByMode[candidateKeyMode] ?? 0;
+        const num = agg.entries.reduce((sum, e) => sum + e.wD * (modeShapeWeights.get(e.userId) ?? 1), 0);
+        peerFraction = den > 0 ? Math.min(1, num / den) : kernelFraction;
+      }
+      // The pre-gate ran at half strength; enforce the real floor on the final
+      // (shaped where available) fraction.
+      if (peerFraction < minPeerFraction) continue;
+    }
+
+    // Benchmark quantiles are weighted by the symmetric benchmark kernel (wB),
+    // shape-adjusted for this candidate's keymode, so an up-skewed discovery
+    // cohort cannot inflate the "if you get X" target.
+    const benchPairs = agg.entries.map((e) => ({ v: e.pp, w: e.wB * (modeShapeWeights?.get(e.userId) ?? 1) }));
     const median = weightedQuantile(benchPairs, 0.5);
     const p75 = weightedQuantile(benchPairs, 0.75);
-    const candidateKeyMode = beatmapKeyMode(meta.keys);
     const candidateLaneKey = farmHelperLaneKey(agg.beatmapId, agg.speedBucket);
     if (
       keyMode === "any"
@@ -591,7 +647,8 @@ async function buildSnapshot(
     const difficultyFit = hasFit ? clamp01(1 - Math.abs(meta.stars - starMid) / starSpread) : 0.5;
     const recencyFit = clamp01(1 - (Date.now() - agg.latestUpdatedMs) / STALE_ACTIVE_MS);
     const chartShape = candidateShapes.get(agg.beatmapId);
-    const patternFit = subjectShape && chartShape ? computePatternFit(subjectShape, chartShape) : null;
+    const subjectShapeForMode = candidateKeyMode ? shapeCtx.subjectShapes[candidateKeyMode] : undefined;
+    const patternFit = subjectShapeForMode && chartShape ? computePatternFit(subjectShapeForMode, chartShape) : null;
 
     scored.push({
       beatmapId: agg.beatmapId,
@@ -745,26 +802,40 @@ async function selectTotalPpKnn(
   userId: number,
   subjectPp: number,
 ): Promise<{ peers: WeightedPeer[]; mode: string }> {
-  // Fetch a generous absolute window (covers the widest kernel widening, with a
-  // floor for low-pp subjects) and let the kernel do the relative weighting in
-  // JS. Total pp is a real measurement: no calibration, full confidence.
+  // Window generously (covers the widest kernel widening, with a floor for
+  // low-pp subjects) and let the kernel do the relative weighting in JS. Total
+  // pp is a real measurement: no calibration, full confidence.
+  const pool = await getTotalPpPool(db);
   const downFetch = Math.max(subjectPp * 0.35, 800);
   const upFetch = Math.max(subjectPp * 0.6, 800);
-  const rows = (await exec(
-    db,
-    `select user_id, pp from users
-     where pp is not null and pp > 0 and user_id != ?
-       and pp between ? and ?`,
-    [userId, Math.max(0, subjectPp - downFetch), subjectPp + upFetch],
-  )).rows;
+  const lo = Math.max(0, subjectPp - downFetch);
+  const hi = subjectPp + upFetch;
   const candidates: CohortCandidate[] = [];
+  for (const row of pool) {
+    if (row.userId === userId || row.pp < lo || row.pp > hi) continue;
+    candidates.push({ userId: row.userId, pp: row.pp, modePp: row.pp, confidence: 1 });
+  }
+  return kernelSelect(candidates, subjectPp);
+}
+
+// The total-pp pool (every tracked user with pp), cached briefly per Db: the
+// who-farms modal and repeated "any" snapshots re-enter peer selection often,
+// so one bounded read per TTL beats a users window scan per request (mirrors
+// getKeyModePeerPool on the keymode path).
+async function getTotalPpPool(db: Db): Promise<Array<{ userId: number; pp: number }>> {
+  const now = Date.now();
+  const cached = totalPpPoolCache.get(db);
+  if (cached && cached.expiresAt > now) return cached.rows;
+  const rows = (await exec(db, "select user_id, pp from users where pp is not null and pp > 0")).rows;
+  const pool: Array<{ userId: number; pp: number }> = [];
   for (const row of rows) {
     const id = Number(row.user_id);
     const pp = Number(row.pp);
     if (!Number.isSafeInteger(id) || id <= 0 || !Number.isFinite(pp) || pp <= 0) continue;
-    candidates.push({ userId: id, pp, modePp: pp, confidence: 1 });
+    pool.push({ userId: id, pp });
   }
-  return kernelSelect(candidates, subjectPp);
+  totalPpPoolCache.set(db, { rows: pool, expiresAt: now + TOTAL_PP_POOL_TTL_MS });
+  return pool;
 }
 
 // Weights each candidate by the discovery and benchmark kernels, widening both
@@ -792,6 +863,32 @@ function kernelSelect(candidates: CohortCandidate[], subjectModePp: number): { p
       mode = KNN_WIDEN_MODES[i];
       break;
     }
+  }
+
+  // Sparse fallback: the old band ladder ended in an unconditional "nearest"
+  // mode; keep that guarantee for a subject whose neighbors mostly sit outside
+  // even the widest kernel (pp-isolated top ranks, sparse keymodes). Gate on
+  // included-peer COUNT, not the weighted effective sample: a full cohort of
+  // down-weighted peers is a valid cohort, an (almost) empty one is not.
+  // Nearest peers by mode-pp distance get a flat floor weight, and any peer the
+  // widest kernel did reach keeps its kernel weight where that is stronger.
+  if (mode === "knn_sparse" && weighted.length < MIN_EFFECTIVE_PEERS && candidates.length > 0) {
+    const merged = new Map(weighted.map((p) => [p.userId, p]));
+    const nearest = [...candidates]
+      .sort((a, b) => Math.abs(a.modePp - subjectModePp) - Math.abs(b.modePp - subjectModePp))
+      .slice(0, SPARSE_FALLBACK_PEERS);
+    for (const c of nearest) {
+      const existing = merged.get(c.userId);
+      const floor = c.confidence * SPARSE_FALLBACK_WEIGHT;
+      merged.set(c.userId, {
+        userId: c.userId,
+        pp: c.pp,
+        modePp: c.modePp,
+        wD: Math.max(existing?.wD ?? 0, floor),
+        wB: Math.max(existing?.wB ?? 0, floor),
+      });
+    }
+    weighted = [...merged.values()];
   }
 
   weighted.sort((a, b) => b.wD - a.wD);
@@ -962,7 +1059,7 @@ async function aggregatePeerFarmedMaps(db: Db, peers: WeightedPeer[], asOf?: num
   const denominatorIds = eligibleIds.length > 0 ? eligibleIds : [...farmedRowsPerPeer.keys()];
   let eligibleWdSum = 0;
   for (const userId of denominatorIds) eligibleWdSum += weightById.get(userId)?.wD ?? 0;
-  return { byBeatmap, farmDataPeerCount: farmedRowsPerPeer.size, eligiblePeerCount: denominatorIds.length, eligibleWdSum };
+  return { byBeatmap, farmDataPeerCount: farmedRowsPerPeer.size, eligiblePeerCount: denominatorIds.length, eligibleWdSum, denominatorIds };
 }
 
 function dateMsToIso(ms: number): string | null {
@@ -1004,11 +1101,26 @@ function keepBestFarmedScore(target: Map<string, CanonicalFarmedScore>, farmed: 
   }
 }
 
-// Folds a per-peer chart-shape weight into each cohort peer's kernel weights
-// (wD, wB). The subject shape is built from their top plays in the shape keymode;
-// peer shapes come from their stored profiles. Disabled (no-op) when the subject
-// has too few analyzed top plays to form a shape.
-async function applyShapeWeighting(
+// Shape weighting state for one snapshot request.
+interface ShapeContext {
+  // Subject shape per concrete keymode (missing = too few analyzed top plays).
+  subjectShapes: Partial<Record<ConcreteFarmHelperKeyMode, UserShape>>;
+  // Deferred per-peer shape weights, keyed by candidate keymode. Only populated
+  // on the "any" view: concrete requests fold their single mode's weights into
+  // the cohort's kernel weights up front instead.
+  peerWeightsByMode: Partial<Record<ConcreteFarmHelperKeyMode, Map<number, number>>>;
+}
+
+function emptyShapeContext(): ShapeContext {
+  return { subjectShapes: {}, peerWeightsByMode: {} };
+}
+
+// Chart-shape weighting context. A concrete keymode request behaves like a
+// single profile: that mode's per-peer weights are multiplied into wD/wB here.
+// On "any", a hybrid subject gets one shape per keymode they play, and the
+// weights stay deferred so the scoring loop can apply the candidate's own
+// keymode (a 4K candidate must never be judged against a 7K profile).
+async function computeShapeContext(
   db: Db,
   peers: WeightedPeer[],
   rankedScores: OscScore[],
@@ -1016,45 +1128,43 @@ async function applyShapeWeighting(
   subjectModeStatsByKey: Record<ConcreteFarmHelperKeyMode, { weightedPp: number }>,
   subjectVariantPps: Partial<Record<ConcreteFarmHelperKeyMode, number>>,
   queue?: JobQueue,
-): Promise<UserShape | null> {
-  const shapeKeyMode = pickShapeKeyMode(keyMode, subjectModeStatsByKey, subjectVariantPps);
-  if (!shapeKeyMode) return null;
+): Promise<ShapeContext> {
+  const modes: ConcreteFarmHelperKeyMode[] = keyMode !== "any"
+    ? [keyMode]
+    : FARM_HELPER_CONCRETE_KEY_MODES.filter((mode) => {
+        const pp = subjectVariantPps[mode] ?? subjectModeStatsByKey[mode].weightedPp;
+        return Number.isFinite(pp) && pp > 0;
+      });
 
-  const { shape: subjectShape, uncovered } = await computeSubjectShape(db, rankedScores, shapeKeyMode);
+  const context = emptyShapeContext();
+  const userIds = peers.map((p) => p.userId);
+  const uncoveredAll = new Set<number>();
+  for (const mode of modes) {
+    const { shape, uncovered } = await computeSubjectShape(db, rankedScores, mode);
+    for (const id of uncovered) uncoveredAll.add(id);
+    if (!shape) continue;
+    context.subjectShapes[mode] = shape;
+    const peerShapes = await readPeerShapes(db, userIds, keyModeToKeys(mode));
+    context.peerWeightsByMode[mode] = computeShapeWeights(shape, peerShapes, userIds);
+  }
   // Self-heal: enqueue chart analysis for the subject's un-analyzed top plays so
   // their shape (and coverage) improves on later requests. Fire-and-forget.
-  if (queue && uncovered.length > 0) {
-    void enqueueMissingChartAnalyses(db, queue, uncovered).catch(() => {});
+  if (queue && uncoveredAll.size > 0) {
+    void enqueueMissingChartAnalyses(db, queue, [...uncoveredAll]).catch(() => {});
   }
-  if (!subjectShape) return null;
 
-  const userIds = peers.map((p) => p.userId);
-  const peerShapes = await readPeerShapes(db, userIds, keyModeToKeys(shapeKeyMode));
-  const weights = computeShapeWeights(subjectShape, peerShapes, userIds);
-  for (const peer of peers) {
-    const wS = weights.get(peer.userId) ?? 1;
-    peer.wD *= wS;
-    peer.wB *= wS;
+  if (keyMode !== "any") {
+    const weights = context.peerWeightsByMode[keyMode];
+    if (weights) {
+      for (const peer of peers) {
+        const wS = weights.get(peer.userId) ?? 1;
+        peer.wD *= wS;
+        peer.wB *= wS;
+      }
+      delete context.peerWeightsByMode[keyMode];
+    }
   }
-  // Returned so the candidate loop can score per-map patternFit against the same
-  // subject shape.
-  return subjectShape;
-}
-
-// The keymode whose shape drives weighting: the explicit request, or (for "any")
-// the subject's strongest keymode by variant/proxy pp. Null when the subject has
-// no keymode pp at all.
-function pickShapeKeyMode(
-  keyMode: FarmHelperKeyMode,
-  subjectModeStatsByKey: Record<ConcreteFarmHelperKeyMode, { weightedPp: number }>,
-  subjectVariantPps: Partial<Record<ConcreteFarmHelperKeyMode, number>>,
-): ConcreteFarmHelperKeyMode | null {
-  if (keyMode !== "any") return keyMode;
-  const candidates = FARM_HELPER_CONCRETE_KEY_MODES
-    .map((mode) => ({ mode, pp: subjectVariantPps[mode] ?? subjectModeStatsByKey[mode].weightedPp }))
-    .filter((c) => Number.isFinite(c.pp) && c.pp > 0);
-  if (candidates.length === 0) return null;
-  return candidates.reduce((best, c) => (c.pp > best.pp ? c : best)).mode;
+  return context;
 }
 
 async function computeSubjectShape(
@@ -1062,25 +1172,14 @@ async function computeSubjectShape(
   rankedScores: OscScore[],
   shapeKeyMode: ConcreteFarmHelperKeyMode,
 ): Promise<{ shape: UserShape | null; uncovered: number[] }> {
-  const scored = rankedScores.filter((score) => scoreMatchesKeyMode(score, shapeKeyMode)).slice(0, 100);
-  const beatmapIds = scored
-    .map((score) => Number(score.beatmap_id ?? score.beatmap?.id ?? 0))
-    .filter((id) => Number.isSafeInteger(id) && id > 0);
-  if (beatmapIds.length < SHAPE_MIN_CHARTS) return { shape: null, uncovered: beatmapIds };
-  const chartShapes = await readChartShapes(db, beatmapIds);
-  const entries: Array<{ shape: ChartShape; weight: number }> = [];
-  const uncovered: number[] = [];
-  scored.forEach((score, rank) => {
-    const beatmapId = Number(score.beatmap_id ?? score.beatmap?.id ?? 0);
-    if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0) return;
-    const shape = chartShapes.get(beatmapId);
-    if (!shape) {
-      uncovered.push(beatmapId);
-      return;
-    }
-    entries.push({ shape, weight: 0.95 ** rank * (score.pp as number) });
-  });
-  return { shape: aggregateShape(entries), uncovered };
+  const entries = rankedScores
+    .filter((score) => scoreMatchesKeyMode(score, shapeKeyMode))
+    .slice(0, 100)
+    .map((score) => ({ beatmapId: Number(score.beatmap_id ?? score.beatmap?.id ?? 0), pp: score.pp as number }))
+    .filter((entry) => Number.isSafeInteger(entry.beatmapId) && entry.beatmapId > 0);
+  if (entries.length < SHAPE_MIN_CHARTS) return { shape: null, uncovered: entries.map((e) => e.beatmapId) };
+  const chartShapes = await readChartShapes(db, entries.map((e) => e.beatmapId));
+  return buildWeightedUserShape(entries, chartShapes);
 }
 
 // patternFit: shape cosine clamped to [0,1] (pat/msd vectors are non-negative),
@@ -1095,23 +1194,23 @@ interface FeasibilityContext {
   chartMsd: Map<number, number[]>;
 }
 
-// Builds the feasibility context (subject 4K skill ratings + candidate raw MSD).
-// Returns null (gate disabled) without a queue (backtest), when the subject has
-// no ready 4K skill rating with enough analyzed plays, or when no candidate has
-// MSD. Reading the ratings enqueues a recompute if stale; it never blocks.
+// Builds the feasibility context (subject 4K skill ratings + candidate raw MSD,
+// the latter passed in from the shared map_search_index read). Returns null
+// (gate disabled) without a queue (backtest), when the subject has no ready 4K
+// skill rating with enough analyzed plays, or when no candidate has MSD.
+// Reading the ratings enqueues a recompute if stale; it never blocks.
 async function buildFeasibilityContext(
   db: Db,
   userId: number,
-  beatmapIds: number[],
+  chartMsd: Map<number, number[]>,
   queue?: JobQueue,
 ): Promise<FeasibilityContext | null> {
   if (!queue) return null;
+  if (chartMsd.size === 0) return null;
   const breakdown = await getPlayerSkillBreakdown(db, queue, userId);
   if (breakdown.status !== "ready") return null;
   const mode4k = breakdown.modes.find((mode) => mode.keyCount === 4);
   if (!mode4k || mode4k.analyzedPlays < FEASIBILITY_MIN_ANALYZED_PLAYS) return null;
-  const chartMsd = await readChartMsd(db, beatmapIds);
-  if (chartMsd.size === 0) return null;
   return { ratings: mode4k.ratings, chartMsd };
 }
 

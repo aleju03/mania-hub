@@ -934,4 +934,114 @@ describe("farm helper", () => {
     expect(past?.reason).toBe("missing");
     expect(past?.subjectPp).toBeNull();
   });
+
+  it("falls back to the nearest peers when everyone sits outside the widest kernel", async () => {
+    const recent = nowIso();
+    const target = 9600;
+    const support = Array.from({ length: 8 }, (_, i) => 9610 + i);
+    const subjectMaps = Array.from({ length: 10 }, (_, i) => 9650 + i);
+    const bestScores = subjectMaps.map((beatmapId, i) => subjectScore(beatmapId, 460 - i * 5, recent, 4, 5));
+
+    await insertBeatmapMeta(target, 4, 5);
+    for (const beatmapId of support) await insertBeatmapMeta(beatmapId, 4, 5);
+    for (const beatmapId of subjectMaps) await insertBeatmapMeta(beatmapId, 4, 5);
+
+    // Every 4K peer's proxy sits at roughly a third of the subject's 4K variant
+    // pp: outside even the widest discovery kernel, where the old band ladder's
+    // terminal "nearest" mode still produced a cohort.
+    for (let i = 0; i < 12; i += 1) {
+      const id = 9660 + i;
+      await insertUser(id, 3_000, "CR", `FarPeer${i}`);
+      await insertFarmed("CR", id, target, 420, recent);
+      for (const beatmapId of support) await insertFarmed("CR", id, beatmapId, 400, recent);
+    }
+
+    const osu = makeOsuStub(bestScores, 9_000, { "4k": 9_000 });
+    const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" });
+
+    expect(snapshot.peerBand.mode).toBe("knn_sparse");
+    expect(snapshot.peerBand.count).toBe(12);
+    expect(snapshot.recs.some((rec) => rec.beatmapId === target)).toBe(true);
+  });
+
+  it("scores Any-view candidates against their own keymode's subject shape, not the dominant mode's", async () => {
+    const recent = nowIso();
+    const JACK = [1, 0, 0, 0, 0, 0, 0, 0];
+    const LN = [0, 0, 0, 0, 0, 0, 0, 1];
+    const jackTarget4k = 9300; // matches the subject's 4K (jack) shape
+    const lnTarget4k = 9301; // matches their 7K (LN) shape, but is a 4K chart
+
+    // Hybrid subject: 7K is the stronger mode (LN main there), 4K is jack. Both
+    // modes clear the Any primary-mode ratio so 4K candidates flow normally.
+    const subject4k = Array.from({ length: 10 }, (_, i) => 9310 + i);
+    const subject7k = Array.from({ length: 10 }, (_, i) => 9330 + i);
+    const bestScores = [
+      ...subject7k.map((beatmapId, i) => subjectScore(beatmapId, 600 - i * 5, recent, 7, 5)),
+      ...subject4k.map((beatmapId, i) => subjectScore(beatmapId, 480 - i * 5, recent, 4, 5)),
+    ];
+    for (const beatmapId of subject4k) {
+      await insertBeatmapMeta(beatmapId, 4, 5);
+      await insertSearchIndex(beatmapId, JACK, 4);
+    }
+    for (const beatmapId of subject7k) {
+      await insertBeatmapMeta(beatmapId, 7, 5);
+      await insertSearchIndex(beatmapId, LN, 7);
+    }
+    await insertBeatmapMeta(jackTarget4k, 4, 5);
+    await insertSearchIndex(jackTarget4k, JACK, 4);
+    await insertBeatmapMeta(lnTarget4k, 4, 5);
+    await insertSearchIndex(lnTarget4k, LN, 4);
+
+    for (let i = 0; i < 12; i += 1) {
+      const id = 9360 + i;
+      await insertUser(id, 10_000, "CR", `HybridPeer${i}`);
+      await insertFarmed("CR", id, jackTarget4k, 520, recent);
+      await insertFarmed("CR", id, lnTarget4k, 520, recent);
+      for (const beatmapId of subject4k) await insertFarmed("CR", id, beatmapId, 500, recent);
+    }
+
+    const osu = makeOsuStub(bestScores, 10_000, { "4k": 8_500, "7k": 9_000 });
+    const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "any" });
+    const jackRec = snapshot.recs.find((rec) => rec.beatmapId === jackTarget4k);
+    const lnRec = snapshot.recs.find((rec) => rec.beatmapId === lnTarget4k);
+
+    // The dominant mode is 7K (LN). Judged against that profile the fits would
+    // invert: jack 4K chart near 0, LN 4K chart near 1. Per-candidate keymode
+    // shapes judge both against the subject's 4K (jack) profile instead.
+    expect(jackRec?.patternFit ?? 0).toBeGreaterThan(0.9);
+    expect(lnRec?.patternFit ?? 1).toBeLessThan(0.1);
+  });
+
+  it("does not share cached snapshots between queue-less and queue-ful callers", async () => {
+    const recent = nowIso();
+    const hard = 9400; // dominant Technical 30, above the subject's 15 + margin
+    const support = Array.from({ length: 8 }, (_, i) => 9410 + i);
+    const bestScores = [
+      subjectScore(9490, 500, recent, 4, 5),
+      ...support.map((beatmapId, i) => subjectScore(beatmapId, 450 - i * 5, recent, 4, 5)),
+    ];
+    const msd = (technical: number) => ({ Stream: 10, Jumpstream: 10, Handstream: 10, Stamina: 10, JackSpeed: 10, Chordjack: 10, Technical: technical });
+
+    await insertBeatmapMeta(hard, 4, 5);
+    await insertSearchIndex(hard, [0, 0, 0, 0, 0, 0, 1, 0], 4, msd(30));
+    for (const beatmapId of support) await insertBeatmapMeta(beatmapId, 4, 5);
+    for (let i = 0; i < 12; i += 1) {
+      const id = 9420 + i;
+      await insertUser(id, 10_000, "CR", `CachePeer${i}`);
+      await insertFarmed("CR", id, hard, 500, recent);
+      for (const beatmapId of support) await insertFarmed("CR", id, beatmapId, 400, recent);
+    }
+    await seedSubjectSkillRatings(SUBJECT_ID, 4, msd(15), 50);
+    const osu = makeOsuStub(bestScores, 10_000, { "4k": 3000 });
+
+    // Queue-less caller (Discord-style): feasibility gate disabled, the over-MSD
+    // chart stays visible. This primes the snapshot cache.
+    const ungated = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" });
+    expect(ungated.recs.some((rec) => rec.beatmapId === hard)).toBe(true);
+
+    // A queue-ful caller with otherwise identical params must not be served the
+    // cached ungated list: its feasibility gate drops the chart.
+    const gated = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" }, stubQueue);
+    expect(gated.recs.some((rec) => rec.beatmapId === hard)).toBe(false);
+  });
 });

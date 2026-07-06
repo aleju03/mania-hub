@@ -1,7 +1,7 @@
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import { calculateWeightedPpTotal, nowIso } from "../shared/score.js";
-import { aggregateShape, readChartShapes, type ChartShape } from "./farm-helper-shape.js";
+import { buildWeightedUserShape, readChartShapes, type ChartShape } from "./farm-helper-shape.js";
 
 export type FarmHelperKeyCount = 4 | 7;
 
@@ -383,16 +383,12 @@ async function writeStats(
 // weighted-pp contribution (0.95^rank * pp) so their strongest farm maps set the
 // profile. Returns null (stored as SQL NULL) when too few charts are covered.
 function computeUserShapeJson(scores: Map<number, number>, chartShapes: Map<number, ChartShape>): string | null {
-  const sorted = [...scores.entries()].sort((a, b) => b[1] - a[1]);
-  const entries: Array<{ shape: ChartShape; weight: number }> = [];
-  sorted.forEach(([beatmapId, pp], rank) => {
-    const shape = chartShapes.get(beatmapId);
-    if (!shape) return;
-    entries.push({ shape, weight: 0.95 ** rank * pp });
-  });
-  const userShape = aggregateShape(entries);
-  if (!userShape) return null;
-  return JSON.stringify({ pat: userShape.pat, msd: userShape.msd, n: userShape.n });
+  const sorted = [...scores.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([beatmapId, pp]) => ({ beatmapId, pp }));
+  const { shape } = buildWeightedUserShape(sorted, chartShapes);
+  if (!shape) return null;
+  return JSON.stringify({ pat: shape.pat, msd: shape.msd, n: shape.n });
 }
 
 // Collects every distinct farmed beatmap id across the collected stats so their
