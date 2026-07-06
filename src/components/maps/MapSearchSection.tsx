@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { motion, useDragControls } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   fetchLiveMapSearch,
   type LiveMapSearchEntry,
@@ -444,7 +444,7 @@ function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
                     src={src}
                     alt={label}
                     draggable={false}
-                    loading="lazy"
+                    decoding="async"
                     className={`h-full w-full object-contain ${
                       active ? "drop-shadow-[0_0_6px_rgba(255,102,171,0.4)]" : "drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
                     }`}
@@ -662,7 +662,28 @@ function MobileFilterSheet({
   hasActiveFilters: boolean;
   resultsLabel: string;
 }) {
-  const dragControls = useDragControls();
+  // Swipe-to-dismiss, mirroring the random-tab filter sheet in maps.tsx: the
+  // open/close slide is a CSS transition (compositor thread, buttery on phones),
+  // and the transition only switches off while a finger is actively dragging.
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState(0);
+  const dragStartYRef = useRef(0);
+  const handleDragStart = (e: React.TouchEvent) => {
+    dragStartYRef.current = e.touches[0].clientY;
+    setIsDragging(true);
+    setDragOffset(0);
+  };
+  const handleDragMove = (e: React.TouchEvent) => {
+    setDragOffset(Math.max(0, e.touches[0].clientY - dragStartYRef.current));
+  };
+  const handleDragEnd = () => {
+    setIsDragging(false);
+    if (dragOffset > 100) onClose();
+    setDragOffset(0);
+  };
+  useEffect(() => {
+    if (open) setDragOffset(0);
+  }, [open]);
 
   // Pre-fetch/decode the badge art for the ladder the sheet would show, so the
   // first open animates over already-decoded images.
@@ -699,31 +720,25 @@ function MobileFilterSheet({
       aria-hidden={!open}
       inert={!open}
     >
-      <motion.div
-        className="absolute inset-0 bg-black/70"
-        initial={false}
-        animate={{ opacity: open ? 1 : 0 }}
-        transition={{ duration: 0.15 }}
+      <div
+        className="absolute inset-0 bg-black/70 transition-opacity duration-200"
+        style={{ opacity: open ? Math.max(0, 1 - dragOffset / 260) : 0 }}
         onClick={onClose}
       />
-      <motion.div
+      <div
         className="absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-2xl bg-osu-b5 ring-1 ring-white/10"
-        style={{ willChange: "transform" }}
-        initial={false}
-        animate={{ y: open ? "0%" : "100%" }}
-        transition={{ duration: 0.26, ease: [0.32, 0.72, 0, 1] }}
-        drag="y"
-        dragListener={false}
-        dragControls={dragControls}
-        dragConstraints={{ top: 0, bottom: 0 }}
-        dragElastic={{ top: 0, bottom: 0.6 }}
-        onDragEnd={(_, info) => {
-          if (info.offset.y > 120 || info.velocity.y > 600) onClose();
+        style={{
+          transform: open ? `translateY(${dragOffset}px)` : "translateY(100%)",
+          transition: isDragging ? "none" : "transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)",
+          willChange: "transform",
         }}
       >
         <div
           className="shrink-0 cursor-grab touch-none pt-2 active:cursor-grabbing"
-          onPointerDown={(e) => dragControls.start(e)}
+          onTouchStart={handleDragStart}
+          onTouchMove={handleDragMove}
+          onTouchEnd={handleDragEnd}
+          onTouchCancel={handleDragEnd}
         >
           <div className="mx-auto h-1 w-9 rounded-full bg-osu-b3" aria-hidden="true" />
           <span className="block px-4 pt-2 text-[13px] font-bold text-osu-l1">Filters</span>
@@ -763,7 +778,7 @@ function MobileFilterSheet({
             {resultsLabel}
           </button>
         </div>
-      </motion.div>
+      </div>
     </div>,
     document.body,
   );
