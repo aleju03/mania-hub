@@ -484,6 +484,23 @@ function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
   );
 }
 
+// The greek badge webps run up to ~130KB each; fetching and decoding them the
+// moment the sheet first slides in is a visible stutter on phones. Warm the
+// whole ladder off the critical path instead (idle time, once per src).
+const warmedDanArt = new Set<string>();
+function warmDanBadgeArt(context: DanScaleContext) {
+  for (const row of danLadderRows(context)) {
+    for (const level of row) {
+      const src = danScaleImage(level, context);
+      if (!src || warmedDanArt.has(src)) continue;
+      warmedDanArt.add(src);
+      const img = new Image();
+      img.src = src;
+      img.decode?.().catch(() => {});
+    }
+  }
+}
+
 // A selected dan at chip scale for the collapsed trigger.
 function DanMini({ level, context }: { level: number; context: DanScaleContext }) {
   const src = danScaleImage(level, context);
@@ -646,6 +663,19 @@ function MobileFilterSheet({
   resultsLabel: string;
 }) {
   const dragControls = useDragControls();
+
+  // Pre-fetch/decode the badge art for the ladder the sheet would show, so the
+  // first open animates over already-decoded images.
+  const danContext = danSliderContext(ui);
+  useEffect(() => {
+    const warm = () => warmDanBadgeArt(danContext);
+    if (typeof window.requestIdleCallback === "function") {
+      const handle = window.requestIdleCallback(warm, { timeout: 2000 });
+      return () => window.cancelIdleCallback(handle);
+    }
+    const timer = window.setTimeout(warm, 300);
+    return () => window.clearTimeout(timer);
+  }, [danContext]);
 
   useEffect(() => {
     if (!open) return;
