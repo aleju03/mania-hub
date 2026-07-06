@@ -729,7 +729,16 @@ function MobileFilterSheet({
         className="absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-2xl bg-osu-b5 ring-1 ring-white/10"
         style={{
           transform: open ? `translateY(${dragOffset}px)` : "translateY(100%)",
-          transition: isDragging ? "none" : "transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)",
+          // Hidden outright once closed so the mobile URL-bar collapse can't
+          // reveal its top edge mid-scroll (translateY(100%) alone leaves the
+          // edge flush with the viewport bottom); the hide waits out the
+          // slide-down so the close still animates.
+          visibility: open ? "visible" : "hidden",
+          transition: isDragging
+            ? "none"
+            : open
+              ? "transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)"
+              : "transform 0.3s cubic-bezier(0.32, 0.72, 0, 1), visibility 0s linear 0.3s",
           willChange: "transform",
         }}
       >

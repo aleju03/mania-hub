@@ -401,7 +401,12 @@ function CollectionDetail({ id, onBack, liveBackendEnabled }: { id: string; onBa
               <SearchCard
                 key={entry.beatmapId}
                 entry={entry}
-                onOpen={setMapEntry}
+                onOpen={(opened) => {
+                  // The detail modal has its own chart-preview audio; don't
+                  // leave the card's song preview playing over it.
+                  stopPreview();
+                  setMapEntry(opened);
+                }}
                 preview={preview}
                 isNew={newIds.has(entry.beatmapId)}
               />
