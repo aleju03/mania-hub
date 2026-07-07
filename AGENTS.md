@@ -76,6 +76,7 @@ Job types:
 - `refresh_user_top_scores`: confirm a candidate top play and compute PP gain.
 - `reconcile_user_recent_scores`: sync a user's recent scores from the osu! API to fill ingest gaps.
 - `refresh_user_maps_farmed_scores`, `refresh_country_maps`, `refresh_global_maps`: maps-farmed aggregation per user, per country, and globally.
+- `refresh_qualified_maps`: hourly qualified-maps watch; pulls osu!'s current qualified mania list in one search call and reconciles `/maps` status (promote pending->qualified, index new sets, resolve ranks/dequalifies).
 - `seed_snipe_board`: build the initial board for a beatmap/lane.
 - `analyze_activity_beatmap`: compute skill vectors for player activity.
 - `analyze_beatmap_chart`: unified chart analysis per beatmap at 1.0x (classifier dan verdict, pattern clusters, MinaCalc MSD skillsets) into `beatmap_chart_analysis`.
@@ -96,6 +97,8 @@ Detected country top plays live in `top_play_events`. When an incoming score is 
 
 ### Maps
 `refresh_user_maps_farmed_scores` pulls a roster user's top 200 and extracts scores that entered their top plays; `refresh_country_maps` aggregates these into `country_maps_snapshots`, and `refresh_global_maps` rolls countries up into a global snapshot. Refresh progress is tracked in `live_meta` and surfaced via `/api/snapshots/maps-progress`.
+
+The `/maps` browser reads from `map_search_index` (materialized from `beatmap_skill_vectors` + beatmap/set metadata). Status stays fresh via three layers, cheapest first: the event-driven + hourly zero-API reconciler in `map-search.ts` (`buildMapStatusPropagationStatement` / `reconcileMapSearchIndexStatuses`), which only upgrades in-flux -> settled to shield against stale score payloads; and the hourly `refresh_qualified_maps` watch (`features/qualified-maps-watch.ts`), which is the one writer allowed to move a row backwards (qualified -> pending on a dequalify) because the osu! API read is current truth. The watch writes status into `metadata_json.$.status` + the status column (via `persistScoresDisplayMetadata`) and the index, filters to native mania diffs (skips converts), and enqueues `analyze_beatmap_chart` for newly-qualified diffs so they become searchable. `SOURCE_SELECT` excludes sub-0.2* in-flux placeholder diffs (empty "delete upon download"/"~"/"asd" stubs that ride along in pack and loved sets), and `pruneMapSearchPlaceholderRows` clears any already indexed.
 
 ### Farm helper
 Recommends maps by comparing the subject player's top 200 against a global peer pool at similar PP, using candidates from `country_maps_farmed_scores` across all countries. Per-keymode (4k/7k) weighted PP lives in `farm_helper_user_key_stats`, seeded on first access.

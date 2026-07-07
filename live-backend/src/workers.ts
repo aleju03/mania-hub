@@ -10,6 +10,7 @@ import { reconcileStatGoalsForCountry } from "./features/goals.js";
 import { runMapSearchIndexBuildJob } from "./features/map-search.js";
 import { rebuildMapCollections } from "./features/map-collections.js";
 import { MapsRosterNotReadyError, enqueueGlobalMapsRefresh, globalMapsFarmedRefreshRunAfter, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores } from "./features/maps.js";
+import { REFRESH_QUALIFIED_MAPS_JOB, runQualifiedMapsWatch } from "./features/qualified-maps-watch.js";
 import { recordSnipeScoreHistory, updateSnipeProjection } from "./features/snipes.js";
 import { PLAYER_SKILLS_JOB, computePlayerSkillsJob } from "./features/player-skills.js";
 import { PROFILE_POOL_WARM_JOB, runProfilePoolWarmJob } from "./features/profile-pool-warm.js";
@@ -85,7 +86,7 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
   },
   {
     name: "maps-refresh",
-    jobTypes: ["refresh_user_maps_farmed_scores", "refresh_country_maps", "refresh_global_maps"],
+    jobTypes: ["refresh_user_maps_farmed_scores", "refresh_country_maps", "refresh_global_maps", REFRESH_QUALIFIED_MAPS_JOB],
     claimLimit: 1,
     intervalMs: 1_000,
   },
@@ -382,6 +383,10 @@ export class WorkerRunner {
     }
     if (job.type === "refresh_global_maps") {
       await refreshGlobalMaps(this.db);
+      return;
+    }
+    if (job.type === REFRESH_QUALIFIED_MAPS_JOB) {
+      await runQualifiedMapsWatch(this.db, this.osu, this.queue);
       return;
     }
     if (job.type === "compute_dan_estimate") {

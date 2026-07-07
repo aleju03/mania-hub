@@ -8,7 +8,8 @@ import { JobQueue } from "./jobs/queue.js";
 import { LiveEventLog } from "./live/event-log.js";
 import { startRuntimeStatusMirror } from "./live/runtime-status.js";
 import { deferMapsRefreshesWaitingForRoster, enqueueGlobalMapsRefreshIfDue, enqueueMapsRefreshIfDue } from "./features/maps.js";
-import { ensureMapSearchIndexSeeded, reconcileMapSearchIndexStatuses } from "./features/map-search.js";
+import { ensureMapSearchIndexSeeded, pruneMapSearchPlaceholderRows, reconcileMapSearchIndexStatuses } from "./features/map-search.js";
+import { enqueueQualifiedMapsWatchIfDue } from "./features/qualified-maps-watch.js";
 import { ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
 import { enqueueMapCollectionsRebuildIfDue } from "./features/map-collections.js";
 import { startGoalUserIndexRefresh } from "./features/goals.js";
@@ -183,6 +184,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       startRosterScheduler(app.db, app.queue, app.config);
       startMapsScheduler(app.db, app.queue, app.config);
       startMapCollectionsScheduler(app.db, app.queue, app.config);
+      startQualifiedMapsWatchScheduler(app.db, app.queue, app.config);
       startProfilePoolWarmScheduler(app.db, app.queue);
     }
     startRetentionScheduler(app.db, app.config);
@@ -355,6 +357,11 @@ function startMapSearchStatusReconciler(db: Awaited<ReturnType<typeof createDb>>
       return 0;
     });
     if (healed > 0) console.log(`[map-search] reconciled ${healed} stale map status label(s)`);
+    const pruned = await pruneMapSearchPlaceholderRows(db).catch((error) => {
+      console.warn("[map-search] placeholder prune failed", error);
+      return 0;
+    });
+    if (pruned > 0) console.log(`[map-search] pruned ${pruned} placeholder diff row(s)`);
     setTimeout(tick, 60 * 60_000).unref();
   };
   setTimeout(tick, 30_000).unref();
@@ -371,4 +378,18 @@ function startMapCollectionsScheduler(db: Awaited<ReturnType<typeof createDb>>, 
     setTimeout(tick, 60 * 60_000).unref();
   };
   setTimeout(tick, 20_000).unref();
+}
+
+// Pulls osu!'s current qualified mania list hourly to reconcile /maps status:
+// promotes pending -> qualified, indexes brand-new sets, and (the gap the
+// zero-API heals can't cover) moves ranked/dequalified sets off the qualified
+// label. One API call per tick in steady state.
+function startQualifiedMapsWatchScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: JobQueue, config: ReturnType<typeof readConfig>): void {
+  const tick = async () => {
+    await enqueueQualifiedMapsWatchIfDue(db, queue, config.qualifiedMapsWatchIntervalMs).catch((error) => {
+      console.warn("[qualified-maps] scheduled watch failed", error);
+    });
+    setTimeout(tick, config.qualifiedMapsWatchIntervalMs).unref();
+  };
+  setTimeout(tick, 45_000).unref();
 }

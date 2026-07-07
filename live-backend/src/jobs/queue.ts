@@ -71,6 +71,9 @@ const RESERVED_LANE_TYPES: Record<string, number> = {
   // score gaps after a socket outage).
   seed_snipe_board: 1,
   refresh_country_maps: 1,
+  // Hourly qualified-maps watch: one API call, but reserve a slot so it still
+  // reconciles /maps status when the queue sits at the soft-pressure cap.
+  refresh_qualified_maps: 1,
   refresh_user_maps_farmed_scores: 2,
   refresh_country_roster: 2,
   // Both backfills chain their next page from inside the running job:

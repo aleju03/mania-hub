@@ -247,6 +247,19 @@ function readPatternTags(classificationJson: unknown): string {
 
 // ── Source rows -> index rows ────────────────────────────────────────────────
 
+// Sub-0.2* diffs are non-playable placeholder stubs -- "00.delete upon
+// download", "~", "===", "asd", 0-star "Normal" -- that mappers bundle into
+// pack and loved sets. Difficulty status is per-diff, so a stub keeps its own
+// pending/graveyard status even when the set is loved, and it leaks into the
+// pending/graveyard tabs on /maps (the LTD Pack / Hylotl / Sendan rows). Drop
+// them by a star floor rather than a name match, so every stub variant is
+// caught, not just the ones literally called "delete". The status guard means a
+// diff a nominator actually ranked/loved/qualified is never hidden -- and no
+// real mania diff sits below 0.2* anyway (the easiest beginner charts are ~0.8).
+const PLACEHOLDER_STAR_FLOOR = 0.2;
+const PLACEHOLDER_STATUSES = ["pending", "wip", "graveyard"] as const;
+const PLACEHOLDER_STATUS_LIST = PLACEHOLDER_STATUSES.map((s) => `'${s}'`).join(", ");
+
 const SOURCE_SELECT = `
   select
     sv.beatmap_id as beatmap_id,
@@ -282,7 +295,11 @@ const SOURCE_SELECT = `
     on ca.beatmap_id = sv.beatmap_id and ca.analysis_version = ${CHART_ANALYSIS_VERSION} and ca.status = 'ready'
   where sv.analysis_version = ? and sv.status = 'ready'
     and json_extract(b.metadata_json, '$.mode') = 'mania'
-    and coalesce(json_extract(b.metadata_json, '$.convert'), 0) != 1`;
+    and coalesce(json_extract(b.metadata_json, '$.convert'), 0) != 1
+    and not (
+      coalesce(b.difficulty_rating, 0) < ${PLACEHOLDER_STAR_FLOOR}
+      and coalesce(nullif(lower(coalesce(json_extract(b.metadata_json, '$.status'), b.status)), ''), 'graveyard') in (${PLACEHOLDER_STATUS_LIST})
+    )`;
 
 function intOr(value: unknown, fallback = 0): number {
   const n = Math.round(Number(value));
@@ -449,6 +466,24 @@ export async function reconcileMapSearchIndexStatuses(db: Db): Promise<number> {
                        and lower(b.status) in (${settled})
                        and lower(b.status) != map_search_index.status)`,
     [nowIso(), ...IN_FLUX_MAP_STATUSES, ...SETTLED_MAP_STATUSES],
+  );
+  return Number(result.rowsAffected ?? 0);
+}
+
+// One-time (idempotent) cleanup for placeholder-diff rows indexed before the
+// SOURCE_SELECT star floor shipped. New builds already skip them, and any
+// re-touched row self-heals (upsertMapSearchIndexRow deletes a row whose source
+// select returns nothing), but the existing stubs are never re-touched unless
+// their skill vector is recomputed, so sweep them explicitly. Reads the index's
+// own stars/status columns (status is stored lowercased, null -> 'graveyard').
+// Returns the number of rows removed. Cheap and self-terminating: 0 after the
+// first pass, so it is safe to run at boot and hourly.
+export async function pruneMapSearchPlaceholderRows(db: Db): Promise<number> {
+  const statuses = PLACEHOLDER_STATUSES.map(() => "?").join(", ");
+  const result = await exec(
+    db,
+    `delete from map_search_index where stars < ? and status in (${statuses})`,
+    [PLACEHOLDER_STAR_FLOOR, ...PLACEHOLDER_STATUSES],
   );
   return Number(result.rowsAffected ?? 0);
 }

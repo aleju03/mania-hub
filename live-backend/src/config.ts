@@ -61,6 +61,9 @@ export interface Config {
   // How long a map-collections rotation lives before the next rebuild resamples
   // every pack from its bucket pool.
   mapCollectionsRefreshIntervalMs: number;
+  // How often the qualified-maps watch pulls the current qualified mania list to
+  // reconcile /maps status (catches ranks, dequalifies, and brand-new sets).
+  qualifiedMapsWatchIntervalMs: number;
   // Tick interval for the chart-analysis worker lane. Sets the backfill pace:
   // each tick runs one classify+MSD job (~0.1-0.3s of local CPU). The default
   // keeps prod gentle; lower it for a fast local backfill.
@@ -242,6 +245,7 @@ export function readConfig(): Config {
     manualRosterMaxPerCountry: readInt("MANUAL_ROSTER_MAX_PER_COUNTRY", 0),
     mapsRefreshIntervalMs: readInt("MAPS_REFRESH_INTERVAL_MS", 7 * 24 * 60 * 60 * 1000),
     mapCollectionsRefreshIntervalMs: readInt("MAP_COLLECTIONS_REFRESH_INTERVAL_MS", 3 * 24 * 60 * 60 * 1000),
+    qualifiedMapsWatchIntervalMs: readInt("QUALIFIED_MAPS_WATCH_INTERVAL_MS", 60 * 60 * 1000),
     chartAnalysisLaneIntervalMs: readBoundedInt("CHART_ANALYSIS_LANE_INTERVAL_MS", 500, 25, 60_000),
     oscBackfillMaxAgeMs: readInt("OSC_BACKFILL_MAX_AGE_MS", 24 * 60 * 60 * 1000),
     oscBackfillPageLimit: Math.min(readInt("OSC_BACKFILL_PAGE_LIMIT", 1000), 1000),
