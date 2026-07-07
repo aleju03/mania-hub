@@ -7,7 +7,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { createDb, exec, json, migrate, type Db } from "../src/db.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION } from "../src/features/activity.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
-import { buildMapSearchIndexBatch, ensureMapSearchIndexSeeded, getMapSearchPage, MAP_SEARCH_BUILD_JOB, type MapSearchQuery } from "../src/features/map-search.js";
+import { buildMapSearchIndexBatch, buildMapStatusPropagationStatement, ensureMapSearchIndexSeeded, getMapSearchPage, getMapSearchSetEntry, MAP_SEARCH_BUILD_JOB, reconcileMapSearchIndexStatuses, type MapSearchQuery } from "../src/features/map-search.js";
 import { getMapCollection, getMapCollections, rebuildMapCollections } from "../src/features/map-collections.js";
 import { routeHttp } from "../src/http/snapshots.js";
 import { JobQueue } from "../src/jobs/queue.js";
@@ -761,6 +761,55 @@ describe("map search primary derivation", () => {
 
     const danScoped = await getMapSearchPage(db, { ...baseQuery(), danMin: 10, danMax: 10 });
     expect(danScoped.items.map((item) => item.beatmapId)).toEqual([2]);
+  });
+});
+
+describe("map search status reconciliation", () => {
+  it("heals a stale qualified index row from the fresh ranked column, no rebuild", async () => {
+    const db = await makeDb();
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, status: "qualified", primary: "stream", patterns: { stream: 1 } });
+    await buildAll(db);
+    expect((await getMapSearchSetEntry(db, 1))?.status).toBe("qualified");
+
+    // The farmed path refreshes only the beatmaps.status *column* while
+    // metadata_json still says qualified, exactly as the live pipeline does.
+    await exec(db, "update beatmaps set status = 'ranked' where beatmap_id = 1");
+
+    expect(await reconcileMapSearchIndexStatuses(db)).toBe(1);
+    expect((await getMapSearchSetEntry(db, 1))?.status).toBe("ranked");
+    // Idempotent: a second sweep changes nothing.
+    expect(await reconcileMapSearchIndexStatuses(db)).toBe(0);
+  });
+
+  it("never downgrades a settled index row from a stale column", async () => {
+    const db = await makeDb();
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, status: "ranked", primary: "stream", patterns: { stream: 1 } });
+    await buildAll(db);
+    // A stale/incorrect column must not revert a genuinely-ranked index row.
+    await exec(db, "update beatmaps set status = 'qualified' where beatmap_id = 1");
+    expect(await reconcileMapSearchIndexStatuses(db)).toBe(0);
+    expect((await getMapSearchSetEntry(db, 1))?.status).toBe("ranked");
+  });
+
+  it("propagates a fresh ranked status across every in-flux diff of the set", async () => {
+    const db = await makeDb();
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, status: "qualified", primary: "stream", patterns: { stream: 1 } });
+    await seedMap(db, { beatmapId: 2, beatmapsetId: 10, status: "qualified", primary: "jack", patterns: { jack: 1 } });
+    await buildAll(db);
+
+    const stmt = buildMapStatusPropagationStatement(10, "ranked", "2026-07-06T00:00:00Z");
+    expect(stmt).not.toBeNull();
+    await exec(db, stmt!.sql, stmt!.args);
+    expect((await getMapSearchSetEntry(db, 1))?.status).toBe("ranked");
+    expect((await getMapSearchSetEntry(db, 2))?.status).toBe("ranked");
+
+    // A non-settled or empty payload is a no-op, and a settled payload never
+    // overwrites a row that has already settled.
+    expect(buildMapStatusPropagationStatement(10, "pending", "t")).toBeNull();
+    expect(buildMapStatusPropagationStatement(10, "", "t")).toBeNull();
+    const loved = buildMapStatusPropagationStatement(10, "loved", "2026-07-06T00:00:00Z")!;
+    await exec(db, loved.sql, loved.args);
+    expect((await getMapSearchSetEntry(db, 1))?.status).toBe("ranked");
   });
 });
 

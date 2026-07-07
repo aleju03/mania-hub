@@ -10,6 +10,7 @@ import { getModAcronyms, getScoreIdentity, getScoreTimestamp, nowIso } from "../
 import type { OscScore } from "../shared/types.js";
 import { markUserMissing } from "../users.js";
 import { refreshFarmHelperKeyStatsForUser } from "./farm-helper-key-stats.js";
+import { buildMapStatusPropagationStatement } from "./map-search.js";
 
 const MAPS_REFRESH_PRIORITY = -100;
 const MAPS_FARMED_REFRESH_PRIORITY = -100;
@@ -3618,6 +3619,7 @@ async function replaceUserMapsFarmedOverlay(
 
 async function persistMapsFarmedScoreDisplayMetadata(db: Db, scores: OscScore[], updatedAt: string): Promise<void> {
   const statements: DbStatement[] = [];
+  const propagatedSets = new Set<number>();
   for (const score of scores) {
     if (score.user) {
       statements.push({
@@ -3669,6 +3671,15 @@ async function persistMapsFarmedScoreDisplayMetadata(db: Db, scores: OscScore[],
         status: score.beatmapset.status ?? "",
         covers: score.beatmapset.covers ?? {},
       }, updatedAt));
+      // A player landing a score on a freshly-ranked map is our earliest,
+      // API-free signal that the set has settled. Push that status straight into
+      // the search index so /maps stops showing a stale QUALIFIED. Deduped per
+      // set; the builder no-ops unless the payload names a settled status.
+      if (!propagatedSets.has(score.beatmapset.id)) {
+        propagatedSets.add(score.beatmapset.id);
+        const propagation = buildMapStatusPropagationStatement(score.beatmapset.id, score.beatmapset.status, updatedAt);
+        if (propagation) statements.push(propagation);
+      }
     }
 
     if (score.beatmap) {

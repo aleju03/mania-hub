@@ -8,7 +8,7 @@ import { JobQueue } from "./jobs/queue.js";
 import { LiveEventLog } from "./live/event-log.js";
 import { startRuntimeStatusMirror } from "./live/runtime-status.js";
 import { deferMapsRefreshesWaitingForRoster, enqueueGlobalMapsRefreshIfDue, enqueueMapsRefreshIfDue } from "./features/maps.js";
-import { ensureMapSearchIndexSeeded } from "./features/map-search.js";
+import { ensureMapSearchIndexSeeded, reconcileMapSearchIndexStatuses } from "./features/map-search.js";
 import { ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
 import { enqueueMapCollectionsRebuildIfDue } from "./features/map-collections.js";
 import { startGoalUserIndexRefresh } from "./features/goals.js";
@@ -186,6 +186,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       startProfilePoolWarmScheduler(app.db, app.queue);
     }
     startRetentionScheduler(app.db, app.config);
+    startMapSearchStatusReconciler(app.db);
     startQueuePressureScheduler(app.queue);
     if (app.config.enableOscBackfill) {
       enqueueOscBackfill(app.queue, app.db, app.config).catch((error) => console.warn("[osc] backfill enqueue failed", error));
@@ -339,6 +340,24 @@ function startMapsScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: Job
     setTimeout(tick, config.mapsRefreshIntervalMs).unref();
   };
   setTimeout(tick, 10_000).unref();
+}
+
+// Heals /maps status labels for maps that ranked after they were indexed. The
+// search index materializes status from beatmap metadata (refreshed only by the
+// API-backed enrich job), but a tracked player's score on a newly-ranked map
+// updates the beatmaps.status column for free; this copies that fresher status
+// into the index. Pure DB work, no osu! API, so it runs regardless of the
+// osu!-API scheduler gating (like retention).
+function startMapSearchStatusReconciler(db: Awaited<ReturnType<typeof createDb>>): void {
+  const tick = async () => {
+    const healed = await reconcileMapSearchIndexStatuses(db).catch((error) => {
+      console.warn("[map-search] status reconcile failed", error);
+      return 0;
+    });
+    if (healed > 0) console.log(`[map-search] reconciled ${healed} stale map status label(s)`);
+    setTimeout(tick, 60 * 60_000).unref();
+  };
+  setTimeout(tick, 30_000).unref();
 }
 
 // The collections rotation runs on its own (shorter) cadence than the weekly

@@ -390,6 +390,69 @@ export async function upsertMapSearchIndexRow(db: Db, beatmapId: number): Promis
   if (statement) await exec(db, statement.sql, statement.args);
 }
 
+// Status reconciliation (zero osu! API) ------------------------------------
+//
+// The index's `status` is materialized from beatmaps.metadata_json.$.status
+// (see SOURCE_SELECT / rowToEntry), which only refreshes when the API-backed
+// enrich_beatmap job re-fetches a map. A qualified -> ranked transition, by
+// contrast, first lands for free on the beatmaps.status *column* the moment a
+// tracked player's score on the newly-ranked map flows through the farmed path
+// (maps.ts persistMapsFarmedScoreDisplayMetadata) -- no osu! API call. Left
+// alone, /maps keeps showing a stale QUALIFIED until the next full rebuild. The
+// two helpers below push that fresher, already-in-DB status into the index.
+// Both only ever upgrade an in-flux status to a settled one, never the reverse,
+// so a genuinely-ranked row is never reverted by a stale score payload.
+const SETTLED_MAP_STATUSES = ["ranked", "approved", "loved"] as const;
+const IN_FLUX_MAP_STATUSES = ["qualified", "pending", "wip"] as const;
+
+function normalizeMapStatus(status: string | null | undefined): string {
+  return String(status ?? "").trim().toLowerCase();
+}
+
+// Event-driven upgrade: a fresh score payload reported a set's current status.
+// If it names a settled status, returns a statement that flips any still-in-flux
+// index rows for that set to it (seeks idx_map_search_set on beatmapset_id).
+// Returns null when there is nothing to do, so callers can skip the write.
+export function buildMapStatusPropagationStatement(
+  beatmapsetId: number,
+  status: string | null | undefined,
+  updatedAt: string,
+): DbStatement | null {
+  const setId = Math.floor(Number(beatmapsetId));
+  if (!Number.isFinite(setId) || setId <= 0) return null;
+  const next = normalizeMapStatus(status);
+  if (!SETTLED_MAP_STATUSES.includes(next as (typeof SETTLED_MAP_STATUSES)[number])) return null;
+  const placeholders = IN_FLUX_MAP_STATUSES.map(() => "?").join(", ");
+  return {
+    sql: `update map_search_index set status = ?, updated_at = ?
+           where beatmapset_id = ? and status in (${placeholders})`,
+    args: [next, updatedAt, setId, ...IN_FLUX_MAP_STATUSES],
+  };
+}
+
+// Periodic backstop: heal index rows still marked in-flux for maps the
+// beatmaps.status column already knows have settled (rows that went stale before
+// the propagation hook shipped, or after a full rebuild re-materialized the old
+// metadata_json status). Pure DB work; returns the number of rows upgraded.
+export async function reconcileMapSearchIndexStatuses(db: Db): Promise<number> {
+  const inFlux = IN_FLUX_MAP_STATUSES.map(() => "?").join(", ");
+  const settled = SETTLED_MAP_STATUSES.map(() => "?").join(", ");
+  const result = await exec(
+    db,
+    `update map_search_index
+        set status = (select lower(b.status) from beatmaps b
+                       where b.beatmap_id = map_search_index.beatmap_id),
+            updated_at = ?
+      where status in (${inFlux})
+        and exists (select 1 from beatmaps b
+                     where b.beatmap_id = map_search_index.beatmap_id
+                       and lower(b.status) in (${settled})
+                       and lower(b.status) != map_search_index.status)`,
+    [nowIso(), ...IN_FLUX_MAP_STATUSES, ...SETTLED_MAP_STATUSES],
+  );
+  return Number(result.rowsAffected ?? 0);
+}
+
 // One bulk batch: the next `limit` ready vectors past `cursor`, upserted in a
 // single write transaction. Returns the new cursor and whether the corpus is done.
 export async function buildMapSearchIndexBatch(
