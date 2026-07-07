@@ -30,15 +30,18 @@ const KEY_OPTIONS = [
 
 const STATUS_OPTIONS = [
   { id: "ranked", label: "Ranked" },
+  { id: "qualified", label: "Qualified" },
   { id: "loved", label: "Loved" },
   { id: "graveyard", label: "Graveyard" },
   { id: "other", label: "Pending" },
 ];
 
-// Match beatmapStatusBadgeClass() in maps.tsx so the filters read like the badges
-// on the cards: green ranked, pink loved, grey graveyard, yellow pending.
+// Match the card status pills (statusPill() in SearchCard) so the filters read
+// like the badges on the cards: green ranked, blue qualified, pink loved, grey
+// graveyard, yellow pending.
 const STATUS_COLOR: Record<string, string> = {
   ranked: "#6cf27f",
+  qualified: "#66ccff",
   loved: "#f26fa6",
   graveyard: "#b3b3b3",
   other: "#ffd36b",

@@ -238,7 +238,7 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
 };
 
 const SEARCH_KEY_VALUES = ["4k", "7k", "other"];
-const SEARCH_STATUS_VALUES = ["ranked", "loved", "graveyard", "other"];
+const SEARCH_STATUS_VALUES = ["ranked", "qualified", "loved", "graveyard", "other"];
 const SEARCH_PATTERN_VALUES = [
   "jack", "stream", "jumpstream", "handstream", "stamina", "chordjack", "tech", "ln",
   // subfamilies (matched against detected-pattern tags, not dominance)

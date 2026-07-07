@@ -100,6 +100,7 @@ export async function migrate(db: Db): Promise<void> {
   await migrateMapSearchIndex(db);
   await migrateMapCollections(db);
   await migrateSkins(db);
+  await migrateAdminTodos(db);
 }
 
 export async function dbHealth(db: Db): Promise<boolean> {
@@ -879,6 +880,30 @@ async function migrateSkins(db: Db): Promise<void> {
   await db.execute(`
     create index if not exists idx_skins_owner
       on skins(owner_user_id, created_at desc)
+  `);
+}
+
+async function migrateAdminTodos(db: Db): Promise<void> {
+  // Private owner todo list (admin-only) for reminders / bugs found / things left to do. Single
+  // user, so no per-user scoping. category is bug|feature|idea|chore|task, priority is
+  // low|normal|high, status is open|done. Timestamps are epoch ms. Durable: retention never
+  // prunes this table.
+  await db.execute(`
+    create table if not exists admin_todos (
+      id text primary key,
+      title text not null,
+      notes text,
+      category text not null default 'task',
+      priority text not null default 'normal',
+      status text not null default 'open',
+      created_at integer not null,
+      updated_at integer not null,
+      done_at integer
+    )
+  `);
+  await db.execute(`
+    create index if not exists idx_admin_todos_status
+      on admin_todos(status, created_at desc)
   `);
 }
 

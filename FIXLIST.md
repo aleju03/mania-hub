@@ -22,6 +22,7 @@ same hot spot as the earlier event-loop-freeze incident (huge GLOBAL snapshot).
 `live-backend/src/workers.ts`).
 
 **Fix direction:**
+
 - Aggregate incrementally: load/parse one country snapshot at a time, fold it into a
   compact accumulator (plain maps of primitives, not retained parsed JSON trees),
   release each country before the next.
@@ -51,6 +52,7 @@ burning osu! API budget and memory.
 type `seed_snipe_board`, lane `snipe-seed` in `live-backend/src/workers.ts`).
 
 **Fix direction:**
+
 - First diagnose *why* it takes >10 min now: most likely osu! API token-bucket
   starvation (~45/min shared across all lanes; check `api_call_log` around those
   windows) or a board with far more lanes/pages than the job was designed for.
@@ -94,18 +96,6 @@ the deferred set may never drain. After fixing the above, confirm
 `deferred_pressure` count trends down (re-run the group-by-status query); if types
 starve indefinitely, revisit the pressure thresholds.
 
-## 6. Ops: add swap to the VPS (cheap insurance, do anytime)
-
-No code change — one-off on the box (needs sudo):
-```bash
-sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile
-sudo mkswap /swapfile && sudo swapon /swapfile
-echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-sudo sysctl vm.swappiness=10   # and persist in /etc/sysctl.d/
-```
-This turns a future heap spike into slowdown instead of an OOM kill. Also consider
-`MemoryHigh=2800M` on the worker unit so systemd throttles before the kernel kills.
-
 ## Useful commands for whoever picks this up (run on the VPS)
 
 ```bash
@@ -114,4 +104,5 @@ journalctl -u mania-hub-live-worker --since "-1 hour" -q | grep -E "watchdog|job
 sqlite3 live-backend/data/mania-hub-live.db "select status,count(*) from jobs group by status;"
 sqlite3 live-backend/data/mania-hub-live.db "select country, round(length(payload_json)/1048576.0,1) mb from country_maps_snapshots order by 2 desc limit 5;"
 ```
+
 Minimum verification for backend changes: `cd live-backend && npm test && npx tsc --noEmit`.

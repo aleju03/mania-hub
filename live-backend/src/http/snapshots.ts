@@ -7,6 +7,7 @@ import { activateCountry, deleteCountryData, getCountryRegistry, GLOBAL_COUNTRY_
 import type { Db } from "../db.js";
 import { dbHealth, exec, getSqliteBusyRetryStats, parseJson } from "../db.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION, getPlayerActivityAvailability, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../features/activity.js";
+import { clearDoneAdminTodos, createAdminTodo, deleteAdminTodo, listAdminTodos, updateAdminTodo, type CreateTodoInput, type UpdateTodoInput } from "../features/admin-todos.js";
 import { cancelBeatmapOsuFileBackfill, getBeatmapOsuFileBackfillStatus, startBeatmapOsuFileBackfill } from "../features/beatmap-osu-file-backfill.js";
 import { CHART_ANALYSIS_VERSION, cancelChartAnalysisBackfill, enqueueChartAnalysisBackfill, startChartAnalysisBackfill } from "../features/chart-analysis.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
@@ -1890,6 +1891,80 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     sendJson(req, res, ctx, 200, { ok: true, removed });
     return true;
   }
+  if (url.pathname === "/api/admin/todos") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { todos: await listAdminTodos(ctx.db) });
+    return true;
+  }
+  if (url.pathname === "/api/admin/todos/create") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<CreateTodoInput>((await readBody(req)) || "{}", {});
+    const todo = await createAdminTodo(ctx.db, body);
+    if (!todo) {
+      sendJson(req, res, ctx, 400, { error: "invalid_title" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true, todo });
+    return true;
+  }
+  if (url.pathname === "/api/admin/todos/update") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<UpdateTodoInput>((await readBody(req)) || "{}", {});
+    const todo = await updateAdminTodo(ctx.db, body);
+    if (!todo) {
+      sendJson(req, res, ctx, 404, { error: "todo_not_found" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true, todo });
+    return true;
+  }
+  if (url.pathname === "/api/admin/todos/delete") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<{ id?: unknown }>((await readBody(req)) || "{}", {});
+    const removed = await deleteAdminTodo(ctx.db, typeof body.id === "string" ? body.id : "");
+    if (!removed) {
+      sendJson(req, res, ctx, 404, { error: "todo_not_found" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true });
+    return true;
+  }
+  if (url.pathname === "/api/admin/todos/clear-done") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true, cleared: await clearDoneAdminTodos(ctx.db) });
+    return true;
+  }
   if (url.pathname === "/api/admin/reset-local-db") {
     if (ctx.config.nodeEnv === "production") {
       sendJson(req, res, ctx, 403, { error: "disabled_in_production" });
@@ -2887,7 +2962,7 @@ function parseMapSearchQuery(params: URLSearchParams): MapSearchQuery {
   return {
     q: (params.get("q") ?? "").trim().slice(0, 120),
     keys: parseCsvSubset(params.get("keys"), ["4k", "7k", "other"]),
-    statuses: parseCsvSubset(params.get("statuses"), ["ranked", "loved", "graveyard", "other"]),
+    statuses: parseCsvSubset(params.get("statuses"), ["ranked", "qualified", "loved", "graveyard", "other"]),
     patterns: parseCsvSubset(params.get("patterns"), [...MAP_SEARCH_PATTERNS, ...MAP_SEARCH_SUB_PATTERNS]),
     starMin: stars.min,
     starMax: stars.max,

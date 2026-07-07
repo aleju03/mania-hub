@@ -704,6 +704,16 @@ export function Nav() {
                         Discord
                       </Link>
                     )}
+                    {adminMode && (
+                      <Link
+                        to="/admin/todos"
+                        onClick={() => setAdminMenuOpen(false)}
+                        className="block px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors border-t border-osu-b3/30"
+                        role="menuitem"
+                      >
+                        Todos
+                      </Link>
+                    )}
                     <Link
                       to="/admin/dan-classifier"
                       onClick={() => setAdminMenuOpen(false)}
@@ -1097,6 +1107,15 @@ export function Nav() {
                       className="block w-full text-center px-3 py-2 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
                     >
                       Discord
+                    </Link>
+                  )}
+                  {adminMode && (
+                    <Link
+                      to="/admin/todos"
+                      onClick={() => setMenuOpen(false)}
+                      className="block w-full text-center px-3 py-2 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
+                    >
+                      Todos
                     </Link>
                   )}
                   <Link

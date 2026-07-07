@@ -26,7 +26,7 @@ The live backend lives in `live-backend/`:
 - `live-backend/src/ingest/score-ingestor.ts`: score ingestion and projection fanout.
 - `live-backend/src/osc/`: oSC Socket.IO client, JSON backfill, and the osu! API scores fallback poller.
 - `live-backend/src/jobs/queue.ts` and `live-backend/src/workers.ts`: job queue and worker lanes.
-- `live-backend/src/features/`: one module per surface (tracker, top-plays, snipes, maps, farm-helper, farm-helper-key-stats, activity, dan-estimates, global-rankings, rank-snapshots, player-profiles, goals, my-data, pack-wallets).
+- `live-backend/src/features/`: one module per surface (tracker, top-plays, snipes, maps, farm-helper, farm-helper-key-stats, activity, dan-estimates, global-rankings, rank-snapshots, player-profiles, goals, my-data, pack-wallets, admin-todos).
 - `live-backend/src/http/snapshots.ts`: REST snapshots, profile endpoints, per-user (goals / my-data / roster / pack) endpoints, Discord interaction/admin routes, admin controls, replay video job endpoints. `live-backend/src/http/abuse-guard.ts`: per-IP rate limiting.
 - `live-backend/src/live/`: SSE handler, event log with replay buffer, per-country client tracking.
 - `live-backend/src/discord/`: the maniabot Discord subsystem (HTTP signed-interaction handler in `index.ts`/`verify.ts`, slash commands, message components, embeds, REST client, osu! account linking, and new-map/farm feeds). Gated by `enableDiscordBot`/`enableDiscordFeeds`; started from `server.ts` and routed through `http/snapshots.ts`.
@@ -86,6 +86,8 @@ Job types:
 - `replay_video_server_render`, `replay_video_export`: server-side render and finalization/upload.
 
 Admin controls are exposed through the frontend at `/admin/live-backend` and backend `/api/admin/*` routes (status, ingest fixtures, roster refresh, pause/resume country, set status/tier, delete country). Be careful with destructive controls.
+
+`/admin/todos` is the owner's private todo list (reminders, bugs found, things left to do), backed by `features/admin-todos.ts` (durable `admin_todos` table, single user, no per-user scoping) over `GET /api/admin/todos` + `POST /api/admin/todos/{create,update,delete,clear-done}`. Frontend server fns in `src/lib/admin-todos.ts` proxy with the shared admin token; the nav entry and page are `canUseAdminFeatures`-gated.
 
 ## Feature Models
 

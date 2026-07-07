@@ -658,9 +658,12 @@ const KEY_CLAUSES: Record<string, (p: string) => string> = {
 
 const STATUS_CLAUSES: Record<string, (p: string) => string> = {
   ranked: (p) => `${p}status in ('ranked', 'approved')`,
+  qualified: (p) => `${p}status = 'qualified'`,
   loved: (p) => `${p}status = 'loved'`,
   graveyard: (p) => `${p}status = 'graveyard'`,
-  other: (p) => `${p}status not in ('ranked', 'approved', 'loved', 'graveyard')`,
+  // Pending now excludes qualified (its own facet), so this is pending/wip and
+  // any other stray in-flux status.
+  other: (p) => `${p}status not in ('ranked', 'approved', 'loved', 'graveyard', 'qualified')`,
 };
 
 // OR the selected options within a facet (so "4K or 7K" widens), then the facets

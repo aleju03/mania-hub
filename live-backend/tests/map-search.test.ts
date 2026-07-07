@@ -244,6 +244,27 @@ describe("map search index", () => {
     expect(await ids("zzz=1")).toEqual([]);
   });
 
+  it("treats qualified as its own status facet, split out of pending", async () => {
+    const db = await makeDb();
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, stars: 4.2, status: "ranked", primary: "stream", patterns: { stream: 1 } });
+    await seedMap(db, { beatmapId: 2, beatmapsetId: 20, stars: 4.5, status: "qualified", primary: "stream", patterns: { stream: 1 } });
+    await seedMap(db, { beatmapId: 3, beatmapsetId: 30, stars: 3.8, status: "pending", primary: "stream", patterns: { stream: 1 } });
+    await seedMap(db, { beatmapId: 4, beatmapsetId: 40, stars: 5.1, status: "loved", primary: "stream", patterns: { stream: 1 } });
+    await buildAll(db);
+
+    const facet = async (statuses: string[]) => {
+      const page = await getMapSearchPage(db, { ...baseQuery(), statuses });
+      return page.items.map((item) => item.beatmapId).sort();
+    };
+
+    expect(await facet(["qualified"])).toEqual([2]);
+    // Pending (the "other" facet) no longer sweeps in qualified.
+    expect(await facet(["other"])).toEqual([3]);
+    // Facets OR within themselves.
+    expect(await facet(["ranked", "qualified"])).toEqual([1, 2]);
+    expect(await facet(["loved"])).toEqual([4]);
+  });
+
   it("filters by dan tokens with facet semantics (±0.5, vibro excluded)", async () => {
     const db = await makeDb();
     await seedMap(db, { beatmapId: 1, beatmapsetId: 10, primary: "stream", patterns: { stream: 1 } });

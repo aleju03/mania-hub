@@ -40,6 +40,7 @@ import { Route as ApiCatboxUploadRouteImport } from './routes/api/catbox-upload'
 import { Route as ApiBackgroundRouteImport } from './routes/api/background'
 import { Route as ApiAvatarRouteImport } from './routes/api/avatar'
 import { Route as ApiAudioRouteImport } from './routes/api/audio'
+import { Route as AdminTodosRouteImport } from './routes/admin/todos'
 import { Route as AdminR2RouteImport } from './routes/admin/r2'
 import { Route as AdminOgPreviewRouteImport } from './routes/admin/og-preview'
 import { Route as AdminMonitorRouteImport } from './routes/admin/monitor'
@@ -211,6 +212,11 @@ const ApiAudioRoute = ApiAudioRouteImport.update({
   path: '/api/audio',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminTodosRoute = AdminTodosRouteImport.update({
+  id: '/admin/todos',
+  path: '/admin/todos',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminR2Route = AdminR2RouteImport.update({
   id: '/admin/r2',
   path: '/admin/r2',
@@ -313,6 +319,7 @@ export interface FileRoutesByFullPath {
   '/admin/monitor': typeof AdminMonitorRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/admin/r2': typeof AdminR2Route
+  '/admin/todos': typeof AdminTodosRoute
   '/api/audio': typeof ApiAudioRoute
   '/api/avatar': typeof ApiAvatarRoute
   '/api/background': typeof ApiBackgroundRoute
@@ -361,6 +368,7 @@ export interface FileRoutesByTo {
   '/admin/monitor': typeof AdminMonitorRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/admin/r2': typeof AdminR2Route
+  '/admin/todos': typeof AdminTodosRoute
   '/api/audio': typeof ApiAudioRoute
   '/api/avatar': typeof ApiAvatarRoute
   '/api/background': typeof ApiBackgroundRoute
@@ -410,6 +418,7 @@ export interface FileRoutesById {
   '/admin/monitor': typeof AdminMonitorRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/admin/r2': typeof AdminR2Route
+  '/admin/todos': typeof AdminTodosRoute
   '/api/audio': typeof ApiAudioRoute
   '/api/avatar': typeof ApiAvatarRoute
   '/api/background': typeof ApiBackgroundRoute
@@ -460,6 +469,7 @@ export interface FileRouteTypes {
     | '/admin/monitor'
     | '/admin/og-preview'
     | '/admin/r2'
+    | '/admin/todos'
     | '/api/audio'
     | '/api/avatar'
     | '/api/background'
@@ -508,6 +518,7 @@ export interface FileRouteTypes {
     | '/admin/monitor'
     | '/admin/og-preview'
     | '/admin/r2'
+    | '/admin/todos'
     | '/api/audio'
     | '/api/avatar'
     | '/api/background'
@@ -556,6 +567,7 @@ export interface FileRouteTypes {
     | '/admin/monitor'
     | '/admin/og-preview'
     | '/admin/r2'
+    | '/admin/todos'
     | '/api/audio'
     | '/api/avatar'
     | '/api/background'
@@ -605,6 +617,7 @@ export interface RootRouteChildren {
   AdminMonitorRoute: typeof AdminMonitorRoute
   AdminOgPreviewRoute: typeof AdminOgPreviewRoute
   AdminR2Route: typeof AdminR2Route
+  AdminTodosRoute: typeof AdminTodosRoute
   ApiAudioRoute: typeof ApiAudioRoute
   ApiAvatarRoute: typeof ApiAvatarRoute
   ApiBackgroundRoute: typeof ApiBackgroundRoute
@@ -841,6 +854,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAudioRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/todos': {
+      id: '/admin/todos'
+      path: '/admin/todos'
+      fullPath: '/admin/todos'
+      preLoaderRoute: typeof AdminTodosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/r2': {
       id: '/admin/r2'
       path: '/admin/r2'
@@ -1017,6 +1037,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminMonitorRoute: AdminMonitorRoute,
   AdminOgPreviewRoute: AdminOgPreviewRoute,
   AdminR2Route: AdminR2Route,
+  AdminTodosRoute: AdminTodosRoute,
   ApiAudioRoute: ApiAudioRoute,
   ApiAvatarRoute: ApiAvatarRoute,
   ApiBackgroundRoute: ApiBackgroundRoute,
