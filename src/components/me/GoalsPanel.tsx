@@ -9,6 +9,7 @@ import { ModBadge } from "../ui/ModBadge";
 import { OsuLogo } from "../ui/OsuLogo";
 import { useAuth } from "../../lib/auth-context";
 import { getBeatmapsetForBeatmap, searchBeatmaps } from "../../lib/osu";
+import { filterBeatmapSearchResults } from "../../lib/beatmap-search";
 import { describeGoal, GOAL_SPEED_LABELS, goalSpeedBucket, nf, trimZeros } from "../../lib/goal-format";
 import { isGoalDeleted, queueGoalDelete, subscribeGoalsChanged } from "../../lib/goal-toasts";
 import { playGoalDeletedSound } from "../../lib/ui-sounds";
@@ -433,8 +434,8 @@ export function GoalsPanel({ initialSuggestionMetrics = EMPTY_GOAL_SUGGESTION_ME
       }
 
       try {
-        const res = await searchBeatmaps({ data: { query } });
-        if (!cancelled) setResults((res.beatmapsets ?? []).slice(0, 8));
+        const res = await searchBeatmaps({ data: { query, sort: "relevance_desc" } });
+        if (!cancelled) setResults(filterBeatmapSearchResults(res.beatmapsets ?? [], query).slice(0, 8));
       } catch {
         if (!cancelled) setResults([]);
       } finally {
