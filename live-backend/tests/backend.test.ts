@@ -1031,6 +1031,31 @@ describe("live backend", () => {
     expect(worker.status().lanes[0].activeJobs).toEqual([]);
   });
 
+  it("aborts the job signal when the watchdog fires so a cooperative handler can stop", async () => {
+    const { db, queue, events, ingestor } = await setup();
+
+    await queue.enqueue("enrich_user", "user:101", { userId: 101 });
+
+    const lane = { name: "fast", jobTypes: ["enrich_user"], claimLimit: 1, intervalMs: 750, jobTimeoutMs: 25 };
+    const worker = new WorkerRunner(db, queue, events, {} as never, ingestor, "test-worker", [lane]);
+    let captured: AbortSignal | undefined;
+    // A handler that only settles when its abort signal fires (a detached zombie
+    // in prod). The watchdog must abort the signal; the late rejection must be
+    // swallowed, not surface as an unhandled rejection.
+    (worker as unknown as { handle: (job: unknown, signal?: AbortSignal) => Promise<void> }).handle = (_job, signal) =>
+      new Promise<void>((_, reject) => {
+        captured = signal;
+        signal?.addEventListener("abort", () => reject(new Error("handler aborted")));
+      });
+
+    await (worker as unknown as { runLaneOnce: (target: typeof lane) => Promise<void> }).runLaneOnce(lane);
+
+    expect(captured?.aborted).toBe(true);
+    const job = (await exec(db, "select status, last_error from jobs where type = 'enrich_user'")).rows[0];
+    expect(job.status).toBe("failed");
+    expect(String(job.last_error)).toContain("watchdog");
+  });
+
   it("trims a runnable reserved-lane backlog to its reserve and keeps it out of shared depth", async () => {
     const { db, queue } = await setup();
     const now = new Date().toISOString();
@@ -3454,6 +3479,54 @@ describe("live backend", () => {
       "select user_id, total_score from country_beatmap_score_pbs where country = 'CR' and beatmap_id = 501 and lane_key = 'normal:lazer' order by user_id, total_score",
     )).rows;
     expect(pbRows.map((row) => `${row.user_id}:${row.total_score}`)).toEqual(["101:800", "101:1000", "303:900"]);
+  });
+
+  it("seeds snipe boards in bounded batches that self-chain instead of one long job", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    const now = new Date().toISOString();
+    // A roster larger than the per-invocation batch (15): one seed invocation
+    // must seed only a batch then park a continuation for the rest, so a single
+    // job never makes ~100 sequential osu! calls and trips the 10-min watchdog.
+    const rosterValues: string[] = [];
+    const rosterArgs: unknown[] = [];
+    for (let rank = 1; rank <= 20; rank += 1) {
+      rosterValues.push("('CR', ?, ?, 'test', 1, ?)");
+      rosterArgs.push(1000 + rank, rank, now);
+    }
+    await exec(
+      db,
+      `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values ${rosterValues.join(", ")}`,
+      rosterArgs,
+    );
+
+    const osu = { getBeatmapUserScoresAll: vi.fn(async () => [] as OscScore[]) };
+    const worker = new WorkerRunner(db, queue, events, osu as never, ingestor, "test-worker");
+
+    await queue.enqueue("seed_snipe_board", "snipe-seed:CR:501:normal:lazer", { country: "CR", beatmapId: 501, laneKey: "normal:lazer" }, { priority: 20 });
+    await worker.runOnce();
+
+    // First invocation seeded exactly one batch (15) and parked a continuation.
+    expect(osu.getBeatmapUserScoresAll).toHaveBeenCalledTimes(15);
+    const continuation = (await exec(
+      db,
+      "select payload_json, priority from jobs where type = 'seed_snipe_board' and dedupe_key like '%:cursor:15'",
+    )).rows[0];
+    expect(continuation).toBeDefined();
+    expect(JSON.parse(String(continuation.payload_json)).cursor).toBe(15);
+    expect(Number(continuation.priority)).toBe(21);
+
+    // Draining the chain seeds the whole roster and stops chaining once exhausted
+    // (batch two returns fewer rows than the batch size), leaving no seed backlog.
+    for (let i = 0; i < 3; i += 1) {
+      await queue.shedPressure();
+      await worker.runOnce();
+    }
+    expect(osu.getBeatmapUserScoresAll).toHaveBeenCalledTimes(20);
+    const remaining = (await exec(
+      db,
+      "select count(*) as count from jobs where type = 'seed_snipe_board' and status != 'done'",
+    )).rows[0];
+    expect(Number(remaining.count)).toBe(0);
   });
 
   it("does not count improving an already leading score as a snipe", async () => {

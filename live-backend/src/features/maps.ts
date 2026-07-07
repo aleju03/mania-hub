@@ -7,7 +7,9 @@ import type { JobQueue } from "../jobs/queue.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { isRankedRosterMember } from "../rosters/country-rosters.js";
 import { getModAcronyms, getScoreIdentity, getScoreTimestamp, nowIso } from "../shared/score.js";
+import { throwIfAborted } from "../shared/abort.js";
 import type { OscScore } from "../shared/types.js";
+import { logInfo } from "../logger.js";
 import { markUserMissing } from "../users.js";
 import { refreshFarmHelperKeyStatsForUser } from "./farm-helper-key-stats.js";
 import { buildMapStatusPropagationStatement } from "./map-search.js";
@@ -31,6 +33,14 @@ const MAPS_USER_LIBRARY_STALE_REFRESH_LIMIT = 25;
 const MAPS_REFRESH_PROGRESS_META_PREFIX = "maps_refresh_progress:";
 const MAPS_REFRESH_PROGRESS_WRITE_INTERVAL_MS = 1_000;
 const MAPS_METADATA_BATCH_FLUSH_STATEMENTS = 500;
+// The GLOBAL rollup folds every country's farmed-score rows (>1M on prod). libsql
+// materialises a whole result set at once, so the rows are paged by rowid and each
+// page is folded then released instead of holding the full table in memory.
+const GLOBAL_MAPS_FARMED_ROWS_PAGE = 50_000;
+
+function heapUsedMb(): number {
+  return Math.round(process.memoryUsage().heapUsed / (1024 * 1024));
+}
 
 export class MapsRosterNotReadyError extends Error {
   constructor(readonly country: string) {
@@ -2104,10 +2114,19 @@ const GLOBAL_MAPS_PLAYERS_PER_ENTRY = 80;
 // snapshot. Works entirely on the compact (ID-only) stored form: the beatmap,
 // beatmapset and user display rows the read path hydrates from were already
 // written by each country's own refresh, so no osu! API calls are needed.
-export async function refreshGlobalMaps(db: Db): Promise<CountryMapsData> {
-  const rows = (await exec(
+//
+// Memory-bounded: on prod this box has 3.8GB and no swap, and the GLOBAL row is
+// ~60MB of JSON built from ~50 country snapshots plus >1M farmed-score rows. So
+// this streams its inputs — one country payload parsed and released at a time
+// (no shared parse cache), and the farmed-score table paged by rowid — instead
+// of materialising everything at once, and it skips hydrating the final blob
+// back into display form (the caller discards the return value; the read path
+// hydrates on demand from the persisted compact snapshot).
+export async function refreshGlobalMaps(db: Db, signal?: AbortSignal): Promise<{ generatedAt: string; farmed: number; mostPlayed: number; favourites: number; beatmapsetPool: number }> {
+  logInfo("refresh_global_maps_memory", { phase: "start", heap_used_mb: heapUsedMb() });
+  const countryRows = (await exec(
     db,
-    "select country, refreshed_at, payload_json from country_maps_snapshots where country != ?",
+    "select country from country_maps_snapshots where country != ? order by country",
     [GLOBAL_COUNTRY_CODE],
   )).rows;
 
@@ -2117,11 +2136,20 @@ export async function refreshGlobalMaps(db: Db): Promise<CountryMapsData> {
   const favouritesByPlayerSets = new Map<number, Set<number>>();
   const pool = new Set<number>();
 
-  for (const row of rows) {
+  for (const countryRow of countryRows) {
+    throwIfAborted(signal);
     // One country's parse+merge is the unit of synchronous work; yield between
-    // them so HTTP requests can interleave with this aggregation.
+    // them so HTTP requests can interleave with this aggregation. The payload is
+    // fetched, parsed locally and folded here, then goes out of scope before the
+    // next country loads — the multi-hundred-MB set of parsed trees is never held
+    // resident at once (deliberately not the shared getStoredSnapshotCached).
     await yieldToEventLoop();
-    const stored = getStoredSnapshotCached(String(row.country), String(row.refreshed_at ?? ""), row.payload_json);
+    const payloadRow = (await exec(
+      db,
+      "select payload_json from country_maps_snapshots where country = ?",
+      [String(countryRow.country)],
+    )).rows[0];
+    const stored = payloadRow ? toStoredCountryMapsData(parseJson<unknown>(payloadRow.payload_json, null)) : null;
     if (!stored) continue;
     for (const entry of stored.farmed) {
       let players = farmedByBeatmap.get(entry.beatmapId);
@@ -2152,44 +2180,60 @@ export async function refreshGlobalMaps(db: Db): Promise<CountryMapsData> {
     }
     for (const id of stored.beatmapsetsPool) pool.add(id);
   }
+  logInfo("refresh_global_maps_memory", { phase: "countries_merged", countries: countryRows.length, heap_used_mb: heapUsedMb() });
 
   // Farmed scores also live in a compact row table as players refresh over
   // time. Merge those in so Global farmed counts are not limited to whatever
-  // was present in the last per-country snapshot.
-  const farmedScoreRows = (await exec(
-    db,
-    `select beatmap_id, user_id, pp, mods_json, score_url, played_at
-     from country_maps_farmed_scores
-     where country != ?`,
-    [GLOBAL_COUNTRY_CODE],
-  )).rows;
+  // was present in the last per-country snapshot. Paged by rowid (the table
+  // holds >1M rows on prod) so each page is folded then released.
   let farmedRowsProcessed = 0;
-  for (const row of farmedScoreRows) {
-    if (++farmedRowsProcessed % 2000 === 0) await yieldToEventLoop();
-    const beatmapId = Number(row.beatmap_id);
-    const userId = Number(row.user_id);
-    const pp = Number(row.pp ?? 0);
-    if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0 || !Number.isSafeInteger(userId) || userId <= 0 || !Number.isFinite(pp) || pp <= 0) {
-      continue;
+  let cursor = 0;
+  for (;;) {
+    throwIfAborted(signal);
+    const page = (await exec(
+      db,
+      `select rowid as rid, beatmap_id, user_id, pp, mods_json, score_url, played_at
+       from country_maps_farmed_scores
+       where rowid > ? and country != ?
+       order by rowid
+       limit ?`,
+      [cursor, GLOBAL_COUNTRY_CODE, GLOBAL_MAPS_FARMED_ROWS_PAGE],
+    )).rows;
+    if (page.length === 0) break;
+    for (const row of page) {
+      farmedRowsProcessed += 1;
+      cursor = Number(row.rid);
+      const beatmapId = Number(row.beatmap_id);
+      const userId = Number(row.user_id);
+      const pp = Number(row.pp ?? 0);
+      if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0 || !Number.isSafeInteger(userId) || userId <= 0 || !Number.isFinite(pp) || pp <= 0) {
+        continue;
+      }
+      let players = farmedByBeatmap.get(beatmapId);
+      if (!players) farmedByBeatmap.set(beatmapId, (players = new Map()));
+      const player: StoredMapsFarmedPlayer = {
+        id: userId,
+        pp,
+        mods: parseJson<string[]>(row.mods_json, []),
+        scoreUrl: row.score_url == null ? null : String(row.score_url),
+        playedAt: row.played_at == null ? null : String(row.played_at),
+      };
+      const existing = players.get(userId);
+      if (!existing || player.pp > existing.pp || (player.pp === existing.pp && (player.playedAt ?? "") > (existing.playedAt ?? ""))) {
+        players.set(userId, player);
+      }
     }
-    let players = farmedByBeatmap.get(beatmapId);
-    if (!players) farmedByBeatmap.set(beatmapId, (players = new Map()));
-    const player: StoredMapsFarmedPlayer = {
-      id: userId,
-      pp,
-      mods: parseJson<string[]>(row.mods_json, []),
-      scoreUrl: row.score_url == null ? null : String(row.score_url),
-      playedAt: row.played_at == null ? null : String(row.played_at),
-    };
-    const existing = players.get(userId);
-    if (!existing || player.pp > existing.pp || (player.pp === existing.pp && (player.playedAt ?? "") > (existing.playedAt ?? ""))) {
-      players.set(userId, player);
-    }
+    // Yield after each page so the event loop is never held for a whole page's
+    // fold, and let the page result set be reclaimed before the next fetch.
+    await yieldToEventLoop();
+    if (page.length < GLOBAL_MAPS_FARMED_ROWS_PAGE) break;
   }
+  logInfo("refresh_global_maps_memory", { phase: "farmed_rows_merged", farmed_rows: farmedRowsProcessed, heap_used_mb: heapUsedMb() });
 
   // The remaining aggregate/sort blocks are each a solid chunk of CPU; yield
   // between them to bound how long the event loop is held at a stretch.
   await yieldToEventLoop();
+  throwIfAborted(signal);
   const farmed = [...farmedByBeatmap.entries()]
     .flatMap(([beatmapId, playerMap]): StoredCountryMapsData["farmed"] => {
       const players = [...playerMap.values()].sort((a, b) => b.pp - a.pp);
@@ -2256,6 +2300,15 @@ export async function refreshGlobalMaps(db: Db): Promise<CountryMapsData> {
     favouritesGeneratedAt: generatedAt,
   };
 
+  logInfo("refresh_global_maps_memory", {
+    phase: "aggregated",
+    farmed: stored.farmed.length,
+    most_played: stored.mostPlayed.length,
+    favourites: stored.favourites.length,
+    beatmapset_pool: stored.beatmapsetsPool.length,
+    heap_used_mb: heapUsedMb(),
+  });
+
   const refreshedAt = nowIso();
   // json(stored) serialises the whole global snapshot in one synchronous pass.
   await yieldToEventLoop();
@@ -2267,7 +2320,18 @@ export async function refreshGlobalMaps(db: Db): Promise<CountryMapsData> {
     [GLOBAL_COUNTRY_CODE, json(stored), generatedAt, refreshedAt],
   );
 
-  return hydrateCompactMapsSnapshot(db, stored);
+  // Intentionally does not hydrate `stored` back into display form: hydrating
+  // the whole ~60MB blob (joining every beatmap/beatmapset/user) is a large
+  // memory spike, and the only caller (the refresh_global_maps job) discards the
+  // return value. The read path hydrates on demand from the persisted snapshot.
+  logInfo("refresh_global_maps_memory", { phase: "persisted", heap_used_mb: heapUsedMb() });
+  return {
+    generatedAt,
+    farmed: stored.farmed.length,
+    mostPlayed: stored.mostPlayed.length,
+    favourites: stored.favourites.length,
+    beatmapsetPool: stored.beatmapsetsPool.length,
+  };
 }
 
 // The global maps refresh and the per-map players lookup both scan every
