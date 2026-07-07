@@ -25,6 +25,7 @@ import { OsuApiClient } from "./osu/client.js";
 import { SqliteSharedRateLimiter } from "./osu/shared-rate-limiter.js";
 import { enqueueRosterRefreshes } from "./rosters/country-rosters.js";
 import { startRetentionScheduler } from "./retention.js";
+import { startWalCheckpointer } from "./wal-checkpointer.js";
 import { WorkerRunner } from "./workers.js";
 import { createDiscordRuntime } from "./discord/index.js";
 
@@ -188,6 +189,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       startProfilePoolWarmScheduler(app.db, app.queue);
     }
     startRetentionScheduler(app.db, app.config);
+    // Active WAL brake: keeps the -wal file bounded so it can never grow into the
+    // read-pin death-spiral. Worker/all role only (never the serving process).
+    startWalCheckpointer(app.config);
     startMapSearchStatusReconciler(app.db);
     startQueuePressureScheduler(app.queue);
     if (app.config.enableOscBackfill) {

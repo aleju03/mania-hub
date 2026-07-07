@@ -1242,42 +1242,59 @@ async function readGlobalFarmedEntriesForFilteredPage(
     mergeStoredFarmedEntryPlayers(byBeatmap, entry.beatmapId, entry.players);
   }
 
-  const snapshotRows = (await exec(
+  // Stream one country snapshot at a time (not a single `where country != ?`
+  // blob read): each read holds only a short WAL read-mark and releases before
+  // the next, so it can't pin the WAL for the whole multi-second GLOBAL fetch.
+  const countryRows = (await exec(
     db,
-    `select payload_json
-     from country_maps_snapshots
-     where country != ?`,
+    "select country from country_maps_snapshots where country != ? order by country",
     [GLOBAL_COUNTRY_CODE],
   )).rows;
-  for (const row of snapshotRows) {
-    const stored = toStoredCountryMapsData(parseJson<unknown>(row.payload_json, null));
+  for (const countryRow of countryRows) {
+    await yieldToEventLoop();
+    const row = (await exec(
+      db,
+      "select payload_json from country_maps_snapshots where country = ?",
+      [String(countryRow.country)],
+    )).rows[0];
+    const stored = row ? toStoredCountryMapsData(parseJson<unknown>(row.payload_json, null)) : null;
     if (!stored) continue;
     for (const entry of stored.farmed) {
       mergeStoredFarmedEntryPlayers(byBeatmap, entry.beatmapId, entry.players);
     }
   }
 
-  const scoreRows = (await exec(
-    db,
-    `select beatmap_id, user_id, pp, mods_json, score_url, played_at
-     from country_maps_farmed_scores
-     where country != ?`,
-    [GLOBAL_COUNTRY_CODE],
-  )).rows;
-  for (const row of scoreRows) {
-    const beatmapId = Number(row.beatmap_id);
-    const userId = Number(row.user_id);
-    const pp = Number(row.pp ?? 0);
-    if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0 || !Number.isSafeInteger(userId) || userId <= 0 || !Number.isFinite(pp) || pp <= 0) {
-      continue;
+  // Farmed-score rows (>1M on prod) paged by rowid for the same reason.
+  let cursor = 0;
+  for (;;) {
+    const page = (await exec(
+      db,
+      `select rowid as rid, beatmap_id, user_id, pp, mods_json, score_url, played_at
+       from country_maps_farmed_scores
+       where rowid > ? and country != ?
+       order by rowid
+       limit ?`,
+      [cursor, GLOBAL_COUNTRY_CODE, GLOBAL_MAPS_FARMED_ROWS_PAGE],
+    )).rows;
+    if (page.length === 0) break;
+    for (const row of page) {
+      cursor = Number(row.rid);
+      const beatmapId = Number(row.beatmap_id);
+      const userId = Number(row.user_id);
+      const pp = Number(row.pp ?? 0);
+      if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0 || !Number.isSafeInteger(userId) || userId <= 0 || !Number.isFinite(pp) || pp <= 0) {
+        continue;
+      }
+      mergeStoredFarmedEntryPlayers(byBeatmap, beatmapId, [{
+        id: userId,
+        pp,
+        mods: parseJson<string[]>(row.mods_json, []),
+        scoreUrl: row.score_url == null ? null : String(row.score_url),
+        playedAt: row.played_at == null ? null : String(row.played_at),
+      }]);
     }
-    mergeStoredFarmedEntryPlayers(byBeatmap, beatmapId, [{
-      id: userId,
-      pp,
-      mods: parseJson<string[]>(row.mods_json, []),
-      scoreUrl: row.score_url == null ? null : String(row.score_url),
-      playedAt: row.played_at == null ? null : String(row.played_at),
-    }]);
+    await yieldToEventLoop();
+    if (page.length < GLOBAL_MAPS_FARMED_ROWS_PAGE) break;
   }
 
   return [...byBeatmap.entries()]
@@ -1536,17 +1553,27 @@ async function readMapsDetailsPlayersFromSnapshots(
   kind: MapsPlayersKind,
   id: number,
 ): Promise<MapsDetailsPlayer[]> {
-  const rows = (await exec(
-    db,
-    `select country, refreshed_at, payload_json
-     from country_maps_snapshots
-     where ${isGlobalCountry(country) ? "country != ?" : "country = ?"}`,
-    [isGlobalCountry(country) ? GLOBAL_COUNTRY_CODE : country],
-  )).rows;
+  // For GLOBAL, stream one country snapshot at a time instead of a single
+  // `where country != ?` blob read (this runs on the serving event loop; a
+  // single all-country read both hogs the loop and holds a WAL-scaling
+  // read-mark for its whole duration). Non-global stays a single row read.
+  const memberCountries = isGlobalCountry(country)
+    ? (await exec(
+        db,
+        "select country from country_maps_snapshots where country != ? order by country",
+        [GLOBAL_COUNTRY_CODE],
+      )).rows.map((row) => String(row.country))
+    : [country];
 
   const byUser = new Map<number, MapsDetailsPlayer>();
-  for (const row of rows) {
+  for (const memberCountry of memberCountries) {
     await yieldToEventLoop();
+    const row = (await exec(
+      db,
+      "select country, refreshed_at, payload_json from country_maps_snapshots where country = ?",
+      [memberCountry],
+    )).rows[0];
+    if (!row) continue;
     const stored = getStoredSnapshotCached(String(row.country), String(row.refreshed_at ?? ""), row.payload_json);
     if (!stored) continue;
 

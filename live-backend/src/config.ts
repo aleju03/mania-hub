@@ -21,6 +21,14 @@ export interface Config {
   sqliteSynchronous: string;
   sqliteCacheMb: number;
   sqliteMmapMb: number;
+  // Active WAL brake (worker/all role only): a dedicated connection forces a
+  // TRUNCATE checkpoint once the -wal file grows past walCheckpointTruncateBytes,
+  // so nothing under normal load lets the WAL grow unbounded into a read-pin
+  // death-spiral (the 2026-07-07 outage). walCheckpointWarnBytes logs when a
+  // reader keeps defeating the reset.
+  walCheckpointIntervalMs: number;
+  walCheckpointTruncateBytes: number;
+  walCheckpointWarnBytes: number;
   databaseUrl: string;
   databaseAuthToken?: string;
   osuClientId?: string;
@@ -199,10 +207,13 @@ export function readConfig(): Config {
     enableEventLogTail: readBool("ENABLE_EVENT_LOG_TAIL", role === "server"),
     eventLogTailIntervalMs: readBoundedInt("EVENT_LOG_TAIL_INTERVAL_MS", 250, 50, 5_000),
     workerHttpPort: readOptionalInt("WORKER_HTTP_PORT"),
-    sqliteBusyTimeoutMs: readBoundedInt("SQLITE_BUSY_TIMEOUT_MS", 5_000, 0, 60_000),
+    sqliteBusyTimeoutMs: readBoundedInt("SQLITE_BUSY_TIMEOUT_MS", 2_000, 0, 60_000),
     sqliteSynchronous: (process.env.SQLITE_SYNCHRONOUS || "NORMAL").toUpperCase(),
     sqliteCacheMb: readBoundedInt("SQLITE_CACHE_MB", 64, 0, 2_048),
     sqliteMmapMb: readBoundedInt("SQLITE_MMAP_MB", 256, 0, 8_192),
+    walCheckpointIntervalMs: readBoundedInt("WAL_CHECKPOINT_INTERVAL_MS", 15_000, 2_000, 300_000),
+    walCheckpointTruncateBytes: readBoundedInt("WAL_CHECKPOINT_TRUNCATE_BYTES", 64 * 1024 * 1024, 1024 * 1024, 2_048 * 1024 * 1024),
+    walCheckpointWarnBytes: readBoundedInt("WAL_CHECKPOINT_WARN_BYTES", 512 * 1024 * 1024, 1024 * 1024, 8_192 * 1024 * 1024),
     databaseUrl: process.env.DATABASE_URL ?? "file:./data/mania-hub-live.db",
     databaseAuthToken: process.env.DATABASE_AUTH_TOKEN || undefined,
     osuClientId: process.env.OSU_CLIENT_ID || undefined,

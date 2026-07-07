@@ -59,7 +59,10 @@ export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | 
   };
   const storageBefore = await getLocalDbStorage(config);
   const emergency = storageBefore.overLimit ? await pruneForLocalDbLimit(db, config, storageBefore) : {};
-  if (storageBefore.bytes != null) await checkpointLocalDb(db);
+  // The WAL is kept bounded by startWalCheckpointer (a dedicated ~15s TRUNCATE
+  // brake); a redundant PASSIVE here only contends for the same checkpoint lock.
+  // The emergency over-limit path (pruneForLocalDbLimit) still TRUNCATEs to
+  // reclaim disk when the DB is over its hard cap.
   Object.assign(results, emergency);
   await Promise.allSettled(oldReplayVideoJobs.map((id) => rm(resolve(config.replayVideoWorkDir, id), { recursive: true, force: true })));
   logInfo("retention_complete", results);

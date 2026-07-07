@@ -7,7 +7,7 @@ export type Db = Client;
 
 type PragmaConfig = Partial<Pick<Config, "sqliteBusyTimeoutMs" | "sqliteSynchronous" | "sqliteCacheMb" | "sqliteMmapMb">>;
 
-const SQLITE_BUSY_RETRY_MS = readBoundedEnvInt("SQLITE_BUSY_RETRY_MS", 30_000, 0, 120_000);
+const SQLITE_BUSY_RETRY_MS = readBoundedEnvInt("SQLITE_BUSY_RETRY_MS", 15_000, 0, 120_000);
 const SQLITE_BUSY_RETRY_INITIAL_DELAY_MS = 25;
 const SQLITE_BUSY_RETRY_MAX_DELAY_MS = 500;
 
@@ -101,6 +101,17 @@ export async function migrate(db: Db): Promise<void> {
   await migrateMapCollections(db);
   await migrateSkins(db);
   await migrateAdminTodos(db);
+  await migrateCountryMapsSnapshotStampsIndex(db);
+}
+
+// getMapsSnapshotMeta reads only (generated_at, refreshed_at) for a country on
+// the serving loop on every /maps request, but country_maps_snapshots rows carry
+// the ~60MB GLOBAL payload_json, so fetching the row walks its overflow chain.
+// A covering index over just the stamp columns keeps that read index-only.
+async function migrateCountryMapsSnapshotStampsIndex(db: Db): Promise<void> {
+  await db.execute(
+    "create index if not exists idx_country_maps_snapshots_stamps on country_maps_snapshots(country, generated_at, refreshed_at)",
+  );
 }
 
 export async function dbHealth(db: Db): Promise<boolean> {
