@@ -79,6 +79,15 @@ export async function createApp() {
     await backfillSkinSlugs(db);
   }
   const rateLimitDb = await createDb(config);
+  // A tiny dedicated write connection (+ its own queue) for the page-serving
+  // path's best-effort bookkeeping (country touch, refresh scheduling). Keeping
+  // those writes off the `db` connection that serves page-load reads is the
+  // invariant that stops a busy single WAL writer from freezing the whole site:
+  // a stuck write here can never queue in front of a read. Small cache/mmap — it
+  // only runs a handful of one-row writes. The pure worker role never serves
+  // HTTP, so it does not need one.
+  const serveWriteDb = config.role === "worker" ? null : await createDb({ ...config, sqliteCacheMb: 2, sqliteMmapMb: 0 });
+  const serveWriteQueue = serveWriteDb ? new JobQueue(serveWriteDb) : null;
   const queue = new JobQueue(db);
   const events = new LiveEventLog(db);
   // Startup writes belong to the ingest/worker side; a serving process stays
@@ -91,6 +100,13 @@ export async function createApp() {
     // the ingest hot path skips a DB lookup for players with no goals (and learns of goals created
     // by a separate server-role process within a refresh interval).
     startGoalUserIndexRefresh(db);
+  } else if (serveWriteDb) {
+    // A server-role process must not write on its serving connection, but the
+    // registry read path (/api/countries/features, /api/status) needs the pinned
+    // countries to exist. Seed them once on the dedicated write connection at
+    // boot so getCountryRegistry can read them with { ensure: false } and never
+    // issue ensurePinnedCountries upserts on ctx.db.
+    await ensurePinnedCountries(serveWriteDb, config).catch(() => undefined);
   }
   const logOsuCall = (entry: { caller: string; path: string; startedAt: number; durationMs?: number | null; status?: number | null }) => {
     void logApiCall(db, {
@@ -131,7 +147,16 @@ export async function createApp() {
   const discord = createDiscordRuntime({ db, osu, queue, config });
   const ctx = {
     db,
-    queue,
+    // HTTP handlers enqueue follow-up jobs (maps/roster refresh, rankings stat
+    // repair, player-skill recompute, replay-video, ...) via ctx.queue. Bind it
+    // to the dedicated write connection so NONE of those enqueue writes land on
+    // the connection that serves page-load reads — otherwise a stuck enqueue on
+    // ctx.db (while a worker holds the WAL writer) blocks every read queued
+    // behind it and freezes the site. The worker/schedulers keep using the
+    // db-bound `queue` variable directly (they run in the worker process).
+    queue: serveWriteQueue ?? queue,
+    serveWriteDb: serveWriteDb ?? undefined,
+    serveWriteQueue: serveWriteQueue ?? undefined,
     events,
     config,
     abuse,
@@ -162,7 +187,7 @@ export async function createApp() {
   server.keepAliveTimeout = 75_000;
   server.headersTimeout = 80_000;
   if (config.role !== "worker") warmStatusBodyCache(ctx);
-  return { server, db, rateLimitDb, queue, events, osu, scoresFallbackOsu, osc, worker, ingestor, config, countryClients, discord };
+  return { server, db, rateLimitDb, serveWriteDb, serveWriteQueue, queue, events, osu, scoresFallbackOsu, osc, worker, ingestor, config, countryClients, discord };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

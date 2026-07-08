@@ -266,8 +266,11 @@ export async function canSeedSnipesForCountry(db: Db, config: CountryWarmConfig,
   return row.status !== "paused" && row.isWarm && isCountryFeatureAtLeast(row.featureTier, "snipes");
 }
 
-export async function getCountryRegistry(db: Db, config: CountryWarmConfig): Promise<CountryRegistryRow[]> {
-  await ensurePinnedCountries(db, config);
+export async function getCountryRegistry(db: Db, config: CountryWarmConfig, options: { ensure?: boolean } = {}): Promise<CountryRegistryRow[]> {
+  // ensure:false is the read-only path for page-serving endpoints: it skips the
+  // ensurePinnedCountries upserts so a registry read never writes on the serving
+  // connection (the pinned rows are seeded at boot on the write connection).
+  if (options.ensure !== false) await ensurePinnedCountries(db, config);
   const rows = (await exec(
     db,
     `select *
@@ -277,7 +280,7 @@ export async function getCountryRegistry(db: Db, config: CountryWarmConfig): Pro
   return rows.map((row) => rowToCountryRegistry(row, config));
 }
 
-async function getCountryRegistryRow(db: Db, country: string, config: CountryWarmConfig): Promise<CountryRegistryRow | null> {
+export async function getCountryRegistryRow(db: Db, country: string, config: CountryWarmConfig): Promise<CountryRegistryRow | null> {
   const row = (await exec(db, "select * from country_registry where country = ?", [normalizeCountry(country)])).rows[0];
   return row ? rowToCountryRegistry(row, config) : null;
 }

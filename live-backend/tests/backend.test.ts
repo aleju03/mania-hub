@@ -20,7 +20,7 @@ import { cancelOscCountryCatchup, enqueueOscCountryCatchup, OscBackfill } from "
 import { OscSocketClient } from "../src/osc/client.js";
 import { runScoresFallbackPage, shouldRunScoresFallback } from "../src/osc/scores-fallback.js";
 import { addManualRosterMember, refreshCountryRoster, removeManualRosterMember } from "../src/rosters/country-rosters.js";
-import { activateCountry, canSeedSnipesForCountry, deleteCountryData, getActiveCountryCodes, getIndexedCountryCodes, getMapsWarmCountryCodes, getRosterRefreshCountryCodes, setCountryFeatureTier, setCountryPaused, setCountryStatus, touchCountryRequest } from "../src/countries.js";
+import { activateCountry, canSeedSnipesForCountry, deleteCountryData, ensurePinnedCountries, getActiveCountryCodes, getIndexedCountryCodes, getMapsWarmCountryCodes, getRosterRefreshCountryCodes, setCountryFeatureTier, setCountryPaused, setCountryStatus, touchCountryRequest } from "../src/countries.js";
 import { CountryClientTracker } from "../src/live/country-clients.js";
 import { ScoreIngestor } from "../src/ingest/score-ingestor.js";
 import { JobQueue } from "../src/jobs/queue.js";
@@ -782,16 +782,20 @@ describe("live backend", () => {
     const countryClients = new CountryClientTracker();
     const release = countryClients.open("CR");
     const first = mockRes();
+    const config = baseConfig({
+      databaseUrl: `file:${join(dir, "test.db")}`,
+      maxLocalDbBytes: 1024 * 1024,
+      targetLocalDbBytes: 512 * 1024,
+    });
+    // Pinned countries are seeded at boot in prod (worker + server-role serveWriteDb);
+    // the status read path no longer seeds, so seed here to match.
+    await ensurePinnedCountries(db, config);
 
     await routeHttp(mockReq("GET", "/api/status"), first.res, {
       db,
       queue,
       events,
-      config: baseConfig({
-        databaseUrl: `file:${join(dir, "test.db")}`,
-        maxLocalDbBytes: 1024 * 1024,
-        targetLocalDbBytes: 512 * 1024,
-      }),
+      config,
       countryClients,
       osu: { limiter: { state: () => ({ hardPerMinute: 60, usedLastMinute: 0, byCaller: [], byPath: [] }) } },
       oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
@@ -808,11 +812,7 @@ describe("live backend", () => {
       db,
       queue,
       events,
-      config: baseConfig({
-        databaseUrl: `file:${join(dir, "test.db")}`,
-        maxLocalDbBytes: 1024 * 1024,
-        targetLocalDbBytes: 512 * 1024,
-      }),
+      config,
       countryClients,
       osu: { limiter: { state: () => ({ hardPerMinute: 60, usedLastMinute: 0, byCaller: [], byPath: [] }) } },
       oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
@@ -826,16 +826,20 @@ describe("live backend", () => {
   it("returns public country feature tiers without the full status payload", async () => {
     const { db, queue, events } = await setup(["CR"]);
     const response = mockRes();
+    const config = baseConfig({
+      trackedCountries: ["CR"],
+      prewarmCountries: ["MX"],
+      mapsWarmCountries: ["BR"],
+    });
+    // Pinned countries are seeded at boot in prod; the features read path no
+    // longer seeds (it must not write on the serving connection), so seed here.
+    await ensurePinnedCountries(db, config);
 
     await routeHttp(mockReq("GET", "/api/countries/features"), response.res, {
       db,
       queue,
       events,
-      config: baseConfig({
-        trackedCountries: ["CR"],
-        prewarmCountries: ["MX"],
-        mapsWarmCountries: ["BR"],
-      }),
+      config,
       osu: { limiter: { state: () => ({ hardPerMinute: 60, usedLastMinute: 0, byCaller: [], byPath: [] }) } },
       oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
     } as never);

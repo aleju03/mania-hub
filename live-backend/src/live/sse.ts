@@ -79,7 +79,9 @@ export async function handleSse(req: IncomingMessage, res: ServerResponse, ctx: 
     const now = Date.now();
     if (!observeOnly && !global && now - lastCountryTouchAt >= countryTouchIntervalMs) {
       lastCountryTouchAt = now;
-      void touchCountryRequest(ctx.db, country).catch(() => undefined);
+      // Off the serving connection (see HttpContext.serveWriteDb): a long-lived
+      // SSE stream must never issue a write on the connection that serves reads.
+      void touchCountryRequest(ctx.serveWriteDb ?? ctx.db, country).catch(() => undefined);
     }
   }, 15_000);
   heartbeat.unref();
