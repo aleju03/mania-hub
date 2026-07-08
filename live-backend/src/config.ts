@@ -255,7 +255,7 @@ export function readConfig(): Config {
     // becomes a problem: manual rows are durable and nothing ages them out.
     manualRosterMaxPerCountry: readInt("MANUAL_ROSTER_MAX_PER_COUNTRY", 0),
     mapsRefreshIntervalMs: readInt("MAPS_REFRESH_INTERVAL_MS", 7 * 24 * 60 * 60 * 1000),
-    mapCollectionsRefreshIntervalMs: readInt("MAP_COLLECTIONS_REFRESH_INTERVAL_MS", 3 * 24 * 60 * 60 * 1000),
+    mapCollectionsRefreshIntervalMs: readInt("MAP_COLLECTIONS_REFRESH_INTERVAL_MS", 7 * 24 * 60 * 60 * 1000),
     qualifiedMapsWatchIntervalMs: readInt("QUALIFIED_MAPS_WATCH_INTERVAL_MS", 60 * 60 * 1000),
     chartAnalysisLaneIntervalMs: readBoundedInt("CHART_ANALYSIS_LANE_INTERVAL_MS", 500, 25, 60_000),
     oscBackfillMaxAgeMs: readInt("OSC_BACKFILL_MAX_AGE_MS", 24 * 60 * 60 * 1000),
