@@ -144,6 +144,15 @@ function isSafeHref(value: string): boolean {
   return /^https?:\/\/\S+$/i.test(value.trim());
 }
 
+// [img] also accepts blob: URLs so the BBCode editor's not-yet-uploaded pasted
+// images round-trip through the parser. Those blob URLs are swapped for real
+// catbox URLs before anything is copied or saved, so they never reach output.
+// Rendering a stray blob URL is harmless (dead cross-origin -> broken image).
+function isImageSrc(value: string): boolean {
+  const trimmed = value.trim();
+  return isSafeHref(trimmed) || /^blob:https?:\/\/\S+$/i.test(trimmed);
+}
+
 function parseImagemap(content: string): BBNode {
   const lines = content.split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
   const src = lines[0] ?? "";
@@ -203,7 +212,7 @@ function buildVerbatimNode(tag: string, content: string, param: string | null): 
       return { type: "code", inline: true, code: content };
     case "img": {
       const src = content.trim();
-      return isSafeHref(src) ? { type: "img", src } : { type: "text", text: src };
+      return isImageSrc(src) ? { type: "img", src } : { type: "text", text: src };
     }
     case "youtube": {
       const videoId = extractYoutubeId(content);
@@ -547,6 +556,18 @@ export function parseBBCode(source: string, options?: { spans?: boolean }): BBNo
   return root.children;
 }
 
+/**
+ * True when `source` holds at least one recognized BBCode tag (anything the
+ * parser turns into a non-text node). Plain prose - even with stray brackets or
+ * a bare URL, which the parser leaves as text - returns false, so a paste
+ * handler can tell "raw BBCode to render" apart from "ordinary text". The
+ * outermost recognized construct always lands at the top level, so checking the
+ * top-level nodes is enough.
+ */
+export function containsBBCode(source: string): boolean {
+  return parseBBCode(source).some((node) => node.type !== "text");
+}
+
 function stripSpans(nodes: BBNode[]) {
   for (const node of nodes) {
     delete node.span;
@@ -649,4 +670,45 @@ export function buildGradientBBCode(text: string, stops: string[], mirror = fals
       return color ? `[color=${color}]${char}[/color]` : char;
     })
     .join("");
+}
+
+function rgbToHsl(r: number, g: number, b: number): readonly [number, number, number] {
+  const rn = r / 255, gn = g / 255, bn = b / 255;
+  const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (d === 0) return [0, 0, l];
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h = 0;
+  if (max === rn) h = ((gn - bn) / d + (gn < bn ? 6 : 0));
+  else if (max === gn) h = (bn - rn) / d + 2;
+  else h = (rn - gn) / d + 4;
+  return [h * 60, s, l];
+}
+
+function hslToRgb(h: number, s: number, l: number): readonly [number, number, number] {
+  if (s === 0) { const v = Math.round(l * 255); return [v, v, v]; }
+  const hue = (((h % 360) + 360) % 360) / 360;
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const channel = (t: number): number => {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  return [Math.round(channel(hue + 1 / 3) * 255), Math.round(channel(hue) * 255), Math.round(channel(hue - 1 / 3) * 255)];
+}
+
+/** Rotates a hex color's hue by `degrees`, keeping saturation and lightness. */
+export function shiftHexHue(value: string, degrees: number): string | null {
+  const hex = normalizeHexColor(value);
+  if (!hex) return null;
+  const [r, g, b] = parseHexChannels(hex);
+  const [h, s, l] = rgbToHsl(r, g, b);
+  const [nr, ng, nb] = hslToRgb(h + degrees, s, l);
+  const to = (c: number) => c.toString(16).padStart(2, "0").toUpperCase();
+  return `#${to(nr)}${to(ng)}${to(nb)}`;
 }

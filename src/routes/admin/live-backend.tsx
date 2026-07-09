@@ -1,6 +1,6 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { Activity, ArrowLeft, Ban, Check, ChevronDown, ChevronRight, Crosshair, Database, HelpCircle, History, Monitor, Pause, Play, Radio, RefreshCw, RotateCcw, Search, Server, Signal, Smartphone, Table2, Trash2, UserRound, Wifi, WifiOff, X } from "lucide-react";
+import { Activity, ArrowLeft, Ban, Check, ChevronDown, ChevronRight, Crosshair, Database, History, Monitor, Radio, RefreshCw, RotateCcw, Search, Server, Signal, Smartphone, Table2, Trash2, Wifi, WifiOff, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { canUseAdminFeatures } from "../../lib/auth-shared";
 import { requireAdminAccess } from "../../lib/auth";
@@ -207,6 +207,7 @@ interface AnalyticsRecentEventRow {
   farmMapUser: string | null;
   packType: string | null;
   packUsername: string | null;
+  viewerUsername: string | null;
 }
 
 interface AnalyticsCountryRow {
@@ -235,6 +236,18 @@ interface AnalyticsTopReplayRow {
 
 interface AnalyticsReferrerRow {
   domain: string;
+  count: number;
+}
+
+interface AnalyticsSharePlatformRow {
+  platform: string;
+  count: number;
+}
+
+interface AnalyticsSharedPageRow {
+  path: string;
+  subject: string | null;
+  subjectType: string | null;
   count: number;
 }
 
@@ -281,6 +294,9 @@ interface AnalyticsMonitorData {
   topProfiles: AnalyticsTopProfileRow[];
   topReplays: AnalyticsTopReplayRow[];
   topReferrers: AnalyticsReferrerRow[];
+  shareEvents: number;
+  sharesByPlatform: AnalyticsSharePlatformRow[];
+  topSharedPages: AnalyticsSharedPageRow[];
   serverErrors: AnalyticsServerErrorRow[];
   recentServerErrors: AnalyticsRecentServerErrorRow[];
   fetchedAt: number;
@@ -460,6 +476,9 @@ function createEmptyAnalyticsMonitorData(rangeHours: AnalyticsRange, cacheState:
     topProfiles: [],
     topReplays: [],
     topReferrers: [],
+    shareEvents: 0,
+    sharesByPlatform: [],
+    topSharedPages: [],
     serverErrors: [],
     recentServerErrors: [],
     fetchedAt: Date.now(),
@@ -539,6 +558,9 @@ async function fetchAnalyticsMonitorDataFromPostHog({
     serverErrors,
     recentServerErrors,
     bounce,
+    shareTotal,
+    sharePlatforms,
+    sharePages,
   ] = await Promise.all([
     runQuery("active visitors", `SELECT count(DISTINCT distinct_id) FROM events WHERE timestamp > now() - interval 5 minute`),
     runQuery("pageviews", `SELECT count() FROM events WHERE event = '$pageview' AND timestamp > ${since} AND properties.$pathname NOT LIKE '/admin/%'`),
@@ -550,7 +572,7 @@ async function fetchAnalyticsMonitorDataFromPostHog({
     ),
     runQuery(
       "recent activity",
-      `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id, properties.maps_tab, properties.rankings_page, properties.profile_username, properties.replay_player, properties.replay_score_id, properties.$screen_width, properties.$viewport_width, properties.$current_url, properties.farm_helper_user, properties.pack_type, properties.pack_username, properties.farm_map_title, properties.farm_map_user FROM events WHERE timestamp > ${since} AND distinct_id != 'server'${recentCountryClause} AND (properties.$pathname IS NULL OR properties.$pathname NOT LIKE '/admin/%') AND NOT (event = '$pageview' AND properties.$pathname = '/') ORDER BY timestamp DESC LIMIT ${ANALYTICS_RECENT_EVENTS_LIMIT}`,
+      `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id, properties.maps_tab, properties.rankings_page, properties.profile_username, properties.replay_player, properties.replay_score_id, properties.$screen_width, properties.$viewport_width, properties.$current_url, properties.farm_helper_user, properties.pack_type, properties.pack_username, properties.farm_map_title, properties.farm_map_user, properties.viewer_username FROM events WHERE timestamp > ${since} AND distinct_id != 'server'${recentCountryClause} AND (properties.$pathname IS NULL OR properties.$pathname NOT LIKE '/admin/%') AND NOT (event = '$pageview' AND properties.$pathname = '/') ORDER BY timestamp DESC LIMIT ${ANALYTICS_RECENT_EVENTS_LIMIT}`,
     ),
     runQuery(
       "physical countries",
@@ -579,6 +601,18 @@ async function fetchAnalyticsMonitorDataFromPostHog({
     runQuery(
       "bounce",
       `SELECT countIf(pv_count = 1) AS bounced, count() AS landers FROM (SELECT distinct_id, count() AS pv_count FROM events WHERE event = '$pageview' AND timestamp > ${since} GROUP BY distinct_id HAVING countIf(properties.$pathname = '/') > 0)`,
+    ),
+    runQuery(
+      "shares total",
+      `SELECT count() FROM events WHERE event = 'page_shared' AND timestamp > ${since}`,
+    ),
+    runQuery(
+      "shares by platform",
+      `SELECT properties.crawler AS c, count() AS n FROM events WHERE event = 'page_shared' AND timestamp > ${since} AND properties.crawler IS NOT NULL GROUP BY c ORDER BY n DESC LIMIT 12`,
+    ),
+    runQuery(
+      "top shared pages",
+      `SELECT properties.pathname AS p, properties.subject AS s, any(properties.subject_type) AS t, count() AS n FROM events WHERE event = 'page_shared' AND timestamp > ${since} AND properties.pathname IS NOT NULL AND properties.pathname NOT LIKE '/admin/%' GROUP BY p, s ORDER BY n DESC LIMIT 12`,
     ),
   ]);
 
@@ -616,6 +650,7 @@ async function fetchAnalyticsMonitorDataFromPostHog({
       packUsername: row[16] ? String(row[16]) : null,
       farmMapTitle: row[17] ? String(row[17]) : null,
       farmMapUser: row[18] ? String(row[18]) : null,
+      viewerUsername: row[19] ? String(row[19]) : null,
     })),
     topPhysicalCountries: topPhysCountries.map((row) => ({
       country: String(row[0] ?? ""),
@@ -641,6 +676,17 @@ async function fetchAnalyticsMonitorDataFromPostHog({
     topReferrers: topReferrers.map((row) => ({
       domain: String(row[0] ?? ""),
       count: Number(row[1] ?? 0),
+    })),
+    shareEvents: Number(shareTotal[0]?.[0] ?? 0),
+    sharesByPlatform: sharePlatforms.map((row) => ({
+      platform: String(row[0] ?? ""),
+      count: Number(row[1] ?? 0),
+    })),
+    topSharedPages: sharePages.map((row) => ({
+      path: String(row[0] ?? ""),
+      subject: row[1] ? String(row[1]) : null,
+      subjectType: row[2] ? String(row[2]) : null,
+      count: Number(row[3] ?? 0),
     })),
     serverErrors: serverErrors.map((row) => ({
       caller: row[0] ? String(row[0]) : "unknown",
@@ -1129,22 +1175,6 @@ function LiveBackendPage() {
             <RateBreakdownCard status={status} />
           </Section>
 
-          <Section title="Controls" subtitle="Admin actions for routine server maintenance.">
-            <ControlsCard
-              status={status}
-              busy={actionBusy}
-              onClearFailed={() => void runAdminAction("clear-failed", "/api/admin/clear-failed-jobs")}
-              onRefreshRoster={() => void runAdminAction("refresh-roster", `/api/admin/refresh-roster?country=${encodeURIComponent(countryCode)}`)}
-              onRunRetention={() => void runAdminAction("retention", "/api/admin/run-retention")}
-              onOscSmoke={() => void runAdminAction("osc-smoke", "/api/admin/osc-smoke")}
-              onRunOscBackfill={() => void runAdminAction("osc-backfill", "/api/admin/run-osc-backfill")}
-              onToggleWorkers={() => void runAdminAction(
-                status?.worker?.paused ? "resume-workers" : "pause-workers",
-                status?.worker?.paused ? "/api/admin/resume-workers" : "/api/admin/pause-workers",
-              )}
-            />
-          </Section>
-
           <Section title="Users" subtitle="Soft-deactivate a banned or cheating player, or reactivate one. Reversible: this untracks them and marks them inactive, it does not delete their rows.">
             <UserModerationCard />
           </Section>
@@ -1443,8 +1473,14 @@ function AnalyticsMonitorPanel() {
             />
             <AnalyticsTopRoutesCard rows={currentData.topRoutes} range={range} />
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <AnalyticsTopProfilesCard rows={currentData.topProfiles} range={range} />
+            <AnalyticsSharesCard
+              rows={currentData.sharesByPlatform}
+              total={currentData.shareEvents}
+              range={range}
+            />
+            <AnalyticsTopSharedPagesCard rows={currentData.topSharedPages} range={range} />
           </div>
         </>
       ) : (
@@ -1614,6 +1650,8 @@ function AnalyticsTopRoutesCard({ rows, range }: { rows: AnalyticsTopRouteRow[];
 }
 
 const ANALYTICS_MAPS_TAB_LABELS: Record<string, string> = {
+  search: "Search",
+  collections: "Collections",
   farmed: "Most farmed",
   popular: "Widely played",
   favourites: "Community favorites",
@@ -1621,7 +1659,8 @@ const ANALYTICS_MAPS_TAB_LABELS: Record<string, string> = {
 };
 
 function formatAnalyticsMapsTab(tab: string | null): string {
-  if (!tab) return ANALYTICS_MAPS_TAB_LABELS.farmed;
+  // No tab recorded means the default view, which is search.
+  if (!tab) return ANALYTICS_MAPS_TAB_LABELS.search;
   return ANALYTICS_MAPS_TAB_LABELS[tab] ?? tab;
 }
 
@@ -1702,6 +1741,8 @@ function formatAnalyticsRecentEventLabel(row: AnalyticsRecentEventRow): string {
   if (!path || path === "/") return "Home";
   if (path === "/maps") return `Maps / ${formatAnalyticsMapsTab(row.mapsTab)}`;
   if (path === "/rankings") return row.rankingsPage ? `Rankings · p${row.rankingsPage}` : "Rankings";
+  if (path === "/my-stats" || path === "/my-data") return row.viewerUsername ? `My stats · ${row.viewerUsername}` : "My stats";
+  if (path === "/goals") return row.viewerUsername ? `Goals · ${row.viewerUsername}` : "Goals";
   if (path.startsWith("/player/")) return row.profileUsername ? `Player · ${row.profileUsername}` : "Player";
   if (path === "/top-plays") return "Top plays";
   if (path === "/tracker") return "Tracker";
@@ -1740,6 +1781,7 @@ interface AnalyticsVisitorGroup {
   label: string;
   country: string | null;
   deviceKind: AnalyticsDeviceKind;
+  viewerUsername: string | null;
   events: AnalyticsRecentEventRow[];
 }
 
@@ -1758,12 +1800,14 @@ function buildVisitorGroups(rows: AnalyticsRecentEventRow[]): AnalyticsVisitorGr
         label: `V${slot + 1}`,
         country: row.country,
         deviceKind: row.deviceKind,
+        viewerUsername: row.viewerUsername,
         events: [],
       };
       groups.set(id, group);
     }
     if (!group.country && row.country) group.country = row.country;
     if (group.deviceKind === "unknown" && row.deviceKind !== "unknown") group.deviceKind = row.deviceKind;
+    if (!group.viewerUsername && row.viewerUsername) group.viewerUsername = row.viewerUsername;
     group.events.push(row);
   }
   return Array.from(groups.values());
@@ -1868,6 +1912,14 @@ function AnalyticsRecentEventsCard({
                   <span className={`font-mono font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${color.bg} ${color.text}`}>
                     {group.label}
                   </span>
+                  {group.viewerUsername ? (
+                    <span
+                      className="font-semibold text-osu-pink-light truncate max-w-[110px] flex-shrink-0"
+                      title={`signed in as ${group.viewerUsername}`}
+                    >
+                      {group.viewerUsername}
+                    </span>
+                  ) : null}
                   {group.country ? (
                     <CountryFlag code={group.country} size="xs" />
                   ) : (
@@ -2226,6 +2278,126 @@ function AnalyticsReferrersCard({ rows, range }: { rows: AnalyticsReferrerRow[];
                 <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-osu-green-light/20 to-osu-green-light/5" style={{ width: `${pct}%` }} />
                 <div className="relative px-3 py-2 flex items-center justify-between gap-3">
                   <span className={`text-[11px] truncate ${isDirect ? "italic text-osu-f1" : "text-osu-c2"}`}>{label}</span>
+                  <span className="text-[11px] font-bold text-white flex-shrink-0">{formatNumber(row.count)}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+const ANALYTICS_SHARE_PLATFORM_LABELS: Record<string, string> = {
+  discord: "Discord",
+  twitter: "Twitter / X",
+  facebook: "Facebook / iMessage",
+  slack: "Slack",
+  telegram: "Telegram",
+  reddit: "Reddit",
+  whatsapp: "WhatsApp",
+  linkedin: "LinkedIn",
+  pinterest: "Pinterest",
+  skype: "Skype",
+  vk: "VK",
+  mastodon: "Mastodon",
+  bluesky: "Bluesky",
+  embedly: "Embedly",
+  iframely: "Iframely",
+};
+
+// A shared link's HTML page fetch by an unfurl bot (Discordbot, Twitterbot,
+// facebookexternalhit, ...). Captured in src/start.ts as `page_shared`. Counts
+// share intent, not reach: one unfurl in a big server looks like one DM.
+function AnalyticsSharesCard({
+  rows,
+  total,
+  range,
+}: {
+  rows: AnalyticsSharePlatformRow[];
+  total: number;
+  range: AnalyticsRange;
+}) {
+  const max = Math.max(1, ...rows.map((row) => row.count));
+  return (
+    <SectionCard
+      title="Link-preview shares"
+      subtitle={`${formatNumber(total)} unfurl${total === 1 ? "" : "s"} by platform, ${formatAnalyticsRangeLabel(range).toLowerCase()}`}
+    >
+      {rows.length === 0 ? (
+        <AnalyticsEmptyMessage text="No shares detected yet." />
+      ) : (
+        <div className="space-y-1.5">
+          {rows.map((row) => {
+            const pct = Math.max(3, Math.round((row.count / max) * 100));
+            const label = ANALYTICS_SHARE_PLATFORM_LABELS[row.platform] ?? row.platform;
+            return (
+              <div key={row.platform} className="relative rounded-md bg-osu-b5/60 border border-osu-b3/20 overflow-hidden">
+                <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-osu-pink/25 to-osu-pink/5" style={{ width: `${pct}%` }} />
+                <div className="relative px-3 py-2 flex items-center justify-between gap-3">
+                  <span className="text-[11px] text-osu-c2 truncate">{label}</span>
+                  <span className="text-[11px] font-bold text-white flex-shrink-0">{formatNumber(row.count)}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+const ANALYTICS_SHARE_SURFACE_LABELS: Record<string, string> = {
+  home: "Home",
+  player: "Player",
+  replay: "Replay",
+  rankings: "Rankings",
+  maps: "Maps",
+  tracker: "Tracker",
+  "top-plays": "Top plays",
+  snipes: "Snipes",
+  "farm-helper": "Farm helper",
+  goals: "Goals",
+  packs: "Packs",
+  skins: "Skins",
+  bbcode: "BBCode",
+  other: "Page",
+};
+
+function analyticsSharedPagePrimary(row: AnalyticsSharedPageRow): string {
+  const surface = ANALYTICS_SHARE_SURFACE_LABELS[row.subjectType ?? "other"] ?? "Page";
+  if (row.subject && (row.subjectType === "player" || row.subjectType === "replay")) {
+    return row.subjectType === "replay" ? `${surface} · #${row.subject}` : `${surface} · ${row.subject}`;
+  }
+  return surface;
+}
+
+function AnalyticsTopSharedPagesCard({ rows, range }: { rows: AnalyticsSharedPageRow[]; range: AnalyticsRange }) {
+  const max = Math.max(1, ...rows.map((row) => row.count));
+  return (
+    <SectionCard title="Top shared pages" subtitle={`by unfurl count, ${formatAnalyticsRangeLabel(range).toLowerCase()}`}>
+      {rows.length === 0 ? (
+        <AnalyticsEmptyMessage text="No shared pages yet." />
+      ) : (
+        <div className="space-y-1.5">
+          {rows.map((row, index) => {
+            const pct = Math.max(3, Math.round((row.count / max) * 100));
+            const secondary =
+              row.subjectType === "replay" && row.subject
+                ? `/replay?scoreId=${row.subject}`
+                : row.path || "(unknown)";
+            return (
+              <div
+                key={`${row.path}-${row.subject ?? ""}-${index}`}
+                className="relative rounded-md bg-osu-b5/60 border border-osu-b3/20 overflow-hidden"
+              >
+                <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-osu-purple/20 to-osu-purple/5" style={{ width: `${pct}%` }} />
+                <div className="relative px-3 py-2 flex items-center gap-3 min-w-0">
+                  <div className="flex-1 min-w-0 leading-tight">
+                    <div className="text-[11px] text-osu-c2 truncate">{analyticsSharedPagePrimary(row)}</div>
+                    <div className="text-[9px] font-mono text-osu-f1 truncate mt-0.5">{secondary}</div>
+                  </div>
                   <span className="text-[11px] font-bold text-white flex-shrink-0">{formatNumber(row.count)}</span>
                 </div>
               </div>
@@ -4668,122 +4840,6 @@ function QueueSummaryCard({ status }: { status: LiveBackendStatus | null }) {
         </div>
       </div>
     </SectionCard>
-  );
-}
-
-function ControlsCard({
-  status,
-  busy,
-  onClearFailed,
-  onRefreshRoster,
-  onRunRetention,
-  onOscSmoke,
-  onRunOscBackfill,
-  onToggleWorkers,
-}: {
-  status: LiveBackendStatus | null;
-  busy: string | null;
-  onClearFailed: () => void;
-  onRefreshRoster: () => void;
-  onRunRetention: () => void;
-  onOscSmoke: () => void;
-  onRunOscBackfill: () => void;
-  onToggleWorkers: () => void;
-}) {
-  return (
-    <div className="space-y-3">
-      <div className="rounded-lg border border-osu-b3/30 bg-osu-b4/30 p-3">
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-          <AdminButton
-            label={status?.worker?.paused ? "Resume jobs" : "Pause jobs"}
-            description={status?.worker?.paused ? "Let queued server jobs start running again." : "Temporarily stop queued jobs. Live score intake can still write new scores."}
-            icon={status?.worker?.paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
-            busy={busy === "pause-workers" || busy === "resume-workers"}
-            onClick={onToggleWorkers}
-          />
-          <AdminButton
-            label="Refresh roster"
-            description="Fetch the latest tracked players for this country from osu! rankings."
-            icon={<UserRound className="h-3.5 w-3.5" />}
-            busy={busy === "refresh-roster"}
-            onClick={onRefreshRoster}
-          />
-          <AdminButton
-            label="Clear failed jobs"
-            description="Remove failed jobs from the queue list after you have inspected or fixed them."
-            icon={<Trash2 className="h-3.5 w-3.5" />}
-            busy={busy === "clear-failed"}
-            onClick={onClearFailed}
-          />
-          <AdminButton
-            label="Run cleanup"
-            description="Delete old logs, completed jobs, and temporary event rows according to retention settings."
-            icon={<RefreshCw className="h-3.5 w-3.5" />}
-            busy={busy === "retention"}
-            onClick={onRunRetention}
-          />
-          <AdminButton
-            label="Test oSC API"
-            description="Make one small oSC JSON request to confirm Kayla's API is reachable."
-            icon={<Radio className="h-3.5 w-3.5" />}
-            busy={busy === "osc-smoke"}
-            onClick={onOscSmoke}
-          />
-          <AdminButton
-            label="Catch up missed scores"
-            description="Queue a paced oSC history scan to recover scores missed while the server was offline."
-            icon={<History className="h-3.5 w-3.5" />}
-            busy={busy === "osc-backfill"}
-            onClick={onRunOscBackfill}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Chart-analysis backfill: one click starts a self-chaining runner that keeps
-// the analysis queue topped up from the cached .osu corpus; progress is
-// analyzed-vs-eligible. Local CPU work only, no osu! API budget.
-function AdminButton({
-  label,
-  description,
-  icon,
-  busy,
-  onClick,
-  danger,
-}: {
-  label: string;
-  description: string;
-  icon: React.ReactNode;
-  busy: boolean;
-  onClick: () => void;
-  danger?: boolean;
-}) {
-  const base = danger
-    ? "bg-osu-red/15 border-osu-red/40 text-osu-red-light hover:bg-osu-red/25 hover:text-white"
-    : "bg-osu-b4/60 border-osu-b3/30 text-osu-l2 hover:bg-osu-b3/60 hover:text-white";
-  return (
-    <button
-      onClick={onClick}
-      disabled={busy}
-      className={`group relative inline-grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-left text-[10px] font-semibold transition-colors duration-[120ms] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${base}`}
-      aria-label={`${label}. ${description}`}
-    >
-      <span className="flex h-4 w-4 items-center justify-center">
-        {busy ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : icon}
-      </span>
-      <span className="min-w-0 truncate">{label}</span>
-      <span
-        className="relative flex h-4 w-4 items-center justify-center rounded-full text-osu-f1 group-hover:text-osu-pink-light"
-        aria-hidden="true"
-      >
-        <HelpCircle className="h-3.5 w-3.5" />
-        <span className="pointer-events-none absolute right-0 top-6 z-30 hidden w-56 rounded-md border border-osu-b3/40 bg-osu-b5 px-2.5 py-2 text-[10px] font-medium leading-relaxed text-osu-l2 shadow-xl shadow-black/30 group-hover:block group-focus-visible:block">
-          {description}
-        </span>
-      </span>
-    </button>
   );
 }
 

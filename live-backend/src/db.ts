@@ -909,13 +909,40 @@ async function migrateAdminTodos(db: Db): Promise<void> {
       status text not null default 'open',
       created_at integer not null,
       updated_at integer not null,
-      done_at integer
+      done_at integer,
+      position real not null default 0
     )
   `);
   await db.execute(`
     create index if not exists idx_admin_todos_status
       on admin_todos(status, created_at desc)
   `);
+
+  // position: manual drag-to-reorder key for the open list (lower = higher up). Backfill existing
+  // rows with spaced values that match the old default sort (open before done; open by priority
+  // then newest; done by most-recently-completed) so the board looks unchanged the first time it
+  // loads, then becomes freely reorderable. Spaced by 1000 to leave room for midpoint inserts.
+  const columns = (await db.execute("pragma table_info(admin_todos)")).rows.map((row) => String(row.name));
+  if (!columns.includes("position")) {
+    await db.execute("alter table admin_todos add column position real not null default 0");
+    await db.execute(`
+      update admin_todos
+         set position = (
+           select ranked.rn * 1000.0
+             from (
+               select id,
+                      row_number() over (
+                        order by case when status = 'open' then 0 else 1 end,
+                                 case when status = 'done' then coalesce(done_at, 0) else 0 end desc,
+                                 case priority when 'high' then 0 when 'normal' then 1 else 2 end,
+                                 created_at desc
+                      ) as rn
+                 from admin_todos
+             ) ranked
+            where ranked.id = admin_todos.id
+         )
+    `);
+  }
 }
 
 async function migrateBeatmapOsuFileCache(db: Db): Promise<void> {

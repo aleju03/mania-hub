@@ -85,18 +85,29 @@ describe("admin todos", () => {
     expect(await updateAdminTodo(db, { id: "nope", title: "x" })).toBeNull();
   });
 
-  it("orders open before done, open by priority then newest", async () => {
-    const low = await createAdminTodo(db, { title: "low", priority: "low" });
-    const high = await createAdminTodo(db, { title: "high", priority: "high" });
-    const normal = await createAdminTodo(db, { title: "normal", priority: "normal" });
-    await updateAdminTodo(db, { id: low!.id, status: "done" });
+  it("orders open before done, newest open on top, and honors manual position", async () => {
+    const first = await createAdminTodo(db, { title: "first" });
+    await createAdminTodo(db, { title: "second" });
+    const third = await createAdminTodo(db, { title: "third" });
+    await updateAdminTodo(db, { id: first!.id, status: "done" });
 
-    const list = await listAdminTodos(db);
-    expect(list.map((t) => t.title)).toEqual(["high", "normal", "low"]);
+    // Each new task lands at the top of the open list; done drops to the bottom.
+    let list = await listAdminTodos(db);
+    expect(list.map((t) => t.title)).toEqual(["third", "second", "first"]);
     expect(list[2].status).toBe("done");
-    // high (added before normal) still leads its band by priority, normal follows.
-    expect(list[0].id).toBe(high!.id);
-    expect(list[1].id).toBe(normal!.id);
+
+    // Dragging "third" below "second" is just a smaller-to-larger position bump.
+    const second = list.find((t) => t.title === "second")!;
+    await updateAdminTodo(db, { id: third!.id, position: second.position + 1 });
+    list = await listAdminTodos(db);
+    expect(list.map((t) => t.title)).toEqual(["second", "third", "first"]);
+  });
+
+  it("assigns a numeric position and stacks new open todos above older ones", async () => {
+    const a = await createAdminTodo(db, { title: "a" });
+    const b = await createAdminTodo(db, { title: "b" });
+    expect(typeof a!.position).toBe("number");
+    expect(b!.position).toBeLessThan(a!.position);
   });
 
   it("deletes a single todo and reports whether a row was removed", async () => {

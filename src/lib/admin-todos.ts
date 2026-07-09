@@ -20,6 +20,8 @@ export interface AdminTodo {
   createdAt: number;
   updatedAt: number;
   doneAt: number | null;
+  // Manual drag-to-reorder key for the open list; lower sorts higher.
+  position: number;
 }
 
 function liveBackendHeaders(): HeadersInit {
@@ -81,7 +83,7 @@ export const createAdminTodo = createServerFn({ method: "POST" })
   });
 
 export const updateAdminTodo = createServerFn({ method: "POST" })
-  .inputValidator((data: { id?: unknown; title?: unknown; notes?: unknown; category?: unknown; priority?: unknown; status?: unknown }) => {
+  .inputValidator((data: { id?: unknown; title?: unknown; notes?: unknown; category?: unknown; priority?: unknown; status?: unknown; position?: unknown }) => {
     // Only forward keys that were actually provided, so a "toggle done" ({ id, status }) never
     // overwrites the title/notes/etc. the backend applies a partial update from exactly these keys.
     const patch: Record<string, unknown> = { id: typeof data?.id === "string" ? data.id : "" };
@@ -90,6 +92,7 @@ export const updateAdminTodo = createServerFn({ method: "POST" })
     if (data && "category" in data) patch.category = data.category;
     if (data && "priority" in data) patch.priority = data.priority;
     if (data && "status" in data) patch.status = data.status;
+    if (data && "position" in data) patch.position = typeof data.position === "number" ? data.position : undefined;
     return patch;
   })
   .handler(async ({ data }): Promise<{ todo: AdminTodo }> => {

@@ -1,6 +1,7 @@
 import { createStart, createMiddleware } from "@tanstack/react-start";
 import { hasAuthCookieHeader } from "./lib/auth-shared";
 import { hasCountryCookieHeader } from "./lib/country-cookie";
+import { trackServerEvent } from "./lib/server-track";
 
 interface DocumentCacheConfig {
   sMaxage: number;
@@ -210,6 +211,128 @@ const documentCacheMiddleware = createMiddleware().server(
   },
 );
 
+// ---------------------------------------------------------------------------
+// Link-preview share tracking. When someone pastes a mania-tracker link into
+// Discord/Twitter/iMessage/etc., that platform's unfurl crawler fetches the
+// page HTML to read the og: meta tags. Those requests carry distinctive
+// User-Agents and, because crawlers send no cookies, are never CDN-cached
+// (documentCacheMiddleware stamps cookieless HTML `private, no-store`), so
+// they reach this function on every unfurl. We log one `page_shared` event
+// per crawl to PostHog; /admin/monitor renders the rollups.
+//
+// This is a share-intent signal, not reach: one unfurl in a 500-person server
+// looks identical to one DM. Search-index bots (Googlebot, bingbot, Applebot)
+// are intentionally excluded here since they crawl to index, not because a
+// human shared a link. Ordered so the specific token wins; iMessage sends a
+// combined `facebookexternalhit ... Twitterbot` UA and lands on facebook.
+const LINK_PREVIEW_CRAWLERS: Array<[RegExp, string]> = [
+  [/discordbot/i, "discord"],
+  // Telegram ("TelegramBot (like TwitterBot)") and iMessage
+  // ("facebookexternalhit/1.1 Facebot Twitterbot/1.0") both embed the
+  // "Twitterbot" token, so they MUST be matched before /twitterbot/i or the
+  // substring test below would misattribute their unfurls to twitter.
+  [/telegrambot/i, "telegram"],
+  [/facebookexternalhit|facebot/i, "facebook"],
+  [/twitterbot/i, "twitter"],
+  [/slackbot|slack-imgproxy/i, "slack"],
+  [/redditbot/i, "reddit"],
+  [/whatsapp/i, "whatsapp"],
+  [/linkedinbot/i, "linkedin"],
+  [/pinterest/i, "pinterest"],
+  [/skypeuripreview/i, "skype"],
+  [/vkshare/i, "vk"],
+  [/mastodon/i, "mastodon"],
+  [/bluesky|bsky|cardyb/i, "bluesky"],
+  [/embedly/i, "embedly"],
+  [/iframely/i, "iframely"],
+];
+
+function classifyLinkPreviewCrawler(userAgent: string | null | undefined): string | null {
+  if (!userAgent) return null;
+  for (const [pattern, name] of LINK_PREVIEW_CRAWLERS) {
+    if (pattern.test(userAgent)) return name;
+  }
+  return null;
+}
+
+// Coarse surface bucket derived from the path alone, for the "by type"
+// breakdown. Mirrors the real routes in src/routes/.
+function shareSubjectType(pathname: string): string {
+  if (pathname === "/") return "home";
+  if (pathname.startsWith("/player/")) return "player";
+  if (pathname === "/replay") return "replay";
+  if (pathname === "/rankings") return "rankings";
+  if (pathname === "/maps") return "maps";
+  if (pathname === "/tracker") return "tracker";
+  if (pathname === "/top-plays") return "top-plays";
+  if (pathname === "/snipes") return "snipes";
+  if (pathname === "/farm-helper") return "farm-helper";
+  if (pathname === "/goals") return "goals";
+  if (pathname === "/packs") return "packs";
+  if (pathname.startsWith("/skins")) return "skins";
+  if (pathname === "/bbcode") return "bbcode";
+  return "other";
+}
+
+// The specific entity a shared card is about, when the identity is in the URL:
+// the username for /player/<name>, the score id for /replay?scoreId=. Lets the
+// monitor break out top shared players/replays instead of one collapsed row.
+function shareSubject(pathname: string, url: URL): string | null {
+  if (pathname.startsWith("/player/")) {
+    const raw = pathname.slice("/player/".length).split("/")[0];
+    if (!raw) return null;
+    try {
+      return decodeURIComponent(raw).slice(0, 60);
+    } catch {
+      return raw.slice(0, 60);
+    }
+  }
+  if (pathname === "/replay") {
+    const scoreId = url.searchParams.get("scoreId");
+    return scoreId && /^\d{1,20}$/.test(scoreId) ? scoreId : null;
+  }
+  return null;
+}
+
+function isHtmlDocumentResponse(response: Response): boolean {
+  if (response.status !== 200) return false;
+  return (response.headers.get("content-type") ?? "").toLowerCase().includes("text/html");
+}
+
+const shareTrackingMiddleware = createMiddleware().server(
+  async ({ next, request }) => {
+    const result = await next();
+    try {
+      // Only GET: a crawler's pre-flight HEAD would otherwise double-count.
+      const crawler =
+        request.method === "GET" ? classifyLinkPreviewCrawler(request.headers.get("user-agent")) : null;
+      if (crawler) {
+        const response = (result as { response?: Response } | undefined)?.response;
+        // Only the HTML page fetch counts: the og:image at /api/og is
+        // image/png (filtered out here) and is CDN-cached anyway, so counting
+        // it would double-count and undercount at the same time.
+        if (response && typeof response.headers?.get === "function" && isHtmlDocumentResponse(response)) {
+          const url = new URL(request.url);
+          const pathname = url.pathname;
+          if (!pathname.startsWith("/admin/")) {
+            const properties: Record<string, unknown> = {
+              crawler,
+              pathname,
+              subject_type: shareSubjectType(pathname),
+            };
+            const subject = shareSubject(pathname, url);
+            if (subject) properties.subject = subject;
+            trackServerEvent("page_shared", properties);
+          }
+        }
+      }
+    } catch {
+      // Share tracking must never affect the response.
+    }
+    return result;
+  },
+);
+
 export const startInstance = createStart(() => ({
-  requestMiddleware: [requestRateLimitMiddleware, documentCacheMiddleware],
+  requestMiddleware: [requestRateLimitMiddleware, documentCacheMiddleware, shareTrackingMiddleware],
 }));

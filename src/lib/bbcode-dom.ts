@@ -170,11 +170,102 @@ export function bbcodeToEditableHtml(source: string): string {
   return renderChildren(parseBBCode(source));
 }
 
+/**
+ * Reads the per-visible-character color of an editable-HTML fragment - a
+ * gradient's colors captured left to right, one entry per glyph (whitespace has
+ * none, so it's skipped). Powers the "copy formatting" format painter.
+ */
+export function captureColorSequence(html: string): (string | null)[] {
+  const holder = document.createElement("div");
+  holder.innerHTML = html;
+  const seq: (string | null)[] = [];
+  const walk = (node: Node, inherited: string | null) => {
+    if (node.nodeType === 3) {
+      for (const ch of node.nodeValue ?? "") if (!/\s/.test(ch)) seq.push(inherited);
+      return;
+    }
+    if (node.nodeType !== 1) return;
+    const el = node as HTMLElement;
+    const own = el.getAttribute("data-bb-color") ?? cssColorToBB(el.style?.color ?? "") ?? inherited;
+    el.childNodes.forEach((child) => walk(child, own));
+  };
+  holder.childNodes.forEach((child) => walk(child, null));
+  return seq;
+}
+
+/**
+ * Paints `text` with a captured color sequence, stretched to fit its length, and
+ * returns editable HTML (one [color] span per glyph; whitespace and newlines
+ * preserved). The other half of the format painter.
+ */
+export function applyColorSequence(text: string, seq: (string | null)[]): string {
+  const chars = Array.from(text);
+  const visible = chars.filter((ch) => !/\s/.test(ch)).length;
+  if (visible === 0 || seq.length === 0) return escapeBBHtml(text).replace(/\n/g, "<br>");
+  let seen = 0;
+  let out = "";
+  for (const ch of chars) {
+    if (/\s/.test(ch)) { out += ch === "\n" ? "<br>" : escapeBBHtml(ch); continue; }
+    const color = seq[Math.min(seq.length - 1, Math.floor((seen * seq.length) / visible))];
+    seen += 1;
+    const escaped = escapeBBHtml(ch);
+    out += color ? `<span style="color:${color}" data-bb-color="${color}">${escaped}</span>` : escaped;
+  }
+  return out;
+}
+
+const WRAP_BLOCK_TAGS = /^(DIV|P|H[1-6]|CENTER|BLOCKQUOTE|UL|OL|LI|PRE)$/;
+
+/**
+ * Wraps `innerHtml` in an inline open/close pair (e.g. [color]/[size]/[spoiler]
+ * spans). When the content spans block lines, the wrapper is pushed *into* each
+ * line rather than around them: wrapping block elements in one inline span makes
+ * execCommand("insertHTML") drop the blocks and wipe the text. Single-line
+ * content is wrapped whole. Client-only (parses via a live DOM element).
+ */
+export function distributeInlineWrap(innerHtml: string, open: string, close: string): string {
+  const holder = document.createElement("div");
+  holder.innerHTML = innerHtml;
+  const spansBlocks = Array.from(holder.childNodes).some(
+    (node) => node.nodeType === 1
+      && (WRAP_BLOCK_TAGS.test((node as Element).tagName) || (node as Element).tagName === "BR"),
+  );
+  if (!spansBlocks) return innerHtml.trim() ? open + innerHtml + close : innerHtml;
+
+  const wrapSegment = (segment: string) =>
+    /^<br/i.test(segment) || !segment.replace(/&nbsp;|\u200b|\s/gi, "").trim()
+      ? segment
+      : open + segment + close;
+
+  let out = "";
+  let run = "";
+  const flushRun = () => {
+    if (run) out += run.split(/(<br\s*\/?>)/i).map(wrapSegment).join("");
+    run = "";
+  };
+  holder.childNodes.forEach((node) => {
+    if (node.nodeType === 1 && WRAP_BLOCK_TAGS.test((node as Element).tagName)) {
+      flushRun();
+      const el = node as HTMLElement;
+      el.innerHTML = distributeInlineWrap(el.innerHTML, open, close); // recurse into nested lines
+      out += el.outerHTML;
+    } else if (node.nodeType === 1 && (node as Element).tagName === "BR") {
+      run += "<br>";
+    } else if (node.nodeType === 1) {
+      run += (node as HTMLElement).outerHTML;
+    } else if (node.nodeType === 3) {
+      run += escapeBBHtml(node.nodeValue ?? "");
+    }
+  });
+  flushRun();
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // DOM -> BBCode
 // ---------------------------------------------------------------------------
 
-function cssColorToBB(value: string): string | null {
+export function cssColorToBB(value: string): string | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
   const rgb = /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})/.exec(trimmed);

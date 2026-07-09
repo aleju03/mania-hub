@@ -9,6 +9,7 @@ import {
   type ChangeEvent as ReactChangeEvent,
   type ClipboardEvent as ReactClipboardEvent,
   type DragEvent as ReactDragEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
@@ -52,16 +53,21 @@ import {
   X,
   Youtube,
 } from "lucide-react";
-import { buildGradientBBCode, gradientCharColors, normalizeHexColor, parseYoutubeInput, type BBSourceSpan } from "../../../lib/bbcode";
+import { buildGradientBBCode, containsBBCode, gradientCharColors, normalizeHexColor, parseYoutubeInput, shiftHexHue, type BBSourceSpan } from "../../../lib/bbcode";
 import {
+  applyColorSequence,
   bbcodeToEditableHtml,
+  captureColorSequence,
+  cssColorToBB,
+  distributeInlineWrap,
   editableWrapMarkup,
   escapeBBHtml,
   serializeBBCodeDom,
   type EditableWrapKind,
 } from "../../../lib/bbcode-dom";
 import { getUser, searchUsers } from "../../../lib/osu";
-import { isUploadableImage, uploadImageToCatbox } from "../../../lib/catbox-upload";
+import { fetchImageBlobViaProxy, isUploadableImage, uploadImageToCatbox } from "../../../lib/catbox-upload";
+import { resizeImageBlobToWidth } from "../../../lib/image-resize";
 import { SearchInput } from "../../ui/SearchInput";
 import { BBCodePreview } from "./BBCodePreview";
 import { BBCodeContextMenu, type ContextMenuItem, type ContextMenuState } from "./BBCodeContextMenu";
@@ -213,9 +219,21 @@ function climbForValue<T>(node: Node | null, root: HTMLElement, read: (el: HTMLE
 
 // Placeholder dropped into code-mode source while an image uploads; stripped
 // from anything serialized/persisted so a stray token never reaches output.
+// editableWrapMarkup kinds that render as block elements (their open/close can
+// legitimately contain block lines); everything else is an inline wrap.
+const BLOCK_WRAP_KINDS = new Set<EditableWrapKind>(["heading", "centre", "notice", "quote", "codeblock", "box"]);
+
 const UPLOAD_TOKEN_PATTERN = /\[uploading image #up-\d+\]/g;
 function stripUploadTokens(value: string): string {
   return value.replace(UPLOAD_TOKEN_PATTERN, "");
+}
+
+// Pasted/dropped images are held as local blob: URLs until the user copies, then
+// uploaded and swapped for real URLs. Blob URLs are session-only, so they're
+// stripped from the saved draft (a reloaded blob URL points at nothing).
+const PENDING_IMG_PATTERN = /\[img\](blob:[^\[\]]+)\[\/img\]/g;
+function stripPendingImages(value: string): string {
+  return value.replace(PENDING_IMG_PATTERN, "");
 }
 
 function readDraft(key: string): string | null {
@@ -315,6 +333,10 @@ function addImagemapHandles(areaEl: HTMLElement) {
     handle.setAttribute("aria-hidden", "true");
     areaEl.appendChild(handle);
   }
+}
+
+function removeImageResizeHandle(surface: HTMLElement | null) {
+  surface?.querySelectorAll(".bbcode-image-resize-handle").forEach((handle) => handle.remove());
 }
 
 function updateImagemapRaw(mapEl: HTMLElement) {
@@ -501,11 +523,15 @@ export function BBCodeEditor({
   const imagemapDragRef = useRef<ImagemapDragState | null>(null);
   const linkElementRef = useRef<HTMLAnchorElement | null>(null);
   const imageElementRef = useRef<HTMLImageElement | null>(null);
+  const resizeHandleRef = useRef<HTMLSpanElement | null>(null);
+  const imageResizeRef = useRef<{ img: HTMLImageElement; startX: number; startWidth: number; maxWidth: number } | null>(null);
   const imageEditorTargetRef = useRef<HTMLImageElement | null>(null);
   const replaceTargetRef = useRef<HTMLImageElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const imageLinkInputRef = useRef<HTMLInputElement | null>(null);
-  const uploadCounter = useRef(0);
+  // Pasted/dropped images kept local (blob URL -> file) until Copy BBCode uploads them.
+  // globalThis.Map: the lucide `Map` icon import shadows the Map constructor here.
+  const pendingUploadsRef = useRef<Map<string, Blob>>(new globalThis.Map());
   const selectionColorRef = useRef<string | null>(null);
   const selectionSizeRef = useRef<number | null>(null);
   const overlayObserverRef = useRef<ResizeObserver | null>(null);
@@ -513,10 +539,9 @@ export function BBCodeEditor({
   const selectionRef = useRef<SelectionSnapshot>({ start: 0, end: 0, text: "" });
   const visualRangeRef = useRef<Range | null>(null);
   const visualSyncHandle = useRef<number | null>(null);
-  // Latest edit mode, so an in-flight upload resolves into the surface that is
-  // actually mounted when it finishes (not the one captured at paste time).
-  const editModeRef = useRef(editMode);
-  editModeRef.current = editMode;
+  // Format painter: the color sequence copied from one selection to paint another.
+  const capturedColorsRef = useRef<(string | null)[] | null>(null);
+  const hueShiftRef = useRef(0);
   const deferredSource = useDeferredValue(source);
   const deferredCaretOffset = useDeferredValue(caretOffset);
 
@@ -527,6 +552,8 @@ export function BBCodeEditor({
   const [gradientStops, setGradientStops] = useState<string[]>(["#B14DE8", "#FF9ECF"]);
   const [gradientMirror, setGradientMirror] = useState(false);
   const [customSize, setCustomSize] = useState("100");
+  const [hasCapturedFormat, setHasCapturedFormat] = useState(false);
+  const [hueShift, setHueShift] = useState(0);
 
   const updateSource = useCallback((next: string) => {
     sourceRef.current = next;
@@ -680,7 +707,7 @@ export function BBCodeEditor({
     const img = imageElementRef.current;
     const el = visualRef.current;
     if (!img || !img.isConnected || !el || !el.contains(img)) return false;
-    el.focus();
+    el.focus({ preventScroll: true });
     const selection = window.getSelection();
     if (!selection) return false;
     const anchor = img.closest<HTMLAnchorElement>('a[data-bb="url"]');
@@ -913,7 +940,7 @@ export function BBCodeEditor({
   }, [clearImagemapSelection, imagemapSelection, scheduleVisualSync, selectImagemapArea]);
 
   useEffect(() => {
-    const handle = window.setTimeout(() => writeDraft(draftKey, stripUploadTokens(source)), DRAFT_SAVE_DEBOUNCE_MS);
+    const handle = window.setTimeout(() => writeDraft(draftKey, stripPendingImages(stripUploadTokens(source))), DRAFT_SAVE_DEBOUNCE_MS);
     return () => window.clearTimeout(handle);
   }, [draftKey, source]);
 
@@ -997,7 +1024,9 @@ export function BBCodeEditor({
   const ensureVisualSelection = useCallback(() => {
     const el = visualRef.current;
     if (!el) return;
-    el.focus();
+    // preventScroll: refocusing the surface after a dialog/toolbar action must
+    // not yank the scroll to the caret (that was the "insert jumps to top" bug).
+    el.focus({ preventScroll: true });
     const selection = window.getSelection();
     if (!selection) return;
     if (selection.rangeCount === 0 || !el.contains(selection.anchorNode)) {
@@ -1012,7 +1041,7 @@ export function BBCodeEditor({
   const restoreVisualRange = useCallback(() => {
     const el = visualRef.current;
     if (!el) return;
-    el.focus();
+    el.focus({ preventScroll: true });
     const saved = visualRangeRef.current;
     const selection = window.getSelection();
     if (saved && selection) {
@@ -1130,7 +1159,11 @@ export function BBCodeEditor({
     expandSelectionOverInlineWrappers();
     const inner = visualSelectionHtml() || escapeBBHtml(placeholder);
     const { open, close } = editableWrapMarkup(kind, param);
-    insertVisualHtml(open + inner + close);
+    // Block wraps ([centre]/[quote]/[box]/...) legitimately contain block lines;
+    // inline wraps ([size]/[spoiler]/[c]) must push into each line instead, or a
+    // multi-line selection gets wiped by execCommand("insertHTML").
+    const html = BLOCK_WRAP_KINDS.has(kind) ? open + inner + close : distributeInlineWrap(inner, open, close);
+    insertVisualHtml(html);
     if (onImage) resyncImageAfterWrap();
   }, [ensureVisualSelection, expandSelectionOverInlineWrappers, insertVisualHtml, resyncImageAfterWrap, selectImageRange, visualSelectionHtml]);
 
@@ -1144,6 +1177,68 @@ export function BBCodeEditor({
     }
     scheduleVisualSync();
   }, [ensureVisualSelection, scheduleVisualSync, selectImageRange]);
+
+  // Colors the current selection with the browser's native foreColor, which
+  // handles multi-line selections correctly. Used instead of wrapping the
+  // selection in one [color] span when it spans blocks - wrapping block lines in
+  // an inline span makes execCommand("insertHTML") drop them (the "it wiped my
+  // text" bug). styleWithCSS is toggled so the result is a `color:` span that
+  // serializes back to [color], then reset so it doesn't affect later commands.
+  const applyVisualForeColor = useCallback((color: string) => {
+    ensureVisualSelection();
+    try {
+      document.execCommand("styleWithCSS", false, "true");
+      document.execCommand("foreColor", false, color);
+      document.execCommand("styleWithCSS", false, "false");
+    } catch {
+      // execCommand unavailable; leave the selection untouched.
+    }
+    scheduleVisualSync();
+  }, [ensureVisualSelection, scheduleVisualSync]);
+
+  // ---- format painter + hue shift ------------------------------------------
+  // Copy the color sequence of the right-clicked selection (its gradient).
+  const copyFormatting = useCallback(() => {
+    const range = visualRangeRef.current;
+    if (!range) return;
+    const holder = document.createElement("div");
+    holder.appendChild(range.cloneContents());
+    const seq = captureColorSequence(holder.innerHTML);
+    if (seq.every((color) => color == null)) {
+      setUploadStatus({ kind: "error", message: "That selection has no colors to copy." });
+      return;
+    }
+    capturedColorsRef.current = seq;
+    setHasCapturedFormat(true);
+  }, []);
+
+  // Paint the copied color sequence onto the right-clicked selection, stretched
+  // to fit its length (so a gradient re-maps proportionally onto longer/shorter text).
+  const pasteFormatting = useCallback(() => {
+    const seq = capturedColorsRef.current;
+    const range = visualRangeRef.current;
+    if (!seq || !range) return;
+    const text = range.toString();
+    if (!text) return;
+    replaceVisualSelectionHtml(text, applyColorSequence(text, seq));
+  }, [replaceVisualSelectionHtml]);
+
+  // Rotate the hue of every colored span touched by the selection, in place
+  // (mutating attributes keeps the saved range valid, so a slider can drag live).
+  const shiftSelectionHue = useCallback((delta: number) => {
+    const el = visualRef.current;
+    const range = visualRangeRef.current;
+    if (!el || !range || delta === 0) return;
+    el.querySelectorAll<HTMLElement>("[data-bb-color], [style*=color]").forEach((node) => {
+      if (!range.intersectsNode(node)) return;
+      const current = node.getAttribute("data-bb-color") ?? cssColorToBB(node.style.color || "");
+      const shifted = current ? shiftHexHue(current, delta) : null;
+      if (!shifted) return;
+      node.setAttribute("data-bb-color", shifted);
+      node.style.color = shifted;
+    });
+    scheduleVisualSync();
+  }, [scheduleVisualSync]);
 
   // ---- code-mode selection helpers ----------------------------------------
 
@@ -1251,6 +1346,8 @@ export function BBCodeEditor({
         setTextField("");
       } else if (next === "color") {
         if (selectionColorRef.current) setHexField(selectionColorRef.current);
+        hueShiftRef.current = 0;
+        setHueShift(0);
       } else if (next === "size") {
         if (selectionSizeRef.current != null) setCustomSize(String(selectionSizeRef.current));
       }
@@ -1281,12 +1378,43 @@ export function BBCodeEditor({
       : selectionRef.current.text;
   }, [editMode]);
 
-  const copyBBCode = useCallback(() => {
-    const value = stripUploadTokens(editMode === "visual" ? flushVisual() : sourceRef.current);
+  const copyBBCode = useCallback(async () => {
+    let value = stripUploadTokens(editMode === "visual" ? flushVisual() : sourceRef.current);
+
+    // Upload every image that was pasted/dropped but deferred until now, and
+    // swap its blob: URL for the real catbox URL. Bail without copying if any
+    // upload fails, so a dead blob URL can never reach the clipboard.
+    const blobUrls = Array.from(
+      new Set(Array.from(value.matchAll(PENDING_IMG_PATTERN), (match) => match[1])),
+    );
+    if (blobUrls.length > 0) {
+      setUploadStatus({ kind: "uploading" });
+      try {
+        for (const blobUrl of blobUrls) {
+          const blob = pendingUploadsRef.current.get(blobUrl);
+          if (!blob) continue; // Staged in a prior session (blob gone); leave as-is.
+          const uploadedUrl = await uploadImageToCatbox(blob);
+          value = value.split(`[img]${blobUrl}[/img]`).join(`[img]${uploadedUrl}[/img]`);
+          visualRef.current
+            ?.querySelectorAll<HTMLImageElement>("img")
+            .forEach((img) => { if (img.getAttribute("src") === blobUrl) img.setAttribute("src", uploadedUrl); });
+          pendingUploadsRef.current.delete(blobUrl);
+          URL.revokeObjectURL(blobUrl);
+        }
+        setUploadStatus(null);
+      } catch (error) {
+        setUploadStatus({ kind: "error", message: error instanceof Error ? error.message : "Image upload failed." });
+        return;
+      }
+      // Persist the resolved source so blob URLs stop lingering in state/draft.
+      value = stripPendingImages(value);
+      updateSource(value);
+    }
+
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(value).then(() => setCopied(true)).catch(() => {});
     }
-  }, [editMode, flushVisual]);
+  }, [editMode, flushVisual, updateSource]);
 
   const resetToProfile = useCallback(() => {
     if (!confirmReset) {
@@ -1348,60 +1476,162 @@ export function BBCodeEditor({
     else insertSnippet(`[img]${url}[/img]`);
   }, [editMode, insertSnippet, insertVisualHtml]);
 
-  /** Uploads a pasted/dropped image, swapping an in-flight placeholder for it. */
-  const uploadImageFile = useCallback(async (file: Blob) => {
+  // Holds a local image (paste, drop, crop, replace) as a blob: URL until
+  // copyBBCode() uploads it. Returns the blob URL to drop into the markup.
+  const registerPendingImage = useCallback((blob: Blob): string => {
+    const blobUrl = URL.createObjectURL(blob);
+    pendingUploadsRef.current.set(blobUrl, blob);
+    return blobUrl;
+  }, []);
+
+  // Frees a staged blob URL if the given src was one (e.g. a crop/replace
+  // discards the pre-edit image); no-op for already-uploaded URLs.
+  const releasePendingImage = useCallback((url: string | null) => {
+    if (url && pendingUploadsRef.current.delete(url)) URL.revokeObjectURL(url);
+  }, []);
+
+  /**
+   * Stages a pasted/dropped image locally as a blob: URL and drops it in as
+   * [img]blob:...[/img]. Nothing is uploaded here - copyBBCode() uploads every
+   * staged image at once and swaps the blob URLs for real catbox URLs.
+   */
+  const stagePendingImage = useCallback((file: Blob) => {
     if (!isUploadableImage(file)) {
       setUploadStatus({ kind: "error", message: "That file isn't a supported image." });
       return;
     }
-    const id = `up-${(uploadCounter.current += 1)}`;
-    const mode = editMode;
-    const token = `[uploading image #${id}]`;
-    setUploadStatus({ kind: "uploading" });
-    if (mode === "visual") {
-      insertVisualHtml(
-        `<span class="bbcode-upload-chip" data-upload-id="${id}" data-bb-skip="1" contenteditable="false">Uploading image…</span>`,
-      );
+    const blobUrl = registerPendingImage(file);
+    if (editMode === "visual") {
+      insertVisualHtml(bbcodeToEditableHtml(`[img]${blobUrl}[/img]`));
     } else {
       const el = textareaRef.current;
-      if (el) insertAtSelection(el, token);
+      if (el) insertAtSelection(el, `[img]${blobUrl}[/img]`);
     }
-    try {
-      const url = await uploadImageToCatbox(file);
-      // Resolve against the surface that is actually mounted now, not `mode`:
-      // the user may have switched Visual<->BBCode while the upload was in flight.
-      const chip = visualRef.current?.querySelector<HTMLElement>(`[data-upload-id="${id}"]`);
-      if (chip) {
-        const img = document.createElement("img");
-        img.setAttribute("src", url);
-        img.setAttribute("alt", "");
-        img.setAttribute("loading", "lazy");
-        chip.replaceWith(img);
-        flushVisual();
-        selectImage(img);
-      } else if (sourceRef.current.includes(token)) {
-        updateSource(sourceRef.current.replace(token, `[img]${url}[/img]`));
-        // Rebuild the visual surface if we've since switched to it, so the
-        // literal token text can't linger and get serialized back.
-        if (editModeRef.current === "visual") setVisualEpoch((epoch) => epoch + 1);
-      } else if (editModeRef.current === "visual") {
-        insertVisualHtml(bbcodeToEditableHtml(`[img]${url}[/img]`));
-      } else {
-        insertSnippet(`[img]${url}[/img]`);
-      }
-      setUploadStatus(null);
-    } catch (error) {
-      const chip = visualRef.current?.querySelector(`[data-upload-id="${id}"]`);
-      if (chip) {
-        chip.remove();
-        flushVisual();
-      } else if (sourceRef.current.includes(token)) {
-        updateSource(sourceRef.current.replace(token, ""));
-        if (editModeRef.current === "visual") setVisualEpoch((epoch) => epoch + 1);
-      }
-      setUploadStatus({ kind: "error", message: error instanceof Error ? error.message : "Upload failed." });
+  }, [editMode, insertVisualHtml, registerPendingImage]);
+
+  // Release any staged blob URLs when the editor unmounts.
+  useEffect(() => {
+    const pending = pendingUploadsRef.current;
+    return () => {
+      pending.forEach((_, url) => URL.revokeObjectURL(url));
+      pending.clear();
+    };
+  }, []);
+
+  // ---- images: drag-to-resize ----------------------------------------------
+  // The handle lives in the surface's scrolling content coordinates, so it
+  // rides along with the image as you scroll.
+  const positionResizeHandle = useCallback(() => {
+    const surface = visualRef.current;
+    const img = imageElementRef.current;
+    const handle = resizeHandleRef.current;
+    if (!surface || !img || !handle || !img.isConnected) return;
+    const surfaceRect = surface.getBoundingClientRect();
+    const imgRect = img.getBoundingClientRect();
+    handle.style.left = `${imgRect.right - surfaceRect.left + surface.scrollLeft}px`;
+    handle.style.top = `${imgRect.bottom - surfaceRect.top + surface.scrollTop}px`;
+  }, []);
+
+  const handleImageResizeMove = useCallback((event: PointerEvent) => {
+    const drag = imageResizeRef.current;
+    if (!drag) return;
+    const next = Math.max(40, Math.min(drag.maxWidth, drag.startWidth + (event.clientX - drag.startX)));
+    // Inline width needs !important to beat the surface's `width: auto !important`.
+    drag.img.style.setProperty("width", `${Math.round(next)}px`, "important");
+    drag.img.style.maxWidth = "none";
+    drag.img.style.height = "auto";
+    positionResizeHandle();
+  }, [positionResizeHandle]);
+
+  const stopImageResize = useCallback((event: PointerEvent) => {
+    void event;
+    const drag = imageResizeRef.current;
+    imageResizeRef.current = null;
+    document.removeEventListener("pointermove", handleImageResizeMove);
+    document.removeEventListener("pointerup", stopImageResize);
+    document.removeEventListener("pointercancel", stopImageResize);
+    if (!drag) return;
+    const img = drag.img;
+    const targetWidth = Math.round(img.getBoundingClientRect().width);
+    // Drop the live-preview overrides; the re-encoded file itself carries the size.
+    img.classList.remove("is-resizing");
+    img.style.removeProperty("width");
+    img.style.removeProperty("max-width");
+    img.style.removeProperty("height");
+    const currentSrc = img.getAttribute("src") ?? "";
+    // A click that didn't really drag shouldn't re-encode (and downscale) the image.
+    if (!currentSrc || targetWidth < 1 || Math.abs(targetWidth - drag.startWidth) < 2) {
+      window.requestAnimationFrame(positionResizeHandle);
+      return;
     }
-  }, [editMode, flushVisual, insertSnippet, insertVisualHtml, selectImage, updateSource]);
+    setUploadStatus({ kind: "uploading" });
+    void (async () => {
+      try {
+        const source = pendingUploadsRef.current.get(currentSrc) ?? await fetchImageBlobViaProxy(currentSrc);
+        const resized = await resizeImageBlobToWidth(source, targetWidth);
+        if (!img.isConnected) return;
+        releasePendingImage(currentSrc); // free the pre-resize blob if it was staged
+        const blobUrl = registerPendingImage(resized);
+        img.setAttribute("src", blobUrl);
+        setImageSelection((sel) => (sel ? { ...sel, src: blobUrl } : sel));
+        flushVisual();
+        setUploadStatus(null);
+        window.requestAnimationFrame(positionResizeHandle);
+      } catch (error) {
+        setUploadStatus({ kind: "error", message: error instanceof Error ? error.message : "Could not resize the image." });
+      }
+    })();
+  }, [flushVisual, handleImageResizeMove, positionResizeHandle, registerPendingImage, releasePendingImage]);
+
+  const startImageResize = useCallback((event: PointerEvent) => {
+    event.preventDefault();
+    event.stopPropagation(); // keep the surface's pointerdown from re-selecting/clearing
+    const img = imageElementRef.current;
+    if (!img) return;
+    const surface = visualRef.current;
+    const rect = img.getBoundingClientRect();
+    const maxBySurface = surface ? surface.clientWidth - 32 : rect.width; // leave the px-4 gutters
+    imageResizeRef.current = {
+      img,
+      startX: event.clientX,
+      startWidth: rect.width,
+      // Don't upscale past the source's own pixels (that only adds blur).
+      maxWidth: Math.max(40, Math.min(maxBySurface, img.naturalWidth || maxBySurface)),
+    };
+    img.classList.add("is-resizing");
+    document.addEventListener("pointermove", handleImageResizeMove);
+    document.addEventListener("pointerup", stopImageResize);
+    document.addEventListener("pointercancel", stopImageResize);
+  }, [handleImageResizeMove, stopImageResize]);
+
+  const showResizeHandle = useCallback(() => {
+    const surface = visualRef.current;
+    const img = imageElementRef.current;
+    if (!surface || !img) return;
+    removeImageResizeHandle(surface);
+    const handle = document.createElement("span");
+    handle.className = "bbcode-image-resize-handle";
+    handle.setAttribute("data-bb-skip", "1");
+    handle.setAttribute("contenteditable", "false");
+    handle.setAttribute("aria-hidden", "true");
+    handle.title = "Drag to resize";
+    handle.addEventListener("pointerdown", startImageResize);
+    resizeHandleRef.current = handle;
+    surface.appendChild(handle);
+    positionResizeHandle();
+  }, [positionResizeHandle, startImageResize]);
+
+  const hideResizeHandle = useCallback(() => {
+    removeImageResizeHandle(visualRef.current);
+    resizeHandleRef.current = null;
+  }, []);
+
+  // Show the resize handle whenever an image is selected; reposition it when the
+  // selection changes (e.g. after a resize swaps the image).
+  useEffect(() => {
+    if (imageSelection) showResizeHandle();
+    else hideResizeHandle();
+  }, [imageSelection, showResizeHandle, hideResizeHandle]);
 
   /** Wraps/updates/unwraps the [url] around the selected image. */
   const mutateImageLinkDom = useCallback((value: string) => {
@@ -1453,12 +1683,13 @@ export function BBCodeEditor({
     setImageEditorState({ source: { url: img.getAttribute("src") ?? "" } });
   }, []);
 
-  const applyImageEdit = useCallback(async (blob: Blob) => {
+  const applyImageEdit = useCallback((blob: Blob) => {
     setImageEditorBusy(true);
     try {
-      const url = await uploadImageToCatbox(blob);
+      const url = registerPendingImage(blob);
       const img = imageEditorTargetRef.current;
       if (img && img.isConnected) {
+        releasePendingImage(img.getAttribute("src")); // drop the pre-crop blob if it was staged
         img.setAttribute("src", url);
         setImageSelection((sel) => (sel ? { ...sel, src: url } : sel));
         flushVisual();
@@ -1471,14 +1702,14 @@ export function BBCodeEditor({
     } finally {
       setImageEditorBusy(false);
     }
-  }, [flushVisual, insertImageMarkup]);
+  }, [flushVisual, insertImageMarkup, registerPendingImage, releasePendingImage]);
 
   const triggerReplaceImage = useCallback((img: HTMLImageElement) => {
     replaceTargetRef.current = img;
     fileInputRef.current?.click();
   }, []);
 
-  const handleReplaceFile = useCallback(async (event: ReactChangeEvent<HTMLInputElement>) => {
+  const handleReplaceFile = useCallback((event: ReactChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
     const img = replaceTargetRef.current;
@@ -1488,21 +1719,16 @@ export function BBCodeEditor({
       setUploadStatus({ kind: "error", message: "That file isn't a supported image." });
       return;
     }
-    setUploadStatus({ kind: "uploading" });
-    try {
-      const url = await uploadImageToCatbox(file);
-      if (img.isConnected) {
-        img.setAttribute("src", url);
-        setImageSelection((sel) => (sel ? { ...sel, src: url } : sel));
-        flushVisual();
-      } else {
-        insertImageMarkup(url);
-      }
-      setUploadStatus(null);
-    } catch (error) {
-      setUploadStatus({ kind: "error", message: error instanceof Error ? error.message : "Upload failed." });
+    const url = registerPendingImage(file);
+    if (img.isConnected) {
+      releasePendingImage(img.getAttribute("src")); // drop the replaced blob if it was staged
+      img.setAttribute("src", url);
+      setImageSelection((sel) => (sel ? { ...sel, src: url } : sel));
+      flushVisual();
+    } else {
+      insertImageMarkup(url);
     }
-  }, [flushVisual, insertImageMarkup]);
+  }, [flushVisual, insertImageMarkup, registerPendingImage, releasePendingImage]);
 
   // ---- clipboard, paste, drop ----------------------------------------------
 
@@ -1533,7 +1759,7 @@ export function BBCodeEditor({
         for (const item of items) {
           const imageType = item.types.find((type) => type.startsWith("image/"));
           if (imageType) {
-            await uploadImageFile(await item.getType(imageType));
+            stagePendingImage(await item.getType(imageType));
             return;
           }
         }
@@ -1548,7 +1774,7 @@ export function BBCodeEditor({
     } catch {
       setUploadStatus({ kind: "error", message: "Couldn't read the clipboard. Use Ctrl+V instead." });
     }
-  }, [insertPlainText, uploadImageFile]);
+  }, [insertPlainText, stagePendingImage]);
 
   const handlePaste = useCallback((event: ReactClipboardEvent<HTMLElement>) => {
     const items = event.clipboardData?.items;
@@ -1558,12 +1784,31 @@ export function BBCodeEditor({
         const file = item.getAsFile();
         if (file) {
           event.preventDefault();
-          void uploadImageFile(file);
+          stagePendingImage(file);
           return;
         }
       }
     }
-  }, [uploadImageFile]);
+    // Visual mode: render pasted BBCode inline instead of dropping the raw
+    // [tags] in as literal characters. Plain text (no recognized tags) falls
+    // through to the browser's native paste. Raw mode keeps BBCode as text.
+    if (editMode === "visual") {
+      const text = event.clipboardData?.getData("text/plain") ?? "";
+      if (text && containsBBCode(text)) {
+        event.preventDefault();
+        insertVisualHtml(bbcodeToEditableHtml(text));
+      }
+    }
+  }, [editMode, insertVisualHtml, stagePendingImage]);
+
+  // A selected image is a DOM node, not a text range, so the browser's own
+  // Backspace/Delete won't remove it - handle those keys ourselves.
+  const handleVisualKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if ((event.key === "Backspace" || event.key === "Delete") && imageElementRef.current) {
+      event.preventDefault();
+      deleteSelectedImage();
+    }
+  }, [deleteSelectedImage]);
 
   const handleDragOver = useCallback((event: ReactDragEvent<HTMLElement>) => {
     if (Array.from(event.dataTransfer?.items ?? []).some((item) => item.kind === "file")) {
@@ -1583,8 +1828,8 @@ export function BBCodeEditor({
         selection.addRange(range);
       }
     }
-    void uploadImageFile(file);
-  }, [editMode, uploadImageFile]);
+    stagePendingImage(file);
+  }, [editMode, stagePendingImage]);
 
   // ---- right-click context menu --------------------------------------------
 
@@ -1615,14 +1860,20 @@ export function BBCodeEditor({
 
   const buildLinkMenuItems = useCallback((anchor: HTMLAnchorElement): ContextMenuItem[] => {
     const href = anchor.getAttribute("href") ?? "";
+    const selection = window.getSelection();
+    const hasSelection = !!selection && !selection.isCollapsed && selection.toString().length > 0;
     return [
       { label: "Edit link…", icon: <Pencil size={14} />, onSelect: () => selectLink(anchor) },
       { label: "Open link", icon: <ExternalLink size={14} />, disabled: !href, onSelect: () => { window.open(href, "_blank", "noopener,noreferrer"); } },
       { label: "Copy link URL", icon: <Copy size={14} />, disabled: !href, onSelect: () => { void navigator.clipboard?.writeText?.(href); } },
       { separator: true },
+      // A gradient link's colors live on the link text, so offer the painter here too.
+      { label: "Copy formatting", icon: <Copy size={14} />, disabled: !hasSelection, onSelect: copyFormatting },
+      { label: "Paste formatting", icon: <ClipboardPaste size={14} />, disabled: !hasSelection || !capturedColorsRef.current, onSelect: pasteFormatting },
+      { separator: true },
       { label: "Remove link", icon: <Unlink size={14} />, onSelect: () => { selectLink(anchor); removeSelectedLink(); } },
     ];
-  }, [removeSelectedLink, selectLink]);
+  }, [copyFormatting, pasteFormatting, removeSelectedLink, selectLink]);
 
   const buildTextMenuItems = useCallback((): ContextMenuItem[] => {
     const selection = window.getSelection();
@@ -1638,9 +1889,12 @@ export function BBCodeEditor({
       { label: "Text color…", icon: <Palette size={14} />, onSelect: () => openDialog("color") },
       { label: "Add link…", icon: <Link size={14} />, onSelect: () => openDialog("link") },
       { separator: true },
+      { label: "Copy formatting", icon: <Copy size={14} />, disabled: !hasSelection, onSelect: copyFormatting },
+      { label: "Paste formatting", icon: <ClipboardPaste size={14} />, disabled: !hasSelection || !capturedColorsRef.current, onSelect: pasteFormatting },
+      { separator: true },
       { label: "Clear formatting", icon: <Eraser size={14} />, onSelect: () => execVisual("removeFormat") },
     ];
-  }, [applyInline, copySelection, cutSelection, execVisual, openDialog, pasteFromClipboard]);
+  }, [applyInline, copyFormatting, copySelection, cutSelection, execVisual, openDialog, pasteFormatting, pasteFromClipboard]);
 
   const handleVisualContextMenu = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
     const root = visualRef.current;
@@ -1673,6 +1927,16 @@ export function BBCodeEditor({
     imageLinkInputRef.current?.focus();
     imageLinkInputRef.current?.select();
   }, [focusImageLinkTick]);
+
+  // Close whatever is docked in the bottom overlay (a tool dialog, a selection
+  // inspector, or an upload message).
+  const dismissOverlay = useCallback(() => {
+    if (dialog) setDialog(null);
+    if (imageSelection) clearImageSelection();
+    if (linkSelection) clearLinkSelection();
+    if (imagemapSelection) clearImagemapSelection();
+    if (uploadStatus) setUploadStatus(null);
+  }, [clearImageSelection, clearImagemapSelection, clearLinkSelection, dialog, imageSelection, imagemapSelection, linkSelection, uploadStatus]);
 
   // Measure the floating overlay so the surface can offset its content by it.
   const setOverlayNode = useCallback((node: HTMLDivElement | null) => {
@@ -1716,11 +1980,15 @@ export function BBCodeEditor({
   }, [overlayHeight, imageSelection, imagemapSelection, linkSelection]);
 
   const charCount = source.length;
+  const pendingImageCount = useMemo(
+    () => Array.from(deferredSource.matchAll(PENDING_IMG_PATTERN)).length,
+    [deferredSource],
+  );
 
   const renderImageInspector = (): ReactNode => {
     if (!imageSelection) return null;
     return (
-      <div className="flex flex-wrap items-end gap-2.5 px-4 py-3 border-b border-osu-b3/30 bg-osu-b5/50">
+      <div className="flex flex-wrap items-end gap-2.5 px-4 py-3 pr-10 border-b border-osu-b3/30 bg-osu-b5/50">
         <div className="self-center pr-1 text-[11px] font-semibold uppercase tracking-wide text-osu-f1">Image</div>
         <DialogField label="Link URL (optional)">
           <input
@@ -1762,7 +2030,7 @@ export function BBCodeEditor({
   const renderImagemapInspector = (): ReactNode => {
     if (!imagemapSelection) return null;
     return (
-      <div className="flex flex-wrap items-end gap-2.5 px-4 py-3 border-b border-osu-b3/30 bg-osu-b5/50">
+      <div className="flex flex-wrap items-end gap-2.5 px-4 py-3 pr-10 border-b border-osu-b3/30 bg-osu-b5/50">
         <div className="flex items-center gap-1.5 self-center pr-1 text-[11px] font-semibold uppercase tracking-wide text-osu-f1">
           <span>Imagemap area {imagemapSelection.areaIndex + 1}/{imagemapSelection.areaCount}</span>
           <button
@@ -1828,7 +2096,7 @@ export function BBCodeEditor({
   const renderLinkInspector = (): ReactNode => {
     if (!linkSelection) return null;
     return (
-      <div className="flex flex-wrap items-end gap-2.5 px-4 py-3 border-b border-osu-b3/30 bg-osu-b5/50">
+      <div className="flex flex-wrap items-end gap-2.5 px-4 py-3 pr-10 border-b border-osu-b3/30 bg-osu-b5/50">
         <div className="self-center pr-1 text-[11px] font-semibold uppercase tracking-wide text-osu-f1">
           Link
         </div>
@@ -1870,11 +2138,17 @@ export function BBCodeEditor({
             if (editMode === "visual") {
               const text = selectedDialogText();
               if (text) {
-                // Replace in place (keeps inner bold/links, swaps an old color span)
-                // instead of nesting a fresh [color] around the selection.
-                const inner = visualSelectionHtml() || escapeBBHtml(text);
+                const inner = visualSelectionHtml();
+                // A multi-line selection can't be wrapped in one inline [color]
+                // span - let the browser color each line so nothing gets wiped.
+                if (/<(br|div|p|h[1-6]|center|blockquote|ul|ol|li|pre)\b/i.test(inner)) {
+                  applyVisualForeColor(color);
+                  return;
+                }
+                // Single line: replace in place (keeps inner bold/links, swaps an
+                // old color span) instead of nesting a fresh [color] around it.
                 const { open, close } = editableWrapMarkup("color", color);
-                replaceVisualSelectionHtml(text, open + inner + close);
+                replaceVisualSelectionHtml(text, open + (inner || escapeBBHtml(text)) + close);
                 return;
               }
             }
@@ -1925,6 +2199,25 @@ export function BBCodeEditor({
             <button type="submit" className={dialogApplyClass} disabled={!normalizeHexColor(hexField)}>
               Apply
             </button>
+            {editMode === "visual" && selectedDialogText() ? (
+              <DialogField label={`Shift hue (${hueShift > 0 ? "+" : ""}${hueShift}°)`}>
+                <input
+                  type="range"
+                  min={-180}
+                  max={180}
+                  step={5}
+                  value={hueShift}
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+                    shiftSelectionHue(value - hueShiftRef.current);
+                    hueShiftRef.current = value;
+                    setHueShift(value);
+                  }}
+                  className="w-40 accent-osu-pink cursor-pointer"
+                  title="Rotate every color in the selection"
+                />
+              </DialogField>
+            ) : null}
           </form>
         );
       }
@@ -2279,7 +2572,8 @@ export function BBCodeEditor({
           <button
             type="button"
             onClick={copyBBCode}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer ${
+            disabled={uploadStatus?.kind === "uploading"}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait ${
               copied
                 ? "bg-osu-green/20 border border-osu-green/40 text-osu-green"
                 : "bg-osu-h1/20 border border-osu-h1/40 text-osu-c1 hover:bg-osu-h1/30"
@@ -2416,6 +2710,15 @@ export function BBCodeEditor({
             and the surface's bottom padding keeps covered content scrollable. */}
         {(imagemapSelection || linkSelection || imageSelection || uploadStatus || dialog) ? (
           <div ref={setOverlayNode} className="absolute inset-x-0 bottom-0 z-20 max-h-full overflow-y-auto bg-osu-b4 border-t border-osu-b3/40 shadow-[0_-8px_24px_rgba(0,0,0,0.35)]">
+            <button
+              type="button"
+              onClick={dismissOverlay}
+              title="Close"
+              aria-label="Close"
+              className="absolute top-1.5 right-1.5 z-10 grid h-6 w-6 place-items-center rounded-md text-osu-f1 hover:text-white hover:bg-osu-b3/60 transition-colors cursor-pointer"
+            >
+              <X size={15} />
+            </button>
             {renderImagemapInspector()}
             {renderLinkInspector()}
             {renderImageInspector()}
@@ -2448,7 +2751,7 @@ export function BBCodeEditor({
 
             {/* Tool dialog */}
             {dialog ? (
-              <div className="px-4 py-3 border-b border-osu-b3/30 bg-osu-b5/50">{renderDialog()}</div>
+              <div className="px-4 py-3 pr-10 border-b border-osu-b3/30 bg-osu-b5/50">{renderDialog()}</div>
             ) : null}
           </div>
         ) : null}
@@ -2461,12 +2764,13 @@ export function BBCodeEditor({
           spellCheck={false}
           onPointerDown={handleVisualPointerDown}
           onContextMenu={handleVisualContextMenu}
+          onKeyDown={handleVisualKeyDown}
           onPaste={handlePaste}
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onInput={scheduleVisualSync}
           onBlur={() => flushVisual()}
-          data-placeholder="Write your page here. Select text and use the toolbar to format it. Right-click for more, or paste an image to upload it."
+          data-placeholder="Write your page here. Select text and use the toolbar to format it. Right-click for more, or paste an image to add it."
           style={{ paddingBottom: surfacePadBottom, scrollPaddingBottom: surfacePadBottom }}
           className={`${paneHeightClass} bbcode-content bbcode-editor-surface overflow-y-auto px-4 py-3 text-sm text-osu-l2 focus:outline-none`}
         />
@@ -2528,6 +2832,14 @@ export function BBCodeEditor({
       <div className="flex items-center gap-3 px-4 py-2 border-t border-osu-b3/30 text-[12px] text-osu-f1">
         <span>{charCount.toLocaleString()} characters</span>
         <span className="hidden sm:inline">Draft autosaves locally</span>
+        {pendingImageCount > 0 ? (
+          <span className="text-osu-c1">
+            {pendingImageCount} image{pendingImageCount > 1 ? "s" : ""} upload on copy
+          </span>
+        ) : null}
+        {hasCapturedFormat ? (
+          <span className="hidden sm:inline text-osu-c1">formatting copied - right-click text to paste</span>
+        ) : null}
         <button
           type="button"
           onClick={resetToProfile}

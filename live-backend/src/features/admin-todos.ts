@@ -28,7 +28,12 @@ export interface AdminTodo {
   createdAt: number;
   updatedAt: number;
   doneAt: number | null;
+  // Manual drag-to-reorder key for the open list; lower sorts higher. Spaced by POSITION_STEP so a
+  // reorder can drop an item at the midpoint of its two new neighbours without renumbering the rest.
+  position: number;
 }
+
+const POSITION_STEP = 1000;
 
 // Inputs are intentionally loose (unknown): everything is normalized here so the HTTP layer can
 // forward a parsed body straight through without re-validating each field.
@@ -46,6 +51,7 @@ export interface UpdateTodoInput {
   category?: unknown;
   priority?: unknown;
   status?: unknown;
+  position?: unknown;
 }
 
 function normalizeCategory(value: unknown): TodoCategory {
@@ -70,7 +76,11 @@ function normalizeNotes(value: unknown): string | null {
   return trimmed.length ? trimmed : null;
 }
 
-const SELECT_COLUMNS = "id, title, notes, category, priority, status, created_at, updated_at, done_at";
+function normalizePosition(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+const SELECT_COLUMNS = "id, title, notes, category, priority, status, created_at, updated_at, done_at, position";
 
 function rowToTodo(row: Record<string, unknown>): AdminTodo {
   return {
@@ -83,20 +93,19 @@ function rowToTodo(row: Record<string, unknown>): AdminTodo {
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
     doneAt: row.done_at == null ? null : Number(row.done_at),
+    position: Number(row.position ?? 0),
   };
 }
 
-const PRIORITY_RANK: Record<TodoPriority, number> = { high: 0, normal: 1, low: 2 };
-
-// Default order for the board: open before done; open items by priority then newest first (a
-// freshly added task lands at the top of its band); done items by most-recently-completed. Sorted
-// in JS because a personal list never grows past a few hundred rows and the mixed key is clearer
-// here than a CASE-heavy ORDER BY.
+// Board order: open before done; open items follow the owner's manual drag order (position asc,
+// newest first as a tiebreak); done items by most-recently-completed. Sorted in JS because a
+// personal list never grows past a few hundred rows and the mixed key is clearer here than a
+// CASE-heavy ORDER BY.
 function sortTodos(todos: AdminTodo[]): AdminTodo[] {
   return todos.slice().sort((a, b) => {
     if (a.status !== b.status) return a.status === "open" ? -1 : 1;
     if (a.status === "done") return (b.doneAt ?? 0) - (a.doneAt ?? 0);
-    if (a.priority !== b.priority) return PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
+    if (a.position !== b.position) return a.position - b.position;
     return b.createdAt - a.createdAt;
   });
 }
@@ -117,6 +126,11 @@ export async function createAdminTodo(db: Db, input: CreateTodoInput): Promise<A
   const title = normalizeTitle(input.title);
   if (!title) return null;
   const now = Date.now();
+  // A freshly added task lands at the very top of the open list (one step above the current minimum)
+  // so it's the first thing you see; drag it wherever it belongs afterwards.
+  const minRow = await exec(db, "select min(position) as min_pos from admin_todos where status = 'open'");
+  const minPos = minRow.rows[0]?.min_pos;
+  const position = minPos == null ? 0 : Number(minPos) - POSITION_STEP;
   const todo: AdminTodo = {
     id: randomUUID(),
     title,
@@ -127,11 +141,12 @@ export async function createAdminTodo(db: Db, input: CreateTodoInput): Promise<A
     createdAt: now,
     updatedAt: now,
     doneAt: null,
+    position,
   };
   await exec(
     db,
-    `insert into admin_todos (${SELECT_COLUMNS}) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [todo.id, todo.title, todo.notes, todo.category, todo.priority, todo.status, todo.createdAt, todo.updatedAt, todo.doneAt],
+    `insert into admin_todos (${SELECT_COLUMNS}) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [todo.id, todo.title, todo.notes, todo.category, todo.priority, todo.status, todo.createdAt, todo.updatedAt, todo.doneAt, todo.position],
   );
   return todo;
 }
@@ -150,6 +165,7 @@ export async function updateAdminTodo(db: Db, input: UpdateTodoInput): Promise<A
   const category = input.category === undefined ? existing.category : normalizeCategory(input.category);
   const priority = input.priority === undefined ? existing.priority : normalizePriority(input.priority);
   const status = input.status === undefined ? existing.status : normalizeStatus(input.status);
+  const position = input.position === undefined ? existing.position : normalizePosition(input.position, existing.position);
   let doneAt = existing.doneAt;
   if (status === "done" && existing.status !== "done") doneAt = now;
   else if (status === "open") doneAt = null;
@@ -157,11 +173,11 @@ export async function updateAdminTodo(db: Db, input: UpdateTodoInput): Promise<A
   await exec(
     db,
     `update admin_todos
-        set title = ?, notes = ?, category = ?, priority = ?, status = ?, updated_at = ?, done_at = ?
+        set title = ?, notes = ?, category = ?, priority = ?, status = ?, updated_at = ?, done_at = ?, position = ?
       where id = ?`,
-    [title, notes, category, priority, status, now, doneAt, id],
+    [title, notes, category, priority, status, now, doneAt, position, id],
   );
-  return { ...existing, title, notes, category, priority, status, updatedAt: now, doneAt };
+  return { ...existing, title, notes, category, priority, status, updatedAt: now, doneAt, position };
 }
 
 export async function deleteAdminTodo(db: Db, id: string): Promise<boolean> {

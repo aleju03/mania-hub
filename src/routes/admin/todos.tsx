@@ -1,20 +1,23 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, Reorder, useDragControls } from "framer-motion";
 import {
   AlertTriangle,
   Bug,
   Check,
   ChevronDown,
+  GripVertical,
   Inbox,
   Lightbulb,
   ListChecks,
   Loader2,
   Plus,
+  Search,
   Sparkles,
   SquarePen,
   Trash2,
   Wrench,
+  X,
 } from "lucide-react";
 import { canUseAdminFeatures } from "../../lib/auth-shared";
 import { SelectMenu, type SelectMenuOption } from "../../components/ui/SelectMenu";
@@ -71,14 +74,18 @@ const PRIORITY_META: Record<TodoPriority, { label: string; bar: string | null; c
   low: { label: "Low", bar: null, chip: "text-osu-f1/60", dot: "bg-osu-f1/50" },
 };
 const PRIORITY_ORDER: TodoPriority[] = ["low", "normal", "high"];
-const PRIORITY_RANK: Record<TodoPriority, number> = { high: 0, normal: 1, low: 2 };
 
-// Mirrors the backend default order so optimistic local updates land where a refetch would put them.
+// Matches the backend spacing so a drag can drop an item at the midpoint of its two new neighbours.
+const POSITION_STEP = 1000;
+
+// Mirrors the backend board order so optimistic local updates land where a refetch would put them:
+// open before done; open items follow the manual drag order (position asc), done items by most
+// recently completed.
 function sortTodos(list: AdminTodo[]): AdminTodo[] {
   return list.slice().sort((a, b) => {
     if (a.status !== b.status) return a.status === "open" ? -1 : 1;
     if (a.status === "done") return (b.doneAt ?? 0) - (a.doneAt ?? 0);
-    if (a.priority !== b.priority) return PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
+    if (a.position !== b.position) return a.position - b.position;
     return b.createdAt - a.createdAt;
   });
 }
@@ -147,8 +154,10 @@ function TodosPage() {
   const titleRef = useRef<HTMLInputElement | null>(null);
 
   // Filters
+  const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
   const [categoryFilter, setCategoryFilter] = useState<TodoCategory | "all">("all");
+  const [priorityFilter, setPriorityFilter] = useState<TodoPriority | "all">("all");
   const [clearing, setClearing] = useState(false);
 
   useEffect(() => {
@@ -171,13 +180,118 @@ function TodosPage() {
   const openCount = useMemo(() => todos.filter((t) => t.status === "open").length, [todos]);
   const doneCount = todos.length - openCount;
 
-  const filtered = useMemo(() => {
-    return todos.filter((todo) => {
-      if (statusFilter !== "all" && todo.status !== statusFilter) return false;
-      if (categoryFilter !== "all" && todo.category !== categoryFilter) return false;
-      return true;
-    });
-  }, [todos, statusFilter, categoryFilter]);
+  const query = search.trim().toLowerCase();
+
+  // Faceted matching: each filter control's counts reflect the *other* active filters, not its own
+  // selection, so picking one facet never zeroes out the counts on the others.
+  const matchesSearch = useCallback(
+    (t: AdminTodo) => !query || `${t.title} ${t.notes ?? ""}`.toLowerCase().includes(query),
+    [query],
+  );
+  const matchesStatus = useCallback(
+    (t: AdminTodo) => statusFilter === "all" || t.status === statusFilter,
+    [statusFilter],
+  );
+  const matchesPriority = useCallback(
+    (t: AdminTodo) => priorityFilter === "all" || t.priority === priorityFilter,
+    [priorityFilter],
+  );
+
+  const filtered = useMemo(
+    () =>
+      todos.filter(
+        (t) =>
+          matchesStatus(t) &&
+          matchesPriority(t) &&
+          matchesSearch(t) &&
+          (categoryFilter === "all" || t.category === categoryFilter),
+      ),
+    [todos, matchesStatus, matchesPriority, matchesSearch, categoryFilter],
+  );
+
+  const statusCounts = useMemo(() => {
+    const counts = { open: 0, done: 0, all: 0 };
+    for (const t of todos) {
+      if (!matchesPriority(t) || !matchesSearch(t)) continue;
+      counts[t.status]++;
+      counts.all++;
+    }
+    return counts;
+  }, [todos, matchesPriority, matchesSearch]);
+
+  const categoryCounts = useMemo(() => {
+    const counts: Record<TodoCategory | "all", number> = { all: 0, task: 0, bug: 0, feature: 0, idea: 0, chore: 0 };
+    for (const t of todos) {
+      if (!matchesStatus(t) || !matchesPriority(t) || !matchesSearch(t)) continue;
+      counts[t.category]++;
+      counts.all++;
+    }
+    return counts;
+  }, [todos, matchesStatus, matchesPriority, matchesSearch]);
+
+  const priorityCounts = useMemo(() => {
+    const counts: Record<TodoPriority | "all", number> = { all: 0, high: 0, normal: 0, low: 0 };
+    for (const t of todos) {
+      if (!matchesStatus(t) || !matchesSearch(t)) continue;
+      if (categoryFilter !== "all" && t.category !== categoryFilter) continue;
+      counts[t.priority]++;
+      counts.all++;
+    }
+    return counts;
+  }, [todos, matchesStatus, matchesSearch, categoryFilter]);
+
+  // Open items are drag-reorderable; done items keep their most-recently-completed order. `order`
+  // drives the Reorder.Group during a drag; it's resynced from the data whenever the visible open
+  // set changes (add / remove / toggle / filter), which never happens mid-drag (a drag only touches
+  // `order`), so the in-progress order is never clobbered.
+  const openList = useMemo(() => filtered.filter((t) => t.status === "open"), [filtered]);
+  const doneList = useMemo(() => filtered.filter((t) => t.status === "done"), [filtered]);
+
+  const [order, setOrder] = useState<AdminTodo[]>(openList);
+  useEffect(() => {
+    setOrder(openList);
+  }, [openList]);
+  const orderRef = useRef(order);
+  orderRef.current = order;
+  // `openList` is the committed (server-synced) open order; `order` only diverges mid-drag. Compare
+  // against it to tell a real reorder from a bare click on the grip handle.
+  const openListRef = useRef(openList);
+  openListRef.current = openList;
+
+  // On drop, give the moved item a position between its two new visible neighbours (or a step past
+  // the end when it lands first/last) and persist just that one row. Optimistic so the reorder
+  // sticks instantly; a failed save refetches server truth.
+  const handleReorderEnd = useCallback(async (id: string) => {
+    const current = orderRef.current;
+    const committed = openListRef.current;
+    if (current.length === committed.length && current.every((t, i) => t.id === committed[i].id)) return; // no net move
+    const index = current.findIndex((t) => t.id === id);
+    if (index === -1) return;
+    const moved = current[index];
+    const prev = current[index - 1];
+    const next = current[index + 1];
+    let position: number;
+    if (!prev && !next) return; // sole item, nothing to reorder
+    else if (!prev) position = next.position - POSITION_STEP;
+    else if (!next) position = prev.position + POSITION_STEP;
+    else position = (prev.position + next.position) / 2;
+    if (position === moved.position) return; // dropped back where it started
+
+    setTodos((list) => upsertTodo(list, { ...moved, position }));
+    setError(null);
+    try {
+      const result = await updateAdminTodo({ data: { id, position } });
+      setTodos((list) => upsertTodo(list, result.todo));
+    } catch (caught) {
+      setError(errMessage(caught));
+      try {
+        const refreshed = await listAdminTodos();
+        setTodos(sortTodos(refreshed.todos));
+      } catch {
+        // leave the optimistic order in place; the error above already surfaces on the page.
+      }
+    }
+  }, []);
 
   const handleAdd = useCallback(async () => {
     const trimmed = title.trim();
@@ -342,37 +456,73 @@ function TodosPage() {
         </div>
 
         {/* Filter bar */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <div className="inline-flex rounded-lg border border-osu-b3/40 bg-osu-b4/40 p-0.5">
-            {(["open", "done", "all"] as StatusFilter[]).map((key) => {
-              const active = key === statusFilter;
-              const count = key === "open" ? openCount : key === "done" ? doneCount : todos.length;
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setStatusFilter(key)}
-                  className={`rounded-md px-3 py-1 text-[11px] font-semibold capitalize transition-colors cursor-pointer ${
-                    active ? "bg-osu-b3/60 text-white" : "text-osu-f1 hover:text-osu-l2"
-                  }`}
-                >
-                  {key} <span className="text-osu-f1/70">{count}</span>
-                </button>
-              );
-            })}
-          </div>
-          <div className="flex flex-wrap items-center gap-1">
-            <CategoryFilterChip label="All" active={categoryFilter === "all"} onClick={() => setCategoryFilter("all")} />
-            {CATEGORY_ORDER.map((key) => (
-              <CategoryFilterChip
-                key={key}
-                label={CATEGORY_META[key].label}
-                Icon={CATEGORY_META[key].Icon}
-                colorClass={CATEGORY_META[key].text}
-                active={categoryFilter === key}
-                onClick={() => setCategoryFilter(categoryFilter === key ? "all" : key)}
+        <div className="space-y-2">
+          {/* Search + status */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <div className="relative min-w-[180px] flex-1">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-osu-f1/60" />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") setSearch("");
+                }}
+                placeholder="Search title or notes..."
+                className="w-full rounded-md border border-osu-b3/50 bg-osu-b6/70 py-1.5 pl-8 pr-8 text-xs text-osu-l1 placeholder:text-osu-f1/60 focus:border-osu-c2/60 focus:outline-none"
               />
-            ))}
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  aria-label="Clear search"
+                  className="absolute right-1.5 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-osu-l1 cursor-pointer"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            <div className="inline-flex rounded-lg border border-osu-b3/40 bg-osu-b4/40 p-0.5">
+              {(["open", "done", "all"] as StatusFilter[]).map((key) => {
+                const active = key === statusFilter;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setStatusFilter(key)}
+                    className={`rounded-md px-3 py-1 text-[11px] font-semibold capitalize transition-colors cursor-pointer ${
+                      active ? "bg-osu-b3/60 text-white" : "text-osu-f1 hover:text-osu-l2"
+                    }`}
+                  >
+                    {key} <span className="text-osu-f1/70">{statusCounts[key]}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {/* Category + priority */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <div className="flex flex-wrap items-center gap-1">
+              <CategoryFilterChip
+                label="All"
+                count={categoryCounts.all}
+                active={categoryFilter === "all"}
+                onClick={() => setCategoryFilter("all")}
+              />
+              {CATEGORY_ORDER.map((key) => (
+                <CategoryFilterChip
+                  key={key}
+                  label={CATEGORY_META[key].label}
+                  Icon={CATEGORY_META[key].Icon}
+                  colorClass={CATEGORY_META[key].text}
+                  count={categoryCounts[key]}
+                  active={categoryFilter === key}
+                  onClick={() => setCategoryFilter(categoryFilter === key ? "all" : key)}
+                />
+              ))}
+            </div>
+            <div className="ml-auto">
+              <PriorityFilter value={priorityFilter} counts={priorityCounts} onChange={setPriorityFilter} />
+            </div>
           </div>
         </div>
 
@@ -392,20 +542,43 @@ function TodosPage() {
         ) : filtered.length === 0 ? (
           <EmptyState hasAny={todos.length > 0} />
         ) : (
-          <motion.ul layout className="flex flex-col gap-2">
-            <AnimatePresence initial={false}>
-              {filtered.map((todo) => (
-                <TodoCard
-                  key={todo.id}
-                  todo={todo}
-                  busy={busyId === todo.id}
-                  onToggle={handleToggle}
-                  onSave={handleSave}
-                  onDelete={handleDelete}
-                />
-              ))}
-            </AnimatePresence>
-          </motion.ul>
+          <div className="flex flex-col gap-2">
+            {/* Open items: drag the grip to reorder by hand. */}
+            {order.length > 0 && (
+              <Reorder.Group axis="y" values={order} onReorder={setOrder} className="flex flex-col gap-2">
+                <AnimatePresence initial={false}>
+                  {order.map((todo) => (
+                    <TodoCard
+                      key={todo.id}
+                      todo={todo}
+                      busy={busyId === todo.id}
+                      reorderable
+                      onToggle={handleToggle}
+                      onSave={handleSave}
+                      onDelete={handleDelete}
+                      onReorderEnd={handleReorderEnd}
+                    />
+                  ))}
+                </AnimatePresence>
+              </Reorder.Group>
+            )}
+            {doneList.length > 0 && (
+              <motion.ul layout className="flex flex-col gap-2">
+                <AnimatePresence initial={false}>
+                  {doneList.map((todo) => (
+                    <TodoCard
+                      key={todo.id}
+                      todo={todo}
+                      busy={busyId === todo.id}
+                      onToggle={handleToggle}
+                      onSave={handleSave}
+                      onDelete={handleDelete}
+                    />
+                  ))}
+                </AnimatePresence>
+              </motion.ul>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -426,15 +599,18 @@ interface EditPatch {
 interface TodoCardProps {
   todo: AdminTodo;
   busy: boolean;
+  reorderable?: boolean;
   onToggle: (todo: AdminTodo) => void;
   onSave: (id: string, patch: EditPatch) => Promise<void>;
   onDelete: (id: string) => void;
+  onReorderEnd?: (id: string) => void;
 }
 
-function TodoCard({ todo, busy, onToggle, onSave, onDelete }: TodoCardProps) {
+function TodoCard({ todo, busy, reorderable, onToggle, onSave, onDelete, onReorderEnd }: TodoCardProps) {
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [draft, setDraft] = useState<EditPatch>(() => toEditPatch(todo));
+  const dragControls = useDragControls();
 
   useEffect(() => {
     if (!confirmDelete) return;
@@ -462,19 +638,12 @@ function TodoCard({ todo, busy, onToggle, onSave, onDelete }: TodoCardProps) {
     }
   };
 
-  return (
-    <motion.li
-      layout
-      initial={{ opacity: 0, y: -6 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, x: -10, transition: { duration: 0.12 } }}
-      transition={{ duration: 0.16, ease: "easeOut" }}
-      className={
-        editing
-          ? "relative z-20 rounded-lg border border-osu-c2/40 bg-osu-b4/40 p-3"
-          : `group relative flex items-start gap-3 rounded-lg border border-osu-b3/40 p-3 transition-colors hover:border-osu-b3/60 ${done ? "bg-osu-b4/15" : "bg-osu-b4/30"}`
-      }
-    >
+  const rootClassName = editing
+    ? "relative z-20 rounded-lg border border-osu-c2/40 bg-osu-b4/40 p-3"
+    : `group relative flex items-start gap-3 rounded-lg border border-osu-b3/40 p-3 transition-colors hover:border-osu-b3/60 ${done ? "bg-osu-b4/15" : "bg-osu-b4/30"}`;
+
+  const content = (
+    <>
       {editing ? (
         <>
           <input
@@ -531,6 +700,18 @@ function TodoCard({ todo, busy, onToggle, onSave, onDelete }: TodoCardProps) {
         <>
           {/* Priority accent (skipped when done or low) */}
           {!done && priorityBar && <span className={`absolute bottom-2 left-0 top-2 w-0.5 rounded-full ${priorityBar}`} />}
+
+          {/* Drag handle: press and hold to reorder by hand */}
+          {reorderable && (
+            <button
+              type="button"
+              aria-label="Drag to reorder"
+              onPointerDown={(event) => dragControls.start(event)}
+              className="-ml-1 mt-0.5 inline-flex h-5 w-4 shrink-0 touch-none items-center justify-center rounded text-osu-f1/30 transition-colors hover:text-osu-l2 cursor-grab active:cursor-grabbing"
+            >
+              <GripVertical className="h-4 w-4" />
+            </button>
+          )}
 
           <TodoCheckbox done={done} busy={busy} onToggle={() => onToggle(todo)} />
 
@@ -594,6 +775,38 @@ function TodoCard({ todo, busy, onToggle, onSave, onDelete }: TodoCardProps) {
           </div>
         </>
       )}
+    </>
+  );
+
+  if (reorderable) {
+    return (
+      <Reorder.Item
+        value={todo}
+        dragListener={false}
+        dragControls={dragControls}
+        onDragEnd={() => onReorderEnd?.(todo.id)}
+        layout
+        initial={{ opacity: 0, y: -6 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, x: -10, transition: { duration: 0.12 } }}
+        transition={{ duration: 0.16, ease: "easeOut" }}
+        className={rootClassName}
+      >
+        {content}
+      </Reorder.Item>
+    );
+  }
+
+  return (
+    <motion.li
+      layout
+      initial={{ opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -10, transition: { duration: 0.12 } }}
+      transition={{ duration: 0.16, ease: "easeOut" }}
+      className={rootClassName}
+    >
+      {content}
     </motion.li>
   );
 }
@@ -652,12 +865,14 @@ function CategoryFilterChip({
   label,
   Icon,
   colorClass,
+  count,
   active,
   onClick,
 }: {
   label: string;
   Icon?: typeof Bug;
   colorClass?: string;
+  count: number;
   active: boolean;
   onClick: () => void;
 }) {
@@ -673,7 +888,52 @@ function CategoryFilterChip({
     >
       {Icon && <Icon className={`h-3 w-3 ${active ? colorClass : ""}`} />}
       {label}
+      <span
+        className={`rounded-full px-1 text-[9px] tabular-nums ${
+          active ? "bg-white/15 text-white" : count === 0 ? "text-osu-f1/40" : "bg-osu-b6/60 text-osu-f1/80"
+        }`}
+      >
+        {count}
+      </span>
     </button>
+  );
+}
+
+function PriorityFilter({
+  value,
+  counts,
+  onChange,
+}: {
+  value: TodoPriority | "all";
+  counts: Record<TodoPriority | "all", number>;
+  onChange: (value: TodoPriority | "all") => void;
+}) {
+  const options: (TodoPriority | "all")[] = ["all", "high", "normal", "low"];
+  return (
+    <div
+      className="inline-flex rounded-lg border border-osu-b3/40 bg-osu-b4/40 p-0.5"
+      role="group"
+      aria-label="Filter by priority"
+    >
+      {options.map((key) => {
+        const active = key === value;
+        const dot = key === "all" ? null : PRIORITY_META[key].dot;
+        return (
+          <button
+            key={key}
+            type="button"
+            onClick={() => onChange(key)}
+            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold capitalize transition-colors cursor-pointer ${
+              active ? "bg-osu-b3/60 text-white" : "text-osu-f1 hover:text-osu-l2"
+            }`}
+          >
+            {dot && <span className={`h-1.5 w-1.5 rounded-full ${dot} ${active ? "" : "opacity-60"}`} />}
+            {key}
+            <span className="text-osu-f1/70 tabular-nums">{counts[key]}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
