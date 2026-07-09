@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ValleyRouteImport } from './routes/valley'
 import { Route as TrackerRouteImport } from './routes/tracker'
 import { Route as TopPlaysRouteImport } from './routes/top-plays'
 import { Route as TermsRouteImport } from './routes/terms'
@@ -57,6 +58,11 @@ import { Route as ApiAuthOsuRouteImport } from './routes/api/auth/osu'
 import { Route as ApiAuthLogoutRouteImport } from './routes/api/auth/logout'
 import { Route as ApiAuthOsuCallbackRouteImport } from './routes/api/auth/osu/callback'
 
+const ValleyRoute = ValleyRouteImport.update({
+  id: '/valley',
+  path: '/valley',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TrackerRoute = TrackerRouteImport.update({
   id: '/tracker',
   path: '/tracker',
@@ -313,6 +319,7 @@ export interface FileRoutesByFullPath {
   '/terms': typeof TermsRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
+  '/valley': typeof ValleyRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
@@ -362,6 +369,7 @@ export interface FileRoutesByTo {
   '/terms': typeof TermsRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
+  '/valley': typeof ValleyRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
@@ -412,6 +420,7 @@ export interface FileRoutesById {
   '/terms': typeof TermsRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
+  '/valley': typeof ValleyRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
@@ -463,6 +472,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/top-plays'
     | '/tracker'
+    | '/valley'
     | '/admin/dan-classifier'
     | '/admin/discord'
     | '/admin/live-backend'
@@ -512,6 +522,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/top-plays'
     | '/tracker'
+    | '/valley'
     | '/admin/dan-classifier'
     | '/admin/discord'
     | '/admin/live-backend'
@@ -561,6 +572,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/top-plays'
     | '/tracker'
+    | '/valley'
     | '/admin/dan-classifier'
     | '/admin/discord'
     | '/admin/live-backend'
@@ -611,6 +623,7 @@ export interface RootRouteChildren {
   TermsRoute: typeof TermsRoute
   TopPlaysRoute: typeof TopPlaysRoute
   TrackerRoute: typeof TrackerRoute
+  ValleyRoute: typeof ValleyRoute
   AdminDanClassifierRoute: typeof AdminDanClassifierRoute
   AdminDiscordRoute: typeof AdminDiscordRoute
   AdminLiveBackendRoute: typeof AdminLiveBackendRoute
@@ -637,6 +650,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/valley': {
+      id: '/valley'
+      path: '/valley'
+      fullPath: '/valley'
+      preLoaderRoute: typeof ValleyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tracker': {
       id: '/tracker'
       path: '/tracker'
@@ -1031,6 +1051,7 @@ const rootRouteChildren: RootRouteChildren = {
   TermsRoute: TermsRoute,
   TopPlaysRoute: TopPlaysRoute,
   TrackerRoute: TrackerRoute,
+  ValleyRoute: ValleyRoute,
   AdminDanClassifierRoute: AdminDanClassifierRoute,
   AdminDiscordRoute: AdminDiscordRoute,
   AdminLiveBackendRoute: AdminLiveBackendRoute,
