@@ -50,9 +50,11 @@ export {
 export { readRankingsPageFromCache } from "./osu/rankings";
 export {
   getBeatmapFile,
+  getCommunityBeatmapFile,
   getReplayParsed,
   getScore,
   lookupBeatmapByChecksum,
+  submitCommunityBeatmap,
 } from "./osu/replay";
 export {
   getBeatmapPatternAnalysis,

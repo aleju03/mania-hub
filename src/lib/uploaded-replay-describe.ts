@@ -1,8 +1,15 @@
 import type { BeatmapChecksumLookupResult } from "./osu/replay";
-import { osuFetch } from "./api";
+import { getPersistentCacheEntry, osuFetch, setPersistentCache } from "./api";
 import { parseUploadedReplayBuffer } from "./replay-upload";
 import { getUploadedReplayStorageKey } from "./r2-cache";
 import { normalizeUploadedReplayId, readUploadedReplay } from "./uploaded-replay-store";
+
+// Uploaded replays are content-addressed by a random id, so a parsed description
+// never changes for a given id. Cache it so the R2 admin browser stops re-parsing
+// the .osr and re-hitting the osu! beatmap lookup on every visit. When the map
+// isn't on osu! yet, keep the entry short-lived so a later submission resolves.
+const DESCRIPTION_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
+const DESCRIPTION_UNRESOLVED_CACHE_TTL = 24 * 60 * 60 * 1000;
 
 // Uploaded replays are stored anonymously and content-addressed by a random id,
 // so there is no stored record of who uploaded them or which score they are.
@@ -101,6 +108,21 @@ export async function describeUploadedReplayById(id: string): Promise<UploadedRe
   const normalized = normalizeUploadedReplayId(id);
   if (!normalized) return null;
 
+  const cacheKey = `uploaded-replay-desc:v1:${normalized}`;
+  const cached = await getPersistentCacheEntry<UploadedReplayDescription>(cacheKey);
+  if (cached.hit) return cached.value;
+
+  const description = await computeUploadedReplayDescription(normalized);
+  // Skip caching a null: a missing/corrupt read is cheap to redo and we don't
+  // want to pin a transient R2 hiccup for a day.
+  if (description) {
+    const ttl = description.beatmap ? DESCRIPTION_CACHE_TTL : DESCRIPTION_UNRESOLVED_CACHE_TTL;
+    await setPersistentCache(cacheKey, description, ttl);
+  }
+  return description;
+}
+
+async function computeUploadedReplayDescription(normalized: string): Promise<UploadedReplayDescription | null> {
   const stored = await readUploadedReplay(normalized);
   if (!stored) return null;
 

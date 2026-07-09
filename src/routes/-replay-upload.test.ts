@@ -23,8 +23,8 @@ describe("replay upload mode", () => {
     expect(routeSource).toContain('"X-Replay-Filename": encodeURIComponent(filename)');
     expect(routeSource).toContain("uploaded.scoreId");
     expect(routeSource).toContain('getScore({ data: { scoreId, mode: "mania" } })');
-    expect(routeSource).toContain("const uploadedMods = uploadedScore?.mods ?? uploaded.mods");
-    expect(routeSource).toContain("setUploadedReplayMods(uploadedMods)");
+    expect(routeSource).toContain("const mods = uploadedScore?.mods ?? uploaded.mods");
+    expect(routeSource).toContain("setUploadedReplayMods(mods)");
     expect(routeSource).toContain("lookupBeatmapByChecksum({ data: { checksum } })");
     expect(routeSource).toContain("replayMods={uploadedReplayMods}");
     expect(routeSource).toContain("shareUrl={uploadedReplayShareUrl");
@@ -56,6 +56,15 @@ describe("replay upload mode", () => {
     expect(routeSource).toContain('enterPendingBeatmapUpload("unlisted", null)');
     expect(routeSource).toContain('enterPendingBeatmapUpload("file-unavailable", beatmapMeta)');
     expect(routeSource).toContain("matchLocalBeatmapFile(file, pending.checksum)");
+
+    // Before asking, a community-supplied copy of the map is tried, so one user
+    // dropping the .osz covers everyone who opens the replay afterwards.
+    expect(routeSource).toContain("tryCommunityBeatmap(null)");
+    expect(routeSource).toContain("tryCommunityBeatmap(beatmapMeta)");
+    expect(routeSource).toContain("getCommunityBeatmapFile({ data: { checksum } })");
+    expect(routeSource).toContain("submitCommunityBeatmap({ data: { checksum: pending.checksum, content: match.content } })");
+    expect(lookupSource).toContain("export const getCommunityBeatmapFile");
+    expect(lookupSource).toContain("export const submitCommunityBeatmap");
     expect(routeSource).toContain("<MissingBeatmapPanel");
     expect(routeSource).toContain("localAudioUrl={localBeatmapAssets.audioUrl}");
     expect(routeSource).toContain("localBackgroundUrl={localBeatmapAssets.backgroundUrl}");

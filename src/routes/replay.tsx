@@ -2,7 +2,7 @@ import { createFileRoute, useCanGoBack, useNavigate, useRouter } from "@tanstack
 import { useState, useRef, useEffect, useCallback, useMemo, type PointerEvent as ReactPointerEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { LoaderCircle, Maximize2, Minimize2, Pause, Play } from "lucide-react";
-import { getReplayParsed, getBeatmapFile, getScore, getUser, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores, lookupBeatmapByChecksum } from "../lib/osu";
+import { getReplayParsed, getBeatmapFile, getCommunityBeatmapFile, getScore, getUser, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores, lookupBeatmapByChecksum, submitCommunityBeatmap } from "../lib/osu";
 import { calculateManiaStarRating } from "../lib/mania-star-rating";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
 import { getEffectiveManiaKeyCount, getManiaKeyModCount, getManiaParseKeyCount, getScoreDisplayValues, getScoreRate, modShiftsPitchWithRate, scoreHasReplay } from "../lib/score";
@@ -1113,6 +1113,39 @@ function ReplayPage() {
     setLocalBeatmapAssets(assets);
   }, []);
 
+  // Finish loading the viewer once the map's .osu is in hand, whatever supplied
+  // it (osu!, the community store, or a file the user just dropped). beatmapMeta
+  // is null for maps osu! doesn't know, where the key count comes from the keymod
+  // alone. The score lookup runs in parallel with the beatmap fetch, so callers
+  // pass the already-started promise in.
+  const finishBeatmapLoad = useCallback(async (params: {
+    content: string;
+    beatmapMeta: BeatmapChecksumLookupResult | null;
+    uploaded: UploadedReplayParseResult;
+    scorePromise: Promise<Awaited<ReturnType<typeof getScore>> | null>;
+    localAssets?: LocalBeatmapAssets;
+  }) => {
+    const { content, beatmapMeta, uploaded, scorePromise, localAssets } = params;
+    const uploadedScore = await scorePromise;
+    const mods = uploadedScore?.mods ?? uploaded.mods;
+    // Prefer the score's beatmap object (mania endpoints mark converts); the
+    // checksum lookup reports the map's original mode instead. Without osu!
+    // metadata the chart's own CS (plus any xK keymod) decides.
+    const keyCount = beatmapMeta
+      ? getManiaParseKeyCount(uploadedScore?.beatmap ?? beatmapMeta, mods) ?? undefined
+      : getManiaKeyModCount(mods) ?? undefined;
+    const parsedBeatmap = parseCachedManiaBeatmap(beatmapMeta?.id ?? 0, content, { keyCount });
+    const beatmapsetId = beatmapMeta ? beatmapMeta.beatmapset_id ?? beatmapMeta.beatmapset?.id : undefined;
+    applyLocalBeatmapAssets(localAssets ?? EMPTY_LOCAL_BEATMAP_ASSETS);
+    setReplay({ ...uploaded.replay, keyCount: parsedBeatmap.keyCount });
+    setBeatmap(parsedBeatmap);
+    setScoreInfo(uploadedScore);
+    setUploadedReplayMods(mods);
+    setUploadedBeatmapsetId(beatmapsetId);
+    setPendingBeatmapUpload(null);
+    return { uploadedScore, mods, beatmapsetId };
+  }, [applyLocalBeatmapAssets]);
+
   const openUploadedReplayBuffer = useCallback(async (
     buffer: ArrayBuffer,
     options: UploadedReplayOpenOptions,
@@ -1125,9 +1158,12 @@ function ReplayPage() {
 
     const fallbackScoreId = extractReplayScoreIdFromFilename(options.filename);
     const scoreId = uploaded.scoreId ?? fallbackScoreId;
+    const scorePromise = scoreId
+      ? getScore({ data: { scoreId, mode: "mania" } }).catch(() => null)
+      : Promise.resolve(null);
 
-    // The replay itself is fine; only the chart is missing. Park it and ask
-    // the user for the map instead of surfacing a raw fetch error.
+    // The replay itself is fine; only the chart is missing. Park it and ask the
+    // user for the map instead of surfacing a raw fetch error.
     const enterPendingBeatmapUpload = (reason: PendingBeatmapUpload["reason"], beatmapMeta: BeatmapChecksumLookupResult | null) => {
       setPendingBeatmapUpload({ checksum, reason, beatmapMeta, uploaded, scoreId, options });
       setLocalBeatmapError(null);
@@ -1141,51 +1177,61 @@ function ReplayPage() {
       });
     };
 
+    // Someone who had this map may have already contributed it; use their copy
+    // instead of asking again. Returns true once it has loaded the viewer.
+    const tryCommunityBeatmap = async (beatmapMeta: BeatmapChecksumLookupResult | null): Promise<boolean> => {
+      const community = await getCommunityBeatmapFile({ data: { checksum } }).catch(() => null);
+      if (!community?.content) return false;
+      setReplayBeatmapFileStatus("fetched");
+      const { beatmapsetId } = await finishBeatmapLoad({ content: community.content, beatmapMeta, uploaded, scorePromise });
+      setUploadedReplayShareUrl(options.shareUrl);
+      setLoadedUploadId(options.uploadId);
+      track("replay_upload_community_beatmap", {
+        replay_upload_id: options.uploadId,
+        replay_beatmap_checksum: checksum,
+        replay_beatmap_id: beatmapMeta?.id ?? null,
+        replay_beatmapset_id: beatmapsetId ?? null,
+        replay_player: uploaded.replay.header.playerName,
+      });
+      return true;
+    };
+
     const beatmapMeta = await lookupBeatmapByChecksum({ data: { checksum } });
     if (!beatmapMeta) {
+      if (await tryCommunityBeatmap(null)) return;
       enterPendingBeatmapUpload("unlisted", null);
       return;
     }
 
     const beatmapsetId = beatmapMeta.beatmapset_id ?? beatmapMeta.beatmapset?.id;
-    const scorePromise = scoreId
-      ? getScore({ data: { scoreId, mode: "mania" } }).catch(() => null)
-      : Promise.resolve(null);
 
     let bmResult: Awaited<ReturnType<typeof getBeatmapFile>>;
     try {
       bmResult = await getBeatmapFile({ data: { beatmapId: beatmapMeta.id, beatmapsetId } });
       setReplayBeatmapFileStatus(bmResult.cacheStatus === "hit" ? "cached" : "fetched");
     } catch {
+      if (await tryCommunityBeatmap(beatmapMeta)) return;
       setReplayBeatmapFileStatus("unavailable");
       enterPendingBeatmapUpload("file-unavailable", beatmapMeta);
       return;
     }
 
-    const uploadedScore = await scorePromise;
-    const uploadedMods = uploadedScore?.mods ?? uploaded.mods;
-    // Prefer the score's beatmap object (mania endpoints mark converts); the
-    // checksum lookup reports the map's original mode instead.
-    const parseKeyCount = getManiaParseKeyCount(uploadedScore?.beatmap ?? beatmapMeta, uploadedMods) ?? undefined;
-    const parsedBeatmap = parseCachedManiaBeatmap(beatmapMeta.id, bmResult.content, { keyCount: parseKeyCount });
-    setReplay({
-      ...uploaded.replay,
-      keyCount: parsedBeatmap.keyCount,
+    const { beatmapsetId: loadedBeatmapsetId } = await finishBeatmapLoad({
+      content: bmResult.content,
+      beatmapMeta,
+      uploaded,
+      scorePromise,
     });
-    setBeatmap(parsedBeatmap);
-    setScoreInfo(uploadedScore);
-    setUploadedReplayMods(uploadedMods);
-    setUploadedBeatmapsetId(beatmapsetId);
     setUploadedReplayShareUrl(options.shareUrl);
     setLoadedUploadId(options.uploadId);
     track(options.source === "owner" ? "replay_upload_view" : "replay_upload_shared_view", {
       replay_upload_id: options.uploadId,
       replay_score_id: scoreId ? String(scoreId) : null,
       replay_beatmap_id: beatmapMeta.id,
-      replay_beatmapset_id: beatmapsetId,
+      replay_beatmapset_id: loadedBeatmapsetId,
       replay_player: uploaded.replay.header.playerName,
     });
-  }, []);
+  }, [finishBeatmapLoad]);
 
   // Second half of the missing-beatmap flow: the user supplied an .osz/.osu,
   // match it against the replay's checksum and finish loading the viewer.
@@ -1196,27 +1242,23 @@ function ReplayPage() {
     setLocalBeatmapError(null);
     try {
       const match = await matchLocalBeatmapFile(file, pending.checksum);
-      const uploadedScore = pending.scoreId
-        ? await getScore({ data: { scoreId: pending.scoreId, mode: "mania" } }).catch(() => null)
-        : null;
-      const localMods = uploadedScore?.mods ?? pending.uploaded.mods;
-      // With osu! metadata, key count resolves like the normal upload path;
-      // for a map osu! doesn't know, the chart's own CS (or, for a std file,
-      // the convert formula plus any xK keymod) decides.
-      const metaKeyCount = pending.beatmapMeta
-        ? getManiaParseKeyCount(uploadedScore?.beatmap ?? pending.beatmapMeta, localMods) ?? undefined
-        : getManiaKeyModCount(localMods) ?? undefined;
-      const parsedBeatmap = parseCachedManiaBeatmap(pending.beatmapMeta?.id ?? 0, match.content, { keyCount: metaKeyCount });
-      applyLocalBeatmapAssets({
-        audioUrl: match.audioBlob ? URL.createObjectURL(match.audioBlob) : null,
-        backgroundUrl: match.backgroundBlob ? URL.createObjectURL(match.backgroundBlob) : null,
+      // The file matched the replay's checksum, so hand the .osu to the community
+      // store and spare the next viewer the same prompt. Best-effort: never block
+      // the local playback the user is waiting on.
+      void submitCommunityBeatmap({ data: { checksum: pending.checksum, content: match.content } }).catch(() => {});
+      const scorePromise = pending.scoreId
+        ? getScore({ data: { scoreId: pending.scoreId, mode: "mania" } }).catch(() => null)
+        : Promise.resolve(null);
+      await finishBeatmapLoad({
+        content: match.content,
+        beatmapMeta: pending.beatmapMeta,
+        uploaded: pending.uploaded,
+        scorePromise,
+        localAssets: {
+          audioUrl: match.audioBlob ? URL.createObjectURL(match.audioBlob) : null,
+          backgroundUrl: match.backgroundBlob ? URL.createObjectURL(match.backgroundBlob) : null,
+        },
       });
-      setReplay({ ...pending.uploaded.replay, keyCount: parsedBeatmap.keyCount });
-      setBeatmap(parsedBeatmap);
-      setScoreInfo(uploadedScore);
-      setUploadedReplayMods(localMods);
-      setUploadedBeatmapsetId(pending.beatmapMeta ? pending.beatmapMeta.beatmapset_id ?? pending.beatmapMeta.beatmapset?.id : undefined);
-      setPendingBeatmapUpload(null);
       track("replay_upload_local_beatmap", {
         replay_upload_id: pending.options.uploadId,
         replay_missing_reason: pending.reason,
@@ -1228,7 +1270,7 @@ function ReplayPage() {
     } finally {
       setLocalBeatmapLoading(false);
     }
-  }, [applyLocalBeatmapAssets, localBeatmapLoading, pendingBeatmapUpload]);
+  }, [finishBeatmapLoad, localBeatmapLoading, pendingBeatmapUpload]);
 
   const handleCancelPendingBeatmapUpload = useCallback(() => {
     dismissedUploadIdRef.current = pendingBeatmapUpload?.options.uploadId ?? uploadId ?? null;
