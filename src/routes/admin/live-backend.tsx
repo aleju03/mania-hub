@@ -322,6 +322,10 @@ const ANALYTICS_CACHE_FRESH_MS = 30_000;
 const ANALYTICS_COLD_RESPONSE_BUDGET_MS = 1_500;
 const ANALYTICS_ERROR_RETRY_MS = 30_000;
 const POSTHOG_QUERY_TIMEOUT_MS = 30_000;
+// PostHog US cloud intermittently 5xxs every events query for a minute or two
+// (shared ClickHouse memory pressure, not our query size); one retry after a
+// short pause rides out the brief blips.
+const POSTHOG_QUERY_RETRY_DELAY_MS = 2_000;
 const HIDDEN_WORKER_LANE_NAMES = new Set([
   "dan-estimates",
   "replay-video-render",
@@ -515,40 +519,43 @@ async function fetchAnalyticsMonitorDataFromPostHog({
   const recentCountryClause = recentCountry ? ` AND properties.$geoip_country_code = '${recentCountry}'` : "";
 
   async function runQuery(label: string, query: string): Promise<unknown[][]> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), POSTHOG_QUERY_TIMEOUT_MS);
-    let res: Response;
-    try {
-      res = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({ query: { kind: "HogQLQuery", query } }),
-        signal: controller.signal,
-      });
-    } catch (err) {
-      if (isAbortError(err)) {
-        throw new AnalyticsPostHogQueryError(null, `PostHog "${label}" query timed out after ${Math.round(POSTHOG_QUERY_TIMEOUT_MS / 1000)}s.`);
+    for (let attempt = 0; ; attempt++) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), POSTHOG_QUERY_TIMEOUT_MS);
+      let res: Response;
+      try {
+        res = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({ query: { kind: "HogQLQuery", query } }),
+          signal: controller.signal,
+        });
+      } catch (err) {
+        if (isAbortError(err)) {
+          throw new AnalyticsPostHogQueryError(null, `PostHog "${label}" query timed out after ${Math.round(POSTHOG_QUERY_TIMEOUT_MS / 1000)}s.`);
+        }
+        throw err;
+      } finally {
+        clearTimeout(timeout);
       }
-      throw err;
-    } finally {
-      clearTimeout(timeout);
+      if (!res.ok) {
+        const text = await res.text();
+        if (res.status >= 500 && attempt === 0) {
+          await new Promise((resolve) => setTimeout(resolve, POSTHOG_QUERY_RETRY_DELAY_MS));
+          continue;
+        }
+        throw new AnalyticsPostHogQueryError(res.status, `${label}: ${text.slice(0, 400)}`);
+      }
+      const body = (await res.json()) as { results?: unknown[][] };
+      return body.results ?? [];
     }
-    if (!res.ok) {
-      const text = await res.text();
-      throw new AnalyticsPostHogQueryError(res.status, `${label}: ${text.slice(0, 400)}`);
-    }
-    const body = (await res.json()) as { results?: unknown[][] };
-    return body.results ?? [];
   }
 
   const [
-    active,
-    pvRange,
-    uvRange,
-    eventsRange,
+    overview,
     topRoutes,
     recent,
     topPhysCountries,
@@ -558,14 +565,15 @@ async function fetchAnalyticsMonitorDataFromPostHog({
     serverErrors,
     recentServerErrors,
     bounce,
-    shareTotal,
     sharePlatforms,
     sharePages,
   ] = await Promise.all([
-    runQuery("active visitors", `SELECT count(DISTINCT distinct_id) FROM events WHERE timestamp > now() - interval 5 minute`),
-    runQuery("pageviews", `SELECT count() FROM events WHERE event = '$pageview' AND timestamp > ${since} AND properties.$pathname NOT LIKE '/admin/%'`),
-    runQuery("unique visitors", `SELECT count(DISTINCT distinct_id) FROM events WHERE timestamp > ${since}`),
-    runQuery("events", `SELECT count() FROM events WHERE timestamp > ${since}`),
+    // Single scan for every scalar KPI (the 5-minute active-visitor window is
+    // always inside the range, which is >= 1 hour).
+    runQuery(
+      "overview",
+      `SELECT uniqExactIf(distinct_id, timestamp > now() - interval 5 minute) AS active, countIf(event = '$pageview' AND properties.$pathname NOT LIKE '/admin/%') AS pageviews, count(DISTINCT distinct_id) AS visitors, count() AS events_total, countIf(event = 'page_shared') AS shares FROM events WHERE timestamp > ${since}`,
+    ),
     runQuery(
       "top routes",
       `SELECT properties.$pathname AS p, count() AS c FROM events WHERE event = '$pageview' AND timestamp > ${since} AND properties.$pathname IS NOT NULL AND properties.$pathname != '/' AND properties.$pathname NOT LIKE '/admin/%' GROUP BY p ORDER BY c DESC LIMIT 10`,
@@ -603,10 +611,6 @@ async function fetchAnalyticsMonitorDataFromPostHog({
       `SELECT countIf(pv_count = 1) AS bounced, count() AS landers FROM (SELECT distinct_id, count() AS pv_count FROM events WHERE event = '$pageview' AND timestamp > ${since} GROUP BY distinct_id HAVING countIf(properties.$pathname = '/') > 0)`,
     ),
     runQuery(
-      "shares total",
-      `SELECT count() FROM events WHERE event = 'page_shared' AND timestamp > ${since}`,
-    ),
-    runQuery(
       "shares by platform",
       `SELECT properties.crawler AS c, count() AS n FROM events WHERE event = 'page_shared' AND timestamp > ${since} AND properties.crawler IS NOT NULL GROUP BY c ORDER BY n DESC LIMIT 12`,
     ),
@@ -619,10 +623,10 @@ async function fetchAnalyticsMonitorDataFromPostHog({
   return {
     rangeHours,
     cacheState: "fresh",
-    activeVisitors: Number(active[0]?.[0] ?? 0),
-    pageviewsInRange: Number(pvRange[0]?.[0] ?? 0),
-    uniqueVisitorsInRange: Number(uvRange[0]?.[0] ?? 0),
-    eventsInRange: Number(eventsRange[0]?.[0] ?? 0),
+    activeVisitors: Number(overview[0]?.[0] ?? 0),
+    pageviewsInRange: Number(overview[0]?.[1] ?? 0),
+    uniqueVisitorsInRange: Number(overview[0]?.[2] ?? 0),
+    eventsInRange: Number(overview[0]?.[3] ?? 0),
     bounce: {
       bounced: Number(bounce[0]?.[0] ?? 0),
       landers: Number(bounce[0]?.[1] ?? 0),
@@ -677,7 +681,7 @@ async function fetchAnalyticsMonitorDataFromPostHog({
       domain: String(row[0] ?? ""),
       count: Number(row[1] ?? 0),
     })),
-    shareEvents: Number(shareTotal[0]?.[0] ?? 0),
+    shareEvents: Number(overview[0]?.[4] ?? 0),
     sharesByPlatform: sharePlatforms.map((row) => ({
       platform: String(row[0] ?? ""),
       count: Number(row[1] ?? 0),
