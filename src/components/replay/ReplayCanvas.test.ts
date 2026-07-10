@@ -242,7 +242,10 @@ describe("ManiaReplayRenderer skin customization", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
     expect(source).toContain("const MANIA_SKIN_STAGE_HEIGHT = 480;");
-    expect(source).toContain("const targetLayoutScale = h / MANIA_SKIN_STAGE_HEIGHT;");
+    // scaleHeight equals the real canvas height everywhere except inline
+    // portrait, where it anchors to the mobile reference stage height.
+    expect(source).toContain("const scaleHeight = compactPortrait ? Math.min(h, MOBILE_PORTRAIT_REFERENCE_HEIGHT) : h;");
+    expect(source).toContain("const targetLayoutScale = scaleHeight / MANIA_SKIN_STAGE_HEIGHT;");
     expect(source).toContain("desiredPlayfieldWidth * targetLayoutScale");
   });
 
@@ -321,7 +324,10 @@ describe("ManiaReplayRenderer skin customization", () => {
 
     expect(source).toContain("const hitPosition = this.skinSettings.hitPosition ?? MANIA_HIT_TARGET_POSITION;");
     expect(source).toContain("const judgmentY = h * (this.skinSettings.upscroll ? hitPosition : MANIA_REFERENCE_HEIGHT - hitPosition) / MANIA_REFERENCE_HEIGHT;");
-    expect(source).toContain("const scrollLength = h * (MANIA_REFERENCE_HEIGHT - MANIA_DEFAULT_HIT_POSITION) / MANIA_REFERENCE_HEIGHT;");
+    // Scroll density derives from the default hit position and scaleHeight
+    // (the real height everywhere except inline portrait), never from the
+    // user's configured hit position.
+    expect(source).toContain("const scrollLength = scaleHeight * (MANIA_REFERENCE_HEIGHT - MANIA_DEFAULT_HIT_POSITION) / MANIA_REFERENCE_HEIGHT;");
   });
 
   it("supports upscroll note positioning", () => {

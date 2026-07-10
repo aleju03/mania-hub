@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type { MutableRefObject, ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, Film, Settings } from "lucide-react";
@@ -328,35 +328,43 @@ export function ReplayControls({
         )}
       </AnimatePresence>
 
-      <ReplayProgressBar
-        rendererRef={rendererRef}
-        heatmap={heatmap}
-        sliderClass=""
-        clipPreviewSeconds={null}
-        clipPreviewRate={speed * modRate}
-        customPreviewRange={onExportVideo && videoClipMode && videoExportKind === "custom"
-          ? { startMs: videoCustomStartMs, endMs: videoCustomEndMs }
-          : null}
-        onPointerDown={onPointerDown}
-        onPointerUp={onPointerUp}
-        onSeek={onSeek}
-        onContextMenu={handleProgressContextMenu}
-      >
-        <ShareTimestampTooltip
-          shareUrl={shareUrl}
-          sharePos={sharePos}
-          shareLabel={shareLabel}
-          copied={copied}
-          onClose={() => setShareUrl(null)}
-          onCopied={() => setCopied(true)}
-        />
-      </ReplayProgressBar>
+      {/* On phones the transport (play + scrubber) lives in the sticky strip
+          under the canvas, so this card only shows it from sm up. */}
+      <div className="hidden sm:block">
+        <ReplayProgressBar
+          rendererRef={rendererRef}
+          heatmap={heatmap}
+          sliderClass=""
+          clipPreviewSeconds={null}
+          clipPreviewRate={speed * modRate}
+          customPreviewRange={onExportVideo && videoClipMode && videoExportKind === "custom"
+            ? { startMs: videoCustomStartMs, endMs: videoCustomEndMs }
+            : null}
+          onPointerDown={onPointerDown}
+          onPointerUp={onPointerUp}
+          onSeek={onSeek}
+          onContextMenu={handleProgressContextMenu}
+        >
+          <ShareTimestampTooltip
+            shareUrl={shareUrl}
+            sharePos={sharePos}
+            shareLabel={shareLabel}
+            copied={copied}
+            onClose={() => setShareUrl(null)}
+            onCopied={() => setCopied(true)}
+          />
+        </ReplayProgressBar>
+      </div>
 
-      <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 flex-wrap">
+      {/* Below sm the order-* classes plus the two basis-full breaks regroup this
+          wrap-row into three deliberate rows: playback (speed + volume), view
+          (scroll + dim), tools (overlays, settings, export, black field). From
+          sm up everything keeps its DOM order in one wrapping row. */}
+      <div className="flex items-center gap-x-2 gap-y-2.5 sm:gap-3 px-3 sm:px-4 py-3 flex-wrap">
         <button
           onClick={onTogglePlay}
           title={pendingPlay ? "Waiting for audio to load..." : isPlaying && buffering ? "Buffering..." : undefined}
-          className="w-9 h-9 rounded-full bg-osu-pink hover:bg-osu-pink-light transition-colors flex items-center justify-center cursor-pointer shrink-0"
+          className="w-9 h-9 rounded-full bg-osu-pink hover:bg-osu-pink-light transition-colors hidden sm:flex items-center justify-center cursor-pointer shrink-0"
         >
           {pendingPlay || (isPlaying && buffering) ? (
             <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" className="w-4 h-4 animate-spin">
@@ -374,7 +382,7 @@ export function ReplayControls({
           )}
         </button>
 
-        <div className="flex items-center gap-0.5">
+        <div className="order-1 sm:order-none flex items-center gap-0.5">
           {[0.25, 0.5, 1, 1.5, 2].map((nextSpeed) => (
             <button
               key={nextSpeed}
@@ -391,7 +399,7 @@ export function ReplayControls({
         {audioUrl && (
           <div
             ref={volumeMixerRef}
-            className="relative flex items-center gap-1.5"
+            className="order-2 ml-auto sm:order-none sm:ml-0 relative flex items-center gap-1.5"
             onMouseEnter={isCoarsePointer ? undefined : openVolumeMixer}
             onMouseLeave={isCoarsePointer ? undefined : () => setVolumeMixerOpen(false)}
           >
@@ -461,8 +469,12 @@ export function ReplayControls({
           </div>
         )}
 
+        {/* Mobile row break: playback row ends here. */}
+        <div className="order-3 h-0 basis-full sm:hidden" aria-hidden="true" />
+
         <div className="w-px h-5 bg-osu-b3/40 hidden sm:block" />
 
+        <div className="order-7 sm:order-none">
         <InputOverlayMenu
           showInputOverlay={showInputOverlay}
           inputOverlayOnly={inputOverlayOnly}
@@ -474,12 +486,13 @@ export function ReplayControls({
           onToggleInputOverlayKeyHistory={onToggleInputOverlayKeyHistory}
           onSetInputOverlayColor={onSetInputOverlayColor}
         />
+        </div>
 
         <button
           onClick={onOpenSkinSettings}
           aria-label="Replay settings"
           title="Replay settings"
-          className={`w-7 h-7 rounded flex items-center justify-center cursor-pointer transition-colors ${
+          className={`order-8 sm:order-none w-7 h-7 rounded flex items-center justify-center cursor-pointer transition-colors ${
             skinSettingsOpen
               ? "bg-osu-pink text-white"
               : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
@@ -489,7 +502,7 @@ export function ReplayControls({
         </button>
 
         {onExportVideo && (
-          <div ref={videoMenuRef} className="relative inline-flex">
+          <div ref={videoMenuRef} className="order-9 sm:order-none relative inline-flex">
             <button
               type="button"
               onClick={() => {
@@ -691,7 +704,7 @@ export function ReplayControls({
           </div>
         )}
 
-        <div className="flex items-center gap-1">
+        <div className="order-4 sm:order-none flex items-center gap-1">
           <span className="text-[10px] text-osu-f1 mr-0.5">Scroll</span>
           <button
             onClick={() => onSetScrollSpeed(Math.max(1, scrollSpeed - 1))}
@@ -726,18 +739,12 @@ export function ReplayControls({
           </button>
         </div>
 
-        <div className="flex items-center gap-2 ml-0 sm:ml-auto w-full sm:w-auto">
-          <button
-            type="button"
-            onClick={onToggleBlackPlayfield}
-            title="Fill the playfield with a solid black background"
-            aria-pressed={blackPlayfield}
-            className={`px-2 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors ${
-              blackPlayfield ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
-            }`}
-          >
-            Black field
-          </button>
+        {/* Mobile row break: view row (scroll + dim) ends here. */}
+        <div className="order-6 h-0 basis-full sm:hidden" aria-hidden="true" />
+
+        {/* sm:order-1 keeps the desktop right cluster reading [Black field][BG Dim]
+            even though BG Dim comes first in the DOM for the mobile rows. */}
+        <div className="order-5 ml-auto sm:order-1 sm:ml-0 flex items-center gap-2">
           <span className="text-[10px] text-osu-f1">BG Dim</span>
           <input
             type="range"
@@ -746,10 +753,22 @@ export function ReplayControls({
             step={5}
             value={bgDim}
             onChange={(e) => onSetBgDim(Number(e.target.value))}
-            className={`w-16 sm:w-20 ${sliderClass}`}
+            className={`w-24 sm:w-20 ${sliderClass}`}
           />
           <span className="text-[10px] text-osu-f1 tabular-nums w-7">{bgDim}%</span>
         </div>
+
+        <button
+          type="button"
+          onClick={onToggleBlackPlayfield}
+          title="Fill the playfield with a solid black background"
+          aria-pressed={blackPlayfield}
+          className={`order-10 ml-auto sm:order-none px-2 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors ${
+            blackPlayfield ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
+          }`}
+        >
+          Black field
+        </button>
       </div>
     </div>
   );
@@ -1115,7 +1134,9 @@ export function ReplayProgressBar({
   );
 }
 
-function ReplayMissMarkers({ missTimes, duration, heatmap }: { missTimes: number[]; duration: number; heatmap: number[] }) {
+// Memoized: ReplayProgressBar re-renders at 10Hz while playing, and a
+// high-miss replay puts hundreds of marker nodes here.
+const ReplayMissMarkers = memo(function ReplayMissMarkers({ missTimes, duration, heatmap }: { missTimes: number[]; duration: number; heatmap: number[] }) {
   if (duration <= 0 || missTimes.length === 0) return null;
 
   return (
@@ -1136,7 +1157,7 @@ function ReplayMissMarkers({ missTimes, duration, heatmap }: { missTimes: number
       })}
     </div>
   );
-}
+});
 
 function getHeatmapLineTopPercent(heatmap: number[], progress: number): number {
   if (heatmap.length === 0) return 50;
@@ -1151,7 +1172,7 @@ function getHeatmapLineTopPercent(heatmap: number[], progress: number): number {
   return 100 - Math.max(0, Math.min(1, value)) * 100;
 }
 
-function KeypressHeatmap({ heatmap }: { heatmap: number[] }) {
+const KeypressHeatmap = memo(function KeypressHeatmap({ heatmap }: { heatmap: number[] }) {
   const n = heatmap.length;
   if (n === 0) return null;
   const width = 1000;
@@ -1199,7 +1220,7 @@ function KeypressHeatmap({ heatmap }: { heatmap: number[] }) {
       />
     </svg>
   );
-}
+});
 
 function ClipPreviewRange({
   progress,

@@ -74,12 +74,15 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
 
   return (
     <>
-      <div className="sm:hidden relative overflow-hidden bg-osu-b4 rounded-xl p-3 mb-3 border border-osu-b3/20">
+      <div className="sm:hidden relative overflow-hidden bg-osu-b4 rounded-xl p-3 border border-osu-b3/20">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <div className="relative flex items-center gap-2">
               <BeatmapBanner coverUrl={beatmapCoverUrl} fade={BEATMAP_BANNER_FADE_COMPACT} className="absolute -top-3 bottom-0 left-0 right-0" />
-              <div className="relative -mt-3 -ml-3 pt-3 pl-3 pb-1.5 pr-6 min-w-0">
+              {/* Symmetric padding (the top pair cancels via the negative margin,
+                  nothing extra below) keeps this block's content centered like the
+                  map column, so the two label/value pairs sit on the same lines. */}
+              <div className="relative -mt-3 -ml-3 pt-3 pl-3 pr-6 min-w-0">
                 <PlayerBanner coverUrl={playerCoverUrl} />
                 <div className="relative flex items-center gap-2 min-w-0">
                   <PlayerAvatar src={avatarSrc} name={displayName} size={32} />
@@ -92,7 +95,9 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
               <div className="relative h-7 w-px bg-osu-b3/40" />
               <div className="relative min-w-0 flex-1">
                 <div className={`text-[8px] uppercase tracking-wider ${mapLabelClass}`}>Map</div>
-                <div className="flex items-center gap-1.5 min-w-0">
+                {/* h-5 matches the player name's text-sm line box so both value
+                    rows share a centerline. */}
+                <div className="flex h-5 items-center gap-1.5 min-w-0">
                   {beatmap ? (
                     mapUrl ? (
                       <a href={mapUrl} target="_blank" rel="noopener noreferrer" className={`min-w-0 truncate text-xs font-semibold text-osu-l2${mapTextShadow}`} title={`${beatmap.title} [${beatmap.version}]`}>

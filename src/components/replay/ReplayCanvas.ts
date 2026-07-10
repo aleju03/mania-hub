@@ -65,6 +65,10 @@ const MANIA_SKIN_STAGE_HEIGHT = 480;
 const MANIA_DEFAULT_HIT_POSITION = (480 - 402) * 1.6;
 const MANIA_HIT_TARGET_POSITION = REPLAY_SKIN_DEFAULT_HIT_POSITION;
 const MANIA_BAR_NOTE_HEIGHT_RATIO = 0.22;
+// What the inline mobile canvas used to be (~390-430px tall). Inline portrait
+// layouts anchor skin scale and scroll speed to this instead of the real
+// height, so the taller redesigned stage adds lookahead rather than speed.
+const MOBILE_PORTRAIT_REFERENCE_HEIGHT = 430;
 const BACKGROUND_OVERSCAN_SCALE = 1.02;
 // Events crossed more than this far behind the playback clock (lag spikes,
 // tab switches) stay silent instead of firing as a burst.
@@ -101,6 +105,14 @@ export function getColumnArrowDirection(col: number, keyCount: number): ArrowDir
   if (col === 0) return "left";
   if (col === keyCount - 1) return "right";
   return col % 2 === 1 ? "up" : "down";
+}
+
+// Not Math.max(...notes.map(...)): spreading a marathon chart's note list can
+// exceed the engine argument limit and throw a RangeError.
+function maxNoteEndTime(notes: ReadonlyArray<{ endTime: number }>): number {
+  let max = 0;
+  for (const note of notes) max = Math.max(max, note.endTime);
+  return max;
 }
 
 const HEX_NUMBER_CACHE = new Map<string, number>();
@@ -386,6 +398,7 @@ export class ManiaReplayRenderer {
   private externalClock: (() => { time: number; stalled: boolean } | null) | null = null;
   private receptorFlashTimestamps: number[];
   private judgmentEvents: ReplayJudgementEvent[];
+  private missTimesCache: number[] | null = null;
   private noteStates: ReplayNoteState[];
   private comboEvents: ReplayComboEvent[];
 
@@ -496,7 +509,12 @@ export class ManiaReplayRenderer {
     this.backgroundDim = options?.backgroundDim ?? 80;
     const difficultyAdjustMod = inputMods.find((m) => getModAcronym(m) === "DA");
     const overriddenOd = Number(getModSetting(difficultyAdjustMod, ["overall_difficulty", "overallDifficulty"]));
-    this.od = Number.isFinite(overriddenOd) ? overriddenOd : options?.od ?? 8;
+    // NaN-proof (`NaN ?? 8` stays NaN): a non-finite od poisons every hit
+    // window, which disables the judgement simulation's loop guards.
+    const suppliedOd = options?.od;
+    this.od = Number.isFinite(overriddenOd)
+      ? overriddenOd
+      : suppliedOd != null && Number.isFinite(suppliedOd) ? suppliedOd : 8;
     this.showInputOverlay = options?.showInputOverlay ?? false;
     this.inputOverlayOnly = options?.inputOverlayOnly ?? false;
     this.inputOverlayColor = options?.inputOverlayColor ?? "#a855f7";
@@ -524,7 +542,7 @@ export class ManiaReplayRenderer {
     this.hitWindows = getManiaReplayHitWindows(this.od, this.ruleset);
 
     const frameDuration = frames.length > 0 ? frames[frames.length - 1].time : 0;
-    const noteDuration = this.notes.length > 0 ? Math.max(...this.notes.map((n) => n.endTime)) : 0;
+    const noteDuration = maxNoteEndTime(this.notes);
     const replayTailGrace = this.hitWindows.miss * 1.5;
     this.totalDuration = Math.max(frameDuration, noteDuration + replayTailGrace);
 
@@ -936,7 +954,9 @@ export class ManiaReplayRenderer {
     this.scrollVelocityTimes = collapsed.map((point) => point.time);
     this.scrollVelocityMultipliers = collapsed.map((point) => point.multiplier);
     this.scrollVelocityCumulative = new Array(collapsed.length).fill(0);
-    this.scrollVelocityMinMultiplier = Math.min(1, ...this.scrollVelocityMultipliers);
+    let minMultiplier = 1;
+    for (const multiplier of this.scrollVelocityMultipliers) minMultiplier = Math.min(minMultiplier, multiplier);
+    this.scrollVelocityMinMultiplier = minMultiplier;
 
     const zeroIndex = this.findScrollVelocityIndex(0);
     this.scrollVelocityCumulative[zeroIndex] = -this.integrateScrollDistance(this.scrollVelocityTimes[zeroIndex], 0, zeroIndex);
@@ -1024,7 +1044,15 @@ export class ManiaReplayRenderer {
     const configuredColumnSpacings = this.getConfiguredColumnSpacings();
     const desiredPlayfieldWidth = configuredColumnWidths.reduce((sum, width) => sum + width, 0)
       + configuredColumnSpacings.reduce((sum, width) => sum + width, 0);
-    const targetLayoutScale = h / MANIA_SKIN_STAGE_HEIGHT;
+    // Inline portrait (phone) canvases: the mobile redesign made the stage
+    // taller, and at a fixed scroll number a taller stage means notes cover
+    // more pixels per ms. Anchor the skin scale and the scroll speed to the
+    // height the mobile viewer always had, so the extra height buys lookahead
+    // instead of bigger, faster notes. Fullscreen and bare (preview/card)
+    // renders keep native full-height scaling.
+    const compactPortrait = !this.barePlayfield && !this.fullscreenLayout && h > w;
+    const scaleHeight = compactPortrait ? Math.min(h, MOBILE_PORTRAIT_REFERENCE_HEIGHT) : h;
+    const targetLayoutScale = scaleHeight / MANIA_SKIN_STAGE_HEIGHT;
     const widthCap = w * (this.barePlayfield ? 0.82 : 0.72);
     const maxPlayfieldWidth = this.barePlayfield
       ? widthCap
@@ -1040,7 +1068,9 @@ export class ManiaReplayRenderer {
     const noteHeight = Math.max(6, this.skinProfile.noteHeightScale * layoutScale * MANIA_BAR_NOTE_HEIGHT_RATIO);
     const receptorHeight = Math.max(6, h * 0.012);
     const scrollTimeRange = (MANIA_MAX_TIME_RANGE / Math.max(1, Math.min(40, this.scrollSpeed))) * this.modRate;
-    const scrollLength = h * (MANIA_REFERENCE_HEIGHT - MANIA_DEFAULT_HIT_POSITION) / MANIA_REFERENCE_HEIGHT;
+    // scaleHeight, not h: on inline portrait the scroll number keeps meaning
+    // what it meant on the shorter stage; notes just stay visible longer.
+    const scrollLength = scaleHeight * (MANIA_REFERENCE_HEIGHT - MANIA_DEFAULT_HIT_POSITION) / MANIA_REFERENCE_HEIGHT;
     const pixelsPerMs = scrollLength / scrollTimeRange;
 
     const layout: Layout = { w, h, playfieldWidth, playfieldX, laneWidth, layoutScale, judgmentY, noteHeight, receptorHeight, pixelsPerMs };
@@ -1123,7 +1153,8 @@ export class ManiaReplayRenderer {
     this.colors = COLUMN_COLORS[this.keyCount] || this.generateColors(this.keyCount);
     for (const c of this.colors) hexToNumber(c);
 
-    this.od = options?.od ?? this.od;
+    const previewOd = options?.od;
+    this.od = previewOd != null && Number.isFinite(previewOd) ? previewOd : this.od;
     this.hitWindows = getManiaReplayHitWindows(this.od, this.ruleset);
     this.initialCombo = Math.max(0, Math.floor(options?.initialCombo ?? 0));
     this.combo = this.initialCombo;
@@ -1137,7 +1168,7 @@ export class ManiaReplayRenderer {
     this.prepareScrollVelocities();
 
     const frameDuration = frames.length > 0 ? frames[frames.length - 1].time : 0;
-    const noteDuration = this.notes.length > 0 ? Math.max(...this.notes.map((n) => n.endTime)) : 0;
+    const noteDuration = maxNoteEndTime(this.notes);
     const replayTailGrace = this.hitWindows.miss * 1.5;
     this.totalDuration = Math.max(frameDuration, noteDuration + replayTailGrace);
     this.maxHoldDuration = 0;
@@ -1161,6 +1192,7 @@ export class ManiaReplayRenderer {
       ? buildStableReplayComboEvents(this.notes, simulated.noteStates)
       : null;
     this.judgmentEvents = simulated.events;
+    this.missTimesCache = null;
     this.lifeBarFrames = this.buildFallbackLifeBarFrames(this.judgmentEvents);
     this.noteStates = simulated.noteStates;
     this.comboEvents = this.ruleset.accuracyMode === "stable"
@@ -1209,9 +1241,12 @@ export class ManiaReplayRenderer {
   }
 
   getMissTimes(): number[] {
-    return this.judgmentEvents
+    // Cached: ReplayProgressBar polls this at 10Hz and the events only change
+    // when a new replay/preview is loaded.
+    this.missTimesCache ??= this.judgmentEvents
       .filter((event) => event.judgment === 6 && Number.isFinite(event.time))
       .map((event) => event.time);
+    return this.missTimesCache;
   }
 
   setSpeed(speed: number) { this.playbackSpeed = speed; }
@@ -2018,7 +2053,9 @@ export class ManiaReplayRenderer {
       const col = note.column;
       if (col >= this.keyCount) continue;
 
+      // Notes the simulation dropped (out-of-range column) have no state.
       const noteState = this.noteStates[i];
+      if (!noteState) continue;
       const headResolved = noteState.headTime <= this.currentTime;
       const tailResolved = noteState.tailTime != null && noteState.tailTime <= this.currentTime;
       const stableMissedHoldStillHeld = note.isHold
@@ -2231,6 +2268,7 @@ export class ManiaReplayRenderer {
         if (!note.isHold || note.column >= this.keyCount) continue;
 
         const noteState = this.noteStates[i];
+        if (!noteState) continue;
         const headResolved = noteState.headTime <= this.currentTime;
         const tailResolved = noteState.tailTime != null && noteState.tailTime <= this.currentTime;
         const stableMissedHoldStillHeld = note.isHold
@@ -3029,6 +3067,28 @@ export class ManiaReplayRenderer {
       anchorX: 1,
       anchorY: 1,
     });
+    if (!this.shouldRenderCustomOverlays(layout)) {
+      // Wherever the draggable overlay HUD is unavailable (phones, and any
+      // narrow non-fullscreen canvas regardless of pointer type, e.g. mobile
+      // emulators), draw a fixed always-on accuracy readout under the FPS
+      // counter. It sits over the beatmap background (which can be bright and
+      // undimmed), so back it with a dark chip like the miss overlay instead
+      // of relying on bare white text.
+      const accFontSize = 15;
+      const accPadX = 7;
+      const accBoxHeight = 24;
+      const accBoxWidth = this.measureTextWidth(this.hudCachedAccuracy, accFontSize, "700") + accPadX * 2;
+      const accBoxY = 26;
+      this.fillRect(w - 8 - accBoxWidth, accBoxY, accBoxWidth, accBoxHeight, "#0a0a12", 0.62);
+      this.addText(this.hudCachedAccuracy, w - 8 - accPadX, accBoxY + accBoxHeight / 2, {
+        fontSize: accFontSize,
+        fill: "#ffffff",
+        alpha: 0.95,
+        fontWeight: "700",
+        anchorX: 1,
+        anchorY: 0.5,
+      });
+    }
     if (this.hidePerformanceStats) return;
     this.addText(`FPS ${this.hudCachedFps}`, w - 8, 8, {
       fontSize: 11,
