@@ -316,15 +316,34 @@ function LengthSlider({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
   );
 }
 
-// Which dan ladder annotates the numeric bounds: 7K courses when the key facet
-// is exactly 7K, the LN ladder when the pattern facet is LN-flavoured,
-// otherwise the 4K reform ladder. The filter itself is the classifier's
-// numeric rawDan, so it works across families; only the labels/logos adapt.
-function danSliderContext(ui: MapSearchUiState): DanScaleContext {
-  const sevenKey = ui.keys.length === 1 && ui.keys[0] === "7k";
+// One ladder the picker can offer: a keymode plus the scale context that names
+// its badges. rawDan is a per-keymode axis (4K reform/LN vs 7K courses), so a
+// pick from a ladder only means what its badge says when the search is scoped
+// to that ladder's keymode.
+interface DanLadderGroup {
+  keysId: "4k" | "7k";
+  label: string;
+  context: DanScaleContext;
+}
+
+// Which ladders the picker offers: the keymode's own ladder when the key facet
+// resolves to exactly 4K or 7K, otherwise both (empty, mixed, or "other" key
+// facets are ambiguous, and the 4K and 7K courses share numbers but not
+// difficulty). An LN-flavoured pattern facet swaps in the LN ladders.
+function danLadderGroups(ui: MapSearchUiState): DanLadderGroup[] {
   const lnFlavoured = ui.patterns.some((pattern) => pattern === "ln" || pattern.startsWith("ln"));
-  if (sevenKey) return lnFlavoured ? "7k-ln" : "7k";
-  return lnFlavoured ? "ln" : "reform";
+  const fourKey: DanLadderGroup = { keysId: "4k", label: "4K", context: lnFlavoured ? "ln" : "reform" };
+  const sevenKey: DanLadderGroup = { keysId: "7k", label: "7K", context: lnFlavoured ? "7k-ln" : "7k" };
+  const only = ui.keys.length === 1 ? ui.keys[0] : null;
+  if (only === "4k") return [fourKey];
+  if (only === "7k") return [sevenKey];
+  return [fourKey, sevenKey];
+}
+
+// The context that annotates the collapsed trigger chip; with both ladders on
+// offer the selection is a bare rawDan range, shown with the 4K badges.
+function danSliderContext(ui: MapSearchUiState): DanScaleContext {
+  return danLadderGroups(ui)[0].context;
 }
 
 // The ladder's badge rows: numeric courses on top, boss/greek courses below.
@@ -350,22 +369,36 @@ function danReadout(value: number, context: DanScaleContext): string {
 // selection pops to full color. A fixed-height readout under the wall names
 // whatever is hovered or selected, so the layout never moves. Only charts with
 // a stored chart analysis match while set.
+//
+// With an ambiguous key facet the wall stacks the 4K and 7K ladders, and a
+// pick also applies its ladder's keymode to the Keys facet (pruning pattern
+// picks the keymode can't express, same as the Keys chips): without the scope
+// a "4K 5th dan" pick would match 7K 5th-dan charts at the same rawDan.
+// Clearing the dan never touches the keys facet.
 function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
-  const context = danSliderContext(ui);
-  const rows = danLadderRows(context);
+  const groups = danLadderGroups(ui);
+  const ambiguous = groups.length > 1;
   const selection = ui.danMin != null && ui.danMax != null ? { lo: ui.danMin, hi: ui.danMax } : null;
-  const [drag, setDrag] = useState<{ anchor: number; current: number } | null>(null);
-  const [hovered, setHovered] = useState<number | null>(null);
+  const [drag, setDrag] = useState<{ group: DanLadderGroup; anchor: number; current: number } | null>(null);
+  const [hovered, setHovered] = useState<{ group: DanLadderGroup; level: number } | null>(null);
   const dragRef = useRef(drag);
   dragRef.current = drag;
 
-  const commit = (lo: number | null, hi: number | null) => {
+  const commit = (lo: number | null, hi: number | null, group: DanLadderGroup) => {
     playPatternHit(lo != null);
+    if (ambiguous && lo != null) {
+      const keys = [group.keysId];
+      const valid = validPatternIds(keys);
+      apply({ danMin: lo, danMax: hi, keys, patterns: ui.patterns.filter((pattern) => valid.has(pattern)), page: 0 });
+      return;
+    }
     apply({ danMin: lo, danMax: hi, page: 0 });
   };
-  const toggleSingle = (level: number) => {
-    if (selection && selection.lo === level && selection.hi === level) commit(null, null);
-    else commit(level, level);
+  const toggleSingle = (level: number, group: DanLadderGroup) => {
+    // Re-click toggles off only on a single ladder; with both ladders shown the
+    // same number sits on each, so a tap always means "select on this ladder".
+    if (!ambiguous && selection && selection.lo === level && selection.hi === level) commit(null, null, group);
+    else commit(level, level, group);
   };
 
   const dragging = drag != null;
@@ -376,14 +409,17 @@ function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
       const badge = target instanceof Element ? target.closest("[data-dan-level]") : null;
       if (!badge) return;
       const level = Number(badge.getAttribute("data-dan-level"));
-      setDrag((state) => (state && state.current !== level ? { ...state, current: level } : state));
+      const groupId = badge.getAttribute("data-dan-group");
+      setDrag((state) =>
+        state && state.group.keysId === groupId && state.current !== level ? { ...state, current: level } : state,
+      );
     };
     const onUp = () => {
       const state = dragRef.current;
       setDrag(null);
       if (!state) return;
-      if (state.anchor === state.current) toggleSingle(state.anchor);
-      else commit(Math.min(state.anchor, state.current), Math.max(state.anchor, state.current));
+      if (state.anchor === state.current) toggleSingle(state.anchor, state.group);
+      else commit(Math.min(state.anchor, state.current), Math.max(state.anchor, state.current), state.group);
     };
     // A vertical touch pan cancels the pointer: abort without applying.
     const onCancel = () => setDrag(null);
@@ -398,66 +434,91 @@ function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dragging]);
 
-  // Live paint while dragging, committed selection otherwise.
-  const paint = drag
-    ? { lo: Math.min(drag.anchor, drag.current), hi: Math.max(drag.anchor, drag.current) }
-    : selection;
-
+  // Live paint while dragging (only on the ladder the drag started in); the
+  // committed selection otherwise. A committed range with both ladders shown is
+  // a bare rawDan filter, so it highlights on each.
+  const paintFor = (group: DanLadderGroup) => {
+    if (drag) {
+      if (drag.group.keysId !== group.keysId) return null;
+      return { lo: Math.min(drag.anchor, drag.current), hi: Math.max(drag.anchor, drag.current) };
+    }
+    return selection;
+  };
+  const describe = (group: DanLadderGroup, lo: number, hi?: number) => {
+    const name = hi == null || hi === lo
+      ? danReadout(lo, group.context)
+      : `${danReadout(lo, group.context)} to ${danReadout(hi, group.context)}`;
+    return ambiguous ? `${group.label} ${name}` : name;
+  };
   return (
-    <div className="flex flex-col gap-1.5 select-none" style={{ touchAction: "pan-y" }} onPointerLeave={() => setHovered(null)}>
-      {rows.map((row, rowIndex) => (
-        <div key={rowIndex} className="flex items-center gap-1 sm:gap-1.5">
-          {row.map((level) => {
-            const active = paint != null && level >= paint.lo && level <= paint.hi;
-            const src = danScaleImage(level, context);
-            const label = danScaleLabel(level, context);
+    <div className="flex flex-col gap-2 select-none" style={{ touchAction: "pan-y" }} onPointerLeave={() => setHovered(null)}>
+      {groups.map((group) => (
+        <div key={group.keysId} className="flex flex-col gap-1.5">
+          {ambiguous && (
+            <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{group.label}</span>
+          )}
+          {danLadderRows(group.context).map((row, rowIndex) => {
+            const groupPaint = paintFor(group);
             return (
-              <motion.button
-                key={`${context}:${level}`}
-                type="button"
-                data-dan-level={level}
-                title={danReadout(level, context)}
-                aria-pressed={active}
-                onPointerDown={(event) => {
-                  if (event.button !== 0 && event.pointerType === "mouse") return;
-                  if (event.shiftKey && selection) {
-                    // Extend: anchor at the selection edge farthest from the tap.
-                    const anchor = Math.abs(level - selection.lo) >= Math.abs(level - selection.hi) ? selection.lo : selection.hi;
-                    setDrag({ anchor, current: level });
-                    return;
-                  }
-                  setDrag({ anchor: level, current: level });
-                }}
-                onClick={(event) => {
-                  // Pointer commits handle mouse/touch; this is the keyboard path.
-                  if (event.detail === 0) toggleSingle(level);
-                }}
-                onPointerEnter={(event) => {
-                  if (event.pointerType === "mouse") setHovered(level);
-                }}
-                onPointerLeave={() => setHovered((value) => (value === level ? null : value))}
-                animate={{ scale: active ? 1.12 : 1 }}
-                transition={{ type: "spring", stiffness: 560, damping: 24 }}
-                className={`grid h-7 w-7 sm:h-8 sm:w-8 shrink-0 cursor-pointer place-items-center transition-[opacity,filter] duration-150 ${
-                  active ? "opacity-100" : hovered === level ? "opacity-90 grayscale-[20%]" : "opacity-40 grayscale-[45%]"
-                }`}
-              >
-                {src ? (
-                  <img
-                    src={src}
-                    alt={label}
-                    draggable={false}
-                    decoding="async"
-                    className={`h-full w-full object-contain ${
-                      active ? "drop-shadow-[0_0_6px_rgba(255,102,171,0.4)]" : "drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
-                    }`}
-                  />
-                ) : (
-                  <span className="grid h-6 w-6 place-items-center rounded-full bg-osu-b3 ring-1 ring-white/20 text-[11px] font-black text-osu-l1">
-                    {label}
-                  </span>
-                )}
-              </motion.button>
+              <div key={rowIndex} className="flex items-center gap-1 sm:gap-1.5">
+                {row.map((level) => {
+                  const active = groupPaint != null && level >= groupPaint.lo && level <= groupPaint.hi;
+                  const isHovered = hovered != null && hovered.group.keysId === group.keysId && hovered.level === level;
+                  const src = danScaleImage(level, group.context);
+                  const label = danScaleLabel(level, group.context);
+                  return (
+                    <motion.button
+                      key={`${group.context}:${level}`}
+                      type="button"
+                      data-dan-level={level}
+                      data-dan-group={group.keysId}
+                      title={describe(group, level)}
+                      aria-pressed={active}
+                      onPointerDown={(event) => {
+                        if (event.button !== 0 && event.pointerType === "mouse") return;
+                        if (event.shiftKey && selection) {
+                          // Extend: anchor at the selection edge farthest from the tap.
+                          const anchor = Math.abs(level - selection.lo) >= Math.abs(level - selection.hi) ? selection.lo : selection.hi;
+                          setDrag({ group, anchor, current: level });
+                          return;
+                        }
+                        setDrag({ group, anchor: level, current: level });
+                      }}
+                      onClick={(event) => {
+                        // Pointer commits handle mouse/touch; this is the keyboard path.
+                        if (event.detail === 0) toggleSingle(level, group);
+                      }}
+                      onPointerEnter={(event) => {
+                        if (event.pointerType === "mouse") setHovered({ group, level });
+                      }}
+                      onPointerLeave={() => setHovered((value) => (
+                        value && value.group.keysId === group.keysId && value.level === level ? null : value
+                      ))}
+                      animate={{ scale: active ? 1.12 : 1 }}
+                      transition={{ type: "spring", stiffness: 560, damping: 24 }}
+                      className={`grid h-7 w-7 sm:h-8 sm:w-8 shrink-0 cursor-pointer place-items-center transition-[opacity,filter] duration-150 ${
+                        active ? "opacity-100" : isHovered ? "opacity-90 grayscale-[20%]" : "opacity-40 grayscale-[45%]"
+                      }`}
+                    >
+                      {src ? (
+                        <img
+                          src={src}
+                          alt={label}
+                          draggable={false}
+                          decoding="async"
+                          className={`h-full w-full object-contain ${
+                            active ? "drop-shadow-[0_0_6px_rgba(255,102,171,0.4)]" : "drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
+                          }`}
+                        />
+                      ) : (
+                        <span className="grid h-6 w-6 place-items-center rounded-full bg-osu-b3 ring-1 ring-white/20 text-[11px] font-black text-osu-l1">
+                          {label}
+                        </span>
+                      )}
+                    </motion.button>
+                  );
+                })}
+              </div>
             );
           })}
         </div>
@@ -465,17 +526,19 @@ function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
       <div className="flex h-4 items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-osu-f1/70">
         <span>
           {hovered != null
-            ? danReadout(hovered, context)
-            : paint
-              ? paint.lo === paint.hi
-                ? danReadout(paint.lo, context)
-                : `${danReadout(paint.lo, context)} to ${danReadout(paint.hi, context)}`
-              : "any"}
+            ? describe(hovered.group, hovered.level)
+            : drag
+              ? describe(drag.group, Math.min(drag.anchor, drag.current), Math.max(drag.anchor, drag.current))
+              : selection
+                ? selection.lo === selection.hi
+                  ? danReadout(selection.lo, groups[0].context)
+                  : `${danReadout(selection.lo, groups[0].context)} to ${danReadout(selection.hi, groups[0].context)}`
+                : "any"}
         </span>
         {selection != null && drag == null && (
           <button
             type="button"
-            onClick={() => commit(null, null)}
+            onClick={() => commit(null, null, groups[0])}
             className="lowercase text-osu-f1/50 hover:text-osu-pink-light transition-colors cursor-pointer"
           >
             clear
@@ -688,18 +751,21 @@ function MobileFilterSheet({
     if (open) setDragOffset(0);
   }, [open]);
 
-  // Pre-fetch/decode the badge art for the ladder the sheet would show, so the
-  // first open animates over already-decoded images.
-  const danContext = danSliderContext(ui);
+  // Pre-fetch/decode the badge art for the ladders the sheet would show, so
+  // the first open animates over already-decoded images. The contexts join to
+  // a string so the effect keys on the value, not the array identity.
+  const danContexts = danLadderGroups(ui).map((group) => group.context).join(" ");
   useEffect(() => {
-    const warm = () => warmDanBadgeArt(danContext);
+    const warm = () => {
+      for (const context of danContexts.split(" ")) warmDanBadgeArt(context as DanScaleContext);
+    };
     if (typeof window.requestIdleCallback === "function") {
       const handle = window.requestIdleCallback(warm, { timeout: 2000 });
       return () => window.cancelIdleCallback(handle);
     }
     const timer = window.setTimeout(warm, 300);
     return () => window.clearTimeout(timer);
-  }, [danContext]);
+  }, [danContexts]);
 
   useEffect(() => {
     if (!open) return;
