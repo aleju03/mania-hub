@@ -3492,7 +3492,7 @@ describe("live backend", () => {
     // must seed only a batch then park a continuation for the rest, so a single
     // job never makes ~100 sequential osu! calls and trips the 10-min watchdog.
     const rosterValues: string[] = [];
-    const rosterArgs: unknown[] = [];
+    const rosterArgs: (number | string)[] = [];
     for (let rank = 1; rank <= 20; rank += 1) {
       rosterValues.push("('CR', ?, ?, 'test', 1, ?)");
       rosterArgs.push(1000 + rank, rank, now);
