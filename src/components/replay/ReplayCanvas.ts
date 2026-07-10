@@ -3342,8 +3342,11 @@ export class ManiaReplayRenderer {
 
     const tailTime = noteState.tailTime ?? note.endTime;
     if (tailTime <= this.currentTime) {
-      // Tail already judged: held through the judgement means the body was
-      // consumed whole; otherwise consumption stopped at the last release.
+      // Tail already judged: a non-miss tail consumed the note whole (the
+      // client despawns it at the judgement even on an early release inside
+      // the window), as did holding through the judgement (too-long-hold
+      // miss). Otherwise consumption stopped at the last release.
+      if (noteState.tailJudgment !== 6) return note.endTime;
       if (this.isColumnEffectivelyHeldAtTime(column, tailTime, 0)) return note.endTime;
       return this.clampHoldCutTime(this.getLastReleaseAtOrBefore(column, tailTime), note);
     }
