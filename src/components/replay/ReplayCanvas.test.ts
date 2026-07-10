@@ -89,19 +89,35 @@ describe("ManiaReplayRenderer initialization", () => {
     expect(source).not.toContain("getDisplayJudgmentCounts");
     expect(source).toContain("legacyReplayFrameRounding: this.ruleset.accuracyMode === \"stable\"");
     expect(source).toContain("this.ruleset.accuracyMode !== \"stable\" && options?.expectedCounts");
-    expect(source).toContain("missedStableHoldHead");
-    expect(source).toContain("stableMissedHoldStillHeld");
-    expect(source).toContain("tailResolved && !stableMissedHoldStillHeld");
     expect(source).not.toContain("lateStableHoldHead");
-    expect(source).toContain("const shouldLetPassLine = missedStableHoldHead || (awaitingJudgment && note.time < this.currentTime - 10);");
+    expect(source).toContain("const shouldLetPassLine = detached || (awaitingJudgment && note.time < this.currentTime - 10);");
     // Late-hit taps scroll below the receptors until their actual hit time;
     // timed-out taps scroll off the bottom instead of vanishing at the line.
     expect(source).not.toContain("if (note.time < this.currentTime - 10 && !headResolved) continue;");
     expect(source).toContain("const tapMissScrollsPast = !note.isHold && noteState.headJudgment === 6 && noteState.headTime > note.time;");
-    expect(source).toContain("if (headResolved && !tapMissScrollsPast && (!note.isHold || (tailResolved && !stableMissedHoldStillHeld))) continue;");
+    expect(source).toContain("if (headResolved && !tapMissScrollsPast) continue;");
     expect(source).toContain("allowLegacyScoreReconciliation: false");
     expect(source).not.toContain("allowLegacyScoreReconciliation: this.ruleset.accuracyMode === \"stable\"");
     expect(source).toContain("return calculateReplayAccuracy(this.judgmentCounts, this.ruleset.accuracyMode);");
+  });
+
+  it("keeps released hold remainders dimmed and scrolling past instead of despawning at the tail judgement", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    // Judged holds only despawn once consumed through the tail or offscreen.
+    expect(source).toContain("if (note.endTime < this.currentTime - velocityWindow * 0.6) continue;");
+    expect(source).toContain("const cut = this.getHoldConsumedCutTime(note, noteState, col);");
+    expect(source).toContain("if (cut == null || cut >= note.endTime - 1) continue;");
+    // The remainder detaches at the release's chart time and scrolls past the
+    // line instead of staying pinned at the receptors.
+    expect(source).toContain("headY = judgmentY + getVisualDelta(consumedCut) * pixelsPerMs * direction;");
+    // Unheld remainders dim like the client's broken/released hold bodies.
+    expect(source).toContain("const bodyAlpha = dimmed ? 0.45 : 1;");
+    expect(source).toContain("const headAlpha = dimmed ? 0.65 : 1;");
+    // Holds held through the tail judgement are fully consumed; missed heads
+    // consume nothing and keep the whole note scrolling past.
+    expect(source).toContain("if (this.isColumnEffectivelyHeldAtTime(column, tailTime, 0)) return note.endTime;");
+    expect(source).toContain("if (noteState.headJudgment === 6) return note.time;");
   });
 
   it("can hide the replay life bar for chart previews", () => {
@@ -231,6 +247,26 @@ describe("ManiaReplayRenderer skin customization", () => {
     expect(source).toContain("const inputArrowBodyRange = this.getHoldBodyRange(headCenterY, tailEndY, tailTrimDelta);");
   });
 
+  it("fades LN bodies per-pixel through Hidden/FadeIn/Cover instead of popping the whole body in", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    // Bodies are drawn as uniform-alpha runs, lazer's positional cover style.
+    expect(source).toContain("private forEachVisibilitySegment(");
+    expect(source).toContain("private lnBodySegment(");
+    // Caps draw as whole pieces so they stay round inside the fade band, and
+    // straight runs never overlap (translucent overlap = seam lines).
+    expect(source).toContain("private lnBodyWithVisibility(");
+    expect(source).toContain("this.lnBodySegment(x, w, top, top + capTop, color, alpha * capAlpha, capTop, 0);");
+    // Skin-image bodies slice into sub-frame texture strips instead of one
+    // scalar alpha across the whole sprite.
+    expect(source).toContain("private drawSkinImageVerticalStrip(");
+    expect(source).not.toContain("* this.getHiddenAlphaForVerticalSpan(bodyTop, bodyBottom, visibilityLayout)");
+    // Pixi aliases orig to frame unless one is passed explicitly.
+    expect(source).toContain("orig: new Rectangle(0, 0, texture.source.width, texture.source.height)");
+    // Circle/arrow bodies stopped multiplying one whole-body visibility alpha.
+    expect(source).not.toContain("bodyAlpha * bodyVisibilityAlpha");
+  });
+
   it("scales circle notes and receptors with the lane width", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
@@ -290,7 +326,9 @@ describe("ManiaReplayRenderer skin customization", () => {
     const helper = /private barLnBodyWithTopFade\(([\s\S]*?)\n  private circleWithTopFade/.exec(source);
 
     expect(helper?.[1]).toBeTruthy();
-    expect(helper![1]).toContain("this.fillRect(x, sliceY, w, sliceHeight + 0.5, color, sliceAlpha);");
+    // Exact shared slice edges: a + 0.5 overlap double-blends translucent
+    // slices into visible seam lines across fading LN bodies.
+    expect(helper![1]).toContain("this.fillRect(x, sliceY, w, sliceHeight, color, sliceAlpha);");
     expect(helper![1]).toContain("this.fillRect(x, fadeHeight, w, bottom - fadeHeight, color, alpha);");
     expect(helper![1]).not.toContain("this.roundRect(");
   });
