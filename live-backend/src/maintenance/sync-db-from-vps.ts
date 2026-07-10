@@ -33,6 +33,7 @@ interface CommandResult {
   stdout: string;
 }
 
+// Real target lives in live-backend/.env as LIVE_DB_SYNC_REMOTE (gitignored); keep no real host here.
 const DEFAULT_REMOTE = "user@your-vps-host";
 const DEFAULT_REMOTE_DIR = "~/apps/mania-hub/live-backend";
 const DOWNLOAD_DIR_NAME = ".sync-from-vps";
