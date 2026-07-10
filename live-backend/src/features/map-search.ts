@@ -15,9 +15,10 @@ export const MAP_SEARCH_BUILD_JOB = "build_map_search_index";
 // Bump BUILD_REVISION to force a full re-upsert of the index after a fix to how
 // indexed fields are derived (r2: length was stored as the source row's column
 // count for every map; r4: MSD-based 4K primaries, lnRatio LN routing, vibro;
-// r5: msd_overall column for MSD-bucketed collections).
+// r5: msd_overall column for MSD-bucketed collections; r6: split-trill charts
+// no longer take MinaCalc's artifact jack-family primaries).
 // The rebuild is pure DB work, no osu! API.
-const BUILD_REVISION = 5;
+const BUILD_REVISION = 6;
 const BUILD_META_KEY = `map_search_index_built:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
 const BUILD_CURSOR_KEY = `map_search_index_build_cursor:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
 const BUILD_BATCH_SIZE = 400;
@@ -200,13 +201,25 @@ function derivePatternProfile(row: Record<string, unknown>): { primary: string; 
   const { primary, scores } = readPatternProfile(row.skills_json);
   let result = primary;
 
+  const classification = parseJson<{ lnRatio?: unknown; clusterCategory?: unknown } | null>(row.ca_classification_json, null);
+  // MinaCalc reads split trills as jacks: each column repeats every second row,
+  // which JackSpeed/Chordjack score as same-column speed even though the chart
+  // never hits a column twice in a row (gdmem 3814262: 0.2% of row pairs share
+  // a column, yet JackSpeed topped MSD at 15.4 and the map indexed as "jack").
+  // The in-house profile falls for the same repetition. When LeoBlack's cluster
+  // analysis says the chart's dominant identity is a split trill, the
+  // jack-family signals are artifacts: drop them from the primary choice and
+  // zero their chips.
+  const splitTrill = typeof classification?.clusterCategory === "string"
+    && classification.clusterCategory.includes("Split Trill");
+
   if (intOr(row.cs) === 4) {
     const msd = readMsdValues(row.ca_msd_json);
     if (msd) {
       const values = MSD_FAMILY_KEYS.map(([msdKey, family]) => {
         const value = Number(msd[msdKey]);
         return { family, value: Number.isFinite(value) && value > 0 ? value : 0 };
-      });
+      }).filter((entry) => !splitTrill || (entry.family !== "jack" && entry.family !== "chordjack"));
       const top = values.reduce((best, entry) => (entry.value > best.value ? entry : best), values[0]);
       if (top.value > 0) {
         for (const entry of values) scores[entry.family] = clamp01(entry.value / top.value);
@@ -214,8 +227,24 @@ function derivePatternProfile(row: Record<string, unknown>): { primary: string; 
       }
     }
   }
+  if (splitTrill) {
+    scores.jack = 0;
+    scores.chordjack = 0;
+    if (result === "jack" || result === "chordjack") {
+      // Non-4K (no MSD reroute): fall to the strongest remaining family.
+      let best = "unknown";
+      let bestValue = 0;
+      for (const family of MAP_SEARCH_PATTERNS) {
+        if (family === "jack" || family === "chordjack") continue;
+        if (scores[family] > bestValue) {
+          best = family;
+          bestValue = scores[family];
+        }
+      }
+      if (bestValue > 0) result = best;
+    }
+  }
 
-  const classification = parseJson<{ lnRatio?: unknown } | null>(row.ca_classification_json, null);
   const lnRatio = classification != null && Number.isFinite(Number(classification.lnRatio)) ? Number(classification.lnRatio) : null;
   if (lnRatio != null && lnRatio >= 0.5) {
     result = "ln";

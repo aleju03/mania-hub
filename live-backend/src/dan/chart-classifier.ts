@@ -12,6 +12,7 @@ import {
   parseLeoBlackLnHalf,
   parseLeoBlackRcHalf,
   runLeoBlackMixed,
+  runLeoBlackSunny,
   type ParsedDanPart,
 } from "./leoblack-estimator.js";
 import { DAN_INDEX, type DanIntervalTable } from "../../vendor/leoblack/estimator/intervals/index.js";
@@ -352,6 +353,48 @@ export function detectLnVibro(map: ManiaBeatmap, rate = 1): boolean {
   return p75 <= LN_VIBRO_MAX_P75_ROW_GAP_MS * rate;
 }
 
+// Roxy wins the mixed routing for every 4K RC chart with enough taps, but its
+// calibration corpus bottoms out at the dan courses: the raw structural signal
+// clamps at -2.5 and the isotonic/meta layers can only extrapolate upward from
+// there, so a 0.9* ranked Easy with 80+ taps came back "Reform 4" (sub-1* maps
+// were landing in the 4-6 dan collections). Charts under Roxy's note gate fall
+// through to Sunny and read "< Intro 1" correctly.
+//
+// A pinned raw signal alone is NOT enough to distrust the verdict: Roxy's
+// structural curve also collapses on some genuinely hard charts (measured on
+// prod: an Alpha-level 6.5* file with raw -2.65), and rescuing those is exactly
+// why the meta model exists. The re-route therefore needs both signals to
+// agree: raw pinned at the clamp AND the independent Sunny baseline asserting
+// the chart sits below Reform 1 on its own scale. Trivial leakers measure
+// 0.22-0.95 Sunny-star vs 5.5+ for the collapsed-but-hard charts, so the two
+// populations are far apart.
+const ROXY_RAW_FLOOR_PIN = -2.45;
+// "Reform 1 low" starts at 3.037 Sunny-star in the 4K RC table
+// (vendor/leoblack/estimator/intervals/4k-rc-reform.js): below 3.0 Sunny is
+// asserting sub-Reform-1 (Intro or off-scale) while the pinned meta claims
+// Reform 3+, a multi-dan disagreement only broken structural input produces.
+const SUNNY_LOW_END_MAX_STAR = 3.0;
+
+function isRoxyFloorPinned(mixed: LeoBlackReworkResult): boolean {
+  if (mixed.numericDifficultyHint !== "roxy-meta-ridge-v3") return false;
+  const raw = Number(mixed.rawNumericDifficulty);
+  return Number.isFinite(raw) && raw <= ROXY_RAW_FLOOR_PIN;
+}
+
+// The Sunny result to re-verdict `mixed` with, or null when the guard should
+// not apply. Exported for the one-shot floor-pin recompute sweep
+// (chart-analysis.ts), which uses it to find stored analyses that predate this
+// guard; keep both callers on this single predicate.
+export function sunnyLowEndReroute(
+  mixed: LeoBlackReworkResult,
+  osuText: string,
+  rate: number,
+): Omit<LeoBlackReworkResult, "mixedCompanellaPlan"> | null {
+  if (!isRoxyFloorPinned(mixed)) return null;
+  const sunny = runLeoBlackSunny(osuText, { speedRate: rate });
+  return Number(sunny.star) < SUNNY_LOW_END_MAX_STAR ? sunny : null;
+}
+
 export function classifyChart(map: ManiaBeatmap, osuText: string, input: ClassifyChartInput = {}): ChartClassification {
   const rate = getInputRate(input);
   const warnings: string[] = [];
@@ -382,7 +425,23 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
 
   let mixed: LeoBlackReworkResult | null = null;
   try {
-    mixed = runLeoBlackMixed(osuText, { speedRate: rate });
+    const candidate = runLeoBlackMixed(osuText, { speedRate: rate });
+    // A Sunny failure inside the reroute check throws into the catch below,
+    // leaving mixed null: better no verdict than the known-bad pinned one.
+    const reroute = sunnyLowEndReroute(candidate, osuText, rate);
+    if (reroute) {
+      mixed = {
+        ...candidate,
+        star: reroute.star,
+        lnRatio: reroute.lnRatio,
+        estDiff: reroute.estDiff,
+        numericDifficulty: null,
+        numericDifficultyHint: null,
+      };
+      warnings.push("Roxy raw difficulty pinned at its scale floor; using the Sunny low-end verdict.");
+    } else {
+      mixed = candidate;
+    }
   } catch (error) {
     warnings.push(`LeoBlack estimator failed: ${error instanceof Error ? error.message : String(error)}.`);
   }

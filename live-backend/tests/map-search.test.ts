@@ -697,6 +697,7 @@ async function seedAnalysis(
     rawDan?: number;
     label?: string;
     family?: string;
+    clusterCategory?: string;
   },
 ): Promise<void> {
   const now = "2026-01-01T00:00:00Z";
@@ -713,7 +714,12 @@ async function seedAnalysis(
       options.family ?? "dan",
       options.rawDan ?? 10,
       options.msdValues?.Overall ?? null,
-      json({ lnRatio: options.lnRatio ?? 0.1, vibro: options.vibro ?? false, patterns: [] }),
+      json({
+        lnRatio: options.lnRatio ?? 0.1,
+        vibro: options.vibro ?? false,
+        patterns: [],
+        clusterCategory: options.clusterCategory ?? null,
+      }),
       options.msdValues ? json({ etternaVersion: "0.72.3", values: options.msdValues }) : null,
       now,
       now,
@@ -742,6 +748,47 @@ describe("map search primary derivation", () => {
     expect(handstream.total).toBe(0);
     const stamina = await getMapSearchPage(db, { ...baseQuery(), patterns: ["stamina"] });
     expect(stamina.total).toBe(1);
+  });
+
+  it("drops MinaCalc's artifact jack primaries on split-trill charts", async () => {
+    const db = await makeDb();
+    // gdmem shape (beatmap 3814262): a pure split trill - each column repeats
+    // every second row, never twice in a row. MinaCalc reads that repetition
+    // as JackSpeed (tops Overall with it) and the in-house profile calls it
+    // chordjack; the cluster analysis is the one source that names it.
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, primary: "chordjack", patterns: { chordjack: 1, jack: 0.61, jumpstream: 0.44 } });
+    await seedAnalysis(db, 1, {
+      msdValues: { Overall: 15.36, Stream: 7.22, Jumpstream: 10.82, Handstream: 6.18, Stamina: 9.14, JackSpeed: 15.36, Chordjack: 8.98, Technical: 10.34 },
+      lnRatio: 0.04,
+      clusterCategory: "Split Trill",
+    });
+    await buildAll(db);
+
+    const all = await getMapSearchPage(db, baseQuery());
+    expect(all.items[0].primaryPattern).toBe("jumpstream");
+    // Zeroed jack-family chips drop out of the entry's patterns record.
+    expect(all.items[0].patterns.jack).toBeUndefined();
+    expect(all.items[0].patterns.chordjack).toBeUndefined();
+    expect(all.items[0].patterns.tech).toBeCloseTo(10.34 / 10.82, 3);
+
+    const jackScoped = await getMapSearchPage(db, { ...baseQuery(), patterns: ["jack"] });
+    expect(jackScoped.total).toBe(0);
+    const jsScoped = await getMapSearchPage(db, { ...baseQuery(), patterns: ["jumpstream"] });
+    expect(jsScoped.total).toBe(1);
+  });
+
+  it("reroutes split-trill jack primaries on non-4K charts from the in-house profile", async () => {
+    const db = await makeDb();
+    // 7K has no MSD reroute: the in-house chordjack primary falls to the
+    // strongest non-jack family instead.
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, cs: 7, primary: "chordjack", patterns: { chordjack: 1, stream: 0.6, jack: 0.5 } });
+    await seedAnalysis(db, 1, { lnRatio: 0.05, clusterCategory: "Split Trill Tech" });
+    await buildAll(db);
+
+    const all = await getMapSearchPage(db, { ...baseQuery(), keys: ["7k"] });
+    expect(all.items[0].primaryPattern).toBe("stream");
+    expect(all.items[0].patterns.jack).toBeUndefined();
+    expect(all.items[0].patterns.chordjack).toBeUndefined();
   });
 
   it("routes LN primaries by the classifier lnRatio", async () => {
