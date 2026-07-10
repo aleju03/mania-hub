@@ -75,6 +75,12 @@ interface CardFlight {
 // so handing the top card to the canvas is seamless.
 const STACK_CARD_SCALE = 1 / 1.05;
 
+// If the card renderer never signals ready (a lost WebGL context or an rAF loop
+// throttled to death after backgrounding on some phones), the reveal would sit
+// on "Drawing player..." forever and the pack could never finish. Time out into
+// the 2D fallback after this long so the last card always resolves.
+const RENDERER_READY_TIMEOUT_MS = 8000;
+
 function isMobileViewport() {
   return (
     typeof window !== "undefined" &&
@@ -301,8 +307,27 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
         reject(new Error("Card host is not mounted."));
         return;
       }
-      onReadyRef.current = resolve;
-      onErrorRef.current = reject;
+      // Watchdog against a renderer that never fires onReady/onError (lost
+      // GPU context, backgrounded rAF): reject so reveal()'s catch drops to the
+      // 2D fallback instead of leaving the phase stuck on "preparing".
+      let settled = false;
+      const readyTimer = window.setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        reject(new Error("Card renderer timed out."));
+      }, RENDERER_READY_TIMEOUT_MS);
+      onReadyRef.current = () => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(readyTimer);
+        resolve();
+      };
+      onErrorRef.current = (error) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(readyTimer);
+        reject(error);
+      };
       if (!rendererRef.current) {
         rendererRef.current = new ManiaCardRenderer({
           host,

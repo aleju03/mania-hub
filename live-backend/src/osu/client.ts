@@ -335,6 +335,15 @@ export class OsuApiClient {
     return this.getJson(`/beatmapsets/${beatmapsetId}`, caller);
   }
 
+  async searchBeatmapsets(params: Record<string, string | number | undefined>, caller = "unknown"): Promise<Record<string, unknown>> {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== "") query.set(key, String(value));
+    }
+    const suffix = query.toString();
+    return this.getJson(`/beatmapsets/search${suffix ? `?${suffix}` : ""}`, caller);
+  }
+
   async getBeatmapFile(beatmapId: number, caller = "unknown"): Promise<string> {
     const safeBeatmapId = Math.floor(beatmapId);
     if (!Number.isFinite(safeBeatmapId) || safeBeatmapId <= 0) throw new Error("Invalid beatmap ID");

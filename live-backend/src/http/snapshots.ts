@@ -3,10 +3,11 @@ import { performance } from "node:perf_hooks";
 import { brotliCompress, constants as zlibConstants, gzip } from "node:zlib";
 import type { Config } from "../config.js";
 import { handleBeatmapAudioRequest, handleBeatmapHitsoundsRequest } from "../audio/http.js";
-import { activateCountry, deleteCountryData, getCountryRegistry, GLOBAL_COUNTRY_CODE, isCountryFeatureAtLeast, isGlobalCountry, setCountryFeatureTier, setCountryPaused, setCountryStatus, type CountryFeatureTier, type CountryRegistryStatus } from "../countries.js";
+import { activateCountry, deleteCountryData, getCountryRegistry, getCountryRegistryRow, GLOBAL_COUNTRY_CODE, isCountryFeatureAtLeast, isGlobalCountry, setCountryFeatureTier, setCountryPaused, setCountryStatus, type CountryFeatureTier, type CountryRegistryStatus } from "../countries.js";
 import type { Db } from "../db.js";
 import { dbHealth, exec, getSqliteBusyRetryStats, parseJson } from "../db.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION, getPlayerActivityAvailability, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../features/activity.js";
+import { clearDoneAdminTodos, createAdminTodo, deleteAdminTodo, listAdminTodos, updateAdminTodo, type CreateTodoInput, type UpdateTodoInput } from "../features/admin-todos.js";
 import { cancelBeatmapOsuFileBackfill, getBeatmapOsuFileBackfillStatus, startBeatmapOsuFileBackfill } from "../features/beatmap-osu-file-backfill.js";
 import { CHART_ANALYSIS_VERSION, cancelChartAnalysisBackfill, enqueueChartAnalysisBackfill, startChartAnalysisBackfill } from "../features/chart-analysis.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
@@ -69,6 +70,14 @@ const HIDDEN_ADMIN_WORKER_LANE_NAMES = new Set([
 export interface HttpContext {
   db: Db;
   queue: JobQueue;
+  // Dedicated write connection + queue for the page-serving path's best-effort
+  // bookkeeping (country touch + refresh scheduling). Kept off `db` so those
+  // writes never share the connection that serves a page-load read: a stuck
+  // write on the serving connection would otherwise queue behind it and freeze
+  // every read (the whole-site freeze this fixes). Absent in tests / worker role,
+  // in which case the serving path stays read-only and skips the bookkeeping.
+  serveWriteDb?: Db;
+  serveWriteQueue?: JobQueue;
   events: LiveEventLog;
   config: Config;
   abuse?: AbuseGuard;
@@ -1890,6 +1899,80 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     sendJson(req, res, ctx, 200, { ok: true, removed });
     return true;
   }
+  if (url.pathname === "/api/admin/todos") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { todos: await listAdminTodos(ctx.db) });
+    return true;
+  }
+  if (url.pathname === "/api/admin/todos/create") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<CreateTodoInput>((await readBody(req)) || "{}", {});
+    const todo = await createAdminTodo(ctx.db, body);
+    if (!todo) {
+      sendJson(req, res, ctx, 400, { error: "invalid_title" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true, todo });
+    return true;
+  }
+  if (url.pathname === "/api/admin/todos/update") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<UpdateTodoInput>((await readBody(req)) || "{}", {});
+    const todo = await updateAdminTodo(ctx.db, body);
+    if (!todo) {
+      sendJson(req, res, ctx, 404, { error: "todo_not_found" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true, todo });
+    return true;
+  }
+  if (url.pathname === "/api/admin/todos/delete") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<{ id?: unknown }>((await readBody(req)) || "{}", {});
+    const removed = await deleteAdminTodo(ctx.db, typeof body.id === "string" ? body.id : "");
+    if (!removed) {
+      sendJson(req, res, ctx, 404, { error: "todo_not_found" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true });
+    return true;
+  }
+  if (url.pathname === "/api/admin/todos/clear-done") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true, cleared: await clearDoneAdminTodos(ctx.db) });
+    return true;
+  }
   if (url.pathname === "/api/admin/reset-local-db") {
     if (ctx.config.nodeEnv === "production") {
       sendJson(req, res, ctx, 403, { error: "disabled_in_production" });
@@ -2308,7 +2391,7 @@ async function countryCatchupStatus(ctx: HttpContext): Promise<Record<string, Co
 }
 
 async function countryFeaturesBody(ctx: HttpContext) {
-  const countries = await getCountryRegistry(ctx.db, ctx.config);
+  const countries = await getCountryRegistry(ctx.db, ctx.config, { ensure: false });
   return {
     generatedAt: new Date().toISOString(),
     countries: countries.map((entry) => ({
@@ -2373,7 +2456,7 @@ async function rosterSummary(db: Db) {
 }
 
 async function countryRegistryStatus(ctx: HttpContext) {
-  const countries = await getCountryRegistry(ctx.db, ctx.config);
+  const countries = await getCountryRegistry(ctx.db, ctx.config, { ensure: false });
   const clients = new Map((ctx.countryClients?.snapshot() ?? []).map((entry) => [entry.country, entry]));
   return countries.map((entry) => {
     const client = clients.get(entry.country);
@@ -2436,8 +2519,9 @@ export async function activatePublicCountry(
 ): Promise<Awaited<ReturnType<typeof activateCountry>> | null> {
   if (isGlobalCountry(country)) {
     // Global is a synthetic aggregate: keep its merged maps snapshot fresh but
-    // never build a roster or registry row for it.
-    await enqueueGlobalMapsRefreshIfDue(ctx.db, ctx.queue, ctx.config.mapsRefreshIntervalMs, { priority: 15 });
+    // never build a roster or registry row for it. Scheduled off the serving
+    // connection, throttled and fire-and-forget (see scheduleGlobalMapsRefresh).
+    scheduleGlobalMapsRefresh(ctx);
     const now = new Date().toISOString();
     return {
       country: GLOBAL_COUNTRY_CODE,
@@ -2472,11 +2556,80 @@ export async function activatePublicCountry(
       return null;
     }
   }
-  const activated = await activateCountry(ctx.db, ctx.queue, ctx.config, country);
+  // Hot path: an already-registered country is served entirely from a READ of
+  // the registry on the serving connection. The write-side bookkeeping
+  // (last_requested_at touch + roster/maps refresh scheduling) is pushed to a
+  // dedicated write connection, throttled and fire-and-forget. This is the
+  // invariant that keeps a busy single WAL writer (a long worker job holding the
+  // lock) from ever blocking or 500ing a page load: the serving connection does
+  // no writes, so a stuck write can't queue in front of the reads and freeze the
+  // site. The earlier WAL-size brake only bounded the symptom (file growth); this
+  // removes the cause.
+  if (registered && ctx.serveWriteDb) {
+    const row = await getCountryRegistryRow(ctx.db, country, ctx.config);
+    if (row) {
+      scheduleCountryServeBookkeeping(ctx, country);
+      return row;
+    }
+    // Registry row lost a race between the check and the read: fall through and
+    // (re)activate synchronously below.
+  }
+  // Cold country (first ever request), or the lost-row race above. Activate
+  // synchronously so the caller can serve, but route the write to the dedicated
+  // write connection when we have one so even this rare activation can't stall
+  // reads on the serving connection.
+  const activationDb = ctx.serveWriteDb ?? ctx.db;
+  const activationQueue = ctx.serveWriteQueue ?? ctx.queue;
+  const activated = await activateCountry(activationDb, activationQueue, ctx.config, country);
   if (ctx.config.enableOsuApiJobs && isCountryFeatureAtLeast(activated.featureTier, "maps_warm")) {
-    await enqueueMapsRefreshIfDue(ctx.db, ctx.queue, activated.country, ctx.config.mapsRefreshIntervalMs, { priority: 15 });
+    await enqueueMapsRefreshIfDue(activationDb, activationQueue, activated.country, ctx.config.mapsRefreshIntervalMs, { priority: 15 });
   }
   return activated;
+}
+
+// Serving-path bookkeeping is throttled per country: last_requested_at only has
+// to advance often enough to keep a country "warm" (warm TTL is minutes-to-hours),
+// not on every request. Bounded set of countries, so this map never needs eviction.
+const COUNTRY_SERVE_BOOKKEEPING_THROTTLE_MS = 30_000;
+const lastCountryServeBookkeepingAt = new Map<string, number>();
+
+// Fire-and-forget the per-request registry bookkeeping onto the dedicated write
+// connection. Never awaited by (and never able to fail) the request that triggers
+// it, and skipped entirely when the writer is contended — the throttle lets the
+// next request retry. Reuses the exact activate/refresh logic, just isolated from
+// the serving connection.
+function scheduleCountryServeBookkeeping(ctx: HttpContext, country: string): void {
+  const writeDb = ctx.serveWriteDb;
+  const queue = ctx.serveWriteQueue;
+  if (!writeDb || !queue) return;
+  const key = country.trim().toUpperCase();
+  const now = Date.now();
+  if (now - (lastCountryServeBookkeepingAt.get(key) ?? 0) < COUNTRY_SERVE_BOOKKEEPING_THROTTLE_MS) return;
+  lastCountryServeBookkeepingAt.set(key, now);
+  void (async () => {
+    const activated = await activateCountry(writeDb, queue, ctx.config, key);
+    if (ctx.config.enableOsuApiJobs && isCountryFeatureAtLeast(activated.featureTier, "maps_warm")) {
+      await enqueueMapsRefreshIfDue(writeDb, queue, activated.country, ctx.config.mapsRefreshIntervalMs, { priority: 15 });
+    }
+  })().catch(() => {
+    // Best-effort: a busy writer just means this cycle is skipped; a page load
+    // must never depend on, wait for, or fail because of this bookkeeping.
+  });
+}
+
+const GLOBAL_MAPS_REFRESH_THROTTLE_MS = 30_000;
+let lastGlobalMapsRefreshScheduleAt = 0;
+
+// GLOBAL is served from an in-memory cache; keep its merged maps snapshot fresh
+// without ever writing on the serving connection.
+function scheduleGlobalMapsRefresh(ctx: HttpContext): void {
+  const writeDb = ctx.serveWriteDb;
+  const queue = ctx.serveWriteQueue;
+  if (!writeDb || !queue) return;
+  const now = Date.now();
+  if (now - lastGlobalMapsRefreshScheduleAt < GLOBAL_MAPS_REFRESH_THROTTLE_MS) return;
+  lastGlobalMapsRefreshScheduleAt = now;
+  void enqueueGlobalMapsRefreshIfDue(writeDb, queue, ctx.config.mapsRefreshIntervalMs, { priority: 15 }).catch(() => undefined);
 }
 
 async function isCountryRegistered(db: Db, country: string): Promise<boolean> {
@@ -2887,7 +3040,7 @@ function parseMapSearchQuery(params: URLSearchParams): MapSearchQuery {
   return {
     q: (params.get("q") ?? "").trim().slice(0, 120),
     keys: parseCsvSubset(params.get("keys"), ["4k", "7k", "other"]),
-    statuses: parseCsvSubset(params.get("statuses"), ["ranked", "loved", "graveyard", "other"]),
+    statuses: parseCsvSubset(params.get("statuses"), ["ranked", "qualified", "loved", "graveyard", "other"]),
     patterns: parseCsvSubset(params.get("patterns"), [...MAP_SEARCH_PATTERNS, ...MAP_SEARCH_SUB_PATTERNS]),
     starMin: stars.min,
     starMax: stars.max,

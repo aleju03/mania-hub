@@ -28,12 +28,11 @@ interface Props {
 }
 
 const PATTERN_DESCRIPTION: Record<string, string> = {
-  jack: "Repeated notes hammered in the same column.",
+  jack: "Repeated notes hammered on the same columns — single jacks, chordjack, all of it.",
   stream: "Fast single-note runs flowing across the keys.",
   jumpstream: "Streams broken up by two-note jumps.",
   handstream: "Streams thickened with three-note hand chords.",
   stamina: "Long, dense charts that test endurance.",
-  chordjack: "Chords jackhammered across multiple columns.",
   tech: "Shifting, irregular patterns that punish bad reading.",
   ln: "Long-note and hold-heavy charts.",
 };
@@ -123,18 +122,31 @@ function SegmentedControl<T extends string | number>({
   );
 }
 
+// Covers that 404ed this session, shared across tiles: axis/keymode switches
+// remount every tile, and per-instance state would retry known-dead covers on
+// each switch, flashing a 3-slot collage that collapses back to 2.
+const failedCoverSetIds = new Set<number>();
+
 function CoverStrip({ setIds, className = "" }: { setIds: number[]; className?: string }) {
-  if (setIds.length === 0) return <div className={`bg-osu-b3/40 ${className}`} />;
+  // Covers can 404 even for sets the backend vetted (backgrounds removed after
+  // upload, e.g. DMCA). Dropping the failed image and re-flowing the collage
+  // beats leaving a blank cell.
+  const [, bumpFailures] = useState(0);
+  const visible = setIds.filter((setId) => !failedCoverSetIds.has(setId));
+  if (visible.length === 0) return <div className={`bg-osu-b3/40 ${className}`} />;
   return (
-    <div className={`grid ${setIds.length >= 3 ? "grid-cols-3" : setIds.length === 2 ? "grid-cols-2" : "grid-cols-1"} gap-px ${className}`}>
-      {setIds.map((setId) => (
+    <div className={`grid ${visible.length >= 3 ? "grid-cols-3" : visible.length === 2 ? "grid-cols-2" : "grid-cols-1"} gap-px ${className}`}>
+      {visible.map((setId) => (
         <img
           key={setId}
           src={`https://assets.ppy.sh/beatmaps/${setId}/covers/card.jpg`}
           alt=""
           className="h-full w-full object-cover opacity-80"
           loading="lazy"
-          onError={(e) => { e.currentTarget.style.visibility = "hidden"; }}
+          onError={() => {
+            failedCoverSetIds.add(setId);
+            bumpFailures((count) => count + 1);
+          }}
         />
       ))}
     </div>
@@ -354,11 +366,11 @@ function CollectionDetail({ id, onBack, liveBackendEnabled }: { id: string; onBa
   }, [id, liveBackendEnabled]);
 
   const badge = detail ? bucketBadgeSrc(detail) : null;
-  // A brand-new pack marks every map new; badges would just be noise there.
-  const newIds = useMemo(() => {
-    if (!detail || detail.newBeatmapIds.length >= detail.items.length) return new Set<number>();
-    return new Set(detail.newBeatmapIds);
-  }, [detail]);
+  // Rotation newcomers are a header stat only: each rotation re-samples most of
+  // the pack (40 from a pool that is often ~4x that), so a per-card "new" badge
+  // was lit on the majority of cards and read as "newly ranked map". A pack
+  // where every member is new is simply fresh; saying so adds nothing.
+  const newCount = detail && detail.newBeatmapIds.length < detail.items.length ? detail.newBeatmapIds.length : 0;
 
   return (
     <div className="flex flex-col gap-4">
@@ -380,7 +392,7 @@ function CollectionDetail({ id, onBack, liveBackendEnabled }: { id: string; onBa
               </h1>
               <p className="mt-0.5 text-[11px] text-osu-f1/70">
                 {formatNumber(detail.items.length)} maps · rotated {formatTimeAgo(detail.refreshedAt)}
-                {newIds.size > 0 ? ` · ${newIds.size} new this rotation` : ""}
+                {newCount > 0 ? ` · ${newCount} new this rotation` : ""}
               </p>
             </div>
           </div>
@@ -389,9 +401,13 @@ function CollectionDetail({ id, onBack, liveBackendEnabled }: { id: string; onBa
               <SearchCard
                 key={entry.beatmapId}
                 entry={entry}
-                onOpen={setMapEntry}
+                onOpen={(opened) => {
+                  // The detail modal has its own chart-preview audio; don't
+                  // leave the card's song preview playing over it.
+                  stopPreview();
+                  setMapEntry(opened);
+                }}
                 preview={preview}
-                isNew={newIds.has(entry.beatmapId)}
               />
             ))}
           </div>

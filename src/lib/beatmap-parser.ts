@@ -482,8 +482,11 @@ export function parseManiaBeatmap(content: string, options: ParseManiaBeatmapOpt
         circleSizeSpecified = Number.isFinite(circleSize);
       }
       if (line.startsWith("OverallDifficulty:")) {
-        overallDifficulty = parseFloat(line.split(":")[1].trim());
-        overallDifficultySpecified = Number.isFinite(overallDifficulty);
+        // Keep the default when the value fails to parse: a NaN od reaches
+        // getManiaReplayHitWindows and every downstream hit-window consumer.
+        const parsedOd = parseFloat(line.split(":")[1].trim());
+        overallDifficultySpecified = Number.isFinite(parsedOd);
+        if (overallDifficultySpecified) overallDifficulty = parsedOd;
       }
       if (line.startsWith("HPDrainRate:")) hpDrainRate = parseFloat(line.split(":")[1].trim());
       if (line.startsWith("ApproachRate:")) approachRate = parseFloat(line.split(":")[1].trim());
@@ -547,6 +550,10 @@ export function parseManiaBeatmap(content: string, options: ParseManiaBeatmapOpt
         const time = parseInt(parts[2], 10);
         const type = parseInt(parts[3], 10);
         const hitSound = parseInt(parts[4], 10) || 0;
+        // Skip malformed object lines: a NaN time stalls the judgement
+        // simulation's scan cursors (quadratic blowup) and a NaN column
+        // leaves noteStates holes that throw during rendering.
+        if (!Number.isFinite(x) || !Number.isFinite(time)) continue;
         const keyCount = normalizeKeyCount(options.keyCount ?? circleSize);
 
         // In mania, column is determined by x position: column = floor(x * keyCount / 512)
@@ -578,7 +585,7 @@ export function parseManiaBeatmap(content: string, options: ParseManiaBeatmapOpt
           filename: rawFilename ? rawFilename.replace(/\\/g, "/") : undefined,
         });
 
-        notes.push({ column: Math.min(column, keyCount - 1), time, endTime, isHold });
+        notes.push({ column: Math.min(Math.max(column, 0), keyCount - 1), time, endTime, isHold });
       }
     }
   }
@@ -707,7 +714,9 @@ export function parseManiaBeatmap(content: string, options: ParseManiaBeatmapOpt
     creator,
     keyCount: convertKeyCount ?? normalizeKeyCount(options.keyCount ?? circleSize),
     isConvert,
-    od: overallDifficulty,
+    // Plain clamp (no fround): hit-window math downstream expects the od
+    // exactly as historically parsed, only bounded to the valid range.
+    od: Math.min(Math.max(overallDifficulty, 0), 10),
     bpm,
     stableScrollBpm,
     notes: sortedNotes,

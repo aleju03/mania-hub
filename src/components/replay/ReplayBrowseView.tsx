@@ -435,10 +435,6 @@ export function MissingBeatmapPanel({
         <p className="mt-3 rounded-lg bg-osu-red/10 px-4 py-2 text-center text-xs text-osu-red-light">{error}</p>
       )}
 
-      <p className="mt-3 text-center text-[11px] text-osu-f1">
-        The map stays in your browser. Anyone opening the share link is asked for it too.
-      </p>
-
       <div className="mt-4 text-center">
         <button
           type="button"

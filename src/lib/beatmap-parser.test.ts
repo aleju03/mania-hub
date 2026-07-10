@@ -353,4 +353,68 @@ CircleSize:3.3
     expect(beatmap.keyCount).toBe(4);
     expect(beatmap.notes[0].column).toBe(3);
   });
+
+  it("keeps od finite when OverallDifficulty fails to parse", () => {
+    const beatmap = parseManiaBeatmap(`
+osu file format v14
+
+[General]
+Mode: 3
+
+[Metadata]
+Title:Test
+Artist:Tester
+Creator:Mapper
+Version:BadOD
+
+[Difficulty]
+CircleSize:4
+OverallDifficulty:
+
+[TimingPoints]
+0,500,4,1,0,100,1,0
+
+[HitObjects]
+64,192,1000,1,0,0:0:0:0:
+`);
+
+    expect(Number.isFinite(beatmap.od)).toBe(true);
+    expect(beatmap.od).toBe(8);
+  });
+
+  it("drops malformed hit objects and clamps out-of-range columns", () => {
+    const beatmap = parseManiaBeatmap(`
+osu file format v14
+
+[General]
+Mode: 3
+
+[Metadata]
+Title:Test
+Artist:Tester
+Creator:Mapper
+Version:Malformed
+
+[Difficulty]
+CircleSize:4
+OverallDifficulty:8
+
+[TimingPoints]
+0,500,4,1,0,100,1,0
+
+[HitObjects]
+abc,192,1000,1,0,0:0:0:0:
+64,192,xyz,1,0,0:0:0:0:
+-64,192,1500,1,0,0:0:0:0:
+64,192,2000,1,0,0:0:0:0:
+`);
+
+    expect(beatmap.notes).toHaveLength(2);
+    expect(beatmap.notes[0]).toMatchObject({ column: 0, time: 1500 });
+    expect(beatmap.notes[1]).toMatchObject({ column: 0, time: 2000 });
+    for (const note of beatmap.notes) {
+      expect(Number.isFinite(note.time)).toBe(true);
+      expect(Number.isFinite(note.column)).toBe(true);
+    }
+  });
 });

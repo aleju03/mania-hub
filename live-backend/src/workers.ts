@@ -4,12 +4,13 @@ import { canSeedSnipesForCountry } from "./countries.js";
 import { exec, json, parseJson, writeVariantPps } from "./db.js";
 import { BEATMAP_OSU_FILE_BACKFILL_JOB, runBeatmapOsuFileBackfillJob } from "./features/beatmap-osu-file-backfill.js";
 import { computeBeatmapActivitySkillVector } from "./features/activity.js";
-import { CHART_ANALYSIS_BACKFILL_JOB, CHART_ANALYSIS_JOB, VIBRO_RECOMPUTE_JOB, computeBeatmapChartAnalysis, runChartAnalysisBackfillJob, runVibroRecomputeJob } from "./features/chart-analysis.js";
+import { CHART_ANALYSIS_BACKFILL_JOB, CHART_ANALYSIS_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, VIBRO_RECOMPUTE_JOB, computeBeatmapChartAnalysis, runChartAnalysisBackfillJob, runDanFloorPinRecomputeJob, runLnSubtypeRecomputeJob, runVibroRecomputeJob } from "./features/chart-analysis.js";
 import { computeDanEstimateJob } from "./features/dan-estimates.js";
 import { reconcileStatGoalsForCountry } from "./features/goals.js";
 import { runMapSearchIndexBuildJob } from "./features/map-search.js";
 import { rebuildMapCollections } from "./features/map-collections.js";
 import { MapsRosterNotReadyError, enqueueGlobalMapsRefresh, globalMapsFarmedRefreshRunAfter, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores } from "./features/maps.js";
+import { REFRESH_QUALIFIED_MAPS_JOB, runQualifiedMapsWatch } from "./features/qualified-maps-watch.js";
 import { recordSnipeScoreHistory, updateSnipeProjection } from "./features/snipes.js";
 import { PLAYER_SKILLS_JOB, computePlayerSkillsJob } from "./features/player-skills.js";
 import { PROFILE_POOL_WARM_JOB, runProfilePoolWarmJob } from "./features/profile-pool-warm.js";
@@ -26,6 +27,7 @@ import { finishReplayVideoExport, markReplayVideoDoneFromRender, markReplayVideo
 import { renderReplayVideoInChrome, type ServerReplayRenderRequest } from "./replay-video/server-render.js";
 import { refreshCountryRoster } from "./rosters/country-rosters.js";
 import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getModAcronyms, getScoreIdentity, getScoreTimestamp, isLazerScore, nowIso, scoreHasReplay } from "./shared/score.js";
+import { throwIfAborted } from "./shared/abort.js";
 import { errorContext, logInfo, logWarn } from "./logger.js";
 import type { OscScore } from "./shared/types.js";
 import { markUserMissing } from "./users.js";
@@ -48,6 +50,13 @@ interface WorkerLane {
 // (job handlers are idempotent upserts). Jobs are designed short (long work
 // self-chains in batches), so ten minutes only ever fires on a genuine hang.
 const DEFAULT_JOB_WATCHDOG_MS = 10 * 60_000;
+
+// seed_snipe_board fetches one osu! API page per ranked roster member (rosterSize
+// is 100). Seeding all of them in one job means ~100 sequential calls sharing the
+// ~45/min budget with every other lane, which routinely blew past the watchdog.
+// Each invocation now seeds this many members then self-chains the next batch, so
+// a single invocation always finishes well under the watchdog ceiling.
+const SNIPE_SEED_ROSTER_BATCH = 15;
 
 export class JobWatchdogTimeoutError extends Error {}
 
@@ -85,7 +94,7 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
   },
   {
     name: "maps-refresh",
-    jobTypes: ["refresh_user_maps_farmed_scores", "refresh_country_maps", "refresh_global_maps"],
+    jobTypes: ["refresh_user_maps_farmed_scores", "refresh_country_maps", "refresh_global_maps", REFRESH_QUALIFIED_MAPS_JOB],
     claimLimit: 1,
     intervalMs: 1_000,
   },
@@ -109,7 +118,7 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     // the work is local (cached .osu text), no osu! API pressure. Tunable via
     // CHART_ANALYSIS_LANE_INTERVAL_MS so a local backfill can run flat out.
     name: "chart-analysis",
-    jobTypes: [CHART_ANALYSIS_JOB, CHART_ANALYSIS_BACKFILL_JOB, VIBRO_RECOMPUTE_JOB],
+    jobTypes: [CHART_ANALYSIS_JOB, CHART_ANALYSIS_BACKFILL_JOB, VIBRO_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB],
     claimLimit: 1,
     intervalMs: readConfig().chartAnalysisLaneIntervalMs,
   },
@@ -260,11 +269,12 @@ export class WorkerRunner {
       payload: job.payload,
     };
     this.activeJobs.set(lane, [...(this.activeJobs.get(lane) ?? []), activeJob]);
+    const startedAtMs = Date.now();
     try {
       logInfo("job_start", { job_id: job.id, type: job.type, lane, worker_id: workerId, attempts: job.attempts + 1 });
       await this.handleWithWatchdog(job, lane);
       await this.queue.complete(job.id);
-      logInfo("job_done", { job_id: job.id, type: job.type, lane, worker_id: workerId });
+      logInfo("job_done", { job_id: job.id, type: job.type, lane, worker_id: workerId, duration_ms: Date.now() - startedAtMs });
       await this.events.append("job_status", null, { id: job.id, type: job.type, status: "done" }, `job:${job.id}:done:${job.attempts}`);
     } catch (error) {
       if (await this.handleMissingUserJob(workerId, job, lane, error)) return;
@@ -291,13 +301,26 @@ export class WorkerRunner {
 
   private async handleWithWatchdog(job: Job, lane: string): Promise<void> {
     const timeoutMs = this.lanes.find((candidate) => candidate.name === lane)?.jobTimeoutMs ?? DEFAULT_JOB_WATCHDOG_MS;
+    const controller = new AbortController();
+    // The handler keeps running detached after the watchdog fires (the lane is
+    // released so it keeps ticking). Aborting the signal lets handlers that check
+    // it stop at their next batch/page boundary instead of running on and burning
+    // memory / osu! API budget. Attach a catch so that late (post-timeout) abort
+    // rejection from the detached handler is not an unhandled rejection.
+    const handlePromise = this.handle(job, controller.signal);
+    handlePromise.catch(() => {});
     let timer: ReturnType<typeof setTimeout> | null = null;
     try {
       await Promise.race([
-        this.handle(job),
+        handlePromise,
         new Promise<never>((_, reject) => {
           timer = setTimeout(() => {
-            reject(new JobWatchdogTimeoutError(`job watchdog: ${job.type} still running after ${timeoutMs}ms, releasing the lane`));
+            const error = new JobWatchdogTimeoutError(`job watchdog: ${job.type} still running after ${timeoutMs}ms, releasing the lane`);
+            // Reject first so the watchdog error is what the race surfaces (the
+            // job's fail path / last_error), then abort — a handler that rejects
+            // synchronously on abort must not preempt the watchdog message.
+            reject(error);
+            controller.abort(error);
           }, timeoutMs);
           timer.unref?.();
         }),
@@ -330,7 +353,7 @@ export class WorkerRunner {
     };
   }
 
-  private async handle(job: Job): Promise<void> {
+  private async handle(job: Job, signal?: AbortSignal): Promise<void> {
     if (!readConfig().enableOsuApiJobs && OSU_API_JOB_TYPES.has(job.type)) {
       logInfo("job_skipped_osu_api_disabled", { job_id: job.id, type: job.type });
       return;
@@ -344,7 +367,12 @@ export class WorkerRunner {
       return;
     }
     if (job.type === "refresh_user_maps_farmed_scores") {
+      // A single osu! API call plus DB writes: it hit the watchdog only when the
+      // shared budget was starved (e.g. by unbatched snipe seeding). Log duration
+      // so a regression back into watchdog territory is visible in journald.
+      const farmedStartedAt = Date.now();
       const result = await refreshUserMapsFarmedScores(this.db, this.osu, job.payload as { userId: number; country: string });
+      logInfo("refresh_user_maps_farmed_scores_done", { user_id: result.userId, country: result.country, score_count: result.scoreCount, duration_ms: Date.now() - farmedStartedAt });
       await enqueueGlobalMapsRefresh(this.queue, { priority: 15, replaceDone: true, runAfter: globalMapsFarmedRefreshRunAfter() });
       await this.events.append(
         "maps_farmed_update",
@@ -381,7 +409,11 @@ export class WorkerRunner {
       return;
     }
     if (job.type === "refresh_global_maps") {
-      await refreshGlobalMaps(this.db);
+      await refreshGlobalMaps(this.db, signal);
+      return;
+    }
+    if (job.type === REFRESH_QUALIFIED_MAPS_JOB) {
+      await runQualifiedMapsWatch(this.db, this.osu, this.queue);
       return;
     }
     if (job.type === "compute_dan_estimate") {
@@ -406,6 +438,14 @@ export class WorkerRunner {
     }
     if (job.type === VIBRO_RECOMPUTE_JOB) {
       await runVibroRecomputeJob(this.db, this.queue, job.payload as { cursor?: number });
+      return;
+    }
+    if (job.type === DAN_FLOOR_PIN_RECOMPUTE_JOB) {
+      await runDanFloorPinRecomputeJob(this.db, this.queue, job.payload as { cursor?: number });
+      return;
+    }
+    if (job.type === LN_SUBTYPE_RECOMPUTE_JOB) {
+      await runLnSubtypeRecomputeJob(this.db, this.queue, job.payload as { cursor?: number });
       return;
     }
     if (job.type === BEATMAP_OSU_FILE_BACKFILL_JOB) {
@@ -444,10 +484,9 @@ export class WorkerRunner {
       return;
     }
     if (job.type === "seed_snipe_board") {
-      const payload = job.payload as { country: string; beatmapId: number; laneKey: string };
+      const payload = job.payload as { country: string; beatmapId: number; laneKey: string; cursor?: number };
       if (!await canSeedSnipesForCountry(this.db, readConfig(), payload.country)) return;
-      await this.seedSnipeBoard(payload);
-      await this.replaySeededSnipeScores(payload);
+      await this.seedSnipeBoard(payload, signal);
       return;
     }
     if (job.type === "replay_video_export") {
@@ -546,7 +585,7 @@ export class WorkerRunner {
     }
   }
 
-  private async replaySeededSnipeScores(payload: { country: string; beatmapId: number; laneKey: string }): Promise<void> {
+  private async replaySeededSnipeScores(payload: { country: string; beatmapId: number; laneKey: string }, signal?: AbortSignal): Promise<void> {
     const rows = (await getHydratedScoresForMetadata(this.db, { beatmapId: payload.beatmapId }, 200))
       .filter((row) => {
         if (row.country !== payload.country) return false;
@@ -561,6 +600,7 @@ export class WorkerRunner {
         return a.score.id - b.score.id;
       });
     for (const row of rows) {
+      throwIfAborted(signal);
       await updateSnipeProjection(this.db, this.events, row.country, row.score, this.osu);
     }
   }
@@ -619,15 +659,25 @@ export class WorkerRunner {
     return !!row;
   }
 
-  private async seedSnipeBoard(payload: { country: string; beatmapId: number; laneKey: string }): Promise<void> {
+  private async seedSnipeBoard(payload: { country: string; beatmapId: number; laneKey: string; cursor?: number }, signal?: AbortSignal): Promise<void> {
     const config = readConfig();
-    const replayScoreIdentities = await this.getSeedReplayScoreIdentities(payload);
-    const roster = (await exec(
-      this.db,
-      "select user_id from country_rosters where country = ? and is_tracked = 1 and rank is not null order by rank asc limit ?",
-      [payload.country, config.rosterSize],
-    )).rows;
+    const rosterSize = Math.max(1, Math.floor(config.rosterSize));
+    const cursor = Math.max(0, Math.floor(payload.cursor ?? 0));
+    // Seed one bounded batch of ranked roster members per invocation (one osu!
+    // API page each), then self-chain the next batch. This keeps every single
+    // invocation short enough to finish under the job watchdog even when the
+    // osu! budget is contended, instead of doing all ~100 calls in one job.
+    const batchSize = Math.min(SNIPE_SEED_ROSTER_BATCH, Math.max(0, rosterSize - cursor));
+    const replayScoreIdentities = batchSize > 0 ? await this.getSeedReplayScoreIdentities(payload) : new Set<string>();
+    const roster = batchSize > 0
+      ? (await exec(
+          this.db,
+          "select user_id from country_rosters where country = ? and is_tracked = 1 and rank is not null order by rank asc limit ? offset ?",
+          [payload.country, batchSize, cursor],
+        )).rows
+      : [];
     for (const row of roster) {
+      throwIfAborted(signal);
       const userId = Number(row.user_id);
       const scores = await this.getSnipeSeedScores(payload.beatmapId, userId);
       await recordSnipeScoreHistory(this.db, payload.country, payload.beatmapId, payload.laneKey, userId, scores, { excludeIdentities: replayScoreIdentities });
@@ -672,6 +722,34 @@ export class WorkerRunner {
         );
       }
     }
+
+    const seededThrough = cursor + roster.length;
+    const hasMore = roster.length === batchSize && seededThrough < rosterSize;
+    logInfo("snipe_seed_batch", {
+      country: payload.country,
+      beatmap_id: payload.beatmapId,
+      lane_key: payload.laneKey,
+      from_rank: cursor,
+      seeded: roster.length,
+      seeded_through: seededThrough,
+      has_more: hasMore,
+    });
+    if (hasMore) {
+      // Self-chain the next batch. A distinct dedupe key (the running row would
+      // not conflict-update) at a higher priority than a fresh seed so an
+      // in-progress board finishes before new boards start. The seed_snipe_board
+      // reserved lane parks it until this invocation completes, then reactivates.
+      await this.queue.enqueue(
+        "seed_snipe_board",
+        `snipe-seed:${payload.country}:${payload.beatmapId}:${payload.laneKey}:cursor:${seededThrough}`,
+        { country: payload.country, beatmapId: payload.beatmapId, laneKey: payload.laneKey, cursor: seededThrough },
+        { priority: 21, replaceDone: true },
+      );
+      return;
+    }
+    // Whole roster seeded (or nothing left to seed): replay recorded scores so
+    // seeded boards emit any snipe events, then the board is done.
+    await this.replaySeededSnipeScores(payload, signal);
   }
 
   private async getSeedReplayScoreIdentities(payload: { country: string; beatmapId: number; laneKey: string }): Promise<Set<string>> {

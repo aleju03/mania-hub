@@ -10,6 +10,7 @@ import {
   type LeoBlackEstimatorOptions,
   type LeoBlackReworkResult,
 } from "../../vendor/leoblack/estimator/mixedEstimator.js";
+import { runSunnyEstimatorFromText } from "../../vendor/leoblack/estimator/sunnyEstimator.js";
 import {
   analyzePatternFromText,
   type LeoBlackPatternCluster,
@@ -262,6 +263,17 @@ export function estimateLeoBlackDan(map: ManiaBeatmap, osuText: string, input: L
 // byte-identical to upstream.
 export function runLeoBlackMixed(osuText: string, options: LeoBlackEstimatorOptions = {}): LeoBlackReworkResult {
   return runMixedEstimatorFromText(osuText, options);
+}
+
+// Direct Sunny baseline (no Roxy/Azusa/Daniel routing). The classifier uses it
+// to re-verdict charts whose Roxy raw signal is pinned at the scale floor; the
+// mixed router itself already lands on this exact result for charts Roxy
+// rejects outright (e.g. under its minimum note count).
+export function runLeoBlackSunny(
+  osuText: string,
+  options: LeoBlackEstimatorOptions = {},
+): Omit<LeoBlackReworkResult, "mixedCompanellaPlan"> {
+  return runSunnyEstimatorFromText(osuText, options);
 }
 
 export function analyzeLeoBlackPatterns(osuText: string): {

@@ -1,11 +1,11 @@
 import { createFileRoute, useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
-import { useState, useRef, useEffect, useCallback, useMemo, type PointerEvent as ReactPointerEvent } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { LoaderCircle, Maximize2, Minimize2, Pause, Play } from "lucide-react";
-import { getReplayParsed, getBeatmapFile, getScore, getUser, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores, lookupBeatmapByChecksum } from "../lib/osu";
+import { ChevronLeft, LoaderCircle, Maximize2, Minimize2, Pause, Play } from "lucide-react";
+import { getReplayParsed, getBeatmapFile, getCommunityBeatmapFile, getScore, getUser, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores, lookupBeatmapByChecksum, submitCommunityBeatmap } from "../lib/osu";
 import { calculateManiaStarRating } from "../lib/mania-star-rating";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
-import { getEffectiveManiaKeyCount, getManiaKeyModCount, getManiaParseKeyCount, getScoreDisplayValues, getScoreRate, modShiftsPitchWithRate, scoreHasReplay } from "../lib/score";
+import { getEffectiveManiaKeyCount, getManiaKeyModCount, getManiaParseKeyCount, getModAcronyms, getScoreDisplayValues, getScoreRate, modShiftsPitchWithRate, scoreHasReplay } from "../lib/score";
 import { useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
 import { PageHeader } from "../components/layout/PageHeader";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
@@ -17,6 +17,7 @@ import { ReplayInfo } from "../components/replay/ReplayInfo";
 import type { ReplayPlayerProfile } from "../components/replay/ReplayInfo";
 import { ReplaySkinSettingsModal } from "../components/replay/ReplaySkinSettingsModal";
 import { track } from "../lib/posthog";
+import { reportCrashedReplayWatchSession, startReplayWatchBeacon } from "../lib/replay-crash-beacon";
 import { withTimeout } from "../lib/promise-timeout";
 import {
   REPLAY_SKIN_SETTINGS_CHANGE_EVENT,
@@ -1113,6 +1114,44 @@ function ReplayPage() {
     setLocalBeatmapAssets(assets);
   }, []);
 
+  useEffect(() => () => {
+    for (const url of localBeatmapAssetUrlsRef.current) URL.revokeObjectURL(url);
+    localBeatmapAssetUrlsRef.current = [];
+  }, []);
+
+  // Finish loading the viewer once the map's .osu is in hand, whatever supplied
+  // it (osu!, the community store, or a file the user just dropped). beatmapMeta
+  // is null for maps osu! doesn't know, where the key count comes from the keymod
+  // alone. The score lookup runs in parallel with the beatmap fetch, so callers
+  // pass the already-started promise in.
+  const finishBeatmapLoad = useCallback(async (params: {
+    content: string;
+    beatmapMeta: BeatmapChecksumLookupResult | null;
+    uploaded: UploadedReplayParseResult;
+    scorePromise: Promise<Awaited<ReturnType<typeof getScore>> | null>;
+    localAssets?: LocalBeatmapAssets;
+  }) => {
+    const { content, beatmapMeta, uploaded, scorePromise, localAssets } = params;
+    const uploadedScore = await scorePromise;
+    const mods = uploadedScore?.mods ?? uploaded.mods;
+    // Prefer the score's beatmap object (mania endpoints mark converts); the
+    // checksum lookup reports the map's original mode instead. Without osu!
+    // metadata the chart's own CS (plus any xK keymod) decides.
+    const keyCount = beatmapMeta
+      ? getManiaParseKeyCount(uploadedScore?.beatmap ?? beatmapMeta, mods) ?? undefined
+      : getManiaKeyModCount(mods) ?? undefined;
+    const parsedBeatmap = parseCachedManiaBeatmap(beatmapMeta?.id ?? 0, content, { keyCount });
+    const beatmapsetId = beatmapMeta ? beatmapMeta.beatmapset_id ?? beatmapMeta.beatmapset?.id : undefined;
+    applyLocalBeatmapAssets(localAssets ?? EMPTY_LOCAL_BEATMAP_ASSETS);
+    setReplay({ ...uploaded.replay, keyCount: parsedBeatmap.keyCount });
+    setBeatmap(parsedBeatmap);
+    setScoreInfo(uploadedScore);
+    setUploadedReplayMods(mods);
+    setUploadedBeatmapsetId(beatmapsetId);
+    setPendingBeatmapUpload(null);
+    return { uploadedScore, mods, beatmapsetId };
+  }, [applyLocalBeatmapAssets]);
+
   const openUploadedReplayBuffer = useCallback(async (
     buffer: ArrayBuffer,
     options: UploadedReplayOpenOptions,
@@ -1125,9 +1164,12 @@ function ReplayPage() {
 
     const fallbackScoreId = extractReplayScoreIdFromFilename(options.filename);
     const scoreId = uploaded.scoreId ?? fallbackScoreId;
+    const scorePromise = scoreId
+      ? getScore({ data: { scoreId, mode: "mania" } }).catch(() => null)
+      : Promise.resolve(null);
 
-    // The replay itself is fine; only the chart is missing. Park it and ask
-    // the user for the map instead of surfacing a raw fetch error.
+    // The replay itself is fine; only the chart is missing. Park it and ask the
+    // user for the map instead of surfacing a raw fetch error.
     const enterPendingBeatmapUpload = (reason: PendingBeatmapUpload["reason"], beatmapMeta: BeatmapChecksumLookupResult | null) => {
       setPendingBeatmapUpload({ checksum, reason, beatmapMeta, uploaded, scoreId, options });
       setLocalBeatmapError(null);
@@ -1141,51 +1183,61 @@ function ReplayPage() {
       });
     };
 
+    // Someone who had this map may have already contributed it; use their copy
+    // instead of asking again. Returns true once it has loaded the viewer.
+    const tryCommunityBeatmap = async (beatmapMeta: BeatmapChecksumLookupResult | null): Promise<boolean> => {
+      const community = await getCommunityBeatmapFile({ data: { checksum } }).catch(() => null);
+      if (!community?.content) return false;
+      setReplayBeatmapFileStatus("fetched");
+      const { beatmapsetId } = await finishBeatmapLoad({ content: community.content, beatmapMeta, uploaded, scorePromise });
+      setUploadedReplayShareUrl(options.shareUrl);
+      setLoadedUploadId(options.uploadId);
+      track("replay_upload_community_beatmap", {
+        replay_upload_id: options.uploadId,
+        replay_beatmap_checksum: checksum,
+        replay_beatmap_id: beatmapMeta?.id ?? null,
+        replay_beatmapset_id: beatmapsetId ?? null,
+        replay_player: uploaded.replay.header.playerName,
+      });
+      return true;
+    };
+
     const beatmapMeta = await lookupBeatmapByChecksum({ data: { checksum } });
     if (!beatmapMeta) {
+      if (await tryCommunityBeatmap(null)) return;
       enterPendingBeatmapUpload("unlisted", null);
       return;
     }
 
     const beatmapsetId = beatmapMeta.beatmapset_id ?? beatmapMeta.beatmapset?.id;
-    const scorePromise = scoreId
-      ? getScore({ data: { scoreId, mode: "mania" } }).catch(() => null)
-      : Promise.resolve(null);
 
     let bmResult: Awaited<ReturnType<typeof getBeatmapFile>>;
     try {
       bmResult = await getBeatmapFile({ data: { beatmapId: beatmapMeta.id, beatmapsetId } });
       setReplayBeatmapFileStatus(bmResult.cacheStatus === "hit" ? "cached" : "fetched");
     } catch {
+      if (await tryCommunityBeatmap(beatmapMeta)) return;
       setReplayBeatmapFileStatus("unavailable");
       enterPendingBeatmapUpload("file-unavailable", beatmapMeta);
       return;
     }
 
-    const uploadedScore = await scorePromise;
-    const uploadedMods = uploadedScore?.mods ?? uploaded.mods;
-    // Prefer the score's beatmap object (mania endpoints mark converts); the
-    // checksum lookup reports the map's original mode instead.
-    const parseKeyCount = getManiaParseKeyCount(uploadedScore?.beatmap ?? beatmapMeta, uploadedMods) ?? undefined;
-    const parsedBeatmap = parseCachedManiaBeatmap(beatmapMeta.id, bmResult.content, { keyCount: parseKeyCount });
-    setReplay({
-      ...uploaded.replay,
-      keyCount: parsedBeatmap.keyCount,
+    const { beatmapsetId: loadedBeatmapsetId } = await finishBeatmapLoad({
+      content: bmResult.content,
+      beatmapMeta,
+      uploaded,
+      scorePromise,
     });
-    setBeatmap(parsedBeatmap);
-    setScoreInfo(uploadedScore);
-    setUploadedReplayMods(uploadedMods);
-    setUploadedBeatmapsetId(beatmapsetId);
     setUploadedReplayShareUrl(options.shareUrl);
     setLoadedUploadId(options.uploadId);
     track(options.source === "owner" ? "replay_upload_view" : "replay_upload_shared_view", {
       replay_upload_id: options.uploadId,
       replay_score_id: scoreId ? String(scoreId) : null,
       replay_beatmap_id: beatmapMeta.id,
-      replay_beatmapset_id: beatmapsetId,
+      replay_beatmapset_id: loadedBeatmapsetId,
       replay_player: uploaded.replay.header.playerName,
     });
-  }, []);
+  }, [finishBeatmapLoad]);
 
   // Second half of the missing-beatmap flow: the user supplied an .osz/.osu,
   // match it against the replay's checksum and finish loading the viewer.
@@ -1196,27 +1248,23 @@ function ReplayPage() {
     setLocalBeatmapError(null);
     try {
       const match = await matchLocalBeatmapFile(file, pending.checksum);
-      const uploadedScore = pending.scoreId
-        ? await getScore({ data: { scoreId: pending.scoreId, mode: "mania" } }).catch(() => null)
-        : null;
-      const localMods = uploadedScore?.mods ?? pending.uploaded.mods;
-      // With osu! metadata, key count resolves like the normal upload path;
-      // for a map osu! doesn't know, the chart's own CS (or, for a std file,
-      // the convert formula plus any xK keymod) decides.
-      const metaKeyCount = pending.beatmapMeta
-        ? getManiaParseKeyCount(uploadedScore?.beatmap ?? pending.beatmapMeta, localMods) ?? undefined
-        : getManiaKeyModCount(localMods) ?? undefined;
-      const parsedBeatmap = parseCachedManiaBeatmap(pending.beatmapMeta?.id ?? 0, match.content, { keyCount: metaKeyCount });
-      applyLocalBeatmapAssets({
-        audioUrl: match.audioBlob ? URL.createObjectURL(match.audioBlob) : null,
-        backgroundUrl: match.backgroundBlob ? URL.createObjectURL(match.backgroundBlob) : null,
+      // The file matched the replay's checksum, so hand the .osu to the community
+      // store and spare the next viewer the same prompt. Best-effort: never block
+      // the local playback the user is waiting on.
+      void submitCommunityBeatmap({ data: { checksum: pending.checksum, content: match.content } }).catch(() => {});
+      const scorePromise = pending.scoreId
+        ? getScore({ data: { scoreId: pending.scoreId, mode: "mania" } }).catch(() => null)
+        : Promise.resolve(null);
+      await finishBeatmapLoad({
+        content: match.content,
+        beatmapMeta: pending.beatmapMeta,
+        uploaded: pending.uploaded,
+        scorePromise,
+        localAssets: {
+          audioUrl: match.audioBlob ? URL.createObjectURL(match.audioBlob) : null,
+          backgroundUrl: match.backgroundBlob ? URL.createObjectURL(match.backgroundBlob) : null,
+        },
       });
-      setReplay({ ...pending.uploaded.replay, keyCount: parsedBeatmap.keyCount });
-      setBeatmap(parsedBeatmap);
-      setScoreInfo(uploadedScore);
-      setUploadedReplayMods(localMods);
-      setUploadedBeatmapsetId(pending.beatmapMeta ? pending.beatmapMeta.beatmapset_id ?? pending.beatmapMeta.beatmapset?.id : undefined);
-      setPendingBeatmapUpload(null);
       track("replay_upload_local_beatmap", {
         replay_upload_id: pending.options.uploadId,
         replay_missing_reason: pending.reason,
@@ -1228,7 +1276,7 @@ function ReplayPage() {
     } finally {
       setLocalBeatmapLoading(false);
     }
-  }, [applyLocalBeatmapAssets, localBeatmapLoading, pendingBeatmapUpload]);
+  }, [finishBeatmapLoad, localBeatmapLoading, pendingBeatmapUpload]);
 
   const handleCancelPendingBeatmapUpload = useCallback(() => {
     dismissedUploadIdRef.current = pendingBeatmapUpload?.options.uploadId ?? uploadId ?? null;
@@ -1615,6 +1663,13 @@ function ReplayPage() {
     navigate({ to: "/replay", search: backNavigation.search });
   };
 
+  // Rendered twice: above the viewer for desktop, and inside the viewer's
+  // scrolling area (below the sticky stage) for mobile. ReplayInfo's own
+  // responsive variants make sure only one copy is ever visible.
+  const replayInfoCard = replay ? (
+    <ReplayInfo replay={replay} score={scoreInfo} beatmap={beatmap} stars={starRating} mods={starMods} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} shareUrl={uploadedReplayShareUrl ?? undefined} playerProfile={playerProfile} onClear={handleClearReplay} />
+  ) : null;
+
   return (
     <div className="flex-1">
       <div className={replay ? "hidden sm:block" : ""}>
@@ -1625,7 +1680,10 @@ function ReplayPage() {
       </div>
 
       <div className="bg-osu-b5 min-h-[80vh]">
-        <div className="max-w-[1200px] mx-auto px-3 py-3 sm:px-5 sm:py-6">
+        {/* With a replay loaded the mobile stage bleeds edge-to-edge and sits flush
+            under the navbar, so the container's mobile padding moves onto the
+            individual scrolling cards instead. */}
+        <div className={`max-w-[1200px] mx-auto ${replay && !loading ? "pb-4 sm:px-5 sm:py-6" : "px-3 py-3 sm:px-5 sm:py-6"}`}>
           <AnimatePresence mode="wait">
             {loading ? (
               <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center px-4 py-20 text-center">
@@ -1635,8 +1693,10 @@ function ReplayPage() {
               </motion.div>
             ) : replay ? (
               <motion.div key="viewer" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <ReplayInfo replay={replay} score={scoreInfo} beatmap={beatmap} stars={starRating} mods={starMods} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} shareUrl={uploadedReplayShareUrl ?? undefined} playerProfile={playerProfile} onClear={handleClearReplay} />
-                <ReplayViewer replay={replay} beatmap={beatmap} scoreInfo={scoreInfo} replayMods={uploadedReplayMods} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} initialTime={initialTime} localAudioUrl={localBeatmapAssets.audioUrl} localBackgroundUrl={localBeatmapAssets.backgroundUrl} />
+                <div className="hidden sm:block">{replayInfoCard}</div>
+                <ReplayViewer replay={replay} beatmap={beatmap} scoreInfo={scoreInfo} replayMods={uploadedReplayMods} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} initialTime={initialTime} localAudioUrl={localBeatmapAssets.audioUrl} localBackgroundUrl={localBeatmapAssets.backgroundUrl} onClear={handleClearReplay}>
+                  <div className="px-3 sm:hidden">{replayInfoCard}</div>
+                </ReplayViewer>
               </motion.div>
             ) : pendingBeatmapUpload ? (
               <motion.div key="missing-beatmap" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -1739,6 +1799,8 @@ function ReplayViewer({
   initialTime,
   localAudioUrl,
   localBackgroundUrl,
+  onClear,
+  children,
 }: {
   replay: ServerReplay;
   beatmap: ManiaBeatmap | null;
@@ -1750,6 +1812,10 @@ function ReplayViewer({
   // isn't downloadable from osu! or the mirrors.
   localAudioUrl?: string | null;
   localBackgroundUrl?: string | null;
+  onClear: () => void;
+  // Mobile-only content (the score info card) slotted between the sticky
+  // stage and the settings card so it scrolls under the pinned player.
+  children?: ReactNode;
 }) {
   const auth = useAuth();
   const canvasContainerRef = useRef<HTMLDivElement>(null);
@@ -2412,6 +2478,29 @@ function ReplayViewer({
       cancelled = true;
     };
   }, [beatmap, hasBeatmapHitsounds, effectiveBeatmapsetId, audioSettings.hitsoundsEnabled, audioSettings.beatmapHitsounds]);
+
+  // Crash forensics: if a previous page load left a watch beacon behind, the
+  // tab died without unloading (crash/OOM kill) - report it with its heap
+  // trajectory, then track the current session the same way.
+  useEffect(() => {
+    reportCrashedReplayWatchSession();
+  }, []);
+
+  useEffect(() => {
+    if (replay.frames.length === 0) return;
+    return startReplayWatchBeacon(
+      {
+        score_id: scoreInfo?.id ?? null,
+        beatmapset_id: effectiveBeatmapsetId ?? null,
+        key_count: replay.keyCount,
+        frame_count: replay.frames.length,
+        note_count: beatmap?.notes.length ?? 0,
+        mods: getModAcronyms(effectiveReplayMods).join(","),
+        rate: modRate,
+      },
+      () => rendererRef.current?.time ?? null,
+    );
+  }, [replay, beatmap, scoreInfo, effectiveBeatmapsetId, effectiveReplayMods, modRate]);
 
   // Create renderer
   useEffect(() => {
@@ -3210,7 +3299,13 @@ function ReplayViewer({
 
   return (
     <div className="space-y-3">
-      {/* Canvas */}
+      {/* Stage: canvas + (mobile) transport strip. Pinned under the 60px navbar
+          on phones so scrolling and the browser chrome hiding/reappearing never
+          move it; the info and settings cards scroll underneath. While
+          fullscreen the wrapper must stay unpositioned: a z-indexed sticky
+          ancestor would trap the pseudo-fullscreen overlay's z-[100] inside a
+          z-30 stacking context, putting it under the z-50 navbar. */}
+      <div className={isCanvasFullscreen ? undefined : "sticky top-[60px] z-30 sm:static sm:z-auto"}>
       <div
         ref={canvasContainerRef}
         data-replay-fullscreen={isCanvasFullscreen ? "true" : undefined}
@@ -3220,7 +3315,7 @@ function ReplayViewer({
         className={`group/replay-canvas relative overflow-hidden bg-[#0a0a18] ${
           isCanvasFullscreen
             ? `${isPseudoFullscreen ? "fixed inset-0 z-[100]" : ""} h-[100dvh] w-screen max-w-none rounded-none border-0`
-            : "rounded-xl border border-osu-b3/20"
+            : "border-y border-osu-b3/20 sm:rounded-xl sm:border"
         }`}
         style={isCanvasFullscreen ? { width: "100vw", height: "100dvh", maxWidth: "none" } : undefined}
       >
@@ -3252,18 +3347,36 @@ function ReplayViewer({
           className={`relative z-10 w-full ${
             isCanvasFullscreen
               ? "h-[100dvh] min-h-0 max-h-none"
-              : "h-[calc(100dvh-315px)] min-h-[390px] max-h-[560px] sm:h-[min(70vh,600px)] sm:min-h-0 sm:max-h-none"
+              : // svh (not dvh) on phones: the small-viewport height ignores the
+                // browser chrome collapsing on scroll, so the stage never resizes.
+                // 172px = 60px navbar + 48px transport strip + a peek of the cards
+                // below to hint that the page scrolls.
+                "h-[calc(100svh-172px)] min-h-[360px] max-h-[540px] sm:h-[min(70vh,600px)] sm:min-h-0 sm:max-h-none"
           }`}
         />
+        {!isCanvasFullscreen && (
+          <button
+            type="button"
+            onClick={onClear}
+            aria-label="Back to replay browser"
+            className={`absolute left-2 top-2 z-30 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-black/50 text-white/85 transition-opacity active:scale-95 sm:hidden ${
+              mobileFullscreenButtonVisible ? "opacity-100" : "pointer-events-none opacity-0"
+            }`}
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+        )}
         <button
           type="button"
           onClick={toggleReplayFullscreen}
           aria-label={isCanvasFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
           title={isCanvasFullscreen ? "Exit fullscreen" : "Fullscreen"}
-          className={`absolute bottom-3 right-3 z-30 flex h-8 w-8 cursor-pointer items-center justify-center rounded-sm text-white/70 drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)] transition hover:bg-white/10 hover:text-white hover:opacity-100 focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-white/50 active:scale-95 sm:h-9 sm:w-9 ${
+          className={`absolute bottom-3 right-3 z-30 h-8 w-8 cursor-pointer items-center justify-center rounded-sm text-white/70 drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)] transition hover:bg-white/10 hover:text-white hover:opacity-100 focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-white/50 active:scale-95 sm:h-9 sm:w-9 ${
             isCanvasFullscreen
-              ? fullscreenChromeVisible ? "opacity-90" : "opacity-0"
-              : mobileFullscreenButtonVisible ? "opacity-90" : "opacity-0 group-hover/replay-canvas:opacity-90"
+              ? fullscreenChromeVisible ? "flex opacity-90" : "flex opacity-0"
+              : // Phones enter fullscreen from the transport strip; this floating
+                // toggle only exists for sm+ (hover reveal, tap reveal on tablets).
+                `hidden sm:flex ${mobileFullscreenButtonVisible ? "opacity-90" : "opacity-0 group-hover/replay-canvas:opacity-90"}`
           }`}
           style={isCanvasFullscreen ? {
             bottom: "max(0.75rem, env(safe-area-inset-bottom))",
@@ -3330,6 +3443,50 @@ function ReplayViewer({
           </div>
         )}
       </div>
+      {/* Phone transport strip: pinned with the canvas so play/scrub/fullscreen
+          never scroll away. Fullscreen mode has its own chrome overlay. */}
+      {!isCanvasFullscreen && (
+        <div className="flex items-center gap-2 border-b border-osu-b3/30 bg-osu-b4 px-2.5 py-1.5 sm:hidden">
+          <button
+            type="button"
+            onClick={togglePlay}
+            aria-label={isPlaying ? "Pause replay" : "Play replay"}
+            title={pendingPlay ? "Waiting for audio to load..." : isPlaying && buffering ? "Buffering..." : isPlaying ? "Pause" : "Play"}
+            className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-osu-pink text-white transition hover:bg-osu-pink-light active:scale-95"
+          >
+            {pendingPlay || (isPlaying && buffering) ? (
+              <LoaderCircle className="h-4 w-4 animate-spin" strokeWidth={2.4} />
+            ) : isPlaying ? (
+              <Pause className="h-4 w-4" fill="currentColor" strokeWidth={2.4} />
+            ) : (
+              <Play className="ml-0.5 h-4 w-4" fill="currentColor" strokeWidth={2.4} />
+            )}
+          </button>
+          <div className="min-w-0 flex-1">
+            <ReplayProgressBar
+              rendererRef={rendererRef}
+              heatmap={keypressHeatmap}
+              sliderClass=""
+              className="!gap-2 !px-0 !pb-0 !pt-0"
+              onPointerDown={handleProgressPointerDown}
+              onPointerUp={handleProgressPointerUp}
+              onSeek={handleProgressSeek}
+              onContextMenu={() => {}}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={toggleReplayFullscreen}
+            aria-label="Enter fullscreen"
+            className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-white active:scale-95"
+          >
+            <Maximize2 className="h-[18px] w-[18px]" />
+          </button>
+        </div>
+      )}
+      </div>
+
+      {children}
 
       {/* Audio element (hidden). Starts streaming from /api/audio with Range
           requests (only pulls what it plays), then swaps to a fully-downloaded
@@ -3344,6 +3501,9 @@ function ReplayViewer({
         />
       )}
 
+      {/* Settings card; on phones the transport (play/scrub) lives in the sticky
+          strip above, so this card hides its own copy below sm. */}
+      <div className="mx-3 sm:mx-0">
       <ReplayControls
         rendererRef={rendererRef}
         heatmap={keypressHeatmap}
@@ -3451,6 +3611,7 @@ function ReplayViewer({
         onSeek={handleProgressSeek}
         onContextMenu={() => {}}
       />
+      </div>
 
       <AnimatePresence>
         {skinSettingsOpen && (

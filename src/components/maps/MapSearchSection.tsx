@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion, useDragControls } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   fetchLiveMapSearch,
   type LiveMapSearchEntry,
@@ -30,15 +30,18 @@ const KEY_OPTIONS = [
 
 const STATUS_OPTIONS = [
   { id: "ranked", label: "Ranked" },
+  { id: "qualified", label: "Qualified" },
   { id: "loved", label: "Loved" },
   { id: "graveyard", label: "Graveyard" },
   { id: "other", label: "Pending" },
 ];
 
-// Match beatmapStatusBadgeClass() in maps.tsx so the filters read like the badges
-// on the cards: green ranked, pink loved, grey graveyard, yellow pending.
+// Match the card status pills (statusPill() in SearchCard) so the filters read
+// like the badges on the cards: green ranked, blue qualified, pink loved, grey
+// graveyard, yellow pending.
 const STATUS_COLOR: Record<string, string> = {
   ranked: "#6cf27f",
+  qualified: "#66ccff",
   loved: "#f26fa6",
   graveyard: "#b3b3b3",
   other: "#ffd36b",
@@ -313,15 +316,34 @@ function LengthSlider({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
   );
 }
 
-// Which dan ladder annotates the numeric bounds: 7K courses when the key facet
-// is exactly 7K, the LN ladder when the pattern facet is LN-flavoured,
-// otherwise the 4K reform ladder. The filter itself is the classifier's
-// numeric rawDan, so it works across families; only the labels/logos adapt.
-function danSliderContext(ui: MapSearchUiState): DanScaleContext {
-  const sevenKey = ui.keys.length === 1 && ui.keys[0] === "7k";
+// One ladder the picker can offer: a keymode plus the scale context that names
+// its badges. rawDan is a per-keymode axis (4K reform/LN vs 7K courses), so a
+// pick from a ladder only means what its badge says when the search is scoped
+// to that ladder's keymode.
+interface DanLadderGroup {
+  keysId: "4k" | "7k";
+  label: string;
+  context: DanScaleContext;
+}
+
+// Which ladders the picker offers: the keymode's own ladder when the key facet
+// resolves to exactly 4K or 7K, otherwise both (empty, mixed, or "other" key
+// facets are ambiguous, and the 4K and 7K courses share numbers but not
+// difficulty). An LN-flavoured pattern facet swaps in the LN ladders.
+function danLadderGroups(ui: MapSearchUiState): DanLadderGroup[] {
   const lnFlavoured = ui.patterns.some((pattern) => pattern === "ln" || pattern.startsWith("ln"));
-  if (sevenKey) return lnFlavoured ? "7k-ln" : "7k";
-  return lnFlavoured ? "ln" : "reform";
+  const fourKey: DanLadderGroup = { keysId: "4k", label: "4K", context: lnFlavoured ? "ln" : "reform" };
+  const sevenKey: DanLadderGroup = { keysId: "7k", label: "7K", context: lnFlavoured ? "7k-ln" : "7k" };
+  const only = ui.keys.length === 1 ? ui.keys[0] : null;
+  if (only === "4k") return [fourKey];
+  if (only === "7k") return [sevenKey];
+  return [fourKey, sevenKey];
+}
+
+// The context that annotates the collapsed trigger chip; with both ladders on
+// offer the selection is a bare rawDan range, shown with the 4K badges.
+function danSliderContext(ui: MapSearchUiState): DanScaleContext {
+  return danLadderGroups(ui)[0].context;
 }
 
 // The ladder's badge rows: numeric courses on top, boss/greek courses below.
@@ -347,22 +369,36 @@ function danReadout(value: number, context: DanScaleContext): string {
 // selection pops to full color. A fixed-height readout under the wall names
 // whatever is hovered or selected, so the layout never moves. Only charts with
 // a stored chart analysis match while set.
+//
+// With an ambiguous key facet the wall stacks the 4K and 7K ladders, and a
+// pick also applies its ladder's keymode to the Keys facet (pruning pattern
+// picks the keymode can't express, same as the Keys chips): without the scope
+// a "4K 5th dan" pick would match 7K 5th-dan charts at the same rawDan.
+// Clearing the dan never touches the keys facet.
 function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
-  const context = danSliderContext(ui);
-  const rows = danLadderRows(context);
+  const groups = danLadderGroups(ui);
+  const ambiguous = groups.length > 1;
   const selection = ui.danMin != null && ui.danMax != null ? { lo: ui.danMin, hi: ui.danMax } : null;
-  const [drag, setDrag] = useState<{ anchor: number; current: number } | null>(null);
-  const [hovered, setHovered] = useState<number | null>(null);
+  const [drag, setDrag] = useState<{ group: DanLadderGroup; anchor: number; current: number } | null>(null);
+  const [hovered, setHovered] = useState<{ group: DanLadderGroup; level: number } | null>(null);
   const dragRef = useRef(drag);
   dragRef.current = drag;
 
-  const commit = (lo: number | null, hi: number | null) => {
+  const commit = (lo: number | null, hi: number | null, group: DanLadderGroup) => {
     playPatternHit(lo != null);
+    if (ambiguous && lo != null) {
+      const keys = [group.keysId];
+      const valid = validPatternIds(keys);
+      apply({ danMin: lo, danMax: hi, keys, patterns: ui.patterns.filter((pattern) => valid.has(pattern)), page: 0 });
+      return;
+    }
     apply({ danMin: lo, danMax: hi, page: 0 });
   };
-  const toggleSingle = (level: number) => {
-    if (selection && selection.lo === level && selection.hi === level) commit(null, null);
-    else commit(level, level);
+  const toggleSingle = (level: number, group: DanLadderGroup) => {
+    // Re-click toggles off only on a single ladder; with both ladders shown the
+    // same number sits on each, so a tap always means "select on this ladder".
+    if (!ambiguous && selection && selection.lo === level && selection.hi === level) commit(null, null, group);
+    else commit(level, level, group);
   };
 
   const dragging = drag != null;
@@ -373,14 +409,17 @@ function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
       const badge = target instanceof Element ? target.closest("[data-dan-level]") : null;
       if (!badge) return;
       const level = Number(badge.getAttribute("data-dan-level"));
-      setDrag((state) => (state && state.current !== level ? { ...state, current: level } : state));
+      const groupId = badge.getAttribute("data-dan-group");
+      setDrag((state) =>
+        state && state.group.keysId === groupId && state.current !== level ? { ...state, current: level } : state,
+      );
     };
     const onUp = () => {
       const state = dragRef.current;
       setDrag(null);
       if (!state) return;
-      if (state.anchor === state.current) toggleSingle(state.anchor);
-      else commit(Math.min(state.anchor, state.current), Math.max(state.anchor, state.current));
+      if (state.anchor === state.current) toggleSingle(state.anchor, state.group);
+      else commit(Math.min(state.anchor, state.current), Math.max(state.anchor, state.current), state.group);
     };
     // A vertical touch pan cancels the pointer: abort without applying.
     const onCancel = () => setDrag(null);
@@ -395,66 +434,91 @@ function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dragging]);
 
-  // Live paint while dragging, committed selection otherwise.
-  const paint = drag
-    ? { lo: Math.min(drag.anchor, drag.current), hi: Math.max(drag.anchor, drag.current) }
-    : selection;
-
+  // Live paint while dragging (only on the ladder the drag started in); the
+  // committed selection otherwise. A committed range with both ladders shown is
+  // a bare rawDan filter, so it highlights on each.
+  const paintFor = (group: DanLadderGroup) => {
+    if (drag) {
+      if (drag.group.keysId !== group.keysId) return null;
+      return { lo: Math.min(drag.anchor, drag.current), hi: Math.max(drag.anchor, drag.current) };
+    }
+    return selection;
+  };
+  const describe = (group: DanLadderGroup, lo: number, hi?: number) => {
+    const name = hi == null || hi === lo
+      ? danReadout(lo, group.context)
+      : `${danReadout(lo, group.context)} to ${danReadout(hi, group.context)}`;
+    return ambiguous ? `${group.label} ${name}` : name;
+  };
   return (
-    <div className="flex flex-col gap-1.5 select-none" style={{ touchAction: "pan-y" }} onPointerLeave={() => setHovered(null)}>
-      {rows.map((row, rowIndex) => (
-        <div key={rowIndex} className="flex items-center gap-1 sm:gap-1.5">
-          {row.map((level) => {
-            const active = paint != null && level >= paint.lo && level <= paint.hi;
-            const src = danScaleImage(level, context);
-            const label = danScaleLabel(level, context);
+    <div className="flex flex-col gap-2 select-none" style={{ touchAction: "pan-y" }} onPointerLeave={() => setHovered(null)}>
+      {groups.map((group) => (
+        <div key={group.keysId} className="flex flex-col gap-1.5">
+          {ambiguous && (
+            <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{group.label}</span>
+          )}
+          {danLadderRows(group.context).map((row, rowIndex) => {
+            const groupPaint = paintFor(group);
             return (
-              <motion.button
-                key={`${context}:${level}`}
-                type="button"
-                data-dan-level={level}
-                title={danReadout(level, context)}
-                aria-pressed={active}
-                onPointerDown={(event) => {
-                  if (event.button !== 0 && event.pointerType === "mouse") return;
-                  if (event.shiftKey && selection) {
-                    // Extend: anchor at the selection edge farthest from the tap.
-                    const anchor = Math.abs(level - selection.lo) >= Math.abs(level - selection.hi) ? selection.lo : selection.hi;
-                    setDrag({ anchor, current: level });
-                    return;
-                  }
-                  setDrag({ anchor: level, current: level });
-                }}
-                onClick={(event) => {
-                  // Pointer commits handle mouse/touch; this is the keyboard path.
-                  if (event.detail === 0) toggleSingle(level);
-                }}
-                onPointerEnter={(event) => {
-                  if (event.pointerType === "mouse") setHovered(level);
-                }}
-                onPointerLeave={() => setHovered((value) => (value === level ? null : value))}
-                animate={{ scale: active ? 1.12 : 1 }}
-                transition={{ type: "spring", stiffness: 560, damping: 24 }}
-                className={`grid h-7 w-7 sm:h-8 sm:w-8 shrink-0 cursor-pointer place-items-center transition-[opacity,filter] duration-150 ${
-                  active ? "opacity-100" : hovered === level ? "opacity-90 grayscale-[20%]" : "opacity-40 grayscale-[45%]"
-                }`}
-              >
-                {src ? (
-                  <img
-                    src={src}
-                    alt={label}
-                    draggable={false}
-                    loading="lazy"
-                    className={`h-full w-full object-contain ${
-                      active ? "drop-shadow-[0_0_6px_rgba(255,102,171,0.4)]" : "drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
-                    }`}
-                  />
-                ) : (
-                  <span className="grid h-6 w-6 place-items-center rounded-full bg-osu-b3 ring-1 ring-white/20 text-[11px] font-black text-osu-l1">
-                    {label}
-                  </span>
-                )}
-              </motion.button>
+              <div key={rowIndex} className="flex items-center gap-1 sm:gap-1.5">
+                {row.map((level) => {
+                  const active = groupPaint != null && level >= groupPaint.lo && level <= groupPaint.hi;
+                  const isHovered = hovered != null && hovered.group.keysId === group.keysId && hovered.level === level;
+                  const src = danScaleImage(level, group.context);
+                  const label = danScaleLabel(level, group.context);
+                  return (
+                    <motion.button
+                      key={`${group.context}:${level}`}
+                      type="button"
+                      data-dan-level={level}
+                      data-dan-group={group.keysId}
+                      title={describe(group, level)}
+                      aria-pressed={active}
+                      onPointerDown={(event) => {
+                        if (event.button !== 0 && event.pointerType === "mouse") return;
+                        if (event.shiftKey && selection) {
+                          // Extend: anchor at the selection edge farthest from the tap.
+                          const anchor = Math.abs(level - selection.lo) >= Math.abs(level - selection.hi) ? selection.lo : selection.hi;
+                          setDrag({ group, anchor, current: level });
+                          return;
+                        }
+                        setDrag({ group, anchor: level, current: level });
+                      }}
+                      onClick={(event) => {
+                        // Pointer commits handle mouse/touch; this is the keyboard path.
+                        if (event.detail === 0) toggleSingle(level, group);
+                      }}
+                      onPointerEnter={(event) => {
+                        if (event.pointerType === "mouse") setHovered({ group, level });
+                      }}
+                      onPointerLeave={() => setHovered((value) => (
+                        value && value.group.keysId === group.keysId && value.level === level ? null : value
+                      ))}
+                      animate={{ scale: active ? 1.12 : 1 }}
+                      transition={{ type: "spring", stiffness: 560, damping: 24 }}
+                      className={`grid h-7 w-7 sm:h-8 sm:w-8 shrink-0 cursor-pointer place-items-center transition-[opacity,filter] duration-150 ${
+                        active ? "opacity-100" : isHovered ? "opacity-90 grayscale-[20%]" : "opacity-40 grayscale-[45%]"
+                      }`}
+                    >
+                      {src ? (
+                        <img
+                          src={src}
+                          alt={label}
+                          draggable={false}
+                          decoding="async"
+                          className={`h-full w-full object-contain ${
+                            active ? "drop-shadow-[0_0_6px_rgba(255,102,171,0.4)]" : "drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
+                          }`}
+                        />
+                      ) : (
+                        <span className="grid h-6 w-6 place-items-center rounded-full bg-osu-b3 ring-1 ring-white/20 text-[11px] font-black text-osu-l1">
+                          {label}
+                        </span>
+                      )}
+                    </motion.button>
+                  );
+                })}
+              </div>
             );
           })}
         </div>
@@ -462,17 +526,19 @@ function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
       <div className="flex h-4 items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-osu-f1/70">
         <span>
           {hovered != null
-            ? danReadout(hovered, context)
-            : paint
-              ? paint.lo === paint.hi
-                ? danReadout(paint.lo, context)
-                : `${danReadout(paint.lo, context)} to ${danReadout(paint.hi, context)}`
-              : "any"}
+            ? describe(hovered.group, hovered.level)
+            : drag
+              ? describe(drag.group, Math.min(drag.anchor, drag.current), Math.max(drag.anchor, drag.current))
+              : selection
+                ? selection.lo === selection.hi
+                  ? danReadout(selection.lo, groups[0].context)
+                  : `${danReadout(selection.lo, groups[0].context)} to ${danReadout(selection.hi, groups[0].context)}`
+                : "any"}
         </span>
         {selection != null && drag == null && (
           <button
             type="button"
-            onClick={() => commit(null, null)}
+            onClick={() => commit(null, null, groups[0])}
             className="lowercase text-osu-f1/50 hover:text-osu-pink-light transition-colors cursor-pointer"
           >
             clear
@@ -482,6 +548,23 @@ function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
       </div>
     </div>
   );
+}
+
+// The greek badge webps run up to ~130KB each; fetching and decoding them the
+// moment the sheet first slides in is a visible stutter on phones. Warm the
+// whole ladder off the critical path instead (idle time, once per src).
+const warmedDanArt = new Set<string>();
+function warmDanBadgeArt(context: DanScaleContext) {
+  for (const row of danLadderRows(context)) {
+    for (const level of row) {
+      const src = danScaleImage(level, context);
+      if (!src || warmedDanArt.has(src)) continue;
+      warmedDanArt.add(src);
+      const img = new Image();
+      img.src = src;
+      img.decode?.().catch(() => {});
+    }
+  }
 }
 
 // A selected dan at chip scale for the collapsed trigger.
@@ -571,8 +654,63 @@ function DanPicker({ ui, apply, inline = false }: { ui: MapSearchUiState; apply:
   );
 }
 
+// The mobile toolbar's Filters trigger plus its bottom sheet. The open state
+// lives here, not in MapSearchSection, so toggling the sheet re-renders only
+// this control and not the card grid behind it (the other half of the phone
+// open/close jank).
+function MobileFilters({
+  ui,
+  apply,
+  onClear,
+  hasActiveFilters,
+  collapsedFilterCount,
+  resultsLabel,
+}: {
+  ui: MapSearchUiState;
+  apply: ApplyFn;
+  onClear: () => void;
+  hasActiveFilters: boolean;
+  collapsedFilterCount: number;
+  resultsLabel: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-[12.5px] font-semibold cursor-pointer transition-colors bg-osu-b4 text-osu-l2 hover:bg-osu-b3 hover:text-osu-l1"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden="true">
+          <path d="M3 6h18M7 12h10M10 18h4" />
+        </svg>
+        Filters
+        {collapsedFilterCount > 0 && (
+          <span className="rounded-full bg-osu-pink px-1.5 text-[10px] font-bold leading-4 text-white tabular-nums">
+            {collapsedFilterCount}
+          </span>
+        )}
+      </button>
+      <MobileFilterSheet
+        open={open}
+        onClose={() => setOpen(false)}
+        ui={ui}
+        apply={apply}
+        onClear={onClear}
+        hasActiveFilters={hasActiveFilters}
+        resultsLabel={resultsLabel}
+      />
+    </>
+  );
+}
+
 // Bottom sheet holding the secondary filters on phones. Filters apply live (the
 // dimmed grid updates behind the scrim); the pink button just closes the sheet.
+// The sheet stays mounted across open/close (translated offscreen, inert) so a
+// toggle only moves an existing compositor layer instead of mounting the badge
+// wall and sliders mid-animation, which dropped frames on phones.
 function MobileFilterSheet({
   open,
   onClose,
@@ -590,7 +728,44 @@ function MobileFilterSheet({
   hasActiveFilters: boolean;
   resultsLabel: string;
 }) {
-  const dragControls = useDragControls();
+  // Swipe-to-dismiss, mirroring the random-tab filter sheet in maps.tsx: the
+  // open/close slide is a CSS transition (compositor thread, buttery on phones),
+  // and the transition only switches off while a finger is actively dragging.
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState(0);
+  const dragStartYRef = useRef(0);
+  const handleDragStart = (e: React.TouchEvent) => {
+    dragStartYRef.current = e.touches[0].clientY;
+    setIsDragging(true);
+    setDragOffset(0);
+  };
+  const handleDragMove = (e: React.TouchEvent) => {
+    setDragOffset(Math.max(0, e.touches[0].clientY - dragStartYRef.current));
+  };
+  const handleDragEnd = () => {
+    setIsDragging(false);
+    if (dragOffset > 100) onClose();
+    setDragOffset(0);
+  };
+  useEffect(() => {
+    if (open) setDragOffset(0);
+  }, [open]);
+
+  // Pre-fetch/decode the badge art for the ladders the sheet would show, so
+  // the first open animates over already-decoded images. The contexts join to
+  // a string so the effect keys on the value, not the array identity.
+  const danContexts = danLadderGroups(ui).map((group) => group.context).join(" ");
+  useEffect(() => {
+    const warm = () => {
+      for (const context of danContexts.split(" ")) warmDanBadgeArt(context as DanScaleContext);
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      const handle = window.requestIdleCallback(warm, { timeout: 2000 });
+      return () => window.cancelIdleCallback(handle);
+    }
+    const timer = window.setTimeout(warm, 300);
+    return () => window.clearTimeout(timer);
+  }, [danContexts]);
 
   useEffect(() => {
     if (!open) return;
@@ -609,78 +784,80 @@ function MobileFilterSheet({
   if (typeof document === "undefined") return null;
 
   return createPortal(
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          key="map-filter-sheet"
-          className="fixed inset-0 z-[120] sm:hidden"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.12 }}
+    <div
+      className={`fixed inset-0 z-[120] sm:hidden ${open ? "" : "pointer-events-none"}`}
+      aria-hidden={!open}
+      inert={!open}
+    >
+      <div
+        className="absolute inset-0 bg-black/70 transition-opacity duration-200"
+        style={{ opacity: open ? Math.max(0, 1 - dragOffset / 260) : 0 }}
+        onClick={onClose}
+      />
+      <div
+        className="absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-2xl bg-osu-b5 ring-1 ring-white/10"
+        style={{
+          transform: open ? `translateY(${dragOffset}px)` : "translateY(100%)",
+          // Hidden outright once closed so the mobile URL-bar collapse can't
+          // reveal its top edge mid-scroll (translateY(100%) alone leaves the
+          // edge flush with the viewport bottom); the hide waits out the
+          // slide-down so the close still animates.
+          visibility: open ? "visible" : "hidden",
+          transition: isDragging
+            ? "none"
+            : open
+              ? "transform 0.3s cubic-bezier(0.32, 0.72, 0, 1)"
+              : "transform 0.3s cubic-bezier(0.32, 0.72, 0, 1), visibility 0s linear 0.3s",
+          willChange: "transform",
+        }}
+      >
+        <div
+          className="shrink-0 cursor-grab touch-none pt-2 active:cursor-grabbing"
+          onTouchStart={handleDragStart}
+          onTouchMove={handleDragMove}
+          onTouchEnd={handleDragEnd}
+          onTouchCancel={handleDragEnd}
         >
-          <div className="absolute inset-0 bg-black/70" onClick={onClose} />
-          <motion.div
-            className="absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-2xl bg-osu-b5 ring-1 ring-white/10"
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-            drag="y"
-            dragListener={false}
-            dragControls={dragControls}
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={{ top: 0, bottom: 0.6 }}
-            onDragEnd={(_, info) => {
-              if (info.offset.y > 120 || info.velocity.y > 600) onClose();
-            }}
+          <div className="mx-auto h-1 w-9 rounded-full bg-osu-b3" aria-hidden="true" />
+          <span className="block px-4 pt-2 text-[13px] font-bold text-osu-l1">Filters</span>
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-3.5">
+          <KeysChips ui={ui} apply={apply} />
+          <StatusChips ui={ui} apply={apply} />
+          <ChipGroup label="Difficulty">
+            <StarSlider ui={ui} apply={apply} />
+          </ChipGroup>
+          <ChipGroup label="Dan (est.)">
+            <DanPicker ui={ui} apply={apply} inline />
+          </ChipGroup>
+          <ChipGroup label="BPM">
+            <BpmSlider ui={ui} apply={apply} />
+          </ChipGroup>
+          <ChipGroup label="Length">
+            <LengthSlider ui={ui} apply={apply} />
+          </ChipGroup>
+        </div>
+        <div className="flex items-center justify-between gap-3 border-t border-osu-b3/20 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <button
+            type="button"
+            onClick={onClear}
+            disabled={!hasActiveFilters}
+            className={`text-[12px] transition-colors ${
+              hasActiveFilters ? "text-osu-f1 hover:text-osu-pink-light cursor-pointer" : "text-osu-f1/40 cursor-default"
+            }`}
           >
-            <div
-              className="shrink-0 cursor-grab touch-none pt-2 active:cursor-grabbing"
-              onPointerDown={(e) => dragControls.start(e)}
-            >
-              <div className="mx-auto h-1 w-9 rounded-full bg-osu-b3" aria-hidden="true" />
-              <span className="block px-4 pt-2 text-[13px] font-bold text-osu-l1">Filters</span>
-            </div>
-            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-3.5">
-              <KeysChips ui={ui} apply={apply} />
-              <StatusChips ui={ui} apply={apply} />
-              <ChipGroup label="Difficulty">
-                <StarSlider ui={ui} apply={apply} />
-              </ChipGroup>
-              <ChipGroup label="Dan (est.)">
-                <DanPicker ui={ui} apply={apply} inline />
-              </ChipGroup>
-              <ChipGroup label="BPM">
-                <BpmSlider ui={ui} apply={apply} />
-              </ChipGroup>
-              <ChipGroup label="Length">
-                <LengthSlider ui={ui} apply={apply} />
-              </ChipGroup>
-            </div>
-            <div className="flex items-center justify-between gap-3 border-t border-osu-b3/20 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-              <button
-                type="button"
-                onClick={onClear}
-                disabled={!hasActiveFilters}
-                className={`text-[12px] transition-colors ${
-                  hasActiveFilters ? "text-osu-f1 hover:text-osu-pink-light cursor-pointer" : "text-osu-f1/40 cursor-default"
-                }`}
-              >
-                Clear all
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-md bg-osu-pink px-4 py-2 text-[12.5px] font-bold text-white hover:bg-osu-pink-light transition-colors cursor-pointer"
-              >
-                {resultsLabel}
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>,
+            Clear all
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md bg-osu-pink px-4 py-2 text-[12.5px] font-bold text-white hover:bg-osu-pink-light transition-colors cursor-pointer"
+          >
+            {resultsLabel}
+          </button>
+        </div>
+      </div>
+    </div>,
     document.body,
   );
 }
@@ -740,9 +917,6 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
   const [ui, setUi] = useState<MapSearchUiState>(state);
   const [searchInput, setSearchInput] = useState(state.q);
   const [showMore, setShowMore] = useState(state.bpmMin > 0 || state.bpmMax > 0 || state.lenMin > 0 || state.lenMax > 0);
-  // On phones the secondary filters live in a bottom sheet behind the toolbar's
-  // Filters button; its badge carries the active count.
-  const [showFilters, setShowFilters] = useState(false);
   const [result, setResult] = useState<LiveMapSearchResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -933,23 +1107,14 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
 
         {/* Mobile toolbar: secondary filters collapse behind a toggle, sort is a dropdown */}
         <div className="flex items-center gap-2 sm:hidden">
-          <button
-            type="button"
-            onClick={() => setShowFilters(true)}
-            aria-haspopup="dialog"
-            aria-expanded={showFilters}
-            className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-[12.5px] font-semibold cursor-pointer transition-colors bg-osu-b4 text-osu-l2 hover:bg-osu-b3 hover:text-osu-l1"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden="true">
-              <path d="M3 6h18M7 12h10M10 18h4" />
-            </svg>
-            Filters
-            {collapsedFilterCount > 0 && (
-              <span className="rounded-full bg-osu-pink px-1.5 text-[10px] font-bold leading-4 text-white tabular-nums">
-                {collapsedFilterCount}
-              </span>
-            )}
-          </button>
+          <MobileFilters
+            ui={ui}
+            apply={apply}
+            onClear={clearFilters}
+            hasActiveFilters={hasActiveFilters}
+            collapsedFilterCount={collapsedFilterCount}
+            resultsLabel={`Show ${formatNumber(total)} maps`}
+          />
           <div className="ml-auto">
             <SortSelect value={ui.sort} onChange={(id) => apply({ sort: id, page: 0 })} />
           </div>
@@ -1067,15 +1232,6 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
           </div>
         )}
       </div>
-      <MobileFilterSheet
-        open={showFilters}
-        onClose={() => setShowFilters(false)}
-        ui={ui}
-        apply={apply}
-        onClear={clearFilters}
-        hasActiveFilters={hasActiveFilters}
-        resultsLabel={`Show ${formatNumber(total)} maps`}
-      />
       <MapDetailModal entry={detail} onClose={() => setDetail(null)} />
     </div>
   );

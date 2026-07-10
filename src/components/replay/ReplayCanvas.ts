@@ -1,4 +1,4 @@
-import { Application, Assets, Container, FillGradient, Graphics, GraphicsPath, Matrix, Sprite, Text, Texture } from "pixi.js";
+import { Application, Assets, Container, FillGradient, Graphics, GraphicsPath, Matrix, Rectangle, Sprite, Text, Texture } from "pixi.js";
 import type { ReplayFrame, ReplayLifeBarFrame } from "../../lib/types";
 import type { ManiaNote, ManiaScrollVelocity, ManiaTimingPoint } from "../../lib/beatmap-parser";
 import type { Judgment, ManiaReplayHitWindows, ManiaReplayRuleset, ReplayJudgementEvent, ReplayNoteState } from "../../lib/mania-replay-judgement";
@@ -65,6 +65,10 @@ const MANIA_SKIN_STAGE_HEIGHT = 480;
 const MANIA_DEFAULT_HIT_POSITION = (480 - 402) * 1.6;
 const MANIA_HIT_TARGET_POSITION = REPLAY_SKIN_DEFAULT_HIT_POSITION;
 const MANIA_BAR_NOTE_HEIGHT_RATIO = 0.22;
+// What the inline mobile canvas used to be (~390-430px tall). Inline portrait
+// layouts anchor skin scale and scroll speed to this instead of the real
+// height, so the taller redesigned stage adds lookahead rather than speed.
+const MOBILE_PORTRAIT_REFERENCE_HEIGHT = 430;
 const BACKGROUND_OVERSCAN_SCALE = 1.02;
 // Events crossed more than this far behind the playback clock (lag spikes,
 // tab switches) stay silent instead of firing as a burst.
@@ -101,6 +105,14 @@ export function getColumnArrowDirection(col: number, keyCount: number): ArrowDir
   if (col === 0) return "left";
   if (col === keyCount - 1) return "right";
   return col % 2 === 1 ? "up" : "down";
+}
+
+// Not Math.max(...notes.map(...)): spreading a marathon chart's note list can
+// exceed the engine argument limit and throw a RangeError.
+function maxNoteEndTime(notes: ReadonlyArray<{ endTime: number }>): number {
+  let max = 0;
+  for (const note of notes) max = Math.max(max, note.endTime);
+  return max;
 }
 
 const HEX_NUMBER_CACHE = new Map<string, number>();
@@ -257,6 +269,9 @@ export class ManiaReplayRenderer {
   private skinSpriteLayer = new Container();
   private skinSpritePool: Sprite[] = [];
   private skinSpritePoolCursor = 0;
+  // Per-sprite-slot sub-frame textures used to draw vertical strips of a skin
+  // image (visibility-mod fades across LN bodies) without new GPU uploads.
+  private skinStripTexturePool: (Texture | null)[] = [];
   private skinTextureCache = new Map<string, Texture>();
   private skinTextureLoadPromises = new Map<string, Promise<Texture | null>>();
   private skinTextureFailedSources = new Set<string>();
@@ -386,6 +401,7 @@ export class ManiaReplayRenderer {
   private externalClock: (() => { time: number; stalled: boolean } | null) | null = null;
   private receptorFlashTimestamps: number[];
   private judgmentEvents: ReplayJudgementEvent[];
+  private missTimesCache: number[] | null = null;
   private noteStates: ReplayNoteState[];
   private comboEvents: ReplayComboEvent[];
 
@@ -496,7 +512,12 @@ export class ManiaReplayRenderer {
     this.backgroundDim = options?.backgroundDim ?? 80;
     const difficultyAdjustMod = inputMods.find((m) => getModAcronym(m) === "DA");
     const overriddenOd = Number(getModSetting(difficultyAdjustMod, ["overall_difficulty", "overallDifficulty"]));
-    this.od = Number.isFinite(overriddenOd) ? overriddenOd : options?.od ?? 8;
+    // NaN-proof (`NaN ?? 8` stays NaN): a non-finite od poisons every hit
+    // window, which disables the judgement simulation's loop guards.
+    const suppliedOd = options?.od;
+    this.od = Number.isFinite(overriddenOd)
+      ? overriddenOd
+      : suppliedOd != null && Number.isFinite(suppliedOd) ? suppliedOd : 8;
     this.showInputOverlay = options?.showInputOverlay ?? false;
     this.inputOverlayOnly = options?.inputOverlayOnly ?? false;
     this.inputOverlayColor = options?.inputOverlayColor ?? "#a855f7";
@@ -524,7 +545,7 @@ export class ManiaReplayRenderer {
     this.hitWindows = getManiaReplayHitWindows(this.od, this.ruleset);
 
     const frameDuration = frames.length > 0 ? frames[frames.length - 1].time : 0;
-    const noteDuration = this.notes.length > 0 ? Math.max(...this.notes.map((n) => n.endTime)) : 0;
+    const noteDuration = maxNoteEndTime(this.notes);
     const replayTailGrace = this.hitWindows.miss * 1.5;
     this.totalDuration = Math.max(frameDuration, noteDuration + replayTailGrace);
 
@@ -936,7 +957,9 @@ export class ManiaReplayRenderer {
     this.scrollVelocityTimes = collapsed.map((point) => point.time);
     this.scrollVelocityMultipliers = collapsed.map((point) => point.multiplier);
     this.scrollVelocityCumulative = new Array(collapsed.length).fill(0);
-    this.scrollVelocityMinMultiplier = Math.min(1, ...this.scrollVelocityMultipliers);
+    let minMultiplier = 1;
+    for (const multiplier of this.scrollVelocityMultipliers) minMultiplier = Math.min(minMultiplier, multiplier);
+    this.scrollVelocityMinMultiplier = minMultiplier;
 
     const zeroIndex = this.findScrollVelocityIndex(0);
     this.scrollVelocityCumulative[zeroIndex] = -this.integrateScrollDistance(this.scrollVelocityTimes[zeroIndex], 0, zeroIndex);
@@ -1024,7 +1047,15 @@ export class ManiaReplayRenderer {
     const configuredColumnSpacings = this.getConfiguredColumnSpacings();
     const desiredPlayfieldWidth = configuredColumnWidths.reduce((sum, width) => sum + width, 0)
       + configuredColumnSpacings.reduce((sum, width) => sum + width, 0);
-    const targetLayoutScale = h / MANIA_SKIN_STAGE_HEIGHT;
+    // Inline portrait (phone) canvases: the mobile redesign made the stage
+    // taller, and at a fixed scroll number a taller stage means notes cover
+    // more pixels per ms. Anchor the skin scale and the scroll speed to the
+    // height the mobile viewer always had, so the extra height buys lookahead
+    // instead of bigger, faster notes. Fullscreen and bare (preview/card)
+    // renders keep native full-height scaling.
+    const compactPortrait = !this.barePlayfield && !this.fullscreenLayout && h > w;
+    const scaleHeight = compactPortrait ? Math.min(h, MOBILE_PORTRAIT_REFERENCE_HEIGHT) : h;
+    const targetLayoutScale = scaleHeight / MANIA_SKIN_STAGE_HEIGHT;
     const widthCap = w * (this.barePlayfield ? 0.82 : 0.72);
     const maxPlayfieldWidth = this.barePlayfield
       ? widthCap
@@ -1040,7 +1071,9 @@ export class ManiaReplayRenderer {
     const noteHeight = Math.max(6, this.skinProfile.noteHeightScale * layoutScale * MANIA_BAR_NOTE_HEIGHT_RATIO);
     const receptorHeight = Math.max(6, h * 0.012);
     const scrollTimeRange = (MANIA_MAX_TIME_RANGE / Math.max(1, Math.min(40, this.scrollSpeed))) * this.modRate;
-    const scrollLength = h * (MANIA_REFERENCE_HEIGHT - MANIA_DEFAULT_HIT_POSITION) / MANIA_REFERENCE_HEIGHT;
+    // scaleHeight, not h: on inline portrait the scroll number keeps meaning
+    // what it meant on the shorter stage; notes just stay visible longer.
+    const scrollLength = scaleHeight * (MANIA_REFERENCE_HEIGHT - MANIA_DEFAULT_HIT_POSITION) / MANIA_REFERENCE_HEIGHT;
     const pixelsPerMs = scrollLength / scrollTimeRange;
 
     const layout: Layout = { w, h, playfieldWidth, playfieldX, laneWidth, layoutScale, judgmentY, noteHeight, receptorHeight, pixelsPerMs };
@@ -1123,7 +1156,8 @@ export class ManiaReplayRenderer {
     this.colors = COLUMN_COLORS[this.keyCount] || this.generateColors(this.keyCount);
     for (const c of this.colors) hexToNumber(c);
 
-    this.od = options?.od ?? this.od;
+    const previewOd = options?.od;
+    this.od = previewOd != null && Number.isFinite(previewOd) ? previewOd : this.od;
     this.hitWindows = getManiaReplayHitWindows(this.od, this.ruleset);
     this.initialCombo = Math.max(0, Math.floor(options?.initialCombo ?? 0));
     this.combo = this.initialCombo;
@@ -1137,7 +1171,7 @@ export class ManiaReplayRenderer {
     this.prepareScrollVelocities();
 
     const frameDuration = frames.length > 0 ? frames[frames.length - 1].time : 0;
-    const noteDuration = this.notes.length > 0 ? Math.max(...this.notes.map((n) => n.endTime)) : 0;
+    const noteDuration = maxNoteEndTime(this.notes);
     const replayTailGrace = this.hitWindows.miss * 1.5;
     this.totalDuration = Math.max(frameDuration, noteDuration + replayTailGrace);
     this.maxHoldDuration = 0;
@@ -1161,6 +1195,7 @@ export class ManiaReplayRenderer {
       ? buildStableReplayComboEvents(this.notes, simulated.noteStates)
       : null;
     this.judgmentEvents = simulated.events;
+    this.missTimesCache = null;
     this.lifeBarFrames = this.buildFallbackLifeBarFrames(this.judgmentEvents);
     this.noteStates = simulated.noteStates;
     this.comboEvents = this.ruleset.accuracyMode === "stable"
@@ -1209,9 +1244,12 @@ export class ManiaReplayRenderer {
   }
 
   getMissTimes(): number[] {
-    return this.judgmentEvents
+    // Cached: ReplayProgressBar polls this at 10Hz and the events only change
+    // when a new replay/preview is loaded.
+    this.missTimesCache ??= this.judgmentEvents
       .filter((event) => event.judgment === 6 && Number.isFinite(event.time))
       .map((event) => event.time);
+    return this.missTimesCache;
   }
 
   setSpeed(speed: number) { this.playbackSpeed = speed; }
@@ -2018,18 +2056,25 @@ export class ManiaReplayRenderer {
       const col = note.column;
       if (col >= this.keyCount) continue;
 
+      // Notes the simulation dropped (out-of-range column) have no state.
       const noteState = this.noteStates[i];
+      if (!noteState) continue;
       const headResolved = noteState.headTime <= this.currentTime;
       const tailResolved = noteState.tailTime != null && noteState.tailTime <= this.currentTime;
-      const stableMissedHoldStillHeld = note.isHold
-        && this.ruleset.accuracyMode === "stable"
-        && noteState.headJudgment === 6
-        && (this.currentTime < noteState.releaseTime || this.isColumnEffectivelyHeldAtTime(col, this.currentTime));
       // Timed-out tap misses (headTime past the note time means no press consumed
       // it) keep scrolling below the receptors until offscreen, like the client.
       const tapMissScrollsPast = !note.isHold && noteState.headJudgment === 6 && noteState.headTime > note.time;
 
-      if (headResolved && !tapMissScrollsPast && (!note.isHold || (tailResolved && !stableMissedHoldStillHeld))) continue;
+      if (!note.isHold) {
+        if (headResolved && !tapMissScrollsPast) continue;
+      } else if (headResolved && tailResolved) {
+        // Judged holds keep their unconsumed remainder (missed head, break,
+        // early release) scrolling past the line like the client; only holds
+        // consumed through the tail despawn at the tail judgement.
+        if (note.endTime < this.currentTime - velocityWindow * 0.6) continue;
+        const cut = this.getHoldConsumedCutTime(note, noteState, col);
+        if (cut == null || cut >= note.endTime - 1) continue;
+      }
 
       const { x: colX, width: colWidth } = this.getColumnLayout(col, layout);
       const x = colX + 3;
@@ -2051,15 +2096,15 @@ export class ManiaReplayRenderer {
         let headY = judgmentY + getVisualDelta(note.time) * pixelsPerMs * direction;
         const tailY = judgmentY + getVisualDelta(note.endTime) * pixelsPerMs * direction;
         const awaitingJudgment = !headResolved;
-        const missedStableHoldHead = this.ruleset.accuracyMode === "stable" && noteState.headJudgment === 6;
-        const shouldLetPassLine = missedStableHoldHead || (awaitingJudgment && note.time < this.currentTime - 10);
-        const withinMatchedSegment = this.currentTime < noteState.releaseTime;
-        const stillPhysicallyHeld = withinMatchedSegment || this.isColumnEffectivelyHeldAtTime(col, this.currentTime);
-        const releasedEarly =
-          noteState.bodyBreakTime != null &&
-          noteState.bodyBreakTime <= this.currentTime &&
-          this.currentTime < (noteState.tailTime ?? note.endTime) &&
-          !stillPhysicallyHeld;
+        // Where consumption at the line stopped. Non-null detaches the hold:
+        // the remainder from the cut edge to the tail scrolls past the line
+        // like stable/lazer broken or early-released holds.
+        const consumedCut = headResolved ? this.getHoldConsumedCutTime(note, noteState, col) : null;
+        const detached = consumedCut != null;
+        if (detached && consumedCut > note.time) {
+          headY = judgmentY + getVisualDelta(consumedCut) * pixelsPerMs * direction;
+        }
+        const shouldLetPassLine = detached || (awaitingJudgment && note.time < this.currentTime - 10);
 
         if (!shouldLetPassLine) headY = this.skinSettings.upscroll ? Math.max(headY, judgmentY) : Math.min(headY, judgmentY);
         const top = Math.min(headY, tailY);
@@ -2067,12 +2112,16 @@ export class ManiaReplayRenderer {
         if (!shouldLetPassLine && !this.skinSettings.upscroll) bottom = Math.min(bottom, judgmentY);
         if (top > h + 20 || bottom < -20) continue;
 
-        const bodyAlpha = releasedEarly ? 0.45 : 1;
-        const headAlpha = releasedEarly ? 0.65 : 1;
+        // Detached remainders dim like the client's unheld hold bodies; a
+        // missed-head hold still lights up while the key is physically down.
+        const dimmed = detached && (noteState.headJudgment === 6
+          ? !this.isColumnEffectivelyHeldAtTime(col, this.currentTime)
+          : true);
+        const bodyAlpha = dimmed ? 0.45 : 1;
+        const headAlpha = dimmed ? 0.65 : 1;
         const headEndY = this.skinSettings.upscroll ? top : bottom;
         const tailEndY = this.skinSettings.upscroll ? bottom : top;
         const headVisibilityAlpha = this.getHiddenAlphaAtY(headEndY, layout);
-        const bodyVisibilityAlpha = this.getHiddenAlphaForVerticalSpan(top, bottom, layout);
         const headTrimDelta = isArrowSkin
           ? arrowSize * 0.5
           : this.skinSettings.style === "circles"
@@ -2097,9 +2146,10 @@ export class ManiaReplayRenderer {
               bodyWidth,
               circleBodyRange.bottom - circleBodyRange.top,
               this.skinSettings.lnBodyColor,
-              bodyAlpha * bodyVisibilityAlpha,
+              bodyAlpha,
               noteFadeHeight,
               0.55,
+              layout,
             );
           }
           this.circleWithTopFade(colX + colWidth / 2, headCenterY, circleRadius, circleLnHeadColor, headAlpha * headVisibilityAlpha, noteFadeHeight, 0.55);
@@ -2121,10 +2171,11 @@ export class ManiaReplayRenderer {
               bodyWidth,
               arrowBodyRange.bottom - arrowBodyRange.top,
               this.skinSettings.lnBodyColor,
-              bodyAlpha * bodyVisibilityAlpha,
+              bodyAlpha,
               noteFadeHeight,
               0.55,
               this.skinSettings.upscroll ? "bottom" : "top",
+              layout,
             );
           }
           this.arrowShapeWithTopFade(
@@ -2231,18 +2282,17 @@ export class ManiaReplayRenderer {
         if (!note.isHold || note.column >= this.keyCount) continue;
 
         const noteState = this.noteStates[i];
+        if (!noteState) continue;
         const headResolved = noteState.headTime <= this.currentTime;
         const tailResolved = noteState.tailTime != null && noteState.tailTime <= this.currentTime;
-        const stableMissedHoldStillHeld = note.isHold
-          && this.ruleset.accuracyMode === "stable"
-          && noteState.headJudgment === 6
-          && (this.currentTime < noteState.releaseTime || this.isColumnEffectivelyHeldAtTime(note.column, this.currentTime));
-        if (headResolved && tailResolved && !stableMissedHoldStillHeld) continue;
+        const consumedCut = headResolved ? this.getHoldConsumedCutTime(note, noteState, note.column) : null;
+        if (headResolved && tailResolved && (consumedCut == null || consumedCut >= note.endTime - 1)) continue;
 
         let headY = judgmentY + getVisualDelta(note.time) * pixelsPerMs * (this.skinSettings.upscroll ? 1 : -1);
         const tailY = judgmentY + getVisualDelta(note.endTime) * pixelsPerMs * (this.skinSettings.upscroll ? 1 : -1);
-        const missedStableHoldHead = this.ruleset.accuracyMode === "stable" && noteState.headJudgment === 6;
-        if (headResolved && !missedStableHoldHead) {
+        if (consumedCut != null && consumedCut > note.time) {
+          headY = judgmentY + getVisualDelta(consumedCut) * pixelsPerMs * (this.skinSettings.upscroll ? 1 : -1);
+        } else if (headResolved && consumedCut == null) {
           headY = this.skinSettings.upscroll ? Math.max(headY, judgmentY) : Math.min(headY, judgmentY);
         }
 
@@ -3029,6 +3079,28 @@ export class ManiaReplayRenderer {
       anchorX: 1,
       anchorY: 1,
     });
+    if (!this.shouldRenderCustomOverlays(layout)) {
+      // Wherever the draggable overlay HUD is unavailable (phones, and any
+      // narrow non-fullscreen canvas regardless of pointer type, e.g. mobile
+      // emulators), draw a fixed always-on accuracy readout under the FPS
+      // counter. It sits over the beatmap background (which can be bright and
+      // undimmed), so back it with a dark chip like the miss overlay instead
+      // of relying on bare white text.
+      const accFontSize = 15;
+      const accPadX = 7;
+      const accBoxHeight = 24;
+      const accBoxWidth = this.measureTextWidth(this.hudCachedAccuracy, accFontSize, "700") + accPadX * 2;
+      const accBoxY = 26;
+      this.fillRect(w - 8 - accBoxWidth, accBoxY, accBoxWidth, accBoxHeight, "#0a0a12", 0.62);
+      this.addText(this.hudCachedAccuracy, w - 8 - accPadX, accBoxY + accBoxHeight / 2, {
+        fontSize: accFontSize,
+        fill: "#ffffff",
+        alpha: 0.95,
+        fontWeight: "700",
+        anchorX: 1,
+        anchorY: 0.5,
+      });
+    }
     if (this.hidePerformanceStats) return;
     this.addText(`FPS ${this.hudCachedFps}`, w - 8, 8, {
       fontSize: 11,
@@ -3259,6 +3331,38 @@ export class ManiaReplayRenderer {
     return false;
   }
 
+  // The chart time up to which a hold's body has been consumed at the judgment
+  // line. Returns null while the hold is attached (head hit and the column is
+  // still held with the tail pending) or the head outcome is pending. A missed
+  // head consumes nothing, so the cut stays at the head; the caller renders the
+  // remainder from the cut edge to the tail scrolling past the line.
+  private getHoldConsumedCutTime(note: ManiaNote, noteState: ReplayNoteState, column: number): number | null {
+    if (noteState.headTime > this.currentTime) return null;
+    if (noteState.headJudgment === 6) return note.time;
+
+    const tailTime = noteState.tailTime ?? note.endTime;
+    if (tailTime <= this.currentTime) {
+      // Tail already judged: held through the judgement means the body was
+      // consumed whole; otherwise consumption stopped at the last release.
+      if (this.isColumnEffectivelyHeldAtTime(column, tailTime, 0)) return note.endTime;
+      return this.clampHoldCutTime(this.getLastReleaseAtOrBefore(column, tailTime), note);
+    }
+
+    if (this.isColumnEffectivelyHeldAtTime(column, this.currentTime)) return null;
+    return this.clampHoldCutTime(this.getLastReleaseAtOrBefore(column, this.currentTime), note);
+  }
+
+  private clampHoldCutTime(releaseTime: number | null, note: ManiaNote): number {
+    return Math.max(note.time, Math.min(releaseTime ?? note.time, note.endTime));
+  }
+
+  private getLastReleaseAtOrBefore(column: number, time: number): number | null {
+    const segments = this.segments[column];
+    const index = this.binarySearchSegmentEndIndex(segments, time);
+    if (index < segments.length && segments[index].end <= time) return segments[index].end;
+    return index > 0 ? segments[index - 1].end : null;
+  }
+
   private binarySearchNoteIndex(targetTime: number): number {
     let lo = 0;
     let hi = this.notes.length - 1;
@@ -3386,10 +3490,20 @@ export class ManiaReplayRenderer {
     const bodyBottom = Math.max(bodyHeadY, bodyTailY);
 
     if (bodyAsset && bodyBottom > bodyTop) {
-      const alpha = bodyAlpha
-        * this.topFadeAlpha(Math.max(0, Math.min(bodyBottom, fadeHeight)), fadeHeight, 0.55)
-        * this.getHiddenAlphaForVerticalSpan(bodyTop, bodyBottom, visibilityLayout);
-      this.drawSkinImage(bodyAsset, colX + colWidth / 2, bodyTop, colWidth, bodyBottom - bodyTop, 0.5, 0, alpha);
+      const baseAlpha = bodyAlpha * this.topFadeAlpha(Math.max(0, Math.min(bodyBottom, fadeHeight)), fadeHeight, 0.55);
+      const bodyHeight = bodyBottom - bodyTop;
+      this.forEachVisibilitySegment(bodyTop, bodyBottom, visibilityLayout, (segmentTop, segmentBottom, visibilityAlpha) => {
+        this.drawSkinImageVerticalStrip(
+          bodyAsset,
+          colX + colWidth / 2,
+          segmentTop,
+          colWidth,
+          segmentBottom - segmentTop,
+          (segmentTop - bodyTop) / bodyHeight,
+          (segmentBottom - bodyTop) / bodyHeight,
+          baseAlpha * visibilityAlpha,
+        );
+      });
     } else {
       this.barLnBodyWithTopFade(colX + 3, bodyTop, colWidth - 6, bodyBottom - bodyTop, this.skinSettings.lnBodyColor, bodyAlpha, fadeHeight, 0.55, visibilityLayout);
     }
@@ -3708,6 +3822,47 @@ export class ManiaReplayRenderer {
     ) / 3;
   }
 
+  // Walks [top, bottom] as vertical runs of visibility-mod alpha, mirroring
+  // lazer's per-pixel playfield cover: fully covered runs are dropped, the
+  // fade band is cut into ~8px slices, and constant-alpha runs collapse into
+  // one draw. Tall LN bodies fade in/out through the cover as they scroll
+  // instead of popping in as a whole.
+  private forEachVisibilitySegment(
+    top: number,
+    bottom: number,
+    visibilityLayout: Layout | undefined,
+    draw: (segmentTop: number, segmentBottom: number, visibilityAlpha: number) => void,
+  ) {
+    if (!visibilityLayout || !this.hasVisibilityMod) {
+      draw(top, bottom, 1);
+      return;
+    }
+
+    const start = Math.max(top, 0);
+    const end = Math.min(bottom, visibilityLayout.h);
+    if (end <= start) return;
+
+    // Slices fine enough (~64 steps across the fade band) that the alpha
+    // staircase stays under ~2 8-bit levels; anything coarser reads as
+    // horizontal banding on wide bodies. Constant-alpha runs merge below, so
+    // only the fade band pays for the granularity.
+    const targetSliceHeight = Math.max(2, getManiaHiddenFadePx(visibilityLayout.h) / 64);
+    const sliceCount = Math.max(1, Math.ceil((end - start) / targetSliceHeight));
+    const sliceHeight = (end - start) / sliceCount;
+    let runStart = start;
+    let runAlpha = this.getHiddenAlphaAtY(start + sliceHeight / 2, visibilityLayout);
+
+    for (let i = 1; i < sliceCount; i++) {
+      const sliceTop = start + sliceHeight * i;
+      const alpha = this.getHiddenAlphaAtY(sliceTop + sliceHeight / 2, visibilityLayout);
+      if (alpha === runAlpha) continue;
+      if (runAlpha > 0) draw(runStart, sliceTop, runAlpha);
+      runStart = sliceTop;
+      runAlpha = alpha;
+    }
+    if (runAlpha > 0) draw(runStart, end, runAlpha);
+  }
+
   private roundRectWithTopFade(
     x: number,
     y: number,
@@ -3757,10 +3912,16 @@ export class ManiaReplayRenderer {
     alpha: number,
     _fadeHeight: number,
     _minAlpha = 0,
+    visibilityLayout?: Layout,
   ) {
     if (w <= 0 || h <= 0 || alpha <= 0) return;
     const bottom = y + h;
     if (bottom <= 0) return;
+    if (visibilityLayout && this.hasVisibilityMod) {
+      const radius = Math.min(w / 2, h / 2);
+      this.lnBodyWithVisibility(x, w, y, bottom, color, alpha, radius, radius, visibilityLayout);
+      return;
+    }
     this.roundRect(x, y, w, h, w / 2, color, alpha);
   }
 
@@ -3774,11 +3935,26 @@ export class ManiaReplayRenderer {
     _fadeHeight: number,
     _minAlpha = 0,
     roundedEnd: "top" | "bottom" = "top",
+    visibilityLayout?: Layout,
   ) {
     if (w <= 0 || h <= 0 || alpha <= 0) return;
     const bottom = y + h;
     if (bottom <= 0) return;
     const radius = Math.min(w / 2, h);
+    if (visibilityLayout && this.hasVisibilityMod) {
+      this.lnBodyWithVisibility(
+        x,
+        w,
+        y,
+        bottom,
+        color,
+        alpha,
+        roundedEnd === "top" ? radius : 0,
+        roundedEnd === "bottom" ? radius : 0,
+        visibilityLayout,
+      );
+      return;
+    }
     if (roundedEnd === "bottom") {
       const path = new GraphicsPath()
         .moveTo(x, y)
@@ -3815,31 +3991,113 @@ export class ManiaReplayRenderer {
     visibilityLayout?: Layout,
   ) {
     if (w <= 0 || h <= 0 || alpha <= 0) return;
-    const useVisibility = !!visibilityLayout && this.hasVisibilityMod;
-    if (!useVisibility && (fadeHeight <= 0 || y >= fadeHeight)) {
+    const bottom = y + h;
+    if (bottom <= 0) return;
+
+    if (visibilityLayout && this.hasVisibilityMod) {
+      this.forEachVisibilitySegment(y, bottom, visibilityLayout, (segmentTop, segmentBottom, visibilityAlpha) => {
+        const topAlpha = this.topFadeAlpha(Math.max(0, Math.min(segmentBottom, fadeHeight)), fadeHeight, minAlpha);
+        this.fillRect(x, segmentTop, w, segmentBottom - segmentTop, color, alpha * topAlpha * visibilityAlpha);
+      });
+      return;
+    }
+
+    if (fadeHeight <= 0 || y >= fadeHeight) {
       this.fillRect(x, y, w, h, color, alpha);
       return;
     }
 
-    const bottom = y + h;
-    if (bottom <= 0) return;
     const start = Math.max(y, 0);
-    const sliceEnd = useVisibility && visibilityLayout ? Math.min(bottom, visibilityLayout.h) : Math.min(bottom, fadeHeight);
+    const sliceEnd = Math.min(bottom, fadeHeight);
     if (sliceEnd <= start) return;
-    const sliceCount = useVisibility ? Math.max(10, Math.ceil((sliceEnd - start) / 8)) : 10;
+    const sliceCount = 10;
     const sliceHeight = (sliceEnd - start) / sliceCount;
 
     for (let i = 0; i < sliceCount; i++) {
       const sliceY = start + sliceHeight * i;
-      const topAlpha = this.topFadeAlpha(sliceY + sliceHeight, fadeHeight, minAlpha);
-      const visibilityAlpha = this.getHiddenAlphaAtY(sliceY + sliceHeight / 2, visibilityLayout);
-      const sliceAlpha = alpha * topAlpha * visibilityAlpha;
-      this.fillRect(x, sliceY, w, sliceHeight + 0.5, color, sliceAlpha);
+      const sliceAlpha = alpha * this.topFadeAlpha(sliceY + sliceHeight, fadeHeight, minAlpha);
+      // Exact shared edges: overlapping translucent slices double-blend into
+      // visible seam lines.
+      this.fillRect(x, sliceY, w, sliceHeight, color, sliceAlpha);
     }
 
-    if (!useVisibility && bottom > fadeHeight) {
+    if (bottom > fadeHeight) {
       this.fillRect(x, fadeHeight, w, bottom - fadeHeight, color, alpha);
     }
+  }
+
+  // LN body under visibility mods: the rounded caps draw as whole pieces (one
+  // alpha each) so they stay round through the fade band, and the straight
+  // middle fades as uniform-alpha runs. Runs share exact edges - overlapping
+  // translucent slices would double-blend into visible seam lines.
+  private lnBodyWithVisibility(
+    x: number,
+    w: number,
+    top: number,
+    bottom: number,
+    color: string,
+    alpha: number,
+    topRadius: number,
+    bottomRadius: number,
+    visibilityLayout: Layout,
+  ) {
+    const h = bottom - top;
+    if (w <= 0 || h <= 0 || alpha <= 0) return;
+    const capTop = Math.max(0, Math.min(topRadius, h / 2));
+    const capBottom = Math.max(0, Math.min(bottomRadius, h / 2));
+    if (h <= capTop + capBottom + 4) {
+      const spanAlpha = this.getHiddenAlphaForVerticalSpan(top, bottom, visibilityLayout);
+      this.lnBodySegment(x, w, top, bottom, color, alpha * spanAlpha, capTop, capBottom);
+      return;
+    }
+
+    // Caps sample their alpha at the inner seam so they blend into the
+    // adjacent run with no visible step; the tip being slightly off has no
+    // neighboring edge to compare against.
+    if (capTop > 0) {
+      const capAlpha = this.getHiddenAlphaAtY(top + capTop, visibilityLayout);
+      this.lnBodySegment(x, w, top, top + capTop, color, alpha * capAlpha, capTop, 0);
+    }
+    if (capBottom > 0) {
+      const capAlpha = this.getHiddenAlphaAtY(bottom - capBottom, visibilityLayout);
+      this.lnBodySegment(x, w, bottom - capBottom, bottom, color, alpha * capAlpha, 0, capBottom);
+    }
+    this.forEachVisibilitySegment(top + capTop, bottom - capBottom, visibilityLayout, (segmentTop, segmentBottom, visibilityAlpha) => {
+      this.lnBodySegment(x, w, segmentTop, segmentBottom, color, alpha * visibilityAlpha, 0, 0);
+    });
+  }
+
+  // One vertical run of an LN body, with corners rounded only where the run
+  // touches the body's real end caps.
+  private lnBodySegment(
+    x: number,
+    w: number,
+    top: number,
+    bottom: number,
+    color: string,
+    alpha: number,
+    topRadius: number,
+    bottomRadius: number,
+  ) {
+    const h = bottom - top;
+    if (w <= 0 || h <= 0 || alpha <= 0) return;
+    const rTop = Math.max(0, Math.min(topRadius, h));
+    const rBottom = Math.max(0, Math.min(bottomRadius, h));
+    if (rTop <= 0 && rBottom <= 0) {
+      this.fillRect(x, top, w, h, color, alpha);
+      return;
+    }
+
+    const path = new GraphicsPath().moveTo(x + rTop, top).lineTo(x + w - rTop, top);
+    if (rTop > 0) path.quadraticCurveTo(x + w, top, x + w, top + rTop);
+    path.lineTo(x + w, bottom - rBottom);
+    if (rBottom > 0) path.quadraticCurveTo(x + w, bottom, x + w - rBottom, bottom);
+    path.lineTo(x + rBottom, bottom);
+    if (rBottom > 0) path.quadraticCurveTo(x, bottom, x, bottom - rBottom);
+    path.lineTo(x, top + rTop);
+    if (rTop > 0) path.quadraticCurveTo(x, top, x + rTop, top);
+    path.closePath();
+    this.graphics.path(path).fill({ color: hexToNumber(color), alpha });
   }
 
   private circleWithTopFade(
@@ -3986,6 +4244,79 @@ export class ManiaReplayRenderer {
     sprite.tint = tint;
   }
 
+  // Draws only the [fracTop, fracBottom] vertical band of a skin image, so LN
+  // bodies can fade per-pixel through the visibility-mod cover. The strip is a
+  // pooled sub-frame texture over the already-uploaded source; no GPU uploads.
+  private drawSkinImageVerticalStrip(
+    asset: ReplaySkinImageAsset,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    fracTop: number,
+    fracBottom: number,
+    alpha: number,
+  ) {
+    if (width <= 0 || height <= 0 || alpha <= 0 || fracBottom <= fracTop) return;
+    if (fracTop <= 0 && fracBottom >= 1) {
+      this.drawSkinImage(asset, x, y, width, height, 0.5, 0, alpha);
+      return;
+    }
+
+    const texture = this.getTexture(asset);
+    if (texture === Texture.EMPTY) return;
+    // Rotated atlas frames don't slice cleanly; draw whole as a fallback.
+    if (texture.rotate !== 0) {
+      this.drawSkinImage(asset, x, y, width, height, 0.5, 0, alpha);
+      return;
+    }
+
+    const slot = this.skinSpritePoolCursor;
+    let sprite = this.skinSpritePool[slot];
+    if (!sprite) {
+      sprite = new Sprite(texture);
+      this.skinSpritePool.push(sprite);
+      this.skinSpriteLayer.addChild(sprite);
+    }
+    this.skinSpritePoolCursor++;
+
+    let strip = this.skinStripTexturePool[slot];
+    if (!strip || strip.destroyed) {
+      strip = new Texture({
+        source: texture.source,
+        frame: new Rectangle(0, 0, texture.source.width, texture.source.height),
+        // Pixi aliases orig to the frame rectangle unless one is passed, and
+        // both get mutated independently per strip draw.
+        orig: new Rectangle(0, 0, texture.source.width, texture.source.height),
+        dynamic: true,
+      });
+      this.skinStripTexturePool[slot] = strip;
+    } else if (strip.source !== texture.source) {
+      strip.source = texture.source;
+    }
+
+    const baseFrame = texture.frame;
+    strip.frame.x = baseFrame.x;
+    strip.frame.width = baseFrame.width;
+    strip.frame.y = baseFrame.y + baseFrame.height * fracTop;
+    strip.frame.height = baseFrame.height * (fracBottom - fracTop);
+    strip.orig.x = 0;
+    strip.orig.y = 0;
+    strip.orig.width = strip.frame.width;
+    strip.orig.height = strip.frame.height;
+    strip.update();
+
+    sprite.visible = true;
+    sprite.texture = strip;
+    sprite.anchor.set(0.5, 0);
+    sprite.x = x;
+    sprite.y = y;
+    sprite.width = width;
+    sprite.height = height;
+    sprite.alpha = alpha;
+    sprite.tint = 0xffffff;
+  }
+
   private getTexture(asset: ReplaySkinImageAsset): Texture {
     const cached = this.skinTextureCache.get(asset.src);
     if (cached) return cached;
@@ -4083,6 +4414,10 @@ export class ManiaReplayRenderer {
   private clearSkinSprites() {
     const children = this.skinSpriteLayer.removeChildren();
     for (const child of children) child.destroy();
+    for (const strip of this.skinStripTexturePool) {
+      if (strip && !strip.destroyed) strip.destroy(false);
+    }
+    this.skinStripTexturePool = [];
     this.skinSpritePool = [];
     this.skinSpritePoolCursor = 0;
     this.skinTextureCache.clear();

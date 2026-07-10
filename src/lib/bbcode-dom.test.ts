@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { bbcodeToEditableHtml, editableWrapMarkup, serializeBBCodeDom } from "./bbcode-dom";
+import { applyColorSequence, bbcodeToEditableHtml, captureColorSequence, distributeInlineWrap, editableWrapMarkup, serializeBBCodeDom } from "./bbcode-dom";
+
+function serialize(html: string): string {
+  const container = document.createElement("div");
+  container.innerHTML = html;
+  return serializeBBCodeDom(container);
+}
 
 function roundTrip(source: string): string {
   const container = document.createElement("div");
@@ -11,6 +17,63 @@ function roundTrip(source: string): string {
 function expectIdentity(source: string) {
   expect(roundTrip(source)).toBe(source);
 }
+
+describe("format painter color sequences", () => {
+  it("captures per-visible-character colors, skipping whitespace", () => {
+    const html = bbcodeToEditableHtml("[color=#FF0000]a[/color] [color=#00FF00]b[/color]");
+    expect(captureColorSequence(html)).toEqual(["#FF0000", "#00FF00"]);
+  });
+
+  it("reads colors from inline style (foreColor output)", () => {
+    expect(captureColorSequence('<span style="color: rgb(255, 0, 0)">a</span>')).toEqual(["#FF0000"]);
+  });
+
+  it("paints a captured sequence onto matching-length text", () => {
+    expect(serialize(applyColorSequence("xy", ["#FF0000", "#0000FF"])))
+      .toBe("[color=#FF0000]x[/color][color=#0000FF]y[/color]");
+  });
+
+  it("stretches a short sequence across longer text", () => {
+    expect(serialize(applyColorSequence("abcd", ["#FF0000", "#0000FF"])))
+      .toBe("[color=#FF0000]a[/color][color=#FF0000]b[/color][color=#0000FF]c[/color][color=#0000FF]d[/color]");
+  });
+
+  it("keeps whitespace uncolored between glyphs", () => {
+    expect(serialize(applyColorSequence("a b", ["#FF0000", "#0000FF"])))
+      .toBe("[color=#FF0000]a[/color] [color=#0000FF]b[/color]");
+  });
+});
+
+describe("distributeInlineWrap", () => {
+  const open = '<span data-bb-size="150">';
+  const close = "</span>";
+
+  it("wraps single-line content whole", () => {
+    expect(distributeInlineWrap("hello", open, close)).toBe(`${open}hello${close}`);
+    expect(distributeInlineWrap("<b>hi</b>", open, close)).toBe(`${open}<b>hi</b>${close}`);
+  });
+
+  it("leaves whitespace-only content unwrapped", () => {
+    expect(distributeInlineWrap("   ", open, close)).toBe("   ");
+  });
+
+  it("pushes the wrapper into each block line instead of around them", () => {
+    const out = distributeInlineWrap("<div>5k:</div><div>6k:</div>", open, close);
+    expect(out).toBe(`<div>${open}5k:${close}</div><div>${open}6k:${close}</div>`);
+  });
+
+  it("wraps each <br>-separated segment and keeps the breaks", () => {
+    const out = distributeInlineWrap("a<br>b", open, close);
+    expect(out).toBe(`${open}a${close}<br>${open}b${close}`);
+  });
+
+  it("re-wrapped block lines round-trip back to per-line bbcode", () => {
+    const html = distributeInlineWrap("<div>5k:</div><div>6k:</div>", open, close);
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    expect(serializeBBCodeDom(container)).toBe("[size=150]5k:[/size]\n[size=150]6k:[/size]");
+  });
+});
 
 describe("bbcode editable DOM round-trip", () => {
   it("keeps plain text and newlines", () => {

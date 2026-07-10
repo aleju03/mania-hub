@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   buildGradientBBCode,
   collectPlainText,
+  containsBBCode,
   findBBNodePathAtOffset,
   gradientCharColors,
   normalizeHexColor,
   parseBBCode,
   parseYoutubeInput,
+  shiftHexHue,
   type BBNode,
 } from "./bbcode";
 
@@ -90,6 +92,16 @@ describe("parseBBCode", () => {
     expect(single("[youtube]dQw4w9WgXcQ[/youtube]")).toEqual({ type: "youtube", videoId: "dQw4w9WgXcQ" });
     expect(single("[audio]https://example.com/a.mp3[/audio]")).toEqual({
       type: "audio", src: "https://example.com/a.mp3",
+    });
+  });
+
+  it("accepts blob: URLs for [img] (editor's deferred pasted images)", () => {
+    expect(single("[img]blob:http://localhost:3000/abc-123[/img]")).toEqual({
+      type: "img", src: "blob:http://localhost:3000/abc-123",
+    });
+    // blob: stays image-only: [url]/[audio] still reject it (falls back to text).
+    expect(single("[audio]blob:http://localhost:3000/abc-123[/audio]")).toEqual({
+      type: "text", text: "blob:http://localhost:3000/abc-123",
     });
   });
 
@@ -294,6 +306,36 @@ describe("findBBNodePathAtOffset", () => {
     expect(path.map((n) => n.type)).toEqual(["list", "text"]);
     expect(path[1]).toMatchObject({ text: "two" });
     expect(findBBNodePathAtOffset(nodes, source.length + 5)).toEqual([]);
+  });
+});
+
+describe("shiftHexHue", () => {
+  it("rotates hue while keeping saturation and lightness", () => {
+    expect(shiftHexHue("#FF0000", 120)).toBe("#00FF00");
+    expect(shiftHexHue("#FF0000", 240)).toBe("#0000FF");
+    expect(shiftHexHue("#FF0000", 360)).toBe("#FF0000");
+    expect(shiftHexHue("#FF0000", -120)).toBe("#0000FF");
+  });
+
+  it("leaves greys unchanged and rejects invalid hex", () => {
+    expect(shiftHexHue("#808080", 90)).toBe("#808080");
+    expect(shiftHexHue("not-a-color", 90)).toBeNull();
+  });
+});
+
+describe("containsBBCode", () => {
+  it("detects recognized tags anywhere in the text", () => {
+    expect(containsBBCode("[b]hi[/b]")).toBe(true);
+    expect(containsBBCode("hello [color=red]world[/color]!")).toBe(true);
+    expect(containsBBCode("[centre][img]https://x.com/a.png[/img][/centre]")).toBe(true);
+    expect(containsBBCode("[list][*]one[*]two[/list]")).toBe(true);
+  });
+
+  it("treats plain text, stray brackets, and bare URLs as non-BBCode", () => {
+    expect(containsBBCode("just some plain text")).toBe(false);
+    expect(containsBBCode("")).toBe(false);
+    expect(containsBBCode("[insert joke here] and [unknown]x[/unknown]")).toBe(false);
+    expect(containsBBCode("see https://example.com for more")).toBe(false);
   });
 });
 

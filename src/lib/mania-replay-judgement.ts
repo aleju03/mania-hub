@@ -354,9 +354,14 @@ export function applyManiaReplayModsToNotes(
 }
 
 export function getManiaReplayHitWindows(
-  od: number,
+  rawOd: number,
   ruleset: ManiaReplayRuleset,
 ): ManiaReplayHitWindows {
+  // A non-finite OD (e.g. a beatmap whose OverallDifficulty failed to parse)
+  // would make every window NaN. NaN windows disable the early-exit guards in
+  // the judgement simulation loops, turning them quadratic-to-cubic - enough
+  // work to freeze the tab until the browser kills it.
+  const od = Number.isFinite(rawOd) ? Math.min(10, Math.max(0, rawOd)) : 8;
   const totalMultiplier = ruleset.speedMultiplier / ruleset.difficultyMultiplier;
 
   if (ruleset.useClassicWindows) {

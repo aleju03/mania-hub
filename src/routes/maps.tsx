@@ -238,7 +238,7 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
 };
 
 const SEARCH_KEY_VALUES = ["4k", "7k", "other"];
-const SEARCH_STATUS_VALUES = ["ranked", "loved", "graveyard", "other"];
+const SEARCH_STATUS_VALUES = ["ranked", "qualified", "loved", "graveyard", "other"];
 const SEARCH_PATTERN_VALUES = [
   "jack", "stream", "jumpstream", "handstream", "stamina", "chordjack", "tech", "ln",
   // subfamilies (matched against detected-pattern tags, not dominance)
@@ -2607,10 +2607,20 @@ function MapsPage() {
               sheet on mobile so it doesn't cover the page content above.
               Always mounted on mobile so transform transitions animate. */}
           <div
-            className="sm:contents sm:!pointer-events-auto fixed bottom-0 left-0 right-0 z-50 max-h-[75vh] overflow-y-auto bg-osu-d5 border-t border-osu-b3/30 rounded-t-2xl shadow-2xl px-4 pt-2 pb-6 flex flex-col gap-3 will-change-transform"
+            className="sm:contents sm:!pointer-events-auto sm:!visible fixed bottom-0 left-0 right-0 z-50 max-h-[75vh] overflow-y-auto bg-osu-d5 border-t border-osu-b3/30 rounded-t-2xl shadow-2xl px-4 pt-2 pb-6 flex flex-col gap-3 will-change-transform"
             style={{
               transform: filtersOpen ? `translateY(${dragOffset}px)` : "translateY(105%)",
-              transition: isDragging ? "none" : "transform 280ms cubic-bezier(0.32, 0.72, 0, 1)",
+              // translateY(105%) alone isn't enough on phones: when the URL bar
+              // collapses on scroll the fixed bottom anchor shifts and the top
+              // edge peeks up. Hiding it outright once closed kills the peek;
+              // the hide is delayed one transition so the slide-down still plays.
+              // sm:!visible keeps the desktop (display:contents) filters shown.
+              visibility: filtersOpen ? "visible" : "hidden",
+              transition: isDragging
+                ? "none"
+                : filtersOpen
+                  ? "transform 280ms cubic-bezier(0.32, 0.72, 0, 1)"
+                  : "transform 280ms cubic-bezier(0.32, 0.72, 0, 1), visibility 0s linear 280ms",
               pointerEvents: filtersOpen ? "auto" : "none",
             }}
             role={filtersOpen ? "dialog" : undefined}

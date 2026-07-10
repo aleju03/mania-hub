@@ -26,7 +26,7 @@ The live backend lives in `live-backend/`:
 - `live-backend/src/ingest/score-ingestor.ts`: score ingestion and projection fanout.
 - `live-backend/src/osc/`: oSC Socket.IO client, JSON backfill, and the osu! API scores fallback poller.
 - `live-backend/src/jobs/queue.ts` and `live-backend/src/workers.ts`: job queue and worker lanes.
-- `live-backend/src/features/`: one module per surface (tracker, top-plays, snipes, maps, farm-helper, farm-helper-key-stats, activity, dan-estimates, global-rankings, rank-snapshots, player-profiles, goals, my-data, pack-wallets).
+- `live-backend/src/features/`: one module per surface (tracker, top-plays, snipes, maps, farm-helper, farm-helper-key-stats, activity, dan-estimates, global-rankings, rank-snapshots, player-profiles, goals, my-data, pack-wallets, admin-todos).
 - `live-backend/src/http/snapshots.ts`: REST snapshots, profile endpoints, per-user (goals / my-data / roster / pack) endpoints, Discord interaction/admin routes, admin controls, replay video job endpoints. `live-backend/src/http/abuse-guard.ts`: per-IP rate limiting.
 - `live-backend/src/live/`: SSE handler, event log with replay buffer, per-country client tracking.
 - `live-backend/src/discord/`: the maniabot Discord subsystem (HTTP signed-interaction handler in `index.ts`/`verify.ts`, slash commands, message components, embeds, REST client, osu! account linking, and new-map/farm feeds). Gated by `enableDiscordBot`/`enableDiscordFeeds`; started from `server.ts` and routed through `http/snapshots.ts`.
@@ -76,15 +76,19 @@ Job types:
 - `refresh_user_top_scores`: confirm a candidate top play and compute PP gain.
 - `reconcile_user_recent_scores`: sync a user's recent scores from the osu! API to fill ingest gaps.
 - `refresh_user_maps_farmed_scores`, `refresh_country_maps`, `refresh_global_maps`: maps-farmed aggregation per user, per country, and globally.
+- `refresh_qualified_maps`: hourly qualified-maps watch; pulls osu!'s current qualified mania list in one search call and reconciles `/maps` status (promote pending->qualified, index new sets, resolve ranks/dequalifies).
 - `seed_snipe_board`: build the initial board for a beatmap/lane.
 - `analyze_activity_beatmap`: compute skill vectors for player activity.
 - `analyze_beatmap_chart`: unified chart analysis per beatmap at 1.0x (classifier dan verdict, pattern clusters, MinaCalc MSD skillsets) into `beatmap_chart_analysis`.
+- `recompute_vibro_sweep`, `recompute_dan_floor_pin_sweep`, `recompute_ln_subtype_sweep`: one-shot boot-seeded sweeps over stored chart analyses (gated by `live_meta` done-keys), patching detector/classifier changes into the corpus without a full `CHART_ANALYSIS_VERSION` re-run (vibro flags in place; floor-pinned dan verdicts and stale 7K LN pattern tags via re-enqueued `analyze_beatmap_chart`).
 - `compute_dan_estimate`: dan rating for a beatmap at a rate.
 - `compute_player_skills`: Etterna-style skillset ratings from a player's top plays (per-play MinaCalc SSRs at the played rate) into `player_skill_ratings`.
 - `osc_backfill`, `osc_country_catchup`: oSC JSON catch-up, global and country-scoped.
 - `replay_video_server_render`, `replay_video_export`: server-side render and finalization/upload.
 
 Admin controls are exposed through the frontend at `/admin/live-backend` and backend `/api/admin/*` routes (status, ingest fixtures, roster refresh, pause/resume country, set status/tier, delete country). Be careful with destructive controls.
+
+`/admin/todos` is the owner's private todo list (reminders, bugs found, things left to do), backed by `features/admin-todos.ts` (durable `admin_todos` table, single user, no per-user scoping) over `GET /api/admin/todos` + `POST /api/admin/todos/{create,update,delete,clear-done}`. Frontend server fns in `src/lib/admin-todos.ts` proxy with the shared admin token; the nav entry and page are `canUseAdminFeatures`-gated.
 
 ## Feature Models
 
@@ -96,6 +100,8 @@ Detected country top plays live in `top_play_events`. When an incoming score is 
 
 ### Maps
 `refresh_user_maps_farmed_scores` pulls a roster user's top 200 and extracts scores that entered their top plays; `refresh_country_maps` aggregates these into `country_maps_snapshots`, and `refresh_global_maps` rolls countries up into a global snapshot. Refresh progress is tracked in `live_meta` and surfaced via `/api/snapshots/maps-progress`.
+
+The `/maps` browser reads from `map_search_index` (materialized from `beatmap_skill_vectors` + beatmap/set metadata). Status stays fresh via three layers, cheapest first: the event-driven + hourly zero-API reconciler in `map-search.ts` (`buildMapStatusPropagationStatement` / `reconcileMapSearchIndexStatuses`), which only upgrades in-flux -> settled to shield against stale score payloads; and the hourly `refresh_qualified_maps` watch (`features/qualified-maps-watch.ts`), which is the one writer allowed to move a row backwards (qualified -> pending on a dequalify) because the osu! API read is current truth. The watch writes status into `metadata_json.$.status` + the status column (via `persistScoresDisplayMetadata`) and the index, filters to native mania diffs (skips converts), and enqueues `analyze_beatmap_chart` for newly-qualified diffs so they become searchable. `SOURCE_SELECT` excludes sub-0.2* in-flux placeholder diffs (empty "delete upon download"/"~"/"asd" stubs that ride along in pack and loved sets), and `pruneMapSearchPlaceholderRows` clears any already indexed.
 
 ### Farm helper
 Recommends maps by comparing the subject player's top 200 against a global peer pool at similar PP, using candidates from `country_maps_farmed_scores` across all countries. Per-keymode (4k/7k) weighted PP lives in `farm_helper_user_key_stats`, seeded on first access.

@@ -1194,7 +1194,15 @@ function getActivityPatternVector(map: ReturnType<typeof parseManiaBeatmap>, sta
     + pressureScore(metrics.lnChordPressure, 1) * 0.18,
   );
   patterns.ln = lnScore;
-  Object.assign(patterns, getActivityLnSubtypeScores(features.notes, features.orderedRows, metrics));
+  Object.assign(
+    patterns,
+    getActivityLnSubtypeScores(
+      features.notes,
+      features.orderedRows,
+      metrics,
+      Number.isFinite(map.bpm) && map.bpm > 0 ? 60000 / map.bpm : 0,
+    ),
+  );
 
   let primary: string = chooseSkillFamily(skillScores, metrics).family;
   if (primary === "handstream" || primary === "jumpstream") {
@@ -1232,10 +1240,19 @@ interface ActivityLnPatternStats {
   tapWhileHoldingRatio: number;
 }
 
+// Same tempo-aware inverse gap cap as the dan-estimator pattern analyzer:
+// inverse release gaps are charted as beat fractions (1/8 to 1/4 beat), so a
+// fixed 120ms cutoff misses slow charts (127ms gaps at 79 BPM).
+function inverseGapCapMs(beatLengthMs: number): number {
+  if (!Number.isFinite(beatLengthMs) || beatLengthMs <= 0) return 120;
+  return Math.min(250, Math.max(120, beatLengthMs * 0.27));
+}
+
 function getActivityLnPatternStats(
   notes: ManiaNote[],
   orderedRows: Array<[number, ManiaNote[]]>,
   keyCount: number,
+  beatLengthMs: number,
 ): ActivityLnPatternStats {
   const releaseRows = new Map<number, ManiaNote[]>();
   const headTimes = new Set<number>();
@@ -1280,6 +1297,7 @@ function getActivityLnPatternStats(
     if (!headTimes.has(time)) releaseOnlyRows++;
   }
 
+  const gapCap = inverseGapCapMs(beatLengthMs);
   let inverseLikeHolds = 0;
   let sameColumnNextHolds = 0;
   for (const columnNotes of notesByColumn) {
@@ -1294,7 +1312,7 @@ function getActivityLnPatternStats(
 
       const gapRatio = gap / Math.max(1, note.endTime - note.time);
       sameColumnNextHolds++;
-      if (gap <= 120 && gapRatio <= 0.7) inverseLikeHolds++;
+      if (gap <= gapCap && gapRatio <= 0.7) inverseLikeHolds++;
     }
   }
 
@@ -1314,12 +1332,13 @@ function getActivityLnSubtypeScores(
   notes: ManiaNote[],
   orderedRows: Array<[number, ManiaNote[]]>,
   metrics: DanFeatureMetrics,
+  beatLengthMs: number,
 ): Record<(typeof ACTIVITY_LN_SUBTYPES)[number], number> {
   if (metrics.keyCount !== 7) {
     return { lnGeneral: 0, lnRelease: 0, lnInverse: 0, lnTech: 0 };
   }
 
-  const stats = getActivityLnPatternStats(notes, orderedRows, metrics.keyCount);
+  const stats = getActivityLnPatternStats(notes, orderedRows, metrics.keyCount, beatLengthMs);
   const lnPatternScore = Math.max(
     pressure(metrics.holdRatio, 0.03, 0.32),
     minGate(pressure(metrics.lnDensity, 0.02, 0.18), pressure(metrics.lnOverlapPressure, 0.4, 2.4)),

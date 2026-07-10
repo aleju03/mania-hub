@@ -21,6 +21,14 @@ export interface Config {
   sqliteSynchronous: string;
   sqliteCacheMb: number;
   sqliteMmapMb: number;
+  // Active WAL brake (worker/all role only): a dedicated connection forces a
+  // TRUNCATE checkpoint once the -wal file grows past walCheckpointTruncateBytes,
+  // so nothing under normal load lets the WAL grow unbounded into a read-pin
+  // death-spiral (the 2026-07-07 outage). walCheckpointWarnBytes logs when a
+  // reader keeps defeating the reset.
+  walCheckpointIntervalMs: number;
+  walCheckpointTruncateBytes: number;
+  walCheckpointWarnBytes: number;
   databaseUrl: string;
   databaseAuthToken?: string;
   osuClientId?: string;
@@ -61,6 +69,9 @@ export interface Config {
   // How long a map-collections rotation lives before the next rebuild resamples
   // every pack from its bucket pool.
   mapCollectionsRefreshIntervalMs: number;
+  // How often the qualified-maps watch pulls the current qualified mania list to
+  // reconcile /maps status (catches ranks, dequalifies, and brand-new sets).
+  qualifiedMapsWatchIntervalMs: number;
   // Tick interval for the chart-analysis worker lane. Sets the backfill pace:
   // each tick runs one classify+MSD job (~0.1-0.3s of local CPU). The default
   // keeps prod gentle; lower it for a fast local backfill.
@@ -196,10 +207,13 @@ export function readConfig(): Config {
     enableEventLogTail: readBool("ENABLE_EVENT_LOG_TAIL", role === "server"),
     eventLogTailIntervalMs: readBoundedInt("EVENT_LOG_TAIL_INTERVAL_MS", 250, 50, 5_000),
     workerHttpPort: readOptionalInt("WORKER_HTTP_PORT"),
-    sqliteBusyTimeoutMs: readBoundedInt("SQLITE_BUSY_TIMEOUT_MS", 5_000, 0, 60_000),
+    sqliteBusyTimeoutMs: readBoundedInt("SQLITE_BUSY_TIMEOUT_MS", 2_000, 0, 60_000),
     sqliteSynchronous: (process.env.SQLITE_SYNCHRONOUS || "NORMAL").toUpperCase(),
     sqliteCacheMb: readBoundedInt("SQLITE_CACHE_MB", 64, 0, 2_048),
     sqliteMmapMb: readBoundedInt("SQLITE_MMAP_MB", 256, 0, 8_192),
+    walCheckpointIntervalMs: readBoundedInt("WAL_CHECKPOINT_INTERVAL_MS", 15_000, 2_000, 300_000),
+    walCheckpointTruncateBytes: readBoundedInt("WAL_CHECKPOINT_TRUNCATE_BYTES", 64 * 1024 * 1024, 1024 * 1024, 2_048 * 1024 * 1024),
+    walCheckpointWarnBytes: readBoundedInt("WAL_CHECKPOINT_WARN_BYTES", 512 * 1024 * 1024, 1024 * 1024, 8_192 * 1024 * 1024),
     databaseUrl: process.env.DATABASE_URL ?? "file:./data/mania-hub-live.db",
     databaseAuthToken: process.env.DATABASE_AUTH_TOKEN || undefined,
     osuClientId: process.env.OSU_CLIENT_ID || undefined,
@@ -241,7 +255,8 @@ export function readConfig(): Config {
     // becomes a problem: manual rows are durable and nothing ages them out.
     manualRosterMaxPerCountry: readInt("MANUAL_ROSTER_MAX_PER_COUNTRY", 0),
     mapsRefreshIntervalMs: readInt("MAPS_REFRESH_INTERVAL_MS", 7 * 24 * 60 * 60 * 1000),
-    mapCollectionsRefreshIntervalMs: readInt("MAP_COLLECTIONS_REFRESH_INTERVAL_MS", 3 * 24 * 60 * 60 * 1000),
+    mapCollectionsRefreshIntervalMs: readInt("MAP_COLLECTIONS_REFRESH_INTERVAL_MS", 7 * 24 * 60 * 60 * 1000),
+    qualifiedMapsWatchIntervalMs: readInt("QUALIFIED_MAPS_WATCH_INTERVAL_MS", 60 * 60 * 1000),
     chartAnalysisLaneIntervalMs: readBoundedInt("CHART_ANALYSIS_LANE_INTERVAL_MS", 500, 25, 60_000),
     oscBackfillMaxAgeMs: readInt("OSC_BACKFILL_MAX_AGE_MS", 24 * 60 * 60 * 1000),
     oscBackfillPageLimit: Math.min(readInt("OSC_BACKFILL_PAGE_LIMIT", 1000), 1000),

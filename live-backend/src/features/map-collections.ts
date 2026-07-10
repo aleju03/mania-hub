@@ -12,8 +12,9 @@ import {
 // Auto-generated map packs materialized from map_search_index by code-defined
 // recipes (pattern x key x difficulty bucket, on two difficulty axes: dan
 // estimate and MSD overall). Players browse these from the /maps Collections
-// section. Members are deduped by beatmapset so a pack is distinct mapsets,
-// not many diffs of one set. Each rebuild samples a fresh rotation from a
+// section. Members are deduped by beatmapset and by normalized song title so
+// a pack is distinct songs, not many uploads of one track. Each rebuild
+// samples a fresh rotation from a
 // quality pool (seeded per pass), so packs change on every refresh instead of
 // pinning the same top-40 forever.
 
@@ -23,6 +24,40 @@ const MEMBER_LIMIT = 40;
 const POOL_OVERFETCH = 400;
 // A pack with almost nothing in its bucket reads as broken; skip publishing it.
 const MIN_MEMBERS = 5;
+// Joke/meme charts are overwhelmingly sub-minute bursts (11s scream maps,
+// sound-effect dumps) and their difficulty estimates are noise; packs are for
+// playable charts, so anything under a minute stays out of every pool.
+const MIN_LENGTH_SECONDS = 60;
+
+// Curation blocklist, matched against the index's lowercased search_text blob
+// (title/artist/creator/version). Collections only - search results and dan
+// classification are untouched. FNF rips are near-universally long vibro-jack
+// dumps ("funkin", "fnf", "agoti", plus the franchise composer), and a pack
+// that says "vibro" on the tin is a mash file even when its timing profile
+// dodges the detector (jumptrill-style vibro is indistinguishable from legit
+// jumptrills).
+const BLOCKED_SEARCH_TEXT: RegExp[] = [
+  /vibro/i,
+  /funkin/i,
+  /\bfnf\b/i,
+  /agoti/i,
+  /kawai sprite/i,
+];
+
+function isBlockedSearchText(searchText: string): boolean {
+  return BLOCKED_SEARCH_TEXT.some((pattern) => pattern.test(searchText));
+}
+
+// One chart per song: the set dedupe misses re-uploads of the same track under
+// different beatmapsets, which kept packs landing e.g. "Maid of Fire" three
+// times. Parentheticals/brackets go too so "(TV Size)" / "(Cut Ver.)" variants
+// collapse onto the strongest chart.
+function songKey(title: unknown): string {
+  return String(title ?? "")
+    .toLowerCase()
+    .replace(/\(.*?\)|\[.*?\]/g, "")
+    .replace(/[^a-z0-9]+/g, "");
+}
 
 const PATTERN_LABELS: Record<string, string> = {
   jack: "Jack",
@@ -34,6 +69,18 @@ const PATTERN_LABELS: Record<string, string> = {
   tech: "Tech",
   ln: "LN",
 };
+
+// Collection shelves. Chordjack folds into the Jack shelf: players want one
+// "Jack" section where any flavor of jack belongs, and legit dense jack
+// content classifies as chordjack-primary anyway.
+interface CollectionGroup {
+  id: string;
+  patterns: string[];
+}
+
+const COLLECTION_GROUPS: CollectionGroup[] = MAP_SEARCH_PATTERNS.filter((pattern) => pattern !== "chordjack").map(
+  (pattern) => ({ id: pattern, patterns: pattern === "jack" ? ["jack", "chordjack"] : [pattern] }),
+);
 
 export type CollectionAxis = "dan" | "msd";
 
@@ -100,6 +147,7 @@ interface CollectionRecipe {
   recipeId: string;
   kind: "pattern";
   pattern: string;
+  patterns: string[];
   keyCount: number;
   axis: CollectionAxis;
   bucketLo: number | null;
@@ -109,11 +157,23 @@ interface CollectionRecipe {
   sortOrder: number;
 }
 
+// 4K jack at Delta+ has no legit single-column population: dense jack at that
+// level is chorded, so the router files every real chart (e.g. Homu's Delta
+// training pack) under chordjack, and the jack-primary residue is a ~30-chart
+// pool of misestimated troll/vibro files. That bucket ships chordjack-only.
+// 7K keeps the full group; its 14+ pool is real boss-tier jack content.
+function bucketPatterns(group: CollectionGroup, keyCount: number, axis: CollectionAxis, bucket: DifficultyBucket): string[] {
+  if (group.id === "jack" && keyCount === 4 && axis === "dan" && bucket.id === "d14plus") return ["chordjack"];
+  return group.patterns;
+}
+
 function buildRecipes(): CollectionRecipe[] {
   const recipes: CollectionRecipe[] = [];
   let order = 0;
-  for (const pattern of MAP_SEARCH_PATTERNS) {
+  for (const group of COLLECTION_GROUPS) {
+    const pattern = group.id;
     const label = PATTERN_LABELS[pattern] ?? pattern;
+    const flavor = pattern === "jack" ? "Jack- and chordjack-heavy" : `${label}-heavy`;
     for (const keyCount of COLLECTION_KEYS) {
       for (const bucket of DAN_BUCKETS) {
         const rangeText = danBucketText(bucket, keyCount, pattern);
@@ -122,12 +182,13 @@ function buildRecipes(): CollectionRecipe[] {
           recipeId: `pattern:${pattern}:${keyCount}k`,
           kind: "pattern",
           pattern,
+          patterns: bucketPatterns(group, keyCount, "dan", bucket),
           keyCount,
           axis: "dan",
           bucketLo: bucket.lo,
           bucketHi: bucket.hi,
           title: `${label} · ${keyCount}K · ${rangeText}`,
-          description: `${label}-heavy ${keyCount}K maps, ${rangeText}. Rotates on every refresh.`,
+          description: `${flavor} ${keyCount}K maps, ${rangeText}. Rotates on every refresh.`,
           sortOrder: order++,
         });
       }
@@ -138,12 +199,13 @@ function buildRecipes(): CollectionRecipe[] {
           recipeId: `pattern:${pattern}:${keyCount}k`,
           kind: "pattern",
           pattern,
+          patterns: bucketPatterns(group, keyCount, "msd", bucket),
           keyCount,
           axis: "msd",
           bucketLo: bucket.lo,
           bucketHi: bucket.hi,
           title: `${label} · ${keyCount}K · ${rangeText}`,
-          description: `${label}-heavy ${keyCount}K maps, ${rangeText}. Rotates on every refresh.`,
+          description: `${flavor} ${keyCount}K maps, ${rangeText}. Rotates on every refresh.`,
           sortOrder: order++,
         });
       }
@@ -189,12 +251,15 @@ function intOr(value: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-// A set has usable cover art when osu! returned a non-empty covers object for
-// it; coverless sets are skipped so the collage never shows a blank tile.
+// A set has usable cover art when osu! returned covers with a real upload
+// version. The API constructs cover URLs for every set, so a non-empty object
+// proves nothing; a "?0" version query marks a set whose background was never
+// uploaded (the asset 404s and would render as a blank collage tile).
 function hasCoverArt(coversJson: unknown): boolean {
   if (coversJson == null) return false;
   const covers = parseJson<Record<string, string> | null>(String(coversJson), null);
-  return !!covers && typeof covers === "object" && Object.values(covers).some((url) => typeof url === "string" && url.length > 0);
+  if (!covers || typeof covers !== "object") return false;
+  return Object.values(covers).some((url) => typeof url === "string" && url.length > 0 && !url.endsWith("?0"));
 }
 
 // Deterministic PRNG for the rotation sample: same rebuild pass -> same packs,
@@ -251,29 +316,41 @@ function bucketConditions(recipe: CollectionRecipe): { clauses: string[]; args: 
 export async function rebuildMapCollections(db: Db): Promise<void> {
   const now = nowIso();
   for (const recipe of COLLECTION_RECIPES) {
-    const column = patternScoreColumn(recipe.pattern);
-    if (!column) continue;
+    const columns = recipe.patterns
+      .map((pattern) => patternScoreColumn(pattern))
+      .filter((column): column is string => column != null);
+    if (columns.length === 0) continue;
+    // Multi-pattern groups (jack + chordjack) rank by whichever family score
+    // is strongest; pat_* columns are always numeric so scalar max() is safe.
+    const metric = columns.length > 1 ? `max(${columns.join(", ")})` : columns[0];
     const bucket = bucketConditions(recipe);
     const axisColumn = recipe.axis === "dan" ? "raw_dan" : "msd_overall";
     // Vibro charts are excluded outright: both difficulty axes are unreliable
     // on them (same policy as the search dan filter).
     const rows = (await exec(
       db,
-      `select beatmap_id, beatmapset_id, covers_json, ${column} as metric, ${axisColumn} as axis_value
+      `select beatmap_id, beatmapset_id, covers_json, title, search_text, ${metric} as metric, ${axisColumn} as axis_value
        from map_search_index
-       where key_count = ? and primary_pattern = ? and vibro = 0 and ${bucket.clauses.join(" and ")}
-       order by ${column} desc, play_count desc
+       where key_count = ? and primary_pattern in (${recipe.patterns.map(() => "?").join(", ")})
+         and vibro = 0 and length >= ? and ${bucket.clauses.join(" and ")}
+       order by ${metric} desc, play_count desc
        limit ?`,
-      [recipe.keyCount, recipe.pattern, ...bucket.args, POOL_OVERFETCH],
+      [recipe.keyCount, ...recipe.patterns, MIN_LENGTH_SECONDS, ...bucket.args, POOL_OVERFETCH],
     )).rows;
 
-    // Dedupe by set (keeping the highest-metric diff), then sample the rotation.
+    // Drop blocklisted uploads, then dedupe by set and by song (keeping the
+    // highest-metric chart of each), then sample the rotation.
     const seenSets = new Set<number>();
+    const seenSongs = new Set<string>();
     const pool: Array<{ beatmapId: number; beatmapsetId: number; score: number; axisValue: number; hasCover: boolean }> = [];
     for (const row of rows) {
+      if (isBlockedSearchText(String(row.search_text ?? ""))) continue;
       const beatmapsetId = intOr(row.beatmapset_id);
       if (beatmapsetId > 0 && seenSets.has(beatmapsetId)) continue;
       if (beatmapsetId > 0) seenSets.add(beatmapsetId);
+      const song = songKey(row.title);
+      if (song.length > 0 && seenSongs.has(song)) continue;
+      if (song.length > 0) seenSongs.add(song);
       pool.push({
         beatmapId: intOr(row.beatmap_id),
         beatmapsetId,

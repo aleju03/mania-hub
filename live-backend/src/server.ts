@@ -8,8 +8,9 @@ import { JobQueue } from "./jobs/queue.js";
 import { LiveEventLog } from "./live/event-log.js";
 import { startRuntimeStatusMirror } from "./live/runtime-status.js";
 import { deferMapsRefreshesWaitingForRoster, enqueueGlobalMapsRefreshIfDue, enqueueMapsRefreshIfDue } from "./features/maps.js";
-import { ensureMapSearchIndexSeeded } from "./features/map-search.js";
-import { ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
+import { ensureMapSearchIndexSeeded, pruneMapSearchPlaceholderRows, reconcileMapSearchIndexStatuses } from "./features/map-search.js";
+import { enqueueQualifiedMapsWatchIfDue } from "./features/qualified-maps-watch.js";
+import { ensureDanFloorPinRecomputeSeeded, ensureLnSubtypeRecomputeSeeded, ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
 import { enqueueMapCollectionsRebuildIfDue } from "./features/map-collections.js";
 import { startGoalUserIndexRefresh } from "./features/goals.js";
 import { enqueueProfilePoolWarmIfIdle } from "./features/profile-pool-warm.js";
@@ -24,6 +25,7 @@ import { OsuApiClient } from "./osu/client.js";
 import { SqliteSharedRateLimiter } from "./osu/shared-rate-limiter.js";
 import { enqueueRosterRefreshes } from "./rosters/country-rosters.js";
 import { startRetentionScheduler } from "./retention.js";
+import { startWalCheckpointer } from "./wal-checkpointer.js";
 import { WorkerRunner } from "./workers.js";
 import { createDiscordRuntime } from "./discord/index.js";
 
@@ -77,6 +79,15 @@ export async function createApp() {
     await backfillSkinSlugs(db);
   }
   const rateLimitDb = await createDb(config);
+  // A tiny dedicated write connection (+ its own queue) for the page-serving
+  // path's best-effort bookkeeping (country touch, refresh scheduling). Keeping
+  // those writes off the `db` connection that serves page-load reads is the
+  // invariant that stops a busy single WAL writer from freezing the whole site:
+  // a stuck write here can never queue in front of a read. Small cache/mmap — it
+  // only runs a handful of one-row writes. The pure worker role never serves
+  // HTTP, so it does not need one.
+  const serveWriteDb = config.role === "worker" ? null : await createDb({ ...config, sqliteCacheMb: 2, sqliteMmapMb: 0 });
+  const serveWriteQueue = serveWriteDb ? new JobQueue(serveWriteDb) : null;
   const queue = new JobQueue(db);
   const events = new LiveEventLog(db);
   // Startup writes belong to the ingest/worker side; a serving process stays
@@ -89,6 +100,13 @@ export async function createApp() {
     // the ingest hot path skips a DB lookup for players with no goals (and learns of goals created
     // by a separate server-role process within a refresh interval).
     startGoalUserIndexRefresh(db);
+  } else if (serveWriteDb) {
+    // A server-role process must not write on its serving connection, but the
+    // registry read path (/api/countries/features, /api/status) needs the pinned
+    // countries to exist. Seed them once on the dedicated write connection at
+    // boot so getCountryRegistry can read them with { ensure: false } and never
+    // issue ensurePinnedCountries upserts on ctx.db.
+    await ensurePinnedCountries(serveWriteDb, config).catch(() => undefined);
   }
   const logOsuCall = (entry: { caller: string; path: string; startedAt: number; durationMs?: number | null; status?: number | null }) => {
     void logApiCall(db, {
@@ -129,7 +147,16 @@ export async function createApp() {
   const discord = createDiscordRuntime({ db, osu, queue, config });
   const ctx = {
     db,
-    queue,
+    // HTTP handlers enqueue follow-up jobs (maps/roster refresh, rankings stat
+    // repair, player-skill recompute, replay-video, ...) via ctx.queue. Bind it
+    // to the dedicated write connection so NONE of those enqueue writes land on
+    // the connection that serves page-load reads — otherwise a stuck enqueue on
+    // ctx.db (while a worker holds the WAL writer) blocks every read queued
+    // behind it and freezes the site. The worker/schedulers keep using the
+    // db-bound `queue` variable directly (they run in the worker process).
+    queue: serveWriteQueue ?? queue,
+    serveWriteDb: serveWriteDb ?? undefined,
+    serveWriteQueue: serveWriteQueue ?? undefined,
     events,
     config,
     abuse,
@@ -160,7 +187,7 @@ export async function createApp() {
   server.keepAliveTimeout = 75_000;
   server.headersTimeout = 80_000;
   if (config.role !== "worker") warmStatusBodyCache(ctx);
-  return { server, db, rateLimitDb, queue, events, osu, scoresFallbackOsu, osc, worker, ingestor, config, countryClients, discord };
+  return { server, db, rateLimitDb, serveWriteDb, serveWriteQueue, queue, events, osu, scoresFallbackOsu, osc, worker, ingestor, config, countryClients, discord };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -178,15 +205,22 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       // the one-shot vibro recompute sweep over stored chart analyses.
       void ensureMapSearchIndexSeeded(app.db, app.queue).catch((error) => console.warn("[map-search] seed failed", error));
       void ensureVibroRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[vibro-recompute] seed failed", error));
+      void ensureDanFloorPinRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[dan-floor-pin] seed failed", error));
+      void ensureLnSubtypeRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[ln-subtype] seed failed", error));
     }
     if (app.config.enableScheduledRefreshes && app.config.enableOsuApiJobs) {
       startRosterScheduler(app.db, app.queue, app.config);
       startMapsScheduler(app.db, app.queue, app.config);
       startMapCollectionsScheduler(app.db, app.queue, app.config);
+      startQualifiedMapsWatchScheduler(app.db, app.queue, app.config);
       startProfilePoolWarmScheduler(app.db, app.queue);
       startVariantPpDripScheduler(app.db, app.queue);
     }
     startRetentionScheduler(app.db, app.config);
+    // Active WAL brake: keeps the -wal file bounded so it can never grow into the
+    // read-pin death-spiral. Worker/all role only (never the serving process).
+    startWalCheckpointer(app.config);
+    startMapSearchStatusReconciler(app.db);
     startQueuePressureScheduler(app.queue);
     if (app.config.enableOscBackfill) {
       enqueueOscBackfill(app.queue, app.db, app.config).catch((error) => console.warn("[osc] backfill enqueue failed", error));
@@ -381,6 +415,29 @@ function startMapsScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: Job
   setTimeout(tick, 10_000).unref();
 }
 
+// Heals /maps status labels for maps that ranked after they were indexed. The
+// search index materializes status from beatmap metadata (refreshed only by the
+// API-backed enrich job), but a tracked player's score on a newly-ranked map
+// updates the beatmaps.status column for free; this copies that fresher status
+// into the index. Pure DB work, no osu! API, so it runs regardless of the
+// osu!-API scheduler gating (like retention).
+function startMapSearchStatusReconciler(db: Awaited<ReturnType<typeof createDb>>): void {
+  const tick = async () => {
+    const healed = await reconcileMapSearchIndexStatuses(db).catch((error) => {
+      console.warn("[map-search] status reconcile failed", error);
+      return 0;
+    });
+    if (healed > 0) console.log(`[map-search] reconciled ${healed} stale map status label(s)`);
+    const pruned = await pruneMapSearchPlaceholderRows(db).catch((error) => {
+      console.warn("[map-search] placeholder prune failed", error);
+      return 0;
+    });
+    if (pruned > 0) console.log(`[map-search] pruned ${pruned} placeholder diff row(s)`);
+    setTimeout(tick, 60 * 60_000).unref();
+  };
+  setTimeout(tick, 30_000).unref();
+}
+
 // The collections rotation runs on its own (shorter) cadence than the weekly
 // maps tick, so the staleness check polls hourly and enqueues once a rotation
 // ages past the configured interval. Pure DB work off the search index.
@@ -392,4 +449,18 @@ function startMapCollectionsScheduler(db: Awaited<ReturnType<typeof createDb>>, 
     setTimeout(tick, 60 * 60_000).unref();
   };
   setTimeout(tick, 20_000).unref();
+}
+
+// Pulls osu!'s current qualified mania list hourly to reconcile /maps status:
+// promotes pending -> qualified, indexes brand-new sets, and (the gap the
+// zero-API heals can't cover) moves ranked/dequalified sets off the qualified
+// label. One API call per tick in steady state.
+function startQualifiedMapsWatchScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: JobQueue, config: ReturnType<typeof readConfig>): void {
+  const tick = async () => {
+    await enqueueQualifiedMapsWatchIfDue(db, queue, config.qualifiedMapsWatchIntervalMs).catch((error) => {
+      console.warn("[qualified-maps] scheduled watch failed", error);
+    });
+    setTimeout(tick, config.qualifiedMapsWatchIntervalMs).unref();
+  };
+  setTimeout(tick, 45_000).unref();
 }

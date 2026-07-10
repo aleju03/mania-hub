@@ -443,7 +443,9 @@ html[data-custom-cursor="true"] * {
 .bbcode-content audio { width: 100%; max-width: 360px; margin: 0.25em 0; }
 
 /* BBCode visual editing surface */
-.bbcode-editor-surface { caret-color: var(--color-osu-pink); cursor: text; }
+/* position: relative so the drag-to-resize handle can be absolutely placed at a
+   selected image's corner, in the surface's scrolling content coordinates. */
+.bbcode-editor-surface { caret-color: var(--color-osu-pink); cursor: text; position: relative; }
 .bbcode-editor-surface:empty::before {
   content: attr(data-placeholder);
   color: var(--color-osu-f1);
@@ -453,6 +455,9 @@ html[data-custom-cursor="true"] * {
 .bbcode-editor-surface .js-spoilerbox__link .bbcode-spoilerbox__link-text {
   cursor: text; min-width: 1.5rem; outline: none;
 }
+/* Keep an emptied box body a clickable, caret-able target - without a
+   min-height it collapses to nothing and there's no way to add content back. */
+.bbcode-editor-surface .js-spoilerbox__body { min-height: 1.4em; }
 .bbcode-editor-surface a { cursor: text; }
 /* Links read as editable text so the caret lands where you click inside them;
    right-click (or the inspector) handles link actions instead. */
@@ -468,19 +473,22 @@ html[data-custom-cursor="true"] * {
   outline-offset: 1px;
   border-radius: 0.15rem;
 }
-.bbcode-upload-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.1rem 0.5rem;
-  margin: 0 0.15rem;
-  border-radius: 0.3rem;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-osu-l2);
-  background: var(--color-osu-b5);
-  border: 1px dashed rgba(255, 102, 170, 0.5);
-  vertical-align: middle;
+/* While dragging the resize handle, let the image grow past the surface's
+   display caps so the live preview tracks the pointer. */
+.bbcode-editor-surface img.is-resizing { max-height: none; }
+/* Drag-to-resize handle, docked to a selected image's bottom-right corner. */
+.bbcode-image-resize-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 3px;
+  background: var(--color-osu-pink);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  cursor: nwse-resize;
+  z-index: 15;
+  touch-action: none;
   user-select: none;
 }
 .bbcode-editor-surface .imagemap__link {

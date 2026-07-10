@@ -16,6 +16,17 @@ describe("mania replay judgement helpers", () => {
     expect(windows.miss).toBe(164.5);
   });
 
+  it("falls back to od 8 for a non-finite od instead of producing NaN windows", () => {
+    const ruleset = getManiaReplayRuleset(false, []);
+    const fallback = getManiaReplayHitWindows(8, ruleset);
+
+    expect(getManiaReplayHitWindows(Number.NaN, ruleset)).toEqual(fallback);
+    expect(getManiaReplayHitWindows(Number.POSITIVE_INFINITY, ruleset)).toEqual(fallback);
+    // Out-of-range values clamp to the valid od range.
+    expect(getManiaReplayHitWindows(99, ruleset)).toEqual(getManiaReplayHitWindows(10, ruleset));
+    expect(getManiaReplayHitWindows(-5, ruleset)).toEqual(getManiaReplayHitWindows(0, ruleset));
+  });
+
   it("applies stable HR and EZ as classic window multipliers", () => {
     const hardRock = getManiaReplayHitWindows(8, getManiaReplayRuleset(false, ["HR"]));
     const easy = getManiaReplayHitWindows(8, getManiaReplayRuleset(false, ["EZ"]));

@@ -8,7 +8,7 @@ export type Db = Client;
 
 type PragmaConfig = Partial<Pick<Config, "sqliteBusyTimeoutMs" | "sqliteSynchronous" | "sqliteCacheMb" | "sqliteMmapMb">>;
 
-const SQLITE_BUSY_RETRY_MS = readBoundedEnvInt("SQLITE_BUSY_RETRY_MS", 30_000, 0, 120_000);
+const SQLITE_BUSY_RETRY_MS = readBoundedEnvInt("SQLITE_BUSY_RETRY_MS", 15_000, 0, 120_000);
 const SQLITE_BUSY_RETRY_INITIAL_DELAY_MS = 25;
 const SQLITE_BUSY_RETRY_MAX_DELAY_MS = 500;
 
@@ -103,6 +103,18 @@ export async function migrate(db: Db): Promise<void> {
   await migrateMapSearchIndex(db);
   await migrateMapCollections(db);
   await migrateSkins(db);
+  await migrateAdminTodos(db);
+  await migrateCountryMapsSnapshotStampsIndex(db);
+}
+
+// getMapsSnapshotMeta reads only (generated_at, refreshed_at) for a country on
+// the serving loop on every /maps request, but country_maps_snapshots rows carry
+// the ~60MB GLOBAL payload_json, so fetching the row walks its overflow chain.
+// A covering index over just the stamp columns keeps that read index-only.
+async function migrateCountryMapsSnapshotStampsIndex(db: Db): Promise<void> {
+  await db.execute(
+    "create index if not exists idx_country_maps_snapshots_stamps on country_maps_snapshots(country, generated_at, refreshed_at)",
+  );
 }
 
 export async function dbHealth(db: Db): Promise<boolean> {
@@ -961,6 +973,57 @@ async function migrateSkins(db: Db): Promise<void> {
     create index if not exists idx_skins_owner
       on skins(owner_user_id, created_at desc)
   `);
+}
+
+async function migrateAdminTodos(db: Db): Promise<void> {
+  // Private owner todo list (admin-only) for reminders / bugs found / things left to do. Single
+  // user, so no per-user scoping. category is bug|feature|idea|chore|task, priority is
+  // low|normal|high, status is open|done. Timestamps are epoch ms. Durable: retention never
+  // prunes this table.
+  await db.execute(`
+    create table if not exists admin_todos (
+      id text primary key,
+      title text not null,
+      notes text,
+      category text not null default 'task',
+      priority text not null default 'normal',
+      status text not null default 'open',
+      created_at integer not null,
+      updated_at integer not null,
+      done_at integer,
+      position real not null default 0
+    )
+  `);
+  await db.execute(`
+    create index if not exists idx_admin_todos_status
+      on admin_todos(status, created_at desc)
+  `);
+
+  // position: manual drag-to-reorder key for the open list (lower = higher up). Backfill existing
+  // rows with spaced values that match the old default sort (open before done; open by priority
+  // then newest; done by most-recently-completed) so the board looks unchanged the first time it
+  // loads, then becomes freely reorderable. Spaced by 1000 to leave room for midpoint inserts.
+  const columns = (await db.execute("pragma table_info(admin_todos)")).rows.map((row) => String(row.name));
+  if (!columns.includes("position")) {
+    await db.execute("alter table admin_todos add column position real not null default 0");
+    await db.execute(`
+      update admin_todos
+         set position = (
+           select ranked.rn * 1000.0
+             from (
+               select id,
+                      row_number() over (
+                        order by case when status = 'open' then 0 else 1 end,
+                                 case when status = 'done' then coalesce(done_at, 0) else 0 end desc,
+                                 case priority when 'high' then 0 when 'normal' then 1 else 2 end,
+                                 created_at desc
+                      ) as rn
+                 from admin_todos
+             ) ranked
+            where ranked.id = admin_todos.id
+         )
+    `);
+  }
 }
 
 async function migrateBeatmapOsuFileCache(db: Db): Promise<void> {

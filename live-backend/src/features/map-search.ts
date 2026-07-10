@@ -15,9 +15,10 @@ export const MAP_SEARCH_BUILD_JOB = "build_map_search_index";
 // Bump BUILD_REVISION to force a full re-upsert of the index after a fix to how
 // indexed fields are derived (r2: length was stored as the source row's column
 // count for every map; r4: MSD-based 4K primaries, lnRatio LN routing, vibro;
-// r5: msd_overall column for MSD-bucketed collections).
+// r5: msd_overall column for MSD-bucketed collections; r6: split-trill charts
+// no longer take MinaCalc's artifact jack-family primaries).
 // The rebuild is pure DB work, no osu! API.
-const BUILD_REVISION = 5;
+const BUILD_REVISION = 6;
 const BUILD_META_KEY = `map_search_index_built:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
 const BUILD_CURSOR_KEY = `map_search_index_build_cursor:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
 const BUILD_BATCH_SIZE = 400;
@@ -200,13 +201,25 @@ function derivePatternProfile(row: Record<string, unknown>): { primary: string; 
   const { primary, scores } = readPatternProfile(row.skills_json);
   let result = primary;
 
+  const classification = parseJson<{ lnRatio?: unknown; clusterCategory?: unknown } | null>(row.ca_classification_json, null);
+  // MinaCalc reads split trills as jacks: each column repeats every second row,
+  // which JackSpeed/Chordjack score as same-column speed even though the chart
+  // never hits a column twice in a row (gdmem 3814262: 0.2% of row pairs share
+  // a column, yet JackSpeed topped MSD at 15.4 and the map indexed as "jack").
+  // The in-house profile falls for the same repetition. When LeoBlack's cluster
+  // analysis says the chart's dominant identity is a split trill, the
+  // jack-family signals are artifacts: drop them from the primary choice and
+  // zero their chips.
+  const splitTrill = typeof classification?.clusterCategory === "string"
+    && classification.clusterCategory.includes("Split Trill");
+
   if (intOr(row.cs) === 4) {
     const msd = readMsdValues(row.ca_msd_json);
     if (msd) {
       const values = MSD_FAMILY_KEYS.map(([msdKey, family]) => {
         const value = Number(msd[msdKey]);
         return { family, value: Number.isFinite(value) && value > 0 ? value : 0 };
-      });
+      }).filter((entry) => !splitTrill || (entry.family !== "jack" && entry.family !== "chordjack"));
       const top = values.reduce((best, entry) => (entry.value > best.value ? entry : best), values[0]);
       if (top.value > 0) {
         for (const entry of values) scores[entry.family] = clamp01(entry.value / top.value);
@@ -214,8 +227,24 @@ function derivePatternProfile(row: Record<string, unknown>): { primary: string; 
       }
     }
   }
+  if (splitTrill) {
+    scores.jack = 0;
+    scores.chordjack = 0;
+    if (result === "jack" || result === "chordjack") {
+      // Non-4K (no MSD reroute): fall to the strongest remaining family.
+      let best = "unknown";
+      let bestValue = 0;
+      for (const family of MAP_SEARCH_PATTERNS) {
+        if (family === "jack" || family === "chordjack") continue;
+        if (scores[family] > bestValue) {
+          best = family;
+          bestValue = scores[family];
+        }
+      }
+      if (bestValue > 0) result = best;
+    }
+  }
 
-  const classification = parseJson<{ lnRatio?: unknown } | null>(row.ca_classification_json, null);
   const lnRatio = classification != null && Number.isFinite(Number(classification.lnRatio)) ? Number(classification.lnRatio) : null;
   if (lnRatio != null && lnRatio >= 0.5) {
     result = "ln";
@@ -246,6 +275,19 @@ function readPatternTags(classificationJson: unknown): string {
 }
 
 // ── Source rows -> index rows ────────────────────────────────────────────────
+
+// Sub-0.2* diffs are non-playable placeholder stubs -- "00.delete upon
+// download", "~", "===", "asd", 0-star "Normal" -- that mappers bundle into
+// pack and loved sets. Difficulty status is per-diff, so a stub keeps its own
+// pending/graveyard status even when the set is loved, and it leaks into the
+// pending/graveyard tabs on /maps (the LTD Pack / Hylotl / Sendan rows). Drop
+// them by a star floor rather than a name match, so every stub variant is
+// caught, not just the ones literally called "delete". The status guard means a
+// diff a nominator actually ranked/loved/qualified is never hidden -- and no
+// real mania diff sits below 0.2* anyway (the easiest beginner charts are ~0.8).
+const PLACEHOLDER_STAR_FLOOR = 0.2;
+const PLACEHOLDER_STATUSES = ["pending", "wip", "graveyard"] as const;
+const PLACEHOLDER_STATUS_LIST = PLACEHOLDER_STATUSES.map((s) => `'${s}'`).join(", ");
 
 const SOURCE_SELECT = `
   select
@@ -282,7 +324,11 @@ const SOURCE_SELECT = `
     on ca.beatmap_id = sv.beatmap_id and ca.analysis_version = ${CHART_ANALYSIS_VERSION} and ca.status = 'ready'
   where sv.analysis_version = ? and sv.status = 'ready'
     and json_extract(b.metadata_json, '$.mode') = 'mania'
-    and coalesce(json_extract(b.metadata_json, '$.convert'), 0) != 1`;
+    and coalesce(json_extract(b.metadata_json, '$.convert'), 0) != 1
+    and not (
+      coalesce(b.difficulty_rating, 0) < ${PLACEHOLDER_STAR_FLOOR}
+      and coalesce(nullif(lower(coalesce(json_extract(b.metadata_json, '$.status'), b.status)), ''), 'graveyard') in (${PLACEHOLDER_STATUS_LIST})
+    )`;
 
 function intOr(value: unknown, fallback = 0): number {
   const n = Math.round(Number(value));
@@ -388,6 +434,87 @@ export async function upsertMapSearchIndexRow(db: Db, beatmapId: number): Promis
   }
   const statement = buildIndexUpsert(row);
   if (statement) await exec(db, statement.sql, statement.args);
+}
+
+// Status reconciliation (zero osu! API) ------------------------------------
+//
+// The index's `status` is materialized from beatmaps.metadata_json.$.status
+// (see SOURCE_SELECT / rowToEntry), which only refreshes when the API-backed
+// enrich_beatmap job re-fetches a map. A qualified -> ranked transition, by
+// contrast, first lands for free on the beatmaps.status *column* the moment a
+// tracked player's score on the newly-ranked map flows through the farmed path
+// (maps.ts persistMapsFarmedScoreDisplayMetadata) -- no osu! API call. Left
+// alone, /maps keeps showing a stale QUALIFIED until the next full rebuild. The
+// two helpers below push that fresher, already-in-DB status into the index.
+// Both only ever upgrade an in-flux status to a settled one, never the reverse,
+// so a genuinely-ranked row is never reverted by a stale score payload.
+const SETTLED_MAP_STATUSES = ["ranked", "approved", "loved"] as const;
+const IN_FLUX_MAP_STATUSES = ["qualified", "pending", "wip"] as const;
+
+function normalizeMapStatus(status: string | null | undefined): string {
+  return String(status ?? "").trim().toLowerCase();
+}
+
+// Event-driven upgrade: a fresh score payload reported a set's current status.
+// If it names a settled status, returns a statement that flips any still-in-flux
+// index rows for that set to it (seeks idx_map_search_set on beatmapset_id).
+// Returns null when there is nothing to do, so callers can skip the write.
+export function buildMapStatusPropagationStatement(
+  beatmapsetId: number,
+  status: string | null | undefined,
+  updatedAt: string,
+): DbStatement | null {
+  const setId = Math.floor(Number(beatmapsetId));
+  if (!Number.isFinite(setId) || setId <= 0) return null;
+  const next = normalizeMapStatus(status);
+  if (!SETTLED_MAP_STATUSES.includes(next as (typeof SETTLED_MAP_STATUSES)[number])) return null;
+  const placeholders = IN_FLUX_MAP_STATUSES.map(() => "?").join(", ");
+  return {
+    sql: `update map_search_index set status = ?, updated_at = ?
+           where beatmapset_id = ? and status in (${placeholders})`,
+    args: [next, updatedAt, setId, ...IN_FLUX_MAP_STATUSES],
+  };
+}
+
+// Periodic backstop: heal index rows still marked in-flux for maps the
+// beatmaps.status column already knows have settled (rows that went stale before
+// the propagation hook shipped, or after a full rebuild re-materialized the old
+// metadata_json status). Pure DB work; returns the number of rows upgraded.
+export async function reconcileMapSearchIndexStatuses(db: Db): Promise<number> {
+  const inFlux = IN_FLUX_MAP_STATUSES.map(() => "?").join(", ");
+  const settled = SETTLED_MAP_STATUSES.map(() => "?").join(", ");
+  const result = await exec(
+    db,
+    `update map_search_index
+        set status = (select lower(b.status) from beatmaps b
+                       where b.beatmap_id = map_search_index.beatmap_id),
+            updated_at = ?
+      where status in (${inFlux})
+        and exists (select 1 from beatmaps b
+                     where b.beatmap_id = map_search_index.beatmap_id
+                       and lower(b.status) in (${settled})
+                       and lower(b.status) != map_search_index.status)`,
+    [nowIso(), ...IN_FLUX_MAP_STATUSES, ...SETTLED_MAP_STATUSES],
+  );
+  return Number(result.rowsAffected ?? 0);
+}
+
+// One-time (idempotent) cleanup for placeholder-diff rows indexed before the
+// SOURCE_SELECT star floor shipped. New builds already skip them, and any
+// re-touched row self-heals (upsertMapSearchIndexRow deletes a row whose source
+// select returns nothing), but the existing stubs are never re-touched unless
+// their skill vector is recomputed, so sweep them explicitly. Reads the index's
+// own stars/status columns (status is stored lowercased, null -> 'graveyard').
+// Returns the number of rows removed. Cheap and self-terminating: 0 after the
+// first pass, so it is safe to run at boot and hourly.
+export async function pruneMapSearchPlaceholderRows(db: Db): Promise<number> {
+  const statuses = PLACEHOLDER_STATUSES.map(() => "?").join(", ");
+  const result = await exec(
+    db,
+    `delete from map_search_index where stars < ? and status in (${statuses})`,
+    [PLACEHOLDER_STAR_FLOOR, ...PLACEHOLDER_STATUSES],
+  );
+  return Number(result.rowsAffected ?? 0);
 }
 
 // One bulk batch: the next `limit` ready vectors past `cursor`, upserted in a
@@ -560,9 +687,12 @@ const KEY_CLAUSES: Record<string, (p: string) => string> = {
 
 const STATUS_CLAUSES: Record<string, (p: string) => string> = {
   ranked: (p) => `${p}status in ('ranked', 'approved')`,
+  qualified: (p) => `${p}status = 'qualified'`,
   loved: (p) => `${p}status = 'loved'`,
   graveyard: (p) => `${p}status = 'graveyard'`,
-  other: (p) => `${p}status not in ('ranked', 'approved', 'loved', 'graveyard')`,
+  // Pending now excludes qualified (its own facet), so this is pending/wip and
+  // any other stray in-flux status.
+  other: (p) => `${p}status not in ('ranked', 'approved', 'loved', 'graveyard', 'qualified')`,
 };
 
 // OR the selected options within a facet (so "4K or 7K" widens), then the facets
@@ -886,6 +1016,11 @@ function buildWhereParts(query: MapSearchQuery, p = ""): { conditions: string[];
   }
   if (patternClauses.length > 0) {
     conditions.push(`(${patternClauses.join(" or ")})`);
+    // Vibro charts are pattern noise: mash files classify as jack/chordjack/ln
+    // by density alone, so a pattern-scoped search returning them buries the
+    // real charts (same policy as the dan filter). They stay reachable
+    // without the pattern facet.
+    conditions.push(`${p}vibro = 0`);
   }
 
   // danMin/danMax are integer dan levels, inclusive of the whole dan: verdict

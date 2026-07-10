@@ -7,7 +7,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { createDb, exec, json, migrate, type Db } from "../src/db.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION } from "../src/features/activity.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
-import { buildMapSearchIndexBatch, ensureMapSearchIndexSeeded, getMapSearchPage, MAP_SEARCH_BUILD_JOB, type MapSearchQuery } from "../src/features/map-search.js";
+import { buildMapSearchIndexBatch, buildMapStatusPropagationStatement, ensureMapSearchIndexSeeded, getMapSearchPage, getMapSearchSetEntry, MAP_SEARCH_BUILD_JOB, reconcileMapSearchIndexStatuses, type MapSearchQuery } from "../src/features/map-search.js";
 import { getMapCollection, getMapCollections, rebuildMapCollections } from "../src/features/map-collections.js";
 import { routeHttp } from "../src/http/snapshots.js";
 import { JobQueue } from "../src/jobs/queue.js";
@@ -43,6 +43,7 @@ interface SeedMap {
   rankedDate?: string;
   mode?: string;
   convert?: boolean;
+  covers?: Record<string, string>;
   primary: string;
   patterns: Record<string, number>;
 }
@@ -59,7 +60,7 @@ async function seedMap(db: Db, map: SeedMap): Promise<void> {
       map.artist ?? "Artist",
       map.creator ?? "Mapper",
       map.status ?? "ranked",
-      json({ card: `https://example/${map.beatmapsetId}.jpg` }),
+      json(map.covers ?? { card: `https://example/${map.beatmapsetId}.jpg` }),
       json({ ranked_date: map.rankedDate ?? "2020-01-01T00:00:00Z" }),
       now,
     ],
@@ -243,6 +244,27 @@ describe("map search index", () => {
     expect(await ids("zzz=1")).toEqual([]);
   });
 
+  it("treats qualified as its own status facet, split out of pending", async () => {
+    const db = await makeDb();
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, stars: 4.2, status: "ranked", primary: "stream", patterns: { stream: 1 } });
+    await seedMap(db, { beatmapId: 2, beatmapsetId: 20, stars: 4.5, status: "qualified", primary: "stream", patterns: { stream: 1 } });
+    await seedMap(db, { beatmapId: 3, beatmapsetId: 30, stars: 3.8, status: "pending", primary: "stream", patterns: { stream: 1 } });
+    await seedMap(db, { beatmapId: 4, beatmapsetId: 40, stars: 5.1, status: "loved", primary: "stream", patterns: { stream: 1 } });
+    await buildAll(db);
+
+    const facet = async (statuses: string[]) => {
+      const page = await getMapSearchPage(db, { ...baseQuery(), statuses });
+      return page.items.map((item) => item.beatmapId).sort();
+    };
+
+    expect(await facet(["qualified"])).toEqual([2]);
+    // Pending (the "other" facet) no longer sweeps in qualified.
+    expect(await facet(["other"])).toEqual([3]);
+    // Facets OR within themselves.
+    expect(await facet(["ranked", "qualified"])).toEqual([1, 2]);
+    expect(await facet(["loved"])).toEqual([4]);
+  });
+
   it("filters by dan tokens with facet semantics (±0.5, vibro excluded)", async () => {
     const db = await makeDb();
     await seedMap(db, { beatmapId: 1, beatmapsetId: 10, primary: "stream", patterns: { stream: 1 } });
@@ -261,6 +283,23 @@ describe("map search index", () => {
     expect(await ids("dan=9")).toEqual([]);
     expect(await ids("dan>=11")).toEqual([]);
     expect(await ids("dan<10")).toEqual([]);
+  });
+
+  it("excludes vibro charts from pattern-facet searches", async () => {
+    const db = await makeDb();
+    // A mash chart classifies as ln-primary by density alone; the pattern
+    // facet must not surface it, but it stays reachable without the facet.
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, primary: "ln", patterns: { ln: 1 } });
+    await seedAnalysis(db, 1, { rawDan: 12.0, label: "12", vibro: true });
+    await seedMap(db, { beatmapId: 2, beatmapsetId: 20, primary: "ln", patterns: { ln: 0.9 } });
+    await seedAnalysis(db, 2, { rawDan: 8.0, label: "8" });
+    await buildAll(db);
+
+    const lnOnly = await getMapSearchPage(db, { ...baseQuery(), patterns: ["ln"] });
+    expect(lnOnly.items.map((item) => item.beatmapId)).toEqual([2]);
+
+    const all = await getMapSearchPage(db, baseQuery());
+    expect(all.total).toBe(2);
   });
 
   it("groups results by beatmapset with matching diffs attached", async () => {
@@ -399,6 +438,133 @@ describe("map search index", () => {
       vi.useRealTimers();
     }
   }, 30000);
+
+  it("keeps sub-minute joke charts out of every pool", async () => {
+    const db = await makeDb();
+    // Five playable-length charts publish the pack; an 11-second scream map in
+    // the same bucket must not enter it even though its scores qualify.
+    for (let i = 0; i < 5; i++) {
+      const beatmapId = i + 1;
+      await seedMap(db, { beatmapId, beatmapsetId: (i + 1) * 10, cs: 4, primary: "jack", patterns: { jack: 0.9 } });
+      await seedAnalysis(db, beatmapId, { rawDan: 9.2 + i * 0.1, label: "9" });
+    }
+    await seedMap(db, { beatmapId: 6, beatmapsetId: 60, cs: 4, totalLength: 11, primary: "jack", patterns: { jack: 0.99 } });
+    await seedAnalysis(db, 6, { rawDan: 9.5, label: "9" });
+    await buildAll(db);
+    await rebuildMapCollections(db);
+
+    const detail = await getMapCollection(db, "pattern:jack:4k:dan:d9-10");
+    expect(detail).toBeTruthy();
+    expect(detail!.items.map((item) => item.beatmapId)).not.toContain(6);
+    expect(detail!.items.length).toBe(5);
+  }, 30000);
+
+  it("keeps never-uploaded (?0) covers out of the collage", async () => {
+    const db = await makeDb();
+    // osu! constructs cover URLs for every set; a "?0" version means no
+    // background was ever uploaded and the asset 404s. Only set 10 has a real
+    // cover, so it must be the only collage candidate.
+    for (let i = 0; i < 5; i++) {
+      const beatmapId = i + 1;
+      const beatmapsetId = (i + 1) * 10;
+      await seedMap(db, {
+        beatmapId,
+        beatmapsetId,
+        cs: 4,
+        primary: "jack",
+        patterns: { jack: 0.9 },
+        covers: {
+          card: `https://assets.ppy.sh/beatmaps/${beatmapsetId}/covers/card.jpg?${i === 0 ? 1662071433 : 0}`,
+          list: `https://assets.ppy.sh/beatmaps/${beatmapsetId}/covers/list.jpg?${i === 0 ? 1662071433 : 0}`,
+        },
+      });
+      await seedAnalysis(db, beatmapId, { rawDan: 9.2 + i * 0.1, label: "9" });
+    }
+    await buildAll(db);
+    await rebuildMapCollections(db);
+
+    const collections = await getMapCollections(db);
+    const pack = collections.find((c) => c.id === "pattern:jack:4k:dan:d9-10");
+    expect(pack).toBeTruthy();
+    expect(pack!.memberCount).toBe(5);
+    expect(pack!.coverSetIds).toEqual([10]);
+    expect(pack!.coverSetId).toBe(10);
+  }, 30000);
+
+  it("folds chordjack charts into the jack group and retires chordjack packs", async () => {
+    const db = await makeDb();
+    // Three jack-primary and three chordjack-primary sets in one bucket. The
+    // merged Jack shelf draws from both (neither family alone reaches
+    // MIN_MEMBERS), and no chordjack shelf publishes anymore.
+    for (let i = 0; i < 3; i++) {
+      const beatmapId = i + 1;
+      await seedMap(db, { beatmapId, beatmapsetId: (i + 1) * 10, cs: 4, primary: "jack", patterns: { jack: 0.9 } });
+      await seedAnalysis(db, beatmapId, { rawDan: 9.2 + i * 0.1, label: "9" });
+    }
+    for (let i = 0; i < 3; i++) {
+      const beatmapId = i + 4;
+      await seedMap(db, { beatmapId, beatmapsetId: (i + 4) * 10, cs: 4, primary: "chordjack", patterns: { chordjack: 0.9 } });
+      await seedAnalysis(db, beatmapId, { rawDan: 9.5 + i * 0.1, label: "9" });
+    }
+    await buildAll(db);
+    await rebuildMapCollections(db);
+
+    const detail = await getMapCollection(db, "pattern:jack:4k:dan:d9-10");
+    expect(detail).toBeTruthy();
+    expect(detail!.items.map((item) => item.beatmapId).sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6]);
+    const collections = await getMapCollections(db);
+    expect(collections.some((collection) => collection.id.startsWith("pattern:chordjack:"))).toBe(false);
+  }, 30000);
+
+  it("keeps blocklisted uploads (vibro packs, FNF rips) out of every pack", async () => {
+    const db = await makeDb();
+    for (let i = 0; i < 5; i++) {
+      const beatmapId = i + 1;
+      await seedMap(db, { beatmapId, beatmapsetId: (i + 1) * 10, cs: 4, primary: "jack", patterns: { jack: 0.9 } });
+      await seedAnalysis(db, beatmapId, { rawDan: 9.2 + i * 0.1, label: "9" });
+    }
+    // These pass every numeric filter (unflagged jumptrill-vibro measures
+    // clean) and must still stay out on their metadata alone.
+    const junk: Array<Partial<SeedMap> & { beatmapId: number; beatmapsetId: number }> = [
+      { beatmapId: 6, beatmapsetId: 60, title: "4k Vibro Pack 99", artist: "Various Artists" },
+      { beatmapId: 7, beatmapsetId: 70, title: "V.S. AGOTI (Insane) FULL WEEK", artist: "AGOTI" },
+      { beatmapId: 8, beatmapsetId: 80, title: "Friday Night Funkin vs AFLAC", artist: "By Aflac" },
+    ];
+    for (const map of junk) {
+      await seedMap(db, { ...map, cs: 4, primary: "jack", patterns: { jack: 0.99 } });
+      await seedAnalysis(db, map.beatmapId, { rawDan: 9.5, label: "9" });
+    }
+    await buildAll(db);
+    await rebuildMapCollections(db);
+
+    const detail = await getMapCollection(db, "pattern:jack:4k:dan:d9-10");
+    expect(detail).toBeTruthy();
+    expect(detail!.items.map((item) => item.beatmapId).sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5]);
+  }, 30000);
+
+  it("keeps one chart per song across different uploads of the same track", async () => {
+    const db = await makeDb();
+    for (let i = 0; i < 4; i++) {
+      const beatmapId = i + 1;
+      await seedMap(db, { beatmapId, beatmapsetId: (i + 1) * 10, cs: 4, primary: "jack", patterns: { jack: 0.9 } });
+      await seedAnalysis(db, beatmapId, { rawDan: 9.2 + i * 0.1, label: "9" });
+    }
+    // Three separate beatmapsets of the same song (one a cut version); only
+    // the strongest chart survives, so the set dedupe alone is not enough.
+    await seedMap(db, { beatmapId: 5, beatmapsetId: 50, cs: 4, title: "MAID OF FIRE", primary: "jack", patterns: { jack: 0.99 } });
+    await seedAnalysis(db, 5, { rawDan: 9.5, label: "9" });
+    await seedMap(db, { beatmapId: 6, beatmapsetId: 60, cs: 4, title: "MAID OF FIRE", primary: "jack", patterns: { jack: 0.95 } });
+    await seedAnalysis(db, 6, { rawDan: 9.5, label: "9" });
+    await seedMap(db, { beatmapId: 7, beatmapsetId: 70, cs: 4, title: "Maid of Fire (Cut Ver.)", primary: "jack", patterns: { jack: 0.93 } });
+    await seedAnalysis(db, 7, { rawDan: 9.5, label: "9" });
+    await buildAll(db);
+    await rebuildMapCollections(db);
+
+    const detail = await getMapCollection(db, "pattern:jack:4k:dan:d9-10");
+    expect(detail).toBeTruthy();
+    const ids = detail!.items.map((item) => item.beatmapId).sort((a, b) => a - b);
+    expect(ids).toEqual([1, 2, 3, 4, 5]);
+  }, 30000);
 });
 
 describe("map search + collections HTTP", () => {
@@ -531,6 +697,7 @@ async function seedAnalysis(
     rawDan?: number;
     label?: string;
     family?: string;
+    clusterCategory?: string;
   },
 ): Promise<void> {
   const now = "2026-01-01T00:00:00Z";
@@ -547,7 +714,12 @@ async function seedAnalysis(
       options.family ?? "dan",
       options.rawDan ?? 10,
       options.msdValues?.Overall ?? null,
-      json({ lnRatio: options.lnRatio ?? 0.1, vibro: options.vibro ?? false, patterns: [] }),
+      json({
+        lnRatio: options.lnRatio ?? 0.1,
+        vibro: options.vibro ?? false,
+        patterns: [],
+        clusterCategory: options.clusterCategory ?? null,
+      }),
       options.msdValues ? json({ etternaVersion: "0.72.3", values: options.msdValues }) : null,
       now,
       now,
@@ -576,6 +748,47 @@ describe("map search primary derivation", () => {
     expect(handstream.total).toBe(0);
     const stamina = await getMapSearchPage(db, { ...baseQuery(), patterns: ["stamina"] });
     expect(stamina.total).toBe(1);
+  });
+
+  it("drops MinaCalc's artifact jack primaries on split-trill charts", async () => {
+    const db = await makeDb();
+    // gdmem shape (beatmap 3814262): a pure split trill - each column repeats
+    // every second row, never twice in a row. MinaCalc reads that repetition
+    // as JackSpeed (tops Overall with it) and the in-house profile calls it
+    // chordjack; the cluster analysis is the one source that names it.
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, primary: "chordjack", patterns: { chordjack: 1, jack: 0.61, jumpstream: 0.44 } });
+    await seedAnalysis(db, 1, {
+      msdValues: { Overall: 15.36, Stream: 7.22, Jumpstream: 10.82, Handstream: 6.18, Stamina: 9.14, JackSpeed: 15.36, Chordjack: 8.98, Technical: 10.34 },
+      lnRatio: 0.04,
+      clusterCategory: "Split Trill",
+    });
+    await buildAll(db);
+
+    const all = await getMapSearchPage(db, baseQuery());
+    expect(all.items[0].primaryPattern).toBe("jumpstream");
+    // Zeroed jack-family chips drop out of the entry's patterns record.
+    expect(all.items[0].patterns.jack).toBeUndefined();
+    expect(all.items[0].patterns.chordjack).toBeUndefined();
+    expect(all.items[0].patterns.tech).toBeCloseTo(10.34 / 10.82, 3);
+
+    const jackScoped = await getMapSearchPage(db, { ...baseQuery(), patterns: ["jack"] });
+    expect(jackScoped.total).toBe(0);
+    const jsScoped = await getMapSearchPage(db, { ...baseQuery(), patterns: ["jumpstream"] });
+    expect(jsScoped.total).toBe(1);
+  });
+
+  it("reroutes split-trill jack primaries on non-4K charts from the in-house profile", async () => {
+    const db = await makeDb();
+    // 7K has no MSD reroute: the in-house chordjack primary falls to the
+    // strongest non-jack family instead.
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, cs: 7, primary: "chordjack", patterns: { chordjack: 1, stream: 0.6, jack: 0.5 } });
+    await seedAnalysis(db, 1, { lnRatio: 0.05, clusterCategory: "Split Trill Tech" });
+    await buildAll(db);
+
+    const all = await getMapSearchPage(db, { ...baseQuery(), keys: ["7k"] });
+    expect(all.items[0].primaryPattern).toBe("stream");
+    expect(all.items[0].patterns.jack).toBeUndefined();
+    expect(all.items[0].patterns.chordjack).toBeUndefined();
   });
 
   it("routes LN primaries by the classifier lnRatio", async () => {
@@ -616,6 +829,55 @@ describe("map search primary derivation", () => {
 
     const danScoped = await getMapSearchPage(db, { ...baseQuery(), danMin: 10, danMax: 10 });
     expect(danScoped.items.map((item) => item.beatmapId)).toEqual([2]);
+  });
+});
+
+describe("map search status reconciliation", () => {
+  it("heals a stale qualified index row from the fresh ranked column, no rebuild", async () => {
+    const db = await makeDb();
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, status: "qualified", primary: "stream", patterns: { stream: 1 } });
+    await buildAll(db);
+    expect((await getMapSearchSetEntry(db, 1))?.status).toBe("qualified");
+
+    // The farmed path refreshes only the beatmaps.status *column* while
+    // metadata_json still says qualified, exactly as the live pipeline does.
+    await exec(db, "update beatmaps set status = 'ranked' where beatmap_id = 1");
+
+    expect(await reconcileMapSearchIndexStatuses(db)).toBe(1);
+    expect((await getMapSearchSetEntry(db, 1))?.status).toBe("ranked");
+    // Idempotent: a second sweep changes nothing.
+    expect(await reconcileMapSearchIndexStatuses(db)).toBe(0);
+  });
+
+  it("never downgrades a settled index row from a stale column", async () => {
+    const db = await makeDb();
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, status: "ranked", primary: "stream", patterns: { stream: 1 } });
+    await buildAll(db);
+    // A stale/incorrect column must not revert a genuinely-ranked index row.
+    await exec(db, "update beatmaps set status = 'qualified' where beatmap_id = 1");
+    expect(await reconcileMapSearchIndexStatuses(db)).toBe(0);
+    expect((await getMapSearchSetEntry(db, 1))?.status).toBe("ranked");
+  });
+
+  it("propagates a fresh ranked status across every in-flux diff of the set", async () => {
+    const db = await makeDb();
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, status: "qualified", primary: "stream", patterns: { stream: 1 } });
+    await seedMap(db, { beatmapId: 2, beatmapsetId: 10, status: "qualified", primary: "jack", patterns: { jack: 1 } });
+    await buildAll(db);
+
+    const stmt = buildMapStatusPropagationStatement(10, "ranked", "2026-07-06T00:00:00Z");
+    expect(stmt).not.toBeNull();
+    await exec(db, stmt!.sql, stmt!.args);
+    expect((await getMapSearchSetEntry(db, 1))?.status).toBe("ranked");
+    expect((await getMapSearchSetEntry(db, 2))?.status).toBe("ranked");
+
+    // A non-settled or empty payload is a no-op, and a settled payload never
+    // overwrites a row that has already settled.
+    expect(buildMapStatusPropagationStatement(10, "pending", "t")).toBeNull();
+    expect(buildMapStatusPropagationStatement(10, "", "t")).toBeNull();
+    const loved = buildMapStatusPropagationStatement(10, "loved", "2026-07-06T00:00:00Z")!;
+    await exec(db, loved.sql, loved.args);
+    expect((await getMapSearchSetEntry(db, 1))?.status).toBe("ranked");
   });
 });
 

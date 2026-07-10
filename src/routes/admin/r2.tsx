@@ -14,6 +14,11 @@ import {
   type R2AdminObject,
   type R2AdminPrefixSummary,
 } from "../../lib/r2-cache";
+import {
+  describeUploadedReplayByKey,
+  type UploadedReplayDescription,
+} from "../../lib/uploaded-replay-describe";
+import { GradeImg } from "../../components/ui/GradeImg";
 
 type R2Search = {
   prefix: string;
@@ -65,6 +70,15 @@ const signR2AdminUrl = createServerFn({ method: "GET" })
     await requireAdminAccess("R2 object preview");
     const url = await getR2AdminSignedUrl(data.key, data.mimeType);
     return { url };
+  });
+
+const describeUploadedReplay = createServerFn({ method: "GET" })
+  .inputValidator((data: { key?: string }) => ({
+    key: typeof data?.key === "string" ? data.key : "",
+  }))
+  .handler(async ({ data }): Promise<UploadedReplayDescription | null> => {
+    await requireAdminAccess("R2 replay inspection");
+    return describeUploadedReplayByKey(data.key);
   });
 
 const deleteR2Object = createServerFn({ method: "POST" })
@@ -209,6 +223,73 @@ function pathCrumbs(prefix: string): Array<{ label: string; prefix: string }> {
     crumbs.push({ label: part, prefix: current });
   }
   return crumbs;
+}
+
+// Uploaded replays live under this prefix as content-addressed <id>.osr blobs
+// (see getUploadedReplayStorageKey). We enrich those rows with the player + map
+// parsed from the file, and link them straight into the replay viewer.
+const UPLOADED_REPLAY_PREFIX = "replay-cache/uploaded-replays/";
+
+function isUploadedReplayObject(key: string): boolean {
+  return key.startsWith(UPLOADED_REPLAY_PREFIX) && /\.osr$/i.test(key);
+}
+
+function uploadedReplayIdFromKey(key: string): string | null {
+  const base = key.slice(UPLOADED_REPLAY_PREFIX.length);
+  if (!base || base.includes("/") || !/\.osr$/i.test(base)) return null;
+  return base.slice(0, -4) || null;
+}
+
+type ReplayDescriptionState =
+  | { status: "loading" }
+  | { status: "ready"; data: UploadedReplayDescription | null };
+
+// Descriptions are stable per key, so cache them for the session and dedupe
+// in-flight lookups. This keeps paging back and forth from re-parsing replays
+// and re-hitting the osu! beatmap lookup.
+const replayDescriptionCache = new Map<string, UploadedReplayDescription | null>();
+const replayDescriptionInflight = new Map<string, Promise<UploadedReplayDescription | null>>();
+
+function loadUploadedReplayDescription(key: string): Promise<UploadedReplayDescription | null> {
+  const existing = replayDescriptionInflight.get(key);
+  if (existing) return existing;
+  const promise = describeUploadedReplay({ data: { key } })
+    .then((data) => data)
+    .catch(() => null)
+    .then((data) => {
+      replayDescriptionCache.set(key, data);
+      return data;
+    })
+    .finally(() => {
+      replayDescriptionInflight.delete(key);
+    });
+  replayDescriptionInflight.set(key, promise);
+  return promise;
+}
+
+function useUploadedReplayDescription(key: string): ReplayDescriptionState {
+  const [state, setState] = useState<ReplayDescriptionState>(() =>
+    replayDescriptionCache.has(key)
+      ? { status: "ready", data: replayDescriptionCache.get(key) ?? null }
+      : { status: "loading" },
+  );
+
+  useEffect(() => {
+    if (replayDescriptionCache.has(key)) {
+      setState({ status: "ready", data: replayDescriptionCache.get(key) ?? null });
+      return;
+    }
+    let active = true;
+    setState({ status: "loading" });
+    void loadUploadedReplayDescription(key).then((data) => {
+      if (active) setState({ status: "ready", data });
+    });
+    return () => {
+      active = false;
+    };
+  }, [key]);
+
+  return state;
 }
 
 function R2AdminPage() {
@@ -424,14 +505,22 @@ function R2AdminPage() {
                       onDelete={() => setPendingDelete({ kind: "prefix", prefix: folder.prefix, name: folder.name })}
                     />
                   ))}
-                  {pageObjects.map((object) => (
-                    <ObjectRow
-                      key={object.key}
-                      object={object}
-                      onPreview={() => setPreview(object)}
-                      onDelete={() => setPendingDelete({ kind: "object", key: object.key, name: object.name })}
-                    />
-                  ))}
+                  {pageObjects.map((object) =>
+                    isUploadedReplayObject(object.key) ? (
+                      <UploadedReplayRow
+                        key={object.key}
+                        object={object}
+                        onDelete={() => setPendingDelete({ kind: "object", key: object.key, name: object.name })}
+                      />
+                    ) : (
+                      <ObjectRow
+                        key={object.key}
+                        object={object}
+                        onPreview={() => setPreview(object)}
+                        onDelete={() => setPendingDelete({ kind: "object", key: object.key, name: object.name })}
+                      />
+                    ),
+                  )}
                 </div>
               )}
             </div>
@@ -850,6 +939,111 @@ function ObjectRow({
           <div className="text-[11px] font-mono text-osu-f1/70 truncate mt-0.5">{object.key}</div>
         </div>
       </button>
+      <DeleteIconButton title="Delete file" onClick={onDelete} />
+    </div>
+  );
+}
+
+function ReplayGlyph({ pulsing }: { pulsing?: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={`h-4 w-4 text-osu-pink-light ${pulsing ? "animate-pulse" : ""}`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M10 9l5 3-5 3z" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+// Enriched row for uploaded .osr blobs: shows who played it and which score/map
+// it is (parsed on demand), and links the whole row to the replay viewer. Falls
+// back to the raw key when the replay can't be read.
+function UploadedReplayRow({
+  object,
+  onDelete,
+}: {
+  object: R2AdminObject;
+  onDelete: () => void;
+}) {
+  const state = useUploadedReplayDescription(object.key);
+  const id = useMemo(() => uploadedReplayIdFromKey(object.key), [object.key]);
+
+  const loading = state.status === "loading";
+  const data = state.status === "ready" ? state.data : null;
+  const beatmap = data?.beatmap ?? null;
+  const watchHref = id ? `/replay?uploadId=${encodeURIComponent(id)}` : null;
+  const mapLine = beatmap
+    ? `${beatmap.artist ? `${beatmap.artist} - ` : ""}${beatmap.title || "(untitled)"}${beatmap.version ? ` [${beatmap.version}]` : ""}`
+    : null;
+
+  const content = (
+    <>
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-osu-pink/10">
+        {data ? <GradeImg grade={data.grade} size={26} /> : <ReplayGlyph pulsing={loading} />}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-2 flex-wrap">
+          <span className={`text-[14px] font-medium truncate ${data ? "text-white" : "text-osu-l2"}`}>
+            {data ? data.playerName : loading ? "Reading replay…" : object.name}
+          </span>
+          {data && data.mods.length > 0 ? (
+            <span className="text-[11px] font-mono text-osu-pink-light shrink-0">+{data.mods.join("")}</span>
+          ) : null}
+          {data ? (
+            <span className="text-[10px] font-mono text-osu-l2 px-1 rounded bg-osu-b3/40 shrink-0">
+              {data.keyCount}K
+            </span>
+          ) : null}
+          <span className="text-[11px] text-osu-f1 font-mono shrink-0">
+            {formatBytes(object.sizeBytes)} · {formatDate(object.lastModified)}
+          </span>
+        </div>
+        <div className="text-[12px] text-osu-l2 truncate mt-0.5">
+          {mapLine ? (
+            mapLine
+          ) : loading ? (
+            <span className="text-osu-f1/60">looking up map…</span>
+          ) : data ? (
+            <span className="text-osu-f1/60">map not on osu! (unsubmitted or deleted)</span>
+          ) : (
+            <span className="text-osu-f1/60">couldn't read replay metadata</span>
+          )}
+        </div>
+        {data ? (
+          <div className="text-[11px] font-mono text-osu-f1/70 truncate mt-0.5">
+            {(data.accuracy * 100).toFixed(2)}% · {formatCount(data.totalScore)} · {formatCount(data.maxCombo)}x
+            {data.judgements.miss > 0 ? ` · ${formatCount(data.judgements.miss)} miss` : ""}
+            {beatmap?.starRating != null ? ` · ${beatmap.starRating.toFixed(2)}★` : ""}
+          </div>
+        ) : (
+          <div className="text-[11px] font-mono text-osu-f1/50 truncate mt-0.5">{object.key}</div>
+        )}
+      </div>
+      {watchHref ? <span className="text-osu-f1/50 shrink-0 text-[13px]">↗</span> : null}
+    </>
+  );
+
+  return (
+    <div className="flex items-center gap-3 px-3 py-2.5 hover:bg-osu-b3/20 transition-colors duration-[100ms]">
+      {watchHref ? (
+        <a
+          href={watchHref}
+          target="_blank"
+          rel="noreferrer noopener"
+          title="Watch replay"
+          className="flex min-w-0 flex-1 items-center gap-3 text-left cursor-pointer"
+        >
+          {content}
+        </a>
+      ) : (
+        <div className="flex min-w-0 flex-1 items-center gap-3">{content}</div>
+      )}
       <DeleteIconButton title="Delete file" onClick={onDelete} />
     </div>
   );

@@ -89,11 +89,11 @@ const STYLE_LABELS: Record<ReplaySkinStyle, string> = {
   arrows: "Arrows",
 };
 
-type TabId = "skin" | "viewer" | "hidden" | "appearance";
+type TabId = "skin" | "viewer" | "filters" | "appearance";
 const TABS: { id: TabId; label: string }[] = [
   { id: "skin", label: "skin & layout" },
   { id: "viewer", label: "playback" },
-  { id: "hidden", label: "hidden players" },
+  { id: "filters", label: "filters" },
   { id: "appearance", label: "appearance" },
 ];
 
@@ -206,7 +206,7 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
           }}
         />
       ) : null}
-      {activeTab === "hidden" ? <HiddenPlayersPanel /> : null}
+      {activeTab === "filters" ? <HiddenPlayersPanel /> : null}
     </>
   );
 
@@ -657,10 +657,10 @@ function HiddenPlayersPanel() {
 
   return (
     <div className="space-y-6">
-      <PanelGroup label="Hidden players">
+      <PanelGroup label="Hide players">
         <p className="text-[12px] leading-relaxed text-osu-f1">
-          Players you hide are removed from rankings and feeds across the site. This list is stored
-          on this browser only.
+          Players you hide are filtered out of rankings and feeds across the site. This list is
+          stored on this browser only.
         </p>
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-osu-f1" />
@@ -732,7 +732,7 @@ function HiddenPlayersPanel() {
       <PanelGroup label={`Hidden list (${hiddenList.length})`}>
         {hiddenList.length === 0 ? (
           <p className="rounded-lg border border-osu-b3/40 bg-osu-b5/40 px-4 py-6 text-center text-[12px] text-osu-f1">
-            No hidden players yet.
+            No players hidden.
           </p>
         ) : (
           <ul className="space-y-2">

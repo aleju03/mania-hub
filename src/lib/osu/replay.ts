@@ -8,10 +8,16 @@ import {
   releaseCacheLock,
   runWithCacheLockRenewal
 } from "../api";
+import {
+  getCommunityBeatmapFile as readCommunityBeatmap,
+  putCommunityBeatmap,
+  type CommunityBeatmapSubmitResult,
+} from "../community-beatmap-store";
 import type { ReplayEndpointKind } from "../r2-cache";
 import type { OsuBeatmap, OsuBeatmapset, OsuScore } from "../types";
 import {
-  edgeCache
+  edgeCache,
+  noStore
 } from "./server";
 import {
   normalizeBeatmapPayload,
@@ -280,6 +286,41 @@ export const getBeatmapFile = createServerFn({ method: "GET" })
     // serverless + Turso round trip entirely.
     edgeCache(3600, 86400);
     return await fetchBeatmapFileWithMeta(data.beatmapId, data.beatmapsetId);
+  });
+
+// Community-supplied .osu for a replay whose map osu! can't serve. Keyed only by
+// the replay's beatmap checksum, so it also covers unsubmitted maps that have no
+// beatmap id at all.
+export const getCommunityBeatmapFile = createServerFn({ method: "GET" })
+  .inputValidator(normalizeBeatmapChecksumPayload)
+  .handler(async ({ data }: { data: { checksum: string } }): Promise<{ content: string } | null> => {
+    const content = await readCommunityBeatmap(data.checksum);
+    if (!content) {
+      // A miss flips to a hit the moment someone contributes this map, so never
+      // let a CDN pin the empty answer and keep asking the next viewer.
+      noStore();
+      return null;
+    }
+    // A contributed .osu is immutable for its checksum; cache it hard.
+    edgeCache(86400, 604800);
+    return { content };
+  });
+
+export const submitCommunityBeatmap = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown): { checksum: string; content: string } => {
+    const record = typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
+    const checksum = String(record.checksum ?? "").trim().toLowerCase();
+    if (!/^[a-f0-9]{32}$/.test(checksum)) {
+      throw new Error("Invalid beatmap checksum.");
+    }
+    const content = typeof record.content === "string" ? record.content : "";
+    if (!content) {
+      throw new Error("Missing beatmap file content.");
+    }
+    return { checksum, content };
+  })
+  .handler(async ({ data }: { data: { checksum: string; content: string } }): Promise<CommunityBeatmapSubmitResult> => {
+    return putCommunityBeatmap(data.checksum, data.content);
   });
 
 export const getScore = createServerFn({ method: "GET" })

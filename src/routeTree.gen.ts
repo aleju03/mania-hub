@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ValleyRouteImport } from './routes/valley'
 import { Route as TrackerRouteImport } from './routes/tracker'
 import { Route as TopPlaysRouteImport } from './routes/top-plays'
 import { Route as TermsRouteImport } from './routes/terms'
@@ -40,6 +41,7 @@ import { Route as ApiCatboxUploadRouteImport } from './routes/api/catbox-upload'
 import { Route as ApiBackgroundRouteImport } from './routes/api/background'
 import { Route as ApiAvatarRouteImport } from './routes/api/avatar'
 import { Route as ApiAudioRouteImport } from './routes/api/audio'
+import { Route as AdminTodosRouteImport } from './routes/admin/todos'
 import { Route as AdminR2RouteImport } from './routes/admin/r2'
 import { Route as AdminOgPreviewRouteImport } from './routes/admin/og-preview'
 import { Route as AdminMonitorRouteImport } from './routes/admin/monitor'
@@ -56,6 +58,11 @@ import { Route as ApiAuthOsuRouteImport } from './routes/api/auth/osu'
 import { Route as ApiAuthLogoutRouteImport } from './routes/api/auth/logout'
 import { Route as ApiAuthOsuCallbackRouteImport } from './routes/api/auth/osu/callback'
 
+const ValleyRoute = ValleyRouteImport.update({
+  id: '/valley',
+  path: '/valley',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TrackerRoute = TrackerRouteImport.update({
   id: '/tracker',
   path: '/tracker',
@@ -211,6 +218,11 @@ const ApiAudioRoute = ApiAudioRouteImport.update({
   path: '/api/audio',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminTodosRoute = AdminTodosRouteImport.update({
+  id: '/admin/todos',
+  path: '/admin/todos',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminR2Route = AdminR2RouteImport.update({
   id: '/admin/r2',
   path: '/admin/r2',
@@ -307,12 +319,14 @@ export interface FileRoutesByFullPath {
   '/terms': typeof TermsRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
+  '/valley': typeof ValleyRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
   '/admin/monitor': typeof AdminMonitorRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/admin/r2': typeof AdminR2Route
+  '/admin/todos': typeof AdminTodosRoute
   '/api/audio': typeof ApiAudioRoute
   '/api/avatar': typeof ApiAvatarRoute
   '/api/background': typeof ApiBackgroundRoute
@@ -355,12 +369,14 @@ export interface FileRoutesByTo {
   '/terms': typeof TermsRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
+  '/valley': typeof ValleyRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
   '/admin/monitor': typeof AdminMonitorRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/admin/r2': typeof AdminR2Route
+  '/admin/todos': typeof AdminTodosRoute
   '/api/audio': typeof ApiAudioRoute
   '/api/avatar': typeof ApiAvatarRoute
   '/api/background': typeof ApiBackgroundRoute
@@ -404,12 +420,14 @@ export interface FileRoutesById {
   '/terms': typeof TermsRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
+  '/valley': typeof ValleyRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
   '/admin/monitor': typeof AdminMonitorRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/admin/r2': typeof AdminR2Route
+  '/admin/todos': typeof AdminTodosRoute
   '/api/audio': typeof ApiAudioRoute
   '/api/avatar': typeof ApiAvatarRoute
   '/api/background': typeof ApiBackgroundRoute
@@ -454,12 +472,14 @@ export interface FileRouteTypes {
     | '/terms'
     | '/top-plays'
     | '/tracker'
+    | '/valley'
     | '/admin/dan-classifier'
     | '/admin/discord'
     | '/admin/live-backend'
     | '/admin/monitor'
     | '/admin/og-preview'
     | '/admin/r2'
+    | '/admin/todos'
     | '/api/audio'
     | '/api/avatar'
     | '/api/background'
@@ -502,12 +522,14 @@ export interface FileRouteTypes {
     | '/terms'
     | '/top-plays'
     | '/tracker'
+    | '/valley'
     | '/admin/dan-classifier'
     | '/admin/discord'
     | '/admin/live-backend'
     | '/admin/monitor'
     | '/admin/og-preview'
     | '/admin/r2'
+    | '/admin/todos'
     | '/api/audio'
     | '/api/avatar'
     | '/api/background'
@@ -550,12 +572,14 @@ export interface FileRouteTypes {
     | '/terms'
     | '/top-plays'
     | '/tracker'
+    | '/valley'
     | '/admin/dan-classifier'
     | '/admin/discord'
     | '/admin/live-backend'
     | '/admin/monitor'
     | '/admin/og-preview'
     | '/admin/r2'
+    | '/admin/todos'
     | '/api/audio'
     | '/api/avatar'
     | '/api/background'
@@ -599,12 +623,14 @@ export interface RootRouteChildren {
   TermsRoute: typeof TermsRoute
   TopPlaysRoute: typeof TopPlaysRoute
   TrackerRoute: typeof TrackerRoute
+  ValleyRoute: typeof ValleyRoute
   AdminDanClassifierRoute: typeof AdminDanClassifierRoute
   AdminDiscordRoute: typeof AdminDiscordRoute
   AdminLiveBackendRoute: typeof AdminLiveBackendRoute
   AdminMonitorRoute: typeof AdminMonitorRoute
   AdminOgPreviewRoute: typeof AdminOgPreviewRoute
   AdminR2Route: typeof AdminR2Route
+  AdminTodosRoute: typeof AdminTodosRoute
   ApiAudioRoute: typeof ApiAudioRoute
   ApiAvatarRoute: typeof ApiAvatarRoute
   ApiBackgroundRoute: typeof ApiBackgroundRoute
@@ -624,6 +650,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/valley': {
+      id: '/valley'
+      path: '/valley'
+      fullPath: '/valley'
+      preLoaderRoute: typeof ValleyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tracker': {
       id: '/tracker'
       path: '/tracker'
@@ -841,6 +874,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAudioRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/todos': {
+      id: '/admin/todos'
+      path: '/admin/todos'
+      fullPath: '/admin/todos'
+      preLoaderRoute: typeof AdminTodosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/r2': {
       id: '/admin/r2'
       path: '/admin/r2'
@@ -1011,12 +1051,14 @@ const rootRouteChildren: RootRouteChildren = {
   TermsRoute: TermsRoute,
   TopPlaysRoute: TopPlaysRoute,
   TrackerRoute: TrackerRoute,
+  ValleyRoute: ValleyRoute,
   AdminDanClassifierRoute: AdminDanClassifierRoute,
   AdminDiscordRoute: AdminDiscordRoute,
   AdminLiveBackendRoute: AdminLiveBackendRoute,
   AdminMonitorRoute: AdminMonitorRoute,
   AdminOgPreviewRoute: AdminOgPreviewRoute,
   AdminR2Route: AdminR2Route,
+  AdminTodosRoute: AdminTodosRoute,
   ApiAudioRoute: ApiAudioRoute,
   ApiAvatarRoute: ApiAvatarRoute,
   ApiBackgroundRoute: ApiBackgroundRoute,

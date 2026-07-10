@@ -12,6 +12,7 @@ import {
   parseLeoBlackLnHalf,
   parseLeoBlackRcHalf,
   runLeoBlackMixed,
+  runLeoBlackSunny,
   type ParsedDanPart,
 } from "./leoblack-estimator.js";
 import { DAN_INDEX, type DanIntervalTable } from "../../vendor/leoblack/estimator/intervals/index.js";
@@ -212,12 +213,26 @@ const RICE_VIBRO_COLUMN_MIN_RUN = 24;
 const RICE_VIBRO_COLUMN_MIN_RATIO = 0.25;
 // Tier 2 (4K only): slower chord-wall vibro (~97-105ms quads you shake, not
 // jack). Needs both recurring 4-note wall rows and a chart soaked in fast
-// column repeats; dense legit 4K charts top out at ~3.3% wall rows.
+// column repeats; dense legit 4K charts top out at ~3.3% wall rows, and the
+// legit charts that do carry wall rows keep their column repeats at 105ms+,
+// so their <=98ms column ratio measures 0.0 - the 0.32 floor has full margin.
 const RICE_VIBRO_WALL_GAP_MS = 105;
 const RICE_VIBRO_WALL_MIN_ROWS = 12;
 const RICE_VIBRO_WALL_MIN_ROW_RATIO = 0.035;
 const RICE_VIBRO_WALL_COLUMN_GAP_MS = 98;
-const RICE_VIBRO_WALL_COLUMN_MIN_RATIO = 0.4;
+const RICE_VIBRO_WALL_COLUMN_MIN_RATIO = 0.32;
+
+// Tier 3 (any keymode): burst-soak vibro. Packs full of 8-23-note same-column
+// bursts at <=100ms slip tiers 1-2 (runs too short for tier 1, no quad walls
+// for tier 2), but a chart where a fifth of all column gaps sit inside such
+// runs is nothing but bursts. Legit files with occasional speedjack stay far
+// under: the calibration corpus's densest unflagged charts (William Tell EX
+// piano rolls, Gengaozo 7K Z O) measure ~0.13, ranked jack files ~0.
+const RICE_VIBRO_BURST_MIN_NOTES = 200;
+const RICE_VIBRO_BURST_GAP_MS = 100;
+const RICE_VIBRO_BURST_MIN_RUN = 8;
+const RICE_VIBRO_BURST_MIN_RUNS = 4;
+const RICE_VIBRO_BURST_MIN_FRACTION = 0.2;
 
 function columnFastGaps(map: ManiaBeatmap, cutoffMs: number): { maxRun: number; ratio: number } {
   const byColumn = new Map<number, number[]>();
@@ -248,6 +263,40 @@ function columnFastGaps(map: ManiaBeatmap, cutoffMs: number): { maxRun: number; 
   return { maxRun, ratio: total > 0 ? fast / total : 0 };
 }
 
+// Same per-column scan, but measuring how much of the chart sits inside fast
+// runs of at least minRun hits (the tier-3 burst-soak signal).
+function columnBurstRuns(map: ManiaBeatmap, cutoffMs: number, minRun: number): { runs: number; fraction: number } {
+  const byColumn = new Map<number, number[]>();
+  for (const note of map.notes) {
+    const list = byColumn.get(note.column) ?? [];
+    list.push(note.time);
+    byColumn.set(note.column, list);
+  }
+  let runs = 0;
+  let inRuns = 0;
+  let total = 0;
+  for (const times of byColumn.values()) {
+    times.sort((a, b) => a - b);
+    let run = 0;
+    const flush = () => {
+      if (run >= minRun) {
+        runs++;
+        inRuns += run;
+      }
+      run = 0;
+    };
+    for (let index = 1; index < times.length; index++) {
+      const gap = times[index] - times[index - 1];
+      if (gap <= 0) continue;
+      total++;
+      if (gap <= cutoffMs) run++;
+      else flush();
+    }
+    flush();
+  }
+  return { runs, fraction: total > 0 ? inRuns / total : 0 };
+}
+
 function quadWallRows(map: ManiaBeatmap, cutoffMs: number): { rows: number; ratio: number } {
   const rowSizes = new Map<number, number>();
   for (const note of map.notes) rowSizes.set(note.time, (rowSizes.get(note.time) ?? 0) + 1);
@@ -262,19 +311,26 @@ function quadWallRows(map: ManiaBeatmap, cutoffMs: number): { rows: number; rati
 }
 
 export function detectRiceVibro(map: ManiaBeatmap, rate = 1): boolean {
-  if (map.notes.length < RICE_VIBRO_MIN_NOTES) return false;
+  if (map.notes.length >= RICE_VIBRO_MIN_NOTES) {
+    const sustained = columnFastGaps(map, RICE_VIBRO_COLUMN_GAP_MS * rate);
+    if (sustained.maxRun >= RICE_VIBRO_COLUMN_MIN_RUN && sustained.ratio >= RICE_VIBRO_COLUMN_MIN_RATIO) return true;
 
-  const sustained = columnFastGaps(map, RICE_VIBRO_COLUMN_GAP_MS * rate);
-  if (sustained.maxRun >= RICE_VIBRO_COLUMN_MIN_RUN && sustained.ratio >= RICE_VIBRO_COLUMN_MIN_RATIO) return true;
-
-  // The wall tier's chord-size floor assumes 4 columns; wider keymodes carry
-  // legit 4-note chords constantly, so it stays 4K-scoped.
-  if (map.keyCount === 4) {
-    const walls = quadWallRows(map, RICE_VIBRO_WALL_GAP_MS * rate);
-    if (walls.rows >= RICE_VIBRO_WALL_MIN_ROWS && walls.ratio >= RICE_VIBRO_WALL_MIN_ROW_RATIO) {
-      const fast = columnFastGaps(map, RICE_VIBRO_WALL_COLUMN_GAP_MS * rate);
-      if (fast.ratio >= RICE_VIBRO_WALL_COLUMN_MIN_RATIO) return true;
+    // The wall tier's chord-size floor assumes 4 columns; wider keymodes carry
+    // legit 4-note chords constantly, so it stays 4K-scoped.
+    if (map.keyCount === 4) {
+      const walls = quadWallRows(map, RICE_VIBRO_WALL_GAP_MS * rate);
+      if (walls.rows >= RICE_VIBRO_WALL_MIN_ROWS && walls.ratio >= RICE_VIBRO_WALL_MIN_ROW_RATIO) {
+        const fast = columnFastGaps(map, RICE_VIBRO_WALL_COLUMN_GAP_MS * rate);
+        if (fast.ratio >= RICE_VIBRO_WALL_COLUMN_MIN_RATIO) return true;
+      }
     }
+  }
+
+  // Tier 3 has its own lower size floor: TV-size burst packs sit under the
+  // tier-1 floor but their soak fraction is unambiguous.
+  if (map.notes.length >= RICE_VIBRO_BURST_MIN_NOTES) {
+    const bursts = columnBurstRuns(map, RICE_VIBRO_BURST_GAP_MS * rate, RICE_VIBRO_BURST_MIN_RUN);
+    if (bursts.runs >= RICE_VIBRO_BURST_MIN_RUNS && bursts.fraction >= RICE_VIBRO_BURST_MIN_FRACTION) return true;
   }
   return false;
 }
@@ -295,6 +351,48 @@ export function detectLnVibro(map: ManiaBeatmap, rate = 1): boolean {
   const p75 = gaps[Math.min(gaps.length - 1, Math.floor(gaps.length * 0.75))];
   // Gaps are chart-time; a rate rescales what the player experiences.
   return p75 <= LN_VIBRO_MAX_P75_ROW_GAP_MS * rate;
+}
+
+// Roxy wins the mixed routing for every 4K RC chart with enough taps, but its
+// calibration corpus bottoms out at the dan courses: the raw structural signal
+// clamps at -2.5 and the isotonic/meta layers can only extrapolate upward from
+// there, so a 0.9* ranked Easy with 80+ taps came back "Reform 4" (sub-1* maps
+// were landing in the 4-6 dan collections). Charts under Roxy's note gate fall
+// through to Sunny and read "< Intro 1" correctly.
+//
+// A pinned raw signal alone is NOT enough to distrust the verdict: Roxy's
+// structural curve also collapses on some genuinely hard charts (measured on
+// prod: an Alpha-level 6.5* file with raw -2.65), and rescuing those is exactly
+// why the meta model exists. The re-route therefore needs both signals to
+// agree: raw pinned at the clamp AND the independent Sunny baseline asserting
+// the chart sits below Reform 1 on its own scale. Trivial leakers measure
+// 0.22-0.95 Sunny-star vs 5.5+ for the collapsed-but-hard charts, so the two
+// populations are far apart.
+const ROXY_RAW_FLOOR_PIN = -2.45;
+// "Reform 1 low" starts at 3.037 Sunny-star in the 4K RC table
+// (vendor/leoblack/estimator/intervals/4k-rc-reform.js): below 3.0 Sunny is
+// asserting sub-Reform-1 (Intro or off-scale) while the pinned meta claims
+// Reform 3+, a multi-dan disagreement only broken structural input produces.
+const SUNNY_LOW_END_MAX_STAR = 3.0;
+
+function isRoxyFloorPinned(mixed: LeoBlackReworkResult): boolean {
+  if (mixed.numericDifficultyHint !== "roxy-meta-ridge-v3") return false;
+  const raw = Number(mixed.rawNumericDifficulty);
+  return Number.isFinite(raw) && raw <= ROXY_RAW_FLOOR_PIN;
+}
+
+// The Sunny result to re-verdict `mixed` with, or null when the guard should
+// not apply. Exported for the one-shot floor-pin recompute sweep
+// (chart-analysis.ts), which uses it to find stored analyses that predate this
+// guard; keep both callers on this single predicate.
+export function sunnyLowEndReroute(
+  mixed: LeoBlackReworkResult,
+  osuText: string,
+  rate: number,
+): Omit<LeoBlackReworkResult, "mixedCompanellaPlan"> | null {
+  if (!isRoxyFloorPinned(mixed)) return null;
+  const sunny = runLeoBlackSunny(osuText, { speedRate: rate });
+  return Number(sunny.star) < SUNNY_LOW_END_MAX_STAR ? sunny : null;
 }
 
 export function classifyChart(map: ManiaBeatmap, osuText: string, input: ClassifyChartInput = {}): ChartClassification {
@@ -327,7 +425,23 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
 
   let mixed: LeoBlackReworkResult | null = null;
   try {
-    mixed = runLeoBlackMixed(osuText, { speedRate: rate });
+    const candidate = runLeoBlackMixed(osuText, { speedRate: rate });
+    // A Sunny failure inside the reroute check throws into the catch below,
+    // leaving mixed null: better no verdict than the known-bad pinned one.
+    const reroute = sunnyLowEndReroute(candidate, osuText, rate);
+    if (reroute) {
+      mixed = {
+        ...candidate,
+        star: reroute.star,
+        lnRatio: reroute.lnRatio,
+        estDiff: reroute.estDiff,
+        numericDifficulty: null,
+        numericDifficultyHint: null,
+      };
+      warnings.push("Roxy raw difficulty pinned at its scale floor; using the Sunny low-end verdict.");
+    } else {
+      mixed = candidate;
+    }
   } catch (error) {
     warnings.push(`LeoBlack estimator failed: ${error instanceof Error ? error.message : String(error)}.`);
   }
