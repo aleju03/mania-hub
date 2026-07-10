@@ -48,7 +48,7 @@ const localDbPath = resolveLocalDbPath(options);
 const localSidecars = [localDbPath, `${localDbPath}-wal`, `${localDbPath}-shm`];
 
 if (options.dryRun && options.fresh) {
-  console.log(`Would create a fresh snapshot of the live DB on ${options.remote} (sqlite3 .backup${options.compressSnapshot ? " + zstd" : ""}), download it, and replace ${localDbPath}.`);
+  console.log(`Would create a fresh snapshot of the live DB on ${options.remote} (sqlite3 VACUUM INTO${options.compressSnapshot ? " + zstd" : ""}), download it, and replace ${localDbPath}.`);
   console.log(`Would then prune remote online-* snapshots, keeping the newest ${options.keepRemoteSnapshots}.`);
   process.exit(0);
 }
@@ -206,7 +206,8 @@ function printUsage(): void {
   npm run db:sync-from-vps -- [options]
 
 Options:
-  --fresh                Create a fresh snapshot of the live DB on the VPS first (sqlite3 .backup),
+  --fresh                Create a fresh snapshot of the live DB on the VPS first (sqlite3 VACUUM INTO,
+                         which stays consistent while the backend writes and compacts free pages),
                          then download that instead of the newest pre-existing backup. After a
                          successful sync, remote online-* snapshots are pruned (see --keep-remote).
   --no-compress          With --fresh, skip zstd compression of the remote snapshot.
@@ -262,8 +263,16 @@ async function createRemoteSnapshot(options: Options): Promise<RemoteCandidate> 
     "stamp=$(date -u +%Y%m%d-%H%M%S)",
     "dir=\"$root/data/backups/online-$stamp\"",
     "mkdir -p \"$dir\"",
+    // If anything below fails (or the SSH session dies), remove the partial
+    // snapshot dir so a later non-fresh sync can never pick up a truncated DB.
+    "trap 'rm -rf \"$dir\"' EXIT",
     "out=\"$dir/mania-hub-live.db\"",
-    "sqlite3 \"$db\" '.timeout 30000' \".backup '$out'\"",
+    // VACUUM INTO copies from a single read transaction, so unlike .backup it
+    // never restarts when the live backend writes mid-copy (which made large
+    // snapshots spin forever). It also compacts free pages. The timeout is a
+    // hard stop so a wedged snapshot fails loudly instead of hanging the sync.
+    "timeout 1800 sqlite3 \"$db\" '.timeout 30000' \"VACUUM INTO '$out.tmp'\"",
+    "mv \"$out.tmp\" \"$out\"",
     ...(options.compressSnapshot
       ? [
           "if command -v zstd >/dev/null 2>&1; then",
@@ -272,10 +281,11 @@ async function createRemoteSnapshot(options: Options): Promise<RemoteCandidate> 
           "fi",
         ]
       : []),
+    "trap - EXIT",
     "printf '%s\\t%s\\t%s\\n' \"$(stat -c %Y \"$out\")\" \"$(stat -c %s \"$out\")\" \"$out\"",
   ].join("\n");
 
-  console.log("Creating a fresh snapshot of the live DB on the VPS (sqlite3 .backup, safe while the backend is running)...");
+  console.log("Creating a fresh snapshot of the live DB on the VPS (sqlite3 VACUUM INTO, consistent even while the backend writes)...");
   const result = await runCapture("ssh", [options.remote, command], [0]);
   const line = result.stdout.trim().split("\n").pop() ?? "";
   const [modifiedAtSeconds, sizeBytes, remotePath] = line.split("\t");
