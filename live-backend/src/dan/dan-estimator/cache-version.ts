@@ -1,3 +1,3 @@
-// v8: Roxy floor-pin guard (chart-classifier.ts) - trivial charts no longer
-// read as "Reform 4".
-export const DAN_ESTIMATE_CACHE_VERSION = 8;
+// v9: tempo-aware LN inverse gap cap (patterns.ts) - slow inverse charts
+// (1/4-beat release gaps over 120ms) now detect as lninverse.
+export const DAN_ESTIMATE_CACHE_VERSION = 9;

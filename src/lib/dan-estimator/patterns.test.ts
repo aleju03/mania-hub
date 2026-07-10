@@ -165,6 +165,29 @@ describe("analyzeManiaPatterns", () => {
     expect(analyzeManiaPatterns(makeMixedMap(7, techRows, 55)).primary?.id).toBe("lntech");
   });
 
+  it("detects slow-tempo LN inverse whose beat-fraction release gaps exceed 120ms", () => {
+    // 1/4-beat inverse gaps at 80 BPM are 150ms+; the old fixed 120ms cap read
+    // these charts as not-inverse (JJ's 7K dan 6th, 79 BPM, 127ms gaps).
+    const slowInverseRows = Array.from({ length: 7 * 36 }, (_, index) => [
+      { column: index % 7, holdMs: 760 },
+    ]);
+    const map = makeMixedMap(7, slowInverseRows, 130); // column period 910ms, gap 150ms
+    map.bpm = 80;
+    expect(analyzeManiaPatterns(map).primary?.id).toBe("lninverse");
+  });
+
+  it("does not read long release gaps on very slow charts as inverse", () => {
+    // 400ms of true rest between holds is a sustain pattern, not inverse, even
+    // at 40 BPM where 400ms is only ~1/4 beat: the cap ceilings at 250ms.
+    const sustainRows = Array.from({ length: 7 * 36 }, (_, index) => [
+      { column: index % 7, holdMs: 1000 },
+    ]);
+    const map = makeMixedMap(7, sustainRows, 200); // column period 1400ms, gap 400ms
+    map.bpm = 40;
+    const analysis = analyzeManiaPatterns(map);
+    expect(analysis.allPatterns.find((pattern) => pattern.id === "lninverse")?.score).toBeLessThan(0.2);
+  });
+
   it("detects 4K speedjack and handjack-style chordjack density", () => {
     expect(patternIds(4, repeatRows([[0, 2], [0, 2], [1, 3], [1, 3]], 30))).toContain("speedjack");
     expect(patternIds(4, repeatRows([[0, 1, 2], [0, 1, 2], [1, 2, 3], [1, 2, 3]], 30))).toContain("handjack");

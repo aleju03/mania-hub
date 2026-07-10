@@ -143,10 +143,23 @@ function getRowPatternStats(orderedRows: Array<[number, ManiaNote[]]>, keyCount:
   };
 }
 
+// Inverse charting joins consecutive notes in a column with LNs, leaving only
+// a small release gap charted as a beat fraction (1/8 to 1/4 beat). A fixed
+// millisecond cutoff misreads slow charts: at 79 BPM a 1/6-beat inverse gap is
+// 127ms, which a 120ms cap counts as not-inverse (JJ's 7K dan 6th missed the
+// lninverse tag with every gap at 126-127ms). Scale the cap with tempo, floored
+// at the old 120ms for fast charts and ceilinged so very slow charts don't
+// count half-second release gaps as inverse holds.
+function inverseGapCapMs(beatLengthMs: number): number {
+  if (!Number.isFinite(beatLengthMs) || beatLengthMs <= 0) return 120;
+  return Math.min(250, Math.max(120, beatLengthMs * 0.27));
+}
+
 function getLnPatternStats(
   notes: ManiaNote[],
   orderedRows: Array<[number, ManiaNote[]]>,
   keyCount: number,
+  beatLengthMs: number,
 ): LnPatternStats {
   const releaseRows = new Map<number, ManiaNote[]>();
   const headTimes = new Set<number>();
@@ -192,6 +205,7 @@ function getLnPatternStats(
   }
 
   const sameColumnGaps: number[] = [];
+  const gapCap = inverseGapCapMs(beatLengthMs);
   let inverseLikeHolds = 0;
   let sameColumnNextHolds = 0;
 
@@ -209,7 +223,7 @@ function getLnPatternStats(
       const gapRatio = gap / holdDuration;
       sameColumnNextHolds++;
       sameColumnGaps.push(gap);
-      if (gap <= 120 && gapRatio <= 0.7) inverseLikeHolds++;
+      if (gap <= gapCap && gapRatio <= 0.7) inverseLikeHolds++;
     }
   }
 
@@ -292,7 +306,9 @@ export function analyzeManiaPatterns(
   );
   const dataConfidence = clamp01(0.35 + Math.min(0.4, metrics.noteCount / 2500) + Math.min(0.25, stats.rowCount / 900));
   const candidates: ManiaPatternHit[] = [];
-  const lnStats = getLnPatternStats(features.notes, orderedRows, metrics.keyCount);
+  // Note times are already rate-scaled, so the beat length must be too.
+  const beatLengthMs = Number.isFinite(map.bpm) && map.bpm > 0 ? 60000 / (map.bpm * rate) : 0;
+  const lnStats = getLnPatternStats(features.notes, orderedRows, metrics.keyCount, beatLengthMs);
   const lnScore = Math.max(
     pressure(metrics.holdRatio, 0.03, 0.32),
     minGate(pressure(metrics.lnDensity, 0.02, 0.18), pressure(metrics.lnOverlapPressure, 0.4, 2.4)),

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import { parseManiaBeatmap } from "../dan/beatmap-parser.js";
+import { analyzeManiaPatterns } from "../dan/dan-estimator/patterns.js";
 import { classifyChart, detectLnVibro, detectRiceVibro, sunnyLowEndReroute, type ChartClassification, type DanVerdictHalf } from "../dan/chart-classifier.js";
 import { runLeoBlackMixed } from "../dan/leoblack-estimator.js";
 import { computeMsd } from "../dan/msd.js";
@@ -773,6 +774,121 @@ async function enqueueDanFloorPinRecompute(queue: JobQueue, cursor: number): Pro
   await queue.enqueue(
     DAN_FLOOR_PIN_RECOMPUTE_JOB,
     `${DAN_FLOOR_PIN_RECOMPUTE_JOB}:${cursor}`,
+    { cursor },
+    { priority: -10, replaceDone: true },
+  );
+}
+
+// The LN inverse gap cap became tempo-aware (dan-estimator/patterns.ts) after
+// the corpus was analyzed: slow 7K inverse charts (release gaps charted as
+// 1/8-1/4 beat, over the old fixed 120ms cap) were stored without the
+// lninverse tag. Same playbook again: a boot-seeded chunked job recomputes the
+// pattern analyzer verdict for stored 7K LN charts from the cached .osu and
+// re-enqueues the full analysis job for the ones whose visible pattern tags or
+// primary changed. Purely local work, no osu! API.
+
+export const LN_SUBTYPE_RECOMPUTE_JOB = "recompute_ln_subtype_sweep";
+const LN_SUBTYPE_META_KEY = "ln_subtype_recompute_done:v1";
+const LN_SUBTYPE_CHUNK = 50;
+// Subtype scores are gated on the composite LN score, which needs some hold
+// presence; charts with near-zero LN share can't change tags.
+const LN_SUBTYPE_MIN_LN_RATIO = 0.02;
+
+export interface LnSubtypeChunkResult {
+  nextCursor: number;
+  scanned: number;
+  changed: number[];
+  done: boolean;
+}
+
+export async function recomputeLnSubtypeChunk(
+  db: Db,
+  cursor: number,
+  limit = LN_SUBTYPE_CHUNK,
+): Promise<LnSubtypeChunkResult> {
+  const rows = (await exec(
+    db,
+    `select beatmap_id, classification_json
+     from beatmap_chart_analysis
+     where analysis_version = ? and status = 'ready'
+       and key_count = 7
+       and json_extract(classification_json, '$.lnRatio') >= ?
+       and beatmap_id > ?
+     order by beatmap_id
+     limit ?`,
+    [CHART_ANALYSIS_VERSION, LN_SUBTYPE_MIN_LN_RATIO, Math.max(0, Math.floor(cursor)), Math.max(1, Math.floor(limit))],
+  )).rows;
+
+  let nextCursor = cursor;
+  const changed: number[] = [];
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    nextCursor = Math.max(nextCursor, beatmapId);
+    const stored = parseJson<Pick<LeanChartClassification, "category" | "patterns"> | null>(row.classification_json, null);
+    if (!stored) continue;
+    const osuText = await readCachedBeatmapFile(db, beatmapId).catch(() => null);
+    if (!osuText) continue;
+    try {
+      const map = parseManiaBeatmap(osuText);
+      if (map.keyCount !== 7) continue;
+      // Same analyzer inputs the full analysis job uses, so a matching verdict
+      // here means re-analysis would store the same tags.
+      const analysis = analyzeManiaPatterns(map, {
+        totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
+        version: map.version,
+      });
+      const storedTags = [...new Set((stored.patterns ?? []).map((hit) => String(hit?.id ?? "")))].sort();
+      const freshTags = [...new Set(analysis.patterns.map((hit) => hit.id))].sort();
+      const storedCategory = stored.category ?? null;
+      const freshCategory = analysis.primary?.label ?? null;
+      if (storedTags.join(",") !== freshTags.join(",") || storedCategory !== freshCategory) {
+        changed.push(beatmapId);
+      }
+    } catch {
+      // A chart the analyzer rejects keeps its stored verdict; the full
+      // analysis job would fail the same way.
+    }
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+
+  return { nextCursor, scanned: rows.length, changed, done: rows.length < limit };
+}
+
+export async function ensureLnSubtypeRecomputeSeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [LN_SUBTYPE_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [LN_SUBTYPE_RECOMPUTE_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueueLnSubtypeRecompute(queue, 0);
+}
+
+export async function runLnSubtypeRecomputeJob(db: Db, queue: JobQueue, payload: { cursor?: number } | undefined): Promise<void> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const result = await recomputeLnSubtypeChunk(db, cursor);
+  // Each re-analysis upserts its own search-index row on completion, so the
+  // refreshed tags reach /maps without a full index rebuild. Collections key
+  // off the primary family, which the subtags don't change - no rebuild needed.
+  for (const beatmapId of result.changed) await enqueueChartAnalysis(queue, beatmapId);
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [LN_SUBTYPE_META_KEY, json({ finishedAt: now }), now],
+    );
+    return;
+  }
+  await enqueueLnSubtypeRecompute(queue, result.nextCursor);
+}
+
+async function enqueueLnSubtypeRecompute(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    LN_SUBTYPE_RECOMPUTE_JOB,
+    `${LN_SUBTYPE_RECOMPUTE_JOB}:${cursor}`,
     { cursor },
     { priority: -10, replaceDone: true },
   );

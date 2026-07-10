@@ -80,7 +80,7 @@ Job types:
 - `seed_snipe_board`: build the initial board for a beatmap/lane.
 - `analyze_activity_beatmap`: compute skill vectors for player activity.
 - `analyze_beatmap_chart`: unified chart analysis per beatmap at 1.0x (classifier dan verdict, pattern clusters, MinaCalc MSD skillsets) into `beatmap_chart_analysis`.
-- `recompute_vibro_sweep`, `recompute_dan_floor_pin_sweep`: one-shot boot-seeded sweeps over stored chart analyses (gated by `live_meta` done-keys), patching detector/classifier changes into the corpus without a full `CHART_ANALYSIS_VERSION` re-run (vibro flags in place; floor-pinned dan verdicts via re-enqueued `analyze_beatmap_chart`).
+- `recompute_vibro_sweep`, `recompute_dan_floor_pin_sweep`, `recompute_ln_subtype_sweep`: one-shot boot-seeded sweeps over stored chart analyses (gated by `live_meta` done-keys), patching detector/classifier changes into the corpus without a full `CHART_ANALYSIS_VERSION` re-run (vibro flags in place; floor-pinned dan verdicts and stale 7K LN pattern tags via re-enqueued `analyze_beatmap_chart`).
 - `compute_dan_estimate`: dan rating for a beatmap at a rate.
 - `compute_player_skills`: Etterna-style skillset ratings from a player's top plays (per-play MinaCalc SSRs at the played rate) into `player_skill_ratings`.
 - `osc_backfill`, `osc_country_catchup`: oSC JSON catch-up, global and country-scoped.
