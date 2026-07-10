@@ -1,16 +1,16 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Activity, ArrowLeft, BarChart3, Clock3, ExternalLink, Gauge, Keyboard, Music2, Star, Target } from "lucide-react";
-import { getBeatmapPatternAnalysis, getBeatmapsetForBeatmap, type BeatmapPatternAnalysisResponse } from "../../../lib/osu";
+import { getBeatmapsetForBeatmap } from "../../../lib/osu";
 import type { MapsFavouriteBeatmapset, OsuBeatmap, OsuBeatmapset } from "../../../lib/types";
 import { detectManiaPatterns, MANIA_PATTERN_LABELS } from "../../../lib/mania-patterns";
-import { MANIA_PATTERN_ANALYZER_LABELS, type ManiaPatternAnalysis, type ManiaPatternHit, type ManiaPatternId } from "../../../lib/dan-estimator";
 import { formatDuration, formatNumber } from "../../../lib/format";
 import { PageHeader } from "../../../components/layout/PageHeader";
 import { Skeleton } from "../../../components/ui/LoadingSkeleton";
 import { ChartPreviewPanel } from "../../../components/maps/ChartPreviewPanel";
 import { FarmersList } from "../../../components/farm-helper/FarmersList";
-import type { LiveFarmHelperKeyMode, LiveFarmHelperReason, LiveFarmHelperSpeedBucket } from "../../../lib/live-backend";
+import { fetchLiveMapSearchEntry, type LiveFarmHelperKeyMode, type LiveFarmHelperReason, type LiveFarmHelperSpeedBucket, type LiveMapSearchEntry } from "../../../lib/live-backend";
+import { danBareLabel, getDanImageSrc } from "../../../lib/dan-images";
 import { pageSeo } from "../../../lib/seo";
 
 type FarmMapContext = {
@@ -67,11 +67,14 @@ type DetailBeatmapset = Omit<MapsFavouriteBeatmapset, "maniaBeatmaps"> & {
   maniaBeatmaps: DetailBeatmap[];
 };
 
+// The chart's shape data from the live backend catalog (map_search_index):
+// the same 8-family pattern mix + MSD the farm-helper engine scores against,
+// already cached server-side, so no .osu download happens here.
 type AnalysisState =
-  | { status: "idle"; analysis: null; error: null }
-  | { status: "loading"; analysis: null; error: null }
-  | { status: "ready"; analysis: BeatmapPatternAnalysisResponse; error: null }
-  | { status: "failed"; analysis: null; error: string };
+  | { status: "idle"; entry: null }
+  | { status: "loading"; entry: null }
+  | { status: "ready"; entry: LiveMapSearchEntry }
+  | { status: "failed"; entry: null };
 
 const REASON_LABELS: Record<LiveFarmHelperReason, string> = {
   missing: "missing",
@@ -119,7 +122,7 @@ function FarmMapDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedBeatmapId, setSelectedBeatmapId] = useState<number | null>(Number.isFinite(beatmapId) ? beatmapId : null);
-  const [analysisState, setAnalysisState] = useState<AnalysisState>({ status: "idle", analysis: null, error: null });
+  const [analysisState, setAnalysisState] = useState<AnalysisState>({ status: "idle", entry: null });
   const [farmContext, setFarmContext] = useState<FarmMapContext | null>(() => readFarmMapContext(beatmapId, search));
 
   useEffect(() => {
@@ -157,46 +160,37 @@ function FarmMapDetailPage() {
   }, [beatmapId]);
 
   const selectedBeatmap = beatmapset?.maniaBeatmaps.find((map) => map.id === selectedBeatmapId) ?? beatmapset?.maniaBeatmaps[0] ?? null;
-  const selectedBeatmapsetId = selectedBeatmap?.beatmapsetId ?? beatmapset?.id;
   const farmRate = getFarmSpeedRate(farmContext?.speed);
   const displayedBpm = Math.round((selectedBeatmap?.bpm ?? beatmapset?.bpm ?? 0) * farmRate);
   const displayedLength = selectedBeatmap ? Math.max(1, Math.round(selectedBeatmap.totalLength / farmRate)) : 0;
 
   useEffect(() => {
-    if (!selectedBeatmap || !selectedBeatmapsetId) {
-      setAnalysisState({ status: "idle", analysis: null, error: null });
+    if (!selectedBeatmap) {
+      setAnalysisState({ status: "idle", entry: null });
       return;
     }
 
     let cancelled = false;
-    setAnalysisState({ status: "loading", analysis: null, error: null });
-    getBeatmapPatternAnalysis({
-      data: {
-        beatmapId: selectedBeatmap.id,
-        beatmapsetId: selectedBeatmapsetId,
-        starRating: selectedBeatmap.difficultyRating,
-        totalLength: selectedBeatmap.totalLength,
-        rate: farmRate,
-        version: selectedBeatmap.version,
-      },
-    })
-      .then((analysis) => {
+    setAnalysisState({ status: "loading", entry: null });
+    fetchLiveMapSearchEntry(selectedBeatmap.id)
+      .then((entry) => {
         if (cancelled) return;
-        setAnalysisState({ status: "ready", analysis, error: null });
+        setAnalysisState(entry ? { status: "ready", entry } : { status: "failed", entry: null });
       })
       .catch(() => {
-        if (!cancelled) setAnalysisState({ status: "failed", analysis: null, error: "Couldn't read chart data." });
+        if (!cancelled) setAnalysisState({ status: "failed", entry: null });
       });
 
     return () => {
       cancelled = true;
     };
-  }, [farmRate, selectedBeatmap, selectedBeatmapsetId]);
+  }, [selectedBeatmap]);
 
   const metrics = useMemo(
-    () => buildMapMetrics(selectedBeatmap, analysisState.status === "ready" ? analysisState.analysis : null, farmRate),
+    () => buildMapMetrics(selectedBeatmap, analysisState.status === "ready" ? analysisState.entry : null, farmRate),
     [analysisState, farmRate, selectedBeatmap],
   );
+  const radarReady = analysisState.status === "ready" && metrics.radar.some((axis) => axis.value > 0);
   const osuUrl = selectedBeatmap?.url ?? (beatmapset ? `https://osu.ppy.sh/beatmapsets/${beatmapset.id}#mania/${selectedBeatmapId ?? beatmapId}` : `https://osu.ppy.sh/beatmaps/${beatmapId}`);
   const coverUrl = beatmapset?.covers["cover@2x"] ?? beatmapset?.covers.cover ?? beatmapset?.covers.card ?? "";
   const cardUrl = beatmapset?.covers.card ?? beatmapset?.covers.list ?? coverUrl;
@@ -337,26 +331,46 @@ function FarmMapDetailPage() {
                   </div>
                   <div className="mt-2 grid gap-4 sm:grid-cols-[minmax(0,300px)_minmax(0,1fr)] sm:items-center">
                     <div className="mx-auto w-full max-w-[340px]">
-                      {analysisState.status === "ready" ? (
+                      {radarReady ? (
                         <RadarChart axes={metrics.radar} />
-                      ) : analysisState.status === "failed" ? (
-                        <AnalysisUnavailableState />
-                      ) : (
+                      ) : analysisState.status === "loading" || analysisState.status === "idle" ? (
                         <AnalysisLoadingState />
+                      ) : (
+                        <AnalysisUnavailableState />
                       )}
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <MetricTile icon={<Keyboard className="h-3.5 w-3.5" />} label="objects" value={formatNumber(metrics.objects)} />
-                      <MetricTile icon={<Gauge className="h-3.5 w-3.5" />} label="peak nps" value={metrics.peakNps.toFixed(1)} />
                       <MetricTile icon={<Activity className="h-3.5 w-3.5" />} label="avg nps" value={metrics.avgNps.toFixed(1)} />
                       <MetricTile icon={<Target className="h-3.5 w-3.5" />} label="OD" value={metrics.od.toFixed(1)} />
-                      <MetricTile
-                        icon={<Clock3 className="h-3.5 w-3.5" />}
-                        label="breaks"
-                        value={String(metrics.breaks)}
-                        className="col-span-2"
-                        detail={formatBreakRanges(metrics.breakRanges, farmRate)}
-                      />
+                      <MetricTile icon={<Clock3 className="h-3.5 w-3.5" />} label="long notes" value={`${Math.round(metrics.lnFraction * 100)}%`} />
+                      {metrics.msdOverall != null ? (
+                        <MetricTile
+                          icon={<Gauge className="h-3.5 w-3.5" />}
+                          label="msd"
+                          value={metrics.msdOverall.toFixed(2)}
+                          detail={metrics.vibro ? "vibro chart, estimate unreliable" : metrics.msdTopSkillset}
+                        />
+                      ) : null}
+                      {metrics.dan ? (
+                        <MetricTile
+                          icon={<Star className="h-3.5 w-3.5" />}
+                          label={metrics.dan.family === "ln" ? "LN dan est." : "dan est."}
+                          value={
+                            metrics.danImage ? (
+                              // The logo IS the number; the +/- tier suffix rides top-right like an exponent.
+                              <span className="flex items-start gap-[2px] leading-none">
+                                <img src={metrics.danImage} alt={metrics.dan.label} className="h-10 w-10 object-contain" />
+                                {danSuffix(metrics.dan.label) ? (
+                                  <span className="mt-0.5 text-[13px] font-bold leading-none">{danSuffix(metrics.dan.label)}</span>
+                                ) : null}
+                              </span>
+                            ) : (
+                              metrics.dan.label
+                            )
+                          }
+                        />
+                      ) : null}
                     </div>
                   </div>
                 </section>
@@ -457,27 +471,55 @@ function normalizeBeatmap(beatmap: OsuBeatmap): DetailBeatmap {
   };
 }
 
-function buildMapMetrics(selected: DetailBeatmap | null, patternPayload: BeatmapPatternAnalysisResponse | null, rate = 1) {
-  const analysis = patternPayload?.analysis ?? null;
+// The 8-family pattern mix stored in the backend catalog, in the same order
+// the /maps PatternRadar uses. Values are already normalized to the chart's
+// dominant family (max = 1).
+const RADAR_AXES: Array<{ id: string; label: string }> = [
+  { id: "jack", label: "Jack" },
+  { id: "stream", label: "Stream" },
+  { id: "jumpstream", label: "Jumpstream" },
+  { id: "handstream", label: "Handstream" },
+  { id: "stamina", label: "Stamina" },
+  { id: "chordjack", label: "Chordjack" },
+  { id: "tech", label: "Tech" },
+  { id: "ln", label: "LN" },
+];
+
+const MSD_SKILLSETS = ["Stream", "Jumpstream", "Handstream", "Stamina", "JackSpeed", "Chordjack", "Technical"];
+
+function buildMapMetrics(selected: DetailBeatmap | null, entry: LiveMapSearchEntry | null, rate = 1) {
   const normalizedRate = Math.max(0.1, rate);
   const lengthSec = Math.max(1, (selected?.totalLength ?? 0) / normalizedRate);
-  const objects = patternPayload?.chart.objects ?? ((selected?.countCircles ?? 0) + (selected?.countSliders ?? 0));
+  const objects = (selected?.countCircles ?? 0) + (selected?.countSliders ?? 0);
   const holdCount = selected?.countSliders ?? 0;
-  const avgNps = patternPayload?.chart.avgNps ?? (objects / lengthSec);
-  const peakNps = patternPayload?.chart.peakNps ?? avgNps;
-  const od = patternPayload?.chart.od ?? selected?.accuracy ?? 8;
-  const breaks = patternPayload?.chart.breaks ?? 0;
-  const breakRanges = patternPayload?.chart.breakRanges ?? [];
+  const msd = entry?.msd ?? null;
+  const msdOverall = Number(msd?.Overall ?? NaN);
+  // Same readout as the /maps modal: the sub-1 values the 6K/7K calc engine
+  // emits for skillsets it does not rate are noise, not data.
+  const msdTopSkillset = msd
+    ? MSD_SKILLSETS
+        .map((name) => ({ name, value: Number(msd[name] ?? 0) }))
+        .filter(({ value }) => value >= 1)
+        .sort((a, b) => b.value - a.value)
+        .map(({ name }) => (name === "JackSpeed" ? "Jackspeed" : name))[0] ?? null
+    : null;
 
   return {
     objects,
     holdCount,
-    avgNps,
-    peakNps,
-    od,
-    breaks,
-    breakRanges,
-    radar: analysis ? buildAnalyzerRadar(analysis) : [],
+    avgNps: objects / lengthSec,
+    od: selected?.accuracy ?? 8,
+    lnFraction: objects > 0 ? holdCount / objects : 0,
+    msdOverall: Number.isFinite(msdOverall) && msdOverall > 0 ? msdOverall : null,
+    msdTopSkillset,
+    vibro: entry?.vibro === true,
+    dan: entry?.dan ?? null,
+    danImage: entry?.dan
+      ? getDanImageSrc(danBareLabel(entry.dan.label), entry.dan.family === "ln" ? "ln" : undefined, entry.keyCount)
+      : null,
+    radar: entry
+      ? RADAR_AXES.map((axis) => ({ label: axis.label, value: clamp01(entry.patterns[axis.id] ?? 0) }))
+      : [],
   };
 }
 
@@ -485,36 +527,9 @@ function getFarmSpeedRate(speed: LiveFarmHelperSpeedBucket | undefined): number 
   return speed ? SPEED_RATES[speed] : 1;
 }
 
-const FOUR_KEY_RADAR_PATTERNS: ManiaPatternId[] = ["jack", "chordjack", "stream", "jumpstream", "handstream", "ln", "tech"];
-const SEVEN_KEY_RADAR_PATTERNS: ManiaPatternId[] = ["delay", "chordstream", "bracket", "chordjack", "ln", "tech"];
-const GENERIC_RADAR_PATTERNS: ManiaPatternId[] = ["stream", "chordstream", "chordjack", "ln", "tech"];
-const LN_SUBTYPE_PATTERN_IDS: ManiaPatternId[] = ["lngeneral", "lnrelease", "lninverse", "lntech"];
-
-function buildAnalyzerRadar(analysis: ManiaPatternAnalysis): Array<{ label: string; value: number }> {
-  const ids = analysis.keyCount === 4
-    ? FOUR_KEY_RADAR_PATTERNS
-    : analysis.keyCount === 6 || analysis.keyCount === 7
-      ? SEVEN_KEY_RADAR_PATTERNS
-      : GENERIC_RADAR_PATTERNS;
-  const byId = new Map(analysis.allPatterns.map((pattern) => [pattern.id, pattern]));
-  const lnSubtype = getBestLnSubtype(analysis);
-
-  return ids.map((id) => {
-    const pattern = id === "ln" && lnSubtype ? lnSubtype : byId.get(id);
-    return {
-      label: id === "ln" && lnSubtype ? lnSubtype.label : MANIA_PATTERN_ANALYZER_LABELS[id],
-      value: clamp01(pattern?.score ?? 0),
-    };
-  });
-}
-
-function getBestLnSubtype(analysis: ManiaPatternAnalysis): ManiaPatternHit | null {
-  if (analysis.keyCount !== 7 || analysis.metrics.holdRatio < 0.12) return null;
-  return LN_SUBTYPE_PATTERN_IDS
-    .map((id) => analysis.allPatterns.find((pattern) => pattern.id === id))
-    .filter((pattern): pattern is NonNullable<typeof pattern> => Boolean(pattern))
-    .filter((pattern) => pattern.score >= 0.2)
-    .sort((left, right) => right.score - left.score)[0] ?? null;
+/** The +/- tier suffix of a dan verdict ("2--" -> "--"), which badge art can't show. */
+function danSuffix(label: string): string {
+  return label.match(/[+-]+$/)?.[0] ?? "";
 }
 
 function RadarChart({ axes }: { axes: Array<{ label: string; value: number }> }) {
@@ -595,14 +610,14 @@ function AnalysisLoadingState() {
         {[0.33, 0.66, 1].map((ring) => (
           <polygon
             key={ring}
-            points={radarLoadingPolygonPoints(190, 112 * ring, 6)}
+            points={radarLoadingPolygonPoints(190, 112 * ring, 8)}
             fill="none"
             stroke="rgba(255,255,255,0.1)"
             strokeWidth="1"
           />
         ))}
-        {Array.from({ length: 6 }, (_, index) => {
-          const angle = (-Math.PI / 2) + (index / 6) * Math.PI * 2;
+        {Array.from({ length: 8 }, (_, index) => {
+          const angle = (-Math.PI / 2) + (index / 8) * Math.PI * 2;
           return (
             <line
               key={index}
@@ -616,14 +631,14 @@ function AnalysisLoadingState() {
           );
         })}
         <polygon
-          points={radarLoadingPolygonPoints(190, 70, 6)}
+          points={radarLoadingPolygonPoints(190, 70, 8)}
           fill="rgba(255,102,171,0.12)"
           stroke="rgba(255,102,171,0.45)"
           strokeWidth="2"
           className="animate-pulse"
         />
-        {Array.from({ length: 6 }, (_, index) => {
-          const angle = (-Math.PI / 2) + (index / 6) * Math.PI * 2;
+        {Array.from({ length: 8 }, (_, index) => {
+          const angle = (-Math.PI / 2) + (index / 8) * Math.PI * 2;
           const x = 190 + Math.cos(angle) * 150;
           const y = 190 + Math.sin(angle) * 150;
           return <circle key={index} cx={x} cy={y} r="12" className="fill-osu-b3/45 animate-pulse" />;
@@ -637,7 +652,7 @@ function AnalysisUnavailableState() {
   return (
     <div className="mt-4 rounded-md border border-osu-b3/20 bg-osu-b5/35 px-3 py-10 text-center">
       <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">analysis unavailable</div>
-      <div className="mt-1 text-[12px] font-semibold text-osu-l2">Couldn't read chart data.</div>
+      <div className="mt-1 text-[12px] font-semibold text-osu-l2">This chart isn't analyzed yet.</div>
     </div>
   );
 }
@@ -719,7 +734,7 @@ function MetricTile({
 }: {
   icon: ReactNode;
   label: string;
-  value: string;
+  value: ReactNode;
   detail?: ReactNode;
   className?: string;
 }) {
@@ -891,18 +906,6 @@ function DetailSkeleton({ farmContext, farmRate }: { farmContext: FarmMapContext
       </div>
     </div>
   );
-}
-
-function formatBreakRanges(ranges: Array<{ startTime: number; endTime: number }>, rate: number): ReactNode {
-  if (ranges.length === 0) return null;
-  const normalizedRate = Math.max(0.1, rate);
-  return ranges.map((range) => (
-    `${formatBreakTime(range.startTime, normalizedRate)}-${formatBreakTime(range.endTime, normalizedRate)}`
-  )).join(" · ");
-}
-
-function formatBreakTime(ms: number, rate: number): string {
-  return formatDuration(Math.floor(Math.max(0, ms) / rate / 1000));
 }
 
 function formatPp(value: number): string {
