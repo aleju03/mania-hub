@@ -199,13 +199,10 @@ export function SearchCard({
   entry,
   onOpen,
   preview,
-  isNew = false,
 }: {
   entry: LiveMapSearchEntry;
   onOpen?: (entry: LiveMapSearchEntry) => void;
   preview?: MapPreviewAudio;
-  /** Marks a map that entered its collection on the latest rotation. */
-  isNew?: boolean;
 }) {
   const pill = statusPill(entry.status);
   const [coverFailed, setCoverFailed] = useState(false);
@@ -250,11 +247,6 @@ export function SearchCard({
           <span className="inline-flex items-center rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold leading-none tabular-nums text-white">
             {keyModeLabel(diffs)}
           </span>
-          {isNew && (
-            <span className="inline-flex items-center rounded-full bg-osu-pink px-2 py-0.5 text-[10px] font-extrabold uppercase leading-none text-white" title="New in this rotation">
-              new
-            </span>
-          )}
         </span>
         <StarRatingBadge
           stars={multi ? starHi : entry.stars}

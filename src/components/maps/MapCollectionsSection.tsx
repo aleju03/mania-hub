@@ -366,11 +366,11 @@ function CollectionDetail({ id, onBack, liveBackendEnabled }: { id: string; onBa
   }, [id, liveBackendEnabled]);
 
   const badge = detail ? bucketBadgeSrc(detail) : null;
-  // A brand-new pack marks every map new; badges would just be noise there.
-  const newIds = useMemo(() => {
-    if (!detail || detail.newBeatmapIds.length >= detail.items.length) return new Set<number>();
-    return new Set(detail.newBeatmapIds);
-  }, [detail]);
+  // Rotation newcomers are a header stat only: each rotation re-samples most of
+  // the pack (40 from a pool that is often ~4x that), so a per-card "new" badge
+  // was lit on the majority of cards and read as "newly ranked map". A pack
+  // where every member is new is simply fresh; saying so adds nothing.
+  const newCount = detail && detail.newBeatmapIds.length < detail.items.length ? detail.newBeatmapIds.length : 0;
 
   return (
     <div className="flex flex-col gap-4">
@@ -392,7 +392,7 @@ function CollectionDetail({ id, onBack, liveBackendEnabled }: { id: string; onBa
               </h1>
               <p className="mt-0.5 text-[11px] text-osu-f1/70">
                 {formatNumber(detail.items.length)} maps · rotated {formatTimeAgo(detail.refreshedAt)}
-                {newIds.size > 0 ? ` · ${newIds.size} new this rotation` : ""}
+                {newCount > 0 ? ` · ${newCount} new this rotation` : ""}
               </p>
             </div>
           </div>
@@ -408,7 +408,6 @@ function CollectionDetail({ id, onBack, liveBackendEnabled }: { id: string; onBa
                   setMapEntry(opened);
                 }}
                 preview={preview}
-                isNew={newIds.has(entry.beatmapId)}
               />
             ))}
           </div>
