@@ -866,13 +866,17 @@ function gateCandidates(
 
 // The cohort summary for one run. `farmDataCount` is filled in after the farmed
 // aggregation; the effective count reflects post-shape-fold discovery weights.
+// The pp range is on the run's own selection scale (modePp: variant/proxy pp
+// for keymode runs, total pp for the fallback), not the peers' total pp - a 7K
+// main with 26k total but 13k 4K pp is a 13k peer in a 4K cohort, and showing
+// their total would misread as "compared to 26k players".
 function buildPeerBand(mode: string, peers: WeightedPeer[]): PeerBandSummary {
   return {
     mode,
     count: peers.length,
     farmDataCount: 0,
-    minPp: peers.length ? Math.min(...peers.map((p) => p.pp)) : 0,
-    maxPp: peers.length ? Math.max(...peers.map((p) => p.pp)) : 0,
+    minPp: peers.length ? Math.min(...peers.map((p) => p.modePp)) : 0,
+    maxPp: peers.length ? Math.max(...peers.map((p) => p.modePp)) : 0,
     effectiveCount: Math.round(peers.reduce((sum, p) => sum + p.wD, 0)),
   };
 }
