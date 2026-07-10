@@ -1,20 +1,19 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion, Reorder, useDragControls } from "framer-motion";
+import { AnimatePresence, motion, Reorder } from "framer-motion";
 import {
   AlertTriangle,
+  AlignLeft,
   Bug,
   Check,
   ChevronDown,
-  GripVertical,
-  Inbox,
   Lightbulb,
   ListChecks,
   Loader2,
   Plus,
+  RotateCcw,
   Search,
   Sparkles,
-  SquarePen,
   Trash2,
   Wrench,
   X,
@@ -32,6 +31,14 @@ import {
   type TodoPriority,
   type TodoStatus,
 } from "../../lib/admin-todos";
+import {
+  playTodoDropTick,
+  playTodoHit,
+  playTodoMiss,
+  playTodoPlace,
+  playTodoReturn,
+  preloadTodoSfx,
+} from "../../lib/todo-sfx";
 
 export const Route = createFileRoute("/admin/todos")({
   head: () => ({
@@ -53,12 +60,14 @@ export const Route = createFileRoute("/admin/todos")({
 // Static metadata / helpers
 // ---------------------------------------------------------------------------
 
-const CATEGORY_META: Record<TodoCategory, { label: string; Icon: typeof Bug; text: string; pill: string }> = {
-  bug: { label: "Bug", Icon: Bug, text: "text-osu-red-light", pill: "text-osu-red-light border-osu-red-light/40 bg-osu-red-light/10" },
-  feature: { label: "Feature", Icon: Sparkles, text: "text-osu-blue", pill: "text-osu-blue border-osu-blue/40 bg-osu-blue/10" },
-  idea: { label: "Idea", Icon: Lightbulb, text: "text-osu-yellow", pill: "text-osu-yellow border-osu-yellow/40 bg-osu-yellow/10" },
-  chore: { label: "Chore", Icon: Wrench, text: "text-osu-purple", pill: "text-osu-purple border-osu-purple/40 bg-osu-purple/10" },
-  task: { label: "Task", Icon: ListChecks, text: "text-osu-l2", pill: "text-osu-l2 border-osu-b3/60 bg-osu-b3/25" },
+// Each category is a lane on the playfield, like columns in 5K mania. `edge` is the note's
+// top-edge accent (mania note colors); `text` colors the lane header and small icons.
+const CATEGORY_META: Record<TodoCategory, { label: string; Icon: typeof Bug; text: string; edge: string }> = {
+  task: { label: "Task", Icon: ListChecks, text: "text-osu-l2", edge: "border-t-osu-l2/70" },
+  bug: { label: "Bug", Icon: Bug, text: "text-osu-red-light", edge: "border-t-osu-red-light/80" },
+  feature: { label: "Feature", Icon: Sparkles, text: "text-osu-blue", edge: "border-t-osu-blue/80" },
+  idea: { label: "Idea", Icon: Lightbulb, text: "text-osu-yellow", edge: "border-t-osu-yellow/80" },
+  chore: { label: "Chore", Icon: Wrench, text: "text-osu-purple", edge: "border-t-osu-purple/80" },
 };
 const CATEGORY_ORDER: TodoCategory[] = ["task", "bug", "feature", "idea", "chore"];
 const CATEGORY_OPTIONS: SelectMenuOption<TodoCategory>[] = CATEGORY_ORDER.map((key) => ({
@@ -68,15 +77,56 @@ const CATEGORY_OPTIONS: SelectMenuOption<TodoCategory>[] = CATEGORY_ORDER.map((k
   colorClass: CATEGORY_META[key].text,
 }));
 
-const PRIORITY_META: Record<TodoPriority, { label: string; bar: string | null; chip: string; dot: string }> = {
-  high: { label: "High", bar: "bg-osu-red-light", chip: "text-osu-red-light", dot: "bg-osu-red-light" },
-  normal: { label: "Normal", bar: "bg-osu-b3/70", chip: "text-osu-f1", dot: "bg-osu-c2" },
-  low: { label: "Low", bar: null, chip: "text-osu-f1/60", dot: "bg-osu-f1/50" },
+const PRIORITY_META: Record<TodoPriority, { label: string; dot: string }> = {
+  high: { label: "High", dot: "bg-osu-red-light" },
+  normal: { label: "Normal", dot: "bg-osu-c2" },
+  low: { label: "Low", dot: "bg-osu-f1/50" },
 };
 const PRIORITY_ORDER: TodoPriority[] = ["low", "normal", "high"];
 
 // Matches the backend spacing so a drag can drop an item at the midpoint of its two new neighbours.
 const POSITION_STEP = 1000;
+
+// Completing a todo scores it like a mania hit: the judgement is how long the note sat on the
+// field before it was cleared. Weights follow mania accuracy (x/300).
+type Judgement = "MAX" | "300" | "200" | "100" | "50";
+type PopupJudgement = Judgement | "MISS";
+
+const JUDGEMENT_META: Record<PopupJudgement, { weight: number; text: string; glow: string }> = {
+  MAX: { weight: 300, text: "text-white", glow: "0 0 14px rgba(255,102,171,0.95), 0 2px 8px rgba(0,0,0,0.6)" },
+  "300": { weight: 300, text: "text-osu-yellow", glow: "0 2px 8px rgba(0,0,0,0.6)" },
+  "200": { weight: 200, text: "text-osu-green", glow: "0 2px 8px rgba(0,0,0,0.6)" },
+  "100": { weight: 100, text: "text-osu-blue", glow: "0 2px 8px rgba(0,0,0,0.6)" },
+  "50": { weight: 50, text: "text-osu-f1", glow: "0 2px 8px rgba(0,0,0,0.6)" },
+  MISS: { weight: 0, text: "text-osu-red", glow: "0 2px 8px rgba(0,0,0,0.6)" },
+};
+
+const DAY_MS = 86_400_000;
+
+function judgeTodo(createdAt: number, doneAt: number): Judgement {
+  const days = (doneAt - createdAt) / DAY_MS;
+  if (days < 1) return "MAX";
+  if (days < 3) return "300";
+  if (days < 7) return "200";
+  if (days < 14) return "100";
+  return "50";
+}
+
+// Mania-style accuracy over everything cleared so far; an empty results screen starts at 100%.
+function accuracyOf(done: AdminTodo[]): number {
+  if (done.length === 0) return 100;
+  const sum = done.reduce((acc, t) => acc + JUDGEMENT_META[judgeTodo(t.createdAt, t.doneAt ?? t.updatedAt)].weight, 0);
+  return (sum / (done.length * 300)) * 100;
+}
+
+function gradeOf(acc: number): { label: string; text: string } {
+  if (acc >= 100) return { label: "SS", text: "text-osu-yellow" };
+  if (acc >= 95) return { label: "S", text: "text-osu-yellow" };
+  if (acc >= 90) return { label: "A", text: "text-osu-green" };
+  if (acc >= 80) return { label: "B", text: "text-osu-blue" };
+  if (acc >= 70) return { label: "C", text: "text-osu-purple" };
+  return { label: "D", text: "text-osu-red" };
+}
 
 // Mirrors the backend board order so optimistic local updates land where a refetch would put them:
 // open before done; open items follow the manual drag order (position asc), done items by most
@@ -136,13 +186,22 @@ function PrioritySegmented({ value, onChange }: { value: TodoPriority; onChange:
 // Page
 // ---------------------------------------------------------------------------
 
-type StatusFilter = "all" | "open" | "done";
+interface LanePopup {
+  key: number;
+  judgement: PopupJudgement;
+}
+
+interface EditPatch {
+  title: string;
+  notes: string;
+  category: TodoCategory;
+  priority: TodoPriority;
+}
 
 function TodosPage() {
   const [todos, setTodos] = useState<AdminTodo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
 
   // Composer draft
   const [title, setTitle] = useState("");
@@ -153,14 +212,35 @@ function TodosPage() {
   const [adding, setAdding] = useState(false);
   const titleRef = useRef<HTMLInputElement | null>(null);
 
-  // Filters
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
-  const [categoryFilter, setCategoryFilter] = useState<TodoCategory | "all">("all");
-  const [priorityFilter, setPriorityFilter] = useState<TodoPriority | "all">("all");
+  const [showResults, setShowResults] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [editing, setEditing] = useState<AdminTodo | null>(null);
+
+  // Per-lane judgement popups; keyed so a fresh hit replaces the previous popup and an older
+  // clear timer can't wipe a newer popup.
+  const popupKey = useRef(0);
+  const [popups, setPopups] = useState<Partial<Record<TodoCategory, LanePopup>>>({});
+  const punch = useCallback((lane: TodoCategory, judgement: PopupJudgement) => {
+    const key = ++popupKey.current;
+    setPopups((prev) => ({ ...prev, [lane]: { key, judgement } }));
+    window.setTimeout(() => {
+      setPopups((prev) => (prev[lane]?.key === key ? { ...prev, [lane]: undefined } : prev));
+    }, 900);
+  }, []);
+
+  const refetch = useCallback(async () => {
+    try {
+      const result = await listAdminTodos();
+      setTodos(sortTodos(result.todos));
+    } catch {
+      // the error that triggered the refetch already surfaces on the page.
+    }
+  }, []);
 
   useEffect(() => {
+    // Decode the hitsound samples before the first hit so it lands on time.
+    preloadTodoSfx();
     let alive = true;
     (async () => {
       try {
@@ -177,121 +257,27 @@ function TodosPage() {
     };
   }, []);
 
-  const openCount = useMemo(() => todos.filter((t) => t.status === "open").length, [todos]);
-  const doneCount = todos.length - openCount;
-
   const query = search.trim().toLowerCase();
-
-  // Faceted matching: each filter control's counts reflect the *other* active filters, not its own
-  // selection, so picking one facet never zeroes out the counts on the others.
   const matchesSearch = useCallback(
     (t: AdminTodo) => !query || `${t.title} ${t.notes ?? ""}`.toLowerCase().includes(query),
     [query],
   );
-  const matchesStatus = useCallback(
-    (t: AdminTodo) => statusFilter === "all" || t.status === statusFilter,
-    [statusFilter],
-  );
-  const matchesPriority = useCallback(
-    (t: AdminTodo) => priorityFilter === "all" || t.priority === priorityFilter,
-    [priorityFilter],
-  );
 
-  const filtered = useMemo(
-    () =>
-      todos.filter(
-        (t) =>
-          matchesStatus(t) &&
-          matchesPriority(t) &&
-          matchesSearch(t) &&
-          (categoryFilter === "all" || t.category === categoryFilter),
-      ),
-    [todos, matchesStatus, matchesPriority, matchesSearch, categoryFilter],
-  );
+  const openFiltered = useMemo(() => todos.filter((t) => t.status === "open" && matchesSearch(t)), [todos, matchesSearch]);
+  const doneFiltered = useMemo(() => todos.filter((t) => t.status === "done" && matchesSearch(t)), [todos, matchesSearch]);
 
-  const statusCounts = useMemo(() => {
-    const counts = { open: 0, done: 0, all: 0 };
-    for (const t of todos) {
-      if (!matchesPriority(t) || !matchesSearch(t)) continue;
-      counts[t.status]++;
-      counts.all++;
-    }
-    return counts;
-  }, [todos, matchesPriority, matchesSearch]);
+  // Lane contents: open todos split by category, position asc (first = next up, closest to the line).
+  const lanes = useMemo(() => {
+    const map = { task: [], bug: [], feature: [], idea: [], chore: [] } as Record<TodoCategory, AdminTodo[]>;
+    for (const t of openFiltered) map[t.category].push(t);
+    return map;
+  }, [openFiltered]);
 
-  const categoryCounts = useMemo(() => {
-    const counts: Record<TodoCategory | "all", number> = { all: 0, task: 0, bug: 0, feature: 0, idea: 0, chore: 0 };
-    for (const t of todos) {
-      if (!matchesStatus(t) || !matchesPriority(t) || !matchesSearch(t)) continue;
-      counts[t.category]++;
-      counts.all++;
-    }
-    return counts;
-  }, [todos, matchesStatus, matchesPriority, matchesSearch]);
-
-  const priorityCounts = useMemo(() => {
-    const counts: Record<TodoPriority | "all", number> = { all: 0, high: 0, normal: 0, low: 0 };
-    for (const t of todos) {
-      if (!matchesStatus(t) || !matchesSearch(t)) continue;
-      if (categoryFilter !== "all" && t.category !== categoryFilter) continue;
-      counts[t.priority]++;
-      counts.all++;
-    }
-    return counts;
-  }, [todos, matchesStatus, matchesSearch, categoryFilter]);
-
-  // Open items are drag-reorderable; done items keep their most-recently-completed order. `order`
-  // drives the Reorder.Group during a drag; it's resynced from the data whenever the visible open
-  // set changes (add / remove / toggle / filter), which never happens mid-drag (a drag only touches
-  // `order`), so the in-progress order is never clobbered.
-  const openList = useMemo(() => filtered.filter((t) => t.status === "open"), [filtered]);
-  const doneList = useMemo(() => filtered.filter((t) => t.status === "done"), [filtered]);
-
-  const [order, setOrder] = useState<AdminTodo[]>(openList);
-  useEffect(() => {
-    setOrder(openList);
-  }, [openList]);
-  const orderRef = useRef(order);
-  orderRef.current = order;
-  // `openList` is the committed (server-synced) open order; `order` only diverges mid-drag. Compare
-  // against it to tell a real reorder from a bare click on the grip handle.
-  const openListRef = useRef(openList);
-  openListRef.current = openList;
-
-  // On drop, give the moved item a position between its two new visible neighbours (or a step past
-  // the end when it lands first/last) and persist just that one row. Optimistic so the reorder
-  // sticks instantly; a failed save refetches server truth.
-  const handleReorderEnd = useCallback(async (id: string) => {
-    const current = orderRef.current;
-    const committed = openListRef.current;
-    if (current.length === committed.length && current.every((t, i) => t.id === committed[i].id)) return; // no net move
-    const index = current.findIndex((t) => t.id === id);
-    if (index === -1) return;
-    const moved = current[index];
-    const prev = current[index - 1];
-    const next = current[index + 1];
-    let position: number;
-    if (!prev && !next) return; // sole item, nothing to reorder
-    else if (!prev) position = next.position - POSITION_STEP;
-    else if (!next) position = prev.position + POSITION_STEP;
-    else position = (prev.position + next.position) / 2;
-    if (position === moved.position) return; // dropped back where it started
-
-    setTodos((list) => upsertTodo(list, { ...moved, position }));
-    setError(null);
-    try {
-      const result = await updateAdminTodo({ data: { id, position } });
-      setTodos((list) => upsertTodo(list, result.todo));
-    } catch (caught) {
-      setError(errMessage(caught));
-      try {
-        const refreshed = await listAdminTodos();
-        setTodos(sortTodos(refreshed.todos));
-      } catch {
-        // leave the optimistic order in place; the error above already surfaces on the page.
-      }
-    }
-  }, []);
+  const openCount = useMemo(() => todos.filter((t) => t.status === "open").length, [todos]);
+  const doneAll = useMemo(() => todos.filter((t) => t.status === "done"), [todos]);
+  const doneCount = doneAll.length;
+  const acc = accuracyOf(doneAll);
+  const grade = gradeOf(acc);
 
   const handleAdd = useCallback(async () => {
     const trimmed = title.trim();
@@ -301,6 +287,7 @@ function TodosPage() {
     try {
       const result = await createAdminTodo({ data: { title: trimmed, notes, category, priority } });
       setTodos((prev) => upsertTodo(prev, result.todo));
+      playTodoPlace(); // synced with the note dropping onto the field
       // Keep category/priority so batches of the same kind stay fast; clear the rest.
       setTitle("");
       setNotes("");
@@ -312,22 +299,33 @@ function TodosPage() {
     }
   }, [title, notes, category, priority, adding]);
 
-  const handleToggle = useCallback(async (todo: AdminTodo) => {
-    setBusyId(todo.id);
-    setError(null);
-    try {
+  // Completing is optimistic so the hit lands instantly: the note bursts, the lane shows the
+  // judgement, then the server response reconciles (or a refetch restores truth on failure).
+  const handleToggle = useCallback(
+    async (todo: AdminTodo) => {
       const nextStatus: TodoStatus = todo.status === "open" ? "done" : "open";
-      const result = await updateAdminTodo({ data: { id: todo.id, status: nextStatus } });
-      setTodos((prev) => upsertTodo(prev, result.todo));
-    } catch (caught) {
-      setError(errMessage(caught));
-    } finally {
-      setBusyId(null);
-    }
-  }, []);
+      const now = Date.now();
+      setTodos((prev) => upsertTodo(prev, { ...todo, status: nextStatus, doneAt: nextStatus === "done" ? now : null }));
+      if (nextStatus === "done") {
+        const judgement = judgeTodo(todo.createdAt, now);
+        punch(todo.category, judgement);
+        playTodoHit(judgement);
+      } else {
+        playTodoReturn();
+      }
+      setError(null);
+      try {
+        const result = await updateAdminTodo({ data: { id: todo.id, status: nextStatus } });
+        setTodos((prev) => upsertTodo(prev, result.todo));
+      } catch (caught) {
+        setError(errMessage(caught));
+        void refetch();
+      }
+    },
+    [punch, refetch],
+  );
 
   const handleSave = useCallback(async (id: string, patch: EditPatch) => {
-    setBusyId(id);
     setError(null);
     try {
       const result = await updateAdminTodo({
@@ -343,23 +341,27 @@ function TodosPage() {
     } catch (caught) {
       setError(errMessage(caught));
       throw caught;
-    } finally {
-      setBusyId(null);
     }
   }, []);
 
-  const handleDelete = useCallback(async (id: string) => {
-    setBusyId(id);
-    setError(null);
-    try {
-      await deleteAdminTodo({ data: { id } });
-      setTodos((prev) => prev.filter((t) => t.id !== id));
-    } catch (caught) {
-      setError(errMessage(caught));
-    } finally {
-      setBusyId(null);
-    }
-  }, []);
+  const handleDelete = useCallback(
+    async (todo: AdminTodo) => {
+      setTodos((prev) => prev.filter((t) => t.id !== todo.id));
+      // Dropping an open note off the field is a miss; deleting from results is just cleanup.
+      if (todo.status === "open") {
+        punch(todo.category, "MISS");
+        playTodoMiss();
+      }
+      setError(null);
+      try {
+        await deleteAdminTodo({ data: { id: todo.id } });
+      } catch (caught) {
+        setError(errMessage(caught));
+        void refetch();
+      }
+    },
+    [punch, refetch],
+  );
 
   const handleClearDone = useCallback(async () => {
     setClearing(true);
@@ -374,9 +376,30 @@ function TodosPage() {
     }
   }, []);
 
+  // On drop, the moved note gets a position between its two new lane neighbours (computed in the
+  // lane, since visual order is reversed there) and persists just that one row.
+  const handleReorderEnd = useCallback(
+    async (id: string, position: number) => {
+      setTodos((prev) => {
+        const current = prev.find((t) => t.id === id);
+        return current ? upsertTodo(prev, { ...current, position }) : prev;
+      });
+      playTodoDropTick();
+      setError(null);
+      try {
+        const result = await updateAdminTodo({ data: { id, position } });
+        setTodos((prev) => upsertTodo(prev, result.todo));
+      } catch (caught) {
+        setError(errMessage(caught));
+        void refetch();
+      }
+    },
+    [refetch],
+  );
+
   return (
     <div className="flex-1 bg-osu-b5 min-h-[calc(100vh-60px)]">
-      <div className="mx-auto max-w-[860px] space-y-4 px-4 py-6 sm:px-5">
+      <div className="mx-auto max-w-[1000px] space-y-4 px-4 py-6 sm:px-5">
         {/* Header */}
         <div className="flex items-end justify-between gap-3">
           <div>
@@ -385,10 +408,31 @@ function TodosPage() {
               <h1 className="text-sm font-bold uppercase tracking-[0.14em] text-osu-l1">Todo</h1>
             </div>
             <p className="mt-1 text-[11px] text-osu-f1">
-              {openCount} open{doneCount ? ` · ${doneCount} done` : ""} · private notes for the project
+              {openCount} on the field{doneCount ? ` · ${doneCount} cleared` : ""} · private notes for the project
             </p>
           </div>
-          {doneCount > 0 && <ClearDoneButton count={doneCount} busy={clearing} onClear={handleClearDone} />}
+          <div className="relative w-[200px] sm:w-[240px]">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-osu-f1/60" />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setSearch("");
+              }}
+              placeholder="Search notes..."
+              className="w-full rounded-md border border-osu-b3/50 bg-osu-b6/70 py-1.5 pl-8 pr-8 text-xs text-osu-l1 placeholder:text-osu-f1/60 focus:border-osu-c2/60 focus:outline-none"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                aria-label="Clear search"
+                className="absolute right-1.5 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-osu-l1 cursor-pointer"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Composer */}
@@ -433,97 +477,16 @@ function TodosPage() {
               {!showNotes && notes ? <span className="text-osu-c2">·</span> : null}
             </button>
           </div>
-          <AnimatePresence initial={false}>
-            {showNotes && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.15 }}
-                className="overflow-hidden"
-              >
-                <textarea
-                  value={notes}
-                  onChange={(event) => setNotes(event.target.value)}
-                  maxLength={5000}
-                  rows={2}
-                  placeholder="Notes (optional) - context, links, repro steps..."
-                  className={`mt-2 ${TEXTAREA_CLASS}`}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* Filter bar */}
-        <div className="space-y-2">
-          {/* Search + status */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <div className="relative min-w-[180px] flex-1">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-osu-f1/60" />
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Escape") setSearch("");
-                }}
-                placeholder="Search title or notes..."
-                className="w-full rounded-md border border-osu-b3/50 bg-osu-b6/70 py-1.5 pl-8 pr-8 text-xs text-osu-l1 placeholder:text-osu-f1/60 focus:border-osu-c2/60 focus:outline-none"
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch("")}
-                  aria-label="Clear search"
-                  className="absolute right-1.5 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-osu-l1 cursor-pointer"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-            <div className="inline-flex rounded-lg border border-osu-b3/40 bg-osu-b4/40 p-0.5">
-              {(["open", "done", "all"] as StatusFilter[]).map((key) => {
-                const active = key === statusFilter;
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setStatusFilter(key)}
-                    className={`rounded-md px-3 py-1 text-[11px] font-semibold capitalize transition-colors cursor-pointer ${
-                      active ? "bg-osu-b3/60 text-white" : "text-osu-f1 hover:text-osu-l2"
-                    }`}
-                  >
-                    {key} <span className="text-osu-f1/70">{statusCounts[key]}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          {/* Category + priority */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <div className="flex flex-wrap items-center gap-1">
-              <CategoryFilterChip
-                label="All"
-                count={categoryCounts.all}
-                active={categoryFilter === "all"}
-                onClick={() => setCategoryFilter("all")}
-              />
-              {CATEGORY_ORDER.map((key) => (
-                <CategoryFilterChip
-                  key={key}
-                  label={CATEGORY_META[key].label}
-                  Icon={CATEGORY_META[key].Icon}
-                  colorClass={CATEGORY_META[key].text}
-                  count={categoryCounts[key]}
-                  active={categoryFilter === key}
-                  onClick={() => setCategoryFilter(categoryFilter === key ? "all" : key)}
-                />
-              ))}
-            </div>
-            <div className="ml-auto">
-              <PriorityFilter value={priorityFilter} counts={priorityCounts} onChange={setPriorityFilter} />
-            </div>
-          </div>
+          {showNotes && (
+            <textarea
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              maxLength={5000}
+              rows={2}
+              placeholder="Notes (optional) - context, links, repro steps..."
+              className={`mt-2 ${TEXTAREA_CLASS}`}
+            />
+          )}
         </div>
 
         {error && (
@@ -533,84 +496,394 @@ function TodosPage() {
           </div>
         )}
 
-        {/* List */}
+        {/* Playfield */}
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-16 text-xs text-osu-f1">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading todos...
           </div>
-        ) : filtered.length === 0 ? (
-          <EmptyState hasAny={todos.length > 0} />
         ) : (
-          <div className="flex flex-col gap-2">
-            {/* Open items: drag the grip to reorder by hand. */}
-            {order.length > 0 && (
-              <Reorder.Group axis="y" values={order} onReorder={setOrder} className="flex flex-col gap-2">
-                <AnimatePresence initial={false}>
-                  {order.map((todo) => (
-                    <TodoCard
-                      key={todo.id}
-                      todo={todo}
-                      busy={busyId === todo.id}
-                      reorderable
-                      onToggle={handleToggle}
-                      onSave={handleSave}
-                      onDelete={handleDelete}
+          <div className="overflow-hidden rounded-xl border border-osu-b3/40 bg-osu-b6/20">
+            <div className="overflow-x-auto">
+              <div className="min-w-[680px]">
+                <div className="relative flex">
+                  {CATEGORY_ORDER.map((key) => (
+                    <Lane
+                      key={key}
+                      category={key}
+                      items={lanes[key]}
+                      popup={popups[key]}
+                      onHit={handleToggle}
+                      onOpen={setEditing}
                       onReorderEnd={handleReorderEnd}
                     />
                   ))}
+                  {openFiltered.length === 0 && (
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                      <p className="rounded-md bg-osu-b6/70 px-3 py-1.5 text-xs text-osu-f1">
+                        {todos.length === 0
+                          ? "No notes on the field. Add the first one above."
+                          : query
+                            ? "Nothing on the field matches this search."
+                            : "All clear. Nothing left on the field."}
+                      </p>
+                    </div>
+                  )}
+                </div>
+                {/* Judgement line */}
+                <div className="h-0.5 w-full bg-osu-pink shadow-[0_0_10px_rgba(255,102,171,0.55)]" />
+              </div>
+            </div>
+
+            {/* Score footer: accuracy + grade, combo, results toggle */}
+            <div className="grid grid-cols-3 items-center border-t border-osu-b3/30 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <span className={`text-sm font-black italic ${grade.text}`}>{grade.label}</span>
+                <span className="text-sm font-bold tabular-nums text-osu-l1">{acc.toFixed(2)}%</span>
+                <span className="text-[10px] uppercase tracking-wider text-osu-f1/50">acc</span>
+              </div>
+              <div className="flex items-baseline justify-center gap-1.5">
+                <AnimatePresence initial={false} mode="popLayout">
+                  <motion.span
+                    key={doneCount}
+                    initial={{ scale: 1.4 }}
+                    animate={{ scale: 1 }}
+                    exit={{ opacity: 0, transition: { duration: 0 } }}
+                    transition={{ type: "spring", stiffness: 500, damping: 24 }}
+                    className="text-base font-black italic text-osu-l1"
+                  >
+                    {doneCount}x
+                  </motion.span>
                 </AnimatePresence>
-              </Reorder.Group>
-            )}
-            {doneList.length > 0 && (
-              <motion.ul layout className="flex flex-col gap-2">
-                <AnimatePresence initial={false}>
-                  {doneList.map((todo) => (
-                    <TodoCard
-                      key={todo.id}
-                      todo={todo}
-                      busy={busyId === todo.id}
-                      onToggle={handleToggle}
-                      onSave={handleSave}
-                      onDelete={handleDelete}
-                    />
-                  ))}
-                </AnimatePresence>
-              </motion.ul>
-            )}
+                <span className="text-[10px] uppercase tracking-wider text-osu-f1/50">cleared</span>
+              </div>
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowResults((open) => !open)}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
+                    showResults ? "text-osu-l1" : "text-osu-f1 hover:text-osu-l2"
+                  }`}
+                >
+                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showResults ? "rotate-180" : ""}`} />
+                  Results
+                  <span className="tabular-nums text-osu-f1/60">{doneCount}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Results screen: everything cleared, scored by how long it sat on the field */}
+        {!loading && showResults && (
+          <div className="rounded-xl border border-osu-b3/40 bg-osu-b4/20 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[10px] text-osu-f1/60">
+                Judgement is time on the field: MAX under a day · 300 under 3 days · 200 under a week · 100 under two
+                weeks · 50 after that.
+              </p>
+              {doneCount > 0 && <ClearDoneButton count={doneCount} busy={clearing} onClear={handleClearDone} />}
+            </div>
+            <div className="mt-2 flex flex-col gap-1.5">
+              {doneFiltered.length === 0 ? (
+                <p className="py-4 text-center text-xs text-osu-f1">
+                  {doneCount === 0 ? "Nothing cleared yet." : "Nothing cleared matches this search."}
+                </p>
+              ) : (
+                doneFiltered.map((todo) => (
+                  <DoneRow key={todo.id} todo={todo} onUndo={handleToggle} onDelete={handleDelete} />
+                ))
+              )}
+            </div>
           </div>
         )}
       </div>
+
+      <AnimatePresence>
+        {editing && (
+          <NoteModal
+            todo={editing}
+            onClose={() => setEditing(null)}
+            onSave={handleSave}
+            onDelete={handleDelete}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Row
+// Lane (one category column of the playfield)
 // ---------------------------------------------------------------------------
 
-interface EditPatch {
-  title: string;
-  notes: string;
+interface LaneProps {
   category: TodoCategory;
-  priority: TodoPriority;
+  // Open todos in this lane, position asc: first = next up, rendered closest to the judgement line.
+  items: AdminTodo[];
+  popup: LanePopup | undefined;
+  onHit: (todo: AdminTodo) => void;
+  onOpen: (todo: AdminTodo) => void;
+  onReorderEnd: (id: string, position: number) => void;
 }
 
-interface TodoCardProps {
+function Lane({ category, items, popup, onHit, onOpen, onReorderEnd }: LaneProps) {
+  const meta = CATEGORY_META[category];
+  const Icon = meta.Icon;
+
+  // Downscroll: the lane renders reversed (last position on top, next-up at the bottom touching
+  // the judgement line). `order` drives the Reorder.Group during a drag and is resynced from the
+  // data whenever the lane's contents change, which never happens mid-drag.
+  const [order, setOrder] = useState<AdminTodo[]>(() => [...items].reverse());
+  useEffect(() => {
+    setOrder([...items].reverse());
+  }, [items]);
+  const orderRef = useRef(order);
+  orderRef.current = order;
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+
+  const handleDragEnd = useCallback(
+    (id: string) => {
+      const current = orderRef.current;
+      const committed = itemsRef.current;
+      // In the reversed view, index i sits between a visually-higher neighbour (larger position)
+      // and a visually-lower one (smaller position); the drop lands at their midpoint.
+      if (current.length === committed.length && current.every((t, i) => t.id === committed[committed.length - 1 - i].id)) {
+        return; // no net move
+      }
+      const index = current.findIndex((t) => t.id === id);
+      if (index === -1) return;
+      const moved = current[index];
+      const above = current[index - 1];
+      const below = current[index + 1];
+      let position: number;
+      if (!above && !below) return; // sole note, nothing to reorder
+      else if (!above) position = below.position + POSITION_STEP;
+      else if (!below) position = above.position - POSITION_STEP;
+      else position = (above.position + below.position) / 2;
+      if (position === moved.position) return; // dropped back where it started
+      onReorderEnd(id, position);
+    },
+    [onReorderEnd],
+  );
+
+  const popupMeta = popup ? JUDGEMENT_META[popup.judgement] : null;
+
+  return (
+    <div className="relative flex min-w-0 flex-1 flex-col border-r border-osu-b3/25 last:border-r-0">
+      <div className={`flex items-center justify-center gap-1.5 border-b border-osu-b3/25 py-2 text-[10px] font-semibold uppercase tracking-wider ${meta.text}`}>
+        <Icon className="h-3.5 w-3.5" />
+        {meta.label}
+        <span className="tabular-nums text-osu-f1/60">{items.length}</span>
+      </div>
+      <Reorder.Group
+        axis="y"
+        values={order}
+        onReorder={setOrder}
+        className="flex min-h-[260px] flex-1 flex-col justify-end gap-1.5 px-1.5 py-2"
+      >
+        <AnimatePresence initial={false}>
+          {order.map((todo) => (
+            <LaneNote key={todo.id} todo={todo} onHit={onHit} onOpen={onOpen} onDragEnd={handleDragEnd} />
+          ))}
+        </AnimatePresence>
+      </Reorder.Group>
+      {/* Judgement popup, sat on the line like in-game */}
+      <AnimatePresence>
+        {popup && popupMeta && (
+          <motion.div
+            key={popup.key}
+            initial={{ scale: 1.7, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.8, opacity: 0, transition: { duration: 0.15 } }}
+            transition={{ type: "spring", stiffness: 520, damping: 22 }}
+            className="pointer-events-none absolute inset-x-0 bottom-1.5 z-10 text-center"
+          >
+            <span className={`text-xl font-black italic tracking-wide ${popupMeta.text}`} style={{ textShadow: popupMeta.glow }}>
+              {popup.judgement}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Note (one open todo on the field)
+// ---------------------------------------------------------------------------
+
+function LaneNote({
+  todo,
+  onHit,
+  onOpen,
+  onDragEnd,
+}: {
   todo: AdminTodo;
-  busy: boolean;
-  reorderable?: boolean;
-  onToggle: (todo: AdminTodo) => void;
-  onSave: (id: string, patch: EditPatch) => Promise<void>;
-  onDelete: (id: string) => void;
-  onReorderEnd?: (id: string) => void;
+  onHit: (todo: AdminTodo) => void;
+  onOpen: (todo: AdminTodo) => void;
+  onDragEnd: (id: string) => void;
+}) {
+  const meta = CATEGORY_META[todo.category];
+  // Distinguish a drag-drop from a plain click so dropping a note never opens the editor.
+  const dragging = useRef(false);
+
+  return (
+    <Reorder.Item
+      value={todo}
+      layout
+      onDragStart={() => {
+        dragging.current = true;
+      }}
+      onDragEnd={() => {
+        onDragEnd(todo.id);
+        requestAnimationFrame(() => {
+          dragging.current = false;
+        });
+      }}
+      onClick={() => {
+        if (!dragging.current) onOpen(todo);
+      }}
+      whileDrag={{ scale: 1.04, zIndex: 20 }}
+      initial={{ opacity: 0, y: -18 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 12, scale: 0.9, transition: { duration: 0.14 } }}
+      transition={{ duration: 0.18, ease: "easeOut" }}
+      style={{ touchAction: "pan-y" }}
+      className={`group relative cursor-grab select-none rounded-md border border-osu-b3/50 border-t-2 bg-osu-b4/60 transition-colors hover:border-osu-b3 active:cursor-grabbing ${meta.edge} ${
+        todo.priority === "low" ? "opacity-70" : ""
+      }`}
+    >
+      <div className="flex items-start gap-1.5 p-1.5 pl-2">
+        <div className="min-w-0 flex-1">
+          <p className="break-words text-[11px] leading-snug text-osu-l1 line-clamp-2">{todo.title}</p>
+          <div className="mt-1 flex items-center gap-1.5 text-[9px] text-osu-f1/60">
+            {todo.priority === "high" && (
+              <span className="inline-flex items-center gap-1 font-semibold uppercase tracking-wide text-osu-red-light">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-osu-red-light" />
+                high
+              </span>
+            )}
+            {todo.notes && <AlignLeft className="h-2.5 w-2.5" />}
+            <span>{formatShortDate(todo.createdAt)}</span>
+          </div>
+        </div>
+        <button
+          type="button"
+          aria-label="Hit (mark as done)"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            onHit(todo);
+          }}
+          className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-osu-b3/60 bg-osu-b6/40 text-transparent transition-colors hover:border-osu-green hover:text-osu-green cursor-pointer"
+        >
+          <Check className="h-3 w-3" />
+        </button>
+      </div>
+    </Reorder.Item>
+  );
 }
 
-function TodoCard({ todo, busy, reorderable, onToggle, onSave, onDelete, onReorderEnd }: TodoCardProps) {
-  const [editing, setEditing] = useState(false);
+// ---------------------------------------------------------------------------
+// Results row (cleared todo with its judgement)
+// ---------------------------------------------------------------------------
+
+function DoneRow({
+  todo,
+  onUndo,
+  onDelete,
+}: {
+  todo: AdminTodo;
+  onUndo: (todo: AdminTodo) => void;
+  onDelete: (todo: AdminTodo) => void;
+}) {
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [draft, setDraft] = useState<EditPatch>(() => toEditPatch(todo));
-  const dragControls = useDragControls();
+  useEffect(() => {
+    if (!confirmDelete) return;
+    const id = window.setTimeout(() => setConfirmDelete(false), 4_000);
+    return () => window.clearTimeout(id);
+  }, [confirmDelete]);
+
+  const meta = CATEGORY_META[todo.category];
+  const CategoryIcon = meta.Icon;
+  const judgement = judgeTodo(todo.createdAt, todo.doneAt ?? todo.updatedAt);
+  const jm = JUDGEMENT_META[judgement];
+
+  return (
+    <div className="group flex items-center gap-2 rounded-lg border border-osu-b3/30 bg-osu-b4/20 px-2.5 py-1.5">
+      <span className={`w-9 shrink-0 text-center text-[10px] font-black italic ${jm.text}`}>{judgement}</span>
+      <CategoryIcon className={`h-3 w-3 shrink-0 ${meta.text}`} />
+      <span className="min-w-0 flex-1 truncate text-xs text-osu-f1 line-through">{todo.title}</span>
+      <span className="shrink-0 text-[10px] tabular-nums text-osu-f1/50">
+        {formatShortDate(todo.doneAt ?? todo.updatedAt)}
+      </span>
+      <button
+        type="button"
+        onClick={() => onUndo(todo)}
+        aria-label="Send back to the field"
+        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-osu-f1 opacity-0 transition hover:bg-osu-b3/50 hover:text-osu-l1 group-hover:opacity-100 cursor-pointer"
+      >
+        <RotateCcw className="h-3 w-3" />
+      </button>
+      {confirmDelete ? (
+        <button
+          type="button"
+          onClick={() => {
+            setConfirmDelete(false);
+            onDelete(todo);
+          }}
+          className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-osu-red/60 bg-osu-red/25 px-1.5 text-[10px] font-semibold uppercase tracking-wider text-white hover:bg-osu-red/35 cursor-pointer"
+        >
+          <Trash2 className="h-3 w-3" />
+          Sure?
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setConfirmDelete(true)}
+          aria-label="Delete"
+          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-osu-f1 opacity-0 transition hover:bg-osu-red/15 hover:text-osu-red group-hover:opacity-100 cursor-pointer"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Edit modal (lanes are too narrow for inline editing)
+// ---------------------------------------------------------------------------
+
+function NoteModal({
+  todo,
+  onClose,
+  onSave,
+  onDelete,
+}: {
+  todo: AdminTodo;
+  onClose: () => void;
+  onSave: (id: string, patch: EditPatch) => Promise<void>;
+  onDelete: (todo: AdminTodo) => void;
+}) {
+  const [draft, setDraft] = useState<EditPatch>({
+    title: todo.title,
+    notes: todo.notes ?? "",
+    category: todo.category,
+    priority: todo.priority,
+  });
+  const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   useEffect(() => {
     if (!confirmDelete) return;
@@ -618,324 +891,130 @@ function TodoCard({ todo, busy, reorderable, onToggle, onSave, onDelete, onReord
     return () => window.clearTimeout(id);
   }, [confirmDelete]);
 
-  const done = todo.status === "done";
-  const meta = CATEGORY_META[todo.category];
-  const CategoryIcon = meta.Icon;
-  const priorityBar = PRIORITY_META[todo.priority].bar;
-
-  const beginEdit = () => {
-    setDraft(toEditPatch(todo));
-    setEditing(true);
-  };
-
   const commit = async () => {
-    if (!draft.title.trim()) return;
+    if (!draft.title.trim() || saving) return;
+    setSaving(true);
     try {
       await onSave(todo.id, draft);
-      setEditing(false);
+      onClose();
     } catch {
       // error surfaces on the page; keep the form open so edits aren't lost.
+    } finally {
+      setSaving(false);
     }
   };
 
-  const rootClassName = editing
-    ? "relative z-20 rounded-lg border border-osu-c2/40 bg-osu-b4/40 p-3"
-    : `group relative flex items-start gap-3 rounded-lg border border-osu-b3/40 p-3 transition-colors hover:border-osu-b3/60 ${done ? "bg-osu-b4/15" : "bg-osu-b4/30"}`;
-
-  const content = (
-    <>
-      {editing ? (
-        <>
-          <input
-            value={draft.title}
-            onChange={(event) => setDraft((d) => ({ ...d, title: event.target.value }))}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                void commit();
-              }
-              if (event.key === "Escape") setEditing(false);
-            }}
-            maxLength={500}
-            autoFocus
-            className="w-full rounded-md border border-osu-b3/50 bg-osu-b6/70 px-3 py-2 text-sm text-osu-l1 focus:border-osu-c2/60 focus:outline-none"
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, transition: { duration: 0.1 } }}
+      transition={{ duration: 0.12 }}
+      onClick={onClose}
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4"
+    >
+      <motion.div
+        initial={{ scale: 0.96, y: 8 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.96, y: 8 }}
+        transition={{ duration: 0.12 }}
+        onClick={(event) => event.stopPropagation()}
+        className="w-full max-w-md rounded-xl border border-osu-b3/50 bg-osu-b5 p-4 shadow-[0_12px_28px_rgba(0,0,0,0.55)]"
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-osu-f1">
+            Edit note · added {formatShortDate(todo.createdAt)}
+          </p>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-osu-l1 cursor-pointer"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        <input
+          value={draft.title}
+          onChange={(event) => setDraft((d) => ({ ...d, title: event.target.value }))}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              void commit();
+            }
+          }}
+          maxLength={500}
+          autoFocus
+          className="w-full rounded-md border border-osu-b3/50 bg-osu-b6/70 px-3 py-2 text-sm text-osu-l1 focus:border-osu-c2/60 focus:outline-none"
+        />
+        <textarea
+          value={draft.notes}
+          onChange={(event) => setDraft((d) => ({ ...d, notes: event.target.value }))}
+          maxLength={5000}
+          rows={3}
+          placeholder="Notes (optional)"
+          className={`mt-2 ${TEXTAREA_CLASS}`}
+        />
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <SelectMenu
+            value={draft.category}
+            options={CATEGORY_OPTIONS}
+            onChange={(category) => setDraft((d) => ({ ...d, category }))}
+            ariaLabel="Category"
           />
-          <textarea
-            value={draft.notes}
-            onChange={(event) => setDraft((d) => ({ ...d, notes: event.target.value }))}
-            maxLength={5000}
-            rows={2}
-            placeholder="Notes (optional)"
-            className={`mt-2 ${TEXTAREA_CLASS}`}
-          />
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <SelectMenu
-              value={draft.category}
-              options={CATEGORY_OPTIONS}
-              onChange={(category) => setDraft((d) => ({ ...d, category }))}
-              ariaLabel="Category"
-            />
-            <PrioritySegmented value={draft.priority} onChange={(priority) => setDraft((d) => ({ ...d, priority }))} />
-            <div className="ml-auto flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setEditing(false)}
-                className="rounded-md border border-osu-b3/50 bg-osu-b4/60 px-2.5 py-1 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b3/50 cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => void commit()}
-                disabled={!draft.title.trim() || busy}
-                className="inline-flex items-center gap-1.5 rounded-md border border-osu-yellow/40 bg-osu-yellow/15 px-2.5 py-1 text-[11px] font-semibold text-osu-yellow hover:bg-osu-yellow/25 disabled:opacity-40 cursor-pointer"
-              >
-                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                Save
-              </button>
-            </div>
-          </div>
-        </>
-      ) : (
-        <>
-          {/* Priority accent (skipped when done or low) */}
-          {!done && priorityBar && <span className={`absolute bottom-2 left-0 top-2 w-0.5 rounded-full ${priorityBar}`} />}
-
-          {/* Drag handle: press and hold to reorder by hand */}
-          {reorderable && (
+          <PrioritySegmented value={draft.priority} onChange={(priority) => setDraft((d) => ({ ...d, priority }))} />
+        </div>
+        <div className="mt-3 flex items-center gap-1.5">
+          {confirmDelete ? (
             <button
               type="button"
-              aria-label="Drag to reorder"
-              onPointerDown={(event) => dragControls.start(event)}
-              className="-ml-1 mt-0.5 inline-flex h-5 w-4 shrink-0 touch-none items-center justify-center rounded text-osu-f1/30 transition-colors hover:text-osu-l2 cursor-grab active:cursor-grabbing"
+              onClick={() => {
+                setConfirmDelete(false);
+                onDelete(todo);
+                onClose();
+              }}
+              className="inline-flex h-7 items-center gap-1 rounded-md border border-osu-red/60 bg-osu-red/25 px-2 text-[10px] font-semibold uppercase tracking-wider text-white hover:bg-osu-red/35 cursor-pointer"
             >
-              <GripVertical className="h-4 w-4" />
+              <Trash2 className="h-3.5 w-3.5" />
+              Sure?
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-semibold text-osu-f1 transition-colors hover:bg-osu-red/15 hover:text-osu-red cursor-pointer"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
             </button>
           )}
-
-          <TodoCheckbox done={done} busy={busy} onToggle={() => onToggle(todo)} />
-
-          {/* Body */}
-          <div className="min-w-0 flex-1">
-            <p className={`text-sm leading-snug ${done ? "text-osu-f1 line-through" : "text-osu-l1"}`}>{todo.title}</p>
-            {todo.notes && (
-              <p className={`mt-1 whitespace-pre-wrap text-xs leading-relaxed ${done ? "text-osu-f1/70" : "text-osu-l2/80"}`}>
-                {todo.notes}
-              </p>
-            )}
-            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px]">
-              <span className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-semibold uppercase tracking-wide ${meta.pill}`}>
-                <CategoryIcon className="h-3 w-3" />
-                {meta.label}
-              </span>
-              {!done && todo.priority !== "normal" && (
-                <span className={`font-semibold uppercase tracking-wide ${PRIORITY_META[todo.priority].chip}`}>
-                  {PRIORITY_META[todo.priority].label}
-                </span>
-              )}
-              <span className="text-osu-f1/50">{formatShortDate(todo.createdAt)}</span>
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="ml-auto flex items-center gap-1.5">
             <button
               type="button"
-              onClick={beginEdit}
-              disabled={busy}
-              aria-label="Edit"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-osu-f1 opacity-0 transition hover:bg-osu-b3/50 hover:text-osu-l1 disabled:opacity-30 group-hover:opacity-100 cursor-pointer"
+              onClick={onClose}
+              className="rounded-md border border-osu-b3/50 bg-osu-b4/60 px-2.5 py-1 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b3/50 cursor-pointer"
             >
-              <SquarePen className="h-3.5 w-3.5" />
+              Cancel
             </button>
-            {confirmDelete ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setConfirmDelete(false);
-                  onDelete(todo.id);
-                }}
-                disabled={busy}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-osu-red/60 bg-osu-red/25 px-2 text-[10px] font-semibold uppercase tracking-wider text-white hover:bg-osu-red/35 disabled:opacity-50 cursor-pointer"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Sure?
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setConfirmDelete(true)}
-                disabled={busy}
-                aria-label="Delete"
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-osu-f1 opacity-0 transition hover:bg-osu-red/15 hover:text-osu-red disabled:opacity-30 group-hover:opacity-100 cursor-pointer"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => void commit()}
+              disabled={!draft.title.trim() || saving}
+              className="inline-flex items-center gap-1.5 rounded-md border border-osu-yellow/40 bg-osu-yellow/15 px-2.5 py-1 text-[11px] font-semibold text-osu-yellow hover:bg-osu-yellow/25 disabled:opacity-40 cursor-pointer"
+            >
+              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+              Save
+            </button>
           </div>
-        </>
-      )}
-    </>
+        </div>
+      </motion.div>
+    </motion.div>
   );
-
-  if (reorderable) {
-    return (
-      <Reorder.Item
-        value={todo}
-        dragListener={false}
-        dragControls={dragControls}
-        onDragEnd={() => onReorderEnd?.(todo.id)}
-        layout
-        initial={{ opacity: 0, y: -6 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, x: -10, transition: { duration: 0.12 } }}
-        transition={{ duration: 0.16, ease: "easeOut" }}
-        className={rootClassName}
-      >
-        {content}
-      </Reorder.Item>
-    );
-  }
-
-  return (
-    <motion.li
-      layout
-      initial={{ opacity: 0, y: -6 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, x: -10, transition: { duration: 0.12 } }}
-      transition={{ duration: 0.16, ease: "easeOut" }}
-      className={rootClassName}
-    >
-      {content}
-    </motion.li>
-  );
-}
-
-function TodoCheckbox({ done, busy, onToggle }: { done: boolean; busy: boolean; onToggle: () => void }) {
-  return (
-    <motion.button
-      type="button"
-      whileTap={{ scale: 0.82 }}
-      onClick={onToggle}
-      disabled={busy}
-      aria-pressed={done}
-      aria-label={done ? "Mark as not done" : "Mark as done"}
-      className={`group/cb mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors cursor-pointer ${
-        done ? "border-osu-green/60 bg-osu-green/25 text-osu-green" : "border-osu-b3/70 bg-osu-b6/40 hover:border-osu-green/60"
-      }`}
-    >
-      {busy ? (
-        <Loader2 className="h-3 w-3 animate-spin text-osu-f1" />
-      ) : (
-        <>
-          <AnimatePresence initial={false}>
-            {done && (
-              <motion.span
-                key="check"
-                initial={{ scale: 0, rotate: -25 }}
-                animate={{ scale: 1, rotate: 0 }}
-                exit={{ scale: 0, opacity: 0 }}
-                transition={{ type: "spring", stiffness: 520, damping: 22 }}
-              >
-                <Check className="h-3.5 w-3.5" />
-              </motion.span>
-            )}
-          </AnimatePresence>
-          {!done && <Check className="h-3.5 w-3.5 text-osu-green opacity-0 transition-opacity group-hover/cb:opacity-40" />}
-        </>
-      )}
-    </motion.button>
-  );
-}
-
-function toEditPatch(todo: AdminTodo): EditPatch {
-  return {
-    title: todo.title,
-    notes: todo.notes ?? "",
-    category: todo.category,
-    priority: todo.priority,
-  };
 }
 
 // ---------------------------------------------------------------------------
 // Small pieces
 // ---------------------------------------------------------------------------
-
-function CategoryFilterChip({
-  label,
-  Icon,
-  colorClass,
-  count,
-  active,
-  onClick,
-}: {
-  label: string;
-  Icon?: typeof Bug;
-  colorClass?: string;
-  count: number;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide transition-colors cursor-pointer ${
-        active
-          ? "border-osu-c2/50 bg-osu-c2/15 text-white"
-          : "border-osu-b3/40 bg-osu-b4/30 text-osu-f1 hover:border-osu-b3/60 hover:text-osu-l2"
-      }`}
-    >
-      {Icon && <Icon className={`h-3 w-3 ${active ? colorClass : ""}`} />}
-      {label}
-      <span
-        className={`rounded-full px-1 text-[9px] tabular-nums ${
-          active ? "bg-white/15 text-white" : count === 0 ? "text-osu-f1/40" : "bg-osu-b6/60 text-osu-f1/80"
-        }`}
-      >
-        {count}
-      </span>
-    </button>
-  );
-}
-
-function PriorityFilter({
-  value,
-  counts,
-  onChange,
-}: {
-  value: TodoPriority | "all";
-  counts: Record<TodoPriority | "all", number>;
-  onChange: (value: TodoPriority | "all") => void;
-}) {
-  const options: (TodoPriority | "all")[] = ["all", "high", "normal", "low"];
-  return (
-    <div
-      className="inline-flex rounded-lg border border-osu-b3/40 bg-osu-b4/40 p-0.5"
-      role="group"
-      aria-label="Filter by priority"
-    >
-      {options.map((key) => {
-        const active = key === value;
-        const dot = key === "all" ? null : PRIORITY_META[key].dot;
-        return (
-          <button
-            key={key}
-            type="button"
-            onClick={() => onChange(key)}
-            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold capitalize transition-colors cursor-pointer ${
-              active ? "bg-osu-b3/60 text-white" : "text-osu-f1 hover:text-osu-l2"
-            }`}
-          >
-            {dot && <span className={`h-1.5 w-1.5 rounded-full ${dot} ${active ? "" : "opacity-60"}`} />}
-            {key}
-            <span className="text-osu-f1/70 tabular-nums">{counts[key]}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 function ClearDoneButton({ count, busy, onClear }: { count: number; busy: boolean; onClear: () => void }) {
   const [armed, setArmed] = useState(false);
@@ -963,18 +1042,7 @@ function ClearDoneButton({ count, busy, onClear }: { count: number; busy: boolea
       }`}
     >
       {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-      {armed ? "Clear done?" : `Clear done (${count})`}
+      {armed ? "Clear results?" : `Clear results (${count})`}
     </button>
-  );
-}
-
-function EmptyState({ hasAny }: { hasAny: boolean }) {
-  return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-osu-b3/40 py-16 text-center">
-      <Inbox className="h-6 w-6 text-osu-f1/50" />
-      <p className="text-xs text-osu-f1">
-        {hasAny ? "Nothing matches this filter." : "No todos yet. Add the first one above."}
-      </p>
-    </div>
   );
 }
