@@ -207,6 +207,36 @@ export function calculateWeightedPpTotal(scores: Array<Pick<OscScore, "pp">>): n
   }, 0);
 }
 
+export interface ManiaVariantPps {
+  pp4k: number | null;
+  pp7k: number | null;
+}
+
+// Extracts per-keymode pp from an osu! user's `statistics.variants` array.
+// Distinguishes two "no pp" cases that drive the users.pp_4k/pp_7k write rule:
+//   - returns null when the payload carries no variants array at all (unknown;
+//     callers must leave stored columns untouched, never zero them);
+//   - returns an object with a null member when the array is present but has no
+//     positive-pp entry for that variant (a real "no pp for this keymode" that
+//     should overwrite a stale stored value, e.g. a decayed variant).
+export function extractManiaVariantPps(statistics: unknown): ManiaVariantPps | null {
+  const variants = (statistics as { variants?: unknown } | null | undefined)?.variants;
+  if (!Array.isArray(variants)) return null;
+  const result: ManiaVariantPps = { pp4k: null, pp7k: null };
+  for (const entry of variants) {
+    if (!entry || typeof entry !== "object") continue;
+    const variant = entry as Record<string, unknown>;
+    if (String(variant.mode ?? "") !== "mania") continue;
+    const keyMode = String(variant.variant ?? "").toLowerCase();
+    if (keyMode !== "4k" && keyMode !== "7k") continue;
+    const pp = typeof variant.pp === "number" && Number.isFinite(variant.pp) ? variant.pp : 0;
+    if (pp <= 0) continue;
+    if (keyMode === "4k") result.pp4k = pp;
+    else result.pp7k = pp;
+  }
+  return result;
+}
+
 export function calculateApproxPpGainMap(bestScores: OscScore[]): Record<number, number> {
   const rankedBestScores = sortWeightedPpScores(bestScores);
   const weightedWithAll = calculateWeightedPpTotal(rankedBestScores);

@@ -1,10 +1,14 @@
 import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
 import { getPlayerProfileSnapshot } from "./player-profiles.js";
-import { calculateWeightedPpTotal, getModAcronyms, getScoreSpeedBucket, nowIso, type ScoreSpeedBucket } from "../shared/score.js";
+import { calculateWeightedPpTotal, extractManiaVariantPps, getModAcronyms, getScoreSpeedBucket, nowIso, type ScoreSpeedBucket } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
-import { queryFarmHelperKeyPeersByDistance, queryFarmHelperKeyPeersWithinBand, type FarmHelperKeyCount } from "./farm-helper-key-stats.js";
+import { calibrateProxy, getKeyModePeerPool, type FarmHelperKeyCount } from "./farm-helper-key-stats.js";
+import { buildWeightedUserShape, computeShapeWeights, MSD_SKILLSETS, readChartShapeData, readChartShapes, readPeerShapes, shapeSimilarity, SHAPE_MIN_CHARTS, type ChartShape, type UserShape } from "./farm-helper-shape.js";
+import { enqueueMissingChartAnalyses } from "./chart-analysis.js";
+import { getPlayerSkillBreakdown } from "./player-skills.js";
+import type { JobQueue } from "../jobs/queue.js";
 
 // Farm Helper recommends maps a player should farm, ranked by estimated pp gain.
 // The peer pool is GLOBAL: we compare the subject against same-pp players across
@@ -54,6 +58,10 @@ export interface FarmHelperRec {
   peerCount: number;
   peerSampleSize: number;
   peerFraction: number;
+  // Shape similarity between the subject and this chart in [0,1], or null when
+  // either side has no comparable shape. Distinct from peerFraction: this is
+  // "is this my kind of chart", not "how many peers farm it".
+  patternFit: number | null;
   peerPpMedian: number;
   peerPpP75: number;
   latestPeerPlayedAt: string | null;
@@ -62,6 +70,15 @@ export interface FarmHelperRec {
   scoreUrl: string | null;
   mapUrl: string;
   rankScore: number;
+}
+
+export interface PeerBandSummary {
+  mode: string;
+  count: number;
+  farmDataCount: number;
+  minPp: number;
+  maxPp: number;
+  effectiveCount: number;
 }
 
 export interface FarmHelperSnapshot {
@@ -73,7 +90,12 @@ export interface FarmHelperSnapshot {
   pp: number;
   keyMode: FarmHelperKeyMode;
   view: FarmHelperView;
-  peerBand: { mode: string; count: number; farmDataCount: number; minPp: number; maxPp: number };
+  // The merged cohort summary (union across both keymode runs on the "any" view,
+  // a single cohort otherwise). Kept for compat.
+  peerBand: PeerBandSummary;
+  // Per-keymode cohort summaries, present only on the merged "any" view (not the
+  // fallback), so the UI can show "4K: 12.9k-15.6k · 7K: 13.9k-16.9k". Additive.
+  peerBands?: Partial<Record<ConcreteFarmHelperKeyMode, PeerBandSummary>>;
   totalPotentialPp: number;
   // How many recommendations qualified before truncating to `limit`, so the UI
   // can say "showing 100 of 214" instead of implying the list is complete.
@@ -97,10 +119,40 @@ export class FarmHelperUserNotFoundError extends Error {
 
 export const FARM_HELPER_DEFAULT_LIMIT = 100;
 export const FARM_HELPER_MAX_LIMIT = 200;
-const MIN_PEERS = 12;
-const MIN_KEYMODE_PROXY_SCORES = 8;
+// Kernel-kNN peer model (Stage 2). Distance d = (peerModePp - subjectModePp) /
+// subjectModePp. Two triangular kernels over the same fetched cohort: an
+// up-skewed "discovery" kernel decides which maps enter the candidate pool (peers
+// slightly above you hold your next farm set), and a symmetric "benchmark" kernel
+// weights the pp quantiles so an up-skewed cohort cannot inflate the target pp.
+const DISCOVERY_KERNEL_DOWN = 0.08;
+const DISCOVERY_KERNEL_UP = 0.15;
+const BENCHMARK_KERNEL_HALF_WIDTH = 0.10;
+// Calibrated-proxy peers (no real variant pp) are down-weighted: their distance
+// is an estimate, not a measurement.
+const PROXY_CONFIDENCE = 0.85;
+// Effective sample = sum of discovery weights. Below this, widen both kernels.
+const MIN_EFFECTIVE_PEERS = 12;
+const KNN_MAX_PEERS = 400;
+const KNN_WIDEN_MODES = ["knn", "knn_wide", "knn_wider", "knn_widest"] as const;
+// When even the widest kernel finds (nearly) nobody, fall back to the nearest
+// peers by mode-pp distance at a flat floor weight, so pp-isolated subjects (top
+// ranks, sparse keymodes) still get a cohort instead of an empty page. Mirrors
+// the old band ladder's unconditional "nearest" terminal mode.
+const SPARSE_FALLBACK_PEERS = 100;
+const SPARSE_FALLBACK_WEIGHT = 0.25;
+// Feasibility gate (Stage 4): drop a 4K chart from the gain view when its
+// dominant MSD skillset exceeds the subject's rating for it by this margin.
+// TODO(farm-helper-v2 7.3): stored MSD is 4K at 1.0x only, so the gate is limited
+// to the "normal" speed lane. When chart analysis stores MSD at 1.5x/0.75x (next
+// CHART_ANALYSIS_VERSION bump), extend the gate to the DT/HT lanes.
+const FEASIBILITY_MSD_MARGIN = 3.0;
+const FEASIBILITY_MIN_ANALYZED_PLAYS = 30;
 const PEER_MIN_COUNT = 3;
 const PEER_MIN_FRACTION = 0.12;
+// A peer only counts toward the peerFraction denominator once it has farmed at
+// least this many maps, so the fraction is not deflated by peers who barely
+// appear in the farm data (the old denominator counted anyone with >= 1 row).
+const MIN_FARMED_FOR_SAMPLE = 5;
 // Popular mode is a browse view, so the popularity floor is lower than the
 // personalized view's and the difficulty/value gates are skipped entirely.
 const POPULAR_PEER_MIN_FRACTION = 0.05;
@@ -116,28 +168,42 @@ const MISSING_MAP_BENCHMARK_QUANTILE = 0.4;
 const PLAYED_MAP_BENCHMARK_STEP = 0.06;
 const PLAYED_MAP_MIN_STEP_PP = 30;
 const MIN_VISIBLE_GAIN_PP = 1;
-const ANY_PRIMARY_MODE_RATIO = 0.85;
 const FARM_HELPER_CONCRETE_KEY_MODES = ["4k", "7k"] as const satisfies readonly ConcreteFarmHelperKeyMode[];
 
 const CACHE_TTL_MS = 5 * 60_000;
 const CACHE_MAX_ENTRIES = 64;
-const PEER_BAND_CACHE_TTL_MS = 5 * 60_000;
-const PEER_BAND_CACHE_MAX_ENTRIES = 256;
 
 interface CachedFarmHelper {
   snapshot: FarmHelperSnapshot;
   expiresAt: number;
 }
 
-interface CachedPeerBand {
-  peers: Array<{ userId: number; pp: number }>;
-  mode: string;
+// Per-Db cache (one Db per process in prod; tests get a fresh Db each). The
+// per-subject peer-band cache is gone: the expensive fetch is the per-keyCount
+// pool, cached subject-independently inside farm-helper-key-stats.
+const farmHelperCache = new WeakMap<Db, Map<string, CachedFarmHelper>>();
+
+const TOTAL_PP_POOL_TTL_MS = 5 * 60_000;
+interface CachedTotalPpPool {
+  rows: Array<{ userId: number; pp: number }>;
   expiresAt: number;
 }
+const totalPpPoolCache = new WeakMap<Db, CachedTotalPpPool>();
 
-// Per-Db cache (one Db per process in prod; tests get a fresh Db each).
-const farmHelperCache = new WeakMap<Db, Map<string, CachedFarmHelper>>();
-const peerBandCache = new WeakMap<Db, Map<string, CachedPeerBand>>();
+// A cohort peer with both kernel weights. modePp is the effective mode pp used
+// for distance (real variant pp, calibrated proxy, or total pp for "any"); pp is
+// the display-only total pp.
+interface WeightedPeer {
+  userId: number;
+  pp: number;
+  modePp: number;
+  wD: number;
+  wB: number;
+  // True for calibrated-proxy peers that were never variant-enriched: an
+  // enrich_user fetch can still replace their proxy with real variant pp, so
+  // the cohort self-heal targets them.
+  needsVariantEnrich?: boolean;
+}
 
 type ProfileOsuClient = Pick<OsuApiClient, "getUser" | "getUserByKey" | "getUserBestScoresWindow">;
 
@@ -148,11 +214,20 @@ interface SubjectMapScore {
   speedBucket: ScoreSpeedBucket;
 }
 
+// One farmed entry per cohort peer on a map: their farmed pp plus the kernel
+// weights carried over from peer selection (wD for discovery/fraction, wB for
+// the benchmark quantiles).
+interface CandidatePeerEntry {
+  userId: number;
+  pp: number;
+  wD: number;
+  wB: number;
+}
+
 interface CandidateAgg {
   beatmapId: number;
   speedBucket: ScoreSpeedBucket;
-  pps: number[];
-  peers: Array<{ userId: number; pp: number }>;
+  entries: CandidatePeerEntry[];
   modCombos: Map<string, { mods: string[]; count: number; ppTotal: number }>;
   latestUpdatedMs: number;
   playedAtMs: number[];
@@ -160,7 +235,12 @@ interface CandidateAgg {
 
 interface PeerFarmedAggregation {
   byBeatmap: Map<string, CandidateAgg>;
+  // Cohort peers with any farm data (>= 1 row).
   farmDataPeerCount: number;
+  // Cohort peers with a meaningful farm sample (>= MIN_FARMED_FOR_SAMPLE rows):
+  // the peerFraction denominator, as a count and a discovery-weight sum.
+  eligiblePeerCount: number;
+  eligibleWdSum: number;
 }
 
 interface CanonicalFarmedScore {
@@ -200,6 +280,7 @@ export async function getFarmHelperSnapshot(
   osu: ProfileOsuClient,
   rawKey: string,
   params: FarmHelperParams = {},
+  queue?: JobQueue,
 ): Promise<FarmHelperSnapshot> {
   const requestedKeyMode = params.keyMode ?? "any";
   const view = params.view ?? "gain";
@@ -213,13 +294,15 @@ export async function getFarmHelperSnapshot(
   const statistics = asRecord(user.statistics);
   const subjectPp = numberOr(statistics.pp, 0);
   const subjectVariantPps = getVariantPps(statistics);
-  const subjectVariantPp = getVariantPp(subjectVariantPps, requestedKeyMode);
   const username = String(user.username ?? rawKey);
   const avatarUrl = String(user.avatar_url ?? "");
   const coverUrl = String(user.cover_url ?? asRecord(user.cover).url ?? "");
 
   const cache = getCache(db);
-  const cacheKey = `${userId}:${requestedKeyMode}:${view}:${limit}`;
+  // The queue flag is part of the key: snapshot content depends on it (the
+  // feasibility gate only runs with a queue), and queue-less callers (Discord)
+  // share this per-Db cache with the HTTP path.
+  const cacheKey = `${userId}:${requestedKeyMode}:${view}:${limit}:${queue ? "q" : "nq"}`;
   const now = Date.now();
   const cached = cache.get(cacheKey);
   if (cached && cached.expiresAt > now) {
@@ -234,11 +317,11 @@ export async function getFarmHelperSnapshot(
     avatarUrl,
     coverUrl,
     subjectPp,
-    subjectVariantPp,
     subjectVariantPps,
     requestedKeyMode,
     view,
     limit,
+    queue,
   });
 
   cache.set(cacheKey, { snapshot, expiresAt: now + CACHE_TTL_MS });
@@ -250,6 +333,58 @@ export async function getFarmHelperSnapshot(
   return snapshot;
 }
 
+export interface FarmHelperBacktestOptions {
+  asOf: number;
+  keyMode?: FarmHelperKeyMode;
+  view?: FarmHelperView;
+  limit?: number;
+}
+
+// Offline backtest entry point. Reconstructs a farm-helper snapshot "as of" a
+// past cutoff from stored data only (no osu! API, no top-level cache), so the
+// maintenance harness can score recommendation quality before and after each
+// redesign stage. The subject's best scores are filtered by ended_at here; peer
+// farmed rows are filtered by played_at inside buildSnapshot. Never call this on
+// the HTTP path: it takes an already-resolved profile and skips all caching.
+export async function buildFarmHelperSnapshotForBacktest(
+  db: Db,
+  user: Record<string, unknown>,
+  bestScores: OscScore[],
+  options: FarmHelperBacktestOptions,
+): Promise<FarmHelperSnapshot> {
+  const requestedKeyMode = options.keyMode ?? "any";
+  const view = options.view ?? "gain";
+  const limit = clampLimit(options.limit);
+  const asOf = options.asOf;
+
+  const statistics = asRecord(user.statistics);
+  const subjectPp = numberOr(statistics.pp, 0);
+  const subjectVariantPps = getVariantPps(statistics);
+  const username = String(user.username ?? "");
+  const avatarUrl = String(user.avatar_url ?? "");
+  const coverUrl = String(user.cover_url ?? asRecord(user.cover).url ?? "");
+
+  const asOfScores = bestScores.filter((score) => {
+    const endedAt = score.ended_at;
+    if (!endedAt) return true;
+    const ms = Date.parse(endedAt);
+    return !Number.isFinite(ms) || ms <= asOf;
+  });
+
+  return buildSnapshot(db, asOfScores, {
+    userId: Number(user.id ?? 0),
+    username,
+    avatarUrl,
+    coverUrl,
+    subjectPp,
+    subjectVariantPps,
+    requestedKeyMode,
+    view,
+    limit,
+    asOf,
+  });
+}
+
 async function resolveProfile(db: Db, osu: ProfileOsuClient, rawKey: string) {
   try {
     return await getPlayerProfileSnapshot(db, osu, rawKey);
@@ -259,26 +394,162 @@ async function resolveProfile(db: Db, osu: ProfileOsuClient, rawKey: string) {
   }
 }
 
-async function buildSnapshot(
-  db: Db,
-  bestScores: OscScore[],
-  ctx: {
-    userId: number;
-    username: string;
-    avatarUrl: string;
-    coverUrl: string;
-    subjectPp: number;
-    subjectVariantPp: number | null;
-    subjectVariantPps: Partial<Record<"4k" | "7k", number>>;
-    requestedKeyMode: FarmHelperKeyMode;
-    view: FarmHelperView;
-    limit: number;
-  },
-): Promise<FarmHelperSnapshot> {
+// Shared request context threaded through the per-mode runs and the shared
+// scoring helper. Each run reads `subjectVariantPps[mode]` directly.
+interface BuildCtx {
+  userId: number;
+  username: string;
+  avatarUrl: string;
+  coverUrl: string;
+  subjectPp: number;
+  subjectVariantPps: Partial<Record<ConcreteFarmHelperKeyMode, number>>;
+  requestedKeyMode: FarmHelperKeyMode;
+  view: FarmHelperView;
+  limit: number;
+  // Internal-only "as of" cutoff (epoch ms) used exclusively by the offline
+  // backtest harness to reconstruct a historical snapshot: subject best scores
+  // are pre-filtered by the caller, peer farmed rows are filtered by played_at,
+  // and all in-memory caches are bypassed. Never set on the HTTP path.
+  asOf?: number;
+  // Optional queue for the fire-and-forget self-heal that enqueues chart
+  // analysis for the subject's uncovered top plays. Absent on the backtest path.
+  queue?: JobQueue;
+}
+
+// Subject state prepared once per request and shared by every mode run.
+interface PreparedSubject {
+  rankedScores: OscScore[];
+  subjectByBeatmap: Map<string, SubjectMapScore>;
+  baselineEntries: Array<{ pp: number; beatmapId: number }>;
+  baselineTotal: number;
+  subjectTopPp: number;
+  subjectModeStatsByKey: Record<ConcreteFarmHelperKeyMode, ReturnType<typeof calculateSubjectKeyModeStats>>;
+}
+
+type ScoredRec = FarmHelperRec & { difficultyFit: number; recencyFit: number };
+
+// One concrete-keymode (or total-pp fallback) run's output before the merged
+// re-rank: its scored recs (rankScore still 0, unsliced) and its cohort summary.
+interface ModeRunResult {
+  scored: ScoredRec[];
+  band: PeerBandSummary;
+}
+
+// Star-fit band for one keymode filter (all scores on the fallback path).
+interface FitBand {
+  hasFit: boolean;
+  starLo: number;
+  starHi: number;
+  starMid: number;
+  starSpread: number;
+}
+
+async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Promise<FarmHelperSnapshot> {
   const isPopular = ctx.view === "popular";
   const generatedAt = nowIso();
-  // Per-beatmap best pp the subject already has in their top plays, and the flat
-  // pp list used as the baseline for net-weighted-pp gain estimation.
+  const subject = prepareSubject(bestScores);
+  const keyMode = ctx.requestedKeyMode;
+
+  // "any" runs the concrete 4k and 7k pipelines separately (each with its own
+  // strict keymode cohort) and merges the rec lists. A concrete request runs one
+  // pipeline. A subject with no keymode evidence in either mode falls back to the
+  // total-pp cohort.
+  const runs: ModeRunResult[] = [];
+  let peerBands: Partial<Record<ConcreteFarmHelperKeyMode, PeerBandSummary>> | undefined;
+  if (keyMode !== "any") {
+    runs.push(await buildModeRun(db, subject, keyMode, ctx));
+  } else {
+    const eligibleModes = FARM_HELPER_CONCRETE_KEY_MODES.filter((mode) => {
+      const pp = ctx.subjectVariantPps[mode] ?? subject.subjectModeStatsByKey[mode].weightedPp;
+      return Number.isFinite(pp) && pp > 0;
+    });
+    if (eligibleModes.length > 0) {
+      // Sequential, not Promise.all: local libsql is synchronous, so parallelism
+      // buys nothing and would interleave the per-keyCount pool cache seeding.
+      const bands: Partial<Record<ConcreteFarmHelperKeyMode, PeerBandSummary>> = {};
+      for (const mode of eligibleModes) {
+        const run = await buildModeRun(db, subject, mode, ctx);
+        runs.push(run);
+        bands[mode] = run.band;
+      }
+      peerBands = bands;
+    } else {
+      runs.push(await buildTotalPpRun(db, subject, ctx));
+    }
+  }
+
+  const peerBand = mergeBands(runs.map((run) => run.band));
+  const base: FarmHelperSnapshot = {
+    status: "ready",
+    userId: ctx.userId,
+    username: ctx.username,
+    avatarUrl: ctx.avatarUrl,
+    coverUrl: ctx.coverUrl,
+    pp: ctx.subjectPp,
+    keyMode,
+    view: ctx.view,
+    peerBand,
+    totalPotentialPp: 0,
+    totalQualifying: 0,
+    recs: [],
+    generatedAt,
+    ...(peerBands ? { peerBands } : {}),
+  };
+
+  const merged = runs.flatMap((run) => run.scored);
+  if (merged.length === 0) return base;
+
+  // Popular mode can surface the same chart under two speed lanes (e.g. NoMod and
+  // DT); collapse to the most-farmed lane per beatmap so the browse grid shows one
+  // card per map, matching the maps page. Key counts differ across modes, so the
+  // merge never collides two modes on the same beatmap.
+  const ranked = isPopular ? collapsePopularLanes(merged) : merged;
+
+  if (isPopular) {
+    for (const rec of ranked) rec.rankScore = round2(rec.peerFraction);
+    ranked.sort((a, b) =>
+      b.peerFraction - a.peerFraction
+      || b.peerCount - a.peerCount
+      || b.estimatedPpGain - a.estimatedPpGain
+      || b.stars - a.stars,
+    );
+  } else {
+    // Normalize gain by the MERGED list's max so cross-mode ranking is fair;
+    // peerFraction/fit/recency are already mode-local [0,1] values.
+    const maxGain = Math.max(...ranked.map((r) => r.estimatedPpGain), 1);
+    for (const rec of ranked) {
+      // patternFit (shape match) replaces the star-proximity difficultyFit as the
+      // fit term when available; difficultyFit is the fallback for shapeless charts.
+      const fit = rec.patternFit ?? rec.difficultyFit;
+      rec.rankScore = round2(
+        0.5 * (rec.estimatedPpGain / maxGain)
+        + 0.2 * rec.peerFraction
+        + 0.2 * fit
+        + 0.1 * rec.recencyFit,
+      );
+    }
+    ranked.sort((a, b) => b.rankScore - a.rankScore || b.estimatedPpGain - a.estimatedPpGain);
+  }
+
+  const top: FarmHelperRec[] = ranked.slice(0, ctx.limit).map(({ difficultyFit, recencyFit, ...rec }) => {
+    void difficultyFit;
+    void recencyFit;
+    return rec;
+  });
+
+  await hydrateTopPeers(db, top);
+
+  return {
+    ...base,
+    totalPotentialPp: round2(top.reduce((sum, rec) => sum + rec.estimatedPpGain, 0)),
+    totalQualifying: ranked.length,
+    recs: top,
+  };
+}
+
+// Everything before cohort selection: subject top plays, baseline, per-keymode
+// stats. Shared by every run in a request.
+function prepareSubject(bestScores: OscScore[]): PreparedSubject {
   const subjectByBeatmap = new Map<string, SubjectMapScore>();
   const baselineEntries: Array<{ pp: number; beatmapId: number }> = [];
   let subjectTopPp = 0;
@@ -303,152 +574,212 @@ async function buildSnapshot(
   });
 
   const baselineTotal = calculateWeightedPpTotal(baselineEntries);
-  const keyMode = ctx.requestedKeyMode;
-  const subjectModeStats = calculateSubjectKeyModeStats(rankedScores, keyMode);
-  const subjectPeerPp = ctx.subjectVariantPp ?? subjectModeStats.weightedPp;
-  const subjectBenchmarkCap = getModeBenchmarkCap(subjectModeStats, ctx.subjectVariantPp, subjectTopPp);
   const subjectModeStatsByKey = {
-    "4k": keyMode === "4k" ? subjectModeStats : calculateSubjectKeyModeStats(rankedScores, "4k"),
-    "7k": keyMode === "7k" ? subjectModeStats : calculateSubjectKeyModeStats(rankedScores, "7k"),
+    "4k": calculateSubjectKeyModeStats(rankedScores, "4k"),
+    "7k": calculateSubjectKeyModeStats(rankedScores, "7k"),
   } satisfies Record<ConcreteFarmHelperKeyMode, ReturnType<typeof calculateSubjectKeyModeStats>>;
-  const anyPrimaryKeyModes = keyMode === "any"
-    ? getAnyPrimaryKeyModes(subjectModeStatsByKey, ctx.subjectVariantPps)
-    : new Set<ConcreteFarmHelperKeyMode>();
-  const anyOffKeySupport = keyMode === "any"
-    ? await collectAnyOffKeyCandidateSupport(db, ctx, subjectModeStatsByKey, anyPrimaryKeyModes)
-    : null;
 
-  const fitStars = rankedScores
-    .filter((score) => scoreMatchesKeyMode(score, keyMode))
-    .slice(0, FIT_SAMPLE_SIZE)
-    .map((score) => numberOr(score.beatmap?.difficulty_rating, 0))
-    .filter((stars) => stars > 0);
-  fitStars.sort((a, b) => a - b);
-  const hasFit = fitStars.length >= 5;
-  const starLo = hasFit ? quantile(fitStars, 0.1) : 0;
-  const starHi = hasFit ? quantile(fitStars, 0.95) : Infinity;
-  const starMid = hasFit ? quantile(fitStars, 0.5) : 0;
-  const starSpread = hasFit ? Math.max(1.5, starHi - starLo) : 1.5;
+  return { rankedScores, subjectByBeatmap, baselineEntries, baselineTotal, subjectTopPp, subjectModeStatsByKey };
+}
 
-  // --- Peers: nearest-by-pp players across all countries, then band-filter ---
-  const { peers, mode: peerMode } = await selectPeerBand(db, ctx.userId, ctx.subjectPp, keyMode, subjectPeerPp, {
-    strictKeyMode: keyMode !== "any",
+// One concrete-keymode pipeline: strict cohort, shape folding, farmed-map
+// aggregation, the value/popularity gate, and the shared scoring loop. No
+// rankScore assignment and no limit slice (the merged tail owns both).
+async function buildModeRun(
+  db: Db,
+  subject: PreparedSubject,
+  mode: ConcreteFarmHelperKeyMode,
+  ctx: BuildCtx,
+): Promise<ModeRunResult> {
+  const isPopular = ctx.view === "popular";
+  const asOf = ctx.asOf;
+  const subjectModeStats = subject.subjectModeStatsByKey[mode];
+  const subjectVariantPp = ctx.subjectVariantPps[mode] ?? null;
+  const subjectPeerPp = subjectVariantPp ?? subjectModeStats.weightedPp;
+  const subjectBenchmarkCap = getModeBenchmarkCap(subjectModeStats, subjectVariantPp, subject.subjectTopPp);
+  const fit = computeFitBand(subject.rankedScores, mode);
+
+  const { peers, mode: peerMode } = await selectPeerBand(db, ctx.userId, ctx.subjectPp, mode, subjectPeerPp, {
+    strictKeyMode: true,
   });
 
-  const emptyBand = {
-    mode: peerMode,
-    count: peers.length,
-    farmDataCount: 0,
-    minPp: peers.length ? Math.min(...peers.map((p) => p.pp)) : 0,
-    maxPp: peers.length ? Math.max(...peers.map((p) => p.pp)) : 0,
-  };
-  const baseSnapshot: FarmHelperSnapshot = {
-    status: "ready",
-    userId: ctx.userId,
-    username: ctx.username,
-    avatarUrl: ctx.avatarUrl,
-    coverUrl: ctx.coverUrl,
-    pp: ctx.subjectPp,
-    keyMode,
-    view: ctx.view,
-    peerBand: emptyBand,
-    totalPotentialPp: 0,
-    totalQualifying: 0,
-    recs: [],
-    generatedAt,
-  };
-  if (peers.length === 0) return baseSnapshot;
+  // Cohort self-heal: proxy-only peers that were never variant-enriched can be
+  // badly mis-placed. Enqueue their enrichment strongest-weight first so the
+  // players who pollute real cohorts get real variant pp ahead of the global
+  // pp-ordered drip. Fire-and-forget; never on the backtest path.
+  if (ctx.queue && asOf == null) enqueueVariantSelfHeal(ctx.queue, peers);
 
-  // --- Candidate aggregation from peers' farmed maps ---
-  const peerIds = peers.map((p) => p.userId);
-  const peerFarmed = await aggregatePeerFarmedMaps(db, peerIds);
-  const peerSampleSize = peerFarmed.farmDataPeerCount;
-  const coveredSnapshot: FarmHelperSnapshot = {
-    ...baseSnapshot,
-    peerBand: { ...baseSnapshot.peerBand, farmDataCount: peerSampleSize },
-  };
-  if (peerSampleSize === 0) return coveredSnapshot;
+  // Chart-shape weighting: down-weight peers whose farm charts look unlike the
+  // subject's, folded into wD/wB up front. Returns the subject's shape for this
+  // mode (for per-candidate patternFit) or null when too few plays are analyzed.
+  const subjectShape = peers.length > 0
+    ? await computeShapeContext(db, peers, subject.rankedScores, mode, ctx.queue)
+    : null;
 
-  const minPeerFraction = isPopular ? POPULAR_PEER_MIN_FRACTION : PEER_MIN_FRACTION;
-  const candidates: CandidateAgg[] = [];
-  for (const agg of peerFarmed.byBeatmap.values()) {
-    if (agg.peers.length < PEER_MIN_COUNT) continue;
-    if (agg.peers.length / peerSampleSize < minPeerFraction) continue;
-    candidates.push(agg);
-  }
-  if (candidates.length === 0) return coveredSnapshot;
+  const band = buildPeerBand(peerMode, peers);
+  if (peers.length === 0) return { scored: [], band };
 
-  const beatmapIds = candidates.map((c) => c.beatmapId);
+  const peerFarmed = await aggregatePeerFarmedMaps(db, peers, asOf);
+  band.farmDataCount = peerFarmed.farmDataPeerCount;
+  if (peerFarmed.farmDataPeerCount === 0) return { scored: [], band };
+
+  const candidates = gateCandidates(peerFarmed, isPopular);
+  if (candidates.length === 0) return { scored: [], band };
+
+  const scored = await scoreCandidates(db, subject, ctx, {
+    candidates,
+    peerSampleSize: peerFarmed.eligiblePeerCount,
+    mode,
+    fit,
+    subjectBenchmarkCap,
+    subjectShape,
+  });
+  return { scored, band };
+}
+
+// Fallback for subjects with no keymode evidence in either mode: the total-pp
+// cohort with per-candidate caps and no shape context. Mirrors the old "any"
+// view minus the deleted primary-ratio / off-key / deferred-shape gates.
+async function buildTotalPpRun(db: Db, subject: PreparedSubject, ctx: BuildCtx): Promise<ModeRunResult> {
+  const isPopular = ctx.view === "popular";
+  const asOf = ctx.asOf;
+  const anyStats = calculateSubjectKeyModeStats(subject.rankedScores, "any");
+  const subjectBenchmarkCap = getModeBenchmarkCap(anyStats, null, subject.subjectTopPp);
+  const fit = computeFitBand(subject.rankedScores, "any");
+
+  const { peers } = await selectPeerBand(db, ctx.userId, ctx.subjectPp, "any", 0, { strictKeyMode: false });
+  if (ctx.queue && asOf == null) enqueueVariantSelfHeal(ctx.queue, peers);
+
+  const band = buildPeerBand("total_pp_fallback", peers);
+  if (peers.length === 0) return { scored: [], band };
+
+  const peerFarmed = await aggregatePeerFarmedMaps(db, peers, asOf);
+  band.farmDataCount = peerFarmed.farmDataPeerCount;
+  if (peerFarmed.farmDataPeerCount === 0) return { scored: [], band };
+
+  const candidates = gateCandidates(peerFarmed, isPopular);
+  if (candidates.length === 0) return { scored: [], band };
+
+  const scored = await scoreCandidates(db, subject, ctx, {
+    candidates,
+    peerSampleSize: peerFarmed.eligiblePeerCount,
+    mode: null,
+    fit,
+    subjectBenchmarkCap,
+    subjectShape: null,
+  });
+  return { scored, band };
+}
+
+interface ScoreCandidatesParams {
+  candidates: Array<{ agg: CandidateAgg; kernelFraction: number }>;
+  peerSampleSize: number;
+  // The concrete keymode this run covers, or null for the total-pp fallback
+  // (any key count allowed, cap resolved per candidate).
+  mode: ConcreteFarmHelperKeyMode | null;
+  fit: FitBand;
+  subjectBenchmarkCap: number;
+  subjectShape: UserShape | null;
+}
+
+// The shared scoring loop: meta/shape/feasibility reads plus reason/benchmark/gain
+// for one run's gated candidates. Emits ScoredRec with rankScore 0 (the merged
+// tail assigns it) and no limit slice.
+async function scoreCandidates(
+  db: Db,
+  subject: PreparedSubject,
+  ctx: BuildCtx,
+  params: ScoreCandidatesParams,
+): Promise<ScoredRec[]> {
+  const isPopular = ctx.view === "popular";
+  const { candidates, peerSampleSize, mode, fit, subjectBenchmarkCap, subjectShape } = params;
+
+  const beatmapIds = candidates.map((c) => c.agg.beatmapId);
   const beatmapMeta = await readBeatmapMeta(db, beatmapIds);
   const beatmapsetIds = [...new Set([...beatmapMeta.values()].map((m) => m.beatmapsetId))];
   const beatmapsetMeta = await readBeatmapsetMeta(db, beatmapsetIds);
+  const hasSubjectShape = subjectShape != null;
+  // One map_search_index pass serves both per-candidate patternFit (shapes) and
+  // the feasibility gate (raw MSD).
+  const chartData = hasSubjectShape || !isPopular ? await readChartShapeData(db, beatmapIds) : null;
+  const candidateShapes = hasSubjectShape && chartData ? chartData.shapes : new Map<number, ChartShape>();
+  // Feasibility gate (gain view only): the subject's 4K skill ratings vs each
+  // chart's dominant MSD skillset. Never blocks or computes inline. The gate only
+  // ever fires on 4K candidates, so a 7K run skips the skill-breakdown read (and
+  // its stale-recompute enqueue) entirely.
+  const feasibility = isPopular || !chartData || mode === "7k"
+    ? null
+    : await buildFeasibilityContext(db, ctx.userId, chartData.rawMsd, ctx.queue);
 
-  type ScoredRec = FarmHelperRec & { difficultyFit: number; recencyFit: number };
   const scored: ScoredRec[] = [];
-  for (const agg of candidates) {
+  for (const { agg, kernelFraction } of candidates) {
     const meta = beatmapMeta.get(agg.beatmapId);
     if (!meta) continue;
-    if (keyMode !== "any" && meta.keys !== (keyMode === "7k" ? 7 : 4)) continue;
-    if (!isPopular && hasFit && (meta.stars < starLo - STAR_BUFFER || meta.stars > starHi + STAR_BUFFER)) continue;
+    if (mode != null && meta.keys !== keyModeToKeys(mode)) continue;
+    if (!isPopular && fit.hasFit && (meta.stars < fit.starLo - STAR_BUFFER || meta.stars > fit.starHi + STAR_BUFFER)) continue;
+    // Feasibility: a chart whose dominant MSD skillset outstrips the subject's
+    // rating for it is not realistically farmable now, so drop it in the gain
+    // view (popular still browses it). 4K + 1.0x lane only, since stored MSD is
+    // 4K at 1.0x; other lanes fall through to the existing pp caps.
+    if (feasibility && meta.keys === 4 && agg.speedBucket === "normal" && isChartInfeasible(agg.beatmapId, feasibility)) continue;
 
-    const median = quantile(agg.pps, 0.5);
-    const p75 = quantile(agg.pps, 0.75);
     const candidateKeyMode = beatmapKeyMode(meta.keys);
-    const candidateLaneKey = farmHelperLaneKey(agg.beatmapId, agg.speedBucket);
-    if (
-      keyMode === "any"
-      && candidateKeyMode
-      && !anyPrimaryKeyModes.has(candidateKeyMode)
-      && !anyOffKeySupport?.get(candidateKeyMode)?.has(candidateLaneKey)
-    ) {
-      continue;
-    }
-    const rawCap = keyMode === "any" && candidateKeyMode
-      ? getModeBenchmarkCapFromEvidence(
-          subjectModeStatsByKey[candidateKeyMode],
-          ctx.subjectVariantPps[candidateKeyMode] ?? null,
-        )
-      : subjectBenchmarkCap;
+    const peerFraction = kernelFraction;
+    // Benchmark quantiles are weighted by the symmetric benchmark kernel (wB), so
+    // an up-skewed discovery cohort cannot inflate the "if you get X" target.
+    const benchPairs = agg.entries.map((e) => ({ v: e.pp, w: e.wB }));
+    const median = weightedQuantile(benchPairs, 0.5);
+    const p75 = weightedQuantile(benchPairs, 0.75);
+
+    // Concrete run: the single mode cap. Fallback: cap by the candidate's own
+    // keymode evidence (null -> drop in the gain view), else the overall cap.
+    const rawCap = mode != null
+      ? subjectBenchmarkCap
+      : candidateKeyMode
+        ? getModeBenchmarkCapFromEvidence(subject.subjectModeStatsByKey[candidateKeyMode], ctx.subjectVariantPps[candidateKeyMode] ?? null)
+        : subjectBenchmarkCap;
     if (rawCap == null && !isPopular) continue;
     // Popular mode is a browse, not a pp ceiling check, so an unknown cap means
     // "don't cap" rather than "drop".
     const cap = rawCap ?? Number.POSITIVE_INFINITY;
-    const subject = subjectByBeatmap.get(farmHelperLaneKey(agg.beatmapId, agg.speedBucket)) ?? null;
+    const subjectScore = subject.subjectByBeatmap.get(farmHelperLaneKey(agg.beatmapId, agg.speedBucket)) ?? null;
 
     let reason: FarmHelperReason;
     let benchmark: number;
-    if (!subject) {
+    if (!subjectScore) {
       reason = "missing";
-      const rawBenchmark = quantile(agg.pps, MISSING_MAP_BENCHMARK_QUANTILE);
+      const rawBenchmark = weightedQuantile(benchPairs, MISSING_MAP_BENCHMARK_QUANTILE);
       if (rawBenchmark > cap && !isPopular) continue;
       benchmark = Math.min(rawBenchmark, cap);
-    } else if (median - subject.pp > IMPROVE_MARGIN_PP) {
+    } else if (median - subjectScore.pp > IMPROVE_MARGIN_PP) {
       reason = "improve";
-      benchmark = Math.min(median, cap, nextPlayedMapBenchmark(subject.pp));
+      benchmark = Math.min(median, cap, nextPlayedMapBenchmark(subjectScore.pp));
     } else if (
-      isStale(subject.endedAt)
+      isStale(subjectScore.endedAt)
       && agg.latestUpdatedMs > Date.now() - STALE_ACTIVE_MS
-      && Math.min(p75, cap) - subject.pp > IMPROVE_MARGIN_PP
+      && Math.min(p75, cap) - subjectScore.pp > IMPROVE_MARGIN_PP
     ) {
       reason = "stale";
-      benchmark = Math.min(p75, cap, nextPlayedMapBenchmark(subject.pp));
+      benchmark = Math.min(p75, cap, nextPlayedMapBenchmark(subjectScore.pp));
     } else if (isPopular) {
       // Already cleared at a competitive score: keep it in the popular browse,
       // labelled "owned", with a near-zero gain.
       reason = "owned";
-      benchmark = Math.max(subject.pp, Math.min(median, cap));
+      benchmark = Math.max(subjectScore.pp, Math.min(median, cap));
     } else {
       continue;
     }
 
     if (!Number.isFinite(benchmark) || benchmark <= 0) continue;
-    if (!isPopular && subject && benchmark - subject.pp <= IMPROVE_MARGIN_PP) continue;
-    const estimatedPpGain = estimateGain(baselineEntries, baselineTotal, agg.beatmapId, benchmark);
+    if (!isPopular && subjectScore && benchmark - subjectScore.pp <= IMPROVE_MARGIN_PP) continue;
+    const estimatedPpGain = estimateGain(subject.baselineEntries, subject.baselineTotal, agg.beatmapId, benchmark);
     if (!isPopular && estimatedPpGain < MIN_VISIBLE_GAIN_PP) continue;
 
     const setMeta = beatmapsetMeta.get(meta.beatmapsetId);
-    const difficultyFit = hasFit ? clamp01(1 - Math.abs(meta.stars - starMid) / starSpread) : 0.5;
+    const difficultyFit = fit.hasFit ? clamp01(1 - Math.abs(meta.stars - fit.starMid) / fit.starSpread) : 0.5;
     const recencyFit = clamp01(1 - (Date.now() - agg.latestUpdatedMs) / STALE_ACTIVE_MS);
+    const chartShape = candidateShapes.get(agg.beatmapId);
+    const patternFit = subjectShape && chartShape ? computePatternFit(subjectShape, chartShape) : null;
 
     scored.push({
       beatmapId: agg.beatmapId,
@@ -469,21 +800,22 @@ async function buildSnapshot(
       reason,
       estimatedPpGain: round2(estimatedPpGain),
       benchmarkPp: round2(benchmark),
-      subjectPp: subject ? round2(subject.pp) : null,
-      subjectPlayedAt: subject?.endedAt ?? null,
-      peerCount: agg.peers.length,
+      subjectPp: subjectScore ? round2(subjectScore.pp) : null,
+      subjectPlayedAt: subjectScore?.endedAt ?? null,
+      peerCount: agg.entries.length,
       peerSampleSize,
-      peerFraction: round2(agg.peers.length / peerSampleSize),
+      peerFraction: round2(peerFraction),
+      patternFit: patternFit == null ? null : round2(patternFit),
       peerPpMedian: round2(median),
       peerPpP75: round2(p75),
       latestPeerPlayedAt: dateMsToIso(Math.max(0, ...agg.playedAtMs)),
       peerRecencyPlayedAt: dateMsToIso(peerRecencyPlayedAtMs(agg.playedAtMs)),
-      topPeers: agg.peers
+      topPeers: agg.entries
         .slice()
         .sort((a, b) => b.pp - a.pp)
         .slice(0, TOP_PEERS_PER_REC)
         .map((p) => ({ userId: p.userId, username: "", avatarUrl: "", pp: round2(p.pp) })),
-      scoreUrl: subject ? `https://osu.ppy.sh/scores/${subject.scoreId}` : null,
+      scoreUrl: subjectScore ? `https://osu.ppy.sh/scores/${subjectScore.scoreId}` : null,
       mapUrl: meta.url,
       rankScore: 0,
       difficultyFit,
@@ -491,88 +823,110 @@ async function buildSnapshot(
     });
   }
 
-  if (scored.length === 0) return coveredSnapshot;
+  return scored;
+}
 
-  // Popular mode can surface the same chart under two speed lanes (e.g. NoMod and
-  // DT); collapse to the most-farmed lane per beatmap so the browse grid shows one
-  // card per map, matching the maps page.
-  const ranked = isPopular ? collapsePopularLanes(scored) : scored;
-
-  if (isPopular) {
-    for (const rec of ranked) rec.rankScore = round2(rec.peerFraction);
-    ranked.sort((a, b) =>
-      b.peerFraction - a.peerFraction
-      || b.peerCount - a.peerCount
-      || b.estimatedPpGain - a.estimatedPpGain
-      || b.stars - a.stars,
-    );
-  } else {
-    const maxGain = Math.max(...ranked.map((r) => r.estimatedPpGain), 1);
-    for (const rec of ranked) {
-      rec.rankScore = round2(
-        0.5 * (rec.estimatedPpGain / maxGain)
-        + 0.25 * rec.peerFraction
-        + 0.15 * rec.difficultyFit
-        + 0.1 * rec.recencyFit,
-      );
-    }
-    ranked.sort((a, b) => b.rankScore - a.rankScore || b.estimatedPpGain - a.estimatedPpGain);
-  }
-
-  const top: FarmHelperRec[] = ranked.slice(0, ctx.limit).map(({ difficultyFit, recencyFit, ...rec }) => {
-    void difficultyFit;
-    void recencyFit;
-    return rec;
-  });
-
-  await hydrateTopPeers(db, top);
-
+// Star-fit band from the subject's top plays in one keymode ("any" = all scores).
+function computeFitBand(rankedScores: OscScore[], keyMode: FarmHelperKeyMode): FitBand {
+  const fitStars = rankedScores
+    .filter((score) => scoreMatchesKeyMode(score, keyMode))
+    .slice(0, FIT_SAMPLE_SIZE)
+    .map((score) => numberOr(score.beatmap?.difficulty_rating, 0))
+    .filter((stars) => stars > 0);
+  fitStars.sort((a, b) => a - b);
+  const hasFit = fitStars.length >= 5;
+  const starLo = hasFit ? quantile(fitStars, 0.1) : 0;
+  const starHi = hasFit ? quantile(fitStars, 0.95) : Infinity;
   return {
-    ...coveredSnapshot,
-    totalPotentialPp: round2(top.reduce((sum, rec) => sum + rec.estimatedPpGain, 0)),
-    totalQualifying: ranked.length,
-    recs: top,
+    hasFit,
+    starLo,
+    starHi,
+    starMid: hasFit ? quantile(fitStars, 0.5) : 0,
+    starSpread: hasFit ? Math.max(1.5, starHi - starLo) : 1.5,
   };
 }
 
-async function queryPeersWithinPpBand(
-  db: Db,
-  userId: number,
-  subjectPp: number,
-  band: number,
-): Promise<Array<{ userId: number; pp: number }>> {
-  const minPp = Math.max(0, subjectPp - band);
-  const maxPp = subjectPp + band;
-  const rows = (await exec(
-    db,
-    `select user_id, pp from users
-     where pp is not null and pp > 0 and user_id != ?
-       and pp between ? and ?
-     order by abs(pp - ?) asc`,
-    [userId, minPp, maxPp, subjectPp],
-  )).rows;
-  return rows.map((row) => ({ userId: Number(row.user_id), pp: Number(row.pp) }));
+// The peerFraction / popularity gate: a discovery-weight ratio floor over the
+// meaningful-sample denominator. Shared by every run.
+function gateCandidates(
+  peerFarmed: PeerFarmedAggregation,
+  isPopular: boolean,
+): Array<{ agg: CandidateAgg; kernelFraction: number }> {
+  const minPeerFraction = isPopular ? POPULAR_PEER_MIN_FRACTION : PEER_MIN_FRACTION;
+  const candidates: Array<{ agg: CandidateAgg; kernelFraction: number }> = [];
+  for (const agg of peerFarmed.byBeatmap.values()) {
+    if (agg.entries.length < PEER_MIN_COUNT) continue;
+    const numeratorWd = agg.entries.reduce((sum, e) => sum + e.wD, 0);
+    const kernelFraction = peerFarmed.eligibleWdSum > 0 ? Math.min(1, numeratorWd / peerFarmed.eligibleWdSum) : 0;
+    if (kernelFraction < minPeerFraction) continue;
+    candidates.push({ agg, kernelFraction });
+  }
+  return candidates;
 }
 
-async function queryPeersByPpDistance(
-  db: Db,
-  userId: number,
-  subjectPp: number,
-): Promise<Array<{ userId: number; pp: number }>> {
-  const rows = (await exec(
-    db,
-    `select user_id, pp from users
-     where pp is not null and pp > 0 and user_id != ?
-     order by abs(pp - ?) asc`,
-    [userId, subjectPp],
-  )).rows;
-  return rows.map((row) => ({ userId: Number(row.user_id), pp: Number(row.pp) }));
+// The cohort summary for one run. `farmDataCount` is filled in after the farmed
+// aggregation; the effective count reflects post-shape-fold discovery weights.
+// The pp range is on the run's own selection scale (modePp: variant/proxy pp
+// for keymode runs, total pp for the fallback), not the peers' total pp - a 7K
+// main with 26k total but 13k 4K pp is a 13k peer in a 4K cohort, and showing
+// their total would misread as "compared to 26k players".
+function buildPeerBand(mode: string, peers: WeightedPeer[]): PeerBandSummary {
+  return {
+    mode,
+    count: peers.length,
+    farmDataCount: 0,
+    minPp: peers.length ? Math.min(...peers.map((p) => p.modePp)) : 0,
+    maxPp: peers.length ? Math.max(...peers.map((p) => p.modePp)) : 0,
+    effectiveCount: Math.round(peers.reduce((sum, p) => sum + p.wD, 0)),
+  };
 }
 
-// The same-pp comparison cohort: all players in the relevant pp band across all
-// countries, progressively widening the band only when the cohort is too thin.
-// The full peer cohort stays server-side; HTTP responses only include counts,
-// recommendation summaries, and tiny top-peer previews.
+// Unions the per-run bands into the compat `peerBand`: summed counts, min/max pp
+// across non-empty runs, per-run modes joined with "+" (e.g. "knn+knn_wide").
+function mergeBands(bands: PeerBandSummary[]): PeerBandSummary {
+  const nonEmpty = bands.filter((band) => band.count > 0);
+  return {
+    mode: bands.map((band) => band.mode).join("+"),
+    count: bands.reduce((sum, band) => sum + band.count, 0),
+    farmDataCount: bands.reduce((sum, band) => sum + band.farmDataCount, 0),
+    minPp: nonEmpty.length ? Math.min(...nonEmpty.map((band) => band.minPp)) : 0,
+    maxPp: nonEmpty.length ? Math.max(...nonEmpty.map((band) => band.maxPp)) : 0,
+    effectiveCount: bands.reduce((sum, band) => sum + band.effectiveCount, 0),
+  };
+}
+
+interface CohortCandidate {
+  userId: number;
+  pp: number;
+  modePp: number;
+  confidence: number;
+  needsVariantEnrich?: boolean;
+}
+
+// Enqueues enrich_user for the cohort's never-variant-enriched proxy peers,
+// strongest discovery weight first. The dedupe key matches organic enrichment,
+// so repeats within a queue cycle collapse; once the fetch stores a variants
+// block the peer stops qualifying (hasVariantsProfile flips true even when the
+// fetched profile carries no positive variant pp).
+const VARIANT_SELF_HEAL_MAX = 12;
+const VARIANT_SELF_HEAL_PRIORITY = 10;
+
+function enqueueVariantSelfHeal(queue: JobQueue, peers: WeightedPeer[]): void {
+  const targets = peers
+    .filter((peer) => peer.needsVariantEnrich)
+    .sort((a, b) => b.wD - a.wD)
+    .slice(0, VARIANT_SELF_HEAL_MAX);
+  for (const peer of targets) {
+    void queue
+      .enqueue("enrich_user", `user:${peer.userId}`, { userId: peer.userId }, { priority: VARIANT_SELF_HEAL_PRIORITY })
+      .catch(() => {});
+  }
+}
+
+// The same-pp comparison cohort as a kernel-weighted kNN: a candidate set (the
+// key-mode pool for 4k/7k, a total-pp window for "any") weighted per peer by two
+// triangular kernels over their distance from the subject. The full cohort stays
+// server-side; HTTP responses only include counts and tiny top-peer previews.
 async function selectPeerBand(
   db: Db,
   userId: number,
@@ -580,78 +934,157 @@ async function selectPeerBand(
   keyMode: FarmHelperKeyMode,
   subjectModePp: number,
   options: { strictKeyMode?: boolean } = {},
-): Promise<{ peers: Array<{ userId: number; pp: number }>; mode: string }> {
-  const cache = getPeerBandCache(db);
-  const strictKey = options.strictKeyMode ? "strict" : "fallback";
-  const cacheKey = `${userId}:${roundCacheNumber(subjectPp)}:${keyMode}:${roundCacheNumber(subjectModePp)}:${strictKey}`;
-  const now = Date.now();
-  const cached = cache.get(cacheKey);
-  if (cached && cached.expiresAt > now) {
-    cache.delete(cacheKey);
-    cache.set(cacheKey, cached);
-    return { peers: cached.peers.slice(), mode: cached.mode };
-  }
-
-  const selected = await computePeerBand(db, userId, subjectPp, keyMode, subjectModePp, options);
-  cache.set(cacheKey, { peers: selected.peers.slice(), mode: selected.mode, expiresAt: now + PEER_BAND_CACHE_TTL_MS });
-  while (cache.size > PEER_BAND_CACHE_MAX_ENTRIES) {
-    const oldest = cache.keys().next().value;
-    if (oldest === undefined) break;
-    cache.delete(oldest);
-  }
-  return selected;
-}
-
-async function computePeerBand(
-  db: Db,
-  userId: number,
-  subjectPp: number,
-  keyMode: FarmHelperKeyMode,
-  subjectModePp: number,
-  options: { strictKeyMode?: boolean } = {},
-): Promise<{ peers: Array<{ userId: number; pp: number }>; mode: string }> {
+): Promise<{ peers: WeightedPeer[]; mode: string }> {
   if (keyMode !== "any") {
     if (subjectModePp > 0) {
-      const keyModePeers = await selectKeyModePeerBand(db, userId, keyMode, subjectModePp);
-      if (options.strictKeyMode || keyModePeers.peers.length >= MIN_PEERS) return keyModePeers;
+      const keyModeResult = await selectKeyModeKnn(db, userId, keyMode, subjectModePp);
+      // A strict request keeps the key-mode cohort even when thin; a non-strict
+      // caller (e.g. the who-farms modal derived from a map's key count) only
+      // falls back to the broader total-pp cohort when the key-mode pool is too
+      // sparse to compare against. Gate on the raw cohort size (not the weighted
+      // effective sample) so a full cohort of same-keymode peers whose distances
+      // merely down-weight them is still preferred over ignoring keymode.
+      if (options.strictKeyMode || keyModeResult.peers.length >= MIN_EFFECTIVE_PEERS) return keyModeResult;
     } else if (options.strictKeyMode) {
       return { peers: [], mode: `${keyMode}_no_pp_proxy` };
     }
   }
-
-  const band = Math.max(400, subjectPp * 0.08);
-  let peers = await queryPeersWithinPpBand(db, userId, subjectPp, band);
-  let mode = "pp_band";
-  if (peers.length < MIN_PEERS) {
-    peers = await queryPeersWithinPpBand(db, userId, subjectPp, band * 2);
-    mode = "pp_band_wide";
-  }
-  if (peers.length < MIN_PEERS) {
-    peers = await queryPeersByPpDistance(db, userId, subjectPp);
-    mode = "nearest";
-  }
-  return { peers, mode };
+  if (subjectPp <= 0) return { peers: [], mode: "no_pp" };
+  return selectTotalPpKnn(db, userId, subjectPp);
 }
 
-async function selectKeyModePeerBand(
+async function selectKeyModeKnn(
   db: Db,
   userId: number,
   keyMode: ConcreteFarmHelperKeyMode,
   subjectModePp: number,
-): Promise<{ peers: Array<{ userId: number; pp: number }>; mode: string }> {
+): Promise<{ peers: WeightedPeer[]; mode: string }> {
   const keyCount = keyModeToKeys(keyMode) as FarmHelperKeyCount;
-  const band = Math.max(300, subjectModePp * 0.08);
-  let peers = await queryFarmHelperKeyPeersWithinBand(db, keyCount, userId, subjectModePp, band, MIN_KEYMODE_PROXY_SCORES);
-  let mode = `${keyMode}_pp_proxy`;
-  if (peers.length < MIN_PEERS) {
-    peers = await queryFarmHelperKeyPeersWithinBand(db, keyCount, userId, subjectModePp, band * 2, MIN_KEYMODE_PROXY_SCORES);
-    mode = `${keyMode}_pp_proxy_wide`;
+  const { peers: pool, calibration } = await getKeyModePeerPool(db, keyCount);
+  const candidates: CohortCandidate[] = [];
+  for (const peer of pool) {
+    if (peer.userId === userId) continue;
+    const hasVariant = peer.variantPp != null && peer.variantPp > 0;
+    // Real variant pp when present, else the proxy calibrated onto the variant
+    // scale so proxy peers sit at the right distance from a variant subject.
+    const modePp = hasVariant ? (peer.variantPp as number) : calibrateProxy(calibration, peer.weightedPp);
+    if (!Number.isFinite(modePp) || modePp <= 0) continue;
+    candidates.push({
+      userId: peer.userId,
+      pp: peer.pp,
+      modePp,
+      confidence: hasVariant ? 1 : PROXY_CONFIDENCE,
+      needsVariantEnrich: !hasVariant && !peer.hasVariantsProfile,
+    });
   }
-  if (peers.length < MIN_PEERS) {
-    peers = await queryFarmHelperKeyPeersByDistance(db, keyCount, userId, subjectModePp, MIN_KEYMODE_PROXY_SCORES);
-    mode = `${keyMode}_nearest`;
+  return kernelSelect(candidates, subjectModePp);
+}
+
+async function selectTotalPpKnn(
+  db: Db,
+  userId: number,
+  subjectPp: number,
+): Promise<{ peers: WeightedPeer[]; mode: string }> {
+  // Window generously (covers the widest kernel widening, with a floor for
+  // low-pp subjects) and let the kernel do the relative weighting in JS. Total
+  // pp is a real measurement: no calibration, full confidence.
+  const pool = await getTotalPpPool(db);
+  const downFetch = Math.max(subjectPp * 0.35, 800);
+  const upFetch = Math.max(subjectPp * 0.6, 800);
+  const lo = Math.max(0, subjectPp - downFetch);
+  const hi = subjectPp + upFetch;
+  const candidates: CohortCandidate[] = [];
+  for (const row of pool) {
+    if (row.userId === userId || row.pp < lo || row.pp > hi) continue;
+    candidates.push({ userId: row.userId, pp: row.pp, modePp: row.pp, confidence: 1 });
   }
-  return { peers: peers.map(({ userId, pp }) => ({ userId, pp })), mode };
+  return kernelSelect(candidates, subjectPp);
+}
+
+// The total-pp pool (every tracked user with pp), cached briefly per Db: the
+// who-farms modal and repeated "any" snapshots re-enter peer selection often,
+// so one bounded read per TTL beats a users window scan per request (mirrors
+// getKeyModePeerPool on the keymode path).
+async function getTotalPpPool(db: Db): Promise<Array<{ userId: number; pp: number }>> {
+  const now = Date.now();
+  const cached = totalPpPoolCache.get(db);
+  if (cached && cached.expiresAt > now) return cached.rows;
+  const rows = (await exec(db, "select user_id, pp from users where pp is not null and pp > 0")).rows;
+  const pool: Array<{ userId: number; pp: number }> = [];
+  for (const row of rows) {
+    const id = Number(row.user_id);
+    const pp = Number(row.pp);
+    if (!Number.isSafeInteger(id) || id <= 0 || !Number.isFinite(pp) || pp <= 0) continue;
+    pool.push({ userId: id, pp });
+  }
+  totalPpPoolCache.set(db, { rows: pool, expiresAt: now + TOTAL_PP_POOL_TTL_MS });
+  return pool;
+}
+
+// Weights each candidate by the discovery and benchmark kernels, widening both
+// (1.5x per step) until the effective sample (sum of discovery weights) clears
+// MIN_EFFECTIVE_PEERS, then caps to the strongest KNN_MAX_PEERS by discovery
+// weight to bound the farmed-row scan.
+function kernelSelect(candidates: CohortCandidate[], subjectModePp: number): { peers: WeightedPeer[]; mode: string } {
+  if (subjectModePp <= 0 || candidates.length === 0) return { peers: [], mode: "knn" };
+
+  let weighted: WeightedPeer[] = [];
+  let mode = "knn_sparse";
+  for (let i = 0; i < KNN_WIDEN_MODES.length; i++) {
+    const m = 1.5 ** i;
+    weighted = [];
+    let effN = 0;
+    for (const c of candidates) {
+      const d = (c.modePp - subjectModePp) / subjectModePp;
+      const wD = c.confidence * triangular(d, DISCOVERY_KERNEL_DOWN * m, DISCOVERY_KERNEL_UP * m);
+      if (wD <= 0) continue;
+      const wB = c.confidence * triangular(d, BENCHMARK_KERNEL_HALF_WIDTH * m, BENCHMARK_KERNEL_HALF_WIDTH * m);
+      weighted.push({ userId: c.userId, pp: c.pp, modePp: c.modePp, wD, wB, needsVariantEnrich: c.needsVariantEnrich });
+      effN += wD;
+    }
+    if (effN >= MIN_EFFECTIVE_PEERS) {
+      mode = KNN_WIDEN_MODES[i];
+      break;
+    }
+  }
+
+  // Sparse fallback: the old band ladder ended in an unconditional "nearest"
+  // mode; keep that guarantee for a subject whose neighbors mostly sit outside
+  // even the widest kernel (pp-isolated top ranks, sparse keymodes). Gate on
+  // included-peer COUNT, not the weighted effective sample: a full cohort of
+  // down-weighted peers is a valid cohort, an (almost) empty one is not.
+  // Nearest peers by mode-pp distance get a flat floor weight, and any peer the
+  // widest kernel did reach keeps its kernel weight where that is stronger.
+  if (mode === "knn_sparse" && weighted.length < MIN_EFFECTIVE_PEERS && candidates.length > 0) {
+    const merged = new Map(weighted.map((p) => [p.userId, p]));
+    const nearest = [...candidates]
+      .sort((a, b) => Math.abs(a.modePp - subjectModePp) - Math.abs(b.modePp - subjectModePp))
+      .slice(0, SPARSE_FALLBACK_PEERS);
+    for (const c of nearest) {
+      const existing = merged.get(c.userId);
+      const floor = c.confidence * SPARSE_FALLBACK_WEIGHT;
+      merged.set(c.userId, {
+        userId: c.userId,
+        pp: c.pp,
+        modePp: c.modePp,
+        wD: Math.max(existing?.wD ?? 0, floor),
+        wB: Math.max(existing?.wB ?? 0, floor),
+        needsVariantEnrich: c.needsVariantEnrich,
+      });
+    }
+    weighted = [...merged.values()];
+  }
+
+  weighted.sort((a, b) => b.wD - a.wD);
+  if (weighted.length > KNN_MAX_PEERS) weighted = weighted.slice(0, KNN_MAX_PEERS);
+  return { peers: weighted, mode };
+}
+
+// Triangular kernel: 1 at d=0, falling linearly to 0 at -down and +up, 0 outside.
+export function triangular(d: number, down: number, up: number): number {
+  if (d === 0) return 1;
+  if (d < 0) return d <= -down ? 0 : 1 + d / down;
+  return d >= up ? 0 : 1 - d / up;
 }
 
 export interface FarmHelperFarmer {
@@ -748,7 +1181,9 @@ export async function getFarmHelperFarmers(
   return { beatmapId, total, farmers };
 }
 
-async function aggregatePeerFarmedMaps(db: Db, peerIds: number[]): Promise<PeerFarmedAggregation> {
+async function aggregatePeerFarmedMaps(db: Db, peers: WeightedPeer[], asOf?: number): Promise<PeerFarmedAggregation> {
+  const weightById = new Map(peers.map((p) => [p.userId, { wD: p.wD, wB: p.wB }]));
+  const peerIds = peers.map((p) => p.userId);
   const byPeerLane = new Map<string, CanonicalFarmedScore>();
   for (let i = 0; i < peerIds.length; i += 900) {
     const chunk = peerIds.slice(i, i + 900);
@@ -764,30 +1199,34 @@ async function aggregatePeerFarmedMaps(db: Db, peerIds: number[]): Promise<PeerF
     for (const row of rows) {
       const farmed = parseFarmedScoreRow(row);
       if (!farmed) continue;
+      // Backtest as-of reconstruction: a farmed row only counts if it was set on
+      // or before the cutoff. Rows with an unknown played_at (playedAtMs === 0)
+      // are kept (better slight leakage than dropping most of the pool).
+      if (asOf != null && farmed.playedAtMs > 0 && farmed.playedAtMs > asOf) continue;
       keepBestFarmedScore(byPeerLane, farmed);
     }
   }
 
   const byBeatmap = new Map<string, CandidateAgg>();
-  const farmDataPeerIds = new Set<number>();
+  const farmedRowsPerPeer = new Map<number, number>();
   for (const farmed of byPeerLane.values()) {
-    farmDataPeerIds.add(farmed.userId);
+    const weights = weightById.get(farmed.userId);
+    if (!weights) continue;
+    farmedRowsPerPeer.set(farmed.userId, (farmedRowsPerPeer.get(farmed.userId) ?? 0) + 1);
     const key = farmHelperLaneKey(farmed.beatmapId, farmed.speedBucket);
     let agg = byBeatmap.get(key);
     if (!agg) {
       agg = {
         beatmapId: farmed.beatmapId,
         speedBucket: farmed.speedBucket,
-        pps: [],
-        peers: [],
+        entries: [],
         modCombos: new Map(),
         latestUpdatedMs: 0,
         playedAtMs: [],
       };
       byBeatmap.set(key, agg);
     }
-    agg.pps.push(farmed.pp);
-    agg.peers.push({ userId: farmed.userId, pp: farmed.pp });
+    agg.entries.push({ userId: farmed.userId, pp: farmed.pp, wD: weights.wD, wB: weights.wB });
     const modKey = farmed.mods.join(",");
     const modCombo = agg.modCombos.get(modKey) ?? { mods: farmed.mods, count: 0, ppTotal: 0 };
     modCombo.count += 1;
@@ -796,7 +1235,15 @@ async function aggregatePeerFarmedMaps(db: Db, peerIds: number[]): Promise<PeerF
     if (farmed.updatedAtMs > agg.latestUpdatedMs) agg.latestUpdatedMs = farmed.updatedAtMs;
     if (farmed.playedAtMs > 0) agg.playedAtMs.push(farmed.playedAtMs);
   }
-  return { byBeatmap, farmDataPeerCount: farmDataPeerIds.size };
+
+  // Denominator = peers with a meaningful farm sample. If none clear the bar (a
+  // tiny cohort where nobody has farmed much), fall back to every farm-data peer
+  // rather than stranding the whole cohort with a zero denominator.
+  const eligibleIds = [...farmedRowsPerPeer].filter(([, count]) => count >= MIN_FARMED_FOR_SAMPLE).map(([userId]) => userId);
+  const denominatorIds = eligibleIds.length > 0 ? eligibleIds : [...farmedRowsPerPeer.keys()];
+  let eligibleWdSum = 0;
+  for (const userId of denominatorIds) eligibleWdSum += weightById.get(userId)?.wD ?? 0;
+  return { byBeatmap, farmDataPeerCount: farmedRowsPerPeer.size, eligiblePeerCount: denominatorIds.length, eligibleWdSum };
 }
 
 function dateMsToIso(ms: number): string | null {
@@ -838,46 +1285,91 @@ function keepBestFarmedScore(target: Map<string, CanonicalFarmedScore>, farmed: 
   }
 }
 
-async function collectAnyOffKeyCandidateSupport(
+// Chart-shape weighting for one concrete-keymode run: down-weights peers whose
+// farm charts look unlike the subject's, folding that mode's per-peer weights
+// into wD/wB up front. Returns the subject's shape for this mode (used for
+// per-candidate patternFit) or null when too few top plays are analyzed. Also
+// self-heals: enqueues chart analysis for the subject's un-analyzed top plays so
+// their shape improves on later requests. Fire-and-forget.
+async function computeShapeContext(
   db: Db,
-  ctx: {
-    userId: number;
-    subjectPp: number;
-    subjectVariantPps: Partial<Record<ConcreteFarmHelperKeyMode, number>>;
-  },
-  subjectModeStatsByKey: Record<ConcreteFarmHelperKeyMode, { weightedPp: number; topPp: number; scoreCount: number }>,
-  primaryModes: Set<ConcreteFarmHelperKeyMode>,
-): Promise<Map<ConcreteFarmHelperKeyMode, Set<string>>> {
-  const support = new Map<ConcreteFarmHelperKeyMode, Set<string>>();
-  for (const mode of FARM_HELPER_CONCRETE_KEY_MODES) {
-    if (primaryModes.has(mode)) continue;
-    const subjectModePp = ctx.subjectVariantPps[mode] ?? subjectModeStatsByKey[mode].weightedPp;
-    if (!Number.isFinite(subjectModePp) || subjectModePp <= 0) continue;
-
-    const { peers } = await selectPeerBand(db, ctx.userId, ctx.subjectPp, mode, subjectModePp, { strictKeyMode: true });
-    if (peers.length === 0) continue;
-
-    const peerFarmed = await aggregatePeerFarmedMaps(db, peers.map((peer) => peer.userId));
-    const peerSampleSize = peerFarmed.farmDataPeerCount;
-    if (peerSampleSize === 0) continue;
-
-    const candidates = [...peerFarmed.byBeatmap.values()].filter((agg) => (
-      agg.peers.length >= PEER_MIN_COUNT
-      && agg.peers.length / peerSampleSize >= PEER_MIN_FRACTION
-    ));
-    if (candidates.length === 0) continue;
-
-    const beatmapMeta = await readBeatmapMeta(db, candidates.map((agg) => agg.beatmapId));
-    const modeKeys = keyModeToKeys(mode);
-    const supported = new Set<string>();
-    for (const agg of candidates) {
-      const meta = beatmapMeta.get(agg.beatmapId);
-      if (!meta || meta.keys !== modeKeys) continue;
-      supported.add(farmHelperLaneKey(agg.beatmapId, agg.speedBucket));
-    }
-    if (supported.size > 0) support.set(mode, supported);
+  peers: WeightedPeer[],
+  rankedScores: OscScore[],
+  mode: ConcreteFarmHelperKeyMode,
+  queue?: JobQueue,
+): Promise<UserShape | null> {
+  const { shape, uncovered } = await computeSubjectShape(db, rankedScores, mode);
+  if (queue && uncovered.length > 0) {
+    void enqueueMissingChartAnalyses(db, queue, uncovered).catch(() => {});
   }
-  return support;
+  if (!shape) return null;
+
+  const userIds = peers.map((p) => p.userId);
+  const peerShapes = await readPeerShapes(db, userIds, keyModeToKeys(mode));
+  const weights = computeShapeWeights(shape, peerShapes, userIds);
+  for (const peer of peers) {
+    const wS = weights.get(peer.userId) ?? 1;
+    peer.wD *= wS;
+    peer.wB *= wS;
+  }
+  return shape;
+}
+
+async function computeSubjectShape(
+  db: Db,
+  rankedScores: OscScore[],
+  shapeKeyMode: ConcreteFarmHelperKeyMode,
+): Promise<{ shape: UserShape | null; uncovered: number[] }> {
+  const entries = rankedScores
+    .filter((score) => scoreMatchesKeyMode(score, shapeKeyMode))
+    .slice(0, 100)
+    .map((score) => ({ beatmapId: Number(score.beatmap_id ?? score.beatmap?.id ?? 0), pp: score.pp as number }))
+    .filter((entry) => Number.isSafeInteger(entry.beatmapId) && entry.beatmapId > 0);
+  if (entries.length < SHAPE_MIN_CHARTS) return { shape: null, uncovered: entries.map((e) => e.beatmapId) };
+  const chartShapes = await readChartShapes(db, entries.map((e) => e.beatmapId));
+  return buildWeightedUserShape(entries, chartShapes);
+}
+
+// patternFit: shape cosine clamped to [0,1] (pat/msd vectors are non-negative),
+// or null when the shapes are not comparable.
+function computePatternFit(subjectShape: UserShape, chartShape: ChartShape): number | null {
+  const sim = shapeSimilarity(subjectShape, chartShape);
+  return sim == null ? null : clamp01(sim);
+}
+
+interface FeasibilityContext {
+  ratings: Record<string, number>;
+  chartMsd: Map<number, number[]>;
+}
+
+// Builds the feasibility context (subject 4K skill ratings + candidate raw MSD,
+// the latter passed in from the shared map_search_index read). Returns null
+// (gate disabled) without a queue (backtest), when the subject has no ready 4K
+// skill rating with enough analyzed plays, or when no candidate has MSD.
+// Reading the ratings enqueues a recompute if stale; it never blocks.
+async function buildFeasibilityContext(
+  db: Db,
+  userId: number,
+  chartMsd: Map<number, number[]>,
+  queue?: JobQueue,
+): Promise<FeasibilityContext | null> {
+  if (!queue) return null;
+  if (chartMsd.size === 0) return null;
+  const breakdown = await getPlayerSkillBreakdown(db, queue, userId);
+  if (breakdown.status !== "ready") return null;
+  const mode4k = breakdown.modes.find((mode) => mode.keyCount === 4);
+  if (!mode4k || mode4k.analyzedPlays < FEASIBILITY_MIN_ANALYZED_PLAYS) return null;
+  return { ratings: mode4k.ratings, chartMsd };
+}
+
+function isChartInfeasible(beatmapId: number, ctx: FeasibilityContext): boolean {
+  const msd = ctx.chartMsd.get(beatmapId);
+  if (!msd || msd.length !== MSD_SKILLSETS.length) return false;
+  let dominantIdx = 0;
+  for (let i = 1; i < msd.length; i++) if (msd[i] > msd[dominantIdx]) dominantIdx = i;
+  const rating = ctx.ratings[MSD_SKILLSETS[dominantIdx]];
+  if (!Number.isFinite(rating)) return false;
+  return msd[dominantIdx] > rating + FEASIBILITY_MSD_MARGIN;
 }
 
 async function readBeatmapMeta(db: Db, ids: number[]): Promise<Map<number, BeatmapMeta>> {
@@ -1025,37 +1517,17 @@ function calculateSubjectKeyModeStats(scores: OscScore[], keyMode: FarmHelperKey
 }
 
 function getVariantPps(statistics: Record<string, unknown>): Partial<Record<"4k" | "7k", number>> {
+  const variantPps = extractManiaVariantPps(statistics);
   const result: Partial<Record<"4k" | "7k", number>> = {};
-  const variants = statistics.variants;
-  if (!Array.isArray(variants)) return result;
-
-  for (const variantValue of variants) {
-    const variant = asRecord(variantValue);
-    if (String(variant.mode ?? "") !== "mania") continue;
-    const keyMode = String(variant.variant ?? "").toLowerCase();
-    if (keyMode !== "4k" && keyMode !== "7k") continue;
-    const pp = numberOr(variant.pp, 0);
-    if (pp > 0) result[keyMode] = pp;
-  }
+  if (!variantPps) return result;
+  if (variantPps.pp4k != null) result["4k"] = variantPps.pp4k;
+  if (variantPps.pp7k != null) result["7k"] = variantPps.pp7k;
   return result;
 }
 
 function getVariantPp(variantPps: Partial<Record<"4k" | "7k", number>>, keyMode: FarmHelperKeyMode): number | null {
   if (keyMode === "any") return null;
   return variantPps[keyMode] ?? null;
-}
-
-function getAnyPrimaryKeyModes(
-  statsByKey: Record<ConcreteFarmHelperKeyMode, { weightedPp: number }>,
-  variantPps: Partial<Record<ConcreteFarmHelperKeyMode, number>>,
-): Set<ConcreteFarmHelperKeyMode> {
-  const modePps = FARM_HELPER_CONCRETE_KEY_MODES.map((mode) => ({
-    mode,
-    pp: variantPps[mode] ?? statsByKey[mode].weightedPp,
-  })).filter(({ pp }) => Number.isFinite(pp) && pp > 0);
-  const maxPp = modePps.reduce((max, entry) => Math.max(max, entry.pp), 0);
-  if (maxPp <= 0) return new Set();
-  return new Set(modePps.filter((entry) => entry.pp >= maxPp * ANY_PRIMARY_MODE_RATIO).map((entry) => entry.mode));
 }
 
 function getModeBenchmarkCapFromEvidence(
@@ -1148,6 +1620,38 @@ function quantile(values: number[], q: number): number {
   return next === undefined ? sorted[base] : sorted[base] + rest * (next - sorted[base]);
 }
 
+// Weighted quantile over (value, weight) pairs. Each value's plotting position is
+// the center of its weight segment, normalized to [0,1]; interpolating there
+// reduces exactly to the unweighted type-7 `quantile` when all weights are equal.
+export function weightedQuantile(pairs: Array<{ v: number; w: number }>, q: number): number {
+  const valid = pairs.filter((p) => Number.isFinite(p.v) && Number.isFinite(p.w) && p.w > 0);
+  if (valid.length === 0) return 0;
+  if (valid.length === 1) return valid[0].v;
+  valid.sort((a, b) => a.v - b.v);
+
+  const positions: number[] = [];
+  let cum = 0;
+  for (const p of valid) {
+    cum += p.w;
+    positions.push(cum - p.w / 2);
+  }
+  const first = positions[0];
+  const last = positions[positions.length - 1];
+  const span = last - first;
+  if (span <= 0) return valid[0].v;
+  const target = first + clamp01(q) * span;
+  if (target <= first) return valid[0].v;
+  if (target >= last) return valid[valid.length - 1].v;
+  for (let i = 1; i < valid.length; i++) {
+    if (target <= positions[i]) {
+      const lo = positions[i - 1];
+      const t = (target - lo) / (positions[i] - lo);
+      return valid[i - 1].v + t * (valid[i].v - valid[i - 1].v);
+    }
+  }
+  return valid[valid.length - 1].v;
+}
+
 function clamp01(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(1, value));
@@ -1174,14 +1678,4 @@ function getCache(db: Db): Map<string, CachedFarmHelper> {
   let cache = farmHelperCache.get(db);
   if (!cache) farmHelperCache.set(db, (cache = new Map()));
   return cache;
-}
-
-function getPeerBandCache(db: Db): Map<string, CachedPeerBand> {
-  let cache = peerBandCache.get(db);
-  if (!cache) peerBandCache.set(db, (cache = new Map()));
-  return cache;
-}
-
-function roundCacheNumber(value: number): number {
-  return Number.isFinite(value) ? Math.round(value * 100) / 100 : 0;
 }

@@ -22,6 +22,7 @@
     "import:chart-analysis:dist": "node --env-file-if-exists=.env dist/maintenance/import-chart-analysis.js",
     "recompute:vibro": "node --env-file-if-exists=.env --import tsx src/maintenance/recompute-vibro.ts",
     "recompute:vibro:dist": "node --env-file-if-exists=.env dist/maintenance/recompute-vibro.js",
+    "backtest:farm-helper": "node --env-file-if-exists=.env --import tsx src/maintenance/farm-helper-backtest.ts",
     "smoke:osc": "node --env-file-if-exists=.env --import tsx src/smoke-osc.ts"
   },
   "dependencies": {

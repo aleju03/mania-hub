@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { readConfig } from "./config.js";
 import { ensurePinnedCountries, getIndexedCountryCodes, getMapsWarmCountryCodes, getRosterRefreshCountryCodes } from "./countries.js";
-import { createDb, getSqliteBusyRetryStats, logApiCall, migrate } from "./db.js";
+import { createDb, exec, getSqliteBusyRetryStats, logApiCall, migrate } from "./db.js";
 import { routeHttp, sendNotFound, warmStatusBodyCache } from "./http/snapshots.js";
 import { ScoreIngestor } from "./ingest/score-ingestor.js";
 import { JobQueue } from "./jobs/queue.js";
@@ -214,6 +214,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       startMapCollectionsScheduler(app.db, app.queue, app.config);
       startQualifiedMapsWatchScheduler(app.db, app.queue, app.config);
       startProfilePoolWarmScheduler(app.db, app.queue);
+      startVariantPpDripScheduler(app.db, app.queue);
     }
     startRetentionScheduler(app.db, app.config);
     // Active WAL brake: keeps the -wal file bounded so it can never grow into the
@@ -339,6 +340,45 @@ function startRosterScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: J
     setTimeout(tick, config.rosterRefreshIntervalMs).unref();
   };
   setTimeout(tick, config.rosterRefreshIntervalMs).unref();
+}
+
+// Slow trickle that fills the real users.pp_4k / pp_7k columns for roster
+// members whose stored profile never carried statistics.variants (older
+// enrichments, rankings-only rows). Reuses enrich_user (which fetches
+// /users/{id}/mania and, via the Stage 1 write rule, now fills the columns), so
+// no new job type. Enqueued at low priority behind organic enrichment: enrich_user
+// is never pressure-deferred or shed, and the fast lane claims it in priority
+// order, so a small batch drains without crowding out user-facing work. Dedupe
+// key user:{id} coalesces with organic enrichment (priority max wins). ~roster
+// size / 8 per 15 min to full coverage; Stage 2's calibration covers the interim.
+const VARIANT_PP_DRIP_BATCH = 8;
+const VARIANT_PP_DRIP_INTERVAL_MS = 15 * 60_000;
+const VARIANT_PP_DRIP_PRIORITY = 10;
+
+function startVariantPpDripScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: JobQueue): void {
+  const tick = async () => {
+    try {
+      const rows = (await exec(
+        db,
+        `select user_id from users
+         where is_active = 1 and pp is not null and pp > 0
+           and pp_4k is null and pp_7k is null
+           and (profile_json is null or profile_json not like '%"variants"%')
+         order by pp desc
+         limit ?`,
+        [VARIANT_PP_DRIP_BATCH],
+      )).rows;
+      for (const row of rows) {
+        const userId = Number(row.user_id);
+        if (!Number.isSafeInteger(userId) || userId <= 0) continue;
+        await queue.enqueue("enrich_user", `user:${userId}`, { userId }, { priority: VARIANT_PP_DRIP_PRIORITY });
+      }
+    } catch (error) {
+      console.warn("[variant-pp-drip] scheduled enqueue failed", error);
+    }
+    setTimeout(tick, VARIANT_PP_DRIP_INTERVAL_MS).unref();
+  };
+  setTimeout(tick, 90_000).unref();
 }
 
 // Seeds and watchdogs the pack-pool snapshot warm chain: the job re-enqueues

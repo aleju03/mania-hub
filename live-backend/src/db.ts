@@ -2,6 +2,7 @@ import { createClient, type Client, type InValue, type ResultSet, type Transacti
 import { mkdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { Config } from "./config.js";
+import { extractManiaVariantPps } from "./shared/score.js";
 
 export type Db = Client;
 
@@ -89,6 +90,8 @@ export async function migrate(db: Db): Promise<void> {
   await migrateScoreEventsIdentity(db);
   await migrateProfileSnapshots(db);
   await migrateMapsFarmedOverlay(db);
+  await migrateUserVariantPp(db);
+  await migrateFarmHelperShape(db);
   await migrateApiCallTargets(db);
   await migrateApiRateLimitReservations(db);
   await migratePlayerActivity(db);
@@ -158,6 +161,27 @@ export async function execBatch(db: Db, statements: DbStatement[], mode: Transac
     results.push(...await withSqliteBusyRetry(() => db.batch(chunk.map(({ sql, args = [] }) => ({ sql, args })), mode)));
   }
   return results;
+}
+
+// Shared write rule for the users.pp_4k / pp_7k columns. Returns a conditional
+// UPDATE only when the payload actually carried a variants array, so a partial
+// user upsert (no variants) leaves the columns intact, while a variants payload
+// overwrites both, including nulling a keymode whose pp legitimately decayed to
+// none. Never coalesce-guard these columns (Number(x ?? 0) poison bug).
+export function variantPpUpdateStatement(userId: number, statistics: unknown): DbStatement | null {
+  if (!Number.isSafeInteger(userId) || userId <= 0) return null;
+  const variantPps = extractManiaVariantPps(statistics);
+  if (!variantPps) return null;
+  return {
+    sql: "update users set pp_4k = ?, pp_7k = ? where user_id = ?",
+    args: [variantPps.pp4k, variantPps.pp7k, userId],
+  };
+}
+
+export async function writeVariantPps(db: Db, userId: number, statistics: unknown): Promise<void> {
+  const statement = variantPpUpdateStatement(userId, statistics);
+  if (!statement) return;
+  await exec(db, statement.sql, statement.args ?? []);
 }
 
 export function isSqliteBusyError(error: unknown): boolean {
@@ -365,6 +389,63 @@ async function migrateProfileSnapshots(db: Db): Promise<void> {
     create index if not exists idx_profile_section_cache_user_section
       on profile_section_cache(user_id, section)
   `);
+}
+
+// Real per-keymode osu! pp columns for the farm helper. Populated from the
+// enrichment payload's statistics.variants at the full-user upsert paths and
+// backfilled once from stored profile_json here so the columns are usable
+// before the enrichment drip finishes covering the roster.
+async function migrateUserVariantPp(db: Db): Promise<void> {
+  const userColumns = (await db.execute("pragma table_info(users)")).rows.map((row) => String(row.name));
+  if (!userColumns.includes("pp_4k")) {
+    await db.execute("alter table users add column pp_4k real");
+  }
+  if (!userColumns.includes("pp_7k")) {
+    await db.execute("alter table users add column pp_7k real");
+  }
+
+  const backfillKey = "farm_helper_variant_pp_backfill:v1";
+  const done = (await db.execute({
+    sql: "select 1 from live_meta where key = ? limit 1",
+    args: [backfillKey],
+  })).rows[0];
+  if (done) return;
+
+  const rows = (await db.execute(
+    "select user_id, profile_json from users where profile_json like '%\"variants\"%'",
+  )).rows;
+  const updates: DbStatement[] = [];
+  for (const row of rows) {
+    const userId = Number(row.user_id);
+    if (!Number.isSafeInteger(userId) || userId <= 0) continue;
+    let statistics: unknown;
+    try {
+      statistics = (JSON.parse(String(row.profile_json)) as { statistics?: unknown }).statistics;
+    } catch {
+      continue;
+    }
+    const variantPps = extractManiaVariantPps(statistics);
+    if (!variantPps) continue;
+    updates.push({
+      sql: "update users set pp_4k = ?, pp_7k = ? where user_id = ?",
+      args: [variantPps.pp4k, variantPps.pp7k, userId],
+    });
+  }
+  await execBatch(db, updates);
+  await db.execute({
+    sql: `insert into live_meta (key, value_json, updated_at) values (?, ?, ?)
+          on conflict(key) do update set value_json = excluded.value_json, updated_at = excluded.updated_at`,
+    args: [backfillKey, json(true), new Date().toISOString()],
+  });
+}
+
+// Per-peer chart-shape profile for the farm helper (Stage 3). Populated by the
+// key-stats seed rebuild and the per-user refresh; the column just needs to exist.
+async function migrateFarmHelperShape(db: Db): Promise<void> {
+  const columns = (await db.execute("pragma table_info(farm_helper_user_key_stats)")).rows.map((row) => String(row.name));
+  if (!columns.includes("shape_json")) {
+    await db.execute("alter table farm_helper_user_key_stats add column shape_json text");
+  }
 }
 
 async function migrateMapsFarmedOverlay(db: Db): Promise<void> {

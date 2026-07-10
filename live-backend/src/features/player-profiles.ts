@@ -1,6 +1,6 @@
 import sanitizeHtml from "sanitize-html";
 import type { Db } from "../db.js";
-import { exec, json, parseJson } from "../db.js";
+import { exec, json, parseJson, writeVariantPps } from "../db.js";
 import { errorContext, logWarn } from "../logger.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { calculateWeightedPpTotal, getScoreIdentity, getScoreTimestamp, nowIso, scoreHasPublicLeaderboard } from "../shared/score.js";
@@ -536,6 +536,7 @@ async function upsertDisplayUser(
       readInteger(readRecord(storedUser.statistics)?.country_rank),
     ],
   );
+  await writeVariantPps(db, userId, storedUser.statistics);
 }
 
 async function buildServedSnapshot(db: Db, row: ProfileSnapshotRow, forceStale: boolean, recentScores: OscScore[] = []): Promise<PlayerProfileSnapshot> {

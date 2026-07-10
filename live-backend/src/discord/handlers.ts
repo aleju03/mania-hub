@@ -477,7 +477,7 @@ const farmHandler: CommandHandler = async (deps, interaction) => {
   const keyMode: FarmHelperKeyMode = keysRaw === "4k" || keysRaw === "7k" ? keysRaw : "any";
   try {
     const key = await resolveTargetKey(deps, interaction);
-    const snapshot = await getFarmHelperSnapshot(deps.db, deps.osu, key, { keyMode, view: "gain", limit: 8 });
+    const snapshot = await getFarmHelperSnapshot(deps.db, deps.osu, key, { keyMode, view: "gain", limit: 8 }, deps.queue);
     return farmEmbed(snapshot, deps.config.discordSiteOrigin);
   } catch (error) {
     return friendlyError(error, subject);

@@ -1,14 +1,5 @@
-import { createServerFn } from "@tanstack/react-start";
-import { fetchBeatmapFile, fetchWithCacheLock } from "../api";
-import { parseCachedManiaBeatmap } from "../parsed-beatmap-cache";
-import { analyzeManiaPatterns, type ManiaPatternAnalysis } from "../dan-estimator";
-import { edgeCache } from "./server";
-import { parseBoundedInt } from "./validators";
 import type { ManiaBeatmap } from "../beatmap-parser";
 
-const PATTERN_ANALYSIS_CACHE_VERSION = 6;
-const PATTERN_ANALYSIS_CACHE_TTL = 365 * 24 * 60 * 60 * 1000;
-const PATTERN_ANALYSIS_CACHE_LOCK_TTL = 30_000;
 const MIN_ANALYSIS_RATE = 0.5;
 const MAX_ANALYSIS_RATE = 2;
 const INFERRED_BREAK_MIN_GAP_MS = 5_000;
@@ -23,100 +14,6 @@ export interface BeatmapBreakRange {
   endTime: number;
   kind: "declared" | "inferred";
 }
-
-export interface BeatmapPatternAnalysisResponse {
-  analysis: ManiaPatternAnalysis;
-  chart: {
-    objects: number;
-    avgNps: number;
-    peakNps: number;
-    od: number;
-    breaks: number;
-    breakRanges: BeatmapBreakRange[];
-    rate: number;
-    svCount: number;
-  };
-}
-
-export const getBeatmapPatternAnalysis = createServerFn({ method: "GET" })
-  .inputValidator((input: unknown) => {
-    if (!input || typeof input !== "object" || Array.isArray(input)) {
-      throw new Error("Invalid beatmap analysis payload.");
-    }
-    const data = input as Record<string, unknown>;
-    const beatmapId = parseBoundedInt(data.beatmapId, "beatmapId", { min: 1, max: 10_000_000 });
-    const beatmapsetId = data.beatmapsetId == null || data.beatmapsetId === ""
-      ? null
-      : parseBoundedInt(data.beatmapsetId, "beatmapsetId", { min: 1, max: 10_000_000 });
-    return {
-      beatmapId,
-      beatmapsetId,
-      starRating: parseOptionalNumber(data.starRating),
-      totalLength: parseOptionalNumber(data.totalLength),
-      rate: normalizeAnalysisRate(parseOptionalNumber(data.rate)),
-      version: typeof data.version === "string" ? data.version.slice(0, 120) : undefined,
-    };
-  })
-  .handler(async ({ data }: {
-    data: {
-      beatmapId: number;
-      beatmapsetId: number | null;
-      starRating?: number;
-      totalLength?: number;
-      rate: number;
-      version?: string;
-    };
-  }) => {
-    edgeCache(300, 3600);
-    const osuFile = await fetchBeatmapFile(data.beatmapId, data.beatmapsetId);
-    const input = {
-      starRating: data.starRating,
-      totalLength: data.totalLength,
-      rate: data.rate,
-      version: data.version,
-    };
-    const inputKey = JSON.stringify({
-      starRating: input.starRating ?? null,
-      totalLength: input.totalLength ?? null,
-      rate: input.rate,
-      version: input.version ?? "",
-    });
-    const cacheKey = [
-      "beatmap-pattern-analysis",
-      `v${PATTERN_ANALYSIS_CACHE_VERSION}`,
-      data.beatmapId,
-      hashString(osuFile),
-      hashString(inputKey),
-    ].join(":");
-
-    return fetchWithCacheLock<BeatmapPatternAnalysisResponse>(
-      cacheKey,
-      PATTERN_ANALYSIS_CACHE_TTL,
-      async () => {
-        const beatmap = parseCachedManiaBeatmap(data.beatmapId, osuFile);
-        const analysis = analyzeManiaPatterns(beatmap, input);
-        const baseDurationSeconds = data.totalLength ?? (beatmap.totalLength ? beatmap.totalLength / 1000 : 0);
-        const durationSeconds = Math.max(1, baseDurationSeconds / data.rate);
-        const objects = analysis.metrics.noteCount || beatmap.notes.length;
-        const breakRanges = getChartBreakRanges(beatmap, data.rate);
-
-        return {
-          analysis,
-          chart: {
-            objects,
-            avgNps: objects / durationSeconds,
-            peakNps: analysis.metrics.peakNps1s,
-            od: beatmap.od,
-            breaks: breakRanges.length,
-            breakRanges,
-            rate: data.rate,
-            svCount: beatmap.scrollVelocities.filter((sv) => Math.abs(sv.multiplier - 1) > 0.001).length,
-          },
-        };
-      },
-      PATTERN_ANALYSIS_CACHE_LOCK_TTL,
-    );
-  });
 
 export function countChartBreaks(beatmap: Pick<ManiaBeatmap, "breakPeriods" | "notes" | "totalLength">, rate = 1): number {
   return getChartBreakRanges(beatmap, rate).length;
@@ -247,22 +144,7 @@ function getGroupedHitObjectStarts(notes: ManiaBeatmap["notes"]): number[] {
   return grouped;
 }
 
-function parseOptionalNumber(value: unknown): number | undefined {
-  if (value == null || value === "") return undefined;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : undefined;
-}
-
 function normalizeAnalysisRate(value: number | undefined): number {
   if (value == null) return 1;
   return Math.min(MAX_ANALYSIS_RATE, Math.max(MIN_ANALYSIS_RATE, value));
-}
-
-function hashString(value: string): string {
-  let hash = 2166136261;
-  for (let index = 0; index < value.length; index++) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(36);
 }

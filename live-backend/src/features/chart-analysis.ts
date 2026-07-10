@@ -257,6 +257,20 @@ export async function enqueueMissingChartAnalyses(db: Db, queue: JobQueue, beatm
   }
 }
 
+// The farm-count-ordered candidate query aggregates the whole
+// country_maps_farmed_scores table, and local libsql runs synchronously, so it
+// must not run on every ~20s top-up tick. The ordered id list barely changes
+// while a backfill drains, so it is cached per Db with a cursor; each top-up
+// serves the next slice and re-checks only that slice's statuses (indexed pk
+// lookup). Admin includeFailed passes bypass the cache entirely.
+const BACKFILL_CANDIDATES_TTL_MS = 10 * 60_000;
+interface CachedBackfillCandidates {
+  ids: number[];
+  cursor: number;
+  expiresAt: number;
+}
+const backfillCandidatesCache = new WeakMap<Db, CachedBackfillCandidates>();
+
 /**
  * Enqueue analysis for beatmaps whose .osu text is already cached but have no
  * row at the current version. No osu! API cost: it only sweeps the local cache.
@@ -269,33 +283,89 @@ export async function enqueueChartAnalysisBackfill(
   options: { includeFailed?: boolean } = {},
 ): Promise<number> {
   const safeLimit = Math.max(1, Math.min(20_000, Math.floor(limit)));
+
+  // Manual admin retry pass: uncached direct query, failed rows included.
+  if (options.includeFailed) {
+    const ids = await queryBackfillCandidates(db, safeLimit, true);
+    let enqueued = 0;
+    for (const beatmapId of ids) {
+      await enqueueChartAnalysis(queue, beatmapId);
+      enqueued += 1;
+    }
+    return enqueued;
+  }
+
+  const now = Date.now();
+  let cached = backfillCandidatesCache.get(db);
+  if (!cached || cached.expiresAt <= now || cached.cursor >= cached.ids.length) {
+    cached = {
+      ids: await queryBackfillCandidates(db, BACKFILL_CANDIDATES_FETCH, false),
+      cursor: 0,
+      expiresAt: now + BACKFILL_CANDIDATES_TTL_MS,
+    };
+    backfillCandidatesCache.set(db, cached);
+  }
+
+  let enqueued = 0;
+  while (enqueued < safeLimit && cached.cursor < cached.ids.length) {
+    const slice = cached.ids.slice(cached.cursor, cached.cursor + Math.min(900, safeLimit - enqueued));
+    cached.cursor += slice.length;
+    // The cached list can be minutes stale: a slice entry may have gained a row
+    // (ready, running, recently failed) since the fetch. Re-check just the slice.
+    const placeholders = slice.map(() => "?").join(", ");
+    const rows = (await exec(
+      db,
+      `select beatmap_id, status, updated_at from beatmap_chart_analysis
+       where analysis_version = ? and beatmap_id in (${placeholders})`,
+      [CHART_ANALYSIS_VERSION, ...slice],
+    )).rows;
+    const rowByBeatmapId = new Map(rows.map((row) => [Number(row.beatmap_id), row]));
+    for (const beatmapId of slice) {
+      const row = rowByBeatmapId.get(beatmapId);
+      if (row && shouldSkipChartAnalysis(row)) continue;
+      await enqueueChartAnalysis(queue, beatmapId);
+      enqueued += 1;
+    }
+  }
+  return enqueued;
+}
+
+// How many ordered candidates one expensive query buys. At the top-up rate
+// (BACKFILL_TOP_UP per drain) this outlives the cache TTL comfortably.
+const BACKFILL_CANDIDATES_FETCH = 20_000;
+
+async function queryBackfillCandidates(db: Db, limit: number, includeFailed: boolean): Promise<number[]> {
   // The self-chaining runner sweeps missing rows only: failed rows already get
   // queue-level retries, and re-sweeping them each pass would keep the run
   // alive forever on a chart that permanently fails. The manual admin endpoint
   // includes them for an explicit retry pass.
-  const missingClause = options.includeFailed
+  const missingClause = includeFailed
     ? "(a.beatmap_id is null or a.status in ('failed'))"
     : "a.beatmap_id is null";
+  // Prioritize charts the farm helper actually ranks: analyze the most-farmed
+  // maps first so the ~half of farmed maps still missing analysis close their
+  // coverage gap before the long tail of never-farmed charts.
   const rows = (await exec(
     db,
     `select f.beatmap_id as beatmap_id
      from beatmap_osu_files f
      left join beatmap_chart_analysis a
        on a.beatmap_id = f.beatmap_id and a.analysis_version = ?
+     left join (
+       select beatmap_id, count(*) as farm_count
+       from country_maps_farmed_scores
+       group by beatmap_id
+     ) fc on fc.beatmap_id = f.beatmap_id
      where f.error is null
        and (f.content != '' or f.content_blob is not null)
        and ${missingClause}
+     order by coalesce(fc.farm_count, 0) desc, f.beatmap_id
      limit ?`,
-    [CHART_ANALYSIS_VERSION, safeLimit],
+    [CHART_ANALYSIS_VERSION, limit],
   )).rows;
-  let enqueued = 0;
-  for (const row of rows) {
-    const beatmapId = Number(row.beatmap_id);
-    if (!Number.isInteger(beatmapId) || beatmapId <= 0) continue;
-    await enqueueChartAnalysis(queue, beatmapId);
-    enqueued += 1;
-  }
-  return enqueued;
+  return rows
+    .map((row) => Number(row.beatmap_id))
+    .filter((id) => Number.isInteger(id) && id > 0);
 }
 
 function shouldSkipChartAnalysis(row: Record<string, unknown>): boolean {

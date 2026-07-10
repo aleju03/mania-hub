@@ -148,6 +148,34 @@ describe("chart analysis", () => {
       expect(Number(count.n)).toBe(1);
     });
   });
+
+  it("prioritizes the most-farmed maps when the backfill limit is smaller than the missing set", async () => {
+    await withDb(async (db) => {
+      const queue = new JobQueue(db);
+      for (const id of [801, 802, 803]) {
+        await storeCachedBeatmapFile(db, id, buildStreamBeatmapFile(), { source: "test" });
+      }
+      const iso = "2026-01-01T00:00:00Z";
+      const farm = (beatmapId: number, userId: number) => exec(
+        db,
+        `insert into country_maps_farmed_scores
+           (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at)
+         values ('CR', ?, ?, ?, 100, '{}', '[]', null, ?, ?, ?)`,
+        [userId, beatmapId, userId * 100000 + beatmapId, iso, iso, iso],
+      );
+      for (let u = 1; u <= 5; u += 1) await farm(801, u); // most farmed
+      for (let u = 1; u <= 2; u += 1) await farm(802, u); // some farmed
+      // 803 is never farmed.
+
+      const enqueued = await enqueueChartAnalysisBackfill(db, queue, 2);
+      expect(enqueued).toBe(2);
+      const jobs = (await exec(db, "select dedupe_key from jobs where type = ?", [CHART_ANALYSIS_JOB])).rows
+        .map((row) => String(row.dedupe_key));
+      expect(jobs).toContain(`chart-analysis:${CHART_ANALYSIS_VERSION}:801`);
+      expect(jobs).toContain(`chart-analysis:${CHART_ANALYSIS_VERSION}:802`);
+      expect(jobs).not.toContain(`chart-analysis:${CHART_ANALYSIS_VERSION}:803`);
+    });
+  });
 });
 
 describe("chart analysis backfill run", () => {

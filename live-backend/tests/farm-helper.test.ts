@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
-import { FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapshot } from "../src/features/farm-helper.js";
+import { buildFarmHelperSnapshotForBacktest, FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapshot } from "../src/features/farm-helper.js";
 import { calculateWeightedPpTotal, nowIso } from "../src/shared/score.js";
 import { OsuApiError, type OsuApiClient } from "../src/osu/client.js";
 import type { OscScore, OsuMod } from "../src/shared/types.js";
@@ -139,8 +139,67 @@ async function insertBeatmapMeta(beatmapId: number, keys = 4, stars = 5): Promis
   );
 }
 
+// Pattern-mix order: jack, stream, jumpstream, handstream, stamina, chordjack, tech, ln.
+async function insertSearchIndex(beatmapId: number, pat: number[], keyCount = 4, msdValues?: Record<string, number>): Promise<void> {
+  const msdJson = msdValues ? JSON.stringify({ etternaVersion: "test", values: { ...msdValues, Overall: Math.max(...Object.values(msdValues)) } }) : null;
+  const msdOverall = msdValues ? Math.max(...Object.values(msdValues)) : null;
+  await exec(
+    db,
+    `insert into map_search_index
+       (beatmap_id, beatmapset_id, analysis_version, title, artist, creator, version, search_text,
+        key_count, stars, bpm, length, status, primary_pattern,
+        pat_jack, pat_stream, pat_jumpstream, pat_handstream, pat_stamina, pat_chordjack, pat_tech, pat_ln,
+        msd_json, msd_overall, updated_at)
+     values (?, ?, 1, ?, 'Artist', 'Mapper', 'Insane', '', ?, 5, 180, 120, 'ranked', 'stream',
+             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     on conflict(beatmap_id) do update set
+       pat_jack = excluded.pat_jack, pat_stream = excluded.pat_stream, pat_jumpstream = excluded.pat_jumpstream,
+       pat_handstream = excluded.pat_handstream, pat_stamina = excluded.pat_stamina, pat_chordjack = excluded.pat_chordjack,
+       pat_tech = excluded.pat_tech, pat_ln = excluded.pat_ln, msd_json = excluded.msd_json, msd_overall = excluded.msd_overall`,
+    [beatmapId, beatmapId + 100, `Map ${beatmapId}`, keyCount, ...pat, msdJson, msdOverall, nowIso()],
+  );
+}
+
+async function seedSubjectSkillRatings(userId: number, keyCount: number, ratings: Record<string, number>, analyzedPlays: number): Promise<void> {
+  const modesJson = JSON.stringify({
+    totalPlays: analyzedPlays,
+    analyzedPlays,
+    pendingPlays: 0,
+    unsupportedPlays: 0,
+    modes: [{ keyCount, analyzedPlays, ratings, patterns: [] }],
+  });
+  const now = nowIso();
+  await exec(
+    db,
+    `insert into player_skill_ratings (user_id, analysis_version, status, plays_json, modes_json, computed_at, updated_at)
+     values (?, 3, 'ready', '[]', ?, ?, ?)`,
+    [userId, modesJson, now, now],
+  );
+}
+
+const stubQueue = { enqueue: async () => {} } as unknown as Parameters<typeof getFarmHelperSnapshot>[4];
+
+// The merged "any" view runs the concrete 4k pipeline, whose peer pool only
+// admits players with at least KEYMODE_MIN_PROXY_SCORES (8) farmed 4K maps. These
+// filler maps are ones buildSubjectBestScores already owns at ~480-500pp, so
+// peers who farm them at 300pp qualify for the 4K pool without those maps ever
+// surfacing as recommendations (the subject owns them competitively -> dropped in
+// the gain view). Distinct from BM_IMPROVE/STALE/MISSING and any per-test ids.
+const FILLER_4K = [900, 901, 902, 903, 904, 905, 906];
+
+async function seedFiller4kMeta(): Promise<void> {
+  for (const beatmapId of FILLER_4K) await insertBeatmapMeta(beatmapId, 4, 5);
+}
+
+// Farms every filler map for one peer so they clear the 4K pool's farm-count
+// floor. playedAt is overridable for backtest cutoff tests.
+async function farmFiller4k(country: string, id: number, playedAt = nowIso()): Promise<void> {
+  for (const beatmapId of FILLER_4K) await insertFarmed(country, id, beatmapId, 300, playedAt, [], playedAt);
+}
+
 async function seedPeers(): Promise<void> {
   const recent = nowIso();
+  await seedFiller4kMeta();
   for (let i = 0; i < 15; i += 1) {
     const id = 100 + i;
     const country = i < 8 ? "CR" : "US"; // two countries -> exercises global aggregation
@@ -148,6 +207,7 @@ async function seedPeers(): Promise<void> {
     await insertFarmed(country, id, BM_IMPROVE, 600, recent); // median 600 (subject only 400)
     await insertFarmed(country, id, BM_MISSING, 620, recent); // median 620 (subject missing)
     await insertFarmed(country, id, BM_STALE, i < 10 ? 600 : 660, recent); // median 600, p75 660
+    await farmFiller4k(country, id, recent); // qualify for the concrete 4K pool
   }
   await insertBeatmapMeta(BM_IMPROVE);
   await insertBeatmapMeta(BM_STALE);
@@ -254,10 +314,12 @@ describe("farm helper", () => {
     const targetBeatmap = 50;
 
     await insertBeatmapMeta(targetBeatmap);
+    await seedFiller4kMeta();
     for (let i = 0; i < 15; i += 1) {
       const id = 700 + i;
       await insertUser(id, SUBJECT_PP, "CR", `SpreadPeer${i}`);
       await insertFarmed("CR", id, targetBeatmap, i < 5 ? 500 : 700, recent);
+      await farmFiller4k("CR", id, recent); // qualify for the concrete 4K pool
     }
 
     const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
@@ -268,32 +330,11 @@ describe("farm helper", () => {
     expect(rec?.estimatedPpGain).toBeGreaterThan(1);
   });
 
-  it("uses every player in the pp band instead of capping at 250 peers", async () => {
-    const bestScores = buildSubjectBestScores();
-    const recent = nowIso();
-    const targetBeatmap = 60;
-
-    await insertBeatmapMeta(targetBeatmap);
-    for (let i = 0; i < 264; i += 1) {
-      await insertUser(1000 + i, SUBJECT_PP + i, "CR", `ClosePeer${i}`);
-    }
-    for (let i = 0; i < 36; i += 1) {
-      const id = 2000 + i;
-      await insertUser(id, SUBJECT_PP + 300 + i, "US", `OuterPeer${i}`);
-      await insertFarmed("US", id, targetBeatmap, 620, recent);
-    }
-
-    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { keyMode: "any" });
-    const rec = snapshot.recs.find((candidate) => candidate.beatmapId === targetBeatmap);
-
-    expect(snapshot.peerBand.mode).toBe("pp_band");
-    expect(snapshot.peerBand.count).toBe(300);
-    expect(snapshot.peerBand.farmDataCount).toBe(36);
-    expect(rec?.reason).toBe("missing");
-    expect(rec?.peerCount).toBe(36);
-    expect(rec?.peerSampleSize).toBe(36);
-    expect(rec?.peerFraction).toBe(1);
-  });
+  // (The old "uses every player in the pp band instead of capping at 250 peers"
+  // test exercised the total-pp cohort's non-farming members. The merged "any"
+  // view runs the concrete 4K pool instead, which only admits farmers, so that
+  // premise no longer applies; the 300-peer cap is covered by "uses every
+  // key-mode peer instead of capping the proxy cohort at 250".)
 
   it("scores Any-mode farm overlap against peers with farm data", async () => {
     const bestScores = buildSubjectBestScores();
@@ -303,19 +344,21 @@ describe("farm helper", () => {
 
     await insertBeatmapMeta(targetBeatmap);
     await insertBeatmapMeta(fillerBeatmap);
-    for (let i = 0; i < 39; i += 1) {
-      await insertUser(5000 + i, SUBJECT_PP + i, "CR", `NoDataPeer${i}`);
-    }
+    await seedFiller4kMeta();
+    // 8 peers with 4K farm data (qualifying for the concrete pool); 4 farm the
+    // target, 4 farm a different map. Only these 8 form the cohort; the fraction
+    // denominator is the farm-data cohort, so the target's fraction is 4/8.
     for (let i = 0; i < 8; i += 1) {
       const id = 6000 + i;
       await insertUser(id, SUBJECT_PP + 100 + i, "US", `DataPeer${i}`);
       await insertFarmed("US", id, i < 4 ? targetBeatmap : fillerBeatmap, 620, recent);
+      await farmFiller4k("US", id, recent);
     }
 
     const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { keyMode: "any" });
     const rec = snapshot.recs.find((candidate) => candidate.beatmapId === targetBeatmap);
 
-    expect(snapshot.peerBand.count).toBe(47);
+    expect(snapshot.peerBand.count).toBe(8);
     expect(snapshot.peerBand.farmDataCount).toBe(8);
     expect(rec?.reason).toBe("missing");
     expect(rec?.peerCount).toBe(4);
@@ -333,32 +376,29 @@ describe("farm helper", () => {
     await insertBeatmapMeta(targetBeatmap, 4, 5);
     for (const beatmapId of supportBeatmaps) await insertBeatmapMeta(beatmapId, 4, 5);
 
-    for (let i = 0; i < 264; i += 1) {
+    // 300 peers at the same key-mode strength (so none are distance-discounted),
+    // all farming the same support set plus the target: exercises the cohort
+    // above the old 250 cap.
+    for (let i = 0; i < 300; i += 1) {
       const id = 3000 + i;
-      await insertUser(id, SUBJECT_PP + i, "CR", `KeyClosePeer${i}`);
+      await insertUser(id, SUBJECT_PP + i, "CR", `KeyPeer${i}`);
       for (let j = 0; j < supportBeatmaps.length; j += 1) {
         await insertFarmed("CR", id, supportBeatmaps[j], supportPps[j] ?? 0, recent);
       }
-    }
-    for (let i = 0; i < 36; i += 1) {
-      const id = 4000 + i;
-      await insertUser(id, SUBJECT_PP + 300 + i, "US", `KeyOuterPeer${i}`);
-      for (let j = 0; j < supportBeatmaps.length; j += 1) {
-        await insertFarmed("US", id, supportBeatmaps[j], supportPps[j] ?? 0, recent);
-      }
-      await insertFarmed("US", id, targetBeatmap, 620, recent);
+      await insertFarmed("CR", id, targetBeatmap, 620, recent);
     }
 
     const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { keyMode: "4k" });
     const rec = snapshot.recs.find((candidate) => candidate.beatmapId === targetBeatmap);
 
-    expect(snapshot.peerBand.mode).toBe("4k_pp_proxy");
+    expect(snapshot.peerBand.mode).toBe("knn");
     expect(snapshot.peerBand.count).toBe(300);
     expect(snapshot.peerBand.farmDataCount).toBe(300);
     expect(rec?.reason).toBe("missing");
-    expect(rec?.peerCount).toBe(36);
+    expect(rec?.peerCount).toBe(300);
     expect(rec?.peerSampleSize).toBe(300);
-    expect(rec?.peerFraction).toBe(0.12);
+    // Every eligible peer farms the target, so it holds the full weight mass.
+    expect(rec?.peerFraction).toBe(1);
   });
 
   it("returns an empty farmer list for a map nobody farmed", async () => {
@@ -470,12 +510,20 @@ describe("farm helper", () => {
     const osu = makeOsuStub(bestScores, 12_341, { "4k": 12_341, "7k": 2_535 });
     const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "7k" });
 
-    expect(snapshot.peerBand.mode).toBe("7k_nearest");
+    // Strict key-mode requests never fall back to the total-pp pool: the peers
+    // have only a single 7k farmed score (below the proxy score-count floor), so
+    // the cohort is legitimately empty rather than borrowing total-pp neighbours.
+    expect(snapshot.peerBand.mode).toBe("knn");
     expect(snapshot.peerBand.count).toBe(0);
     expect(snapshot.recs).toEqual([]);
   });
 
-  it("does not show off-keymode Any recommendations above the player's key-mode range", async () => {
+  it("only recommends a keymode's maps in Any when that keymode has its own cohort", async () => {
+    // Merged design: Any runs the 4K and 7K pipelines separately. The subject is
+    // 4K-strong; their 7K variant pp is tiny and the peers farm only a single 7K
+    // map (below the 7K pool's farm-count floor), so the 7K cohort is empty and
+    // the 7K chart drops out - not via an off-key gate, but because no 7K cohort
+    // exists. The 4K chart, backed by a real 4K cohort, survives.
     const recent = nowIso();
     const safe4kBeatmap = 76;
     const tooHard7kBeatmap = 77;
@@ -483,11 +531,13 @@ describe("farm helper", () => {
 
     await insertBeatmapMeta(safe4kBeatmap, 4, 5);
     await insertBeatmapMeta(tooHard7kBeatmap, 7, 8);
+    await seedFiller4kMeta();
     for (let i = 0; i < 15; i += 1) {
       const id = 7100 + i;
       await insertUser(id, 12_350 + i, "CR", `OverallPeer${i}`);
       await insertFarmed("CR", id, safe4kBeatmap, 620, recent);
       await insertFarmed("CR", id, tooHard7kBeatmap, 620, recent);
+      await farmFiller4k("CR", id, recent); // qualify for the concrete 4K pool
     }
 
     const osu = makeOsuStub(bestScores, 12_341, { "4k": 12_341, "7k": 2_535 });
@@ -565,7 +615,7 @@ describe("farm helper", () => {
     const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "7k" });
     const rec = snapshot.recs.find((candidate) => candidate.beatmapId === targetBeatmap);
 
-    expect(snapshot.peerBand.mode).toMatch(/^7k_pp_proxy/);
+    expect(snapshot.peerBand.mode).toMatch(/^knn/);
     expect(rec?.peerCount).toBe(12);
     expect(rec?.topPeers.every((peer) => peer.username.startsWith("Strong7kPeer"))).toBe(true);
     expect(rec?.topPeers.some((peer) => peer.username.startsWith("Low7kPeer"))).toBe(false);
@@ -603,7 +653,7 @@ describe("farm helper", () => {
     const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" });
     const rec = snapshot.recs.find((candidate) => candidate.beatmapId === targetBeatmap);
 
-    expect(snapshot.peerBand.mode).toMatch(/^4k_pp_proxy/);
+    expect(snapshot.peerBand.mode).toMatch(/^knn/);
     expect(rec?.peerCount).toBe(12);
     expect(rec?.benchmarkPp).toBe(430);
     expect(rec?.topPeers.every((peer) => peer.username.startsWith("KeyPeer"))).toBe(true);
@@ -614,7 +664,12 @@ describe("farm helper", () => {
     expect(farmers.farmers.every((peer) => peer.username.startsWith("KeyPeer"))).toBe(true);
   });
 
-  it("scopes the who-farms list to the snapshot keyMode (Any keeps the total-pp pool)", async () => {
+  it("scopes the who-farms list to an Any-view card's own keymode cohort", async () => {
+    // Merged design: an Any-view 4K card is generated by the concrete 4K cohort,
+    // so the who-farms modal must sample that same 4K cohort (decision 8: the
+    // frontend passes the card's "4k", not the view's "any"). The high-total-pp,
+    // 4K-light farmers sit in the 4K pool but far from the subject's 4K pp, so the
+    // kernel excludes them - only the matched 4K-strength peers form the cohort.
     const recent = nowIso();
     const targetBeatmap = 70;
     const supportBeatmaps = Array.from({ length: 8 }, (_, i) => 7000 + i);
@@ -628,8 +683,7 @@ describe("farm helper", () => {
     await insertBeatmapMeta(6999, 4, 8);
     for (const beatmapId of supportBeatmaps) await insertBeatmapMeta(beatmapId, 4, 7.8);
 
-    // 4K-strength peers: total pp BELOW the subject's total-pp band, but their 4K
-    // farm strength matches the subject, so only the key-mode band should see them.
+    // 4K-strength peers whose 4K farm strength matches the subject: the cohort.
     for (let i = 0; i < 12; i += 1) {
       const id = 700 + i;
       await insertUser(id, 13_000, "CR", `KeyPeer${i}`);
@@ -637,8 +691,8 @@ describe("farm helper", () => {
       for (const beatmapId of supportBeatmaps) await insertFarmed("CR", id, beatmapId, 500 - i, recent);
     }
 
-    // High total-pp, 4K-light farmers (the bojii/logann case): inside the subject's
-    // total-pp band, so the Any/total-pp pool is the cohort that should see them.
+    // 4K-light-but-high-total-pp farmers (the bojii/logann case): in the 4K pool
+    // but their 4K farm strength is ~2x the subject's, so the kernel drops them.
     for (let i = 0; i < 12; i += 1) {
       const id = 800 + i;
       await insertUser(id, 15_000, "US", `TotalPpPeer${i}`);
@@ -648,20 +702,21 @@ describe("farm helper", () => {
 
     const osu = makeOsuStub(bestScores, 15_000);
 
-    // The Any card samples the total-pp band -> the high-total-pp cohort.
+    // The Any card for this 4K map is backed by the matched 4K cohort.
     const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "any" });
-    expect(snapshot.peerBand.mode).toBe("pp_band");
+    expect(snapshot.peerBand.mode).toMatch(/^knn/);
     expect(snapshot.peerBand.count).toBe(12);
     expect(snapshot.peerBand.farmDataCount).toBe(12);
+    const anyRec = snapshot.recs.find((rec) => rec.beatmapId === targetBeatmap);
+    expect(anyRec?.topPeers.every((peer) => peer.username.startsWith("KeyPeer"))).toBe(true);
 
-    // The who-farms list must mirror that Any cohort, not silently switch to a 4K
-    // band (which is what produced the card-vs-modal count mismatch).
-    const anyFarmers = await getFarmHelperFarmers(db, osu, "Subject", targetBeatmap, undefined, "any");
-    expect(anyFarmers.total).toBe(12);
-    expect(anyFarmers.farmers.every((peer) => peer.username.startsWith("TotalPpPeer"))).toBe(true);
+    // The modal for an Any-view 4K card passes the card's keymode ("4k"), so it
+    // mirrors the card's 4K cohort instead of switching pools.
+    const cardFarmers = await getFarmHelperFarmers(db, osu, "Subject", targetBeatmap, undefined, "4k");
+    expect(cardFarmers.total).toBe(12);
+    expect(cardFarmers.farmers.every((peer) => peer.username.startsWith("KeyPeer"))).toBe(true);
 
-    // Without a keyMode it still falls back to the map's key count (4K), selecting
-    // the key-strength cohort instead -> a disjoint set of players.
+    // A direct caller without a keyMode still falls back to the map's key count.
     const keyFarmers = await getFarmHelperFarmers(db, osu, "Subject", targetBeatmap);
     expect(keyFarmers.total).toBe(12);
     expect(keyFarmers.farmers.every((peer) => peer.username.startsWith("KeyPeer"))).toBe(true);
@@ -723,5 +778,480 @@ describe("farm helper", () => {
     } as unknown as Pick<OsuApiClient, "getUser" | "getUserByKey" | "getUserBestScoresWindow">;
 
     await expect(getFarmHelperSnapshot(db, osu, "ghost")).rejects.toBeInstanceOf(FarmHelperUserNotFoundError);
+  });
+
+  it("up-weights peers whose farm charts match the subject's shape (LN vs jack)", async () => {
+    const recent = nowIso();
+    const LN = [0, 0, 0, 0, 0, 0, 0, 1];
+    const JACK = [1, 0, 0, 0, 0, 0, 0, 0];
+    const target = 9700;
+
+    // Subject is an LN main: 10 LN-shaped 4K top plays, pinned to 3000 4K pp.
+    const subjectMaps = Array.from({ length: 10 }, (_, i) => 9800 + i);
+    const bestScores = subjectMaps.map((beatmapId, i) => subjectScore(beatmapId, 480 - i * 5, recent, 4, 5));
+    for (const beatmapId of subjectMaps) {
+      await insertBeatmapMeta(beatmapId, 4, 5);
+      await insertSearchIndex(beatmapId, LN);
+    }
+    await insertBeatmapMeta(target, 4, 5);
+    await insertSearchIndex(target, LN);
+
+    const lnSupport = Array.from({ length: 8 }, (_, i) => 9500 + i);
+    const jackSupport = Array.from({ length: 8 }, (_, i) => 9600 + i);
+    for (const beatmapId of lnSupport) { await insertBeatmapMeta(beatmapId, 4, 5); await insertSearchIndex(beatmapId, LN); }
+    for (const beatmapId of jackSupport) { await insertBeatmapMeta(beatmapId, 4, 5); await insertSearchIndex(beatmapId, JACK); }
+
+    // LN peers farm LN charts and clear the target at 400; jack peers farm jack
+    // charts and clear it at 800. Both cohorts sit near the subject's 4K pp.
+    for (let i = 0; i < 12; i += 1) {
+      const id = 9110 + i;
+      await insertUser(id, 10_000, "CR", `LnPeer${i}`);
+      await insertFarmed("CR", id, target, 400, recent);
+      for (const beatmapId of lnSupport) await insertFarmed("CR", id, beatmapId, 400, recent);
+    }
+    for (let i = 0; i < 12; i += 1) {
+      const id = 9210 + i;
+      await insertUser(id, 10_000, "US", `JackPeer${i}`);
+      await insertFarmed("US", id, target, 800, recent);
+      for (const beatmapId of jackSupport) await insertFarmed("US", id, beatmapId, 400, recent);
+    }
+
+    const osu = makeOsuStub(bestScores, 10_000, { "4k": 3000 });
+    const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" });
+    const rec = snapshot.recs.find((candidate) => candidate.beatmapId === target);
+
+    // The subject is missing the target, so its benchmark is the shape-weighted
+    // quantile of peer pps. LN peers (matching shape) dominate over jack peers,
+    // dragging the benchmark toward the LN cohort's 400 rather than the ~600
+    // midpoint an unweighted cohort would produce.
+    expect(rec).toBeDefined();
+    expect(rec?.peerPpMedian).toBeLessThan(550);
+    // With a comparable subject and chart shape, patternFit is a real number.
+    expect(rec?.patternFit).not.toBeNull();
+    expect(rec?.patternFit ?? 0).toBeGreaterThan(0.5);
+  });
+
+  it("drops charts whose dominant skill outstrips the subject rating from gain, keeps feasible ones", async () => {
+    const recent = nowIso();
+    const hard = 9900; // dominant Technical 30, above the subject's 15 + margin
+    const easy = 9901; // dominant Technical 15, within reach
+    const support = Array.from({ length: 8 }, (_, i) => 9910 + i);
+    const bestScores = [
+      subjectScore(9990, 500, recent, 4, 5),
+      ...support.map((beatmapId, i) => subjectScore(beatmapId, 450 - i * 5, recent, 4, 5)),
+    ];
+    const msd = (technical: number) => ({ Stream: 10, Jumpstream: 10, Handstream: 10, Stamina: 10, JackSpeed: 10, Chordjack: 10, Technical: technical });
+
+    await insertBeatmapMeta(hard, 4, 5);
+    await insertBeatmapMeta(easy, 4, 5);
+    await insertSearchIndex(hard, [0, 0, 0, 0, 0, 0, 1, 0], 4, msd(30));
+    await insertSearchIndex(easy, [0, 0, 0, 0, 0, 0, 1, 0], 4, msd(15));
+    for (const beatmapId of support) await insertBeatmapMeta(beatmapId, 4, 5);
+
+    for (let i = 0; i < 12; i += 1) {
+      const id = 9920 + i;
+      await insertUser(id, 10_000, "CR", `MsdPeer${i}`);
+      await insertFarmed("CR", id, hard, 500, recent);
+      await insertFarmed("CR", id, easy, 500, recent);
+      for (const beatmapId of support) await insertFarmed("CR", id, beatmapId, 400, recent);
+    }
+    await seedSubjectSkillRatings(SUBJECT_ID, 4, msd(15), 50);
+    const osu = makeOsuStub(bestScores, 10_000, { "4k": 3000 });
+
+    const gain = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" }, stubQueue);
+    expect(gain.recs.some((rec) => rec.beatmapId === easy)).toBe(true);
+    expect(gain.recs.some((rec) => rec.beatmapId === hard)).toBe(false);
+
+    // The over-MSD chart is still browsable in popular (the gate is gain-only).
+    const popular = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k", view: "popular" }, stubQueue);
+    expect(popular.recs.some((rec) => rec.beatmapId === hard)).toBe(true);
+  });
+
+  it("computes key-mode peer distance on mode pp, not identical total pp", async () => {
+    const recent = nowIso();
+    const targetBeatmap = 90;
+    const supportBeatmaps = Array.from({ length: 8 }, (_, i) => 9000 + i);
+    // Subject is a 4K player pinned to a 3000 4K variant pp; total pp is 10000,
+    // the SAME total as every seeded peer below.
+    const bestScores: OscScore[] = [
+      subjectScore(8999, 500, recent, 4, 5),
+      subjectScore(targetBeatmap, 300, recent, 4, 5),
+      ...supportBeatmaps.map((beatmapId, index) => subjectScore(beatmapId, 460 - index * 5, recent, 4, 5)),
+    ];
+
+    await insertBeatmapMeta(targetBeatmap, 4, 5);
+    await insertBeatmapMeta(8999, 4, 5);
+    for (const beatmapId of supportBeatmaps) await insertBeatmapMeta(beatmapId, 4, 5);
+
+    // "Match" peers: identical total pp, 4K farm strength near the subject.
+    for (let i = 0; i < 12; i += 1) {
+      const id = 9100 + i;
+      await insertUser(id, 10_000, "CR", `MatchPeer${i}`);
+      await insertFarmed("CR", id, targetBeatmap, 500, recent);
+      for (const beatmapId of supportBeatmaps) await insertFarmed("CR", id, beatmapId, 450, recent);
+    }
+    // "Off" peers: SAME total pp, far higher 4K farm strength. If distance used
+    // total pp they would tie with the match peers; on mode pp they fall outside.
+    for (let i = 0; i < 12; i += 1) {
+      const id = 9200 + i;
+      await insertUser(id, 10_000, "US", `OffPeer${i}`);
+      await insertFarmed("US", id, targetBeatmap, 1300, recent);
+      for (const beatmapId of supportBeatmaps) await insertFarmed("US", id, beatmapId, 1200, recent);
+    }
+
+    const osu = makeOsuStub(bestScores, 10_000, { "4k": 3000 });
+    const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" });
+    const rec = snapshot.recs.find((candidate) => candidate.beatmapId === targetBeatmap);
+
+    expect(snapshot.peerBand.count).toBe(12);
+    expect(rec?.peerCount).toBe(12);
+    expect(rec?.topPeers.every((peer) => peer.username.startsWith("MatchPeer"))).toBe(true);
+    expect(rec?.topPeers.some((peer) => peer.username.startsWith("OffPeer"))).toBe(false);
+    // No chart shapes seeded here -> patternFit is null and ranking falls back to
+    // the star-proximity difficultyFit.
+    expect(rec?.patternFit).toBeNull();
+  });
+
+  it("backtest reconstruction filters peer farmed rows and subject scores by the asOf cutoff", async () => {
+    const BM_PAST = 20;
+    const BM_FUTURE = 21;
+    const asOf = Date.parse("2024-06-01T00:00:00Z");
+
+    const bestScores = buildSubjectBestScores();
+    // A subject score set AFTER the cutoff must be ignored, so BM_PAST stays a
+    // "missing" recommendation rather than looking already-owned.
+    bestScores.push(subjectScore(BM_PAST, 900, "2024-07-15T00:00:00Z"));
+
+    await insertBeatmapMeta(BM_PAST);
+    await insertBeatmapMeta(BM_FUTURE);
+    await seedFiller4kMeta();
+    for (let i = 0; i < 15; i += 1) {
+      const id = 200 + i;
+      await insertUser(id, SUBJECT_PP, i < 8 ? "CR" : "US");
+      // BM_PAST farmed before the cutoff (kept), BM_FUTURE after (dropped).
+      await insertFarmed("CR", id, BM_PAST, 620, "2024-05-01T00:00:00Z", [], "2024-05-01T00:00:00Z");
+      await insertFarmed("CR", id, BM_FUTURE, 620, "2024-07-01T00:00:00Z", [], "2024-07-01T00:00:00Z");
+      // Pre-cutoff filler so the peer clears the 4K pool's farm-count floor even
+      // after the as-of aggregation drops BM_FUTURE.
+      await farmFiller4k("CR", id, "2024-05-01T00:00:00Z");
+    }
+
+    const user = {
+      id: SUBJECT_ID,
+      username: "Subject",
+      avatar_url: "https://a.ppy.sh/1",
+      statistics: { pp: SUBJECT_PP, variants: [] },
+    };
+
+    const snapshot = await buildFarmHelperSnapshotForBacktest(db, user, bestScores, { asOf, view: "gain", limit: 100 });
+
+    const byBeatmap = new Map(snapshot.recs.map((rec) => [rec.beatmapId, rec]));
+    // The future-only map has no peer support as of the cutoff -> not recommended.
+    expect(byBeatmap.has(BM_FUTURE)).toBe(false);
+    // The past map survives, and the subject's post-cutoff score is ignored.
+    const past = byBeatmap.get(BM_PAST);
+    expect(past?.reason).toBe("missing");
+    expect(past?.subjectPp).toBeNull();
+  });
+
+  it("falls back to the nearest peers when everyone sits outside the widest kernel", async () => {
+    const recent = nowIso();
+    const target = 9600;
+    const support = Array.from({ length: 8 }, (_, i) => 9610 + i);
+    const subjectMaps = Array.from({ length: 10 }, (_, i) => 9650 + i);
+    const bestScores = subjectMaps.map((beatmapId, i) => subjectScore(beatmapId, 460 - i * 5, recent, 4, 5));
+
+    await insertBeatmapMeta(target, 4, 5);
+    for (const beatmapId of support) await insertBeatmapMeta(beatmapId, 4, 5);
+    for (const beatmapId of subjectMaps) await insertBeatmapMeta(beatmapId, 4, 5);
+
+    // Every 4K peer's proxy sits at roughly a third of the subject's 4K variant
+    // pp: outside even the widest discovery kernel, where the old band ladder's
+    // terminal "nearest" mode still produced a cohort.
+    for (let i = 0; i < 12; i += 1) {
+      const id = 9660 + i;
+      await insertUser(id, 3_000, "CR", `FarPeer${i}`);
+      await insertFarmed("CR", id, target, 420, recent);
+      for (const beatmapId of support) await insertFarmed("CR", id, beatmapId, 400, recent);
+    }
+
+    const osu = makeOsuStub(bestScores, 9_000, { "4k": 9_000 });
+    const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" });
+
+    expect(snapshot.peerBand.mode).toBe("knn_sparse");
+    expect(snapshot.peerBand.count).toBe(12);
+    expect(snapshot.recs.some((rec) => rec.beatmapId === target)).toBe(true);
+  });
+
+  it("scores Any-view candidates against their own keymode's subject shape, not the dominant mode's", async () => {
+    const recent = nowIso();
+    const JACK = [1, 0, 0, 0, 0, 0, 0, 0];
+    const LN = [0, 0, 0, 0, 0, 0, 0, 1];
+    const jackTarget4k = 9300; // matches the subject's 4K (jack) shape
+    const lnTarget4k = 9301; // matches their 7K (LN) shape, but is a 4K chart
+
+    // Hybrid subject: 7K is the stronger mode (LN main there), 4K is jack. Both
+    // modes clear the Any primary-mode ratio so 4K candidates flow normally.
+    const subject4k = Array.from({ length: 10 }, (_, i) => 9310 + i);
+    const subject7k = Array.from({ length: 10 }, (_, i) => 9330 + i);
+    const bestScores = [
+      ...subject7k.map((beatmapId, i) => subjectScore(beatmapId, 600 - i * 5, recent, 7, 5)),
+      ...subject4k.map((beatmapId, i) => subjectScore(beatmapId, 480 - i * 5, recent, 4, 5)),
+    ];
+    for (const beatmapId of subject4k) {
+      await insertBeatmapMeta(beatmapId, 4, 5);
+      await insertSearchIndex(beatmapId, JACK, 4);
+    }
+    for (const beatmapId of subject7k) {
+      await insertBeatmapMeta(beatmapId, 7, 5);
+      await insertSearchIndex(beatmapId, LN, 7);
+    }
+    await insertBeatmapMeta(jackTarget4k, 4, 5);
+    await insertSearchIndex(jackTarget4k, JACK, 4);
+    await insertBeatmapMeta(lnTarget4k, 4, 5);
+    await insertSearchIndex(lnTarget4k, LN, 4);
+
+    for (let i = 0; i < 12; i += 1) {
+      const id = 9360 + i;
+      await insertUser(id, 10_000, "CR", `HybridPeer${i}`);
+      await insertFarmed("CR", id, jackTarget4k, 520, recent);
+      await insertFarmed("CR", id, lnTarget4k, 520, recent);
+      for (const beatmapId of subject4k) await insertFarmed("CR", id, beatmapId, 500, recent);
+    }
+
+    const osu = makeOsuStub(bestScores, 10_000, { "4k": 8_500, "7k": 9_000 });
+    const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "any" });
+    const jackRec = snapshot.recs.find((rec) => rec.beatmapId === jackTarget4k);
+    const lnRec = snapshot.recs.find((rec) => rec.beatmapId === lnTarget4k);
+
+    // The dominant mode is 7K (LN). Judged against that profile the fits would
+    // invert: jack 4K chart near 0, LN 4K chart near 1. Per-candidate keymode
+    // shapes judge both against the subject's 4K (jack) profile instead.
+    expect(jackRec?.patternFit ?? 0).toBeGreaterThan(0.9);
+    expect(lnRec?.patternFit ?? 1).toBeLessThan(0.1);
+  });
+
+  it("does not share cached snapshots between queue-less and queue-ful callers", async () => {
+    const recent = nowIso();
+    const hard = 9400; // dominant Technical 30, above the subject's 15 + margin
+    const support = Array.from({ length: 8 }, (_, i) => 9410 + i);
+    const bestScores = [
+      subjectScore(9490, 500, recent, 4, 5),
+      ...support.map((beatmapId, i) => subjectScore(beatmapId, 450 - i * 5, recent, 4, 5)),
+    ];
+    const msd = (technical: number) => ({ Stream: 10, Jumpstream: 10, Handstream: 10, Stamina: 10, JackSpeed: 10, Chordjack: 10, Technical: technical });
+
+    await insertBeatmapMeta(hard, 4, 5);
+    await insertSearchIndex(hard, [0, 0, 0, 0, 0, 0, 1, 0], 4, msd(30));
+    for (const beatmapId of support) await insertBeatmapMeta(beatmapId, 4, 5);
+    for (let i = 0; i < 12; i += 1) {
+      const id = 9420 + i;
+      await insertUser(id, 10_000, "CR", `CachePeer${i}`);
+      await insertFarmed("CR", id, hard, 500, recent);
+      for (const beatmapId of support) await insertFarmed("CR", id, beatmapId, 400, recent);
+    }
+    await seedSubjectSkillRatings(SUBJECT_ID, 4, msd(15), 50);
+    const osu = makeOsuStub(bestScores, 10_000, { "4k": 3000 });
+
+    // Queue-less caller (Discord-style): feasibility gate disabled, the over-MSD
+    // chart stays visible. This primes the snapshot cache.
+    const ungated = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" });
+    expect(ungated.recs.some((rec) => rec.beatmapId === hard)).toBe(true);
+
+    // A queue-ful caller with otherwise identical params must not be served the
+    // cached ungated list: its feasibility gate drops the chart.
+    const gated = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" }, stubQueue);
+    expect(gated.recs.some((rec) => rec.beatmapId === hard)).toBe(false);
+  });
+
+  it("self-heals proxy-only cohort peers by enqueueing their variant enrichment", async () => {
+    const recent = nowIso();
+    const target = 9550;
+    const support = Array.from({ length: 8 }, (_, i) => 9560 + i);
+    const bestScores = [
+      subjectScore(9590, 700, recent, 4, 5),
+      ...support.map((beatmapId, i) => subjectScore(beatmapId, 500 - i * 5, recent, 4, 5)),
+    ];
+
+    await insertBeatmapMeta(target, 4, 5);
+    for (const beatmapId of support) await insertBeatmapMeta(beatmapId, 4, 5);
+
+    // 12 proxy-only peers (no pp_4k, no variants in profile_json) plus two
+    // controls: one with real variant pp, one whose profile already carries a
+    // variants block (a fetch cannot improve either).
+    const seedPeer = async (id: number, name: string) => {
+      await insertUser(id, 13_000, "CR", name);
+      await insertFarmed("CR", id, target, 520, recent);
+      for (const beatmapId of support) await insertFarmed("CR", id, beatmapId, 500, recent);
+    };
+    for (let i = 0; i < 12; i += 1) await seedPeer(9500 + i, `ProxyPeer${i}`);
+    await seedPeer(9540, "VariantPeer");
+    await exec(db, "update users set pp_4k = 3800 where user_id = 9540");
+    await seedPeer(9541, "ProfiledPeer");
+    await exec(db, `update users set profile_json = '{"statistics":{"variants":[]}}' where user_id = 9541`);
+
+    const enqueued: Array<{ type: string; key: string }> = [];
+    const captureQueue = {
+      enqueue: async (type: string, key: string) => {
+        enqueued.push({ type, key });
+      },
+    } as unknown as Parameters<typeof getFarmHelperSnapshot>[4];
+
+    const osu = makeOsuStub(bestScores, 15_000);
+    await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" }, captureQueue);
+
+    const enriches = enqueued.filter((entry) => entry.type === "enrich_user");
+    expect(enriches.length).toBeGreaterThan(0);
+    expect(enriches.some((entry) => entry.key === "user:9500")).toBe(true);
+    // Neither control peer qualifies: one already has variant pp, the other's
+    // profile shows the variants block was fetched and carried nothing usable.
+    expect(enriches.some((entry) => entry.key === "user:9540")).toBe(false);
+    expect(enriches.some((entry) => entry.key === "user:9541")).toBe(false);
+  });
+
+  it("merges the concrete 4K and 7K runs into the Any view (union of recs and totals)", async () => {
+    const recent = nowIso();
+    const fourkTarget = 8100;
+    const sevenkTarget = 8200;
+    const subj4k = Array.from({ length: 10 }, (_, i) => 8110 + i);
+    const subj7k = Array.from({ length: 10 }, (_, i) => 8210 + i);
+    // Hybrid subject: 10 owned 4K plays + 10 owned 7K plays, both keymodes eligible.
+    const bestScores = [
+      ...subj4k.map((beatmapId, i) => subjectScore(beatmapId, 500 - i * 5, recent, 4, 5)),
+      ...subj7k.map((beatmapId, i) => subjectScore(beatmapId, 500 - i * 5, recent, 7, 5)),
+    ];
+    await insertBeatmapMeta(fourkTarget, 4, 5);
+    await insertBeatmapMeta(sevenkTarget, 7, 5);
+    for (const beatmapId of subj4k) await insertBeatmapMeta(beatmapId, 4, 5);
+    for (const beatmapId of subj7k) await insertBeatmapMeta(beatmapId, 7, 5);
+
+    // Disjoint cohorts: 4K peers farm the 4K target + the owned 4K support (below
+    // the subject's held pp so that support stays "owned" and drops out); 7K peers
+    // do the same on the 7K side. Each cohort clears its own pool's farm floor.
+    for (let i = 0; i < 12; i += 1) {
+      const id = 8300 + i;
+      await insertUser(id, 10_000, "CR", `FourkPeer${i}`);
+      await insertFarmed("CR", id, fourkTarget, 520, recent);
+      for (const beatmapId of subj4k) await insertFarmed("CR", id, beatmapId, 300, recent);
+    }
+    for (let i = 0; i < 12; i += 1) {
+      const id = 8400 + i;
+      await insertUser(id, 10_000, "US", `SevenkPeer${i}`);
+      await insertFarmed("US", id, sevenkTarget, 520, recent);
+      for (const beatmapId of subj7k) await insertFarmed("US", id, beatmapId, 300, recent);
+    }
+
+    const osu = makeOsuStub(bestScores, 10_000);
+    const fourk = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" });
+    const sevenk = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "7k" });
+    const any = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "any" });
+
+    const ids = (snap: typeof any) => new Set(snap.recs.map((rec) => rec.beatmapId));
+    expect(fourk.recs.some((rec) => rec.beatmapId === fourkTarget)).toBe(true);
+    expect(sevenk.recs.some((rec) => rec.beatmapId === sevenkTarget)).toBe(true);
+    // Any = union of the two concrete views' recs.
+    expect(ids(any)).toEqual(new Set([...ids(fourk), ...ids(sevenk)]));
+    // Totals sum: gains use the shared full-top baseline, so per-rec gain is the
+    // same in a concrete view and inside the merged view.
+    expect(any.totalPotentialPp).toBeCloseTo(fourk.totalPotentialPp + sevenk.totalPotentialPp, 2);
+    expect(any.totalPotentialPp).toBeGreaterThan(0);
+  });
+
+  it("keeps a 4K-inflated same-total-pp peer out of an Any-view 4K card's cohort (konkawe)", async () => {
+    const recent = nowIso();
+    const target = 8500;
+    const support = Array.from({ length: 8 }, (_, i) => 8510 + i);
+    const subjOwned4k = Array.from({ length: 10 }, (_, i) => 8520 + i);
+    const subjOwned7k = Array.from({ length: 10 }, (_, i) => 8540 + i);
+    const bestScores = [
+      ...subjOwned4k.map((beatmapId, i) => subjectScore(beatmapId, 480 - i * 5, recent, 4, 5)),
+      ...subjOwned7k.map((beatmapId, i) => subjectScore(beatmapId, 480 - i * 5, recent, 7, 5)),
+    ];
+    await insertBeatmapMeta(target, 4, 5);
+    for (const beatmapId of support) await insertBeatmapMeta(beatmapId, 4, 5);
+    for (const beatmapId of subjOwned4k) await insertBeatmapMeta(beatmapId, 4, 5);
+    for (const beatmapId of subjOwned7k) await insertBeatmapMeta(beatmapId, 7, 5);
+
+    // 12 legit 4K peers with a real pp_4k right at the subject's 4K variant pp, so
+    // the kernel gives them full weight (effective sample >= floor, no sparse
+    // fallback). They farm the target + support.
+    for (let i = 0; i < 12; i += 1) {
+      const id = 8600 + i;
+      await insertUser(id, 15_300, "CR", `LegitPeer${i}`);
+      await exec(db, "update users set pp_4k = 13600 where user_id = ?", [id]);
+      await insertFarmed("CR", id, target, 520, recent);
+      for (const beatmapId of support) await insertFarmed("CR", id, beatmapId, 500, recent);
+    }
+    // The konkawe case: same TOTAL pp as the subject, but a 4K variant pp ~90%
+    // above it. On the 4K axis this peer is far away, so the 4K cohort must drop it.
+    await insertUser(15665805, 15_300, "US", "Konkawe");
+    await exec(db, "update users set pp_4k = 25840 where user_id = 15665805");
+    await insertFarmed("US", 15665805, target, 900, recent);
+    for (const beatmapId of support) await insertFarmed("US", 15665805, beatmapId, 880, recent);
+
+    const osu = makeOsuStub(bestScores, 15_300, { "4k": 13_600, "7k": 14_700 });
+    const any = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "any" });
+    const rec = any.recs.find((candidate) => candidate.beatmapId === target);
+
+    expect(any.peerBands?.["4k"]?.mode).toMatch(/^knn/);
+    expect(rec).toBeDefined();
+    expect(rec?.topPeers.some((peer) => peer.username === "Konkawe")).toBe(false);
+    expect(rec?.topPeers.every((peer) => peer.username.startsWith("LegitPeer"))).toBe(true);
+
+    // The who-farms modal for the 4K card (frontend passes "4k") also excludes it.
+    const farmers = await getFarmHelperFarmers(db, osu, "Subject", target, undefined, "4k");
+    expect(farmers.farmers.some((peer) => peer.username === "Konkawe")).toBe(false);
+    expect(farmers.total).toBe(12);
+  });
+
+  it("falls back to the total-pp cohort when the subject has no keymode evidence", async () => {
+    const recent = nowIso();
+    const target = 8700;
+    // Subject plays only 5K: neither the 4K nor 7K pipeline is eligible. Their top
+    // play (700) sets the benchmark cap above the peers' 600pp target.
+    const owned = Array.from({ length: 10 }, (_, i) => 700 - i * 5);
+    const ownedIds = Array.from({ length: 10 }, (_, i) => 8710 + i);
+    const bestScores = ownedIds.map((beatmapId, i) => subjectScore(beatmapId, owned[i], recent, 5, 5));
+    await insertBeatmapMeta(target, 5, 5);
+    for (const beatmapId of ownedIds) await insertBeatmapMeta(beatmapId, 5, 5);
+
+    for (let i = 0; i < 15; i += 1) {
+      const id = 8800 + i;
+      await insertUser(id, SUBJECT_PP + i, i < 8 ? "CR" : "US", `TotalPeer${i}`);
+      await insertFarmed(i < 8 ? "CR" : "US", id, target, 600, recent);
+    }
+
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores, SUBJECT_PP), "Subject", { keyMode: "any" });
+
+    expect(snapshot.peerBand.mode).toBe("total_pp_fallback");
+    expect(snapshot.peerBands).toBeUndefined();
+    expect(snapshot.recs.some((rec) => rec.beatmapId === target)).toBe(true);
+  });
+
+  it("exposes per-keymode peerBands only on the merged Any view", async () => {
+    const recent = nowIso();
+    const fourkTarget = 8900;
+    const subj4k = Array.from({ length: 10 }, (_, i) => 8910 + i);
+    const bestScores = subj4k.map((beatmapId, i) => subjectScore(beatmapId, 500 - i * 5, recent, 4, 5));
+    await insertBeatmapMeta(fourkTarget, 4, 5);
+    for (const beatmapId of subj4k) await insertBeatmapMeta(beatmapId, 4, 5);
+    for (let i = 0; i < 12; i += 1) {
+      const id = 8950 + i;
+      await insertUser(id, 10_000, "CR", `BandPeer${i}`);
+      await insertFarmed("CR", id, fourkTarget, 520, recent);
+      for (const beatmapId of subj4k) await insertFarmed("CR", id, beatmapId, 300, recent);
+    }
+
+    const osu = makeOsuStub(bestScores, 10_000);
+    const any = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "any" });
+    const concrete = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" });
+
+    // Subject is 4K-only, so the merged view exposes just the 4K band.
+    expect(any.peerBands).toBeDefined();
+    expect(any.peerBands?.["4k"]?.count).toBe(12);
+    expect(any.peerBands?.["7k"]).toBeUndefined();
+    // The concrete view keeps the single peerBand and omits peerBands entirely.
+    expect(concrete.peerBands).toBeUndefined();
+    expect(concrete.peerBand.count).toBe(12);
   });
 });

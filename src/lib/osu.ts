@@ -57,10 +57,6 @@ export {
   submitCommunityBeatmap,
 } from "./osu/replay";
 export {
-  getBeatmapPatternAnalysis,
-  type BeatmapPatternAnalysisResponse,
-} from "./osu/pattern-analysis";
-export {
   getCountrySnipes,
   getPartialSnipeEvents,
   getSnipesScanStatus,

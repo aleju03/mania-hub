@@ -972,6 +972,9 @@ export interface LiveFarmHelperRec {
   peerCount: number;
   peerSampleSize: number;
   peerFraction: number;
+  // Shape match between the player and this chart in [0,1], or null when the
+  // backend has no comparable shape. Optional so older builds still parse.
+  patternFit?: number | null;
   peerPpMedian: number;
   peerPpP75: number;
   latestPeerPlayedAt: string | null;
@@ -980,6 +983,15 @@ export interface LiveFarmHelperRec {
   scoreUrl: string | null;
   mapUrl: string;
   rankScore: number;
+}
+
+export interface LiveFarmHelperPeerBand {
+  mode: string;
+  count: number;
+  farmDataCount: number;
+  minPp: number;
+  maxPp: number;
+  effectiveCount?: number;
 }
 
 export interface LiveFarmHelperSnapshot {
@@ -991,7 +1003,10 @@ export interface LiveFarmHelperSnapshot {
   pp: number;
   keyMode: LiveFarmHelperKeyMode;
   view: LiveFarmHelperView;
-  peerBand: { mode: string; count: number; farmDataCount: number; minPp: number; maxPp: number };
+  peerBand: LiveFarmHelperPeerBand;
+  // Per-keymode cohort summaries on the merged "any" view (absent on concrete
+  // views and the total-pp fallback). Optional so older builds still parse.
+  peerBands?: Partial<Record<"4k" | "7k", LiveFarmHelperPeerBand>>;
   totalPotentialPp: number;
   // Optional: older backend builds don't send it. Count of qualifying recs
   // before server-side truncation to the requested limit.
