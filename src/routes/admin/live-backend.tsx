@@ -517,6 +517,12 @@ async function fetchAnalyticsMonitorDataFromPostHog({
 }): Promise<AnalyticsMonitorData> {
   const since = getAnalyticsRangeSql(rangeHours);
   const recentCountryClause = recentCountry ? ` AND properties.$geoip_country_code = '${recentCountry}'` : "";
+  // The recent activity feed should reflect real visitors on the live site only:
+  // keep events captured on a production host (drops localhost and Vercel preview
+  // deploys) and drop the site owner's own signed-in traffic (aleju03).
+  const recentRealVisitorClause =
+    " AND properties.$host IN ('mania-tracker.com', 'www.mania-tracker.com')"
+    + " AND (properties.viewer_username IS NULL OR lower(properties.viewer_username) != 'aleju03')";
 
   async function runQuery(label: string, query: string): Promise<unknown[][]> {
     for (let attempt = 0; ; attempt++) {
@@ -580,7 +586,7 @@ async function fetchAnalyticsMonitorDataFromPostHog({
     ),
     runQuery(
       "recent activity",
-      `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id, properties.maps_tab, properties.rankings_page, properties.profile_username, properties.replay_player, properties.replay_score_id, properties.$screen_width, properties.$viewport_width, properties.$current_url, properties.farm_helper_user, properties.pack_type, properties.pack_username, properties.farm_map_title, properties.farm_map_user, properties.viewer_username FROM events WHERE timestamp > ${since} AND distinct_id != 'server'${recentCountryClause} AND (properties.$pathname IS NULL OR properties.$pathname NOT LIKE '/admin/%') AND NOT (event = '$pageview' AND properties.$pathname = '/') ORDER BY timestamp DESC LIMIT ${ANALYTICS_RECENT_EVENTS_LIMIT}`,
+      `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id, properties.maps_tab, properties.rankings_page, properties.profile_username, properties.replay_player, properties.replay_score_id, properties.$screen_width, properties.$viewport_width, properties.$current_url, properties.farm_helper_user, properties.pack_type, properties.pack_username, properties.farm_map_title, properties.farm_map_user, properties.viewer_username FROM events WHERE timestamp > ${since} AND distinct_id != 'server'${recentRealVisitorClause}${recentCountryClause} AND (properties.$pathname IS NULL OR properties.$pathname NOT LIKE '/admin/%') AND NOT (event = '$pageview' AND properties.$pathname = '/') ORDER BY timestamp DESC LIMIT ${ANALYTICS_RECENT_EVENTS_LIMIT}`,
     ),
     runQuery(
       "physical countries",
