@@ -625,6 +625,7 @@ export class ManiaReplayRenderer {
       autoStart: false,
       antialias: true,
       backgroundAlpha: 0,
+      powerPreference: "high-performance",
       preference: ["webgl", "canvas"],
     });
 
@@ -3516,7 +3517,10 @@ export class ManiaReplayRenderer {
       const alpha = bodyAlpha
         * this.topFadeAlpha(Math.max(0, Math.min(tailTop + tailHeight, fadeHeight)), fadeHeight, 0.55)
         * this.getHiddenAlphaForVerticalSpan(tailTop, tailTop + tailHeight, visibilityLayout);
-      this.drawSkinImage(tailAsset, colX + colWidth / 2, tailTop, colWidth, tailHeight, 0.5, 0, alpha);
+      // Stable flips the tail texture vertically on downscroll (lazer's
+      // LegacyHoldNoteTailPiece inverts the scroll direction), so tail art is
+      // authored upside down; mirror it back.
+      this.drawSkinImage(tailAsset, colX + colWidth / 2, tailTop, colWidth, tailHeight, 0.5, 0, alpha, 0xffffff, !this.skinSettings.upscroll);
     }
 
     if (headAsset) {
@@ -4223,6 +4227,7 @@ export class ManiaReplayRenderer {
     anchorY: number,
     alpha: number,
     tint = 0xffffff,
+    flipY = false,
   ) {
     if (width <= 0 || height <= 0 || alpha <= 0) return;
     const texture = this.getTexture(asset);
@@ -4238,11 +4243,15 @@ export class ManiaReplayRenderer {
     this.skinSpritePoolCursor++;
     sprite.visible = true;
     sprite.texture = texture;
-    sprite.anchor.set(anchorX, anchorY);
+    // A flipped sprite mirrors about its anchor, so the anchor swaps sides to
+    // keep the drawn rect at [y, y + height].
+    sprite.anchor.set(anchorX, flipY ? 1 - anchorY : anchorY);
     sprite.x = x;
     sprite.y = y;
     sprite.width = width;
     sprite.height = height;
+    // Pooled sprites keep their scale sign across draws; set it explicitly.
+    sprite.scale.y = (flipY ? -1 : 1) * Math.abs(sprite.scale.y);
     sprite.alpha = alpha;
     sprite.tint = tint;
   }
@@ -4316,6 +4325,8 @@ export class ManiaReplayRenderer {
     sprite.y = y;
     sprite.width = width;
     sprite.height = height;
+    // Reset any flip left behind by a drawSkinImage call on this pool slot.
+    sprite.scale.y = Math.abs(sprite.scale.y);
     sprite.alpha = alpha;
     sprite.tint = 0xffffff;
   }

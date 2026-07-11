@@ -238,7 +238,10 @@ export function readConfig(): Config {
     sseMaxConnectionsPerIp: readInt("SSE_MAX_CONNECTIONS_PER_IP", 6),
     sseMaxConnectionsTotal: readInt("SSE_MAX_CONNECTIONS_TOTAL", 500),
     replayVideoRatePerMinute: readInt("REPLAY_VIDEO_RATE_PER_MINUTE", 2),
-    skinUploadRatePerMinute: readInt("SKIN_UPLOAD_RATE_PER_MINUTE", 12),
+    // One publish is up to ~17 requests (start + a preview per keymode + up
+    // to 4 screenshots + the .osk + finish), so the budget must cover a full
+    // multi-keymode upload with headroom; uploads are ticket-gated anyway.
+    skinUploadRatePerMinute: readInt("SKIN_UPLOAD_RATE_PER_MINUTE", 40),
     osuApiTargetPerMinute: readInt("OSU_API_TARGET_PER_MINUTE", 45),
     osuApiHardPerMinute: readInt("OSU_API_HARD_PER_MINUTE", 60),
     oscJsonTargetPerMinute: readInt("OSC_JSON_TARGET_PER_MINUTE", 30),

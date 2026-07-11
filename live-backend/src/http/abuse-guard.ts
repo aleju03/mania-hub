@@ -152,7 +152,7 @@ function limitForBucket(config: Config, bucket: AbuseBucket): number {
     case "replayVideo":
       return Math.max(1, config.replayVideoRatePerMinute ?? 2);
     case "skinUpload":
-      return Math.max(1, config.skinUploadRatePerMinute ?? 12);
+      return Math.max(1, config.skinUploadRatePerMinute ?? 40);
   }
 }
 

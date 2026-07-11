@@ -138,7 +138,10 @@ export async function importReplaySkinFromOsk(
   nextSettings = normalizeReplaySkinSettings({
     ...nextSettings,
     ...selectedBlockSettings,
-    style: hasAnyImportedAssets(selectedProfile.assets) ? nextSettings.style : nextSettings.style,
+    // The renderer only draws imported note/receptor art under the "bars"
+    // style (circles/arrows are the synthetic shape styles), so a skin that
+    // ships any assets must switch to it or it renders as flat shapes.
+    style: hasAnyImportedAssets(selectedProfile.assets) ? "bars" : nextSettings.style,
     tapColor: selectedProfile.tapColor,
     tapColors: selectedProfile.tapColors,
     lnHeadColor: selectedProfile.lnHeadColor,
@@ -307,12 +310,12 @@ async function buildProfileFromManiaBlock({
     10,
     200,
   );
-  const tapColors = Array.from({ length: keys }, (_, index) =>
-    parseColor(block[`Colour${index + 1}`]) ?? baseProfile.tapColors[index] ?? "",
-  );
-  const lnHeadColors = Array.from({ length: keys }, (_, index) =>
-    parseColor(block[`ColourLight${index + 1}`]) ?? baseProfile.lnHeadColors[index] ?? "",
-  );
+  // Colour{n} is the column BACKGROUND colour and ColourLight{n} the column
+  // light tint — neither is a note colour (skins routinely set them black,
+  // which used to paint the flat-fallback notes invisible). Keep the viewer's
+  // own palette for the no-note-art fallback instead.
+  const tapColors = Array.from({ length: keys }, (_, index) => baseProfile.tapColors[index] ?? "");
+  const lnHeadColors = Array.from({ length: keys }, (_, index) => baseProfile.lnHeadColors[index] ?? "");
   const columns: ReplaySkinColumnAssets[] = [];
   let noteAssets = 0;
   let receptorAssets = 0;
@@ -325,12 +328,24 @@ async function buildProfileFromManiaBlock({
 
   for (let col = 0; col < keys; col += 1) {
     const column: ReplaySkinColumnAssets = {};
-    const tap = await resolveTracked(block[`NoteImage${col}`]);
-    const lnHead = await resolveTracked(block[`NoteImage${col}H`]);
-    const lnBody = await resolveTracked(block[`NoteImage${col}L`]);
-    const lnTail = await resolveTracked(block[`NoteImage${col}T`]);
-    const receptor = await resolveTracked(block[`KeyImage${col}`]);
-    const receptorPressed = await resolveTracked(block[`KeyImage${col}D`]);
+    // Stable resolves elements the block does not declare (or whose file is
+    // missing) from the default filenames — mania-note1/2/S and mania-key1/2/S
+    // per the symmetric column layout — so skins that ship default-named art
+    // with a bare skin.ini (the o2jam ports especially) still get their notes.
+    // Animated variants ship as "-0..N" frames; frame 0 stands in for the
+    // static image, same as the Hit* fallback below.
+    const suffix = defaultManiaImageSuffix(keys, col);
+    const resolveWithDefaults = async (reference: string | undefined, fallback: string): Promise<ReplaySkinImageAsset | undefined> =>
+      (await resolveTracked(reference))
+        ?? (reference ? await resolveTracked(`${reference}-0`) : undefined)
+        ?? (await resolveTracked(fallback))
+        ?? (await resolveTracked(`${fallback}-0`));
+    const tap = await resolveWithDefaults(block[`NoteImage${col}`], `mania-note${suffix}`);
+    const lnHead = await resolveWithDefaults(block[`NoteImage${col}H`], `mania-note${suffix}H`);
+    const lnBody = await resolveWithDefaults(block[`NoteImage${col}L`], `mania-note${suffix}L`);
+    const lnTail = await resolveWithDefaults(block[`NoteImage${col}T`], `mania-note${suffix}T`);
+    const receptor = await resolveWithDefaults(block[`KeyImage${col}`], `mania-key${suffix}`);
+    const receptorPressed = await resolveWithDefaults(block[`KeyImage${col}D`], `mania-key${suffix}D`);
     if (tap) column.tap = tap;
     if (lnHead) column.lnHead = lnHead;
     if (lnBody) column.lnBody = lnBody;
@@ -365,7 +380,9 @@ async function buildProfileFromManiaBlock({
     }
   }
 
-  const comboPrefix = block.FontCombo || fonts.ComboPrefix || "";
+  // Stable's [Fonts] ComboPrefix defaults to "score", so skins that ship only
+  // score-* digit art still get a combo font.
+  const comboPrefix = block.FontCombo || fonts.ComboPrefix || "score";
   const comboOverlap = clampInteger(parseNumber(fonts.ComboOverlap) ?? 0, -80, 80);
   const comboDigitsAssets = comboPrefix
     ? await Promise.all(Array.from({ length: 10 }, (_, digit) =>
@@ -409,6 +426,15 @@ async function buildProfileFromManiaBlock({
     judgementAssets,
     comboDigits,
   };
+}
+
+// Stable's default column layout: alternating 1/2 mirrored from the outer
+// edges in, with the middle column of odd keymodes as the special "S" lane
+// (mania-noteS / mania-keyS). 4K = 1,2,2,1; 7K = 1,2,1,S,1,2,1.
+function defaultManiaImageSuffix(keys: number, column: number): "1" | "2" | "S" {
+  if (keys % 2 === 1 && column === Math.floor(keys / 2)) return "S";
+  const mirrored = column < keys / 2 ? column : keys - 1 - column;
+  return mirrored % 2 === 0 ? "1" : "2";
 }
 
 function settingsFromManiaBlock(block: Record<string, string>): Partial<ReplaySkinSettings> {

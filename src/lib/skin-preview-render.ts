@@ -449,6 +449,23 @@ function drawPreviewBackdrop(ctx: CanvasRenderingContext2D, accent: string): voi
   ctx.globalAlpha = 1;
 }
 
+// Draws an image mirrored vertically inside its target rect; stable flips
+// note sprites like this depending on scroll direction.
+function drawImageFlippedY(
+  ctx: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): void {
+  ctx.save();
+  ctx.translate(0, y * 2 + height);
+  ctx.scale(1, -1);
+  ctx.drawImage(image, x, y, width, height);
+  ctx.restore();
+}
+
 function drawTapNote(
   ctx: CanvasRenderingContext2D,
   profile: ReplaySkinKeymodeProfile,
@@ -466,9 +483,12 @@ function drawTapNote(
   const anchorY = mapY(tap.y);
   if (image) {
     // Anchored like the game: the sprite grows away from the judgment line.
+    // Note textures flip on upscroll (stable's NoteFlipWhenUpsideDown, on by
+    // default) so directional art keeps pointing the intended way.
     const height = noteAssetHeight(image);
     const top = upscroll ? anchorY : anchorY - height;
-    ctx.drawImage(image, laneX, top, laneWidth, height);
+    if (upscroll) drawImageFlippedY(ctx, image, laneX, top, laneWidth, height);
+    else ctx.drawImage(image, laneX, top, laneWidth, height);
     return;
   }
   const height = Math.max(10, laneWidth * 0.3);
@@ -541,16 +561,22 @@ function drawLongNote(
   }
 
   // The tail sprite grows toward the head from its anchor (down on
-  // downscroll) at full aspect height, as in ReplayCanvas.
+  // downscroll) at full aspect height, as in ReplayCanvas. Stable draws the
+  // tail texture vertically flipped on downscroll (lazer's
+  // LegacyHoldNoteTailPiece inverts the scroll direction for exactly this),
+  // so skins author the tail art upside down; mirror it back here.
   if (tailImage) {
     const tailHeight = noteAssetHeight(tailImage);
     const tailTop = upscroll ? tailEndY - tailHeight : tailEndY;
-    ctx.drawImage(tailImage, laneX, tailTop, laneWidth, tailHeight);
+    if (upscroll) ctx.drawImage(tailImage, laneX, tailTop, laneWidth, tailHeight);
+    else drawImageFlippedY(ctx, tailImage, laneX, tailTop, laneWidth, tailHeight);
   }
 
   if (headImage) {
+    // Heads flip with the notes (on upscroll), unlike the tail.
     const headTop = upscroll ? headEndY : headEndY - headHeight;
-    ctx.drawImage(headImage, laneX, headTop, laneWidth, headHeight);
+    if (upscroll) drawImageFlippedY(ctx, headImage, laneX, headTop, laneWidth, headHeight);
+    else ctx.drawImage(headImage, laneX, headTop, laneWidth, headHeight);
   } else {
     const top = upscroll ? headEndY : headEndY - headHeight;
     ctx.fillStyle = profile.lnHeadColors[ln.column] || profile.lnHeadColor || "#ffffff";

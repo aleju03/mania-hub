@@ -347,10 +347,17 @@ export function skinDownloadUrl(id: string): string | null {
 // download the way /api/skins/download does.
 export function skinOskFileUrl(skin: Pick<SkinSummary, "id" | "oskUrl">): string | null {
   const base = getLiveBackendUrl();
-  const filename = skin.oskUrl?.split("/").pop();
-  return base && filename
-    ? `${base}/api/skins/file/${encodeURIComponent(skin.id)}/${encodeURIComponent(filename)}`
-    : null;
+  // The oskUrl path segment is already percent-encoded; decode before
+  // re-encoding or filenames with spaces get double-encoded into 404s.
+  const encoded = skin.oskUrl?.split("/").pop();
+  if (!base || !encoded) return null;
+  let filename = encoded;
+  try {
+    filename = decodeURIComponent(encoded);
+  } catch {
+    // Malformed escape: treat the segment as a literal filename.
+  }
+  return `${base}/api/skins/file/${encodeURIComponent(skin.id)}/${encodeURIComponent(filename)}`;
 }
 
 // Maps eligible for the skin page's in-browser player. The backend only

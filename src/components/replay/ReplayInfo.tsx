@@ -161,8 +161,14 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
       </div>
 
       <div className="hidden sm:block relative overflow-hidden bg-osu-b4 rounded-xl p-4 mb-4 border border-osu-b3/20">
-        <div className="grid grid-cols-[minmax(56px,max-content)_minmax(0,1fr)_auto] lg:grid-cols-[minmax(64px,max-content)_minmax(160px,1fr)_auto_auto] items-center gap-x-4 sm:gap-x-6 gap-y-2">
-          <div className="relative -my-4 -ml-4 py-4 pl-4 pr-2 min-w-0">
+        {/* The map column needs a real floor (not 0): the stats track is auto-sized
+            and grows to max-content first, so without it the map column collapses
+            to 0px at mid widths and the cover bleed strands over the player name. */}
+        {/* Below lg the Back button wraps to a second row; the player/map cells span
+            both rows (explicit so row-span-full has a line to reach) so their banners
+            still bleed to the card's top/bottom edges instead of cutting off mid-card. */}
+        <div className="grid grid-cols-[minmax(56px,max-content)_minmax(160px,1fr)_auto] grid-rows-[auto_auto] lg:grid-cols-[minmax(64px,max-content)_minmax(160px,1fr)_auto_auto] lg:grid-rows-none items-center gap-x-4 sm:gap-x-6 gap-y-2">
+          <div className="relative row-span-full lg:row-auto self-stretch flex flex-col justify-center -my-4 -ml-4 py-4 pl-4 pr-2 min-w-0">
             <PlayerBanner coverUrl={playerCoverUrl} />
             <div className="relative flex items-center gap-2.5 min-w-0">
               <PlayerAvatar src={avatarSrc} name={displayName} size={36} />
@@ -170,7 +176,7 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
             </div>
           </div>
           {beatmap && (
-            <div className="relative self-stretch -my-4 py-4 flex flex-col justify-center min-w-0">
+            <div className="relative row-span-full lg:row-auto self-stretch -my-4 py-4 flex flex-col justify-center min-w-0">
               {/* The map column starts 24px further left than it used to (the player
                   block gave up padding), so bleed the cover 24px less to keep its
                   on-screen position unchanged. */}
@@ -212,7 +218,7 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
             </div>
             {beatmap && <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Notes</div><div className="text-sm font-bold text-osu-f1">{beatmap.notes.length.toLocaleString()}</div></div>}
           </div>
-          <div className="justify-self-end flex items-center gap-2">
+          <div className="col-start-3 lg:col-start-auto justify-self-end flex items-center gap-2">
             {shareUrl && <ShareReplayButton shareUrl={shareUrl} />}
             <button onClick={onClear} className="px-3 py-1.5 rounded-lg bg-osu-b3/50 text-xs text-osu-f1 hover:text-white hover:bg-osu-b2 transition-colors cursor-pointer">Back</button>
           </div>
