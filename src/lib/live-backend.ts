@@ -1223,6 +1223,10 @@ export interface LiveMapSearchEntry {
   // From the unified chart analysis; null until the chart's analysis job lands.
   dan?: { label: string; family: string; rawDan: number } | null;
   msd?: Record<string, number> | null;
+  // Rate-adjusted (1.5x / DT) dan + MSD, present on the single-map detail entry
+  // once the DT-rate sweep covers the chart; used to show real DT difficulty.
+  danDt?: { label: string; family: string; rawDan: number } | null;
+  msdDt?: Record<string, number> | null;
   // Vibro-like chart per the classifier: ratings are unreliable and dan-scoped
   // searches skip these server-side.
   vibro?: boolean;

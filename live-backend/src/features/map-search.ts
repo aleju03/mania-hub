@@ -121,6 +121,12 @@ export interface MapSearchEntry {
 export interface MapSearchSetEntry extends MapSearchEntry {
   diffCount: number;
   diffs: MapSearchEntry[];
+  /** Rate-adjusted (1.5x / DT) dan + MSD from the DT-rate analysis sweep, so the
+   *  map detail page can show real difficulty under a DT farm context instead of
+   *  the 1.0x values. Absent on bulk search rows; null when the sweep has not
+   *  covered this chart yet. */
+  danDt?: { label: string; family: string; rawDan: number } | null;
+  msdDt?: Record<string, number> | null;
 }
 
 export interface MapSearchPage {
@@ -1157,7 +1163,37 @@ export async function getMapSearchSetEntry(db: Db, beatmapId: number): Promise<M
     [entry.beatmapsetId],
   )).rows;
   const diffs = diffRows.map((row) => ({ ...rowToEntry(row), covers: null }));
-  return { ...entry, diffCount: diffs.length, diffs };
+  // Rate-adjusted (DT) verdicts for the requested diff only; switching diffs on
+  // the detail page re-requests this endpoint, so each diff gets its own.
+  const dtRow = (await exec(
+    db,
+    "select msd_dt_json, dan_dt_json from beatmap_chart_analysis where beatmap_id = ? and analysis_version = ?",
+    [beatmapId, CHART_ANALYSIS_VERSION],
+  )).rows[0];
+  const { danDt, msdDt } = parseDtRateVerdict(dtRow);
+  return { ...entry, diffCount: diffs.length, diffs, danDt, msdDt };
+}
+
+// Parses the DT-rate columns (dan_dt_json is a lean {primaryLabel, primaryFamily,
+// rawDan}; msd_dt_json matches msd_json's { values }) into the same shapes the
+// entry uses for the 1.0x dan/msd, so the frontend can swap them under DT.
+function parseDtRateVerdict(row: Record<string, unknown> | undefined): {
+  danDt: { label: string; family: string; rawDan: number } | null;
+  msdDt: Record<string, number> | null;
+} {
+  if (!row) return { danDt: null, msdDt: null };
+  const msdParsed = row.msd_dt_json == null
+    ? null
+    : parseJson<{ values?: Record<string, number> } | null>(row.msd_dt_json, null);
+  const msdDt = msdParsed && msdParsed.values && typeof msdParsed.values === "object" ? msdParsed.values : null;
+  const danParsed = row.dan_dt_json == null
+    ? null
+    : parseJson<{ primaryLabel?: unknown; primaryFamily?: unknown; rawDan?: unknown } | null>(row.dan_dt_json, null);
+  const rawDan = danParsed && danParsed.rawDan != null ? Number(danParsed.rawDan) : null;
+  const danDt = danParsed && danParsed.primaryLabel != null && rawDan != null && Number.isFinite(rawDan)
+    ? { label: String(danParsed.primaryLabel), family: String(danParsed.primaryFamily ?? "dan"), rawDan }
+    : null;
+  return { danDt, msdDt };
 }
 
 // Fetch index entries for a set of beatmap ids (used by collection detail).

@@ -492,7 +492,11 @@ function buildMapMetrics(selected: DetailBeatmap | null, entry: LiveMapSearchEnt
   const lengthSec = Math.max(1, (selected?.totalLength ?? 0) / normalizedRate);
   const objects = (selected?.countCircles ?? 0) + (selected?.countSliders ?? 0);
   const holdCount = selected?.countSliders ?? 0;
-  const msd = entry?.msd ?? null;
+  // Under a DT farm context (1.5x), show the rate-adjusted dan/MSD once the DT
+  // sweep has covered this chart; otherwise fall back to the stored 1.0x values.
+  const preferDt = normalizedRate >= 1.5;
+  const msd = (preferDt && entry?.msdDt ? entry.msdDt : entry?.msd) ?? null;
+  const dan = (preferDt && entry?.danDt ? entry.danDt : entry?.dan) ?? null;
   const msdOverall = Number(msd?.Overall ?? NaN);
   // Same readout as the /maps modal: the sub-1 values the 6K/7K calc engine
   // emits for skillsets it does not rate are noise, not data.
@@ -513,9 +517,9 @@ function buildMapMetrics(selected: DetailBeatmap | null, entry: LiveMapSearchEnt
     msdOverall: Number.isFinite(msdOverall) && msdOverall > 0 ? msdOverall : null,
     msdTopSkillset,
     vibro: entry?.vibro === true,
-    dan: entry?.dan ?? null,
-    danImage: entry?.dan
-      ? getDanImageSrc(danBareLabel(entry.dan.label), entry.dan.family === "ln" ? "ln" : undefined, entry.keyCount)
+    dan,
+    danImage: dan
+      ? getDanImageSrc(danBareLabel(dan.label), dan.family === "ln" ? "ln" : undefined, entry?.keyCount ?? 4)
       : null,
     radar: entry
       ? RADAR_AXES.map((axis) => ({ label: axis.label, value: clamp01(entry.patterns[axis.id] ?? 0) }))
