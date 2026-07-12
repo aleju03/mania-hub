@@ -991,16 +991,23 @@ export async function recomputeDtRateChunk(
   cursor: number,
   limit = DT_RATE_ANALYSIS_CHUNK,
 ): Promise<DtRateAnalysisChunkResult> {
+  // Correlated EXISTS (indexed seek on country_maps_farmed_scores.beatmap_id per
+  // candidate) instead of `in (select ... where mods_json like ...)`: the latter
+  // is a full LIKE scan of the ~1.4M-row farmed table on every chunk (~3-7s
+  // synchronous, i.e. a worker event-loop stall each tick). The EXISTS form seeks
+  // the (beatmap_id, ...) index and stays sub-second. beatmap_id is unique per
+  // (beatmap_id, analysis_version), so no DISTINCT is needed.
   const rows = (await exec(
     db,
-    `select distinct a.beatmap_id as beatmap_id
+    `select a.beatmap_id as beatmap_id
      from beatmap_chart_analysis a
      where a.analysis_version = ? and a.status = 'ready'
        and a.key_count = 4 and a.msd_dt_json is null
        and a.beatmap_id > ?
-       and a.beatmap_id in (
-         select beatmap_id from country_maps_farmed_scores
-         where mods_json like '%"DT"%' or mods_json like '%"NC"%'
+       and exists (
+         select 1 from country_maps_farmed_scores f
+         where f.beatmap_id = a.beatmap_id
+           and (f.mods_json like '%"DT"%' or f.mods_json like '%"NC"%')
        )
      order by a.beatmap_id
      limit ?`,
