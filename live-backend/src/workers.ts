@@ -4,7 +4,7 @@ import { canSeedSnipesForCountry } from "./countries.js";
 import { exec, json, parseJson, writeVariantPps } from "./db.js";
 import { BEATMAP_OSU_FILE_BACKFILL_JOB, runBeatmapOsuFileBackfillJob } from "./features/beatmap-osu-file-backfill.js";
 import { computeBeatmapActivitySkillVector } from "./features/activity.js";
-import { CHART_ANALYSIS_BACKFILL_JOB, CHART_ANALYSIS_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, VIBRO_RECOMPUTE_JOB, computeBeatmapChartAnalysis, runChartAnalysisBackfillJob, runDanFloorPinRecomputeJob, runLnSubtypeRecomputeJob, runVibroRecomputeJob } from "./features/chart-analysis.js";
+import { CHART_ANALYSIS_BACKFILL_JOB, CHART_ANALYSIS_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB, LN_SUBTYPE_RECOMPUTE_JOB, VIBRO_RECOMPUTE_JOB, computeBeatmapChartAnalysis, runChartAnalysisBackfillJob, runDanFloorPinRecomputeJob, runDtRateAnalysisJob, runLnSubtypeRecomputeJob, runVibroRecomputeJob } from "./features/chart-analysis.js";
 import { computeDanEstimateJob } from "./features/dan-estimates.js";
 import { reconcileStatGoalsForCountry } from "./features/goals.js";
 import { runMapSearchIndexBuildJob } from "./features/map-search.js";
@@ -118,7 +118,7 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     // the work is local (cached .osu text), no osu! API pressure. Tunable via
     // CHART_ANALYSIS_LANE_INTERVAL_MS so a local backfill can run flat out.
     name: "chart-analysis",
-    jobTypes: [CHART_ANALYSIS_JOB, CHART_ANALYSIS_BACKFILL_JOB, VIBRO_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB],
+    jobTypes: [CHART_ANALYSIS_JOB, CHART_ANALYSIS_BACKFILL_JOB, VIBRO_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB],
     claimLimit: 1,
     intervalMs: readConfig().chartAnalysisLaneIntervalMs,
   },
@@ -446,6 +446,10 @@ export class WorkerRunner {
     }
     if (job.type === LN_SUBTYPE_RECOMPUTE_JOB) {
       await runLnSubtypeRecomputeJob(this.db, this.queue, job.payload as { cursor?: number });
+      return;
+    }
+    if (job.type === DT_RATE_ANALYSIS_JOB) {
+      await runDtRateAnalysisJob(this.db, this.queue, job.payload as { cursor?: number });
       return;
     }
     if (job.type === BEATMAP_OSU_FILE_BACKFILL_JOB) {

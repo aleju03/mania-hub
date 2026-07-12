@@ -160,6 +160,19 @@ async function insertSearchIndex(beatmapId: number, pat: number[], keyCount = 4,
   );
 }
 
+// Rate-adjusted (1.5x/DT) MSD for a 4K chart, in the beatmap_chart_analysis
+// row the DT feasibility gate reads via readDtRateMsd.
+async function insertDtRateAnalysis(beatmapId: number, msdValues: Record<string, number>): Promise<void> {
+  const msdJson = JSON.stringify({ etternaVersion: "test", values: { ...msdValues, Overall: Math.max(...Object.values(msdValues)) } });
+  const danJson = JSON.stringify({ primaryLabel: null, primaryFamily: null, rawDan: null });
+  await exec(
+    db,
+    `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, key_count, msd_dt_json, dan_dt_json, updated_at)
+     values (?, 1, 'ready', 4, ?, ?, ?)`,
+    [beatmapId, msdJson, danJson, nowIso()],
+  );
+}
+
 async function seedSubjectSkillRatings(userId: number, keyCount: number, ratings: Record<string, number>, analyzedPlays: number): Promise<void> {
   const modesJson = JSON.stringify({
     totalPlays: analyzedPlays,
@@ -865,6 +878,49 @@ describe("farm helper", () => {
     // The over-MSD chart is still browsable in popular (the gate is gain-only).
     const popular = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k", view: "popular" }, stubQueue);
     expect(popular.recs.some((rec) => rec.beatmapId === hard)).toBe(true);
+  });
+
+  it("gates DT recs on 1.5x MSD with the wider DT margin, keeping ones within reach", async () => {
+    const recent = nowIso();
+    const hardDt = 9700; // dominant Technical 25 at 1.5x, above the subject's 15 + 3.5
+    const easyDt = 9701; // dominant Technical 17 at 1.5x, within the DT margin
+    const support = Array.from({ length: 8 }, (_, i) => 9710 + i);
+    const bestScores = [
+      subjectScore(9790, 500, recent, 4, 5),
+      ...support.map((beatmapId, i) => subjectScore(beatmapId, 450 - i * 5, recent, 4, 5)),
+    ];
+    const msd = (technical: number) => ({ Stream: 10, Jumpstream: 10, Handstream: 10, Stamina: 10, JackSpeed: 10, Chordjack: 10, Technical: technical });
+
+    await insertBeatmapMeta(hardDt, 4, 5);
+    await insertBeatmapMeta(easyDt, 4, 5);
+    // Normal-lane MSD sits below the subject's rating, so only the DT gate can
+    // fire; it just puts both ids into the feasibility context. The 1.5x MSD that
+    // the DT lane screens against lives in the chart-analysis row.
+    await insertSearchIndex(hardDt, [0, 0, 0, 0, 0, 0, 1, 0], 4, msd(12));
+    await insertSearchIndex(easyDt, [0, 0, 0, 0, 0, 0, 1, 0], 4, msd(12));
+    await insertDtRateAnalysis(hardDt, msd(25));
+    await insertDtRateAnalysis(easyDt, msd(17));
+    for (const beatmapId of support) await insertBeatmapMeta(beatmapId, 4, 5);
+
+    for (let i = 0; i < 12; i += 1) {
+      const id = 9720 + i;
+      await insertUser(id, 10_000, "CR", `DtPeer${i}`);
+      await insertFarmed("CR", id, hardDt, 500, recent, ["DT"]);
+      await insertFarmed("CR", id, easyDt, 500, recent, ["DT"]);
+      for (const beatmapId of support) await insertFarmed("CR", id, beatmapId, 400, recent);
+    }
+    await seedSubjectSkillRatings(SUBJECT_ID, 4, msd(15), 50);
+    const osu = makeOsuStub(bestScores, 10_000, { "4k": 3000 });
+
+    const gain = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" }, stubQueue);
+    const easyRec = gain.recs.find((rec) => rec.beatmapId === easyDt);
+    expect(easyRec).toBeDefined();
+    expect(easyRec?.speedBucket).toBe("dt");
+    expect(gain.recs.some((rec) => rec.beatmapId === hardDt)).toBe(false);
+
+    // Popular still browses the over-MSD DT chart (the gate is gain-only).
+    const popular = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k", view: "popular" }, stubQueue);
+    expect(popular.recs.some((rec) => rec.beatmapId === hardDt)).toBe(true);
   });
 
   it("computes key-mode peer distance on mode pp, not identical total pp", async () => {

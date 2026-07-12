@@ -6,7 +6,7 @@ import type { OscScore } from "../shared/types.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { calibrateProxy, getKeyModePeerPool, type FarmHelperKeyCount } from "./farm-helper-key-stats.js";
 import { buildWeightedUserShape, computeShapeWeights, MSD_SKILLSETS, readChartShapeData, readChartShapes, readPeerShapes, shapeSimilarity, SHAPE_MIN_CHARTS, type ChartShape, type UserShape } from "./farm-helper-shape.js";
-import { enqueueMissingChartAnalyses } from "./chart-analysis.js";
+import { enqueueMissingChartAnalyses, readDtRateMsd } from "./chart-analysis.js";
 import { getPlayerSkillBreakdown } from "./player-skills.js";
 import type { JobQueue } from "../jobs/queue.js";
 
@@ -141,11 +141,13 @@ const KNN_WIDEN_MODES = ["knn", "knn_wide", "knn_wider", "knn_widest"] as const;
 const SPARSE_FALLBACK_PEERS = 100;
 const SPARSE_FALLBACK_WEIGHT = 0.25;
 // Feasibility gate (Stage 4): drop a 4K chart from the gain view when its
-// dominant MSD skillset exceeds the subject's rating for it by this margin.
-// TODO(farm-helper-v2 7.3): stored MSD is 4K at 1.0x only, so the gate is limited
-// to the "normal" speed lane. When chart analysis stores MSD at 1.5x/0.75x (next
-// CHART_ANALYSIS_VERSION bump), extend the gate to the DT/HT lanes.
+// dominant MSD skillset exceeds the subject's rating for it by this margin. The
+// "normal" lane uses stored 1.0x MSD; the "dt" lane uses the rate-adjusted 1.5x
+// MSD from the DT-rate analysis sweep (chart-analysis.ts), with a wider margin
+// since 1.5x charts sit higher on the same skill axis. HT stays ungated (no
+// stored 0.75x MSD yet).
 const FEASIBILITY_MSD_MARGIN = 3.0;
+const FEASIBILITY_MSD_MARGIN_DT = 3.5;
 const FEASIBILITY_MIN_ANALYZED_PLAYS = 30;
 const PEER_MIN_COUNT = 3;
 const PEER_MIN_FRACTION = 0.12;
@@ -719,9 +721,13 @@ async function scoreCandidates(
     if (!isPopular && fit.hasFit && (meta.stars < fit.starLo - STAR_BUFFER || meta.stars > fit.starHi + STAR_BUFFER)) continue;
     // Feasibility: a chart whose dominant MSD skillset outstrips the subject's
     // rating for it is not realistically farmable now, so drop it in the gain
-    // view (popular still browses it). 4K + 1.0x lane only, since stored MSD is
-    // 4K at 1.0x; other lanes fall through to the existing pp caps.
-    if (feasibility && meta.keys === 4 && agg.speedBucket === "normal" && isChartInfeasible(agg.beatmapId, feasibility)) continue;
+    // view (popular still browses it). The normal lane uses stored 1.0x MSD; the
+    // DT lane uses the rate-adjusted 1.5x MSD with a wider margin. HT and other
+    // lanes fall through to the existing pp caps. Missing MSD never gates.
+    if (feasibility && meta.keys === 4) {
+      if (agg.speedBucket === "normal" && isChartInfeasible(feasibility.chartMsd.get(agg.beatmapId), feasibility.ratings, FEASIBILITY_MSD_MARGIN)) continue;
+      if (agg.speedBucket === "dt" && isChartInfeasible(feasibility.chartMsdDt.get(agg.beatmapId), feasibility.ratings, FEASIBILITY_MSD_MARGIN_DT)) continue;
+    }
 
     const candidateKeyMode = beatmapKeyMode(meta.keys);
     const peerFraction = kernelFraction;
@@ -1340,13 +1346,15 @@ function computePatternFit(subjectShape: UserShape, chartShape: ChartShape): num
 interface FeasibilityContext {
   ratings: Record<string, number>;
   chartMsd: Map<number, number[]>;
+  chartMsdDt: Map<number, number[]>;
 }
 
-// Builds the feasibility context (subject 4K skill ratings + candidate raw MSD,
-// the latter passed in from the shared map_search_index read). Returns null
-// (gate disabled) without a queue (backtest), when the subject has no ready 4K
-// skill rating with enough analyzed plays, or when no candidate has MSD.
-// Reading the ratings enqueues a recompute if stale; it never blocks.
+// Builds the feasibility context (subject 4K skill ratings + candidate raw MSD at
+// 1.0x, the latter passed in from the shared map_search_index read, plus the 1.5x
+// MSD for the DT lane). Returns null (gate disabled) without a queue (backtest),
+// when the subject has no ready 4K skill rating with enough analyzed plays, or
+// when no candidate has MSD. Reading the ratings enqueues a recompute if stale;
+// it never blocks.
 async function buildFeasibilityContext(
   db: Db,
   userId: number,
@@ -1359,17 +1367,20 @@ async function buildFeasibilityContext(
   if (breakdown.status !== "ready") return null;
   const mode4k = breakdown.modes.find((mode) => mode.keyCount === 4);
   if (!mode4k || mode4k.analyzedPlays < FEASIBILITY_MIN_ANALYZED_PLAYS) return null;
-  return { ratings: mode4k.ratings, chartMsd };
+  const chartMsdDt = await readDtRateMsd(db, [...chartMsd.keys()]);
+  return { ratings: mode4k.ratings, chartMsd, chartMsdDt };
 }
 
-function isChartInfeasible(beatmapId: number, ctx: FeasibilityContext): boolean {
-  const msd = ctx.chartMsd.get(beatmapId);
+// A 4K chart is infeasible when its dominant MSD skillset outstrips the subject's
+// rating for that skillset by more than the margin. Missing/short MSD never gates
+// (never reject on missing data).
+function isChartInfeasible(msd: number[] | undefined, ratings: Record<string, number>, margin: number): boolean {
   if (!msd || msd.length !== MSD_SKILLSETS.length) return false;
   let dominantIdx = 0;
   for (let i = 1; i < msd.length; i++) if (msd[i] > msd[dominantIdx]) dominantIdx = i;
-  const rating = ctx.ratings[MSD_SKILLSETS[dominantIdx]];
+  const rating = ratings[MSD_SKILLSETS[dominantIdx]];
   if (!Number.isFinite(rating)) return false;
-  return msd[dominantIdx] > rating + FEASIBILITY_MSD_MARGIN;
+  return msd[dominantIdx] > rating + margin;
 }
 
 async function readBeatmapMeta(db: Db, ids: number[]): Promise<Map<number, BeatmapMeta>> {

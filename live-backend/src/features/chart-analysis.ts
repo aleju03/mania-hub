@@ -11,6 +11,7 @@ import { readConfig } from "../config.js";
 import { getCachedBeatmapFile, readCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { nowIso } from "../shared/score.js";
+import { MSD_SKILLSETS } from "./farm-helper-shape.js";
 
 // Per-beatmap chart analysis at 1.0x: the unified classifier verdict (dan
 // estimate, pattern clusters, in-house pattern hits) plus the Etterna MSD
@@ -962,6 +963,168 @@ async function enqueueLnSubtypeRecompute(queue: JobQueue, cursor: number): Promi
     { cursor },
     { priority: -10, replaceDone: true },
   );
+}
+
+// ── One-shot rate-adjusted (DT / 1.5x) analysis sweep ─────────────────────────
+// Stored analysis is 1.0x only, so the farm helper's feasibility gate can only
+// screen normal-speed 4K recs; DT recs bypass it and far-too-hard-under-1.5x maps
+// slip through. This boot-seeded chunked sweep computes 1.5x MSD (and a lean dan
+// verdict) for the 4K charts that are actually DT-farmed, storing them in the
+// msd_dt_json / dan_dt_json columns so the gate can screen DT recs too. Same
+// playbook as the vibro sweep above: chunked, self-chaining, boot-seeded, done in
+// live_meta. Purely local work (cached .osu corpus), no osu! API.
+
+export const DT_RATE_ANALYSIS_JOB = "recompute_dt_rate_analysis_sweep";
+const DT_RATE_ANALYSIS_META_KEY = "dt_rate_analysis_done:v1";
+const DT_RATE_ANALYSIS_CHUNK = 40;
+const DT_RATE = 1.5;
+
+export interface DtRateAnalysisChunkResult {
+  nextCursor: number;
+  scanned: number;
+  computed: number[];
+  done: boolean;
+}
+
+export async function recomputeDtRateChunk(
+  db: Db,
+  cursor: number,
+  limit = DT_RATE_ANALYSIS_CHUNK,
+): Promise<DtRateAnalysisChunkResult> {
+  const rows = (await exec(
+    db,
+    `select distinct a.beatmap_id as beatmap_id
+     from beatmap_chart_analysis a
+     where a.analysis_version = ? and a.status = 'ready'
+       and a.key_count = 4 and a.msd_dt_json is null
+       and a.beatmap_id > ?
+       and a.beatmap_id in (
+         select beatmap_id from country_maps_farmed_scores
+         where mods_json like '%"DT"%' or mods_json like '%"NC"%'
+       )
+     order by a.beatmap_id
+     limit ?`,
+    [CHART_ANALYSIS_VERSION, Math.max(0, Math.floor(cursor)), Math.max(1, Math.floor(limit))],
+  )).rows;
+
+  let nextCursor = cursor;
+  const computed: number[] = [];
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    nextCursor = Math.max(nextCursor, beatmapId);
+    const osuText = await readCachedBeatmapFile(db, beatmapId).catch(() => null);
+    if (!osuText) continue;
+    try {
+      const map = parseManiaBeatmap(osuText);
+      if (map.keyCount !== 4) continue;
+      const starRating = Number((await exec(
+        db,
+        "select difficulty_rating from beatmaps where beatmap_id = ? limit 1",
+        [beatmapId],
+      )).rows[0]?.difficulty_rating ?? 0);
+      const classification = classifyChart(map, osuText, {
+        rate: DT_RATE,
+        starRating: Number.isFinite(starRating) && starRating > 0 ? starRating : undefined,
+        totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
+        version: map.version,
+      });
+      // The classifier and MinaCalc are the CPU bursts; yield between them and
+      // between charts so ingest/SSE keep moving.
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      const msd = await computeMsd(osuText, { keyCount: 4, rate: DT_RATE }).catch(() => null);
+      if (!msd) continue;
+
+      const lean = leanClassification(classification);
+      const danDt = {
+        primaryLabel: lean.primary?.displayName ?? null,
+        primaryFamily: lean.primary ? (lean.primary.kind === "ln" ? "ln" : "dan") : null,
+        rawDan: lean.primary?.rawDan ?? null,
+      };
+      await exec(
+        db,
+        `update beatmap_chart_analysis
+         set msd_dt_json = json(?), dan_dt_json = json(?)
+         where beatmap_id = ? and analysis_version = ?`,
+        [json(msd), json(danDt), beatmapId, CHART_ANALYSIS_VERSION],
+      );
+      computed.push(beatmapId);
+    } catch {
+      // A chart the parser/estimator rejects keeps its null DT columns; the full
+      // analysis job (at 1.0x) would fail the same way.
+    }
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+
+  return { nextCursor, scanned: rows.length, computed, done: rows.length < limit };
+}
+
+// Boot watchdog: seed the sweep once per meta-key version, resume if a chain
+// died mid-way (each chunk's job carries its own cursor dedupe key).
+export async function ensureDtRateAnalysisSeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [DT_RATE_ANALYSIS_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [DT_RATE_ANALYSIS_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueueDtRateAnalysis(queue, 0);
+}
+
+export async function runDtRateAnalysisJob(db: Db, queue: JobQueue, payload: { cursor?: number } | undefined): Promise<void> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const result = await recomputeDtRateChunk(db, cursor);
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [DT_RATE_ANALYSIS_META_KEY, json({ finishedAt: now }), now],
+    );
+    return;
+  }
+  await enqueueDtRateAnalysis(queue, result.nextCursor);
+}
+
+async function enqueueDtRateAnalysis(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    DT_RATE_ANALYSIS_JOB,
+    `${DT_RATE_ANALYSIS_JOB}:${cursor}`,
+    { cursor },
+    { priority: -10, replaceDone: true },
+  );
+}
+
+// Reads stored 1.5x MSD for the given beatmaps, as raw skillset vectors in
+// MSD_SKILLSETS order (the farm helper's feasibility gate compares absolute
+// values). Rows without a valid msd_dt_json are skipped. Mirrors the normal-speed
+// raw MSD read in farm-helper-shape.ts.
+export async function readDtRateMsd(db: Db, beatmapIds: number[]): Promise<Map<number, number[]>> {
+  const ids = [...new Set(beatmapIds.filter((id) => Number.isSafeInteger(id) && id > 0))];
+  const result = new Map<number, number[]>();
+  for (let i = 0; i < ids.length; i += 900) {
+    const chunk = ids.slice(i, i + 900);
+    if (chunk.length === 0) continue;
+    const placeholders = chunk.map(() => "?").join(",");
+    const rows = (await exec(
+      db,
+      `select beatmap_id, msd_dt_json from beatmap_chart_analysis
+       where analysis_version = ? and beatmap_id in (${placeholders}) and msd_dt_json is not null`,
+      [CHART_ANALYSIS_VERSION, ...chunk],
+    )).rows;
+    for (const row of rows) {
+      const beatmapId = Number(row.beatmap_id);
+      if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0) continue;
+      const parsed = parseJson<{ values?: Record<string, number> }>(row.msd_dt_json, {});
+      const values = parsed?.values;
+      if (!values || typeof values !== "object") continue;
+      const vector = MSD_SKILLSETS.map((skill) => Number(values[skill]));
+      if (!vector.every((v) => Number.isFinite(v))) continue;
+      result.set(beatmapId, vector);
+    }
+  }
+  return result;
 }
 
 async function readAnalysisJobCounts(db: Db): Promise<{ queued: number; running: number; failed: number; deferred: number }> {

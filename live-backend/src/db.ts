@@ -105,6 +105,7 @@ export async function migrate(db: Db): Promise<void> {
   await migrateSkins(db);
   await migrateAdminTodos(db);
   await migrateCountryMapsSnapshotStampsIndex(db);
+  await migrateChartAnalysisDtRate(db);
 }
 
 // getMapsSnapshotMeta reads only (generated_at, refreshed_at) for a country on
@@ -445,6 +446,20 @@ async function migrateFarmHelperShape(db: Db): Promise<void> {
   const columns = (await db.execute("pragma table_info(farm_helper_user_key_stats)")).rows.map((row) => String(row.name));
   if (!columns.includes("shape_json")) {
     await db.execute("alter table farm_helper_user_key_stats add column shape_json text");
+  }
+}
+
+// Rate-adjusted (1.5x/DT) analysis for DT-farmed 4K charts, so the farm helper's
+// feasibility gate can screen DT recs too (stored 1.0x MSD/dan can't). Populated
+// by the boot-seeded DT-rate sweep in features/chart-analysis.ts; the columns
+// just need to exist. Same shapes as msd_json / a lean dan verdict.
+async function migrateChartAnalysisDtRate(db: Db): Promise<void> {
+  const columns = (await db.execute("pragma table_info(beatmap_chart_analysis)")).rows.map((row) => String(row.name));
+  if (!columns.includes("msd_dt_json")) {
+    await db.execute("alter table beatmap_chart_analysis add column msd_dt_json text");
+  }
+  if (!columns.includes("dan_dt_json")) {
+    await db.execute("alter table beatmap_chart_analysis add column dan_dt_json text");
   }
 }
 
