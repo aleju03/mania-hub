@@ -9,6 +9,7 @@ import {
   type LiveMapSearchEntry,
 } from "../../lib/live-backend";
 import { useAuth } from "../../lib/auth-context";
+import { rememberMapsCollection } from "../../lib/analytics-maps";
 import { formatNumber, formatTimeAgo } from "../../lib/format";
 import { danScaleImage, danScaleLabel, type DanScaleContext } from "../../lib/dan-images";
 import { MapDetailModal } from "./MapDetailModal";
@@ -320,7 +321,16 @@ function CollectionsBrowse({ onSelect, liveBackendEnabled }: { onSelect: (id: st
           </div>
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
             {list.map((summary) => (
-              <CollectionTile key={summary.id} summary={summary} onClick={() => onSelect(summary.id)} />
+              <CollectionTile
+                key={summary.id}
+                summary={summary}
+                onClick={() => {
+                  // Collection ids are opaque, so hand the pack's name to the
+                  // pageview the navigation is about to fire.
+                  rememberMapsCollection(summary.id, summary.title);
+                  onSelect(summary.id);
+                }}
+              />
             ))}
           </div>
         </section>

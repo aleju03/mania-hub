@@ -197,6 +197,12 @@ interface AnalyticsRecentEventRow {
   deviceKind: AnalyticsDeviceKind;
   distinctId: string;
   mapsTab: string | null;
+  mapsQuery: string | null;
+  mapsFilters: string | null;
+  mapsSort: string | null;
+  mapsCollection: string | null;
+  mapsPage: string | null;
+  mapsBeatmapId: string | null;
   rankingsPage: string | null;
   profileUsername: string | null;
   replayPlayer: string | null;
@@ -586,7 +592,7 @@ async function fetchAnalyticsMonitorDataFromPostHog({
     ),
     runQuery(
       "recent activity",
-      `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id, properties.maps_tab, properties.rankings_page, properties.profile_username, properties.replay_player, properties.replay_score_id, properties.$screen_width, properties.$viewport_width, properties.$current_url, properties.farm_helper_user, properties.pack_type, properties.pack_username, properties.farm_map_title, properties.farm_map_user, properties.viewer_username FROM events WHERE timestamp > ${since} AND distinct_id != 'server'${recentRealVisitorClause}${recentCountryClause} AND (properties.$pathname IS NULL OR properties.$pathname NOT LIKE '/admin/%') AND NOT (event = '$pageview' AND properties.$pathname = '/') ORDER BY timestamp DESC LIMIT ${ANALYTICS_RECENT_EVENTS_LIMIT}`,
+      `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id, properties.maps_tab, properties.rankings_page, properties.profile_username, properties.replay_player, properties.replay_score_id, properties.$screen_width, properties.$viewport_width, properties.$current_url, properties.farm_helper_user, properties.pack_type, properties.pack_username, properties.farm_map_title, properties.farm_map_user, properties.viewer_username, properties.maps_query, properties.maps_filters, properties.maps_sort, properties.maps_collection, properties.maps_page, properties.maps_beatmap_id FROM events WHERE timestamp > ${since} AND distinct_id != 'server'${recentRealVisitorClause}${recentCountryClause} AND (properties.$pathname IS NULL OR properties.$pathname NOT LIKE '/admin/%') AND NOT (event = '$pageview' AND properties.$pathname = '/') ORDER BY timestamp DESC LIMIT ${ANALYTICS_RECENT_EVENTS_LIMIT}`,
     ),
     runQuery(
       "physical countries",
@@ -650,6 +656,12 @@ async function fetchAnalyticsMonitorDataFromPostHog({
       deviceKind: getAnalyticsDeviceKind(row[11], row[12]),
       distinctId: String(row[5] ?? ""),
       mapsTab: row[6] ? String(row[6]) : null,
+      mapsQuery: row[20] ? String(row[20]) : null,
+      mapsFilters: row[21] ? String(row[21]) : null,
+      mapsSort: row[22] ? String(row[22]) : null,
+      mapsCollection: row[23] ? String(row[23]) : null,
+      mapsPage: row[24] ? String(row[24]) : null,
+      mapsBeatmapId: row[25] ? String(row[25]) : null,
       rankingsPage: row[7] ? String(row[7]) : null,
       profileUsername: row[8] ? String(row[8]) : null,
       replayPlayer: row[9] ? String(row[9]) : null,
@@ -1743,13 +1755,28 @@ function analyticsUrlParam(url: string | null, key: string): string | null {
   }
 }
 
+// A maps visit is a search session rather than a page: every keystroke and
+// filter click lands as its own pageview, so the tab alone reads as a wall of
+// "Maps / Search". Spell out what was typed, what was filtered, and where in
+// the results they were.
+function formatAnalyticsMapsLabel(row: AnalyticsRecentEventRow): string {
+  const parts = [`Maps / ${formatAnalyticsMapsTab(row.mapsTab)}`];
+  if (row.mapsCollection) parts.push(row.mapsCollection);
+  if (row.mapsQuery) parts.push(`"${row.mapsQuery}"`);
+  if (row.mapsFilters) parts.push(row.mapsFilters);
+  if (row.mapsSort) parts.push(`sort: ${row.mapsSort}`);
+  if (row.mapsPage) parts.push(`p${row.mapsPage}`);
+  if (row.mapsBeatmapId) parts.push(`map #${row.mapsBeatmapId}`);
+  return parts.join(" · ");
+}
+
 function formatAnalyticsRecentEventLabel(row: AnalyticsRecentEventRow): string {
   if (row.event === "pack_open") {
     return `Pack · ${formatAnalyticsPackType(row.packType)} · ${row.packUsername || "guest"}`;
   }
   const path = row.path || "";
   if (!path || path === "/") return "Home";
-  if (path === "/maps") return `Maps / ${formatAnalyticsMapsTab(row.mapsTab)}`;
+  if (path === "/maps") return formatAnalyticsMapsLabel(row);
   if (path === "/rankings") return row.rankingsPage ? `Rankings · p${row.rankingsPage}` : "Rankings";
   if (path === "/my-stats" || path === "/my-data") return row.viewerUsername ? `My stats · ${row.viewerUsername}` : "My stats";
   if (path === "/goals") return row.viewerUsername ? `Goals · ${row.viewerUsername}` : "Goals";
@@ -1936,7 +1963,9 @@ function AnalyticsRecentEventsCard({
                     <span className="h-[10px] w-[15px] rounded-[1px] bg-osu-b3/40 flex-shrink-0" />
                   )}
                   <AnalyticsVisitorDeviceIcon deviceKind={group.deviceKind} />
-                  <span className="text-osu-c2 truncate flex-1">{formatAnalyticsRecentEventLabel(latest)}</span>
+                  <span className="text-osu-c2 truncate flex-1" title={formatAnalyticsRecentEventLabel(latest)}>
+                    {formatAnalyticsRecentEventLabel(latest)}
+                  </span>
                   <span className="text-osu-f1 flex-shrink-0">
                     {group.events.length} event{group.events.length === 1 ? "" : "s"}
                   </span>
@@ -1949,11 +1978,12 @@ function AnalyticsRecentEventsCard({
                       const href = analyticsViewHref(row.viewUrl);
                       const inspectionHref = href ? analyticsInspectionHref(href) : null;
                       const rowClass = "flex items-center gap-2 text-[10px] py-1 pl-5 pr-2 hover:bg-osu-b3/30 transition-colors duration-[100ms]";
+                      const label = formatAnalyticsRecentEventLabel(row);
                       const content = (
                         <>
                           <span className="text-osu-f1 font-mono w-20 flex-shrink-0">{row.timestamp || "—"}</span>
-                          <span className="text-osu-c2 truncate flex-1 group-hover:underline">
-                            {formatAnalyticsRecentEventLabel(row)}
+                          <span className="text-osu-c2 truncate flex-1 group-hover:underline" title={label}>
+                            {label}
                           </span>
                         </>
                       );

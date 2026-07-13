@@ -1,3 +1,5 @@
+import { getMapsPageviewProperties } from "./analytics-maps";
+
 const API_KEY = import.meta.env.VITE_POSTHOG_KEY as string | undefined;
 const ENDPOINT = "/api/sync";
 const VISITOR_ID_KEY = "mh_vid";
@@ -136,12 +138,9 @@ function getPageviewProperties(pathname: string): Record<string, unknown> {
     if (beatmapsetId) props.replay_beatmapset_id = beatmapsetId;
     if (player) props.replay_player = player;
   } else if (pathname === "/maps") {
-    // Tabs mirror maps.tsx `type Tab`. No `?tab=` param means the default
-    // tab, which is search (not farmed) - the old fallback mis-recorded every
-    // search/collections visit as farmed.
-    const tab = params.get("tab");
-    const knownTabs = ["search", "collections", "farmed", "popular", "favourites", "random"];
-    props.maps_tab = tab && knownTabs.includes(tab) ? tab : "search";
+    // Tab plus the search text, filters and sort behind it, so the activity
+    // feed can show what the visitor is actually looking for.
+    Object.assign(props, getMapsPageviewProperties(params));
   } else if (pathname === "/rankings") {
     const page = params.get("page");
     if (page) props.rankings_page = page;
