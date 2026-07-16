@@ -201,6 +201,8 @@ export interface ValleyVisitorEvent {
 
 export interface ValleyVisitors {
   available: boolean;
+  /* True when served by the in-house analytics store (fresher; poll faster). */
+  live?: boolean;
   activeVisitors: number;
   recent: ValleyVisitorEvent[];
   fetchedAt: number;

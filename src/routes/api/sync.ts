@@ -4,6 +4,59 @@ import { waitUntil } from "@vercel/functions";
 const POSTHOG_CAPTURE_URL = "https://us.i.posthog.com/capture/";
 const MAX_SYNC_BODY_BYTES = 64 * 1024;
 const POSTHOG_FORWARD_TIMEOUT_MS = 5_000;
+const LIVE_ANALYTICS_FORWARD_TIMEOUT_MS = 5_000;
+
+// Link-unfurl crawlers and monitoring agents that execute JS still send
+// obviously non-browser user agents; flag them so the in-house store can keep
+// them out of visitor counts (PostHog does this at ingest).
+const BOT_USER_AGENT_PATTERN =
+  /bot|crawler|spider|crawling|facebookexternalhit|whatsapp|telegram|discord|slurp|bingpreview|headless|lighthouse|gtmetrix|pingdom|uptime|statuscake|python-requests|python-urllib|curl\/|wget\/|go-http-client|okhttp|axios\//i;
+
+function isLikelyBotUserAgent(userAgent: string | null): boolean {
+  if (!userAgent) return true;
+  return BOT_USER_AGENT_PATTERN.test(userAgent);
+}
+
+// Mirrors getServerLiveBackendUrl without importing the client-side live
+// backend module into this lean capture route.
+function getLiveBackendBase(): string | null {
+  const base = process.env.LIVE_BACKEND_URL ?? process.env.VITE_LIVE_BACKEND_URL;
+  return base ? base.replace(/\/+$/, "") : null;
+}
+
+/* Second write target: the in-house analytics store on the live backend.
+   Wrapped (not raw-forwarded) so the backend gets the Vercel-derived GeoIP
+   country and a bot verdict without trusting client-supplied properties. */
+function forwardToLiveAnalytics(request: Request, body: ArrayBuffer): void {
+  const base = getLiveBackendBase();
+  const token = process.env.LIVE_ADMIN_TOKEN;
+  if (!base || !token) return;
+  let payload: unknown;
+  try {
+    payload = JSON.parse(new TextDecoder().decode(body));
+  } catch {
+    return;
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), LIVE_ANALYTICS_FORWARD_TIMEOUT_MS);
+  waitUntil(
+    fetch(`${base}/api/analytics/capture`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        payload,
+        geo_country: request.headers.get("x-vercel-ip-country"),
+        is_bot: isLikelyBotUserAgent(request.headers.get("user-agent")),
+      }),
+      signal: controller.signal,
+    }).catch(() => {}).finally(() => {
+      clearTimeout(timeout);
+    }),
+  );
+}
 
 async function readRequestBodyWithLimit(request: Request, limitBytes: number): Promise<ArrayBuffer | null> {
   const contentLength = request.headers.get("content-length");
@@ -84,6 +137,10 @@ async function forwardCapture(request: Request): Promise<Response> {
       clearTimeout(timeout);
     }),
   );
+
+  // Dual-write to the in-house store; PostHog stays as the free cold archive
+  // until the in-house numbers have soaked long enough to trust alone.
+  forwardToLiveAnalytics(request, body);
 
   return new Response(null, { status: 202 });
 }

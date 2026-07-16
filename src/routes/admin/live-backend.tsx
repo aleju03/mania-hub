@@ -9,6 +9,7 @@ import {
   fetchLiveBackendStorageBreakdown,
   fetchLiveBackendTableRows,
   getLiveBackendUrl,
+  getServerLiveBackendUrl,
   openLiveEventSource,
   runLiveBackendAdminAction,
   setLiveBackendUserActive,
@@ -289,6 +290,9 @@ type AnalyticsCacheState = "fresh" | "stale" | "warming";
 interface AnalyticsMonitorData {
   rangeHours: AnalyticsRange;
   cacheState: AnalyticsCacheState;
+  /* Which store answered: the in-house live backend (seconds-fresh) or the
+     PostHog fallback (minutes-stale). Drives the auto-refresh cadence. */
+  source?: "live" | "posthog";
   activeVisitors: number;
   pageviewsInRange: number;
   uniqueVisitorsInRange: number;
@@ -310,6 +314,7 @@ interface AnalyticsMonitorData {
 
 const BACKEND_REFRESH_MS = 5_000;
 const ANALYTICS_REFRESH_MS = 30_000;
+const ANALYTICS_LIVE_REFRESH_MS = 5_000;
 const DEFAULT_COUNTRY = "CR";
 const MONITORING_TABS = ["backend", "analytics"] as const;
 type MonitoringTab = (typeof MONITORING_TABS)[number];
@@ -730,9 +735,40 @@ async function fetchAnalyticsMonitorDataFromPostHog({
       rateLimit: row[10] == null ? null : Number(row[10]),
       retryAfter: row[11] ? String(row[11]) : null,
     })),
+    source: "posthog",
     fetchedAt: Date.now(),
   };
 }
+
+/* The in-house path: one call to the live backend's local store instead of 12
+   HogQL round trips. The backend returns display-ready rows in the exact
+   AnalyticsMonitorData row shapes. */
+async function fetchAnalyticsMonitorDataFromLiveBackend({
+  rangeHours,
+  recentCountry,
+}: {
+  rangeHours: AnalyticsRange;
+  recentCountry: string | null;
+}): Promise<AnalyticsMonitorData> {
+  const base = getServerLiveBackendUrl();
+  if (!base) throw new Error("LIVE_BACKEND_URL is not configured.");
+  const params = new URLSearchParams({ rangeHours: String(rangeHours), recentLimit: String(ANALYTICS_RECENT_EVENTS_LIMIT) });
+  if (recentCountry) params.set("recentCountry", recentCountry);
+  const headers: HeadersInit = { connection: "close" };
+  if (process.env.LIVE_ADMIN_TOKEN) headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+  const response = await fetch(`${base}/api/admin/analytics/monitor?${params}`, { headers });
+  if (!response.ok) throw new Error(`Live analytics monitor failed (${response.status}).`);
+  const payload = await response.json() as Omit<AnalyticsMonitorData, "cacheState" | "fetchedAt" | "source">;
+  return { ...payload, rangeHours, cacheState: "fresh", source: "live", fetchedAt: Date.now() };
+}
+
+function liveAnalyticsConfigured(): boolean {
+  return Boolean(getServerLiveBackendUrl() && process.env.LIVE_ADMIN_TOKEN);
+}
+
+// The in-house store answers in milliseconds from a local file, so its cache
+// window only exists to coalesce refresh bursts; PostHog keeps the old 30s.
+const ANALYTICS_LIVE_CACHE_FRESH_MS = 4_000;
 
 const getAnalyticsMonitorData = createServerFn({ method: "POST" })
   .inputValidator((data: { range?: unknown; rangeHours?: unknown; recentCountry?: unknown }) => ({
@@ -742,17 +778,19 @@ const getAnalyticsMonitorData = createServerFn({ method: "POST" })
   .handler(async ({ data }: { data: { rangeHours: AnalyticsRange; recentCountry: string | null } }): Promise<AnalyticsMonitorData> => {
     await requireAdminAccess("Monitoring analytics");
 
+    const useLiveStore = liveAnalyticsConfigured();
     const apiKey = process.env.POSTHOG_PERSONAL_API_KEY;
     const projectId = process.env.POSTHOG_PROJECT_ID;
-    if (!apiKey || !projectId) {
-      throw new Error("Set POSTHOG_PERSONAL_API_KEY and POSTHOG_PROJECT_ID in .env to use analytics monitoring.");
+    if (!useLiveStore && (!apiKey || !projectId)) {
+      throw new Error("Configure LIVE_BACKEND_URL + LIVE_ADMIN_TOKEN (in-house analytics) or POSTHOG_PERSONAL_API_KEY + POSTHOG_PROJECT_ID in .env to use analytics monitoring.");
     }
 
     const endpoint = `https://us.posthog.com/api/projects/${projectId}/query/`;
     const cacheKey = getAnalyticsCacheKey(data.rangeHours, data.recentCountry);
     const cached = analyticsMonitorCache.get(cacheKey);
     const now = Date.now();
-    if (cached?.data && now - cached.data.fetchedAt <= ANALYTICS_CACHE_FRESH_MS) {
+    const freshMs = useLiveStore ? ANALYTICS_LIVE_CACHE_FRESH_MS : ANALYTICS_CACHE_FRESH_MS;
+    if (cached?.data && now - cached.data.fetchedAt <= freshMs) {
       return { ...cached.data, cacheState: "fresh" };
     }
 
@@ -765,12 +803,17 @@ const getAnalyticsMonitorData = createServerFn({ method: "POST" })
 
     if (!refreshPromise) {
       let nextPromise: Promise<AnalyticsMonitorData>;
-      nextPromise = fetchAnalyticsMonitorDataFromPostHog({
-        endpoint,
-        apiKey,
-        rangeHours: data.rangeHours,
-        recentCountry: data.recentCountry,
-      }).then(
+      nextPromise = (useLiveStore
+        ? fetchAnalyticsMonitorDataFromLiveBackend({
+          rangeHours: data.rangeHours,
+          recentCountry: data.recentCountry,
+        })
+        : fetchAnalyticsMonitorDataFromPostHog({
+          endpoint,
+          apiKey: apiKey!,
+          rangeHours: data.rangeHours,
+          recentCountry: data.recentCountry,
+        })).then(
         (freshData) => {
           analyticsMonitorCache.set(cacheKey, { data: freshData, promise: null });
           return freshData;
@@ -1394,11 +1437,14 @@ function AnalyticsMonitorPanel() {
   useEffect(() => {
     if (!hydrated) return;
     if (!autoRefresh) return;
+    // The in-house store is a local read: poll at seconds cadence for a
+    // near-realtime feed. PostHog stays on the old gentle interval.
+    const refreshMs = data?.source === "live" ? ANALYTICS_LIVE_REFRESH_MS : ANALYTICS_REFRESH_MS;
     const id = window.setInterval(() => {
       void load(range, recentCountry, false);
-    }, ANALYTICS_REFRESH_MS);
+    }, refreshMs);
     return () => window.clearInterval(id);
-  }, [hydrated, autoRefresh, range, recentCountry, load]);
+  }, [hydrated, autoRefresh, range, recentCountry, load, data?.source]);
 
   const currentData = data && dataRange === range ? data : null;
   const isRecentCountryPending = Boolean(currentData && dataRecentCountry !== recentCountry);

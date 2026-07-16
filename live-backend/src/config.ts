@@ -31,6 +31,10 @@ export interface Config {
   walCheckpointWarnBytes: number;
   databaseUrl: string;
   databaseAuthToken?: string;
+  // In-house analytics store: its own SQLite file (own WAL), so event volume
+  // never contends with the main serving DB.
+  analyticsDatabaseUrl: string;
+  analyticsRetentionDays: number;
   osuClientId?: string;
   osuClientSecret?: string;
   oscBaseUrl: string;
@@ -216,6 +220,8 @@ export function readConfig(): Config {
     walCheckpointWarnBytes: readBoundedInt("WAL_CHECKPOINT_WARN_BYTES", 512 * 1024 * 1024, 1024 * 1024, 8_192 * 1024 * 1024),
     databaseUrl: process.env.DATABASE_URL ?? "file:./data/mania-hub-live.db",
     databaseAuthToken: process.env.DATABASE_AUTH_TOKEN || undefined,
+    analyticsDatabaseUrl: process.env.ANALYTICS_DATABASE_URL ?? "file:./data/mania-hub-analytics.db",
+    analyticsRetentionDays: readBoundedInt("ANALYTICS_RETENTION_DAYS", 90, 7, 3650),
     osuClientId: process.env.OSU_CLIENT_ID || undefined,
     osuClientSecret: process.env.OSU_CLIENT_SECRET || undefined,
     oscBaseUrl: process.env.OSC_BASE_URL ?? "https://osc.kaysting.dev",

@@ -3,19 +3,53 @@ import { createServerFn } from "@tanstack/react-start";
 import { useEffect, useRef } from "react";
 import { canUseAdminFeatures } from "#/lib/auth-shared";
 import { requireAdminAccess } from "#/lib/auth";
-import { fetchLiveBackendAdminStatus } from "#/lib/live-backend";
+import { fetchLiveBackendAdminStatus, getServerLiveBackendUrl } from "#/lib/live-backend";
 import { ValleyGame } from "#/lib/valley/game";
 import { eventLabelForPath, type ValleyVisitors } from "#/lib/valley/types";
 
 const STATUS_POLL_MS = 5_000;
 const VISITORS_POLL_MS = 30_000;
+const LIVE_VISITORS_POLL_MS = 10_000;
 const POSTHOG_QUERY_TIMEOUT_MS = 15_000;
 
-// Small PostHog slice for the villager layer: active visitor count + recent
-// pageviews. Degrades to unavailable when PostHog env vars are missing so the
-// valley still runs from backend status alone.
+/* Villager layer, in-house path: the live backend's analytics store answers
+   in milliseconds from a local file, so the valley can poll it faster. */
+async function getValleyVisitorsFromLiveBackend(base: string): Promise<ValleyVisitors> {
+  const headers: HeadersInit = { connection: "close" };
+  if (process.env.LIVE_ADMIN_TOKEN) headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+  const response = await fetch(`${base}/api/admin/analytics/valley`, { headers });
+  if (!response.ok) throw new Error(`Valley visitors failed (${response.status}).`);
+  const payload = await response.json() as {
+    activeVisitors: number;
+    recent: Array<{ timestamp: string; path: string | null; country: string | null; distinctId: string; profileUsername: string | null }>;
+  };
+  return {
+    available: true,
+    live: true,
+    activeVisitors: Number(payload.activeVisitors ?? 0),
+    recent: payload.recent.map((row) => ({
+      key: `${row.timestamp}:${row.distinctId}`,
+      label: eventLabelForPath(row.path, row.profileUsername),
+      path: row.path ?? "/",
+      country: row.country,
+    })),
+    fetchedAt: Date.now(),
+  };
+}
+
+// Small analytics slice for the villager layer: active visitor count + recent
+// pageviews. Prefers the in-house store; falls back to PostHog, then degrades
+// to unavailable so the valley still runs from backend status alone.
 const getValleyVisitors = createServerFn({ method: "GET" }).handler(async (): Promise<ValleyVisitors> => {
   await requireAdminAccess("Valley visitors");
+  const liveBase = getServerLiveBackendUrl();
+  if (liveBase && process.env.LIVE_ADMIN_TOKEN) {
+    try {
+      return await getValleyVisitorsFromLiveBackend(liveBase);
+    } catch {
+      // Fall through to the PostHog path below.
+    }
+  }
   const apiKey = process.env.POSTHOG_PERSONAL_API_KEY;
   const projectId = process.env.POSTHOG_PROJECT_ID;
   if (!apiKey || !projectId) {
@@ -115,14 +149,16 @@ function ValleyPage() {
     };
     const pollVisitors = async () => {
       if (stopped) return;
+      let nextDelay = VISITORS_POLL_MS;
       try {
         const v = await getValleyVisitors();
         if (!stopped) game.updateVisitors(v);
+        if (v.live) nextDelay = LIVE_VISITORS_POLL_MS;
       } catch {
         // villagers are optional; keep the farm running
       }
       if (!stopped && !document.hidden) {
-        visitorsTimer = setTimeout(pollVisitors, VISITORS_POLL_MS);
+        visitorsTimer = setTimeout(pollVisitors, nextDelay);
       }
     };
 

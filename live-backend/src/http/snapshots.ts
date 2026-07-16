@@ -60,6 +60,7 @@ import { getDiscordPublicInfo, type DiscordRuntime } from "../discord/index.js";
 import { getDiscordShowcase } from "../discord/showcase.js";
 import { listAllSubscriptions, removeSubscriptionById } from "../discord/subscriptions.js";
 import { countUserLinks } from "../discord/identity.js";
+import type { AnalyticsStore } from "../features/analytics.js";
 
 const HIDDEN_ADMIN_WORKER_LANE_NAMES = new Set([
   "dan-estimates",
@@ -109,6 +110,7 @@ export interface HttpContext {
   pauseWorkers?: () => void;
   resumeWorkers?: () => void;
   discord?: DiscordRuntime;
+  analytics?: AnalyticsStore;
 }
 
 const REQUEST_STARTED_AT = Symbol("maniaHubRequestStartedAt");
@@ -303,6 +305,110 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     if (!checkRate(req, res, ctx, "publicCostly")) return true;
     sendJson(req, res, ctx, 200, await getPlayerAbout(ctx.db, ctx.osu, userId));
+    return true;
+  }
+  // In-house analytics capture: the Vercel /api/sync proxy posts every tracked
+  // event here (server-to-server, bearer-token gated — the browser never talks
+  // to this endpoint directly).
+  if (url.pathname === "/api/analytics/capture") {
+    if (!ctx.analytics) {
+      sendJson(req, res, ctx, 404, { error: "analytics_disabled" });
+      return true;
+    }
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<{ payload?: unknown; geo_country?: unknown; is_bot?: unknown }>((await readBody(req)) || "{}", {});
+    const accepted = ctx.analytics.capture(body.payload, {
+      geoCountry: typeof body.geo_country === "string" ? body.geo_country : null,
+      isBot: body.is_bot === true,
+    });
+    sendJson(req, res, ctx, 202, { accepted });
+    return true;
+  }
+  if (url.pathname === "/api/admin/analytics/monitor") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (!ctx.analytics) {
+      sendJson(req, res, ctx, 404, { error: "analytics_disabled" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, await ctx.analytics.getMonitorData({
+      rangeHours: Number(url.searchParams.get("rangeHours")) || 24,
+      recentCountry: url.searchParams.get("recentCountry"),
+      recentLimit: Number(url.searchParams.get("recentLimit")) || undefined,
+    }));
+    return true;
+  }
+  if (url.pathname === "/api/admin/analytics/valley") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (!ctx.analytics) {
+      sendJson(req, res, ctx, 404, { error: "analytics_disabled" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, await ctx.analytics.getValleyVisitors());
+    return true;
+  }
+  // Short-lived ticket for the admin browser's live SSE stream: EventSource
+  // can't send Authorization headers, and baking the real admin token into a
+  // URL would leak it into history/proxy logs.
+  if (url.pathname === "/api/admin/analytics/live-ticket") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (!ctx.analytics) {
+      sendJson(req, res, ctx, 404, { error: "analytics_disabled" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, ctx.analytics.issueLiveTicket());
+    return true;
+  }
+  // Realtime admin feed: pushes every accepted capture (post feed-visibility
+  // filters) the moment it arrives, ~1s ahead of it being queryable.
+  if (url.pathname === "/api/admin/analytics/live") {
+    if (!ctx.analytics) {
+      sendJson(req, res, ctx, 404, { error: "analytics_disabled" });
+      return true;
+    }
+    const store = ctx.analytics;
+    if (!isAdmin(req, ctx) && !store.consumeLiveTicket(url.searchParams.get("ticket"))) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    sendCors(req, res, ctx);
+    res.writeHead(200, {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache, no-transform",
+      connection: "keep-alive",
+    });
+    res.write(`event: hello\ndata: ${JSON.stringify({ status: "connected" })}\n\n`);
+    const unsubscribe = store.subscribe((record) => {
+      if (!store.feedFilterAccepts(record)) return;
+      res.write(`event: analytics_event\ndata: ${JSON.stringify(store.buildFeedEvent(record))}\n\n`);
+    });
+    const heartbeat = setInterval(() => {
+      res.write(`event: heartbeat\ndata: ${JSON.stringify({ t: Date.now() })}\n\n`);
+    }, 15_000);
+    heartbeat.unref();
+    req.on("close", () => {
+      clearInterval(heartbeat);
+      unsubscribe();
+    });
     return true;
   }
   if (url.pathname === "/api/admin/status") {

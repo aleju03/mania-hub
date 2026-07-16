@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { readConfig } from "./config.js";
 import { ensurePinnedCountries, getIndexedCountryCodes, getMapsWarmCountryCodes, getRosterRefreshCountryCodes } from "./countries.js";
 import { createDb, exec, getSqliteBusyRetryStats, logApiCall, migrate } from "./db.js";
+import { AnalyticsStore } from "./features/analytics.js";
 import { routeHttp, sendNotFound, warmStatusBodyCache } from "./http/snapshots.js";
 import { ScoreIngestor } from "./ingest/score-ingestor.js";
 import { JobQueue } from "./jobs/queue.js";
@@ -88,6 +89,29 @@ export async function createApp() {
   // HTTP, so it does not need one.
   const serveWriteDb = config.role === "worker" ? null : await createDb({ ...config, sqliteCacheMb: 2, sqliteMmapMb: 0 });
   const serveWriteQueue = serveWriteDb ? new JobQueue(serveWriteDb) : null;
+  // In-house analytics lives in its own SQLite file on its own connection,
+  // owned by the HTTP-serving process (capture posts, admin queries, live
+  // SSE); a pure worker process never opens it.
+  const analytics = config.role === "worker" ? null : new AnalyticsStore(
+    await createDb({
+      databaseUrl: config.analyticsDatabaseUrl,
+      sqliteBusyTimeoutMs: config.sqliteBusyTimeoutMs,
+      sqliteSynchronous: config.sqliteSynchronous,
+      sqliteCacheMb: 8,
+      sqliteMmapMb: 0,
+    }),
+    {
+      retentionDays: config.analyticsRetentionDays,
+      // Outside production there is no live-site host to allowlist; show
+      // local traffic in the feed instead of filtering everything out.
+      feedHosts: config.nodeEnv === "production" ? undefined : null,
+      feedExcludedViewer: config.nodeEnv === "production" ? undefined : null,
+    },
+  );
+  if (analytics) {
+    await analytics.ensureSchema();
+    analytics.start();
+  }
   const queue = new JobQueue(db);
   const events = new LiveEventLog(db);
   // Startup writes belong to the ingest/worker side; a serving process stays
@@ -168,6 +192,7 @@ export async function createApp() {
     pauseWorkers: () => worker.pause(),
     resumeWorkers: () => worker.resume(),
     discord: discord ?? undefined,
+    analytics: analytics ?? undefined,
   };
   const server = createServer(async (req, res) => {
     try {
@@ -187,7 +212,7 @@ export async function createApp() {
   server.keepAliveTimeout = 75_000;
   server.headersTimeout = 80_000;
   if (config.role !== "worker") warmStatusBodyCache(ctx);
-  return { server, db, rateLimitDb, serveWriteDb, serveWriteQueue, queue, events, osu, scoresFallbackOsu, osc, worker, ingestor, config, countryClients, discord };
+  return { server, db, rateLimitDb, serveWriteDb, serveWriteQueue, queue, events, osu, scoresFallbackOsu, osc, worker, ingestor, config, countryClients, discord, analytics };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
