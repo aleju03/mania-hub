@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
+import { shardValueForTier } from "#/lib/pack-collection";
 import { CountryFlag } from "../ui/CountryFlag";
 import type { RevealedCard } from "./RevealStage";
 
@@ -12,6 +13,10 @@ interface PackSummaryProps {
 export function PackSummary({ cards, onOpenAnother, reducedMotion }: PackSummaryProps) {
   const bestRank = Math.min(...cards.map((card) => card.player.globalRank));
   const newCount = cards.filter((card) => card.isNew).length;
+  // What this pack's duplicates recycle into - the loop back to shard packs.
+  const dupeShards = cards
+    .filter((card) => !card.isNew)
+    .reduce((sum, card) => sum + shardValueForTier(card.tier), 0);
 
   return (
     <div className="flex flex-col items-center">
@@ -95,7 +100,8 @@ export function PackSummary({ cards, onOpenAnother, reducedMotion }: PackSummary
       <div className="mt-3 text-[11px] text-osu-f1">
         {newCount > 0
           ? `${newCount} new card${newCount === 1 ? "" : "s"} added to your collection.`
-          : "All duplicates. Recycle them in your collection for shards."}
+          : "All duplicates."}
+        {dupeShards > 0 && ` Dupes worth ${dupeShards} shard${dupeShards === 1 ? "" : "s"} if recycled.`}
       </div>
     </div>
   );

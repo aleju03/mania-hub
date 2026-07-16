@@ -163,6 +163,52 @@ export function playFlipWhoosh(durationMs: number) {
   source.stop(t + duration + 0.05);
 }
 
+/* Tension riser under a high-tier flip: an airy swell plus two slowly
+   climbing detuned partials that crest right as the card faces out. Unlike
+   the whoosh (which peaks mid-flip and falls away), this keeps building to
+   the end - the "something good is coming" cue. Layered, not a replacement. */
+export function playHypeRiser(durationMs: number, intensity: number) {
+  const ctx = ensureAudio();
+  if (!ctx || !master) return;
+  const level = Math.max(0, Math.min(1, intensity));
+  const duration = Math.max(0.3, durationMs / 1000);
+  const t = ctx.currentTime;
+
+  const source = ctx.createBufferSource();
+  source.buffer = getNoise(ctx);
+  source.loop = true;
+  source.playbackRate.value = 0.9 + Math.random() * 0.2;
+  const filter = ctx.createBiquadFilter();
+  filter.type = "bandpass";
+  filter.frequency.setValueAtTime(650, t);
+  filter.frequency.exponentialRampToValueAtTime(2800 + level * 2200, t + duration);
+  filter.Q.value = 1.6;
+  const noiseGain = ctx.createGain();
+  noiseGain.gain.setValueAtTime(0.0001, t);
+  noiseGain.gain.exponentialRampToValueAtTime(0.028 + level * 0.05, t + duration * 0.9);
+  noiseGain.gain.exponentialRampToValueAtTime(0.0001, t + duration + 0.15);
+  source.connect(filter).connect(noiseGain).connect(master);
+  source.start(t, Math.random() * 0.5);
+  source.stop(t + duration + 0.2);
+
+  for (const [freq, gainPeak] of [
+    [196, 0.05 + level * 0.035],
+    [294.5, 0.028 + level * 0.02],
+  ] as const) {
+    const osc = ctx.createOscillator();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(freq, t);
+    osc.frequency.exponentialRampToValueAtTime(freq * (1.6 + level * 0.6), t + duration);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(gainPeak, t + duration * 0.85);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + duration + 0.12);
+    osc.connect(gain).connect(master);
+    osc.start(t);
+    osc.stop(t + duration + 0.2);
+  }
+}
+
 const CHIME_NOTES = [784, 988, 1175, 1568, 1976];
 
 /* Landing chime when the card faces out. Intensity (0..1, from the tier)

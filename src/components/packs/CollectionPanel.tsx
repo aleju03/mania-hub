@@ -861,12 +861,27 @@ export function CollectionPanel({
   return (
     <section className="mx-auto w-full max-w-[820px]">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-baseline gap-2">
-          <h2 className="text-sm font-bold text-white">Collection</h2>
-          <span className="text-[12px] text-osu-f1 tabular-nums">
-            {collectionTotal}
-            {wallet.poolTotal ? ` / ${wallet.poolTotal.toLocaleString()}` : ""} players
-          </span>
+        <div>
+          <div className="flex items-baseline gap-2">
+            <h2 className="text-sm font-bold text-white">Collection</h2>
+            <span className="text-[12px] text-osu-f1 tabular-nums">
+              {collectionTotal}
+              {wallet.poolTotal ? ` / ${wallet.poolTotal.toLocaleString()}` : ""} players
+            </span>
+          </div>
+          {wallet.poolTotal !== null && wallet.poolTotal > 0 && collectionTotal > 0 && (
+            <div className="mt-1 flex items-center gap-1.5">
+              <div className="h-1 w-[140px] overflow-hidden rounded-full bg-osu-b3/40">
+                <div
+                  className="h-full rounded-full bg-osu-pink/70 transition-[width] duration-500"
+                  style={{ width: `${Math.max(1, Math.min(100, (collectionTotal / wallet.poolTotal) * 100))}%` }}
+                />
+              </div>
+              <span className="text-[10px] text-osu-f1 tabular-nums">
+                {((collectionTotal / wallet.poolTotal) * 100).toFixed(1)}%
+              </span>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-3" data-select-keep="">
           <span className="flex items-center gap-1.5 text-[12px] text-osu-f1">

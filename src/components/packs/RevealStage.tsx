@@ -23,7 +23,7 @@ import {
   rememberCardThumbnailDataUrl,
 } from "./cardThumbnailCache";
 import { createCardBackCanvas } from "./packArt";
-import { playCardDraw, playFlipWhoosh, playRevealChime } from "./packSfx";
+import { playCardDraw, playFlipWhoosh, playHypeRiser, playRevealChime } from "./packSfx";
 import { TierBurst } from "./TierBurst";
 
 export interface PackCardState {
@@ -80,6 +80,19 @@ const STACK_CARD_SCALE = 1 / 1.05;
 // on "Drawing player..." forever and the pack could never finish. Time out into
 // the 2D fallback after this long so the last card always resolves.
 const RENDERER_READY_TIMEOUT_MS = 8000;
+
+// Tiers from this rank up (ultraRare+) get the slow-burn flip: a longer turn,
+// a pulsing golden aura, and a riser under the whoosh. The aura is
+// deliberately tier-neutral gold - it says "something good" while the exact
+// tier stays the flip's reveal.
+const HYPE_TIER_MIN_RANK = 4;
+const MAX_TIER_RANK = 8;
+
+function hypeLevelForTier(tier: ManiaCardTier | null): number | null {
+  const rank = tierRank(tier);
+  if (rank < HYPE_TIER_MIN_RANK) return null;
+  return (rank - (HYPE_TIER_MIN_RANK - 1)) / (MAX_TIER_RANK - (HYPE_TIER_MIN_RANK - 1));
+}
 
 function isMobileViewport() {
   return (
@@ -261,6 +274,8 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
      stuck. */
   const [slowDraw, setSlowDraw] = useState(false);
   const [burst, setBurst] = useState<{ key: number; tier: ManiaCardTier; glowColor: RgbaColor } | null>(null);
+  /* 0..1 intensity while a high-tier card is mid-flip; null for commons. */
+  const [hype, setHype] = useState<number | null>(null);
   const [cardBack, setCardBack] = useState<string | null>(null);
   const [skipping, setSkipping] = useState(false);
   const [flight, setFlight] = useState<CardFlight | null>(null);
@@ -426,18 +441,23 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     );
     const cardIndex = revealedRef.current.length - 1;
 
+    const hypeLevel = hypeLevelForTier(data.tier);
+
     try {
       await ensureRendererReady(data);
       if (cancelledRef.current) return;
       setActiveData(data);
       setActiveFallback(null);
+      setHype(hypeLevel);
       setPhase("flipping");
       // A short beat while the canvas card (same neutral back as the stack)
-      // takes over the top of the stack, then it turns.
-      await new Promise((resolve) => setTimeout(resolve, reducedMotion ? 60 : 220));
+      // takes over the top of the stack, then it turns. A high-tier card
+      // holds the moment a little longer.
+      await new Promise((resolve) => setTimeout(resolve, reducedMotion ? 60 : hypeLevel !== null ? 420 : 220));
       if (cancelledRef.current) return;
-      const flipMs = reducedMotion ? 240 : 980;
+      const flipMs = reducedMotion ? 240 : hypeLevel !== null ? 1380 : 980;
       playFlipWhoosh(flipMs);
+      if (hypeLevel !== null && !reducedMotion) playHypeRiser(flipMs, hypeLevel);
       await rendererRef.current?.playRevealFlip(flipMs);
       if (cancelledRef.current) return;
       // Tray thumbnail comes from the front texture the renderer already
@@ -678,6 +698,29 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.25 }}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* High-tier tension aura: swells while the card turns, then hands
+            off to the tier burst. Gold for every hype tier so it never
+            spoils which one; only the intensity scales. */}
+        <AnimatePresence>
+          {phase === "flipping" && hype != null && !reducedMotion && (
+            <motion.div
+              className="absolute inset-0 z-20 rounded-[18px] pointer-events-none"
+              style={{ scale: STACK_CARD_SCALE }}
+              initial={{ opacity: 0 }}
+              animate={{
+                opacity: [0.4, 1, 0.6],
+                boxShadow: [
+                  `0 0 0 2px rgba(253,230,138,0.4), 0 0 26px 6px rgba(251,191,36,${(0.2 + hype * 0.2).toFixed(2)})`,
+                  `0 0 0 3px rgba(253,230,138,0.8), 0 0 ${Math.round(46 + hype * 42)}px ${Math.round(10 + hype * 10)}px rgba(251,191,36,${(0.4 + hype * 0.3).toFixed(2)})`,
+                  `0 0 0 2px rgba(253,230,138,0.55), 0 0 34px 8px rgba(251,191,36,${(0.28 + hype * 0.24).toFixed(2)})`,
+                ],
+              }}
+              exit={{ opacity: 0, transition: { duration: 0.35 } }}
+              transition={{ duration: 0.8, repeat: Infinity, ease: "easeInOut" }}
             />
           )}
         </AnimatePresence>
