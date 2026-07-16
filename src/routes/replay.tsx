@@ -13,6 +13,7 @@ import { MissingBeatmapPanel, ReplayBrowseView } from "../components/replay/Repl
 import type { ReplayBrowseMode } from "../components/replay/ReplayBrowseView";
 import { ReplayControls, ReplayProgressBar } from "../components/replay/ReplayControls";
 import type { ReplayVideoExportOptions } from "../components/replay/ReplayControls";
+import { ReplayCompareEntry, ReplayCompareView } from "../components/replay/ReplayCompareView";
 import { ReplayInfo } from "../components/replay/ReplayInfo";
 import type { ReplayPlayerProfile } from "../components/replay/ReplayInfo";
 import { ReplaySkinSettingsModal } from "../components/replay/ReplaySkinSettingsModal";
@@ -97,6 +98,7 @@ interface ReplaySearch {
   t?: number; // timestamp in seconds to seek to on load
   tab?: "player" | "beatmap" | "upload";
   player?: string; // selected player username (for URL state)
+  compareId?: number; // second score for side-by-side compare mode
 }
 
 type PlayerScoreGroups = { best: OsuScore[]; firsts: OsuScore[]; pinned: OsuScore[]; recent: OsuScore[] };
@@ -571,6 +573,7 @@ export const Route = createFileRoute("/replay")({
     t: Number(s.t) || undefined,
     tab: s.tab === "beatmap" || s.tab === "upload" ? s.tab : undefined,
     player: (s.player as string) || undefined,
+    compareId: Number(s.compareId) || undefined,
   }),
 });
 
@@ -632,7 +635,7 @@ async function fetchReplayCachedProfileSnapshot(key: string): Promise<LivePlayer
 }
 
 function ReplayPage() {
-  const { scoreId, beatmapsetId, uploadId, t: initialTime, tab, player: playerParam } = Route.useSearch();
+  const { scoreId, beatmapsetId, uploadId, t: initialTime, tab, player: playerParam, compareId } = Route.useSearch();
   const loaderData = Route.useLoaderData();
   const navigate = useNavigate();
   const router = useRouter();
@@ -905,7 +908,9 @@ function ReplayPage() {
   }, []);
 
   useEffect(() => {
-    if (scoreId) {
+    // Compare mode owns its own loading; fall through to the reset branch so
+    // no single-replay viewer state lingers behind the comparison.
+    if (scoreId && !compareId) {
       playerScoreRequestRef.current += 1;
       setLoadingScores(false);
       setPlayerScoreLoadingByGroup(createPlayerScoreGroupLoading(false));
@@ -928,7 +933,7 @@ function ReplayPage() {
     setScorePreviewLoading(false);
     setScorePreviewError(null);
     setPlayerScoreLoadingByGroup(createPlayerScoreGroupLoading(false));
-  }, [scoreId, uploadId, loadReplay, loaderData.score]);
+  }, [scoreId, compareId, uploadId, loadReplay, loaderData.score]);
 
   useEffect(() => {
     if (scoreId) return;
@@ -1667,7 +1672,16 @@ function ReplayPage() {
   // scrolling area (below the sticky stage) for mobile. ReplayInfo's own
   // responsive variants make sure only one copy is ever visible.
   const replayInfoCard = replay ? (
-    <ReplayInfo replay={replay} score={scoreInfo} beatmap={beatmap} stars={starRating} mods={starMods} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} shareUrl={uploadedReplayShareUrl ?? undefined} playerProfile={playerProfile} onClear={handleClearReplay} />
+    <>
+      <ReplayInfo replay={replay} score={scoreInfo} beatmap={beatmap} stars={starRating} mods={starMods} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} shareUrl={uploadedReplayShareUrl ?? undefined} playerProfile={playerProfile} onClear={handleClearReplay} />
+      {/* Compare only works for scores with online replays, so uploaded
+          replays (no score id) don't get the entry. */}
+      {scoreInfo?.id && scoreId ? (
+        <ReplayCompareEntry
+          onCompare={(otherScoreId) => navigate({ to: "/replay", search: { scoreId, compareId: otherScoreId } })}
+        />
+      ) : null}
+    </>
   ) : null;
 
   return (
@@ -1685,7 +1699,15 @@ function ReplayPage() {
             individual scrolling cards instead. */}
         <div className={`max-w-[1200px] mx-auto ${replay && !loading ? "pb-4 sm:px-5 sm:py-6" : "px-3 py-3 sm:px-5 sm:py-6"}`}>
           <AnimatePresence mode="wait">
-            {loading ? (
+            {scoreId && compareId ? (
+              <motion.div key={`compare-${scoreId}-${compareId}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                <ReplayCompareView
+                  scoreIdA={scoreId}
+                  scoreIdB={compareId}
+                  onExit={() => navigate({ to: "/replay", search: { scoreId } })}
+                />
+              </motion.div>
+            ) : loading ? (
               <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center px-4 py-20 text-center">
                 <div className="mb-4 h-10 w-10 rounded-full border-2 border-osu-pink/40 border-t-osu-pink animate-spin" />
                 <p className="text-sm font-semibold text-osu-l2">{replayLoadingCopy.title}</p>
