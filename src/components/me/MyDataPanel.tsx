@@ -93,7 +93,7 @@ function HighlightStat({ label, value, sub, accent }: { label: string; value: st
   return (
     <div className="min-w-0 rounded-lg border border-osu-b3/20 bg-osu-b4 px-2.5 py-2.5 sm:px-3">
       <div className="truncate text-[10px] font-semibold uppercase tracking-wide text-osu-l3">{label}</div>
-      <div className="mt-0.5 text-[18px] font-bold leading-none tabular-nums" style={{ color: accent }}>{value}</div>
+      <div className="mt-0.5 truncate text-[15px] font-bold leading-none tabular-nums sm:text-[18px]" style={{ color: accent }} title={value}>{value}</div>
       {sub ? <div className="mt-1 truncate text-[10px] text-osu-f1">{sub}</div> : null}
     </div>
   );
@@ -498,6 +498,12 @@ export function MyDataPanel() {
             <HeaderStat label="top plays" value={compact(summary?.topPlayCount ?? 0)} />
           </div>
         </div>
+        {/* The header stat trio doesn't fit next to the avatar on phones; give it its own strip. */}
+        <div className="relative grid grid-cols-3 gap-3 border-t border-osu-b3/25 px-4 py-2.5 sm:hidden">
+          <HeaderStat label="plays" value={compact(summary?.totalScores ?? 0)} />
+          <HeaderStat label="active days" value={compact(summary?.activeDays ?? 0)} />
+          <HeaderStat label="top plays" value={compact(summary?.topPlayCount ?? 0)} />
+        </div>
       </div>
 
       {!tracked ? (
@@ -508,7 +514,7 @@ export function MyDataPanel() {
       ) : (
         <>
           {highlightStats.length > 0 ? (
-            <div className={`grid gap-2.5 ${highlightGridClass}`}>
+            <div className={`grid gap-2 sm:gap-2.5 ${highlightGridClass}`}>
               {highlightStats.map((stat) => (
                 <HighlightStat key={stat.key} label={stat.label} value={stat.value} sub={stat.sub} accent={stat.accent} />
               ))}

@@ -60,7 +60,7 @@ export function MeScoreRow({ score, isNew, ppGain }: { score: MyDataScoreRow; is
           >
             {score.beatmapset?.title ?? "Unknown map"}
           </a>
-          <span className="shrink-0 truncate text-[10px] text-osu-f1">[{score.beatmap?.version}]</span>
+          <span className="min-w-[5ch] shrink-[3] truncate text-[10px] text-osu-f1">[{score.beatmap?.version}]</span>
           {keys ? <span className="shrink-0 rounded bg-osu-b3/50 px-1 py-0.5 text-[8px] font-bold text-osu-yellow">{keys}</span> : null}
         </div>
         <div className="mt-0.5 flex min-h-[13px] flex-wrap items-center gap-0.5">
