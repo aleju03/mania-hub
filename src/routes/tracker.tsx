@@ -39,6 +39,7 @@ import { parseCountrySearchParam } from "../lib/country-search";
 import { getReplaySearch } from "../lib/replay-navigation";
 import { showPlayerCountryFlagState } from "../lib/player-profile-navigation";
 import { fetchLiveTrackerSnapshot, isLiveBackendConfigured, openLiveEventSource } from "../lib/live-backend";
+import { detectTrackerMultis, type TrackerMultiInfo } from "../lib/tracker-multi";
 import { CountryWarming } from "../components/CountryWarming";
 import { LiveDataEmptyState } from "../components/LiveDataEmptyState";
 import { useCountryWarming } from "../lib/use-country-warming";
@@ -718,6 +719,14 @@ function ScoresPage() {
 
   const selectedPlayerIdSet = useMemo(() => new Set(selectedPlayerIds), [selectedPlayerIds]);
   const selectedPlayersKey = selectedPlayerIds.join(",");
+
+  // Suspected multiplayer-lobby plays, detected over every score pool we hold
+  // (the live feed plus deep-page/filtered snapshots) so groups don't split at
+  // page boundaries. Keyed by score identity.
+  const multiByScoreKey = useMemo(
+    () => detectTrackerMultis([...feedScores, ...livePageScores, ...liveFilteredScores]),
+    [feedScores, liveFilteredScores, livePageScores],
+  );
 
   const updateTrackerSearch = useCallback((patch: Partial<{ country: string | undefined; page: number | undefined; sort: TrackerSort; sortDirection: TrackerSortDirection }>) => {
     const nextPage = patch.page ?? page;
@@ -1414,6 +1423,7 @@ function ScoresPage() {
                   onToggle={handleToggleExpand}
                   ppGainByScoreId={ppGainByScoreId}
                   showCountryFlag={selectedIsGlobal}
+                  multiByScoreKey={multiByScoreKey}
                 />
                 <Pagination
                   page={currentPage}
@@ -1462,6 +1472,7 @@ function VirtualScoreList({
   onToggle,
   ppGainByScoreId,
   showCountryFlag,
+  multiByScoreKey,
 }: {
   listKey: string;
   scores: LeanTrackerScore[];
@@ -1470,6 +1481,7 @@ function VirtualScoreList({
   onToggle: (key: string) => void;
   ppGainByScoreId: Record<number, number>;
   showCountryFlag: boolean;
+  multiByScoreKey: Map<string, TrackerMultiInfo>;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
   const scrollMargin = parentRef.current?.offsetTop ?? 0;
@@ -1530,6 +1542,7 @@ function VirtualScoreList({
       {items.map((vi) => {
         const score = scores[vi.index];
         const scoreKey = getScoreIdentity(score);
+        const multi = multiByScoreKey.get(scoreKey);
         return (
           <div
             key={scoreKey}
@@ -1553,6 +1566,8 @@ function VirtualScoreList({
               onToggle={onToggle}
               showCountryFlag={showCountryFlag}
               isNew={animatedKeys.has(scoreKey)}
+              multiPlayerCount={multi?.playerCount ?? 0}
+              multiOthers={multi ? multi.others.join(", ") : ""}
             />
           </div>
         );
@@ -1570,6 +1585,8 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
   onToggle,
   showCountryFlag,
   isNew,
+  multiPlayerCount,
+  multiOthers,
 }: {
   score: LeanTrackerScore;
   scoreKey: string;
@@ -1579,6 +1596,10 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
   onToggle: (key: string) => void;
   showCountryFlag: boolean;
   isNew: boolean;
+  /** Distinct players in the suspected lobby (0 = solo play). */
+  multiPlayerCount: number;
+  /** Comma-joined usernames of the suspected lobby's other players. */
+  multiOthers: string;
 }) {
   const navigate = useNavigate();
 
@@ -1673,6 +1694,14 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
             {keymodeLabel && (
               <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 text-osu-yellow flex-shrink-0">
                 {keymodeLabel}
+              </span>
+            )}
+            {multiPlayerCount >= 2 && (
+              <span
+                className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-purple/20 text-osu-purple-light flex-shrink-0 cursor-help"
+                title={`Looks like a multiplayer lobby: finished together with ${multiOthers}`}
+              >
+                MULTI{multiPlayerCount > 2 ? ` ×${multiPlayerCount}` : ""}
               </span>
             )}
             <span className="hidden sm:inline flex-shrink-0"><DanBadge score={score} /></span>
