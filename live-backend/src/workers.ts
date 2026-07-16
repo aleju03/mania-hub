@@ -371,7 +371,7 @@ export class WorkerRunner {
       // shared budget was starved (e.g. by unbatched snipe seeding). Log duration
       // so a regression back into watchdog territory is visible in journald.
       const farmedStartedAt = Date.now();
-      const result = await refreshUserMapsFarmedScores(this.db, this.osu, job.payload as { userId: number; country: string });
+      const result = await refreshUserMapsFarmedScores(this.db, this.osu, this.queue, job.payload as { userId: number; country: string });
       logInfo("refresh_user_maps_farmed_scores_done", { user_id: result.userId, country: result.country, score_count: result.scoreCount, duration_ms: Date.now() - farmedStartedAt });
       await enqueueGlobalMapsRefresh(this.queue, { priority: 15, replaceDone: true, runAfter: globalMapsFarmedRefreshRunAfter() });
       await this.events.append(
@@ -404,7 +404,7 @@ export class WorkerRunner {
       return;
     }
     if (job.type === "refresh_country_maps") {
-      await refreshCountryMaps(this.db, this.osu, job.payload as { country: string });
+      await refreshCountryMaps(this.db, this.osu, this.queue, job.payload as { country: string });
       await enqueueGlobalMapsRefresh(this.queue, { priority: 15, replaceDone: true });
       return;
     }

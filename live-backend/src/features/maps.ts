@@ -11,6 +11,7 @@ import { throwIfAborted } from "../shared/abort.js";
 import type { OscScore } from "../shared/types.js";
 import { logInfo } from "../logger.js";
 import { markUserMissing } from "../users.js";
+import { enqueueMissingChartAnalyses } from "./chart-analysis.js";
 import { refreshFarmHelperKeyStatsForUser } from "./farm-helper-key-stats.js";
 import { buildMapStatusPropagationStatement } from "./map-search.js";
 
@@ -2082,6 +2083,7 @@ class MapsRefreshProgressReporter {
 export async function refreshCountryMaps(
   db: Db,
   osu: Pick<OsuApiClient, "getUserBestScoresWindow" | "getUserMostPlayed" | "getUserFavourites">,
+  queue: JobQueue,
   payload: { country: string },
 ): Promise<CountryMapsData> {
   const country = payload.country.toUpperCase();
@@ -2106,7 +2108,7 @@ export async function refreshCountryMaps(
   };
 
   try {
-    const farmedPromise = buildCountryFarmed(db, osu, country, users, progress).then(async (section) => {
+    const farmedPromise = buildCountryFarmed(db, osu, queue, country, users, progress).then(async (section) => {
       latestFarmed = section;
       await progress.markSectionDone("farmed");
       await persistLatest();
@@ -2898,6 +2900,7 @@ function rowToMapsBeatmapsetMetadata(row: Record<string, unknown>): MapsBeatmaps
 export async function refreshUserMapsFarmedScores(
   db: Db,
   osu: Pick<OsuApiClient, "getUserBestScoresWindow">,
+  queue: JobQueue,
   payload: { country: string; userId: number },
 ): Promise<{ country: string; userId: number; scoreCount: number; updatedAt: string }> {
   const country = payload.country.toUpperCase();
@@ -2908,13 +2911,13 @@ export async function refreshUserMapsFarmedScores(
     if (!(error instanceof OsuApiError && error.status === 404)) throw error;
     await markUserMissing(db, payload.userId, `refresh_user_maps_farmed_scores: ${error.message}`);
     const updatedAt = nowIso();
-    await replaceUserMapsFarmedOverlay(db, country, payload.userId, [], updatedAt);
+    await replaceUserMapsFarmedOverlay(db, queue, country, payload.userId, [], updatedAt);
     return { country, userId: payload.userId, scoreCount: 0, updatedAt };
   }
   const updatedAt = nowIso();
   const rows = buildMapsFarmedOverlayRows(country, bestScores, updatedAt, payload.userId);
   await persistMapsFarmedScoreDisplayMetadata(db, bestScores, updatedAt);
-  await replaceUserMapsFarmedOverlay(db, country, payload.userId, rows, updatedAt);
+  await replaceUserMapsFarmedOverlay(db, queue, country, payload.userId, rows, updatedAt);
   await updateUserMapsFarmedThreshold(db, payload.userId, bestScores, updatedAt);
   return { country, userId: payload.userId, scoreCount: rows.length, updatedAt };
 }
@@ -2988,13 +2991,14 @@ async function getMapsUsers(db: Db, country: string): Promise<MapsUser[]> {
 async function buildCountryFarmed(
   db: Db,
   osu: Pick<OsuApiClient, "getUserBestScoresWindow">,
+  queue: JobQueue,
   country: string,
   users: MapsUser[],
   progress?: MapsRefreshProgressReporter,
 ): Promise<CountryMapsFarmedSection> {
   const missingUsers = await getUsersMissingMapsFarmedOverlay(db, country, users);
   if (missingUsers.length > 0) {
-    await seedCountryFarmedOverlayUsers(db, osu, country, missingUsers, progress);
+    await seedCountryFarmedOverlayUsers(db, osu, queue, country, missingUsers, progress);
   }
   return readCountryFarmedOverlaySection(db, country, users);
 }
@@ -3002,6 +3006,7 @@ async function buildCountryFarmed(
 async function seedCountryFarmedOverlayUsers(
   db: Db,
   osu: Pick<OsuApiClient, "getUserBestScoresWindow">,
+  queue: JobQueue,
   country: string,
   users: MapsUser[],
   progress?: MapsRefreshProgressReporter,
@@ -3016,7 +3021,7 @@ async function seedCountryFarmedOverlayUsers(
       const updatedAt = nowIso();
       const rows = buildMapsFarmedOverlayRows(country, bestScores, updatedAt, user.id);
       await persistMapsFarmedScoreDisplayMetadata(db, bestScores, updatedAt);
-      await replaceUserMapsFarmedOverlay(db, country, user.id, rows, updatedAt);
+      await replaceUserMapsFarmedOverlay(db, queue, country, user.id, rows, updatedAt);
       await updateUserMapsFarmedThreshold(db, user.id, bestScores, updatedAt);
     } finally {
       await progress?.markUserDone("farmed");
@@ -3662,6 +3667,7 @@ function buildMapsFarmedOverlayRows(country: string, scores: OscScore[], updated
 
 async function replaceUserMapsFarmedOverlay(
   db: Db,
+  queue: JobQueue,
   country: string,
   userId: number,
   rows: MapsFarmedOverlayWriteRow[],
@@ -3705,6 +3711,13 @@ async function replaceUserMapsFarmedOverlay(
   if (rows.length > 0 || Number(deleted?.rowsAffected ?? 0) > 0) {
     await refreshFarmHelperKeyStatsForUser(db, userId, updatedAt);
     await touchMapsFarmedOverlay(db, country, updatedAt);
+  }
+  // Overlay rows come from the osu! API top-200 window, not live ingest, so
+  // this is the only place aggregation-farmed maps can pick up chart analysis
+  // (live-played maps get theirs from the activity recorder). Best-effort:
+  // dedupe-guarded, and a failed enqueue must not fail the refresh.
+  if (rows.length > 0) {
+    await enqueueMissingChartAnalyses(db, queue, rows.map((row) => row.beatmapId)).catch(() => {});
   }
 }
 

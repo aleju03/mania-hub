@@ -7,6 +7,7 @@ import { createDb, exec, migrate } from "../src/db.js";
 import { getSnipesSnapshot, updateSnipeProjection } from "../src/features/snipes.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../src/features/activity.js";
 import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, globalMapsFarmedRefreshRunAfter, recordMapsFarmedScore, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores, type MapsPageQuery } from "../src/features/maps.js";
+import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores } from "../src/features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../src/features/rank-snapshots.js";
 import { confirmTopPlay, getTopPlaysSnapshot, TopPlayConfirmationPendingError } from "../src/features/top-plays.js";
@@ -4256,7 +4257,7 @@ describe("live backend", () => {
   });
 
   it("refreshes a player's farmed overlay from their top-200 best-score window", async () => {
-    const { db } = await setup();
+    const { db, queue } = await setup();
     const [baseScore] = await fixture<OscScore[]>("scores.json");
     const now = "2026-05-12T11:00:00.000Z";
     await exec(
@@ -4285,8 +4286,15 @@ describe("live backend", () => {
     const osu = {
       getUserBestScoresWindow: vi.fn(async (_userId: number, _limit: number, _caller: string) => bestScores),
     };
+    // One map already analyzed: the refresh must enqueue chart analysis only
+    // for the other 199 (aggregation is these maps' sole route to coverage).
+    await exec(
+      db,
+      "insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, updated_at) values (?, ?, 'ready', ?)",
+      [10_000, CHART_ANALYSIS_VERSION, now],
+    );
 
-    const result = await refreshUserMapsFarmedScores(db, osu, { country: "CR", userId: 101 });
+    const result = await refreshUserMapsFarmedScores(db, osu, queue, { country: "CR", userId: 101 });
 
     expect(result.scoreCount).toBe(200);
     expect(osu.getUserBestScoresWindow).toHaveBeenCalledWith(101, 200, "job:refresh_user_maps_farmed_scores");
@@ -4294,6 +4302,8 @@ describe("live backend", () => {
     const user = (await exec(db, "select maps_farmed_min_pp, maps_farmed_scores_refreshed_at from users where user_id = 101")).rows[0];
     expect(Number(user.maps_farmed_min_pp)).toBe(201);
     expect(String(user.maps_farmed_scores_refreshed_at)).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'analyze_beatmap_chart'")).rows[0].count)).toBe(199);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'analyze_beatmap_chart' and dedupe_key like '%:10000'")).rows[0].count)).toBe(0);
   });
 
   it("queues a global maps rebuild after a player farmed overlay refresh", async () => {
@@ -4316,7 +4326,7 @@ describe("live backend", () => {
   });
 
   it("treats missing users as a terminal maps farmed refresh", async () => {
-    const { db } = await setup();
+    const { db, queue } = await setup();
     const now = "2026-05-12T11:00:00.000Z";
     await exec(
       db,
@@ -4331,7 +4341,7 @@ describe("live backend", () => {
       }),
     };
 
-    const result = await refreshUserMapsFarmedScores(db, osu, { country: "CR", userId: 39728876 });
+    const result = await refreshUserMapsFarmedScores(db, osu, queue, { country: "CR", userId: 39728876 });
 
     expect(result).toMatchObject({ country: "CR", userId: 39728876, scoreCount: 0 });
     expect(Number((await exec(db, "select count(*) as count from country_maps_farmed_scores where country = 'CR' and user_id = 39728876")).rows[0].count)).toBe(0);
@@ -4340,7 +4350,7 @@ describe("live backend", () => {
   });
 
   it("builds country maps from the configured roster size", async () => {
-    const { db } = await setup();
+    const { db, queue } = await setup();
     const [baseScore] = await fixture<OscScore[]>("scores.json");
     const previousRosterSize = process.env.ROSTER_SIZE;
     process.env.ROSTER_SIZE = "100";
@@ -4386,7 +4396,7 @@ describe("live backend", () => {
         getUserFavourites: vi.fn(async () => []),
       };
 
-      const snapshot = await refreshCountryMaps(db, osu, { country: "CR" });
+      const snapshot = await refreshCountryMaps(db, osu, queue, { country: "CR" });
 
       expect(osu.getUserBestScoresWindow).toHaveBeenCalledTimes(100);
       expect(osu.getUserBestScoresWindow).toHaveBeenCalledWith(10_100, 200, "job:refresh_country_maps:farmed");
@@ -4394,13 +4404,13 @@ describe("live backend", () => {
 
       await exec(db, "delete from live_meta where key = 'maps_farmed_user_overlay_refreshed_at:CR:10100'");
       osu.getUserBestScoresWindow.mockClear();
-      await refreshCountryMaps(db, osu, { country: "CR" });
+      await refreshCountryMaps(db, osu, queue, { country: "CR" });
 
       expect(osu.getUserBestScoresWindow).toHaveBeenCalledTimes(1);
       expect(osu.getUserBestScoresWindow).toHaveBeenCalledWith(10_100, 200, "job:refresh_country_maps:farmed");
 
       osu.getUserBestScoresWindow.mockClear();
-      const rebuilt = await refreshCountryMaps(db, osu, { country: "CR" });
+      const rebuilt = await refreshCountryMaps(db, osu, queue, { country: "CR" });
 
       expect(osu.getUserBestScoresWindow).not.toHaveBeenCalled();
       const rebuiltFarmed = rebuilt.farmed.find((entry) => entry.players.some((player) => player.id === 10_100));
@@ -4413,7 +4423,7 @@ describe("live backend", () => {
   });
 
   it("rebuilds country popular and favourites from stored per-user rows", async () => {
-    const { db } = await setup();
+    const { db, queue } = await setup();
     const now = "2026-05-12T11:45:00.000Z";
     for (const [rank, userId, username] of [
       [1, 101, "Maps Alpha"],
@@ -4458,7 +4468,7 @@ describe("live backend", () => {
       getUserFavourites: vi.fn(async () => [favourite]),
     };
 
-    const snapshot = await refreshCountryMaps(db, osu, { country: "CR" });
+    const snapshot = await refreshCountryMaps(db, osu, queue, { country: "CR" });
 
     expect(osu.getUserMostPlayed).toHaveBeenCalledTimes(2);
     expect(osu.getUserFavourites).toHaveBeenCalledTimes(2);
@@ -4468,7 +4478,7 @@ describe("live backend", () => {
     osu.getUserBestScoresWindow.mockClear();
     osu.getUserMostPlayed.mockClear();
     osu.getUserFavourites.mockClear();
-    const rebuilt = await refreshCountryMaps(db, osu, { country: "CR" });
+    const rebuilt = await refreshCountryMaps(db, osu, queue, { country: "CR" });
 
     expect(osu.getUserBestScoresWindow).not.toHaveBeenCalled();
     expect(osu.getUserMostPlayed).not.toHaveBeenCalled();
@@ -4480,7 +4490,7 @@ describe("live backend", () => {
     await exec(db, "delete from live_meta where key = 'maps_user_library_refreshed_at:CR:101'");
     osu.getUserMostPlayed.mockClear();
     osu.getUserFavourites.mockClear();
-    await refreshCountryMaps(db, osu, { country: "CR" });
+    await refreshCountryMaps(db, osu, queue, { country: "CR" });
 
     expect(osu.getUserMostPlayed).toHaveBeenCalledTimes(1);
     expect(osu.getUserFavourites).toHaveBeenCalledTimes(1);
@@ -4489,7 +4499,7 @@ describe("live backend", () => {
   });
 
   it("keeps known maps_beatmaps cs/bpm when most_played returns compact beatmaps", async () => {
-    const { db } = await setup();
+    const { db, queue } = await setup();
     const now = "2026-05-12T11:45:00.000Z";
     await exec(
       db,
@@ -4547,7 +4557,7 @@ describe("live backend", () => {
       getUserFavourites: vi.fn(async () => [favourite]),
     };
 
-    await refreshCountryMaps(db, osu, { country: "CR" });
+    await refreshCountryMaps(db, osu, queue, { country: "CR" });
 
     const rows = (await exec(db, "select beatmap_id, cs, bpm from maps_beatmaps where beatmap_id in (90001, 90002) order by beatmap_id")).rows;
     // The known map keeps its values; the never-enriched map stores null, not a fake 0.
@@ -4586,7 +4596,7 @@ describe("live backend", () => {
   });
 
   it("stores completed maps refresh progress with processed user counts", async () => {
-    const { db } = await setup();
+    const { db, queue } = await setup();
     const now = "2026-05-12T11:30:00.000Z";
     for (let rank = 1; rank <= 2; rank++) {
       const userId = 20_000 + rank;
@@ -4623,7 +4633,7 @@ describe("live backend", () => {
       getUserFavourites: vi.fn(async () => [favouriteSet]),
     };
 
-    await refreshCountryMaps(db, osu, { country: "CR" });
+    await refreshCountryMaps(db, osu, queue, { country: "CR" });
 
     const row = (await exec(db, "select value_json from live_meta where key = 'maps_refresh_progress:CR'")).rows[0];
     const progress = JSON.parse(String(row.value_json));
