@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { LegalDocument, LegalParagraph, LegalSection } from "#/components/legal/LegalDocument";
 
-const UPDATED_AT = "July 1, 2026";
+const UPDATED_AT = "July 16, 2026";
 
 export const Route = createFileRoute("/privacy")({
   head: () => ({
@@ -57,17 +57,20 @@ function PrivacyPage() {
 
       <LegalSection title="Analytics And Logs">
         <LegalParagraph>
-          Mania Tracker uses PostHog to count page views and feature usage. Events are sent
-          through the site's own endpoint and can include the visited route, selected country,
-          referrer, browser language, screen size, and route context such as a viewed player,
-          score, beatmapset, or maps tab.
+          Mania Tracker counts page views and feature usage with its own first-party analytics,
+          stored on the site's own server. Events are sent through the site's own endpoint and
+          can include the visited route, selected country, referrer, browser language, screen
+          size, and route context such as a viewed player, score, beatmapset, or maps tab.
+          Events are kept for 90 days and then deleted.
         </LegalParagraph>
         <LegalParagraph>
           Analytics groups page views from the same browser using a random visitor ID stored in
           localStorage. The ID is not derived from or linked to your osu! account, and clearing
-          site data removes it. PostHog receives the request IP address and browser user agent
-          with each event for its country and device breakdowns; Mania Tracker itself stores
-          neither.
+          site data removes it. The country shown in analytics is derived from the request at
+          the hosting edge; the IP address itself and the browser user agent are not stored.
+          During a transition period events are also sent to PostHog, which receives the request
+          IP address and browser user agent with each event for its country and device
+          breakdowns; Mania Tracker itself stores neither.
         </LegalParagraph>
         <LegalParagraph>
           To prevent abuse, the server counts requests per IP address for rate limiting and caps
