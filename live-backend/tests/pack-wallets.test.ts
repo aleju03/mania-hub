@@ -2,8 +2,14 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createDb, migrate, type Db } from "../src/db.js";
-import { getPackWallet, listPackCollectionCards, listPackCollectionOwnedUserIds, savePackWallet } from "../src/features/pack-wallets.js";
+import { createDb, exec, migrate, type Db } from "../src/db.js";
+import {
+  getPackWallet,
+  listPackCollectionCards,
+  listPackCollectionOwnedUserIds,
+  recyclePackCollectionCards,
+  savePackWallet,
+} from "../src/features/pack-wallets.js";
 
 let dir = "";
 let db: Db;
@@ -105,6 +111,51 @@ describe("pack wallets", () => {
 
     await savePackWallet(db, USER_ID, cardPayload(1), 2, 3000, "delta");
     expect((await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 })).cards[0].copies).toBe(3);
+  });
+
+  it("overlays the current identity from users onto listed cards", async () => {
+    await savePackWallet(db, USER_ID, cardPayload(1), 0, 1000);
+    await exec(
+      db,
+      "insert into users (user_id, username, avatar_url, country_code, updated_at) values (?, ?, ?, ?, ?)",
+      [42, "delta_renamed", "https://a.ppy.sh/42?999", "ES", new Date(2000).toISOString()],
+    );
+
+    const page = await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 });
+    expect(page.cards[0]).toMatchObject({
+      userId: 42,
+      username: "delta_renamed",
+      avatarUrl: "https://a.ppy.sh/42?999",
+      countryCode: "ES",
+      // The pull snapshot stays authoritative for everything non-identity.
+      pp: 1234,
+      copies: 1,
+    });
+
+    // Search matches the displayed (current) name, not the pull-time one.
+    const byCurrentName = await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15, query: "renamed" });
+    expect(byCurrentName.total).toBe(1);
+    const byOldName = await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15, query: "delta" });
+    expect(byOldName.total).toBe(1);
+  });
+
+  it("keeps the stored identity for cards without a users row", async () => {
+    await savePackWallet(db, USER_ID, cardPayload(1), 0, 1000);
+    const page = await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 });
+    expect(page.cards[0]).toMatchObject({ username: "delta", avatarUrl: "https://a.ppy.sh/42", countryCode: "CR" });
+  });
+
+  it("recycles by the same display name the listing filters on", async () => {
+    await savePackWallet(db, USER_ID, cardPayload(2), 0, 1000);
+    await exec(
+      db,
+      "insert into users (user_id, username, avatar_url, country_code, updated_at) values (?, ?, ?, ?, ?)",
+      [42, "delta_renamed", "https://a.ppy.sh/42?999", "ES", new Date(2000).toISOString()],
+    );
+
+    const result = await recyclePackCollectionCards(db, USER_ID, { mode: "whole_matching", query: "renamed" }, 3000);
+    expect(result.gained).toBe(4);
+    expect((await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 })).total).toBe(0);
   });
 
   it("does not import card rows from stale wallet revisions", async () => {

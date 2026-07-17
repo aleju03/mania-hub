@@ -6,6 +6,7 @@ import {
   createPackBackCanvas,
   createPackFrontCanvas,
   DEFAULT_PACK_ART_STYLE,
+  drawPackCardCount,
   drawPackSubtitle,
   PACK_ART_HEIGHT,
   PACK_ART_WIDTH,
@@ -13,7 +14,7 @@ import {
   PACK_TEAR_FRACTION,
   type PackArtStyle,
 } from "./packArt";
-import { PackScene } from "./packScene";
+import { createPackScene, type PackScene } from "./packScene";
 import { playPackRip, playSlashTick } from "./packSfx";
 
 // The cut is tracked in vertical columns; each cut column remembers the y
@@ -78,6 +79,9 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
   const backCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const sceneRef = useRef<PackScene | null>(null);
   const [artReady, setArtReady] = useState(false);
+  // Flips when the async scene creation lands, so effects that push state
+  // into the scene (window activity, reduced motion) re-sync to it.
+  const [sceneReady, setSceneReady] = useState(false);
   const [ripping, setRipping] = useState(false);
   const [sparks, setSparks] = useState<SlashSpark[]>([]);
 
@@ -294,18 +298,31 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
     liveCanvasRef.current = live;
     const back = createPackBackCanvas();
     backCanvasRef.current = back;
-    const scene = new PackScene({
+    // Async: the shared renderer/environment/shaders build staged across
+    // frames on the first ever mount (and resolve instantly afterwards), so
+    // the route transition never pays the whole WebGL setup in one frame.
+    let cancelled = false;
+    void createPackScene({
       host,
       textureCanvas: live,
       backCanvas: back,
       reducedMotion: reducedMotionRef.current,
+    }).then((scene) => {
+      if (cancelled) {
+        scene.dispose();
+        return;
+      }
+      sceneRef.current = scene;
+      setSceneReady(true);
+    }).catch(() => {
+      // WebGL unavailable; the placeholder stays.
     });
-    sceneRef.current = scene;
-    const onResize = () => scene.resize();
+    const onResize = () => sceneRef.current?.resize();
     window.addEventListener("resize", onResize);
     return () => {
+      cancelled = true;
       window.removeEventListener("resize", onResize);
-      scene.dispose();
+      sceneRef.current?.dispose();
       sceneRef.current = null;
       liveCanvasRef.current = null;
     };
@@ -314,15 +331,15 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
 
   useEffect(() => {
     sceneRef.current?.setWindowActive(windowActive);
-  }, [windowActive]);
+  }, [windowActive, sceneReady]);
 
   useEffect(() => {
     sceneRef.current?.setReducedMotion(reducedMotion);
-  }, [reducedMotion]);
+  }, [reducedMotion, sceneReady]);
 
   useEffect(() => {
     const nextStyle: PackArtStyle = packType
-      ? { accent: packType.accent, subtitle: packType.artSubtitle }
+      ? { accent: packType.accent, subtitle: packType.artSubtitle, cardCount: packType.cardCount }
       : DEFAULT_PACK_ART_STYLE;
     const previousStyle = artStyleRef.current;
     artStyleRef.current = nextStyle;
@@ -338,11 +355,13 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
       return;
     }
     // Switching pack types recolors the same pack in place: the foil accent
-    // crossfades while the subtitle fades out as the old wording and back in
-    // as the new one (blending two different texts at the same spot reads as
-    // a garbled double exposure).
-    const prevBase = createPackFrontCanvas(previousStyle, { subtitle: false });
-    const nextBase = createPackFrontCanvas(nextStyle, { subtitle: false });
+    // crossfades while the subtitle and card count fade out as the old
+    // wording and back in as the new one (blending two different texts at
+    // the same spot reads as a garbled double exposure).
+    const prevBase = createPackFrontCanvas(previousStyle, { subtitle: false, cardCount: false });
+    const nextBase = createPackFrontCanvas(nextStyle, { subtitle: false, cardCount: false });
+    const prevCount = previousStyle.cardCount ?? 5;
+    const nextCount = nextStyle.cardCount ?? 5;
     const blend = document.createElement("canvas");
     blend.width = PACK_ART_WIDTH;
     blend.height = PACK_ART_HEIGHT;
@@ -366,6 +385,12 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
       blendContext.globalAlpha = 1;
       drawPackSubtitle(blendContext, blend.width, blend.height, previousStyle.subtitle, 1 - Math.min(1, t / 0.45));
       drawPackSubtitle(blendContext, blend.width, blend.height, nextStyle.subtitle, Math.max(0, (t - 0.55) / 0.45));
+      if (prevCount === nextCount) {
+        drawPackCardCount(blendContext, blend.width, blend.height, nextCount);
+      } else {
+        drawPackCardCount(blendContext, blend.width, blend.height, prevCount, 1 - Math.min(1, t / 0.45));
+        drawPackCardCount(blendContext, blend.width, blend.height, nextCount, Math.max(0, (t - 0.55) / 0.45));
+      }
       if (t >= 1) artCanvasRef.current = next;
       drawFrame();
       if (t < 1) artFadeRafRef.current = requestAnimationFrame(step);
@@ -752,7 +777,7 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
         onPointerMove={onPointerMoveTilt}
         onPointerLeave={onPointerLeaveTilt}
       >
-        {!artReady && <div className="absolute inset-0 rounded-xl bg-osu-b4/50 animate-pulse" />}
+        {!(artReady && sceneReady) && <div className="absolute inset-0 rounded-xl bg-osu-b4/50 animate-pulse" />}
       </div>
       {/* Ground shadow under the floating pack */}
       <motion.div

@@ -14,6 +14,7 @@ import {
   PACK_SIZE,
   PACK_SLOT_BANDS,
   PACK_TYPES,
+  packSlotBandsForCount,
   packTypeById,
   pickDeepCountry,
   pickPackEntries,
@@ -108,6 +109,19 @@ describe("rollPackRanks", () => {
       const ranks = rollPackRanks(mulberry32(seed));
       expect(isDeepRank(ranks[0])).toBe(true);
       expect(isDeepRank(ranks[PACK_SIZE - 1])).toBe(false);
+    }
+  });
+
+  it("sizes slot bands to the pack's card count, keeping one hit slot", () => {
+    expect(packSlotBandsForCount(PACK_SIZE)).toBe(PACK_SLOT_BANDS);
+    for (const count of [3, 7, 10]) {
+      const bands = packSlotBandsForCount(count);
+      expect(bands).toHaveLength(count);
+      // The hit slot's bands stay at the end regardless of size.
+      expect(bands[count - 1]).toBe(PACK_SLOT_BANDS[PACK_SLOT_BANDS.length - 1]);
+      const ranks = rollPackRanks(mulberry32(17), count);
+      expect(ranks).toHaveLength(count);
+      expect(isDeepRank(ranks[count - 1])).toBe(false);
     }
   });
 });
@@ -276,6 +290,18 @@ describe("tracked pool draws", () => {
     }
     // Page 1 is fetched once for the pool size and reused, never refetched.
     expect(calls.filter((page) => page === 1)).toHaveLength(1);
+  });
+
+  it("draws bigger packs when the type asks for more cards", async () => {
+    for (const count of [7, 10]) {
+      const { fetchPage } = makePoolFetcher(5853);
+      const { players } = await drawPackPlayersFromPool(mulberry32(33), fetchPage, { count });
+      expect(players).toHaveLength(count);
+      expect(new Set(players.map((player) => player.user.id)).size).toBe(count);
+      for (let index = 1; index < players.length; index += 1) {
+        expect(players[index - 1].globalRank).toBeGreaterThanOrEqual(players[index].globalRank);
+      }
+    }
   });
 
   it("draws sliced packs from the pool's top slice only", async () => {

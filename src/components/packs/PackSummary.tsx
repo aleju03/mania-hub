@@ -1,16 +1,52 @@
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { shardValueForTier } from "#/lib/pack-collection";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { shardValueForTier, type CollectedCard } from "#/lib/pack-collection";
 import { CountryFlag } from "../ui/CountryFlag";
-import type { RevealedCard } from "./RevealStage";
+import { CardSpotlight, type CardSpotlightTarget } from "./CardSpotlight";
+import type { FlightRect, RevealedCard } from "./RevealStage";
 
 interface PackSummaryProps {
   cards: RevealedCard[];
   onOpenAnother: () => void;
   reducedMotion: boolean;
+  /* Reveal-all handoff: where each card's tile sat when the reveal finished,
+     keyed by card position. Present = the viewer already saw every card, so
+     the grid renders in place (no enter stagger) and each tile flies from
+     its handed-off rect into its slot. */
+  flyFrom?: Map<number, FlightRect> | null;
 }
 
-export function PackSummary({ cards, onOpenAnother, reducedMotion }: PackSummaryProps) {
+/* One card's journey from its reveal rect into its summary slot. */
+interface SummaryFlight {
+  position: number;
+  thumbnail: string;
+  from: FlightRect;
+  to: FlightRect;
+}
+
+/* The spotlight speaks CollectedCard; a fresh pull maps onto one directly
+   (a single copy, timestamps unused by the spotlight). */
+function toSpotlightCard(card: RevealedCard): CollectedCard {
+  return {
+    userId: card.player.user.id,
+    username: card.player.user.username,
+    avatarUrl: card.player.user.avatar_url,
+    countryCode: card.player.user.country_code,
+    tier: card.tier,
+    tierLabel: card.tierLabel,
+    skills: card.skills,
+    pp: card.player.pp,
+    globalRank: card.player.globalRank,
+    copies: 1,
+    recycledCopies: 0,
+    firstPulledAt: 0,
+    lastPulledAt: 0,
+  };
+}
+
+export function PackSummary({ cards, onOpenAnother, reducedMotion, flyFrom = null }: PackSummaryProps) {
+  const instant = flyFrom !== null;
   const bestRank = Math.min(...cards.map((card) => card.player.globalRank));
   const newCount = cards.filter((card) => card.isNew).length;
   // What this pack's duplicates recycle into - the loop back to shard packs.
@@ -18,11 +54,85 @@ export function PackSummary({ cards, onOpenAnother, reducedMotion }: PackSummary
     .filter((card) => !card.isNew)
     .reduce((sum, card) => sum + shardValueForTier(card.tier), 0);
 
+  // Clicking a card lifts it into the same spotlight the collection uses;
+  // the profile lives behind the player's name and the spotlight's button.
+  const [spotlight, setSpotlight] = useState<CardSpotlightTarget | null>(null);
+  /* The lifted card's tile stays hidden until the close flight lands back
+     in it, so the card never shows twice. */
+  const [liftedCardId, setLiftedCardId] = useState<number | null>(null);
+
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  const flightImgRefs = useRef<Map<number, HTMLImageElement>>(new Map());
+  const [flights, setFlights] = useState<SummaryFlight[] | null>(null);
+
+  /* Measured once on mount, before paint: pair each handed-off rect with its
+     tile's final slot. The real tiles hide while their overlays are in the
+     air, so the cards never show twice. */
+  useLayoutEffect(() => {
+    if (!flyFrom || flyFrom.size === 0 || reducedMotion) return;
+    const next: SummaryFlight[] = [];
+    cards.forEach((card, position) => {
+      const from = flyFrom.get(position);
+      if (!from || !card.thumbnail) return;
+      const tile = gridRef.current?.querySelector(`[data-pull-index="${position}"]`);
+      if (!(tile instanceof HTMLElement)) return;
+      const rect = tile.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      next.push({
+        position,
+        thumbnail: card.thumbnail,
+        from,
+        to: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+      });
+    });
+    if (next.length > 0) setFlights(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Same trick as the reveal tray flight: the overlays move on the
+  // compositor via the Web Animations API so nothing on the main thread
+  // (thumbnail decodes, the collection panel mounting) can stutter them.
+  useEffect(() => {
+    if (!flights) return;
+    const animations: Animation[] = [];
+    for (const flight of flights) {
+      const el = flightImgRefs.current.get(flight.position);
+      if (!el || typeof el.animate !== "function") continue;
+      const dx = flight.to.left - flight.from.left;
+      const dy = flight.to.top - flight.from.top;
+      const sx = flight.to.width / flight.from.width;
+      const sy = flight.to.height / flight.from.height;
+      animations.push(
+        el.animate(
+          [
+            { transform: "translate(0px, 0px) scale(1, 1)" },
+            { transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})` },
+          ],
+          { duration: 420, easing: "cubic-bezier(0.3, 0.7, 0.2, 1)", fill: "forwards" },
+        ),
+      );
+    }
+    if (animations.length === 0) {
+      setFlights(null);
+      return;
+    }
+    let cancelled = false;
+    void Promise.allSettled(animations.map((animation) => animation.finished)).then(() => {
+      if (!cancelled) setFlights(null);
+    });
+    return () => {
+      cancelled = true;
+      for (const animation of animations) animation.cancel();
+    };
+  }, [flights]);
+
+  const inFlight = new Set(flights?.map((flight) => flight.position));
+
   return (
     <div className="flex flex-col items-center">
       <div className="text-[11px] font-semibold uppercase tracking-wider text-osu-f1">your pulls</div>
 
-      <div className="mt-5 flex flex-wrap items-start justify-center gap-4 sm:gap-5">
+      <div ref={gridRef} className="mt-5 flex flex-wrap items-start justify-center gap-4 sm:gap-5">
         {cards.map((card, position) => {
           const isBest = card.player.globalRank === bestRank;
           const glow = card.glowColor
@@ -35,17 +145,31 @@ export function PackSummary({ cards, onOpenAnother, reducedMotion }: PackSummary
             <motion.div
               key={`${card.player.user.id}-${position}`}
               className="w-[128px] sm:w-[148px]"
-              initial={reducedMotion ? false : { opacity: 0, y: 14 }}
+              initial={reducedMotion || instant ? false : { opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: reducedMotion ? 0 : position * 0.07 }}
+              transition={{ duration: 0.3, delay: reducedMotion || instant ? 0 : position * 0.07 }}
             >
-              <Link
-                to="/player/$username"
-                params={{ username: card.player.user.username }}
-                className="block"
-                aria-label={`Open ${card.player.user.username}'s profile`}
+              <button
+                type="button"
+                onClick={(event) => {
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  setSpotlight({
+                    card: toSpotlightCard(card),
+                    thumbnail: card.thumbnail,
+                    rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
+                  });
+                  setLiftedCardId(card.player.user.id);
+                }}
+                className="block w-full cursor-pointer"
+                style={
+                  liftedCardId === card.player.user.id || inFlight.has(position)
+                    ? { visibility: "hidden" }
+                    : undefined
+                }
+                aria-label={`View ${card.player.user.username}'s card`}
               >
                 <div
+                  data-pull-index={position}
                   className="relative overflow-hidden rounded-[10px] transition-transform duration-150 hover:-translate-y-1"
                   style={{
                     aspectRatio: "5 / 7",
@@ -70,12 +194,17 @@ export function PackSummary({ cards, onOpenAnother, reducedMotion }: PackSummary
                     </div>
                   )}
                 </div>
-              </Link>
+              </button>
               <div className="mt-2 text-center">
-                <div className="flex items-center justify-center gap-1.5">
+                <Link
+                  to="/player/$username"
+                  params={{ username: card.player.user.username }}
+                  className="flex items-center justify-center gap-1.5 hover:underline underline-offset-4 decoration-osu-f1/60"
+                  aria-label={`Open ${card.player.user.username}'s profile`}
+                >
                   <CountryFlag code={card.player.user.country_code} size="xs" decorative />
                   <span className="truncate text-[13px] font-bold text-white">{card.player.user.username}</span>
-                </div>
+                </Link>
                 <div className="mt-0.5 flex items-center justify-center gap-1.5 text-[11px]">
                   {card.tierLabel && (
                     <span className="font-bold uppercase tracking-wide" style={{ color: tierColor }}>
@@ -103,6 +232,37 @@ export function PackSummary({ cards, onOpenAnother, reducedMotion }: PackSummary
           : "All duplicates."}
         {dupeShards > 0 && ` Dupes worth ${dupeShards} shard${dupeShards === 1 ? "" : "s"} if recycled.`}
       </div>
+
+      <CardSpotlight
+        target={spotlight}
+        onClose={() => setSpotlight(null)}
+        onExitComplete={() => setLiftedCardId(null)}
+      />
+
+      {/* Handoff flights: each card sliding from where the reveal left it
+          into its grid slot */}
+      {flights?.map((flight) => (
+        <img
+          key={flight.position}
+          ref={(el) => {
+            if (el) flightImgRefs.current.set(flight.position, el);
+            else flightImgRefs.current.delete(flight.position);
+          }}
+          src={flight.thumbnail}
+          alt=""
+          className="pointer-events-none fixed z-40 rounded-[10px] object-cover"
+          style={{
+            left: flight.from.left,
+            top: flight.from.top,
+            width: flight.from.width,
+            height: flight.from.height,
+            transformOrigin: "top left",
+            willChange: "transform",
+          }}
+          draggable={false}
+          aria-hidden="true"
+        />
+      ))}
     </div>
   );
 }

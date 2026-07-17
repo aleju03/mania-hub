@@ -4,7 +4,7 @@ declare module "three" {
   export class Object3D {
     children: Object3D[];
     position: { x: number; y: number; z: number; set: (...args: any[]) => void };
-    rotation: { x: number; y: number; z: number };
+    rotation: { x: number; y: number; z: number; set: (...args: any[]) => void };
     scale: { x: number; y: number; z: number; setScalar: (value: number) => void };
     quaternion: Quaternion;
     renderOrder: number;
@@ -145,6 +145,7 @@ declare module "three" {
     setSize(...args: any[]): void;
     setPixelRatio(...args: any[]): void;
     render(...args: any[]): void;
+    compile(...args: any[]): void;
     dispose(): void;
   }
 

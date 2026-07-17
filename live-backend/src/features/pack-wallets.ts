@@ -115,6 +115,17 @@ function toFiniteNumber(value: unknown, fallback: number): number {
   return Number.isFinite(next) ? next : fallback;
 }
 
+/* Card rows freeze identity at pull time, but avatars and usernames move on
+   (a.ppy.sh serves the current image either way; only the URL's cache-buster
+   changes, and thumbnail caches key off that string). Reads overlay the
+   current identity from users so a new pfp or rename shows up without a
+   repull. */
+function liveUserFieldSql(field: "username" | "avatar_url" | "country_code"): string {
+  return `(select u.${field} from users u where u.user_id = pack_collection_cards.card_user_id)`;
+}
+
+const displayUsernameSql = `coalesce(nullif(${liveUserFieldSql("username")}, ''), username)`;
+
 function normalizeCard(value: unknown): StoredPackCard | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Partial<WalletCardPayload>;
@@ -277,12 +288,16 @@ async function upsertPackCard(
   );
 }
 
+function nonEmptyString(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
 function cardFromRow(row: Record<string, unknown>): StoredPackCard {
   return {
     userId: Number(row.card_user_id),
-    username: String(row.username ?? ""),
-    avatarUrl: String(row.avatar_url ?? ""),
-    countryCode: String(row.country_code ?? ""),
+    username: nonEmptyString(row.live_username) ?? String(row.username ?? ""),
+    avatarUrl: nonEmptyString(row.live_avatar_url) ?? String(row.avatar_url ?? ""),
+    countryCode: nonEmptyString(row.live_country_code) ?? String(row.country_code ?? ""),
     tier: typeof row.tier === "string" ? row.tier : null,
     tierLabel: typeof row.tier_label === "string" ? row.tier_label : null,
     skills: row.skills_json ? parseJson<unknown | null>(String(row.skills_json), null) : null,
@@ -356,7 +371,7 @@ export async function listPackCollectionCards(
   const args: InValue[] = [userId];
   const query = options.query?.trim().toLowerCase() ?? "";
   if (query) {
-    where.push("lower(username) like ?");
+    where.push(`lower(${displayUsernameSql}) like ?`);
     args.push(`%${query}%`);
   }
   if (options.tier && options.tier !== "all") {
@@ -370,7 +385,11 @@ export async function listPackCollectionCards(
   const totalRow = (await exec(db, `select count(*) as total from pack_collection_cards where ${whereSql}`, args)).rows[0];
   const rows = (await exec(
     db,
-    `select * from pack_collection_cards
+    `select pack_collection_cards.*,
+       ${liveUserFieldSql("username")} as live_username,
+       ${liveUserFieldSql("avatar_url")} as live_avatar_url,
+       ${liveUserFieldSql("country_code")} as live_country_code
+     from pack_collection_cards
      where ${whereSql}
      order by ${tierRankSql("tier")} desc, pp desc, global_rank asc, username collate nocase asc
      limit ? offset ?`,
@@ -439,7 +458,9 @@ export async function recyclePackCollectionCards(
     const tier = options.tier ?? "all";
     const query = options.query?.trim().toLowerCase() ?? "";
     if (query) {
-      where.push("lower(username) like ?");
+      // Must match by the same display name listPackCollectionCards filters
+      // on, or "recycle everything matching" would miss renamed players.
+      where.push(`lower(${displayUsernameSql}) like ?`);
       args.push(`%${query}%`);
     }
     if (tier && tier !== "all") {

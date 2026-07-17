@@ -23,7 +23,7 @@ import {
   rememberCardThumbnailDataUrl,
 } from "./cardThumbnailCache";
 import { createCardBackCanvas } from "./packArt";
-import { playCardDraw, playFlipWhoosh, playHypeRiser, playRevealChime } from "./packSfx";
+import { playCardDraw, playFlipWhoosh, playRevealChime } from "./packSfx";
 import { TierBurst } from "./TierBurst";
 
 export interface PackCardState {
@@ -39,6 +39,9 @@ export interface RevealedCard {
   tierLabel: string | null;
   glowColor: RgbaColor | null;
   thumbnail: string | null;
+  /* Skills snapshot from the mint, enough to redraw the live card offline
+     (the summary's spotlight rebuilds the 3D card from it). */
+  skills: ManiaSkills | null;
   isNew: boolean;
 }
 
@@ -48,16 +51,26 @@ interface RevealStageProps {
   /* Called once per card the moment it is revealed; returns whether this is
      the player's first copy in the viewer's collection. */
   onCardRevealed?: (pull: PulledCard) => boolean;
-  onComplete: (revealed: RevealedCard[]) => void;
+  /* A handoff means the viewer already saw the full grid (reveal-all): the
+     summary should skip its enter ceremony and fly each card from its
+     handed-off rect into the grid. */
+  onComplete: (revealed: RevealedCard[], handoff?: RevealHandoff) => void;
 }
 
 type RevealPhase = "stack" | "preparing" | "flipping" | "shown";
 
-interface FlightRect {
+export interface FlightRect {
   left: number;
   top: number;
   width: number;
   height: number;
+}
+
+/* Reveal-all handoff to the summary: where each card's tile sat (cascade
+   slots plus the tray of earlier reveals) the moment the reveal completed,
+   keyed by card position, so the summary can fly them into its grid. */
+export interface RevealHandoff {
+  sourceRects: Map<number, FlightRect>;
 }
 
 /* The advance transition: the shown card's thumbnail flies from the big
@@ -81,18 +94,20 @@ const STACK_CARD_SCALE = 1 / 1.05;
 // the 2D fallback after this long so the last card always resolves.
 const RENDERER_READY_TIMEOUT_MS = 8000;
 
-// Tiers from this rank up (ultraRare+) get the slow-burn flip: a longer turn,
-// a pulsing golden aura, and a riser under the whoosh. The aura is
-// deliberately tier-neutral gold - it says "something good" while the exact
-// tier stays the flip's reveal.
-const HYPE_TIER_MIN_RANK = 4;
-const MAX_TIER_RANK = 8;
-
-function hypeLevelForTier(tier: ManiaCardTier | null): number | null {
-  const rank = tierRank(tier);
-  if (rank < HYPE_TIER_MIN_RANK) return null;
-  return (rank - (HYPE_TIER_MIN_RANK - 1)) / (MAX_TIER_RANK - (HYPE_TIER_MIN_RANK - 1));
-}
+// Reveal-all cascade: the remaining backs deal out of the stack into
+// centered rows of face-down tiles, and each tile flips the moment its data
+// lands. Rows may run wider than the stage; nothing clips them until the
+// page-level overflow boundary.
+const CASCADE_GAP = 12;
+const CASCADE_MAX_SLOT_WIDTH = 152;
+const CASCADE_MAX_ROW_WIDTH = 820;
+// Past this many remaining cards the cascade wraps into two rows instead of
+// shrinking the tiles into slivers.
+const CASCADE_MAX_PER_ROW = 6;
+// Minimum spacing between consecutive flips when every card's data is
+// already hot, so a cached pack still cascades instead of slapping all
+// the faces over in the same frame.
+const CASCADE_FLIP_GAP_MS = 170;
 
 function isMobileViewport() {
   return (
@@ -103,9 +118,12 @@ function isMobileViewport() {
 }
 
 function stackBackTransform(position: number, dragX = 0) {
-  const x = position * 5 + dragX;
-  const y = position * 6;
-  const rotate = position * 1.4 + dragX * 0.035;
+  // Mostly-horizontal fan: the rotated cards are taller than the stage, so a
+  // steeper y/rotation step walks the buried cards' corners down over the
+  // caption below the stack.
+  const x = position * 7 + dragX;
+  const y = position * 1;
+  const rotate = position * 0.9 + dragX * 0.035;
   return `translate3d(${x}px, ${y}px, 0) rotate(${rotate}deg) scale(${STACK_CARD_SCALE})`;
 }
 
@@ -252,6 +270,79 @@ function DraggableStackBackCard({
   );
 }
 
+interface CascadeTileProps {
+  /* undefined until this card's data lands; landing is what flips the tile. */
+  entry: RevealedCard | undefined;
+  username: string;
+  cardBack: string;
+  /* True once the flip has landed (burst window). */
+  landed: boolean;
+  reducedMotion: boolean;
+  onLanded: () => void;
+}
+
+function CascadeTile({ entry, username, cardBack, landed, reducedMotion, onLanded }: CascadeTileProps) {
+  const firedRef = useRef(false);
+  const flipped = entry !== undefined;
+
+  const fire = () => {
+    if (!flipped || firedRef.current) return;
+    firedRef.current = true;
+    onLanded();
+  };
+
+  // Under reduced motion the flip is instant; don't rely on framer emitting a
+  // completion event for a zero-duration animation.
+  useEffect(() => {
+    if (reducedMotion && flipped) fire();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reducedMotion, flipped]);
+
+  return (
+    <div className="relative h-full w-full" style={{ perspective: 700 }}>
+      <motion.div
+        className="relative h-full w-full"
+        style={{ transformStyle: "preserve-3d" }}
+        initial={false}
+        animate={{ rotateY: flipped ? 180 : 0 }}
+        transition={{ duration: reducedMotion ? 0 : 0.36, ease: [0.3, 0.1, 0.3, 1] }}
+        onAnimationComplete={fire}
+      >
+        <div
+          className="absolute inset-0 rounded-[10px] bg-cover bg-center"
+          style={{
+            backgroundImage: `url(${cardBack})`,
+            backfaceVisibility: "hidden",
+            boxShadow: "0 10px 26px rgba(0,0,0,0.45)",
+          }}
+        />
+        <div
+          className="absolute inset-0 overflow-hidden rounded-[10px]"
+          style={{ transform: "rotateY(180deg)", backfaceVisibility: "hidden" }}
+        >
+          {entry?.thumbnail ? (
+            <img src={entry.thumbnail} alt={username} className="h-full w-full object-cover" draggable={false} />
+          ) : (
+            /* Mint failure: same dark tile the tray shows, plus the name so
+               the slot isn't anonymous. */
+            <div className="grid h-full w-full place-items-center bg-osu-b4 px-1 text-center">
+              <span className="break-all text-[9px] font-semibold text-osu-f1">{flipped ? username : ""}</span>
+            </div>
+          )}
+        </div>
+      </motion.div>
+
+      {/* TierBurst animates in stage-sized pixels; the scale wrapper shrinks
+          its whole coordinate space down to tile scale. */}
+      {landed && !reducedMotion && entry?.tier && entry.glowColor && (
+        <div className="pointer-events-none absolute inset-0" style={{ transform: "scale(0.5)" }}>
+          <TierBurst tier={entry.tier} glowColor={entry.glowColor} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }: RevealStageProps) {
   const windowActive = useWindowActive();
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -274,12 +365,16 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
      stuck. */
   const [slowDraw, setSlowDraw] = useState(false);
   const [burst, setBurst] = useState<{ key: number; tier: ManiaCardTier; glowColor: RgbaColor } | null>(null);
-  /* 0..1 intensity while a high-tier card is mid-flip; null for commons. */
-  const [hype, setHype] = useState<number | null>(null);
   const [cardBack, setCardBack] = useState<string | null>(null);
   const [skipping, setSkipping] = useState(false);
+  /* Reveal-all row geometry; null while revealing one by one. scaleFrom is
+     the stack-to-tile size ratio so the deal starts at full stack size. */
+  const [cascade, setCascade] = useState<{ start: number; slotWidth: number; scaleFrom: number; perRow: number } | null>(null);
+  /* Cascade positions whose flip has landed (chime fired, burst showing). */
+  const [cascadeLanded, setCascadeLanded] = useState<number[]>([]);
   const [flight, setFlight] = useState<CardFlight | null>(null);
   const trayRef = useRef<HTMLDivElement | null>(null);
+  const cascadeRef = useRef<HTMLDivElement | null>(null);
 
   const setPhase = (next: RevealPhase) => {
     phaseRef.current = next;
@@ -367,7 +462,7 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
       }
     });
 
-  const recordRevealed = (entry: Omit<RevealedCard, "isNew">, skills: ManiaSkills | null) => {
+  const recordRevealed = (entry: Omit<RevealedCard, "isNew" | "skills">, skills: ManiaSkills | null) => {
     const isNew = onCardRevealed
       ? onCardRevealed({
           userId: entry.player.user.id,
@@ -381,7 +476,7 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
           globalRank: entry.player.globalRank,
         })
       : false;
-    revealedRef.current = [...revealedRef.current, { ...entry, isNew }];
+    revealedRef.current = [...revealedRef.current, { ...entry, skills, isNew }];
     setRevealed(revealedRef.current);
   };
 
@@ -441,23 +536,18 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     );
     const cardIndex = revealedRef.current.length - 1;
 
-    const hypeLevel = hypeLevelForTier(data.tier);
-
     try {
       await ensureRendererReady(data);
       if (cancelledRef.current) return;
       setActiveData(data);
       setActiveFallback(null);
-      setHype(hypeLevel);
       setPhase("flipping");
       // A short beat while the canvas card (same neutral back as the stack)
-      // takes over the top of the stack, then it turns. A high-tier card
-      // holds the moment a little longer.
-      await new Promise((resolve) => setTimeout(resolve, reducedMotion ? 60 : hypeLevel !== null ? 420 : 220));
+      // takes over the top of the stack, then it turns.
+      await new Promise((resolve) => setTimeout(resolve, reducedMotion ? 60 : 220));
       if (cancelledRef.current) return;
-      const flipMs = reducedMotion ? 240 : hypeLevel !== null ? 1380 : 980;
+      const flipMs = reducedMotion ? 240 : 980;
       playFlipWhoosh(flipMs);
-      if (hypeLevel !== null && !reducedMotion) playHypeRiser(flipMs, hypeLevel);
       await rendererRef.current?.playRevealFlip(flipMs);
       if (cancelledRef.current) return;
       // Tray thumbnail comes from the front texture the renderer already
@@ -568,12 +658,72 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     };
   }, [flight]);
 
-  // Resolves every remaining card without the one-by-one ceremony.
+  /* Viewport rects of every on-screen card tile (tray thumbnails and cascade
+     slots), for the summary handoff. Transforms are settled by the time this
+     runs, so the rects are where the eye last saw each card. */
+  const collectHandoffRects = (): Map<number, FlightRect> => {
+    const sourceRects = new Map<number, FlightRect>();
+    const collect = (root: HTMLElement | null, attribute: string) => {
+      if (!root) return;
+      root.querySelectorAll(`[${attribute}]`).forEach((el) => {
+        if (!(el instanceof HTMLElement)) return;
+        const position = Number(el.getAttribute(attribute));
+        if (!Number.isFinite(position)) return;
+        const rect = el.getBoundingClientRect();
+        sourceRects.set(position, { left: rect.left, top: rect.top, width: rect.width, height: rect.height });
+      });
+    };
+    collect(trayRef.current, "data-tray-index");
+    collect(cascadeRef.current, "data-cascade-index");
+    return sourceRects;
+  };
+
+  const handleCascadeLanded = (position: number) => {
+    setCascadeLanded((current) => (current.includes(position) ? current : [...current, position]));
+    const entry = revealedRef.current[position];
+    if (!entry || entry.tier === null) return;
+    playRevealChime(tierRank(entry.tier) / 8, entry.isNew);
+  };
+
+  // Resolves every remaining card without the one-by-one ceremony: the
+  // remaining backs deal out of the stack into a row, and each tile flips
+  // the moment its data lands. High tiers keep their held moment.
   const revealRest = async () => {
     if (skipping || phaseRef.current === "preparing" || phaseRef.current === "flipping") return;
     setSkipping(true);
     playCardDraw();
     const startAt = phaseRef.current === "shown" ? index + 1 : index;
+
+    // No flight for a card still shown on the canvas: the stage compresses
+    // while the backs deal out, so the tray is a moving target the flight
+    // overlay would miss. Its tile simply joins the tray.
+    setBurst(null);
+    setActiveData(null);
+    setActiveFallback(null);
+    setMintFailure(null);
+    setPhase("stack");
+
+    if (startAt >= cards.length) {
+      onComplete(revealedRef.current, { sourceRects: collectHandoffRects() });
+      return;
+    }
+
+    const count = cards.length - startAt;
+    const perRow = count > CASCADE_MAX_PER_ROW ? Math.ceil(count / 2) : count;
+    const stageWidth = hostRef.current?.getBoundingClientRect().width ?? 340;
+    const rowWidth = Math.min(
+      CASCADE_MAX_ROW_WIDTH,
+      typeof window !== "undefined" ? window.innerWidth * 0.94 : CASCADE_MAX_ROW_WIDTH,
+    );
+    const slotWidth = Math.min(CASCADE_MAX_SLOT_WIDTH, (rowWidth - (perRow - 1) * CASCADE_GAP) / perRow);
+    setCascade({ start: startAt, slotWidth, scaleFrom: (stageWidth * STACK_CARD_SCALE) / slotWidth, perRow });
+
+    // Flips wait for the deal-out to finish; the data fetches keep running
+    // underneath it. After that, each flip waits only for its data, with a
+    // minimum gap so hot data still cascades.
+    const dealMs = reducedMotion ? 0 : 300 + count * 60;
+    let nextFlipAt = performance.now() + dealMs;
+
     for (let position = startAt; position < cards.length; position += 1) {
       const card = cards[position];
       let scores = await card.scoresPromise;
@@ -582,35 +732,52 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
         scores = await fetchPackPlayerScores(card.player.user.id).catch(() => null);
         if (cancelledRef.current) return;
       }
-      if (scores === null) {
-        recordRevealed({ player: card.player, tier: null, tierLabel: null, glowColor: null, thumbnail: null }, null);
-        continue;
+
+      let entry: Omit<RevealedCard, "isNew" | "skills"> = {
+        player: card.player,
+        tier: null,
+        tierLabel: null,
+        glowColor: null,
+        thumbnail: null,
+      };
+      let skills: ManiaSkills | null = null;
+      if (scores !== null) {
+        const data = buildManiaCardRenderData({ user: card.player.user, scores });
+        if (data.status === "ready") {
+          let thumbnail: string | null = null;
+          try {
+            thumbnail = await renderCardThumbnail(data, COLLECTION_CARD_THUMB_WIDTH);
+            void rememberCardThumbnailDataUrl(data, thumbnail, COLLECTION_CARD_THUMB_WIDTH);
+          } catch {
+            thumbnail = null;
+          }
+          if (cancelledRef.current) return;
+          entry = {
+            player: card.player,
+            tier: data.tier,
+            tierLabel: data.tierStyle.label,
+            glowColor: data.glowColor,
+            thumbnail,
+          };
+          skills = data.skills;
+        }
       }
-      const data = buildManiaCardRenderData({ user: card.player.user, scores });
-      if (data.status !== "ready") {
-        recordRevealed({ player: card.player, tier: null, tierLabel: null, glowColor: null, thumbnail: null }, null);
-        continue;
+
+      const holdMs = nextFlipAt - performance.now();
+      if (holdMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, holdMs));
+        if (cancelledRef.current) return;
       }
-      let thumbnail: string | null = null;
-      try {
-        thumbnail = await renderCardThumbnail(data, COLLECTION_CARD_THUMB_WIDTH);
-        void rememberCardThumbnailDataUrl(data, thumbnail, COLLECTION_CARD_THUMB_WIDTH);
-      } catch {
-        thumbnail = null;
-      }
-      if (cancelledRef.current) return;
-      recordRevealed(
-        {
-          player: card.player,
-          tier: data.tier,
-          tierLabel: data.tierStyle.label,
-          glowColor: data.glowColor,
-          thumbnail,
-        },
-        data.skills,
-      );
+      recordRevealed(entry, skills);
+      nextFlipAt = performance.now() + (reducedMotion ? 0 : CASCADE_FLIP_GAP_MS);
     }
-    if (!cancelledRef.current) onComplete(revealedRef.current);
+    if (cancelledRef.current) return;
+    // A beat so the last flip and its burst land before the summary. The
+    // cascade already showed every card, so instead of fading the grid out
+    // and staggering it back in, the summary takes over in place and flies
+    // each tile from the rect it occupies right now.
+    await new Promise((resolve) => setTimeout(resolve, reducedMotion ? 150 : 700));
+    if (!cancelledRef.current) onComplete(revealedRef.current, { sourceRects: collectHandoffRects() });
   };
 
   // While the active card is on the canvas, its DOM back leaves the stack.
@@ -621,7 +788,9 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
      visible would show the previous card's face behind a failure overlay. */
   const showCanvas = (phase === "flipping" || phase === "shown") && !activeFallback && activeData !== null;
   const current = revealed[index] ?? null;
-  const trayEntries = revealed.slice(0, skipping ? revealed.length : index);
+  /* While the cascade runs, cards from `start` on live in the dealt-out row,
+     not the tray; only the ones revealed before the skip stay below. */
+  const trayEntries = revealed.slice(0, skipping ? (cascade?.start ?? revealed.length) : index);
   const tierColor = current?.glowColor
     ? `rgb(${current.glowColor.r}, ${current.glowColor.g}, ${current.glowColor.b})`
     : "rgb(226, 232, 240)";
@@ -629,15 +798,34 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
   return (
     <div className="flex flex-col items-center">
       <div className="text-[11px] font-semibold uppercase tracking-wider text-osu-f1 tabular-nums">
-        card {Math.min(index + 1, cards.length)} / {cards.length}
+        {/* During the cascade the counter runs with the flips as they land. */}
+        card {skipping ? Math.max(1, revealed.length) : Math.min(index + 1, cards.length)} / {cards.length}
       </div>
 
-      <div
+      {/* The stage holds the stack's 5/7 footprint while revealing one by
+          one; during the cascade it compresses to the dealt row's height so
+          the caption and tray pull up instead of orbiting an empty box.
+          Inline height wins over aspect-ratio once the animation sets it. */}
+      <motion.div
         className="relative mt-4 w-[min(340px,84vw)]"
         style={{ aspectRatio: "5 / 7" }}
+        initial={false}
+        animate={
+          cascade
+            ? {
+                height:
+                  Math.ceil((cards.length - cascade.start) / cascade.perRow) *
+                    ((cascade.slotWidth * 7) / 5 + CASCADE_GAP) -
+                  CASCADE_GAP +
+                  56,
+              }
+            : {}
+        }
+        transition={{ duration: reducedMotion ? 0 : 0.45, ease: [0.3, 0.7, 0.2, 1] }}
       >
-        {/* Face-down stack */}
+        {/* Face-down stack (the cascade row replaces it while skipping) */}
         {cardBack &&
+          !cascade &&
           Array.from({ length: remainingBacks }, (_, position) => position)
             .reverse()
             .map((position) => {
@@ -662,15 +850,18 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
                   className="absolute inset-0 rounded-[18px] bg-cover bg-center"
                   style={{
                     backgroundImage: `url(${cardBack})`,
-                    boxShadow: "0 14px 36px rgba(0,0,0,0.5)",
+                    // Only the top card casts the big drop shadow; the buried
+                    // cards overlap almost fully, so per-card shadows compound
+                    // into an opaque blob under the fan. Tight rim only.
+                    boxShadow: isTop ? "0 14px 36px rgba(0,0,0,0.5)" : "0 2px 6px rgba(0,0,0,0.35)",
                     zIndex: 10 - position,
                     willChange: "transform",
                     backfaceVisibility: "hidden",
                   }}
                   animate={{
-                    x: position * 5,
-                    y: position * 6,
-                    rotate: position * 1.4,
+                    x: position * 7,
+                    y: position * 1,
+                    rotate: position * 0.9,
                     scale:
                       isTop && phase === "preparing" && !reducedMotion && windowActive
                         ? [STACK_CARD_SCALE, STACK_CARD_SCALE * 1.025, STACK_CARD_SCALE]
@@ -685,6 +876,66 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
               );
             })}
 
+        {/* Reveal-all cascade: the remaining backs deal out of the stack into
+            centered rows, each starting at full stack size and shrinking
+            into its slot, then flipping in place as its data lands. */}
+        {cascade && cardBack && (
+          <div ref={cascadeRef} className="absolute inset-0" style={{ zIndex: 15 }}>
+            {Array.from({ length: cards.length - cascade.start }, (_, slot) => {
+              const position = cascade.start + slot;
+              const count = cards.length - cascade.start;
+              const rowCount = Math.ceil(count / cascade.perRow);
+              const row = Math.floor(slot / cascade.perRow);
+              const column = slot % cascade.perRow;
+              // The last row may be short; it centers on its own width.
+              const rowLength = Math.min(cascade.perRow, count - row * cascade.perRow);
+              const slotHeight = (cascade.slotWidth * 7) / 5;
+              const targetX = (column - (rowLength - 1) / 2) * (cascade.slotWidth + CASCADE_GAP);
+              const targetY = (row - (rowCount - 1) / 2) * (slotHeight + CASCADE_GAP);
+              return (
+                <motion.div
+                  key={position}
+                  data-cascade-index={position}
+                  className="absolute left-1/2 top-1/2"
+                  style={{
+                    width: cascade.slotWidth,
+                    height: slotHeight,
+                    marginLeft: -cascade.slotWidth / 2,
+                    marginTop: -slotHeight / 2,
+                    // Top of the old stack deals first and stays above the
+                    // cards still waiting their turn.
+                    zIndex: count - slot,
+                    willChange: "transform",
+                  }}
+                  // Initial transform mirrors the card's spot in the stack
+                  // (same fanned offsets), so the deal visibly pulls each
+                  // back out of the pile.
+                  initial={
+                    reducedMotion
+                      ? false
+                      : { x: slot * 7, y: slot * 1, rotate: slot * 0.9, scale: cascade.scaleFrom }
+                  }
+                  animate={{ x: targetX, y: targetY, rotate: 0, scale: 1 }}
+                  transition={
+                    reducedMotion
+                      ? { duration: 0 }
+                      : { delay: 0.05 + slot * 0.06, duration: 0.4, ease: [0.3, 0.7, 0.2, 1] }
+                  }
+                >
+                  <CascadeTile
+                    entry={revealed[position]}
+                    username={cards[position]?.player.user.username ?? ""}
+                    cardBack={cardBack}
+                    landed={cascadeLanded.includes(position)}
+                    reducedMotion={reducedMotion}
+                    onLanded={() => handleCascadeLanded(position)}
+                  />
+                </motion.div>
+              );
+            })}
+          </div>
+        )}
+
         {/* Preparing ring */}
         <AnimatePresence>
           {phase === "preparing" && (
@@ -698,29 +949,6 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.25 }}
-            />
-          )}
-        </AnimatePresence>
-
-        {/* High-tier tension aura: swells while the card turns, then hands
-            off to the tier burst. Gold for every hype tier so it never
-            spoils which one; only the intensity scales. */}
-        <AnimatePresence>
-          {phase === "flipping" && hype != null && !reducedMotion && (
-            <motion.div
-              className="absolute inset-0 z-20 rounded-[18px] pointer-events-none"
-              style={{ scale: STACK_CARD_SCALE }}
-              initial={{ opacity: 0 }}
-              animate={{
-                opacity: [0.4, 1, 0.6],
-                boxShadow: [
-                  `0 0 0 2px rgba(253,230,138,0.4), 0 0 26px 6px rgba(251,191,36,${(0.2 + hype * 0.2).toFixed(2)})`,
-                  `0 0 0 3px rgba(253,230,138,0.8), 0 0 ${Math.round(46 + hype * 42)}px ${Math.round(10 + hype * 10)}px rgba(251,191,36,${(0.4 + hype * 0.3).toFixed(2)})`,
-                  `0 0 0 2px rgba(253,230,138,0.55), 0 0 34px 8px rgba(251,191,36,${(0.28 + hype * 0.24).toFixed(2)})`,
-                ],
-              }}
-              exit={{ opacity: 0, transition: { duration: 0.35 } }}
-              transition={{ duration: 0.8, repeat: Infinity, ease: "easeInOut" }}
             />
           )}
         </AnimatePresence>
@@ -770,7 +998,7 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
         )}
 
         {burst && <TierBurst key={burst.key} tier={burst.tier} glowColor={burst.glowColor} />}
-      </div>
+      </motion.div>
 
       {/* Caption */}
       <div className="mt-5 h-[58px] text-center" aria-live="polite">

@@ -20,11 +20,14 @@ function random01(value: number) {
 export interface PackArtStyle {
   accent: { r: number; g: number; b: number };
   subtitle: string;
+  /* Card count on the foil pill; pack types differ. */
+  cardCount?: number;
 }
 
 export const DEFAULT_PACK_ART_STYLE: PackArtStyle = {
   accent: { r: 167, g: 139, b: 250 },
   subtitle: "BOOSTER PACK",
+  cardCount: 5,
 };
 
 type Rgb = PackArtStyle["accent"];
@@ -49,7 +52,7 @@ const BLACK: Rgb = { r: 8, g: 6, b: 16 };
    tear away as its own element. */
 export function createPackFrontCanvas(
   style: PackArtStyle = DEFAULT_PACK_ART_STYLE,
-  options: { subtitle?: boolean } = {},
+  options: { subtitle?: boolean; cardCount?: boolean } = {},
 ): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = PACK_ART_WIDTH;
@@ -74,6 +77,7 @@ export function createPackFrontCanvas(
   drawEmblem(context, width, height, style.accent);
   drawWordmark(context, width, height, style);
   if (options.subtitle !== false) drawPackSubtitle(context, width, height, style.subtitle);
+  if (options.cardCount !== false) drawPackCardCount(context, width, height, style.cardCount);
   drawCrimp(context, width, height, 0);
   drawCrimp(context, width, height, height - PACK_CRIMP_FRACTION * height);
   drawTearPerforation(context, width, height);
@@ -213,7 +217,8 @@ function drawWordmark(context: CanvasRenderingContext2D, width: number, height: 
 
   context.shadowBlur = 0;
 
-  // "5 cards" pill
+  // Card-count pill shell; the count text is drawn by drawPackCardCount so
+  // a pack-type switch can fade it separately.
   const pillWidth = 190;
   const pillHeight = 46;
   const pillY = height * 0.80;
@@ -224,9 +229,25 @@ function drawWordmark(context: CanvasRenderingContext2D, width: number, height: 
   context.strokeStyle = "rgba(255,255,255,0.3)";
   context.lineWidth = 2;
   context.stroke();
+  context.restore();
+}
+
+/* The count inside the pill, split out of the base art for the same reason
+   as the subtitle: pack types differ in card count, and crossfading two
+   different texts at the same spot reads as a flickering double exposure. */
+export function drawPackCardCount(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  cardCount: number | undefined,
+  alpha = 1,
+) {
+  if (alpha <= 0) return;
+  context.save();
+  context.textAlign = "center";
   context.font = `800 26px ${FONT}`;
-  context.fillStyle = "rgba(255,255,255,0.85)";
-  context.fillText("5 CARDS", cx, pillY + 32);
+  context.fillStyle = `rgba(255,255,255,${(0.85 * alpha).toFixed(3)})`;
+  context.fillText(`${cardCount ?? 5} CARDS`, width / 2, height * 0.80 + 32);
   context.restore();
 }
 

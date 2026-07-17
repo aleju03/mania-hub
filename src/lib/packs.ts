@@ -8,6 +8,7 @@ import {
 import { getRankings, getUserScoresBestWindow } from "./osu";
 import type { LeanRankingEntry, OsuScore } from "./types";
 
+/* Default cards per pack; pack types override via cardCount. */
 export const PACK_SIZE = 5;
 
 // Packs draw from the server's tracked-player pool (the global
@@ -130,8 +131,19 @@ export function rollRanksFromBands(slotBands: PackRankBand[][], rng: () => numbe
   });
 }
 
-export function rollPackRanks(rng: () => number = Math.random): number[] {
-  return rollRanksFromBands(PACK_SLOT_BANDS, rng);
+/* Slot bands for an arbitrary pack size. Smaller packs keep the later
+   (stronger) slots; larger packs pad with extra copies of the deepest slot,
+   so the reveal still builds toward the same single hit at the end. */
+export function packSlotBandsForCount(count: number): PackRankBand[][] {
+  const size = Math.max(1, Math.round(count));
+  if (size === PACK_SLOT_BANDS.length) return PACK_SLOT_BANDS;
+  if (size < PACK_SLOT_BANDS.length) return PACK_SLOT_BANDS.slice(PACK_SLOT_BANDS.length - size);
+  const extra = size - PACK_SLOT_BANDS.length;
+  return [...Array.from({ length: extra }, () => PACK_SLOT_BANDS[0]), ...PACK_SLOT_BANDS];
+}
+
+export function rollPackRanks(rng: () => number = Math.random, count: number = PACK_SIZE): number[] {
+  return rollRanksFromBands(packSlotBandsForCount(count), rng);
 }
 
 // The booster lineup. Standard burns a regenerating pack charge; the rest
@@ -151,6 +163,8 @@ export interface PackTypeDef {
   cost: PackCost;
   /* Slice of the pool this pack draws from (1 = the whole pool). */
   topFraction: number;
+  /* Cards dealt per pack. */
+  cardCount: number;
   /* Replaces owned pulls with unowned cards from the same slice when possible. */
   guaranteesNew?: boolean;
   blurb: string;
@@ -164,6 +178,7 @@ export const PACK_TYPES: PackTypeDef[] = [
     artSubtitle: "BOOSTER PACK",
     cost: { kind: "charge" },
     topFraction: 1,
+    cardCount: PACK_SIZE,
     blurb: "Every tracked player, same odds",
     accent: { r: 167, g: 139, b: 250 },
   },
@@ -171,8 +186,11 @@ export const PACK_TYPES: PackTypeDef[] = [
     id: "wild",
     name: "Wild",
     artSubtitle: "WILD PACK",
-    cost: { kind: "shards", amount: 8 },
+    // The volume pack: double the cards, priced under 2x the old 5-card
+    // rate so bulk stays the draw.
+    cost: { kind: "shards", amount: 14 },
     topFraction: 1,
+    cardCount: 10,
     guaranteesNew: true,
     blurb: "Whole pool, new cards first",
     accent: { r: 52, g: 211, b: 153 },
@@ -181,8 +199,9 @@ export const PACK_TYPES: PackTypeDef[] = [
     id: "elite",
     name: "Elite",
     artSubtitle: "ELITE PACK",
-    cost: { kind: "shards", amount: 25 },
+    cost: { kind: "shards", amount: 32 },
     topFraction: 0.1,
+    cardCount: 7,
     guaranteesNew: true,
     blurb: "Top 10%, new cards first",
     accent: { r: 251, g: 191, b: 36 },
@@ -193,6 +212,7 @@ export const PACK_TYPES: PackTypeDef[] = [
     artSubtitle: "LEGEND PACK",
     cost: { kind: "shards", amount: 60 },
     topFraction: 0.02,
+    cardCount: PACK_SIZE,
     guaranteesNew: true,
     blurb: "Top 2%, new cards first",
     accent: { r: 244, g: 114, b: 182 },
@@ -372,6 +392,8 @@ const defaultPoolPageFetcher: PoolPageFetcher = async (page) => {
 export interface PackDrawOptions {
   /* Draw from the pool's top slice instead of the whole pool (1 = all). */
   topFraction?: number;
+  /* Cards to draw (defaults to PACK_SIZE). */
+  count?: number;
   /* Collected card ids. When set, every owned slot is replaced with an
      unowned player from the same draw slice when one exists. Near-complete
      collections keep only the repeats that have no unowned replacement. */
@@ -502,7 +524,7 @@ export async function drawPackPlayersFromPool(
   const total = Math.max(head.total, head.ranking.length);
   if (total < 100) throw new Error("Tracked player pool is too small for packs.");
   const drawTotal = poolSliceSize(total, options.topFraction ?? 1);
-  const positions = rollUniformPositions(drawTotal, PACK_SIZE, rng);
+  const positions = rollUniformPositions(drawTotal, options.count ?? PACK_SIZE, rng);
   const pages = [...new Set(positions.map(rankToPage))];
   const responses = await Promise.all(
     pages.map(async (page) => (page === 1 ? head : await fetchPage(page))),
@@ -532,11 +554,14 @@ export async function drawPackPlayers(
     }
   }
   if (needsDuplicateProtection) throw new Error("Duplicate-protected packs require the tracked player pool.");
-  return { players: await drawPackPlayersFromOsuApi(rng), poolTotal: null };
+  return { players: await drawPackPlayersFromOsuApi(rng, options.count ?? PACK_SIZE), poolTotal: null };
 }
 
-export async function drawPackPlayersFromOsuApi(rng: () => number = Math.random): Promise<PackPlayer[]> {
-  const ranks = rollPackRanks(rng);
+export async function drawPackPlayersFromOsuApi(
+  rng: () => number = Math.random,
+  count: number = PACK_SIZE,
+): Promise<PackPlayer[]> {
+  const ranks = rollPackRanks(rng, count);
   const usedUserIds = new Set<number>();
   const deepEntries: LeanRankingEntry[] = [];
   const normalRanks: number[] = [];

@@ -8,7 +8,13 @@ import { CollectionPanel } from "../components/packs/CollectionPanel";
 import { createPackFrontCanvas, PACK_ASPECT } from "../components/packs/packArt";
 import { PackStage } from "../components/packs/PackStage";
 import { PackSummary } from "../components/packs/PackSummary";
-import { RevealStage, type PackCardState, type RevealedCard } from "../components/packs/RevealStage";
+import {
+  RevealStage,
+  type FlightRect,
+  type PackCardState,
+  type RevealedCard,
+} from "../components/packs/RevealStage";
+import { ShuffleStage } from "../components/packs/ShuffleStage";
 import { usePackWallet } from "../components/packs/usePackWallet";
 import { useAuth } from "../lib/auth-context";
 import {
@@ -41,7 +47,7 @@ import { track } from "../lib/posthog";
 export const Route = createFileRoute("/packs")({
   head: ({ match }) => pageSeo({
     title: "Card Packs",
-    description: "Tear open a booster pack of five maniacards: random osu!mania players minted as collectible cards with skill stats and rarity tiers.",
+    description: "Tear open booster packs of maniacards: random osu!mania players minted as collectible cards with skill stats and rarity tiers.",
     path: "/packs",
     origin: match.context.origin,
     imageKind: "packs",
@@ -147,22 +153,44 @@ async function getDuplicateProtectionOwnedIds(
   return owned;
 }
 
-/* Thumbnail renders of each pack type's foil art, generated once. */
+/* Thumbnail renders of each pack type's foil art, generated once per session
+   and kept across route visits. Each full-size foil draw costs ~20ms, so the
+   types render one per frame instead of all in the mount frame (which would
+   stutter the tab switch alongside the 3D pack's own setup). */
+const packThumbCache = new Map<PackTypeId, string>();
+
 function usePackArtThumbs(): Partial<Record<PackTypeId, string>> {
-  const [thumbs, setThumbs] = useState<Partial<Record<PackTypeId, string>>>({});
+  const [thumbs, setThumbs] = useState<Partial<Record<PackTypeId, string>>>(() =>
+    Object.fromEntries(packThumbCache),
+  );
   useEffect(() => {
-    const next: Partial<Record<PackTypeId, string>> = {};
-    for (const type of PACK_TYPES) {
-      const full = createPackFrontCanvas({ accent: type.accent, subtitle: type.artSubtitle });
+    const pending = PACK_TYPES.filter((type) => !packThumbCache.has(type.id));
+    if (pending.length === 0) return;
+    let cancelled = false;
+    let handle: number | null = null;
+    const renderNext = () => {
+      handle = null;
+      if (cancelled) return;
+      const type = pending.shift();
+      if (!type) return;
+      const full = createPackFrontCanvas({ accent: type.accent, subtitle: type.artSubtitle, cardCount: type.cardCount });
       const small = document.createElement("canvas");
       small.width = 160;
       small.height = Math.round(160 / PACK_ASPECT);
       const context = small.getContext("2d");
-      if (!context) continue;
-      context.drawImage(full, 0, 0, small.width, small.height);
-      next[type.id] = small.toDataURL("image/png");
-    }
-    setThumbs(next);
+      if (context) {
+        context.drawImage(full, 0, 0, small.width, small.height);
+        const url = small.toDataURL("image/png");
+        packThumbCache.set(type.id, url);
+        setThumbs((current) => ({ ...current, [type.id]: url }));
+      }
+      if (pending.length > 0) handle = window.requestAnimationFrame(renderNext);
+    };
+    handle = window.requestAnimationFrame(renderNext);
+    return () => {
+      cancelled = true;
+      if (handle !== null) window.cancelAnimationFrame(handle);
+    };
   }, []);
   return thumbs;
 }
@@ -235,6 +263,7 @@ function PackTypeSelector({
               <div className="text-[10px] text-osu-f1 tabular-nums">
                 {type.cost.kind === "charge" ? "free" : `${type.cost.amount} shards`}
               </div>
+              <div className="text-[10px] text-osu-f1/70 tabular-nums">{type.cardCount} cards</div>
             </button>
           );
         })}
@@ -256,6 +285,10 @@ function PacksPage() {
   const [packTypeId, setPackTypeId] = useState<PackTypeId>("standard");
   const [cards, setCards] = useState<PackCardState[] | null>(null);
   const [revealed, setRevealed] = useState<RevealedCard[]>([]);
+  /* Reveal-all handoff: the rects every card tile occupied when the reveal
+     finished. Non-null means the viewer already saw the whole grid, so the
+     summary skips its enter ceremony and flies the cards into place. */
+  const [summaryFlyFrom, setSummaryFlyFrom] = useState<Map<number, FlightRect> | null>(null);
   const [dealError, setDealError] = useState(false);
   const [collectionPanelReady, setCollectionPanelReady] = useState(true);
 
@@ -293,6 +326,7 @@ function PacksPage() {
         const ownedUserIds = await getDuplicateProtectionOwnedIds(type, currentWallet, walletApi.syncStatus);
         const draw = await drawPackPlayers(Math.random, {
           topFraction: type.topFraction,
+          count: type.cardCount,
           ownedUserIds,
         });
         if (cancelled) return;
@@ -334,6 +368,7 @@ function PacksPage() {
 
   const openAnother = () => {
     setRevealed([]);
+    setSummaryFlyFrom(null);
     // Keep the chosen pack type across packs while it stays affordable.
     if (!canAffordPack(walletApi.wallet, packTypeById(packTypeId))) setPackTypeId("standard");
     setPhase("pack");
@@ -362,7 +397,7 @@ function PacksPage() {
       <div className="relative z-10 flex flex-1 flex-col overflow-clip bg-osu-b5">
         <OsuTriangleBackdrop />
         <div className="relative z-10 flex flex-1 flex-col">
-          <PageHeader iconSrc="/images/icons/beatmappacks.svg" title="Maniacard packs" />
+          <PageHeader iconSrc="/images/icons/packs.svg" title="Maniacard packs" />
 
           <div className="mx-auto w-full max-w-[960px] flex-1 px-4 py-8 sm:px-5 sm:py-12">
             {wallet && phase !== "reveal" && (
@@ -451,15 +486,26 @@ function PacksPage() {
                     )}
                   </motion.div>
                 )}
-                {phase === "reveal" && (
+                {(phase === "reveal" || phase === "summary") && (
+                  // Reveal and summary share one presence child: swapping
+                  // between them is a plain same-frame re-render, so the
+                  // reveal-all handoff can fly each card straight from its
+                  // reveal rect into its summary slot with no blank frame.
                   <motion.div
-                    key={`reveal-${packId}`}
+                    key={`open-${packId}`}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.15 }}
                   >
-                    {cards ? (
+                    {phase === "summary" ? (
+                      <PackSummary
+                        cards={revealed}
+                        reducedMotion={reducedMotion}
+                        flyFrom={summaryFlyFrom}
+                        onOpenAnother={openAnother}
+                      />
+                    ) : cards ? (
                       <RevealStage
                         cards={cards}
                         reducedMotion={reducedMotion}
@@ -468,26 +514,16 @@ function PacksPage() {
                           consumePendingPackCard(pull.userId);
                           return walletApi.recordPull(pull);
                         }}
-                        onComplete={(pulls) => {
+                        onComplete={(pulls, handoff) => {
                           clearPendingPack();
                           setRevealed(pulls);
+                          setSummaryFlyFrom(handoff?.sourceRects ?? null);
                           setPhase("summary");
                         }}
                       />
                     ) : (
-                      <div className="py-16 text-center text-[12px] text-osu-f1">Shuffling players...</div>
+                      <ShuffleStage reducedMotion={reducedMotion} count={selectedType.cardCount} />
                     )}
-                  </motion.div>
-                )}
-                {phase === "summary" && (
-                  <motion.div
-                    key={`summary-${packId}`}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.15 }}
-                  >
-                    <PackSummary cards={revealed} reducedMotion={reducedMotion} onOpenAnother={openAnother} />
                   </motion.div>
                 )}
               </AnimatePresence>

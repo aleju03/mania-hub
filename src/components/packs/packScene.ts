@@ -20,7 +20,6 @@ import {
   Vector3,
   WebGLRenderer,
 } from "three";
-import type { Texture } from "three";
 import { PACK_ASPECT, PACK_CRIMP_FRACTION } from "./packArt";
 
 // World size of the pack; bulge depths are fractions of the width. A real
@@ -122,6 +121,183 @@ function createStudioEnvironment() {
   return { studio, dispose: () => disposables.forEach((item) => item.dispose()) };
 }
 
+/* Everything about the scene that is expensive to build and independent of
+   any one pack: the WebGL context, the baked PMREM environment, the pouch
+   geometries, and the materials (whose compiled shader programs live in the
+   renderer's program cache). Built once per session, staged across frames so
+   no single frame eats the whole cost, then reused by every PackScene - a
+   fresh scene per pack was re-paying context creation, the PMREM bake, and
+   shader compilation on every mount, which stuttered the route transition. */
+interface PackSceneCore {
+  renderer: WebGLRenderer;
+  scene: Scene;
+  camera: PerspectiveCamera;
+  packGroup: Group;
+  bodyGroup: Group;
+  frontMaterial: MeshStandardMaterial;
+  backMaterial: MeshStandardMaterial;
+  frontGeometry: PlaneGeometry;
+  backGeometry: PlaneGeometry;
+  /* 1x1 parked maps: they give renderer.compile() the USE_MAP shader variant
+     during warmup, and hold the map slots while no PackScene is mounted. */
+  parkedFrontMap: CanvasTexture;
+  parkedBackMap: CanvasTexture;
+  dead: boolean;
+}
+
+let corePromise: Promise<PackSceneCore> | null = null;
+let coreBusy = false;
+const coreWaiters: Array<() => void> = [];
+
+/* Yields until the next frame so staged setup work lands in separate frames;
+   falls back to a timeout when the tab is hidden and rAF would stall. */
+function nextBreath(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+      window.setTimeout(() => resolve(), 32);
+    } else {
+      requestAnimationFrame(() => resolve());
+    }
+  });
+}
+
+function makeCanvasTexture(renderer: WebGLRenderer, canvas: HTMLCanvasElement) {
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  texture.minFilter = LinearFilter;
+  texture.magFilter = LinearFilter;
+  texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  return texture;
+}
+
+async function buildCore(): Promise<PackSceneCore> {
+  const renderer = new WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  const canvas = renderer.domElement;
+  canvas.style.display = "block";
+  canvas.style.position = "absolute";
+  canvas.style.left = "50%";
+  canvas.style.top = "50%";
+  canvas.style.transform = "translate(-50%, -50%)";
+  canvas.style.pointerEvents = "none";
+  await nextBreath();
+
+  const pmrem = new PMREMGenerator(renderer);
+  const studio = createStudioEnvironment();
+  const environment = pmrem.fromScene(studio.studio, 0.035);
+  pmrem.dispose();
+  studio.dispose();
+  await nextBreath();
+
+  const scene = new Scene();
+  scene.environment = environment.texture;
+  // Mostly-diffuse lighting: high metalness would take its color from the
+  // (dark) environment and crush the print. The env map is only there for
+  // the glossy streaks that sweep the bulge on tilt.
+  scene.add(new AmbientLight(0xffffff, 0.9));
+  const key = new DirectionalLight(0xffffff, 1.4);
+  key.position.set(-3, 4, 5);
+  scene.add(key);
+  const rim = new DirectionalLight(0xcfc4f5, 0.6);
+  rim.position.set(2.5, 1, -4);
+  scene.add(rim);
+
+  const camera = new PerspectiveCamera(CAMERA_FOV_DEG, PACK_ASPECT, 0.1, 100);
+  const fovRad = (CAMERA_FOV_DEG * Math.PI) / 180;
+  const cameraDistance = (PACK_WORLD_HEIGHT * CANVAS_OVERSCAN * 1.04) / (2 * Math.tan(fovRad / 2));
+  camera.position.set(0, 0, cameraDistance);
+
+  const parked = document.createElement("canvas");
+  parked.width = 1;
+  parked.height = 1;
+  const parkedFrontMap = makeCanvasTexture(renderer, parked);
+  const parkedBackMap = makeCanvasTexture(renderer, parked);
+
+  // alphaTest: the live cut canvas leaves the slit transparent, so the cut
+  // is a real hole in the front shell - the dark inside (the back shell)
+  // shows through it with true parallax. Cutout via alphaTest keeps the
+  // material on the opaque path (no sorting artifacts).
+  const frontMaterial = new MeshStandardMaterial({
+    map: parkedFrontMap,
+    roughness: 0.4,
+    metalness: 0.18,
+    envMapIntensity: 1.0,
+    alphaTest: 0.5,
+  });
+  // Matte: its inner face shows through the cut slit as the dark inside
+  // of the pack, and a glossy inside sparkles with env-map glints.
+  const backMaterial = new MeshStandardMaterial({
+    map: parkedBackMap,
+    roughness: 0.6,
+    metalness: 0.1,
+    envMapIntensity: 0.35,
+  });
+
+  const frontGeometry = createPouchGeometry(FRONT_BULGE);
+  const backGeometry = createPouchGeometry(-BACK_BULGE);
+  const frontMesh = new Mesh(frontGeometry, frontMaterial);
+  frontMesh.renderOrder = 1;
+  // DoubleSide: the inside of the back shell shows through the torn gap.
+  backMaterial.side = DoubleSide;
+  const backMesh = new Mesh(backGeometry, backMaterial);
+  const bodyGroup = new Group();
+  bodyGroup.add(backMesh, frontMesh);
+  const packGroup = new Group();
+  packGroup.add(bodyGroup);
+  scene.add(packGroup);
+  await nextBreath();
+
+  // Shader warmup in its own frame: the first render otherwise pays the
+  // whole program compile while the pack is already supposed to be moving.
+  renderer.compile(scene, camera);
+
+  const core: PackSceneCore = {
+    renderer,
+    scene,
+    camera,
+    packGroup,
+    bodyGroup,
+    frontMaterial,
+    backMaterial,
+    frontGeometry,
+    backGeometry,
+    parkedFrontMap,
+    parkedBackMap,
+    dead: false,
+  };
+  canvas.addEventListener("webglcontextlost", () => {
+    core.dead = true;
+    corePromise = null;
+  });
+  return core;
+}
+
+/* Exclusive checkout of the shared core. AnimatePresence mode="wait" keeps
+   PackStage mounts sequential, so a waiter only ever bridges the gap between
+   one stage's dispose and the next mount (or a strict-mode double-mount). */
+async function acquireCore(): Promise<PackSceneCore> {
+  for (;;) {
+    if (!corePromise) {
+      corePromise = buildCore().catch((error) => {
+        corePromise = null;
+        throw error;
+      });
+    }
+    const core = await corePromise;
+    if (core.dead) continue;
+    if (!coreBusy) {
+      coreBusy = true;
+      return core;
+    }
+    await new Promise<void>((resolve) => coreWaiters.push(resolve));
+  }
+}
+
+function releaseCore() {
+  coreBusy = false;
+  coreWaiters.shift()?.();
+}
+
 export interface PackSceneOptions {
   host: HTMLElement;
   /* Live 2D canvas PackStage keeps redrawing (art + cut + gape); used as the
@@ -131,15 +307,22 @@ export interface PackSceneOptions {
   reducedMotion: boolean;
 }
 
+/* The only way to obtain a PackScene: resolves once the shared core is built
+   (staged across frames on the first call, instant afterwards) and free. */
+export async function createPackScene(options: PackSceneOptions): Promise<PackScene> {
+  return new PackScene(options, await acquireCore());
+}
+
 export class PackScene {
   private readonly host: HTMLElement;
+  private readonly core: PackSceneCore;
   private readonly renderer: WebGLRenderer;
-  private readonly scene = new Scene();
-  private readonly camera = new PerspectiveCamera(CAMERA_FOV_DEG, PACK_ASPECT, 0.1, 100);
+  private readonly scene: Scene;
+  private readonly camera: PerspectiveCamera;
   /* packGroup carries tilt + float; bodyGroup (front + back shells) and the
      strip mesh animate separately during the rip. */
-  private readonly packGroup = new Group();
-  private readonly bodyGroup = new Group();
+  private readonly packGroup: Group;
+  private readonly bodyGroup: Group;
   private readonly raycaster = new Raycaster();
   private readonly pointerNdc = new Vector2();
   private readonly planeNormal = new Vector3();
@@ -150,11 +333,9 @@ export class PackScene {
   private readonly frontTexture: CanvasTexture;
   private readonly backTexture: CanvasTexture;
   private readonly frontGeometry: PlaneGeometry;
-  private readonly backGeometry: PlaneGeometry;
   private stripMesh: Mesh | null = null;
   private stripMaterial: MeshStandardMaterial | null = null;
   private ripTextures: CanvasTexture[] = [];
-  private environmentTexture: Texture | null = null;
   private tiltTarget = { x: 0, y: 0 };
   private tiltCurrent = { x: 0, y: 0 };
   private reducedMotion: boolean;
@@ -163,87 +344,45 @@ export class PackScene {
   private disposed = false;
   private rip: { startedAt: number | null } | null = null;
 
-  constructor(options: PackSceneOptions) {
+  constructor(options: PackSceneOptions, core: PackSceneCore) {
     this.host = options.host;
     this.reducedMotion = options.reducedMotion;
-    this.renderer = new WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    const canvas = this.renderer.domElement;
-    canvas.style.display = "block";
-    canvas.style.position = "absolute";
-    canvas.style.left = "50%";
-    canvas.style.top = "50%";
-    canvas.style.transform = "translate(-50%, -50%)";
-    canvas.style.pointerEvents = "none";
-    this.host.appendChild(canvas);
-
-    const fovRad = (CAMERA_FOV_DEG * Math.PI) / 180;
-    const cameraDistance = (PACK_WORLD_HEIGHT * CANVAS_OVERSCAN * 1.04) / (2 * Math.tan(fovRad / 2));
-    this.camera.position.set(0, 0, cameraDistance);
-
-    const pmrem = new PMREMGenerator(this.renderer);
-    const studio = createStudioEnvironment();
-    const environment = pmrem.fromScene(studio.studio, 0.035);
-    this.environmentTexture = environment.texture;
-    this.scene.environment = environment.texture;
-    pmrem.dispose();
-    studio.dispose();
-
-    // Mostly-diffuse lighting: high metalness would take its color from the
-    // (dark) environment and crush the print. The env map is only there for
-    // the glossy streaks that sweep the bulge on tilt.
-    this.scene.add(new AmbientLight(0xffffff, 0.9));
-    const key = new DirectionalLight(0xffffff, 1.4);
-    key.position.set(-3, 4, 5);
-    this.scene.add(key);
-    const rim = new DirectionalLight(0xcfc4f5, 0.6);
-    rim.position.set(2.5, 1, -4);
-    this.scene.add(rim);
+    this.core = core;
+    this.renderer = core.renderer;
+    this.scene = core.scene;
+    this.camera = core.camera;
+    this.packGroup = core.packGroup;
+    this.bodyGroup = core.bodyGroup;
+    this.frontMaterial = core.frontMaterial;
+    this.backMaterial = core.backMaterial;
+    this.frontGeometry = core.frontGeometry;
+    this.host.appendChild(this.renderer.domElement);
 
     this.frontTexture = this.makeTexture(options.textureCanvas);
     this.backTexture = this.makeTexture(options.backCanvas);
-    // alphaTest: the live cut canvas leaves the slit transparent, so the cut
-    // is a real hole in the front shell - the dark inside (the back shell)
-    // shows through it with true parallax. Cutout via alphaTest keeps the
-    // material on the opaque path (no sorting artifacts).
-    this.frontMaterial = new MeshStandardMaterial({
-      map: this.frontTexture,
-      roughness: 0.4,
-      metalness: 0.18,
-      envMapIntensity: 1.0,
-      alphaTest: 0.5,
-    });
-    // Matte: its inner face shows through the cut slit as the dark inside
-    // of the pack, and a glossy inside sparkles with env-map glints.
-    this.backMaterial = new MeshStandardMaterial({
-      map: this.backTexture,
-      roughness: 0.6,
-      metalness: 0.1,
-      envMapIntensity: 0.35,
-    });
-
-    this.frontGeometry = createPouchGeometry(FRONT_BULGE);
-    this.backGeometry = createPouchGeometry(-BACK_BULGE);
-    const frontMesh = new Mesh(this.frontGeometry, this.frontMaterial);
-    frontMesh.renderOrder = 1;
-    // DoubleSide: the inside of the back shell shows through the torn gap.
-    this.backMaterial.side = DoubleSide;
-    const backMesh = new Mesh(this.backGeometry, this.backMaterial);
-    this.bodyGroup.add(backMesh, frontMesh);
-    this.packGroup.add(this.bodyGroup);
-    this.scene.add(this.packGroup);
+    // Undo whatever the previous pack's rip left on the shared materials
+    // and groups, then point the maps at this pack's canvases.
+    this.frontMaterial.map = this.frontTexture;
+    this.frontMaterial.transparent = false;
+    this.frontMaterial.alphaTest = 0.5;
+    this.frontMaterial.opacity = 1;
+    this.frontMaterial.needsUpdate = true;
+    this.backMaterial.map = this.backTexture;
+    this.backMaterial.transparent = false;
+    this.backMaterial.alphaTest = 0;
+    this.backMaterial.opacity = 1;
+    this.backMaterial.needsUpdate = true;
+    this.packGroup.rotation.set(0, 0, 0);
+    this.packGroup.position.set(0, 0, 0);
+    this.bodyGroup.position.set(0, 0, 0);
+    this.bodyGroup.scale.setScalar(1);
 
     this.resize();
     this.start();
   }
 
   private makeTexture(canvas: HTMLCanvasElement) {
-    const texture = new CanvasTexture(canvas);
-    texture.colorSpace = SRGBColorSpace;
-    texture.minFilter = LinearFilter;
-    texture.magFilter = LinearFilter;
-    texture.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
-    return texture;
+    return makeCanvasTexture(this.renderer, canvas);
   }
 
   markArtDirty() {
@@ -349,22 +488,25 @@ export class PackScene {
     this.start();
   }
 
+  /* Returns the shared core to the pool instead of tearing it down: the
+     renderer, environment, geometries, and materials (with their compiled
+     programs) survive for the next pack. Only this pack's textures die. */
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
     if (this.frameId !== null) cancelAnimationFrame(this.frameId);
     this.frameId = null;
     this.renderer.domElement.remove();
+    if (this.stripMesh) this.packGroup.remove(this.stripMesh);
+    this.stripMaterial?.dispose();
+    // Park the map slots so the shared materials never point at disposed
+    // textures while no pack is mounted.
+    this.frontMaterial.map = this.core.parkedFrontMap;
+    this.backMaterial.map = this.core.parkedBackMap;
     this.frontTexture.dispose();
     this.backTexture.dispose();
     for (const texture of this.ripTextures) texture.dispose();
-    this.frontGeometry.dispose();
-    this.backGeometry.dispose();
-    this.frontMaterial.dispose();
-    this.backMaterial.dispose();
-    this.stripMaterial?.dispose();
-    this.environmentTexture?.dispose();
-    this.renderer.dispose();
+    releaseCore();
   }
 
   private start() {
