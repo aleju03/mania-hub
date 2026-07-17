@@ -15,6 +15,7 @@ import { Route as TopPlaysRouteImport } from './routes/top-plays'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SnipesRouteImport } from './routes/snipes'
 import { Route as SkinsRouteImport } from './routes/skins'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ReplayRouteImport } from './routes/replay'
 import { Route as RankingsRouteImport } from './routes/rankings'
@@ -33,7 +34,6 @@ import { Route as SkinsIdRouteImport } from './routes/skins_.$id'
 import { Route as PlayerUsernameRouteImport } from './routes/player/$username'
 import { Route as DevOptInPreviewRouteImport } from './routes/dev.opt-in-preview'
 import { Route as ApiSyncRouteImport } from './routes/api/sync'
-import { Route as ApiSitemapRouteImport } from './routes/api/sitemap'
 import { Route as ApiReplayUploadRouteImport } from './routes/api/replay-upload'
 import { Route as ApiOgRouteImport } from './routes/api/og'
 import { Route as ApiFaviconRouteImport } from './routes/api/favicon'
@@ -85,6 +85,11 @@ const SnipesRoute = SnipesRouteImport.update({
 const SkinsRoute = SkinsRouteImport.update({
   id: '/skins',
   path: '/skins',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -175,11 +180,6 @@ const DevOptInPreviewRoute = DevOptInPreviewRouteImport.update({
 const ApiSyncRoute = ApiSyncRouteImport.update({
   id: '/api/sync',
   path: '/api/sync',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiSitemapRoute = ApiSitemapRouteImport.update({
-  id: '/api/sitemap',
-  path: '/api/sitemap',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiReplayUploadRoute = ApiReplayUploadRouteImport.update({
@@ -308,6 +308,7 @@ export interface FileRoutesByFullPath {
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
   '/settings': typeof SettingsRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/skins': typeof SkinsRoute
   '/snipes': typeof SnipesRoute
   '/terms': typeof TermsRoute
@@ -327,7 +328,6 @@ export interface FileRoutesByFullPath {
   '/api/favicon': typeof ApiFaviconRoute
   '/api/og': typeof ApiOgRoute
   '/api/replay-upload': typeof ApiReplayUploadRoute
-  '/api/sitemap': typeof ApiSitemapRoute
   '/api/sync': typeof ApiSyncRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
@@ -357,6 +357,7 @@ export interface FileRoutesByTo {
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
   '/settings': typeof SettingsRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/skins': typeof SkinsRoute
   '/snipes': typeof SnipesRoute
   '/terms': typeof TermsRoute
@@ -376,7 +377,6 @@ export interface FileRoutesByTo {
   '/api/favicon': typeof ApiFaviconRoute
   '/api/og': typeof ApiOgRoute
   '/api/replay-upload': typeof ApiReplayUploadRoute
-  '/api/sitemap': typeof ApiSitemapRoute
   '/api/sync': typeof ApiSyncRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
@@ -407,6 +407,7 @@ export interface FileRoutesById {
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
   '/settings': typeof SettingsRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/skins': typeof SkinsRoute
   '/snipes': typeof SnipesRoute
   '/terms': typeof TermsRoute
@@ -426,7 +427,6 @@ export interface FileRoutesById {
   '/api/favicon': typeof ApiFaviconRoute
   '/api/og': typeof ApiOgRoute
   '/api/replay-upload': typeof ApiReplayUploadRoute
-  '/api/sitemap': typeof ApiSitemapRoute
   '/api/sync': typeof ApiSyncRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
@@ -458,6 +458,7 @@ export interface FileRouteTypes {
     | '/rankings'
     | '/replay'
     | '/settings'
+    | '/sitemap.xml'
     | '/skins'
     | '/snipes'
     | '/terms'
@@ -477,7 +478,6 @@ export interface FileRouteTypes {
     | '/api/favicon'
     | '/api/og'
     | '/api/replay-upload'
-    | '/api/sitemap'
     | '/api/sync'
     | '/dev/opt-in-preview'
     | '/player/$username'
@@ -507,6 +507,7 @@ export interface FileRouteTypes {
     | '/rankings'
     | '/replay'
     | '/settings'
+    | '/sitemap.xml'
     | '/skins'
     | '/snipes'
     | '/terms'
@@ -526,7 +527,6 @@ export interface FileRouteTypes {
     | '/api/favicon'
     | '/api/og'
     | '/api/replay-upload'
-    | '/api/sitemap'
     | '/api/sync'
     | '/dev/opt-in-preview'
     | '/player/$username'
@@ -556,6 +556,7 @@ export interface FileRouteTypes {
     | '/rankings'
     | '/replay'
     | '/settings'
+    | '/sitemap.xml'
     | '/skins'
     | '/snipes'
     | '/terms'
@@ -575,7 +576,6 @@ export interface FileRouteTypes {
     | '/api/favicon'
     | '/api/og'
     | '/api/replay-upload'
-    | '/api/sitemap'
     | '/api/sync'
     | '/dev/opt-in-preview'
     | '/player/$username'
@@ -606,6 +606,7 @@ export interface RootRouteChildren {
   RankingsRoute: typeof RankingsRoute
   ReplayRoute: typeof ReplayRoute
   SettingsRoute: typeof SettingsRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   SkinsRoute: typeof SkinsRoute
   SnipesRoute: typeof SnipesRoute
   TermsRoute: typeof TermsRoute
@@ -625,7 +626,6 @@ export interface RootRouteChildren {
   ApiFaviconRoute: typeof ApiFaviconRoute
   ApiOgRoute: typeof ApiOgRoute
   ApiReplayUploadRoute: typeof ApiReplayUploadRoute
-  ApiSitemapRoute: typeof ApiSitemapRoute
   ApiSyncRoute: typeof ApiSyncRoute
   DevOptInPreviewRoute: typeof DevOptInPreviewRoute
   PlayerUsernameRoute: typeof PlayerUsernameRouteWithChildren
@@ -677,6 +677,13 @@ declare module '@tanstack/react-router' {
       path: '/skins'
       fullPath: '/skins'
       preLoaderRoute: typeof SkinsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -803,13 +810,6 @@ declare module '@tanstack/react-router' {
       path: '/api/sync'
       fullPath: '/api/sync'
       preLoaderRoute: typeof ApiSyncRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/sitemap': {
-      id: '/api/sitemap'
-      path: '/api/sitemap'
-      fullPath: '/api/sitemap'
-      preLoaderRoute: typeof ApiSitemapRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/replay-upload': {
@@ -1026,6 +1026,7 @@ const rootRouteChildren: RootRouteChildren = {
   RankingsRoute: RankingsRoute,
   ReplayRoute: ReplayRoute,
   SettingsRoute: SettingsRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   SkinsRoute: SkinsRoute,
   SnipesRoute: SnipesRoute,
   TermsRoute: TermsRoute,
@@ -1045,7 +1046,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiFaviconRoute: ApiFaviconRoute,
   ApiOgRoute: ApiOgRoute,
   ApiReplayUploadRoute: ApiReplayUploadRoute,
-  ApiSitemapRoute: ApiSitemapRoute,
   ApiSyncRoute: ApiSyncRoute,
   DevOptInPreviewRoute: DevOptInPreviewRoute,
   PlayerUsernameRoute: PlayerUsernameRouteWithChildren,
