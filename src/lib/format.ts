@@ -63,9 +63,14 @@ export function formatDuration(totalSeconds: number): string {
 }
 
 export function formatDate(dateStr: string): string {
+  // Pinned to UTC: this renders inside server-rendered HTML (e.g. profile
+  // "Joined" line), so server and client must produce identical text for any
+  // viewer timezone or hydration fails (React #418) and recovery re-renders
+  // wipe the <html> theme vars.
   return new Date(dateStr).toLocaleDateString("en-US", {
     year: "numeric",
     month: "long",
     day: "numeric",
+    timeZone: "UTC",
   });
 }
