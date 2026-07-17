@@ -9,7 +9,7 @@ import { isRankedRosterMember } from "../rosters/country-rosters.js";
 import { getModAcronyms, getScoreIdentity, getScoreTimestamp, nowIso } from "../shared/score.js";
 import { throwIfAborted } from "../shared/abort.js";
 import type { OscScore } from "../shared/types.js";
-import { logInfo } from "../logger.js";
+import { errorContext, logInfo, logWarn } from "../logger.js";
 import { markUserMissing } from "../users.js";
 import { enqueueMissingChartAnalyses } from "./chart-analysis.js";
 import { refreshFarmHelperKeyStatsForUser } from "./farm-helper-key-stats.js";
@@ -488,6 +488,14 @@ export async function getMapsPageSnapshot(
   query: MapsPageQuery,
 ): Promise<MapsSnapshotResponse<MapsPageValue>> {
   const normalized = country.toUpperCase();
+  // Filtered GLOBAL farmed requests are answered from the packed board; when
+  // it is current for the snapshot row's generation, skip readRawMapsSnapshot
+  // entirely — its multi-MB GLOBAL payload_json parse would be pure overhead
+  // (the board carries everything the page needs, stamps included).
+  if (isGlobalCountry(normalized) && query.tab === "farmed" && (query.pp > 0 || query.mod !== "all")) {
+    const lean = await getGlobalFarmedBoardPageSnapshot(db, queue, normalized, maxAgeMs, query);
+    if (lean) return lean;
+  }
   const snapshot = await readRawMapsSnapshot(db, normalized, maxAgeMs);
   let refreshQueued = await hasActiveMapsRefresh(db, normalized);
   if (snapshot.isStale && !refreshQueued) {
@@ -1111,7 +1119,7 @@ async function hydrateCompactMapsPageValue(
   refreshedAt: string | null,
 ): Promise<MapsPageValue> {
   if (query.tab === "farmed" && isGlobalCountry(country) && (query.pp > 0 || query.mod !== "all")) {
-    return hydrateGlobalCompactFarmedFilteredPageValue(db, parsed, query);
+    return hydrateGlobalCompactFarmedFilteredPageValue(db, parsed, query, refreshedAt);
   }
 
   if (await canUseCompactFarmedPageFastPath(db, country, query, refreshedAt)) {
@@ -1216,20 +1224,392 @@ async function hydrateGlobalCompactFarmedFilteredPageValue(
   db: Db,
   parsed: StoredCountryMapsData,
   query: MapsPageQuery,
+  refreshedAt: string | null,
 ): Promise<MapsPageValue> {
-  const sourceEntries = await readGlobalFarmedEntriesForFilteredPage(db, parsed.farmed);
-  const allItems = await filterSortStoredFarmedMapsForPage(db, sourceEntries, query);
-  const pageItems = allItems.slice(query.page * query.pageSize, query.page * query.pageSize + query.pageSize);
-  const items = limitMapsPagePreviewPlayers(await hydrateMapsPageItemUsers(db, await hydrateCompactFarmedEntries(db, pageItems)));
+  const board = await getGlobalFarmedBoard(db, parsed, refreshedAt ?? "");
+  return buildGlobalFarmedBoardPageValue(db, board, query);
+}
+
+async function buildGlobalFarmedBoardPageValue(db: Db, board: GlobalFarmedBoard, query: MapsPageQuery): Promise<MapsPageValue> {
+  const ranked = filterSortGlobalFarmedBoard(board, query);
+  const pageRanked = ranked.slice(query.page * query.pageSize, query.page * query.pageSize + query.pageSize);
+  const pageEntries = pageRanked.map((item) => materializeGlobalFarmedBoardEntry(board, item));
+  const items = limitMapsPagePreviewPlayers(await hydrateMapsPageItemUsers(db, await hydrateCompactFarmedEntries(db, pageEntries)));
   return {
     tab: query.tab,
     page: query.page,
     pageSize: query.pageSize,
-    total: allItems.length,
+    total: ranked.length,
     items,
+    // Stamps travel with the board so they always describe the data actually
+    // served (a stale-served board reports its own generation's stamps).
+    generatedAt: board.generatedAt,
+    farmedGeneratedAt: board.farmedGeneratedAt,
+    favouritesGeneratedAt: board.favouritesGeneratedAt,
+  };
+}
+
+// Serve a filtered GLOBAL farmed page without touching payload_json: only
+// possible while the cached board matches the snapshot row's generation.
+// Returns null whenever the full (parse + board build) path must run instead.
+// The staleness/refresh bookkeeping mirrors readRawMapsSnapshot for GLOBAL; a
+// board existing for this generation implies the payload was usable when it
+// was built, so the usability probe needs no payload either.
+async function getGlobalFarmedBoardPageSnapshot(
+  db: Db,
+  queue: JobQueue,
+  normalized: string,
+  maxAgeMs: number,
+  query: MapsPageQuery,
+): Promise<MapsSnapshotResponse<MapsPageValue> | null> {
+  const board = globalFarmedBoardStates.get(db)?.board;
+  if (!board) return null;
+  const row = (await exec(
+    db,
+    "select generated_at, refreshed_at from country_maps_snapshots where country = ?",
+    [normalized],
+  )).rows[0];
+  const refreshedAt = row?.refreshed_at == null ? null : String(row.refreshed_at);
+  if (!refreshedAt || board.generation !== refreshedAt) return null;
+
+  const refreshedMs = new Date(refreshedAt).getTime();
+  const globalStale = await isGlobalMapsSnapshotBehindSources(db, refreshedAt);
+  const isStale = !Number.isFinite(refreshedMs) || Date.now() - refreshedMs > maxAgeMs || globalStale;
+  let refreshQueued = await hasActiveMapsRefresh(db, normalized);
+  if (isStale && !refreshQueued) {
+    await enqueueMapsRefresh(queue, normalized);
+    refreshQueued = true;
+  }
+
+  return {
+    value: await buildGlobalFarmedBoardPageValue(db, board, query),
+    generatedAt: row?.generated_at == null ? null : String(row.generated_at),
+    refreshedAt,
+    isStale,
+    refreshQueued,
+    progress: refreshQueued ? await readActiveMapsRefreshProgress(db, normalized) : null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Global farmed board cache
+//
+// A pp/mod-filtered GLOBAL farmed page cannot be answered from the stored
+// GLOBAL rollup: its per-map player lists are truncated to the top
+// GLOBAL_MAPS_PLAYERS_PER_ENTRY by pp, and the filter must recount every
+// player. The full union (every country snapshot plus >1M farmed-score rows)
+// used to be re-merged from scratch on every uncached request — a 10-15s build
+// per distinct page/pp/sort/mod combination. The union does not depend on the
+// query at all, so it is built once per GLOBAL snapshot generation and kept
+// here; each request then filters/sorts it in memory.
+//
+// Memory is the constraint (this cache lives for the life of the process, on
+// the maps snapshot thread in production): per-player fields are packed into
+// flat typed arrays (~30 bytes/player, ~40MB at prod's 1.35M players) instead
+// of ~1.35M string-bearing objects (hundreds of MB). Mods arrays are interned
+// through a small dictionary (a few hundred combos exist) and score URLs are
+// stored as their numeric score id (every prod row is
+// https://osu.ppy.sh/scores/<id>; the rare mismatch goes to an override map).
+//
+// Freshness follows the GLOBAL snapshot row's refreshed_at, the same
+// generation marker the HTTP response cache uses: when it changes, the first
+// request serves the previous board and kicks a rebuild in the background, so
+// only the very first filtered request of a process lifetime ever waits for a
+// build.
+
+interface GlobalFarmedBoardEntry {
+  beatmapId: number;
+  /** Index of this map's first player in the flat player arrays. */
+  start: number;
+  /** Number of players, stored contiguously and sorted by pp desc. */
+  count: number;
+}
+
+// modsFlags bits per dictionary combo: bit 0 = counts as DT (has DT or NC),
+// bit 1 = literally includes "HT". Both are needed to reproduce
+// getDominantStoredMapsSpeedMod exactly (its HT branch checks the top
+// player's raw mods, not the DT/HT bucketing).
+const GLOBAL_FARMED_MOD_FLAG_DT = 1;
+const GLOBAL_FARMED_MOD_FLAG_HT = 2;
+
+interface GlobalFarmedBoard {
+  generation: string;
+  // Response stamps captured from the payload this board was built from.
+  generatedAt: string;
+  farmedGeneratedAt: string;
+  favouritesGeneratedAt: string;
+  entries: GlobalFarmedBoardEntry[];
+  // Float64 for ids keeps every safe integer exact (no int32 wrap hazard).
+  userIds: Float64Array;
+  pps: Float64Array;
+  modsIdx: Uint32Array;
+  playedAtMs: Float64Array;
+  scoreIds: Float64Array;
+  scoreUrlOverrides: Map<number, string>;
+  modsDict: string[][];
+  modsFlags: Uint8Array;
+  metadata: Map<number, MapsFarmedPageMetadata>;
+}
+
+interface GlobalFarmedBoardState {
+  board: GlobalFarmedBoard | null;
+  inflight: Promise<GlobalFarmedBoard> | null;
+  inflightGeneration: string | null;
+}
+
+// Per-Db so tests with separate databases never share a board; production has
+// one Db per process (the snapshot thread's own connection).
+const globalFarmedBoardStates = new WeakMap<Db, GlobalFarmedBoardState>();
+
+async function getGlobalFarmedBoard(db: Db, parsed: StoredCountryMapsData, generation: string): Promise<GlobalFarmedBoard> {
+  let state = globalFarmedBoardStates.get(db);
+  if (!state) globalFarmedBoardStates.set(db, (state = { board: null, inflight: null, inflightGeneration: null }));
+  const stateRef = state;
+  const current = stateRef.board;
+  if (current && current.generation === generation) return current;
+
+  if (!stateRef.inflight || stateRef.inflightGeneration !== generation) {
+    stateRef.inflightGeneration = generation;
+    const build = buildGlobalFarmedBoard(db, parsed, generation);
+    stateRef.inflight = build;
+    build
+      .then((board) => {
+        // A newer generation may have started while this build ran; never let
+        // a slow older build clobber it.
+        if (stateRef.inflightGeneration === generation) stateRef.board = board;
+      })
+      .catch((error) => logWarn("global_farmed_board_build_failed", { generation, ...errorContext(error) }))
+      .finally(() => {
+        if (stateRef.inflight === build) stateRef.inflight = null;
+      });
+  }
+
+  // Stale-serve: an outdated board answers immediately while the rebuild runs
+  // in the background (mirrors the HTTP layer's GLOBAL stale-serve).
+  if (current) return current;
+  return stateRef.inflight;
+}
+
+/** Test hook: settle the in-flight board build (if any) for this Db. */
+export async function waitForGlobalFarmedBoardBuild(db: Db): Promise<void> {
+  const inflight = globalFarmedBoardStates.get(db)?.inflight;
+  if (inflight) await inflight.then(() => undefined, () => undefined);
+}
+
+async function buildGlobalFarmedBoard(db: Db, parsed: StoredCountryMapsData, generation: string): Promise<GlobalFarmedBoard> {
+  const startedAt = Date.now();
+  const source = await readGlobalFarmedEntriesForFilteredPage(db, parsed.farmed);
+  const metadata = await readMapsFarmedPageMetadataByIds(db, source.map((entry) => entry.beatmapId));
+  const board = encodeGlobalFarmedBoard(generation, parsed, source, metadata);
+  logInfo("global_farmed_board_built", {
+    generation,
+    entries: board.entries.length,
+    players: board.userIds.length,
+    duration_ms: Date.now() - startedAt,
+    heap_used_mb: heapUsedMb(),
+  });
+  return board;
+}
+
+const GLOBAL_FARMED_SCORE_URL_PATTERN = /^https:\/\/osu\.ppy\.sh\/scores\/(\d+)$/;
+
+function encodeGlobalFarmedBoard(
+  generation: string,
+  parsed: StoredCountryMapsData,
+  source: StoredMapsFarmedEntry[],
+  metadata: Map<number, MapsFarmedPageMetadata>,
+): GlobalFarmedBoard {
+  let total = 0;
+  for (const entry of source) total += entry.players.length;
+
+  const userIds = new Float64Array(total);
+  const pps = new Float64Array(total);
+  const modsIdx = new Uint32Array(total);
+  const playedAtMs = new Float64Array(total);
+  const scoreIds = new Float64Array(total);
+  const scoreUrlOverrides = new Map<number, string>();
+  const modsDict: string[][] = [];
+  const modsFlags: number[] = [];
+  const dictIndexByKey = new Map<string, number>();
+  const entries: GlobalFarmedBoardEntry[] = [];
+
+  let cursor = 0;
+  for (const entry of source) {
+    const start = cursor;
+    for (const player of entry.players) {
+      const mods = Array.isArray(player.mods) ? player.mods : [];
+      const modsKey = JSON.stringify(mods);
+      let dictIndex = dictIndexByKey.get(modsKey);
+      if (dictIndex === undefined) {
+        dictIndex = modsDict.length;
+        dictIndexByKey.set(modsKey, dictIndex);
+        modsDict.push([...mods]);
+        modsFlags.push(
+          (mods.includes("DT") || mods.includes("NC") ? GLOBAL_FARMED_MOD_FLAG_DT : 0)
+          | (mods.includes("HT") ? GLOBAL_FARMED_MOD_FLAG_HT : 0),
+        );
+      }
+      userIds[cursor] = player.id;
+      pps[cursor] = player.pp;
+      modsIdx[cursor] = dictIndex;
+      const playedMs = player.playedAt == null ? Number.NaN : Date.parse(player.playedAt);
+      playedAtMs[cursor] = Number.isFinite(playedMs) ? playedMs : Number.NaN;
+      if (player.scoreUrl != null && player.scoreUrl !== "") {
+        const match = GLOBAL_FARMED_SCORE_URL_PATTERN.exec(player.scoreUrl);
+        const scoreId = match ? Number(match[1]) : Number.NaN;
+        if (Number.isSafeInteger(scoreId) && scoreId > 0) scoreIds[cursor] = scoreId;
+        else scoreUrlOverrides.set(cursor, player.scoreUrl);
+      }
+      cursor++;
+    }
+    entries.push({ beatmapId: entry.beatmapId, start, count: cursor - start });
+  }
+
+  return {
+    generation,
     generatedAt: parsed.generatedAt,
     farmedGeneratedAt: parsed.farmedGeneratedAt,
     favouritesGeneratedAt: parsed.favouritesGeneratedAt,
+    entries,
+    userIds,
+    pps,
+    modsIdx,
+    playedAtMs,
+    scoreIds,
+    scoreUrlOverrides,
+    modsDict,
+    modsFlags: Uint8Array.from(modsFlags),
+    metadata,
+  };
+}
+
+interface GlobalFarmedBoardRanked {
+  boardIndex: number;
+  /** Players meeting the pp filter — a prefix, since players sort by pp desc. */
+  keptCount: number;
+  playerCount: number;
+  avgPp: number;
+  maxPp: number;
+  dominantMod: "DT" | "HT" | null;
+  latestPlayedAtMs: number;
+  stars: number;
+}
+
+// In-memory equivalent of filterSortStoredFarmedMapsForPage over the packed
+// board; the aggregate/dominant/sort semantics must stay identical to it.
+function filterSortGlobalFarmedBoard(board: GlobalFarmedBoard, query: MapsPageQuery): GlobalFarmedBoardRanked[] {
+  const ranked: GlobalFarmedBoardRanked[] = [];
+  const { entries, pps, modsIdx, modsFlags, playedAtMs, metadata } = board;
+
+  for (let boardIndex = 0; boardIndex < entries.length; boardIndex++) {
+    const entry = entries[boardIndex];
+    const meta = metadata.get(entry.beatmapId);
+    if (!meta) continue;
+    if (!matchesMapsKeyFilter(meta.cs, query.key)) continue;
+    if (!matchesMapsSearch(query.q, [meta.title, meta.artist, meta.creator, meta.version])) continue;
+
+    const start = entry.start;
+    let kept = entry.count;
+    if (query.pp > 0) {
+      // Binary search for the first player below the threshold.
+      let lo = 0;
+      let hi = entry.count;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (pps[start + mid] >= query.pp) lo = mid + 1;
+        else hi = mid;
+      }
+      kept = lo;
+    }
+    const maxPp = kept > 0 ? pps[start] : 0;
+    if (kept < 2 && maxPp < FARMED_SINGLE_PLAYER_PP_MIN) continue;
+
+    let ppSum = 0;
+    let dtCount = 0;
+    let htCount = 0;
+    let latest = 0;
+    for (let i = start; i < start + kept; i++) {
+      ppSum += pps[i];
+      const flags = modsFlags[modsIdx[i]];
+      if (flags & GLOBAL_FARMED_MOD_FLAG_DT) dtCount++;
+      else if (flags & GLOBAL_FARMED_MOD_FLAG_HT) htCount++;
+      const played = playedAtMs[i];
+      if (played > latest) latest = played;
+    }
+
+    let dominantMod: "DT" | "HT" | null = null;
+    if (dtCount > 0 || htCount > 0) {
+      if (dtCount >= htCount) {
+        dominantMod = dtCount > kept * FARMED_DOMINANT_MOD_SHARE ? "DT" : null;
+      } else if (
+        htCount > kept * FARMED_DOMINANT_MOD_SHARE
+        // The top-pp player (index `start`, players sorted desc) must itself
+        // carry HT — same rule as getDominantStoredMapsSpeedMod.
+        && (modsFlags[modsIdx[start]] & GLOBAL_FARMED_MOD_FLAG_HT) !== 0
+      ) {
+        dominantMod = "HT";
+      }
+    }
+
+    if (query.mod !== "all") {
+      if (query.mod === "dt" && dominantMod !== "DT") continue;
+      if (query.mod === "ht" && dominantMod !== "HT") continue;
+      if (query.mod !== "dt" && query.mod !== "ht" && dominantMod !== null) continue;
+    }
+
+    ranked.push({
+      boardIndex,
+      keptCount: kept,
+      playerCount: kept,
+      avgPp: kept > 0 ? ppSum / kept : 0,
+      maxPp,
+      dominantMod,
+      latestPlayedAtMs: latest,
+      stars: meta.difficultyRating,
+    });
+  }
+
+  const flip = query.dir === "asc" ? -1 : 1;
+  return ranked.sort((a, b) => {
+    if (query.farmedSort === "players") return (b.playerCount - a.playerCount) * flip || b.avgPp - a.avgPp;
+    if (query.farmedSort === "avg-pp") return (b.avgPp - a.avgPp) * flip;
+    if (query.farmedSort === "max-pp") return (b.maxPp - a.maxPp) * flip;
+    if (query.farmedSort === "stars") return (b.stars - a.stars) * flip || b.playerCount - a.playerCount || b.avgPp - a.avgPp;
+    return (b.latestPlayedAtMs - a.latestPlayedAtMs) * flip || b.playerCount - a.playerCount || b.avgPp - a.avgPp;
+  });
+}
+
+// Unpack one page entry back into the stored shape the shared hydrate path
+// expects; only the (up to pageSize) entries actually returned pay this.
+// Players are capped at the preview size: every aggregate the downstream
+// hydrate reads (playerCount/avgPp/maxPp/dominantMod) is precomputed here, and
+// limitMapsPagePreviewPlayers truncates the response to the same cap, so
+// materializing (and user-hydrating) a popular map's thousands of players
+// would be pure waste.
+function materializeGlobalFarmedBoardEntry(board: GlobalFarmedBoard, ranked: GlobalFarmedBoardRanked): StoredMapsFarmedEntry {
+  const entry = board.entries[ranked.boardIndex];
+  const players: StoredMapsFarmedPlayer[] = [];
+  const materializeCount = Math.min(ranked.keptCount, MAPS_PAGE_PREVIEW_PLAYERS);
+  for (let i = entry.start; i < entry.start + materializeCount; i++) {
+    const playedMs = board.playedAtMs[i];
+    const scoreId = board.scoreIds[i];
+    players.push({
+      id: board.userIds[i],
+      pp: board.pps[i],
+      mods: [...board.modsDict[board.modsIdx[i]]],
+      scoreUrl: scoreId > 0 ? `https://osu.ppy.sh/scores/${scoreId}` : board.scoreUrlOverrides.get(i) ?? null,
+      // Source timestamps are whole-second "…SSZ" strings; strip the ms field
+      // toISOString adds so round-tripped values match the originals.
+      playedAt: Number.isFinite(playedMs) ? new Date(playedMs).toISOString().replace(".000Z", "Z") : null,
+    });
+  }
+  return {
+    beatmapId: entry.beatmapId,
+    playerCount: ranked.playerCount,
+    avgPp: ranked.avgPp,
+    maxPp: ranked.maxPp,
+    dominantMod: ranked.dominantMod,
+    players,
   };
 }
 

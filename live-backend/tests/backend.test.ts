@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { createDb, exec, migrate } from "../src/db.js";
 import { getSnipesSnapshot, updateSnipeProjection } from "../src/features/snipes.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../src/features/activity.js";
-import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, globalMapsFarmedRefreshRunAfter, recordMapsFarmedScore, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores, type MapsPageQuery } from "../src/features/maps.js";
+import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, globalMapsFarmedRefreshRunAfter, recordMapsFarmedScore, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores, waitForGlobalFarmedBoardBuild, type MapsPageQuery } from "../src/features/maps.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores } from "../src/features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../src/features/rank-snapshots.js";
@@ -5250,6 +5250,92 @@ describe("live backend", () => {
     expect(filteredTop.beatmapId).toBe(11);
     expect(filteredTop.playerCount).toBe(81);
     expect(filteredTop.players).toHaveLength(4);
+  });
+
+  it("caches the filtered global farmed board per generation and rebuilds it in the background", async () => {
+    const { db, queue } = await setup();
+    const now = "2026-05-12T12:10:00.000Z";
+    await exec(
+      db,
+      `insert into maps_beatmapsets
+         (beatmapset_id, title, artist, creator, status, covers_json, global_play_count, global_favourite_count, preview_url, bpm, mania_keys_json, patterns_json, updated_at)
+       values (10, 'Board Set', 'Artist', 'Mapper', 'ranked', '{}', 1, 1, '', 180, '[4]', '[]', ?)`,
+      [now],
+    );
+    await exec(
+      db,
+      `insert into maps_beatmaps
+         (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, total_length, version, url, updated_at)
+       values (11, 10, 'mania', 'ranked', 4, 5.5, 180, 120, '[4K] Board', 'https://osu.ppy.sh/beatmaps/11', ?)`,
+      [now],
+    );
+    const players = Array.from({ length: 90 }, (_, index) => ({
+      id: 20_000 + index,
+      mods: [],
+      pp: 500 - index,
+      scoreUrl: null,
+      playedAt: now,
+    }));
+    await exec(
+      db,
+      `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
+       values ('CR', ?, ?, ?)`,
+      [
+        JSON.stringify({
+          schemaVersion: 2,
+          farmed: [{ beatmapId: 11, playerCount: players.length, avgPp: 455, maxPp: 500, players }],
+          mostPlayed: [],
+          favourites: [],
+          favouritesByPlayer: [],
+          beatmapsetsPool: [],
+          generatedAt: now,
+          farmedGeneratedAt: now,
+          favouritesGeneratedAt: now,
+        }),
+        now,
+        now,
+      ],
+    );
+    await refreshGlobalMaps(db);
+
+    const query: MapsPageQuery = {
+      tab: "farmed", page: 0, pageSize: 24, key: "all", beatmapSort: "players", farmedSort: "players", dir: "desc", status: "all", pp: 420, mod: "all", q: "",
+    };
+    const first = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query);
+    const firstTop = first.value?.items[0] as { playerCount: number };
+    expect(firstTop.playerCount).toBe(81);
+
+    // New farmed-score rows do not appear until the global snapshot generation
+    // bumps: the merged board is cached per refreshed_at, by design.
+    const scoredAt = "2026-05-12T13:00:00Z";
+    await exec(
+      db,
+      `insert into country_maps_farmed_scores
+         (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at)
+       values ('CR', 999, 11, 42, 650, '{}', '["DT"]', 'https://osu.ppy.sh/scores/6665949113', ?, ?, ?)`,
+      [scoredAt, now, now],
+    );
+    const cached = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query);
+    expect((cached.value?.items[0] as { playerCount: number }).playerCount).toBe(81);
+
+    // Generation bump: the request is served from the stale board while the
+    // rebuild runs in the background, then the fresh board takes over.
+    await exec(db, "update country_maps_snapshots set refreshed_at = '2026-05-12T14:00:00.000Z' where country = 'GLOBAL'");
+    const stale = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query);
+    expect((stale.value?.items[0] as { playerCount: number }).playerCount).toBe(81);
+
+    await waitForGlobalFarmedBoardBuild(db);
+    const fresh = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query);
+    const freshTop = fresh.value?.items[0] as { playerCount: number; players: Array<Record<string, unknown>> };
+    expect(freshTop.playerCount).toBe(82);
+    // The packed board round-trips the new score's fields exactly.
+    expect(freshTop.players[0]).toMatchObject({
+      id: 999,
+      pp: 650,
+      mods: ["DT"],
+      scoreUrl: "https://osu.ppy.sh/scores/6665949113",
+      playedAt: scoredAt,
+    });
   });
 
   it("paginates and searches the map detail player list", async () => {

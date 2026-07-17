@@ -2194,6 +2194,33 @@ export function warmStatusBodyCache(ctx: HttpContext): void {
   void statusBody(ctx, {}).catch(() => undefined);
 }
 
+// The first pp/mod-filtered GLOBAL farmed request after a restart pays the
+// full multi-second global board build (maps.ts keeps the board cached per
+// snapshot generation after that). Build it in the background shortly after
+// boot so a user never fronts that cost. Runs on the maps snapshot thread; if
+// the thread is unavailable (memory DB, MAPS_SNAPSHOT_THREAD=0, vitest) this
+// deliberately does nothing rather than stall the main event loop.
+const MAPS_GLOBAL_FARMED_WARMUP_DELAY_MS = 15_000;
+
+export function warmGlobalMapsFarmedBoard(ctx: HttpContext): void {
+  const timer = setTimeout(() => {
+    void (async () => {
+      const meta = await getMapsSnapshotMeta(ctx.db, GLOBAL_COUNTRY_CODE);
+      if (!meta.refreshedAt) return;
+      await buildGlobalMapsResponseOnThread(ctx, {
+        kind: "maps-page",
+        country: GLOBAL_COUNTRY_CODE,
+        // Any pp > 0 routes through the filtered path and builds the shared
+        // board; the specific filter values do not matter.
+        query: { tab: "farmed", page: 0, pageSize: 48, key: "all", beatmapSort: "players", farmedSort: "players", dir: "desc", status: "all", pp: 1, mod: "all", q: "" },
+        encoding: null,
+        maxAgeMs: ctx.config.mapsRefreshIntervalMs,
+      });
+    })().catch((error) => logWarn("maps_global_farmed_board_warmup_failed", errorContext(error)));
+  }, MAPS_GLOBAL_FARMED_WARMUP_DELAY_MS);
+  timer.unref();
+}
+
 async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: boolean; snapshotCountry?: string } = {}) {
   let cache = statusBodyCacheByCtx.get(ctx);
   if (!cache) {

@@ -3,7 +3,7 @@ import { readConfig } from "./config.js";
 import { ensurePinnedCountries, getIndexedCountryCodes, getMapsWarmCountryCodes, getRosterRefreshCountryCodes } from "./countries.js";
 import { createDb, exec, getSqliteBusyRetryStats, logApiCall, migrate } from "./db.js";
 import { AnalyticsStore } from "./features/analytics.js";
-import { routeHttp, sendNotFound, warmStatusBodyCache } from "./http/snapshots.js";
+import { routeHttp, sendNotFound, warmGlobalMapsFarmedBoard, warmStatusBodyCache } from "./http/snapshots.js";
 import { ScoreIngestor } from "./ingest/score-ingestor.js";
 import { JobQueue } from "./jobs/queue.js";
 import { LiveEventLog } from "./live/event-log.js";
@@ -211,7 +211,10 @@ export async function createApp() {
   // sporadic SSR loader failures). Keep ours above the proxy's idle window.
   server.keepAliveTimeout = 75_000;
   server.headersTimeout = 80_000;
-  if (config.role !== "worker") warmStatusBodyCache(ctx);
+  if (config.role !== "worker") {
+    warmStatusBodyCache(ctx);
+    warmGlobalMapsFarmedBoard(ctx);
+  }
   return { server, db, rateLimitDb, serveWriteDb, serveWriteQueue, queue, events, osu, scoresFallbackOsu, osc, worker, ingestor, config, countryClients, discord, analytics };
 }
 
