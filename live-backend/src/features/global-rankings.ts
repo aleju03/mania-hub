@@ -1,6 +1,7 @@
 import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
+import { errorContext, logWarn } from "../logger.js";
 
 const SNAPSHOT_TARGET_TOLERANCE_MS = 36 * 60 * 60 * 1000;
 const GLOBAL_RANKINGS_MAX_PAGE_SIZE = 50;
@@ -110,14 +111,24 @@ export async function getCountryRankingsSnapshot(
   };
 }
 
-// The Global leaderboard is the union of every tracked country's roster, ranked
-// by mania pp. Because the warmed rosters span the top mania countries, this is
-// effectively the real global mania top-N (limited to players we track).
-export async function getGlobalRankingsSnapshot(db: Db, query: GlobalRankingsQuery = {}): Promise<GlobalRankingsSnapshot> {
-  const page = Math.max(1, Math.floor(query.page ?? 1) || 1);
-  const pageSize = Math.max(1, Math.min(GLOBAL_RANKINGS_MAX_PAGE_SIZE, Math.floor(query.pageSize ?? 50) || 50));
-  const sort = query.sort ?? "rank";
-  const dir = query.dir ?? "desc";
+// Building the global board reads and JSON-parses profile_json for every
+// tracked player (several seconds of synchronous work that blocks the event
+// loop), so it must not run per request: pack shuffles fire several page
+// fetches at once and would freeze SSE for every connected browser. The built
+// board is cached per Db instance (WeakMap so test databases stay isolated)
+// and revalidated in the background; an expired board keeps answering
+// instantly while the rebuild runs.
+const GLOBAL_BOARD_CACHE_TTL_MS = 60 * 1000;
+
+interface GlobalBoardCache {
+  entries: GlobalRankingEntry[];
+  builtAt: number;
+}
+
+const globalBoardCacheByDb = new WeakMap<Db, GlobalBoardCache>();
+const globalBoardBuildByDb = new WeakMap<Db, Promise<GlobalBoardCache>>();
+
+async function buildGlobalBoard(db: Db): Promise<GlobalBoardCache> {
   const rows = (await exec(
     db,
     `select
@@ -141,21 +152,61 @@ export async function getGlobalRankingsSnapshot(db: Db, query: GlobalRankingsQue
 
   const deltas = await readGlobalRankingDeltas(db, rows.map((row) => Number(row.user_id)));
 
-  const allEntries: GlobalRankingEntry[] = rows.map((row, index) => ({
+  const entries: GlobalRankingEntry[] = rows.map((row, index) => ({
     ...buildGlobalRankingEntry(row, index + 1),
     global_change: deltas.get(Number(row.user_id))?.globalChange ?? null,
     country_change: deltas.get(Number(row.user_id))?.countryChange ?? null,
   }));
-  const sortedEntries = sortGlobalRankingEntries(allEntries, sort, dir);
+  return { entries, builtAt: Date.now() };
+}
+
+async function getGlobalBoard(db: Db): Promise<GlobalBoardCache> {
+  const cached = globalBoardCacheByDb.get(db);
+  if (cached && Date.now() - cached.builtAt < GLOBAL_BOARD_CACHE_TTL_MS) return cached;
+  let build = globalBoardBuildByDb.get(db);
+  if (!build) {
+    build = buildGlobalBoard(db)
+      .then((built) => {
+        globalBoardCacheByDb.set(db, built);
+        return built;
+      })
+      .catch((error) => {
+        // Keep serving the previous board through a failed rebuild; only the
+        // very first build has nothing to fall back to.
+        logWarn("global_board_rebuild_failed", errorContext(error));
+        const stale = globalBoardCacheByDb.get(db);
+        if (stale) return stale;
+        throw error;
+      })
+      .finally(() => {
+        globalBoardBuildByDb.delete(db);
+      });
+    globalBoardBuildByDb.set(db, build);
+  }
+  return cached ?? build;
+}
+
+// The Global leaderboard is the union of every tracked country's roster, ranked
+// by mania pp. Because the warmed rosters span the top mania countries, this is
+// effectively the real global mania top-N (limited to players we track).
+export async function getGlobalRankingsSnapshot(db: Db, query: GlobalRankingsQuery = {}): Promise<GlobalRankingsSnapshot> {
+  const page = Math.max(1, Math.floor(query.page ?? 1) || 1);
+  const pageSize = Math.max(1, Math.min(GLOBAL_RANKINGS_MAX_PAGE_SIZE, Math.floor(query.pageSize ?? 50) || 50));
+  const sort = query.sort ?? "rank";
+  const dir = query.dir ?? "desc";
+  const board = await getGlobalBoard(db);
+  const sortedEntries = sortGlobalRankingEntries(board.entries, sort, dir);
   const start = (page - 1) * pageSize;
-  const ranking = sortedEntries.slice(start, start + pageSize);
+  // Clones, not the cached rows: accent enrichment mutates response objects in
+  // place and must not write into the shared board.
+  const ranking = sortedEntries.slice(start, start + pageSize).map((entry) => ({ ...entry, user: { ...entry.user } }));
 
   return {
     ranking,
-    total: allEntries.length,
+    total: board.entries.length,
     page,
     pageSize,
-    fetchedAt: Date.now(),
+    fetchedAt: board.builtAt,
   };
 }
 
