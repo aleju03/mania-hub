@@ -109,3 +109,66 @@ describe("roxy floor-pin guard", () => {
     expect(sunnyLowEndReroute(pinnedMixed, TRIVIAL_CHART, 1)).not.toBeNull();
   });
 });
+
+// 4K LN verdicts come from the in-house kNN (LeoBlack's LN table is only the
+// fallback); its reference set includes the curated benchmark corpus so both
+// pack singles and segmented courses resolve through it. Mirrors the frontend
+// chart-classifier.test.ts block.
+describe("4K LN verdict routing", () => {
+  function buildLnOsu(title: string): string {
+    // Four ~50s segments of dense chorded holds separated by 3s gaps: enough
+    // duration, segment count, and notes per segment to read as a dan course
+    // when the title says so, and unambiguous LN signal either way.
+    const hitObjects: string[] = [];
+    let time = 1000;
+    for (let segment = 0; segment < 4; segment++) {
+      const rows = Math.floor(50_000 / 150);
+      for (let row = 0; row < rows; row++) {
+        const start = time + row * 150;
+        const end = start + 320;
+        const first = (row * 7) % 4;
+        const second = (first + 1 + (row % 3)) % 4;
+        hitObjects.push(`${columnX(first)},192,${start},128,0,${end}:0:0:0:0:`);
+        hitObjects.push(`${columnX(second)},192,${start},128,0,${end}:0:0:0:0:`);
+      }
+      time += 50_000 + 3_000;
+    }
+    return [
+      "osu file format v14",
+      "",
+      "[General]",
+      "Mode: 3",
+      "",
+      "[Metadata]",
+      `Title:${title}`,
+      "Artist:Test",
+      "Creator:Test",
+      "Version:Test",
+      "",
+      "[Difficulty]",
+      "CircleSize:4",
+      "OverallDifficulty:8",
+      "HPDrainRate:8",
+      "",
+      "[TimingPoints]",
+      "0,352.94,4,2,0,100,1,0",
+      "",
+      "[HitObjects]",
+      ...hitObjects,
+    ].join("\n");
+  }
+
+  it("sources the LN half from the in-house kNN for regular LN charts", () => {
+    const text = buildLnOsu("Synthetic LN Chart");
+    const classification = classifyChart(parseManiaBeatmap(text), text);
+    expect(classification.ln).not.toBeNull();
+    expect(classification.ln?.source).toBe("inhouse-ln-knn");
+  });
+
+  it("sources the LN half from the in-house kNN for dan courses", () => {
+    const text = buildLnOsu("Synthetic LN Dan Course");
+    const classification = classifyChart(parseManiaBeatmap(text), text);
+    expect(classification.ln).not.toBeNull();
+    expect(classification.ln?.source).toBe("inhouse-ln-knn");
+  });
+});

@@ -1,3 +1,3 @@
-// v8: tempo-aware LN inverse gap cap (patterns.ts) - slow inverse charts
-// (1/4-beat release gaps over 120ms) now detect as lninverse.
-export const DAN_ESTIMATE_CACHE_VERSION = 8;
+// v9: LN kNN reference set extended with the curated benchmark corpus (ln.ts);
+// out-of-corpus charts no longer over-rate through the ln-pressure regression.
+export const DAN_ESTIMATE_CACHE_VERSION = 9;

@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import { parseManiaBeatmap } from "../dan/beatmap-parser.js";
+import { extractDanFeatures } from "../dan/dan-estimator/features.js";
+import { estimateLnDan } from "../dan/dan-estimator/ln.js";
 import { analyzeManiaPatterns } from "../dan/dan-estimator/patterns.js";
 import { classifyChart, detectLnVibro, detectRiceVibro, sunnyLowEndReroute, type ChartClassification, type DanVerdictHalf } from "../dan/chart-classifier.js";
 import { runLeoBlackMixed } from "../dan/leoblack-estimator.js";
@@ -1098,6 +1100,157 @@ async function enqueueDtRateAnalysis(queue: JobQueue, cursor: number): Promise<v
   await queue.enqueue(
     DT_RATE_ANALYSIS_JOB,
     `${DT_RATE_ANALYSIS_JOB}:${cursor}`,
+    { cursor },
+    { priority: -10, replaceDone: true },
+  );
+}
+
+// ── One-shot 4K LN estimate sweep ────────────────────────────────────────────
+// The LN kNN's reference set was extended with the curated benchmark corpus
+// (dan-estimator/ln.ts): out-of-corpus charts previously fell through to the
+// ln-pressure regression, which over-rates them (ranked LN charts reading a
+// dan high). Stored analyses whose LN half came from the kNN predate the new
+// anchors. Same playbook as the sweeps above: a boot-seeded chunked job
+// recomputes the cheap kNN half for each candidate; unchanged verdicts are
+// skipped, the rest re-enqueue the full analysis job after refreshing their DT
+// dan verdict inline, because the full job never touches the DT columns.
+// Purely local work, no osu! API.
+
+export const LN_SOURCE_RECOMPUTE_JOB = "recompute_ln_estimate_sweep";
+const LN_SOURCE_META_KEY = "ln_estimate_recompute_done:v1";
+const LN_SOURCE_CHUNK = 40;
+
+export interface LnSourceChunkResult {
+  nextCursor: number;
+  scanned: number;
+  changed: number[];
+  done: boolean;
+}
+
+export async function recomputeLnSourceChunk(
+  db: Db,
+  cursor: number,
+  limit = LN_SOURCE_CHUNK,
+): Promise<LnSourceChunkResult> {
+  const rows = (await exec(
+    db,
+    `select beatmap_id, classification_json, dan_dt_json is not null as has_dt
+     from beatmap_chart_analysis
+     where analysis_version = ? and status = 'ready'
+       and key_count = 4
+       and json_extract(classification_json, '$.ln.source') = 'inhouse-ln-knn'
+       and beatmap_id > ?
+     order by beatmap_id
+     limit ?`,
+    [CHART_ANALYSIS_VERSION, Math.max(0, Math.floor(cursor)), Math.max(1, Math.floor(limit))],
+  )).rows;
+
+  let nextCursor = cursor;
+  const changed: number[] = [];
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    nextCursor = Math.max(nextCursor, beatmapId);
+    const stored = parseJson<Pick<LeanChartClassification, "ln"> | null>(row.classification_json, null);
+    const storedLn = stored?.ln?.displayName ?? null;
+    const osuText = await readCachedBeatmapFile(db, beatmapId).catch(() => null);
+    if (!osuText || !storedLn) continue;
+    try {
+      const map = parseManiaBeatmap(osuText);
+      if (map.keyCount !== 4) continue;
+      // Recompute just the kNN half with the same inputs the full analysis job
+      // uses; a matching verdict means re-analysis would store the same thing.
+      const starRating = Number((await exec(
+        db,
+        "select difficulty_rating from beatmaps where beatmap_id = ? limit 1",
+        [beatmapId],
+      )).rows[0]?.difficulty_rating ?? 0);
+      const input = {
+        totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
+        version: map.version,
+        starRating: Number.isFinite(starRating) && starRating > 0 ? starRating : undefined,
+      };
+      const features = extractDanFeatures(map, input, 1);
+      const fresh = estimateLnDan(
+        map,
+        input,
+        features.metrics,
+        Number.isFinite(starRating) && starRating > 0 ? starRating : 0,
+        features.durationMs,
+        1,
+      );
+      if (fresh && `${fresh.label}${fresh.variant ?? ""}` === storedLn) continue;
+      // Refresh the DT dan verdict before the full analysis job runs, so its
+      // search-index upsert reads current DT columns.
+      if (Number(row.has_dt)) {
+        const classification = classifyChart(map, osuText, {
+          rate: DT_RATE,
+          starRating: Number.isFinite(starRating) && starRating > 0 ? starRating : undefined,
+          totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
+          version: map.version,
+        });
+        const danDt = {
+          primaryLabel: classification.primary?.displayName ?? null,
+          primaryFamily: classification.primary ? (classification.primary.kind === "ln" ? "ln" : "dan") : null,
+          rawDan: classification.primary?.rawDan ?? null,
+        };
+        await exec(
+          db,
+          `update beatmap_chart_analysis
+           set dan_dt_json = json(?)
+           where beatmap_id = ? and analysis_version = ?`,
+          [json(danDt), beatmapId, CHART_ANALYSIS_VERSION],
+        );
+      }
+      changed.push(beatmapId);
+    } catch {
+      // A chart the parser/estimator rejects keeps its stored verdict; the full
+      // analysis job would fail the same way.
+    }
+    // The feature extraction / DT classifier run is the CPU burst; yield
+    // between charts like the sweeps above.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+
+  return { nextCursor, scanned: rows.length, changed, done: rows.length < limit };
+}
+
+export async function ensureLnSourceRecomputeSeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [LN_SOURCE_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [LN_SOURCE_RECOMPUTE_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueueLnSourceRecompute(queue, 0);
+}
+
+export async function runLnSourceRecomputeJob(db: Db, queue: JobQueue, payload: { cursor?: number } | undefined): Promise<void> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const result = await recomputeLnSourceChunk(db, cursor);
+  // Re-analysis jobs run at higher priority than this sweep and upsert their
+  // search-index row on completion, same as the floor-pin sweep.
+  for (const beatmapId of result.changed) await enqueueChartAnalysis(queue, beatmapId);
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [LN_SOURCE_META_KEY, json({ finishedAt: now }), now],
+    );
+    // Re-verdicted charts must move between LN dan collections now, not on the
+    // next scheduled rotation.
+    await queue.enqueue("rebuild_map_collections", "rebuild_map_collections", {}, { priority: -12, replaceDone: true });
+    return;
+  }
+  await enqueueLnSourceRecompute(queue, result.nextCursor);
+}
+
+async function enqueueLnSourceRecompute(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    LN_SOURCE_RECOMPUTE_JOB,
+    `${LN_SOURCE_RECOMPUTE_JOB}:${cursor}`,
     { cursor },
     { priority: -10, replaceDone: true },
   );
