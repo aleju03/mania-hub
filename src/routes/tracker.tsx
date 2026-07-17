@@ -1620,7 +1620,10 @@ const MultiFeedCard = memo(function MultiFeedCard({
 
   return (
     <div className={`relative rounded-xl bg-osu-b4 border border-osu-purple/25 overflow-hidden${isNew ? " score-enter" : ""}`}>
-      {coverUrl && <CoverBackdrop url={coverUrl} opacityClass="opacity-[0.06]" />}
+      {/* Backdrop scoped to the header: expanded rounds get their own map's
+          cover below, so the latest map's art must not bleed over them. */}
+      <div className="relative">
+        {coverUrl && <CoverBackdrop url={coverUrl} opacityClass="opacity-[0.06]" />}
       <div
         className="relative flex items-center gap-2 sm:gap-3 py-3 px-3 sm:px-4 hover:bg-osu-b3/50 transition-colors duration-[120ms] cursor-pointer"
         onClick={() => onToggleCard(groupKey)}
@@ -1699,6 +1702,7 @@ const MultiFeedCard = memo(function MultiFeedCard({
           {"▾"}
         </span>
       </div>
+      </div>
       {expanded && (
         <div className="relative border-t border-osu-b3/30 detail-enter">
           {rounds.map((round, roundIndex) => ({ round, number: roundIndex + 1 })).reverse().map(({ round, number }) => {
@@ -1707,10 +1711,12 @@ const MultiFeedCard = memo(function MultiFeedCard({
             const roundNewest = round.scores[round.scores.length - 1];
             const roundUrl = getBeatmapUrl(roundSample);
             const roundCover = roundSample.beatmapset?.covers?.list;
+            const roundBackdropUrl = roundSample.beatmapset?.covers?.["cover@2x"] || roundSample.beatmapset?.covers?.cover;
             const roundKeymode = getBeatmapKeymodeLabel(roundSample.beatmap);
             return (
-              <div key={round.key}>
-                <div className="flex items-center gap-2 px-3 sm:px-4 py-1.5 bg-osu-b3/25 border-b border-osu-b3/20">
+              <div key={round.key} className="relative">
+                {roundBackdropUrl && <CoverBackdrop url={roundBackdropUrl} opacityClass="opacity-[0.06]" />}
+                <div className="relative flex items-center gap-2 px-3 sm:px-4 py-1.5 bg-osu-b3/25 border-b border-osu-b3/20">
                   <span className="text-[9px] uppercase tracking-wider font-semibold text-osu-purple-light/80 tabular-nums flex-shrink-0">
                     Map {number}
                   </span>
@@ -1743,7 +1749,7 @@ const MultiFeedCard = memo(function MultiFeedCard({
                 {rankedRound.map((score, index) => {
                   const memberKey = getScoreIdentity(score);
                   return (
-                    <div key={memberKey} className={index > 0 ? "border-t border-osu-b3/15" : undefined}>
+                    <div key={memberKey} className={`relative${index > 0 ? " border-t border-osu-b3/15" : ""}`}>
                       <ScoreFeedItem
                         score={score}
                         scoreKey={memberKey}
@@ -1974,7 +1980,9 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
         <div
           className="relative overflow-hidden px-4 pb-3 pt-1 border-t border-osu-b3/20 detail-enter"
         >
-              {(score.beatmapset?.covers?.["cover@2x"] || score.beatmapset?.covers?.cover) && (
+              {/* Embedded rows sit inside a round section that already shows
+                  this map's cover; a second backdrop here would stack on it. */}
+              {!embedded && (score.beatmapset?.covers?.["cover@2x"] || score.beatmapset?.covers?.cover) && (
                 <CoverBackdrop url={score.beatmapset.covers["cover@2x"] || score.beatmapset.covers.cover} />
               )}
               <div className="relative grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-center">
