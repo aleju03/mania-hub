@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireAdminAccess } from "./auth";
+import { harvestAvatarAccents } from "./avatar-accent-harvest";
 import type {
   CountryMapsData,
   CountryTopPlay,
@@ -870,7 +871,9 @@ export async function fetchLivePlayerCachedProfileSnapshotDirect(key: string): P
   const response = await fetch(`${base}/api/profiles/${encodeURIComponent(trimmed)}/cached-snapshot`, { credentials: "omit" });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`Server ${response.status}`);
-  return response.json() as Promise<LivePlayerProfileSnapshot>;
+  const snapshot = await response.json() as LivePlayerProfileSnapshot;
+  harvestAvatarAccents(snapshot);
+  return snapshot;
 }
 
 export async function fetchLivePlayerRecentScoresDirect(userId: number): Promise<LivePlayerProfileSection<OsuScore[]>> {
@@ -1573,7 +1576,27 @@ export function openLiveEventSource(country: string, options?: { observe?: boole
   if (!base || typeof EventSource === "undefined") return null;
   const query = new URLSearchParams({ country });
   if (options?.observe) query.set("observe", "1");
-  return new EventSource(`${base}/api/live?${query.toString()}`);
+  const source = new EventSource(`${base}/api/live?${query.toString()}`);
+  // Event payloads carry avatar accents like snapshots do. Harvesting here, before the caller's
+  // listener runs, means every SSE consumer gets colored names with zero per-consumer code. No
+  // consumer uses removeEventListener on these sources, so wrapping the listener is safe.
+  const originalAddEventListener = source.addEventListener.bind(source);
+  source.addEventListener = ((type: string, listener: EventListenerOrEventListenerObject, listenerOptions?: boolean | AddEventListenerOptions) => {
+    const wrapped = (event: Event) => {
+      const data = (event as MessageEvent).data;
+      if (typeof data === "string" && data.includes("avatar")) {
+        try {
+          harvestAvatarAccents(JSON.parse(data));
+        } catch {
+          // Not JSON or malformed: the caller's listener decides how to handle it.
+        }
+      }
+      if (typeof listener === "function") listener(event);
+      else listener.handleEvent(event);
+    };
+    originalAddEventListener(type, wrapped, listenerOptions);
+  }) as typeof source.addEventListener;
+  return source;
 }
 
 async function fetchLiveJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -1581,7 +1604,11 @@ async function fetchLiveJson<T>(path: string, init?: RequestInit): Promise<T> {
   if (!base) throw new Error("Server is not configured.");
   const response = await fetch(`${base}${path}`, { credentials: "omit", ...init });
   if (!response.ok) throw new Error(`Server ${response.status}`);
-  return response.json() as Promise<T>;
+  const payload = await response.json();
+  // Snapshot payloads carry avatar accents next to avatar URLs; feed them to the accent store so
+  // player names and their colors land in the same commit.
+  harvestAvatarAccents(payload);
+  return payload as T;
 }
 
 // ---------------------------------------------------------------------------

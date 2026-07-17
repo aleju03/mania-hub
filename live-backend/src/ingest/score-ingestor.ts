@@ -3,6 +3,7 @@ import type { Db, DbStatement } from "../db.js";
 import { exec, execBatch, json } from "../db.js";
 import { canSeedSnipesForCountry, getActiveCountryCodes, markCountryScoreSeen } from "../countries.js";
 import { recordPlayerActivity, removePlayerActivityScore } from "../features/activity.js";
+import { getAvatarAccentForUrl } from "../features/avatar-accents.js";
 import { maybeEnqueueMapsFarmedRefresh } from "../features/maps.js";
 import { updateSnipeProjection, type SnipeSelfHistoryProvider } from "../features/snipes.js";
 import { maybeEnqueueTopPlayRefresh } from "../features/top-plays.js";
@@ -137,7 +138,14 @@ export class ScoreIngestor {
       const hydratedScore = await getHydratedScoreByIdentity(this.db, country, scoreIdentity);
       if (hydratedScore) {
         hydratedScoresByCountry.set(country, hydratedScore.score);
-        await this.events.append("tracker_score", hydratedScore.country, toLeanTrackerScore(hydratedScore.score), `tracker_score:${hydratedScore.country}:${scoreIdentity}`);
+        const leanScore = toLeanTrackerScore(hydratedScore.score);
+        // SSE cards render the same colored names as snapshots, so the event
+        // carries the accent too. One PK read; a miss queues extraction and the
+        // name just stays theme-colored until the next payload.
+        if (leanScore.user?.avatar_url) {
+          leanScore.user.avatar_accent = await getAvatarAccentForUrl(this.db, this.queue, leanScore.user.avatar_url);
+        }
+        await this.events.append("tracker_score", hydratedScore.country, leanScore, `tracker_score:${hydratedScore.country}:${scoreIdentity}`);
       }
     }
     if (inserted === 0) return false;

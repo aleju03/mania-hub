@@ -21,7 +21,11 @@ export async function fetchWithTimeout(input: string, timeoutMs: number): Promis
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(input, { signal: controller.signal, headers: { Accept: "*/*" } });
+    // catboy.best 403s requests with undici's default User-Agent.
+    return await fetch(input, {
+      signal: controller.signal,
+      headers: { Accept: "*/*", "User-Agent": "mania-hub-dan-benchmark/1.0 (+https://mania-tracker.com)" },
+    });
   } finally {
     clearTimeout(timeout);
   }

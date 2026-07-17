@@ -15,6 +15,21 @@ const COPY: Record<LiveEmptyKind, { eyebrow: (countryName: string) => string; ti
   },
 };
 
+// Rendered when no live backend is configured. The live surfaces have no other
+// data source: the osu!-API fallback scans were removed with the Turso exit,
+// so a missing VITE_LIVE_BACKEND_URL is a deployment error, not a degraded mode.
+export function LiveBackendRequired() {
+  return (
+    <div className="mx-auto max-w-md px-4 py-16 text-center">
+      <div className="text-sm font-bold text-white">Live data is unavailable</div>
+      <p className="mt-2 text-[12px] leading-relaxed text-osu-f1">
+        This page needs the live backend and none is configured
+        (VITE_LIVE_BACKEND_URL is not set).
+      </p>
+    </div>
+  );
+}
+
 export function LiveDataEmptyState({
   country,
   kind,

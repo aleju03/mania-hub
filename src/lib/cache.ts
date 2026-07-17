@@ -4,9 +4,6 @@ export const CLIENT_CACHE_TTL = {
   homeRecentScores: 60 * 1000,
   homePopoffs: 2 * 60 * 1000,
   popoffs: 90 * 1000,
-  scoresFeed: 60 * 1000,
-  mapsData: 7 * 24 * 60 * 60 * 1000,
-  snipes: 6 * 60 * 60 * 1000,
   discordShowcase: 60 * 60 * 1000,
 } as const;
 

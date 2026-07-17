@@ -46,8 +46,8 @@ Routing: `src/routes/` file routes with `createFileRoute`; shared shell, auth, c
 
 Data flow, in order of preference for live surfaces:
 1. `src/lib/live-backend.ts`: typed snapshot fetchers + `openLiveEventSource()` SSE client + country feature-tier bootstrap. Use this for tracker/top-plays/snipes/maps/rankings/profile data from client routes.
-2. Server functions (`createServerFn`) wrapping the osu! API layer as fallback when no live backend is configured.
-3. Turso (`src/lib/db.ts`, `cache_entries` TTL cache) and R2 (`src/lib/r2-cache.ts`) as server-side caches; legacy paths still read Turso.
+2. Server functions (`createServerFn`) wrapping the osu! API layer for data the backend does not project: user profiles/scores, rank histories, per-beatmap scoreboards (replay browse), beatmap search/files, dan estimates, OG cards. The live surfaces (home, tracker, top plays, snipes, maps) hard-require the live backend; without `VITE_LIVE_BACKEND_URL` they render a "live backend required" notice (the osu!-API fallback scans were removed).
+3. Server-side caching lives where each resource lives: osu! API responses are cached inside the backend's `/api/osu/v2` proxy (opt-in per call via `cacheTtlMs`/`staleMs` on `osuFetch`; `staleMs` serves expired data through osu! outages), heavy computed artifacts (parsed replays, uploaded-replay descriptions, community `.osu` files) are gzipped JSON/text objects in R2 (`src/lib/r2-cache.ts`; growth bounded by Cloudflare lifecycle rules per prefix, not code). The persistent-cache helpers in `src/lib/api.ts` are a per-instance memory tier only.
 
 Client state: one Zustand store in `src/store.ts`, persisted to localStorage (`mania-hub-cache-v5`; bump the version on breaking shape changes). Data is country-keyed with `fetchedAt` + TTL constants from `src/lib/cache.ts`. Persistence is debounced, has quota-eviction handling, and keeps critical prefs (theme, hidden users, avatar accents) in separate storage keys. Check `useHasHydrated()` before trusting persisted state during SSR hydration.
 
@@ -71,7 +71,7 @@ SEO/OG: `src/lib/seo.ts` builds meta + OG URLs and defines the `OG_IMAGE_VERSION
 
 Local secrets live in `.env` (root) and `live-backend/.env`. Key vars:
 
-- Root/frontend: `VITE_LIVE_BACKEND_URL`, `LIVE_BACKEND_URL`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, R2 vars, PostHog vars.
+- Root/frontend: `VITE_LIVE_BACKEND_URL`, `LIVE_BACKEND_URL`, `LIVE_ADMIN_TOKEN`, R2 vars, PostHog vars.
 - Live backend (`live-backend/src/config.ts` has the full ~90-var list with defaults): osu!/oSC credentials and endpoints, `TRACKED_COUNTRIES`, `ALLOWED_ORIGINS`, `LIVE_ADMIN_TOKEN`, `LIVE_BACKEND_ROLE` (`all`/`server`/`worker`, opt-in two-process split), and feature flags (`ENABLE_WORKERS`, `ENABLE_OSC_SOCKET`, `ENABLE_OSC_BACKFILL`, `ENABLE_OSU_SCORES_FALLBACK`, `ENABLE_SCHEDULED_REFRESHES`, `ENABLE_DISCORD_BOT`/`ENABLE_DISCORD_FEEDS`).
 
 Admin UI is at `/admin/live-backend` (frontend) talking to backend `/api/admin/*`. Some admin controls (reset-local-db, delete-country) are destructive; treat with care.

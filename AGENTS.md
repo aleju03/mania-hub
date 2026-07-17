@@ -37,7 +37,7 @@ The live backend lives in `live-backend/`:
 - `live-backend/src/maintenance/`: storage compaction and DB sync-from-VPS scripts.
 - `live-backend/migrations/001_initial.sql`: schema, applied at boot.
 
-Legacy/shared Turso schema is in `db/schema.sql`. Utility scripts live in `scripts/` (dan benchmark/analyze, replay capture/validate, cache migrations, plus `scripts/dev/replay-video-job.ts`, the Vite dev middleware fallback for replay video). Static assets live in `public/`.
+Utility scripts live in `scripts/` (dan benchmark/analyze, replay capture/validate, plus `scripts/dev/replay-video-job.ts`, the Vite dev middleware fallback for replay video). Static assets live in `public/`.
 
 ## Development Commands
 
@@ -50,7 +50,6 @@ The user often keeps local servers running; do not start dev servers or builds u
 - Backend DB compaction: `cd live-backend && npm run compact:storage` (full VACUUM/GC) or `npm run compact:maps-farmed` (rebuild maps-farmed overlay).
 - Sync prod DB to local: `npm run live-db:update` (root wrapper for `db:sync-from-vps --fresh`) creates a fresh snapshot on the VPS via sqlite3 `.backup` + zstd, downloads it, replaces the local SQLite DB, and prunes old remote `online-*` snapshots (keeps 2, `--keep-remote N`). `npm run live-db:sync-from-vps` reuses the newest pre-existing backup instead; supports `--dry-run`/`--force`. Run these from a dev PC, never on the VPS (they overwrite the local DB).
 - Dan tooling: `npm run dan:benchmark`, `npm run dan:analyze`.
-- Old Turso schema init/shell: `npm run db:init`, `npm run db:inspect`.
 
 ## Live Backend Architecture
 
@@ -98,7 +97,7 @@ In-house web analytics (`live-backend/src/features/analytics.ts`) replaces PostH
 Snipes do not require keeping every raw score forever. Each beatmap/lane has a stored board in `country_beatmap_scores` (keyed by country + beatmap + lane + user). A new score is compared to that board; when it overtakes someone the backend writes `snipe_events` and emits an SSE `snipe`. If no board exists yet, `seed_snipe_board` fetches roster users' scores for that beatmap and builds it.
 
 ### Top plays
-Detected country top plays live in `top_play_events`. When an incoming score is near the player's known top-play threshold, the backend queues `refresh_user_top_scores`, confirms via the osu! API whether it actually entered the player's top plays (confirmation window ~30min), records the PP gain, then emits `top_play`. Old Turso `country_top_plays` may be imported for history; new detection happens in the backend queue.
+Detected country top plays live in `top_play_events`. When an incoming score is near the player's known top-play threshold, the backend queues `refresh_user_top_scores`, confirms via the osu! API whether it actually entered the player's top plays (confirmation window ~30min), records the PP gain, then emits `top_play`.
 
 ### Maps
 `refresh_user_maps_farmed_scores` pulls a roster user's top 200 and extracts scores that entered their top plays; `refresh_country_maps` aggregates these into `country_maps_snapshots`, and `refresh_global_maps` rolls countries up into a global snapshot. Refresh progress is tracked in `live_meta` and surfaced via `/api/snapshots/maps-progress`.
@@ -159,17 +158,15 @@ The backend uses LibSQL/SQLite (default `live-backend/data/mania-hub-live.db`, W
 
 Durable projections (`country_beatmap_scores`, `snipe_events`, `top_play_events`, `user_top_scores`, maps snapshots, users, beatmaps, beatmapsets, rosters) are not part of the short raw-event cleanup.
 
-The older Turso cache uses `cache_entries` with TTLs and cache locks. R2/replay/beatmap asset metadata is handled by `src/lib/r2-cache.ts`.
+Caching lives where each resource lives. osu! API responses: cached in the backend's `/api/osu/v2` proxy (`osu_proxy_cache` table, `features/osu-proxy-cache.ts`), opt-in per call via `cacheTtlMs`/`staleMs` on `osuFetch`; the proxy also collapses concurrent identical fetches in-process and serves expired rows through upstream failures within `staleMs` (the old 6h stale-profile behavior). Computed artifacts (parsed replays, uploaded-replay descriptions): gzipped JSON objects in R2 via `getJsonArtifact`/`putJsonArtifact`. The `getPersistentCache*`/`fetchWithCacheLock` helpers in `src/lib/api.ts` kept their signatures but are a per-instance memory tier + in-flight dedup only; there is no shared frontend KV. R2 objects are managed by `src/lib/r2-cache.ts` (replay endpoint kind rides on S3 object metadata; size is bounded by per-prefix Cloudflare lifecycle rules, never by code).
 
 ## Frontend Data Rules
 
-Prefer `src/lib/live-backend.ts` for live backend calls from client routes: typed snapshot fetchers, `openLiveEventSource()` for SSE, and the country feature-tier bootstrap. Tracker, Top Plays, Snipes, Maps, and rankings should use live snapshots + SSE when configured, with old server-function/Turso behavior only as fallback. When an SSE connection drops, the browser's `EventSource` reconnects and replays missed events via `Last-Event-ID` against `live_event_log`; there is no polling fallback (`/api/sync` is unrelated, it is the analytics capture proxy).
+Prefer `src/lib/live-backend.ts` for live backend calls from client routes: typed snapshot fetchers, `openLiveEventSource()` for SSE, and the country feature-tier bootstrap. Home, Tracker, Top Plays, Snipes, and Maps hard-require the live backend (no `VITE_LIVE_BACKEND_URL` renders a `LiveBackendRequired` notice; the osu!-API fallback scans were deleted). Server functions remain only for data the backend does not project: user profiles/scores, rank histories, per-beatmap country scoreboards (replay browse), beatmap search/files, dan estimates, OG cards. When an SSE connection drops, the browser's `EventSource` reconnects and replays missed events via `Last-Event-ID` against `live_event_log`; there is no polling fallback (`/api/sync` is unrelated, it is the analytics capture proxy).
 
 Keep authenticated osu! API access on the server. Do not put osu! credentials or direct authenticated osu! calls in client components. `src/lib/osu.ts` is a facade over domain modules in `src/lib/osu/`.
 
 Client state uses Zustand in `src/store.ts`, persisted to localStorage under `mania-hub-cache-v5`; bump the version on breaking shape changes. Data is country-keyed with `fetchedAt` plus TTL checks from `src/lib/cache.ts`. Persistence is debounced with quota-eviction handling; critical preferences (theme, hidden users, avatar accents) live in separate storage keys so they survive quota errors. Check `useHasHydrated()` before trusting persisted state during SSR hydration.
-
-Maps data uses persistent cache TTLs (farmed and favourites weekly). Rebuilds are visit-triggered/stale-while-revalidate, not a true cron.
 
 OG images are rendered by `src/routes/api/og.ts` (@vercel/og) and cached in R2 keyed by the `OG_IMAGE_VERSION` constant defined in `src/lib/seo.ts`; bump it there when changing OG layouts. Meta and OG URL builders also live in `src/lib/seo.ts`; the sitemap is `src/routes/api/sitemap.ts`.
 
@@ -199,7 +196,7 @@ Local secrets belong in `.env` and `live-backend/.env`; do not commit secrets.
 
 Important env vars:
 
-- Root/frontend: `VITE_LIVE_BACKEND_URL`, `LIVE_BACKEND_URL`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, R2 vars, PostHog vars.
+- Root/frontend: `VITE_LIVE_BACKEND_URL`, `LIVE_BACKEND_URL`, `LIVE_ADMIN_TOKEN`, R2 vars, PostHog vars.
 - Live backend (`live-backend/src/config.ts` holds the full ~90-var list with defaults): `PORT`, `DATABASE_URL`, `OSU_CLIENT_ID`, `OSU_CLIENT_SECRET`, `OSC_BASE_URL`, `OSC_SOCKET_PATH`, `TRACKED_COUNTRIES`, `LIVE_PUBLIC_ORIGIN`, `ALLOWED_ORIGINS`, `LIVE_ADMIN_TOKEN`, `LIVE_BACKEND_ROLE` (`all`/`server`/`worker`, alias `BACKEND_ROLE`) for the opt-in two-process split (with `ENABLE_EVENT_LOG_TAIL`, `WORKER_HTTP_PORT`, and `SQLITE_*` connection-pragma tuning), feature flags (`ENABLE_WORKERS`, `ENABLE_OSC_SOCKET`, `ENABLE_OSC_BACKFILL`, `ENABLE_OSU_SCORES_FALLBACK`, `ENABLE_SCHEDULED_REFRESHES`), Discord (`ENABLE_DISCORD_BOT`, `ENABLE_DISCORD_FEEDS`, `DISCORD_APPLICATION_ID`, `DISCORD_PUBLIC_KEY`, `DISCORD_BOT_TOKEN`, plus new-farm-map alert thresholds), osu/oSC rate settings, retention settings, roster settings, replay video settings (R2, ffmpeg, Chrome path).
 
 The live backend defaults to local SQLite at `live-backend/data/mania-hub-live.db`. For production/VPS, configure durable storage and `LIVE_ADMIN_TOKEN`.

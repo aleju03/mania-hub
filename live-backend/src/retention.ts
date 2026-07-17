@@ -3,6 +3,8 @@ import { resolve } from "node:path";
 import type { Config } from "./config.js";
 import type { Db } from "./db.js";
 import { exec } from "./db.js";
+import { pruneAvatarAccents } from "./features/avatar-accents.js";
+import { pruneOsuProxyCache } from "./features/osu-proxy-cache.js";
 import { deleteSkin, listExpiredPendingSkins } from "./features/skins.js";
 import { logInfo, logWarn, errorContext } from "./logger.js";
 import { deleteSkinObjects, type SkinStorageConfig } from "./skins/r2.js";
@@ -56,6 +58,11 @@ export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | 
     // Discord "last map in channel" memory is only useful while fresh, so 30d is
     // plenty; stale rows just mean /pb asks the user to run /recent again.
     discordChannelContext: Number((await exec(db, "delete from discord_channel_map_context where updated_at < ?", [daysAgo(30)])).rowsAffected ?? 0),
+    // Slow self-healing refresh: a pruned accent recomputes the next time the
+    // avatar shows up in a payload. Also bounds churn from avatar changes.
+    avatarAccents: await pruneAvatarAccents(db),
+    // osu! proxy response cache rows past their stale window.
+    osuProxyCache: await pruneOsuProxyCache(db),
   };
   const storageBefore = await getLocalDbStorage(config);
   const emergency = storageBefore.overLimit ? await pruneForLocalDbLimit(db, config, storageBefore) : {};

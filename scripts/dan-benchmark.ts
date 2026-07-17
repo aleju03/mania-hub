@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Run the dan classifier against the curated benchmark beatmapsets and compare
-// predicted dan vs the expected labels stored in Turso (the same data the
-// admin /admin/dan-classifier benchmark tab uses).
+// predicted dan vs the expected labels stored in the live backend (the same
+// data the admin /admin/dan-classifier benchmark tab uses).
 //
 // Usage:
 //   npm run dan:benchmark
@@ -24,7 +24,6 @@ import {
   getBenchmarkBeatmapsetIds,
   RANKED_BENCHMARK_BEATMAP_IDS,
 } from "../src/lib/dan-benchmark-sets.ts";
-import { db, hasDb } from "../src/lib/db.ts";
 import {
   type BeatmapMeta,
   type CatboyBeatmapset,
@@ -219,7 +218,7 @@ function usage(exitCode = 2): never {
     "  npm run dan:benchmark -- --compare before.json after.json --summary-by-set",
     "  npm run dan:benchmark -- --set 2192368 --grep Sendan",
     "",
-    "Requires TURSO_DATABASE_URL and TURSO_AUTH_TOKEN in the environment (or .env).",
+    "Requires LIVE_BACKEND_URL and LIVE_ADMIN_TOKEN in the environment (or .env).",
   ].join("\n");
   if (exitCode === 0) process.stdout.write(`${output}\n`);
   else process.stderr.write(`${output}\n`);
@@ -396,26 +395,34 @@ function runClassifier(
   return { estimate, map, version: map.version, title: map.title, artist: map.artist };
 }
 
-async function loadExpectedLabels(family: DanBenchmarkFamily): Promise<Map<number, string>> {
-  if (!hasDb() || !db) return new Map();
-  const result = await db.execute({
-    sql: `SELECT beatmap_id, expected_label FROM dan_benchmark_labels WHERE family = ?`,
-    args: [family],
+function liveBackendBase(): string | null {
+  const base = process.env.LIVE_BACKEND_URL?.trim();
+  if (!base || !process.env.LIVE_ADMIN_TOKEN) return null;
+  return base.replace(/\/$/, "");
+}
+
+async function fetchDanBenchmark<T>(path: string): Promise<T> {
+  const base = liveBackendBase();
+  if (!base) throw new Error("LIVE_BACKEND_URL / LIVE_ADMIN_TOKEN missing.");
+  const response = await fetch(`${base}${path}`, {
+    headers: { authorization: `Bearer ${process.env.LIVE_ADMIN_TOKEN}` },
   });
-  const out = new Map<number, string>();
-  for (const row of result.rows) {
-    out.set(Number(row.beatmap_id), String(row.expected_label));
-  }
-  return out;
+  if (!response.ok) throw new Error(`Dan benchmark fetch failed (${response.status}) for ${path}`);
+  return await response.json() as T;
+}
+
+async function loadExpectedLabels(family: DanBenchmarkFamily): Promise<Map<number, string>> {
+  const payload = await fetchDanBenchmark<{ labels: Array<{ beatmapId: number; expectedLabel: string }> }>(
+    `/api/admin/dan-benchmark/labels?family=${family}`,
+  );
+  return new Map(payload.labels.map((label) => [label.beatmapId, label.expectedLabel]));
 }
 
 async function loadHiddenDiffs(family: DanBenchmarkFamily): Promise<Set<number>> {
-  if (!hasDb() || !db) return new Set();
-  const result = await db.execute({
-    sql: `SELECT beatmap_id FROM dan_benchmark_hidden_diffs WHERE family = ?`,
-    args: [family],
-  });
-  return new Set(result.rows.map((row) => Number(row.beatmap_id)));
+  const payload = await fetchDanBenchmark<{ hidden: number[] }>(
+    `/api/admin/dan-benchmark/hidden?family=${family}`,
+  );
+  return new Set(payload.hidden);
 }
 
 async function mapWithConcurrency<T, R>(
@@ -1107,10 +1114,10 @@ async function main(): Promise<void> {
     options.beatmapIds = new Set([...(options.beatmapIds ?? []), ...targets.beatmapIds]);
   }
 
-  if (!hasDb()) {
+  if (!liveBackendBase()) {
     process.stderr.write(
-      "ERROR: Turso credentials missing. Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN " +
-      "in .env. Expected labels are loaded from the dan_benchmark_labels table.\n",
+      "ERROR: live backend credentials missing. Set LIVE_BACKEND_URL and LIVE_ADMIN_TOKEN " +
+      "in .env. Expected labels are loaded from the backend dan_benchmark_labels table.\n",
     );
     process.exit(1);
   }

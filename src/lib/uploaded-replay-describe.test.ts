@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Stub the persistent cache and the .osr store so only the caching wrapper around
-// describeUploadedReplayById is exercised, not Turso/R2 or the replay parser.
+// describeUploadedReplayById is exercised, not the KV/R2 stores or the replay parser.
 // vi.hoisted keeps these defined before the hoisted vi.mock factories run.
 const { getPersistentCacheEntry, setPersistentCache, readUploadedReplay } = vi.hoisted(() => ({
   getPersistentCacheEntry: vi.fn(),

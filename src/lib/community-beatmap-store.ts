@@ -1,29 +1,21 @@
 import crypto from "node:crypto";
 
-import { getPersistentCacheEntry, setPersistentCache } from "./api";
+import { getCommunityBeatmapObject, putCommunityBeatmapObject } from "./r2-cache";
 
 // When an uploaded replay's beatmap can't be downloaded from osu! (unsubmitted,
 // deleted, or every mirror failed), the viewer asks whoever opened it to supply
 // the .osu themselves. That copy used to live only in that one browser, so every
-// other viewer got asked again. Stashing the verified .osu here, keyed by its MD5
-// checksum, lets the first person who has the map cover everyone who opens the
-// same replay afterwards.
+// other viewer got asked again. Stashing the verified .osu in R2, keyed by its
+// MD5 checksum, lets the first person who has the map cover everyone who opens
+// the same replay afterwards.
+//
+// R2 (not the live backend) on purpose: this is durable contributed content, not
+// a fetch-cache, and it must survive independently of the VPS. Objects are
+// content-addressed and immutable; nothing evicts the community-beatmaps/ prefix.
 
-// The map's .osu never changes for a given checksum, so keep it around for a long
-// time; this is contributed content, not a fetch-cache we expect to churn.
-const COMMUNITY_BEATMAP_CACHE_TTL = 365 * 24 * 60 * 60 * 1000;
 // A single .osu difficulty is tiny (well under a MB); this is a sanity bound so a
-// bad payload can't wedge a huge blob into the cache table.
+// bad payload can't wedge a huge blob into the store.
 const MAX_COMMUNITY_BEATMAP_BYTES = 8 * 1024 * 1024;
-
-type CommunityBeatmapCacheValue = {
-  content: string;
-  storedAt: number;
-};
-
-function communityBeatmapCacheKey(checksum: string): string {
-  return `community-beatmap:v1:${checksum}`;
-}
 
 // Same shape guard used elsewhere for fetched .osu files: it must look like a
 // real beatmap, not an error page or an unrelated text file.
@@ -41,12 +33,9 @@ export async function getCommunityBeatmapFile(checksum: string): Promise<string 
   const normalized = checksum.trim().toLowerCase();
   if (!/^[a-f0-9]{32}$/.test(normalized)) return null;
 
-  const cached = await getPersistentCacheEntry<CommunityBeatmapCacheValue>(communityBeatmapCacheKey(normalized));
-  if (!cached.hit) return null;
-
-  const content = cached.value?.content;
-  // Re-verify the checksum on read so a corrupted or mis-keyed entry can't serve
-  // the wrong chart into the replay viewer.
+  const content = await getCommunityBeatmapObject(normalized);
+  // Re-verify the checksum on read so a corrupted or mis-keyed object can't
+  // serve the wrong chart into the replay viewer.
   if (!content || !isLikelyBeatmapFile(content) || md5Hex(content) !== normalized) return null;
   return content;
 }
@@ -63,7 +52,9 @@ export async function putCommunityBeatmap(checksum: string, content: string): Pr
   if (!isLikelyBeatmapFile(content)) return { stored: false, reason: "invalid-file" };
   if (md5Hex(content) !== normalized) return { stored: false, reason: "checksum-mismatch" };
 
-  const value: CommunityBeatmapCacheValue = { content, storedAt: Date.now() };
-  await setPersistentCache(communityBeatmapCacheKey(normalized), value, COMMUNITY_BEATMAP_CACHE_TTL);
+  // When R2 isn't configured (local dev without creds) the put is a silent no-op,
+  // matching the old persistent-cache behavior: the uploader still gets to watch
+  // their replay this session; the copy just isn't shared.
+  await putCommunityBeatmapObject(normalized, content);
   return { stored: true };
 }

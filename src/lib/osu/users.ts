@@ -2,7 +2,6 @@ import { createServerFn } from "@tanstack/react-start";
 import {
   fetchWithCacheLock,
   getPersistentCacheEntryAllowStale,
-  getPersistentCacheEntries,
   getPersistentCacheEntry,
   osuFetch,
   refreshCacheInBackground,
@@ -10,11 +9,7 @@ import {
 } from "../api";
 import type { OsuFetchContextValue } from "../api";
 import { calculateUserProfileInsights } from "../profile-insights";
-import {
-  calculateApproxPpGainMap,
-  calculateReplacementPpGain,
-  getScoreTimestamp
-} from "../score";
+import { getScoreTimestamp } from "../score";
 import type {
   OsuScore,
   OsuUser
@@ -25,11 +20,10 @@ import {
   sanitizeServerProfilePageHtml
 } from "./server";
 import {
-  APPROX_PP_GAINS_CONCURRENCY,
   BEATMAP_USER_SCORES_ALL_CACHE_TTL,
   BEST_SCORES_WINDOW_CACHE_TTL,
+  OSU_PROXY_STALE_MS,
   RANK_HISTORY_CACHE_TTL,
-  SCORE_PP_GAIN_CACHE_TTL,
   USER_CACHE_TTL,
   USER_CACHE_VERSION,
   USER_PROFILE_INSIGHTS_CACHE_TTL,
@@ -42,12 +36,7 @@ import {
   userPromiseCache,
   userScoresListPromiseCache
 } from "./state";
-import { scorePpGainCacheKey } from "./internal-types";
-import type {
-  BeatmapUserScoresResponse,
-  CachedScorePpGain,
-  ScorePpGainLookup
-} from "./internal-types";
+import type { BeatmapUserScoresResponse } from "./internal-types";
 import {
   asInputRecord,
   normalizeBestWindowPayload,
@@ -55,7 +44,6 @@ import {
   normalizeUserIdPayload,
   normalizeUserKeyPayload
 } from "./validators";
-import { mapWithConcurrency } from "./concurrency";
 
 export function getScoreRequestParams(
   params: Record<string, string | number | undefined>,
@@ -107,6 +95,8 @@ async function fetchUserByKeyFromOsu(key: string): Promise<OsuUser> {
     try {
       return await osuFetch<OsuUser>(`/users/${encodeURIComponent(lookupKey)}/mania`, undefined, {
         caller: "getUser",
+        cacheTtlMs: USER_CACHE_TTL,
+        staleMs: OSU_PROXY_STALE_MS,
       });
     } catch (error) {
       fallbackError = error;
@@ -162,6 +152,9 @@ function fetchUserScoresFromOsu(
     }),
     {
       caller: `getUserScores:${type}`,
+      // Recent scores must stay live; the stable lists can share across instances.
+      cacheTtlMs: type === "recent" ? undefined : USER_SCORE_LIST_CACHE_TTL,
+      staleMs: type === "recent" ? undefined : OSU_PROXY_STALE_MS,
       context: {
         source: "user-score-list",
         userId,
@@ -216,8 +209,11 @@ export async function fetchAndCacheUserRankHistory(userId: number): Promise<numb
   const pending = rankHistoryPromiseCache.get(userId);
   if (pending) return pending;
 
+  // Same proxy path as the profile fetch, so one cached response serves both.
   const request = osuFetch<OsuUser>(`/users/${userId}/mania`, undefined, {
     caller: "getUserRankHistory",
+    cacheTtlMs: USER_CACHE_TTL,
+    staleMs: OSU_PROXY_STALE_MS,
   })
     .then((user) => {
       const history = user.rank_history?.data ?? null;
@@ -332,6 +328,8 @@ async function fetchUserBestScoresWindowFromOsu(
     }),
     {
       caller: `fetchUserBestScoresWindow:p${page}`,
+      cacheTtlMs: BEST_SCORES_WINDOW_CACHE_TTL,
+      staleMs: OSU_PROXY_STALE_MS,
       context: {
         source: "best-scores-window",
         userId,
@@ -375,6 +373,7 @@ export async function getBeatmapUserScoresAll(
       { ruleset: "mania" },
       {
         caller: "getBeatmapUserScoresAll",
+        cacheTtlMs: BEATMAP_USER_SCORES_ALL_CACHE_TTL,
         context: {
           source: "beatmap-user-scores-all",
           beatmapId,
@@ -403,128 +402,6 @@ export const getUserBeatmapScores = createServerFn({ method: "GET" })
       source: "getUserBeatmapScores",
     });
   });
-
-export function getPreviousBeatmapBestScore(scores: OsuScore[], target: ScorePpGainLookup): OsuScore | null {
-  const targetTimestampMs = new Date(target.timestamp).getTime();
-  if (!Number.isFinite(targetTimestampMs) || targetTimestampMs <= 0) return null;
-
-  const olderScores = scores
-    .filter((score) => score.id !== target.scoreId)
-    .filter((score) => {
-      const timestampMs = getTimestampMs(score);
-      return Number.isFinite(timestampMs) && timestampMs > 0 && timestampMs < targetTimestampMs;
-    })
-    .filter((score) => score.pp != null && score.pp > 0);
-
-  if (olderScores.length === 0) return null;
-
-  olderScores.sort((a, b) => {
-    const ppDiff = (b.pp ?? 0) - (a.pp ?? 0);
-    if (ppDiff !== 0) return ppDiff;
-    return getTimestampMs(b) - getTimestampMs(a);
-  });
-
-  return olderScores[0];
-}
-
-export async function calculateReplacementPpGainMapForTargets(
-  bestScores: OsuScore[],
-  targets: ScorePpGainLookup[],
-): Promise<Record<number, number>> {
-  if (targets.length === 0) return {};
-
-  const bestScoreById = new Map(
-    bestScores
-      .filter((score) => score.id > 0 && score.pp != null && score.pp > 0)
-      .map((score) => [score.id, score]),
-  );
-  const fallbackGainMap = calculateApproxPpGainMap(bestScores);
-  const relevantTargets = targets.filter((target) => bestScoreById.has(target.scoreId));
-  if (relevantTargets.length === 0) return {};
-
-  const cacheKeyByScoreId = new Map<number, string>();
-  for (const target of relevantTargets) {
-    const currentScore = bestScoreById.get(target.scoreId);
-    if (!currentScore?.pp) continue;
-    cacheKeyByScoreId.set(target.scoreId, scorePpGainCacheKey(target.scoreId, currentScore.pp));
-  }
-
-  const cachedGains = await getPersistentCacheEntries<CachedScorePpGain>(
-    [...new Set(cacheKeyByScoreId.values())],
-  );
-  const gains: Record<number, number> = {};
-  const uncachedTargets: ScorePpGainLookup[] = [];
-
-  for (const target of relevantTargets) {
-    const currentScore = bestScoreById.get(target.scoreId);
-    const cacheKey = cacheKeyByScoreId.get(target.scoreId);
-    const cached = cacheKey ? cachedGains.get(cacheKey) : undefined;
-    if (
-      currentScore?.pp &&
-      cached &&
-      Number.isFinite(cached.pp) &&
-      Number.isFinite(cached.ppGain) &&
-      Math.abs(cached.pp - currentScore.pp) < 0.01
-    ) {
-      if (cached.ppGain > 0) gains[target.scoreId] = cached.ppGain;
-      continue;
-    }
-
-    uncachedTargets.push(target);
-  }
-
-  if (uncachedTargets.length === 0) return gains;
-
-  const previousScores = await mapWithConcurrency(
-    uncachedTargets,
-    APPROX_PP_GAINS_CONCURRENCY,
-    async (target) => {
-      try {
-        const history = await getBeatmapUserScoresAll(target.beatmapId, target.userId, {
-          feature: "pp-gain-fallback",
-          batchSize: uncachedTargets.length,
-          concurrency: APPROX_PP_GAINS_CONCURRENCY,
-          scoreId: target.scoreId,
-        });
-        return getPreviousBeatmapBestScore(history, target);
-      } catch (error) {
-        console.warn("[osu] failed to fetch beatmap score history for pp gain fallback", {
-          beatmapId: target.beatmapId,
-          scoreId: target.scoreId,
-          timestamp: target.timestamp,
-          userId: target.userId,
-          error: getErrorMessage(error),
-        });
-        return undefined;
-      }
-    },
-  );
-
-  uncachedTargets.forEach((target, index) => {
-    const currentScore = bestScoreById.get(target.scoreId);
-    if (!currentScore) return;
-
-    const previousScore = previousScores[index];
-    if (previousScore === undefined) {
-      const fallbackGain = fallbackGainMap[target.scoreId];
-      if (fallbackGain > 0) gains[target.scoreId] = fallbackGain;
-      return;
-    }
-
-    const gain = calculateReplacementPpGain(bestScores, target.scoreId, previousScore ?? null);
-    const cacheKey = cacheKeyByScoreId.get(target.scoreId);
-    if (cacheKey && currentScore.pp != null) {
-      void setPersistentCache(
-        cacheKey,
-        { pp: currentScore.pp, ppGain: gain } satisfies CachedScorePpGain,
-        SCORE_PP_GAIN_CACHE_TTL,
-      );
-    }
-    if (gain > 0) gains[target.scoreId] = gain;
-  });
-
-  return gains;
-}
 
 export const getUserScoresBestWindow = createServerFn({ method: "GET" })
   .inputValidator(normalizeBestWindowPayload)

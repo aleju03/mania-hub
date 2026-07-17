@@ -183,6 +183,14 @@ export const getReplayParsed = createServerFn({ method: "GET" })
     ].join(":");
 
     return fetchWithCacheLock<ParsedReplayResponse>(cacheKey, REPLAY_PARSED_CACHE_TTL, async () => {
+      // Cross-instance tier: parsing is the most expensive replay-viewer step, so
+      // the packed result lives in R2 (a miss on this instance is usually a hit
+      // there). Age-expired objects just re-parse.
+      const { getJsonArtifact, getParsedReplayStorageKey, putJsonArtifact } = await getReplayCacheModule();
+      const storageKey = getParsedReplayStorageKey(REPLAY_PARSED_CACHE_VERSION, data.scoreId, data.mode, data.keyCount ?? 0);
+      const stored = await getJsonArtifact<ParsedReplayResponse>(storageKey);
+      if (stored) return stored;
+
       const { ScoreDecoder } = await import("osu-parsers");
       const buffer = await getReplayBuffer(data);
       const decoder = new ScoreDecoder();
@@ -226,7 +234,7 @@ export const getReplayParsed = createServerFn({ method: "GET" })
       const timesB64 = Buffer.from(times.buffer, times.byteOffset, times.byteLength).toString("base64");
       const keysB64 = Buffer.from(keys.buffer, keys.byteOffset, keys.byteLength).toString("base64");
 
-      return {
+      const response: ParsedReplayResponse = {
         header: {
           playerName: info?.username ?? "Unknown",
           gameMode: info?.rulesetId ?? 3,
@@ -248,6 +256,8 @@ export const getReplayParsed = createServerFn({ method: "GET" })
         keyCount,
         stableScrollSpeedScale: stableScrollSpeedScale ?? undefined,
       };
+      await putJsonArtifact(storageKey, response);
+      return response;
     }, REPLAY_CACHE_LOCK_TTL_MS);
   });
 
@@ -282,8 +292,8 @@ export const getBeatmapFile = createServerFn({ method: "GET" })
   })
   .handler(async ({ data }: { data: { beatmapId: number; beatmapsetId: number | null } }) => {
     // The .osu content only changes when the map is updated, and it is already
-    // Turso-cached for 30 days; edge-cache it so repeat replay views skip the
-    // serverless + Turso round trip entirely.
+    // KV-cached for 30 days; edge-cache it so repeat replay views skip the
+    // serverless + KV round trip entirely.
     edgeCache(3600, 86400);
     return await fetchBeatmapFileWithMeta(data.beatmapId, data.beatmapsetId);
   });

@@ -1,8 +1,6 @@
 import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useCallback, useMemo, memo, useRef } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { getRankings, getCountryRecentScores, getTrackerLiveSnapshot, getTrackerSnapshot } from "../lib/osu";
-import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName, isGlobalScope } from "../lib/country";
 import { formatAccuracy, formatTimeAgo, formatPP, formatNumber, formatPpGain } from "../lib/format";
 import {
@@ -42,11 +40,10 @@ import { showPlayerCountryFlagState } from "../lib/player-profile-navigation";
 import { fetchLiveTrackerSnapshot, isLiveBackendConfigured, openLiveEventSource } from "../lib/live-backend";
 import { detectTrackerMultis, type TrackerMultiRound } from "../lib/tracker-multi";
 import { CountryWarming } from "../components/CountryWarming";
-import { LiveDataEmptyState } from "../components/LiveDataEmptyState";
+import { LiveBackendRequired, LiveDataEmptyState } from "../components/LiveDataEmptyState";
 import { useCountryWarming } from "../lib/use-country-warming";
 import { useWindowActive } from "../lib/window-activity";
 
-const TRACKER_SNAPSHOT_LOADER_TIMEOUT_MS = 2500;
 const TRACKER_PAGE_SIZE = 45;
 const TRACKER_LIVE_MIN_SNAPSHOT_LIMIT = TRACKER_PAGE_SIZE * 2;
 const TRACKER_LIVE_RECONCILE_LIMIT = 60;
@@ -200,19 +197,6 @@ function makeDevSimScore(user: DevSimUser, map: DevSimMap, modAcronyms: string[]
   };
 }
 
-async function withSnapshotLoaderBudget<T>(snapshotPromise: Promise<T>): Promise<T | null> {
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  const timeoutPromise = new Promise<null>((resolve) => {
-    timeoutId = setTimeout(() => resolve(null), TRACKER_SNAPSHOT_LOADER_TIMEOUT_MS);
-  });
-  return Promise.race([
-    snapshotPromise.finally(() => {
-      if (timeoutId) clearTimeout(timeoutId);
-    }),
-    timeoutPromise,
-  ]);
-}
-
 function parseTrackerSort(value: unknown): TrackerSort {
   return value === "stars" ? "stars" : "recent";
 }
@@ -242,17 +226,6 @@ export const Route = createFileRoute("/tracker")({
   },
   search: {
     middlewares: [stripSearchParams({ page: undefined, sort: undefined, sortDirection: undefined })],
-  },
-  loaderDeps: ({ search }) => ({
-    country: search.country,
-  }),
-  loader: async ({ deps }) => {
-    if (isLiveBackendConfigured()) return null;
-    try {
-      return await withSnapshotLoaderBudget(getTrackerSnapshot({ data: { country: deps.country } }));
-    } catch {
-      return null;
-    }
   },
   head: ({ match }) => {
     const country = match.search.country;
@@ -353,7 +326,6 @@ function getLiveTrackerTotal(country: string, total: number | null | undefined):
   return isGlobalScope(country) ? normalizedTotal : Math.min(TRACKER_FEED_SCORE_LIMIT, normalizedTotal);
 }
 
-const EMPTY_IDS: number[] = [];
 const EMPTY_SCORES: LeanTrackerScore[] = [];
 const EMPTY_KEY_SET: ReadonlySet<string> = new Set<string>();
 
@@ -364,20 +336,6 @@ type TrackerFeedEntry =
   | { kind: "multi"; key: string; rounds: TrackerMultiRound[] };
 const EMPTY_SCORE_GAINS: Record<number, { fetchedAt: number; value: number }> = {};
 
-function getTrackerUserBatch(
-  userIds: number[],
-  users: Array<{ id: number; username: string; avatar_url: string; country_code: string }>,
-  batchSize: number,
-  batchIndex: number,
-) {
-  const start = (batchIndex * batchSize) % Math.max(1, userIds.length);
-  const batchUserIds = userIds.slice(start, start + batchSize);
-  const batchUserIdSet = new Set(batchUserIds);
-  return {
-    userIds: batchUserIds,
-    users: users.filter((user) => batchUserIdSet.has(user.id)),
-  };
-}
 
 function ScoresPage() {
   const navigate = useNavigate();
@@ -390,38 +348,21 @@ function ScoresPage() {
   const selectedCountryRef = useRef(selectedCountry);
   selectedCountryRef.current = selectedCountry;
   const selectedIsGlobal = isGlobalScope(selectedCountry);
-  const loaderData = Route.useLoaderData();
-  const snapshot = loaderData?.country === selectedCountry ? loaderData : null;
-  const cachedRankings = useAppStore((state) => state.rankingsByCountry[selectedCountry] ?? null);
-  const rankings = cachedRankings ?? snapshot?.rankings ?? null;
-  const rankingsFetchedAt = useAppStore((state) => state.rankingsFetchedAtByCountry[selectedCountry] ?? null);
-  const cachedFeedScores = useAppStore((state) => state.feedScoresByCountry[selectedCountry]) ?? EMPTY_SCORES;
-  const feedScores = cachedFeedScores.length > 0 ? cachedFeedScores : snapshot?.scores ?? EMPTY_SCORES;
+  const feedScores = useAppStore((state) => state.feedScoresByCountry[selectedCountry]) ?? EMPTY_SCORES;
   const feedScoresFetchedAt = useAppStore((state) => state.feedScoresFetchedAtByCountry[selectedCountry]) ?? null;
-  const cachedTrackedUserIds = useAppStore((state) => state.trackedUserIdsByCountry[selectedCountry]) ?? EMPTY_IDS;
-  const trackedUserIds = cachedTrackedUserIds.length > 0 ? cachedTrackedUserIds : snapshot?.userIds ?? EMPTY_IDS;
   const addFeedScores = useAppStore((state) => state.addFeedScores);
   const markFeedScoresFetched = useAppStore((state) => state.markFeedScoresFetched);
-  const setRankings = useAppStore((state) => state.setRankings);
-  const setTrackedUserIds = useAppStore((state) => state.setTrackedUserIds);
-  const resetPollIndex = useAppStore((state) => state.resetPollIndex);
   const hiddenUserIds = useHiddenUserIds();
-  const [userIds, setUserIds] = useState<number[]>(trackedUserIds);
-  const [loadingPlayers, setLoadingPlayers] = useState<boolean>(trackedUserIds.length === 0 && !rankings);
-  const [playersError, setPlayersError] = useState<string | null>(null);
   const [filter, setFilter] = useState<ScoreFilter>("all");
   const [gradeFilter, setGradeFilter] = useState<GradeFilter>("all");
   const [keyFilter, setKeyFilter] = useState<KeyFilter>("all");
   const [missFilter, setMissFilter] = useState<MissFilter>("all");
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<number[]>([]);
-  const [initialLoaded, setInitialLoaded] = useState(feedScores.length > 0 || !!feedScoresFetchedAt || !!snapshot);
+  const [initialLoaded, setInitialLoaded] = useState(feedScores.length > 0 || !!feedScoresFetchedAt);
   const initialLoadedCountryRef = useRef(selectedCountry);
   const initialLoadedForSelectedCountry = initialLoadedCountryRef.current === selectedCountry
     ? initialLoaded
-    : feedScores.length > 0 || !!feedScoresFetchedAt || !!snapshot;
-  const [initialRefreshDone, setInitialRefreshDone] = useState(false);
-  const [initialFetching, setInitialFetching] = useState(false);
-  const [polling, setPolling] = useState(false);
+    : feedScores.length > 0 || !!feedScoresFetchedAt;
   const [simulateHighTraffic, setSimulateHighTraffic] = useState(false);
   const [simulateFeedActivity, setSimulateFeedActivity] = useState(false);
   const [simFeedScores, setSimFeedScores] = useState<LeanTrackerScore[]>([]);
@@ -435,9 +376,7 @@ function ScoresPage() {
   const [liveFilteredScores, setLiveFilteredScores] = useState<LeanTrackerScore[]>([]);
   const [liveFilteredSnapshotKey, setLiveFilteredSnapshotKey] = useState<string | null>(null);
   const [liveFilteredLoading, setLiveFilteredLoading] = useState(false);
-  const refreshing = initialFetching || polling || liveSnapshotLoading || livePageLoading || liveFilteredLoading;
-  const initialFetchInFlightRef = useRef(false);
-  const pollInFlightRef = useRef(false);
+  const refreshing = liveSnapshotLoading || livePageLoading || liveFilteredLoading;
   const liveSnapshotInFlightRef = useRef(false);
   const liveSnapshotInFlightLimitRef = useRef(0);
   const queuedLiveSnapshotLimitRef = useRef<number | null>(null);
@@ -445,8 +384,6 @@ function ScoresPage() {
   const liveFilteredRequestIdRef = useRef(0);
   const lastLiveSnapshotAtRef = useRef(0);
   const knownLiveScoreIdentitiesRef = useRef<Set<string>>(new Set());
-  const pollRequestIdRef = useRef(0);
-  const appliedSnapshotKeyRef = useRef<string | null>(null);
   const liveBackendEnabled = isLiveBackendConfigured();
   const windowActive = useWindowActive();
   const { warming } = useCountryWarming(selectedCountry);
@@ -484,36 +421,6 @@ function ScoresPage() {
       || (trackerSort !== "recent" && selectedPlayerIds.length === 0)
     )
     && hiddenUserIds.size === 0;
-  const trackerUsers = useMemo(
-    () => rankings?.ranking
-      .filter((entry: { user: { is_active?: boolean } }) => entry.user.is_active !== false)
-      .map((entry) => ({
-        id: entry.user.id,
-        username: entry.user.username,
-        avatar_url: entry.user.avatar_url,
-        country_code: entry.user.country_code,
-      })) ?? [],
-    [rankings],
-  );
-
-  useEffect(() => {
-    if (!snapshot) return;
-    const snapshotKey = `${snapshot.country}:${snapshot.fetchedAt}`;
-    if (appliedSnapshotKeyRef.current === snapshotKey) return;
-    appliedSnapshotKeyRef.current = snapshotKey;
-
-    setRankings(selectedCountry, snapshot.rankings);
-    setTrackedUserIds(selectedCountry, snapshot.userIds);
-    setUserIds(snapshot.userIds);
-    setLoadingPlayers(false);
-    setPlayersError(null);
-    initialLoadedCountryRef.current = selectedCountry;
-    setInitialLoaded(true);
-    if (snapshot.scores.length > 0) addFeedScores(selectedCountry, snapshot.scores);
-    if (Object.keys(snapshot.gains).length > 0) {
-      setTrackerPpGains(selectedCountry, snapshot.gains, snapshot.fetchedAt);
-    }
-  }, [snapshot, selectedCountry, setRankings, setTrackedUserIds, addFeedScores, setTrackerPpGains]);
 
   useEffect(() => {
     if (!windowActive) return;
@@ -559,9 +466,6 @@ function ScoresPage() {
       markFeedScoresFetched(requestedCountry);
       initialLoadedCountryRef.current = requestedCountry;
       setInitialLoaded(true);
-      setInitialRefreshDone(true);
-      setInitialFetching(false);
-      setLoadingPlayers(false);
     } finally {
       liveSnapshotInFlightRef.current = false;
       liveSnapshotInFlightLimitRef.current = 0;
@@ -578,12 +482,9 @@ function ScoresPage() {
   useEffect(() => {
     if (!liveBackendEnabled || !windowActive) return;
     const requestedCountry = selectedCountry;
-    const run = (options: { force?: boolean; limit?: number } = {}) => {
-      reconcileLiveSnapshot(requestedCountry, options).catch(() => {
-        // The existing server-function path below remains the fallback.
-      });
-    };
-    run({ force: true, limit: TRACKER_LIVE_MIN_SNAPSHOT_LIMIT });
+    reconcileLiveSnapshot(requestedCountry, { force: true, limit: TRACKER_LIVE_MIN_SNAPSHOT_LIMIT }).catch(() => {
+      // Transient backend failure: the SSE feed and the next reconcile retry cover it.
+    });
   }, [liveBackendEnabled, reconcileLiveSnapshot, selectedCountry, windowActive]);
 
   // Unlike the other live surfaces, the tracker feed stays connected while the
@@ -625,15 +526,7 @@ function ScoresPage() {
 
   useEffect(() => {
     initialLoadedCountryRef.current = selectedCountry;
-    setUserIds(trackedUserIds);
-    setLoadingPlayers(trackedUserIds.length === 0 && !rankings);
-    setPlayersError(null);
     setInitialLoaded(feedScores.length > 0 || !!feedScoresFetchedAt);
-    setInitialRefreshDone(false);
-    setInitialFetching(false);
-    setPolling(false);
-    initialFetchInFlightRef.current = false;
-    pollInFlightRef.current = false;
     liveSnapshotInFlightRef.current = false;
     liveSnapshotInFlightLimitRef.current = 0;
     queuedLiveSnapshotLimitRef.current = null;
@@ -649,197 +542,18 @@ function ScoresPage() {
     setLiveFilteredSnapshotKey(null);
     setLiveFilteredLoading(false);
     liveFilteredRequestIdRef.current += 1;
-    pollRequestIdRef.current += 1;
     knownLiveScoreIdentitiesRef.current = new Set();
     setExpandedKey(null);
     setExpandedMultiKeys(EMPTY_KEY_SET);
     setSelectedPlayerIds([]);
-    resetPollIndex(selectedCountry);
   }, [selectedCountry]);
 
   useEffect(() => {
-    let cancelled = false;
-    const cachedIds = rankings?.ranking
-      .filter((entry: { user: { is_active?: boolean } }) => entry.user.is_active !== false)
-      .map((entry: { user: { id: number } }) => entry.user.id) ?? trackedUserIds;
-
-    if (cachedIds.length > 0) {
-      setUserIds(cachedIds);
-      setLoadingPlayers(false);
-      setPlayersError(null);
-    }
-
-    if (liveBackendEnabled) {
-      setLoadingPlayers(false);
-      setPlayersError(null);
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    const shouldRefresh = !rankings || isCacheStale(rankingsFetchedAt, CLIENT_CACHE_TTL.rankings);
-
-    if (!shouldRefresh) {
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    setLoadingPlayers(cachedIds.length === 0);
-
-    getRankings({ data: { type: "performance", page: 1, country: selectedCountry } })
-      .then((rankings) => {
-        if (cancelled) return;
-
-        const ids = rankings.ranking
-          .filter((entry: { user: { is_active?: boolean } }) => entry.user.is_active !== false)
-          .map((entry: { user: { id: number } }) => entry.user.id);
-        setRankings(selectedCountry, rankings);
-        setUserIds(ids);
-        setTrackedUserIds(selectedCountry, ids);
-        setPlayersError(null);
-      })
-      .catch(() => {
-        if (cancelled || cachedIds.length > 0) return;
-        setPlayersError("Couldn't load the tracked player pool.");
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setLoadingPlayers(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rankings, rankingsFetchedAt, selectedCountry, liveBackendEnabled]);
-
-  useEffect(() => {
-    if (feedScores.length > 0 || !!feedScoresFetchedAt || !!snapshot) {
+    if (feedScores.length > 0 || !!feedScoresFetchedAt) {
       initialLoadedCountryRef.current = selectedCountry;
       setInitialLoaded(true);
     }
-  }, [feedScores.length, feedScoresFetchedAt, selectedCountry, snapshot]);
-
-  useEffect(() => {
-    if (liveBackendEnabled) {
-      setInitialRefreshDone(true);
-      setInitialFetching(false);
-      return;
-    }
-    if (userIds.length === 0 || initialRefreshDone || initialFetchInFlightRef.current) return;
-
-    const feedIsStale =
-      feedScores.length === 0 ||
-      !feedScoresFetchedAt || isCacheStale(feedScoresFetchedAt, CLIENT_CACHE_TTL.scoresFeed);
-    const shouldBackfillSeededSnapshot = snapshot?.country === selectedCountry && snapshot.seedBatchCount > 0;
-    const shouldRefresh = feedIsStale || shouldBackfillSeededSnapshot;
-
-    if (!shouldRefresh) {
-      initialLoadedCountryRef.current = selectedCountry;
-      setInitialLoaded(true);
-      setInitialRefreshDone(true);
-      return;
-    }
-
-    if (feedScores.length > 0) {
-      initialLoadedCountryRef.current = selectedCountry;
-      setInitialLoaded(true);
-    }
-
-    let cancelled = false;
-    const BATCH = 10;
-    const requestedCountry = selectedCountry;
-    const requestedUserIds = userIds;
-    const requestedUsers = trackerUsers;
-
-    initialFetchInFlightRef.current = true;
-    setInitialFetching(true);
-
-    (async () => {
-      const totalBatches = Math.ceil(requestedUserIds.length / BATCH);
-      const backfillBatchCount = feedIsStale
-        ? totalBatches
-        : Math.min(snapshot?.seedBatchCount ?? totalBatches, totalBatches);
-      // The loader snapshot is intentionally fast and may be sourced from the
-      // public live feed, which can miss osu! recent-score entries with odd
-      // shapes. Still backfill from osu! after first paint so the seeded top
-      // players do not get stuck with a partial live snapshot.
-      const firstBatchIndex = 0;
-      const parallelBatchEnd = Math.min(backfillBatchCount, 3);
-      const fetchBatch = async (batchIndex: number) => {
-        if (cancelled) return;
-        try {
-          const batch = getTrackerUserBatch(requestedUserIds, requestedUsers, BATCH, batchIndex);
-          const result = await getCountryRecentScores({
-            data: { userIds: batch.userIds, users: batch.users, batchSize: BATCH, batchIndex: 0, recentLimit: 20, source: "backfill" },
-          });
-          if (cancelled) return;
-          if (result.scores.length > 0) addFeedScores(requestedCountry, result.scores);
-          if (Object.keys(result.gains).length > 0) setTrackerPpGains(requestedCountry, result.gains);
-          initialLoadedCountryRef.current = requestedCountry;
-          setInitialLoaded(true);
-        } catch { /* continue */ }
-      };
-
-      await Promise.allSettled(
-        Array.from(
-          { length: Math.max(0, parallelBatchEnd - firstBatchIndex) },
-          (_, offset) => fetchBatch(firstBatchIndex + offset),
-        ),
-      );
-
-      for (let b = Math.max(firstBatchIndex, parallelBatchEnd); b < backfillBatchCount; b++) {
-        await fetchBatch(b);
-      }
-      if (!cancelled) {
-        markFeedScoresFetched(requestedCountry);
-        setInitialRefreshDone(true);
-        initialFetchInFlightRef.current = false;
-        setInitialFetching(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      initialFetchInFlightRef.current = false;
-      setInitialFetching(false);
-    };
-  // feedScores.length and feedScoresFetchedAt intentionally omitted:
-  // addFeedScores writes both inside the loop, and those writes must not cancel
-  // the remaining batches of this initial refresh.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userIds, trackerUsers, initialRefreshDone, addFeedScores, markFeedScoresFetched, selectedCountry, setTrackerPpGains, snapshot]);
-
-  const poll = useCallback(async () => {
-    if (liveBackendEnabled) return;
-    if (!windowActive) return;
-    if (pollInFlightRef.current) return;
-    pollInFlightRef.current = true;
-    const requestId = ++pollRequestIdRef.current;
-    setPolling(true);
-    try {
-      const result = await getTrackerLiveSnapshot({ data: { country: selectedCountry } });
-      if (result.userIds.length > 0) setTrackedUserIds(selectedCountry, result.userIds);
-      if (result.scores.length > 0) addFeedScores(selectedCountry, result.scores);
-      if (Object.keys(result.gains).length > 0) setTrackerPpGains(selectedCountry, result.gains);
-      else markFeedScoresFetched(selectedCountry);
-    } catch { /* silently continue */ } finally {
-      if (pollRequestIdRef.current === requestId) {
-        pollInFlightRef.current = false;
-        setPolling(false);
-      }
-    }
-  }, [liveBackendEnabled, addFeedScores, markFeedScoresFetched, selectedCountry, setTrackerPpGains, setTrackedUserIds, windowActive]);
-
-  useEffect(() => {
-    if (liveBackendEnabled || !windowActive) return;
-    void poll();
-    const id = setInterval(poll, 60_000);
-    return () => {
-      clearInterval(id);
-    };
-  }, [poll, liveBackendEnabled, windowActive]);
+  }, [feedScores.length, feedScoresFetchedAt, selectedCountry]);
 
   useEffect(() => {
     setExpandedKey(null);
@@ -1174,14 +888,12 @@ function ScoresPage() {
     }
     return entries;
   }, [paginatedScores, multiGroupByScoreKey, hiddenUserIds]);
-  const liveStatusLabel = liveBackendEnabled ? "Live updates on" : "Live polling";
-  const scoreWindowLabel = liveBackendEnabled && selectedIsGlobal
+  const liveStatusLabel = "Live updates on";
+  const scoreWindowLabel = selectedIsGlobal
     ? liveTrackerTotal == null && !useLiveBackendFilteredScores
       ? "Last 24h"
       : `Last 24h \u00b7 ${formatNumber(trackerWindowCount)} scores`
-    : liveBackendEnabled
-      ? `${formatNumber(trackerWindowCount)} scores`
-      : `${formatNumber(feedScores.length)} scores`;
+    : `${formatNumber(trackerWindowCount)} scores`;
 
   useEffect(() => {
     if (!useLiveBackendFilteredScores) {
@@ -1332,6 +1044,15 @@ function ScoresPage() {
     </div>
   );
 
+  if (!liveBackendEnabled) {
+    return (
+      <div className="flex-1">
+        <PageHeader iconSrc="/images/icons/news.svg" title={`${countryName} mania tracker`} />
+        <LiveBackendRequired />
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1">
       <PageHeader
@@ -1367,13 +1088,11 @@ function ScoresPage() {
                 {simulateFeedActivity ? "Sim feed on" : "Sim feed"}
               </button>
             )}
-            {loadingPlayers || refreshing || showingLivePageSkeletons ? (
+            {refreshing || showingLivePageSkeletons ? (
               <>
                 <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
                 <span className="text-[10px] text-osu-f1 tabular-nums">
-                  {loadingPlayers
-                    ? "Loading tracked players..."
-                    : "Refreshing..."}
+                  Refreshing...
                 </span>
               </>
             ) : (
@@ -1651,11 +1370,7 @@ function ScoresPage() {
             </>
           )}
           <div className="flex-1 min-w-0">
-            {playersError ? (
-              <div className="text-center py-16 text-osu-f1 text-sm">
-                {playersError}
-              </div>
-            ) : loadingPlayers || (!initialLoadedForSelectedCountry && feedScores.length === 0) || showingLivePageSkeletons ? (
+            {(!initialLoadedForSelectedCountry && feedScores.length === 0) || showingLivePageSkeletons ? (
               <>
                 <div className="space-y-2">
                   {Array.from({ length: 6 }).map((_, i) => (

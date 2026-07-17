@@ -1,21 +1,3 @@
-import { TRACKER_SNAPSHOT_BATCH_TIMEOUT_MS } from "./constants";
-import type { CountryRecentScoresResponse } from "./internal-types";
-
-export async function withTrackerSnapshotBatchBudget(
-  feedPromise: Promise<CountryRecentScoresResponse>,
-): Promise<CountryRecentScoresResponse | null> {
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  const timeoutPromise = new Promise<null>((resolve) => {
-    timeoutId = setTimeout(() => resolve(null), TRACKER_SNAPSHOT_BATCH_TIMEOUT_MS);
-  });
-  return Promise.race([
-    feedPromise.finally(() => {
-      if (timeoutId) clearTimeout(timeoutId);
-    }),
-    timeoutPromise,
-  ]);
-}
-
 export async function mapWithConcurrency<T, R>(
   items: T[],
   concurrency: number,

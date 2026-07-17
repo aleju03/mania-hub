@@ -7,8 +7,6 @@ import {
   getCachedUser,
   getRankings,
   getScore,
-  readCountryMapsFavouritesFromCache,
-  readRankingsPageFromCache,
 } from "../../lib/osu";
 import { getServerLiveBackendUrl } from "../../lib/live-backend";
 import { getCountryName, isGlobalScope, isSupportedCountryCode } from "../../lib/country";
@@ -288,36 +286,8 @@ async function fetchMapsOgPoolFromLiveBackend(
   }
 }
 
-// Turso fallback (server unconfigured/down or country untracked there):
-// recover the last roster we cached for this country, then look up the
-// favourites blob stored under that exact roster key. Both reads allow stale
-// entries and never rebuild.
-async function fetchMapsOgPoolFromTurso(country: string): Promise<MapsOgPool | null> {
-  const rankings = await readRankingsPageFromCache("performance", 1, country);
-  if (!rankings) return null;
-  const users = rankings.ranking
-    .filter((entry) => entry.user.is_active !== false)
-    .slice(0, 50)
-    .map((entry) => ({
-      id: entry.user.id,
-      username: entry.user.username,
-      avatar_url: entry.user.avatar_url,
-    }));
-  if (users.length === 0) return null;
-  const favSection = await readCountryMapsFavouritesFromCache(users);
-  const pool = favSection?.beatmapsetsPool;
-  const sets = pool ? Object.values(pool) : [];
-  const covers = sets
-    .map((set) => pickCover(set.covers))
-    .filter((cover): cover is string => !!cover);
-  if (covers.length === 0) return null;
-  return { covers, poolSize: sets.length };
-}
-
 async function renderMapsOg(request: Request, country: string): Promise<Response> {
-  const pool =
-    (await fetchMapsOgPoolFromLiveBackend(country)) ??
-    (await fetchMapsOgPoolFromTurso(country));
+  const pool = await fetchMapsOgPoolFromLiveBackend(country);
   if (!pool) {
     // No maps data for this country: fall through to the scoreboard layout
     // without storing that fallback under the maps-specific R2 key.

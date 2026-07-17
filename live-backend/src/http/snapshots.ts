@@ -11,6 +11,9 @@ import { clearDoneAdminTodos, createAdminTodo, deleteAdminTodo, listAdminTodos, 
 import { cancelBeatmapOsuFileBackfill, getBeatmapOsuFileBackfillStatus, startBeatmapOsuFileBackfill } from "../features/beatmap-osu-file-backfill.js";
 import { CHART_ANALYSIS_VERSION, cancelChartAnalysisBackfill, enqueueChartAnalysisBackfill, startChartAnalysisBackfill } from "../features/chart-analysis.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
+import { importDanBenchmark, isDanBenchmarkFamily, listDanBenchmarkHiddenDiffs, listDanBenchmarkLabels, setDanBenchmarkHiddenDiff, setDanBenchmarkLabel } from "../features/dan-benchmark.js";
+import { enrichPayloadAvatarAccents } from "../features/avatar-accents.js";
+import { getOsuJsonWithProxyCache, normalizeOsuProxyCacheHints } from "../features/osu-proxy-cache.js";
 import { GOAL_KINDS, GOAL_MAP_KINDS, GOAL_SPEED_BUCKETS, GOAL_TARGET_GRADES, createUserGoal, deleteUserGoal, getUserGoal, listUserGoalsWithProgress, reconcileGoalsForUser, updateUserGoal, type GoalKind, type GoalSpeedBucket, type UserGoalInput, type UserGoalTargetPatch } from "../features/goals.js";
 import { getMyDataSummary, getUserTopPlaysFeed, getUserTrackedFeed, type MyDataTopPlaysQuery, type MyDataTrackedFeedQuery } from "../features/my-data.js";
 import { getPlayerSkillBreakdown } from "../features/player-skills.js";
@@ -152,6 +155,14 @@ export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: 
   }
 }
 
+// sendJson for the surfaces that render player names: attaches avatar accents next to every
+// avatar URL in the payload (and queues extraction for unseen avatars). Additive only; an
+// enrichment failure still sends the plain payload.
+async function sendAccentEnrichedJson(req: IncomingMessage, res: ServerResponse, ctx: HttpContext, status: number, body: unknown): Promise<void> {
+  await enrichPayloadAvatarAccents(ctx.db, ctx.queue ?? null, body);
+  sendJson(req, res, ctx, status, body);
+}
+
 async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: HttpContext): Promise<boolean> {
   const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
   const country = countryFromUrl(url, ctx);
@@ -247,12 +258,12 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         return true;
       }
       res.setHeader("cache-control", "public, max-age=15, stale-while-revalidate=60");
-      sendJson(req, res, ctx, 200, snapshot);
+      await sendAccentEnrichedJson(req, res, ctx, 200, snapshot);
       return true;
     }
     if (profileRoute.kind === "snapshot") {
       if (!checkRate(req, res, ctx, "publicCostly")) return true;
-      sendJson(req, res, ctx, 200, await getPlayerProfileSnapshot(ctx.db, ctx.osu, profileRoute.key));
+      await sendAccentEnrichedJson(req, res, ctx, 200, await getPlayerProfileSnapshot(ctx.db, ctx.osu, profileRoute.key));
       return true;
     }
     const userId = Number(profileRoute.key);
@@ -753,17 +764,17 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
           produceSnapshot,
         )
       : await produceSnapshot();
-    sendJson(req, res, ctx, 200, snapshot);
+    await sendAccentEnrichedJson(req, res, ctx, 200, snapshot);
     return true;
   }
   if (url.pathname === "/api/snapshots/top-plays") {
     if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
-    sendJson(req, res, ctx, 200, await getTopPlaysSnapshot(ctx.db, country, url.searchParams.get("window") ?? "7d", parseTopPlaysSnapshotQuery(url.searchParams)));
+    await sendAccentEnrichedJson(req, res, ctx, 200, await getTopPlaysSnapshot(ctx.db, country, url.searchParams.get("window") ?? "7d", parseTopPlaysSnapshotQuery(url.searchParams)));
     return true;
   }
   if (url.pathname === "/api/snapshots/snipes") {
     if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
-    sendJson(req, res, ctx, 200, await getSnipesSnapshot(ctx.db, country, clampLimit(url.searchParams.get("limit"), 500, 1000)));
+    await sendAccentEnrichedJson(req, res, ctx, 200, await getSnipesSnapshot(ctx.db, country, clampLimit(url.searchParams.get("limit"), 500, 1000)));
     return true;
   }
   if (url.pathname === "/api/snapshots/maps-progress") {
@@ -796,7 +807,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       q: (url.searchParams.get("q") ?? "").slice(0, 100),
     };
     res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
-    sendJson(req, res, ctx, 200, await getMapsPlayersSnapshot(ctx.db, country, kind, id, playersQuery));
+    await sendAccentEnrichedJson(req, res, ctx, 200, await getMapsPlayersSnapshot(ctx.db, country, kind, id, playersQuery));
     return true;
   }
   if (url.pathname === "/api/snapshots/maps-set") {
@@ -865,7 +876,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         console.warn("[global-rankings] failed to queue stat repair", error);
       }
       res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
-      sendJson(req, res, ctx, 200, snapshot);
+      await sendAccentEnrichedJson(req, res, ctx, 200, snapshot);
       return true;
     }
     if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
@@ -876,7 +887,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       console.warn("[country-rankings] failed to queue stat repair", error);
     }
     res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
-    sendJson(req, res, ctx, 200, snapshot);
+    await sendAccentEnrichedJson(req, res, ctx, 200, snapshot);
     return true;
   }
   if (url.pathname === "/api/snapshots/global-rankings") {
@@ -887,7 +898,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       console.warn("[global-rankings] failed to queue stat repair", error);
     }
     res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
-    sendJson(req, res, ctx, 200, snapshot);
+    await sendAccentEnrichedJson(req, res, ctx, 200, snapshot);
     return true;
   }
   if (url.pathname === "/api/snapshots/farm-helper") {
@@ -906,7 +917,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         limit: clampInteger(url.searchParams.get("limit"), 1, FARM_HELPER_MAX_LIMIT, FARM_HELPER_DEFAULT_LIMIT),
       }, ctx.queue);
       res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
-      sendJson(req, res, ctx, 200, snapshot);
+      await sendAccentEnrichedJson(req, res, ctx, 200, snapshot);
     } catch (error) {
       if (error instanceof FarmHelperUserNotFoundError) {
         sendJson(req, res, ctx, 404, { error: "user_not_found" });
@@ -938,7 +949,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         parseFarmHelperKeyMode(url.searchParams.get("key")),
       );
       res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
-      sendJson(req, res, ctx, 200, result);
+      await sendAccentEnrichedJson(req, res, ctx, 200, result);
     } catch (error) {
       if (error instanceof FarmHelperUserNotFoundError) {
         sendJson(req, res, ctx, 404, { error: "user_not_found" });
@@ -1027,7 +1038,14 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       if (body.body !== undefined) {
         sendJson(req, res, ctx, 200, await ctx.osu.postJson(path, normalizeOsuApiBody(body.body), caller));
       } else {
-        sendJson(req, res, ctx, 200, await ctx.osu.getJson(path, caller));
+        const cacheHints = normalizeOsuProxyCacheHints(body);
+        if (cacheHints) {
+          const cached = await getOsuJsonWithProxyCache(ctx.db, ctx.serveWriteDb ?? ctx.db, ctx.osu, path, caller, cacheHints);
+          res.setHeader("x-osu-proxy-cache", cached.cache);
+          sendJson(req, res, ctx, 200, cached.payload);
+        } else {
+          sendJson(req, res, ctx, 200, await ctx.osu.getJson(path, caller));
+        }
       }
     } catch (error) {
       sendOsuError(req, res, ctx, error);
@@ -2077,6 +2095,56 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     sendJson(req, res, ctx, 200, { ok: true, cleared: await clearDoneAdminTodos(ctx.db) });
+    return true;
+  }
+  if (url.pathname === "/api/admin/dan-benchmark/labels" || url.pathname === "/api/admin/dan-benchmark/hidden") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    const family = url.searchParams.get("family");
+    if (!isDanBenchmarkFamily(family)) {
+      sendJson(req, res, ctx, 400, { error: "invalid_family" });
+      return true;
+    }
+    if (url.pathname.endsWith("/labels")) {
+      sendJson(req, res, ctx, 200, { labels: await listDanBenchmarkLabels(ctx.db, family) });
+    } else {
+      sendJson(req, res, ctx, 200, { hidden: await listDanBenchmarkHiddenDiffs(ctx.db, family) });
+    }
+    return true;
+  }
+  if (url.pathname === "/api/admin/dan-benchmark/set-label" || url.pathname === "/api/admin/dan-benchmark/set-hidden") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
+    const ok = url.pathname.endsWith("/set-label")
+      ? await setDanBenchmarkLabel(ctx.db, body)
+      : await setDanBenchmarkHiddenDiff(ctx.db, body);
+    if (!ok) {
+      sendJson(req, res, ctx, 400, { error: "invalid_payload" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true });
+    return true;
+  }
+  if (url.pathname === "/api/admin/dan-benchmark/import") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<{ labels?: []; hidden?: [] }>((await readBody(req)) || "{}", {});
+    sendJson(req, res, ctx, 200, { ok: true, ...(await importDanBenchmark(ctx.db, body)) });
     return true;
   }
   if (url.pathname === "/api/admin/reset-local-db") {

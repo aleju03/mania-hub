@@ -527,12 +527,6 @@ export interface UserProfileInsights {
   ppDistribution: UserProfilePpDistributionBucket[];
 }
 
-export interface HomePageData {
-  rankings: RankingsResponse;
-  recentScores: LeanHomeScore[];
-  popoffs: LeanHomePopoff[];
-}
-
 // Snipes types
 
 export interface SnipePlayer {
@@ -582,68 +576,6 @@ export interface SnipeEvent {
   victimPp?: number | null;
 }
 
-export interface CountryBoardScore {
-  userId: number;
-  username: string;
-  avatarUrl: string;
-  scoreId: number;
-  totalScore: number;
-  accuracy: number;
-  mods: string[];
-  pp: number | null;
-  rank: string;
-  isLazer: boolean;
-  hasReplay: boolean;
-  endedAt: string;
-  /** Max totalScore this user had in this lane on this map with endedAt
-   *  strictly before the current best's endedAt. Used in the seed path to
-   *  kill self-improvement false positives: if priorBestTotalScore is above
-   *  the adjacent victim's current best, the "sniper" already held a rank
-   *  above them before the current play — not a snipe. */
-  priorBestTotalScore?: number;
-}
-
-export interface CountryBoardSnapshotEntry {
-  beatmap: {
-    version: string;
-    difficulty_rating: number;
-    cs: number;
-    url: string;
-  };
-  beatmapset: {
-    id: number;
-    title: string;
-    artist: string;
-    cover_url: string;
-  };
-  scores: CountryBoardScore[]; // sorted by totalScore desc
-  lastTouchedAt: number;
-}
-
-/** v3: per-beatmap snapshot is further segmented by lane key
- *  (`${speedBucket}:${client}`, e.g. "normal:lazer", "dt:stable"). Each lane
- *  is treated as an independent leaderboard for snipe-detection purposes. */
-export type CountryBoardSnapshot = Record<number, Record<string, CountryBoardSnapshotEntry>>;
-
-export interface SnipesResponse {
-  events: SnipeEvent[];
-  /** Epoch ms when the server produced this list (either by running a scan
-   *  or serving a cached response from a prior scan). The client should use
-   *  this, not receive time, for "last updated" labels. */
-  scannedAt: number;
-  /** True when this response was served from stale/logged data and a scan was
-   *  started in the background to refresh the country snipes cache. */
-  refreshInProgress?: boolean;
-}
-
-export interface SnipesScanStatus {
-  phase: "roster" | "recent" | "compare" | "seed";
-  label: string;
-  current: number;
-  total: number;
-  updatedAt: number;
-}
-
 export interface CountryTopPlay {
   user: { id: number; username: string; avatar_url: string; country_code?: string };
   score: OsuScore;
@@ -651,22 +583,6 @@ export interface CountryTopPlay {
   weightedPP: number;
   ppGain: number;
   time: string;
-}
-
-export interface TopPlaysResponse {
-  popoffs: CountryTopPlay[];
-  scannedAt: number;
-  window: "24h" | "3d" | "7d" | "30d";
-  refreshInProgress?: boolean;
-}
-
-export interface TopPlaysRefreshStatus {
-  phase: "scores";
-  label: string;
-  current: number;
-  total: number;
-  found: number;
-  updatedAt: number;
 }
 
 export interface BeatmapScoreLookupStatus {

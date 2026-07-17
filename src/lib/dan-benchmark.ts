@@ -1,7 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireAdminAccess } from "./auth";
-import { db, ensureCacheSchema, hasDb } from "./db";
+import { getServerLiveBackendUrl } from "./live-backend";
 import type { DanBenchmarkFamily } from "./dan-benchmark-sets";
+
+// Server fns for the /admin/dan-classifier page. The benchmark ground truth (owner-curated labels
+// and hidden diffs) lives in the live backend (dan_benchmark_labels / dan_benchmark_hidden_diffs);
+// these proxy through with the shared admin token. Mirrors the admin-todos proxy shape.
 
 export interface DanBenchmarkLabel {
   beatmapId: number;
@@ -19,6 +23,74 @@ function normalizeListPayload(input: unknown): { family: DanBenchmarkFamily } {
   const data = input as { family?: unknown };
   if (!isBenchmarkFamily(data.family)) throw new Error("Invalid family.");
   return { family: data.family };
+}
+
+function liveBackendHeaders(): HeadersInit {
+  // connection: close sidesteps keep-alive socket reuse between the frontend server and the live
+  // backend, which intermittently dies mid-response ("other side closed"); localhost setup is free.
+  const headers: HeadersInit = { connection: "close" };
+  if (process.env.LIVE_ADMIN_TOKEN) {
+    headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+  }
+  return headers;
+}
+
+async function fetchLiveBackend(url: string, init: RequestInit, attempts = 2): Promise<Response> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fetch(url, init);
+    } catch (error) {
+      if (attempt >= attempts) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+}
+
+function requireLiveBackendBase(): string {
+  const base = getServerLiveBackendUrl();
+  if (!base) throw new Error("LIVE_BACKEND_URL is not configured.");
+  return base;
+}
+
+export const getDanBenchmarkLabels = createServerFn({ method: "GET" })
+  .inputValidator(normalizeListPayload)
+  .handler(async ({ data }: { data: { family: DanBenchmarkFamily } }): Promise<DanBenchmarkLabel[]> => {
+    await requireAdminAccess("getDanBenchmarkLabels");
+    const base = requireLiveBackendBase();
+    const response = await fetchLiveBackend(
+      `${base}/api/admin/dan-benchmark/labels?family=${data.family}`,
+      { headers: liveBackendHeaders() },
+    );
+    if (!response.ok) throw new Error(`Dan benchmark labels failed (${response.status}).`);
+    const payload = await response.json() as { labels: DanBenchmarkLabel[] };
+    return payload.labels;
+  });
+
+export const getDanBenchmarkHiddenDiffs = createServerFn({ method: "GET" })
+  .inputValidator(normalizeListPayload)
+  .handler(async ({ data }: { data: { family: DanBenchmarkFamily } }): Promise<number[]> => {
+    await requireAdminAccess("getDanBenchmarkHiddenDiffs");
+    const base = requireLiveBackendBase();
+    const response = await fetchLiveBackend(
+      `${base}/api/admin/dan-benchmark/hidden?family=${data.family}`,
+      { headers: liveBackendHeaders() },
+    );
+    if (!response.ok) throw new Error(`Dan benchmark hidden diffs failed (${response.status}).`);
+    const payload = await response.json() as { hidden: number[] };
+    return payload.hidden;
+  });
+
+function normalizeHidePayload(input: unknown): {
+  beatmapId: number;
+  family: DanBenchmarkFamily;
+  hidden: boolean;
+} {
+  if (!input || typeof input !== "object") throw new Error("Invalid payload.");
+  const data = input as { beatmapId?: unknown; family?: unknown; hidden?: unknown };
+  const beatmapId = Number(data.beatmapId);
+  if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0) throw new Error("Invalid beatmapId.");
+  if (!isBenchmarkFamily(data.family)) throw new Error("Invalid family.");
+  return { beatmapId, family: data.family, hidden: data.hidden === true };
 }
 
 function normalizeSavePayload(input: unknown): {
@@ -39,86 +111,21 @@ function normalizeSavePayload(input: unknown): {
   return { beatmapId, family: data.family, expectedLabel };
 }
 
-export const getDanBenchmarkLabels = createServerFn({ method: "GET" })
-  .inputValidator(normalizeListPayload)
-  .handler(async ({ data }: { data: { family: DanBenchmarkFamily } }): Promise<DanBenchmarkLabel[]> => {
-    await requireAdminAccess("getDanBenchmarkLabels");
-    if (!hasDb() || !db) return [];
-    await ensureCacheSchema();
-
-    const result = await db.execute({
-      sql: `
-        SELECT beatmap_id, expected_label, family, updated_at
-        FROM dan_benchmark_labels
-        WHERE family = ?
-      `,
-      args: [data.family],
-    });
-
-    return result.rows.map((row) => ({
-      beatmapId: Number(row.beatmap_id),
-      expectedLabel: String(row.expected_label),
-      family: String(row.family) as DanBenchmarkFamily,
-      updatedAt: Number(row.updated_at),
-    }));
+async function postDanBenchmark(path: string, payload: unknown): Promise<void> {
+  const base = requireLiveBackendBase();
+  const response = await fetchLiveBackend(`${base}${path}`, {
+    method: "POST",
+    headers: { ...liveBackendHeaders(), "content-type": "application/json" },
+    body: JSON.stringify(payload ?? {}),
   });
-
-function normalizeHidePayload(input: unknown): {
-  beatmapId: number;
-  family: DanBenchmarkFamily;
-  hidden: boolean;
-} {
-  if (!input || typeof input !== "object") throw new Error("Invalid payload.");
-  const data = input as { beatmapId?: unknown; family?: unknown; hidden?: unknown };
-  const beatmapId = Number(data.beatmapId);
-  if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0) throw new Error("Invalid beatmapId.");
-  if (!isBenchmarkFamily(data.family)) throw new Error("Invalid family.");
-  const hidden = data.hidden === true;
-  return { beatmapId, family: data.family, hidden };
+  if (!response.ok) throw new Error(`Dan benchmark update failed (${response.status}).`);
 }
-
-export const getDanBenchmarkHiddenDiffs = createServerFn({ method: "GET" })
-  .inputValidator(normalizeListPayload)
-  .handler(async ({ data }: { data: { family: DanBenchmarkFamily } }): Promise<number[]> => {
-    await requireAdminAccess("getDanBenchmarkHiddenDiffs");
-    if (!hasDb() || !db) return [];
-    await ensureCacheSchema();
-
-    const result = await db.execute({
-      sql: `SELECT beatmap_id FROM dan_benchmark_hidden_diffs WHERE family = ?`,
-      args: [data.family],
-    });
-
-    return result.rows.map((row) => Number(row.beatmap_id));
-  });
 
 export const setDanBenchmarkHiddenDiff = createServerFn({ method: "POST" })
   .inputValidator(normalizeHidePayload)
   .handler(async ({ data }: { data: { beatmapId: number; family: DanBenchmarkFamily; hidden: boolean } }): Promise<{ ok: true }> => {
     await requireAdminAccess("setDanBenchmarkHiddenDiff");
-    if (!hasDb() || !db) return { ok: true };
-    await ensureCacheSchema();
-
-    if (!data.hidden) {
-      await db.execute({
-        sql: `DELETE FROM dan_benchmark_hidden_diffs WHERE beatmap_id = ?`,
-        args: [data.beatmapId],
-      });
-      return { ok: true };
-    }
-
-    const now = Date.now();
-    await db.execute({
-      sql: `
-        INSERT INTO dan_benchmark_hidden_diffs (beatmap_id, family, updated_at)
-        VALUES (?, ?, ?)
-        ON CONFLICT(beatmap_id) DO UPDATE SET
-          family = excluded.family,
-          updated_at = excluded.updated_at
-      `,
-      args: [data.beatmapId, data.family, now],
-    });
-
+    await postDanBenchmark("/api/admin/dan-benchmark/set-hidden", data);
     return { ok: true };
   });
 
@@ -126,29 +133,6 @@ export const setDanBenchmarkLabel = createServerFn({ method: "POST" })
   .inputValidator(normalizeSavePayload)
   .handler(async ({ data }: { data: { beatmapId: number; family: DanBenchmarkFamily; expectedLabel: string | null } }): Promise<{ ok: true }> => {
     await requireAdminAccess("setDanBenchmarkLabel");
-    if (!hasDb() || !db) return { ok: true };
-    await ensureCacheSchema();
-
-    if (data.expectedLabel === null) {
-      await db.execute({
-        sql: `DELETE FROM dan_benchmark_labels WHERE beatmap_id = ?`,
-        args: [data.beatmapId],
-      });
-      return { ok: true };
-    }
-
-    const now = Date.now();
-    await db.execute({
-      sql: `
-        INSERT INTO dan_benchmark_labels (beatmap_id, expected_label, family, updated_at)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(beatmap_id) DO UPDATE SET
-          expected_label = excluded.expected_label,
-          family = excluded.family,
-          updated_at = excluded.updated_at
-      `,
-      args: [data.beatmapId, data.expectedLabel, data.family, now],
-    });
-
+    await postDanBenchmark("/api/admin/dan-benchmark/set-label", data);
     return { ok: true };
   });

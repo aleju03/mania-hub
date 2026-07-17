@@ -331,9 +331,6 @@ interface AppState {
   trackerPpGainsByCountry: CountryRecord<Record<number, CachedScoreGain>>;
   snipesByCountry: CountryRecord<SnipeEvent[]>;
   snipesFetchedAtByCountry: CountryRecord<number>;
-  trackedUserIdsByCountry: CountryRecord<number[]>;
-  trackedUserIdsFetchedAtByCountry: CountryRecord<number>;
-  pollIndexByCountry: CountryRecord<number>;
   setSelectedCountry: (country: string) => void;
   setThemeHue: (hue: number) => void;
   setThemeSaturation: (sat: number) => void;
@@ -354,9 +351,6 @@ interface AppState {
   addFeedScores: (country: string, scores: LeanTrackerScore[]) => void;
   markFeedScoresFetched: (country: string) => void;
   setTrackerPpGains: (country: string, gains: Record<number, number>, fetchedAt?: number) => void;
-  setTrackedUserIds: (country: string, ids: number[]) => void;
-  nextPollIndex: (country: string) => void;
-  resetPollIndex: (country: string) => void;
 }
 
 const warnedStorageIssues = new Set<string>();
@@ -594,9 +588,6 @@ export const useAppStore = create<AppState>()(
       trackerPpGainsByCountry: {},
       snipesByCountry: {},
       snipesFetchedAtByCountry: {},
-      trackedUserIdsByCountry: {},
-      trackedUserIdsFetchedAtByCountry: {},
-      pollIndexByCountry: {},
       setSelectedCountry: (country) => {
         const normalized = normalizeCountryScope(country);
         writeCountryCookieClient(normalized);
@@ -853,44 +844,6 @@ export const useAppStore = create<AppState>()(
             },
           };
         }),
-      setTrackedUserIds: (country, ids) =>
-        set((state) => {
-          const normalizedCountry = normalizeCountryScope(country);
-          return {
-            trackedUserIdsByCountry: {
-              ...state.trackedUserIdsByCountry,
-              [normalizedCountry]: ids,
-            },
-            trackedUserIdsFetchedAtByCountry: {
-              ...state.trackedUserIdsFetchedAtByCountry,
-              [normalizedCountry]: Date.now(),
-            },
-            pollIndexByCountry: {
-              ...state.pollIndexByCountry,
-              [normalizedCountry]: 0,
-            },
-          };
-        }),
-      nextPollIndex: (country) =>
-        set((state) => {
-          const normalizedCountry = normalizeCountryScope(country);
-          return {
-            pollIndexByCountry: {
-              ...state.pollIndexByCountry,
-              [normalizedCountry]: (state.pollIndexByCountry[normalizedCountry] ?? 0) + 1,
-            },
-          };
-        }),
-      resetPollIndex: (country) =>
-        set((state) => {
-          const normalizedCountry = normalizeCountryScope(country);
-          return {
-            pollIndexByCountry: {
-              ...state.pollIndexByCountry,
-              [normalizedCountry]: 0,
-            },
-          };
-        }),
     }),
     {
       // v5: home scores/popoffs and rankings persisted shapes changed to
@@ -1135,9 +1088,6 @@ export const useAppStore = create<AppState>()(
         // feedScoresByCountry IS persisted, but trimmed to TRACKER_FEED_PERSIST_LIMIT
         // (newest-first) above so the blob stays small. The full in-memory feed
         // (up to TRACKER_FEED_SCORE_LIMIT) is only for the current session.
-        trackedUserIdsByCountry: state.trackedUserIdsByCountry,
-        trackedUserIdsFetchedAtByCountry: state.trackedUserIdsFetchedAtByCountry,
-        pollIndexByCountry: state.pollIndexByCountry,
       }),
     },
   ),

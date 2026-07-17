@@ -4,19 +4,8 @@ import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Dices } from "lucide-react";
-import {
-  getRankings,
-  getCountryMapsFarmed,
-  getCountryMapsFavourites,
-  getBeatmapFile,
-  rebuildCountryMapsFarmed,
-  rebuildCountryMapsFavourites,
-  rebuildCountryMapsData,
-  rebuildCountryMapsForUser,
-  composeCountryMapsData,
-} from "../lib/osu";
-import type { CountryMapsFarmedSection, CountryMapsFavouritesSection } from "../lib/osu";
-import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
+import { getBeatmapFile } from "../lib/osu";
+import { LiveBackendRequired } from "../components/LiveDataEmptyState";
 import { getCountryName, isGlobalScope } from "../lib/country";
 import { formatNumber, formatDuration, formatTimeAgo } from "../lib/format";
 import { MANIA_PATTERN_LABELS } from "../lib/mania-patterns";
@@ -33,7 +22,6 @@ import { ModBadge } from "../components/ui/ModBadge";
 import { Pagination } from "../components/ui/Pagination";
 import type {
   CountryMapsData,
-  RankingsResponse,
   MapsAggregatedBeatmap,
   MapsAggregatedFavourite,
   MapsFarmedEntry,
@@ -1069,22 +1057,13 @@ function MapsPage() {
   const auth = useAuth();
   const fallbackCountry = useSelectedCountry();
   const selectedCountry = mapsSearch.country ?? fallbackCountry;
-  const rankings = useAppStore((s) => s.rankingsByCountry[selectedCountry] ?? null);
-  const rankingsFetchedAt = useAppStore((s) => s.rankingsFetchedAtByCountry[selectedCountry] ?? null);
   const mapsData = useAppStore((s) => s.mapsDataByCountry[selectedCountry] ?? null);
-  const setRankings = useAppStore((s) => s.setRankings);
   const setMapsData = useAppStore((s) => s.setMapsData);
   const hiddenUserIds = useHiddenUserIds();
   const hasValidMapsData = hasValidMapsDataShape(mapsData);
 
-  const [loadingPlayers, setLoadingPlayers] = useState(!rankings);
   const [loadingMaps, setLoadingMaps] = useState(!mapsData);
-  const [loadedSections, setLoadedSections] = useState(0);
-  const [smoothProgress, setSmoothProgress] = useState(0);
   const [rebuilding, setRebuilding] = useState(false);
-  const [rebuildMenuOpen, setRebuildMenuOpen] = useState(false);
-  const [rebuildQuery, setRebuildQuery] = useState("");
-  const [liveMapsAttempted, setLiveMapsAttempted] = useState(false);
   const [liveMapsRefreshing, setLiveMapsRefreshing] = useState(false);
   const [liveMapsProgress, setLiveMapsProgress] = useState<LiveMapsRefreshProgress | null>(null);
   const [liveMapsPage, setLiveMapsPage] = useState<LiveMapsPageState | null>(null);
@@ -1094,20 +1073,8 @@ function MapsPage() {
   // first time (no snapshot has ever existed). Distinguishes a cold first build
   // from a quick refresh of already-cached maps.
   const [mapsFirstBuild, setMapsFirstBuild] = useState(false);
-  const rebuildMenuRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (!rebuildMenuOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (rebuildMenuRef.current && !rebuildMenuRef.current.contains(e.target as Node)) {
-        setRebuildMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [rebuildMenuOpen]);
   const [error, setError] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState<MapDetails | null>(null);
-  const fetchingMapsRef = useRef(false);
   const tab = mapsSearch.tab;
   // Search + Collections are global catalog views, not country-scoped lenses.
   const isGlobalCatalogTab = tab === "search" || tab === "collections";
@@ -1276,34 +1243,12 @@ function MapsPage() {
   }, [routeSearchQuery, searchInput, updateMapsSearch]);
 
   useEffect(() => {
-    setLoadingPlayers(liveBackendEnabled ? false : !rankings);
-    setLoadingMaps(liveBackendEnabled ? false : !mapsData || !hasValidMapsData);
-    setLoadedSections(0);
-    setSmoothProgress(0);
+    setLoadingMaps(false);
     setError(null);
-    setLiveMapsAttempted(false);
     setLiveMapsRefreshing(false);
     setLiveMapsProgress(null);
     setLiveMapsPage(null);
-    fetchingMapsRef.current = false;
   }, [selectedCountry, liveBackendEnabled]);
-
-  useEffect(() => {
-    if (!loadingMaps) {
-      setSmoothProgress(0);
-      return;
-    }
-    const realPercent = loadedSections * 50;
-    setSmoothProgress((prev) => Math.max(prev, realPercent));
-    const cap = Math.min(realPercent + 45, 95);
-    const id = setInterval(() => {
-      setSmoothProgress((prev) => {
-        if (prev >= cap) return prev;
-        return Math.min(cap, prev + Math.max(1, (cap - prev) * 0.1));
-      });
-    }, 180);
-    return () => clearInterval(id);
-  }, [loadingMaps, loadedSections]);
 
   useEffect(() => {
     if (!liveBackendEnabled) return;
@@ -1314,17 +1259,14 @@ function MapsPage() {
     // page opened in the background doesn't sit on skeletons until focus.
     if (!windowActive && cachedPage) {
       setLoadingMaps(false);
-      setLoadedSections(2);
       return;
     }
 
-    setLiveMapsAttempted(false);
     setMapsFirstBuild(false);
     setLiveMapsRefreshing(false);
     setLiveMapsProgress(null);
     let cancelled = false;
     setLoadingMaps(!cachedPage);
-    setLoadedSections(cachedPage ? 2 : 0);
     let pollTimer: ReturnType<typeof setTimeout> | null = null;
 
     const loadPage = () => {
@@ -1335,7 +1277,6 @@ function MapsPage() {
           setLiveMapsProgress(snapshot.progress ?? null);
           if (snapshot.value) {
             rememberLiveMapsPage({ ...snapshot.value, requestKey: liveMapsPageRequestKey });
-            setLoadedSections(2);
             setLoadingMaps(false);
             setMapsFirstBuild(false);
             setError(null);
@@ -1356,9 +1297,7 @@ function MapsPage() {
           }
           if (!cancelled) setLiveMapsRefreshing(false);
         })
-        .finally(() => {
-          if (!cancelled) setLiveMapsAttempted(true);
-        });
+        ;
     };
 
     loadPage();
@@ -1411,10 +1350,8 @@ function MapsPage() {
 
   useEffect(() => {
     if (!liveBackendEnabled || tab !== "random") return;
-    setLiveMapsAttempted(false);
     if (randomPoolReady) {
       setLoadingMaps(false);
-      setLoadedSections(2);
       setLiveMapsProgress(null);
       return;
     }
@@ -1422,7 +1359,6 @@ function MapsPage() {
     let cancelled = false;
     let pollTimer: ReturnType<typeof setTimeout> | null = null;
     setLoadingMaps(true);
-    setLoadedSections(0);
     setLiveMapsProgress(null);
 
     const loadRandomPool = () => {
@@ -1433,7 +1369,6 @@ function MapsPage() {
           setLiveMapsProgress(snapshot.progress ?? null);
           if (snapshot.value && hasValidMapsDataShape(snapshot.value)) {
             setMapsData(selectedCountry, snapshot.value);
-            setLoadedSections(2);
             setLoadingMaps(false);
             setMapsFirstBuild(false);
             setError(null);
@@ -1453,9 +1388,7 @@ function MapsPage() {
             setError("Couldn't load maps data. Try again later.");
           }
         })
-        .finally(() => {
-          if (!cancelled) setLiveMapsAttempted(true);
-        });
+        ;
     };
 
     loadRandomPool();
@@ -1480,162 +1413,6 @@ function MapsPage() {
 
     if (Object.keys(patch).length > 0) updateMapsSearch(patch);
   }, []);
-
-  const players =
-    rankings?.ranking
-      .filter((entry: RankingsResponse["ranking"][number]) => entry.user.is_active !== false)
-      .slice(0, 50)
-      .map((e: RankingsResponse["ranking"][number]) => ({
-        id: e.user.id,
-        username: e.user.username,
-        avatar_url: e.user.avatar_url,
-      })) ?? [];
-  const playerIdsKey = useMemo(
-    () => players.map((player) => player.id).join(","),
-    [players],
-  );
-
-  // Fetch rankings
-  useEffect(() => {
-    let cancelled = false;
-    if (liveBackendEnabled) {
-      setLoadingPlayers(false);
-      return () => { cancelled = true; };
-    }
-    if (!isCacheStale(rankingsFetchedAt, CLIENT_CACHE_TTL.rankings) && rankings) {
-      setLoadingPlayers(false);
-      return () => { cancelled = true; };
-    }
-
-    setLoadingPlayers(!rankings);
-    getRankings({ data: { type: "performance", page: 1, country: selectedCountry } })
-      .then((r) => {
-        if (cancelled) return;
-        setRankings(selectedCountry, r);
-      })
-      .catch(() => {
-        if (cancelled || rankings) return;
-        setError("Couldn't load the player list.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingPlayers(false);
-      });
-
-    return () => { cancelled = true; };
-  }, [liveBackendEnabled, rankings, rankingsFetchedAt, selectedCountry, setRankings]);
-
-  // Fetch maps data in two parallel sections (farmed + favourites) so the
-  // header can show incremental progress. We intentionally exclude mapsData /
-  // hasValidMapsData / mapsDataFetchedAt from the dep array: those are derived
-  // from the store this effect writes to, and including them would make the
-  // effect re-trigger itself on every setMapsData and race with the cleanup.
-  // fetchingMapsRef guards against concurrent fetches for the same country.
-  useEffect(() => {
-    if (liveBackendEnabled) return;
-    if (loadingPlayers || error || players.length === 0) return;
-
-    // Snapshot the current store state inside the effect rather than depending
-    // on selectors, so a fresh-cache early return is safe from reruns.
-    const snapshot = useAppStore.getState();
-    const currentData = snapshot.mapsDataByCountry[selectedCountry] ?? null;
-    const currentFetchedAt = snapshot.mapsDataFetchedAtByCountry[selectedCountry] ?? null;
-    if (
-      !isCacheStale(currentFetchedAt, CLIENT_CACHE_TTL.mapsData) &&
-      hasValidMapsDataShape(currentData)
-    ) {
-      setLoadingMaps(false);
-      setLoadedSections(2);
-      return;
-    }
-
-    if (fetchingMapsRef.current) return;
-
-    let cancelled = false;
-    fetchingMapsRef.current = true;
-    setLoadingMaps(true);
-    setLoadedSections(0);
-
-    const bumpSection = () => {
-      if (!cancelled) setLoadedSections((n) => n + 1);
-    };
-
-    Promise.all([
-      getCountryMapsFarmed({ data: { users: players } }).then((r) => {
-        bumpSection();
-        if (r.isStale) {
-          rebuildCountryMapsFarmed({ data: { users: players } })
-            .then((result) => {
-              if (cancelled || !result.value) return;
-              // Re-compose with the freshest farmed section; reuse current favourites.
-              const state = useAppStore.getState();
-              const existing = state.mapsDataByCountry[selectedCountry];
-              if (!existing) return;
-              setMapsData(selectedCountry, {
-                ...existing,
-                farmed: result.value.farmed,
-                farmedGeneratedAt: result.value.generatedAt,
-                generatedAt:
-                  result.value.generatedAt < existing.favouritesGeneratedAt
-                    ? result.value.generatedAt
-                    : existing.favouritesGeneratedAt,
-              });
-            })
-            .catch(() => {});
-        }
-        return r.value;
-      }),
-      getCountryMapsFavourites({ data: { users: players } }).then((r) => {
-        bumpSection();
-        if (r.isStale) {
-          rebuildCountryMapsFavourites({ data: { users: players } })
-            .then((result) => {
-              if (cancelled || !result.value) return;
-              const state = useAppStore.getState();
-              const existing = state.mapsDataByCountry[selectedCountry];
-              if (!existing) return;
-              setMapsData(selectedCountry, {
-                ...existing,
-                mostPlayed: result.value.mostPlayed,
-                favourites: result.value.favourites,
-                favouritesByPlayer: result.value.favouritesByPlayer,
-                beatmapsetsPool: result.value.beatmapsetsPool,
-                favouritesGeneratedAt: result.value.generatedAt,
-                generatedAt:
-                  existing.farmedGeneratedAt < result.value.generatedAt
-                    ? existing.farmedGeneratedAt
-                    : result.value.generatedAt,
-              });
-            })
-            .catch(() => {});
-        }
-        return r.value;
-      }),
-    ])
-      .then(([farmedSection, favSection]: [CountryMapsFarmedSection, CountryMapsFavouritesSection]) => {
-        if (cancelled) return;
-        setMapsData(selectedCountry, composeCountryMapsData(farmedSection, favSection));
-      })
-      .catch(() => {
-        if (cancelled) return;
-        const state = useAppStore.getState();
-        const existing = state.mapsDataByCountry[selectedCountry] ?? null;
-        if (!hasValidMapsDataShape(existing)) {
-          setError("Couldn't load maps data. Try again later.");
-        }
-      })
-      .finally(() => {
-        // If cancelled (country/players changed), a new fetch may already own
-        // fetchingMapsRef — don't clear it out from under the new owner.
-        if (cancelled) return;
-        fetchingMapsRef.current = false;
-        setLoadingMaps(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadingPlayers, error, playerIdsKey, selectedCountry, liveBackendEnabled, liveMapsAttempted]);
 
   // ── Filtered + sorted: farmed (from best scores) ────────────────────────
   // Maps data is aggregate (per-map player lists). Strip hidden players from
@@ -1901,10 +1678,10 @@ function MapsPage() {
     updateMapsSearch(next);
   }, [updateMapsSearch]);
 
-  const isLoading = loadingPlayers || (liveBackendPaged ? liveMapsPagePending : loadingMaps) || currentMapsSectionLoading;
+  const isLoading = (liveBackendPaged ? liveMapsPagePending : loadingMaps) || currentMapsSectionLoading;
 
   useEffect(() => {
-    if (!liveBackendEnabled || !isLoading || loadingPlayers) return;
+    if (!liveBackendEnabled || !isLoading) return;
 
     let cancelled = false;
     const loadProgress = () => {
@@ -1920,7 +1697,7 @@ function MapsPage() {
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [isLoading, liveBackendEnabled, loadingPlayers, selectedCountry]);
+  }, [isLoading, liveBackendEnabled, selectedCountry]);
 
   // ── Random tab: pick a random top-50 player and a single random favourite ──
   // The pool ships lean entries, so a pick records the chosen set id and the
@@ -2278,45 +2055,24 @@ function MapsPage() {
   };
 
   const handleDevRebuildAll = async () => {
-    if (rebuilding || (!liveBackendEnabled && players.length === 0)) return;
+    if (rebuilding || !liveBackendEnabled) return;
     setRebuilding(true);
-    setRebuildMenuOpen(false);
     try {
-      if (liveBackendEnabled) {
-        await runLiveBackendAdminAction({ data: { path: `/api/admin/refresh-maps?country=${selectedCountry}` } });
-        if (tab === "random") {
-          const snapshot = await fetchLiveMapsSnapshot(selectedCountry, "random");
-          setLiveMapsProgress(snapshot.progress ?? null);
-          if (snapshot.value && hasValidMapsDataShape(snapshot.value)) {
-            setMapsData(selectedCountry, snapshot.value);
-          }
-        } else if (liveMapsPageParams && liveMapsPageRequestKey) {
-          const snapshot = await fetchLiveMapsPageSnapshot(selectedCountry, liveMapsPageParams);
-          setLiveMapsProgress(snapshot.progress ?? null);
-          if (snapshot.value) {
-            liveMapsPageCacheRef.current.clear();
-            rememberLiveMapsPage({ ...snapshot.value, requestKey: liveMapsPageRequestKey });
-          }
+      await runLiveBackendAdminAction({ data: { path: `/api/admin/refresh-maps?country=${selectedCountry}` } });
+      if (tab === "random") {
+        const snapshot = await fetchLiveMapsSnapshot(selectedCountry, "random");
+        setLiveMapsProgress(snapshot.progress ?? null);
+        if (snapshot.value && hasValidMapsDataShape(snapshot.value)) {
+          setMapsData(selectedCountry, snapshot.value);
         }
-        return;
+      } else if (liveMapsPageParams && liveMapsPageRequestKey) {
+        const snapshot = await fetchLiveMapsPageSnapshot(selectedCountry, liveMapsPageParams);
+        setLiveMapsProgress(snapshot.progress ?? null);
+        if (snapshot.value) {
+          liveMapsPageCacheRef.current.clear();
+          rememberLiveMapsPage({ ...snapshot.value, requestKey: liveMapsPageRequestKey });
+        }
       }
-      const result = await rebuildCountryMapsData({ data: { users: players } });
-      if (result.value) setMapsData(selectedCountry, result.value);
-    } catch {
-      setError("Rebuild failed.");
-    } finally {
-      setRebuilding(false);
-    }
-  };
-
-  const handleDevRebuildUser = async (userId: number) => {
-    if (rebuilding || players.length === 0) return;
-    setRebuilding(true);
-    setRebuildMenuOpen(false);
-    setRebuildQuery("");
-    try {
-      const result = await rebuildCountryMapsForUser({ data: { users: players, userId } });
-      if (result.value) setMapsData(selectedCountry, result.value);
     } catch {
       setError("Rebuild failed.");
     } finally {
@@ -2344,16 +2100,23 @@ function MapsPage() {
       ? formatLiveMapsProgress(liveMapsProgress)
       : null;
   const liveMapsPageSliceLoading = liveBackendPaged && liveMapsPagePending && !mapsFirstBuild;
-  const mapsLoadingLabel = loadingPlayers
-    ? "Loading players..."
-    : currentMapsSectionLoading
-      ? `Loading ${currentMapsSectionLabel}...`
-      : liveMapsProgressLabel
-        ?? (mapsFirstBuild
-          ? "Building maps..."
-          : liveBackendEnabled
-            ? (liveMapsRefreshing && !liveMapsPageSliceLoading ? "Refreshing maps..." : "Loading maps...")
-            : `Loading maps... (${Math.round(smoothProgress)}%)`);
+  const mapsLoadingLabel = currentMapsSectionLoading
+    ? `Loading ${currentMapsSectionLabel}...`
+    : liveMapsProgressLabel
+      ?? (mapsFirstBuild
+        ? "Building maps..."
+        : liveMapsRefreshing && !liveMapsPageSliceLoading
+          ? "Refreshing maps..."
+          : "Loading maps...");
+
+  if (!liveBackendEnabled) {
+    return (
+      <div className="flex-1">
+        <PageHeader iconSrc="/images/icons/rankings.svg" title={isGlobalCatalogTab ? "Mania maps" : lensTitle} />
+        <LiveBackendRequired />
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1">
@@ -2378,62 +2141,14 @@ function MapsPage() {
               </span>
             )}
             {canUseAdminFeatures && !isLoading && !error && (mapsData || currentLiveMapsPage) && (
-              <div ref={rebuildMenuRef} className="relative">
-                <div className="flex items-stretch rounded-lg bg-osu-red/20 border border-osu-red/30 overflow-hidden">
-                  <button
-                    onClick={handleDevRebuildAll}
-                    disabled={rebuilding}
-                    className="px-2 py-1 text-[10px] text-osu-red font-semibold hover:bg-osu-red/30 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Force rebuild maps data for everyone (dev only)"
-                  >
-                    {rebuilding ? "Rebuilding..." : "Rebuild"}
-                  </button>
-                  <div className="w-px bg-osu-red/30" />
-                  <button
-                    onClick={() => setRebuildMenuOpen((v) => !v)}
-                    disabled={rebuilding}
-                    aria-label="Rebuild for a specific player"
-                    aria-expanded={rebuildMenuOpen}
-                    className="px-1.5 flex items-center text-osu-red hover:bg-osu-red/30 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`w-3 h-3 transition-transform ${rebuildMenuOpen ? "rotate-180" : ""}`}>
-                      <polyline points="6 9 12 15 18 9" />
-                    </svg>
-                  </button>
-                </div>
-                {rebuildMenuOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-[240px] rounded-lg bg-osu-b4 border border-osu-b3 shadow-xl z-20 flex flex-col">
-                    <div className="px-3 pt-2 pb-1 text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">
-                      Rebuild just one player
-                    </div>
-                    <input
-                      type="text"
-                      value={rebuildQuery}
-                      onChange={(e) => setRebuildQuery(e.target.value)}
-                      placeholder="Search player..."
-                      className="mx-1 mb-1 px-2 py-1 rounded-md bg-osu-b5 border border-osu-b3/60 text-[11px] text-osu-l2 placeholder:text-osu-f1 focus:outline-none focus:border-osu-pink/40"
-                      autoFocus
-                    />
-                    <div className="max-h-[240px] overflow-y-auto">
-                      {players
-                        .filter((p) => p.username.toLowerCase().includes(rebuildQuery.toLowerCase()))
-                        .map((p) => (
-                          <button
-                            key={p.id}
-                            onClick={() => handleDevRebuildUser(p.id)}
-                            disabled={rebuilding}
-                            className="w-full text-left px-3 py-1.5 text-[11px] text-osu-l2 hover:bg-osu-b3 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed truncate"
-                          >
-                            {p.username}
-                          </button>
-                        ))}
-                      {players.filter((p) => p.username.toLowerCase().includes(rebuildQuery.toLowerCase())).length === 0 && (
-                        <div className="px-3 py-2 text-[10px] text-osu-f1">No matches</div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
+              <button
+                onClick={handleDevRebuildAll}
+                disabled={rebuilding}
+                className="px-2 py-1 rounded-lg bg-osu-red/20 border border-osu-red/30 text-[10px] text-osu-red font-semibold hover:bg-osu-red/30 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Force rebuild maps data for everyone (dev only)"
+              >
+                {rebuilding ? "Rebuilding..." : "Rebuild"}
+              </button>
             )}
           </div>
         )}
@@ -2830,13 +2545,13 @@ function MapsPage() {
           {/* Loading skeleton */}
           {!error && isLoading && (liveBackendPaged ? !currentLiveMapsPage : (!mapsData || !hasValidMapsData)) && (
             <div className="space-y-3">
-              {mapsFirstBuild && !loadingPlayers && (
+              {mapsFirstBuild && (
                 <div className="rounded-lg border border-osu-b3/30 bg-osu-b4/60 px-3.5 py-2.5 text-[11px] leading-relaxed text-osu-f1">
                   <span className="font-semibold text-osu-c2">First time loading {countryName} maps.</span>{" "}
                   Scanning its top players' plays and favourites. This can take a minute, and the page will fill in on its own.
                 </div>
               )}
-              <MapsLoadingIndicator loadingPlayers={loadingPlayers} firstBuild={mapsFirstBuild} />
+              <MapsLoadingIndicator firstBuild={mapsFirstBuild} />
               {tab === "random" ? (
                 <RandomPickLoadingSkeleton />
               ) : (
@@ -2851,7 +2566,7 @@ function MapsPage() {
                 <span className="font-semibold text-osu-c2">Still loading {currentMapsSectionLabel}.</span>{" "}
                 The other map tabs may appear first while this section catches up.
               </div>
-              <MapsLoadingIndicator loadingPlayers={false} firstBuild={false} label={`Loading ${currentMapsSectionLabel}...`} />
+              <MapsLoadingIndicator firstBuild={false} label={`Loading ${currentMapsSectionLabel}...`} />
               <MapsCardGridSkeleton count={8} />
             </div>
           )}
@@ -3147,22 +2862,20 @@ const LOADING_STEPS = [
   "Almost there...",
 ];
 
-function MapsLoadingIndicator({ loadingPlayers, firstBuild, label: overrideLabel }: { loadingPlayers: boolean; firstBuild: boolean; label?: string }) {
+function MapsLoadingIndicator({ firstBuild, label: overrideLabel }: { firstBuild: boolean; label?: string }) {
   const [stepIndex, setStepIndex] = useState(0);
 
   useEffect(() => {
-    if (loadingPlayers || firstBuild) return;
+    if (firstBuild) return;
     const id = setInterval(() => {
       setStepIndex((i) => (i + 1) % LOADING_STEPS.length);
     }, 3000);
     return () => clearInterval(id);
-  }, [loadingPlayers, firstBuild]);
+  }, [firstBuild]);
 
-  const label = overrideLabel ?? (loadingPlayers
-    ? "Loading players..."
-    : firstBuild
-      ? "Building maps for the first time..."
-      : LOADING_STEPS[stepIndex]);
+  const label = overrideLabel ?? (firstBuild
+    ? "Building maps for the first time..."
+    : LOADING_STEPS[stepIndex]);
 
   return (
     <div className="flex items-center gap-3">

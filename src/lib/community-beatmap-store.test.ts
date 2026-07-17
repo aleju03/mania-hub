@@ -1,15 +1,14 @@
 import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Keep the store off the real Turso/R2 cache: an in-memory map stands in for the
-// persistent layer so the checksum-verification logic is what gets exercised.
-const cacheStore = new Map<string, unknown>();
-vi.mock("./api", () => ({
-  getPersistentCacheEntry: vi.fn(async (key: string) =>
-    cacheStore.has(key) ? { hit: true, value: cacheStore.get(key) } : { hit: false },
-  ),
-  setPersistentCache: vi.fn(async (key: string, data: unknown) => {
-    cacheStore.set(key, data);
+// Keep the store off real R2: an in-memory map stands in for the object store so
+// the checksum-verification logic is what gets exercised.
+const objectStore = new Map<string, string>();
+vi.mock("./r2-cache", () => ({
+  getCommunityBeatmapObject: vi.fn(async (checksum: string) => objectStore.get(checksum) ?? null),
+  putCommunityBeatmapObject: vi.fn(async (checksum: string, content: string) => {
+    objectStore.set(checksum, content);
+    return true;
   }),
 }));
 
@@ -23,7 +22,7 @@ const OSU_FILE = "osu file format v14\n\n[HitObjects]\n256,192,1000,1,0,0:0:0:0:
 
 describe("community beatmap store", () => {
   beforeEach(() => {
-    cacheStore.clear();
+    objectStore.clear();
   });
 
   it("stores a verified .osu and serves it back by checksum", async () => {
@@ -53,5 +52,12 @@ describe("community beatmap store", () => {
   it("returns null for a malformed checksum or an unknown map", async () => {
     expect(await getCommunityBeatmapFile("not-a-checksum")).toBeNull();
     expect(await getCommunityBeatmapFile(md5("never uploaded"))).toBeNull();
+  });
+
+  it("refuses to serve a stored object whose content no longer matches its key", async () => {
+    const checksum = md5(OSU_FILE);
+    // Simulate a corrupted or mis-keyed object landing in the store.
+    objectStore.set(checksum, "osu file format v14\n\n[HitObjects]\ncorrupted\n");
+    expect(await getCommunityBeatmapFile(checksum)).toBeNull();
   });
 });

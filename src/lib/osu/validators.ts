@@ -5,7 +5,6 @@ import {
   MAX_BATCH_USERS,
   MAX_BEST_WINDOW_LIMIT,
   MAX_CURSOR_LENGTH,
-  MAX_HOME_USERS,
   MAX_OSU_ID,
   MAX_OSU_SCORE_ID,
   MAX_QUERY_LENGTH,
@@ -14,11 +13,6 @@ import {
   RANKING_TYPES,
   REPLAY_MODES
 } from "./constants";
-import type { PopoffWindow } from "./constants";
-import type {
-  HomePreviewPlayer,
-  TrackerUserSummary
-} from "./internal-types";
 
 export function asInputRecord(data: unknown): Record<string, unknown> {
   if (!data || typeof data !== "object" || Array.isArray(data)) return {};
@@ -79,60 +73,12 @@ export function parseOptionalCountry(value: unknown): string | undefined {
   return country;
 }
 
-export function parsePopoffWindow(value: unknown): PopoffWindow {
-  if (value == null || value === "") return "30d";
-  if (value === "24h" || value === "3d" || value === "7d" || value === "30d") return value;
-  throw new Error("Invalid popoff window.");
-}
-
 export function parseUserIds(value: unknown, max = MAX_BATCH_USERS): number[] {
   if (!Array.isArray(value)) throw new Error("Invalid userIds payload.");
   if (value.length > max) throw new Error(`User list is limited to ${max} users.`);
   return [...new Set(value.map((id) => parseOsuId(id, "user id")))];
 }
 
-
-export function parseHomePlayers(value: unknown, max = MAX_HOME_USERS): HomePreviewPlayer[] {
-  if (!Array.isArray(value)) throw new Error("Invalid players payload.");
-  if (value.length > max) throw new Error(`Player list is limited to ${max} users.`);
-
-  const seen = new Set<number>();
-  const players: HomePreviewPlayer[] = [];
-  for (const raw of value) {
-    const input = asInputRecord(raw);
-    const id = parseOsuId(input.id, "player id");
-    if (seen.has(id)) continue;
-    seen.add(id);
-    players.push({
-      id,
-      username: parseString(input.username, "username", 64, "Unknown"),
-      avatar_url: String(input.avatar_url ?? "").slice(0, 512),
-    });
-  }
-  return players;
-}
-
-export function parseTrackerUsers(value: unknown, max = MAX_BATCH_USERS): TrackerUserSummary[] {
-  if (value == null) return [];
-  if (!Array.isArray(value)) throw new Error("Invalid users payload.");
-  if (value.length > max) throw new Error(`User list is limited to ${max} users.`);
-
-  const seen = new Set<number>();
-  const users: TrackerUserSummary[] = [];
-  for (const raw of value) {
-    const input = asInputRecord(raw);
-    const id = parseOsuId(input.id, "user id");
-    if (seen.has(id)) continue;
-    seen.add(id);
-    users.push({
-      id,
-      username: parseString(input.username, "username", 64, "Unknown"),
-      avatar_url: String(input.avatar_url ?? "").slice(0, 512),
-      country_code: String(input.country_code ?? "").trim().toUpperCase().slice(0, 2),
-    });
-  }
-  return users;
-}
 
 export function normalizeUserKeyPayload(data: unknown): { key: string } {
   const input = asInputRecord(data);
@@ -180,36 +126,6 @@ export function normalizeRankingsPayload(data: unknown): { type?: string; page?:
     type,
     page: parseBoundedInt(input.page, "page", { min: 1, max: 200, fallback: 1 }),
     country: parseOptionalCountry(input.country),
-  };
-}
-
-export function normalizeCountryPayload(data: unknown): { country?: string } {
-  const input = asInputRecord(data);
-  return { country: parseOptionalCountry(input.country) };
-}
-
-export function normalizeHomeRecentScoresPayload(data: unknown): { userIds: number[] } {
-  const input = asInputRecord(data);
-  return { userIds: parseUserIds(input.userIds, MAX_HOME_USERS) };
-}
-
-export function normalizeHomePopoffsPayload(data: unknown): { players: HomePreviewPlayer[] } {
-  const input = asInputRecord(data);
-  return { players: parseHomePlayers(input.players, MAX_HOME_USERS) };
-}
-
-export function normalizeCountryPopoffsPayload(data: unknown): {
-  country?: string;
-  players: HomePreviewPlayer[];
-  window?: PopoffWindow;
-  refresh?: boolean;
-} {
-  const input = asInputRecord(data);
-  return {
-    country: parseOptionalCountry(input.country),
-    players: parseHomePlayers(input.players, MAX_BATCH_USERS),
-    window: parsePopoffWindow(input.window),
-    refresh: input.refresh !== false,
   };
 }
 
@@ -279,29 +195,6 @@ export function normalizeBeatmapScoresPayload(data: unknown): { beatmapId: numbe
 export function normalizeSearchUsersPayload(data: unknown): { query: string } {
   const input = asInputRecord(data);
   return { query: parseString(input.query, "query", 64) };
-}
-
-export function normalizeCountryRecentScoresPayload(data: unknown): {
-  userIds: number[];
-  users: TrackerUserSummary[];
-  batchSize?: number;
-  batchIndex?: number;
-  recentLimit?: number;
-  source?: "backfill" | "live";
-} {
-  const input = asInputRecord(data);
-  const source = input.source == null || input.source === "" ? undefined : String(input.source);
-  if (source != null && source !== "backfill" && source !== "live") {
-    throw new Error("Invalid tracker score source.");
-  }
-  return {
-    userIds: parseUserIds(input.userIds, MAX_BATCH_USERS),
-    users: parseTrackerUsers(input.users, MAX_BATCH_USERS),
-    batchSize: parseBoundedInt(input.batchSize, "batchSize", { min: 1, max: 50, fallback: 5 }),
-    batchIndex: parseBoundedInt(input.batchIndex, "batchIndex", { min: 0, max: 500, fallback: 0 }),
-    recentLimit: parseBoundedInt(input.recentLimit, "recentLimit", { min: 1, max: 100, fallback: 20 }),
-    source: source as "backfill" | "live" | undefined,
-  };
 }
 
 export function normalizeReplayParsedPayload(data: unknown): { scoreId: number; mode: string; keyCount?: number } {

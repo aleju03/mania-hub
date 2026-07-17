@@ -55,6 +55,8 @@ export interface ScoreUser {
   username: string;
   avatar_url: string;
   country_code: string;
+  // Attached at the payload edge (sendAccentEnrichedJson / SSE emit), never stored in score rows.
+  avatar_accent?: string | null;
 }
 
 export interface OscScore {

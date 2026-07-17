@@ -1,13 +1,6 @@
-import {
-  getModDisplayList,
-  getScoreDisplayValues,
-  getScoreTimestamp
-} from "../score";
 import type {
-  LeanHomeScore,
   LeanRankingEntry,
   OsuGradeCounts,
-  OsuScore,
   OsuUser
 } from "../types";
 
@@ -45,31 +38,5 @@ export function toLeanRankingEntry(raw: RawRankingsResponse["ranking"][number]):
     global_rank: raw.global_rank,
     ranked_score: raw.ranked_score,
     grade_counts: raw.grade_counts,
-  };
-}
-
-export function toLeanHomeScore(
-  score: OsuScore,
-  fallbackUser?: { id?: number; username?: string; avatar_url?: string },
-): LeanHomeScore {
-  const display = getScoreDisplayValues(score);
-  const user = {
-    id: score.user?.id ?? fallbackUser?.id ?? score.user_id,
-    username: score.user?.username ?? fallbackUser?.username ?? "Unknown",
-    avatar_url: score.user?.avatar_url ?? fallbackUser?.avatar_url ?? "",
-  };
-  return {
-    id: score.id,
-    pp: score.pp,
-    displayAcc: display.accuracy,
-    displayRank: display.rank,
-    isLazer: display.isLazer,
-    mods: getModDisplayList(score.mods),
-    timestamp: getScoreTimestamp(score),
-    title: score.beatmapset?.title ?? "",
-    version: score.beatmap?.version ?? "",
-    keyCount: Number(score.beatmap?.cs) || 0,
-    beatmapsetId: score.beatmapset?.id,
-    user,
   };
 }

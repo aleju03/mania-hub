@@ -9,7 +9,10 @@ let dir = "";
 let db: Db;
 let store: AnalyticsStore;
 
-const NOW = Date.parse("2026-07-16T18:00:00Z");
+// Anchored to the real clock: capture() clamps event timestamps against
+// Date.now() (last 24h), so a hardcoded date here silently ages out of the
+// window and collapses distinct timestamps into ties (bit us 2026-07-17).
+const NOW = Date.now();
 const LIVE_HOST = "mania-tracker.com";
 
 function pageview(overrides: {

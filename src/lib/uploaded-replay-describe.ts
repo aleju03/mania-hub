@@ -1,7 +1,7 @@
 import type { BeatmapChecksumLookupResult } from "./osu/replay";
 import { getPersistentCacheEntry, osuFetch, setPersistentCache } from "./api";
 import { parseUploadedReplayBuffer } from "./replay-upload";
-import { getUploadedReplayStorageKey } from "./r2-cache";
+import { getJsonArtifact, getUploadedReplayDescStorageKey, getUploadedReplayStorageKey, putJsonArtifact } from "./r2-cache";
 import { normalizeUploadedReplayId, readUploadedReplay } from "./uploaded-replay-store";
 
 // Uploaded replays are content-addressed by a random id, so a parsed description
@@ -112,12 +112,25 @@ export async function describeUploadedReplayById(id: string): Promise<UploadedRe
   const cached = await getPersistentCacheEntry<UploadedReplayDescription>(cacheKey);
   if (cached.hit) return cached.value;
 
+  // Cross-instance tier in R2, next to the uploaded .osr itself; only fully
+  // resolved descriptions are stored there (an unresolved beatmap should retry
+  // soon, so it stays in this instance's short memory cache).
+  const storageKey = getUploadedReplayDescStorageKey(normalized);
+  const stored = await getJsonArtifact<UploadedReplayDescription>(storageKey);
+  if (stored) {
+    await setPersistentCache(cacheKey, stored, DESCRIPTION_CACHE_TTL);
+    return stored;
+  }
+
   const description = await computeUploadedReplayDescription(normalized);
   // Skip caching a null: a missing/corrupt read is cheap to redo and we don't
   // want to pin a transient R2 hiccup for a day.
   if (description) {
     const ttl = description.beatmap ? DESCRIPTION_CACHE_TTL : DESCRIPTION_UNRESOLVED_CACHE_TTL;
     await setPersistentCache(cacheKey, description, ttl);
+    if (description.beatmap) {
+      await putJsonArtifact(storageKey, description);
+    }
   }
   return description;
 }

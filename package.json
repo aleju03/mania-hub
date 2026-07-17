@@ -20,17 +20,12 @@
     "replay:compare-capture": "node --env-file-if-exists=.env scripts/replay-compare-capture.ts",
     "replay:source-audit": "node --env-file-if-exists=.env scripts/stable-replay-source-audit.ts",
     "replay:validate": "node --env-file-if-exists=.env scripts/replay-validate.ts",
-    "db:init": "turso db shell mania-hub < db/schema.sql",
-    "db:inspect": "turso db shell mania-hub",
     "skins:build-preview-backdrops": "node scripts/build-skin-preview-backdrops.mjs",
-    "snipes:reset": "node --env-file=.env scripts/reset-snipes.mjs",
-    "snipes:migrate-cache": "node --env-file-if-exists=.env scripts/migrate-snipes-cache.mjs",
     "audio:migrate-playback": "node --env-file-if-exists=.env node_modules/vite-node/vite-node.mjs scripts/migrate-audio-playback-cache.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1037.0",
     "@aws-sdk/s3-request-presigner": "^3.1037.0",
-    "@libsql/client": "^0.17.3",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-devtools": "latest",
     "@tanstack/react-router": "latest",

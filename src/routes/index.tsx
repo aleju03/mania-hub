@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { getHomePopoffs, getHomeRecentScores, getRankings } from "../lib/osu";
+import { getRankings } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName, isGlobalScope } from "../lib/country";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
@@ -26,10 +26,56 @@ import { readGlobalTopPlayersCache, readGlobalTopPlayersMemoryCache, writeGlobal
 import { showPlayerCountryFlagState } from "../lib/player-profile-navigation";
 import { useWindowActive } from "../lib/window-activity";
 
+// The SSR paint is what crawlers index, so the loader fills the top-players
+// panel with real rows server-side instead of skeletons. Both sources sit
+// behind short server caches; the budget keeps a slow upstream from stalling
+// the whole page render.
+const HOME_SNAPSHOT_LOADER_TIMEOUT_MS = 2500;
+
+async function withHomeLoaderBudget<T>(snapshotPromise: Promise<T>): Promise<T | null> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<null>((resolve) => {
+    timeoutId = setTimeout(() => resolve(null), HOME_SNAPSHOT_LOADER_TIMEOUT_MS);
+  });
+  return Promise.race([
+    snapshotPromise.finally(() => {
+      if (timeoutId) clearTimeout(timeoutId);
+    }),
+    timeoutPromise,
+  ]);
+}
+
+type HomeLoaderData = {
+  scope: string;
+  rankings: RankingsResponse | null;
+  globalRanking: LiveGlobalRankingEntry[] | null;
+} | null;
+
 export const Route = createFileRoute("/")({
   validateSearch: (search: Record<string, unknown>) => ({
     country: parseCountrySearchParam(search.country),
   }),
+  loaderDeps: ({ search }) => ({ country: search.country }),
+  loader: async ({ deps, context }): Promise<HomeLoaderData> => {
+    // SSR only: on client navigations the store + effects own the data, so the
+    // loader skipping keeps navigation instant and avoids a duplicate fetch.
+    if (typeof document !== "undefined") return null;
+    const scope = deps.country ?? context.initialCountry;
+    try {
+      if (isGlobalScope(scope)) {
+        const snapshot = await withHomeLoaderBudget(
+          fetchLiveGlobalRankings(HOME_GLOBAL_RANKINGS_FETCH_COUNT),
+        );
+        return snapshot ? { scope, rankings: null, globalRanking: snapshot.ranking } : null;
+      }
+      const rankings = await withHomeLoaderBudget(
+        getRankings({ data: { type: "performance", page: 1, country: scope } }),
+      );
+      return rankings ? { scope, rankings, globalRanking: null } : null;
+    } catch {
+      return null;
+    }
+  },
   head: ({ match }) => {
     const country = match.search.country;
     const countryName = country ? getCountryName(country) : null;
@@ -81,9 +127,7 @@ const HOME_RANKING_SKELETON_MOBILE_COUNT = 5;
 const HOME_RANKING_SKELETON_DESKTOP_COUNT = 10;
 const HOME_GLOBAL_RANKINGS_FETCH_COUNT = 50;
 const HOME_RECENT_SCORES_SKELETON_COUNT = 2;
-const HOME_RECENT_SCORES_PLAYER_COUNT = 50;
 const HOME_LIVE_RECENT_SNAPSHOT_LIMIT = 20;
-const HOME_POPOFFS_PLAYER_COUNT = 10;
 const HOME_POPOFFS_CACHE_LIMIT = 200;
 const HOME_GLOBAL_POPOFFS_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -291,10 +335,16 @@ function selectFeaturedHomePopoffs(popoffs: LeanHomePopoff[], limit = 3): LeanHo
 function HomePage() {
   const navigate = useNavigate();
   const { country } = Route.useSearch();
+  const loaderData = Route.useLoaderData();
   const fallbackCountry = useSelectedCountry();
   const selectedCountry = country ?? fallbackCountry;
   const selectedIsGlobal = isGlobalScope(selectedCountry);
-  const rankings = useAppStore((state) => state.rankingsByCountry[selectedCountry] ?? null);
+  // SSR fallback: renders real rows on the server paint (what crawlers index)
+  // and until the client fetches land. Scope-guarded so a post-hydration
+  // country switch never shows the previous scope's board.
+  const loaderSnapshot = loaderData?.scope === selectedCountry ? loaderData : null;
+  const storeRankings = useAppStore((state) => state.rankingsByCountry[selectedCountry] ?? null);
+  const rankings = storeRankings ?? loaderSnapshot?.rankings ?? null;
   const rankingsFetchedAt = useAppStore((state) => state.rankingsFetchedAtByCountry[selectedCountry] ?? null);
   const recentScores = useAppStore((state) => state.homeRecentScoresByCountry[selectedCountry]) ?? EMPTY_SCORES;
   const recentScoresFetchedAt = useAppStore((state) => state.homeRecentScoresFetchedAtByCountry[selectedCountry]) ?? null;
@@ -327,23 +377,6 @@ function HomePage() {
   const [loadingPopoffs, setLoadingPopoffs] = useState(() => displayablePopoffsCount === 0);
   const countryName = getCountryName(selectedCountry);
   const homeTopPlaysRange = selectedIsGlobal ? "24h" : hydrated ? topPlaysRange : "7d";
-  const homeActivePlayers = rankings?.ranking
-    .filter((entry) => entry.user.is_active !== false)
-    .map((entry) => ({
-      id: entry.user.id,
-      username: entry.user.username,
-      avatar_url: entry.user.avatar_url,
-    })) ?? [];
-  const homeRecentPlayers = homeActivePlayers.slice(0, HOME_RECENT_SCORES_PLAYER_COUNT);
-  const homePopoffPlayers = homeActivePlayers.slice(0, HOME_POPOFFS_PLAYER_COUNT);
-  const homeRecentUserIds = homeRecentPlayers.map((player) => player.id);
-  const homeRecentPlayerIdsKey = homeRecentUserIds.join(",");
-  const homePopoffPlayersKey = homePopoffPlayers
-    .map((player) => `${player.id}:${player.username}:${player.avatar_url}`)
-    .join("|");
-  const homeRecentEffectPlayerIdsKey = liveBackendEnabled ? "" : homeRecentPlayerIdsKey;
-  const homePopoffsEffectPlayersKey = liveBackendEnabled ? "" : homePopoffPlayersKey;
-  const homeEffectsRankingsError = liveBackendEnabled ? null : rankingsError;
 
   useEffect(() => {
     let cancelled = false;
@@ -419,6 +452,12 @@ function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
+    if (!liveBackendEnabled) {
+      setLoadingScores(false);
+      return () => {
+        cancelled = true;
+      };
+    }
     const shouldRefreshScores =
       !recentScoresFetchedAt || isCacheStale(recentScoresFetchedAt, CLIENT_CACHE_TTL.homeRecentScores);
 
@@ -438,41 +477,14 @@ function HomePage() {
       };
     }
 
-    if (liveBackendEnabled) {
-      setLoadingScores(recentScores.length === 0);
-      fetchLiveTrackerSnapshot(selectedCountry, HOME_LIVE_RECENT_SNAPSHOT_LIMIT)
-        .then((snapshot) => {
-          if (cancelled) return;
-          const passedScores = snapshot.scores.filter((score) => getScoreDisplayValues(score).passed);
-          setHomeRecentScores(selectedCountry, passedScores.map(trackerScoreToHomeScore));
-          if (passedScores.length > 0) addFeedScores(selectedCountry, passedScores);
-          else markFeedScoresFetched(selectedCountry);
-        })
-        .catch(() => {
-          if (cancelled) return;
-        })
-        .finally(() => {
-          if (cancelled) return;
-          setLoadingScores(false);
-        });
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    if (homeRecentUserIds.length === 0) {
-      setLoadingScores(recentScores.length === 0 && !rankingsError);
-      return () => {
-        cancelled = true;
-      };
-    }
-
     setLoadingScores(recentScores.length === 0);
-
-    getHomeRecentScores({ data: { userIds: homeRecentUserIds } })
-      .then((data) => {
+    fetchLiveTrackerSnapshot(selectedCountry, HOME_LIVE_RECENT_SNAPSHOT_LIMIT)
+      .then((snapshot) => {
         if (cancelled) return;
-        setHomeRecentScores(selectedCountry, data);
+        const passedScores = snapshot.scores.filter((score) => getScoreDisplayValues(score).passed);
+        setHomeRecentScores(selectedCountry, passedScores.map(trackerScoreToHomeScore));
+        if (passedScores.length > 0) addFeedScores(selectedCountry, passedScores);
+        else markFeedScoresFetched(selectedCountry);
       })
       .catch(() => {
         if (cancelled) return;
@@ -490,8 +502,6 @@ function HomePage() {
   }, [
     recentScores.length,
     recentScoresFetchedAt,
-    homeRecentEffectPlayerIdsKey,
-    homeEffectsRankingsError,
     selectedCountry,
     setHomeRecentScores,
     addFeedScores,
@@ -530,6 +540,12 @@ function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
+    if (!liveBackendEnabled) {
+      setLoadingPopoffs(false);
+      return () => {
+        cancelled = true;
+      };
+    }
     const cachedGlobalPopoffsIncludeOld = selectedIsGlobal && popoffs.some((popoff) => !isHomeGlobalPopoffRecent(popoff));
     const shouldRefreshPopoffs =
       !popoffsFetchedAt || isCacheStale(popoffsFetchedAt, CLIENT_CACHE_TTL.homePopoffs) || cachedGlobalPopoffsIncludeOld;
@@ -550,46 +566,19 @@ function HomePage() {
       };
     }
 
-    if (liveBackendEnabled) {
-      setLoadingPopoffs(displayablePopoffsCount === 0);
-      fetchLiveTopPlaysSnapshot(selectedCountry, selectedIsGlobal ? "24h" : "7d")
-        .then((snapshot) => {
-          if (cancelled) return;
-          const nextPopoffs = dedupeHomePopoffs(
-            snapshot.popoffs
-              .map(countryTopPlayToHomePopoff)
-              .filter((play): play is LeanHomePopoff => play !== null),
-          );
-          setHomePopoffs(
-            selectedCountry,
-            selectedIsGlobal ? filterHomeGlobalPopoffs(nextPopoffs) : nextPopoffs,
-          );
-        })
-        .catch(() => {
-          if (cancelled) return;
-        })
-        .finally(() => {
-          if (cancelled) return;
-          setLoadingPopoffs(false);
-        });
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    if (homePopoffPlayers.length === 0) {
-      setLoadingPopoffs(popoffs.length === 0 && !rankingsError);
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    setLoadingPopoffs(popoffs.length === 0);
-
-    getHomePopoffs({ data: { players: homePopoffPlayers } })
-      .then((data) => {
+    setLoadingPopoffs(displayablePopoffsCount === 0);
+    fetchLiveTopPlaysSnapshot(selectedCountry, selectedIsGlobal ? "24h" : "7d")
+      .then((snapshot) => {
         if (cancelled) return;
-        setHomePopoffs(selectedCountry, dedupeHomePopoffs(data));
+        const nextPopoffs = dedupeHomePopoffs(
+          snapshot.popoffs
+            .map(countryTopPlayToHomePopoff)
+            .filter((play): play is LeanHomePopoff => play !== null),
+        );
+        setHomePopoffs(
+          selectedCountry,
+          selectedIsGlobal ? filterHomeGlobalPopoffs(nextPopoffs) : nextPopoffs,
+        );
       })
       .catch(() => {
         if (cancelled) return;
@@ -607,8 +596,6 @@ function HomePage() {
   }, [
     popoffs.length,
     popoffsFetchedAt,
-    homePopoffsEffectPlayersKey,
-    homeEffectsRankingsError,
     selectedCountry,
     selectedIsGlobal,
     setHomePopoffs,
@@ -620,9 +607,10 @@ function HomePage() {
     () => (rankings?.ranking ?? []).filter((entry) => !hiddenUserIds.has(entry.user.id)),
     [rankings, hiddenUserIds],
   );
+  const effectiveGlobalTopPlayers = globalTopPlayers ?? loaderSnapshot?.globalRanking ?? null;
   const visibleGlobalTopPlayers = useMemo(
-    () => (globalTopPlayers ?? []).filter((entry) => !hiddenUserIds.has(entry.user.id)),
-    [globalTopPlayers, hiddenUserIds],
+    () => (effectiveGlobalTopPlayers ?? []).filter((entry) => !hiddenUserIds.has(entry.user.id)),
+    [effectiveGlobalTopPlayers, hiddenUserIds],
   );
   const topPlayersMobile = visibleRanking.slice(0, 5);
   const topPlayersDesktop = visibleRanking.slice(0, 10);
@@ -677,7 +665,7 @@ function HomePage() {
           </div>
           {selectedIsGlobal ? (
             <div className="divide-y divide-osu-b3/15">
-              {globalTopPlayers == null ? (
+              {effectiveGlobalTopPlayers == null ? (
                 <>
                   <div className="lg:hidden">
                     {Array.from({ length: HOME_RANKING_SKELETON_MOBILE_COUNT }).map((_, i) => <RankingRowSkeleton key={i} />)}
@@ -922,6 +910,35 @@ function HomePage() {
         </div>
       </div>
       )}
+
+      {/* Static site summary: the only copy on this page that exists in the
+         server HTML regardless of live data, so crawlers always get real text
+         and internal links to the indexable surfaces. */}
+      <section className="relative max-w-[1200px] mx-auto px-4 sm:px-5 pb-10">
+        <div className="bg-osu-b4 rounded-xl border border-osu-b3/20 px-5 py-4 space-y-2 text-xs text-osu-f1 leading-relaxed">
+          <p>
+            <span className="font-semibold text-white">Live score tracker for osu!mania</span>:
+            plays show up in the feed seconds after they're set and roll up into country rankings,
+            top plays, and player profiles.
+          </p>
+          <p>
+            <Link to="/rankings" search={{ page: 1, country: selectedCountry }} className="text-osu-pink hover:text-osu-pink-light transition-colors">Rankings</Link>{" "}
+            cover every tracked country plus a combined global board.{" "}
+            <Link to="/top-plays" search={{ range: homeTopPlaysRange, country: selectedCountry, sort: "recent", dir: "desc", keys: "all" }} className="text-osu-pink hover:text-osu-pink-light transition-colors">Top plays</Link>{" "}
+            list each country's pp records by keymode and time range.{" "}
+            <Link to="/maps" search={{} as never} className="text-osu-pink hover:text-osu-pink-light transition-colors">Map search</Link>{" "}
+            filters every ranked osu!mania map by keymode, stars, patterns, and status.
+            The <Link to="/replay" className="text-osu-pink hover:text-osu-pink-light transition-colors">replay viewer</Link>{" "}
+            plays .osr files in the browser and exports video.{" "}
+            <Link to="/farm-helper" className="text-osu-pink hover:text-osu-pink-light transition-colors">Farm helper</Link>{" "}
+            surfaces maps worth playing for pp.{" "}
+            <Link to="/packs" className="text-osu-pink hover:text-osu-pink-light transition-colors">Card packs</Link>{" "}
+            turn players into collectible maniacards, and the{" "}
+            <Link to="/bbcode" className="text-osu-pink hover:text-osu-pink-light transition-colors">BBCode editor</Link>{" "}
+            live-previews osu! profile pages.
+          </p>
+        </div>
+      </section>
     </div>
   );
 }

@@ -10,13 +10,14 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { db, ensureCacheSchema } from "./db";
 
+// Cache growth is bounded by R2 lifecycle rules configured per prefix in the Cloudflare dashboard
+// (audio/ and background/ 30d, replays/ 60d, og/ 7d; community-beatmaps/ and videos/ never expire),
+// replacing the old Turso-tracked LRU. Age-based expiry is fine here: a miss re-uploads and
+// refreshes the object's age. Replay endpoint kind rides on S3 object metadata.
 const REPLAY_CACHE_BUCKET = "mania-hub-replay-cache";
 const REPLAY_CACHE_PREFIX = "replay-cache/";
 const SIGNED_URL_EXPIRES_SECONDS = 6 * 60 * 60;
-const DEFAULT_MAX_CACHE_BYTES = 2.5 * 1024 * 1024 * 1024;
-const BEATMAP_ASSET_CACHE_STATS_ID = 1;
 const R2_ADMIN_LIST_LIMIT = 100;
 const R2_ADMIN_DELETE_BATCH_SIZE = 1000;
 const R2_ADMIN_SEARCH_SCAN_LIMIT = 5000;
@@ -103,14 +104,6 @@ export type R2AdminPrefixSummary = {
 };
 
 let client: S3Client | null | undefined;
-let cleanupPromise: Promise<void> | null = null;
-
-function getMaxCacheBytes(): number {
-  const raw = process.env.R2_REPLAY_CACHE_MAX_BYTES;
-  const parsed = raw ? Number(raw) : DEFAULT_MAX_CACHE_BYTES;
-  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_MAX_CACHE_BYTES;
-  return Math.floor(parsed);
-}
 
 function getClient(): S3Client | null {
   if (client !== undefined) return client;
@@ -183,6 +176,113 @@ export function getUploadedReplayStorageKey(id: string): string {
   const safeId = id.replace(/[^a-zA-Z0-9_-]+/g, "").slice(0, 64);
   if (!safeId) throw new Error("Invalid uploaded replay id.");
   return `${REPLAY_CACHE_PREFIX}uploaded-replays/${safeId}.osr`;
+}
+
+// Durable user-contributed .osu files for unsubmitted/deleted maps (see
+// community-beatmap-store.ts). Content-addressed by MD5, so objects are
+// immutable; nothing may evict this prefix (keep it out of any R2 lifecycle
+// rule and out of LRU cleanup).
+const COMMUNITY_BEATMAP_PREFIX = `${REPLAY_CACHE_PREFIX}community-beatmaps/`;
+
+export function getCommunityBeatmapStorageKey(checksum: string): string {
+  return `${COMMUNITY_BEATMAP_PREFIX}${checksum}.osu`;
+}
+
+export async function getCommunityBeatmapObject(checksum: string): Promise<string | null> {
+  const r2 = getClient();
+  if (!r2) return null;
+
+  const storageKey = getCommunityBeatmapStorageKey(checksum);
+  assertReplayCacheKey(storageKey);
+  try {
+    const object = await r2.send(new GetObjectCommand({
+      Bucket: REPLAY_CACHE_BUCKET,
+      Key: storageKey,
+    }));
+    const buffer = await readObjectBody(object.Body);
+    return buffer.length > 0 ? buffer.toString("utf8") : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function putCommunityBeatmapObject(checksum: string, content: string): Promise<boolean> {
+  const r2 = getClient();
+  if (!r2) return false;
+
+  const storageKey = getCommunityBeatmapStorageKey(checksum);
+  assertReplayCacheKey(storageKey);
+  await r2.send(new PutObjectCommand({
+    Bucket: REPLAY_CACHE_BUCKET,
+    Key: storageKey,
+    Body: Buffer.from(content, "utf8"),
+    ContentType: "text/plain; charset=utf-8",
+    CacheControl: "public, max-age=31536000, immutable",
+  }));
+  return true;
+}
+
+// ── Gzipped JSON artifacts ──
+// Cross-instance cache tier for expensive server-side computations (parsed replays, uploaded-replay
+// descriptions). Content is derived data: age-based lifecycle expiry is fine because a miss just
+// recomputes. Stored gzipped; parsed replays are ~100 KB compressed.
+
+const PARSED_REPLAY_PREFIX = `${REPLAY_CACHE_PREFIX}parsed/`;
+const UPLOADED_REPLAY_DESC_PREFIX = `${REPLAY_CACHE_PREFIX}uploaded-replay-desc/`;
+
+export function getParsedReplayStorageKey(version: number, scoreId: number, mode: string, keyCount: number): string {
+  const safeMode = mode.replace(/[^a-z0-9_-]+/gi, "_") || "mania";
+  return `${PARSED_REPLAY_PREFIX}v${version}/${scoreId}-${safeMode}-${keyCount}.json.gz`;
+}
+
+export function getUploadedReplayDescStorageKey(id: string): string {
+  const safeId = id.replace(/[^a-zA-Z0-9_-]+/g, "").slice(0, 64);
+  if (!safeId) throw new Error("Invalid uploaded replay id.");
+  return `${UPLOADED_REPLAY_DESC_PREFIX}${safeId}.json.gz`;
+}
+
+async function getZlib(): Promise<typeof import("node:zlib")> {
+  return import("node:zlib");
+}
+
+export async function getJsonArtifact<T>(storageKey: string): Promise<T | null> {
+  const r2 = getClient();
+  if (!r2) return null;
+
+  assertReplayCacheKey(storageKey);
+  try {
+    const object = await r2.send(new GetObjectCommand({
+      Bucket: REPLAY_CACHE_BUCKET,
+      Key: storageKey,
+    }));
+    const buffer = await readObjectBody(object.Body);
+    if (buffer.length === 0) return null;
+    const zlib = await getZlib();
+    return JSON.parse(zlib.gunzipSync(buffer).toString("utf8")) as T;
+  } catch {
+    return null;
+  }
+}
+
+export async function putJsonArtifact(storageKey: string, value: unknown): Promise<boolean> {
+  const r2 = getClient();
+  if (!r2) return false;
+
+  assertReplayCacheKey(storageKey);
+  try {
+    const zlib = await getZlib();
+    const body = zlib.gzipSync(Buffer.from(JSON.stringify(value), "utf8"));
+    await r2.send(new PutObjectCommand({
+      Bucket: REPLAY_CACHE_BUCKET,
+      Key: storageKey,
+      Body: body,
+      ContentType: "application/gzip",
+      CacheControl: "public, max-age=86400",
+    }));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 const MANIACARD_THUMBNAIL_CACHE_PREFIX = `${REPLAY_CACHE_PREFIX}maniacards/`;
@@ -330,72 +430,6 @@ async function signGetUrl(storageKey: string, mimeType?: string): Promise<string
   );
 }
 
-async function touchAssetRow(storageKey: string, now: number): Promise<void> {
-  if (!db) return;
-  await ensureCacheSchema();
-  await db.execute({
-    sql: "UPDATE beatmap_asset_cache SET last_accessed_at = ? WHERE storage_key = ?",
-    args: [now, storageKey],
-  });
-}
-
-async function touchReplayRow(scoreId: number, now: number): Promise<void> {
-  if (!db) return;
-  await ensureCacheSchema();
-  await db.execute({
-    sql: "UPDATE replay_cache SET last_accessed_at = ? WHERE score_id = ?",
-    args: [now, scoreId],
-  });
-}
-
-async function adjustBeatmapAssetCacheTotal(deltaBytes: number, now: number): Promise<void> {
-  if (!db || !Number.isFinite(deltaBytes)) return;
-  await db.execute({
-    sql: `
-      INSERT INTO beatmap_asset_cache_stats (id, total_size_bytes, updated_at)
-      VALUES (?, MAX(0, ?), ?)
-      ON CONFLICT(id) DO UPDATE SET
-        total_size_bytes = MAX(0, total_size_bytes + ?),
-        updated_at = excluded.updated_at
-    `,
-    args: [BEATMAP_ASSET_CACHE_STATS_ID, deltaBytes, now, deltaBytes],
-  });
-}
-
-async function rebuildBeatmapAssetCacheTotal(now: number): Promise<number> {
-  if (!db) return 0;
-  const totalResult = await db.execute(`
-    SELECT
-      (SELECT COALESCE(SUM(size_bytes), 0) FROM beatmap_asset_cache)
-      + (SELECT COALESCE(SUM(size_bytes), 0) FROM replay_cache)
-      AS total_bytes
-  `);
-  const totalBytes = Number(totalResult.rows[0]?.total_bytes ?? 0);
-  const safeTotalBytes = Number.isFinite(totalBytes) ? Math.max(0, totalBytes) : 0;
-  await db.execute({
-    sql: `
-      INSERT INTO beatmap_asset_cache_stats (id, total_size_bytes, updated_at)
-      VALUES (?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        total_size_bytes = excluded.total_size_bytes,
-        updated_at = excluded.updated_at
-    `,
-    args: [BEATMAP_ASSET_CACHE_STATS_ID, safeTotalBytes, now],
-  });
-  return safeTotalBytes;
-}
-
-async function readBeatmapAssetCacheTotal(now: number): Promise<number> {
-  if (!db) return 0;
-  const totalResult = await db.execute({
-    sql: "SELECT total_size_bytes FROM beatmap_asset_cache_stats WHERE id = ? LIMIT 1",
-    args: [BEATMAP_ASSET_CACHE_STATS_ID],
-  });
-  const totalBytes = Number(totalResult.rows[0]?.total_size_bytes);
-  if (Number.isFinite(totalBytes)) return Math.max(0, totalBytes);
-  return rebuildBeatmapAssetCacheTotal(now);
-}
-
 export async function getCachedBeatmapAssetUrl(
   kind: BeatmapAssetKind,
   beatmapsetId: string,
@@ -412,10 +446,8 @@ export async function getCachedBeatmapAssetUrl(
       Bucket: REPLAY_CACHE_BUCKET,
       Key: storageKey,
     }));
-    const now = Date.now();
     const sizeBytes = head.ContentLength ?? 0;
     const mimeType = head.ContentType ?? "application/octet-stream";
-    await touchAssetRow(storageKey, now);
     return {
       storageKey,
       sizeBytes,
@@ -456,28 +488,14 @@ export async function getCachedReplay(scoreId: number): Promise<CachedReplay | n
     const buffer = await readObjectBody(object.Body);
     if (buffer.length === 0) return null;
 
-    const now = Date.now();
     const sizeBytes = object.ContentLength ?? buffer.length;
     const mimeType = object.ContentType ?? "application/octet-stream";
-    let endpointKind: ReplayEndpointKind = "modern";
-
-    if (db) {
-      await ensureCacheSchema();
-      const row = await db.execute({
-        sql: "SELECT endpoint_kind FROM replay_cache WHERE score_id = ? LIMIT 1",
-        args: [scoreId],
-      });
-      const storedEndpoint = String(row.rows[0]?.endpoint_kind ?? "");
-      if (storedEndpoint === "legacy" || storedEndpoint === "modern") {
-        endpointKind = storedEndpoint;
-      }
-      await touchReplayRow(scoreId, now);
-    }
-
     return {
       scoreId,
       storageKey,
-      endpointKind,
+      // Pre-migration .osr objects carry no metadata; "modern" was always the
+      // default and self-heals on the next putCachedReplay.
+      endpointKind: parseEndpointKindMetadata(object.Metadata) ?? "modern",
       sizeBytes,
       mimeType,
       buffer,
@@ -487,16 +505,24 @@ export async function getCachedReplay(scoreId: number): Promise<CachedReplay | n
   }
 }
 
+function parseEndpointKindMetadata(metadata: Record<string, string> | undefined): ReplayEndpointKind | null {
+  // S3 lowercases user metadata keys on the wire.
+  const value = metadata?.endpointkind;
+  return value === "legacy" || value === "modern" ? value : null;
+}
+
 export async function getCachedReplayEndpointKind(scoreId: number): Promise<ReplayEndpointKind | null> {
-  if (!db) return null;
+  const r2 = getClient();
+  if (!r2) return null;
+
+  const storageKey = getReplayStorageKey(scoreId);
+  assertReplayCacheKey(storageKey);
   try {
-    await ensureCacheSchema();
-    const row = await db.execute({
-      sql: "SELECT endpoint_kind FROM replay_cache WHERE score_id = ? LIMIT 1",
-      args: [scoreId],
-    });
-    const endpointKind = String(row.rows[0]?.endpoint_kind ?? "");
-    return endpointKind === "legacy" || endpointKind === "modern" ? endpointKind : null;
+    const head = await r2.send(new HeadObjectCommand({
+      Bucket: REPLAY_CACHE_BUCKET,
+      Key: storageKey,
+    }));
+    return parseEndpointKindMetadata(head.Metadata);
   } catch {
     return null;
   }
@@ -625,45 +651,6 @@ export async function putBeatmapAssetAndGetUrl(
     CacheControl: "public, max-age=86400, immutable",
   }));
 
-  const now = Date.now();
-  if (db) {
-    await ensureCacheSchema();
-    const existing = await db.execute({
-      sql: "SELECT size_bytes FROM beatmap_asset_cache WHERE storage_key = ? LIMIT 1",
-      args: [storageKey],
-    });
-    const previousSizeBytes = Number(existing.rows[0]?.size_bytes ?? 0);
-    const deltaBytes = buffer.length - (Number.isFinite(previousSizeBytes) ? previousSizeBytes : 0);
-
-    await db.batch([
-      {
-        sql: `
-          INSERT INTO beatmap_asset_cache (
-            storage_key, beatmapset_id, filename, kind, mime_type, size_bytes, last_accessed_at, created_at
-          )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT(storage_key) DO UPDATE SET
-            mime_type = excluded.mime_type,
-            size_bytes = excluded.size_bytes,
-            last_accessed_at = excluded.last_accessed_at
-        `,
-        args: [storageKey, beatmapsetId, filename, kind, mimeType, buffer.length, now, now],
-      },
-      {
-        sql: `
-          INSERT INTO beatmap_asset_cache_stats (id, total_size_bytes, updated_at)
-          VALUES (?, MAX(0, ?), ?)
-          ON CONFLICT(id) DO UPDATE SET
-            total_size_bytes = MAX(0, total_size_bytes + ?),
-            updated_at = excluded.updated_at
-        `,
-        args: [BEATMAP_ASSET_CACHE_STATS_ID, deltaBytes, now, deltaBytes],
-      },
-    ]);
-
-    void runReplayCacheCleanup();
-  }
-
   return {
     storageKey,
     sizeBytes: buffer.length,
@@ -752,48 +739,10 @@ export async function putCachedReplay(
     Body: buffer,
     ContentType: mimeType,
     CacheControl: "private, max-age=31536000, immutable",
+    // Which osu! replay endpoint produced this .osr (legacy vs modern timing quirks);
+    // read back by getCachedReplay / getCachedReplayEndpointKind.
+    Metadata: { endpointkind: endpointKind },
   }));
-
-  const now = Date.now();
-  if (db) {
-    await ensureCacheSchema();
-    const existing = await db.execute({
-      sql: "SELECT size_bytes FROM replay_cache WHERE score_id = ? LIMIT 1",
-      args: [scoreId],
-    });
-    const previousSizeBytes = Number(existing.rows[0]?.size_bytes ?? 0);
-    const deltaBytes = buffer.length - (Number.isFinite(previousSizeBytes) ? previousSizeBytes : 0);
-
-    await db.batch([
-      {
-        sql: `
-          INSERT INTO replay_cache (
-            score_id, storage_key, endpoint_kind, mime_type, size_bytes, last_accessed_at, created_at
-          )
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT(score_id) DO UPDATE SET
-            storage_key = excluded.storage_key,
-            endpoint_kind = excluded.endpoint_kind,
-            mime_type = excluded.mime_type,
-            size_bytes = excluded.size_bytes,
-            last_accessed_at = excluded.last_accessed_at
-        `,
-        args: [scoreId, storageKey, endpointKind, mimeType, buffer.length, now, now],
-      },
-      {
-        sql: `
-          INSERT INTO beatmap_asset_cache_stats (id, total_size_bytes, updated_at)
-          VALUES (?, MAX(0, ?), ?)
-          ON CONFLICT(id) DO UPDATE SET
-            total_size_bytes = MAX(0, total_size_bytes + ?),
-            updated_at = excluded.updated_at
-        `,
-        args: [BEATMAP_ASSET_CACHE_STATS_ID, deltaBytes, now, deltaBytes],
-      },
-    ]);
-
-    void runReplayCacheCleanup();
-  }
 
   return {
     scoreId,
@@ -803,48 +752,6 @@ export async function putCachedReplay(
     mimeType,
     buffer,
   };
-}
-
-async function deleteCacheRowsForKeys(keys: string[]): Promise<number> {
-  if (!db || keys.length === 0) return 0;
-  await ensureCacheSchema();
-
-  let deletedBytes = 0;
-  for (let i = 0; i < keys.length; i += 200) {
-    const chunk = keys.slice(i, i + 200);
-    const placeholders = chunk.map(() => "?").join(",");
-    const [assetRows, replayRows] = await Promise.all([
-      db.execute({
-        sql: `SELECT size_bytes FROM beatmap_asset_cache WHERE storage_key IN (${placeholders})`,
-        args: chunk,
-      }),
-      db.execute({
-        sql: `SELECT size_bytes FROM replay_cache WHERE storage_key IN (${placeholders})`,
-        args: chunk,
-      }),
-    ]);
-
-    for (const row of [...assetRows.rows, ...replayRows.rows]) {
-      const sizeBytes = Number(row.size_bytes ?? 0);
-      if (Number.isFinite(sizeBytes) && sizeBytes > 0) deletedBytes += sizeBytes;
-    }
-
-    await db.batch([
-      {
-        sql: `DELETE FROM beatmap_asset_cache WHERE storage_key IN (${placeholders})`,
-        args: chunk,
-      },
-      {
-        sql: `DELETE FROM replay_cache WHERE storage_key IN (${placeholders})`,
-        args: chunk,
-      },
-    ]);
-  }
-
-  if (deletedBytes > 0) {
-    await adjustBeatmapAssetCacheTotal(-deletedBytes, Date.now());
-  }
-  return deletedBytes;
 }
 
 export async function getR2AdminListing(
@@ -1049,11 +956,10 @@ export async function deleteR2AdminObject(keyInput: string): Promise<R2AdminDele
     Key: key,
   }));
 
-  const cacheBytes = await deleteCacheRowsForKeys([key]);
   return {
     ok: true,
     deletedCount: 1,
-    deletedBytes: Number.isFinite(sizeBytes) ? sizeBytes : cacheBytes || null,
+    deletedBytes: sizeBytes !== null && Number.isFinite(sizeBytes) ? sizeBytes : null,
   };
 }
 
@@ -1101,7 +1007,6 @@ export async function deleteR2AdminPrefix(prefixInput: string): Promise<R2AdminD
       deletedBytes += objects.reduce((sum, object) => (
         Number.isFinite(object.sizeBytes) ? sum + object.sizeBytes : sum
       ), 0);
-      await deleteCacheRowsForKeys(objects.map((object) => object.key));
     }
 
     continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
@@ -1114,63 +1019,3 @@ export async function deleteR2AdminPrefix(prefixInput: string): Promise<R2AdminD
   };
 }
 
-async function runReplayCacheCleanup(): Promise<void> {
-  if (cleanupPromise) return cleanupPromise;
-  cleanupPromise = cleanupReplayCacheByLru().finally(() => {
-    cleanupPromise = null;
-  });
-  return cleanupPromise;
-}
-
-async function cleanupReplayCacheByLru(): Promise<void> {
-  const r2 = getClient();
-  if (!r2 || !db) return;
-
-  await ensureCacheSchema();
-  const totalBytes = await readBeatmapAssetCacheTotal(Date.now());
-  const maxBytes = getMaxCacheBytes();
-  if (!Number.isFinite(totalBytes) || totalBytes <= maxBytes) return;
-
-  let bytesToRemove = totalBytes - maxBytes;
-  const rows = await db.execute({
-    sql: `
-      SELECT storage_key, size_bytes, cache_kind, score_id
-      FROM (
-        SELECT storage_key, size_bytes, last_accessed_at, 'asset' AS cache_kind, NULL AS score_id
-        FROM beatmap_asset_cache
-        UNION ALL
-        SELECT storage_key, size_bytes, last_accessed_at, 'replay' AS cache_kind, score_id
-        FROM replay_cache
-      )
-      ORDER BY last_accessed_at ASC
-      LIMIT 200
-    `,
-    args: [],
-  });
-
-  for (const row of rows.rows) {
-    if (bytesToRemove <= 0) break;
-    const storageKey = String(row.storage_key ?? "");
-    const sizeBytes = Number(row.size_bytes ?? 0);
-    const cacheKind = String(row.cache_kind ?? "");
-    if (!storageKey.startsWith(REPLAY_CACHE_PREFIX)) continue;
-
-    await r2.send(new DeleteObjectCommand({
-      Bucket: REPLAY_CACHE_BUCKET,
-      Key: storageKey,
-    }));
-    const deleteResult = cacheKind === "replay"
-      ? await db.execute({
-        sql: "DELETE FROM replay_cache WHERE score_id = ?",
-        args: [Number(row.score_id)],
-      })
-      : await db.execute({
-        sql: "DELETE FROM beatmap_asset_cache WHERE storage_key = ?",
-        args: [storageKey],
-      });
-    if ((deleteResult.rowsAffected ?? 0) > 0) {
-      await adjustBeatmapAssetCacheTotal(-sizeBytes, Date.now());
-    }
-    bytesToRemove -= Number.isFinite(sizeBytes) ? sizeBytes : 0;
-  }
-}

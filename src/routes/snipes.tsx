@@ -1,8 +1,6 @@
 import { createFileRoute, Link, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
 import { Globe } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getCountrySnipes, getPartialSnipeEvents, getSnipesScanStatus } from "../lib/osu";
-import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName, isGlobalScope } from "../lib/country";
 import { formatAccuracy, formatNumber, formatPP, formatTimeAgo } from "../lib/format";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -14,13 +12,13 @@ import { ModBadge } from "../components/ui/ModBadge";
 import { Pagination } from "../components/ui/Pagination";
 import { UsernameText } from "../components/ui/UsernameText";
 import { CoverBackdrop } from "../components/ui/CoverBackdrop";
-import type { SnipeEvent, SnipesScanStatus } from "../lib/types";
+import type { SnipeEvent } from "../lib/types";
 import { DEFAULT_SNIPES_FILTERS, useAppStore, useHiddenUserIds, useSelectedCountry, type SnipesFilters, type SnipesKeyFilter, type SnipesRange } from "../store";
 import { parseCountrySearchParam } from "../lib/country-search";
 import { getReplaySearch } from "../lib/replay-navigation";
-import { startProgressPoll } from "../lib/progress-poll";
 import { fetchLiveSnipesSnapshot, isLiveBackendConfigured, openLiveEventSource } from "../lib/live-backend";
 import { CountryWarming } from "../components/CountryWarming";
+import { LiveBackendRequired } from "../components/LiveDataEmptyState";
 import { SnipesNotTracked } from "../components/SnipesNotTracked";
 import { useCountryWarming } from "../lib/use-country-warming";
 import { useWindowActive } from "../lib/window-activity";
@@ -50,13 +48,6 @@ const RANGE_MS: Record<RangeFilter, number> = {
 
 const PAGE_SIZE = 25;
 const EMPTY_SNIPES: SnipeEvent[] = [];
-
-const INLINE_PHASE_LABEL: Record<SnipesScanStatus["phase"], string> = {
-  roster: "Loading country roster…",
-  recent: "Loading players' recent plays…",
-  compare: "Comparing plays against snapshot…",
-  seed: "Checking new beatmaps…",
-};
 
 function readKeys(value: unknown): KeyFilter {
   return value === "4k" || value === "7k" ? value : "all";
@@ -118,14 +109,6 @@ function SnipesPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
-  const [scanStartedAt, setScanStartedAt] = useState<number | null>(null);
-  const [elapsed, setElapsed] = useState(0);
-  const [scanStatus, setScanStatus] = useState<SnipesScanStatus | null>(null);
-  const [partialEvents, setPartialEvents] = useState<SnipeEvent[]>([]);
-  const fetchingRef = useRef(false);
-  const sawScanActivityRef = useRef(false);
-  const finalizingRefreshRef = useRef(false);
-  const refreshInProgressRef = useRef(false);
   const hasRestoredRememberedFiltersRef = useRef(false);
   const liveBackendEnabled = isLiveBackendConfigured();
   const windowActive = useWindowActive();
@@ -134,82 +117,6 @@ function SnipesPage() {
   // Country is below the snipes tier: the backend won't seed/update snipe
   // boards for it, so there is nothing live to wait for here.
   const snipesTierDisabled = liveBackendEnabled && featureTier != null && featureTier !== "snipes";
-
-  // Render-driving "elapsed" timer for the secondary header indicator.
-  useEffect(() => {
-    if (scanStartedAt == null) return;
-    const tick = () => setElapsed(Date.now() - scanStartedAt);
-    tick();
-    const id = window.setInterval(tick, 250);
-    return () => window.clearInterval(id);
-  }, [scanStartedAt]);
-
-  // Poll scan progress and partial events while the request is in flight.
-  useEffect(() => {
-    if (liveBackendEnabled) {
-      setScanStatus(null);
-      setPartialEvents([]);
-      return;
-    }
-    if (scanStartedAt == null) {
-      setScanStatus(null);
-      setPartialEvents([]);
-      return;
-    }
-    let cancelled = false;
-    const requestedCountry = selectedCountry;
-    const startedAt = scanStartedAt;
-    const poll = async () => {
-      try {
-        const [status, partial] = await Promise.all([
-          getSnipesScanStatus({ data: { country: requestedCountry } }),
-          getPartialSnipeEvents({ data: { country: requestedCountry } }),
-        ]);
-        if (cancelled) return;
-        if (currentCountryRef.current !== requestedCountry) return;
-        setScanStatus((prev) => getMonotonicScanStatus(prev, status));
-        if (status || partial.length > 0) sawScanActivityRef.current = true;
-        if (partial.length > 0) {
-          setPartialEvents(partial);
-        }
-
-        if (
-          !status &&
-          sawScanActivityRef.current &&
-          Date.now() - startedAt > 1500 &&
-          !finalizingRefreshRef.current
-        ) {
-          finalizingRefreshRef.current = true;
-          const response = await getCountrySnipes({ data: { country: requestedCountry } });
-          if (cancelled) return;
-          if (currentCountryRef.current !== requestedCountry) return;
-          setSnipes(
-            requestedCountry,
-            response?.events ?? [],
-            response?.scannedAt ?? Date.now(),
-          );
-          const refreshStillInProgress = response?.refreshInProgress === true;
-          refreshInProgressRef.current = refreshStillInProgress;
-          setRefreshing(refreshStillInProgress);
-          setScanStartedAt(refreshStillInProgress ? Date.now() : null);
-          if (!refreshStillInProgress) {
-            setPartialEvents([]);
-            setScanStatus(null);
-            sawScanActivityRef.current = false;
-          }
-          finalizingRefreshRef.current = false;
-        }
-      } catch {
-        // Best-effort; ignore failures so the main fetch isn't disturbed.
-        finalizingRefreshRef.current = false;
-      }
-    };
-    const stopPolling = startProgressPoll(poll);
-    return () => {
-      cancelled = true;
-      stopPolling();
-    };
-  }, [liveBackendEnabled, scanStartedAt, selectedCountry, setSnipes]);
 
   useEffect(() => {
     if (!liveBackendEnabled || selectedIsGlobal || !windowActive) return;
@@ -221,7 +128,6 @@ function SnipesPage() {
         setSnipes(requestedCountry, snapshot.events, snapshot.scannedAt);
         setLoading(false);
         setRefreshing(false);
-        setScanStartedAt(null);
       })
       .catch((err) => {
         if (currentCountryRef.current === requestedCountry && snipes.length === 0) {
@@ -249,7 +155,6 @@ function SnipesPage() {
     });
     source.addEventListener("job_status", () => {
       setRefreshing(false);
-      setScanStartedAt(null);
     });
     return () => source.close();
   }, [liveBackendEnabled, selectedCountry, selectedIsGlobal, setSnipes, snipes, windowActive]);
@@ -284,13 +189,6 @@ function SnipesPage() {
     setLoading(snipes.length === 0);
     setRefreshing(false);
     setExpandedKey(null);
-    setScanStartedAt(null);
-    setPartialEvents([]);
-    setElapsed(0);
-    fetchingRef.current = false;
-    sawScanActivityRef.current = false;
-    finalizingRefreshRef.current = false;
-    refreshInProgressRef.current = false;
     hasRestoredRememberedFiltersRef.current = false;
     if (search.page !== 0) updateSearch({ page: 0 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -347,84 +245,8 @@ function SnipesPage() {
     setSnipesFilters(selectedCountry, currentFilters);
   }, [location.searchStr, rememberedFilters.keys, rememberedFilters.range, search.keys, search.range, selectedCountry, setSnipesFilters]);
 
-  // Fetch snipes when stale. State updates are gated on the country still
-  // matching at resolve time so a country switch doesn't write the wrong
-  // result. We don't cancel on cleanup — strict-mode double-mounting would
-  // otherwise drop the only inflight fetch and leave us stuck loading.
-  useEffect(() => {
-    if (selectedIsGlobal) return;
-    if (liveBackendEnabled) return;
-    if (fetchingRef.current) return;
-    const stale = isCacheStale(snipesFetchedAt, CLIENT_CACHE_TTL.snipes);
-    if (!stale) {
-      refreshInProgressRef.current = false;
-      setLoading(false);
-      return;
-    }
-    if (refreshInProgressRef.current) {
-      setLoading(false);
-      if (snipes.length > 0) setRefreshing(true);
-      if (scanStartedAt == null) setScanStartedAt(Date.now());
-      return;
-    }
-
-    fetchingRef.current = true;
-    setLoading(snipes.length === 0);
-    if (snipes.length > 0) setRefreshing(true);
-    setScanStartedAt(Date.now());
-    setElapsed(0);
-    const requestedCountry = selectedCountry;
-    let keepPollingRefresh = false;
-
-    getCountrySnipes({ data: { country: requestedCountry } })
-      .then((response) => {
-        keepPollingRefresh = response?.refreshInProgress === true;
-        refreshInProgressRef.current = keepPollingRefresh;
-        setSnipes(
-          requestedCountry,
-          response?.events ?? [],
-          response?.scannedAt ?? Date.now(),
-        );
-        if (currentCountryRef.current === requestedCountry) {
-          setError(null);
-          if (keepPollingRefresh) {
-            setRefreshing(true);
-            setScanStartedAt(Date.now());
-          }
-        }
-      })
-      .catch((err) => {
-        const message = err instanceof Error ? err.message : "Couldn't load snipes.";
-        if (currentCountryRef.current === requestedCountry && snipes.length === 0) {
-          setError(message);
-        }
-      })
-      .finally(() => {
-        if (currentCountryRef.current === requestedCountry) {
-          setLoading(false);
-          if (!keepPollingRefresh) {
-            refreshInProgressRef.current = false;
-            setRefreshing(false);
-            setScanStartedAt(null);
-          }
-        }
-        fetchingRef.current = false;
-      });
-  }, [liveBackendEnabled, selectedCountry, selectedIsGlobal, snipesFetchedAt, snipes.length, scanStartedAt, setSnipes]);
-
   // ── Filter + sort ──────────────────────────────────────────────────────
-  const visibleSnipes = useMemo(() => {
-    if (partialEvents.length === 0) return snipes;
-    const merged = new Map<string, SnipeEvent>();
-    for (const event of partialEvents) {
-      merged.set(`${event.beatmap_id}:${event.score_id}`, event);
-    }
-    for (const event of snipes) {
-      const key = `${event.beatmap_id}:${event.score_id}`;
-      if (!merged.has(key)) merged.set(key, event);
-    }
-    return [...merged.values()];
-  }, [snipes, partialEvents]);
+  const visibleSnipes = snipes;
 
   const filtered = useMemo(() => {
     const cutoff = Date.now() - RANGE_MS[search.range];
@@ -494,11 +316,19 @@ function SnipesPage() {
     (search.keys !== "all" ? 1 : 0) +
     (search.range !== "7d" ? 1 : 0);
   const hasActiveFilters = activeFilterCount > 0;
-  const scanProgressPercent = getScanProgressPercent(scanStatus);
 
   const resetFilters = () => {
     updateSearch({ ...DEFAULT_SNIPES_SEARCH, country: search.country });
   };
+
+  if (!liveBackendEnabled) {
+    return (
+      <div className="flex-1">
+        <PageHeader iconSrc="/images/icons/snipes.svg" title={`${countryName} mania snipes`} />
+        <LiveBackendRequired />
+      </div>
+    );
+  }
 
   // Snipes are inherently per-country (a snipe is one country's player passing
   // another). The Global aggregate has no such notion, so point readers to Maps.
@@ -542,9 +372,7 @@ function SnipesPage() {
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
                 <span className="text-[10px] text-osu-f1">
-                  {loading
-                    ? `Scanning... ${formatElapsedSeconds(elapsed)}`
-                    : `Refreshing...${scanProgressPercent == null ? "" : ` (${scanProgressPercent}%)`}`}
+                  {loading ? "Loading..." : "Refreshing..."}
                 </span>
               </div>
             )}
@@ -684,50 +512,10 @@ function SnipesPage() {
           {!error && (
             <>
               {loading && snipes.length === 0 && (
-                <>
-                  {scanStatus?.phase === "seed" ? (
-                    <ScanProgress
-                      elapsed={elapsed}
-                      countryName={countryName}
-                      status={scanStatus}
-                    />
-                  ) : (
-                    <div className="flex flex-col items-center justify-center gap-1.5 py-20 text-osu-f1 text-xs">
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
-                        <span>
-                          {scanStatus
-                            ? INLINE_PHASE_LABEL[scanStatus.phase]
-                            : `Loading ${countryName} snipes…`}
-                        </span>
-                      </div>
-                      {scanStatus && scanStatus.total > 0 && (
-                        <span className="text-[10px] tabular-nums text-osu-f1/70">
-                          {scanStatus.current}/{scanStatus.total}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  {partialEvents.length > 0 && (
-                    <div className="space-y-2 mt-4">
-                      <div className="text-[11px] text-osu-f1 mb-2">
-                        Found {partialEvents.length} snipe{partialEvents.length === 1 ? "" : "s"} so far...
-                      </div>
-                      {partialEvents.map((event) => {
-                        const key = `${event.beatmap_id}:${event.score_id}`;
-                        return (
-                          <SnipeRow
-                            key={key}
-                            event={event}
-                            eventKey={key}
-                            expanded={expandedKey === key}
-                            onToggle={(k) => setExpandedKey((prev) => (prev === k ? null : k))}
-                          />
-                        );
-                      })}
-                    </div>
-                  )}
-                </>
+                <div className="flex items-center justify-center gap-2 py-20 text-osu-f1 text-xs">
+                  <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
+                  <span>{`Loading ${countryName} snipes…`}</span>
+                </div>
               )}
 
               {!loading && sorted.length === 0 && visibleSnipes.length === 0 && (
@@ -736,11 +524,6 @@ function SnipesPage() {
                   <p className="mt-1 text-[11px]">
                     Snipes appear when tracked country players push each other down a beatmap's country leaderboard.
                   </p>
-                  {snipesFetchedAt && !liveBackendEnabled && (
-                    <p className="mt-2 text-[10px] text-osu-f1/60">
-                      Last scanned {formatTimeAgo(new Date(snipesFetchedAt).toISOString())}.
-                    </p>
-                  )}
                 </div>
               )}
 
@@ -1074,157 +857,5 @@ function FilterPill({ active, onClick, children }: { active: boolean; onClick: (
     >
       {children}
     </button>
-  );
-}
-
-function formatElapsedSeconds(ms: number): string {
-  return `${Math.floor(ms / 1000)}s`;
-}
-
-function getScanProgressPercent(status: SnipesScanStatus | null): number | null {
-  if (!status || status.total <= 0) return null;
-  const phaseIdx = PHASE_ORDER.indexOf(status.phase);
-  if (phaseIdx < 0) return null;
-  const phaseProgress = Math.max(0, Math.min(1, status.current / status.total));
-  return Math.max(
-    0,
-    Math.min(100, Math.round(((phaseIdx + phaseProgress) / PHASE_ORDER.length) * 100)),
-  );
-}
-
-function getMonotonicScanStatus(
-  previous: SnipesScanStatus | null,
-  next: SnipesScanStatus | null,
-): SnipesScanStatus | null {
-  if (!previous || !next) return next;
-  const previousPercent = getScanProgressPercent(previous);
-  const nextPercent = getScanProgressPercent(next);
-  if (previousPercent == null || nextPercent == null) return next;
-  return nextPercent >= previousPercent ? next : previous;
-}
-
-const PHASE_ORDER: SnipesScanStatus["phase"][] = [
-  "roster",
-  "recent",
-  "compare",
-  "seed",
-];
-
-const PHASE_DESCRIPTIONS: Record<SnipesScanStatus["phase"], string> = {
-  roster: "Loading the country roster.",
-  recent: "Pulling each player's recent plays from the osu! API.",
-  compare: "Cross-checking those plays against the saved country leaderboards.",
-  seed: "Looking up country rankings on beatmaps we haven't seen yet.",
-};
-
-function ScanProgress({
-  elapsed,
-  countryName,
-  status,
-}: {
-  elapsed: number;
-  countryName: string;
-  status: SnipesScanStatus | null;
-}) {
-  const phaseIdx = status ? PHASE_ORDER.indexOf(status.phase) : -1;
-  const maxRef = useRef({ phase: "", pct: 0, current: 0 });
-  const rawPct =
-    status && status.total > 0
-      ? Math.min(100, Math.round((status.current / status.total) * 100))
-      : 0;
-  if (status && status.phase !== maxRef.current.phase) {
-    maxRef.current = { phase: status.phase, pct: rawPct, current: status?.current ?? 0 };
-  } else {
-    if (rawPct > maxRef.current.pct) maxRef.current.pct = rawPct;
-    if (status && status.current > maxRef.current.current) maxRef.current.current = status.current;
-  }
-  const phasePct = maxRef.current.pct;
-  const flooredCurrent = maxRef.current.current;
-  const description = status ? PHASE_DESCRIPTIONS[status.phase] : "Connecting to the scanner...";
-
-  return (
-    <div className="max-w-xl mx-auto py-8 px-1">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <div className="w-3.5 h-3.5 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin flex-shrink-0" />
-            <h2 className="text-sm font-bold text-white">
-              Scanning {countryName}
-            </h2>
-          </div>
-          <p className="text-[11px] text-osu-f1 mt-1">
-            First scan for a country pulls a lot of data. Subsequent scans are near-instant.
-          </p>
-        </div>
-        <span className="text-[11px] text-osu-f1 tabular-nums flex-shrink-0">
-          {formatElapsedSeconds(elapsed)}
-        </span>
-      </div>
-
-      {/* Phase checklist */}
-      <ol className="mt-5 space-y-1.5">
-        {PHASE_ORDER.map((phase, idx) => {
-          const isCurrent = idx === phaseIdx;
-          const isDone = phaseIdx >= 0 && idx < phaseIdx;
-          const isPending = phaseIdx < 0 || idx > phaseIdx;
-          return (
-            <li
-              key={phase}
-              className={`flex items-center gap-2 text-[11px] ${
-                isCurrent
-                  ? "text-white"
-                  : isDone
-                    ? "text-osu-l2"
-                    : "text-osu-f1/60"
-              }`}
-            >
-              <span
-                className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold flex-shrink-0 ${
-                  isCurrent
-                    ? "bg-osu-pink text-white"
-                    : isDone
-                      ? "bg-osu-pink/30 text-osu-pink-light"
-                      : "bg-osu-b3/60 text-osu-f1"
-                }`}
-              >
-                {isDone ? "✓" : idx + 1}
-              </span>
-              <span className={isPending ? "" : "font-medium"}>
-                {phase === "roster" && "Country roster"}
-                {phase === "recent" && "Recent plays"}
-                {phase === "compare" && "Compare against snapshot"}
-                {phase === "seed" && "Check new beatmaps"}
-              </span>
-              {isCurrent && status && status.total > 0 && (
-                <span className="ml-auto text-osu-f1 tabular-nums">
-                  {flooredCurrent}/{status.total}
-                </span>
-              )}
-            </li>
-          );
-        })}
-      </ol>
-
-      {/* Active phase detail + progress bar */}
-      <div className="mt-5">
-        <div className="flex items-center justify-between text-[10px] text-osu-f1 mb-1.5">
-          <span className="truncate pr-2">{status?.label ?? "Waiting for first status update..."}</span>
-          {status && status.total > 0 && (
-            <span className="tabular-nums flex-shrink-0">{phasePct}%</span>
-          )}
-        </div>
-        <div className="h-2 rounded-full bg-osu-b3/60 overflow-hidden">
-          {status && status.total > 0 ? (
-            <div
-              className="h-full bg-osu-pink transition-[width] duration-[400ms] ease-out"
-              style={{ width: `${phasePct}%` }}
-            />
-          ) : (
-            <div className="h-full w-1/3 bg-osu-pink/60 animate-pulse rounded-full" />
-          )}
-        </div>
-        <p className="text-[10px] text-osu-f1 mt-2">{description}</p>
-      </div>
-    </div>
   );
 }

@@ -2,7 +2,6 @@ import { createServerFn } from "@tanstack/react-start";
 import {
   fetchWithCacheLock,
   getPersistentCacheEntries,
-  getPersistentCacheEntryAllowStale,
   osuFetch
 } from "../api";
 import type { RankingsResponse } from "../types";
@@ -10,6 +9,7 @@ import { edgeCache } from "./server";
 import { toLeanRankingEntry } from "./mappers";
 import type { RawRankingsResponse } from "./mappers";
 import {
+  OSU_PROXY_STALE_MS,
   RANKINGS_CACHE_TTL,
   RANK_HISTORY_CONCURRENCY
 } from "./constants";
@@ -38,20 +38,6 @@ function rankingsCacheKey(type: string, page: number, country?: string): string 
   return `rankings:v4:${type}:${page}:${country ?? ""}`;
 }
 
-// Read-only, stale-allowed view of a cached rankings page. Lets the OG route
-// recover the last-known roster for a country without spending an osu! API
-// call; a miss means the caller falls back, never fetches.
-export async function readRankingsPageFromCache(
-  type: string,
-  page: number,
-  country?: string,
-): Promise<RankingsResponse | null> {
-  const cached = await getPersistentCacheEntryAllowStale<RankingsResponse>(
-    rankingsCacheKey(type, page, country),
-  );
-  return cached.hit ? cached.value : null;
-}
-
 export async function fetchRankingsPage(type: string, page: number, country?: string): Promise<RankingsResponse> {
   const cacheKey = rankingsCacheKey(type, page, country);
   return fetchWithCacheLock(cacheKey, RANKINGS_CACHE_TTL, async () => {
@@ -61,7 +47,8 @@ export async function fetchRankingsPage(type: string, page: number, country?: st
         "cursor[page]": page,
         country,
       },
-      { caller: "getRankings" },
+      // Stale window keeps replay scoreboards and OG cards working through osu! hiccups.
+      { caller: "getRankings", cacheTtlMs: RANKINGS_CACHE_TTL, staleMs: OSU_PROXY_STALE_MS },
     );
     return {
       cursor: raw.cursor,

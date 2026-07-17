@@ -104,6 +104,9 @@ export async function migrate(db: Db): Promise<void> {
   await migrateMapCollections(db);
   await migrateSkins(db);
   await migrateAdminTodos(db);
+  await migrateDanBenchmark(db);
+  await migrateAvatarAccents(db);
+  await migrateOsuProxyCache(db);
   await migrateCountryMapsSnapshotStampsIndex(db);
   await migrateChartAnalysisDtRate(db);
 }
@@ -1039,6 +1042,75 @@ async function migrateAdminTodos(db: Db): Promise<void> {
          )
     `);
   }
+}
+
+async function migrateDanBenchmark(db: Db): Promise<void> {
+  // Owner-curated dan benchmark ground truth (labels + hidden diffs), moved here from the legacy
+  // frontend Turso store. beatmap_id is the primary key in both tables: a beatmap carries at most
+  // one label / one hidden flag, with the family recorded alongside (mirrors the old schema, whose
+  // upserts were on conflict(beatmap_id)). Durable: retention never prunes these.
+  await db.execute(`
+    create table if not exists dan_benchmark_labels (
+      beatmap_id integer primary key,
+      expected_label text not null,
+      family text not null,
+      updated_at integer not null
+    )
+  `);
+  await db.execute(`
+    create index if not exists idx_dan_benchmark_labels_family
+      on dan_benchmark_labels(family)
+  `);
+  await db.execute(`
+    create table if not exists dan_benchmark_hidden_diffs (
+      beatmap_id integer primary key,
+      family text not null,
+      updated_at integer not null
+    )
+  `);
+  await db.execute(`
+    create index if not exists idx_dan_benchmark_hidden_family
+      on dan_benchmark_hidden_diffs(family)
+  `);
+}
+
+async function migrateAvatarAccents(db: Db): Promise<void> {
+  // Per-avatar-URL accent colors for player names (features/avatar-accents.ts). a.ppy.sh URLs are
+  // cache-busted per avatar change, so a row is effectively content-addressed: accent computed once,
+  // shipped in snapshot payloads. status is ok|error (error rows retry after a day). Retention
+  // prunes rows older than ~180d as a slow refresh; everything self-heals via compute jobs.
+  await db.execute(`
+    create table if not exists avatar_accents (
+      avatar_url text primary key,
+      accent text,
+      status text not null default 'ok',
+      computed_at integer not null
+    )
+  `);
+  await db.execute(`
+    create index if not exists idx_avatar_accents_computed
+      on avatar_accents(computed_at)
+  `);
+}
+
+async function migrateOsuProxyCache(db: Db): Promise<void> {
+  // Response cache for the /api/osu/v2 GET-JSON proxy (features/osu-proxy-cache.ts). Callers opt in
+  // per request with TTL/stale hints; rows past their stale window are pruned by retention. Nothing
+  // here is durable.
+  await db.execute(`
+    create table if not exists osu_proxy_cache (
+      cache_key text primary key,
+      path text not null,
+      body text not null,
+      expires_at integer not null,
+      stale_until integer not null,
+      updated_at integer not null
+    )
+  `);
+  await db.execute(`
+    create index if not exists idx_osu_proxy_cache_stale
+      on osu_proxy_cache(stale_until)
+  `);
 }
 
 async function migrateBeatmapOsuFileCache(db: Db): Promise<void> {

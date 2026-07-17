@@ -2,9 +2,10 @@ import type { Db } from "./db.js";
 import { readConfig } from "./config.js";
 import { canSeedSnipesForCountry } from "./countries.js";
 import { exec, json, parseJson, writeVariantPps } from "./db.js";
+import { AVATAR_ACCENT_JOB, computeAvatarAccentJob } from "./features/avatar-accents.js";
 import { BEATMAP_OSU_FILE_BACKFILL_JOB, runBeatmapOsuFileBackfillJob } from "./features/beatmap-osu-file-backfill.js";
 import { computeBeatmapActivitySkillVector } from "./features/activity.js";
-import { CHART_ANALYSIS_BACKFILL_JOB, CHART_ANALYSIS_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB, LN_SUBTYPE_RECOMPUTE_JOB, VIBRO_RECOMPUTE_JOB, computeBeatmapChartAnalysis, runChartAnalysisBackfillJob, runDanFloorPinRecomputeJob, runDtRateAnalysisJob, runLnSubtypeRecomputeJob, runVibroRecomputeJob } from "./features/chart-analysis.js";
+import { CHART_ANALYSIS_BACKFILL_JOB, CHART_ANALYSIS_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB, LN_SOURCE_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, VIBRO_RECOMPUTE_JOB, computeBeatmapChartAnalysis, runChartAnalysisBackfillJob, runDanFloorPinRecomputeJob, runDtRateAnalysisJob, runLnSourceRecomputeJob, runLnSubtypeRecomputeJob, runVibroRecomputeJob } from "./features/chart-analysis.js";
 import { computeDanEstimateJob } from "./features/dan-estimates.js";
 import { reconcileStatGoalsForCountry } from "./features/goals.js";
 import { runMapSearchIndexBuildJob } from "./features/map-search.js";
@@ -118,7 +119,7 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     // the work is local (cached .osu text), no osu! API pressure. Tunable via
     // CHART_ANALYSIS_LANE_INTERVAL_MS so a local backfill can run flat out.
     name: "chart-analysis",
-    jobTypes: [CHART_ANALYSIS_JOB, CHART_ANALYSIS_BACKFILL_JOB, VIBRO_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB],
+    jobTypes: [CHART_ANALYSIS_JOB, CHART_ANALYSIS_BACKFILL_JOB, VIBRO_RECOMPUTE_JOB, DAN_FLOOR_PIN_RECOMPUTE_JOB, LN_SUBTYPE_RECOMPUTE_JOB, LN_SOURCE_RECOMPUTE_JOB, DT_RATE_ANALYSIS_JOB],
     claimLimit: 1,
     intervalMs: readConfig().chartAnalysisLaneIntervalMs,
   },
@@ -141,6 +142,15 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     name: "snipe-seed",
     jobTypes: ["seed_snipe_board"],
     claimLimit: 1,
+    intervalMs: 1_000,
+  },
+  {
+    // Avatar accent extraction: a.ppy.sh CDN fetch + sharp, off the osu! API
+    // budget entirely. Its own lane so slow CDN responses never stall the fast
+    // enrichment lane.
+    name: "avatar-accents",
+    jobTypes: [AVATAR_ACCENT_JOB],
+    claimLimit: 2,
     intervalMs: 1_000,
   },
   {
@@ -420,6 +430,10 @@ export class WorkerRunner {
       await computeDanEstimateJob(this.db, this.osu, job.payload);
       return;
     }
+    if (job.type === AVATAR_ACCENT_JOB) {
+      await computeAvatarAccentJob(this.db, job.payload);
+      return;
+    }
     if (job.type === "analyze_activity_beatmap") {
       await computeBeatmapActivitySkillVector(this.db, this.osu, job.payload as { beatmapId: number });
       return;
@@ -446,6 +460,10 @@ export class WorkerRunner {
     }
     if (job.type === LN_SUBTYPE_RECOMPUTE_JOB) {
       await runLnSubtypeRecomputeJob(this.db, this.queue, job.payload as { cursor?: number });
+      return;
+    }
+    if (job.type === LN_SOURCE_RECOMPUTE_JOB) {
+      await runLnSourceRecomputeJob(this.db, this.queue, job.payload as { cursor?: number });
       return;
     }
     if (job.type === DT_RATE_ANALYSIS_JOB) {

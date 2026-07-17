@@ -1,38 +1,12 @@
-// Server-only: OAuth token management + fetch wrapper for osu! API v2
+// Server-only: fetch wrapper for osu! API v2 (proxied through the live backend, which owns the
+// token bucket) plus a per-instance in-memory response cache. Cross-instance caching deliberately
+// does NOT live here anymore: osu! responses are cached inside the backend proxy (opt-in per call
+// via cacheTtlMs/staleMs on osuFetch), heavy artifacts live in R2, so this module only keeps the
+// short-lived memory tier and in-flight deduplication. The get/set/lock helper signatures survive
+// from the old persistent-store era so their many callers stay untouched.
 import { createServerFn } from "@tanstack/react-start";
 import { requireAdminAccess } from "./auth";
-import { db, ensureCacheSchema, hasDb } from "./db";
 import { trackServerEvent } from "./server-track";
-
-// Lazy zlib loader. Using a dynamic import keeps `node:zlib` out of any client
-// module graph that reaches this file. A top-level `import "node:zlib"` would
-// otherwise be externalized by Vite and crash the browser at runtime.
-type ZlibAsync = {
-  gzipAsync: (buf: Buffer) => Promise<Buffer>;
-  gunzipAsync: (buf: Buffer) => Promise<Buffer>;
-};
-let zlibPromise: Promise<ZlibAsync> | null = null;
-function getZlib(): Promise<ZlibAsync> {
-  if (!zlibPromise) {
-    zlibPromise = (async () => {
-      // Keep Node built-ins invisible to Vite's client resolver; this path only
-      // runs on the server when persistent cache compression is used.
-      const importNodeModule = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<any>;
-      const [zlib, util] = await Promise.all([
-        importNodeModule("node:zlib"),
-        importNodeModule("node:util"),
-      ]);
-      return {
-        gzipAsync: util.promisify(zlib.gzip) as (buf: Buffer) => Promise<Buffer>,
-        gunzipAsync: util.promisify(zlib.gunzip) as (buf: Buffer) => Promise<Buffer>,
-      };
-    })().catch((error) => {
-      zlibPromise = null;
-      throw error;
-    });
-  }
-  return zlibPromise;
-}
 
 const LIVE_BACKEND_OSU_TIMEOUT_MS = 120_000;
 const BEATMAP_FILE_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
@@ -41,27 +15,7 @@ const BEATMAP_FILE_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
 const responseCache = new Map<string, { value: unknown; expires: number }>();
 const CACHE_TTL = 5 * 60 * 1000;
 const MAX_RESPONSE_CACHE_ENTRIES = 1000;
-const CACHE_ENVELOPE_MARKER = "__mania_hub_cache_v1";
-// Anything above this gets gzipped before storage. Below it, gzip header
-// overhead dominates and compression would hurt more than help.
-const CACHE_COMPRESS_THRESHOLD_BYTES = 4096;
 const warnedCacheIssues = new Set<string>();
-
-// Opportunistic auto-purge of expired rows. Every Nth successful write fires
-// a background DELETE of up to M expired rows. Keeps the table bounded without
-// scheduled jobs or new infrastructure.
-const CACHE_PURGE_EVERY_N_WRITES = 20;
-const CACHE_PURGE_BATCH_SIZE = 50;
-const PROFILE_STALE_CACHE_PREFIXES = new Set([
-  "user",
-  "user-id",
-  "user-score-list",
-  "user-best-scores-window",
-]);
-const PROFILE_STALE_CACHE_RETENTION_MS = 6 * 60 * 60 * 1000;
-let writesSinceLastPurge = 0;
-let persistentCacheBypassUntil = 0;
-const PERSISTENT_CACHE_BYPASS_MS = 60_000;
 
 export type CacheLookup<T> =
   | { hit: true; value: T }
@@ -73,26 +27,10 @@ export type StaleCacheLookup<T> =
 
 function warnCacheIssue(action: string, key: string, error: unknown): void {
   const message = error instanceof Error ? error.message : String(error);
-  if (isPersistentCacheTransportError(message)) {
-    persistentCacheBypassUntil = Math.max(persistentCacheBypassUntil, Date.now() + PERSISTENT_CACHE_BYPASS_MS);
-  }
   const warningKey = `${action}:${key}:${message}`;
   if (warnedCacheIssues.has(warningKey)) return;
   warnedCacheIssues.add(warningKey);
   console.warn(`[cache] ${action} failed for "${key}": ${message}`);
-}
-
-function isPersistentCacheTransportError(message: string): boolean {
-  return /SERVER_ERROR|bad gateway|HTTP status 502|fetch failed|ECONNRESET|ETIMEDOUT|socket hang up|terminated/i.test(message);
-}
-
-function shouldBypassPersistentCache(): boolean {
-  return Date.now() < persistentCacheBypassUntil;
-}
-
-function getCacheKeyPrefix(key: string): string {
-  const separatorIndex = key.indexOf(":");
-  return separatorIndex >= 0 ? key.slice(0, separatorIndex) : key;
 }
 
 function makeLockOwner(): string {
@@ -132,88 +70,6 @@ async function fetchWithTimeout(
   }
 }
 
-async function encodeCacheValue(data: unknown): Promise<string> {
-  const json = JSON.stringify({
-    [CACHE_ENVELOPE_MARKER]: true,
-    value: data,
-  });
-  if (json.length < CACHE_COMPRESS_THRESHOLD_BYTES) {
-    return `P:${json}`;
-  }
-  // Defensive: encode/decode should only run server-side. If a client build
-  // somehow calls this, Buffer + dynamic node: imports would throw, so we
-  // bail to plain encoding.
-  if (typeof window !== "undefined") {
-    return `P:${json}`;
-  }
-  try {
-    const { gzipAsync } = await getZlib();
-    const compressed = await gzipAsync(Buffer.from(json, "utf8"));
-    return `Z:${compressed.toString("base64")}`;
-  } catch {
-    return `P:${json}`;
-  }
-}
-
-async function decodeCacheValue(raw: string): Promise<unknown> {
-  let json: string;
-  if (raw.startsWith("Z:")) {
-    if (typeof window !== "undefined") {
-      throw new Error("cannot decode compressed cache value in client context");
-    }
-    const { gunzipAsync } = await getZlib();
-    const compressed = Buffer.from(raw.slice(2), "base64");
-    const decompressed = await gunzipAsync(compressed);
-    json = decompressed.toString("utf8");
-  } else if (raw.startsWith("P:")) {
-    json = raw.slice(2);
-  } else {
-    // Legacy entries written before the P:/Z: prefix format existed.
-    json = raw;
-  }
-
-  const parsed = JSON.parse(json) as unknown;
-  if (
-    parsed &&
-    typeof parsed === "object" &&
-    !Array.isArray(parsed) &&
-    CACHE_ENVELOPE_MARKER in parsed &&
-    "value" in parsed
-  ) {
-    return (parsed as { value: unknown }).value;
-  }
-
-  return parsed;
-}
-
-async function purgeExpiredCacheEntries(): Promise<void> {
-  if (!hasDb() || !db) return;
-  try {
-    const now = Date.now();
-    await db.execute({
-      sql: `
-        DELETE FROM cache_entries
-        WHERE cache_key IN (
-          SELECT cache_key FROM cache_entries
-          WHERE expires_at < ?
-            AND NOT (cache_prefix IN (${[...PROFILE_STALE_CACHE_PREFIXES].map(() => "?").join(",")}) AND expires_at >= ?)
-          LIMIT ?
-        )
-      `,
-      args: [now, ...PROFILE_STALE_CACHE_PREFIXES, now - PROFILE_STALE_CACHE_RETENTION_MS, CACHE_PURGE_BATCH_SIZE],
-    });
-  } catch (error) {
-    warnCacheIssue("auto-purge expired", "cache_entries", error);
-  }
-}
-
-function scheduleOpportunisticPurge(): void {
-  writesSinceLastPurge += 1;
-  if (writesSinceLastPurge < CACHE_PURGE_EVERY_N_WRITES) return;
-  writesSinceLastPurge = 0;
-  purgeExpiredCacheEntries().catch(() => {});
-}
-
 export function getCachedEntry<T>(key: string): CacheLookup<T> {
   const entry = responseCache.get(key);
   if (entry && Date.now() < entry.expires) {
@@ -234,469 +90,123 @@ export function setCache(key: string, data: unknown, ttlMs = CACHE_TTL): void {
   setMemoryCache(key, data, Date.now() + ttlMs);
 }
 
+// ── "Persistent" cache helpers - now a memory tier only ──
+// These kept their historical names and signatures because dozens of call sites use them, but the
+// backing store is gone: cross-instance caching of osu! data happens inside the backend proxy
+// (osuFetch cacheTtlMs/staleMs), and heavy artifacts (parsed replays, community .osu files) live in
+// R2. What remains here is the per-instance fast path.
+
 export async function getPersistentCacheEntry<T>(key: string): Promise<CacheLookup<T>> {
-  const memoryCached = getCachedEntry<T>(key);
-  if (memoryCached.hit) return memoryCached;
-  if (shouldBypassPersistentCache()) return { hit: false };
-  if (!hasDb() || !db) return { hit: false };
-
-  try {
-    await ensureCacheSchema();
-
-    const result = await db.execute({
-      sql: `
-        SELECT cache_value, expires_at
-        FROM cache_entries
-        WHERE cache_key = ?
-        LIMIT 1
-      `,
-      args: [key],
-    });
-
-    const row = result.rows[0];
-    if (!row) return { hit: false };
-
-    const expiresAt = Number(row.expires_at);
-    if (Date.now() >= expiresAt) {
-      try {
-        await db.execute({
-          sql: `DELETE FROM cache_entries WHERE cache_key = ?`,
-          args: [key],
-        });
-      } catch (error) {
-        warnCacheIssue("delete expired entry", key, error);
-      }
-      return { hit: false };
-    }
-
-    const parsed = (await decodeCacheValue(String(row.cache_value))) as T;
-    setMemoryCache(key, parsed, expiresAt);
-    return { hit: true, value: parsed };
-  } catch (error) {
-    warnCacheIssue("persistent read", key, error);
-    return { hit: false };
-  }
+  return getCachedEntry<T>(key);
 }
 
 export async function getPersistentCacheEntries<T>(keys: string[]): Promise<Map<string, T>> {
   const results = new Map<string, T>();
-  if (keys.length === 0) return results;
-
-  const dbKeys: string[] = [];
   for (const key of keys) {
     const mem = getCachedEntry<T>(key);
-    if (mem.hit) {
-      results.set(key, mem.value);
-    } else {
-      dbKeys.push(key);
-    }
+    if (mem.hit) results.set(key, mem.value);
   }
-
-  if (dbKeys.length === 0 || shouldBypassPersistentCache() || !hasDb() || !db) return results;
-
-  try {
-    await ensureCacheSchema();
-
-    const placeholders = dbKeys.map(() => "?").join(",");
-    const result = await db.execute({
-      sql: `SELECT cache_key, cache_value, expires_at FROM cache_entries WHERE cache_key IN (${placeholders})`,
-      args: dbKeys,
-    });
-
-    const now = Date.now();
-    for (const row of result.rows) {
-      const key = String(row.cache_key);
-      const expiresAt = Number(row.expires_at);
-      if (now >= expiresAt) continue;
-
-      try {
-        const parsed = (await decodeCacheValue(String(row.cache_value))) as T;
-        setMemoryCache(key, parsed, expiresAt);
-        results.set(key, parsed);
-      } catch (error) {
-        warnCacheIssue("batch decode", key, error);
-      }
-    }
-  } catch (error) {
-    warnCacheIssue("persistent batch read", `${dbKeys.length} keys`, error);
-  }
-
   return results;
 }
 
 export async function getPersistentCached<T>(key: string): Promise<T | null> {
-  const cached = await getPersistentCacheEntry<T>(key);
-  return cached.hit ? cached.value : null;
+  return getCached<T>(key);
 }
 
 export async function getPersistentCacheEntryAllowStale<T>(
   key: string,
 ): Promise<StaleCacheLookup<T>> {
+  // Memory entries are dropped at expiry, so a hit is never stale. Stale serving for osu! data
+  // moved into the proxy (staleMs hint: it serves an expired row when the upstream call fails).
   const memoryCached = getCachedEntry<T>(key);
   if (memoryCached.hit) return { hit: true, value: memoryCached.value, isStale: false };
-  if (shouldBypassPersistentCache()) return { hit: false };
-  if (!hasDb() || !db) return { hit: false };
-
-  try {
-    await ensureCacheSchema();
-
-    const result = await db.execute({
-      sql: `
-        SELECT cache_value, expires_at, updated_at
-        FROM cache_entries
-        WHERE cache_key = ?
-        LIMIT 1
-      `,
-      args: [key],
-    });
-
-    const row = result.rows[0];
-    if (!row) return { hit: false };
-
-    const expiresAt = Number(row.expires_at);
-    const updatedAt = Number(row.updated_at);
-    const parsed = (await decodeCacheValue(String(row.cache_value))) as T;
-    const isStale = Date.now() >= expiresAt;
-
-    if (!isStale) {
-      setMemoryCache(key, parsed, expiresAt);
-    }
-
-    return {
-      hit: true,
-      value: parsed,
-      isStale,
-      updatedAt: Number.isFinite(updatedAt) ? updatedAt : undefined,
-    };
-  } catch (error) {
-    warnCacheIssue("persistent read (stale allowed)", key, error);
-    return { hit: false };
-  }
+  return { hit: false };
 }
 
 export async function setPersistentCache(key: string, data: unknown, ttlMs = CACHE_TTL): Promise<void> {
-  const expiresAt = Date.now() + ttlMs;
-  setMemoryCache(key, data, expiresAt);
-  if (shouldBypassPersistentCache()) return;
-  if (!hasDb() || !db) return;
-
-  try {
-    await ensureCacheSchema();
-
-    const encoded = await encodeCacheValue(data);
-    await db.execute({
-      sql: `
-        INSERT INTO cache_entries (cache_key, cache_prefix, cache_value, expires_at, updated_at)
-        VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(cache_key) DO UPDATE SET
-          cache_prefix = excluded.cache_prefix,
-          cache_value = excluded.cache_value,
-          expires_at = excluded.expires_at,
-          updated_at = excluded.updated_at
-      `,
-      args: [key, getCacheKeyPrefix(key), encoded, expiresAt, Date.now()],
-    });
-    scheduleOpportunisticPurge();
-  } catch (error) {
-    warnCacheIssue("persistent write", key, error);
-  }
+  setMemoryCache(key, data, Date.now() + ttlMs);
 }
 
-// ── Distributed cache lock (prevents thundering herd across serverless instances) ──
+// ── Herd control - per-instance in-flight deduplication ──
+// The old distributed lock table is gone. Within one server instance, concurrent same-key builds
+// collapse onto one promise here; across instances, the herd is absorbed one layer down (the osu!
+// proxy dedupes identical upstream fetches in-process on the backend, which is the resource that
+// actually needed protecting). Lock acquire/release keep their signatures as free passes for the
+// few call sites that use them directly.
 
-const LOCK_WAIT_MS = 300;
-const LOCK_WAIT_RETRIES = 5;
 const DEFAULT_LOCK_TTL = 15_000;
-const LOCK_PURGE_BATCH_SIZE = 250;
+const inFlightBuilds = new Map<string, Promise<unknown>>();
 
-async function purgeExpiredCacheLocks(now: number): Promise<void> {
-  if (!hasDb() || !db) return;
+async function dedupedBuild<T>(cacheKey: string, build: () => Promise<T>): Promise<T> {
+  const existing = inFlightBuilds.get(cacheKey);
+  if (existing) return existing as Promise<T>;
+  const attempt = build();
+  inFlightBuilds.set(cacheKey, attempt);
   try {
-    await db.execute({
-      sql: `
-        DELETE FROM cache_locks
-        WHERE lock_key IN (
-          SELECT lock_key FROM cache_locks
-          WHERE expires_at <= ?
-          LIMIT ?
-        )
-      `,
-      args: [now, LOCK_PURGE_BATCH_SIZE],
-    });
-  } catch (error) {
-    warnCacheIssue("purge expired locks", "cache_locks", error);
+    return await attempt;
+  } finally {
+    if (inFlightBuilds.get(cacheKey) === attempt) inFlightBuilds.delete(cacheKey);
   }
 }
 
-export async function acquireCacheLock(key: string, lockTtlMs: number): Promise<string | null> {
-  if (shouldBypassPersistentCache()) return makeLockOwner();
-  if (!hasDb() || !db) return makeLockOwner();
-  try {
-    await ensureCacheSchema();
-    const now = Date.now();
-    await purgeExpiredCacheLocks(now);
-    const owner = makeLockOwner();
-    const results = await db.batch([
-      {
-        sql: "DELETE FROM cache_locks WHERE lock_key = ? AND expires_at <= ?",
-        args: [key, now],
-      },
-      {
-        sql: "INSERT INTO cache_locks (lock_key, lock_owner, expires_at) VALUES (?, ?, ?) ON CONFLICT(lock_key) DO NOTHING",
-        args: [key, owner, now + lockTtlMs],
-      },
-    ]);
-    return (results[1].rowsAffected ?? 0) > 0 ? owner : null;
-  } catch (error) {
-    warnCacheIssue("acquire lock", key, error);
-    return makeLockOwner();
-  }
+export async function acquireCacheLock(_key: string, _lockTtlMs: number): Promise<string | null> {
+  return makeLockOwner();
 }
 
-export async function releaseCacheLock(key: string, owner: string | null): Promise<void> {
-  if (shouldBypassPersistentCache()) return;
-  if (!hasDb() || !db) return;
-  if (!owner) return;
-  try {
-    await db.execute({
-      sql: "DELETE FROM cache_locks WHERE lock_key = ? AND lock_owner = ?",
-      args: [key, owner],
-    });
-  } catch (error) {
-    warnCacheIssue("release lock", key, error);
-  }
-}
-
-async function renewCacheLock(key: string, owner: string | null, lockTtlMs: number): Promise<void> {
-  if (!hasDb() || !db) return;
-  if (!owner) return;
-  try {
-    await db.execute({
-      sql: "UPDATE cache_locks SET expires_at = ? WHERE lock_key = ? AND lock_owner = ?",
-      args: [Date.now() + lockTtlMs, key, owner],
-    });
-  } catch (error) {
-    warnCacheIssue("renew lock", key, error);
-  }
-}
+export async function releaseCacheLock(_key: string, _owner: string | null): Promise<void> {}
 
 export async function runWithCacheLockRenewal<T>(
-  key: string,
-  owner: string,
-  lockTtlMs: number,
+  _key: string,
+  _owner: string,
+  _lockTtlMs: number,
   fn: () => Promise<T>,
 ): Promise<T> {
-  let renewalTimer: ReturnType<typeof setInterval> | null = null;
-  if (hasDb() && db) {
-    renewalTimer = setInterval(() => {
-      renewCacheLock(key, owner, lockTtlMs).catch(() => {});
-    }, Math.max(1000, Math.floor(lockTtlMs / 2)));
-  }
-  try {
-    return await fn();
-  } finally {
-    if (renewalTimer) clearInterval(renewalTimer);
-  }
+  return fn();
 }
 
 export async function fetchWithCacheLock<T>(
   cacheKey: string,
   cacheTtlMs: number,
   fetchFn: () => Promise<T>,
-  lockTtlMs: number = DEFAULT_LOCK_TTL,
-  options: {
+  _lockTtlMs: number = DEFAULT_LOCK_TTL,
+  _options: {
     waitMs?: number;
     waitRetries?: number;
     runWithoutLockOnTimeout?: boolean;
   } = {},
 ): Promise<T> {
-  const waitMs = options.waitMs ?? LOCK_WAIT_MS;
-  const waitRetries = options.waitRetries ?? LOCK_WAIT_RETRIES;
-  const runWithoutLockOnTimeout = options.runWithoutLockOnTimeout ?? true;
-  const cached = await getPersistentCached<T>(cacheKey);
+  const cached = getCached<T>(cacheKey);
   if (cached) return cached;
 
-  const lockOwner = await acquireCacheLock(cacheKey, lockTtlMs);
-
-  if (lockOwner) {
-    try {
-      const rechecked = await getPersistentCached<T>(cacheKey);
-      if (rechecked) return rechecked;
-
-      const result = await runWithCacheLockRenewal(cacheKey, lockOwner, lockTtlMs, fetchFn);
-      await setPersistentCache(cacheKey, result, cacheTtlMs);
-      return result;
-    } finally {
-      await releaseCacheLock(cacheKey, lockOwner);
-    }
-  }
-
-  for (let i = 0; i < waitRetries; i++) {
-    await sleep(waitMs);
-    const cached = await getPersistentCached<T>(cacheKey);
-    if (cached) return cached;
-  }
-
-  if (!runWithoutLockOnTimeout) {
-    const retryLockOwner = await acquireCacheLock(cacheKey, lockTtlMs);
-    if (retryLockOwner) {
-      try {
-        const rechecked = await getPersistentCached<T>(cacheKey);
-        if (rechecked) return rechecked;
-
-        const result = await runWithCacheLockRenewal(cacheKey, retryLockOwner, lockTtlMs, fetchFn);
-        await setPersistentCache(cacheKey, result, cacheTtlMs);
-        return result;
-      } finally {
-        await releaseCacheLock(cacheKey, retryLockOwner);
-      }
-    }
-
-    throw new Error(`Timed out waiting for cache rebuild: ${cacheKey}`);
-  }
-
-  const result = await fetchFn();
-  await setPersistentCache(cacheKey, result, cacheTtlMs);
-  return result;
+  return dedupedBuild(cacheKey, async () => {
+    const rechecked = getCached<T>(cacheKey);
+    if (rechecked) return rechecked;
+    const result = await fetchFn();
+    setCache(cacheKey, result, cacheTtlMs);
+    return result;
+  });
 }
 
 export async function refreshCacheInBackground<T>(
   cacheKey: string,
   cacheTtlMs: number,
   fetchFn: () => Promise<T>,
-  lockTtlMs: number = DEFAULT_LOCK_TTL,
+  _lockTtlMs: number = DEFAULT_LOCK_TTL,
 ): Promise<void> {
-  const lockOwner = await acquireCacheLock(cacheKey, lockTtlMs);
-  if (!lockOwner) return;
-
   try {
-    const rechecked = await getPersistentCacheEntryAllowStale<T>(cacheKey);
-    if (rechecked.hit && !rechecked.isStale) return;
-
-    const result = await runWithCacheLockRenewal(cacheKey, lockOwner, lockTtlMs, fetchFn);
-    await setPersistentCache(cacheKey, result, cacheTtlMs);
+    await dedupedBuild(`${cacheKey}:refresh`, async () => {
+      const result = await fetchFn();
+      setCache(cacheKey, result, cacheTtlMs);
+      return result;
+    });
   } catch (error) {
     warnCacheIssue("background refresh", cacheKey, error);
-  } finally {
-    await releaseCacheLock(cacheKey, lockOwner);
-  }
-}
-
-export async function fetchWithStaleAllowed<T>(
-  cacheKey: string,
-  cacheTtlMs: number,
-  fetchFn: () => Promise<T>,
-  lockTtlMs: number = DEFAULT_LOCK_TTL,
-): Promise<{ value: T; isStale: boolean }> {
-  const cached = await getPersistentCacheEntryAllowStale<T>(cacheKey);
-  if (cached.hit) return { value: cached.value, isStale: cached.isStale };
-
-  const lockOwner = await acquireCacheLock(cacheKey, lockTtlMs);
-
-  if (lockOwner) {
-    try {
-      const rechecked = await getPersistentCacheEntryAllowStale<T>(cacheKey);
-      if (rechecked.hit) return { value: rechecked.value, isStale: rechecked.isStale };
-
-      const result = await fetchFn();
-      await setPersistentCache(cacheKey, result, cacheTtlMs);
-      return { value: result, isStale: false };
-    } finally {
-      await releaseCacheLock(cacheKey, lockOwner);
-    }
-  }
-
-  for (let i = 0; i < LOCK_WAIT_RETRIES; i++) {
-    await sleep(LOCK_WAIT_MS);
-    const polled = await getPersistentCacheEntryAllowStale<T>(cacheKey);
-    if (polled.hit) return { value: polled.value, isStale: polled.isStale };
-  }
-
-  const result = await fetchFn();
-  await setPersistentCache(cacheKey, result, cacheTtlMs);
-  return { value: result, isStale: false };
-}
-
-const REBUILD_POLL_MS = 2000;
-const REBUILD_POLL_RETRIES = 20;
-
-export async function runCacheRebuild<T>(
-  cacheKey: string,
-  cacheTtlMs: number,
-  fetchFn: () => Promise<T>,
-  lockTtlMs: number = DEFAULT_LOCK_TTL,
-): Promise<{ rebuilt: boolean; value: T | null }> {
-  const lockOwner = await acquireCacheLock(cacheKey, lockTtlMs);
-
-  if (lockOwner) {
-    try {
-      const result = await fetchFn();
-      await setPersistentCache(cacheKey, result, cacheTtlMs);
-      return { rebuilt: true, value: result };
-    } finally {
-      await releaseCacheLock(cacheKey, lockOwner);
-    }
-  }
-
-  // Another instance is already rebuilding. Wait for it to publish fresh data to Turso,
-  // then return that so this caller still gets an up-to-date value.
-  for (let i = 0; i < REBUILD_POLL_RETRIES; i++) {
-    await sleep(REBUILD_POLL_MS);
-    const polled = await getPersistentCacheEntryAllowStale<T>(cacheKey);
-    if (polled.hit && !polled.isStale) {
-      return { rebuilt: false, value: polled.value };
-    }
-  }
-
-  return { rebuilt: false, value: null };
-}
-
-export async function deleteExpiredCacheEntriesByPrefix(
-  prefix: string,
-  olderThanMs: number,
-): Promise<void> {
-  if (!hasDb() || !db) return;
-  try {
-    await ensureCacheSchema();
-    const threshold = Date.now() - olderThanMs;
-    await db.execute({
-      sql: "DELETE FROM cache_entries WHERE cache_prefix = ? AND expires_at < ?",
-      args: [getCacheKeyPrefix(prefix), threshold],
-    });
-  } catch (error) {
-    warnCacheIssue("cleanup expired entries", prefix, error);
-  }
-}
-
-export async function deletePersistentCacheEntries(keys: string[]): Promise<void> {
-  if (keys.length === 0) return;
-  for (const key of keys) responseCache.delete(key);
-  if (!hasDb() || !db) return;
-  try {
-    await ensureCacheSchema();
-    const placeholders = keys.map(() => "?").join(",");
-    await db.execute({
-      sql: `DELETE FROM cache_entries WHERE cache_key IN (${placeholders})`,
-      args: keys,
-    });
-  } catch (error) {
-    warnCacheIssue("delete entries", keys.join(","), error);
   }
 }
 
 async function clearServerCachesInternal(): Promise<void> {
   responseCache.clear();
   warnedCacheIssues.clear();
-
-  if (!hasDb() || !db) return;
-
-  try {
-    await ensureCacheSchema();
-    await db.execute("DELETE FROM cache_entries");
-  } catch (error) {
-    warnCacheIssue("clear persistent cache", "cache_entries", error);
-    throw error;
-  }
 }
 
 export const clearDevServerCaches = createServerFn({ method: "POST" })
@@ -705,10 +215,6 @@ export const clearDevServerCaches = createServerFn({ method: "POST" })
     await clearServerCachesInternal();
     return { ok: true };
   });
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 // ── osu! API rate-limit snapshot for server error telemetry ──
 // State is stashed on globalThis so that all server module contexts (SSR
@@ -761,6 +267,12 @@ export type OsuFetchContextValue = string | number | boolean | null | undefined;
 export type OsuFetchOptions = {
   caller?: string;
   context?: Record<string, OsuFetchContextValue>;
+  // Opt-in cross-instance caching, executed inside the backend proxy (which owns the osu! token
+  // bucket): cacheTtlMs caches the JSON response for that long; staleMs additionally lets the proxy
+  // serve the expired response when the upstream call fails (profile surfaces ride out osu! outages
+  // this way). GET-JSON requests only.
+  cacheTtlMs?: number;
+  staleMs?: number;
 };
 
 export type BeatmapFileSource = "osu" | "catboy" | "archive";
@@ -822,7 +334,7 @@ export async function osuFetch<T = unknown>(
   const caller = options?.caller ?? "unknown";
   const context = cleanOsuFetchContext(options?.context);
   const requestPath = pathWithParams(path, params);
-  const response = await fetchLiveBackendOsu(path, params, caller, "json");
+  const response = await fetchLiveBackendOsu(path, params, caller, "json", options);
   recordOsuCall(response, requestPath, caller);
   if (response.ok) return response.json() as Promise<T>;
   return await throwLiveBackendOsuError(response, caller, requestPath, "json", context);
@@ -922,6 +434,7 @@ async function fetchLiveBackendOsu(
   params: Record<string, string | number | undefined> | undefined,
   caller: string,
   kind: "json" | "binary",
+  cache?: { cacheTtlMs?: number; staleMs?: number },
 ): Promise<Response> {
   const base = getServerLiveBackendUrl();
   return fetchWithTimeout(
@@ -929,7 +442,13 @@ async function fetchLiveBackendOsu(
     {
       method: "POST",
       headers: liveBackendHeaders(),
-      body: JSON.stringify({ path, params, caller, kind }),
+      body: JSON.stringify({
+        path,
+        params,
+        caller,
+        kind,
+        ...(cache?.cacheTtlMs ? { cacheTtlMs: cache.cacheTtlMs, staleMs: cache.staleMs } : {}),
+      }),
     },
     LIVE_BACKEND_OSU_TIMEOUT_MS,
   );
