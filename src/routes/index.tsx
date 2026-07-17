@@ -911,34 +911,6 @@ function HomePage() {
       </div>
       )}
 
-      {/* Static site summary: the only copy on this page that exists in the
-         server HTML regardless of live data, so crawlers always get real text
-         and internal links to the indexable surfaces. */}
-      <section className="relative max-w-[1200px] mx-auto px-4 sm:px-5 pb-10">
-        <div className="bg-osu-b4 rounded-xl border border-osu-b3/20 px-5 py-4 space-y-2 text-xs text-osu-f1 leading-relaxed">
-          <p>
-            <span className="font-semibold text-white">Live score tracker for osu!mania</span>:
-            plays show up in the feed seconds after they're set and roll up into country rankings,
-            top plays, and player profiles.
-          </p>
-          <p>
-            <Link to="/rankings" search={{ page: 1, country: selectedCountry }} className="text-osu-pink hover:text-osu-pink-light transition-colors">Rankings</Link>{" "}
-            cover every tracked country plus a combined global board.{" "}
-            <Link to="/top-plays" search={{ range: homeTopPlaysRange, country: selectedCountry, sort: "recent", dir: "desc", keys: "all" }} className="text-osu-pink hover:text-osu-pink-light transition-colors">Top plays</Link>{" "}
-            list each country's pp records by keymode and time range.{" "}
-            <Link to="/maps" search={{} as never} className="text-osu-pink hover:text-osu-pink-light transition-colors">Map search</Link>{" "}
-            filters every ranked osu!mania map by keymode, stars, patterns, and status.
-            The <Link to="/replay" className="text-osu-pink hover:text-osu-pink-light transition-colors">replay viewer</Link>{" "}
-            plays .osr files in the browser and exports video.{" "}
-            <Link to="/farm-helper" className="text-osu-pink hover:text-osu-pink-light transition-colors">Farm helper</Link>{" "}
-            surfaces maps worth playing for pp.{" "}
-            <Link to="/packs" className="text-osu-pink hover:text-osu-pink-light transition-colors">Card packs</Link>{" "}
-            turn players into collectible maniacards, and the{" "}
-            <Link to="/bbcode" className="text-osu-pink hover:text-osu-pink-light transition-colors">BBCode editor</Link>{" "}
-            live-previews osu! profile pages.
-          </p>
-        </div>
-      </section>
     </div>
   );
 }
