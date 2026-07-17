@@ -405,6 +405,40 @@ export async function getAvatarAccentForUrl(db: Db, queue: JobQueue | null, url:
   return null;
 }
 
+export const AVATAR_ACCENT_LOOKUP_MAX_URLS = 100;
+
+// Batch lookup for surfaces whose data never passes through
+// enrichPayloadAvatarAccents (osu!-API-sourced rankings on home and /rankings):
+// the browser asks for accents by avatar URL after render. Misses enqueue a
+// compute job, same as enrichment, so unknown avatars color on a later visit.
+export async function lookupAvatarAccents(db: Db, queue: JobQueue | null, urls: unknown): Promise<Record<string, string>> {
+  if (!Array.isArray(urls)) return {};
+  const normalizedByRaw = new Map<string, string>();
+  for (const raw of urls.slice(0, AVATAR_ACCENT_LOOKUP_MAX_URLS)) {
+    if (typeof raw !== "string") continue;
+    const normalized = normalizeAvatarAccentUrl(raw);
+    if (normalized) normalizedByRaw.set(raw, normalized);
+  }
+  if (normalizedByRaw.size === 0) return {};
+
+  const uniqueUrls = [...new Set(normalizedByRaw.values())];
+  const rows = await readAvatarAccentRows(db, uniqueUrls);
+  const missing = uniqueUrls.filter((url) => {
+    const row = rows.get(url);
+    return !row || (row.status !== "ok" && Date.now() - row.computedAt >= AVATAR_ACCENT_ERROR_RETRY_MS);
+  });
+  if (queue && missing.length > 0) {
+    await enqueueAvatarAccentJobs(queue, missing);
+  }
+
+  const accents: Record<string, string> = {};
+  for (const [raw, normalized] of normalizedByRaw) {
+    const accent = rows.get(normalized)?.accent;
+    if (accent) accents[raw] = accent;
+  }
+  return accents;
+}
+
 function isPlainObjectOrArray(value: unknown): value is Record<string, unknown> | unknown[] {
   return typeof value === "object" && value !== null;
 }

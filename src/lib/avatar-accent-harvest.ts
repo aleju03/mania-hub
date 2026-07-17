@@ -36,6 +36,70 @@ export function collectAvatarAccentsFromPayload(payload: unknown): Map<string, s
   return pairs;
 }
 
+// ── Request-on-miss ────────────────────────────────────────────────────────
+// Surfaces fed by the osu! API server fns (home top players, /rankings) never
+// receive live-backend payloads, so nothing harvests accents for them.
+// UsernameText registers its avatar URL when it renders without an accent;
+// registrations batch into one POST /api/avatar-accents per burst and the
+// response feeds the same store, coloring the names in place.
+
+const ACCENT_REQUEST_FLUSH_MS = 250;
+const ACCENT_REQUEST_MAX_URLS = 100;
+
+const pendingAccentUrls = new Set<string>();
+const requestedAccentUrls = new Set<string>();
+let accentFlushTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Read directly instead of importing live-backend.ts: that module imports this
+// one for harvesting, and the accent path must not create an import cycle.
+function liveBackendBase(): string | null {
+  const value = import.meta.env.VITE_LIVE_BACKEND_URL || import.meta.env.LIVE_BACKEND_URL;
+  if (typeof value !== "string" || value.trim() === "") return null;
+  return value.replace(/\/+$/, "");
+}
+
+async function flushAccentRequests(): Promise<void> {
+  accentFlushTimer = null;
+  const base = liveBackendBase();
+  if (!base || pendingAccentUrls.size === 0) return;
+  const urls = [...pendingAccentUrls].slice(0, ACCENT_REQUEST_MAX_URLS);
+  for (const url of urls) pendingAccentUrls.delete(url);
+  try {
+    const response = await fetch(`${base}/api/avatar-accents`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ urls }),
+    });
+    if (response.ok) {
+      const payload = (await response.json()) as { accents?: Record<string, string> };
+      if (payload.accents && Object.keys(payload.accents).length > 0) {
+        useAppStore.getState().setAvatarAccents(payload.accents);
+      }
+    }
+  } catch {
+    // Cosmetic: names stay in the surrounding text color until a later
+    // payload or session carries the accent.
+  }
+  if (pendingAccentUrls.size > 0) scheduleAccentFlush();
+}
+
+function scheduleAccentFlush(): void {
+  if (accentFlushTimer !== null) return;
+  accentFlushTimer = setTimeout(() => {
+    void flushAccentRequests();
+  }, ACCENT_REQUEST_FLUSH_MS);
+}
+
+/** Registers an avatar URL rendered without an accent; requested at most once per session. */
+export function requestAvatarAccent(url: string): void {
+  if (typeof window === "undefined") return;
+  if (!url || requestedAccentUrls.has(url)) return;
+  if (useAppStore.getState().avatarAccents[getAvatarAccentStoreKey(url)]?.value) return;
+  requestedAccentUrls.add(url);
+  pendingAccentUrls.add(url);
+  scheduleAccentFlush();
+}
+
 /** Feeds any accents found in `payload` into the store. Cheap no-op when there are none. */
 export function harvestAvatarAccents(payload: unknown): void {
   // Server-side the store is per-process and never shipped to the browser; harvesting there would

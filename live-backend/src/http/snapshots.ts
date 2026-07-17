@@ -12,7 +12,7 @@ import { cancelBeatmapOsuFileBackfill, getBeatmapOsuFileBackfillStatus, startBea
 import { CHART_ANALYSIS_VERSION, cancelChartAnalysisBackfill, enqueueChartAnalysisBackfill, startChartAnalysisBackfill } from "../features/chart-analysis.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
 import { importDanBenchmark, isDanBenchmarkFamily, listDanBenchmarkHiddenDiffs, listDanBenchmarkLabels, setDanBenchmarkHiddenDiff, setDanBenchmarkLabel } from "../features/dan-benchmark.js";
-import { enrichPayloadAvatarAccents } from "../features/avatar-accents.js";
+import { enrichPayloadAvatarAccents, lookupAvatarAccents } from "../features/avatar-accents.js";
 import { getOsuJsonWithProxyCache, normalizeOsuProxyCacheHints } from "../features/osu-proxy-cache.js";
 import { GOAL_KINDS, GOAL_MAP_KINDS, GOAL_SPEED_BUCKETS, GOAL_TARGET_GRADES, createUserGoal, deleteUserGoal, getUserGoal, listUserGoalsWithProgress, reconcileGoalsForUser, updateUserGoal, type GoalKind, type GoalSpeedBucket, type UserGoalInput, type UserGoalTargetPatch } from "../features/goals.js";
 import { getMyDataSummary, getUserTopPlaysFeed, getUserTrackedFeed, type MyDataTopPlaysQuery, type MyDataTrackedFeedQuery } from "../features/my-data.js";
@@ -962,6 +962,15 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   if (url.pathname === "/api/snapshots/rank-deltas") {
     if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
     sendJson(req, res, ctx, 200, await getRankDeltaSnapshot(ctx.db, country, parseUserIds(url.searchParams.get("userIds"))));
+    return true;
+  }
+  if (url.pathname === "/api/avatar-accents") {
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
+    sendJson(req, res, ctx, 200, { accents: await lookupAvatarAccents(ctx.db, ctx.queue ?? null, body.urls) });
     return true;
   }
   if (url.pathname === "/api/dan-estimates") {

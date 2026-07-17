@@ -8,6 +8,7 @@ import {
   enrichPayloadAvatarAccents,
   extractDominantColors,
   getAvatarAccentForUrl,
+  lookupAvatarAccents,
   normalizeAvatarAccentUrl,
   pickAccentColor,
   pruneAvatarAccents,
@@ -152,5 +153,30 @@ describe("pruneAvatarAccents", () => {
     expect(await pruneAvatarAccents(db)).toBe(1);
     const rows = await exec(db, "select avatar_url from avatar_accents");
     expect(rows.rows.map((row) => String(row.avatar_url))).toEqual(["https://a.ppy.sh/new?2.jpeg"]);
+  });
+});
+
+describe("lookupAvatarAccents", () => {
+  it("returns accents keyed by the raw requested url", async () => {
+    await seedAccent("https://a.ppy.sh/10?1.jpeg", "#aabbcc");
+    const accents = await lookupAvatarAccents(db, null, ["https://a.ppy.sh/10?1.jpeg", "https://a.ppy.sh/11?2.jpeg"]);
+    expect(accents).toEqual({ "https://a.ppy.sh/10?1.jpeg": "#aabbcc" });
+  });
+
+  it("enqueues compute jobs for unknown urls and ignores foreign hosts", async () => {
+    const { queue, enqueued } = fakeQueue();
+    const accents = await lookupAvatarAccents(db, queue, [
+      "https://a.ppy.sh/12?3.jpeg",
+      "https://example.com/not-an-avatar.png",
+      42,
+    ]);
+    expect(accents).toEqual({});
+    expect(enqueued).toHaveLength(1);
+    expect(enqueued[0].type).toBe(AVATAR_ACCENT_JOB);
+    expect(enqueued[0].payload).toEqual({ url: "https://a.ppy.sh/12?3.jpeg" });
+  });
+
+  it("tolerates a non-array payload", async () => {
+    expect(await lookupAvatarAccents(db, null, { urls: "nope" })).toEqual({});
   });
 });
