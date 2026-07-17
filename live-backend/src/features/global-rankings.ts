@@ -128,8 +128,22 @@ interface GlobalBoardCache {
 const globalBoardCacheByDb = new WeakMap<Db, GlobalBoardCache>();
 const globalBoardBuildByDb = new WeakMap<Db, Promise<GlobalBoardCache>>();
 
+// Batch sizing for the build: the board spans thousands of players and libsql
+// runs synchronously on the event loop, so the heavy steps (profile_json
+// transfer + JSON.parse, delta joins) run in small batches with a yield
+// between each. The build takes slightly longer wall-clock but never stalls
+// SSE or concurrent requests.
+const BOARD_BUILD_PROFILE_BATCH = 400;
+const BOARD_BUILD_DELTA_BATCH = 1000;
+
+function yieldEventLoop(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
 async function buildGlobalBoard(db: Db): Promise<GlobalBoardCache> {
-  const rows = (await exec(
+  // Light pass: everything except profile_json, so the ordered scan transfers
+  // kilobytes instead of the tens of MB of profile blobs.
+  const lightRows = (await exec(
     db,
     `select
        u.user_id,
@@ -141,8 +155,7 @@ async function buildGlobalBoard(db: Db): Promise<GlobalBoardCache> {
        coalesce(
          min(case when upper(ro.country) = upper(coalesce(u.country_code, '')) then ro.rank end),
          u.country_rank
-       ) as country_rank,
-       u.profile_json
+       ) as country_rank
      from country_rosters ro
      join users u on u.user_id = ro.user_id
      where ro.is_tracked = 1 and ro.rank is not null and u.pp is not null
@@ -150,13 +163,46 @@ async function buildGlobalBoard(db: Db): Promise<GlobalBoardCache> {
      order by u.pp desc, u.global_rank asc`,
   )).rows;
 
-  const deltas = await readGlobalRankingDeltas(db, rows.map((row) => Number(row.user_id)));
+  const entries: GlobalRankingEntry[] = [];
+  for (let i = 0; i < lightRows.length; i += BOARD_BUILD_PROFILE_BATCH) {
+    const batch = lightRows.slice(i, i + BOARD_BUILD_PROFILE_BATCH);
+    const ids = batch.map((row) => Number(row.user_id));
+    const profileRows = (await exec(
+      db,
+      `select user_id, profile_json from users where user_id in (${ids.map(() => "?").join(",")})`,
+      ids,
+    )).rows;
+    const profileJsonById = new Map(profileRows.map((row) => [Number(row.user_id), row.profile_json]));
+    batch.forEach((row, offset) => {
+      entries.push({
+        ...buildGlobalRankingEntry({
+          user_id: row.user_id,
+          username: row.username,
+          avatar_url: row.avatar_url,
+          country_code: row.country_code,
+          pp: row.pp,
+          global_rank: row.global_rank,
+          country_rank: row.country_rank,
+          profile_json: profileJsonById.get(Number(row.user_id)) ?? null,
+        }, i + offset + 1),
+        global_change: null,
+        country_change: null,
+      });
+    });
+    await yieldEventLoop();
+  }
 
-  const entries: GlobalRankingEntry[] = rows.map((row, index) => ({
-    ...buildGlobalRankingEntry(row, index + 1),
-    global_change: deltas.get(Number(row.user_id))?.globalChange ?? null,
-    country_change: deltas.get(Number(row.user_id))?.countryChange ?? null,
-  }));
+  for (let i = 0; i < entries.length; i += BOARD_BUILD_DELTA_BATCH) {
+    const batch = entries.slice(i, i + BOARD_BUILD_DELTA_BATCH);
+    const deltas = await readGlobalRankingDeltas(db, batch.map((entry) => entry.user.id));
+    for (const entry of batch) {
+      const delta = deltas.get(entry.user.id);
+      entry.global_change = delta?.globalChange ?? null;
+      entry.country_change = delta?.countryChange ?? null;
+    }
+    await yieldEventLoop();
+  }
+
   return { entries, builtAt: Date.now() };
 }
 
