@@ -14,6 +14,7 @@ import { CountryFlag } from "../components/ui/CountryFlag";
 import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
 import { DanBadge } from "../components/ui/DanBadge";
+import { CoverBackdrop } from "../components/ui/CoverBackdrop";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { getManiaJudgementStats } from "../components/ui/ManiaJudgementStats";
 import { UsernameText } from "../components/ui/UsernameText";
@@ -1163,10 +1164,7 @@ function PopOffsPage() {
                     <ExpandableDetail expanded={expandedId === p.score.id}>
                       <div className="relative px-4 pb-3 pt-1 border-t border-osu-b3/20 overflow-hidden">
                             {(p.score.beatmapset?.covers?.["cover@2x"] || p.score.beatmapset?.covers?.cover) && (
-                              <div
-                                className="absolute inset-0 opacity-[0.07] bg-cover bg-center pointer-events-none"
-                                style={{ backgroundImage: `url(${p.score.beatmapset.covers["cover@2x"] || p.score.beatmapset.covers.cover})` }}
-                              />
+                              <CoverBackdrop url={p.score.beatmapset.covers["cover@2x"] || p.score.beatmapset.covers.cover} />
                             )}
                             <div className="relative grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-center">
                               <StatCell label="Score" value={getDisplayedTotalScore(p.score) != null ? formatNumber(getDisplayedTotalScore(p.score)!) : "-"} />

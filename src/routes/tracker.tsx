@@ -33,13 +33,14 @@ import { TrackerRowSkeleton } from "../components/ui/LoadingSkeleton";
 import { Pagination } from "../components/ui/Pagination";
 import { getManiaJudgementStats } from "../components/ui/ManiaJudgementStats";
 import { UsernameText } from "../components/ui/UsernameText";
+import { CoverBackdrop } from "../components/ui/CoverBackdrop";
 import { TRACKER_FEED_SCORE_LIMIT, TRACKER_PP_GAIN_CLIENT_TTL, useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
 import type { LeanTrackerScore } from "../lib/types";
 import { parseCountrySearchParam } from "../lib/country-search";
 import { getReplaySearch } from "../lib/replay-navigation";
 import { showPlayerCountryFlagState } from "../lib/player-profile-navigation";
 import { fetchLiveTrackerSnapshot, isLiveBackendConfigured, openLiveEventSource } from "../lib/live-backend";
-import { detectTrackerMultis, type TrackerMultiInfo } from "../lib/tracker-multi";
+import { detectTrackerMultis, type TrackerMultiRound } from "../lib/tracker-multi";
 import { CountryWarming } from "../components/CountryWarming";
 import { LiveDataEmptyState } from "../components/LiveDataEmptyState";
 import { useCountryWarming } from "../lib/use-country-warming";
@@ -81,6 +82,122 @@ function makeDevActivePlayers(count: number): ActivePlayerRailItem[] {
     latestTime: now - index * 1000,
     simulated: true,
   }));
+}
+
+// Dev-only feed simulation: streams synthetic tracker scores (solo plays plus
+// multiplayer-lobby rounds where several players finish the same map within
+// seconds) so the feed UI, entrance animation, and MULTI badge can be
+// eyeballed without waiting for real activity.
+const DEV_FEED_SIM_INTERVAL_MS = 2_500;
+const DEV_FEED_SIM_MAX_SCORES = 120;
+const DEV_FEED_SIM_LOBBY_CHANCE = 0.45;
+const DEV_FEED_SIM_USER_COUNT = 10;
+
+type DevSimUser = LeanTrackerScore["user"];
+
+type DevSimMap = {
+  beatmapId: number;
+  beatmapsetId: number;
+  title: string;
+  artist: string;
+  version: string;
+  keys: number;
+  stars: number;
+  bpm: number;
+  noteCount: number;
+};
+
+function makeDevCoverUrl(index: number): string {
+  const hue = (index * 61) % 360;
+  const accentHue = (hue + 150) % 360;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 140"><rect width="400" height="140" fill="hsl(${hue} 45% 22%)"/><polygon points="60,140 160,0 260,140" fill="hsl(${accentHue} 70% 55%)" opacity=".35"/><polygon points="200,140 320,0 400,90 400,140" fill="hsl(${hue} 70% 60%)" opacity=".3"/></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+const DEV_SIM_MAPS: DevSimMap[] = [
+  { beatmapId: -101, beatmapsetId: -11, title: "Sidereal Cascade", artist: "monoq", version: "4K Insane", keys: 4, stars: 4.6, bpm: 185, noteCount: 2350 },
+  { beatmapId: -102, beatmapsetId: -12, title: "paperclip waltz", artist: "Feryquitous", version: "4K Another", keys: 4, stars: 5.3, bpm: 202, noteCount: 3120 },
+  { beatmapId: -103, beatmapsetId: -13, title: "Overclock City", artist: "t+pazolite", version: "4K Hyper", keys: 4, stars: 3.8, bpm: 220, noteCount: 1840 },
+  { beatmapId: -104, beatmapsetId: -14, title: "Lantern Route", artist: "Frums", version: "7K Extra", keys: 7, stars: 5.0, bpm: 174, noteCount: 4010 },
+  { beatmapId: -105, beatmapsetId: -15, title: "Glass Meridian", artist: "ARForest", version: "4K Expert", keys: 4, stars: 4.2, bpm: 190, noteCount: 2680 },
+  { beatmapId: -106, beatmapsetId: -16, title: "Nocturne 9", artist: "Sound Souler", version: "7K Insane", keys: 7, stars: 4.4, bpm: 160, noteCount: 3350 },
+  { beatmapId: -107, beatmapsetId: -17, title: "Runaway Comet", artist: "II-L", version: "4K Lunatic", keys: 4, stars: 6.1, bpm: 240, noteCount: 3560 },
+  { beatmapId: -108, beatmapsetId: -18, title: "Terminal Bloom", artist: "Se-U-Ra", version: "4K Normal", keys: 4, stars: 2.4, bpm: 145, noteCount: 980 },
+];
+
+// Negative ids: getScoreUrl returns null (no dead osu! links) and
+// getScoreIdentity falls back to its composite key, which stays unique
+// per simulated play.
+let devSimNextScoreId = -8_000_000_000;
+
+function makeDevSimUsers(count: number): DevSimUser[] {
+  return Array.from({ length: count }, (_, index) => ({
+    id: -9_500_000 - index,
+    username: `sim player ${index + 1}`,
+    avatar_url: makeDevAvatarUrl(index),
+    country_code: "CR",
+  }));
+}
+
+function makeDevSimScore(user: DevSimUser, map: DevSimMap, modAcronyms: string[], endedAtMs: number): LeanTrackerScore {
+  const total = map.noteCount;
+  const miss = Math.round(total * Math.random() * 0.015);
+  const meh = Math.round(total * Math.random() * 0.003);
+  const ok = Math.round(total * Math.random() * 0.008);
+  const good = Math.round(total * Math.random() * 0.025);
+  const rest = Math.max(0, total - miss - meh - ok - good);
+  const perfect = Math.round(rest * (0.55 + Math.random() * 0.4));
+  const great = rest - perfect;
+  const accuracy = (300 * (perfect + great) + 200 * good + 100 * ok + 50 * meh) / (300 * total);
+  const silver = modAcronyms.includes("HD");
+  const rank = accuracy >= 1 ? (silver ? "XH" : "X") : accuracy > 0.95 ? (silver ? "SH" : "S") : accuracy > 0.9 ? "A" : "B";
+  const mapIndex = DEV_SIM_MAPS.indexOf(map);
+  const coverUrl = makeDevCoverUrl(mapIndex);
+  return {
+    id: devSimNextScoreId--,
+    legacy_score_id: null,
+    user_id: user.id,
+    accuracy,
+    mods: modAcronyms.map((acronym) => ({ acronym })),
+    score: Math.round(1_000_000 * accuracy ** 4),
+    total_score: Math.round(1_000_000 * accuracy ** 4),
+    max_combo: miss === 0 ? total : Math.round(total * (0.25 + Math.random() * 0.6)),
+    passed: true,
+    rank,
+    statistics: { perfect, great, good, ok, meh, miss },
+    pp: Math.round(map.stars ** 2.2 * 8 * accuracy ** 6),
+    beatmap: {
+      id: map.beatmapId,
+      beatmapset_id: map.beatmapsetId,
+      difficulty_rating: map.stars,
+      mode: "mania",
+      cs: map.keys,
+      bpm: map.bpm,
+      max_combo: total,
+      version: map.version,
+      // Empty on purpose: getBeatmapUrl treats "" as no link, so simulated
+      // rows never point at nonexistent osu! pages.
+      url: "",
+    },
+    beatmapset: {
+      id: map.beatmapsetId,
+      title: map.title,
+      artist: map.artist,
+      covers: {
+        cover: coverUrl,
+        "cover@2x": coverUrl,
+        card: coverUrl,
+        "card@2x": coverUrl,
+        list: coverUrl,
+        "list@2x": coverUrl,
+        slimcover: coverUrl,
+        "slimcover@2x": coverUrl,
+      },
+    },
+    user,
+    ended_at: new Date(endedAtMs).toISOString(),
+    has_replay: false,
+  };
 }
 
 async function withSnapshotLoaderBudget<T>(snapshotPromise: Promise<T>): Promise<T | null> {
@@ -239,6 +356,12 @@ function getLiveTrackerTotal(country: string, total: number | null | undefined):
 const EMPTY_IDS: number[] = [];
 const EMPTY_SCORES: LeanTrackerScore[] = [];
 const EMPTY_KEY_SET: ReadonlySet<string> = new Set<string>();
+
+// One virtualized feed row: either a plain score or a whole multiplayer-lobby
+// session (every map it played) rendered as a single expandable card.
+type TrackerFeedEntry =
+  | { kind: "score"; key: string; score: LeanTrackerScore }
+  | { kind: "multi"; key: string; rounds: TrackerMultiRound[] };
 const EMPTY_SCORE_GAINS: Record<number, { fetchedAt: number; value: number }> = {};
 
 function getTrackerUserBatch(
@@ -300,6 +423,8 @@ function ScoresPage() {
   const [initialFetching, setInitialFetching] = useState(false);
   const [polling, setPolling] = useState(false);
   const [simulateHighTraffic, setSimulateHighTraffic] = useState(false);
+  const [simulateFeedActivity, setSimulateFeedActivity] = useState(false);
+  const [simFeedScores, setSimFeedScores] = useState<LeanTrackerScore[]>([]);
   const [timeTick, setTimeTick] = useState(0);
   const [liveSnapshotLoading, setLiveSnapshotLoading] = useState(false);
   const [liveTrackerTotal, setLiveTrackerTotal] = useState<number | null>(null);
@@ -328,6 +453,17 @@ function ScoresPage() {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const handleToggleExpand = useCallback((key: string) => {
     setExpandedKey((prev) => (prev === key ? null : key));
+  }, []);
+  // Multi-lobby cards expand independently of the single-score detail
+  // accordion, so a lobby can stay open while browsing member details inside.
+  const [expandedMultiKeys, setExpandedMultiKeys] = useState<ReadonlySet<string>>(EMPTY_KEY_SET);
+  const handleToggleMulti = useCallback((key: string) => {
+    setExpandedMultiKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   }, []);
   const trackerPpGainEntries = useAppStore((state) => state.trackerPpGainsByCountry[selectedCountry] ?? EMPTY_SCORE_GAINS);
   const setTrackerPpGains = useAppStore((state) => state.setTrackerPpGains);
@@ -516,6 +652,7 @@ function ScoresPage() {
     pollRequestIdRef.current += 1;
     knownLiveScoreIdentitiesRef.current = new Set();
     setExpandedKey(null);
+    setExpandedMultiKeys(EMPTY_KEY_SET);
     setSelectedPlayerIds([]);
     resetPollIndex(selectedCountry);
   }, [selectedCountry]);
@@ -706,6 +843,7 @@ function ScoresPage() {
 
   useEffect(() => {
     setExpandedKey(null);
+    setExpandedMultiKeys(EMPTY_KEY_SET);
   }, [filter, gradeFilter, keyFilter, missFilter, trackerSort, trackerSortDirection]);
 
   const ppGainByScoreId = useMemo(
@@ -720,12 +858,88 @@ function ScoresPage() {
   const selectedPlayerIdSet = useMemo(() => new Set(selectedPlayerIds), [selectedPlayerIds]);
   const selectedPlayersKey = selectedPlayerIds.join(",");
 
-  // Suspected multiplayer-lobby plays, detected over every score pool we hold
-  // (the live feed plus deep-page/filtered snapshots) so groups don't split at
-  // page boundaries. Keyed by score identity.
-  const multiByScoreKey = useMemo(
-    () => detectTrackerMultis([...feedScores, ...livePageScores, ...liveFilteredScores]),
-    [feedScores, liveFilteredScores, livePageScores],
+  // Dev feed simulation: while toggled on, emit one synthetic score per tick.
+  // A simulated lobby keeps the same members across 2-4 maps; each round
+  // queues every member on one map (same rate mods) so they trickle in a tick
+  // apart, inside the co-finish window - and the repeated rounds satisfy the
+  // detector's happened-at-least-twice rule like a real lobby session does.
+  // Scores live only in this local state, never in the persisted store.
+  useEffect(() => {
+    if (!import.meta.env.DEV || !simulateFeedActivity) {
+      setSimFeedScores([]);
+      return;
+    }
+    const users = makeDevSimUsers(DEV_FEED_SIM_USER_COUNT);
+    const pickMap = () => DEV_SIM_MAPS[Math.floor(Math.random() * DEV_SIM_MAPS.length)];
+    const pickRateMods = () => (Math.random() < 0.25 ? (Math.random() < 0.5 ? ["DT"] : ["HT"]) : []);
+    const withHdMaybe = (mods: string[]) => (Math.random() < 0.3 ? [...mods, "HD"] : mods);
+
+    // Seed a finished two-map lobby plus a couple of solo plays so a MULTI
+    // card is visible immediately instead of two lobby-rounds later.
+    const now = Date.now();
+    const seedLobby = users.slice(0, 3);
+    const seedMap1 = DEV_SIM_MAPS[0];
+    const seedMap2 = DEV_SIM_MAPS[1];
+    const seed = [
+      ...seedLobby.map((user, index) => makeDevSimScore(user, seedMap1, [], now - 100_000 + index * 3_000)),
+      ...seedLobby.map((user, index) => makeDevSimScore(user, seedMap2, [], now - 40_000 + index * 4_000)),
+      makeDevSimScore(users[4], DEV_SIM_MAPS[2], ["DT"], now - 24_000),
+      makeDevSimScore(users[5], DEV_SIM_MAPS[3], [], now - 11_000),
+    ];
+    setSimFeedScores(seed);
+
+    let pending: Array<{ user: DevSimUser; map: DevSimMap; mods: string[] }> = [];
+    let activeLobby: { members: DevSimUser[]; roundsLeft: number; lastMapId: number | null } | null = null;
+    const queueLobbyRound = () => {
+      if (!activeLobby) return;
+      let map = pickMap();
+      // Back-to-back rounds on the same map would chain into one detection
+      // cluster; a real lobby moves on to the next pick, so the sim does too.
+      while (map.beatmapId === activeLobby.lastMapId) map = pickMap();
+      activeLobby.lastMapId = map.beatmapId;
+      const rateMods = pickRateMods();
+      pending = activeLobby.members.map((user) => ({ user, map, mods: withHdMaybe(rateMods) }));
+      activeLobby.roundsLeft -= 1;
+      if (activeLobby.roundsLeft <= 0) activeLobby = null;
+    };
+    const scheduleEvent = () => {
+      if (activeLobby) {
+        queueLobbyRound();
+        return;
+      }
+      if (Math.random() < DEV_FEED_SIM_LOBBY_CHANCE) {
+        const size = 2 + Math.floor(Math.random() * 3);
+        activeLobby = {
+          members: [...users].sort(() => Math.random() - 0.5).slice(0, size),
+          roundsLeft: 2 + Math.floor(Math.random() * 3),
+          lastMapId: null,
+        };
+        queueLobbyRound();
+      } else {
+        pending = [{ user: users[Math.floor(Math.random() * users.length)], map: pickMap(), mods: withHdMaybe(pickRateMods()) }];
+      }
+    };
+    const intervalId = window.setInterval(() => {
+      if (pending.length === 0) scheduleEvent();
+      const next = pending.shift();
+      if (!next) return;
+      const score = makeDevSimScore(next.user, next.map, next.mods, Date.now());
+      setSimFeedScores((current) => [score, ...current].slice(0, DEV_FEED_SIM_MAX_SCORES));
+    }, DEV_FEED_SIM_INTERVAL_MS);
+    return () => window.clearInterval(intervalId);
+  }, [simulateFeedActivity]);
+
+  const feedScoresWithSim = useMemo(
+    () => (simFeedScores.length > 0 ? [...simFeedScores, ...feedScores] : feedScores),
+    [feedScores, simFeedScores],
+  );
+
+  // Suspected multiplayer-lobby rounds, detected over every score pool we hold
+  // (the live feed plus deep-page/filtered snapshots) so lobbies don't split at
+  // page boundaries. Maps score identity -> shared group.
+  const multiGroupByScoreKey = useMemo(
+    () => detectTrackerMultis([...feedScoresWithSim, ...livePageScores, ...liveFilteredScores]),
+    [feedScoresWithSim, liveFilteredScores, livePageScores],
   );
 
   const updateTrackerSearch = useCallback((patch: Partial<{ country: string | undefined; page: number | undefined; sort: TrackerSort; sortDirection: TrackerSortDirection }>) => {
@@ -774,20 +988,20 @@ function ScoresPage() {
 
   const filtered = useMemo(() => {
     const playerFiltered = selectedPlayerIds.length > 0
-      ? feedScores.filter((score: LeanTrackerScore) => selectedPlayerIdSet.has(score.user_id))
-      : feedScores;
+      ? feedScoresWithSim.filter((score: LeanTrackerScore) => selectedPlayerIdSet.has(score.user_id))
+      : feedScoresWithSim;
 
     const nextFiltered = playerFiltered.filter((score: LeanTrackerScore) => {
       if (hiddenUserIds.has(score.user_id)) return false;
       return scoreMatchesTrackerFilters(score, { filter, gradeFilter, keyFilter, missFilter });
     });
     return sortTrackerScores(nextFiltered, trackerSort, trackerSortDirection);
-  }, [feedScores, filter, gradeFilter, keyFilter, missFilter, selectedPlayerIdSet, selectedPlayerIds.length, hiddenUserIds, trackerSort, trackerSortDirection]);
+  }, [feedScoresWithSim, filter, gradeFilter, keyFilter, missFilter, selectedPlayerIdSet, selectedPlayerIds.length, hiddenUserIds, trackerSort, trackerSortDirection]);
 
   const activePlayers = useMemo(() => {
     const activeCutoff = Date.now() - 40 * 60 * 1000;
     const seen = new Map<number, ActivePlayerRailInfo>();
-    for (const score of feedScores) {
+    for (const score of feedScoresWithSim) {
       const timeMs = getScoreTimeMs(score);
       if (timeMs < activeCutoff || !score.user) continue;
       if (hiddenUserIds.has(score.user_id)) continue;
@@ -810,7 +1024,7 @@ function ScoresPage() {
       ...realPlayers,
       ...makeDevActivePlayers(DEV_ACTIVE_PLAYER_SIMULATION_COUNT - realPlayers.length),
     ];
-  }, [feedScores, hiddenUserIds, simulateHighTraffic]);
+  }, [feedScoresWithSim, hiddenUserIds, simulateHighTraffic]);
 
   // Desktop active-player rail scrolls internally; fade the edge(s) that have
   // hidden avatars so the list never cuts off abruptly (and hide the scrollbar).
@@ -931,6 +1145,35 @@ function ScoresPage() {
       : filtered.slice(livePageOffset, expectedLivePageEnd),
     [expectedLivePageEnd, expectedLivePageSize, filtered, hasLiveFilteredSnapshot, hasLivePageSnapshot, liveFilteredScores, livePageOffset, livePageScores],
   );
+  // Collapse a lobby's plays into one card entry, placed where the lobby's
+  // first play sits in this page slice (the newest one under recent sort).
+  // The card holds every round we know for the session, so plays below the
+  // fold or on other pages still appear inside it.
+  const feedEntries = useMemo(() => {
+    const entries: TrackerFeedEntry[] = [];
+    const emittedGroups = new Set<string>();
+    for (const score of paginatedScores) {
+      const identity = getScoreIdentity(score);
+      const group = multiGroupByScoreKey.get(identity);
+      if (!group) {
+        entries.push({ kind: "score", key: identity, score });
+        continue;
+      }
+      if (emittedGroups.has(group.key)) continue;
+      emittedGroups.add(group.key);
+      const visibleRounds = group.rounds
+        .map((round) => ({ ...round, scores: round.scores.filter((member) => !hiddenUserIds.has(member.user_id)) }))
+        .filter((round) => round.scores.length > 0);
+      const visiblePlayers = new Set(visibleRounds.flatMap((round) => round.scores.map((member) => member.user_id)));
+      if (visiblePlayers.size < 2) {
+        // Hiding users can shrink a lobby to one player; show a plain row.
+        entries.push({ kind: "score", key: identity, score });
+      } else {
+        entries.push({ kind: "multi", key: group.key, rounds: visibleRounds });
+      }
+    }
+    return entries;
+  }, [paginatedScores, multiGroupByScoreKey, hiddenUserIds]);
   const liveStatusLabel = liveBackendEnabled ? "Live updates on" : "Live polling";
   const scoreWindowLabel = liveBackendEnabled && selectedIsGlobal
     ? liveTrackerTotal == null && !useLiveBackendFilteredScores
@@ -1108,6 +1351,20 @@ function ScoresPage() {
                 title="Toggle simulated high-traffic active players"
               >
                 {simulateHighTraffic ? "Sim 200 on" : "Sim 200"}
+              </button>
+            )}
+            {import.meta.env.DEV && (
+              <button
+                type="button"
+                onClick={() => setSimulateFeedActivity((enabled) => !enabled)}
+                className={`rounded-lg border px-2 py-1 text-[10px] font-semibold transition-colors ${
+                  simulateFeedActivity
+                    ? "border-osu-yellow/40 bg-osu-yellow/15 text-osu-yellow"
+                    : "border-osu-pink/25 bg-osu-pink/10 text-osu-pink-light hover:bg-osu-pink/20"
+                }`}
+                title="Toggle simulated tracker feed: solo scores plus multiplayer-lobby rounds that trigger the MULTI badge"
+              >
+                {simulateFeedActivity ? "Sim feed on" : "Sim feed"}
               </button>
             )}
             {loadingPlayers || refreshing || showingLivePageSkeletons ? (
@@ -1417,13 +1674,14 @@ function ScoresPage() {
               <>
                 <VirtualScoreList
                   listKey={`${listKey}:${currentPage}`}
-                  scores={paginatedScores}
+                  entries={feedEntries}
                   timeTick={timeTick}
                   expandedKey={expandedKey}
                   onToggle={handleToggleExpand}
+                  expandedMultiKeys={expandedMultiKeys}
+                  onToggleMulti={handleToggleMulti}
                   ppGainByScoreId={ppGainByScoreId}
                   showCountryFlag={selectedIsGlobal}
-                  multiByScoreKey={multiByScoreKey}
                 />
                 <Pagination
                   page={currentPage}
@@ -1466,41 +1724,43 @@ const ignoreVirtualizerScrollCorrection = () => false;
 
 function VirtualScoreList({
   listKey,
-  scores,
+  entries,
   timeTick,
   expandedKey,
   onToggle,
+  expandedMultiKeys,
+  onToggleMulti,
   ppGainByScoreId,
   showCountryFlag,
-  multiByScoreKey,
 }: {
   listKey: string;
-  scores: LeanTrackerScore[];
+  entries: TrackerFeedEntry[];
   timeTick: number;
   expandedKey: string | null;
   onToggle: (key: string) => void;
+  expandedMultiKeys: ReadonlySet<string>;
+  onToggleMulti: (key: string) => void;
   ppGainByScoreId: Record<number, number>;
   showCountryFlag: boolean;
-  multiByScoreKey: Map<string, TrackerMultiInfo>;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
   const scrollMargin = parentRef.current?.offsetTop ?? 0;
 
   const virtualizer = useWindowVirtualizer({
-    count: scores.length,
+    count: entries.length,
     estimateSize: () => ESTIMATED_ROW_HEIGHT,
     overscan: 4,
     scrollMargin,
     useAnimationFrameWithResizeObserver: true,
     // Include the 8px gap (space-y-2) in the item's measured size via a
     // wrapper padding, so the virtualizer's offsets stay correct.
-    getItemKey: (index) => getScoreIdentity(scores[index]),
+    getItemKey: (index) => entries[index].key,
   });
   // Score detail expansion is a click-driven resize in visible rows; scroll
   // correction here causes one-frame jumps while the accordion swaps rows.
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = ignoreVirtualizerScrollCorrection;
 
-  // Track which score keys we've already shown so only scores that are genuinely
+  // Track which entry keys we've already shown so only entries that are genuinely
   // new to the feed get the entrance cue. Rows that mount because the user
   // scrolled them into view are already "seen" and stay still. A null seen-set
   // means first paint; a listKey change (filter/page swap) resets it so the
@@ -1512,19 +1772,18 @@ function VirtualScoreList({
     const seen = seenKeysRef.current;
     if (isResetRender || seen === null) return EMPTY_KEY_SET;
     const fresh = new Set<string>();
-    for (const score of scores) {
-      const key = getScoreIdentity(score);
-      if (!seen.has(key)) fresh.add(key);
+    for (const entry of entries) {
+      if (!seen.has(entry.key)) fresh.add(entry.key);
     }
     return fresh;
-  }, [scores, isResetRender]);
+  }, [entries, isResetRender]);
 
   useEffect(() => {
     const seen = isResetRender || seenKeysRef.current === null ? new Set<string>() : seenKeysRef.current;
-    for (const score of scores) seen.add(getScoreIdentity(score));
+    for (const entry of entries) seen.add(entry.key);
     seenKeysRef.current = seen;
     prevListKeyRef.current = listKey;
-  }, [scores, listKey, isResetRender]);
+  }, [entries, listKey, isResetRender]);
 
   const items = virtualizer.getVirtualItems();
 
@@ -1540,12 +1799,10 @@ function VirtualScoreList({
       }}
     >
       {items.map((vi) => {
-        const score = scores[vi.index];
-        const scoreKey = getScoreIdentity(score);
-        const multi = multiByScoreKey.get(scoreKey);
+        const entry = entries[vi.index];
         return (
           <div
-            key={scoreKey}
+            key={entry.key}
             data-index={vi.index}
             ref={virtualizer.measureElement}
             style={{
@@ -1557,24 +1814,244 @@ function VirtualScoreList({
               paddingBottom: 8,
             }}
           >
-            <ScoreFeedItem
-              score={score}
-              scoreKey={scoreKey}
-              timeTick={timeTick}
-              approxPpGain={ppGainByScoreId[score.id] ?? null}
-              expanded={expandedKey === scoreKey}
-              onToggle={onToggle}
-              showCountryFlag={showCountryFlag}
-              isNew={animatedKeys.has(scoreKey)}
-              multiPlayerCount={multi?.playerCount ?? 0}
-              multiOthers={multi ? multi.others.join(", ") : ""}
-            />
+            {entry.kind === "multi" ? (
+              <MultiFeedCard
+                groupKey={entry.key}
+                rounds={entry.rounds}
+                timeTick={timeTick}
+                expanded={expandedMultiKeys.has(entry.key)}
+                onToggleCard={onToggleMulti}
+                expandedKey={expandedKey}
+                onToggleScore={onToggle}
+                ppGainByScoreId={ppGainByScoreId}
+                showCountryFlag={showCountryFlag}
+                isNew={animatedKeys.has(entry.key)}
+              />
+            ) : (
+              <ScoreFeedItem
+                score={entry.score}
+                scoreKey={entry.key}
+                timeTick={timeTick}
+                approxPpGain={ppGainByScoreId[entry.score.id] ?? null}
+                expanded={expandedKey === entry.key}
+                onToggle={onToggle}
+                showCountryFlag={showCountryFlag}
+                isNew={animatedKeys.has(entry.key)}
+              />
+            )}
           </div>
         );
       })}
     </div>
   );
 }
+
+// A multiplayer-lobby session as one card: collapsed it headlines the lobby's
+// latest map and roster; expanded it lists every map the lobby played, each
+// with its plays ranked by total score like osu!'s multi results screen.
+// Member rows reuse ScoreFeedItem, so per-score expansion, replay links, and
+// pp gains keep working inside the card.
+const MultiFeedCard = memo(function MultiFeedCard({
+  groupKey,
+  rounds,
+  timeTick,
+  expanded,
+  onToggleCard,
+  expandedKey,
+  onToggleScore,
+  ppGainByScoreId,
+  showCountryFlag,
+  isNew,
+}: {
+  groupKey: string;
+  /** The lobby's rounds in play order, each round's plays in finish order. */
+  rounds: TrackerMultiRound[];
+  timeTick: number;
+  expanded: boolean;
+  onToggleCard: (key: string) => void;
+  expandedKey: string | null;
+  onToggleScore: (key: string) => void;
+  ppGainByScoreId: Record<number, number>;
+  showCountryFlag: boolean;
+  isNew: boolean;
+}) {
+  const latestRound = rounds[rounds.length - 1];
+  const sample = latestRound.scores[0];
+  const newest = latestRound.scores[latestRound.scores.length - 1];
+  // Latest round's results order: total score, like osu!'s multi results.
+  const rankedLatest = useMemo(
+    () => [...latestRound.scores].sort((a, b) => (getDisplayedTotalScore(b) ?? 0) - (getDisplayedTotalScore(a) ?? 0)),
+    [latestRound],
+  );
+  const winner = rankedLatest[0];
+  // Roster across the whole session: latest round's results order first, then
+  // players only seen in earlier rounds.
+  const rosterNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const score of rankedLatest) {
+      if (score.user?.username) names.add(score.user.username);
+    }
+    for (let i = rounds.length - 2; i >= 0; i--) {
+      for (const score of rounds[i].scores) {
+        if (score.user?.username) names.add(score.user.username);
+      }
+    }
+    return [...names].join(", ");
+  }, [rankedLatest, rounds]);
+  const keymodeLabel = getBeatmapKeymodeLabel(sample.beatmap);
+  const beatmapUrl = getBeatmapUrl(sample);
+  const coverUrl = sample.beatmapset?.covers?.["cover@2x"] || sample.beatmapset?.covers?.cover;
+  const overflowCount = rankedLatest.length - 4;
+
+  return (
+    <div className={`relative rounded-xl bg-osu-b4 border border-osu-purple/25 overflow-hidden${isNew ? " score-enter" : ""}`}>
+      {coverUrl && <CoverBackdrop url={coverUrl} opacityClass="opacity-[0.06]" />}
+      <div
+        className="relative flex items-center gap-2 sm:gap-3 py-3 px-3 sm:px-4 hover:bg-osu-b3/50 transition-colors duration-[120ms] cursor-pointer"
+        onClick={() => onToggleCard(groupKey)}
+      >
+        <div className="flex -space-x-2.5 flex-shrink-0">
+          {rankedLatest.slice(0, 4).map((score) => (
+            <div key={getScoreIdentity(score)} className="rounded-full ring-2 ring-osu-b4" title={score.user?.username}>
+              <Avatar url={score.user?.avatar_url} size={30} />
+            </div>
+          ))}
+          {overflowCount > 0 && (
+            <div className="w-[30px] h-[30px] rounded-full bg-osu-b3 ring-2 ring-osu-b4 flex items-center justify-center text-[9px] font-bold text-osu-f1">
+              +{overflowCount}
+            </div>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span
+                className="inline-flex items-center gap-1 pl-1.5 pr-2 py-0.5 rounded-full bg-osu-purple/15 ring-1 ring-inset ring-osu-purple/40 text-osu-purple-light flex-shrink-0 cursor-help"
+                title="These players finished the same maps within seconds of each other, repeatedly: a multiplayer lobby"
+              >
+                <svg viewBox="0 0 16 16" className="w-2.5 h-2.5 fill-current" aria-hidden>
+                  <circle cx="5.5" cy="4.6" r="2.4" />
+                  <rect x="2" y="8.2" width="7" height="6" rx="3" />
+                  <g opacity=".55">
+                    <circle cx="11.8" cy="5" r="2" />
+                    <rect x="9.2" y="8.8" width="5.8" height="5.2" rx="2.6" />
+                  </g>
+                </svg>
+                <span className="text-[8px] font-bold tracking-wide leading-none">MULTI</span>
+              </span>
+              {beatmapUrl ? (
+                <a
+                  href={beatmapUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-sm font-semibold text-white truncate hover:text-osu-pink-light underline-offset-2 hover:underline"
+                  title="Open beatmap on osu!"
+                >
+                  {sample.beatmapset?.title}
+                </a>
+              ) : (
+                <span className="text-sm font-semibold text-white truncate">{sample.beatmapset?.title}</span>
+              )}
+              <span className="text-[10px] text-osu-f1 truncate hidden sm:inline">[{sample.beatmap?.version}]</span>
+              {keymodeLabel && (
+                <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 text-osu-yellow flex-shrink-0">
+                  {keymodeLabel}
+                </span>
+              )}
+              <span className="hidden sm:inline flex-shrink-0"><DanBadge score={winner} /></span>
+            </div>
+            <span className="text-[10px] text-osu-f1 flex-shrink-0 sm:hidden">{formatTimeAgo(getScoreTimestamp(newest))}</span>
+          </div>
+          <div className="text-[10px] text-osu-f1 mt-0.5 truncate">
+            {rounds.length > 1 ? `${rounds.length} maps · ` : ""}{rosterNames}
+          </div>
+        </div>
+        <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
+          <span className="text-[10px] font-bold text-osu-yellow tabular-nums">#1</span>
+          <span className={`text-xs ${isLazerScore(winner) ? "text-osu-pink-light" : "text-osu-l2"}`}>
+            {formatAccuracy(getDisplayedAccuracy(winner))}
+          </span>
+          <span className="text-sm font-bold">{formatPP(winner.pp)}</span>
+          <span className="text-[10px] text-osu-f1 w-12 text-right">
+            {formatTimeAgo(getScoreTimestamp(newest))}
+          </span>
+        </div>
+        <span
+          className={`flex-shrink-0 text-[10px] text-osu-purple-light transition-transform duration-[120ms] ${expanded ? "rotate-180" : ""}`}
+          aria-hidden
+        >
+          {"▾"}
+        </span>
+      </div>
+      {expanded && (
+        <div className="relative border-t border-osu-b3/30 detail-enter">
+          {rounds.map((round, roundIndex) => ({ round, number: roundIndex + 1 })).reverse().map(({ round, number }) => {
+            const rankedRound = [...round.scores].sort((a, b) => (getDisplayedTotalScore(b) ?? 0) - (getDisplayedTotalScore(a) ?? 0));
+            const roundSample = round.scores[0];
+            const roundNewest = round.scores[round.scores.length - 1];
+            const roundUrl = getBeatmapUrl(roundSample);
+            const roundCover = roundSample.beatmapset?.covers?.list;
+            const roundKeymode = getBeatmapKeymodeLabel(roundSample.beatmap);
+            return (
+              <div key={round.key}>
+                <div className="flex items-center gap-2 px-3 sm:px-4 py-1.5 bg-osu-b3/25 border-b border-osu-b3/20">
+                  <span className="text-[9px] uppercase tracking-wider font-semibold text-osu-purple-light/80 tabular-nums flex-shrink-0">
+                    Map {number}
+                  </span>
+                  {roundCover && (
+                    <img src={roundCover} alt="" className="w-6 h-6 rounded object-cover flex-shrink-0" loading="lazy" />
+                  )}
+                  {roundUrl ? (
+                    <a
+                      href={roundUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-white truncate hover:text-osu-pink-light underline-offset-2 hover:underline"
+                      title="Open beatmap on osu!"
+                    >
+                      {roundSample.beatmapset?.title}
+                    </a>
+                  ) : (
+                    <span className="text-xs text-white truncate">{roundSample.beatmapset?.title}</span>
+                  )}
+                  <span className="text-[10px] text-osu-f1 truncate">[{roundSample.beatmap?.version}]</span>
+                  {roundKeymode && (
+                    <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 text-osu-yellow flex-shrink-0">
+                      {roundKeymode}
+                    </span>
+                  )}
+                  <span className="ml-auto text-[10px] text-osu-f1 flex-shrink-0">
+                    {formatTimeAgo(getScoreTimestamp(roundNewest))}
+                  </span>
+                </div>
+                {rankedRound.map((score, index) => {
+                  const memberKey = getScoreIdentity(score);
+                  return (
+                    <div key={memberKey} className={index > 0 ? "border-t border-osu-b3/15" : undefined}>
+                      <ScoreFeedItem
+                        score={score}
+                        scoreKey={memberKey}
+                        timeTick={timeTick}
+                        approxPpGain={ppGainByScoreId[score.id] ?? null}
+                        expanded={expandedKey === memberKey}
+                        onToggle={onToggleScore}
+                        showCountryFlag={showCountryFlag}
+                        isNew={false}
+                        embedded
+                        placement={index + 1}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+});
 
 const ScoreFeedItem = memo(function ScoreFeedItem({
   score,
@@ -1585,8 +2062,8 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
   onToggle,
   showCountryFlag,
   isNew,
-  multiPlayerCount,
-  multiOthers,
+  embedded = false,
+  placement = null,
 }: {
   score: LeanTrackerScore;
   scoreKey: string;
@@ -1596,10 +2073,10 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
   onToggle: (key: string) => void;
   showCountryFlag: boolean;
   isNew: boolean;
-  /** Distinct players in the suspected lobby (0 = solo play). */
-  multiPlayerCount: number;
-  /** Comma-joined usernames of the suspected lobby's other players. */
-  multiOthers: string;
+  /** Rendered inside a multi-lobby card: no card chrome, no beatmap line. */
+  embedded?: boolean;
+  /** Lobby results placement (1 = round winner); only set when embedded. */
+  placement?: number | null;
 }) {
   const navigate = useNavigate();
 
@@ -1614,11 +2091,20 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
   const showPpGain = approxPpGain != null && approxPpGain >= 0.05;
 
   return (
-    <div className={`rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden${isNew ? " score-enter" : ""}`}>
+    <div className={embedded ? "overflow-hidden" : `rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden${isNew ? " score-enter" : ""}`}>
       <div
-        className="flex items-center gap-2 sm:gap-3 py-3 px-3 sm:px-4 hover:bg-osu-b3/50 transition-colors duration-[120ms] cursor-pointer"
+        className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 hover:bg-osu-b3/50 transition-colors duration-[120ms] cursor-pointer ${embedded ? "py-2" : "py-3"}`}
         onClick={() => onToggle(scoreKey)}
       >
+        {placement != null && (
+          <span
+            className={`w-6 text-center text-xs font-bold tabular-nums flex-shrink-0 ${
+              placement === 1 ? "text-osu-yellow" : placement === 2 ? "text-osu-l2" : "text-osu-f1"
+            }`}
+          >
+            #{placement}
+          </span>
+        )}
         <GradeImg grade={getDisplayedRank(score)} size={32} />
         <button
           onClick={(e) => {
@@ -1672,40 +2158,35 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
             </div>
             <span className="text-[10px] text-osu-f1 flex-shrink-0 sm:hidden">{formatTimeAgo(getScoreTimestamp(score))}</span>
           </div>
-          {/* Row 2: Beatmap title + keys */}
-          <div className="flex items-center justify-between sm:justify-start gap-2 mt-0.5">
-            <div className="flex items-center gap-2 min-w-0">
-              {beatmapUrl ? (
-                <a
-                  href={beatmapUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="text-xs text-white truncate hover:text-osu-pink-light underline-offset-2 hover:underline"
-                  title="Open beatmap on osu!"
-                >
-                  {score.beatmapset?.title}
-                </a>
-              ) : (
-                <span className="text-xs text-white truncate">{score.beatmapset?.title}</span>
+          {/* Row 2: Beatmap title + keys (the multi card shows the map once in
+              its header, so embedded member rows skip it) */}
+          {!embedded && (
+            <div className="flex items-center justify-between sm:justify-start gap-2 mt-0.5">
+              <div className="flex items-center gap-2 min-w-0">
+                {beatmapUrl ? (
+                  <a
+                    href={beatmapUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-xs text-white truncate hover:text-osu-pink-light underline-offset-2 hover:underline"
+                    title="Open beatmap on osu!"
+                  >
+                    {score.beatmapset?.title}
+                  </a>
+                ) : (
+                  <span className="text-xs text-white truncate">{score.beatmapset?.title}</span>
+                )}
+                <span className="text-[10px] text-osu-f1 truncate">[{score.beatmap?.version}]</span>
+              </div>
+              {keymodeLabel && (
+                <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 text-osu-yellow flex-shrink-0">
+                  {keymodeLabel}
+                </span>
               )}
-              <span className="text-[10px] text-osu-f1 truncate">[{score.beatmap?.version}]</span>
+              <span className="hidden sm:inline flex-shrink-0"><DanBadge score={score} /></span>
             </div>
-            {keymodeLabel && (
-              <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 text-osu-yellow flex-shrink-0">
-                {keymodeLabel}
-              </span>
-            )}
-            {multiPlayerCount >= 2 && (
-              <span
-                className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-purple/20 text-osu-purple-light flex-shrink-0 cursor-help"
-                title={`Looks like a multiplayer lobby: finished together with ${multiOthers}`}
-              >
-                MULTI{multiPlayerCount > 2 ? ` ×${multiPlayerCount}` : ""}
-              </span>
-            )}
-            <span className="hidden sm:inline flex-shrink-0"><DanBadge score={score} /></span>
-          </div>
+          )}
           {/* Row 3 (mobile): Mods left, stats right */}
           <div className="flex items-center justify-between gap-2 mt-1 sm:hidden">
             <div className="flex items-center gap-1">
@@ -1779,10 +2260,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
           className="relative overflow-hidden px-4 pb-3 pt-1 border-t border-osu-b3/20 detail-enter"
         >
               {(score.beatmapset?.covers?.["cover@2x"] || score.beatmapset?.covers?.cover) && (
-                <div
-                  className="absolute inset-0 opacity-[0.07] bg-cover bg-center pointer-events-none"
-                  style={{ backgroundImage: `url(${score.beatmapset.covers["cover@2x"] || score.beatmapset.covers.cover})` }}
-                />
+                <CoverBackdrop url={score.beatmapset.covers["cover@2x"] || score.beatmapset.covers.cover} />
               )}
               <div className="relative grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-center">
                 <StatCell label="Score" value={totalScore != null ? formatNumber(totalScore) : "-"} />

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Check, Copy } from "lucide-react";
+import { ArrowLeftRight, Check, Copy } from "lucide-react";
 import { StarRatingBadge } from "#/components/maps/SearchCard";
+import { ReplayCompareEntry } from "#/components/replay/ReplayCompareView";
 import { avatarImageSrc } from "#/components/ui/Avatar";
 import { ModBadge } from "#/components/ui/ModBadge";
 import { formatDate } from "#/lib/format";
@@ -31,9 +32,12 @@ interface ReplayInfoProps {
   shareUrl?: string;
   playerProfile?: ReplayPlayerProfile | null;
   onClear: () => void;
+  /** When set, the card grows a compare action that reveals a paste-a-score form. */
+  onCompare?: (otherScoreId: number) => void;
 }
 
-export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatmapsetId, shareUrl, playerProfile, onClear }: ReplayInfoProps) {
+export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatmapsetId, shareUrl, playerProfile, onClear, onCompare }: ReplayInfoProps) {
+  const [compareOpen, setCompareOpen] = useState(false);
   const h = replay.header;
   const totalHits = h.countGeki + h.count300 + h.countKatu + h.count100 + h.count50;
   const accuracy = score
@@ -71,6 +75,9 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
     : "text-osu-f1";
   const mapTextShadow = beatmapCoverUrl ? " [text-shadow:0_1px_3px_rgba(0,0,0,0.85)]" : "";
   const displayMods = getModDisplayList(mods);
+  const compareEntry = onCompare && compareOpen ? (
+    <ReplayCompareEntry onCompare={onCompare} onClose={() => setCompareOpen(false)} />
+  ) : null;
 
   return (
     <>
@@ -158,6 +165,20 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
             </div>
           )}
         </div>
+        {/* The header cluster is already tight on phones (an extra icon there
+            starves the map title), so mobile gets a slim bottom row instead
+            that swaps into the form when tapped. */}
+        {onCompare && !compareOpen && (
+          <button
+            type="button"
+            onClick={() => setCompareOpen(true)}
+            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-osu-b5/55 px-2.5 py-2 text-[11px] font-semibold text-osu-f1 hover:text-white transition-colors cursor-pointer"
+          >
+            <ArrowLeftRight className="h-3.5 w-3.5" aria-hidden="true" />
+            Compare with another score
+          </button>
+        )}
+        {compareEntry}
       </div>
 
       <div className="hidden sm:block relative overflow-hidden bg-osu-b4 rounded-xl p-4 mb-4 border border-osu-b3/20">
@@ -166,9 +187,11 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
             to 0px at mid widths and the cover bleed strands over the player name. */}
         {/* Below lg the Back button wraps to a second row; the player/map cells span
             both rows (explicit so row-span-full has a line to reach) so their banners
-            still bleed to the card's top/bottom edges instead of cutting off mid-card. */}
+            still bleed to the card's top/bottom edges instead of cutting off mid-card.
+            With the compare form open the card's bottom edge is no longer the row's
+            bottom, so the downward bleed would land on the form - stop at the row. */}
         <div className="grid grid-cols-[minmax(56px,max-content)_minmax(160px,1fr)_auto] grid-rows-[auto_auto] lg:grid-cols-[minmax(64px,max-content)_minmax(160px,1fr)_auto_auto] lg:grid-rows-none items-center gap-x-4 sm:gap-x-6 gap-y-2">
-          <div className="relative row-span-full lg:row-auto self-stretch flex flex-col justify-center -my-4 -ml-4 py-4 pl-4 pr-2 min-w-0">
+          <div className={`relative row-span-full lg:row-auto self-stretch flex flex-col justify-center ${compareOpen ? "-mt-4 pt-4" : "-my-4 py-4"} -ml-4 pl-4 pr-2 min-w-0`}>
             <PlayerBanner coverUrl={playerCoverUrl} />
             <div className="relative flex items-center gap-2.5 min-w-0">
               <PlayerAvatar src={avatarSrc} name={displayName} size={36} />
@@ -176,7 +199,7 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
             </div>
           </div>
           {beatmap && (
-            <div className="relative row-span-full lg:row-auto self-stretch -my-4 py-4 flex flex-col justify-center min-w-0">
+            <div className={`relative row-span-full lg:row-auto self-stretch ${compareOpen ? "-mt-4 pt-4" : "-my-4 py-4"} flex flex-col justify-center min-w-0`}>
               {/* The map column starts 24px further left than it used to (the player
                   block gave up padding), so bleed the cover 24px less to keep its
                   on-screen position unchanged. */}
@@ -219,10 +242,12 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
             {beatmap && <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Notes</div><div className="text-sm font-bold text-osu-f1">{beatmap.notes.length.toLocaleString()}</div></div>}
           </div>
           <div className="col-start-3 lg:col-start-auto justify-self-end flex items-center gap-2">
+            {onCompare && <CompareToggleButton open={compareOpen} onToggle={() => setCompareOpen((open) => !open)} />}
             {shareUrl && <ShareReplayButton shareUrl={shareUrl} />}
             <button onClick={onClear} className="px-3 py-1.5 rounded-lg bg-osu-b3/50 text-xs text-osu-f1 hover:text-white hover:bg-osu-b2 transition-colors cursor-pointer">Back</button>
           </div>
         </div>
+        {compareEntry}
       </div>
     </>
   );
@@ -313,6 +338,26 @@ function PlayerAvatar({ src, name, size }: { src?: string; name: string; size: n
 function getReplayHeaderClientLabel(gameVersion: number | undefined): "Lazer" | "Stable" | null {
   if (!gameVersion) return null;
   return gameVersion >= 30_000_000 ? "Lazer" : "Stable";
+}
+
+// Deliberately quiet (muted icon, same treatment as Back): compare is a side
+// tool, not a headline action, so it lives in the card's action cluster and
+// only expands into a form on demand.
+function CompareToggleButton({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title="Compare with another score"
+      aria-label="Compare with another score"
+      aria-expanded={open}
+      className={`inline-flex items-center justify-center rounded-lg p-1.5 transition-colors cursor-pointer ${
+        open ? "bg-osu-b2 text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b2"
+      }`}
+    >
+      <ArrowLeftRight className="h-4 w-4" aria-hidden="true" />
+    </button>
+  );
 }
 
 function ShareReplayButton({ shareUrl, compact = false }: { shareUrl: string; compact?: boolean }) {

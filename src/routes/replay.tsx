@@ -13,7 +13,7 @@ import { MissingBeatmapPanel, ReplayBrowseView } from "../components/replay/Repl
 import type { ReplayBrowseMode } from "../components/replay/ReplayBrowseView";
 import { ReplayControls, ReplayProgressBar } from "../components/replay/ReplayControls";
 import type { ReplayVideoExportOptions } from "../components/replay/ReplayControls";
-import { ReplayCompareEntry, ReplayCompareView } from "../components/replay/ReplayCompareView";
+import { ReplayCompareView } from "../components/replay/ReplayCompareView";
 import { ReplayInfo } from "../components/replay/ReplayInfo";
 import type { ReplayPlayerProfile } from "../components/replay/ReplayInfo";
 import { ReplaySkinSettingsModal } from "../components/replay/ReplaySkinSettingsModal";
@@ -1672,16 +1672,22 @@ function ReplayPage() {
   // scrolling area (below the sticky stage) for mobile. ReplayInfo's own
   // responsive variants make sure only one copy is ever visible.
   const replayInfoCard = replay ? (
-    <>
-      <ReplayInfo replay={replay} score={scoreInfo} beatmap={beatmap} stars={starRating} mods={starMods} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} shareUrl={uploadedReplayShareUrl ?? undefined} playerProfile={playerProfile} onClear={handleClearReplay} />
-      {/* Compare only works for scores with online replays, so uploaded
-          replays (no score id) don't get the entry. */}
-      {scoreInfo?.id && scoreId ? (
-        <ReplayCompareEntry
-          onCompare={(otherScoreId) => navigate({ to: "/replay", search: { scoreId, compareId: otherScoreId } })}
-        />
-      ) : null}
-    </>
+    <ReplayInfo
+      replay={replay}
+      score={scoreInfo}
+      beatmap={beatmap}
+      stars={starRating}
+      mods={starMods}
+      fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId}
+      shareUrl={uploadedReplayShareUrl ?? undefined}
+      playerProfile={playerProfile}
+      onClear={handleClearReplay}
+      // Compare only works for scores with online replays, so uploaded
+      // replays (no score id) don't get the action.
+      onCompare={scoreInfo?.id && scoreId
+        ? (otherScoreId) => navigate({ to: "/replay", search: { scoreId, compareId: otherScoreId } })
+        : undefined}
+    />
   ) : null;
 
   return (

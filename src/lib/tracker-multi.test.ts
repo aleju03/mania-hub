@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { detectTrackerMultis, TRACKER_MULTI_WINDOW_MS } from "./tracker-multi";
+import {
+  detectTrackerMultis,
+  TRACKER_MULTI_SESSION_GAP_MS,
+  TRACKER_MULTI_WINDOW_MS,
+} from "./tracker-multi";
 import { getScoreIdentity } from "./score";
 import type { LeanTrackerScore, OsuMod } from "./types";
 
@@ -51,61 +55,112 @@ function at(offsetSeconds: number): string {
 }
 
 describe("detectTrackerMultis", () => {
-  it("flags two players finishing the same map within the window", () => {
-    const a = makeScore({ userId: 1, beatmapId: 100, endedAt: at(0) });
-    const b = makeScore({ userId: 2, beatmapId: 100, endedAt: at(8) });
-    const multis = detectTrackerMultis([a, b]);
-    expect(multis.get(getScoreIdentity(a))).toEqual({ playerCount: 2, others: ["player2"] });
-    expect(multis.get(getScoreIdentity(b))).toEqual({ playerCount: 2, others: ["player1"] });
+  it("does not flag a single co-finish round (fresh farm map burst)", () => {
+    const scores = [1, 2, 3, 4, 5].map((userId, index) =>
+      makeScore({ userId, beatmapId: 100, endedAt: at(index * 3) }),
+    );
+    expect(detectTrackerMultis(scores).size).toBe(0);
   });
 
-  it("ignores same-map plays outside the window", () => {
-    const a = makeScore({ userId: 1, beatmapId: 100, endedAt: at(0) });
-    const b = makeScore({ userId: 2, beatmapId: 100, endedAt: at(TRACKER_MULTI_WINDOW_MS / 1000 + 5) });
-    expect(detectTrackerMultis([a, b]).size).toBe(0);
+  it("flags the same pair co-finishing on two maps", () => {
+    const r1a = makeScore({ userId: 1, beatmapId: 100, endedAt: at(0) });
+    const r1b = makeScore({ userId: 2, beatmapId: 100, endedAt: at(3) });
+    const r2a = makeScore({ userId: 1, beatmapId: 200, endedAt: at(180) });
+    const r2b = makeScore({ userId: 2, beatmapId: 200, endedAt: at(184) });
+    const multis = detectTrackerMultis([r1a, r1b, r2a, r2b]);
+    const group = multis.get(getScoreIdentity(r1a));
+    expect(group).toBeDefined();
+    expect(group).toBe(multis.get(getScoreIdentity(r2b)));
+    expect(group?.playerCount).toBe(2);
+    expect(group?.rounds.map((round) => round.scores)).toEqual([[r1a, r1b], [r2a, r2b]]);
   });
 
-  it("ignores simultaneous plays on different maps", () => {
-    const a = makeScore({ userId: 1, beatmapId: 100, endedAt: at(0) });
-    const b = makeScore({ userId: 2, beatmapId: 200, endedAt: at(1) });
-    expect(detectTrackerMultis([a, b]).size).toBe(0);
+  it("requires co-finish gaps of at most the window", () => {
+    const gapSeconds = TRACKER_MULTI_WINDOW_MS / 1000 + 2;
+    const r1a = makeScore({ userId: 1, beatmapId: 100, endedAt: at(0) });
+    const r1b = makeScore({ userId: 2, beatmapId: 100, endedAt: at(gapSeconds) });
+    const r2a = makeScore({ userId: 1, beatmapId: 200, endedAt: at(180) });
+    const r2b = makeScore({ userId: 2, beatmapId: 200, endedAt: at(180 + gapSeconds) });
+    expect(detectTrackerMultis([r1a, r1b, r2a, r2b]).size).toBe(0);
+  });
+
+  it("does not link rounds played by different pairs", () => {
+    const r1a = makeScore({ userId: 1, beatmapId: 100, endedAt: at(0) });
+    const r1b = makeScore({ userId: 2, beatmapId: 100, endedAt: at(3) });
+    const r2a = makeScore({ userId: 3, beatmapId: 200, endedAt: at(180) });
+    const r2b = makeScore({ userId: 4, beatmapId: 200, endedAt: at(184) });
+    expect(detectTrackerMultis([r1a, r1b, r2a, r2b]).size).toBe(0);
+  });
+
+  it("splits rounds separated by more than the session gap", () => {
+    const laterSeconds = TRACKER_MULTI_SESSION_GAP_MS / 1000 + 60;
+    const r1a = makeScore({ userId: 1, beatmapId: 100, endedAt: at(0) });
+    const r1b = makeScore({ userId: 2, beatmapId: 100, endedAt: at(3) });
+    const r2a = makeScore({ userId: 1, beatmapId: 200, endedAt: at(laterSeconds) });
+    const r2b = makeScore({ userId: 2, beatmapId: 200, endedAt: at(laterSeconds + 4) });
+    expect(detectTrackerMultis([r1a, r1b, r2a, r2b]).size).toBe(0);
+  });
+
+  it("trims players seen in only one round of the session", () => {
+    const r1a = makeScore({ userId: 1, beatmapId: 100, endedAt: at(0) });
+    const r1b = makeScore({ userId: 2, beatmapId: 100, endedAt: at(3) });
+    const bystander = makeScore({ userId: 9, beatmapId: 100, endedAt: at(5) });
+    const r2a = makeScore({ userId: 1, beatmapId: 200, endedAt: at(180) });
+    const r2b = makeScore({ userId: 2, beatmapId: 200, endedAt: at(184) });
+    const multis = detectTrackerMultis([r1a, r1b, bystander, r2a, r2b]);
+    const group = multis.get(getScoreIdentity(r1a));
+    expect(group?.playerCount).toBe(2);
+    expect(group?.rounds[0]?.scores).toEqual([r1a, r1b]);
+    expect(multis.has(getScoreIdentity(bystander))).toBe(false);
   });
 
   it("ignores one player retrying the same map quickly", () => {
-    const a = makeScore({ userId: 1, beatmapId: 100, endedAt: at(0) });
-    const b = makeScore({ userId: 1, beatmapId: 100, endedAt: at(10) });
-    expect(detectTrackerMultis([a, b]).size).toBe(0);
+    const scores = [
+      makeScore({ userId: 1, beatmapId: 100, endedAt: at(0) }),
+      makeScore({ userId: 1, beatmapId: 100, endedAt: at(4) }),
+      makeScore({ userId: 1, beatmapId: 200, endedAt: at(180) }),
+      makeScore({ userId: 1, beatmapId: 200, endedAt: at(184) }),
+    ];
+    expect(detectTrackerMultis(scores).size).toBe(0);
   });
 
-  it("does not mix rates: a DT play is not in a lobby with a nomod play", () => {
-    const a = makeScore({ userId: 1, beatmapId: 100, endedAt: at(0), mods: ["DT"] });
-    const b = makeScore({ userId: 2, beatmapId: 100, endedAt: at(3) });
-    expect(detectTrackerMultis([a, b]).size).toBe(0);
+  it("does not mix rates: a DT play is not in a round with a nomod play", () => {
+    const r1a = makeScore({ userId: 1, beatmapId: 100, endedAt: at(0), mods: ["DT"] });
+    const r1b = makeScore({ userId: 2, beatmapId: 100, endedAt: at(3) });
+    const r2a = makeScore({ userId: 1, beatmapId: 200, endedAt: at(180), mods: ["DT"] });
+    const r2b = makeScore({ userId: 2, beatmapId: 200, endedAt: at(184) });
+    expect(detectTrackerMultis([r1a, r1b, r2a, r2b]).size).toBe(0);
   });
 
-  it("groups a full lobby and lists co-players by finish order", () => {
-    const a = makeScore({ userId: 1, beatmapId: 100, endedAt: at(0) });
-    const b = makeScore({ userId: 2, beatmapId: 100, endedAt: at(5) });
-    const c = makeScore({ userId: 3, beatmapId: 100, endedAt: at(12) });
-    const multis = detectTrackerMultis([c, a, b]);
-    expect(multis.get(getScoreIdentity(b))).toEqual({ playerCount: 3, others: ["player1", "player3"] });
+  it("orders each round's plays by finish time", () => {
+    const r1a = makeScore({ userId: 1, beatmapId: 100, endedAt: at(4) });
+    const r1b = makeScore({ userId: 2, beatmapId: 100, endedAt: at(0) });
+    const r2a = makeScore({ userId: 1, beatmapId: 200, endedAt: at(180) });
+    const r2b = makeScore({ userId: 2, beatmapId: 200, endedAt: at(183) });
+    const multis = detectTrackerMultis([r1a, r1b, r2a, r2b]);
+    expect(multis.get(getScoreIdentity(r1a))?.rounds[0]?.scores).toEqual([r1b, r1a]);
   });
 
-  it("chains within the window but splits separate rounds", () => {
-    const round1a = makeScore({ userId: 1, beatmapId: 100, endedAt: at(0) });
-    const round1b = makeScore({ userId: 2, beatmapId: 100, endedAt: at(6) });
-    const round2a = makeScore({ userId: 1, beatmapId: 100, endedAt: at(300) });
-    const round2b = makeScore({ userId: 3, beatmapId: 100, endedAt: at(306) });
-    const multis = detectTrackerMultis([round1a, round1b, round2a, round2b]);
-    expect(multis.get(getScoreIdentity(round1a))?.others).toEqual(["player2"]);
-    expect(multis.get(getScoreIdentity(round2a))?.others).toEqual(["player3"]);
+  it("keeps the lobby key stable when later rounds arrive", () => {
+    const r1a = makeScore({ userId: 1, beatmapId: 100, endedAt: at(0) });
+    const r1b = makeScore({ userId: 2, beatmapId: 100, endedAt: at(3) });
+    const r2a = makeScore({ userId: 1, beatmapId: 200, endedAt: at(180) });
+    const r2b = makeScore({ userId: 2, beatmapId: 200, endedAt: at(184) });
+    const r3a = makeScore({ userId: 1, beatmapId: 300, endedAt: at(360) });
+    const r3b = makeScore({ userId: 2, beatmapId: 300, endedAt: at(363) });
+    const before = detectTrackerMultis([r1a, r1b, r2a, r2b]).get(getScoreIdentity(r1a));
+    const after = detectTrackerMultis([r1a, r1b, r2a, r2b, r3a, r3b]).get(getScoreIdentity(r1a));
+    expect(before?.key).toBe(after?.key);
+    expect(after?.rounds).toHaveLength(3);
   });
 
   it("dedupes overlapping pools by score identity", () => {
-    const a = makeScore({ userId: 1, beatmapId: 100, endedAt: at(0) });
-    const b = makeScore({ userId: 2, beatmapId: 100, endedAt: at(4) });
-    const multis = detectTrackerMultis([a, b, a, b]);
-    expect(multis.get(getScoreIdentity(a))).toEqual({ playerCount: 2, others: ["player2"] });
+    const r1a = makeScore({ userId: 1, beatmapId: 100, endedAt: at(0) });
+    const r1b = makeScore({ userId: 2, beatmapId: 100, endedAt: at(3) });
+    const r2a = makeScore({ userId: 1, beatmapId: 200, endedAt: at(180) });
+    const r2b = makeScore({ userId: 2, beatmapId: 200, endedAt: at(184) });
+    const multis = detectTrackerMultis([r1a, r1b, r2a, r2b, r1a, r2b]);
+    expect(multis.get(getScoreIdentity(r1a))?.rounds[0]?.scores).toEqual([r1a, r1b]);
   });
 
   it("skips scores without usable timestamps", () => {

@@ -13,6 +13,7 @@ import { LazerBadge } from "../components/ui/LazerBadge";
 import { ModBadge } from "../components/ui/ModBadge";
 import { Pagination } from "../components/ui/Pagination";
 import { UsernameText } from "../components/ui/UsernameText";
+import { CoverBackdrop } from "../components/ui/CoverBackdrop";
 import type { SnipeEvent, SnipesScanStatus } from "../lib/types";
 import { DEFAULT_SNIPES_FILTERS, useAppStore, useHiddenUserIds, useSelectedCountry, type SnipesFilters, type SnipesKeyFilter, type SnipesRange } from "../store";
 import { parseCountrySearchParam } from "../lib/country-search";
@@ -981,12 +982,7 @@ function SnipeRow({
         <div
           className="relative px-4 pb-3 pt-2 border-t border-osu-b3/20 overflow-hidden detail-enter"
         >
-          {event.beatmapset.cover_url && (
-            <div
-              className="absolute inset-0 opacity-[0.07] bg-cover bg-center pointer-events-none"
-              style={{ backgroundImage: `url(${event.beatmapset.cover_url})` }}
-            />
-          )}
+          {event.beatmapset.cover_url && <CoverBackdrop url={event.beatmapset.cover_url} />}
           {/* flex-wrap + justify-center so an orphan last row (e.g. 5 stats in
               a 2/4/5-col layout) centers itself instead of hugging the left
               edge. Each cell's basis matches the old grid's column width minus

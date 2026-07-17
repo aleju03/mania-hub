@@ -477,16 +477,31 @@ export function ReplayCompareView({
   );
 }
 
-/* Entry point shown under the score card of a loaded replay: paste another
-   score's link (or id) from the same map to jump into compare mode. */
+/* Inline form revealed inside the score card when the compare action is
+   toggled: paste another score's link (or id) from the same map to jump into
+   compare mode. Collapsed by default so it doesn't compete with the score info. */
 export function ReplayCompareEntry({
   onCompare,
+  onClose,
 }: {
   onCompare: (otherScoreId: number) => void;
+  onClose: () => void;
 }) {
   const [value, setValue] = useState("");
   const [invalid, setInvalid] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const parsed = parseReplayScoreInput(value);
+
+  // Autofocus only with a hardware pointer: on phones it would pop the
+  // software keyboard immediately, reflowing the svh stage and leaving this
+  // form buried behind the keyboard. Touch users see the form scroll into
+  // view instead and tap the input themselves, which lets the browser's own
+  // focus handling position it above the keyboard.
+  useEffect(() => {
+    formRef.current?.scrollIntoView({ block: "nearest" });
+    if (!window.matchMedia?.("(pointer: coarse)").matches) inputRef.current?.focus();
+  }, []);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -500,27 +515,35 @@ export function ReplayCompareEntry({
 
   return (
     <form
+      ref={formRef}
       onSubmit={submit}
-      className="mt-2 flex items-center gap-2 rounded-lg border border-osu-b3/20 bg-osu-b4 px-2.5 py-2"
+      className="mt-2 flex items-center gap-2 rounded-lg bg-osu-b5/55 px-2.5 py-2"
     >
       <ArrowLeftRight className="h-3.5 w-3.5 shrink-0 text-osu-f1" />
       <input
+        ref={inputRef}
         type="text"
         value={value}
         onChange={(event) => {
           setValue(event.currentTarget.value);
           setInvalid(false);
         }}
-        placeholder="compare: paste another score link of this map..."
+        onKeyDown={(event) => {
+          if (event.key === "Escape") onClose();
+        }}
+        placeholder="score link of this map"
         aria-label="Score link or id to compare against"
-        className={`h-7 min-w-0 flex-1 rounded-md border bg-osu-b5/70 px-2 text-[11px] text-white outline-none transition-colors placeholder:text-osu-f1/70 focus:border-osu-pink/40 ${
+        enterKeyHint="go"
+        // 16px on phones: anything smaller makes iOS Safari zoom the whole
+        // page when the input gains focus.
+        className={`h-9 sm:h-7 min-w-0 flex-1 rounded-md border bg-osu-b4/70 px-2 text-[16px] sm:text-[11px] text-white outline-none transition-colors placeholder:text-osu-f1/70 focus:border-osu-pink/40 ${
           invalid ? "border-osu-red/60" : "border-osu-b3/30"
         }`}
       />
       <button
         type="submit"
         disabled={!parsed}
-        className="shrink-0 rounded-md bg-osu-pink/15 px-2.5 py-1 text-[11px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/25 hover:text-white disabled:opacity-40 cursor-pointer"
+        className="shrink-0 rounded-md bg-osu-pink/15 px-2.5 py-2 sm:py-1 text-[12px] sm:text-[11px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/25 hover:text-white disabled:opacity-40 cursor-pointer"
       >
         Compare
       </button>
