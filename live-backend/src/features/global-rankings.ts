@@ -210,15 +210,24 @@ export async function getGlobalRankingsSnapshot(db: Db, query: GlobalRankingsQue
   };
 }
 
+// A country whose roster refresh was queued recently is skipped: with the
+// board cached, every page of the same board would otherwise re-enqueue the
+// identical repairs on each request (queue writes that stall under
+// contention), and the refresh job itself takes minutes to land anyway.
+const STAT_REPAIR_THROTTLE_MS = 5 * 60 * 1000;
+const statRepairEnqueuedAt = new Map<string, number>();
+
 export async function enqueueGlobalRankingStatRepairs(queue: JobQueue, entries: GlobalRankingEntry[]): Promise<string[]> {
+  const now = Date.now();
   const countries = [...new Set(
     entries
       .filter(hasIncompleteStats)
       .map((entry) => entry.user.country_code.trim().toUpperCase())
       .filter((country) => /^[A-Z]{2}$/.test(country)),
-  )];
+  )].filter((country) => now - (statRepairEnqueuedAt.get(country) ?? 0) >= STAT_REPAIR_THROTTLE_MS);
 
   for (const country of countries) {
+    statRepairEnqueuedAt.set(country, now);
     await queue.enqueue("refresh_country_roster", `roster:${country}`, { country }, { priority: 85, replaceDone: true });
   }
 

@@ -870,33 +870,33 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   if (url.pathname === "/api/snapshots/rankings") {
     if (isGlobalCountry(country)) {
       const snapshot = await getGlobalRankingsSnapshot(ctx.db, parseGlobalRankingsQuery(url.searchParams));
-      try {
-        await enqueueGlobalRankingStatRepairs(ctx.queue, snapshot.ranking);
-      } catch (error) {
+      // Detached: repairs are background work and their queue writes must not
+      // delay the response under write contention.
+      void enqueueGlobalRankingStatRepairs(ctx.queue, snapshot.ranking).catch((error) => {
         console.warn("[global-rankings] failed to queue stat repair", error);
-      }
+      });
       res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
       await sendAccentEnrichedJson(req, res, ctx, 200, snapshot);
       return true;
     }
     if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
     const snapshot = await getCountryRankingsSnapshot(ctx.db, country, parseGlobalRankingsQuery(url.searchParams));
-    try {
-      await enqueueGlobalRankingStatRepairs(ctx.queue, snapshot.ranking);
-    } catch (error) {
+    // Detached: repairs are background work and their queue writes must not
+    // delay the response under write contention.
+    void enqueueGlobalRankingStatRepairs(ctx.queue, snapshot.ranking).catch((error) => {
       console.warn("[country-rankings] failed to queue stat repair", error);
-    }
+    });
     res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
     await sendAccentEnrichedJson(req, res, ctx, 200, snapshot);
     return true;
   }
   if (url.pathname === "/api/snapshots/global-rankings") {
     const snapshot = await getGlobalRankingsSnapshot(ctx.db, parseGlobalRankingsQuery(url.searchParams));
-    try {
-      await enqueueGlobalRankingStatRepairs(ctx.queue, snapshot.ranking);
-    } catch (error) {
+    // Detached: repairs are background work and their queue writes must not
+    // delay the response under write contention.
+    void enqueueGlobalRankingStatRepairs(ctx.queue, snapshot.ranking).catch((error) => {
       console.warn("[global-rankings] failed to queue stat repair", error);
-    }
+    });
     res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
     await sendAccentEnrichedJson(req, res, ctx, 200, snapshot);
     return true;

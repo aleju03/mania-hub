@@ -428,7 +428,9 @@ export async function lookupAvatarAccents(db: Db, queue: JobQueue | null, urls: 
     return !row || (row.status !== "ok" && Date.now() - row.computedAt >= AVATAR_ACCENT_ERROR_RETRY_MS);
   });
   if (queue && missing.length > 0) {
-    await enqueueAvatarAccentJobs(queue, missing);
+    // Detached: queue inserts can stall for seconds under write contention and
+    // the lookup response must not wait on them (failures log per URL inside).
+    void enqueueAvatarAccentJobs(queue, missing);
   }
 
   const accents: Record<string, string> = {};
@@ -496,7 +498,9 @@ export async function enrichPayloadAvatarAccents(db: Db, queue: JobQueue | null,
     }
 
     if (queue && missing.length > 0) {
-      await enqueueAvatarAccentJobs(queue, missing);
+      // Detached: the enriched response must not wait on queue inserts, which
+      // stall for seconds under write contention (failures log per URL inside).
+      void enqueueAvatarAccentJobs(queue, missing);
     }
   } catch (error) {
     // Enrichment is strictly additive; a failure must never break the snapshot response.
