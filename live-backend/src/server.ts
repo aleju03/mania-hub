@@ -26,6 +26,7 @@ import { OsuApiClient } from "./osu/client.js";
 import { SqliteSharedRateLimiter } from "./osu/shared-rate-limiter.js";
 import { enqueueRosterRefreshes } from "./rosters/country-rosters.js";
 import { startRetentionScheduler } from "./retention.js";
+import { packGlobalBoard } from "./features/global-rankings.js";
 import { startWalCheckpointer } from "./wal-checkpointer.js";
 import { WorkerRunner } from "./workers.js";
 import { createDiscordRuntime } from "./discord/index.js";
@@ -247,6 +248,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       startVariantPpDripScheduler(app.db, app.queue);
     }
     startRetentionScheduler(app.db, app.config);
+    // Global rankings board: built here (yielding batches) and packed into
+    // live_meta so the serving process answers pages from one small read and
+    // never scans the roster on its own event loop.
+    startGlobalBoardPackScheduler(app.db);
     // Active WAL brake: keeps the -wal file bounded so it can never grow into the
     // read-pin death-spiral. Worker/all role only (never the serving process).
     startWalCheckpointer(app.config);
@@ -356,6 +361,20 @@ function startQueuePressureScheduler(queue: JobQueue): void {
     setTimeout(tick, 60_000).unref();
   };
   setTimeout(tick, 60_000).unref();
+}
+
+const GLOBAL_BOARD_PACK_INTERVAL_MS = 60_000;
+
+function startGlobalBoardPackScheduler(db: Awaited<ReturnType<typeof createDb>>): void {
+  const tick = async () => {
+    try {
+      await packGlobalBoard(db);
+    } catch (error) {
+      console.warn("[global-board] pack failed", error);
+    }
+    setTimeout(tick, GLOBAL_BOARD_PACK_INTERVAL_MS).unref();
+  };
+  setTimeout(tick, 5_000).unref();
 }
 
 function startRosterScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: JobQueue, config: ReturnType<typeof readConfig>): void {

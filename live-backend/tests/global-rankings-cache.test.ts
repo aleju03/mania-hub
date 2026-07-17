@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
-import { getGlobalRankingsSnapshot } from "../src/features/global-rankings.js";
+import { getGlobalRankingsSnapshot, packGlobalBoard } from "../src/features/global-rankings.js";
 
 let dir = "";
 let db: Db;
@@ -103,5 +103,19 @@ describe("global rankings board cache", () => {
     expect(pageTwo.ranking.map((entry) => entry.user.username)).toEqual(["player3", "player4"]);
     expect(byPlayer.ranking[0].user.username).toBe("player1");
     expect(byPlayer.fetchedAt).toBe(byRank.fetchedAt);
+  });
+});
+
+describe("packed global board", () => {
+  it("serves snapshots from the packed board written by the worker", async () => {
+    await seedPlayer(1, "alpha", 9000);
+    const count = await packGlobalBoard(db);
+    expect(count).toBe(1);
+
+    // Reader with a separate connection: sees the pack, not the tables.
+    const readerDb = await createDb({ databaseUrl: `file:${join(dir, "test.db")}` });
+    await exec(db, `update users set username = 'renamed' where user_id = 1`);
+    const snapshot = await getGlobalRankingsSnapshot(readerDb, { page: 1 });
+    expect(snapshot.ranking[0].user.username).toBe("alpha");
   });
 });

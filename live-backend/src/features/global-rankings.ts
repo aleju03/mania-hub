@@ -125,8 +125,41 @@ interface GlobalBoardCache {
   builtAt: number;
 }
 
-const globalBoardCacheByDb = new WeakMap<Db, GlobalBoardCache>();
+interface GlobalBoardMemory {
+  board: GlobalBoardCache;
+  // When we last looked for a fresher board (not the board's age): the packed
+  // row is multi-MB, so it must not be re-read and re-parsed on every request
+  // while the worker hasn't produced a newer build yet.
+  checkedAt: number;
+}
+
+const globalBoardCacheByDb = new WeakMap<Db, GlobalBoardMemory>();
 const globalBoardBuildByDb = new WeakMap<Db, Promise<GlobalBoardCache>>();
+
+// The worker packs the built board into live_meta on a timer; the serving
+// process then answers every page from one small sequential read instead of
+// scanning the roster itself. The local build below survives as a fallback
+// for the all-in-one role and for a worker outage.
+const GLOBAL_BOARD_PACK_KEY = "global_board_pack";
+const GLOBAL_BOARD_PACK_STALE_MS = 5 * 60 * 1000;
+
+export async function packGlobalBoard(db: Db): Promise<number> {
+  const board = await buildGlobalBoard(db);
+  await exec(
+    db,
+    `insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)`,
+    [GLOBAL_BOARD_PACK_KEY, JSON.stringify(board), new Date().toISOString()],
+  );
+  return board.entries.length;
+}
+
+async function readPackedGlobalBoard(db: Db): Promise<GlobalBoardCache | null> {
+  const row = (await exec(db, `select value_json from live_meta where key = ?`, [GLOBAL_BOARD_PACK_KEY])).rows[0];
+  if (!row) return null;
+  const parsed = parseJson<{ builtAt?: unknown; entries?: unknown }>(row.value_json, {});
+  if (!Number.isFinite(parsed.builtAt) || !Array.isArray(parsed.entries)) return null;
+  return { entries: parsed.entries as GlobalRankingEntry[], builtAt: Number(parsed.builtAt) };
+}
 
 // Batch sizing for the build: the board spans thousands of players and libsql
 // runs synchronously on the event loop, so the heavy steps (profile_json
@@ -207,13 +240,28 @@ async function buildGlobalBoard(db: Db): Promise<GlobalBoardCache> {
 }
 
 async function getGlobalBoard(db: Db): Promise<GlobalBoardCache> {
-  const cached = globalBoardCacheByDb.get(db);
-  if (cached && Date.now() - cached.builtAt < GLOBAL_BOARD_CACHE_TTL_MS) return cached;
+  const now = Date.now();
+  const memory = globalBoardCacheByDb.get(db);
+  if (memory && now - memory.checkedAt < GLOBAL_BOARD_CACHE_TTL_MS) return memory.board;
+
+  try {
+    const packed = await readPackedGlobalBoard(db);
+    if (packed && now - packed.builtAt < GLOBAL_BOARD_PACK_STALE_MS) {
+      const board = memory && memory.board.builtAt >= packed.builtAt ? memory.board : packed;
+      globalBoardCacheByDb.set(db, { board, checkedAt: now });
+      return board;
+    }
+  } catch (error) {
+    logWarn("global_board_pack_read_failed", errorContext(error));
+  }
+
+  // No usable packed board (worker down, first boot, all-in-one role without
+  // the pack yet): build locally, serving the previous board while it runs.
   let build = globalBoardBuildByDb.get(db);
   if (!build) {
     build = buildGlobalBoard(db)
       .then((built) => {
-        globalBoardCacheByDb.set(db, built);
+        globalBoardCacheByDb.set(db, { board: built, checkedAt: Date.now() });
         return built;
       })
       .catch((error) => {
@@ -221,7 +269,7 @@ async function getGlobalBoard(db: Db): Promise<GlobalBoardCache> {
         // very first build has nothing to fall back to.
         logWarn("global_board_rebuild_failed", errorContext(error));
         const stale = globalBoardCacheByDb.get(db);
-        if (stale) return stale;
+        if (stale) return stale.board;
         throw error;
       })
       .finally(() => {
@@ -229,7 +277,7 @@ async function getGlobalBoard(db: Db): Promise<GlobalBoardCache> {
       });
     globalBoardBuildByDb.set(db, build);
   }
-  return cached ?? build;
+  return memory?.board ?? build;
 }
 
 // The Global leaderboard is the union of every tracked country's roster, ranked
