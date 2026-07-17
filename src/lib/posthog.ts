@@ -64,9 +64,11 @@ function getBaseProperties(): Record<string, unknown> {
 }
 
 export function track(event: string, properties?: Record<string, unknown>) {
-  if (!API_KEY || typeof window === "undefined") return;
+  if (typeof window === "undefined") return;
   if (isAdminAnalyticsInspection()) return;
   const distinctId = getVisitorId();
+  // api_key is only meaningful to the PostHog leg of the /api/sync dual-write;
+  // capture must keep flowing to the in-house store without it.
   const payload = {
     api_key: API_KEY,
     event,

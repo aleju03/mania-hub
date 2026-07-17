@@ -217,8 +217,9 @@ const documentCacheMiddleware = createMiddleware().server(
 // page HTML to read the og: meta tags. Those requests carry distinctive
 // User-Agents and, because crawlers send no cookies, are never CDN-cached
 // (documentCacheMiddleware stamps cookieless HTML `private, no-store`), so
-// they reach this function on every unfurl. We log one `page_shared` event
-// per crawl to PostHog; /admin/monitor renders the rollups.
+// they reach this function on every unfurl. Each crawl logs one `page_shared`
+// event via trackServerEvent; the /admin/live-backend analytics tab renders
+// the rollups.
 //
 // This is a share-intent signal, not reach: one unfurl in a 500-person server
 // looks identical to one DM. Search-index bots (Googlebot, bingbot, Applebot)

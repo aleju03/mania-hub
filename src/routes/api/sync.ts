@@ -125,21 +125,23 @@ async function forwardCapture(request: Request): Promise<Response> {
   // waitUntil keeps the Vercel function alive until the upstream fetch
   // resolves so events aren't dropped when the runtime recycles the
   // instance; it's a no-op outside Vercel.
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), POSTHOG_FORWARD_TIMEOUT_MS);
-  waitUntil(
-    fetch(POSTHOG_CAPTURE_URL, {
-      method: "POST",
-      headers,
-      body,
-      signal: controller.signal,
-    }).catch(() => {}).finally(() => {
-      clearTimeout(timeout);
-    }),
-  );
+  // The PostHog leg only runs while VITE_POSTHOG_KEY is set: unsetting it
+  // ends the dual-write and leaves the in-house store as the sole sink.
+  if (process.env.VITE_POSTHOG_KEY) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), POSTHOG_FORWARD_TIMEOUT_MS);
+    waitUntil(
+      fetch(POSTHOG_CAPTURE_URL, {
+        method: "POST",
+        headers,
+        body,
+        signal: controller.signal,
+      }).catch(() => {}).finally(() => {
+        clearTimeout(timeout);
+      }),
+    );
+  }
 
-  // Dual-write to the in-house store; PostHog stays as the free cold archive
-  // until the in-house numbers have soaked long enough to trust alone.
   forwardToLiveAnalytics(request, body);
 
   return new Response(null, { status: 202 });

@@ -44,7 +44,6 @@ import { Route as ApiAudioRouteImport } from './routes/api/audio'
 import { Route as AdminTodosRouteImport } from './routes/admin/todos'
 import { Route as AdminR2RouteImport } from './routes/admin/r2'
 import { Route as AdminOgPreviewRouteImport } from './routes/admin/og-preview'
-import { Route as AdminMonitorRouteImport } from './routes/admin/monitor'
 import { Route as AdminLiveBackendRouteImport } from './routes/admin/live-backend'
 import { Route as AdminDiscordRouteImport } from './routes/admin/discord'
 import { Route as AdminDanClassifierRouteImport } from './routes/admin/dan-classifier'
@@ -233,11 +232,6 @@ const AdminOgPreviewRoute = AdminOgPreviewRouteImport.update({
   path: '/admin/og-preview',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminMonitorRoute = AdminMonitorRouteImport.update({
-  id: '/admin/monitor',
-  path: '/admin/monitor',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AdminLiveBackendRoute = AdminLiveBackendRouteImport.update({
   id: '/admin/live-backend',
   path: '/admin/live-backend',
@@ -323,7 +317,6 @@ export interface FileRoutesByFullPath {
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
-  '/admin/monitor': typeof AdminMonitorRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/admin/r2': typeof AdminR2Route
   '/admin/todos': typeof AdminTodosRoute
@@ -373,7 +366,6 @@ export interface FileRoutesByTo {
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
-  '/admin/monitor': typeof AdminMonitorRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/admin/r2': typeof AdminR2Route
   '/admin/todos': typeof AdminTodosRoute
@@ -424,7 +416,6 @@ export interface FileRoutesById {
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
-  '/admin/monitor': typeof AdminMonitorRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/admin/r2': typeof AdminR2Route
   '/admin/todos': typeof AdminTodosRoute
@@ -476,7 +467,6 @@ export interface FileRouteTypes {
     | '/admin/dan-classifier'
     | '/admin/discord'
     | '/admin/live-backend'
-    | '/admin/monitor'
     | '/admin/og-preview'
     | '/admin/r2'
     | '/admin/todos'
@@ -526,7 +516,6 @@ export interface FileRouteTypes {
     | '/admin/dan-classifier'
     | '/admin/discord'
     | '/admin/live-backend'
-    | '/admin/monitor'
     | '/admin/og-preview'
     | '/admin/r2'
     | '/admin/todos'
@@ -576,7 +565,6 @@ export interface FileRouteTypes {
     | '/admin/dan-classifier'
     | '/admin/discord'
     | '/admin/live-backend'
-    | '/admin/monitor'
     | '/admin/og-preview'
     | '/admin/r2'
     | '/admin/todos'
@@ -627,7 +615,6 @@ export interface RootRouteChildren {
   AdminDanClassifierRoute: typeof AdminDanClassifierRoute
   AdminDiscordRoute: typeof AdminDiscordRoute
   AdminLiveBackendRoute: typeof AdminLiveBackendRoute
-  AdminMonitorRoute: typeof AdminMonitorRoute
   AdminOgPreviewRoute: typeof AdminOgPreviewRoute
   AdminR2Route: typeof AdminR2Route
   AdminTodosRoute: typeof AdminTodosRoute
@@ -895,13 +882,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminOgPreviewRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/monitor': {
-      id: '/admin/monitor'
-      path: '/admin/monitor'
-      fullPath: '/admin/monitor'
-      preLoaderRoute: typeof AdminMonitorRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/admin/live-backend': {
       id: '/admin/live-backend'
       path: '/admin/live-backend'
@@ -1055,7 +1035,6 @@ const rootRouteChildren: RootRouteChildren = {
   AdminDanClassifierRoute: AdminDanClassifierRoute,
   AdminDiscordRoute: AdminDiscordRoute,
   AdminLiveBackendRoute: AdminLiveBackendRoute,
-  AdminMonitorRoute: AdminMonitorRoute,
   AdminOgPreviewRoute: AdminOgPreviewRoute,
   AdminR2Route: AdminR2Route,
   AdminTodosRoute: AdminTodosRoute,

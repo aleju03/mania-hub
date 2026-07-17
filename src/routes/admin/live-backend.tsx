@@ -845,6 +845,23 @@ const getAnalyticsMonitorData = createServerFn({ method: "POST" })
     return createEmptyAnalyticsMonitorData(data.rangeHours, "warming");
   });
 
+/* Trades the admin session for a short-lived SSE ticket: EventSource can't
+   send auth headers, and the browser must never hold the real admin token.
+   Returns null when the in-house store isn't configured. */
+const getAnalyticsLiveTicket = createServerFn({ method: "POST" })
+  .handler(async (): Promise<{ ticket: string; expiresAt: number } | null> => {
+    await requireAdminAccess("Analytics live feed");
+    const base = getServerLiveBackendUrl();
+    const token = process.env.LIVE_ADMIN_TOKEN;
+    if (!base || !token) return null;
+    const response = await fetch(`${base}/api/admin/analytics/live-ticket`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, connection: "close" },
+    });
+    if (!response.ok) return null;
+    return await response.json() as { ticket: string; expiresAt: number };
+  });
+
 export const Route = createFileRoute("/admin/live-backend")({
   head: () => ({
     meta: [
@@ -1357,9 +1374,14 @@ function AnalyticsMonitorPanel() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [liveFeedConnected, setLiveFeedConnected] = useState(false);
   const mountedRef = useRef(true);
   const requestIdRef = useRef(0);
   const hasLoadedRef = useRef(false);
+  // Read by the SSE handler so a country-filter change doesn't tear down the
+  // stream just to change which events get prepended.
+  const recentCountryRef = useRef(recentCountry);
+  recentCountryRef.current = recentCountry;
 
   const setRange = useCallback((next: AnalyticsRange) => {
     const normalized = clampAnalyticsRangeHours(next);
@@ -1446,6 +1468,81 @@ function AnalyticsMonitorPanel() {
     return () => window.clearInterval(id);
   }, [hydrated, autoRefresh, range, recentCountry, load, data?.source]);
 
+  // Realtime feed: once the in-house store is answering, stream every accepted
+  // event into the recent-activity card the moment it's captured. The polling
+  // loop above still refreshes the aggregates; a poll's wholesale setData
+  // already contains anything streamed earlier, so the two never duplicate.
+  const liveFeedWanted = hydrated && autoRefresh && data?.source === "live";
+  useEffect(() => {
+    if (!liveFeedWanted) return;
+    const base = getLiveBackendUrl();
+    if (!base) return;
+    let stopped = false;
+    let source: EventSource | null = null;
+    let retryTimer: number | null = null;
+
+    const scheduleReconnect = () => {
+      if (stopped || retryTimer != null) return;
+      retryTimer = window.setTimeout(() => {
+        retryTimer = null;
+        void connect();
+      }, 5_000);
+    };
+
+    const connect = async () => {
+      let ticket: string | null = null;
+      try {
+        ticket = (await getAnalyticsLiveTicket())?.ticket ?? null;
+      } catch {
+        ticket = null;
+      }
+      if (stopped) return;
+      if (!ticket) {
+        scheduleReconnect();
+        return;
+      }
+      source = new EventSource(`${base}/api/admin/analytics/live?ticket=${encodeURIComponent(ticket)}`);
+      source.addEventListener("open", () => {
+        if (!stopped) setLiveFeedConnected(true);
+      });
+      source.addEventListener("analytics_event", (event) => {
+        if (stopped) return;
+        let row: AnalyticsRecentEventRow;
+        try {
+          row = JSON.parse((event as MessageEvent).data) as AnalyticsRecentEventRow;
+        } catch {
+          return;
+        }
+        const countryFilter = recentCountryRef.current;
+        if (countryFilter && row.country !== countryFilter) return;
+        setData((prev) => {
+          if (!prev || prev.source !== "live") return prev;
+          return {
+            ...prev,
+            recentEvents: [row, ...prev.recentEvents].slice(0, ANALYTICS_RECENT_EVENTS_LIMIT),
+          };
+        });
+      });
+      source.onerror = () => {
+        // EventSource's built-in retry would replay the same (soon-expired)
+        // ticket; close and reconnect through a fresh one instead.
+        source?.close();
+        source = null;
+        if (stopped) return;
+        setLiveFeedConnected(false);
+        scheduleReconnect();
+      };
+    };
+
+    void connect();
+    return () => {
+      stopped = true;
+      setLiveFeedConnected(false);
+      if (retryTimer != null) window.clearTimeout(retryTimer);
+      source?.close();
+    };
+  }, [liveFeedWanted]);
+
   const currentData = data && dataRange === range ? data : null;
   const isRecentCountryPending = Boolean(currentData && dataRecentCountry !== recentCountry);
   const statusData = currentData ?? data;
@@ -1470,10 +1567,16 @@ function AnalyticsMonitorPanel() {
         <div>
           <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Analytics</div>
           <div className="text-[13px] text-osu-c2 mt-1">
-            Replay views, visitor geography, referrers, recent events, and PostHog-captured server errors.
+            Replay views, visitor geography, referrers, recent events, and captured server errors.
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {liveFeedConnected ? (
+            <span className="inline-flex items-center gap-1.5 text-[11px] text-osu-green" title="Streaming events from the in-house analytics store">
+              <span className="w-2 h-2 rounded-full bg-osu-green animate-pulse" />
+              live
+            </span>
+          ) : null}
           {statusText ? (
             <span className={`text-[11px] ${statusColorClass}`}>
               {statusText}
