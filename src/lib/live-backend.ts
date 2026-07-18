@@ -1055,6 +1055,33 @@ export async function fetchLiveFarmHelperFarmers(
   return fetchLiveJson(`/api/snapshots/farm-helper-farmers?${query.toString()}`, options?.signal ? { signal: options.signal } : undefined);
 }
 
+export interface LiveFarmHelperNeighbor {
+  userId: number;
+  username: string;
+  avatarUrl: string;
+  modePp: number;
+}
+
+export interface LiveFarmHelperNeighbors {
+  userId: number;
+  username: string;
+  avatarUrl: string;
+  keyMode: LiveFarmHelperKeyMode;
+  bandMode: string;
+  subjectModePp: number;
+  neighborCount: number;
+  neighbors: LiveFarmHelperNeighbor[];
+}
+
+export async function fetchLiveFarmHelperNeighbors(
+  userKey: string,
+  options?: { keyMode?: LiveFarmHelperKeyMode; signal?: AbortSignal },
+): Promise<LiveFarmHelperNeighbors> {
+  const query = new URLSearchParams({ user: userKey });
+  if (options?.keyMode) query.set("key", options.keyMode);
+  return fetchLiveJson(`/api/snapshots/farm-helper-neighbors?${query.toString()}`, options?.signal ? { signal: options.signal } : undefined);
+}
+
 export interface LiveCountryActivation {
   ok: boolean;
   // True while the country has no roster projection yet, so every country

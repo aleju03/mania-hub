@@ -1,10 +1,26 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import type { AuthViewer } from "../../lib/auth-shared";
+import { fetchLiveFarmHelperNeighbors, isLiveBackendConfigured } from "../../lib/live-backend";
 
-// Real mania players sampled from a farm-helper peer band; shown as the
-// neighbor nodes. Hover reveals the username, click opens the profile.
-const PEERS: { id: number; name: string }[] = [
+interface NeighborPeer {
+  id: number;
+  name: string;
+  avatarUrl: string | null;
+  // pp on the cohort's keymode axis; null in the canned fallback
+  modePp: number | null;
+}
+
+interface GraphSource {
+  peers: NeighborPeer[];
+  subjectModePp: number | null;
+  live: boolean;
+}
+
+// Canned sample shown to signed-out visitors (real mania players from a
+// farm-helper peer band). Signed-in viewers get their actual kNN cohort from
+// the live backend instead.
+const FALLBACK_PEERS: NeighborPeer[] = [
   { id: 13018117, name: "josiaxarg" },
   { id: 9895650, name: "XxNewson1234xX" },
   { id: 36327194, name: "_Myuka_" },
@@ -29,8 +45,11 @@ const PEERS: { id: number; name: string }[] = [
   { id: 17036965, name: "PouSlayer" },
   { id: 11183413, name: "CertifiedPinoy" },
   { id: 25263357, name: "rikan" },
-];
-const CROWD_COUNT = 44;
+].map((p) => ({ ...p, avatarUrl: null, modePp: null }));
+
+const AVATAR_COUNT = 24;
+const MIN_LIVE_PEERS = 8;
+const CROWD_PAD_COUNT = 44;
 const GUEST_AVATAR = "https://osu.ppy.sh/images/layout/avatar-guest@2x.png";
 const PULSE_MS = 2100;
 const AUTO_SPIN = 0.09; // rad/s, paused while grabbing
@@ -53,12 +72,13 @@ function mul(a: Mat3, b: Mat3): Mat3 {
 }
 
 interface GraphNode {
-  peer: { id: number; name: string } | null;
+  peer: NeighborPeer | null;
   // rest position on the unit sphere, scaled by shell
   px: number;
   py: number;
   pz: number;
   size: number;
+  hasAvatar: boolean;
   driftPhase: number;
   driftSpeed: number;
   img: HTMLImageElement | null;
@@ -75,56 +95,185 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-// Fibonacci sphere: evenly distributed points, organic once jittered.
-function buildNodes(): GraphNode[] {
+function sphereDirection(y: number, phi: number): { x: number; y: number; z: number } {
+  const r = Math.sqrt(Math.max(0, 1 - y * y));
+  return { x: Math.cos(phi) * r, y, z: Math.sin(phi) * r };
+}
+
+// Constellation ball: faces on a shuffled fibonacci sphere (even coverage,
+// no hemisphere clumps, no pp-rank/latitude correlation), with radii in a
+// NARROW rank-ordered band so the whole thing reads as one round ball rather
+// than random scatter. Closer to center still means nearer in pp; hover shows
+// the exact number.
+function buildGraph(source: GraphSource): GraphNode[] {
   const rng = mulberry32(727);
   const golden = Math.PI * (3 - Math.sqrt(5));
-  const nodes: GraphNode[] = PEERS.map((peer, i) => {
-    const y = 1 - (2 * (i + 0.5)) / PEERS.length;
-    const r = Math.sqrt(Math.max(0, 1 - y * y));
-    const phi = i * golden + (rng() - 0.5) * 0.3;
-    const shell = 0.82 + rng() * 0.22;
-    return {
-      peer,
-      px: Math.cos(phi) * r * shell,
-      py: y * shell,
-      pz: Math.sin(phi) * r * shell,
+  const { peers, subjectModePp } = source;
+  const hasDistances = subjectModePp != null && peers.some((p) => p.modePp != null);
+
+  // peer indices in pp-distance order (identity order for the canned fallback)
+  const rankOrder = peers.map((_, i) => i);
+  if (hasDistances) {
+    rankOrder.sort((a, b) => {
+      const da = peers[a].modePp != null ? Math.abs((peers[a].modePp as number) - subjectModePp) : Infinity;
+      const db = peers[b].modePp != null ? Math.abs((peers[b].modePp as number) - subjectModePp) : Infinity;
+      return da - db;
+    });
+  }
+  const rankOf = new Map(rankOrder.map((peerIndex, rank) => [peerIndex, rank]));
+
+  // Faces stratified across the whole band, kept in rank order.
+  const faceCount = Math.min(AVATAR_COUNT, peers.length);
+  const faceList: number[] = [];
+  const faceSet = new Set<number>();
+  for (let i = 0; i < faceCount; i++) {
+    const peerIndex = rankOrder[Math.round((i * (rankOrder.length - 1)) / Math.max(1, faceCount - 1))];
+    if (!faceSet.has(peerIndex)) {
+      faceSet.add(peerIndex);
+      faceList.push(peerIndex);
+    }
+  }
+
+  const nodes: GraphNode[] = [];
+  const shuffle = <T,>(items: T[]): T[] => {
+    for (let i = items.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [items[i], items[j]] = [items[j], items[i]];
+    }
+    return items;
+  };
+
+  const faceDirs = shuffle(
+    Array.from({ length: faceList.length }, (_, j) =>
+      sphereDirection(1 - (2 * (j + 0.5)) / faceList.length, j * golden + (rng() - 0.5) * 0.3),
+    ),
+  );
+  faceList.forEach((peerIndex, k) => {
+    // Narrow radius band, monotone in pp rank: round ball, truthful ordering.
+    const shell = 0.72 + 0.4 * Math.pow(k / Math.max(1, faceList.length - 1), 0.9) + (rng() - 0.5) * 0.04;
+    const dir = faceDirs[k];
+    nodes.push({
+      peer: peers[peerIndex],
+      px: dir.x * shell,
+      py: dir.y * shell,
+      pz: dir.z * shell,
       size: 12.5 + rng() * 3,
+      hasAvatar: true,
       driftPhase: rng() * Math.PI * 2,
-      driftSpeed: 0.2 + rng() * 0.25,
+      driftSpeed: 0.2 + rng() * 0.26,
       img: null,
-    };
+    });
   });
-  for (let i = 0; i < CROWD_COUNT; i++) {
-    const y = 1 - 2 * rng();
-    const r = Math.sqrt(Math.max(0, 1 - y * y));
-    const phi = rng() * Math.PI * 2;
-    const shell = 0.7 + rng() * 0.5;
+
+  const realCrowdCount = peers.length - faceList.length;
+  const crowdTotal = Math.max(realCrowdCount, CROWD_PAD_COUNT);
+  const crowdDirs = shuffle(
+    Array.from({ length: crowdTotal }, (_, j) => {
+      const y = Math.max(-0.98, Math.min(0.98, 1 - (2 * (j + 0.5)) / crowdTotal + (rng() - 0.5) * 0.14));
+      return sphereDirection(y, j * golden + Math.PI + (rng() - 0.5) * 0.5);
+    }),
+  );
+  let crowdOrdinal = 0;
+  const crowdShell = (peerIndex: number | null) => {
+    if (peerIndex == null || !hasDistances) return 0.68 + rng() * 0.48;
+    const rank = rankOf.get(peerIndex) ?? 0;
+    return 0.66 + 0.5 * Math.pow(rank / Math.max(1, peers.length - 1), 0.85) + (rng() - 0.5) * 0.05;
+  };
+  for (let i = 0; i < peers.length; i++) {
+    if (faceSet.has(i)) continue;
+    const dir = crowdDirs[crowdOrdinal++];
+    const shell = crowdShell(i);
+    nodes.push({
+      peer: peers[i],
+      px: dir.x * shell,
+      py: dir.y * shell,
+      pz: dir.z * shell,
+      size: 2.2 + rng() * 1.2,
+      hasAvatar: false,
+      driftPhase: rng() * Math.PI * 2,
+      driftSpeed: 0.18 + rng() * 0.26,
+      img: null,
+    });
+  }
+  // Pad sparse graphs (the canned fallback, thin cohorts) with anonymous dots.
+  while (crowdOrdinal < CROWD_PAD_COUNT) {
+    const dir = crowdDirs[crowdOrdinal++];
+    const shell = crowdShell(null);
     nodes.push({
       peer: null,
-      px: Math.cos(phi) * r * shell,
-      py: y * shell,
-      pz: Math.sin(phi) * r * shell,
+      px: dir.x * shell,
+      py: dir.y * shell,
+      pz: dir.z * shell,
       size: 1.3 + rng() * 1.4,
+      hasAvatar: false,
       driftPhase: rng() * Math.PI * 2,
       driftSpeed: 0.18 + rng() * 0.28,
       img: null,
     });
   }
+
   return nodes;
+}
+
+function formatPp(pp: number): string {
+  return `${Math.round(pp).toLocaleString("en-US")}pp`;
+}
+
+// One fetch per viewer per session: remounts (StrictMode, tab switches) reuse
+// the same promise instead of re-hitting the endpoint.
+const neighborsFetchCache = new Map<number, Promise<GraphSource>>();
+
+function loadNeighbors(viewerId: number): Promise<GraphSource> {
+  const cached = neighborsFetchCache.get(viewerId);
+  if (cached) return cached;
+  const promise = fetchLiveFarmHelperNeighbors(String(viewerId))
+    .then((data): GraphSource => {
+      const peers: NeighborPeer[] = data.neighbors
+        .filter((n) => n.username)
+        .map((n) => ({ id: n.userId, name: n.username, avatarUrl: n.avatarUrl || null, modePp: n.modePp }));
+      if (peers.length < MIN_LIVE_PEERS) return { peers: FALLBACK_PEERS, subjectModePp: null, live: false };
+      return { peers, subjectModePp: data.subjectModePp, live: true };
+    })
+    .catch((error): GraphSource => {
+      neighborsFetchCache.delete(viewerId);
+      throw error;
+    });
+  neighborsFetchCache.set(viewerId, promise);
+  return promise;
 }
 
 export function NeighborhoodGraph({ viewer }: { viewer: AuthViewer | null }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const nodes = useMemo(buildNodes, []);
   const navigate = useNavigate();
+  const [source, setSource] = useState<GraphSource | null>(null);
+  const viewerId = viewer?.id ?? null;
   const viewerAvatarUrl = viewer?.avatarUrl ?? null;
+
+  useEffect(() => {
+    if (!viewerId || !isLiveBackendConfigured()) {
+      setSource({ peers: FALLBACK_PEERS, subjectModePp: null, live: false });
+      return;
+    }
+    let cancelled = false;
+    loadNeighbors(viewerId)
+      .then((result) => {
+        if (!cancelled) setSource(result);
+      })
+      .catch(() => {
+        if (!cancelled) setSource({ peers: FALLBACK_PEERS, subjectModePp: null, live: false });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [viewerId]);
+
+  const nodes = useMemo(() => (source ? buildGraph(source) : null), [source]);
 
   useEffect(() => {
     const wrap = wrapRef.current;
     const canvas = canvasRef.current;
-    if (!wrap || !canvas) return;
+    if (!wrap || !canvas || !nodes) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
@@ -164,13 +313,21 @@ export function NeighborhoodGraph({ viewer }: { viewer: AuthViewer | null }) {
       return img;
     };
     for (const node of nodes) {
-      if (node.peer && !node.img) node.img = loadImage(`https://a.ppy.sh/${node.peer.id}`);
+      if (node.hasAvatar && node.peer && !node.img) {
+        node.img = loadImage(node.peer.avatarUrl ?? `https://a.ppy.sh/${node.peer.id}`);
+      }
     }
     const centerImg = loadImage(viewerAvatarUrl ?? GUEST_AVATAR);
 
-    const avatarNodes = nodes.filter((n) => n.peer);
+    const avatarNodes = nodes.filter((n) => n.hasAvatar);
+    const namedNodes = nodes.filter((n) => n.peer);
+    // Projection radii derive from the widest shell so the farthest node plus
+    // its drawn circle always fits inside the canvas (nodes were clipping at
+    // the edges with a fixed width fraction).
+    const EDGE_PAD = 26;
+    const maxShell = Math.max(1, ...nodes.map((n) => Math.hypot(n.px, n.py, n.pz)));
 
-    // Mesh edges between neighbors that rest close together on the sphere.
+    // Mesh edges between faces that rest close together on the sphere.
     const meshEdges: [GraphNode, GraphNode][] = [];
     for (const a of avatarNodes) {
       const byDist = avatarNodes
@@ -178,7 +335,7 @@ export function NeighborhoodGraph({ viewer }: { viewer: AuthViewer | null }) {
         .map((b) => ({ b, d: Math.hypot(a.px - b.px, a.py - b.py, a.pz - b.pz) }))
         .sort((u, v) => u.d - v.d);
       for (const { b, d } of byDist.slice(0, 2)) {
-        if (d > 0.85) continue;
+        if (d > 0.95) continue;
         if (meshEdges.some(([u, v]) => (u === a && v === b) || (u === b && v === a))) continue;
         meshEdges.push([a, b]);
       }
@@ -199,19 +356,28 @@ export function NeighborhoodGraph({ viewer }: { viewer: AuthViewer | null }) {
       r: number;
     }
 
-    const project = (node: GraphNode, t: number): Projected => {
+    const projectPoint = (px: number, py: number, pz: number): { x: number; y: number; depth: number } => {
       const m = rotation;
-      const x = m[0] * node.px + m[1] * node.py + m[2] * node.pz;
-      const y = m[3] * node.px + m[4] * node.py + m[5] * node.pz;
-      const z = m[6] * node.px + m[7] * node.py + m[8] * node.pz;
-      const depth = (z + 1.25) / 2.5;
-      const scale = 0.62 + 0.55 * depth;
+      const x = m[0] * px + m[1] * py + m[2] * pz;
+      const y = m[3] * px + m[4] * py + m[5] * pz;
+      const z = m[6] * px + m[7] * py + m[8] * pz;
+      const rx = Math.max(1, width * 0.5 - EDGE_PAD) / maxShell;
+      const ry = Math.max(1, height * 0.5 - EDGE_PAD) / maxShell;
+      return {
+        x: width * 0.5 + x * rx,
+        y: height * 0.5 + y * ry,
+        depth: (z + 1.25) / 2.5,
+      };
+    };
+
+    const project = (node: GraphNode, t: number): Projected => {
+      const p = projectPoint(node.px, node.py, node.pz);
       const wobble = (t / 1000) * node.driftSpeed + node.driftPhase;
       return {
-        x: width * 0.5 + x * width * 0.42 + 2.5 * Math.sin(wobble),
-        y: height * 0.5 + y * height * 0.42 + 2.5 * Math.cos(wobble * 0.85),
-        depth,
-        r: node.size * scale,
+        x: p.x + 2.5 * Math.sin(wobble),
+        y: p.y + 2.5 * Math.cos(wobble * 0.85),
+        depth: p.depth,
+        r: node.size * (0.62 + 0.55 * p.depth),
       };
     };
 
@@ -219,10 +385,11 @@ export function NeighborhoodGraph({ viewer }: { viewer: AuthViewer | null }) {
       if (!cursor.inside) return null;
       let bestNode: GraphNode | null = null;
       let bestDepth = -1;
-      for (const node of avatarNodes) {
+      for (const node of namedNodes) {
         const p = project(node, t);
+        const hitR = Math.max(6, p.r + 3);
         const d = Math.hypot(p.x - cursor.x, p.y - cursor.y);
-        if (d <= p.r + 3 && p.depth > bestDepth) {
+        if (d <= hitR && p.depth > bestDepth) {
           bestDepth = p.depth;
           bestNode = node;
         }
@@ -348,7 +515,7 @@ export function NeighborhoodGraph({ viewer }: { viewer: AuthViewer | null }) {
       const hovered = drag.active ? null : hitTest(t);
       canvas.style.cursor = drag.active ? "grabbing" : hovered ? "pointer" : "grab";
 
-      // edges under everything
+      // mesh edges under everything
       for (const [a, b] of meshEdges) {
         const pa = projected.get(a)!;
         const pb = projected.get(b)!;
@@ -422,17 +589,17 @@ export function NeighborhoodGraph({ viewer }: { viewer: AuthViewer | null }) {
           continue;
         }
         const p = projected.get(node)!;
-        if (!node.peer) {
+        const emphasized = node === hovered;
+        if (!node.hasAvatar) {
           ctx.save();
-          ctx.globalAlpha = 0.08 + 0.26 * p.depth;
-          ctx.fillStyle = "#ffffff";
+          ctx.globalAlpha = emphasized ? 0.95 : (node.peer ? 0.14 : 0.08) + 0.26 * p.depth;
+          ctx.fillStyle = emphasized ? pink : "#ffffff";
           ctx.beginPath();
-          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.arc(p.x, p.y, p.r + (emphasized ? 1 : 0), 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
           continue;
         }
-        const emphasized = node === hovered;
         const r = p.r + (emphasized ? 2 : 0);
         const alpha = emphasized ? 1 : 0.45 + 0.55 * p.depth;
         if (node.img?.complete && node.img.naturalWidth > 0) {
@@ -456,16 +623,22 @@ export function NeighborhoodGraph({ viewer }: { viewer: AuthViewer | null }) {
         ctx.restore();
       }
 
-      // hovered username
-      if (hovered) {
+      // hovered label: username, plus pp on the cohort axis when live
+      if (hovered?.peer) {
         const p = projected.get(hovered)!;
+        const label = hovered.peer.modePp != null
+          ? `${hovered.peer.name} · ${formatPp(hovered.peer.modePp)}`
+          : hovered.peer.name;
         ctx.save();
         ctx.font = "600 11px system-ui";
         ctx.textAlign = "center";
         ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
         ctx.shadowBlur = 5;
         ctx.fillStyle = "#ffffff";
-        ctx.fillText(hovered.peer!.name, p.x, p.y - p.r - 9);
+        const halfLabel = ctx.measureText(label).width / 2;
+        const labelX = Math.min(Math.max(p.x, halfLabel + 4), width - halfLabel - 4);
+        const labelY = p.y - p.r - 9 < 14 ? p.y + p.r + 16 : p.y - p.r - 9;
+        ctx.fillText(label, labelX, labelY);
         ctx.restore();
       }
     };

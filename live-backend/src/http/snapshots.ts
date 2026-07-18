@@ -17,7 +17,7 @@ import { getOsuJsonWithProxyCache, normalizeOsuProxyCacheHints } from "../featur
 import { GOAL_KINDS, GOAL_MAP_KINDS, GOAL_SPEED_BUCKETS, GOAL_TARGET_GRADES, createUserGoal, deleteUserGoal, getUserGoal, listUserGoalsWithProgress, reconcileGoalsForUser, updateUserGoal, type GoalKind, type GoalSpeedBucket, type UserGoalInput, type UserGoalTargetPatch } from "../features/goals.js";
 import { getMyDataSummary, getUserTopPlaysFeed, getUserTrackedFeed, type MyDataTopPlaysQuery, type MyDataTrackedFeedQuery } from "../features/my-data.js";
 import { getPlayerSkillBreakdown } from "../features/player-skills.js";
-import { FARM_HELPER_DEFAULT_LIMIT, FARM_HELPER_MAX_LIMIT, FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapshot, type FarmHelperKeyMode, type FarmHelperView } from "../features/farm-helper.js";
+import { FARM_HELPER_DEFAULT_LIMIT, FARM_HELPER_MAX_LIMIT, FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperNeighbors, getFarmHelperSnapshot, type FarmHelperKeyMode, type FarmHelperView } from "../features/farm-helper.js";
 import type { ScoreSpeedBucket } from "../shared/score.js";
 import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalRankingsSnapshot, type GlobalRankingsSort } from "../features/global-rankings.js";
 import { enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRefreshProgress, getMapsSnapshot, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery } from "../features/maps.js";
@@ -950,6 +950,31 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       );
       res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
       await sendAccentEnrichedJson(req, res, ctx, 200, result);
+    } catch (error) {
+      if (error instanceof FarmHelperUserNotFoundError) {
+        sendJson(req, res, ctx, 404, { error: "user_not_found" });
+        return true;
+      }
+      throw error;
+    }
+    return true;
+  }
+  if (url.pathname === "/api/snapshots/farm-helper-neighbors") {
+    const userKey = (url.searchParams.get("user") ?? "").trim();
+    if (!userKey) {
+      sendJson(req, res, ctx, 400, { error: "missing_user" });
+      return true;
+    }
+    if (!checkRate(req, res, ctx, "publicCostly")) return true;
+    try {
+      const result = await getFarmHelperNeighbors(
+        ctx.db,
+        ctx.osu,
+        userKey,
+        parseFarmHelperKeyMode(url.searchParams.get("key")),
+      );
+      res.setHeader("cache-control", "public, max-age=300, stale-while-revalidate=600");
+      sendJson(req, res, ctx, 200, result);
     } catch (error) {
       if (error instanceof FarmHelperUserNotFoundError) {
         sendJson(req, res, ctx, 404, { error: "user_not_found" });

@@ -1187,6 +1187,122 @@ export async function getFarmHelperFarmers(
   return { beatmapId, total, farmers };
 }
 
+export interface FarmHelperNeighbor {
+  userId: number;
+  username: string;
+  avatarUrl: string;
+  modePp: number;
+}
+
+export interface FarmHelperNeighborsResult {
+  userId: number;
+  username: string;
+  avatarUrl: string;
+  // Cohort axis actually used: a concrete keymode, or "any" when the subject
+  // had no keymode data (or the keymode pool was too sparse) and the band fell
+  // back to total pp.
+  keyMode: FarmHelperKeyMode;
+  bandMode: string;
+  subjectModePp: number;
+  neighborCount: number;
+  neighbors: FarmHelperNeighbor[];
+}
+
+const NEIGHBORS_MAX = 96;
+
+// The sampled peer cohort around a player, for the farm-helper landing
+// neighborhood graph. Reuses the snapshot's kernel-kNN cohort selection; the
+// sample is stratified by mode-pp distance so the graph sees the whole band,
+// not just the nearest rim. The osu! profile resolve is cached, so this is a
+// DB-only lookup in the common case.
+export async function getFarmHelperNeighbors(
+  db: Db,
+  osu: ProfileOsuClient,
+  rawKey: string,
+  requestedKeyMode: FarmHelperKeyMode = "any",
+): Promise<FarmHelperNeighborsResult> {
+  const profile = await resolveProfile(db, osu, rawKey);
+  const user = profile.user;
+  const userId = Number(user.id ?? 0);
+  if (!Number.isInteger(userId) || userId <= 0) throw new FarmHelperUserNotFoundError(rawKey);
+
+  const statistics = asRecord(user.statistics);
+  const subjectPp = numberOr(statistics.pp, 0);
+  const variantPps = getVariantPps(statistics);
+  const rankedScores = [...profile.bestScores]
+    .filter((score) => typeof score.pp === "number" && score.pp > 0)
+    .sort((a, b) => (b.pp ?? 0) - (a.pp ?? 0));
+  const subjectModePpFor = (mode: ConcreteFarmHelperKeyMode) =>
+    getVariantPp(variantPps, mode) ?? calculateSubjectKeyModeStats(rankedScores, mode).weightedPp;
+
+  // "any" resolves to the subject's dominant concrete keymode so the graph
+  // compares like with like (a 7k monster is not a 4k neighbor).
+  let keyMode: FarmHelperKeyMode = requestedKeyMode;
+  if (keyMode === "any") {
+    const pp4 = subjectModePpFor("4k");
+    const pp7 = subjectModePpFor("7k");
+    if (pp4 > 0 || pp7 > 0) keyMode = pp7 > pp4 ? "7k" : "4k";
+  }
+
+  let band: { peers: WeightedPeer[]; mode: string } = { peers: [], mode: "no_pp" };
+  let referencePp = subjectPp;
+  let usedKeyMode: FarmHelperKeyMode = "any";
+  if (keyMode !== "any") {
+    const subjectModePp = subjectModePpFor(keyMode);
+    if (subjectModePp > 0) {
+      const result = await selectKeyModeKnn(db, userId, keyMode, subjectModePp);
+      if (result.peers.length >= MIN_EFFECTIVE_PEERS) {
+        band = result;
+        referencePp = subjectModePp;
+        usedKeyMode = keyMode;
+      }
+    }
+  }
+  if (usedKeyMode === "any" && subjectPp > 0) {
+    band = await selectTotalPpKnn(db, userId, subjectPp);
+  }
+
+  // Stratified sample across the distance range: nearest first, then evenly
+  // spaced through the tail so far cohort members stay represented.
+  const sorted = [...band.peers].sort(
+    (a, b) => Math.abs(a.modePp - referencePp) - Math.abs(b.modePp - referencePp),
+  );
+  let sample: WeightedPeer[];
+  if (sorted.length <= NEIGHBORS_MAX) {
+    sample = sorted;
+  } else {
+    const picked = new Map<number, WeightedPeer>();
+    for (let i = 0; i < NEIGHBORS_MAX; i++) {
+      const peer = sorted[Math.round((i * (sorted.length - 1)) / (NEIGHBORS_MAX - 1))];
+      picked.set(peer.userId, peer);
+    }
+    sample = [...picked.values()];
+  }
+
+  const rows = await selectByIds(db, "select user_id, username, avatar_url from users where user_id in", sample.map((p) => p.userId));
+  const byId = new Map(rows.map((row) => [Number(row.user_id), row]));
+  const neighbors: FarmHelperNeighbor[] = sample.map((peer) => {
+    const row = byId.get(peer.userId);
+    return {
+      userId: peer.userId,
+      username: row ? String(row.username ?? "") : "",
+      avatarUrl: row ? String(row.avatar_url ?? "") : "",
+      modePp: round2(peer.modePp),
+    };
+  });
+
+  return {
+    userId,
+    username: String(user.username ?? rawKey),
+    avatarUrl: String(user.avatar_url ?? ""),
+    keyMode: usedKeyMode,
+    bandMode: band.mode,
+    subjectModePp: round2(referencePp),
+    neighborCount: band.peers.length,
+    neighbors,
+  };
+}
+
 async function aggregatePeerFarmedMaps(db: Db, peers: WeightedPeer[], asOf?: number): Promise<PeerFarmedAggregation> {
   const weightById = new Map(peers.map((p) => [p.userId, { wD: p.wD, wB: p.wB }]));
   const peerIds = peers.map((p) => p.userId);
