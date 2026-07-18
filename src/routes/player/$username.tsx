@@ -30,6 +30,7 @@ import {
   formatDate,
   formatPP,
 } from "../../lib/format";
+import { useHasHydrated } from "../../store";
 import {
   getBeatmapUrl,
   getBeatmapKeyCount,
@@ -952,6 +953,7 @@ export function PlayerProfilePage({
   showCountryFlag?: boolean;
 }) {
   const navigate = useNavigate();
+  const hasHydrated = useHasHydrated();
   const loaderSnapshot = loaderData?.cachedSnapshot ?? null;
   const loaderBestScores = useMemo(
     () => loaderSnapshot ? dedupeScores(loaderSnapshot.bestScores) : [],
@@ -1488,7 +1490,10 @@ export function PlayerProfilePage({
     ? user.country_code.trim().toUpperCase()
     : null;
   const profileCountryName = profileCountryCode ? getCountryName(profileCountryCode) : null;
-  const showProfileCountryFlag = showCountryFlag && profileCountryCode && profileCountryName;
+  // showCountryFlag rides on history state, which SSR can't see but the
+  // browser restores on reload — render the flag only once hydration is done
+  // so the server and first client render agree (React #418 otherwise).
+  const showProfileCountryFlag = hasHydrated && showCountryFlag && profileCountryCode && profileCountryName;
 
   return (
     <div className="flex-1">
@@ -2027,6 +2032,9 @@ export function PlayerProfilePage({
                   <span
                     className="text-[11px] text-osu-l2"
                     title={new Date(user.last_visit).toLocaleString()}
+                    // Relative to Date.now(), so SSR and hydration can land on
+                    // different sides of a minute boundary; let the client text win.
+                    suppressHydrationWarning
                   >
                     Last seen {formatDetailedTimeAgo(user.last_visit)}
                   </span>

@@ -25,6 +25,7 @@ import {
   resolveInitialCountry,
 } from "../lib/country-cookie";
 import { PostHogProvider } from "../lib/posthog-provider";
+import { track } from "../lib/posthog";
 import { getCanonicalOrigin } from "../lib/origin";
 import { DEFAULT_DESCRIPTION, SITE_FAVICON_HREF, SITE_NAME, websiteJsonLd } from "../lib/seo";
 import { activateLiveCountryOnServer, fetchLiveBackendBootstrap } from "../lib/live-backend";
@@ -332,9 +333,15 @@ function RootErrorComponent({ error }: { error: Error }) {
   const chunkLoadError = isChunkLoadError(error);
 
   useEffect(() => {
-    if (import.meta.env.PROD && chunkLoadError) {
-      recoverFromChunkLoadError(error);
-    }
+    const autoReloading = import.meta.env.PROD && chunkLoadError && recoverFromChunkLoadError(error);
+    // chunk_load + auto_reloading:false means the reload loop guard tripped,
+    // i.e. a refresh did not clear it and the user is stuck on this screen.
+    track("route_error", {
+      message: (errorText(error) || "unknown").slice(0, 500),
+      stack: error instanceof Error && error.stack ? error.stack.slice(0, 1500) : null,
+      chunk_load: chunkLoadError,
+      auto_reloading: autoReloading,
+    });
   }, [chunkLoadError, error]);
 
   return (

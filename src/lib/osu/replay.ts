@@ -343,7 +343,7 @@ export const getScore = createServerFn({ method: "GET" })
       const legacyScore = await osuFetch<OsuScore>(
         `/scores/${mode}/${data.scoreId}`,
         undefined,
-        { caller: "getScore:legacy" },
+        { caller: "getScore:legacy", expectedStatuses: [404] },
       );
       const resolvedMode = legacyScore.beatmap?.mode ?? mode;
       if (resolvedMode === mode) {
@@ -355,5 +355,6 @@ export const getScore = createServerFn({ method: "GET" })
 
     return osuFetch<OsuScore>(`/scores/${data.scoreId}`, undefined, {
       caller: "getScore:modern",
+      expectedStatuses: [404],
     });
   });

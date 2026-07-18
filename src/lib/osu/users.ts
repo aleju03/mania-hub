@@ -95,6 +95,7 @@ async function fetchUserByKeyFromOsu(key: string): Promise<OsuUser> {
     try {
       return await osuFetch<OsuUser>(`/users/${encodeURIComponent(lookupKey)}/mania`, undefined, {
         caller: "getUser",
+        expectedStatuses: [404],
         cacheTtlMs: USER_CACHE_TTL,
         staleMs: OSU_PROXY_STALE_MS,
       });
@@ -328,6 +329,7 @@ async function fetchUserBestScoresWindowFromOsu(
     }),
     {
       caller: `fetchUserBestScoresWindow:p${page}`,
+      expectedStatuses: [404],
       cacheTtlMs: BEST_SCORES_WINDOW_CACHE_TTL,
       staleMs: OSU_PROXY_STALE_MS,
       context: {

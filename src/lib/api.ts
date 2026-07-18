@@ -273,6 +273,10 @@ export type OsuFetchOptions = {
   // this way). GET-JSON requests only.
   cacheTtlMs?: number;
   staleMs?: number;
+  // Statuses that are normal caller outcomes rather than API problems (404 for
+  // a deleted score or restricted user): still thrown, but not reported to
+  // analytics as osu_api_error.
+  expectedStatuses?: number[];
 };
 
 export type BeatmapFileSource = "osu" | "catboy" | "archive";
@@ -337,7 +341,7 @@ export async function osuFetch<T = unknown>(
   const response = await fetchLiveBackendOsu(path, params, caller, "json", options);
   recordOsuCall(response, requestPath, caller);
   if (response.ok) return response.json() as Promise<T>;
-  return await throwLiveBackendOsuError(response, caller, requestPath, "json", context);
+  return await throwLiveBackendOsuError(response, caller, requestPath, "json", context, options?.expectedStatuses);
 }
 
 export async function osuFetchBinary(
@@ -349,7 +353,7 @@ export async function osuFetchBinary(
   const response = await fetchLiveBackendOsu(path, undefined, caller, "binary");
   recordOsuCall(response, path, caller);
   if (response.ok) return response.arrayBuffer();
-  return await throwLiveBackendOsuError(response, caller, path, "binary", context);
+  return await throwLiveBackendOsuError(response, caller, path, "binary", context, options?.expectedStatuses);
 }
 
 export async function fetchBeatmapFileWithMeta(beatmapId: number, beatmapsetId?: number | null): Promise<BeatmapFileResult> {
@@ -479,10 +483,16 @@ async function throwLiveBackendOsuError(
   path: string,
   kind: "json" | "binary" | "beatmap-file",
   context?: Record<string, string | number | boolean | null>,
+  expectedStatuses?: number[],
 ): Promise<never> {
   const text = await response.text().catch(() => "");
   const bodyPreview = truncateErrorBody(text);
   const rate = getOsuRateSnapshot();
+  if (expectedStatuses?.includes(response.status)) {
+    throw new Error(
+      `[liveBackendOsu:${caller}] ${response.status} ${path} - ${bodyPreview || "<empty body>"}`,
+    );
+  }
   trackServerEvent("osu_api_error", {
     caller,
     path,
