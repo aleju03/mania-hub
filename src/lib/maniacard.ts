@@ -551,7 +551,7 @@ export interface NextManiaCardTier {
   progress: number;
 }
 
-const MANIA_CARD_TIER_THRESHOLDS: Array<{ tier: ManiaCardTier; threshold: number }> = [
+export const MANIA_CARD_TIER_THRESHOLDS: Array<{ tier: ManiaCardTier; threshold: number }> = [
   { tier: "rare", threshold: 120 },
   { tier: "elite", threshold: 240 },
   { tier: "superRare", threshold: 330 },

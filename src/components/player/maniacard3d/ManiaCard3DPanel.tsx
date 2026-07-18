@@ -1,6 +1,11 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MANIA_TIER_STYLES, type NextManiaCardTier } from "#/lib/maniacard";
+import {
+  MANIA_CARD_TIER_THRESHOLDS,
+  MANIA_TIER_STYLES,
+  type ManiaCardTier,
+  type NextManiaCardTier,
+} from "#/lib/maniacard";
 import { ManiaCardRenderer } from "./ManiaCardRenderer";
 import { buildManiaCardRenderData, getManiaCardRenderDataSignature } from "./renderData";
 import type { ManiaCardPanelProps, ManiaCardReadyData } from "./types";
@@ -115,6 +120,13 @@ const TIER_FILL_COLOR: Record<string, string> = {
   ascendant: "rgb(226, 232, 240)",
   worldClass: "rgb(110, 231, 183)",
 };
+
+// Full tier ladder (lowest -> highest), derived from the shared thresholds so
+// it never drifts from getManiaCardTier. Common has no threshold of its own.
+const TIER_LADDER: Array<{ tier: ManiaCardTier; min: number }> = [
+  { tier: "common", min: 0 },
+  ...MANIA_CARD_TIER_THRESHOLDS.map(({ tier, threshold }) => ({ tier, min: threshold })),
+];
 
 export function ManiaCard3DPanel({ user, scores, loading }: ManiaCardPanelProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -348,35 +360,6 @@ function TierProgress({
   );
 }
 
-type RatingTrait = { label: string; weight: number; inputs: string; onCard: boolean };
-
-const RATING_TRAITS: RatingTrait[] = [
-  { label: "Control", weight: 9, inputs: "stars, LN density, OD, combo retention", onCard: true },
-  { label: "Speed", weight: 7, inputs: "effective BPM (after rate mods), rice density, stars", onCard: true },
-  { label: "Precision", weight: 5, inputs: "accuracy curve, MAX/300 ratio, OD, misses", onCard: true },
-  { label: "Stamina", weight: 7, inputs: "rate-adjusted length, total object count", onCard: false },
-];
-
-function StepNumber({ n }: { n: number }) {
-  return (
-    <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-osu-b3/60 text-[11px] font-bold text-white tabular-nums">
-      {n}
-    </div>
-  );
-}
-
-function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
-  return (
-    <div className="flex gap-3">
-      <StepNumber n={n} />
-      <div className="min-w-0 flex-1 pt-0.5">
-        <div className="text-[13px] font-semibold text-white leading-tight">{title}</div>
-        <div className="mt-1.5 text-[12px] text-osu-f1/85 leading-snug">{children}</div>
-      </div>
-    </div>
-  );
-}
-
 function RatingExplainerModal({
   nextTier,
   cardRating,
@@ -387,6 +370,9 @@ function RatingExplainerModal({
   onClose: () => void;
 }) {
   const toColor = TIER_FILL_COLOR[nextTier.tier] ?? "rgb(226, 232, 240)";
+  const pct = Math.round(nextTier.progress * 100);
+  // Highest tier at the top, so the ladder reads like an in-game rank ladder.
+  const rungs = [...TIER_LADDER].reverse();
 
   return (
     <motion.div
@@ -398,7 +384,7 @@ function RatingExplainerModal({
       transition={{ duration: 0.2 }}
     >
       <motion.div
-        className="modal-card-mobile-safe relative isolate bg-osu-b4 border border-osu-b3/20 rounded-2xl w-[440px] max-w-full max-h-[85vh] overflow-hidden shadow-[0_12px_60px_rgba(0,0,0,0.7)] cursor-default"
+        className="modal-card-mobile-safe relative isolate bg-osu-b4 border border-osu-b3/20 rounded-2xl w-[380px] max-w-full max-h-[85vh] overflow-hidden shadow-[0_12px_60px_rgba(0,0,0,0.7)] cursor-default"
         onClick={(e) => e.stopPropagation()}
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
@@ -417,9 +403,9 @@ function RatingExplainerModal({
           </svg>
         </button>
         <div className="relative z-10 max-h-[85vh] overflow-y-auto p-5 [scrollbar-gutter:stable]">
-          <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">How your Maniacard works</div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-white tabular-nums">{cardRating}</span>
+          <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">Card rank</div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-3xl font-bold text-white tabular-nums">{cardRating}</span>
             <span className="text-[11px] text-osu-f1">
               <span className="font-bold tabular-nums" style={{ color: toColor }}>+{nextTier.remaining}</span>{" "}
               <span className="text-osu-f1">to</span>{" "}
@@ -427,45 +413,77 @@ function RatingExplainerModal({
             </span>
           </div>
 
-          <div className="mt-5 space-y-4">
-            <Step n={1} title="Your top 200 mania plays are pulled">
-              Each play is weighted by{" "}
-              <code className="text-osu-yellow font-mono text-[11px]">pp^0.72 × 0.965^rank</code>, so your best plays count most.
-            </Step>
+          <div className="relative mt-4">
+            {/* Spine connecting the rungs. */}
+            <div className="pointer-events-none absolute left-[15px] top-4 bottom-4 w-px bg-osu-b3/40" aria-hidden="true" />
+            <div className="relative space-y-0.5">
+              {rungs.map((rung) => {
+                const fill = TIER_FILL_COLOR[rung.tier] ?? "rgb(148, 163, 184)";
+                const achieved = cardRating >= rung.min;
+                const isCurrent = rung.tier === nextTier.currentTier;
 
-            <Step n={2} title="Each play gets scored on 4 traits">
-              <div className="space-y-1.5">
-                {RATING_TRAITS.map((t) => (
-                  <div key={t.label} className="flex gap-2">
-                    <span className="font-semibold text-white text-[12px] w-[68px] flex-shrink-0">{t.label}</span>
-                    <span className="text-osu-f1/80 text-[11px] leading-snug">{t.inputs}</span>
+                return (
+                  <div
+                    key={rung.tier}
+                    className={`relative flex items-center gap-3 rounded-lg py-2 pr-3 pl-2 ${isCurrent ? "bg-osu-b3/40" : ""}`}
+                  >
+                    <div className="relative z-10 flex w-[11px] justify-center">
+                      <span
+                        className="block rounded-full"
+                        style={
+                          isCurrent
+                            ? { width: 13, height: 13, backgroundColor: fill, boxShadow: "0 0 0 4px rgba(255,255,255,0.1)" }
+                            : achieved
+                              ? { width: 9, height: 9, backgroundColor: fill }
+                              : { width: 9, height: 9, backgroundColor: "transparent", border: "1.5px solid rgba(148,163,184,0.35)" }
+                        }
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-[13px] font-semibold ${
+                            isCurrent
+                              ? TIER_TEXT_COLOR[rung.tier] ?? "text-white"
+                              : achieved
+                                ? "text-osu-f1"
+                                : "text-osu-f1/45"
+                          }`}
+                        >
+                          {MANIA_TIER_STYLES[rung.tier].label}
+                        </span>
+                        {isCurrent && (
+                          <span className="rounded-full bg-white/15 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-white">
+                            You
+                          </span>
+                        )}
+                      </div>
+                      {isCurrent && (
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <div className="h-1 flex-1 overflow-hidden rounded-full bg-osu-b3/50">
+                            <div
+                              className="h-full rounded-full transition-[width] duration-500"
+                              style={{ width: `${Math.max(3, pct)}%`, backgroundColor: toColor }}
+                            />
+                          </div>
+                          <span className="text-[10px] font-semibold tabular-nums" style={{ color: toColor }}>
+                            {pct}%
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <span className={`text-[11px] tabular-nums ${achieved ? "text-osu-f1/70" : "text-osu-f1/40"}`}>
+                      {rung.min}
+                    </span>
                   </div>
-                ))}
-              </div>
-              <p className="mt-2 text-[11px] text-osu-f1/70">Traits are normalized per keymode, so plays from different keymodes don't get compared on the same BPM and density scale.</p>
-            </Step>
-
-            <Step n={3} title="Three traits go on the card front">
-              <span className="font-semibold text-white">Control</span>, <span className="font-semibold text-white">Speed</span>, and <span className="font-semibold text-white">Precision</span> are shown as the card's signature stats. Stamina still feeds the rating below, but isn't displayed.
-              <p className="mt-2 text-[11px] text-osu-f1/70">
-                The front stats keep your trait spread, then use the same rating budget as the tier progress so card numbers and rarity move together.
-              </p>
-            </Step>
-
-            <Step n={4} title="Rating = PP + skill traits">
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-osu-yellow font-semibold tabular-nums text-[12px] w-9">72%</span>
-                  <span>Total PP (39%) + top-play strength (33%)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-osu-yellow font-semibold tabular-nums text-[12px] w-9">28%</span>
-                  <span>Control (9%) + Stamina (7%) + Speed (7%) + Precision (5%)</span>
-                </div>
-              </div>
-              <p className="mt-2 text-[11px] text-osu-f1/70">PP standing is read on a per-keymode scale, so a 7K main isn't ranked on 4K PP. This number determines your tier.</p>
-            </Step>
+                );
+              })}
+            </div>
           </div>
+
+          <p className="mt-4 text-[11px] leading-snug text-osu-f1/55">
+            Rank is set by your top mania plays: mostly pp standing, plus control, speed, precision and stamina traits.
+          </p>
         </div>
       </motion.div>
     </motion.div>
