@@ -1,10 +1,33 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { isGlobalCountry, touchCountryRequest } from "../countries.js";
+import { exec, type Db } from "../db.js";
 import { normalizeCountryParam } from "../http/abuse-guard.js";
 import { activatePublicCountry, sendRateLimited, type HttpContext } from "../http/snapshots.js";
 import type { LiveEvent } from "../shared/types.js";
 
 const DEFAULT_COUNTRY_TOUCH_INTERVAL_MS = 60 * 60_000;
+const INGEST_FRESHNESS_CACHE_MS = 15_000;
+
+// Heartbeats carry when the pipeline last ingested a score, so clients can
+// tell "connected but the backend stopped writing" (the 2026-07-18 wedge)
+// apart from a healthy quiet feed. Ingest happens in the worker process, so
+// the serving process reads it from the DB — one indexed newest-row read,
+// cached across all SSE connections.
+let ingestFreshness: { checkedAt: number; ingestAtMs: number | null } = { checkedAt: 0, ingestAtMs: null };
+
+async function getLastIngestAtMs(db: Db): Promise<number | null> {
+  const now = Date.now();
+  if (now - ingestFreshness.checkedAt < INGEST_FRESHNESS_CACHE_MS) return ingestFreshness.ingestAtMs;
+  ingestFreshness.checkedAt = now;
+  try {
+    const row = (await exec(db, "select received_at from score_events order by id desc limit 1")).rows[0];
+    const parsed = row?.received_at == null ? NaN : Date.parse(String(row.received_at));
+    ingestFreshness.ingestAtMs = Number.isFinite(parsed) ? parsed : null;
+  } catch {
+    // Keep the previous value; a failed read must never break heartbeats.
+  }
+  return ingestFreshness.ingestAtMs;
+}
 
 export async function handleSse(req: IncomingMessage, res: ServerResponse, ctx: HttpContext): Promise<boolean> {
   const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
@@ -75,8 +98,12 @@ export async function handleSse(req: IncomingMessage, res: ServerResponse, ctx: 
     Math.min(DEFAULT_COUNTRY_TOUCH_INTERVAL_MS, Math.floor((ctx.config.countryWarmTtlMs ?? 72 * 60 * 60_000) / 4)),
   );
   const heartbeat = setInterval(() => {
-    writeEvent(res, { type: "heartbeat", sequence: Date.now(), payload: { t: Date.now() } });
     const now = Date.now();
+    void getLastIngestAtMs(ctx.db).then((ingestAtMs) => {
+      // No id line: an id here would overwrite the browser's Last-Event-ID
+      // cursor with a timestamp, breaking replay on the next reconnect.
+      res.write(`event: heartbeat\ndata: ${JSON.stringify({ t: now, ingest_at: ingestAtMs })}\n\n`);
+    }).catch(() => undefined);
     if (!observeOnly && !global && now - lastCountryTouchAt >= countryTouchIntervalMs) {
       lastCountryTouchAt = now;
       // Off the serving connection (see HttpContext.serveWriteDb): a long-lived

@@ -46,6 +46,9 @@ import { useWindowActive } from "../lib/window-activity";
 
 const TRACKER_PAGE_SIZE = 45;
 const TRACKER_LIVE_MIN_SNAPSHOT_LIMIT = TRACKER_PAGE_SIZE * 2;
+// Global ingest normally lands scores every few seconds across all tracked
+// countries; several silent minutes means the pipeline is stalled, not quiet.
+const TRACKER_INGEST_DELAYED_AFTER_MS = 3 * 60_000;
 const TRACKER_LIVE_RECONCILE_LIMIT = 60;
 const TRACKER_LIVE_RECONCILE_MIN_INTERVAL_MS = 2 * 60_000;
 const TRACKER_GLOBAL_WINDOW_HOURS = 24;
@@ -369,6 +372,7 @@ function ScoresPage() {
   const [timeTick, setTimeTick] = useState(0);
   const [liveSnapshotLoading, setLiveSnapshotLoading] = useState(false);
   const [liveTrackerTotal, setLiveTrackerTotal] = useState<number | null>(null);
+  const [liveFeedState, setLiveFeedState] = useState<"live" | "delayed" | "reconnecting">("live");
   const [livePageScores, setLivePageScores] = useState<LeanTrackerScore[]>([]);
   const [livePageSnapshotKey, setLivePageSnapshotKey] = useState<string | null>(null);
   const [livePageLoading, setLivePageLoading] = useState(false);
@@ -496,7 +500,26 @@ function ScoresPage() {
     if (!liveBackendEnabled) return;
     const source = openLiveEventSource(selectedCountry);
     if (!source) return;
+    setLiveFeedState("live");
+    source.onopen = () => setLiveFeedState("live");
+    source.onerror = () => setLiveFeedState("reconnecting");
+    // Connected is not the same as live: heartbeats report when the backend
+    // pipeline last ingested a score, so a wedged backend shows as delayed
+    // instead of a green light over a frozen feed.
+    source.addEventListener("heartbeat", (event) => {
+      try {
+        const data = JSON.parse(event.data) as { t?: number; ingest_at?: number | null };
+        if (typeof data.t !== "number" || typeof data.ingest_at !== "number") {
+          setLiveFeedState("live");
+          return;
+        }
+        setLiveFeedState(data.t - data.ingest_at > TRACKER_INGEST_DELAYED_AFTER_MS ? "delayed" : "live");
+      } catch {
+        // Malformed heartbeat: leave the indicator as-is.
+      }
+    });
     source.addEventListener("tracker_score", (event) => {
+      setLiveFeedState((current) => current === "live" ? current : "live");
       const score = JSON.parse(event.data) as LeanTrackerScore;
       if (!isDisplayedPassed(score)) return;
       const identity = getScoreIdentity(score);
@@ -888,7 +911,16 @@ function ScoresPage() {
     }
     return entries;
   }, [paginatedScores, multiGroupByScoreKey, hiddenUserIds]);
-  const liveStatusLabel = "Live updates on";
+  const liveStatusLabel = liveFeedState === "delayed"
+    ? "Live updates delayed"
+    : liveFeedState === "reconnecting"
+      ? "Live feed reconnecting"
+      : "Live updates on";
+  const liveStatusTitle = liveFeedState === "delayed"
+    ? "Connected, but the backend hasn't ingested new scores for a few minutes. Recent plays will appear once it catches up."
+    : liveFeedState === "reconnecting"
+      ? "Lost the connection to the live backend; retrying."
+      : "New scores stream in live over this connection.";
   const scoreWindowLabel = selectedIsGlobal
     ? liveTrackerTotal == null && !useLiveBackendFilteredScores
       ? "Last 24h"
@@ -1097,8 +1129,16 @@ function ScoresPage() {
               </>
             ) : (
               <>
-                <div className="w-2 h-2 rounded-full bg-osu-green animate-pulse" />
-                <span className="text-[10px] text-osu-f1">
+                <div
+                  className={`w-2 h-2 rounded-full ${
+                    liveFeedState === "live"
+                      ? "bg-osu-green animate-pulse"
+                      : liveFeedState === "delayed"
+                        ? "bg-osu-yellow"
+                        : "bg-osu-red"
+                  }`}
+                />
+                <span className="text-[10px] text-osu-f1" title={liveStatusTitle}>
                   {liveStatusLabel} {"\u00b7"} {scoreWindowLabel}
                 </span>
               </>
