@@ -149,10 +149,7 @@ export class ManiaCardRenderer {
       powerPreference: "high-performance",
     });
     this.renderer.setPixelRatio(this.quality.pixelRatio);
-    this.renderer.setSize(
-      Math.max(1, Math.round(this.host.clientWidth * CANVAS_OVERSCAN)),
-      Math.max(1, Math.round(this.host.clientHeight * CANVAS_OVERSCAN)),
-    );
+    this.applyCanvasSize();
     // The canvas is larger than the host so the card can rotate past the host's
     // bounds without getting clipped (mirrors how the CSS card overflows its
     // container when tilted). We keep the host's size for layout and position
@@ -294,15 +291,33 @@ export class ManiaCardRenderer {
   }
 
   resize() {
+    this.applyCanvasSize();
+    this.start();
+  }
+
+  private applyCanvasSize() {
     const hostWidth = Math.max(1, this.host.clientWidth);
     const hostHeight = Math.max(1, this.host.clientHeight);
-    const overscan = CANVAS_OVERSCAN;
-    const canvasWidth = Math.round(hostWidth * overscan);
-    const canvasHeight = Math.round(hostHeight * overscan);
+    const canvasHeight = Math.max(1, Math.round(hostHeight * CANVAS_OVERSCAN));
+    const canvasWidth = this.clampCanvasWidth(Math.round(hostWidth * CANVAS_OVERSCAN));
     this.renderer.setSize(canvasWidth, canvasHeight);
     this.camera.aspect = canvasWidth / canvasHeight;
     this.camera.updateProjectionMatrix();
-    this.start();
+  }
+
+  // The canvas is centered on the host, so anything wider than twice the
+  // distance from the host's center to the nearest viewport edge pokes past
+  // the page edge and turns into horizontal page scroll on mobile. The FOV is
+  // vertical, so losing width only crops the horizontal tilt bleed.
+  private clampCanvasWidth(ideal: number): number {
+    if (typeof document === "undefined") return Math.max(1, ideal);
+    const viewportWidth = document.documentElement.clientWidth;
+    if (!viewportWidth) return Math.max(1, ideal);
+    const rect = this.host.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const available = Math.floor(2 * Math.min(centerX, viewportWidth - centerX));
+    if (available <= 0) return Math.max(1, ideal);
+    return Math.max(1, Math.min(ideal, available));
   }
 
   setWindowActive(active: boolean) {

@@ -15,6 +15,7 @@ import { searchUsers } from "../lib/osu";
 import { PageHeader } from "../components/layout/PageHeader";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { FarmersList } from "../components/farm-helper/FarmersList";
+import { NeighborhoodGraph } from "../components/farm-helper/NeighborhoodGraph";
 import { SearchInput } from "../components/ui/SearchInput";
 import { Avatar } from "../components/ui/Avatar";
 import { CountryFlag } from "../components/ui/CountryFlag";
@@ -683,7 +684,7 @@ function PlayerPicker({ viewer, onPick }: { viewer: ReturnType<typeof useAuth>["
         </div>
       </div>
 
-      <PickerPreviewCard />
+      <NeighborhoodGraph viewer={viewer} />
     </div>
   );
 }
@@ -694,135 +695,6 @@ function PickerLegend({ icon, label, body }: { icon: ReactNode; label: string; b
       {icon}
       <span className="w-16 shrink-0 font-bold uppercase tracking-wide text-osu-c1">{label}</span>
       <span className="text-osu-f1">{body}</span>
-    </div>
-  );
-}
-
-interface PreviewRec {
-  reason: LiveFarmHelperRec["reason"];
-  title: string;
-  version: string;
-  artist: string;
-  creator: string;
-  stars: number;
-  cover: string;
-  gain: number;
-  barLeft: string;
-  barRight: string;
-  pct: number;
-}
-
-// Lifted from a real snapshot for a ~4,250pp 4K player so the numbers are plausible.
-const PREVIEW_RECS: PreviewRec[] = [
-  {
-    reason: "missing",
-    title: "Galaxy Collapse",
-    version: "4K Ayase vs Ferdi's Galactic Annihilation",
-    artist: "Kurokotei",
-    creator: "SuzumeAyase",
-    stars: 5.84,
-    cover: "https://assets.ppy.sh/beatmaps/2474975/covers/list.jpg",
-    gain: 71,
-    barLeft: "32% of sampled nearby players farm this",
-    barRight: "median 274pp",
-    pct: 32,
-  },
-  {
-    reason: "improve",
-    title: "Triumph & Regret",
-    version: "4K Regret",
-    artist: "typeMARS",
-    creator: "[ A v a l o n ]",
-    stars: 5.48,
-    cover: "https://assets.ppy.sh/beatmaps/347650/covers/list.jpg",
-    gain: 30,
-    barLeft: "your 232pp",
-    barRight: "median 274pp",
-    pct: 85,
-  },
-  {
-    reason: "stale",
-    title: "MALIGNANT",
-    version: "4K Proboscidea",
-    artist: "a crowd of rebellion",
-    creator: "Nathalia-",
-    stars: 4.95,
-    cover: "https://assets.ppy.sh/beatmaps/1556170/covers/list.jpg",
-    gain: 18,
-    barLeft: "your 204pp · 16mo old",
-    barRight: "top 25% 225pp",
-    pct: 91,
-  },
-];
-
-function PickerPreviewCard() {
-  const totalPreviewGain = PREVIEW_RECS.reduce((sum, rec) => sum + rec.gain, 0);
-  return (
-    <div aria-hidden="true" className="pointer-events-none select-none">
-      <div className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4 shadow-xl shadow-black/25">
-        <div className="flex items-center justify-between gap-3 border-b border-osu-b3/20 px-4 py-3">
-          <div className="min-w-0">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">recommendations</div>
-            <div className="mt-0.5 text-sm font-semibold text-osu-c1">
-              {PREVIEW_RECS.length} maps
-              <span className="font-normal text-osu-f1"> · +{totalPreviewGain}pp on the table</span>
-            </div>
-          </div>
-          <span className="shrink-0 rounded-md border border-osu-b3/30 bg-osu-b5/60 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-osu-f1">
-            example
-          </span>
-        </div>
-        <div className="divide-y divide-osu-b3/20">
-          {PREVIEW_RECS.map((rec) => (
-            <PreviewRecRow key={rec.title} rec={rec} />
-          ))}
-        </div>
-      </div>
-      <p className="mt-2.5 text-center text-[11px] text-osu-f1 lg:text-right">
-        what it finds for a 4,200pp player
-      </p>
-    </div>
-  );
-}
-
-function PreviewRecRow({ rec }: { rec: PreviewRec }) {
-  const meta = REASON_META[rec.reason];
-  return (
-    <div className="relative bg-osu-b4">
-      <span className={`absolute inset-y-0 left-0 w-[3px] ${meta.accent}`} />
-      <div className="grid grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-3 p-3 pl-4">
-        <div className="h-11 w-11 overflow-hidden rounded-md bg-osu-b6">
-          <img src={rec.cover} alt="" loading="lazy" className="h-full w-full object-cover" />
-        </div>
-        <div className="min-w-0">
-          <div className="truncate text-[13px] font-bold text-osu-c1">
-            {rec.title}
-            <span className="font-medium text-osu-f1"> [{rec.version}]</span>
-          </div>
-          <div className="flex items-center gap-x-2 text-[11px] leading-tight">
-            <span className={`whitespace-nowrap font-bold uppercase tracking-wide ${meta.text}`}>{meta.label}</span>
-            <span className="tabular-nums text-osu-yellow">★{rec.stars.toFixed(2)}</span>
-            <span className="min-w-0 truncate text-osu-f1">
-              {rec.artist} · {rec.creator}
-            </span>
-          </div>
-          <div className="mt-1.5">
-            <div className="flex items-center justify-between gap-2 text-[10px]">
-              <span className="truncate text-osu-l2">{rec.barLeft}</span>
-              <span className="shrink-0 text-osu-f1">{rec.barRight}</span>
-            </div>
-            <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-osu-b6">
-              <div className={`h-full rounded-full ${meta.accent}`} style={{ width: `${rec.pct}%` }} />
-            </div>
-          </div>
-        </div>
-        <div className="text-right">
-          <div className="text-lg font-black leading-none tabular-nums text-osu-pink">
-            +{rec.gain}
-            <span className="text-[11px] font-bold text-osu-pink/70">pp</span>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
