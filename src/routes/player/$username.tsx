@@ -236,6 +236,7 @@ function slimLoaderScore(score: OsuScore): OsuScore {
       accuracy: score.beatmap.accuracy,
       ar: score.beatmap.ar,
       bpm: score.beatmap.bpm,
+      note_bpm: score.beatmap.note_bpm,
       convert: score.beatmap.convert,
       count_circles: score.beatmap.count_circles,
       count_sliders: score.beatmap.count_sliders,
@@ -1779,7 +1780,7 @@ export function PlayerProfilePage({
               <div className="relative z-10 max-h-[85vh] overflow-y-auto p-5 [scrollbar-gutter:stable]">
                 <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">BPM Breakdown</div>
                 <div className="mt-0.5 text-[11px] text-osu-f1/60">
-                  across {profileInsights.sampleSize} top plays · adjusted for rate mods
+                  across {profileInsights.sampleSize} top plays · note-density tempo where available · adjusted for rate mods · weighted toward your highest plays
                 </div>
 
                 <div className="mt-4 flex items-baseline gap-2">

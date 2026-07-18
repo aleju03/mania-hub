@@ -5,6 +5,7 @@ import { errorContext, logWarn } from "../logger.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { calculateWeightedPpTotal, getScoreIdentity, getScoreTimestamp, nowIso, scoreHasPublicLeaderboard } from "../shared/score.js";
 import { compactScoresForStorage, hydrateScoresDisplayMetadata, persistScoresDisplayMetadata } from "../shared/score-storage.js";
+import { readNoteBpms } from "./chart-analysis.js";
 import type { OscScore } from "../shared/types.js";
 
 const PROFILE_SNAPSHOT_TTL_MS = 24 * 60 * 60_000;
@@ -545,6 +546,7 @@ async function buildServedSnapshot(db: Db, row: ProfileSnapshotRow, forceStale: 
   const userFetchedAt = row.user_fetched_at ?? row.fetched_at;
   const projectionBaselineAt = latestValidTimestamp(row.fetched_at, userFetchedAt);
   const projection = await projectTopPlays(db, row.user_id, rawBestScores, row.fetched_at, projectionBaselineAt, recentScores);
+  await attachNoteBpms(db, projection.scores);
   const basePp = readNumber(readRecord(user.statistics)?.pp);
   const projectedPp = calculateProjectedUserPp(basePp, projection.ppBaselineScores, projection.scores);
 
@@ -562,6 +564,24 @@ async function buildServedSnapshot(db: Db, row: ProfileSnapshotRow, forceStale: 
       provenanceByScoreId: projection.provenanceByScoreId,
     },
   };
+}
+
+// Attaches the note-weighted song tempo from chart analysis onto each served
+// score's beatmap (one indexed IN lookup over the snapshot's <=~250 beatmap
+// pks). Profile BPM stats prefer it over the nominal osu! bpm field, which
+// misreads marathons and BPM-gimmick charts. Best-effort: unanalyzed charts
+// simply stay without note_bpm and the client falls back to nominal.
+async function attachNoteBpms(db: Db, scores: OscScore[]): Promise<void> {
+  const beatmapIds = scores.map((score) => score.beatmap?.id ?? 0).filter((id) => id > 0);
+  if (beatmapIds.length === 0) return;
+  const noteBpms = await readNoteBpms(db, beatmapIds).catch(() => new Map<number, number>());
+  if (noteBpms.size === 0) return;
+  for (const score of scores) {
+    const noteBpm = score.beatmap ? noteBpms.get(score.beatmap.id) : undefined;
+    if (score.beatmap && noteBpm != null) {
+      score.beatmap = { ...score.beatmap, note_bpm: noteBpm };
+    }
+  }
 }
 
 async function projectTopPlays(

@@ -113,6 +113,10 @@ export interface OsuBeatmap {
   accuracy: number; // OD
   ar: number;
   bpm: number;
+  // Note-weighted song tempo at 1.0x from the live backend's chart analysis
+  // (median BPM under the hit-object start times). Absent for unanalyzed
+  // charts, converts, and osu!-API-only data paths; callers fall back to bpm.
+  note_bpm?: number | null;
   convert: boolean;
   count_circles: number;
   count_sliders: number; // hold notes in mania

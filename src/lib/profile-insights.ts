@@ -17,17 +17,24 @@ function getTopCountEntry(counts: Map<string, number>, total: number): { label: 
   return { label, count, total };
 }
 
-function getMedian(values: number[]): number | null {
-  if (!values.length) return null;
+// Weighted median: the smallest value whose cumulative weight reaches half the
+// total. Robust like the plain median (a single gimmick outlier cannot move
+// it), but lets top-play decay weights concentrate the stat in the plays that
+// define the profile instead of the stale tail.
+function getWeightedMedian(entries: Array<{ value: number; weight: number }>): number | null {
+  if (!entries.length) return null;
 
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
+  const sorted = [...entries].sort((a, b) => a.value - b.value);
+  const totalWeight = sorted.reduce((sum, entry) => sum + entry.weight, 0);
+  if (totalWeight <= 0) return null;
 
-  if (sorted.length % 2 === 1) {
-    return sorted[mid];
+  let cumulative = 0;
+  for (const entry of sorted) {
+    cumulative += entry.weight;
+    if (cumulative >= totalWeight / 2) return entry.value;
   }
 
-  return (sorted[mid - 1] + sorted[mid]) / 2;
+  return sorted[sorted.length - 1].value;
 }
 
 function getTimestampMs(score: OsuScore): number {
@@ -93,11 +100,11 @@ export function calculateUserProfileInsights(bestScores: OsuScore[]): UserProfil
   const keyCounts = new Map<number, number>();
   const modCounts = new Map<string, number>();
   let moddedPlayCount = 0;
-  const bpmEntries: Array<{ bpm: number; keyCount: number | null; score: OsuScore }> = [];
+  const bpmEntries: Array<{ bpm: number; weight: number; keyCount: number | null; score: OsuScore }> = [];
   const ppValues: number[] = [];
   const datedScores: Array<{ score: OsuScore; ms: number }> = [];
 
-  for (const score of scores) {
+  for (const [index, score] of scores.entries()) {
     const rawKeyCount = Number(score.beatmap?.cs);
     const normalizedKeyCount = Number.isFinite(rawKeyCount) && rawKeyCount > 0 ? Math.round(rawKeyCount) : null;
     if (normalizedKeyCount !== null) {
@@ -112,9 +119,18 @@ export function calculateUserProfileInsights(bestScores: OsuScore[]): UserProfil
       }
     }
 
-    const bpm = Number(score.beatmap?.bpm);
+    // Note-derived song tempo (backend chart analysis) over the osu! API's
+    // nominal bpm field: the nominal value is the most-common timing point by
+    // wall-clock duration and misreads marathons, intros/breaks, and
+    // BPM-gimmick charts. Falls back to nominal when analysis is missing
+    // (converts, brand-new maps, no live backend).
+    const noteBpm = Number(score.beatmap?.note_bpm);
+    const nominalBpm = Number(score.beatmap?.bpm);
+    const bpm = Number.isFinite(noteBpm) && noteBpm > 0 ? noteBpm : nominalBpm;
     if (Number.isFinite(bpm) && bpm > 0) {
-      bpmEntries.push({ bpm: bpm * getScoreRate(score.mods), keyCount: normalizedKeyCount, score });
+      // Scores arrive pp-descending, so osu!'s own top-play decay by list index
+      // weights each play by how much it defines the profile.
+      bpmEntries.push({ bpm: bpm * getScoreRate(score.mods), weight: 0.95 ** index, keyCount: normalizedKeyCount, score });
     }
 
     if (score.pp != null && score.pp > 0) {
@@ -132,7 +148,6 @@ export function calculateUserProfileInsights(bestScores: OsuScore[]): UserProfil
     .sort((a, b) => b.count - a.count || a.keyCount - b.keyCount);
   datedScores.sort((a, b) => a.ms - b.ms);
   const sortedPpValues = [...ppValues].sort((a, b) => b - a);
-  const bpms = bpmEntries.map((e) => e.bpm);
 
   let bpmRange: UserProfileInsights["bpmRange"] = null;
   if (bpmEntries.length > 0) {
@@ -150,15 +165,15 @@ export function calculateUserProfileInsights(bestScores: OsuScore[]): UserProfil
     };
   }
 
-  const bpmByKeyMap = new Map<number, number[]>();
+  const bpmByKeyMap = new Map<number, Array<{ value: number; weight: number }>>();
   for (const entry of bpmEntries) {
     if (entry.keyCount === null) continue;
     const arr = bpmByKeyMap.get(entry.keyCount);
-    if (arr) arr.push(entry.bpm);
-    else bpmByKeyMap.set(entry.keyCount, [entry.bpm]);
+    if (arr) arr.push({ value: entry.bpm, weight: entry.weight });
+    else bpmByKeyMap.set(entry.keyCount, [{ value: entry.bpm, weight: entry.weight }]);
   }
   const bpmByKeyMode = [...bpmByKeyMap.entries()]
-    .map(([keyCount, values]) => ({ keyCount, median: getMedian(values) ?? 0, count: values.length }))
+    .map(([keyCount, values]) => ({ keyCount, median: getWeightedMedian(values) ?? 0, count: values.length }))
     .sort((a, b) => a.keyCount - b.keyCount);
 
   return {
@@ -168,7 +183,7 @@ export function calculateUserProfileInsights(bestScores: OsuScore[]): UserProfil
     modBreakdown: [...modCounts.entries()]
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .map(([label, count]) => ({ label, count, total: scores.length })),
-    medianBpm: getMedian(bpms),
+    medianBpm: getWeightedMedian(bpmEntries.map((entry) => ({ value: entry.bpm, weight: entry.weight }))),
     bpmRange,
     bpmByKeyMode,
     newestTopPlay: datedScores.length ? scoreToSnapshot(datedScores[datedScores.length - 1].score) : null,

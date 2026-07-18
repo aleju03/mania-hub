@@ -106,6 +106,8 @@ describe("chart analysis", () => {
       expect(Array.isArray(classification.patterns)).toBe(true);
       expect(Array.isArray(classification.clusters)).toBe(true);
       expect(classification.lnRatio).toBeLessThan(0.05);
+      // beatLength 352.94 = 170 BPM under every note.
+      expect(classification.noteBpm).toBe(170);
 
       // MSD runs the real MinaCalc wasm; a dense 4K stream must rate above 0.
       const msd = JSON.parse(String(row.msd_json));

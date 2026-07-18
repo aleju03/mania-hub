@@ -6,6 +6,7 @@ interface TestScoreInput {
   id: number;
   cs: number;
   bpm: number;
+  note_bpm?: number | null;
   created_at: string;
   pp: number;
   mods?: OsuScore["mods"];
@@ -21,6 +22,7 @@ function createScore(overrides: TestScoreInput): OsuScore {
       id: 10_000 + overrides.id,
       beatmapset_id: 20_000 + overrides.id,
       bpm: overrides.bpm,
+      note_bpm: overrides.note_bpm,
       cs: overrides.cs,
       mode: overrides.mode ?? "mania",
       url: `https://osu.ppy.sh/beatmaps/${10_000 + overrides.id}`,
@@ -110,10 +112,12 @@ describe("calculateUserProfileInsights", () => {
       { label: "DT", count: 1, total: 4 },
       { label: "HD", count: 1, total: 4 },
     ]);
-    expect(insights.medianBpm).toBe(185);
+    // Weighted median (0.95^index decay over the pp-descending list): the
+    // smallest BPM whose cumulative weight reaches half the total.
+    expect(insights.medianBpm).toBe(200);
     expect(insights.bpmByKeyMode).toEqual([
-      { keyCount: 4, median: 235, count: 2 },
-      { keyCount: 7, median: 145, count: 2 },
+      { keyCount: 4, median: 270, count: 2 },
+      { keyCount: 7, median: 120, count: 2 },
     ]);
     expect(insights.bpmRange?.min).toBe(120);
     expect(insights.bpmRange?.minScore.title).toBe("Middle HD");
@@ -130,6 +134,38 @@ describe("calculateUserProfileInsights", () => {
       { min: 400, max: 499, count: 1, total: 4 },
       { min: 300, max: 399, count: 1, total: 4 },
     ]);
+  });
+
+  it("keeps the headline at the top plays' tempo when a larger stale tail sits elsewhere", () => {
+    // 20 defining plays at 250 BPM, then 30 stale tail plays at 100 BPM. An
+    // unweighted median over the 50 plays would read 100; the 0.95^i decay
+    // keeps more than half the total weight in the top 20.
+    const scores = [
+      ...Array.from({ length: 20 }, (_, i) =>
+        createScore({ id: i + 1, cs: 4, bpm: 250, created_at: "2025-06-01T00:00:00Z", pp: 900 - i }),
+      ),
+      ...Array.from({ length: 30 }, (_, i) =>
+        createScore({ id: i + 21, cs: 4, bpm: 100, created_at: "2025-01-01T00:00:00Z", pp: 500 - i }),
+      ),
+    ];
+
+    const insights = calculateUserProfileInsights(scores);
+    expect(insights.medianBpm).toBe(250);
+    expect(insights.bpmByKeyMode).toEqual([{ keyCount: 4, median: 250, count: 50 }]);
+  });
+
+  it("prefers note-derived BPM over the nominal field and falls back when absent", () => {
+    const insights = calculateUserProfileInsights([
+      // Nominal 666 is a timing gimmick; the note-derived tempo is the real one.
+      createScore({ id: 1, cs: 4, bpm: 666, note_bpm: 222, created_at: "2025-03-01T00:00:00Z", pp: 700, title: "Gimmick" }),
+      createScore({ id: 2, cs: 4, bpm: 180, note_bpm: null, created_at: "2025-02-01T00:00:00Z", pp: 600, title: "Null Note" }),
+      createScore({ id: 3, cs: 4, bpm: 140, created_at: "2025-01-01T00:00:00Z", pp: 500, title: "No Note" }),
+    ]);
+
+    expect(insights.medianBpm).toBe(180);
+    expect(insights.bpmRange?.max).toBe(222);
+    expect(insights.bpmRange?.maxScore.title).toBe("Gimmick");
+    expect(insights.bpmRange?.min).toBe(140);
   });
 
   it("uses smaller pp bands for lower-pp profiles", () => {

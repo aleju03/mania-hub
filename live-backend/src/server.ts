@@ -11,7 +11,7 @@ import { startRuntimeStatusMirror } from "./live/runtime-status.js";
 import { deferMapsRefreshesWaitingForRoster, enqueueGlobalMapsRefreshIfDue, enqueueMapsRefreshIfDue } from "./features/maps.js";
 import { ensureMapSearchIndexSeeded, pruneMapSearchPlaceholderRows, reconcileMapSearchIndexStatuses } from "./features/map-search.js";
 import { enqueueQualifiedMapsWatchIfDue } from "./features/qualified-maps-watch.js";
-import { ensureDanFloorPinRecomputeSeeded, ensureDtRateAnalysisSeeded, ensureLnSourceRecomputeSeeded, ensureLnSubtypeRecomputeSeeded, ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
+import { ensureDanFloorPinRecomputeSeeded, ensureDtRateAnalysisSeeded, ensureLnSourceRecomputeSeeded, ensureLnSubtypeRecomputeSeeded, ensureNoteBpmRecomputeSeeded, ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
 import { enqueueMapCollectionsRebuildIfDue } from "./features/map-collections.js";
 import { startGoalUserIndexRefresh } from "./features/goals.js";
 import { enqueueProfilePoolWarmIfIdle } from "./features/profile-pool-warm.js";
@@ -238,6 +238,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       void ensureLnSubtypeRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[ln-subtype] seed failed", error));
       void ensureLnSourceRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[ln-source] seed failed", error));
       void ensureDtRateAnalysisSeeded(app.db, app.queue).catch((error) => console.warn("[dt-rate-analysis] seed failed", error));
+      void ensureNoteBpmRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[note-bpm-recompute] seed failed", error));
     }
     if (app.config.enableScheduledRefreshes && app.config.enableOsuApiJobs) {
       startRosterScheduler(app.db, app.queue, app.config);

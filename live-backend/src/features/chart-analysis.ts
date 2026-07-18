@@ -8,6 +8,7 @@ import { analyzeManiaPatterns } from "../dan/dan-estimator/patterns.js";
 import { classifyChart, detectLnVibro, detectRiceVibro, sunnyLowEndReroute, type ChartClassification, type DanVerdictHalf } from "../dan/chart-classifier.js";
 import { runLeoBlackMixed } from "../dan/leoblack-estimator.js";
 import { computeMsd } from "../dan/msd.js";
+import { computeNoteBpm } from "../dan/note-bpm.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { readConfig } from "../config.js";
 import { getCachedBeatmapFile, readCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
@@ -55,6 +56,9 @@ interface LeanChartClassification {
   clusterCategory: string | null;
   modeTag: string | null;
   warnings: string[];
+  // Note-weighted song tempo at 1.0x (dan/note-bpm.ts); null when the chart
+  // has no timing points or notes. Serves profile BPM stats via readNoteBpms.
+  noteBpm: number | null;
 }
 
 function leanHalf(half: DanVerdictHalf | null): LeanVerdictHalf | null {
@@ -71,8 +75,9 @@ function leanHalf(half: DanVerdictHalf | null): LeanVerdictHalf | null {
   };
 }
 
-function leanClassification(classification: ChartClassification): LeanChartClassification {
+function leanClassification(classification: ChartClassification, noteBpm: number | null = null): LeanChartClassification {
   return {
+    noteBpm,
     keyCount: classification.keyCount,
     supported: classification.supported,
     lnRatio: classification.lnRatio,
@@ -155,7 +160,7 @@ export async function computeBeatmapChartAnalysis(
 
     const msd = await computeMsd(osuText, { keyCount: map.keyCount }).catch(() => null);
 
-    const lean = leanClassification(classification);
+    const lean = leanClassification(classification, computeNoteBpm(osuText));
     const computedAt = nowIso();
     await exec(
       db,
@@ -738,6 +743,150 @@ async function enqueueVibroRecompute(queue: JobQueue, cursor: number): Promise<v
     { cursor },
     { priority: -10, replaceDone: true },
   );
+}
+
+// ── One-shot note-BPM backfill sweep ─────────────────────────────────────────
+// noteBpm (dan/note-bpm.ts) arrived after the corpus was analyzed: stored
+// classifications lack the field, so profile BPM stats would fall back to the
+// nominal osu! bpm for every existing chart. Same playbook as the vibro sweep
+// above: a boot-seeded chunked job patches classification_json in place from
+// the cached .osu corpus, once per meta-key version. The parse is a light
+// timing+notes scan (no classifier, no MinaCalc). Purely local work, no osu!
+// API.
+
+export const NOTE_BPM_RECOMPUTE_JOB = "recompute_note_bpm_sweep";
+// v2: v1 ran against a pre-fold computeNoteBpm (a dev-watch restart picked the
+// sweep up mid-edit), so inflated-timing charts were stored raw (666 instead
+// of 333). The scan below revisits stored values above the fold trigger.
+// v3: v2 was burned the same way - a dev-watch restart booted between the key
+// bump and the widened scan landing, saw zero missing rows, and wrote the
+// done-key. Key bumps must ship in the same write as their scan change.
+const NOTE_BPM_RECOMPUTE_META_KEY = "note_bpm_recompute_done:v3";
+const NOTE_BPM_RECOMPUTE_CHUNK = 50;
+// Keep in sync with FOLD_TRIGGER_BPM (dan/note-bpm.ts): stored medians above
+// it are the only ones a fold-rule change can move.
+const NOTE_BPM_RESCAN_MIN_BPM = 300;
+
+export interface NoteBpmRecomputeChunkResult {
+  nextCursor: number;
+  scanned: number;
+  patched: number[];
+  done: boolean;
+}
+
+export async function recomputeNoteBpmChunk(
+  db: Db,
+  cursor: number,
+  limit = NOTE_BPM_RECOMPUTE_CHUNK,
+): Promise<NoteBpmRecomputeChunkResult> {
+  // json_extract as a scan filter is fine here: this is the background sweep,
+  // not a serving query, and it lets an interrupted chain skip already-patched
+  // rows. Rows with a stored value above the fold trigger re-match so sweep
+  // version bumps can apply fold-rule changes; the cursor only moves forward,
+  // so each run still visits each row once.
+  const rows = (await exec(
+    db,
+    `select beatmap_id
+     from beatmap_chart_analysis
+     where analysis_version = ? and status = 'ready'
+       and beatmap_id > ?
+       and (
+         json_extract(classification_json, '$.noteBpm') is null
+         or json_extract(classification_json, '$.noteBpm') > ?
+       )
+     order by beatmap_id
+     limit ?`,
+    [CHART_ANALYSIS_VERSION, Math.max(0, Math.floor(cursor)), NOTE_BPM_RESCAN_MIN_BPM, Math.max(1, Math.floor(limit))],
+  )).rows;
+
+  let nextCursor = cursor;
+  const patched: number[] = [];
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    nextCursor = Math.max(nextCursor, beatmapId);
+    const osuText = await readCachedBeatmapFile(db, beatmapId).catch(() => null);
+    if (!osuText) continue;
+    const noteBpm = computeNoteBpm(osuText);
+    // Store the null verdict too, so fresh analyses and swept rows read alike.
+    await exec(
+      db,
+      `update beatmap_chart_analysis
+       set classification_json = json_set(classification_json, '$.noteBpm', json(?))
+       where beatmap_id = ? and analysis_version = ?`,
+      [JSON.stringify(noteBpm), beatmapId, CHART_ANALYSIS_VERSION],
+    );
+    if (noteBpm != null) patched.push(beatmapId);
+    // Light work per chart, but the chunk still yields so ingest/SSE keep moving.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+
+  return { nextCursor, scanned: rows.length, patched, done: rows.length < limit };
+}
+
+// Boot watchdog: seed the sweep once per meta-key version, resume if a chain
+// died mid-way (each chunk's job carries its own cursor dedupe key).
+export async function ensureNoteBpmRecomputeSeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [NOTE_BPM_RECOMPUTE_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [NOTE_BPM_RECOMPUTE_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueueNoteBpmRecompute(queue, 0);
+}
+
+export async function runNoteBpmRecomputeJob(db: Db, queue: JobQueue, payload: { cursor?: number } | undefined): Promise<void> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const result = await recomputeNoteBpmChunk(db, cursor);
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [NOTE_BPM_RECOMPUTE_META_KEY, json({ finishedAt: now }), now],
+    );
+    return;
+  }
+  await enqueueNoteBpmRecompute(queue, result.nextCursor);
+}
+
+async function enqueueNoteBpmRecompute(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    NOTE_BPM_RECOMPUTE_JOB,
+    `${NOTE_BPM_RECOMPUTE_JOB}:${cursor}`,
+    { cursor },
+    { priority: -10, replaceDone: true },
+  );
+}
+
+// Reads stored note-weighted BPMs for the given beatmaps (profile snapshot
+// serving attaches them as beatmap.note_bpm). Indexed pk IN lookup; rows
+// without a positive stored noteBpm are simply absent from the map.
+export async function readNoteBpms(db: Db, beatmapIds: number[]): Promise<Map<number, number>> {
+  const ids = [...new Set(beatmapIds.filter((id) => Number.isSafeInteger(id) && id > 0))];
+  const result = new Map<number, number>();
+  for (let i = 0; i < ids.length; i += 900) {
+    const chunk = ids.slice(i, i + 900);
+    if (chunk.length === 0) continue;
+    const placeholders = chunk.map(() => "?").join(",");
+    const rows = (await exec(
+      db,
+      `select beatmap_id, json_extract(classification_json, '$.noteBpm') as note_bpm
+       from beatmap_chart_analysis
+       where analysis_version = ? and status = 'ready' and beatmap_id in (${placeholders})`,
+      [CHART_ANALYSIS_VERSION, ...chunk],
+    )).rows;
+    for (const row of rows) {
+      const beatmapId = Number(row.beatmap_id);
+      const noteBpm = Number(row.note_bpm);
+      if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0) continue;
+      if (!Number.isFinite(noteBpm) || noteBpm <= 0) continue;
+      result.set(beatmapId, noteBpm);
+    }
+  }
+  return result;
 }
 
 // ── One-shot dan floor-pin recompute sweep ───────────────────────────────────

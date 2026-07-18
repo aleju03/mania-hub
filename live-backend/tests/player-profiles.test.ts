@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
+import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
 import { getCachedPlayerProfileSnapshot } from "../src/features/player-profiles.js";
 import type { OscScore } from "../src/shared/types.js";
 
@@ -304,6 +305,46 @@ describe("player profile snapshots", () => {
       beatmap: { id: 201, version: "[4K] Normal", total_length: 95 },
       beatmapset: { title: "Compact best", play_count: 1234 },
     });
+  });
+
+  it("attaches note-weighted BPM from chart analysis onto served best scores", async () => {
+    const snapshotFetchedAt = "2026-06-01T03:28:53Z";
+    const analyzed = score({ id: 30, beatmapId: 301, title: "Analyzed", pp: 90, endedAt: snapshotFetchedAt });
+    const unanalyzed = score({ id: 31, beatmapId: 302, title: "Unanalyzed", pp: 80, endedAt: snapshotFetchedAt });
+
+    await exec(
+      db,
+      `insert into profile_snapshots
+       (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        USER_ID,
+        "mnshiny",
+        JSON.stringify({
+          id: USER_ID,
+          username: "MnShiny",
+          country_code: "CR",
+          avatar_url: "https://example.test/avatar.png",
+          statistics: { pp: 1000 },
+        }),
+        JSON.stringify([analyzed, unanalyzed]),
+        200,
+        snapshotFetchedAt,
+        snapshotFetchedAt,
+        snapshotFetchedAt,
+      ],
+    );
+    await exec(
+      db,
+      `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, computed_at, updated_at)
+       values (?, ?, 'ready', ?, ?, ?)`,
+      [301, CHART_ANALYSIS_VERSION, JSON.stringify({ keyCount: 4, noteBpm: 160.5 }), snapshotFetchedAt, snapshotFetchedAt],
+    );
+
+    const snapshot = await getCachedPlayerProfileSnapshot(db, "MnShiny");
+
+    expect(snapshot?.bestScores.find((entry) => entry.id === 30)?.beatmap?.note_bpm).toBe(160.5);
+    expect(snapshot?.bestScores.find((entry) => entry.id === 31)?.beatmap?.note_bpm).toBeUndefined();
   });
 });
 

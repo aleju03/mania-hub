@@ -27,6 +27,9 @@ export interface OsuBeatmap {
   cs: number;
   convert?: boolean;
   bpm: number;
+  // Note-weighted song tempo from chart analysis, attached at profile-snapshot
+  // serve time (player-profiles.ts); never stored in score rows.
+  note_bpm?: number | null;
   max_combo?: number;
   version: string;
   url: string;
