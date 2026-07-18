@@ -1395,7 +1395,7 @@ export async function fetchLiveChartAnalysis(beatmapId: number): Promise<LiveCha
 
 export interface LiveGlobalRankingEntry {
   rank: number;
-  user: { id: number; username: string; avatar_url: string; cover_url: string; country_code: string };
+  user: { id: number; username: string; avatar_url: string; cover_url: string; country_code: string; avatar_accent: string | null };
   pp: number;
   global_rank: number | null;
   country_rank: number | null;
@@ -1491,6 +1491,9 @@ function normalizeLiveGlobalRankingEntry(value: unknown, index: number): LiveGlo
       avatar_url: readString(user.avatar_url),
       cover_url: readString(user.cover_url),
       country_code: readString(user.country_code),
+      // Keep the accent on the entry so cached boards (home top players) color
+      // names without a follow-up lookup, which privacy extensions can block.
+      avatar_accent: typeof user.avatar_accent === "string" && user.avatar_accent ? user.avatar_accent : null,
     },
     pp: readFiniteNumber(entry.pp) ?? 0,
     global_rank: readPositiveInteger(entry.global_rank),

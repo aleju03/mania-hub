@@ -231,6 +231,7 @@ function makePoolEntry(position: number): LiveGlobalRankingEntry {
       avatar_url: `https://a.ppy.sh/${100_000 + position}`,
       cover_url: "",
       country_code: "CR",
+      avatar_accent: null,
     },
     pp: 20_000 - position,
     global_rank: position * 3, // tracked pools are sparse in global-rank space

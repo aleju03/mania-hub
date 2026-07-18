@@ -11,14 +11,18 @@ import { useAppStore } from "../../store";
 export function UsernameText({
   username,
   avatarUrl,
+  accent: accentProp,
   className,
 }: {
   username: string;
   avatarUrl?: string;
+  /** Accent carried inline by the caller's data; skips the store and the backend lookup. */
+  accent?: string | null;
   className?: string;
 }) {
   const accentKey = avatarUrl ? getAvatarAccentStoreKey(avatarUrl) : null;
-  const accent = useAppStore((state) => (accentKey ? state.avatarAccents[accentKey]?.value ?? null : null));
+  const storeAccent = useAppStore((state) => (accentKey ? state.avatarAccents[accentKey]?.value ?? null : null));
+  const accent = storeAccent ?? accentProp ?? null;
 
   useEffect(() => {
     if (!accent && avatarUrl) requestAvatarAccent(avatarUrl);

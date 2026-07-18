@@ -173,7 +173,7 @@ function GlobalRankingRow({ entry, index, delayStep }: { entry: LiveGlobalRankin
     >
       <span className="w-6 shrink-0 text-center text-sm font-bold text-osu-f1 tabular-nums">#{entry.rank}</span>
       <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} />
-      <UsernameText username={entry.user.username} avatarUrl={entry.user.avatar_url} className="min-w-0 flex-1 truncate text-sm font-medium" />
+      <UsernameText username={entry.user.username} avatarUrl={entry.user.avatar_url} accent={entry.user.avatar_accent} className="min-w-0 flex-1 truncate text-sm font-medium" />
       <span className="flex w-[22px] shrink-0 justify-center">
         <CountryFlag code={entry.user.country_code} size="sm" />
       </span>
