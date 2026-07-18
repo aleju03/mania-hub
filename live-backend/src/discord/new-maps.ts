@@ -9,7 +9,6 @@ import { nowIso } from "../shared/score.js";
 // than guess, so the alert never fires on an old map.
 
 const HOUR_MS = 60 * 60 * 1000;
-const TOP_PLAY_BEATMAP_ID_EXPR = "cast(case when json_valid(payload_json) then coalesce(json_extract(payload_json, '$.score.beatmap_id'), json_extract(payload_json, '$.score.beatmap.id')) end as integer)";
 
 // Parses the ranked date for a beatmapset from its stored metadata. Returns the
 // epoch milliseconds, or null when unknown / unparseable.
@@ -131,7 +130,7 @@ export async function getFarmMapSignal(db: Db, beatmapId: number, options: FarmM
      from top_play_events
      where detected_at >= ?
        and pp_gain >= ?
-       and ${TOP_PLAY_BEATMAP_ID_EXPR} = ?`,
+       and score_beatmap_id = ?`,
     [cutoff, minPpGain, beatmapId],
   );
   const row = result.rows[0] ?? {};

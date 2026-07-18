@@ -126,6 +126,17 @@ function getPopoffKey(popoff: PopOff): string {
   return `${popoff.user.id}-${popoff.score.id}`;
 }
 
+// The expanded panel's cover backdrop is the only place a row loads its cover,
+// so the image download used to start on click and the backdrop faded in late.
+// Warming it on hover has it cached by the time the row expands.
+const preloadedCoverUrls = new Set<string>();
+function preloadPopoffCover(popoff: PopOff): void {
+  const url = popoff.score.beatmapset?.covers?.["cover@2x"] || popoff.score.beatmapset?.covers?.cover;
+  if (!url || preloadedCoverUrls.has(url)) return;
+  preloadedCoverUrls.add(url);
+  new Image().src = url;
+}
+
 function PopOffsPage() {
   const { range, country, sort, dir, keys } = Route.useSearch();
   const location = useLocation();
@@ -162,9 +173,16 @@ function PopOffsPage() {
   const { warming } = useCountryWarming(selectedCountry);
   const wasWindowActiveRef = useRef(windowActive);
 
+  const refocusRefreshRef = useRef(false);
+
+  // Refocus catch-up: force the next snapshot fetch without clearing
+  // currentLiveSnapshotKeyRef - nulling it made the UI read the refetch as a
+  // page change and wipe the visible list to skeletons ("Loading page...")
+  // every time the window regained focus. With the key intact the refetch runs
+  // as a background "Refreshing..." over the list that's already on screen.
   useEffect(() => {
     if (!wasWindowActiveRef.current && windowActive) {
-      currentLiveSnapshotKeyRef.current = null;
+      refocusRefreshRef.current = true;
     }
     wasWindowActiveRef.current = windowActive;
   }, [windowActive]);
@@ -228,11 +246,12 @@ function PopOffsPage() {
       selectedRange: range,
       cacheTtlMs: CLIENT_CACHE_TTL.popoffs,
     });
-    if (!cacheNeedsRefresh && currentLiveSnapshotKeyRef.current === snapshotKey) {
+    if (!cacheNeedsRefresh && !refocusRefreshRef.current && currentLiveSnapshotKeyRef.current === snapshotKey) {
       setLoading(false);
       setRefreshing(false);
       return;
     }
+    refocusRefreshRef.current = false;
 
     let cancelled = false;
     const requestedCountry = selectedCountry;
@@ -721,6 +740,7 @@ function PopOffsPage() {
                     <div
                       className="flex items-center gap-2 sm:gap-3 py-3 px-3 sm:px-4 hover:bg-osu-b3 transition-colors duration-[120ms] cursor-pointer"
                       onClick={() => setExpandedId(expandedId === p.score.id ? null : p.score.id)}
+                      onPointerEnter={() => preloadPopoffCover(p)}
                     >
                       <div className="flex-shrink-0 w-12 sm:w-16 text-center">
                         <div className="text-base sm:text-lg font-bold text-osu-pink" style={{ fontFamily: "Torus" }}>

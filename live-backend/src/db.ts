@@ -109,6 +109,7 @@ export async function migrate(db: Db): Promise<void> {
   await migrateOsuProxyCache(db);
   await migrateCountryMapsSnapshotStampsIndex(db);
   await migrateChartAnalysisDtRate(db);
+  await migrateTopPlayEventsHotColumns(db);
 }
 
 // getMapsSnapshotMeta reads only (generated_at, refreshed_at) for a country on
@@ -456,6 +457,36 @@ async function migrateFarmHelperShape(db: Db): Promise<void> {
 // feasibility gate can screen DT recs too (stored 1.0x MSD/dan can't). Populated
 // by the boot-seeded DT-rate sweep in features/chart-analysis.ts; the columns
 // just need to exist. Same shapes as msd_json / a lean dan verdict.
+// Top-plays snapshots used to filter/sort/join via json_extract over every
+// payload_json in the window (~5s for GLOBAL 30d, on the serving loop). These
+// columns materialize the extracted fields once; the covering indexes keep the
+// count/pp-gain scans off the payload overflow pages entirely.
+async function migrateTopPlayEventsHotColumns(db: Db): Promise<void> {
+  const columns = (await db.execute("pragma table_info(top_play_events)")).rows.map((row) => String(row.name));
+  if (!columns.includes("score_time")) {
+    await db.execute("alter table top_play_events add column score_time text");
+    await db.execute("alter table top_play_events add column score_beatmap_id integer");
+    await db.execute("alter table top_play_events add column key_count real");
+    await db.execute(`
+      update top_play_events set
+        score_time = coalesce(case when json_valid(payload_json) then json_extract(payload_json, '$.time') end, detected_at),
+        score_beatmap_id = cast(case when json_valid(payload_json) then coalesce(json_extract(payload_json, '$.score.beatmap_id'), json_extract(payload_json, '$.score.beatmap.id')) end as integer),
+        key_count = cast(case when json_valid(payload_json) then json_extract(payload_json, '$.score.beatmap.cs') end as real)
+    `);
+    await db.execute(`
+      update top_play_events
+      set key_count = (select b.cs from beatmaps b where b.beatmap_id = top_play_events.score_beatmap_id)
+      where key_count is null and score_beatmap_id is not null
+    `);
+  }
+  await db.execute("create index if not exists idx_top_play_events_country_score_time on top_play_events(country, score_time desc, key_count)");
+  await db.execute("create index if not exists idx_top_play_events_score_time on top_play_events(score_time desc, key_count, pp_gain, user_id)");
+  // pp/gain sorts walk these in order and check the window + key filter from
+  // the index itself; without them each candidate row costs a table lookup.
+  await db.execute("create index if not exists idx_top_play_events_pp_window on top_play_events(pp desc, score_time, key_count)");
+  await db.execute("create index if not exists idx_top_play_events_gain_window on top_play_events(pp_gain desc, score_time, key_count)");
+}
+
 async function migrateChartAnalysisDtRate(db: Db): Promise<void> {
   const columns = (await db.execute("pragma table_info(beatmap_chart_analysis)")).rows.map((row) => String(row.name));
   if (!columns.includes("msd_dt_json")) {

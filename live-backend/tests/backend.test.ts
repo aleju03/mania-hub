@@ -2478,9 +2478,9 @@ describe("live backend", () => {
     for (const [country, scoreId] of [["CR", 8001], ["US", 8002]] as const) {
       await exec(
         db,
-        `insert into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at)
-         values (?, ?, 101, 100, 95, 20, '{}', ?)`,
-        [country, scoreId, detectedAt],
+        `insert into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at, score_time)
+         values (?, ?, 101, 100, 95, 20, '{}', ?, ?)`,
+        [country, scoreId, detectedAt, detectedAt],
       );
     }
     expect((await getTopPlaysSnapshot(db, "CR", "7d")).popoffs).toHaveLength(1);
@@ -2497,8 +2497,8 @@ describe("live backend", () => {
     for (let i = 0; i < 205; i += 1) {
       await exec(
         db,
-        `insert into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at)
-         values ('US', ?, ?, ?, ?, 1, ?, ?)`,
+        `insert into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at, score_time, key_count)
+         values ('US', ?, ?, ?, ?, 1, ?, ?, ?, 7)`,
         [
           10_000 + i,
           20_000 + i,
@@ -2515,13 +2515,14 @@ describe("live backend", () => {
             keys: 7,
           }),
           olderTime,
+          olderTime,
         ],
       );
     }
     await exec(
       db,
-      `insert into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at)
-       values ('CR', 9001, 101, 280, 266, 36.9, ?, ?)`,
+      `insert into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at, score_time, key_count)
+       values ('CR', 9001, 101, 280, 266, 36.9, ?, ?, ?, 4)`,
       [
         topPlayPayload({
           scoreId: 9001,
@@ -2533,6 +2534,7 @@ describe("live backend", () => {
           time: recentTime,
           keys: 4,
         }),
+        recentTime,
         recentTime,
       ],
     );
@@ -2561,6 +2563,10 @@ describe("live backend", () => {
     await ingestor.ingestBatch([scores[0]]);
     expect(Number((await exec(db, "select count(*) as count from top_play_events")).rows[0].count)).toBe(0);
     const best = await fixture<OscScore[]>("top-best.json");
+    // Snapshot windows cut on when the play happened (score_time), so the
+    // fixture's canned ended_at has to be recent for the 7d snapshot below.
+    const freshEndedAt = new Date(Date.now() - 60_000).toISOString();
+    for (const bestScore of best) bestScore.ended_at = freshEndedAt;
     const osu = {
       getBeatmapUserScoresAll: async (_beatmapId: number, _userId: number, _caller?: string) => [],
       getUserBestScores: async (_userId: number, _caller?: string) => best,

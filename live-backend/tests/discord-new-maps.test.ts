@@ -70,8 +70,8 @@ describe("new-map db helpers", () => {
       : { beatmap_id: params.beatmapId };
     await exec(
       db,
-      `insert into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at)
-       values ('CR', ?, ?, ?, ?, ?, ?, ?)`,
+      `insert into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at, score_time, score_beatmap_id)
+       values ('CR', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         params.scoreId,
         params.userId,
@@ -80,6 +80,8 @@ describe("new-map db helpers", () => {
         params.ppGain,
         JSON.stringify({ score }),
         params.detectedAt,
+        params.detectedAt,
+        params.beatmapId,
       ],
     );
   }

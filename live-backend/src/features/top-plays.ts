@@ -15,10 +15,13 @@ const TOP_PLAY_CONFIRMATION_PENDING_MS = 30 * 60_000;
 const TOP_PLAYS_DEFAULT_PAGE_SIZE = 200;
 const TOP_PLAYS_MAX_PAGE_SIZE = 200;
 const TOP_PLAYS_PP_GAIN_LIMIT = 500;
-const TOP_PLAY_TIME_EXPR = "coalesce(case when json_valid(e.payload_json) then json_extract(e.payload_json, '$.time') end, e.detected_at)";
-const TOP_PLAY_BEATMAP_ID_EXPR = "cast(case when json_valid(e.payload_json) then coalesce(json_extract(e.payload_json, '$.score.beatmap_id'), json_extract(e.payload_json, '$.score.beatmap.id')) end as integer)";
-const TOP_PLAY_BEATMAP_JOIN = `left join beatmaps b on b.beatmap_id = ${TOP_PLAY_BEATMAP_ID_EXPR}`;
-const TOP_PLAY_KEY_COUNT_EXPR = "cast(coalesce(case when json_valid(e.payload_json) then json_extract(e.payload_json, '$.score.beatmap.cs') end, b.cs) as real)";
+// Filters and sorts run on the materialized columns (score_time,
+// score_beatmap_id, key_count - see migrateTopPlayEventsHotColumns), never on
+// json_extract over payload_json: the GLOBAL 30d window is ~60k multi-KB
+// payloads and parsing them per request blocked the serving loop for seconds.
+// score_time is non-null (backfilled with a detected_at fallback, always set on
+// insert), so bare-column predicates keep the score_time indexes usable.
+const TOP_PLAY_TIME_EXPR = "e.score_time";
 
 export type TopPlaysSnapshotSort = "recent" | "pp" | "gain";
 export type TopPlaysSnapshotDirection = "asc" | "desc";
@@ -104,11 +107,13 @@ export async function confirmTopPlay(
     ppGain,
     time: score.ended_at ?? score.created_at ?? refreshedAt,
   };
+  const scoreBeatmapId = readPositiveIntegerField(score.beatmap_id ?? score.beatmap?.id);
+  const scoreKeyCount = readPositiveNumberField(score.beatmap?.cs);
   const inserted = await exec(
     db,
-    `insert or ignore into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [payload.country, confirmedScoreId, payload.userId, event.pp, event.weightedPP, event.ppGain, json(toStoredTopPlayEvent(event)), refreshedAt],
+    `insert or ignore into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at, score_time, score_beatmap_id, key_count)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [payload.country, confirmedScoreId, payload.userId, event.pp, event.weightedPP, event.ppGain, json(toStoredTopPlayEvent(event)), refreshedAt, event.time, scoreBeatmapId, scoreKeyCount],
   );
   if (inserted.rowsAffected === 0) return false;
   // A fresh top play is what moves overall pp, so this is the natural moment to settle "reach N pp"
@@ -295,14 +300,16 @@ export async function getTopPlaysSnapshot(db: Db, country: string, window: strin
   const page = Math.max(1, Math.floor(options.page ?? 1));
   const pageSize = Math.max(1, Math.min(TOP_PLAYS_MAX_PAGE_SIZE, Math.floor(options.pageSize ?? TOP_PLAYS_DEFAULT_PAGE_SIZE)));
   const offset = (page - 1) * pageSize;
-  // Global aggregates every tracked country's detected top plays.
+  // Global aggregates every tracked country's detected top plays. The window
+  // cuts on score_time (when the play happened), not detected_at, so backfill
+  // catch-up after downtime doesn't surface days-old plays under "24 hours".
   const global = isGlobalCountry(country);
-  const where = global ? ["e.detected_at >= ?"] : ["e.country = ?", "e.detected_at >= ?"];
+  const where = global ? ["e.score_time >= ?"] : ["e.country = ?", "e.score_time >= ?"];
   const args: Array<string | number> = global ? [cutoff] : [country, cutoff];
   if (options.keys === "4k") {
-    where.push(`${TOP_PLAY_KEY_COUNT_EXPR} = 4`);
+    where.push("e.key_count = 4");
   } else if (options.keys === "other") {
-    where.push(`${TOP_PLAY_KEY_COUNT_EXPR} is not null`, `${TOP_PLAY_KEY_COUNT_EXPR} != 4`);
+    where.push("e.key_count is not null", "e.key_count != 4");
   }
   const userIds = (options.userIds ?? [])
     .map((id) => Math.floor(Number(id)))
@@ -316,7 +323,6 @@ export async function getTopPlaysSnapshot(db: Db, country: string, window: strin
     db,
     `select count(*) as count
      from top_play_events e
-     ${TOP_PLAY_BEATMAP_JOIN}
      where ${whereSql}`,
     args,
   )).rows;
@@ -325,7 +331,6 @@ export async function getTopPlaysSnapshot(db: Db, country: string, window: strin
     `select e.payload_json, u.username, u.avatar_url, u.country_code
      from top_play_events e
      left join users u on u.user_id = e.user_id
-     ${TOP_PLAY_BEATMAP_JOIN}
      where ${whereSql}
      order by ${topPlaysSnapshotOrderBy(options)}
      limit ? offset ?`,
@@ -344,20 +349,21 @@ export async function getTopPlaysSnapshot(db: Db, country: string, window: strin
 
 async function getTopPlaysPpGains(db: Db, country: string, cutoff: string, options: TopPlaysSnapshotOptions): Promise<TopPlaysPpGainSummary[]> {
   const global = isGlobalCountry(country);
-  const where = global ? ["e.detected_at >= ?", "e.pp_gain >= 0.05"] : ["e.country = ?", "e.detected_at >= ?", "e.pp_gain >= 0.05"];
+  const where = global ? ["e.score_time >= ?", "e.pp_gain >= 0.05"] : ["e.country = ?", "e.score_time >= ?", "e.pp_gain >= 0.05"];
   const args: Array<string | number> = global ? [cutoff] : [country, cutoff];
   if (options.keys === "4k") {
-    where.push(`${TOP_PLAY_KEY_COUNT_EXPR} = 4`);
+    where.push("e.key_count = 4");
   } else if (options.keys === "other") {
-    where.push(`${TOP_PLAY_KEY_COUNT_EXPR} is not null`, `${TOP_PLAY_KEY_COUNT_EXPR} != 4`);
+    where.push("e.key_count is not null", "e.key_count != 4");
   }
+  // No payload_json here: the users join carries the display fields, and
+  // max(payload_json) forced multi-KB string comparisons across the window.
   const rows = (await exec(
     db,
-    `select e.user_id, sum(e.pp_gain) as total_gain, max(e.payload_json) as payload_json,
+    `select e.user_id, sum(e.pp_gain) as total_gain,
             u.username, u.avatar_url, u.country_code
      from top_play_events e
      left join users u on u.user_id = e.user_id
-     ${TOP_PLAY_BEATMAP_JOIN}
      where ${where.join(" and ")}
      group by e.user_id
      having total_gain >= 0.05
@@ -368,6 +374,18 @@ async function getTopPlaysPpGains(db: Db, country: string, cutoff: string, optio
   return rows
     .map((row) => hydrateTopPlayPpGain(row))
     .filter((entry): entry is TopPlaysPpGainSummary => entry !== null);
+}
+
+// Guarded reads for the materialized columns: compact API beatmap objects can
+// omit cs entirely, and a coalesced 0 would poison the 4K/other filters.
+function readPositiveIntegerField(value: unknown): number | null {
+  const numberValue = Number(value);
+  return Number.isInteger(numberValue) && numberValue > 0 ? numberValue : null;
+}
+
+function readPositiveNumberField(value: unknown): number | null {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : null;
 }
 
 function topPlaysSnapshotOrderBy(options: TopPlaysSnapshotOptions): string {
@@ -433,18 +451,14 @@ function hydrateTopPlayEvent(row: Record<string, unknown>, event: CountryTopPlay
 }
 
 function hydrateTopPlayPpGain(row: Record<string, unknown>): TopPlaysPpGainSummary | null {
-  const event = parseJson<CountryTopPlay>(row.payload_json, {} as CountryTopPlay);
-  const id = Number(row.user_id ?? event.user?.id);
+  const id = Number(row.user_id);
   const totalGain = Number(row.total_gain ?? 0);
   if (!Number.isFinite(id) || id <= 0 || !Number.isFinite(totalGain) || totalGain < 0.05) return null;
-  const username = row.username == null ? "" : String(row.username);
-  const avatarUrl = row.avatar_url == null ? "" : String(row.avatar_url);
-  const countryCode = row.country_code == null ? "" : String(row.country_code);
   return {
     id,
-    username: username || event.user?.username || "",
-    avatar_url: avatarUrl || event.user?.avatar_url || "",
-    country_code: countryCode || event.user?.country_code,
+    username: row.username == null ? "" : String(row.username),
+    avatar_url: row.avatar_url == null ? "" : String(row.avatar_url),
+    country_code: row.country_code == null ? "" : String(row.country_code),
     totalGain,
   };
 }
