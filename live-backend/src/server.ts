@@ -440,13 +440,14 @@ function startVariantPpDripScheduler(db: Awaited<ReturnType<typeof createDb>>, q
 }
 
 // Version-stale player-skills drip: after a PLAYER_SKILLS_VERSION bump every
-// stored rating is stale, and the read path only recomputes players someone
-// views, so the rest of the roster would never converge on its own. The drip
+// stored rating is stale, and outside the drip recomputes only happen for
+// players someone views or who set a new top play, so the inactive rest of
+// the roster would never converge on its own. The drip
 // tops up the MinaCalc lane only while its waiting pool is nearly empty and
 // enqueues at bottom priority, so view-triggered computes (priority 50) and
 // dan estimates always jump ahead and the drip drains at whatever pace the
 // lane has spare. Strongest players first: their profiles get viewed most.
-const SKILLS_DRIP_BATCH = 8;
+const SKILLS_DRIP_BATCH = 16;
 const SKILLS_DRIP_INTERVAL_MS = 5 * 60_000;
 const SKILLS_DRIP_PRIORITY = 5;
 
