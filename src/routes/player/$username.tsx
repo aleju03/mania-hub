@@ -13,7 +13,9 @@ import {
   fetchLivePlayerAboutDirect,
   fetchLivePlayerProfileSnapshotDirect,
   fetchLivePlayerRecentScoresDirect,
+  fetchLivePlayerSkillsDirect,
   isLiveBackendConfigured,
+  type LivePlayerSkills,
   type LivePlayerActivityPatterns,
   type LivePlayerActivityPrimarySkill,
   type LivePlayerActivitySnapshot,
@@ -56,6 +58,7 @@ import { DanBadge } from "../../components/ui/DanBadge";
 import { ScoreRowSkeleton, Skeleton } from "../../components/ui/LoadingSkeleton";
 import { UsernameText } from "../../components/ui/UsernameText";
 import { ManiaCard3DPanel as ManiaCardPanel } from "../../components/player/maniacard3d/ManiaCard3DPanel";
+import { SkillBreakdownBody, SkillModePanel, qualifyingSkillModes, skillRatingAccent } from "../../components/player/SkillBreakdown";
 import type { InsightScoreSnapshot, OsuCovers, OsuManiaVariant, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
 import { buildPpDistribution, calculateUserProfileInsights } from "../../lib/profile-insights";
 import { readPlayerShell } from "../../lib/player-shell-cache";
@@ -115,7 +118,7 @@ const TUNG_TUNG_SAHUR_GLOW_COLORS = ["#38d9ff", "#ff3f57", "#8bff3f", "#b45cff",
 const TUNG_TUNG_SAHUR_BASE_REST = { y: 0, scaleY: 1 };
 const TUNG_TUNG_SAHUR_TOP_REST = { x: -3.25, y: 4, scaleY: 1, filter: "brightness(1)" };
 const TUNG_TUNG_SAHUR_ACTUATION_MS = 49;
-export type PlayerTab = "best" | "recent" | "card" | "about" | "activity";
+export type PlayerTab = "best" | "recent" | "card" | "about" | "activity" | "skills";
 type ActivityDay = {
   date: string;
   scoreCount: number;
@@ -165,7 +168,7 @@ type ActivitySummary = {
   timezone: string;
 };
 
-const PLAYER_TABS: PlayerTab[] = ["best", "recent", "about", "card", "activity"];
+const PLAYER_TABS: PlayerTab[] = ["best", "recent", "skills", "about", "card", "activity"];
 const ACTIVITY_EMPTY_CELL_CLASS = "bg-osu-b4/45 border-osu-b3/25";
 const PLAYER_ACTIVITY_COUNTRY_SCOPE = "GLOBAL";
 
@@ -178,6 +181,7 @@ function getPlayerTabLabel(tab: PlayerTab): string {
   if (tab === "recent") return "Recent Plays";
   if (tab === "card") return "Maniacard";
   if (tab === "activity") return "Activity";
+  if (tab === "skills") return "Skills";
   return "About";
 }
 
@@ -198,6 +202,7 @@ function getPlayerTabFromPathname(pathname: string): PlayerTab {
   if (tabSlug === "recent") return "recent";
   if (tabSlug === "about") return "about";
   if (tabSlug === "maniacard") return "card";
+  if (tabSlug === "skills") return "skills";
   if (tabSlug === "activity") return normalizePlayerTab("activity");
   return "best";
 }
@@ -977,7 +982,12 @@ export function PlayerProfilePage({
   const [recentError, setRecentError] = useState<string | null>(null);
   const [aboutError, setAboutError] = useState<string | null>(null);
   const [insightsError, setInsightsError] = useState<string | null>(null);
-  const [tab, setTab] = useState<PlayerTab>(() => normalizePlayerTab(initialTab));
+  const [tabState, setTab] = useState<PlayerTab>(() => normalizePlayerTab(initialTab));
+  // Skills stays admin-only while the skill/dan formulas are in calibration preview;
+  // non-admins landing on /skills (old links) fall back to the default tab.
+  const canSeeSkillsTab = useAuth().canUseAdminFeatures;
+  const tab = !canSeeSkillsTab && tabState === "skills" ? "best" : tabState;
+  const playerTabs = canSeeSkillsTab ? PLAYER_TABS : PLAYER_TABS.filter((t) => t !== "skills");
   const [keyFilter, setKeyFilter] = useState<KeyFilter>("all");
   const [bestModFilter, setBestModFilter] = useState<ModFilterState>({});
   const [bestSort, setBestSort] = useState<BestSort>("pp-desc");
@@ -2208,7 +2218,7 @@ export function PlayerProfilePage({
           <div className="mt-5 pt-1 border-t border-osu-b3/30 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div ref={tabsRailRef} className="-mx-5 overflow-x-auto px-5 scrollbar-hide sm:mx-0 sm:px-0">
               <div className="flex min-w-max">
-                {PLAYER_TABS.map((t) => (
+                {playerTabs.map((t) => (
                   <button
                     key={t}
                     data-player-tab={t}
@@ -2338,6 +2348,16 @@ export function PlayerProfilePage({
                 transition={{ duration: 0.14 }}
               >
                 <PlayerActivityPanel user={user} />
+              </motion.div>
+            ) : tab === "skills" ? (
+              <motion.div
+                key="skills"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.14 }}
+              >
+                <PlayerSkillsPanel user={user} />
               </motion.div>
             ) : (
               <motion.div
@@ -2555,6 +2575,8 @@ function PlayerPageSkeleton({
   tab: PlayerTab;
   onTabChange: (tab: PlayerTab) => void;
 }) {
+  const canSeeSkillsTab = useAuth().canUseAdminFeatures;
+  const playerTabs = canSeeSkillsTab ? PLAYER_TABS : PLAYER_TABS.filter((t) => t !== "skills");
   return (
     <div className="flex-1 bg-osu-b5">
       <div className="relative h-[220px] sm:h-[280px] overflow-hidden bg-osu-b4">
@@ -2626,7 +2648,7 @@ function PlayerPageSkeleton({
         <div className="mt-5 pt-1 border-t border-osu-b3/30">
           <div className="-mx-5 overflow-x-auto px-5 scrollbar-hide sm:mx-0 sm:px-0">
             <div className="flex min-w-max">
-              {PLAYER_TABS.map((t) => (
+              {playerTabs.map((t) => (
                 <button
                   key={t}
                   onClick={() => onTabChange(t)}
@@ -2752,6 +2774,102 @@ function ActivityOptInEmptyState({
       <div className="mt-1.5 text-[13px] text-osu-f1">
         Plays are only recorded for the top 100 players of each tracked country, and this player isn't currently among them.
       </div>
+    </div>
+  );
+}
+
+function PlayerSkillCard({ title, accent, children }: { title: string; accent: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <span className="h-3.5 w-1 rounded-full" style={{ backgroundColor: accent }} />
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-l3">{title}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// Public Skills tab: the exact per-keymode skill ratings (same renderer as the
+// My Data card) with population percentiles and player dan chips. First-time
+// visitors start "pending" while the backend rates their plays, so the panel
+// polls until the breakdown lands.
+function PlayerSkillsPanel({ user }: { user: OsuUser }) {
+  const [skills, setSkills] = useState<LivePlayerSkills | null>(null);
+  const [skillsError, setSkillsError] = useState(false);
+  const liveConfigured = isLiveBackendConfigured();
+
+  useEffect(() => {
+    if (!liveConfigured) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let attempts = 0;
+    const load = async () => {
+      try {
+        const data = await fetchLivePlayerSkillsDirect(user.id);
+        if (cancelled) return;
+        setSkills(data);
+        setSkillsError(false);
+        if (data.status === "pending" && attempts < 40) {
+          // Fast polls while the compute is imminent, then back off; deploy-day
+          // version bumps can park a profile deep in the analyzer queue.
+          attempts += 1;
+          timer = setTimeout(() => void load(), attempts <= 12 ? 6_000 : 15_000);
+        }
+      } catch {
+        if (!cancelled) setSkillsError(true);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [user.id, liveConfigured]);
+
+  if (!liveConfigured) {
+    return <div className="py-8 text-center text-sm text-osu-f1">Skill ratings need the live backend, which is not configured.</div>;
+  }
+  if (skillsError) {
+    return <div className="py-8 text-center text-sm text-osu-f1">Could not load skill ratings. Try again in a bit.</div>;
+  }
+  if (!skills) {
+    return (
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        {Array.from({ length: 2 }).map((_, i) => (
+          <div key={i} className="space-y-3 rounded-xl border border-osu-b3/20 bg-osu-b4 p-4">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-7 w-24" />
+            {Array.from({ length: 5 }).map((_, j) => (
+              <Skeleton key={j} className="h-3 w-full" />
+            ))}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const modes = qualifyingSkillModes(skills);
+  if (skills.status !== "ready" || modes.length === 0) {
+    return (
+      <div className="mx-auto max-w-[440px]">
+        <PlayerSkillCard title="Skill rating" accent={skillRatingAccent(null)}>
+          <SkillBreakdownBody skills={skills} mode={null} />
+        </PlayerSkillCard>
+      </div>
+    );
+  }
+  return (
+    <div
+      className={`grid grid-cols-1 gap-3 ${
+        modes.length > 1
+          ? "xl:grid-cols-2 xl:[&>*:last-child:nth-child(odd)]:col-span-2"
+          : "md:max-w-[640px]"
+      }`}
+    >
+      {modes.map((mode) => (
+        <SkillModePanel key={mode.keyCount} skills={skills} mode={mode} />
+      ))}
     </div>
   );
 }

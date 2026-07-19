@@ -16,7 +16,6 @@ import {
   type MyDataArchiveFilter,
   type MyDataModFilter,
   type MyDataSkillBreakdown,
-  type MyDataSkillMode,
   type MyDataSummary,
   type MyDataPage,
   type MyDataTopPlay,
@@ -27,6 +26,7 @@ import {
   type MyDataTrackedSort,
 } from "../../lib/my-data";
 import { openLiveEventSource } from "../../lib/live-backend";
+import { SkillBreakdownBody, qualifyingSkillModes, skillRatingAccent } from "../player/SkillBreakdown";
 import { getScoreTimestamp } from "../../lib/score";
 import { MeScoreRow } from "./MeScoreRow";
 import { ModBadge } from "../ui/ModBadge";
@@ -119,41 +119,6 @@ function formatHour(h: number): string {
   const period = h < 12 ? "am" : "pm";
   const base = h % 12 === 0 ? 12 : h % 12;
   return `${base}${period}`;
-}
-
-// Etterna's skillset taxonomy (from the MinaCalc analysis), with colors from
-// the same palette the old pattern fingerprint used. Native for 4K only.
-const MSD_SKILLSET_META: Array<{ key: string; label: string; color: string }> = [
-  { key: "Stream", label: "Stream", color: "#8f6bd8" },
-  { key: "Jumpstream", label: "Jumpstream", color: "#6f87d8" },
-  { key: "Handstream", label: "Handstream", color: "#b06bc0" },
-  { key: "Stamina", label: "Stamina", color: "#ad6b5d" },
-  { key: "JackSpeed", label: "Jackspeed", color: "#c66f84" },
-  { key: "Chordjack", label: "Chordjack", color: "#c59a5c" },
-  { key: "Technical", label: "Technical", color: "#83a86f" },
-];
-
-// Non-4K axes come from the in-house pattern detector instead (MinaCalc's
-// skillset names are 4K vocabulary): each value is the aggregate of the
-// player's Overall SSRs on charts tagged with that pattern. Family ids only;
-// subtypes (speedjack, lnrelease, ...) stay a maps-page concern.
-const PATTERN_RATING_META: Array<{ key: string; label: string; color: string }> = [
-  { key: "chordstream", label: "Chordstream", color: "#5ab2f2" },
-  { key: "bracket", label: "Bracket", color: "#f3c24a" },
-  { key: "delay", label: "Delay", color: "#46c7b8" },
-  { key: "stream", label: "Stream", color: "#8f6bd8" },
-  { key: "jack", label: "Jack", color: "#ec6a9c" },
-  { key: "chordjack", label: "Chordjack", color: "#c59a5c" },
-  { key: "tech", label: "Tech", color: "#83cf6b" },
-  { key: "ln", label: "LN", color: "#f07474" },
-];
-
-// Drop trickle keymodes (a few stray plays in an off-keymode) so the toggle only offers modes the
-// player meaningfully plays; always keep at least the dominant one.
-function qualifyingSkillModes(skills: MyDataSkillBreakdown | null): MyDataSkillMode[] {
-  const modes = skills?.modes ?? [];
-  const qualifying = modes.filter((mode) => mode.analyzedPlays >= 3);
-  return qualifying.length > 0 ? qualifying : modes.slice(0, 1);
 }
 
 function normalizedQuery(value: string): string | undefined {
@@ -591,7 +556,7 @@ export function MyDataPanel() {
                 accent={skillRatingAccent(activeSkillMode)}
                 right={skillModes.length > 1 ? <KeymodeToggle modes={skillModes} active={activeSkillMode?.keyCount ?? null} onChange={setSkillModeKey} /> : undefined}
               >
-                <SkillRatingCardBody skills={skills} mode={activeSkillMode} />
+                <SkillBreakdownBody skills={skills} mode={activeSkillMode} own />
               </InsightCard>
 
               {summary && summary.rhythm.sampleSize > 0 ? (
@@ -920,80 +885,6 @@ function HeaderStat({ label, value }: { label: string; value: string }) {
     <div>
       <div className="text-[16px] font-bold leading-none text-white tabular-nums">{value}</div>
       <div className="mt-0.5 text-[10px] text-osu-f1">{label}</div>
-    </div>
-  );
-}
-
-// 4K speaks MinaCalc's native skillsets; other keymodes speak the in-house
-// pattern vocabulary (falling back to the MSD names while tags are missing).
-function skillModeEntries(mode: MyDataSkillMode): Array<{ key: string; label: string; color: string; value: number }> {
-  if (mode.keyCount !== 4) {
-    const byId = new Map((mode.patterns ?? []).map((entry) => [entry.id, entry.rating]));
-    const patternEntries = PATTERN_RATING_META
-      .map((meta) => ({ ...meta, value: Number(byId.get(meta.key) ?? 0) }))
-      .filter((entry) => entry.value >= 1)
-      .sort((a, b) => b.value - a.value);
-    if (patternEntries.length > 0) return patternEntries;
-  }
-  const entries = MSD_SKILLSET_META
-    .map((meta) => ({ ...meta, value: Number(mode.ratings[meta.key] ?? 0) }))
-    // The 6K/7K calc engine returns ~0 for skillsets it does not rate
-    // (Technical); a 0.15 sliver next to 20+ bars is noise, not signal.
-    .filter((entry) => entry.value >= 1);
-  // Etterna's taxonomy has no LN skillset, so the 4K card grafts in the LN
-  // pattern axis (same rating scale: Overall SSRs on LN-tagged charts).
-  const ln = (mode.patterns ?? []).find((entry) => entry.id === "ln");
-  if (ln && ln.rating >= 1) entries.push({ key: "ln", label: "LN", color: "#f07474", value: ln.rating });
-  return entries.sort((a, b) => b.value - a.value);
-}
-
-function skillRatingAccent(mode: MyDataSkillMode | null): string {
-  if (!mode) return "#8f6bd8";
-  return skillModeEntries(mode)[0]?.color ?? "#8f6bd8";
-}
-
-function SkillRatingCardBody({ skills, mode }: { skills: MyDataSkillBreakdown | null; mode: MyDataSkillMode | null }) {
-  if (!skills || skills.status === "pending") {
-    return <div className="text-[12px] text-osu-f1">Your top plays are being rated by the chart analyzer. The first pass takes a minute or two.</div>;
-  }
-  if (skills.status === "failed") {
-    return <div className="text-[12px] text-osu-f1">Rating your top plays failed. It retries automatically, check back in a bit.</div>;
-  }
-  if (!mode || mode.analyzedPlays === 0) {
-    return <div className="text-[12px] text-osu-f1">None of your top plays could be rated yet. Converts and unusual keymodes are skipped.</div>;
-  }
-  const entries = skillModeEntries(mode);
-  const overall = Number(mode.ratings.Overall ?? 0);
-  const max = entries[0]?.value ?? 1;
-  return (
-    <div>
-      {entries[0] ? (
-        <div className="mb-2.5 text-[12px] text-osu-l2">
-          You&apos;re strongest in <span className="font-semibold text-white">{entries[0].label}</span>
-        </div>
-      ) : null}
-      <div className="mb-3 flex items-baseline gap-2">
-        <span className="text-[26px] font-bold leading-none text-white tabular-nums">{overall.toFixed(2)}</span>
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-l3">overall</span>
-      </div>
-      <div className="space-y-2">
-        {entries.map((entry) => (
-          <div key={entry.key} className="flex items-center gap-2">
-            <span className="w-[74px] shrink-0 text-[11px] font-semibold text-osu-l2">{entry.label}</span>
-            <span className="h-1.5 min-w-0 flex-1 rounded-full bg-osu-b3/35">
-              <span
-                className="block h-full rounded-full"
-                style={{ width: `${Math.max(4, (entry.value / max) * 100)}%`, backgroundColor: entry.color }}
-              />
-            </span>
-            <span className="w-[42px] shrink-0 text-right text-[11px] text-osu-f1 tabular-nums">{entry.value.toFixed(2)}</span>
-          </div>
-        ))}
-      </div>
-      <div className="mt-3 text-[10px] text-osu-f1">
-        rated from {mode.analyzedPlays} of your top {skills.totalPlays} plays, DT and HT at their real rate, accuracy weighted by MAX:300 ratio
-        {skills.pendingPlays > 0 ? <> &middot; {skills.pendingPlays} still analyzing</> : null}
-      </div>
     </div>
   );
 }

@@ -994,24 +994,41 @@ export function Nav() {
                 <ThemePicker variant="mobile" />
                 {auth.viewer ? (
                   <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMobileAccountOpen((open) => !open);
-                        setMobileCountryOpen(false);
-                      }}
-                      className="flex w-full items-center gap-2.5 rounded-lg border border-osu-b3/30 bg-osu-b4/60 px-2.5 py-1.5 text-osu-l2 transition-colors duration-[120ms] hover:border-osu-b3/60 hover:bg-osu-b4/80"
-                      aria-label="Account menu"
-                      aria-expanded={mobileAccountOpen}
-                    >
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1 ring-osu-b3/60">
-                        <Avatar url={auth.viewer.avatarUrl} userId={auth.viewer.id} size={24} />
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-left text-[11px] font-semibold">
-                        {auth.viewer.username}
-                      </span>
-                      <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-osu-f1 transition-transform duration-150 ${mobileAccountOpen ? "rotate-180" : ""}`} strokeWidth={2.2} />
-                    </button>
+                    <div className="flex items-stretch gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMobileAccountOpen((open) => !open);
+                          setMobileCountryOpen(false);
+                        }}
+                        className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg border border-osu-b3/30 bg-osu-b4/60 px-2.5 py-1.5 text-osu-l2 transition-colors duration-[120ms] hover:border-osu-b3/60 hover:bg-osu-b4/80"
+                        aria-label="Account menu"
+                        aria-expanded={mobileAccountOpen}
+                      >
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1 ring-osu-b3/60">
+                          <Avatar url={auth.viewer.avatarUrl} userId={auth.viewer.id} size={24} />
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-left text-[11px] font-semibold">
+                          {auth.viewer.username}
+                        </span>
+                        <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-osu-f1 transition-transform duration-150 ${mobileAccountOpen ? "rotate-180" : ""}`} strokeWidth={2.2} />
+                      </button>
+                      {viewerCountryTracked && viewerCountryCode ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleCountrySelect(viewerCountryCode);
+                            setMobileAccountOpen(false);
+                            setMenuOpen(false);
+                          }}
+                          title={`Switch to ${getCountryName(viewerCountryCode)}`}
+                          aria-label={`Switch country to ${getCountryName(viewerCountryCode)}`}
+                          className="flex shrink-0 items-center justify-center rounded-lg border border-osu-b3/30 bg-osu-b4/60 px-2.5 transition-colors duration-[120ms] hover:border-osu-b3/60 hover:bg-osu-b4/80 cursor-pointer"
+                        >
+                          <CountryFlag code={viewerCountryCode} size="md" decorative />
+                        </button>
+                      ) : null}
+                    </div>
 
                     {mobileAccountOpen ? (
                       <div className="absolute left-0 right-0 top-full z-[65] mt-1 overflow-hidden rounded-lg border border-osu-b3/50 bg-osu-b5 shadow-[0_10px_25px_rgba(0,0,0,0.5)]">

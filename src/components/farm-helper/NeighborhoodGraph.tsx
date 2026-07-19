@@ -82,6 +82,8 @@ interface GraphNode {
   driftPhase: number;
   driftSpeed: number;
   img: HTMLImageElement | null;
+  // set on the first frame the node is drawable; drives the fade-in
+  appearAt: number | null;
 }
 
 function mulberry32(seed: number): () => number {
@@ -162,6 +164,7 @@ function buildGraph(source: GraphSource): GraphNode[] {
       driftPhase: rng() * Math.PI * 2,
       driftSpeed: 0.2 + rng() * 0.26,
       img: null,
+      appearAt: null,
     });
   });
 
@@ -193,6 +196,7 @@ function buildGraph(source: GraphSource): GraphNode[] {
       driftPhase: rng() * Math.PI * 2,
       driftSpeed: 0.18 + rng() * 0.26,
       img: null,
+      appearAt: null,
     });
   }
   // Pad sparse graphs (the canned fallback, thin cohorts) with anonymous dots.
@@ -209,6 +213,7 @@ function buildGraph(source: GraphSource): GraphNode[] {
       driftPhase: rng() * Math.PI * 2,
       driftSpeed: 0.18 + rng() * 0.28,
       img: null,
+      appearAt: null,
     });
   }
 
@@ -222,6 +227,40 @@ function formatPp(pp: number): string {
 // One fetch per viewer per session: remounts (StrictMode, tab switches) reuse
 // the same promise instead of re-hitting the endpoint.
 const neighborsFetchCache = new Map<number, Promise<GraphSource>>();
+
+// Survives F5: the last live cohort renders immediately on reload while the
+// fetch refreshes it in the background.
+const NEIGHBORS_STORAGE_KEY = "mania-hub-farm-neighbors-v1";
+
+function readStoredNeighbors(viewerId: number): GraphSource | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(NEIGHBORS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || parsed.viewerId !== viewerId || !Array.isArray(parsed.peers)) return null;
+    const peers = (parsed.peers as unknown[]).filter(
+      (p): p is NeighborPeer =>
+        !!p && typeof p === "object" && Number.isFinite((p as NeighborPeer).id) && typeof (p as NeighborPeer).name === "string",
+    );
+    if (peers.length < MIN_LIVE_PEERS) return null;
+    return { peers, subjectModePp: typeof parsed.subjectModePp === "number" ? parsed.subjectModePp : null, live: true };
+  } catch {
+    return null;
+  }
+}
+
+function storeNeighbors(viewerId: number, source: GraphSource): void {
+  if (typeof window === "undefined" || !source.live) return;
+  try {
+    window.sessionStorage.setItem(
+      NEIGHBORS_STORAGE_KEY,
+      JSON.stringify({ viewerId, peers: source.peers, subjectModePp: source.subjectModePp }),
+    );
+  } catch {
+    /* ignore quota */
+  }
+}
 
 function loadNeighbors(viewerId: number): Promise<GraphSource> {
   const cached = neighborsFetchCache.get(viewerId);
@@ -246,7 +285,10 @@ export function NeighborhoodGraph({ viewer }: { viewer: AuthViewer | null }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const navigate = useNavigate();
-  const [source, setSource] = useState<GraphSource | null>(null);
+  // Starts as an empty cohort so the sphere (anonymous dots + "you") renders
+  // immediately; peers fill in when the fetch resolves instead of the whole
+  // graph popping into an empty column.
+  const [source, setSource] = useState<GraphSource>({ peers: [], subjectModePp: null, live: false });
   const viewerId = viewer?.id ?? null;
   const viewerAvatarUrl = viewer?.avatarUrl ?? null;
 
@@ -255,10 +297,16 @@ export function NeighborhoodGraph({ viewer }: { viewer: AuthViewer | null }) {
       setSource({ peers: FALLBACK_PEERS, subjectModePp: null, live: false });
       return;
     }
+    const stored = readStoredNeighbors(viewerId);
+    if (stored) setSource(stored);
+    const storedJson = stored ? JSON.stringify(stored) : null;
     let cancelled = false;
     loadNeighbors(viewerId)
       .then((result) => {
-        if (!cancelled) setSource(result);
+        storeNeighbors(viewerId, result);
+        // Identical to the stored cohort: keep the current nodes so the
+        // already-rendered graph doesn't rebuild and re-fade.
+        if (!cancelled && JSON.stringify(result) !== storedJson) setSource(result);
       })
       .catch(() => {
         if (!cancelled) setSource({ peers: FALLBACK_PEERS, subjectModePp: null, live: false });
@@ -268,7 +316,7 @@ export function NeighborhoodGraph({ viewer }: { viewer: AuthViewer | null }) {
     };
   }, [viewerId]);
 
-  const nodes = useMemo(() => (source ? buildGraph(source) : null), [source]);
+  const nodes = useMemo(() => buildGraph(source), [source]);
 
   useEffect(() => {
     const wrap = wrapRef.current;
@@ -487,6 +535,14 @@ export function NeighborhoodGraph({ viewer }: { viewer: AuthViewer | null }) {
       ctx.restore();
     };
 
+    const FADE_MS = 450;
+    let centerAppearAt: number | null = null;
+    const fadeIn = (node: { appearAt: number | null }, now: number): number => {
+      if (reducedMotion) return 1;
+      if (node.appearAt == null) node.appearAt = now;
+      return Math.min(1, (now - node.appearAt) / FADE_MS);
+    };
+
     const draw = (now: number) => {
       const dt = Math.min(64, Math.max(0, now - lastFrameT));
       lastFrameT = now;
@@ -578,7 +634,9 @@ export function NeighborhoodGraph({ viewer }: { viewer: AuthViewer | null }) {
           ctx.stroke();
           ctx.restore();
           if (centerImg.complete && centerImg.naturalWidth > 0) {
-            circleImage(centerImg, center.x, center.y, centerR);
+            if (centerAppearAt == null) centerAppearAt = now;
+            const centerFade = reducedMotion ? 1 : Math.min(1, (now - centerAppearAt) / FADE_MS);
+            circleImage(centerImg, center.x, center.y, centerR, centerFade);
           }
           ctx.save();
           ctx.fillStyle = pink;
@@ -590,9 +648,10 @@ export function NeighborhoodGraph({ viewer }: { viewer: AuthViewer | null }) {
         }
         const p = projected.get(node)!;
         const emphasized = node === hovered;
+        const fade = fadeIn(node, now);
         if (!node.hasAvatar) {
           ctx.save();
-          ctx.globalAlpha = emphasized ? 0.95 : (node.peer ? 0.14 : 0.08) + 0.26 * p.depth;
+          ctx.globalAlpha = (emphasized ? 0.95 : (node.peer ? 0.14 : 0.08) + 0.26 * p.depth) * fade;
           ctx.fillStyle = emphasized ? pink : "#ffffff";
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.r + (emphasized ? 1 : 0), 0, Math.PI * 2);
@@ -601,7 +660,7 @@ export function NeighborhoodGraph({ viewer }: { viewer: AuthViewer | null }) {
           continue;
         }
         const r = p.r + (emphasized ? 2 : 0);
-        const alpha = emphasized ? 1 : 0.45 + 0.55 * p.depth;
+        const alpha = (emphasized ? 1 : 0.45 + 0.55 * p.depth) * fade;
         if (node.img?.complete && node.img.naturalWidth > 0) {
           circleImage(node.img, p.x, p.y, r, alpha);
         } else {
@@ -614,7 +673,7 @@ export function NeighborhoodGraph({ viewer }: { viewer: AuthViewer | null }) {
           ctx.restore();
         }
         ctx.save();
-        ctx.globalAlpha = emphasized ? 0.9 : 0.15 + 0.25 * p.depth;
+        ctx.globalAlpha = (emphasized ? 0.9 : 0.15 + 0.25 * p.depth) * fade;
         ctx.strokeStyle = emphasized ? pink : "#ffffff";
         ctx.lineWidth = emphasized ? 1.8 : 1;
         ctx.beginPath();

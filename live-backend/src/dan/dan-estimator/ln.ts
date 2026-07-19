@@ -247,7 +247,10 @@ function officialReferenceNeighborTarget(metrics: DanFeatureMetrics, rate: numbe
   };
 }
 
-function parseRawLnDan(rawDan: number): LnDanEstimateResult {
+// The LN dan ladder is numeric 1-16 with +/- variants; it never extends into
+// the rice ladder's greek levels. Exported so player-dan positioning labels
+// its LN side on the same scale as chart LN verdicts.
+export function parseLnDan(rawDan: number): { label: string; variant: string | null; displayName: string } {
   const level = Math.max(1, Math.min(16, Math.round(rawDan)));
   const offset = rawDan - level;
   const variant = level >= 15
@@ -257,6 +260,12 @@ function parseRawLnDan(rawDan: number): LnDanEstimateResult {
     label: String(level),
     variant,
     displayName: `LN ${level}${variant ?? ""}`,
+  };
+}
+
+function parseRawLnDan(rawDan: number): LnDanEstimateResult {
+  return {
+    ...parseLnDan(rawDan),
     rawDan,
     estimatedSr: rawDan,
     confidence: 0.72,

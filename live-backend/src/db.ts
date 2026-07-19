@@ -110,6 +110,8 @@ export async function migrate(db: Db): Promise<void> {
   await migrateCountryMapsSnapshotStampsIndex(db);
   await migrateChartAnalysisDtRate(db);
   await migrateTopPlayEventsHotColumns(db);
+  await migratePlayerSkillBaseline(db);
+  await migrateActivityMapsBestPayload(db);
 }
 
 // getMapsSnapshotMeta reads only (generated_at, refreshed_at) for a country on
@@ -485,6 +487,44 @@ async function migrateTopPlayEventsHotColumns(db: Db): Promise<void> {
   // the index itself; without them each candidate row costs a table lookup.
   await db.execute("create index if not exists idx_top_play_events_pp_window on top_play_events(pp desc, score_time, key_count)");
   await db.execute("create index if not exists idx_top_play_events_gain_window on top_play_events(pp_gain desc, score_time, key_count)");
+}
+
+// Approximate per-user skill ratings backing the population percentiles
+// (features/skill-baseline.ts). Written by the chunked refresh_skill_baseline
+// job; the quantile curves themselves live in live_meta.
+async function migratePlayerSkillBaseline(db: Db): Promise<void> {
+  await db.execute(`
+    create table if not exists player_skill_baseline (
+      user_id integer not null,
+      key_count integer not null,
+      baseline_version integer not null,
+      analyzed_plays integer not null,
+      ratings_json text not null,
+      latest_played_at text,
+      updated_at text not null,
+      primary key (user_id, key_count, baseline_version)
+    )
+  `);
+  // Added after the table first shipped; dev DBs created without it need the
+  // column, and rows backfill naturally on the next baseline run.
+  const columns = (await db.execute("pragma table_info(player_skill_baseline)")).rows.map((row) => String(row.name));
+  if (!columns.includes("latest_played_at")) {
+    await db.execute("alter table player_skill_baseline add column latest_played_at text");
+  }
+}
+
+// The day-best rows outlive raw score payloads by ~2 years, and the skill
+// pipeline reads them back as archived evidence. Mods and judgement counts
+// are the two fields that evidence needs beyond accuracy (real rate, wife
+// goal, miss share); ~100 bytes per row vs the multi-KB payload.
+async function migrateActivityMapsBestPayload(db: Db): Promise<void> {
+  const columns = (await db.execute("pragma table_info(player_activity_maps)")).rows.map((row) => String(row.name));
+  if (!columns.includes("best_mods_json")) {
+    await db.execute("alter table player_activity_maps add column best_mods_json text");
+  }
+  if (!columns.includes("best_statistics_json")) {
+    await db.execute("alter table player_activity_maps add column best_statistics_json text");
+  }
 }
 
 async function migrateChartAnalysisDtRate(db: Db): Promise<void> {

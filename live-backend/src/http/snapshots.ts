@@ -17,6 +17,7 @@ import { getOsuJsonWithProxyCache, normalizeOsuProxyCacheHints } from "../featur
 import { GOAL_KINDS, GOAL_MAP_KINDS, GOAL_SPEED_BUCKETS, GOAL_TARGET_GRADES, createUserGoal, deleteUserGoal, getUserGoal, listUserGoalsWithProgress, reconcileGoalsForUser, updateUserGoal, type GoalKind, type GoalSpeedBucket, type UserGoalInput, type UserGoalTargetPatch } from "../features/goals.js";
 import { getMyDataSummary, getUserTopPlaysFeed, getUserTrackedFeed, type MyDataTopPlaysQuery, type MyDataTrackedFeedQuery } from "../features/my-data.js";
 import { getPlayerSkillBreakdown } from "../features/player-skills.js";
+import { decoratePlayerSkillBreakdown } from "../features/skill-baseline.js";
 import { FARM_HELPER_DEFAULT_LIMIT, FARM_HELPER_MAX_LIMIT, FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperNeighbors, getFarmHelperSnapshot, type FarmHelperKeyMode, type FarmHelperView } from "../features/farm-helper.js";
 import type { ScoreSpeedBucket } from "../shared/score.js";
 import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalRankingsSnapshot, type GlobalRankingsSort } from "../features/global-rankings.js";
@@ -312,6 +313,19 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         userId,
         url.searchParams.get("country") ?? country,
       ));
+      return true;
+    }
+    if (profileRoute.kind === "skills") {
+      if (!checkRate(req, res, ctx, "publicCostly")) return true;
+      // Reads always serve; compute enqueueing is reserved for players the
+      // backend already knows (tracked roster members or players with a
+      // stored profile snapshot), so anonymous visitors cannot flood the
+      // MinaCalc lane with arbitrary user ids.
+      const known = (await exec(ctx.db, "select 1 from country_rosters where user_id = ? limit 1", [userId])).rows[0]
+        ?? (await exec(ctx.db, "select 1 from profile_snapshots where user_id = ? limit 1", [userId])).rows[0];
+      const breakdown = await getPlayerSkillBreakdown(ctx.db, ctx.queue, userId, { allowEnqueue: !!known });
+      res.setHeader("cache-control", "public, max-age=60");
+      sendJson(req, res, ctx, 200, await decoratePlayerSkillBreakdown(ctx.db, userId, breakdown));
       return true;
     }
     if (!checkRate(req, res, ctx, "publicCostly")) return true;
@@ -659,7 +673,9 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     const [trackedPage, topPlayPage, skills] = await Promise.all([
       getUserTrackedFeed(ctx.db, userId, limit, trackedOffset),
       getUserTopPlaysFeed(ctx.db, userId, limit, topOffset),
-      getPlayerSkillBreakdown(ctx.db, ctx.queue, userId).catch(() => null),
+      getPlayerSkillBreakdown(ctx.db, ctx.queue, userId)
+        .then((breakdown) => decoratePlayerSkillBreakdown(ctx.db, userId, breakdown))
+        .catch(() => null),
     ]);
     sendJson(req, res, ctx, 200, { summary, trackedPage, topPlayPage, skills });
     return true;
@@ -678,7 +694,8 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
       return true;
     }
-    sendJson(req, res, ctx, 200, await getPlayerSkillBreakdown(ctx.db, ctx.queue, userId));
+    const breakdown = await getPlayerSkillBreakdown(ctx.db, ctx.queue, userId);
+    sendJson(req, res, ctx, 200, await decoratePlayerSkillBreakdown(ctx.db, userId, breakdown));
     return true;
   }
   if (url.pathname === "/api/my-data/feed") {
@@ -3637,8 +3654,8 @@ function parseUserIds(raw: string | null): number[] {
     .slice(0, 100);
 }
 
-function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snapshot" | "recent" | "about" | "activity" | "activity-day" | "activity-availability"; key: string } | null {
-  const match = /^\/api\/profiles\/([^/]+)\/(cached-snapshot|snapshot|recent|about|activity|activity-day|activity-availability)$/.exec(pathname);
+function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snapshot" | "recent" | "about" | "activity" | "activity-day" | "activity-availability" | "skills"; key: string } | null {
+  const match = /^\/api\/profiles\/([^/]+)\/(cached-snapshot|snapshot|recent|about|activity|activity-day|activity-availability|skills)$/.exec(pathname);
   if (!match) return null;
   let key: string;
   try {
@@ -3648,7 +3665,7 @@ function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snaps
   }
   return {
     key,
-    kind: match[2] as "cached-snapshot" | "snapshot" | "recent" | "about" | "activity" | "activity-day" | "activity-availability",
+    kind: match[2] as "cached-snapshot" | "snapshot" | "recent" | "about" | "activity" | "activity-day" | "activity-availability" | "skills",
   };
 }
 

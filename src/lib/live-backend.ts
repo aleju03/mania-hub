@@ -1,6 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireAdminAccess } from "./auth";
 import { harvestAvatarAccents } from "./avatar-accent-harvest";
+import type { MyDataSkillBreakdown } from "./my-data";
+
+export type LivePlayerSkills = MyDataSkillBreakdown;
 import type {
   CountryMapsData,
   CountryTopPlay,
@@ -884,6 +887,15 @@ export async function fetchLivePlayerRecentScoresDirect(userId: number): Promise
 export async function fetchLivePlayerAboutDirect(userId: number): Promise<LivePlayerProfileSection<LivePlayerAboutPayload>> {
   if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
   return fetchLiveJson(`/api/profiles/${userId}/about`);
+}
+
+// Public per-player skill ratings (the same shape the My Data card consumes,
+// plus percentiles and player dan). Server-side compute enqueueing is gated to
+// players the backend already tracks, so this can 200 with status "pending"
+// forever for arbitrary unknown ids.
+export async function fetchLivePlayerSkillsDirect(userId: number): Promise<LivePlayerSkills> {
+  if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
+  return fetchLiveJson(`/api/profiles/${userId}/skills`);
 }
 
 export async function fetchLivePlayerActivityDirect(

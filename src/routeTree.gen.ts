@@ -48,6 +48,7 @@ import { Route as AdminLiveBackendRouteImport } from './routes/admin/live-backen
 import { Route as AdminDiscordRouteImport } from './routes/admin/discord'
 import { Route as AdminDanClassifierRouteImport } from './routes/admin/dan-classifier'
 import { Route as VideosIdFilenameRouteImport } from './routes/videos/$id/$filename'
+import { Route as PlayerUsernameSkillsRouteImport } from './routes/player/$username/skills'
 import { Route as PlayerUsernameRecentRouteImport } from './routes/player/$username/recent'
 import { Route as PlayerUsernameManiacardRouteImport } from './routes/player/$username/maniacard'
 import { Route as PlayerUsernameActivityRouteImport } from './routes/player/$username/activity'
@@ -252,6 +253,11 @@ const VideosIdFilenameRoute = VideosIdFilenameRouteImport.update({
   path: '/videos/$id/$filename',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PlayerUsernameSkillsRoute = PlayerUsernameSkillsRouteImport.update({
+  id: '/skills',
+  path: '/skills',
+  getParentRoute: () => PlayerUsernameRoute,
+} as any)
 const PlayerUsernameRecentRoute = PlayerUsernameRecentRouteImport.update({
   id: '/recent',
   path: '/recent',
@@ -339,6 +345,7 @@ export interface FileRoutesByFullPath {
   '/player/$username/activity': typeof PlayerUsernameActivityRoute
   '/player/$username/maniacard': typeof PlayerUsernameManiacardRoute
   '/player/$username/recent': typeof PlayerUsernameRecentRoute
+  '/player/$username/skills': typeof PlayerUsernameSkillsRoute
   '/videos/$id/$filename': typeof VideosIdFilenameRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
 }
@@ -388,6 +395,7 @@ export interface FileRoutesByTo {
   '/player/$username/activity': typeof PlayerUsernameActivityRoute
   '/player/$username/maniacard': typeof PlayerUsernameManiacardRoute
   '/player/$username/recent': typeof PlayerUsernameRecentRoute
+  '/player/$username/skills': typeof PlayerUsernameSkillsRoute
   '/videos/$id/$filename': typeof VideosIdFilenameRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
 }
@@ -438,6 +446,7 @@ export interface FileRoutesById {
   '/player/$username/activity': typeof PlayerUsernameActivityRoute
   '/player/$username/maniacard': typeof PlayerUsernameManiacardRoute
   '/player/$username/recent': typeof PlayerUsernameRecentRoute
+  '/player/$username/skills': typeof PlayerUsernameSkillsRoute
   '/videos/$id/$filename': typeof VideosIdFilenameRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
 }
@@ -489,6 +498,7 @@ export interface FileRouteTypes {
     | '/player/$username/activity'
     | '/player/$username/maniacard'
     | '/player/$username/recent'
+    | '/player/$username/skills'
     | '/videos/$id/$filename'
     | '/api/auth/osu/callback'
   fileRoutesByTo: FileRoutesByTo
@@ -538,6 +548,7 @@ export interface FileRouteTypes {
     | '/player/$username/activity'
     | '/player/$username/maniacard'
     | '/player/$username/recent'
+    | '/player/$username/skills'
     | '/videos/$id/$filename'
     | '/api/auth/osu/callback'
   id:
@@ -587,6 +598,7 @@ export interface FileRouteTypes {
     | '/player/$username/activity'
     | '/player/$username/maniacard'
     | '/player/$username/recent'
+    | '/player/$username/skills'
     | '/videos/$id/$filename'
     | '/api/auth/osu/callback'
   fileRoutesById: FileRoutesById
@@ -910,6 +922,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VideosIdFilenameRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/player/$username/skills': {
+      id: '/player/$username/skills'
+      path: '/skills'
+      fullPath: '/player/$username/skills'
+      preLoaderRoute: typeof PlayerUsernameSkillsRouteImport
+      parentRoute: typeof PlayerUsernameRoute
+    }
     '/player/$username/recent': {
       id: '/player/$username/recent'
       path: '/recent'
@@ -986,6 +1005,7 @@ interface PlayerUsernameRouteChildren {
   PlayerUsernameActivityRoute: typeof PlayerUsernameActivityRoute
   PlayerUsernameManiacardRoute: typeof PlayerUsernameManiacardRoute
   PlayerUsernameRecentRoute: typeof PlayerUsernameRecentRoute
+  PlayerUsernameSkillsRoute: typeof PlayerUsernameSkillsRoute
 }
 
 const PlayerUsernameRouteChildren: PlayerUsernameRouteChildren = {
@@ -993,6 +1013,7 @@ const PlayerUsernameRouteChildren: PlayerUsernameRouteChildren = {
   PlayerUsernameActivityRoute: PlayerUsernameActivityRoute,
   PlayerUsernameManiacardRoute: PlayerUsernameManiacardRoute,
   PlayerUsernameRecentRoute: PlayerUsernameRecentRoute,
+  PlayerUsernameSkillsRoute: PlayerUsernameSkillsRoute,
 }
 
 const PlayerUsernameRouteWithChildren = PlayerUsernameRoute._addFileChildren(

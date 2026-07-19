@@ -15,6 +15,8 @@ import { ensureDanFloorPinRecomputeSeeded, ensureDtRateAnalysisSeeded, ensureLnS
 import { enqueueMapCollectionsRebuildIfDue } from "./features/map-collections.js";
 import { startGoalUserIndexRefresh } from "./features/goals.js";
 import { enqueueProfilePoolWarmIfIdle } from "./features/profile-pool-warm.js";
+import { enqueuePlayerSkills, PLAYER_SKILLS_JOB, PLAYER_SKILLS_VERSION } from "./features/player-skills.js";
+import { enqueueSkillBaselineIfDue } from "./features/skill-baseline.js";
 import { backfillSkinSlugs } from "./features/skins.js";
 import { AbuseGuard } from "./http/abuse-guard.js";
 import { CountryClientTracker } from "./live/country-clients.js";
@@ -247,8 +249,14 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       startQualifiedMapsWatchScheduler(app.db, app.queue, app.config);
       startProfilePoolWarmScheduler(app.db, app.queue);
       startVariantPpDripScheduler(app.db, app.queue);
+      startPlayerSkillsDripScheduler(app.db, app.queue);
     }
     startRetentionScheduler(app.db, app.config);
+    // Skill percentile baseline: pure DB/CPU (approximate SSRs over stored top
+    // plays), so it runs whenever workers do, like retention.
+    if (app.config.enableWorkers) {
+      startSkillBaselineScheduler(app.db, app.queue);
+    }
     // Global rankings board: built here (yielding batches) and packed into
     // live_meta so the serving process answers pages from one small read and
     // never scans the roster on its own event loop.
@@ -429,6 +437,65 @@ function startVariantPpDripScheduler(db: Awaited<ReturnType<typeof createDb>>, q
     setTimeout(tick, VARIANT_PP_DRIP_INTERVAL_MS).unref();
   };
   setTimeout(tick, 90_000).unref();
+}
+
+// Version-stale player-skills drip: after a PLAYER_SKILLS_VERSION bump every
+// stored rating is stale, and the read path only recomputes players someone
+// views, so the rest of the roster would never converge on its own. The drip
+// tops up the MinaCalc lane only while its waiting pool is nearly empty and
+// enqueues at bottom priority, so view-triggered computes (priority 50) and
+// dan estimates always jump ahead and the drip drains at whatever pace the
+// lane has spare. Strongest players first: their profiles get viewed most.
+const SKILLS_DRIP_BATCH = 8;
+const SKILLS_DRIP_INTERVAL_MS = 5 * 60_000;
+const SKILLS_DRIP_PRIORITY = 5;
+
+function startPlayerSkillsDripScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: JobQueue): void {
+  const tick = async () => {
+    try {
+      const waiting = Number((await exec(
+        db,
+        "select count(*) as cnt from jobs where type = ? and status in ('queued', 'failed')",
+        [PLAYER_SKILLS_JOB],
+      )).rows[0]?.cnt ?? 0);
+      if (waiting < 2) {
+        const rows = (await exec(
+          db,
+          `select cr.user_id from (select distinct user_id from country_rosters) cr
+           left join users u on u.user_id = cr.user_id
+           where not exists (
+             select 1 from player_skill_ratings psr
+             where psr.user_id = cr.user_id and psr.analysis_version = ?
+           )
+           order by coalesce(u.pp, 0) desc
+           limit ?`,
+          [PLAYER_SKILLS_VERSION, SKILLS_DRIP_BATCH],
+        )).rows;
+        for (const row of rows) {
+          const userId = Number(row.user_id);
+          if (!Number.isSafeInteger(userId) || userId <= 0) continue;
+          await enqueuePlayerSkills(queue, userId, { priority: SKILLS_DRIP_PRIORITY });
+        }
+      }
+    } catch (error) {
+      console.warn("[player-skills-drip] scheduled enqueue failed", error);
+    }
+    setTimeout(tick, SKILLS_DRIP_INTERVAL_MS).unref();
+  };
+  setTimeout(tick, 3 * 60_000).unref();
+}
+
+// Weekly skill-baseline refresh: the due-check owns the cadence (stale or
+// missing curves enqueue a fresh chunked run), so this tick only has to fire
+// often enough to notice staleness and restart a chain that died.
+function startSkillBaselineScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: JobQueue): void {
+  const tick = async () => {
+    await enqueueSkillBaselineIfDue(db, queue).catch((error) => {
+      console.warn("[skill-baseline] scheduled refresh failed", error);
+    });
+    setTimeout(tick, 6 * 60 * 60_000).unref();
+  };
+  setTimeout(tick, 2 * 60_000).unref();
 }
 
 // Seeds and watchdogs the pack-pool snapshot warm chain: the job re-enqueues

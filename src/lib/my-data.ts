@@ -47,6 +47,20 @@ export interface MyDataDashboard {
   skills: MyDataSkillBreakdown | null;
 }
 
+// Player dan positioning per verdict side (RC vs LN), on the chart-dan scale.
+export interface MyDataSkillDanSide {
+  rawDan: number;
+  label: string;
+  clears: number;
+}
+
+// Share of the tracked population rating below the subject (0-100), from the
+// backend's approximate-SSR baseline curves.
+export interface MyDataSkillPercentile {
+  value: number;
+  population: number;
+}
+
 export interface MyDataSkillMode {
   keyCount: number;
   analyzedPlays: number;
@@ -54,6 +68,9 @@ export interface MyDataSkillMode {
   // Per-pattern ratings in the in-house pattern vocabulary (Overall SSRs
   // aggregated over chart-analysis tags); the keymode-honest axes for non-4K.
   patterns: Array<{ id: string; rating: number; plays: number }>;
+  dan?: { rc: MyDataSkillDanSide | null; ln: MyDataSkillDanSide | null };
+  // Keys are skillset names or `pattern:{id}` axes.
+  percentiles?: Record<string, MyDataSkillPercentile>;
 }
 
 // Etterna-style skillset ratings aggregated from the player's top plays by the
@@ -67,6 +84,12 @@ export interface MyDataSkillBreakdown {
   pendingPlays: number;
   unsupportedPlays: number;
   modes: MyDataSkillMode[];
+  // Present when the population baseline has been computed; users counts the
+  // tracked players behind each keymode's percentile curves.
+  baseline?: { computedAt: string; users: Record<string, number> } | null;
+  // Non-ready only: where the compute sits in the backend's analyzer lane.
+  // position is 1-based among waiting jobs; null while the job is running.
+  queue?: { state: "queued" | "running"; position: number | null; waiting: number } | null;
 }
 
 export interface MyDataBeatmapRef {

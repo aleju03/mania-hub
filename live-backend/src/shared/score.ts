@@ -83,7 +83,7 @@ export function isFullCombo(score: ScoreLike): boolean {
   return Boolean(score.passed) && getMissCount(score) === 0;
 }
 
-function calculateStableAccuracy(stats: OsuScoreStatistics): number {
+export function calculateStableAccuracy(stats: OsuScoreStatistics): number {
   const counts = getHitCounts(stats);
   const total = counts.countMax + counts.count300 + counts.count200 + counts.count100 + counts.count50 + counts.countMiss;
   if (total === 0) return 0;

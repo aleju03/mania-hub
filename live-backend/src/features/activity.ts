@@ -543,14 +543,16 @@ async function upsertActivityMap(
   await exec(
     db,
     `insert into player_activity_maps
-       (country, user_id, day, beatmap_id, play_count, best_score_id, best_pp, best_accuracy, best_rank, first_played_at, last_played_at, updated_at)
-     values (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)
+       (country, user_id, day, beatmap_id, play_count, best_score_id, best_pp, best_accuracy, best_rank, best_mods_json, best_statistics_json, first_played_at, last_played_at, updated_at)
+     values (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      on conflict(country, user_id, day, beatmap_id) do update set
        play_count = player_activity_maps.play_count + 1,
        best_score_id = case when ${activityMapBetterSql()} then excluded.best_score_id else player_activity_maps.best_score_id end,
        best_pp = case when ${activityMapBetterSql()} then excluded.best_pp else player_activity_maps.best_pp end,
        best_accuracy = case when ${activityMapBetterSql()} then excluded.best_accuracy else player_activity_maps.best_accuracy end,
        best_rank = case when ${activityMapBetterSql()} then excluded.best_rank else player_activity_maps.best_rank end,
+       best_mods_json = case when ${activityMapBetterSql()} then excluded.best_mods_json else player_activity_maps.best_mods_json end,
+       best_statistics_json = case when ${activityMapBetterSql()} then excluded.best_statistics_json else player_activity_maps.best_statistics_json end,
        first_played_at = case
          when player_activity_maps.first_played_at is null or excluded.first_played_at < player_activity_maps.first_played_at
            then excluded.first_played_at
@@ -571,6 +573,10 @@ async function upsertActivityMap(
       Number.isFinite(pp) ? pp : null,
       Number.isFinite(accuracy) ? accuracy : null,
       getDisplayedRank(score),
+      // The two payload fields the skill pipeline needs once the raw score is
+      // pruned: mods carry the rate, judgement counts carry goal + miss share.
+      JSON.stringify(score.mods ?? []),
+      JSON.stringify(score.statistics ?? {}),
       activity.endedAt,
       activity.endedAt,
       now,

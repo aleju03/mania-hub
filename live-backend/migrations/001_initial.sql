@@ -401,6 +401,8 @@ create table if not exists player_activity_maps (
   best_pp real,
   best_accuracy real,
   best_rank text,
+  best_mods_json text,
+  best_statistics_json text,
   first_played_at text,
   last_played_at text,
   updated_at text not null,
@@ -682,4 +684,17 @@ create table if not exists player_skill_ratings (
   computed_at text,
   updated_at text not null,
   primary key (user_id, analysis_version)
+);
+
+-- Approximate per-user skill ratings (no wasm) backing the population
+-- percentiles (the quantile curves themselves live in live_meta)
+create table if not exists player_skill_baseline (
+  user_id integer not null,
+  key_count integer not null,
+  baseline_version integer not null,
+  analyzed_plays integer not null,
+  ratings_json text not null,
+  latest_played_at text,
+  updated_at text not null,
+  primary key (user_id, key_count, baseline_version)
 );

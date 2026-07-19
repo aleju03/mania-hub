@@ -1,0 +1,703 @@
+import { randomUUID } from "node:crypto";
+import type { Db } from "../db.js";
+import { exec, json, parseJson } from "../db.js";
+import type { JobQueue } from "../jobs/queue.js";
+import { CHART_ANALYSIS_VERSION } from "./chart-analysis.js";
+import {
+  PLAYER_SKILLS_VERSION,
+  SKILL_RATING_SKILLSETS,
+  SSR_CALC_GOAL_CAP,
+  SSR_EXTRAPOLATION_BASE_GOAL,
+  aggregateSsrs,
+  getRankedPlayRate,
+  ssrGoalForScore,
+  type PlayerSkillBreakdown,
+  type PlayerSkillModeBreakdown,
+} from "./player-skills.js";
+import { nowIso } from "../shared/score.js";
+import { logInfo } from "../logger.js";
+import type { OscScore } from "../shared/types.js";
+
+// Population baseline for the skill ratings: an approximate SSR per stored top
+// play, computed with zero wasm from data already in SQLite —
+//
+//   ssrApprox(play, skillset) = msd_1x(chart, s) · R(rate, s) · A(goal)
+//
+// where msd_1x comes from beatmap_chart_analysis.msd_json, R is an exact
+// DT/base ratio when the DT sweep stored one and a fitted power law rate^γ_s
+// otherwise, and A derates by accuracy along the calc's own 0.93→0.965 slope.
+// Per user and keymode the same erfc aggregation as the exact pipeline turns
+// those into an approximate rating vector; per (keymode, axis) a quantile
+// curve over all tracked users makes any single rating legible as a
+// percentile. Subject and population sit on the same approximate scale, so
+// the comparison is self-consistent; the exact rating stays the headline
+// number. Running the real calc for every tracked user would be ~600k
+// serialized wasm bursts (days of CPU) — the wrong tool for a baseline.
+//
+// Chunked, self-chaining, done-key-in-live_meta playbook like the DT sweep:
+// each job invocation processes a batch of users into player_skill_baseline,
+// then the final chunk folds the table into quantile curves stored in
+// live_meta. The heavy chart map is cached per run at module level; a worker
+// restart mid-run just rebuilds it on the next chunk.
+
+export const SKILL_BASELINE_JOB = "refresh_skill_baseline";
+// Bump to invalidate stored baselines (also bump when the goal function or
+// PLAYER_SKILLS_VERSION semantics change enough to shift the approximate scale).
+export const SKILL_BASELINE_VERSION = 1;
+export const SKILL_BASELINE_CURVES_META_KEY = `skill_baseline_curves:v${SKILL_BASELINE_VERSION}`;
+
+const BASELINE_REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60_000;
+const BASELINE_USER_CHUNK = 100;
+// A rating from a handful of plays is noise; the population only counts users
+// with a real stack in the keymode.
+export const BASELINE_MIN_PLAYS = 20;
+// Quantile curves with too few users behind them read as precision they do
+// not have; below this the axis publishes no percentile.
+const BASELINE_MIN_USERS_PER_CURVE = 20;
+const BASELINE_QUANTILE_POINTS = 200;
+// Accuracy derate anchored on the calc's measured 0.93→0.965 window: the
+// per-chart slope over that window sits at ~1.07-1.11 on real charts
+// (player-skills.ts extrapolation bounds), so the global value is its
+// midpoint. A(goal) = slope^((goal - 0.93) / 0.035).
+const ACC_DERATE_SLOPE = 1.09;
+const ACC_DERATE_WINDOW = SSR_CALC_GOAL_CAP - SSR_EXTRAPOLATION_BASE_GOAL;
+// γ_s fit safety: ignore ratio samples where either side is near zero, fall
+// back to a neutral exponent when the paired-chart corpus is too thin.
+const GAMMA_MIN_SAMPLE = 50;
+const GAMMA_FALLBACK = 1.0;
+const PATTERN_TAG_MIN_SCORE = 0.5;
+const BASELINE_PATTERN_MIN_PLAYS = 3;
+
+const AXES = SKILL_RATING_SKILLSETS;
+
+export interface BaselineChartEntry {
+  keyCount: number;
+  // Skillset values in SKILL_RATING_SKILLSETS order.
+  msd: Float64Array;
+  dtMsd: Float64Array | null;
+  lnRatio: number | null;
+  patterns: string[];
+}
+
+export interface BaselineFitParams {
+  gamma: Record<string, number>;
+  accSlope: number;
+  pairs: number;
+}
+
+export interface ApproxPlay {
+  beatmapId: number;
+  rate: number;
+  goal: number;
+  patterns: string[];
+  // Epoch ms of the play; feeds the per-keymode recency signal the farm
+  // helper's cohort affinity reads. Optional: callers without timestamps
+  // (the serving-side percentile path) just skip recency.
+  endedAtMs?: number | null;
+}
+
+export interface BaselineCurves {
+  computedAt: string;
+  baselineVersion: number;
+  playerSkillsVersion: number;
+  gamma: Record<string, number>;
+  accSlope: number;
+  minPlays: number;
+  // keyCount -> axis -> { count, curve } where curve is BASELINE_QUANTILE_POINTS
+  // ascending quantile values and axis is a skillset name or `pattern:{id}`.
+  curves: Record<string, Record<string, { count: number; curve: number[] }>>;
+  users: Record<string, number>;
+}
+
+export interface PlayerSkillAxisPercentile {
+  // Share of the tracked population rating below the subject, 0-100.
+  value: number;
+  population: number;
+}
+
+export interface PublicPlayerSkillMode extends PlayerSkillModeBreakdown {
+  percentiles?: Record<string, PlayerSkillAxisPercentile>;
+}
+
+export interface PublicPlayerSkillBreakdown extends PlayerSkillBreakdown {
+  modes: PublicPlayerSkillMode[];
+  baseline: { computedAt: string; users: Record<string, number> } | null;
+}
+
+function msdVector(values: Record<string, unknown> | undefined): Float64Array | null {
+  if (!values) return null;
+  const vector = new Float64Array(AXES.length);
+  let any = false;
+  for (let i = 0; i < AXES.length; i += 1) {
+    const value = Number(values[AXES[i]]);
+    if (Number.isFinite(value) && value > 0) {
+      vector[i] = value;
+      any = true;
+    }
+  }
+  return any ? vector : null;
+}
+
+/** A(goal): accuracy derate along the global 0.93-anchored slope. */
+function accuracyFactor(goal: number, accSlope: number): number {
+  return Math.pow(accSlope, (goal - SSR_EXTRAPOLATION_BASE_GOAL) / ACC_DERATE_WINDOW);
+}
+
+/** R(rate, s): exact DT ratio when stored, fitted power law otherwise. */
+function rateFactor(entry: BaselineChartEntry, axisIndex: number, rate: number, gamma: Record<string, number>): number {
+  if (rate === 1) return 1;
+  if (rate === 1.5 && entry.dtMsd && entry.dtMsd[axisIndex] > 0 && entry.msd[axisIndex] > 0) {
+    return entry.dtMsd[axisIndex] / entry.msd[axisIndex];
+  }
+  return Math.pow(rate, gamma[AXES[axisIndex]] ?? GAMMA_FALLBACK);
+}
+
+/**
+ * Approximate rating vectors per keymode from a set of plays: per-play
+ * approximate SSRs aggregated with the same erfc fold as the exact pipeline,
+ * plus pattern axes (`pattern:{id}`) over the plays' chart tags.
+ */
+export function computeApproxRatings(
+  plays: ApproxPlay[],
+  charts: Map<number, BaselineChartEntry>,
+  params: Pick<BaselineFitParams, "gamma" | "accSlope">,
+): Map<number, { analyzedPlays: number; ratings: Record<string, number>; latestPlayedAtMs: number | null }> {
+  const byKeyCount = new Map<number, { ssrs: number[][]; patternOveralls: Map<string, number[]>; latestPlayedAtMs: number | null }>();
+  for (const play of plays) {
+    const entry = charts.get(play.beatmapId);
+    if (!entry) continue;
+    let bucket = byKeyCount.get(entry.keyCount);
+    if (!bucket) {
+      bucket = { ssrs: AXES.map(() => []), patternOveralls: new Map(), latestPlayedAtMs: null };
+      byKeyCount.set(entry.keyCount, bucket);
+    }
+    if (play.endedAtMs != null && Number.isFinite(play.endedAtMs)) {
+      bucket.latestPlayedAtMs = Math.max(bucket.latestPlayedAtMs ?? 0, play.endedAtMs);
+    }
+    const acc = accuracyFactor(play.goal, params.accSlope);
+    let overall = 0;
+    for (let i = 0; i < AXES.length; i += 1) {
+      const base = entry.msd[i];
+      if (!(base > 0)) continue;
+      const ssr = base * rateFactor(entry, i, play.rate, params.gamma) * acc;
+      bucket.ssrs[i].push(ssr);
+      if (AXES[i] === "Overall") overall = ssr;
+    }
+    if (overall > 0) {
+      for (const pattern of play.patterns) {
+        const list = bucket.patternOveralls.get(pattern);
+        if (list) list.push(overall);
+        else bucket.patternOveralls.set(pattern, [overall]);
+      }
+    }
+  }
+  const result = new Map<number, { analyzedPlays: number; ratings: Record<string, number>; latestPlayedAtMs: number | null }>();
+  for (const [keyCount, bucket] of byKeyCount) {
+    const ratings: Record<string, number> = {};
+    let analyzedPlays = 0;
+    for (let i = 0; i < AXES.length; i += 1) {
+      analyzedPlays = Math.max(analyzedPlays, bucket.ssrs[i].length);
+      const rating = aggregateSsrs(bucket.ssrs[i]);
+      if (rating > 0) ratings[AXES[i]] = rating;
+    }
+    for (const [pattern, overalls] of bucket.patternOveralls) {
+      if (overalls.length < BASELINE_PATTERN_MIN_PLAYS) continue;
+      const rating = aggregateSsrs(overalls);
+      if (rating > 0) ratings[`pattern:${pattern}`] = rating;
+    }
+    result.set(keyCount, { analyzedPlays, ratings, latestPlayedAtMs: bucket.latestPlayedAtMs });
+  }
+  return result;
+}
+
+/**
+ * Fit γ_s from the charts that carry both 1.0x and DT MSD: the median of
+ * ln(msd_dt/msd_1x)/ln(1.5) per skillset. Purely statistical, no chart
+ * identity involved. The corpus is 4K (the DT sweep's scope); other keymodes
+ * reuse the same exponents as an approximation.
+ */
+export async function fitBaselineParams(db: Db): Promise<BaselineFitParams> {
+  const samples: Record<string, number[]> = Object.fromEntries(AXES.map((axis) => [axis, []]));
+  let cursor = 0;
+  let pairs = 0;
+  for (;;) {
+    const rows = (await exec(
+      db,
+      `select beatmap_id, msd_json, msd_dt_json from beatmap_chart_analysis
+       where analysis_version = ? and status = 'ready'
+         and msd_json is not null and msd_dt_json is not null
+         and beatmap_id > ?
+       order by beatmap_id
+       limit 2000`,
+      [CHART_ANALYSIS_VERSION, cursor],
+    )).rows;
+    for (const row of rows) {
+      cursor = Math.max(cursor, Number(row.beatmap_id));
+      const base = parseJson<{ values?: Record<string, number> }>(String(row.msd_json ?? ""), {}).values;
+      const dt = parseJson<{ values?: Record<string, number> }>(String(row.msd_dt_json ?? ""), {}).values;
+      if (!base || !dt) continue;
+      pairs += 1;
+      for (const axis of AXES) {
+        const baseValue = Number(base[axis]);
+        const dtValue = Number(dt[axis]);
+        // Near-zero skillset values are calc noise, not a rate signal.
+        if (baseValue > 0.5 && dtValue > 0.5) {
+          samples[axis].push(Math.log(dtValue / baseValue) / Math.log(1.5));
+        }
+      }
+    }
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    if (rows.length < 2000) break;
+  }
+  const gamma: Record<string, number> = {};
+  for (const axis of AXES) {
+    const values = samples[axis];
+    if (values.length < GAMMA_MIN_SAMPLE) {
+      gamma[axis] = GAMMA_FALLBACK;
+      continue;
+    }
+    values.sort((a, b) => a - b);
+    const median = values[Math.floor(values.length / 2)];
+    gamma[axis] = Math.round(Math.max(0, Math.min(2.5, median)) * 1000) / 1000;
+  }
+  return { gamma, accSlope: ACC_DERATE_SLOPE, pairs };
+}
+
+/**
+ * Load minimal chart entries (keyCount + MSD vectors + lnRatio + qualifying
+ * pattern tags) for a bounded id set. Used by the serving-side percentile
+ * decoration; the baseline job streams the whole corpus via
+ * loadBaselineChartMap instead.
+ */
+export async function loadBaselineChartEntries(db: Db, beatmapIds: number[]): Promise<Map<number, BaselineChartEntry>> {
+  const ids = [...new Set(beatmapIds)].filter((id) => Number.isInteger(id) && id > 0);
+  const map = new Map<number, BaselineChartEntry>();
+  if (ids.length === 0) return map;
+  const placeholders = ids.map(() => "?").join(", ");
+  const rows = (await exec(
+    db,
+    `select beatmap_id, key_count, msd_json, msd_dt_json, classification_json from beatmap_chart_analysis
+     where analysis_version = ? and status = 'ready' and msd_json is not null and beatmap_id in (${placeholders})`,
+    [CHART_ANALYSIS_VERSION, ...ids],
+  )).rows;
+  for (const row of rows) {
+    const entry = rowToChartEntry(row);
+    if (entry) map.set(Number(row.beatmap_id), entry);
+  }
+  return map;
+}
+
+function rowToChartEntry(row: Record<string, unknown>): BaselineChartEntry | null {
+  const keyCount = Number(row.key_count);
+  if (!Number.isInteger(keyCount) || keyCount <= 0) return null;
+  const msd = msdVector(parseJson<{ values?: Record<string, number> }>(String(row.msd_json ?? ""), {}).values);
+  if (!msd) return null;
+  const dtMsd = msdVector(parseJson<{ values?: Record<string, number> }>(String(row.msd_dt_json ?? ""), {}).values);
+  const classification = parseJson<{ lnRatio?: unknown; vibro?: unknown; patterns?: Array<{ id?: unknown; score?: unknown }> } | null>(
+    String(row.classification_json ?? ""),
+    null,
+  );
+  // No vibro skip here: every baseline input is a pp-backed top play, so its
+  // chart is ranked, and true vibro does not pass mania ranking criteria - a
+  // vibro flag on these charts is a detector misfire, same trust rule as the
+  // exact pipeline in player-skills.ts.
+  const lnRatio = Number(classification?.lnRatio);
+  const patterns = Array.isArray(classification?.patterns)
+    ? [...new Set(classification.patterns
+        .filter((hit) => Number(hit?.score ?? 0) >= PATTERN_TAG_MIN_SCORE)
+        .map((hit) => String(hit?.id ?? ""))
+        .filter(Boolean))]
+    : [];
+  return {
+    keyCount,
+    msd,
+    dtMsd,
+    lnRatio: Number.isFinite(lnRatio) ? Math.max(0, Math.min(1, lnRatio)) : null,
+    patterns,
+  };
+}
+
+// The full ~87k-chart map is expensive to build (a streamed scan with JSON
+// parsing), so it is cached per run id at module level: chunk N+1 of the same
+// run reuses chunk N's map, and a worker restart mid-run just rebuilds once.
+let chartMapCache: { runId: string; map: Map<number, BaselineChartEntry>; params: BaselineFitParams } | null = null;
+
+async function loadBaselineRunState(db: Db, runId: string): Promise<{ map: Map<number, BaselineChartEntry>; params: BaselineFitParams }> {
+  if (chartMapCache && chartMapCache.runId === runId) return chartMapCache;
+  const params = await fitBaselineParams(db);
+  const map = new Map<number, BaselineChartEntry>();
+  let cursor = 0;
+  for (;;) {
+    const rows = (await exec(
+      db,
+      `select beatmap_id, key_count, msd_json, msd_dt_json, classification_json from beatmap_chart_analysis
+       where analysis_version = ? and status = 'ready' and msd_json is not null and beatmap_id > ?
+       order by beatmap_id
+       limit 2000`,
+      [CHART_ANALYSIS_VERSION, cursor],
+    )).rows;
+    for (const row of rows) {
+      const beatmapId = Number(row.beatmap_id);
+      cursor = Math.max(cursor, beatmapId);
+      const entry = rowToChartEntry(row);
+      if (entry) map.set(beatmapId, entry);
+    }
+    // Chunked scan + a breath per chunk: never park the worker loop on one
+    // giant materialized read.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    if (rows.length < 2000) break;
+  }
+  chartMapCache = { runId, map, params };
+  logInfo("skill_baseline_chart_map_ready", { run_id: runId, charts: map.size, msd_pairs: params.pairs });
+  return chartMapCache;
+}
+
+function scoreToApproxPlay(score: OscScore, charts: Map<number, BaselineChartEntry>): ApproxPlay | null {
+  if (!(typeof score.pp === "number" && score.pp > 0)) return null;
+  const beatmapId = Number(score.beatmap_id ?? score.beatmap?.id ?? 0);
+  if (!Number.isInteger(beatmapId) || beatmapId <= 0) return null;
+  const entry = charts.get(beatmapId);
+  if (!entry) return null;
+  const rate = getRankedPlayRate(score.mods);
+  if (rate == null) return null;
+  const endedAtMs = Date.parse(String(score.ended_at ?? score.created_at ?? ""));
+  return {
+    beatmapId,
+    rate,
+    goal: ssrGoalForScore(score, entry.lnRatio),
+    patterns: entry.patterns,
+    endedAtMs: Number.isFinite(endedAtMs) ? endedAtMs : null,
+  };
+}
+
+export interface SkillBaselineChunkResult {
+  nextCursor: number;
+  usersProcessed: number;
+  done: boolean;
+}
+
+export async function runSkillBaselineChunk(
+  db: Db,
+  runId: string,
+  cursor: number,
+  limit = BASELINE_USER_CHUNK,
+): Promise<SkillBaselineChunkResult> {
+  const { map, params } = await loadBaselineRunState(db, runId);
+  const userRows = (await exec(
+    db,
+    "select distinct user_id from user_top_scores where user_id > ? order by user_id limit ?",
+    [Math.max(0, Math.floor(cursor)), Math.max(1, Math.floor(limit))],
+  )).rows;
+
+  let nextCursor = cursor;
+  const now = nowIso();
+  for (const userRow of userRows) {
+    const userId = Number(userRow.user_id);
+    nextCursor = Math.max(nextCursor, userId);
+    const scoreRows = (await exec(
+      db,
+      "select score_json from user_top_scores where user_id = ?",
+      [userId],
+    )).rows;
+    const plays: ApproxPlay[] = [];
+    for (const row of scoreRows) {
+      const score = parseJson<OscScore | null>(String(row.score_json ?? ""), null);
+      if (!score) continue;
+      const play = scoreToApproxPlay(score, map);
+      if (play) plays.push(play);
+    }
+    const byKeyCount = computeApproxRatings(plays, map, params);
+    for (const [keyCount, mode] of byKeyCount) {
+      await exec(
+        db,
+        `insert into player_skill_baseline (user_id, key_count, baseline_version, analyzed_plays, ratings_json, latest_played_at, updated_at)
+         values (?, ?, ?, ?, ?, ?, ?)
+         on conflict(user_id, key_count, baseline_version) do update set
+           analyzed_plays = excluded.analyzed_plays,
+           ratings_json = excluded.ratings_json,
+           latest_played_at = excluded.latest_played_at,
+           updated_at = excluded.updated_at`,
+        [
+          userId,
+          keyCount,
+          SKILL_BASELINE_VERSION,
+          mode.analyzedPlays,
+          json(mode.ratings),
+          mode.latestPlayedAtMs != null ? new Date(mode.latestPlayedAtMs).toISOString() : null,
+          now,
+        ],
+      );
+    }
+    // Parsing ~200 score payloads per user is the CPU burst; breathe per user.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+
+  return { nextCursor, usersProcessed: userRows.length, done: userRows.length < limit };
+}
+
+function quantileCurve(sortedValues: number[], points = BASELINE_QUANTILE_POINTS): number[] {
+  const curve: number[] = [];
+  const last = sortedValues.length - 1;
+  for (let i = 0; i < points; i += 1) {
+    const position = (i / (points - 1)) * last;
+    const low = Math.floor(position);
+    const high = Math.min(last, low + 1);
+    const t = position - low;
+    curve.push(Math.round((sortedValues[low] * (1 - t) + sortedValues[high] * t) * 100) / 100);
+  }
+  return curve;
+}
+
+async function finalizeSkillBaseline(db: Db, runId: string): Promise<void> {
+  const rows = (await exec(
+    db,
+    "select user_id, key_count, analyzed_plays, ratings_json from player_skill_baseline where baseline_version = ? and analyzed_plays >= ?",
+    [SKILL_BASELINE_VERSION, BASELINE_MIN_PLAYS],
+  )).rows;
+  const byKeyCount = new Map<number, Array<Record<string, number>>>();
+  for (const row of rows) {
+    const keyCount = Number(row.key_count);
+    const ratings = parseJson<Record<string, number>>(String(row.ratings_json ?? ""), {});
+    const list = byKeyCount.get(keyCount);
+    if (list) list.push(ratings);
+    else byKeyCount.set(keyCount, [ratings]);
+  }
+
+  const params = chartMapCache && chartMapCache.runId === runId ? chartMapCache.params : await fitBaselineParams(db);
+  const curves: BaselineCurves["curves"] = {};
+  const users: Record<string, number> = {};
+  for (const [keyCount, ratingRows] of byKeyCount) {
+    users[String(keyCount)] = ratingRows.length;
+    const axisValues = new Map<string, number[]>();
+    for (const ratings of ratingRows) {
+      for (const [axis, value] of Object.entries(ratings)) {
+        if (!(Number(value) > 0)) continue;
+        const list = axisValues.get(axis);
+        if (list) list.push(Number(value));
+        else axisValues.set(axis, [Number(value)]);
+      }
+    }
+    const axisCurves: Record<string, { count: number; curve: number[] }> = {};
+    for (const [axis, values] of axisValues) {
+      if (values.length < BASELINE_MIN_USERS_PER_CURVE) continue;
+      values.sort((a, b) => a - b);
+      axisCurves[axis] = { count: values.length, curve: quantileCurve(values) };
+    }
+    curves[String(keyCount)] = axisCurves;
+  }
+
+  const now = nowIso();
+  const blob: BaselineCurves = {
+    computedAt: now,
+    baselineVersion: SKILL_BASELINE_VERSION,
+    playerSkillsVersion: PLAYER_SKILLS_VERSION,
+    gamma: params.gamma,
+    accSlope: params.accSlope,
+    minPlays: BASELINE_MIN_PLAYS,
+    curves,
+    users,
+  };
+  await exec(
+    db,
+    `insert into live_meta (key, value_json, updated_at) values (?, ?, ?)
+     on conflict(key) do update set value_json = excluded.value_json, updated_at = excluded.updated_at`,
+    [SKILL_BASELINE_CURVES_META_KEY, json(blob), now],
+  );
+  // Superseded-version rows are dead weight once the new curves are live.
+  await exec(db, "delete from player_skill_baseline where baseline_version != ?", [SKILL_BASELINE_VERSION]);
+  chartMapCache = null;
+  curvesCache = null;
+  logInfo("skill_baseline_done", { run_id: runId, users: users, curve_keymodes: Object.keys(curves) });
+}
+
+export async function runSkillBaselineJob(db: Db, queue: JobQueue, payload: { runId?: string; cursor?: number } | undefined): Promise<void> {
+  const runId = typeof payload?.runId === "string" && payload.runId ? payload.runId : randomUUID();
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const result = await runSkillBaselineChunk(db, runId, cursor);
+  if (result.done) {
+    await finalizeSkillBaseline(db, runId);
+    return;
+  }
+  await enqueueSkillBaselineChunk(queue, runId, result.nextCursor);
+}
+
+async function enqueueSkillBaselineChunk(queue: JobQueue, runId: string, cursor: number): Promise<void> {
+  await queue.enqueue(
+    SKILL_BASELINE_JOB,
+    `${SKILL_BASELINE_JOB}:${runId}:${cursor}`,
+    { runId, cursor },
+    { priority: -10, replaceDone: true },
+  );
+}
+
+/**
+ * Weekly staleness check: (re)start the baseline chain when the stored curves
+ * are missing, from an older baseline version, or past the refresh interval,
+ * and no chain link is already pending. Pure DB/CPU work, no osu! API.
+ */
+export async function enqueueSkillBaselineIfDue(db: Db, queue: JobQueue, intervalMs = BASELINE_REFRESH_INTERVAL_MS): Promise<boolean> {
+  const row = (await exec(db, "select value_json from live_meta where key = ? limit 1", [SKILL_BASELINE_CURVES_META_KEY])).rows[0];
+  const stored = parseJson<BaselineCurves | null>(String(row?.value_json ?? ""), null);
+  const computedAtMs = Date.parse(stored?.computedAt ?? "");
+  if (stored?.playerSkillsVersion === PLAYER_SKILLS_VERSION && Number.isFinite(computedAtMs) && Date.now() - computedAtMs < intervalMs) {
+    return false;
+  }
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [SKILL_BASELINE_JOB],
+  )).rows[0];
+  if (pending) return false;
+  await enqueueSkillBaselineChunk(queue, randomUUID(), 0);
+  return true;
+}
+
+// --- Cohort vectors for the farm helper's skill/recency-aware neighbors ---
+
+export interface BaselineUserVector {
+  userId: number;
+  analyzedPlays: number;
+  ratings: Record<string, number>;
+  latestPlayedAtMs: number | null;
+}
+
+interface CachedUserVectors {
+  vectors: Map<number, BaselineUserVector>;
+  expiresAt: number;
+}
+
+const userVectorsCache = new WeakMap<Db, Map<number, CachedUserVectors>>();
+const USER_VECTORS_CACHE_TTL_MS = 5 * 60_000;
+
+/**
+ * All tracked users' approximate rating vectors for a keymode, cached per Db
+ * like the farm helper's peer pools. Empty until the first baseline run has
+ * landed, which callers must treat as "no signal", never as an empty cohort.
+ */
+export async function getBaselineUserVectors(db: Db, keyCount: number): Promise<Map<number, BaselineUserVector>> {
+  let byKeyCount = userVectorsCache.get(db);
+  if (!byKeyCount) userVectorsCache.set(db, (byKeyCount = new Map()));
+  const now = Date.now();
+  const cached = byKeyCount.get(keyCount);
+  if (cached && cached.expiresAt > now) return cached.vectors;
+  const rows = (await exec(
+    db,
+    "select user_id, analyzed_plays, ratings_json, latest_played_at from player_skill_baseline where baseline_version = ? and key_count = ?",
+    [SKILL_BASELINE_VERSION, keyCount],
+  )).rows;
+  const vectors = new Map<number, BaselineUserVector>();
+  for (const row of rows) {
+    const userId = Number(row.user_id);
+    if (!Number.isSafeInteger(userId) || userId <= 0) continue;
+    const latestMs = Date.parse(String(row.latest_played_at ?? ""));
+    vectors.set(userId, {
+      userId,
+      analyzedPlays: Math.max(0, Number(row.analyzed_plays) || 0),
+      ratings: parseJson<Record<string, number>>(String(row.ratings_json ?? ""), {}),
+      latestPlayedAtMs: Number.isFinite(latestMs) ? latestMs : null,
+    });
+  }
+  byKeyCount.set(keyCount, { vectors, expiresAt: now + USER_VECTORS_CACHE_TTL_MS });
+  return vectors;
+}
+
+// Serving-side curve cache: one small live_meta read, refreshed lazily. The
+// serving process never builds the chart map or scans user_top_scores.
+let curvesCache: { readAt: number; curves: BaselineCurves | null } | null = null;
+const CURVES_CACHE_TTL_MS = 5 * 60_000;
+
+export async function readBaselineCurves(db: Db): Promise<BaselineCurves | null> {
+  if (curvesCache && Date.now() - curvesCache.readAt < CURVES_CACHE_TTL_MS) return curvesCache.curves;
+  const row = (await exec(db, "select value_json from live_meta where key = ? limit 1", [SKILL_BASELINE_CURVES_META_KEY])).rows[0];
+  const curves = parseJson<BaselineCurves | null>(String(row?.value_json ?? ""), null);
+  curvesCache = { readAt: Date.now(), curves };
+  return curves;
+}
+
+function percentileFromCurve(curve: number[], value: number): number {
+  if (curve.length === 0) return 0;
+  if (value <= curve[0]) return 0;
+  const last = curve.length - 1;
+  if (value >= curve[last]) return 100;
+  let low = 0;
+  let high = last;
+  while (high - low > 1) {
+    const mid = (low + high) >> 1;
+    if (curve[mid] <= value) low = mid;
+    else high = mid;
+  }
+  const span = curve[high] - curve[low];
+  const t = span > 0 ? (value - curve[low]) / span : 0;
+  return Math.round(((low + t) / last) * 1000) / 10;
+}
+
+// Axes eligible for a percentile per keymode: 4K speaks the native MSD
+// skillsets (plus pattern axes); other keymodes publish Overall + pattern
+// axes only, since MinaCalc's non-4K skillset names are unreliable.
+function percentileAxes(keyCount: number, ratings: Record<string, number>): string[] {
+  const axes = Object.keys(ratings);
+  if (keyCount === 4) return axes;
+  return axes.filter((axis) => axis === "Overall" || axis.startsWith("pattern:"));
+}
+
+/**
+ * Decorate an exact skill breakdown with population percentiles: the
+ * subject's own approximate ratings (recomputed from their stored per-play
+ * cache with the same formula the population used) interpolated into the
+ * stored quantile curves. Bounded work: one live_meta read, one plays_json
+ * read, one indexed chart lookup for <= top-plays-count beatmaps.
+ */
+export async function decoratePlayerSkillBreakdown(
+  db: Db,
+  userId: number,
+  breakdown: PlayerSkillBreakdown,
+): Promise<PublicPlayerSkillBreakdown> {
+  const base: PublicPlayerSkillBreakdown = { ...breakdown, modes: breakdown.modes as PublicPlayerSkillMode[], baseline: null };
+  if (breakdown.status !== "ready" || breakdown.modes.length === 0) return base;
+  const curves = await readBaselineCurves(db);
+  if (!curves) return base;
+
+  const playsRow = (await exec(
+    db,
+    "select plays_json from player_skill_ratings where user_id = ? and analysis_version = ?",
+    [userId, PLAYER_SKILLS_VERSION],
+  )).rows[0];
+  const storedPlays = parseJson<{ plays?: Array<{ beatmapId?: number; rate?: number; goal?: number; patterns?: string[]; source?: string }> }>(
+    String(playsRow?.plays_json ?? ""),
+    {},
+  ).plays ?? [];
+  // The population curves are built from top plays only, so the subject's
+  // approximate rating compares top-sourced plays only - tracked-history
+  // plays would put the subject on a different scale than the population.
+  const plays: ApproxPlay[] = storedPlays
+    .filter((play) => play.source !== "tracked")
+    .filter((play) => Number.isInteger(play.beatmapId) && Number(play.rate) > 0 && Number(play.goal) > 0)
+    .map((play) => ({
+      beatmapId: Number(play.beatmapId),
+      rate: Number(play.rate),
+      goal: Number(play.goal),
+      patterns: Array.isArray(play.patterns) ? play.patterns : [],
+    }));
+  if (plays.length === 0) return base;
+
+  const charts = await loadBaselineChartEntries(db, plays.map((play) => play.beatmapId));
+  const approxByKeyCount = computeApproxRatings(plays, charts, { gamma: curves.gamma, accSlope: curves.accSlope });
+
+  const modes: PublicPlayerSkillMode[] = breakdown.modes.map((mode) => {
+    const axisCurves = curves.curves[String(mode.keyCount)];
+    const approx = approxByKeyCount.get(mode.keyCount);
+    if (!axisCurves || !approx) return { ...mode };
+    const percentiles: Record<string, PlayerSkillAxisPercentile> = {};
+    for (const axis of percentileAxes(mode.keyCount, approx.ratings)) {
+      const axisCurve = axisCurves[axis];
+      if (!axisCurve) continue;
+      percentiles[axis] = {
+        value: percentileFromCurve(axisCurve.curve, approx.ratings[axis]),
+        population: axisCurve.count,
+      };
+    }
+    return Object.keys(percentiles).length > 0 ? { ...mode, percentiles } : { ...mode };
+  });
+
+  return { ...base, modes, baseline: { computedAt: curves.computedAt, users: curves.users } };
+}

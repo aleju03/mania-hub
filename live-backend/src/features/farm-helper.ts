@@ -8,6 +8,7 @@ import { calibrateProxy, getKeyModePeerPool, type FarmHelperKeyCount } from "./f
 import { buildWeightedUserShape, computeShapeWeights, MSD_SKILLSETS, readChartShapeData, readChartShapes, readPeerShapes, shapeSimilarity, SHAPE_MIN_CHARTS, type ChartShape, type UserShape } from "./farm-helper-shape.js";
 import { enqueueMissingChartAnalyses, readDtRateMsd } from "./chart-analysis.js";
 import { getPlayerSkillBreakdown } from "./player-skills.js";
+import { getBaselineUserVectors, type BaselineUserVector } from "./skill-baseline.js";
 import type { JobQueue } from "../jobs/queue.js";
 
 // Farm Helper recommends maps a player should farm, ranked by estimated pp gain.
@@ -130,6 +131,25 @@ const BENCHMARK_KERNEL_HALF_WIDTH = 0.10;
 // Calibrated-proxy peers (no real variant pp) are down-weighted: their distance
 // is an estimate, not a measurement.
 const PROXY_CONFIDENCE = 0.85;
+// Cohort affinity (Stage 5): pp proximity alone kept long-inactive players
+// (frozen pp, years-old farm sets) and off-style specialists at full cohort
+// weight. Each keymode peer's kernel confidence is additionally scaled by
+//  - recency: full weight while their newest top play in the keymode is under
+//    RECENCY_FULL_MS old, then a half-life decay down to a floor (never zero:
+//    an inactive peer's farm data is stale evidence, not no evidence), and
+//  - skill-shape similarity: Pearson correlation between the subject's and
+//    peer's Overall-normalized baseline rating shapes (what they are good at
+//    relative to their level; the level itself is already the pp distance),
+//    mapped onto [SKILL_SIM_FLOOR, 1].
+// Both factors read the weekly player_skill_baseline vectors and stay neutral
+// (1.0) whenever a vector is missing - the model must never reject on missing
+// data, and before the first baseline run it behaves exactly like pure pp kNN.
+const RECENCY_FULL_MS = 180 * 86_400_000;
+const RECENCY_HALF_LIFE_MS = 365 * 86_400_000;
+const RECENCY_FLOOR = 0.25;
+const SKILL_SIM_FLOOR = 0.35;
+const SKILL_SIM_MIN_PLAYS = 10;
+const SKILL_SIM_MIN_SHARED_AXES = 3;
 // Effective sample = sum of discovery weights. Below this, widen both kernels.
 const MIN_EFFECTIVE_PEERS = 12;
 const KNN_MAX_PEERS = 400;
@@ -967,6 +987,9 @@ async function selectKeyModeKnn(
 ): Promise<{ peers: WeightedPeer[]; mode: string }> {
   const keyCount = keyModeToKeys(keyMode) as FarmHelperKeyCount;
   const { peers: pool, calibration } = await getKeyModePeerPool(db, keyCount);
+  const vectors = await getBaselineUserVectors(db, keyCount).catch(() => new Map<number, BaselineUserVector>());
+  const subjectVector = vectors.get(userId) ?? null;
+  const nowMs = Date.now();
   const candidates: CohortCandidate[] = [];
   for (const peer of pool) {
     if (peer.userId === userId) continue;
@@ -975,15 +998,68 @@ async function selectKeyModeKnn(
     // scale so proxy peers sit at the right distance from a variant subject.
     const modePp = hasVariant ? (peer.variantPp as number) : calibrateProxy(calibration, peer.weightedPp);
     if (!Number.isFinite(modePp) || modePp <= 0) continue;
+    const peerVector = vectors.get(peer.userId) ?? null;
+    const affinity = peerRecencyFactor(peerVector, nowMs) * skillSimilarityFactor(subjectVector, peerVector);
     candidates.push({
       userId: peer.userId,
       pp: peer.pp,
       modePp,
-      confidence: hasVariant ? 1 : PROXY_CONFIDENCE,
+      confidence: (hasVariant ? 1 : PROXY_CONFIDENCE) * affinity,
       needsVariantEnrich: !hasVariant && !peer.hasVariantsProfile,
     });
   }
   return kernelSelect(candidates, subjectModePp);
+}
+
+// Peers with no baseline vector (or no timestamped plays) stay neutral.
+function peerRecencyFactor(vector: BaselineUserVector | null, nowMs: number): number {
+  if (!vector || vector.latestPlayedAtMs == null) return 1;
+  const age = nowMs - vector.latestPlayedAtMs;
+  if (age <= RECENCY_FULL_MS) return 1;
+  return Math.max(RECENCY_FLOOR, 0.5 ** ((age - RECENCY_FULL_MS) / RECENCY_HALF_LIFE_MS));
+}
+
+// Correlation of Overall-normalized rating shapes over the axes both sides
+// have; neutral when either side lacks a trustworthy vector or the shared
+// axis set is too thin to mean anything.
+function skillSimilarityFactor(subject: BaselineUserVector | null, peer: BaselineUserVector | null): number {
+  if (!subject || !peer) return 1;
+  if (subject.analyzedPlays < SKILL_SIM_MIN_PLAYS || peer.analyzedPlays < SKILL_SIM_MIN_PLAYS) return 1;
+  const subjectOverall = Number(subject.ratings.Overall ?? 0);
+  const peerOverall = Number(peer.ratings.Overall ?? 0);
+  if (!(subjectOverall > 0) || !(peerOverall > 0)) return 1;
+  const a: number[] = [];
+  const b: number[] = [];
+  for (const [axis, value] of Object.entries(subject.ratings)) {
+    if (axis === "Overall") continue;
+    const peerValue = Number(peer.ratings[axis] ?? 0);
+    if (!(Number(value) > 0) || !(peerValue > 0)) continue;
+    a.push(Number(value) / subjectOverall);
+    b.push(peerValue / peerOverall);
+  }
+  if (a.length < SKILL_SIM_MIN_SHARED_AXES) return 1;
+  const correlation = pearson(a, b);
+  if (correlation == null) return 1;
+  return SKILL_SIM_FLOOR + (1 - SKILL_SIM_FLOOR) * Math.max(0, Math.min(1, (correlation + 1) / 2));
+}
+
+function pearson(a: number[], b: number[]): number | null {
+  const n = a.length;
+  const meanA = a.reduce((sum, v) => sum + v, 0) / n;
+  const meanB = b.reduce((sum, v) => sum + v, 0) / n;
+  let cov = 0;
+  let varA = 0;
+  let varB = 0;
+  for (let i = 0; i < n; i += 1) {
+    const da = a[i] - meanA;
+    const db = b[i] - meanB;
+    cov += da * db;
+    varA += da * da;
+    varB += db * db;
+  }
+  // A flat shape has no direction to correlate against.
+  if (varA <= 1e-9 || varB <= 1e-9) return null;
+  return cov / Math.sqrt(varA * varB);
 }
 
 async function selectTotalPpKnn(

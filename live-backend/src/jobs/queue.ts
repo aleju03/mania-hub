@@ -64,6 +64,9 @@ const RESERVED_LANE_TYPES: Record<string, number> = {
   // The pack-pool snapshot warm chains its next batch from inside the running
   // job, so reserve a slot for the runner and one for the continuation.
   warm_profile_pool: 2,
+  // The skill-baseline sweep chains its next user chunk from inside the
+  // running job: runner + queued continuation. No osu! API involved.
+  refresh_skill_baseline: 2,
   // Formerly sheddable (see the SHEDDABLE_TYPES note): each starved on prod
   // whenever the queue hovered at the soft-pressure cap. Snipe seeding was the
   // observed incident (boards for new beatmaps stopped for a day); the others

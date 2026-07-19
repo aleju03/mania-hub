@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
 import { buildFarmHelperSnapshotForBacktest, FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapshot } from "../src/features/farm-helper.js";
+import { PLAYER_SKILLS_VERSION } from "../src/features/player-skills.js";
+import { SKILL_BASELINE_VERSION } from "../src/features/skill-baseline.js";
 import { calculateWeightedPpTotal, nowIso } from "../src/shared/score.js";
 import { OsuApiError, type OsuApiClient } from "../src/osu/client.js";
 import type { OscScore, OsuMod } from "../src/shared/types.js";
@@ -185,12 +187,27 @@ async function seedSubjectSkillRatings(userId: number, keyCount: number, ratings
   await exec(
     db,
     `insert into player_skill_ratings (user_id, analysis_version, status, plays_json, modes_json, computed_at, updated_at)
-     values (?, 3, 'ready', '[]', ?, ?, ?)`,
-    [userId, modesJson, now, now],
+     values (?, ?, 'ready', '[]', ?, ?, ?)`,
+    [userId, PLAYER_SKILLS_VERSION, modesJson, now, now],
   );
 }
 
 const stubQueue = { enqueue: async () => {} } as unknown as Parameters<typeof getFarmHelperSnapshot>[4];
+
+async function seedBaselineVector(
+  userId: number,
+  keyCount: number,
+  ratings: Record<string, number>,
+  analyzedPlays: number,
+  latestPlayedAt: string,
+): Promise<void> {
+  await exec(
+    db,
+    `insert into player_skill_baseline (user_id, key_count, baseline_version, analyzed_plays, ratings_json, latest_played_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?)`,
+    [userId, keyCount, SKILL_BASELINE_VERSION, analyzedPlays, JSON.stringify(ratings), latestPlayedAt, nowIso()],
+  );
+}
 
 // The merged "any" view runs the concrete 4k pipeline, whose peer pool only
 // admits players with at least KEYMODE_MIN_PROXY_SCORES (8) farmed 4K maps. These
@@ -842,6 +859,85 @@ describe("farm helper", () => {
     // With a comparable subject and chart shape, patternFit is a real number.
     expect(rec?.patternFit).not.toBeNull();
     expect(rec?.patternFit ?? 0).toBeGreaterThan(0.5);
+  });
+
+  it("fades long-inactive peers from the cohort by baseline recency", async () => {
+    const recent = nowIso();
+    const threeYearsAgo = new Date(Date.now() - 3 * 365 * 86_400_000).toISOString();
+    const activeMap = 9700;
+    const staleMap = 9701;
+    const subjectMaps = Array.from({ length: 10 }, (_, i) => 9800 + i);
+    const support = Array.from({ length: 8 }, (_, i) => 9500 + i);
+    const bestScores = subjectMaps.map((beatmapId, i) => subjectScore(beatmapId, 480 - i * 5, recent, 4, 5));
+    for (const beatmapId of [...subjectMaps, ...support, activeMap, staleMap]) await insertBeatmapMeta(beatmapId, 4, 5);
+
+    // Two symmetric cohorts at the same pp: the active peers' newest baseline
+    // top play is recent, the stale peers' is three years old. Farmed-row
+    // timestamps are identical, so any spread comes from the affinity factor.
+    for (let i = 0; i < 12; i += 1) {
+      const id = 9110 + i;
+      await insertUser(id, 10_000, "CR", `ActivePeer${i}`);
+      await seedBaselineVector(id, 4, { Overall: 20, Stream: 18, Stamina: 17, JackSpeed: 16 }, 40, recent);
+      await insertFarmed("CR", id, activeMap, 400, recent);
+      for (const beatmapId of support) await insertFarmed("CR", id, beatmapId, 400, recent);
+    }
+    for (let i = 0; i < 12; i += 1) {
+      const id = 9210 + i;
+      await insertUser(id, 10_000, "US", `StalePeer${i}`);
+      await seedBaselineVector(id, 4, { Overall: 20, Stream: 18, Stamina: 17, JackSpeed: 16 }, 40, threeYearsAgo);
+      await insertFarmed("US", id, staleMap, 400, recent);
+      for (const beatmapId of support) await insertFarmed("US", id, beatmapId, 400, recent);
+    }
+
+    const osu = makeOsuStub(bestScores, 10_000, { "4k": 3000 });
+    const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" });
+    const active = snapshot.recs.find((rec) => rec.beatmapId === activeMap);
+    const stale = snapshot.recs.find((rec) => rec.beatmapId === staleMap);
+    expect(active).toBeDefined();
+    expect(stale).toBeDefined();
+    expect(active!.peerFraction).toBeGreaterThan(stale!.peerFraction);
+    expect(active!.peerFraction).toBeGreaterThan(0.55);
+    expect(stale!.peerFraction).toBeLessThan(0.4);
+  });
+
+  it("up-weights peers whose skill shape matches the subject's baseline vector", async () => {
+    const recent = nowIso();
+    const similarMap = 9700;
+    const dissimilarMap = 9701;
+    const subjectMaps = Array.from({ length: 10 }, (_, i) => 9800 + i);
+    const support = Array.from({ length: 8 }, (_, i) => 9500 + i);
+    const bestScores = subjectMaps.map((beatmapId, i) => subjectScore(beatmapId, 480 - i * 5, recent, 4, 5));
+    for (const beatmapId of [...subjectMaps, ...support, similarMap, dissimilarMap]) await insertBeatmapMeta(beatmapId, 4, 5);
+
+    // Subject is jack-leaning; one cohort mirrors that shape, the other is the
+    // inverse (stream-leaning). Same pp, same recency: only shape differs.
+    const jackShape = { Overall: 20, JackSpeed: 24, Chordjack: 22, Stream: 14, Stamina: 18 };
+    const streamShape = { Overall: 20, JackSpeed: 14, Chordjack: 15, Stream: 24, Stamina: 21 };
+    await seedBaselineVector(SUBJECT_ID, 4, jackShape, 50, recent);
+    for (let i = 0; i < 12; i += 1) {
+      const id = 9110 + i;
+      await insertUser(id, 10_000, "CR", `JackPeer${i}`);
+      await seedBaselineVector(id, 4, jackShape, 40, recent);
+      await insertFarmed("CR", id, similarMap, 400, recent);
+      for (const beatmapId of support) await insertFarmed("CR", id, beatmapId, 400, recent);
+    }
+    for (let i = 0; i < 12; i += 1) {
+      const id = 9210 + i;
+      await insertUser(id, 10_000, "US", `StreamPeer${i}`);
+      await seedBaselineVector(id, 4, streamShape, 40, recent);
+      await insertFarmed("US", id, dissimilarMap, 400, recent);
+      for (const beatmapId of support) await insertFarmed("US", id, beatmapId, 400, recent);
+    }
+
+    const osu = makeOsuStub(bestScores, 10_000, { "4k": 3000 });
+    const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" });
+    const similar = snapshot.recs.find((rec) => rec.beatmapId === similarMap);
+    const dissimilar = snapshot.recs.find((rec) => rec.beatmapId === dissimilarMap);
+    expect(similar).toBeDefined();
+    expect(dissimilar).toBeDefined();
+    expect(similar!.peerFraction).toBeGreaterThan(dissimilar!.peerFraction);
+    expect(similar!.peerFraction).toBeGreaterThan(0.55);
+    expect(dissimilar!.peerFraction).toBeLessThan(0.45);
   });
 
   it("drops charts whose dominant skill outstrips the subject rating from gain, keeps feasible ones", async () => {

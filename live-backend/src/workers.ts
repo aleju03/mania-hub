@@ -14,6 +14,7 @@ import { MapsRosterNotReadyError, enqueueGlobalMapsRefresh, globalMapsFarmedRefr
 import { REFRESH_QUALIFIED_MAPS_JOB, runQualifiedMapsWatch } from "./features/qualified-maps-watch.js";
 import { recordSnipeScoreHistory, updateSnipeProjection } from "./features/snipes.js";
 import { PLAYER_SKILLS_JOB, computePlayerSkillsJob } from "./features/player-skills.js";
+import { SKILL_BASELINE_JOB, runSkillBaselineJob } from "./features/skill-baseline.js";
 import { PROFILE_POOL_WARM_JOB, runProfilePoolWarmJob } from "./features/profile-pool-warm.js";
 import { confirmTopPlay, TopPlayConfirmationPendingError } from "./features/top-plays.js";
 import { getHydratedScoresForMetadata } from "./features/tracker.js";
@@ -174,6 +175,15 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     // rebuild. Pure background work (no osu! API) that yields to everything else.
     name: "map-search-index",
     jobTypes: ["build_map_search_index", "rebuild_map_collections"],
+    claimLimit: 1,
+    intervalMs: 2_000,
+  },
+  {
+    // Weekly approximate-ratings sweep over stored top plays (skill
+    // percentile curves). Pure DB/CPU work in self-chaining chunks; its own
+    // lane so a long chain never queues behind index maintenance.
+    name: "skill-baseline",
+    jobTypes: [SKILL_BASELINE_JOB],
     claimLimit: 1,
     intervalMs: 2_000,
   },
@@ -440,6 +450,10 @@ export class WorkerRunner {
     }
     if (job.type === PLAYER_SKILLS_JOB) {
       await computePlayerSkillsJob(this.db, this.osu, this.queue, job.payload as { userId: number });
+      return;
+    }
+    if (job.type === SKILL_BASELINE_JOB) {
+      await runSkillBaselineJob(this.db, this.queue, job.payload as { runId?: string; cursor?: number });
       return;
     }
     if (job.type === CHART_ANALYSIS_JOB) {
