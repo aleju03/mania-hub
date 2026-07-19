@@ -253,7 +253,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     if (profileRoute.kind === "cached-snapshot") {
-      const snapshot = await getCachedPlayerProfileSnapshot(ctx.db, profileRoute.key, ctx.osu);
+      const snapshot = await getCachedPlayerProfileSnapshot(ctx.serveWriteDb ?? ctx.db, profileRoute.key, ctx.osu);
       if (!snapshot) {
         sendJson(req, res, ctx, 404, { error: "not_cached" });
         return true;
@@ -264,7 +264,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     if (profileRoute.kind === "snapshot") {
       if (!checkRate(req, res, ctx, "publicCostly")) return true;
-      await sendAccentEnrichedJson(req, res, ctx, 200, await getPlayerProfileSnapshot(ctx.db, ctx.osu, profileRoute.key));
+      await sendAccentEnrichedJson(req, res, ctx, 200, await getPlayerProfileSnapshot(ctx.serveWriteDb ?? ctx.db, ctx.osu, profileRoute.key));
       return true;
     }
     const userId = Number(profileRoute.key);
@@ -274,12 +274,12 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     if (profileRoute.kind === "recent") {
       if (!checkRate(req, res, ctx, "publicCostly")) return true;
-      sendJson(req, res, ctx, 200, await getPlayerRecentScores(ctx.db, ctx.osu, userId));
+      sendJson(req, res, ctx, 200, await getPlayerRecentScores(ctx.serveWriteDb ?? ctx.db, ctx.osu, userId));
       return true;
     }
     if (profileRoute.kind === "activity") {
       sendJson(req, res, ctx, 200, await getPlayerActivitySnapshot(
-        ctx.db,
+        ctx.serveWriteDb ?? ctx.db,
         ctx.queue,
         userId,
         url.searchParams.get("country") ?? country,
@@ -294,7 +294,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         return true;
       }
       const detail = await getPlayerActivityDayDetail(
-        ctx.db,
+        ctx.serveWriteDb ?? ctx.db,
         ctx.queue,
         userId,
         url.searchParams.get("country") ?? country,
@@ -329,7 +329,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     if (!checkRate(req, res, ctx, "publicCostly")) return true;
-    sendJson(req, res, ctx, 200, await getPlayerAbout(ctx.db, ctx.osu, userId));
+    sendJson(req, res, ctx, 200, await getPlayerAbout(ctx.serveWriteDb ?? ctx.db, ctx.osu, userId));
     return true;
   }
   // In-house analytics capture: the Vercel /api/sync proxy posts every tracked
@@ -495,7 +495,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 404, { error: "user_not_found" });
       return true;
     }
-    const result = await setUserActive(ctx.db, userId, active, "admin: manual toggle");
+    const result = await setUserActive(ctx.serveWriteDb ?? ctx.db, userId, active, "admin: manual toggle");
     sendJson(req, res, ctx, 200, { ok: true, ...result });
     return true;
   }
@@ -1024,7 +1024,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     if (!checkRate(req, res, ctx, "danEstimate")) return true;
     const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
     const items = Array.isArray(body.items) ? body.items : [];
-    sendJson(req, res, ctx, 200, await getDanEstimateBatch(ctx.db, ctx.queue, ctx.osu, items, {
+    sendJson(req, res, ctx, 200, await getDanEstimateBatch(ctx.serveWriteDb ?? ctx.db, ctx.queue, ctx.osu, items, {
       computeMissing: body.computeMissing !== false,
     }));
     return true;
@@ -1122,7 +1122,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 400, { error: "invalid_user_ids" });
       return true;
     }
-    sendJson(req, res, ctx, 202, await warmProfileSnapshots(ctx.db, ctx.osu, userIds));
+    sendJson(req, res, ctx, 202, await warmProfileSnapshots(ctx.serveWriteDb ?? ctx.db, ctx.osu, userIds));
     return true;
   }
   const packWalletMatch = url.pathname.match(/^\/api\/pack-wallet\/(\d+)$/);
@@ -1253,7 +1253,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       // calling the osu! API; callers opt back into the network with a plain request.
       const cachedOnly = url.searchParams.get("cachedOnly") === "1";
       const content = await getCachedBeatmapFile(
-        ctx.db,
+        ctx.serveWriteDb ?? ctx.db,
         ctx.osu,
         Math.floor(beatmapId),
         normalizeCaller(url.searchParams.get("caller")),
@@ -1651,7 +1651,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     if (action === "delete") {
-      const deleted = await deleteSkin(ctx.db, id);
+      const deleted = await deleteSkin(ctx.serveWriteDb ?? ctx.db, id);
       if (deleted) {
         await deleteSkinObjects(ctx.config, deleted.keys).catch((error) => {
           logWarn("skin_delete_r2_failed", { id, ...errorContext(error) });
@@ -1661,7 +1661,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, deleted ? 200 : 404, { ok: Boolean(deleted) });
       return true;
     }
-    const ok = await setSkinHidden(ctx.db, id, action === "hide");
+    const ok = await setSkinHidden(ctx.serveWriteDb ?? ctx.db, id, action === "hide");
     if (ok) logInfo("skin_moderated", { id, action });
     sendJson(req, res, ctx, ok ? 200 : 404, { ok });
     return true;
@@ -1673,7 +1673,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     const rows = parseJson<unknown[]>((await readBody(req)) || "[]", []);
     const { ScoreIngestor } = await import("../ingest/score-ingestor.js");
-    const ingestor = new ScoreIngestor(ctx.db, ctx.queue, ctx.events, ctx.config);
+    const ingestor = new ScoreIngestor(ctx.serveWriteDb ?? ctx.db, ctx.queue, ctx.events, ctx.config);
     sendJson(req, res, ctx, 200, await ingestor.ingestBatch(rows as never[], "admin_fixture"));
     return true;
   }
@@ -1700,7 +1700,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     const paused = url.pathname === "/api/admin/pause-country";
-    sendJson(req, res, ctx, 200, { ok: true, country: await setCountryPaused(ctx.db, ctx.config, country, paused) });
+    sendJson(req, res, ctx, 200, { ok: true, country: await setCountryPaused(ctx.serveWriteDb ?? ctx.db, ctx.config, country, paused) });
     return true;
   }
   if (url.pathname === "/api/admin/set-country-status") {
@@ -1717,7 +1717,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 400, { error: "invalid_status" });
       return true;
     }
-    sendJson(req, res, ctx, 200, { ok: true, country: await setCountryStatus(ctx.db, ctx.config, country, status) });
+    sendJson(req, res, ctx, 200, { ok: true, country: await setCountryStatus(ctx.serveWriteDb ?? ctx.db, ctx.config, country, status) });
     return true;
   }
   if (url.pathname === "/api/admin/set-country-tier") {
@@ -1734,7 +1734,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 400, { error: "invalid_tier" });
       return true;
     }
-    const updated = await setCountryFeatureTier(ctx.db, ctx.config, country, tier);
+    const updated = await setCountryFeatureTier(ctx.serveWriteDb ?? ctx.db, ctx.config, country, tier);
     if (ctx.config.enableOsuApiJobs) {
       await enqueueRosterRefreshes(ctx.queue, [updated.country]);
     }
@@ -1753,7 +1753,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 400, { error: "global_is_not_country" });
       return true;
     }
-    const added = await activateCountry(ctx.db, ctx.queue, ctx.config, country);
+    const added = await activateCountry(ctx.serveWriteDb ?? ctx.db, ctx.queue, ctx.config, country);
     if (ctx.config.enableOsuApiJobs && isCountryFeatureAtLeast(added.featureTier, "maps_warm")) {
       await enqueueMapsRefreshIfDue(ctx.db, ctx.queue, added.country, ctx.config.mapsRefreshIntervalMs, { priority: 15 });
     }
@@ -1769,7 +1769,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 400, { error: "global_is_not_country" });
       return true;
     }
-    sendJson(req, res, ctx, 200, { ok: true, country, deleted: await deleteCountryData(ctx.db, country) });
+    sendJson(req, res, ctx, 200, { ok: true, country, deleted: await deleteCountryData(ctx.serveWriteDb ?? ctx.db, country) });
     return true;
   }
   if (url.pathname === "/api/admin/refresh-maps") {
@@ -1793,7 +1793,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     // Run inline (local index pass, no osu! API) so the response only returns
     // once the packs are freshly rotated; the admin button can then refetch and
     // immediately show the new sample instead of waiting on the queue.
-    await rebuildMapCollections(ctx.db);
+    await rebuildMapCollections(ctx.serveWriteDb ?? ctx.db);
     sendJson(req, res, ctx, 200, { ok: true });
     return true;
   }
@@ -1806,9 +1806,9 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 400, { error: "global_is_not_country" });
       return true;
     }
-    await setCountryStatus(ctx.db, ctx.config, country, "active");
+    await setCountryStatus(ctx.serveWriteDb ?? ctx.db, ctx.config, country, "active");
     await enqueueRosterRefreshes(ctx.queue, [country]);
-    const queued = await enqueueOscCountryCatchup(ctx.queue, ctx.db, ctx.config, country);
+    const queued = await enqueueOscCountryCatchup(ctx.queue, ctx.serveWriteDb ?? ctx.db, ctx.config, country);
     sendJson(req, res, ctx, 200, { ok: true, ...queued });
     return true;
   }
@@ -1821,7 +1821,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 400, { error: "global_is_not_country" });
       return true;
     }
-    sendJson(req, res, ctx, 200, { ok: true, ...await cancelOscCountryCatchup(ctx.db, country) });
+    sendJson(req, res, ctx, 200, { ok: true, ...await cancelOscCountryCatchup(ctx.serveWriteDb ?? ctx.db, country) });
     return true;
   }
   if (url.pathname === "/api/admin/clear-failed-jobs") {
@@ -1840,7 +1840,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     ctx.pauseWorkers?.();
     // Cross-process flag the worker polls, so pause works when workers run elsewhere.
-    await setWorkersPaused(ctx.db, true);
+    await setWorkersPaused(ctx.serveWriteDb ?? ctx.db, true);
     sendJson(req, res, ctx, 200, { ok: true, worker: ctx.workerStatus?.() ?? null });
     return true;
   }
@@ -1850,7 +1850,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     ctx.resumeWorkers?.();
-    await setWorkersPaused(ctx.db, false);
+    await setWorkersPaused(ctx.serveWriteDb ?? ctx.db, false);
     sendJson(req, res, ctx, 200, { ok: true, worker: ctx.workerStatus?.() ?? null });
     return true;
   }
@@ -1859,7 +1859,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
-    sendJson(req, res, ctx, 200, { ok: true, deleted: await runRetention(ctx.db, ctx.config) });
+    sendJson(req, res, ctx, 200, { ok: true, deleted: await runRetention(ctx.serveWriteDb ?? ctx.db, ctx.config) });
     return true;
   }
   if (url.pathname === "/api/admin/osc-smoke") {
@@ -1886,7 +1886,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
-    await enqueueOscBackfill(ctx.queue, ctx.db, ctx.config);
+    await enqueueOscBackfill(ctx.queue, ctx.serveWriteDb ?? ctx.db, ctx.config);
     sendJson(req, res, ctx, 200, { ok: true });
     return true;
   }
@@ -1913,7 +1913,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         // minutes on one uncached chart (full .osz download from mirrors, which
         // may be stale and not even contain the diff). Uncached charts come back
         // as missing and go through the explicit fetch-missing path instead.
-        const content = await getCachedBeatmapFile(ctx.db, ctx.osu, beatmapId, "dan_classifier_admin", {
+        const content = await getCachedBeatmapFile(ctx.serveWriteDb ?? ctx.db, ctx.osu, beatmapId, "dan_classifier_admin", {
           allowArchive: false,
           allowDirect: false,
         });
@@ -1951,7 +1951,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     const limit = Number(url.searchParams.get("limit") ?? "");
     const enqueued = await enqueueChartAnalysisBackfill(
-      ctx.db,
+      ctx.serveWriteDb ?? ctx.db,
       ctx.queue,
       Number.isFinite(limit) && limit > 0 ? limit : undefined,
       { includeFailed: true },
@@ -1964,7 +1964,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
-    sendJson(req, res, ctx, 200, { ok: true, backfill: await startChartAnalysisBackfill(ctx.db, ctx.queue) });
+    sendJson(req, res, ctx, 200, { ok: true, backfill: await startChartAnalysisBackfill(ctx.serveWriteDb ?? ctx.db, ctx.queue) });
     return true;
   }
   if (url.pathname === "/api/admin/chart-analysis/cancel") {
@@ -1972,7 +1972,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
-    sendJson(req, res, ctx, 200, { ok: true, backfill: await cancelChartAnalysisBackfill(ctx.db) });
+    sendJson(req, res, ctx, 200, { ok: true, backfill: await cancelChartAnalysisBackfill(ctx.serveWriteDb ?? ctx.db) });
     return true;
   }
   if (url.pathname === "/api/admin/osu-file-backfill/start") {
@@ -1984,7 +1984,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 409, { error: "osu_api_jobs_disabled" });
       return true;
     }
-    sendJson(req, res, ctx, 200, { ok: true, backfill: await startBeatmapOsuFileBackfill(ctx.db, ctx.queue) });
+    sendJson(req, res, ctx, 200, { ok: true, backfill: await startBeatmapOsuFileBackfill(ctx.serveWriteDb ?? ctx.db, ctx.queue) });
     return true;
   }
   if (url.pathname === "/api/admin/osu-file-backfill/cancel") {
@@ -1992,7 +1992,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
-    sendJson(req, res, ctx, 200, { ok: true, backfill: await cancelBeatmapOsuFileBackfill(ctx.db) });
+    sendJson(req, res, ctx, 200, { ok: true, backfill: await cancelBeatmapOsuFileBackfill(ctx.serveWriteDb ?? ctx.db) });
     return true;
   }
   if (url.pathname === "/api/admin/discord/status") {
@@ -2070,7 +2070,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 400, { error: "invalid_id" });
       return true;
     }
-    const removed = await removeSubscriptionById(ctx.db, id);
+    const removed = await removeSubscriptionById(ctx.serveWriteDb ?? ctx.db, id);
     if (removed) ctx.discord?.notifySubscriptionsChanged();
     sendJson(req, res, ctx, 200, { ok: true, removed });
     return true;
@@ -2093,7 +2093,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     const body = parseJson<CreateTodoInput>((await readBody(req)) || "{}", {});
-    const todo = await createAdminTodo(ctx.db, body);
+    const todo = await createAdminTodo(ctx.serveWriteDb ?? ctx.db, body);
     if (!todo) {
       sendJson(req, res, ctx, 400, { error: "invalid_title" });
       return true;
@@ -2111,7 +2111,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     const body = parseJson<UpdateTodoInput>((await readBody(req)) || "{}", {});
-    const todo = await updateAdminTodo(ctx.db, body);
+    const todo = await updateAdminTodo(ctx.serveWriteDb ?? ctx.db, body);
     if (!todo) {
       sendJson(req, res, ctx, 404, { error: "todo_not_found" });
       return true;
@@ -2129,7 +2129,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     const body = parseJson<{ id?: unknown }>((await readBody(req)) || "{}", {});
-    const removed = await deleteAdminTodo(ctx.db, typeof body.id === "string" ? body.id : "");
+    const removed = await deleteAdminTodo(ctx.serveWriteDb ?? ctx.db, typeof body.id === "string" ? body.id : "");
     if (!removed) {
       sendJson(req, res, ctx, 404, { error: "todo_not_found" });
       return true;
@@ -2146,7 +2146,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
       return true;
     }
-    sendJson(req, res, ctx, 200, { ok: true, cleared: await clearDoneAdminTodos(ctx.db) });
+    sendJson(req, res, ctx, 200, { ok: true, cleared: await clearDoneAdminTodos(ctx.serveWriteDb ?? ctx.db) });
     return true;
   }
   if (url.pathname === "/api/admin/dan-benchmark/labels" || url.pathname === "/api/admin/dan-benchmark/hidden") {
@@ -2177,8 +2177,8 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
     const ok = url.pathname.endsWith("/set-label")
-      ? await setDanBenchmarkLabel(ctx.db, body)
-      : await setDanBenchmarkHiddenDiff(ctx.db, body);
+      ? await setDanBenchmarkLabel(ctx.serveWriteDb ?? ctx.db, body)
+      : await setDanBenchmarkHiddenDiff(ctx.serveWriteDb ?? ctx.db, body);
     if (!ok) {
       sendJson(req, res, ctx, 400, { error: "invalid_payload" });
       return true;
@@ -2196,7 +2196,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     const body = parseJson<{ labels?: []; hidden?: [] }>((await readBody(req)) || "{}", {});
-    sendJson(req, res, ctx, 200, { ok: true, ...(await importDanBenchmark(ctx.db, body)) });
+    sendJson(req, res, ctx, 200, { ok: true, ...(await importDanBenchmark(ctx.serveWriteDb ?? ctx.db, body)) });
     return true;
   }
   if (url.pathname === "/api/admin/reset-local-db") {
@@ -2236,7 +2236,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     ];
     const deleted: Record<string, number> = {};
     for (const table of tables) {
-      deleted[table] = Number((await exec(ctx.db, `delete from ${table}`)).rowsAffected ?? 0);
+      deleted[table] = Number((await exec(ctx.serveWriteDb ?? ctx.db, `delete from ${table}`)).rowsAffected ?? 0);
     }
     sendJson(req, res, ctx, 200, { ok: true, deleted });
     return true;
