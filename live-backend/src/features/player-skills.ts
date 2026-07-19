@@ -43,7 +43,9 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 // the signal), and goals that still land above the cap get their SSRs
 // log-linearly extrapolated from the calc's own 0.93 -> 0.965 slope.
 
-export const PLAYER_SKILLS_VERSION = 13;
+// v14: mod-less archived day-best rows no longer rate at an assumed 1.0x
+// (that inflated HT/DC originals); stored plays built from them purge.
+export const PLAYER_SKILLS_VERSION = 14;
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
 export const SKILL_RATING_SKILLSETS = [
@@ -587,10 +589,11 @@ export async function computePlayerSkillRatings(
   osu: Pick<OsuApiClient, "getBeatmapFile">,
   scores: OscScore[],
   previousPlays: StoredPlaySsr[],
-  options: { trackedScores?: OscScore[] } = {},
+  options: { trackedScores?: OscScore[]; untrustedIdentities?: Set<string> } = {},
 ): Promise<{ summary: StoredModesSummary; plays: StoredPlaySsr[]; untaggedBeatmapIds: number[] }> {
   const topPlays = scores.filter((score) => typeof score.pp === "number" && score.pp > 0);
   const trackedScores = options.trackedScores ?? [];
+  const untrustedIdentities = options.untrustedIdentities ?? new Set<string>();
   const previousByIdentity = new Map(previousPlays.map((play) => [play.identity, play]));
   const scoresByIdentity = new Map<string, OscScore>();
   let pendingPlays = 0;
@@ -643,6 +646,11 @@ export async function computePlayerSkillRatings(
   };
   for (const score of topPlays) consider(score, "top");
   for (const score of trackedScores) consider(score, "tracked");
+
+  // One score id has exactly one true rate; the retention pass uses this to
+  // drop stored plays that contradict a live candidate's rate.
+  const candidateRateByIdentity = new Map<string, number>();
+  for (const candidate of candidates.values()) candidateRateByIdentity.set(candidate.identity, candidate.rate);
 
   const analyzedByKey = new Map<string, StoredPlaySsr>();
   let calcRuns = 0;
@@ -713,6 +721,16 @@ export async function computePlayerSkillRatings(
       previous.source !== "top" &&
       !ppBackedChartIds.has(previous.beatmapId)
     ) continue;
+    // A tracked-sourced play whose only surviving evidence is a mod-less
+    // archived row was rated at an assumed rate that cannot be verified
+    // (an HT/DC original would be inflated), so it drops instead of
+    // retaining. Top-sourced plays keep their trust: their rate came from
+    // the real mods at rating time. And when a live candidate carries the
+    // same score id at a different rate, the stored play is a stale
+    // assumed-rate phantom of that same score - the candidate wins.
+    if (previous.source !== "top" && untrustedIdentities.has(previous.identity)) continue;
+    const candidateRate = candidateRateByIdentity.get(previous.identity);
+    if (candidateRate != null && candidateRate !== previous.rate) continue;
     const key = `${previous.beatmapId}:${previous.rate}`;
     const current = analyzedByKey.get(key);
     if (!current) {
@@ -803,9 +821,10 @@ export async function computePlayerSkillsJob(db: Db, osu: ProfileOsuClient, queu
     const previousPlays = parseJson<{ plays?: StoredPlaySsr[] }>(String(previousRow?.plays_json ?? ""), {}).plays ?? [];
 
     const trackedScores = await loadTrackedScores(db, userId);
-    const archivedScores = await loadArchivedTrackedEvidence(db, userId);
+    const archived = await loadArchivedTrackedEvidence(db, userId);
     const result = await computePlayerSkillRatings(db, osu, snapshot.bestScores, previousPlays, {
-      trackedScores: [...trackedScores, ...archivedScores],
+      trackedScores: [...trackedScores, ...archived.scores],
+      untrustedIdentities: archived.unknownModsIdentities,
     });
     const computedAt = nowIso();
     await exec(
@@ -867,15 +886,24 @@ async function loadTrackedScores(db: Db, userId: number): Promise<OscScore[]> {
 // durable day-best trace in player_activity_maps (2y retention). Rows
 // written since best_mods_json/best_statistics_json shipped carry the full
 // skill evidence (real rate from mods, wife goal and miss share from the
-// judgement counts - dan-clear eligible); older acc-only rows still rate,
-// with the goal falling back to plain accuracy (estimateWifeAccuracy returns
-// null on empty statistics), assumed 1.0x - a modded original underrates
-// rather than inflates - and never count as dan clears (no miss share). Days
-// still covered by live payloads just produce weaker duplicate candidates
-// that lose the per-(chart, rate) dedup to the real score.
+// judgement counts - dan-clear eligible). Older rows with no stored mods
+// cannot be rated honestly at any rate - assuming 1.0x would credit an
+// HT/DC original's accuracy against the full-speed chart, inflating the
+// rating - so they contribute nothing; their derived identities come back
+// as untrusted so previously stored plays built from them purge instead of
+// retaining. Days still covered by live payloads just produce weaker
+// duplicate candidates that lose the per-(chart, rate) dedup to the real
+// score.
 const ARCHIVED_EVIDENCE_SCAN_LIMIT = 4000;
 
-export async function loadArchivedTrackedEvidence(db: Db, userId: number): Promise<OscScore[]> {
+export interface ArchivedTrackedEvidence {
+  scores: OscScore[];
+  // Score identities of mod-less archived rows: rateable at no rate, and
+  // grounds for dropping a stored play with the same identity.
+  unknownModsIdentities: Set<string>;
+}
+
+export async function loadArchivedTrackedEvidence(db: Db, userId: number): Promise<ArchivedTrackedEvidence> {
   const rows = (await exec(
     db,
     `select m.day, m.beatmap_id, m.best_score_id, m.best_accuracy, m.best_mods_json, m.best_statistics_json
@@ -893,6 +921,7 @@ export async function loadArchivedTrackedEvidence(db: Db, userId: number): Promi
     [userId, ARCHIVED_EVIDENCE_SCAN_LIMIT],
   )).rows;
   const scores: OscScore[] = [];
+  const unknownModsIdentities = new Set<string>();
   for (const row of rows) {
     const accuracy = Number(row.best_accuracy);
     const beatmapId = Number(row.beatmap_id);
@@ -900,7 +929,7 @@ export async function loadArchivedTrackedEvidence(db: Db, userId: number): Promi
     const scoreId = Number(row.best_score_id);
     const mods = parseJson<OscScore["mods"] | null>(String(row.best_mods_json ?? ""), null);
     const statistics = parseJson<OscScore["statistics"] | null>(String(row.best_statistics_json ?? ""), null);
-    scores.push({
+    const score = {
       id: Number.isFinite(scoreId) && scoreId > 0 ? scoreId : 0,
       user_id: userId,
       beatmap_id: beatmapId,
@@ -915,9 +944,14 @@ export async function loadArchivedTrackedEvidence(db: Db, userId: number): Promi
       // Day-anchored timestamp: rows are immutable once the day closes, so
       // the derived score identity stays stable across recomputes.
       ended_at: `${String(row.day)}T00:00:00Z`,
-    } as OscScore);
+    } as OscScore;
+    if (!Array.isArray(mods)) {
+      unknownModsIdentities.add(getScoreIdentity(score));
+      continue;
+    }
+    scores.push(score);
   }
-  return scores;
+  return { scores, unknownModsIdentities };
 }
 
 async function loadTopPlaysSnapshot(

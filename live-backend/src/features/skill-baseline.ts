@@ -542,6 +542,19 @@ export async function enqueueSkillBaselineIfDue(db: Db, queue: JobQueue, interva
   if (stored?.playerSkillsVersion === PLAYER_SKILLS_VERSION && Number.isFinite(computedAtMs) && Date.now() - computedAtMs < intervalMs) {
     return false;
   }
+  // After a PLAYER_SKILLS_VERSION bump this check fires immediately, but the
+  // drip recomputes strongest players first, so curves rebuilt from its early
+  // arrivals would skew every percentile low for the whole refresh interval.
+  // Keep serving the previous version's curves until the new version covers
+  // the majority of rated players.
+  if (stored && stored.playerSkillsVersion !== PLAYER_SKILLS_VERSION) {
+    const counts = (await exec(
+      db,
+      "select sum(case when analysis_version = ? then 1 else 0 end) as current, count(*) as total from player_skill_ratings where status = 'ready'",
+      [PLAYER_SKILLS_VERSION],
+    )).rows[0];
+    if (Number(counts?.current ?? 0) * 2 < Number(counts?.total ?? 0)) return false;
+  }
   const pending = (await exec(
     db,
     "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",

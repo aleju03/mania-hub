@@ -534,26 +534,68 @@ describe("computePlayerSkillRatings", () => {
       );
 
       const archived = await loadArchivedTrackedEvidence(db, 42);
-      expect(archived).toHaveLength(2);
-      const byBeatmap = new Map(archived.map((score) => [score.beatmap_id, score]));
-      expect(byBeatmap.get(106)?.accuracy).toBe(0.93);
-      expect(byBeatmap.get(106)?.mods).toEqual([]);
-      expect(byBeatmap.get(113)?.mods).toEqual([{ acronym: "DT" }]);
+      // The mod-less legacy row cannot be rated at any honest rate (an HT/DC
+      // original would inflate at an assumed 1.0x), so it yields no score -
+      // only an untrusted identity.
+      expect(archived.scores).toHaveLength(1);
+      expect(archived.unknownModsIdentities).toEqual(new Set(["official:991"]));
+      expect(archived.scores[0]?.beatmap_id).toBe(113);
+      expect(archived.scores[0]?.mods).toEqual([{ acronym: "DT" }]);
 
-      const result = await computePlayerSkillRatings(db, failingOsu, [], [], { trackedScores: archived });
-      expect(result.summary.analyzedPlays).toBe(2);
+      const result = await computePlayerSkillRatings(db, failingOsu, [], [], {
+        trackedScores: archived.scores,
+        untrustedIdentities: archived.unknownModsIdentities,
+      });
+      expect(result.summary.analyzedPlays).toBe(1);
       const plays = new Map(result.plays.map((entry) => [entry.beatmapId, entry]));
-      // Acc-only legacy row: plain-accuracy goal, assumed 1.0x, and never a
-      // dan clear (no miss share).
-      expect(plays.get(106)?.source).toBe("tracked");
-      expect(plays.get(106)?.rate).toBe(1);
-      expect(plays.get(106)?.goal).toBe(0.93);
-      expect(plays.get(106)?.missShare).toBeNull();
+      expect(plays.has(106)).toBe(false);
       // Enriched row: real rate from the stored mods, miss share from the
       // stored judgement counts.
       expect(plays.get(113)?.rate).toBe(1.5);
       expect(plays.get(113)?.missShare).toBeCloseTo(4 / 384, 5);
       expect(result.summary.modes[0].dan?.rc ?? null).toBeNull();
+    });
+  });
+
+  it("purges stored plays whose only evidence is a mod-less archived row", async () => {
+    await withDb(async (db) => {
+      await storeCachedBeatmapFile(db, 106, buildStreamBeatmapFile(), { source: "test" });
+      const trackedScores = [play({ id: 991, beatmap_id: 106, accuracy: 0.93, pp: null })];
+      const first = await computePlayerSkillRatings(db, failingOsu, [], [], { trackedScores });
+      expect(first.summary.analyzedPlays).toBe(1);
+      expect(first.plays[0].identity).toBe("official:991");
+
+      // The raw payload ages out; the surviving archive row has no mods, so
+      // the stored play drops instead of retaining at its unverifiable rate.
+      const purged = await computePlayerSkillRatings(db, failingOsu, [], first.plays, {
+        untrustedIdentities: new Set(["official:991"]),
+      });
+      expect(purged.summary.analyzedPlays).toBe(0);
+
+      // A top-sourced play keeps its trust: its rate came from the real mods
+      // at rating time, mod-less archive trace or not.
+      const topSourced = [{ ...first.plays[0], source: "top" as const }];
+      const kept = await computePlayerSkillRatings(db, failingOsu, [], topSourced, {
+        untrustedIdentities: new Set(["official:991"]),
+      });
+      expect(kept.summary.analyzedPlays).toBe(1);
+    });
+  });
+
+  it("drops a stored play contradicting a live candidate's rate for the same score", async () => {
+    await withDb(async (db) => {
+      await storeCachedBeatmapFile(db, 106, buildStreamBeatmapFile(), { source: "test" });
+      // A stale assumed-1.0x phantom of score 991 sits in the cache while the
+      // live tracked payload shows the score was really played on HT.
+      const phantom = await computePlayerSkillRatings(db, failingOsu, [], [], {
+        trackedScores: [play({ id: 991, beatmap_id: 106, accuracy: 0.93, pp: null })],
+      });
+      expect(phantom.plays[0].rate).toBe(1);
+      const trackedScores = [play({ id: 991, beatmap_id: 106, accuracy: 0.93, pp: null, mods: [{ acronym: "HT" }] })];
+      const result = await computePlayerSkillRatings(db, failingOsu, [], phantom.plays, { trackedScores });
+      expect(result.summary.analyzedPlays).toBe(1);
+      expect(result.plays[0].rate).toBe(0.75);
+      expect(result.plays[0].identity).toBe("official:991");
     });
   });
 
