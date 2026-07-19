@@ -5,6 +5,7 @@ import { errorContext, logWarn } from "../logger.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { calculateWeightedPpTotal, getScoreIdentity, getScoreTimestamp, nowIso, scoreHasPublicLeaderboard } from "../shared/score.js";
 import { compactScoresForStorage, hydrateScoresDisplayMetadata, persistScoresDisplayMetadata } from "../shared/score-storage.js";
+import { packJson, unpackJson } from "../shared/compressed-json.js";
 import { readNoteBpms } from "./chart-analysis.js";
 import type { OscScore } from "../shared/types.js";
 
@@ -46,8 +47,10 @@ export interface PlayerProfileSection {
 interface ProfileSnapshotRow {
   user_id: number;
   username_key: string;
-  user_json: string;
-  best_scores_json: string;
+  // Plain JSON text on legacy rows, gzipped blob on rows written since the
+  // storage compression — always read through unpackJson.
+  user_json: string | Uint8Array | ArrayBuffer;
+  best_scores_json: string | Uint8Array | ArrayBuffer;
   fetched_at: string;
   user_fetched_at?: string | null;
 }
@@ -382,7 +385,7 @@ async function fetchAndStoreProfileSnapshot(
        user_fetched_at = excluded.user_fetched_at,
        updated_at = excluded.updated_at,
        refresh_error = null`,
-    [userId, usernameKey, json(storedUser), json(compactScoresForStorage(bestScores)), PROFILE_BEST_SCORES_LIMIT, fetchedAt, fetchedAt, fetchedAt],
+    [userId, usernameKey, packJson(storedUser), packJson(compactScoresForStorage(bestScores)), PROFILE_BEST_SCORES_LIMIT, fetchedAt, fetchedAt, fetchedAt],
   );
   await upsertDisplayUser(db, userId, username, storedUser, fetchedAt);
   const row = await getStoredProfileSnapshot(db, usernameKey);
@@ -468,7 +471,7 @@ async function refreshProfileUserIfDue(
   try {
     const user = await osu.getUser(row.user_id, "api:profile_snapshot:user");
     const userId = Number(user.id);
-    const username = typeof user.username === "string" ? user.username : parseJson<Record<string, unknown>>(row.user_json, {}).username;
+    const username = typeof user.username === "string" ? user.username : unpackJson<Record<string, unknown>>(row.user_json, {}).username;
     if (userId !== row.user_id || typeof username !== "string") return row;
 
     const storedUser = stripProfilePage(user);
@@ -478,7 +481,7 @@ async function refreshProfileUserIfDue(
       `update profile_snapshots
        set username_key = ?, user_json = ?, user_fetched_at = ?, updated_at = ?, refresh_error = null
        where user_id = ?`,
-      [normalizeProfileKey(username), json(storedUser), fetchedAt, fetchedAt, row.user_id],
+      [normalizeProfileKey(username), packJson(storedUser), fetchedAt, fetchedAt, row.user_id],
     );
     await upsertDisplayUser(db, row.user_id, username, storedUser, fetchedAt);
     return await getStoredProfileSnapshot(db, String(row.user_id)) ?? row;
@@ -541,8 +544,8 @@ async function upsertDisplayUser(
 }
 
 async function buildServedSnapshot(db: Db, row: ProfileSnapshotRow, forceStale: boolean, recentScores: OscScore[] = []): Promise<PlayerProfileSnapshot> {
-  const user = parseJson<Record<string, unknown>>(row.user_json, {});
-  const rawBestScores = await hydrateScoresDisplayMetadata(db, parseJson<OscScore[]>(row.best_scores_json, []));
+  const user = unpackJson<Record<string, unknown>>(row.user_json, {});
+  const rawBestScores = await hydrateScoresDisplayMetadata(db, unpackJson<OscScore[]>(row.best_scores_json, []));
   const userFetchedAt = row.user_fetched_at ?? row.fetched_at;
   const projectionBaselineAt = latestValidTimestamp(row.fetched_at, userFetchedAt);
   const projection = await projectTopPlays(db, row.user_id, rawBestScores, row.fetched_at, projectionBaselineAt, recentScores);

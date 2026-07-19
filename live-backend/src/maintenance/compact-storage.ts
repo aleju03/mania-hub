@@ -5,6 +5,7 @@ import { toStoredScoreEvent } from "../ingest/score-ingestor.js";
 import { compactLiveEventLogPayloadForStorage } from "../live/event-log.js";
 import { getModAcronyms, getScoreTimestamp, nowIso } from "../shared/score.js";
 import { compactScoreForStorage, compactScoresForStorage, persistScoresDisplayMetadata } from "../shared/score-storage.js";
+import { packJson, unpackJson } from "../shared/compressed-json.js";
 import type { CountryTopPlay, OscScore } from "../shared/types.js";
 
 interface CompactOptions {
@@ -27,6 +28,10 @@ await releaseMemory();
 
 const profileSnapshots = await compactProfileSnapshots(options.batchSize);
 console.log(`profile_snapshots: compacted ${profileSnapshots.compacted}, failed ${profileSnapshots.failed}, scanned ${profileSnapshots.scanned}`);
+await releaseMemory();
+
+const compressedSnapshots = await compressProfileSnapshots(options.batchSize);
+console.log(`profile_snapshots (gzip): compressed ${compressedSnapshots.compressed}, failed ${compressedSnapshots.failed}, scanned ${compressedSnapshots.scanned}`);
 await releaseMemory();
 
 const topPlays = await compactTopPlayEvents(options.batchSize);
@@ -98,7 +103,7 @@ async function compactProfileSnapshots(batchSize: number): Promise<{ scanned: nu
       await exec(
         db,
         "update profile_snapshots set best_scores_json = ? where user_id = ?",
-        [json(compactScoresForStorage(scores)), Number(row.user_id)],
+        [packJson(compactScoresForStorage(scores)), Number(row.user_id)],
       );
       result.compacted++;
       await releaseMemory();
@@ -394,6 +399,51 @@ function parseScore(value: unknown): OscScore | null {
   return parsed as OscScore;
 }
 
+// Rewrites legacy plain-text user_json / best_scores_json cells as gzipped
+// blobs (the write path compresses new rows; this migrates the backlog).
+async function compressProfileSnapshots(batchSize: number): Promise<{ scanned: number; compressed: number; failed: number }> {
+  const result = { scanned: 0, compressed: 0, failed: 0 };
+  let afterUserId = 0;
+
+  while (true) {
+    const rows = (await exec(
+      db,
+      `select user_id, user_json, best_scores_json
+       from profile_snapshots
+       where user_id > ?
+         and (typeof(user_json) = 'text' or typeof(best_scores_json) = 'text')
+       order by user_id asc
+       limit ?`,
+      [afterUserId, batchSize],
+    )).rows;
+
+    if (rows.length === 0) break;
+    result.scanned += rows.length;
+
+    for (const row of rows) {
+      afterUserId = Math.max(afterUserId, Number(row.user_id));
+      const user = unpackJson<Record<string, unknown> | null>(row.user_json, null);
+      const scores = unpackJson<OscScore[] | null>(row.best_scores_json, null);
+      if (!user || !Array.isArray(scores)) {
+        result.failed++;
+        continue;
+      }
+      await exec(
+        db,
+        "update profile_snapshots set user_json = ?, best_scores_json = ? where user_id = ?",
+        [packJson(user), packJson(scores), Number(row.user_id)],
+      );
+      result.compressed++;
+      await releaseMemory();
+    }
+
+    await releaseMemory();
+    if (rows.length < batchSize) break;
+  }
+
+  return result;
+}
+
 function parseScores(value: unknown): OscScore[] | null {
   const parsed = parseUnknownJson(value);
   if (!Array.isArray(parsed)) return null;
@@ -413,12 +463,7 @@ function compactTopPlayPayload(event: Partial<CountryTopPlay>): Partial<CountryT
 }
 
 function parseUnknownJson(value: unknown): unknown | null {
-  if (typeof value !== "string") return null;
-  try {
-    return JSON.parse(value) as unknown;
-  } catch {
-    return null;
-  }
+  return unpackJson<unknown | null>(value, null);
 }
 
 function getMapsFarmedDisplayScoreId(score: OscScore): number {

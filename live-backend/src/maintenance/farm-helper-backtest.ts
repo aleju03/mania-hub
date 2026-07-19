@@ -2,6 +2,7 @@ import { execSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { readConfig } from "../config.js";
 import { createDb, exec, migrate, type Db } from "../db.js";
+import { unpackJson } from "../shared/compressed-json.js";
 import { buildFarmHelperSnapshotForBacktest, type FarmHelperKeyMode } from "../features/farm-helper.js";
 import { hydrateScoresDisplayMetadata } from "../shared/score-storage.js";
 import type { OscScore } from "../shared/types.js";
@@ -87,8 +88,8 @@ async function selectSubjects(db: Db, args: Args): Promise<SubjectRow[]> {
   )).rows;
   return rows.map((row) => ({
     userId: Number(row.user_id),
-    userJson: String(row.user_json),
-    bestScoresJson: String(row.best_scores_json),
+    userJson: JSON.stringify(unpackJson<Record<string, unknown>>(row.user_json, {})),
+    bestScoresJson: JSON.stringify(unpackJson<unknown[]>(row.best_scores_json, [])),
     maxDetectedAt: String(row.max_detected_at),
     eventCount: Number(row.event_count),
   }));

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
+import { unpackJson } from "../shared/compressed-json.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { LiveEventLog } from "../live/event-log.js";
 import { getDisplayedAccuracy, getDisplayedRank, getModAcronyms, getScoreIdentity, getScoreSpeedBucket, isFullCombo, nowIso } from "../shared/score.js";
@@ -369,7 +370,7 @@ async function bestSinglePpPlay(db: Db, userId: number): Promise<{ pp: number; s
   // that predates live tracking and isn't in user_top_scores yet. Without this source the "best so
   // far" hint on a play_pp goal would only reflect recently-seen plays (e.g. 798pp instead of 927).
   const snapshotRow = (await exec(db, "select best_scores_json from profile_snapshots where user_id = ?", [userId])).rows[0];
-  for (const score of parseJson<OscScore[]>(snapshotRow?.best_scores_json, [])) {
+  for (const score of unpackJson<OscScore[]>(snapshotRow?.best_scores_json, [])) {
     const pp = positivePp(score.pp);
     if (pp == null) continue;
     candidates.push({
@@ -440,7 +441,7 @@ async function ppPlayCountSummary(db: Db, userId: number, threshold: number, ext
   });
 
   const snapshotRow = (await exec(db, "select best_scores_json from profile_snapshots where user_id = ?", [userId])).rows[0];
-  const snapshotScores = parseJson<OscScore[]>(snapshotRow?.best_scores_json, []);
+  const snapshotScores = unpackJson<OscScore[]>(snapshotRow?.best_scores_json, []);
   snapshotScores.forEach((score, index) => {
     const pp = positivePp(score.pp);
     const key = scoreKey(score, `profile:${userId}:${index}`);
