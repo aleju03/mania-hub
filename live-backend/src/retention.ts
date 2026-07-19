@@ -135,7 +135,7 @@ export interface StorageBreakdownSnapshot {
 
 let storageBreakdownCache: { at: number; value: StorageBreakdown } | null = null;
 let storageBreakdownInFlight: Promise<StorageBreakdown | null> | null = null;
-const STORAGE_BREAKDOWN_TTL_MS = 5 * 60_000;
+const STORAGE_BREAKDOWN_TTL_MS = 30 * 60_000;
 const STORAGE_BREAKDOWN_WAIT_MS = 2_500;
 
 // Per-table storage from the dbstat virtual table (table b-tree + its indexes,
@@ -187,7 +187,9 @@ function getOrStartStorageBreakdownScan(
   return storageBreakdownInFlight;
 }
 
-const STORAGE_SCAN_TIMEOUT_MS = 180_000;
+// Generous: the chunked walk deliberately idles ~50% of the time, so a cold
+// multi-GB scan can run for several minutes.
+const STORAGE_SCAN_TIMEOUT_MS = 15 * 60_000;
 
 // Runs the dbstat walk in a one-shot worker thread: local libsql executes
 // synchronously on the calling thread, and walking every page of a multi-GB
@@ -218,8 +220,10 @@ function scanTablesInThread(databaseUrl: string): Promise<Array<{ name: string; 
     worker.on("online", () => {
       online = true;
     });
+    const startedAt = Date.now();
     worker.on("message", (result: { ok: boolean; tables?: Array<{ name: string; bytes: number }>; error?: string }) => {
-      if (!result.ok) logWarn("storage_scan_failed", { error: result.error });
+      if (result.ok) logInfo("storage_scan_done", { tables: result.tables?.length ?? 0, duration_ms: Date.now() - startedAt });
+      else logWarn("storage_scan_failed", { error: result.error, duration_ms: Date.now() - startedAt });
       settle(result.ok ? result.tables ?? null : null);
     });
     worker.on("error", (error) => {
