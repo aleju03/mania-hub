@@ -208,6 +208,16 @@ const OSU_API_JOB_TYPES = new Set([
   PROFILE_POOL_WARM_JOB,
 ]);
 
+// Admin-monitor superset: every job type whose run consumes osu! API budget,
+// including the ones OSU_API_JOB_TYPES leaves runnable when API jobs are
+// disabled (their handlers take the osu client but are gated elsewhere).
+export const OSU_API_BOUND_JOB_TYPES: ReadonlySet<string> = new Set([
+  ...OSU_API_JOB_TYPES,
+  REFRESH_QUALIFIED_MAPS_JOB,
+  "osc_backfill",
+  "osc_country_catchup",
+]);
+
 export class WorkerRunner {
   private stopped = false;
   private paused = false;

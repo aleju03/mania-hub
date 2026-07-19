@@ -63,6 +63,7 @@ interface LiveBackendStatus {
     count: number;
     oldestRunAfter: string | null;
     newestError: string | null;
+    osuApi?: boolean;
   }>;
   roster?: Array<{ country: string; users: number; refreshedAt: string | null }>;
   analysis?: {
@@ -109,6 +110,7 @@ interface LiveBackendStatus {
     pending?: number;
     byCaller?: Array<{ caller: string; count: number }>;
     byPath?: Array<{ path: string; count: number }>;
+    byLane?: Array<{ lane: string; count: number }>;
   };
   scoresFallback?: {
     enabled: boolean;
@@ -4878,7 +4880,7 @@ function RateBreakdownCard({ status }: { status: LiveBackendStatus | null }) {
   const windowMin = status?.apiCallHistory?.windowMinutes ?? 15;
   const max = Math.max(1, ...callers.map((row) => row.count), ...paths.map((row) => row.count), ...historyCallers.map((row) => row.count), ...historyPaths.map((row) => row.count));
   return (
-    <SectionCard title="osu! API breakdown" subtitle="Compare live minute against the persisted recent window">
+    <SectionCard title="osu! API breakdown" subtitle="Live minute (server + worker + fallback combined) vs the persisted recent window">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">Callers, last 60s</div>
@@ -4887,6 +4889,11 @@ function RateBreakdownCard({ status }: { status: LiveBackendStatus | null }) {
             max={max}
             empty="No calls in the last minute."
           />
+          {status?.rate.byLane?.length ? (
+            <div className="mt-2 text-[10px] text-osu-f1">
+              {status.rate.byLane.map((row) => `${row.lane} ${row.count}`).join(" · ")}
+            </div>
+          ) : null}
         </div>
         <div>
           <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">Callers, last {windowMin}m</div>
@@ -4995,16 +5002,23 @@ function QueueSummaryCard({ status }: { status: LiveBackendStatus | null }) {
   const parkedRows = rows.filter((row) => row.status === "deferred_pressure");
   const parked = status?.queuePressure?.deferred ?? parkedRows.reduce((sum, row) => sum + row.count, 0);
   const pressure = status?.queuePressure;
+  const osuApiDepth = activeRows.reduce((sum, row) => sum + (row.osuApi ? row.count : 0), 0);
+  const localDepth = activeRows.reduce((sum, row) => sum + (row.osuApi ? 0 : row.count), 0);
   return (
     <SectionCard title="Job queue" subtitle="Counts by type and status">
       <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <div className="rounded-md bg-osu-b5/60 border border-osu-b3/20 px-3 py-2">
             <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Active depth</div>
             <div className="mt-1 text-xl font-bold text-white">{formatNumber(depth)}</div>
             <div className="mt-1 text-[10px] text-osu-f1 truncate">
               {pressure ? `target ${formatNumber(pressure.targetDepth)}, recover below ${formatNumber(pressure.recoveryDepth ?? 60)}` : "queued / running / failed"}
             </div>
+          </div>
+          <div className="rounded-md bg-osu-b5/60 border border-osu-b3/20 px-3 py-2">
+            <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">osu! API-bound</div>
+            <div className="mt-1 text-xl font-bold text-white">{formatNumber(osuApiDepth)}</div>
+            <div className="mt-1 text-[10px] text-osu-f1 truncate">{`need API budget · ${formatNumber(localDepth)} local-only`}</div>
           </div>
           <div className={`rounded-md border px-3 py-2 ${parked > 0 ? "bg-osu-yellow/10 border-osu-yellow/25" : "bg-osu-b5/60 border-osu-b3/20"}`}>
             <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Parked</div>
@@ -5047,6 +5061,11 @@ function QueueSummaryRow({ row }: { row: NonNullable<LiveBackendStatus["queueSum
       <div className="flex items-center gap-2">
         <span className={`text-[10px] font-mono ${statusColor}`}>{row.status}</span>
         <span className="min-w-0 flex-1 truncate text-[10px] font-mono text-osu-c2">{row.type}</span>
+        {row.osuApi ? (
+          <span className="flex-shrink-0 rounded bg-osu-yellow/10 border border-osu-yellow/25 px-1 py-px text-[8px] font-semibold uppercase tracking-wider text-osu-yellow" title="Consumes osu! API budget">
+            api
+          </span>
+        ) : null}
         <span className="text-[11px] font-bold text-white">{formatNumber(row.count)}</span>
       </div>
       {row.newestError ? <div className="mt-1 text-[10px] font-mono text-osu-red-light/80 truncate">{row.newestError}</div> : null}

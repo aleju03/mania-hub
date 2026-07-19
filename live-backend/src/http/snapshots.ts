@@ -64,6 +64,7 @@ import { getDiscordPublicInfo, type DiscordRuntime } from "../discord/index.js";
 import { getDiscordShowcase } from "../discord/showcase.js";
 import { listAllSubscriptions, removeSubscriptionById } from "../discord/subscriptions.js";
 import { countUserLinks } from "../discord/identity.js";
+import { OSU_API_BOUND_JOB_TYPES } from "../workers.js";
 import type { AnalyticsStore } from "../features/analytics.js";
 
 const HIDDEN_ADMIN_WORKER_LANE_NAMES = new Set([
@@ -2415,6 +2416,7 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
     countries,
     catchup,
     snapshotStats,
+    sharedRate,
   ] = await Promise.all([
     dbHealth(ctx.db),
     exec(ctx.db, "select created_at from live_event_log order by sequence desc limit 1"),
@@ -2430,10 +2432,15 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
     countryRegistryStatus(ctx),
     countryCatchupStatus(ctx),
     options.snapshotCountry ? adminSnapshotStats(ctx.db, options.snapshotCountry) : Promise.resolve(undefined),
+    sharedRateBreakdown(ctx.db),
   ]);
   const worker = (mirror?.worker as WorkerStatus | null | undefined) ?? ctx.workerStatus?.() ?? null;
   const osc = (mirror?.osc as OscStatus | undefined) ?? ctx.oscStatus();
-  const rate = mirror?.osuRate ?? ctx.osu.limiter.state();
+  // The in-process limiter (or the worker's mirrored copy) only sees its own
+  // process's calls; the shared reservation table spans server + worker +
+  // scores-fallback, so its last-minute view wins when available.
+  const rateBase = mirror?.osuRate ?? ctx.osu.limiter.state();
+  const rate = sharedRate ? { ...(rateBase as object), ...sharedRate } : rateBase;
   const sqliteBusy = {
     server: getSqliteBusyRetryStats(),
     worker: mirror?.sqliteBusy ?? (ctx.config.role === "server" ? null : getSqliteBusyRetryStats()),
@@ -2446,7 +2453,7 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
     lastEventAt: lastEvent.rows[0]?.created_at ?? null,
     queueDepth,
     queuePressure,
-    queueSummary,
+    queueSummary: queueSummary.map((row) => ({ ...row, osuApi: OSU_API_BOUND_JOB_TYPES.has(row.type) })),
     roster,
     analysis,
     osuFileBackfill,
@@ -2719,6 +2726,40 @@ async function countryRegistryStatus(ctx: HttpContext) {
       lastActiveAt: client?.lastActiveAt ?? entry.lastRequestedAt,
     };
   });
+}
+
+// Cross-process last-minute osu! rate view from the shared limiter's
+// reservation log: unlike the per-process limiter state, this covers server
+// interactive calls, worker jobs, and the scores-fallback poller together.
+async function sharedRateBreakdown(db: Db): Promise<{
+  usedLastMinute: number;
+  byCaller: Array<{ caller: string; count: number }>;
+  byPath: Array<{ path: string; count: number }>;
+  byLane: Array<{ lane: string; count: number }>;
+} | null> {
+  try {
+    const rows = (await exec(
+      db,
+      "select caller, path, lane from api_rate_limit_reservations where provider = 'osu' and started_at_ms > ?",
+      [Date.now() - 60_000],
+    )).rows;
+    const tally = (key: "caller" | "path" | "lane") => {
+      const counts = new Map<string, number>();
+      for (const row of rows) {
+        const value = String(row[key] ?? "unknown");
+        counts.set(value, (counts.get(value) ?? 0) + 1);
+      }
+      return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    };
+    return {
+      usedLastMinute: rows.length,
+      byCaller: tally("caller").map(([caller, count]) => ({ caller, count })),
+      byPath: tally("path").slice(0, 10).map(([path, count]) => ({ path, count })),
+      byLane: tally("lane").map(([lane, count]) => ({ lane, count })),
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function apiCallHistory(db: Db) {
