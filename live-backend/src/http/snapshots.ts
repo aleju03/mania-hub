@@ -522,8 +522,8 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     const result = url.pathname === "/api/roster/self-remove"
-      ? await removeManualRosterMember(ctx.db, memberCountry, memberUserId)
-      : await addManualRosterMember(ctx.db, ctx.queue, ctx.config, memberCountry, memberUserId);
+      ? await removeManualRosterMember(ctx.serveWriteDb ?? ctx.db, memberCountry, memberUserId)
+      : await addManualRosterMember(ctx.serveWriteDb ?? ctx.db, ctx.queue, ctx.config, memberCountry, memberUserId);
     sendJson(req, res, ctx, result.ok ? 200 : 409, result);
     return true;
   }
@@ -547,7 +547,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       }
       // Settle goals against stored projections before listing, so goals that were already satisfied
       // before creation (or while a split worker's in-memory goal index was stale) do not linger open.
-      await reconcileGoalsForUser(ctx.db, ctx.events, userId).catch(() => {});
+      await reconcileGoalsForUser(ctx.serveWriteDb ?? ctx.db, ctx.events, userId).catch(() => {});
       sendJson(req, res, ctx, 200, { goals: await listUserGoalsWithProgress(ctx.db, userId) });
       return true;
     }
@@ -567,7 +567,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         sendJson(req, res, ctx, 400, { error: "invalid_goal" });
         return true;
       }
-      const ok = await deleteUserGoal(ctx.db, userId, id);
+      const ok = await deleteUserGoal(ctx.serveWriteDb ?? ctx.db, userId, id);
       sendJson(req, res, ctx, ok ? 200 : 404, { ok });
       return true;
     }
@@ -587,13 +587,13 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         sendJson(req, res, ctx, 400, { error: targets.error });
         return true;
       }
-      const updated = await updateUserGoal(ctx.db, userId, id, targets.fields);
+      const updated = await updateUserGoal(ctx.serveWriteDb ?? ctx.db, userId, id, targets.fields);
       if (!updated) {
         sendJson(req, res, ctx, 404, { ok: false, error: "goal_not_editable" });
         return true;
       }
       // A lowered target may already be satisfied by stored projections; settle it right away.
-      await reconcileGoalsForUser(ctx.db, ctx.events, userId, [existing.kind]).catch(() => {});
+      await reconcileGoalsForUser(ctx.serveWriteDb ?? ctx.db, ctx.events, userId, [existing.kind]).catch(() => {});
       sendJson(req, res, ctx, 200, { ok: true, goal: (await getUserGoal(ctx.db, id)) ?? updated });
       return true;
     }
@@ -623,9 +623,9 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     Object.assign(input, targets.fields);
     if (typeof body.note === "string") input.note = body.note;
-    const created = await createUserGoal(ctx.db, ctx.queue, input);
+    const created = await createUserGoal(ctx.serveWriteDb ?? ctx.db, ctx.queue, input);
     // A just-created goal may already be satisfied by the player's stored tracker/top-play data.
-    await reconcileGoalsForUser(ctx.db, ctx.events, userId, [kind]).catch(() => {});
+    await reconcileGoalsForUser(ctx.serveWriteDb ?? ctx.db, ctx.events, userId, [kind]).catch(() => {});
     sendJson(req, res, ctx, 200, { ok: true, goal: (await getUserGoal(ctx.db, created.id)) ?? created });
     return true;
   }
@@ -1140,7 +1140,8 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     if (req.method === "GET") {
-      const wallet = await getPackWallet(ctx.db, walletUserId);
+      // getPackWallet can lazily rewrite legacy payloads, so it needs the write connection too.
+      const wallet = await getPackWallet(ctx.serveWriteDb ?? ctx.db, walletUserId);
       sendJson(req, res, ctx, 200, wallet ? { payload: wallet.payload, rev: wallet.rev } : { payload: null, rev: 0 });
       return true;
     }
@@ -1156,7 +1157,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         sendJson(req, res, ctx, 400, { error: "invalid_wallet_payload" });
         return true;
       }
-      const result = await savePackWallet(ctx.db, walletUserId, payload, Math.floor(baseRev), Date.now(), cardImportMode);
+      const result = await savePackWallet(ctx.serveWriteDb ?? ctx.db, walletUserId, payload, Math.floor(baseRev), Date.now(), cardImportMode);
       if (!result.ok) {
         sendJson(req, res, ctx, 409, { error: "wallet_conflict", payload: result.current.payload, rev: result.current.rev });
         return true;
@@ -1208,7 +1209,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         sendJson(req, res, ctx, 400, { error: "invalid_recycle_request" });
         return true;
       }
-      const result = await recyclePackCollectionCards(ctx.db, walletUserId, {
+      const result = await recyclePackCollectionCards(ctx.serveWriteDb ?? ctx.db, walletUserId, {
         mode,
         cardUserId: Number.isFinite(cardUserId) ? Math.floor(cardUserId) : undefined,
         cardUserIds: hasBulkIds ? cardUserIds : undefined,
@@ -1294,13 +1295,13 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     const action = url.searchParams.get("action");
     if (action === "start") {
-      const job = await createReplayVideoExport(ctx.db, ctx.config, parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {}));
+      const job = await createReplayVideoExport(ctx.serveWriteDb ?? ctx.db, ctx.config, parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {}));
       sendJson(req, res, ctx, 200, { id: job.id });
       return true;
     }
     if (action === "server-render") {
       const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
-      const job = await createServerReplayVideoExport(ctx.db, ctx.config, body);
+      const job = await createServerReplayVideoExport(ctx.serveWriteDb ?? ctx.db, ctx.config, body);
       await ctx.queue.enqueue("replay_video_server_render", `replay-video-server:${job.id}`, { id: job.id, request: body }, { priority: 85 });
       sendJson(req, res, ctx, 202, replayVideoExportResponse(job));
       return true;
@@ -1323,18 +1324,18 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     if (action === "upload-video") {
       const buffer = await readBodyBuffer(req, ctx.config.replayVideoUploadMaxBytes);
-      const job = await writeReplayVideoUpload(ctx.db, ctx.config, id, buffer);
+      const job = await writeReplayVideoUpload(ctx.serveWriteDb ?? ctx.db, ctx.config, id, buffer);
       sendJson(req, res, ctx, 200, replayVideoExportResponse(job));
       return true;
     }
     if (action === "finish") {
-      const job = await markReplayVideoQueued(ctx.db, id);
+      const job = await markReplayVideoQueued(ctx.serveWriteDb ?? ctx.db, id);
       await ctx.queue.enqueue("replay_video_export", `replay-video:${id}`, { id }, { priority: 80 });
       sendJson(req, res, ctx, 202, replayVideoExportResponse(job));
       return true;
     }
     if (action === "cancel") {
-      await cancelReplayVideoExport(ctx.db, ctx.config, id);
+      await cancelReplayVideoExport(ctx.serveWriteDb ?? ctx.db, ctx.config, id);
       sendJson(req, res, ctx, 200, { ok: true });
       return true;
     }
@@ -1405,7 +1406,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     const id = url.searchParams.get("id") ?? "";
-    const target = id ? await recordSkinDownload(ctx.db, id) : null;
+    const target = id ? await recordSkinDownload(ctx.serveWriteDb ?? ctx.db, id) : null;
     if (!target) {
       sendJson(req, res, ctx, 404, { error: "not_found" });
       return true;
@@ -1472,7 +1473,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
       return true;
     }
-    const result = await createPendingSkin(ctx.db, {
+    const result = await createPendingSkin(ctx.serveWriteDb ?? ctx.db, {
       ownerUserId: userId,
       ownerUsername: typeof body.username === "string" ? body.username : "",
       name: typeof body.name === "string" ? body.name : "",
@@ -1503,7 +1504,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     const id = url.searchParams.get("id") ?? "";
     const token = url.searchParams.get("token") ?? "";
     if (url.pathname === "/api/skins/finish") {
-      const result = await finishSkin(ctx.db, id, token);
+      const result = await finishSkin(ctx.serveWriteDb ?? ctx.db, id, token);
       if (!result.ok) {
         const status = result.error === "not_found" ? 403 : 400;
         sendJson(req, res, ctx, status, { ok: false, error: result.error === "not_found" ? "invalid_ticket" : result.error });
@@ -1528,7 +1529,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       }
       const key = skinOskKey(skin.id, skin.name);
       const uploaded = await uploadSkinObject(ctx.config, key, buffer, "application/octet-stream", "attachment");
-      await attachSkinOsk(ctx.db, skin, {
+      await attachSkinOsk(ctx.serveWriteDb ?? ctx.db, skin, {
         key,
         url: uploaded.url,
         sizeBytes: uploaded.sizeBytes,
@@ -1558,7 +1559,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         // The renderer samples the accent from the note art itself, which is
         // more faithful than the skin.ini colours the .osk validation reads.
         const accent = url.searchParams.get("accent");
-        if (accent && /^#[0-9a-f]{6}$/i.test(accent)) await setSkinAccent(ctx.db, skin.id, accent);
+        if (accent && /^#[0-9a-f]{6}$/i.test(accent)) await setSkinAccent(ctx.serveWriteDb ?? ctx.db, skin.id, accent);
         // With keys=N the render is stored as that keymode's preview (one per
         // keymode, replace on repeat); cover=1 also makes it the card cover.
         // Without keys it degrades to the single-cover flow.
@@ -1569,7 +1570,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
           const uploaded = await uploadSkinObject(ctx.config, key, buffer, sniffed.mime, "inline");
           const isCover = url.searchParams.get("cover") === "1";
           const upserted = await upsertSkinKeymodePreview(
-            ctx.db,
+            ctx.serveWriteDb ?? ctx.db,
             skin.id,
             { keys, key, url: uploaded.url, width, height },
             isCover,
@@ -1582,12 +1583,12 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         } else {
           const key = skinPreviewKey(skin.id, sniffed.ext);
           const uploaded = await uploadSkinObject(ctx.config, key, buffer, sniffed.mime, "inline");
-          await attachSkinPreview(ctx.db, skin.id, { key, url: uploaded.url, width, height });
+          await attachSkinPreview(ctx.serveWriteDb ?? ctx.db, skin.id, { key, url: uploaded.url, width, height });
         }
       } else {
         const key = skinScreenshotKey(skin.id, skin.screenshots.length, sniffed.ext);
         const uploaded = await uploadSkinObject(ctx.config, key, buffer, sniffed.mime, "inline");
-        const appended = await appendSkinScreenshot(ctx.db, skin.id, { key, url: uploaded.url, width, height });
+        const appended = await appendSkinScreenshot(ctx.serveWriteDb ?? ctx.db, skin.id, { key, url: uploaded.url, width, height });
         if (!appended.ok) {
           await deleteSkinObjects(ctx.config, [key]).catch(() => {});
           sendJson(req, res, ctx, 400, { ok: false, error: appended.error });
@@ -1623,7 +1624,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 404, { ok: false, error: "not_found" });
       return true;
     }
-    const deleted = await deleteSkin(ctx.db, id);
+    const deleted = await deleteSkin(ctx.serveWriteDb ?? ctx.db, id);
     if (deleted) {
       await deleteSkinObjects(ctx.config, deleted.keys).catch((error) => {
         logWarn("skin_delete_r2_failed", { id, ...errorContext(error) });

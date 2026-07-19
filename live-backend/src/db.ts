@@ -2,6 +2,7 @@ import { createClient, type Client, type InValue, type ResultSet, type Transacti
 import { mkdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { Config } from "./config.js";
+import { logWarn, errorContext } from "./logger.js";
 import { extractManiaVariantPps } from "./shared/score.js";
 
 export type Db = Client;
@@ -20,6 +21,9 @@ export interface SqliteBusyRetryStats {
   totalWaitMs: number;
   lastAt: string | null;
   lastMessage: string | null;
+  leakedTxnRollbacks: number;
+  reconnects: number;
+  lastReconnectAt: string | null;
 }
 
 const sqliteBusyRetryStats: SqliteBusyRetryStats = {
@@ -30,7 +34,20 @@ const sqliteBusyRetryStats: SqliteBusyRetryStats = {
   totalWaitMs: 0,
   lastAt: null,
   lastMessage: null,
+  leakedTxnRollbacks: 0,
+  reconnects: 0,
+  lastReconnectAt: null,
 };
+
+// A local libsql connection can wedge permanently: once it is left inside (or
+// pinned to) a stale read snapshot while another process advances the WAL,
+// every write on it fails SQLITE_BUSY instantly and unretryably, reads serve
+// stale data, and no SQL (rollback / begin immediate / checkpoint) un-pins it —
+// only reopening the connection does. That is the 2026-07-18/19 server write
+// freeze. The reconnect hook below lets the busy-retry path swap the underlying
+// client in place, invisibly to every holder of the Db reference.
+const RECONNECT = Symbol("mania.sqliteReconnect");
+const RECONNECT_MIN_INTERVAL_MS = 5_000;
 
 export async function createDb(config: Pick<Config, "databaseUrl" | "databaseAuthToken"> & PragmaConfig): Promise<Db> {
   const isFile = config.databaseUrl.startsWith("file:");
@@ -38,15 +55,42 @@ export async function createDb(config: Pick<Config, "databaseUrl" | "databaseAut
     const filePath = config.databaseUrl.slice("file:".length);
     await mkdir(dirname(resolve(filePath)), { recursive: true });
   }
-  const client = createClient({
-    url: config.databaseUrl,
-    authToken: config.databaseAuthToken,
-  });
-  // Local libsql runs every query synchronously on the calling thread, and each
-  // process opens its own connection, so connection-level pragmas must be set
-  // here. Skipped for remote (Turso) URLs, which manage these server-side.
-  if (isFile) await applyConnectionPragmas(client, config);
-  return client;
+  const open = async () => {
+    const client = createClient({
+      url: config.databaseUrl,
+      authToken: config.databaseAuthToken,
+    });
+    // Local libsql runs every query synchronously on the calling thread, and each
+    // process opens its own connection, so connection-level pragmas must be set
+    // here. Skipped for remote (Turso) URLs, which manage these server-side.
+    if (isFile) await applyConnectionPragmas(client, config);
+    return client;
+  };
+  let inner = await open();
+  if (!isFile) return inner;
+  let lastReconnectAtMs = 0;
+  const reconnect = async (): Promise<boolean> => {
+    const now = Date.now();
+    if (now - lastReconnectAtMs < RECONNECT_MIN_INTERVAL_MS) return false;
+    lastReconnectAtMs = now;
+    const previous = inner;
+    inner = await open();
+    try {
+      previous.close();
+    } catch {
+      // The old handle is being abandoned either way.
+    }
+    sqliteBusyRetryStats.reconnects += 1;
+    sqliteBusyRetryStats.lastReconnectAt = new Date().toISOString();
+    return true;
+  };
+  return new Proxy(inner, {
+    get(_target, prop) {
+      if (prop === RECONNECT) return reconnect;
+      const value = (inner as unknown as Record<string | symbol, unknown>)[prop];
+      return typeof value === "function" ? (value as (...args: unknown[]) => unknown).bind(inner) : value;
+    },
+  }) as Db;
 }
 
 async function applyConnectionPragmas(db: Db, config: PragmaConfig): Promise<void> {
@@ -157,7 +201,7 @@ export interface DbStatement {
 const EXEC_BATCH_MAX_STATEMENTS = 500;
 
 export async function exec(db: Db, sql: string, args: InValue[] = []) {
-  return withSqliteBusyRetry(() => db.execute({ sql, args }));
+  return withSqliteBusyRetry(() => db.execute({ sql, args }), db);
 }
 
 export async function execBatch(db: Db, statements: DbStatement[], mode: TransactionMode = "write") {
@@ -165,7 +209,7 @@ export async function execBatch(db: Db, statements: DbStatement[], mode: Transac
   const results: ResultSet[] = [];
   for (let index = 0; index < statements.length; index += EXEC_BATCH_MAX_STATEMENTS) {
     const chunk = statements.slice(index, index + EXEC_BATCH_MAX_STATEMENTS);
-    results.push(...await withSqliteBusyRetry(() => db.batch(chunk.map(({ sql, args = [] }) => ({ sql, args })), mode)));
+    results.push(...await withSqliteBusyRetry(() => db.batch(chunk.map(({ sql, args = [] }) => ({ sql, args })), mode), db));
   }
   return results;
 }
@@ -200,7 +244,7 @@ export function getSqliteBusyRetryStats(): SqliteBusyRetryStats {
   return { ...sqliteBusyRetryStats };
 }
 
-async function withSqliteBusyRetry<T>(operation: () => Promise<T>): Promise<T> {
+async function withSqliteBusyRetry<T>(operation: () => Promise<T>, recoverDb?: Db): Promise<T> {
   if (SQLITE_BUSY_RETRY_MS <= 0) {
     try {
       return await operation();
@@ -209,9 +253,10 @@ async function withSqliteBusyRetry<T>(operation: () => Promise<T>): Promise<T> {
       throw error;
     }
   }
-  const startedAt = Date.now();
+  let startedAt = Date.now();
   let delayMs = SQLITE_BUSY_RETRY_INITIAL_DELAY_MS;
   let operationAttempts = 0;
+  let recoveryAttempted = false;
   for (;;) {
     try {
       return await operation();
@@ -220,6 +265,16 @@ async function withSqliteBusyRetry<T>(operation: () => Promise<T>): Promise<T> {
       const elapsedMs = Date.now() - startedAt;
       operationAttempts += 1;
       if (elapsedMs >= SQLITE_BUSY_RETRY_MS) {
+        if (!recoveryAttempted && recoverDb && await tryRecoverWedgedConnection(recoverDb, error)) {
+          // The connection was likely wedged on a stale read snapshot (the
+          // 2026-07-18/19 server write freezes) — reopening it is the only
+          // cure, and the operation deserves a fresh budget on the new
+          // connection.
+          recoveryAttempted = true;
+          startedAt = Date.now();
+          delayMs = SQLITE_BUSY_RETRY_INITIAL_DELAY_MS;
+          continue;
+        }
         recordSqliteBusyRetry(error, 0, true, operationAttempts);
         throw error;
       }
@@ -229,6 +284,41 @@ async function withSqliteBusyRetry<T>(operation: () => Promise<T>): Promise<T> {
       delayMs = Math.min(SQLITE_BUSY_RETRY_MAX_DELAY_MS, Math.ceil(delayMs * 1.6));
     }
   }
+}
+
+// Busy-exhaustion last resort. First a ROLLBACK probe purely for forensics:
+// if it succeeds, some code path leaked an open transaction on this connection
+// (the prime suspect for how the wedge forms) — log it loudly so the leak can
+// finally be pinpointed. Then reopen the connection, because a wedged snapshot
+// pin survives rollback; only a fresh connection recovers (verified against
+// libsql local). Rate-limited inside the reconnect hook so plain long-lived
+// contention (a worker holding the write lock) cannot cause reconnect churn.
+async function tryRecoverWedgedConnection(db: Db, cause: unknown): Promise<boolean> {
+  const reconnect = (db as unknown as Record<symbol, unknown>)[RECONNECT] as (() => Promise<boolean>) | undefined;
+  if (!reconnect) return false;
+  let hadOpenTxn = false;
+  try {
+    await db.execute("rollback");
+    hadOpenTxn = true;
+    sqliteBusyRetryStats.leakedTxnRollbacks += 1;
+  } catch {
+    // No open transaction — the pin (if any) formed some other way.
+  }
+  let reconnected = false;
+  try {
+    reconnected = await reconnect();
+  } catch (error) {
+    logWarn("sqlite_reconnect_failed", errorContext(error));
+    return false;
+  }
+  if (reconnected) {
+    logWarn("sqlite_wedged_connection_reopened", {
+      detail: "write busy-retry budget exhausted; reopened the connection",
+      hadOpenTxn,
+      ...errorContext(cause),
+    });
+  }
+  return reconnected;
 }
 
 function recordSqliteBusyRetry(error: unknown, waitMs: number, exhausted: boolean, operationAttempts = 1): void {
