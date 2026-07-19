@@ -1,5 +1,6 @@
 import { stat, rm } from "node:fs/promises";
 import { resolve } from "node:path";
+import { Worker } from "node:worker_threads";
 import type { Config } from "./config.js";
 import type { Db } from "./db.js";
 import { exec } from "./db.js";
@@ -186,14 +187,56 @@ function getOrStartStorageBreakdownScan(
   return storageBreakdownInFlight;
 }
 
-async function scanStorageBreakdown(
-  db: Db,
-  config: Pick<Config, "databaseUrl" | "maxLocalDbBytes">,
-): Promise<StorageBreakdown | null> {
-  const nowMs = Date.now();
-  let rows;
+const STORAGE_SCAN_TIMEOUT_MS = 180_000;
+
+// Runs the dbstat walk in a one-shot worker thread: local libsql executes
+// synchronously on the calling thread, and walking every page of a multi-GB
+// file from the serving event loop froze the whole site for its duration.
+// Resolves the per-table sizes, or null when the thread ran but the scan
+// failed (dbstat unavailable, crash, timeout). Rejects only when the thread
+// itself cannot start — the compiled worker file is missing, i.e. vitest/dev —
+// where an inline scan of a small local database is an acceptable substitute.
+function scanTablesInThread(databaseUrl: string): Promise<Array<{ name: string; bytes: number }> | null> {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const worker = new Worker(new URL("./storage-scan-worker.js", import.meta.url), {
+      workerData: { databaseUrl },
+    });
+    // The thread must never keep an exiting process alive.
+    worker.unref();
+    let online = false;
+    let settled = false;
+    const settle = (value: Array<{ name: string; bytes: number }> | null, spawnError?: unknown): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      void worker.terminate().catch(() => undefined);
+      if (spawnError !== undefined) rejectPromise(spawnError instanceof Error ? spawnError : new Error(String(spawnError)));
+      else resolvePromise(value);
+    };
+    const timer = setTimeout(() => settle(null), STORAGE_SCAN_TIMEOUT_MS);
+    timer.unref();
+    worker.on("online", () => {
+      online = true;
+    });
+    worker.on("message", (result: { ok: boolean; tables?: Array<{ name: string; bytes: number }>; error?: string }) => {
+      if (!result.ok) logWarn("storage_scan_failed", { error: result.error });
+      settle(result.ok ? result.tables ?? null : null);
+    });
+    worker.on("error", (error) => {
+      if (online) {
+        logWarn("storage_scan_thread_error", errorContext(error));
+        settle(null);
+      } else {
+        settle(null, error);
+      }
+    });
+    worker.on("exit", () => settle(null));
+  });
+}
+
+async function scanTablesInline(db: Db): Promise<Array<{ name: string; bytes: number }> | null> {
   try {
-    rows = (await exec(
+    const rows = (await exec(
       db,
       `select m.tbl_name as name, sum(d.pgsize) as bytes
        from dbstat d
@@ -202,10 +245,29 @@ async function scanStorageBreakdown(
        group by m.tbl_name
        order by bytes desc`,
     )).rows;
+    return rows.map((row) => ({ name: String(row.name), bytes: Number(row.bytes ?? 0) }));
   } catch {
     return null;
   }
-  const tables = rows.map((row) => ({ name: String(row.name), bytes: Number(row.bytes ?? 0) }));
+}
+
+async function scanStorageBreakdown(
+  db: Db,
+  config: Pick<Config, "databaseUrl" | "maxLocalDbBytes">,
+): Promise<StorageBreakdown | null> {
+  const nowMs = Date.now();
+  let tables: Array<{ name: string; bytes: number }> | null = null;
+  if (config.databaseUrl.startsWith("file:")) {
+    try {
+      tables = await scanTablesInThread(config.databaseUrl);
+    } catch {
+      tables = await scanTablesInline(db);
+    }
+  } else {
+    // Remote databases execute asynchronously, so inline is already non-blocking.
+    tables = await scanTablesInline(db);
+  }
+  if (!tables) return null;
   const tableBytes = tables.reduce((sum, table) => sum + table.bytes, 0);
   const filePath = localDbFilePath(config.databaseUrl);
   const [fileBytes, walBytes] = filePath
