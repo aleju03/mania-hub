@@ -13,7 +13,7 @@ import { rebuildMapCollections } from "./features/map-collections.js";
 import { MapsRosterNotReadyError, enqueueGlobalMapsRefresh, globalMapsFarmedRefreshRunAfter, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores } from "./features/maps.js";
 import { REFRESH_QUALIFIED_MAPS_JOB, runQualifiedMapsWatch } from "./features/qualified-maps-watch.js";
 import { recordSnipeScoreHistory, updateSnipeProjection } from "./features/snipes.js";
-import { PLAYER_SKILLS_JOB, computePlayerSkillsJob, enqueuePlayerSkills } from "./features/player-skills.js";
+import { PLAYER_SKILLS_JOB, computePlayerSkillsJob } from "./features/player-skills.js";
 import { SKILL_BASELINE_JOB, runSkillBaselineJob } from "./features/skill-baseline.js";
 import { PROFILE_POOL_WARM_JOB, runProfilePoolWarmJob } from "./features/profile-pool-warm.js";
 import { confirmTopPlay, TopPlayConfirmationPendingError } from "./features/top-plays.js";
@@ -379,14 +379,10 @@ export class WorkerRunner {
       return;
     }
     if (job.type === "refresh_user_top_scores") {
-      const payload = job.payload as { userId: number; scoreId: number; country: string };
-      const confirmed = await confirmTopPlay(this.db, this.events, this.osu, payload);
-      // A confirmed top play changes the skill rating's inputs, and the
-      // confirmation just refreshed user_top_scores (and top_play_events feeds
-      // the snapshot projection), so recomputing here is API-free. Priority
-      // sits above the version drip but below view-triggered computes; the
-      // dedupe key collapses bursts from a player farming several top plays.
-      if (confirmed) await enqueuePlayerSkills(this.queue, payload.userId, { priority: 20 });
+      // Skill recomputes ride the ingest-side session debounce (see
+      // score-ingestor.ts), not this confirmation — one compute per session,
+      // covering tracked-only sessions too.
+      await confirmTopPlay(this.db, this.events, this.osu, job.payload as { userId: number; scoreId: number; country: string });
       return;
     }
     if (job.type === PROFILE_POOL_WARM_JOB) {

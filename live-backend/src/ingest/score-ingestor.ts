@@ -7,6 +7,7 @@ import { getAvatarAccentForUrl } from "../features/avatar-accents.js";
 import { maybeEnqueueMapsFarmedRefresh } from "../features/maps.js";
 import { updateSnipeProjection, type SnipeSelfHistoryProvider } from "../features/snipes.js";
 import { maybeEnqueueTopPlayRefresh } from "../features/top-plays.js";
+import { enqueuePlayerSkillsAfterSession } from "../features/player-skills.js";
 import { getHydratedScoreByIdentity } from "../features/tracker.js";
 import { evaluateScoreGoals } from "../features/goals.js";
 import type { JobQueue } from "../jobs/queue.js";
@@ -155,6 +156,16 @@ export class ScoreIngestor {
       await evaluateScoreGoals(this.db, this.events, score, countries);
     } catch (error) {
       logWarn("goal_eval_failed", { user_id: score.user_id, error: error instanceof Error ? error.message : String(error) });
+    }
+    // Session-end skill refresh: debounced per player, so the recompute runs
+    // once ~30min after their last pass instead of once per play. Guarded like
+    // goals: ingest is the hot path and must keep flowing.
+    if (score.passed) {
+      try {
+        await enqueuePlayerSkillsAfterSession(this.queue, score.user_id);
+      } catch (error) {
+        logWarn("skills_session_enqueue_failed", { user_id: score.user_id, error: error instanceof Error ? error.message : String(error) });
+      }
     }
     if (source.startsWith("osc_")) await this.updateOscCursor(score, receivedAt);
     const canUseOsuApi = this.canUseOsuApi();

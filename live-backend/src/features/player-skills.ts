@@ -949,11 +949,14 @@ async function getSkillQueueStatus(db: Db, userId: number): Promise<PlayerSkillQ
   )).rows[0];
   if (!job) return null;
   const jobStatus = String(job.status);
-  const waitingSql = "status in ('queued', 'failed') and type in (?, ?)";
+  // Due jobs only: session-debounced recomputes with a future run_after are
+  // not claimable yet and would inflate the queue position shown to viewers.
+  const nowIsoStamp = new Date().toISOString();
+  const waitingSql = "status in ('queued', 'failed') and type in (?, ?) and run_after <= ?";
   const waiting = Number((await exec(
     db,
     `select count(*) as cnt from jobs where ${waitingSql}`,
-    SKILL_LANE_JOB_TYPES,
+    [...SKILL_LANE_JOB_TYPES, nowIsoStamp],
   )).rows[0]?.cnt ?? 0);
   if (jobStatus === "running") return { state: "running", position: null, waiting };
   if (jobStatus !== "queued" && jobStatus !== "failed") return null;
@@ -962,7 +965,7 @@ async function getSkillQueueStatus(db: Db, userId: number): Promise<PlayerSkillQ
     `select count(*) as cnt from jobs
      where ${waitingSql}
        and (priority > ? or (priority = ? and (run_after < ? or (run_after = ? and id < ?))))`,
-    [...SKILL_LANE_JOB_TYPES, Number(job.priority), Number(job.priority), String(job.run_after), String(job.run_after), Number(job.id)],
+    [...SKILL_LANE_JOB_TYPES, nowIsoStamp, Number(job.priority), Number(job.priority), String(job.run_after), String(job.run_after), Number(job.id)],
   )).rows[0]?.cnt ?? 0);
   return { state: "queued", position: ahead + 1, waiting };
 }
@@ -979,6 +982,29 @@ export async function enqueuePlayerSkills(
     // Dedupe takes max(priority), so a background-drip enqueue gets bumped to
     // the front the moment someone actually views the player.
     { priority: options.priority ?? 50, replaceDone: true },
+  );
+}
+
+// A session's last play, not its every play, is what should trigger the
+// background recompute: each ingested pass pushes the job out again, so it
+// becomes claimable only once the player has gone quiet. Tracked plays feed
+// the rating alongside the top-200, so sessions without a single new top play
+// still refresh. A view-triggered enqueue (plain min-merge, run-now) yanks
+// the same job forward immediately, so an audience never waits on the timer.
+const SKILLS_SESSION_DEBOUNCE_MS = 30 * 60_000;
+const SKILLS_SESSION_PRIORITY = 15;
+
+export async function enqueuePlayerSkillsAfterSession(queue: JobQueue, userId: number): Promise<void> {
+  await queue.enqueue(
+    PLAYER_SKILLS_JOB,
+    `player-skills:${PLAYER_SKILLS_VERSION}:${userId}`,
+    { userId },
+    {
+      priority: SKILLS_SESSION_PRIORITY,
+      replaceDone: true,
+      runAfter: new Date(Date.now() + SKILLS_SESSION_DEBOUNCE_MS),
+      debounce: true,
+    },
   );
 }
 

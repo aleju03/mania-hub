@@ -88,19 +88,28 @@ const RESERVED_LANE_TYPES: Record<string, number> = {
 export class JobQueue {
   constructor(private readonly db: Db) {}
 
-  async enqueue(type: string, dedupeKey: string, payload: unknown, options: { priority?: number; runAfter?: Date; replaceDone?: boolean } = {}): Promise<void> {
+  async enqueue(type: string, dedupeKey: string, payload: unknown, options: { priority?: number; runAfter?: Date; replaceDone?: boolean; debounce?: boolean } = {}): Promise<void> {
     const pressureStatus = await this.pressureStatusFor(type);
     const now = nowIso();
     const status = pressureStatus.defer ? "deferred_pressure" : "queued";
     const runAfter = pressureStatus.defer ? new Date(Date.now() + PRESSURE_DEFER_MS) : options.runAfter ?? new Date();
     await exec(
       this.db,
+      // run_after merge: normally the earliest request wins so an urgent
+      // enqueue pulls a scheduled job forward. `debounce` inverts that for the
+      // incoming value (max) so repeated events keep pushing the job out —
+      // e.g. one skills recompute after a play session instead of one per
+      // play. ISO strings compare lexicographically, so min/max are sound.
       `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at, last_error)
        values (?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
        on conflict(dedupe_key) do update set
          status = excluded.status,
          priority = max(priority, excluded.priority),
-         run_after = case when jobs.status = 'done' then excluded.run_after else min(run_after, excluded.run_after) end,
+         run_after = case
+           when jobs.status = 'done' then excluded.run_after
+           when ? then max(jobs.run_after, excluded.run_after)
+           else min(jobs.run_after, excluded.run_after)
+         end,
          attempts = case when jobs.status = 'done' then 0 else jobs.attempts end,
          payload_json = excluded.payload_json,
          last_error = case when jobs.status = 'done' then excluded.last_error else coalesce(jobs.last_error, excluded.last_error) end,
@@ -116,6 +125,7 @@ export class JobQueue {
         now,
         now,
         pressureStatus.reason,
+        options.debounce ? 1 : 0,
         options.replaceDone ? 1 : 0,
       ],
     );

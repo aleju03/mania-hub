@@ -454,10 +454,13 @@ const SKILLS_DRIP_PRIORITY = 5;
 function startPlayerSkillsDripScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: JobQueue): void {
   const tick = async () => {
     try {
+      // Due jobs only: session-debounced recomputes sit queued with a future
+      // run_after while their player keeps playing, and counting them would
+      // starve the drip whenever anyone is mid-session.
       const waiting = Number((await exec(
         db,
-        "select count(*) as cnt from jobs where type = ? and status in ('queued', 'failed')",
-        [PLAYER_SKILLS_JOB],
+        "select count(*) as cnt from jobs where type = ? and status in ('queued', 'failed') and run_after <= ?",
+        [PLAYER_SKILLS_JOB, new Date().toISOString()],
       )).rows[0]?.cnt ?? 0);
       if (waiting < 2) {
         const rows = (await exec(
