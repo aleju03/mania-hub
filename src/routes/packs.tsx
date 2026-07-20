@@ -605,6 +605,7 @@ function PacksPage() {
                       wallet={wallet}
                       syncStatus={walletApi.syncStatus}
                       trackedCountries={trackedCountries}
+                      viewerId={auth.viewer?.id ?? null}
                     />
                   </div>
                 )}

@@ -99,6 +99,42 @@ function writeRosterTotalCache(code: string, total: number): void {
   }
 }
 
+/* Last-known per-album card counts for a synced viewer. A synced wallet
+   keeps its cards server-side, so on the shelf's first mount every count is
+   zero until the collection fetch lands, and orderShelfSections re-sorts
+   the covers under the cursor a beat later. Seeding the counts from this
+   cache lets the shelf mount already sorted (and labeled); the fresh
+   fetch still takes over, so a drift only costs one re-sort. */
+const SHELF_COUNT_CACHE_KEY = "mania-hub-album-shelf-counts-v1";
+
+function readShelfCountCache(viewerId: number | null): Map<string, number> | null {
+  if (typeof window === "undefined" || !viewerId) return null;
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(SHELF_COUNT_CACHE_KEY) ?? "null");
+    if (!parsed || typeof parsed !== "object" || parsed.viewerId !== viewerId) return null;
+    const counts = new Map<string, number>();
+    for (const [code, count] of Object.entries(parsed.counts ?? {})) {
+      if (typeof count === "number" && Number.isFinite(count) && count > 0) counts.set(code, count);
+    }
+    return counts.size > 0 ? counts : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeShelfCountCache(viewerId: number | null, counts: ReadonlyMap<string, number>): void {
+  if (typeof window === "undefined" || !viewerId) return;
+  try {
+    const record: Record<string, number> = {};
+    for (const [code, count] of counts) {
+      if (count > 0) record[code] = count;
+    }
+    window.localStorage.setItem(SHELF_COUNT_CACHE_KEY, JSON.stringify({ viewerId, counts: record }));
+  } catch {
+    // Best-effort cache; the server collection is the source of truth.
+  }
+}
+
 const skeletonThumbCache = new Map<ManiaCardTier, string | null>();
 
 function tierSkeletonThumb(tier: ManiaCardTier): string | null {
@@ -659,10 +695,12 @@ export function AlbumView({
   wallet,
   syncStatus,
   trackedCountries,
+  viewerId,
 }: {
   wallet: PackWallet;
   syncStatus: "local" | "syncing" | "synced";
   trackedCountries: string[] | null;
+  viewerId: number | null;
 }) {
   const sections = useMemo(() => buildAlbumSections(trackedCountries ?? []), [trackedCountries]);
   const [openCode, setOpenCode] = useState<string | null>(null);
@@ -683,7 +721,18 @@ export function AlbumView({
   const lastFlipAtRef = useRef(0);
   const [, setThumbRevision] = useState(0);
   const [serverOwned, setServerOwned] = useState<Set<number> | null>(null);
-  const [serverCards, setServerCards] = useState<CollectedCard[] | null>(null);
+  /* A still-fresh session cache seeds the very first render, so remounting
+     the album (tab away and back, route re-entry) never flashes the
+     zero-count alphabetical shelf. Client-only: the cache can only be
+     populated after hydration, so SSR and first client render agree. */
+  const [serverCards, setServerCards] = useState<CollectedCard[] | null>(() =>
+    serverCollectionCache && Date.now() - serverCollectionCache.at < SERVER_COLLECTION_TTL_MS
+      ? serverCollectionCache.cards
+      : null,
+  );
+  /* Read once per mount: only bridges the gap until the collection fetch
+     lands. */
+  const [seededShelfCounts] = useState(() => readShelfCountCache(viewerId));
   const [spotlight, setSpotlight] = useState<CardSpotlightTarget | null>(null);
   const [peek, setPeek] = useState<PlayerPeekTarget | null>(null);
   const apiRef = useRef<FlipBookApi | null>(null);
@@ -706,8 +755,16 @@ export function AlbumView({
       total += 1;
     }
     counts.set(GLOBAL_SCOPE_CODE, total);
+    /* While the server collection is still loading, the live counts only
+       see this session's local pulls; fill in the last-known counts (max
+       per album: local pulls may not be in the persisted snapshot yet). */
+    if (!serverCards && seededShelfCounts) {
+      for (const [code, count] of seededShelfCounts) {
+        if ((counts.get(code) ?? 0) < count) counts.set(code, count);
+      }
+    }
     return counts;
-  }, [collectedById]);
+  }, [collectedById, serverCards, seededShelfCounts]);
 
   const shelfSections = useMemo(
     () => orderShelfSections(sections, walletCountByCode),
@@ -757,6 +814,13 @@ export function AlbumView({
       cancelled = true;
     };
   }, [syncStatus]);
+
+  /* Only full-collection counts are worth persisting; the seeded/local-only
+     interim would just overwrite good data with zeros. */
+  useEffect(() => {
+    if (!serverCards) return;
+    writeShelfCountCache(viewerId, walletCountByCode);
+  }, [viewerId, serverCards, walletCountByCode]);
 
   const openSection = openCode ? sections.find((section) => section.code === openCode) ?? null : null;
 
@@ -1216,17 +1280,22 @@ export function AlbumView({
       </div>
 
       {/* Collection progress, moved off the cover so it can arrive with the
-          roster lookup without repainting the book. */}
-      {!global && limit != null && limit > 0 && (
-        <div className="mx-auto mt-4 w-[min(60%,320px)]">
+          roster lookup without repainting the book. The block occupies its
+          full height from the first frame (invisible while the roster size
+          is unknown) so its arrival never pushes the page around. */}
+      {!global && limit !== 0 && (
+        <div className={`mx-auto mt-4 w-[min(60%,320px)]${limit == null ? " invisible" : ""}`}>
           <div className="mb-1.5 flex items-baseline justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#e8c56a]">{limit} players</span>
-            <span className="text-[11px] font-bold text-white/80 tabular-nums">{collectedShown}/{limit} collected</span>
+            <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#e8c56a]">{limit ?? 0} players</span>
+            <span className="text-[11px] font-bold text-white/80 tabular-nums">{collectedShown}/{limit ?? 0} collected</span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-[3px] bg-white/10">
             <div
               className="h-full rounded-[3px]"
-              style={{ width: `${Math.max(2, Math.min(100, (collectedShown / limit) * 100))}%`, background: GOLD }}
+              style={{
+                width: limit == null ? "0%" : `${Math.max(2, Math.min(100, (collectedShown / limit) * 100))}%`,
+                background: GOLD,
+              }}
             />
           </div>
         </div>
