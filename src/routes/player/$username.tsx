@@ -985,7 +985,8 @@ export function PlayerProfilePage({
   const [tabState, setTab] = useState<PlayerTab>(() => normalizePlayerTab(initialTab));
   // Skills stays admin-only while the skill/dan formulas are in calibration preview;
   // non-admins landing on /skills (old links) fall back to the default tab.
-  const canSeeSkillsTab = useAuth().canUseAdminFeatures;
+  const auth = useAuth();
+  const canSeeSkillsTab = auth.canUseAdminFeatures;
   const tab = !canSeeSkillsTab && tabState === "skills" ? "best" : tabState;
   const playerTabs = canSeeSkillsTab ? PLAYER_TABS : PLAYER_TABS.filter((t) => t !== "skills");
   const [keyFilter, setKeyFilter] = useState<KeyFilter>("all");
@@ -2337,6 +2338,7 @@ export function PlayerProfilePage({
                   user={user}
                   scores={best}
                   loading={!bestWindowLoaded}
+                  isOwnProfile={!!auth.viewer && !!user && auth.viewer.id === user.id}
                 />
               </motion.div>
             ) : tab === "activity" ? (

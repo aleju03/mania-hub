@@ -128,7 +128,7 @@ const TIER_LADDER: Array<{ tier: ManiaCardTier; min: number }> = [
   ...MANIA_CARD_TIER_THRESHOLDS.map(({ tier, threshold }) => ({ tier, min: threshold })),
 ];
 
-export function ManiaCard3DPanel({ user, scores, loading }: ManiaCardPanelProps) {
+export function ManiaCard3DPanel({ user, scores, loading, isOwnProfile = false }: ManiaCardPanelProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<ManiaCardRenderer | null>(null);
   const latestReadyDataRef = useRef<ManiaCardReadyData | null>(null);
@@ -303,6 +303,7 @@ export function ManiaCard3DPanel({ user, scores, loading }: ManiaCardPanelProps)
           <RatingExplainerModal
             nextTier={data.nextTier}
             cardRating={data.skills.cardPower}
+            isOwnProfile={isOwnProfile}
             onClose={() => setRatingModalOpen(false)}
           />
         )}
@@ -363,10 +364,12 @@ function TierProgress({
 function RatingExplainerModal({
   nextTier,
   cardRating,
+  isOwnProfile,
   onClose,
 }: {
   nextTier: NextManiaCardTier;
   cardRating: number;
+  isOwnProfile: boolean;
   onClose: () => void;
 }) {
   const toColor = TIER_FILL_COLOR[nextTier.tier] ?? "rgb(226, 232, 240)";
@@ -452,7 +455,7 @@ function RatingExplainerModal({
                         >
                           {MANIA_TIER_STYLES[rung.tier].label}
                         </span>
-                        {isCurrent && (
+                        {isCurrent && isOwnProfile && (
                           <span className="rounded-full bg-white/15 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-white">
                             You
                           </span>
@@ -482,7 +485,7 @@ function RatingExplainerModal({
           </div>
 
           <p className="mt-4 text-[11px] leading-snug text-osu-f1/55">
-            Rank is set by your top mania plays: mostly pp standing, plus control, speed, precision and stamina traits.
+            Rank is set by {isOwnProfile ? "your" : "the player's"} top mania plays: mostly pp standing, plus control, speed, precision and stamina traits.
           </p>
         </div>
       </motion.div>

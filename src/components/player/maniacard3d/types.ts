@@ -7,6 +7,8 @@ export interface ManiaCardPanelProps {
   };
   scores: OsuScore[];
   loading: boolean;
+  /** True only when the signed-in viewer is looking at their own card. Gates the "You" ladder badge. */
+  isOwnProfile?: boolean;
 }
 
 export interface ManiaCardStat {
