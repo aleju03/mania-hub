@@ -12,6 +12,13 @@ type PragmaConfig = Partial<Pick<Config, "sqliteBusyTimeoutMs" | "sqliteSynchron
 const SQLITE_BUSY_RETRY_MS = readBoundedEnvInt("SQLITE_BUSY_RETRY_MS", 15_000, 0, 120_000);
 const SQLITE_BUSY_RETRY_INITIAL_DELAY_MS = 25;
 const SQLITE_BUSY_RETRY_MAX_DELAY_MS = 500;
+// Best-effort request-path writes (throwaway caches like the osu! proxy cache)
+// must never burn the full durable-write budget above or trigger a connection
+// reopen: a page load that only wanted to *populate* a cache would otherwise
+// hang 15-48s waiting for a writer the worker is holding during a backfill
+// burst. With this short budget the write instead gives up and skips caching,
+// which is invisible to the user (the payload was already fetched).
+const SQLITE_BEST_EFFORT_WRITE_BUDGET_MS = readBoundedEnvInt("SQLITE_BEST_EFFORT_WRITE_BUDGET_MS", 250, 0, 5_000);
 
 export interface SqliteBusyRetryStats {
   retryBudgetMs: number;
@@ -24,6 +31,10 @@ export interface SqliteBusyRetryStats {
   leakedTxnRollbacks: number;
   reconnects: number;
   lastReconnectAt: string | null;
+  // Best-effort cache writes that hit a busy writer and skipped rather than
+  // wait out the durable budget. Tracked separately so it never looks like a
+  // wedge (which the operations/attempts/exhausted counters above indicate).
+  bestEffortWriteSkips: number;
 }
 
 const sqliteBusyRetryStats: SqliteBusyRetryStats = {
@@ -37,6 +48,7 @@ const sqliteBusyRetryStats: SqliteBusyRetryStats = {
   leakedTxnRollbacks: 0,
   reconnects: 0,
   lastReconnectAt: null,
+  bestEffortWriteSkips: 0,
 };
 
 // A local libsql connection can wedge permanently: once it is left inside (or
@@ -118,7 +130,7 @@ async function applyConnectionPragmas(db: Db, config: PragmaConfig): Promise<voi
   if (cacheMb > 0) pragmas.push(`pragma cache_size = ${-cacheMb * 1024}`);
   if (mmapBytes > 0) pragmas.push(`pragma mmap_size = ${mmapBytes}`);
   for (const pragma of pragmas) {
-    await withSqliteBusyRetry(() => db.execute(pragma)).catch((error) => {
+    await withSqliteBusyRetry(() => db.execute(pragma), {}).catch((error) => {
       console.warn(`[db] failed to apply ${pragma}:`, error instanceof Error ? error.message : error);
     });
   }
@@ -200,8 +212,20 @@ export interface DbStatement {
 
 const EXEC_BATCH_MAX_STATEMENTS = 500;
 
-export async function exec(db: Db, sql: string, args: InValue[] = []) {
-  return withSqliteBusyRetry(() => db.execute({ sql, args }), db);
+export interface ExecOptions {
+  // Best-effort writes skip the durable retry budget and the connection reopen:
+  // on a busy writer they fail fast so the caller can move on without caching.
+  bestEffort?: boolean;
+}
+
+export async function exec(db: Db, sql: string, args: InValue[] = [], options?: ExecOptions) {
+  if (options?.bestEffort) {
+    return withSqliteBusyRetry(() => db.execute({ sql, args }), {
+      budgetMs: SQLITE_BEST_EFFORT_WRITE_BUDGET_MS,
+      bestEffort: true,
+    });
+  }
+  return withSqliteBusyRetry(() => db.execute({ sql, args }), { recoverDb: db });
 }
 
 export async function execBatch(db: Db, statements: DbStatement[], mode: TransactionMode = "write") {
@@ -209,7 +233,7 @@ export async function execBatch(db: Db, statements: DbStatement[], mode: Transac
   const results: ResultSet[] = [];
   for (let index = 0; index < statements.length; index += EXEC_BATCH_MAX_STATEMENTS) {
     const chunk = statements.slice(index, index + EXEC_BATCH_MAX_STATEMENTS);
-    results.push(...await withSqliteBusyRetry(() => db.batch(chunk.map(({ sql, args = [] }) => ({ sql, args })), mode), db));
+    results.push(...await withSqliteBusyRetry(() => db.batch(chunk.map(({ sql, args = [] }) => ({ sql, args })), mode), { recoverDb: db }));
   }
   return results;
 }
@@ -244,12 +268,29 @@ export function getSqliteBusyRetryStats(): SqliteBusyRetryStats {
   return { ...sqliteBusyRetryStats };
 }
 
-async function withSqliteBusyRetry<T>(operation: () => Promise<T>, recoverDb?: Db): Promise<T> {
-  if (SQLITE_BUSY_RETRY_MS <= 0) {
+interface BusyRetryOptions {
+  // Passed only for durable writes: on budget exhaustion the connection is
+  // reopened (the stale-snapshot wedge recovery). Best-effort writes omit it.
+  recoverDb?: Db;
+  // Retry ceiling; defaults to the durable budget. Best-effort writes pass the
+  // short best-effort budget instead.
+  budgetMs?: number;
+  // Best-effort writes record a skip counter instead of the wedge stats and
+  // never attempt connection recovery.
+  bestEffort?: boolean;
+}
+
+async function withSqliteBusyRetry<T>(operation: () => Promise<T>, options: BusyRetryOptions = {}): Promise<T> {
+  const { recoverDb, bestEffort = false } = options;
+  const budgetMs = options.budgetMs ?? SQLITE_BUSY_RETRY_MS;
+  if (budgetMs <= 0) {
     try {
       return await operation();
     } catch (error) {
-      if (isSqliteBusyError(error)) recordSqliteBusyRetry(error, 0, true);
+      if (isSqliteBusyError(error)) {
+        if (bestEffort) sqliteBusyRetryStats.bestEffortWriteSkips += 1;
+        else recordSqliteBusyRetry(error, 0, true);
+      }
       throw error;
     }
   }
@@ -264,7 +305,7 @@ async function withSqliteBusyRetry<T>(operation: () => Promise<T>, recoverDb?: D
       if (!isSqliteBusyError(error)) throw error;
       const elapsedMs = Date.now() - startedAt;
       operationAttempts += 1;
-      if (elapsedMs >= SQLITE_BUSY_RETRY_MS) {
+      if (elapsedMs >= budgetMs) {
         if (!recoveryAttempted && recoverDb && await tryRecoverWedgedConnection(recoverDb, error)) {
           // The connection was likely wedged on a stale read snapshot (the
           // 2026-07-18/19 server write freezes) — reopening it is the only
@@ -275,11 +316,14 @@ async function withSqliteBusyRetry<T>(operation: () => Promise<T>, recoverDb?: D
           delayMs = SQLITE_BUSY_RETRY_INITIAL_DELAY_MS;
           continue;
         }
-        recordSqliteBusyRetry(error, 0, true, operationAttempts);
+        if (bestEffort) sqliteBusyRetryStats.bestEffortWriteSkips += 1;
+        else recordSqliteBusyRetry(error, 0, true, operationAttempts);
         throw error;
       }
-      const waitMs = Math.min(delayMs, SQLITE_BUSY_RETRY_MS - elapsedMs);
-      recordSqliteBusyRetry(error, waitMs, false, operationAttempts);
+      const waitMs = Math.min(delayMs, budgetMs - elapsedMs);
+      // Best-effort skips are expected and frequent under load; keep them out of
+      // the wedge stats (only the final give-up bumps the skip counter).
+      if (!bestEffort) recordSqliteBusyRetry(error, waitMs, false, operationAttempts);
       await sleep(waitMs);
       delayMs = Math.min(SQLITE_BUSY_RETRY_MAX_DELAY_MS, Math.ceil(delayMs * 1.6));
     }

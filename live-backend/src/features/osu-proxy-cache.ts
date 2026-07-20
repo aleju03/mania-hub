@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Db } from "../db.js";
-import { exec } from "../db.js";
+import { exec, isSqliteBusyError } from "../db.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { errorContext, logWarn } from "../logger.js";
 
@@ -75,6 +75,10 @@ async function writeRow(db: Db, key: string, path: string, body: string, hints: 
        stale_until = excluded.stale_until,
        updated_at = excluded.updated_at`,
     [key, path, body, expiresAt, expiresAt + hints.staleMs, now],
+    // Populating the cache is a pure optimization: if the writer is busy (a
+    // worker backfill burst holds the single WAL writer), skip fast instead of
+    // stalling the page load that triggered this proxy call.
+    { bestEffort: true },
   );
 }
 
@@ -111,7 +115,11 @@ async function lookupOrFetch(
         await writeRow(writeDb, key, path, body, hints);
       }
     } catch (error) {
-      logWarn("osu_proxy_cache_write_failed", { path, ...errorContext(error) });
+      // A busy writer is an expected skip (best-effort write), not a failure —
+      // tracked via sqliteBusy.bestEffortWriteSkips. Only log real write errors.
+      if (!isSqliteBusyError(error)) {
+        logWarn("osu_proxy_cache_write_failed", { path, ...errorContext(error) });
+      }
     }
     return { payload, cache: "miss" };
   } catch (error) {
