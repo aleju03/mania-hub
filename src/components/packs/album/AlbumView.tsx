@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, Globe, Info } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { getManiaCardTier, type ManiaCardTier } from "#/lib/maniacard";
 import { ownedCards, type CollectedCard, type PackWallet } from "#/lib/pack-collection";
@@ -582,7 +582,11 @@ function PlayerPeek({ target, onClose }: { target: PlayerPeekTarget | null; onCl
   );
 }
 
-function AlbumSlot({
+/* Memoized: every album page re-renders on any AlbumView state change
+   (page turns, roster chunks, thumbnail arrivals), and a big country is
+   ~500 slots. All props are identity-stable, so slots only re-render when
+   their own data lands -- keeping React work off the flip animation. */
+const AlbumSlot = memo(function AlbumSlot({
   entry,
   card,
   serverOwned,
@@ -689,7 +693,7 @@ function AlbumSlot({
       </span>
     </button>
   );
-}
+});
 
 export function AlbumView({
   wallet,
@@ -970,6 +974,19 @@ export function AlbumView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spreadSignature]);
 
+  /* Identity-stable so the memoized slots don't re-render on unrelated
+     state changes. */
+  const openSpotlight = useCallback((card: CollectedCard, thumbnail: string | null, rect: DOMRect) => {
+    setSpotlight({
+      card,
+      thumbnail,
+      rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
+    });
+  }, []);
+  const openPeek = useCallback((entry: LiveGlobalRankingEntry, owned: boolean) => {
+    setPeek({ entry, owned });
+  }, []);
+
   if (!isLiveBackendConfigured() || !trackedCountries || sections.length <= 1) {
     return (
       <div className="py-10 text-center text-[12px] text-osu-f1">
@@ -988,14 +1005,6 @@ export function AlbumView({
     setOpenCode(null);
     setPeek(null);
     setSpotlight(null);
-  };
-
-  const openSpotlight = (card: CollectedCard, thumbnail: string | null, rect: DOMRect) => {
-    setSpotlight({
-      card,
-      thumbnail,
-      rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
-    });
   };
 
   const shelfCountText = (section: AlbumSection) => {
@@ -1123,7 +1132,7 @@ export function AlbumView({
                   serverOwned={Boolean(serverOwned?.has(entry.user.id))}
                   thumbnail={getMemoryCardThumbnail(key)}
                   onSpotlight={openSpotlight}
-                  onPeek={(peekEntry, owned) => setPeek({ entry: peekEntry, owned })}
+                  onPeek={openPeek}
                 />
               );
             })}
@@ -1163,9 +1172,12 @@ export function AlbumView({
         </span>
       </div>
 
-      <div className="relative">
+      {/* album-book-stage/-standin size the waiting cover with the flip
+          engine's own rule (portrait below 520px, landscape above), so the
+          live book swaps in at exactly the stand-in's size on phones too. */}
+      <div className="album-book-stage relative">
         {!bookReady && (
-          <div className="album-cover-live mx-auto w-[min(50%,440px)] min-w-[260px]">
+          <div className="album-cover-live album-book-standin mx-auto">
             <div className="overflow-hidden rounded-[6px]" style={{ aspectRatio: `${PAGE_WIDTH} / ${PAGE_HEIGHT}` }}>
               <AlbumCoverFace
                 section={openSection}

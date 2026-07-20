@@ -237,6 +237,34 @@ html[data-custom-cursor="true"] * {
   .album-tri-layer { animation: none; }
   .album-flag-sticker { transition: none; }
 }
+@media (hover: none) {
+  /* Touch devices: the drifting cover field would repaint under the flip
+     engine's per-frame clip-path work and read as jank, so covers hold
+     still (hover is meaningless there anyway). */
+  .album-cover-live .album-tri-layer,
+  .album-cover-hover:hover .album-tri-layer {
+    animation-play-state: paused;
+  }
+}
+/* The open-album stage copies the flip engine's sizing rule so the static
+   cover stand-in and the mounted book land on the same width: below 520px
+   (two minimum-width pages) the engine goes portrait and gives one page the
+   full block width capped at 440px; from 520px up, landscape pages take
+   half. A mismatch shows as the album resizing when the live book swaps in. */
+.album-book-stage {
+  container-type: inline-size;
+}
+.album-book-standin {
+  width: min(100%, 440px);
+}
+@container (min-width: 520px) {
+  .album-book-standin { width: min(50%, 440px); }
+}
+/* Flip pages get their own compositor layers; the engine rewrites their
+   transforms every animation frame. */
+.album-book-stage .stf__item {
+  will-change: transform;
+}
 .skeleton-pulse {
   background-color: rgba(255, 255, 255, 0.045);
   animation: skeleton-pulse 1.8s ease-in-out infinite;

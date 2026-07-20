@@ -66,6 +66,34 @@ export function FlipBook({
     let pageFlip: PageFlip | null = null;
     const ratio = pageHeight / pageWidth;
 
+    /* The engine's flipNext/flipPrev aim a synthetic click at a corner and
+       run it through the same corner test disableFlipByClick imposes on real
+       clicks -- but the points are computed wrong whenever the book rect has
+       an offset. flipPrev forgets rect.left entirely, and in portrait
+       rect.left is -pageWidth (the spread's unseen left half hangs
+       off-screen), so the point lands mid-book and the call silently no-ops:
+       back arrow, ArrowLeft and swipe-back were all dead on phones. Both
+       also aim y at 1 instead of rect.top + 1, which misses whenever the
+       page is letterboxed. Recreate them with corrected coordinates and
+       patch the instance so the engine's own swipe handling takes these
+       paths too. */
+    const flipNextFixed = (corner?: "top" | "bottom") => {
+      if (!pageFlip) return;
+      const rect = pageFlip.getRender().getRect();
+      pageFlip.getFlipController().flip({
+        x: rect.left + rect.pageWidth * 2 - 10,
+        y: corner === "bottom" ? rect.top + rect.height - 2 : rect.top + 1,
+      });
+    };
+    const flipPrevFixed = (corner?: "top" | "bottom") => {
+      if (!pageFlip) return;
+      const rect = pageFlip.getRender().getRect();
+      pageFlip.getFlipController().flip({
+        x: rect.left + 10,
+        y: corner === "bottom" ? rect.top + rect.height - 2 : rect.top + 1,
+      });
+    };
+
     /* The engine flips on corner CLICKS even with disableFlipByClick (that
        setting only guards non-corner points), so a card sitting in a page
        corner would flip the page instead of opening. Interactive targets
@@ -79,8 +107,39 @@ export function FlipBook({
     };
     bookHost.addEventListener("mousedown", blockMouseGrab, true);
 
+    /* The engine ignores touches that START on interactive elements (its
+       clickEventForward guard) -- and album pages are wall-to-wall slot
+       buttons, so on phones most swipes went dead. Re-detect swipes for
+       exactly those touches, with the engine's own thresholds (30px of
+       mostly-horizontal travel within 250ms). Taps still click: a real
+       swipe travels past the browser's click slop, so no click follows. */
+    let interactiveTouch: { x: number; y: number; at: number } | null = null;
+    const onTouchStart = (event: TouchEvent) => {
+      const touch = event.changedTouches[0];
+      if (!touch || !(event.target instanceof Element) || !event.target.closest("button, a")) return;
+      interactiveTouch = { x: touch.clientX, y: touch.clientY, at: Date.now() };
+    };
+    const onTouchEnd = (event: TouchEvent) => {
+      const start = interactiveTouch;
+      interactiveTouch = null;
+      const touch = event.changedTouches[0];
+      if (!start || !touch || Date.now() - start.at > 250) return;
+      const deltaX = touch.clientX - start.x;
+      if (Math.abs(deltaX) < 30 || Math.abs(touch.clientY - start.y) >= 60) return;
+      const hostRect = bookHost.getBoundingClientRect();
+      const corner = start.y - hostRect.top >= hostRect.height / 2 ? "bottom" : "top";
+      if (deltaX > 0) flipPrevFixed(corner);
+      else flipNextFixed(corner);
+    };
+    bookHost.addEventListener("touchstart", onTouchStart, { passive: true });
+    bookHost.addEventListener("touchend", onTouchEnd, { passive: true });
+
     void import("page-flip").then(({ PageFlip: PageFlipCtor }) => {
       if (cancelled) return;
+      /* Touch devices skip the page shadows: they're gradient layers whose
+         clip-path is rebuilt on every animation frame, the biggest repaint
+         cost of a flip on phones. */
+      const noHover = window.matchMedia("(hover: none)").matches;
       pageFlip = new PageFlipCtor(bookHost, {
         width: pageWidth,
         height: pageHeight,
@@ -90,6 +149,7 @@ export function FlipBook({
         minHeight: Math.round(minPageWidth * ratio),
         maxHeight: Math.round(maxPageWidth * ratio),
         showCover: true,
+        drawShadow: !noHover,
         maxShadowOpacity: 0.55,
         flippingTime: 700,
         mobileScrollSupport: true,
@@ -101,6 +161,8 @@ export function FlipBook({
         showPageCorners: false,
       });
       pageFlip.loadFromHTML(pages);
+      pageFlip.flipNext = flipNextFixed;
+      pageFlip.flipPrev = flipPrevFixed;
       pageFlip.on("flip", (event) => {
         if (typeof event.data === "number") onPageChangeRef.current?.(event.data);
       });
@@ -111,9 +173,27 @@ export function FlipBook({
       });
       if (apiRef) {
         apiRef.current = {
-          flipNext: () => pageFlip?.flipNext(),
-          flipPrev: () => pageFlip?.flipPrev(),
-          flipTo: (pageIndex) => pageFlip?.flip(pageIndex),
+          flipNext: () => flipNextFixed(),
+          flipPrev: () => flipPrevFixed(),
+          /* Not the engine's flip(page): that routes backward jumps through
+             its broken flipPrev. Same spread bookkeeping, fixed flips. */
+          flipTo: (pageIndex) => {
+            if (!pageFlip) return;
+            try {
+              const spreads = pageFlip.getPageCollection();
+              const current = spreads.getCurrentSpreadIndex();
+              const target = spreads.getSpreadIndexByPage(pageIndex);
+              if (target > current) {
+                spreads.setCurrentSpreadIndex(target - 1);
+                flipNextFixed();
+              } else if (target < current) {
+                spreads.setCurrentSpreadIndex(target + 1);
+                flipPrevFixed();
+              }
+            } catch {
+              // Out-of-range page index: nothing to flip to.
+            }
+          },
           getCurrentPageIndex: () => pageFlip?.getCurrentPageIndex() ?? 0,
           getOrientation: () => pageFlip?.getOrientation() ?? "landscape",
         };
@@ -125,6 +205,8 @@ export function FlipBook({
     return () => {
       cancelled = true;
       bookHost.removeEventListener("mousedown", blockMouseGrab, true);
+      bookHost.removeEventListener("touchstart", onTouchStart);
+      bookHost.removeEventListener("touchend", onTouchEnd);
       if (apiRef) apiRef.current = null;
       try {
         pageFlip?.destroy();
