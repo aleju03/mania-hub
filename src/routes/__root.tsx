@@ -171,6 +171,45 @@ function readClientRootSlowContext(): RootSlowContext | Promise<RootSlowContext>
   return refreshClientRootSlowContext();
 }
 
+// The SSR response dehydrates its slow context (auth + backend bootstrap) into
+// an inline script, and the first client beforeLoad consumes it here instead of
+// fetching. This is a hydration-correctness requirement, not just a saved round
+// trip: route context is not serialized by the router, so without the handoff
+// the client re-fetches during hydration, and any drift from what the server
+// rendered with (a backend restart between the two fetches, a country tier
+// flap, transient bootstrap failure) makes React hydrate against different
+// data -- seen in the wild as recoverable #418s at the first divergent node
+// (the nav's tier-gated Snipes link). Consumed once; later refreshes go
+// through the normal TTL'd fetch path.
+function consumeDehydratedRootSlowContext(): RootSlowContext | null {
+  const value = window.__maniaHubRootSlowContext;
+  if (!value || typeof value !== "object" || typeof value.backendStatus !== "string") return null;
+  delete window.__maniaHubRootSlowContext;
+  const context: RootSlowContext = {
+    auth: value.auth,
+    backendStatus: value.backendStatus,
+    countryFeatures: value.countryFeatures ?? null,
+  };
+  clientRootSlowContextCache = {
+    value: context,
+    expiresAt: Date.now() + CLIENT_ROOT_CONTEXT_TTL_MS,
+  };
+  return context;
+}
+
+// Keys are written in RootSlowContext declaration order so the client's
+// re-render of the dehydration script serializes to the identical string.
+function serializeRootSlowContext(value: RootSlowContext): string {
+  return JSON.stringify({
+    auth: value.auth,
+    backendStatus: value.backendStatus,
+    countryFeatures: value.countryFeatures,
+  })
+    .replace(/</g, "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
 function seedClientRootSlowContext(value: RootSlowContext): void {
   if (typeof document === "undefined") return;
   if (
@@ -194,7 +233,8 @@ function isPromiseLike<T>(value: T | Promise<T>): value is Promise<T> {
 
 declare global {
   interface Window {
-    __maniaHubRecoverChunkLoad?: (error: unknown) => boolean;
+    __maniaHubRecoverChunkLoad?: (error: unknown, force?: boolean) => boolean;
+    __maniaHubRootSlowContext?: RootSlowContext;
   }
 }
 
@@ -208,7 +248,7 @@ const CHUNK_LOAD_ERROR_PATTERNS = [
   "vite:preloaderror",
 ];
 
-const CHUNK_LOAD_RECOVERY_SCRIPT = `(()=>{var key="mania-hub-chunk-reload-v1";var ttl=300000;function text(value){try{if(!value)return"";if(typeof value==="string")return value;if(value instanceof Error)return value.name+" "+value.message;var parts=[];if(typeof value.name==="string")parts.push(value.name);if(typeof value.message==="string")parts.push(value.message);if(typeof value.type==="string")parts.push(value.type);if(value.reason)parts.push(text(value.reason));if(value.payload)parts.push(text(value.payload));return parts.join(" ");}catch(e){return"";}}function isChunkError(value){var message=text(value).toLowerCase();return message.indexOf("failed to fetch dynamically imported module")!==-1||message.indexOf("error loading dynamically imported module")!==-1||message.indexOf("importing a module script failed")!==-1||message.indexOf("failed to load module script")!==-1||message.indexOf("loading chunk")!==-1||message.indexOf("chunkloaderror")!==-1||message.indexOf("vite:preloaderror")!==-1;}function freshen(){var tasks=[];try{if(navigator.serviceWorker&&navigator.serviceWorker.getRegistrations){tasks.push(navigator.serviceWorker.getRegistrations().then(function(registrations){return Promise.all(registrations.map(function(registration){return registration.unregister().catch(function(){});}));}));}}catch(e){}try{if(window.caches&&caches.keys){tasks.push(caches.keys().then(function(keys){return Promise.all(keys.filter(function(name){return /^static-v/.test(name)||/^mania-hub/.test(name);}).map(function(name){return caches.delete(name);}));}));}}catch(e){}Promise.allSettled(tasks).finally(function(){location.reload();});}function recover(value){if(!isChunkError(value))return false;try{var now=Date.now();var href=location.href;var previous=JSON.parse(sessionStorage.getItem(key)||"null");if(previous&&previous.href===href&&now-previous.at<ttl)return false;sessionStorage.setItem(key,JSON.stringify({href:href,at:now}));}catch(e){}freshen();return true;}window.__maniaHubRecoverChunkLoad=recover;window.addEventListener("vite:preloadError",function(event){if(recover(event&&event.payload)){event.preventDefault();}},true);window.addEventListener("unhandledrejection",function(event){recover(event&&event.reason);},true);window.addEventListener("error",function(event){recover(event&&(event.error||event.message));},true);})();`;
+const CHUNK_LOAD_RECOVERY_SCRIPT = `(()=>{var key="mania-hub-chunk-reload-v1";var ttl=300000;function text(value){try{if(!value)return"";if(typeof value==="string")return value;if(value instanceof Error)return value.name+" "+value.message;var parts=[];if(typeof value.name==="string")parts.push(value.name);if(typeof value.message==="string")parts.push(value.message);if(typeof value.type==="string")parts.push(value.type);if(value.reason)parts.push(text(value.reason));if(value.payload)parts.push(text(value.payload));return parts.join(" ");}catch(e){return"";}}function isChunkError(value){var message=text(value).toLowerCase();return message.indexOf("failed to fetch dynamically imported module")!==-1||message.indexOf("error loading dynamically imported module")!==-1||message.indexOf("importing a module script failed")!==-1||message.indexOf("failed to load module script")!==-1||message.indexOf("loading chunk")!==-1||message.indexOf("chunkloaderror")!==-1||message.indexOf("vite:preloaderror")!==-1;}function freshen(){var tasks=[];try{if(navigator.serviceWorker&&navigator.serviceWorker.getRegistrations){tasks.push(navigator.serviceWorker.getRegistrations().then(function(registrations){return Promise.all(registrations.map(function(registration){return registration.unregister().catch(function(){});}));}));}}catch(e){}try{if(window.caches&&caches.keys){tasks.push(caches.keys().then(function(keys){return Promise.all(keys.filter(function(name){return /^static-v/.test(name)||/^mania-hub/.test(name);}).map(function(name){return caches.delete(name);}));}));}}catch(e){}Promise.allSettled(tasks).finally(function(){location.reload();});}function recover(value,force){if(!force&&!isChunkError(value))return false;try{var now=Date.now();var href=location.href;var previous=JSON.parse(sessionStorage.getItem(key)||"null");if(previous&&previous.href===href&&now-previous.at<ttl)return false;sessionStorage.setItem(key,JSON.stringify({href:href,at:now}));}catch(e){}freshen();return true;}window.__maniaHubRecoverChunkLoad=recover;window.addEventListener("vite:preloadError",function(event){if(recover(event&&event.payload)){event.preventDefault();}},true);window.addEventListener("unhandledrejection",function(event){recover(event&&event.reason);},true);window.addEventListener("error",function(event){recover(event&&(event.error||event.message));},true);})();`;
 
 function errorText(error: unknown): string {
   if (!error) return "";
@@ -238,9 +278,24 @@ function isChunkLoadError(error: unknown): boolean {
   return CHUNK_LOAD_ERROR_PATTERNS.some((pattern) => message.includes(pattern));
 }
 
-function recoverFromChunkLoadError(error: unknown): boolean {
+// Version skew's other face: the lazy import *succeeds* (the CDN serves the
+// new deployment's module), but the old client's route tree doesn't line up
+// with what it exports, and TanStack Router's preload dies reading `.component`
+// off undefined. No chunk-load pattern matches (the fetch worked), so without
+// this the user lands on the error screen instead of getting the silent
+// refresh. Matched only here in the route error boundary -- the global
+// error/unhandledrejection hooks keep the narrow chunk patterns, so a genuine
+// app bug that happens to read `.component` can at worst cost one guarded
+// reload via this path, not ambient listeners.
+const STALE_ROUTE_MODULE_PATTERN = "cannot read properties of undefined (reading 'component')";
+
+function isStaleRouteModuleError(error: unknown): boolean {
+  return errorText(error).toLowerCase().includes(STALE_ROUTE_MODULE_PATTERN);
+}
+
+function recoverFromChunkLoadError(error: unknown, force = false): boolean {
   if (typeof window === "undefined") return false;
-  return window.__maniaHubRecoverChunkLoad?.(error) ?? false;
+  return window.__maniaHubRecoverChunkLoad?.(error, force) ?? false;
 }
 
 function availableCountrySetFromContext(context: RootSlowContext): ReadonlySet<string> | null {
@@ -257,7 +312,7 @@ function resolveClientInitialCountry(context: RootSlowContext): string {
 
 function getClientRootContext(): RootRouteContext | Promise<RootRouteContext> {
   const origin = window.location.origin;
-  const slowContext = readClientRootSlowContext();
+  const slowContext = consumeDehydratedRootSlowContext() ?? readClientRootSlowContext();
 
   if (isPromiseLike(slowContext)) {
     return slowContext.then((context) => ({
@@ -331,24 +386,27 @@ export const Route = createRootRoute({
 
 function RootErrorComponent({ error }: { error: Error }) {
   const chunkLoadError = isChunkLoadError(error);
+  const staleRouteError = !chunkLoadError && isStaleRouteModuleError(error);
+  const staleBuildError = chunkLoadError || staleRouteError;
 
   useEffect(() => {
-    const autoReloading = import.meta.env.PROD && chunkLoadError && recoverFromChunkLoadError(error);
-    // chunk_load + auto_reloading:false means the reload loop guard tripped,
+    const autoReloading = import.meta.env.PROD && staleBuildError && recoverFromChunkLoadError(error, true);
+    // stale build + auto_reloading:false means the reload loop guard tripped,
     // i.e. a refresh did not clear it and the user is stuck on this screen.
     track("route_error", {
       message: (errorText(error) || "unknown").slice(0, 500),
       stack: error instanceof Error && error.stack ? error.stack.slice(0, 1500) : null,
       chunk_load: chunkLoadError,
+      stale_route: staleRouteError,
       auto_reloading: autoReloading,
     });
-  }, [chunkLoadError, error]);
+  }, [chunkLoadError, staleBuildError, staleRouteError, error]);
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 px-6 py-24 text-center">
       <div className="text-5xl font-bold text-white">Something broke</div>
       <div className="max-w-md text-sm text-osu-f1">
-        {chunkLoadError
+        {staleBuildError
           ? "A freshly deployed asset could not be loaded. The app will try one clean refresh; if it comes back here, the preview deploy is missing a built asset."
           : "The page hit an unexpected error and couldn't finish rendering. Reloading usually clears it. If it keeps happening, try disabling browser extensions."}
       </div>
@@ -356,7 +414,7 @@ function RootErrorComponent({ error }: { error: Error }) {
         <button
           type="button"
           onClick={() => {
-            if (!chunkLoadError || !recoverFromChunkLoadError(error)) {
+            if (!staleBuildError || !recoverFromChunkLoadError(error, true)) {
               window.location.reload();
             }
           }}
@@ -571,7 +629,7 @@ function WindowActivityAttribute() {
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
-  const { origin } = Route.useRouteContext();
+  const { origin, auth, backendStatus, countryFeatures } = Route.useRouteContext();
   const jsonLd = websiteJsonLd(origin);
   return (
     <html lang="en" suppressHydrationWarning>
@@ -583,6 +641,15 @@ function RootDocument({ children }: { children: React.ReactNode }) {
             dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
           />
         )}
+        {/* Dehydrated slow context: the client's first beforeLoad consumes this
+            instead of re-fetching, so hydration renders against exactly the
+            data the server rendered with (see consumeDehydratedRootSlowContext). */}
+        <script
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{
+            __html: `window.__maniaHubRootSlowContext=${serializeRootSlowContext({ auth, backendStatus, countryFeatures })};`,
+          }}
+        />
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var h=null;var t=localStorage.getItem("mania-hub-theme-v1");if(t!=null){var tn=Number(t);if(isFinite(tn))h=tn;}if(h==null){var s=localStorage.getItem("mania-hub-cache-v5");if(s){var p=JSON.parse(s);var bh=p&&p.state&&p.state.themeHue;if(typeof bh==="number"&&isFinite(bh))h=bh;}}if(h!=null){var n=((Math.round(h)%360)+360)%360;document.documentElement.style.setProperty("--theme-hue",String(n));if(n!==333)document.documentElement.style.setProperty("--theme-hue-mix","1");}var sv=localStorage.getItem("mania-hub-theme-sat-v1");if(sv!=null){var sn=Number(sv);if(isFinite(sn))document.documentElement.style.setProperty("--theme-sat",String(Math.max(0,Math.min(100,Math.round(sn)))/100));}}catch(e){}})();`,
