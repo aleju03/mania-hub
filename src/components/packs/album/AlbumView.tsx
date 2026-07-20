@@ -64,6 +64,41 @@ interface RosterData {
   error: boolean;
 }
 
+/* Last-known roster size per album, persisted so reopening an album can show
+   the collection progress bar (and mount the book at the right page count)
+   immediately instead of waiting for the first roster chunk. The fresh
+   snapshot still overwrites it, so a drifted size only costs one book
+   remount. */
+const ROSTER_TOTAL_CACHE_KEY = "mania-hub-album-roster-totals-v1";
+
+function readRosterTotalCache(): Record<string, number> {
+  if (typeof window === "undefined") return {};
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(ROSTER_TOTAL_CACHE_KEY) ?? "null");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const totals: Record<string, number> = {};
+    for (const [code, total] of Object.entries(parsed)) {
+      if (typeof total === "number" && Number.isFinite(total) && total > 0) totals[code] = total;
+    }
+    return totals;
+  } catch {
+    return {};
+  }
+}
+
+function writeRosterTotalCache(code: string, total: number): void {
+  if (typeof window === "undefined") return;
+  if (!Number.isFinite(total) || total <= 0) return;
+  try {
+    const totals = readRosterTotalCache();
+    if (totals[code] === total) return;
+    totals[code] = total;
+    window.localStorage.setItem(ROSTER_TOTAL_CACHE_KEY, JSON.stringify(totals));
+  } catch {
+    // Best-effort cache; the roster fetch is the source of truth.
+  }
+}
+
 const skeletonThumbCache = new Map<ManiaCardTier, string | null>();
 
 function tierSkeletonThumb(tier: ManiaCardTier): string | null {
@@ -633,7 +668,13 @@ export function AlbumView({
   const [openCode, setOpenCode] = useState<string | null>(null);
   const [shelfQuery, setShelfQuery] = useState("");
   const rootRef = useRef<HTMLElement | null>(null);
-  const [rosters, setRosters] = useState<Record<string, RosterData>>({});
+  const [rosters, setRosters] = useState<Record<string, RosterData>>(() => {
+    const seeded: Record<string, RosterData> = {};
+    for (const [code, total] of Object.entries(readRosterTotalCache())) {
+      seeded[code] = { total, entries: {}, chunks: {}, error: false };
+    }
+    return seeded;
+  });
   const inflightRosters = useRef(new Set<string>());
   const [currentPage, setCurrentPage] = useState(0);
   const [orientation, setOrientation] = useState<"portrait" | "landscape">("landscape");
@@ -775,6 +816,7 @@ export function AlbumView({
         : fetchLiveRankingsSnapshot(code, { page: chunk, pageSize: ROSTER_CHUNK_SIZE });
       void fetchPage
         .then((snapshot) => {
+          writeRosterTotalCache(code, snapshot.total);
           setRosters((prev) => {
             const current = prev[code] ?? { total: null, entries: {}, chunks: {}, error: false };
             const entries = { ...current.entries };
@@ -795,8 +837,11 @@ export function AlbumView({
         .catch(() => {
           setRosters((prev) => {
             const current = prev[code];
-            // Partial data stays usable; only a failed first load blocks the album.
-            if (current?.total != null) return prev;
+            // Partial data stays usable; only a failed first load blocks the
+            // album. A total seeded from the persisted cache without any
+            // fetched chunk does not count as data: drop it so the retry UI
+            // shows instead of a book of placeholders that will never fill.
+            if (current?.total != null && Object.keys(current.chunks).length > 0) return prev;
             return { ...prev, [code]: { total: null, entries: {}, chunks: {}, error: true } };
           });
         })
