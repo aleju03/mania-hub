@@ -64,6 +64,41 @@ ${notes}
 `;
 }
 
+// The stream chart with every note turned into a ~250ms hold: same heads, so
+// the head-only calc sees the identical chart, while the tail-aware pass sees
+// the release rows.
+function buildLnBeatmapFile(): string {
+  const pattern = [0, 1, 2, 3, 1, 3, 0, 2, 3, 0, 1, 3, 2, 0, 2, 1];
+  const notes = Array.from({ length: 700 }, (_, index) => {
+    const column = pattern[index % pattern.length];
+    const x = 64 + column * 128;
+    const time = 1000 + index * 88;
+    return `${x},192,${time},128,0,${time + 250}:0:0:0:0:`;
+  }).join("\n");
+  return `osu file format v14
+
+[General]
+AudioFilename: audio.mp3
+Mode: 3
+
+[Metadata]
+Title: Player Skills LN Test
+Artist: Test
+Creator: Mapper
+Version: 4K LN
+
+[Difficulty]
+CircleSize:4
+OverallDifficulty:8
+
+[TimingPoints]
+0,352.94,4,2,0,100,1,0
+
+[HitObjects]
+${notes}
+`;
+}
+
 function buildStdBeatmapFile(): string {
   return `osu file format v14
 
@@ -554,6 +589,42 @@ describe("computePlayerSkillRatings", () => {
       expect(plays.get(113)?.rate).toBe(1.5);
       expect(plays.get(113)?.missShare).toBeCloseTo(4 / 384, 5);
       expect(result.summary.modes[0].dan?.rc ?? null).toBeNull();
+    });
+  });
+
+  it("blends LN-chart SSRs toward the tail-aware calc pass", async () => {
+    await withDb(async (db) => {
+      const { CHART_ANALYSIS_VERSION } = await import("../src/features/chart-analysis.js");
+      // Same chart twice: once as pure rice, once with every note a hold.
+      // Identical heads mean the head-only calc rates them the same; the LN
+      // copy must come out strictly higher once its lnRatio unlocks the
+      // tail-aware blend. The rice copy's rating must not change at all.
+      await storeCachedBeatmapFile(db, 301, buildStreamBeatmapFile(), { source: "test" });
+      await storeCachedBeatmapFile(db, 302, buildLnBeatmapFile(), { source: "test" });
+      for (const [beatmapId, lnRatio] of [[301, 0], [302, 1]] as const) {
+        await exec(
+          db,
+          `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, classification_json, updated_at)
+           values (?, ?, 'ready', ?, ?)`,
+          [beatmapId, CHART_ANALYSIS_VERSION, JSON.stringify({ lnRatio, patterns: [] }), new Date().toISOString()],
+        );
+      }
+      const scores = [
+        play({ id: 11, beatmap_id: 301, accuracy: 0.95 }),
+        play({ id: 12, beatmap_id: 302, accuracy: 0.95 }),
+      ];
+      const result = await computePlayerSkillRatings(db, failingOsu, scores, []);
+      expect(result.summary.analyzedPlays).toBe(2);
+      const byBeatmap = new Map(result.plays.map((entry) => [entry.beatmapId, entry]));
+      const rice = byBeatmap.get(301);
+      const ln = byBeatmap.get(302);
+      expect(rice && ln).toBeTruthy();
+      expect(ln!.values.Overall).toBeGreaterThan(rice!.values.Overall);
+
+      // The rice play matches a no-analysis-row compute exactly (lnRatio 0
+      // never triggers the second calc pass).
+      const bare = await computePlayerSkillRatings(db, failingOsu, [play({ id: 13, beatmap_id: 301, accuracy: 0.95 })], []);
+      expect(bare.plays[0].values.Overall).toBeCloseTo(rice!.values.Overall, 4);
     });
   });
 

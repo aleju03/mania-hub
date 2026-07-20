@@ -42,7 +42,7 @@ export function isMsdSupportedKeyCount(keyCount: number): boolean {
  */
 export async function computeMsd(
   osuText: string,
-  options: { rate?: number; keyCount?: number; scoreGoal?: number } = {},
+  options: { rate?: number; keyCount?: number; scoreGoal?: number; lnTailTaps?: boolean } = {},
 ): Promise<MsdResult | null> {
   const keyCount = options.keyCount;
   if (keyCount != null && !isMsdSupportedKeyCount(keyCount)) return null;
@@ -53,6 +53,7 @@ export async function computeMsd(
       musicRate: options.rate ?? 1,
       scoreGoal: options.scoreGoal,
       keyOverride: keyCount ?? null,
+      lnTailTaps: options.lnTailTaps === true,
     });
     if (result.etternaVersionFallbackReason && !loggedFallbackReasons.has(result.etternaVersionFallbackReason)) {
       // The 6K/7K preference for 0.74.0 is expected and fires on every non-4K

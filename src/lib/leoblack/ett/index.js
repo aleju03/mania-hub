@@ -39,6 +39,7 @@ export async function analyzeEtternaFromText(osuText, {
     keyOverride = null,
     cvtFlag = null,
     etternaVersion = null,
+    lnTailTaps = false,
 } = {}) {
     const normalizedOptions = {
         musicRate: Number.isFinite(Number(musicRate)) ? Number(musicRate) : 1.0,
@@ -46,6 +47,7 @@ export async function analyzeEtternaFromText(osuText, {
         keyOverride: normalizeKeyOverride(keyOverride),
         cvtFlag,
         etternaVersion,
+        lnTailTaps: lnTailTaps === true,
     };
 
     return requestWasmCalc(osuText, normalizedOptions);

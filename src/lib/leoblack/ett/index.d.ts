@@ -4,6 +4,9 @@ export interface LeoBlackMsdOptions {
   keyOverride?: number | null;
   cvtFlag?: string | null;
   etternaVersion?: string | null;
+  // Include LN releases as extra note rows so the calc sees hold/release
+  // work; charts without holds build identical rows either way.
+  lnTailTaps?: boolean;
 }
 
 export interface LeoBlackMsdResult {

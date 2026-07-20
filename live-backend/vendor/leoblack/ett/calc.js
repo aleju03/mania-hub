@@ -57,10 +57,11 @@ function applyMod(chart, cvtFlag) {
     }
 }
 
-function buildRows(chart) {
+function buildRows(chart, { lnTailTaps = false, minTailGapMs = 50 } = {}) {
     const byTime = new Map();
     const columns = Array.isArray(chart.columns) ? chart.columns : [];
     const starts = Array.isArray(chart.noteStarts) ? chart.noteStarts : [];
+    const ends = Array.isArray(chart.noteEnds) ? chart.noteEnds : [];
     const len = Math.min(columns.length, starts.length);
 
     for (let i = 0; i < len; i += 1) {
@@ -72,6 +73,19 @@ function buildRows(chart) {
 
         const prev = byTime.get(start) || 0;
         byTime.set(start, prev | (1 << col));
+
+        // LN releases are timed actions the head-only view discards. When
+        // enabled, a hold's tail lands as an extra row in its column so the
+        // calc sees the release work; holds shorter than minTailGapMs are
+        // effectively taps and add nothing. Charts without holds build
+        // identical rows either way.
+        if (lnTailTaps) {
+            const end = Math.trunc(Number(ends[i]));
+            if (Number.isFinite(end) && end - start >= minTailGapMs) {
+                const prevEnd = byTime.get(end) || 0;
+                byTime.set(end, prevEnd | (1 << col));
+            }
+        }
     }
 
     const times = [...byTime.keys()].sort((a, b) => a - b);
@@ -227,6 +241,7 @@ export async function analyzeEtternaFromText(osuText, {
     keyOverride = null,
     cvtFlag = null,
     etternaVersion = DEFAULT_ETTERNA_VERSION,
+    lnTailTaps = false,
 } = {}) {
     const chart = new OsuFileParser(osuText);
     chart.process();
@@ -238,7 +253,7 @@ export async function analyzeEtternaFromText(osuText, {
     const keycount = resolveKeycount(chart.columnCount, keyOverride);
     applyMod(chart, cvtFlag);
 
-    const { masks, seconds } = buildRows(chart);
+    const { masks, seconds } = buildRows(chart, { lnTailTaps });
     if (masks.length <= 1) {
         return {
             keycount,

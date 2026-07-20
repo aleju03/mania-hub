@@ -45,7 +45,10 @@ import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 
 // v14: mod-less archived day-best rows no longer rate at an assumed 1.0x
 // (that inflated HT/DC originals); stored plays built from them purge.
-export const PLAYER_SKILLS_VERSION = 14;
+// v15: LN-tail blend - SSRs on hold-bearing charts blend toward a second
+// calc pass that sees LN releases as rows, closing the systematic deficit
+// for LN players (keymode-calibrated; rice charts unchanged).
+export const PLAYER_SKILLS_VERSION = 15;
 export const PLAYER_SKILLS_JOB = "compute_player_skills";
 
 export const SKILL_RATING_SKILLSETS = [
@@ -345,15 +348,15 @@ export function aggregateSsrs(values: number[]): number {
  * along the chart's own 0.93 -> 0.965 log-slope. Returns the values plus how
  * many calc runs it took (for event-loop breathing).
  */
-async function computePlaySsrValues(
+async function runMsdAtGoal(
   osuText: string,
-  options: { rate: number; keyCount: number; goal: number },
+  options: { rate: number; keyCount: number; goal: number; lnTailTaps?: boolean },
 ): Promise<{ values: Record<string, number>; calcRuns: number } | null> {
-  const { rate, keyCount, goal } = options;
-  const capped = await computeMsd(osuText, { rate, keyCount, scoreGoal: Math.min(goal, SSR_CALC_GOAL_CAP) }).catch(() => null);
+  const { rate, keyCount, goal, lnTailTaps = false } = options;
+  const capped = await computeMsd(osuText, { rate, keyCount, scoreGoal: Math.min(goal, SSR_CALC_GOAL_CAP), lnTailTaps }).catch(() => null);
   if (!capped) return null;
   if (goal <= SSR_CALC_GOAL_CAP) return { values: capped.values, calcRuns: 1 };
-  const base = await computeMsd(osuText, { rate, keyCount, scoreGoal: SSR_EXTRAPOLATION_BASE_GOAL }).catch(() => null);
+  const base = await computeMsd(osuText, { rate, keyCount, scoreGoal: SSR_EXTRAPOLATION_BASE_GOAL, lnTailTaps }).catch(() => null);
   if (!base) return { values: capped.values, calcRuns: 1 };
   const exponent = (goal - SSR_CALC_GOAL_CAP) / (SSR_CALC_GOAL_CAP - SSR_EXTRAPOLATION_BASE_GOAL);
   const values: Record<string, number> = {};
@@ -367,6 +370,39 @@ async function computePlaySsrValues(
     values[name] = atCap * Math.pow(slope, exponent);
   }
   return { values, calcRuns: 2 };
+}
+
+// MinaCalc rates the rice skeleton: LN tails never reach it, so hold-heavy
+// charts (and the players who main them) underrate. The correction runs the
+// calc a second time with LN releases included as rows (a strict upper bound
+// on the release work - a release is easier than a tap) and blends toward it
+// by a keymode-calibrated weight. Weights were fit on player cohorts
+// (2026-07-19, ~140 players, LN-share-of-top-200 cohorts vs pp-anchored
+// residuals): 4K flattens the hybrid cohort at 0.1 (pp overpays 4K LN, so
+// chasing the ln-main residual to zero against pp would overcorrect); the
+// 0.74 multi-key calc underrates 7K LN far harder and wants 0.3. Charts
+// without holds produce identical rows either way, so rice SSRs are
+// untouched by construction.
+const LN_TAIL_BLEND_BY_KEYMODE: Record<number, number> = { 4: 0.1, 6: 0.3, 7: 0.3 };
+const LN_TAIL_MIN_RATIO = 0.02;
+
+async function computePlaySsrValues(
+  osuText: string,
+  options: { rate: number; keyCount: number; goal: number; lnRatio?: number | null },
+): Promise<{ values: Record<string, number>; calcRuns: number } | null> {
+  const { rate, keyCount, goal, lnRatio } = options;
+  const base = await runMsdAtGoal(osuText, { rate, keyCount, goal });
+  if (!base) return null;
+  const blend = LN_TAIL_BLEND_BY_KEYMODE[keyCount] ?? 0;
+  if (!(blend > 0) || !(Number(lnRatio) > LN_TAIL_MIN_RATIO)) return base;
+  const tails = await runMsdAtGoal(osuText, { rate, keyCount, goal, lnTailTaps: true });
+  if (!tails) return base;
+  const values: Record<string, number> = {};
+  for (const [name, atBase] of Object.entries(base.values)) {
+    const atTails = Number(tails.values[name] ?? atBase);
+    values[name] = atBase > 0 && atTails > atBase ? atBase + blend * (atTails - atBase) : atBase;
+  }
+  return { values, calcRuns: base.calcRuns + tails.calcRuns };
 }
 
 function aggregateModeRatings(plays: StoredPlaySsr[]): Record<string, number> {
@@ -691,7 +727,7 @@ export async function computePlayerSkillRatings(
       if (source === "top") unsupportedPlays += 1;
       continue;
     }
-    const ssr = await computePlaySsrValues(osuText, { rate, keyCount, goal });
+    const ssr = await computePlaySsrValues(osuText, { rate, keyCount, goal, lnRatio: infoByBeatmap.get(beatmapId)?.lnRatio ?? null });
     if (!ssr) {
       if (source === "top") unsupportedPlays += 1;
       continue;
