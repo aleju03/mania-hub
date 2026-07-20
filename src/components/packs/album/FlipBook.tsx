@@ -198,7 +198,29 @@ export function FlipBook({
           : bookX < rect.width / 2;
       if (back !== deltaX > 0) return;
       const index = pageFlip.getCurrentPageIndex();
-      if (back ? index < 1 : index >= pageFlip.getPageCount() - 1) return;
+      const count = pageFlip.getPageCount();
+      if (back ? index < 1 : index >= count - 1) return;
+      /* Hard pages (the covers) don't fold to the finger: the engine rotates
+         the whole sheet by the drag's overall progress, so grabbing the
+         closed cover mid-page snaps it into a half-open swing for a beat and
+         back on release -- the album seems to blink away for a frame. Leave
+         rigid flips to taps and the release swipe; only soft pages get the
+         live fold. In landscape the engine also promotes the page across the
+         sheet from a hard one, so cover-adjacent flips stay rigid there. */
+      const portrait = pageFlip.getOrientation() === "portrait";
+      const flippingIndex = portrait
+        ? back
+          ? index - 1
+          : index
+        : back
+          ? index - 1
+          : index === 0
+            ? 1
+            : index + 2;
+      const rigid = portrait
+        ? flippingIndex === 0 || flippingIndex === count - 1
+        : flippingIndex <= 1 || flippingIndex >= count - 2;
+      if (rigid) return;
       blockRect = distRect;
       state.folding = true;
       pageFlip.startUserTouch(blockPos(state.x0, state.y0));
