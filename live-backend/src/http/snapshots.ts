@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { performance } from "node:perf_hooks";
 import { brotliCompress, constants as zlibConstants, gzip } from "node:zlib";
 import type { Config } from "../config.js";
-import { handleBeatmapAudioRequest, handleBeatmapHitsoundsRequest } from "../audio/http.js";
+import { handleBeatmapAudioRequest, handleBeatmapHitsoundsRequest, handlePreviewAudioRequest } from "../audio/http.js";
 import { activateCountry, deleteCountryData, getCountryRegistry, getCountryRegistryRow, GLOBAL_COUNTRY_CODE, isCountryFeatureAtLeast, isGlobalCountry, setCountryFeatureTier, setCountryPaused, setCountryStatus, type CountryFeatureTier, type CountryRegistryStatus } from "../countries.js";
 import type { Db } from "../db.js";
 import { dbHealth, exec, getSqliteBusyRetryStats, parseJson } from "../db.js";
@@ -128,7 +128,7 @@ type TimedRequest = IncomingMessage & { [REQUEST_STARTED_AT]?: number };
 // endpoints are exempt: their handlers legitimately stay open for as long as
 // the client keeps reading.
 const SLOW_HTTP_LOG_MS = 2_000;
-const SLOW_HTTP_LOG_EXEMPT = new Set(["/api/live", "/api/audio", "/api/hitsounds"]);
+const SLOW_HTTP_LOG_EXEMPT = new Set(["/api/live", "/api/audio", "/api/hitsounds", "/api/preview-audio"]);
 
 export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: HttpContext): Promise<boolean> {
   const startedAt = performance.now();
@@ -189,6 +189,10 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   }
   if (url.pathname === "/api/hitsounds") {
     await handleBeatmapHitsoundsRequest(req, res, ctx.config, url);
+    return true;
+  }
+  if (url.pathname === "/api/preview-audio") {
+    await handlePreviewAudioRequest(req, res, ctx.config, url);
     return true;
   }
   // Discord posts interactions server-to-server (no Origin header, bursty). It

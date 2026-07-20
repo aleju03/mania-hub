@@ -78,6 +78,94 @@ export async function handleBeatmapAudioRequest(
   }
 }
 
+// GET /api/preview-audio?beatmapsetId=…
+// Proxy for the b.ppy.sh set preview clip. b.ppy.sh sends no CORS headers, so
+// a browser can never route the direct file through a Web Audio graph (the
+// analyser behind the maps random-card beat visual); serving it from here puts
+// the clip behind the backend's CORS allowlist. Clips are ~100KB and
+// immutable, so a small in-memory LRU absorbs repeat plays.
+const PREVIEW_AUDIO_CACHE_MAX_ENTRIES = 48;
+const previewAudioCache = new Map<string, { lastAccessedAt: number; promise: Promise<PreparedBeatmapAudio> }>();
+
+async function fetchPreviewAudio(beatmapsetId: string): Promise<PreparedBeatmapAudio> {
+  const response = await fetch(`https://b.ppy.sh/preview/${beatmapsetId}.mp3`);
+  if (!response.ok) {
+    throw new Error(`Preview audio unavailable (upstream ${response.status})`);
+  }
+  const buffer = Buffer.from(await response.arrayBuffer());
+  return {
+    buffer,
+    mimeType: response.headers.get("content-type") ?? "audio/mpeg",
+    sizeBytes: buffer.length,
+    publicUrl: null,
+    mp3InMp4: false,
+  };
+}
+
+function getPreviewAudio(beatmapsetId: string): Promise<PreparedBeatmapAudio> {
+  const cached = previewAudioCache.get(beatmapsetId);
+  if (cached) {
+    cached.lastAccessedAt = Date.now();
+    return cached.promise;
+  }
+  const promise = fetchPreviewAudio(beatmapsetId);
+  previewAudioCache.set(beatmapsetId, { lastAccessedAt: Date.now(), promise });
+  promise.catch(() => {
+    previewAudioCache.delete(beatmapsetId);
+  });
+  while (previewAudioCache.size > PREVIEW_AUDIO_CACHE_MAX_ENTRIES) {
+    let oldestKey: string | null = null;
+    let oldestAccess = Infinity;
+    for (const [key, entry] of previewAudioCache) {
+      if (entry.lastAccessedAt < oldestAccess) {
+        oldestAccess = entry.lastAccessedAt;
+        oldestKey = key;
+      }
+    }
+    if (oldestKey == null) break;
+    previewAudioCache.delete(oldestKey);
+  }
+  return promise;
+}
+
+export async function handlePreviewAudioRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  config: Config,
+  url: URL,
+): Promise<void> {
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    sendAudioCors(req, res, config);
+    res.statusCode = 405;
+    res.setHeader("allow", "GET,HEAD");
+    res.end("Method not allowed");
+    return;
+  }
+
+  const beatmapsetId = url.searchParams.get("beatmapsetId");
+  if (!beatmapsetId || !/^\d+$/.test(beatmapsetId)) {
+    sendAudioText(req, res, config, 400, "Invalid beatmapsetId");
+    return;
+  }
+
+  let audio: PreparedBeatmapAudio;
+  try {
+    audio = await getPreviewAudio(beatmapsetId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown preview audio error";
+    sendAudioText(req, res, config, 404, message);
+    return;
+  }
+
+  if (req.method === "HEAD") {
+    sendAudioHeaders(req, res, config, audio, AUDIO_IMMUTABLE_CACHE_HEADERS);
+    res.statusCode = 200;
+    res.end();
+    return;
+  }
+  sendAudioBuffer(req, res, config, audio, audio.buffer as Buffer, req.headers.range);
+}
+
 // GET /api/hitsounds?beatmapsetId=…[&exclude=audio.mp3]
 // Serves the set's hitsound files as one store-only zip (or 302 to the R2
 // copy). An empty zip means the set has no hitsound files.

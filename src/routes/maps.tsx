@@ -15,9 +15,29 @@ import { OsuLogo } from "../components/ui/OsuLogo";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { ModGlyph } from "../components/maps/ModGlyph";
 import { MapSearchSection, type MapSearchUiState } from "../components/maps/MapSearchSection";
+import {
+  DEFAULT_SEARCH_SORT,
+  SEARCH_SORT_VALUES,
+  isPersistableSearchSort,
+  readSearchSortPreference,
+  writeSearchSortPreference,
+} from "../components/maps/searchSortPreference";
+import {
+  ACCENT_CHIP_FILL,
+  ACCENT_CHIP_TEXT,
+  accentChipRing,
+  Chip,
+  ChipGroup,
+  DirButton,
+  SortSelect,
+  StatusChip,
+  STATUS_COLOR,
+  type SortOption,
+} from "../components/maps/FilterChips";
+import { StarRangePill } from "../components/maps/StarRangePill";
 import { MapCollectionsSection } from "../components/maps/MapCollectionsSection";
 import { MapDetailModal } from "../components/maps/MapDetailModal";
-import { StarRatingBadge } from "../components/maps/SearchCard";
+import { PATTERN_COLOR, StarRatingBadge } from "../components/maps/SearchCard";
 import { ModBadge } from "../components/ui/ModBadge";
 import { Pagination } from "../components/ui/Pagination";
 import type {
@@ -32,10 +52,11 @@ import type {
   ReplayFrame,
 } from "../lib/types";
 import type { ManiaBeatmap, ManiaNote, ManiaScrollVelocity } from "../lib/beatmap-parser";
-import { useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
+import { useAppStore, useHasHydrated, useHiddenUserIds, useSelectedCountry } from "../store";
 import { pageSeo, mapsOgImagePath } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
-import { getBeatmapAudioUrl } from "../lib/audio-url";
+import { getBeatmapAudioUrl, getPreviewAudioProxyUrl } from "../lib/audio-url";
+import { getPreviewAnalyser, releasePreviewAnalyser } from "../lib/preview-analyser";
 import {
   RANDOM_REPLAY_PREVIEW_MS,
   buildAutoplayFrames,
@@ -86,6 +107,22 @@ type StatusFilter = "all" | "ranked" | "loved" | "graveyard" | "other";
 type PpFilter = number;
 type ModFilter = "all" | "dt" | "ht" | "nm";
 type RandomWeight = "players" | "favourites";
+
+// Sort vocabularies for the browse tabs' "Sort by" row and mobile dropdown.
+const FARMED_SORT_OPTIONS: SortOption[] = [
+  { id: "players", label: "Players" },
+  { id: "avg-pp", label: "Avg PP" },
+  { id: "max-pp", label: "Max PP" },
+  { id: "stars", label: "Stars" },
+  { id: "recent", label: "Recent plays" },
+];
+const POPULAR_SORT_OPTIONS: SortOption[] = [
+  { id: "players", label: "Players" },
+  { id: "plays", label: "Plays" },
+  { id: "stars", label: "Stars" },
+  { id: "length", label: "Length" },
+];
+
 type MapsSearch = {
   tab: Tab;
   page: number;
@@ -218,8 +255,8 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
   sDanMax: null,
   sPatterns: "",
   sCountryOnly: false,
-  sSort: "playcount",
-  sDir: "desc",
+  sSort: DEFAULT_SEARCH_SORT.sort,
+  sDir: DEFAULT_SEARCH_SORT.dir,
   col: "",
   map: 0,
   country: undefined,
@@ -233,7 +270,7 @@ const SEARCH_PATTERN_VALUES = [
   "speedjack", "handjack", "dumpstream", "quadstream", "chordstream", "delay", "bracket",
   "lngeneral", "lnrelease", "lninverse", "lntech",
 ];
-const SEARCH_SORT_VALUES = ["playcount", "stars", "bpm", "length", "date", "relevance"];
+// SEARCH_SORT_VALUES lives in components/maps/searchSortPreference.ts.
 
 // Search range fields use 0 as "unset"; clamp anything else into [min, max].
 function clampSearchNumber(raw: unknown, min: number, max: number): number {
@@ -273,25 +310,35 @@ function rememberRandomFullSet(set: MapsFavouriteBeatmapset): void {
   }
 }
 
-function readRandomPickSettings(): Partial<RandomPickSettings> {
-  if (typeof window === "undefined") return {};
+// Read and JSON-parse a localStorage object, returning null on miss, parse
+// error, or non-object so each caller validates its own fields against a plain
+// record. Shared by the small per-feature preference readers below.
+function readStoredRecord(key: string): Record<string, unknown> | null {
+  if (typeof window === "undefined") return null;
 
   try {
-    const raw = localStorage.getItem(RANDOM_PICK_SETTINGS_STORAGE_KEY);
-    if (!raw) return {};
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
 
     const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
 
-    const settings: Partial<RandomPickSettings> = {};
-    const { rWeight, rAvoidRepeats } = parsed as Record<string, unknown>;
-    if (rWeight === "players" || rWeight === "favourites") settings.rWeight = rWeight;
-    if (typeof rAvoidRepeats === "boolean") settings.rAvoidRepeats = rAvoidRepeats;
-    return settings;
+    return parsed as Record<string, unknown>;
   } catch (error) {
-    console.warn("[maps] failed to read random pick settings", error);
-    return {};
+    console.warn(`[maps] failed to read "${key}"`, error);
+    return null;
   }
+}
+
+function readRandomPickSettings(): Partial<RandomPickSettings> {
+  const parsed = readStoredRecord(RANDOM_PICK_SETTINGS_STORAGE_KEY);
+  if (!parsed) return {};
+
+  const settings: Partial<RandomPickSettings> = {};
+  const { rWeight, rAvoidRepeats } = parsed;
+  if (rWeight === "players" || rWeight === "favourites") settings.rWeight = rWeight;
+  if (typeof rAvoidRepeats === "boolean") settings.rAvoidRepeats = rAvoidRepeats;
+  return settings;
 }
 
 function writeRandomPickSettings(patch: Partial<RandomPickSettings>): void {
@@ -367,6 +414,21 @@ const RANDOM_PATTERN_LABEL: Record<RandomPattern, string> = {
   ln: "LN",
   sv: "SV",
   tiebreaker: "Tournament",
+};
+
+// The search tab's pattern palette, extended for the two tags that aren't
+// chart patterns there (SV borrows handstream's unused yellow, Tournament
+// gets the silver the pattern chips fall back to).
+const RANDOM_PATTERN_CHIP_COLOR: Record<RandomPattern, string> = {
+  jack: PATTERN_COLOR.jack,
+  chordjack: PATTERN_COLOR.chordjack,
+  stream: PATTERN_COLOR.stream,
+  jumpstream: PATTERN_COLOR.jumpstream,
+  stamina: PATTERN_COLOR.stamina,
+  tech: PATTERN_COLOR.tech,
+  ln: PATTERN_COLOR.ln,
+  sv: "#f3c24a",
+  tiebreaker: "#cfcfe6",
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -1675,8 +1737,43 @@ function MapsPage() {
     if (patch.sort !== undefined) next.sSort = patch.sort;
     if (patch.dir !== undefined) next.sDir = patch.dir;
     if (patch.page !== undefined) next.page = patch.page;
+    // Remember the chosen sort (and its direction) so the next visit restores
+    // it instead of resetting to the default. Reads the current value for
+    // whichever half isn't in this patch so a lone direction flip still stores
+    // the active sort.
+    if (patch.sort !== undefined || patch.dir !== undefined) {
+      const sort = patch.sort ?? mapsSearchRef.current.sSort;
+      const dir = patch.dir ?? mapsSearchRef.current.sDir;
+      if (isPersistableSearchSort(sort)) writeSearchSortPreference({ sort, dir });
+    }
     updateMapsSearch(next);
   }, [updateMapsSearch]);
+
+  // Restore the persisted search sort whenever the Search tab is shown with no
+  // explicit sort in the URL (a bare visit, a nav-link entry, or having cleared
+  // back to the default). An explicit URL sort (shared link, back/forward)
+  // always wins. Gated on hydration so the applied sort never diverges from the
+  // SSR-rendered default on the first client render.
+  //
+  // This re-runs on every sort change rather than once per mount, but it can't
+  // fight the user: applying makes the URL non-default (so the guard below bails
+  // next time), and because updateSearchUi writes the preference synchronously,
+  // an explicit pick of the default has already updated the stored pref before
+  // this effect re-reads it, so the reapply is a no-op.
+  const hasHydrated = useHasHydrated();
+  useEffect(() => {
+    if (!hasHydrated || tab !== "search") return;
+    const current = mapsSearchRef.current;
+    // Both at default means the URL specified no sort, so the stored preference
+    // is safe to apply; a non-default in either half is an explicit URL intent.
+    if (current.sSort !== DEFAULT_MAPS_SEARCH.sSort || current.sDir !== DEFAULT_MAPS_SEARCH.sDir) return;
+    const pref = readSearchSortPreference();
+    const sSort = pref.sort ?? DEFAULT_MAPS_SEARCH.sSort;
+    const sDir = pref.dir ?? DEFAULT_MAPS_SEARCH.sDir;
+    if (sSort === current.sSort && sDir === current.sDir) return;
+    // A new ordering invalidates the current page, same as any sort change.
+    updateMapsSearch({ sSort, sDir, page: 0 });
+  }, [hasHydrated, tab, mapsSearch.sSort, mapsSearch.sDir, updateMapsSearch]);
 
   const isLoading = (liveBackendPaged ? liveMapsPagePending : loadingMaps) || currentMapsSectionLoading;
 
@@ -1767,22 +1864,20 @@ function MapsPage() {
 
   // ── Mobile collapsible filter panel (shared across tabs) ────────────────
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // Counts only what lives in the mobile sheet; sort has its own toolbar control.
   const activeFilterCount = useMemo(() => {
     if (tab === "random") return totalRandomActive;
     if (tab === "farmed") {
       return (
         (keyFilter !== "all" ? 1 : 0) +
         (modFilter !== "all" ? 1 : 0) +
-        (ppFilter > 0 ? 1 : 0) +
-        (farmedSort !== "players" || sortDir !== "desc" ? 1 : 0)
+        (ppFilter > 0 ? 1 : 0)
       );
     }
-    if (tab === "popular") {
-      return (keyFilter !== "all" ? 1 : 0) + (beatmapSort !== "players" || sortDir !== "desc" ? 1 : 0);
-    }
+    if (tab === "popular") return keyFilter !== "all" ? 1 : 0;
     if (tab === "favourites") return statusFilter !== "all" ? 1 : 0;
     return 0;
-  }, [tab, totalRandomActive, keyFilter, modFilter, ppFilter, farmedSort, beatmapSort, sortDir, statusFilter]);
+  }, [tab, totalRandomActive, keyFilter, modFilter, ppFilter, statusFilter]);
 
   // Reset the panel when switching tabs so the new tab doesn't open mid-overlay.
   useEffect(() => { setFiltersOpen(false); }, [tab]);
@@ -2041,9 +2136,7 @@ function MapsPage() {
   const hasActiveFilters =
     tab === "random"
       ? totalRandomActive > 0
-      : (
-          searchQuery || keyFilter !== "all" || statusFilter !== "all" || ppFilter > 0 || modFilter !== "all" || beatmapSort !== "players" || farmedSort !== "players" || sortDir !== "desc" || tab !== "farmed"
-        );
+      : Boolean(searchQuery) || activeFilterCount > 0;
 
   const resetFilters = () => {
     navigate({
@@ -2053,6 +2146,118 @@ function MapsPage() {
       resetScroll: false,
     });
   };
+
+  // ── Browse-tab filters (shared by the desktop chip row and mobile sheet) ──
+  const browseSortOptions = tab === "farmed" ? FARMED_SORT_OPTIONS : tab === "popular" ? POPULAR_SORT_OPTIONS : [];
+  const browseSortValue = tab === "farmed" ? farmedSort : beatmapSort;
+  const setBrowseSort = (id: string) => {
+    if (tab === "farmed") updateMapsSearch({ farmedSort: id as FarmedSort, page: 0 });
+    else updateMapsSearch({ beatmapSort: id as BeatmapSort, page: 0 });
+  };
+
+  const browseFilterGroups = (
+    <>
+      {tab === "random" && (
+        <>
+          <ChipGroup label="Status">
+            {RANDOM_STATUS_OPTIONS.map((s) => (
+              <TriStatePill
+                key={s}
+                color={STATUS_COLOR[s]}
+                pill
+                mode={getTriStateMode(randomStatus, s)}
+                hasAnyActive={triStateActive(randomStatus) > 0}
+                onClick={() => updateMapsSearch({ rStatus: cycleTriStateCsv(rStatusRaw, s) })}
+                onContextMenu={() => updateMapsSearch({ rStatus: reverseCycleTriStateCsv(rStatusRaw, s) })}
+              >
+                {s.charAt(0).toUpperCase() + s.slice(1)}
+              </TriStatePill>
+            ))}
+          </ChipGroup>
+
+          <ChipGroup label="Keys">
+            {RANDOM_KEY_OPTIONS.map((k) => (
+              <TriStatePill
+                key={k}
+                mode={getTriStateMode(randomKey, k)}
+                hasAnyActive={triStateActive(randomKey) > 0}
+                onClick={() => updateMapsSearch({ rKey: cycleTriStateCsv(rKeyRaw, k) })}
+                onContextMenu={() => updateMapsSearch({ rKey: reverseCycleTriStateCsv(rKeyRaw, k) })}
+              >
+                {k.toUpperCase()}
+              </TriStatePill>
+            ))}
+          </ChipGroup>
+
+          <ChipGroup label="Tags">
+            {RANDOM_PATTERN_OPTIONS.map((p) => (
+              <TriStatePill
+                key={p}
+                color={RANDOM_PATTERN_CHIP_COLOR[p]}
+                mode={getTriStateMode(randomPattern, p)}
+                hasAnyActive={triStateActive(randomPattern) > 0}
+                onClick={() => updateMapsSearch({ rPattern: cycleTriStateCsv(rPatternRaw, p) })}
+                onContextMenu={() => updateMapsSearch({ rPattern: reverseCycleTriStateCsv(rPatternRaw, p) })}
+              >
+                {RANDOM_PATTERN_LABEL[p]}
+              </TriStatePill>
+            ))}
+          </ChipGroup>
+
+          <ChipGroup label="Difficulty">
+            <StarRangePill
+              lo={RANDOM_STAR_MIN}
+              hi={RANDOM_STAR_MAX}
+              min={rStars}
+              max={rStarsMax}
+              step={0.1}
+              ariaLabel="Star rating"
+              onChange={(nextMin, nextMax) => updateMapsSearch({ rStars: nextMin, rStarsMax: nextMax })}
+            />
+          </ChipGroup>
+        </>
+      )}
+
+      {(tab === "farmed" || tab === "popular") && (
+        <ChipGroup label="Keys">
+          {(["4k", "7k", "other"] as KeyFilter[]).map((k) => (
+            <Chip key={k} active={keyFilter === k} onClick={() => updateMapsSearch({ key: keyFilter === k ? "all" : k, page: 0 })}>
+              {k === "other" ? "Other" : k.toUpperCase()}
+            </Chip>
+          ))}
+        </ChipGroup>
+      )}
+
+      {tab === "farmed" && (
+        <>
+          <ChipGroup label="Mods">
+            {(["dt", "ht", "nm"] as ModFilter[]).map((m) => (
+              <Chip key={m} active={modFilter === m} onClick={() => updateMapsSearch({ mod: modFilter === m ? "all" : m, page: 0 })}>
+                {m.toUpperCase()}
+              </Chip>
+            ))}
+          </ChipGroup>
+          <ChipGroup label="Min PP">
+            <MinPpSlider value={ppFilter} onChange={(v) => updateMapsSearch({ pp: v, page: 0 })} />
+          </ChipGroup>
+        </>
+      )}
+
+      {tab === "favourites" && (
+        <ChipGroup label="Status">
+          {(["ranked", "loved", "graveyard", "other"] as const).map((s) => (
+            <StatusChip
+              key={s}
+              id={s}
+              label={s === "other" ? "Other" : s.charAt(0).toUpperCase() + s.slice(1)}
+              active={statusFilter === s}
+              onClick={() => updateMapsSearch({ status: statusFilter === s ? "all" : s, page: 0 })}
+            />
+          ))}
+        </ChipGroup>
+      )}
+    </>
+  );
 
   const handleDevRebuildAll = async () => {
     if (rebuilding || !liveBackendEnabled) return;
@@ -2268,42 +2473,74 @@ function MapsPage() {
       {!isGlobalCatalogTab && (
       <>
 
-      {/* ── Filter bar ───────────────────────────────────────────────── */}
-      <div className="bg-osu-d5 border-b border-osu-b3/20">
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-2.5 flex flex-wrap items-start sm:items-center gap-x-4 gap-y-2">
+      {/* ── Filter bar: same language as the search tab (icon search bar with
+          live count, chip groups, sort-by text links, mobile toolbar+sheet) ── */}
+      <div className="bg-osu-b5">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-5 pt-4 flex flex-col gap-4">
           {tab !== "random" && (
-            <input
-              type="text"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search maps..."
-              aria-label="Search by title, artist, mapper, or difficulty"
-              title="Search by title, artist, mapper, or difficulty"
-              className="bg-osu-b4 border border-osu-b3/30 rounded-lg px-3 py-1.5 text-[11px] text-osu-l2 placeholder:text-osu-f1 w-full sm:w-48 focus:outline-none focus:border-osu-pink/40 transition-colors"
-            />
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-osu-f1/50">
+                  <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+                </svg>
+                <input
+                  type="text"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  placeholder="Search title, artist, mapper, or difficulty"
+                  aria-label="Search by title, artist, mapper, or difficulty"
+                  className={`w-full bg-osu-b4 border border-osu-b3/30 rounded-lg pl-10 py-2.5 text-[14px] text-osu-l1 placeholder:text-osu-f1/55 focus:outline-none focus:border-osu-pink/50 transition-colors ${searchInput ? "pr-10" : "pr-3"}`}
+                />
+                {searchInput && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchInput("")}
+                    aria-label="Clear search"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-md text-osu-f1/55 hover:text-osu-l1 hover:bg-osu-b3 transition-colors cursor-pointer"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
+                      <path d="M18 6 6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+              <span className="shrink-0 text-[12px] text-osu-f1 tabular-nums" role="status" aria-live="polite">
+                {isLoading || currentMapsSectionLoading ? "Loading maps..." : `${formatNumber(currentTotal)} maps`}
+              </span>
+            </div>
           )}
 
-          {/* Mobile-only summary row: filter toggle + (random) match count */}
-          <div className="flex w-full items-center justify-between gap-2 sm:hidden">
+          {/* Mobile toolbar: filters collapse behind a toggle, sort is a dropdown */}
+          <div className="flex items-center gap-2 sm:hidden">
             <button
-              onClick={() => setFiltersOpen((o) => !o)}
+              type="button"
+              onClick={() => setFiltersOpen(true)}
+              aria-haspopup="dialog"
               aria-expanded={filtersOpen}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-osu-b4 border border-osu-b3/30 text-[11px] text-osu-l2 hover:bg-osu-b3 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-[12.5px] font-semibold cursor-pointer transition-colors bg-osu-b4 text-osu-l2 hover:bg-osu-b3 hover:text-osu-l1"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
-                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden="true">
+                <path d="M3 6h18M7 12h10M10 18h4" />
               </svg>
-              <span>Filters</span>
+              Filters
               {activeFilterCount > 0 && (
-                <span className="inline-flex min-w-[18px] h-[18px] shrink-0 items-center justify-center self-center rounded-full bg-osu-pink/30 px-1 text-[10px] font-bold leading-none text-osu-pink-light tabular-nums">
-                  <span className="relative -top-px">{activeFilterCount}</span>
+                <span className="rounded-full bg-osu-pink px-1.5 text-[10px] font-bold leading-4 text-white tabular-nums">
+                  {activeFilterCount}
                 </span>
               )}
             </button>
             {tab === "random" && (
-              <span className="text-[10px] text-osu-f1">
+              <span className="ml-auto text-[11px] text-osu-f1 tabular-nums">
                 {formatNumber(randomPool.length)} {randomPool.length === 1 ? "pick" : "possible picks"}
               </span>
+            )}
+            {browseSortOptions.length > 0 && (
+              <>
+                <div className="ml-auto">
+                  <SortSelect options={browseSortOptions} value={browseSortValue} onChange={setBrowseSort} />
+                </div>
+                <DirButton dir={sortDir} onToggle={() => updateMapsSearch({ dir: sortDir === "asc" ? "desc" : "asc", page: 0 })} />
+              </>
             )}
           </div>
 
@@ -2318,18 +2555,17 @@ function MapsPage() {
             }}
           />
 
-          {/* Filter content: inline on desktop (display: contents), bottom
-              sheet on mobile so it doesn't cover the page content above.
-              Always mounted on mobile so transform transitions animate. */}
+          {/* Mobile bottom sheet. Always mounted (translated offscreen, hidden
+              once the slide-down finishes) so open/close only moves an existing
+              compositor layer. */}
           <div
-            className="sm:contents sm:!pointer-events-auto sm:!visible fixed bottom-0 left-0 right-0 z-50 max-h-[75vh] overflow-y-auto bg-osu-d5 border-t border-osu-b3/30 rounded-t-2xl shadow-2xl px-4 pt-2 pb-6 flex flex-col gap-3 will-change-transform"
+            className="sm:hidden fixed bottom-0 left-0 right-0 z-50 flex max-h-[75vh] flex-col rounded-t-2xl bg-osu-b5 ring-1 ring-white/10 will-change-transform"
             style={{
               transform: filtersOpen ? `translateY(${dragOffset}px)` : "translateY(105%)",
               // translateY(105%) alone isn't enough on phones: when the URL bar
               // collapses on scroll the fixed bottom anchor shifts and the top
               // edge peeks up. Hiding it outright once closed kills the peek;
               // the hide is delayed one transition so the slide-down still plays.
-              // sm:!visible keeps the desktop (display:contents) filters shown.
               visibility: filtersOpen ? "visible" : "hidden",
               transition: isDragging
                 ? "none"
@@ -2341,196 +2577,113 @@ function MapsPage() {
             role={filtersOpen ? "dialog" : undefined}
             aria-modal={filtersOpen ? true : undefined}
           >
-            {/* Drag handle pill — also the swipe-to-dismiss touch zone */}
+            {/* Drag handle — also the swipe-to-dismiss touch zone */}
             <div
               onTouchStart={handleDragStart}
               onTouchMove={handleDragMove}
               onTouchEnd={handleDragEnd}
               onTouchCancel={handleDragEnd}
-              className="sm:hidden flex justify-center pt-2 pb-3 -mx-4 cursor-grab touch-none"
+              className="shrink-0 cursor-grab touch-none pt-2 active:cursor-grabbing"
             >
-              <div className="h-1 w-10 rounded-full bg-osu-b3" />
-            </div>
-
-            {/* Sheet header: title + close button */}
-            <div className="sm:hidden flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <h3 className="text-[12px] font-bold text-osu-l2 uppercase tracking-wider">Filters</h3>
+              <div className="mx-auto h-1 w-9 rounded-full bg-osu-b3" aria-hidden="true" />
+              <div className="flex items-center gap-2 px-4 pt-2">
+                <span className="text-[13px] font-bold text-osu-l1">Filters</span>
                 {activeFilterCount > 0 && (
-                  <span className="inline-flex min-w-[18px] h-[18px] shrink-0 items-center justify-center self-center rounded-full bg-osu-pink/30 px-1 text-[10px] font-bold leading-none text-osu-pink-light tabular-nums">
-                    <span className="relative -top-px">{activeFilterCount}</span>
+                  <span className="rounded-full bg-osu-pink px-1.5 text-[10px] font-bold leading-4 text-white tabular-nums">
+                    {activeFilterCount}
                   </span>
                 )}
               </div>
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-3.5">
+              {browseFilterGroups}
+            </div>
+            <div className="flex items-center justify-between gap-3 border-t border-osu-b3/20 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               <button
-                onClick={() => setFiltersOpen(false)}
-                aria-label="Close filters"
-                className="p-1 text-osu-f1 hover:text-white transition-colors cursor-pointer"
+                type="button"
+                onClick={resetFilters}
+                disabled={!hasActiveFilters}
+                className={`text-[12px] transition-colors ${
+                  hasActiveFilters ? "text-osu-f1 hover:text-osu-pink-light cursor-pointer" : "text-osu-f1/40 cursor-default"
+                }`}
               >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
+                Clear all
+              </button>
+              <button
+                type="button"
+                onClick={() => setFiltersOpen(false)}
+                className="rounded-md bg-osu-pink px-4 py-2 text-[12.5px] font-bold text-white hover:bg-osu-pink-light transition-colors cursor-pointer"
+              >
+                {tab === "random"
+                  ? `Show ${formatNumber(randomPool.length)} picks`
+                  : `Show ${formatNumber(currentTotal)} maps`}
               </button>
             </div>
-              {tab === "random" && (
-                <>
-                  <FilterGroup label="Status">
-                    {RANDOM_STATUS_OPTIONS.map((s) => (
-                      <TriStatePill
-                        key={s}
-                        mode={getTriStateMode(randomStatus, s)}
-                        hasAnyActive={triStateActive(randomStatus) > 0}
-                        onClick={() => updateMapsSearch({ rStatus: cycleTriStateCsv(rStatusRaw, s) })}
-                        onContextMenu={() => updateMapsSearch({ rStatus: reverseCycleTriStateCsv(rStatusRaw, s) })}
-                      >
-                        {s.charAt(0).toUpperCase() + s.slice(1)}
-                      </TriStatePill>
-                    ))}
-                  </FilterGroup>
-
-                  <FilterGroup label="Keys">
-                    {RANDOM_KEY_OPTIONS.map((k) => (
-                      <TriStatePill
-                        key={k}
-                        mode={getTriStateMode(randomKey, k)}
-                        hasAnyActive={triStateActive(randomKey) > 0}
-                        onClick={() => updateMapsSearch({ rKey: cycleTriStateCsv(rKeyRaw, k) })}
-                        onContextMenu={() => updateMapsSearch({ rKey: reverseCycleTriStateCsv(rKeyRaw, k) })}
-                      >
-                        {k.toUpperCase()}
-                      </TriStatePill>
-                    ))}
-                  </FilterGroup>
-
-                  <FilterGroup label="Tags">
-                    {RANDOM_PATTERN_OPTIONS.map((p) => (
-                      <TriStatePill
-                        key={p}
-                        mode={getTriStateMode(randomPattern, p)}
-                        hasAnyActive={triStateActive(randomPattern) > 0}
-                        onClick={() => updateMapsSearch({ rPattern: cycleTriStateCsv(rPatternRaw, p) })}
-                        onContextMenu={() => updateMapsSearch({ rPattern: reverseCycleTriStateCsv(rPatternRaw, p) })}
-                      >
-                        {RANDOM_PATTERN_LABEL[p]}
-                      </TriStatePill>
-                    ))}
-                  </FilterGroup>
-
-                  <FilterGroup label="★ range">
-                    <StarRangeSlider
-                      min={rStars}
-                      max={rStarsMax}
-                      onChange={(nextMin, nextMax) => updateMapsSearch({ rStars: nextMin, rStarsMax: nextMax })}
-                    />
-                  </FilterGroup>
-
-                  <span className="hidden sm:inline text-[10px] text-osu-f1">
-                    {formatNumber(randomPool.length)} {randomPool.length === 1 ? "pick" : "possible picks"}
-                  </span>
-                </>
-              )}
-
-              {tab === "farmed" && (
-                <>
-                  <FilterGroup label="Keys">
-                    {(["all", "4k", "7k", "other"] as KeyFilter[]).map((k) => (
-                      <FilterPill key={k} active={keyFilter === k} onClick={() => updateMapsSearch({ key: k, page: 0 })}>
-                        {k === "all" ? "All" : k.toUpperCase()}
-                      </FilterPill>
-                    ))}
-                  </FilterGroup>
-
-                  <FilterGroup label="Mods">
-                    {(["all", "dt", "ht", "nm"] as ModFilter[]).map((m) => (
-                      <FilterPill key={m} active={modFilter === m} onClick={() => updateMapsSearch({ mod: m, page: 0 })}>
-                        {m === "all" ? "All" : m === "nm" ? "NM" : m.toUpperCase()}
-                      </FilterPill>
-                    ))}
-                  </FilterGroup>
-
-                  <FilterGroup label="Min PP">
-                    <MinPpSlider
-                      value={ppFilter}
-                      onChange={(v) => updateMapsSearch({ pp: v, page: 0 })}
-                    />
-                  </FilterGroup>
-
-                  <FilterGroup label="Sort">
-                    {([
-                      ["players", "Players"],
-                      ["avg-pp", "Avg PP"],
-                      ["max-pp", "Max PP"],
-                      ["stars", "Stars"],
-                      ["recent", "Recent Plays"],
-                    ] as [FarmedSort, string][]).map(([id, label]) => (
-                      <SortPill
-                        key={id}
-                        active={farmedSort === id}
-                        dir={sortDir}
-                        onClick={() => {
-                          const nextDir: SortDirection = farmedSort === id ? (sortDir === "desc" ? "asc" : "desc") : "desc";
-                          updateMapsSearch({ farmedSort: id, dir: nextDir, page: 0 });
-                        }}
-                      >
-                        {label}
-                      </SortPill>
-                    ))}
-                  </FilterGroup>
-                </>
-              )}
-
-              {tab === "popular" && (
-                <>
-                  <FilterGroup label="Keys">
-                    {(["all", "4k", "7k", "other"] as KeyFilter[]).map((k) => (
-                      <FilterPill key={k} active={keyFilter === k} onClick={() => updateMapsSearch({ key: k, page: 0 })}>
-                        {k === "all" ? "All" : k.toUpperCase()}
-                      </FilterPill>
-                    ))}
-                  </FilterGroup>
-
-                  <FilterGroup label="Sort">
-                    {([
-                      ["players", "Players"],
-                      ["plays", "Plays"],
-                      ["stars", "Stars"],
-                      ["length", "Length"],
-                    ] as [BeatmapSort, string][]).map(([id, label]) => (
-                      <SortPill
-                        key={id}
-                        active={beatmapSort === id}
-                        dir={sortDir}
-                        onClick={() => {
-                          const nextDir: SortDirection = beatmapSort === id ? (sortDir === "desc" ? "asc" : "desc") : "desc";
-                          updateMapsSearch({ beatmapSort: id, dir: nextDir, page: 0 });
-                        }}
-                      >
-                        {label}
-                      </SortPill>
-                    ))}
-                  </FilterGroup>
-                </>
-              )}
-
-              {tab === "favourites" && (
-                <FilterGroup label="Status">
-                  {(["all", "ranked", "loved", "graveyard", "other"] as StatusFilter[]).map((s) => (
-                    <FilterPill key={s} active={statusFilter === s} onClick={() => updateMapsSearch({ status: s, page: 0 })}>
-                      {s === "all" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}
-                    </FilterPill>
-                  ))}
-                </FilterGroup>
-              )}
           </div>
 
-          {hasActiveFilters && (
-            <button
-              onClick={resetFilters}
-              className="text-[10px] text-osu-pink-light hover:text-white transition-colors cursor-pointer"
-            >
-              Clear filters
-            </button>
+          {/* Desktop: chip groups inline */}
+          <div className="hidden sm:flex flex-wrap items-start gap-x-10 gap-y-4">
+            {browseFilterGroups}
+            {tab === "random" && (
+              <span className="ml-auto self-center text-[11px] text-osu-f1 tabular-nums">
+                {formatNumber(randomPool.length)} {randomPool.length === 1 ? "pick" : "possible picks"}
+              </span>
+            )}
+          </div>
+
+          {/* Sort + actions (desktop; phones sort from the toolbar above). Plain
+              text links like the search tab: the active sort is white with a
+              direction caret, and clicking it again flips the direction. */}
+          {(browseSortOptions.length > 0 || hasActiveFilters) && (
+            <div className="hidden sm:flex flex-wrap items-center justify-between gap-3 border-t border-osu-b3/15 pt-3.5">
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                {browseSortOptions.length > 0 && (
+                  <>
+                    <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Sort by</span>
+                    {browseSortOptions.map((option) => {
+                      const isActive = browseSortValue === option.id;
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() =>
+                            isActive
+                              ? updateMapsSearch({ dir: sortDir === "asc" ? "desc" : "asc", page: 0 })
+                              : setBrowseSort(option.id)
+                          }
+                          aria-pressed={isActive}
+                          title={isActive ? "Flip direction" : undefined}
+                          className={`inline-flex items-center gap-1 text-[12.5px] font-semibold transition-colors cursor-pointer ${
+                            isActive ? "text-white" : "text-osu-f1 hover:text-osu-pink-light"
+                          }`}
+                        >
+                          {option.label}
+                          {isActive && (
+                            <svg
+                              viewBox="0 0 20 20"
+                              fill="currentColor"
+                              className={`h-3 w-3 text-osu-pink-light transition-transform duration-150 ${sortDir === "asc" ? "rotate-180" : ""}`}
+                              aria-hidden="true"
+                            >
+                              <path d="M5.25 7.5 10 12.25 14.75 7.5H5.25Z" />
+                            </svg>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </>
+                )}
+              </div>
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="text-[12px] text-osu-f1 hover:text-osu-pink-light transition-colors cursor-pointer"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -2992,249 +3145,85 @@ function RandomCardSkeleton() {
 
 // ── Filter UI ──────────────────────────────────────────────────────────────
 
-function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex w-full min-w-0 flex-col gap-1 sm:w-auto sm:flex-row sm:items-center sm:gap-1.5">
-      <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold shrink-0">{label}</span>
-      <div className="flex min-w-0 flex-wrap gap-0.5">{children}</div>
-    </div>
-  );
-}
-
-function SortPill({
-  active,
-  dir,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  dir: SortDirection;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer inline-flex items-center gap-1 ${
-        active
-          ? "bg-osu-pink/20 text-osu-pink-light"
-          : "bg-osu-b4 text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3"
-      }`}
-      aria-pressed={active}
-      title={active ? (dir === "desc" ? "Click to sort ascending" : "Click to sort descending") : undefined}
-    >
-      <span>{children}</span>
-      {active && (
-        <span aria-hidden className="text-[9px] leading-none opacity-90">
-          {dir === "desc" ? "↓" : "↑"}
-        </span>
-      )}
-    </button>
-  );
-}
-
-function FilterPill({ active, onClick, children, dimmed }: { active: boolean; onClick: () => void; children: React.ReactNode; dimmed?: boolean }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${
-        active
-          ? "bg-osu-pink/20 text-osu-pink-light"
-          : dimmed
-            ? "bg-osu-b4/60 text-osu-f1/70 hover:text-osu-l2 hover:bg-osu-b3"
-            : "bg-osu-b4 text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-// Tri-state pill for random filters: click cycles none → include → exclude → none.
-// Include = pink fill, exclude = red fill with strikethrough overlay.
+// Tri-state chip for random filters: click cycles none → include → exclude →
+// none. Speaks the search tab's chip language: outlined when neutral, filled
+// when including, a red strikethrough when excluding. `color` swaps the theme
+// accent for a facet colour (status badges, pattern palette) while keeping the
+// tri-state semantics; the strikethrough carries the exclusion so the chip
+// keeps its identity colour. `pill` dresses it as the card status badges
+// (rounded, uppercase).
 function TriStatePill({
   mode,
   hasAnyActive,
   onClick,
   onContextMenu,
+  color,
+  pill = false,
   children,
 }: {
   mode: TriStateMode | undefined;
   hasAnyActive: boolean;
   onClick: () => void;
   onContextMenu: () => void;
+  color?: string;
+  pill?: boolean;
   children: React.ReactNode;
 }) {
-  const styleClass = mode === "include"
-    ? "bg-osu-pink/20 text-osu-pink-light"
-    : mode === "exclude"
-      ? "bg-osu-red/15 text-osu-red border border-osu-red/40"
-      : hasAnyActive
-        ? "bg-osu-b4/60 text-osu-f1/70 hover:text-osu-l2 hover:bg-osu-b3"
-        : "bg-osu-b4 text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3";
+  const style: CSSProperties = color
+    ? mode === "include"
+      ? { background: color, color: "#11111a" }
+      : {
+          background: "transparent",
+          color,
+          boxShadow: `inset 0 0 0 1.5px ${color}59`,
+          opacity: mode === "exclude" ? 0.8 : hasAnyActive ? 0.55 : 1,
+        }
+    : mode === "include"
+      ? { background: ACCENT_CHIP_FILL, color: "#11111a" }
+      : mode === "exclude"
+        ? {
+            background: "transparent",
+            color: "var(--color-osu-red-light)",
+            boxShadow: "inset 0 0 0 1.5px color-mix(in srgb, var(--color-osu-red) 55%, transparent)",
+          }
+        : {
+            background: "transparent",
+            color: ACCENT_CHIP_TEXT,
+            boxShadow: accentChipRing(35),
+            opacity: hasAnyActive ? 0.55 : 1,
+          };
   const title = mode === "include"
     ? "Including (click to exclude)"
     : mode === "exclude"
       ? "Excluding (click to clear)"
       : "Click to include";
   return (
-    <button
+    <motion.button
       type="button"
       onClick={onClick}
       onContextMenu={(event) => {
         event.preventDefault();
         onContextMenu();
       }}
+      whileTap={{ scale: 0.94 }}
+      transition={{ type: "spring", stiffness: 600, damping: 30 }}
       title={title}
       aria-label={title}
-      className={`relative px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${styleClass}`}
+      className={`relative cursor-pointer transition-[background-color,color,opacity] duration-150 ${
+        pill
+          ? "inline-flex items-center rounded-full px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide leading-none"
+          : "rounded-md px-3.5 py-1.5 text-[12.5px] font-bold"
+      }`}
+      style={style}
     >
-      <span className={mode === "exclude" ? "opacity-60" : ""}>{children}</span>
+      <span className={mode === "exclude" ? "opacity-70" : ""}>{children}</span>
       {mode === "exclude" && (
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute left-1.5 right-1.5 top-1/2 h-[1.5px] -translate-y-1/2 rotate-[-8deg] rounded-full bg-osu-red/80"
+          className="pointer-events-none absolute left-2.5 right-2.5 top-1/2 h-[1.5px] -translate-y-1/2 rotate-[-8deg] rounded-full bg-osu-red/80"
         />
       )}
-    </button>
-  );
-}
-
-// Dual-thumb range slider for "★ range". Props use 0 as "unset" for each side:
-// min=0 → thumb at floor, max=0 → thumb at ceiling. Commits on release,
-// rounded to 0.1, clamping thumbs from crossing with a 0.1-star gap.
-function StarRangeSlider({
-  min,
-  max,
-  onChange,
-}: {
-  min: number;
-  max: number;
-  onChange: (nextMin: number, nextMax: number) => void;
-}) {
-  const active = min > 0 || max > 0;
-  const resolvedMin = min > 0 ? min : RANDOM_STAR_MIN;
-  const resolvedMax = max > 0 ? max : RANDOM_STAR_MAX;
-  const [localMin, setLocalMin] = useState<number>(resolvedMin);
-  const [localMax, setLocalMax] = useState<number>(resolvedMax);
-  const [isDragging, setIsDragging] = useState(false);
-  const draggingRef = useRef(false);
-
-  useEffect(() => {
-    if (draggingRef.current) return;
-    setLocalMin(min > 0 ? min : RANDOM_STAR_MIN);
-    setLocalMax(max > 0 ? max : RANDOM_STAR_MAX);
-  }, [min, max]);
-
-  const commit = () => {
-    if (!draggingRef.current) return;
-    draggingRef.current = false;
-    setIsDragging(false);
-    const round = (n: number) => Math.round(n * 10) / 10;
-    const nextMin = round(localMin);
-    const nextMax = round(localMax);
-    onChange(
-      nextMin <= RANDOM_STAR_MIN ? 0 : nextMin,
-      nextMax >= RANDOM_STAR_MAX ? 0 : nextMax,
-    );
-  };
-
-  const show = active || isDragging;
-  const span = RANDOM_STAR_MAX - RANDOM_STAR_MIN;
-  const minPct = ((localMin - RANDOM_STAR_MIN) / span) * 100;
-  const maxPct = ((localMax - RANDOM_STAR_MIN) / span) * 100;
-
-  const atFloor = localMin <= RANDOM_STAR_MIN + 1e-6;
-  const atCeiling = localMax >= RANDOM_STAR_MAX - 1e-6;
-  const label = !show
-    ? "—"
-    : atFloor && atCeiling
-      ? "Any"
-      : atCeiling
-        ? `${localMin.toFixed(1)}★+`
-        : atFloor
-          ? `≤${localMax.toFixed(1)}★`
-          : `${localMin.toFixed(1)}-${localMax.toFixed(1)}★`;
-
-  // Put the thumb closer to the centre on top so it's always reachable when
-  // the thumbs meet. Push the min thumb to the front once it's past 50%.
-  const minOnTop = localMin - RANDOM_STAR_MIN > span / 2;
-
-  const thumbClasses =
-    "[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink-light [&::-webkit-slider-thumb]:shadow-[0_0_0_2px_rgba(0,0,0,0.35)] [&::-webkit-slider-thumb]:cursor-grab [&::-webkit-slider-thumb]:pointer-events-auto" +
-    " [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-osu-pink-light [&::-moz-range-thumb]:shadow-[0_0_0_2px_rgba(0,0,0,0.35)] [&::-moz-range-thumb]:cursor-grab [&::-moz-range-thumb]:pointer-events-auto";
-
-  return (
-    <div className="flex items-center gap-2 w-full sm:w-auto">
-      <button
-        type="button"
-        onClick={() => onChange(0, 0)}
-        className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer shrink-0 ${
-          !active
-            ? "bg-osu-pink/20 text-osu-pink-light"
-            : "bg-osu-b4/60 text-osu-f1/70 hover:text-osu-l2 hover:bg-osu-b3"
-        }`}
-      >
-        Any
-      </button>
-      <div className={`relative flex-1 sm:w-28 h-3 transition-opacity ${show ? "" : "opacity-60"}`}>
-        <div
-          className="absolute top-1/2 -translate-y-1/2 inset-x-0 h-1 rounded-full"
-          style={{ background: "var(--color-osu-b3)" }}
-        />
-        {show && (
-          <div
-            className="absolute top-1/2 -translate-y-1/2 h-1 rounded-full"
-            style={{
-              background: "var(--color-osu-pink)",
-              left: `${minPct}%`,
-              right: `${100 - maxPct}%`,
-            }}
-          />
-        )}
-        <input
-          type="range"
-          min={RANDOM_STAR_MIN}
-          max={RANDOM_STAR_MAX}
-          step="any"
-          value={localMin}
-          onChange={(e) => {
-            const v = Math.min(Number(e.target.value), localMax - 0.1);
-            draggingRef.current = true;
-            setIsDragging(true);
-            setLocalMin(Math.max(RANDOM_STAR_MIN, v));
-          }}
-          onMouseUp={commit}
-          onTouchEnd={commit}
-          onKeyUp={commit}
-          aria-label="Minimum star rating"
-          className={`absolute inset-0 w-full h-full appearance-none bg-transparent pointer-events-none ${thumbClasses}`}
-          style={{ zIndex: minOnTop ? 3 : 2 }}
-        />
-        <input
-          type="range"
-          min={RANDOM_STAR_MIN}
-          max={RANDOM_STAR_MAX}
-          step="any"
-          value={localMax}
-          onChange={(e) => {
-            const v = Math.max(Number(e.target.value), localMin + 0.1);
-            draggingRef.current = true;
-            setIsDragging(true);
-            setLocalMax(Math.min(RANDOM_STAR_MAX, v));
-          }}
-          onMouseUp={commit}
-          onTouchEnd={commit}
-          onKeyUp={commit}
-          aria-label="Maximum star rating"
-          className={`absolute inset-0 w-full h-full appearance-none bg-transparent pointer-events-none ${thumbClasses}`}
-          style={{ zIndex: minOnTop ? 2 : 3 }}
-        />
-      </div>
-      <span className="text-[10px] font-semibold tabular-nums text-left text-osu-pink-light shrink-0">
-        {label}
-      </span>
-    </div>
+    </motion.button>
   );
 }
 
@@ -3267,18 +3256,7 @@ function MinPpSlider({ value, onChange }: { value: number; onChange: (v: number)
     : trackColor;
 
   return (
-    <div className="flex items-center gap-2 w-full sm:w-auto">
-      <button
-        type="button"
-        onClick={() => onChange(0)}
-        className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer shrink-0 ${
-          !active
-            ? "bg-osu-pink/20 text-osu-pink-light"
-            : "bg-osu-b4/60 text-osu-f1/70 hover:text-osu-l2 hover:bg-osu-b3"
-        }`}
-      >
-        Any
-      </button>
+    <div className="flex h-[29px] items-center gap-3 w-full sm:w-[240px]">
       <input
         type="range"
         min={FARMED_PP_MIN}
@@ -3295,14 +3273,20 @@ function MinPpSlider({ value, onChange }: { value: number; onChange: (v: number)
         onKeyUp={commit}
         aria-label="Minimum PP"
         style={{ background }}
-        className={`flex-1 sm:w-28 h-1 appearance-none rounded-full cursor-pointer
-          [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink-light [&::-webkit-slider-thumb]:shadow-[0_0_0_2px_rgba(0,0,0,0.35)] [&::-webkit-slider-thumb]:cursor-grab
-          [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-osu-pink-light [&::-moz-range-thumb]:shadow-[0_0_0_2px_rgba(0,0,0,0.35)] [&::-moz-range-thumb]:cursor-grab
-          transition-opacity ${show ? "" : "opacity-60"}`}
+        className={`flex-1 min-w-[120px] h-1 appearance-none rounded-full cursor-pointer
+          [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink-light [&::-webkit-slider-thumb]:shadow-[0_0_0_2px_rgba(0,0,0,0.35)] [&::-webkit-slider-thumb]:cursor-grab
+          [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-osu-pink-light [&::-moz-range-thumb]:shadow-[0_0_0_2px_rgba(0,0,0,0.35)] [&::-moz-range-thumb]:cursor-grab`}
       />
-      <span className="text-[10px] font-semibold tabular-nums text-left text-osu-pink-light shrink-0">
-        {show ? `${Math.round(localValue)}pp+` : "—"}
-      </span>
+      <button
+        type="button"
+        onClick={() => active && onChange(0)}
+        className={`shrink-0 w-20 text-left text-[11px] font-semibold tabular-nums transition-colors ${
+          active ? "text-osu-pink-light cursor-pointer hover:text-osu-pink" : "text-osu-f1/55 cursor-default"
+        }`}
+        title={active ? "Clear" : undefined}
+      >
+        {show ? `${Math.round(localValue)}pp+` : "Any"}{active ? " ✕" : ""}
+      </button>
     </div>
   );
 }
@@ -4591,6 +4575,241 @@ function ChartPreviewTimeline({
   );
 }
 
+// Canvas fill for the audio-preview progress bar: the played portion is a
+// travelling wave whose amplitude at each x follows a live frequency band of
+// the signal (Web Audio analyser over the CORS-clean proxied clip), driven by
+// spectral flux so it dances to onsets rather than sustained loudness - see
+// the inline notes on the band pipeline below. When the analyser is
+// unavailable (no live backend, or the direct b.ppy.sh fallback, which is
+// tainted) the level degrades to a BPM-phase envelope: set previews start at
+// the map's preview point, which mappers snap to the beat, so beat zero is
+// simply clip start. Everything draws per frame off the media clock -
+// timeupdate alone ticks ~4Hz.
+function BeatWaveFill({
+  getAudio,
+  bpm,
+  maxSeconds,
+  analysable,
+}: {
+  getAudio: () => HTMLAudioElement | null;
+  bpm: number;
+  maxSeconds: number;
+  analysable: boolean;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+    const reduceMotion = typeof window.matchMedia === "function"
+      && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // The osu-pink runtime color: the --color-osu-* vars are build-time only.
+    const rootStyle = window.getComputedStyle(document.documentElement);
+    const themeHue = Number.parseFloat(rootStyle.getPropertyValue("--theme-hue"));
+    const themeSat = Number.parseFloat(rootStyle.getPropertyValue("--theme-sat"));
+    const waveColor = `hsl(${Number.isFinite(themeHue) ? themeHue : 333}, ${Math.round((Number.isFinite(themeSat) ? themeSat : 1) * 100)}%, 70%)`;
+    // Fold frantic BPMs to their half-time feel so the fallback pulse and the
+    // wave travel stay readable instead of strobing.
+    let pulseBpm = bpm;
+    while (pulseBpm > 220) pulseBpm /= 2;
+    const beatSeconds = pulseBpm > 0 ? 60 / pulseBpm : 0;
+
+    // Only record the size here; the draw loop syncs the bitmap right before
+    // it repaints (see below for why).
+    let width = 0;
+    let height = 0;
+    const measure = (rect: { width: number; height: number }) => {
+      width = rect.width;
+      height = rect.height;
+    };
+    measure(canvas.getBoundingClientRect());
+    const observer = new ResizeObserver((entries) => {
+      const rect = entries[entries.length - 1]?.contentRect;
+      if (rect) measure(rect);
+    });
+    observer.observe(canvas);
+
+    let raf = 0;
+    let analyser: AnalyserNode | null = null;
+    let analyserFailed = false;
+    let bins: Uint8Array<ArrayBuffer> | null = null;
+    // Spectrum ribbon: position along the bar maps to frequency (log-spaced
+    // 40Hz-8kHz, bass left, highs right), so different parts of the bar move
+    // with different parts of the mix - kicks pump the left, melody works the
+    // middle, hats shimmer the right. (A single loudness scalar moving every
+    // x in unison read as BPM decoration rather than the audio.)
+    const BANDS = 24;
+    const bandLevels = new Float32Array(BANDS);
+    const bandValues = new Float32Array(BANDS);
+    const bandFlux = new Float32Array(BANDS);
+    const prevValues = new Float32Array(BANDS);
+    let bandRanges: Array<[number, number]> | null = null;
+    // One GLOBAL loudness reference, deliberately not per-band auto-gain:
+    // normalising each band against its own peak makes every band ride near
+    // its own max, so a mellow song wiggles exactly like a banger. A single
+    // reference (plus a fixed treble tilt below) preserves both the spectral
+    // shape and the song's actual dynamics.
+    let globalPeak = 0.06;
+    // Movement is driven by spectral flux (per-band frame-to-frame increase),
+    // not magnitude: a sustained wall of sound measures loud in every band
+    // yet has no rhythm to it, and magnitude-driven bars dance through it
+    // (measured: a shoegaze preview pinned a magnitude drive at 1.0 while a
+    // punchy DnB track sat at 0.5). Onsets - kicks, snares, note changes -
+    // are what should move the wave.
+    let fluxPeak = 0.04;
+    // Pulse level for the no-analyser fallback.
+    let level = 0;
+    // Carrier phase, advanced with media time scaled by the music's energy:
+    // calm passages barely drift, hits push the wave forward. Pausing stops
+    // it for free because media time stops.
+    let phase = 0;
+    let lastMediaT = -1;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const audio = getAudio();
+      if (!audio) return;
+      const t = Math.min(audio.currentTime, maxSeconds);
+      const progressX = maxSeconds > 0 ? Math.min(1, t / maxSeconds) * width : 0;
+
+      const active = !audio.paused && !reduceMotion;
+      if (active && analysable && !analyser && !analyserFailed) {
+        analyser = getPreviewAnalyser(audio);
+        analyserFailed = analyser == null;
+      }
+      if (analyser && active) {
+        if (!bins || bins.length !== analyser.frequencyBinCount) {
+          bins = new Uint8Array(analyser.frequencyBinCount);
+          bandRanges = null;
+        }
+        analyser.getByteFrequencyData(bins);
+        if (!bandRanges) {
+          const binHz = analyser.context.sampleRate / 2 / bins.length;
+          const maxHz = Math.min(8000, analyser.context.sampleRate / 2);
+          bandRanges = [];
+          for (let b = 0; b < BANDS; b += 1) {
+            const f0 = 40 * Math.pow(maxHz / 40, b / BANDS);
+            const f1 = 40 * Math.pow(maxHz / 40, (b + 1) / BANDS);
+            const i0 = Math.min(bins.length - 1, Math.max(1, Math.floor(f0 / binHz)));
+            const i1 = Math.min(bins.length, Math.max(i0 + 1, Math.ceil(f1 / binHz)));
+            bandRanges.push([i0, i1]);
+          }
+        }
+        let frameMax = 0;
+        let frameFluxMax = 0;
+        for (let b = 0; b < BANDS; b += 1) {
+          const [i0, i1] = bandRanges[b];
+          let sum = 0;
+          for (let i = i0; i < i1; i += 1) sum += bins[i];
+          // The tilt is a fixed compensation for the natural treble roll-off
+          // of music, so highs register without giving them infinite gain.
+          const value = (sum / (i1 - i0) / 255) * (1 + 1.8 * (b / (BANDS - 1)));
+          bandValues[b] = value;
+          if (value > frameMax) frameMax = value;
+          const flux = Math.max(0, value - prevValues[b]);
+          prevValues[b] = value;
+          bandFlux[b] = flux;
+          if (flux > frameFluxMax) frameFluxMax = flux;
+        }
+        globalPeak = Math.max(frameMax, globalPeak * 0.998, 0.06);
+        fluxPeak = Math.max(frameFluxMax, fluxPeak * 0.998, 0.04);
+        for (let b = 0; b < BANDS; b += 1) {
+          // The 1.6 power deepens valleys: content well below the mix's
+          // loudest register stays visibly small.
+          const magNorm = Math.pow(Math.min(1, bandValues[b] / globalPeak), 1.6);
+          const fluxNorm = Math.min(1, bandFlux[b] / fluxPeak);
+          // Onsets dominate; sustained content keeps only a low hum so the
+          // bar isn't dead through held chords, but doesn't dance to them.
+          const targetB = Math.max(0.18 * magNorm, fluxNorm);
+          // Fast attack, slower release: a hit snaps up and rings briefly.
+          bandLevels[b] += (targetB - bandLevels[b]) * (targetB > bandLevels[b] ? 0.7 : 0.12);
+        }
+      } else {
+        // Paused (frequency data freezes on a paused element) or no analyser:
+        // settle the ribbon; the BPM-phase fallback pulses `level` instead.
+        for (let b = 0; b < BANDS; b += 1) bandLevels[b] *= 0.85;
+        const target = active && !analyser && beatSeconds > 0
+          ? Math.exp(-5 * ((t % beatSeconds) / beatSeconds))
+          : 0;
+        level += (target - level) * (target > level ? 0.6 : 0.18);
+      }
+
+      let drive = level;
+      if (analyser) {
+        let sum = 0;
+        for (let b = 0; b < BANDS; b += 1) sum += bandLevels[b];
+        drive = Math.min(1, (sum / BANDS) * 1.6);
+      }
+      const omega = beatSeconds > 0 ? (Math.PI * 2) / beatSeconds : Math.PI * 2;
+      if (lastMediaT >= 0 && t > lastMediaT) {
+        phase += (t - lastMediaT) * omega * (0.2 + 0.8 * drive);
+      }
+      lastMediaT = t;
+
+      // Sync the bitmap to the observed size here, in the same frame as the
+      // redraw: resizing a canvas blanks it, so doing this in the observer
+      // callback flashed an empty bar for one frame on any layout jitter.
+      const dpr = window.devicePixelRatio || 1;
+      const bitmapWidth = Math.max(1, Math.round(width * dpr));
+      const bitmapHeight = Math.max(1, Math.round(height * dpr));
+      if (canvas.width !== bitmapWidth || canvas.height !== bitmapHeight) {
+        canvas.width = bitmapWidth;
+        canvas.height = bitmapHeight;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
+      ctx.clearRect(0, 0, width, height);
+      if (progressX <= 0) return;
+      const mid = height / 2;
+      const maxAmp = mid - 2.4;
+      // The envelope along x is the live spectrum curve (frequency identity
+      // is fixed to the full bar width, so a position always answers to the
+      // same register); `phase` above makes the carrier march with the
+      // music's energy rather than metronomically.
+      ctx.strokeStyle = waveColor;
+      ctx.fillStyle = waveColor;
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      for (let x = 0; x <= progressX; x += 2) {
+        const taper = Math.max(0, Math.min(1, x / 10, (progressX - x) / 12));
+        let local = level;
+        if (analyser) {
+          const pos = (x / Math.max(1, width)) * (BANDS - 1);
+          const b0 = Math.floor(pos);
+          const b1 = Math.min(BANDS - 1, b0 + 1);
+          local = bandLevels[b0] + (bandLevels[b1] - bandLevels[b0]) * (pos - b0);
+        }
+        // No unconditional floor: quiet music gets a quiet bar. The tiny
+        // energy-scaled base just avoids a dead-flat line mid-song.
+        const swell = active ? Math.max(local, 0.05 * drive) : local;
+        const y = mid + maxAmp * swell * taper * Math.sin((x / 26) * Math.PI * 2 - phase);
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.lineTo(progressX, mid);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(progressX, mid, 2.4, 0, Math.PI * 2);
+      ctx.fill();
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      observer.disconnect();
+    };
+  }, [analysable, bpm, getAudio, maxSeconds]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="pointer-events-none absolute inset-x-0 top-1/2 h-4 w-full -translate-y-1/2"
+      aria-hidden="true"
+    />
+  );
+}
+
 function RandomReplayPreview({
   beatmap,
   startTimeMs,
@@ -4874,6 +5093,14 @@ function RandomCard({ bm, resolving = false }: { bm: MapsFavouriteBeatmapset; re
   const lastNonZeroVolumeRef = useRef<number>(volume > 0 ? volume : DEFAULT_PREVIEW_VOLUME);
   const rawPreviewUrl = typeof bm.previewUrl === "string" ? bm.previewUrl : "";
   const previewUrl = rawPreviewUrl.startsWith("//") ? `https:${rawPreviewUrl}` : rawPreviewUrl;
+  // Prefer the live-backend preview proxy: it is the only CORS-clean source
+  // the Web Audio analyser (beat wave bar) can read. Direct b.ppy.sh stays as
+  // the no-analyser fallback if the proxy errors (e.g. an older backend).
+  const previewProxyUrl = previewUrl ? getPreviewAudioProxyUrl(bm.id) : null;
+  const [previewProxyFailed, setPreviewProxyFailed] = useState(false);
+  const usePreviewProxy = previewProxyUrl != null && !previewProxyFailed;
+  const effectivePreviewUrl = usePreviewProxy ? previewProxyUrl : previewUrl;
+  const retryPreviewAfterProxyFailRef = useRef(false);
   const maniaBeatmaps = useMemo(
     () => [...(bm.maniaBeatmaps ?? [])].sort((a, b) => b.difficultyRating - a.difficultyRating),
     [bm.maniaBeatmaps],
@@ -4943,7 +5170,7 @@ function RandomCard({ bm, resolving = false }: { bm: MapsFavouriteBeatmapset; re
       replayChartLengthMs > 0 ? replayChartLengthMs - replayChartStartMs : RANDOM_REPLAY_PREVIEW_MS,
     );
   const replayAudioUrl = replayAudioMode === "set-preview"
-    ? previewUrl
+    ? effectivePreviewUrl
     : replayAudioFullUrl;
   const replayPreviewStartSeconds = replayAudioMode === "selected-file"
     ? Math.max(0, replayChartStartMs / 1000)
@@ -5173,6 +5400,7 @@ function RandomCard({ bm, resolving = false }: { bm: MapsFavouriteBeatmapset; re
       replayAudioClockAnchorRef.current = null;
       requestedAudioModeRef.current = null;
       clearReplayPreviewEndTimer();
+      releasePreviewAnalyser(audioRef.current);
       resetAudioElement(audioRef.current, true);
       resetAudioElement(replayAudioRef.current, true);
     };
@@ -5282,6 +5510,14 @@ function RandomCard({ bm, resolving = false }: { bm: MapsFavouriteBeatmapset; re
       }
     }
   }, [currentTime, duration, isPreviewPlaying, previewUrl, resetReplayPreview, volume]);
+
+  // After the proxy fallback remounts the audio element on the direct URL,
+  // resume the play the user asked for.
+  useEffect(() => {
+    if (!previewProxyFailed || !retryPreviewAfterProxyFailRef.current) return;
+    retryPreviewAfterProxyFailRef.current = false;
+    void togglePreview();
+  }, [previewProxyFailed, togglePreview]);
 
   const startReplayPreviewAudio = useCallback(async (token: number) => {
     const audio = replayAudioRef.current;
@@ -5583,7 +5819,7 @@ function RandomCard({ bm, resolving = false }: { bm: MapsFavouriteBeatmapset; re
   }, [applyVolume, volume]);
 
   const displayDuration = duration > 0 ? Math.min(duration, RANDOM_REPLAY_PREVIEW_MS / 1000) : 0;
-  const progressRatio = displayDuration > 0 ? Math.min(1, currentTime / displayDuration) : 0;
+  const getPreviewAudio = useCallback(() => audioRef.current, []);
   // Paused == the preview is live and ready but the user stopped it; that is
   // distinct from "preparing" (still spinning up), which keeps the spinner.
   // replayAudioReadyRef is true only once audio playback has been established,
@@ -5752,10 +5988,7 @@ function RandomCard({ bm, resolving = false }: { bm: MapsFavouriteBeatmapset; re
                 }}
                 className="flex-1 h-1 bg-osu-b3/60 rounded-full cursor-pointer relative group"
               >
-                <div
-                  className="absolute inset-y-0 left-0 bg-osu-pink rounded-full"
-                  style={{ width: `${progressRatio * 100}%` }}
-                />
+                <BeatWaveFill getAudio={getPreviewAudio} bpm={bm.bpm} maxSeconds={displayDuration} analysable={usePreviewProxy} />
               </div>
 
               <span className="text-[9px] text-osu-f1 tabular-nums shrink-0">
@@ -5799,8 +6032,13 @@ function RandomCard({ bm, resolving = false }: { bm: MapsFavouriteBeatmapset; re
             />
 
             <audio
+              // Remount on source strategy change: an element that ever fed
+              // the analyser graph plays silence for a tainted (direct
+              // b.ppy.sh) src, so the fallback needs a fresh element.
+              key={effectivePreviewUrl}
               ref={audioRef}
-              src={previewUrl}
+              src={effectivePreviewUrl}
+              crossOrigin={usePreviewProxy ? "anonymous" : undefined}
               preload="metadata"
               onLoadedMetadata={(e) => {
                 e.currentTarget.volume = volume;
@@ -5823,6 +6061,16 @@ function RandomCard({ bm, resolving = false }: { bm: MapsFavouriteBeatmapset; re
               onPause={() => setIsPreviewPlaying(false)}
               onPlay={() => setIsPreviewPlaying(requestedAudioModeRef.current === "audio")}
               onError={() => {
+                if (usePreviewProxy) {
+                  // Proxy unavailable (older backend, transient error): fall
+                  // back to the direct b.ppy.sh clip and resume if a play was
+                  // in flight. The key remount discards this element.
+                  releasePreviewAnalyser(audioRef.current);
+                  retryPreviewAfterProxyFailRef.current = requestedAudioModeRef.current === "audio";
+                  setPreviewProxyFailed(true);
+                  setIsPreviewPlaying(false);
+                  return;
+                }
                 setPreviewError("Couldn't load preview");
                 setIsPreviewPlaying(false);
               }}

@@ -16,11 +16,24 @@ import { playPatternHit } from "./patternSfx";
 import { RangeSlider } from "./RangeSlider";
 import { danScaleImage, danScaleLabel, type DanScaleContext } from "../../lib/dan-images";
 import { SearchCard } from "./SearchCard";
+import { DEFAULT_SEARCH_SORT, savedSearchSortToRestore } from "./searchSortPreference";
 import { StarRangePill } from "./StarRangePill";
+import {
+  ACCENT_CHIP_TEXT,
+  accentChipRing,
+  Chip,
+  ChipGroup,
+  DirButton,
+  SortSelect,
+  StatusChip,
+} from "./FilterChips";
 
 const SEARCH_PAGE_SIZE = 24;
 const SEARCH_INITIAL_SKELETON_COUNT = 12;
 const SEARCH_DEBOUNCE_MS = 300;
+// Safety valve on the held first fetch: if the saved-sort restore somehow
+// never lands, fetch with the default rather than strand the page on skeletons.
+const SAVED_SORT_RESTORE_TIMEOUT_MS = 1500;
 
 const KEY_OPTIONS = [
   { id: "4k", label: "4K" },
@@ -35,17 +48,6 @@ const STATUS_OPTIONS = [
   { id: "graveyard", label: "Graveyard" },
   { id: "other", label: "Pending" },
 ];
-
-// Match the card status pills (statusPill() in SearchCard) so the filters read
-// like the badges on the cards: green ranked, blue qualified, pink loved, grey
-// graveyard, yellow pending.
-const STATUS_COLOR: Record<string, string> = {
-  ranked: "#6cf27f",
-  qualified: "#66ccff",
-  loved: "#f26fa6",
-  graveyard: "#b3b3b3",
-  other: "#ffd36b",
-};
 
 const SORT_OPTIONS = [
   { id: "playcount", label: "Most played" },
@@ -94,169 +96,6 @@ function stateKey(s: MapSearchUiState): string {
     s.starMin, s.starMax, s.bpmMin, s.bpmMax, s.lenMin, s.lenMax, s.danMin, s.danMax,
     s.sort, s.dir, s.page,
   ]);
-}
-
-// Keys and the dan trigger speak the pattern/status chip language (outlined
-// when off, filled when on) in the theme accent, so they read as their own
-// facet family without going flat white.
-const ACCENT_CHIP_TEXT = "var(--color-osu-pink-light)";
-const ACCENT_CHIP_FILL = "var(--color-osu-pink)";
-const accentChipRing = (alpha: number) =>
-  `inset 0 0 0 1.5px color-mix(in srgb, var(--color-osu-pink) ${alpha}%, transparent)`;
-
-function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <motion.button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      whileHover={{ scale: 1.03 }}
-      whileTap={{ scale: 0.95 }}
-      transition={{ type: "spring", stiffness: 600, damping: 30 }}
-      className="rounded-md px-3.5 py-1.5 text-[12.5px] font-bold cursor-pointer transition-colors duration-150"
-      style={
-        active
-          ? { background: ACCENT_CHIP_FILL, color: "#11111a" }
-          : { background: "transparent", color: ACCENT_CHIP_TEXT, boxShadow: accentChipRing(35) }
-      }
-    >
-      {children}
-    </motion.button>
-  );
-}
-
-// Status chips styled as the card status badges: solid coloured pill when on,
-// outlined in the same colour when off.
-function StatusChip({ id, label, active, onClick }: { id: string; label: string; active: boolean; onClick: () => void }) {
-  const color = STATUS_COLOR[id] ?? "#ffd36b";
-  return (
-    <motion.button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      whileTap={{ scale: 0.94 }}
-      transition={{ type: "spring", stiffness: 600, damping: 32 }}
-      className="inline-flex items-center rounded-full px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide leading-none cursor-pointer transition-colors duration-100"
-      style={
-        active
-          ? { background: color, color: "#11111a" }
-          : { background: "transparent", color, boxShadow: `inset 0 0 0 1.5px ${color}59` }
-      }
-    >
-      {label}
-    </motion.button>
-  );
-}
-
-// Custom sort dropdown for the mobile toolbar, styled like the random tab's
-// difficulty picker so it doesn't fall back to the OS-native select look.
-function SortSelect({ value, onChange }: { value: string; onChange: (id: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  const selected = SORT_OPTIONS.find((option) => option.id === value) ?? SORT_OPTIONS[0];
-
-  return (
-    <div className="relative" ref={containerRef}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label="Sort by"
-        className={`inline-flex items-center gap-1.5 rounded-md pl-3 pr-2 py-2 text-[12.5px] font-semibold cursor-pointer transition-colors ${
-          open ? "bg-osu-b3 text-osu-l1" : "bg-osu-b4 text-osu-l2"
-        }`}
-      >
-        {selected.label}
-        <svg
-          viewBox="0 0 20 20"
-          fill="currentColor"
-          className={`h-3.5 w-3.5 shrink-0 transition-transform duration-200 ${open ? "rotate-180 text-osu-pink-light" : "text-osu-f1"}`}
-          aria-hidden="true"
-        >
-          <path d="M5.25 7.5 10 12.25 14.75 7.5H5.25Z" />
-        </svg>
-      </button>
-
-      <div
-        role="listbox"
-        className={`absolute right-0 top-full z-50 mt-1.5 min-w-[160px] overflow-hidden rounded-lg border border-osu-pink/20 bg-osu-b4/95 shadow-xl shadow-black/40 backdrop-blur-md transition-all duration-200 origin-top ${
-          open ? "opacity-100 scale-y-100 translate-y-0 pointer-events-auto" : "opacity-0 scale-y-95 -translate-y-1 pointer-events-none"
-        }`}
-      >
-        <div className="p-1">
-          {SORT_OPTIONS.map((option) => {
-            const isSelected = option.id === value;
-            return (
-              <button
-                key={option.id}
-                type="button"
-                role="option"
-                aria-selected={isSelected}
-                onClick={() => {
-                  onChange(option.id);
-                  setOpen(false);
-                }}
-                className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] font-semibold transition-colors cursor-pointer ${
-                  isSelected ? "bg-osu-pink/15 text-osu-pink-light" : "text-osu-l2 hover:bg-osu-b3 hover:text-white"
-                }`}
-              >
-                <span className={`flex h-3 w-3 shrink-0 items-center justify-center transition-all ${isSelected ? "opacity-100" : "opacity-0 scale-75"}`}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3 text-osu-pink">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                </span>
-                {option.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DirButton({ dir, onToggle }: { dir: string; onToggle: () => void }) {
-  return (
-    <motion.button
-      type="button"
-      whileTap={{ scale: 0.94 }}
-      onClick={onToggle}
-      className="inline-flex items-center justify-center rounded-md px-2.5 py-2 bg-osu-b4 text-osu-l2 hover:bg-osu-b3 hover:text-osu-l1 transition-colors cursor-pointer"
-      title={dir === "asc" ? "Ascending" : "Descending"}
-      aria-label={dir === "asc" ? "Ascending" : "Descending"}
-    >
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
-        {dir === "asc" ? <path d="M12 19V5m-6 6 6-6 6 6" /> : <path d="M12 5v14m-6-6 6 6 6-6" />}
-      </svg>
-    </motion.button>
-  );
-}
-
-function ChipGroup({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-2">
-      <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">{label}</span>
-      <div className="flex flex-wrap gap-2">{children}</div>
-    </div>
-  );
 }
 
 // The Keys/Status chip groups and range sliders, shared between the desktop
@@ -931,20 +770,26 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
   // a rapid tap sequence can't revert a newer local state.
   const pendingKeys = useRef<Set<string>>(new Set());
 
-  // Adopt genuine external navigations (back/forward, clear); skip our own echoes.
-  useEffect(() => {
+  // Adopt genuine external navigations (back/forward, clear, the post-hydration
+  // sort restore); skip our own echoes. This runs during render (the adjust-
+  // state-on-prop-change pattern) rather than in an effect: an effect adopts a
+  // commit late, and anything keyed on `ui` in that gap (the fetch below)
+  // fires with filters that are about to be superseded.
+  const [adoptedState, setAdoptedState] = useState(state);
+  if (state !== adoptedState) {
+    setAdoptedState(state);
     const key = stateKey(state);
-    if (pendingKeys.current.has(key)) {
-      pendingKeys.current.delete(key);
-      return;
-    }
-    if (key !== stateKey(uiRef.current)) {
+    if (!pendingKeys.current.has(key) && key !== stateKey(ui)) {
       setUi(state);
-      uiRef.current = state;
       setSearchInput(state.q);
-      pendingKeys.current.clear();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }
+  // Echo bookkeeping waits for the render that observed the prop change (a
+  // render-phase mutation would misbehave under StrictMode's double render):
+  // our own pushes retire as they echo back, and a genuine external navigation
+  // moots whatever else was still pending.
+  useEffect(() => {
+    if (!pendingKeys.current.delete(stateKey(state))) pendingKeys.current.clear();
   }, [state]);
 
   // Filter changes apply instantly to local state, then sync to the URL.
@@ -969,6 +814,24 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
     [ui],
   );
 
+  // On a cold load the first client render must keep the SSR default sort; a
+  // saved preference only lands afterwards (the post-hydration restore in
+  // maps.tsx). If one is about to, a fetch now would be superseded the moment
+  // the restore lands, so the first fetch waits for the restored sort to reach
+  // `ui`. Reading localStorage in the initializer is hydration-safe: the flag
+  // only gates the fetch effect and never changes rendered output.
+  const [awaitingSavedSort, setAwaitingSavedSort] = useState(() => savedSearchSortToRestore(state));
+  useEffect(() => {
+    if (!awaitingSavedSort) return;
+    if (ui.sort !== DEFAULT_SEARCH_SORT.sort || ui.dir !== DEFAULT_SEARCH_SORT.dir) {
+      setAwaitingSavedSort(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setAwaitingSavedSort(false), SAVED_SORT_RESTORE_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [awaitingSavedSort, requestKey]);
+
   // A filter/page change swaps the grid out from under the playing card.
   useEffect(() => {
     stopPreview();
@@ -980,6 +843,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
       setError("Search needs the live backend running.");
       return;
     }
+    if (awaitingSavedSort) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -1017,7 +881,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestKey, liveBackendEnabled]);
+  }, [requestKey, liveBackendEnabled, awaitingSavedSort]);
 
   const items = result?.items ?? lastResultRef.current?.items ?? [];
   const total = result?.total ?? lastResultRef.current?.total ?? 0;
@@ -1116,9 +980,9 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
             resultsLabel={`Show ${formatNumber(total)} maps`}
           />
           <div className="ml-auto">
-            <SortSelect value={ui.sort} onChange={(id) => apply({ sort: id, page: 0 })} />
+            <SortSelect options={SORT_OPTIONS} value={ui.sort} onChange={(id) => apply({ sort: id, page: 0 })} />
           </div>
-          <DirButton dir={ui.dir} onToggle={() => apply({ dir: ui.dir === "asc" ? "desc" : "asc", page: 0 })} />
+          <DirButton dir={ui.dir} onToggle={() => apply({ sort: ui.sort, dir: ui.dir === "asc" ? "desc" : "asc", page: 0 })} />
         </div>
 
         {/* Secondary filters: inline on sm+, in the bottom sheet on phones */}
@@ -1165,7 +1029,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
                   type="button"
                   onClick={() =>
                     isActive
-                      ? apply({ dir: ui.dir === "asc" ? "desc" : "asc", page: 0 })
+                      ? apply({ sort: option.id, dir: ui.dir === "asc" ? "desc" : "asc", page: 0 })
                       : apply({ sort: option.id, page: 0 })
                   }
                   aria-pressed={isActive}
