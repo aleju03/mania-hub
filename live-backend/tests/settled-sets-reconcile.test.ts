@@ -96,18 +96,25 @@ describe("runSettledSetsReconcile", () => {
     // the osu! stub throws if it is ever fetched.
     await seedIndexRow(db, 4000, 400, "graveyard");
 
+    // Set 500: partially Loved -- osu! loves diffs selectively, so the set is
+    // loved while diff 5000 legitimately stays graveyard. Resolution confirms
+    // nothing changed; the cooldown must then keep it from re-fetching hourly.
+    await seedIndexRow(db, 5000, 500, "graveyard");
+    await seedIndexRow(db, 5001, 500, "loved");
+
     const fetched: number[] = [];
     const osu = {
       async getBeatmapset(id: number) {
         fetched.push(id);
         if (id === 100) return set(100, "loved", [maniaDiff(1001, 100, "loved"), maniaDiff(1002, 100, "loved")]);
         if (id === 200) return set(200, "loved", [maniaDiff(2000, 200, "loved")]);
+        if (id === 500) return set(500, "loved", [maniaDiff(5000, 500, "graveyard"), maniaDiff(5001, 500, "loved")]);
         throw new Error(`unexpected getBeatmapset(${id})`);
       },
     } as unknown as OsuApiClient;
 
     const result = await runSettledSetsReconcile(db, osu, queue);
-    expect(fetched.sort((a, b) => a - b)).toEqual([100, 200]);
+    expect(fetched.sort((a, b) => a - b)).toEqual([100, 200, 500]);
 
     // Set 100: dead diff dropped, survivor untouched at loved.
     expect(await indexStatuses(db, 100)).toEqual({ 1001: "loved" });
@@ -130,19 +137,24 @@ describe("runSettledSetsReconcile", () => {
     // Set 400 untouched.
     expect(await indexStatuses(db, 400)).toEqual({ 4000: "graveyard" });
 
+    // Set 500: the non-loved diff keeps its genuine graveyard status.
+    expect(await indexStatuses(db, 500)).toEqual({ 5000: "graveyard", 5001: "loved" });
+
     // The new upstream diff 1002 gets a chart-analysis job so it becomes searchable.
     const targets = (await exec(db, "select payload_json from jobs where type = 'analyze_beatmap_chart'")).rows
       .map((r) => Number(JSON.parse(String(r.payload_json)).beatmapId)).sort((a, b) => a - b);
     expect(targets).toContain(1002);
 
-    expect(result.candidates).toBe(2);
-    expect(result.resolved).toBe(2);
+    expect(result.candidates).toBe(3);
+    expect(result.resolved).toBe(3);
     expect(result.deletedRows).toBe(1);
 
-    // Self-terminating: everything now agrees with upstream, second run is a no-op.
+    // Self-terminating: sets 100/200 no longer carry the stale signature, and
+    // 500 -- still a permanent partial-Loved match -- is on cooldown. The
+    // second run fetches nothing.
     const again = await runSettledSetsReconcile(db, osu, queue);
     expect(again.candidates).toBe(0);
-    expect(fetched.sort((a, b) => a - b)).toEqual([100, 200]);
+    expect(fetched.sort((a, b) => a - b)).toEqual([100, 200, 500]);
   });
 
   it("drops all index rows for a set deleted upstream (404)", async () => {

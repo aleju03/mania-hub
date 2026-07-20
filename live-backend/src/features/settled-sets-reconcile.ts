@@ -34,10 +34,20 @@ import { normalizeMapSetStatus, shapeManiaDiffScores } from "./qualified-maps-wa
 export const RECONCILE_SETTLED_SETS_JOB = "reconcile_settled_sets";
 const RECONCILE_SETTLED_SETS_DEDUPE = "reconcile-settled-sets";
 const LAST_ENQUEUED_META_KEY = "settled_sets_reconcile:last_enqueued";
+const RESOLVED_META_KEY_PREFIX = "settled_sets_reconcile:resolved:";
 const RESOLVE_CALLER = "job:reconcile_settled_sets:resolve";
 // One API call per set; the backlog (23 sets at ship time) clears in one run
 // and steady state is a handful per Loved round at most.
 const MAX_SETS_PER_RUN = 30;
+// Partially-Loved sets are a *permanent* candidate signature: osu! loves diffs
+// selectively, so a loved set can legitimately keep wip/graveyard diffs
+// forever (dead-end index rows + settled set status, exactly the stale shape).
+// Resolution confirms them unchanged, so re-checking hourly would burn one API
+// call per such set per run for good. The per-set marker written after each
+// resolution puts the set on this cooldown; a week bounds how long a later
+// real transition (its remaining diffs getting loved) can sit stale, in line
+// with osu!'s monthly Loved rounds.
+const RESOLVE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 
 const DEAD_END_STATUSES = ["graveyard", "wip", "pending"] as const;
 const SETTLED_STATUSES = ["ranked", "approved", "loved"] as const;
@@ -79,6 +89,7 @@ export async function runSettledSetsReconcile(db: Db, osu: OsuApiClient, queue: 
       return null;
     });
     if (!outcome) continue;
+    await markSetResolved(db, setId, updatedAt);
     resolved++;
     updatedRows += outcome.updatedRows;
     deletedRows += outcome.deletedRows;
@@ -105,6 +116,9 @@ export async function runSettledSetsReconcile(db: Db, osu: OsuApiClient, queue: 
 async function getCandidateSetIds(db: Db): Promise<number[]> {
   const deadEnd = DEAD_END_STATUSES.map(() => "?").join(", ");
   const settled = SETTLED_STATUSES.map(() => "?").join(", ");
+  // Cooldown check lives in the query (not post-filter) so on-cooldown sets do
+  // not eat MAX_SETS_PER_RUN slots away from fresh candidates.
+  const cooldownCutoff = new Date(Date.now() - RESOLVE_COOLDOWN_MS).toISOString();
   const rows = (await exec(
     db,
     `select distinct i.beatmapset_id as beatmapset_id
@@ -121,9 +135,20 @@ async function getCandidateSetIds(db: Db): Promise<number[]> {
                       where bs.beatmapset_id = i.beatmapset_id
                         and lower(coalesce(bs.status, '')) in (${settled}))
         )
+        and not exists (select 1 from live_meta lm
+                         where lm.key = ? || i.beatmapset_id
+                           and lm.updated_at > ?)
       order by i.beatmapset_id
       limit ?`,
-    [...DEAD_END_STATUSES, ...SETTLED_STATUSES, ...SETTLED_STATUSES, ...SETTLED_STATUSES, MAX_SETS_PER_RUN],
+    [
+      ...DEAD_END_STATUSES,
+      ...SETTLED_STATUSES,
+      ...SETTLED_STATUSES,
+      ...SETTLED_STATUSES,
+      RESOLVED_META_KEY_PREFIX,
+      cooldownCutoff,
+      MAX_SETS_PER_RUN,
+    ],
   )).rows;
   const ids: number[] = [];
   for (const row of rows) {
@@ -204,6 +229,15 @@ async function resolveSet(db: Db, osu: OsuApiClient, setId: number, updatedAt: s
   });
   await execBatch(db, statements);
   return { updatedRows, deletedRows, maniaDiffIds: shaped.diffIds };
+}
+
+async function markSetResolved(db: Db, setId: number, updatedAt: string): Promise<void> {
+  await exec(
+    db,
+    `insert into live_meta (key, value_json, updated_at) values (?, ?, ?)
+     on conflict(key) do update set value_json = excluded.value_json, updated_at = excluded.updated_at`,
+    [`${RESOLVED_META_KEY_PREFIX}${setId}`, json(updatedAt), updatedAt],
+  );
 }
 
 async function getIndexRows(db: Db, setId: number): Promise<Map<number, string>> {
