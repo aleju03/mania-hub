@@ -75,10 +75,19 @@ export function FlipBook({
        back arrow, ArrowLeft and swipe-back were all dead on phones. Both
        also aim y at 1 instead of rect.top + 1, which misses whenever the
        page is letterboxed. Recreate them with corrected coordinates and
-       patch the instance so the engine's own swipe handling takes these
-       paths too. */
+       patch the instance so the engine's own paths heal too.
+
+       Flips that land while an animation is still mid-flight are queued (one
+       deep) instead of passed through: the engine would snap the running
+       animation to its final frame first, which reads as the next page's
+       content popping in with no transition. */
+    let queuedFlip: (() => void) | null = null;
     const flipNextFixed = (corner?: "top" | "bottom") => {
       if (!pageFlip) return;
+      if (pageFlip.getState() === "flipping") {
+        queuedFlip = () => flipNextFixed(corner);
+        return;
+      }
       const rect = pageFlip.getRender().getRect();
       pageFlip.getFlipController().flip({
         x: rect.left + rect.pageWidth * 2 - 10,
@@ -87,6 +96,10 @@ export function FlipBook({
     };
     const flipPrevFixed = (corner?: "top" | "bottom") => {
       if (!pageFlip) return;
+      if (pageFlip.getState() === "flipping") {
+        queuedFlip = () => flipPrevFixed(corner);
+        return;
+      }
       const rect = pageFlip.getRender().getRect();
       pageFlip.getFlipController().flip({
         x: rect.left + 10,
@@ -98,8 +111,8 @@ export function FlipBook({
        setting only guards non-corner points), so a card sitting in a page
        corner would flip the page instead of opening. Interactive targets
        are fenced off from the mouse handlers entirely; page chrome stays
-       draggable. Touch is unaffected: swipes are detected by distance and
-       plain taps never reach the click-flip path. */
+       draggable. (Touch never reaches the engine's handlers at all -- the
+       pipeline below owns it.) */
     const blockMouseGrab = (event: MouseEvent) => {
       if (event.target instanceof Element && event.target.closest("button, a")) {
         event.stopPropagation();
@@ -107,32 +120,168 @@ export function FlipBook({
     };
     bookHost.addEventListener("mousedown", blockMouseGrab, true);
 
-    /* The engine ignores touches that START on interactive elements (its
-       clickEventForward guard) -- and album pages are wall-to-wall slot
-       buttons, so on phones most swipes went dead. Re-detect swipes for
-       exactly those touches, with the engine's own thresholds (30px of
-       mostly-horizontal travel within 250ms). Taps still click: a real
-       swipe travels past the browser's click slop, so no click follows. */
-    let interactiveTouch: { x: number; y: number; at: number } | null = null;
+    /* The engine's own touch handling can't carry the album: it drops any
+       touch that starts on a button or link (album pages are wall-to-wall
+       slot buttons, and its guard only checks the direct target, so a touch
+       on a card's <img> IS handled while one on the button's padding isn't
+       -- double- or un-handled at random), and it only arms the drag-fold
+       250ms into a touch, so grabbing a page never felt like the desktop
+       mouse drag. Own the touch pipeline instead: capture-phase listeners
+       keep every touch away from the engine's handlers and drive its public
+       fold API directly.
+
+       The rules: a mostly-horizontal drag grabs the page immediately and the
+       fold follows the finger (page scroll stays free until then; vertical
+       drags never grab). Releasing lets the engine settle it -- past the
+       spine completes, short of it falls back like real paper -- except a
+       flick toward the turn, which completes from anywhere. Touches that
+       never grab (wrong-direction region, taps, mid-animation) fall back to
+       swipe detection on release; plain taps click through to the slots. */
+    let touchState: {
+      x0: number;
+      y0: number;
+      t0: number;
+      lastX: number;
+      lastY: number;
+      folding: boolean;
+      samples: Array<{ x: number; t: number }>;
+    } | null = null;
+    let blockRect: DOMRect | null = null;
+
+    const blockPos = (clientX: number, clientY: number) => {
+      const rect = blockRect ?? pageFlip?.getUI().getDistElement().getBoundingClientRect();
+      return rect ? { x: clientX - rect.left, y: clientY - rect.top } : { x: clientX, y: clientY };
+    };
+
+    const abandonTouch = () => {
+      if (touchState?.folding && pageFlip) {
+        pageFlip.userStop(blockPos(touchState.lastX, touchState.lastY), false);
+      }
+      touchState = null;
+      blockRect = null;
+    };
+
     const onTouchStart = (event: TouchEvent) => {
+      if (!pageFlip) return;
+      if (touchState || event.touches.length > 1) {
+        event.stopPropagation();
+        abandonTouch();
+        return;
+      }
       const touch = event.changedTouches[0];
-      if (!touch || !(event.target instanceof Element) || !event.target.closest("button, a")) return;
-      interactiveTouch = { x: touch.clientX, y: touch.clientY, at: Date.now() };
+      if (!touch) return;
+      touchState = {
+        x0: touch.clientX,
+        y0: touch.clientY,
+        t0: Date.now(),
+        lastX: touch.clientX,
+        lastY: touch.clientY,
+        folding: false,
+        samples: [],
+      };
+      event.stopPropagation();
     };
+
+    const tryGrabPage = (state: NonNullable<typeof touchState>, deltaX: number) => {
+      if (!pageFlip || pageFlip.getState() === "flipping") return;
+      const rect = pageFlip.getRender().getRect();
+      const distRect = pageFlip.getUI().getDistElement().getBoundingClientRect();
+      const bookX = state.x0 - distRect.left - rect.left;
+      /* The engine derives the fold direction from where the page is
+         grabbed (its getDirectionByPoint): the leading fifth/half of the
+         spread folds back, the rest folds forward. Only grab when the drag
+         direction agrees, else the fold would fight the finger; disagreeing
+         drags still flip via the release swipe. */
+      const back =
+        pageFlip.getOrientation() === "portrait"
+          ? bookX - rect.pageWidth <= rect.width / 5
+          : bookX < rect.width / 2;
+      if (back !== deltaX > 0) return;
+      const index = pageFlip.getCurrentPageIndex();
+      if (back ? index < 1 : index >= pageFlip.getPageCount() - 1) return;
+      blockRect = distRect;
+      state.folding = true;
+      pageFlip.startUserTouch(blockPos(state.x0, state.y0));
+      /* Seed the fold at the grab point so the direction the engine picks
+         matches the region just validated; the finger's live position takes
+         over on the next move. */
+      pageFlip.userMove(blockPos(state.x0 + (deltaX > 0 ? 6 : -6), state.y0), true);
+    };
+
+    const onTouchMove = (event: TouchEvent) => {
+      if (!pageFlip || !touchState) return;
+      const touch = event.changedTouches[0];
+      if (!touch) return;
+      touchState.lastX = touch.clientX;
+      touchState.lastY = touch.clientY;
+      touchState.samples.push({ x: touch.clientX, t: Date.now() });
+      if (touchState.samples.length > 4) touchState.samples.shift();
+      if (!touchState.folding) {
+        const deltaX = touch.clientX - touchState.x0;
+        const deltaY = touch.clientY - touchState.y0;
+        if (Math.abs(deltaX) > 10 && Math.abs(deltaX) > Math.abs(deltaY)) {
+          tryGrabPage(touchState, deltaX);
+        }
+      }
+      if (touchState.folding) {
+        if (event.cancelable) event.preventDefault();
+        event.stopPropagation();
+        pageFlip.userMove(blockPos(touch.clientX, touch.clientY), true);
+      }
+    };
+
     const onTouchEnd = (event: TouchEvent) => {
-      const start = interactiveTouch;
-      interactiveTouch = null;
+      const state = touchState;
+      touchState = null;
       const touch = event.changedTouches[0];
-      if (!start || !touch || Date.now() - start.at > 250) return;
-      const deltaX = touch.clientX - start.x;
-      if (Math.abs(deltaX) < 30 || Math.abs(touch.clientY - start.y) >= 60) return;
-      const hostRect = bookHost.getBoundingClientRect();
-      const corner = start.y - hostRect.top >= hostRect.height / 2 ? "bottom" : "top";
-      if (deltaX > 0) flipPrevFixed(corner);
-      else flipNextFixed(corner);
+      if (!pageFlip || !state || !touch) {
+        blockRect = null;
+        return;
+      }
+      event.stopPropagation();
+      const deltaX = touch.clientX - state.x0;
+      const deltaY = touch.clientY - state.y0;
+      const elapsed = Date.now() - state.t0;
+      if (state.folding) {
+        const sample = state.samples[0];
+        const now = Date.now();
+        const velocityX = sample && now > sample.t ? (touch.clientX - sample.x) / (now - sample.t) : 0;
+        const direction = pageFlip.getRender().getDirection();
+        const flick = direction === 0 ? velocityX < -0.3 : direction === 1 ? velocityX > 0.3 : false;
+        if (flick) {
+          /* Pull the corner just past the spine before releasing, so the
+             engine's settle rule (past the spine completes) finishes the
+             turn from wherever the flick let go. */
+          const rect = pageFlip.getRender().getRect();
+          const pos = {
+            x: rect.left + rect.width / 2 + (direction === 0 ? -4 : 4),
+            y: blockPos(touch.clientX, touch.clientY).y,
+          };
+          pageFlip.userMove(pos, true);
+          pageFlip.userStop(pos, false);
+        } else {
+          pageFlip.userStop(blockPos(touch.clientX, touch.clientY), false);
+        }
+      } else if (
+        (elapsed < 250 && Math.abs(deltaX) >= 30 && Math.abs(deltaY) < 60) ||
+        (Math.abs(deltaX) >= 60 && Math.abs(deltaX) > 2 * Math.abs(deltaY))
+      ) {
+        const hostRect = bookHost.getBoundingClientRect();
+        const corner = state.y0 - hostRect.top >= hostRect.height / 2 ? "bottom" : "top";
+        if (deltaX > 0) flipPrevFixed(corner);
+        else flipNextFixed(corner);
+      }
+      blockRect = null;
     };
-    bookHost.addEventListener("touchstart", onTouchStart, { passive: true });
-    bookHost.addEventListener("touchend", onTouchEnd, { passive: true });
+
+    const onTouchCancel = () => {
+      abandonTouch();
+    };
+
+    bookHost.addEventListener("touchstart", onTouchStart, { capture: true, passive: true });
+    bookHost.addEventListener("touchmove", onTouchMove, { capture: true, passive: false });
+    bookHost.addEventListener("touchend", onTouchEnd, { capture: true, passive: true });
+    bookHost.addEventListener("touchcancel", onTouchCancel, { capture: true, passive: true });
 
     void import("page-flip").then(({ PageFlip: PageFlipCtor }) => {
       if (cancelled) return;
@@ -171,6 +320,16 @@ export function FlipBook({
           onOrientationChangeRef.current?.(event.data);
         }
       });
+      /* Run the one queued flip when the book settles; deferred a tick so it
+         starts outside the engine's own state-change callstack. */
+      pageFlip.on("changeState", (event) => {
+        if (event.data !== "read" || !queuedFlip) return;
+        const flip = queuedFlip;
+        queuedFlip = null;
+        setTimeout(() => {
+          if (!cancelled) flip();
+        }, 0);
+      });
       if (apiRef) {
         apiRef.current = {
           flipNext: () => flipNextFixed(),
@@ -205,8 +364,11 @@ export function FlipBook({
     return () => {
       cancelled = true;
       bookHost.removeEventListener("mousedown", blockMouseGrab, true);
-      bookHost.removeEventListener("touchstart", onTouchStart);
-      bookHost.removeEventListener("touchend", onTouchEnd);
+      bookHost.removeEventListener("touchstart", onTouchStart, true);
+      bookHost.removeEventListener("touchmove", onTouchMove, true);
+      bookHost.removeEventListener("touchend", onTouchEnd, true);
+      bookHost.removeEventListener("touchcancel", onTouchCancel, true);
+      queuedFlip = null;
       if (apiRef) apiRef.current = null;
       try {
         pageFlip?.destroy();

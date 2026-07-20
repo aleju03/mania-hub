@@ -54,13 +54,24 @@ declare module "page-flip" {
     destroy(): void;
     /* Internals the FlipBook wrapper reaches into to route around the
        engine's flipNext/flipPrev, whose synthetic click points miss the
-       corner test in portrait (see FlipBook.tsx). */
-    getRender(): { getRect(): PageRect };
+       corner test in portrait, and to drive page folds from its own touch
+       pipeline (see FlipBook.tsx). */
+    getState(): "read" | "user_fold" | "fold_corner" | "flipping";
+    getRender(): {
+      getRect(): PageRect;
+      /* FlipDirection: 0 = forward, 1 = back; null until a flip starts. */
+      getDirection(): number | null;
+    };
     getFlipController(): { flip(globalPos: { x: number; y: number }): void };
     getPageCollection(): {
       getCurrentSpreadIndex(): number;
       getSpreadIndexByPage(pageIndex: number): number;
       setCurrentSpreadIndex(index: number): void;
     };
+    getUI(): { getDistElement(): HTMLElement };
+    /* The drag-fold pipeline (positions are relative to the dist element). */
+    startUserTouch(pos: { x: number; y: number }): void;
+    userMove(pos: { x: number; y: number }, isTouch: boolean): void;
+    userStop(pos: { x: number; y: number }, isSwipe?: boolean): void;
   }
 }
