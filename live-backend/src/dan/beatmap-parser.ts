@@ -80,8 +80,15 @@ function getMostCommonBeatLength(timingPoints: TimingPoint[], lastObjectTime: nu
 
   if (mostCommonBeatLength <= 0) return DEFAULT_BEAT_LENGTH;
 
-  const rawBeatLengths = timingPoints.map((point) => point.beatLength);
-  return Math.max(Math.min(...rawBeatLengths), Math.min(Math.max(...rawBeatLengths), mostCommonBeatLength));
+  // Single-pass min/max; spreading beatLengths into Math.min/max would overflow
+  // the call stack on charts with a huge number of timing points (see totalLength).
+  let minBeatLength = Infinity;
+  let maxBeatLength = -Infinity;
+  for (const point of timingPoints) {
+    if (point.beatLength < minBeatLength) minBeatLength = point.beatLength;
+    if (point.beatLength > maxBeatLength) maxBeatLength = point.beatLength;
+  }
+  return Math.max(minBeatLength, Math.min(maxBeatLength, mostCommonBeatLength));
 }
 
 function buildManiaScrollVelocities(
@@ -236,10 +243,13 @@ export function parseManiaBeatmap(content: string): ManiaBeatmap {
   // Calculate BPM from first timing point
   const bpm = timingPoints.length > 0 ? Math.round(60000 / timingPoints[0].beatLength) : 0;
 
-  // Total length = last note's end time
-  const totalLength = notes.length > 0
-    ? Math.max(...notes.map((n) => n.endTime))
-    : 0;
+  // Total length = last note's end time. Reduce instead of spreading into
+  // Math.max: hour-long marathons have 100k+ notes, and spreading that many
+  // args overflows the call stack ("Maximum call stack size exceeded").
+  let totalLength = 0;
+  for (const n of notes) {
+    if (n.endTime > totalLength) totalLength = n.endTime;
+  }
   const sortedNotes = notes.sort((a, b) => a.time - b.time);
 
   return {
