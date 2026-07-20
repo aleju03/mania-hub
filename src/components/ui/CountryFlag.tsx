@@ -1,5 +1,11 @@
 import { Globe } from "lucide-react";
-import { getCountryFlagUrl, getCountryName, isGlobalScope } from "../../lib/country";
+import {
+  UNKNOWN_FLAG_URL,
+  getCountryFlagLargeUrl,
+  getCountryFlagUrl,
+  getCountryName,
+  isGlobalScope,
+} from "../../lib/country";
 
 type CountryFlagSize = "xs" | "sm" | "md" | "lg";
 
@@ -56,8 +62,17 @@ export function CountryFlag({
         className="block h-full w-full object-cover"
         loading="lazy"
         onError={(event) => {
-          const fallback = getCountryFlagUrl("XX");
-          if (event.currentTarget.src !== fallback) event.currentTarget.src = fallback;
+          const img = event.currentTarget;
+          // osu! is missing flags for a handful of countries (e.g. Curaçao).
+          // Fall through to flagcdn's broader set, then osu!'s unknown-flag
+          // placeholder -- never resolve an unrecognised code to a default
+          // country's flag.
+          const flagcdn = getCountryFlagLargeUrl(normalized);
+          if (flagcdn !== UNKNOWN_FLAG_URL && img.src !== flagcdn) {
+            img.src = flagcdn;
+          } else if (img.src !== UNKNOWN_FLAG_URL) {
+            img.src = UNKNOWN_FLAG_URL;
+          }
         }}
       />
     </span>

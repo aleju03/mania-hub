@@ -279,18 +279,26 @@ export function getCountryFlagEmoji(code?: string | null): string {
 // for the Global scope wherever a flag image is rendered generically.
 export const GLOBAL_SCOPE_ICON_URL = "/images/icons/rankings.svg";
 
+// osu!'s own neutral unknown-flag placeholder. Used whenever a code has no real
+// flag so we never launder it through normalizeCountryCode's default country
+// (which would render an unrelated flag, e.g. Costa Rica, for anything unmapped).
+export const UNKNOWN_FLAG_URL = "https://assets.ppy.sh/old-flags/__.png";
+
 export function getCountryFlagUrl(code?: string | null): string {
   if (isGlobalScope(code)) return GLOBAL_SCOPE_ICON_URL;
-  const normalized = normalizeCountryCode(code);
+  const normalized = code?.trim().toUpperCase();
+  if (!normalized || !COUNTRY_NAME_BY_CODE.has(normalized)) return UNKNOWN_FLAG_URL;
   return `https://osu.ppy.sh/images/flags/${normalized}.png`;
 }
 
 // Higher-res raster than osu!'s 70x47 flag PNG for large renders (the OG
-// cards pull from the same source at w640). Callers should keep the osu!
+// cards pull from the same source at w640) and a broader set than osu! ships
+// (it covers countries osu! lacks, e.g. Curaçao). Callers should keep the osu!
 // flag as an onError fallback.
 export function getCountryFlagLargeUrl(code?: string | null): string {
   if (isGlobalScope(code)) return GLOBAL_SCOPE_ICON_URL;
-  const normalized = normalizeCountryCode(code);
+  const normalized = code?.trim().toUpperCase();
+  if (!normalized || !COUNTRY_NAME_BY_CODE.has(normalized)) return UNKNOWN_FLAG_URL;
   return `https://flagcdn.com/w320/${normalized.toLowerCase()}.png`;
 }
 
