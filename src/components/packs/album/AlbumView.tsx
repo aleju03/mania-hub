@@ -233,6 +233,12 @@ function CoverTriangleDefs() {
 }
 
 function CoverTriangles() {
+  /* Wall-clock phase lock: a negative delay starts every instance mid-drift at
+     the shared global phase, so when the open album swaps the static stand-in
+     cover for the book's cover face the field carries on instead of visibly
+     restarting. Client-only render (the album mounts on interaction), so the
+     Date.now() in render never reaches SSR markup. */
+  const nowSeconds = Date.now() / 1000;
   return (
     <svg
       className="pointer-events-none absolute inset-0 h-full w-full"
@@ -244,7 +250,10 @@ function CoverTriangles() {
         <g
           key={layerIndex}
           className="album-tri-layer"
-          style={{ "--drift-dur": `${layer.duration}s` } as CSSProperties}
+          style={{
+            "--drift-dur": `${layer.duration}s`,
+            animationDelay: `${(-(nowSeconds % layer.duration)).toFixed(2)}s`,
+          } as CSSProperties}
         >
           <use href={`#album-tri-layer-${layerIndex}`} />
         </g>
@@ -300,17 +309,18 @@ function FlagSticker({ code, width }: { code: string; width: number }) {
 
 /* The album cover: a gold-framed dark board under the drifting triangle
    field, the series masthead up top, the flag sticker as the hero, and the
-   country code + name, player count, and collection progress under it. */
+   country code + name and owned-card count under it. The footer is the same
+   whether the cover sits on the shelf or fronts the open book -- collection
+   progress lives below the book instead, so opening an album never repaints
+   the cover. */
 function AlbumCoverFace({
   section,
   collectedText,
   subtitle,
-  progress,
 }: {
   section: AlbumSection;
   collectedText: string;
   subtitle: string;
-  progress: number | null;
 }) {
   const global = isGlobalScope(section.code);
   return (
@@ -343,18 +353,12 @@ function AlbumCoverFace({
         )}
       </div>
       <div className="absolute inset-x-6 bottom-[26px] z-[3]">
+        {/* mb-2 keeps the row at the exact height it had when a progress bar
+            used to follow it, so pre-existing covers do not shift. */}
         <div className="mb-2 flex items-baseline justify-between">
           <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#e8c56a]">{subtitle}</span>
           <span className="text-[11px] font-bold text-white/80 tabular-nums">{collectedText}</span>
         </div>
-        {progress != null && (
-          <div className="h-1.5 overflow-hidden rounded-[3px] bg-white/10">
-            <div
-              className="h-full rounded-[3px]"
-              style={{ width: `${Math.max(2, Math.min(100, progress * 100))}%`, background: GOLD }}
-            />
-          </div>
-        )}
       </div>
     </div>
   );
@@ -945,7 +949,6 @@ export function AlbumView({
                 section={section}
                 collectedText={shelfCountText(section)}
                 subtitle={shelfSubtitle(section)}
-                progress={null}
               />
             </ScaledCover>
           </button>
@@ -960,17 +963,12 @@ export function AlbumView({
   const slotPages = limit != null ? slotPagesForRoster(limit) : 2;
   const walletCount = walletCountByCode.get(openSection.code) ?? 0;
   const collectedShown = limit != null ? Math.min(walletCount, limit) : walletCount;
-  const coverText = global
-    ? `${walletCount.toLocaleString()} ${walletCount === 1 ? "card" : "cards"}`
-    : limit != null
-      ? `${collectedShown}/${limit} collected`
-      : shelfCountText(openSection);
-  const coverSubtitle = global
-    ? `Top ${GLOBAL_ALBUM_CAP} players`
-    : limit != null
-      ? `${limit} players`
-      : "Card collection";
-  const coverProgress = !global && limit != null && limit > 0 ? collectedShown / limit : null;
+  /* The open book fronts the same cover the shelf shows: constant text, no
+     progress. Anything roster-dependent would repaint the cover (and restart
+     its triangle field) the moment the lookup lands; collection progress
+     renders below the book instead. */
+  const coverText = shelfCountText(openSection);
+  const coverSubtitle = shelfSubtitle(openSection);
   const headerRight = global ? `Top ${GLOBAL_ALBUM_CAP}` : limit != null ? `${collectedShown}/${limit}` : "";
   const rosterFailed = Boolean(openData?.error && openData.total === null);
 
@@ -1064,7 +1062,6 @@ export function AlbumView({
                 section={openSection}
                 collectedText={coverText}
                 subtitle={coverSubtitle}
-                progress={coverProgress}
               />
             </div>
           </div>
@@ -1123,7 +1120,6 @@ export function AlbumView({
                   section={openSection}
                   collectedText={coverText}
                   subtitle={coverSubtitle}
-                  progress={coverProgress}
                 />
               </div>
             </div>
@@ -1173,6 +1169,23 @@ export function AlbumView({
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>
+
+      {/* Collection progress, moved off the cover so it can arrive with the
+          roster lookup without repainting the book. */}
+      {!global && limit != null && limit > 0 && (
+        <div className="mx-auto mt-4 w-[min(60%,320px)]">
+          <div className="mb-1.5 flex items-baseline justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#e8c56a]">{limit} players</span>
+            <span className="text-[11px] font-bold text-white/80 tabular-nums">{collectedShown}/{limit} collected</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-[3px] bg-white/10">
+            <div
+              className="h-full rounded-[3px]"
+              style={{ width: `${Math.max(2, Math.min(100, (collectedShown / limit) * 100))}%`, background: GOLD }}
+            />
+          </div>
+        </div>
+      )}
 
     </div>
   );
