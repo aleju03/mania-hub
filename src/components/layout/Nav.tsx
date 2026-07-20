@@ -12,7 +12,7 @@ import { useAuth } from "../../lib/auth-context";
 import { searchUsers } from "../../lib/osu";
 import { DEFAULT_SNIPES_FILTERS, useAppStore, useHasHydrated, useSelectedCountry } from "../../store";
 import { readCountryFromSearchStr } from "../../lib/country-search";
-import { getCountryFlagGradient, getCountryFlagUrl, getCountryName, isGlobalScope, isSupportedCountryCode } from "../../lib/country";
+import { getCountryFlagGradient, getCountryFlagLargeUrl, getCountryName, isGlobalScope, isSupportedCountryCode } from "../../lib/country";
 import { isLiveBackendConfigured } from "../../lib/live-backend";
 import { showPlayerCountryFlagState } from "../../lib/player-profile-navigation";
 import { getCachedCountryTier, useCountryWarming } from "../../lib/use-country-warming";
@@ -204,8 +204,11 @@ export function Nav() {
   }, [openGroup]);
 
   const selectedIsGlobal = isGlobalScope(selectedCountry);
+  // A CSS background can't onError-fall-back like <img>, so source the flag from
+  // flagcdn (universal coverage, incl. countries osu! lacks e.g. Curaçao) rather
+  // than osu!'s set, whose missing PNGs would leave the nav crest blank.
   const flagBackground = getCountryFlagGradient(selectedCountry)
-    ?? `url(${getCountryFlagUrl(selectedCountry)}) center/cover no-repeat`;
+    ?? `url(${getCountryFlagLargeUrl(selectedCountry)}) center/cover no-repeat`;
 
   useDynamicFavicon(selectedCountry);
 

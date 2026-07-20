@@ -72,21 +72,36 @@ function gradientToSvgBuffer(gradient: string): Buffer | null {
   return Buffer.from(svg);
 }
 
-async function fetchFlagBuffer(code: string): Promise<Buffer> {
+async function fetchFlagPng(url: string): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FLAG_FETCH_TIMEOUT_MS);
-  const response = await fetch(`https://osu.ppy.sh/images/flags/${code}.png`, {
+  return fetch(url, {
     redirect: "follow",
     headers: { "User-Agent": "mania-hub-favicon" },
     signal: controller.signal,
   }).finally(() => {
     clearTimeout(timeout);
   });
-  if (!response.ok) {
-    throw new Error(`Flag fetch failed for ${code}: ${response.status}`);
+}
+
+async function fetchFlagBuffer(code: string): Promise<Buffer> {
+  // osu! is missing flag PNGs for a handful of countries (e.g. Curaçao), where
+  // its endpoint 404s and the favicon would 500. Fall back to flagcdn's broader
+  // set so those countries still get a rendered tab icon.
+  const sources = [
+    `https://osu.ppy.sh/images/flags/${code}.png`,
+    `https://flagcdn.com/w320/${code.toLowerCase()}.png`,
+  ];
+  let lastStatus = 0;
+  for (const url of sources) {
+    const response = await fetchFlagPng(url);
+    if (response.ok) {
+      const ab = await response.arrayBuffer();
+      return Buffer.from(ab);
+    }
+    lastStatus = response.status;
   }
-  const ab = await response.arrayBuffer();
-  return Buffer.from(ab);
+  throw new Error(`Flag fetch failed for ${code}: ${lastStatus}`);
 }
 
 async function composeIcon(code: string): Promise<Buffer> {
