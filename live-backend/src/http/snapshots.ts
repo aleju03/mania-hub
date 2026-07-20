@@ -6,6 +6,7 @@ import { handleBeatmapAudioRequest, handleBeatmapHitsoundsRequest } from "../aud
 import { activateCountry, deleteCountryData, getCountryRegistry, getCountryRegistryRow, GLOBAL_COUNTRY_CODE, isCountryFeatureAtLeast, isGlobalCountry, setCountryFeatureTier, setCountryPaused, setCountryStatus, type CountryFeatureTier, type CountryRegistryStatus } from "../countries.js";
 import type { Db } from "../db.js";
 import { dbHealth, exec, getSqliteBusyRetryStats, parseJson } from "../db.js";
+import { lnAdjustedMsd } from "../dan/msd.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION, getPlayerActivityAvailability, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../features/activity.js";
 import { clearDoneAdminTodos, createAdminTodo, deleteAdminTodo, listAdminTodos, updateAdminTodo, type CreateTodoInput, type UpdateTodoInput } from "../features/admin-todos.js";
 import { cancelBeatmapOsuFileBackfill, getBeatmapOsuFileBackfillStatus, startBeatmapOsuFileBackfill } from "../features/beatmap-osu-file-backfill.js";
@@ -1046,12 +1047,20 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     const row = (await exec(
       ctx.db,
-      `select status, key_count, classification_json from beatmap_chart_analysis
+      `select status, key_count, classification_json, msd_json, msd_ln_json from beatmap_chart_analysis
        where beatmap_id = ? and analysis_version = ? limit 1`,
       [beatmapId, CHART_ANALYSIS_VERSION],
     )).rows[0];
     const classification = row?.status === "ready"
       ? parseJson<Record<string, unknown> | null>(String(row.classification_json ?? ""), null)
+      : null;
+    const readMsdValues = (raw: unknown): Record<string, number> | null => {
+      if (raw == null) return null;
+      const parsed = parseJson<{ values?: Record<string, number> } | null>(String(raw), null);
+      return parsed && parsed.values && typeof parsed.values === "object" ? parsed.values : null;
+    };
+    const msdLn = row?.status === "ready"
+      ? lnAdjustedMsd(readMsdValues(row.msd_json), readMsdValues(row.msd_ln_json), Number(row.key_count ?? 0))
       : null;
     sendJson(req, res, ctx, 200, {
       beatmapId,
@@ -1063,6 +1072,9 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       modeTag: typeof classification?.modeTag === "string" ? classification.modeTag : null,
       verdictText: typeof classification?.verdictText === "string" ? classification.verdictText : null,
       lnRatio: Number.isFinite(Number(classification?.lnRatio)) ? Number(classification?.lnRatio) : null,
+      // LN-adjusted (tail-aware, keymode-blended) MSD; null for rice charts or
+      // until the LN MSD sweep covers this chart.
+      msdLn,
     });
     return true;
   }

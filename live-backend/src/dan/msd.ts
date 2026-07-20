@@ -41,6 +41,21 @@ export function blendLnTailValues(
   return values;
 }
 
+/**
+ * Display-ready LN-adjusted MSD: the blended values, or null when blending
+ * changes nothing (rice charts, unsupported keymodes) so callers can hide
+ * a redundant readout.
+ */
+export function lnAdjustedMsd(
+  base: Record<string, number> | null,
+  tails: Record<string, number> | null,
+  keyCount: number,
+): Record<string, number> | null {
+  if (!base || !tails) return null;
+  const blended = blendLnTailValues(base, tails, keyCount);
+  return Number(blended.Overall ?? 0) - Number(base.Overall ?? 0) >= 0.005 ? blended : null;
+}
+
 type EttModule = typeof import("../../vendor/leoblack/ett/index.js");
 
 let ettModulePromise: Promise<EttModule> | null = null;

@@ -74,8 +74,11 @@ function danSuffix(label: string): string {
 // Sorted by value with the top skillset tinted; no bars, the numbers carry it.
 // The skillset names are MinaCalc's 4K taxonomy for every keymode; the
 // ClustersBlock below is where charts speak their own keymode's language.
-function MsdBlock({ entry }: { entry: LiveMapSearchEntry }) {
-  const msd = entry.msd ?? null;
+function MsdBlock({ entry, msdLn }: { entry: LiveMapSearchEntry; msdLn?: Record<string, number> | null }) {
+  // The LN-adjusted (tail-aware) values simply ARE the msd shown when the
+  // chart has holds: they match what the skill-rating engine credits a play
+  // here. Lands with the lazily fetched analysis; base values show meanwhile.
+  const msd = msdLn ?? entry.msd ?? null;
   if (!msd) return null;
   const skillsets = MSD_SKILLSETS
     .map((name) => ({ name, value: Number(msd[name] ?? 0) }))
@@ -383,7 +386,7 @@ export function MapDetailModal({ entry, onClose }: { entry: LiveMapSearchEntry |
 
                 {/* MSD skillsets when the chart analysis has landed; the old
                     relative pattern mix stays as the fallback until then. */}
-                {active.msd ? <MsdBlock entry={active} /> : null}
+                {active.msd ? <MsdBlock entry={active} msdLn={activeAnalysis?.msdLn ?? null} /> : null}
                 <ClustersBlock analysis={activeAnalysis} pending={analysisPending} />
 
                 {/* Pattern profile: radar + the raw numbers */}

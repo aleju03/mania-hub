@@ -1426,6 +1426,9 @@ export interface LiveChartAnalysisDetail {
   modeTag: string | null;
   verdictText: string | null;
   lnRatio: number | null;
+  // LN-adjusted (tail-aware, keymode-blended) MSD; null for rice charts or
+  // until the LN MSD sweep covers this chart.
+  msdLn?: Record<string, number> | null;
 }
 
 export async function fetchLiveChartAnalysis(beatmapId: number): Promise<LiveChartAnalysisDetail | null> {

@@ -3,7 +3,7 @@ import type { Db } from "../db.js";
 import { exec, execBatch, json, parseJson, type DbStatement } from "../db.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION } from "./activity.js";
 import { CHART_ANALYSIS_VERSION } from "./chart-analysis.js";
-import { blendLnTailValues } from "../dan/msd.js";
+import { lnAdjustedMsd } from "../dan/msd.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { nowIso } from "../shared/score.js";
 
@@ -1192,11 +1192,7 @@ function parseLnAdjustedMsd(
   if (!row || row.msd_ln_json == null || !baseMsd) return null;
   const parsed = parseJson<{ values?: Record<string, number> } | null>(String(row.msd_ln_json), null);
   const tails = parsed && parsed.values && typeof parsed.values === "object" ? parsed.values : null;
-  if (!tails) return null;
-  const blended = blendLnTailValues(baseMsd, tails, keyCount);
-  const baseOverall = Number(baseMsd.Overall ?? 0);
-  const blendedOverall = Number(blended.Overall ?? 0);
-  return blendedOverall - baseOverall >= 0.005 ? blended : null;
+  return lnAdjustedMsd(baseMsd, tails, keyCount);
 }
 
 // Parses the DT-rate columns (dan_dt_json is a lean {primaryLabel, primaryFamily,
