@@ -70,8 +70,8 @@ describe("score display helpers", () => {
     expect(getBeatmapKeymodeLabel({ cs: 7, convert: false })).toBe("7K");
   });
 
-  it("omits convert from rendered mod badges", () => {
-    expect(getModDisplayList([{ acronym: "CO" }, { acronym: "HD" }])).toEqual([{ acronym: "HD" }]);
+  it("keeps the Cover mod in rendered mod badges", () => {
+    expect(getModDisplayList([{ acronym: "CO" }, { acronym: "HD" }])).toEqual([{ acronym: "CO" }, { acronym: "HD" }]);
   });
 
   it("uses xK mods only for converted mania key counts", () => {

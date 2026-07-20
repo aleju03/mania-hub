@@ -181,11 +181,15 @@ function parseModNumberSetting(value: unknown, fallback: number): number {
 }
 
 // Cover's direction setting is lazer's CoverExpandDirection enum:
-// 0 = AgainstScroll (over the receptors), 1 = AlongScroll (over the spawn edge).
+// 0 = AlongScroll (over the spawn edge, the serialization default),
+// 1 = AgainstScroll (over the receptors, Hidden-style).
 function parseCoverDirectionAlongScroll(value: unknown): boolean {
-  if (typeof value === "number") return value === 1;
-  if (typeof value === "string") return value.trim().toLowerCase() === "alongscroll" || value.trim() === "1";
-  return false;
+  if (typeof value === "number") return value !== 1;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "againstscroll" || normalized === "1") return false;
+  }
+  return true;
 }
 
 interface RendererOptions {

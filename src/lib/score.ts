@@ -162,7 +162,6 @@ export function getModDisplayList(mods: OsuMod[] | undefined, excludeCl = true):
     const acronym = typeof m === "string" ? m : (m as any)?.acronym ?? "";
     if (!acronym) continue;
     if (excludeCl && acronym === "CL") continue;
-    if (acronym === "CO") continue;
     const rateSetting = typeof m === "object" ? Number((m as any)?.settings?.speed_change) : NaN;
     const defaultRate = MOD_RATE_DEFAULTS[acronym];
     if (Number.isFinite(rateSetting) && defaultRate !== undefined && rateSetting !== defaultRate) {
