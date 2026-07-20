@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "#/lib/auth-context";
 import type { ManiaCardTier } from "#/lib/maniacard";
 import {
@@ -329,10 +329,10 @@ export function usePackWallet(): PackWalletApi {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [regenerating]);
 
-  return {
-    wallet,
-    nowMs,
-    syncStatus,
+  /* The actions close over refs and stable setters only, so they keep one
+     identity for the hook's lifetime; memoized consumers (the packs route's
+     panels) rely on that to skip re-renders on countdown ticks. */
+  const actions = useMemo<Omit<PackWalletApi, "wallet" | "nowMs" | "syncStatus">>(() => ({
     openPack: (cost) => {
       const current = walletRef.current;
       if (!current) return false;
@@ -463,5 +463,8 @@ export function usePackWallet(): PackWalletApi {
       if (!current || total === null || current.poolTotal === total) return;
       commit({ ...current, poolTotal: total });
     },
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), []);
+
+  return { wallet, nowMs, syncStatus, ...actions };
 }

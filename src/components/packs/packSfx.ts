@@ -110,7 +110,7 @@ export function playSlashTick(progress: number) {
   if (!ctx) return;
   playNoise(ctx, {
     duration: 0.032,
-    gain: 0.14,
+    gain: 0.42,
     startFreq: 2100 + progress * 2400 + Math.random() * 420,
     q: 8,
   });
@@ -170,6 +170,15 @@ export function playFlipWhoosh(durationMs: number) {
   source.connect(filter).connect(gain).connect(master);
   source.start(t, Math.random() * 0.5);
   source.stop(t + duration + 0.05);
+}
+
+/* Paper page turn for the card album: the sheet lifting with an airy
+   swish, then settling. Quiet by design: it plays on every flip. */
+export function playPageTurn() {
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  playNoise(ctx, { duration: 0.16, gain: 0.05, startFreq: 900, endFreq: 2600, q: 0.8 });
+  playNoise(ctx, { at: 0.15, duration: 0.09, gain: 0.06, startFreq: 2300, endFreq: 850, q: 1.2 });
 }
 
 const CHIME_NOTES = [784, 988, 1175, 1568, 1976];

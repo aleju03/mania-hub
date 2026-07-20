@@ -1,9 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { Recycle } from "lucide-react";
-import { useEffect, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { PageHeader } from "../components/layout/PageHeader";
+import { AlbumView } from "../components/packs/album/AlbumView";
 import { CollectionPanel } from "../components/packs/CollectionPanel";
 import { createPackFrontCanvas, PACK_ASPECT } from "../components/packs/packArt";
 import { PackStage } from "../components/packs/PackStage";
@@ -45,6 +46,8 @@ import { pageSeo } from "../lib/seo";
 import { track } from "../lib/posthog";
 
 export const Route = createFileRoute("/packs")({
+  validateSearch: (search: Record<string, unknown>): { view?: "album" } =>
+    search.view === "album" ? { view: "album" } : {},
   head: ({ match }) => pageSeo({
     title: "Card Packs",
     description: "Tear open booster packs of maniacards: random osu!mania players minted as collectible cards with skill stats and rarity tiers.",
@@ -56,6 +59,12 @@ export const Route = createFileRoute("/packs")({
 });
 
 type PackPhase = "pack" | "reveal" | "summary";
+
+/* Both collection panels are heavy; memo keeps the wallet countdown ticks
+   and the Grid/Album swap (a wrapper-class flip) from re-rendering them.
+   usePackWallet's action callbacks are identity-stable for this. */
+const MemoAlbumView = memo(AlbumView);
+const MemoCollectionPanel = memo(CollectionPanel);
 
 function useReducedMotion() {
   const [reduced, setReduced] = useState(false);
@@ -278,6 +287,9 @@ function PackTypeSelector({
 function PacksPage() {
   const reducedMotion = useReducedMotion();
   const auth = useAuth();
+  const { view } = Route.useSearch();
+  const { countryFeatures } = Route.useRouteContext();
+  const navigate = useNavigate();
   const walletApi = usePackWallet();
   const packThumbs = usePackArtThumbs();
   const [phase, setPhase] = useState<PackPhase>("pack");
@@ -291,8 +303,25 @@ function PacksPage() {
   const [summaryFlyFrom, setSummaryFlyFrom] = useState<Map<number, FlightRect> | null>(null);
   const [dealError, setDealError] = useState(false);
   const [collectionPanelReady, setCollectionPanelReady] = useState(true);
+  /* The Grid/Album swap runs on local state so it lands in the click's own
+     render; the router navigation (route re-match + full route re-render)
+     only trails behind to keep the URL shareable. Waiting on it made the
+     tab switch visibly lag. */
+  const [albumOpen, setAlbumOpen] = useState(view === "album");
+  /* Once visited, the album stays mounted (hidden) so switching back keeps
+     its shelf, open book, and loaded rosters. */
+  const [albumMounted, setAlbumMounted] = useState(view === "album");
+  useEffect(() => {
+    setAlbumOpen(view === "album");
+    if (view === "album") setAlbumMounted(true);
+  }, [view]);
 
   const wallet = walletApi.wallet;
+  /* Identity-stable for the memoized album view. */
+  const trackedCountries = useMemo(
+    () => countryFeatures?.countries.map((entry) => entry.country) ?? null,
+    [countryFeatures],
+  );
   const selectedType = packTypeById(packTypeId);
   const charges = wallet?.charges ?? 0;
   const shards = wallet?.shards ?? 0;
@@ -529,19 +558,69 @@ function PacksPage() {
               </AnimatePresence>
             )}
 
-            {showCollectionPanel && (
+            {showCollectionPanel && wallet && (
               <div className="mt-14">
-                <CollectionPanel
-                  wallet={wallet}
-                  showLoginNudge={!auth.viewer && auth.loginAvailable}
-                  syncStatus={walletApi.syncStatus}
-                  onRecycleCard={walletApi.recycleCard}
-                  onRecycleWhole={walletApi.recycleWhole}
-                  onRecycleWholeMany={walletApi.recycleWholeMany}
-                  onRecycleWholeMatching={walletApi.recycleWholeMatching}
-                  onRecycleAll={walletApi.recycleAll}
-                  onApplyMint={walletApi.applyMint}
-                />
+                <div className="mx-auto mb-3 flex w-full max-w-[820px] items-center justify-end gap-1">
+                  {(["grid", "album"] as const).map((mode) => {
+                    const active = albumOpen === (mode === "album");
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => {
+                          const toAlbum = mode === "album";
+                          setAlbumOpen(toAlbum);
+                          if (toAlbum) setAlbumMounted(true);
+                          /* The URL update waits until after the next paint:
+                             navigate() does its route re-match and full route
+                             re-render synchronously, and inside the click
+                             handler React would batch the swap above into
+                             that long task, holding the paint back to where
+                             it started. rAF lands just before the paint, the
+                             timeout right after it. */
+                          window.requestAnimationFrame(() => {
+                            window.setTimeout(() => {
+                              void navigate({
+                                to: "/packs",
+                                search: toAlbum ? { view: "album" } : {},
+                                replace: true,
+                                resetScroll: false,
+                              });
+                            }, 0);
+                          });
+                        }}
+                        className={`rounded-full px-3 py-1 text-[12px] font-semibold transition-colors cursor-pointer ${
+                          active ? "bg-osu-pink text-white" : "text-osu-f1 hover:bg-osu-b4/60 hover:text-white"
+                        }`}
+                        aria-pressed={active}
+                      >
+                        {mode === "album" ? "Album" : "Grid"}
+                      </button>
+                    );
+                  })}
+                </div>
+                {albumMounted && (
+                  <div className={albumOpen ? undefined : "hidden"}>
+                    <MemoAlbumView
+                      wallet={wallet}
+                      syncStatus={walletApi.syncStatus}
+                      trackedCountries={trackedCountries}
+                    />
+                  </div>
+                )}
+                <div className={albumOpen ? "hidden" : undefined}>
+                  <MemoCollectionPanel
+                    wallet={wallet}
+                    showLoginNudge={!auth.viewer && auth.loginAvailable}
+                    syncStatus={walletApi.syncStatus}
+                    onRecycleCard={walletApi.recycleCard}
+                    onRecycleWhole={walletApi.recycleWhole}
+                    onRecycleWholeMany={walletApi.recycleWholeMany}
+                    onRecycleWholeMatching={walletApi.recycleWholeMatching}
+                    onRecycleAll={walletApi.recycleAll}
+                    onApplyMint={walletApi.applyMint}
+                  />
+                </div>
               </div>
             )}
           </div>

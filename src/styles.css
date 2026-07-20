@@ -206,6 +206,37 @@ html[data-custom-cursor="true"] * {
   0%, 100% { background-color: rgba(255, 255, 255, 0.045); }
   50% { background-color: rgba(255, 255, 255, 0.065); }
 }
+
+/* Album cover triangle drift (lazer's Triangles field, CSS edition): each
+   layer scrolls up by one full field period and wraps; the field is drawn
+   twice vertically so the wrap is seamless. Shelf covers stay paused and
+   come alive on hover; the open book's covers always drift. */
+@keyframes album-cover-drift {
+  to { transform: translateY(-560px); }
+}
+.album-tri-layer {
+  animation: album-cover-drift var(--drift-dur, 45s) linear infinite;
+  animation-play-state: paused;
+}
+.album-cover-live .album-tri-layer,
+.album-cover-hover:hover .album-tri-layer {
+  animation-play-state: running;
+}
+/* The cover's flag sticker sits at its per-country tilt and perks up
+   (straightens most of the way and lifts) while its album is hovered or
+   open as a book. */
+.album-flag-sticker {
+  transform: rotate(var(--sticker-tilt, -3deg));
+  transition: transform 200ms ease;
+}
+.album-cover-live .album-flag-sticker,
+.album-cover-hover:hover .album-flag-sticker {
+  transform: rotate(calc(var(--sticker-tilt, -3deg) * 0.4)) scale(1.045);
+}
+@media (prefers-reduced-motion: reduce) {
+  .album-tri-layer { animation: none; }
+  .album-flag-sticker { transition: none; }
+}
 .skeleton-pulse {
   background-color: rgba(255, 255, 255, 0.045);
   animation: skeleton-pulse 1.8s ease-in-out infinite;

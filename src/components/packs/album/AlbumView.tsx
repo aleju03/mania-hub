@@ -1,0 +1,1192 @@
+import { Link } from "@tanstack/react-router";
+import { ChevronLeft, ChevronRight, Globe, Info } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { getManiaCardTier, type ManiaCardTier } from "#/lib/maniacard";
+import { ownedCards, type CollectedCard, type PackWallet } from "#/lib/pack-collection";
+import {
+  fetchServerPackCollectionOwnedIds,
+  fetchServerPackCollectionPage,
+} from "#/lib/pack-wallet-sync";
+import {
+  fetchLiveGlobalRankings,
+  fetchLiveRankingsSnapshot,
+  isLiveBackendConfigured,
+  type LiveGlobalRankingEntry,
+} from "#/lib/live-backend";
+import {
+  getCountryFlagLargeUrl,
+  getCountryFlagUrl,
+  GLOBAL_SCOPE_CODE,
+  isGlobalScope,
+} from "#/lib/country";
+import { buildManiaCardRenderDataFromSkills } from "../../player/maniacard3d/renderData";
+import { CountryFlag } from "../../ui/CountryFlag";
+import { CardSpotlight, type CardSpotlightTarget } from "../CardSpotlight";
+import { renderCardSkeletonThumbnail, renderCardThumbnailBlob } from "../cardSnapshot";
+import {
+  cardThumbnailKeyForCollectionCard,
+  cardThumbnailKeyForData,
+  COLLECTION_CARD_THUMB_WIDTH,
+  getMemoryCardThumbnail,
+  loadPersistedCardThumbnail,
+  loadR2CardThumbnails,
+  rememberCardThumbnailBlob,
+} from "../cardThumbnailCache";
+import { playPageTurn } from "../packSfx";
+import {
+  ALBUM_SLOTS_PER_PAGE,
+  albumPageCount,
+  albumRosterLimit,
+  buildAlbumSections,
+  chunkForSlot,
+  GLOBAL_ALBUM_CAP,
+  orderShelfSections,
+  ROSTER_CHUNK_SIZE,
+  slotOffsetForPage,
+  slotPagesForRoster,
+  type AlbumSection,
+} from "./albumModel";
+import { FlipBook, type FlipBookApi } from "./FlipBook";
+
+const PAGE_WIDTH = 380;
+const PAGE_HEIGHT = 560;
+const MIN_PAGE_WIDTH = 260;
+const MAX_PAGE_WIDTH = 440;
+const SHELF_COVER_WIDTH = 180;
+const GOLD = "#e8c56a";
+const ALBUM_SEASON = new Date().getFullYear();
+
+interface RosterData {
+  total: number | null;
+  entries: Record<number, LiveGlobalRankingEntry>;
+  chunks: Record<number, boolean>;
+  error: boolean;
+}
+
+const skeletonThumbCache = new Map<ManiaCardTier, string | null>();
+
+function tierSkeletonThumb(tier: ManiaCardTier): string | null {
+  if (!skeletonThumbCache.has(tier)) {
+    skeletonThumbCache.set(tier, renderCardSkeletonThumbnail(tier, COLLECTION_CARD_THUMB_WIDTH));
+  }
+  return skeletonThumbCache.get(tier) ?? null;
+}
+
+function cardTier(card: CollectedCard): ManiaCardTier {
+  if (card.tier) return card.tier;
+  if (card.skills && Number.isFinite(card.skills.cardPower)) return getManiaCardTier(card.skills.cardPower);
+  return "common";
+}
+
+/* Same two-at-a-time cap the collection grid uses for on-device card renders. */
+let activeRenders = 0;
+const renderQueue: Array<() => void> = [];
+async function throttleRender<T>(task: () => Promise<T>): Promise<T> {
+  if (activeRenders >= 2) await new Promise<void>((resolve) => renderQueue.push(resolve));
+  activeRenders += 1;
+  try {
+    return await task();
+  } finally {
+    activeRenders -= 1;
+    renderQueue.shift()?.();
+  }
+}
+
+async function renderAlbumThumbnail(card: CollectedCard): Promise<string | null> {
+  if (!card.skills) return null;
+  const data = buildManiaCardRenderDataFromSkills({
+    user: {
+      id: card.userId,
+      username: card.username,
+      avatar_url: card.avatarUrl,
+      country_code: card.countryCode,
+      statistics: { global_rank: card.globalRank, pp: card.pp },
+    },
+    skills: card.skills,
+  });
+  const key = cardThumbnailKeyForData(data, COLLECTION_CARD_THUMB_WIDTH);
+  const blob = await throttleRender(() => renderCardThumbnailBlob(data, COLLECTION_CARD_THUMB_WIDTH));
+  return rememberCardThumbnailBlob(key, blob);
+}
+
+/* A synced account keeps its collection server-side (the local wallet's
+   cards map is intentionally stripped), so the album pages the full server
+   collection once and merges it with any local pulls. Cached per session:
+   the album only reads it. */
+const SERVER_COLLECTION_TTL_MS = 120_000;
+let serverCollectionCache: { at: number; cards: CollectedCard[] } | null = null;
+let serverCollectionPromise: Promise<CollectedCard[] | null> | null = null;
+
+async function loadFullServerCollection(): Promise<CollectedCard[] | null> {
+  if (serverCollectionCache && Date.now() - serverCollectionCache.at < SERVER_COLLECTION_TTL_MS) {
+    return serverCollectionCache.cards;
+  }
+  if (serverCollectionPromise) return serverCollectionPromise;
+  serverCollectionPromise = (async () => {
+    try {
+      const pageSize = 60;
+      const first = await fetchServerPackCollectionPage({ data: { page: 0, pageSize, tier: "all", query: "" } });
+      if (!first) return null;
+      const cards: CollectedCard[] = [...first.cards];
+      const totalPages = Math.ceil(first.total / pageSize);
+      for (let page = 1; page < totalPages; page += 1) {
+        const next = await fetchServerPackCollectionPage({ data: { page, pageSize, tier: "all", query: "" } });
+        if (!next) break;
+        cards.push(...next.cards);
+      }
+      serverCollectionCache = { at: Date.now(), cards };
+      return cards;
+    } finally {
+      serverCollectionPromise = null;
+    }
+  })();
+  return serverCollectionPromise;
+}
+
+/* The cover backdrop follows lazer's Triangles drawable (the same field the
+   skin-upload dropzone ports): equilateral triangles with normally
+   distributed sizes, large behind small, here as a translucent white
+   texture over each country's colour wash. Seeded so the server and client
+   emit identical SVG, split into three speed layers (big drifts fastest,
+   lazer's rule) and drawn twice vertically so the CSS scroll wraps
+   seamlessly. */
+function mulberry32(seed: number): () => number {
+  return () => {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+interface CoverTriangle {
+  x: number;
+  y: number;
+  size: number;
+  shade: number;
+}
+
+const TRIANGLE_LAYERS: Array<{ duration: number; triangles: CoverTriangle[] }> = (() => {
+  const rand = mulberry32(730317);
+  const randomNormal = () => {
+    const u1 = 1 - rand();
+    const u2 = 1 - rand();
+    return Math.sqrt(-2 * Math.log(u1)) * Math.sin(2 * Math.PI * u2);
+  };
+  const field: CoverTriangle[] = [];
+  for (let index = 0; index < 44; index += 1) {
+    const scale = Math.max(1.6 * (0.5 + 0.16 * randomNormal()), 0.4);
+    field.push({
+      x: rand() * PAGE_WIDTH,
+      y: rand() * PAGE_HEIGHT,
+      size: 100 * scale,
+      shade: rand(),
+    });
+  }
+  field.sort((a, b) => b.size - a.size);
+  return [
+    { duration: 26, triangles: field.slice(0, 15) },
+    { duration: 40, triangles: field.slice(15, 30) },
+    { duration: 58, triangles: field.slice(30) },
+  ];
+})();
+
+/* The board surface sits between the b5 and b4 tokens; triangles are opaque
+   tonal shades just above it, exactly the dropzone's resting palette idea. */
+const COVER_BOARD_BACKGROUND = "hsl(var(--theme-hue), calc(10% * var(--theme-sat)), 16.5%)";
+
+function coverTriangleFill(shade: number): string {
+  const saturation = (11 + 4 * shade).toFixed(1);
+  const lightness = (19 + 8.5 * shade).toFixed(1);
+  return `hsl(var(--theme-hue), calc(${saturation}% * var(--theme-sat)), ${lightness}%)`;
+}
+
+/* Every cover shares the same seeded field, so the polygons exist once in
+   this hidden defs block and each cover stamps them with <use>. Without the
+   sharing the shelf mounts ~7,500 polygons (85 covers x 3 layers x 44
+   triangles x 2 wrap copies) and the Album tab takes most of a second to
+   appear. The fills' theme vars still resolve inside the <use> shadow tree
+   because custom properties inherit through it. */
+function CoverTriangleDefs() {
+  return (
+    <svg width={0} height={0} className="absolute" aria-hidden="true" focusable="false">
+      <defs>
+        {TRIANGLE_LAYERS.map((layer, layerIndex) => (
+          <g key={layerIndex} id={`album-tri-layer-${layerIndex}`}>
+            {layer.triangles.flatMap((triangle, index) => {
+              const height = triangle.size * 0.866;
+              return [0, PAGE_HEIGHT].map((offsetY) => (
+                <polygon
+                  key={`${index}-${offsetY}`}
+                  points={`${triangle.x},${triangle.y + offsetY} ${triangle.x - triangle.size / 2},${triangle.y + offsetY + height} ${triangle.x + triangle.size / 2},${triangle.y + offsetY + height}`}
+                  style={{ fill: coverTriangleFill(triangle.shade) }}
+                />
+              ));
+            })}
+          </g>
+        ))}
+      </defs>
+    </svg>
+  );
+}
+
+function CoverTriangles() {
+  return (
+    <svg
+      className="pointer-events-none absolute inset-0 h-full w-full"
+      viewBox={`0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}`}
+      preserveAspectRatio="xMidYMid slice"
+      aria-hidden="true"
+    >
+      {TRIANGLE_LAYERS.map((layer, layerIndex) => (
+        <g
+          key={layerIndex}
+          className="album-tri-layer"
+          style={{ "--drift-dur": `${layer.duration}s` } as CSSProperties}
+        >
+          <use href={`#album-tri-layer-${layerIndex}`} />
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+/* Each cover's tilt is hashed from its country code so the shelf looks
+   hand-assembled but every render (and both book faces) agree. Kept off
+   zero so the sticker never looks accidentally almost-straight. */
+function stickerTilt(code: string): number {
+  let hash = 0;
+  for (let index = 0; index < code.length; index += 1) hash = (hash * 31 + code.charCodeAt(index)) | 0;
+  const magnitude = 2 + (Math.abs(hash) % 30) / 10;
+  return (Math.abs(hash >> 7) % 2 === 0 ? 1 : -1) * magnitude;
+}
+
+/* The cover art is itself a sticker: the country's flag blown up on a white
+   die-cut border, slapped onto the board at that country's tilt. flagcdn
+   carries the large raster (osu!'s own flags are 70x47); the osu! flag
+   stays as the fallback. The Global album has no flag, so its sticker is
+   the pink globe the flag component uses for that scope. */
+function FlagSticker({ code, width }: { code: string; width: number }) {
+  const global = isGlobalScope(code);
+  return (
+    <div
+      className="album-flag-sticker rounded-[10px] bg-white p-[7px] shadow-[0_14px_30px_rgba(0,0,0,0.55)]"
+      style={{ width, "--sticker-tilt": `${stickerTilt(code)}deg` } as CSSProperties}
+    >
+      <div className="relative w-full overflow-hidden rounded-[4px]" style={{ aspectRatio: "3 / 2" }}>
+        {global ? (
+          <span className="absolute inset-0 flex items-center justify-center bg-osu-pink">
+            <Globe className="h-3/5 w-3/5 text-white" strokeWidth={1.5} aria-hidden="true" />
+          </span>
+        ) : (
+          <img
+            src={getCountryFlagLargeUrl(code)}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            loading="lazy"
+            draggable={false}
+            onError={(event) => {
+              const fallback = getCountryFlagUrl(code);
+              if (event.currentTarget.src !== fallback) event.currentTarget.src = fallback;
+            }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* The album cover: a gold-framed dark board under the drifting triangle
+   field, the series masthead up top, the flag sticker as the hero, and the
+   country code + name, player count, and collection progress under it. */
+function AlbumCoverFace({
+  section,
+  collectedText,
+  subtitle,
+  progress,
+}: {
+  section: AlbumSection;
+  collectedText: string;
+  subtitle: string;
+  progress: number | null;
+}) {
+  const global = isGlobalScope(section.code);
+  return (
+    <div className="relative h-full w-full overflow-hidden" style={{ background: COVER_BOARD_BACKGROUND }}>
+      <CoverTriangles />
+      <span
+        className="pointer-events-none absolute inset-3 z-[5] rounded-[5px] border"
+        style={{ borderColor: "rgba(232, 197, 106, 0.32)" }}
+      />
+      <div className="absolute inset-x-6 top-7 z-[3] text-center">
+        <div className="text-[11px] font-extrabold uppercase tracking-[0.3em]" style={{ color: GOLD }}>
+          maniacards
+        </div>
+        <div className="mt-1 text-[9px] font-semibold uppercase tracking-[0.3em] text-white/40">
+          {ALBUM_SEASON} series
+        </div>
+      </div>
+      <div className="absolute inset-x-5 bottom-[76px] top-[64px] z-[3] flex flex-col items-center justify-center">
+        <FlagSticker code={section.code} width={global ? 176 : 208} />
+        <div
+          className="mt-8 font-black italic leading-none text-osu-pink"
+          style={{ fontSize: global ? 60 : 88, letterSpacing: "-0.02em" }}
+        >
+          {global ? "GLOBAL" : section.code}
+        </div>
+        {!global && (
+          <div className="mt-2 text-center text-[18px] font-extrabold uppercase leading-[1.15] tracking-[0.06em] text-white">
+            {section.name}
+          </div>
+        )}
+      </div>
+      <div className="absolute inset-x-6 bottom-[26px] z-[3]">
+        <div className="mb-2 flex items-baseline justify-between">
+          <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#e8c56a]">{subtitle}</span>
+          <span className="text-[11px] font-bold text-white/80 tabular-nums">{collectedText}</span>
+        </div>
+        {progress != null && (
+          <div className="h-1.5 overflow-hidden rounded-[3px] bg-white/10">
+            <div
+              className="h-full rounded-[3px]"
+              style={{ width: `${Math.max(2, Math.min(100, progress * 100))}%`, background: GOLD }}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AlbumBackFace({ section }: { section: AlbumSection }) {
+  return (
+    <div className="relative h-full w-full overflow-hidden" style={{ background: COVER_BOARD_BACKGROUND }}>
+      <CoverTriangles />
+      <span
+        className="pointer-events-none absolute inset-3 rounded-[5px] border"
+        style={{ borderColor: "rgba(232, 197, 106, 0.32)" }}
+      />
+      <div className="relative z-[2] flex h-full flex-col items-center justify-center">
+        <FlagSticker code={section.code} width={120} />
+        <span className="mt-6 text-[10px] font-extrabold uppercase tracking-[0.24em] text-white/85">
+          maniacards
+        </span>
+        <span className="mt-1 text-[9px] font-semibold uppercase tracking-[0.24em] text-white/40">
+          {ALBUM_SEASON} series
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/* Renders the fixed-size cover art scaled down to an arbitrary width. */
+function ScaledCover({ width, children }: { width: number; children: ReactNode }) {
+  const scale = width / PAGE_WIDTH;
+  return (
+    <div style={{ width, height: Math.round(PAGE_HEIGHT * scale) }} className="pointer-events-none">
+      <div
+        style={{ width: PAGE_WIDTH, height: PAGE_HEIGHT, transform: `scale(${scale})`, transformOrigin: "top left" }}
+        className="overflow-hidden rounded-[10px]"
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+interface PlayerPeekTarget {
+  entry: LiveGlobalRankingEntry;
+  owned: boolean;
+}
+
+function PeekStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg bg-osu-b4/50 px-2 py-1.5">
+      <div className="text-[9px] uppercase tracking-wide text-osu-f1">{label}</div>
+      <div className="text-[12px] font-semibold text-white tabular-nums">{value}</div>
+    </div>
+  );
+}
+
+/* The scouting card behind an album slot: everything the tracker already knows
+   about the player from the rankings roster, plus the way to their profile. */
+function PlayerPeek({ target, onClose }: { target: PlayerPeekTarget | null; onClose: () => void }) {
+  useEffect(() => {
+    if (!target) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [target, onClose]);
+
+  if (!target || typeof document === "undefined") return null;
+  const { entry, owned } = target;
+  const grades = entry.grade_counts;
+  const revealBanner = (banner: HTMLImageElement | null) => {
+    if (banner?.complete && banner.naturalWidth > 0) banner.style.opacity = "0.7";
+  };
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 px-4"
+      onClick={onClose}
+      role="dialog"
+      aria-label={`${entry.user.username} details`}
+    >
+      <div
+        className="w-full max-w-[330px] overflow-hidden rounded-xl border border-osu-b3/60 bg-osu-b5"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="relative h-[84px] bg-osu-b4">
+          {entry.user.cover_url && (
+            <img
+              src={entry.user.cover_url}
+              alt=""
+              ref={revealBanner}
+              onLoad={(event) => {
+                event.currentTarget.style.opacity = "0.7";
+              }}
+              className="h-full w-full object-cover opacity-0 transition-opacity duration-300"
+              draggable={false}
+            />
+          )}
+          <div className="absolute inset-0 bg-black/25" />
+          <img
+            src={entry.user.avatar_url}
+            alt=""
+            className="absolute -bottom-6 left-4 h-14 w-14 rounded-[10px] border-2 border-osu-b5 bg-osu-b4 object-cover"
+            draggable={false}
+          />
+        </div>
+        <div className="px-4 pb-4 pt-8">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-[15px] font-bold text-white">{entry.user.username}</span>
+            <CountryFlag code={entry.user.country_code} size="sm" decorative />
+          </div>
+          <div className="mt-0.5 text-[11px] text-osu-f1 tabular-nums">
+            {entry.global_rank ? `#${entry.global_rank.toLocaleString()} global` : "unranked"}
+            {entry.country_rank ? <> &middot; #{entry.country_rank.toLocaleString()} {entry.user.country_code}</> : null}
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-1.5">
+            <PeekStat label="pp" value={Math.round(entry.pp).toLocaleString()} />
+            <PeekStat
+              label="accuracy"
+              value={entry.hit_accuracy != null ? `${entry.hit_accuracy.toFixed(2)}%` : "?"}
+            />
+            <PeekStat label="plays" value={entry.play_count != null ? entry.play_count.toLocaleString() : "?"} />
+            {grades && (
+              <>
+                <PeekStat label="SS" value={(grades.ssh + grades.ss).toLocaleString()} />
+                <PeekStat label="S" value={(grades.sh + grades.s).toLocaleString()} />
+                <PeekStat label="A" value={grades.a.toLocaleString()} />
+              </>
+            )}
+          </div>
+          {entry.ranked_score != null && (
+            <div className="mt-2 text-[11px] text-osu-f1 tabular-nums">
+              Ranked score {entry.ranked_score.toLocaleString()}
+            </div>
+          )}
+          <div className="mt-2 text-[11px] text-osu-f1">
+            {owned ? "In your collection." : "Missing from your collection."}
+          </div>
+          <Link
+            to="/player/$username"
+            params={{ username: entry.user.username }}
+            className="mt-3 block w-full rounded-full bg-osu-pink px-4 py-1.5 text-center text-[12px] font-bold text-white transition hover:brightness-110"
+          >
+            View profile
+          </Link>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function AlbumSlot({
+  entry,
+  card,
+  serverOwned,
+  thumbnail,
+  onSpotlight,
+  onPeek,
+}: {
+  entry: LiveGlobalRankingEntry | null;
+  card: CollectedCard | null;
+  serverOwned: boolean;
+  thumbnail: string | null;
+  onSpotlight: (card: CollectedCard, thumbnail: string | null, rect: DOMRect) => void;
+  onPeek: (entry: LiveGlobalRankingEntry, owned: boolean) => void;
+}) {
+  if (!entry) {
+    return <div className="rounded-[7px] bg-osu-b4/25" style={{ aspectRatio: "5 / 7" }} />;
+  }
+
+  if (card) {
+    const skeleton = thumbnail ? null : tierSkeletonThumb(cardTier(card));
+    return (
+      <div className="relative w-full" style={{ aspectRatio: "5 / 7" }}>
+        <button
+          type="button"
+          className="absolute inset-0 cursor-pointer overflow-hidden rounded-[7px]"
+          onClick={(event) => onSpotlight(card, thumbnail, event.currentTarget.getBoundingClientRect())}
+          title={card.username}
+        >
+          {(thumbnail ?? skeleton) ? (
+            <img
+              src={thumbnail ?? skeleton ?? undefined}
+              alt={`${card.username} maniacard`}
+              className="absolute inset-0 h-full w-full object-cover"
+              draggable={false}
+            />
+          ) : (
+            <span className="absolute inset-0 bg-osu-b3" />
+          )}
+          {card.copies > 1 && (
+            <span className="absolute right-1 top-1 rounded bg-black/70 px-1 py-px text-[9px] font-bold text-white tabular-nums">
+              x{card.copies}
+            </span>
+          )}
+        </button>
+        {/* The card click shows the card; this keeps the scouting modal
+            reachable for collected players too. Bottom-right: the card art
+            wears the mania logo in its top-left corner. */}
+        <button
+          type="button"
+          className="absolute bottom-1 right-1 z-[2] flex h-5 w-5 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white/85 hover:bg-black/80 hover:text-white"
+          onClick={() => onPeek(entry, true)}
+          aria-label={`${entry.user.username} details`}
+          title="Player details"
+        >
+          <Info className="h-3 w-3" />
+        </button>
+      </div>
+    );
+  }
+
+  if (serverOwned) {
+    /* Owned by the synced account, full card data not loaded (yet): the
+       card is slotted in, just without its art. */
+    return (
+      <button
+        type="button"
+        className="relative flex w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[7px] border border-white/20 bg-osu-b4/70 px-1"
+        style={{ aspectRatio: "5 / 7" }}
+        onClick={() => onPeek(entry, true)}
+        title={entry.user.username}
+      >
+        <img
+          src={entry.user.avatar_url}
+          alt=""
+          className="h-1/2 w-auto rounded-full object-cover"
+          loading="lazy"
+          draggable={false}
+        />
+        <span className="mt-1.5 w-full truncate text-center text-[9px] font-semibold text-white">
+          {entry.user.username}
+        </span>
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="relative flex w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[7px] border border-dashed border-white/12 bg-black/20 px-1 hover:bg-black/30"
+      style={{ aspectRatio: "5 / 7" }}
+      onClick={() => onPeek(entry, false)}
+      title={entry.user.username}
+    >
+      <span className="absolute left-1 top-1 text-[9px] text-osu-f1/60 tabular-nums">#{entry.rank}</span>
+      <img
+        src={entry.user.avatar_url}
+        alt=""
+        className="h-1/2 w-auto rounded-full object-cover opacity-30 grayscale"
+        loading="lazy"
+        draggable={false}
+      />
+      <span className="mt-1.5 w-full truncate text-center text-[9px] text-osu-f1/80">
+        {entry.user.username}
+      </span>
+    </button>
+  );
+}
+
+export function AlbumView({
+  wallet,
+  syncStatus,
+  trackedCountries,
+}: {
+  wallet: PackWallet;
+  syncStatus: "local" | "syncing" | "synced";
+  trackedCountries: string[] | null;
+}) {
+  const sections = useMemo(() => buildAlbumSections(trackedCountries ?? []), [trackedCountries]);
+  const [openCode, setOpenCode] = useState<string | null>(null);
+  const [shelfQuery, setShelfQuery] = useState("");
+  const rootRef = useRef<HTMLElement | null>(null);
+  const [rosters, setRosters] = useState<Record<string, RosterData>>({});
+  const inflightRosters = useRef(new Set<string>());
+  const [currentPage, setCurrentPage] = useState(0);
+  const [orientation, setOrientation] = useState<"portrait" | "landscape">("landscape");
+  const [bookReady, setBookReady] = useState(false);
+  const [bookSettled, setBookSettled] = useState(false);
+  const lastFlipAtRef = useRef(0);
+  const [, setThumbRevision] = useState(0);
+  const [serverOwned, setServerOwned] = useState<Set<number> | null>(null);
+  const [serverCards, setServerCards] = useState<CollectedCard[] | null>(null);
+  const [spotlight, setSpotlight] = useState<CardSpotlightTarget | null>(null);
+  const [peek, setPeek] = useState<PlayerPeekTarget | null>(null);
+  const apiRef = useRef<FlipBookApi | null>(null);
+
+  /* Local pulls layered over the server collection; local wins on overlap
+     because it reflects this session's pulls immediately. */
+  const collectedById = useMemo(() => {
+    const map = new Map<number, CollectedCard>();
+    for (const card of serverCards ?? []) map.set(card.userId, card);
+    for (const card of ownedCards(wallet)) map.set(card.userId, card);
+    return map;
+  }, [wallet, serverCards]);
+
+  const walletCountByCode = useMemo(() => {
+    const counts = new Map<string, number>();
+    let total = 0;
+    for (const card of collectedById.values()) {
+      const code = card.countryCode?.toUpperCase() ?? "";
+      counts.set(code, (counts.get(code) ?? 0) + 1);
+      total += 1;
+    }
+    counts.set(GLOBAL_SCOPE_CODE, total);
+    return counts;
+  }, [collectedById]);
+
+  const shelfSections = useMemo(
+    () => orderShelfSections(sections, walletCountByCode),
+    [sections, walletCountByCode],
+  );
+
+  /* Warm the flip engine chunk while the shelf is browsed, so opening an
+     album doesn't wait on a dynamic import. */
+  useEffect(() => {
+    void import("page-flip").catch(() => {});
+  }, []);
+
+  /* The centering-shift transition switches on a couple of frames after the
+     book reveals, so nothing about the reveal itself can animate. */
+  useEffect(() => {
+    if (!bookReady) {
+      setBookSettled(false);
+      return;
+    }
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => setBookSettled(true));
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
+  }, [bookReady]);
+
+  /* A synced account keeps its cards server-side; pull the full collection
+     for real per-country counts and card art, with the owned-ids set as a
+     fast first signal while pages stream in. */
+  useEffect(() => {
+    if (syncStatus === "local") return;
+    let cancelled = false;
+    void fetchServerPackCollectionOwnedIds()
+      .then((ids) => {
+        if (!cancelled && ids) setServerOwned(new Set(ids));
+      })
+      .catch(() => {});
+    void loadFullServerCollection()
+      .then((cards) => {
+        if (!cancelled && cards) setServerCards(cards);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [syncStatus]);
+
+  const openSection = openCode ? sections.find((section) => section.code === openCode) ?? null : null;
+
+  /* Arrow keys turn pages; Escape shelves the open album (unless an overlay
+     is up, whose own Escape handler wins). The album stays mounted behind
+     the Grid tab, so a hidden book must let these keys through: offsetParent
+     goes null under a display:none ancestor. */
+  useEffect(() => {
+    if (!openSection) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (rootRef.current?.offsetParent == null) return;
+      if (event.key === "Escape") {
+        if (!peek && !spotlight) setOpenCode(null);
+        return;
+      }
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable)) return;
+      if (event.key === "ArrowLeft") apiRef.current?.flipPrev();
+      else apiRef.current?.flipNext();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [openSection, peek, spotlight]);
+
+  /* Load roster chunks for the open spread and its neighbors; the first
+     chunk also reveals the roster size, which fixes the page count. */
+  useEffect(() => {
+    if (!openCode || !isLiveBackendConfigured()) return;
+    const data = rosters[openCode];
+    const wantedChunks = new Set<number>();
+    if (!data || data.total === null) {
+      if (data?.error) return;
+      wantedChunks.add(1);
+    } else {
+      const limit = albumRosterLimit(openCode, data.total);
+      if (limit === 0) return;
+      const pages = slotPagesForRoster(limit);
+      const maxChunk = chunkForSlot(limit - 1);
+      for (let page = currentPage - 2; page <= currentPage + 3; page += 1) {
+        if (page < 1 || page > pages) continue;
+        const start = slotOffsetForPage(page);
+        const end = Math.min(start + ALBUM_SLOTS_PER_PAGE - 1, limit - 1);
+        if (end < start) continue;
+        wantedChunks.add(Math.min(chunkForSlot(start), maxChunk));
+        wantedChunks.add(Math.min(chunkForSlot(end), maxChunk));
+      }
+    }
+    for (const chunk of wantedChunks) {
+      if (data?.chunks[chunk]) continue;
+      const key = `${openCode}:${chunk}`;
+      if (inflightRosters.current.has(key)) continue;
+      inflightRosters.current.add(key);
+      const code = openCode;
+      const fetchPage = isGlobalScope(code)
+        ? fetchLiveGlobalRankings({ page: chunk, pageSize: ROSTER_CHUNK_SIZE })
+        : fetchLiveRankingsSnapshot(code, { page: chunk, pageSize: ROSTER_CHUNK_SIZE });
+      void fetchPage
+        .then((snapshot) => {
+          setRosters((prev) => {
+            const current = prev[code] ?? { total: null, entries: {}, chunks: {}, error: false };
+            const entries = { ...current.entries };
+            snapshot.ranking.forEach((entry, index) => {
+              entries[(chunk - 1) * ROSTER_CHUNK_SIZE + index] = entry;
+            });
+            return {
+              ...prev,
+              [code]: {
+                total: snapshot.total,
+                entries,
+                chunks: { ...current.chunks, [chunk]: true },
+                error: false,
+              },
+            };
+          });
+        })
+        .catch(() => {
+          setRosters((prev) => {
+            const current = prev[code];
+            // Partial data stays usable; only a failed first load blocks the album.
+            if (current?.total != null) return prev;
+            return { ...prev, [code]: { total: null, entries: {}, chunks: {}, error: true } };
+          });
+        })
+        .finally(() => {
+          inflightRosters.current.delete(key);
+        });
+    }
+  }, [openCode, currentPage, rosters]);
+
+  /* Resolve card art for the loaded roster's collected cards: persisted
+     cache, then the shared R2 pool, then a local render. */
+  const openData = openCode ? rosters[openCode] : undefined;
+  const spreadCards = useMemo(() => {
+    if (!openData) return [] as CollectedCard[];
+    return Object.values(openData.entries)
+      .map((entry) => collectedById.get(entry.user.id))
+      .filter((card): card is CollectedCard => Boolean(card?.skills));
+  }, [openData, collectedById]);
+
+  const spreadSignature = spreadCards.map((card) => cardThumbnailKeyForCollectionCard(card)).join("|");
+
+  useEffect(() => {
+    if (spreadCards.length === 0) return;
+    let cancelled = false;
+    const missing = spreadCards
+      .map((card) => ({ card, key: cardThumbnailKeyForCollectionCard(card) }))
+      .filter((item): item is { card: CollectedCard; key: string } =>
+        Boolean(item.key && !getMemoryCardThumbnail(item.key)),
+      );
+    if (missing.length === 0) return;
+
+    void (async () => {
+      const remote: Array<{ card: CollectedCard; key: string }> = [];
+      await Promise.all(missing.map(async ({ card, key }) => {
+        const cached = await loadPersistedCardThumbnail(key);
+        if (cancelled) return;
+        if (cached) setThumbRevision((revision) => revision + 1);
+        else remote.push({ card, key });
+      }));
+      if (cancelled || remote.length === 0) return;
+
+      const urls = await loadR2CardThumbnails(remote.map((item) => item.key));
+      if (cancelled) return;
+      const toRender = remote.filter(({ key }) => {
+        if (!urls[key]) return true;
+        setThumbRevision((revision) => revision + 1);
+        return false;
+      });
+      await Promise.all(toRender.map(async ({ card }) => {
+        try {
+          const url = await renderAlbumThumbnail(card);
+          if (!cancelled && url) setThumbRevision((revision) => revision + 1);
+        } catch {
+          // The tier skeleton stays on this slot.
+        }
+      }));
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spreadSignature]);
+
+  if (!isLiveBackendConfigured() || !trackedCountries || sections.length <= 1) {
+    return (
+      <div className="py-10 text-center text-[12px] text-osu-f1">
+        The album needs the live backend to list each country's players.
+      </div>
+    );
+  }
+
+  const openAlbum = (code: string) => {
+    setOpenCode(code);
+    setCurrentPage(0);
+    setBookReady(false);
+  };
+
+  const closeAlbum = () => {
+    setOpenCode(null);
+    setPeek(null);
+    setSpotlight(null);
+  };
+
+  const openSpotlight = (card: CollectedCard, thumbnail: string | null, rect: DOMRect) => {
+    setSpotlight({
+      card,
+      thumbnail,
+      rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
+    });
+  };
+
+  const shelfCountText = (section: AlbumSection) => {
+    const count = walletCountByCode.get(section.code) ?? 0;
+    return `${count.toLocaleString()} ${count === 1 ? "card" : "cards"}`;
+  };
+
+  const shelfSubtitle = (section: AlbumSection) =>
+    isGlobalScope(section.code) ? `Top ${GLOBAL_ALBUM_CAP} players` : "Card collection";
+
+  const trimmedQuery = shelfQuery.trim().toLowerCase();
+  const visibleSections = trimmedQuery
+    ? shelfSections.filter(
+        (section) =>
+          section.code.toLowerCase().includes(trimmedQuery) ||
+          section.name.toLowerCase().includes(trimmedQuery),
+      )
+    : shelfSections;
+
+  /* The shelf stays mounted (just hidden) while an album is open, so going
+     back to it costs nothing. */
+  const shelfView = (
+    <div className={openSection ? "hidden" : undefined}>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <h2 className="text-sm font-bold text-white">Card albums</h2>
+        <span className="text-[12px] text-osu-f1 tabular-nums">
+          {trimmedQuery ? `${visibleSections.length} of ${sections.length} albums` : `${sections.length} albums`}
+        </span>
+        <input
+          type="search"
+          value={shelfQuery}
+          onChange={(event) => setShelfQuery(event.target.value)}
+          placeholder="find a country"
+          aria-label="Find a country album"
+          className="ml-auto h-7 w-[180px] select-text rounded-full border border-osu-b3/40 bg-osu-b4/40 px-3 text-[12px] text-white outline-none placeholder:text-osu-f1/70 focus:border-osu-pink/50"
+        />
+      </div>
+      {visibleSections.length === 0 && (
+        <div className="py-10 text-center text-[12px] text-osu-f1">
+          No album matches "{shelfQuery.trim()}".
+        </div>
+      )}
+      <div className="grid grid-cols-2 justify-items-center gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4">
+        {visibleSections.map((section) => (
+          <button
+            key={section.code}
+            type="button"
+            onClick={() => openAlbum(section.code)}
+            className="album-cover-hover cursor-pointer rounded-[10px] shadow-[0_10px_24px_rgba(0,0,0,0.4)] transition-transform duration-150 hover:-translate-y-1"
+            /* Covers below the fold skip layout/paint until scrolled to; the
+               intrinsic size matches ScaledCover so nothing shifts. */
+            style={{
+              contentVisibility: "auto",
+              containIntrinsicSize: `${SHELF_COVER_WIDTH}px ${Math.round((PAGE_HEIGHT / PAGE_WIDTH) * SHELF_COVER_WIDTH)}px`,
+            }}
+            aria-label={`Open the ${section.name} album`}
+          >
+            <ScaledCover width={SHELF_COVER_WIDTH}>
+              <AlbumCoverFace
+                section={section}
+                collectedText={shelfCountText(section)}
+                subtitle={shelfSubtitle(section)}
+                progress={null}
+              />
+            </ScaledCover>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderOpenAlbum = (openSection: AlbumSection) => {
+  const global = isGlobalScope(openSection.code);
+  const limit = openData?.total != null ? albumRosterLimit(openSection.code, openData.total) : null;
+  const slotPages = limit != null ? slotPagesForRoster(limit) : 2;
+  const walletCount = walletCountByCode.get(openSection.code) ?? 0;
+  const collectedShown = limit != null ? Math.min(walletCount, limit) : walletCount;
+  const coverText = global
+    ? `${walletCount.toLocaleString()} ${walletCount === 1 ? "card" : "cards"}`
+    : limit != null
+      ? `${collectedShown}/${limit} collected`
+      : shelfCountText(openSection);
+  const coverSubtitle = global
+    ? `Top ${GLOBAL_ALBUM_CAP} players`
+    : limit != null
+      ? `${limit} players`
+      : "Card collection";
+  const coverProgress = !global && limit != null && limit > 0 ? collectedShown / limit : null;
+  const headerRight = global ? `Top ${GLOBAL_ALBUM_CAP}` : limit != null ? `${collectedShown}/${limit}` : "";
+  const rosterFailed = Boolean(openData?.error && openData.total === null);
+
+  const albumPage = (pageIndex: number) => {
+    const offset = slotOffsetForPage(pageIndex);
+    return (
+      <div
+        key={`page-${pageIndex}`}
+        data-album-page
+        className="overflow-hidden rounded-[6px] border border-osu-b3/60 bg-osu-b4"
+      >
+        <div className="flex h-full flex-col px-3 pb-3 pt-2.5">
+          <div className="mb-2 flex items-center gap-1.5">
+            <CountryFlag code={openSection.code} size="sm" decorative />
+            <span className="truncate text-[12px] font-bold text-white">{openSection.name}</span>
+            <span className="ml-auto text-[10px] text-osu-f1 tabular-nums">{headerRight}</span>
+          </div>
+          <div className="grid grid-cols-3 content-start gap-1.5">
+            {Array.from({ length: ALBUM_SLOTS_PER_PAGE }, (_, position) => {
+              const slotIndex = offset + position;
+              if (limit != null && slotIndex >= limit) {
+                return (
+                  <div key={position} className="rounded-[7px] bg-osu-b4/25" style={{ aspectRatio: "5 / 7" }} />
+                );
+              }
+              const entry = openData?.entries[slotIndex] ?? null;
+              if (!entry) {
+                return (
+                  <div
+                    key={position}
+                    className="animate-pulse rounded-[7px] bg-osu-b3/40"
+                    style={{ aspectRatio: "5 / 7" }}
+                  />
+                );
+              }
+              const card = collectedById.get(entry.user.id) ?? null;
+              const key = card ? cardThumbnailKeyForCollectionCard(card) : null;
+              return (
+                <AlbumSlot
+                  key={position}
+                  entry={entry}
+                  card={card}
+                  serverOwned={Boolean(serverOwned?.has(entry.user.id))}
+                  thumbnail={getMemoryCardThumbnail(key)}
+                  onSpotlight={openSpotlight}
+                  onPeek={(peekEntry, owned) => setPeek({ entry: peekEntry, owned })}
+                />
+              );
+            })}
+          </div>
+          <div className="mt-auto pt-1 text-right text-[9px] text-osu-f1/50 tabular-nums">{pageIndex}</div>
+        </div>
+      </div>
+    );
+  };
+
+  const lastPageIndex = albumPageCount(slotPages) - 1;
+  /* A closed book only occupies one half of the two-page block, so nudge the
+     whole block sideways to keep the visible cover centered; the shift eases
+     back as the book opens. */
+  const bookShift = orientation === "landscape"
+    ? currentPage === 0
+      ? "-25%"
+      : currentPage >= lastPageIndex
+        ? "25%"
+        : "0%"
+    : "0%";
+
+  return (
+    <div>
+      <div className="mb-4 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={closeAlbum}
+          className="flex h-7 cursor-pointer items-center gap-1 rounded-full border border-osu-b3/40 bg-osu-b4/40 pl-1.5 pr-3 text-[12px] text-osu-f1 hover:bg-osu-b4/70 hover:text-white"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Albums
+        </button>
+        <span className="flex items-center gap-1.5 text-[12px] font-bold text-white">
+          <CountryFlag code={openSection.code} size="sm" decorative />
+          {openSection.name}
+        </span>
+      </div>
+
+      <div className="relative">
+        {!bookReady && (
+          <div className="album-cover-live mx-auto w-[min(50%,440px)] min-w-[260px]">
+            <div className="overflow-hidden rounded-[6px]" style={{ aspectRatio: `${PAGE_WIDTH} / ${PAGE_HEIGHT}` }}>
+              <AlbumCoverFace
+                section={openSection}
+                collectedText={coverText}
+                subtitle={coverSubtitle}
+                progress={coverProgress}
+              />
+            </div>
+          </div>
+        )}
+        {/* The book mounts once the roster size (and so the page count) is
+            known; the static cover above covers the wait, so the swap-in is
+            invisible and the page list never changes mid-mount. */}
+        {/* The transform is applied while still hidden and the transition
+            class only arrives a couple of frames after the reveal, so the
+            book can never be seen gliding into its centered position. */}
+        {/* The shift percentages are fractions of THIS element, so its width
+            must equal the engine's block (100% capped at maxWidth * 2, here
+            centered) or the -25% overshoots and the revealed cover lands a
+            few pixels off the static stand-in. */}
+        {limit != null && (
+        <div
+          className={`mx-auto ${bookSettled ? "transition-transform duration-500 ease-in-out " : ""}${
+            bookReady ? "" : "pointer-events-none absolute inset-x-0 top-0 opacity-0"
+          }`}
+          style={{ transform: `translateX(${bookShift})`, maxWidth: MAX_PAGE_WIDTH * 2 }}
+        >
+          <FlipBook
+            key={`${openSection.code}:${slotPages}`}
+            pageWidth={PAGE_WIDTH}
+            pageHeight={PAGE_HEIGHT}
+            minPageWidth={MIN_PAGE_WIDTH}
+            maxPageWidth={MAX_PAGE_WIDTH}
+            onPageChange={(page) => {
+              lastFlipAtRef.current = Date.now();
+              setCurrentPage(page);
+              playPageTurn();
+            }}
+            onOrientationChange={setOrientation}
+            onReady={() => setBookReady(true)}
+            apiRef={apiRef}
+          >
+            <div data-album-page data-density="hard" className="album-cover-live overflow-hidden rounded-[6px]">
+              {/* Not a <button>: buttons are fenced off from the engine's
+                  mouse handlers, and the cover must stay grabbable so a drag
+                  can peel it open. A corner click makes the engine flip on
+                  its own, so the click handler stands down right after any
+                  flip to avoid turning two pages. */}
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => {
+                  if (Date.now() - lastFlipAtRef.current > 350) apiRef.current?.flipNext();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") apiRef.current?.flipNext();
+                }}
+                className="block h-full w-full cursor-pointer text-left"
+                aria-label="Open the album"
+              >
+                <AlbumCoverFace
+                  section={openSection}
+                  collectedText={coverText}
+                  subtitle={coverSubtitle}
+                  progress={coverProgress}
+                />
+              </div>
+            </div>
+            {Array.from({ length: slotPages }, (_, index) => albumPage(index + 1))}
+            <div data-album-page data-density="hard" className="album-cover-live overflow-hidden rounded-[6px]">
+              <AlbumBackFace section={openSection} />
+            </div>
+          </FlipBook>
+        </div>
+        )}
+        {rosterFailed && (
+          <div className="mt-4 text-center text-[12px] text-osu-f1">
+            The rankings lookup failed.{" "}
+            <button
+              type="button"
+              onClick={() => {
+                setRosters((prev) => {
+                  const next = { ...prev };
+                  delete next[openSection.code];
+                  return next;
+                });
+              }}
+              className="cursor-pointer font-semibold text-osu-pink-light hover:text-white"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-4 flex items-center justify-center gap-2">
+        <button
+          type="button"
+          onClick={() => apiRef.current?.flipPrev()}
+          className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-osu-b3/40 bg-osu-b4/40 text-osu-f1 hover:bg-osu-b4/70 hover:text-white"
+          aria-label="Previous album page"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <span className="text-[11px] text-osu-f1">Drag a page or swipe to flip</span>
+        <button
+          type="button"
+          onClick={() => apiRef.current?.flipNext()}
+          className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-osu-b3/40 bg-osu-b4/40 text-osu-f1 hover:bg-osu-b4/70 hover:text-white"
+          aria-label="Next album page"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+
+    </div>
+  );
+  };
+
+  return (
+    /* select-none: a page drag that leaves the book must not sweep a text
+       selection across the whole album (the filter input opts back in). */
+    <section ref={rootRef} className="mx-auto w-full max-w-[900px] select-none">
+      <CoverTriangleDefs />
+      {shelfView}
+      {openSection && renderOpenAlbum(openSection)}
+      <PlayerPeek target={peek} onClose={() => setPeek(null)} />
+      <CardSpotlight target={spotlight} onClose={() => setSpotlight(null)} />
+    </section>
+  );
+}

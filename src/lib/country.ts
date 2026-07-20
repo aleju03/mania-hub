@@ -285,6 +285,15 @@ export function getCountryFlagUrl(code?: string | null): string {
   return `https://osu.ppy.sh/images/flags/${normalized}.png`;
 }
 
+// Higher-res raster than osu!'s 70x47 flag PNG for large renders (the OG
+// cards pull from the same source at w640). Callers should keep the osu!
+// flag as an onError fallback.
+export function getCountryFlagLargeUrl(code?: string | null): string {
+  if (isGlobalScope(code)) return GLOBAL_SCOPE_ICON_URL;
+  const normalized = normalizeCountryCode(code);
+  return `https://flagcdn.com/w320/${normalized.toLowerCase()}.png`;
+}
+
 /**
  * Returns a CSS gradient approximating the country's flag for use on the osu! logo circle.
  * Only covers countries with simple stripe-based flags. Returns null for complex flags,
