@@ -142,7 +142,7 @@ async function resolveLeftSet(db: Db, osu: OsuApiClient, setId: number, updatedA
     }
     throw error;
   }
-  const status = normalizeStatus(set.status);
+  const status = normalizeMapSetStatus(set.status);
   if (!status) return false;
   const shaped = shapeManiaDiffScores(set);
   if (shaped.scores.length > 0) await persistScoresDisplayMetadata(db, shaped.scores, updatedAt);
@@ -178,8 +178,9 @@ async function getIndexedQualifiedSetIds(db: Db): Promise<Set<number>> {
 
 // Shape a set's native mania diffs as synthetic scores for the shared upsert
 // (persistScoresDisplayMetadata reads only .beatmap/.beatmapset). Converts are
-// skipped to match the search index, which excludes them.
-function shapeManiaDiffScores(set: Record<string, unknown>): { scores: OscScore[]; diffIds: number[] } {
+// skipped to match the search index, which excludes them. Shared with the
+// settled-sets reconcile sweep, which resolves sets the same way.
+export function shapeManiaDiffScores(set: Record<string, unknown>): { scores: OscScore[]; diffIds: number[] } {
   const setId = Math.floor(Number(set.id));
   const beatmaps = Array.isArray(set.beatmaps) ? (set.beatmaps as Record<string, unknown>[]) : [];
   const { beatmaps: _diffs, ...setMeta } = set; // keep metadata_json lean
@@ -196,7 +197,7 @@ function shapeManiaDiffScores(set: Record<string, unknown>): { scores: OscScore[
   return { scores, diffIds };
 }
 
-function normalizeStatus(status: unknown): string {
+export function normalizeMapSetStatus(status: unknown): string {
   return String(status ?? "").trim().toLowerCase();
 }
 

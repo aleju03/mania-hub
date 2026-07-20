@@ -76,6 +76,11 @@ export interface Config {
   // How often the qualified-maps watch pulls the current qualified mania list to
   // reconcile /maps status (catches ranks, dequalifies, and brand-new sets).
   qualifiedMapsWatchIntervalMs: number;
+  // How often the settled-sets reconcile sweeps /maps for dead-end index rows
+  // (graveyard/wip/pending) on sets already known settled: heals revived-then-
+  // loved sets and drops rows for diffs deleted upstream. Zero API in steady
+  // state; one /beatmapsets read per affected set otherwise.
+  settledSetsReconcileIntervalMs: number;
   // Tick interval for the chart-analysis worker lane. Sets the backfill pace:
   // each tick runs one classify+MSD job (~0.1-0.3s of local CPU). The default
   // keeps prod gentle; lower it for a fast local backfill.
@@ -266,6 +271,7 @@ export function readConfig(): Config {
     mapsRefreshIntervalMs: readInt("MAPS_REFRESH_INTERVAL_MS", 7 * 24 * 60 * 60 * 1000),
     mapCollectionsRefreshIntervalMs: readInt("MAP_COLLECTIONS_REFRESH_INTERVAL_MS", 7 * 24 * 60 * 60 * 1000),
     qualifiedMapsWatchIntervalMs: readInt("QUALIFIED_MAPS_WATCH_INTERVAL_MS", 60 * 60 * 1000),
+    settledSetsReconcileIntervalMs: readInt("SETTLED_SETS_RECONCILE_INTERVAL_MS", 60 * 60 * 1000),
     chartAnalysisLaneIntervalMs: readBoundedInt("CHART_ANALYSIS_LANE_INTERVAL_MS", 500, 25, 60_000),
     oscBackfillMaxAgeMs: readInt("OSC_BACKFILL_MAX_AGE_MS", 24 * 60 * 60 * 1000),
     oscBackfillPageLimit: Math.min(readInt("OSC_BACKFILL_PAGE_LIMIT", 1000), 1000),

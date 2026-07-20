@@ -336,6 +336,7 @@ const SOURCE_SELECT = `
   where sv.analysis_version = ? and sv.status = 'ready'
     and json_extract(b.metadata_json, '$.mode') = 'mania'
     and coalesce(json_extract(b.metadata_json, '$.convert'), 0) != 1
+    and lower(coalesce(json_extract(b.metadata_json, '$.status'), '')) != 'deleted'
     and not (
       coalesce(b.difficulty_rating, 0) < ${PLACEHOLDER_STAR_FLOOR}
       and coalesce(nullif(lower(coalesce(json_extract(b.metadata_json, '$.status'), b.status)), ''), 'graveyard') in (${PLACEHOLDER_STATUS_LIST})

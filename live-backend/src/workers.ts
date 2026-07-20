@@ -12,6 +12,7 @@ import { runMapSearchIndexBuildJob } from "./features/map-search.js";
 import { rebuildMapCollections } from "./features/map-collections.js";
 import { MapsRosterNotReadyError, enqueueGlobalMapsRefresh, globalMapsFarmedRefreshRunAfter, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores } from "./features/maps.js";
 import { REFRESH_QUALIFIED_MAPS_JOB, runQualifiedMapsWatch } from "./features/qualified-maps-watch.js";
+import { RECONCILE_SETTLED_SETS_JOB, runSettledSetsReconcile } from "./features/settled-sets-reconcile.js";
 import { recordSnipeScoreHistory, updateSnipeProjection } from "./features/snipes.js";
 import { PLAYER_SKILLS_JOB, computePlayerSkillsJob } from "./features/player-skills.js";
 import { SKILL_BASELINE_JOB, runSkillBaselineJob } from "./features/skill-baseline.js";
@@ -96,7 +97,7 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
   },
   {
     name: "maps-refresh",
-    jobTypes: ["refresh_user_maps_farmed_scores", "refresh_country_maps", "refresh_global_maps", REFRESH_QUALIFIED_MAPS_JOB],
+    jobTypes: ["refresh_user_maps_farmed_scores", "refresh_country_maps", "refresh_global_maps", REFRESH_QUALIFIED_MAPS_JOB, RECONCILE_SETTLED_SETS_JOB],
     claimLimit: 1,
     intervalMs: 1_000,
   },
@@ -214,6 +215,7 @@ const OSU_API_JOB_TYPES = new Set([
 export const OSU_API_BOUND_JOB_TYPES: ReadonlySet<string> = new Set([
   ...OSU_API_JOB_TYPES,
   REFRESH_QUALIFIED_MAPS_JOB,
+  RECONCILE_SETTLED_SETS_JOB,
   "osc_backfill",
   "osc_country_catchup",
 ]);
@@ -447,6 +449,10 @@ export class WorkerRunner {
     }
     if (job.type === REFRESH_QUALIFIED_MAPS_JOB) {
       await runQualifiedMapsWatch(this.db, this.osu, this.queue);
+      return;
+    }
+    if (job.type === RECONCILE_SETTLED_SETS_JOB) {
+      await runSettledSetsReconcile(this.db, this.osu, this.queue);
       return;
     }
     if (job.type === "compute_dan_estimate") {

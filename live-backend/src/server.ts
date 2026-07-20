@@ -11,6 +11,7 @@ import { startRuntimeStatusMirror } from "./live/runtime-status.js";
 import { deferMapsRefreshesWaitingForRoster, enqueueGlobalMapsRefreshIfDue, enqueueMapsRefreshIfDue } from "./features/maps.js";
 import { ensureMapSearchIndexSeeded, pruneMapSearchPlaceholderRows, reconcileMapSearchIndexStatuses } from "./features/map-search.js";
 import { enqueueQualifiedMapsWatchIfDue } from "./features/qualified-maps-watch.js";
+import { enqueueSettledSetsReconcileIfDue } from "./features/settled-sets-reconcile.js";
 import { ensureDanFloorPinRecomputeSeeded, ensureDtRateAnalysisSeeded, ensureLnMsdSweepSeeded, ensureLnSourceRecomputeSeeded, ensureLnSubtypeRecomputeSeeded, ensureNoteBpmRecomputeSeeded, ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
 import { enqueueMapCollectionsRebuildIfDue } from "./features/map-collections.js";
 import { startGoalUserIndexRefresh } from "./features/goals.js";
@@ -248,6 +249,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       startMapsScheduler(app.db, app.queue, app.config);
       startMapCollectionsScheduler(app.db, app.queue, app.config);
       startQualifiedMapsWatchScheduler(app.db, app.queue, app.config);
+      startSettledSetsReconcileScheduler(app.db, app.queue, app.config);
       startProfilePoolWarmScheduler(app.db, app.queue);
       startVariantPpDripScheduler(app.db, app.queue);
       startPlayerSkillsDripScheduler(app.db, app.queue);
@@ -585,4 +587,19 @@ function startQualifiedMapsWatchScheduler(db: Awaited<ReturnType<typeof createDb
     setTimeout(tick, config.qualifiedMapsWatchIntervalMs).unref();
   };
   setTimeout(tick, 45_000).unref();
+}
+
+// Heals /maps rows the zero-API reconcilers and the qualified watch both miss:
+// revived-then-loved sets whose old rows sit at graveyard forever, including
+// diffs that no longer exist upstream (re-uploaded under new ids). Candidate
+// discovery is pure DB; each hit costs one /beatmapsets read, so it lives
+// behind the same osu!-API scheduler gating as the qualified watch.
+function startSettledSetsReconcileScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: JobQueue, config: ReturnType<typeof readConfig>): void {
+  const tick = async () => {
+    await enqueueSettledSetsReconcileIfDue(db, queue, config.settledSetsReconcileIntervalMs).catch((error) => {
+      console.warn("[settled-sets] scheduled reconcile failed", error);
+    });
+    setTimeout(tick, config.settledSetsReconcileIntervalMs).unref();
+  };
+  setTimeout(tick, 50_000).unref();
 }
