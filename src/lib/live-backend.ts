@@ -1269,6 +1269,10 @@ export interface LiveMapSearchEntry {
   // once the DT-rate sweep covers the chart; used to show real DT difficulty.
   danDt?: { label: string; family: string; rawDan: number } | null;
   msdDt?: Record<string, number> | null;
+  // LN-adjusted (tail-aware) MSD at 1.0x, present on the single-map detail
+  // entry for hold-bearing charts once the LN MSD sweep covers them. Already
+  // blended server-side; matches the skill-rating engine's valuation.
+  msdLn?: Record<string, number> | null;
   // Vibro-like chart per the classifier: ratings are unreliable and dan-scoped
   // searches skip these server-side.
   vibro?: boolean;

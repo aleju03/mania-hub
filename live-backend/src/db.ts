@@ -625,6 +625,11 @@ async function migrateChartAnalysisDtRate(db: Db): Promise<void> {
   if (!columns.includes("dan_dt_json")) {
     await db.execute("alter table beatmap_chart_analysis add column dan_dt_json text");
   }
+  // Raw tail-aware MSD (lnTailTaps run, same { values } shape as msd_json);
+  // readers blend it toward msd_json by the keymode weight in dan/msd.ts.
+  if (!columns.includes("msd_ln_json")) {
+    await db.execute("alter table beatmap_chart_analysis add column msd_ln_json text");
+  }
 }
 
 async function migrateMapsFarmedOverlay(db: Db): Promise<void> {

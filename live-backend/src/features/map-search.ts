@@ -3,6 +3,7 @@ import type { Db } from "../db.js";
 import { exec, execBatch, json, parseJson, type DbStatement } from "../db.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION } from "./activity.js";
 import { CHART_ANALYSIS_VERSION } from "./chart-analysis.js";
+import { blendLnTailValues } from "../dan/msd.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { nowIso } from "../shared/score.js";
 
@@ -127,6 +128,10 @@ export interface MapSearchSetEntry extends MapSearchEntry {
    *  covered this chart yet. */
   danDt?: { label: string; family: string; rawDan: number } | null;
   msdDt?: Record<string, number> | null;
+  /** LN-adjusted (tail-aware, keymode-blended) MSD at 1.0x; null until the LN
+   *  MSD sweep covers this chart or when the chart has no meaningful LN
+   *  content. Absent on bulk search rows. */
+  msdLn?: Record<string, number> | null;
 }
 
 export interface MapSearchPage {
@@ -1167,11 +1172,31 @@ export async function getMapSearchSetEntry(db: Db, beatmapId: number): Promise<M
   // the detail page re-requests this endpoint, so each diff gets its own.
   const dtRow = (await exec(
     db,
-    "select msd_dt_json, dan_dt_json from beatmap_chart_analysis where beatmap_id = ? and analysis_version = ?",
+    "select msd_dt_json, dan_dt_json, msd_ln_json from beatmap_chart_analysis where beatmap_id = ? and analysis_version = ?",
     [beatmapId, CHART_ANALYSIS_VERSION],
   )).rows[0];
   const { danDt, msdDt } = parseDtRateVerdict(dtRow);
-  return { ...entry, diffCount: diffs.length, diffs, danDt, msdDt };
+  const msdLn = parseLnAdjustedMsd(dtRow, entry.msd, entry.keyCount);
+  return { ...entry, diffCount: diffs.length, diffs, danDt, msdDt, msdLn };
+}
+
+// msd_ln_json stores the raw tail-aware calc run; the entry carries the
+// blended (display-ready) values so the frontend never needs the weights.
+// Null when the sweep has not covered the chart, when the base MSD is
+// missing, or when blending changes nothing (rice charts).
+function parseLnAdjustedMsd(
+  row: Record<string, unknown> | undefined,
+  baseMsd: Record<string, number> | null,
+  keyCount: number,
+): Record<string, number> | null {
+  if (!row || row.msd_ln_json == null || !baseMsd) return null;
+  const parsed = parseJson<{ values?: Record<string, number> } | null>(String(row.msd_ln_json), null);
+  const tails = parsed && parsed.values && typeof parsed.values === "object" ? parsed.values : null;
+  if (!tails) return null;
+  const blended = blendLnTailValues(baseMsd, tails, keyCount);
+  const baseOverall = Number(baseMsd.Overall ?? 0);
+  const blendedOverall = Number(blended.Overall ?? 0);
+  return blendedOverall - baseOverall >= 0.005 ? blended : null;
 }
 
 // Parses the DT-rate columns (dan_dt_json is a lean {primaryLabel, primaryFamily,

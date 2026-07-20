@@ -12,6 +12,35 @@ export interface MsdResult {
 
 const MSD_SUPPORTED_KEYS = new Set([4, 6, 7]);
 
+// MinaCalc rates the rice skeleton: LN tails never reach it, so hold-heavy
+// charts underrate. The tail-aware pass (lnTailTaps) is a strict upper bound
+// on the release work - a release is easier than a tap - so consumers blend
+// toward it by a keymode-calibrated weight. Weights were fit on player
+// cohorts (2026-07-19, ~140 players, LN-share cohorts vs pp-anchored
+// residuals): 4K flattens the hybrid cohort at 0.1 (osu pp overpays 4K LN,
+// so zeroing the ln-main residual against pp would overcorrect); the 0.74
+// multi-key calc underrates 7K LN far harder and wants 0.3. Charts without
+// holds produce identical rows either way, so rice values are untouched.
+export const LN_TAIL_BLEND_BY_KEYMODE: Record<number, number> = { 4: 0.1, 6: 0.3, 7: 0.3 };
+export const LN_TAIL_MIN_RATIO = 0.02;
+
+/** Blend base MSD values toward the tail-aware pass by the keymode weight. */
+export function blendLnTailValues(
+  base: Record<string, number>,
+  tails: Record<string, number>,
+  keyCount: number,
+): Record<string, number> {
+  const blend = LN_TAIL_BLEND_BY_KEYMODE[keyCount] ?? 0;
+  const values: Record<string, number> = {};
+  for (const [name, atBase] of Object.entries(base)) {
+    const atTails = Number(tails[name] ?? atBase);
+    values[name] = blend > 0 && atBase > 0 && atTails > atBase
+      ? atBase + blend * (atTails - atBase)
+      : atBase;
+  }
+  return values;
+}
+
 type EttModule = typeof import("../../vendor/leoblack/ett/index.js");
 
 let ettModulePromise: Promise<EttModule> | null = null;

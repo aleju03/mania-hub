@@ -352,6 +352,14 @@ function FarmMapDetailPage() {
                           detail={metrics.vibro ? "vibro chart, estimate unreliable" : metrics.msdTopSkillset}
                         />
                       ) : null}
+                      {metrics.msdLnOverall != null ? (
+                        <MetricTile
+                          icon={<Gauge className="h-3.5 w-3.5" />}
+                          label="msd (LN-adj)"
+                          value={metrics.msdLnOverall.toFixed(2)}
+                          detail="tail-aware, matches skill rating"
+                        />
+                      ) : null}
                       {metrics.dan ? (
                         <MetricTile
                           icon={<Star className="h-3.5 w-3.5" />}
@@ -498,6 +506,9 @@ function buildMapMetrics(selected: DetailBeatmap | null, entry: LiveMapSearchEnt
   const msd = (preferDt && entry?.msdDt ? entry.msdDt : entry?.msd) ?? null;
   const dan = (preferDt && entry?.danDt ? entry.danDt : entry?.dan) ?? null;
   const msdOverall = Number(msd?.Overall ?? NaN);
+  // LN-adjusted MSD exists only at 1.0x (no LN x DT cross-sweep); it mirrors
+  // what the skill-rating engine credits a play on this chart.
+  const msdLnOverall = !preferDt ? Number(entry?.msdLn?.Overall ?? NaN) : NaN;
   // Same readout as the /maps modal: the sub-1 values the 6K/7K calc engine
   // emits for skillsets it does not rate are noise, not data.
   const msdTopSkillset = msd
@@ -515,6 +526,7 @@ function buildMapMetrics(selected: DetailBeatmap | null, entry: LiveMapSearchEnt
     od: selected?.accuracy ?? 8,
     lnFraction: objects > 0 ? holdCount / objects : 0,
     msdOverall: Number.isFinite(msdOverall) && msdOverall > 0 ? msdOverall : null,
+    msdLnOverall: Number.isFinite(msdLnOverall) && msdLnOverall > 0 ? msdLnOverall : null,
     msdTopSkillset,
     vibro: entry?.vibro === true,
     dan,

@@ -7,7 +7,7 @@ import { estimateLnDan } from "../dan/dan-estimator/ln.js";
 import { analyzeManiaPatterns } from "../dan/dan-estimator/patterns.js";
 import { classifyChart, detectLnVibro, detectRiceVibro, sunnyLowEndReroute, type ChartClassification, type DanVerdictHalf } from "../dan/chart-classifier.js";
 import { runLeoBlackMixed } from "../dan/leoblack-estimator.js";
-import { computeMsd } from "../dan/msd.js";
+import { LN_TAIL_MIN_RATIO, computeMsd } from "../dan/msd.js";
 import { computeNoteBpm } from "../dan/note-bpm.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { readConfig } from "../config.js";
@@ -160,14 +160,22 @@ export async function computeBeatmapChartAnalysis(
 
     const msd = await computeMsd(osuText, { keyCount: map.keyCount }).catch(() => null);
 
+    // Tail-aware MSD for hold-bearing charts (stored raw; readers blend by
+    // the keymode weight). Same shape as msd_json.
+    let msdLn: Awaited<ReturnType<typeof computeMsd>> = null;
+    if (msd && classification.lnRatio > LN_TAIL_MIN_RATIO) {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      msdLn = await computeMsd(osuText, { keyCount: map.keyCount, lnTailTaps: true }).catch(() => null);
+    }
+
     const lean = leanClassification(classification, computeNoteBpm(osuText));
     const computedAt = nowIso();
     await exec(
       db,
       `insert into beatmap_chart_analysis
          (beatmap_id, analysis_version, status, key_count, primary_label, primary_family,
-          raw_dan, msd_overall, classification_json, msd_json, error, computed_at, updated_at)
-       values (?, ?, 'ready', ?, ?, ?, ?, ?, ?, ?, null, ?, ?)
+          raw_dan, msd_overall, classification_json, msd_json, msd_ln_json, error, computed_at, updated_at)
+       values (?, ?, 'ready', ?, ?, ?, ?, ?, ?, ?, ?, null, ?, ?)
        on conflict(beatmap_id, analysis_version) do update set
          status = excluded.status,
          key_count = excluded.key_count,
@@ -177,6 +185,7 @@ export async function computeBeatmapChartAnalysis(
          msd_overall = excluded.msd_overall,
          classification_json = excluded.classification_json,
          msd_json = excluded.msd_json,
+         msd_ln_json = excluded.msd_ln_json,
          error = excluded.error,
          computed_at = excluded.computed_at,
          updated_at = excluded.updated_at`,
@@ -190,6 +199,7 @@ export async function computeBeatmapChartAnalysis(
         msd?.values.Overall ?? null,
         json(lean),
         msd ? json(msd) : null,
+        msdLn ? json(msdLn) : null,
         computedAt,
         computedAt,
       ],
@@ -1249,6 +1259,108 @@ async function enqueueDtRateAnalysis(queue: JobQueue, cursor: number): Promise<v
   await queue.enqueue(
     DT_RATE_ANALYSIS_JOB,
     `${DT_RATE_ANALYSIS_JOB}:${cursor}`,
+    { cursor },
+    { priority: -10, replaceDone: true },
+  );
+}
+
+// ── One-shot LN-tail MSD backfill sweep ──────────────────────────────────────
+// Stored analyses predate msd_ln_json; this backfills the tail-aware MSD for
+// every ready hold-bearing chart from the cached .osu corpus so map pages can
+// show LN-adjusted MSD. Same playbook as the DT sweep: chunked, self-chaining,
+// boot-seeded, done-key in live_meta. Purely local work, no osu! API.
+
+export const LN_MSD_SWEEP_JOB = "recompute_ln_msd_sweep";
+const LN_MSD_SWEEP_META_KEY = "ln_msd_backfill_done:v1";
+const LN_MSD_SWEEP_CHUNK = 40;
+
+export interface LnMsdSweepChunkResult {
+  nextCursor: number;
+  scanned: number;
+  computed: number[];
+  done: boolean;
+}
+
+export async function recomputeLnMsdChunk(
+  db: Db,
+  cursor: number,
+  limit = LN_MSD_SWEEP_CHUNK,
+): Promise<LnMsdSweepChunkResult> {
+  // The json_extract predicate cannot use an index, but the PK walk stops at
+  // `limit` candidates, so each chunk's scan cost is proportional to the gap
+  // between candidates (roughly every other ready row qualifies).
+  const rows = (await exec(
+    db,
+    `select a.beatmap_id as beatmap_id, a.key_count as key_count
+     from beatmap_chart_analysis a
+     where a.analysis_version = ? and a.status = 'ready'
+       and a.msd_json is not null and a.msd_ln_json is null
+       and a.key_count in (4, 6, 7)
+       and cast(json_extract(a.classification_json, '$.lnRatio') as real) > ?
+       and a.beatmap_id > ?
+     order by a.beatmap_id
+     limit ?`,
+    [CHART_ANALYSIS_VERSION, LN_TAIL_MIN_RATIO, Math.max(0, Math.floor(cursor)), Math.max(1, Math.floor(limit))],
+  )).rows;
+
+  let nextCursor = cursor;
+  const computed: number[] = [];
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    nextCursor = Math.max(nextCursor, beatmapId);
+    const osuText = await readCachedBeatmapFile(db, beatmapId).catch(() => null);
+    if (!osuText) continue;
+    try {
+      const msdLn = await computeMsd(osuText, { keyCount: Number(row.key_count), lnTailTaps: true }).catch(() => null);
+      if (!msdLn) continue;
+      await exec(
+        db,
+        `update beatmap_chart_analysis set msd_ln_json = json(?)
+         where beatmap_id = ? and analysis_version = ?`,
+        [json(msdLn), beatmapId, CHART_ANALYSIS_VERSION],
+      );
+      computed.push(beatmapId);
+    } catch {
+      // A chart the calc rejects keeps its null column; the map page falls
+      // back to the base MSD.
+    }
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+
+  return { nextCursor, scanned: rows.length, computed, done: rows.length < limit };
+}
+
+export async function ensureLnMsdSweepSeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [LN_MSD_SWEEP_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [LN_MSD_SWEEP_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueueLnMsdSweep(queue, 0);
+}
+
+export async function runLnMsdSweepJob(db: Db, queue: JobQueue, payload: { cursor?: number } | undefined): Promise<void> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const result = await recomputeLnMsdChunk(db, cursor);
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [LN_MSD_SWEEP_META_KEY, json({ finishedAt: now }), now],
+    );
+    return;
+  }
+  await enqueueLnMsdSweep(queue, result.nextCursor);
+}
+
+async function enqueueLnMsdSweep(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    LN_MSD_SWEEP_JOB,
+    `${LN_MSD_SWEEP_JOB}:${cursor}`,
     { cursor },
     { priority: -10, replaceDone: true },
   );

@@ -1,6 +1,6 @@
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
-import { computeMsd, isMsdSupportedKeyCount } from "../dan/msd.js";
+import { LN_TAIL_BLEND_BY_KEYMODE, LN_TAIL_MIN_RATIO, blendLnTailValues, computeMsd, isMsdSupportedKeyCount } from "../dan/msd.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { readConfig } from "../config.js";
 import { CHART_ANALYSIS_VERSION, enqueueMissingChartAnalyses } from "./chart-analysis.js";
@@ -372,20 +372,8 @@ async function runMsdAtGoal(
   return { values, calcRuns: 2 };
 }
 
-// MinaCalc rates the rice skeleton: LN tails never reach it, so hold-heavy
-// charts (and the players who main them) underrate. The correction runs the
-// calc a second time with LN releases included as rows (a strict upper bound
-// on the release work - a release is easier than a tap) and blends toward it
-// by a keymode-calibrated weight. Weights were fit on player cohorts
-// (2026-07-19, ~140 players, LN-share-of-top-200 cohorts vs pp-anchored
-// residuals): 4K flattens the hybrid cohort at 0.1 (pp overpays 4K LN, so
-// chasing the ln-main residual to zero against pp would overcorrect); the
-// 0.74 multi-key calc underrates 7K LN far harder and wants 0.3. Charts
-// without holds produce identical rows either way, so rice SSRs are
-// untouched by construction.
-const LN_TAIL_BLEND_BY_KEYMODE: Record<number, number> = { 4: 0.1, 6: 0.3, 7: 0.3 };
-const LN_TAIL_MIN_RATIO = 0.02;
-
+// SSRs on hold-bearing charts blend toward a tail-aware second calc pass;
+// weights and rationale live with the calc facade (dan/msd.ts).
 async function computePlaySsrValues(
   osuText: string,
   options: { rate: number; keyCount: number; goal: number; lnRatio?: number | null },
@@ -397,12 +385,7 @@ async function computePlaySsrValues(
   if (!(blend > 0) || !(Number(lnRatio) > LN_TAIL_MIN_RATIO)) return base;
   const tails = await runMsdAtGoal(osuText, { rate, keyCount, goal, lnTailTaps: true });
   if (!tails) return base;
-  const values: Record<string, number> = {};
-  for (const [name, atBase] of Object.entries(base.values)) {
-    const atTails = Number(tails.values[name] ?? atBase);
-    values[name] = atBase > 0 && atTails > atBase ? atBase + blend * (atTails - atBase) : atBase;
-  }
-  return { values, calcRuns: base.calcRuns + tails.calcRuns };
+  return { values: blendLnTailValues(base.values, tails.values, keyCount), calcRuns: base.calcRuns + tails.calcRuns };
 }
 
 function aggregateModeRatings(plays: StoredPlaySsr[]): Record<string, number> {
