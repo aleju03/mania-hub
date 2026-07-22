@@ -30,6 +30,57 @@ interface FlipBookProps {
   children: ReactNode;
 }
 
+/* Whether a touch that has moved `deltaX` from a page position of `bookX`
+   (the seed point in book coordinates, see tryGrabPage) may take the page as a
+   live fold, and which way the engine will fold it. Pure geometry, exported so
+   the rules can be tested without an engine. */
+export function grabDecision({
+  bookX,
+  deltaX,
+  portrait,
+  rectWidth,
+  pageWidth,
+  index,
+  count,
+}: {
+  bookX: number;
+  deltaX: number;
+  portrait: boolean;
+  rectWidth: number;
+  pageWidth: number;
+  index: number;
+  count: number;
+}): { grab: boolean; back: boolean } {
+  /* The engine derives the fold direction from where the page is grabbed (its
+     getDirectionByPoint): the leading fifth/half of the spread folds back, the
+     rest folds forward. Only grab when the drag direction agrees, else the
+     fold would fight the finger; disagreeing drags still flip via the release
+     swipe. */
+  const back = portrait ? bookX - pageWidth <= rectWidth / 5 : bookX < rectWidth / 2;
+  if (back !== deltaX > 0) return { grab: false, back };
+  if (back ? index < 1 : index >= count - 1) return { grab: false, back };
+  /* Hard pages (the covers) don't fold to the finger: the engine rotates the
+     whole sheet by the drag's overall progress, so grabbing the closed cover
+     mid-page snaps it into a half-open swing for a beat and back on release --
+     the album seems to blink away for a frame. Leave rigid flips to taps and
+     the release swipe; only soft pages get the live fold. In landscape the
+     engine also promotes the page across the sheet from a hard one, so
+     cover-adjacent flips stay rigid there. */
+  const flippingIndex = portrait
+    ? back
+      ? index - 1
+      : index
+    : back
+      ? index - 1
+      : index === 0
+        ? 1
+        : index + 2;
+  const rigid = portrait
+    ? flippingIndex === 0 || flippingIndex === count - 1
+    : flippingIndex <= 1 || flippingIndex >= count - 2;
+  return { grab: !rigid, back };
+}
+
 /* Thin React wrapper over the StPageFlip engine. The engine re-parents the
    React-rendered page elements into its own DOM; on teardown the pages are
    moved back into the React-owned staging element so a StrictMode remount
@@ -82,9 +133,25 @@ export function FlipBook({
        animation to its final frame first, which reads as the next page's
        content popping in with no transition. */
     let queuedFlip: (() => void) | null = null;
+    /* "Busy" is not the same as state === "flipping". A released drag-fold
+       settles through the engine's own animation without ever entering that
+       state, so for the whole settle the book looked idle: a flip fired in
+       that window skipped the queue and went straight to the engine's flip(),
+       which finishes the running animation on its final frame first -- the
+       no-transition snap the queue exists to stop -- and a fresh touch could
+       grab the page that was still settling, where the settle's frames
+       overwrite the finger's geometry until the gesture dies. The flip
+       controller's calculation is non-null for both a flip and a settle, and
+       null in the dead user_fold the engine is left in when it refuses a fold
+       direction, so the arrows can never deadlock waiting for "read". */
+    const isBusy = () => {
+      if (!pageFlip) return false;
+      if (pageFlip.getState() === "flipping") return true;
+      return pageFlip.getFlipController().getCalculation() !== null;
+    };
     const flipNextFixed = (corner?: "top" | "bottom") => {
       if (!pageFlip) return;
-      if (pageFlip.getState() === "flipping") {
+      if (isBusy()) {
         queuedFlip = () => flipNextFixed(corner);
         return;
       }
@@ -96,7 +163,7 @@ export function FlipBook({
     };
     const flipPrevFixed = (corner?: "top" | "bottom") => {
       if (!pageFlip) return;
-      if (pageFlip.getState() === "flipping") {
+      if (isBusy()) {
         queuedFlip = () => flipPrevFixed(corner);
         return;
       }
@@ -183,51 +250,35 @@ export function FlipBook({
     };
 
     const tryGrabPage = (state: NonNullable<typeof touchState>, deltaX: number) => {
-      if (!pageFlip || pageFlip.getState() === "flipping") return;
+      if (!pageFlip || isBusy()) return;
       const rect = pageFlip.getRender().getRect();
       const distRect = pageFlip.getUI().getDistElement().getBoundingClientRect();
-      const bookX = state.x0 - distRect.left - rect.left;
-      /* The engine derives the fold direction from where the page is
-         grabbed (its getDirectionByPoint): the leading fifth/half of the
-         spread folds back, the rest folds forward. Only grab when the drag
-         direction agrees, else the fold would fight the finger; disagreeing
-         drags still flip via the release swipe. */
-      const back =
-        pageFlip.getOrientation() === "portrait"
-          ? bookX - rect.pageWidth <= rect.width / 5
-          : bookX < rect.width / 2;
-      if (back !== deltaX > 0) return;
-      const index = pageFlip.getCurrentPageIndex();
-      const count = pageFlip.getPageCount();
-      if (back ? index < 1 : index >= count - 1) return;
-      /* Hard pages (the covers) don't fold to the finger: the engine rotates
-         the whole sheet by the drag's overall progress, so grabbing the
-         closed cover mid-page snaps it into a half-open swing for a beat and
-         back on release -- the album seems to blink away for a frame. Leave
-         rigid flips to taps and the release swipe; only soft pages get the
-         live fold. In landscape the engine also promotes the page across the
-         sheet from a hard one, so cover-adjacent flips stay rigid there. */
-      const portrait = pageFlip.getOrientation() === "portrait";
-      const flippingIndex = portrait
-        ? back
-          ? index - 1
-          : index
-        : back
-          ? index - 1
-          : index === 0
-            ? 1
-            : index + 2;
-      const rigid = portrait
-        ? flippingIndex === 0 || flippingIndex === count - 1
-        : flippingIndex <= 1 || flippingIndex >= count - 2;
-      if (rigid) return;
+      /* Classify the point the ENGINE will classify, not the raw touch-down
+         point. The fold is seeded 6px along the drag below and the engine
+         derives the fold direction from that seed, so within 6px of the
+         back/forward boundary -- which in portrait sits 40% across the visible
+         page, not at an edge -- the two disagreed: the bounds and rigid rules
+         were checked for one page while the engine folded the other, which at
+         page 1 put a live fold on the hard front cover. */
+      const seedX = state.x0 + (deltaX > 0 ? 6 : -6);
+      const { grab } = grabDecision({
+        bookX: seedX - distRect.left - rect.left,
+        deltaX,
+        portrait: pageFlip.getOrientation() === "portrait",
+        rectWidth: rect.width,
+        pageWidth: rect.pageWidth,
+        index: pageFlip.getCurrentPageIndex(),
+        count: pageFlip.getPageCount(),
+      });
+      if (!grab) return;
       blockRect = distRect;
       state.folding = true;
+      /* The engine only starts folding once the move is more than 5px from
+         the startUserTouch point, so this anchors at the real touch-down and
+         the seed 6px along it takes the fold past that threshold; the finger's
+         live position takes over on the next move. */
       pageFlip.startUserTouch(blockPos(state.x0, state.y0));
-      /* Seed the fold at the grab point so the direction the engine picks
-         matches the region just validated; the finger's live position takes
-         over on the next move. */
-      pageFlip.userMove(blockPos(state.x0 + (deltaX > 0 ? 6 : -6), state.y0), true);
+      pageFlip.userMove(blockPos(seedX, state.y0), true);
     };
 
     const onTouchMove = (event: TouchEvent) => {
@@ -309,8 +360,10 @@ export function FlipBook({
       if (cancelled) return;
       /* Touch devices skip the page shadows: they're gradient layers whose
          clip-path is rebuilt on every animation frame, the biggest repaint
-         cost of a flip on phones. */
-      const noHover = window.matchMedia("(hover: none)").matches;
+         cost of a flip on phones. Matched the way the stylesheet matches
+         touch, because plenty of Android devices report (hover: hover) and the
+         bare query left the shadows switched on there. */
+      const noHover = window.matchMedia("(hover: none), (pointer: coarse)").matches;
       pageFlip = new PageFlipCtor(bookHost, {
         width: pageWidth,
         height: pageHeight,

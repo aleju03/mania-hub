@@ -237,13 +237,22 @@ html[data-custom-cursor="true"] * {
   .album-tri-layer { animation: none; }
   .album-flag-sticker { transition: none; }
 }
-@media (hover: none) {
+@media (hover: none), (pointer: coarse) {
   /* Touch devices: the drifting cover field would repaint under the flip
      engine's per-frame clip-path work and read as jank, so covers hold
-     still (hover is meaningless there anyway). */
-  .album-cover-live .album-tri-layer,
-  .album-cover-hover:hover .album-tri-layer {
-    animation-play-state: paused;
+     still (hover is meaningless there anyway).
+
+     Drop the animation rather than pausing it. A paused animation still
+     renders whichever frame its animation-delay selects, so on touch the
+     delay WAS the picture: every re-render restamped it and the whole field
+     teleported, and two covers mounted a moment apart (the stand-in and the
+     book's own cover face) picked different frames, so the hand-off jumped
+     too. With no animation there is no frame for a delay to select and every
+     cover shows the identical resting field. Paired with (pointer: coarse)
+     like the rest of this file, because Android reports (hover: hover) on
+     plenty of touch-only devices. */
+  .album-tri-layer {
+    animation: none;
   }
 }
 /* The open-album stage copies the flip engine's sizing rule so the static

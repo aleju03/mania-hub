@@ -126,8 +126,36 @@ export function cardThumbnailKeyForData(data: ManiaCardReadyData, width = COLLEC
   return `${CACHE_VERSION}-w${width}-u${data.user.id}-${hashString(sourceSignature)}`;
 }
 
+/* Building a key means rebuilding the whole render data, parsing two CSS
+   colours and a gradient, serializing a ~400-character signature and hashing
+   it. The album asks for the same cards' keys twice on every one of its
+   renders -- once for the spread signature, once per slot, both outside the
+   memoized slot itself -- so the answer is cached per card object. The wallet
+   and the server collection are copy-on-write, so a card whose data changed is
+   always a different object and can never be served a stale key. Keyed by
+   width too, or the 240px key would be handed to any other size. */
+const keyCacheByWidth = new Map<number, WeakMap<CollectedCard, string | null>>();
+
 export function cardThumbnailKeyForCollectionCard(card: CollectedCard, width = COLLECTION_CARD_THUMB_WIDTH): string | null {
-  if (!card.skills) return null;
+  let cached = keyCacheByWidth.get(width);
+  if (!cached) {
+    cached = new WeakMap();
+    keyCacheByWidth.set(width, cached);
+  }
+  /* Not a truthiness test: null is a legitimate cached answer for a card with
+     no skills. */
+  const hit = cached.get(card);
+  if (hit !== undefined) return hit;
+  const key = card.skills ? buildCollectionCardKey(card, card.skills, width) : null;
+  cached.set(card, key);
+  return key;
+}
+
+function buildCollectionCardKey(
+  card: CollectedCard,
+  skills: NonNullable<CollectedCard["skills"]>,
+  width: number,
+): string {
   return cardThumbnailKeyForData(
     buildManiaCardRenderDataFromSkills({
       user: {
@@ -137,7 +165,7 @@ export function cardThumbnailKeyForCollectionCard(card: CollectedCard, width = C
         country_code: card.countryCode,
         statistics: { global_rank: card.globalRank, pp: card.pp },
       },
-      skills: card.skills,
+      skills,
     }),
     width,
   );

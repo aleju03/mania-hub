@@ -181,6 +181,16 @@ export function playPageTurn() {
   playNoise(ctx, { at: 0.15, duration: 0.09, gain: 0.06, startFreq: 2300, endFreq: 850, q: 1.2 });
 }
 
+/* Building the context and filling the one-second noise buffer costs real
+   time, and on the very first page turn it landed inside the flip engine's
+   animation-end callback. Call this from the gesture that opens an album --
+   still a user gesture, so autoplay policy is satisfied -- and the first turn
+   is already warm. */
+export function warmPackAudio(): void {
+  const ctx = ensureAudio();
+  if (ctx) getNoise(ctx);
+}
+
 const CHIME_NOTES = [784, 988, 1175, 1568, 1976];
 
 /* Landing chime when the card faces out. Intensity (0..1, from the tier)

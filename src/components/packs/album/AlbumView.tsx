@@ -33,7 +33,7 @@ import {
   loadR2CardThumbnails,
   rememberCardThumbnailBlob,
 } from "../cardThumbnailCache";
-import { playPageTurn } from "../packSfx";
+import { playPageTurn, warmPackAudio } from "../packSfx";
 import {
   ALBUM_SLOTS_PER_PAGE,
   albumPageCount,
@@ -303,13 +303,24 @@ function CoverTriangleDefs() {
   );
 }
 
-function CoverTriangles() {
-  /* Wall-clock phase lock: a negative delay starts every instance mid-drift at
-     the shared global phase, so when the open album swaps the static stand-in
-     cover for the book's cover face the field carries on instead of visibly
-     restarting. Client-only render (the album mounts on interaction), so the
-     Date.now() in render never reaches SSR markup. */
-  const nowSeconds = Date.now() / 1000;
+/* Memoized: it takes no props, so this is a total barrier. Without one, every
+   AlbumView state change -- a page turn, a roster chunk, each thumbnail that
+   resolves -- walked this svg for every mounted cover (the hidden shelf's
+   included) and rewrote three inline styles on each. */
+export const CoverTriangles = memo(function CoverTriangles() {
+  /* Wall-clock phase lock: a negative delay equal to this instance's own mount
+     time keeps its drift at the shared global phase for as long as it lives
+     (progress = elapsed + mount time, congruent to now for every layer
+     period), so when the open album swaps the static stand-in cover for the
+     book's cover face the field carries on instead of visibly restarting.
+
+     Stamped once at mount and never again on a re-render: animation-delay is
+     effect timing, not a start time, so restamping it on a live animation
+     shifts that animation's local time by the whole render-to-render gap and
+     the field visibly jumps -- the exact opposite of a phase lock. AlbumView
+     only renders once the wallet has loaded out of localStorage, so this never
+     runs on the server and the clock read cannot reach SSR markup. */
+  const [mountSeconds] = useState(() => Date.now() / 1000);
   return (
     <svg
       className="pointer-events-none absolute inset-0 h-full w-full"
@@ -323,7 +334,7 @@ function CoverTriangles() {
           className="album-tri-layer"
           style={{
             "--drift-dur": `${layer.duration}s`,
-            animationDelay: `${(-(nowSeconds % layer.duration)).toFixed(2)}s`,
+            animationDelay: `${(-(mountSeconds % layer.duration)).toFixed(2)}s`,
           } as CSSProperties}
         >
           <use href={`#album-tri-layer-${layerIndex}`} />
@@ -331,7 +342,7 @@ function CoverTriangles() {
       ))}
     </svg>
   );
-}
+});
 
 /* Each cover's tilt is hashed from its country code so the shelf looks
    hand-assembled but every render (and both book faces) agree. Kept off
@@ -470,6 +481,120 @@ function ScaledCover({ width, children }: { width: number; children: ReactNode }
     </div>
   );
 }
+
+/* A re-render pulse, coalesced to at most one per frame. The album's thumbnails
+   resolve one at a time out of CacheStorage, the shared R2 pool and the local
+   canvas renderer, each completion landing in its own task, so React cannot
+   batch them: a chunk of collected cards used to fire one full AlbumView render
+   per thumbnail, arriving on top of whatever page turn was running. The slots
+   read the module cache during render, so one pulse per frame delivers the
+   whole batch just as fast. */
+export function useFramePulse(): () => void {
+  const [, setRevision] = useState(0);
+  const frameRef = useRef(0);
+  useEffect(
+    () => () => {
+      if (frameRef.current) cancelAnimationFrame(frameRef.current);
+    },
+    [],
+  );
+  return useCallback(() => {
+    if (frameRef.current) return;
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = 0;
+      setRevision((revision) => revision + 1);
+    });
+  }, []);
+}
+
+/* The shelf cover and the open book's cover face carry the same two captions,
+   so they live out here rather than in either one. */
+export function albumCountText(counts: ReadonlyMap<string, number>, code: string): string {
+  const count = counts.get(code) ?? 0;
+  return `${count.toLocaleString()} ${count === 1 ? "card" : "cards"}`;
+}
+
+export function albumSubtitle(code: string): string {
+  return isGlobalScope(code) ? `Top ${GLOBAL_ALBUM_CAP} players` : "Card collection";
+}
+
+/* Memoized, and it owns its search box. The shelf stays mounted (just hidden)
+   behind an open album and React has no idea about display:none, so without a
+   boundary here every page turn, roster chunk and thumbnail arrival re-rendered
+   every cover on the shelf -- the bulk of the work in an AlbumView render, none
+   of it on screen. Both data props are memoized upstream and onOpen is
+   identity-stable, so this now re-renders only when the collection itself
+   changes. The query moved in for the same reason: left in AlbumView it would
+   re-render the open book on every keystroke, and the filtered array it
+   produces would defeat the memo anyway. */
+export const AlbumShelf = memo(function AlbumShelf({
+  sections,
+  counts,
+  onOpen,
+}: {
+  sections: AlbumSection[];
+  counts: ReadonlyMap<string, number>;
+  onOpen: (code: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const trimmed = query.trim().toLowerCase();
+  const visible = trimmed
+    ? sections.filter(
+        (section) =>
+          section.code.toLowerCase().includes(trimmed) ||
+          section.name.toLowerCase().includes(trimmed),
+      )
+    : sections;
+
+  return (
+    <>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <h2 className="text-sm font-bold text-white">Card albums</h2>
+        <span className="text-[12px] text-osu-f1 tabular-nums">
+          {trimmed ? `${visible.length} of ${sections.length} albums` : `${sections.length} albums`}
+        </span>
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="find a country"
+          aria-label="Find a country album"
+          className="ml-auto h-7 w-[180px] select-text rounded-full border border-osu-b3/40 bg-osu-b4/40 px-3 text-[12px] text-white outline-none placeholder:text-osu-f1/70 focus:border-osu-pink/50"
+        />
+      </div>
+      {visible.length === 0 && (
+        <div className="py-10 text-center text-[12px] text-osu-f1">
+          No album matches "{query.trim()}".
+        </div>
+      )}
+      <div className="grid grid-cols-2 justify-items-center gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4">
+        {visible.map((section) => (
+          <button
+            key={section.code}
+            type="button"
+            onClick={() => onOpen(section.code)}
+            className="album-cover-hover cursor-pointer rounded-[10px] shadow-[0_10px_24px_rgba(0,0,0,0.4)] transition-transform duration-150 hover:-translate-y-1"
+            /* Covers below the fold skip layout/paint until scrolled to; the
+               intrinsic size matches ScaledCover so nothing shifts. */
+            style={{
+              contentVisibility: "auto",
+              containIntrinsicSize: `${SHELF_COVER_WIDTH}px ${Math.round((PAGE_HEIGHT / PAGE_WIDTH) * SHELF_COVER_WIDTH)}px`,
+            }}
+            aria-label={`Open the ${section.name} album`}
+          >
+            <ScaledCover width={SHELF_COVER_WIDTH}>
+              <AlbumCoverFace
+                section={section}
+                collectedText={albumCountText(counts, section.code)}
+                subtitle={albumSubtitle(section.code)}
+              />
+            </ScaledCover>
+          </button>
+        ))}
+      </div>
+    </>
+  );
+});
 
 interface PlayerPeekTarget {
   entry: LiveGlobalRankingEntry;
@@ -708,7 +833,6 @@ export function AlbumView({
 }) {
   const sections = useMemo(() => buildAlbumSections(trackedCountries ?? []), [trackedCountries]);
   const [openCode, setOpenCode] = useState<string | null>(null);
-  const [shelfQuery, setShelfQuery] = useState("");
   const rootRef = useRef<HTMLElement | null>(null);
   const [rosters, setRosters] = useState<Record<string, RosterData>>(() => {
     const seeded: Record<string, RosterData> = {};
@@ -723,7 +847,7 @@ export function AlbumView({
   const [bookReady, setBookReady] = useState(false);
   const [bookSettled, setBookSettled] = useState(false);
   const lastFlipAtRef = useRef(0);
-  const [, setThumbRevision] = useState(0);
+  const bumpThumbnails = useFramePulse();
   const [serverOwned, setServerOwned] = useState<Set<number> | null>(null);
   /* A still-fresh session cache seeds the very first render, so remounting
      the album (tab away and back, route re-entry) never flashes the
@@ -946,7 +1070,7 @@ export function AlbumView({
       await Promise.all(missing.map(async ({ card, key }) => {
         const cached = await loadPersistedCardThumbnail(key);
         if (cancelled) return;
-        if (cached) setThumbRevision((revision) => revision + 1);
+        if (cached) bumpThumbnails();
         else remote.push({ card, key });
       }));
       if (cancelled || remote.length === 0) return;
@@ -955,13 +1079,13 @@ export function AlbumView({
       if (cancelled) return;
       const toRender = remote.filter(({ key }) => {
         if (!urls[key]) return true;
-        setThumbRevision((revision) => revision + 1);
+        bumpThumbnails();
         return false;
       });
       await Promise.all(toRender.map(async ({ card }) => {
         try {
           const url = await renderAlbumThumbnail(card);
-          if (!cancelled && url) setThumbRevision((revision) => revision + 1);
+          if (!cancelled && url) bumpThumbnails();
         } catch {
           // The tier skeleton stays on this slot.
         }
@@ -972,7 +1096,7 @@ export function AlbumView({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spreadSignature]);
+  }, [spreadSignature, bumpThumbnails]);
 
   /* Identity-stable so the memoized slots don't re-render on unrelated
      state changes. */
@@ -987,6 +1111,19 @@ export function AlbumView({
     setPeek({ entry, owned });
   }, []);
 
+  /* Identity-stable for the same reason, and declared up here because it is a
+     prop of the memoized shelf and hooks cannot live below the early return. */
+  const openAlbum = useCallback((code: string) => {
+    /* Built inside the tap that opens an album, so the audio graph is warm by
+       the first page turn instead of being constructed inside the flip
+       engine's animation-end callback -- and still under a user gesture, so
+       autoplay policy is satisfied. */
+    warmPackAudio();
+    setOpenCode(code);
+    setCurrentPage(0);
+    setBookReady(false);
+  }, []);
+
   if (!isLiveBackendConfigured() || !trackedCountries || sections.length <= 1) {
     return (
       <div className="py-10 text-center text-[12px] text-osu-f1">
@@ -995,83 +1132,18 @@ export function AlbumView({
     );
   }
 
-  const openAlbum = (code: string) => {
-    setOpenCode(code);
-    setCurrentPage(0);
-    setBookReady(false);
-  };
-
   const closeAlbum = () => {
     setOpenCode(null);
     setPeek(null);
     setSpotlight(null);
   };
 
-  const shelfCountText = (section: AlbumSection) => {
-    const count = walletCountByCode.get(section.code) ?? 0;
-    return `${count.toLocaleString()} ${count === 1 ? "card" : "cards"}`;
-  };
-
-  const shelfSubtitle = (section: AlbumSection) =>
-    isGlobalScope(section.code) ? `Top ${GLOBAL_ALBUM_CAP} players` : "Card collection";
-
-  const trimmedQuery = shelfQuery.trim().toLowerCase();
-  const visibleSections = trimmedQuery
-    ? shelfSections.filter(
-        (section) =>
-          section.code.toLowerCase().includes(trimmedQuery) ||
-          section.name.toLowerCase().includes(trimmedQuery),
-      )
-    : shelfSections;
-
   /* The shelf stays mounted (just hidden) while an album is open, so going
-     back to it costs nothing. */
+     back to it costs nothing. The wrapper stays out here so toggling the class
+     never re-renders the shelf itself. */
   const shelfView = (
     <div className={openSection ? "hidden" : undefined}>
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <h2 className="text-sm font-bold text-white">Card albums</h2>
-        <span className="text-[12px] text-osu-f1 tabular-nums">
-          {trimmedQuery ? `${visibleSections.length} of ${sections.length} albums` : `${sections.length} albums`}
-        </span>
-        <input
-          type="search"
-          value={shelfQuery}
-          onChange={(event) => setShelfQuery(event.target.value)}
-          placeholder="find a country"
-          aria-label="Find a country album"
-          className="ml-auto h-7 w-[180px] select-text rounded-full border border-osu-b3/40 bg-osu-b4/40 px-3 text-[12px] text-white outline-none placeholder:text-osu-f1/70 focus:border-osu-pink/50"
-        />
-      </div>
-      {visibleSections.length === 0 && (
-        <div className="py-10 text-center text-[12px] text-osu-f1">
-          No album matches "{shelfQuery.trim()}".
-        </div>
-      )}
-      <div className="grid grid-cols-2 justify-items-center gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4">
-        {visibleSections.map((section) => (
-          <button
-            key={section.code}
-            type="button"
-            onClick={() => openAlbum(section.code)}
-            className="album-cover-hover cursor-pointer rounded-[10px] shadow-[0_10px_24px_rgba(0,0,0,0.4)] transition-transform duration-150 hover:-translate-y-1"
-            /* Covers below the fold skip layout/paint until scrolled to; the
-               intrinsic size matches ScaledCover so nothing shifts. */
-            style={{
-              contentVisibility: "auto",
-              containIntrinsicSize: `${SHELF_COVER_WIDTH}px ${Math.round((PAGE_HEIGHT / PAGE_WIDTH) * SHELF_COVER_WIDTH)}px`,
-            }}
-            aria-label={`Open the ${section.name} album`}
-          >
-            <ScaledCover width={SHELF_COVER_WIDTH}>
-              <AlbumCoverFace
-                section={section}
-                collectedText={shelfCountText(section)}
-                subtitle={shelfSubtitle(section)}
-              />
-            </ScaledCover>
-          </button>
-        ))}
-      </div>
+      <AlbumShelf sections={shelfSections} counts={walletCountByCode} onOpen={openAlbum} />
     </div>
   );
 
@@ -1082,11 +1154,10 @@ export function AlbumView({
   const walletCount = walletCountByCode.get(openSection.code) ?? 0;
   const collectedShown = limit != null ? Math.min(walletCount, limit) : walletCount;
   /* The open book fronts the same cover the shelf shows: constant text, no
-     progress. Anything roster-dependent would repaint the cover (and restart
-     its triangle field) the moment the lookup lands; collection progress
-     renders below the book instead. */
-  const coverText = shelfCountText(openSection);
-  const coverSubtitle = shelfSubtitle(openSection);
+     progress. Anything roster-dependent would repaint the cover the moment the
+     lookup lands; collection progress renders below the book instead. */
+  const coverText = albumCountText(walletCountByCode, openSection.code);
+  const coverSubtitle = albumSubtitle(openSection.code);
   const headerRight = global ? `Top ${GLOBAL_ALBUM_CAP}` : limit != null ? `${collectedShown}/${limit}` : "";
   const rosterFailed = Boolean(openData?.error && openData.total === null);
 

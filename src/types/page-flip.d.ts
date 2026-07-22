@@ -62,7 +62,14 @@ declare module "page-flip" {
       /* FlipDirection: 0 = forward, 1 = back; null until a flip starts. */
       getDirection(): number | null;
     };
-    getFlipController(): { flip(globalPos: { x: number; y: number }): void };
+    getFlipController(): {
+      flip(globalPos: { x: number; y: number }): void;
+      /* Non-null while a flip OR a released fold's settle animation is in
+         flight, and null in the dead user_fold state the engine is left in
+         when it refuses a fold direction -- so this, not getState(), is the
+         honest "is the book busy" test. */
+      getCalculation(): object | null;
+    };
     getPageCollection(): {
       getCurrentSpreadIndex(): number;
       getSpreadIndexByPage(pageIndex: number): number;
