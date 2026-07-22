@@ -303,6 +303,58 @@ async function getStoredUserTopScores(db: Db, userId: number): Promise<OscScore[
     .filter((score): score is OscScore => !!score));
 }
 
+async function hasStoredUserTopScores(db: Db, userId: number): Promise<boolean> {
+  const row = (await exec(db, "select 1 from user_top_scores where user_id = ? limit 1", [userId])).rows[0];
+  return !!row;
+}
+
+/* Session-end freshness for maniacards. When a player's play session ends, the
+   skills job calls this to materialize their stored profile_snapshots row from
+   the already-ingested user_top_scores projection - the SAME osu! best-200 a
+   mint fetches, which confirmTopPlay already paid for this session (top-plays
+   writes user_top_scores + users.top_scores_refreshed_at). Zero osu! calls in
+   the common case; it is the durable, event-driven replacement for the pack
+   warm path's 24h-TTL re-mint. Rules:
+   - Never blank a cold player: an empty projection is left to the skills job's
+     own mint fallback (loadTopPlaysSnapshot), which owns the ~3-call authority.
+   - Never downgrade a fresher row: skip when a mint/confirmTopPlay already
+     refreshed at/after the snapshot's fetched_at (nothing newer to write).
+   - Never touch the users row (that upsert is a SQLITE_BUSY pressure point).
+   Best-effort by contract: callers ignore failures so a profile-write hiccup
+   can never fail or delay the skill-rating write. */
+export async function persistSessionProfileSnapshot(db: Db, userId: number): Promise<"written" | "skipped"> {
+  if (!Number.isInteger(userId) || userId <= 0) return "skipped";
+  const key = normalizeProfileKey(String(userId));
+  const existing = await getStoredProfileSnapshot(db, key, "userId");
+  const userRow = await getStoredProfileUser(db, key, "userId");
+  if (!userRow) return "skipped";
+  const projectionRefreshedAt = readString(userRow.top_scores_refreshed_at);
+  if (existing && (!projectionRefreshedAt || projectionRefreshedAt <= existing.fetched_at)) return "skipped";
+  const bestScores = await getStoredUserTopScores(db, userId);
+  if (bestScores.length === 0) return "skipped";
+  const username = readString(userRow.username) ?? String(userId);
+  const usernameKey = normalizeProfileKey(username);
+  // Used only when this is a first insert (no prior snapshot); on conflict the
+  // existing authoritative user_json is kept - we only refresh the scores.
+  const user = buildCachedProfileUser(userRow);
+  const fetchedAt = nowIso();
+  const userFetchedAt = existing?.user_fetched_at ?? fetchedAt;
+  await persistScoresDisplayMetadata(db, bestScores, fetchedAt);
+  await exec(
+    db,
+    `insert into profile_snapshots (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at, refresh_error)
+     values (?, ?, ?, ?, ?, ?, ?, ?, null)
+     on conflict(user_id) do update set
+       best_scores_json = excluded.best_scores_json,
+       best_scores_limit = excluded.best_scores_limit,
+       fetched_at = excluded.fetched_at,
+       updated_at = excluded.updated_at,
+       refresh_error = null`,
+    [userId, usernameKey, packJson(user), packJson(compactScoresForStorage(bestScores)), PROFILE_BEST_SCORES_LIMIT, fetchedAt, userFetchedAt, fetchedAt],
+  );
+  return "written";
+}
+
 /* In-flight snapshot fetches keyed by profile key. A pack warm and the
    reveal's snapshot request for the same cold player share one osu! API
    fetch instead of doubling it; two visitors landing on the same cold
@@ -314,11 +366,14 @@ export function fetchAndStoreProfileSnapshotShared(
   osu: Pick<OsuApiClient, "getUserByKey" | "getUserBestScoresWindow">,
   key: string,
   lookupMode: ProfileLookupMode = "auto",
+  caller = "api:profile_snapshot",
 ): Promise<ProfileSnapshotRow> {
+  // Coalesce across callers (a pack warm and the skills-job refresh for the
+  // same cold player share one fetch); the first caller's lane label wins.
   const inflightKey = `${lookupMode}:${key}`;
   const existing = inflightSnapshotFetches.get(inflightKey);
   if (existing) return existing;
-  const promise = fetchAndStoreProfileSnapshot(db, osu, key, lookupMode).finally(() => {
+  const promise = fetchAndStoreProfileSnapshot(db, osu, key, lookupMode, caller).finally(() => {
     inflightSnapshotFetches.delete(inflightKey);
   });
   inflightSnapshotFetches.set(inflightKey, promise);
@@ -340,8 +395,14 @@ export async function warmProfileSnapshots(
   const coldKeys: string[] = [];
   for (const userId of userIds) {
     const key = normalizeProfileKey(String(userId));
-    const row = await getStoredProfileSnapshot(db, key, "userId");
-    if (row && !isExpired(row.fetched_at, PROFILE_SNAPSHOT_TTL_MS)) continue;
+    // A stored snapshot (even stale) or a populated top-score projection already
+    // serves the card via getCachedPlayerProfileSnapshot, so only a genuinely
+    // never-seen player needs a mint here. Active players' snapshots stay fresh
+    // via the session-end refresh (persistSessionProfileSnapshot), so warm no
+    // longer re-mints on the 24h TTL - that TTL re-mint is what let a burst of
+    // pack opens stampede the interactive osu! lane.
+    if (await getStoredProfileSnapshot(db, key, "userId")) continue;
+    if (await hasStoredUserTopScores(db, userId)) continue;
     coldKeys.push(key);
   }
   void (async () => {
@@ -361,14 +422,15 @@ async function fetchAndStoreProfileSnapshot(
   osu: Pick<OsuApiClient, "getUserByKey" | "getUserBestScoresWindow">,
   key: string,
   lookupMode: ProfileLookupMode,
+  caller = "api:profile_snapshot",
 ): Promise<ProfileSnapshotRow> {
-  const user = await fetchProfileUserByKey(osu, key, lookupMode);
+  const user = await fetchProfileUserByKey(osu, key, lookupMode, caller);
   const userId = Number(user.id);
   const username = typeof user.username === "string" ? user.username : key;
   if (!Number.isInteger(userId) || userId <= 0) throw new Error("osu! profile response was missing a user id");
 
   const storedUser = stripProfilePage(user);
-  const bestScores = await osu.getUserBestScoresWindow(userId, PROFILE_BEST_SCORES_LIMIT, "api:profile_snapshot:best");
+  const bestScores = await osu.getUserBestScoresWindow(userId, PROFILE_BEST_SCORES_LIMIT, `${caller}:best`);
   const fetchedAt = nowIso();
   const usernameKey = normalizeProfileKey(username);
   await persistScoresDisplayMetadata(db, bestScores, fetchedAt);
@@ -397,15 +459,16 @@ async function fetchProfileUserByKey(
   osu: Pick<OsuApiClient, "getUserByKey">,
   key: string,
   lookupMode: ProfileLookupMode,
+  caller: string,
 ): Promise<Record<string, unknown>> {
-  if (lookupMode === "userId") return osu.getUserByKey(key, "api:profile_snapshot", "id");
-  if (!isNumericProfileKey(key)) return osu.getUserByKey(key, "api:profile_snapshot", "username");
+  if (lookupMode === "userId") return osu.getUserByKey(key, caller, "id");
+  if (!isNumericProfileKey(key)) return osu.getUserByKey(key, caller, "username");
 
   try {
-    return await osu.getUserByKey(key, "api:profile_snapshot", "username");
+    return await osu.getUserByKey(key, caller, "username");
   } catch (error) {
     if (error instanceof OsuApiError && error.status === 404) {
-      return osu.getUserByKey(key, "api:profile_snapshot", "id");
+      return osu.getUserByKey(key, caller, "id");
     }
     throw error;
   }

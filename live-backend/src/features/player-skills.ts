@@ -3,10 +3,11 @@ import { exec, json, parseJson } from "../db.js";
 import { LN_TAIL_BLEND_BY_KEYMODE, LN_TAIL_MIN_RATIO, blendLnTailValues, computeMsd, isMsdSupportedKeyCount } from "../dan/msd.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { readConfig } from "../config.js";
+import { errorContext, logWarn } from "../logger.js";
 import { CHART_ANALYSIS_VERSION, enqueueMissingChartAnalyses } from "./chart-analysis.js";
 import { getCachedBeatmapFile, readCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
 import type { OsuApiClient } from "../osu/client.js";
-import { fetchAndStoreProfileSnapshotShared, getCachedPlayerProfileSnapshot } from "./player-profiles.js";
+import { fetchAndStoreProfileSnapshotShared, getCachedPlayerProfileSnapshot, persistSessionProfileSnapshot } from "./player-profiles.js";
 import { calculateStableAccuracy, getDisplayedAccuracy, getScoreIdentity, isLazerScore, nowIso } from "../shared/score.js";
 import { parseDan } from "../dan/dan-estimator/labels.js";
 import { parseLnDan } from "../dan/dan-estimator/ln.js";
@@ -832,6 +833,13 @@ export async function computePlayerSkillsJob(db: Db, osu: ProfileOsuClient, queu
     const snapshot = await loadTopPlaysSnapshot(db, osu, userId);
     if (!snapshot) throw new Error("No stored top plays and osu API jobs are disabled");
 
+    // Session-end freshness: materialize the maniacard snapshot from the same
+    // ingested projection we just loaded, at zero osu! cost. Best-effort - a
+    // profile-write hiccup must never fail or delay the skill-rating write.
+    await persistSessionProfileSnapshot(db, userId).catch((error) => {
+      logWarn("session_profile_snapshot_persist_failed", { userId, ...errorContext(error) });
+    });
+
     const previousRow = (await exec(
       db,
       "select plays_json from player_skill_ratings where user_id = ? and analysis_version = ?",
@@ -981,7 +989,9 @@ async function loadTopPlaysSnapshot(
   const key = String(userId);
   let snapshot = await getCachedPlayerProfileSnapshot(db, key);
   if ((!snapshot || snapshot.bestScores.length === 0) && readConfig().enableOsuApiJobs) {
-    await fetchAndStoreProfileSnapshotShared(db, osu, key, "userId");
+    // Background job work: mint on the job lane so it drips under the osu!
+    // ceiling instead of competing with real user requests on the interactive lane.
+    await fetchAndStoreProfileSnapshotShared(db, osu, key, "userId", "job:refresh_profile_snapshot");
     snapshot = await getCachedPlayerProfileSnapshot(db, key);
   }
   if (!snapshot) return null;
