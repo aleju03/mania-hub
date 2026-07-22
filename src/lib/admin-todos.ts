@@ -22,6 +22,8 @@ export interface AdminTodo {
   doneAt: number | null;
   // Manual drag-to-reorder key for the open list; lower sorts higher.
   position: number;
+  // Short handle shown on the card ("#7") so a task can be named in conversation. Never reused.
+  seq: number;
 }
 
 function liveBackendHeaders(): HeadersInit {

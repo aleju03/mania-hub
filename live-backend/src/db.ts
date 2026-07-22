@@ -1219,7 +1219,8 @@ async function migrateAdminTodos(db: Db): Promise<void> {
       created_at integer not null,
       updated_at integer not null,
       done_at integer,
-      position real not null default 0
+      position real not null default 0,
+      seq integer not null default 0
     )
   `);
   await db.execute(`
@@ -1251,6 +1252,36 @@ async function migrateAdminTodos(db: Db): Promise<void> {
             where ranked.id = admin_todos.id
          )
     `);
+  }
+
+  // seq: the short human-readable handle ("#7") the owner quotes when pointing at a task. Oldest
+  // task gets #1 so the numbering reads like a ledger, and it is never reused or renumbered —
+  // deleting #7 leaves a gap on purpose, so an id always means the same task.
+  if (!columns.includes("seq")) {
+    await db.execute("alter table admin_todos add column seq integer not null default 0");
+    await db.execute(`
+      update admin_todos
+         set seq = (
+           select ranked.rn
+             from (
+               select id, row_number() over (order by created_at, id) as rn
+                 from admin_todos
+             ) ranked
+            where ranked.id = admin_todos.id
+         )
+    `);
+  }
+
+  // Seed the allocator's high-water mark from the rows that exist. Without this the counter stays
+  // absent until the first todo is *created*, and until then allocateTodoSeq falls back to
+  // max(seq) — so deleting the newest task in that window would hand its id straight to the next
+  // one. Runs on every boot (insert-or-ignore) so a DB that skipped the backfill is covered too.
+  const maxSeq = Number((await db.execute("select max(seq) as max_seq from admin_todos")).rows[0]?.max_seq ?? 0);
+  if (Number.isFinite(maxSeq) && maxSeq > 0) {
+    await db.execute({
+      sql: "insert or ignore into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      args: ["admin_todos_seq", JSON.stringify(maxSeq), new Date().toISOString()],
+    });
   }
 }
 

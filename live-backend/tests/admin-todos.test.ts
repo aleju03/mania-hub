@@ -110,6 +110,44 @@ describe("admin todos", () => {
     expect(b!.position).toBeLessThan(a!.position);
   });
 
+  it("hands out sequential ids starting at 1", async () => {
+    const first = await createAdminTodo(db, { title: "first" });
+    const second = await createAdminTodo(db, { title: "second" });
+    const third = await createAdminTodo(db, { title: "third" });
+
+    expect([first!.seq, second!.seq, third!.seq]).toEqual([1, 2, 3]);
+  });
+
+  it("never reuses the id of a deleted todo", async () => {
+    const first = await createAdminTodo(db, { title: "first" });
+    const second = await createAdminTodo(db, { title: "second" });
+    await deleteAdminTodo(db, second!.id);
+
+    const third = await createAdminTodo(db, { title: "third" });
+    expect(third!.seq).toBe(3);
+
+    // Clearing the whole done pile must not roll the counter back onto live ids either.
+    await updateAdminTodo(db, { id: third!.id, status: "done" });
+    await clearDoneAdminTodos(db);
+    const fourth = await createAdminTodo(db, { title: "fourth" });
+    expect(fourth!.seq).toBe(4);
+    expect(first!.seq).toBe(1);
+  });
+
+  it("keeps a todo's id fixed across edits, completion and reopening", async () => {
+    const todo = await createAdminTodo(db, { title: "recent plays rework" });
+
+    const moved = await updateAdminTodo(db, { id: todo!.id, category: "bug", position: 250 });
+    expect(moved!.seq).toBe(todo!.seq);
+
+    const done = await updateAdminTodo(db, { id: todo!.id, status: "done" });
+    expect(done!.seq).toBe(todo!.seq);
+
+    const reopened = await updateAdminTodo(db, { id: todo!.id, status: "open" });
+    expect(reopened!.seq).toBe(todo!.seq);
+    expect((await getAdminTodo(db, todo!.id))!.seq).toBe(todo!.seq);
+  });
+
   it("deletes a single todo and reports whether a row was removed", async () => {
     const todo = await createAdminTodo(db, { title: "gone soon" });
     expect(await deleteAdminTodo(db, todo!.id)).toBe(true);

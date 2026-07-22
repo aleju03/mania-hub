@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
-import { listAdminTodos } from "../src/features/admin-todos.js";
+import { createAdminTodo, deleteAdminTodo, listAdminTodos } from "../src/features/admin-todos.js";
 
 // Guards the `position` backfill in migrateAdminTodos: a DB created before the column existed gets
 // spaced positions that reproduce the *old* default order (open before done; open by priority then
@@ -65,11 +65,42 @@ describe("admin todos position backfill", () => {
     expect(list.map((t) => t.position)).toEqual([1000, 2000, 3000, 4000, 5000, 6000]);
   });
 
-  it("is idempotent: a second migrate leaves positions untouched", async () => {
+  it("numbers pre-existing todos oldest-first, independent of board order", async () => {
     await migrate(db);
-    const before = (await listAdminTodos(db)).map((t) => t.position);
+
+    const list = await listAdminTodos(db);
+    // created_at asc (e/f share 0, broken by id), so: e=1 f=2 a=3 b=4 d=5 c=6.
+    expect(Object.fromEntries(list.map((t) => [t.id, t.seq]))).toEqual({ e: 1, f: 2, a: 3, b: 4, d: 5, c: 6 });
+    // A newly added todo continues past the highest backfilled number.
+    expect((await createAdminTodo(db, { title: "after backfill" }))!.seq).toBe(7);
+  });
+
+  it("does not reuse a backfilled id when the newest todo is removed before anything is created", async () => {
     await migrate(db);
-    const after = (await listAdminTodos(db)).map((t) => t.position);
+
+    // The migration has to seed the allocator itself: nothing has been *created* yet, so a counter
+    // left absent here would fall back to max(seq) and re-issue #6.
+    const list = await listAdminTodos(db);
+    const newest = list.find((t) => t.seq === 6)!;
+    await deleteAdminTodo(db, newest.id);
+
+    expect((await createAdminTodo(db, { title: "after delete" }))!.seq).toBe(7);
+  });
+
+  it("leaves an already-running counter alone", async () => {
+    await migrate(db);
+    expect((await createAdminTodo(db, { title: "first" }))!.seq).toBe(7);
+
+    // A later boot re-runs the seed; it must not rewind the counter to max(seq).
+    await migrate(db);
+    expect((await createAdminTodo(db, { title: "second" }))!.seq).toBe(8);
+  });
+
+  it("is idempotent: a second migrate leaves positions and ids untouched", async () => {
+    await migrate(db);
+    const before = (await listAdminTodos(db)).map((t) => [t.id, t.position, t.seq]);
+    await migrate(db);
+    const after = (await listAdminTodos(db)).map((t) => [t.id, t.position, t.seq]);
     expect(after).toEqual(before);
   });
 });

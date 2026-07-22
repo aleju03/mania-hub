@@ -7,8 +7,11 @@ import {
   Bug,
   Check,
   ChevronDown,
+  Columns3,
+  GripVertical,
   Lightbulb,
   ListChecks,
+  ListOrdered,
   Loader2,
   Plus,
   RotateCcw,
@@ -61,13 +64,16 @@ export const Route = createFileRoute("/admin/todos")({
 // ---------------------------------------------------------------------------
 
 // Each category is a lane on the playfield, like columns in 5K mania. `edge` is the note's
-// top-edge accent (mania note colors); `text` colors the lane header and small icons.
-const CATEGORY_META: Record<TodoCategory, { label: string; Icon: typeof Bug; text: string; edge: string }> = {
-  task: { label: "Task", Icon: ListChecks, text: "text-osu-l2", edge: "border-t-osu-l2/70" },
-  bug: { label: "Bug", Icon: Bug, text: "text-osu-red-light", edge: "border-t-osu-red-light/80" },
-  feature: { label: "Feature", Icon: Sparkles, text: "text-osu-blue", edge: "border-t-osu-blue/80" },
-  idea: { label: "Idea", Icon: Lightbulb, text: "text-osu-yellow", edge: "border-t-osu-yellow/80" },
-  chore: { label: "Chore", Icon: Wrench, text: "text-osu-purple", edge: "border-t-osu-purple/80" },
+// top-edge accent (mania note colors); `edgeLeft` is the same accent turned side-on for the queue's
+// rows. Both are spelled out in full because Tailwind only emits classes it can see literally in
+// the source - deriving one from the other at runtime yields a class that was never generated.
+// `text` colors the lane header and small icons.
+const CATEGORY_META: Record<TodoCategory, { label: string; Icon: typeof Bug; text: string; edge: string; edgeLeft: string }> = {
+  task: { label: "Task", Icon: ListChecks, text: "text-osu-l2", edge: "border-t-osu-l2/70", edgeLeft: "border-l-osu-l2/70" },
+  bug: { label: "Bug", Icon: Bug, text: "text-osu-red-light", edge: "border-t-osu-red-light/80", edgeLeft: "border-l-osu-red-light/80" },
+  feature: { label: "Feature", Icon: Sparkles, text: "text-osu-blue", edge: "border-t-osu-blue/80", edgeLeft: "border-l-osu-blue/80" },
+  idea: { label: "Idea", Icon: Lightbulb, text: "text-osu-yellow", edge: "border-t-osu-yellow/80", edgeLeft: "border-l-osu-yellow/80" },
+  chore: { label: "Chore", Icon: Wrench, text: "text-osu-purple", edge: "border-t-osu-purple/80", edgeLeft: "border-l-osu-purple/80" },
 };
 const CATEGORY_ORDER: TodoCategory[] = ["task", "bug", "feature", "idea", "chore"];
 const CATEGORY_OPTIONS: SelectMenuOption<TodoCategory>[] = CATEGORY_ORDER.map((key) => ({
@@ -86,6 +92,152 @@ const PRIORITY_ORDER: TodoPriority[] = ["low", "normal", "high"];
 
 // Matches the backend spacing so a drag can drop an item at the midpoint of its two new neighbours.
 const POSITION_STEP = 1000;
+
+// Two ways to look at the same open todos: the category playfield, or one flat do-next queue.
+// `position` is global rather than per-lane, so the queue is just the same key read end to end.
+type BoardView = "lanes" | "queue";
+const BOARD_VIEW_KEY = "mania-hub-todos-view";
+
+function readBoardViewPreference(): BoardView {
+  if (typeof window === "undefined") return "lanes";
+  try {
+    return window.localStorage.getItem(BOARD_VIEW_KEY) === "queue" ? "queue" : "lanes";
+  } catch {
+    return "lanes";
+  }
+}
+
+function writeBoardViewPreference(view: BoardView): void {
+  try {
+    window.localStorage.setItem(BOARD_VIEW_KEY, view);
+  } catch {
+    // Preference only; the board works either way.
+  }
+}
+
+// A note dropped this far above/below a lane still counts as aimed at it, so a slightly wild throw
+// lands instead of snapping back.
+const LANE_DROP_Y_SLACK = 48;
+
+type LaneElements = Partial<Record<TodoCategory, HTMLDivElement | null>>;
+
+/** Which lane the pointer was over when the drag ended, or null if it was off the playfield. */
+export function findLaneAtPoint(lanes: LaneElements, x: number, y: number): TodoCategory | null {
+  for (const key of CATEGORY_ORDER) {
+    const el = lanes[key];
+    if (!el) continue;
+    const rect = el.getBoundingClientRect();
+    if (x < rect.left || x > rect.right) continue;
+    if (y < rect.top - LANE_DROP_Y_SLACK || y > rect.bottom + LANE_DROP_Y_SLACK) return null;
+    return key;
+  }
+  return null;
+}
+
+function nearestAbove(occupied: number[], bound: number): number | null {
+  let best: number | null = null;
+  for (const value of occupied) {
+    if (value > bound && (best === null || value < best)) best = value;
+  }
+  return best;
+}
+
+function nearestBelow(occupied: number[], bound: number): number | null {
+  let best: number | null = null;
+  for (const value of occupied) {
+    if (value < bound && (best === null || value > best)) best = value;
+  }
+  return best;
+}
+
+/** Midpoint, or null when the two are so close that floats can't fit a value between them. */
+function midpoint(a: number, b: number): number | null {
+  const mid = (a + b) / 2;
+  return mid === a || mid === b ? null : mid;
+}
+
+/**
+ * A free position strictly between `lo` and `hi` (null on either side = unbounded).
+ *
+ * `position` is one global key, but a lane only ever shows its own notes, so the plain midpoint of
+ * two lane neighbours can land exactly on a todo sitting in a *different* lane - and new todos are
+ * created on an exact 1000 grid, which makes that likely rather than rare. A tie is ambiguous
+ * (both sortTodos implementations fall back to createdAt), and re-dropping into it is then a no-op,
+ * so the slot becomes unreachable. Anchoring on the nearest globally occupied position instead of
+ * the far bound keeps every result collision-free by construction.
+ */
+export function positionBetween(occupied: number[], lo: number | null, hi: number | null): number | null {
+  if (lo === null && hi === null) return null;
+  if (lo === null) {
+    const nearest = nearestBelow(occupied, hi!);
+    return nearest === null ? hi! - POSITION_STEP : midpoint(nearest, hi!);
+  }
+  if (hi === null) {
+    const nearest = nearestAbove(occupied, lo);
+    return nearest === null ? lo + POSITION_STEP : midpoint(lo, nearest);
+  }
+  const nearest = nearestAbove(occupied, lo);
+  return midpoint(lo, nearest === null ? hi : Math.min(nearest, hi));
+}
+
+/**
+ * Position for the note now sitting at `index` of a lane's visual order. Lanes render reversed
+ * (largest position on top, next-up at the bottom touching the judgement line), so the neighbour
+ * above holds the *larger* position. null = nothing to sit between, so leave the position alone.
+ */
+export function laneDropPosition(visualOrder: AdminTodo[], index: number, occupied: number[]): number | null {
+  const above = visualOrder[index - 1];
+  const below = visualOrder[index + 1];
+  return positionBetween(occupied, below?.position ?? null, above?.position ?? null);
+}
+
+/** Same, for the queue: it reads top-down, so the row above holds the *smaller* position. */
+export function queueDropPosition(order: AdminTodo[], index: number, occupied: number[]): number | null {
+  const above = order[index - 1];
+  const below = order[index + 1];
+  return positionBetween(occupied, above?.position ?? null, below?.position ?? null);
+}
+
+/** Where in a lane's visual (top-to-bottom) order a note released at `dropY` slots in. */
+export function laneInsertionIndex(middles: number[], dropY: number): number {
+  const index = middles.findIndex((middle) => dropY <= middle);
+  return index === -1 ? middles.length : index;
+}
+
+/** Where a note dropped at `dropY` belongs in a lane it didn't come from. */
+function crossLaneDropPosition(
+  laneEl: HTMLElement,
+  laneItems: AdminTodo[],
+  moved: AdminTodo,
+  dropY: number,
+  occupied: number[],
+): number {
+  const byId = new Map(laneItems.map((todo) => [todo.id, todo]));
+  const visual: AdminTodo[] = [];
+  const middles: number[] = [];
+  // DOM order is the visual order, top to bottom.
+  laneEl.querySelectorAll<HTMLElement>("[data-todo-id]").forEach((el) => {
+    const todo = byId.get(el.dataset.todoId ?? "");
+    if (!todo) return;
+    const rect = el.getBoundingClientRect();
+    visual.push(todo);
+    middles.push(rect.top + rect.height / 2);
+  });
+
+  const index = laneInsertionIndex(middles, dropY);
+  visual.splice(index, 0, moved);
+  // An empty target lane leaves the note where it already sat in the global order; only its
+  // category changes.
+  return laneDropPosition(visual, index, occupied) ?? moved.position;
+}
+
+/** Viewport coords for a drag end, preferring the real event over framer's own point. */
+function dropPoint(event: MouseEvent | TouchEvent | PointerEvent, info: { point: { x: number; y: number } }): { x: number; y: number } {
+  if ("clientX" in event && typeof event.clientX === "number") return { x: event.clientX, y: event.clientY };
+  const touch = "changedTouches" in event ? event.changedTouches[0] : undefined;
+  if (touch) return { x: touch.clientX, y: touch.clientY };
+  return info.point;
+}
 
 // Completing a todo scores it like a mania hit: the judgement is how long the note sat on the
 // field before it was cleared. Weights follow mania accuracy (x/300).
@@ -183,6 +335,20 @@ function PrioritySegmented({ value, onChange }: { value: TodoPriority; onChange:
 }
 
 // ---------------------------------------------------------------------------
+// Task id chip
+// ---------------------------------------------------------------------------
+
+/** The handle you quote to name a task ("do #7"). Hidden on rows predating the backend's seq column. */
+function TodoSeq({ seq, className = "" }: { seq: number; className?: string }) {
+  if (!seq) return null;
+  return (
+    <span className={`shrink-0 font-mono tabular-nums text-osu-f1/70 ${className}`} title={`Task #${seq}`}>
+      #{seq}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -213,6 +379,10 @@ function TodosPage() {
   const titleRef = useRef<HTMLInputElement | null>(null);
 
   const [search, setSearch] = useState("");
+  const [view, setViewState] = useState<BoardView>("lanes");
+  const laneRefs = useRef<LaneElements>({});
+  // Lane a note is currently hovering over mid-drag, so the drop target is obvious before release.
+  const [hoveredLane, setHoveredLane] = useState<TodoCategory | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [editing, setEditing] = useState<AdminTodo | null>(null);
@@ -238,6 +408,16 @@ function TodosPage() {
     }
   }, []);
 
+  // Read after mount: SSR has no localStorage, and a first paint in the wrong view would flash.
+  useEffect(() => {
+    setViewState(readBoardViewPreference());
+  }, []);
+
+  const setView = useCallback((next: BoardView) => {
+    setViewState(next);
+    writeBoardViewPreference(next);
+  }, []);
+
   useEffect(() => {
     // Decode the hitsound samples before the first hit so it lands on time.
     preloadTodoSfx();
@@ -259,7 +439,8 @@ function TodosPage() {
 
   const query = search.trim().toLowerCase();
   const matchesSearch = useCallback(
-    (t: AdminTodo) => !query || `${t.title} ${t.notes ?? ""}`.toLowerCase().includes(query),
+    // "#7" (or plain "7") pulls up a single task, so an id quoted in conversation is findable.
+    (t: AdminTodo) => !query || `#${t.seq} ${t.title} ${t.notes ?? ""}`.toLowerCase().includes(query),
     [query],
   );
 
@@ -273,7 +454,13 @@ function TodosPage() {
     return map;
   }, [openFiltered]);
 
-  const openCount = useMemo(() => todos.filter((t) => t.status === "open").length, [todos]);
+  // Queue view: the same open todos as one do-next list, position asc (first = do it first).
+  const queue = useMemo(() => openFiltered.slice().sort((a, b) => a.position - b.position), [openFiltered]);
+
+  // Unfiltered, unlike `openFiltered`: drops need every occupied position, including rows the
+  // current search is hiding.
+  const openTodos = useMemo(() => todos.filter((t) => t.status === "open"), [todos]);
+  const openCount = openTodos.length;
   const doneAll = useMemo(() => todos.filter((t) => t.status === "done"), [todos]);
   const doneCount = doneAll.length;
   const acc = accuracyOf(doneAll);
@@ -397,6 +584,27 @@ function TodosPage() {
     [refetch],
   );
 
+  // Dragging a note sideways onto another lane retypes it: the lane a task sits in *is* its
+  // category, so dropping "recent plays rework" on the bug lane makes it a bug.
+  const handleMoveToLane = useCallback(
+    async (id: string, category: TodoCategory, position: number) => {
+      setTodos((prev) => {
+        const current = prev.find((t) => t.id === id);
+        return current ? upsertTodo(prev, { ...current, category, position }) : prev;
+      });
+      playTodoDropTick();
+      setError(null);
+      try {
+        const result = await updateAdminTodo({ data: { id, category, position } });
+        setTodos((prev) => upsertTodo(prev, result.todo));
+      } catch (caught) {
+        setError(errMessage(caught));
+        void refetch();
+      }
+    },
+    [refetch],
+  );
+
   return (
     <div className="flex-1 bg-osu-b5 min-h-[calc(100vh-60px)]">
       <div className="mx-auto max-w-[1000px] space-y-4 px-4 py-6 sm:px-5">
@@ -411,7 +619,27 @@ function TodosPage() {
               {openCount} on the field{doneCount ? ` · ${doneCount} cleared` : ""} · private notes for the project
             </p>
           </div>
-          <div className="relative w-[200px] sm:w-[240px]">
+          <div className="flex items-center gap-2">
+            <div className="inline-flex rounded-md border border-osu-b3/50 bg-osu-b4/60 p-0.5" role="group" aria-label="Board view">
+              {([
+                { key: "lanes" as const, label: "Lanes", Icon: Columns3 },
+                { key: "queue" as const, label: "Queue", Icon: ListOrdered },
+              ]).map(({ key, label, Icon }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setView(key)}
+                  aria-pressed={view === key}
+                  className={`inline-flex items-center gap-1.5 rounded px-2 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
+                    view === key ? "bg-osu-b3/50 text-white" : "text-osu-f1 hover:text-osu-l2"
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="relative w-[200px] sm:w-[240px]">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-osu-f1/60" />
             <input
               value={search}
@@ -432,6 +660,7 @@ function TodosPage() {
                 <X className="h-3.5 w-3.5" />
               </button>
             )}
+            </div>
           </div>
         </div>
 
@@ -504,36 +733,64 @@ function TodosPage() {
           </div>
         ) : (
           <div className="overflow-hidden rounded-xl border border-osu-b3/40 bg-osu-b6/20">
-            <div className="overflow-x-auto">
-              <div className="min-w-[680px]">
-                <div className="relative flex">
-                  {CATEGORY_ORDER.map((key) => (
-                    <Lane
-                      key={key}
-                      category={key}
-                      items={lanes[key]}
-                      popup={popups[key]}
-                      onHit={handleToggle}
-                      onOpen={setEditing}
-                      onReorderEnd={handleReorderEnd}
-                    />
-                  ))}
-                  {openFiltered.length === 0 && (
-                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                      <p className="rounded-md bg-osu-b6/70 px-3 py-1.5 text-xs text-osu-f1">
-                        {todos.length === 0
-                          ? "No notes on the field. Add the first one above."
-                          : query
-                            ? "Nothing on the field matches this search."
-                            : "All clear. Nothing left on the field."}
-                      </p>
-                    </div>
-                  )}
+            {view === "lanes" ? (
+              <div className="overflow-x-auto">
+                <div className="min-w-[680px]">
+                  <div className="relative flex">
+                    {CATEGORY_ORDER.map((key) => (
+                      <Lane
+                        key={key}
+                        category={key}
+                        items={lanes[key]}
+                        popup={popups[key]}
+                        onHit={handleToggle}
+                        onOpen={setEditing}
+                        onReorderEnd={handleReorderEnd}
+                        laneRefs={laneRefs}
+                        lanes={lanes}
+                        openTodos={openTodos}
+                        onMoveToLane={handleMoveToLane}
+                        onDragHoverLane={setHoveredLane}
+                        hovered={hoveredLane === key}
+                      />
+                    ))}
+                    {openFiltered.length === 0 && (
+                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                        <p className="rounded-md bg-osu-b6/70 px-3 py-1.5 text-xs text-osu-f1">
+                          {todos.length === 0
+                            ? "No notes on the field. Add the first one above."
+                            : query
+                              ? "Nothing on the field matches this search."
+                              : "All clear. Nothing left on the field."}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  {/* Judgement line */}
+                  <div className="h-0.5 w-full bg-osu-pink shadow-[0_0_10px_rgba(255,102,171,0.55)]" />
                 </div>
-                {/* Judgement line */}
-                <div className="h-0.5 w-full bg-osu-pink shadow-[0_0_10px_rgba(255,102,171,0.55)]" />
               </div>
-            </div>
+            ) : (
+              <div className="min-h-[260px]">
+                {queue.length === 0 ? (
+                  <p className="py-20 text-center text-xs text-osu-f1">
+                    {todos.length === 0
+                      ? "Nothing queued. Add the first task above."
+                      : query
+                        ? "Nothing queued matches this search."
+                        : "All clear. Nothing left to do."}
+                  </p>
+                ) : (
+                  <Queue
+                    items={queue}
+                    openTodos={openTodos}
+                    onHit={handleToggle}
+                    onOpen={setEditing}
+                    onReorderEnd={handleReorderEnd}
+                  />
+                )}
+              </div>
+            )}
 
             {/* Score footer: accuracy + grade, combo, results toggle */}
             <div className="grid grid-cols-3 items-center border-t border-osu-b3/30 px-3 py-2">
@@ -625,17 +882,32 @@ interface LaneProps {
   onHit: (todo: AdminTodo) => void;
   onOpen: (todo: AdminTodo) => void;
   onReorderEnd: (id: string, position: number) => void;
+  // Shared across every lane so a drop can be hit-tested against all of them, plus the lane
+  // contents needed to work out where in the target lane the note landed.
+  laneRefs: React.RefObject<LaneElements>;
+  lanes: Record<TodoCategory, AdminTodo[]>;
+  // Every open todo, search filter included, since `position` is global: a drop has to dodge
+  // positions held by notes that aren't currently on screen.
+  openTodos: AdminTodo[];
+  onMoveToLane: (id: string, category: TodoCategory, position: number) => void;
+  onDragHoverLane: (category: TodoCategory | null) => void;
+  hovered: boolean;
 }
 
-function Lane({ category, items, popup, onHit, onOpen, onReorderEnd }: LaneProps) {
+function Lane({ category, items, popup, onHit, onOpen, onReorderEnd, laneRefs, lanes, openTodos, onMoveToLane, onDragHoverLane, hovered }: LaneProps) {
   const meta = CATEGORY_META[category];
   const Icon = meta.Icon;
 
   // Downscroll: the lane renders reversed (last position on top, next-up at the bottom touching
   // the judgement line). `order` drives the Reorder.Group during a drag and is resynced from the
-  // data whenever the lane's contents change, which never happens mid-drag.
+  // data whenever the lane's contents change.
   const [order, setOrder] = useState<AdminTodo[]>(() => [...items].reverse());
+  const dragging = useRef(false);
   useEffect(() => {
+    // Any todo change hands every lane a new array, so a response landing mid-drag (a cross-lane
+    // move, a completed note, the previous drag's own write) would yank the note out from under the
+    // pointer and the drop would then read as "no net move". Catch up when the drag ends instead.
+    if (dragging.current) return;
     setOrder([...items].reverse());
   }, [items]);
   const orderRef = useRef(order);
@@ -643,35 +915,77 @@ function Lane({ category, items, popup, onHit, onOpen, onReorderEnd }: LaneProps
   const itemsRef = useRef(items);
   itemsRef.current = items;
 
+  const lanesRef = useRef(lanes);
+  lanesRef.current = lanes;
+  const openTodosRef = useRef(openTodos);
+  openTodosRef.current = openTodos;
+
+  const handleDragStart = useCallback(() => {
+    dragging.current = true;
+  }, []);
+
+  const handleDrag = useCallback(
+    (point: { x: number; y: number }) => {
+      const target = findLaneAtPoint(laneRefs.current, point.x, point.y);
+      onDragHoverLane(target === category ? null : target);
+    },
+    [category, laneRefs, onDragHoverLane],
+  );
+
   const handleDragEnd = useCallback(
-    (id: string) => {
+    (id: string, point: { x: number; y: number }) => {
+      dragging.current = false;
+      onDragHoverLane(null);
+      const occupied = openTodosRef.current.filter((t) => t.id !== id).map((t) => t.position);
+      // Whatever happens next, the local order must stop diverging from the data.
+      const resync = () => setOrder([...itemsRef.current].reverse());
+
+      // A sideways drop retypes the note; only a drop that stayed home is a plain reorder.
+      const target = findLaneAtPoint(laneRefs.current, point.x, point.y);
+      if (target && target !== category) {
+        const moved = itemsRef.current.find((t) => t.id === id);
+        const targetEl = laneRefs.current[target];
+        if (moved && targetEl) {
+          onMoveToLane(id, target, crossLaneDropPosition(targetEl, lanesRef.current[target], moved, point.y, occupied));
+          return;
+        }
+      }
+
       const current = orderRef.current;
       const committed = itemsRef.current;
       // In the reversed view, index i sits between a visually-higher neighbour (larger position)
       // and a visually-lower one (smaller position); the drop lands at their midpoint.
       if (current.length === committed.length && current.every((t, i) => t.id === committed[committed.length - 1 - i].id)) {
+        resync();
         return; // no net move
       }
       const index = current.findIndex((t) => t.id === id);
-      if (index === -1) return;
-      const moved = current[index];
-      const above = current[index - 1];
-      const below = current[index + 1];
-      let position: number;
-      if (!above && !below) return; // sole note, nothing to reorder
-      else if (!above) position = below.position + POSITION_STEP;
-      else if (!below) position = above.position - POSITION_STEP;
-      else position = (above.position + below.position) / 2;
-      if (position === moved.position) return; // dropped back where it started
+      if (index === -1) {
+        resync();
+        return;
+      }
+      const position = laneDropPosition(current, index, occupied);
+      // null = sole note with nothing to sit between; unchanged = dropped back where it started.
+      if (position === null || position === current[index].position) {
+        resync();
+        return;
+      }
       onReorderEnd(id, position);
     },
-    [onReorderEnd],
+    [category, laneRefs, onDragHoverLane, onMoveToLane, onReorderEnd],
   );
 
   const popupMeta = popup ? JUDGEMENT_META[popup.judgement] : null;
 
   return (
-    <div className="relative flex min-w-0 flex-1 flex-col border-r border-osu-b3/25 last:border-r-0">
+    <div
+      ref={(node) => {
+        laneRefs.current[category] = node;
+      }}
+      className={`relative flex min-w-0 flex-1 flex-col border-r border-osu-b3/25 transition-colors last:border-r-0 ${
+        hovered ? "bg-osu-b3/25" : ""
+      }`}
+    >
       <div className={`flex items-center justify-center gap-1.5 border-b border-osu-b3/25 py-2 text-[10px] font-semibold uppercase tracking-wider ${meta.text}`}>
         <Icon className="h-3.5 w-3.5" />
         {meta.label}
@@ -685,7 +999,15 @@ function Lane({ category, items, popup, onHit, onOpen, onReorderEnd }: LaneProps
       >
         <AnimatePresence initial={false}>
           {order.map((todo) => (
-            <LaneNote key={todo.id} todo={todo} onHit={onHit} onOpen={onOpen} onDragEnd={handleDragEnd} />
+            <LaneNote
+              key={todo.id}
+              todo={todo}
+              onHit={onHit}
+              onOpen={onOpen}
+              onDragStart={handleDragStart}
+              onDrag={handleDrag}
+              onDragEnd={handleDragEnd}
+            />
           ))}
         </AnimatePresence>
       </Reorder.Group>
@@ -718,12 +1040,16 @@ function LaneNote({
   todo,
   onHit,
   onOpen,
+  onDragStart,
+  onDrag,
   onDragEnd,
 }: {
   todo: AdminTodo;
   onHit: (todo: AdminTodo) => void;
   onOpen: (todo: AdminTodo) => void;
-  onDragEnd: (id: string) => void;
+  onDragStart: () => void;
+  onDrag: (point: { x: number; y: number }) => void;
+  onDragEnd: (id: string, point: { x: number; y: number }) => void;
 }) {
   const meta = CATEGORY_META[todo.category];
   // Distinguish a drag-drop from a plain click so dropping a note never opens the editor.
@@ -733,11 +1059,18 @@ function LaneNote({
     <Reorder.Item
       value={todo}
       layout
+      data-todo-id={todo.id}
+      // Overrides Reorder's y-axis lock (its own `drag` prop is set before ours), so a note can be
+      // thrown sideways onto another lane. Reorder.Item forces dragSnapToOrigin, so it springs back
+      // and re-renders from the committed data either way.
+      drag
       onDragStart={() => {
         dragging.current = true;
+        onDragStart();
       }}
-      onDragEnd={() => {
-        onDragEnd(todo.id);
+      onDrag={(event, info) => onDrag(dropPoint(event, info))}
+      onDragEnd={(event, info) => {
+        onDragEnd(todo.id, dropPoint(event, info));
         requestAnimationFrame(() => {
           dragging.current = false;
         });
@@ -759,6 +1092,7 @@ function LaneNote({
         <div className="min-w-0 flex-1">
           <p className="break-words text-[11px] leading-snug text-osu-l1 line-clamp-2">{todo.title}</p>
           <div className="mt-1 flex items-center gap-1.5 text-[9px] text-osu-f1/60">
+            <TodoSeq seq={todo.seq} />
             {todo.priority === "high" && (
               <span className="inline-flex items-center gap-1 font-semibold uppercase tracking-wide text-osu-red-light">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-osu-red-light" />
@@ -782,6 +1116,163 @@ function LaneNote({
           <Check className="h-3 w-3" />
         </button>
       </div>
+    </Reorder.Item>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Queue (every open todo as one do-next list, regardless of category)
+// ---------------------------------------------------------------------------
+
+function Queue({
+  items,
+  openTodos,
+  onHit,
+  onOpen,
+  onReorderEnd,
+}: {
+  // Position asc: first row is the next thing to do.
+  items: AdminTodo[];
+  // Every open todo, search filter included - `position` is global, so a drop has to dodge
+  // positions held by rows the current search is hiding.
+  openTodos: AdminTodo[];
+  onHit: (todo: AdminTodo) => void;
+  onOpen: (todo: AdminTodo) => void;
+  onReorderEnd: (id: string, position: number) => void;
+}) {
+  const [order, setOrder] = useState<AdminTodo[]>(items);
+  const dragging = useRef(false);
+  useEffect(() => {
+    // `items` gets a fresh identity on every todo change, so a response landing mid-drag would
+    // reset the row under the pointer and the drop would then read as "no net move".
+    if (dragging.current) return;
+    setOrder(items);
+  }, [items]);
+  const orderRef = useRef(order);
+  orderRef.current = order;
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const openTodosRef = useRef(openTodos);
+  openTodosRef.current = openTodos;
+
+  const handleDragStart = useCallback(() => {
+    dragging.current = true;
+  }, []);
+
+  const handleDragEnd = useCallback(
+    (id: string) => {
+      dragging.current = false;
+      const current = orderRef.current;
+      const committed = itemsRef.current;
+      const resync = () => setOrder(itemsRef.current);
+      if (current.length === committed.length && current.every((t, i) => t.id === committed[i].id)) {
+        resync();
+        return; // no net move
+      }
+      const index = current.findIndex((t) => t.id === id);
+      if (index === -1) {
+        resync();
+        return;
+      }
+      const occupied = openTodosRef.current.filter((t) => t.id !== id).map((t) => t.position);
+      const position = queueDropPosition(current, index, occupied);
+      // null = sole row with nothing to sit between; unchanged = dropped back where it started.
+      if (position === null || position === current[index].position) {
+        resync();
+        return;
+      }
+      onReorderEnd(id, position);
+    },
+    [onReorderEnd],
+  );
+
+  return (
+    <Reorder.Group axis="y" values={order} onReorder={setOrder} className="flex flex-col gap-1 p-2">
+      <AnimatePresence initial={false}>
+        {order.map((todo, index) => (
+          <QueueRow
+            key={todo.id}
+            todo={todo}
+            rank={index + 1}
+            onHit={onHit}
+            onOpen={onOpen}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          />
+        ))}
+      </AnimatePresence>
+    </Reorder.Group>
+  );
+}
+
+function QueueRow({
+  todo,
+  rank,
+  onHit,
+  onOpen,
+  onDragStart,
+  onDragEnd,
+}: {
+  todo: AdminTodo;
+  rank: number;
+  onHit: (todo: AdminTodo) => void;
+  onOpen: (todo: AdminTodo) => void;
+  onDragStart: () => void;
+  onDragEnd: (id: string) => void;
+}) {
+  const meta = CATEGORY_META[todo.category];
+  const CategoryIcon = meta.Icon;
+  const dragging = useRef(false);
+
+  return (
+    <Reorder.Item
+      value={todo}
+      layout
+      onDragStart={() => {
+        dragging.current = true;
+        onDragStart();
+      }}
+      onDragEnd={() => {
+        onDragEnd(todo.id);
+        requestAnimationFrame(() => {
+          dragging.current = false;
+        });
+      }}
+      onClick={() => {
+        if (!dragging.current) onOpen(todo);
+      }}
+      whileDrag={{ scale: 1.01, zIndex: 20 }}
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 8, scale: 0.98, transition: { duration: 0.14 } }}
+      transition={{ duration: 0.16, ease: "easeOut" }}
+      style={{ touchAction: "pan-y" }}
+      className={`group flex cursor-grab select-none items-center gap-2 rounded-md border border-osu-b3/40 border-l-2 bg-osu-b4/40 px-2 py-1.5 transition-colors hover:border-osu-b3 active:cursor-grabbing ${meta.edgeLeft} ${
+        todo.priority === "low" ? "opacity-70" : ""
+      }`}
+    >
+      <GripVertical className="h-3.5 w-3.5 shrink-0 text-osu-f1/30 group-hover:text-osu-f1/60" />
+      <span className="w-5 shrink-0 text-right text-[10px] font-bold tabular-nums text-osu-f1/50">{rank}</span>
+      <TodoSeq seq={todo.seq} className="w-8 text-[10px]" />
+      <CategoryIcon className={`h-3 w-3 shrink-0 ${meta.text}`} />
+      <span className="min-w-0 flex-1 truncate text-xs text-osu-l1">{todo.title}</span>
+      {todo.priority === "high" && (
+        <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-osu-red-light" title="High priority" />
+      )}
+      {todo.notes && <AlignLeft className="h-2.5 w-2.5 shrink-0 text-osu-f1/60" />}
+      <span className="shrink-0 text-[10px] tabular-nums text-osu-f1/50">{formatShortDate(todo.createdAt)}</span>
+      <button
+        type="button"
+        aria-label="Hit (mark as done)"
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation();
+          onHit(todo);
+        }}
+        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-osu-b3/60 bg-osu-b6/40 text-transparent transition-colors hover:border-osu-green hover:text-osu-green cursor-pointer"
+      >
+        <Check className="h-3 w-3" />
+      </button>
     </Reorder.Item>
   );
 }
@@ -815,6 +1306,7 @@ function DoneRow({
     <div className="group flex items-center gap-2 rounded-lg border border-osu-b3/30 bg-osu-b4/20 px-2.5 py-1.5">
       <span className={`w-9 shrink-0 text-center text-[10px] font-black italic ${jm.text}`}>{judgement}</span>
       <CategoryIcon className={`h-3 w-3 shrink-0 ${meta.text}`} />
+      <TodoSeq seq={todo.seq} className="text-[10px]" />
       <span className="min-w-0 flex-1 truncate text-xs text-osu-f1 line-through">{todo.title}</span>
       <span className="shrink-0 text-[10px] tabular-nums text-osu-f1/50">
         {formatShortDate(todo.doneAt ?? todo.updatedAt)}
@@ -922,7 +1414,8 @@ function NoteModal({
         className="w-full max-w-md rounded-xl border border-osu-b3/50 bg-osu-b5 p-4 shadow-[0_12px_28px_rgba(0,0,0,0.55)]"
       >
         <div className="mb-3 flex items-center justify-between">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-osu-f1">
+          <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-osu-f1">
+            <TodoSeq seq={todo.seq} className="text-osu-l2" />
             Edit note · added {formatShortDate(todo.createdAt)}
           </p>
           <button

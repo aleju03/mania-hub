@@ -31,9 +31,33 @@ export interface AdminTodo {
   // Manual drag-to-reorder key for the open list; lower sorts higher. Spaced by POSITION_STEP so a
   // reorder can drop an item at the midpoint of its two new neighbours without renumbering the rest.
   position: number;
+  // Short handle the owner quotes to point at a task ("#7"). Allocated once, never reused: a
+  // deleted task leaves a gap so an id always refers to the same thing.
+  seq: number;
 }
 
 const POSITION_STEP = 1000;
+
+// The `seq` high-water mark, kept in live_meta rather than derived from max(seq) so that deleting
+// (or clearing) the newest task never hands its number to the next one. Ids are quoted in
+// conversation and outlive the row, so reuse would silently point an old reference at a new task.
+const SEQ_COUNTER_KEY = "admin_todos_seq";
+
+async function allocateTodoSeq(db: Db): Promise<number> {
+  const row = (await exec(db, "select value_json from live_meta where key = ?", [SEQ_COUNTER_KEY])).rows[0];
+  const stored = row?.value_json == null ? NaN : Number(row.value_json);
+  // The table's high-water mark seeds the counter the first time a todo is created after the
+  // backfill migration, and backstops a live_meta row that somehow went missing.
+  const maxRow = await exec(db, "select max(seq) as max_seq from admin_todos");
+  const highWater = Number(maxRow.rows[0]?.max_seq ?? 0);
+  const next = Math.max(Number.isFinite(stored) ? stored : 0, Number.isFinite(highWater) ? highWater : 0) + 1;
+  await exec(
+    db,
+    "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+    [SEQ_COUNTER_KEY, JSON.stringify(next), new Date().toISOString()],
+  );
+  return next;
+}
 
 // Inputs are intentionally loose (unknown): everything is normalized here so the HTTP layer can
 // forward a parsed body straight through without re-validating each field.
@@ -80,7 +104,7 @@ function normalizePosition(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
-const SELECT_COLUMNS = "id, title, notes, category, priority, status, created_at, updated_at, done_at, position";
+const SELECT_COLUMNS = "id, title, notes, category, priority, status, created_at, updated_at, done_at, position, seq";
 
 function rowToTodo(row: Record<string, unknown>): AdminTodo {
   return {
@@ -94,6 +118,7 @@ function rowToTodo(row: Record<string, unknown>): AdminTodo {
     updatedAt: Number(row.updated_at),
     doneAt: row.done_at == null ? null : Number(row.done_at),
     position: Number(row.position ?? 0),
+    seq: Number(row.seq ?? 0),
   };
 }
 
@@ -131,6 +156,7 @@ export async function createAdminTodo(db: Db, input: CreateTodoInput): Promise<A
   const minRow = await exec(db, "select min(position) as min_pos from admin_todos where status = 'open'");
   const minPos = minRow.rows[0]?.min_pos;
   const position = minPos == null ? 0 : Number(minPos) - POSITION_STEP;
+  const seq = await allocateTodoSeq(db);
   const todo: AdminTodo = {
     id: randomUUID(),
     title,
@@ -142,11 +168,12 @@ export async function createAdminTodo(db: Db, input: CreateTodoInput): Promise<A
     updatedAt: now,
     doneAt: null,
     position,
+    seq,
   };
   await exec(
     db,
-    `insert into admin_todos (${SELECT_COLUMNS}) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [todo.id, todo.title, todo.notes, todo.category, todo.priority, todo.status, todo.createdAt, todo.updatedAt, todo.doneAt, todo.position],
+    `insert into admin_todos (${SELECT_COLUMNS}) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [todo.id, todo.title, todo.notes, todo.category, todo.priority, todo.status, todo.createdAt, todo.updatedAt, todo.doneAt, todo.position, todo.seq],
   );
   return todo;
 }
