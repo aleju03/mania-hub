@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { activateLiveCountry, isLiveBackendConfigured, type LiveCountryActivation, type LiveCountryFeature, type LiveCountryFeatureTier } from "./live-backend";
-import { isGlobalScope, normalizeCountryScope } from "./country";
+import { isGlobalScope } from "./country";
 
 const POLL_INTERVAL_MS = 6_000;
 const COUNTRY_TIER_CACHE_KEY = "mania-hub-country-feature-tiers-v1";
@@ -14,14 +14,23 @@ const tierCache = readTierCache();
 const warmingCache = readWarmingCache();
 const activationRequests = new Map<string, Promise<LiveCountryActivation | null>>();
 
+// Cache keys are the raw scope code, never normalizeCountryScope(): that maps
+// any code outside the frontend's country list onto DEFAULT_COUNTRY_CODE, so
+// seeding a backend-tracked country the list doesn't carry (e.g. VA) would
+// overwrite the default country's tier -- which hid the Snipes tab and flashed
+// "snipes aren't tracked" on the default country until activation repaired it.
+function countryScopeKey(country?: string | null): string {
+  return country?.trim().toUpperCase() ?? "";
+}
+
 export function getCachedCountryTier(country: string): LiveCountryFeatureTier | null {
-  return tierCache.get(normalizeCountryScope(country)) ?? null;
+  return tierCache.get(countryScopeKey(country)) ?? null;
 }
 
 export function seedCountryTierCache(countries: LiveCountryFeature[] | null | undefined): void {
   if (!countries?.length) return;
   for (const entry of countries) {
-    tierCache.set(normalizeCountryScope(entry.country), entry.featureTier);
+    tierCache.set(countryScopeKey(entry.country), entry.featureTier);
   }
   writeTierCache(tierCache);
 }
@@ -47,7 +56,7 @@ export interface CountryWarmingState {
  * treat it as a no-op fallback.
  */
 export function useCountryWarming(country: string): CountryWarmingState {
-  const normalizedCountry = normalizeCountryScope(country);
+  const normalizedCountry = countryScopeKey(country);
   const liveBackendEnabled = isLiveBackendConfigured();
   const [warming, setWarmingState] = useState(() => liveBackendEnabled && warmingCache.has(normalizedCountry));
   const [checking, setChecking] = useState(liveBackendEnabled);
@@ -112,7 +121,7 @@ export function useCountryWarming(country: string): CountryWarmingState {
 }
 
 function activateLiveCountryOnce(country: string): Promise<LiveCountryActivation | null> {
-  const normalizedCountry = normalizeCountryScope(country);
+  const normalizedCountry = countryScopeKey(country);
   const existing = activationRequests.get(normalizedCountry);
   if (existing) return existing;
   const request = activateLiveCountry(normalizedCountry)
@@ -130,7 +139,7 @@ function readTierCache(): Map<string, LiveCountryFeatureTier> {
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return entries;
     for (const [country, tier] of Object.entries(parsed)) {
-      if (isCountryFeatureTier(tier)) entries.set(normalizeCountryScope(country), tier);
+      if (isCountryFeatureTier(tier)) entries.set(countryScopeKey(country), tier);
     }
   } catch {
     // Best-effort cache only; activation will repair it.
@@ -156,7 +165,7 @@ function readWarmingCache(): Set<string> {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return entries;
     for (const country of parsed) {
-      if (typeof country === "string") entries.add(normalizeCountryScope(country));
+      if (typeof country === "string") entries.add(countryScopeKey(country));
     }
   } catch {
     // Best-effort cache only; activation polling will repair it.
@@ -165,7 +174,7 @@ function readWarmingCache(): Set<string> {
 }
 
 function setCachedCountryWarming(country: string, warming: boolean): void {
-  const normalizedCountry = normalizeCountryScope(country);
+  const normalizedCountry = countryScopeKey(country);
   if (warming) warmingCache.add(normalizedCountry);
   else warmingCache.delete(normalizedCountry);
   if (typeof window === "undefined") return;

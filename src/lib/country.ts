@@ -226,6 +226,7 @@ const RAW_COUNTRY_OPTIONS = [
   { code: "US", name: "United States" },
   { code: "UY", name: "Uruguay" },
   { code: "UZ", name: "Uzbekistan" },
+  { code: "VA", name: "Vatican City" },
   { code: "VC", name: "St Vincent" },
   { code: "VE", name: "Venezuela" },
   { code: "VG", name: "Virgin Islands (UK)" },
