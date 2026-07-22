@@ -35,7 +35,7 @@
     "@tanstack/react-virtual": "^3.13.23",
     "@tanstack/router-plugin": "^1.132.0",
     "@vercel/functions": "^3.4.3",
-    "@vercel/og": "^0.11.1",
+    "@vercel/og": "^1.0.0",
     "framer-motion": "^12.38.0",
     "html-to-image": "^1.11.13",
     "jszip": "^3.10.1",
@@ -49,7 +49,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "sanitize-html": "^2.17.2",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.3",
     "tailwindcss": "^4.1.18",
     "three": "^0.184.0",
     "zustand": "^5.0.12"

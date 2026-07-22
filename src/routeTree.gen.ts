@@ -9,148 +9,58 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as ValleyRouteImport } from './routes/valley'
-import { Route as TrackerRouteImport } from './routes/tracker'
-import { Route as TopPlaysRouteImport } from './routes/top-plays'
-import { Route as TermsRouteImport } from './routes/terms'
-import { Route as SnipesRouteImport } from './routes/snipes'
-import { Route as SkinsRouteImport } from './routes/skins'
-import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
-import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as ReplayRouteImport } from './routes/replay'
-import { Route as RankingsRouteImport } from './routes/rankings'
-import { Route as PrivacyRouteImport } from './routes/privacy'
-import { Route as PacksRouteImport } from './routes/packs'
-import { Route as MyStatsRouteImport } from './routes/my-stats'
-import { Route as MyDataRouteImport } from './routes/my-data'
-import { Route as MapsRouteImport } from './routes/maps'
-import { Route as LegalRouteImport } from './routes/legal'
-import { Route as GoalsRouteImport } from './routes/goals'
-import { Route as FarmHelperRouteImport } from './routes/farm-helper'
-import { Route as DiscordRouteImport } from './routes/discord'
-import { Route as BbcodeRouteImport } from './routes/bbcode'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as SkinsIdRouteImport } from './routes/skins_.$id'
-import { Route as PlayerUsernameRouteImport } from './routes/player/$username'
-import { Route as DevOptInPreviewRouteImport } from './routes/dev.opt-in-preview'
-import { Route as ApiSyncRouteImport } from './routes/api/sync'
-import { Route as ApiReplayUploadRouteImport } from './routes/api/replay-upload'
-import { Route as ApiOgRouteImport } from './routes/api/og'
-import { Route as ApiFaviconRouteImport } from './routes/api/favicon'
-import { Route as ApiCatboxUploadRouteImport } from './routes/api/catbox-upload'
-import { Route as ApiBackgroundRouteImport } from './routes/api/background'
-import { Route as ApiAvatarRouteImport } from './routes/api/avatar'
-import { Route as ApiAudioRouteImport } from './routes/api/audio'
-import { Route as AdminTodosRouteImport } from './routes/admin/todos'
-import { Route as AdminR2RouteImport } from './routes/admin/r2'
-import { Route as AdminOgPreviewRouteImport } from './routes/admin/og-preview'
-import { Route as AdminLiveBackendRouteImport } from './routes/admin/live-backend'
-import { Route as AdminDiscordRouteImport } from './routes/admin/discord'
+import { Route as BbcodeRouteImport } from './routes/bbcode'
+import { Route as DiscordRouteImport } from './routes/discord'
+import { Route as FarmHelperRouteImport } from './routes/farm-helper'
+import { Route as GoalsRouteImport } from './routes/goals'
+import { Route as LegalRouteImport } from './routes/legal'
+import { Route as MapsRouteImport } from './routes/maps'
+import { Route as MyDataRouteImport } from './routes/my-data'
+import { Route as MyStatsRouteImport } from './routes/my-stats'
+import { Route as PacksRouteImport } from './routes/packs'
+import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as RankingsRouteImport } from './routes/rankings'
+import { Route as ReplayRouteImport } from './routes/replay'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as SkinsRouteImport } from './routes/skins'
+import { Route as SnipesRouteImport } from './routes/snipes'
+import { Route as TermsRouteImport } from './routes/terms'
+import { Route as TopPlaysRouteImport } from './routes/top-plays'
+import { Route as TrackerRouteImport } from './routes/tracker'
+import { Route as ValleyRouteImport } from './routes/valley'
 import { Route as AdminDanClassifierRouteImport } from './routes/admin/dan-classifier'
-import { Route as VideosIdFilenameRouteImport } from './routes/videos/$id/$filename'
-import { Route as PlayerUsernameSkillsRouteImport } from './routes/player/$username/skills'
-import { Route as PlayerUsernameRecentRouteImport } from './routes/player/$username/recent'
-import { Route as PlayerUsernameManiacardRouteImport } from './routes/player/$username/maniacard'
-import { Route as PlayerUsernameActivityRouteImport } from './routes/player/$username/activity'
-import { Route as PlayerUsernameAboutRouteImport } from './routes/player/$username/about'
-import { Route as FarmHelperMapBeatmapIdRouteImport } from './routes/farm-helper/map/$beatmapId'
-import { Route as ApiAuthOsuRouteImport } from './routes/api/auth/osu'
+import { Route as AdminDiscordRouteImport } from './routes/admin/discord'
+import { Route as AdminLiveBackendRouteImport } from './routes/admin/live-backend'
+import { Route as AdminOgPreviewRouteImport } from './routes/admin/og-preview'
+import { Route as AdminR2RouteImport } from './routes/admin/r2'
+import { Route as AdminTodosRouteImport } from './routes/admin/todos'
+import { Route as ApiAudioRouteImport } from './routes/api/audio'
+import { Route as ApiAvatarRouteImport } from './routes/api/avatar'
+import { Route as ApiBackgroundRouteImport } from './routes/api/background'
+import { Route as ApiCatboxUploadRouteImport } from './routes/api/catbox-upload'
+import { Route as ApiFaviconRouteImport } from './routes/api/favicon'
+import { Route as ApiOgRouteImport } from './routes/api/og'
+import { Route as ApiReplayUploadRouteImport } from './routes/api/replay-upload'
+import { Route as ApiSyncRouteImport } from './routes/api/sync'
+import { Route as DevOptInPreviewRouteImport } from './routes/dev.opt-in-preview'
+import { Route as PlayerUsernameRouteImport } from './routes/player/$username'
+import { Route as SkinsIdRouteImport } from './routes/skins_.$id'
 import { Route as ApiAuthLogoutRouteImport } from './routes/api/auth/logout'
+import { Route as ApiAuthOsuRouteImport } from './routes/api/auth/osu'
+import { Route as FarmHelperMapBeatmapIdRouteImport } from './routes/farm-helper/map/$beatmapId'
+import { Route as PlayerUsernameAboutRouteImport } from './routes/player/$username/about'
+import { Route as PlayerUsernameActivityRouteImport } from './routes/player/$username/activity'
+import { Route as PlayerUsernameManiacardRouteImport } from './routes/player/$username/maniacard'
+import { Route as PlayerUsernameRecentRouteImport } from './routes/player/$username/recent'
+import { Route as PlayerUsernameSkillsRouteImport } from './routes/player/$username/skills'
+import { Route as VideosIdFilenameRouteImport } from './routes/videos/$id/$filename'
 import { Route as ApiAuthOsuCallbackRouteImport } from './routes/api/auth/osu/callback'
 
-const ValleyRoute = ValleyRouteImport.update({
-  id: '/valley',
-  path: '/valley',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TrackerRoute = TrackerRouteImport.update({
-  id: '/tracker',
-  path: '/tracker',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TopPlaysRoute = TopPlaysRouteImport.update({
-  id: '/top-plays',
-  path: '/top-plays',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TermsRoute = TermsRouteImport.update({
-  id: '/terms',
-  path: '/terms',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SnipesRoute = SnipesRouteImport.update({
-  id: '/snipes',
-  path: '/snipes',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SkinsRoute = SkinsRouteImport.update({
-  id: '/skins',
-  path: '/skins',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
-  id: '/sitemap.xml',
-  path: '/sitemap.xml',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SettingsRoute = SettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ReplayRoute = ReplayRouteImport.update({
-  id: '/replay',
-  path: '/replay',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RankingsRoute = RankingsRouteImport.update({
-  id: '/rankings',
-  path: '/rankings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PrivacyRoute = PrivacyRouteImport.update({
-  id: '/privacy',
-  path: '/privacy',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PacksRoute = PacksRouteImport.update({
-  id: '/packs',
-  path: '/packs',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MyStatsRoute = MyStatsRouteImport.update({
-  id: '/my-stats',
-  path: '/my-stats',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MyDataRoute = MyDataRouteImport.update({
-  id: '/my-data',
-  path: '/my-data',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MapsRoute = MapsRouteImport.update({
-  id: '/maps',
-  path: '/maps',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LegalRoute = LegalRouteImport.update({
-  id: '/legal',
-  path: '/legal',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GoalsRoute = GoalsRouteImport.update({
-  id: '/goals',
-  path: '/goals',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FarmHelperRoute = FarmHelperRouteImport.update({
-  id: '/farm-helper',
-  path: '/farm-helper',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DiscordRoute = DiscordRouteImport.update({
-  id: '/discord',
-  path: '/discord',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BbcodeRoute = BbcodeRouteImport.update({
@@ -158,89 +68,99 @@ const BbcodeRoute = BbcodeRouteImport.update({
   path: '/bbcode',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const DiscordRoute = DiscordRouteImport.update({
+  id: '/discord',
+  path: '/discord',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SkinsIdRoute = SkinsIdRouteImport.update({
-  id: '/skins_/$id',
-  path: '/skins/$id',
+const FarmHelperRoute = FarmHelperRouteImport.update({
+  id: '/farm-helper',
+  path: '/farm-helper',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PlayerUsernameRoute = PlayerUsernameRouteImport.update({
-  id: '/player/$username',
-  path: '/player/$username',
+const GoalsRoute = GoalsRouteImport.update({
+  id: '/goals',
+  path: '/goals',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DevOptInPreviewRoute = DevOptInPreviewRouteImport.update({
-  id: '/dev/opt-in-preview',
-  path: '/dev/opt-in-preview',
+const LegalRoute = LegalRouteImport.update({
+  id: '/legal',
+  path: '/legal',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiSyncRoute = ApiSyncRouteImport.update({
-  id: '/api/sync',
-  path: '/api/sync',
+const MapsRoute = MapsRouteImport.update({
+  id: '/maps',
+  path: '/maps',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiReplayUploadRoute = ApiReplayUploadRouteImport.update({
-  id: '/api/replay-upload',
-  path: '/api/replay-upload',
+const MyDataRoute = MyDataRouteImport.update({
+  id: '/my-data',
+  path: '/my-data',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiOgRoute = ApiOgRouteImport.update({
-  id: '/api/og',
-  path: '/api/og',
+const MyStatsRoute = MyStatsRouteImport.update({
+  id: '/my-stats',
+  path: '/my-stats',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiFaviconRoute = ApiFaviconRouteImport.update({
-  id: '/api/favicon',
-  path: '/api/favicon',
+const PacksRoute = PacksRouteImport.update({
+  id: '/packs',
+  path: '/packs',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiCatboxUploadRoute = ApiCatboxUploadRouteImport.update({
-  id: '/api/catbox-upload',
-  path: '/api/catbox-upload',
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiBackgroundRoute = ApiBackgroundRouteImport.update({
-  id: '/api/background',
-  path: '/api/background',
+const RankingsRoute = RankingsRouteImport.update({
+  id: '/rankings',
+  path: '/rankings',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiAvatarRoute = ApiAvatarRouteImport.update({
-  id: '/api/avatar',
-  path: '/api/avatar',
+const ReplayRoute = ReplayRouteImport.update({
+  id: '/replay',
+  path: '/replay',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiAudioRoute = ApiAudioRouteImport.update({
-  id: '/api/audio',
-  path: '/api/audio',
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminTodosRoute = AdminTodosRouteImport.update({
-  id: '/admin/todos',
-  path: '/admin/todos',
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminR2Route = AdminR2RouteImport.update({
-  id: '/admin/r2',
-  path: '/admin/r2',
+const SkinsRoute = SkinsRouteImport.update({
+  id: '/skins',
+  path: '/skins',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminOgPreviewRoute = AdminOgPreviewRouteImport.update({
-  id: '/admin/og-preview',
-  path: '/admin/og-preview',
+const SnipesRoute = SnipesRouteImport.update({
+  id: '/snipes',
+  path: '/snipes',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminLiveBackendRoute = AdminLiveBackendRouteImport.update({
-  id: '/admin/live-backend',
-  path: '/admin/live-backend',
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminDiscordRoute = AdminDiscordRouteImport.update({
-  id: '/admin/discord',
-  path: '/admin/discord',
+const TopPlaysRoute = TopPlaysRouteImport.update({
+  id: '/top-plays',
+  path: '/top-plays',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TrackerRoute = TrackerRouteImport.update({
+  id: '/tracker',
+  path: '/tracker',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ValleyRoute = ValleyRouteImport.update({
+  id: '/valley',
+  path: '/valley',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminDanClassifierRoute = AdminDanClassifierRouteImport.update({
@@ -248,24 +168,104 @@ const AdminDanClassifierRoute = AdminDanClassifierRouteImport.update({
   path: '/admin/dan-classifier',
   getParentRoute: () => rootRouteImport,
 } as any)
-const VideosIdFilenameRoute = VideosIdFilenameRouteImport.update({
-  id: '/videos/$id/$filename',
-  path: '/videos/$id/$filename',
+const AdminDiscordRoute = AdminDiscordRouteImport.update({
+  id: '/admin/discord',
+  path: '/admin/discord',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PlayerUsernameSkillsRoute = PlayerUsernameSkillsRouteImport.update({
-  id: '/skills',
-  path: '/skills',
-  getParentRoute: () => PlayerUsernameRoute,
+const AdminLiveBackendRoute = AdminLiveBackendRouteImport.update({
+  id: '/admin/live-backend',
+  path: '/admin/live-backend',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const PlayerUsernameRecentRoute = PlayerUsernameRecentRouteImport.update({
-  id: '/recent',
-  path: '/recent',
-  getParentRoute: () => PlayerUsernameRoute,
+const AdminOgPreviewRoute = AdminOgPreviewRouteImport.update({
+  id: '/admin/og-preview',
+  path: '/admin/og-preview',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const PlayerUsernameManiacardRoute = PlayerUsernameManiacardRouteImport.update({
-  id: '/maniacard',
-  path: '/maniacard',
+const AdminR2Route = AdminR2RouteImport.update({
+  id: '/admin/r2',
+  path: '/admin/r2',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminTodosRoute = AdminTodosRouteImport.update({
+  id: '/admin/todos',
+  path: '/admin/todos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAudioRoute = ApiAudioRouteImport.update({
+  id: '/api/audio',
+  path: '/api/audio',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAvatarRoute = ApiAvatarRouteImport.update({
+  id: '/api/avatar',
+  path: '/api/avatar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiBackgroundRoute = ApiBackgroundRouteImport.update({
+  id: '/api/background',
+  path: '/api/background',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCatboxUploadRoute = ApiCatboxUploadRouteImport.update({
+  id: '/api/catbox-upload',
+  path: '/api/catbox-upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiFaviconRoute = ApiFaviconRouteImport.update({
+  id: '/api/favicon',
+  path: '/api/favicon',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiOgRoute = ApiOgRouteImport.update({
+  id: '/api/og',
+  path: '/api/og',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiReplayUploadRoute = ApiReplayUploadRouteImport.update({
+  id: '/api/replay-upload',
+  path: '/api/replay-upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSyncRoute = ApiSyncRouteImport.update({
+  id: '/api/sync',
+  path: '/api/sync',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevOptInPreviewRoute = DevOptInPreviewRouteImport.update({
+  id: '/dev/opt-in-preview',
+  path: '/dev/opt-in-preview',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlayerUsernameRoute = PlayerUsernameRouteImport.update({
+  id: '/player/$username',
+  path: '/player/$username',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SkinsIdRoute = SkinsIdRouteImport.update({
+  id: '/skins_/$id',
+  path: '/skins/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthLogoutRoute = ApiAuthLogoutRouteImport.update({
+  id: '/api/auth/logout',
+  path: '/api/auth/logout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthOsuRoute = ApiAuthOsuRouteImport.update({
+  id: '/api/auth/osu',
+  path: '/api/auth/osu',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FarmHelperMapBeatmapIdRoute = FarmHelperMapBeatmapIdRouteImport.update({
+  id: '/map/$beatmapId',
+  path: '/map/$beatmapId',
+  getParentRoute: () => FarmHelperRoute,
+} as any)
+const PlayerUsernameAboutRoute = PlayerUsernameAboutRouteImport.update({
+  id: '/about',
+  path: '/about',
   getParentRoute: () => PlayerUsernameRoute,
 } as any)
 const PlayerUsernameActivityRoute = PlayerUsernameActivityRouteImport.update({
@@ -273,24 +273,24 @@ const PlayerUsernameActivityRoute = PlayerUsernameActivityRouteImport.update({
   path: '/activity',
   getParentRoute: () => PlayerUsernameRoute,
 } as any)
-const PlayerUsernameAboutRoute = PlayerUsernameAboutRouteImport.update({
-  id: '/about',
-  path: '/about',
+const PlayerUsernameManiacardRoute = PlayerUsernameManiacardRouteImport.update({
+  id: '/maniacard',
+  path: '/maniacard',
   getParentRoute: () => PlayerUsernameRoute,
 } as any)
-const FarmHelperMapBeatmapIdRoute = FarmHelperMapBeatmapIdRouteImport.update({
-  id: '/map/$beatmapId',
-  path: '/map/$beatmapId',
-  getParentRoute: () => FarmHelperRoute,
+const PlayerUsernameRecentRoute = PlayerUsernameRecentRouteImport.update({
+  id: '/recent',
+  path: '/recent',
+  getParentRoute: () => PlayerUsernameRoute,
 } as any)
-const ApiAuthOsuRoute = ApiAuthOsuRouteImport.update({
-  id: '/api/auth/osu',
-  path: '/api/auth/osu',
-  getParentRoute: () => rootRouteImport,
+const PlayerUsernameSkillsRoute = PlayerUsernameSkillsRouteImport.update({
+  id: '/skills',
+  path: '/skills',
+  getParentRoute: () => PlayerUsernameRoute,
 } as any)
-const ApiAuthLogoutRoute = ApiAuthLogoutRouteImport.update({
-  id: '/api/auth/logout',
-  path: '/api/auth/logout',
+const VideosIdFilenameRoute = VideosIdFilenameRouteImport.update({
+  id: '/videos/$id/$filename',
+  path: '/videos/$id/$filename',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAuthOsuCallbackRoute = ApiAuthOsuCallbackRouteImport.update({
@@ -649,137 +649,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/valley': {
-      id: '/valley'
-      path: '/valley'
-      fullPath: '/valley'
-      preLoaderRoute: typeof ValleyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/tracker': {
-      id: '/tracker'
-      path: '/tracker'
-      fullPath: '/tracker'
-      preLoaderRoute: typeof TrackerRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/top-plays': {
-      id: '/top-plays'
-      path: '/top-plays'
-      fullPath: '/top-plays'
-      preLoaderRoute: typeof TopPlaysRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/terms': {
-      id: '/terms'
-      path: '/terms'
-      fullPath: '/terms'
-      preLoaderRoute: typeof TermsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/snipes': {
-      id: '/snipes'
-      path: '/snipes'
-      fullPath: '/snipes'
-      preLoaderRoute: typeof SnipesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/skins': {
-      id: '/skins'
-      path: '/skins'
-      fullPath: '/skins'
-      preLoaderRoute: typeof SkinsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sitemap.xml': {
-      id: '/sitemap.xml'
-      path: '/sitemap.xml'
-      fullPath: '/sitemap.xml'
-      preLoaderRoute: typeof SitemapDotxmlRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/settings': {
-      id: '/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/replay': {
-      id: '/replay'
-      path: '/replay'
-      fullPath: '/replay'
-      preLoaderRoute: typeof ReplayRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/rankings': {
-      id: '/rankings'
-      path: '/rankings'
-      fullPath: '/rankings'
-      preLoaderRoute: typeof RankingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/privacy': {
-      id: '/privacy'
-      path: '/privacy'
-      fullPath: '/privacy'
-      preLoaderRoute: typeof PrivacyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/packs': {
-      id: '/packs'
-      path: '/packs'
-      fullPath: '/packs'
-      preLoaderRoute: typeof PacksRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/my-stats': {
-      id: '/my-stats'
-      path: '/my-stats'
-      fullPath: '/my-stats'
-      preLoaderRoute: typeof MyStatsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/my-data': {
-      id: '/my-data'
-      path: '/my-data'
-      fullPath: '/my-data'
-      preLoaderRoute: typeof MyDataRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/maps': {
-      id: '/maps'
-      path: '/maps'
-      fullPath: '/maps'
-      preLoaderRoute: typeof MapsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/legal': {
-      id: '/legal'
-      path: '/legal'
-      fullPath: '/legal'
-      preLoaderRoute: typeof LegalRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/goals': {
-      id: '/goals'
-      path: '/goals'
-      fullPath: '/goals'
-      preLoaderRoute: typeof GoalsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/farm-helper': {
-      id: '/farm-helper'
-      path: '/farm-helper'
-      fullPath: '/farm-helper'
-      preLoaderRoute: typeof FarmHelperRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/discord': {
-      id: '/discord'
-      path: '/discord'
-      fullPath: '/discord'
-      preLoaderRoute: typeof DiscordRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/bbcode': {
@@ -789,123 +663,137 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BbcodeRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/discord': {
+      id: '/discord'
+      path: '/discord'
+      fullPath: '/discord'
+      preLoaderRoute: typeof DiscordRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/skins_/$id': {
-      id: '/skins_/$id'
-      path: '/skins/$id'
-      fullPath: '/skins/$id'
-      preLoaderRoute: typeof SkinsIdRouteImport
+    '/farm-helper': {
+      id: '/farm-helper'
+      path: '/farm-helper'
+      fullPath: '/farm-helper'
+      preLoaderRoute: typeof FarmHelperRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/player/$username': {
-      id: '/player/$username'
-      path: '/player/$username'
-      fullPath: '/player/$username'
-      preLoaderRoute: typeof PlayerUsernameRouteImport
+    '/goals': {
+      id: '/goals'
+      path: '/goals'
+      fullPath: '/goals'
+      preLoaderRoute: typeof GoalsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/dev/opt-in-preview': {
-      id: '/dev/opt-in-preview'
-      path: '/dev/opt-in-preview'
-      fullPath: '/dev/opt-in-preview'
-      preLoaderRoute: typeof DevOptInPreviewRouteImport
+    '/legal': {
+      id: '/legal'
+      path: '/legal'
+      fullPath: '/legal'
+      preLoaderRoute: typeof LegalRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/sync': {
-      id: '/api/sync'
-      path: '/api/sync'
-      fullPath: '/api/sync'
-      preLoaderRoute: typeof ApiSyncRouteImport
+    '/maps': {
+      id: '/maps'
+      path: '/maps'
+      fullPath: '/maps'
+      preLoaderRoute: typeof MapsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/replay-upload': {
-      id: '/api/replay-upload'
-      path: '/api/replay-upload'
-      fullPath: '/api/replay-upload'
-      preLoaderRoute: typeof ApiReplayUploadRouteImport
+    '/my-data': {
+      id: '/my-data'
+      path: '/my-data'
+      fullPath: '/my-data'
+      preLoaderRoute: typeof MyDataRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/og': {
-      id: '/api/og'
-      path: '/api/og'
-      fullPath: '/api/og'
-      preLoaderRoute: typeof ApiOgRouteImport
+    '/my-stats': {
+      id: '/my-stats'
+      path: '/my-stats'
+      fullPath: '/my-stats'
+      preLoaderRoute: typeof MyStatsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/favicon': {
-      id: '/api/favicon'
-      path: '/api/favicon'
-      fullPath: '/api/favicon'
-      preLoaderRoute: typeof ApiFaviconRouteImport
+    '/packs': {
+      id: '/packs'
+      path: '/packs'
+      fullPath: '/packs'
+      preLoaderRoute: typeof PacksRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/catbox-upload': {
-      id: '/api/catbox-upload'
-      path: '/api/catbox-upload'
-      fullPath: '/api/catbox-upload'
-      preLoaderRoute: typeof ApiCatboxUploadRouteImport
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/background': {
-      id: '/api/background'
-      path: '/api/background'
-      fullPath: '/api/background'
-      preLoaderRoute: typeof ApiBackgroundRouteImport
+    '/rankings': {
+      id: '/rankings'
+      path: '/rankings'
+      fullPath: '/rankings'
+      preLoaderRoute: typeof RankingsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/avatar': {
-      id: '/api/avatar'
-      path: '/api/avatar'
-      fullPath: '/api/avatar'
-      preLoaderRoute: typeof ApiAvatarRouteImport
+    '/replay': {
+      id: '/replay'
+      path: '/replay'
+      fullPath: '/replay'
+      preLoaderRoute: typeof ReplayRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/audio': {
-      id: '/api/audio'
-      path: '/api/audio'
-      fullPath: '/api/audio'
-      preLoaderRoute: typeof ApiAudioRouteImport
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/todos': {
-      id: '/admin/todos'
-      path: '/admin/todos'
-      fullPath: '/admin/todos'
-      preLoaderRoute: typeof AdminTodosRouteImport
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/r2': {
-      id: '/admin/r2'
-      path: '/admin/r2'
-      fullPath: '/admin/r2'
-      preLoaderRoute: typeof AdminR2RouteImport
+    '/skins': {
+      id: '/skins'
+      path: '/skins'
+      fullPath: '/skins'
+      preLoaderRoute: typeof SkinsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/og-preview': {
-      id: '/admin/og-preview'
-      path: '/admin/og-preview'
-      fullPath: '/admin/og-preview'
-      preLoaderRoute: typeof AdminOgPreviewRouteImport
+    '/snipes': {
+      id: '/snipes'
+      path: '/snipes'
+      fullPath: '/snipes'
+      preLoaderRoute: typeof SnipesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/live-backend': {
-      id: '/admin/live-backend'
-      path: '/admin/live-backend'
-      fullPath: '/admin/live-backend'
-      preLoaderRoute: typeof AdminLiveBackendRouteImport
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/discord': {
-      id: '/admin/discord'
-      path: '/admin/discord'
-      fullPath: '/admin/discord'
-      preLoaderRoute: typeof AdminDiscordRouteImport
+    '/top-plays': {
+      id: '/top-plays'
+      path: '/top-plays'
+      fullPath: '/top-plays'
+      preLoaderRoute: typeof TopPlaysRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tracker': {
+      id: '/tracker'
+      path: '/tracker'
+      fullPath: '/tracker'
+      preLoaderRoute: typeof TrackerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/valley': {
+      id: '/valley'
+      path: '/valley'
+      fullPath: '/valley'
+      preLoaderRoute: typeof ValleyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/dan-classifier': {
@@ -915,32 +803,144 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminDanClassifierRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/videos/$id/$filename': {
-      id: '/videos/$id/$filename'
-      path: '/videos/$id/$filename'
-      fullPath: '/videos/$id/$filename'
-      preLoaderRoute: typeof VideosIdFilenameRouteImport
+    '/admin/discord': {
+      id: '/admin/discord'
+      path: '/admin/discord'
+      fullPath: '/admin/discord'
+      preLoaderRoute: typeof AdminDiscordRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/player/$username/skills': {
-      id: '/player/$username/skills'
-      path: '/skills'
-      fullPath: '/player/$username/skills'
-      preLoaderRoute: typeof PlayerUsernameSkillsRouteImport
-      parentRoute: typeof PlayerUsernameRoute
+    '/admin/live-backend': {
+      id: '/admin/live-backend'
+      path: '/admin/live-backend'
+      fullPath: '/admin/live-backend'
+      preLoaderRoute: typeof AdminLiveBackendRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/player/$username/recent': {
-      id: '/player/$username/recent'
-      path: '/recent'
-      fullPath: '/player/$username/recent'
-      preLoaderRoute: typeof PlayerUsernameRecentRouteImport
-      parentRoute: typeof PlayerUsernameRoute
+    '/admin/og-preview': {
+      id: '/admin/og-preview'
+      path: '/admin/og-preview'
+      fullPath: '/admin/og-preview'
+      preLoaderRoute: typeof AdminOgPreviewRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/player/$username/maniacard': {
-      id: '/player/$username/maniacard'
-      path: '/maniacard'
-      fullPath: '/player/$username/maniacard'
-      preLoaderRoute: typeof PlayerUsernameManiacardRouteImport
+    '/admin/r2': {
+      id: '/admin/r2'
+      path: '/admin/r2'
+      fullPath: '/admin/r2'
+      preLoaderRoute: typeof AdminR2RouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/todos': {
+      id: '/admin/todos'
+      path: '/admin/todos'
+      fullPath: '/admin/todos'
+      preLoaderRoute: typeof AdminTodosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/audio': {
+      id: '/api/audio'
+      path: '/api/audio'
+      fullPath: '/api/audio'
+      preLoaderRoute: typeof ApiAudioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/avatar': {
+      id: '/api/avatar'
+      path: '/api/avatar'
+      fullPath: '/api/avatar'
+      preLoaderRoute: typeof ApiAvatarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/background': {
+      id: '/api/background'
+      path: '/api/background'
+      fullPath: '/api/background'
+      preLoaderRoute: typeof ApiBackgroundRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/catbox-upload': {
+      id: '/api/catbox-upload'
+      path: '/api/catbox-upload'
+      fullPath: '/api/catbox-upload'
+      preLoaderRoute: typeof ApiCatboxUploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/favicon': {
+      id: '/api/favicon'
+      path: '/api/favicon'
+      fullPath: '/api/favicon'
+      preLoaderRoute: typeof ApiFaviconRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/og': {
+      id: '/api/og'
+      path: '/api/og'
+      fullPath: '/api/og'
+      preLoaderRoute: typeof ApiOgRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/replay-upload': {
+      id: '/api/replay-upload'
+      path: '/api/replay-upload'
+      fullPath: '/api/replay-upload'
+      preLoaderRoute: typeof ApiReplayUploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/sync': {
+      id: '/api/sync'
+      path: '/api/sync'
+      fullPath: '/api/sync'
+      preLoaderRoute: typeof ApiSyncRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dev/opt-in-preview': {
+      id: '/dev/opt-in-preview'
+      path: '/dev/opt-in-preview'
+      fullPath: '/dev/opt-in-preview'
+      preLoaderRoute: typeof DevOptInPreviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/player/$username': {
+      id: '/player/$username'
+      path: '/player/$username'
+      fullPath: '/player/$username'
+      preLoaderRoute: typeof PlayerUsernameRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/skins_/$id': {
+      id: '/skins_/$id'
+      path: '/skins/$id'
+      fullPath: '/skins/$id'
+      preLoaderRoute: typeof SkinsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/logout': {
+      id: '/api/auth/logout'
+      path: '/api/auth/logout'
+      fullPath: '/api/auth/logout'
+      preLoaderRoute: typeof ApiAuthLogoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/osu': {
+      id: '/api/auth/osu'
+      path: '/api/auth/osu'
+      fullPath: '/api/auth/osu'
+      preLoaderRoute: typeof ApiAuthOsuRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/farm-helper/map/$beatmapId': {
+      id: '/farm-helper/map/$beatmapId'
+      path: '/map/$beatmapId'
+      fullPath: '/farm-helper/map/$beatmapId'
+      preLoaderRoute: typeof FarmHelperMapBeatmapIdRouteImport
+      parentRoute: typeof FarmHelperRoute
+    }
+    '/player/$username/about': {
+      id: '/player/$username/about'
+      path: '/about'
+      fullPath: '/player/$username/about'
+      preLoaderRoute: typeof PlayerUsernameAboutRouteImport
       parentRoute: typeof PlayerUsernameRoute
     }
     '/player/$username/activity': {
@@ -950,32 +950,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlayerUsernameActivityRouteImport
       parentRoute: typeof PlayerUsernameRoute
     }
-    '/player/$username/about': {
-      id: '/player/$username/about'
-      path: '/about'
-      fullPath: '/player/$username/about'
-      preLoaderRoute: typeof PlayerUsernameAboutRouteImport
+    '/player/$username/maniacard': {
+      id: '/player/$username/maniacard'
+      path: '/maniacard'
+      fullPath: '/player/$username/maniacard'
+      preLoaderRoute: typeof PlayerUsernameManiacardRouteImport
       parentRoute: typeof PlayerUsernameRoute
     }
-    '/farm-helper/map/$beatmapId': {
-      id: '/farm-helper/map/$beatmapId'
-      path: '/map/$beatmapId'
-      fullPath: '/farm-helper/map/$beatmapId'
-      preLoaderRoute: typeof FarmHelperMapBeatmapIdRouteImport
-      parentRoute: typeof FarmHelperRoute
+    '/player/$username/recent': {
+      id: '/player/$username/recent'
+      path: '/recent'
+      fullPath: '/player/$username/recent'
+      preLoaderRoute: typeof PlayerUsernameRecentRouteImport
+      parentRoute: typeof PlayerUsernameRoute
     }
-    '/api/auth/osu': {
-      id: '/api/auth/osu'
-      path: '/api/auth/osu'
-      fullPath: '/api/auth/osu'
-      preLoaderRoute: typeof ApiAuthOsuRouteImport
-      parentRoute: typeof rootRouteImport
+    '/player/$username/skills': {
+      id: '/player/$username/skills'
+      path: '/skills'
+      fullPath: '/player/$username/skills'
+      preLoaderRoute: typeof PlayerUsernameSkillsRouteImport
+      parentRoute: typeof PlayerUsernameRoute
     }
-    '/api/auth/logout': {
-      id: '/api/auth/logout'
-      path: '/api/auth/logout'
-      fullPath: '/api/auth/logout'
-      preLoaderRoute: typeof ApiAuthLogoutRouteImport
+    '/videos/$id/$filename': {
+      id: '/videos/$id/$filename'
+      path: '/videos/$id/$filename'
+      fullPath: '/videos/$id/$filename'
+      preLoaderRoute: typeof VideosIdFilenameRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/auth/osu/callback': {
