@@ -61,7 +61,7 @@ import { ManiaCard3DPanel as ManiaCardPanel } from "../../components/player/mani
 import { SkillBreakdownBody, SkillModePanel, qualifyingSkillModes, skillRatingAccent } from "../../components/player/SkillBreakdown";
 import type { InsightScoreSnapshot, OsuCovers, OsuManiaVariant, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
 import { buildPpDistribution, calculateUserProfileInsights } from "../../lib/profile-insights";
-import { readPlayerShell } from "../../lib/player-shell-cache";
+import { playedWithinOnlineWindow, readPlayerRecentPlay, readPlayerShell } from "../../lib/player-shell-cache";
 import { pageSeo, playerOgImagePath } from "../../lib/seo";
 import { getRankTierClass } from "../../lib/rankings";
 import { getCountryName, isSupportedCountryCode } from "../../lib/country";
@@ -1006,6 +1006,7 @@ export function PlayerProfilePage({
     readPpDistributionModePreference(),
   );
   const [ppKeyFilter, setPpKeyFilter] = useState<KeyFilter>("all");
+  const [recentPlayAt, setRecentPlayAt] = useState<string | null>(null);
   const [recentHasMore, setRecentHasMore] = useState(false);
   const [bestVisibleCount, setBestVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
   const [recentVisibleCount, setRecentVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
@@ -1038,6 +1039,12 @@ export function PlayerProfilePage({
     setPpDistributionModeState(mode);
     writePpDistributionModePreference(mode);
   }, []);
+
+  // Read after mount so SSR keeps rendering osu!'s own presence and hydration
+  // stays byte-identical; the seeded play only takes over on the client.
+  useLayoutEffect(() => {
+    setRecentPlayAt(readPlayerRecentPlay(username));
+  }, [username]);
 
   useLayoutEffect(() => {
     if (!loaderSnapshot?.user || !profileSnapshotUserMetadataIsStale(loaderSnapshot)) return;
@@ -1505,6 +1512,9 @@ export function PlayerProfilePage({
   // browser restores on reload — render the flag only once hydration is done
   // so the server and first client render agree (React #418 otherwise).
   const showProfileCountryFlag = hasHydrated && showCountryFlag && profileCountryCode && profileCountryName;
+  // A play we just watched land beats osu!'s `last_visit`, which only tracks
+  // website visits and can read weeks stale for someone mid-session.
+  const seenPlayingNow = recentPlayAt != null && playedWithinOnlineWindow(recentPlayAt);
 
   return (
     <div className="flex-1">
@@ -2037,8 +2047,11 @@ export function PlayerProfilePage({
                     <img src="/images/icons/supporter.svg" alt="Supporter" className="w-3 h-3 brightness-0 invert" />
                   </span>
                 )}
-                {user.is_online ? (
-                  <span className="w-2 h-2 rounded-full bg-osu-green" title="Online" />
+                {user.is_online || seenPlayingNow ? (
+                  <span
+                    className="w-2 h-2 rounded-full bg-osu-green"
+                    title={user.is_online || !recentPlayAt ? "Online" : `Set a play ${formatDetailedTimeAgo(recentPlayAt)}`}
+                  />
                 ) : user.last_visit ? (
                   <span
                     className="text-[11px] text-osu-l2"

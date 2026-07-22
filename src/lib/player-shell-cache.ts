@@ -11,6 +11,19 @@ type PlayerShellCacheEntry = {
 
 const memoryCache = new Map<string, PlayerShellCacheEntry>();
 
+const PLAYER_RECENT_PLAY_CACHE_KEY = "mania-hub-player-recent-play-cache-v1";
+const PLAYER_RECENT_PLAY_MAX_ENTRIES = 150;
+
+/**
+ * osu! derives `is_online` / `last_visit` from website and bancho presence, so a
+ * player grinding maps without ever opening the site keeps a weeks-old
+ * `last_visit`. Surfaces that watch scores land (the tracker) know better, so
+ * they seed the play time here and the profile trusts it as presence this long.
+ */
+export const RECENT_PLAY_ONLINE_WINDOW_MS = 10 * 60 * 1000;
+
+const recentPlayMemoryCache = new Map<string, string>();
+
 export function seedPlayerShellFromRankingEntry(entry: LeanRankingEntry, countryRank?: number | null): void {
   writePlayerShell(buildPlayerShellFromRankingEntry(entry, countryRank));
 }
@@ -40,6 +53,34 @@ export function readPlayerShell(username: string): OsuUser | null {
 
   memoryCache.set(key, storedEntry);
   return storedEntry.user;
+}
+
+/** Records that `username` was seen setting a play, for the profile to read on arrival. */
+export function seedPlayerRecentPlay(username: string, playedAt: string): void {
+  const key = normalizeUsernameKey(username);
+  if (!key || !Number.isFinite(Date.parse(playedAt))) return;
+  recentPlayMemoryCache.set(key, playedAt);
+
+  const stored = readStoredRecentPlays();
+  stored[key] = playedAt;
+  writeStoredRecentPlays(stored);
+}
+
+/** The seeded play time for `username`, or null once it falls outside the online window. */
+export function readPlayerRecentPlay(username: string): string | null {
+  const key = normalizeUsernameKey(username);
+  if (!key) return null;
+  const playedAt = recentPlayMemoryCache.get(key) ?? readStoredRecentPlays()[key];
+  return typeof playedAt === "string" && playedWithinOnlineWindow(playedAt) ? playedAt : null;
+}
+
+export function playedWithinOnlineWindow(playedAt: string, now: number = Date.now()): boolean {
+  const parsed = Date.parse(playedAt);
+  if (!Number.isFinite(parsed)) return false;
+  // Clock skew between the ingest host and the browser can date a play that
+  // just landed slightly in the future, so bound the gap from both sides.
+  const age = now - parsed;
+  return age < RECENT_PLAY_ONLINE_WINDOW_MS && age > -RECENT_PLAY_ONLINE_WINDOW_MS;
 }
 
 function writePlayerShell(user: OsuUser): void {
@@ -140,6 +181,33 @@ function writeStoredShells(shells: Record<string, PlayerShellCacheEntry>): void 
         .slice(-PLAYER_SHELL_CACHE_MAX_ENTRIES),
     );
     window.localStorage.setItem(PLAYER_SHELL_CACHE_KEY, JSON.stringify(pruned));
+  } catch {
+    // Best-effort navigation cache only.
+  }
+}
+
+function readStoredRecentPlays(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(PLAYER_RECENT_PLAY_CACHE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return parsed as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+function writeStoredRecentPlays(plays: Record<string, string>): void {
+  if (typeof window === "undefined") return;
+  try {
+    const pruned = Object.fromEntries(
+      Object.entries(plays)
+        .filter(([, playedAt]) => playedWithinOnlineWindow(playedAt))
+        .slice(-PLAYER_RECENT_PLAY_MAX_ENTRIES),
+    );
+    window.localStorage.setItem(PLAYER_RECENT_PLAY_CACHE_KEY, JSON.stringify(pruned));
   } catch {
     // Best-effort navigation cache only.
   }

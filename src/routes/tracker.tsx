@@ -37,6 +37,7 @@ import type { LeanTrackerScore } from "../lib/types";
 import { parseCountrySearchParam } from "../lib/country-search";
 import { getReplaySearch } from "../lib/replay-navigation";
 import { showPlayerCountryFlagState } from "../lib/player-profile-navigation";
+import { seedPlayerRecentPlay } from "../lib/player-shell-cache";
 import { fetchLiveTrackerSnapshot, isLiveBackendConfigured, openLiveEventSource } from "../lib/live-backend";
 import { detectTrackerMultis, type TrackerMultiRound } from "../lib/tracker-multi";
 import { CountryWarming } from "../components/CountryWarming";
@@ -1841,6 +1842,18 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
 }) {
   const navigate = useNavigate();
 
+  // The profile can only show osu!'s `last_visit`, which ignores gameplay. This
+  // play is proof the player was at their keyboard, so hand it over on the way.
+  const openPlayerProfile = () => {
+    if (!score.user?.username) return;
+    seedPlayerRecentPlay(score.user.username, getScoreTimestamp(score));
+    navigate({
+      to: "/player/$username",
+      params: { username: score.user.username },
+      ...(showCountryFlag ? { state: showPlayerCountryFlagState } : {}),
+    });
+  };
+
   const keymodeLabel = getBeatmapKeymodeLabel(score.beatmap);
   const totalScore = getDisplayedTotalScore(score);
   const beatmapUrl = getBeatmapUrl(score);
@@ -1870,12 +1883,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            if (!score.user?.username) return;
-            navigate({
-              to: "/player/$username",
-              params: { username: score.user.username },
-              ...(showCountryFlag ? { state: showPlayerCountryFlagState } : {}),
-            });
+            openPlayerProfile();
           }}
           className="cursor-pointer"
           title={score.user?.username ? `Open ${score.user.username}'s profile` : undefined}
@@ -1891,11 +1899,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  navigate({
-                                    to: "/player/$username",
-                                    params: { username: score.user.username },
-                                    ...(showCountryFlag ? { state: showPlayerCountryFlagState } : {}),
-                                  });
+                                  openPlayerProfile();
                                 }}
                                 className="cursor-pointer min-w-0"
                               >
