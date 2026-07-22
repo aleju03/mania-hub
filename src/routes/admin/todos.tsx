@@ -98,13 +98,19 @@ const POSITION_STEP = 1000;
 type BoardView = "lanes" | "queue";
 const BOARD_VIEW_KEY = "mania-hub-todos-view";
 
+// Below this the five-lane playfield is a sideways scroll with no room to drag, so a phone opens
+// in the single-column queue instead. Only ever a default: an explicit choice always wins.
+const LANES_MIN_WIDTH = 680;
+
 function readBoardViewPreference(): BoardView {
   if (typeof window === "undefined") return "lanes";
   try {
-    return window.localStorage.getItem(BOARD_VIEW_KEY) === "queue" ? "queue" : "lanes";
+    const stored = window.localStorage.getItem(BOARD_VIEW_KEY);
+    if (stored === "queue" || stored === "lanes") return stored;
   } catch {
-    return "lanes";
+    // No stored preference to honour; fall through to the viewport default.
   }
+  return window.innerWidth < LANES_MIN_WIDTH ? "queue" : "lanes";
 }
 
 function writeBoardViewPreference(view: BoardView): void {
@@ -609,18 +615,19 @@ function TodosPage() {
     <div className="flex-1 bg-osu-b5 min-h-[calc(100vh-60px)]">
       <div className="mx-auto max-w-[1000px] space-y-4 px-4 py-6 sm:px-5">
         {/* Header */}
-        <div className="flex items-end justify-between gap-3">
-          <div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="h-4 w-1 rounded-full bg-osu-pink" />
               <h1 className="text-sm font-bold uppercase tracking-[0.14em] text-osu-l1">Todo</h1>
             </div>
             <p className="mt-1 text-[11px] text-osu-f1">
-              {openCount} on the field{doneCount ? ` · ${doneCount} cleared` : ""} · private notes for the project
+              {openCount} on the field{doneCount ? ` · ${doneCount} cleared` : ""}
+              <span className="hidden sm:inline"> · private notes for the project</span>
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <div className="inline-flex rounded-md border border-osu-b3/50 bg-osu-b4/60 p-0.5" role="group" aria-label="Board view">
+            <div className="inline-flex shrink-0 rounded-md border border-osu-b3/50 bg-osu-b4/60 p-0.5" role="group" aria-label="Board view">
               {([
                 { key: "lanes" as const, label: "Lanes", Icon: Columns3 },
                 { key: "queue" as const, label: "Queue", Icon: ListOrdered },
@@ -630,7 +637,9 @@ function TodosPage() {
                   type="button"
                   onClick={() => setView(key)}
                   aria-pressed={view === key}
-                  className={`inline-flex items-center gap-1.5 rounded px-2 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
+                  aria-label={label}
+                  title={label}
+                  className={`inline-flex items-center gap-1.5 rounded px-2 py-1.5 text-[11px] font-semibold transition-colors cursor-pointer sm:py-1 ${
                     view === key ? "bg-osu-b3/50 text-white" : "text-osu-f1 hover:text-osu-l2"
                   }`}
                 >
@@ -639,7 +648,7 @@ function TodosPage() {
                 </button>
               ))}
             </div>
-            <div className="relative w-[200px] sm:w-[240px]">
+            <div className="relative min-w-0 flex-1 sm:w-[240px] sm:flex-none">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-osu-f1/60" />
             <input
               value={search}
@@ -734,8 +743,11 @@ function TodosPage() {
         ) : (
           <div className="overflow-hidden rounded-xl border border-osu-b3/40 bg-osu-b6/20">
             {view === "lanes" ? (
-              <div className="overflow-x-auto">
-                <div className="min-w-[680px]">
+              <div className="snap-x overflow-x-auto">
+                {/* Wider than the desktop minimum on purpose: on a phone this scrolls sideways
+                    either way, so give each lane enough room to read rather than cramming five
+                    into the viewport. */}
+                <div className="min-w-[760px] sm:min-w-[680px]">
                   <div className="relative flex">
                     {CATEGORY_ORDER.map((key) => (
                       <Lane
@@ -793,11 +805,12 @@ function TodosPage() {
             )}
 
             {/* Score footer: accuracy + grade, combo, results toggle */}
-            <div className="grid grid-cols-3 items-center border-t border-osu-b3/30 px-3 py-2">
-              <div className="flex items-center gap-2">
+            <div className="grid grid-cols-3 items-center gap-2 border-t border-osu-b3/30 px-2 py-2 sm:px-3">
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 <span className={`text-sm font-black italic ${grade.text}`}>{grade.label}</span>
                 <span className="text-sm font-bold tabular-nums text-osu-l1">{acc.toFixed(2)}%</span>
-                <span className="text-[10px] uppercase tracking-wider text-osu-f1/50">acc</span>
+                {/* Labels are decoration; the grade letter and the % carry the meaning on their own. */}
+                <span className="hidden text-[10px] uppercase tracking-wider text-osu-f1/50 sm:inline">acc</span>
               </div>
               <div className="flex items-baseline justify-center gap-1.5">
                 <AnimatePresence initial={false} mode="popLayout">
@@ -812,7 +825,7 @@ function TodosPage() {
                     {doneCount}x
                   </motion.span>
                 </AnimatePresence>
-                <span className="text-[10px] uppercase tracking-wider text-osu-f1/50">cleared</span>
+                <span className="hidden text-[10px] uppercase tracking-wider text-osu-f1/50 sm:inline">cleared</span>
               </div>
               <div className="flex justify-end">
                 <button
@@ -982,7 +995,7 @@ function Lane({ category, items, popup, onHit, onOpen, onReorderEnd, laneRefs, l
       ref={(node) => {
         laneRefs.current[category] = node;
       }}
-      className={`relative flex min-w-0 flex-1 flex-col border-r border-osu-b3/25 transition-colors last:border-r-0 ${
+      className={`relative flex min-w-0 flex-1 snap-start flex-col border-r border-osu-b3/25 transition-colors last:border-r-0 ${
         hovered ? "bg-osu-b3/25" : ""
       }`}
     >
@@ -1103,6 +1116,7 @@ function LaneNote({
             <span>{formatShortDate(todo.createdAt)}</span>
           </div>
         </div>
+        {/* Hover reveals the tick on desktop; touch has no hover, so it stays visible there. */}
         <button
           type="button"
           aria-label="Hit (mark as done)"
@@ -1111,7 +1125,7 @@ function LaneNote({
             event.stopPropagation();
             onHit(todo);
           }}
-          className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-osu-b3/60 bg-osu-b6/40 text-transparent transition-colors hover:border-osu-green hover:text-osu-green cursor-pointer"
+          className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-osu-b3/60 bg-osu-b6/40 text-osu-f1/40 transition-colors hover:border-osu-green hover:text-osu-green cursor-pointer sm:h-5 sm:w-5 sm:text-transparent"
         >
           <Check className="h-3 w-3" />
         </button>
@@ -1247,20 +1261,21 @@ function QueueRow({
       exit={{ opacity: 0, y: 8, scale: 0.98, transition: { duration: 0.14 } }}
       transition={{ duration: 0.16, ease: "easeOut" }}
       style={{ touchAction: "pan-y" }}
-      className={`group flex cursor-grab select-none items-center gap-2 rounded-md border border-osu-b3/40 border-l-2 bg-osu-b4/40 px-2 py-1.5 transition-colors hover:border-osu-b3 active:cursor-grabbing ${meta.edgeLeft} ${
+      className={`group flex cursor-grab select-none items-center gap-2 rounded-md border border-osu-b3/40 border-l-2 bg-osu-b4/40 px-2 py-2 transition-colors hover:border-osu-b3 active:cursor-grabbing sm:py-1.5 ${meta.edgeLeft} ${
         todo.priority === "low" ? "opacity-70" : ""
       }`}
     >
-      <GripVertical className="h-3.5 w-3.5 shrink-0 text-osu-f1/30 group-hover:text-osu-f1/60" />
+      {/* The whole row is the drag handle, so the grip is decoration - drop it before the title. */}
+      <GripVertical className="hidden h-3.5 w-3.5 shrink-0 text-osu-f1/30 group-hover:text-osu-f1/60 sm:block" />
       <span className="w-5 shrink-0 text-right text-[10px] font-bold tabular-nums text-osu-f1/50">{rank}</span>
-      <TodoSeq seq={todo.seq} className="w-8 text-[10px]" />
+      <TodoSeq seq={todo.seq} className="shrink-0 text-[10px] sm:w-8" />
       <CategoryIcon className={`h-3 w-3 shrink-0 ${meta.text}`} />
       <span className="min-w-0 flex-1 truncate text-xs text-osu-l1">{todo.title}</span>
       {todo.priority === "high" && (
         <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-osu-red-light" title="High priority" />
       )}
       {todo.notes && <AlignLeft className="h-2.5 w-2.5 shrink-0 text-osu-f1/60" />}
-      <span className="shrink-0 text-[10px] tabular-nums text-osu-f1/50">{formatShortDate(todo.createdAt)}</span>
+      <span className="hidden shrink-0 text-[10px] tabular-nums text-osu-f1/50 sm:inline">{formatShortDate(todo.createdAt)}</span>
       <button
         type="button"
         aria-label="Hit (mark as done)"
@@ -1269,7 +1284,7 @@ function QueueRow({
           event.stopPropagation();
           onHit(todo);
         }}
-        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-osu-b3/60 bg-osu-b6/40 text-transparent transition-colors hover:border-osu-green hover:text-osu-green cursor-pointer"
+        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-osu-b3/60 bg-osu-b6/40 text-osu-f1/40 transition-colors hover:border-osu-green hover:text-osu-green cursor-pointer sm:h-5 sm:w-5 sm:text-transparent"
       >
         <Check className="h-3 w-3" />
       </button>
@@ -1308,14 +1323,17 @@ function DoneRow({
       <CategoryIcon className={`h-3 w-3 shrink-0 ${meta.text}`} />
       <TodoSeq seq={todo.seq} className="text-[10px]" />
       <span className="min-w-0 flex-1 truncate text-xs text-osu-f1 line-through">{todo.title}</span>
-      <span className="shrink-0 text-[10px] tabular-nums text-osu-f1/50">
+      <span className="hidden shrink-0 text-[10px] tabular-nums text-osu-f1/50 sm:inline">
         {formatShortDate(todo.doneAt ?? todo.updatedAt)}
       </span>
+      {/* Reveal-on-hover only works with a real pointer: the group-hover variant maps to :active on
+          touch, so these would vanish the moment a finger lifted to reach them. Always shown on
+          small screens instead. */}
       <button
         type="button"
         onClick={() => onUndo(todo)}
         aria-label="Send back to the field"
-        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-osu-f1 opacity-0 transition hover:bg-osu-b3/50 hover:text-osu-l1 group-hover:opacity-100 cursor-pointer"
+        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-osu-f1 opacity-100 transition hover:bg-osu-b3/50 hover:text-osu-l1 cursor-pointer sm:h-6 sm:w-6 sm:opacity-0 sm:group-hover:opacity-100"
       >
         <RotateCcw className="h-3 w-3" />
       </button>
@@ -1326,7 +1344,7 @@ function DoneRow({
             setConfirmDelete(false);
             onDelete(todo);
           }}
-          className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md border border-osu-red/60 bg-osu-red/25 px-1.5 text-[10px] font-semibold uppercase tracking-wider text-white hover:bg-osu-red/35 cursor-pointer"
+          className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-osu-red/60 bg-osu-red/25 px-1.5 text-[10px] font-semibold uppercase tracking-wider text-white hover:bg-osu-red/35 cursor-pointer sm:h-6"
         >
           <Trash2 className="h-3 w-3" />
           Sure?
@@ -1336,7 +1354,7 @@ function DoneRow({
           type="button"
           onClick={() => setConfirmDelete(true)}
           aria-label="Delete"
-          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-osu-f1 opacity-0 transition hover:bg-osu-red/15 hover:text-osu-red group-hover:opacity-100 cursor-pointer"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-osu-f1 opacity-100 transition hover:bg-osu-red/15 hover:text-osu-red cursor-pointer sm:h-6 sm:w-6 sm:opacity-0 sm:group-hover:opacity-100"
         >
           <Trash2 className="h-3 w-3" />
         </button>
