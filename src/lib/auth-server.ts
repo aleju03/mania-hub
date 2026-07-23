@@ -196,6 +196,35 @@ async function readViewerFromCookie(raw = getCookie(AUTH_COOKIE_NAME)): Promise<
   };
 }
 
+function cookieValueFromHeader(header: string | null, name: string): string | undefined {
+  if (!header) return undefined;
+  for (const part of header.split(";")) {
+    const trimmed = part.trim();
+    if (!trimmed.startsWith(`${name}=`)) continue;
+    try {
+      return decodeURIComponent(trimmed.slice(name.length + 1));
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+/** Viewer from an explicit Request, for route handlers that run outside the
+    server-function context (no getRequest/getCookie). Fails closed to null. */
+export async function readViewerFromRequest(request: Request): Promise<AuthViewer | null> {
+  const raw = cookieValueFromHeader(request.headers.get("cookie"), AUTH_COOKIE_NAME);
+  // A missing cookie must mean anonymous: passing undefined onward would
+  // trigger readViewerFromCookie's default argument, which consults the
+  // ambient request context this helper exists to avoid.
+  if (raw === undefined) return null;
+  try {
+    return await readViewerFromCookie(raw);
+  } catch {
+    return null;
+  }
+}
+
 export async function readCurrentAuth(): Promise<AuthState> {
   const request = getRequest();
   try {
