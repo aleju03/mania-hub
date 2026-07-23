@@ -76,7 +76,7 @@ import {
   fetchLiveMapsPageSnapshot,
   fetchLiveMapsPlayersSnapshot,
   fetchLiveMapsProgress,
-  fetchLiveMapsSnapshot,
+  fetchLiveMapsRandomSnapshot,
   isLiveBackendConfigured,
   openLiveEventSource,
   runLiveBackendAdminAction,
@@ -1424,7 +1424,7 @@ function MapsPage() {
     setLiveMapsProgress(null);
 
     const loadRandomPool = () => {
-      fetchLiveMapsSnapshot(selectedCountry, "random")
+      fetchLiveMapsRandomSnapshot(selectedCountry)
         .then((snapshot) => {
           if (cancelled) return;
           setLiveMapsRefreshing(snapshot.isStale || snapshot.refreshQueued);
@@ -2265,7 +2265,7 @@ function MapsPage() {
     try {
       await runLiveBackendAdminAction({ data: { path: `/api/admin/refresh-maps?country=${selectedCountry}` } });
       if (tab === "random") {
-        const snapshot = await fetchLiveMapsSnapshot(selectedCountry, "random");
+        const snapshot = await fetchLiveMapsRandomSnapshot(selectedCountry);
         setLiveMapsProgress(snapshot.progress ?? null);
         if (snapshot.value && hasValidMapsDataShape(snapshot.value)) {
           setMapsData(selectedCountry, snapshot.value);

@@ -33,7 +33,7 @@ import { getPlayerProfileSnapshot, getPlayerRecentScores } from "../features/pla
 import { getCountryRankingsSnapshot, getGlobalRankingsSnapshot } from "../features/global-rankings.js";
 import { getTopPlaysSnapshot } from "../features/top-plays.js";
 import { getTrackerSnapshot } from "../features/tracker.js";
-import { getMapsRandomBeatmapsets, getMapsSnapshot } from "../features/maps.js";
+import { getMapsPageSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, type MapsPageValue } from "../features/maps.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
 import { getPlayerActivitySnapshot } from "../features/activity.js";
 import { getMyDataSummary } from "../features/my-data.js";
@@ -465,10 +465,20 @@ async function buildPlayerPool(db: Db, country: string, limit: number): Promise<
 interface CacheEntry {
   storedAt: number;
   payload: Promise<ShowcaseDiscordPayload>;
+  pending: boolean;
 }
-const cache = new Map<string, CacheEntry>();
+// Keep cache state tied to the database it was built from. Production has one
+// serving DB, while tests and maintenance callers may create several in one
+// process; payload promises must never cross those boundaries.
+const cacheByDb = new WeakMap<Db, Map<string, CacheEntry>>();
 const CACHE_TTL_MS = 60 * 60_000;
 const CACHE_MAX_ENTRIES = 24;
+// The public route's fresh=1 is the /discord page's manual-refresh affordance,
+// not a cache-buster: a build is costly (it reads profiles, boards, maps and
+// dan), so fresh joins any in-flight build and rebuilds at most once per
+// interval per country. Without this, concurrent fresh=1 requests would each
+// start their own build and stack the heavy maps reads.
+const FRESH_REBUILD_MIN_INTERVAL_MS = 60_000;
 
 export function getDiscordShowcase(
   deps: { db: Db; osu: OsuApiClient; queue: JobQueue; config: Config },
@@ -477,21 +487,41 @@ export function getDiscordShowcase(
 ): Promise<ShowcaseDiscordPayload> {
   const key = isGlobalCountry(country) ? GLOBAL_COUNTRY_CODE : country.toUpperCase();
   const now = Date.now();
+  let cache = cacheByDb.get(deps.db);
+  if (!cache) {
+    cache = new Map();
+    cacheByDb.set(deps.db, cache);
+  }
   for (const [entryKey, entry] of cache) {
-    if (now - entry.storedAt > CACHE_TTL_MS) cache.delete(entryKey);
+    if (!entry.pending && now - entry.storedAt > CACHE_TTL_MS) cache.delete(entryKey);
   }
   while (cache.size > CACHE_MAX_ENTRIES) {
-    const oldest = cache.keys().next().value;
-    if (oldest === undefined) break;
-    cache.delete(oldest);
+    // Never evict an in-flight promise or a build still inside its fresh
+    // cooldown: either would let another request for the same country bypass
+    // the stampede/rebuild bounds. Temporarily exceeding the small cache cap is
+    // safer than stacking the expensive GLOBAL maps reads.
+    const oldestEvictable = [...cache].find(([, entry]) =>
+      !entry.pending && now - entry.storedAt >= FRESH_REBUILD_MIN_INTERVAL_MS
+    )?.[0];
+    if (oldestEvictable === undefined) break;
+    cache.delete(oldestEvictable);
   }
   const cached = cache.get(key);
-  if (cached && !fresh) return cached.payload;
+  if (cached && (!fresh || cached.pending || now - cached.storedAt < FRESH_REBUILD_MIN_INTERVAL_MS)) {
+    return cached.payload;
+  }
   const payload = buildShowcase(deps, key);
-  cache.set(key, { storedAt: now, payload });
-  payload.catch(() => {
-    if (cache.get(key)?.payload === payload) cache.delete(key);
-  });
+  const entry: CacheEntry = { storedAt: now, payload, pending: true };
+  cache.set(key, entry);
+  payload.then(
+    () => {
+      entry.pending = false;
+    },
+    () => {
+      entry.pending = false;
+      if (cache.get(key) === entry) cache.delete(key);
+    },
+  );
   return payload;
 }
 
@@ -587,8 +617,27 @@ async function buildShowcase(
     };
   });
 
-  const mapsSnapshot = await safe("maps", () => getMapsSnapshot(db, queue, country, MAPS_MAX_AGE_MS, "core"));
-  const farmed = mapsSnapshot?.value?.farmed ?? [];
+  // A bounded farmed page, not the full core snapshot: this builder is
+  // reachable from the public /api/discord/showcase route, and the GLOBAL core
+  // hydrate is exactly the GiB-scale build Phase 5 removed from the public
+  // surface. 48 rows cover every showcase pick below (top 3 + a roll from the
+  // top ~18, with 4K filtering headroom).
+  const mapsPage = await safe("maps", () => getMapsPageSnapshot(db, queue, country, MAPS_MAX_AGE_MS, {
+    tab: "farmed",
+    page: 0,
+    pageSize: 48,
+    key: "all",
+    beatmapSort: "players",
+    farmedSort: "players",
+    dir: "desc",
+    status: "all",
+    pp: 0,
+    mod: "all",
+    q: "",
+  }));
+  const farmed = (mapsPage?.value?.items ?? []).filter(
+    (item): item is Extract<MapsPageValue["items"][number], { avgPp: number }> => "avgPp" in item,
+  );
   const mapsFarmed: ShowcaseFarmedRow[] = farmed.slice(0, 3).map((m, i): ShowcaseFarmedRow => ({
     rank: i + 1,
     title: `${m.artist} - ${m.title} [${m.version}]`,

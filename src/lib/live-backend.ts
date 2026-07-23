@@ -1174,17 +1174,16 @@ export async function fetchLiveSnipesSnapshot(country: string, limit = 500, opti
   return fetchLiveJson(`/api/snapshots/snipes?${query.toString()}`);
 }
 
-export async function fetchLiveMapsSnapshot(
-  country: string,
-  section: "core" | "random" = "core",
-): Promise<LiveMapsSnapshot> {
-  const query = new URLSearchParams({ country });
-  if (section === "random") query.set("section", "random");
+// Random-tab pool only: the backend's /api/snapshots/maps endpoint rejects
+// anything but section=random (the full "core" payload was removed; Maps
+// browsing goes through fetchLiveMapsPageSnapshot).
+export async function fetchLiveMapsRandomSnapshot(country: string): Promise<LiveMapsSnapshot> {
+  const query = new URLSearchParams({ country, section: "random" });
   const snapshot = await fetchLiveJson<LiveMapsSnapshot>(`/api/snapshots/maps?${query.toString()}`);
   // The random section omits covers/previewUrl/maniaBeatmaps from its pool
   // entries on the wire (they're always empty there, and GLOBAL ships ~45k
   // entries); restore the defaults so consumers keep the full beatmapset shape.
-  if (section === "random" && snapshot.value?.beatmapsetsPool) {
+  if (snapshot.value?.beatmapsetsPool) {
     for (const set of Object.values(snapshot.value.beatmapsetsPool)) {
       set.covers ??= {} as MapsFavouriteBeatmapset["covers"];
       set.previewUrl ??= "";

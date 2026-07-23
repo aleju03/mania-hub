@@ -11,7 +11,10 @@ import type { MapsPageQuery } from "../features/maps.js";
 import type { PreparedJsonResponse } from "./prepared-json.js";
 
 export type MapsSnapshotThreadBuildRequest =
-  | { kind: "maps"; country: string; section: "core" | "random"; encoding: "br" | "gzip" | null; maxAgeMs: number }
+  // "maps" builds are Random-pool only: the public core section was removed
+  // (410 in the router), so the thread can never be asked for the full-board
+  // GLOBAL core hydrate again.
+  | { kind: "maps"; country: string; section: "random"; encoding: "br" | "gzip" | null; maxAgeMs: number }
   | { kind: "maps-page"; country: string; query: MapsPageQuery; encoding: "br" | "gzip" | null; maxAgeMs: number };
 
 export type MapsSnapshotThreadRequest = MapsSnapshotThreadBuildRequest & { id: number };

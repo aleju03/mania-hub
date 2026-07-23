@@ -4147,13 +4147,57 @@ describe("live backend", () => {
     expect(snapshot.value?.farmedGeneratedAt).toBe("2026-05-12T00:05:00.000Z");
   });
 
-  it("invalidates the maps HTTP response cache when farmed overlay updates", async () => {
+  it("rejects non-random maps snapshot requests with 410 before reading or hydrating the snapshot", async () => {
     const { db, queue, events } = await setup();
-    const refreshedAt = "2026-05-12T10:00:00.000Z";
+    // A stale GLOBAL row whose payload is not even valid JSON: if the core
+    // path still ran, the request would read this row (410 proves it never
+    // did — a build over a corrupt row answers 202, not 410) and its
+    // staleness would enqueue a maps refresh.
+    const staleRefreshedAt = "2020-01-01T00:00:00.000Z";
     await exec(
       db,
       `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
-       values ('CR', ?, ?, ?)`,
+       values ('GLOBAL', ?, ?, ?)`,
+      ["{not json", staleRefreshedAt, staleRefreshedAt],
+    );
+    const ctx = {
+      db,
+      queue,
+      events,
+      config: baseConfig(),
+      osu: {},
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never;
+    const request = async (path: string) => {
+      const { res, writes } = mockRes();
+      await routeHttp(mockReq("GET", path), res, ctx);
+      return { status: res.statusCode, body: JSON.parse(writes.join("")) as { error?: string } };
+    };
+
+    for (const path of [
+      "/api/snapshots/maps?country=GLOBAL",
+      "/api/snapshots/maps?country=GLOBAL&section=core",
+      "/api/snapshots/maps?country=CR",
+      "/api/snapshots/maps?country=CR&section=core",
+    ]) {
+      const { status, body } = await request(path);
+      expect(status, path).toBe(410);
+      expect(body.error, path).toBe("maps_core_snapshot_removed");
+    }
+
+    // The 410 fires in the router: no snapshot hydration ran, so neither the
+    // stale GLOBAL row (refresh_global_maps) nor the CR requests
+    // (refresh_country_maps) enqueued a refresh job.
+    expect(Number((await exec(db, "select count(*) as count from jobs where type in ('refresh_country_maps', 'refresh_global_maps')")).rows[0].count)).toBe(0);
+  });
+
+  it("keeps the GLOBAL maps random response cached while overlay and source stamps churn", async () => {
+    const { db, queue, events } = await setup();
+    const refreshedAt = new Date().toISOString();
+    await exec(
+      db,
+      `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
+       values ('GLOBAL', ?, ?, ?)`,
       [
         JSON.stringify({
           farmed: [],
@@ -4184,51 +4228,7 @@ describe("live backend", () => {
     } as never;
     const request = async () => {
       const { res, writes } = mockRes();
-      await routeHttp(mockReq("GET", "/api/snapshots/maps?country=CR"), res, ctx);
-      return JSON.parse(writes.join("")) as { value: { farmed: unknown[] } | null };
-    };
-
-    expect((await request()).value?.farmed).toHaveLength(0);
-
-    const score = { ...(await fixture<OscScore[]>("scores.json"))[0], pp: 550 };
-    await recordMapsFarmedScore(db, "CR", score, "2026-05-12T10:05:00.000Z");
-
-    expect((await request()).value?.farmed).toHaveLength(1);
-  });
-
-  it("keeps the GLOBAL maps response cached while overlay and source stamps churn", async () => {
-    const { db, queue, events } = await setup();
-    const refreshedAt = new Date().toISOString();
-    await exec(
-      db,
-      `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
-       values ('GLOBAL', ?, ?, ?)`,
-      [
-        JSON.stringify({
-          farmed: [],
-          mostPlayed: [],
-          favourites: [],
-          favouritesByPlayer: [],
-          beatmapsetsPool: {},
-          generatedAt: refreshedAt,
-          farmedGeneratedAt: refreshedAt,
-          favouritesGeneratedAt: refreshedAt,
-        }),
-        refreshedAt,
-        refreshedAt,
-      ],
-    );
-    const ctx = {
-      db,
-      queue,
-      events,
-      config: baseConfig(),
-      osu: {},
-      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
-    } as never;
-    const request = async () => {
-      const { res, writes } = mockRes();
-      await routeHttp(mockReq("GET", "/api/snapshots/maps?country=GLOBAL"), res, ctx);
+      await routeHttp(mockReq("GET", "/api/snapshots/maps?country=GLOBAL&section=random"), res, ctx);
       return { status: res.statusCode, body: JSON.parse(writes.join("")) as { value: { farmed: unknown[] } | null } };
     };
 
@@ -4256,7 +4256,7 @@ describe("live backend", () => {
     expect(churned.body.value?.farmed).toHaveLength(0);
   });
 
-  it("serves the previous GLOBAL maps generation and swaps in the rebuild in the background", async () => {
+  it("serves the previous GLOBAL maps random generation and swaps in the rebuild in the background", async () => {
     const { db, queue, events } = await setup();
     const writeGlobalPayload = (playerId: number, refreshedAt: string) =>
       JSON.stringify({
@@ -4291,7 +4291,7 @@ describe("live backend", () => {
     } as never;
     const request = async () => {
       const { res, writes } = mockRes();
-      await routeHttp(mockReq("GET", "/api/snapshots/maps?country=GLOBAL"), res, ctx);
+      await routeHttp(mockReq("GET", "/api/snapshots/maps?country=GLOBAL&section=random"), res, ctx);
       const body = JSON.parse(writes.join("")) as { value: { favouritesByPlayer: Array<{ id: number }> } | null };
       return body.value?.favouritesByPlayer[0]?.id;
     };
@@ -5770,7 +5770,7 @@ describe("live backend", () => {
     const writes: string[] = [];
     const req = new EventEmitter() as IncomingMessage;
     req.method = "GET";
-    req.url = "/api/snapshots/maps?country=CR";
+    req.url = "/api/snapshots/maps?country=CR&section=random";
     req.headers = { host: "localhost" };
     const res = {
       setHeader: vi.fn(),
@@ -5833,7 +5833,7 @@ describe("live backend", () => {
     } as never;
     const request = async () => {
       const { res, writes } = mockRes();
-      await routeHttp(mockReq("GET", "/api/snapshots/maps?country=CR"), res, ctx);
+      await routeHttp(mockReq("GET", "/api/snapshots/maps?country=CR&section=random"), res, ctx);
       return { status: res.statusCode, body: JSON.parse(writes.join("")) as { value: unknown } };
     };
 

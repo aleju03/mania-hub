@@ -821,9 +821,17 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     return true;
   }
   if (url.pathname === "/api/snapshots/maps") {
+    // Only the Random tab's pool is public here; Maps browsing uses
+    // /api/snapshots/maps-page. The full "core" payload (an entire country's
+    // farmed/favourite boards) had no frontend caller left, and its GLOBAL
+    // hydrate/stringify peaked over a GiB — legacy callers get a controlled
+    // 410 before any snapshot row is read, hydrated, or activation runs.
+    if (url.searchParams.get("section") !== "random") {
+      sendJson(req, res, ctx, 410, { error: "maps_core_snapshot_removed", detail: "Use /api/snapshots/maps-page, or section=random for the Random pool." });
+      return true;
+    }
     if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
-    const section = url.searchParams.get("section") === "random" ? "random" : "core";
-    await handleMapsSnapshot(req, res, ctx, country, section);
+    await handleMapsSnapshot(req, res, ctx, country);
     return true;
   }
   if (url.pathname === "/api/snapshots/maps-players") {
@@ -3084,9 +3092,10 @@ function setServerTiming(req: IncomingMessage, res: ServerResponse): void {
   res.setHeader("server-timing", `app;dur=${durationMs.toFixed(1)}`);
 }
 
-// /api/snapshots/maps serves a multi-MB payload (a whole country roster's
-// farmed + favourite maps). The stored snapshot only changes when the maps
-// refresh job rewrites the row, yet every visit otherwise re-parses,
+// /api/snapshots/maps serves only the Random tab's pool (the public "core"
+// section — a whole country roster's farmed + favourite boards — was removed;
+// legacy callers get 410 in the router). The stored snapshot only changes when
+// the maps refresh job rewrites the row, yet every visit otherwise re-parses,
 // re-slices and re-compresses it from scratch. We cache the finished
 // (already-compressed) response body keyed on the row's refreshed_at: that key
 // IS the real cache lifetime — it stays valid until the next rebuild, then
@@ -3095,31 +3104,25 @@ function setServerTiming(req: IncomingMessage, res: ServerResponse): void {
 // a rebuild stalls; the refresh itself is enqueued on cache misses (inside
 // getMapsSnapshot) and on the activatePublicCountry path.
 //
-// Responses cache even while a refresh is in flight, just for a much shorter
-// window. On prod the maps refresh jobs sit parked under queue pressure, so
-// "wait for a settled state" degenerated into "never cache anything" and every
-// request re-paid the full parse/hydrate (~0.3-1s). The refreshed_at in the
-// key still invalidates the moment a rebuild actually lands; the short TTL
-// only bounds how long the body's volatile isStale / refreshQueued / progress
-// flags can lag (the UI polls live progress from /maps-progress anyway).
-// "random" caches at the full TTL even mid-refresh: its pool is identical for
+// Random caches at the full TTL even mid-refresh: its pool is identical for
 // a given refreshed_at regardless of staleness flags, and GLOBAL is
 // permanently "behind sources" (any country refresh or ingested score
-// re-stales it), so a settled-state requirement would keep GLOBAL — a ~10s
+// re-stales it), so a settled-state requirement would keep GLOBAL — a
 // hydrate of ~45k sets — uncached forever, which is what made Random crawl.
+// The short refreshing TTL below applies to /maps-page country responses,
+// whose bodies do carry refresh-state flags worth re-checking sooner.
 const MAPS_RESPONSE_CACHE_TTL_MS = 60 * 60_000;
 const MAPS_RESPONSE_CACHE_MAX_ENTRIES = 32;
 const MAPS_PAGE_RESPONSE_CACHE_TTL_MS = 10 * 60_000;
 const MAPS_PAGE_RESPONSE_CACHE_MAX_ENTRIES = 128;
 const MAPS_REFRESHING_RESPONSE_CACHE_TTL_MS = 30_000;
 // How long past its TTL a GLOBAL entry may still be served while a background
-// rebuild replaces it. GLOBAL hydrates are the expensive ones (~10s+ for
-// "core") and, with local libsql running queries synchronously on the event
-// loop, a foreground rebuild stalls every other request on the process — so
-// GLOBAL requests get the previous generation instantly and the rebuild runs
-// once, off the request path. Country entries don't opt in (staleServeMs 0):
-// their builds are sub-second and their responses must pick up farmed-overlay
-// changes immediately.
+// rebuild replaces it. GLOBAL hydrates are the expensive ones (a ~45k-set
+// random pool) and, with local libsql running queries synchronously on the
+// event loop, a foreground rebuild stalls every other request on the process —
+// so GLOBAL requests get the previous generation instantly and the rebuild
+// runs once, off the request path. Country entries don't opt in (staleServeMs
+// 0): their builds are sub-second.
 const MAPS_GLOBAL_STALE_SERVE_MS = 45 * 60_000;
 
 interface MapsResponseCacheEntry extends PreparedJsonResponse {
@@ -3542,7 +3545,6 @@ async function handleMapsSnapshot(
   res: ServerResponse,
   ctx: HttpContext,
   country: string,
-  section: "core" | "random",
 ): Promise<void> {
   const cacheState = getMapsResponseCacheState(ctx.db);
   pruneMapsResponseCacheMap(cacheState.responses, MAPS_RESPONSE_CACHE_MAX_ENTRIES, Date.now());
@@ -3554,33 +3556,22 @@ async function handleMapsSnapshot(
   // which is itself the expensive payload_json parse/hydrate/slice path.
   const meta = await getMapsSnapshotMeta(ctx.db, country);
   // The random slice depends only on this row's pool ids plus beatmapset
-  // metadata, so refreshed_at alone marks its generation. Country "core" also
-  // depends on the farmed overlay, so its key keeps the source/overlay stamps
-  // and invalidates the moment either changes. GLOBAL "core" never applies
-  // the overlay, and those stamps churn with every ingested score anywhere —
-  // keying on them kept the GLOBAL entry permanently cold, so every request
-  // re-paid the ~10s+ hydrate of the full global payload, stalling the whole
-  // event loop each time. GLOBAL entries instead invalidate via refreshed_at
-  // and are replaced through stale-serve.
-  const base = `${normalized}|${section}|${encoding ?? "identity"}`;
-  const cacheKey = meta.refreshedAt
-    ? section === "random" || global
-      ? base
-      : `${base}|${meta.refreshedAt}|${meta.sourceRefreshedAt ?? ""}|${meta.farmedOverlayUpdatedAt ?? ""}`
-    : null;
+  // metadata, so refreshed_at alone marks its generation — the key stays
+  // stable across generations and the freshnessKey invalidates it.
+  const cacheKey = meta.refreshedAt ? `${normalized}|random|${encoding ?? "identity"}` : null;
 
   await serveMapsResponseCached(req, res, ctx, {
     cache: cacheState.responses,
     inflight: cacheState.inflight,
     key: cacheKey,
-    freshnessKey: section === "random" || global ? meta.refreshedAt ?? "" : "",
+    freshnessKey: meta.refreshedAt ?? "",
     staleServeMs: global ? MAPS_GLOBAL_STALE_SERVE_MS : 0,
     build: async () => {
       if (global) {
         const prepared = await buildGlobalMapsResponseOnThread(ctx, {
           kind: "maps",
           country,
-          section,
+          section: "random",
           encoding,
           maxAgeMs: ctx.config.mapsRefreshIntervalMs,
         });
@@ -3588,19 +3579,14 @@ async function handleMapsSnapshot(
           return { prepared, cacheTtlMs: prepared.status === 200 ? MAPS_RESPONSE_CACHE_TTL_MS : null };
         }
       }
-      const snapshot = await getMapsSnapshot(ctx.db, ctx.queue, country, ctx.config.mapsRefreshIntervalMs, section);
+      const snapshot = await getMapsSnapshot(ctx.db, ctx.queue, country, ctx.config.mapsRefreshIntervalMs, "random");
       const status = snapshot.value ? 200 : 202;
       const prepared = await prepareJsonResponse(status, snapshot, encoding);
       // Only cache populated 200s — never the cold "still building" 202/null
-      // state, whose body changes the moment the first real snapshot lands. A
-      // country "core" response with a refresh in flight caches briefly;
-      // "random" ignores the refresh state and GLOBAL is permanently
-      // mid-refresh, so both take the full TTL (see the cache comment).
-      const cacheTtlMs = status !== 200 || snapshot.value == null
-        ? null
-        : section === "core" && !global && snapshot.refreshQueued
-          ? MAPS_REFRESHING_RESPONSE_CACHE_TTL_MS
-          : MAPS_RESPONSE_CACHE_TTL_MS;
+      // state, whose body changes the moment the first real snapshot lands.
+      // The random pool is identical for a given refreshed_at regardless of
+      // refresh state, so it always takes the full TTL (see the cache comment).
+      const cacheTtlMs = status !== 200 || snapshot.value == null ? null : MAPS_RESPONSE_CACHE_TTL_MS;
       return { prepared, cacheTtlMs };
     },
   });
