@@ -95,6 +95,36 @@ function formatDanChip(label: string): string {
   return /^\d/.test(label) ? `${label} dan` : label;
 }
 
+// Stale-snapshot marker: the backend is recomputing and the numbers on
+// screen may adjust in a moment - showing that beats a silent swap on the
+// next visit.
+function RefreshingChip({ skills }: { skills: MyDataSkillBreakdown }) {
+  if (!skills.stale) return null;
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-md border border-osu-b3/40 bg-osu-b5/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-osu-l3"
+      title="A fresh rating is being computed from the latest plays; these numbers may adjust shortly"
+    >
+      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-osu-pink-light" />
+      updating
+    </span>
+  );
+}
+
+// Thin-evidence marker: the backend shrinks these ratings toward the
+// population median, so the number is an estimate, not a standing.
+function ProvisionalChip({ mode }: { mode: MyDataSkillMode }) {
+  if (!mode.provisional) return null;
+  return (
+    <span
+      className="inline-flex items-center rounded-md border border-osu-b3/40 bg-osu-b5/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-osu-l3"
+      title={`Rated from only ${mode.analyzedPlays} plays - treat as a rough estimate until more ${mode.keyCount}K plays are rated`}
+    >
+      provisional
+    </span>
+  );
+}
+
 function mapsKeyParam(keyCount: number): "4k" | "7k" | "other" {
   if (keyCount === 4) return "4k";
   if (keyCount === 7) return "7k";
@@ -166,6 +196,8 @@ export function SkillBreakdownBody({ skills, mode, own = false }: { skills: MyDa
       <div className="mb-1 flex items-baseline gap-2">
         <span className="text-[26px] font-bold leading-none text-white tabular-nums">{overall.toFixed(2)}</span>
         <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-l3">overall</span>
+        <ProvisionalChip mode={mode!} />
+        <RefreshingChip skills={skills!} />
       </div>
       {overallPercentile ? (
         <div className="mb-2.5 text-[11px] text-osu-l2">
@@ -397,6 +429,8 @@ export function SkillModePanel({ skills, mode }: { skills: MyDataSkillBreakdown;
           <div className="flex items-baseline gap-2">
             <span className="text-[30px] font-bold leading-none text-white tabular-nums">{overall.toFixed(2)}</span>
             <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-l3">overall</span>
+            <ProvisionalChip mode={mode} />
+            <RefreshingChip skills={skills} />
           </div>
           {overallPercentile ? (
             <div className="mt-1 text-[11px] text-osu-l2">

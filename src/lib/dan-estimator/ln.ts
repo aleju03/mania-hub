@@ -248,7 +248,9 @@ function officialReferenceNeighborTarget(metrics: DanFeatureMetrics, rate: numbe
 }
 
 function parseRawLnDan(rawDan: number): LnDanEstimateResult {
-  const level = Math.max(1, Math.min(16, Math.round(rawDan)));
+  // The LN dan ladder caps at 15 (14 = Yami, 15 = Yume); the "LN 16/17"
+  // table rows are difficulty-table charts, not dan courses.
+  const level = Math.max(1, Math.min(15, Math.round(rawDan)));
   const offset = rawDan - level;
   const variant = level >= 15
     ? (offset <= -0.7 ? "-" : null)

@@ -179,6 +179,35 @@ describe("skill baseline job", () => {
       expect(percentiles.Overall.value).toBeGreaterThanOrEqual(0);
       expect(percentiles.Overall.value).toBeLessThanOrEqual(100);
       expect(percentiles["pattern:stream"]).toBeDefined();
+      // 20 analyzed plays clears the provisional bar; the served rating is
+      // the evidence-shrunk value (never above the raw aggregate).
+      expect(decorated.modes[0].provisional).toBeUndefined();
+      expect(decorated.modes[0].ratings.Overall).toBeGreaterThan(0);
+      expect(decorated.modes[0].ratings.Overall).toBeLessThanOrEqual(21);
+
+      // A thin pool (9 all-killer plays) must not read as a standing: the
+      // rating shrinks hard toward the population median, the keymode is
+      // flagged provisional, and no percentile is published below the
+      // population's own min-plays floor.
+      const thinBreakdown = {
+        ...breakdown,
+        totalPlays: 9,
+        analyzedPlays: 9,
+        modes: [{ keyCount: 4, analyzedPlays: 9, ratings: { Overall: 25.03 }, patterns: [] }],
+      };
+      await exec(
+        db,
+        `insert into player_skill_ratings (user_id, analysis_version, status, modes_json, plays_json, computed_at, updated_at)
+         values (1013, ?, 'ready', ?, ?, ?, ?)`,
+        [PLAYER_SKILLS_VERSION, JSON.stringify(thinBreakdown), JSON.stringify({ plays: plays.slice(0, 9) }), now, now],
+      );
+      const thin = await decoratePlayerSkillBreakdown(db, 1013, thinBreakdown);
+      expect(thin.modes[0].provisional).toBe(true);
+      // w = 9/(9+k): the served value sits well below the raw 25.03 aggregate,
+      // pulled toward (but staying above) the population median.
+      expect(thin.modes[0].ratings.Overall).toBeLessThan(24.2);
+      expect(thin.modes[0].ratings.Overall).toBeGreaterThan(15);
+      expect(thin.modes[0].percentiles).toBeUndefined();
 
       // Fresh curves mean the due-check stays quiet.
       expect(await enqueueSkillBaselineIfDue(db, queue)).toBe(false);

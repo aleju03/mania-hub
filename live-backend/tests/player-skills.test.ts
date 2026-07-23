@@ -747,6 +747,7 @@ describe("getPlayerSkillBreakdown", () => {
       const fresh = await getPlayerSkillBreakdown(db, queue, 99);
       expect(fresh.status).toBe("ready");
       expect(fresh.modes[0].ratings.Overall).toBe(21.5);
+      expect(fresh.stale).toBeUndefined();
       expect(Number((await exec(db, "select count(*) as cnt from jobs where type = 'compute_player_skills'")).rows[0].cnt)).toBe(0);
 
       await exec(
@@ -757,7 +758,95 @@ describe("getPlayerSkillBreakdown", () => {
       );
       const afterNewTopPlay = await getPlayerSkillBreakdown(db, queue, 99);
       expect(afterNewTopPlay.status).toBe("ready");
+      // The served snapshot is known-superseded: clients get told instead of
+      // being left to discover the swap on the next visit.
+      expect(afterNewTopPlay.stale).toBe(true);
       expect(Number((await exec(db, "select count(*) as cnt from jobs where type = 'compute_player_skills'")).rows[0].cnt)).toBe(1);
     });
+  });
+
+  it("relabels stored 6K/7K dan sides on their own ladders, not the 4K greek one", async () => {
+    await withDb(async (db) => {
+      const queue = new JobQueue(db);
+      const computedAt = new Date().toISOString();
+      const summary = {
+        totalPlays: 300,
+        analyzedPlays: 300,
+        pendingPlays: 0,
+        unsupportedPlays: 0,
+        modes: [
+          {
+            keyCount: 7,
+            analyzedPlays: 228,
+            ratings: { Overall: 24.47 },
+            patterns: [],
+            // Stored labels are stale pre-fix garbage; the read path must
+            // re-derive from rawDan (7K table scale: Gamma = 11).
+            dan: {
+              rc: { rawDan: 11.4, label: "alpha++", clears: 6 },
+              ln: { rawDan: 11.4, label: "alpha++", clears: 5 },
+            },
+          },
+          {
+            keyCount: 6,
+            analyzedPlays: 40,
+            ratings: { Overall: 18 },
+            patterns: [],
+            dan: {
+              // 6K RC is numeric only and caps at 9; 6K LN goes Terra(10)..Finish(14).
+              rc: { rawDan: 9.4, label: "iota", clears: 4 },
+              ln: { rawDan: 14, label: "delta", clears: 4 },
+            },
+          },
+          {
+            keyCount: 4,
+            analyzedPlays: 32,
+            ratings: { Overall: 20 },
+            patterns: [],
+            // 4K keeps its own ladders: rice greek via parseDan, LN numeric.
+            dan: {
+              rc: { rawDan: 11.4, label: "stale", clears: 4 },
+              ln: { rawDan: 16.2, label: "16", clears: 4 },
+            },
+          },
+        ],
+      };
+      await exec(
+        db,
+        `insert into player_skill_ratings (user_id, analysis_version, status, modes_json, computed_at, updated_at)
+         values (?, ?, 'ready', ?, ?, ?)`,
+        [99, PLAYER_SKILLS_VERSION, JSON.stringify(summary), computedAt, computedAt],
+      );
+
+      const breakdown = await getPlayerSkillBreakdown(db, queue, 99);
+      const byKeyCount = new Map(breakdown.modes.map((mode) => [mode.keyCount, mode]));
+      expect(byKeyCount.get(7)?.dan?.rc?.label).toBe("gamma++");
+      expect(byKeyCount.get(7)?.dan?.ln?.label).toBe("gamma++");
+      expect(byKeyCount.get(6)?.dan?.rc?.label).toBe("9++");
+      expect(byKeyCount.get(6)?.dan?.ln?.label).toBe("finish");
+      expect(byKeyCount.get(4)?.dan?.rc?.label).toBe("alpha++");
+      // The 4K LN ladder ends at 15 (Yume); there is no LN 16 dan.
+      expect(byKeyCount.get(4)?.dan?.ln?.label).toBe("15");
+    });
+  });
+});
+
+describe("danTableLabelFor", () => {
+  it("speaks each keymode's table ladder and clamps to its ends", async () => {
+    const { danTableLabelFor } = await import("../src/dan/chart-classifier.js");
+    // 7K: Regular 0-10 then Gamma(11), Azimuth(12), Zenith(13), Stellium(14).
+    expect(danTableLabelFor(7, "rc", 7)).toBe("7");
+    expect(danTableLabelFor(11.4, "rc", 7)).toBe("gamma++");
+    expect(danTableLabelFor(12, "ln", 7)).toBe("azimuth");
+    expect(danTableLabelFor(13.7, "ln", 7)).toBe("stellium-");
+    expect(danTableLabelFor(99, "rc", 7)).toBe("stellium++");
+    // 7K LN table starts at LN 3; anything below clamps up to its floor.
+    expect(danTableLabelFor(1, "ln", 7)).toBe("3--");
+    // 6K: RC numeric 0-9; LN Terra(10) Celestial(11) Mystery(12) Nihility(13) Finish(14).
+    expect(danTableLabelFor(9.4, "rc", 6)).toBe("9++");
+    expect(danTableLabelFor(10, "ln", 6)).toBe("terra");
+    expect(danTableLabelFor(13, "ln", 6)).toBe("nihility");
+    // No table for keymodes outside the index.
+    expect(danTableLabelFor(5, "rc", 5)).toBeNull();
   });
 });

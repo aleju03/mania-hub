@@ -344,8 +344,12 @@ export function MyDataPanel() {
 
   // The first compute after a deploy (or a fresh top-play stack) runs as a
   // background job; poll until it lands instead of asking for a page reload.
+  // Stale-ready snapshots poll too: the backend serves the old numbers while
+  // a recompute runs, and without the poll the fresh value would only appear
+  // as a surprise swap on the next visit.
+  const skillsRefreshing = skills?.status === "pending" || (skills?.status === "ready" && skills.stale === true);
   useEffect(() => {
-    if (!viewer || !summary?.tracked || skills?.status !== "pending") return;
+    if (!viewer || !summary?.tracked || !skillsRefreshing) return;
     let attempts = 0;
     let cancelled = false;
     const interval = window.setInterval(() => {
@@ -356,14 +360,22 @@ export function MyDataPanel() {
       }
       void fetchMyDataSkills().then((next) => {
         if (cancelled || !next) return;
-        setSkills(next);
+        setSkills((prev) => {
+          // Never replace a ready snapshot with an older one: the poll races
+          // the recompute, and computedAt decides which value is the truth.
+          if (prev?.status === "ready" && next.status === "ready" && prev.computedAt && next.computedAt && next.computedAt < prev.computedAt) {
+            return prev;
+          }
+          if (prev?.status === "ready" && next.status !== "ready") return prev;
+          return next;
+        });
       }).catch(() => {});
     }, 5_000);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [viewer, summary?.tracked, skills?.status]);
+  }, [viewer, summary?.tracked, skillsRefreshing]);
   const highlightStats = useMemo(() => {
     if (!summary) return [];
     const stats: Array<{ key: string; label: string; value: string; sub?: string; accent: string }> = [];

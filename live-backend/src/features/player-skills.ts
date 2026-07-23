@@ -9,6 +9,7 @@ import { getCachedBeatmapFile, readCachedBeatmapFile } from "../osu/beatmap-file
 import type { OsuApiClient } from "../osu/client.js";
 import { fetchAndStoreProfileSnapshotShared, getCachedPlayerProfileSnapshot, persistSessionProfileSnapshot } from "./player-profiles.js";
 import { calculateStableAccuracy, getDisplayedAccuracy, getScoreIdentity, isLazerScore, nowIso } from "../shared/score.js";
+import { danTableLabelFor } from "../dan/chart-classifier.js";
 import { parseDan } from "../dan/dan-estimator/labels.js";
 import { parseLnDan } from "../dan/dan-estimator/ln.js";
 import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
@@ -185,6 +186,13 @@ export interface PlayerSkillBreakdown {
   unsupportedPlays: number;
   modes: PlayerSkillModeBreakdown[];
   queue?: PlayerSkillQueueStatus | null;
+  // Ready rows only: the served snapshot is known-superseded (past the
+  // recompute TTL, pending plays due a retry, or newer top plays landed) and
+  // a recompute is on its way. Clients should present the numbers as
+  // refreshing rather than final, and may poll until a fresh computedAt
+  // arrives - without this the stale value paints as final and silently
+  // swaps on the next visit.
+  stale?: boolean;
 }
 
 interface StoredPlaySsr {
@@ -564,11 +572,17 @@ function danFromClears(rawDans: number[], side: "rc" | "ln", keyCount: number): 
   };
 }
 
-// Each ladder speaks its community's language: rice runs 1-10 then the greek
-// levels everywhere, and 4K LN dans are numeric 1-16 and never go greek. The
-// 7K LN dan series is named like rice ("~ 10th ~", "~ Gamma ~"), so every
-// non-4K LN side labels on the numbered/greek ladder too.
+// Each ladder speaks its own community's language. 4K rice runs 1-10 then the
+// Reform greek levels (parseDan), 4K LN is numeric 1-15 and never goes greek
+// (parseLnDan). 6K/7K rawDans arrive on their leoblack table scale, whose
+// level names are the real Sunny/Jinjin ladders (7K past 10th = Gamma,
+// Azimuth, Zenith, Stellium; 6K LN = Terra..Finish) - the 4K greek ladder
+// ("alpha") does not exist there, so those keymodes label from their table.
 function danLabelFor(rawDan: number, side: "rc" | "ln", keyCount: number): string {
+  if (keyCount !== 4) {
+    const tableLabel = danTableLabelFor(rawDan, side, keyCount);
+    if (tableLabel != null) return tableLabel;
+  }
   const parsed = side === "ln" && keyCount === 4 ? parseLnDan(rawDan) : parseDan(rawDan);
   return `${parsed.label}${parsed.variant ?? ""}`;
 }
@@ -1128,6 +1142,7 @@ export async function getPlayerSkillBreakdown(
       pendingPlays: Math.max(0, Number(summary.pendingPlays ?? 0)),
       unsupportedPlays: Math.max(0, Number(summary.unsupportedPlays ?? 0)),
       modes: Array.isArray(summary.modes) ? summary.modes.filter(isValidMode).map(normalizeMode) : [],
+      ...(shouldEnqueue ? { stale: true } : {}),
     };
   }
   return {
