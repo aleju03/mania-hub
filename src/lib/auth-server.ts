@@ -8,6 +8,7 @@ import {
   hasAuthCookieHeader,
 } from "./auth-shared";
 import type { AuthState, AuthViewer } from "./auth-shared";
+import { isLocalDevAccessGranted } from "./auth-local-dev";
 
 const DEFAULT_DEV_OSU_USER_IDS: number[] = [];
 const DEFAULT_ADMIN_OSU_USER_IDS = [7095193];
@@ -76,8 +77,12 @@ function getAdminUserIds(): Set<number> {
   return parseUserIdSet(process.env.ADMIN_OSU_USER_IDS, DEFAULT_ADMIN_OSU_USER_IDS);
 }
 
-function isLocalDevRequest(): boolean {
-  return process.env.NODE_ENV !== "production";
+function isLocalDevRequest(request = getRequest()): boolean {
+  return isLocalDevAccessGranted({
+    nodeEnv: process.env.NODE_ENV,
+    localDevSwitch: process.env.ENABLE_LOCAL_DEV_ADMIN,
+    hostname: requestHostname(request),
+  });
 }
 
 function requestHostname(request = getRequest()): string {
@@ -99,7 +104,7 @@ function allowsOsuDevAccess(hostname: string): boolean {
 function buildAuthState(viewer: AuthViewer | null, request = getRequest()): AuthState {
   const devUserIds = getDevUserIds();
   const adminUserIds = getAdminUserIds();
-  const isLocalDev = isLocalDevRequest();
+  const isLocalDev = isLocalDevRequest(request);
   const loginAvailable = Boolean(process.env.OSU_CLIENT_ID && process.env.OSU_CLIENT_SECRET);
   const hostname = requestHostname(request);
   const canHonorOsuAccess = isLocalDev || allowsOsuDevAccess(hostname);

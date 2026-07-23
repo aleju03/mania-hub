@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { performance } from "node:perf_hooks";
 import { brotliCompress, constants as zlibConstants, gzip } from "node:zlib";
@@ -3784,8 +3785,14 @@ function sendOsuError(req: IncomingMessage, res: ServerResponse, ctx: HttpContex
 }
 
 function isAdmin(req: IncomingMessage, ctx: HttpContext): boolean {
-  if (!ctx.config.liveAdminToken) return ctx.config.nodeEnv !== "production";
-  return req.headers.authorization === `Bearer ${ctx.config.liveAdminToken}`;
+  // Fail closed: no configured token means no admin access in any NODE_ENV.
+  const token = ctx.config.liveAdminToken;
+  if (!token) return false;
+  const header = req.headers.authorization;
+  if (typeof header !== "string") return false;
+  const expected = Buffer.from(`Bearer ${token}`);
+  const provided = Buffer.from(header);
+  return provided.length === expected.length && timingSafeEqual(provided, expected);
 }
 
 function normalizeIdList(value: unknown): number[] {

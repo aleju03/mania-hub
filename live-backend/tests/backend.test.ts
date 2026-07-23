@@ -2401,11 +2401,11 @@ describe("live backend", () => {
     );
 
     const response = mockRes();
-    await routeHttp(mockReq("GET", "/api/admin/status?country=CR"), response.res, {
+    await routeHttp(mockReq("GET", "/api/admin/status?country=CR", { authorization: "Bearer secret" }), response.res, {
       db,
       queue,
       events,
-      config: baseConfig({ nodeEnv: "development", databaseUrl: `file:${join(dir, "test.db")}` }),
+      config: baseConfig({ nodeEnv: "development", liveAdminToken: "secret", databaseUrl: `file:${join(dir, "test.db")}` }),
       osu: { limiter: { state: () => ({ hardPerMinute: 60, usedLastMinute: 0 }) } },
       oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
     } as never);

@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { readConfig } from "./config.js";
+import { logWarn } from "./logger.js";
 import { ensurePinnedCountries, getIndexedCountryCodes, getMapsWarmCountryCodes, getRosterRefreshCountryCodes } from "./countries.js";
 import { createDb, exec, getSqliteBusyRetryStats, logApiCall, migrate } from "./db.js";
 import { AnalyticsStore } from "./features/analytics.js";
@@ -70,6 +71,12 @@ const IDLE_COUNTRY_ROSTER_REFRESH_INTERVAL_MS = 3 * 24 * 60 * 60 * 1000;
 
 export async function createApp() {
   const config = readConfig();
+  if (!config.liveAdminToken) {
+    logWarn("live_admin_token_missing", {
+      role: config.role,
+      detail: "LIVE_ADMIN_TOKEN is not set; admin and user-scoped endpoints fail closed (401). Public endpoints are unaffected.",
+    });
+  }
   const db = await createDb(config);
   // Exactly one process owns schema DDL. A "server"-role process attaches to a
   // DB the worker process migrates, so it waits for readiness instead of racing

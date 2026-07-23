@@ -200,6 +200,18 @@ function countryCsv(name: string, fallback: string[]): string[] {
   return uniqueCountries(raw.split(","));
 }
 
+// Admin auth fails closed when this is unset (isAdmin in http/snapshots.ts),
+// so a deploy that forgets the token loses protected endpoints instead of
+// exposing them. A production token must also be long enough to not be
+// guessable.
+function readLiveAdminToken(nodeEnv: string): string | undefined {
+  const token = process.env.LIVE_ADMIN_TOKEN?.trim() || undefined;
+  if (token && nodeEnv === "production" && token.length < 32) {
+    throw new Error("LIVE_ADMIN_TOKEN must be at least 32 characters in production (generate one with: openssl rand -hex 32).");
+  }
+  return token;
+}
+
 export function readConfig(): Config {
   const trackedCountries = countryCsv("TRACKED_COUNTRIES", ["CR"]);
   const prewarmCountries = countryCsv("PREWARM_COUNTRIES", TOP_50_MANIA_COUNTRIES);
@@ -209,9 +221,10 @@ export function readConfig(): Config {
   ]);
 
   const role = readRole();
+  const nodeEnv = process.env.NODE_ENV ?? "development";
   return {
     port: readInt("PORT", 7227),
-    nodeEnv: process.env.NODE_ENV ?? "development",
+    nodeEnv,
     role,
     enableEventLogTail: readBool("ENABLE_EVENT_LOG_TAIL", role === "server"),
     eventLogTailIntervalMs: readBoundedInt("EVENT_LOG_TAIL_INTERVAL_MS", 250, 50, 5_000),
@@ -236,7 +249,7 @@ export function readConfig(): Config {
     mapsWarmCountries,
     livePublicOrigin: process.env.LIVE_PUBLIC_ORIGIN ?? "http://localhost:7227",
     allowedOrigins: csv(process.env.ALLOWED_ORIGINS, "http://localhost:3000"),
-    liveAdminToken: process.env.LIVE_ADMIN_TOKEN || undefined,
+    liveAdminToken: readLiveAdminToken(nodeEnv),
     trustProxyHeaders: readBool("TRUST_PROXY_HEADERS", false),
     countryWarmTtlMs: readInt("COUNTRY_WARM_TTL_MS", 72 * 60 * 60 * 1000),
     publicApiRatePerMinute: readInt("PUBLIC_API_RATE_PER_MINUTE", 120),
