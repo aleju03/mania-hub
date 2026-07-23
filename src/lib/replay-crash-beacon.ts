@@ -21,6 +21,12 @@ interface ChromeMemoryInfo {
   jsHeapSizeLimit: number;
 }
 
+interface BeaconLastError {
+  message: string;
+  stack: string | null;
+  at: number;
+}
+
 interface BeaconRecord {
   startedAt: number;
   lastSampleAt: number;
@@ -30,7 +36,17 @@ interface BeaconRecord {
   // [seconds since start, used MB] tuples, thinned to cover the whole session.
   samples: Array<[number, number]>;
   context: Record<string, unknown>;
+  // Last uncaught error / rejection seen during the session. A crash usually
+  // takes the error detail with it, so this is our best chance at a cause.
+  lastError: BeaconLastError | null;
 }
+
+// The in-memory handle to the live session so late-arriving diagnostics (the
+// resolved renderer backend, a WebGL context-loss event) can be merged in after
+// the beacon starts.
+let activeRecord: BeaconRecord | null = null;
+
+const MAX_STACK_CHARS = 4000;
 
 function getMemory(): ChromeMemoryInfo | null {
   const memory = (performance as Performance & { memory?: ChromeMemoryInfo }).memory;
@@ -66,6 +82,40 @@ function clearRecord() {
 
 const toMb = (bytes: number) => Math.round(bytes / 1048576);
 
+// Probes a throwaway WebGL context for GPU identity + WebGL availability. This
+// distinguishes a GPU/driver crash on a specific card (gpu_renderer set, WebGL
+// supported) from a no-WebGL Canvas-fallback grind (webgl_supported false). The
+// context is dropped immediately so it never counts against the browser's live
+// WebGL context limit.
+function getGpuInfo(): Record<string, unknown> {
+  try {
+    if (typeof document === "undefined") return {};
+    const canvas = document.createElement("canvas");
+    const gl2 = canvas.getContext("webgl2");
+    const gl = (gl2 ?? canvas.getContext("webgl")) as WebGLRenderingContext | null;
+    if (!gl) return { webgl_supported: false };
+    const info: Record<string, unknown> = { webgl_supported: true, webgl_version: gl2 ? 2 : 1 };
+    const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
+    if (debugInfo) {
+      info.gpu_renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) ?? null;
+      info.gpu_vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) ?? null;
+    }
+    gl.getExtension("WEBGL_lose_context")?.loseContext();
+    return info;
+  } catch {
+    return {};
+  }
+}
+
+// Merges late diagnostics into the live beacon (e.g. the resolved Pixi renderer
+// backend once it initialises, or a WebGL context-loss marker). No-op when no
+// session is active.
+export function updateReplayWatchBeaconContext(patch: Record<string, unknown>) {
+  if (typeof window === "undefined" || !activeRecord) return;
+  activeRecord.context = { ...activeRecord.context, ...patch };
+  writeRecord(activeRecord);
+}
+
 // Reports (and clears) a watch session left behind by a previous page load.
 // Call once when the replay page mounts, before a new beacon starts.
 export function reportCrashedReplayWatchSession() {
@@ -76,6 +126,7 @@ export function reportCrashedReplayWatchSession() {
 
   const samples = record.samples ?? [];
   const lastSample = samples[samples.length - 1] ?? null;
+  const lastError = record.lastError ?? null;
   track("replay_watch_crash", {
     ...record.context,
     watched_ms: record.watchedMs,
@@ -85,6 +136,9 @@ export function reportCrashedReplayWatchSession() {
     heap_last_mb: lastSample ? lastSample[1] : null,
     heap_samples: samples,
     device_memory_gb: (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? null,
+    last_error_message: lastError?.message ?? null,
+    last_error_stack: lastError?.stack ? lastError.stack.slice(0, MAX_STACK_CHARS) : null,
+    last_error_at_ms: lastError ? lastError.at - record.startedAt : null,
   });
 }
 
@@ -104,8 +158,10 @@ export function startReplayWatchBeacon(
     heapLimitMb: null,
     peakUsedMb: null,
     samples: [],
-    context,
+    context: { ...context, ...getGpuInfo() },
+    lastError: null,
   };
+  activeRecord = record;
 
   const sample = () => {
     record.lastSampleAt = Date.now();
@@ -133,13 +189,35 @@ export function startReplayWatchBeacon(
   const handlePageShow = (event: PageTransitionEvent) => {
     if (event.persisted) sample();
   };
+  // Capture the last uncaught error/rejection so a crash report can carry a
+  // cause. The report is inferred on the next load, after the error itself is
+  // gone, so this is the only place to record it.
+  const rememberError = (message: string, stack: string | null) => {
+    record.lastError = { message: message.slice(0, 500), stack, at: Date.now() };
+    writeRecord(record);
+  };
+  const handleError = (event: ErrorEvent) => {
+    rememberError(event.message || "error", event.error instanceof Error ? event.error.stack ?? null : null);
+  };
+  const handleRejection = (event: PromiseRejectionEvent) => {
+    const reason = event.reason;
+    rememberError(
+      reason instanceof Error ? reason.message : String(reason),
+      reason instanceof Error ? reason.stack ?? null : null,
+    );
+  };
   window.addEventListener("pagehide", handlePageHide);
   window.addEventListener("pageshow", handlePageShow);
+  window.addEventListener("error", handleError);
+  window.addEventListener("unhandledrejection", handleRejection);
 
   return () => {
     window.clearInterval(intervalId);
     window.removeEventListener("pagehide", handlePageHide);
     window.removeEventListener("pageshow", handlePageShow);
+    window.removeEventListener("error", handleError);
+    window.removeEventListener("unhandledrejection", handleRejection);
+    if (activeRecord === record) activeRecord = null;
     clearRecord();
   };
 }

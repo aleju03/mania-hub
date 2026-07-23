@@ -51,6 +51,7 @@ export interface ReplayRendererLike {
   setSpeed: (value: number) => void;
   setHitsoundTrigger?: (trigger: ReplayHitsoundTrigger | null) => void;
   ready: () => Promise<void>;
+  getDiagnostics?: () => { rendererBackend: string; judgementBuildMs: number | null };
 }
 
 export function getScoreExpectedCounts(score: OsuScore | null, replay: ServerReplay): ReplayHitCounts {
