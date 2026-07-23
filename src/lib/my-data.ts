@@ -344,7 +344,7 @@ function readTopPlayParams(data: { pageIndex?: unknown; query?: unknown; key?: u
 }
 
 export const fetchMyDataFeed = createServerFn({ method: "GET" })
-  .inputValidator(readTrackedParams)
+  .validator(readTrackedParams)
   .handler(async ({ data }): Promise<MyDataPage<MyDataTrackedPlay>> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     setResponseHeader("Cache-Control", "private, no-store");
@@ -391,7 +391,7 @@ export interface MyDataTopPlay {
 }
 
 export const fetchMyDataTopPlays = createServerFn({ method: "GET" })
-  .inputValidator(readTopPlayParams)
+  .validator(readTopPlayParams)
   .handler(async ({ data }): Promise<MyDataPage<MyDataTopPlay>> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     setResponseHeader("Cache-Control", "private, no-store");

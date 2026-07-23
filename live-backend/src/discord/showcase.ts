@@ -545,7 +545,7 @@ async function buildShowcase(
   // players[2]: recent plays.
   const recent: ShowcaseScore[] = idAt(2)
     ? (await safe("recent", async () => {
-      const section = await getPlayerRecentScores(db, osu, idAt(2));
+      const section = await getPlayerRecentScores(db, idAt(2));
       return ((section.payload as OscScore[]) ?? []).slice(0, 5).map((s) => toShowcaseScore(s));
     })) ?? []
     : [];

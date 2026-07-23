@@ -71,7 +71,7 @@ export const listAdminTodos = createServerFn({ method: "GET" }).handler(async ()
 });
 
 export const createAdminTodo = createServerFn({ method: "POST" })
-  .inputValidator((data: { title?: unknown; notes?: unknown; category?: unknown; priority?: unknown }) => ({
+  .validator((data: { title?: unknown; notes?: unknown; category?: unknown; priority?: unknown }) => ({
     title: typeof data?.title === "string" ? data.title : "",
     notes: typeof data?.notes === "string" ? data.notes : null,
     category: typeof data?.category === "string" ? data.category : "task",
@@ -85,7 +85,7 @@ export const createAdminTodo = createServerFn({ method: "POST" })
   });
 
 export const updateAdminTodo = createServerFn({ method: "POST" })
-  .inputValidator((data: { id?: unknown; title?: unknown; notes?: unknown; category?: unknown; priority?: unknown; status?: unknown; position?: unknown }) => {
+  .validator((data: { id?: unknown; title?: unknown; notes?: unknown; category?: unknown; priority?: unknown; status?: unknown; position?: unknown }) => {
     // Only forward keys that were actually provided, so a "toggle done" ({ id, status }) never
     // overwrites the title/notes/etc. the backend applies a partial update from exactly these keys.
     const patch: Record<string, unknown> = { id: typeof data?.id === "string" ? data.id : "" };
@@ -105,7 +105,7 @@ export const updateAdminTodo = createServerFn({ method: "POST" })
   });
 
 export const deleteAdminTodo = createServerFn({ method: "POST" })
-  .inputValidator((data: { id?: unknown }) => ({ id: typeof data?.id === "string" ? data.id : "" }))
+  .validator((data: { id?: unknown }) => ({ id: typeof data?.id === "string" ? data.id : "" }))
   .handler(async ({ data }): Promise<{ ok: boolean }> => {
     await requireAdminAccess("Admin todo delete");
     const response = await postAdminTodos("/api/admin/todos/delete", data);

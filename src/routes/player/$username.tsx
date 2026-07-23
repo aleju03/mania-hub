@@ -1,7 +1,7 @@
 import { Link, createFileRoute, useLocation, useNavigate } from "@tanstack/react-router";
 import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Pencil, X } from "lucide-react";
+import { Check, Pencil, RefreshCw, X } from "lucide-react";
 import {
   getUser,
   getUserScoresBestWindow,
@@ -99,6 +99,9 @@ const PLAYER_SNAPSHOT_CLIENT_CACHE_TTL = 5 * 60 * 1000;
 const PLAYER_ABOUT_CLIENT_CACHE_TTL = 2 * 60 * 1000;
 const PLAYER_ABOUT_LIVE_TIMEOUT_MS = 8_000;
 const PLAYER_RECENT_LIVE_TIMEOUT_MS = 8_000;
+// Mirrors PROFILE_SECTION_TTL_MS in the live backend. The response's fetchedAt
+// anchors this cooldown, so a cached response only disables the remaining time.
+const PLAYER_RECENT_OSU_REFRESH_COOLDOWN_MS = 2 * 60_000;
 const PROFILE_SNAPSHOT_BEST_GRACE_MS = 450;
 const PROFILE_SNAPSHOT_REFRESH_DEFER_MS = 2500;
 const PROFILE_USER_METADATA_STALE_MS = 10 * 60_000;
@@ -626,6 +629,14 @@ function dedupeScores(scores: OsuScore[]): OsuScore[] {
   return unique;
 }
 
+function sortRecentScores(scores: OsuScore[]): OsuScore[] {
+  return [...scores].sort((a, b) => getScoreTimeMs(b) - getScoreTimeMs(a));
+}
+
+function mergeRecentScores(current: OsuScore[], fetched: OsuScore[]): OsuScore[] {
+  return sortRecentScores(dedupeScores([...fetched, ...current]));
+}
+
 function getScoreListSignature(scores: OsuScore[]): string {
   return scores
     .map((score) => [
@@ -807,7 +818,7 @@ function loadUserRecentCached(userId: number): Promise<OsuScore[]> {
   const request = withTimeout(fetchLivePlayerRecentScoresDirect(userId), PLAYER_RECENT_LIVE_TIMEOUT_MS)
     .then((section) => section.payload)
     .then((scores) => {
-      const dedupedScores = dedupeScores(scores);
+      const dedupedScores = sortRecentScores(dedupeScores(scores));
       userRecentDataCache.set(userId, {
         data: dedupedScores,
         expiresAt: Date.now() + USER_RECENT_CLIENT_CACHE_TTL,
@@ -975,11 +986,15 @@ export function PlayerProfilePage({
   );
   const [loadingUser, setLoadingUser] = useState(() => !loaderSnapshot?.user);
   const [loadingRecent, setLoadingRecent] = useState(true);
+  const [loadingOsuRecent, setLoadingOsuRecent] = useState(false);
   const [loadingAbout, setLoadingAbout] = useState(false);
   const [loadingInsights, setLoadingInsights] = useState(() => loaderBestScores.length === 0);
   const [userError, setUserError] = useState<string | null>(null);
   const [bestError, setBestError] = useState<string | null>(null);
   const [recentError, setRecentError] = useState<string | null>(null);
+  const [recentOsuError, setRecentOsuError] = useState<string | null>(null);
+  const [recentOsuLoaded, setRecentOsuLoaded] = useState(false);
+  const [recentOsuFetchedAt, setRecentOsuFetchedAt] = useState<string | null>(null);
   const [aboutError, setAboutError] = useState<string | null>(null);
   const [insightsError, setInsightsError] = useState<string | null>(null);
   const [tabState, setTab] = useState<PlayerTab>(() => normalizePlayerTab(initialTab));
@@ -1012,6 +1027,7 @@ export function PlayerProfilePage({
   const [recentVisibleCount, setRecentVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
   const tabsRailRef = useRef<HTMLDivElement | null>(null);
   const loadedProfileKeyRef = useRef<string | null>(null);
+  const recentOsuRequestRef = useRef(0);
   const ppManiaBestScores = useMemo(
     () => best.filter((score) => score.beatmap?.mode === "mania"),
     [best],
@@ -1132,13 +1148,18 @@ export function PlayerProfilePage({
     setUserError(null);
     setBestError(null);
     setRecentError(null);
+    setRecentOsuError(null);
+    setRecentOsuLoaded(false);
+    setRecentOsuFetchedAt(null);
     setAboutError(null);
     setInsightsError(null);
     setLoadingRecent(false);
+    setLoadingOsuRecent(false);
     setLoadingAbout(false);
     setRecentHasMore(false);
     setBestVisibleCount(INITIAL_SCORE_BATCH_SIZE);
     setRecentVisibleCount(INITIAL_SCORE_BATCH_SIZE);
+    recentOsuRequestRef.current += 1;
 
     let snapshotApplied = false;
     if (loaderSnapshot?.user) {
@@ -1390,6 +1411,30 @@ export function PlayerProfilePage({
 
     setRecentVisibleCount((count) => count + SHOW_MORE_BATCH_SIZE);
   }, [tab]);
+
+  const handleFetchOsuRecent = useCallback(async () => {
+    if (!user || loadingOsuRecent) return;
+    const requestId = ++recentOsuRequestRef.current;
+    setLoadingOsuRecent(true);
+    setRecentOsuError(null);
+    try {
+      const section = await withTimeout(
+        fetchLivePlayerRecentScoresDirect(user.id, "osu"),
+        PLAYER_RECENT_LIVE_TIMEOUT_MS,
+      );
+      if (recentOsuRequestRef.current !== requestId) return;
+      const fetched = Array.isArray(section.payload) ? section.payload : [];
+      setRecent((current) => mergeRecentScores(current, fetched));
+      setRecentHasMore(false);
+      setRecentOsuLoaded(true);
+      setRecentOsuFetchedAt(section.fetchedAt);
+    } catch {
+      if (recentOsuRequestRef.current !== requestId) return;
+      setRecentOsuError("Couldn't load osu! recents right now.");
+    } finally {
+      if (recentOsuRequestRef.current === requestId) setLoadingOsuRecent(false);
+    }
+  }, [loadingOsuRecent, user]);
 
   const relevantBestMods = useMemo(() => getRelevantMods(best), [best]);
   const bestPositionByIdentity = useMemo(() => {
@@ -2247,13 +2292,23 @@ export function PlayerProfilePage({
                 ))}
               </div>
             </div>
-            {(tab === "best" || tab === "recent") && availableKeyModes.length > 1 && (
-              <div className="hidden lg:block">
-                <KeyModeControl
-                  availableKeyModes={availableKeyModes}
-                  keyFilter={keyFilter}
-                  onChangeKeyFilter={setKeyFilter}
-                />
+            {(tab === "recent" || (tab === "best" && availableKeyModes.length > 1)) && (
+              <div className="hidden items-center gap-2 lg:flex">
+                {tab === "recent" && (
+                  <RecentOsuSourceButton
+                    loading={loadingOsuRecent}
+                    loaded={recentOsuLoaded}
+                    fetchedAt={recentOsuFetchedAt}
+                    onFetch={handleFetchOsuRecent}
+                  />
+                )}
+                {availableKeyModes.length > 1 && (
+                  <KeyModeControl
+                    availableKeyModes={availableKeyModes}
+                    keyFilter={keyFilter}
+                    onChangeKeyFilter={setKeyFilter}
+                  />
+                )}
               </div>
             )}
           </div>
@@ -2274,13 +2329,28 @@ export function PlayerProfilePage({
               onChangeSort={handleBestSortChange}
             />
           )}
-          {tab === "recent" && availableKeyModes.length > 1 && (
-            <div className="mt-3 lg:hidden">
-              <KeyModeControl
-                availableKeyModes={availableKeyModes}
-                keyFilter={keyFilter}
-                onChangeKeyFilter={setKeyFilter}
+          {tab === "recent" && (
+            <div className={`mt-3 flex items-center gap-2 lg:hidden ${
+              availableKeyModes.length > 1 ? "justify-between" : "justify-end"
+            }`}>
+              <RecentOsuSourceButton
+                loading={loadingOsuRecent}
+                loaded={recentOsuLoaded}
+                fetchedAt={recentOsuFetchedAt}
+                onFetch={handleFetchOsuRecent}
               />
+              {availableKeyModes.length > 1 && (
+                <KeyModeControl
+                  availableKeyModes={availableKeyModes}
+                  keyFilter={keyFilter}
+                  onChangeKeyFilter={setKeyFilter}
+                />
+              )}
+            </div>
+          )}
+          {tab === "recent" && recentOsuError && (
+            <div role="alert" className="mt-2 text-right text-[10px] text-osu-red">
+              {recentOsuError}
             </div>
           )}
         </div>
@@ -2400,7 +2470,9 @@ export function PlayerProfilePage({
                     return <ScoreRow key={identity} score={s} position={position} />;
                   })
                 ) : (
-                  <div className="text-center py-8 text-osu-f1 text-sm">No scores found</div>
+                  <div className="text-center py-8 text-osu-f1 text-sm">
+                    {tab === "recent" ? "No tracked plays found" : "No scores found"}
+                  </div>
                 )}
               </motion.div>
             )}
@@ -4371,6 +4443,91 @@ function KeyModeControl({
       ))}
     </div>
   );
+}
+
+function RecentOsuSourceButton({
+  loading,
+  loaded,
+  fetchedAt,
+  onFetch,
+}: {
+  loading: boolean;
+  loaded: boolean;
+  fetchedAt: string | null;
+  onFetch: () => void;
+}) {
+  const [clockMs, setClockMs] = useState(() => Date.now());
+  const fetchedAtMs = fetchedAt == null ? Number.NaN : Date.parse(fetchedAt);
+  const refreshAtMs = fetchedAtMs + PLAYER_RECENT_OSU_REFRESH_COOLDOWN_MS;
+  const refreshWaitMs = Number.isFinite(refreshAtMs) ? Math.max(0, refreshAtMs - clockMs) : 0;
+  const coolingDown = loaded && refreshWaitMs > 0;
+  const label = loading
+    ? "Loading…"
+    : coolingDown
+      ? "Updated just now"
+      : loaded
+        ? "osu! recents"
+        : "Load osu! recents";
+  const description = coolingDown
+    ? `osu! recents are loaded. Refresh available in ${formatRecentRefreshWait(refreshWaitMs)}.`
+    : loaded
+      ? "Refresh failed or otherwise missed plays from osu!'s latest recent history."
+      : "Add failed or otherwise missed plays from osu!'s latest recent history.";
+
+  useEffect(() => {
+    if (!loaded || !Number.isFinite(refreshAtMs)) return;
+    const remainingMs = refreshAtMs - Date.now();
+    setClockMs(Date.now());
+    if (remainingMs <= 0) return;
+
+    const tick = window.setInterval(() => setClockMs(Date.now()), 1_000);
+    const finish = window.setTimeout(() => {
+      window.clearInterval(tick);
+      setClockMs(Date.now());
+    }, remainingMs);
+    return () => {
+      window.clearInterval(tick);
+      window.clearTimeout(finish);
+    };
+  }, [loaded, refreshAtMs]);
+
+  return (
+    <button
+      type="button"
+      onClick={onFetch}
+      disabled={loading || coolingDown}
+      title={description}
+      aria-label={description}
+      className={`group inline-flex h-9 shrink-0 cursor-pointer items-center overflow-hidden rounded-lg border text-[10px] font-semibold transition-colors disabled:cursor-default ${
+        coolingDown
+          ? "border-osu-b3/20 bg-osu-b4/35 text-osu-f1/60"
+          : loaded
+            ? "border-osu-pink/30 bg-osu-pink/12 text-osu-pink-light hover:border-osu-pink/45 hover:bg-osu-pink/18"
+            : "border-osu-b3/25 bg-osu-b4/55 text-osu-f1 hover:border-osu-pink/30 hover:text-osu-pink-light"
+      } ${loading ? "opacity-60" : ""}`}
+    >
+      <span className="inline-flex h-full items-center gap-1.5 px-2.5 sm:px-3">
+        <OsuLogo className="h-3.5 w-3.5" />
+        {label}
+      </span>
+      {(loading || loaded) && (
+        <span className={`inline-flex h-4 w-6 items-center justify-center border-l ${
+          coolingDown ? "border-osu-b3/30 text-osu-f1/55" : "border-osu-pink/25"
+        }`}>
+          {coolingDown
+            ? <Check size={11} />
+            : <RefreshCw size={10} className={loading ? "animate-spin" : "transition-transform group-hover:rotate-45"} />}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function formatRecentRefreshWait(waitMs: number): string {
+  const totalSeconds = Math.max(1, Math.ceil(waitMs / 1_000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
 }
 
 function ModFilterChip({

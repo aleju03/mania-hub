@@ -14,11 +14,13 @@ const PROFILE_USER_TTL_MS = 10 * 60_000;
 const PROFILE_USER_RECENT_TOP_PLAY_TTL_MS = 2 * 60_000;
 const PROFILE_RECENT_TOP_PLAY_WINDOW_MS = 24 * 60 * 60_000;
 const PROFILE_SECTION_TTL_MS = 2 * 60_000;
+const PROFILE_TRACKED_RECENT_LIMIT = 100;
+const PROFILE_TRACKED_RECENT_SCAN_LIMIT = 400;
+const PROFILE_TRACKED_OVERLAY_LIMIT = 50;
 const PROFILE_BEST_SCORES_LIMIT = 200;
 const PROFILE_USER_INLINE_REFRESH_BUDGET_MS = 150;
-const PROFILE_RECENT_OVERLAY_INLINE_REFRESH_BUDGET_MS = 150;
 
-type ProfileScoreProvenance = "osu_snapshot" | "live_top_play_event" | "profile_recent_score";
+type ProfileScoreProvenance = "osu_snapshot" | "live_top_play_event" | "tracked_recent_score";
 type ProfileLookupMode = "auto" | "userId";
 
 export interface PlayerProfileSnapshot {
@@ -106,7 +108,7 @@ const PROFILE_PAGE_SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
 
 export async function getPlayerProfileSnapshot(
   db: Db,
-  osu: Pick<OsuApiClient, "getUser" | "getUserByKey" | "getUserBestScoresWindow"> & Partial<Pick<OsuApiClient, "getUserRecentScores">>,
+  osu: Pick<OsuApiClient, "getUser" | "getUserByKey" | "getUserBestScoresWindow">,
   rawKey: string,
 ): Promise<PlayerProfileSnapshot> {
   const key = normalizeProfileKey(rawKey);
@@ -114,16 +116,23 @@ export async function getPlayerProfileSnapshot(
   if (row) {
     const snapshotExpired = isExpired(row.fetched_at, PROFILE_SNAPSHOT_TTL_MS);
     const servedRow = await refreshProfileUserForServe(db, osu, row);
+    const trackedRecentScores = await getTrackedProfileRecentScores(db, servedRow.user_id, PROFILE_TRACKED_OVERLAY_LIMIT);
     if (snapshotExpired) {
       refreshProfileSnapshotInBackground(db, osu, key, servedRow);
-      return buildServedSnapshot(db, servedRow, true, await getProfileRecentScoresForOverlay(db, osu, servedRow.user_id));
+      return buildServedSnapshot(db, servedRow, true, trackedRecentScores);
     }
-    const snapshot = await buildServedSnapshot(db, servedRow, false, await getProfileRecentScoresForOverlay(db, osu, servedRow.user_id));
+    const snapshot = await buildServedSnapshot(db, servedRow, false, trackedRecentScores);
     if (snapshot.projection.appliedRecentScores > 0) refreshProfileSnapshotInBackground(db, osu, key, servedRow);
     return snapshot;
   }
 
-  return buildServedSnapshot(db, await fetchAndStoreProfileSnapshotShared(db, osu, key), false);
+  const fetchedRow = await fetchAndStoreProfileSnapshotShared(db, osu, key);
+  return buildServedSnapshot(
+    db,
+    fetchedRow,
+    false,
+    await getTrackedProfileRecentScores(db, fetchedRow.user_id, PROFILE_TRACKED_OVERLAY_LIMIT),
+  );
 }
 
 // First-ever profile views used to wait for the browser to hydrate and call
@@ -162,7 +171,12 @@ export async function getCachedPlayerProfileSnapshot(
   const key = normalizeProfileKey(rawKey);
   const row = await getStoredProfileSnapshot(db, key);
   if (row) {
-    return buildServedSnapshot(db, row, isExpired(row.fetched_at, PROFILE_SNAPSHOT_TTL_MS), await getCachedProfileRecentScores(db, row.user_id));
+    return buildServedSnapshot(
+      db,
+      row,
+      isExpired(row.fetched_at, PROFILE_SNAPSHOT_TTL_MS),
+      await getTrackedProfileRecentScores(db, row.user_id, PROFILE_TRACKED_OVERLAY_LIMIT),
+    );
   }
 
   const userRow = await getStoredProfileUser(db, key);
@@ -179,15 +193,38 @@ export async function getCachedPlayerProfileSnapshot(
     best_scores_json: json(bestScores),
     fetched_at: fetchedAt,
     user_fetched_at: fetchedAt,
-  }, true, await getCachedProfileRecentScores(db, Number(userRow.user_id)));
+  }, true, await getTrackedProfileRecentScores(db, Number(userRow.user_id), PROFILE_TRACKED_OVERLAY_LIMIT));
 }
 
 export async function getPlayerRecentScores(
   db: Db,
+  userId: number,
+): Promise<PlayerProfileSection> {
+  const fetchedAt = nowIso();
+  return {
+    userId,
+    section: "recent",
+    payload: await getTrackedProfileRecentScores(db, userId, PROFILE_TRACKED_RECENT_LIMIT),
+    fetchedAt,
+    isStale: false,
+  };
+}
+
+export async function getPlayerRecentScoresFromOsu(
+  db: Db,
   osu: Pick<OsuApiClient, "getUserRecentScores">,
   userId: number,
 ): Promise<PlayerProfileSection> {
-  return getProfileSection(db, "recent", userId, async () => osu.getUserRecentScores(userId, "api:profile_recent"));
+  const section = await getProfileSection(
+    db,
+    "recent",
+    userId,
+    async () => osu.getUserRecentScores(userId, "api:profile_recent:optional"),
+  );
+  return {
+    ...section,
+    payload: filterProfileRecentScoresToWindow(readProfileRecentScores(section.payload)),
+  };
 }
 
 export async function getPlayerAbout(
@@ -237,28 +274,48 @@ async function getProfileSection(
   return { userId, section, payload, fetchedAt, isStale: false };
 }
 
-async function getProfileRecentScoresForOverlay(
-  db: Db,
-  osu: Partial<Pick<OsuApiClient, "getUserRecentScores">>,
-  userId: number,
-): Promise<OscScore[]> {
-  if (!osu.getUserRecentScores) return getCachedProfileRecentScores(db, userId);
-  const cached = await getCachedProfileRecentScores(db, userId);
-  const refresh = getProfileSection(db, "recent", userId, async () => osu.getUserRecentScores!(userId, "api:profile_snapshot:recent_overlay"))
-    .then((section) => readProfileRecentScores(section.payload))
-    .catch(() => cached);
-  return withInlineRefreshBudget(refresh, cached, PROFILE_RECENT_OVERLAY_INLINE_REFRESH_BUDGET_MS);
-}
-
-async function getCachedProfileRecentScores(db: Db, userId: number): Promise<OscScore[]> {
-  const row = (await exec(db, "select payload_json from profile_section_cache where cache_key = ?", [`recent:${userId}`])).rows[0];
-  return readProfileRecentScores(parseJson(row?.payload_json, null));
-}
-
 function readProfileRecentScores(payload: unknown): OscScore[] {
   return Array.isArray(payload)
     ? payload.filter((score): score is OscScore => !!score && typeof score === "object" && !Array.isArray(score))
     : [];
+}
+
+function filterProfileRecentScoresToWindow(scores: OscScore[], now = Date.now()): OscScore[] {
+  const cutoff = now - PROFILE_RECENT_TOP_PLAY_WINDOW_MS;
+  return scores
+    .filter((score) => {
+      const playedAt = Date.parse(getScoreTimestamp(score));
+      return Number.isFinite(playedAt) && playedAt >= cutoff;
+    })
+    .sort((a, b) => Date.parse(getScoreTimestamp(b)) - Date.parse(getScoreTimestamp(a)));
+}
+
+async function getTrackedProfileRecentScores(
+  db: Db,
+  userId: number,
+  limit: number,
+): Promise<OscScore[]> {
+  const rows = (await exec(
+    db,
+    `select score_json
+     from score_events
+     where user_id = ? and ruleset_id = 3
+     order by ended_at desc
+     limit ?`,
+    [userId, Math.min(PROFILE_TRACKED_RECENT_SCAN_LIMIT, Math.max(limit, limit * 2))],
+  )).rows;
+  const scores: OscScore[] = [];
+  const identities = new Set<string>();
+  for (const row of rows) {
+    const score = parseJson<OscScore | null>(row.score_json, null);
+    if (!score) continue;
+    const identity = getScoreIdentity(score);
+    if (identities.has(identity)) continue;
+    identities.add(identity);
+    scores.push(score);
+    if (scores.length >= limit) break;
+  }
+  return hydrateScoresDisplayMetadata(db, scores);
 }
 
 async function getStoredProfileSnapshot(db: Db, key: string, lookupMode: ProfileLookupMode = "auto"): Promise<ProfileSnapshotRow | null> {
@@ -691,7 +748,7 @@ async function projectTopPlays(
     if (nextScores === scores) continue;
     scores = nextScores;
     if (isAtOrBefore(getScoreTimestamp(recentScore), ppProjectionBaselineAt)) ppBaselineScores = applyTopPlayEvent(ppBaselineScores, recentScore);
-    provenanceByScoreId[recentScore.id] = "profile_recent_score";
+    provenanceByScoreId[recentScore.id] = "tracked_recent_score";
     appliedRecentScores += 1;
   }
 

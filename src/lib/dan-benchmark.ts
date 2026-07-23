@@ -53,7 +53,7 @@ function requireLiveBackendBase(): string {
 }
 
 export const getDanBenchmarkLabels = createServerFn({ method: "GET" })
-  .inputValidator(normalizeListPayload)
+  .validator(normalizeListPayload)
   .handler(async ({ data }: { data: { family: DanBenchmarkFamily } }): Promise<DanBenchmarkLabel[]> => {
     await requireAdminAccess("getDanBenchmarkLabels");
     const base = requireLiveBackendBase();
@@ -67,7 +67,7 @@ export const getDanBenchmarkLabels = createServerFn({ method: "GET" })
   });
 
 export const getDanBenchmarkHiddenDiffs = createServerFn({ method: "GET" })
-  .inputValidator(normalizeListPayload)
+  .validator(normalizeListPayload)
   .handler(async ({ data }: { data: { family: DanBenchmarkFamily } }): Promise<number[]> => {
     await requireAdminAccess("getDanBenchmarkHiddenDiffs");
     const base = requireLiveBackendBase();
@@ -122,7 +122,7 @@ async function postDanBenchmark(path: string, payload: unknown): Promise<void> {
 }
 
 export const setDanBenchmarkHiddenDiff = createServerFn({ method: "POST" })
-  .inputValidator(normalizeHidePayload)
+  .validator(normalizeHidePayload)
   .handler(async ({ data }: { data: { beatmapId: number; family: DanBenchmarkFamily; hidden: boolean } }): Promise<{ ok: true }> => {
     await requireAdminAccess("setDanBenchmarkHiddenDiff");
     await postDanBenchmark("/api/admin/dan-benchmark/set-hidden", data);
@@ -130,7 +130,7 @@ export const setDanBenchmarkHiddenDiff = createServerFn({ method: "POST" })
   });
 
 export const setDanBenchmarkLabel = createServerFn({ method: "POST" })
-  .inputValidator(normalizeSavePayload)
+  .validator(normalizeSavePayload)
   .handler(async ({ data }: { data: { beatmapId: number; family: DanBenchmarkFamily; expectedLabel: string | null } }): Promise<{ ok: true }> => {
     await requireAdminAccess("setDanBenchmarkLabel");
     await postDanBenchmark("/api/admin/dan-benchmark/set-label", data);

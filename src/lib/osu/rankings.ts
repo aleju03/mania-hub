@@ -24,7 +24,7 @@ import {
 } from "./users";
 
 export const getRankings = createServerFn({ method: "GET" })
-  .inputValidator(normalizeRankingsPayload)
+  .validator(normalizeRankingsPayload)
   .handler(async ({ data }: { data: { type?: string; page?: number; country?: string } }): Promise<RankingsResponse> => {
     edgeCache(60, 300);
     const type = data.type ?? "performance";
@@ -61,7 +61,7 @@ export async function fetchRankingsPage(type: string, page: number, country?: st
 // ── Batch user rank history ────────────────────────────────────────────────
 
 export const getUsersRankHistory = createServerFn({ method: "GET" })
-  .inputValidator(normalizeRankHistoryPayload)
+  .validator(normalizeRankHistoryPayload)
   .handler(async ({ data }: { data: { userIds: number[] } }) => {
     edgeCache(3600, 86400);
     const uniqueUserIds = [...new Set(data.userIds)];

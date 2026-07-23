@@ -780,7 +780,7 @@ function liveAnalyticsConfigured(): boolean {
 const ANALYTICS_LIVE_CACHE_FRESH_MS = 4_000;
 
 const getAnalyticsMonitorData = createServerFn({ method: "POST" })
-  .inputValidator((data: { range?: unknown; rangeHours?: unknown; recentCountry?: unknown }) => ({
+  .validator((data: { range?: unknown; rangeHours?: unknown; recentCountry?: unknown }) => ({
     rangeHours: normalizeAnalyticsRangeHours(data?.rangeHours ?? data?.range),
     recentCountry: normalizeAnalyticsCountryFilter(data?.recentCountry),
   }))

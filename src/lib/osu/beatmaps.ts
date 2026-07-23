@@ -48,7 +48,7 @@ import { getRankings } from "./rankings";
 // ── Beatmaps ────────────────────────────────────────────────────────────────
 
 export const searchBeatmaps = createServerFn({ method: "GET" })
-  .inputValidator(normalizeBeatmapSearchPayload)
+  .validator(normalizeBeatmapSearchPayload)
   .handler(async ({ data }: { data: { query?: string; sort?: string; cursor_string?: string; status?: string } }) => {
     edgeCache(300, 3600);
     return osuFetch<BeatmapsetSearchResponse>(
@@ -65,7 +65,7 @@ export const searchBeatmaps = createServerFn({ method: "GET" })
   });
 
 export const searchBeatmapsByMappers = createServerFn({ method: "GET" })
-  .inputValidator(normalizeMapperSearchPayload)
+  .validator(normalizeMapperSearchPayload)
   .handler(async ({ data }: { data: { usernames?: string[] } }) => {
     edgeCache(300, 3600);
 
@@ -109,7 +109,7 @@ export const searchBeatmapsByMappers = createServerFn({ method: "GET" })
   });
 
 export const getBeatmapset = createServerFn({ method: "GET" })
-  .inputValidator(normalizeBeatmapsetPayload)
+  .validator(normalizeBeatmapsetPayload)
   .handler(async ({ data }: { data: { beatmapsetId: number } }) => {
     edgeCache(300, 3600);
     return osuFetch<OsuBeatmapset>(
@@ -120,7 +120,7 @@ export const getBeatmapset = createServerFn({ method: "GET" })
   });
 
 export const getBeatmapsetForBeatmap = createServerFn({ method: "GET" })
-  .inputValidator(normalizeBeatmapPayload)
+  .validator(normalizeBeatmapPayload)
   .handler(async ({ data }: { data: { beatmapId: number } }) => {
     edgeCache(300, 3600);
     const beatmap = await osuFetch<OsuBeatmap>(
@@ -209,7 +209,7 @@ async function getCountryBeatmapScores(beatmapId: number, country: string, page:
 }
 
 export const getBeatmapScores = createServerFn({ method: "GET" })
-  .inputValidator(normalizeBeatmapScoresPayload)
+  .validator(normalizeBeatmapScoresPayload)
   .handler(async ({ data }: { data: { beatmapId: number; country?: string; page: number } }) => {
     edgeCache(120, 600);
     if (data.country?.trim()) {
@@ -227,7 +227,7 @@ export const getBeatmapScores = createServerFn({ method: "GET" })
   });
 
 export const getBeatmapScoreLookupStatus = createServerFn({ method: "GET" })
-  .inputValidator(normalizeBeatmapScoresPayload)
+  .validator(normalizeBeatmapScoresPayload)
   .handler(async ({ data }: { data: { beatmapId: number; country?: string; page: number } }): Promise<BeatmapScoreLookupStatus | null> => {
     noStore();
     if (!data.country?.trim()) return null;
@@ -237,7 +237,7 @@ export const getBeatmapScoreLookupStatus = createServerFn({ method: "GET" })
   });
 
 export const getPartialBeatmapScores = createServerFn({ method: "GET" })
-  .inputValidator(normalizeBeatmapScoresPayload)
+  .validator(normalizeBeatmapScoresPayload)
   .handler(async ({ data }: { data: { beatmapId: number; country?: string; page: number } }): Promise<OsuScore[]> => {
     noStore();
     if (!data.country?.trim()) return [];
@@ -249,7 +249,7 @@ export const getPartialBeatmapScores = createServerFn({ method: "GET" })
 // ── Search ──────────────────────────────────────────────────────────────────
 
 export const searchUsers = createServerFn({ method: "GET" })
-  .inputValidator(normalizeSearchUsersPayload)
+  .validator(normalizeSearchUsersPayload)
   .handler(async ({ data }: { data: { query: string } }) => {
     edgeCache(60, 600);
     return osuFetch<UserSearchResponse>(

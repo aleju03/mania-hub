@@ -76,7 +76,7 @@ export const fetchServerPackWallet = createServerFn({ method: "GET" }).handler(
 );
 
 export const pushServerPackWallet = createServerFn({ method: "POST" })
-  .inputValidator((input: { payload?: unknown; baseRev?: unknown; cardsMode?: unknown }) => {
+  .validator((input: { payload?: unknown; baseRev?: unknown; cardsMode?: unknown }) => {
     const payload = typeof input?.payload === "string" ? input.payload : "";
     const baseRev = Number(input?.baseRev);
     const cardsMode = input?.cardsMode === "delta" ? "delta" : "snapshot";
@@ -122,7 +122,7 @@ export const pushServerPackWallet = createServerFn({ method: "POST" })
   });
 
 export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
-  .inputValidator((input: { page?: unknown; pageSize?: unknown; tier?: unknown; query?: unknown }) => {
+  .validator((input: { page?: unknown; pageSize?: unknown; tier?: unknown; query?: unknown }) => {
     const page = Math.max(0, Math.floor(Number(input?.page) || 0));
     const pageSize = Math.min(60, Math.max(1, Math.floor(Number(input?.pageSize) || 15)));
     const tier = typeof input?.tier === "string" ? input.tier : "all";
@@ -171,7 +171,7 @@ export const fetchServerPackCollectionOwnedIds = createServerFn({ method: "GET" 
 export type ServerPackRecycleMode = "duplicates" | "whole" | "all_duplicates" | "whole_matching";
 
 export const recycleServerPackCollection = createServerFn({ method: "POST" })
-  .inputValidator((input: { mode?: unknown; cardUserId?: unknown; cardUserIds?: unknown; tier?: unknown; query?: unknown }) => {
+  .validator((input: { mode?: unknown; cardUserId?: unknown; cardUserIds?: unknown; tier?: unknown; query?: unknown }) => {
     const mode =
       input?.mode === "duplicates" ||
       input?.mode === "whole" ||

@@ -22,7 +22,7 @@ function decodeWebpDataUrl(dataUrl: string): Buffer {
 }
 
 export const fetchR2PackCardThumbnail = createServerFn({ method: "GET" })
-  .inputValidator((input: { key?: unknown }) => ({
+  .validator((input: { key?: unknown }) => ({
     key: normalizeThumbnailKey(input?.key),
   }))
   .handler(async ({ data }): Promise<{ url: string | null }> => {
@@ -33,7 +33,7 @@ export const fetchR2PackCardThumbnail = createServerFn({ method: "GET" })
   });
 
 export const fetchR2PackCardThumbnails = createServerFn({ method: "GET" })
-  .inputValidator((input: { keys?: unknown }) => {
+  .validator((input: { keys?: unknown }) => {
     const rawKeys = Array.isArray(input?.keys) ? input.keys : [];
     const keys = [...new Set(rawKeys.map((key) => normalizeThumbnailKey(key)))].slice(0, MAX_THUMBNAIL_BATCH);
     return { keys };
@@ -61,7 +61,7 @@ export const fetchR2PackCardThumbnails = createServerFn({ method: "GET" })
   });
 
 export const uploadR2PackCardThumbnail = createServerFn({ method: "POST" })
-  .inputValidator((input: { key?: unknown; dataUrl?: unknown }) => {
+  .validator((input: { key?: unknown; dataUrl?: unknown }) => {
     const key = normalizeThumbnailKey(input?.key);
     const dataUrl = typeof input?.dataUrl === "string" ? input.dataUrl : "";
     if (dataUrl.length > MAX_THUMBNAIL_BYTES * 2) throw new Error("Invalid card thumbnail payload.");

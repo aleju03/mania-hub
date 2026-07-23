@@ -8,7 +8,7 @@ import { getSnipesSnapshot, updateSnipeProjection } from "../src/features/snipes
 import { ACTIVITY_SKILL_ANALYSIS_VERSION, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../src/features/activity.js";
 import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, globalMapsFarmedRefreshRunAfter, recordMapsFarmedScore, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores, waitForGlobalFarmedBoardBuild, type MapsPageQuery } from "../src/features/maps.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
-import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores } from "../src/features/player-profiles.js";
+import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu } from "../src/features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../src/features/rank-snapshots.js";
 import { confirmTopPlay, getTopPlaysSnapshot, TopPlayConfirmationPendingError } from "../src/features/top-plays.js";
 import { getTrackerSnapshot } from "../src/features/tracker.js";
@@ -2916,7 +2916,7 @@ describe("live backend", () => {
     });
   });
 
-  it("serves cached profile recent overlay when the refresh is slow", async () => {
+  it("does not refresh the optional osu! recent cache while serving profile snapshots", async () => {
     const { db } = await setup();
     const best = await fixture<OscScore[]>("top-best.json");
     const getUserByKey = vi.fn(async () => ({
@@ -2937,31 +2937,28 @@ describe("live backend", () => {
     }));
     const getUserBestScoresWindow = vi.fn(async () => best);
     const cachedRecent = { ...best[0], id: 9901 };
-    const refreshedRecent = { ...best[0], id: 9902 };
 
     await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
-    await getPlayerRecentScores(db, { getUserRecentScores: vi.fn(async () => [cachedRecent]) }, 101);
+    await getPlayerRecentScoresFromOsu(db, {
+      getUserRecentScores: vi.fn(async () => [{
+        ...cachedRecent,
+        ended_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+      }]),
+    }, 101);
     await exec(db, "update profile_section_cache set fetched_at = ? where cache_key = 'recent:101'", [
       new Date(Date.now() - 3 * 60_000).toISOString(),
     ]);
 
-    let resolveRecentRefresh: (value: OscScore[]) => void = () => {};
-    const getUserRecentScores = vi.fn(() => new Promise<OscScore[]>((resolve) => {
-      resolveRecentRefresh = resolve;
-    }));
+    const getUserRecentScores = vi.fn(async () => [{ ...best[0], id: 9902 }]);
+    const osu = { getUser, getUserByKey, getUserBestScoresWindow, getUserRecentScores };
 
     const startedAt = Date.now();
-    await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow, getUserRecentScores }, "Sniper");
+    const snapshot = await getPlayerProfileSnapshot(db, osu, "Sniper");
 
     expect(Date.now() - startedAt).toBeLessThan(1000);
-    expect(getUserRecentScores).toHaveBeenCalledTimes(1);
-    resolveRecentRefresh([refreshedRecent]);
-
-    await vi.waitFor(async () => {
-      const row = (await exec(db, "select payload_json from profile_section_cache where cache_key = 'recent:101'")).rows[0];
-      const payload = JSON.parse(String(row?.payload_json)) as OscScore[];
-      expect(payload.map((score) => score.id)).toEqual([9902]);
-    });
+    expect(getUserRecentScores).not.toHaveBeenCalled();
+    expect(snapshot.bestScores.map((score) => score.id)).not.toContain(9901);
   });
 
   it("projects confirmed live top plays into cached player snapshots without same-map duplicates", async () => {
@@ -3095,27 +3092,82 @@ describe("live backend", () => {
     expect(getUserBestScoresWindow).toHaveBeenCalledTimes(1);
   });
 
-  it("caches lazy player recent and about sections separately from the snapshot", async () => {
-    const { db } = await setup();
+  it("serves tracked recent plays and caches optional osu! recent plays separately from about", async () => {
+    const { db, ingestor } = await setup();
     const best = await fixture<OscScore[]>("top-best.json");
-    const getUserRecentScores = vi.fn(async () => [best[0], { ...best[0], id: 9902 }]);
+    await ingestor.ingestBatch([best[0]]);
+    const playedAt = new Date().toISOString();
+    const getUserRecentScores = vi.fn(async () => [
+      { ...best[0], ended_at: playedAt, created_at: playedAt },
+      { ...best[0], id: 9902, ended_at: playedAt, created_at: playedAt },
+      {
+        ...best[0],
+        id: 9903,
+        ended_at: new Date(Date.now() - 25 * 60 * 60_000).toISOString(),
+        created_at: new Date(Date.now() - 25 * 60 * 60_000).toISOString(),
+      },
+    ]);
     const getUser = vi.fn(async () => ({
       id: 101,
       username: "Sniper",
       page: { html: "<script>alert(1)</script><b>hi</b>" },
     }));
 
-    const recent = await getPlayerRecentScores(db, { getUserRecentScores }, 101);
-    const recentAgain = await getPlayerRecentScores(db, { getUserRecentScores }, 101);
+    const tracked = await getPlayerRecentScores(db, 101);
+    const recent = await getPlayerRecentScoresFromOsu(db, { getUserRecentScores }, 101);
+    const recentAgain = await getPlayerRecentScoresFromOsu(db, { getUserRecentScores }, 101);
     const about = await getPlayerAbout(db, { getUser }, 101);
     const aboutAgain = await getPlayerAbout(db, { getUser }, 101);
 
+    expect(tracked.payload).toHaveLength(1);
     expect(recent.payload).toHaveLength(2);
     expect(recentAgain.payload).toHaveLength(2);
     expect(getUserRecentScores).toHaveBeenCalledTimes(1);
     expect(about.payload).toMatchObject({ html: "<b>hi</b>" });
     expect(aboutAgain.payload).toMatchObject({ html: "<b>hi</b>" });
     expect(getUser).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses tracked profile recent plays by default and calls osu! only when requested", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    const [trackedScore] = await fixture<OscScore[]>("top-best.json");
+    await ingestor.ingestBatch([trackedScore]);
+    const playedAt = new Date().toISOString();
+    const getUserRecentScores = vi.fn(async () => [{
+      ...trackedScore,
+      id: 9910,
+      ended_at: playedAt,
+      created_at: playedAt,
+    }]);
+    const ctx = {
+      db,
+      queue,
+      events,
+      config: baseConfig(),
+      osu: {
+        getUserRecentScores,
+        limiter: { state: () => ({ hardPerMinute: 60, usedLastMinute: 0, byCaller: [], byPath: [] }) },
+      },
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never;
+
+    const trackedResponse = mockRes();
+    await routeHttp(mockReq("GET", "/api/profiles/101/recent"), trackedResponse.res, ctx);
+    expect(trackedResponse.res.statusCode).toBe(200);
+    expect(JSON.parse(trackedResponse.writes.join("")).payload).toHaveLength(1);
+    expect(getUserRecentScores).not.toHaveBeenCalled();
+
+    const osuResponse = mockRes();
+    await routeHttp(mockReq("GET", "/api/profiles/101/recent?source=osu"), osuResponse.res, ctx);
+    expect(osuResponse.res.statusCode).toBe(200);
+    expect(JSON.parse(osuResponse.writes.join("")).payload).toHaveLength(1);
+    expect(getUserRecentScores).toHaveBeenCalledTimes(1);
+
+    const invalidResponse = mockRes();
+    await routeHttp(mockReq("GET", "/api/profiles/101/recent?source=other"), invalidResponse.res, ctx);
+    expect(invalidResponse.res.statusCode).toBe(400);
+    expect(JSON.parse(invalidResponse.writes.join(""))).toMatchObject({ error: "invalid_recent_source" });
+    expect(getUserRecentScores).toHaveBeenCalledTimes(1);
   });
 
   it("deduplicates repeated best-score ids in the stored top-score rows", async () => {

@@ -23,7 +23,7 @@ afterEach(async () => {
 });
 
 describe("player profile snapshots", () => {
-  it("overlays fresh cached recent top-score candidates onto stale best-score snapshots", async () => {
+  it("overlays fresh tracked top-score candidates onto stale best-score snapshots", async () => {
     const snapshotFetchedAt = "2026-06-01T03:28:53Z";
     const oldBest = score({
       id: 1,
@@ -70,19 +70,8 @@ describe("player profile snapshots", () => {
         snapshotFetchedAt,
       ],
     );
-    await exec(
-      db,
-      `insert into profile_section_cache (cache_key, user_id, section, payload_json, fetched_at, updated_at)
-       values (?, ?, ?, ?, ?, ?)`,
-      [
-        `recent:${USER_ID}`,
-        USER_ID,
-        "recent",
-        JSON.stringify([failedRecent, freshRecentTop]),
-        "2026-06-07T22:25:00Z",
-        "2026-06-07T22:25:00Z",
-      ],
-    );
+    await insertTrackedScore(failedRecent);
+    await insertTrackedScore(freshRecentTop);
 
     const snapshot = await getCachedPlayerProfileSnapshot(db, "MnShiny");
 
@@ -90,7 +79,7 @@ describe("player profile snapshots", () => {
     expect(snapshot?.projection.appliedRecentScores).toBe(1);
     expect(snapshot?.projection.projectedPp).toBeGreaterThan(1000);
     expect((snapshot?.user.statistics as { pp?: number } | undefined)?.pp).toBe(1000);
-    expect(snapshot?.projection.provenanceByScoreId[2]).toBe("profile_recent_score");
+    expect(snapshot?.projection.provenanceByScoreId[2]).toBe("tracked_recent_score");
     expect(snapshot?.projection.provenanceByScoreId[3]).toBeUndefined();
   });
 
@@ -134,19 +123,7 @@ describe("player profile snapshots", () => {
         snapshotFetchedAt,
       ],
     );
-    await exec(
-      db,
-      `insert into profile_section_cache (cache_key, user_id, section, payload_json, fetched_at, updated_at)
-       values (?, ?, ?, ?, ?, ?)`,
-      [
-        `recent:${USER_ID}`,
-        USER_ID,
-        "recent",
-        JSON.stringify([recentNonPb]),
-        "2026-06-07T22:25:00Z",
-        "2026-06-07T22:25:00Z",
-      ],
-    );
+    await insertTrackedScore(recentNonPb);
 
     const snapshot = await getCachedPlayerProfileSnapshot(db, "MnShiny");
 
@@ -194,19 +171,7 @@ describe("player profile snapshots", () => {
         snapshotFetchedAt,
       ],
     );
-    await exec(
-      db,
-      `insert into profile_section_cache (cache_key, user_id, section, payload_json, fetched_at, updated_at)
-       values (?, ?, ?, ?, ?, ?)`,
-      [
-        `recent:${USER_ID}`,
-        USER_ID,
-        "recent",
-        JSON.stringify([recentLowerPp]),
-        "2026-06-07T22:25:00Z",
-        "2026-06-07T22:25:00Z",
-      ],
-    );
+    await insertTrackedScore(recentLowerPp);
 
     const snapshot = await getCachedPlayerProfileSnapshot(db, "MnShiny");
 
@@ -347,6 +312,33 @@ describe("player profile snapshots", () => {
     expect(snapshot?.bestScores.find((entry) => entry.id === 31)?.beatmap?.note_bpm).toBeUndefined();
   });
 });
+
+async function insertTrackedScore(trackedScore: OscScore): Promise<void> {
+  const endedAt = trackedScore.ended_at ?? trackedScore.created_at ?? new Date().toISOString();
+  const beatmapId = trackedScore.beatmap_id ?? trackedScore.beatmap?.id;
+  if (!beatmapId) throw new Error("tracked profile score fixture is missing a beatmap id");
+  await exec(
+    db,
+    `insert into score_events
+     (score_id, score_identity, legacy_score_id, user_id, country, beatmap_id, ruleset_id, score_json, pp, total_score, accuracy, rank, passed, processed, is_lazer, has_replay, ended_at, received_at, source)
+     values (?, ?, ?, ?, 'CR', ?, 3, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?, 'osc_socket')`,
+    [
+      trackedScore.id,
+      `official:${trackedScore.id}`,
+      trackedScore.legacy_score_id ?? null,
+      trackedScore.user_id,
+      beatmapId,
+      JSON.stringify(trackedScore),
+      trackedScore.pp ?? null,
+      trackedScore.total_score ?? trackedScore.score ?? null,
+      trackedScore.accuracy ?? null,
+      trackedScore.rank ?? null,
+      trackedScore.passed ? 1 : 0,
+      endedAt,
+      endedAt,
+    ],
+  );
+}
 
 function score(options: {
   id: number;

@@ -262,10 +262,14 @@ async function scanStorageBreakdown(
   const nowMs = Date.now();
   let tables: Array<{ name: string; bytes: number }> | null = null;
   if (config.databaseUrl.startsWith("file:")) {
-    try {
-      tables = await scanTablesInThread(config.databaseUrl);
-    } catch {
+    if (import.meta.url.endsWith(".ts")) {
       tables = await scanTablesInline(db);
+    } else {
+      try {
+        tables = await scanTablesInThread(config.databaseUrl);
+      } catch {
+        tables = await scanTablesInline(db);
+      }
     }
   } else {
     // Remote databases execute asynchronously, so inline is already non-blocking.

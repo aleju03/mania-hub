@@ -26,7 +26,7 @@ import { enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIf
 import { getMapSearchPage, getMapSearchSetEntry, MAP_SEARCH_PATTERNS, MAP_SEARCH_SUB_PATTERNS, type MapSearchQuery, type MapSearchSort } from "../features/map-search.js";
 import { getMapCollection, getMapCollections, getMapCollectionsRotation, rebuildMapCollections } from "../features/map-collections.js";
 import { getPackWallet, listPackCollectionCards, listPackCollectionOwnedUserIds, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
-import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, warmProfileSnapshots } from "../features/player-profiles.js";
+import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, warmProfileSnapshots } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
 import { getSnipesSnapshot } from "../features/snipes.js";
 import { getTopPlaysSnapshot, type TopPlaysSnapshotOptions } from "../features/top-plays.js";
@@ -279,8 +279,17 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     if (profileRoute.kind === "recent") {
-      if (!checkRate(req, res, ctx, "publicCostly")) return true;
-      sendJson(req, res, ctx, 200, await getPlayerRecentScores(ctx.serveWriteDb ?? ctx.db, ctx.osu, userId));
+      const source = url.searchParams.get("source") ?? "tracked";
+      if (source !== "tracked" && source !== "osu") {
+        sendJson(req, res, ctx, 400, { error: "invalid_recent_source" });
+        return true;
+      }
+      if (source === "osu") {
+        if (!checkRate(req, res, ctx, "publicCostly")) return true;
+        sendJson(req, res, ctx, 200, await getPlayerRecentScoresFromOsu(ctx.serveWriteDb ?? ctx.db, ctx.osu, userId));
+        return true;
+      }
+      sendJson(req, res, ctx, 200, await getPlayerRecentScores(ctx.serveWriteDb ?? ctx.db, userId));
       return true;
     }
     if (profileRoute.kind === "activity") {

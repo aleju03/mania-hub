@@ -177,6 +177,12 @@ export function getMapsSnapshotThread(config: {
   const databaseUrl = config.databaseUrl;
   if (!databaseUrl || !databaseUrl.startsWith("file:")) return null;
   if (process.env.MAPS_SNAPSHOT_THREAD === "0") return null;
+  // `node --import tsx` can run this source module, but its worker threads do
+  // not remap the worker's internal `.js` imports back to `.ts`. Source-mode
+  // development therefore uses the existing inline fallback without first
+  // spawning a worker that is guaranteed to fail and log warnings. Compiled
+  // production reaches this code from a `.js` module and keeps the worker.
+  if (import.meta.url.endsWith(".ts")) return null;
   let thread = threadsByDatabaseUrl.get(databaseUrl);
   if (!thread) {
     thread = new MapsSnapshotThread({

@@ -4,7 +4,7 @@ import { exec } from "../db.js";
 import { GLOBAL_COUNTRY_CODE, isGlobalCountry } from "../countries.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
-import { getPlayerProfileSnapshot, getPlayerRecentScores } from "../features/player-profiles.js";
+import { getPlayerProfileSnapshot, getPlayerRecentScoresFromOsu } from "../features/player-profiles.js";
 import { getGlobalRankingsSnapshot } from "../features/global-rankings.js";
 import { getTopPlaysSnapshot } from "../features/top-plays.js";
 import { getFarmHelperSnapshot, FarmHelperUserNotFoundError, type FarmHelperKeyMode } from "../features/farm-helper.js";
@@ -422,7 +422,7 @@ const recentHandler: CommandHandler = async (deps, interaction) => {
     const snapshot = await getPlayerProfileSnapshot(deps.db, deps.osu, key);
     const userId = Number((snapshot.user as { id?: number }).id ?? 0);
     const username = String((snapshot.user as { username?: string }).username ?? key);
-    const section = await getPlayerRecentScores(deps.db, deps.osu, userId);
+    const section = await getPlayerRecentScoresFromOsu(deps.db, deps.osu, userId);
     const scores = (section.payload as OscScore[]) ?? [];
     const slice = scores.slice((page - 1) * pageSize, page * pageSize);
     const hasNext = scores.length > page * pageSize;

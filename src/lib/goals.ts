@@ -154,7 +154,7 @@ export const fetchMyGoalSuggestionMetrics = createServerFn({ method: "GET" }).ha
 });
 
 export const createGoal = createServerFn({ method: "POST" })
-  .inputValidator((data: CreateGoalInput) => data)
+  .validator((data: CreateGoalInput) => data)
   .handler(async ({ data }): Promise<{ ok: boolean; goal: UserGoal | null }> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     setResponseHeader("Cache-Control", "private, no-store");
@@ -186,7 +186,7 @@ export const createGoal = createServerFn({ method: "POST" })
   });
 
 export const updateGoal = createServerFn({ method: "POST" })
-  .inputValidator((data: UpdateGoalInput) => data)
+  .validator((data: UpdateGoalInput) => data)
   .handler(async ({ data }): Promise<{ ok: boolean; goal: UserGoal | null }> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     setResponseHeader("Cache-Control", "private, no-store");
@@ -213,7 +213,7 @@ export const updateGoal = createServerFn({ method: "POST" })
   });
 
 export const deleteGoal = createServerFn({ method: "POST" })
-  .inputValidator((data: { id: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data }): Promise<{ ok: boolean }> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     setResponseHeader("Cache-Control", "private, no-store");

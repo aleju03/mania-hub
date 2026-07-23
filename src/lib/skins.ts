@@ -111,7 +111,7 @@ export async function fetchSkinsListDirect(params: SkinsListParams, init?: Reque
 }
 
 export const fetchSkinById = createServerFn({ method: "GET" })
-  .inputValidator((data: { id?: unknown }) => {
+  .validator((data: { id?: unknown }) => {
     // Accepts a slug or a raw row id; slugs with the short-id collision
     // fallback can run past 64 chars, hence the wider cap.
     const id = typeof data.id === "string" ? data.id.trim() : "";
@@ -168,7 +168,7 @@ async function resolveSkinsBackend(): Promise<SkinsBackend | null> {
 }
 
 export const startSkinUpload = createServerFn({ method: "POST" })
-  .inputValidator((data: { name?: unknown; author?: unknown; description?: unknown }) => ({
+  .validator((data: { name?: unknown; author?: unknown; description?: unknown }) => ({
     name: typeof data.name === "string" ? data.name.slice(0, 80) : "",
     author: typeof data.author === "string" ? data.author.slice(0, SKIN_AUTHOR_MAX_LENGTH) : "",
     description: typeof data.description === "string" ? data.description.slice(0, SKIN_DESCRIPTION_MAX_LENGTH) : "",
@@ -203,7 +203,7 @@ export const startSkinUpload = createServerFn({ method: "POST" })
   });
 
 export const deleteMySkin = createServerFn({ method: "POST" })
-  .inputValidator((data: { id?: unknown }) => {
+  .validator((data: { id?: unknown }) => {
     const id = typeof data.id === "string" ? data.id.trim() : "";
     if (!id || id.length > 64) throw new Error("Invalid skin id.");
     return { id };
@@ -226,7 +226,7 @@ export const deleteMySkin = createServerFn({ method: "POST" })
   });
 
 export const moderateSkin = createServerFn({ method: "POST" })
-  .inputValidator((data: { id?: unknown; action?: unknown }) => {
+  .validator((data: { id?: unknown; action?: unknown }) => {
     const id = typeof data.id === "string" ? data.id.trim() : "";
     const action = data.action === "hide" || data.action === "unhide" || data.action === "delete" ? data.action : null;
     if (!id || id.length > 64 || !action) throw new Error("Invalid moderation request.");

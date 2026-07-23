@@ -42,7 +42,7 @@ const ROOTS = [
 const PAGE_SIZE = 25;
 
 const listR2Objects = createServerFn({ method: "GET" })
-  .inputValidator((data: { prefix?: string; continuationToken?: string | null; query?: string }) => ({
+  .validator((data: { prefix?: string; continuationToken?: string | null; query?: string }) => ({
     prefix: typeof data?.prefix === "string" ? data.prefix : ROOT_PREFIX,
     continuationToken: typeof data?.continuationToken === "string" ? data.continuationToken : null,
     query: typeof data?.query === "string" ? data.query : "",
@@ -53,7 +53,7 @@ const listR2Objects = createServerFn({ method: "GET" })
   });
 
 const summarizeR2Prefix = createServerFn({ method: "GET" })
-  .inputValidator((data: { prefix?: string }) => ({
+  .validator((data: { prefix?: string }) => ({
     prefix: typeof data?.prefix === "string" ? data.prefix : "",
   }))
   .handler(async ({ data }): Promise<R2AdminPrefixSummary> => {
@@ -62,7 +62,7 @@ const summarizeR2Prefix = createServerFn({ method: "GET" })
   });
 
 const signR2AdminUrl = createServerFn({ method: "GET" })
-  .inputValidator((data: { key?: string; mimeType?: string }) => ({
+  .validator((data: { key?: string; mimeType?: string }) => ({
     key: typeof data?.key === "string" ? data.key : "",
     mimeType: typeof data?.mimeType === "string" && data.mimeType ? data.mimeType : undefined,
   }))
@@ -73,7 +73,7 @@ const signR2AdminUrl = createServerFn({ method: "GET" })
   });
 
 const describeUploadedReplay = createServerFn({ method: "GET" })
-  .inputValidator((data: { key?: string }) => ({
+  .validator((data: { key?: string }) => ({
     key: typeof data?.key === "string" ? data.key : "",
   }))
   .handler(async ({ data }): Promise<UploadedReplayDescription | null> => {
@@ -82,7 +82,7 @@ const describeUploadedReplay = createServerFn({ method: "GET" })
   });
 
 const deleteR2Object = createServerFn({ method: "POST" })
-  .inputValidator((data: { key?: string }) => ({
+  .validator((data: { key?: string }) => ({
     key: typeof data?.key === "string" ? data.key : "",
   }))
   .handler(async ({ data }) => {
@@ -91,7 +91,7 @@ const deleteR2Object = createServerFn({ method: "POST" })
   });
 
 const deleteR2Prefix = createServerFn({ method: "POST" })
-  .inputValidator((data: { prefix?: string }) => ({
+  .validator((data: { prefix?: string }) => ({
     prefix: typeof data?.prefix === "string" ? data.prefix : "",
   }))
   .handler(async ({ data }) => {

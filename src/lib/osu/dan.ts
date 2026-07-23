@@ -67,7 +67,7 @@ async function computeDanEstimate(
 }
 
 export const getDanEstimates = createServerFn({ method: "GET" })
-  .inputValidator(
+  .validator(
     (input: { items?: unknown[]; estimatorVersion?: unknown }): { items: DanEstimateRequest[]; estimatorVersion: number } => {
       const raw = asInputRecord(input);
       const items = Array.isArray(raw.items) ? raw.items : [];

@@ -172,7 +172,7 @@ async function getReplayBuffer(data: { scoreId: number; mode: string }): Promise
 }
 
 export const getReplayParsed = createServerFn({ method: "GET" })
-  .inputValidator(normalizeReplayParsedPayload)
+  .validator(normalizeReplayParsedPayload)
   .handler(async ({ data }: { data: { scoreId: number; mode: string; keyCount?: number } }) => {
     edgeCache(86400, 604800);
     const cacheKey = [
@@ -262,7 +262,7 @@ export const getReplayParsed = createServerFn({ method: "GET" })
   });
 
 export const lookupBeatmapByChecksum = createServerFn({ method: "GET" })
-  .inputValidator(normalizeBeatmapChecksumPayload)
+  .validator(normalizeBeatmapChecksumPayload)
   .handler(async ({ data }: { data: { checksum: string } }): Promise<BeatmapChecksumLookupResult | null> => {
     edgeCache(300, 3600);
     try {
@@ -280,7 +280,7 @@ export const lookupBeatmapByChecksum = createServerFn({ method: "GET" })
   });
 
 export const getBeatmapFile = createServerFn({ method: "GET" })
-  .inputValidator((input: unknown) => {
+  .validator((input: unknown) => {
     const data = normalizeBeatmapPayload(input);
     const beatmapsetIdRaw = typeof input === "object" && input !== null && "beatmapsetId" in input
       ? (input as { beatmapsetId?: unknown }).beatmapsetId
@@ -302,7 +302,7 @@ export const getBeatmapFile = createServerFn({ method: "GET" })
 // the replay's beatmap checksum, so it also covers unsubmitted maps that have no
 // beatmap id at all.
 export const getCommunityBeatmapFile = createServerFn({ method: "GET" })
-  .inputValidator(normalizeBeatmapChecksumPayload)
+  .validator(normalizeBeatmapChecksumPayload)
   .handler(async ({ data }: { data: { checksum: string } }): Promise<{ content: string } | null> => {
     const content = await readCommunityBeatmap(data.checksum);
     if (!content) {
@@ -317,7 +317,7 @@ export const getCommunityBeatmapFile = createServerFn({ method: "GET" })
   });
 
 export const submitCommunityBeatmap = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown): { checksum: string; content: string } => {
+  .validator((input: unknown): { checksum: string; content: string } => {
     const record = typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
     const checksum = String(record.checksum ?? "").trim().toLowerCase();
     if (!/^[a-f0-9]{32}$/.test(checksum)) {
@@ -334,7 +334,7 @@ export const submitCommunityBeatmap = createServerFn({ method: "POST" })
   });
 
 export const getScore = createServerFn({ method: "GET" })
-  .inputValidator(normalizeScorePayload)
+  .validator(normalizeScorePayload)
   .handler(async ({ data }: { data: { scoreId: number; mode?: string } }) => {
     edgeCache(300, 1800);
     const mode = data.mode ?? "mania";

@@ -214,7 +214,7 @@ export interface LivePlayerProfileSnapshot {
     appliedRecentScores: number;
     projectedPp: number | null;
     basePp: number | null;
-    provenanceByScoreId: Record<number, "osu_snapshot" | "live_top_play_event" | "profile_recent_score">;
+    provenanceByScoreId: Record<number, "osu_snapshot" | "live_top_play_event" | "tracked_recent_score">;
   };
 }
 
@@ -225,6 +225,8 @@ export interface LivePlayerProfileSection<T> {
   fetchedAt: string;
   isStale: boolean;
 }
+
+export type LivePlayerRecentSource = "tracked" | "osu";
 
 export interface LivePlayerAboutPayload {
   html: string | null;
@@ -398,7 +400,7 @@ function normalizeAdminPath(input: unknown): string {
 }
 
 export const runLiveBackendAdminAction = createServerFn({ method: "POST" })
-  .inputValidator((data: { path?: unknown }) => ({
+  .validator((data: { path?: unknown }) => ({
     path: normalizeAdminPath(data?.path),
   }))
   .handler(async ({ data }): Promise<{ ok: boolean; body: string | null }> => {
@@ -425,7 +427,7 @@ export const runLiveBackendAdminAction = createServerFn({ method: "POST" })
   });
 
 export const fetchLiveBackendAdminStatus = createServerFn({ method: "GET" })
-  .inputValidator((data: { country?: unknown } | undefined) => {
+  .validator((data: { country?: unknown } | undefined) => {
     const rawCountry = typeof data?.country === "string" ? data.country.trim().toUpperCase() : "";
     return { country: /^([A-Z]{2}|GLOBAL)$/.test(rawCountry) ? rawCountry : null };
   })
@@ -526,7 +528,7 @@ export interface LiveBackendTablePreview {
 // browser. Admin-gated; the token is injected server-side (never in the
 // browser), mirroring fetchLiveBackendStorageBreakdown.
 export const fetchLiveBackendTableRows = createServerFn({ method: "GET" })
-  .inputValidator((data: { table?: unknown; limit?: unknown; offset?: unknown; search?: unknown }) => {
+  .validator((data: { table?: unknown; limit?: unknown; offset?: unknown; search?: unknown }) => {
     const table = typeof data?.table === "string" ? data.table.trim() : "";
     if (!/^[A-Za-z0-9_]+$/.test(table)) throw new Error("Invalid table name.");
     const limit = Math.min(Math.max(Math.trunc(Number(data?.limit)) || 25, 1), 100);
@@ -584,7 +586,7 @@ export interface LiveBackendUserActiveResult {
 // "delete this cheater" button). Admin-gated; the token is injected server-side.
 // Accepts a user id or a username; the backend resolves and 404s if unknown.
 export const setLiveBackendUserActive = createServerFn({ method: "POST" })
-  .inputValidator((data: { userId?: unknown; username?: unknown; active?: unknown }) => {
+  .validator((data: { userId?: unknown; username?: unknown; active?: unknown }) => {
     const userId = Number(data?.userId);
     const username = typeof data?.username === "string" ? data.username.trim().slice(0, 60) : "";
     if ((!Number.isInteger(userId) || userId <= 0) && !username) {
@@ -817,7 +819,7 @@ export async function activateLiveCountryOnServer(country: string, forwardedFor?
 }
 
 export const fetchLivePlayerCachedProfileSnapshot = createServerFn({ method: "GET" })
-  .inputValidator((data: { key?: unknown }) => {
+  .validator((data: { key?: unknown }) => {
     if (typeof data?.key !== "string" || !data.key.trim()) throw new Error("Invalid profile key.");
     return { key: data.key.trim().slice(0, 120) };
   })
@@ -831,21 +833,23 @@ export const fetchLivePlayerCachedProfileSnapshot = createServerFn({ method: "GE
   });
 
 export const fetchLivePlayerRecentScores = createServerFn({ method: "GET" })
-  .inputValidator((data: { userId?: unknown }) => {
+  .validator((data: { userId?: unknown; source?: unknown }) => {
     const userId = Number(data?.userId);
     if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
-    return { userId };
+    const source = data?.source === "osu" ? "osu" : "tracked";
+    return { userId, source };
   })
   .handler(async ({ data }): Promise<LivePlayerProfileSection<OsuScore[]> | null> => {
     const base = getServerLiveBackendUrl();
     if (!base) return null;
-    const response = await fetch(`${base}/api/profiles/${data.userId}/recent`);
+    const query = data.source === "osu" ? "?source=osu" : "";
+    const response = await fetch(`${base}/api/profiles/${data.userId}/recent${query}`);
     if (!response.ok) throw new Error(`Server ${response.status} for profile recent scores`);
     return response.json() as Promise<LivePlayerProfileSection<OsuScore[]>>;
   });
 
 export const fetchLivePlayerAbout = createServerFn({ method: "GET" })
-  .inputValidator((data: { userId?: unknown }) => {
+  .validator((data: { userId?: unknown }) => {
     const userId = Number(data?.userId);
     if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
     return { userId };
@@ -879,9 +883,13 @@ export async function fetchLivePlayerCachedProfileSnapshotDirect(key: string): P
   return snapshot;
 }
 
-export async function fetchLivePlayerRecentScoresDirect(userId: number): Promise<LivePlayerProfileSection<OsuScore[]>> {
+export async function fetchLivePlayerRecentScoresDirect(
+  userId: number,
+  source: LivePlayerRecentSource = "tracked",
+): Promise<LivePlayerProfileSection<OsuScore[]>> {
   if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
-  return fetchLiveJson(`/api/profiles/${userId}/recent`);
+  const query = source === "osu" ? "?source=osu" : "";
+  return fetchLiveJson(`/api/profiles/${userId}/recent${query}`);
 }
 
 export async function fetchLivePlayerAboutDirect(userId: number): Promise<LivePlayerProfileSection<LivePlayerAboutPayload>> {

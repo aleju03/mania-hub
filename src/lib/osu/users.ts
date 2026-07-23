@@ -232,14 +232,14 @@ export async function fetchAndCacheUserRankHistory(userId: number): Promise<numb
 // ── User ────────────────────────────────────────────────────────────────────
 
 export const getUser = createServerFn({ method: "GET" })
-  .inputValidator(normalizeUserKeyPayload)
+  .validator(normalizeUserKeyPayload)
   .handler(async ({ data }: { data: { key: string } }) => {
     edgeCache(60, 300);
     return getCachedUser(data.key);
   });
 
 export const getUserScoresBest = createServerFn({ method: "GET" })
-  .inputValidator(normalizeScoreListPayload)
+  .validator(normalizeScoreListPayload)
   .handler(async ({ data }: { data: { userId: number; limit?: number; offset?: number } }) => {
     edgeCache(120, 600);
     return getCachedUserScores("best", data.userId, {
@@ -249,7 +249,7 @@ export const getUserScoresBest = createServerFn({ method: "GET" })
   });
 
 export const getUserScoresRecent = createServerFn({ method: "GET" })
-  .inputValidator(normalizeScoreListPayload)
+  .validator(normalizeScoreListPayload)
   .handler(async ({ data }: { data: { userId: number; limit?: number; offset?: number; include_fails?: boolean } }) => {
     edgeCache(30, 120);
     return getCachedUserScores("recent", data.userId, {
@@ -260,7 +260,7 @@ export const getUserScoresRecent = createServerFn({ method: "GET" })
   });
 
 export const getUserScoresFirsts = createServerFn({ method: "GET" })
-  .inputValidator(normalizeScoreListPayload)
+  .validator(normalizeScoreListPayload)
   .handler(async ({ data }: { data: { userId: number; limit?: number; offset?: number } }) => {
     edgeCache(300, 1800);
     return getCachedUserScores("firsts", data.userId, {
@@ -270,7 +270,7 @@ export const getUserScoresFirsts = createServerFn({ method: "GET" })
   });
 
 export const getUserScoresPinned = createServerFn({ method: "GET" })
-  .inputValidator(normalizeScoreListPayload)
+  .validator(normalizeScoreListPayload)
   .handler(async ({ data }: { data: { userId: number; limit?: number; offset?: number } }) => {
     edgeCache(600, 3600);
     return getCachedUserScores("pinned", data.userId, {
@@ -389,7 +389,7 @@ export async function getBeatmapUserScoresAll(
 }
 
 export const getUserBeatmapScores = createServerFn({ method: "GET" })
-  .inputValidator((data: unknown) => {
+  .validator((data: unknown) => {
     const input = asInputRecord(data);
     const beatmapId = Number(input.beatmapId);
     const userId = Number(input.userId);
@@ -406,7 +406,7 @@ export const getUserBeatmapScores = createServerFn({ method: "GET" })
   });
 
 export const getUserScoresBestWindow = createServerFn({ method: "GET" })
-  .inputValidator(normalizeBestWindowPayload)
+  .validator(normalizeBestWindowPayload)
   .handler(async ({ data }: { data: { userId: number; totalLimit?: number; parallel?: boolean } }) => {
     edgeCache(120, 600);
     return fetchUserBestScoresWindow(data.userId, data.totalLimit ?? 200, {
@@ -418,7 +418,7 @@ export const getUserScoresBestWindow = createServerFn({ method: "GET" })
   });
 
 export const getUserProfileInsights = createServerFn({ method: "GET" })
-  .inputValidator(normalizeUserIdPayload)
+  .validator(normalizeUserIdPayload)
   .handler(async ({ data }: { data: { userId: number } }) => {
     edgeCache(1800, 21600);
     const cacheKey = `user-profile-insights:v${USER_PROFILE_INSIGHTS_CACHE_VERSION}:${data.userId}`;

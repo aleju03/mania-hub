@@ -73,7 +73,7 @@ function normalizeIdList(value: unknown, limit: number): number[] {
 // Chart text for one beatmap. Cached-only by default; allowOsuFetch=true lets the
 // live backend hit the osu! API for this one chart (the explicit opt-in path).
 export const getDanClassifierChartFile = createServerFn({ method: "POST" })
-  .inputValidator((data: { beatmapId?: unknown; allowOsuFetch?: unknown }) => ({
+  .validator((data: { beatmapId?: unknown; allowOsuFetch?: unknown }) => ({
     beatmapId: Math.floor(Number(data?.beatmapId)),
     allowOsuFetch: data?.allowOsuFetch === true,
   }))
@@ -99,7 +99,7 @@ export const getDanClassifierChartFile = createServerFn({ method: "POST" })
 
 // Batch cached chart texts for the benchmark tab. Never fetches from osu!.
 export const getDanClassifierChartBatch = createServerFn({ method: "POST" })
-  .inputValidator((data: { ids?: unknown }) => ({
+  .validator((data: { ids?: unknown }) => ({
     ids: normalizeIdList(data?.ids, 50),
   }))
   .handler(async ({ data }): Promise<{ files: Array<{ beatmapId: number; content: string }>; missing: number[] }> => {
@@ -119,7 +119,7 @@ export const getDanClassifierChartBatch = createServerFn({ method: "POST" })
 
 // Set/diff metadata from the live backend's beatmaps/beatmapsets projections.
 export const getDanClassifierSets = createServerFn({ method: "POST" })
-  .inputValidator((data: { beatmapsetIds?: unknown; beatmapIds?: unknown }) => ({
+  .validator((data: { beatmapsetIds?: unknown; beatmapIds?: unknown }) => ({
     beatmapsetIds: normalizeIdList(data?.beatmapsetIds, 100),
     beatmapIds: normalizeIdList(data?.beatmapIds, 400),
   }))
