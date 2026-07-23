@@ -9,6 +9,7 @@ import type { JobQueue } from "../jobs/queue.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { getCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
 import { enqueueChartAnalysisIfNeeded, enqueueMissingChartAnalyses } from "./chart-analysis.js";
+import { isTerminalBeatmapFileError } from "../osu/beatmap-file-errors.js";
 import { addDayKeyDays, getCountryTimezone, getZonedDayKey } from "../shared/country-timezones.js";
 import { getDisplayedAccuracy, getDisplayedRank, getScoreTimestamp, nowIso } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
@@ -470,7 +471,7 @@ export async function computeBeatmapActivitySkillVector(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const failedAt = nowIso();
-    const status = isTerminalActivitySkillAnalysisError(message) ? "unavailable" : "failed";
+    const status = isTerminalBeatmapFileError(message) ? "unavailable" : "failed";
     await exec(
       db,
       `insert into beatmap_skill_vectors
@@ -637,22 +638,10 @@ function shouldSkipActivitySkillAnalysis(row: Record<string, unknown>): boolean 
   const updatedAt = typeof row.updated_at === "string" ? row.updated_at : "";
   if (status === "ready") return true;
   if (status === "unavailable") return true;
-  if (status === "failed" && isTerminalActivitySkillAnalysisError(error)) return true;
+  if (status === "failed" && isTerminalBeatmapFileError(error)) return true;
   if (status === "running" && isRecentActivityAnalysisStatus(updatedAt, ACTIVITY_ANALYSIS_RUNNING_REQUEUE_MS)) return true;
   if (status === "failed" && isRecentActivityAnalysisStatus(updatedAt, ACTIVITY_ANALYSIS_FAILED_RETRY_MS)) return true;
   return false;
-}
-
-function isTerminalActivitySkillAnalysisError(message: string): boolean {
-  if (!message.startsWith("Failed to fetch .osu file for beatmap ")) return false;
-  const separatorIndex = message.indexOf(": ");
-  if (separatorIndex < 0) return false;
-  const sourceErrors = message
-    .slice(separatorIndex + 2)
-    .split(";")
-    .map((part) => part.trim().toLowerCase())
-    .filter(Boolean);
-  return sourceErrors.length > 0 && sourceErrors.every((part) => part.includes("(404)") || part.includes("invalid .osu file"));
 }
 
 async function enqueueActivitySkillAnalysis(queue: JobQueue, beatmapId: number): Promise<void> {

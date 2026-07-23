@@ -3,7 +3,7 @@ import { exec, execBatch, json, variantPpUpdateStatement, type DbStatement } fro
 import { readConfig, type Config } from "../config.js";
 import { getActiveCountryCodes, markCountryRosterRefreshed } from "../countries.js";
 import type { JobQueue } from "../jobs/queue.js";
-import type { OsuApiClient } from "../osu/client.js";
+import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { nowIso } from "../shared/score.js";
 
 type RankingGradeCounts = { ss?: number | null; ssh?: number | null; s?: number | null; sh?: number | null; a?: number | null };
@@ -32,7 +32,29 @@ export async function refreshCountryRoster(db: Db, osu: Pick<OsuApiClient, "getR
   const config = readConfig();
   const rows: RankingRow[] = [];
   for (let page = 1; page <= config.rosterRankingPages && rows.length < config.rosterSize; page++) {
-    const ranking = await osu.getRanking(country, page, caller) as { ranking?: RankingRow[] };
+    let ranking: { ranking?: RankingRow[] };
+    try {
+      ranking = await osu.getRanking(country, page, caller) as { ranking?: RankingRow[] };
+    } catch (error) {
+      // Tiny countries with no ranked mania players (e.g. VA) 404 on the
+      // rankings endpoint. That is a permanent empty result, not a retryable
+      // failure, so stop failing the job and retrying on backoff forever.
+      if (error instanceof OsuApiError && error.status === 404) {
+        // A page-1 404 means "no ranking for this country". Skip the refresh
+        // this cycle and leave the existing roster untouched rather than
+        // wiping it: a transient/spurious 404 on a populated country must not
+        // untrack all its members (the job would complete and never retry,
+        // taking that country's live/ranking surfaces dark for a full refresh
+        // interval). A genuinely-empty country is still cleared through the
+        // normal 200-with-empty-ranking path below.
+        if (page === 1) {
+          await markCountryRosterRefreshed(db, country);
+          return 0;
+        }
+        break;
+      }
+      throw error;
+    }
     const pageRows = ranking.ranking ?? [];
     rows.push(...pageRows);
     if (pageRows.length === 0) break;

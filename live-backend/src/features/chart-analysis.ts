@@ -12,6 +12,7 @@ import { computeNoteBpm } from "../dan/note-bpm.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { readConfig } from "../config.js";
 import { getCachedBeatmapFile, readCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
+import { isTerminalBeatmapFileError } from "../osu/beatmap-file-errors.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { nowIso } from "../shared/score.js";
 import { MSD_SKILLSETS } from "./farm-helper-shape.js";
@@ -232,16 +233,10 @@ export async function computeBeatmapChartAnalysis(
 // 404s and invalid files never heal, so retrying is wasted API budget. Parse
 // failures (non-mania charts the backend parser rejects) are terminal too.
 function isTerminalChartAnalysisError(message: string): boolean {
+  // Parse failures (non-mania charts the backend parser rejects) are terminal
+  // on top of the shared exhausted-.osu-fetch cases.
   if (message.startsWith("Not a mania beatmap") || message.startsWith("Invalid .osu")) return true;
-  if (!message.startsWith("Failed to fetch .osu file for beatmap ")) return false;
-  const separatorIndex = message.indexOf(": ");
-  if (separatorIndex < 0) return false;
-  const sourceErrors = message
-    .slice(separatorIndex + 2)
-    .split(";")
-    .map((part) => part.trim().toLowerCase())
-    .filter(Boolean);
-  return sourceErrors.length > 0 && sourceErrors.every((part) => part.includes("(404)") || part.includes("invalid .osu file"));
+  return isTerminalBeatmapFileError(message);
 }
 
 export async function enqueueChartAnalysisIfNeeded(db: Db, queue: JobQueue, beatmapId: number): Promise<void> {
