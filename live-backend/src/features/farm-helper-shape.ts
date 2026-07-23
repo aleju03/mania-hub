@@ -12,7 +12,9 @@ const PAT_COLUMNS = [
   "pat_stamina", "pat_chordjack", "pat_tech", "pat_ln",
 ] as const;
 // MinaCalc skillsets (excluding Overall), normalized by Overall to capture shape
-// rather than level. 4K only (msd is a 4K MinaCalc output).
+// rather than level. Values exist per keymode (4K on its calc, 6K/7K on
+// theirs); subjects, peers, and charts only ever compare within one keymode,
+// so the per-keymode rulers never mix.
 export const MSD_SKILLSETS = ["Stream", "Jumpstream", "Handstream", "Stamina", "JackSpeed", "Chordjack", "Technical"] as const;
 
 export const SHAPE_MIN_CHARTS = 10;
@@ -21,7 +23,7 @@ export const SHAPE_FLOOR = 0.3;
 export const SHAPE_SPAN = 0.7;
 const SHAPE_NEUTRAL_DEFAULT = 0.65;
 
-// A pattern-mix vector and (4K) normalized MSD vector. Either may be null.
+// A pattern-mix vector and a normalized MSD vector. Either may be null.
 export interface ShapeVectors {
   pat: number[] | null;
   msd: number[] | null;
@@ -35,7 +37,7 @@ export interface UserShape {
   n: number;
 }
 
-// Chart shapes plus the raw (un-normalized) 4K MSD skillset vectors used by the
+// Chart shapes plus the raw (un-normalized) MSD skillset vectors used by the
 // feasibility gate, from one map_search_index pass (one query + one JSON.parse
 // of msd_json per row, shared by both consumers).
 export interface ChartShapeData {
@@ -92,11 +94,10 @@ function readPatVector(row: Record<string, unknown>): number[] | null {
 }
 
 // Raw MSD skillsets plus their Overall-normalized shape, from one msd_json
-// parse. 4K only (msd is a 4K MinaCalc output). `raw` requires every skillset to
-// be finite (the feasibility gate compares absolute values); `normalized` only
-// needs a positive Overall.
+// parse. Any keymode the calc covers (rows without msd_json gate naturally).
+// `raw` requires every skillset to be finite (the feasibility gate compares
+// absolute values); `normalized` only needs a positive Overall.
 function readMsdVectors(row: Record<string, unknown>): { raw: number[] | null; normalized: number[] | null } | null {
-  if (Number(row.key_count) !== 4) return null;
   if (row.msd_json == null) return null;
   const parsed = parseJson<{ values?: Record<string, number> }>(row.msd_json, {});
   const values = parsed?.values;

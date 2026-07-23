@@ -1019,6 +1019,46 @@ describe("farm helper", () => {
     expect(popular.recs.some((rec) => rec.beatmapId === hardDt)).toBe(true);
   });
 
+  it("gates 7K charts on the subject's 7K ratings (an LN main is not fed rice-speed charts)", async () => {
+    const recent = nowIso();
+    // The LN-main shape: pp earned on LN control, ratings low on the speed axes.
+    // A rice-speed chart peers at his pp farm freely must NOT recommend; an
+    // LN chart at the same Overall must.
+    const riceSpeed = 9800; // dominant Stream 30, above the subject's 16 + 3.5
+    const lnChart = 9801; // dominant Stream 16, within reach of the LN main
+    const support = Array.from({ length: 8 }, (_, i) => 9810 + i);
+    const bestScores = [
+      subjectScore(9890, 500, recent, 7, 5),
+      ...support.map((beatmapId, i) => subjectScore(beatmapId, 450 - i * 5, recent, 7, 5)),
+    ];
+    const msd = (stream: number) => ({ Stream: stream, Jumpstream: 10, Handstream: 10, Stamina: 10, JackSpeed: 10, Chordjack: 10, Technical: 10 });
+
+    await insertBeatmapMeta(riceSpeed, 7, 5);
+    await insertBeatmapMeta(lnChart, 7, 5);
+    await insertSearchIndex(riceSpeed, [0, 1, 0, 0, 0, 0, 0, 0], 7, msd(30));
+    await insertSearchIndex(lnChart, [0, 0, 0, 0, 0, 0, 0, 1], 7, msd(16));
+    for (const beatmapId of support) await insertBeatmapMeta(beatmapId, 7, 5);
+
+    for (let i = 0; i < 12; i += 1) {
+      const id = 9820 + i;
+      await insertUser(id, 10_000, "CR", `SevenKPeer${i}`);
+      await insertFarmed("CR", id, riceSpeed, 500, recent);
+      await insertFarmed("CR", id, lnChart, 500, recent);
+      for (const beatmapId of support) await insertFarmed("CR", id, beatmapId, 400, recent);
+    }
+    // LN-earned rating vector: strong Overall, thin on the speed skillsets.
+    await seedSubjectSkillRatings(SUBJECT_ID, 7, { ...msd(16), Overall: 24 }, 50);
+    const osu = makeOsuStub(bestScores, 10_000, { "7k": 3000 });
+
+    const gain = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "7k" }, stubQueue);
+    expect(gain.recs.some((rec) => rec.beatmapId === lnChart)).toBe(true);
+    expect(gain.recs.some((rec) => rec.beatmapId === riceSpeed)).toBe(false);
+
+    // Popular still browses the out-of-reach chart (the gate is gain-only).
+    const popular = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "7k", view: "popular" }, stubQueue);
+    expect(popular.recs.some((rec) => rec.beatmapId === riceSpeed)).toBe(true);
+  });
+
   it("computes key-mode peer distance on mode pp, not identical total pp", async () => {
     const recent = nowIso();
     const targetBeatmap = 90;
