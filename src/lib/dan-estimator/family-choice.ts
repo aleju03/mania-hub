@@ -433,8 +433,17 @@ const FAMILY_CHOICE_RULES: DanFamilyChoiceRule[] = [
   },
 ];
 
+// True chordjack re-hits columns on consecutive chords (overlap 0.5+); the
+// raw chordjack score is density-driven and a dense bracket/jumpstream file
+// can carry the top score with overlap ~0.1, so below this floor the family
+// is ineligible outright and drops out of the ranking entirely (leaving its
+// inflated score in place would suppress the legitimate families' rules).
+const CHORDJACK_MIN_CHORD_OVERLAP = 0.25;
+
 export function chooseSkillFamily(skillScores: Record<DanSkillFamily, number>, metrics: DanFeatureMetrics): DanFamilyChoiceResult {
+  const chordjackEligible = metrics.chordColumnOverlapRatio >= CHORDJACK_MIN_CHORD_OVERLAP;
   const ranked = RATING_FAMILIES
+    .filter((family) => chordjackEligible || family !== "chordjack")
     .map((family) => [family, skillScores[family]] as [DanPrimaryFamily, number])
     .sort((a, b) => b[1] - a[1]);
   const [topFamily, topScore] = ranked[0];
@@ -449,6 +458,7 @@ export function chooseSkillFamily(skillScores: Record<DanSkillFamily, number>, m
   });
 
   for (const rule of FAMILY_CHOICE_RULES) {
+    if (!chordjackEligible && rule.family === "chordjack") continue;
     if (rule.applies({ metrics, skillScores, topScore })) {
       return choose(rule.family, rule.id);
     }

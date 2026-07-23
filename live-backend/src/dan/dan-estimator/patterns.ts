@@ -292,9 +292,15 @@ export function analyzeManiaPatterns(
     pressure(chordRatio, metrics.keyCount >= 6 ? 0.14 : 0.24, metrics.keyCount >= 6 ? 0.5 : 0.58),
     pressure(metrics.sustainedNps10s, metrics.keyCount >= 6 ? 6 : 11, metrics.keyCount >= 6 ? 17 : 25),
   );
+  // Chord density alone is not chordjack: dense 7K bracket/jumpstream files
+  // carry chordRatio 0.8+ with almost no consecutive-chord column re-hits.
+  // The overlap gate demands actual chord-jack repetition (~0.1 on bracket
+  // files vs 0.5-0.97 on true CJ; the 0.18-0.4 ramp sits in the empty band
+  // between the two populations).
+  const chordOverlapGate = pressure(metrics.chordColumnOverlapRatio, 0.18, 0.4);
   const chordjackBase = Math.max(
-    minGate(pressure(chordRatio, 0.28, 0.64), pressure(metrics.chordjackPressure, 70, 185)),
-    minGate(pressure(chordRatio, 0.36, 0.72), pressure(metrics.jackPressure, 80, 180)),
+    minGate(pressure(chordRatio, 0.28, 0.64), pressure(metrics.chordjackPressure, 70, 185), chordOverlapGate),
+    minGate(pressure(chordRatio, 0.36, 0.72), pressure(metrics.jackPressure, 80, 180), chordOverlapGate),
   );
   const techScore = Math.max(
     minGate(pressure(metrics.techPressure, 3.5, 8.5), pressure(metrics.rowPatternChangeRate, 0.34, 0.66)),

@@ -24,6 +24,7 @@ const vertexBetaMidChordProfile: DanFeatureMetrics = {
   streamPressure: 4.367,
   jumpstreamPressure: 18,
   chordjackPressure: 171.727,
+  chordColumnOverlapRatio: 0.52,
   techPressure: 9.012,
   rowBurstPressure: 12.5,
   fastRowRatio: 0.17,

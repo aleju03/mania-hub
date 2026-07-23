@@ -14,7 +14,10 @@ import { addDayKeyDays, getCountryTimezone, getZonedDayKey } from "../shared/cou
 import { getDisplayedAccuracy, getDisplayedRank, getScoreTimestamp, nowIso } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
 
-export const ACTIVITY_SKILL_ANALYSIS_VERSION = 4;
+// v5: chordjack requires actual chord-column repetition (chordColumnOverlapRatio
+// gate in the family choice + pattern scorer), so dense 7K bracket/jumpstream
+// files stop minting "chordjack" primaries.
+export const ACTIVITY_SKILL_ANALYSIS_VERSION = 5;
 
 const ACTIVITY_SESSION_GAP_MS = 45 * 60_000;
 const ACTIVITY_DAY_DETAIL_MAP_LIMIT = 500;
