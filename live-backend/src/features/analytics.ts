@@ -50,6 +50,7 @@ export interface AnalyticsEventRecord {
 }
 
 export interface AnalyticsFeedEvent {
+  eventId: string | null;
   timestamp: string;
   event: string;
   path: string;
@@ -161,6 +162,7 @@ export function normalizeAnalyticsEvent(
     ? { ...(raw.properties as Record<string, unknown>) }
     : {};
   delete properties.distinct_id;
+  properties.$insert_id = asTrimmedString(properties.$insert_id, 64) ?? randomUUID();
   const distinctId = asTrimmedString(raw.distinct_id, 64)
     ?? asTrimmedString((raw.properties as Record<string, unknown> | undefined)?.distinct_id, 64)
     ?? "unknown";
@@ -191,7 +193,7 @@ function propsJsonFor(record: AnalyticsEventRecord): string {
   if (serialized.length <= MAX_PROPS_JSON_CHARS) return serialized;
   // Oversized property bags lose everything but the columns already extracted;
   // better a lean row than an unbounded blob in the events table.
-  return json({ _truncated: true });
+  return json({ _truncated: true, $insert_id: record.properties.$insert_id });
 }
 
 export class AnalyticsStore {
@@ -410,6 +412,7 @@ export class AnalyticsStore {
       return text ? text : null;
     };
     return {
+      eventId: str("$insert_id"),
       timestamp: this.timeLabel(record.ts),
       event: record.event,
       path: record.path ?? "",

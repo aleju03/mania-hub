@@ -33,6 +33,7 @@ export function trackServerEvent(
 ): void {
   if (typeof window !== "undefined") return;
 
+  const eventId = crypto.randomUUID();
   const payload = {
     api_key: process.env.VITE_POSTHOG_KEY,
     event,
@@ -41,6 +42,7 @@ export function trackServerEvent(
     properties: {
       $lib: "mania-hub-server",
       ...properties,
+      $insert_id: eventId,
     },
   };
 

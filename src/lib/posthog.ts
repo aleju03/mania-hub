@@ -67,6 +67,7 @@ export function track(event: string, properties?: Record<string, unknown>) {
   if (typeof window === "undefined") return;
   if (isAdminAnalyticsInspection()) return;
   const distinctId = getVisitorId();
+  const eventId = crypto.randomUUID();
   // api_key is only meaningful to the PostHog leg of the /api/sync dual-write;
   // capture must keep flowing to the in-house store without it.
   const payload = {
@@ -79,6 +80,7 @@ export function track(event: string, properties?: Record<string, unknown>) {
       ...superProperties,
       ...properties,
       distinct_id: distinctId,
+      $insert_id: eventId,
     },
   };
   const body = JSON.stringify(payload);

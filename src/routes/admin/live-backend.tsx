@@ -22,6 +22,11 @@ import {
 import { formatNumber, formatTimeAgo } from "../../lib/format";
 import { COUNTRY_OPTIONS, getCountryName } from "../../lib/country";
 import { CountryFlag } from "../../components/ui/CountryFlag";
+import {
+  prependPendingAnalyticsEvent,
+  reconcileAnalyticsRecentEvents,
+  type PendingAnalyticsRecentEvent,
+} from "../../lib/analytics-recent";
 
 type ConnectionState = "idle" | "connecting" | "open" | "error";
 type StatusTone = "good" | "warn" | "bad" | "neutral";
@@ -192,6 +197,7 @@ interface AnalyticsTopRouteRow {
 type AnalyticsDeviceKind = "mobile" | "desktop" | "unknown";
 
 interface AnalyticsRecentEventRow {
+  eventId: string | null;
   timestamp: string;
   event: string;
   path: string;
@@ -599,7 +605,7 @@ async function fetchAnalyticsMonitorDataFromPostHog({
     ),
     runQuery(
       "recent activity",
-      `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id, properties.maps_tab, properties.rankings_page, properties.profile_username, properties.replay_player, properties.replay_score_id, properties.$screen_width, properties.$viewport_width, properties.$current_url, properties.farm_helper_user, properties.pack_type, properties.pack_username, properties.farm_map_title, properties.farm_map_user, properties.viewer_username, properties.maps_query, properties.maps_filters, properties.maps_sort, properties.maps_collection, properties.maps_page, properties.maps_beatmap_id FROM events WHERE timestamp > ${since} AND distinct_id != 'server'${recentRealVisitorClause}${recentCountryClause} AND (properties.$pathname IS NULL OR properties.$pathname NOT LIKE '/admin/%') AND NOT (event = '$pageview' AND properties.$pathname = '/') ORDER BY timestamp DESC LIMIT ${ANALYTICS_RECENT_EVENTS_LIMIT}`,
+      `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id, properties.maps_tab, properties.rankings_page, properties.profile_username, properties.replay_player, properties.replay_score_id, properties.$screen_width, properties.$viewport_width, properties.$current_url, properties.farm_helper_user, properties.pack_type, properties.pack_username, properties.farm_map_title, properties.farm_map_user, properties.viewer_username, properties.maps_query, properties.maps_filters, properties.maps_sort, properties.maps_collection, properties.maps_page, properties.maps_beatmap_id, properties.$insert_id FROM events WHERE timestamp > ${since} AND distinct_id != 'server'${recentRealVisitorClause}${recentCountryClause} AND (properties.$pathname IS NULL OR properties.$pathname NOT LIKE '/admin/%') AND NOT (event = '$pageview' AND properties.$pathname = '/') ORDER BY timestamp DESC LIMIT ${ANALYTICS_RECENT_EVENTS_LIMIT}`,
     ),
     runQuery(
       "physical countries",
@@ -655,6 +661,7 @@ async function fetchAnalyticsMonitorDataFromPostHog({
       count: Number(row[1] ?? 0),
     })),
     recentEvents: recent.map((row) => ({
+      eventId: row[26] ? String(row[26]) : null,
       timestamp: String(row[0] ?? ""),
       event: String(row[1] ?? ""),
       path: String(row[2] ?? ""),
@@ -1380,6 +1387,7 @@ function AnalyticsMonitorPanel() {
   const mountedRef = useRef(true);
   const requestIdRef = useRef(0);
   const hasLoadedRef = useRef(false);
+  const pendingRecentEventsRef = useRef<Array<PendingAnalyticsRecentEvent<AnalyticsRecentEventRow>>>([]);
   // Read by the SSE handler so a country-filter change doesn't tear down the
   // stream just to change which events get prepended.
   const recentCountryRef = useRef(recentCountry);
@@ -1404,7 +1412,21 @@ function AnalyticsMonitorPanel() {
         const result = await getAnalyticsMonitorData({ data: { rangeHours: targetRange, recentCountry: targetRecentCountry } });
         if (!mountedRef.current) return;
         if (requestId !== requestIdRef.current) return;
-        setData(result);
+        const reconciledResult = result.source === "live"
+          ? (() => {
+            const reconciled = reconcileAnalyticsRecentEvents({
+              snapshot: result.recentEvents,
+              pending: pendingRecentEventsRef.current,
+              country: targetRecentCountry,
+              now: Date.now(),
+              limit: ANALYTICS_RECENT_EVENTS_LIMIT,
+            });
+            pendingRecentEventsRef.current = reconciled.pending;
+            return { ...result, recentEvents: reconciled.rows };
+          })()
+          : result;
+        if (result.source !== "live") pendingRecentEventsRef.current = [];
+        setData(reconciledResult);
         setDataRange(targetRange);
         setDataRecentCountry(targetRecentCountry);
         setError(null);
@@ -1471,9 +1493,9 @@ function AnalyticsMonitorPanel() {
   }, [hydrated, autoRefresh, range, recentCountry, load, data?.source]);
 
   // Realtime feed: once the in-house store is answering, stream every accepted
-  // event into the recent-activity card the moment it's captured. The polling
-  // loop above still refreshes the aggregates; a poll's wholesale setData
-  // already contains anything streamed earlier, so the two never duplicate.
+  // event into the recent-activity card the moment it's captured. Polling still
+  // refreshes aggregates, while unconfirmed live rows remain overlaid until a
+  // durable snapshot returns the same event ID.
   const liveFeedWanted = hydrated && autoRefresh && data?.source === "live";
   useEffect(() => {
     if (!liveFeedWanted) return;
@@ -1515,10 +1537,17 @@ function AnalyticsMonitorPanel() {
         } catch {
           return;
         }
+        pendingRecentEventsRef.current = prependPendingAnalyticsEvent(
+          pendingRecentEventsRef.current,
+          row,
+          Date.now(),
+          ANALYTICS_RECENT_EVENTS_LIMIT,
+        );
         const countryFilter = recentCountryRef.current;
         if (countryFilter && row.country !== countryFilter) return;
         setData((prev) => {
           if (!prev || prev.source !== "live") return prev;
+          if (row.eventId && prev.recentEvents.some((entry) => entry.eventId === row.eventId)) return prev;
           return {
             ...prev,
             recentEvents: [row, ...prev.recentEvents].slice(0, ANALYTICS_RECENT_EVENTS_LIMIT),

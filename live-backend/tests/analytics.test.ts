@@ -61,6 +61,7 @@ describe("normalizeAnalyticsEvent", () => {
     expect(record!.selectedCountry).toBe("CR");
     expect(record!.viewerUsername).toBe("someone");
     expect(record!.screenWidth).toBe(1920);
+    expect(record!.properties.$insert_id).toEqual(expect.any(String));
   });
 
   it("rejects garbage and missing event names", () => {
@@ -138,6 +139,7 @@ describe("AnalyticsStore capture + monitor", () => {
     expect(event.mapsTab).toBe("farmed");
     expect(event.deviceKind).toBe("desktop");
     expect(event.timestamp).toBeTruthy();
+    expect(event.eventId).toEqual(expect.any(String));
   });
 
   it("applies the recent-feed country filter", async () => {
@@ -248,6 +250,19 @@ describe("AnalyticsStore realtime", () => {
     store.capture(pageview({ distinctId: "after" }), {});
     expect(seen).toHaveLength(1);
     expect(seen[0]).toMatchObject({ event: "$pageview", path: "/maps", country: "CR", mapsQuery: "jack" });
+  });
+
+  it("uses the same event ID for the immediate feed row and persisted snapshot", async () => {
+    let liveEventId: string | null = null;
+    const unsubscribe = store.subscribe((record) => {
+      liveEventId = store.buildFeedEvent(record).eventId;
+    });
+    store.capture(pageview({ distinctId: "human", path: "/maps" }), { geoCountry: "CR" });
+    unsubscribe();
+
+    const data = await store.getMonitorData({ rangeHours: 24, now: NOW });
+    expect(liveEventId).toEqual(expect.any(String));
+    expect(data.recentEvents[0]?.eventId).toBe(liveEventId);
   });
 
   it("issues and validates expiring live tickets", () => {
