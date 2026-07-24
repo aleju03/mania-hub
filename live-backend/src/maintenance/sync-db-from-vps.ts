@@ -20,6 +20,7 @@ interface Options {
   fresh: boolean;
   compressSnapshot: boolean;
   keepRemoteSnapshots: number;
+  keepLocalBackups: number;
 }
 
 interface RemoteCandidate {
@@ -49,15 +50,15 @@ const localDbPath = resolveLocalDbPath(options);
 const localSidecars = [localDbPath, `${localDbPath}-wal`, `${localDbPath}-shm`];
 
 if (options.dryRun && options.fresh) {
-  console.log(`Would create a fresh snapshot of the live DB on ${options.remote} (sqlite3 VACUUM INTO${options.compressSnapshot ? " + zstd" : ""}), download it, and replace ${localDbPath}.`);
-  console.log(`Would then prune remote online-* snapshots, keeping the newest ${options.keepRemoteSnapshots}.`);
+  console.log(`Would prune remote online-* snapshots down to ${Math.max(0, options.keepRemoteSnapshots - 1)}, then create a fresh snapshot of the live DB on ${options.remote} (sqlite3 VACUUM INTO${options.compressSnapshot ? " + zstd" : ""}), download it, and replace ${localDbPath}.`);
+  console.log(`Would end with the newest ${options.keepRemoteSnapshots} remote snapshot(s)${options.backupLocal ? ` and the newest ${options.keepLocalBackups} local backup(s)` : ""}.`);
   process.exit(0);
 }
 
 const remoteBackup = options.remoteBackup
   ? await resolveRemotePath(options.remote, options.remoteBackup)
   : options.fresh
-    ? await createRemoteSnapshot(options)
+    ? await createFreshRemoteSnapshot(options)
     : await findLatestRemoteBackup(options);
 
 console.log(`Remote: ${options.remote}`);
@@ -104,8 +105,16 @@ try {
   await replaceLocalDatabase(preparedPath, localDbPath);
   console.log("Local live-backend database updated.");
 
+  // Each safety backup is a full copy of a multi-GB database, so retention is
+  // enforced the moment a new one lands rather than left to the operator.
+  if (options.backupLocal) {
+    await pruneLocalBackups(localDbPath, options.keepLocalBackups);
+  }
+
   if (options.fresh) {
-    await pruneRemoteSnapshots(options);
+    // The pre-snapshot prune already made room; this is the idempotent backstop
+    // that drops the snapshot we just superseded.
+    await pruneRemoteSnapshots(options, options.keepRemoteSnapshots);
   }
 
   if (!options.keepDownload) {
@@ -133,6 +142,7 @@ function parseOptions(args: string[]): Options {
     fresh: false,
     compressSnapshot: true,
     keepRemoteSnapshots: 2,
+    keepLocalBackups: 2,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -182,6 +192,14 @@ function parseOptions(args: string[]): Options {
         options.keepRemoteSnapshots = value;
         break;
       }
+      case "--keep-local": {
+        const value = Number(readValue(args, ++index, arg));
+        if (!Number.isInteger(value) || value < 1) {
+          throw new Error("--keep-local requires an integer >= 1.");
+        }
+        options.keepLocalBackups = value;
+        break;
+      }
       case "--help":
       case "-h":
         printUsage();
@@ -209,8 +227,9 @@ function printUsage(): void {
 Options:
   --fresh                Create a fresh snapshot of the live DB on the VPS first (sqlite3 VACUUM INTO,
                          which stays consistent while the backend writes and compacts free pages),
-                         then download that instead of the newest pre-existing backup. After a
-                         successful sync, remote online-* snapshots are pruned (see --keep-remote).
+                         then download that instead of the newest pre-existing backup. Older
+                         online-* snapshots are pruned before the new one is created, so a run that
+                         fails cannot leave them piling up (see --keep-remote).
   --no-compress          With --fresh, skip zstd compression of the remote snapshot.
   --keep-remote N        With --fresh, how many online-* snapshots to keep on the VPS. Default: 2.
   --dry-run              Show the remote backup that would be used.
@@ -222,6 +241,7 @@ Options:
   --force                Replace even if lsof reports the local DB is open.
   --keep-download        Keep the downloaded backup in the temp sync folder.
   --backup-local         Copy current local DB files before replacing them.
+  --keep-local N         With --backup-local, how many local backup folders to keep. Default: 2.
   --skip-quick-check     Skip SQLite pragma quick_check validation.
 `);
 }
@@ -254,6 +274,16 @@ async function resolveRemotePath(remote: string, path: string): Promise<RemoteCa
   };
 }
 
+// Prune before the snapshot, not after the sync: the old code only pruned once
+// the download had been validated and installed, so every failed run left a
+// full-size online-* dir behind and N failures meant N snapshots on a disk that
+// has room for about two. Freeing first also gives the VACUUM the space it
+// needs instead of making it compete with the copies it is about to replace.
+async function createFreshRemoteSnapshot(options: Options): Promise<RemoteCandidate> {
+  await pruneRemoteSnapshots(options, Math.max(0, options.keepRemoteSnapshots - 1));
+  return createRemoteSnapshot(options);
+}
+
 async function createRemoteSnapshot(options: Options): Promise<RemoteCandidate> {
   const command = [
     "set -eu",
@@ -261,6 +291,15 @@ async function createRemoteSnapshot(options: Options): Promise<RemoteCandidate> 
     "db=\"$root/data/mania-hub-live.db\"",
     "[ -f \"$db\" ] || { echo \"Remote live DB not found: $db\" >&2; exit 2; }",
     "command -v sqlite3 >/dev/null 2>&1 || { echo \"sqlite3 is required on the VPS to create a fresh snapshot.\" >&2; exit 2; }",
+    // VACUUM INTO writes a second full copy of the DB, and zstd --rm briefly
+    // holds the plain copy and the .zst at once. Failing here is a clean abort;
+    // filling the VPS disk mid-snapshot takes the live backend down with it.
+    "size=$(stat -c %s \"$db\")",
+    "avail=$(df -Pk \"$root/data\" 2>/dev/null | awk 'NR==2{print $4}')",
+    "if [ -n \"$avail\" ] && [ \"$((avail * 1024))\" -lt \"$((size + size / 10))\" ]; then",
+    "  echo \"Not enough free space on the VPS for a snapshot: $((avail / 1024)) MiB available under $root/data, need about $(((size + size / 10) / 1048576)) MiB.\" >&2",
+    "  exit 2",
+    "fi",
     "stamp=$(date -u +%Y%m%d-%H%M%S)",
     "dir=\"$root/data/backups/online-$stamp\"",
     "mkdir -p \"$dir\"",
@@ -300,12 +339,12 @@ async function createRemoteSnapshot(options: Options): Promise<RemoteCandidate> 
   };
 }
 
-async function pruneRemoteSnapshots(options: Options): Promise<void> {
+async function pruneRemoteSnapshots(options: Options, keep: number): Promise<void> {
   const command = [
     "set -eu",
     `root=${shellPath(options.remoteDir)}`,
     "cd \"$root/data/backups\" 2>/dev/null || exit 0",
-    "ls -1d online-* 2>/dev/null | sort -r | tail -n +" + (options.keepRemoteSnapshots + 1) + " | while read -r name; do",
+    "ls -1d online-* 2>/dev/null | sort -r | tail -n +" + (keep + 1) + " | while read -r name; do",
     "  rm -rf -- \"./$name\"",
     "  echo \"$name\"",
     "done",
@@ -313,7 +352,23 @@ async function pruneRemoteSnapshots(options: Options): Promise<void> {
   const result = await runCapture("ssh", [options.remote, command], [0]);
   const pruned = result.stdout.trim().split("\n").filter(Boolean);
   if (pruned.length > 0) {
-    console.log(`Pruned ${pruned.length} old remote snapshot(s): ${pruned.join(", ")} (keeping the newest ${options.keepRemoteSnapshots}).`);
+    console.log(`Pruned ${pruned.length} old remote snapshot(s): ${pruned.join(", ")} (keeping the newest ${keep}).`);
+  }
+}
+
+async function pruneLocalBackups(localDbPath: string, keep: number): Promise<void> {
+  const root = join(dirname(localDbPath), LOCAL_BACKUP_DIR_NAME);
+  const entries = await readdir(root, { withFileTypes: true }).catch(() => null);
+  if (!entries) return;
+  // The directory names are ISO timestamps with the colons swapped out, so
+  // lexicographic order is chronological order.
+  const dirs = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+  const stale = dirs.slice(0, Math.max(0, dirs.length - keep));
+  for (const name of stale) {
+    await rm(join(root, name), { force: true, recursive: true }).catch(() => undefined);
+  }
+  if (stale.length > 0) {
+    console.log(`Pruned ${stale.length} old local backup(s) from ${root} (keeping the newest ${keep}).`);
   }
 }
 

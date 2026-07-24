@@ -1,3 +1,6 @@
+import { stat, statfs } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, resolve } from "node:path";
 import { readConfig } from "../config.js";
 import { createDb, exec, json, migrate } from "../db.js";
 import { compactCountryMapsSnapshots } from "../features/maps.js";
@@ -11,12 +14,27 @@ import type { CountryTopPlay, OscScore } from "../shared/types.js";
 interface CompactOptions {
   batchSize: number;
   vacuum: boolean;
+  force: boolean;
 }
 
+// Declared up here because the boot sequence below runs before any const later
+// in the file is initialised (see assertVacuumHeadroom for what they mean).
+const VACUUM_HEADROOM_FACTOR = 1.15;
+const TMPFS_MAGIC = 0x01021994;
+
 const options = readOptions(process.argv.slice(2));
-const db = await createDb(readConfig());
+const config = readConfig();
+const db = await createDb(config);
 
 await migrate(db);
+
+// Checked up front rather than at the VACUUM itself: the compaction passes
+// below take the better part of an hour on a multi-GB database and free pages
+// inside the file without shrinking it, so the answer is the same either way
+// and refusing at the end would waste the whole run.
+if (options.vacuum) {
+  await assertVacuumHeadroom(config.databaseUrl, options.force);
+}
 
 const farmed = await compactMapsFarmedOverlay(options.batchSize);
 console.log(`country_maps_farmed_scores: compacted ${farmed.compacted}, failed ${farmed.failed}, scanned ${farmed.scanned}`);
@@ -476,11 +494,62 @@ function getScoreUrl(score: OscScore): string | null {
   return `https://osu.ppy.sh/scores/${score.beatmap?.mode ?? "mania"}/${score.id}`;
 }
 
+// VACUUM rebuilds the whole database into a second copy before swapping it in,
+// so it needs the file's size over again — once where SQLite puts its temp
+// database, and once in the data directory. SQLite picks the temp location from
+// SQLITE_TMPDIR, TMPDIR, /var/tmp, /usr/tmp, /tmp, then the cwd, and on hosts
+// where /tmp is a RAM-backed tmpfs that copy would land in memory, so the
+// recommended invocation pins SQLITE_TMPDIR at the data directory.
+async function assertVacuumHeadroom(databaseUrl: string, force: boolean): Promise<void> {
+  if (!databaseUrl.startsWith("file:")) return;
+  const dbPath = resolve(databaseUrl.slice("file:".length));
+  const dbBytes = await stat(dbPath).then((stats) => stats.size).catch(() => null);
+  if (dbBytes == null) return;
+
+  const required = Math.ceil(dbBytes * VACUUM_HEADROOM_FACTOR);
+  const dataDir = dirname(dbPath);
+  const tempDir = process.env.SQLITE_TMPDIR || process.env.TMPDIR || tmpdir();
+  const problems: string[] = [];
+  for (const target of [...new Set([dataDir, tempDir])]) {
+    const stats = await statfs(target).catch(() => null);
+    if (!stats) continue;
+    const free = Number(stats.bavail) * Number(stats.bsize);
+    if (free < required) {
+      problems.push(`  ${target}: ${formatBytes(free)} free, needs ${formatBytes(required)}`);
+    }
+    if (target === tempDir && Number(stats.type) === TMPFS_MAGIC) {
+      console.warn(`Warning: ${tempDir} is a RAM-backed tmpfs and SQLite would build the ${formatBytes(dbBytes)} temp database there.`);
+    }
+  }
+
+  if (problems.length === 0) return;
+  console.error(`Not enough free space to VACUUM ${dbPath} (${formatBytes(dbBytes)}):\n${problems.join("\n")}`);
+  console.error(`Free some space, or rerun with SQLITE_TMPDIR=${dataDir} so the rebuild stays on the database's own filesystem.`);
+  if (!force) {
+    console.error("Refusing to VACUUM. Pass --force to run anyway.");
+    process.exit(1);
+  }
+  console.warn("--force was passed, continuing anyway.");
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return "unknown size";
+  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
 function readOptions(args: string[]): CompactOptions {
   const batchArg = args.find((arg) => arg.startsWith("--batch-size="));
   const batchSize = Math.max(1, Math.min(5_000, Number(batchArg?.slice("--batch-size=".length) ?? 500)));
   return {
     batchSize: Number.isFinite(batchSize) ? batchSize : 500,
     vacuum: args.includes("--vacuum"),
+    force: args.includes("--force"),
   };
 }

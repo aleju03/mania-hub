@@ -1,5 +1,5 @@
-import { stat, rm } from "node:fs/promises";
-import { resolve } from "node:path";
+import { readdir, stat, statfs, rm } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import { Worker } from "node:worker_threads";
 import type { Config } from "./config.js";
 import type { Db } from "./db.js";
@@ -73,7 +73,20 @@ export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | 
   // reclaim disk when the DB is over its hard cap.
   Object.assign(results, emergency);
   await Promise.allSettled(oldReplayVideoJobs.map((id) => rm(resolve(config.replayVideoWorkDir, id), { recursive: true, force: true })));
-  logInfo("retention_complete", results);
+  // The hourly tick is the only thing that reliably runs on the box, so it
+  // doubles as the disk alarm: the DB cap alone cannot catch backups, the
+  // analytics DB or logs filling the same filesystem.
+  const disk = await getDbDiskUsage(config);
+  if (disk && disk.level !== "ok") {
+    logWarn("disk_usage_high", {
+      path: disk.path,
+      level: disk.level,
+      used_pct: disk.usedPct,
+      free_bytes: disk.freeBytes,
+      total_bytes: disk.totalBytes,
+    });
+  }
+  logInfo("retention_complete", { ...results, ...(disk ? { disk_used_pct: disk.usedPct } : {}) });
   return results;
 }
 
@@ -116,6 +129,177 @@ export async function getLocalDbStorage(config: Pick<Config, "databaseUrl" | "ma
     targetBytes: Math.min(config.targetLocalDbBytes, config.maxLocalDbBytes),
     overLimit: filePath != null && totalBytes > config.maxLocalDbBytes,
   };
+}
+
+// Disk pressure is measured for the whole filesystem the database lives on, not
+// just the DB file: the WAL, the analytics DB, snapshots and the journal all
+// share it, so an over-limit DB is only one of several ways to run out of room.
+const DISK_WARN_PCT = 70;
+const DISK_CRITICAL_PCT = 85;
+
+export interface DiskUsage {
+  path: string;
+  totalBytes: number;
+  usedBytes: number;
+  freeBytes: number;
+  usedPct: number;
+  warnPct: number;
+  criticalPct: number;
+  level: "ok" | "warn" | "critical";
+}
+
+export interface StorageFootprint {
+  db: number | null;
+  dbWal: number | null;
+  dbShm: number | null;
+  analytics: number | null;
+  analyticsWal: number | null;
+  backups: number | null;
+  replayVideoWork: number | null;
+}
+
+// Follows df rather than raw block counts: the blocks a filesystem reserves for
+// root count as neither used nor available, so this percentage matches what an
+// operator reads off the box (and the thresholds they set there).
+export async function getDiskUsage(path: string): Promise<DiskUsage | null> {
+  const stats = await statfs(path).catch(() => null);
+  if (!stats) return null;
+  const blockSize = Number(stats.bsize);
+  const blocks = Number(stats.blocks);
+  if (!(blockSize > 0) || !(blocks > 0)) return null;
+  const usedBytes = (blocks - Number(stats.bfree)) * blockSize;
+  const freeBytes = Number(stats.bavail) * blockSize;
+  const capacity = usedBytes + freeBytes;
+  const usedPct = capacity > 0 ? Math.round((usedBytes / capacity) * 1000) / 10 : 0;
+  return {
+    path,
+    totalBytes: blocks * blockSize,
+    usedBytes,
+    freeBytes,
+    usedPct,
+    warnPct: DISK_WARN_PCT,
+    criticalPct: DISK_CRITICAL_PCT,
+    level: usedPct >= DISK_CRITICAL_PCT ? "critical" : usedPct >= DISK_WARN_PCT ? "warn" : "ok",
+  };
+}
+
+// The filesystem holding the database, which is the one that matters: a remote
+// database has no local disk to run out of, hence the null.
+export async function getDbDiskUsage(config: Pick<Config, "databaseUrl">): Promise<DiskUsage | null> {
+  const filePath = localDbFilePath(config.databaseUrl);
+  return filePath ? getDiskUsage(dirname(filePath)) : null;
+}
+
+// Where the disk actually went, per path. Callers hand over whatever slice of
+// the config they hold and optional fields may genuinely be missing at runtime,
+// so every path is derived defensively; a null means "not configured or absent"
+// (an absent replay-video work dir is the signal that it stayed disabled).
+export async function getStorageFootprint(
+  config: Pick<Config, "databaseUrl"> & Partial<Pick<Config, "analyticsDatabaseUrl" | "replayVideoWorkDir">>,
+): Promise<StorageFootprint> {
+  const dbPath = localDbFilePath(config.databaseUrl);
+  const analyticsPath = localDbFilePath(config.analyticsDatabaseUrl);
+  const backupsDir = dbPath ? join(dirname(dbPath), BACKUPS_DIR_NAME) : null;
+  const workDir = config.replayVideoWorkDir ? resolve(config.replayVideoWorkDir) : null;
+  const [db, dbWal, dbShm, analytics, analyticsWal, backups, replayVideoWork] = await Promise.all([
+    optionalFileSize(dbPath),
+    optionalFileSize(dbPath && `${dbPath}-wal`),
+    optionalFileSize(dbPath && `${dbPath}-shm`),
+    optionalFileSize(analyticsPath),
+    optionalFileSize(analyticsPath && `${analyticsPath}-wal`),
+    optionalDirSize(backupsDir),
+    optionalDirSize(workDir),
+  ]);
+  return { db, dbWal, dbShm, analytics, analyticsWal, backups, replayVideoWork };
+}
+
+// Index-building migrations can transiently need a large multiple of the table
+// they cover, and a half-applied migration on a full disk is worse than a
+// refused boot. The warn floor stays non-fatal on purpose: the worker restarts
+// on failure and would crash-loop, taking the server role down with it through
+// waitForSchema. Below the hard floor writes fail anyway, so failing loudly
+// there is the honest outcome.
+const MIGRATION_WARN_FREE_BYTES = 2 * 1024 * 1024 * 1024;
+const MIGRATION_MIN_FREE_BYTES = 256 * 1024 * 1024;
+
+export async function assertMigrationDiskHeadroom(config: Pick<Config, "databaseUrl">): Promise<void> {
+  const disk = await getDbDiskUsage(config);
+  if (!disk) return;
+  if (disk.freeBytes < MIGRATION_MIN_FREE_BYTES) {
+    throw new Error(
+      `Refusing to migrate: only ${mib(disk.freeBytes)} MiB free on ${disk.path}, need at least ${mib(MIGRATION_MIN_FREE_BYTES)} MiB.`,
+    );
+  }
+  if (disk.freeBytes < MIGRATION_WARN_FREE_BYTES) {
+    logWarn("migration_disk_headroom_low", {
+      path: disk.path,
+      free_bytes: disk.freeBytes,
+      used_pct: disk.usedPct,
+      warn_free_bytes: MIGRATION_WARN_FREE_BYTES,
+      min_free_bytes: MIGRATION_MIN_FREE_BYTES,
+    });
+  }
+}
+
+function mib(bytes: number): number {
+  return Math.round(bytes / (1024 * 1024));
+}
+
+const BACKUPS_DIR_NAME = "backups";
+// A directory walk is not free and the status body is rebuilt on every admin
+// poll, so the walk is both bounded and memoised. The real layout is a handful
+// of `backups/online-<stamp>/<file>` entries; the bounds only exist so a
+// surprise (an unpruned tree, a work dir full of frames) cannot turn an admin
+// page into a filesystem crawl.
+const DIR_WALK_MAX_DEPTH = 3;
+const DIR_WALK_MAX_ENTRIES = 2_000;
+const DIR_SIZE_TTL_MS = 60_000;
+
+const dirSizeCache = new Map<string, { at: number; bytes: number | null }>();
+
+async function cachedDirSize(path: string): Promise<number | null> {
+  const nowMs = Date.now();
+  const cached = dirSizeCache.get(path);
+  if (cached && nowMs - cached.at < DIR_SIZE_TTL_MS) return cached.bytes;
+  const bytes = await dirSize(path);
+  dirSizeCache.set(path, { at: nowMs, bytes });
+  return bytes;
+}
+
+async function dirSize(root: string): Promise<number | null> {
+  let total = 0;
+  let seen = 0;
+  const queue: Array<{ dir: string; depth: number }> = [{ dir: root, depth: 0 }];
+  while (queue.length > 0 && seen < DIR_WALK_MAX_ENTRIES) {
+    const next = queue.shift();
+    if (!next) break;
+    const entries = await readdir(next.dir, { withFileTypes: true }).catch(() => null);
+    if (!entries) {
+      // The root being unreadable means "there is nothing here", which is a
+      // different answer from "there is nothing in it".
+      if (next.dir === root) return null;
+      continue;
+    }
+    for (const entry of entries) {
+      if (seen >= DIR_WALK_MAX_ENTRIES) break;
+      seen += 1;
+      const child = join(next.dir, entry.name);
+      if (entry.isDirectory()) {
+        if (next.depth < DIR_WALK_MAX_DEPTH) queue.push({ dir: child, depth: next.depth + 1 });
+      } else if (entry.isFile()) {
+        total += (await fileSize(child)) ?? 0;
+      }
+    }
+  }
+  return total;
+}
+
+async function optionalFileSize(path: string | null): Promise<number | null> {
+  return path ? fileSize(path) : null;
+}
+
+async function optionalDirSize(path: string | null): Promise<number | null> {
+  return path ? cachedDirSize(path) : null;
 }
 
 export interface StorageBreakdown {
@@ -482,8 +666,10 @@ async function checkpointLocalDb(db: Db, mode: "PASSIVE" | "TRUNCATE" = "PASSIVE
   await exec(db, `pragma wal_checkpoint(${mode})`).catch(() => undefined);
 }
 
-function localDbFilePath(databaseUrl: string): string | null {
-  if (!databaseUrl.startsWith("file:")) return null;
+// Optional config slices reach here with the URL missing, so an absent value is
+// treated the same as a non-local database: there is no file to measure.
+function localDbFilePath(databaseUrl: string | undefined): string | null {
+  if (!databaseUrl?.startsWith("file:")) return null;
   const rawPath = databaseUrl.slice("file:".length);
   if (!rawPath || rawPath === ":memory:") return null;
   return resolve(rawPath);
