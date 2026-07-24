@@ -14,6 +14,7 @@ import { LiveEventLog } from "../src/live/event-log.js";
 const mapsFeatureCalls = vi.hoisted(() => ({
   pages: [] as unknown[][],
   snapshots: [] as unknown[][],
+  draws: [] as unknown[][],
 }));
 
 vi.mock("../src/features/maps.js", async (importOriginal) => {
@@ -28,6 +29,10 @@ vi.mock("../src/features/maps.js", async (importOriginal) => {
       mapsFeatureCalls.snapshots.push(args);
       return actual.getMapsSnapshot(...args);
     },
+    getMapsRandomDraw: (...args: Parameters<typeof actual.getMapsRandomDraw>) => {
+      mapsFeatureCalls.draws.push(args);
+      return actual.getMapsRandomDraw(...args);
+    },
   };
 });
 
@@ -39,6 +44,7 @@ let events: LiveEventLog;
 beforeEach(async () => {
   mapsFeatureCalls.pages.length = 0;
   mapsFeatureCalls.snapshots.length = 0;
+  mapsFeatureCalls.draws.length = 0;
   dir = await mkdtemp(join(tmpdir(), "mania-discord-showcase-"));
   db = await createDb({ databaseUrl: `file:${join(dir, "test.db")}` });
   await migrate(db);
@@ -129,11 +135,13 @@ describe("getDiscordShowcase build stampede protection", () => {
 });
 
 describe("/api/discord/showcase", () => {
-  it("serves GLOBAL fresh requests without the full core maps hydrate", async () => {
+  it("serves GLOBAL fresh requests without reading a maps snapshot payload", async () => {
     // A stale GLOBAL maps row with an unparseable payload: the bounded
     // farmed-page read degrades to an empty maps section instead of failing
-    // the showcase. Feature-call instrumentation below is the regression
-    // guard that proves this route never invokes the core snapshot path.
+    // the showcase, and the random-favourite preview is drawn from the
+    // normalized favourite tables (none seeded here, so it comes back null).
+    // Feature-call instrumentation below is the regression guard that proves
+    // this route never invokes the whole-snapshot path at all.
     const staleRefreshedAt = "2020-01-01T00:00:00.000Z";
     await exec(
       db,
@@ -163,8 +171,14 @@ describe("/api/discord/showcase", () => {
       && (args[4] as { tab?: string; pageSize?: number } | undefined)?.tab === "farmed"
       && (args[4] as { pageSize?: number } | undefined)?.pageSize === 48
     )).toBe(true);
-    expect(mapsFeatureCalls.snapshots.some((args) =>
-      args[2] === "GLOBAL" && (args[4] ?? "core") === "core"
-    )).toBe(false);
+    // getMapsSnapshot is the whole-payload read (both its "core" and its
+    // "random" section); the showcase reaches neither.
+    expect(mapsFeatureCalls.snapshots).toEqual([]);
+    // The random-favourite preview goes through the seeded draw instead, so a
+    // rebuild keeps picking the same map.
+    expect(mapsFeatureCalls.draws.some((args) => {
+      const query = args[4] as { count?: number; seed?: string } | undefined;
+      return args[2] === "GLOBAL" && (query?.count ?? 0) > 0 && query?.seed === "fav:GLOBAL";
+    })).toBe(true);
   });
 });

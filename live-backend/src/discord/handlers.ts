@@ -10,7 +10,7 @@ import { getTopPlaysSnapshot } from "../features/top-plays.js";
 import { getFarmHelperSnapshot, FarmHelperUserNotFoundError, type FarmHelperKeyMode } from "../features/farm-helper.js";
 import { readFarmHelperKeyStatsForUsers, type FarmHelperKeyStat } from "../features/farm-helper-key-stats.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
-import { getMapsRandomBeatmapsets, getMapsSnapshot } from "../features/maps.js";
+import { getMapsRandomDraw, getMapsSnapshot, mapsRandomDrawQuery } from "../features/maps.js";
 import { getTrackerSnapshot } from "../features/tracker.js";
 import { getPlayerActivitySnapshot } from "../features/activity.js";
 import { listUserGoalsWithProgress } from "../features/goals.js";
@@ -861,26 +861,10 @@ const randomFarmHandler: CommandHandler = async (deps, interaction) => {
   }
 };
 
-// The favourites/random pool is a heavy multi-thousand-row hydration (GLOBAL
-// ships tens of thousands of sets). Cache it briefly so rerolls and back-to-back
-// /randomfav calls reuse it instead of re-reading (and re-blocking the libsql
-// event loop) each time.
-type RandomFavPool = Awaited<ReturnType<typeof getMapsSnapshot>>["value"];
-const randomFavPoolCache = new Map<string, { at: number; value: RandomFavPool }>();
-const RANDOM_FAV_POOL_TTL_MS = 60_000;
-
-async function loadRandomFavPool(deps: HandlerDeps, country: string): Promise<RandomFavPool> {
-  const now = Date.now();
-  const cached = randomFavPoolCache.get(country);
-  if (cached && now - cached.at < RANDOM_FAV_POOL_TTL_MS) return cached.value;
-  const snapshot = await getMapsSnapshot(deps.db, deps.queue, country, MAPS_MAX_AGE_MS, "random");
-  randomFavPoolCache.set(country, { at: now, value: snapshot.value });
-  if (randomFavPoolCache.size > 8) {
-    const oldest = randomFavPoolCache.keys().next().value;
-    if (oldest !== undefined) randomFavPoolCache.delete(oldest);
-  }
-  return snapshot.value;
-}
+// Only the first hydrated pick is shown; the rest are spares for sets that
+// cannot be rendered. Batch size costs nothing on the draw itself, which is
+// dominated by scanning the eligible pool.
+const RANDOM_FAV_DRAW_BATCH = 4;
 
 const randomFavHandler: CommandHandler = async (deps, interaction) => {
   const country = resolveCountry(deps, stringOption(interaction, "country"), true);
@@ -889,44 +873,41 @@ const randomFavHandler: CommandHandler = async (deps, interaction) => {
   const pattern = stringOption(interaction, "pattern");
   const starsMin = numberOption(interaction, "stars_min");
   const starsMax = numberOption(interaction, "stars_max");
-  const patternMatches = pattern ? RANDOM_PATTERN_MATCHES[pattern] ?? null : null;
   try {
-    const data = await loadRandomFavPool(deps, country);
-    if (!data || !data.favouritesByPlayer?.length || !data.beatmapsetsPool) {
+    // SQLite samples eligible (player, favourited set) pairs and only those
+    // pairs are hydrated. Sampling pairs uniformly makes each favourite equally
+    // likely, mirroring the Maps random tab and surfacing widely-favourited
+    // sets more often as a side-effect. The batch is a few wide because a set
+    // whose beatmap rows have been pruned cannot be rendered and is dropped
+    // during hydration; taking the first survivor keeps the pick uniform.
+    const snapshot = await getMapsRandomDraw(deps.db, deps.queue, country, MAPS_MAX_AGE_MS, mapsRandomDrawQuery({
+      count: RANDOM_FAV_DRAW_BATCH,
+      // The command's filters are single-choice includes; "any" and an
+      // unrecognized pattern mean "do not filter", as they did before.
+      status: status ? [status] : [],
+      keys: keysRaw === "4k" || keysRaw === "7k" ? [keysRaw] : [],
+      patterns: pattern ? RANDOM_PATTERN_MATCHES[pattern] ?? [] : [],
+      starMin: starsMin ?? 0,
+      starMax: starsMax ?? 0,
+    }));
+    if (!snapshot.value) {
       return noticeBody(`Favourite maps for ${countryLabel(country)} are still generating, try again shortly.`);
     }
-    // One eligible row per (player, favourited set): sampling a row uniformly
-    // makes each favourite equally likely, mirroring the Maps random tab and
-    // surfacing widely-favourited sets more often as a side-effect.
-    const rows: Array<{ playerName: string; setId: number }> = [];
-    const scopeFavCounts = new Map<number, number>();
-    for (const player of data.favouritesByPlayer) {
-      for (const setId of player.beatmapsetIds) {
-        const set = data.beatmapsetsPool[setId];
-        if (!set) continue;
-        scopeFavCounts.set(setId, (scopeFavCounts.get(setId) ?? 0) + 1);
-        if (status && statusBucket(set.status) !== status) continue;
-        const keys = set.maniaKeys ?? [];
-        if (keysRaw === "4k" && !keys.some((k) => Math.round(k) === 4)) continue;
-        if (keysRaw === "7k" && !keys.some((k) => Math.round(k) === 7)) continue;
-        if (patternMatches && !(set.patterns ?? []).some((p) => patternMatches.includes(p))) continue;
-        if (starsMin != null && (set.starMax ?? 0) < starsMin) continue;
-        if (starsMax != null && (set.starMin ?? Number.MAX_VALUE) > starsMax) continue;
-        rows.push({ playerName: player.username, setId });
-      }
-    }
-    if (rows.length === 0) return noticeBody(randomEmptyNotice(country));
-    const pick = rows[Math.floor(Math.random() * rows.length)];
-    // The random pool ships without covers/difficulties; fetch the full set for
-    // art, falling back to the lean record if the read comes back empty.
-    const lean = data.beatmapsetsPool[pick.setId];
-    const full = (await getMapsRandomBeatmapsets(deps.db, [pick.setId]).catch(() => []))[0] ?? lean;
+    const pick = snapshot.value.picks[0];
+    if (!pick) return noticeBody(randomEmptyNotice(country));
     const params = {
       country, keys: keysRaw ?? "", status: status ?? "", pattern: pattern ?? "",
       stars_min: numStr(starsMin), stars_max: numStr(starsMax),
     };
     return withNavRow(
-      randomFavEmbed(full, pick.playerName, scopeFavCounts.get(pick.setId) ?? 1, country, deps.config.discordSiteOrigin),
+      randomFavEmbed(
+        pick.beatmapset,
+        pick.player.username,
+        // The drawn player is one of them, so the count is never below 1.
+        Math.max(1, pick.scopeFavCount),
+        country,
+        deps.config.discordSiteOrigin,
+      ),
       rerollRow("randomfav", params),
     );
   } catch (error) {

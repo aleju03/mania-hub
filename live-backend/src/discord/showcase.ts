@@ -33,7 +33,7 @@ import { getPlayerProfileSnapshot, getPlayerRecentScores } from "../features/pla
 import { getCountryRankingsSnapshot, getGlobalRankingsSnapshot } from "../features/global-rankings.js";
 import { getTopPlaysSnapshot } from "../features/top-plays.js";
 import { getTrackerSnapshot } from "../features/tracker.js";
-import { getMapsPageSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, type MapsPageValue } from "../features/maps.js";
+import { getMapsPageSnapshot, getMapsRandomDraw, mapsRandomDrawQuery, type MapsPageValue } from "../features/maps.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
 import { getPlayerActivitySnapshot } from "../features/activity.js";
 import { getMyDataSummary } from "../features/my-data.js";
@@ -886,37 +886,27 @@ async function buildVs(db: Db, a: ShowcasePlayer, b: ShowcasePlayer): Promise<{ 
   return { title: `${a.username} • ${b.username}`, rows, gap };
 }
 
-// Sample one favourited set from the random pool, plus who favourited it, in the
-// same uniform-over-(player, set) way the /randomfav handler does.
+// Sample one favourited set, plus who favourited it, exactly the way the
+// /randomfav handler does: SQLite draws one eligible (player, set) pair and
+// only that pair is hydrated, so the preview never materialises the country's
+// favourite pool. Uniform-over-pairs already leans popular (a set favourited by
+// fifty players is fifty times likelier than one favourited by one), so the
+// example still reads as a recognisable map rather than an obscure one.
+//
+// The seed makes the draw deterministic per scope: this preview is cached and
+// rebuilt on a timer, and a fresh roll on every rebuild would make the page
+// flicker. The batch is a few wide only because a set whose beatmap rows have
+// been pruned cannot be rendered and is dropped during hydration.
+const RANDOM_FAV_DRAW_BATCH = 4;
+
 async function buildRandomFav(db: Db, queue: JobQueue, country: string): Promise<ShowcaseRandomFav | null> {
-  const snapshot = await getMapsSnapshot(db, queue, country, MAPS_MAX_AGE_MS, "random");
-  const data = snapshot.value;
-  if (!data?.favouritesByPlayer?.length || !data.beatmapsetsPool) return null;
-  // Count favourites per set (GLOBAL ships tens of thousands of rows, so tally
-  // counts directly rather than materialising one row per (player, set)).
-  const favCounts = new Map<number, number>();
-  const firstFavBy = new Map<number, string>();
-  for (const playerFavs of data.favouritesByPlayer) {
-    for (const setId of playerFavs.beatmapsetIds) {
-      if (!data.beatmapsetsPool[setId]) continue;
-      favCounts.set(setId, (favCounts.get(setId) ?? 0) + 1);
-      if (!firstFavBy.has(setId)) firstFavBy.set(setId, playerFavs.username);
-    }
-  }
-  if (favCounts.size === 0) return null;
-  // Deterministic pick so the cached preview is stable, but a deeper one than the
-  // single most-favourited set (which is always the obvious classic) so the
-  // example reads as a real reroll. Rank by fav count desc, setId as a stable
-  // tiebreak, then take a popular-but-not-#1 entry.
-  const rankedFavs = [...favCounts.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]);
-  const picked = pickDeeperEntry(rankedFavs, `fav:${country}`, 8, 18) ?? rankedFavs[0];
-  const pickSetId = picked[0];
-  const pickCount = picked[1];
-  // The random pool ships lean (no covers/patterns); fetch the full set for art
-  // and pattern tags, exactly like the /randomfav handler, falling back to lean.
-  const lean = data.beatmapsetsPool[pickSetId];
-  const set = (await getMapsRandomBeatmapsets(db, [pickSetId]).catch(() => []))[0] ?? lean;
-  if (!set) return null;
+  const snapshot = await getMapsRandomDraw(db, queue, country, MAPS_MAX_AGE_MS, mapsRandomDrawQuery({
+    count: RANDOM_FAV_DRAW_BATCH,
+    seed: `fav:${country}`,
+  }));
+  const pick = snapshot.value?.picks[0];
+  if (!pick) return null;
+  const set = pick.beatmapset;
   const keys = [...new Set((set.maniaKeys ?? []).map((k) => `${Math.round(k)}K`))];
   const patterns = (set.patterns ?? []).slice(0, 4).map(patternLabel);
   const lo = set.starMin;
@@ -932,8 +922,9 @@ async function buildRandomFav(db: Db, queue: JobQueue, country: string): Promise
     bpm: set.bpm != null ? NUMBER.format(Math.round(set.bpm)) : "-",
     globalFavs: NUMBER.format(set.globalFavouriteCount ?? 0),
     patterns: patterns.length ? patterns.join(", ") : "-",
-    pickedBy: firstFavBy.get(pickSetId) ?? "a player",
-    others: Math.max(0, pickCount - 1),
+    pickedBy: pick.player.username || "a player",
+    // The drawn player is one of the favouriters, so "and N others" excludes them.
+    others: Math.max(0, pick.scopeFavCount - 1),
     cover: bestCover(set.covers),
   };
 }
