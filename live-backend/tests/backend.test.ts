@@ -6325,7 +6325,7 @@ describe("live backend", () => {
     expect(row?.status).toBe("failed");
     expect(row?.error).toContain("disabled");
     const pending = await exec(db, "select count(*) as count from jobs where status = 'pending'");
-    expect(Number((pending.rows[0] as { count: number }).count)).toBe(0);
+    expect(Number(pending.rows[0]?.count ?? -1)).toBe(0);
   });
 
   it("rejects replay video uploads before buffering oversized bodies", async () => {
