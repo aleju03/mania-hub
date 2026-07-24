@@ -219,6 +219,8 @@ interface RendererOptions {
   skinSettings?: ReplaySkinSettings;
   overlaySettings?: ReplayOverlaySettings;
   onOverlaySettingsChange?: (settings: ReplayOverlaySettings) => void;
+  onContextLost?: () => void;
+  onContextRestored?: () => void;
 }
 
 interface Layout {
@@ -348,6 +350,13 @@ export class ManiaReplayRenderer {
   private skinSettings: ReplaySkinSettings = DEFAULT_REPLAY_SKIN_SETTINGS;
   private overlaySettings: ReplayOverlaySettings = DEFAULT_REPLAY_OVERLAY_SETTINGS;
   private onOverlaySettingsChange: ((settings: ReplayOverlaySettings) => void) | null = null;
+  private onContextLost: (() => void) | null = null;
+  private onContextRestored: (() => void) | null = null;
+  private handleContextLost: ((event: Event) => void) | null = null;
+  private handleContextRestored: (() => void) | null = null;
+  // Wall-clock cost of the synchronous judgement simulation done in the
+  // constructor; surfaced to crash diagnostics to catch main-thread hangs.
+  private judgementBuildMs: number | null = null;
   private overlayHitboxes: ReplayOverlayHitbox[] = [];
   private selectedOverlayIds = new Set<ReplayOverlayId>();
   private activeOverlayPointers = new Map<number, { id: ReplayOverlayId; x: number; y: number }>();
@@ -540,6 +549,8 @@ export class ManiaReplayRenderer {
     this.skinSettings = normalizeReplaySkinSettings(options?.skinSettings);
     this.overlaySettings = normalizeReplayOverlaySettings(options?.overlaySettings);
     this.onOverlaySettingsChange = options?.onOverlaySettingsChange ?? null;
+    this.onContextLost = options?.onContextLost ?? null;
+    this.onContextRestored = options?.onContextRestored ?? null;
     this.updateSkinCache();
     // Constant Speed removes every BPM/SV-driven scroll change; the renderer's
     // base scroll is already constant-time, so dropping the SVs is the mod.
@@ -558,6 +569,7 @@ export class ManiaReplayRenderer {
       if (n.isHold) this.maxHoldDuration = Math.max(this.maxHoldDuration, n.endTime - n.time);
     }
 
+    const judgementBuildStart = typeof performance !== "undefined" ? performance.now() : 0;
     this.segments = buildReplaySegments(this.frames, this.keyCount, this.totalDuration);
     const simulated = simulateManiaReplayJudgements(
       this.notes,
@@ -571,6 +583,18 @@ export class ManiaReplayRenderer {
         speedMultiplier: this.ruleset.speedMultiplier,
       },
     );
+    if (typeof performance !== "undefined") {
+      this.judgementBuildMs = performance.now() - judgementBuildStart;
+      // These loops run synchronously on the main thread; a multi-second run can
+      // hang the tab into a "page unresponsive" kill. Flag it so we can catch
+      // pathological charts and consider moving the work off-thread.
+      if (this.judgementBuildMs > 1500) {
+        console.warn(
+          `[replay] slow judgement build: ${Math.round(this.judgementBuildMs)}ms ` +
+            `(${this.notes.length} notes, ${this.frames.length} frames)`,
+        );
+      }
+    }
     const rawStableComboEvents = this.ruleset.accuracyMode === "stable"
       ? buildStableReplayComboEvents(this.notes, simulated.noteStates)
       : null;
@@ -639,6 +663,22 @@ export class ManiaReplayRenderer {
     }
 
     this.app = app;
+    // A GPU driver reset / VRAM pressure fires webglcontextlost; without
+    // preventDefault the browser never restores the context (hard failure).
+    // preventDefault opts into restoration and lets us record the event for
+    // crash diagnostics.
+    this.handleContextLost = (event: Event) => {
+      event.preventDefault();
+      this.pause();
+      console.error("[replay] WebGL context lost");
+      this.onContextLost?.();
+    };
+    this.handleContextRestored = () => {
+      console.warn("[replay] WebGL context restored");
+      this.onContextRestored?.();
+    };
+    this.canvas.addEventListener("webglcontextlost", this.handleContextLost);
+    this.canvas.addEventListener("webglcontextrestored", this.handleContextRestored);
     app.stage.addChild(this.backgroundLayer);
     app.stage.addChild(this.staticGraphics);
     app.stage.addChild(this.graphics);
@@ -4560,10 +4600,25 @@ export class ManiaReplayRenderer {
     }
   }
 
+  getDiagnostics(): { rendererBackend: string; judgementBuildMs: number | null } {
+    return {
+      rendererBackend: this.app ? formatPixiRendererType(this.app.renderer.type, this.app.renderer.name) : "uninitialized",
+      judgementBuildMs: this.judgementBuildMs,
+    };
+  }
+
   destroy() {
     this.pause();
     this.destroyed = true;
     this.canvas.style.visibility = "hidden";
+    if (this.handleContextLost) {
+      this.canvas.removeEventListener("webglcontextlost", this.handleContextLost);
+      this.handleContextLost = null;
+    }
+    if (this.handleContextRestored) {
+      this.canvas.removeEventListener("webglcontextrestored", this.handleContextRestored);
+      this.handleContextRestored = null;
+    }
     this.removeOverlayPointerHandlers();
     this.previousBackgroundImage = null;
     this.backgroundTransitionStartedAt = 0;

@@ -778,7 +778,7 @@ interface FarmRec {
 }
 
 export function farmEmbed(
-  snapshot: { username: string; userId: number; pp: number; keyMode: string; recs: FarmRec[] },
+  snapshot: { username: string; userId: number; pp: number; keyMode: string; gainBasis?: string; recs: FarmRec[] },
   siteOrigin: string,
 ): DiscordMessageBody {
   const list = snapshot.recs.slice(0, 8);
@@ -794,7 +794,13 @@ export function farmEmbed(
     description: lines.length
       ? `**Farm picks**\n${lines.join("\n")}`
       : "No farm recommendations available right now.",
-    footer: { text: `${snapshot.keyMode.toUpperCase()} • ${BOT_NAME}` },
+    footer: {
+      // A keymode-scoped run measures gain in that keymode's variant pp, not
+      // overall profile pp; say so next to the scope tag.
+      text: snapshot.gainBasis === "keymode" && snapshot.keyMode !== "any"
+        ? `${snapshot.keyMode.toUpperCase()} • gains in ${snapshot.keyMode.toUpperCase()} pp • ${BOT_NAME}`
+        : `${snapshot.keyMode.toUpperCase()} • ${BOT_NAME}`,
+    },
   };
   return {
     embeds: [embed],

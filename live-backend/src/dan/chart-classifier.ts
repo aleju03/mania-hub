@@ -134,6 +134,29 @@ function tableLabelForBase(base: string): string {
   return base.replace(/^(Regular|LN)\s+/, "").replace(/^\S+\s+LN\s+/, "").toLowerCase();
 }
 
+/**
+ * Label a rawDan that lives on a leoblack interval-table scale (6K/7K rice
+ * and LN verdicts store rawDan as the table's 0-indexed level, e.g. 7K
+ * Gamma = 11). The table's own level names ARE those communities' ladders
+ * ("Regular 7" -> "7", "LN Gamma" -> "gamma"); the 4K greek ladder never
+ * applies outside 4K, so labeling these from parseDan misnames everything
+ * past 10th. Returns null when no table covers the keymode/side.
+ */
+export function danTableLabelFor(rawDan: number, side: "rc" | "ln", keyCount: number): string | null {
+  const tables = DAN_INDEX[keyCount];
+  const table = tables ? (side === "ln" ? tables.LN.default : tables.RC.default) : undefined;
+  if (!table) return null;
+  const levels = tableLevels(table);
+  if (levels.length === 0) return null;
+  const level = Math.min(levels[levels.length - 1].level, Math.max(levels[0].level, Math.round(rawDan)));
+  const entry = levels.find((candidate) => candidate.level === level);
+  if (!entry) return null;
+  const offset = Math.max(-0.5, Math.min(0.5, rawDan - level));
+  // parseDan's variant thresholds, so 4K and 6K/7K dan chips read alike.
+  const variant = offset <= -0.45 ? "--" : offset <= -0.25 ? "-" : offset < 0.1 ? null : offset < 0.26 ? "+" : "++";
+  return `${tableLabelForBase(entry.base)}${variant ?? ""}`;
+}
+
 function parseTableHalf(text: string, table: DanIntervalTable): ParsedDanPart | null {
   let boundary: ParsedDanPart["boundary"] = null;
   let body = text.trim();

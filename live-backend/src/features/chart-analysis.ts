@@ -12,6 +12,7 @@ import { computeNoteBpm } from "../dan/note-bpm.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { readConfig } from "../config.js";
 import { getCachedBeatmapFile, readCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
+import { isTerminalBeatmapFileError } from "../osu/beatmap-file-errors.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { nowIso } from "../shared/score.js";
 import { MSD_SKILLSETS } from "./farm-helper-shape.js";
@@ -232,16 +233,10 @@ export async function computeBeatmapChartAnalysis(
 // 404s and invalid files never heal, so retrying is wasted API budget. Parse
 // failures (non-mania charts the backend parser rejects) are terminal too.
 function isTerminalChartAnalysisError(message: string): boolean {
+  // Parse failures (non-mania charts the backend parser rejects) are terminal
+  // on top of the shared exhausted-.osu-fetch cases.
   if (message.startsWith("Not a mania beatmap") || message.startsWith("Invalid .osu")) return true;
-  if (!message.startsWith("Failed to fetch .osu file for beatmap ")) return false;
-  const separatorIndex = message.indexOf(": ");
-  if (separatorIndex < 0) return false;
-  const sourceErrors = message
-    .slice(separatorIndex + 2)
-    .split(";")
-    .map((part) => part.trim().toLowerCase())
-    .filter(Boolean);
-  return sourceErrors.length > 0 && sourceErrors.every((part) => part.includes("(404)") || part.includes("invalid .osu file"));
+  return isTerminalBeatmapFileError(message);
 }
 
 export async function enqueueChartAnalysisIfNeeded(db: Db, queue: JobQueue, beatmapId: number): Promise<void> {
@@ -1121,6 +1116,115 @@ async function enqueueLnSubtypeRecompute(queue: JobQueue, cursor: number): Promi
   await queue.enqueue(
     LN_SUBTYPE_RECOMPUTE_JOB,
     `${LN_SUBTYPE_RECOMPUTE_JOB}:${cursor}`,
+    { cursor },
+    { priority: -10, replaceDone: true },
+  );
+}
+
+// One-shot sweep re-checking stored chordjack-tagged verdicts against the
+// column-overlap-gated analyzer: dense bracket/jumpstream files used to mint
+// chordjack tags off chord density alone. Same playbook as the LN subtype
+// sweep - re-run the analyzer from the cached .osu, and where the verdict
+// changed, enqueue a full re-analysis so the stored row and its search-index
+// entry re-mint. Charts never tagged chordjack cannot lose or gain a tag from
+// this change (the gate only ever lowers the chordjack family scores), so the
+// LIKE filter bounds the scan to the affected rows.
+export const CHORDJACK_TAG_RECOMPUTE_JOB = "recompute_chordjack_tag_sweep";
+const CHORDJACK_TAG_META_KEY = "chordjack_tag_recompute_done:v1";
+const CHORDJACK_TAG_CHUNK = 50;
+
+export interface ChordjackTagChunkResult {
+  nextCursor: number;
+  scanned: number;
+  changed: number[];
+  done: boolean;
+}
+
+export async function recomputeChordjackTagChunk(
+  db: Db,
+  cursor: number,
+  limit = CHORDJACK_TAG_CHUNK,
+): Promise<ChordjackTagChunkResult> {
+  const rows = (await exec(
+    db,
+    `select beatmap_id, classification_json
+     from beatmap_chart_analysis
+     where analysis_version = ? and status = 'ready'
+       and classification_json like '%"chordjack"%'
+       and beatmap_id > ?
+     order by beatmap_id
+     limit ?`,
+    [CHART_ANALYSIS_VERSION, Math.max(0, Math.floor(cursor)), Math.max(1, Math.floor(limit))],
+  )).rows;
+
+  let nextCursor = cursor;
+  const changed: number[] = [];
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    nextCursor = Math.max(nextCursor, beatmapId);
+    const stored = parseJson<Pick<LeanChartClassification, "category" | "patterns"> | null>(row.classification_json, null);
+    if (!stored) continue;
+    const osuText = await readCachedBeatmapFile(db, beatmapId).catch(() => null);
+    if (!osuText) continue;
+    try {
+      const map = parseManiaBeatmap(osuText);
+      // Same analyzer inputs the full analysis job uses, so a matching verdict
+      // here means re-analysis would store the same tags.
+      const analysis = analyzeManiaPatterns(map, {
+        totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
+        version: map.version,
+      });
+      const storedTags = [...new Set((stored.patterns ?? []).map((hit) => String(hit?.id ?? "")))].sort();
+      const freshTags = [...new Set(analysis.patterns.map((hit) => hit.id))].sort();
+      const storedCategory = stored.category ?? null;
+      const freshCategory = analysis.primary?.label ?? null;
+      if (storedTags.join(",") !== freshTags.join(",") || storedCategory !== freshCategory) {
+        changed.push(beatmapId);
+      }
+    } catch {
+      // A chart the analyzer rejects keeps its stored verdict; the full
+      // analysis job would fail the same way.
+    }
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+
+  return { nextCursor, scanned: rows.length, changed, done: rows.length < limit };
+}
+
+export async function ensureChordjackTagRecomputeSeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [CHORDJACK_TAG_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [CHORDJACK_TAG_RECOMPUTE_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueueChordjackTagRecompute(queue, 0);
+}
+
+export async function runChordjackTagRecomputeJob(db: Db, queue: JobQueue, payload: { cursor?: number } | undefined): Promise<void> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const result = await recomputeChordjackTagChunk(db, cursor);
+  // Each re-analysis upserts its own search-index row on completion, so the
+  // refreshed tags reach /maps without a full index rebuild.
+  for (const beatmapId of result.changed) await enqueueChartAnalysis(queue, beatmapId);
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [CHORDJACK_TAG_META_KEY, json({ finishedAt: now }), now],
+    );
+    return;
+  }
+  await enqueueChordjackTagRecompute(queue, result.nextCursor);
+}
+
+async function enqueueChordjackTagRecompute(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    CHORDJACK_TAG_RECOMPUTE_JOB,
+    `${CHORDJACK_TAG_RECOMPUTE_JOB}:${cursor}`,
     { cursor },
     { priority: -10, replaceDone: true },
   );

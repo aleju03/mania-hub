@@ -117,6 +117,11 @@ export interface PlayerSkillAxisPercentile {
 
 export interface PublicPlayerSkillMode extends PlayerSkillModeBreakdown {
   percentiles?: Record<string, PlayerSkillAxisPercentile>;
+  // Thin evidence base: fewer analyzed plays than the population baseline
+  // requires of its own members (BASELINE_MIN_PLAYS). Ratings for such a
+  // keymode are served shrunk hard toward the population median and should
+  // read as rough estimates, not standings.
+  provisional?: boolean;
 }
 
 export interface PublicPlayerSkillBreakdown extends PlayerSkillBreakdown {
@@ -653,6 +658,42 @@ function percentileAxes(keyCount: number, ratings: Record<string, number>): stri
   return axes.filter((axis) => axis === "Overall" || axis.startsWith("pattern:"));
 }
 
+// Evidence-weighted display shrink: aggregateSsrs is an absolute erfc fold,
+// so a handful of all-killer plays converges near their own SSR level while a
+// deep stack settles at what the player sustains - a 9-play 4K pool can
+// outrank a 228-play 7K main. Served ratings therefore shrink toward the
+// population median with the empirical-Bayes weight n/(n+k): thin pools
+// become mostly prior, deep stacks stay essentially untouched. One-sided by
+// design - a thin pool's bias is always upward (every play in it is a peak),
+// so the shrink may lower a rating but never gifts one to a below-median
+// pool. Display-layer only: stored ratings, farm-helper gating, and the
+// percentile comparison (raw approx vs raw population) keep unshrunk values.
+const RATING_SHRINK_K = 12;
+
+function shrinkRating(value: number, plays: number, median: number | undefined): number {
+  if (!(value > 0) || !(median != null && median > 0)) return value;
+  const weight = Math.max(0, plays) / (Math.max(0, plays) + RATING_SHRINK_K);
+  return Math.min(value, Math.round((value * weight + median * (1 - weight)) * 100) / 100);
+}
+
+function curveMedian(axisCurves: Record<string, { count: number; curve: number[] }> | undefined, axis: string): number | undefined {
+  const curve = axisCurves?.[axis]?.curve;
+  if (!curve || curve.length === 0) return undefined;
+  return curve[Math.floor((curve.length - 1) / 2)];
+}
+
+function shrinkMode(mode: PublicPlayerSkillMode, curves: BaselineCurves): PublicPlayerSkillMode {
+  const axisCurves = curves.curves[String(mode.keyCount)];
+  const ratings: Record<string, number> = {};
+  for (const [axis, value] of Object.entries(mode.ratings)) {
+    ratings[axis] = shrinkRating(Number(value), mode.analyzedPlays, curveMedian(axisCurves, axis));
+  }
+  const patterns = (mode.patterns ?? [])
+    .map((entry) => ({ ...entry, rating: shrinkRating(entry.rating, entry.plays, curveMedian(axisCurves, `pattern:${entry.id}`)) }))
+    .sort((a, b) => b.rating - a.rating);
+  return { ...mode, ratings, patterns };
+}
+
 /**
  * Decorate an exact skill breakdown with population percentiles: the
  * subject's own approximate ratings (recomputed from their stored per-play
@@ -665,10 +706,16 @@ export async function decoratePlayerSkillBreakdown(
   userId: number,
   breakdown: PlayerSkillBreakdown,
 ): Promise<PublicPlayerSkillBreakdown> {
-  const base: PublicPlayerSkillBreakdown = { ...breakdown, modes: breakdown.modes as PublicPlayerSkillMode[], baseline: null };
+  // Thin keymodes are flagged even before any baseline exists: the evidence
+  // count is the mode's own datum.
+  const marked: PublicPlayerSkillMode[] = breakdown.modes.map((mode) =>
+    mode.analyzedPlays < BASELINE_MIN_PLAYS ? { ...mode, provisional: true } : { ...mode },
+  );
+  const base: PublicPlayerSkillBreakdown = { ...breakdown, modes: marked, baseline: null };
   if (breakdown.status !== "ready" || breakdown.modes.length === 0) return base;
   const curves = await readBaselineCurves(db);
   if (!curves) return base;
+  base.modes = marked.map((mode) => shrinkMode(mode, curves));
 
   const playsRow = (await exec(
     db,
@@ -696,10 +743,14 @@ export async function decoratePlayerSkillBreakdown(
   const charts = await loadBaselineChartEntries(db, plays.map((play) => play.beatmapId));
   const approxByKeyCount = computeApproxRatings(plays, charts, { gamma: curves.gamma, accSlope: curves.accSlope });
 
-  const modes: PublicPlayerSkillMode[] = breakdown.modes.map((mode) => {
+  const modes: PublicPlayerSkillMode[] = base.modes.map((mode) => {
     const axisCurves = curves.curves[String(mode.keyCount)];
     const approx = approxByKeyCount.get(mode.keyCount);
     if (!axisCurves || !approx) return { ...mode };
+    // The population only admits users with minPlays+ rated plays; a subject
+    // below that floor gets no percentile - "top 1%" from a 9-play pool is
+    // precision the evidence does not carry.
+    if (approx.analyzedPlays < Math.max(1, Number(curves.minPlays) || 0)) return { ...mode };
     const percentiles: Record<string, PlayerSkillAxisPercentile> = {};
     for (const axis of percentileAxes(mode.keyCount, approx.ratings)) {
       const axisCurve = axisCurves[axis];

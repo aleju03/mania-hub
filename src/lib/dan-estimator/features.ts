@@ -171,6 +171,8 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
   let rowMaskTwoBack: number | null = null;
   let repeatedRowPatterns = 0;
   let alternatingRowPatterns = 0;
+  let chordPairCount = 0;
+  let chordPairOverlapCount = 0;
   let rowPatternChangeSum = 0;
   const rowMasks: number[] = [];
   const rowSignatures: number[] = [];
@@ -193,6 +195,19 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
     if (rowHasHold) {
       holdRows++;
       if (columns.length >= 2) lnChordRows++;
+    }
+
+    // Chord-jack repetition: of adjacent chord rows (<1s apart, both >= 2
+    // notes), how many re-hit a column. True chordjack repeats columns on
+    // consecutive chords; dense bracket/jumpstream alternates hands and
+    // barely overlaps at the same chord density. Must run before the
+    // previous-row state updates below.
+    if (
+      previousRowMask != null && previousChordSize >= 2 && columns.length >= 2
+      && previousRowTime != null && time - previousRowTime < 1000
+    ) {
+      chordPairCount++;
+      if ((rowMask & previousRowMask) !== 0) chordPairOverlapCount++;
     }
 
     rowMasks.push(rowMask);
@@ -337,6 +352,7 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
   const chordSizeChangeRate = orderedRows.length ? chordSizeChanges / orderedRows.length : 0;
   const directionChangeRate = notes.length ? directionChanges / notes.length : 0;
   const chordjackPressure = jackPressure * (0.28 + chordRatio * 1.35) + burstDensity * chordRatio * 0.6;
+  const chordColumnOverlapRatio = chordPairCount ? chordPairOverlapCount / chordPairCount : 0;
   const techPressure = orderedRows.length
     ? (directionChanges / orderedRows.length) * 4.4 + (chordSizeChanges / orderedRows.length) * 3.5 + chordRatio * 1.6 + average(rowDensities) * 0.018
     : 0;
@@ -368,6 +384,7 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
       streamPressure,
       jumpstreamPressure,
       chordjackPressure,
+      chordColumnOverlapRatio,
       techPressure,
       rowBurstPressure,
       fastRowRatio,

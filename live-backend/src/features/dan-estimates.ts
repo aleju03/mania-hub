@@ -7,6 +7,7 @@ import type { JobQueue } from "../jobs/queue.js";
 import { logWarn } from "../logger.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { getCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
+import { isTerminalBeatmapFileError } from "../osu/beatmap-file-errors.js";
 import { nowIso } from "../shared/score.js";
 
 const MAX_DAN_ESTIMATE_BATCH = 32;
@@ -166,7 +167,20 @@ async function computeAndStoreDanEstimate(
   if (cached.found) return cached.value;
 
   const starRating = request.starRating ?? await readBeatmapStarRating(db, request.beatmapId);
-  const { map, osuText } = await getParsedDanBeatmap(db, osu, request.beatmapId, caller);
+  let parsed: ParsedDanBeatmap;
+  try {
+    parsed = await getParsedDanBeatmap(db, osu, request.beatmapId, caller);
+  } catch (error) {
+    // The .osu file is gone from every mirror (404/invalid): retrying can never
+    // succeed, so cache a terminal "unavailable" marker and stop the job from
+    // failing on backoff forever. Transient errors still throw and retry.
+    if (isTerminalBeatmapFileError(error instanceof Error ? error.message : String(error))) {
+      await storeUnavailableDanEstimate(db, request);
+      return null;
+    }
+    throw error;
+  }
+  const { map, osuText } = parsed;
   const classification = classifyChart(map, osuText, {
     starRating,
     totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
@@ -270,7 +284,7 @@ async function readCachedDanEstimate(db: Db, request: NormalizedDanEstimateReque
   )).rows[0];
   if (!row) return { found: false };
   const status = String(row.status ?? "");
-  if (status === "unsupported") return { found: true, value: null };
+  if (status === "unsupported" || status === "unavailable") return { found: true, value: null };
   if (status !== "ready") return { found: false };
   if (row.star_rating == null && request.starRating != null) return { found: false };
 
@@ -298,6 +312,21 @@ async function readCachedDanEstimate(db: Db, request: NormalizedDanEstimateReque
 }
 
 async function storeUnsupportedDanEstimate(db: Db, request: NormalizedDanEstimateRequest): Promise<void> {
+  await storeTerminalDanEstimate(db, request, "unsupported", "unsupported_keymode");
+}
+
+// Caches a terminal null result so `readCachedDanEstimate` reports it as found
+// (value null) and neither the API nor the job re-computes it.
+async function storeUnavailableDanEstimate(db: Db, request: NormalizedDanEstimateRequest): Promise<void> {
+  await storeTerminalDanEstimate(db, request, "unavailable", "beatmap_file_unavailable");
+}
+
+async function storeTerminalDanEstimate(
+  db: Db,
+  request: NormalizedDanEstimateRequest,
+  status: "unsupported" | "unavailable",
+  error: string,
+): Promise<void> {
   const now = nowIso();
   await exec(
     db,
@@ -305,7 +334,7 @@ async function storeUnsupportedDanEstimate(db: Db, request: NormalizedDanEstimat
        estimator_version, beatmap_id, rate_percent, status, label, variant, display_name,
        raw_dan, family, confidence, star_rating, error, computed_at, updated_at
      )
-     values (?, ?, ?, 'unsupported', null, null, null, null, null, null, ?, 'unsupported_keymode', ?, ?)
+     values (?, ?, ?, ?, null, null, null, null, null, null, ?, ?, ?, ?)
      on conflict(estimator_version, beatmap_id, rate_percent) do update set
        status = excluded.status,
        label = excluded.label,
@@ -318,7 +347,7 @@ async function storeUnsupportedDanEstimate(db: Db, request: NormalizedDanEstimat
        error = excluded.error,
        computed_at = excluded.computed_at,
        updated_at = excluded.updated_at`,
-    [DAN_ESTIMATE_CACHE_VERSION, request.beatmapId, request.ratePercent, request.starRating ?? null, now, now],
+    [DAN_ESTIMATE_CACHE_VERSION, request.beatmapId, request.ratePercent, status, request.starRating ?? null, error, now, now],
   );
 }
 

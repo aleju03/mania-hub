@@ -18,7 +18,7 @@ import { ReplayInfo } from "../components/replay/ReplayInfo";
 import type { ReplayPlayerProfile } from "../components/replay/ReplayInfo";
 import { ReplaySkinSettingsModal } from "../components/replay/ReplaySkinSettingsModal";
 import { track } from "../lib/posthog";
-import { reportCrashedReplayWatchSession, startReplayWatchBeacon } from "../lib/replay-crash-beacon";
+import { reportCrashedReplayWatchSession, startReplayWatchBeacon, updateReplayWatchBeaconContext } from "../lib/replay-crash-beacon";
 import { withTimeout } from "../lib/promise-timeout";
 import {
   REPLAY_SKIN_SETTINGS_CHANGE_EVENT,
@@ -2572,6 +2572,8 @@ function ReplayViewer({
             inputOverlayOnly: inputOverlayOnlyRef.current,
             inputOverlayColor: inputOverlayColorRef.current,
             inputOverlayKeyHistory: inputOverlayKeyHistoryRef.current,
+            onContextLost: () => updateReplayWatchBeaconContext({ webgl_context_lost: true }),
+            onContextRestored: () => updateReplayWatchBeaconContext({ webgl_context_restored: true }),
           },
         ) as ReplayRendererLike;
 
@@ -2598,6 +2600,17 @@ function ReplayViewer({
         renderer.setOverlaySettings(overlaySettingsRef.current);
         renderer.setHitsoundTrigger?.(hitsoundPlayerRef.current);
         rendererRef.current = renderer;
+
+        // Record the resolved renderer backend (WebGL vs Canvas fallback) and
+        // judgement-build cost into the crash beacon so a later hard crash can
+        // be attributed to a GPU path or a main-thread hang.
+        const diagnostics = renderer.getDiagnostics?.();
+        if (diagnostics) {
+          updateReplayWatchBeaconContext({
+            renderer_backend: diagnostics.rendererBackend,
+            judgement_build_ms: diagnostics.judgementBuildMs,
+          });
+        }
 
         // Install the audio-driven clock. When audio is enabled and actually
         // making sound, the renderer derives currentTime from audio.currentTime
@@ -2633,6 +2646,18 @@ function ReplayViewer({
           rendererRef.current = null;
           setIsPlaying(false);
           setRendererError(message);
+          // A caught init failure is invisible to the crash beacon (the tab
+          // survives), so report it explicitly and separately from hard crashes.
+          track("replay_renderer_error", {
+            message,
+            score_id: scoreInfo?.id ?? null,
+            beatmapset_id: effectiveBeatmapsetId ?? null,
+            key_count: replay.keyCount,
+            frame_count: replay.frames.length,
+            note_count: beatmap?.notes.length ?? 0,
+            mods: getModAcronyms(effectiveReplayMods).join(","),
+            rate: modRate,
+          });
         }
       }
     })();

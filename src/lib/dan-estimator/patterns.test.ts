@@ -208,4 +208,14 @@ describe("analyzeManiaPatterns", () => {
     expect(patternIds(7, repeatRows([[0, 2, 4], [0, 2, 4], [1, 3, 5], [1, 3, 5]], 30))).toContain("chordjack");
     expect(patternIds(7, repeatRows([[0], [1, 3, 5], [2], [1, 2], [6], [0, 4, 5]], 35))).toContain("tech");
   });
+
+  it("does not tag hand-alternating bracket files as chordjack", () => {
+    // Dense 7K bracket motion: every row is a hand chord, but consecutive
+    // chords never share a column - chord density without chord-jack
+    // repetition. The density-driven chordjack score used to fire on this
+    // shape (the two misclassified community reports).
+    const ids = patternIds(7, repeatRows([[0, 1, 2], [4, 5, 6], [1, 2, 3], [4, 5, 6]], 30));
+    expect(ids).toContain("bracket");
+    expect(ids).not.toContain("chordjack");
+  });
 });

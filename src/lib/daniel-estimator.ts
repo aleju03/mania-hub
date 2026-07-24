@@ -648,6 +648,10 @@ function buildMetrics(map: ManiaBeatmap, rate: number): DanEstimate["metrics"] {
   const streamValues: number[] = [];
   const jumpstreamValues: number[] = [];
   let previousRowTime: number | null = null;
+  let previousRowMask = 0;
+  let previousChordSize = 0;
+  let chordPairCount = 0;
+  let chordPairOverlapCount = 0;
 
   for (const [time, rowNotes] of orderedRows) {
     const columns = rowNotes.map((note) => note.column).sort((a, b) => a - b);
@@ -657,6 +661,15 @@ function buildMetrics(map: ManiaBeatmap, rate: number): DanEstimate["metrics"] {
         jumpstreamValues.push(Math.min(60, (columns.length * 1000) / rowDelta));
       }
     }
+    const rowMask = columns.reduce((mask, column) => mask | (1 << column), 0);
+    // Same semantics as features.ts: of consecutive chord->chord row pairs
+    // (both >= 2 notes, under 1s apart), how many re-hit a shared column.
+    if (previousRowTime != null && previousChordSize >= 2 && columns.length >= 2 && time - previousRowTime < 1000) {
+      chordPairCount += 1;
+      if ((rowMask & previousRowMask) !== 0) chordPairOverlapCount += 1;
+    }
+    previousRowMask = rowMask;
+    previousChordSize = columns.length;
     previousRowTime = time;
 
     for (const column of columns) {
@@ -708,6 +721,7 @@ function buildMetrics(map: ManiaBeatmap, rate: number): DanEstimate["metrics"] {
     streamPressure,
     jumpstreamPressure,
     chordjackPressure: jackPressure * (0.28 + chordRatio * 1.35),
+    chordColumnOverlapRatio: chordPairCount > 0 ? chordPairOverlapCount / chordPairCount : 0,
     techPressure: 0,
     rowBurstPressure: 0,
     fastRowRatio: 0,

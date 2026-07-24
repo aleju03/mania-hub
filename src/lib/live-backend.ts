@@ -1031,6 +1031,10 @@ export interface LiveFarmHelperSnapshot {
   // views and the total-pp fallback). Optional so older builds still parse.
   peerBands?: Partial<Record<"4k" | "7k", LiveFarmHelperPeerBand>>;
   totalPotentialPp: number;
+  // What the gain numbers measure: the player's overall profile pp ("any"
+  // view) or the requested keymode's variant pp (concrete "4k"/"7k" views).
+  // Optional: older backend builds don't send it; treat absent as "overall".
+  gainBasis?: "overall" | "keymode";
   // Optional: older backend builds don't send it. Count of qualifying recs
   // before server-side truncation to the requested limit.
   totalQualifying?: number;

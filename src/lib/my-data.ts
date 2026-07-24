@@ -71,6 +71,9 @@ export interface MyDataSkillMode {
   dan?: { rc: MyDataSkillDanSide | null; ln: MyDataSkillDanSide | null };
   // Keys are skillset names or `pattern:{id}` axes.
   percentiles?: Record<string, MyDataSkillPercentile>;
+  // Thin evidence base (few analyzed plays): ratings are served shrunk toward
+  // the population median and should read as rough estimates.
+  provisional?: boolean;
 }
 
 // Etterna-style skillset ratings aggregated from the player's top plays by the
@@ -90,6 +93,9 @@ export interface MyDataSkillBreakdown {
   // Non-ready only: where the compute sits in the backend's analyzer lane.
   // position is 1-based among waiting jobs; null while the job is running.
   queue?: { state: "queued" | "running"; position: number | null; waiting: number } | null;
+  // Ready only: the served snapshot is known-superseded and a recompute is on
+  // its way; present the numbers as refreshing, not final.
+  stale?: boolean;
 }
 
 export interface MyDataBeatmapRef {

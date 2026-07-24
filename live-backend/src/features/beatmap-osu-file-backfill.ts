@@ -3,6 +3,7 @@ import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { getCachedBeatmapFile, markCachedBeatmapFileUnavailable } from "../osu/beatmap-file-cache.js";
+import { isTerminalBeatmapFileError } from "../osu/beatmap-file-errors.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { nowIso } from "../shared/score.js";
 
@@ -543,16 +544,4 @@ function normalizeState(value: Partial<BackfillState> | null): BackfillState {
 function normalizeNonNegativeInt(value: unknown, fallback: number): number {
   const number = Math.floor(Number(value));
   return Number.isFinite(number) && number >= 0 ? number : fallback;
-}
-
-function isTerminalBeatmapFileError(message: string): boolean {
-  if (!message.startsWith("Failed to fetch .osu file for beatmap ")) return false;
-  const separatorIndex = message.indexOf(": ");
-  if (separatorIndex < 0) return false;
-  const sourceErrors = message
-    .slice(separatorIndex + 2)
-    .split(";")
-    .map((part) => part.trim().toLowerCase())
-    .filter(Boolean);
-  return sourceErrors.length > 0 && sourceErrors.every((part) => part.includes("(404)") || part.includes("invalid .osu file"));
 }

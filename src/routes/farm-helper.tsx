@@ -429,7 +429,7 @@ function FarmHelperPage() {
                               {view === "popular" ? (
                                 <span className="font-normal text-osu-f1"> · what nearby players farm</span>
                               ) : (
-                                <span className="font-normal text-osu-f1"> · +{formatPp(totalGain(recs))}pp on the table</span>
+                                <span className="font-normal text-osu-f1"> · {formatGainWithUnit(totalGain(recs), gainUnitLabel(visibleSnapshot))} on the table</span>
                               )}
                             </>
                           ) : error ? (
@@ -516,6 +516,7 @@ function FarmHelperPage() {
                             userKey={String(visibleSnapshot.userId)}
                             userName={visibleSnapshot.username}
                             keyMode={cardKeyMode}
+                            gainUnit={gainUnitLabel(visibleSnapshot)}
                             onShowFarmers={() => setFarmersFor({ rec, keyMode: cardKeyMode })}
                           />
                         );
@@ -532,6 +533,7 @@ function FarmHelperPage() {
                             userKey={String(visibleSnapshot.userId)}
                             userName={visibleSnapshot.username}
                             keyMode={cardKeyMode}
+                            gainUnit={gainUnitLabel(visibleSnapshot)}
                             onShowFarmers={() => setFarmersFor({ rec, keyMode: cardKeyMode })}
                           />
                         );
@@ -794,7 +796,9 @@ function TargetPanel({
         </div>
 
         <div className="border-t border-osu-b3/20 px-4 py-4">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">potential pp gain</div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">
+            potential {gainUnitLabel(snapshot)} gain
+          </div>
           {refreshing ? (
             <div className="mt-2 space-y-2">
               <Skeleton className="h-8 w-32" />
@@ -804,12 +808,12 @@ function TargetPanel({
             <>
               <div className="mt-1 text-3xl font-black leading-none tabular-nums text-osu-pink">
                 +{formatPp(snapshot.totalPotentialPp)}
-                <span className="ml-1 text-base font-bold text-osu-pink/70">pp</span>
+                <span className="ml-1 text-base font-bold text-osu-pink/70">{gainUnitLabel(snapshot)}</span>
               </div>
               {mapCount > 0 ? (
                 <div className="mt-2 text-[11px] text-osu-f1">
                   across {formatPp(mapCount)} map{mapCount === 1 ? "" : "s"}
-                  {biggest > 0 ? ` · biggest +${formatPp(biggest)}pp` : ""}
+                  {biggest > 0 ? ` · biggest ${formatGainWithUnit(biggest, gainUnitLabel(snapshot))}` : ""}
                 </div>
               ) : null}
             </>
@@ -850,6 +854,22 @@ function farmersKeyMode(snapshot: LiveFarmHelperSnapshot, rec: LiveFarmHelperRec
   if (rec.keys === 7) return "7k";
   if (rec.keys === 4) return "4k";
   return "any";
+}
+
+// Concrete-keymode snapshots measure gain in that keymode's variant pp, not
+// overall profile pp (snapshot.gainBasis === "keymode"), so a 7K main reading
+// the 4K tab knows what the numbers actually move. Older backends omit
+// gainBasis and always send overall-pp gains, which keeps the plain "pp" label.
+function gainUnitLabel(snapshot: LiveFarmHelperSnapshot | null | undefined): string {
+  if (snapshot?.gainBasis !== "keymode") return "pp";
+  if (snapshot.keyMode === "4k") return "4K pp";
+  if (snapshot.keyMode === "7k") return "7K pp";
+  return "pp";
+}
+
+// "+123pp" when the unit is plain pp, "+123 4K pp" for variant-pp gains.
+function formatGainWithUnit(gain: number, gainUnit: string): string {
+  return `+${formatPp(gain)}${gainUnit === "pp" ? "pp" : ` ${gainUnit}`}`;
 }
 
 function peerBandRange(band: { count: number; minPp: number; maxPp: number }): string | null {
@@ -1119,19 +1139,21 @@ function RecRow({
   userKey,
   userName,
   keyMode,
+  gainUnit,
   onShowFarmers,
 }: {
   rec: LiveFarmHelperRec;
   userKey: string;
   userName: string;
   keyMode: LiveFarmHelperKeyMode;
+  gainUnit: string;
   onShowFarmers: () => void;
 }) {
   const meta = REASON_META[rec.reason];
   const bar = comparisonBar(rec);
   const fit = confidence(rec);
   const desktopCover = rec.listCover || rec.cover;
-  const openDetails = useOpenFarmMapDetail(rec, userKey, userName, keyMode);
+  const openDetails = useOpenFarmMapDetail(rec, userKey, userName, keyMode, gainUnit);
   return (
     <div
       role="link"
@@ -1194,7 +1216,7 @@ function RecRow({
           <div className="md:text-right">
             <div className="text-xl font-black leading-none tabular-nums text-osu-pink">
               +{formatPp(rec.estimatedPpGain)}
-              <span className="text-xs font-bold text-osu-pink/70">pp</span>
+              <span className={`text-xs font-bold text-osu-pink/70${gainUnit === "pp" ? "" : " ml-1"}`}>{gainUnit}</span>
             </div>
             <div className="mt-1 text-[10px] text-osu-f1">if you get {formatPp(rec.benchmarkPp)}pp</div>
           </div>
@@ -1222,15 +1244,17 @@ function RecCard({
   userKey,
   userName,
   keyMode,
+  gainUnit,
   onShowFarmers,
 }: {
   rec: LiveFarmHelperRec;
   userKey: string;
   userName: string;
   keyMode: LiveFarmHelperKeyMode;
+  gainUnit: string;
   onShowFarmers: () => void;
 }) {
-  const openDetails = useOpenFarmMapDetail(rec, userKey, userName, keyMode);
+  const openDetails = useOpenFarmMapDetail(rec, userKey, userName, keyMode, gainUnit);
   const cover = rec.listCover || rec.cover;
   const gain = Math.max(0, rec.estimatedPpGain);
   return (
@@ -1326,6 +1350,7 @@ function buildFarmMapDetailContext(
   userKey: string,
   userName: string,
   keyMode: LiveFarmHelperKeyMode,
+  gainUnit: string,
 ): Record<string, unknown> {
   return {
     beatmapsetId: rec.beatmapsetId,
@@ -1346,6 +1371,7 @@ function buildFarmMapDetailContext(
     speed: rec.speedBucket,
     reason: rec.reason,
     gain: Math.round(rec.estimatedPpGain * 10) / 10,
+    gainUnit,
     benchmark: Math.round(rec.benchmarkPp * 10) / 10,
     subjectPp: rec.subjectPp == null ? undefined : Math.round(rec.subjectPp * 10) / 10,
     peerCount: rec.peerCount,
@@ -1364,10 +1390,11 @@ function useOpenFarmMapDetail(
   userKey: string,
   userName: string,
   keyMode: LiveFarmHelperKeyMode,
+  gainUnit: string,
 ): () => void {
   const navigate = useNavigate();
   return () => {
-    writeFarmMapContext(rec.beatmapId, buildFarmMapDetailContext(rec, userKey, userName, keyMode));
+    writeFarmMapContext(rec.beatmapId, buildFarmMapDetailContext(rec, userKey, userName, keyMode, gainUnit));
     void navigate({
       to: "/farm-helper/map/$beatmapId",
       params: { beatmapId: String(rec.beatmapId) },

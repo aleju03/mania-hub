@@ -65,6 +65,11 @@ export interface DanFeatureMetrics {
   streamPressure: number;
   jumpstreamPressure: number;
   chordjackPressure: number;
+  // Of adjacent chord rows (<1s apart, both >= 2 notes), the share that
+  // re-hit at least one column: the actual chord-JACK signal. Dense
+  // bracket/jumpstream files sit ~0.1 here at the same chord density where
+  // true chordjack sits 0.7+.
+  chordColumnOverlapRatio: number;
   techPressure: number;
   rowBurstPressure: number;
   fastRowRatio: number;
