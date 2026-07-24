@@ -1314,6 +1314,12 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     return true;
   }
   if (url.pathname === "/api/replay-video-job") {
+    if (!ctx.config.enableReplayVideo) {
+      // The whole feature is off (production default): behave as if the
+      // endpoint were never registered, before auth or rate accounting.
+      sendJson(req, res, ctx, 404, { error: "replay_video_disabled" });
+      return true;
+    }
     if (req.method !== "POST") {
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
       return true;

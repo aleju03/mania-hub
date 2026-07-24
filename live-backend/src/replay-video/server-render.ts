@@ -1,5 +1,8 @@
 import { existsSync } from "node:fs";
-import { chromium, type Browser } from "playwright-core";
+// Type-only: playwright-core's runtime (and its module graph) must never load
+// at boot. It is imported dynamically inside renderReplayVideoInChrome, which
+// only runs where ENABLE_REPLAY_VIDEO is on (the owner's local environment).
+import type { Browser, Page } from "playwright-core";
 import type { Config } from "../config.js";
 
 export type ServerReplayRenderRequest = {
@@ -39,7 +42,11 @@ const DEFAULT_CHROME_PATHS = [
 ];
 
 export async function renderReplayVideoInChrome(config: Config, request: ServerReplayRenderRequest): Promise<ServerReplayRenderResult> {
+  if (!config.enableReplayVideo) {
+    throw new Error("Replay video rendering is disabled (set ENABLE_REPLAY_VIDEO=true).");
+  }
   const executablePath = findChromePath(config);
+  const { chromium } = await import("playwright-core");
   let browser: Browser | null = null;
   try {
     browser = await chromium.launch({
@@ -70,7 +77,7 @@ export async function renderReplayVideoInChrome(config: Config, request: ServerR
   }
 }
 
-async function evaluateReplayExport(page: import("playwright-core").Page, request: ServerReplayRenderRequest): Promise<ServerReplayRenderResult | null> {
+async function evaluateReplayExport(page: Page, request: ServerReplayRenderRequest): Promise<ServerReplayRenderResult | null> {
   let lastError: unknown = null;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {

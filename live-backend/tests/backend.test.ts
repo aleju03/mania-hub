@@ -28,7 +28,8 @@ import { JobQueue } from "../src/jobs/queue.js";
 import { LiveEventLog } from "../src/live/event-log.js";
 import { OsuApiClient, OsuApiError, TokenBucketLimiter } from "../src/osu/client.js";
 import { runRetention } from "../src/retention.js";
-import { WorkerRunner } from "../src/workers.js";
+import { defaultWorkerLanes, WorkerRunner } from "../src/workers.js";
+import { createServerReplayVideoExport, getReplayVideoExport } from "../src/replay-video/exports.js";
 import type { OscScore } from "../src/shared/types.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
@@ -6001,6 +6002,7 @@ describe("live backend", () => {
     const { db, queue, events } = await setup();
     const config = baseConfig({
       liveAdminToken: "secret",
+      enableReplayVideo: true,
       replayVideoPublicEnabled: false,
       r2Endpoint: "https://r2.example",
       r2AccessKeyId: "key",
@@ -6031,8 +6033,72 @@ describe("live backend", () => {
     expect(adminRes.res.statusCode).toBe(404);
   });
 
+  it("hides the replay-video job endpoint entirely when the feature is disabled", async () => {
+    const { db, queue, events } = await setup();
+    const config = baseConfig({
+      liveAdminToken: "secret",
+      r2Endpoint: "https://r2.example",
+      r2AccessKeyId: "key",
+      r2SecretAccessKey: "secret",
+      r2Bucket: "mania-hub-replay-cache",
+    });
+    const adminRes = mockRes();
+    await routeHttp(mockReq("POST", "/api/replay-video-job?action=status&id=missing", { authorization: "Bearer secret" }), adminRes.res, {
+      db,
+      queue,
+      events,
+      config,
+      osu: { limiter: { state: () => ({ hardPerMinute: 60, usedLastMinute: 0 }) } },
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never);
+    expect(adminRes.res.statusCode).toBe(404);
+    expect(JSON.parse(adminRes.writes.join(""))).toMatchObject({ error: "replay_video_disabled" });
+  });
+
+  it("registers replay-video worker lanes only when ENABLE_REPLAY_VIDEO is on", () => {
+    const previous = process.env.ENABLE_REPLAY_VIDEO;
+    try {
+      delete process.env.ENABLE_REPLAY_VIDEO;
+      const disabledNames = defaultWorkerLanes().map((lane) => lane.name);
+      expect(disabledNames).not.toContain("replay-video-render");
+      expect(disabledNames).not.toContain("replay-video-finalize");
+
+      process.env.ENABLE_REPLAY_VIDEO = "true";
+      const enabledNames = defaultWorkerLanes().map((lane) => lane.name);
+      expect(enabledNames).toContain("replay-video-render");
+      expect(enabledNames).toContain("replay-video-finalize");
+      // The flag only adds the replay-video lanes; everything else is identical.
+      expect(enabledNames.filter((name) => !name.startsWith("replay-video"))).toEqual(disabledNames);
+    } finally {
+      if (previous === undefined) delete process.env.ENABLE_REPLAY_VIDEO;
+      else process.env.ENABLE_REPLAY_VIDEO = previous;
+    }
+  });
+
+  it("fails leftover replay-video jobs instead of running them when the feature is disabled", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    const config = baseConfig({
+      enableReplayVideo: true,
+      replayVideoWorkDir: join(dir, "replay-video-jobs"),
+    }) as never as Parameters<typeof createServerReplayVideoExport>[1];
+    const job = await createServerReplayVideoExport(db, config, { scoreId: 4242 });
+    await queue.enqueue("replay_video_server_render", `replay-video-server:${job.id}`, { id: job.id, request: {} });
+
+    // ENABLE_REPLAY_VIDEO is not set in the test environment, so the worker
+    // treats the claimed job as disabled instead of importing Playwright.
+    const worker = new WorkerRunner(db, queue, events, {} as never, ingestor, "test-worker");
+    await worker.runOnce();
+
+    const row = await getReplayVideoExport(db, job.id);
+    expect(row?.status).toBe("failed");
+    expect(row?.error).toContain("disabled");
+    const pending = await exec(db, "select count(*) as count from jobs where status = 'pending'");
+    expect(Number((pending.rows[0] as { count: number }).count)).toBe(0);
+  });
+
   it("rejects replay video uploads before buffering oversized bodies", async () => {
     const config = baseConfig({
+      enableReplayVideo: true,
       replayVideoPublicEnabled: true,
       replayVideoUploadMaxBytes: 4,
       r2Endpoint: "https://r2.example",

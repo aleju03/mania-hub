@@ -72,6 +72,9 @@ interface WorkerActiveJob {
   payload: unknown;
 }
 
+const REPLAY_VIDEO_JOB_TYPES = new Set(["replay_video_server_render", "replay_video_export"]);
+const REPLAY_VIDEO_LANE_NAMES = new Set(["replay-video-render", "replay-video-finalize"]);
+
 const DEFAULT_WORKER_LANES: WorkerLane[] = [
   {
     name: "fast",
@@ -209,6 +212,13 @@ const OSU_API_JOB_TYPES = new Set([
   PROFILE_POOL_WARM_JOB,
 ]);
 
+// The replay-video lanes exist only where ENABLE_REPLAY_VIDEO is on (the
+// owner's local environment); production workers never poll for those jobs.
+export function defaultWorkerLanes(): WorkerLane[] {
+  if (readConfig().enableReplayVideo) return DEFAULT_WORKER_LANES;
+  return DEFAULT_WORKER_LANES.filter((lane) => !REPLAY_VIDEO_LANE_NAMES.has(lane.name));
+}
+
 // Admin-monitor superset: every job type whose run consumes osu! API budget,
 // including the ones OSU_API_JOB_TYPES leaves runnable when API jobs are
 // disabled (their handlers take the osu client but are gated elsewhere).
@@ -238,7 +248,7 @@ export class WorkerRunner {
     private readonly osu: OsuApiClient,
     private readonly ingestor: ScoreIngestor,
     private readonly workerId = `worker-${process.pid}`,
-    private readonly lanes: WorkerLane[] = DEFAULT_WORKER_LANES,
+    private readonly lanes: WorkerLane[] = defaultWorkerLanes(),
   ) {}
 
   start(): () => void {
@@ -388,6 +398,15 @@ export class WorkerRunner {
   private async handle(job: Job, signal?: AbortSignal): Promise<void> {
     if (!readConfig().enableOsuApiJobs && OSU_API_JOB_TYPES.has(job.type)) {
       logInfo("job_skipped_osu_api_disabled", { job_id: job.id, type: job.type });
+      return;
+    }
+    if (REPLAY_VIDEO_JOB_TYPES.has(job.type) && !readConfig().enableReplayVideo) {
+      // Belt-and-braces: the lanes are gone when disabled, but an untyped claim
+      // (runOnce) could still pick up a job enqueued before the flag flipped.
+      // Fail the export so a polling client isn't stuck on a job nobody runs.
+      const payload = job.payload as { id?: string };
+      if (payload.id) await markReplayVideoFailed(this.db, payload.id, new Error("Replay video is disabled on this instance."));
+      logInfo("job_skipped_replay_video_disabled", { job_id: job.id, type: job.type });
       return;
     }
     if (job.type === "refresh_user_top_scores") {

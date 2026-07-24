@@ -145,6 +145,8 @@ All public endpoints are rate-limited per IP by `abuse-guard.ts` with separate b
 
 ## Replay Video Export
 
+The whole feature is gated by `ENABLE_REPLAY_VIDEO` (default `false`; on only in the owner's local env). When off, `/api/replay-video-job` returns 404, the replay-video worker lanes are not registered, and playwright-core is never imported (it is a dynamic import inside the render function).
+
 Two paths, both finishing in the backend queue:
 
 1. Browser render: WebCodecs encodes the MP4 client-side, then the frontend calls `/api/replay-video-job` (`start` -> `upload-video` -> `finish`).

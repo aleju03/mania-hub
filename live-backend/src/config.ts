@@ -98,6 +98,10 @@ export interface Config {
   activityRetentionYears: number;
   maxLocalDbBytes: number;
   targetLocalDbBytes: number;
+  // Master switch for the whole replay-video feature (HTTP job endpoint, worker
+  // lanes, headless-Chrome renderer). Off by default: production never renders
+  // video, so it must never pay for the module graph either.
+  enableReplayVideo: boolean;
   replayVideoPublicEnabled: boolean;
   replayVideoUploadMaxBytes: number;
   skinOskMaxBytes: number;
@@ -299,6 +303,7 @@ export function readConfig(): Config {
     activityRetentionYears: readBoundedInt("ACTIVITY_RETENTION_YEARS", 2, 1, 10),
     maxLocalDbBytes: readInt("MAX_LOCAL_DB_BYTES", 10 * 1024 * 1024 * 1024),
     targetLocalDbBytes: readInt("TARGET_LOCAL_DB_BYTES", 8 * 1024 * 1024 * 1024),
+    enableReplayVideo: readBool("ENABLE_REPLAY_VIDEO", false),
     replayVideoPublicEnabled: readBool("REPLAY_VIDEO_PUBLIC_ENABLED", false),
     replayVideoUploadMaxBytes: readInt("REPLAY_VIDEO_UPLOAD_MAX_BYTES", 600 * 1024 * 1024),
     skinOskMaxBytes: readInt("SKIN_OSK_MAX_BYTES", 50 * 1024 * 1024),
