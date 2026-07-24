@@ -36,7 +36,7 @@ import { type AbuseBucket, type AbuseGuard, normalizeCountryParam, type RateLimi
 import type { JobQueue } from "../jobs/queue.js";
 import type { CountryClientTracker } from "../live/country-clients.js";
 import type { LiveEventLog } from "../live/event-log.js";
-import { readRuntimeStatus, setWorkersPaused, type RuntimeStatusSnapshot } from "../live/runtime-status.js";
+import { readJobMemoryMetric, readRuntimeStatus, setWorkersPaused, type RuntimeStatusSnapshot } from "../live/runtime-status.js";
 import type { OscStatus } from "../osc/client.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { getCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
@@ -58,9 +58,10 @@ import { deleteSkinObjects, getSkinObject, isSkinStorageConfigured, skinKeymodeP
 import { sniffImage, validateOskBuffer } from "../skins/validate-osk.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
 import { COMPRESSIBLE_MIN_BYTES, prepareJsonResponse, type PreparedJsonResponse } from "./prepared-json.js";
-import { getMapsSnapshotThread, MapsSnapshotBuildError, type MapsSnapshotThreadBuildRequest } from "./maps-snapshot-thread.js";
+import { getMapsSnapshotThread, mapsSnapshotThreadStatus, MapsSnapshotBuildError, type MapsSnapshotThreadBuildRequest } from "./maps-snapshot-thread.js";
 import { addManualRosterMember, enqueueRosterRefreshes, removeManualRosterMember } from "../rosters/country-rosters.js";
-import { getLocalDbStorage, getStorageBreakdownSnapshot, getTablePreview, runRetention } from "../retention.js";
+import { getDbDiskUsage, getLocalDbStorage, getStorageBreakdownSnapshot, getStorageFootprint, getTablePreview, runRetention } from "../retention.js";
+import { readProcessMemory, type ProcessMemorySample } from "../shared/process-memory.js";
 import { setUserActive } from "../users.js";
 import { getDiscordPublicInfo, type DiscordRuntime } from "../discord/index.js";
 import { getDiscordShowcase } from "../discord/showcase.js";
@@ -131,6 +132,11 @@ type TimedRequest = IncomingMessage & { [REQUEST_STARTED_AT]?: number };
 const SLOW_HTTP_LOG_MS = 2_000;
 const SLOW_HTTP_LOG_EXEMPT = new Set(["/api/live", "/api/audio", "/api/hitsounds", "/api/preview-audio"]);
 
+// Beatmap media: served before the general public gate, rate-limited on their
+// own window (see the dispatch block for why).
+const MEDIA_PATHS = new Set(["/api/audio", "/api/hitsounds", "/api/preview-audio"]);
+const MEDIA_RATE_SUFFIX = "media";
+
 export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: HttpContext): Promise<boolean> {
   const startedAt = performance.now();
   (req as TimedRequest)[REQUEST_STARTED_AT] = startedAt;
@@ -184,16 +190,18 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     res.end();
     return true;
   }
-  if (url.pathname === "/api/audio") {
-    await handleBeatmapAudioRequest(req, res, ctx.config, url);
-    return true;
-  }
-  if (url.pathname === "/api/hitsounds") {
-    await handleBeatmapHitsoundsRequest(req, res, ctx.config, url);
-    return true;
-  }
-  if (url.pathname === "/api/preview-audio") {
-    await handlePreviewAudioRequest(req, res, ctx.config, url);
+  // Media stays ahead of the publicApi gate on purpose: an <audio> element
+  // issues several Range requests for one track, and those must not spend the
+  // page's general API budget. They are not free, though — a cold hit pulls an
+  // up-to-120 MiB .osz, spawns ffmpeg and uploads to R2 — so they get the
+  // costly ceiling on their own window (MEDIA_RATE_SUFFIX). A shared window
+  // with the costly JSON endpoints would break real pages: the maps Random tab
+  // spends the same budget on maps-random-draw with every reroll.
+  if (MEDIA_PATHS.has(url.pathname)) {
+    if (!checkRate(req, res, ctx, "publicCostly", MEDIA_RATE_SUFFIX)) return true;
+    if (url.pathname === "/api/audio") await handleBeatmapAudioRequest(req, res, ctx.config, url);
+    else if (url.pathname === "/api/hitsounds") await handleBeatmapHitsoundsRequest(req, res, ctx.config, url);
+    else await handlePreviewAudioRequest(req, res, ctx.config, url);
     return true;
   }
   // Discord posts interactions server-to-server (no Origin header, bursty). It
@@ -465,7 +473,15 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
-    sendJson(req, res, ctx, 200, await getStorageBreakdownSnapshot(ctx.db, ctx.config));
+    // Per-table bytes answer "what is in the database"; disk + per-path answer
+    // "what else is on the volume", which is the half that decides whether the
+    // box runs out of room. The storage modal is the only place either belongs.
+    const [breakdown, disk, storagePaths] = await Promise.all([
+      getStorageBreakdownSnapshot(ctx.db, ctx.config),
+      getDbDiskUsage(ctx.config),
+      getStorageFootprint(ctx.config),
+    ]);
+    sendJson(req, res, ctx, 200, { ...breakdown, disk, storagePaths });
     return true;
   }
   if (url.pathname === "/api/admin/table-rows") {
@@ -1441,6 +1457,10 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
       return true;
     }
+    // Free-text search that gzip-decompresses up to a hundred cached .osu files
+    // per call to resolve audio filenames. Debounced to one call per keystroke
+    // pause in the UI, so the costly ceiling is far above real usage.
+    if (!checkRate(req, res, ctx, "publicCostly")) return true;
     const limit = Number(url.searchParams.get("limit") ?? 24);
     const keys = Number(url.searchParams.get("keys"));
     const maps = await listSkinPreviewMaps(ctx.db, ctx.config, {
@@ -2451,6 +2471,13 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
   // status (lanes, OSC feed, osu! limiter) is mirrored to the DB. Prefer that
   // mirror in server-only mode; fall back to in-process state for "all" mode.
   const mirror = ctx.config.role === "server" ? await readRuntimeStatus(ctx.db) : null;
+  // Written by the worker process, read here: it is the only way the serving
+  // process can see how much memory a GLOBAL maps refresh actually took. A
+  // read failure must degrade to "not reported" rather than take the whole
+  // admin body down with it, since this is observability, not state.
+  const globalMapsRefresh = options.includeWorkerActivity
+    ? await readJobMemoryMetric(ctx.db, "refresh_global_maps").catch(() => null)
+    : null;
   // The reads are independent, so they run concurrently: latency is the slowest
   // query, and a write-lock window is waited out once rather than once per
   // query down a sequential chain.
@@ -2470,6 +2497,8 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
     catchup,
     snapshotStats,
     sharedRate,
+    disk,
+    storagePaths,
   ] = await Promise.all([
     dbHealth(ctx.db),
     exec(ctx.db, "select created_at from live_event_log order by sequence desc limit 1"),
@@ -2486,6 +2515,11 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
     countryCatchupStatus(ctx),
     options.snapshotCountry ? adminSnapshotStats(ctx.db, options.snapshotCountry) : Promise.resolve(undefined),
     sharedRateBreakdown(ctx.db),
+    // Filesystem pressure and where the disk went. Admin-only, and only paid
+    // for on an admin build: statfs is cheap, and the per-path walk behind
+    // getStorageFootprint carries its own memo.
+    options.includeWorkerActivity ? getDbDiskUsage(ctx.config) : Promise.resolve(undefined),
+    options.includeWorkerActivity ? getStorageFootprint(ctx.config) : Promise.resolve(undefined),
   ]);
   const worker = (mirror?.worker as WorkerStatus | null | undefined) ?? ctx.workerStatus?.() ?? null;
   const osc = (mirror?.osc as OscStatus | undefined) ?? ctx.oscStatus();
@@ -2498,10 +2532,30 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
     server: getSqliteBusyRetryStats(),
     worker: mirror?.sqliteBusy ?? (ctx.config.role === "server" ? null : getSqliteBusyRetryStats()),
   };
+  // Same server/worker shape as sqliteBusy. The worker's copy rides the
+  // live_meta mirror; a worker still running code that does not write it leaves
+  // the field undefined, which must read as "unknown", not as a crash. In the
+  // "all" role both sides are the same process, hence the pid in the sample.
+  const memory = options.includeWorkerActivity
+    ? {
+      server: readProcessMemory(ctx.config.role ?? "all"),
+      worker: (mirror?.memory as ProcessMemorySample | undefined)
+        ?? (ctx.config.role === "server" ? null : readProcessMemory(ctx.config.role ?? "all")),
+    }
+    : undefined;
+  // filePath is an absolute path on the server's filesystem and nothing public
+  // renders it, so the public body gets everything except that.
+  const publicStorage = {
+    bytes: storage.bytes,
+    walBytes: storage.walBytes,
+    maxBytes: storage.maxBytes,
+    targetBytes: storage.targetBytes,
+    overLimit: storage.overLimit,
+  };
   return {
     ok: db,
     db,
-    storage,
+    storage: options.includeWorkerActivity ? storage : publicStorage,
     osc,
     lastEventAt: lastEvent.rows[0]?.created_at ?? null,
     queueDepth,
@@ -2517,9 +2571,19 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
     apiCallHistory: apiCalls,
     countries,
     catchup,
-    responseCaches: mapsResponseCacheMetrics(ctx.db),
     worker: options.includeWorkerActivity ? adminWorkerStatus(worker) : publicWorkerStatus(worker),
     ...(snapshotStats ? { snapshotStats } : {}),
+    ...(memory ? { memory } : {}),
+    ...(options.includeWorkerActivity
+      ? {
+        // Asking for the thread's status must never be what constructs it.
+        mapsSnapshotThread: mapsSnapshotThreadStatus(ctx.config),
+        responseCaches: mapsResponseCacheMetrics(ctx.db),
+        disk: disk ?? null,
+        storagePaths: storagePaths ?? null,
+        globalMapsRefresh,
+      }
+      : {}),
   };
 }
 
@@ -3002,9 +3066,12 @@ async function isCountryRegistered(db: Db, country: string): Promise<boolean> {
   return !!row;
 }
 
-function checkRate(req: IncomingMessage, res: ServerResponse, ctx: HttpContext, bucket: AbuseBucket): boolean {
+// `suffix` splits a bucket's limit into an independent per-IP window without
+// inventing a new bucket (and a new env var) for it. Used where two groups of
+// endpoints deserve the same ceiling but must not spend each other's budget.
+function checkRate(req: IncomingMessage, res: ServerResponse, ctx: HttpContext, bucket: AbuseBucket, suffix = ""): boolean {
   if (!ctx.abuse || isAdmin(req, ctx)) return true;
-  const result = ctx.abuse.check(req, ctx.config, bucket);
+  const result = ctx.abuse.check(req, ctx.config, bucket, suffix);
   if (result.allowed) return true;
   sendRateLimited(req, res, ctx, result);
   return false;

@@ -9,7 +9,7 @@ import { ScoreIngestor } from "./ingest/score-ingestor.js";
 import { JobQueue } from "./jobs/queue.js";
 import { LiveEventLog } from "./live/event-log.js";
 import { startRuntimeStatusMirror } from "./live/runtime-status.js";
-import { deferMapsRefreshesWaitingForRoster, enqueueGlobalMapsRefreshIfDue, enqueueMapsRefreshIfDue } from "./features/maps.js";
+import { enqueueGlobalMapsRefreshIfDue, enqueueMapsRefreshIfDue } from "./features/maps.js";
 import { ensureMapSearchIndexSeeded, pruneMapSearchPlaceholderRows, reconcileMapSearchIndexStatuses } from "./features/map-search.js";
 import { enqueueQualifiedMapsWatchIfDue } from "./features/qualified-maps-watch.js";
 import { enqueueSettledSetsReconcileIfDue } from "./features/settled-sets-reconcile.js";
@@ -29,7 +29,8 @@ import { startScoresFallbackScheduler } from "./osc/scores-fallback.js";
 import { OsuApiClient } from "./osu/client.js";
 import { SqliteSharedRateLimiter } from "./osu/shared-rate-limiter.js";
 import { enqueueRosterRefreshes } from "./rosters/country-rosters.js";
-import { startRetentionScheduler } from "./retention.js";
+import { assertMigrationDiskHeadroom, startRetentionScheduler } from "./retention.js";
+import { readProcessMemory } from "./shared/process-memory.js";
 import { packGlobalBoard } from "./features/global-rankings.js";
 import { startWalCheckpointer } from "./wal-checkpointer.js";
 import { WorkerRunner } from "./workers.js";
@@ -85,12 +86,21 @@ export async function createApp() {
   if (isServerRole) {
     await waitForSchema(db);
   } else {
+    // A migration that builds an index needs transient room well beyond the
+    // rows it covers, and a half-applied migration on a full disk is worse
+    // than a refused boot. Warns above the hard floor, throws below it.
+    await assertMigrationDiskHeadroom(config);
     await migrate(db);
     // Data backfill rides with schema ownership: assign slugs to skins
     // published before the slug column existed.
     await backfillSkinSlugs(db);
   }
-  const rateLimitDb = await createDb(config);
+  // The shared osu! limiter only touches api_rate_limit_reservations (a few
+  // hundred rows, pruned to a 60s window) and one live_meta key. Inheriting the
+  // main connection's SQLITE_CACHE_MB/SQLITE_MMAP_MB would map a 256 MiB window
+  // of a multi-GB database in every process for that, so pin it small — same
+  // shape as serveWriteDb below.
+  const rateLimitDb = await createDb({ ...config, sqliteCacheMb: 2, sqliteMmapMb: 0 });
   // A tiny dedicated write connection (+ its own queue) for the page-serving
   // path's best-effort bookkeeping (country touch, refresh scheduling). Keeping
   // those writes off the `db` connection that serves page-load reads is the
@@ -129,7 +139,6 @@ export async function createApp() {
   // read-mostly so it never contends with the worker on these at boot.
   if (!isServerRole) {
     await queue.shedPressure();
-    await deferMapsRefreshesWaitingForRoster(db);
     await ensurePinnedCountries(db, config);
     // Keep the in-memory "who has open goals" filter warm in the process that ingests scores, so
     // the ingest hot path skips a DB lookup for players with no goals (and learns of goals created
@@ -299,6 +308,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         osuRate: app.osu.limiter.state(),
         scoresFallbackRate: app.scoresFallbackOsu.limiter.state(),
         sqliteBusy: getSqliteBusyRetryStats(),
+        // The serving process answers /api/admin/status and cannot read this
+        // process's RSS any other way.
+        memory: readProcessMemory("worker"),
       }),
       5_000,
     );
