@@ -269,6 +269,9 @@ describe("AnalyticsStore realtime", () => {
     const { ticket, expiresAt } = store.issueLiveTicket(NOW);
     expect(expiresAt).toBeGreaterThan(NOW);
     expect(store.consumeLiveTicket(ticket, NOW)).toBe(true);
+    // Consuming must not burn the ticket: the admin EventSource reopens the stream with the
+    // same one after a transient drop.
+    expect(store.consumeLiveTicket(ticket, NOW + 60_000)).toBe(true);
     expect(store.consumeLiveTicket(ticket, expiresAt + 1)).toBe(false);
     expect(store.consumeLiveTicket("nope", NOW)).toBe(false);
     expect(store.consumeLiveTicket(null, NOW)).toBe(false);

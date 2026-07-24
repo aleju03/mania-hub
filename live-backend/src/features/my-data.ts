@@ -214,12 +214,29 @@ const WEEKDAY_INDEX: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, 
 const RHYTHM_SAMPLE_LIMIT = 2500;
 const MODS_SAMPLE_LIMIT = 400;
 const SUMMARY_CACHE_TTL_MS = 30_000;
+const SUMMARY_CACHE_MAX_ENTRIES = 200;
 
 // The summary is heavy (many queries + timestamp/JSON scans) and admin-gated, so it skips the
 // public rate limiter. A short per-user cache caps recomputation if the owner spam-refreshes,
 // keeping the synchronous libsql loop free for ingest. Aggregates here are slow-moving; the
 // live feed updates over SSE independently.
 const summaryCache = new Map<number, { at: number; value: MyDataSummary }>();
+
+// The sweep runs on a cache miss only — i.e. after the ~15 queries below have already run — so
+// it never touches the hit path. Insertion-order (FIFO) eviction is LRU-equivalent here because
+// a hit never re-stamps `at`.
+function rememberMyDataSummary(userId: number, summary: MyDataSummary): void {
+  const now = Date.now();
+  for (const [key, entry] of summaryCache) {
+    if (now - entry.at >= SUMMARY_CACHE_TTL_MS) summaryCache.delete(key);
+  }
+  summaryCache.set(userId, { at: now, value: summary });
+  while (summaryCache.size > SUMMARY_CACHE_MAX_ENTRIES) {
+    const oldest = summaryCache.keys().next().value;
+    if (oldest === undefined) break;
+    summaryCache.delete(oldest);
+  }
+}
 
 async function computeRhythm(db: Db, userId: number, country: string | null) {
   const timezone = getCountryTimezone(country);
@@ -390,7 +407,7 @@ export async function getMyDataSummary(db: Db, userId: number): Promise<MyDataSu
     goalsCompleted: Number(goals?.completed_count ?? 0),
     generatedAt: new Date().toISOString(),
   };
-  summaryCache.set(userId, { at: Date.now(), value: summary });
+  rememberMyDataSummary(userId, summary);
   return summary;
 }
 

@@ -31,6 +31,12 @@ const MAX_AUDIO_PROBES_PER_REQUEST = 40;
 const AUDIO_PROBE_CONCURRENCY = 8;
 const AUDIO_STATE_TTL_MS = 10 * 60 * 1000;
 const AUDIO_FILENAME_NEGATIVE = "";
+// Both memos are fed by a public, search-driven endpoint whose key space is every cached mania
+// beatmap (~121k on prod), so an IP varying `q` could walk the lot into memory. Cap them, and
+// only sweep/evict on a miss that is already paying for a DB read or an R2 probe. No TTL is
+// needed on the filename memo: the AudioFilename of a cached .osu never changes.
+const AUDIO_FILENAME_CACHE_MAX_ENTRIES = 4_000;
+const AUDIO_STATE_CACHE_MAX_ENTRIES = 4_000;
 
 const audioFilenameCache = new Map<number, string>();
 const audioCachedState = new Map<string, { cached: boolean; expiresAt: number }>();
@@ -126,6 +132,10 @@ async function resolveAudioFilename(db: Db, beatmapId: number): Promise<string |
   } catch {
     filename = null;
   }
+  if (audioFilenameCache.size >= AUDIO_FILENAME_CACHE_MAX_ENTRIES) {
+    const oldest = audioFilenameCache.keys().next().value;
+    if (oldest !== undefined) audioFilenameCache.delete(oldest);
+  }
   audioFilenameCache.set(beatmapId, filename ?? AUDIO_FILENAME_NEGATIVE);
   return filename;
 }
@@ -136,14 +146,23 @@ function audioStateKey(beatmapsetId: number, filename: string): string {
 
 async function isAudioCached(config: Config, beatmapsetId: number, filename: string): Promise<boolean> {
   const key = audioStateKey(beatmapsetId, filename);
+  const now = Date.now();
   const state = audioCachedState.get(key);
-  if (state && state.expiresAt > Date.now()) return state.cached;
+  if (state && state.expiresAt > now) return state.cached;
   let cached = false;
   try {
     cached = (await getCachedBeatmapAudioMetadata(config, String(beatmapsetId), filename)) != null;
   } catch {
     cached = false;
   }
-  audioCachedState.set(key, { cached, expiresAt: Date.now() + AUDIO_STATE_TTL_MS });
+  for (const [entryKey, entry] of audioCachedState) {
+    if (entry.expiresAt <= now) audioCachedState.delete(entryKey);
+  }
+  audioCachedState.set(key, { cached, expiresAt: now + AUDIO_STATE_TTL_MS });
+  while (audioCachedState.size > AUDIO_STATE_CACHE_MAX_ENTRIES) {
+    const oldest = audioCachedState.keys().next().value;
+    if (oldest === undefined) break;
+    audioCachedState.delete(oldest);
+  }
   return cached;
 }
