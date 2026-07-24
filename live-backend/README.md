@@ -60,6 +60,15 @@ merging the roles would stall HTTP and SSE behind jobs.
 | worker | ~300 MB floor | 1625 MB during `refresh_global_maps` (~30 s, ~6/h) | **1822 MB** |
 | host | 3.7 GiB, **no swap**; worst coincident ~2503 MB | | |
 
+**Those numbers are from `f397afa` — the code before Phases 8-13.** A fresh capture on `d0ef381`
+(10 min after the deploy restart) puts the server's VmHWM at **1403 MB** (essentially unchanged, and
+still the boot board build) but the worker's at **1984 MB** — above the `MemoryHigh` proposed below
+and close to the proposed `MemoryMax`. That boot also ran the Phase 8-13 migrations, so it may be a
+one-off rather than the new normal for `refresh_global_maps`. **Re-read both VmHWM values before
+applying any cap**, and raise the worker's numbers if 1984 MB persists. Note that cgroup
+`memory.peak` (2.3-2.4 G for both) additionally counts file page cache charged to the cgroup and is
+inflated by database reads — do not plan heap ceilings against it.
+
 Both peaks are legitimate work, so a cap below them guarantees an OOM kill at every boot / every
 global maps refresh. Note the plan's original arithmetic (per-unit `MemoryMax` = peak + 30-50%,
 *and* 750 MiB-1 GiB left outside the services) is unsatisfiable here — it sums to 4.2-4.8 GiB on a
@@ -69,7 +78,9 @@ runaway protection:
 - swapfile **first** (1-2 GiB, `vm.swappiness=10`): with no swap, `MemoryHigh` throttling reclaims
   the 256 MB read-only DB mmaps instead of anonymous heap, which is a latency cliff. Swap here is
   OOM insurance, not capacity.
-- then `MemoryHigh` only (server 1500M, worker 1700M) and watch `memory.events` for a week.
+- then `MemoryHigh` only (server 1500M, worker 1700M — **but re-check the worker against the note
+  above first; a 1984 MB high-water would make 1700M throttle normal work**) and watch
+  `memory.events` for a week.
 - then a `mania-hub.slice` with `MemoryHigh=2700M` / `MemoryMax=3000M`, plus per-unit
   `MemoryMax` (server 1900M, worker 2300M) and `MemorySwapMax`.
 - CPU: `CPUWeight` 300 (server) / 60 (worker) so HTTP stays responsive during chart analysis and
