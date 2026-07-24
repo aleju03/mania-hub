@@ -9,7 +9,6 @@ import { getScoreIdentity, getScoreTimeMs } from "./lib/score";
 import type {
   OsuScore,
   RankingsResponse,
-  CountryMapsData,
   LeanHomeScore,
   LeanHomePopoff,
   LeanTrackerScore,
@@ -324,8 +323,6 @@ interface AppState {
   popoffsByCountry: CountryRecord<CachedPopoff[]>;
   popoffsFetchedAtByCountry: CountryRecord<number>;
   popoffsWindowByCountry: CountryRecord<TopPlaysRange>;
-  mapsDataByCountry: CountryRecord<CountryMapsData>;
-  mapsDataFetchedAtByCountry: CountryRecord<number>;
   feedScoresByCountry: CountryRecord<LeanTrackerScore[]>;
   feedScoresFetchedAtByCountry: CountryRecord<number>;
   trackerPpGainsByCountry: CountryRecord<Record<number, CachedScoreGain>>;
@@ -346,7 +343,6 @@ interface AppState {
   setTopPlaysRange: (country: string, range: TopPlaysRange) => void;
   setSnipesFilters: (country: string, filters: SnipesFilters) => void;
   setPopoffs: (country: string, popoffs: CachedPopoff[], window: TopPlaysRange) => void;
-  setMapsData: (country: string, data: CountryMapsData) => void;
   setSnipes: (country: string, events: SnipeEvent[], scannedAt: number) => void;
   addFeedScores: (country: string, scores: LeanTrackerScore[]) => void;
   markFeedScoresFetched: (country: string) => void;
@@ -581,8 +577,6 @@ export const useAppStore = create<AppState>()(
       popoffsByCountry: {},
       popoffsFetchedAtByCountry: {},
       popoffsWindowByCountry: {},
-      mapsDataByCountry: {},
-      mapsDataFetchedAtByCountry: {},
       feedScoresByCountry: {},
       feedScoresFetchedAtByCountry: {},
       trackerPpGainsByCountry: {},
@@ -752,20 +746,6 @@ export const useAppStore = create<AppState>()(
             popoffsWindowByCountry: {
               ...state.popoffsWindowByCountry,
               [normalizedCountry]: window,
-            },
-          };
-        }),
-      setMapsData: (country, data) =>
-        set((state) => {
-          const normalizedCountry = normalizeCountryScope(country);
-          return {
-            mapsDataByCountry: {
-              ...state.mapsDataByCountry,
-              [normalizedCountry]: data,
-            },
-            mapsDataFetchedAtByCountry: {
-              ...state.mapsDataFetchedAtByCountry,
-              [normalizedCountry]: Date.now(),
             },
           };
         }),
@@ -1079,12 +1059,10 @@ export const useAppStore = create<AppState>()(
           ]),
         ),
         feedScoresFetchedAtByCountry: state.feedScoresFetchedAtByCountry,
-        // mapsDataByCountry and snipesByCountry are intentionally NOT
-        // persisted. They can balloon past the ~5MB localStorage quota
-        // once more than a country or two accumulates (the maps beatmapset
-        // pool alone is ~1-2MB per country; the snipes log is up to
-        // 500 entries × ~1KB per country). The server cache serves them
-        // in <100ms on hydration so the round-trip is cheap.
+        // snipesByCountry is intentionally NOT persisted. It can balloon
+        // past the ~5MB localStorage quota once more than a country or two
+        // accumulates (up to 500 entries × ~1KB per country). The server
+        // cache serves it in <100ms on hydration so the round-trip is cheap.
         // feedScoresByCountry IS persisted, but trimmed to TRACKER_FEED_PERSIST_LIMIT
         // (newest-first) above so the blob stays small. The full in-memory feed
         // (up to TRACKER_FEED_SCORE_LIMIT) is only for the current session.

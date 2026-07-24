@@ -41,18 +41,16 @@ import { PATTERN_COLOR, StarRatingBadge } from "../components/maps/SearchCard";
 import { ModBadge } from "../components/ui/ModBadge";
 import { Pagination } from "../components/ui/Pagination";
 import type {
-  CountryMapsData,
   MapsAggregatedBeatmap,
   MapsAggregatedFavourite,
   MapsFarmedEntry,
   MapsFarmedPlayer,
   MapsFavouriteBeatmapset,
   MapsPlayerEntry,
-  MapsPlayerFavourites,
   ReplayFrame,
 } from "../lib/types";
 import type { ManiaBeatmap, ManiaNote, ManiaScrollVelocity } from "../lib/beatmap-parser";
-import { useAppStore, useHasHydrated, useHiddenUserIds, useSelectedCountry } from "../store";
+import { useHasHydrated, useHiddenUserIds, useSelectedCountry } from "../store";
 import { pageSeo, mapsOgImagePath } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { getBeatmapAudioUrl, getPreviewAudioProxyUrl } from "../lib/audio-url";
@@ -72,17 +70,16 @@ import type { ReplaySkinSettings } from "../lib/replay-skin";
 import { useAuth } from "../lib/auth-context";
 import {
   fetchLiveMapSearchEntry,
-  fetchLiveMapsBeatmapsets,
   fetchLiveMapsPageSnapshot,
   fetchLiveMapsPlayersSnapshot,
   fetchLiveMapsProgress,
-  fetchLiveMapsRandomSnapshot,
+  fetchLiveMapsRandomDraw,
   isLiveBackendConfigured,
   openLiveEventSource,
   runLiveBackendAdminAction,
 } from "../lib/live-backend";
-import { LIVE_MAPS_PLAYERS_PAGE_SIZE } from "../lib/live-backend";
-import type { LiveMapSearchEntry, LiveMapsBrowseTab, LiveMapsDetailsPlayer, LiveMapsPageValue, LiveMapsPlayersKind, LiveMapsRefreshProgress } from "../lib/live-backend";
+import { LIVE_MAPS_PLAYERS_PAGE_SIZE, RANDOM_DRAW_BATCH_SIZE } from "../lib/live-backend";
+import type { LiveMapSearchEntry, LiveMapsBrowseTab, LiveMapsDetailsPlayer, LiveMapsPageValue, LiveMapsPlayersKind, LiveMapsRandomDrawValue, LiveMapsRandomPick, LiveMapsRefreshProgress } from "../lib/live-backend";
 import { CountryWarming } from "../components/CountryWarming";
 import { useCountryWarming } from "../lib/use-country-warming";
 import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
@@ -94,6 +91,14 @@ import {
   triStateActive,
 } from "../lib/maps-random-filter";
 import type { TriStateMode } from "../lib/maps-random-filter";
+import {
+  RANDOM_KEY_OPTIONS,
+  RANDOM_PATTERN_OPTIONS,
+  RANDOM_STATUS_OPTIONS,
+  buildRandomDrawFilters,
+  buildRandomDrawParams,
+} from "../lib/maps-random-draw-params";
+import type { RandomPattern, RandomWeight } from "../lib/maps-random-draw-params";
 import { useWindowActive } from "../lib/window-activity";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -106,7 +111,6 @@ type SortDirection = "desc" | "asc";
 type StatusFilter = "all" | "ranked" | "loved" | "graveyard" | "other";
 type PpFilter = number;
 type ModFilter = "all" | "dt" | "ht" | "nm";
-type RandomWeight = "players" | "favourites";
 
 // Sort vocabularies for the browse tabs' "Sort by" row and mobile dropdown.
 const FARMED_SORT_OPTIONS: SortOption[] = [
@@ -167,22 +171,18 @@ type MapsSearch = {
 
 const PAGE_SIZE = 24;
 const VISIBLE_AVATARS = 4;
-const FARMED_SINGLE_PLAYER_PP_MIN = 500;
 // Keep in sync with the live backend (FARMED_DOMINANT_MOD_SHARE): a speed mod is
 // dominant when more than this share of the farming roster used it.
 const FARMED_DOMINANT_MOD_SHARE = 0.4;
-// When "avoid repeats" is on, recently-picked players/maps get 10× less weight
-// rather than being excluded, so the advertised distribution still holds for
-// fresh candidates but the feed doesn't stall on the same person/map.
-const RECENT_BIAS = 0.1;
+// When "avoid repeats" is on, the ids of the last few picks ride along with the
+// draw request so the server excludes them from the next batch.
 const RECENT_PLAYER_HISTORY = 2;
 const RECENT_BEATMAP_HISTORY = 5;
-// How many upcoming picks to decide ahead of time and prefetch, so rerolls
-// resolve from cache instead of waiting on a network round-trip each time.
-const REROLL_LOOKAHEAD = 10;
+// Top the prefetched pick buffer back up once it drops to this many, so a
+// reroll keeps resolving from memory instead of a network round-trip.
+const RANDOM_DRAW_REFILL_AT = 3;
 const RANDOM_PICK_SETTINGS_STORAGE_KEY = "mania-hub-maps-random-pick-settings-v1";
 const SEARCH_URL_DEBOUNCE_MS = 250;
-const RANDOM_FULL_SET_CACHE_MAX_ENTRIES = 512;
 const LIVE_MAPS_PAGE_CACHE_MAX_ENTRIES = 48;
 
 function beatmapStatusBadgeClass(status: string): string {
@@ -209,18 +209,6 @@ function BeatmapStatusBadge({ status, className = "" }: { status: string; classN
       {status}
     </span>
   );
-}
-
-function weightedPick<T>(items: T[], weight: (item: T) => number): T {
-  let total = 0;
-  for (const item of items) total += weight(item);
-  if (total <= 0) return items[Math.floor(Math.random() * items.length)];
-  let r = Math.random() * total;
-  for (const item of items) {
-    r -= weight(item);
-    if (r <= 0) return item;
-  }
-  return items[items.length - 1];
 }
 
 const DEFAULT_MAPS_SEARCH: MapsSearch = {
@@ -298,17 +286,6 @@ type RandomPickSettings = Pick<MapsSearch, "rWeight" | "rAvoidRepeats">;
 type LiveMapsPageState = LiveMapsPageValue & { requestKey: string };
 const liveMapsPageSessionCache = new Map<string, LiveMapsPageState>();
 const liveMapsPageTotalSessionCache = new Map<string, number>();
-const randomFullSetSessionCache = new Map<number, MapsFavouriteBeatmapset>();
-
-function rememberRandomFullSet(set: MapsFavouriteBeatmapset): void {
-  randomFullSetSessionCache.delete(set.id);
-  randomFullSetSessionCache.set(set.id, set);
-  while (randomFullSetSessionCache.size > RANDOM_FULL_SET_CACHE_MAX_ENTRIES) {
-    const oldestKey = randomFullSetSessionCache.keys().next().value;
-    if (oldestKey === undefined) break;
-    randomFullSetSessionCache.delete(oldestKey);
-  }
-}
 
 // Read and JSON-parse a localStorage object, returning null on miss, parse
 // error, or non-object so each caller validates its own fields against a plain
@@ -365,37 +342,6 @@ function formatLiveMapsProgress(progress: LiveMapsRefreshProgress): string {
   const message = progress.message || (progress.stage === "persisting" ? "Saving maps..." : "Building maps...");
   return `${message} (${percent}%)`;
 }
-
-const RANDOM_STATUS_OPTIONS = ["ranked", "loved", "graveyard", "other"] as const;
-const RANDOM_KEY_OPTIONS = ["4k", "7k", "other"] as const;
-const RANDOM_PATTERN_OPTIONS = [
-  "jack",
-  "chordjack",
-  "stream",
-  "jumpstream",
-  "stamina",
-  "tech",
-  "ln",
-  "sv",
-  "tiebreaker",
-] as const;
-type RandomStatus = (typeof RANDOM_STATUS_OPTIONS)[number];
-type RandomKey = (typeof RANDOM_KEY_OPTIONS)[number];
-type RandomPattern = (typeof RANDOM_PATTERN_OPTIONS)[number];
-
-// Umbrella filters expand to their specific siblings so "Jack" also matches
-// chordjack/longjack/etc and "Stream" also matches jumpstream/handstream/etc.
-const RANDOM_PATTERN_MATCHES: Record<RandomPattern, string[]> = {
-  jack: ["jack", "chordjack", "longjack", "speedjack", "minijack"],
-  chordjack: ["chordjack"],
-  stream: ["stream", "jumpstream", "chordstream", "handstream", "dumpstream"],
-  jumpstream: ["jumpstream"],
-  stamina: ["stamina"],
-  tech: ["tech"],
-  ln: ["ln"],
-  sv: ["sv"],
-  tiebreaker: ["tiebreaker"],
-};
 
 const RANDOM_STAR_MIN = 2;
 const RANDOM_STAR_MAX = 9;
@@ -878,135 +824,6 @@ async function seekAudioElement(
   await waitForAudioSeekSettle(audio, targetSeconds, options?.seekSettleTimeoutMs);
 }
 
-function matchesKeyFilter(kc: number | null, filter: KeyFilter): boolean {
-  if (filter === "all") return true;
-  if (filter === "4k") return kc === 4;
-  if (filter === "7k") return kc === 7;
-  return kc !== null && kc !== 4 && kc !== 7;
-}
-
-function matchesStatusFilter(status: string, filter: StatusFilter): boolean {
-  if (filter === "all") return true;
-  if (filter === "ranked") return status === "ranked" || status === "approved";
-  if (filter === "loved") return status === "loved";
-  if (filter === "graveyard") return status === "graveyard";
-  return status !== "ranked" && status !== "approved" && status !== "loved" && status !== "graveyard";
-}
-
-function mapStatusBucket(status: string): RandomStatus {
-  if (status === "ranked" || status === "approved") return "ranked";
-  if (status === "loved") return "loved";
-  if (status === "graveyard") return "graveyard";
-  return "other";
-}
-
-function mapKeyBucket(keyCount: number): RandomKey {
-  if (keyCount === 4) return "4k";
-  if (keyCount === 7) return "7k";
-  return "other";
-}
-
-function matchesSearch(query: string, fields: Array<string | null | undefined>): boolean {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  return fields.some((field) => (field ?? "").toLowerCase().includes(q));
-}
-
-function normalizeRandomForceSearch(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-}
-
-function matchesRandomForceSearch(
-  pair: { player: MapsPlayerFavourites; beatmapset: MapsFavouriteBeatmapset },
-  query: string,
-): boolean {
-  const tokens = normalizeRandomForceSearch(query).split(/\s+/).filter(Boolean);
-  if (tokens.length === 0) return false;
-
-  const beatmapset = pair.beatmapset;
-  const haystack = normalizeRandomForceSearch([
-    beatmapset.id,
-    beatmapset.title,
-    beatmapset.artist,
-    beatmapset.creator,
-    beatmapset.status,
-    pair.player.username,
-    ...(beatmapset.patterns ?? []),
-    ...(beatmapset.maniaKeys ?? []).map((key) => `${key}k`),
-    ...(beatmapset.maniaBeatmaps ?? []).flatMap((beatmap) => [
-      beatmap.id,
-      beatmap.version,
-      `${Math.round(beatmap.cs)}k`,
-      beatmap.difficultyRating.toFixed(2),
-    ]),
-  ].join(" "));
-
-  return tokens.every((token) => haystack.includes(token));
-}
-
-function getLatestFarmedPlayTime(entry: MapsFarmedEntry): number {
-  return entry.players.reduce((latest, player) => {
-    const time = new Date(player.playedAt ?? 0).getTime();
-    return Number.isFinite(time) ? Math.max(latest, time) : latest;
-  }, 0);
-}
-
-function hasValidMapsDataShape(data: CountryMapsData | null): data is CountryMapsData {
-  if (!data) return false;
-  if (!Array.isArray(data.farmed) || !Array.isArray(data.mostPlayed) || !Array.isArray(data.favourites)) {
-    return false;
-  }
-  if (!Array.isArray(data.favouritesByPlayer) || !data.beatmapsetsPool || typeof data.beatmapsetsPool !== "object") {
-    return false;
-  }
-  if (typeof data.farmedGeneratedAt !== "string" || typeof data.favouritesGeneratedAt !== "string") {
-    return false;
-  }
-
-  const sampleSet = Object.values(data.beatmapsetsPool)[0];
-  if (
-    sampleSet && (
-      !Array.isArray(sampleSet.maniaKeys) ||
-      !Array.isArray(sampleSet.maniaBeatmaps) ||
-      typeof sampleSet.previewUrl !== "string" ||
-      typeof sampleSet.starMax !== "number" ||
-      !Array.isArray(sampleSet.patterns)
-    )
-  ) {
-    return false;
-  }
-
-  const sampleFarmed = data.farmed[0];
-  if (sampleFarmed) {
-    if (
-      typeof sampleFarmed.avgPp !== "number" ||
-      typeof sampleFarmed.maxPp !== "number" ||
-      typeof sampleFarmed.cs !== "number" ||
-      !Array.isArray(sampleFarmed.players)
-    ) {
-      return false;
-    }
-
-    const samplePlayer = sampleFarmed.players[0];
-    if (
-      samplePlayer && (
-        typeof samplePlayer.pp !== "number" ||
-        !Array.isArray(samplePlayer.mods) ||
-        (samplePlayer.scoreUrl !== null && typeof samplePlayer.scoreUrl !== "string") ||
-        (samplePlayer.playedAt !== null && typeof samplePlayer.playedAt !== "string")
-      )
-    ) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
 // ── Route ──────────────────────────────────────────────────────────────────
 
 export const Route = createFileRoute("/maps")({
@@ -1119,12 +936,9 @@ function MapsPage() {
   const auth = useAuth();
   const fallbackCountry = useSelectedCountry();
   const selectedCountry = mapsSearch.country ?? fallbackCountry;
-  const mapsData = useAppStore((s) => s.mapsDataByCountry[selectedCountry] ?? null);
-  const setMapsData = useAppStore((s) => s.setMapsData);
   const hiddenUserIds = useHiddenUserIds();
-  const hasValidMapsData = hasValidMapsDataShape(mapsData);
 
-  const [loadingMaps, setLoadingMaps] = useState(!mapsData);
+  const [loadingMaps, setLoadingMaps] = useState(true);
   const [rebuilding, setRebuilding] = useState(false);
   const [liveMapsRefreshing, setLiveMapsRefreshing] = useState(false);
   const [liveMapsProgress, setLiveMapsProgress] = useState<LiveMapsRefreshProgress | null>(null);
@@ -1159,7 +973,6 @@ function MapsPage() {
   const rStarsMax = mapsSearch.rStarsMax;
   const rWeight = mapsSearch.rWeight;
   const rAvoidRepeats = mapsSearch.rAvoidRepeats;
-  const isDevMode = auth.canUseDevFeatures;
   const canUseAdminFeatures = auth.canUseAdminFeatures;
   const liveBackendEnabled = isLiveBackendConfigured();
   const windowActive = useWindowActive();
@@ -1201,16 +1014,6 @@ function MapsPage() {
   const randomStatus = useMemo(() => parseTriStateCsv(rStatusRaw, RANDOM_STATUS_OPTIONS), [rStatusRaw]);
   const randomKey = useMemo(() => parseTriStateCsv(rKeyRaw, RANDOM_KEY_OPTIONS), [rKeyRaw]);
   const randomPattern = useMemo(() => parseTriStateCsv(rPatternRaw, RANDOM_PATTERN_OPTIONS), [rPatternRaw]);
-  // Expand umbrella tags ("Stream" → jumpstream/handstream/etc) on each side.
-  const randomPatternCanonical = useMemo(() => {
-    const expand = (set: Set<RandomPattern>): Set<string> | null => {
-      if (set.size === 0) return null;
-      const expanded = new Set<string>();
-      for (const p of set) for (const c of RANDOM_PATTERN_MATCHES[p]) expanded.add(c);
-      return expanded;
-    };
-    return { includes: expand(randomPattern.includes), excludes: expand(randomPattern.excludes) };
-  }, [randomPattern]);
   const totalRandomActive = triStateActive(randomStatus) + triStateActive(randomKey) + triStateActive(randomPattern) + (rStars > 0 || rStarsMax > 0 ? 1 : 0);
   const countryName = getCountryName(selectedCountry);
   // Header title tracks the active lens; search/collections keep "Mania maps".
@@ -1402,65 +1205,6 @@ function MapsPage() {
     };
   }, [liveBackendEnabled, liveMapsPageParams, liveMapsPageRequestKey, rememberLiveMapsPage, selectedCountry, windowActive]);
 
-  // The Random tab still needs the heavy beatmapsetsPool, so it is fetched
-  // only when Random is opened. Normal map browsing uses the paged endpoint.
-  const randomPoolReady = useMemo(() => {
-    if (!mapsData) return false;
-    if (!mapsData.favouritesByPlayer || mapsData.favouritesByPlayer.length === 0) return true;
-    return !!mapsData.beatmapsetsPool && Object.keys(mapsData.beatmapsetsPool).length > 0;
-  }, [mapsData]);
-
-  useEffect(() => {
-    if (!liveBackendEnabled || tab !== "random") return;
-    if (randomPoolReady) {
-      setLoadingMaps(false);
-      setLiveMapsProgress(null);
-      return;
-    }
-
-    let cancelled = false;
-    let pollTimer: ReturnType<typeof setTimeout> | null = null;
-    setLoadingMaps(true);
-    setLiveMapsProgress(null);
-
-    const loadRandomPool = () => {
-      fetchLiveMapsRandomSnapshot(selectedCountry)
-        .then((snapshot) => {
-          if (cancelled) return;
-          setLiveMapsRefreshing(snapshot.isStale || snapshot.refreshQueued);
-          setLiveMapsProgress(snapshot.progress ?? null);
-          if (snapshot.value && hasValidMapsDataShape(snapshot.value)) {
-            setMapsData(selectedCountry, snapshot.value);
-            setLoadingMaps(false);
-            setMapsFirstBuild(false);
-            setError(null);
-          } else {
-            setLoadingMaps(true);
-            setMapsFirstBuild(snapshot.generatedAt == null);
-          }
-          if (!cancelled && !snapshot.value && (snapshot.isStale || snapshot.refreshQueued)) {
-            pollTimer = setTimeout(loadRandomPool, 5_000);
-          }
-        })
-        .catch(() => {
-          if (!cancelled) {
-            setLoadingMaps(false);
-            setLiveMapsRefreshing(false);
-            setLiveMapsProgress(null);
-            setError("Couldn't load maps data. Try again later.");
-          }
-        })
-        ;
-    };
-
-    loadRandomPool();
-
-    return () => {
-      cancelled = true;
-      if (pollTimer) clearTimeout(pollTimer);
-    };
-  }, [liveBackendEnabled, randomPoolReady, selectedCountry, setMapsData, tab]);
-
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const saved = readRandomPickSettings();
@@ -1475,138 +1219,6 @@ function MapsPage() {
 
     if (Object.keys(patch).length > 0) updateMapsSearch(patch);
   }, []);
-
-  // ── Filtered + sorted: farmed (from best scores) ────────────────────────
-  // Maps data is aggregate (per-map player lists). Strip hidden players from
-  // every player list once here and recompute the derived counts, so the
-  // farmed/popular/favourites/random views all read already-cleaned data.
-  const visibleMapsData = useMemo<CountryMapsData | null>(() => {
-    if (!mapsData) return null;
-    if (liveBackendPaged && tab !== "random") return mapsData;
-    if (hiddenUserIds.size === 0) return mapsData;
-
-    const farmed = mapsData.farmed
-      .map((entry) => {
-        const players = entry.players.filter((p) => !hiddenUserIds.has(p.id));
-        if (players.length === entry.players.length) return entry;
-        if (players.length === 0) return null;
-        return {
-          ...entry,
-          players,
-          playerCount: players.length,
-          avgPp: players.reduce((sum, p) => sum + p.pp, 0) / players.length,
-          maxPp: Math.max(...players.map((p) => p.pp), 0),
-        };
-      })
-      .filter((entry): entry is MapsFarmedEntry => entry !== null);
-
-    const mostPlayed = mapsData.mostPlayed
-      .map((entry) => {
-        const players = entry.players.filter((p) => !hiddenUserIds.has(p.id));
-        if (players.length === entry.players.length) return entry;
-        if (players.length === 0) return null;
-        return {
-          ...entry,
-          players,
-          playerCount: players.length,
-          totalPlays: players.reduce((sum, p) => sum + p.count, 0),
-        };
-      })
-      .filter((entry): entry is MapsAggregatedBeatmap => entry !== null);
-
-    const favourites = mapsData.favourites
-      .map((entry) => {
-        const players = entry.players.filter((p) => !hiddenUserIds.has(p.id));
-        if (players.length === entry.players.length) return entry;
-        if (players.length === 0) return null;
-        return { ...entry, players, playerCount: players.length };
-      })
-      .filter((entry): entry is MapsAggregatedFavourite => entry !== null);
-
-    const favouritesByPlayer = mapsData.favouritesByPlayer.filter(
-      (player) => !hiddenUserIds.has(player.id),
-    );
-
-    return { ...mapsData, farmed, mostPlayed, favourites, favouritesByPlayer };
-  }, [mapsData, hiddenUserIds, liveBackendPaged, tab]);
-
-  const filteredFarmed = useMemo(() => {
-    if (liveBackendPaged || tab !== "farmed") return [];
-    if (!visibleMapsData?.farmed?.length) return [];
-    return visibleMapsData.farmed
-      .map((entry) => {
-        // When pp filter is active, only keep players meeting the threshold
-        if (ppFilter > 0) {
-          const filtered = entry.players.filter((p) => p.pp >= ppFilter);
-          const filteredMaxPp = Math.max(...filtered.map((p) => p.pp), 0);
-          if (filtered.length < 2 && filteredMaxPp < FARMED_SINGLE_PLAYER_PP_MIN) return null;
-          return {
-            ...entry,
-            players: filtered,
-            playerCount: filtered.length,
-            avgPp: filtered.reduce((s, p) => s + p.pp, 0) / filtered.length,
-            maxPp: filteredMaxPp,
-          };
-        }
-        return entry;
-      })
-      .filter(
-        (m): m is MapsFarmedEntry =>
-          m !== null &&
-          matchesKeyFilter(m.cs, keyFilter) &&
-          matchesSearch(searchQuery, [m.title, m.artist, m.creator, m.version]) &&
-          (modFilter === "all" || (
-            modFilter === "dt" ? getDominantSpeedMod(m.players) === "DT" :
-            modFilter === "ht" ? getDominantSpeedMod(m.players) === "HT" :
-            getDominantSpeedMod(m.players) === null
-          )),
-      )
-      .sort((a, b) => {
-        const flip = sortDir === "asc" ? -1 : 1;
-        if (farmedSort === "players") return (b.playerCount - a.playerCount) * flip || b.avgPp - a.avgPp;
-        if (farmedSort === "avg-pp") return (b.avgPp - a.avgPp) * flip;
-        if (farmedSort === "max-pp") return (b.maxPp - a.maxPp) * flip;
-        if (farmedSort === "recent") {
-          return (getLatestFarmedPlayTime(b) - getLatestFarmedPlayTime(a)) * flip || b.playerCount - a.playerCount || b.avgPp - a.avgPp;
-        }
-        return (b.difficultyRating - a.difficultyRating) * flip;
-      });
-  }, [visibleMapsData, keyFilter, searchQuery, farmedSort, sortDir, ppFilter, modFilter, liveBackendPaged, tab]);
-
-  // ── Filtered + sorted: most played (from most_played endpoint) ──────────
-  const filteredMostPlayed = useMemo(() => {
-    if (liveBackendPaged || tab !== "popular") return [];
-    if (!visibleMapsData?.mostPlayed?.length) return [];
-    return visibleMapsData.mostPlayed
-      .filter(
-        (m) =>
-          matchesKeyFilter(parseKeyCount(m.version), keyFilter) &&
-          matchesSearch(searchQuery, [m.title, m.artist, m.creator, m.version]),
-      )
-      .sort((a, b) => {
-        const flip = sortDir === "asc" ? -1 : 1;
-        if (beatmapSort === "plays") return (b.totalPlays - a.totalPlays) * flip;
-        if (beatmapSort === "players") return (b.playerCount - a.playerCount) * flip || b.totalPlays - a.totalPlays;
-        if (beatmapSort === "stars") return (b.difficultyRating - a.difficultyRating) * flip;
-        return (b.totalLength - a.totalLength) * flip;
-      });
-  }, [visibleMapsData, keyFilter, searchQuery, beatmapSort, sortDir, liveBackendPaged, tab]);
-
-  // ── Filtered + sorted: favourites ───────────────────────────────────────
-  const filteredFavourites = useMemo(() => {
-    if (liveBackendPaged || tab !== "favourites") return [];
-    if (!visibleMapsData?.favourites?.length) return [];
-    return visibleMapsData.favourites
-      .filter(
-        (f) =>
-          matchesStatusFilter(f.status, statusFilter) &&
-          matchesSearch(searchQuery, [f.title, f.artist, f.creator]),
-      )
-      .sort(
-        (a, b) =>
-          b.playerCount - a.playerCount || b.globalFavouriteCount - a.globalFavouriteCount,
-      );
-  }, [visibleMapsData, statusFilter, searchQuery, liveBackendPaged, tab]);
 
   const liveVisiblePageItems = useMemo(() => {
     if (!currentLiveMapsPage) return [];
@@ -1647,50 +1259,18 @@ function MapsPage() {
       .filter((entry): entry is MapsAggregatedFavourite => entry !== null);
   }, [currentLiveMapsPage, hiddenUserIds]);
 
-  const currentList =
-    liveBackendPaged
-      ? liveVisiblePageItems
-      : tab === "farmed"
-      ? filteredFarmed
-      : tab === "popular"
-        ? filteredMostPlayed
-        : tab === "favourites"
-          ? filteredFavourites
-          : [];
-  const currentTotal = liveBackendPaged ? (currentLiveMapsPage?.total ?? 0) : currentList.length;
+  // Browsing is fully server-paged; Random draws its own picks and never fills
+  // this list.
+  const currentList = liveBackendPaged ? liveVisiblePageItems : [];
+  const currentTotal = currentLiveMapsPage?.total ?? 0;
   const totalPages = tab === "random" ? 0 : Math.ceil(currentTotal / PAGE_SIZE);
   const paginationTotal = liveBackendPaged ? knownLiveMapsTotal : currentTotal;
   const paginationTotalPages = tab === "random" ? 0 : Math.ceil(paginationTotal / PAGE_SIZE);
-  const currentRawListLength =
-    liveBackendPaged
-      ? currentTotal
-      : tab === "farmed"
-      ? mapsData?.farmed.length ?? 0
-      : tab === "popular"
-        ? mapsData?.mostPlayed.length ?? 0
-        : tab === "favourites"
-          ? mapsData?.favourites.length ?? 0
-          : 0;
-  const currentMapsSectionLoading =
-    liveBackendEnabled &&
-    liveMapsRefreshing &&
-    tab !== "random" &&
-    !liveBackendPaged &&
-    !!mapsData &&
-    currentRawListLength === 0;
-  const currentMapsSectionLabel =
-    tab === "farmed"
-      ? "most farmed"
-      : tab === "popular"
-        ? "widely played"
-        : "community favorites";
 
   useEffect(() => {
     if (tab === "random" || totalPages === 0 || page < totalPages) return;
     updateMapsSearch({ page: totalPages - 1 });
   }, [page, tab, totalPages]);
-
-  const paginated = tab === "random" ? [] : liveBackendPaged ? currentList : currentList.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   // The three rankings are one surface seen through different lenses, so they
   // share a segmented control. "random" draws from the favourites pool, so it
@@ -1775,7 +1355,7 @@ function MapsPage() {
     updateMapsSearch({ sSort, sDir, page: 0 });
   }, [hasHydrated, tab, mapsSearch.sSort, mapsSearch.sDir, updateMapsSearch]);
 
-  const isLoading = (liveBackendPaged ? liveMapsPagePending : loadingMaps) || currentMapsSectionLoading;
+  const isLoading = liveBackendPaged ? liveMapsPagePending : loadingMaps;
 
   useEffect(() => {
     if (!liveBackendEnabled || !isLoading) return;
@@ -1796,31 +1376,31 @@ function MapsPage() {
     };
   }, [isLoading, liveBackendEnabled, selectedCountry]);
 
-  // ── Random tab: pick a random top-50 player and a single random favourite ──
-  // The pool ships lean entries, so a pick records the chosen set id and the
-  // full record (covers + per-difficulty list + preview audio) is fetched on
-  // demand, cached, and prefetched a few ahead so rerolls stay snappy.
-  const [randomPlayer, setRandomPlayer] = useState<MapsPlayerFavourites | null>(null);
-  const [pickedSetId, setPickedSetId] = useState<number | null>(null);
-  const [randomBeatmapset, setRandomBeatmapset] = useState<MapsFavouriteBeatmapset | null>(null);
-  const [randomPickResolving, setRandomPickResolving] = useState(false);
-  const fullSetCacheRef = useRef<Map<number, MapsFavouriteBeatmapset>>(randomFullSetSessionCache);
-  const randomPickRequestIdRef = useRef(0);
-  const lastRandomKeyRef = useRef<string | null>(null);
-  // Pre-decided upcoming picks, warmed ahead of time so rerolls resolve from
-  // cache. See refillPendingPicks / reshuffleRandom.
-  const pendingPicksRef = useRef<Array<{ player: MapsPlayerFavourites; beatmapset: MapsFavouriteBeatmapset }>>([]);
-  // Full-set fetches currently in flight, keyed by set id, so a pick can ride
-  // along on a warm request already running instead of firing a duplicate.
-  const inflightSetFetchRef = useRef<Map<number, Promise<MapsFavouriteBeatmapset | null>>>(new Map());
-  // Sliding windows used when "avoid repeats" is on (see drawRandomPick).
+  // ── Random tab: the server draws the picks ─────────────────────────────
+  // Filters travel with the request and the response carries a batch of fully
+  // hydrated picks plus the eligible counts, so the browser never holds the
+  // favourites pool. Rerolls come out of the prefetched batch.
+  const [randomDraw, setRandomDraw] = useState<LiveMapsRandomDrawValue | null>(null);
+  const [randomPick, setRandomPick] = useState<LiveMapsRandomPick | null>(null);
+  // A reroll with an empty buffer keeps the current card up and spins the
+  // button instead of flashing a skeleton.
+  const [rerollPending, setRerollPending] = useState(false);
+  const pendingPicksRef = useRef<LiveMapsRandomPick[]>([]);
+  // Only the newest draw's response is applied; earlier ones are dropped so a
+  // filter change can't be overwritten by a request it superseded.
+  const drawRequestIdRef = useRef(0);
+  const drawAbortRef = useRef<AbortController | null>(null);
+  const drawPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Mirrors of state the fetch handlers read without wanting a new identity on
+  // every draw.
+  const hasRandomDrawRef = useRef(false);
+  const hasRandomPickRef = useRef(false);
+  const lastRandomDrawKeyRef = useRef<string | null>(null);
+  // Sliding windows sent as hard exclusions when "avoid repeats" is on.
   const recentRandomPlayerIdsRef = useRef<number[]>([]);
   const recentRandomBeatmapIdsRef = useRef<number[]>([]);
   const [rerollMenuOpen, setRerollMenuOpen] = useState(false);
-  const [devRandomForceQuery, setDevRandomForceQuery] = useState("");
-  const [devRandomForceOpen, setDevRandomForceOpen] = useState(false);
   const rerollMenuRef = useRef<HTMLDivElement | null>(null);
-  const devRandomForceRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!rerollMenuOpen) return;
     const onDown = (e: MouseEvent) => {
@@ -1833,34 +1413,24 @@ function MapsPage() {
   }, [rerollMenuOpen]);
 
   useEffect(() => {
-    if (!devRandomForceOpen) return;
-    const onDown = (e: MouseEvent) => {
-      if (devRandomForceRef.current && !devRandomForceRef.current.contains(e.target as Node)) {
-        setDevRandomForceOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [devRandomForceOpen]);
-
-  useEffect(() => {
-    if (tab !== "random" || devRandomForceQuery.trim().length < 2) {
-      setDevRandomForceOpen(false);
-    }
-  }, [devRandomForceQuery, tab]);
-
-  useEffect(() => {
-    randomPickRequestIdRef.current += 1;
-    lastRandomKeyRef.current = null;
+    drawRequestIdRef.current += 1;
+    drawAbortRef.current?.abort();
+    if (drawPollTimerRef.current) clearTimeout(drawPollTimerRef.current);
     recentRandomPlayerIdsRef.current = [];
     recentRandomBeatmapIdsRef.current = [];
     pendingPicksRef.current = [];
-    inflightSetFetchRef.current.clear();
-    setRandomPlayer(null);
-    setPickedSetId(null);
-    setRandomBeatmapset(null);
-    setRandomPickResolving(false);
+    hasRandomDrawRef.current = false;
+    hasRandomPickRef.current = false;
+    lastRandomDrawKeyRef.current = null;
+    setRandomDraw(null);
+    setRandomPick(null);
+    setRerollPending(false);
   }, [selectedCountry]);
+
+  useEffect(() => () => {
+    drawAbortRef.current?.abort();
+    if (drawPollTimerRef.current) clearTimeout(drawPollTimerRef.current);
+  }, []);
 
   // ── Mobile collapsible filter panel (shared across tabs) ────────────────
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -1912,227 +1482,157 @@ function MapsPage() {
   };
   useEffect(() => { if (filtersOpen) setDragOffset(0); }, [filtersOpen]);
 
-  const randomPool = useMemo(() => {
-    if (tab !== "random") return [];
-    if (!visibleMapsData?.favouritesByPlayer || !visibleMapsData?.beatmapsetsPool) return [];
-    const pairs: Array<{ player: MapsPlayerFavourites; beatmapset: MapsFavouriteBeatmapset }> = [];
-    for (const player of visibleMapsData.favouritesByPlayer) {
-      for (const bid of player.beatmapsetIds) {
-        const beatmapset = visibleMapsData.beatmapsetsPool[bid];
-        if (!beatmapset) continue;
-        const statusBucket = mapStatusBucket(beatmapset.status);
-        if (randomStatus.includes.size > 0 && !randomStatus.includes.has(statusBucket)) continue;
-        if (randomStatus.excludes.has(statusBucket)) continue;
-        const keys = beatmapset.maniaKeys ?? [];
-        if (randomKey.includes.size > 0 && !keys.some((k) => randomKey.includes.has(mapKeyBucket(k)))) continue;
-        if (randomKey.excludes.size > 0 && keys.some((k) => randomKey.excludes.has(mapKeyBucket(k)))) continue;
-        const patterns = beatmapset.patterns ?? [];
-        if (randomPatternCanonical.includes && !patterns.some((p) => randomPatternCanonical.includes!.has(p))) continue;
-        if (randomPatternCanonical.excludes && patterns.some((p) => randomPatternCanonical.excludes!.has(p))) continue;
-        if (rStars > 0 && (beatmapset.starMax ?? 0) < rStars) continue;
-        if (rStarsMax > 0 && (beatmapset.starMin ?? Number.MAX_VALUE) > rStarsMax) continue;
-        pairs.push({ player, beatmapset });
-      }
-    }
-    return pairs;
-  }, [visibleMapsData, randomStatus, randomKey, randomPatternCanonical, rStars, rStarsMax, tab]);
-  const randomUniqueBeatmapsetCount = useMemo(
-    () => new Set(randomPool.map((pair) => pair.beatmapset.id)).size,
-    [randomPool],
+  // Filters as the server sees them. Stable across rerolls, so the serialized
+  // form doubles as the key that invalidates the prefetched queue.
+  const randomDrawFilters = useMemo(
+    () => buildRandomDrawFilters({
+      rStatus: rStatusRaw,
+      rKey: rKeyRaw,
+      rPattern: rPatternRaw,
+      rStars,
+      rStarsMax,
+      rWeight,
+      hiddenUserIds,
+    }),
+    [rStatusRaw, rKeyRaw, rPatternRaw, rStars, rStarsMax, rWeight, hiddenUserIds],
+  );
+  // Avoid-repeats isn't a server filter (it only decides whether the recency
+  // windows are sent), but flipping it should still re-draw the queue.
+  const randomDrawKey = useMemo(
+    () => JSON.stringify({ ...randomDrawFilters, rAvoidRepeats }),
+    [randomDrawFilters, rAvoidRepeats],
   );
 
-  // Group eligible pairs by player so sampling can be uniform per-player
-  // rather than per-pair (players with more favourites would otherwise win).
-  const randomPlayerGroups = useMemo(() => {
-    const byId = new Map<number, { player: MapsPlayerFavourites; beatmapsets: MapsFavouriteBeatmapset[] }>();
-    for (const { player, beatmapset } of randomPool) {
-      const g = byId.get(player.id);
-      if (g) g.beatmapsets.push(beatmapset);
-      else byId.set(player.id, { player, beatmapsets: [beatmapset] });
+  const commitRandomPick = useCallback((pick: LiveMapsRandomPick) => {
+    hasRandomPickRef.current = true;
+    setRandomPick(pick);
+    setRerollPending(false);
+    if (!rAvoidRepeats) return;
+
+    const nextPlayers = [...recentRandomPlayerIdsRef.current, pick.player.id];
+    if (nextPlayers.length > RECENT_PLAYER_HISTORY) nextPlayers.shift();
+    recentRandomPlayerIdsRef.current = nextPlayers;
+
+    const nextSets = [...recentRandomBeatmapIdsRef.current, pick.beatmapset.id];
+    if (nextSets.length > RECENT_BEATMAP_HISTORY) nextSets.shift();
+    recentRandomBeatmapIdsRef.current = nextSets;
+  }, [rAvoidRepeats]);
+
+  // One draw. `commit` shows the first arriving pick; a prefetch only fills the
+  // queue and refreshes the header counts.
+  const requestDraw: (count: number, options: { commit: boolean }) => Promise<void> = useCallback((count, options) => {
+    const requestId = drawRequestIdRef.current + 1;
+    drawRequestIdRef.current = requestId;
+    drawAbortRef.current?.abort();
+    if (drawPollTimerRef.current) {
+      clearTimeout(drawPollTimerRef.current);
+      drawPollTimerRef.current = null;
     }
-    return [...byId.values()];
-  }, [randomPool]);
+    const controller = new AbortController();
+    drawAbortRef.current = controller;
 
-  const devRandomForceMatches = useMemo(() => {
-    if (!isDevMode || tab !== "random" || devRandomForceQuery.trim().length < 2) return [];
-    return randomPool
-      .filter((pair) => matchesRandomForceSearch(pair, devRandomForceQuery))
-      .slice(0, 12);
-  }, [devRandomForceQuery, isDevMode, randomPool, tab]);
+    const params = buildRandomDrawParams(randomDrawFilters, {
+      count,
+      excludeUsers: rAvoidRepeats ? recentRandomPlayerIdsRef.current : [],
+      // Queued sets are excluded too, so a refill doesn't hand back a pick the
+      // user is about to see anyway.
+      excludeSets: [
+        ...(rAvoidRepeats ? recentRandomBeatmapIdsRef.current : []),
+        ...pendingPicksRef.current.map((pick) => pick.beatmapset.id),
+      ],
+    });
 
-  // Prefetch full set records (covers + per-difficulty list + preview audio) in
-  // a single batch and track each as in-flight, so a pick that lands before the
-  // batch resolves can await it instead of firing a duplicate request.
-  const warmRandomSetCache = useCallback((ids: number[]) => {
-    if (!liveBackendEnabled) return;
-    const need = [...new Set(ids)].filter(
-      (id) => Number.isFinite(id) && id > 0 && !fullSetCacheRef.current.has(id) && !inflightSetFetchRef.current.has(id),
-    );
-    if (need.length === 0) return;
-    const batch = fetchLiveMapsBeatmapsets(selectedCountry, need)
-      .then((sets) => {
-        for (const set of sets) rememberRandomFullSet(set);
-        return sets;
+    return fetchLiveMapsRandomDraw(selectedCountry, params, { signal: controller.signal })
+      .then((snapshot) => {
+        if (drawRequestIdRef.current !== requestId) return;
+        setLiveMapsRefreshing(snapshot.isStale || snapshot.refreshQueued);
+        setLiveMapsProgress(snapshot.progress ?? null);
+
+        if (!snapshot.value) {
+          // Cold country: the maps build is still running, so keep the
+          // "Building maps... (N%)" indicator up and come back for it.
+          setMapsFirstBuild(snapshot.generatedAt == null);
+          if (snapshot.isStale || snapshot.refreshQueued) {
+            drawPollTimerRef.current = setTimeout(() => void requestDraw(count, options), 5_000);
+          } else {
+            setRerollPending(false);
+          }
+          return;
+        }
+
+        hasRandomDrawRef.current = true;
+        setRandomDraw(snapshot.value);
+        setLoadingMaps(false);
+        setMapsFirstBuild(false);
+        setError(null);
+        // The hidden-user list is capped on the wire, so re-check locally.
+        pendingPicksRef.current.push(
+          ...snapshot.value.picks.filter((pick) => !hiddenUserIds.has(pick.player.id)),
+        );
+
+        if (!options.commit) return;
+        const next = pendingPicksRef.current.shift();
+        if (next) commitRandomPick(next);
+        else setRerollPending(false);
       })
-      .catch(() => [] as MapsFavouriteBeatmapset[]);
-    for (const id of need) {
-      const tracked = batch
-        .then((sets) => sets.find((set) => set.id === id) ?? fullSetCacheRef.current.get(id) ?? null)
-        .finally(() => inflightSetFetchRef.current.delete(id));
-      inflightSetFetchRef.current.set(id, tracked);
-    }
-  }, [liveBackendEnabled, selectedCountry]);
-
-  // Show the lean pick immediately, then replace it with the full card metadata
-  // once covers, preview audio, and difficulty data arrive.
-  const commitRandomPick = useCallback((player: MapsPlayerFavourites, poolSet: MapsFavouriteBeatmapset) => {
-    const setId = poolSet.id;
-    const requestId = randomPickRequestIdRef.current + 1;
-    randomPickRequestIdRef.current = requestId;
-
-    const applyPick = (beatmapset: MapsFavouriteBeatmapset | null) => {
-      if (randomPickRequestIdRef.current !== requestId) return;
-      setRandomPlayer(player);
-      setPickedSetId(setId);
-      setRandomBeatmapset(beatmapset ?? poolSet);
-      setRandomPickResolving(false);
-    };
-
-    if (poolSet.maniaBeatmaps.length > 0) {
-      rememberRandomFullSet(poolSet);
-      applyPick(poolSet);
-      return;
-    }
-
-    const cached = fullSetCacheRef.current.get(setId);
-    if (cached) {
-      applyPick(cached);
-      return;
-    }
-
-    if (!liveBackendEnabled) {
-      applyPick(poolSet);
-      return;
-    }
-
-    // Show the lean pick immediately; finish once the full record lands. Reuse a
-    // warm fetch already in flight for this set rather than starting a new one.
-    setRandomPlayer(player);
-    setPickedSetId(setId);
-    setRandomBeatmapset(poolSet);
-    setRandomPickResolving(true);
-    const pending =
-      inflightSetFetchRef.current.get(setId) ??
-      fetchLiveMapsBeatmapsets(selectedCountry, [setId]).then((sets) => {
-        const full = sets.find((set) => set.id === setId) ?? null;
-        if (full) rememberRandomFullSet(full);
-        return full;
+      .catch(() => {
+        if (controller.signal.aborted || drawRequestIdRef.current !== requestId) return;
+        setLoadingMaps(false);
+        setLiveMapsRefreshing(false);
+        setLiveMapsProgress(null);
+        setRerollPending(false);
+        // A failed refill leaves the visible pick alone; only a cold tab errors.
+        if (!hasRandomDrawRef.current) setError("Couldn't load maps data. Try again later.");
       });
-    pending.then((full) => applyPick(full)).catch(() => applyPick(poolSet));
-  }, [liveBackendEnabled, selectedCountry]);
-
-  const forceDevRandomPick = useCallback((pair: { player: MapsPlayerFavourites; beatmapset: MapsFavouriteBeatmapset }) => {
-    commitRandomPick(pair.player, pair.beatmapset);
-    setDevRandomForceOpen(false);
-  }, [commitRandomPick]);
-
-  // Draw a single pick using the current weighting, advancing the avoid-repeats
-  // windows so consecutive draws (including pre-decided queued ones) don't
-  // repeat. Returns null when there's nothing eligible to pick.
-  const drawRandomPick = useCallback(() => {
-    if (randomPlayerGroups.length === 0) return null;
-    const recentPlayers = rAvoidRepeats ? new Set(recentRandomPlayerIdsRef.current) : null;
-    const recentMaps = rAvoidRepeats ? new Set(recentRandomBeatmapIdsRef.current) : null;
-
-    let pickedPlayer: MapsPlayerFavourites;
-    let pickedBeatmapset: MapsFavouriteBeatmapset;
-
-    if (rWeight === "favourites") {
-      // "Equal chance per map": sample a (player, beatmapset) pair uniformly
-      // so every eligible favourite is equally likely. Players with bigger
-      // collections show up more often as a side-effect.
-      const pair = weightedPick(randomPool, (p) => {
-        let w = 1;
-        if (recentPlayers?.has(p.player.id)) w *= RECENT_BIAS;
-        if (recentMaps?.has(p.beatmapset.id)) w *= RECENT_BIAS;
-        return w;
-      });
-      pickedPlayer = pair.player;
-      pickedBeatmapset = pair.beatmapset;
-    } else {
-      // "Equal chance per player": pick a player uniformly, then pick one of
-      // their eligible favourites uniformly.
-      const group = weightedPick(randomPlayerGroups, (g) =>
-        recentPlayers?.has(g.player.id) ? RECENT_BIAS : 1,
-      );
-      pickedPlayer = group.player;
-      pickedBeatmapset = weightedPick(group.beatmapsets, (b) =>
-        recentMaps?.has(b.id) ? RECENT_BIAS : 1,
-      );
-    }
-
-    if (rAvoidRepeats) {
-      const nextPlayers = [...recentRandomPlayerIdsRef.current, pickedPlayer.id];
-      if (nextPlayers.length > RECENT_PLAYER_HISTORY) nextPlayers.shift();
-      recentRandomPlayerIdsRef.current = nextPlayers;
-
-      const nextMaps = [...recentRandomBeatmapIdsRef.current, pickedBeatmapset.id];
-      if (nextMaps.length > RECENT_BEATMAP_HISTORY) nextMaps.shift();
-      recentRandomBeatmapIdsRef.current = nextMaps;
-    }
-
-    return { player: pickedPlayer, beatmapset: pickedBeatmapset };
-  }, [randomPlayerGroups, randomPool, rWeight, rAvoidRepeats]);
-
-  // Keep the lookahead queue topped up and prefetch its sets, so the next
-  // several rerolls hit warm cache instead of waiting on a fetch.
-  const refillPendingPicks = useCallback(() => {
-    const queue = pendingPicksRef.current;
-    let guard = 0;
-    while (queue.length < REROLL_LOOKAHEAD && guard++ < REROLL_LOOKAHEAD * 4) {
-      const pick = drawRandomPick();
-      if (!pick) break;
-      queue.push(pick);
-    }
-    if (queue.length > 0) warmRandomSetCache(queue.map((p) => p.beatmapset.id));
-  }, [drawRandomPick, warmRandomSetCache]);
+  }, [commitRandomPick, hiddenUserIds, rAvoidRepeats, randomDrawFilters, selectedCountry]);
 
   const reshuffleRandom = useCallback(() => {
-    if (randomPlayerGroups.length === 0) {
-      randomPickRequestIdRef.current += 1;
-      pendingPicksRef.current = [];
-      setRandomPlayer(null);
-      setPickedSetId(null);
-      setRandomBeatmapset(null);
-      setRandomPickResolving(false);
-      return;
-    }
-    // Serve the next pre-decided pick (already warmed); the very first one after
-    // entering or changing filters falls through to an immediate draw.
-    if (pendingPicksRef.current.length === 0) refillPendingPicks();
     const next = pendingPicksRef.current.shift();
-    if (!next) return;
-    commitRandomPick(next.player, next.beatmapset);
-    refillPendingPicks();
-  }, [randomPlayerGroups, refillPendingPicks, commitRandomPick]);
+    if (next) commitRandomPick(next);
+    else setRerollPending(true);
+    if (pendingPicksRef.current.length <= RANDOM_DRAW_REFILL_AT) {
+      void requestDraw(RANDOM_DRAW_BATCH_SIZE, { commit: !next });
+    }
+  }, [commitRandomPick, requestDraw]);
 
-  // Filter / data / weighting changes invalidate the pre-decided queue: the
-  // queued picks may no longer be eligible or were drawn under the old weights.
+  // Entering the tab (or a country switch / rebuild) draws and commits. A later
+  // filter change only refreshes the counts and re-warms the queue: filter
+  // changes never auto-reroll, the user must click Reroll.
   useEffect(() => {
-    pendingPicksRef.current = [];
-  }, [randomPool, rWeight, rAvoidRepeats]);
+    if (!liveBackendEnabled || tab !== "random") return;
+    const firstEntry = lastRandomDrawKeyRef.current === null;
+    const filtersChanged = lastRandomDrawKeyRef.current !== randomDrawKey;
+    lastRandomDrawKeyRef.current = randomDrawKey;
+    // Queued picks were drawn under the previous filters.
+    if (filtersChanged) pendingPicksRef.current = [];
 
-  // Only reshuffle on first entry to the tab or when the underlying data
-  // changes (country switch / rebuild). Filter changes never auto-reroll —
-  // the user must click Reroll explicitly.
-  useEffect(() => {
-    if (tab !== "random" || !mapsData) return;
-    const dataKey = `${selectedCountry}:${mapsData.favouritesGeneratedAt}`;
-    const dataChanged = lastRandomKeyRef.current !== dataKey;
-    lastRandomKeyRef.current = dataKey;
-    if (dataChanged || pickedSetId == null) reshuffleRandom();
-  }, [tab, selectedCountry, mapsData, reshuffleRandom, pickedSetId]);
+    let debounce: number | null = null;
+    if (firstEntry) {
+      setLoadingMaps(true);
+      void requestDraw(RANDOM_DRAW_BATCH_SIZE, { commit: true });
+    } else if (filtersChanged) {
+      // Chip toggles only refresh the counts and re-warm the queue; the visible
+      // pick stays put unless there was never one to begin with.
+      debounce = window.setTimeout(
+        () => void requestDraw(RANDOM_DRAW_BATCH_SIZE, { commit: !hasRandomPickRef.current }),
+        SEARCH_URL_DEBOUNCE_MS,
+      );
+    }
+    // Otherwise this is a re-entry with unchanged filters: the counts and the
+    // warm queue both still hold, so don't spend a request on them.
 
+    return () => {
+      if (debounce != null) window.clearTimeout(debounce);
+      // Leaving the tab (or superseding this draw) also stops the cold-country
+      // repoll; a new request schedules its own.
+      if (drawPollTimerRef.current) {
+        clearTimeout(drawPollTimerRef.current);
+        drawPollTimerRef.current = null;
+      }
+    };
+  }, [liveBackendEnabled, randomDrawKey, requestDraw, tab]);
+
+  const randomPickCount = randomDraw?.totalPicks ?? 0;
   const hasActiveFilters =
     tab === "random"
       ? totalRandomActive > 0
@@ -2265,11 +1765,8 @@ function MapsPage() {
     try {
       await runLiveBackendAdminAction({ data: { path: `/api/admin/refresh-maps?country=${selectedCountry}` } });
       if (tab === "random") {
-        const snapshot = await fetchLiveMapsRandomSnapshot(selectedCountry);
-        setLiveMapsProgress(snapshot.progress ?? null);
-        if (snapshot.value && hasValidMapsDataShape(snapshot.value)) {
-          setMapsData(selectedCountry, snapshot.value);
-        }
+        pendingPicksRef.current = [];
+        await requestDraw(RANDOM_DRAW_BATCH_SIZE, { commit: true });
       } else if (liveMapsPageParams && liveMapsPageRequestKey) {
         const snapshot = await fetchLiveMapsPageSnapshot(selectedCountry, liveMapsPageParams);
         setLiveMapsProgress(snapshot.progress ?? null);
@@ -2286,28 +1783,23 @@ function MapsPage() {
   };
 
   const mapsUpdatedAt =
-    tab === "farmed"
-      ? currentLiveMapsPage?.farmedGeneratedAt ?? mapsData?.farmedGeneratedAt
-      : currentLiveMapsPage?.favouritesGeneratedAt ?? mapsData?.favouritesGeneratedAt;
+    tab === "random"
+      ? randomDraw?.favouritesGeneratedAt ?? null
+      : tab === "farmed"
+        ? currentLiveMapsPage?.farmedGeneratedAt
+        : currentLiveMapsPage?.favouritesGeneratedAt;
   const showMapsSummary =
-    !isLoading &&
-    !error &&
-    (tab === "random"
-      ? !!mapsData && randomPoolReady
-      : liveBackendPaged
-        ? !!currentLiveMapsPage
-        : !!mapsData);
+    !isLoading && !error && (tab === "random" ? !!randomDraw : !!currentLiveMapsPage);
   const liveMapsProgressLabel =
     liveBackendEnabled &&
     liveMapsProgress &&
     (liveMapsProgress.status === "queued" || liveMapsProgress.status === "running") &&
-    (mapsFirstBuild || currentMapsSectionLoading || (!liveBackendPaged && loadingMaps && !mapsData))
+    (mapsFirstBuild || (!liveBackendPaged && loadingMaps && !randomDraw))
       ? formatLiveMapsProgress(liveMapsProgress)
       : null;
   const liveMapsPageSliceLoading = liveBackendPaged && liveMapsPagePending && !mapsFirstBuild;
-  const mapsLoadingLabel = currentMapsSectionLoading
-    ? `Loading ${currentMapsSectionLabel}...`
-    : liveMapsProgressLabel
+  const mapsLoadingLabel =
+    liveMapsProgressLabel
       ?? (mapsFirstBuild
         ? "Building maps..."
         : liveMapsRefreshing && !liveMapsPageSliceLoading
@@ -2341,11 +1833,11 @@ function MapsPage() {
             {showMapsSummary && mapsUpdatedAt && (
               <span className="text-[10px] text-osu-f1">
                 {tab === "random"
-                  ? `${formatNumber(randomPool.length)} possible picks · ${formatNumber(randomUniqueBeatmapsetCount)} unique sets`
+                  ? `${formatNumber(randomPickCount)} possible picks · ${formatNumber(randomDraw?.uniqueSets ?? 0)} unique sets`
                   : `${formatNumber(currentTotal)} maps`} &middot; updated {formatTimeAgo(mapsUpdatedAt)}
               </span>
             )}
-            {canUseAdminFeatures && !isLoading && !error && (mapsData || currentLiveMapsPage) && (
+            {canUseAdminFeatures && !isLoading && !error && (randomDraw || currentLiveMapsPage) && (
               <button
                 onClick={handleDevRebuildAll}
                 disabled={rebuilding}
@@ -2505,7 +1997,7 @@ function MapsPage() {
                 )}
               </div>
               <span className="shrink-0 text-[12px] text-osu-f1 tabular-nums" role="status" aria-live="polite">
-                {isLoading || currentMapsSectionLoading ? "Loading maps..." : `${formatNumber(currentTotal)} maps`}
+                {isLoading ? "Loading maps..." : `${formatNumber(currentTotal)} maps`}
               </span>
             </div>
           )}
@@ -2531,7 +2023,7 @@ function MapsPage() {
             </button>
             {tab === "random" && (
               <span className="ml-auto text-[11px] text-osu-f1 tabular-nums">
-                {formatNumber(randomPool.length)} {randomPool.length === 1 ? "pick" : "possible picks"}
+                {formatNumber(randomPickCount)} {randomPickCount === 1 ? "pick" : "possible picks"}
               </span>
             )}
             {browseSortOptions.length > 0 && (
@@ -2615,7 +2107,7 @@ function MapsPage() {
                 className="rounded-md bg-osu-pink px-4 py-2 text-[12.5px] font-bold text-white hover:bg-osu-pink-light transition-colors cursor-pointer"
               >
                 {tab === "random"
-                  ? `Show ${formatNumber(randomPool.length)} picks`
+                  ? `Show ${formatNumber(randomPickCount)} picks`
                   : `Show ${formatNumber(currentTotal)} maps`}
               </button>
             </div>
@@ -2626,7 +2118,7 @@ function MapsPage() {
             {browseFilterGroups}
             {tab === "random" && (
               <span className="ml-auto self-center text-[11px] text-osu-f1 tabular-nums">
-                {formatNumber(randomPool.length)} {randomPool.length === 1 ? "pick" : "possible picks"}
+                {formatNumber(randomPickCount)} {randomPickCount === 1 ? "pick" : "possible picks"}
               </span>
             )}
           </div>
@@ -2696,7 +2188,7 @@ function MapsPage() {
           )}
 
           {/* Loading skeleton */}
-          {!error && isLoading && (liveBackendPaged ? !currentLiveMapsPage : (!mapsData || !hasValidMapsData)) && (
+          {!error && isLoading && (liveBackendPaged ? !currentLiveMapsPage : !randomDraw) && (
             <div className="space-y-3">
               {mapsFirstBuild && (
                 <div className="rounded-lg border border-osu-b3/30 bg-osu-b4/60 px-3.5 py-2.5 text-[11px] leading-relaxed text-osu-f1">
@@ -2713,22 +2205,11 @@ function MapsPage() {
             </div>
           )}
 
-          {!error && currentMapsSectionLoading && mapsData && hasValidMapsData && (
-            <div className="space-y-3">
-              <div className="rounded-lg border border-osu-b3/30 bg-osu-b4/60 px-3.5 py-2.5 text-[11px] leading-relaxed text-osu-f1">
-                <span className="font-semibold text-osu-c2">Still loading {currentMapsSectionLabel}.</span>{" "}
-                The other map tabs may appear first while this section catches up.
-              </div>
-              <MapsLoadingIndicator firstBuild={false} label={`Loading ${currentMapsSectionLabel}...`} />
-              <MapsCardGridSkeleton count={8} />
-            </div>
-          )}
-
           {/* Card grid */}
-          {tab !== "random" && !error && !currentMapsSectionLoading && paginated.length > 0 && (
+          {tab !== "random" && !error && currentList.length > 0 && (
             <div key={`${tab}-${page}`} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 cards-enter">
                 {tab === "farmed"
-                  ? (paginated as MapsFarmedEntry[]).map((map) => (
+                  ? (currentList as MapsFarmedEntry[]).map((map) => (
                       <FarmedCard
                         key={map.beatmapId}
                         map={map}
@@ -2737,7 +2218,7 @@ function MapsPage() {
                       />
                     ))
                   : tab === "popular"
-                    ? (paginated as MapsAggregatedBeatmap[]).map((map) => (
+                    ? (currentList as MapsAggregatedBeatmap[]).map((map) => (
                         <MostPlayedCard
                           key={map.beatmapId}
                           map={map}
@@ -2745,7 +2226,7 @@ function MapsPage() {
                           onOpenDetails={() => setDetailsOpen({ kind: "popular", map })}
                         />
                       ))
-                    : (paginated as MapsAggregatedFavourite[]).map((fav) => (
+                    : (currentList as MapsAggregatedFavourite[]).map((fav) => (
                         <FavouriteCard
                           key={fav.beatmapsetId}
                           fav={fav}
@@ -2762,103 +2243,26 @@ function MapsPage() {
             </div>
           )}
 
-          {/* Random tab — pool still loading in the background */}
-          {tab === "random" && !error && !isLoading && !currentMapsSectionLoading && mapsData && !randomPoolReady && (
-            <RandomPickLoadingSkeleton />
-          )}
-
           {/* Random tab */}
-          {tab === "random" && !error && !isLoading && mapsData && randomPoolReady && (
+          {tab === "random" && !error && !isLoading && randomDraw && (
             <div className="max-w-[640px] mx-auto space-y-5">
-              {isDevMode ? (
-                <div ref={devRandomForceRef} className="relative z-30 rounded-lg border border-osu-yellow/25 bg-osu-yellow/10 p-2.5">
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const first = devRandomForceMatches[0];
-                      if (!first) return;
-                      forceDevRandomPick(first);
-                    }}
-                    className="flex flex-col gap-2"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="shrink-0 rounded bg-osu-yellow/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-osu-yellow">
-                        Dev
-                      </span>
-                      <input
-                        type="text"
-                        value={devRandomForceQuery}
-                        onChange={(e) => {
-                          setDevRandomForceQuery(e.target.value);
-                          setDevRandomForceOpen(e.target.value.trim().length >= 2);
-                        }}
-                        onFocus={() => setDevRandomForceOpen(devRandomForceQuery.trim().length >= 2)}
-                        placeholder="Force random pick..."
-                        className="min-w-0 flex-1 rounded-md border border-osu-yellow/25 bg-osu-b5/70 px-2 py-1.5 text-[11px] text-osu-l2 placeholder:text-osu-f1 focus:outline-none focus:border-osu-yellow/50"
-                      />
-                      <button
-                        type="submit"
-                        disabled={devRandomForceMatches.length === 0}
-                        className="rounded-md bg-osu-yellow/20 px-2.5 py-1.5 text-[11px] font-semibold text-osu-yellow transition-colors hover:bg-osu-yellow/30 disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        Force
-                      </button>
-                    </div>
-                    {devRandomForceOpen && devRandomForceQuery.trim().length >= 2 ? (
-                      <div className="absolute left-2.5 right-2.5 top-[calc(100%-0.35rem)] max-h-[260px] overflow-y-auto rounded-md border border-osu-b3/40 bg-osu-b5/95 shadow-2xl backdrop-blur-sm">
-                        {devRandomForceMatches.length > 0 ? devRandomForceMatches.map(({ player, beatmapset }) => (
-                          <button
-                            key={`${player.id}-${beatmapset.id}`}
-                            type="button"
-                            onClick={() => forceDevRandomPick({ player, beatmapset })}
-                            className="flex w-full items-center gap-2 px-2 py-1.5 text-left transition-colors hover:bg-osu-b3/70"
-                          >
-                            <img
-                              src={beatmapset.covers.list ?? beatmapset.covers.card}
-                              alt=""
-                              className="h-8 w-12 shrink-0 rounded object-cover"
-                              loading="lazy"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <div className="truncate text-[11px] font-semibold text-osu-l2">
-                                {beatmapset.title}
-                              </div>
-                              <div className="truncate text-[10px] text-osu-f1">
-                                {beatmapset.artist}{" \u00b7 "}{beatmapset.creator}{" \u00b7 "}{player.username}
-                              </div>
-                            </div>
-                            <span className="shrink-0 text-[10px] font-semibold text-osu-yellow">
-                              {"\u2605"}{formatStars(beatmapset) ?? "?"}
-                            </span>
-                          </button>
-                        )) : (
-                          <div className="px-2 py-2 text-[10px] text-osu-f1">
-                            No matches in the current random pool.
-                          </div>
-                        )}
-                      </div>
-                    ) : null}
-                  </form>
-                </div>
-              ) : null}
-
-              {randomPlayer ? (
+              {randomPick ? (
                 <>
                   <div className="flex flex-row items-center justify-between gap-3">
                     <button
-                      onClick={() => navigate({ to: "/player/$username", params: { username: randomPlayer.username } })}
+                      onClick={() => navigate({ to: "/player/$username", params: { username: randomPick.player.username } })}
                       className="flex items-center gap-3 group cursor-pointer min-w-0 text-left"
                     >
-                      <Avatar url={randomPlayer.avatarUrl} size={44} />
+                      <Avatar url={randomPick.player.avatarUrl} size={44} />
                       <div className="min-w-0">
                         <div className="text-[10px] uppercase tracking-wider text-osu-f1">
                           random pick from
                         </div>
                         <div className="text-[15px] font-semibold text-osu-l2 group-hover:text-white transition-colors truncate">
-                          {randomPlayer.username}
+                          {randomPick.player.username}
                         </div>
                         <div className="text-[10px] text-osu-f1">
-                          {randomPlayer.beatmapsetIds.length} favourites
+                          {randomPick.player.favouriteCount} favourites
                         </div>
                       </div>
                     </button>
@@ -2866,8 +2270,12 @@ function MapsPage() {
                       <div className="flex items-stretch rounded-lg bg-osu-pink/20 border border-osu-pink/30 overflow-hidden">
                         <button
                           onClick={() => { setRerollMenuOpen(false); reshuffleRandom(); }}
-                          className="px-3 py-1.5 text-[11px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
+                          disabled={rerollPending}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer disabled:cursor-not-allowed"
                         >
+                          {rerollPending && (
+                            <span className="w-3 h-3 border-2 border-osu-pink-light/40 border-t-osu-pink-light rounded-full animate-spin" aria-hidden="true" />
+                          )}
                           Reroll
                         </button>
                         <div className="w-px bg-osu-pink/30" />
@@ -2949,25 +2357,18 @@ function MapsPage() {
                               </span>
                             </div>
                             <div className="mt-0.5 text-[10px] text-osu-f1 leading-snug">
-                              Makes recent picks much less likely.
+                              Skips the last few players and maps you were shown.
                             </div>
                           </button>
                         </div>
                       )}
                     </div>
                   </div>
-                  {randomBeatmapset ? (
-                    <div key={`random-${randomPlayer.id}-${pickedSetId}`} className="cards-enter">
-                      <RandomCard
-                        bm={randomBeatmapset}
-                        resolving={randomPickResolving}
-                      />
-                    </div>
-                  ) : (
-                    <RandomCardSkeleton />
-                  )}
+                  <div key={`random-${randomPick.player.id}-${randomPick.beatmapset.id}`} className="cards-enter">
+                    <RandomCard bm={randomPick.beatmapset} />
+                  </div>
                 </>
-              ) : randomPickResolving || randomPool.length > 0 ? (
+              ) : randomPickCount > 0 ? (
                 <RandomPickLoadingSkeleton />
               ) : (
                 <div className="text-center py-16 text-osu-f1 text-sm">
@@ -2980,7 +2381,7 @@ function MapsPage() {
           )}
 
           {/* Pagination */}
-          {tab !== "random" && !currentMapsSectionLoading && paginationTotalPages > 1 && (
+          {tab !== "random" && paginationTotalPages > 1 && (
             <div
               className="sticky bottom-0 z-10 -mx-4 sm:-mx-5 mt-6 px-4 sm:px-5 py-2 bg-osu-b5/90 backdrop-blur-sm border-t border-osu-b3/30 [&>div]:!mt-0 relative after:absolute after:left-0 after:right-0 after:top-full after:h-4 after:bg-osu-b5/90 after:backdrop-blur-sm after:content-['']"
               style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom, 0px))" }}
@@ -3015,7 +2416,7 @@ const LOADING_STEPS = [
   "Almost there...",
 ];
 
-function MapsLoadingIndicator({ firstBuild, label: overrideLabel }: { firstBuild: boolean; label?: string }) {
+function MapsLoadingIndicator({ firstBuild }: { firstBuild: boolean }) {
   const [stepIndex, setStepIndex] = useState(0);
 
   useEffect(() => {
@@ -3026,9 +2427,9 @@ function MapsLoadingIndicator({ firstBuild, label: overrideLabel }: { firstBuild
     return () => clearInterval(id);
   }, [firstBuild]);
 
-  const label = overrideLabel ?? (firstBuild
+  const label = firstBuild
     ? "Building maps for the first time..."
-    : LOADING_STEPS[stepIndex]);
+    : LOADING_STEPS[stepIndex];
 
   return (
     <div className="flex items-center gap-3">
@@ -5067,7 +4468,7 @@ function DifficultyPicker({
   );
 }
 
-function RandomCard({ bm, resolving = false }: { bm: MapsFavouriteBeatmapset; resolving?: boolean }) {
+function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   const url = `https://osu.ppy.sh/beatmapsets/${bm.id}`;
   const coverUrl = bm.covers.cover ?? bm.covers.card ?? bm.covers["list@2x"] ?? bm.covers.list ?? "";
   const keys = bm.maniaKeys ?? [];
@@ -5850,7 +5251,7 @@ function RandomCard({ bm, resolving = false }: { bm: MapsFavouriteBeatmapset; re
       <div className="rounded-2xl bg-osu-b4 border border-osu-b3/20 hover:border-osu-pink/40 transition-colors">
         <a href={url} target="_blank" rel="noreferrer" className="block relative rounded-t-2xl overflow-hidden">
         <div className="relative w-full h-[220px] bg-osu-b6 overflow-hidden">
-          {!coverReady && (resolving || coverUrl !== "") && (
+          {!coverReady && coverUrl !== "" && (
             <Skeleton className="absolute inset-0 rounded-none" />
           )}
           {coverUrl && (
@@ -5936,12 +5337,6 @@ function RandomCard({ bm, resolving = false }: { bm: MapsFavouriteBeatmapset; re
             <span className="shrink-0 rounded-md bg-osu-b3/50 px-2 py-1 text-[10px] font-semibold text-osu-f1">
               {maniaBeatmaps.length} diffs
             </span>
-          </div>
-        ) : resolving ? (
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-2.5 w-6 shrink-0" />
-            <Skeleton className="h-8 min-w-0 flex-1 rounded-md" />
-            <Skeleton className="h-7 w-14 shrink-0 rounded-md" />
           </div>
         ) : null}
 
@@ -6107,14 +5502,6 @@ function RandomCard({ bm, resolving = false }: { bm: MapsFavouriteBeatmapset; re
                 }}
               />
             ) : null}
-          </div>
-        ) : resolving ? (
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
-            <Skeleton className="h-1 min-w-0 flex-1 rounded-full" />
-            <Skeleton className="h-3 w-10 shrink-0" />
-            <Skeleton className="h-5 w-5 shrink-0 rounded-full" />
-            <Skeleton className="h-1 w-12 shrink-0 rounded-full" />
           </div>
         ) : null}
         {previewError ? (

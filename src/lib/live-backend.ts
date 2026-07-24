@@ -1,11 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireAdminAccess } from "./auth";
 import { harvestAvatarAccents } from "./avatar-accent-harvest";
+import { buildRandomDrawQuery } from "./maps-random-draw-params";
+import type { LiveMapsRandomDrawParams } from "./maps-random-draw-params";
 import type { MyDataSkillBreakdown } from "./my-data";
 
 export type LivePlayerSkills = MyDataSkillBreakdown;
 import type {
-  CountryMapsData,
   CountryTopPlay,
   LeanDanEstimate,
   LeanTrackerScore,
@@ -76,15 +77,6 @@ export interface LiveTopPlaysPpGain {
 export interface LiveSnipesSnapshot {
   events: SnipeEvent[];
   scannedAt: number;
-}
-
-export interface LiveMapsSnapshot {
-  value: CountryMapsData | null;
-  generatedAt: string | null;
-  refreshedAt: string | null;
-  isStale: boolean;
-  refreshQueued: boolean;
-  progress: LiveMapsRefreshProgress | null;
 }
 
 export type LiveMapsRefreshProgressStatus = "queued" | "running" | "done" | "failed";
@@ -174,6 +166,46 @@ export interface LiveMapsPlayersSnapshot {
 }
 
 export const LIVE_MAPS_PLAYERS_PAGE_SIZE = 50;
+
+// A drawn pick is fully hydrated (~1 KiB), so the Random tab prefetches a batch
+// of them and serves rerolls from that buffer instead of round-tripping.
+export const RANDOM_DRAW_BATCH_SIZE = 8;
+
+// The request half lives with the URL-param translation it grew out of.
+export type { LiveMapsRandomDrawParams };
+
+export interface LiveMapsRandomPick {
+  player: {
+    id: number;
+    username: string;
+    avatarUrl: string;
+    // The player's unfiltered in-scope favourite total ("N favourites").
+    favouriteCount: number;
+  };
+  beatmapset: MapsFavouriteBeatmapset;
+  // Distinct in-scope players who favourited this set, ignoring the draw filters.
+  scopeFavCount: number;
+}
+
+export interface LiveMapsRandomDrawValue {
+  country: string;
+  weight: "favourites" | "players";
+  // Eligible (player, set) pairs after filters -> "N possible picks".
+  totalPicks: number;
+  uniqueSets: number;
+  picks: LiveMapsRandomPick[];
+  generatedAt: string | null;
+  favouritesGeneratedAt: string | null;
+}
+
+export interface LiveMapsRandomDrawSnapshot {
+  value: LiveMapsRandomDrawValue | null;
+  generatedAt: string | null;
+  refreshedAt: string | null;
+  isStale: boolean;
+  refreshQueued: boolean;
+  progress: LiveMapsRefreshProgress | null;
+}
 
 export interface LiveDanEstimateRequest {
   beatmapId: number;
@@ -1178,23 +1210,16 @@ export async function fetchLiveSnipesSnapshot(country: string, limit = 500, opti
   return fetchLiveJson(`/api/snapshots/snipes?${query.toString()}`);
 }
 
-// Random-tab pool only: the backend's /api/snapshots/maps endpoint rejects
-// anything but section=random (the full "core" payload was removed; Maps
-// browsing goes through fetchLiveMapsPageSnapshot).
-export async function fetchLiveMapsRandomSnapshot(country: string): Promise<LiveMapsSnapshot> {
-  const query = new URLSearchParams({ country, section: "random" });
-  const snapshot = await fetchLiveJson<LiveMapsSnapshot>(`/api/snapshots/maps?${query.toString()}`);
-  // The random section omits covers/previewUrl/maniaBeatmaps from its pool
-  // entries on the wire (they're always empty there, and GLOBAL ships ~45k
-  // entries); restore the defaults so consumers keep the full beatmapset shape.
-  if (snapshot.value?.beatmapsetsPool) {
-    for (const set of Object.values(snapshot.value.beatmapsetsPool)) {
-      set.covers ??= {} as MapsFavouriteBeatmapset["covers"];
-      set.previewUrl ??= "";
-      set.maniaBeatmaps ??= [];
-    }
-  }
-  return snapshot;
+// The Random tab draws server-side: the filters travel with the request and the
+// response carries a handful of fully hydrated picks plus the eligible counts,
+// instead of the whole favourites pool (13 MiB at GLOBAL scope).
+export async function fetchLiveMapsRandomDraw(
+  country: string,
+  params: LiveMapsRandomDrawParams,
+  options?: { signal?: AbortSignal },
+): Promise<LiveMapsRandomDrawSnapshot> {
+  const query = buildRandomDrawQuery(country, params);
+  return fetchLiveJson(`/api/snapshots/maps-random-draw?${query}`, options?.signal ? { signal: options.signal } : undefined);
 }
 
 export async function fetchLiveMapsPageSnapshot(
@@ -1235,21 +1260,6 @@ export async function fetchLiveMapsPlayersSnapshot(
   const q = options.q?.trim();
   if (q) query.set("q", q);
   return fetchLiveJson(`/api/snapshots/maps-players?${query.toString()}`);
-}
-
-// Full per-set metadata (covers, per-difficulty list, preview audio) for the
-// Random tab, fetched on demand since the pool snapshot now ships lean entries.
-export async function fetchLiveMapsBeatmapsets(
-  country: string,
-  ids: number[],
-): Promise<MapsFavouriteBeatmapset[]> {
-  const cleanIds = [...new Set(ids)].filter((id) => Number.isFinite(id) && id > 0);
-  if (cleanIds.length === 0) return [];
-  const query = new URLSearchParams({ country, ids: cleanIds.join(",") });
-  const result = await fetchLiveJson<{ beatmapsets: MapsFavouriteBeatmapset[] }>(
-    `/api/snapshots/maps-set?${query.toString()}`,
-  );
-  return result.beatmapsets ?? [];
 }
 
 // ---------------------------------------------------------------------------
