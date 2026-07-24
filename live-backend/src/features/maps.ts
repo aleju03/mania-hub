@@ -51,6 +51,20 @@ export class MapsRosterNotReadyError extends Error {
   }
 }
 
+// A refresh that ran to completion and produced nothing usable: the roster's
+// users genuinely have no farmed / most-played / favourite data. Per-user osu!
+// failures are swallowed upstream (throwIfMapsRefreshShouldAbort rethrows only
+// the transient ones), so this is a property of the country, not of the run —
+// which is what lets the worker park it instead of retrying hourly forever. The
+// message string is deliberately unchanged from the anonymous Error it replaces
+// so `jobs.last_error` and the admin queue summary stay continuous.
+export class MapsEmptyResultError extends Error {
+  constructor(readonly country: string, readonly userCount: number) {
+    super(`Maps refresh produced no usable data for ${userCount} users`);
+    this.name = "MapsEmptyResultError";
+  }
+}
+
 interface MapsUser {
   id: number;
   username: string;
@@ -368,24 +382,6 @@ export async function enqueueMapsRefreshIfDue(
   if (await hasActiveMapsRefresh(db, normalized)) return true;
   await enqueueMapsRefresh(queue, normalized, options);
   return true;
-}
-
-export async function deferMapsRefreshesWaitingForRoster(db: Db, retryDelayMs = 10 * 60_000): Promise<number> {
-  const result = await exec(
-    db,
-    `update jobs
-     set status = 'queued',
-         locked_by = null,
-         locked_until = null,
-         run_after = ?,
-         last_error = null,
-         updated_at = ?
-     where type = 'refresh_country_maps'
-       and status = 'failed'
-       and last_error like 'No tracked roster users available for %'`,
-    [new Date(Date.now() + retryDelayMs).toISOString(), nowIso()],
-  );
-  return Number(result.rowsAffected ?? 0);
 }
 
 export type MapsSnapshotSection = "core" | "random";
@@ -3051,7 +3047,7 @@ export async function refreshCountryMaps(
     const [farmedSection, favSection] = await Promise.all([farmedPromise, favouritesPromise]);
     await progress.markPersisting();
     const value = composeCountryMapsData(farmedSection, favSection);
-    assertUsableMapsData(value, users.length);
+    assertUsableMapsData(value, country, users.length);
     await persistMapsSnapshot(db, country, value);
     await progress.markDone();
     return value;
@@ -4510,9 +4506,9 @@ function isUsableMapsData(value: CountryMapsData | null): value is CountryMapsDa
   );
 }
 
-function assertUsableMapsData(value: CountryMapsData, userCount: number): void {
+function assertUsableMapsData(value: CountryMapsData, country: string, userCount: number): void {
   if (isUsableMapsData(value)) return;
-  throw new Error(`Maps refresh produced no usable data for ${userCount} users`);
+  throw new MapsEmptyResultError(country, userCount);
 }
 
 function throwIfMapsRefreshShouldAbort(error: unknown): void {

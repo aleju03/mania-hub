@@ -10,7 +10,7 @@ import { computeDanEstimateJob } from "./features/dan-estimates.js";
 import { reconcileStatGoalsForCountry } from "./features/goals.js";
 import { runMapSearchIndexBuildJob } from "./features/map-search.js";
 import { rebuildMapCollections } from "./features/map-collections.js";
-import { MapsRosterNotReadyError, enqueueGlobalMapsRefresh, globalMapsFarmedRefreshRunAfter, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores } from "./features/maps.js";
+import { MapsEmptyResultError, MapsRosterNotReadyError, enqueueGlobalMapsRefresh, globalMapsFarmedRefreshRunAfter, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores } from "./features/maps.js";
 import { REFRESH_QUALIFIED_MAPS_JOB, runQualifiedMapsWatch } from "./features/qualified-maps-watch.js";
 import { RECONCILE_SETTLED_SETS_JOB, runSettledSetsReconcile } from "./features/settled-sets-reconcile.js";
 import { recordSnipeScoreHistory, updateSnipeProjection } from "./features/snipes.js";
@@ -22,7 +22,7 @@ import { getHydratedScoresForMetadata } from "./features/tracker.js";
 import type { ClaimOptions, Job, JobQueue } from "./jobs/queue.js";
 import { hasPendingRecentReconcileJob, RECENT_RECONCILE_JOB_TYPE, requeueDeferredRecentReconcileJobs } from "./jobs/recent-reconcile.js";
 import type { LiveEventLog } from "./live/event-log.js";
-import { readWorkersPaused } from "./live/runtime-status.js";
+import { readWorkersPaused, writeJobMemoryMetric } from "./live/runtime-status.js";
 import { OsuApiError, type OsuApiClient } from "./osu/client.js";
 import { OscBackfill } from "./osc/backfill.js";
 import type { ScoreIngestor } from "./ingest/score-ingestor.js";
@@ -31,6 +31,7 @@ import { renderReplayVideoInChrome, type ServerReplayRenderRequest } from "./rep
 import { refreshCountryRoster } from "./rosters/country-rosters.js";
 import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getModAcronyms, getScoreIdentity, getScoreTimestamp, isLazerScore, nowIso, scoreHasReplay } from "./shared/score.js";
 import { throwIfAborted } from "./shared/abort.js";
+import { startPeakMemorySampler } from "./shared/process-memory.js";
 import { errorContext, logInfo, logWarn } from "./logger.js";
 import type { OscScore } from "./shared/types.js";
 import { markUserMissing } from "./users.js";
@@ -395,6 +396,15 @@ export class WorkerRunner {
     };
   }
 
+  // Jobs this worker currently has in flight across every lane, including the
+  // caller. Recorded alongside a job memory sample so a peak that was shared
+  // with co-resident lanes is not mistaken for one job's own allocation.
+  private countActiveJobs(): number {
+    let count = 0;
+    for (const jobs of this.activeJobs.values()) count += jobs.length;
+    return count;
+  }
+
   private async handle(job: Job, signal?: AbortSignal): Promise<void> {
     if (!readConfig().enableOsuApiJobs && OSU_API_JOB_TYPES.has(job.type)) {
       logInfo("job_skipped_osu_api_disabled", { job_id: job.id, type: job.type });
@@ -463,7 +473,20 @@ export class WorkerRunner {
       return;
     }
     if (job.type === "refresh_global_maps") {
-      await refreshGlobalMaps(this.db, signal);
+      // The GLOBAL rollup is the single largest memory transient this service
+      // has, and the ceilings it drives are worth reading off a live metric
+      // rather than a number someone once wrote down. Sample here rather than
+      // around handleWithWatchdog: the watchdog rejects while the handler keeps
+      // running detached, so a wrapper outside it would stop the sampler early
+      // and under-report the peak of the run that actually mattered.
+      const sampler = startPeakMemorySampler();
+      try {
+        await refreshGlobalMaps(this.db, signal);
+        await writeJobMemoryMetric(this.db, job.type, sampler.stop(true), { concurrentJobs: this.countActiveJobs() });
+      } catch (error) {
+        await writeJobMemoryMetric(this.db, job.type, sampler.stop(false, error), { concurrentJobs: this.countActiveJobs() });
+        throw error;
+      }
       return;
     }
     if (job.type === REFRESH_QUALIFIED_MAPS_JOB) {
@@ -874,6 +897,35 @@ export class WorkerRunner {
   }
 }
 
+// A refresh_country_maps job that keeps failing this many times with a terminal
+// error is poisoned, not unlucky: the country has no rankable roster at all, or
+// its roster users have no farmed/most-played/favourite data. The generic
+// backoff pins such a job at a 60-minute retry forever, and because
+// refresh_country_maps has a reserved lane of exactly one
+// (RESERVED_LANE_TYPES in jobs/queue.ts), a permanently runnable dead country
+// occupies that single slot and pushes real countries into deferred_pressure.
+//
+// Parking it a day out fixes that without pretending the refresh succeeded: a
+// completed job would drop out of hasActiveMapsRefresh and let every page view
+// re-enqueue the refresh, and every successful refresh_country_maps enqueues a
+// refresh_global_maps behind it — the most expensive transient this service
+// has. A parked job still counts as active (failed or queued with a future
+// run_after), so nothing re-enqueues; activeDepth ignores future run_after, so
+// the reserved lane frees up immediately; and an admin refresh still pulls it
+// forward because enqueue() merges run_after with min().
+const POISONED_MAPS_REFRESH_ATTEMPTS = 6;
+const POISONED_MAPS_REFRESH_PARK_MS = 24 * 60 * 60_000;
+
+// Terminal for this country regardless of when we retry. Matching on the error
+// classes rather than on the job type alone matters: per-user osu! failures are
+// swallowed inside the refresh, but a rate limit or a 5xx is rethrown, and a
+// multi-hour osu! outage must not park every country for a day.
+function isPoisonedMapsRefresh(type: string, nextAttempt: number, error: unknown): boolean {
+  if (type !== "refresh_country_maps") return false;
+  if (nextAttempt < POISONED_MAPS_REFRESH_ATTEMPTS) return false;
+  return error instanceof MapsEmptyResultError || error instanceof MapsRosterNotReadyError;
+}
+
 function getRetryDelayMs(type: string, attempts: number, error: unknown): number {
   if (error instanceof Error && error.message.includes("OSU_CLIENT_ID")) return 5 * 60_000;
   if (error instanceof OsuApiError && error.status === 429) {
@@ -881,6 +933,7 @@ function getRetryDelayMs(type: string, attempts: number, error: unknown): number
   }
   if (error instanceof TopPlayConfirmationPendingError) return 2 * 60_000;
   const nextAttempt = Math.max(1, attempts + 1);
+  if (isPoisonedMapsRefresh(type, nextAttempt, error)) return POISONED_MAPS_REFRESH_PARK_MS;
   const base = type === "refresh_user_top_scores"
     ? 15_000
     : type === "refresh_user_maps_farmed_scores"

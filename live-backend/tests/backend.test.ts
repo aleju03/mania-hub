@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { createDb, exec, migrate } from "../src/db.js";
 import { getSnipesSnapshot, updateSnipeProjection } from "../src/features/snipes.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../src/features/activity.js";
-import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, globalMapsFarmedRefreshRunAfter, recordMapsFarmedScore, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores, waitForGlobalFarmedBoardBuild, type MapsPageQuery } from "../src/features/maps.js";
+import { enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, globalMapsFarmedRefreshRunAfter, recordMapsFarmedScore, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores, waitForGlobalFarmedBoardBuild, type MapsPageQuery } from "../src/features/maps.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu } from "../src/features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../src/features/rank-snapshots.js";
@@ -27,6 +27,7 @@ import { CountryClientTracker } from "../src/live/country-clients.js";
 import { ScoreIngestor } from "../src/ingest/score-ingestor.js";
 import { JobQueue } from "../src/jobs/queue.js";
 import { LiveEventLog } from "../src/live/event-log.js";
+import { readJobMemoryMetric } from "../src/live/runtime-status.js";
 import { OsuApiClient, OsuApiError, TokenBucketLimiter } from "../src/osu/client.js";
 import { runRetention } from "../src/retention.js";
 import { defaultWorkerLanes, WorkerRunner } from "../src/workers.js";
@@ -2470,6 +2471,11 @@ describe("live backend", () => {
     const body = JSON.parse(response.writes.join("")) as {
       snapshotStats?: Record<string, number>;
       responseCaches?: Record<string, { entries: number; bytes: number; maxEntries: number; maxBytes: number; maxEntryBytes: number }>;
+      memory?: { server: Record<string, unknown>; worker: Record<string, unknown> | null };
+      mapsSnapshotThread?: Record<string, unknown>;
+      disk?: { usedPct: number; level: string } | null;
+      storagePaths?: Record<string, number | null> | null;
+      storage?: { filePath?: string | null };
     };
     expect(response.res.statusCode).toBe(200);
     expect(body.snapshotStats).toMatchObject({
@@ -2481,6 +2487,44 @@ describe("live backend", () => {
     expect(body.responseCaches?.mapsPage).toMatchObject({ entries: 0, bytes: 0 });
     expect(body.responseCaches?.mapsSnapshot.maxBytes).toBeGreaterThan(0);
     expect(body.responseCaches?.mapsPage.maxEntryBytes).toBeGreaterThan(0);
+    // Process memory. Role is unset in this ctx, so both sides fall back to
+    // this process: the pids match, which is exactly how the dashboard tells
+    // "all" mode from a split deployment.
+    expect(body.memory?.server).toMatchObject({ pid: process.pid });
+    expect(body.memory?.server.rssBytes as number).toBeGreaterThan(0);
+    expect(body.memory?.server.hint as string).toContain("per-isolate");
+    expect(body.memory?.worker).toMatchObject({ pid: process.pid });
+    // Loaded from source under vitest, so the thread can never spawn here.
+    expect(body.mapsSnapshotThread).toMatchObject({ enabled: false, disabledReason: "source_mode", inFlight: 0 });
+    expect(body.disk?.usedPct).toBeGreaterThan(0);
+    expect(["ok", "warn", "critical"]).toContain(body.disk?.level);
+    expect(body.storagePaths).toMatchObject({ db: expect.any(Number) });
+    expect(body.storage?.filePath).toContain("test.db");
+  });
+
+  it("keeps the operational counters out of the public status body", async () => {
+    const { db, queue, events } = await setup();
+    const response = mockRes();
+    await routeHttp(mockReq("GET", "/api/status"), response.res, {
+      db,
+      queue,
+      events,
+      config: baseConfig({ nodeEnv: "development", liveAdminToken: "secret", databaseUrl: `file:${join(dir, "test.db")}` }),
+      osu: { limiter: { state: () => ({ hardPerMinute: 60, usedLastMinute: 0 }) } },
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never);
+
+    const body = JSON.parse(response.writes.join("")) as Record<string, unknown> & { storage?: Record<string, unknown> };
+    expect(response.res.statusCode).toBe(200);
+    // Memory, thread internals and disk layout are operator data; the absolute
+    // database path is a server path nothing public renders.
+    expect(body.memory).toBeUndefined();
+    expect(body.mapsSnapshotThread).toBeUndefined();
+    expect(body.disk).toBeUndefined();
+    expect(body.storagePaths).toBeUndefined();
+    expect(body.storage?.filePath).toBeUndefined();
+    // The rest of the storage block stays public: the site renders it.
+    expect(body.storage).toMatchObject({ bytes: expect.any(Number), walBytes: expect.any(Number), overLimit: false });
   });
 
   it("aggregates tracker and top-play snapshots across countries for Global", async () => {
@@ -5823,17 +5867,115 @@ describe("live backend", () => {
     expect(new Date(String(job.run_after)).getTime()).toBeGreaterThan(Date.now());
   });
 
-  it("cleans up old maps roster-missing failures as deferred jobs", async () => {
-    const { db, queue } = await setup();
-    await queue.enqueue("refresh_country_maps", "maps:AU", { country: "AU" });
-    const job = (await queue.claim("test-worker"))[0];
-    await queue.fail(job.id, new Error("No tracked roster users available for AU"), 60 * 60_000);
+  it("parks a maps refresh for a day once a missing roster has poisoned it", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    await enqueueMapsRefreshIfDue(db, queue, "AU", 7 * 24 * 60 * 60 * 1000);
+    // Five prior runs already burned the backoff ramp; the sixth is the one that
+    // would otherwise be pinned at a 60-minute retry forever.
+    await exec(db, "update jobs set attempts = 5 where type = 'refresh_country_maps' and dedupe_key = 'maps:AU'");
+    const worker = new WorkerRunner(db, queue, events, {} as never, ingestor, "test-worker");
 
-    expect(await deferMapsRefreshesWaitingForRoster(db)).toBe(1);
+    await worker.runOnce();
 
-    const row = (await exec(db, "select status, last_error, run_after from jobs where id = ?", [job.id])).rows[0];
-    expect(row).toMatchObject({ status: "queued", last_error: null });
-    expect(new Date(String(row.run_after)).getTime()).toBeGreaterThan(Date.now());
+    const job = (await exec(db, "select status, attempts, last_error, run_after from jobs where dedupe_key = 'maps:AU'")).rows[0];
+    // Still queued with a future run_after, so hasActiveMapsRefresh keeps
+    // suppressing re-enqueues; activeDepth ignores it, so the single
+    // refresh_country_maps reserved lane is free for real countries.
+    expect(job).toMatchObject({ status: "queued", last_error: null });
+    expect(Number(job.attempts)).toBe(6);
+    expect(new Date(String(job.run_after)).getTime() - Date.now()).toBeGreaterThan(20 * 60 * 60_000);
+  });
+
+  it("parks a maps refresh for a day once its roster users keep producing no usable data", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    const now = new Date().toISOString();
+    for (const [rank, userId] of [[1, 8_101], [2, 8_102]] as const) {
+      await exec(
+        db,
+        "insert into users (user_id, username, avatar_url, country_code, updated_at) values (?, ?, '', 'CR', ?)",
+        [userId, `Empty ${rank}`, now],
+      );
+      await exec(
+        db,
+        "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values ('CR', ?, ?, 'test', 1, ?)",
+        [userId, rank, now],
+      );
+    }
+    await enqueueMapsRefresh(queue, "CR");
+    await exec(db, "update jobs set attempts = 5 where dedupe_key = 'maps:CR'");
+    // A roster that exists but whose members have no farmed / most-played /
+    // favourite data at all: the refresh runs to completion and produces nothing.
+    const osu = {
+      getUserBestScoresWindow: vi.fn(async () => []),
+      getUserMostPlayed: vi.fn(async () => []),
+      getUserFavourites: vi.fn(async () => []),
+    };
+    const worker = new WorkerRunner(db, queue, events, osu as never, ingestor, "test-worker");
+
+    await worker.runOnce();
+
+    const job = (await exec(db, "select status, attempts, last_error, run_after from jobs where dedupe_key = 'maps:CR'")).rows[0];
+    expect(job.status).toBe("failed");
+    expect(Number(job.attempts)).toBe(6);
+    // The message is unchanged from the anonymous Error it replaced, so the
+    // admin queue summary and last_error stay continuous across the deploy.
+    expect(String(job.last_error)).toBe("Maps refresh produced no usable data for 2 users");
+    expect(new Date(String(job.run_after)).getTime() - Date.now()).toBeGreaterThan(20 * 60 * 60_000);
+  });
+
+  it("keeps the hourly retry for a maps refresh that failed for a transient osu! reason", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    const now = new Date().toISOString();
+    await exec(
+      db,
+      "insert into users (user_id, username, avatar_url, country_code, updated_at) values (8201, 'Outage', '', 'CR', ?)",
+      [now],
+    );
+    await exec(
+      db,
+      "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values ('CR', 8201, 1, 'test', 1, ?)",
+      [now],
+    );
+    await enqueueMapsRefresh(queue, "CR");
+    await exec(db, "update jobs set attempts = 20 where dedupe_key = 'maps:CR'");
+    // An osu! outage is not a property of the country: parking on the job type
+    // alone would take every country offline for a day.
+    const osu = {
+      getUserBestScoresWindow: vi.fn(async () => {
+        throw new OsuApiError(503, "/users/8201/scores/best?mode=mania&limit=100&offset=0");
+      }),
+      getUserMostPlayed: vi.fn(async () => []),
+      getUserFavourites: vi.fn(async () => []),
+    };
+    const worker = new WorkerRunner(db, queue, events, osu as never, ingestor, "test-worker");
+
+    await worker.runOnce();
+
+    const job = (await exec(db, "select status, run_after from jobs where dedupe_key = 'maps:CR'")).rows[0];
+    expect(job.status).toBe("failed");
+    const retryDelayMs = new Date(String(job.run_after)).getTime() - Date.now();
+    expect(retryDelayMs).toBeLessThan(2 * 60 * 60_000);
+  });
+
+  it("records the worker process memory peak of a GLOBAL maps refresh", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    await enqueueMapsRefresh(queue, "GLOBAL");
+    const worker = new WorkerRunner(db, queue, events, {} as never, ingestor, "test-worker");
+
+    await worker.runOnce();
+
+    expect((await exec(db, "select status from jobs where dedupe_key = 'maps:GLOBAL'")).rows[0].status).toBe("done");
+    const metric = await readJobMemoryMetric(db, "refresh_global_maps");
+    expect(metric).toBeTruthy();
+    expect(metric?.jobType).toBe("refresh_global_maps");
+    expect(metric?.ok).toBe(true);
+    expect(metric?.error).toBeNull();
+    expect(metric?.pid).toBe(process.pid);
+    expect(metric?.peakRssBytes).toBeGreaterThan(0);
+    expect(metric?.peakRssBytes).toBeGreaterThanOrEqual(Number(metric?.startRssBytes));
+    // The job itself counts, so a run with nothing co-resident still reports 1.
+    expect(metric?.concurrentJobs).toBeGreaterThanOrEqual(1);
+    expect(String(metric?.hint)).toContain("not the job's own allocation");
   });
 
   it("queues maps refreshes from the maps snapshot HTTP endpoint", async () => {
@@ -6142,6 +6284,51 @@ describe("live backend", () => {
     expect(first.res.statusCode).toBe(401);
     expect(second.res.statusCode).toBe(429);
     expect(second.headers["retry-after"]).toBe("60");
+  });
+
+  it("rate-limits the beatmap media endpoints on a window of their own", async () => {
+    const { db, queue, events } = await setup();
+    const abuse = new AbuseGuard();
+    const config = baseConfig({ publicCostlyRatePerMinute: 1, databaseUrl: `file:${join(dir, "test.db")}` });
+    const ctx = {
+      db,
+      queue,
+      events,
+      config,
+      abuse,
+      osu: { limiter: { state: () => ({ hardPerMinute: 60, usedLastMinute: 0 }) } },
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never;
+    const ip = { "x-real-ip": "203.0.113.40" };
+    // Every request here carries a non-numeric beatmapsetId, so a handler that
+    // is reached answers 400 without any network, archive download or ffmpeg.
+    const first = mockRes();
+    await routeHttp(mockReq("GET", "/api/audio?beatmapsetId=abc&filename=audio.mp3", ip), first.res, ctx);
+    expect(first.res.statusCode).toBe(400);
+
+    for (const path of ["/api/audio?beatmapsetId=abc&filename=audio.mp3", "/api/hitsounds?beatmapsetId=abc", "/api/preview-audio?beatmapsetId=abc"]) {
+      const blocked = mockRes();
+      await routeHttp(mockReq("GET", path, ip), blocked.res, ctx);
+      expect(blocked.res.statusCode).toBe(429);
+      expect(JSON.parse(blocked.writes.join(""))).toMatchObject({ error: "rate_limited", bucket: "publicCostly" });
+    }
+
+    // Media spends its own window: an <audio> element's Range requests must not
+    // be able to lock a visitor out of the costly JSON endpoints.
+    const skins = mockRes();
+    await routeHttp(mockReq("GET", "/api/skins/preview-maps", ip), skins.res, ctx);
+    expect(skins.res.statusCode).toBe(200);
+    expect(JSON.parse(skins.writes.join(""))).toMatchObject({ maps: [] });
+
+    const skinsAgain = mockRes();
+    await routeHttp(mockReq("GET", "/api/skins/preview-maps?q=zenith", ip), skinsAgain.res, ctx);
+    expect(skinsAgain.res.statusCode).toBe(429);
+    expect(JSON.parse(skinsAgain.writes.join(""))).toMatchObject({ error: "rate_limited", bucket: "publicCostly" });
+
+    // A different visitor is untouched by either window.
+    const other = mockRes();
+    await routeHttp(mockReq("GET", "/api/audio?beatmapsetId=abc&filename=audio.mp3", { "x-real-ip": "203.0.113.41" }), other.res, ctx);
+    expect(other.res.statusCode).toBe(400);
   });
 
   it("keeps dynamic countries but throttles new-country activation", async () => {
