@@ -19,7 +19,9 @@ const PROFILE_SECTION_TTL_MS = 2 * 60_000;
 const PROFILE_TRACKED_RECENT_LIMIT = 100;
 const PROFILE_TRACKED_RECENT_SCAN_LIMIT = 400;
 const PROFILE_TRACKED_OVERLAY_LIMIT = 50;
-const PROFILE_BEST_SCORES_LIMIT = 200;
+// Exported for the farm helper: whether a best-scores snapshot filled the whole
+// window decides if a keymode's play list can be truncated from below.
+export const PROFILE_BEST_SCORES_LIMIT = 200;
 const PROFILE_USER_INLINE_REFRESH_BUDGET_MS = 150;
 
 type ProfileScoreProvenance = "osu_snapshot" | "live_top_play_event" | "tracked_recent_score";
