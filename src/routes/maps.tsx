@@ -79,7 +79,7 @@ import {
   runLiveBackendAdminAction,
 } from "../lib/live-backend";
 import { LIVE_MAPS_PLAYERS_PAGE_SIZE, RANDOM_DRAW_BATCH_SIZE } from "../lib/live-backend";
-import type { LiveMapSearchEntry, LiveMapsBrowseTab, LiveMapsDetailsPlayer, LiveMapsPageValue, LiveMapsPlayersKind, LiveMapsRandomDrawValue, LiveMapsRandomPick, LiveMapsRefreshProgress } from "../lib/live-backend";
+import type { LiveMapSearchEntry, LiveMapsBrowseTab, LiveMapsDetailsPlayer, LiveMapsPageValue, LiveMapsPlayersKind, LiveMapsRandomDrawSnapshot, LiveMapsRandomDrawValue, LiveMapsRandomPick, LiveMapsRefreshProgress } from "../lib/live-backend";
 import { CountryWarming } from "../components/CountryWarming";
 import { useCountryWarming } from "../lib/use-country-warming";
 import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
@@ -99,6 +99,8 @@ import {
   buildRandomDrawParams,
 } from "../lib/maps-random-draw-params";
 import type { RandomPattern, RandomWeight } from "../lib/maps-random-draw-params";
+import { MapsRandomDrawController } from "../lib/maps-random-draw-state";
+import type { RandomDrawEvent } from "../lib/maps-random-draw-state";
 import { useWindowActive } from "../lib/window-activity";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -174,13 +176,6 @@ const VISIBLE_AVATARS = 4;
 // Keep in sync with the live backend (FARMED_DOMINANT_MOD_SHARE): a speed mod is
 // dominant when more than this share of the farming roster used it.
 const FARMED_DOMINANT_MOD_SHARE = 0.4;
-// When "avoid repeats" is on, the ids of the last few picks ride along with the
-// draw request so the server excludes them from the next batch.
-const RECENT_PLAYER_HISTORY = 2;
-const RECENT_BEATMAP_HISTORY = 5;
-// Top the prefetched pick buffer back up once it drops to this many, so a
-// reroll keeps resolving from memory instead of a network round-trip.
-const RANDOM_DRAW_REFILL_AT = 3;
 const RANDOM_PICK_SETTINGS_STORAGE_KEY = "mania-hub-maps-random-pick-settings-v1";
 const SEARCH_URL_DEBOUNCE_MS = 250;
 const LIVE_MAPS_PAGE_CACHE_MAX_ENTRIES = 48;
@@ -1379,26 +1374,14 @@ function MapsPage() {
   // ── Random tab: the server draws the picks ─────────────────────────────
   // Filters travel with the request and the response carries a batch of fully
   // hydrated picks plus the eligible counts, so the browser never holds the
-  // favourites pool. Rerolls come out of the prefetched batch.
+  // favourites pool. Rerolls come out of the prefetched batch, which
+  // MapsRandomDrawController owns along with the rest of the draw sequencing;
+  // this component only mirrors what it reports into React state.
   const [randomDraw, setRandomDraw] = useState<LiveMapsRandomDrawValue | null>(null);
   const [randomPick, setRandomPick] = useState<LiveMapsRandomPick | null>(null);
   // A reroll with an empty buffer keeps the current card up and spins the
   // button instead of flashing a skeleton.
   const [rerollPending, setRerollPending] = useState(false);
-  const pendingPicksRef = useRef<LiveMapsRandomPick[]>([]);
-  // Only the newest draw's response is applied; earlier ones are dropped so a
-  // filter change can't be overwritten by a request it superseded.
-  const drawRequestIdRef = useRef(0);
-  const drawAbortRef = useRef<AbortController | null>(null);
-  const drawPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Mirrors of state the fetch handlers read without wanting a new identity on
-  // every draw.
-  const hasRandomDrawRef = useRef(false);
-  const hasRandomPickRef = useRef(false);
-  const lastRandomDrawKeyRef = useRef<string | null>(null);
-  // Sliding windows sent as hard exclusions when "avoid repeats" is on.
-  const recentRandomPlayerIdsRef = useRef<number[]>([]);
-  const recentRandomBeatmapIdsRef = useRef<number[]>([]);
   const [rerollMenuOpen, setRerollMenuOpen] = useState(false);
   const rerollMenuRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -1411,26 +1394,6 @@ function MapsPage() {
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
   }, [rerollMenuOpen]);
-
-  useEffect(() => {
-    drawRequestIdRef.current += 1;
-    drawAbortRef.current?.abort();
-    if (drawPollTimerRef.current) clearTimeout(drawPollTimerRef.current);
-    recentRandomPlayerIdsRef.current = [];
-    recentRandomBeatmapIdsRef.current = [];
-    pendingPicksRef.current = [];
-    hasRandomDrawRef.current = false;
-    hasRandomPickRef.current = false;
-    lastRandomDrawKeyRef.current = null;
-    setRandomDraw(null);
-    setRandomPick(null);
-    setRerollPending(false);
-  }, [selectedCountry]);
-
-  useEffect(() => () => {
-    drawAbortRef.current?.abort();
-    if (drawPollTimerRef.current) clearTimeout(drawPollTimerRef.current);
-  }, []);
 
   // ── Mobile collapsible filter panel (shared across tabs) ────────────────
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -1497,140 +1460,100 @@ function MapsPage() {
     [rStatusRaw, rKeyRaw, rPatternRaw, rStars, rStarsMax, rWeight, hiddenUserIds],
   );
   // Avoid-repeats isn't a server filter (it only decides whether the recency
-  // windows are sent), but flipping it should still re-draw the queue.
+  // windows are sent) and the country isn't part of the filters, but both
+  // invalidate the prefetched queue, so they ride in the key too.
   const randomDrawKey = useMemo(
-    () => JSON.stringify({ ...randomDrawFilters, rAvoidRepeats }),
-    [randomDrawFilters, rAvoidRepeats],
+    () => JSON.stringify({ ...randomDrawFilters, rAvoidRepeats, country: selectedCountry }),
+    [randomDrawFilters, rAvoidRepeats, selectedCountry],
   );
 
-  const commitRandomPick = useCallback((pick: LiveMapsRandomPick) => {
-    hasRandomPickRef.current = true;
-    setRandomPick(pick);
-    setRerollPending(false);
-    if (!rAvoidRepeats) return;
+  // The controller outlives every render, so the values a draw needs reach it
+  // through a ref instead of rebuilding it whenever a filter moves.
+  const drawContextRef = useRef({ country: selectedCountry, filters: randomDrawFilters, avoidRepeats: rAvoidRepeats, hiddenUserIds });
+  drawContextRef.current = { country: selectedCountry, filters: randomDrawFilters, avoidRepeats: rAvoidRepeats, hiddenUserIds };
 
-    const nextPlayers = [...recentRandomPlayerIdsRef.current, pick.player.id];
-    if (nextPlayers.length > RECENT_PLAYER_HISTORY) nextPlayers.shift();
-    recentRandomPlayerIdsRef.current = nextPlayers;
-
-    const nextSets = [...recentRandomBeatmapIdsRef.current, pick.beatmapset.id];
-    if (nextSets.length > RECENT_BEATMAP_HISTORY) nextSets.shift();
-    recentRandomBeatmapIdsRef.current = nextSets;
-  }, [rAvoidRepeats]);
-
-  // One draw. `commit` shows the first arriving pick; a prefetch only fills the
-  // queue and refreshes the header counts.
-  const requestDraw: (count: number, options: { commit: boolean }) => Promise<void> = useCallback((count, options) => {
-    const requestId = drawRequestIdRef.current + 1;
-    drawRequestIdRef.current = requestId;
-    drawAbortRef.current?.abort();
-    if (drawPollTimerRef.current) {
-      clearTimeout(drawPollTimerRef.current);
-      drawPollTimerRef.current = null;
-    }
-    const controller = new AbortController();
-    drawAbortRef.current = controller;
-
-    const params = buildRandomDrawParams(randomDrawFilters, {
-      count,
-      excludeUsers: rAvoidRepeats ? recentRandomPlayerIdsRef.current : [],
-      // Queued sets are excluded too, so a refill doesn't hand back a pick the
-      // user is about to see anyway.
-      excludeSets: [
-        ...(rAvoidRepeats ? recentRandomBeatmapIdsRef.current : []),
-        ...pendingPicksRef.current.map((pick) => pick.beatmapset.id),
-      ],
-    });
-
-    return fetchLiveMapsRandomDraw(selectedCountry, params, { signal: controller.signal })
-      .then((snapshot) => {
-        if (drawRequestIdRef.current !== requestId) return;
-        setLiveMapsRefreshing(snapshot.isStale || snapshot.refreshQueued);
-        setLiveMapsProgress(snapshot.progress ?? null);
-
-        if (!snapshot.value) {
-          // Cold country: the maps build is still running, so keep the
-          // "Building maps... (N%)" indicator up and come back for it.
-          setMapsFirstBuild(snapshot.generatedAt == null);
-          if (snapshot.isStale || snapshot.refreshQueued) {
-            drawPollTimerRef.current = setTimeout(() => void requestDraw(count, options), 5_000);
-          } else {
-            setRerollPending(false);
-          }
-          return;
-        }
-
-        hasRandomDrawRef.current = true;
-        setRandomDraw(snapshot.value);
+  const applyDrawEvent = useCallback((event: RandomDrawEvent<LiveMapsRandomPick, LiveMapsRandomDrawSnapshot>) => {
+    switch (event.type) {
+      case "loading":
+        setLoadingMaps(event.loading);
+        // A retry supersedes whatever the previous attempt left on screen.
+        if (event.loading) setError(null);
+        break;
+      case "meta":
+        setLiveMapsRefreshing(event.snapshot.isStale || event.snapshot.refreshQueued);
+        setLiveMapsProgress(event.snapshot.progress ?? null);
+        break;
+      case "building":
+        setMapsFirstBuild(event.firstBuild);
+        break;
+      case "value":
+        setRandomDraw(event.value);
         setLoadingMaps(false);
         setMapsFirstBuild(false);
         setError(null);
-        // The hidden-user list is capped on the wire, so re-check locally.
-        pendingPicksRef.current.push(
-          ...snapshot.value.picks.filter((pick) => !hiddenUserIds.has(pick.player.id)),
-        );
-
-        if (!options.commit) return;
-        const next = pendingPicksRef.current.shift();
-        if (next) commitRandomPick(next);
-        else setRerollPending(false);
-      })
-      .catch(() => {
-        if (controller.signal.aborted || drawRequestIdRef.current !== requestId) return;
+        break;
+      case "pick":
+        setRandomPick(event.pick);
+        break;
+      case "pending":
+        setRerollPending(event.pending);
+        break;
+      case "failed":
         setLoadingMaps(false);
         setLiveMapsRefreshing(false);
         setLiveMapsProgress(null);
-        setRerollPending(false);
         // A failed refill leaves the visible pick alone; only a cold tab errors.
-        if (!hasRandomDrawRef.current) setError("Couldn't load maps data. Try again later.");
-      });
-  }, [commitRandomPick, hiddenUserIds, rAvoidRepeats, randomDrawFilters, selectedCountry]);
-
-  const reshuffleRandom = useCallback(() => {
-    const next = pendingPicksRef.current.shift();
-    if (next) commitRandomPick(next);
-    else setRerollPending(true);
-    if (pendingPicksRef.current.length <= RANDOM_DRAW_REFILL_AT) {
-      void requestDraw(RANDOM_DRAW_BATCH_SIZE, { commit: !next });
+        if (!event.hasValue) setError("Couldn't load maps data. Try again later.");
+        break;
     }
-  }, [commitRandomPick, requestDraw]);
+  }, []);
+
+  const drawControllerRef = useRef<MapsRandomDrawController<LiveMapsRandomPick, LiveMapsRandomDrawSnapshot> | null>(null);
+  if (!drawControllerRef.current) {
+    drawControllerRef.current = new MapsRandomDrawController<LiveMapsRandomPick, LiveMapsRandomDrawSnapshot>({
+      batchSize: RANDOM_DRAW_BATCH_SIZE,
+      filterDebounceMs: SEARCH_URL_DEBOUNCE_MS,
+      host: {
+        draw: (request, signal) => {
+          const { country, filters } = drawContextRef.current;
+          return fetchLiveMapsRandomDraw(country, buildRandomDrawParams(filters, request), { signal });
+        },
+        avoidRepeats: () => drawContextRef.current.avoidRepeats,
+        isPickVisible: (pick) => !drawContextRef.current.hiddenUserIds.has(pick.player.id),
+        emit: applyDrawEvent,
+        schedule: (run, ms) => {
+          const timer = setTimeout(run, ms);
+          return () => clearTimeout(timer);
+        },
+      },
+    });
+  }
+  const drawController = drawControllerRef.current;
+
+  // A different country is a different pool. Declared above the draw effect so
+  // the reset lands before the re-entry it triggers.
+  useEffect(() => {
+    drawController.reset();
+    setRandomDraw(null);
+    setRandomPick(null);
+    setRerollPending(false);
+  }, [drawController, selectedCountry]);
 
   // Entering the tab (or a country switch / rebuild) draws and commits. A later
   // filter change only refreshes the counts and re-warms the queue: filter
   // changes never auto-reroll, the user must click Reroll.
   useEffect(() => {
     if (!liveBackendEnabled || tab !== "random") return;
-    const firstEntry = lastRandomDrawKeyRef.current === null;
-    const filtersChanged = lastRandomDrawKeyRef.current !== randomDrawKey;
-    lastRandomDrawKeyRef.current = randomDrawKey;
-    // Queued picks were drawn under the previous filters.
-    if (filtersChanged) pendingPicksRef.current = [];
+    drawController.enterTab(randomDrawKey);
+    // Leaving the tab (or superseding this draw with a filter change) drops the
+    // in-flight request and the cold-country repoll; the next entry re-arms
+    // whatever it still needs.
+    return () => drawController.stop();
+  }, [drawController, liveBackendEnabled, randomDrawKey, tab]);
 
-    let debounce: number | null = null;
-    if (firstEntry) {
-      setLoadingMaps(true);
-      void requestDraw(RANDOM_DRAW_BATCH_SIZE, { commit: true });
-    } else if (filtersChanged) {
-      // Chip toggles only refresh the counts and re-warm the queue; the visible
-      // pick stays put unless there was never one to begin with.
-      debounce = window.setTimeout(
-        () => void requestDraw(RANDOM_DRAW_BATCH_SIZE, { commit: !hasRandomPickRef.current }),
-        SEARCH_URL_DEBOUNCE_MS,
-      );
-    }
-    // Otherwise this is a re-entry with unchanged filters: the counts and the
-    // warm queue both still hold, so don't spend a request on them.
-
-    return () => {
-      if (debounce != null) window.clearTimeout(debounce);
-      // Leaving the tab (or superseding this draw) also stops the cold-country
-      // repoll; a new request schedules its own.
-      if (drawPollTimerRef.current) {
-        clearTimeout(drawPollTimerRef.current);
-        drawPollTimerRef.current = null;
-      }
-    };
-  }, [liveBackendEnabled, randomDrawKey, requestDraw, tab]);
+  // The page can unmount from any tab, so quiesce the controller unconditionally
+  // rather than leaning on the draw effect's cleanup.
+  useEffect(() => () => drawController.stop(), [drawController]);
 
   const randomPickCount = randomDraw?.totalPicks ?? 0;
   const hasActiveFilters =
@@ -1765,8 +1688,7 @@ function MapsPage() {
     try {
       await runLiveBackendAdminAction({ data: { path: `/api/admin/refresh-maps?country=${selectedCountry}` } });
       if (tab === "random") {
-        pendingPicksRef.current = [];
-        await requestDraw(RANDOM_DRAW_BATCH_SIZE, { commit: true });
+        await drawController.redraw();
       } else if (liveMapsPageParams && liveMapsPageRequestKey) {
         const snapshot = await fetchLiveMapsPageSnapshot(selectedCountry, liveMapsPageParams);
         setLiveMapsProgress(snapshot.progress ?? null);
@@ -2269,7 +2191,7 @@ function MapsPage() {
                     <div ref={rerollMenuRef} className="shrink-0 relative">
                       <div className="flex items-stretch rounded-lg bg-osu-pink/20 border border-osu-pink/30 overflow-hidden">
                         <button
-                          onClick={() => { setRerollMenuOpen(false); reshuffleRandom(); }}
+                          onClick={() => { setRerollMenuOpen(false); void drawController.reroll(); }}
                           disabled={rerollPending}
                           className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer disabled:cursor-not-allowed"
                         >
