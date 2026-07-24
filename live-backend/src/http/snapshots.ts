@@ -2504,8 +2504,26 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
     apiCallHistory: apiCalls,
     countries,
     catchup,
+    responseCaches: mapsResponseCacheMetrics(ctx.db),
     worker: options.includeWorkerActivity ? adminWorkerStatus(worker) : publicWorkerStatus(worker),
     ...(snapshotStats ? { snapshotStats } : {}),
+  };
+}
+
+// Entry counts and body bytes for the maps prepared-response caches, surfaced
+// in /api/admin/status so the byte budgets are observable in production.
+function mapsResponseCacheMetrics(db: Db) {
+  const state = getMapsResponseCacheState(db);
+  const describe = (cache: MapsResponseCache) => ({
+    entries: cache.entries.size,
+    bytes: cache.totalBytes,
+    maxEntries: cache.maxEntries,
+    maxBytes: cache.maxBytes,
+    maxEntryBytes: cache.maxEntryBytes,
+  });
+  return {
+    mapsSnapshot: describe(state.responses),
+    mapsPage: describe(state.pageResponses),
   };
 }
 
@@ -3122,6 +3140,23 @@ const MAPS_RESPONSE_CACHE_MAX_ENTRIES = 32;
 const MAPS_PAGE_RESPONSE_CACHE_TTL_MS = 10 * 60_000;
 const MAPS_PAGE_RESPONSE_CACHE_MAX_ENTRIES = 128;
 const MAPS_REFRESHING_RESPONSE_CACHE_TTL_MS = 30_000;
+// Byte budgets (Phase 7). Entry counts alone can't bound memory: one entry may
+// hold a multi-MiB body. Measured on the prod snapshot (2026-07-24): GLOBAL
+// random is 13.0 MiB raw / 3.2 gzip / 2.5 brotli; country randoms are <= ~1 MiB
+// raw; maps-page bodies are <= ~64 KiB. So the compressed working set is a few
+// MiB and these budgets are safety ceilings, not tuning knobs.
+const MAPS_RESPONSE_CACHE_MAX_BYTES = 48 * 1024 * 1024;
+const MAPS_PAGE_RESPONSE_CACHE_MAX_BYTES = 32 * 1024 * 1024;
+// No single body may occupy a meaningful slice of a cache budget. Larger
+// bodies are still served, just never retained.
+const MAPS_RESPONSE_CACHE_MAX_ENTRY_BYTES = 8 * 1024 * 1024;
+// A 200 body above this size is only served compressed: clients that accept
+// neither br nor gzip get a cached 406 instead. This keeps very large identity
+// bodies (GLOBAL random is 13 MiB raw) out of the cache without opening a
+// rebuild-per-request path for Accept-Encoding-less clients — the tiny 406 is
+// cached under the identity key. Every browser and standard HTTP library
+// sends Accept-Encoding.
+const MAPS_IDENTITY_RESPONSE_MAX_BYTES = 2 * 1024 * 1024;
 // How long past its TTL a GLOBAL entry may still be served while a background
 // rebuild replaces it. GLOBAL hydrates are the expensive ones (a ~45k-set
 // random pool) and, with local libsql running queries synchronously on the
@@ -3131,11 +3166,22 @@ const MAPS_REFRESHING_RESPONSE_CACHE_TTL_MS = 30_000;
 // 0): their builds are sub-second.
 const MAPS_GLOBAL_STALE_SERVE_MS = 45 * 60_000;
 
-interface MapsResponseCacheEntry extends PreparedJsonResponse {
+export interface MapsResponseCacheEntry extends PreparedJsonResponse {
   storedAt: number;
   ttlMs: number;
   staleServeMs: number;
   freshnessKey: string;
+}
+
+// A prepared-response cache bounded by body bytes as well as entry count.
+// totalBytes is maintained incrementally by the set/delete helpers below; all
+// mutations must go through them.
+export interface MapsResponseCache {
+  entries: Map<string, MapsResponseCacheEntry>;
+  totalBytes: number;
+  readonly maxEntries: number;
+  readonly maxBytes: number;
+  readonly maxEntryBytes: number;
 }
 
 // Per-Db cache state so entries never leak across databases (one process holds
@@ -3143,33 +3189,90 @@ interface MapsResponseCacheEntry extends PreparedJsonResponse {
 // that GLOBAL keys are stable across generations instead of embedding
 // refreshed_at.
 interface MapsResponseCacheState {
-  responses: Map<string, MapsResponseCacheEntry>;
-  pageResponses: Map<string, MapsResponseCacheEntry>;
+  responses: MapsResponseCache;
+  pageResponses: MapsResponseCache;
   inflight: Map<string, Promise<PreparedJsonResponse>>;
   pageInflight: Map<string, Promise<PreparedJsonResponse>>;
 }
 
 const mapsResponseCacheByDb = new WeakMap<Db, MapsResponseCacheState>();
 
+export function createMapsResponseCache(
+  maxEntries: number,
+  maxBytes: number,
+  maxEntryBytes = MAPS_RESPONSE_CACHE_MAX_ENTRY_BYTES,
+): MapsResponseCache {
+  return { entries: new Map(), totalBytes: 0, maxEntries, maxBytes, maxEntryBytes };
+}
+
 function getMapsResponseCacheState(db: Db): MapsResponseCacheState {
   let state = mapsResponseCacheByDb.get(db);
   if (!state) {
-    state = { responses: new Map(), pageResponses: new Map(), inflight: new Map(), pageInflight: new Map() };
+    state = {
+      responses: createMapsResponseCache(MAPS_RESPONSE_CACHE_MAX_ENTRIES, MAPS_RESPONSE_CACHE_MAX_BYTES),
+      pageResponses: createMapsResponseCache(MAPS_PAGE_RESPONSE_CACHE_MAX_ENTRIES, MAPS_PAGE_RESPONSE_CACHE_MAX_BYTES),
+      inflight: new Map(),
+      pageInflight: new Map(),
+    };
     mapsResponseCacheByDb.set(db, state);
   }
   return state;
 }
 
-function pruneMapsResponseCacheMap(map: Map<string, MapsResponseCacheEntry>, maxEntries: number, now: number): void {
-  for (const [key, entry] of map) {
-    if (now - entry.storedAt > entry.ttlMs + entry.staleServeMs) map.delete(key);
+export function mapsResponseCacheDelete(cache: MapsResponseCache, key: string): void {
+  const existing = cache.entries.get(key);
+  if (!existing) return;
+  cache.entries.delete(key);
+  cache.totalBytes -= existing.body.length;
+}
+
+export function mapsResponseCacheSet(cache: MapsResponseCache, key: string, entry: MapsResponseCacheEntry): void {
+  // Oversized bodies are served but never retained: a single entry must not
+  // occupy a meaningful slice of the cache budget.
+  if (entry.body.length > cache.maxEntryBytes) {
+    mapsResponseCacheDelete(cache, key);
+    return;
   }
+  // Delete-then-set keeps Map insertion order meaningful for the oldest-first
+  // eviction below.
+  mapsResponseCacheDelete(cache, key);
+  cache.entries.set(key, entry);
+  cache.totalBytes += entry.body.length;
+  evictMapsResponseCacheOverflow(cache);
+}
+
+function evictMapsResponseCacheOverflow(cache: MapsResponseCache): void {
   // Map iterates in insertion order, so the first key is the oldest entry.
-  while (map.size > maxEntries) {
-    const oldest = map.keys().next().value;
+  while (cache.entries.size > cache.maxEntries || cache.totalBytes > cache.maxBytes) {
+    const oldest = cache.entries.keys().next().value;
     if (oldest === undefined) break;
-    map.delete(oldest);
+    mapsResponseCacheDelete(cache, oldest);
   }
+}
+
+export function pruneMapsResponseCache(cache: MapsResponseCache, now: number): void {
+  for (const [key, entry] of cache.entries) {
+    if (now - entry.storedAt > entry.ttlMs + entry.staleServeMs) mapsResponseCacheDelete(cache, key);
+  }
+  evictMapsResponseCacheOverflow(cache);
+}
+
+// A 200 body too large for identity transfer becomes a tiny cacheable 406:
+// see MAPS_IDENTITY_RESPONSE_MAX_BYTES. vary is set because the outcome
+// depends on Accept-Encoding even though this body itself is uncompressed.
+function enforceCompressedLargeBody(
+  result: { prepared: PreparedJsonResponse; cacheTtlMs: number | null },
+  encoding: "br" | "gzip" | null,
+): { prepared: PreparedJsonResponse; cacheTtlMs: number | null } {
+  const { prepared } = result;
+  if (encoding !== null || prepared.status !== 200 || prepared.body.length <= MAPS_IDENTITY_RESPONSE_MAX_BYTES) {
+    return result;
+  }
+  const body = Buffer.from(JSON.stringify({
+    error: "compression_required",
+    message: "This response is only served compressed. Repeat the request with Accept-Encoding: br or gzip.",
+  }), "utf8");
+  return { prepared: { status: 406, encoding: null, vary: true, body }, cacheTtlMs: result.cacheTtlMs };
 }
 
 // Try to run a GLOBAL maps build on the snapshot worker thread, where its
@@ -3200,7 +3303,7 @@ async function buildGlobalMapsResponseOnThread(
 }
 
 interface MapsResponseCachedServeOptions {
-  cache: Map<string, MapsResponseCacheEntry>;
+  cache: MapsResponseCache;
   inflight: Map<string, Promise<PreparedJsonResponse>>;
   /** Stable cache key; null disables caching (no snapshot row yet). */
   key: string | null;
@@ -3226,7 +3329,7 @@ async function serveMapsResponseCached(
     return;
   }
   const now = Date.now();
-  const entry = cache.get(key);
+  const entry = cache.entries.get(key);
   if (entry) {
     const age = now - entry.storedAt;
     if (entry.freshnessKey === freshnessKey && age < entry.ttlMs) {
@@ -3255,10 +3358,7 @@ function startMapsResponseBuild(options: MapsResponseCachedServeOptions): Promis
   const promise = build()
     .then(({ prepared, cacheTtlMs }) => {
       if (cacheTtlMs != null) {
-        // Delete-then-set keeps Map insertion order meaningful for the
-        // oldest-first size-cap eviction in the prune passes.
-        cache.delete(key);
-        cache.set(key, { ...prepared, storedAt: Date.now(), ttlMs: cacheTtlMs, staleServeMs, freshnessKey });
+        mapsResponseCacheSet(cache, key, { ...prepared, storedAt: Date.now(), ttlMs: cacheTtlMs, staleServeMs, freshnessKey });
       }
       return prepared;
     })
@@ -3472,7 +3572,7 @@ async function handleMapsPageSnapshot(
   query: MapsPageQuery,
 ): Promise<void> {
   const cacheState = getMapsResponseCacheState(ctx.db);
-  pruneMapsResponseCacheMap(cacheState.pageResponses, MAPS_PAGE_RESPONSE_CACHE_MAX_ENTRIES, Date.now());
+  pruneMapsResponseCache(cacheState.pageResponses, Date.now());
   const encoding = negotiateEncoding(req);
   const normalized = country.toUpperCase();
   const global = isGlobalCountry(normalized);
@@ -3526,7 +3626,10 @@ async function handleMapsPageSnapshot(
           maxAgeMs: ctx.config.mapsRefreshIntervalMs,
         });
         if (prepared) {
-          return { prepared, cacheTtlMs: prepared.status === 200 ? MAPS_PAGE_RESPONSE_CACHE_TTL_MS : null };
+          return enforceCompressedLargeBody(
+            { prepared, cacheTtlMs: prepared.status === 200 ? MAPS_PAGE_RESPONSE_CACHE_TTL_MS : null },
+            encoding,
+          );
         }
       }
       const snapshot = await getMapsPageSnapshot(ctx.db, ctx.queue, country, ctx.config.mapsRefreshIntervalMs, query);
@@ -3541,7 +3644,7 @@ async function handleMapsPageSnapshot(
         : !global && snapshot.refreshQueued
           ? MAPS_REFRESHING_RESPONSE_CACHE_TTL_MS
           : MAPS_PAGE_RESPONSE_CACHE_TTL_MS;
-      return { prepared, cacheTtlMs };
+      return enforceCompressedLargeBody({ prepared, cacheTtlMs }, encoding);
     },
   });
 }
@@ -3553,7 +3656,7 @@ async function handleMapsSnapshot(
   country: string,
 ): Promise<void> {
   const cacheState = getMapsResponseCacheState(ctx.db);
-  pruneMapsResponseCacheMap(cacheState.responses, MAPS_RESPONSE_CACHE_MAX_ENTRIES, Date.now());
+  pruneMapsResponseCache(cacheState.responses, Date.now());
 
   const encoding = negotiateEncoding(req);
   const normalized = country.toUpperCase();
@@ -3582,7 +3685,10 @@ async function handleMapsSnapshot(
           maxAgeMs: ctx.config.mapsRefreshIntervalMs,
         });
         if (prepared) {
-          return { prepared, cacheTtlMs: prepared.status === 200 ? MAPS_RESPONSE_CACHE_TTL_MS : null };
+          return enforceCompressedLargeBody(
+            { prepared, cacheTtlMs: prepared.status === 200 ? MAPS_RESPONSE_CACHE_TTL_MS : null },
+            encoding,
+          );
         }
       }
       const snapshot = await getMapsSnapshot(ctx.db, ctx.queue, country, ctx.config.mapsRefreshIntervalMs, "random");
@@ -3593,7 +3699,7 @@ async function handleMapsSnapshot(
       // The random pool is identical for a given refreshed_at regardless of
       // refresh state, so it always takes the full TTL (see the cache comment).
       const cacheTtlMs = status !== 200 || snapshot.value == null ? null : MAPS_RESPONSE_CACHE_TTL_MS;
-      return { prepared, cacheTtlMs };
+      return enforceCompressedLargeBody({ prepared, cacheTtlMs }, encoding);
     },
   });
 }

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { brotliDecompressSync, gunzipSync } from "node:zlib";
 import { EventEmitter } from "node:events";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,7 +15,7 @@ import { confirmTopPlay, getTopPlaysSnapshot, TopPlayConfirmationPendingError } 
 import { getTrackerSnapshot } from "../src/features/tracker.js";
 import { getGlobalRankingsSnapshot } from "../src/features/global-rankings.js";
 import { getMyDataSummary, getUserTopPlaysFeed, getUserTrackedFeed } from "../src/features/my-data.js";
-import { routeHttp, sendJson } from "../src/http/snapshots.js";
+import { createMapsResponseCache, mapsResponseCacheSet, pruneMapsResponseCache, routeHttp, sendJson, type MapsResponseCacheEntry } from "../src/http/snapshots.js";
 import { AbuseGuard } from "../src/http/abuse-guard.js";
 import { handleSse } from "../src/live/sse.js";
 import { cancelOscCountryCatchup, enqueueOscCountryCatchup, OscBackfill } from "../src/osc/backfill.js";
@@ -89,6 +90,61 @@ function mockRes() {
   };
   res = partial as unknown as ServerResponse & { statusCode: number };
   return { res, writes, headers };
+}
+
+// Like mockRes but byte-accurate: compressed bodies round-trip through String()
+// lossily, so encoding tests need the raw buffers.
+async function binaryRequest(
+  ctx: never,
+  url: string,
+  headers: IncomingMessage["headers"] = {},
+): Promise<{ status: number; headers: Record<string, string>; body: Buffer }> {
+  const chunks: Buffer[] = [];
+  const headerBag: Record<string, string> = {};
+  const res = {
+    statusCode: 200,
+    setHeader(key: string, value: number | string | readonly string[]) {
+      headerBag[key.toLowerCase()] = Array.isArray(value) ? value.join(",") : String(value);
+      return res;
+    },
+    getHeader(key: string) {
+      return headerBag[key.toLowerCase()];
+    },
+    writeHead(status: number, extra?: Record<string, string>) {
+      res.statusCode = status;
+      for (const [key, value] of Object.entries(extra ?? {})) headerBag[key.toLowerCase()] = String(value);
+      return res;
+    },
+    write(chunk: string | Buffer) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      return true;
+    },
+    end(chunk?: string | Buffer) {
+      if (chunk != null) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    },
+  };
+  await routeHttp(mockReq("GET", url, headers), res as unknown as ServerResponse, ctx);
+  return { status: res.statusCode, headers: headerBag, body: Buffer.concat(chunks) };
+}
+
+// A legacy-shape maps snapshot payload whose size scales with playerCount
+// (~2 KiB per player), for exercising the response-cache byte rules.
+function mapsSnapshotPayload(refreshedAt: string, playerCount: number): string {
+  return JSON.stringify({
+    farmed: [],
+    mostPlayed: [],
+    favourites: [],
+    favouritesByPlayer: Array.from({ length: playerCount }, (_, index) => ({
+      id: 101 + index,
+      username: `player-${index}-${"x".repeat(2000)}`,
+      avatarUrl: "https://assets.example/player.png",
+      beatmapsetIds: [1],
+    })),
+    beatmapsetsPool: {},
+    generatedAt: refreshedAt,
+    farmedGeneratedAt: refreshedAt,
+    favouritesGeneratedAt: refreshedAt,
+  });
 }
 
 function baseConfig(overrides: Record<string, unknown> = {}) {
@@ -2411,13 +2467,20 @@ describe("live backend", () => {
       oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
     } as never);
 
-    const body = JSON.parse(response.writes.join("")) as { snapshotStats?: Record<string, number> };
+    const body = JSON.parse(response.writes.join("")) as {
+      snapshotStats?: Record<string, number>;
+      responseCaches?: Record<string, { entries: number; bytes: number; maxEntries: number; maxBytes: number; maxEntryBytes: number }>;
+    };
     expect(response.res.statusCode).toBe(200);
     expect(body.snapshotStats).toMatchObject({
       trackerScores: 1,
       topPlays: 1,
       snipes: 1,
     });
+    expect(body.responseCaches?.mapsSnapshot).toMatchObject({ entries: 0, bytes: 0 });
+    expect(body.responseCaches?.mapsPage).toMatchObject({ entries: 0, bytes: 0 });
+    expect(body.responseCaches?.mapsSnapshot.maxBytes).toBeGreaterThan(0);
+    expect(body.responseCaches?.mapsPage.maxEntryBytes).toBeGreaterThan(0);
   });
 
   it("aggregates tracker and top-play snapshots across countries for Global", async () => {
@@ -5866,6 +5929,175 @@ describe("live backend", () => {
     const afterRefresh = await request();
     expect(afterRefresh.status).toBe(202);
     expect(afterRefresh.body.value).toBeNull();
+  });
+
+  it("serves maps snapshots compressed per accept-encoding and varies correctly", async () => {
+    const { db, queue, events } = await setup();
+    const refreshedAt = new Date().toISOString();
+    await exec(
+      db,
+      `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
+       values ('CR', ?, ?, ?)`,
+      [mapsSnapshotPayload(refreshedAt, 10), refreshedAt, refreshedAt],
+    );
+    const ctx = {
+      db,
+      queue,
+      events,
+      config: baseConfig(),
+      osu: {},
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never;
+
+    const brotli = await binaryRequest(ctx, "/api/snapshots/maps?country=CR&section=random", { "accept-encoding": "br" });
+    expect(brotli.status).toBe(200);
+    expect(brotli.headers["content-encoding"]).toBe("br");
+    expect(brotli.headers.vary).toBe("accept-encoding");
+    const brotliBody = JSON.parse(brotliDecompressSync(brotli.body).toString("utf8")) as { value: unknown };
+    expect(brotliBody.value).toBeTruthy();
+
+    const gzipped = await binaryRequest(ctx, "/api/snapshots/maps?country=CR&section=random", { "accept-encoding": "gzip" });
+    expect(gzipped.status).toBe(200);
+    expect(gzipped.headers["content-encoding"]).toBe("gzip");
+    expect(gzipped.headers.vary).toBe("accept-encoding");
+    expect((JSON.parse(gunzipSync(gzipped.body).toString("utf8")) as { value: unknown }).value).toBeTruthy();
+
+    // No Accept-Encoding: identity body, still varies (it could have been
+    // compressed for another client), no content-encoding header.
+    const identity = await binaryRequest(ctx, "/api/snapshots/maps?country=CR&section=random");
+    expect(identity.status).toBe(200);
+    expect(identity.headers["content-encoding"]).toBeUndefined();
+    expect(identity.headers.vary).toBe("accept-encoding");
+    expect((JSON.parse(identity.body.toString("utf8")) as { value: unknown }).value).toBeTruthy();
+  });
+
+  it("refuses very large identity bodies with a cacheable 406 while compressed clients get 200", async () => {
+    const { db, queue, events } = await setup();
+    const refreshedAt = new Date().toISOString();
+    // ~2.6 MiB of favouritesByPlayer: over the 2 MiB identity threshold but a
+    // few hundred KiB compressed.
+    await exec(
+      db,
+      `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
+       values ('CR', ?, ?, ?)`,
+      [mapsSnapshotPayload(refreshedAt, 1300), refreshedAt, refreshedAt],
+    );
+    const ctx = {
+      db,
+      queue,
+      events,
+      config: baseConfig(),
+      osu: {},
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never;
+
+    const identity = await binaryRequest(ctx, "/api/snapshots/maps?country=CR&section=random");
+    expect(identity.status).toBe(406);
+    expect(identity.headers.vary).toBe("accept-encoding");
+    expect(JSON.parse(identity.body.toString("utf8"))).toMatchObject({ error: "compression_required" });
+
+    const gzipped = await binaryRequest(ctx, "/api/snapshots/maps?country=CR&section=random", { "accept-encoding": "gzip" });
+    expect(gzipped.status).toBe(200);
+    expect(gzipped.headers["content-encoding"]).toBe("gzip");
+
+    // The tiny 406 (not the 2.6 MiB identity body) is what got cached: corrupt
+    // the stored payload so a rebuild would return 202, then re-request.
+    await exec(db, "update country_maps_snapshots set payload_json = ? where country = 'CR'", ["{not json"]);
+    const cached = await binaryRequest(ctx, "/api/snapshots/maps?country=CR&section=random");
+    expect(cached.status).toBe(406);
+  });
+
+  it("bounds prepared maps response caches by bytes, entry size, and entry count", () => {
+    const entry = (body: string, storedAt = Date.now()): MapsResponseCacheEntry => ({
+      status: 200,
+      encoding: null,
+      vary: false,
+      body: Buffer.from(body, "utf8"),
+      storedAt,
+      ttlMs: 60_000,
+      staleServeMs: 0,
+      freshnessKey: "",
+    });
+
+    const cache = createMapsResponseCache(10, 100, 60);
+    mapsResponseCacheSet(cache, "a", entry("x".repeat(40)));
+    mapsResponseCacheSet(cache, "b", entry("y".repeat(40)));
+    expect(cache.totalBytes).toBe(80);
+
+    // 120 bytes total exceeds the 100-byte budget: the oldest entry goes.
+    mapsResponseCacheSet(cache, "c", entry("z".repeat(40)));
+    expect([...cache.entries.keys()]).toEqual(["b", "c"]);
+    expect(cache.totalBytes).toBe(80);
+
+    // Oversized single entry: never stored, and it evicts the stale entry it
+    // would have replaced rather than leaving an outdated body behind.
+    mapsResponseCacheSet(cache, "b", entry("w".repeat(70)));
+    expect(cache.entries.has("b")).toBe(false);
+    expect(cache.totalBytes).toBe(40);
+
+    // TTL prune returns the bytes too.
+    mapsResponseCacheSet(cache, "old", entry("s".repeat(30), Date.now() - 10 * 60_000));
+    expect(cache.totalBytes).toBe(70);
+    pruneMapsResponseCache(cache, Date.now());
+    expect(cache.entries.has("old")).toBe(false);
+    expect(cache.totalBytes).toBe(40);
+
+    // Entry-count cap still applies independently of bytes.
+    const small = createMapsResponseCache(2, 1000, 60);
+    mapsResponseCacheSet(small, "a", entry("1"));
+    mapsResponseCacheSet(small, "b", entry("2"));
+    mapsResponseCacheSet(small, "c", entry("3"));
+    expect([...small.entries.keys()]).toEqual(["b", "c"]);
+    expect(small.totalBytes).toBe(2);
+  });
+
+  it("coalesces concurrent maps snapshot misses into one build", async () => {
+    const { db, queue, events } = await setup();
+    const refreshedAt = new Date().toISOString();
+    await exec(
+      db,
+      `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
+       values ('CR', ?, ?, ?)`,
+      [mapsSnapshotPayload(refreshedAt, 5), refreshedAt, refreshedAt],
+    );
+
+    // Count the expensive payload_json reads through a counting proxy; the
+    // cheap meta read selects refreshed_at only and stays uncounted.
+    let payloadReads = 0;
+    const countingDb = new Proxy(db, {
+      get(target, prop, receiver) {
+        if (prop === "execute") {
+          return (arg: { sql?: string } | string) => {
+            const sql = typeof arg === "string" ? arg : arg?.sql ?? "";
+            if (sql.includes("payload_json") && sql.trimStart().startsWith("select")) payloadReads += 1;
+            return target.execute(arg as never);
+          };
+        }
+        const value = Reflect.get(target, prop, receiver);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const ctx = {
+      db: countingDb,
+      queue,
+      events,
+      config: baseConfig(),
+      osu: {},
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never;
+
+    const request = async () => {
+      const { res, writes } = mockRes();
+      await routeHttp(mockReq("GET", "/api/snapshots/maps?country=CR&section=random"), res, ctx);
+      return { status: res.statusCode, body: JSON.parse(writes.join("")) as { value: unknown } };
+    };
+
+    const [first, second] = await Promise.all([request(), request()]);
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(first.body.value).toBeTruthy();
+    expect(second.body.value).toBeTruthy();
+    expect(payloadReads).toBe(1);
   });
 
   it("marks large JSON responses as varying by accept-encoding", () => {
