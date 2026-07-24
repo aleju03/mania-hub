@@ -537,71 +537,136 @@ export async function getMapsPlayersSnapshot(
   const pageSize = Math.max(1, Math.min(MAPS_PLAYERS_MAX_PAGE_SIZE, Math.floor(query.pageSize) || MAPS_PLAYERS_MAX_PAGE_SIZE));
   if (safeId === 0) return { kind, id: safeId, total: 0, matched: 0, page, pageSize, players: [] };
 
-  const all = await getFullMapsDetailsPlayers(db, normalized, kind, safeId);
   const q = query.q.trim().toLowerCase();
-  // Stamp each player with its rank on the full ordered board before filtering,
-  // so a search that surfaces a few players still reports their true standing.
-  const ranked = all.map((player, i) => ({ ...player, rank: i + 1 }));
-  const matched = q ? ranked.filter((player) => player.username.toLowerCase().includes(q)) : ranked;
-  const start = page * pageSize;
-  return {
-    kind,
-    id: safeId,
-    total: all.length,
-    matched: matched.length,
-    page,
-    pageSize,
-    players: matched.slice(start, start + pageSize),
-  };
+  const { total, matched, players } = await readMapsDetailsPlayersPage(db, normalized, kind, safeId, q, page, pageSize);
+  return { kind, id: safeId, total, matched, page, pageSize, players };
 }
 
-// The full player list for one map is assembled from every country's stored
-// snapshot (and the farmed-score rows), which is expensive to parse. Modal
-// pagination/search re-hits the same map repeatedly, so the assembled list is
-// cached for a short window (matching the HTTP cache-control) under a bounded
-// LRU so paging through a 1k+ player map never re-parses all snapshots.
-interface CachedMapsDetailsPlayers {
-  players: MapsDetailsPlayer[];
-  expiresAt: number;
+// The per-map player board is paged straight out of the normalized tables the
+// snapshots themselves are built from (farmed score rows, most-played rows,
+// favourite sets), so serving a modal never touches country_maps_snapshots.
+// Aggregation per kind: farmed keeps the best-pp row per user, popular sums
+// play counts per user, favourite keeps distinct users; GLOBAL folds every
+// non-GLOBAL country. Rank is a window over the full ordered board computed
+// before the username filter, so a searched player keeps their true standing.
+//
+// Popular/favourite rows join the roster with the same condition snapshot
+// builds use (tracked, currently ranked), because those tables retain rows
+// for members who have since been soft-untracked. Farmed deliberately does
+// not: the farmed modal always merged the raw score rows in unfiltered, so a
+// former member's best score stays on the board.
+function mapsDetailsBoardSql(kind: MapsPlayersKind, global: boolean): string {
+  const scope = global ? "!=" : "=";
+  // Roster status is checked against the row's own country, so a GLOBAL board
+  // only counts a user's rows from countries currently tracking them.
+  const rosterJoin = (alias: string): string =>
+    `join country_rosters r on r.country = ${alias}.country and r.user_id = ${alias}.user_id and r.is_tracked = 1 and r.rank is not null`;
+  // The display username (with the same `User <id>` fallback the client
+  // renders) is resolved in SQL so the search filter and the favourite
+  // ordering both see exactly what the modal shows.
+  const username = "coalesce(nullif(u.username, ''), 'User ' || b.id)";
+  if (kind === "farmed") {
+    return `with best as (
+        select id, pp, mods_json, score_url, played_at from (
+          select s.user_id as id, s.pp, s.mods_json, s.score_url, s.played_at,
+                 row_number() over (partition by s.user_id order by s.pp desc, s.detected_at desc, s.country asc) as rn
+          from country_maps_farmed_scores s
+          where s.country ${scope} ? and s.beatmap_id = ? and s.user_id > 0 and s.pp > 0
+        ) where rn = 1
+      ),
+      board as (
+        select b.id, ${username} as username, coalesce(u.avatar_url, '') as avatar_url,
+               b.pp, b.mods_json, b.score_url, b.played_at,
+               row_number() over (order by b.pp desc, b.id asc) as rank
+        from best b left join users u on u.user_id = b.id
+      )`;
+  }
+  if (kind === "popular") {
+    return `with agg as (
+        select mp.user_id as id, sum(mp.play_count) as cnt
+        from country_maps_most_played mp
+        ${rosterJoin("mp")}
+        where mp.country ${scope} ? and mp.beatmap_id = ? and mp.user_id > 0 and mp.play_count > 0
+        group by mp.user_id
+      ),
+      board as (
+        select b.id, ${username} as username, coalesce(u.avatar_url, '') as avatar_url, b.cnt,
+               row_number() over (order by b.cnt desc, b.id asc) as rank
+        from agg b left join users u on u.user_id = b.id
+      )`;
+  }
+  return `with agg as (
+      select distinct f.user_id as id
+      from country_maps_favourite_sets f
+      ${rosterJoin("f")}
+      where f.country ${scope} ? and f.beatmapset_id = ? and f.user_id > 0
+    ),
+    board as (
+      select b.id, ${username} as username, coalesce(u.avatar_url, '') as avatar_url,
+             row_number() over (order by ${username} collate nocase asc, b.id asc) as rank
+      from agg b left join users u on u.user_id = b.id
+    )`;
 }
 
-const MAPS_DETAILS_PLAYERS_CACHE_TTL_MS = 60_000;
-const MAPS_DETAILS_PLAYERS_CACHE_MAX_ENTRIES = 48;
-// Per-Db cache so the entries never leak across databases (one process holds a
-// single Db in production; tests spin up a fresh Db each).
-const mapsDetailsPlayersCache = new WeakMap<Db, Map<string, CachedMapsDetailsPlayers>>();
-
-async function getFullMapsDetailsPlayers(
+async function readMapsDetailsPlayersPage(
   db: Db,
   country: string,
   kind: MapsPlayersKind,
   id: number,
-): Promise<MapsDetailsPlayer[]> {
-  let cache = mapsDetailsPlayersCache.get(db);
-  if (!cache) mapsDetailsPlayersCache.set(db, (cache = new Map()));
-  const cacheKey = `${country}:${kind}:${id}`;
-  const now = Date.now();
-  const cached = cache.get(cacheKey);
-  if (cached && cached.expiresAt > now) {
-    cache.delete(cacheKey);
-    cache.set(cacheKey, cached);
-    return cached.players;
-  }
+  q: string,
+  page: number,
+  pageSize: number,
+): Promise<{ total: number; matched: number; players: MapsDetailsPlayer[] }> {
+  const global = isGlobalCountry(country);
+  const boardSql = mapsDetailsBoardSql(kind, global);
+  const boardArgs = [global ? GLOBAL_COUNTRY_CODE : country, id];
 
-  const players = kind === "farmed"
-    ? mergeFarmedDetailsPlayers(
-        await readMapsDetailsPlayersFromSnapshots(db, country, kind, id),
-        await readFarmedDetailsPlayersFromScores(db, country, id),
-      )
-    : await readMapsDetailsPlayersFromSnapshots(db, country, kind, id);
+  // Counts and page run in one read transaction so they see the same board.
+  // Across page requests the board is only eventually consistent: a write
+  // between pages can shift offsets (the client dedupes repeats), the same
+  // exposure the old 60-second assembled-board cache had once it expired.
+  const [countsResult, pageResult] = await execBatch(db, [
+    {
+      sql: `${boardSql}
+        select count(*) as total,
+               coalesce(sum(case when ? = '' or instr(lower(username), ?) > 0 then 1 else 0 end), 0) as matched
+        from board`,
+      args: [...boardArgs, q, q],
+    },
+    {
+      sql: `${boardSql}
+        select * from board
+        where ? = '' or instr(lower(username), ?) > 0
+        order by rank asc
+        limit ? offset ?`,
+      args: [...boardArgs, q, q, pageSize, page * pageSize],
+    },
+  ], "read");
+  const counts = countsResult.rows[0];
+  const rows = pageResult.rows;
 
-  cache.set(cacheKey, { players, expiresAt: now + MAPS_DETAILS_PLAYERS_CACHE_TTL_MS });
-  while (cache.size > MAPS_DETAILS_PLAYERS_CACHE_MAX_ENTRIES) {
-    const oldestKey = cache.keys().next().value;
-    if (oldestKey === undefined) break;
-    cache.delete(oldestKey);
-  }
-  return players;
+  const players = rows.map((row): MapsDetailsPlayer => {
+    const player: MapsDetailsPlayer = {
+      id: Number(row.id),
+      username: String(row.username ?? ""),
+      avatarUrl: String(row.avatar_url ?? ""),
+      rank: Number(row.rank),
+    };
+    if (kind === "farmed") {
+      player.pp = Number(row.pp ?? 0);
+      player.mods = parseJson<string[]>(row.mods_json, []);
+      player.scoreUrl = row.score_url == null ? null : String(row.score_url);
+      player.playedAt = row.played_at == null ? null : String(row.played_at);
+    }
+    if (kind === "popular") player.count = Number(row.cnt ?? 0);
+    return player;
+  });
+
+  return {
+    total: Number(counts?.total ?? 0),
+    matched: Number(counts?.matched ?? 0),
+    players,
+  };
 }
 
 /**
@@ -1883,139 +1948,6 @@ async function readMapsUserDisplayByIds(
   ]));
 }
 
-async function readFarmedDetailsPlayersFromScores(db: Db, country: string, beatmapId: number): Promise<MapsDetailsPlayer[]> {
-  const global = isGlobalCountry(country);
-  const rows = (await exec(
-    db,
-    `select s.user_id, s.pp, s.mods_json, s.score_url, s.played_at, u.username, u.avatar_url
-     from country_maps_farmed_scores s
-     left join users u on u.user_id = s.user_id
-     where ${global ? "s.country != ?" : "s.country = ?"} and s.beatmap_id = ?
-     order by s.pp desc`,
-    [global ? GLOBAL_COUNTRY_CODE : country, beatmapId],
-  )).rows;
-
-  const byUser = new Map<number, MapsDetailsPlayer>();
-  for (const row of rows) {
-    const userId = Number(row.user_id);
-    const pp = Number(row.pp ?? 0);
-    if (!Number.isSafeInteger(userId) || userId <= 0 || !Number.isFinite(pp) || pp <= 0) continue;
-    const current = byUser.get(userId);
-    if (current?.pp != null && current.pp >= pp) continue;
-    byUser.set(userId, {
-      id: userId,
-      username: String(row.username ?? `User ${userId}`),
-      avatarUrl: String(row.avatar_url ?? ""),
-      pp,
-      mods: parseJson<string[]>(row.mods_json, []),
-      scoreUrl: row.score_url == null ? null : String(row.score_url),
-      playedAt: row.played_at == null ? null : String(row.played_at),
-    });
-  }
-
-  return [...byUser.values()].sort((a, b) => (b.pp ?? 0) - (a.pp ?? 0));
-}
-
-function mergeFarmedDetailsPlayers(...groups: MapsDetailsPlayer[][]): MapsDetailsPlayer[] {
-  const byUser = new Map<number, MapsDetailsPlayer>();
-  for (const group of groups) {
-    for (const player of group) {
-      const current = byUser.get(player.id);
-      if (current?.pp != null && player.pp != null && current.pp >= player.pp) continue;
-      byUser.set(player.id, player);
-    }
-  }
-  return [...byUser.values()].sort((a, b) => (b.pp ?? 0) - (a.pp ?? 0));
-}
-
-async function readMapsDetailsPlayersFromSnapshots(
-  db: Db,
-  country: string,
-  kind: MapsPlayersKind,
-  id: number,
-): Promise<MapsDetailsPlayer[]> {
-  // For GLOBAL, stream one country snapshot at a time instead of a single
-  // `where country != ?` blob read (this runs on the serving event loop; a
-  // single all-country read both hogs the loop and holds a WAL-scaling
-  // read-mark for its whole duration). Non-global stays a single row read.
-  const memberCountries = isGlobalCountry(country)
-    ? (await exec(
-        db,
-        "select country from country_maps_snapshots where country != ? order by country",
-        [GLOBAL_COUNTRY_CODE],
-      )).rows.map((row) => String(row.country))
-    : [country];
-
-  const byUser = new Map<number, MapsDetailsPlayer>();
-  for (const memberCountry of memberCountries) {
-    await yieldToEventLoop();
-    const row = (await exec(
-      db,
-      "select country, refreshed_at, payload_json from country_maps_snapshots where country = ?",
-      [memberCountry],
-    )).rows[0];
-    if (!row) continue;
-    const stored = getStoredSnapshotCached(String(row.country), String(row.refreshed_at ?? ""), row.payload_json);
-    if (!stored) continue;
-
-    if (kind === "farmed") {
-      const entry = stored.farmed.find((candidate) => candidate.beatmapId === id);
-      if (!entry) continue;
-      for (const player of entry.players) {
-        const current = byUser.get(player.id);
-        if (current?.pp != null && current.pp >= player.pp) continue;
-        byUser.set(player.id, {
-          id: player.id,
-          username: "",
-          avatarUrl: "",
-          pp: player.pp,
-          mods: [...player.mods],
-          scoreUrl: player.scoreUrl,
-          playedAt: player.playedAt,
-        });
-      }
-      continue;
-    }
-
-    if (kind === "popular") {
-      const entry = stored.mostPlayed.find((candidate) => candidate.beatmapId === id);
-      if (!entry) continue;
-      for (const player of entry.players) {
-        const current = byUser.get(player.id);
-        byUser.set(player.id, {
-          id: player.id,
-          username: "",
-          avatarUrl: "",
-          count: (current?.count ?? 0) + player.count,
-        });
-      }
-      continue;
-    }
-
-    const entry = stored.favourites.find((candidate) => candidate.beatmapsetId === id);
-    if (!entry) continue;
-    for (const player of entry.players) {
-      if (byUser.has(player.id)) continue;
-      byUser.set(player.id, { id: player.id, username: "", avatarUrl: "" });
-    }
-  }
-
-  const players = [...byUser.values()];
-  await hydrateMapsDetailsPlayers(db, players);
-  if (kind === "farmed") return players.sort((a, b) => (b.pp ?? 0) - (a.pp ?? 0));
-  if (kind === "popular") return players.sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
-  return players.sort((a, b) => a.username.localeCompare(b.username));
-}
-
-async function hydrateMapsDetailsPlayers(db: Db, players: MapsDetailsPlayer[]): Promise<void> {
-  const users = await readMapsUserDisplayByIds(db, players.map((player) => player.id));
-  for (const player of players) {
-    const user = users.get(player.id);
-    player.username = user?.username || player.username || `User ${player.id}`;
-    player.avatarUrl = user?.avatarUrl || player.avatarUrl || "";
-  }
-}
-
 function filterSortMapsPageItems(value: CountryMapsData, query: MapsPageQuery): MapsPageItem[] {
   if (query.tab === "farmed") return filterSortFarmedMaps(value.farmed, query);
   if (query.tab === "popular") return filterSortMostPlayedMaps(value.mostPlayed, query);
@@ -2550,8 +2482,8 @@ export async function refreshGlobalMaps(db: Db, signal?: AbortSignal): Promise<{
     // One country's parse+merge is the unit of synchronous work; yield between
     // them so HTTP requests can interleave with this aggregation. The payload is
     // fetched, parsed locally and folded here, then goes out of scope before the
-    // next country loads — the multi-hundred-MB set of parsed trees is never held
-    // resident at once (deliberately not the shared getStoredSnapshotCached).
+    // next country loads — the multi-hundred-MB set of parsed trees is never
+    // held resident at once (deliberately uncached).
     await yieldToEventLoop();
     const payloadRow = (await exec(
       db,
@@ -2741,29 +2673,6 @@ export async function refreshGlobalMaps(db: Db, signal?: AbortSignal): Promise<{
     favourites: stored.favourites.length,
     beatmapsetPool: stored.beatmapsetsPool.length,
   };
-}
-
-// The global maps refresh and the per-map players lookup both scan every
-// country's snapshot, and parsing those multi-hundred-KB JSON blobs is
-// synchronous CPU work that blocks the event loop (and with it every HTTP
-// request in flight). Cache the parsed compact form keyed by the row's
-// refreshed_at so a snapshot is parsed once per write instead of once per
-// scan. Cached values are shared between callers: treat them as immutable.
-const STORED_SNAPSHOT_CACHE_MAX_ENTRIES = 64;
-const storedSnapshotCache = new Map<string, { refreshedAt: string; size: number; stored: StoredCountryMapsData | null }>();
-
-function getStoredSnapshotCached(country: string, refreshedAt: string, payloadJson: unknown): StoredCountryMapsData | null {
-  const payload = typeof payloadJson === "string" ? payloadJson : String(payloadJson ?? "");
-  const cached = storedSnapshotCache.get(country);
-  if (cached && cached.refreshedAt === refreshedAt && cached.size === payload.length) return cached.stored;
-  const stored = toStoredCountryMapsData(parseJson<unknown>(payload, null));
-  storedSnapshotCache.delete(country);
-  if (storedSnapshotCache.size >= STORED_SNAPSHOT_CACHE_MAX_ENTRIES) {
-    const oldest = storedSnapshotCache.keys().next().value;
-    if (oldest != null) storedSnapshotCache.delete(oldest);
-  }
-  storedSnapshotCache.set(country, { refreshedAt, size: payload.length, stored });
-  return stored;
 }
 
 // Normalises a stored maps payload (compact schema v2 or the legacy hydrated

@@ -494,6 +494,12 @@ create index if not exists idx_country_maps_farmed_scores_user on country_maps_f
 create index if not exists idx_country_maps_farmed_scores_beatmap_user on country_maps_farmed_scores(beatmap_id, user_id, pp desc);
 create index if not exists idx_country_maps_most_played_country_beatmap on country_maps_most_played(country, beatmap_id);
 create index if not exists idx_country_maps_favourite_sets_country_set on country_maps_favourite_sets(country, beatmapset_id);
+-- Beatmap(set)-first covering indexes for the per-map player boards: the GLOBAL
+-- modal filters on country != 'GLOBAL', so the country-first indexes above
+-- cannot serve it. user_id follows the equality column so the per-user
+-- group-by/distinct streams in index order.
+create index if not exists idx_country_maps_most_played_beatmap_user on country_maps_most_played(beatmap_id, user_id, country, play_count);
+create index if not exists idx_country_maps_favourite_sets_beatmapset_user on country_maps_favourite_sets(beatmapset_id, user_id, country);
 create index if not exists idx_farm_helper_user_key_stats_weighted on farm_helper_user_key_stats(key_count, weighted_pp);
 create index if not exists idx_farm_helper_user_key_stats_user on farm_helper_user_key_stats(user_id);
 create index if not exists idx_replay_video_exports_status_time on replay_video_exports(status, updated_at desc);

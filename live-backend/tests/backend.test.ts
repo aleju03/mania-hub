@@ -5409,31 +5409,27 @@ describe("live backend", () => {
          values (?, ?, ?, 'CR', ?)`,
         [userId, `Player${i}`, `https://assets.example/${userId}.png`, now],
       );
+      // Popular boards only count currently tracked roster members.
+      await exec(
+        db,
+        `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+         values ('CR', ?, ?, 'ranking', 1, ?)`,
+        [userId, i, now],
+      );
       players.push({ id: userId, count: 100 - i });
     }
     // One distinctive name so the server-side search has a single target.
     await exec(db, "update users set username = 'Needle' where user_id = ?", [1037]);
 
-    await exec(
-      db,
-      `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
-       values ('CR', ?, ?, ?)`,
-      [
-        JSON.stringify({
-          schemaVersion: 2,
-          farmed: [],
-          mostPlayed: [{ beatmapId: 555, totalPlays: 1000, playerCount: players.length, players }],
-          favourites: [],
-          favouritesByPlayer: [],
-          beatmapsetsPool: [],
-          generatedAt: now,
-          farmedGeneratedAt: now,
-          favouritesGeneratedAt: now,
-        }),
-        now,
-        now,
-      ],
-    );
+    // The details board reads the normalized most-played rows directly.
+    for (const player of players) {
+      await exec(
+        db,
+        `insert into country_maps_most_played (country, user_id, beatmap_id, play_count, updated_at)
+         values ('CR', ?, 555, ?, ?)`,
+        [player.id, player.count, now],
+      );
+    }
 
     const firstPage = await getMapsPlayersSnapshot(db, "CR", "popular", 555, { page: 0, pageSize: 50, q: "" });
     expect(firstPage.total).toBe(60);
@@ -5596,6 +5592,17 @@ describe("live backend", () => {
        values (41, 40, 'mania', 'ranked', 4, 8, 180, 1000, '[4K] convert', 'https://osu.ppy.sh/beatmaps/41', ?, ?)`,
       [JSON.stringify({ mode: "mania", convert: true }), now],
     );
+    // The details modal reads the normalized farmed rows (the snapshot below
+    // only drives the browse tabs), so mirror beatmap 11's players there.
+    for (const player of farmedPlayers) {
+      await exec(
+        db,
+        `insert into country_maps_farmed_scores
+           (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at)
+         values ('CR', ?, 11, ?, ?, '{}', ?, null, ?, ?, ?)`,
+        [player.id, player.id * 100, player.pp, JSON.stringify(player.mods), player.playedAt, now, now],
+      );
+    }
     await exec(
       db,
       `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
