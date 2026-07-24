@@ -1,3 +1,4 @@
+import type { InValue } from "@libsql/client";
 import { setImmediate as yieldToEventLoop } from "node:timers/promises";
 import { readConfig } from "../config.js";
 import { GLOBAL_COUNTRY_CODE, isGlobalCountry } from "../countries.js";
@@ -741,19 +742,131 @@ async function readMapsSnapshot(
   };
 }
 
+/**
+ * The Random section reads two fields out of a stored maps payload
+ * (favouritesByPlayer + beatmapsetsPool) and discards the rest — 97 % of a
+ * GLOBAL row, whose whole-row JSON.parse costs 207 ms and +212 MiB of
+ * transient heap inside the serving process. One multi-path json_extract
+ * returns just those two (1.9 MB instead of 67.6 MB) for 126 ms and +6 MiB.
+ *
+ * Narrow reading is limited to compact schemaVersion 2 rows that actually
+ * carry a random section. Everything else still gets `payload_json` in the
+ * same round trip, so the whole-row path below stays reachable without a
+ * second query:
+ *  - unparseable payloads (json_valid keeps json_extract from raising, and the
+ *    fallback is what answers "still building" instead of throwing),
+ *  - legacy hydrated rows, whose pool is an object rather than an id list,
+ *  - rows with both random sections empty, where usability is decided by the
+ *    farmed / mostPlayed / favourites sections this read skips.
+ *
+ * SQLite caches the parse across the json_ calls of one statement, so the
+ * repeated probes cost nothing (measured identical to a single extract).
+ */
+const MAPS_RANDOM_NARROW_CONDITION = `json_valid(payload_json)
+       and json_extract(payload_json, '$.schemaVersion') = 2
+       and (json_array_length(payload_json, '$.favouritesByPlayer') > 0
+            or json_array_length(payload_json, '$.beatmapsetsPool') > 0)`;
+
+const MAPS_RANDOM_SNAPSHOT_SQL = `select
+     generated_at,
+     refreshed_at,
+     case when ${MAPS_RANDOM_NARROW_CONDITION}
+          then json_extract(
+            payload_json,
+            '$.generatedAt',
+            '$.farmedGeneratedAt',
+            '$.favouritesGeneratedAt',
+            '$.favouritesByPlayer',
+            '$.beatmapsetsPool'
+          ) end as parts,
+     case when ${MAPS_RANDOM_NARROW_CONDITION}
+          then null else payload_json end as payload_json
+   from country_maps_snapshots
+   where country = ?`;
+
 async function readMapsRandomSnapshot(
   db: Db,
   country: string,
   maxAgeMs: number,
 ): Promise<{ value: CountryMapsData | null; generatedAt: string | null; refreshedAt: string | null; isStale: boolean }> {
-  const raw = await readRawMapsSnapshot(db, country, maxAgeMs);
-  const value = raw.parsed ? await hydrateMapsRandomSnapshotSection(db, raw.parsed) : null;
+  const normalized = country.toUpperCase();
+  let row: Record<string, unknown> | undefined;
+  try {
+    row = (await exec(db, MAPS_RANDOM_SNAPSHOT_SQL, [normalized])).rows[0];
+  } catch (error) {
+    // A SQLite build without JSON1 (or a json_extract behaviour change) must
+    // degrade to the plain read, never take the endpoint down.
+    logWarn("maps_random_narrow_read_failed", { country: normalized, ...errorContext(error) });
+    const raw = await readRawMapsSnapshot(db, normalized, maxAgeMs);
+    return {
+      value: raw.parsed ? await hydrateMapsRandomSnapshotSection(db, raw.parsed) : null,
+      generatedAt: raw.generatedAt,
+      refreshedAt: raw.refreshedAt,
+      isStale: raw.isStale,
+    };
+  }
+
+  const generatedAt = row?.generated_at == null ? null : String(row.generated_at);
+  const refreshedAt = row?.refreshed_at == null ? null : String(row.refreshed_at);
+  const globalStale = isGlobalCountry(normalized)
+    ? await isGlobalMapsSnapshotBehindSources(db, refreshedAt)
+    : false;
+  const pastMaxAge = isMapsSnapshotPastMaxAge(refreshedAt, maxAgeMs);
+
+  const narrow = row ? narrowMapsRandomPayload(row.parts) : null;
+  if (narrow) {
+    return {
+      value: await hydrateMapsRandomSnapshotSection(db, narrow),
+      generatedAt,
+      refreshedAt,
+      isStale: pastMaxAge || globalStale,
+    };
+  }
+
+  // The statement withholds payload_json exactly when it judged the row
+  // narrow-readable. Should that judgement and the shape checks above ever
+  // disagree, re-read the row rather than report a built country as empty.
+  const payload = row && row.parts != null && row.payload_json == null
+    ? (await exec(db, "select payload_json from country_maps_snapshots where country = ?", [normalized])).rows[0]?.payload_json
+    : row?.payload_json;
+  const parsed = row ? parseJson<unknown>(payload, null) : null;
+  const usable = isStoredCountryMapsData(parsed)
+    ? isUsableStoredMapsData(parsed)
+    : isCountryMapsDataShape(parsed) && isUsableMapsData(parsed);
   return {
-    value,
-    generatedAt: raw.generatedAt,
-    refreshedAt: raw.refreshedAt,
-    isStale: raw.isStale,
+    value: usable && (isStoredCountryMapsData(parsed) || isCountryMapsDataShape(parsed))
+      ? await hydrateMapsRandomSnapshotSection(db, parsed)
+      : null,
+    generatedAt,
+    refreshedAt,
+    isStale: pastMaxAge || (!!row && !usable) || globalStale,
   };
+}
+
+// Rebuilds the compact payload from the extracted parts, or gives up (null) so
+// the caller falls back to the whole row.
+function narrowMapsRandomPayload(parts: unknown): StoredCountryMapsData | null {
+  const values = parseJson<unknown>(parts, null);
+  if (!Array.isArray(values) || values.length !== 5) return null;
+  const [generatedAt, farmedGeneratedAt, favouritesGeneratedAt, favouritesByPlayer, beatmapsetsPool] = values;
+  if (typeof generatedAt !== "string" || typeof farmedGeneratedAt !== "string" || typeof favouritesGeneratedAt !== "string") return null;
+  if (!Array.isArray(favouritesByPlayer) || !Array.isArray(beatmapsetsPool)) return null;
+  return {
+    schemaVersion: 2,
+    farmed: [],
+    mostPlayed: [],
+    favourites: [],
+    favouritesByPlayer: favouritesByPlayer as StoredCountryMapsData["favouritesByPlayer"],
+    beatmapsetsPool: beatmapsetsPool as number[],
+    generatedAt,
+    farmedGeneratedAt,
+    favouritesGeneratedAt,
+  };
+}
+
+function isMapsSnapshotPastMaxAge(refreshedAt: string | null, maxAgeMs: number): boolean {
+  const refreshedMs = refreshedAt ? new Date(refreshedAt).getTime() : 0;
+  return !Number.isFinite(refreshedMs) || Date.now() - refreshedMs > maxAgeMs;
 }
 
 async function readRawMapsSnapshot(
@@ -768,7 +881,6 @@ async function readRawMapsSnapshot(
     [normalized],
   )).rows[0];
   const refreshedAt = row?.refreshed_at == null ? null : String(row.refreshed_at);
-  const refreshedMs = refreshedAt ? new Date(refreshedAt).getTime() : 0;
   const parsed = row ? parseJson<unknown>(row.payload_json, null) : null;
   const usable = isStoredCountryMapsData(parsed)
     ? isUsableStoredMapsData(parsed)
@@ -776,7 +888,7 @@ async function readRawMapsSnapshot(
   const globalStale = isGlobalCountry(normalized)
     ? await isGlobalMapsSnapshotBehindSources(db, refreshedAt)
     : false;
-  const isStale = !Number.isFinite(refreshedMs) || Date.now() - refreshedMs > maxAgeMs || (!!row && !usable) || globalStale;
+  const isStale = isMapsSnapshotPastMaxAge(refreshedAt, maxAgeMs) || (!!row && !usable) || globalStale;
   return {
     parsed: usable && (isStoredCountryMapsData(parsed) || isCountryMapsDataShape(parsed)) ? parsed : null,
     generatedAt: row?.generated_at == null ? null : String(row.generated_at),
@@ -1141,6 +1253,509 @@ export async function getMapsRandomBeatmapsets(db: Db, ids: number[]): Promise<M
     const beatmaps = beatmapsBySet.get(id) ?? [];
     return beatmapset && beatmaps.length > 0 ? [buildPoolBeatmapset(id, beatmapset, beatmaps, { trimCovers: true })] : [];
   });
+}
+
+// ---------------------------------------------------------------------------
+// Random draw
+//
+// The Random tab used to download every (player, favourite set) pair in scope
+// and weight the pick in the browser — 13 MiB on the wire and ~40 MB of
+// retained browser heap at GLOBAL scope. The draw now runs here: the filters
+// travel with the request, SQLite samples the eligible pairs, and only the
+// handful of drawn picks is hydrated. Like the per-map player boards, the
+// eligible set is rebuilt from the normalized tables, so a draw never parses
+// country_maps_snapshots.payload_json (67 MB at GLOBAL scope).
+
+export type MapsRandomDrawWeight = "favourites" | "players";
+
+// Filter vocabularies the HTTP parser validates against. They have to agree
+// with the bucket CASE expressions below, so they live next to them.
+export const MAPS_RANDOM_STATUS_BUCKETS = ["ranked", "loved", "graveyard", "other"];
+export const MAPS_RANDOM_KEY_BUCKETS = ["4k", "7k", "other"];
+// Canonical pattern names, as chart analysis writes them into patterns_json.
+// The client expands its umbrella chips (Jack -> jack/chordjack/longjack/...)
+// before sending them, so the server matches names verbatim and never expands.
+export const MAPS_RANDOM_PATTERN_NAMES = [
+  "bracket",
+  "chordjack",
+  "chordstream",
+  "dumpstream",
+  "handstream",
+  "jack",
+  "jumpstream",
+  "ln",
+  "longjack",
+  "minijack",
+  "rice",
+  "speed",
+  "speedjack",
+  "stamina",
+  "stream",
+  "sv",
+  "tech",
+  "tiebreaker",
+];
+
+export const MAPS_RANDOM_DRAW_DEFAULT_COUNT = 8;
+// A batch is hydrated through getMapsRandomBeatmapsets, which drops ids past
+// its own cap — so a batch may never ask for more distinct sets than that.
+export const MAPS_RANDOM_DRAW_MAX_COUNT = MAPS_RANDOM_SET_MAX_IDS;
+export const MAPS_RANDOM_DRAW_EXCLUDE_USERS_MAX = 8;
+export const MAPS_RANDOM_DRAW_EXCLUDE_SETS_MAX = 16;
+export const MAPS_RANDOM_DRAW_HIDE_USERS_MAX = 100;
+export const MAPS_RANDOM_DRAW_STAR_MAX = 20;
+
+export interface MapsRandomDrawQuery {
+  weight: MapsRandomDrawWeight;
+  // 0 asks for the counts only: the header's "N possible picks" has to follow
+  // a filter change without spending a draw.
+  count: number;
+  status: string[];
+  statusExclude: string[];
+  keys: string[];
+  keysExclude: string[];
+  patterns: string[];
+  patternsExclude: string[];
+  starMin: number;
+  starMax: number;
+  excludeUsers: number[];
+  excludeSets: number[];
+  hideUsers: number[];
+  // When set, the batch is drawn from a stable hash of the pair instead of
+  // random(), so the same seed over the same pool always yields the same picks.
+  // The cached /discord showcase preview needs that: it is rebuilt on a timer
+  // and a fresh roll every rebuild would make the page flicker.
+  seed?: string;
+}
+
+// Every draw filter has an off value, and callers outside the HTTP parser only
+// ever set two or three of them.
+export function mapsRandomDrawQuery(overrides: Partial<MapsRandomDrawQuery> = {}): MapsRandomDrawQuery {
+  return {
+    weight: "favourites",
+    count: MAPS_RANDOM_DRAW_DEFAULT_COUNT,
+    status: [],
+    statusExclude: [],
+    keys: [],
+    keysExclude: [],
+    patterns: [],
+    patternsExclude: [],
+    starMin: 0,
+    starMax: 0,
+    excludeUsers: [],
+    excludeSets: [],
+    hideUsers: [],
+    ...overrides,
+  };
+}
+
+export interface MapsRandomDrawPick {
+  player: {
+    id: number;
+    username: string;
+    avatarUrl: string;
+    // The player's in-scope favourite total, unfiltered by the draw filters —
+    // it renders the "N favourites" label and is not derivable from the pick.
+    favouriteCount: number;
+  };
+  beatmapset: MapsFavouriteBeatmapset;
+  // Distinct in-scope players who favourited this set, again unfiltered by the
+  // draw filters. Feeds Discord's "and N others".
+  scopeFavCount: number;
+}
+
+export interface MapsRandomDrawValue {
+  country: string;
+  weight: MapsRandomDrawWeight;
+  // Eligible (player, set) pairs and distinct sets after the filters, ignoring
+  // the recency exclusions (see mapsRandomEligibleSql).
+  totalPicks: number;
+  uniqueSets: number;
+  picks: MapsRandomDrawPick[];
+  generatedAt: string | null;
+  favouritesGeneratedAt: string | null;
+}
+
+// Mirrors the client's mapStatusBucket: osu! "approved" reads as ranked.
+const MAPS_RANDOM_STATUS_BUCKET_SQL = `case
+      when lower(coalesce(bs.status, '')) in ('ranked', 'approved') then 'ranked'
+      when lower(coalesce(bs.status, '')) = 'loved' then 'loved'
+      when lower(coalesce(bs.status, '')) = 'graveyard' then 'graveyard'
+      else 'other' end`;
+// Mirrors the client's mapKeyBucket: an exact 4/7 key count, everything else
+// (including 4.x from a rate-changed diff) lands in "other".
+const MAPS_RANDOM_KEY_BUCKET_SQL = "case when k.value = 4 then '4k' when k.value = 7 then '7k' else 'other' end";
+
+function sqlPlaceholders(values: readonly unknown[]): string {
+  return values.map(() => "?").join(",");
+}
+
+// FNV-1a, the same 32-bit hash the Discord showcase uses to vary its cached
+// previews per scope. Only the mixing matters here, not the distribution.
+function mapsRandomSeedValue(seed: string): number {
+  let hash = 2166136261 >>> 0;
+  for (let index = 0; index < seed.length; index++) {
+    hash ^= seed.charCodeAt(index);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return hash;
+}
+
+// Knuth's multiplicative constant times the id, folded modulo a Mersenne prime:
+// a plain sum would sort by user_id and always hand back the same player, while
+// the modulus scrambles neighbouring ids apart. The prime is large enough that
+// ties (which SQLite would break arbitrarily, costing determinism) are ~1e-4
+// likely even on the GLOBAL pool. The widest intermediate is ~2.7e16, well
+// inside SQLite's signed 64-bit integers.
+const MAPS_RANDOM_SEED_MODULUS = 2147483647;
+function mapsRandomSeededOrderSql(userColumn: string, setColumn: string | null): string {
+  const terms = [`(${userColumn} * 2654435761)`];
+  if (setColumn) terms.push(`(${setColumn} * 40503)`);
+  return `((${terms.join(" + ")} + ?) % ${MAPS_RANDOM_SEED_MODULUS})`;
+}
+
+// json_each() rejects NULL and empty text, and about a third of
+// maps_beatmapsets rows have never been chart-analyzed.
+function mapsRandomJsonArraySql(column: string): string {
+  return `json_each(coalesce(nullif(${column}, ''), '[]'))`;
+}
+
+/**
+ * The CTE prefix that narrows the favourite rows to the eligible pool.
+ *
+ * Every CTE is AS MATERIALIZED: without it the players-weighted draw re-runs
+ * the eligible scan per partition and never finishes on GLOBAL-sized data.
+ * Clauses are only emitted for filters that are actually set, so an unfiltered
+ * draw never touches maps_beatmapsets or maps_beatmaps at all.
+ *
+ * The recency exclusions deliberately live outside `elig`: "N possible picks"
+ * describes the filters, so it must not flicker as the history rotates.
+ */
+function mapsRandomEligibleSql(
+  country: string,
+  query: MapsRandomDrawQuery,
+): { cte: string; args: InValue[] } {
+  const global = isGlobalCountry(country);
+  // GLOBAL folds every country's rows, exactly like the per-map player boards.
+  const scope = global ? "!=" : "=";
+  const scopeArg = global ? GLOBAL_COUNTRY_CODE : country;
+  const args: InValue[] = [];
+  const ctes: string[] = [];
+
+  const setClauses: string[] = [];
+  if (query.status.length > 0) {
+    setClauses.push(`(${MAPS_RANDOM_STATUS_BUCKET_SQL}) in (${sqlPlaceholders(query.status)})`);
+    args.push(...query.status);
+  }
+  if (query.statusExclude.length > 0) {
+    setClauses.push(`(${MAPS_RANDOM_STATUS_BUCKET_SQL}) not in (${sqlPlaceholders(query.statusExclude)})`);
+    args.push(...query.statusExclude);
+  }
+  // A set matches an include chip when ANY of its key counts / patterns match,
+  // and is dropped by an exclude chip when ANY of them match — the same
+  // some()/!some() pair the client applied over the pool entry's arrays.
+  if (query.keys.length > 0) {
+    setClauses.push(`exists (select 1 from ${mapsRandomJsonArraySql("bs.mania_keys_json")} k where (${MAPS_RANDOM_KEY_BUCKET_SQL}) in (${sqlPlaceholders(query.keys)}))`);
+    args.push(...query.keys);
+  }
+  if (query.keysExclude.length > 0) {
+    setClauses.push(`not exists (select 1 from ${mapsRandomJsonArraySql("bs.mania_keys_json")} k where (${MAPS_RANDOM_KEY_BUCKET_SQL}) in (${sqlPlaceholders(query.keysExclude)}))`);
+    args.push(...query.keysExclude);
+  }
+  if (query.patterns.length > 0) {
+    setClauses.push(`exists (select 1 from ${mapsRandomJsonArraySql("bs.patterns_json")} p where p.value in (${sqlPlaceholders(query.patterns)}))`);
+    args.push(...query.patterns);
+  }
+  if (query.patternsExclude.length > 0) {
+    setClauses.push(`not exists (select 1 from ${mapsRandomJsonArraySql("bs.patterns_json")} p where p.value in (${sqlPlaceholders(query.patternsExclude)}))`);
+    args.push(...query.patternsExclude);
+  }
+  const hasSetFilter = setClauses.length > 0;
+  if (hasSetFilter) {
+    ctes.push(`sets as materialized (
+      select bs.beatmapset_id as beatmapset_id
+      from maps_beatmapsets bs
+      where ${setClauses.join("\n        and ")}
+    )`);
+  }
+
+  const starMin = query.starMin > 0 ? query.starMin : 0;
+  const starMax = query.starMax > 0 ? query.starMax : 0;
+  const hasStarFilter = starMin > 0 || starMax > 0;
+  if (hasStarFilter) {
+    // The star aggregate is restricted to sets somebody in scope actually
+    // favourited; otherwise a country draw pays for the whole maps_beatmaps
+    // table (measured 224 ms -> 41 ms on the largest country).
+    ctes.push(`pool as materialized (
+      select distinct f.beatmapset_id as beatmapset_id
+      from country_maps_favourite_sets f
+      ${hasSetFilter ? "join sets s on s.beatmapset_id = f.beatmapset_id" : ""}
+      where f.country ${scope} ?
+    )`);
+    args.push(scopeArg);
+    // Range OVERLAP, matching the client: keep a set whose hardest diff clears
+    // the floor and whose easiest diff stays under the ceiling. The star range
+    // counts native-mania diffs only, same as the hydrated pick's starMin/Max.
+    const having: string[] = [];
+    if (starMin > 0) having.push("max(b.difficulty_rating) >= ?");
+    if (starMax > 0) having.push("min(b.difficulty_rating) <= ?");
+    ctes.push(`stars as materialized (
+      select b.beatmapset_id as beatmapset_id
+      from maps_beatmaps b
+      join pool pl on pl.beatmapset_id = b.beatmapset_id
+      left join beatmaps raw on raw.beatmap_id = b.beatmap_id
+      where ${nativeManiaBeatmapSql("b")}
+      group by b.beatmapset_id
+      having ${having.join(" and ")}
+    )`);
+    if (starMin > 0) args.push(starMin);
+    if (starMax > 0) args.push(starMax);
+  }
+
+  // Roster status is checked against the row's own country, exactly like the
+  // per-map player boards: favourite rows survive a member being untracked or
+  // dropping off the ranking, and neither may put a player on a draw.
+  const eligClauses = [`f.country ${scope} ?`];
+  const eligArgs: InValue[] = [scopeArg];
+  if (query.hideUsers.length > 0) {
+    eligClauses.push(`f.user_id not in (${sqlPlaceholders(query.hideUsers)})`);
+    eligArgs.push(...query.hideUsers);
+  }
+  // distinct because a player tracked by two countries has one favourite row
+  // per country, and a GLOBAL draw must not weight them double.
+  ctes.push(`elig as materialized (
+      select distinct f.user_id as user_id, f.beatmapset_id as beatmapset_id
+      from country_maps_favourite_sets f
+      ${hasSetFilter ? "join sets s on s.beatmapset_id = f.beatmapset_id" : ""}
+      ${hasStarFilter ? "join stars st on st.beatmapset_id = f.beatmapset_id" : ""}
+      join country_rosters r on r.country = f.country and r.user_id = f.user_id and r.is_tracked = 1 and r.rank is not null
+      where ${eligClauses.join("\n        and ")}
+    )`);
+  args.push(...eligArgs);
+
+  return { cte: `with ${ctes.join(",\n    ")}`, args };
+}
+
+/**
+ * Counts and batch in ONE statement, so the eligible set is materialized once
+ * and the two provably describe the same pool. Every row carries the counts
+ * (uncorrelated scalar subqueries over the materialized CTE, evaluated once);
+ * the left join keeps that row alive when the batch comes back empty, with
+ * null ids the hydrator drops. Measured on prod-size data, folding the counts
+ * in this way costs ~40 % less than running them as a second statement.
+ */
+function mapsRandomDrawStatement(
+  country: string,
+  query: MapsRandomDrawQuery,
+  count: number,
+  options: { applyExclusions: boolean },
+): DbStatement {
+  const { cte, args } = mapsRandomEligibleSql(country, query);
+  const keptClauses: string[] = [];
+  if (options.applyExclusions && query.excludeUsers.length > 0) {
+    keptClauses.push(`user_id not in (${sqlPlaceholders(query.excludeUsers)})`);
+    args.push(...query.excludeUsers);
+  }
+  if (options.applyExclusions && query.excludeSets.length > 0) {
+    keptClauses.push(`beatmapset_id not in (${sqlPlaceholders(query.excludeSets)})`);
+    args.push(...query.excludeSets);
+  }
+  const kept = `kept as (
+      select user_id, beatmapset_id from elig${keptClauses.length > 0 ? `\n      where ${keptClauses.join(" and ")}` : ""}
+    )`;
+  // A seeded draw swaps random() for a hash of the pair. Its arguments are
+  // pushed in textual order, since they interleave with the batch's limit.
+  const seed = query.seed ? mapsRandomSeedValue(query.seed) : null;
+  const picksArgs: InValue[] = [];
+  let picks: string;
+  if (query.weight === "players") {
+    // "Equal chance per player": sample distinct players uniformly, then one
+    // of that player's eligible sets uniformly.
+    const userOrder = seed == null ? "random()" : mapsRandomSeededOrderSql("user_id", null);
+    if (seed != null) picksArgs.push(seed);
+    picksArgs.push(count);
+    const pairOrder = seed == null ? "random()" : mapsRandomSeededOrderSql("k.user_id", "k.beatmapset_id");
+    if (seed != null) picksArgs.push(seed);
+    picks = `picked as materialized (
+      select user_id from (select distinct user_id from kept) order by ${userOrder} limit ?
+    ),
+    picks as (
+      select user_id, beatmapset_id from (
+        select k.user_id as user_id, k.beatmapset_id as beatmapset_id,
+               row_number() over (partition by k.user_id order by ${pairOrder}) as rn
+        from kept k join picked p on p.user_id = k.user_id
+      ) where rn = 1
+    )`;
+  } else {
+    // "Equal chance per map": sample (player, set) pairs uniformly.
+    const pairOrder = seed == null ? "random()" : mapsRandomSeededOrderSql("user_id", "beatmapset_id");
+    if (seed != null) picksArgs.push(seed);
+    picksArgs.push(count);
+    picks = `picks as (
+      select user_id, beatmapset_id from kept order by ${pairOrder} limit ?
+    )`;
+  }
+
+  return {
+    sql: `${cte},
+    ${kept},
+    ${picks}
+    select (select count(*) from elig) as total_picks,
+           (select count(distinct beatmapset_id) from elig) as unique_sets,
+           p.user_id as user_id, p.beatmapset_id as beatmapset_id
+    from (select 1) one left join picks p on 1 = 1`,
+    args: [...args, ...picksArgs],
+  };
+}
+
+/**
+ * Draws a batch of Random-tab picks plus the eligible-pool counts.
+ *
+ * Recency is a hard exclusion here, not the client's old 0.1 soft weight: a
+ * player/set in excludeUsers/excludeSets cannot come back for the next few
+ * draws instead of being ten times less likely. The client only fills those
+ * lists when its "avoid repeats" toggle is on.
+ */
+export async function getMapsRandomDraw(
+  db: Db,
+  queue: JobQueue,
+  country: string,
+  maxAgeMs: number,
+  query: MapsRandomDrawQuery,
+): Promise<MapsSnapshotResponse<MapsRandomDrawValue>> {
+  const normalized = country.toUpperCase();
+  // Stamps only: the draw reads the normalized tables, so payload_json is never
+  // touched. It still drives the same staleness/refresh bookkeeping the pool
+  // endpoint had, which is what keeps a cold country's build progressing.
+  const row = (await exec(
+    db,
+    "select generated_at, refreshed_at from country_maps_snapshots where country = ?",
+    [normalized],
+  )).rows[0];
+  const generatedAt = row?.generated_at == null ? null : String(row.generated_at);
+  const refreshedAt = row?.refreshed_at == null ? null : String(row.refreshed_at);
+  const refreshedMs = refreshedAt ? new Date(refreshedAt).getTime() : 0;
+  const globalStale = isGlobalCountry(normalized)
+    ? await isGlobalMapsSnapshotBehindSources(db, refreshedAt)
+    : false;
+  const isStale = !Number.isFinite(refreshedMs) || Date.now() - refreshedMs > maxAgeMs || globalStale;
+  let refreshQueued = await hasActiveMapsRefresh(db, normalized);
+  if (isStale && !refreshQueued) {
+    await enqueueMapsRefresh(queue, normalized);
+    refreshQueued = true;
+  }
+  const progress = refreshQueued ? await readActiveMapsRefreshProgress(db, normalized) : null;
+
+  // A missing snapshot row means this country's maps have never been built.
+  // Report the null value the frontend's "Building maps... (N%)" flow waits on
+  // rather than an empty draw, which would read as "nothing matches".
+  if (!row) return { value: null, generatedAt, refreshedAt, isStale, refreshQueued, progress };
+
+  return {
+    value: await drawMapsRandomPicks(db, normalized, query, generatedAt),
+    generatedAt,
+    refreshedAt,
+    isStale,
+    refreshQueued,
+    progress,
+  };
+}
+
+async function drawMapsRandomPicks(
+  db: Db,
+  country: string,
+  query: MapsRandomDrawQuery,
+  generatedAt: string | null,
+): Promise<MapsRandomDrawValue> {
+  const count = Math.max(0, Math.min(MAPS_RANDOM_DRAW_MAX_COUNT, Math.floor(query.count) || 0));
+  const hasExclusions = query.excludeUsers.length > 0 || query.excludeSets.length > 0;
+  const statement = mapsRandomDrawStatement(country, query, count, { applyExclusions: hasExclusions });
+  let drawn = (await exec(db, statement.sql, statement.args)).rows;
+  const totalPicks = Number(drawn[0]?.total_picks ?? 0);
+  const uniqueSets = Number(drawn[0]?.unique_sets ?? 0);
+
+  // Reroll must never dead-end: when the recency exclusions empty an otherwise
+  // non-empty pool, draw again with only the hidden-user filter left in place.
+  if (count > 0 && hasExclusions && totalPicks > 0 && drawn.every((row) => row.user_id == null)) {
+    const retry = mapsRandomDrawStatement(country, query, count, { applyExclusions: false });
+    drawn = (await exec(db, retry.sql, retry.args)).rows;
+  }
+
+  return {
+    country,
+    weight: query.weight,
+    totalPicks,
+    uniqueSets,
+    picks: await hydrateMapsRandomPicks(db, country, drawn),
+    generatedAt,
+    // The stored payload's favouritesGeneratedAt trails generatedAt by the
+    // seconds one refresh takes, and digging it out of a 67 MB payload_json
+    // costs ~180 ms per draw at GLOBAL scope — more than the draw itself.
+    favouritesGeneratedAt: generatedAt,
+  };
+}
+
+async function hydrateMapsRandomPicks(
+  db: Db,
+  country: string,
+  rows: Record<string, unknown>[],
+): Promise<MapsRandomDrawPick[]> {
+  const pairs = rows
+    .map((row) => ({ userId: Number(row.user_id), beatmapsetId: Number(row.beatmapset_id) }))
+    .filter((pair) => Number.isSafeInteger(pair.userId) && pair.userId > 0 && Number.isSafeInteger(pair.beatmapsetId) && pair.beatmapsetId > 0);
+  if (pairs.length === 0) return [];
+
+  const userIds = [...new Set(pairs.map((pair) => pair.userId))];
+  const setIds = [...new Set(pairs.map((pair) => pair.beatmapsetId))];
+  const beatmapsets = new Map((await getMapsRandomBeatmapsets(db, setIds)).map((beatmapset) => [beatmapset.id, beatmapset]));
+  const users = await readMapsUserDisplayByIds(db, userIds);
+  const favouriteCounts = await readMapsScopeFavouriteCounts(db, country, "user_id", userIds);
+  const scopeFavCounts = await readMapsScopeFavouriteCounts(db, country, "beatmapset_id", setIds);
+
+  return pairs.flatMap((pair) => {
+    // A set whose beatmaps have since been pruned cannot be rendered; drop the
+    // pick rather than shipping a half-empty card.
+    const beatmapset = beatmapsets.get(pair.beatmapsetId);
+    if (!beatmapset) return [];
+    const user = users.get(pair.userId);
+    return [{
+      player: {
+        id: pair.userId,
+        // Same fallback the per-map player board renders for a user row that
+        // has not been enriched yet.
+        username: user?.username || `User ${pair.userId}`,
+        avatarUrl: user?.avatarUrl ?? "",
+        favouriteCount: favouriteCounts.get(pair.userId) ?? 0,
+      },
+      beatmapset,
+      scopeFavCount: scopeFavCounts.get(pair.beatmapsetId) ?? 0,
+    }];
+  });
+}
+
+// Per-player favourite totals and per-set favouriter counts for the drawn
+// batch. Both stay unfiltered by the draw filters — they describe the scope,
+// not the query — and both apply the same roster join as the draw itself.
+async function readMapsScopeFavouriteCounts(
+  db: Db,
+  country: string,
+  groupBy: "user_id" | "beatmapset_id",
+  ids: number[],
+): Promise<Map<number, number>> {
+  if (ids.length === 0) return new Map();
+  const global = isGlobalCountry(country);
+  const scope = global ? "!=" : "=";
+  const counted = groupBy === "user_id" ? "beatmapset_id" : "user_id";
+  const rows = (await exec(
+    db,
+    `select f.${groupBy} as id, count(distinct f.${counted}) as total
+     from country_maps_favourite_sets f
+     join country_rosters r on r.country = f.country and r.user_id = f.user_id and r.is_tracked = 1 and r.rank is not null
+     where f.country ${scope} ? and f.${groupBy} in (${sqlPlaceholders(ids)})
+     group by f.${groupBy}`,
+    [global ? GLOBAL_COUNTRY_CODE : country, ...ids],
+  )).rows;
+  return new Map(rows.map((row) => [Number(row.id), Number(row.total ?? 0)]));
 }
 
 async function hydrateMapsPageValue(

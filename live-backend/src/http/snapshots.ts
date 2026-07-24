@@ -23,7 +23,7 @@ import { decoratePlayerSkillBreakdown } from "../features/skill-baseline.js";
 import { FARM_HELPER_DEFAULT_LIMIT, FARM_HELPER_MAX_LIMIT, FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperNeighbors, getFarmHelperSnapshot, type FarmHelperKeyMode, type FarmHelperView } from "../features/farm-helper.js";
 import type { ScoreSpeedBucket } from "../shared/score.js";
 import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalRankingsSnapshot, type GlobalRankingsSort } from "../features/global-rankings.js";
-import { enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRefreshProgress, getMapsSnapshot, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery } from "../features/maps.js";
+import { enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRandomDraw, getMapsRefreshProgress, getMapsSnapshot, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, MAPS_RANDOM_DRAW_DEFAULT_COUNT, MAPS_RANDOM_DRAW_EXCLUDE_SETS_MAX, MAPS_RANDOM_DRAW_EXCLUDE_USERS_MAX, MAPS_RANDOM_DRAW_HIDE_USERS_MAX, MAPS_RANDOM_DRAW_MAX_COUNT, MAPS_RANDOM_DRAW_STAR_MAX, MAPS_RANDOM_KEY_BUCKETS, MAPS_RANDOM_PATTERN_NAMES, MAPS_RANDOM_STATUS_BUCKETS, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery, type MapsRandomDrawQuery } from "../features/maps.js";
 import { getMapSearchPage, getMapSearchSetEntry, MAP_SEARCH_PATTERNS, MAP_SEARCH_SUB_PATTERNS, type MapSearchQuery, type MapSearchSort } from "../features/map-search.js";
 import { getMapCollection, getMapCollections, getMapCollectionsRotation, rebuildMapCollections } from "../features/map-collections.js";
 import { getPackWallet, listPackCollectionCards, listPackCollectionOwnedUserIds, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
@@ -818,6 +818,19 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   if (url.pathname === "/api/snapshots/maps-page") {
     if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
     await handleMapsPageSnapshot(req, res, ctx, country, parseMapsPageQuery(url.searchParams));
+    return true;
+  }
+  if (url.pathname === "/api/snapshots/maps-random-draw") {
+    // A draw is uncacheable by construction (it samples), so it is the one maps
+    // route that can be made to do real work on every request — hence the
+    // costly bucket on top of the blanket public gate.
+    if (!checkRate(req, res, ctx, "publicCostly")) return true;
+    if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
+    res.setHeader("cache-control", "no-store");
+    const draw = await getMapsRandomDraw(ctx.db, ctx.queue, country, ctx.config.mapsRefreshIntervalMs, parseMapsRandomDrawQuery(url.searchParams));
+    // 202 while the country's first maps build is still running, matching the
+    // pool endpoint it replaces; the client polls on a null value either way.
+    await sendAccentEnrichedJson(req, res, ctx, draw.value ? 200 : 202, draw);
     return true;
   }
   if (url.pathname === "/api/snapshots/maps") {
@@ -3451,6 +3464,28 @@ function parseMapsPageQuery(params: URLSearchParams): MapsPageQuery {
     pp,
     mod,
     q: (params.get("q") ?? "").trim().slice(0, 120),
+  };
+}
+
+// Every list is validated against a closed vocabulary and every id list is
+// capped, so a hand-written query string can't grow the draw's SQL. Garbage
+// values are dropped rather than 400'd, like the sibling maps routes.
+function parseMapsRandomDrawQuery(params: URLSearchParams): MapsRandomDrawQuery {
+  const idList = (key: string, max: number): number[] => parseUserIds(params.get(key)).slice(0, max);
+  return {
+    weight: params.get("weight") === "players" ? "players" : "favourites",
+    count: clampInteger(params.get("count"), 0, MAPS_RANDOM_DRAW_MAX_COUNT, MAPS_RANDOM_DRAW_DEFAULT_COUNT),
+    status: parseCsvSubset(params.get("status"), MAPS_RANDOM_STATUS_BUCKETS),
+    statusExclude: parseCsvSubset(params.get("statusExclude"), MAPS_RANDOM_STATUS_BUCKETS),
+    keys: parseCsvSubset(params.get("keys"), MAPS_RANDOM_KEY_BUCKETS),
+    keysExclude: parseCsvSubset(params.get("keysExclude"), MAPS_RANDOM_KEY_BUCKETS),
+    patterns: parseCsvSubset(params.get("patterns"), MAPS_RANDOM_PATTERN_NAMES),
+    patternsExclude: parseCsvSubset(params.get("patternsExclude"), MAPS_RANDOM_PATTERN_NAMES),
+    starMin: optionalBoundedNumber(params.get("starMin"), 0, MAPS_RANDOM_DRAW_STAR_MAX) ?? 0,
+    starMax: optionalBoundedNumber(params.get("starMax"), 0, MAPS_RANDOM_DRAW_STAR_MAX) ?? 0,
+    excludeUsers: idList("excludeUsers", MAPS_RANDOM_DRAW_EXCLUDE_USERS_MAX),
+    excludeSets: idList("excludeSets", MAPS_RANDOM_DRAW_EXCLUDE_SETS_MAX),
+    hideUsers: idList("hideUsers", MAPS_RANDOM_DRAW_HIDE_USERS_MAX),
   };
 }
 
