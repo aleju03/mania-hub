@@ -1343,10 +1343,20 @@ describe("farm helper", () => {
     expect(sevenk.recs.some((rec) => rec.beatmapId === sevenkTarget)).toBe(true);
     // Any = union of the two concrete views' recs.
     expect(ids(any)).toEqual(new Set([...ids(fourk), ...ids(sevenk)]));
-    // Totals sum: gains use the shared full-top baseline, so per-rec gain is the
-    // same in a concrete view and inside the merged view.
-    expect(any.totalPotentialPp).toBeCloseTo(fourk.totalPotentialPp + sevenk.totalPotentialPp, 2);
+    // Any measures gain against the overall list; the concrete views measure it
+    // against each keymode's own (shorter) list, so a rec is worth at least as
+    // much there - a play displaces fewer higher entries in its variant list.
+    expect(any.gainBasis).toBe("overall");
+    expect(fourk.gainBasis).toBe("keymode");
     expect(any.totalPotentialPp).toBeGreaterThan(0);
+    expect(fourk.totalPotentialPp + sevenk.totalPotentialPp).toBeGreaterThanOrEqual(any.totalPotentialPp);
+    for (const merged of any.recs) {
+      const concrete = [...fourk.recs, ...sevenk.recs].find(
+        (rec) => rec.beatmapId === merged.beatmapId && rec.speedBucket === merged.speedBucket,
+      );
+      expect(concrete).toBeDefined();
+      expect(concrete!.estimatedPpGain).toBeGreaterThanOrEqual(merged.estimatedPpGain);
+    }
   });
 
   it("keeps a 4K-inflated same-total-pp peer out of an Any-view 4K card's cohort (konkawe)", async () => {
@@ -1445,5 +1455,48 @@ describe("farm helper", () => {
     // The concrete view keeps the single peerBand and omits peerBands entirely.
     expect(concrete.peerBands).toBeUndefined();
     expect(concrete.peerBand.count).toBe(12);
+  });
+
+  it("measures concrete-keymode gain in that keymode's variant pp (a 7K main still gets 4K picks)", async () => {
+    const recent = nowIso();
+    const fourkTarget = 9500;
+    const subj4k = Array.from({ length: 8 }, (_, i) => 9510 + i);
+    // The todo-#35 shape: 140 high 7K plays fill the overall top-100, so any
+    // feasible 4K benchmark contributes literally zero overall pp. The 4K side
+    // profile still exists (8 plays at ~265-300pp) and osu! reports it as
+    // variant pp; the 4K tab must measure gain against that, not the 7K wall.
+    const bestScores: OscScore[] = [
+      ...Array.from({ length: 140 }, (_, i) => subjectScore(20_000 + i, 800 - i, recent, 7, 8)),
+      ...subj4k.map((beatmapId, i) => subjectScore(beatmapId, 300 - i * 5, recent, 4, 5)),
+    ];
+    await insertBeatmapMeta(fourkTarget, 4, 5);
+    for (const beatmapId of subj4k) await insertBeatmapMeta(beatmapId, 4, 5);
+    for (let i = 0; i < 12; i += 1) {
+      const id = 9550 + i;
+      await insertUser(id, 2_100, "CR", `SidePeer${i}`);
+      await insertFarmed("CR", id, fourkTarget, 340, recent);
+      for (const beatmapId of subj4k) await insertFarmed("CR", id, beatmapId, 290, recent);
+    }
+
+    const osu = makeOsuStub(bestScores, 15_000, { "4k": 2_000, "7k": 14_000 });
+    const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" });
+    expect(snapshot.gainBasis).toBe("keymode");
+    const rec = snapshot.recs.find((candidate) => candidate.beatmapId === fourkTarget);
+    expect(rec?.reason).toBe("missing");
+
+    // Sanity on the fixture: against the overall list this benchmark is worth
+    // exactly nothing, which is what used to blank the 4K tab for a 7K main.
+    expect(expectedGain(bestScores, fourkTarget, rec?.benchmarkPp ?? 0)).toBe(0);
+    // The reported gain is the 4K-local (variant pp) estimate.
+    const fourkScores = bestScores.filter((score) => score.beatmap?.cs === 4);
+    const modeGain = expectedGain(fourkScores, fourkTarget, rec?.benchmarkPp ?? 0);
+    expect(modeGain).toBeGreaterThan(1);
+    expect(rec?.estimatedPpGain).toBeCloseTo(Math.round(modeGain * 100) / 100, 1);
+
+    // The merged Any view keeps overall-pp semantics: this pick genuinely does
+    // not move the player's profile pp, so it stays out of that list.
+    const any = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "any" });
+    expect(any.gainBasis).toBe("overall");
+    expect(any.recs.some((candidate) => candidate.beatmapId === fourkTarget)).toBe(false);
   });
 });

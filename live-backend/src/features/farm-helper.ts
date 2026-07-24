@@ -98,6 +98,12 @@ export interface FarmHelperSnapshot {
   // fallback), so the UI can show "4K: 12.9k-15.6k · 7K: 13.9k-16.9k". Additive.
   peerBands?: Partial<Record<ConcreteFarmHelperKeyMode, PeerBandSummary>>;
   totalPotentialPp: number;
+  // What the gain numbers measure. "overall" = the player's profile pp (the
+  // "any" view). "keymode" = the requested keymode's variant pp: a concrete
+  // "4k"/"7k" request estimates gain within that keymode's own weighted list,
+  // so a 7K main still gets real 4K suggestions even though no 4K play can
+  // move their overall pp. Additive; absent on older cached snapshots.
+  gainBasis?: "overall" | "keymode";
   // How many recommendations qualified before truncating to `limit`, so the UI
   // can say "showing 100 of 214" instead of implying the list is complete.
   totalQualifying: number;
@@ -453,6 +459,12 @@ interface PreparedSubject {
   subjectByBeatmap: Map<string, SubjectMapScore>;
   baselineEntries: Array<{ pp: number; beatmapId: number }>;
   baselineTotal: number;
+  // Keymode-local weighted lists (the subject's virtual variant-pp profiles).
+  // A concrete-keymode request estimates gain against these instead of the
+  // overall list: a 7K main's feasible 4K plays land far past the overall
+  // top-plays cutoff (gain ~0, every rec dropped), but they still move the
+  // player's 4K variant pp, which is what a "4k"-scoped run is about.
+  modeBaselines: Record<ConcreteFarmHelperKeyMode, { entries: Array<{ pp: number; beatmapId: number }>; total: number }>;
   subjectTopPp: number;
   subjectModeStatsByKey: Record<ConcreteFarmHelperKeyMode, ReturnType<typeof calculateSubjectKeyModeStats>>;
 }
@@ -520,6 +532,7 @@ async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Pro
     keyMode,
     view: ctx.view,
     peerBand,
+    gainBasis: keyMode === "any" ? "overall" : "keymode",
     totalPotentialPp: 0,
     totalQualifying: 0,
     recs: [],
@@ -583,6 +596,7 @@ async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Pro
 function prepareSubject(bestScores: OscScore[]): PreparedSubject {
   const subjectByBeatmap = new Map<string, SubjectMapScore>();
   const baselineEntries: Array<{ pp: number; beatmapId: number }> = [];
+  const modeEntries: Record<ConcreteFarmHelperKeyMode, Array<{ pp: number; beatmapId: number }>> = { "4k": [], "7k": [] };
   let subjectTopPp = 0;
 
   const rankedScores = [...bestScores]
@@ -594,7 +608,10 @@ function prepareSubject(bestScores: OscScore[]): PreparedSubject {
     const beatmapId = score.beatmap_id ?? score.beatmap?.id ?? 0;
     if (pp > subjectTopPp) subjectTopPp = pp;
     if (beatmapId > 0) {
-      baselineEntries.push({ pp, beatmapId });
+      const entry = { pp, beatmapId };
+      baselineEntries.push(entry);
+      const keyMode = beatmapKeyMode(getScoreKeys(score));
+      if (keyMode) modeEntries[keyMode].push(entry);
       const speedBucket = getScoreSpeedBucket(getModAcronyms(score.mods));
       const subjectKey = farmHelperLaneKey(beatmapId, speedBucket);
       const existing = subjectByBeatmap.get(subjectKey);
@@ -605,12 +622,16 @@ function prepareSubject(bestScores: OscScore[]): PreparedSubject {
   });
 
   const baselineTotal = calculateWeightedPpTotal(baselineEntries);
+  const modeBaselines = {
+    "4k": { entries: modeEntries["4k"], total: calculateWeightedPpTotal(modeEntries["4k"]) },
+    "7k": { entries: modeEntries["7k"], total: calculateWeightedPpTotal(modeEntries["7k"]) },
+  } satisfies PreparedSubject["modeBaselines"];
   const subjectModeStatsByKey = {
     "4k": calculateSubjectKeyModeStats(rankedScores, "4k"),
     "7k": calculateSubjectKeyModeStats(rankedScores, "7k"),
   } satisfies Record<ConcreteFarmHelperKeyMode, ReturnType<typeof calculateSubjectKeyModeStats>>;
 
-  return { rankedScores, subjectByBeatmap, baselineEntries, baselineTotal, subjectTopPp, subjectModeStatsByKey };
+  return { rankedScores, subjectByBeatmap, baselineEntries, baselineTotal, modeBaselines, subjectTopPp, subjectModeStatsByKey };
 }
 
 // One concrete-keymode pipeline: strict cohort, shape folding, farmed-map
@@ -740,6 +761,14 @@ async function scoreCandidates(
     ? null
     : await buildFeasibilityContext(db, ctx.userId, chartData.rawMsd, ctx.queue);
 
+  // Per-keymode pp gain: a concrete-keymode request measures gain against the
+  // subject's keymode-local weighted list (their variant pp), so a 7K main
+  // browsing the 4K tab sees what a play would add to their 4K pp instead of a
+  // universal ~0 against an overall list their 7K plays dominate. The "any"
+  // view (and its total-pp fallback) keeps overall-pp gain: minority-keymode
+  // plays genuinely do not move that player's profile pp.
+  const gainBaseline = ctx.requestedKeyMode !== "any" && mode != null ? subject.modeBaselines[mode] : null;
+
   const scored: ScoredRec[] = [];
   for (const { agg, kernelFraction } of candidates) {
     const meta = beatmapMeta.get(agg.beatmapId);
@@ -810,7 +839,9 @@ async function scoreCandidates(
 
     if (!Number.isFinite(benchmark) || benchmark <= 0) continue;
     if (!isPopular && subjectScore && benchmark - subjectScore.pp <= IMPROVE_MARGIN_PP) continue;
-    const estimatedPpGain = estimateGain(subject.baselineEntries, subject.baselineTotal, agg.beatmapId, benchmark);
+    const estimatedPpGain = gainBaseline
+      ? estimateGain(gainBaseline.entries, gainBaseline.total, agg.beatmapId, benchmark)
+      : estimateGain(subject.baselineEntries, subject.baselineTotal, agg.beatmapId, benchmark);
     if (!isPopular && estimatedPpGain < MIN_VISIBLE_GAIN_PP) continue;
 
     const setMeta = beatmapsetMeta.get(meta.beatmapsetId);

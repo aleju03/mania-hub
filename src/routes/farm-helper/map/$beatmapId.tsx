@@ -32,6 +32,9 @@ type FarmMapContext = {
   speed?: LiveFarmHelperSpeedBucket;
   reason?: LiveFarmHelperReason;
   gain?: number;
+  // "pp" or a variant-pp unit ("4K pp"/"7K pp") when the gain came from a
+  // concrete-keymode farm-helper run measuring that keymode's variant pp.
+  gainUnit?: string;
   benchmark?: number;
   subjectPp?: number;
   peerCount?: number;
@@ -384,7 +387,9 @@ function FarmMapDetailPage() {
                         <div>
                           <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">farm verdict</div>
                           <div className="mt-1 text-2xl font-black tabular-nums text-osu-pink">
-                            {farmContext?.gain != null ? `+${formatPp(farmContext.gain)}pp` : "unknown"}
+                            {farmContext?.gain != null
+                              ? `+${formatPp(farmContext.gain)}${!farmContext.gainUnit || farmContext.gainUnit === "pp" ? "pp" : ` ${farmContext.gainUnit}`}`
+                              : "unknown"}
                           </div>
                         </div>
                         <div className="grid min-w-[150px] gap-1.5">
@@ -964,6 +969,7 @@ function readStoredFarmContext(beatmapId: number): FarmMapContext | null {
           ? data.reason
           : undefined,
       gain: finiteNumber(data.gain),
+      gainUnit: finiteString(data.gainUnit),
       benchmark: finiteNumber(data.benchmark),
       subjectPp: finiteNumber(data.subjectPp),
       peerCount: finiteNumber(data.peerCount),
