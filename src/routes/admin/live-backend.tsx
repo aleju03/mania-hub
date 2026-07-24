@@ -37,7 +37,8 @@ interface LiveBackendStatus {
   ok: boolean;
   db: boolean;
   storage?: {
-    filePath: string | null;
+    // Admin-only: the public /api/status body omits the absolute path.
+    filePath?: string | null;
     bytes: number | null;
     walBytes: number | null;
     maxBytes: number;
@@ -171,6 +172,113 @@ interface LiveBackendStatus {
     }>;
   } | null;
   snapshotStats?: SnapshotStats;
+  // Operational counters below are admin-only: /api/admin/status emits them,
+  // the public /api/status body (the 404 fallback in fetchLiveBackendAdminStatus)
+  // does not. They are also all optional so a backend running older code during
+  // a rolling deploy renders as "not reported" instead of crashing the page.
+  memory?: {
+    server: ProcessMemorySample | null;
+    // Null when the serving process cannot see the worker's sample: a
+    // server-role process reads it from the live_meta mirror, and a worker on
+    // older code writes no sample at all.
+    worker: ProcessMemorySample | null;
+  };
+  mapsSnapshotThread?: MapsSnapshotThreadStatus;
+  // Last completed GLOBAL maps refresh, measured in the worker process and
+  // persisted to live_meta so the serving process can report it.
+  globalMapsRefresh?: JobMemoryRecord | null;
+  responseCaches?: {
+    mapsSnapshot: ResponseCacheMetrics;
+    mapsPage: ResponseCacheMetrics;
+  };
+  // Null when the database is remote: there is no local disk to run out of.
+  disk?: DiskUsage | null;
+  storagePaths?: StorageFootprint | null;
+}
+
+// process.memoryUsage() plus resourceUsage().maxRSS, taken in one process.
+interface ProcessMemorySample {
+  pid: number;
+  role: string;
+  at: string;
+  uptimeSec: number;
+  rssBytes: number;
+  heapUsedBytes: number;
+  heapTotalBytes: number;
+  externalBytes: number;
+  arrayBuffersBytes: number;
+  // Process-lifetime high-water mark (VmHWM), or null where the runtime
+  // refuses to report it.
+  peakRssBytes: number | null;
+  hint?: string;
+}
+
+interface MapsSnapshotThreadStatus {
+  enabled: boolean;
+  disabledReason: string | null;
+  spawned: boolean;
+  everOnline: boolean;
+  available: boolean;
+  cooldownMsRemaining: number;
+  /** Builds handed to the thread and not yet answered; there is no queue behind it. */
+  inFlight: number;
+  requested: number;
+  ok: number;
+  failed: number;
+  timeouts: number;
+  lastBuildMs: number | null;
+  lastBuildAt: string | null;
+  lastBuildBytes: number | null;
+  lastErrorAt: string | null;
+  lastError: string | null;
+  lastFailureReason: string | null;
+}
+
+interface JobMemoryRecord {
+  jobType: string;
+  at: string;
+  pid: number;
+  durationMs: number;
+  ok: boolean;
+  error: string | null;
+  startRssBytes: number;
+  peakRssBytes: number;
+  endRssBytes: number;
+  startHeapUsedBytes: number;
+  peakHeapUsedBytes: number;
+  processPeakRssBytes: number | null;
+  samples: number;
+  concurrentJobs: number;
+  hint?: string;
+}
+
+interface ResponseCacheMetrics {
+  entries: number;
+  bytes: number;
+  maxEntries: number;
+  maxBytes: number;
+  maxEntryBytes: number;
+}
+
+interface DiskUsage {
+  path: string;
+  totalBytes: number;
+  usedBytes: number;
+  freeBytes: number;
+  usedPct: number;
+  warnPct: number;
+  criticalPct: number;
+  level: "ok" | "warn" | "critical";
+}
+
+interface StorageFootprint {
+  db: number | null;
+  dbWal: number | null;
+  dbShm: number | null;
+  analytics: number | null;
+  analyticsWal: number | null;
+  backups: number | null;
+  replayVideoWork: number | null;
 }
 
 interface SnapshotStats {
@@ -3763,6 +3871,129 @@ function getScoresFallbackStatus(status: LiveBackendStatus | null): ScoresFallba
   };
 }
 
+// Resident-set thresholds from the production baseline (4 GB VPS, no swap):
+// the serving process sits ~410 MB flat, the worker ~300 MB with 1.3-1.6 GB
+// transients while a GLOBAL maps refresh runs, so the worker gets the looser
+// budget. Only current RSS feeds the card tone: peak RSS is a process-lifetime
+// high-water mark, and grading on it would pin the card red forever after the
+// first refresh spike.
+const SERVER_RSS_WARN_BYTES = 1.0 * 1024 ** 3;
+const SERVER_RSS_BAD_BYTES = 1.5 * 1024 ** 3;
+const WORKER_RSS_WARN_BYTES = 1.3 * 1024 ** 3;
+const WORKER_RSS_BAD_BYTES = 1.9 * 1024 ** 3;
+
+function rssTone(bytes: number | null | undefined, warnBytes: number, badBytes: number): StatusTone {
+  if (bytes == null || !Number.isFinite(bytes)) return "neutral";
+  if (bytes > badBytes) return "bad";
+  if (bytes > warnBytes) return "warn";
+  return "good";
+}
+
+interface MemoryView {
+  server: ProcessMemorySample | null;
+  worker: ProcessMemorySample | null;
+  // True when one process both serves and runs jobs (LIVE_BACKEND_ROLE=all,
+  // which is the local dev setup): both samples come from the same pid, so
+  // rendering them twice would invent a second process.
+  singleProcess: boolean;
+  serverTone: StatusTone;
+  workerTone: StatusTone;
+  tone: StatusTone;
+}
+
+function getMemoryView(status: LiveBackendStatus | null): MemoryView {
+  const server = status?.memory?.server ?? null;
+  const worker = status?.memory?.worker ?? null;
+  const singleProcess = server != null && worker != null && server.pid === worker.pid;
+  // A single process also does the worker's work, so it is graded on the looser
+  // worker budget: a GLOBAL refresh transient there is expected, not a warning.
+  const serverTone = rssTone(
+    server?.rssBytes,
+    singleProcess ? WORKER_RSS_WARN_BYTES : SERVER_RSS_WARN_BYTES,
+    singleProcess ? WORKER_RSS_BAD_BYTES : SERVER_RSS_BAD_BYTES,
+  );
+  const workerTone = singleProcess ? serverTone : rssTone(worker?.rssBytes, WORKER_RSS_WARN_BYTES, WORKER_RSS_BAD_BYTES);
+  return { server, worker, singleProcess, serverTone, workerTone, tone: worstTone(serverTone, workerTone) };
+}
+
+function formatUptime(seconds: number | null | undefined): string {
+  if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return "unknown";
+  const days = Math.floor(seconds / 86_400);
+  const hours = Math.floor((seconds % 86_400) / 3_600);
+  const minutes = Math.floor((seconds % 3_600) / 60);
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
+function ProcessMemoryRows({ label, sample, tone }: { label: string; sample: ProcessMemorySample | null; tone: StatusTone }) {
+  if (!sample) return <DetailRow label={label} value="not reported by this backend" />;
+  return (
+    <>
+      <DetailRow label={`${label} RSS`} value={`${formatBytes(sample.rssBytes)} now · ${formatBytes(sample.peakRssBytes)} peak`} tone={tone} />
+      <DetailRow label={`${label} heap`} value={`${formatBytes(sample.heapUsedBytes)} used of ${formatBytes(sample.heapTotalBytes)}`} />
+      <DetailRow label={`${label} off-heap`} value={`${formatBytes(sample.externalBytes)} external · ${formatBytes(sample.arrayBuffersBytes)} array buffers`} />
+      <DetailRow label={`${label} process`} value={`pid ${sample.pid} · role ${sample.role} · up ${formatUptime(sample.uptimeSec)} · sampled ${formatTimeAgo(sample.at)}`} />
+    </>
+  );
+}
+
+function getSnapshotThreadView(thread: MapsSnapshotThreadStatus | undefined): { value: string; tone: StatusTone } {
+  if (!thread) return { value: "not reported", tone: "neutral" };
+  // Disabled is the expected state under tsx/vitest and for a remote database,
+  // so it is never an alarm.
+  if (!thread.enabled) return { value: `off (${thread.disabledReason ?? "disabled"})`, tone: "neutral" };
+  if (!thread.available) return { value: `cooling down ${formatCallMs(thread.cooldownMsRemaining)}`, tone: "bad" };
+  if (thread.inFlight > 0) return { value: `building ${formatNumber(thread.inFlight)}`, tone: "good" };
+  if (!thread.spawned) return { value: thread.everOnline ? "respawn pending" : "idle", tone: "neutral" };
+  return { value: "ready", tone: "good" };
+}
+
+function ResponseCacheRow({ label, cache }: { label: string; cache: ResponseCacheMetrics | undefined }) {
+  // Sitting at the byte budget is the design, not a fault: these are bounded
+  // LRUs, so the row stays neutral however full it is.
+  if (!cache) return <DetailRow label={label} value="not reported" />;
+  return (
+    <DetailRow
+      label={label}
+      value={`${formatNumber(cache.entries)}/${formatNumber(cache.maxEntries)} entries · ${formatBytes(cache.bytes)} of ${formatBytes(cache.maxBytes)} · ${formatBytes(cache.maxEntryBytes)} cap each`}
+    />
+  );
+}
+
+function diskTone(disk: DiskUsage | null | undefined): StatusTone {
+  if (!disk || !Number.isFinite(disk.usedPct)) return "neutral";
+  // Regraded from the thresholds the backend reports (70% warn, 85% critical)
+  // so the dashboard cannot drift from the alarm the box logs against.
+  const warnPct = Number.isFinite(disk.warnPct) ? disk.warnPct : 70;
+  const criticalPct = Number.isFinite(disk.criticalPct) ? disk.criticalPct : 85;
+  if (disk.usedPct >= criticalPct) return "bad";
+  if (disk.usedPct >= warnPct) return "warn";
+  return "good";
+}
+
+function StoragePathRows({ paths }: { paths: StorageFootprint | null | undefined }) {
+  if (!paths) return <DetailRow label="Storage paths" value="not reported" />;
+  const rows: Array<{ label: string; bytes: number | null }> = [
+    { label: "Database file", bytes: paths.db },
+    { label: "Database WAL", bytes: paths.dbWal },
+    { label: "Database -shm", bytes: paths.dbShm },
+    { label: "Analytics database", bytes: paths.analytics },
+    { label: "Analytics WAL", bytes: paths.analyticsWal },
+    { label: "Backups directory", bytes: paths.backups },
+    { label: "Replay video work dir", bytes: paths.replayVideoWork },
+  ];
+  return (
+    <>
+      {rows.map((row) => (
+        // null means the path is not configured or not on disk - an absent
+        // replay-video work dir is how "that feature stayed off" reads here.
+        <DetailRow key={row.label} label={row.label} value={row.bytes == null ? "absent" : formatBytes(row.bytes)} />
+      ))}
+    </>
+  );
+}
+
 function StatusCard({ status, connectionState, country, snapshots }: { status: LiveBackendStatus | null; connectionState: ConnectionState; country: string; snapshots: SnapshotStats }) {
   const [openKey, setOpenKey] = useState<string | null>(null);
   const roster = status?.roster?.find((entry) => entry.country === country);
@@ -3780,6 +4011,16 @@ function StatusCard({ status, connectionState, country, snapshots }: { status: L
 
   const batchAgo = status?.osc.lastBatchAt ? formatTimeAgo(status.osc.lastBatchAt) : "no batch";
   const fallbackUpdated = status?.scoresFallback?.updatedAt ? formatTimeAgo(status.scoresFallback.updatedAt) : "never";
+
+  const memory = getMemoryView(status);
+  const globalRefresh = status?.globalMapsRefresh ?? null;
+  const thread = status?.mapsSnapshotThread;
+  const threadView = getSnapshotThreadView(thread);
+  const caches = status?.responseCaches;
+  const cacheBytes = caches ? caches.mapsSnapshot.bytes + caches.mapsPage.bytes : null;
+  const cacheEntries = caches ? caches.mapsSnapshot.entries + caches.mapsPage.entries : null;
+  const disk = status?.disk ?? null;
+  const diskCardTone = diskTone(disk);
 
   const groups: Array<{ key: string; title: string; tone: StatusTone; stats: StatusStat[]; detail: React.ReactNode }> = [
     {
@@ -3897,6 +4138,130 @@ function StatusCard({ status, connectionState, country, snapshots }: { status: L
           <DetailRow label="In progress" value={analysis ? formatNumber(analysis.running) : "—"} tone={analysis && analysis.running > 0 ? "warn" : "neutral"} />
           <DetailRow label="Failed" value={analysis ? formatNumber(analysis.failed) : "—"} tone={analysis && analysis.failed > 0 ? "warn" : "neutral"} />
           <DetailRow label="Unavailable" value={analysis ? formatNumber(analysis.unavailable) : "—"} />
+        </>
+      ),
+    },
+    {
+      key: "memory",
+      title: "Memory",
+      tone: memory.tone,
+      stats: memory.singleProcess
+        ? [
+          { label: "Process", value: formatBytes(memory.server?.rssBytes), tone: memory.serverTone },
+          { label: "Peak", value: formatBytes(memory.server?.peakRssBytes) },
+        ]
+        : [
+          { label: "Server", value: memory.server ? formatBytes(memory.server.rssBytes) : "—", tone: memory.serverTone },
+          { label: "Worker", value: memory.worker ? formatBytes(memory.worker.rssBytes) : "—", tone: memory.workerTone },
+        ],
+      detail: (
+        <>
+          <div className="rounded-md bg-osu-b4/30 px-3 py-2 text-[10px] leading-relaxed text-osu-f1">
+            {memory.singleProcess ? "One process is serving and running jobs (same pid), so these numbers are the whole backend. " : ""}
+            Sampled while the status body was built: up to 5s old normally, and up to 120s old whenever a stale body is served. RSS and peak RSS cover the whole process; heap used is per-isolate, so the serving process's maps snapshot thread counts in RSS but never in heap used. Peak RSS is a lifetime high-water mark and never falls.
+          </div>
+          {memory.singleProcess ? (
+            <ProcessMemoryRows label="Process" sample={memory.server} tone={memory.serverTone} />
+          ) : (
+            <>
+              <ProcessMemoryRows label="Server" sample={memory.server} tone={memory.serverTone} />
+              <ProcessMemoryRows label="Worker" sample={memory.worker} tone={memory.workerTone} />
+            </>
+          )}
+          {globalRefresh ? (
+            <>
+              <DetailRow
+                label="Last GLOBAL maps refresh"
+                value={`${formatTimeAgo(globalRefresh.at)} · ran ${formatCallMs(globalRefresh.durationMs)} · ${globalRefresh.ok ? "ok" : "failed"}`}
+                tone={globalRefresh.ok ? "neutral" : "bad"}
+              />
+              <DetailRow
+                label="Refresh peak"
+                value={`${formatBytes(globalRefresh.peakRssBytes)} RSS from ${formatBytes(globalRefresh.startRssBytes)} · ${formatBytes(globalRefresh.peakHeapUsedBytes)} heap`}
+                tone={rssTone(globalRefresh.peakRssBytes, WORKER_RSS_WARN_BYTES, WORKER_RSS_BAD_BYTES)}
+              />
+              <DetailRow
+                label="Refresh sampling"
+                value={`${formatNumber(globalRefresh.samples)} samples · ${formatNumber(globalRefresh.concurrentJobs)} jobs in flight at rollup`}
+              />
+              {globalRefresh.error ? <DetailRow label="Refresh error" value={globalRefresh.error} tone="bad" /> : null}
+              <div className="rounded-md bg-osu-b4/30 px-3 py-2 text-[10px] leading-relaxed text-osu-f1">
+                {globalRefresh.hint ?? "Refresh peak RSS is the whole worker process while the job ran, not the job's own allocation; concurrent lanes count toward it."}
+              </div>
+            </>
+          ) : (
+            <DetailRow label="Last GLOBAL maps refresh" value="not reported" />
+          )}
+        </>
+      ),
+    },
+    {
+      key: "mapsServing",
+      title: "Maps serving",
+      tone: threadView.tone,
+      stats: [
+        { label: "Thread", value: threadView.value, tone: threadView.tone },
+        { label: "Cached", value: cacheBytes == null ? "—" : `${formatBytes(cacheBytes)} · ${formatNumber(cacheEntries ?? 0)} entries` },
+      ],
+      detail: (
+        <>
+          <div className="rounded-md bg-osu-b4/30 px-3 py-2 text-[10px] leading-relaxed text-osu-f1">
+            Maps responses kept in memory already serialized and compressed, and the worker thread that builds the GLOBAL maps page off the request path. Each cache is bounded by entry count, by total bytes, and by the size of a single response.
+          </div>
+          <ResponseCacheRow label="Maps snapshot cache" cache={caches?.mapsSnapshot} />
+          <ResponseCacheRow label="Maps page cache" cache={caches?.mapsPage} />
+          {thread ? (
+            <>
+              <DetailRow label="Snapshot thread" value={threadView.value} tone={threadView.tone} />
+              <DetailRow
+                label="Builds"
+                value={`${formatNumber(thread.ok)} ok · ${formatNumber(thread.failed)} failed · ${formatNumber(thread.timeouts)} timed out · ${formatNumber(thread.inFlight)} in flight`}
+                tone={thread.failed + thread.timeouts > 0 ? "warn" : "neutral"}
+              />
+              <DetailRow
+                label="Last build"
+                value={thread.lastBuildAt
+                  ? `${formatTimeAgo(thread.lastBuildAt)}${thread.lastBuildMs == null ? "" : ` · ${formatCallMs(thread.lastBuildMs)}`}${thread.lastBuildBytes == null ? "" : ` · ${formatBytes(thread.lastBuildBytes)}`}`
+                  : "none yet"}
+              />
+              {thread.lastError ? (
+                <DetailRow label="Last thread error" value={`${thread.lastFailureReason ?? "error"}: ${thread.lastError}`} tone="bad" />
+              ) : null}
+            </>
+          ) : (
+            <DetailRow label="Snapshot thread" value="not reported" />
+          )}
+        </>
+      ),
+    },
+    {
+      key: "disk",
+      title: "Disk",
+      tone: diskCardTone,
+      stats: [
+        { label: "Used", value: disk ? `${disk.usedPct}%` : "—", tone: diskCardTone },
+        { label: "Free", value: disk ? formatBytes(disk.freeBytes) : "—" },
+      ],
+      detail: (
+        <>
+          <div className="rounded-md bg-osu-b4/30 px-3 py-2 text-[10px] leading-relaxed text-osu-f1">
+            The filesystem holding the live database. The database size cap cannot see backups, the analytics database, or logs filling the same disk, so this is graded separately. Percentages follow df: blocks the filesystem reserves for root count as neither used nor free.
+          </div>
+          {disk ? (
+            <>
+              <DetailRow label="Mount" value={disk.path} />
+              <DetailRow
+                label="Used"
+                value={`${disk.usedPct}% · ${formatBytes(disk.usedBytes)} of ${formatBytes(disk.usedBytes + disk.freeBytes)}`}
+                tone={diskCardTone}
+              />
+              <DetailRow label="Free" value={formatBytes(disk.freeBytes)} tone={diskCardTone} />
+              <DetailRow label="Thresholds" value={`warn at ${disk.warnPct}% · critical at ${disk.criticalPct}%`} />
+            </>
+          ) : (
+            <DetailRow label="Disk" value="not reported (no local database file)" />
+          )}
+          <StoragePathRows paths={status?.storagePaths} />
         </>
       ),
     },
