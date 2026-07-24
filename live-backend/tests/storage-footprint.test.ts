@@ -31,8 +31,13 @@ describe("getDiskUsage", () => {
     const used = (stats.blocks - stats.bfree) * stats.bsize;
     const avail = stats.bavail * stats.bsize;
     expect(usage.path).toBe(dir);
-    expect(usage.usedBytes).toBe(used);
-    expect(usage.freeBytes).toBe(avail);
+    // The two statfs calls are separated by real time on a live filesystem, so
+    // compare within a tolerance rather than for byte equality: parallel vitest
+    // workers writing temp databases move these numbers between the samples.
+    const tolerance = Math.max(64 * 1024 * 1024, used * 0.01);
+    expect(Math.abs(usage.usedBytes - used)).toBeLessThan(tolerance);
+    expect(Math.abs(usage.freeBytes - avail)).toBeLessThan(tolerance);
+    // Total capacity does not move, so this one stays exact.
     expect(usage.totalBytes).toBe(stats.blocks * stats.bsize);
     // Root-reserved blocks count as neither used nor available.
     expect(usage.usedPct).toBeCloseTo((used / (used + avail)) * 100, 1);
