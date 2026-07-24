@@ -106,6 +106,20 @@ export interface Config {
   replayVideoUploadMaxBytes: number;
   skinOskMaxBytes: number;
   skinImageMaxBytes: number;
+  // Memory budgets for the audio surfaces. The serving process only holds
+  // prepared audio, hitsound bundles and preview clips while there is no R2
+  // public base URL to redirect browsers to, so 0 (disable the cache) is a
+  // meaningful setting for a deploy that has one.
+  audioCacheTtlMs: number;
+  audioCacheMaxEntries: number;
+  audioCacheMaxBytes: number;
+  previewAudioCacheMaxEntries: number;
+  hitsoundBundleCacheMaxEntries: number;
+  hitsoundBundleCacheMaxBytes: number;
+  hitsoundMaxTotalBytes: number;
+  // Ceiling for a whole .osz download. Real mania sets reach 80.7 MiB
+  // (beatmapset 2136400), so this cannot go much below its default.
+  beatmapArchiveMaxBytes: number;
   replayVideoOptimize: boolean;
   replayVideoOptimizeCrf: number;
   replayVideoOptimizePreset: string;
@@ -153,6 +167,12 @@ function readInt(name: string, fallback: number): number {
 function readNonNegativeNumber(name: string, fallback: number): number {
   const value = Number(process.env[name]);
   return Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
+// For budgets where 0 is a real setting ("disable this cache"), which readInt
+// cannot express because it treats 0 as absent.
+function readNonNegativeInt(name: string, fallback: number): number {
+  return Math.floor(readNonNegativeNumber(name, fallback));
 }
 
 function readBool(name: string, fallback: boolean): boolean {
@@ -308,6 +328,14 @@ export function readConfig(): Config {
     replayVideoUploadMaxBytes: readInt("REPLAY_VIDEO_UPLOAD_MAX_BYTES", 600 * 1024 * 1024),
     skinOskMaxBytes: readInt("SKIN_OSK_MAX_BYTES", 50 * 1024 * 1024),
     skinImageMaxBytes: readInt("SKIN_IMAGE_MAX_BYTES", 4 * 1024 * 1024),
+    audioCacheTtlMs: readNonNegativeInt("AUDIO_CACHE_TTL_MS", 15 * 60 * 1000),
+    audioCacheMaxEntries: readNonNegativeInt("AUDIO_CACHE_MAX_ENTRIES", 12),
+    audioCacheMaxBytes: readNonNegativeInt("AUDIO_CACHE_MAX_BYTES", 180 * 1024 * 1024),
+    previewAudioCacheMaxEntries: readNonNegativeInt("PREVIEW_AUDIO_CACHE_MAX_ENTRIES", 48),
+    hitsoundBundleCacheMaxEntries: readNonNegativeInt("HITSOUND_BUNDLE_CACHE_MAX_ENTRIES", 6),
+    hitsoundBundleCacheMaxBytes: readNonNegativeInt("HITSOUND_BUNDLE_CACHE_MAX_BYTES", 100 * 1024 * 1024),
+    hitsoundMaxTotalBytes: readNonNegativeInt("HITSOUND_MAX_TOTAL_BYTES", 24 * 1024 * 1024),
+    beatmapArchiveMaxBytes: readNonNegativeInt("BEATMAP_ARCHIVE_MAX_BYTES", 120 * 1024 * 1024),
     replayVideoOptimize: readBool("REPLAY_VIDEO_OPTIMIZE", true),
     replayVideoOptimizeCrf: readBoundedInt("REPLAY_VIDEO_OPTIMIZE_CRF", 20, 16, 28),
     replayVideoOptimizePreset: process.env.REPLAY_VIDEO_OPTIMIZE_PRESET || "slow",

@@ -13,9 +13,11 @@ import {
   type BeatmapAudioAsset,
 } from "./r2-assets.js";
 
-const AUDIO_CACHE_TTL = 15 * 60 * 1000;
-const AUDIO_CACHE_MAX_ENTRIES = 12;
-const AUDIO_CACHE_MAX_BYTES = 180 * 1024 * 1024;
+// Fallback budgets for configs that predate the env vars (and for test configs
+// that only fill in the fields they exercise).
+const DEFAULT_AUDIO_CACHE_TTL_MS = 15 * 60 * 1000;
+const DEFAULT_AUDIO_CACHE_MAX_ENTRIES = 12;
+const DEFAULT_AUDIO_CACHE_MAX_BYTES = 180 * 1024 * 1024;
 const MAX_AUDIO_FILENAME_LENGTH = 260;
 const MP4_AUDIO_MIME_TYPE = "audio/mp4";
 
@@ -95,7 +97,7 @@ export async function getPreparedBeatmapAudio(
     const object = await readCachedBeatmapAudioAsset(config, beatmapsetId, filename);
     if (object) {
       const value = fromAsset(object, filename, object.buffer);
-      setPreparedMemoryCache(cacheKey, value);
+      setPreparedMemoryCache(config, cacheKey, value);
       return value;
     }
   }
@@ -116,7 +118,7 @@ async function prepareBeatmapAudio(
   beatmapsetId: string,
   filename: string,
 ): Promise<PreparedBeatmapAudio> {
-  const sourceBuffer = await extractBeatmapArchiveFile(beatmapsetId, filename);
+  const sourceBuffer = await extractBeatmapArchiveFile(beatmapsetId, filename, config.beatmapArchiveMaxBytes);
   const source: AudioValue = {
     buffer: sourceBuffer,
     mimeType: getBeatmapAudioMimeType(filename),
@@ -127,7 +129,7 @@ async function prepareBeatmapAudio(
     try {
       const uploaded = await uploadBeatmapAudioAsset(config, beatmapsetId, filename, playback.mimeType, playback.buffer);
       const value = fromAsset(uploaded, filename, uploaded.publicUrl ? null : playback.buffer);
-      if (!uploaded.publicUrl) setPreparedMemoryCache(getCacheKey(beatmapsetId, filename), value);
+      if (!uploaded.publicUrl) setPreparedMemoryCache(config, getCacheKey(beatmapsetId, filename), value);
       return value;
     } catch {
       // Serving directly is still better than breaking playback if storage has
@@ -142,7 +144,7 @@ async function prepareBeatmapAudio(
     publicUrl: null,
     mp3InMp4: isMp3BeatmapAudio(filename, source.mimeType),
   };
-  setPreparedMemoryCache(getCacheKey(beatmapsetId, filename), value);
+  setPreparedMemoryCache(config, getCacheKey(beatmapsetId, filename), value);
   return value;
 }
 
@@ -234,26 +236,29 @@ function getPreparedMemoryCache(cacheKey: string, now = Date.now()): PreparedBea
   return entry.value;
 }
 
-function setPreparedMemoryCache(cacheKey: string, value: PreparedBeatmapAudio, now = Date.now()): void {
+function setPreparedMemoryCache(config: Config, cacheKey: string, value: PreparedBeatmapAudio, now = Date.now()): void {
   if (!value.buffer) return;
   preparedAudioCache.set(cacheKey, {
-    expiresAt: now + AUDIO_CACHE_TTL,
+    expiresAt: now + (config.audioCacheTtlMs ?? DEFAULT_AUDIO_CACHE_TTL_MS),
     lastAccessedAt: now,
     sizeBytes: value.sizeBytes,
     value,
   });
-  prunePreparedMemoryCache(now);
+  prunePreparedMemoryCache(config, now);
 }
 
-function prunePreparedMemoryCache(now = Date.now()): void {
+function prunePreparedMemoryCache(config: Config, now = Date.now()): void {
+  const maxEntries = config.audioCacheMaxEntries ?? DEFAULT_AUDIO_CACHE_MAX_ENTRIES;
+  const maxBytes = config.audioCacheMaxBytes ?? DEFAULT_AUDIO_CACHE_MAX_BYTES;
+
   for (const [key, entry] of preparedAudioCache.entries()) {
     if (entry.expiresAt <= now) preparedAudioCache.delete(key);
   }
 
-  if (preparedAudioCache.size > AUDIO_CACHE_MAX_ENTRIES) {
+  if (preparedAudioCache.size > maxEntries) {
     const entriesToRemove = [...preparedAudioCache.entries()]
       .sort(([, a], [, b]) => a.lastAccessedAt - b.lastAccessedAt)
-      .slice(0, preparedAudioCache.size - AUDIO_CACHE_MAX_ENTRIES);
+      .slice(0, preparedAudioCache.size - maxEntries);
 
     entriesToRemove.forEach(([key]) => {
       preparedAudioCache.delete(key);
@@ -261,13 +266,13 @@ function prunePreparedMemoryCache(now = Date.now()): void {
   }
 
   let totalBytes = [...preparedAudioCache.values()].reduce((sum, entry) => sum + entry.sizeBytes, 0);
-  if (totalBytes <= AUDIO_CACHE_MAX_BYTES) return;
+  if (totalBytes <= maxBytes) return;
 
   const entriesByAge = [...preparedAudioCache.entries()]
     .sort(([, a], [, b]) => a.lastAccessedAt - b.lastAccessedAt);
 
   for (const [key, entry] of entriesByAge) {
-    if (totalBytes <= AUDIO_CACHE_MAX_BYTES) break;
+    if (totalBytes <= maxBytes) break;
     preparedAudioCache.delete(key);
     totalBytes -= entry.sizeBytes;
   }

@@ -66,6 +66,19 @@ describe("buildStoredZip", () => {
     expect(zip.length).toBe(22);
     expect(readStoredZip(zip)).toEqual([]);
   });
+
+  it("allocates exactly the zip size once", () => {
+    const files = [
+      { path: "a.wav", data: Buffer.alloc(9, 1) },
+      { path: "nested/b.ogg", data: Buffer.alloc(17, 2) },
+    ];
+    const expected = files.reduce(
+      (sum, file) => sum + 30 + Buffer.byteLength(file.path) + file.data.length + 46 + Buffer.byteLength(file.path),
+      22,
+    );
+
+    expect(buildStoredZip(files).length).toBe(expected);
+  });
 });
 
 describe("selectHitsoundArchiveEntries", () => {
@@ -117,6 +130,16 @@ describe("selectHitsoundArchiveEntries", () => {
     // The smallest files survive.
     expect(selected[0].uncompressedSize).toBe(100);
     expect(selected.every((item) => item.uncompressedSize < 100 + 400)).toBe(true);
+  });
+
+  it("respects an injected total size budget", () => {
+    const entries = Array.from({ length: 10 }, (_, index) =>
+      entry({ path: `sample${index}.wav`, uncompressedSize: 1000 }),
+    );
+    const { selected, dropped } = selectHitsoundArchiveEntries(entries, null, { maxTotalBytes: 3_500 });
+
+    expect(selected).toHaveLength(3);
+    expect(dropped).toBe(7);
   });
 
   it("stops before exceeding the total size budget", () => {

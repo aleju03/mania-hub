@@ -5,8 +5,15 @@ const ARCHIVE_SOURCE_MIN_INTERVAL_MS = 2_500;
 const ARCHIVE_SOURCE_COOLDOWN_MS = 15 * 60 * 1000;
 const ZIP_TAIL_BYTES = 128 * 1024;
 const MAX_ZIP_CENTRAL_DIRECTORY_BYTES = 8 * 1024 * 1024;
-const MAX_ARCHIVE_BYTES = 120 * 1024 * 1024;
+// Real mania sets get this big: beatmapset 2136400 (Vietnamese Chordjack Pack 5,
+// 27 diffs) is 84,661,083 bytes = 80.7 MiB, i.e. 67% of this cap, and multi-diff
+// practice packs in the 30-85 MB range are routine. Anything under ~96 MiB stops
+// legitimate downloads, so lower BEATMAP_ARCHIVE_MAX_BYTES only with new evidence.
+const DEFAULT_MAX_ARCHIVE_BYTES = 120 * 1024 * 1024;
 const MAX_EXTRACTED_FILE_BYTES = 60 * 1024 * 1024;
+// Only 2 of the 121,369 charts cached in production are above this (largest
+// 36.6 MB) and both fall back to the osu! API, while a 14.9 MB one does come
+// through the archive path: the limit sits at the edge, not comfortably above.
 const MAX_OSU_FILE_BYTES = 16 * 1024 * 1024;
 const MAX_ARCHIVE_OSU_CANDIDATES = 128;
 const ARCHIVE_FETCH_HEADERS = {
@@ -207,7 +214,35 @@ export function __withArchiveSourceSlotForTest<T>(
   return withArchiveSourceSlot(source, signal, task);
 }
 
-async function readResponseBufferWithLimit(response: Response, limitBytes: number): Promise<ArrayBuffer> {
+// ArrayBuffer.prototype.transfer landed in Node 21; prod runs v22.
+type TransferableArrayBuffer = ArrayBuffer & { transfer?: (newByteLength?: number) => ArrayBuffer };
+
+// Content-Length only promises the size of the body we are about to read when
+// that body is not encoded: undici decodes gzip/br transparently but leaves the
+// *compressed* Content-Length on the response headers.
+function trustedBodyLength(response: Response, limitBytes: number, expectedBytes?: number): number | null {
+  const declared = expectedBytes ?? readContentLengthHeader(response);
+  if (declared == null) return null;
+  if (!Number.isSafeInteger(declared) || declared < 0 || declared > limitBytes) return null;
+  if (expectedBytes == null) {
+    const encoding = response.headers.get("content-encoding");
+    if (encoding && encoding.trim().toLowerCase() !== "identity") return null;
+  }
+  return declared;
+}
+
+function readContentLengthHeader(response: Response): number | null {
+  const raw = response.headers.get("content-length");
+  return raw ? Number(raw) : null;
+}
+
+// `expectedBytes` is the length the caller already validated against the
+// response metadata (Content-Range on the range path).
+async function readResponseBufferWithLimit(
+  response: Response,
+  limitBytes: number,
+  expectedBytes?: number,
+): Promise<ArrayBuffer> {
   const contentLength = response.headers.get("content-length");
   if (contentLength) {
     const length = Number(contentLength);
@@ -225,6 +260,9 @@ async function readResponseBufferWithLimit(response: Response, limitBytes: numbe
   }
 
   const reader = response.body.getReader();
+  const expected = trustedBodyLength(response, limitBytes, expectedBytes);
+  if (expected != null) return readExactResponseBuffer(reader, expected);
+
   const chunks: Uint8Array[] = [];
   let total = 0;
 
@@ -248,6 +286,44 @@ async function readResponseBufferWithLimit(response: Response, limitBytes: numbe
     offset += chunk.byteLength;
   }
   return out.buffer;
+}
+
+// Fills one allocation of the announced size instead of accumulating chunks and
+// concatenating them: an 85 MB archive peaks at ~85 MB resident here versus
+// ~220 MB through the growth path.
+async function readExactResponseBuffer(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  expected: number,
+): Promise<ArrayBuffer> {
+  const out = new Uint8Array(expected);
+  let offset = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+
+    if (offset + value.byteLength > expected) {
+      await reader.cancel().catch(() => {});
+      throw new Error(`Archive body exceeded its declared length (${expected} bytes)`);
+    }
+    out.set(value, offset);
+    offset += value.byteLength;
+  }
+
+  if (offset === expected) return out.buffer;
+  // A short body must not leave trailing zeros behind: the zip EOCD scan walks
+  // backwards from the end of the buffer and would never find the signature.
+  const buffer = out.buffer as TransferableArrayBuffer;
+  return typeof buffer.transfer === "function" ? buffer.transfer(offset) : buffer.slice(0, offset);
+}
+
+export function __readResponseBufferWithLimitForTest(
+  response: Response,
+  limitBytes: number,
+  expectedBytes?: number,
+): Promise<ArrayBuffer> {
+  return readResponseBufferWithLimit(response, limitBytes, expectedBytes);
 }
 
 function parseContentRange(header: string | null): { start: number; end: number; total: number } | null {
@@ -284,7 +360,7 @@ async function fetchRangeBuffer(url: string, range: string, limitBytes: number, 
     throw new Error(`range response is too large (${expectedBytes} bytes)`);
   }
 
-  const buffer = await readResponseBufferWithLimit(response, limitBytes);
+  const buffer = await readResponseBufferWithLimit(response, limitBytes, expectedBytes);
   if (buffer.byteLength !== expectedBytes) {
     throw new Error(`range response length mismatch (${buffer.byteLength} !== ${expectedBytes})`);
   }
@@ -682,51 +758,50 @@ function isLikelyZip(buffer: ArrayBuffer): boolean {
   return bytes[0] === 0x50 && bytes[1] === 0x4b;
 }
 
-async function extractArchiveFileByFullArchive(beatmapsetId: string, filename: string): Promise<Buffer> {
-  const errors: string[] = [];
-  for (const source of getArchiveSourceOrder()) {
-    if (isArchiveSourceCoolingDown(source.name)) {
-      errors.push(`${source.name}: cooling down`);
-      continue;
-    }
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), ARCHIVE_FETCH_TIMEOUT_MS);
-    let shouldCooldown = false;
-    try {
-      const archiveResponse = await withArchiveSourceSlot(source.name, controller.signal, () => fetch(source.url(beatmapsetId), {
-        signal: controller.signal,
-        headers: ARCHIVE_FETCH_HEADERS,
-      }));
-      if (!archiveResponse.ok) {
-        shouldCooldown = shouldCooldownArchiveSource(archiveResponse.status);
-        throw new Error(`${source.name} returned ${archiveResponse.status}`);
-      }
+// The full-archive branch is the memory-heavy one: a download holds up to the
+// archive cap in memory. Per-mirror slots alone would still allow one download
+// per mirror at a time, so the branch as a whole is gated, and concurrent
+// extractions of the same set (audio, hitsounds, a .osu) share a single
+// download instead of each pulling its own copy.
+const MAX_CONCURRENT_FULL_ARCHIVES = 2;
+const MAX_FULL_ARCHIVE_ATTEMPTS = 2;
 
-      const archiveBuffer = await readResponseBufferWithLimit(archiveResponse, MAX_ARCHIVE_BYTES);
-      if (!isLikelyZip(archiveBuffer)) {
-        throw new Error(`${source.name} returned a non-zip response`);
-      }
-      return extractEntryFromZipBuffer(archiveBuffer, filename);
-    } catch (error) {
-      if (shouldCooldown || (error instanceof Error && error.name === "AbortError")) {
-        cooldownArchiveSource(source.name);
-      }
-      const message = error instanceof Error ? error.message : String(error);
-      errors.push(`${source.name}: ${message}`);
-    } finally {
-      clearTimeout(timeout);
-    }
+type FullArchive = {
+  buffer: ArrayBuffer;
+  source: ArchiveSourceName;
+};
+
+let activeFullArchives = 0;
+const fullArchiveWaiters: Array<() => void> = [];
+const fullArchiveDownloads = new Map<string, Promise<FullArchive>>();
+
+async function withFullArchiveSlot<T>(task: () => Promise<T>): Promise<T> {
+  if (activeFullArchives >= MAX_CONCURRENT_FULL_ARCHIVES) {
+    // The slot is handed straight to the next waiter on release, so the counter
+    // never drops below the number of downloads actually running.
+    await new Promise<void>((resolve) => {
+      fullArchiveWaiters.push(resolve);
+    });
+  } else {
+    activeFullArchives++;
   }
-  throw new Error(`Archive fetch failed for beatmapset ${beatmapsetId} (${errors.join("; ")})`);
+  try {
+    return await task();
+  } finally {
+    const next = fullArchiveWaiters.shift();
+    if (next) next();
+    else activeFullArchives--;
+  }
 }
 
-async function extractBeatmapOsuFileByFullArchive(
+async function fetchFullArchive(
   beatmapsetId: string,
-  beatmapId: number,
-  hints?: { version?: string | null },
-): Promise<BeatmapArchiveOsuFile> {
+  maxArchiveBytes: number,
+  skipSources: ReadonlySet<ArchiveSourceName>,
+): Promise<FullArchive> {
   const errors: string[] = [];
   for (const source of getArchiveSourceOrder()) {
+    if (skipSources.has(source.name)) continue;
     if (isArchiveSourceCoolingDown(source.name)) {
       errors.push(`${source.name}: cooling down`);
       continue;
@@ -744,11 +819,11 @@ async function extractBeatmapOsuFileByFullArchive(
         throw new Error(`${source.name} returned ${archiveResponse.status}`);
       }
 
-      const archiveBuffer = await readResponseBufferWithLimit(archiveResponse, MAX_ARCHIVE_BYTES);
-      if (!isLikelyZip(archiveBuffer)) {
+      const buffer = await readResponseBufferWithLimit(archiveResponse, maxArchiveBytes);
+      if (!isLikelyZip(buffer)) {
         throw new Error(`${source.name} returned a non-zip response`);
       }
-      return findBeatmapOsuFileInArchiveBuffer(archiveBuffer, beatmapId, hints);
+      return { buffer, source: source.name };
     } catch (error) {
       if (shouldCooldown || (error instanceof Error && error.name === "AbortError")) {
         cooldownArchiveSource(source.name);
@@ -759,10 +834,71 @@ async function extractBeatmapOsuFileByFullArchive(
       clearTimeout(timeout);
     }
   }
-  throw new Error(`Archive .osu fetch failed for beatmapset ${beatmapsetId} (${errors.join("; ")})`);
+  throw new Error(`no mirror served the archive (${errors.join("; ")})`);
 }
 
-export async function extractBeatmapArchiveFile(beatmapsetId: string, filename: string): Promise<Buffer> {
+function getFullArchive(
+  beatmapsetId: string,
+  maxArchiveBytes: number,
+  skipSources: ReadonlySet<ArchiveSourceName>,
+): Promise<FullArchive> {
+  const key = `${beatmapsetId}:${maxArchiveBytes}:${[...skipSources].sort().join(",")}`;
+  const inFlight = fullArchiveDownloads.get(key);
+  if (inFlight) return inFlight;
+
+  const download = withFullArchiveSlot(() => fetchFullArchive(beatmapsetId, maxArchiveBytes, skipSources))
+    .finally(() => {
+      fullArchiveDownloads.delete(key);
+    });
+  fullArchiveDownloads.set(key, download);
+  return download;
+}
+
+export function __getFullArchiveForTest(beatmapsetId: string, maxArchiveBytes: number): Promise<{ buffer: ArrayBuffer }> {
+  return getFullArchive(beatmapsetId, maxArchiveBytes, new Set());
+}
+
+export function __getFullArchiveStateForTest(): { inFlight: number; active: number; waiting: number } {
+  return { inFlight: fullArchiveDownloads.size, active: activeFullArchives, waiting: fullArchiveWaiters.length };
+}
+
+async function extractFromFullArchive<T>(
+  beatmapsetId: string,
+  maxArchiveBytes: number,
+  label: string,
+  extract: (archive: ArrayBuffer) => T,
+): Promise<T> {
+  const skipSources = new Set<ArchiveSourceName>();
+  const errors: string[] = [];
+
+  for (let attempt = 0; attempt < MAX_FULL_ARCHIVE_ATTEMPTS; attempt++) {
+    let archive: FullArchive;
+    try {
+      archive = await getFullArchive(beatmapsetId, maxArchiveBytes, skipSources);
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+      break;
+    }
+
+    try {
+      return extract(archive.buffer);
+    } catch (error) {
+      // The download itself was fine, so a stale mirror missing a recent diff
+      // can still be worked around by pulling another copy.
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`${archive.source}: ${message}`);
+      skipSources.add(archive.source);
+    }
+  }
+
+  throw new Error(`${label} for beatmapset ${beatmapsetId} (${errors.join("; ")})`);
+}
+
+export async function extractBeatmapArchiveFile(
+  beatmapsetId: string,
+  filename: string,
+  maxArchiveBytes = DEFAULT_MAX_ARCHIVE_BYTES,
+): Promise<Buffer> {
   try {
     return await extractArchiveFileByRange(beatmapsetId, filename);
   } catch {
@@ -770,13 +906,19 @@ export async function extractBeatmapArchiveFile(beatmapsetId: string, filename: 
     // archive fetch, but still extract only the requested audio file.
   }
 
-  return extractArchiveFileByFullArchive(beatmapsetId, filename);
+  return extractFromFullArchive(
+    beatmapsetId,
+    maxArchiveBytes,
+    "Archive fetch failed",
+    (archive) => extractEntryFromZipBuffer(archive, filename),
+  );
 }
 
 export async function extractBeatmapOsuFileFromArchive(
   beatmapsetId: string,
   beatmapId: number,
   hints?: { version?: string | null },
+  maxArchiveBytes = DEFAULT_MAX_ARCHIVE_BYTES,
 ): Promise<BeatmapArchiveOsuFile> {
   try {
     return await extractBeatmapOsuFileByRange(beatmapsetId, beatmapId, hints);
@@ -785,7 +927,12 @@ export async function extractBeatmapOsuFileFromArchive(
     // plain archive request. Fall back to a guarded full-archive fetch.
   }
 
-  return extractBeatmapOsuFileByFullArchive(beatmapsetId, beatmapId, hints);
+  return extractFromFullArchive(
+    beatmapsetId,
+    maxArchiveBytes,
+    "Archive .osu fetch failed",
+    (archive) => findBeatmapOsuFileInArchiveBuffer(archive, beatmapId, hints),
+  );
 }
 
 // Hitsound extraction: every hitsound-sized audio file in the archive, for
@@ -798,7 +945,7 @@ export interface BeatmapArchiveHitsoundFile {
 
 const HITSOUND_FILE_EXTENSIONS = [".wav", ".ogg", ".mp3"] as const;
 const MAX_HITSOUND_FILE_BYTES = Math.round(1.5 * 1024 * 1024);
-const MAX_HITSOUND_TOTAL_BYTES = 24 * 1024 * 1024;
+const DEFAULT_MAX_HITSOUND_TOTAL_BYTES = 24 * 1024 * 1024;
 const MAX_HITSOUND_FILES = 400;
 // Above this many files, per-entry range requests cost more than one full
 // archive download.
@@ -816,7 +963,9 @@ function getFilenameStem(path: string): string {
 export function selectHitsoundArchiveEntries(
   entries: ZipDirectoryEntry[],
   excludeBasename?: string | null,
+  limits: { maxTotalBytes?: number } = {},
 ): { selected: ZipDirectoryEntry[]; dropped: number } {
+  const maxTotalBytes = limits.maxTotalBytes ?? DEFAULT_MAX_HITSOUND_TOTAL_BYTES;
   const excludedStem = excludeBasename ? getFilenameStem(excludeBasename) : null;
   const matching = entries.filter((entry) => {
     if (entry.path.endsWith("/") || entry.path.includes("..")) return false;
@@ -836,7 +985,7 @@ export function selectHitsoundArchiveEntries(
   let totalBytes = 0;
   for (const entry of matching) {
     if (selected.length >= MAX_HITSOUND_FILES) break;
-    if (totalBytes + entry.uncompressedSize > MAX_HITSOUND_TOTAL_BYTES) break;
+    if (totalBytes + entry.uncompressedSize > maxTotalBytes) break;
     selected.push(entry);
     totalBytes += entry.uncompressedSize;
   }
@@ -846,6 +995,7 @@ export function selectHitsoundArchiveEntries(
 async function extractHitsoundsByRange(
   beatmapsetId: string,
   excludeBasename: string | null,
+  maxTotalBytes: number,
 ): Promise<{ files: BeatmapArchiveHitsoundFile[]; dropped: number }> {
   const errors: string[] = [];
   for (const source of getArchiveSourceOrder()) {
@@ -860,7 +1010,7 @@ async function extractHitsoundsByRange(
       return await withArchiveSourceSlot(source.name, controller.signal, async () => {
         const rangeUrl = await resolveArchiveRangeUrl(source, beatmapsetId, controller.signal);
         const entries = await readZipDirectoryEntriesByRangeFromUrl(rangeUrl, controller.signal);
-        const { selected, dropped } = selectHitsoundArchiveEntries(entries, excludeBasename);
+        const { selected, dropped } = selectHitsoundArchiveEntries(entries, excludeBasename, { maxTotalBytes });
         if (selected.length === 0) return { files: [], dropped };
         if (selected.length > MAX_HITSOUND_RANGE_EXTRACTIONS) {
           throw new Error(`too many hitsound files for range extraction (${selected.length})`);
@@ -885,71 +1035,48 @@ async function extractHitsoundsByRange(
   throw new Error(`Archive hitsound range extraction failed for beatmapset ${beatmapsetId} (${errors.join("; ")})`);
 }
 
-async function extractHitsoundsByFullArchive(
-  beatmapsetId: string,
+function extractHitsoundsFromArchiveBuffer(
+  archiveBuffer: ArrayBuffer,
   excludeBasename: string | null,
-): Promise<{ files: BeatmapArchiveHitsoundFile[]; dropped: number }> {
-  const errors: string[] = [];
-  for (const source of getArchiveSourceOrder()) {
-    if (isArchiveSourceCoolingDown(source.name)) {
-      errors.push(`${source.name}: cooling down`);
-      continue;
-    }
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), ARCHIVE_FETCH_TIMEOUT_MS);
-    let shouldCooldown = false;
+  maxTotalBytes: number,
+): { files: BeatmapArchiveHitsoundFile[]; dropped: number } {
+  const { selected, dropped } = selectHitsoundArchiveEntries(
+    readZipDirectoryEntriesFromBuffer(archiveBuffer),
+    excludeBasename,
+    { maxTotalBytes },
+  );
+  const files: BeatmapArchiveHitsoundFile[] = [];
+  let failed = 0;
+  for (const entry of selected) {
     try {
-      const archiveResponse = await withArchiveSourceSlot(source.name, controller.signal, () => fetch(source.url(beatmapsetId), {
-        signal: controller.signal,
-        headers: ARCHIVE_FETCH_HEADERS,
-      }));
-      if (!archiveResponse.ok) {
-        shouldCooldown = shouldCooldownArchiveSource(archiveResponse.status);
-        throw new Error(`${source.name} returned ${archiveResponse.status}`);
-      }
-
-      const archiveBuffer = await readResponseBufferWithLimit(archiveResponse, MAX_ARCHIVE_BYTES);
-      if (!isLikelyZip(archiveBuffer)) {
-        throw new Error(`${source.name} returned a non-zip response`);
-      }
-      const { selected, dropped } = selectHitsoundArchiveEntries(readZipDirectoryEntriesFromBuffer(archiveBuffer), excludeBasename);
-      const files: BeatmapArchiveHitsoundFile[] = [];
-      let failed = 0;
-      for (const entry of selected) {
-        try {
-          files.push({
-            path: entry.path.replace(/\\/g, "/"),
-            data: extractZipEntryFromBuffer(archiveBuffer, entry, entry.path, MAX_HITSOUND_FILE_BYTES),
-          });
-        } catch {
-          failed++;
-        }
-      }
-      return { files, dropped: dropped + failed };
-    } catch (error) {
-      if (shouldCooldown || (error instanceof Error && error.name === "AbortError")) {
-        cooldownArchiveSource(source.name);
-      }
-      const message = error instanceof Error ? error.message : String(error);
-      errors.push(`${source.name}: ${message}`);
-    } finally {
-      clearTimeout(timeout);
+      files.push({
+        path: entry.path.replace(/\\/g, "/"),
+        data: extractZipEntryFromBuffer(archiveBuffer, entry, entry.path, MAX_HITSOUND_FILE_BYTES),
+      });
+    } catch {
+      failed++;
     }
   }
-  throw new Error(`Archive hitsound fetch failed for beatmapset ${beatmapsetId} (${errors.join("; ")})`);
+  return { files, dropped: dropped + failed };
 }
 
 export async function extractBeatmapArchiveHitsounds(
   beatmapsetId: string,
-  options: { excludeBasename?: string | null } = {},
+  options: { excludeBasename?: string | null; maxTotalBytes?: number; maxArchiveBytes?: number } = {},
 ): Promise<{ files: BeatmapArchiveHitsoundFile[]; dropped: number }> {
   const excludeBasename = options.excludeBasename ?? null;
+  const maxTotalBytes = options.maxTotalBytes ?? DEFAULT_MAX_HITSOUND_TOTAL_BYTES;
   try {
-    return await extractHitsoundsByRange(beatmapsetId, excludeBasename);
+    return await extractHitsoundsByRange(beatmapsetId, excludeBasename, maxTotalBytes);
   } catch {
     // Mirrors without range support (or keysounded maps with many files) go
     // through a single guarded full-archive fetch instead.
   }
 
-  return extractHitsoundsByFullArchive(beatmapsetId, excludeBasename);
+  return extractFromFullArchive(
+    beatmapsetId,
+    options.maxArchiveBytes ?? DEFAULT_MAX_ARCHIVE_BYTES,
+    "Archive hitsound fetch failed",
+    (archive) => extractHitsoundsFromArchiveBuffer(archive, excludeBasename, maxTotalBytes),
+  );
 }

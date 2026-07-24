@@ -5,6 +5,10 @@ import type { Config } from "../config.js";
 
 const REPLAY_CACHE_BUCKET = "mania-hub-replay-cache";
 const REPLAY_CACHE_PREFIX = "replay-cache/";
+// Nothing this module uploads can exceed the extraction caps (60 MiB for one
+// audio file, 24 MiB for a hitsound bundle), so a larger object is either
+// corrupt or not ours; re-preparing it is cheaper than holding it in the heap.
+const MAX_CACHED_OBJECT_BYTES = 64 * 1024 * 1024;
 
 export type BeatmapAudioAsset = {
   storageKey: string;
@@ -67,7 +71,10 @@ export async function readCachedBeatmapAudioAsset(
       Bucket: requireBucket(config),
       Key: storageKey,
     }));
-    const buffer = await readObjectBody(object.Body);
+    if ((object.ContentLength ?? 0) > MAX_CACHED_OBJECT_BYTES) {
+      throw new Error(`Cached audio object is too large (${object.ContentLength} bytes)`);
+    }
+    const buffer = await readObjectBody(object.Body, MAX_CACHED_OBJECT_BYTES);
     if (buffer.length === 0) return null;
     return {
       storageKey,
@@ -171,16 +178,22 @@ function getPublicObjectUrl(config: Config, storageKey: string): string | null {
   return `${publicBase}/${storageKey.split("/").map(encodeURIComponent).join("/")}`;
 }
 
-async function readObjectBody(body: GetObjectCommandOutput["Body"]): Promise<Buffer> {
+async function readObjectBody(body: GetObjectCommandOutput["Body"], maxBytes: number): Promise<Buffer> {
   if (!body) return Buffer.alloc(0);
   const maybeTransform = body as { transformToByteArray?: () => Promise<Uint8Array> };
   if (typeof maybeTransform.transformToByteArray === "function") {
-    return Buffer.from(await maybeTransform.transformToByteArray());
+    const bytes = await maybeTransform.transformToByteArray();
+    if (bytes.byteLength > maxBytes) throw new Error(`Cached audio object is too large (${bytes.byteLength} bytes)`);
+    return Buffer.from(bytes);
   }
 
   const chunks: Buffer[] = [];
+  let total = 0;
   for await (const chunk of body as AsyncIterable<Uint8Array | string>) {
-    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : Buffer.from(chunk));
+    const part = typeof chunk === "string" ? Buffer.from(chunk) : Buffer.from(chunk);
+    total += part.length;
+    if (total > maxBytes) throw new Error(`Cached audio object is too large (>${maxBytes} bytes)`);
+    chunks.push(part);
   }
-  return Buffer.concat(chunks);
+  return Buffer.concat(chunks, total);
 }

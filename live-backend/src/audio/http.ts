@@ -84,15 +84,23 @@ export async function handleBeatmapAudioRequest(
 // analyser behind the maps random-card beat visual); serving it from here puts
 // the clip behind the backend's CORS allowlist. Clips are ~100KB and
 // immutable, so a small in-memory LRU absorbs repeat plays.
-const PREVIEW_AUDIO_CACHE_MAX_ENTRIES = 48;
-const previewAudioCache = new Map<string, { lastAccessedAt: number; promise: Promise<PreparedBeatmapAudio> }>();
+const DEFAULT_PREVIEW_AUDIO_CACHE_MAX_ENTRIES = 48;
+// Real clips are ~100KB; the cap only exists so a misbehaving upstream cannot
+// stream an arbitrary amount of data into the serving process.
+const PREVIEW_AUDIO_MAX_BYTES = 4 * 1024 * 1024;
+const PREVIEW_AUDIO_FETCH_TIMEOUT_MS = 10_000;
+const PREVIEW_AUDIO_CACHE_TTL_MS = 15 * 60 * 1000;
+const previewAudioCache = new Map<string, { cachedAt: number; lastAccessedAt: number; promise: Promise<PreparedBeatmapAudio> }>();
 
 async function fetchPreviewAudio(beatmapsetId: string): Promise<PreparedBeatmapAudio> {
-  const response = await fetch(`https://b.ppy.sh/preview/${beatmapsetId}.mp3`);
+  const response = await fetch(`https://b.ppy.sh/preview/${beatmapsetId}.mp3`, {
+    signal: AbortSignal.timeout(PREVIEW_AUDIO_FETCH_TIMEOUT_MS),
+  });
   if (!response.ok) {
+    await response.body?.cancel().catch(() => {});
     throw new Error(`Preview audio unavailable (upstream ${response.status})`);
   }
-  const buffer = Buffer.from(await response.arrayBuffer());
+  const buffer = await readCappedResponseBuffer(response, PREVIEW_AUDIO_MAX_BYTES);
   return {
     buffer,
     mimeType: response.headers.get("content-type") ?? "audio/mpeg",
@@ -102,18 +110,50 @@ async function fetchPreviewAudio(beatmapsetId: string): Promise<PreparedBeatmapA
   };
 }
 
-function getPreviewAudio(beatmapsetId: string): Promise<PreparedBeatmapAudio> {
+async function readCappedResponseBuffer(response: Response, limitBytes: number): Promise<Buffer> {
+  const declared = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > limitBytes) {
+    await response.body?.cancel().catch(() => {});
+    throw new Error(`Preview audio is too large (${declared} bytes)`);
+  }
+  if (!response.body) return Buffer.alloc(0);
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    total += value.byteLength;
+    if (total > limitBytes) {
+      await reader.cancel().catch(() => {});
+      throw new Error(`Preview audio is too large (>${limitBytes} bytes)`);
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks, total);
+}
+
+function getPreviewAudio(config: Config, beatmapsetId: string): Promise<PreparedBeatmapAudio> {
+  const now = Date.now();
+  const maxEntries = config.previewAudioCacheMaxEntries ?? DEFAULT_PREVIEW_AUDIO_CACHE_MAX_ENTRIES;
   const cached = previewAudioCache.get(beatmapsetId);
-  if (cached) {
-    cached.lastAccessedAt = Date.now();
+  if (cached && now - cached.cachedAt < PREVIEW_AUDIO_CACHE_TTL_MS) {
+    cached.lastAccessedAt = now;
     return cached.promise;
   }
   const promise = fetchPreviewAudio(beatmapsetId);
-  previewAudioCache.set(beatmapsetId, { lastAccessedAt: Date.now(), promise });
+  previewAudioCache.set(beatmapsetId, { cachedAt: now, lastAccessedAt: now, promise });
   promise.catch(() => {
     previewAudioCache.delete(beatmapsetId);
   });
-  while (previewAudioCache.size > PREVIEW_AUDIO_CACHE_MAX_ENTRIES) {
+  for (const [key, entry] of previewAudioCache) {
+    if (key !== beatmapsetId && now - entry.cachedAt >= PREVIEW_AUDIO_CACHE_TTL_MS) {
+      previewAudioCache.delete(key);
+    }
+  }
+  while (previewAudioCache.size > maxEntries) {
     let oldestKey: string | null = null;
     let oldestAccess = Infinity;
     for (const [key, entry] of previewAudioCache) {
@@ -150,7 +190,7 @@ export async function handlePreviewAudioRequest(
 
   let audio: PreparedBeatmapAudio;
   try {
-    audio = await getPreviewAudio(beatmapsetId);
+    audio = await getPreviewAudio(config, beatmapsetId);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown preview audio error";
     sendAudioText(req, res, config, 404, message);
