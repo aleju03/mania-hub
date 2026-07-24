@@ -1,4 +1,3 @@
-import sharp from "sharp";
 import type { Db } from "../db.js";
 import { exec } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
@@ -23,6 +22,22 @@ const AVATAR_ACCENT_MAX_URL_LENGTH = 512;
 const AVATAR_ACCENT_ERROR_RETRY_MS = 24 * 60 * 60 * 1000;
 const ENRICH_READ_BATCH = 100;
 const ENRICH_MAX_URLS = 2_000;
+
+// Lazy: sharp links libvips, which costs tens of MiB of RSS the moment the
+// module loads. Only the worker's avatar-accents lane ever needs it, so neither
+// process pays for it at boot.
+let sharpPromise: Promise<typeof import("sharp")["default"]> | null = null;
+
+function loadSharp(): Promise<typeof import("sharp")["default"]> {
+  sharpPromise ??= import("sharp").then((mod) => {
+    // One-time libvips tuning for the 2-vCPU host: 24x24 accent thumbnails need
+    // neither a large operation cache nor a thread per core.
+    mod.default.cache({ memory: 16, files: 0, items: 100 });
+    mod.default.concurrency(1);
+    return mod.default;
+  });
+  return sharpPromise;
+}
 
 interface RgbColor {
   r: number;
@@ -312,6 +327,7 @@ export async function extractAvatarAccent(url: string): Promise<string | null> {
     }
 
     const buffer = await readImageBufferWithLimit(response, AVATAR_MAX_IMAGE_BYTES);
+    const sharp = await loadSharp();
     const { data, info } = await sharp(buffer, { animated: false })
       .resize(24, 24, { fit: "fill" })
       .removeAlpha()

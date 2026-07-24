@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { loadS3Module, type S3Module } from "../shared/lazy-s3.js";
 import type { Config } from "../config.js";
 
 const REPLAY_CACHE_BUCKET = "mania-hub-replay-cache";
@@ -23,11 +23,12 @@ export function getReplayVideoStorageKey(id: string, filename: string): string {
 }
 
 export async function uploadReplayVideo(config: Config, id: string, filename: string, mimeType: string, buffer: Buffer): Promise<UploadedReplayVideo> {
-  const client = getClient(config);
+  const s3 = await loadS3Module();
+  const client = getClient(s3, config);
   const storageKey = getReplayVideoStorageKey(id, filename);
   const safeMimeType = mimeType === "video/mp4" || mimeType === "video/webm" ? mimeType : "video/mp4";
 
-  await client.send(new PutObjectCommand({
+  await client.send(new s3.PutObjectCommand({
     Bucket: requireBucket(config),
     Key: storageKey,
     Body: buffer,
@@ -56,10 +57,10 @@ function getReplayVideoAppUrl(config: Config, id: string, filename: string): str
   ).toString();
 }
 
-function getClient(config: Config): S3Client {
+function getClient(s3: S3Module, config: Config): InstanceType<S3Module["S3Client"]> {
   if (!isReplayVideoStorageConfigured(config)) throw new Error("R2 replay video storage is not configured");
   requireBucket(config);
-  return new S3Client({
+  return new s3.S3Client({
     region: "auto",
     endpoint: config.r2Endpoint,
     forcePathStyle: true,

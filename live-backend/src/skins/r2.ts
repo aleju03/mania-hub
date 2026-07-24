@@ -1,5 +1,5 @@
 import type { Readable } from "node:stream";
-import { DeleteObjectsCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { loadS3Module, type S3Module } from "../shared/lazy-s3.js";
 import type { Config } from "../config.js";
 
 const REPLAY_CACHE_BUCKET = "mania-hub-replay-cache";
@@ -60,9 +60,10 @@ export async function uploadSkinObject(
   contentType: string,
   disposition: "attachment" | "inline",
 ): Promise<UploadedSkinObject> {
-  const client = getClient(config);
+  const s3 = await loadS3Module();
+  const client = getClient(s3, config);
   const filename = key.split("/").pop() ?? "file";
-  await client.send(new PutObjectCommand({
+  await client.send(new s3.PutObjectCommand({
     Bucket: requireBucket(config),
     Key: key,
     Body: buffer,
@@ -91,9 +92,10 @@ function skinObjectUrl(config: SkinStorageConfig & Pick<Config, "livePublicOrigi
 
 export async function getSkinObject(config: SkinStorageConfig, key: string): Promise<SkinObjectStream | null> {
   if (!key.startsWith(SKINS_PREFIX) || !isSkinStorageConfigured(config)) return null;
-  const client = getClient(config);
+  const s3 = await loadS3Module();
+  const client = getClient(s3, config);
   try {
-    const object = await client.send(new GetObjectCommand({
+    const object = await client.send(new s3.GetObjectCommand({
       Bucket: requireBucket(config),
       Key: key,
     }));
@@ -112,17 +114,18 @@ export async function getSkinObject(config: SkinStorageConfig, key: string): Pro
 export async function deleteSkinObjects(config: SkinStorageConfig, keys: string[]): Promise<void> {
   const valid = keys.filter((key) => key.startsWith(SKINS_PREFIX));
   if (valid.length === 0 || !isSkinStorageConfigured(config)) return;
-  const client = getClient(config);
-  await client.send(new DeleteObjectsCommand({
+  const s3 = await loadS3Module();
+  const client = getClient(s3, config);
+  await client.send(new s3.DeleteObjectsCommand({
     Bucket: requireBucket(config),
     Delete: { Objects: valid.map((Key) => ({ Key })), Quiet: true },
   }));
 }
 
-function getClient(config: SkinStorageConfig): S3Client {
+function getClient(s3: S3Module, config: SkinStorageConfig): InstanceType<S3Module["S3Client"]> {
   if (!isSkinStorageConfigured(config)) throw new Error("R2 skin storage is not configured");
   requireBucket(config);
-  return new S3Client({
+  return new s3.S3Client({
     region: "auto",
     endpoint: config.r2Endpoint,
     forcePathStyle: true,

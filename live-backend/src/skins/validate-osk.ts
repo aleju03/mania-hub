@@ -1,5 +1,8 @@
 import crypto from "node:crypto";
-import JSZip from "jszip";
+// Type-only: jszip's runtime is loaded on demand inside validateOskBuffer so
+// .osk uploads (a rare admin-ish action) don't put the library in the boot
+// module graph of the serving process.
+import type JSZip from "jszip";
 
 // skin.ini discovery and parsing are a port of src/lib/replay-skin-import.ts
 // (readSkinIni / parseSkinIni) so uploads validate against the same rules the
@@ -27,9 +30,12 @@ export async function validateOskBuffer(buffer: Buffer): Promise<OskValidation> 
     return { ok: false, error: "not_a_zip" };
   }
 
+  // Outside the try: a failed module load is an environment bug that should
+  // surface as an error, not be misreported as a bad upload.
+  const { default: JSZipRuntime } = await import("jszip");
   let zip: JSZip;
   try {
-    zip = await JSZip.loadAsync(buffer);
+    zip = await JSZipRuntime.loadAsync(buffer);
   } catch {
     return { ok: false, error: "zip_unreadable" };
   }

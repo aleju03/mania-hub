@@ -1,11 +1,6 @@
 import crypto from "node:crypto";
-import {
-  GetObjectCommand,
-  type GetObjectCommandOutput,
-  HeadObjectCommand,
-  PutObjectCommand,
-  S3Client,
-} from "@aws-sdk/client-s3";
+import type { GetObjectCommandOutput, S3Client } from "@aws-sdk/client-s3";
+import { loadS3Module, type S3Module } from "../shared/lazy-s3.js";
 import type { Config } from "../config.js";
 
 const REPLAY_CACHE_BUCKET = "mania-hub-replay-cache";
@@ -35,12 +30,13 @@ export async function getCachedBeatmapAudioAsset(
   filename: string,
 ): Promise<BeatmapAudioAsset | null> {
   if (!isBeatmapAudioStorageConfigured(config)) return null;
-  const client = getClient(config);
+  const s3 = await loadS3Module();
+  const client = getClient(s3, config);
   const storageKey = getBeatmapAudioStorageKey(beatmapsetId, filename);
   assertReplayCacheKey(storageKey);
 
   try {
-    const head = await client.send(new HeadObjectCommand({
+    const head = await client.send(new s3.HeadObjectCommand({
       Bucket: requireBucket(config),
       Key: storageKey,
     }));
@@ -61,12 +57,13 @@ export async function readCachedBeatmapAudioAsset(
   filename: string,
 ): Promise<BeatmapAudioObject | null> {
   if (!isBeatmapAudioStorageConfigured(config)) return null;
-  const client = getClient(config);
+  const s3 = await loadS3Module();
+  const client = getClient(s3, config);
   const storageKey = getBeatmapAudioStorageKey(beatmapsetId, filename);
   assertReplayCacheKey(storageKey);
 
   try {
-    const object = await client.send(new GetObjectCommand({
+    const object = await client.send(new s3.GetObjectCommand({
       Bucket: requireBucket(config),
       Key: storageKey,
     }));
@@ -91,11 +88,12 @@ export async function uploadBeatmapAudioAsset(
   mimeType: string,
   buffer: Buffer,
 ): Promise<BeatmapAudioAsset> {
-  const client = getClient(config);
+  const s3 = await loadS3Module();
+  const client = getClient(s3, config);
   const storageKey = getBeatmapAudioStorageKey(beatmapsetId, filename);
   assertReplayCacheKey(storageKey);
 
-  await client.send(new PutObjectCommand({
+  await client.send(new s3.PutObjectCommand({
     Bucket: requireBucket(config),
     Key: storageKey,
     Body: buffer,
@@ -112,7 +110,7 @@ export async function uploadBeatmapAudioAsset(
   };
 }
 
-function getClient(config: Config): S3Client {
+function getClient(s3: S3Module, config: Config): S3Client {
   if (!isBeatmapAudioStorageConfigured(config)) throw new Error("R2 beatmap audio storage is not configured");
   requireBucket(config);
   const clientKey = [
@@ -123,7 +121,7 @@ function getClient(config: Config): S3Client {
   ].join("\0");
   if (cachedClient && cachedClientKey === clientKey) return cachedClient;
   cachedClientKey = clientKey;
-  cachedClient = new S3Client({
+  cachedClient = new s3.S3Client({
     region: "auto",
     endpoint: config.r2Endpoint,
     forcePathStyle: true,

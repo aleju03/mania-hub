@@ -1,4 +1,6 @@
-import sanitizeHtml from "sanitize-html";
+// Type-only: sanitize-html (and its htmlparser2/postcss graph) loads on demand
+// inside sanitizeProfilePageHtml — only About-page fetches need it, not boot.
+import type sanitizeHtml from "sanitize-html";
 import type { Db } from "../db.js";
 import { exec, json, parseJson, writeVariantPps } from "../db.js";
 import { errorContext, logWarn } from "../logger.js";
@@ -235,7 +237,7 @@ export async function getPlayerAbout(
   return getProfileSection(db, "about", userId, async () => {
     const user = await osu.getUser(userId, "api:profile_about");
     const page = readRecord(user.page);
-    const html = typeof page?.html === "string" ? sanitizeProfilePageHtml(page.html) : null;
+    const html = typeof page?.html === "string" ? await sanitizeProfilePageHtml(page.html) : null;
     const raw = typeof page?.raw === "string" ? page.raw : null;
     return { html, raw };
   });
@@ -869,9 +871,10 @@ function calculateProjectedUserPp(basePp: number | null, rawScores: OscScore[], 
   return Math.max(0, basePp + projectedWeighted - rawWeighted);
 }
 
-function sanitizeProfilePageHtml(html: string | null | undefined): string | null {
+async function sanitizeProfilePageHtml(html: string | null | undefined): Promise<string | null> {
   if (!html) return null;
-  const cleaned = sanitizeHtml(html, PROFILE_PAGE_SANITIZE_OPTIONS);
+  const { default: sanitize } = await import("sanitize-html");
+  const cleaned = sanitize(html, PROFILE_PAGE_SANITIZE_OPTIONS);
   return cleaned.trim() || null;
 }
 
