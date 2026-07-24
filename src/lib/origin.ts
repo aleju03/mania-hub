@@ -114,6 +114,32 @@ export function getCanonicalOrigin(request: Request): string {
   return getVercelProductionOrigin() ?? allowedRequestOrigin ?? requestOrigin(request);
 }
 
+/** True only for a request the browser made from our own origin. `same-site`
+    (a sibling subdomain) is rejected too: the callers are same-origin fetches
+    and form submits, so nothing legitimate arrives from anywhere else. */
+export function isSameOriginRequest(request: Request): boolean {
+  const fetchSite = request.headers.get("sec-fetch-site");
+  if (fetchSite) return fetchSite === "same-origin";
+  // Older browsers omit Sec-Fetch-*; fall back to a full Origin/Referer
+  // origin match (scheme included), not just the host.
+  let canonicalOrigin: string;
+  try {
+    canonicalOrigin = new URL(getCanonicalOrigin(request)).origin;
+  } catch {
+    return false;
+  }
+  for (const header of ["origin", "referer"]) {
+    const value = request.headers.get(header);
+    if (!value) continue;
+    try {
+      return new URL(value).origin === canonicalOrigin;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
 export function getAssetOrigin(request: Request): string {
   return (
     getAllowedRequestOrigin(request) ??

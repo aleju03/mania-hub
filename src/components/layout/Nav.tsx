@@ -819,14 +819,19 @@ export function Nav() {
                         <Target className="h-3.5 w-3.5" />
                         Goals
                       </Link>
-                      <a
-                        href={logoutHref}
-                        className="flex items-center gap-2 border-t border-osu-b3/30 px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors"
-                        role="menuitem"
-                      >
-                        <LogOut className="h-3.5 w-3.5" />
-                        Logout
-                      </a>
+                      {/* Logout is a POST (the route rejects GET), so it needs a
+                          form; `contents` keeps the button laid out as if it
+                          were still a direct child of the menu. */}
+                      <form method="post" action={logoutHref} className="contents">
+                        <button
+                          type="submit"
+                          className="flex w-full items-center gap-2 border-t border-osu-b3/30 px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors"
+                          role="menuitem"
+                        >
+                          <LogOut className="h-3.5 w-3.5" />
+                          Logout
+                        </button>
+                      </form>
                     </>
                   ) : (
                     <>
@@ -1069,13 +1074,15 @@ export function Nav() {
                           <Target className="h-3.5 w-3.5 shrink-0 opacity-75" />
                           Goals
                         </Link>
-                        <a
-                          href={logoutHref}
-                          className="flex w-full items-center gap-2.5 border-t border-osu-b3/30 px-3 py-2 text-left text-[11px] font-medium text-osu-l2 transition-colors duration-[80ms] hover:bg-osu-b3/50 hover:text-white"
-                        >
-                          <LogOut className="h-3.5 w-3.5 shrink-0 opacity-75" />
-                          Logout
-                        </a>
+                        <form method="post" action={logoutHref} className="contents">
+                          <button
+                            type="submit"
+                            className="flex w-full items-center gap-2.5 border-t border-osu-b3/30 px-3 py-2 text-left text-[11px] font-medium text-osu-l2 transition-colors duration-[80ms] hover:bg-osu-b3/50 hover:text-white"
+                          >
+                            <LogOut className="h-3.5 w-3.5 shrink-0 opacity-75" />
+                            Logout
+                          </button>
+                        </form>
                       </div>
                     ) : null}
                   </div>

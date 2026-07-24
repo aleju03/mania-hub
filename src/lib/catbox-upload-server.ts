@@ -17,7 +17,7 @@
 import { isLocalDevAccessGranted } from "./auth-local-dev";
 import { readViewerFromRequest } from "./auth-server";
 import { sniffImageMime } from "./image-sniff";
-import { getCanonicalOrigin } from "./origin";
+import { isSameOriginRequest } from "./origin";
 import { createFixedWindowLimiter, readCappedBody } from "./upload-guards";
 import {
   fetchValidatedImage,
@@ -61,32 +61,6 @@ const MIME_EXTENSION: Record<string, string> = {
 function normalizeImageMime(value: string | null): string | null {
   const mime = value?.split(";")[0]?.trim().toLowerCase();
   return mime && ALLOWED_IMAGE_MIME.has(mime) ? mime : null;
-}
-
-/** Only ever called from the editor in a browser, so require a same-origin
-    hit. The editor always fetches its own origin's route, so `same-site`
-    (a sibling subdomain) has no legitimate caller and is rejected. */
-function isSameOriginRequest(request: Request): boolean {
-  const fetchSite = request.headers.get("sec-fetch-site");
-  if (fetchSite) return fetchSite === "same-origin";
-  // Older browsers omit Sec-Fetch-*; fall back to a full Origin/Referer
-  // origin match (scheme included), not just the host.
-  let canonicalOrigin: string;
-  try {
-    canonicalOrigin = new URL(getCanonicalOrigin(request)).origin;
-  } catch {
-    return false;
-  }
-  for (const header of ["origin", "referer"]) {
-    const value = request.headers.get(header);
-    if (!value) continue;
-    try {
-      return new URL(value).origin === canonicalOrigin;
-    } catch {
-      return false;
-    }
-  }
-  return false;
 }
 
 /** Rate-limit key for an authorized request, or null when unauthenticated. */

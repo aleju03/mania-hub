@@ -1,33 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { handleAuthLogoutGet, handleAuthLogoutPost } from "#/lib/auth-logout-server";
 
-function appendCookies(response: Response, cookies: string[]): Response {
-  for (const cookie of cookies) response.headers.append("Set-Cookie", cookie);
-  return response;
-}
-
-function redirectResponse(url: string | URL): Response {
-  return new Response(null, {
-    status: 302,
-    headers: { Location: url.toString() },
-  });
-}
-
+// Thin wrapper: handler logic lives in src/lib/auth-logout-server.ts so it is
+// testable with plain Request objects. Logout is POST-only and same-origin
+// checked; the reasoning is documented there.
 export const Route = createFileRoute("/api/auth/logout")({
   server: {
     handlers: {
-      GET: async ({ request }) => {
-        const {
-          clearAuthCookieHeader,
-          clearOAuthStateCookieHeader,
-          normalizeAuthNext,
-        } = await import("#/lib/auth-server");
-        const url = new URL(request.url);
-        const next = normalizeAuthNext(url.searchParams.get("next"), request);
-        return appendCookies(redirectResponse(new URL(next, request.url)), [
-          clearAuthCookieHeader(request),
-          clearOAuthStateCookieHeader(request),
-        ]);
-      },
+      POST: async ({ request }) => handleAuthLogoutPost(request),
+      GET: async () => handleAuthLogoutGet(),
     },
   },
 });
