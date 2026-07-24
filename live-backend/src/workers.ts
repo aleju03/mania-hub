@@ -897,13 +897,14 @@ export class WorkerRunner {
   }
 }
 
-// A refresh_country_maps job that keeps failing this many times with a terminal
-// error is poisoned, not unlucky: the country has no rankable roster at all, or
-// its roster users have no farmed/most-played/favourite data. The generic
-// backoff pins such a job at a 60-minute retry forever, and because
-// refresh_country_maps has a reserved lane of exactly one
-// (RESERVED_LANE_TYPES in jobs/queue.ts), a permanently runnable dead country
-// occupies that single slot and pushes real countries into deferred_pressure.
+// A refresh_country_maps job that keeps failing this many times with an empty
+// result is poisoned, not unlucky: its roster users have no
+// farmed/most-played/favourite data at all. Each of those retries re-runs the
+// whole roster sweep — three osu! API calls per tracked user — and the generic
+// backoff pins the job at a 60-minute retry forever, so a dead country burns
+// that sweep every hour and keeps the reserved refresh_country_maps lane
+// (RESERVED_LANE_TYPES in jobs/queue.ts, a single slot) busy against real
+// countries.
 //
 // Parking it a day out fixes that without pretending the refresh succeeded: a
 // completed job would drop out of hasActiveMapsRefresh and let every page view
@@ -917,13 +918,22 @@ const POISONED_MAPS_REFRESH_ATTEMPTS = 6;
 const POISONED_MAPS_REFRESH_PARK_MS = 24 * 60 * 60_000;
 
 // Terminal for this country regardless of when we retry. Matching on the error
-// classes rather than on the job type alone matters: per-user osu! failures are
+// class rather than on the job type alone matters: per-user osu! failures are
 // swallowed inside the refresh, but a rate limit or a 5xx is rethrown, and a
 // multi-hour osu! outage must not park every country for a day.
+//
+// MapsRosterNotReadyError is deliberately not parked. It is raised before any
+// osu! call, by a single roster query, so retrying it costs nothing — and it
+// says nothing about the country's own data: a country activated while
+// refresh_country_roster is failing (osu! outage, sustained 429s) raises it
+// until the roster lands. Parking that would leave /maps showing the pending
+// state for up to a day after osu! recovers, because the parked job still
+// counts as an active refresh and nothing re-enqueues it. The bounded backoff
+// retries it hourly instead and picks the country up as soon as it can.
 function isPoisonedMapsRefresh(type: string, nextAttempt: number, error: unknown): boolean {
   if (type !== "refresh_country_maps") return false;
   if (nextAttempt < POISONED_MAPS_REFRESH_ATTEMPTS) return false;
-  return error instanceof MapsEmptyResultError || error instanceof MapsRosterNotReadyError;
+  return error instanceof MapsEmptyResultError;
 }
 
 function getRetryDelayMs(type: string, attempts: number, error: unknown): number {

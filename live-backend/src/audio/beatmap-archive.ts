@@ -765,32 +765,82 @@ function isLikelyZip(buffer: ArrayBuffer): boolean {
 // download instead of each pulling its own copy.
 const MAX_CONCURRENT_FULL_ARCHIVES = 2;
 const MAX_FULL_ARCHIVE_ATTEMPTS = 2;
+// The queue in front of those two slots is the part a public endpoint can abuse:
+// /api/audio and /api/hitsounds admit far more requests per minute than two
+// slots can drain (one sweep costs up to a mirror timeout per mirror, and the
+// per-mirror spacing serializes it further), and a waiter that has been queued
+// for a whole sweep has no client left listening. So the queue gets a hard
+// ceiling and sheds on arrival — the same shape as the total SSE connection cap
+// — and every waiter it does accept expires on its own.
+const MAX_FULL_ARCHIVE_WAITERS = 8;
+const FULL_ARCHIVE_QUEUE_TIMEOUT_MS = ARCHIVE_SOURCES.length * ARCHIVE_FETCH_TIMEOUT_MS;
 
 type FullArchive = {
   buffer: ArrayBuffer;
   source: ArchiveSourceName;
 };
 
+// A waiter needs an identity so the queue can drop it again: a bare resolve
+// cannot be found in the array once its deadline passes.
+type FullArchiveWaiter = {
+  resolve: () => void;
+  reject: (error: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+};
+
 let activeFullArchives = 0;
-const fullArchiveWaiters: Array<() => void> = [];
+const fullArchiveWaiters: FullArchiveWaiter[] = [];
 const fullArchiveDownloads = new Map<string, Promise<FullArchive>>();
 
-async function withFullArchiveSlot<T>(task: () => Promise<T>): Promise<T> {
-  if (activeFullArchives >= MAX_CONCURRENT_FULL_ARCHIVES) {
-    // The slot is handed straight to the next waiter on release, so the counter
-    // never drops below the number of downloads actually running.
-    await new Promise<void>((resolve) => {
-      fullArchiveWaiters.push(resolve);
-    });
-  } else {
+function removeFullArchiveWaiter(waiter: FullArchiveWaiter): boolean {
+  const index = fullArchiveWaiters.indexOf(waiter);
+  if (index < 0) return false;
+  fullArchiveWaiters.splice(index, 1);
+  clearTimeout(waiter.timer);
+  return true;
+}
+
+function acquireFullArchiveSlot(): Promise<void> {
+  if (activeFullArchives < MAX_CONCURRENT_FULL_ARCHIVES) {
     activeFullArchives++;
+    return Promise.resolve();
   }
+  if (fullArchiveWaiters.length >= MAX_FULL_ARCHIVE_WAITERS) {
+    return Promise.reject(new Error("too many archive downloads are queued"));
+  }
+  return new Promise<void>((resolve, reject) => {
+    const waiter: FullArchiveWaiter = {
+      resolve,
+      reject,
+      timer: setTimeout(() => {
+        if (removeFullArchiveWaiter(waiter)) reject(new Error("timed out waiting for an archive download slot"));
+      }, FULL_ARCHIVE_QUEUE_TIMEOUT_MS),
+    };
+    // The deadline alone must not hold the process open.
+    waiter.timer.unref?.();
+    fullArchiveWaiters.push(waiter);
+  });
+}
+
+function releaseFullArchiveSlot(): void {
+  const next = fullArchiveWaiters.shift();
+  if (!next) {
+    activeFullArchives--;
+    return;
+  }
+  // The slot is handed straight to the next waiter, so the counter never drops
+  // below the number of downloads actually running.
+  clearTimeout(next.timer);
+  next.resolve();
+}
+
+async function withFullArchiveSlot<T>(task: () => Promise<T>): Promise<T> {
+  // A rejected acquire never held a slot, so it must not release one either.
+  await acquireFullArchiveSlot();
   try {
     return await task();
   } finally {
-    const next = fullArchiveWaiters.shift();
-    if (next) next();
-    else activeFullArchives--;
+    releaseFullArchiveSlot();
   }
 }
 
@@ -861,6 +911,22 @@ export function __getFullArchiveForTest(beatmapsetId: string, maxArchiveBytes: n
 export function __getFullArchiveStateForTest(): { inFlight: number; active: number; waiting: number } {
   return { inFlight: fullArchiveDownloads.size, active: activeFullArchives, waiting: fullArchiveWaiters.length };
 }
+
+export function __withFullArchiveSlotForTest<T>(task: () => Promise<T>): Promise<T> {
+  return withFullArchiveSlot(task);
+}
+
+export function __resetFullArchiveQueueForTest(): void {
+  for (const waiter of fullArchiveWaiters.splice(0)) clearTimeout(waiter.timer);
+  activeFullArchives = 0;
+  fullArchiveDownloads.clear();
+}
+
+export const __fullArchiveQueueLimitsForTest = {
+  maxConcurrent: MAX_CONCURRENT_FULL_ARCHIVES,
+  maxWaiters: MAX_FULL_ARCHIVE_WAITERS,
+  queueTimeoutMs: FULL_ARCHIVE_QUEUE_TIMEOUT_MS,
+} as const;
 
 async function extractFromFullArchive<T>(
   beatmapsetId: string,

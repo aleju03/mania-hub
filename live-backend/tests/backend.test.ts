@@ -5867,11 +5867,10 @@ describe("live backend", () => {
     expect(new Date(String(job.run_after)).getTime()).toBeGreaterThan(Date.now());
   });
 
-  it("parks a maps refresh for a day once a missing roster has poisoned it", async () => {
+  it("keeps the bounded retry for a maps refresh whose roster has not landed yet", async () => {
     const { db, queue, events, ingestor } = await setup();
     await enqueueMapsRefreshIfDue(db, queue, "AU", 7 * 24 * 60 * 60 * 1000);
-    // Five prior runs already burned the backoff ramp; the sixth is the one that
-    // would otherwise be pinned at a 60-minute retry forever.
+    // Five prior runs already burned the backoff ramp.
     await exec(db, "update jobs set attempts = 5 where type = 'refresh_country_maps' and dedupe_key = 'maps:AU'");
     const worker = new WorkerRunner(db, queue, events, {} as never, ingestor, "test-worker");
 
@@ -5883,7 +5882,13 @@ describe("live backend", () => {
     // refresh_country_maps reserved lane is free for real countries.
     expect(job).toMatchObject({ status: "queued", last_error: null });
     expect(Number(job.attempts)).toBe(6);
-    expect(new Date(String(job.run_after)).getTime() - Date.now()).toBeGreaterThan(20 * 60 * 60_000);
+    // A roster that has not been built yet is not a property of the country: an
+    // osu! outage can hold refresh_country_roster off for hours, and parking
+    // this job would keep /maps pending for a day after osu! recovers. The
+    // retry stays hourly, and it costs one roster query.
+    const retryDelayMs = new Date(String(job.run_after)).getTime() - Date.now();
+    expect(retryDelayMs).toBeGreaterThan(0);
+    expect(retryDelayMs).toBeLessThanOrEqual(60 * 60_000);
   });
 
   it("parks a maps refresh for a day once its roster users keep producing no usable data", async () => {

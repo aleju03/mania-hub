@@ -412,8 +412,27 @@ describe("getMapsRandomDraw", () => {
   });
 
   it("clamps the batch size to what the set hydrator can serve", async () => {
-    const snapshot = await draw("GLOBAL", { count: 500 });
-    expect(snapshot.value?.picks.length).toBeLessThanOrEqual(24);
+    // The fixture pool is smaller than the clamp, so grow it well past 24 pairs
+    // — all on one renderable set, so the count clamp is what bounds the batch
+    // rather than the hydrator's own 24-distinct-sets cap.
+    for (let index = 0; index < 40; index += 1) {
+      const userId = 500 + index;
+      await seedUser(userId, `Extra ${index}`);
+      await seedRoster("CR", userId, 100 + index, 1);
+      await seedFavourite("CR", userId, RANKED_SET);
+    }
+
+    // 108 is hidden so the one unrenderable pair cannot land in the batch and
+    // make the drawn count ambiguous.
+    const snapshot = await draw("CR", { count: 500, hideUsers: [108] });
+    expect(snapshot.value?.totalPicks).toBe(45);
+    expect(snapshot.value?.picks.length).toBe(24);
+    // Every clamped row is a distinct pair, so the batch is 24 real picks
+    // rather than 24 rows that collapsed on hydration.
+    expect(new Set(pairsOf(snapshot.value).map((pair) => pair.join(":"))).size).toBe(24);
+    // Far fewer than 24 distinct sets are in play, so the count clamp — not the
+    // hydrator's own id cap — is what stopped the batch at 24.
+    expect(new Set((snapshot.value?.picks ?? []).map((pick) => pick.beatmapset.id)).size).toBeLessThanOrEqual(4);
   });
 
   it("reports a null value and queues a build for a country with no snapshot", async () => {
