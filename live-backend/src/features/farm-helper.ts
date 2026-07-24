@@ -1,6 +1,6 @@
 import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
-import { getPlayerProfileSnapshot } from "./player-profiles.js";
+import { getPlayerProfileSnapshot, PROFILE_BEST_SCORES_LIMIT } from "./player-profiles.js";
 import { calculateWeightedPpTotal, extractManiaVariantPps, getModAcronyms, getScoreSpeedBucket, nowIso, type ScoreSpeedBucket } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
@@ -464,6 +464,10 @@ interface PreparedSubject {
   // overall list: a 7K main's feasible 4K plays land far past the overall
   // top-plays cutoff (gain ~0, every rec dropped), but they still move the
   // player's 4K variant pp, which is what a "4k"-scoped run is about.
+  // Calibrated against the official variant pp (see padModeBaseline): the
+  // best-scores window only shows a minority keymode's top plays, and gains
+  // measured against that truncated list ignore the hidden tail a new play
+  // would displace, overstating them severalfold.
   modeBaselines: Record<ConcreteFarmHelperKeyMode, { entries: Array<{ pp: number; beatmapId: number }>; total: number }>;
   subjectTopPp: number;
   subjectModeStatsByKey: Record<ConcreteFarmHelperKeyMode, ReturnType<typeof calculateSubjectKeyModeStats>>;
@@ -490,7 +494,7 @@ interface FitBand {
 async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Promise<FarmHelperSnapshot> {
   const isPopular = ctx.view === "popular";
   const generatedAt = nowIso();
-  const subject = prepareSubject(bestScores);
+  const subject = prepareSubject(bestScores, ctx.subjectVariantPps);
   const keyMode = ctx.requestedKeyMode;
 
   // "any" runs the concrete 4k and 7k pipelines separately (each with its own
@@ -583,9 +587,17 @@ async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Pro
 
   await hydrateTopPeers(db, top);
 
+  // The headline total simulates farming everything shown at once against the
+  // same baseline the per-rec gains used, so it can never exceed what the list
+  // is collectively worth (a naive sum of per-rec gains explodes on short
+  // variant baselines: every rec claims the same top slots).
+  const totalBaseline = base.gainBasis === "keymode" && keyMode !== "any"
+    ? subject.modeBaselines[keyMode]
+    : { entries: subject.baselineEntries, total: subject.baselineTotal };
+
   return {
     ...base,
-    totalPotentialPp: round2(top.reduce((sum, rec) => sum + rec.estimatedPpGain, 0)),
+    totalPotentialPp: round2(estimateCombinedGain(totalBaseline.entries, totalBaseline.total, top)),
     totalQualifying: ranked.length,
     recs: top,
   };
@@ -593,7 +605,10 @@ async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Pro
 
 // Everything before cohort selection: subject top plays, baseline, per-keymode
 // stats. Shared by every run in a request.
-function prepareSubject(bestScores: OscScore[]): PreparedSubject {
+function prepareSubject(
+  bestScores: OscScore[],
+  variantPps: Partial<Record<ConcreteFarmHelperKeyMode, number>>,
+): PreparedSubject {
   const subjectByBeatmap = new Map<string, SubjectMapScore>();
   const baselineEntries: Array<{ pp: number; beatmapId: number }> = [];
   const modeEntries: Record<ConcreteFarmHelperKeyMode, Array<{ pp: number; beatmapId: number }>> = { "4k": [], "7k": [] };
@@ -622,9 +637,17 @@ function prepareSubject(bestScores: OscScore[]): PreparedSubject {
   });
 
   const baselineTotal = calculateWeightedPpTotal(baselineEntries);
+  // A keymode's visible plays can only be truncated from below when the overall
+  // window itself is full: every keymode play above the window cutoff is in the
+  // window, so the visible entries are always the exact top of that keymode's
+  // list. An unfilled window means the list is already complete.
+  const windowFull = bestScores.length >= PROFILE_BEST_SCORES_LIMIT;
+  const hiddenCapPp = windowFull && rankedScores.length > 0
+    ? (rankedScores[rankedScores.length - 1].pp as number)
+    : null;
   const modeBaselines = {
-    "4k": { entries: modeEntries["4k"], total: calculateWeightedPpTotal(modeEntries["4k"]) },
-    "7k": { entries: modeEntries["7k"], total: calculateWeightedPpTotal(modeEntries["7k"]) },
+    "4k": padModeBaseline(modeEntries["4k"], variantPps["4k"], hiddenCapPp),
+    "7k": padModeBaseline(modeEntries["7k"], variantPps["7k"], hiddenCapPp),
   } satisfies PreparedSubject["modeBaselines"];
   const subjectModeStatsByKey = {
     "4k": calculateSubjectKeyModeStats(rankedScores, "4k"),
@@ -1733,6 +1756,44 @@ async function selectByIds(db: Db, sqlPrefix: string, values: number[]): Promise
   return rows;
 }
 
+// Synthetic hidden-tail entries carry this beatmapId so no candidate map's
+// estimateGain filter (positive ids) can ever remove them.
+const HIDDEN_TAIL_BEATMAP_ID = -1;
+
+// Calibrate a keymode baseline against the official variant pp. The visible
+// entries are the exact top of the keymode's true list (the overall window
+// truncates from below), so the hidden tail's weighted mass is simply
+// variantPp minus the visible mass. The weighted-gain formula only depends on
+// hidden plays through that mass, so synthetic entries reproducing it make the
+// gain of any benchmark landing at or above the visible floor exact. Entries
+// are packed at hiddenCapPp (the overall window cutoff, an upper bound on
+// every hidden play), which places the mass as high as possible: benchmarks
+// landing inside the tail sort below it, keeping their estimates conservative.
+// Also conservative: the variant's bonus pp (up to ~417, not displaceable and
+// not separable without the variant play count) stays folded into the tail,
+// and mass that cannot fit in the 100 weighted slots is dropped since entries
+// past #100 never displace anything.
+function padModeBaseline(
+  entries: Array<{ pp: number; beatmapId: number }>,
+  variantPp: number | null | undefined,
+  hiddenCapPp: number | null,
+): { entries: Array<{ pp: number; beatmapId: number }>; total: number } {
+  const visibleTotal = calculateWeightedPpTotal(entries);
+  if (variantPp == null || !(variantPp > 0) || hiddenCapPp == null || !(hiddenCapPp > 0)) {
+    return { entries, total: visibleTotal };
+  }
+  let remaining = variantPp - visibleTotal;
+  if (remaining <= 0) return { entries, total: visibleTotal };
+  const padded = [...entries];
+  for (let position = padded.length; position < 100 && remaining > 1; position += 1) {
+    const weight = 0.95 ** position;
+    const value = Math.min(hiddenCapPp, remaining / weight);
+    padded.push({ pp: value, beatmapId: HIDDEN_TAIL_BEATMAP_ID });
+    remaining -= value * weight;
+  }
+  return { entries: padded, total: calculateWeightedPpTotal(padded) };
+}
+
 function estimateGain(
   baselineEntries: Array<{ pp: number; beatmapId: number }>,
   baselineTotal: number,
@@ -1741,6 +1802,26 @@ function estimateGain(
 ): number {
   const hypothetical: Array<{ pp: number }> = baselineEntries.filter((entry) => entry.beatmapId !== beatmapId);
   hypothetical.push({ pp: benchmark });
+  return Math.max(0, calculateWeightedPpTotal(hypothetical) - baselineTotal);
+}
+
+// "If you got ALL of these at their benchmarks": one simulation inserting every
+// rec's benchmark at once, instead of summing per-rec gains that each pretend
+// to be the only new play (those double-count massively on short baselines).
+// One score per map counts, so a map recommended in two speed lanes contributes
+// its best benchmark once.
+function estimateCombinedGain(
+  baselineEntries: Array<{ pp: number; beatmapId: number }>,
+  baselineTotal: number,
+  recs: Array<{ beatmapId: number; benchmarkPp: number }>,
+): number {
+  if (recs.length === 0) return 0;
+  const benchByMap = new Map<number, number>();
+  for (const rec of recs) {
+    benchByMap.set(rec.beatmapId, Math.max(rec.benchmarkPp, benchByMap.get(rec.beatmapId) ?? 0));
+  }
+  const hypothetical: Array<{ pp: number }> = baselineEntries.filter((entry) => !benchByMap.has(entry.beatmapId));
+  for (const benchmark of benchByMap.values()) hypothetical.push({ pp: benchmark });
   return Math.max(0, calculateWeightedPpTotal(hypothetical) - baselineTotal);
 }
 

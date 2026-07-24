@@ -254,6 +254,20 @@ function expectedGain(bestScores: OscScore[], beatmapId: number, benchmark: numb
   return Math.max(0, calculateWeightedPpTotal(hypothetical) - baseTotal);
 }
 
+// Mirrors the snapshot's headline total: one simulation inserting every rec's
+// benchmark at once (best lane per map), not a sum of independent gains.
+function expectedCombinedGain(bestScores: OscScore[], recs: Array<{ beatmapId: number; benchmarkPp: number }>): number {
+  const baseline = bestScores
+    .filter((s) => typeof s.pp === "number" && (s.pp ?? 0) > 0)
+    .map((s) => ({ pp: s.pp as number, beatmapId: s.beatmap_id ?? 0 }));
+  const baseTotal = calculateWeightedPpTotal(baseline);
+  const benchByMap = new Map<number, number>();
+  for (const rec of recs) benchByMap.set(rec.beatmapId, Math.max(rec.benchmarkPp, benchByMap.get(rec.beatmapId) ?? 0));
+  const hypothetical = baseline.filter((e) => !benchByMap.has(e.beatmapId)).map((e) => ({ pp: e.pp }));
+  for (const benchmark of benchByMap.values()) hypothetical.push({ pp: benchmark });
+  return Math.max(0, calculateWeightedPpTotal(hypothetical) - baseTotal);
+}
+
 describe("farm helper", () => {
   it("recommends missing, improve and stale farm maps with sane gains", async () => {
     const bestScores = buildSubjectBestScores();
@@ -292,9 +306,11 @@ describe("farm helper", () => {
       expect(rec.cover).toBe(`cover-${rec.beatmapId}`);
     }
 
-    expect(snapshot.totalPotentialPp).toBeCloseTo(
-      snapshot.recs.reduce((sum, rec) => sum + rec.estimatedPpGain, 0),
-      2,
+    // The headline total is a combined simulation (all benchmarks inserted at
+    // once), so it never exceeds the naive per-rec sum.
+    expect(snapshot.totalPotentialPp).toBeCloseTo(expectedCombinedGain(bestScores, snapshot.recs), 2);
+    expect(snapshot.totalPotentialPp).toBeLessThanOrEqual(
+      snapshot.recs.reduce((sum, rec) => sum + rec.estimatedPpGain, 0) + 0.01,
     );
 
     expect(missing?.topPeers.length).toBeGreaterThan(0);
@@ -1498,5 +1514,85 @@ describe("farm helper", () => {
     const any = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "any" });
     expect(any.gainBasis).toBe("overall");
     expect(any.recs.some((candidate) => candidate.beatmapId === fourkTarget)).toBe(false);
+  });
+
+  it("calibrates a truncated keymode baseline to the official variant pp (full window)", async () => {
+    const recent = nowIso();
+    const targetA = 9600;
+    const targetB = 9601;
+    const subj4k = Array.from({ length: 9 }, (_, i) => 9610 + i);
+    // Full 200-score window: 191 7K plays crowd out everything 4K below 470,
+    // so only the true top nine 4K plays are visible (~3.6k weighted) while the
+    // official pp_4k says the full list weighs 8,000. Gains must be measured
+    // against the calibrated 8k baseline, not the visible stub.
+    const bestScores: OscScore[] = [
+      ...Array.from({ length: 191 }, (_, i) => subjectScore(20_000 + i, 900 - i * 2, recent, 7, 8)),
+      ...subj4k.map((beatmapId, i) => subjectScore(beatmapId, 510 - i * 5, recent, 4, 5)),
+    ];
+    expect(bestScores.length).toBe(200);
+    await insertBeatmapMeta(targetA, 4, 5);
+    await insertBeatmapMeta(targetB, 4, 5);
+    for (const beatmapId of subj4k) await insertBeatmapMeta(beatmapId, 4, 5);
+    for (let i = 0; i < 12; i += 1) {
+      const id = 9650 + i;
+      await insertUser(id, 8_100, "CR", `CalPeer${i}`);
+      await insertFarmed("CR", id, targetA, 560, recent);
+      await insertFarmed("CR", id, targetB, 555, recent);
+      for (const beatmapId of subj4k) await insertFarmed("CR", id, beatmapId, 470, recent);
+    }
+
+    const variant4kPp = 8_000;
+    const osu = makeOsuStub(bestScores, 16_400, { "4k": variant4kPp, "7k": 16_000 });
+    const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" });
+    const recA = snapshot.recs.find((rec) => rec.beatmapId === targetA);
+    const recB = snapshot.recs.find((rec) => rec.beatmapId === targetB);
+    expect(recA?.reason).toBe("missing");
+    expect(recB?.reason).toBe("missing");
+
+    // Both benchmarks top the visible 4K plays, so the gain is exact:
+    // benchmark minus 5% of the full variant-pp mass it displaces. Against the
+    // visible-only baseline these would read ~380, a 2.4x overstatement.
+    expect(recA?.estimatedPpGain).toBeCloseTo(560 - 0.05 * variant4kPp, 0);
+    expect(recB?.estimatedPpGain).toBeCloseTo(555 - 0.05 * variant4kPp, 0);
+
+    // Headline total: one simulation with both benchmarks inserted, strictly
+    // below the sum of the independent per-rec gains.
+    const naiveSum = (recA?.estimatedPpGain ?? 0) + (recB?.estimatedPpGain ?? 0);
+    expect(snapshot.totalPotentialPp).toBeCloseTo(560 + 0.95 * 555 - (1 - 0.95 ** 2) * variant4kPp, 0);
+    expect(snapshot.totalPotentialPp).toBeLessThan(naiveSum);
+  });
+
+  it("recommends a keymode with zero visible plays off the official variant pp alone", async () => {
+    const recent = nowIso();
+    const target = 9700;
+    const supports = Array.from({ length: 9 }, (_, i) => 9710 + i);
+    // The all-7K wall: every one of the 200 windowed plays is 7K, yet osu!
+    // reports pp_4k = 7,000. Every hidden 4K play sits below the window cutoff
+    // (502), so a benchmark above it provably tops the entire 4K list.
+    const bestScores = Array.from({ length: 200 }, (_, i) => subjectScore(20_000 + i, 900 - i * 2, recent, 7, 8));
+    await insertBeatmapMeta(target, 4, 5);
+    for (const beatmapId of supports) await insertBeatmapMeta(beatmapId, 4, 5);
+    for (let i = 0; i < 12; i += 1) {
+      const id = 9750 + i;
+      await insertUser(id, 7_100, "CR", `NoPlayPeer${i}`);
+      await insertFarmed("CR", id, target, 620, recent);
+      for (const beatmapId of supports) await insertFarmed("CR", id, beatmapId, 300, recent);
+    }
+
+    const variant4kPp = 7_000;
+    const osu = makeOsuStub(bestScores, 19_500, { "4k": variant4kPp, "7k": 19_000 });
+    const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" });
+    expect(snapshot.gainBasis).toBe("keymode");
+
+    const rec = snapshot.recs.find((candidate) => candidate.beatmapId === target);
+    expect(rec?.reason).toBe("missing");
+    // 620 beats the 502 cutoff, so it beats every hidden 4K play: exact gain.
+    expect(rec?.estimatedPpGain).toBeCloseTo(620 - 0.05 * variant4kPp, 0);
+
+    // A benchmark below the cutoff cannot be placed, so it sorts below the
+    // synthetic tail: present, but at a conservative fraction of its value.
+    const support = snapshot.recs.find((candidate) => candidate.beatmapId === supports[0]);
+    expect(support?.estimatedPpGain ?? 0).toBeGreaterThan(1);
+    expect(support?.estimatedPpGain ?? 0).toBeLessThan(300 * 0.4);
   });
 });

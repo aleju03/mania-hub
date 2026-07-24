@@ -429,7 +429,7 @@ function FarmHelperPage() {
                               {view === "popular" ? (
                                 <span className="font-normal text-osu-f1"> · what nearby players farm</span>
                               ) : (
-                                <span className="font-normal text-osu-f1"> · {formatGainWithUnit(totalGain(recs), gainUnitLabel(visibleSnapshot))} on the table</span>
+                                <span className="font-normal text-osu-f1"> · {formatGainWithUnit(isClientFiltered ? totalGain(recs) : visibleSnapshot.totalPotentialPp, gainUnitLabel(visibleSnapshot))} on the table</span>
                               )}
                             </>
                           ) : error ? (
