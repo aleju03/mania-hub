@@ -1,0 +1,307 @@
+// Server handlers for /api/replay-upload, kept out of the route file so they
+// can be tested with plain Request objects (no TanStack server context).
+//
+// Policy (findings/README.md Phase 9): uploading a .osr requires a signed-in
+// user; the generated share links stay publicly readable. Uploads are
+// validated as real osu!mania replays before storage — a structural .osr
+// header check first (game mode, bounded strings, and the LZMA blob's declared
+// decompressed size, so a crafted replay cannot expand without limit), then a
+// full decode through the same parser the viewer uses.
+
+import { isLocalDevAccessGranted } from "./auth-local-dev";
+import { readViewerFromRequest } from "./auth-server";
+import { parseUploadedReplayBuffer } from "./replay-upload";
+import {
+  normalizeUploadedReplayId,
+  readUploadedReplay,
+  ReplayStorageUnavailableError,
+  saveUploadedReplay,
+} from "./uploaded-replay-store";
+import { createFixedWindowLimiter, readCappedBody } from "./upload-guards";
+
+export const MAX_UPLOAD_REPLAY_BYTES = 25 * 1024 * 1024;
+
+// Per-user fixed window; the multi-instance total is bounded by the edge/WAF
+// rule tracked in the Phase 9 checklist (same setup as /api/catbox-upload).
+const RATE_WINDOW_MS = 60_000;
+const UPLOAD_RATE_LIMIT_PER_WINDOW = 6;
+const rateLimiter = createFixedWindowLimiter(RATE_WINDOW_MS);
+
+// .osr structural bounds. Strings in a replay header are metadata (hashes,
+// player name, life bar graph); nothing legitimate approaches these caps.
+const MAX_OSR_STRING_BYTES = 4 * 1024 * 1024;
+// The LZMA blob declares its decompressed size up front; frame CSV for even a
+// marathon replay is a few MiB, so 64 MiB rejects only crafted bombs. An
+// "unknown size" marker (all 0xff) is rejected outright — every real encoder
+// (osu! stable, osu-parsers, lzma tooling) writes the explicit size.
+export const MAX_DECOMPRESSED_REPLAY_BYTES = 64 * 1024 * 1024;
+// Belt-and-braces after the full decode; bounded already by the size cap.
+export const MAX_REPLAY_FRAMES = 2_000_000;
+
+const MANIA_RULESET_ID = 3;
+
+export class ReplayValidationError extends Error {
+  constructor(message: string, readonly status: number = 422) {
+    super(message);
+  }
+}
+
+class OsrReader {
+  private offset = 0;
+  constructor(private readonly buffer: Buffer) {}
+
+  byte(): number {
+    if (this.offset + 1 > this.buffer.length) throw new ReplayValidationError("This is not a valid .osr replay file.");
+    return this.buffer[this.offset++];
+  }
+
+  int32(): number {
+    if (this.offset + 4 > this.buffer.length) throw new ReplayValidationError("This is not a valid .osr replay file.");
+    const value = this.buffer.readInt32LE(this.offset);
+    this.offset += 4;
+    return value;
+  }
+
+  uint16(): number {
+    if (this.offset + 2 > this.buffer.length) throw new ReplayValidationError("This is not a valid .osr replay file.");
+    const value = this.buffer.readUInt16LE(this.offset);
+    this.offset += 2;
+    return value;
+  }
+
+  uint64(): bigint {
+    if (this.offset + 8 > this.buffer.length) throw new ReplayValidationError("This is not a valid .osr replay file.");
+    const value = this.buffer.readBigUInt64LE(this.offset);
+    this.offset += 8;
+    return value;
+  }
+
+  /** osu! string: 0x00 (absent) or 0x0b + ULEB128 length + utf8 bytes. */
+  string(): string {
+    const marker = this.byte();
+    if (marker === 0x00) return "";
+    if (marker !== 0x0b) throw new ReplayValidationError("This is not a valid .osr replay file.");
+    let length = 0;
+    let shift = 0;
+    for (;;) {
+      const byte = this.byte();
+      length |= (byte & 0x7f) << shift;
+      if ((byte & 0x80) === 0) break;
+      shift += 7;
+      if (shift > 28 || length > MAX_OSR_STRING_BYTES) {
+        throw new ReplayValidationError("This is not a valid .osr replay file.");
+      }
+    }
+    if (length > MAX_OSR_STRING_BYTES || this.offset + length > this.buffer.length) {
+      throw new ReplayValidationError("This is not a valid .osr replay file.");
+    }
+    const value = this.buffer.toString("utf8", this.offset, this.offset + length);
+    this.offset += length;
+    return value;
+  }
+
+  slice(length: number): Buffer {
+    if (length < 0 || this.offset + length > this.buffer.length) {
+      throw new ReplayValidationError("This is not a valid .osr replay file.");
+    }
+    const value = this.buffer.subarray(this.offset, this.offset + length);
+    this.offset += length;
+    return value;
+  }
+}
+
+export interface OsrStructure {
+  gameMode: number;
+  gameVersion: number;
+  beatmapHash: string;
+  playerName: string;
+  declaredDecompressedBytes: bigint | null;
+}
+
+// Walks the fixed .osr layout up to the LZMA blob without decompressing
+// anything, so the cheap rejections (wrong ruleset, absurd declared sizes)
+// happen before the expensive decode.
+export function readOsrStructure(buffer: Buffer): OsrStructure {
+  const reader = new OsrReader(buffer);
+  const gameMode = reader.byte();
+  const gameVersion = reader.int32();
+  const beatmapHash = reader.string();
+  const playerName = reader.string();
+  reader.string(); // replay hash
+  for (let i = 0; i < 6; i++) reader.uint16(); // 300/100/50/geki/katu/miss
+  reader.int32(); // total score
+  reader.uint16(); // max combo
+  reader.byte(); // perfect
+  reader.int32(); // mods
+  reader.string(); // life bar graph
+  reader.uint64(); // timestamp
+  const replayLength = reader.int32();
+  const lzma = reader.slice(replayLength);
+  // LZMA header: 5 properties bytes + uint64 declared decompressed size.
+  let declaredDecompressedBytes: bigint | null = null;
+  if (lzma.length >= 13) {
+    const declared = lzma.readBigUInt64LE(5);
+    declaredDecompressedBytes = declared === 0xffffffffffffffffn ? null : declared;
+  } else if (replayLength > 0) {
+    throw new ReplayValidationError("This is not a valid .osr replay file.");
+  }
+  return { gameMode, gameVersion, beatmapHash, playerName, declaredDecompressedBytes };
+}
+
+export interface ValidatedReplayUpload {
+  beatmapHash: string;
+  playerName: string;
+  frameCount: number;
+}
+
+export async function validateUploadedReplayOsr(
+  buffer: Buffer,
+  limits: { maxDecompressedBytes?: number; maxFrames?: number } = {},
+): Promise<ValidatedReplayUpload> {
+  const maxDecompressedBytes = limits.maxDecompressedBytes ?? MAX_DECOMPRESSED_REPLAY_BYTES;
+  const maxFrames = limits.maxFrames ?? MAX_REPLAY_FRAMES;
+
+  const structure = readOsrStructure(buffer);
+  if (structure.gameMode !== MANIA_RULESET_ID) {
+    throw new ReplayValidationError("This is not an osu!mania replay.");
+  }
+  if (structure.declaredDecompressedBytes == null) {
+    throw new ReplayValidationError("This replay does not declare its decompressed size.");
+  }
+  if (structure.declaredDecompressedBytes > BigInt(maxDecompressedBytes)) {
+    throw new ReplayValidationError("This replay's input data is too large.", 413);
+  }
+
+  // Full decode through the same parser the viewer uses, so anything accepted
+  // here is something the viewer can actually open (and vice versa).
+  let parsed: Awaited<ReturnType<typeof parseUploadedReplayBuffer>>;
+  try {
+    parsed = await parseUploadedReplayBuffer(
+      buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer,
+    );
+  } catch (error) {
+    throw new ReplayValidationError(
+      error instanceof Error && error.message ? error.message : "This is not a valid .osr replay file.",
+    );
+  }
+  if (parsed.replay.frames.length > maxFrames) {
+    throw new ReplayValidationError("This replay has too many input frames.", 413);
+  }
+  return {
+    beatmapHash: parsed.replay.header.beatmapHash ?? "",
+    playerName: parsed.replay.header.playerName,
+    frameCount: parsed.replay.frames.length,
+  };
+}
+
+/** Rate-limit key for an authorized request, or null when unauthenticated. */
+async function authorizeUploader(request: Request): Promise<string | null> {
+  const viewer = await readViewerFromRequest(request);
+  if (viewer) return `user:${viewer.id}`;
+  let hostname = "";
+  try {
+    hostname = new URL(request.url).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+  const localDev = isLocalDevAccessGranted({
+    nodeEnv: process.env.NODE_ENV,
+    localDevSwitch: process.env.ENABLE_LOCAL_DEV_ADMIN,
+    hostname,
+  });
+  return localDev ? "local-dev" : null;
+}
+
+// The header is client-supplied and URI-encoded; malformed encoding is
+// treated as "no filename", never as a request failure.
+function readUploadFilename(request: Request): string | undefined {
+  const raw = request.headers.get("x-replay-filename");
+  if (!raw) return undefined;
+  try {
+    return decodeURIComponent(raw).trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function getShareUrl(request: Request, id: string): string {
+  const url = new URL(request.url);
+  url.pathname = "/replay";
+  url.search = "";
+  url.searchParams.set("uploadId", id);
+  return url.toString();
+}
+
+export async function handleReplayUploadPost(request: Request): Promise<Response> {
+  const rateKey = await authorizeUploader(request);
+  if (!rateKey) {
+    return Response.json({ error: "Sign in to upload replays." }, { status: 401 });
+  }
+  if (rateLimiter.isRateLimited(`post:${rateKey}`, UPLOAD_RATE_LIMIT_PER_WINDOW)) {
+    return Response.json({ error: "Too many uploads; try again in a minute." }, { status: 429 });
+  }
+
+  const buffer = await readCappedBody(request, MAX_UPLOAD_REPLAY_BYTES);
+  if (!buffer) {
+    return Response.json({ error: "Replay file is too large." }, { status: 413 });
+  }
+  if (buffer.length === 0) {
+    return Response.json({ error: "Replay file is empty." }, { status: 400 });
+  }
+
+  try {
+    await validateUploadedReplayOsr(buffer);
+  } catch (error) {
+    if (error instanceof ReplayValidationError) {
+      return Response.json({ error: error.message }, { status: error.status });
+    }
+    return Response.json({ error: "This is not a valid .osr replay file." }, { status: 422 });
+  }
+
+  const uploaderId = rateKey.startsWith("user:") ? Number(rateKey.slice(5)) : null;
+  try {
+    const saved = await saveUploadedReplay(buffer, {
+      originalFilename: readUploadFilename(request),
+      uploaderId,
+      uploadedAt: new Date().toISOString(),
+    });
+    return Response.json({
+      id: saved.id,
+      url: getShareUrl(request, saved.id),
+      storage: saved.storage,
+    });
+  } catch (error) {
+    if (error instanceof ReplayStorageUnavailableError) {
+      return Response.json({ error: "Replay storage is temporarily unavailable." }, { status: 503 });
+    }
+    const message = error instanceof Error ? error.message : "Failed to save replay upload.";
+    return Response.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function handleReplayUploadGet(request: Request): Promise<Response> {
+  const url = new URL(request.url);
+  const id = normalizeUploadedReplayId(url.searchParams.get("id"));
+  if (!id) {
+    return new Response("Invalid upload id", { status: 400 });
+  }
+
+  const stored = await readUploadedReplay(id);
+  if (!stored) {
+    return new Response("Replay upload not found", { status: 404 });
+  }
+
+  return new Response(stored.buffer as unknown as BodyInit, {
+    status: 200,
+    headers: {
+      "Content-Type": "application/octet-stream",
+      "Content-Length": String(stored.buffer.length),
+      // Direct navigation downloads the file; the viewer's fetch() path reads
+      // the body and never sees the disposition.
+      "Content-Disposition": `attachment; filename="${stored.originalFilename || `${id}.osr`}"`,
+      "X-Content-Type-Options": "nosniff",
+      ...(stored.originalFilename ? { "X-Replay-Filename": encodeURIComponent(stored.originalFilename) } : {}),
+      "Cache-Control": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
+    },
+  });
+}

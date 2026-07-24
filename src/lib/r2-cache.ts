@@ -693,13 +693,20 @@ export async function putReplayVideoAndGetUrl(
   };
 }
 
-export async function putUploadedReplay(id: string, buffer: Buffer, originalFilename?: string): Promise<UploadedReplay | null> {
+export interface UploadedReplayPutMetadata {
+  originalFilename?: string;
+  uploaderId?: number | null;
+  uploadedAt?: string;
+}
+
+export async function putUploadedReplay(id: string, buffer: Buffer, metadata: UploadedReplayPutMetadata = {}): Promise<UploadedReplay | null> {
   const r2 = getClient();
   if (!r2) return null;
 
   const storageKey = getUploadedReplayStorageKey(id);
   assertReplayCacheKey(storageKey);
   const mimeType = "application/octet-stream";
+  const { originalFilename, uploaderId, uploadedAt } = metadata;
 
   await r2.send(new PutObjectCommand({
     Bucket: REPLAY_CACHE_BUCKET,
@@ -707,8 +714,12 @@ export async function putUploadedReplay(id: string, buffer: Buffer, originalFile
     Body: buffer,
     ContentType: mimeType,
     CacheControl: "private, max-age=31536000, immutable",
-    ContentDisposition: `inline; filename="${sanitizeFilename(originalFilename || `${id}.osr`)}"`,
-    Metadata: originalFilename ? { originalfilename: sanitizeFilename(originalFilename) } : undefined,
+    ContentDisposition: `attachment; filename="${sanitizeFilename(originalFilename || `${id}.osr`)}"`,
+    Metadata: {
+      ...(originalFilename ? { originalfilename: sanitizeFilename(originalFilename) } : {}),
+      ...(uploaderId != null && Number.isFinite(uploaderId) ? { uploaderid: String(uploaderId) } : {}),
+      uploadedat: uploadedAt ?? new Date().toISOString(),
+    },
   }));
 
   return {

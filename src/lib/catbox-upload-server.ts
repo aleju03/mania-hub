@@ -18,6 +18,7 @@ import { isLocalDevAccessGranted } from "./auth-local-dev";
 import { readViewerFromRequest } from "./auth-server";
 import { sniffImageMime } from "./image-sniff";
 import { getCanonicalOrigin } from "./origin";
+import { createFixedWindowLimiter, readCappedBody } from "./upload-guards";
 import {
   fetchValidatedImage,
   ProxyError,
@@ -106,52 +107,10 @@ async function authorizeViewer(request: Request): Promise<string | null> {
   return localDev ? "local-dev" : null;
 }
 
-interface RateWindow {
-  windowStart: number;
-  count: number;
-}
+const rateLimiter = createFixedWindowLimiter(RATE_WINDOW_MS);
 
-const rateWindows = new Map<string, RateWindow>();
-
-function isRateLimited(key: string, limit: number, now = Date.now()): boolean {
-  const window = rateWindows.get(key);
-  if (!window || now - window.windowStart >= RATE_WINDOW_MS) {
-    if (rateWindows.size > 1000) {
-      for (const [staleKey, stale] of rateWindows) {
-        if (now - stale.windowStart >= RATE_WINDOW_MS) rateWindows.delete(staleKey);
-      }
-    }
-    rateWindows.set(key, { windowStart: now, count: 1 });
-    return false;
-  }
-  window.count += 1;
-  return window.count > limit;
-}
-
-/** Reads a web Response/Request body into a Buffer, aborting past `cap`. */
-async function readCappedBody(body: Request, cap: number): Promise<Buffer | null> {
-  const declared = Number(body.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > cap) return null;
-  const reader = body.body?.getReader();
-  if (!reader) {
-    const buffer = Buffer.from(await body.arrayBuffer());
-    return buffer.length > cap ? null : buffer;
-  }
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (value) {
-      total += value.length;
-      if (total > cap) {
-        await reader.cancel().catch(() => {});
-        return null;
-      }
-      chunks.push(value);
-    }
-  }
-  return Buffer.concat(chunks);
+function isRateLimited(key: string, limit: number): boolean {
+  return rateLimiter.isRateLimited(key, limit);
 }
 
 // Upload raw image bytes to catbox and return the hosted URL.

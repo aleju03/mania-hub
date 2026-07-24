@@ -301,7 +301,7 @@ function UploadReplayBrowser({
         </div>
         <div className="flex items-center gap-2 text-[11px] text-osu-f1">
           <Link2 className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
-          <span>Uploading gives you a share link for the replay.</span>
+          <span>Uploading gives you a share link for the replay. Sign in with osu! to upload.</span>
         </div>
       </div>
     </div>

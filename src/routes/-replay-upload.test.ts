@@ -28,10 +28,13 @@ describe("replay upload mode", () => {
     expect(routeSource).toContain("lookupBeatmapByChecksum({ data: { checksum } })");
     expect(routeSource).toContain("replayMods={uploadedReplayMods}");
     expect(routeSource).toContain("shareUrl={uploadedReplayShareUrl");
+    const uploadServerSource = fs.readFileSync(path.resolve(__dirname, "../lib/replay-upload-server.ts"), "utf8");
     expect(apiSource).toContain('createFileRoute("/api/replay-upload")');
-    expect(apiSource).toContain("saveUploadedReplay(buffer, originalFilename)");
-    expect(apiSource).toContain("readUploadedReplay(id)");
-    expect(apiSource).toContain('"X-Replay-Filename": encodeURIComponent(stored.originalFilename)');
+    expect(apiSource).toContain("handleReplayUploadPost(request)");
+    expect(apiSource).toContain("handleReplayUploadGet(request)");
+    expect(uploadServerSource).toContain("saveUploadedReplay(buffer, {");
+    expect(uploadServerSource).toContain("readUploadedReplay(id)");
+    expect(uploadServerSource).toContain('"X-Replay-Filename": encodeURIComponent(stored.originalFilename)');
     expect(uploadSource).toContain("extractReplayScoreIdFromFilename");
     expect(uploadSource).toContain("scoreId: Number.isSafeInteger(scoreId)");
     expect(uploadSource).toContain('await import("osu-parsers")');

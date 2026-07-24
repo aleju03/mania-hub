@@ -14,6 +14,21 @@ export type StoredUploadedReplay = {
   originalFilename?: string;
 };
 
+export interface UploadedReplayMetadata {
+  originalFilename?: string;
+  uploaderId?: number | null;
+  uploadedAt?: string;
+}
+
+// In production the only durable store is R2 (serverless local disk is
+// ephemeral and per-instance); a missing or failing R2 must surface as a
+// controlled error, never a silent local-disk "success" that loses the file.
+export class ReplayStorageUnavailableError extends Error {
+  constructor(message = "Replay storage is unavailable.") {
+    super(message);
+  }
+}
+
 export function createUploadedReplayId(): string {
   return crypto.randomBytes(15).toString("base64url");
 }
@@ -46,20 +61,44 @@ function normalizeOriginalFilename(filename: string | null | undefined): string 
   return value.replace(/["\r\n]+/g, "_").slice(0, 180);
 }
 
-export async function saveUploadedReplay(buffer: Buffer, originalFilename?: string): Promise<{ id: string; storage: UploadedReplayStorage }> {
+export async function saveUploadedReplay(
+  buffer: Buffer,
+  metadata: UploadedReplayMetadata = {},
+): Promise<{ id: string; storage: UploadedReplayStorage }> {
   const id = createUploadedReplayId();
-  const safeFilename = normalizeOriginalFilename(originalFilename);
+  const safeFilename = normalizeOriginalFilename(metadata.originalFilename);
+  const production = process.env.NODE_ENV === "production";
 
   if (isR2ReplayCacheConfigured()) {
-    const stored = await putUploadedReplay(id, buffer, safeFilename);
-    if (stored) return { id, storage: "r2" };
+    try {
+      const stored = await putUploadedReplay(id, buffer, {
+        originalFilename: safeFilename,
+        uploaderId: metadata.uploaderId ?? null,
+        uploadedAt: metadata.uploadedAt,
+      });
+      if (stored) return { id, storage: "r2" };
+    } catch (error) {
+      if (production) {
+        throw new ReplayStorageUnavailableError(error instanceof Error ? error.message : undefined);
+      }
+      // Development: fall through to local disk.
+    }
+    if (production) throw new ReplayStorageUnavailableError();
+  } else if (production) {
+    throw new ReplayStorageUnavailableError("R2 replay storage is not configured.");
   }
 
   await mkdir(getLocalUploadDir(), { recursive: true });
   await writeFile(getLocalUploadPath(id), buffer);
-  if (safeFilename) {
-    await writeFile(getLocalUploadMetaPath(id), JSON.stringify({ originalFilename: safeFilename }), "utf8");
-  }
+  await writeFile(
+    getLocalUploadMetaPath(id),
+    JSON.stringify({
+      ...(safeFilename ? { originalFilename: safeFilename } : {}),
+      uploaderId: metadata.uploaderId ?? null,
+      uploadedAt: metadata.uploadedAt ?? new Date().toISOString(),
+    }),
+    "utf8",
+  );
   return { id, storage: "local" };
 }
 
