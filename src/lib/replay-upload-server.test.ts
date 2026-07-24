@@ -7,7 +7,10 @@ import { createAuthCookieHeader } from "./auth-server";
 import {
   handleReplayUploadGet,
   handleReplayUploadPost,
+  MAX_DECOMPRESSED_REPLAY_BYTES,
+  MAX_REPLAY_FRAMES,
   MAX_UPLOAD_REPLAY_BYTES,
+  MIN_FRAME_CSV_BYTES,
   readOsrStructure,
   ReplayValidationError,
   validateUploadedReplayOsr,
@@ -159,8 +162,52 @@ describe("replay upload validation", () => {
       .rejects.toThrowError("does not declare its decompressed size");
   });
 
+  it("rejects a sub-KB upload that declares millions of frames", async () => {
+    // Repeated minimal frames compress to almost nothing, so the upload size
+    // says nothing about the work a decode would do — the declared size does.
+    // 16 MiB of 8-byte entries is over two million frame objects, which no
+    // request can afford to allocate.
+    const lzmaBlob = compressFrames("0|256|-500|0,1000|1|0|0");
+    lzmaBlob.writeBigUInt64LE(16n * 1024n * 1024n, 5);
+    const osr = buildOsr({ lzmaBlob });
+    expect(osr.length).toBeLessThan(1024);
+
+    const error = await validateUploadedReplayOsr(osr).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ReplayValidationError);
+    expect((error as ReplayValidationError).status).toBe(413);
+  });
+
+  it("spends the frame budget before decoding, not after", async () => {
+    // The blob only holds two frames but claims 16 MiB. With the byte cap
+    // relaxed, only the declared-size-to-frames budget can reject it — and it
+    // has to do so without handing the lying header to the decoder.
+    const lzmaBlob = compressFrames("0|256|-500|0,1000|1|0|0");
+    lzmaBlob.writeBigUInt64LE(16n * 1024n * 1024n, 5);
+
+    const error = await validateUploadedReplayOsr(buildOsr({ lzmaBlob }), {
+      maxDecompressedBytes: 64 * 1024 * 1024,
+      maxFrames: 1000,
+    }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ReplayValidationError);
+    expect((error as ReplayValidationError).status).toBe(413);
+    expect((error as Error).message).toContain("too many input frames");
+  });
+
+  it("keeps the decompressed byte cap tied to the frame cap", () => {
+    expect(MAX_DECOMPRESSED_REPLAY_BYTES).toBe(MAX_REPLAY_FRAMES * MIN_FRAME_CSV_BYTES);
+    // The point of the tie: the largest payload the byte cap admits cannot
+    // encode more frames than the frame cap allows.
+    expect(Math.floor(MAX_DECOMPRESSED_REPLAY_BYTES / MIN_FRAME_CSV_BYTES)).toBeLessThanOrEqual(MAX_REPLAY_FRAMES);
+  });
+
   it("caps the decoded frame count", async () => {
-    const error = await validateUploadedReplayOsr(buildOsr(), { maxFrames: 2 }).catch((e: unknown) => e);
+    // Every entry is the 8-byte minimum and only the last lacks a trailing
+    // comma, so the declared size under-counts by exactly one frame — the gap
+    // the post-decode check covers.
+    const entryCount = 64;
+    const frames = Array.from({ length: entryCount }, () => "0|0|0|0").join(",");
+    const error = await validateUploadedReplayOsr(buildOsr({ frames }), { maxFrames: entryCount - 1 })
+      .catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ReplayValidationError);
     expect((error as ReplayValidationError).status).toBe(413);
     expect((error as Error).message).toContain("too many input frames");

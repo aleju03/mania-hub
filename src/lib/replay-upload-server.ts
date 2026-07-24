@@ -5,8 +5,9 @@
 // user; the generated share links stay publicly readable. Uploads are
 // validated as real osu!mania replays before storage — a structural .osr
 // header check first (game mode, bounded strings, and the LZMA blob's declared
-// decompressed size, so a crafted replay cannot expand without limit), then a
-// full decode through the same parser the viewer uses.
+// decompressed size, which also fixes the frame budget so a crafted replay
+// cannot expand without limit), then a full decode through the same parser the
+// viewer uses.
 
 import { isLocalDevAccessGranted } from "./auth-local-dev";
 import { readViewerFromRequest } from "./auth-server";
@@ -30,13 +31,25 @@ const rateLimiter = createFixedWindowLimiter(RATE_WINDOW_MS);
 // .osr structural bounds. Strings in a replay header are metadata (hashes,
 // player name, life bar graph); nothing legitimate approaches these caps.
 const MAX_OSR_STRING_BYTES = 4 * 1024 * 1024;
-// The LZMA blob declares its decompressed size up front; frame CSV for even a
-// marathon replay is a few MiB, so 64 MiB rejects only crafted bombs. An
-// "unknown size" marker (all 0xff) is rejected outright — every real encoder
-// (osu! stable, osu-parsers, lzma tooling) writes the explicit size.
-export const MAX_DECOMPRESSED_REPLAY_BYTES = 64 * 1024 * 1024;
-// Belt-and-braces after the full decode; bounded already by the size cap.
-export const MAX_REPLAY_FRAMES = 2_000_000;
+// Shortest frame the replay CSV can encode is "0|0|0|0," — 8 bytes — so the
+// LZMA blob's declared decompressed size is a hard upper bound on how many
+// frames a decode will materialise.
+export const MIN_FRAME_CSV_BYTES = 8;
+// osu! stable records a mania frame on every key change plus a ~60 Hz
+// keep-alive, so an hour of play is roughly 216k frames and a dense chart adds
+// two more per note; ranked marathons top out nearer 25 minutes. 400k covers
+// all of that with room to spare, and caps the frame objects a single decode
+// can allocate at a size the request can actually afford.
+export const MAX_REPLAY_FRAMES = 400_000;
+// Derived from the frame cap rather than chosen alongside it: repeated minimal
+// entries compress to almost nothing, so a few KB of upload can declare a huge
+// payload, and every declared byte turns into frame objects during the decode —
+// long before any post-decode count can run. A genuine mania frame is ~11 bytes
+// ("16|65|10|0,": delta, column bitfield, scroll-speed scale, unused key field),
+// so this still admits ~290k real frames. An "unknown size" marker (all 0xff) is
+// rejected outright — every real encoder (osu! stable, osu-parsers, lzma
+// tooling) writes the explicit size.
+export const MAX_DECOMPRESSED_REPLAY_BYTES = MAX_REPLAY_FRAMES * MIN_FRAME_CSV_BYTES;
 
 const MANIA_RULESET_ID = 3;
 
@@ -171,6 +184,12 @@ export async function validateUploadedReplayOsr(
   if (structure.declaredDecompressedBytes > BigInt(maxDecompressedBytes)) {
     throw new ReplayValidationError("This replay's input data is too large.", 413);
   }
+  // Frame budget has to be spent here, not after the decode: the parser
+  // materialises two objects per frame, so a declared size that implies more
+  // frames than we allow would exhaust the heap before the count below runs.
+  if (structure.declaredDecompressedBytes / BigInt(MIN_FRAME_CSV_BYTES) > BigInt(maxFrames)) {
+    throw new ReplayValidationError("This replay has too many input frames.", 413);
+  }
 
   // Full decode through the same parser the viewer uses, so anything accepted
   // here is something the viewer can actually open (and vice versa).
@@ -184,6 +203,8 @@ export async function validateUploadedReplayOsr(
       error instanceof Error && error.message ? error.message : "This is not a valid .osr replay file.",
     );
   }
+  // Belt-and-braces: the pre-decode budget rounds down (the final CSV entry
+  // carries no trailing comma), so confirm against the real count as well.
   if (parsed.replay.frames.length > maxFrames) {
     throw new ReplayValidationError("This replay has too many input frames.", 413);
   }
