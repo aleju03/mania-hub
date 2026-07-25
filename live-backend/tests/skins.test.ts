@@ -11,6 +11,7 @@ import {
   backfillSkinSlugs,
   createPendingSkin,
   deleteSkin,
+  findPublishedSkinByOskSha256,
   finishSkin,
   getSkin,
   getSkinByRef,
@@ -51,6 +52,7 @@ async function createPublishedSkin(input: {
   ownerUsername: string;
   name: string;
   keymodes?: number[];
+  sha256?: string;
 }): Promise<string> {
   const created = await createPendingSkin(db, {
     ownerUserId: input.ownerUserId,
@@ -64,7 +66,7 @@ async function createPublishedSkin(input: {
     key: skinOskKey(created.id, input.name),
     url: `https://cdn.example/skins/${created.id}/skin.osk`,
     sizeBytes: 1024,
-    sha256: "ab".repeat(32),
+    sha256: input.sha256 ?? "ab".repeat(32),
     keymodes: input.keymodes ?? [4],
     accentColor: "#ff66aa",
     iniAuthor: null,
@@ -490,6 +492,68 @@ NoteImage0: mania-note1
 Keys: 7
 Colour1: 12,12,12
 `;
+
+describe("duplicate .osk guard", () => {
+  const HASH = "1f".repeat(32);
+
+  it("refuses a ticket for bytes a published skin already carries", async () => {
+    const existing = await createPublishedSkin({ ownerUserId: 7, ownerUsername: "sona", name: "Frost", sha256: HASH });
+
+    const result = await createPendingSkin(db, { ...OWNER, oskSha256: HASH });
+
+    expect(result.ok).toBe(false);
+    if (result.ok || result.error !== "duplicate") throw new Error("expected a duplicate rejection");
+    expect(result.duplicate).toMatchObject({ id: existing, name: "Frost", slug: "frost", ownerUsername: "sona" });
+  });
+
+  it("matches case-insensitively and lets unrelated bytes through", async () => {
+    await createPublishedSkin({ ownerUserId: 7, ownerUsername: "sona", name: "Frost", sha256: HASH });
+
+    expect((await createPendingSkin(db, { ...OWNER, oskSha256: HASH.toUpperCase() })).ok).toBe(false);
+    expect((await createPendingSkin(db, { ...OWNER, oskSha256: "0c".repeat(32) })).ok).toBe(true);
+    // No hash sent (an insecure context, say): the ticket is minted and the
+    // check falls to the server-hashed archive at upload time.
+    expect((await createPendingSkin(db, OWNER)).ok).toBe(true);
+  });
+
+  it("only blocks on published skins, and never on the row doing the upload", async () => {
+    const pending = await createPendingSkin(db, { ...OWNER, oskSha256: HASH });
+    if (!pending.ok) throw new Error("pending failed");
+    const pendingRow = await getSkin(db, pending.id);
+    if (!pendingRow) throw new Error("pending row missing");
+    await attachSkinOsk(db, pendingRow, {
+      key: "k", url: "https://cdn.example/skin.osk", sizeBytes: 1, sha256: HASH,
+      keymodes: [4], accentColor: null, iniAuthor: null,
+    });
+
+    // Its own half-finished row must not look like somebody else's upload.
+    expect(await findPublishedSkinByOskSha256(db, HASH, pending.id)).toBeNull();
+    // Nor should a pending row block a different uploader.
+    expect(await findPublishedSkinByOskSha256(db, HASH)).toBeNull();
+
+    const published = await createPublishedSkin({ ownerUserId: 9, ownerUsername: "kite", name: "Nova", sha256: HASH });
+    expect((await findPublishedSkinByOskSha256(db, HASH))?.id).toBe(published);
+    // Hidden is a moderation state; a public upload error must not expose it.
+    await setSkinHidden(db, published, true);
+    expect(await findPublishedSkinByOskSha256(db, HASH)).toBeNull();
+  });
+
+  it("frees the hash when the owner deletes the skin", async () => {
+    const id = await createPublishedSkin({ ownerUserId: 7, ownerUsername: "sona", name: "Frost", sha256: HASH });
+    expect((await createPendingSkin(db, { ...OWNER, oskSha256: HASH })).ok).toBe(false);
+
+    await deleteSkin(db, id);
+
+    expect((await createPendingSkin(db, { ...OWNER, oskSha256: HASH })).ok).toBe(true);
+  });
+
+  it("ignores a malformed hash instead of matching on it", async () => {
+    await createPublishedSkin({ ownerUserId: 7, ownerUsername: "sona", name: "Frost", sha256: HASH });
+
+    expect(await findPublishedSkinByOskSha256(db, "not-a-hash")).toBeNull();
+    expect((await createPendingSkin(db, { ...OWNER, oskSha256: "zz" })).ok).toBe(true);
+  });
+});
 
 describe("validateOskBuffer", () => {
   it("accepts a real .osk and derives name, author, and sorted keymodes", async () => {

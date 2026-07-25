@@ -161,7 +161,10 @@ export async function importReplaySkinFromOsk(
     summary: {
       name: parsed.name ?? stripExtension(file.name),
       author: parsed.author,
-      keymodes: maniaBlocks.map((entry) => entry.keys),
+      // Deduped and sorted to match what the server derives from the same
+      // skin.ini: a file may repeat a [Mania] block for the same key count,
+      // and each keymode is one preview, one tile, one render.
+      keymodes: [...new Set(maniaBlocks.map((entry) => entry.keys))].sort((a, b) => a - b),
       selectedKeyCount: selectedBlock.keys,
       noteAssets,
       receptorAssets,

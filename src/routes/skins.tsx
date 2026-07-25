@@ -10,9 +10,9 @@ import { Pagination } from "../components/ui/Pagination";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { OsuLogo } from "../components/ui/OsuLogo";
 import { useAuth } from "../lib/auth-context";
-import { canUseDevFeatures } from "../lib/auth-shared";
+import { canUseDevFeatures, isAdmin } from "../lib/auth-shared";
 import { isLiveBackendConfigured } from "../lib/live-backend";
-import { fetchSkinsListDirect, SKINS_PAGE_SIZE, type SkinsListResult, type SkinsSort, type SkinSummary } from "../lib/skins";
+import { fetchSkinsListAsAdmin, fetchSkinsListDirect, SKINS_PAGE_SIZE, type SkinsListResult, type SkinsSort, type SkinSummary } from "../lib/skins";
 import { pageSeo } from "../lib/seo";
 
 // All fields optional at the type level so links can target /skins without a
@@ -109,6 +109,7 @@ function SkinsPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const auth = useAuth();
+  const admin = isAdmin(auth);
 
   const [data, setData] = useState<SkinsListResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -147,8 +148,17 @@ function SkinsPage() {
     const controller = new AbortController();
     setLoading(true);
     setFailed(false);
-    fetchSkinsListDirect({ q, page, sort, k }, { signal: controller.signal })
+    // Admins take the server-fn route: it forwards the admin token, which is
+    // what makes the backend send download counts back. Everyone else (and an
+    // admin whose session just lapsed) reads the public list straight from the
+    // backend, counts omitted.
+    const load = admin
+      ? fetchSkinsListAsAdmin({ data: { q, page, sort, k } })
+          .catch(() => fetchSkinsListDirect({ q, page, sort, k }, { signal: controller.signal }))
+      : fetchSkinsListDirect({ q, page, sort, k }, { signal: controller.signal });
+    load
       .then((result) => {
+        if (controller.signal.aborted) return;
         setData(result);
         setLoading(false);
       })
@@ -158,7 +168,7 @@ function SkinsPage() {
         setLoading(false);
       });
     return () => controller.abort();
-  }, [q, page, sort, k, reloadTick]);
+  }, [q, page, sort, k, reloadTick, admin]);
 
   const handlePublished = useCallback((skin: SkinSummary) => {
     // Land the fresh skin at the top of an unfiltered first page.

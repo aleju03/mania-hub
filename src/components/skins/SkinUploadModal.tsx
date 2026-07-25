@@ -1,20 +1,32 @@
+import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import JSZip from "jszip";
-import { Upload, X } from "lucide-react";
+import { Check, Copy, Shuffle, Star, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { importReplaySkinFromOsk, type ReplaySkinImportResult } from "../../lib/replay-skin-import";
 import { buildSkinAssetGroups, type SkinAssetGroup } from "../../lib/skin-asset-explorer";
-import { SkinAssetTile } from "./SkinAssetExplorer";
+import { SkinAssetTiles } from "./SkinAssetExplorer";
+import { SkinCard } from "./SkinCard";
+import {
+  applyBackdropPick,
+  backdropForKeymode,
+  type BackdropScope,
+  drawSkinPreviewBackdrops,
+  type PreviewBackdrop,
+  replaceBackdrop,
+  type SkinBackdropCandidate,
+} from "../../lib/skin-preview-backdrops";
 import {
   loadSkinPreviewBackgroundForSet,
   renderSkinPreview,
-  SKIN_PREVIEW_BACKGROUND_SETS,
   skinPreviewBackgroundThumbUrl,
 } from "../../lib/skin-preview-render";
 import {
+  type DuplicateSkinRef,
   finishSkinUpload,
   formatSkinFileSize,
+  hashOskFile,
   markSkinsListStale,
   SKIN_DESCRIPTION_MAX_LENGTH,
   SKIN_MAX_SCREENSHOTS,
@@ -56,11 +68,8 @@ interface UploadTicket {
   token: string;
 }
 
-// "flat" is the accent-tinted triangle backdrop the renderer falls back to.
-type PreviewBackdrop = number | "flat";
-
-function randomPreviewBackdrop(): PreviewBackdrop {
-  return SKIN_PREVIEW_BACKGROUND_SETS[Math.floor(Math.random() * SKIN_PREVIEW_BACKGROUND_SETS.length)] ?? "flat";
+function randomPoolPick(pool: SkinBackdropCandidate[]): PreviewBackdrop {
+  return pool[Math.floor(Math.random() * pool.length)]?.setId ?? "flat";
 }
 
 // Canvas port of lazer's Triangles drawable (osu.Game/Graphics/Backgrounds/
@@ -228,12 +237,19 @@ export function SkinUploadModal({
   const [file, setFile] = useState<File | null>(null);
   const [imported, setImported] = useState<ReplaySkinImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Set when the .osk being published is already on the site, so the error can
+  // link to it. Cleared alongside every other error.
+  const [duplicate, setDuplicate] = useState<DuplicateSkinRef | null>(null);
   // Local parse progress after a drop: extracting and decoding the skin's
   // assets takes seconds on big .osk files. percent is null until the archive
   // is open and the reference count is known.
   const [reading, setReading] = useState<{ name: string; percent: number | null } | null>(null);
 
   const [selectedKeymode, setSelectedKeymode] = useState(4);
+  // Which keymode's render becomes the browse-card cover. Separate from the
+  // keymode being viewed: clicking through the previews used to retarget the
+  // cover, so looking at 1K published a 1K card.
+  const [coverKeymode, setCoverKeymode] = useState(4);
   // One rendered playfield per keymode; the selected keymode is the cover.
   const [previews, setPreviews] = useState<Map<number, RenderedPreview>>(new Map());
   const [previewBusy, setPreviewBusy] = useState(false);
@@ -281,15 +297,36 @@ export function SkinUploadModal({
   }, []);
 
   const ticketRef = useRef<UploadTicket | null>(null);
-  // The backdrop behind the rendered previews: one of the curated map covers
-  // or the flat triangle fallback. Starts on a random cover, user-swappable;
-  // every keymode render shares the choice. Covers memoize per set: the
-  // promise map dedupes in-flight loads, the image map records settled
-  // results so the render effect can tell "already decoded" apart from
+  const oskHashRef = useRef<{ file: File; hash: Promise<string | null> } | null>(null);
+  // Whether the current file has previews on screen. Gates the flat-first
+  // render pass: it is there so a slow cover never leaves the form blank, and
+  // it must not fire once there is something to look at.
+  const hasRenderedRef = useRef(false);
+  // What each keymode's image was last drawn against, so a backdrop change
+  // only re-renders the keymodes it actually touches.
+  const renderedBackdropsRef = useRef<Map<number, PreviewBackdrop>>(new Map());
+  // The backdrop behind the rendered previews: one of the map covers on offer
+  // or the flat triangle fallback. The offer itself is drawn fresh from the
+  // map catalog each upload session (and again on every shuffle), so skins
+  // stop sharing one fixed handful of covers; the draw starts empty and the
+  // first arrival picks the default. Keymodes share that default until one is
+  // given its own cover, which is what backdropOverrides holds. Covers memoize
+  // per set: the promise map dedupes in-flight loads, the image map records
+  // settled results so the render effect can tell "already decoded" apart from
   // "still downloading" without awaiting.
-  const [backdrop, setBackdrop] = useState<PreviewBackdrop>(randomPreviewBackdrop);
+  const [backdropPool, setBackdropPool] = useState<SkinBackdropCandidate[]>([]);
+  const backdropPoolRef = useRef<SkinBackdropCandidate[]>([]);
+  const [backdropDrawing, setBackdropDrawing] = useState(false);
+  const [backdrop, setBackdrop] = useState<PreviewBackdrop>("flat");
+  const [backdropOverrides, setBackdropOverrides] = useState<Map<number, PreviewBackdrop>>(new Map());
+  // Whether a pick retargets every keymode or only the one on screen.
+  const [backdropScope, setBackdropScope] = useState<BackdropScope>("all");
   const backgroundPromisesRef = useRef<Map<number, Promise<HTMLImageElement | null>>>(new Map());
   const backgroundImagesRef = useRef<Map<number, HTMLImageElement | null>>(new Map());
+  // A draw in flight owns the default pick; a user click during it does not
+  // get overwritten when the covers land.
+  const backdropTouchedRef = useRef(false);
+  const drawInFlightRef = useRef(false);
 
   const ensureBackdropImage = useCallback((setId: number): Promise<HTMLImageElement | null> => {
     let promise = backgroundPromisesRef.current.get(setId);
@@ -301,13 +338,101 @@ export function SkinUploadModal({
     return promise;
   }, []);
 
-  // Warm the chosen cover as soon as the modal opens: picking and parsing the
+  // Draws a new set of covers to choose from, skipping the ones already on
+  // offer so a shuffle visibly changes the row.
+  const drawBackdrops = useCallback(async (exclude: number[]) => {
+    setBackdropDrawing(true);
+    try {
+      const pool = await drawSkinPreviewBackdrops({ exclude });
+      backdropPoolRef.current = pool;
+      setBackdropPool(pool);
+      return pool;
+    } finally {
+      setBackdropDrawing(false);
+    }
+  }, []);
+
+  // One draw per upload session: opening the modal fills the picker, and a
+  // reset clears the pool so the next upload gets different covers. Kicking it
+  // off at open time means the covers are usually chosen and warm before the
+  // .osk has finished parsing.
+  useEffect(() => {
+    if (!open || backdropPool.length > 0 || drawInFlightRef.current) return;
+    drawInFlightRef.current = true;
+    void drawBackdrops([])
+      .then((pool) => {
+        if (!backdropTouchedRef.current) setBackdrop(randomPoolPick(pool));
+      })
+      .catch(() => {})
+      .finally(() => {
+        drawInFlightRef.current = false;
+      });
+  }, [open, backdropPool.length, drawBackdrops]);
+
+  // A pick lands on the keymode on screen or on all of them, per the scope.
+  // "all" also drops the per-keymode overrides: it would not be all otherwise,
+  // and it doubles as the way back to one shared backdrop.
+  const pickBackdrop = useCallback((choice: PreviewBackdrop) => {
+    backdropTouchedRef.current = true;
+    const next = applyBackdropPick(
+      { shared: backdrop, overrides: backdropOverrides },
+      { scope: backdropScope, keymode: selectedKeymode, choice },
+    );
+    setBackdrop(next.shared);
+    setBackdropOverrides(next.overrides);
+  }, [backdrop, backdropOverrides, backdropScope, selectedKeymode]);
+
+  const shuffleBackdrops = useCallback(() => {
+    backdropTouchedRef.current = true;
+    drawInFlightRef.current = true;
+    void drawBackdrops(backdropPool.map((candidate) => candidate.setId))
+      .then((pool) => pickBackdrop(randomPoolPick(pool)))
+      .catch(() => {})
+      .finally(() => {
+        drawInFlightRef.current = false;
+      });
+  }, [backdropPool, drawBackdrops, pickBackdrop]);
+
+  // Hovering a thumbnail starts its download, so the click usually lands on an
+  // already-decoded cover and re-renders without a wait.
+  const prefetchBackdrop = useCallback((setId: number) => {
+    void ensureBackdropImage(setId);
+  }, [ensureBackdropImage]);
+
+  // A cover with no art on assets.ppy.sh drops out of the picker instead of
+  // showing a broken thumbnail, and anything rendering against it moves to
+  // another cover from the row. Only a dead cover triggers this: a shuffle
+  // replaces the row without disturbing keymodes that already picked, so
+  // covers stay in use after they leave the offer.
+  const dropBackdropCandidate = useCallback((setId: number) => {
+    const remaining = backdropPoolRef.current.filter((candidate) => candidate.setId !== setId);
+    // Mirrored eagerly so a second dead thumbnail in the same tick filters the
+    // already-shortened row instead of resurrecting this one.
+    backdropPoolRef.current = remaining;
+    setBackdropPool(remaining);
+    const next = replaceBackdrop(
+      { shared: backdrop, overrides: backdropOverrides },
+      setId,
+      randomPoolPick(remaining),
+    );
+    setBackdrop(next.shared);
+    setBackdropOverrides(next.overrides);
+  }, [backdrop, backdropOverrides]);
+
+  const backdropFor = useCallback(
+    (keys: number): PreviewBackdrop => backdropForKeymode({ shared: backdrop, overrides: backdropOverrides }, keys),
+    [backdrop, backdropOverrides],
+  );
+
+  // Warm the chosen covers as soon as they are picked: picking and parsing the
   // .osk takes a while, which hides the download so the first render rarely
   // has to wait for it.
   useEffect(() => {
-    if (!open || backdrop === "flat") return;
-    void ensureBackdropImage(backdrop);
-  }, [open, backdrop, ensureBackdropImage]);
+    if (!open) return;
+    for (const choice of [backdrop, ...backdropOverrides.values()]) {
+      if (choice !== "flat") void ensureBackdropImage(choice);
+    }
+  }, [open, backdrop, backdropOverrides, ensureBackdropImage]);
   const [progress, setProgress] = useState({ done: 0, total: 0, label: "" });
   const [published, setPublished] = useState<SkinSummary | null>(null);
 
@@ -333,14 +458,23 @@ export function SkinUploadModal({
     setFile(null);
     setImported(null);
     setError(null);
+    setDuplicate(null);
     setPreviews(new Map());
+    hasRenderedRef.current = false;
+    renderedBackdropsRef.current.clear();
     setName("");
     setAuthor("");
     setDescription("");
     setScreenshots([]);
     setPublished(null);
     setAssetGroups(null);
-    setBackdrop(randomPreviewBackdrop());
+    // Emptying the pool makes the next open draw a fresh one.
+    setBackdropPool([]);
+    backdropPoolRef.current = [];
+    setBackdrop("flat");
+    setBackdropOverrides(new Map());
+    setBackdropScope("all");
+    backdropTouchedRef.current = false;
     ticketRef.current = null;
     assetZipRef.current = null;
   }, [revokeAllUrls]);
@@ -351,7 +485,10 @@ export function SkinUploadModal({
   const handleDismiss = useCallback(() => {
     if (step === "uploading") return;
     if (step === "done") resetAll();
-    else setError(null);
+    else {
+      setError(null);
+      setDuplicate(null);
+    }
     onClose();
   }, [step, onClose, resetAll]);
 
@@ -401,6 +538,7 @@ export function SkinUploadModal({
     const picked = files?.[0];
     if (!picked) return;
     setError(null);
+    setDuplicate(null);
     if (picked.size > SKIN_OSK_MAX_BYTES) {
       setError(`This file is ${formatSkinFileSize(picked.size)}. The limit is 50 MB.`);
       return;
@@ -422,14 +560,26 @@ export function SkinUploadModal({
       });
       setFile(picked);
       setImported(result);
+      // Hashing starts here, while the uploader is still filling the form, so
+      // the publish click can ask the backend whether these exact bytes are
+      // already on the site before it starts transferring them. Kept as the
+      // promise, tagged with its file: publish awaits it if it has not settled
+      // yet, and a re-pick makes the older one irrelevant rather than racing.
+      oskHashRef.current = { file: picked, hash: hashOskFile(picked) };
       setName(result.summary.name.slice(0, 80));
       setAuthor((result.summary.author ?? "").slice(0, SKIN_AUTHOR_MAX_LENGTH));
       setDescription("");
       const keymodes = result.summary.keymodes;
-      setSelectedKeymode(keymodes.includes(4) ? 4 : keymodes[0] ?? 4);
+      // 4K is the keymode people recognise a skin by, so it fronts the card
+      // whenever the skin ships it.
+      const defaultKeymode = keymodes.includes(4) ? 4 : keymodes[0] ?? 4;
+      setSelectedKeymode(defaultKeymode);
+      setCoverKeymode(defaultKeymode);
       previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
       previewUrlsRef.current = [];
       setPreviews(new Map());
+      hasRenderedRef.current = false;
+      renderedBackdropsRef.current.clear();
       ticketRef.current = null;
       setStep("form");
       // Asset detection reads only the zip's central directory plus name
@@ -457,48 +607,59 @@ export function SkinUploadModal({
     }
   }, [revokeAssetUrls]);
 
-  // Render every supported keymode once per picked file and again when the
+  // Render every supported keymode once per picked file and again whenever its
   // backdrop changes (4K first so the hero fills fast); switching keymodes
-  // afterwards just swaps images. A cover that is still downloading never
-  // blocks: the first pass renders on the flat backdrop right away and a
-  // second pass swaps the cover in once it lands.
+  // afterwards just swaps images. Only the keymodes whose backdrop actually
+  // moved are redrawn, so retargeting one leaves the rest untouched.
   useEffect(() => {
     if (!imported) return;
+    const keymodes = [...imported.summary.keymodes].sort((a, b) => (a === 4 ? -1 : b === 4 ? 1 : a - b));
+    const pending = keymodes.filter((keys) => renderedBackdropsRef.current.get(keys) !== backdropFor(keys));
+    if (pending.length === 0) return;
     let cancelled = false;
     setPreviewBusy(true);
-    const keymodes = [...imported.summary.keymodes].sort((a, b) => (a === 4 ? -1 : b === 4 ? 1 : a - b));
-    const renderAll = async (background: HTMLImageElement | null) => {
-      for (const keys of keymodes) {
-        if (cancelled) return;
-        const render = await renderSkinPreview(imported.settings, keys, { background });
-        if (cancelled) return;
-        const url = URL.createObjectURL(render.blob);
-        previewUrlsRef.current.push(url);
-        setPreviews((previous) => {
-          const replaced = previous.get(keys);
-          if (replaced) {
-            URL.revokeObjectURL(replaced.url);
-            previewUrlsRef.current = previewUrlsRef.current.filter((candidate) => candidate !== replaced.url);
-          }
-          return new Map(previous).set(keys, { blob: render.blob, width: render.width, height: render.height, url, accent: render.accent });
-        });
-      }
+    const renderOne = async (keys: number, background: HTMLImageElement | null) => {
+      const render = await renderSkinPreview(imported.settings, keys, { background });
+      if (cancelled) return;
+      const url = URL.createObjectURL(render.blob);
+      previewUrlsRef.current.push(url);
+      setPreviews((previous) => {
+        const replaced = previous.get(keys);
+        if (replaced) {
+          URL.revokeObjectURL(replaced.url);
+          previewUrlsRef.current = previewUrlsRef.current.filter((candidate) => candidate !== replaced.url);
+        }
+        return new Map(previous).set(keys, { blob: render.blob, width: render.width, height: render.height, url, accent: render.accent });
+      });
+      hasRenderedRef.current = true;
+    };
+    // A settled cover renders straight away; an unsettled one is awaited, so a
+    // preview already on screen is held rather than flashing the flat backdrop.
+    // A cover that fails to load resolves null and stays flat, no retry.
+    const backgroundFor = async (choice: PreviewBackdrop): Promise<HTMLImageElement | null> => {
+      if (choice === "flat") return null;
+      if (backgroundImagesRef.current.has(choice)) return backgroundImagesRef.current.get(choice) ?? null;
+      return ensureBackdropImage(choice);
     };
     (async () => {
-      if (backdrop === "flat") {
-        await renderAll(null);
-        return;
+      // Nothing on screen yet and the first cover is still downloading: draw
+      // the whole set flat so the form fills immediately, then let each
+      // keymode swap to its own cover below as it resolves.
+      const first = backdropFor(pending[0]);
+      if (!hasRenderedRef.current && first !== "flat" && !backgroundImagesRef.current.has(first)) {
+        for (const keys of pending) {
+          if (cancelled) return;
+          await renderOne(keys, null);
+        }
       }
-      const promise = ensureBackdropImage(backdrop);
-      if (backgroundImagesRef.current.has(backdrop)) {
-        // Already settled (null means the load failed: stay flat, no retry).
-        await renderAll(backgroundImagesRef.current.get(backdrop) ?? null);
-        return;
+      for (const keys of pending) {
+        if (cancelled) return;
+        const choice = backdropFor(keys);
+        const background = await backgroundFor(choice);
+        if (cancelled) return;
+        await renderOne(keys, background);
+        renderedBackdropsRef.current.set(keys, choice);
       }
-      await renderAll(null);
-      const background = await promise;
-      if (cancelled || !background) return;
-      await renderAll(background);
     })()
       .catch(() => {
         if (!cancelled) setError("The previews could not be rendered.");
@@ -509,7 +670,7 @@ export function SkinUploadModal({
     return () => {
       cancelled = true;
     };
-  }, [imported, backdrop, ensureBackdropImage]);
+  }, [imported, backdropFor, ensureBackdropImage]);
 
   const addScreenshots = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -543,23 +704,28 @@ export function SkinUploadModal({
 
   const publish = useCallback(async () => {
     const previewEntries = [...previews.entries()].sort(([a], [b]) => a - b);
-    if (!file || previewEntries.length === 0 || !previews.get(selectedKeymode)) return;
+    if (!file || previewEntries.length === 0 || !previews.get(coverKeymode)) return;
     const trimmedName = name.trim();
     if (!trimmedName) {
       setError("The skin needs a name.");
       return;
     }
     setError(null);
+    setDuplicate(null);
     setProgress({ done: 0, total: 0, label: "Preparing the upload." });
     setStep("uploading");
     try {
       // Reuse a still-valid ticket across retries so a network blip does not
       // burn the per-user pending-upload budget.
       if (!ticketRef.current) {
-        const started = await startSkinUpload({ data: { name: trimmedName, author: author.trim(), description: description.trim() } });
+        const oskSha256 = oskHashRef.current?.file === file ? await oskHashRef.current.hash : null;
+        const started = await startSkinUpload({
+          data: { name: trimmedName, author: author.trim(), description: description.trim(), oskSha256 },
+        });
         if (!started.ok) {
           setStep("form");
           setError(startErrorMessage(started.error));
+          if (started.error === "duplicate") setDuplicate(started.duplicate);
           return;
         }
         ticketRef.current = { id: started.id, token: started.token };
@@ -582,8 +748,8 @@ export function SkinUploadModal({
           width: preview.width,
           height: preview.height,
           keys,
-          cover: keys === selectedKeymode,
-          accent: keys === selectedKeymode ? preview.accent : undefined,
+          cover: keys === coverKeymode,
+          accent: keys === coverKeymode ? preview.accent : undefined,
           onProgress: (sent) => report(label, sent),
         });
         doneBytes += preview.blob.size;
@@ -626,13 +792,14 @@ export function SkinUploadModal({
     } catch (uploadError) {
       if (uploadError instanceof SkinUploadError) {
         if (uploadError.code === "invalid_ticket") ticketRef.current = null;
+        if (uploadError.code === "duplicate") setDuplicate(uploadError.duplicate ?? null);
         setError(uploadError.message);
       } else {
         setError(uploadErrorMessage("upload_failed"));
       }
       setStep("form");
     }
-  }, [file, name, author, description, onPublished, previews, screenshots, selectedKeymode]);
+  }, [file, name, author, description, onPublished, previews, screenshots, coverKeymode]);
 
   const uploading = step === "uploading";
 
@@ -678,7 +845,7 @@ export function SkinUploadModal({
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
                 {step === "done" && published ? (
-                  <DoneStep published={published} onUploadAnother={resetAll} />
+                  <DoneStep published={published} onUploadAnother={resetAll} onDismiss={handleDismiss} />
                 ) : step === "pick" ? (
                   <PickStep
                     dragActive={dragActive}
@@ -695,12 +862,22 @@ export function SkinUploadModal({
                     uploading={uploading}
                     previews={previews}
                     previewBusy={previewBusy}
-                    backdrop={backdrop}
-                    setBackdrop={setBackdrop}
+                    backdrop={backdropFor(selectedKeymode)}
+                    pickBackdrop={pickBackdrop}
+                    backdropScope={backdropScope}
+                    setBackdropScope={setBackdropScope}
+                    overriddenKeymodes={backdropOverrides}
+                    backdropPool={backdropPool}
+                    backdropDrawing={backdropDrawing}
+                    shuffleBackdrops={shuffleBackdrops}
+                    dropBackdropCandidate={dropBackdropCandidate}
+                    prefetchBackdrop={prefetchBackdrop}
                     assetGroups={assetGroups}
                     resolveAssetUrl={resolveAssetUrl}
                     selectedKeymode={selectedKeymode}
                     setSelectedKeymode={setSelectedKeymode}
+                    coverKeymode={coverKeymode}
+                    setCoverKeymode={setCoverKeymode}
                     name={name}
                     setName={setName}
                     author={author}
@@ -712,9 +889,11 @@ export function SkinUploadModal({
                     addScreenshots={addScreenshots}
                     removeScreenshot={removeScreenshot}
                     error={error}
+                    duplicate={duplicate}
                     progress={progress}
                     onPublish={() => void publish()}
                     onRepick={() => setStep("pick")}
+                    onDismiss={handleDismiss}
                   />
                 )}
               </div>
@@ -817,29 +996,86 @@ function PickStep({
   );
 }
 
-function DoneStep({ published, onUploadAnother }: { published: SkinSummary; onUploadAnother: () => void }) {
+// The publish confirmation. It shows the real browse card rather than a bare
+// preview: what lands here is exactly what everyone else sees on /skins, which
+// is the thing an uploader wants to check before walking away.
+function DoneStep({
+  published,
+  onUploadAnother,
+  onDismiss,
+}: {
+  published: SkinSummary;
+  onUploadAnother: () => void;
+  onDismiss: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef<number | null>(null);
+  const path = `/skins/${published.slug ?? published.id}`;
+  // Absolute, because the point of the button is pasting it somewhere else.
+  const shareUrl = typeof window === "undefined" ? path : `${window.location.origin}${path}`;
+
+  useEffect(() => () => {
+    if (copyTimerRef.current != null) window.clearTimeout(copyTimerRef.current);
+  }, []);
+
+  const copyLink = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      if (copyTimerRef.current != null) window.clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard blocked (permissions, insecure context): the url is printed
+      // under the card, so it can still be copied by hand.
+    }
+  }, [shareUrl]);
+
+  const previewCount = published.previews.length || (published.previewUrl ? 1 : 0);
+  const facts = [
+    published.keymodes.length > 0 ? `${published.keymodes.map((keys) => `${keys}K`).join(", ")}` : null,
+    previewCount > 0 ? `${previewCount} preview${previewCount === 1 ? "" : "s"}` : null,
+    published.oskSizeBytes ? formatSkinFileSize(published.oskSizeBytes) : null,
+    published.screenshots.length > 0
+      ? `${published.screenshots.length} screenshot${published.screenshots.length === 1 ? "" : "s"}`
+      : null,
+  ].filter(Boolean) as string[];
+
   return (
-    <div className="flex flex-col items-center gap-3 py-5 text-center">
-      {published.previewUrl && (
-        <img
-          src={published.previewUrl}
-          alt={`${published.name} cover`}
-          className="aspect-video w-full max-w-[420px] rounded-lg border border-osu-b3/30 object-cover"
-        />
-      )}
-      <div className="text-sm font-bold text-white">{published.name} is live.</div>
-      <div className="text-[12px] text-osu-f1">
-        {published.keymodes.length > 1
-          ? `Previews for ${published.keymodes.map((keys) => `${keys}K`).join(", ")} are on the skin page.`
-          : "The skin page is ready to share."}
+    <div className="flex flex-col items-center gap-4 py-4 text-center">
+      <div className="flex flex-col items-center gap-1">
+        <span className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-[0.1em] text-osu-green">
+          <Check size={13} aria-hidden="true" />
+          published
+        </span>
+        <h3 className="text-[17px] font-bold leading-tight text-white">{published.name} is live</h3>
+        <p className="text-[12px] text-osu-f1">This is how it looks on the skins page.</p>
       </div>
-      <div className="flex items-center gap-3">
-        <a
-          href={`/skins/${published.slug ?? published.id}`}
+
+      <div className="w-full max-w-[340px] text-left">
+        <SkinCard skin={published} onClick={onDismiss} />
+      </div>
+
+      {facts.length > 0 && (
+        <p className="max-w-[420px] text-[11.5px] text-osu-f1">{facts.join(" · ")}</p>
+      )}
+
+      <div className="flex flex-wrap items-center justify-center gap-2.5">
+        <Link
+          to="/skins/$id"
+          params={{ id: published.slug ?? published.id }}
+          onClick={onDismiss}
           className="rounded-full bg-osu-pink px-5 py-2 text-[13px] font-bold text-white transition hover:brightness-110"
         >
           View the skin page
-        </a>
+        </Link>
+        <button
+          type="button"
+          onClick={() => void copyLink()}
+          className="flex items-center gap-1.5 rounded-full border border-osu-b3/40 px-4 py-2 text-[12.5px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:border-osu-f1/40 hover:text-osu-l1"
+        >
+          {copied ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
+          {copied ? "Link copied" : "Copy link"}
+        </button>
         <button
           type="button"
           onClick={onUploadAnother}
@@ -848,6 +1084,8 @@ function DoneStep({ published, onUploadAnother }: { published: SkinSummary; onUp
           Upload another
         </button>
       </div>
+
+      <code className="max-w-full truncate text-[10.5px] text-osu-f1/60">{shareUrl}</code>
     </div>
   );
 }
@@ -859,11 +1097,21 @@ function FormStep({
   previews,
   previewBusy,
   backdrop,
-  setBackdrop,
+  pickBackdrop,
+  backdropScope,
+  setBackdropScope,
+  overriddenKeymodes,
+  backdropPool,
+  backdropDrawing,
+  shuffleBackdrops,
+  dropBackdropCandidate,
+  prefetchBackdrop,
   assetGroups,
   resolveAssetUrl,
   selectedKeymode,
   setSelectedKeymode,
+  coverKeymode,
+  setCoverKeymode,
   name,
   setName,
   author,
@@ -875,21 +1123,36 @@ function FormStep({
   addScreenshots,
   removeScreenshot,
   error,
+  duplicate,
   progress,
   onPublish,
   onRepick,
+  onDismiss,
 }: {
   imported: ReplaySkinImportResult | null;
   file: File | null;
   uploading: boolean;
   previews: Map<number, RenderedPreview>;
   previewBusy: boolean;
+  // The backdrop behind the keymode on screen, which is what the picker marks
+  // as selected; other keymodes can be on a different one.
   backdrop: PreviewBackdrop;
-  setBackdrop: (backdrop: PreviewBackdrop) => void;
+  pickBackdrop: (backdrop: PreviewBackdrop) => void;
+  backdropScope: BackdropScope;
+  setBackdropScope: (scope: BackdropScope) => void;
+  overriddenKeymodes: Map<number, PreviewBackdrop>;
+  backdropPool: SkinBackdropCandidate[];
+  backdropDrawing: boolean;
+  shuffleBackdrops: () => void;
+  dropBackdropCandidate: (setId: number) => void;
+  // Warms a cover on hover so picking it usually renders straight away.
+  prefetchBackdrop: (setId: number) => void;
   assetGroups: SkinAssetGroup[] | null;
   resolveAssetUrl: (path: string) => Promise<string | null>;
   selectedKeymode: number;
   setSelectedKeymode: (keys: number) => void;
+  coverKeymode: number;
+  setCoverKeymode: (keys: number) => void;
   name: string;
   setName: (name: string) => void;
   author: string;
@@ -901,13 +1164,18 @@ function FormStep({
   addScreenshots: (files: FileList | null) => Promise<void>;
   removeScreenshot: (index: number) => void;
   error: string | null;
+  // The already-published skin behind a duplicate error, linked from it.
+  duplicate: DuplicateSkinRef | null;
   progress: { done: number; total: number; label: string };
   onPublish: () => void;
   onRepick: () => void;
+  onDismiss: () => void;
 }) {
   const keymodes = imported?.summary.keymodes ?? [];
   const percent = progress.total > 0 ? Math.min(100, Math.round((progress.done / progress.total) * 100)) : 0;
   const heroPreview = previews.get(selectedKeymode);
+  // Publishing needs the cover's render, which is not always the one on screen.
+  const coverPreview = previews.get(coverKeymode);
   // Keymodes whose [Mania] block resolved no note images render with flat
   // colour fallbacks; flag them so a broken block is obvious before publish.
   const keymodesWithoutNoteArt = useMemo(() => {
@@ -932,13 +1200,42 @@ function FormStep({
               <div className="flex h-full items-center justify-center text-[12px] text-osu-f1">Rendering the {selectedKeymode}K playfield...</div>
             )}
           </div>
+          {/* The previews on screen stay put while a new backdrop decodes, so
+              the wait needs saying out loud instead of showing as a flash. */}
+          {heroPreview && previewBusy && (
+            <div className="pointer-events-none absolute right-2 top-2 rounded bg-osu-b5/85 px-1.5 py-0.5 text-[10px] font-bold text-osu-l2">
+              updating
+            </div>
+          )}
+        </div>
+        {/* Which keymode fronts the browse card is its own choice: clicking
+            through the previews only changes what is on screen. */}
+        <div className="mt-2 flex items-center justify-between gap-2 text-[11px]">
+          <span className="text-osu-f1">Viewing <span className="font-bold text-osu-l2 tabular-nums">{selectedKeymode}K</span></span>
+          {selectedKeymode === coverKeymode ? (
+            <span className="flex items-center gap-1 font-bold text-osu-pink">
+              <Star size={11} aria-hidden="true" />
+              card cover
+            </span>
+          ) : (
+            <button
+              type="button"
+              disabled={uploading}
+              onClick={() => setCoverKeymode(selectedKeymode)}
+              className="flex items-center gap-1 font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1 disabled:cursor-default"
+            >
+              <Star size={11} aria-hidden="true" />
+              Use {selectedKeymode}K as the card cover
+            </button>
+          )}
         </div>
         {/* Every keymode read from the skin, rendered with the skin's own
-            notes; the selected one becomes the browse-card cover. */}
-        <div className="mt-2.5 flex flex-wrap items-start gap-2">
+            notes; the starred one is what the browse card shows. */}
+        <div className="mt-2 flex flex-wrap items-start gap-2">
           {keymodes.map((keys) => {
             const preview = previews.get(keys);
             const selected = selectedKeymode === keys;
+            const isCover = coverKeymode === keys;
             const missingNoteArt = keymodesWithoutNoteArt.has(keys);
             return (
               <button
@@ -960,7 +1257,13 @@ function FormStep({
                   )}
                 </div>
                 <div className={`flex items-center gap-1 px-1.5 py-0.5 text-[10.5px] font-bold tabular-nums ${selected ? "bg-osu-pink text-white" : "bg-osu-b4 text-osu-l2"}`}>
-                  {keys}K{selected ? " · cover" : ""}
+                  {keys}K
+                  {isCover && <Star size={9} className={selected ? "text-white" : "text-osu-pink"} aria-label="card cover" />}
+                  {/* Its backdrop was set on its own, so an "all keymodes"
+                      pick is what puts it back with the rest. */}
+                  {overriddenKeymodes.has(keys) && (
+                    <span className={selected ? "text-white/80" : "text-osu-f1/70"} title="Has its own backdrop" aria-hidden="true">*</span>
+                  )}
                   {missingNoteArt && <span className={selected ? "text-white/80" : "text-osu-yellow"} aria-hidden="true">!</span>}
                 </div>
               </button>
@@ -974,12 +1277,51 @@ function FormStep({
         )}
 
         <div className="mt-3 flex flex-col gap-1.5">
-          <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Preview backdrop</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Preview backdrop</span>
+            {/* Scope of a pick: every keymode, or just the one on screen.
+                Picking on "all" also clears the per-keymode choices, so it is
+                the way back to a single shared backdrop. */}
+            <div className="flex overflow-hidden rounded border border-osu-b3/40">
+              {(["all", "keymode"] as const).map((scope) => (
+                <button
+                  key={scope}
+                  type="button"
+                  disabled={uploading}
+                  onClick={() => setBackdropScope(scope)}
+                  aria-pressed={backdropScope === scope}
+                  title={scope === "all"
+                    ? "Apply picks to every keymode preview"
+                    : `Apply picks to the ${selectedKeymode}K preview only`}
+                  className={`px-1.5 py-0.5 text-[10px] font-bold transition-colors cursor-pointer disabled:cursor-default ${
+                    backdropScope === scope ? "bg-osu-pink text-white" : "bg-osu-b5 text-osu-l2 hover:text-osu-l1"
+                  }`}
+                >
+                  {scope === "all" ? "all keymodes" : `${selectedKeymode}K only`}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              disabled={uploading || previewBusy || backdropDrawing}
+              onClick={shuffleBackdrops}
+              title="Draw a different set of map covers"
+              className="flex items-center gap-1 rounded border border-osu-b3/40 bg-osu-b5 px-1.5 py-0.5 text-[10px] font-bold text-osu-l2 transition-colors cursor-pointer hover:border-osu-f1/40 disabled:cursor-default disabled:opacity-50"
+            >
+              <Shuffle size={11} aria-hidden="true" />
+              {backdropDrawing ? "drawing" : "shuffle"}
+            </button>
+            {overriddenKeymodes.size > 0 && (
+              <span className="text-[10px] text-osu-f1/55">
+                {[...overriddenKeymodes.keys()].sort((a, b) => a - b).map((keys) => `${keys}K`).join(", ")} on their own
+              </span>
+            )}
+          </div>
           <div className="flex flex-wrap items-center gap-1.5">
             <button
               type="button"
               disabled={uploading || previewBusy}
-              onClick={() => setBackdrop("flat")}
+              onClick={() => pickBackdrop("flat")}
               aria-pressed={backdrop === "flat"}
               title="Flat backdrop tinted with the skin's accent"
               className={`grid h-8 w-[52px] place-items-center rounded border text-[10px] font-bold text-osu-l2 transition-colors cursor-pointer disabled:cursor-default ${
@@ -988,26 +1330,33 @@ function FormStep({
             >
               flat
             </button>
-            {SKIN_PREVIEW_BACKGROUND_SETS.map((setId) => (
+            {backdropPool.map((candidate) => (
               <button
-                key={setId}
+                key={candidate.setId}
                 type="button"
                 disabled={uploading || previewBusy}
-                onClick={() => setBackdrop(setId)}
-                aria-pressed={backdrop === setId}
-                aria-label={`Use map cover ${setId} as the backdrop`}
+                onClick={() => pickBackdrop(candidate.setId)}
+                onPointerEnter={() => prefetchBackdrop(candidate.setId)}
+                onFocus={() => prefetchBackdrop(candidate.setId)}
+                aria-pressed={backdrop === candidate.setId}
+                aria-label={`Use ${candidate.label || `map cover ${candidate.setId}`} as the backdrop`}
+                title={candidate.label || undefined}
                 className={`h-8 w-[52px] overflow-hidden rounded border transition-colors cursor-pointer disabled:cursor-default ${
-                  backdrop === setId ? "border-osu-pink" : "border-osu-b3/40 hover:border-osu-f1/40"
+                  backdrop === candidate.setId ? "border-osu-pink" : "border-osu-b3/40 hover:border-osu-f1/40"
                 }`}
               >
                 <img
-                  src={skinPreviewBackgroundThumbUrl(setId)}
+                  src={skinPreviewBackgroundThumbUrl(candidate.setId)}
                   alt=""
                   loading="lazy"
+                  onError={() => dropBackdropCandidate(candidate.setId)}
                   className="h-full w-full object-cover"
                 />
               </button>
             ))}
+            {backdropPool.length === 0 && backdropDrawing && (
+              <span className="text-[10px] text-osu-f1/50">drawing covers</span>
+            )}
           </div>
         </div>
 
@@ -1098,7 +1447,25 @@ function FormStep({
         </div>
 
         <div className="mt-auto flex flex-col gap-2.5 pt-1">
-          {error && <div className="text-[12px] font-semibold text-osu-red-light">{error}</div>}
+          {error && (
+            <div className="text-[12px] font-semibold text-osu-red-light">
+              {error}
+              {duplicate && (
+                <>
+                  {" "}
+                  <Link
+                    to="/skins/$id"
+                    params={{ id: duplicate.slug ?? duplicate.id }}
+                    onClick={onDismiss}
+                    className="underline underline-offset-2 hover:text-osu-l1"
+                  >
+                    {duplicate.name || "View it"}
+                  </Link>
+                  {duplicate.ownerUsername ? ` (uploaded by ${duplicate.ownerUsername})` : ""}
+                </>
+              )}
+            </div>
+          )}
           {uploading ? (
             <div className="flex flex-col gap-1.5">
               <div className="h-2 overflow-hidden rounded-full bg-osu-b4">
@@ -1114,7 +1481,7 @@ function FormStep({
               <button
                 type="button"
                 onClick={onPublish}
-                disabled={previewBusy || !heroPreview}
+                disabled={previewBusy || !heroPreview || !coverPreview}
                 className="rounded-full bg-osu-pink px-6 py-2 text-[13px] font-bold text-white transition cursor-pointer hover:brightness-110 disabled:cursor-default disabled:opacity-50"
               >
                 Upload skin
@@ -1171,20 +1538,22 @@ function DetectedAssets({
         })}
       </div>
       {open && (
-        <div className="mt-1 flex max-h-[240px] flex-wrap gap-2 overflow-y-auto rounded-lg border border-osu-b3/30 bg-osu-b5/40 p-2.5">
-          {open.entries.map((entry) => (
-            <SkinAssetTile key={entry.primaryPath} entry={entry} resolve={resolve} />
-          ))}
-        </div>
+        <SkinAssetTiles
+          entries={open.entries}
+          resolve={resolve}
+          className="mt-1 flex max-h-[240px] flex-wrap gap-2 overflow-y-auto rounded-lg border border-osu-b3/30 bg-osu-b5/40 p-2.5"
+        />
       )}
     </div>
   );
 }
 
-function startErrorMessage(code: "not_logged_in" | "unavailable" | "storage_not_configured" | "invalid_name" | "pending_limit" | "skin_limit"): string {
+function startErrorMessage(code: "not_logged_in" | "unavailable" | "storage_not_configured" | "invalid_name" | "pending_limit" | "skin_limit" | "duplicate"): string {
   switch (code) {
     case "not_logged_in":
       return "The session expired. Log in with osu! again to publish.";
+    case "duplicate":
+      return "This exact .osk is already published on the site.";
     case "invalid_name":
       return "The skin needs a name.";
     case "pending_limit":

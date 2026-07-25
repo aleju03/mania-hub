@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -193,7 +194,6 @@ describe("skins HTTP endpoints", () => {
       keymodes: [4, 7],
       accentColor: "#ff66aa",
       status: "published",
-      downloadCount: 0,
       previewWidth: 1280,
       previewHeight: 720,
     });
@@ -216,8 +216,29 @@ describe("skins HTTP endpoints", () => {
     const download = await call(mockReq("GET", `/api/skins/download?id=${id}`));
     expect(download.status).toBe(302);
     expect(download.headers.location).toContain("https://cdn.test/skins/");
-    expect((await call(mockReq("GET", `/api/skins/get?id=${id}`))).body.skin.downloadCount).toBe(1);
+    // The counter still ticks; it just only comes back with the admin token.
+    expect((await call(mockReq("GET", `/api/skins/get?id=${id}`, ADMIN))).body.skin.downloadCount).toBe(1);
     expect((await call(mockReq("GET", "/api/skins/download?id=missing"))).status).toBe(404);
+  });
+
+  it("keeps download counts to admin responses", async () => {
+    const { id, token } = await startUpload();
+    await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=osk`, await buildOskBuffer()));
+    await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=preview`, PNG_BYTES));
+    // Publishing hands the uploader their own skin back, counts included in
+    // neither that response nor any public read.
+    const finished = await call(mockReq("POST", `/api/skins/finish?id=${id}&token=${token}`));
+    expect(finished.body.skin.downloadCount).toBeNull();
+    await call(mockReq("GET", `/api/skins/download?id=${id}`));
+    await call(mockReq("GET", `/api/skins/download?id=${id}`));
+
+    expect((await call(mockReq("GET", `/api/skins/get?id=${id}`))).body.skin.downloadCount).toBeNull();
+    expect((await call(mockReq("GET", "/api/skins/list"))).body.skins[0].downloadCount).toBeNull();
+
+    expect((await call(mockReq("GET", `/api/skins/get?id=${id}`, ADMIN))).body.skin.downloadCount).toBe(2);
+    expect((await call(mockReq("GET", "/api/skins/list", ADMIN))).body.skins[0].downloadCount).toBe(2);
+    // An admin read must not land in a shared cache.
+    expect((await call(mockReq("GET", "/api/skins/list", ADMIN))).headers["cache-control"]).toBeUndefined();
   });
 
   it("requires both osk and preview before finish", async () => {
@@ -225,6 +246,37 @@ describe("skins HTTP endpoints", () => {
     expect((await call(mockReq("POST", `/api/skins/finish?id=${id}&token=${token}`))).body).toMatchObject({ error: "missing_osk" });
     await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=osk`, await buildOskBuffer()));
     expect((await call(mockReq("POST", `/api/skins/finish?id=${id}&token=${token}`))).body).toMatchObject({ error: "missing_preview" });
+  });
+
+  it("refuses a re-upload of an already published .osk, at the ticket and at the archive", async () => {
+    const osk = await buildOskBuffer();
+    const sha256 = createHash("sha256").update(osk).digest("hex");
+    const first = await startUpload();
+    await call(bodyReq("POST", `/api/skins/upload?id=${first.id}&token=${first.token}&part=osk`, osk));
+    await call(bodyReq("POST", `/api/skins/upload?id=${first.id}&token=${first.token}&part=preview`, PNG_BYTES));
+    await call(mockReq("POST", `/api/skins/finish?id=${first.id}&token=${first.token}`));
+
+    // The client sends the hash up front, so no ticket is minted at all.
+    const started = await call(bodyReq(
+      "POST",
+      "/api/skins/start",
+      JSON.stringify({ userId: 202, username: "echo", name: "Cloudy Skies Again", oskSha256: sha256 }),
+      ADMIN,
+    ));
+    expect(started.status).toBe(409);
+    expect(started.body).toMatchObject({
+      error: "duplicate",
+      duplicate: { id: first.id, name: "Cloudy Skies", slug: "cloudy-skies", ownerUsername: "delta" },
+    });
+
+    // No hash sent (or a lying client): the archive is hashed server-side and
+    // rejected before anything reaches storage.
+    const second = await startUpload();
+    vi.mocked(uploadSkinObject).mockClear();
+    const retried = await call(bodyReq("POST", `/api/skins/upload?id=${second.id}&token=${second.token}&part=osk`, osk));
+    expect(retried.status).toBe(409);
+    expect(retried.body).toMatchObject({ error: "duplicate", duplicate: { id: first.id } });
+    expect(uploadSkinObject).not.toHaveBeenCalled();
   });
 
   it("hides, unhides, and deletes through moderation, and enforces owner-only deletes", async () => {

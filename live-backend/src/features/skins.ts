@@ -71,7 +71,11 @@ export interface SkinSummary {
   ownerUsername: string;
   keymodes: number[];
   accentColor: string | null;
-  downloadCount: number;
+  // Null on every response that did not carry the admin token: the count is
+  // owner-only, so it is dropped at the HTTP boundary rather than left for the
+  // client to hide. Sorting by downloads still works - it never exposes the
+  // numbers themselves.
+  downloadCount: number | null;
   previewUrl: string | null;
   previewWidth: number | null;
   previewHeight: number | null;
@@ -84,19 +88,69 @@ export interface SkinSummary {
   publishedAt: string | null;
 }
 
+// Enough to point the uploader at the skin that already carries these bytes.
+export interface DuplicateSkinRef {
+  id: string;
+  slug: string | null;
+  name: string;
+  ownerUsername: string;
+}
+
 export type CreatePendingSkinResult =
   | { ok: true; id: string; token: string; expiresAt: string }
-  | { ok: false; error: "invalid_name" | "pending_limit" | "skin_limit" };
+  | { ok: false; error: "invalid_name" | "pending_limit" | "skin_limit" }
+  | { ok: false; error: "duplicate"; duplicate: DuplicateSkinRef };
+
+// Byte-identical .osk lookup, the duplicate-upload guard. Published rows only:
+// pending rows are half-finished attempts (often the uploader's own retry) and
+// hidden ones are a moderation state that must not leak through a public
+// upload error. An owner who deletes a skin frees its hash with the row.
+export async function findPublishedSkinByOskSha256(
+  db: Db,
+  sha256: string,
+  excludeId?: string,
+): Promise<DuplicateSkinRef | null> {
+  if (!/^[0-9a-f]{64}$/.test(sha256)) return null;
+  const row = (await exec(
+    db,
+    `select id, slug, name, owner_username from skins
+     where osk_sha256 = ? and status = 'published' and id != ?
+     order by published_at asc limit 1`,
+    [sha256, excludeId ?? ""],
+  )).rows[0];
+  if (!row) return null;
+  return {
+    id: String(row.id),
+    slug: textOrNull(row.slug),
+    name: String(row.name ?? ""),
+    ownerUsername: String(row.owner_username ?? ""),
+  };
+}
 
 export async function createPendingSkin(
   db: Db,
-  input: { ownerUserId: number; ownerUsername: string; name: string; author?: string | null; description?: string | null },
+  input: {
+    ownerUserId: number;
+    ownerUsername: string;
+    name: string;
+    author?: string | null;
+    description?: string | null;
+    // Client-computed hash of the .osk about to be uploaded. Advisory: it
+    // saves the uploader a pointless 50MB transfer, and the same check runs
+    // again on the server-computed hash when the archive actually lands.
+    oskSha256?: string | null;
+  },
 ): Promise<CreatePendingSkinResult> {
   const name = cleanText(input.name, SKIN_NAME_MAX_LENGTH);
   if (!name) return { ok: false, error: "invalid_name" };
   const ownerUsername = cleanText(input.ownerUsername, 32) || `user ${input.ownerUserId}`;
   const author = cleanText(input.author ?? "", SKIN_AUTHOR_MAX_LENGTH) || null;
   const description = cleanMultilineText(input.description ?? "", SKIN_DESCRIPTION_MAX_LENGTH) || null;
+
+  if (input.oskSha256) {
+    const duplicate = await findPublishedSkinByOskSha256(db, input.oskSha256.toLowerCase());
+    if (duplicate) return { ok: false, error: "duplicate", duplicate };
+  }
 
   const counts = (await exec(
     db,
@@ -413,6 +467,11 @@ export function toSkinSummary(row: SkinRow): SkinSummary {
     status: row.status,
     publishedAt: row.publishedAt,
   };
+}
+
+// Applied to every public response; see SkinSummary.downloadCount.
+export function withoutDownloadCount(summary: SkinSummary): SkinSummary {
+  return { ...summary, downloadCount: null };
 }
 
 function storageKeysOf(row: SkinRow): string[] {

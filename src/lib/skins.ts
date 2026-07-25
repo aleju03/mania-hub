@@ -32,7 +32,9 @@ export interface SkinSummary {
   ownerUsername: string;
   keymodes: number[];
   accentColor: string | null;
-  downloadCount: number;
+  // Owner-only: the backend nulls it on every response that did not carry the
+  // admin token, so the UI simply has nothing to show for everyone else.
+  downloadCount: number | null;
   previewUrl: string | null;
   previewWidth: number | null;
   previewHeight: number | null;
@@ -110,6 +112,36 @@ export async function fetchSkinsListDirect(params: SkinsListParams, init?: Reque
   return response.json() as Promise<SkinsListResult>;
 }
 
+// Same list as fetchSkinsListDirect, routed through the server so the admin
+// token can ride along; that is the only way download counts come back. Throws
+// for anyone who is not a true admin, so callers fall back to the direct fetch.
+export const fetchSkinsListAsAdmin = createServerFn({ method: "GET" })
+  .validator((data: SkinsListParams) => ({
+    q: typeof data.q === "string" ? data.q.slice(0, 80) : "",
+    page: Number.isFinite(data.page) ? Math.max(0, Math.floor(Number(data.page))) : 0,
+    sort: data.sort === "downloads" ? ("downloads" as const) : ("newest" as const),
+    k: Number.isInteger(data.k) && Number(data.k) >= 1 && Number(data.k) <= 10 ? Number(data.k) : 0,
+  }))
+  .handler(async ({ data }): Promise<SkinsListResult> => {
+    const { requireTrueAdminAccess } = await import("./auth-server");
+    await requireTrueAdminAccess("Skin download counts");
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const base = getServerLiveBackendUrl();
+    if (!base) throw new Error("Server is not configured.");
+    const query = new URLSearchParams();
+    if (data.q) query.set("q", data.q);
+    if (data.page) query.set("page", String(data.page));
+    if (data.sort === "downloads") query.set("sort", "downloads");
+    if (data.k) query.set("k", String(data.k));
+    query.set("pageSize", String(SKINS_PAGE_SIZE));
+    const headers: HeadersInit = {};
+    if (process.env.LIVE_ADMIN_TOKEN) headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+    const response = await fetch(`${base}/api/skins/list?${query.toString()}`, { headers });
+    if (!response.ok) throw new Error(`Server ${response.status}`);
+    return response.json() as Promise<SkinsListResult>;
+  });
+
 export const fetchSkinById = createServerFn({ method: "GET" })
   .validator((data: { id?: unknown }) => {
     // Accepts a slug or a raw row id; slugs with the short-id collision
@@ -145,9 +177,33 @@ export const fetchSkinById = createServerFn({ method: "GET" })
     }
   });
 
+// The skin that already holds the .osk bytes being uploaded, so the modal can
+// link to it instead of just saying no.
+export interface DuplicateSkinRef {
+  id: string;
+  slug: string | null;
+  name: string;
+  ownerUsername: string;
+}
+
 export type StartSkinUploadResult =
   | { ok: true; id: string; token: string; expiresAt: string }
-  | { ok: false; error: "not_logged_in" | "unavailable" | "storage_not_configured" | "invalid_name" | "pending_limit" | "skin_limit" };
+  | { ok: false; error: "not_logged_in" | "unavailable" | "storage_not_configured" | "invalid_name" | "pending_limit" | "skin_limit" }
+  | { ok: false; error: "duplicate"; duplicate: DuplicateSkinRef | null };
+
+// SHA-256 of the picked .osk, hex, computed while the archive is being parsed.
+// The backend rejects a hash that already belongs to a published skin, which
+// turns a duplicate upload into an instant no instead of a 50MB transfer that
+// fails at the end. Returns null wherever WebCrypto is unavailable (an
+// insecure context); the server then catches the duplicate on its own hash.
+export async function hashOskFile(file: Blob): Promise<string | null> {
+  try {
+    const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+    return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  } catch {
+    return null;
+  }
+}
 
 interface SkinsBackend {
   base: string;
@@ -168,10 +224,13 @@ async function resolveSkinsBackend(): Promise<SkinsBackend | null> {
 }
 
 export const startSkinUpload = createServerFn({ method: "POST" })
-  .validator((data: { name?: unknown; author?: unknown; description?: unknown }) => ({
+  .validator((data: { name?: unknown; author?: unknown; description?: unknown; oskSha256?: unknown }) => ({
     name: typeof data.name === "string" ? data.name.slice(0, 80) : "",
     author: typeof data.author === "string" ? data.author.slice(0, SKIN_AUTHOR_MAX_LENGTH) : "",
     description: typeof data.description === "string" ? data.description.slice(0, SKIN_DESCRIPTION_MAX_LENGTH) : "",
+    oskSha256: typeof data.oskSha256 === "string" && /^[0-9a-f]{64}$/i.test(data.oskSha256)
+      ? data.oskSha256.toLowerCase()
+      : null,
   }))
   .handler(async ({ data }): Promise<StartSkinUploadResult> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
@@ -182,13 +241,23 @@ export const startSkinUpload = createServerFn({ method: "POST" })
       const response = await fetch(`${cfg.base}/api/skins/start`, {
         method: "POST",
         headers: cfg.headers,
-        body: JSON.stringify({ userId: cfg.userId, username: cfg.username, name: data.name, author: data.author, description: data.description }),
+        body: JSON.stringify({
+          userId: cfg.userId,
+          username: cfg.username,
+          name: data.name,
+          author: data.author,
+          description: data.description,
+          oskSha256: data.oskSha256,
+        }),
       });
       const body = (await response.json().catch(() => null)) as
-        | { ok?: boolean; id?: string; token?: string; expiresAt?: string; error?: string }
+        | { ok?: boolean; id?: string; token?: string; expiresAt?: string; error?: string; duplicate?: DuplicateSkinRef }
         | null;
       if (response.ok && body?.ok && body.id && body.token) {
         return { ok: true, id: body.id, token: body.token, expiresAt: body.expiresAt ?? "" };
+      }
+      if (body?.error === "duplicate") {
+        return { ok: false, error: "duplicate", duplicate: body.duplicate ?? null };
       }
       if (body?.error === "invalid_name" || body?.error === "pending_limit" || body?.error === "skin_limit") {
         return { ok: false, error: body.error };
@@ -254,7 +323,13 @@ export const moderateSkin = createServerFn({ method: "POST" })
 export type SkinUploadPart = "osk" | "preview" | "screenshot";
 
 export class SkinUploadError extends Error {
-  constructor(readonly code: string, message: string, readonly status?: number) {
+  constructor(
+    readonly code: string,
+    message: string,
+    readonly status?: number,
+    // Set on code === "duplicate": the published skin holding these bytes.
+    readonly duplicate?: DuplicateSkinRef | null,
+  ) {
     super(message);
   }
 }
@@ -298,9 +373,9 @@ export function uploadSkinPart(options: {
         resolve();
         return;
       }
-      const body = xhr.response as { error?: string; reason?: string } | null;
+      const body = xhr.response as { error?: string; reason?: string; duplicate?: DuplicateSkinRef } | null;
       const code = body?.error === "invalid_osk" && body.reason ? `invalid_osk:${body.reason}` : body?.error ?? "upload_failed";
-      reject(new SkinUploadError(code, uploadErrorMessage(code, xhr.status), xhr.status));
+      reject(new SkinUploadError(code, uploadErrorMessage(code, xhr.status), xhr.status, body?.duplicate ?? null));
     };
     xhr.onerror = () => reject(new SkinUploadError("network", "The upload failed. Check the connection and try again."));
     xhr.onabort = () => reject(new SkinUploadError("aborted", "The upload was cancelled."));
@@ -330,6 +405,7 @@ export function uploadErrorMessage(code: string, status?: number): string {
     if (code.includes("not_a_zip") || code.includes("zip_unreadable")) return "This file is not a readable .osk archive.";
     return "This .osk could not be validated as a mania skin.";
   }
+  if (code === "duplicate") return "This exact .osk is already published on the site.";
   if (code === "invalid_image") return "Screenshots must be PNG, JPEG, or WebP images.";
   if (code === "screenshot_limit") return `A skin can have up to ${SKIN_MAX_SCREENSHOTS} screenshots.`;
   if (code === "rate_limited") return "Too many upload requests. Wait a minute and try again.";
@@ -358,35 +434,6 @@ export function skinOskFileUrl(skin: Pick<SkinSummary, "id" | "oskUrl">): string
     // Malformed escape: treat the segment as a literal filename.
   }
   return `${base}/api/skins/file/${encodeURIComponent(skin.id)}/${encodeURIComponent(filename)}`;
-}
-
-// Maps eligible for the skin page's in-browser player. The backend only
-// returns charts whose .osu and audio are already cached, so playback starts
-// instantly and never triggers a beatmap archive download.
-export interface SkinPreviewMap {
-  beatmapId: number;
-  beatmapsetId: number;
-  title: string;
-  artist: string;
-  creator: string | null;
-  version: string;
-  keys: number;
-  difficultyRating: number;
-  totalLength: number;
-  audioFilename: string;
-}
-
-export async function fetchSkinPreviewMaps(q: string, keys?: number | null, init?: RequestInit): Promise<SkinPreviewMap[]> {
-  const base = getLiveBackendUrl();
-  if (!base) return [];
-  const query = new URLSearchParams();
-  const trimmed = q.trim();
-  if (trimmed) query.set("q", trimmed.slice(0, 80));
-  if (keys && Number.isInteger(keys) && keys >= 1 && keys <= 10) query.set("keys", String(keys));
-  const response = await fetch(`${base}/api/skins/preview-maps?${query.toString()}`, { credentials: "omit", ...init });
-  if (!response.ok) throw new Error(`Server ${response.status}`);
-  const body = (await response.json()) as { maps?: SkinPreviewMap[] };
-  return body.maps ?? [];
 }
 
 export function formatSkinFileSize(bytes: number | null | undefined): string {

@@ -162,40 +162,37 @@ export interface SkinPreviewRenderOptions {
 }
 
 // Real ranked mania sets whose covers back the preview like in-game map art.
-// All verified to have a fullsize cover on assets.ppy.sh. Exported so the
-// upload modal can offer them as a backdrop picker.
+// All verified to have a fullsize cover on assets.ppy.sh, and all pre-shrunk
+// into public/images/skin-preview-backdrops. The live pool the upload modal
+// offers is drawn from the map catalog (see skin-preview-backdrops.ts); this
+// baked list is its offline fallback.
 export const SKIN_PREVIEW_BACKGROUND_SETS = [
   2556057, 2297326, 2127200, 476691, 712142, 2344640, 849169,
   2076003, 2045674, 1297881, 2485019, 1112479, 2519924, 2383217,
 ];
+
+const PREBUILT_BACKGROUND_SETS = new Set(SKIN_PREVIEW_BACKGROUND_SETS);
 
 // Small direct thumbnail for picker rows; plain <img> display needs no CORS.
 export function skinPreviewBackgroundThumbUrl(setId: number): string {
   return `https://assets.ppy.sh/beatmaps/${setId}/covers/card.jpg`;
 }
 
-// Loads one set's cover from the pre-shrunk static copies in
-// public/images/skin-preview-backdrops (~50-190 KB each, built by
-// scripts/build-skin-preview-backdrops.mjs; rerun it when the set list
-// changes). Same-origin, so the canvas stays clean. A missing copy falls
-// back to proxying the multi-MB original through /api/background
-// (assets.ppy.sh sends no CORS headers, so a direct load would taint the
-// canvas), and resolves null when nothing loads; the renderer then uses its
-// flat triangle backdrop.
+// Loads one set's cover for the canvas. The baked ids come from the pre-shrunk
+// static copies in public/images/skin-preview-backdrops (~50-190 KB each,
+// built by scripts/build-skin-preview-backdrops.mjs; rerun it when the list
+// changes) - same-origin, so the canvas stays clean. Anything drawn from the
+// live catalog has no static copy, so it proxies the original through
+// /api/background instead (assets.ppy.sh sends no CORS headers, so a direct
+// load would taint the canvas); that response is edge-cached for a year, so a
+// cover only costs its download once. Resolves null when nothing loads; the
+// renderer then uses its flat triangle backdrop.
 export function loadSkinPreviewBackgroundForSet(setId: number): Promise<HTMLImageElement | null> {
-  return decodeImage(`/images/skin-preview-backdrops/${setId}.webp`)
-    .catch(() => decodeImage(`/api/background?beatmapsetId=${setId}&inline=1&cover=fullsize`))
-    .catch(() => null);
-}
-
-// Random pick with fallbacks, for callers that do not care which cover.
-export async function loadSkinPreviewBackground(): Promise<HTMLImageElement | null> {
-  const pool = [...SKIN_PREVIEW_BACKGROUND_SETS].sort(() => Math.random() - 0.5).slice(0, 3);
-  for (const setId of pool) {
-    const image = await loadSkinPreviewBackgroundForSet(setId);
-    if (image) return image;
-  }
-  return null;
+  const proxied = () => decodeImage(`/api/background?beatmapsetId=${setId}&inline=1&cover=fullsize`);
+  const source = PREBUILT_BACKGROUND_SETS.has(setId)
+    ? decodeImage(`/images/skin-preview-backdrops/${setId}.webp`).catch(proxied)
+    : proxied();
+  return source.catch(() => null);
 }
 
 export async function renderSkinPreview(

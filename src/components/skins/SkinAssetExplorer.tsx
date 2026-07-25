@@ -1,6 +1,7 @@
 import JSZip from "jszip";
-import { ChevronDown, Volume2 } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Pause, Play, Volume2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   buildSkinAssetGroups,
   extractSkinIniStageReferences,
@@ -178,20 +179,324 @@ function AssetGroupSection({
               ))}
             </p>
           )}
-          <div className="flex flex-wrap gap-2">
-            {group.entries.map((entry) => (
-              <SkinAssetTile key={entry.primaryPath} entry={entry} resolve={resolve} />
-            ))}
-          </div>
+          <SkinAssetTiles entries={group.entries} resolve={resolve} className="flex flex-wrap gap-2" />
         </div>
       )}
     </div>
   );
 }
 
+// A grid of asset tiles wired to the full-size viewer: clicking an image opens
+// it big, and the viewer walks the rest of the grid from there. Sounds stay
+// click-to-play. Shared by the skin page's explorer and the upload modal's
+// "Detected in the .osk" expansion so both browse the same way.
+export function SkinAssetTiles({
+  entries,
+  resolve,
+  className,
+}: {
+  entries: SkinAssetEntry[];
+  resolve: (path: string) => Promise<string | null>;
+  className: string;
+}) {
+  const images = useMemo(() => entries.filter((entry) => entry.kind !== "sound"), [entries]);
+  const [viewing, setViewing] = useState<number | null>(null);
+
+  return (
+    <>
+      <div className={className}>
+        {entries.map((entry) => (
+          <SkinAssetTile
+            key={entry.primaryPath}
+            entry={entry}
+            resolve={resolve}
+            onOpen={entry.kind === "sound" ? undefined : () => setViewing(images.indexOf(entry))}
+          />
+        ))}
+      </div>
+      {viewing != null && images[viewing] && (
+        <SkinAssetViewer
+          entries={images}
+          index={viewing}
+          onIndex={setViewing}
+          onClose={() => setViewing(null)}
+          resolve={resolve}
+        />
+      )}
+    </>
+  );
+}
+
+type ViewerSurface = "checker" | "dark" | "light";
+
+const SURFACE_STYLES: Record<ViewerSurface, React.CSSProperties> = {
+  // Skin art is mostly transparent PNGs, and plenty of it is white-on-nothing
+  // (stage light, hit lighting) or black-on-nothing. The checker reads both,
+  // and the two flat surfaces are there to judge the art against what it
+  // actually sits on in game.
+  checker: {
+    backgroundImage: "repeating-conic-gradient(#2b2530 0% 25%, #1a161f 0% 50%)",
+    backgroundSize: "20px 20px",
+  },
+  dark: { backgroundColor: "#0f0c13" },
+  light: { backgroundColor: "#e9e6ee" },
+};
+
+const FRAME_INTERVAL_MS = 90;
+
+// Full-size look at one asset, with its frames if it animates. Rendered in a
+// portal so it sits above the upload modal that may have opened it.
+function SkinAssetViewer({
+  entries,
+  index,
+  onIndex,
+  onClose,
+  resolve,
+}: {
+  entries: SkinAssetEntry[];
+  index: number;
+  onIndex: (index: number) => void;
+  onClose: () => void;
+  resolve: (path: string) => Promise<string | null>;
+}) {
+  const entry = entries[index];
+  const [frame, setFrame] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [url, setUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [natural, setNatural] = useState<{ width: number; height: number } | null>(null);
+  const [surface, setSurface] = useState<ViewerSurface>("checker");
+  const [actualSize, setActualSize] = useState(false);
+
+  // Frames in the order they animate; a still asset is just its own path.
+  const framePaths = useMemo(() => sortedFramePaths(entry), [entry]);
+  const path = framePaths[Math.min(frame, framePaths.length - 1)] ?? entry.primaryPath;
+
+  useEffect(() => {
+    setFrame(0);
+    setPlaying(false);
+  }, [entry.primaryPath]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setFailed(false);
+    void resolve(path).then((resolved) => {
+      if (cancelled) return;
+      if (resolved) setUrl(resolved);
+      else setFailed(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [path, resolve]);
+
+  useEffect(() => {
+    if (!playing || framePaths.length < 2) return;
+    const timer = window.setInterval(() => setFrame((current) => (current + 1) % framePaths.length), FRAME_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [playing, framePaths.length]);
+
+  // Captured on document so the escape never reaches the upload modal behind
+  // this one, which would close both at once.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        onClose();
+        return;
+      }
+      if (event.key === "ArrowRight" && index < entries.length - 1) {
+        event.stopPropagation();
+        onIndex(index + 1);
+      }
+      if (event.key === "ArrowLeft" && index > 0) {
+        event.stopPropagation();
+        onIndex(index - 1);
+      }
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [entries.length, index, onClose, onIndex]);
+
+  if (typeof document === "undefined") return null;
+
+  const caption = entry.frameCount > 1 ? `${entry.name} · ${entry.frameCount} frames` : entry.name;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${entry.name} preview`}
+    >
+      <div
+        className="flex max-h-full w-full max-w-[720px] flex-col overflow-hidden rounded-xl border border-osu-b3/40 bg-osu-b3"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 px-4 py-2.5">
+          <div className="min-w-0">
+            <div className="truncate text-[13px] font-bold text-white">{caption}</div>
+            <div className="truncate text-[10.5px] text-osu-f1">{path}</div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="ml-auto shrink-0 rounded p-1 text-osu-f1 transition-colors cursor-pointer hover:text-white"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="relative grid min-h-[240px] flex-1 place-items-center overflow-auto" style={SURFACE_STYLES[surface]}>
+          {url && !failed ? (
+            <img
+              src={url}
+              alt={entry.name}
+              onLoad={(event) => setNatural({
+                width: event.currentTarget.naturalWidth,
+                height: event.currentTarget.naturalHeight,
+              })}
+              onError={() => setFailed(true)}
+              className={actualSize ? "max-w-none" : "max-h-[58vh] max-w-full object-contain"}
+              style={actualSize && natural ? { width: natural.width, height: natural.height } : undefined}
+            />
+          ) : (
+            <span className="text-[12px] text-osu-f1">{failed ? "This file could not be decoded." : "Loading..."}</span>
+          )}
+          {entries.length > 1 && (
+            <>
+              <ViewerArrow side="left" disabled={index === 0} onClick={() => onIndex(index - 1)} />
+              <ViewerArrow side="right" disabled={index === entries.length - 1} onClick={() => onIndex(index + 1)} />
+            </>
+          )}
+        </div>
+
+        {framePaths.length > 1 && (
+          <div className="flex items-center gap-1.5 overflow-x-auto border-t border-osu-b3/40 px-3 py-2">
+            <button
+              type="button"
+              onClick={() => setPlaying((previous) => !previous)}
+              className="flex shrink-0 items-center gap-1 rounded border border-osu-b3/60 px-1.5 py-0.5 text-[10.5px] font-bold text-osu-l2 transition-colors cursor-pointer hover:text-white"
+            >
+              {playing ? <Pause size={10} aria-hidden="true" /> : <Play size={10} aria-hidden="true" />}
+              {playing ? "pause" : "play"}
+            </button>
+            {framePaths.map((framePath, frameIndex) => (
+              <button
+                key={framePath}
+                type="button"
+                onClick={() => {
+                  setPlaying(false);
+                  setFrame(frameIndex);
+                }}
+                aria-pressed={frameIndex === frame}
+                className={`shrink-0 rounded px-1.5 py-0.5 text-[10.5px] font-bold tabular-nums transition-colors cursor-pointer ${
+                  frameIndex === frame ? "bg-osu-pink text-white" : "bg-osu-b5 text-osu-l2 hover:text-white"
+                }`}
+              >
+                {frameIndex}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2 border-t border-osu-b3/40 px-4 py-2 text-[11px] text-osu-f1">
+          <span className="tabular-nums">
+            {natural ? `${natural.width} × ${natural.height}` : "—"}
+          </span>
+          <span aria-hidden="true">·</span>
+          <span className="tabular-nums">{formatSkinFileSize(entry.totalBytes)}</span>
+          {entries.length > 1 && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span className="tabular-nums">{index + 1} of {entries.length}</span>
+            </>
+          )}
+          <div className="ml-auto flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setActualSize((previous) => !previous)}
+              aria-pressed={actualSize}
+              title={actualSize ? "Scale the image to fit" : "Show the image at its real pixel size"}
+              className={`rounded border px-1.5 py-0.5 text-[10.5px] font-bold transition-colors cursor-pointer ${
+                actualSize ? "border-osu-pink text-white" : "border-osu-b3/60 text-osu-l2 hover:text-white"
+              }`}
+            >
+              1:1
+            </button>
+            <div className="flex overflow-hidden rounded border border-osu-b3/60">
+              {(["checker", "dark", "light"] as const).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setSurface(option)}
+                  aria-pressed={surface === option}
+                  title={`View on a ${option} background`}
+                  className={`px-1.5 py-0.5 text-[10.5px] font-bold transition-colors cursor-pointer ${
+                    surface === option ? "bg-osu-pink text-white" : "text-osu-l2 hover:text-white"
+                  }`}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function ViewerArrow({ side, disabled, onClick }: { side: "left" | "right"; disabled: boolean; onClick: () => void }) {
+  const Icon = side === "left" ? ChevronLeft : ChevronRight;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={side === "left" ? "Previous asset" : "Next asset"}
+      className={`absolute top-1/2 -translate-y-1/2 rounded-full bg-black/55 p-1.5 text-white/90 transition-opacity cursor-pointer hover:bg-black/75 disabled:cursor-default disabled:opacity-0 ${
+        side === "left" ? "left-2" : "right-2"
+      }`}
+    >
+      <Icon className="h-4 w-4" aria-hidden="true" />
+    </button>
+  );
+}
+
+// Animation frames in play order. The entry keeps every path it absorbed,
+// which for an animated asset is "name-0", "name-1", ... plus possibly a still
+// and @2x copies; the numbered ones drive the animation, and anything without
+// a frame index (or a duplicate index) is not part of it.
+function sortedFramePaths(entry: SkinAssetEntry): string[] {
+  if (entry.frameCount < 2) return [entry.primaryPath];
+  const byFrame = new Map<number, string>();
+  for (const path of entry.paths) {
+    const base = path.slice(path.lastIndexOf("/") + 1).replace(/\.[a-z0-9]+$/i, "");
+    const match = /-(\d{1,3})(@2x)?$/i.exec(base);
+    if (!match) continue;
+    const frame = Number(match[1]);
+    // @2x wins, matching the thumbnail's preference for the bigger art.
+    if (!byFrame.has(frame) || match[2]) byFrame.set(frame, path);
+  }
+  const frames = [...byFrame.entries()].sort(([a], [b]) => a - b).map(([, path]) => path);
+  return frames.length > 1 ? frames : [entry.primaryPath];
+}
+
 // One asset as a thumbnail (or a play chip for sounds); also used by the
 // upload modal's "Detected in the .osk" expansion.
-export function SkinAssetTile({ entry, resolve }: { entry: SkinAssetEntry; resolve: (path: string) => Promise<string | null> }) {
+export function SkinAssetTile({
+  entry,
+  resolve,
+  onOpen,
+}: {
+  entry: SkinAssetEntry;
+  resolve: (path: string) => Promise<string | null>;
+  onOpen?: () => void;
+}) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const isSound = entry.kind === "sound";
@@ -238,8 +543,20 @@ export function SkinAssetTile({ entry, resolve }: { entry: SkinAssetEntry; resol
   }
 
   return (
-    <figure className="w-[96px]" title={caption + (entry.frameCount > 1 ? ` - ${entry.frameCount} frames` : "")}>
-      <div className="relative grid h-[72px] place-items-center overflow-hidden rounded-md border border-osu-b3/40 bg-osu-b5">
+    <figure className="w-[96px]" title={`${caption}${entry.frameCount > 1 ? ` - ${entry.frameCount} frames` : ""}${onOpen ? " - click to view" : ""}`}>
+      <div
+        // A plain div when nothing can open it, so the skin page keeps working
+        // if a caller has no viewer to hand.
+        {...(onOpen ? { role: "button", tabIndex: 0, onClick: onOpen, onKeyDown: (event: React.KeyboardEvent) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onOpen();
+          }
+        } } : {})}
+        className={`relative grid h-[72px] place-items-center overflow-hidden rounded-md border border-osu-b3/40 bg-osu-b5 ${
+          onOpen ? "cursor-pointer transition-colors hover:border-osu-pink/45" : ""
+        }`}
+      >
         {url ? (
           <img src={url} alt={entry.name} loading="lazy" className="max-h-full max-w-full object-contain" />
         ) : (

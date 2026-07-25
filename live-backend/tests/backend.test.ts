@@ -6320,15 +6320,16 @@ describe("live backend", () => {
 
     // Media spends its own window: an <audio> element's Range requests must not
     // be able to lock a visitor out of the costly JSON endpoints.
-    const skins = mockRes();
-    await routeHttp(mockReq("GET", "/api/skins/preview-maps", ip), skins.res, ctx);
-    expect(skins.res.statusCode).toBe(200);
-    expect(JSON.parse(skins.writes.join(""))).toMatchObject({ maps: [] });
+    // Whatever the draw answers on an empty db (202 while the snapshot warms),
+    // what matters is that the costly window was still there to spend.
+    const draw = mockRes();
+    await routeHttp(mockReq("GET", "/api/snapshots/maps-random-draw?country=CR&observe=1", ip), draw.res, ctx);
+    expect(draw.res.statusCode).not.toBe(429);
 
-    const skinsAgain = mockRes();
-    await routeHttp(mockReq("GET", "/api/skins/preview-maps?q=zenith", ip), skinsAgain.res, ctx);
-    expect(skinsAgain.res.statusCode).toBe(429);
-    expect(JSON.parse(skinsAgain.writes.join(""))).toMatchObject({ error: "rate_limited", bucket: "publicCostly" });
+    const drawAgain = mockRes();
+    await routeHttp(mockReq("GET", "/api/snapshots/maps-random-draw?country=CR&observe=1", ip), drawAgain.res, ctx);
+    expect(drawAgain.res.statusCode).toBe(429);
+    expect(JSON.parse(drawAgain.writes.join(""))).toMatchObject({ error: "rate_limited", bucket: "publicCostly" });
 
     // A different visitor is untouched by either window.
     const other = mockRes();

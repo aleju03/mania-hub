@@ -1610,6 +1610,13 @@ async function migrateSkins(db: Db): Promise<void> {
     create index if not exists idx_skins_owner
       on skins(owner_user_id, created_at desc)
   `);
+  // Duplicate-upload guard: the same .osk bytes are looked up by hash before a
+  // ticket is minted and again when the archive lands. Not unique - a hash can
+  // legitimately recur across pending rows and deleted-then-reuploaded skins.
+  await db.execute(`
+    create index if not exists idx_skins_osk_sha256
+      on skins(osk_sha256) where osk_sha256 is not null
+  `);
 }
 
 async function migrateAdminTodos(db: Db): Promise<void> {

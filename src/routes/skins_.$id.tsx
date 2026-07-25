@@ -6,7 +6,6 @@ import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { PageHeader } from "../components/layout/PageHeader";
 import { SKIN_FALLBACK_ACCENT, SkinKeymodeTags } from "../components/skins/SkinCard";
 import { SkinAssetExplorer } from "../components/skins/SkinAssetExplorer";
-import { SkinMapPreview } from "../components/skins/SkinMapPreview";
 import { Avatar } from "../components/ui/Avatar";
 import { useAuth } from "../lib/auth-context";
 import { canUseDevFeatures } from "../lib/auth-shared";
@@ -204,7 +203,6 @@ function SkinDetailPage() {
                       ))}
                     </div>
                   )}
-                  <SkinMapPreview skin={skin} />
                   <SkinAssetExplorer skin={skin} />
                 </div>
 
@@ -263,9 +261,12 @@ function SkinDetailPage() {
                     <FactRow label="Keymodes">
                       <SkinKeymodeTags keymodes={skin.keymodes} max={10} />
                     </FactRow>
-                    <FactRow label="Downloads">
-                      <span className="tabular-nums text-osu-l1">{skin.downloadCount.toLocaleString()}</span>
-                    </FactRow>
+                    {/* Owner-only, and null for everyone else. */}
+                    {skin.downloadCount != null && (
+                      <FactRow label="Downloads">
+                        <span className="tabular-nums text-osu-l1">{skin.downloadCount.toLocaleString()}</span>
+                      </FactRow>
+                    )}
                     {skin.oskSizeBytes ? (
                       <FactRow label="File size">
                         <span className="tabular-nums text-osu-l1">{formatSkinFileSize(skin.oskSizeBytes)}</span>

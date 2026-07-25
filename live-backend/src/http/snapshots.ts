@@ -52,8 +52,7 @@ import {
   writeReplayVideoUpload,
 } from "../replay-video/exports.js";
 import { isReplayVideoStorageConfigured } from "../replay-video/r2.js";
-import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, finishSkin, getSkin, getSkinByRef, getSkinForUpload, listSkins, recordSkinDownload, setSkinAccent, setSkinHidden, SKIN_MAX_SCREENSHOTS, toSkinSummary, upsertSkinKeymodePreview } from "../features/skins.js";
-import { listSkinPreviewMaps } from "../skins/preview-maps.js";
+import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, findPublishedSkinByOskSha256, withoutDownloadCount, finishSkin, getSkin, getSkinByRef, getSkinForUpload, listSkins, recordSkinDownload, setSkinAccent, setSkinHidden, SKIN_MAX_SCREENSHOTS, toSkinSummary, upsertSkinKeymodePreview } from "../features/skins.js";
 import { deleteSkinObjects, getSkinObject, isSkinStorageConfigured, skinKeymodePreviewKey, skinOskKey, skinPreviewKey, skinScreenshotKey, uploadSkinObject } from "../skins/r2.js";
 import { sniffImage, validateOskBuffer } from "../skins/validate-osk.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
@@ -1417,19 +1416,21 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
       return true;
     }
-    const includeHidden = url.searchParams.get("includeHidden") === "1" && isAdmin(req, ctx);
+    const admin = isAdmin(req, ctx);
+    const includeHidden = url.searchParams.get("includeHidden") === "1" && admin;
     const keymode = Number(url.searchParams.get("k"));
     const page = Number(url.searchParams.get("page") ?? 0);
     const pageSize = Number(url.searchParams.get("pageSize") ?? 24);
-    if (!includeHidden) res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
-    sendJson(req, res, ctx, 200, await listSkins(ctx.db, {
+    if (!admin) res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
+    const list = await listSkins(ctx.db, {
       q: (url.searchParams.get("q") ?? "").slice(0, 80),
       keymode: Number.isInteger(keymode) && keymode >= 1 && keymode <= 10 ? keymode : null,
       page: Number.isFinite(page) ? page : 0,
       pageSize: Number.isFinite(pageSize) ? pageSize : 24,
       includeHidden,
       sort: url.searchParams.get("sort") === "downloads" ? "downloads" : "newest",
-    }));
+    });
+    sendJson(req, res, ctx, 200, admin ? list : { ...list, skins: list.skins.map(withoutDownloadCount) });
     return true;
   }
   if (url.pathname === "/api/skins/get") {
@@ -1446,30 +1447,8 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     if (!admin) res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
-    sendJson(req, res, ctx, 200, { skin: toSkinSummary(skin) });
-    return true;
-  }
-  if (url.pathname === "/api/skins/preview-maps") {
-    // Maps eligible for the skin page's in-browser player: .osu text cached
-    // in beatmap_osu_files and audio already extracted to R2, so picking one
-    // never triggers a beatmap archive download.
-    if (req.method !== "GET") {
-      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
-      return true;
-    }
-    // Free-text search that gzip-decompresses up to a hundred cached .osu files
-    // per call to resolve audio filenames. Debounced to one call per keystroke
-    // pause in the UI, so the costly ceiling is far above real usage.
-    if (!checkRate(req, res, ctx, "publicCostly")) return true;
-    const limit = Number(url.searchParams.get("limit") ?? 24);
-    const keys = Number(url.searchParams.get("keys"));
-    const maps = await listSkinPreviewMaps(ctx.db, ctx.config, {
-      q: (url.searchParams.get("q") ?? "").slice(0, 80),
-      keys: Number.isInteger(keys) && keys >= 1 && keys <= 10 ? keys : null,
-      limit: Number.isFinite(limit) ? limit : 24,
-    });
-    res.setHeader("cache-control", "public, max-age=120, stale-while-revalidate=600");
-    sendJson(req, res, ctx, 200, { maps });
+    const summary = toSkinSummary(skin);
+    sendJson(req, res, ctx, 200, { skin: admin ? summary : withoutDownloadCount(summary) });
     return true;
   }
   if (url.pathname === "/api/skins/download") {
@@ -1541,20 +1520,29 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 503, { error: "skin_storage_not_configured" });
       return true;
     }
-    const body = parseJson<{ userId?: unknown; username?: unknown; name?: unknown; author?: unknown; description?: unknown }>((await readBody(req)) || "{}", {});
+    const body = parseJson<{ userId?: unknown; username?: unknown; name?: unknown; author?: unknown; description?: unknown; oskSha256?: unknown }>((await readBody(req)) || "{}", {});
     const userId = Number(body.userId);
     if (!Number.isInteger(userId) || userId <= 0) {
       sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
       return true;
     }
+    const oskSha256 = typeof body.oskSha256 === "string" && /^[0-9a-f]{64}$/i.test(body.oskSha256)
+      ? body.oskSha256.toLowerCase()
+      : null;
     const result = await createPendingSkin(ctx.serveWriteDb ?? ctx.db, {
       ownerUserId: userId,
       ownerUsername: typeof body.username === "string" ? body.username : "",
       name: typeof body.name === "string" ? body.name : "",
       author: typeof body.author === "string" ? body.author : null,
       description: typeof body.description === "string" ? body.description : null,
+      oskSha256,
     });
     if (!result.ok) {
+      if (result.error === "duplicate") {
+        logInfo("skin_upload_duplicate", { ownerUserId: userId, stage: "start", existingId: result.duplicate.id });
+        sendJson(req, res, ctx, 409, { ok: false, error: "duplicate", duplicate: result.duplicate });
+        return true;
+      }
       sendJson(req, res, ctx, result.error === "invalid_name" ? 400 : 429, { ok: false, error: result.error });
       return true;
     }
@@ -1585,7 +1573,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         return true;
       }
       logInfo("skin_upload_finish", { id, ownerUserId: result.skin.ownerUserId, keymodes: result.skin.keymodes });
-      sendJson(req, res, ctx, 200, { ok: true, skin: result.skin });
+      sendJson(req, res, ctx, 200, { ok: true, skin: withoutDownloadCount(result.skin) });
       return true;
     }
     const skin = id && token ? await getSkinForUpload(ctx.db, id, token) : null;
@@ -1599,6 +1587,16 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       const validation = await validateOskBuffer(buffer);
       if (!validation.ok) {
         sendJson(req, res, ctx, 400, { ok: false, error: "invalid_osk", reason: validation.error });
+        return true;
+      }
+      // Server-side duplicate check on the hash we computed ourselves: the one
+      // at /api/skins/start trusts a client-sent hash, and the file can differ
+      // from the one that minted the ticket. Runs before the R2 write, so a
+      // rejected duplicate leaves no object behind.
+      const duplicate = await findPublishedSkinByOskSha256(ctx.db, validation.info.sha256, skin.id);
+      if (duplicate) {
+        logInfo("skin_upload_duplicate", { ownerUserId: skin.ownerUserId, stage: "osk", existingId: duplicate.id });
+        sendJson(req, res, ctx, 409, { ok: false, error: "duplicate", duplicate });
         return true;
       }
       const key = skinOskKey(skin.id, skin.name);
