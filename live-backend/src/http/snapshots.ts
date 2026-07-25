@@ -6,7 +6,7 @@ import type { Config } from "../config.js";
 import { handleBeatmapAudioRequest, handleBeatmapHitsoundsRequest, handlePreviewAudioRequest } from "../audio/http.js";
 import { activateCountry, deleteCountryData, getCountryRegistry, getCountryRegistryRow, GLOBAL_COUNTRY_CODE, isCountryFeatureAtLeast, isGlobalCountry, setCountryFeatureTier, setCountryPaused, setCountryStatus, type CountryFeatureTier, type CountryRegistryStatus } from "../countries.js";
 import type { Db } from "../db.js";
-import { dbHealth, exec, getSqliteBusyRetryStats, parseJson } from "../db.js";
+import { dbHealth, exec, getSqliteBusyRetryStats, parseJson, readSchemaMigrationState, SQLITE_MIGRATION_TOTAL_BUSY_WAIT_MS } from "../db.js";
 import { lnAdjustedMsd } from "../dan/msd.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION, getPlayerActivityAvailability, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../features/activity.js";
 import { clearDoneAdminTodos, createAdminTodo, deleteAdminTodo, listAdminTodos, updateAdminTodo, type CreateTodoInput, type UpdateTodoInput } from "../features/admin-todos.js";
@@ -2394,25 +2394,82 @@ export function warmStatusBodyCache(ctx: HttpContext): void {
 // boot so a user never fronts that cost. Runs on the maps snapshot thread; if
 // the thread is unavailable (memory DB, MAPS_SNAPSHOT_THREAD=0, vitest) this
 // deliberately does nothing rather than stall the main event loop.
+//
+// The build is a pure read (it never takes the write lock), but it pegs a core
+// for ~32s, streams ~200MB and grows a ~700MB heap, so landing it on top of a
+// deploy's schema migration on a 2-vCPU / 3.7GB box starves the writer of CPU
+// and page cache. No constant can separate the two: migrate() may now spend up
+// to SQLITE_MIGRATION_TOTAL_BUSY_WAIT_MS purely waiting out a concurrent writer,
+// so a delay big enough for the contended case would penalize every ordinary
+// restart (where the migration is done in seconds) with minutes of cold board.
+// So observe it instead — migrate() publishes its start/finish in live_meta —
+// and keep the floor at the boot-burst settle time it always was.
 const MAPS_GLOBAL_FARMED_WARMUP_DELAY_MS = 15_000;
+// Poll only while a migration is actually in flight, and never longer than the
+// window in which one could still be making progress: past that the worker has
+// either finished, died (systemd restarts it), or left a stale in-flight marker
+// behind, and none of those is a reason to leave the board cold forever.
+const MAPS_GLOBAL_FARMED_WARMUP_POLL_MS = 5_000;
+const MAPS_GLOBAL_FARMED_WARMUP_MAX_WAIT_MS = SQLITE_MIGRATION_TOTAL_BUSY_WAIT_MS + 60_000;
 
 export function warmGlobalMapsFarmedBoard(ctx: HttpContext): void {
-  const timer = setTimeout(() => {
-    void (async () => {
-      const meta = await getMapsSnapshotMeta(ctx.db, GLOBAL_COUNTRY_CODE);
-      if (!meta.refreshedAt) return;
-      await buildGlobalMapsResponseOnThread(ctx, {
-        kind: "maps-page",
-        country: GLOBAL_COUNTRY_CODE,
-        // Any pp > 0 routes through the filtered path and builds the shared
-        // board; the specific filter values do not matter.
-        query: { tab: "farmed", page: 0, pageSize: 48, key: "all", beatmapSort: "players", farmedSort: "players", dir: "desc", status: "all", pp: 1, mod: "all", q: "" },
-        encoding: null,
-        maxAgeMs: ctx.config.mapsRefreshIntervalMs,
+  void (async () => {
+    await unrefDelay(MAPS_GLOBAL_FARMED_WARMUP_DELAY_MS);
+    await waitForQuietSchema(ctx.db);
+    const meta = await getMapsSnapshotMeta(ctx.db, GLOBAL_COUNTRY_CODE);
+    if (!meta.refreshedAt) return;
+    await buildGlobalMapsResponseOnThread(ctx, {
+      kind: "maps-page",
+      country: GLOBAL_COUNTRY_CODE,
+      // Any pp > 0 routes through the filtered path and builds the shared
+      // board; the specific filter values do not matter.
+      query: { tab: "farmed", page: 0, pageSize: 48, key: "all", beatmapSort: "players", farmedSort: "players", dir: "desc", status: "all", pp: 1, mod: "all", q: "" },
+      encoding: null,
+      maxAgeMs: ctx.config.mapsRefreshIntervalMs,
+    });
+  })().catch((error) => logWarn("maps_global_farmed_board_warmup_failed", errorContext(error)));
+}
+
+// Blocks while a worker/all-role process is inside migrate(). By the time this
+// first runs the floor above has elapsed, which is far longer than a restarting
+// worker needs to reach its in-flight marker (written right after the initial
+// schema), so "no marker in flight" here really does mean nobody is migrating.
+async function waitForQuietSchema(db: Db): Promise<void> {
+  const startedAt = Date.now();
+  let polls = 0;
+  for (;;) {
+    const state = await readSchemaMigrationState(db);
+    if (!state || state.completedAt) {
+      if (polls > 0) {
+        logInfo("maps_global_farmed_board_warmup_waited", {
+          detail: "deferred the global farmed board build until the schema migration finished",
+          waited_ms: Date.now() - startedAt,
+        });
+      }
+      return;
+    }
+    const migrationAgeMs = Date.now() - Date.parse(state.startedAt);
+    const stale = !Number.isFinite(migrationAgeMs) || migrationAgeMs > MAPS_GLOBAL_FARMED_WARMUP_MAX_WAIT_MS;
+    if (stale || Date.now() - startedAt >= MAPS_GLOBAL_FARMED_WARMUP_MAX_WAIT_MS) {
+      logWarn("maps_global_farmed_board_warmup_impatient", {
+        detail: "schema migration still marked in flight; building the global farmed board anyway",
+        migration_started_at: state.startedAt,
+        waited_ms: Date.now() - startedAt,
       });
-    })().catch((error) => logWarn("maps_global_farmed_board_warmup_failed", errorContext(error)));
-  }, MAPS_GLOBAL_FARMED_WARMUP_DELAY_MS);
-  timer.unref();
+      return;
+    }
+    polls += 1;
+    await unrefDelay(MAPS_GLOBAL_FARMED_WARMUP_POLL_MS);
+  }
+}
+
+// unref'd so a pending warm-up never holds the process open (the headless worker
+// role and every test rely on the event loop draining on its own).
+function unrefDelay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    timer.unref();
+  });
 }
 
 async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: boolean; snapshotCountry?: string } = {}) {

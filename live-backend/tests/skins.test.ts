@@ -108,11 +108,26 @@ describe("skin slugs", () => {
 
     expect(await backfillSkinSlugs(db)).toBe(1);
     expect((await getSkin(db, id))?.slug).toBe("old-upload");
-    // Pending rows stay slugless until they publish.
+
+    // Pending rows stay slugless until they publish. The one-shot marker the
+    // first call wrote would otherwise short-circuit before the query runs, so
+    // this case would pass without ever exercising the pending exclusion.
+    await exec(db, "delete from live_meta where key = 'skin_slug_backfill:v1'");
     const pending = await createPendingSkin(db, OWNER);
     if (!pending.ok) throw new Error("pending failed");
     expect(await backfillSkinSlugs(db)).toBe(0);
     expect((await getSkin(db, pending.id))?.slug).toBeNull();
+  });
+
+  it("stops scanning for slugless skins once the backfill has succeeded", async () => {
+    const id = await createPublishedSkin({ ownerUserId: 4, ownerUsername: "golf", name: "Marked Upload" });
+    expect(await backfillSkinSlugs(db)).toBe(0);
+
+    // The marker is now set, so a row that becomes slugless afterwards is left
+    // alone: the unindexed "slug is null" scan must not run on every boot.
+    await exec(db, "update skins set slug = null where id = ?", [id]);
+    expect(await backfillSkinSlugs(db)).toBe(0);
+    expect((await getSkin(db, id))?.slug).toBeNull();
   });
 });
 

@@ -18,6 +18,13 @@ export interface Config {
   workerHttpPort: number | null;
   // SQLite/libsql pragmas applied per connection at boot.
   sqliteBusyTimeoutMs: number;
+  // busy_timeout for the throwaway connection that runs migrate(). Much larger
+  // than the serving default because schema DDL on a deploy always races the
+  // still-running previous process, and blocking inside SQLite is far cheaper
+  // than re-issuing the statement from the retry loop in db.ts. Safe to block
+  // for this long only here: migrate() runs before any worker, timer, listener
+  // or request exists in the process.
+  sqliteMigrationBusyTimeoutMs: number;
   sqliteSynchronous: string;
   sqliteCacheMb: number;
   sqliteMmapMb: number;
@@ -254,6 +261,7 @@ export function readConfig(): Config {
     eventLogTailIntervalMs: readBoundedInt("EVENT_LOG_TAIL_INTERVAL_MS", 250, 50, 5_000),
     workerHttpPort: readOptionalInt("WORKER_HTTP_PORT"),
     sqliteBusyTimeoutMs: readBoundedInt("SQLITE_BUSY_TIMEOUT_MS", 2_000, 0, 60_000),
+    sqliteMigrationBusyTimeoutMs: readBoundedInt("SQLITE_MIGRATION_BUSY_TIMEOUT_MS", 10_000, 0, 60_000),
     sqliteSynchronous: (process.env.SQLITE_SYNCHRONOUS || "NORMAL").toUpperCase(),
     sqliteCacheMb: readBoundedInt("SQLITE_CACHE_MB", 64, 0, 2_048),
     sqliteMmapMb: readBoundedInt("SQLITE_MMAP_MB", 256, 0, 8_192),

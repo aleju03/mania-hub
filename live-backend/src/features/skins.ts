@@ -259,8 +259,17 @@ async function uniqueSkinSlug(db: Db, name: string, excludeId: string): Promise<
   return `${base}-${excludeId.slice(0, 8)}`;
 }
 
-// One-time boot backfill for rows published before slugs existed.
+const SLUG_BACKFILL_META_KEY = "skin_slug_backfill:v1";
+
+// One-time boot backfill for rows published before slugs existed. server.ts is
+// the only caller and no scheduler stands behind it, so it carries its own
+// one-shot marker: the "where slug is null" scan (slug has no index covering
+// nulls) stops running on every boot, and because the marker is written only
+// after the work succeeds, a boot that loses this to SQLITE_BUSY re-runs it on
+// the next one instead of leaving pre-slug skins slugless until someone notices.
 export async function backfillSkinSlugs(db: Db): Promise<number> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [SLUG_BACKFILL_META_KEY])).rows[0];
+  if (done) return 0;
   const rows = (await exec(
     db,
     "select id, name from skins where slug is null and status != 'pending'",
@@ -270,6 +279,11 @@ export async function backfillSkinSlugs(db: Db): Promise<number> {
     const slug = await uniqueSkinSlug(db, String(row.name ?? ""), id);
     await exec(db, "update skins set slug = ? where id = ?", [slug, id]);
   }
+  await exec(
+    db,
+    "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+    [SLUG_BACKFILL_META_KEY, JSON.stringify({ backfilled: rows.length }), nowIso()],
+  );
   return rows.length;
 }
 

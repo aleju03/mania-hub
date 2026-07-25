@@ -2,7 +2,7 @@ import { createClient, type Client, type InValue, type ResultSet, type Transacti
 import { mkdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { Config } from "./config.js";
-import { logWarn, errorContext } from "./logger.js";
+import { logInfo, logWarn, errorContext } from "./logger.js";
 import { extractManiaVariantPps } from "./shared/score.js";
 
 export type Db = Client;
@@ -20,6 +20,26 @@ const SQLITE_BUSY_RETRY_MAX_DELAY_MS = 500;
 // which is invisible to the user (the payload was already fetched).
 const SQLITE_BEST_EFFORT_WRITE_BUDGET_MS = readBoundedEnvInt("SQLITE_BEST_EFFORT_WRITE_BUDGET_MS", 250, 0, 5_000);
 
+// migrate() used to be the ONE write path in this process that bypassed the
+// busy-retry layer below: every statement went straight to the raw client, so
+// its whole tolerance for a concurrent writer was a single busy_timeout window
+// (2s by default). A deploy always races a live writer — the previous
+// server-role process keeps serving while this one restarts — and on 2026-07-24
+// that cost 12 worker crash-loops in ~2 minutes with score ingest down for the
+// whole window: one SQLITE_BUSY out of a CREATE INDEX / UPDATE killed boot and
+// systemd restarted straight back into the same contention.
+//
+// The budget below measures *time lost to lock contention*, not wall clock: only
+// a pass that died on SQLITE_BUSY counts against it, so a legitimately slow
+// migration (a fresh DB building 58 indexes) is never aborted for merely taking
+// its time, while a genuinely wedged database still fails loudly once the budget
+// is spent and systemd's restart stays the backstop.
+export const SQLITE_MIGRATION_TOTAL_BUSY_WAIT_MS = readBoundedEnvInt("SQLITE_MIGRATION_TOTAL_BUSY_WAIT_MS", 300_000, 0, 1_800_000);
+// Backoff between migration passes, so a writer that is mid-transaction gets a
+// moment to finish instead of being re-raced immediately.
+const MIGRATION_PASS_RETRY_INITIAL_DELAY_MS = 250;
+const MIGRATION_PASS_RETRY_MAX_DELAY_MS = 5_000;
+
 export interface SqliteBusyRetryStats {
   retryBudgetMs: number;
   operations: number;
@@ -31,6 +51,10 @@ export interface SqliteBusyRetryStats {
   leakedTxnRollbacks: number;
   reconnects: number;
   lastReconnectAt: string | null;
+  // Connection reopens performed by migrate() between passes. Counted apart
+  // from `reconnects` so that counter keeps meaning "a long-lived connection
+  // went stale" (the write-freeze signal) instead of "a deploy was contended".
+  migrationReconnects: number;
   // Best-effort cache writes that hit a busy writer and skipped rather than
   // wait out the durable budget. Tracked separately so it never looks like a
   // wedge (which the operations/attempts/exhausted counters above indicate).
@@ -48,6 +72,7 @@ const sqliteBusyRetryStats: SqliteBusyRetryStats = {
   leakedTxnRollbacks: 0,
   reconnects: 0,
   lastReconnectAt: null,
+  migrationReconnects: 0,
   bestEffortWriteSkips: 0,
 };
 
@@ -60,6 +85,11 @@ const sqliteBusyRetryStats: SqliteBusyRetryStats = {
 // client in place, invisibly to every holder of the Db reference.
 const RECONNECT = Symbol("mania.sqliteReconnect");
 const RECONNECT_MIN_INTERVAL_MS = 5_000;
+// Why a connection is being reopened. "wedge" is the stale-snapshot recovery
+// above; "migration" is migrate() discarding a connection that lost the write
+// lock. They are counted and rate-limited differently.
+type ReconnectReason = "wedge" | "migration";
+type ReconnectHook = (reason: ReconnectReason) => Promise<boolean>;
 
 export async function createDb(config: Pick<Config, "databaseUrl" | "databaseAuthToken"> & PragmaConfig): Promise<Db> {
   const isFile = config.databaseUrl.startsWith("file:");
@@ -81,9 +111,15 @@ export async function createDb(config: Pick<Config, "databaseUrl" | "databaseAut
   let inner = await open();
   if (!isFile) return inner;
   let lastReconnectAtMs = 0;
-  const reconnect = async (): Promise<boolean> => {
+  const reconnect = async (reason: ReconnectReason): Promise<boolean> => {
     const now = Date.now();
-    if (now - lastReconnectAtMs < RECONNECT_MIN_INTERVAL_MS) return false;
+    // The interval guard exists to stop reconnect churn on a long-lived serving
+    // connection that keeps losing to a busy writer. A migration reopen is a
+    // different animal: it is deliberate, already bounded by the migration's
+    // contention budget, and separated from the next one by a whole migration
+    // pass — and refusing it would strand migrate() on a connection whose writes
+    // can never commit. So it is never rate-limited.
+    if (reason !== "migration" && now - lastReconnectAtMs < RECONNECT_MIN_INTERVAL_MS) return false;
     lastReconnectAtMs = now;
     const previous = inner;
     inner = await open();
@@ -92,8 +128,15 @@ export async function createDb(config: Pick<Config, "databaseUrl" | "databaseAut
     } catch {
       // The old handle is being abandoned either way.
     }
-    sqliteBusyRetryStats.reconnects += 1;
-    sqliteBusyRetryStats.lastReconnectAt = new Date().toISOString();
+    // Counted apart, so "reconnects" keeps meaning "a long-lived connection went
+    // stale" — the write-freeze signal /api/status and /valley watch — instead of
+    // also meaning "a deploy was contended".
+    if (reason === "migration") {
+      sqliteBusyRetryStats.migrationReconnects += 1;
+    } else {
+      sqliteBusyRetryStats.reconnects += 1;
+      sqliteBusyRetryStats.lastReconnectAt = new Date().toISOString();
+    }
     return true;
   };
   return new Proxy(inner, {
@@ -136,38 +179,280 @@ async function applyConnectionPragmas(db: Db, config: PragmaConfig): Promise<voi
   }
 }
 
-export async function migrate(db: Db): Promise<void> {
+export interface MigrateOptions {
+  // Ceiling on the time this migration may lose to lock contention: failed
+  // passes plus the backoff between them. 0 keeps the pre-2026-07-24 behaviour
+  // (the first SQLITE_BUSY fails boot and systemd retries).
+  totalBusyBudgetMs?: number;
+}
+
+// A SQLITE_BUSY poisons the connection it came from. On the local libsql client
+// that connection then keeps accepting writes and reporting success while NONE
+// of them become visible to any other connection, and they are discarded when it
+// closes — verified cross-process against @libsql/client 0.17 with a second
+// process holding BEGIN IMMEDIATE: the whole migration resolved happily, the
+// migrating connection listed all 59 tables, and a separate process saw zero.
+// Retrying the failed statement in place would therefore turn the 2026-07-24
+// crash-loop into something worse: a worker that boots "successfully" onto a
+// schema that was never written.
+//
+// So contention is handled at pass granularity instead. The first SQLITE_BUSY
+// aborts the pass (nothing it wrote was durable anyway, and continuing to write
+// on a poisoned connection is what leaves its lock held even after close), the
+// connection is reopened, and the whole migration re-runs on the fresh one.
+// Re-running is always safe: every statement in a pass is idempotent, which is
+// the same property that lets migrate() run at every boot.
+export async function migrate(db: Db, options: MigrateOptions = {}): Promise<void> {
+  const state: MigrationBusyState = {
+    totalBudgetMs: options.totalBusyBudgetMs ?? SQLITE_MIGRATION_TOTAL_BUSY_WAIT_MS,
+    busyWaitedMs: 0,
+    failedPasses: 0,
+    lastBusySql: "",
+  };
+  const target = withMigrationBusyTracking(db, state);
+  const startedAt = Date.now();
+  const startedAtIso = new Date(startedAt).toISOString();
   const sql = await readFile(new URL("../migrations/001_initial.sql", import.meta.url), "utf8");
-  for (const statement of splitSql(sql)) {
-    await db.execute(statement);
+  const statements = splitSql(sql);
+  let delayMs = MIGRATION_PASS_RETRY_INITIAL_DELAY_MS;
+  for (;;) {
+    const passStartedAt = Date.now();
+    try {
+      await runMigrationPass(target, statements, startedAtIso);
+      // A deploy that had to wait out a writer must say so in the journal:
+      // silence would hide contention getting steadily worse until it exhausts
+      // the budget.
+      if (state.failedPasses > 0) {
+        logInfo("sqlite_migration_busy_summary", {
+          detail: "migration completed after waiting out a concurrent writer",
+          failed_passes: state.failedPasses,
+          busy_waited_ms: state.busyWaitedMs,
+          total_budget_ms: state.totalBudgetMs,
+          duration_ms: Date.now() - startedAt,
+        });
+      }
+      return;
+    } catch (error) {
+      // ONLY lock contention is retryable. A duplicate column, a syntax error, a
+      // constraint violation or a corrupt page must surface immediately and
+      // unchanged — exactly as before this wrapper existed.
+      if (!isSqliteBusyError(error) || state.totalBudgetMs <= 0) throw error;
+      state.failedPasses += 1;
+      // The whole pass is lost, so all of its time counts as time lost to
+      // contention, and so does the backoff before the next one.
+      state.busyWaitedMs += Date.now() - passStartedAt;
+      const remainingMs = state.totalBudgetMs - state.busyWaitedMs;
+      const waitMs = Math.min(delayMs, Math.max(0, remainingMs));
+      if (remainingMs <= 0 || !(await reopenForNextMigrationPass(db, state, error))) {
+        // Feed the shared counters so migration contention is finally visible in
+        // getSqliteBusyRetryStats() (/api/status, the admin panel). During the
+        // 2026-07-24 crash-loop those counters read clean while the worker died.
+        recordSqliteBusyRetry(error, 0, true, state.failedPasses);
+        logWarn("sqlite_migration_busy_exhausted", {
+          detail: "migration gave up waiting for the write lock; boot fails so systemd retries and a wedged database stays visible",
+          sql: state.lastBusySql,
+          failed_passes: state.failedPasses,
+          busy_waited_ms: state.busyWaitedMs,
+          total_budget_ms: state.totalBudgetMs,
+          ...errorContext(error),
+        });
+        throw error;
+      }
+      if (state.failedPasses === 1) {
+        logWarn("sqlite_migration_busy_wait", {
+          detail: "migration pass hit a concurrent writer; reopening and re-running until the budget is spent",
+          sql: state.lastBusySql,
+          total_budget_ms: state.totalBudgetMs,
+          busy_waited_ms: state.busyWaitedMs,
+          ...errorContext(error),
+        });
+      }
+      recordSqliteBusyRetry(error, waitMs, false, state.failedPasses);
+      state.busyWaitedMs += waitMs;
+      await sleep(waitMs);
+      delayMs = Math.min(MIGRATION_PASS_RETRY_MAX_DELAY_MS, Math.ceil(delayMs * 1.6));
+    }
   }
-  await migrateCountryRegistryFeatureTier(db);
-  await migrateCountryRegistryKeepWarm(db);
-  await migrateScoreEventsIdentity(db);
-  await migrateProfileSnapshots(db);
-  await migrateMapsFarmedOverlay(db);
-  await migrateUserVariantPp(db);
-  await migrateFarmHelperShape(db);
-  await migrateApiCallTargets(db);
-  await migrateApiRateLimitReservations(db);
-  await migratePlayerActivity(db);
-  await migratePackCollectionCards(db);
-  await migrateTrackerIndexes(db);
-  await migrateSnipePersonalBests(db);
-  await migrateUserGoals(db);
-  await migrateBeatmapOsuFileCache(db);
-  await migrateMapSearchIndex(db);
-  await migrateMapCollections(db);
-  await migrateSkins(db);
-  await migrateAdminTodos(db);
-  await migrateDanBenchmark(db);
-  await migrateAvatarAccents(db);
-  await migrateOsuProxyCache(db);
-  await migrateCountryMapsSnapshotStampsIndex(db);
-  await migrateChartAnalysisDtRate(db);
-  await migrateTopPlayEventsHotColumns(db);
-  await migratePlayerSkillBaseline(db);
-  await migrateActivityMapsBestPayload(db);
+}
+
+// One full sweep of the schema. Idempotent by construction, so migrate() can run
+// it again on a reopened connection when contention poisoned the previous one.
+async function runMigrationPass(target: Db, statements: string[], startedAtIso: string): Promise<void> {
+  for (const statement of statements) {
+    await target.execute(statement);
+  }
+  // From here on, other processes can *observe* this migration instead of
+  // guessing at it: a serving process schedules its heavy board warm-up against
+  // this marker (http/snapshots.ts) rather than a fixed delay that a contended
+  // migrate() can now legitimately outlive. Stamped after the initial schema so
+  // live_meta is guaranteed to exist; a database that fresh has no serving
+  // process to inform anyway (it is still blocked in waitForSchema).
+  await setMigrationSentinel(target, SCHEMA_MIGRATION_META_KEY, { startedAt: startedAtIso, completedAt: null });
+  await migrateCountryRegistryFeatureTier(target);
+  await migrateCountryRegistryKeepWarm(target);
+  await migrateScoreEventsIdentity(target);
+  await migrateProfileSnapshots(target);
+  await migrateMapsFarmedOverlay(target);
+  await migrateUserVariantPp(target);
+  await migrateFarmHelperShape(target);
+  await migrateApiCallTargets(target);
+  await migrateApiRateLimitReservations(target);
+  await migratePlayerActivity(target);
+  await migratePackCollectionCards(target);
+  await migrateTrackerIndexes(target);
+  await migrateSnipePersonalBests(target);
+  await migrateUserGoals(target);
+  await migrateBeatmapOsuFileCache(target);
+  await migrateMapSearchIndex(target);
+  await migrateMapCollections(target);
+  await migrateSkins(target);
+  await migrateAdminTodos(target);
+  await migrateDanBenchmark(target);
+  await migrateAvatarAccents(target);
+  await migrateOsuProxyCache(target);
+  await migrateCountryMapsSnapshotStampsIndex(target);
+  await migrateChartAnalysisDtRate(target);
+  await migrateTopPlayEventsHotColumns(target);
+  await migratePlayerSkillBaseline(target);
+  await migrateActivityMapsBestPayload(target);
+  await setMigrationSentinel(target, SCHEMA_MIGRATION_META_KEY, {
+    startedAt: startedAtIso,
+    completedAt: new Date().toISOString(),
+  });
+}
+
+// Reopens the connection between passes. This is NOT the stale-snapshot wedge
+// recovery (tryRecoverWedgedConnection): that one cures a LONG-LIVED connection
+// and reports itself through sqlite_wedged_connection_reopened plus the
+// "reconnects" counter that /api/status and /valley treat as the write-freeze
+// signal from the 2026-07-18/19 incident. A migration connection is seconds old
+// and has run only pragmas and DDL, so it cannot hold that stale pin, and deploy
+// contention is an expected event rather than an alarm — so this gets its own
+// message and counter and leaves that signal meaning what it has always meant.
+async function reopenForNextMigrationPass(db: Db, state: MigrationBusyState, cause: unknown): Promise<boolean> {
+  const reconnect = (db as unknown as Record<symbol, unknown>)[RECONNECT] as ReconnectHook | undefined;
+  // No reopen hook means a memory or remote database, where nothing outside this
+  // process holds the write lock in the first place. Nothing to recover.
+  if (!reconnect) return false;
+  try {
+    if (!(await reconnect("migration"))) return false;
+  } catch (error) {
+    logWarn("sqlite_migration_reopen_failed", errorContext(error));
+    return false;
+  }
+  logWarn("sqlite_migration_connection_reopened", {
+    detail: "a pass lost the write lock, so nothing it wrote can be trusted; reopened the connection and re-running the migration",
+    failed_passes: state.failedPasses,
+    busy_waited_ms: state.busyWaitedMs,
+    total_budget_ms: state.totalBudgetMs,
+    ...errorContext(cause),
+  });
+  return true;
+}
+
+interface MigrationBusyState {
+  totalBudgetMs: number;
+  busyWaitedMs: number;
+  failedPasses: number;
+  // SQL of the statement that lost the lock, for the give-up log line.
+  lastBusySql: string;
+}
+
+// Marks the proxy below so execBatch() can tell it is running inside migrate().
+const MIGRATION_TARGET = Symbol("mania.migrationTarget");
+
+function isMigrationDb(db: Db): boolean {
+  return (db as unknown as Record<symbol, unknown>)[MIGRATION_TARGET] === true;
+}
+
+// The migration connection needs no per-statement retry — a SQLITE_BUSY is
+// handled a level up, by redoing the whole pass on a reopened connection — but
+// it does need to be recognizable (so execBatch() never retries in place on it)
+// and it should name the statement that lost the lock. That is all this does:
+// one property read and one try/catch around the same single db.execute() as
+// before, so the ~30 test suites that migrate a fresh tmpdir database pay
+// nothing measurable.
+function withMigrationBusyTracking(db: Db, state: MigrationBusyState): Db {
+  return new Proxy(db, {
+    get(_target, prop) {
+      if (prop === MIGRATION_TARGET) return true;
+      if (prop === "execute") return (...args: unknown[]) => runMigrationStatement(db, args, state);
+      const value = (db as unknown as Record<string | symbol, unknown>)[prop];
+      // Bind to `db` (never to the proxy): libsql client methods read private
+      // fields off `this`, which throws when `this` is a Proxy.
+      return typeof value === "function" ? (value as (...args: unknown[]) => unknown).bind(db) : value;
+    },
+  }) as Db;
+}
+
+async function runMigrationStatement(db: Db, args: unknown[], state: MigrationBusyState): Promise<ResultSet> {
+  try {
+    // Member call, so `this` stays the client.
+    return await (db as unknown as { execute: (...args: unknown[]) => Promise<ResultSet> }).execute(...args);
+  } catch (error) {
+    if (isSqliteBusyError(error)) state.lastBusySql = describeMigrationSql(args);
+    throw error;
+  }
+}
+
+function describeMigrationSql(args: unknown[]): string {
+  const first = args[0];
+  const sql = typeof first === "string"
+    ? first
+    : first && typeof first === "object" && "sql" in first
+      ? String((first as { sql: unknown }).sql)
+      : "";
+  return sql.replace(/\s+/g, " ").trim().slice(0, 200);
+}
+
+// One-shot markers in live_meta, so a migration step that is expensive but only
+// ever needed once stops re-running (and re-holding the write lock) on every
+// boot. Always written AFTER the work, so a crash re-runs the whole step.
+async function hasMigrationSentinel(db: Db, key: string): Promise<boolean> {
+  const row = (await db.execute({ sql: "select value_json from live_meta where key = ? limit 1", args: [key] })).rows[0];
+  return row != null;
+}
+
+async function readMigrationSentinel<T>(db: Db, key: string, fallback: T): Promise<T> {
+  const row = (await db.execute({ sql: "select value_json from live_meta where key = ? limit 1", args: [key] })).rows[0];
+  return row ? parseJson<T>(String(row.value_json), fallback) : fallback;
+}
+
+// Cross-process migration state, written by migrate() and read by anything that
+// must not pile work onto a migrating worker. It answers "is a migration running
+// right now?" — which a delay constant can only guess at, and now guesses badly:
+// migrate() may legitimately spend minutes waiting out a deploy's write lock.
+export const SCHEMA_MIGRATION_META_KEY = "schema_migration:v1";
+
+export interface SchemaMigrationState {
+  startedAt: string;
+  // Null while migrate() is still running; set when it completes.
+  completedAt: string | null;
+}
+
+export async function readSchemaMigrationState(db: Db): Promise<SchemaMigrationState | null> {
+  try {
+    const row = (await db.execute({
+      sql: "select value_json from live_meta where key = ? limit 1",
+      args: [SCHEMA_MIGRATION_META_KEY],
+    })).rows[0];
+    if (!row) return null;
+    const parsed = parseJson<Partial<SchemaMigrationState>>(String(row.value_json), {});
+    if (typeof parsed.startedAt !== "string") return null;
+    return { startedAt: parsed.startedAt, completedAt: typeof parsed.completedAt === "string" ? parsed.completedAt : null };
+  } catch {
+    // live_meta may not exist yet (nobody has ever migrated this database).
+    // "Unknown" and "nobody is migrating" are the same answer to every caller.
+    return null;
+  }
+}
+
+async function setMigrationSentinel(db: Db, key: string, value: unknown = true): Promise<void> {
+  await db.execute({
+    sql: `insert into live_meta (key, value_json, updated_at) values (?, ?, ?)
+          on conflict(key) do update set value_json = excluded.value_json, updated_at = excluded.updated_at`,
+    args: [key, json(value), new Date().toISOString()],
+  });
 }
 
 // getMapsSnapshotMeta reads only (generated_at, refreshed_at) for a country on
@@ -231,9 +516,35 @@ export async function exec(db: Db, sql: string, args: InValue[] = [], options?: 
 export async function execBatch(db: Db, statements: DbStatement[], mode: TransactionMode = "write") {
   if (statements.length === 0) return [];
   const results: ResultSet[] = [];
+  // Inside migrate() the statements go through .execute() ONE AT A TIME, with no
+  // retry wrapper. Three reasons, in order of severity (all verified against
+  // @libsql/client 0.17 on a local file URL):
+  //  1. A .batch() that loses the race to a concurrent writer leaves the
+  //     connection holding a leaked open transaction. Every later .batch() on it
+  //     then fails "SQLITE_BUSY: cannot commit transaction - SQL statements in
+  //     progress" no matter how free the lock is, and later .execute()s REPORT
+  //     SUCCESS while their writes never commit and vanish when the connection
+  //     closes. migrate() answers a SQLITE_BUSY by reopening the connection and
+  //     re-running the whole pass, which cures that — but only if the busy error
+  //     is allowed to reach it instead of being retried in place here.
+  //  2. Retrying here would also stack the generic 15s budget on top of the
+  //     migration budget — migrateUserVariantPp, the one migration write that
+  //     still went through execBatch, is exactly the case finding 3 is about.
+  //  3. recoverDb would be the migration proxy, so the wedge-recovery "rollback"
+  //     forensics probe would run through it rather than being the instant probe
+  //     it is written to be.
+  // Losing atomicity is free here: the only migration caller writes independent
+  // single-row backfills and records its sentinel only after the last one, so a
+  // partial run simply re-runs on the next boot.
+  if (isMigrationDb(db)) {
+    for (const { sql, args = [] } of statements) results.push(await db.execute({ sql, args }));
+    return results;
+  }
   for (let index = 0; index < statements.length; index += EXEC_BATCH_MAX_STATEMENTS) {
-    const chunk = statements.slice(index, index + EXEC_BATCH_MAX_STATEMENTS);
-    results.push(...await withSqliteBusyRetry(() => db.batch(chunk.map(({ sql, args = [] }) => ({ sql, args })), mode), { recoverDb: db }));
+    const chunk = statements
+      .slice(index, index + EXEC_BATCH_MAX_STATEMENTS)
+      .map(({ sql, args = [] }) => ({ sql, args }));
+    results.push(...await withSqliteBusyRetry(() => db.batch(chunk, mode), { recoverDb: db }));
   }
   return results;
 }
@@ -338,7 +649,7 @@ async function withSqliteBusyRetry<T>(operation: () => Promise<T>, options: Busy
 // libsql local). Rate-limited inside the reconnect hook so plain long-lived
 // contention (a worker holding the write lock) cannot cause reconnect churn.
 async function tryRecoverWedgedConnection(db: Db, cause: unknown): Promise<boolean> {
-  const reconnect = (db as unknown as Record<symbol, unknown>)[RECONNECT] as (() => Promise<boolean>) | undefined;
+  const reconnect = (db as unknown as Record<symbol, unknown>)[RECONNECT] as ReconnectHook | undefined;
   if (!reconnect) return false;
   let hadOpenTxn = false;
   try {
@@ -350,7 +661,7 @@ async function tryRecoverWedgedConnection(db: Db, cause: unknown): Promise<boole
   }
   let reconnected = false;
   try {
-    reconnected = await reconnect();
+    reconnected = await reconnect("wedge");
   } catch (error) {
     logWarn("sqlite_reconnect_failed", errorContext(error));
     return false;
@@ -546,11 +857,7 @@ async function migrateUserVariantPp(db: Db): Promise<void> {
   }
 
   const backfillKey = "farm_helper_variant_pp_backfill:v1";
-  const done = (await db.execute({
-    sql: "select 1 from live_meta where key = ? limit 1",
-    args: [backfillKey],
-  })).rows[0];
-  if (done) return;
+  if (await hasMigrationSentinel(db, backfillKey)) return;
 
   const rows = (await db.execute(
     "select user_id, profile_json from users where profile_json like '%\"variants\"%'",
@@ -573,11 +880,7 @@ async function migrateUserVariantPp(db: Db): Promise<void> {
     });
   }
   await execBatch(db, updates);
-  await db.execute({
-    sql: `insert into live_meta (key, value_json, updated_at) values (?, ?, ?)
-          on conflict(key) do update set value_json = excluded.value_json, updated_at = excluded.updated_at`,
-    args: [backfillKey, json(true), new Date().toISOString()],
-  });
+  await setMigrationSentinel(db, backfillKey);
 }
 
 // Per-peer chart-shape profile for the farm helper (Stage 3). Populated by the
@@ -599,10 +902,31 @@ async function migrateFarmHelperShape(db: Db): Promise<void> {
 // count/pp-gain scans off the payload overflow pages entirely.
 async function migrateTopPlayEventsHotColumns(db: Db): Promise<void> {
   const columns = (await db.execute("pragma table_info(top_play_events)")).rows.map((row) => String(row.name));
-  if (!columns.includes("score_time")) {
-    await db.execute("alter table top_play_events add column score_time text");
-    await db.execute("alter table top_play_events add column score_beatmap_id integer");
-    await db.execute("alter table top_play_events add column key_count real");
+  // Guarded per column rather than as one block behind `score_time`, same as the
+  // map search index and map collections below. migrations/001_initial.sql
+  // creates top_play_events WITHOUT any of the three, so EVERY fresh database
+  // walks this path — and a boot that died between the 1st and 2nd ALTER (budget
+  // exhaustion, a deploy's SIGTERM) used to find score_time present next time,
+  // skip its two siblings permanently, and then throw "no such column: key_count"
+  // out of the index below. That is not a busy error, so the retry loop rethrows
+  // it on attempt 1 and every subsequent boot fails identically, forever.
+  if (!columns.includes("score_time")) await db.execute("alter table top_play_events add column score_time text");
+  if (!columns.includes("score_beatmap_id")) await db.execute("alter table top_play_events add column score_beatmap_id integer");
+  if (!columns.includes("key_count")) await db.execute("alter table top_play_events add column key_count real");
+  // The backfills exist only to fill rows written before the columns did, so they
+  // must not re-run on a database that already has them (on prod score_time has
+  // been applied for a long time). They carry their own marker rather than riding
+  // the pre-ALTER snapshot: a crash between the score_time ALTER and these UPDATEs
+  // would otherwise make the next boot's snapshot report score_time present and
+  // skip them permanently, leaving every pre-existing row with a null score_time
+  // and key_count — silently dropped from the /top-plays window and the pp/gain
+  // sorts, with the indexes below built over those nulls and no error anywhere.
+  const backfillKey = "top_play_events_hot_column_backfill:v1";
+  const backfilled = (await db.execute({
+    sql: "select 1 from live_meta where key = ? limit 1",
+    args: [backfillKey],
+  })).rows[0];
+  if (!columns.includes("score_time") && !backfilled) {
     await db.execute(`
       update top_play_events set
         score_time = coalesce(case when json_valid(payload_json) then json_extract(payload_json, '$.time') end, detected_at),
@@ -614,6 +938,10 @@ async function migrateTopPlayEventsHotColumns(db: Db): Promise<void> {
       set key_count = (select b.cs from beatmaps b where b.beatmap_id = top_play_events.score_beatmap_id)
       where key_count is null and score_beatmap_id is not null
     `);
+    await db.execute({
+      sql: "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      args: [backfillKey, JSON.stringify({ at: new Date().toISOString() }), new Date().toISOString()],
+    });
   }
   await db.execute("create index if not exists idx_top_play_events_country_score_time on top_play_events(country, score_time desc, key_count)");
   await db.execute("create index if not exists idx_top_play_events_score_time on top_play_events(score_time desc, key_count, pp_gain, user_id)");
@@ -1397,8 +1725,21 @@ async function migrateBeatmapOsuFileCache(db: Db): Promise<void> {
     await db.execute("alter table beatmap_osu_files add column last_used_at text");
     await db.execute("update beatmap_osu_files set last_used_at = fetched_at where last_used_at is null");
   }
-  await db.execute("update beatmap_osu_files set raw_bytes = length(content) where raw_bytes = 0 and content is not null and length(content) > 0");
-  await db.execute("update beatmap_osu_files set last_used_at = fetched_at where last_used_at is null");
+  // These two heal rows written before raw_bytes / last_used_at existed. Every
+  // write path has set both columns for a long time now (osu/beatmap-file-cache.ts),
+  // so on a healed database they update zero rows — but neither predicate has a
+  // usable index, and on prod this table is ~1.3GB of inline .osu blobs, so
+  // "zero rows" still meant a full-table scan holding the write lock for seconds
+  // on EVERY boot. That is the lock a deploy's DDL was losing the race to.
+  // Run them once, record it, and stop paying the scan. Both are idempotent, and
+  // the marker is written only after both succeed, so a crash in between simply
+  // re-runs them rather than leaving half the table unhealed forever.
+  const legacyHealKey = "beatmap_osu_files_legacy_heal:v1";
+  if (!(await hasMigrationSentinel(db, legacyHealKey))) {
+    await db.execute("update beatmap_osu_files set raw_bytes = length(content) where raw_bytes = 0 and content is not null and length(content) > 0");
+    await db.execute("update beatmap_osu_files set last_used_at = fetched_at where last_used_at is null");
+    await setMigrationSentinel(db, legacyHealKey);
+  }
   // Covering index for the status/backfill count scans. The table's B-tree
   // pages are dominated by inline .osu blob content, so a "count the cached
   // rows" aggregate that touches the table reads gigabytes (a 10-40s scan
@@ -1453,15 +1794,16 @@ async function migrateMapSearchIndex(db: Db): Promise<void> {
     )
   `);
   // Chart-analysis join columns arrived after the table shipped; add them to
-  // existing databases (fresh ones get them from the create above).
+  // existing databases (fresh ones get them from the create above). Guarded per
+  // column rather than as one block behind `dan_label`: a boot that died between
+  // two ALTERs of a shared guard would find dan_label present next time and skip
+  // its four siblings permanently.
   const mapSearchColumns = new Set((await db.execute("pragma table_info(map_search_index)")).rows.map((row) => String(row.name)));
-  if (!mapSearchColumns.has("dan_label")) {
-    await db.execute("alter table map_search_index add column dan_label text");
-    await db.execute("alter table map_search_index add column dan_family text");
-    await db.execute("alter table map_search_index add column raw_dan real");
-    await db.execute("alter table map_search_index add column msd_json text");
-    await db.execute("alter table map_search_index add column pattern_tags text not null default ''");
-  }
+  if (!mapSearchColumns.has("dan_label")) await db.execute("alter table map_search_index add column dan_label text");
+  if (!mapSearchColumns.has("dan_family")) await db.execute("alter table map_search_index add column dan_family text");
+  if (!mapSearchColumns.has("raw_dan")) await db.execute("alter table map_search_index add column raw_dan real");
+  if (!mapSearchColumns.has("msd_json")) await db.execute("alter table map_search_index add column msd_json text");
+  if (!mapSearchColumns.has("pattern_tags")) await db.execute("alter table map_search_index add column pattern_tags text not null default ''");
   if (!mapSearchColumns.has("vibro")) {
     await db.execute("alter table map_search_index add column vibro integer not null default 0");
   }
@@ -1488,8 +1830,44 @@ async function migrateMapSearchIndex(db: Db): Promise<void> {
   await db.execute("create index if not exists idx_map_search_date_id on map_search_index(ranked_date, beatmap_id)");
   await db.execute("create index if not exists idx_map_search_raw_dan on map_search_index(raw_dan, beatmap_id)");
   // Fresh planner stats so SQLite picks the ordered-scan + anti-join plan over
-  // the older key_count-prefixed indexes. Cheap (<100ms) at boot.
+  // the older key_count-prefixed indexes.
+  await analyzeMapSearchIndexIfStale(db);
+}
+
+const MAP_SEARCH_ANALYZE_KEY = "map_search_index_analyze:v1";
+// Re-analyze once the table has grown/shrunk by this fraction (or 1k rows,
+// whichever is larger) since the last run.
+const MAP_SEARCH_ANALYZE_DRIFT = 0.25;
+
+// `analyze` is a WRITE (it rewrites sqlite_stat1) that scans the table plus all
+// 13 of its indexes — ~160MB on prod, seconds under memory pressure — and it
+// used to run on every single boot, holding the write lock while the other
+// process of a deploy was still serving. The planner only needs stats that are
+// roughly right, so run it only when they can actually have gone wrong:
+//   - the row count drifted (the reason stats decay in normal operation), or
+//   - the *index set* changed. This is the case row counts cannot see: a deploy
+//     that adds an index to this table — exactly what the deploy above did
+//     elsewhere — leaves the new index with no sqlite_stat1 row while the other
+//     13 have real ones, and that asymmetry is what makes the planner flip to a
+//     bad plan. Waiting for 23k rows of drift to fix it is not acceptable.
+// Both probes are cheap: the count is an index-only scan and the fingerprint is
+// a sqlite_master read (milliseconds each).
+async function analyzeMapSearchIndexIfStale(db: Db): Promise<void> {
+  const rows = Number((await db.execute("select count(*) as cnt from map_search_index")).rows[0]?.cnt ?? 0);
+  const indexes = (await db.execute(
+    "select name from sqlite_master where type = 'index' and tbl_name = 'map_search_index' order by name",
+  )).rows.map((row) => String(row.name)).join(",");
+  const previous = await readMigrationSentinel<{ rows?: number; indexes?: string }>(db, MAP_SEARCH_ANALYZE_KEY, {});
+  // A count recorded against an EMPTY table is not a baseline: stats over zero
+  // rows tell the planner nothing, and treating them as fresh used to suppress
+  // re-analysis until the table reached 1,000 rows. Any row at all invalidates
+  // them, so only an equally empty table counts as unchanged.
+  const rowsFresh = typeof previous.rows === "number"
+    && (previous.rows > 0 || rows === 0)
+    && Math.abs(rows - previous.rows) < Math.max(1_000, previous.rows * MAP_SEARCH_ANALYZE_DRIFT);
+  if (rowsFresh && previous.indexes === indexes) return;
   await db.execute("analyze map_search_index");
+  await setMigrationSentinel(db, MAP_SEARCH_ANALYZE_KEY, { rows, indexes, at: new Date().toISOString() });
 }
 
 async function migrateMapCollections(db: Db): Promise<void> {
@@ -1518,13 +1896,13 @@ async function migrateMapCollections(db: Db): Promise<void> {
   `);
   // The dan/MSD bucket columns arrived with the collections rework; add them to
   // databases created before it (fresh ones get them from the create above).
+  // Per column, not one block behind `axis`, for the same reason as the map
+  // search index above: a partial block must not be permanently skippable.
   const collectionColumns = new Set((await db.execute("pragma table_info(map_collections)")).rows.map((row) => String(row.name)));
-  if (!collectionColumns.has("axis")) {
-    await db.execute("alter table map_collections add column axis text");
-    await db.execute("alter table map_collections add column bucket_lo real");
-    await db.execute("alter table map_collections add column bucket_hi real");
-    await db.execute("alter table map_collections add column cover_sets_json text");
-  }
+  if (!collectionColumns.has("axis")) await db.execute("alter table map_collections add column axis text");
+  if (!collectionColumns.has("bucket_lo")) await db.execute("alter table map_collections add column bucket_lo real");
+  if (!collectionColumns.has("bucket_hi")) await db.execute("alter table map_collections add column bucket_hi real");
+  if (!collectionColumns.has("cover_sets_json")) await db.execute("alter table map_collections add column cover_sets_json text");
   await db.execute(`
     create table if not exists map_collection_members (
       collection_id text not null,

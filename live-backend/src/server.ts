@@ -1,8 +1,8 @@
 import { createServer } from "node:http";
 import { readConfig } from "./config.js";
-import { logWarn } from "./logger.js";
+import { errorContext, logWarn } from "./logger.js";
 import { ensurePinnedCountries, getIndexedCountryCodes, getMapsWarmCountryCodes, getRosterRefreshCountryCodes } from "./countries.js";
-import { createDb, exec, getSqliteBusyRetryStats, logApiCall, migrate } from "./db.js";
+import { createDb, exec, getSqliteBusyRetryStats, logApiCall, migrate, SQLITE_MIGRATION_TOTAL_BUSY_WAIT_MS } from "./db.js";
 import { AnalyticsStore } from "./features/analytics.js";
 import { routeHttp, sendNotFound, warmGlobalMapsFarmedBoard, warmStatusBodyCache } from "./http/snapshots.js";
 import { ScoreIngestor } from "./ingest/score-ingestor.js";
@@ -68,6 +68,30 @@ const REQUIRED_SCHEMA_TABLES = [
   "skins",
 ];
 
+// Same temporal-dead-zone hazard as REQUIRED_SCHEMA_TABLES above, and a sharper
+// one: waitForSchema reads SCHEMA_WAIT_TIMEOUT_MS as a *default parameter*, so
+// it is evaluated when createApp() calls it — on the microtask queue, while
+// module evaluation is still suspended at `await createApp()` in the entrypoint
+// block below. Declared under that block, this would throw "Cannot access
+// 'SCHEMA_WAIT_TIMEOUT_MS' before initialization" on every server-role boot,
+// before listen(), with nothing to catch it. Keep both consts above it.
+//
+// The two budgets must stay coherent, or a worker that is legitimately waiting
+// out a deploy's contention would take the serving process down with it:
+//   - migrate() (db.ts) may lose at most SQLITE_MIGRATION_TOTAL_BUSY_WAIT_MS
+//     (300s) to SQLITE_BUSY — the passes it has to throw away plus the backoff
+//     between them — then fails loudly. Add up to one in-flight busy_timeout
+//     (10s) of overshoot.
+//   - This poll must outlast that: 300s of contention + 120s of slack for the
+//     uncontended part of a fresh-database migration (106 schema statements plus
+//     27 helpers, including the big index batch) = 420s (7 min).
+// On an existing database this is a no-op: all 23 required tables already exist,
+// so the first poll returns in milliseconds no matter what the worker is doing.
+// It only bites on a first boot, where the server genuinely must wait for the
+// worker to reach migrateSkins (step 18 of 27).
+export const SCHEMA_WAIT_TIMEOUT_MS = SQLITE_MIGRATION_TOTAL_BUSY_WAIT_MS + 120_000;
+const SCHEMA_WAIT_LOG_INTERVAL_MS = 15_000;
+
 const IDLE_COUNTRY_ROSTER_REFRESH_INTERVAL_MS = 3 * 24 * 60 * 60 * 1000;
 
 export async function createApp() {
@@ -90,10 +114,29 @@ export async function createApp() {
     // rows it covers, and a half-applied migration on a full disk is worse
     // than a refused boot. Warns above the hard floor, throws below it.
     await assertMigrationDiskHeadroom(config);
-    await migrate(db);
+    // Migrate on a throwaway connection with a much larger busy_timeout than the
+    // serving/ingest default (10s vs 2s). A deploy restarts this process while
+    // the previous one is still writing, so every DDL statement races a live
+    // writer; absorbing that wait inside SQLite is by far the cheapest outcome,
+    // because a statement that gives up and returns SQLITE_BUSY costs the whole
+    // migration pass plus a connection reopen (db.ts explains why). Blocking
+    // this long is safe only here: nothing else in this process exists yet — no
+    // worker, no timer, no listener needs the event loop during migrate().
+    // Closed immediately after, so the process does not carry a second
+    // connection (and its page-cache/mmap window) for the rest of its life.
+    // Only for an on-disk database: with a ":memory:" URL a second connection is
+    // a second, private database (and nothing can contend with it anyway).
+    const migrationDb = usesSharedDbFile(config.databaseUrl)
+      ? await createDb({ ...config, sqliteBusyTimeoutMs: config.sqliteMigrationBusyTimeoutMs })
+      : null;
+    try {
+      await migrate(migrationDb ?? db);
+    } finally {
+      migrationDb?.close();
+    }
     // Data backfill rides with schema ownership: assign slugs to skins
     // published before the slug column existed.
-    await backfillSkinSlugs(db);
+    await bootWrite("backfill_skin_slugs", () => backfillSkinSlugs(db));
   }
   // The shared osu! limiter only touches api_rate_limit_reservations (a few
   // hundred rows, pruned to a 60s window) and one live_meta key. Inheriting the
@@ -138,8 +181,8 @@ export async function createApp() {
   // Startup writes belong to the ingest/worker side; a serving process stays
   // read-mostly so it never contends with the worker on these at boot.
   if (!isServerRole) {
-    await queue.shedPressure();
-    await ensurePinnedCountries(db, config);
+    await bootWrite("queue_shed_pressure", () => queue.shedPressure());
+    await bootWrite("ensure_pinned_countries", () => ensurePinnedCountries(db, config));
     // Keep the in-memory "who has open goals" filter warm in the process that ingests scores, so
     // the ingest hot path skips a DB lookup for players with no goals (and learns of goals created
     // by a separate server-role process within a refresh interval).
@@ -185,7 +228,7 @@ export async function createApp() {
     })) {
       startupRosterCountries.add(country);
     }
-    await enqueueRosterRefreshes(queue, [...startupRosterCountries]);
+    await bootWrite("enqueue_startup_roster_refreshes", () => enqueueRosterRefreshes(queue, [...startupRosterCountries]));
   }
   const worker = new WorkerRunner(db, queue, events, osu, ingestor);
   const discord = createDiscordRuntime({ db, osu, queue, config });
@@ -351,11 +394,37 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
 }
 
+// True only when every connection this process opens sees the same database on
+// disk — the case that both allows a dedicated migration connection and creates
+// the write-lock contention it exists to survive.
+function usesSharedDbFile(databaseUrl: string): boolean {
+  return databaseUrl.startsWith("file:") && databaseUrl.slice("file:".length).length > 0 && !databaseUrl.endsWith(":memory:");
+}
+
+// Boot-time bookkeeping writes (not schema). On a deploy these land in exactly
+// the contention window that used to kill migrate(), and none of them is worth a
+// crash-loop: pressure shedding re-runs every 60s, the pinned-country registry is
+// re-ensured on demand, and roster refreshes are re-enqueued by the roster
+// scheduler. The skin-slug backfill has no scheduler — it runs only here — but it
+// records its one-shot marker *after* it succeeds, so a boot that loses it simply
+// re-runs it on the next boot rather than leaving pre-slug skins slugless.
+// Crashing the worker over any of these would take score ingest down for the
+// whole restart loop, so log loudly and carry on — the server role already does
+// exactly this for ensurePinnedCountries.
+async function bootWrite(step: string, run: () => Promise<unknown>): Promise<void> {
+  try {
+    await run();
+  } catch (error) {
+    logWarn("boot_write_failed", { step, detail: "non-fatal boot write failed; continuing", ...errorContext(error) });
+  }
+}
+
 // A "server"-role process does not migrate; it waits for the worker/all process
 // to create the schema. Polls sqlite_master so a fresh deploy where both
 // processes restart together does not fail the window before migration.
-async function waitForSchema(db: Awaited<ReturnType<typeof createDb>>, timeoutMs = 60_000): Promise<void> {
+async function waitForSchema(db: Awaited<ReturnType<typeof createDb>>, timeoutMs = SCHEMA_WAIT_TIMEOUT_MS): Promise<void> {
   const startedAt = Date.now();
+  let loggedAt = 0;
   for (;;) {
     let missing: string[] = REQUIRED_SCHEMA_TABLES;
     try {
@@ -367,8 +436,21 @@ async function waitForSchema(db: Awaited<ReturnType<typeof createDb>>, timeoutMs
     } catch {
       // sqlite_master should always be readable; treat a failure as not-ready.
     }
-    if (Date.now() - startedAt > timeoutMs) {
+    const elapsedMs = Date.now() - startedAt;
+    if (elapsedMs > timeoutMs) {
       throw new Error(`schema not ready after ${timeoutMs}ms (is a worker/all-role process running to migrate it?); missing: ${missing.join(", ")}`);
+    }
+    // Waiting minutes for a migrating worker is now legitimate, so say so
+    // instead of sitting silent until the throw.
+    if (elapsedMs - loggedAt >= SCHEMA_WAIT_LOG_INTERVAL_MS) {
+      loggedAt = elapsedMs;
+      logWarn("schema_wait_pending", {
+        detail: "waiting for a worker/all-role process to finish migrating",
+        elapsed_ms: elapsedMs,
+        timeout_ms: timeoutMs,
+        missing_tables: missing.length,
+        missing: missing.slice(0, 5).join(", "),
+      });
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
