@@ -29,10 +29,36 @@ export interface BulkUploadUpdate {
   duplicate?: DuplicateSkinRef | null;
 }
 
+// Everything the per-file editor prepared ahead of the run. The renders come
+// in ready-made (the editor already parsed the archive and drew them against
+// the chosen backdrops), so publishing an edited item skips the parse and
+// render phases entirely and only hashes the file before streaming the parts.
+export interface BulkPreparedRender {
+  keys: number;
+  blob: Blob;
+  width: number;
+  height: number;
+  accent: string;
+}
+
+export interface BulkPreparedScreenshot {
+  blob: Blob;
+  width: number;
+  height: number;
+}
+
+export interface BulkPreparedDetails {
+  description: string;
+  coverKeymode: number;
+  renders: BulkPreparedRender[];
+  screenshots: BulkPreparedScreenshot[];
+}
+
 export interface BulkUploadItemInput {
   file: File;
   name: string;
   author: string | null;
+  details?: BulkPreparedDetails | null;
 }
 
 // A rate-limited response says how long to wait; sleeping exactly that long
@@ -176,22 +202,52 @@ export async function publishBulkSkin(
     return null;
   }
 
+  const details = item.details ?? null;
+
   try {
     stopIfCancelled();
     onUpdate({ phase: "reading", progress: 0 });
-    const imported = await importReplaySkinFromOsk(item.file, {
-      targetKeyCount: 4,
-      onProgress: (done, total) => onUpdate({ phase: "reading", progress: total > 0 ? done / total : 0 }),
-    });
+
+    // An edited item arrives with its renders already drawn; only untouched
+    // items parse the archive here.
+    let name = item.name.trim();
+    let author = (item.author ?? "").trim();
+    let renders: BulkPreparedRender[] = details?.renders ?? [];
+    let coverKeymode = details?.coverKeymode ?? 4;
+    if (!details) {
+      const imported = await importReplaySkinFromOsk(item.file, {
+        targetKeyCount: 4,
+        onProgress: (done, total) => onUpdate({ phase: "reading", progress: total > 0 ? done / total : 0 }),
+      });
+      stopIfCancelled();
+      name = name || imported.summary.name;
+      author = author || (imported.summary.author ?? "").trim();
+      const keymodes = [...imported.summary.keymodes].sort((a, b) => (a === 4 ? -1 : b === 4 ? 1 : a - b));
+      coverKeymode = keymodes.includes(4) ? 4 : keymodes[0];
+      const background = await backdropImageFor(context.dealer, context.backdrops);
+      stopIfCancelled();
+
+      onUpdate({ phase: "rendering", progress: 0 });
+      renders = [];
+      for (const keys of keymodes) {
+        stopIfCancelled();
+        const render = await renderSkinPreview(imported.settings, keys, { background });
+        renders.push({ keys, blob: render.blob, width: render.width, height: render.height, accent: render.accent });
+        onUpdate({ phase: "rendering", progress: renders.length / keymodes.length });
+      }
+    }
+    // The editor keeps cover and renders together, so a mismatch would be a
+    // bug; still, publishing with no cover flag at all is worse than fronting
+    // the first render.
+    if (!renders.some((render) => render.keys === coverKeymode)) coverKeymode = renders[0]?.keys ?? coverKeymode;
     stopIfCancelled();
 
     // Hashed before the ticket so an already-published file costs no transfer.
     const oskSha256 = await hashOskFile(item.file);
     stopIfCancelled();
 
-    const name = item.name.trim() || imported.summary.name;
     const started = await startAdminSkinUpload({
-      data: { name, author: (item.author ?? imported.summary.author ?? "").trim(), oskSha256 },
+      data: { name, author, description: details?.description ?? "", oskSha256 },
     });
     if (!started.ok) {
       if (started.error === "duplicate") {
@@ -203,22 +259,9 @@ export async function publishBulkSkin(
     }
     stopIfCancelled();
 
-    const keymodes = [...imported.summary.keymodes].sort((a, b) => (a === 4 ? -1 : b === 4 ? 1 : a - b));
-    const coverKeymode = keymodes.includes(4) ? 4 : keymodes[0];
-    const background = await backdropImageFor(context.dealer, context.backdrops);
-    stopIfCancelled();
-
-    onUpdate({ phase: "rendering", progress: 0 });
-    const renders: Array<{ keys: number; blob: Blob; width: number; height: number; accent: string }> = [];
-    for (const keys of keymodes) {
-      stopIfCancelled();
-      const render = await renderSkinPreview(imported.settings, keys, { background });
-      renders.push({ keys, blob: render.blob, width: render.width, height: render.height, accent: render.accent });
-      onUpdate({ phase: "rendering", progress: renders.length / keymodes.length });
-    }
-
-    // previews + the archive + the publish call
-    const steps = renders.length + 2;
+    const screenshots = details?.screenshots ?? [];
+    // previews + screenshots + the archive + the publish call
+    const steps = renders.length + screenshots.length + 2;
     let done = 0;
     const step = () => onUpdate({ phase: "uploading", progress: (done += 1) / steps });
     onUpdate({ phase: "uploading", progress: 0 });
@@ -241,6 +284,21 @@ export async function publishBulkSkin(
         keys: render.keys,
         cover: render.keys === coverKeymode,
         accent: render.keys === coverKeymode ? render.accent : undefined,
+      }), { onWait: waited, cancelled: context.cancelled });
+      step();
+    }
+
+    for (const shot of screenshots) {
+      stopIfCancelled();
+      await context.pacer.take(paced);
+      stopIfCancelled();
+      await withRateLimitRetry(() => uploadSkinPart({
+        id: started.id,
+        token: started.token,
+        part: "screenshot",
+        blob: shot.blob,
+        width: shot.width,
+        height: shot.height,
       }), { onWait: waited, cancelled: context.cancelled });
       step();
     }

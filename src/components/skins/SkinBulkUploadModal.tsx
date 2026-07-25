@@ -1,9 +1,14 @@
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Layers, Trash2, Upload, X } from "lucide-react";
+import { Check, Layers, Pencil, Trash2, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { readOskManifest } from "../../lib/replay-skin-import";
+import {
+  SkinBulkDetailsEditor,
+  type BulkEditorResult,
+  type BulkItemDetails,
+} from "./SkinBulkDetailsEditor";
 import {
   BulkUploadCancelled,
   drawBulkBackdrops,
@@ -22,7 +27,9 @@ import {
 // Admin-only bulk publish: drop a folder's worth of .osk files, watch them go
 // up one by one. Every file takes the same path a single upload does, so the
 // results are ordinary skins - the only difference is that the per-user caps
-// are lifted for the run and nobody is asked to fill a form forty times.
+// are lifted for the run and nobody is *made* to fill a form forty times. Any
+// row can still opt into the full single-upload form (previews, backdrops,
+// cover, description, screenshots) through its pencil button.
 
 interface BulkItem {
   id: string;
@@ -31,11 +38,21 @@ interface BulkItem {
   name: string;
   author: string | null;
   keymodes: number[];
+  // Everything the per-file editor saved; null rows publish with defaults.
+  details: BulkItemDetails | null;
   phase: BulkPhase;
   progress: number;
   message: string | null;
   skin: SkinSummary | null;
   duplicate: DuplicateSkinRef | null;
+}
+
+// The saved renders and screenshots hold object URLs; dropping a row (or its
+// details) without revoking them would leak the blobs for the session.
+function releaseDetails(details: BulkItemDetails | null): void {
+  if (!details) return;
+  for (const render of details.renders) URL.revokeObjectURL(render.url);
+  for (const shot of details.screenshots) URL.revokeObjectURL(shot.url);
 }
 
 const PHASE_LABELS: Record<BulkPhase, string> = {
@@ -70,6 +87,8 @@ export function SkinBulkUploadModal({
   const [items, setItems] = useState<BulkItem[]>([]);
   const [reading, setReading] = useState(0);
   const [running, setRunning] = useState(false);
+  // The row whose details editor is open, if any.
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [bodyLockActive, setBodyLockActive] = useState(false);
   const cancelRef = useRef(false);
@@ -117,6 +136,7 @@ export function SkinBulkUploadModal({
             name: manifest.name.slice(0, 80),
             author: manifest.author,
             keymodes: manifest.keymodes,
+            details: null,
             phase: "queued",
             progress: 0,
             message: null,
@@ -130,6 +150,7 @@ export function SkinBulkUploadModal({
           name: file.name.replace(/\.[^.]+$/, "").slice(0, 80),
           author: null,
           keymodes: [],
+          details: null,
           phase: "failed",
           progress: 0,
           message: readError instanceof Error ? readError.message : "This .osk could not be read.",
@@ -162,13 +183,21 @@ export function SkinBulkUploadModal({
         if (cancelRef.current) break;
         patch(item.id, { phase: "queued", progress: 0, message: null });
         const skin = await publishBulkSkin(
-          { file: item.file, name: item.name, author: item.author },
+          { file: item.file, name: item.name, author: item.author, details: item.details },
           context,
           (update) => patch(item.id, update),
         );
         if (skin) {
           markSkinsListStale();
           onPublished(skin);
+          // A published row cannot be edited again, so its prepared renders
+          // and screenshots have nothing left to do.
+          if (item.details) {
+            releaseDetails(item.details);
+            setItems((previous) => previous.map((current) => (
+              current.id === item.id ? { ...current, details: null } : current
+            )));
+          }
         }
       }
     } catch (runError) {
@@ -188,11 +217,43 @@ export function SkinBulkUploadModal({
   }, [items, onPublished, patch]);
 
   const removeItem = useCallback((id: string) => {
-    setItems((previous) => previous.filter((item) => item.id !== id));
+    setItems((previous) => {
+      releaseDetails(previous.find((item) => item.id === id)?.details ?? null);
+      return previous.filter((item) => item.id !== id);
+    });
   }, []);
 
   const clearDone = useCallback(() => {
-    setItems((previous) => previous.filter((item) => item.phase !== "published" && item.phase !== "duplicate"));
+    setItems((previous) => {
+      for (const item of previous) {
+        if (item.phase === "published" || item.phase === "duplicate") releaseDetails(item.details);
+      }
+      return previous.filter((item) => item.phase !== "published" && item.phase !== "duplicate");
+    });
+  }, []);
+
+  // A saved edit lands on the row: name and author go where the inline rename
+  // already lives, everything else rides along as the prepared details. URLs
+  // the new save no longer uses are revoked here (the editor reuses the old
+  // ones it kept, so a blanket release would break them).
+  const saveDetails = useCallback((id: string, result: BulkEditorResult) => {
+    setEditingId(null);
+    setItems((previous) => previous.map((item) => {
+      if (item.id !== id) return item;
+      if (item.details) {
+        const kept = new Set([
+          ...result.details.renders.map((render) => render.url),
+          ...result.details.screenshots.map((shot) => shot.url),
+        ]);
+        for (const render of item.details.renders) {
+          if (!kept.has(render.url)) URL.revokeObjectURL(render.url);
+        }
+        for (const shot of item.details.screenshots) {
+          if (!kept.has(shot.url)) URL.revokeObjectURL(shot.url);
+        }
+      }
+      return { ...item, name: result.name, author: result.author, details: result.details };
+    }));
   }, []);
 
   const dismiss = useCallback(() => {
@@ -204,11 +265,12 @@ export function SkinBulkUploadModal({
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") dismiss();
+      // With the details editor on top, Escape is its to handle.
+      if (event.key === "Escape" && !editingId) dismiss();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [open, dismiss]);
+  }, [open, dismiss, editingId]);
 
   // A run lives in this tab; closing it mid-upload leaves half-published rows
   // behind (they expire as pending), so the browser asks first.
@@ -239,6 +301,7 @@ export function SkinBulkUploadModal({
 
   const busy = running || reading > 0;
   const pendingCount = items.filter((item) => item.phase === "queued" || item.phase === "failed").length;
+  const editingItem = editingId ? items.find((item) => item.id === editingId) ?? null : null;
 
   return createPortal(
     <AnimatePresence onExitComplete={() => setBodyLockActive(false)}>
@@ -314,6 +377,7 @@ export function SkinBulkUploadModal({
                       onRename={(name) => setItems((previous) => previous.map((current) => (
                         current.id === item.id ? { ...current, name } : current
                       )))}
+                      onEdit={() => setEditingId(item.id)}
                       onRemove={() => removeItem(item.id)}
                       onNavigate={dismiss}
                     />
@@ -367,6 +431,18 @@ export function SkinBulkUploadModal({
               </div>
             </div>
           </motion.div>
+          {editingItem && (
+            <SkinBulkDetailsEditor
+              // A different row gets a fresh editor rather than inherited state.
+              key={editingItem.id}
+              file={editingItem.file}
+              initialName={editingItem.name}
+              initialAuthor={editingItem.author ?? ""}
+              initialDetails={editingItem.details}
+              onSave={(result) => saveDetails(editingItem.id, result)}
+              onCancel={() => setEditingId(null)}
+            />
+          )}
         </motion.div>
       )}
     </AnimatePresence>,
@@ -378,12 +454,14 @@ function BulkRow({
   item,
   running,
   onRename,
+  onEdit,
   onRemove,
   onNavigate,
 }: {
   item: BulkItem;
   running: boolean;
   onRename: (name: string) => void;
+  onEdit: () => void;
   onRemove: () => void;
   onNavigate: () => void;
 }) {
@@ -428,15 +506,31 @@ function BulkRow({
             view
           </Link>
         ) : (
-          <button
-            type="button"
-            onClick={onRemove}
-            disabled={running}
-            aria-label={`Remove ${item.file.name}`}
-            className="shrink-0 rounded p-1 text-osu-f1 transition-colors cursor-pointer hover:text-osu-red-light disabled:cursor-default disabled:opacity-30"
-          >
-            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={onEdit}
+              disabled={running}
+              aria-label={`Edit details for ${item.file.name}`}
+              title={item.details
+                ? "Has custom details; click to change them"
+                : "Edit this skin's details like a single upload"}
+              className={`shrink-0 rounded p-1 transition-colors cursor-pointer hover:text-osu-l1 disabled:cursor-default disabled:opacity-30 ${
+                item.details ? "text-osu-pink" : "text-osu-f1"
+              }`}
+            >
+              <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={onRemove}
+              disabled={running}
+              aria-label={`Remove ${item.file.name}`}
+              className="shrink-0 rounded p-1 text-osu-f1 transition-colors cursor-pointer hover:text-osu-red-light disabled:cursor-default disabled:opacity-30"
+            >
+              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </>
         )}
       </div>
       {item.message && (
