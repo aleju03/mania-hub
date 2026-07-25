@@ -5,7 +5,7 @@ import { ChevronLeft, LoaderCircle, Maximize2, Minimize2, Pause, Play } from "lu
 import { getReplayParsed, getBeatmapFile, getCommunityBeatmapFile, getScore, getUser, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores, lookupBeatmapByChecksum, submitCommunityBeatmap } from "../lib/osu";
 import { calculateManiaStarRating } from "../lib/mania-star-rating";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
-import { getEffectiveManiaKeyCount, getManiaKeyModCount, getManiaParseKeyCount, getModAcronyms, getScoreDisplayValues, getScoreRate, modShiftsPitchWithRate, scoreHasReplay } from "../lib/score";
+import { beatmapStatusAwardsPp, getEffectiveManiaKeyCount, getManiaKeyModCount, getManiaParseKeyCount, getModAcronyms, getScoreRate, modShiftsPitchWithRate, scoreHasReplay, scoreUsesLazerScoring } from "../lib/score";
 import { useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
 import { PageHeader } from "../components/layout/PageHeader";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
@@ -717,6 +717,14 @@ function ReplayPage() {
     () => visibleRawBeatmapScores.filter((s) => scoreHasReplay(s)),
     [visibleRawBeatmapScores],
   );
+  // Compare picker candidates: strictly the leaderboard already sitting in
+  // memory from the browse tab (no fetch). Empty when the viewer was reached
+  // some other way, in which case the compare form falls back to link-paste.
+  const compareCandidates = useMemo(() => {
+    const beatmapId = scoreInfo?.beatmap?.id;
+    if (!beatmapId || selectedDiffId !== beatmapId) return [];
+    return beatmapScores.filter((s) => s.id !== scoreInfo?.id);
+  }, [beatmapScores, scoreInfo, selectedDiffId]);
   const normalizedPlayerParam = normalizeReplayPlayerParam(playerParam);
   const playerSearchScoreId = parseReplayScoreInput(playerSearchQuery);
   // Replays for scores set moments ago are usually still being processed by
@@ -734,6 +742,16 @@ function ReplayPage() {
     if (!beatmap || beatmap.notes.length === 0) return null;
     return calculateManiaStarRating(beatmap.notes, beatmap.keyCount, getScoreRate(starMods));
   }, [beatmap, starMods]);
+
+  // "What if this was played on the other client?": the info bar's Client
+  // stat can flip the judging ruleset, which re-simulates both the info bar
+  // stats and the playback itself. Null means "judge as the actual client".
+  const sourceIsLazer = useMemo(() => scoreUsesLazerScoring(scoreInfo), [scoreInfo]);
+  const [clientJudgeAsLazer, setClientJudgeAsLazer] = useState<boolean | null>(null);
+  useEffect(() => {
+    setClientJudgeAsLazer(null);
+  }, [replay]);
+  const judgeAsLazer = clientJudgeAsLazer ?? sourceIsLazer;
 
   useEffect(() => {
     if (!loading || replayLoadingStartedAt <= 0) {
@@ -1681,6 +1699,9 @@ function ReplayPage() {
       fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId}
       shareUrl={uploadedReplayShareUrl ?? undefined}
       playerProfile={playerProfile}
+      judgeAsLazer={judgeAsLazer}
+      onSelectClient={setClientJudgeAsLazer}
+      compareCandidates={compareCandidates}
       onClear={handleClearReplay}
       // Compare only works for scores with online replays, so uploaded
       // replays (no score id) don't get the action.
@@ -1722,7 +1743,7 @@ function ReplayPage() {
             ) : replay ? (
               <motion.div key="viewer" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
                 <div className="hidden sm:block">{replayInfoCard}</div>
-                <ReplayViewer replay={replay} beatmap={beatmap} scoreInfo={scoreInfo} replayMods={uploadedReplayMods} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} initialTime={initialTime} localAudioUrl={localBeatmapAssets.audioUrl} localBackgroundUrl={localBeatmapAssets.backgroundUrl} onClear={handleClearReplay}>
+                <ReplayViewer replay={replay} beatmap={beatmap} scoreInfo={scoreInfo} replayMods={uploadedReplayMods} judgeAsLazer={judgeAsLazer} sourceIsLazer={sourceIsLazer} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} initialTime={initialTime} localAudioUrl={localBeatmapAssets.audioUrl} localBackgroundUrl={localBeatmapAssets.backgroundUrl} onClear={handleClearReplay}>
                   <div className="px-3 sm:hidden">{replayInfoCard}</div>
                 </ReplayViewer>
               </motion.div>
@@ -1823,6 +1844,8 @@ function ReplayViewer({
   beatmap,
   scoreInfo,
   replayMods,
+  judgeAsLazer,
+  sourceIsLazer,
   fallbackBeatmapsetId,
   initialTime,
   localAudioUrl,
@@ -1834,6 +1857,11 @@ function ReplayViewer({
   beatmap: ManiaBeatmap | null;
   scoreInfo: OsuScore | null;
   replayMods?: OsuMod[];
+  /** Ruleset to judge with; differs from sourceIsLazer while the info bar's
+      client what-if toggle is active. */
+  judgeAsLazer: boolean;
+  /** Ruleset the play was actually set on. */
+  sourceIsLazer: boolean;
   fallbackBeatmapsetId?: number;
   initialTime?: number;
   // Blob object URLs extracted from a user-supplied .osz when the beatmap
@@ -1860,20 +1888,27 @@ function ReplayViewer({
     () => resolveStableManiaReplayScrollSpeed(
       replay.stableScrollSpeedScale,
       beatmap?.stableScrollBpm ?? beatmap?.bpm ?? scoreInfo?.beatmap?.bpm,
+      getScoreRate(effectiveReplayMods),
     ),
-    [beatmap?.bpm, beatmap?.stableScrollBpm, replay.stableScrollSpeedScale, scoreInfo?.beatmap?.bpm],
+    [beatmap?.bpm, beatmap?.stableScrollBpm, effectiveReplayMods, replay.stableScrollSpeedScale, scoreInfo?.beatmap?.bpm],
   );
-  const displayScoreValues = useMemo(
-    () => (scoreInfo ? getScoreDisplayValues(scoreInfo) : null),
-    [scoreInfo],
+  // Converted stable scores carry CL in their lazer-API mod list; when the
+  // what-if toggle re-judges them as lazer, CL has to go or the "lazer"
+  // ruleset would still use stable windows. Genuine lazer plays with CL
+  // keep it. Only the renderer's judging cares; rate, star rating, and the
+  // watch beacon keep the actual mod list.
+  const rendererMods = useMemo(
+    () => (judgeAsLazer && !sourceIsLazer
+      ? effectiveReplayMods.filter((mod) => mod.acronym?.toUpperCase() !== "CL")
+      : effectiveReplayMods),
+    [effectiveReplayMods, judgeAsLazer, sourceIsLazer],
   );
-  const replayUsesLazerScoring = useMemo(() => {
-    if (!scoreInfo) return false;
-    if (scoreInfo.legacy_score_id != null || (scoreInfo.legacy_total_score != null && scoreInfo.legacy_total_score > 0)) {
-      return false;
-    }
-    return displayScoreValues?.isLazer ?? false;
-  }, [displayScoreValues?.isLazer, scoreInfo]);
+  // The score header's counts describe the actual play; reconciling a
+  // cross-judged simulation against them would corrupt it.
+  const rendererExpectedCounts = useMemo(
+    () => (judgeAsLazer === sourceIsLazer ? getScoreExpectedCounts(scoreInfo, replay) : undefined),
+    [judgeAsLazer, sourceIsLazer, scoreInfo, replay],
+  );
   const keypressHeatmap = useMemo(() => {
     const frames = replay.frames;
     if (frames.length < 2) return [];
@@ -1915,6 +1950,10 @@ function ReplayViewer({
     url: null,
     signed: false,
   });
+  // When the same replay is re-judged in place (the client what-if toggle
+  // rebuilds the renderer), playback resumes from where it was instead of
+  // resetting to the top. A different replay still starts fresh.
+  const resumeAfterRebuildRef = useRef<{ replay: ServerReplay; time: number } | null>(null);
   const scrubbingRef = useRef(false);
   const scrubResumeOnReleaseRef = useRef(false);
   const fullscreenChromeTimeoutRef = useRef<number | null>(null);
@@ -2538,6 +2577,10 @@ function ReplayViewer({
     let renderer: ReplayRendererLike | null = null;
     let handleResize: (() => void) | null = null;
     setRendererError(null);
+    // A rebuild always starts paused (the fresh renderer is); stop the audio
+    // too so it can't run ahead while the new judgement build finishes.
+    setIsPlaying(false);
+    audioRef.current?.pause();
 
     void (async () => {
       try {
@@ -2555,16 +2598,18 @@ function ReplayViewer({
           beatmap?.notes ?? [],
           {
             isConvert: (scoreInfo?.beatmap?.convert ?? false) || (beatmap?.isConvert ?? false),
-            isLazer: replayUsesLazerScoring,
+            isLazer: judgeAsLazer,
+            legacyReplayFrameRounding: !sourceIsLazer,
+            mapAwardsPp: beatmapStatusAwardsPp(scoreInfo?.beatmap?.status),
             od: beatmap?.od,
             showInputOverlay: showInputOverlayRef.current,
-            mods: effectiveReplayMods,
+            mods: rendererMods,
             speedMultiplier: modRate,
             timingPoints: beatmap?.timingPoints,
             transparentBackground: true,
             blackPlayfield: blackPlayfieldRef.current,
             scrollVelocities: beatmap?.scrollVelocities,
-            expectedCounts: getScoreExpectedCounts(scoreInfo, replay),
+            expectedCounts: rendererExpectedCounts,
             lifeBarFrames: replay.lifeBarFrames,
             skinSettings: skinSettingsRef.current,
             overlaySettings: overlaySettingsRef.current,
@@ -2628,7 +2673,11 @@ function ReplayViewer({
           return { time: audio.currentTime * 1000, stalled };
         });
 
-        if (initialTime != null && initialTime > 0) {
+        const resume = resumeAfterRebuildRef.current;
+        resumeAfterRebuildRef.current = null;
+        if (resume && resume.replay === replay && resume.time > 0) {
+          renderer.seek(resume.time);
+        } else if (initialTime != null && initialTime > 0) {
           const gameTimeMs = initialTime * 1000 * modRate;
           renderer.seek(gameTimeMs);
           // ReplayProgressBar polls the renderer on an interval, so it will pick
@@ -2666,11 +2715,12 @@ function ReplayViewer({
       cancelled = true;
       if (handleResize) window.removeEventListener("resize", handleResize);
       if (rendererRef.current) {
+        resumeAfterRebuildRef.current = { replay, time: rendererRef.current.time };
         rendererRef.current.destroy();
         rendererRef.current = null;
       }
     };
-  }, [replay, beatmap, initialTime, modRate, effectiveReplayMods, replayUsesLazerScoring, scoreInfo?.beatmap?.convert, beatmap?.isConvert, applyOverlaySettings]);
+  }, [replay, beatmap, initialTime, modRate, rendererMods, rendererExpectedCounts, judgeAsLazer, sourceIsLazer, scoreInfo?.beatmap?.convert, scoreInfo?.beatmap?.status, beatmap?.isConvert, applyOverlaySettings]);
 
   // Detect when the renderer reaches the end on its own (no more frames) and
   // flip isPlaying back. ReplayProgressBar polls the renderer independently
@@ -3151,17 +3201,19 @@ function ReplayViewer({
         beatmap?.notes ?? [],
         {
           isConvert: (scoreInfo?.beatmap?.convert ?? false) || (beatmap?.isConvert ?? false),
-          isLazer: replayUsesLazerScoring,
+          isLazer: judgeAsLazer,
+          legacyReplayFrameRounding: !sourceIsLazer,
+          mapAwardsPp: beatmapStatusAwardsPp(scoreInfo?.beatmap?.status),
           od: beatmap?.od,
           showInputOverlay: exportShowInputOverlay,
-          mods: effectiveReplayMods,
+          mods: rendererMods,
           speedMultiplier: modRate,
           timingPoints: beatmap?.timingPoints,
           transparentBackground: true,
           blackPlayfield: exportBlackPlayfield,
           hidePerformanceStats: true,
           scrollVelocities: beatmap?.scrollVelocities,
-          expectedCounts: getScoreExpectedCounts(scoreInfo, replay),
+          expectedCounts: rendererExpectedCounts,
           lifeBarFrames: replay.lifeBarFrames,
           skinSettings: exportSkinSettings,
           overlaySettings: exportOverlaySettings,
@@ -3316,13 +3368,16 @@ function ReplayViewer({
     inputOverlayKeyHistory,
     inputOverlayOnly,
     effectiveReplayMods,
+    rendererMods,
+    rendererExpectedCounts,
+    judgeAsLazer,
+    sourceIsLazer,
     modRate,
     overlaySettings,
     replay.header.playerName,
     replay.frames,
     replay.keyCount,
     replay.lifeBarFrames,
-    replayUsesLazerScoring,
     scoreInfo,
     scoreInfo?.beatmap?.version,
     scoreInfo?.beatmapset?.title,
@@ -3395,6 +3450,11 @@ function ReplayViewer({
           style={{ opacity: bgDim / 100 }}
         />
         <canvas
+          // A canvas that has hosted a (now destroyed) WebGL context can't get
+          // a fresh one, so the client what-if toggle must remount the node;
+          // every other renderer rebuild already gets a new canvas via the
+          // loading-screen unmount.
+          key={judgeAsLazer ? "stage-lazer" : "stage-stable"}
           ref={canvasRef}
           onPointerDown={handleReplayCanvasPointerDown}
           className={`relative z-10 w-full ${

@@ -742,7 +742,7 @@ export function ReplayControls({
         {/* Mobile row break: view row (scroll + dim) ends here. */}
         <div className="order-6 h-0 basis-full sm:hidden" aria-hidden="true" />
 
-        {/* sm:order-1 keeps the desktop right cluster reading [Black field][BG Dim]
+        {/* sm:order-1 keeps the desktop right cluster reading [Black playfield][BG Dim]
             even though BG Dim comes first in the DOM for the mobile rows. */}
         <div className="order-5 ml-auto sm:order-1 sm:ml-0 flex items-center gap-2">
           <span className="text-[10px] text-osu-f1">BG Dim</span>
@@ -767,7 +767,7 @@ export function ReplayControls({
             blackPlayfield ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
           }`}
         >
-          Black field
+          Black playfield
         </button>
       </div>
     </div>

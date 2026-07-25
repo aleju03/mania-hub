@@ -1,7 +1,8 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowLeftRight, LoaderCircle, Pause, Play, X } from "lucide-react";
+import { ArrowLeftRight, LoaderCircle, Pause, Play, Volume2, VolumeX, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
+import { getBeatmapAudioUrl } from "../../lib/audio-url";
 import type { ManiaBeatmap } from "../../lib/beatmap-parser";
 import { formatAccuracy, formatNumber, formatPP } from "../../lib/format";
 import { getBeatmapFile, getReplayParsed, getScore } from "../../lib/osu";
@@ -9,6 +10,7 @@ import { parseCachedManiaBeatmap } from "../../lib/parsed-beatmap-cache";
 import { withTimeout } from "../../lib/promise-timeout";
 import { unpackReplayFrames } from "../../lib/replay-frames";
 import { buildKeypressHeatmap } from "../../lib/replay-keypress-heatmap";
+import { readReplayVolume } from "../../lib/replay-preferences";
 import { getReplayScoreAvailability } from "../../lib/replay-score-availability";
 import { parseReplayScoreInput } from "../../lib/replay-score-input";
 import { readReplayScrollSpeed } from "../../lib/replay-scroll-speed";
@@ -23,19 +25,22 @@ import {
   getModDisplayList,
   getScoreDisplayValues,
   getScoreRate,
+  modShiftsPitchWithRate,
+  scoreHasReplay,
 } from "../../lib/score";
 import type { OsuScore } from "../../lib/types";
+import { avatarImageSrc } from "../ui/Avatar";
 import { CountryFlag } from "../ui/CountryFlag";
 import { GradeImg } from "../ui/GradeImg";
 import { ModBadge } from "../ui/ModBadge";
 import { ReplayProgressBar } from "./ReplayControls";
 
 /* Side-by-side playback of two replays on the same beatmap. Both playfields
-   follow one shared MAP-TIME clock, so the same chart moment shows on both
-   sides even when the replays were set at different mod rates (a DT replay
-   simply advances its own frames faster). No audio: the song belongs to
-   neither player, and keeping the transport self-owned keeps this component
-   independent of the main viewer's audio pipeline. */
+   follow one shared MAP-TIME clock. Compare requires both runs to use the
+   same mod rate, which keeps the shared clock honest (no side plays its
+   frames at a different effective speed than the player heard) and lets the
+   map's audio play for both: the track runs at transport speed x mod rate
+   and follows the clock with periodic drift correction. */
 
 const COMPARE_SPEED_OPTIONS = [0.5, 0.75, 1, 1.5, 2];
 
@@ -46,6 +51,17 @@ interface CompareSide {
   /* Mod rate (DT 1.5 / HT 0.75 / lazer custom). */
   rate: number;
   usesLazerScoring: boolean;
+}
+
+// Browsers default preservesPitch to true (the DT/HT behavior); NC/DC need
+// the pitch to follow the playback rate. Vendor-prefixed for older Safari.
+function setComparePreservesPitch(audio: HTMLAudioElement, preservesPitch: boolean): void {
+  const pitchAudio = audio as HTMLAudioElement & {
+    preservesPitch?: boolean;
+    webkitPreservesPitch?: boolean;
+  };
+  pitchAudio.preservesPitch = preservesPitch;
+  pitchAudio.webkitPreservesPitch = preservesPitch;
 }
 
 /* Mirrors the main viewer's lazer-scoring detection. */
@@ -150,12 +166,33 @@ export function ReplayCompareView({
   const [ready, setReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioEnabledRef = useRef(true);
+  const [audioEnabled, setAudioEnabled] = useState(true);
+  const [audioFailed, setAudioFailed] = useState(false);
 
   const readClockTime = useCallback(() => {
     const clock = clockRef.current;
     if (!clock.playing) return clock.anchorTime;
     return clock.anchorTime + (performance.now() - clock.anchorPerf) * clock.speed * clock.rate;
   }, []);
+
+  // The rate-match guard means both players heard the same song at the same
+  // rate, so one audio track is correct for both sides. It follows the
+  // transport clock (clock time is map time; audio.currentTime maps 1:1).
+  const audioUrl = useMemo(() => {
+    const setId = sides?.[0]?.score.beatmapset?.id;
+    const filename = sides?.[0]?.beatmap?.audioFilename;
+    return setId && filename ? getBeatmapAudioUrl(setId, filename) : null;
+  }, [sides]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !sides) return;
+    audio.volume = readReplayVolume();
+    setComparePreservesPitch(audio, !modShiftsPitchWithRate(sides[0].score.mods));
+    audio.playbackRate = speed * sides[0].rate;
+  }, [sides, speed, audioUrl]);
 
   // Load both scores + replays and the (shared) beatmap file.
   useEffect(() => {
@@ -182,6 +219,13 @@ export function ReplayCompareView({
       const beatmapId = scoreA.beatmap?.id;
       if (!beatmapId || scoreB.beatmap?.id !== beatmapId) {
         throw new Error("These scores are on different maps. Compare plays two replays of the same beatmap.");
+      }
+      // A rate mismatch would mean one side plays its frames faster than the
+      // player heard them, and the audio could match neither run.
+      const rateA = getScoreRate(scoreA.mods);
+      const rateB = getScoreRate(scoreB.mods);
+      if (rateA !== rateB) {
+        throw new Error(`These runs used different rates (${rateA}x vs ${rateB}x). Compare needs both replays at the same rate.`);
       }
       const beatmapFilePromise = getBeatmapFile({
         data: { beatmapId, beatmapsetId: scoreA.beatmapset?.id },
@@ -299,6 +343,7 @@ export function ReplayCompareView({
     clock.anchorTime = Math.min(readClockTime(), maxDurationRef.current);
     clock.playing = false;
     for (const renderer of renderersRef.current) renderer.pause();
+    audioRef.current?.pause();
     setIsPlaying(false);
   }, [readClockTime]);
 
@@ -315,6 +360,11 @@ export function ReplayCompareView({
     clock.anchorPerf = performance.now();
     clock.playing = true;
     for (const renderer of renderersRef.current) renderer.play();
+    const audio = audioRef.current;
+    if (audio && audioEnabledRef.current) {
+      audio.currentTime = Math.max(0, clock.anchorTime / 1000);
+      void audio.play().catch(() => {});
+    }
     setIsPlaying(true);
   }, [readClockTime]);
 
@@ -324,6 +374,8 @@ export function ReplayCompareView({
     clock.anchorTime = clamped;
     clock.anchorPerf = performance.now();
     for (const renderer of renderersRef.current) renderer.seek(clamped);
+    const audio = audioRef.current;
+    if (audio) audio.currentTime = clamped / 1000;
   }, []);
 
   const applySpeed = useCallback((next: number) => {
@@ -335,14 +387,42 @@ export function ReplayCompareView({
     for (const [index, renderer] of renderersRef.current.entries()) {
       renderer.setSpeed((next * sides[0].rate) / sides[index].rate);
     }
+    const audio = audioRef.current;
+    if (audio) {
+      audio.playbackRate = next * clock.rate;
+      audio.currentTime = clock.anchorTime / 1000;
+    }
     setSpeed(next);
   }, [readClockTime, sides]);
 
+  const toggleAudio = useCallback(() => {
+    setAudioEnabled((enabled) => {
+      const next = !enabled;
+      audioEnabledRef.current = next;
+      const audio = audioRef.current;
+      if (audio) {
+        if (next && clockRef.current.playing) {
+          audio.currentTime = Math.max(0, readClockTime() / 1000);
+          void audio.play().catch(() => {});
+        } else {
+          audio.pause();
+        }
+      }
+      return next;
+    });
+  }, [readClockTime]);
+
   // The shorter replay freezes on its last frame; stop the transport once the
-  // longer one ends too.
+  // longer one ends too. The same tick nudges the audio back onto the clock
+  // when it drifts (buffering hiccups, tab throttling).
   useEffect(() => {
     if (!isPlaying) return;
     const id = window.setInterval(() => {
+      const audio = audioRef.current;
+      if (audio && audioEnabledRef.current && !audio.paused) {
+        const drift = Math.abs(audio.currentTime * 1000 - readClockTime());
+        if (drift > 120) audio.currentTime = readClockTime() / 1000;
+      }
       if (readClockTime() >= maxDurationRef.current) pause();
     }, 200);
     return () => window.clearInterval(id);
@@ -454,6 +534,17 @@ export function ReplayCompareView({
               onContextMenu={() => {}}
             />
           </div>
+          {audioUrl && !audioFailed && (
+            <button
+              type="button"
+              onClick={toggleAudio}
+              title={audioEnabled ? "Mute" : "Unmute"}
+              aria-pressed={!audioEnabled}
+              className="shrink-0 rounded p-1 text-osu-f1 hover:text-white transition-colors cursor-pointer"
+            >
+              {audioEnabled ? <Volume2 className="h-4 w-4" aria-hidden="true" /> : <VolumeX className="h-4 w-4" aria-hidden="true" />}
+            </button>
+          )}
           <div className="hidden items-center gap-1 sm:flex">
             {COMPARE_SPEED_OPTIONS.map((option) => (
               <button
@@ -469,8 +560,11 @@ export function ReplayCompareView({
             ))}
           </div>
         </div>
+        {audioUrl && !audioFailed && (
+          <audio ref={audioRef} src={audioUrl} preload="auto" onError={() => setAudioFailed(true)} />
+        )}
         <div className="mt-1.5 text-center text-[10px] text-osu-f1">
-          Both playfields follow the same chart time{sides[0].rate !== sides[1].rate ? " - these runs used different rates, so one plays its frames faster" : ""}. No audio in compare mode.
+          Both playfields follow the same chart time.
         </div>
       </div>
     </div>
@@ -483,24 +577,26 @@ export function ReplayCompareView({
 export function ReplayCompareEntry({
   onCompare,
   onClose,
+  candidates,
+  requiredRate,
 }: {
   onCompare: (otherScoreId: number) => void;
   onClose: () => void;
+  /** Leaderboard scores already loaded elsewhere on the page (browse tab).
+      This component never fetches; without candidates it's just the form. */
+  candidates?: OsuScore[];
+  /** Compare only works between runs at the same mod rate. */
+  requiredRate?: number;
 }) {
   const [value, setValue] = useState("");
   const [invalid, setInvalid] = useState(false);
-  const formRef = useRef<HTMLFormElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const parsed = parseReplayScoreInput(value);
+  const hasCandidates = (candidates?.length ?? 0) > 0;
 
-  // Autofocus only with a hardware pointer: on phones it would pop the
-  // software keyboard immediately, reflowing the svh stage and leaving this
-  // form buried behind the keyboard. Touch users see the form scroll into
-  // view instead and tap the input themselves, which lets the browser's own
-  // focus handling position it above the keyboard.
   useEffect(() => {
-    formRef.current?.scrollIntoView({ block: "nearest" });
-    if (!window.matchMedia?.("(pointer: coarse)").matches) inputRef.current?.focus();
+    panelRef.current?.scrollIntoView({ block: "nearest" });
   }, []);
 
   const submit = (event: FormEvent) => {
@@ -514,39 +610,85 @@ export function ReplayCompareEntry({
   };
 
   return (
-    <form
-      ref={formRef}
-      onSubmit={submit}
-      className="mt-2 flex items-center gap-2 rounded-lg bg-osu-b5/55 px-2.5 py-2"
-    >
-      <ArrowLeftRight className="h-3.5 w-3.5 shrink-0 text-osu-f1" />
-      <input
-        ref={inputRef}
-        type="text"
-        value={value}
-        onChange={(event) => {
-          setValue(event.currentTarget.value);
-          setInvalid(false);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Escape") onClose();
-        }}
-        placeholder="score link of this map"
-        aria-label="Score link or id to compare against"
-        enterKeyHint="go"
-        // 16px on phones: anything smaller makes iOS Safari zoom the whole
-        // page when the input gains focus.
-        className={`h-9 sm:h-7 min-w-0 flex-1 rounded-md border bg-osu-b4/70 px-2 text-[16px] sm:text-[11px] text-white outline-none transition-colors placeholder:text-osu-f1/70 focus:border-osu-pink/40 ${
-          invalid ? "border-osu-red/60" : "border-osu-b3/30"
-        }`}
-      />
-      <button
-        type="submit"
-        disabled={!parsed}
-        className="shrink-0 rounded-md bg-osu-pink/15 px-2.5 py-2 sm:py-1 text-[12px] sm:text-[11px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/25 hover:text-white disabled:opacity-40 cursor-pointer"
-      >
-        Compare
-      </button>
-    </form>
+    <div ref={panelRef} className="mt-2 rounded-lg bg-osu-b5/55 p-2.5" onKeyDown={(event) => { if (event.key === "Escape") onClose(); }}>
+      {hasCandidates && (
+        <div className="mb-2">
+          <div className="mb-1 text-[9px] uppercase tracking-wider text-osu-f1">Loaded scores on this map</div>
+          <div className="flex max-h-52 flex-col gap-0.5 overflow-y-auto pr-1">
+              {candidates!.map((entry, index) => {
+                const hasReplay = scoreHasReplay(entry);
+                const entryRate = getScoreRate(entry.mods);
+                const rateMatches = requiredRate == null || entryRate === requiredRate;
+                const entryMods = getModDisplayList(entry.mods);
+                return (
+                  <button
+                    key={entry.id}
+                    type="button"
+                    disabled={!hasReplay || !rateMatches}
+                    title={!hasReplay
+                      ? "No replay available for this score"
+                      : !rateMatches
+                        ? `Played at ${entryRate}x; compare needs a ${requiredRate}x run`
+                        : undefined}
+                    onClick={() => onCompare(entry.id)}
+                    className="grid w-full grid-cols-[1.6rem_1.25rem_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-osu-b4/70 disabled:cursor-not-allowed disabled:opacity-35 cursor-pointer"
+                  >
+                    <span className="text-[10px] font-semibold tabular-nums text-osu-f1">#{index + 1}</span>
+                    <img
+                      src={avatarImageSrc(entry.user?.avatar_url, entry.user?.id)}
+                      alt=""
+                      loading="lazy"
+                      className="h-5 w-5 rounded-full object-cover ring-1 ring-white/10"
+                    />
+                    <span className="flex min-w-0 items-center gap-1">
+                      <span className="truncate text-[11px] font-semibold text-white">{entry.user?.username ?? "?"}</span>
+                      {entryMods.length > 0 && (
+                        <span className="flex shrink-0 items-center gap-0.5">
+                          {entryMods.map((mod, modIndex) => (
+                            <ModBadge key={`${mod.acronym}-${modIndex}`} mod={mod.acronym} rate={mod.rate} size={0.5} />
+                          ))}
+                        </span>
+                      )}
+                    </span>
+                    <span className="flex items-center gap-2 tabular-nums">
+                      <span className="text-[11px] font-semibold text-osu-l2">{formatAccuracy(getDisplayedAccuracy(entry))}</span>
+                      {entry.pp != null && (
+                        <span className="w-14 text-right text-[11px] font-bold text-osu-pink-light">{formatPP(entry.pp)}</span>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+          </div>
+        </div>
+      )}
+      <form onSubmit={submit} className="flex items-center gap-2">
+        <ArrowLeftRight className="h-3.5 w-3.5 shrink-0 text-osu-f1" />
+        <input
+          ref={inputRef}
+          type="text"
+          value={value}
+          onChange={(event) => {
+            setValue(event.currentTarget.value);
+            setInvalid(false);
+          }}
+          placeholder={hasCandidates ? "or paste a score link" : "Paste a link to another score on this map"}
+          aria-label="Score link or id to compare against"
+          enterKeyHint="go"
+          // 16px on phones: anything smaller makes iOS Safari zoom the whole
+          // page when the input gains focus.
+          className={`h-9 sm:h-7 min-w-0 flex-1 rounded-md border bg-osu-b4/70 px-2 text-[16px] sm:text-[11px] text-white outline-none transition-colors placeholder:text-osu-f1/70 focus:border-osu-pink/40 ${
+            invalid ? "border-osu-red/60" : "border-osu-b3/30"
+          }`}
+        />
+        <button
+          type="submit"
+          disabled={!parsed}
+          className="shrink-0 rounded-md bg-osu-pink/15 px-2.5 py-2 sm:py-1 text-[12px] sm:text-[11px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/25 hover:text-white disabled:opacity-40 cursor-pointer"
+        >
+          Compare
+        </button>
+      </form>
+    </div>
   );
 }

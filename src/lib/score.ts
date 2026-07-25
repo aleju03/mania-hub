@@ -233,6 +233,21 @@ export function isLazerScore(score: ScoreLike): boolean {
   return !isLegacySubmittedScore(score);
 }
 
+// The replay viewer's judging flag: whether the play was scored by lazer's
+// ruleset. Uploaded replays without an API score are treated as stable, which
+// matches how the viewer simulates them.
+export function scoreUsesLazerScoring(score: ScoreLike | null | undefined): boolean {
+  return score != null && isLazerScore(score);
+}
+
+// Only ranked and approved maps award pp; loved, qualified, and graveyard
+// plays carry pp: null no matter how good they are. Gates every locally
+// computed pp display so dan courses and other unranked charts don't show
+// fictional numbers.
+export function beatmapStatusAwardsPp(status: string | null | undefined): boolean {
+  return status === "ranked" || status === "approved";
+}
+
 export type ManiaJudgementLabel = "MAX" | "300" | "200" | "100" | "50" | "Miss";
 
 interface ManiaHitCounts {

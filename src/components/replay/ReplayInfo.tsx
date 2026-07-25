@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeftRight, Check, Copy } from "lucide-react";
 import { StarRatingBadge } from "#/components/maps/SearchCard";
 import { ReplayCompareEntry } from "#/components/replay/ReplayCompareView";
 import { avatarImageSrc } from "#/components/ui/Avatar";
 import { ModBadge } from "#/components/ui/ModBadge";
 import { formatDate } from "#/lib/format";
-import { getDisplayedAccuracy, getModDisplayList, getScoreTimestamp, isLazerScore } from "#/lib/score";
+import { beatmapStatusAwardsPp, getDisplayedAccuracy, getModDisplayList, getScoreRate, getScoreTimestamp, isLazerScore, scoreUsesLazerScoring } from "#/lib/score";
+import { computeManiaRulesetWhatIf } from "#/lib/replay-what-if";
 import type { ManiaBeatmap } from "#/lib/beatmap-parser";
 import type { ServerReplay } from "#/lib/replay-types";
 import type { OsuMod, OsuScore } from "#/lib/types";
@@ -31,12 +32,18 @@ interface ReplayInfoProps {
   fallbackBeatmapsetId?: number;
   shareUrl?: string;
   playerProfile?: ReplayPlayerProfile | null;
+  /** Effective judging ruleset while the Client what-if toggle is in play. */
+  judgeAsLazer?: boolean;
+  /** Enables the Client stat's stable/lazer toggle. */
+  onSelectClient?: (lazer: boolean) => void;
+  /** Already-loaded leaderboard scores for the compare picker (never fetched here). */
+  compareCandidates?: OsuScore[];
   onClear: () => void;
   /** When set, the card grows a compare action that reveals a paste-a-score form. */
   onCompare?: (otherScoreId: number) => void;
 }
 
-export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatmapsetId, shareUrl, playerProfile, onClear, onCompare }: ReplayInfoProps) {
+export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatmapsetId, shareUrl, playerProfile, judgeAsLazer, onSelectClient, compareCandidates, onClear, onCompare }: ReplayInfoProps) {
   const [compareOpen, setCompareOpen] = useState(false);
   const h = replay.header;
   const totalHits = h.countGeki + h.count300 + h.countKatu + h.count100 + h.count50;
@@ -76,8 +83,48 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
   const mapTextShadow = beatmapCoverUrl ? " [text-shadow:0_1px_3px_rgba(0,0,0,0.85)]" : "";
   const displayMods = getModDisplayList(mods);
   const compareEntry = onCompare && compareOpen ? (
-    <ReplayCompareEntry onCompare={onCompare} onClose={() => setCompareOpen(false)} />
+    <ReplayCompareEntry
+      onCompare={onCompare}
+      onClose={() => setCompareOpen(false)}
+      candidates={compareCandidates}
+      requiredRate={getScoreRate(mods)}
+    />
   ) : null;
+
+  // Client what-if: flipping the Client stat re-judges the same keypresses
+  // under the other ruleset. The stats below mirror what the viewer is now
+  // playing; score and combo can't be simulated and stay from the real play.
+  const sourceIsLazer = scoreUsesLazerScoring(score);
+  const canToggleClient = Boolean(onSelectClient && beatmap && beatmap.notes.length > 0 && replay.frames.length > 0);
+  const judgingIsLazer = canToggleClient ? judgeAsLazer ?? sourceIsLazer : sourceIsLazer;
+  const simActive = canToggleClient && judgingIsLazer !== sourceIsLazer;
+  const sim = useMemo(() => {
+    if (!simActive || !beatmap) return null;
+    return computeManiaRulesetWhatIf({
+      frames: replay.frames,
+      notes: beatmap.notes,
+      keyCount: replay.keyCount,
+      mods,
+      timingPoints: beatmap.timingPoints,
+      od: beatmap.od,
+      isConvert: (score?.beatmap?.convert ?? false) || (beatmap.isConvert ?? false),
+      sourceIsLazer,
+      modRate: getScoreRate(mods),
+    });
+  }, [simActive, replay, beatmap, score, mods, sourceIsLazer]);
+
+  const shownAccuracy = simActive && sim ? sim.accuracy : accuracy;
+  const shownCounts = simActive && sim
+    ? { geki: sim.counts[1], c300: sim.counts[2], katu: sim.counts[3], c100: sim.counts[4], c50: sim.counts[5], miss: sim.counts[6] }
+    : { geki: h.countGeki, c300: h.count300, katu: h.countKatu, c100: h.count100, c50: h.count50, miss: h.countMiss };
+  const actualPp = score?.pp ?? null;
+  // Unranked maps award no pp, so a locally computed value would be fiction.
+  const mapAwardsPp = beatmapStatusAwardsPp(score?.beatmap?.status);
+  const shownPp = mapAwardsPp ? (simActive && sim ? sim.pp : actualPp) : null;
+  const ppDelta = simActive && sim && actualPp != null ? sim.pp - actualPp : null;
+  const accDelta = simActive && sim ? sim.accuracy - accuracy : null;
+  // Score and combo come from the real play and can't be re-simulated.
+  const realOnlyDim = simActive ? " opacity-40" : "";
 
   return (
     <>
@@ -136,13 +183,26 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
 
         <div className="mt-3 grid grid-cols-4 gap-1.5">
           <MobileReplayStat label="Keys" value={`${replay.keyCount}K`} valueClassName="text-osu-yellow" compact />
-          <MobileReplayStat label="Acc" value={`${accuracy.toFixed(2)}%`} compact />
-          <MobileReplayStat label="Score" value={h.totalScore.toLocaleString()} compact />
-          <MobileReplayStat label="Combo" value={`${h.maxCombo}x`} compact />
+          <MobileReplayStat label="Acc" value={`${shownAccuracy.toFixed(2)}%`} compact />
+          <MobileReplayStat label="Score" value={h.totalScore.toLocaleString()} valueClassName={`text-white${realOnlyDim}`} compact />
+          <MobileReplayStat label="Combo" value={`${h.maxCombo}x`} valueClassName={`text-white${realOnlyDim}`} compact />
         </div>
-        {(clientLabel || playedDate) && (
-          <div className="mt-1.5 grid grid-cols-2 gap-1.5">
-            {clientLabel && <MobileReplayStat label="Client" value={clientLabel} valueClassName={clientLabel === "Stable" ? "text-osu-pink-light" : "text-osu-l2"} compact />}
+        {(clientLabel || canToggleClient || playedDate || shownPp != null) && (
+          <div className={`mt-1.5 grid gap-1.5 ${shownPp != null ? "grid-cols-3" : "grid-cols-2"}`}>
+            {canToggleClient && onSelectClient ? (
+              <div className="min-w-0 rounded-lg bg-osu-b5/55 px-1 py-1.5 text-center">
+                <div className="text-[8px] uppercase tracking-wider text-osu-f1">Client</div>
+                <ClientToggle compact judgingIsLazer={judgingIsLazer} simActive={simActive} onSelect={onSelectClient} />
+              </div>
+            ) : clientLabel ? (
+              <MobileReplayStat label="Client" value={clientLabel} valueClassName={clientLabel === "Stable" ? "text-osu-pink-light" : "text-osu-l2"} compact />
+            ) : null}
+            {shownPp != null && (
+              <div className="min-w-0 rounded-lg bg-osu-b5/55 px-1 py-1.5 text-center">
+                <div className="text-[8px] uppercase tracking-wider text-osu-f1">PP</div>
+                <div className="truncate text-xs font-bold tabular-nums text-white">{Math.round(shownPp)}pp<DeltaChip delta={ppDelta} suffix="pp" /></div>
+              </div>
+            )}
             {playedDate && <MobileReplayStat label="Played" value={playedDate} compact />}
           </div>
         )}
@@ -150,12 +210,12 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
           <div className="min-w-0">
             <div className="mb-1 text-[8px] uppercase tracking-wider text-osu-f1">Judgments</div>
             <div className="grid grid-cols-6 gap-1.5 text-center text-[11px] font-bold tabular-nums">
-              <span className="rounded bg-osu-b4/70 px-1 py-1 text-osu-yellow">{h.countGeki}</span>
-              <span className="rounded bg-osu-b4/70 px-1 py-1 text-osu-blue">{h.count300}</span>
-              <span className="rounded bg-osu-b4/70 px-1 py-1 text-osu-green-light">{h.countKatu}</span>
-              <span className="rounded bg-osu-b4/70 px-1 py-1 text-osu-green">{h.count100}</span>
-              <span className="rounded bg-osu-b4/70 px-1 py-1 text-osu-orange">{h.count50}</span>
-              <span className="rounded bg-osu-b4/70 px-1 py-1 text-osu-red-light">{h.countMiss}</span>
+              <span className="rounded bg-osu-b4/70 px-1 py-1 text-osu-yellow">{shownCounts.geki}</span>
+              <span className="rounded bg-osu-b4/70 px-1 py-1 text-osu-blue">{shownCounts.c300}</span>
+              <span className="rounded bg-osu-b4/70 px-1 py-1 text-osu-green-light">{shownCounts.katu}</span>
+              <span className="rounded bg-osu-b4/70 px-1 py-1 text-osu-green">{shownCounts.c100}</span>
+              <span className="rounded bg-osu-b4/70 px-1 py-1 text-osu-orange">{shownCounts.c50}</span>
+              <span className="rounded bg-osu-b4/70 px-1 py-1 text-osu-red-light">{shownCounts.miss}</span>
             </div>
           </div>
           {beatmap && (
@@ -182,16 +242,14 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
       </div>
 
       <div className="hidden sm:block relative overflow-hidden bg-osu-b4 rounded-xl p-4 mb-4 border border-osu-b3/20">
-        {/* The map column needs a real floor (not 0): the stats track is auto-sized
-            and grows to max-content first, so without it the map column collapses
-            to 0px at mid widths and the cover bleed strands over the player name. */}
-        {/* Below lg the Back button wraps to a second row; the player/map cells span
-            both rows (explicit so row-span-full has a line to reach) so their banners
-            still bleed to the card's top/bottom edges instead of cutting off mid-card.
-            With the compare form open the card's bottom edge is no longer the row's
-            bottom, so the downward bleed would land on the form - stop at the row. */}
-        <div className="grid grid-cols-[minmax(56px,max-content)_minmax(160px,1fr)_auto] grid-rows-[auto_auto] lg:grid-cols-[minmax(64px,max-content)_minmax(160px,1fr)_auto_auto] lg:grid-rows-none items-center gap-x-4 sm:gap-x-6 gap-y-2">
-          <div className={`relative row-span-full lg:row-auto self-stretch flex flex-col justify-center ${compareOpen ? "-mt-4 pt-4" : "-my-4 py-4"} -ml-4 pl-4 pr-2 min-w-0`}>
+        {/* Two rows: identity on top (player, full-width map title, actions),
+            the stat strip below. The stats used to share the single row and
+            starved the map title at most widths. The player cell spans both
+            rows so its banner still bleeds to the card's top and bottom
+            edges (stopping at the row while the compare form is open); the
+            map cell only bleeds upward now that the stats sit under it. */}
+        <div className="grid grid-cols-[minmax(64px,max-content)_minmax(0,1fr)_auto] grid-rows-[auto_auto] items-center gap-x-4 sm:gap-x-6 gap-y-2.5">
+          <div className={`relative row-span-full self-stretch flex flex-col justify-center ${compareOpen ? "-mt-4 pt-4" : "-my-4 py-4"} -ml-4 pl-4 pr-2 min-w-0`}>
             <PlayerBanner coverUrl={playerCoverUrl} />
             <div className="relative flex items-center gap-2.5 min-w-0">
               <PlayerAvatar src={avatarSrc} name={displayName} size={36} />
@@ -199,11 +257,11 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
             </div>
           </div>
           {beatmap && (
-            <div className={`relative row-span-full lg:row-auto self-stretch ${compareOpen ? "-mt-4 pt-4" : "-my-4 py-4"} flex flex-col justify-center min-w-0`}>
+            <div className="relative col-start-2 row-start-1 self-stretch -mt-4 pt-4 flex flex-col justify-center min-w-0">
               {/* The map column starts 24px further left than it used to (the player
                   block gave up padding), so bleed the cover 24px less to keep its
                   on-screen position unchanged. */}
-              <BeatmapBanner coverUrl={beatmapCoverUrl} fade={BEATMAP_BANNER_FADE_MAP} className="absolute inset-y-0 -left-14 right-0" />
+              <BeatmapBanner coverUrl={beatmapCoverUrl} fade={BEATMAP_BANNER_FADE_MAP} bottomFade={BEATMAP_BANNER_BOTTOM_FADE} className="absolute inset-y-0 -left-14 right-0" />
               <div className="relative">
                 <div className={`text-[9px] uppercase tracking-wider ${mapLabelClass}`}>Map</div>
                 <div className="flex items-center gap-2 min-w-0">
@@ -226,22 +284,27 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
               </div>
             </div>
           )}
-          <div className="col-span-1 lg:col-span-1 flex flex-wrap items-center justify-end gap-x-4 sm:gap-x-6 gap-y-2 min-w-0">
+          <div className="col-start-2 col-span-2 row-start-2 flex flex-wrap items-center gap-x-4 sm:gap-x-6 gap-y-2 min-w-0">
             <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Keys</div><div className="text-sm font-bold text-osu-yellow">{replay.keyCount}K</div></div>
-            <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Accuracy</div><div className="text-sm font-bold text-white">{accuracy.toFixed(2)}%</div></div>
-            <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Score</div><div className="text-sm font-bold text-white">{h.totalScore.toLocaleString()}</div></div>
-            <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Combo</div><div className="text-sm font-bold text-white">{h.maxCombo}x</div></div>
-            {clientLabel && <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Client</div><div className={`text-sm font-bold ${clientLabel === "Stable" ? "text-osu-pink-light" : "text-osu-l2"}`}>{clientLabel}</div></div>}
+            <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Accuracy</div><div className="text-sm font-bold text-white">{shownAccuracy.toFixed(2)}%<DeltaChip delta={accDelta} suffix="%" decimals={2} /></div></div>
+            {shownPp != null && <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">PP</div><div className="text-sm font-bold text-white">{Math.round(shownPp)}pp<DeltaChip delta={ppDelta} suffix="pp" /></div></div>}
+            <div title={simActive ? "From the real play (not simulated)" : undefined}><div className="text-[9px] uppercase tracking-wider text-osu-f1">Score</div><div className={`text-sm font-bold text-white${realOnlyDim}`}>{h.totalScore.toLocaleString()}</div></div>
+            <div title={simActive ? "From the real play (not simulated)" : undefined}><div className="text-[9px] uppercase tracking-wider text-osu-f1">Combo</div><div className={`text-sm font-bold text-white${realOnlyDim}`}>{h.maxCombo}x</div></div>
+            {canToggleClient && onSelectClient ? (
+              <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Client</div><ClientToggle judgingIsLazer={judgingIsLazer} simActive={simActive} onSelect={onSelectClient} /></div>
+            ) : clientLabel ? (
+              <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Client</div><div className={`text-sm font-bold ${clientLabel === "Stable" ? "text-osu-pink-light" : "text-osu-l2"}`}>{clientLabel}</div></div>
+            ) : null}
             {playedDate && <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Played</div><div className="text-sm font-bold text-white">{playedDate}</div></div>}
             <div>
               <div className="text-[9px] uppercase tracking-wider text-osu-f1">Judgments</div>
               <div className="text-xs text-osu-f1">
-                <span className="text-osu-yellow">{h.countGeki}</span>/<span className="text-osu-blue">{h.count300}</span>/<span className="text-osu-green-light">{h.countKatu}</span>/<span className="text-osu-green">{h.count100}</span>/<span className="text-osu-orange">{h.count50}</span>/<span className="text-osu-red-light">{h.countMiss}</span>
+                <span className="text-osu-yellow">{shownCounts.geki}</span>/<span className="text-osu-blue">{shownCounts.c300}</span>/<span className="text-osu-green-light">{shownCounts.katu}</span>/<span className="text-osu-green">{shownCounts.c100}</span>/<span className="text-osu-orange">{shownCounts.c50}</span>/<span className="text-osu-red-light">{shownCounts.miss}</span>
               </div>
             </div>
             {beatmap && <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Notes</div><div className="text-sm font-bold text-osu-f1">{beatmap.notes.length.toLocaleString()}</div></div>}
           </div>
-          <div className="col-start-3 lg:col-start-auto justify-self-end flex items-center gap-2">
+          <div className="col-start-3 row-start-1 justify-self-end flex items-center gap-2">
             {onCompare && <CompareToggleButton open={compareOpen} onToggle={() => setCompareOpen((open) => !open)} />}
             {shareUrl && <ShareReplayButton shareUrl={shareUrl} />}
             <button onClick={onClear} className="px-3 py-1.5 rounded-lg bg-osu-b3/50 text-xs text-osu-f1 hover:text-white hover:bg-osu-b2 transition-colors cursor-pointer">Back</button>
@@ -250,6 +313,53 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
         {compareEntry}
       </div>
     </>
+  );
+}
+
+// The Client stat doubles as the "what if this was played on the other
+// client?" switch: it shows the ruleset currently judging the replay and one
+// click flips it. Same footprint as the old static label plus a small swap
+// glyph; the explanation lives in the tooltip instead of a caption row.
+function ClientToggle({ judgingIsLazer, simActive, onSelect, compact = false }: {
+  judgingIsLazer: boolean;
+  simActive: boolean;
+  onSelect: (lazer: boolean) => void;
+  compact?: boolean;
+}) {
+  const otherLabel = judgingIsLazer ? "stable" : "lazer";
+  const title = simActive
+    ? `Simulated from the replay's keypresses; score and combo still show the real play. Click to judge with ${otherLabel} rules again.`
+    : `See this play judged with ${otherLabel} windows and LN rules`;
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(!judgingIsLazer)}
+      title={title}
+      aria-pressed={simActive}
+      className={`group flex items-center gap-1 font-bold transition-colors cursor-pointer ${
+        compact ? "mx-auto text-xs" : "text-sm"
+      } ${judgingIsLazer ? "text-osu-l2" : "text-osu-pink-light"}`}
+    >
+      {judgingIsLazer ? "Lazer" : "Stable"}
+      <ArrowLeftRight
+        className={`${compact ? "h-3 w-3" : "h-3.5 w-3.5"} transition-colors ${
+          simActive ? "text-osu-pink-light" : "text-osu-f1/50 group-hover:text-white"
+        }`}
+        aria-hidden="true"
+      />
+    </button>
+  );
+}
+
+function DeltaChip({ delta, suffix, decimals = 0 }: { delta: number | null; suffix: string; decimals?: number }) {
+  if (delta == null) return null;
+  const formatted = Math.abs(delta).toFixed(decimals);
+  if (Number(formatted) <= 0) return null;
+  const positive = delta > 0;
+  return (
+    <span className={`ml-1 text-[10px] font-semibold ${positive ? "text-osu-green-light" : "text-osu-red-light"}`}>
+      {positive ? "+" : "-"}{formatted}{suffix}
+    </span>
   );
 }
 
@@ -284,8 +394,13 @@ function PlayerBanner({ coverUrl }: { coverUrl?: string }) {
 // catches the player banner mid-dissolve and fills the seam instead of dipping dark.
 const BEATMAP_BANNER_FADE_MAP = "linear-gradient(to right, transparent 0%, rgba(0,0,0,0.55) 22%, #000 46%, #000 82%, transparent 100%)";
 const BEATMAP_BANNER_FADE_COMPACT = "linear-gradient(to right, transparent 18%, #000 44%, #000 82%, transparent 100%)";
+// The desktop map cover only spans the identity row now, so its bottom edge
+// lands mid-card; without a vertical dissolve it reads as a hard straight
+// line crossing the player banner's fade. Nested masks multiply, giving the
+// strip a soft bottom in addition to the horizontal fade.
+const BEATMAP_BANNER_BOTTOM_FADE = "linear-gradient(to bottom, #000 40%, transparent 98%)";
 
-function BeatmapBanner({ coverUrl, fade, className = "absolute inset-0" }: { coverUrl?: string; fade: string; className?: string }) {
+function BeatmapBanner({ coverUrl, fade, bottomFade, className = "absolute inset-0" }: { coverUrl?: string; fade: string; bottomFade?: string; className?: string }) {
   if (!coverUrl) return null;
   return (
     <div
@@ -294,10 +409,15 @@ function BeatmapBanner({ coverUrl, fade, className = "absolute inset-0" }: { cov
       aria-hidden="true"
     >
       <div
-        className="absolute inset-0 bg-cover bg-center opacity-50"
-        style={{ backgroundImage: `url(${coverUrl})` }}
-      />
-      <div className="absolute inset-0 bg-osu-b4/30" />
+        className="absolute inset-0"
+        style={bottomFade ? { maskImage: bottomFade, WebkitMaskImage: bottomFade } : undefined}
+      >
+        <div
+          className="absolute inset-0 bg-cover bg-center opacity-50"
+          style={{ backgroundImage: `url(${coverUrl})` }}
+        />
+        <div className="absolute inset-0 bg-osu-b4/30" />
+      </div>
     </div>
   );
 }
