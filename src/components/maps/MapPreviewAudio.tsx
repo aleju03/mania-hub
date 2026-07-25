@@ -12,6 +12,20 @@ function previewAudioUrl(beatmapsetId: number): string {
   return `https://b.ppy.sh/preview/${beatmapsetId}.mp3`;
 }
 
+// MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED; the constant is not worth reaching
+// for a global that does not exist under SSR/jsdom.
+const MEDIA_ERR_SRC_NOT_SUPPORTED = 4;
+
+// Only a source the browser could not load at all means "this set has no
+// preview". Network drops and decode hiccups are transient, and the
+// unavailable mark is permanent for the session, so treating them as missing
+// leaves a perfectly fine set crossed out until a reload.
+function isMissingSource(audio: HTMLAudioElement): boolean {
+  if (audio.error?.code !== MEDIA_ERR_SRC_NOT_SUPPORTED) return false;
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
+  return true;
+}
+
 // Same key the chart preview panel persists. A stored mute still plays at the
 // default volume here: tapping play on a card means "let me hear it", and this
 // surface has no volume control to undo a silent start.
@@ -38,21 +52,34 @@ export interface MapPreviewAudio {
 export function useMapPreviewAudio(): MapPreviewAudio {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const activeSetIdRef = useRef<number | null>(null);
+  // Bumped per toggle so a late event from a superseded attempt can be told
+  // apart from the current one, even when both are for the same set.
+  const attemptRef = useRef(0);
+  const detachRef = useRef<(() => void) | null>(null);
   const [playingSetId, setPlayingSetId] = useState<number | null>(null);
   const [loadingSetId, setLoadingSetId] = useState<number | null>(null);
   const [unavailableIds, setUnavailableIds] = useState<ReadonlySet<number>>(() => new Set());
 
-  const stop = useCallback(() => {
-    activeSetIdRef.current = null;
+  // Retires the current element for good: its listeners are dropped and its
+  // load cancelled, so anything it fires afterwards reaches nobody.
+  const teardown = useCallback(() => {
+    detachRef.current?.();
+    detachRef.current = null;
     const audio = audioRef.current;
+    audioRef.current = null;
     if (audio) {
       audio.pause();
       audio.removeAttribute("src");
       audio.load();
     }
+  }, []);
+
+  const stop = useCallback(() => {
+    activeSetIdRef.current = null;
+    teardown();
     setPlayingSetId(null);
     setLoadingSetId(null);
-  }, []);
+  }, [teardown]);
 
   const markUnavailable = useCallback(
     (beatmapsetId: number) => {
@@ -75,36 +102,60 @@ export function useMapPreviewAudio(): MapPreviewAudio {
         stop();
         return;
       }
-      let audio = audioRef.current;
-      if (!audio) {
-        audio = new Audio();
-        audio.preload = "auto";
-        audio.addEventListener("playing", () => {
-          const active = activeSetIdRef.current;
-          if (active == null) return;
-          setLoadingSetId(null);
-          setPlayingSetId(active);
-        });
-        audio.addEventListener("ended", () => stop());
-        audio.addEventListener("error", () => {
-          const active = activeSetIdRef.current;
-          if (active != null) markUnavailable(active);
-        });
-        audioRef.current = audio;
-      }
+
+      // One element per attempt rather than one for the hook: a 404 or an
+      // aborted fetch can fire `error` long after we moved to another card,
+      // and on a shared element that event is indistinguishable from a failure
+      // of the set now loading - which is how a set with a perfectly good
+      // preview ended up crossed out. Retiring the element makes the late
+      // event land on a dead handler instead. Constructing it inside the click
+      // keeps the user gesture that iOS needs to unlock playback.
+      teardown();
+      const attempt = ++attemptRef.current;
+      const element = new Audio();
+      element.preload = "auto";
+      audioRef.current = element;
+      const isCurrent = () => attemptRef.current === attempt && activeSetIdRef.current === beatmapsetId;
+
+      const onPlaying = () => {
+        if (!isCurrent()) return;
+        setLoadingSetId(null);
+        setPlayingSetId(beatmapsetId);
+      };
+      const onEnded = () => {
+        if (isCurrent()) stop();
+      };
+      const onError = () => {
+        if (!isCurrent()) return;
+        if (isMissingSource(element)) markUnavailable(beatmapsetId);
+        else stop();
+      };
+      element.addEventListener("playing", onPlaying);
+      element.addEventListener("ended", onEnded);
+      element.addEventListener("error", onError);
+      detachRef.current = () => {
+        element.removeEventListener("playing", onPlaying);
+        element.removeEventListener("ended", onEnded);
+        element.removeEventListener("error", onError);
+      };
+
       activeSetIdRef.current = beatmapsetId;
       setPlayingSetId(null);
       setLoadingSetId(beatmapsetId);
-      audio.volume = readPreviewVolume();
-      audio.src = previewAudioUrl(beatmapsetId);
-      audio.play().catch(() => {
+      element.volume = readPreviewVolume();
+      element.src = previewAudioUrl(beatmapsetId);
+      element.play().catch((err: unknown) => {
         // A rejection for a request we've since replaced or cancelled is just
         // the interrupted load, not a missing preview.
-        if (activeSetIdRef.current !== beatmapsetId) return;
-        markUnavailable(beatmapsetId);
+        if (!isCurrent()) return;
+        const name = err instanceof Error ? err.name : "";
+        // Autoplay blocks (NotAllowedError) and interrupted loads (AbortError)
+        // say nothing about whether the file exists; only reset the button.
+        if (name === "NotSupportedError") markUnavailable(beatmapsetId);
+        else if (name !== "AbortError") stop();
       });
     },
-    [markUnavailable, stop],
+    [markUnavailable, stop, teardown],
   );
 
   const isUnavailable = useCallback((beatmapsetId: number) => unavailableIds.has(beatmapsetId), [unavailableIds]);
