@@ -1,10 +1,11 @@
 import { createFileRoute, notFound, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
-import { Upload } from "lucide-react";
+import { Layers, Upload } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { ManiaRain } from "../components/home/ManiaRain";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { PageHeader } from "../components/layout/PageHeader";
 import { SkinCard } from "../components/skins/SkinCard";
+import { SkinBulkUploadModal } from "../components/skins/SkinBulkUploadModal";
 import { SkinUploadModal } from "../components/skins/SkinUploadModal";
 import { Pagination } from "../components/ui/Pagination";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
@@ -115,6 +116,7 @@ function SkinsPage() {
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [showUploader, setShowUploader] = useState(false);
+  const [showBulkUploader, setShowBulkUploader] = useState(false);
   const [searchInput, setSearchInput] = useState(q);
   const [reloadTick, setReloadTick] = useState(0);
 
@@ -184,14 +186,28 @@ function SkinsPage() {
   const skins = data?.skins ?? [];
 
   const headerAction = auth.viewer ? (
-    <button
-      type="button"
-      onClick={() => setShowUploader(true)}
-      className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-osu-pink px-4 py-1.5 text-[12.5px] font-bold text-white transition cursor-pointer hover:brightness-110 sm:w-auto"
-    >
-      <Upload className="h-3.5 w-3.5" aria-hidden="true" />
-      Upload skin
-    </button>
+    <div className="flex w-full items-center gap-2 sm:w-auto">
+      {/* Seeding the site is an owner job, so the bulk queue is admin-only. */}
+      {admin && (
+        <button
+          type="button"
+          onClick={() => setShowBulkUploader(true)}
+          title="Publish a whole folder of .osk files in one run"
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-osu-pink/45 bg-osu-pink/10 px-3.5 py-1.5 text-[12.5px] font-bold text-osu-pink-light transition-colors cursor-pointer hover:bg-osu-pink/20 hover:text-white"
+        >
+          <Layers className="h-3.5 w-3.5" aria-hidden="true" />
+          Bulk
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => setShowUploader(true)}
+        className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-osu-pink px-4 py-1.5 text-[12.5px] font-bold text-white transition cursor-pointer hover:brightness-110 sm:w-auto"
+      >
+        <Upload className="h-3.5 w-3.5" aria-hidden="true" />
+        Upload skin
+      </button>
+    </div>
   ) : auth.loginAvailable ? (
     <a
       href={loginHref}
@@ -324,6 +340,11 @@ function SkinsPage() {
       <SkinUploadModal
         open={showUploader && !!auth.viewer}
         onClose={() => setShowUploader(false)}
+        onPublished={handlePublished}
+      />
+      <SkinBulkUploadModal
+        open={showBulkUploader && admin}
+        onClose={() => setShowBulkUploader(false)}
         onPublished={handlePublished}
       />
     </div>

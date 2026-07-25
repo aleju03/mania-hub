@@ -176,6 +176,30 @@ export async function importReplaySkinFromOsk(
   };
 }
 
+// Name, author and keymodes without decoding a single image: the bulk
+// uploader lists a queue of .osk files long before it renders any of them, and
+// a full import of forty skins up front would take minutes and a lot of
+// memory. Only skin.ini comes out of the archive here.
+export interface OskManifest {
+  name: string;
+  author: string | null;
+  keymodes: number[];
+}
+
+export async function readOskManifest(file: File): Promise<OskManifest> {
+  const zip = await JSZip.loadAsync(file);
+  const skinIni = await readSkinIni(zip);
+  if (!skinIni) throw new Error("No skin.ini was found in this .osk file.");
+  const parsed = parseSkinIni(skinIni);
+  const keymodes = [...new Set(
+    parsed.mania
+      .map((block) => parseInteger(block.Keys))
+      .filter((keys): keys is number => keys != null && keys >= 1 && keys <= REPLAY_SKIN_MAX_COLUMNS),
+  )].sort((a, b) => a - b);
+  if (keymodes.length === 0) throw new Error("The skin.ini has no [Mania] section, so this skin has no mania keymodes.");
+  return { name: parsed.name ?? stripExtension(file.name), author: parsed.author, keymodes };
+}
+
 export interface ReplaySkinSoundsImportResult {
   name: string;
   sounds: Record<string, ArrayBuffer>;

@@ -139,6 +139,11 @@ export async function createPendingSkin(
     // saves the uploader a pointless 50MB transfer, and the same check runs
     // again on the server-computed hash when the archive actually lands.
     oskSha256?: string | null;
+    // Set only by the admin bulk uploader, which seeds the site with a whole
+    // collection at once: the per-user caps exist to keep a visitor from
+    // filling storage, and they would stop a seeding run at 30. The duplicate
+    // guard still applies.
+    bypassLimits?: boolean;
   },
 ): Promise<CreatePendingSkinResult> {
   const name = cleanText(input.name, SKIN_NAME_MAX_LENGTH);
@@ -152,16 +157,18 @@ export async function createPendingSkin(
     if (duplicate) return { ok: false, error: "duplicate", duplicate };
   }
 
-  const counts = (await exec(
-    db,
-    `select
-       count(*) as total,
-       sum(case when status = 'pending' then 1 else 0 end) as pending
-     from skins where owner_user_id = ?`,
-    [input.ownerUserId],
-  )).rows[0];
-  if (Number(counts?.pending ?? 0) >= SKIN_MAX_PENDING_PER_USER) return { ok: false, error: "pending_limit" };
-  if (Number(counts?.total ?? 0) >= SKIN_MAX_PER_USER) return { ok: false, error: "skin_limit" };
+  if (!input.bypassLimits) {
+    const counts = (await exec(
+      db,
+      `select
+         count(*) as total,
+         sum(case when status = 'pending' then 1 else 0 end) as pending
+       from skins where owner_user_id = ?`,
+      [input.ownerUserId],
+    )).rows[0];
+    if (Number(counts?.pending ?? 0) >= SKIN_MAX_PENDING_PER_USER) return { ok: false, error: "pending_limit" };
+    if (Number(counts?.total ?? 0) >= SKIN_MAX_PER_USER) return { ok: false, error: "skin_limit" };
+  }
 
   const id = crypto.randomUUID();
   const token = crypto.randomBytes(24).toString("base64url");

@@ -271,6 +271,57 @@ export const startSkinUpload = createServerFn({ method: "POST" })
     }
   });
 
+// The bulk uploader's ticket mint. Same route as startSkinUpload, but it
+// verifies a true admin and asks the backend to skip the per-user caps: a
+// seeding run publishes a whole collection under one account, and the caps
+// exist to stop a visitor filling storage. Duplicates are still refused.
+export const startAdminSkinUpload = createServerFn({ method: "POST" })
+  .validator((data: { name?: unknown; author?: unknown; description?: unknown; oskSha256?: unknown }) => ({
+    name: typeof data.name === "string" ? data.name.slice(0, 80) : "",
+    author: typeof data.author === "string" ? data.author.slice(0, SKIN_AUTHOR_MAX_LENGTH) : "",
+    description: typeof data.description === "string" ? data.description.slice(0, SKIN_DESCRIPTION_MAX_LENGTH) : "",
+    oskSha256: typeof data.oskSha256 === "string" && /^[0-9a-f]{64}$/i.test(data.oskSha256)
+      ? data.oskSha256.toLowerCase()
+      : null,
+  }))
+  .handler(async ({ data }): Promise<StartSkinUploadResult> => {
+    const { requireTrueAdminAccess } = await import("./auth-server");
+    await requireTrueAdminAccess("Bulk skin upload");
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const cfg = await resolveSkinsBackend();
+    if (!cfg) return { ok: false, error: "not_logged_in" };
+    try {
+      const response = await fetch(`${cfg.base}/api/skins/start`, {
+        method: "POST",
+        headers: cfg.headers,
+        body: JSON.stringify({
+          userId: cfg.userId,
+          username: cfg.username,
+          name: data.name,
+          author: data.author,
+          description: data.description,
+          oskSha256: data.oskSha256,
+          bypassLimits: true,
+        }),
+      });
+      const body = (await response.json().catch(() => null)) as
+        | { ok?: boolean; id?: string; token?: string; expiresAt?: string; error?: string; duplicate?: DuplicateSkinRef }
+        | null;
+      if (response.ok && body?.ok && body.id && body.token) {
+        return { ok: true, id: body.id, token: body.token, expiresAt: body.expiresAt ?? "" };
+      }
+      if (body?.error === "duplicate") {
+        return { ok: false, error: "duplicate", duplicate: body.duplicate ?? null };
+      }
+      if (body?.error === "invalid_name") return { ok: false, error: "invalid_name" };
+      if (body?.error === "skin_storage_not_configured") return { ok: false, error: "storage_not_configured" };
+      return { ok: false, error: "unavailable" };
+    } catch {
+      return { ok: false, error: "unavailable" };
+    }
+  });
+
 export const deleteMySkin = createServerFn({ method: "POST" })
   .validator((data: { id?: unknown }) => {
     const id = typeof data.id === "string" ? data.id.trim() : "";
@@ -329,6 +380,9 @@ export class SkinUploadError extends Error {
     readonly status?: number,
     // Set on code === "duplicate": the published skin holding these bytes.
     readonly duplicate?: DuplicateSkinRef | null,
+    // Set on code === "rate_limited": how long the backend says to wait. The
+    // bulk uploader sleeps exactly that long instead of guessing a pace.
+    readonly retryAfterMs?: number | null,
   ) {
     super(message);
   }
@@ -373,9 +427,9 @@ export function uploadSkinPart(options: {
         resolve();
         return;
       }
-      const body = xhr.response as { error?: string; reason?: string; duplicate?: DuplicateSkinRef } | null;
+      const body = xhr.response as { error?: string; reason?: string; duplicate?: DuplicateSkinRef; retryAfterMs?: number } | null;
       const code = body?.error === "invalid_osk" && body.reason ? `invalid_osk:${body.reason}` : body?.error ?? "upload_failed";
-      reject(new SkinUploadError(code, uploadErrorMessage(code, xhr.status), xhr.status, body?.duplicate ?? null));
+      reject(new SkinUploadError(code, uploadErrorMessage(code, xhr.status), xhr.status, body?.duplicate ?? null, body?.retryAfterMs ?? null));
     };
     xhr.onerror = () => reject(new SkinUploadError("network", "The upload failed. Check the connection and try again."));
     xhr.onabort = () => reject(new SkinUploadError("aborted", "The upload was cancelled."));
@@ -388,10 +442,12 @@ export async function finishSkinUpload(id: string, token: string): Promise<SkinS
   if (!base) throw new SkinUploadError("unavailable", "Server is not configured.");
   const query = new URLSearchParams({ id, token });
   const response = await fetch(`${base}/api/skins/finish?${query.toString()}`, { method: "POST", credentials: "omit" });
-  const body = (await response.json().catch(() => null)) as { ok?: boolean; skin?: SkinSummary; error?: string } | null;
+  const body = (await response.json().catch(() => null)) as
+    | { ok?: boolean; skin?: SkinSummary; error?: string; retryAfterMs?: number }
+    | null;
   if (!response.ok || !body?.ok || !body.skin) {
     const code = body?.error ?? "upload_failed";
-    throw new SkinUploadError(code, uploadErrorMessage(code, response.status), response.status);
+    throw new SkinUploadError(code, uploadErrorMessage(code, response.status), response.status, null, body?.retryAfterMs ?? null);
   }
   return body.skin;
 }

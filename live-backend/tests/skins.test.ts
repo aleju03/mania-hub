@@ -493,6 +493,35 @@ Keys: 7
 Colour1: 12,12,12
 `;
 
+describe("bulk upload limits", () => {
+  it("lets an admin seeding run past the per-user caps, duplicates aside", async () => {
+    // Fill the account to the cap, with one known .osk hash among them.
+    for (let index = 0; index < SKIN_MAX_PER_USER - 1; index += 1) {
+      await createPublishedSkin({
+        ownerUserId: OWNER.ownerUserId,
+        ownerUsername: OWNER.ownerUsername,
+        name: `Seed ${index}`,
+        sha256: index.toString(16).padStart(2, "0").repeat(32),
+      });
+    }
+    const alreadyHere = await createPublishedSkin({ ...OWNER, name: "Already here", sha256: "ee".repeat(32) });
+
+    expect((await createPendingSkin(db, OWNER))).toMatchObject({ ok: false, error: "skin_limit" });
+
+    // The seeding run keeps going, and past the pending cap too: a run leaves
+    // half-finished rows behind whenever a file fails mid-upload.
+    for (let index = 0; index <= SKIN_MAX_PENDING_PER_USER; index += 1) {
+      expect((await createPendingSkin(db, { ...OWNER, bypassLimits: true })).ok).toBe(true);
+    }
+
+    // Uploading a file the site already has is still refused, caps or not.
+    const duplicate = await createPendingSkin(db, { ...OWNER, bypassLimits: true, oskSha256: "ee".repeat(32) });
+    expect(duplicate.ok).toBe(false);
+    if (duplicate.ok || duplicate.error !== "duplicate") throw new Error("expected a duplicate rejection");
+    expect(duplicate.duplicate.id).toBe(alreadyHere);
+  });
+});
+
 describe("duplicate .osk guard", () => {
   const HASH = "1f".repeat(32);
 

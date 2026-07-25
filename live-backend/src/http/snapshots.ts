@@ -1520,7 +1520,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 503, { error: "skin_storage_not_configured" });
       return true;
     }
-    const body = parseJson<{ userId?: unknown; username?: unknown; name?: unknown; author?: unknown; description?: unknown; oskSha256?: unknown }>((await readBody(req)) || "{}", {});
+    const body = parseJson<{ userId?: unknown; username?: unknown; name?: unknown; author?: unknown; description?: unknown; oskSha256?: unknown; bypassLimits?: unknown }>((await readBody(req)) || "{}", {});
     const userId = Number(body.userId);
     if (!Number.isInteger(userId) || userId <= 0) {
       sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
@@ -1536,6 +1536,9 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       author: typeof body.author === "string" ? body.author : null,
       description: typeof body.description === "string" ? body.description : null,
       oskSha256,
+      // Only the admin bulk uploader asks for this, through a server fn that
+      // verifies a true admin before forwarding it on this token-gated route.
+      bypassLimits: body.bypassLimits === true,
     });
     if (!result.ok) {
       if (result.error === "duplicate") {
