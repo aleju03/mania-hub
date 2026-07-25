@@ -103,6 +103,13 @@ export type R2AdminPrefixSummary = {
   truncated: boolean;
 };
 
+export type R2AdminSkinDownload = {
+  key: string;
+  name: string;
+  sizeBytes: number;
+  url: string;
+};
+
 let client: S3Client | null | undefined;
 
 function getClient(): S3Client | null {
@@ -347,6 +354,37 @@ export async function getR2AdminSignedUrl(keyInput: string, mimeType?: string): 
   return signGetUrl(key, mimeType);
 }
 
+// The live backend writes exactly one <name>.osk per skins/<id>/ folder (see
+// skinOskKey) alongside the preview/screenshot images, so the admin browser can
+// resolve a skin's archive without paging into the folder first.
+export async function getR2AdminSkinOskDownload(prefixInput: string): Promise<R2AdminSkinDownload | null> {
+  const prefix = normalizeR2AdminPrefix(prefixInput);
+  if (!prefix.startsWith(SKINS_PREFIX)) {
+    throw new Error("Quick download is only available for skin folders.");
+  }
+  const r2 = getClient();
+  if (!r2) throw new Error("R2 replay cache is not configured");
+
+  const response = await r2.send(new ListObjectsV2Command({
+    Bucket: REPLAY_CACHE_BUCKET,
+    Prefix: prefix,
+    Delimiter: "/",
+    MaxKeys: R2_ADMIN_LIST_LIMIT,
+  }));
+
+  const entry = (response.Contents ?? []).find((item) => /\.osk$/i.test(item.Key ?? ""));
+  if (!entry?.Key) return null;
+
+  const key = String(entry.Key);
+  const name = objectNameFromKey(key, prefix);
+  return {
+    key,
+    name,
+    sizeBytes: Number(entry.Size ?? 0),
+    url: await signGetUrl(key, "application/octet-stream", name),
+  };
+}
+
 function assertReplayCacheKey(storageKey: string): void {
   if (!storageKey.startsWith(REPLAY_CACHE_PREFIX)) {
     throw new Error(`Refusing to touch non replay-cache R2 key "${storageKey}"`);
@@ -356,7 +394,8 @@ function assertReplayCacheKey(storageKey: string): void {
 // Roots the admin bucket browser may operate on: the evictable replay cache
 // plus durable skin uploads the live backend writes under skins/. Cache
 // eviction and every non-admin path stay locked to replay-cache/ only.
-const ADMIN_BROWSABLE_PREFIXES = [REPLAY_CACHE_PREFIX, "skins/"];
+const SKINS_PREFIX = "skins/";
+const ADMIN_BROWSABLE_PREFIXES = [REPLAY_CACHE_PREFIX, SKINS_PREFIX];
 
 function assertAdminBrowsableKey(storageKey: string): void {
   if (!ADMIN_BROWSABLE_PREFIXES.some((prefix) => storageKey.startsWith(prefix))) {
@@ -412,7 +451,11 @@ async function mapWithConcurrency<T, U>(
   return results;
 }
 
-async function signGetUrl(storageKey: string, mimeType?: string): Promise<string> {
+async function signGetUrl(
+  storageKey: string,
+  mimeType?: string,
+  downloadFilename?: string,
+): Promise<string> {
   // Read-only signing may reach any admin-browsable root; every mutating
   // cache path still asserts the stricter replay-cache/ guard itself.
   assertAdminBrowsableKey(storageKey);
@@ -425,9 +468,18 @@ async function signGetUrl(storageKey: string, mimeType?: string): Promise<string
       Bucket: REPLAY_CACHE_BUCKET,
       Key: storageKey,
       ResponseContentType: mimeType,
+      ResponseContentDisposition: downloadFilename
+        ? `attachment; filename="${sanitizeDispositionFilename(downloadFilename)}"`
+        : undefined,
     }),
     { expiresIn: SIGNED_URL_EXPIRES_SECONDS },
   );
+}
+
+// Content-Disposition is a signed header, so anything that could break out of
+// the quoted filename has to go before it reaches the signature.
+function sanitizeDispositionFilename(name: string): string {
+  return name.replace(/[^a-zA-Z0-9._ -]+/g, "_").slice(0, 96) || "download";
 }
 
 export async function getCachedBeatmapAssetUrl(

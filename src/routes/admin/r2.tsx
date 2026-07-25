@@ -9,10 +9,12 @@ import {
   getR2AdminListing,
   getR2AdminPrefixSummary,
   getR2AdminSignedUrl,
+  getR2AdminSkinOskDownload,
   type R2AdminFolder,
   type R2AdminListing,
   type R2AdminObject,
   type R2AdminPrefixSummary,
+  type R2AdminSkinDownload,
 } from "../../lib/r2-cache";
 import {
   describeUploadedReplayByKey,
@@ -70,6 +72,15 @@ const signR2AdminUrl = createServerFn({ method: "GET" })
     await requireAdminAccess("R2 object preview");
     const url = await getR2AdminSignedUrl(data.key, data.mimeType);
     return { url };
+  });
+
+const signSkinOskDownload = createServerFn({ method: "GET" })
+  .validator((data: { prefix?: string }) => ({
+    prefix: typeof data?.prefix === "string" ? data.prefix : "",
+  }))
+  .handler(async ({ data }): Promise<R2AdminSkinDownload | null> => {
+    await requireAdminAccess("R2 skin download");
+    return getR2AdminSkinOskDownload(data.prefix);
   });
 
 const describeUploadedReplay = createServerFn({ method: "GET" })
@@ -839,6 +850,67 @@ function SortToggles({
   );
 }
 
+// skins/<id>/ folders hold one .osk plus preview images; those get a quick
+// download so grabbing the archive doesn't need a trip into the folder.
+function isSkinFolderPrefix(prefix: string): boolean {
+  if (!prefix.startsWith("skins/")) return false;
+  return prefix.replace(/\/+$/, "").split("/").length === 2;
+}
+
+function SkinOskDownloadButton({ prefix }: { prefix: string }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const download = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await signSkinOskDownload({ data: { prefix } });
+      if (!result) {
+        setError("No .osk in this folder.");
+        return;
+      }
+      // The signed URL carries an attachment disposition, so a plain anchor
+      // click saves the file instead of navigating away.
+      const link = document.createElement("a");
+      link.href = result.url;
+      link.download = result.name;
+      link.rel = "noreferrer noopener";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not sign the .osk URL.");
+    } finally {
+      setBusy(false);
+    }
+  }, [prefix]);
+
+  return (
+    <button
+      type="button"
+      onClick={() => void download()}
+      disabled={busy}
+      title={error ?? "Download .osk"}
+      className={`inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors duration-[120ms] cursor-pointer flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed ${
+        error
+          ? "text-osu-red-light hover:bg-osu-red/15"
+          : "text-osu-f1 hover:bg-osu-pink/15 hover:text-osu-pink-light"
+      }`}
+    >
+      {busy ? (
+        <span className="text-[13px] font-mono">…</span>
+      ) : (
+        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 3v12" />
+          <path d="m7 11 5 5 5-5" />
+          <path d="M4 20h16" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
 function FolderRow({
   folder,
   onOpen,
@@ -871,6 +943,7 @@ function FolderRow({
         </div>
         <span className="text-osu-f1/60 shrink-0 text-[14px]">›</span>
       </button>
+      {isSkinFolderPrefix(folder.prefix) ? <SkinOskDownloadButton prefix={folder.prefix} /> : null}
       <DeleteIconButton title="Delete folder" onClick={onDelete} />
     </div>
   );
