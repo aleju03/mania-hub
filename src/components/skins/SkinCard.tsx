@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Download } from "lucide-react";
 import type { CSSProperties } from "react";
+import { rememberSkinName } from "../../lib/analytics-skins";
 import { formatTimeAgo } from "../../lib/format";
 import { formatSkinFileSize, type SkinSummary } from "../../lib/skins";
 import { Avatar } from "../ui/Avatar";
@@ -38,7 +39,12 @@ export function SkinCard({ skin, onClick }: { skin: SkinSummary; onClick?: () =>
     <Link
       to="/skins/$id"
       params={{ id: skin.slug ?? skin.id }}
-      onClick={onClick}
+      onClick={() => {
+        // The detail pageview only sees a slug, so the card hands the real
+        // name forward for the activity feed.
+        rememberSkinName(skin.slug ?? skin.id, skin.name);
+        onClick?.();
+      }}
       style={{ "--skin-accent": accent } as CSSProperties}
       className="group flex flex-col overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4 transition-[border-color,box-shadow] hover:border-(--skin-accent) hover:shadow-[0_0_18px_-8px_var(--skin-accent)]"
     >

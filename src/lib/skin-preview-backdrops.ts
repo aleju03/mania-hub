@@ -122,6 +122,24 @@ function fallbackPool(count: number, exclude: Set<number>): SkinBackdropCandidat
     .map((setId) => ({ setId, label: "" }));
 }
 
+// Hands out covers one at a time without repeating until the pool runs dry:
+// picking at random per skin means a run of seventeen lands on nine or ten
+// distinct covers, with a few showing up three times. Dealing from a shuffled
+// deck gives every skin its own until there are more skins than covers.
+export class BackdropDealer {
+  private deck: SkinBackdropCandidate[] = [];
+
+  constructor(private readonly pool: readonly SkinBackdropCandidate[]) {}
+
+  next(): SkinBackdropCandidate | null {
+    if (this.pool.length === 0) return null;
+    // Reshuffled on each pass, so a queue longer than the pool does not repeat
+    // the same order twice.
+    if (this.deck.length === 0) this.deck = shuffle(this.pool);
+    return this.deck.pop() ?? null;
+  }
+}
+
 export async function drawSkinPreviewBackdrops(
   options: { count?: number; exclude?: Iterable<number> } = {},
 ): Promise<SkinBackdropCandidate[]> {

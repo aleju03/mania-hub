@@ -4,6 +4,8 @@ import JSZip from "jszip";
 import { Check, Copy, Shuffle, Star, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { skinEventProperties } from "../../lib/analytics-skins";
+import { track } from "../../lib/posthog";
 import { importReplaySkinFromOsk, type ReplaySkinImportResult } from "../../lib/replay-skin-import";
 import { buildSkinAssetGroups, type SkinAssetGroup } from "../../lib/skin-asset-explorer";
 import { SkinAssetTiles } from "./SkinAssetExplorer";
@@ -785,11 +787,17 @@ export function SkinUploadModal({
       report("Publishing.", 0);
 
       const skin = await finishSkinUpload(ticket.id, ticket.token);
+      track("skin_upload_published", skinEventProperties(skin));
       markSkinsListStale();
       setPublished(skin);
       setStep("done");
       onPublished(skin);
     } catch (uploadError) {
+      // What visitors trip over on the way to publishing is worth knowing;
+      // the reason travels, the file does not.
+      track("skin_upload_failed", {
+        skin_upload_error: uploadError instanceof SkinUploadError ? uploadError.code : "unexpected",
+      });
       if (uploadError instanceof SkinUploadError) {
         if (uploadError.code === "invalid_ticket") ticketRef.current = null;
         if (uploadError.code === "duplicate") setDuplicate(uploadError.duplicate ?? null);

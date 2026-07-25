@@ -75,6 +75,14 @@ export interface AnalyticsFeedEvent {
   farmMapUser: string | null;
   packType: string | null;
   packUsername: string | null;
+  skinsQuery: string | null;
+  skinsKeys: string | null;
+  skinsSort: string | null;
+  skinsPage: string | null;
+  skinRef: string | null;
+  skinName: string | null;
+  skinKeymodes: string | null;
+  skinUploadError: string | null;
   viewerUsername: string | null;
 }
 
@@ -437,6 +445,14 @@ export class AnalyticsStore {
       packUsername: str("pack_username"),
       farmMapTitle: str("farm_map_title"),
       farmMapUser: str("farm_map_user"),
+      skinsQuery: str("skins_query"),
+      skinsKeys: str("skins_keys"),
+      skinsSort: str("skins_sort"),
+      skinsPage: str("skins_page"),
+      skinRef: str("skin_ref"),
+      skinName: str("skin_name"),
+      skinKeymodes: str("skin_keymodes"),
+      skinUploadError: str("skin_upload_error"),
       viewerUsername: record.viewerUsername,
     };
   }

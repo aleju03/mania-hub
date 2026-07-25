@@ -1,5 +1,5 @@
 import { importReplaySkinFromOsk } from "./replay-skin-import";
-import { drawSkinPreviewBackdrops, type SkinBackdropCandidate } from "./skin-preview-backdrops";
+import { BackdropDealer, drawSkinPreviewBackdrops, SKIN_BACKDROP_POOL_SIZE } from "./skin-preview-backdrops";
 import { loadSkinPreviewBackgroundForSet, renderSkinPreview } from "./skin-preview-render";
 import {
   finishSkinUpload,
@@ -122,21 +122,26 @@ export class RequestPacer {
 
 export class BulkUploadCancelled extends Error {}
 
-// One draw per run, so a batch shares a coherent set of covers while each skin
-// still gets its own. Failures fall back to the flat backdrop.
-export async function drawBulkBackdrops(): Promise<SkinBackdropCandidate[]> {
+// One catalog draw per run, sized to the queue so every skin can have its own
+// cover: a single catalog page holds 48, which is the ceiling here. A run
+// longer than that starts a second pass over the same covers. Failures fall
+// back to the flat backdrop.
+const MAX_BULK_POOL = 48;
+
+export async function drawBulkBackdrops(queueLength: number): Promise<BackdropDealer> {
   try {
-    return await drawSkinPreviewBackdrops();
+    const count = Math.min(MAX_BULK_POOL, Math.max(SKIN_BACKDROP_POOL_SIZE, queueLength));
+    return new BackdropDealer(await drawSkinPreviewBackdrops({ count }));
   } catch {
-    return [];
+    return new BackdropDealer([]);
   }
 }
 
 async function backdropImageFor(
-  pool: SkinBackdropCandidate[],
+  dealer: BackdropDealer,
   cache: Map<number, HTMLImageElement | null>,
 ): Promise<HTMLImageElement | null> {
-  const candidate = pool[Math.floor(Math.random() * pool.length)];
+  const candidate = dealer.next();
   if (!candidate) return null;
   const cached = cache.get(candidate.setId);
   if (cached !== undefined) return cached;
@@ -146,7 +151,8 @@ async function backdropImageFor(
 }
 
 export interface BulkUploadContext {
-  pool: SkinBackdropCandidate[];
+  // Deals each skin its own cover; see drawBulkBackdrops.
+  dealer: BackdropDealer;
   backdrops: Map<number, HTMLImageElement | null>;
   cancelled: () => boolean;
   // Shared across the whole run: the window is per IP, not per file.
@@ -199,7 +205,7 @@ export async function publishBulkSkin(
 
     const keymodes = [...imported.summary.keymodes].sort((a, b) => (a === 4 ? -1 : b === 4 ? 1 : a - b));
     const coverKeymode = keymodes.includes(4) ? 4 : keymodes[0];
-    const background = await backdropImageFor(context.pool, context.backdrops);
+    const background = await backdropImageFor(context.dealer, context.backdrops);
     stopIfCancelled();
 
     onUpdate({ phase: "rendering", progress: 0 });

@@ -150,7 +150,8 @@ export function SkinBulkUploadModal({
     setRunning(true);
     setError(null);
     const context = {
-      pool: await drawBulkBackdrops(),
+      // Sized to the queue, so seventeen files get seventeen different covers.
+      dealer: await drawBulkBackdrops(pending.length),
       backdrops: new Map<number, HTMLImageElement | null>(),
       cancelled: () => cancelRef.current,
       // One window for the whole run: the backend counts per address.

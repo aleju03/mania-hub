@@ -330,6 +330,14 @@ interface AnalyticsRecentEventRow {
   farmMapUser: string | null;
   packType: string | null;
   packUsername: string | null;
+  skinsQuery: string | null;
+  skinsKeys: string | null;
+  skinsSort: string | null;
+  skinsPage: string | null;
+  skinRef: string | null;
+  skinName: string | null;
+  skinKeymodes: string | null;
+  skinUploadError: string | null;
   viewerUsername: string | null;
 }
 
@@ -713,7 +721,7 @@ async function fetchAnalyticsMonitorDataFromPostHog({
     ),
     runQuery(
       "recent activity",
-      `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id, properties.maps_tab, properties.rankings_page, properties.profile_username, properties.replay_player, properties.replay_score_id, properties.$screen_width, properties.$viewport_width, properties.$current_url, properties.farm_helper_user, properties.pack_type, properties.pack_username, properties.farm_map_title, properties.farm_map_user, properties.viewer_username, properties.maps_query, properties.maps_filters, properties.maps_sort, properties.maps_collection, properties.maps_page, properties.maps_beatmap_id, properties.$insert_id FROM events WHERE timestamp > ${since} AND distinct_id != 'server'${recentRealVisitorClause}${recentCountryClause} AND (properties.$pathname IS NULL OR properties.$pathname NOT LIKE '/admin/%') AND NOT (event = '$pageview' AND properties.$pathname = '/') ORDER BY timestamp DESC LIMIT ${ANALYTICS_RECENT_EVENTS_LIMIT}`,
+      `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id, properties.maps_tab, properties.rankings_page, properties.profile_username, properties.replay_player, properties.replay_score_id, properties.$screen_width, properties.$viewport_width, properties.$current_url, properties.farm_helper_user, properties.pack_type, properties.pack_username, properties.farm_map_title, properties.farm_map_user, properties.viewer_username, properties.maps_query, properties.maps_filters, properties.maps_sort, properties.maps_collection, properties.maps_page, properties.maps_beatmap_id, properties.$insert_id, properties.skins_query, properties.skins_keys, properties.skins_sort, properties.skins_page, properties.skin_ref, properties.skin_name, properties.skin_keymodes, properties.skin_upload_error FROM events WHERE timestamp > ${since} AND distinct_id != 'server'${recentRealVisitorClause}${recentCountryClause} AND (properties.$pathname IS NULL OR properties.$pathname NOT LIKE '/admin/%') AND NOT (event = '$pageview' AND properties.$pathname = '/') ORDER BY timestamp DESC LIMIT ${ANALYTICS_RECENT_EVENTS_LIMIT}`,
     ),
     runQuery(
       "physical countries",
@@ -794,6 +802,14 @@ async function fetchAnalyticsMonitorDataFromPostHog({
       packUsername: row[16] ? String(row[16]) : null,
       farmMapTitle: row[17] ? String(row[17]) : null,
       farmMapUser: row[18] ? String(row[18]) : null,
+      skinsQuery: row[27] ? String(row[27]) : null,
+      skinsKeys: row[28] ? String(row[28]) : null,
+      skinsSort: row[29] ? String(row[29]) : null,
+      skinsPage: row[30] ? String(row[30]) : null,
+      skinRef: row[31] ? String(row[31]) : null,
+      skinName: row[32] ? String(row[32]) : null,
+      skinKeymodes: row[33] ? String(row[33]) : null,
+      skinUploadError: row[34] ? String(row[34]) : null,
       viewerUsername: row[19] ? String(row[19]) : null,
     })),
     topPhysicalCountries: topPhysCountries.map((row) => ({
@@ -2043,6 +2059,17 @@ function analyticsUrlParam(url: string | null, key: string): string | null {
   }
 }
 
+// Browsing skins is a search session too: spell out the query, the keymode
+// facet and the sort so the feed does not read as a wall of "Skins".
+function formatAnalyticsSkinsLabel(row: AnalyticsRecentEventRow): string {
+  const parts = ["Skins"];
+  if (row.skinsQuery) parts.push(`"${row.skinsQuery}"`);
+  if (row.skinsKeys) parts.push(row.skinsKeys);
+  if (row.skinsSort) parts.push(`sort: ${row.skinsSort}`);
+  if (row.skinsPage) parts.push(`p${row.skinsPage}`);
+  return parts.join(" · ");
+}
+
 // A maps visit is a search session rather than a page: every keystroke and
 // filter click lands as its own pageview, so the tab alone reads as a wall of
 // "Maps / Search". Spell out what was typed, what was filtered, and where in
@@ -2059,12 +2086,28 @@ function formatAnalyticsMapsLabel(row: AnalyticsRecentEventRow): string {
 }
 
 function formatAnalyticsRecentEventLabel(row: AnalyticsRecentEventRow): string {
+  // A skin the visitor actually took away, and what tripped up an upload:
+  // both say more than the page they happened on.
+  if (row.event === "skin_download") {
+    return `Skin download · ${row.skinName || row.skinRef || "skin"}`;
+  }
+  if (row.event === "skin_upload_published") {
+    return `Skin published · ${row.skinName || row.skinRef || "skin"}`;
+  }
+  if (row.event === "skin_upload_failed") {
+    return `Skin upload failed${row.skinUploadError ? ` · ${row.skinUploadError}` : ""}`;
+  }
   if (row.event === "pack_open") {
     return `Pack · ${formatAnalyticsPackType(row.packType)} · ${row.packUsername || "guest"}`;
   }
   const path = row.path || "";
   if (!path || path === "/") return "Home";
   if (path === "/maps") return formatAnalyticsMapsLabel(row);
+  if (path === "/skins") return formatAnalyticsSkinsLabel(row);
+  if (path.startsWith("/skins/")) {
+    const name = row.skinName || row.skinRef || path.slice("/skins/".length);
+    return name ? `Skin · ${name}` : "Skin";
+  }
   if (path === "/rankings") return row.rankingsPage ? `Rankings · p${row.rankingsPage}` : "Rankings";
   if (path === "/my-stats" || path === "/my-data") return row.viewerUsername ? `My stats · ${row.viewerUsername}` : "My stats";
   if (path === "/goals") return row.viewerUsername ? `Goals · ${row.viewerUsername}` : "Goals";

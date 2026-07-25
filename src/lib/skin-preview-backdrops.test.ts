@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   applyBackdropPick,
   backdropForKeymode,
+  BackdropDealer,
   type BackdropSelection,
   drawSkinPreviewBackdrops,
   replaceBackdrop,
@@ -158,5 +159,33 @@ describe("per-keymode backdrop selection", () => {
 
     expect(next.shared).toBe(100);
     expect([...next.overrides]).toEqual([[5, 200]]);
+  });
+});
+
+describe("BackdropDealer", () => {
+  const pool = Array.from({ length: 5 }, (_, index) => ({ setId: 100 + index, label: "" }));
+
+  it("gives every cover out once before repeating any", () => {
+    const dealer = new BackdropDealer(pool);
+    const dealt = pool.map(() => dealer.next()?.setId);
+
+    expect(new Set(dealt).size).toBe(pool.length);
+    expect([...dealt].sort()).toEqual(pool.map((candidate) => candidate.setId));
+  });
+
+  it("starts a fresh pass once the pool runs dry", () => {
+    const dealer = new BackdropDealer(pool);
+    for (let index = 0; index < pool.length; index += 1) dealer.next();
+
+    // A queue longer than the pool has to repeat, but only after everything
+    // has been used once.
+    const second = pool.map(() => dealer.next()?.setId);
+    expect(new Set(second).size).toBe(pool.length);
+  });
+
+  it("has nothing to deal when the draw came back empty", () => {
+    const dealer = new BackdropDealer([]);
+    expect(dealer.next()).toBeNull();
+    expect(dealer.next()).toBeNull();
   });
 });

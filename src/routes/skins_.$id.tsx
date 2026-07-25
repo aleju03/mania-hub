@@ -10,6 +10,8 @@ import { Avatar } from "../components/ui/Avatar";
 import { useAuth } from "../lib/auth-context";
 import { canUseDevFeatures } from "../lib/auth-shared";
 import { formatTimeAgo } from "../lib/format";
+import { skinEventProperties } from "../lib/analytics-skins";
+import { track } from "../lib/posthog";
 import { deleteMySkin, fetchSkinById, formatKeymodes, formatSkinFileSize, markSkinsListStale, moderateSkin, skinDownloadUrl, type SkinSummary } from "../lib/skins";
 import { pageSeo } from "../lib/seo";
 
@@ -246,6 +248,7 @@ function SkinDetailPage() {
                     {skin.oskUrl && (
                       <a
                         href={skinDownloadUrl(skin.id) ?? skin.oskUrl}
+                        onClick={() => track("skin_download", skinEventProperties(skin))}
                         className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-osu-pink px-5 py-2 text-[13px] font-bold text-white transition hover:brightness-110"
                       >
                         <Download className="h-4 w-4" aria-hidden="true" />

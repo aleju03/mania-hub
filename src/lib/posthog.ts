@@ -1,4 +1,5 @@
 import { getMapsPageviewProperties } from "./analytics-maps";
+import { getSkinDetailPageviewProperties, getSkinsPageviewProperties } from "./analytics-skins";
 
 const API_KEY = import.meta.env.VITE_POSTHOG_KEY as string | undefined;
 const ENDPOINT = "/api/sync";
@@ -145,6 +146,12 @@ function getPageviewProperties(pathname: string): Record<string, unknown> {
     // Tab plus the search text, filters and sort behind it, so the activity
     // feed can show what the visitor is actually looking for.
     Object.assign(props, getMapsPageviewProperties(params));
+  } else if (pathname === "/skins") {
+    // Browsing skins is a search session like maps: the query, keymode facet
+    // and sort say more than the bare path.
+    Object.assign(props, getSkinsPageviewProperties(params));
+  } else if (pathname.startsWith("/skins/")) {
+    Object.assign(props, getSkinDetailPageviewProperties(pathname));
   } else if (pathname === "/rankings") {
     const page = params.get("page");
     if (page) props.rankings_page = page;
