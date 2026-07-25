@@ -54,9 +54,18 @@ export function getStableManiaReplayScrollSpeedScale(rawFrames: RawReplayFrameLi
   return null;
 }
 
-export function resolveStableManiaReplayScrollSpeed(scale: number | null | undefined, bpm: number | null | undefined): number | null {
-  if (scale == null || bpm == null) return null;
-  const scrollSpeed = scale * bpm / STABLE_MANIA_SCROLL_SPEED_BPM_SCALE;
+// Stable normalizes the frame-embedded scroll marker by the EFFECTIVE bpm,
+// so rate mods matter: a DT play divides the setting by 1.5x the bpm and an
+// HT play by 0.75x. Recovering the player's 1-40 setting has to multiply the
+// same rate back in, or an HT replay reads ~33% too fast (a speed-29 HT play
+// on a 193bpm map decodes as 39 without it).
+export function resolveStableManiaReplayScrollSpeed(
+  scale: number | null | undefined,
+  bpm: number | null | undefined,
+  rate: number = 1,
+): number | null {
+  if (scale == null || bpm == null || !(rate > 0)) return null;
+  const scrollSpeed = scale * bpm * rate / STABLE_MANIA_SCROLL_SPEED_BPM_SCALE;
   if (!Number.isFinite(scrollSpeed) || scrollSpeed < 1 || scrollSpeed > 40) return null;
   return normalizeReplayScrollSpeed(scrollSpeed);
 }

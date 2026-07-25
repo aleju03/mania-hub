@@ -70,8 +70,18 @@ describe("resolveStableManiaReplayScrollSpeed", () => {
     expect(resolveStableManiaReplayScrollSpeed(15.81395, 215)).toBe(34);
   });
 
+  it("multiplies the rate back in for rate-modded replays", () => {
+    // Real HT play (score 6636034455): scale 20.03454 on a 193bpm map decodes
+    // to exactly 29 at 0.75x; ignoring the rate misreads it as 39.
+    expect(resolveStableManiaReplayScrollSpeed(20.03454, 193, 0.75)).toBe(29);
+    expect(resolveStableManiaReplayScrollSpeed(20.03454, 193)).toBe(39);
+    // The same setting on DT stores a smaller scale (setting * 100 / (bpm * 1.5)).
+    expect(resolveStableManiaReplayScrollSpeed(29 * 100 / (193 * 1.5), 193, 1.5)).toBe(29);
+  });
+
   it("ignores resolved values outside stable's scroll speed range", () => {
     expect(resolveStableManiaReplayScrollSpeed(1, 5000)).toBeNull();
+    expect(resolveStableManiaReplayScrollSpeed(9.009009, 222, 0)).toBeNull();
   });
 });
 
