@@ -698,23 +698,23 @@ export interface SkinPreviewLongNoteGeometry {
 // is what lets arrow-style caps cover the join with their own shape - and
 // since the body never passes a cap's centre, nothing pokes out past art
 // that fills only the far half of its box. Head/tail end Ys are the position
-// lines (where each cap's receptor-side edge sits); trim is the Percy
-// shortening, applied at the tail side.
+// lines (where each cap's receptor-side edge sits). No Percy-style trim
+// here: stable has none, and shaving the tail end back out from under the
+// cap is exactly what opens a gap below it. Percy bodies read shorter
+// through their own transparent lead-in, which the cascade already places
+// at the tail end.
 export function longNoteGeometry(input: {
   upscroll: boolean;
   headEndY: number;
   tailEndY: number;
   headHeight: number;
   tailHeight: number;
-  trim?: number;
 }): SkinPreviewLongNoteGeometry {
   const { upscroll, headEndY, tailEndY, headHeight, tailHeight } = input;
-  const trim = input.trim ?? 0;
   const headBoxTop = upscroll ? headEndY : headEndY - headHeight;
   const tailBoxTop = upscroll ? tailEndY : tailEndY - tailHeight;
   const headSideY = upscroll ? headEndY + headHeight / 2 : headEndY - headHeight / 2;
-  const tailSideY = (upscroll ? tailEndY + tailHeight / 2 : tailEndY - tailHeight / 2)
-    + (upscroll ? -trim : trim);
+  const tailSideY = upscroll ? tailEndY + tailHeight / 2 : tailEndY - tailHeight / 2;
   return {
     bodyTop: Math.min(headSideY, tailSideY),
     bodyBottom: Math.max(headSideY, tailSideY),
@@ -745,17 +745,12 @@ function drawLongNote(
   const headHeight = headImage ? noteAssetHeight(headImage) : Math.max(10, laneWidth * 0.3);
   const tailHeight = tailImage ? noteAssetHeight(tailImage) : 0;
 
-  // Percy trim, as in ReplayCanvas: pull the body's tail end back so oversized
-  // LN sprites read at their intended length.
-  const trim = settings.percy ? Math.min(20, laneWidth * 0.35) : 0;
-
   const { bodyTop, bodyBottom, headBoxTop, tailBoxTop } = longNoteGeometry({
     upscroll,
     headEndY,
     tailEndY,
     headHeight,
     tailHeight,
-    trim,
   });
 
   if (bodyImage && bodyBottom > bodyTop) {

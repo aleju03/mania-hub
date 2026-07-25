@@ -179,10 +179,13 @@ describe("longNoteGeometry", () => {
     expect(geometry.tailBoxTop).toBe(420);
   });
 
-  it("shortens the body at the tail side by the Percy trim", () => {
-    expect(longNoteGeometry({ ...downscroll, trim: 20 }).bodyTop).toBe(300 - 48 + 20);
-    const upscroll = longNoteGeometry({ upscroll: true, headEndY: 120, tailEndY: 420, headHeight: 96, tailHeight: 96, trim: 20 });
-    expect(upscroll.bodyBottom).toBe(420 + 48 - 20);
+  it("keeps the body flush under the tail cap (no Percy-style trim)", () => {
+    // ArrowMania's flipped tail art reaches 51px into its 96px box, so the
+    // body meeting the box centre (48) overlaps it by 3px; any trim at the
+    // tail side would open a visible gap below the cap.
+    const geometry = longNoteGeometry(downscroll);
+    const flippedArtBottom = geometry.tailBoxTop + (96 * (128 - 59 - 1)) / 128;
+    expect(geometry.bodyTop).toBeLessThan(flippedArtBottom);
   });
 
   it("runs the body to the position line when the skin ships no tail art", () => {
