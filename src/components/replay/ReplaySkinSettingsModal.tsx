@@ -2701,6 +2701,7 @@ const REPLAY_OVERLAY_LABELS: Record<ReplayOverlayId, string> = {
   kps: "KPS counter",
   misses: "L/R miss counter",
   accuracy: "Accuracy",
+  pp: "PP counter",
   judgements: "Judgements",
   progress: "Progress pie",
 };
@@ -2710,6 +2711,7 @@ const REPLAY_OVERLAY_DESCRIPTIONS: Record<ReplayOverlayId, string> = {
   kps: "Keys pressed per second.",
   misses: "Left vs right hand miss totals.",
   accuracy: "Current accuracy percentage.",
+  pp: "Live performance points.",
   judgements: "Hit counts and unstable rate.",
   progress: "Map completion percentage.",
 };
@@ -2719,6 +2721,7 @@ const REPLAY_OVERLAY_PREVIEWS: Record<ReplayOverlayId, string> = {
   kps: "/images/replay-overlays/kps-v2.webp",
   misses: "/images/replay-overlays/misses.webp",
   accuracy: "/images/replay-overlays/accuracy.webp",
+  pp: "/images/replay-overlays/pp.webp",
   judgements: "/images/replay-overlays/judgements.webp",
   progress: "/images/replay-overlays/progress.webp",
 };

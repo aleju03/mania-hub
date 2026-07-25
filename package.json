@@ -14,6 +14,7 @@
     "dan:analyze": "vite-node scripts/dan-analyze.ts",
     "dan:benchmark": "node --env-file-if-exists=.env node_modules/vite-node/vite-node.mjs scripts/dan-benchmark.ts",
     "validate:mania-sr": "node --env-file-if-exists=.env node_modules/vite-node/vite-node.mjs scripts/validate-mania-sr.ts",
+    "validate:mania-pp": "node --env-file-if-exists=.env node_modules/vite-node/vite-node.mjs scripts/validate-mania-pp.ts",
     "live-db:sync-from-vps": "npm --prefix live-backend run db:sync-from-vps --",
     "live-db:update": "npm --prefix live-backend run db:sync-from-vps -- --fresh",
     "replay:capture-stable": "node --env-file-if-exists=.env scripts/replay-capture-stable.ts",

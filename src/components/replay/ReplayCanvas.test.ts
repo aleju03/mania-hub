@@ -87,7 +87,7 @@ describe("ManiaReplayRenderer initialization", () => {
     expect(source).not.toContain("buildStableReplayScoringSegments");
     expect(source).not.toContain("expectedFinalJudgmentCounts");
     expect(source).not.toContain("getDisplayJudgmentCounts");
-    expect(source).toContain("legacyReplayFrameRounding: this.ruleset.accuracyMode === \"stable\"");
+    expect(source).toContain("legacyReplayFrameRounding: options?.legacyReplayFrameRounding ?? this.ruleset.accuracyMode === \"stable\"");
     expect(source).toContain("this.ruleset.accuracyMode !== \"stable\" && options?.expectedCounts");
     expect(source).not.toContain("lateStableHoldHead");
     expect(source).toContain("const shouldLetPassLine = detached || (awaitingJudgment && note.time < this.currentTime - 10);");
@@ -99,6 +99,23 @@ describe("ManiaReplayRenderer initialization", () => {
     expect(source).toContain("allowLegacyScoreReconciliation: false");
     expect(source).not.toContain("allowLegacyScoreReconciliation: this.ruleset.accuracyMode === \"stable\"");
     expect(source).toContain("return calculateReplayAccuracy(this.judgmentCounts, this.ruleset.accuracyMode);");
+  });
+
+  it("drives the pp overlay from the star-rating timeline and live judgement counts", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain("this.ppModMultiplier = getManiaPpModMultiplier([...mods]);");
+    // Both simulation builds (constructor and setPreviewData) refresh the timeline.
+    expect(source.match(/this\.rebuildStarRatingTimeline\(\);/g)).toHaveLength(2);
+    expect(source).toContain("calculateManiaStarRatingTimeline(this.notes, this.keyCount, this.modRate)");
+    expect(source).toContain("this.hudCachedPp = `${Math.round(this.getPp())}pp`;");
+    expect(source).toContain("counts: { perfect: c[1], great: c[2], good: c[3], ok: c[4], meh: c[5], miss: c[6] },");
+    expect(source).toContain("modMultiplier: this.ppModMultiplier,");
+    expect(source).toContain("this.renderPpOverlay(layout);");
+    // Unranked maps award no pp; the overlay hides instead of showing fiction.
+    expect(source).toContain("this.mapAwardsPp = options?.mapAwardsPp ?? true;");
+    expect(source).toContain("this.starRatingTimeline = !this.mapAwardsPp || this.hideHud || this.barePlayfield");
+    expect(source).toContain("if (!this.mapAwardsPp) return;");
   });
 
   it("keeps released hold remainders dimmed and scrolling past instead of despawning at the tail judgement", () => {

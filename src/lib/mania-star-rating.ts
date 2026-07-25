@@ -6,11 +6,25 @@
 // speed_change settings). Validated against the API's star_rating for
 // nomod/DT/HT; keep every quirk below (legacy unstable sort, banker's
 // rounding, DefinitelyBigger's 1ms epsilon) - they are load-bearing.
+//
+// calculateManiaStarRatingTimeline is the replay viewer's equivalent of
+// lazer's DifficultyCalculator.CalculateTimed (which feeds the in-game PP
+// counter): the star rating of the chart processed so far, one point per
+// strain object. Mid-map points use an incremental weighted-peak sum whose
+// float summation order differs from the final full sort, so the last point
+// is overwritten with the exact whole-map value.
 
 export interface StarRatingNote {
   time: number;
   endTime: number;
   column: number;
+}
+
+export interface ManiaStarRatingTimelinePoint {
+  // Raw (un-rate-adjusted) beatmap ms of the object that produced this value,
+  // clamped monotone so the list stays binary-searchable by playback time.
+  time: number;
+  stars: number;
 }
 
 const INDIVIDUAL_DECAY_BASE = 0.125;
@@ -31,13 +45,62 @@ interface Dho {
   prevs: (Dho | null)[];
 }
 
+interface StrainRunCallbacks {
+  onSectionFlush(peak: number): void;
+  onObject(note: StarRatingNote, currentSectionPeak: number): void;
+}
+
+interface StrainRunResult {
+  strainPeaks: number[];
+  currentSectionPeak: number;
+}
+
 export function calculateManiaStarRating(
   notes: readonly StarRatingNote[],
   columnCount: number,
   clockRate: number,
 ): number {
   if (notes.length < 2 || columnCount <= 0 || !(clockRate > 0)) return 0;
+  const { strainPeaks, currentSectionPeak } = runStrainLoop(notes, columnCount, clockRate);
+  return aggregateDifficulty(strainPeaks, currentSectionPeak) * DIFFICULTY_MULTIPLIER;
+}
 
+export function calculateManiaStarRatingTimeline(
+  notes: readonly StarRatingNote[],
+  columnCount: number,
+  clockRate: number,
+): ManiaStarRatingTimelinePoint[] {
+  if (notes.length < 2 || columnCount <= 0 || !(clockRate > 0)) return [];
+
+  const flushedPeaks = new WeightedPeakSum();
+  const points: ManiaStarRatingTimelinePoint[] = [];
+  const { strainPeaks, currentSectionPeak } = runStrainLoop(notes, columnCount, clockRate, {
+    onSectionFlush: (peak) => flushedPeaks.add(peak),
+    onObject: (note, sectionPeak) => {
+      const stars = flushedPeaks.totalWith(sectionPeak) * DIFFICULTY_MULTIPLIER;
+      // The legacy sort orders by rounded-ms start time, so raw times can
+      // regress by sub-ms amounts across ties; clamp to keep them monotone.
+      const time = points.length > 0 ? Math.max(points[points.length - 1].time, note.time) : note.time;
+      if (points.length > 0 && points[points.length - 1].time === time) {
+        points[points.length - 1].stars = stars;
+      } else {
+        points.push({ time, stars });
+      }
+    },
+  });
+
+  if (points.length > 0) {
+    points[points.length - 1].stars = aggregateDifficulty(strainPeaks, currentSectionPeak) * DIFFICULTY_MULTIPLIER;
+  }
+  return points;
+}
+
+function runStrainLoop(
+  notes: readonly StarRatingNote[],
+  columnCount: number,
+  clockRate: number,
+  callbacks?: StrainRunCallbacks,
+): StrainRunResult {
   const sorted = notes.slice();
   legacySort(sorted, (a, b) => roundHalfToEven(a.time) - roundHalfToEven(b.time));
 
@@ -78,6 +141,7 @@ export function calculateManiaStarRating(
     }
     while (startTime > currentSectionEnd) {
       strainPeaks.push(currentSectionPeak);
+      callbacks?.onSectionFlush(currentSectionPeak);
       // Strain.CalculateInitialStrain, with Previous(0) = the last processed object.
       const elapsed = currentSectionEnd - prevStartTime;
       currentSectionPeak =
@@ -104,9 +168,15 @@ export function calculateManiaStarRating(
     lastInColumn[dho.column] = dho;
     prevDho = dho;
     prevStartTime = startTime;
+
+    callbacks?.onObject(note, currentSectionPeak);
   }
 
-  // StrainSkill.DifficultyValue: weighted sum of section peaks, highest first.
+  return { strainPeaks, currentSectionPeak };
+}
+
+// StrainSkill.DifficultyValue: weighted sum of section peaks, highest first.
+function aggregateDifficulty(strainPeaks: readonly number[], currentSectionPeak: number): number {
   const peaks = [...strainPeaks, currentSectionPeak].filter((p) => p > 0).sort((a, b) => b - a);
   let difficulty = 0;
   let weight = 1;
@@ -114,7 +184,50 @@ export function calculateManiaStarRating(
     difficulty += peak * weight;
     weight *= DECAY_WEIGHT;
   }
-  return difficulty * DIFFICULTY_MULTIPLIER;
+  return difficulty;
+}
+
+// Incremental form of aggregateDifficulty for the timeline: flushed section
+// peaks are kept sorted descending with prefix sums of peak * 0.9^rank, so
+// each timeline point costs one binary search instead of a full re-sort.
+class WeightedPeakSum {
+  private readonly sorted: number[] = [];
+  private readonly powers: number[] = [1];
+  // prefix[i] = sum of sorted[j] * 0.9^j for j < i
+  private readonly prefix: number[] = [0];
+
+  add(peak: number): void {
+    if (!(peak > 0)) return;
+    const rank = this.rankOf(peak);
+    this.sorted.splice(rank, 0, peak);
+    while (this.powers.length <= this.sorted.length) {
+      this.powers.push(this.powers[this.powers.length - 1] * DECAY_WEIGHT);
+    }
+    for (let i = rank; i < this.sorted.length; i++) {
+      this.prefix[i + 1] = this.prefix[i] + this.sorted[i] * this.powers[i];
+    }
+  }
+
+  // Difficulty as if `extraPeak` (the still-open section's peak) were a
+  // section of its own: inserting it at its rank shifts every lower peak one
+  // weight step down, i.e. multiplies their summed contribution by 0.9.
+  totalWith(extraPeak: number): number {
+    const total = this.prefix[this.sorted.length];
+    if (!(extraPeak > 0)) return total;
+    const rank = this.rankOf(extraPeak);
+    return this.prefix[rank] + extraPeak * this.powers[rank] + DECAY_WEIGHT * (total - this.prefix[rank]);
+  }
+
+  private rankOf(peak: number): number {
+    let lo = 0;
+    let hi = this.sorted.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (this.sorted[mid] >= peak) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  }
 }
 
 // IndividualStrainEvaluator: bonus if this note starts and ends inside

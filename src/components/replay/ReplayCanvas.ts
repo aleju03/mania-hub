@@ -3,6 +3,9 @@ import type { ReplayFrame, ReplayLifeBarFrame } from "../../lib/types";
 import type { ManiaNote, ManiaScrollVelocity, ManiaTimingPoint } from "../../lib/beatmap-parser";
 import type { Judgment, ManiaReplayHitWindows, ManiaReplayRuleset, ReplayJudgementEvent, ReplayNoteState } from "../../lib/mania-replay-judgement";
 import { applyManiaReplayModsToNotes, buildReplaySegments, calculateReplayAccuracy, getManiaReplayHitWindows, getManiaReplayRuleset, simulateManiaReplayJudgements } from "../../lib/mania-replay-judgement";
+import { calculateManiaPp, getManiaPpModMultiplier } from "../../lib/mania-pp";
+import { calculateManiaStarRatingTimeline } from "../../lib/mania-star-rating";
+import type { ManiaStarRatingTimelinePoint } from "../../lib/mania-star-rating";
 import { DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
 import type { ReplayOverlayId, ReplayOverlaySettings } from "../../lib/replay-overlays";
 import { DEFAULT_REPLAY_SCROLL_SPEED } from "../../lib/replay-scroll-speed";
@@ -197,6 +200,13 @@ interface RendererOptions {
   backgroundDim?: number;
   isConvert?: boolean;
   isLazer?: boolean;
+  // Frame-time rounding is a property of the source replay file, not the
+  // judging ruleset; pass it explicitly when re-judging a replay on the
+  // other client (the "what if" toggle). Defaults to the judging mode.
+  legacyReplayFrameRounding?: boolean;
+  // False for maps that can't award pp (unranked/loved/graveyard); hides the
+  // pp overlay entirely instead of showing a fictional number.
+  mapAwardsPp?: boolean;
   od?: number;
   showInputOverlay?: boolean;
   inputOverlayOnly?: boolean;
@@ -431,6 +441,9 @@ export class ManiaReplayRenderer {
   private hitsoundPressCursors: number[] = [];
   private comboBreakSoundCursor = 0;
   private judgmentCounts: number[] = [0, 0, 0, 0, 0, 0, 0];
+  private starRatingTimeline: ManiaStarRatingTimelinePoint[] = [];
+  private ppModMultiplier = 1;
+  private mapAwardsPp = true;
   private leftHandMisses = 0;
   private rightHandMisses = 0;
   private recentHitOffsets: number[] = [];
@@ -449,6 +462,7 @@ export class ManiaReplayRenderer {
 
   private hudSnapshotTime = -Infinity;
   private hudCachedAccuracy = "100.00%";
+  private hudCachedPp = "0pp";
   private hudCachedUr = "0";
   private hudCachedTime = "0:00";
   private hudCachedFps = "--";
@@ -579,7 +593,7 @@ export class ManiaReplayRenderer {
       this.ruleset.accuracyMode,
       {
         lazerNoReleaseTails: mods.has("NR"),
-        legacyReplayFrameRounding: this.ruleset.accuracyMode === "stable",
+        legacyReplayFrameRounding: options?.legacyReplayFrameRounding ?? this.ruleset.accuracyMode === "stable",
         speedMultiplier: this.ruleset.speedMultiplier,
       },
     );
@@ -621,6 +635,14 @@ export class ManiaReplayRenderer {
       ? this.judgmentEvents[this.judgmentEvents.length - 1].time
       : 0;
     this.totalDuration = Math.max(this.totalDuration, lastJudgementTime);
+
+    // Live PP counter inputs: lazer-style timed star ratings over the same
+    // post-mod note list the judgements are simulated on. Skipped where the
+    // HUD can never render (chart previews, bare playfields).
+    this.mapAwardsPp = options?.mapAwardsPp ?? true;
+    this.ppModMultiplier = getManiaPpModMultiplier([...mods]);
+    this.rebuildStarRatingTimeline();
+
     this.buildHitsoundTimeline();
 
     this.measureCanvas();
@@ -865,6 +887,41 @@ export class ManiaReplayRenderer {
     return calculateReplayAccuracy(this.judgmentCounts, this.ruleset.accuracyMode);
   }
 
+  private rebuildStarRatingTimeline() {
+    this.starRatingTimeline = !this.mapAwardsPp || this.hideHud || this.barePlayfield
+      ? []
+      : calculateManiaStarRatingTimeline(this.notes, this.keyCount, this.modRate);
+  }
+
+  // PP as if the map ended at the playback clock: current judgement counts
+  // against the star rating of the chart processed so far. Same recipe as
+  // lazer's PerformancePointsCounter (timed difficulty attributes + the
+  // score's live statistics), which keys its lookup by the judged object's
+  // end time; the playback clock lands on the same timeline point.
+  private getPp(): number {
+    const timeline = this.starRatingTimeline;
+    if (timeline.length === 0) return 0;
+    const time = this.currentTime;
+    let lo = 0;
+    let hi = timeline.length - 1;
+    let index = 0;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (timeline[mid].time <= time) {
+        index = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    const c = this.judgmentCounts;
+    return calculateManiaPp({
+      starRating: timeline[index].stars,
+      counts: { perfect: c[1], great: c[2], good: c[3], ok: c[4], meh: c[5], miss: c[6] },
+      modMultiplier: this.ppModMultiplier,
+    });
+  }
+
   private formatAccuracy(value: number): string {
     return `${value.toFixed(2)}%`;
   }
@@ -875,6 +932,7 @@ export class ManiaReplayRenderer {
     this.hudSnapshotTime = performance.now();
 
     this.hudCachedAccuracy = this.formatAccuracy(this.getAccuracy());
+    this.hudCachedPp = `${Math.round(this.getPp())}pp`;
     this.hudCachedUr = String(Math.round(this.getUr()));
     const wallTime = this.currentTime / this.modRate;
     const mins = Math.floor(wallTime / 60000);
@@ -1253,6 +1311,7 @@ export class ManiaReplayRenderer {
       ? this.judgmentEvents[this.judgmentEvents.length - 1].time
       : 0;
     this.totalDuration = Math.max(this.totalDuration, lastJudgementTime);
+    this.rebuildStarRatingTimeline();
     this.buildHitsoundTimeline();
 
     this.currentTime = 0;
@@ -2886,6 +2945,21 @@ export class ManiaReplayRenderer {
     });
   }
 
+  private renderPpOverlay(layout: Layout) {
+    if (!this.mapAwardsPp) return;
+    const scale = this.getOverlayScale(layout, "pp");
+    const width = this.getTextOverlayWidth(this.hudCachedPp, 18 * scale, scale, "700");
+    const height = 26 * scale;
+    const frame = this.getOverlayFrame(layout, "pp", width, height);
+    if (!frame) return;
+    this.addText(this.hudCachedPp, frame.x, frame.y, {
+      fontSize: 18 * scale,
+      fill: "#ffffff",
+      alpha: 0.85,
+      fontWeight: "700",
+    });
+  }
+
   private renderKpsOverlay(layout: Layout) {
     const scale = this.getOverlayScale(layout, "kps");
     const height = 20 * scale;
@@ -3096,6 +3170,7 @@ export class ManiaReplayRenderer {
       this.renderKpsOverlay(layout);
       this.renderMissOverlay(layout);
       this.renderAccuracyOverlay(layout);
+      this.renderPpOverlay(layout);
       this.renderJudgementOverlay(layout);
       this.renderProgressOverlay(layout);
     }

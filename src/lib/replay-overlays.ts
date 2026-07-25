@@ -1,7 +1,7 @@
 export const REPLAY_OVERLAY_SETTINGS_STORAGE_KEY = "mania-hub-replay-overlays";
 export const REPLAY_OVERLAY_SETTINGS_CHANGE_EVENT = "mania-hub:replay-overlay-settings-change";
 
-export const REPLAY_OVERLAY_IDS = ["keypresses", "kps", "misses", "accuracy", "judgements", "progress"] as const;
+export const REPLAY_OVERLAY_IDS = ["keypresses", "kps", "misses", "accuracy", "pp", "judgements", "progress"] as const;
 
 export type ReplayOverlayId = typeof REPLAY_OVERLAY_IDS[number];
 
@@ -22,6 +22,7 @@ export const DEFAULT_REPLAY_OVERLAY_SETTINGS: ReplayOverlaySettings = {
   kps: { enabled: false, x: 0.035, y: 0.77, scale: 0.75 },
   misses: { enabled: true, x: 0.085, y: 0.77, scale: 1 },
   accuracy: { enabled: true, x: 0.74, y: 0.02, scale: 1 },
+  pp: { enabled: false, x: 0.88, y: 0.02, scale: 1 },
   judgements: { enabled: true, x: 0.74, y: 0.07, scale: 1.25 },
   progress: { enabled: true, x: 0.03, y: 0.03, scale: 1 },
 };
@@ -33,6 +34,9 @@ const OVERLAPPING_LEFT_CLUSTER_DEFAULTS: ReplayOverlaySettings = {
   kps: { enabled: true, x: 0.03, y: 0.68, scale: 0.82 },
   misses: { enabled: true, x: 0.05, y: 0.77, scale: 0.82 },
   accuracy: { enabled: true, x: 0.74, y: 0.02, scale: 1 },
+  // "pp" postdates these legacy layouts; matching the current default makes
+  // the migration a no-op for it.
+  pp: { enabled: false, x: 0.88, y: 0.02, scale: 1 },
   judgements: { enabled: true, x: 0.74, y: 0.07, scale: 1 },
   progress: { enabled: true, x: 0.03, y: 0.03, scale: 1 },
 };
@@ -42,6 +46,7 @@ const LEGACY_PLAYFIELD_OVERLAY_DEFAULTS: ReplayOverlaySettings = {
   kps: { enabled: true, x: 0.14, y: 0.74, scale: 1 },
   misses: { enabled: true, x: 0.22, y: 0.84, scale: 1 },
   accuracy: { enabled: true, x: 0.68, y: 0.02, scale: 1 },
+  pp: { enabled: false, x: 0.88, y: 0.02, scale: 1 },
   judgements: { enabled: true, x: 0.68, y: 0.07, scale: 1 },
   progress: { enabled: true, x: 0.03, y: 0.03, scale: 1 },
 };

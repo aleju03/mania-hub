@@ -26,6 +26,11 @@ describe("replay overlay settings", () => {
     expect(settings.judgements).toEqual(DEFAULT_REPLAY_OVERLAY_SETTINGS.judgements);
   });
 
+  it("ships the pp counter disabled by default, placed next to accuracy", () => {
+    expect(DEFAULT_REPLAY_OVERLAY_SETTINGS.pp).toEqual({ enabled: false, x: 0.88, y: 0.02, scale: 1 });
+    expect(normalizeReplayOverlaySettings({}).pp).toEqual(DEFAULT_REPLAY_OVERLAY_SETTINGS.pp);
+  });
+
   it("preserves custom miss counter scale choices", () => {
     const settings = normalizeReplayOverlaySettings({
       misses: { enabled: true, x: 0.085, y: 0.77, scale: 1.2 },
