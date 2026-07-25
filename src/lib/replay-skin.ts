@@ -93,10 +93,29 @@ export interface ReplaySkinComboAssets {
   x?: ReplaySkinImageAsset;
 }
 
+// The stage furniture skin.ini declares per keymode: the frame either side of
+// the columns, the deck under them, the hit-position hint, the column light
+// that flashes under a pressed key, and the hit glow. Skins like RESIDENT are
+// mostly this art, so a playfield drawn without it barely resembles them.
+export interface ReplaySkinStageAssets {
+  left?: ReplaySkinImageAsset;
+  right?: ReplaySkinImageAsset;
+  bottom?: ReplaySkinImageAsset;
+  hint?: ReplaySkinImageAsset;
+  light?: ReplaySkinImageAsset;
+  lighting?: ReplaySkinImageAsset;
+  // skin.ini LightingNWidth, per column, in 480-space units. Empty means the
+  // key was absent and the glow keeps the art's own width.
+  lightingWidths: number[];
+  // skin.ini ColourLight{n} as #rrggbb, the tint for the column light.
+  lightColors: string[];
+}
+
 export interface ReplaySkinKeymodeAssets {
   columns: ReplaySkinColumnAssets[];
   judgements: ReplaySkinJudgementAssets;
   combo: ReplaySkinComboAssets | null;
+  stage: ReplaySkinStageAssets;
 }
 
 export interface ReplaySkinKeymodeProfile {
@@ -115,6 +134,11 @@ export interface ReplaySkinKeymodeProfile {
   // skin.ini ColourColumnLine as #rrggbb or #rrggbbaa; "" means skin default
   // (opaque white).
   columnLineColor: string;
+  // skin.ini Colour{n}: the column BACKGROUND, as #rrggbb or #rrggbbaa. Kept
+  // apart from the note palette on purpose - skins routinely set these black,
+  // and feeding them to the flat-fallback notes made those invisible. "" means
+  // the skin said nothing, so the playfield default applies.
+  columnBackgrounds: string[];
   // skin.ini JudgementLine: the white line at HitPosition. Circle/arrow skins
   // almost always turn it off; stable defaults it on.
   judgementLine: boolean;
@@ -288,10 +312,16 @@ const REPLAY_JUDGEMENT_SET_ASSETS: Record<Exclude<ReplayJudgementSet, "skin">, R
   set34: judgementSetAssets("34", ["hit0", "hit100", "hit200", "hit300", "hit300g", "hit50"]),
 };
 
+export const EMPTY_REPLAY_SKIN_STAGE_ASSETS: ReplaySkinStageAssets = {
+  lightingWidths: [],
+  lightColors: [],
+};
+
 export const EMPTY_REPLAY_SKIN_ASSETS: ReplaySkinKeymodeAssets = {
   columns: [],
   judgements: {},
   combo: null,
+  stage: EMPTY_REPLAY_SKIN_STAGE_ASSETS,
 };
 
 export const DEFAULT_REPLAY_SKIN_PROFILE: ReplaySkinKeymodeProfile = {
@@ -305,6 +335,7 @@ export const DEFAULT_REPLAY_SKIN_PROFILE: ReplaySkinKeymodeProfile = {
   columnSpacings: [],
   columnLineWidths: [],
   columnLineColor: "",
+  columnBackgrounds: [],
   judgementLine: true,
   noteHeightScale: REPLAY_SKIN_DEFAULT_COLUMN_WIDTH,
   assets: EMPTY_REPLAY_SKIN_ASSETS,
@@ -561,6 +592,22 @@ function normalizeKeymodeAssets(value: unknown): ReplaySkinKeymodeAssets {
       : [],
     judgements: normalizeJudgementAssets(raw.judgements),
     combo: normalizeComboAssets(raw.combo),
+    stage: normalizeStageAssets(raw.stage),
+  };
+}
+
+function normalizeStageAssets(value: unknown): ReplaySkinStageAssets {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return EMPTY_REPLAY_SKIN_STAGE_ASSETS;
+  const raw = value as Partial<Record<keyof ReplaySkinStageAssets, unknown>>;
+  return {
+    left: normalizeImageAsset(raw.left),
+    right: normalizeImageAsset(raw.right),
+    bottom: normalizeImageAsset(raw.bottom),
+    hint: normalizeImageAsset(raw.hint),
+    light: normalizeImageAsset(raw.light),
+    lighting: normalizeImageAsset(raw.lighting),
+    lightingWidths: normalizeNumberList(raw.lightingWidths, 1, 400, REPLAY_SKIN_MAX_COLUMNS),
+    lightColors: normalizeColumnColors(raw.lightColors),
   };
 }
 
@@ -582,6 +629,7 @@ function normalizeKeymodeProfile(value: unknown, fallback?: Partial<ReplaySkinKe
     columnSpacings: normalizeNumberList(raw.columnSpacings, REPLAY_SKIN_MIN_COLUMN_SPACING, REPLAY_SKIN_MAX_COLUMN_SPACING),
     columnLineWidths: normalizeNumberList(raw.columnLineWidths, 0, REPLAY_SKIN_MAX_COLUMN_LINE_WIDTH, REPLAY_SKIN_MAX_COLUMNS + 1),
     columnLineColor: normalizeLineColor(raw.columnLineColor),
+    columnBackgrounds: normalizeColumnColors(raw.columnBackgrounds),
     judgementLine: typeof raw.judgementLine === "boolean" ? raw.judgementLine : true,
     noteHeightScale: normalizeNoteHeightScale(raw.noteHeightScale ?? fallback?.noteHeightScale, smallestColumnWidth),
     assets: normalizeKeymodeAssets(raw.assets),

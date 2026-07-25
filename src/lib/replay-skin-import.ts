@@ -14,6 +14,7 @@ import type {
   ReplaySkinKeymodeAssets,
   ReplaySkinKeymodeProfile,
   ReplaySkinSettings,
+  ReplaySkinStageAssets,
 } from "./replay-skin";
 
 interface SkinIniData {
@@ -317,6 +318,7 @@ async function buildProfileFromManiaBlock({
   receptorAssets: number;
   judgementAssets: number;
   comboDigits: number;
+  stageAssets: number;
 }> {
   const columnWidths = parseNumberList(block.ColumnWidth);
   const columnSpacings = parseNumberList(block.ColumnSpacing);
@@ -343,6 +345,13 @@ async function buildProfileFromManiaBlock({
   // own palette for the no-note-art fallback instead.
   const tapColors = Array.from({ length: keys }, (_, index) => baseProfile.tapColors[index] ?? "");
   const lnHeadColors = Array.from({ length: keys }, (_, index) => baseProfile.lnHeadColors[index] ?? "");
+  // ...but the playfield wants them: Colour{n} with its alpha is what decides
+  // whether the map art shows through a column, so it is kept on its own field
+  // for the stage to fill with.
+  const columnBackgrounds = Array.from({ length: keys }, (_, index) =>
+    parseColorWithAlpha(block[`Colour${index + 1}`]) ?? "");
+  const lightColors = Array.from({ length: keys }, (_, index) =>
+    parseColor(block[`ColourLight${index + 1}`]) ?? "");
   const columns: ReplaySkinColumnAssets[] = [];
   let noteAssets = 0;
   let receptorAssets = 0;
@@ -407,6 +416,31 @@ async function buildProfileFromManiaBlock({
     }
   }
 
+  // Stage furniture: the frame, deck, hint line, column light and hit glow.
+  // Stable resolves each from its default filename when the block is silent,
+  // and the animated first frame outranks the static image the same way the
+  // note art does.
+  const resolveStage = async (reference: string | undefined, fallback: string): Promise<ReplaySkinImageAsset | undefined> =>
+    (await resolveTracked(reference))
+      ?? (reference ? await resolveTracked(`${reference}-0`) : undefined)
+      ?? (await resolveTracked(fallback))
+      ?? (await resolveTracked(`${fallback}-0`));
+  const stage: ReplaySkinStageAssets = {
+    left: await resolveStage(block.StageLeft, "mania-stage-left"),
+    right: await resolveStage(block.StageRight, "mania-stage-right"),
+    bottom: await resolveStage(block.StageBottom, "mania-stage-bottom"),
+    hint: await resolveStage(block.StageHint, "mania-stage-hint"),
+    light: await resolveStage(block.StageLight, "mania-stage-light"),
+    // LightingN is the note glow and LightingL the hold glow; skins often ship
+    // only one, and either reads as "the hit glow" on a still preview.
+    lighting: (await resolveStage(block.LightingN, "lightingN"))
+      ?? (await resolveStage(block.LightingL, "lightingL")),
+    lightingWidths: parseNumberList(block.LightingNWidth).slice(0, keys),
+    lightColors,
+  };
+  const stageAssets = [stage.left, stage.right, stage.bottom, stage.hint, stage.light, stage.lighting]
+    .filter(Boolean).length;
+
   // Stable's [Fonts] ComboPrefix defaults to "score", so skins that ship only
   // score-* digit art still get a combo font.
   const comboPrefix = block.FontCombo || fonts.ComboPrefix || "score";
@@ -442,16 +476,19 @@ async function buildProfileFromManiaBlock({
       columnLineColor,
       judgementLine,
       noteHeightScale,
+      columnBackgrounds,
       assets: {
         columns,
         judgements,
         combo,
+        stage,
       },
     },
     noteAssets,
     receptorAssets,
     judgementAssets,
     comboDigits,
+    stageAssets,
   };
 }
 

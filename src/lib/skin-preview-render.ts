@@ -16,6 +16,9 @@ import { getReplaySkinProfile, OSU_MANIA_DEFAULT_COLUMN_LINE_WIDTH } from "./rep
 export const SKIN_PREVIEW_WIDTH = 1280;
 export const SKIN_PREVIEW_HEIGHT = 720;
 const PREVIEW_BACKGROUND = "#16121d";
+// The playfield a mania skin is authored against: opaque, not a dim over the
+// map art. skin.ini Colour{n} overrides it per column when the skin sets one.
+const PLAYFIELD_BACKGROUND = "#040308";
 // Safety cap only: the true stage width comes from the game's 480-unit
 // vertical space (a 65-wide column is 65/480 of the screen height), which on
 // a 16:9 canvas reproduces the in-game proportions exactly. Ultra-wide skins
@@ -24,6 +27,10 @@ const STAGE_MAX_FRACTION = 0.94;
 // The game's HitPosition for mania skins sits around 440-450 of 480 (~92-94%);
 // 0.9 keeps that proportion while leaving the key area readable on a card.
 const HIT_LINE_FRACTION = 0.9;
+// How far up the card a skin's own HitPosition may push the judgement line.
+// Skins with a tall key deck (RESIDENT sits at 320 of 480, two thirds down)
+// were being dragged back to 0.75 and lost the deck art below the receptors.
+const HIT_LINE_MIN_FRACTION = 0.62;
 const SCROLL_TOP_FRACTION = 0.04;
 
 export interface SkinPreviewLayout {
@@ -230,7 +237,10 @@ export async function renderSkinPreview(
   // note/receptor/hit-gap proportions stay exactly as in game. Clamped so a
   // degenerate HitPosition still leaves a usable field.
   const hitGap = Math.max(0, Math.min(768, settings.hitPosition)) * (480 / 768) * layout.scale;
-  const judgmentY = Math.max(SKIN_PREVIEW_HEIGHT * 0.75, Math.min(SKIN_PREVIEW_HEIGHT * 0.95, SKIN_PREVIEW_HEIGHT - hitGap));
+  const judgmentY = Math.max(
+    SKIN_PREVIEW_HEIGHT * HIT_LINE_MIN_FRACTION,
+    Math.min(SKIN_PREVIEW_HEIGHT * 0.95, SKIN_PREVIEW_HEIGHT - hitGap),
+  );
 
   // Tap visual height drives pattern spacing so notes never stack.
   const tapHeights = Array.from({ length: keys }, (_, col) => {
@@ -255,12 +265,69 @@ export async function renderSkinPreview(
     drawPreviewBackdrop(ctx, accent);
   }
 
-  // Stage: dark but slightly translucent, like a dimmed in-game playfield.
-  ctx.fillStyle = "rgba(4, 3, 8, 0.72)";
+  // Stage: opaque black, the playfield a mania skin is authored against. It
+  // used to be 72% black, which let the map art wash through every column.
+  // A skin that declares Colour{n} gets exactly that colour instead, alpha
+  // included, so the ones that deliberately show the background still do.
+  ctx.fillStyle = PLAYFIELD_BACKGROUND;
   ctx.fillRect(layout.stageX, 0, layout.stageWidth, SKIN_PREVIEW_HEIGHT);
+  for (let col = 0; col < keys; col += 1) {
+    const declared = profile.columnBackgrounds[col];
+    if (!declared) continue;
+    ctx.clearRect(layout.laneXs[col], 0, layout.laneWidths[col], SKIN_PREVIEW_HEIGHT);
+    // Cleared first: a translucent Colour{n} is meant to show the map art
+    // through, not to sit on top of the default black.
+    if (options.background) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(layout.laneXs[col], 0, layout.laneWidths[col], SKIN_PREVIEW_HEIGHT);
+      ctx.clip();
+      drawCoverFit(ctx, options.background);
+      ctx.fillStyle = "rgba(6, 4, 10, 0.72)";
+      ctx.fillRect(layout.laneXs[col], 0, layout.laneWidths[col], SKIN_PREVIEW_HEIGHT);
+      ctx.restore();
+    }
+    ctx.fillStyle = declared;
+    ctx.fillRect(layout.laneXs[col], 0, layout.laneWidths[col], SKIN_PREVIEW_HEIGHT);
+  }
   // Column lines exactly as skin.ini declares them (ColumnLineWidth +
   // ColourColumnLine), instead of invented separators or accent side borders.
   drawColumnLines(ctx, profile, layout);
+
+  // Stage furniture, behind the notes: the column light under the pressed key
+  // and the hint line at the hit position. Skins like RESIDENT are mostly this
+  // art, and a playfield without it reads as bare columns.
+  const stage = profile.assets.stage;
+  const stageScale = (asset: { height?: number; scale?: number } | undefined, image: HTMLImageElement) => {
+    const assetScale = asset?.scale && asset.scale > 0 ? asset.scale : 1;
+    const nativeHeight = (asset?.height && asset.height > 0 ? asset.height : image.naturalHeight || 1) / assetScale;
+    return Math.max(1, nativeHeight * (480 / 768) * layout.scale);
+  };
+  const pressedColumn = Math.min(1, keys - 1);
+  const judgmentLineY = mapY(judgmentY);
+
+  const lightAsset = stage.light;
+  const lightImage = lightAsset ? images.get(lightAsset.src) : undefined;
+  if (lightImage) {
+    // Stable draws the column light from the hit position back up the column
+    // while the key is held; only the one pressed column shows it here.
+    const height = stageScale(lightAsset, lightImage);
+    const tint = stage.lightColors[pressedColumn] || "";
+    const art = tint ? tintedImage(lightImage, tint) : lightImage;
+    const laneX = layout.laneXs[pressedColumn];
+    const laneWidth = layout.laneWidths[pressedColumn];
+    if (upscroll) drawImageFlippedY(ctx, art, laneX, judgmentLineY, laneWidth, height);
+    else ctx.drawImage(art, laneX, judgmentLineY - height, laneWidth, height);
+  }
+
+  const hintAsset = stage.hint;
+  const hintImage = hintAsset ? images.get(hintAsset.src) : undefined;
+  if (hintImage) {
+    // The hint marks the hit position across the whole stage.
+    const height = stageScale(hintAsset, hintImage);
+    if (upscroll) drawImageFlippedY(ctx, hintImage, layout.stageX, judgmentLineY, layout.stageWidth, height);
+    else ctx.drawImage(hintImage, layout.stageX, judgmentLineY - height / 2, layout.stageWidth, height);
+  }
 
   // Key images: width stretched to the lane, height at the texture's NATIVE
   // size in the game's 768-unit space (pixel height / @2x scale, then into
@@ -268,8 +335,6 @@ export async function renderSkinPreview(
   // key-area rule and it matches gameplay pixel-for-pixel: pl0x's 400px @2x
   // key renders 125 skin-units tall, putting its ring exactly note-sized with
   // its bottom on the hit line. One column renders pressed for life.
-  const pressedColumn = Math.min(1, keys - 1);
-  const judgmentLineY = mapY(judgmentY);
   for (let col = 0; col < keys; col += 1) {
     const assets = profile.assets.columns[col] ?? {};
     const asset = col === pressedColumn ? assets.receptorPressed ?? assets.receptor : assets.receptor;
@@ -309,6 +374,45 @@ export async function renderSkinPreview(
   }
   for (const tap of pattern.taps) {
     drawTapNote(ctx, profile, images, layout, tap, upscroll, noteAssetHeight, mapY);
+  }
+
+  // Deck, frame and hit glow sit over the columns, as they do in game: the
+  // key area art overlaps the bottom of the stage and the frame flanks it.
+  const bottomAsset = stage.bottom;
+  const bottomImage = bottomAsset ? images.get(bottomAsset.src) : undefined;
+  if (bottomImage) {
+    const height = stageScale(bottomAsset, bottomImage);
+    if (upscroll) drawImageFlippedY(ctx, bottomImage, layout.stageX, 0, layout.stageWidth, height);
+    else ctx.drawImage(bottomImage, layout.stageX, SKIN_PREVIEW_HEIGHT - height, layout.stageWidth, height);
+  }
+
+  for (const [asset, side] of [[stage.left, "left"], [stage.right, "right"]] as const) {
+    const image = asset ? images.get(asset.src) : undefined;
+    if (!image) continue;
+    // The frame hangs outside the columns at its own width, stretched down the
+    // full stage the way stable scales it to the playfield height.
+    const assetScale = asset?.scale && asset.scale > 0 ? asset.scale : 1;
+    const nativeWidth = (asset?.width && asset.width > 0 ? asset.width : image.naturalWidth || 1) / assetScale;
+    const width = Math.max(1, nativeWidth * (480 / 768) * layout.scale);
+    const x = side === "left" ? layout.stageX - width : layout.stageX + layout.stageWidth;
+    ctx.drawImage(image, x, 0, width, SKIN_PREVIEW_HEIGHT);
+  }
+
+  const lightingAsset = stage.lighting;
+  const lightingImage = lightingAsset ? images.get(lightingAsset.src) : undefined;
+  if (lightingImage) {
+    // Hit lighting is additive in game, and LightingNWidth overrides the art's
+    // own width per column.
+    const declaredWidth = stage.lightingWidths[pressedColumn];
+    const assetScale = lightingAsset?.scale && lightingAsset.scale > 0 ? lightingAsset.scale : 1;
+    const nativeWidth = (lightingAsset?.width && lightingAsset.width > 0 ? lightingAsset.width : lightingImage.naturalWidth || 1) / assetScale;
+    const width = Math.max(1, (declaredWidth && declaredWidth > 0 ? declaredWidth : nativeWidth * (480 / 768)) * layout.scale);
+    const height = Math.max(1, width * ((lightingImage.naturalHeight || 1) / (lightingImage.naturalWidth || 1)));
+    const centerX = layout.laneXs[pressedColumn] + layout.laneWidths[pressedColumn] / 2;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.drawImage(lightingImage, centerX - width / 2, judgmentLineY - height / 2, width, height);
+    ctx.restore();
   }
 
   drawJudgementAndCombo(ctx, profile, images, layout);
@@ -450,7 +554,7 @@ function drawPreviewBackdrop(ctx: CanvasRenderingContext2D, accent: string): voi
 // note sprites like this depending on scroll direction.
 function drawImageFlippedY(
   ctx: CanvasRenderingContext2D,
-  image: HTMLImageElement,
+  image: CanvasImageSource,
   x: number,
   y: number,
   width: number,
@@ -494,6 +598,132 @@ function drawTapNote(
   fillRoundedRect(ctx, laneX + 1, top, laneWidth - 2, height, 4);
 }
 
+export interface SkinPreviewBodyTile {
+  top: number;
+  height: number;
+  sourceRows: number;
+}
+
+// The cascade of body tiles between the two caps, snapped to whole pixels.
+//
+// A tile drawn into a fractional rect only half-covers the pixel row at each
+// end, and two half-covered rows composited one after the other come to 75%
+// opacity rather than 100% - which is the faint line that used to show at
+// every seam of a tiled LN body. Rounding both edges (and carrying the
+// unrounded position forward, so the next tile rounds to the same boundary)
+// leaves the tiles flush with no partial coverage anywhere.
+export function bodyTileRects(
+  bodyTop: number,
+  bodyBottom: number,
+  sourceHeight: number,
+  scale: number,
+): SkinPreviewBodyTile[] {
+  const tiles: SkinPreviewBodyTile[] = [];
+  if (!(scale > 0) || !(sourceHeight > 0) || !(bodyBottom > bodyTop)) return tiles;
+  let y = bodyTop;
+  // The cap is a backstop against a pathological scale, not a real limit.
+  while (y < bodyBottom - 0.01 && tiles.length < 4096) {
+    const sourceRows = Math.min(sourceHeight, (bodyBottom - y) / scale);
+    const top = Math.round(y);
+    const bottom = Math.round(y + sourceRows * scale);
+    tiles.push({ top, height: Math.max(1, bottom - top), sourceRows });
+    y += sourceRows * scale;
+  }
+  return tiles;
+}
+
+// skin.ini ColourLight{n} tints the column light, which skins ship as white
+// art. Multiply keeps the art's own shading; the cache means a preview tints
+// each texture once rather than per keymode.
+const tintedImageCache = new Map<string, HTMLCanvasElement>();
+
+function tintedImage(image: HTMLImageElement, color: string): CanvasImageSource {
+  const key = `${image.src}|${color}`;
+  const cached = tintedImageCache.get(key);
+  if (cached) return cached;
+  const width = image.naturalWidth || 0;
+  const height = image.naturalHeight || 0;
+  if (width < 1 || height < 1) return image;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return image;
+  ctx.drawImage(image, 0, 0);
+  ctx.globalCompositeOperation = "multiply";
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, width, height);
+  // Multiply paints the transparent surround too; clip it back to the art.
+  ctx.globalCompositeOperation = "destination-in";
+  ctx.drawImage(image, 0, 0);
+  tintedImageCache.set(key, canvas);
+  return canvas;
+}
+
+// The tail sprite's box, which is its native height like every other note
+// asset; zero when the skin ships no tail art.
+function tailBoxHeight(
+  tailImage: HTMLImageElement | undefined,
+  noteAssetHeight: (image: HTMLImageElement) => number,
+): number {
+  return tailImage ? noteAssetHeight(tailImage) : 0;
+}
+
+// How far the visible art sits from one edge of its box, as a fraction of the
+// box height. Skins pad note art inside a square texture (an arrow head, a
+// pointed LN cap), and the padding is what decides where a body has to stop.
+// Measured once per texture and cached; a texture that cannot be read back
+// reports no padding, which is the old behaviour.
+const artInsetCache = new Map<string, { top: number; bottom: number }>();
+
+function artInset(image: HTMLImageElement, flipped: boolean, edge: "top" | "bottom"): number {
+  const bounds = opaqueBounds(image);
+  if (!bounds) return 0;
+  // A flipped draw turns the texture over, so its top padding lands at the
+  // bottom of the box.
+  const which = flipped ? (edge === "top" ? "bottom" : "top") : edge;
+  return bounds[which];
+}
+
+function opaqueBounds(image: HTMLImageElement): { top: number; bottom: number } | null {
+  const key = image.src;
+  const cached = artInsetCache.get(key);
+  if (cached) return cached;
+  const height = image.naturalHeight || 0;
+  const width = image.naturalWidth || 0;
+  if (height < 2 || width < 1) return null;
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return null;
+    ctx.drawImage(image, 0, 0);
+    const { data } = ctx.getImageData(0, 0, width, height);
+    let top = -1;
+    let bottom = -1;
+    for (let y = 0; y < height; y += 1) {
+      let opaque = false;
+      for (let x = 0; x < width; x += 1) {
+        // Anything under ~3% alpha is a soft edge, not art.
+        if (data[(y * width + x) * 4 + 3] > 8) { opaque = true; break; }
+      }
+      if (opaque) {
+        if (top < 0) top = y;
+        bottom = y;
+      }
+    }
+    if (top < 0) return null;
+    const bounds = { top: top / height, bottom: (height - 1 - bottom) / height };
+    artInsetCache.set(key, bounds);
+    return bounds;
+  } catch {
+    // A tainted canvas (shouldn't happen: every asset is a blob URL) just
+    // means no padding information.
+    return null;
+  }
+}
+
 function drawLongNote(
   ctx: CanvasRenderingContext2D,
   profile: ReplaySkinKeymodeProfile,
@@ -518,10 +748,24 @@ function drawLongNote(
   // Percy trim, as in ReplayCanvas: pull the body's tail end back so oversized
   // LN sprites read at their intended length.
   const trim = settings.percy ? Math.min(20, laneWidth * 0.35) : 0;
-  const tailSideY = tailEndY + (upscroll ? -trim : trim);
-  // The body runs to the head's visual centre (how the game reads: the head
-  // sprite fully covers the body's end, so nothing pokes out under a circle).
-  const headSideY = upscroll ? headEndY + headHeight / 2 : headEndY - headHeight / 2;
+
+  // Where the body meets each cap. Running it to the head's visual centre
+  // (what this used to do) only works for art that fills its box: an arrow
+  // head leaves its corners transparent, so the body showed through around it
+  // and stopped with a hard edge halfway down. The body now ends at the cap's
+  // visible art instead, which covers both - the sprite still hides the join,
+  // and nothing pokes out past a cap that sits inset in its own box.
+  const tailBoxTop = upscroll ? tailEndY - tailBoxHeight(tailImage, noteAssetHeight) : tailEndY;
+  const tailInset = tailImage
+    ? artInset(tailImage, !upscroll, upscroll ? "bottom" : "top") * tailBoxHeight(tailImage, noteAssetHeight)
+    : 0;
+  const tailSideY = (upscroll ? tailBoxTop + tailBoxHeight(tailImage, noteAssetHeight) - tailInset : tailBoxTop + tailInset)
+    + (upscroll ? -trim : trim);
+  const headBoxTop = upscroll ? headEndY : headEndY - headHeight;
+  const headInset = headImage
+    ? artInset(headImage, upscroll, upscroll ? "bottom" : "top") * headHeight
+    : headHeight / 2;
+  const headSideY = upscroll ? headBoxTop + headHeight - headInset : headBoxTop + headInset;
   const bodyTop = Math.min(tailSideY, headSideY);
   const bodyBottom = Math.max(tailSideY, headSideY);
 
@@ -535,19 +779,14 @@ function drawLongNote(
     // capped intermediate, which would squash the cap flat.
     const sourceWidth = bodyImage.naturalWidth || 1;
     const sourceHeight = bodyImage.naturalHeight || 1;
-    const scale = laneWidth / sourceWidth;
     ctx.save();
     if (upscroll) {
       // Tail end is at the bottom: flip the span so the cap edge lands there.
       ctx.translate(0, bodyTop + bodyBottom);
       ctx.scale(1, -1);
     }
-    let y = bodyTop;
-    while (y < bodyBottom - 0.01) {
-      const sliceRows = Math.min(sourceHeight, (bodyBottom - y) / scale);
-      const sliceHeight = Math.max(1, sliceRows * scale);
-      ctx.drawImage(bodyImage, 0, 0, sourceWidth, sliceRows, laneX, y, laneWidth, sliceHeight);
-      y += sliceHeight;
+    for (const tile of bodyTileRects(bodyTop, bodyBottom, sourceHeight, laneWidth / sourceWidth)) {
+      ctx.drawImage(bodyImage, 0, 0, sourceWidth, tile.sourceRows, laneX, tile.top, laneWidth, tile.height);
     }
     ctx.restore();
   } else if (bodyBottom > bodyTop) {
@@ -639,6 +878,16 @@ async function decodeProfileImages(profile: ReplaySkinKeymodeProfile): Promise<M
     for (const asset of profile.assets.combo.digits) {
       if (asset?.src) sources.add(asset.src);
     }
+  }
+  for (const asset of [
+    profile.assets.stage.left,
+    profile.assets.stage.right,
+    profile.assets.stage.bottom,
+    profile.assets.stage.hint,
+    profile.assets.stage.light,
+    profile.assets.stage.lighting,
+  ]) {
+    if (asset?.src) sources.add(asset.src);
   }
   const entries = await Promise.all(
     [...sources].map(async (src): Promise<[string, HTMLImageElement] | null> => {

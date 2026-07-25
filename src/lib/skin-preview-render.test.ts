@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  bodyTileRects,
   buildSkinPreviewPattern,
   computeSkinPreviewLayout,
   mulberry32,
@@ -114,5 +115,60 @@ describe("buildSkinPreviewPattern", () => {
     for (const tap of pattern.taps) {
       expect(tap.y).toBeLessThanOrEqual(500);
     }
+  });
+});
+
+describe("bodyTileRects", () => {
+  // The tiling seam: a body tile drawn into a fractional rect half-covers the
+  // pixel row at each end, and two half-covered rows composited in sequence
+  // reach 75% opacity, not 100%. Whole-pixel edges are what removes it, so
+  // that is what these pin down.
+  const span = (tiles: ReturnType<typeof bodyTileRects>) =>
+    tiles.length === 0 ? 0 : tiles[tiles.length - 1].top + tiles[tiles.length - 1].height - tiles[0].top;
+
+  it("lands every tile edge on a whole pixel", () => {
+    const tiles = bodyTileRects(100.37, 260.81, 32, 0.6719);
+
+    expect(tiles.length).toBeGreaterThan(4);
+    for (const tile of tiles) {
+      expect(Number.isInteger(tile.top)).toBe(true);
+      expect(Number.isInteger(tile.height)).toBe(true);
+    }
+  });
+
+  it("leaves no gap or overlap between tiles", () => {
+    const tiles = bodyTileRects(100.37, 260.81, 32, 0.6719);
+
+    for (let index = 1; index < tiles.length; index += 1) {
+      expect(tiles[index].top).toBe(tiles[index - 1].top + tiles[index - 1].height);
+    }
+  });
+
+  it("covers the span it was given, to the pixel", () => {
+    const tiles = bodyTileRects(100.37, 260.81, 32, 0.6719);
+
+    expect(tiles[0].top).toBe(Math.round(100.37));
+    expect(span(tiles)).toBe(Math.round(260.81) - Math.round(100.37));
+  });
+
+  it("trims the last tile's source rows rather than overshooting the tail", () => {
+    const tiles = bodyTileRects(0, 50, 32, 1);
+
+    expect(tiles).toHaveLength(2);
+    expect(tiles[0].sourceRows).toBe(32);
+    // 18 rows left of the span, so the closing tile samples only those.
+    expect(tiles[1].sourceRows).toBeCloseTo(18, 5);
+  });
+
+  it("keeps a sub-pixel tile visible instead of collapsing it", () => {
+    const tiles = bodyTileRects(0, 2, 32, 0.01);
+
+    expect(tiles.every((tile) => tile.height >= 1)).toBe(true);
+  });
+
+  it("draws nothing for an empty or inverted span", () => {
+    expect(bodyTileRects(200, 100, 32, 0.6)).toEqual([]);
+    expect(bodyTileRects(100, 100, 32, 0.6)).toEqual([]);
+    expect(bodyTileRects(100, 200, 32, 0)).toEqual([]);
   });
 });
