@@ -332,6 +332,14 @@ async function buildProfileFromManiaBlock({
   const columnLineColor = parseColorWithAlpha(block.ColourColumnLine) ?? "";
   const judgementLineValue = parseNumber(block.JudgementLine);
   const judgementLine = judgementLineValue == null ? true : judgementLineValue !== 0;
+  // ColumnStart is the stage's left edge in osu!pixels from the screen's left
+  // edge (853.33 units wide at 16:9); LightPosition is the column light's
+  // bottom edge, top-down in the 480 space like HitPosition. Both stay null
+  // when unset so the renderer applies stable's defaults (136 / 413).
+  const columnStartValue = parseNumber(block.ColumnStart);
+  const columnStart = columnStartValue == null ? null : Math.max(0, Math.min(853, columnStartValue));
+  const lightPositionValue = parseNumber(block.LightPosition);
+  const lightPosition = lightPositionValue == null ? null : Math.max(0, Math.min(480, lightPositionValue));
   const columnWidth = clampInteger(columnWidths[0] ?? parseNumber(block.ColumnWidth) ?? baseProfile.columnWidth, 20, 160);
   const columnSpacing = clampInteger(columnSpacings[0] ?? parseNumber(block.ColumnSpacing) ?? baseProfile.columnSpacing, 0, 40);
   const noteHeightScale = clampInteger(
@@ -475,6 +483,8 @@ async function buildProfileFromManiaBlock({
       columnLineWidths,
       columnLineColor,
       judgementLine,
+      columnStart,
+      lightPosition,
       noteHeightScale,
       columnBackgrounds,
       assets: {

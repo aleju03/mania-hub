@@ -1,17 +1,23 @@
 import type { ReplaySkinKeymodeProfile, ReplaySkinSettings } from "./replay-skin";
-import { getReplaySkinProfile, OSU_MANIA_DEFAULT_COLUMN_LINE_WIDTH } from "./replay-skin";
+import {
+  getReplaySkinProfile,
+  OSU_MANIA_DEFAULT_COLUMN_LINE_WIDTH,
+  OSU_MANIA_DEFAULT_COLUMN_START,
+  OSU_MANIA_DEFAULT_LIGHT_POSITION,
+} from "./replay-skin";
 
 // Composes the browse-card preview for an uploaded skin: a fixed 1280x720
 // playfield snippet rendered from the skin's own note/receptor/LN assets, with
 // flat-colour fallbacks where the skin has none. Sprite sizing and anchoring
-// follow osu!stable, not naive image-fitting: note heights come from
-// noteHeightScale, LN bodies cascade at natural aspect from the tail end
-// (stable's default NoteBodyStyle, which is what makes Percy-style 40000px
-// body images show their baked-in rounded cap instead of squashing it flat),
-// the body ends under the head's visual centre, and key images stretch from
-// the hit line to the bottom edge. The note pattern is seeded by the key
-// count only, so every skin renders the same "chart" and previews stay
-// comparable side by side. The image doubles as the OG card.
+// follow osu!stable, not naive image-fitting: the stage sits at ColumnStart
+// like in game (not centred), note heights come from noteHeightScale, LN
+// bodies cascade at natural aspect from the tail end (stable's default
+// NoteBodyStyle, which is what makes Percy-style 40000px body images show
+// their baked-in rounded cap instead of squashing it flat), the body lies
+// half-way under the head and tail caps, and key images stretch from the hit
+// line to the bottom edge. The note pattern is seeded by the key count only,
+// so every skin renders the same "chart" and previews stay comparable side by
+// side. The image doubles as the OG card.
 
 export const SKIN_PREVIEW_WIDTH = 1280;
 export const SKIN_PREVIEW_HEIGHT = 720;
@@ -67,7 +73,7 @@ export interface SkinPreviewPatternOptions {
 }
 
 export function computeSkinPreviewLayout(
-  profile: Pick<ReplaySkinKeymodeProfile, "columnWidth" | "columnWidths" | "columnSpacing">,
+  profile: Pick<ReplaySkinKeymodeProfile, "columnWidth" | "columnWidths" | "columnSpacing" | "columnStart">,
   keyCount: number,
   canvasWidth = SKIN_PREVIEW_WIDTH,
   canvasHeight = SKIN_PREVIEW_HEIGHT,
@@ -85,7 +91,14 @@ export function computeSkinPreviewLayout(
   const laneWidths = rawWidths.map((width) => width * scale);
   const scaledSpacing = spacing * scale;
   const stageWidth = laneWidths.reduce((sum, width) => sum + width, 0) + scaledSpacing * (keys - 1);
-  const stageX = (canvasWidth - stageWidth) / 2;
+  // Stable positions the stage's left edge ColumnStart osu!pixels from the
+  // screen's left (the canvas is 16:9, so the unit space is 853.33 wide -
+  // exactly canvasWidth at the uncapped scale). Skins centre themselves with
+  // ColumnStart = 427 - width/2; BMS-style boards like RESIDENT sit at the
+  // left on purpose, and stable's default 136 is left of centre too. Clamped
+  // so the stage always stays on the card.
+  const columnStart = profile.columnStart ?? OSU_MANIA_DEFAULT_COLUMN_START;
+  const stageX = Math.max(0, Math.min(canvasWidth - stageWidth, columnStart * scale));
   const laneXs: number[] = [];
   let x = stageX;
   for (const width of laneWidths) {
@@ -129,7 +142,9 @@ export function buildSkinPreviewPattern(keyCount: number, options: SkinPreviewPa
   const longNotes: SkinPreviewLongNote[] = lnColumns.slice(0, 2).map((column, index) => {
     const headY = hitLineY - usable * (0.08 + 0.4 * index + random() * 0.06);
     const length = Math.max(noteHeight * 2.6, usable * (0.26 + random() * 0.12));
-    return { column, headY, tailY: Math.max(scrollTop, headY - length) };
+    // tailY is a position line and the tail sprite's box grows above it
+    // (downscroll), so it needs the same sprite-height headroom as the taps.
+    return { column, headY, tailY: Math.max(minY, headY - length) };
   });
 
   const tapCount = Math.min(14, Math.max(6, keys * 2));
@@ -309,15 +324,22 @@ export async function renderSkinPreview(
   const lightAsset = stage.light;
   const lightImage = lightAsset ? images.get(lightAsset.src) : undefined;
   if (lightImage) {
-    // Stable draws the column light from the hit position back up the column
-    // while the key is held; only the one pressed column shows it here.
+    // Stable draws the column light up the lane while the key is held, its
+    // bottom edge at skin.ini LightPosition - NOT at the hit position. The
+    // default 413 sits 11 units below the default hit line, and O2Jam-style
+    // decks rely on the light overlapping their key tops. Anchored relative
+    // to the (possibly clamped) judgement line so the declared gap survives
+    // the card's clamping; only the one pressed column shows it here.
     const height = stageScale(lightAsset, lightImage);
+    const hitUnits = Math.max(0, Math.min(768, settings.hitPosition)) * (480 / 768);
+    const lightUnits = 480 - (profile.lightPosition ?? OSU_MANIA_DEFAULT_LIGHT_POSITION);
+    const lightShift = (hitUnits - lightUnits) * layout.scale;
     const tint = stage.lightColors[pressedColumn] || "";
     const art = tint ? tintedImage(lightImage, tint) : lightImage;
     const laneX = layout.laneXs[pressedColumn];
     const laneWidth = layout.laneWidths[pressedColumn];
-    if (upscroll) drawImageFlippedY(ctx, art, laneX, judgmentLineY, laneWidth, height);
-    else ctx.drawImage(art, laneX, judgmentLineY - height, laneWidth, height);
+    if (upscroll) drawImageFlippedY(ctx, art, laneX, judgmentLineY - lightShift, laneWidth, height);
+    else ctx.drawImage(art, laneX, judgmentLineY + lightShift - height, laneWidth, height);
   }
 
   const hintAsset = stage.hint;
@@ -660,68 +682,45 @@ function tintedImage(image: HTMLImageElement, color: string): CanvasImageSource 
   return canvas;
 }
 
-// The tail sprite's box, which is its native height like every other note
-// asset; zero when the skin ships no tail art.
-function tailBoxHeight(
-  tailImage: HTMLImageElement | undefined,
-  noteAssetHeight: (image: HTMLImageElement) => number,
-): number {
-  return tailImage ? noteAssetHeight(tailImage) : 0;
+export interface SkinPreviewLongNoteGeometry {
+  bodyTop: number;
+  bodyBottom: number;
+  headBoxTop: number;
+  tailBoxTop: number;
 }
 
-// How far the visible art sits from one edge of its box, as a fraction of the
-// box height. Skins pad note art inside a square texture (an arrow head, a
-// pointed LN cap), and the padding is what decides where a body has to stop.
-// Measured once per texture and cached; a texture that cannot be read back
-// reports no padding, which is the old behaviour.
-const artInsetCache = new Map<string, { top: number; bottom: number }>();
-
-function artInset(image: HTMLImageElement, flipped: boolean, edge: "top" | "bottom"): number {
-  const bounds = opaqueBounds(image);
-  if (!bounds) return 0;
-  // A flipped draw turns the texture over, so its top padding lands at the
-  // bottom of the box.
-  const which = flipped ? (edge === "top" ? "bottom" : "top") : edge;
-  return bounds[which];
-}
-
-function opaqueBounds(image: HTMLImageElement): { top: number; bottom: number } | null {
-  const key = image.src;
-  const cached = artInsetCache.get(key);
-  if (cached) return cached;
-  const height = image.naturalHeight || 0;
-  const width = image.naturalWidth || 0;
-  if (height < 2 || width < 1) return null;
-  try {
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    if (!ctx) return null;
-    ctx.drawImage(image, 0, 0);
-    const { data } = ctx.getImageData(0, 0, width, height);
-    let top = -1;
-    let bottom = -1;
-    for (let y = 0; y < height; y += 1) {
-      let opaque = false;
-      for (let x = 0; x < width; x += 1) {
-        // Anything under ~3% alpha is a soft edge, not art.
-        if (data[(y * width + x) * 4 + 3] > 8) { opaque = true; break; }
-      }
-      if (opaque) {
-        if (top < 0) top = y;
-        bottom = y;
-      }
-    }
-    if (top < 0) return null;
-    const bounds = { top: top / height, bottom: (height - 1 - bottom) / height };
-    artInsetCache.set(key, bounds);
-    return bounds;
-  } catch {
-    // A tainted canvas (shouldn't happen: every asset is a blob URL) just
-    // means no padding information.
-    return null;
-  }
+// Stable's hold-note layout, which lazer's DrawableHoldNote spells out: the
+// body is positioned "to lie half-way under the head and the tail notes",
+// and the tail is a note at the end position - its box grows away from the
+// receptor like every other note, with the texture drawn flipped relative to
+// the notes (lazer's LegacyHoldNoteTailPiece inverts the scroll direction for
+// exactly this). Running the body to each cap's CENTRE, under the cap art,
+// is what lets arrow-style caps cover the join with their own shape - and
+// since the body never passes a cap's centre, nothing pokes out past art
+// that fills only the far half of its box. Head/tail end Ys are the position
+// lines (where each cap's receptor-side edge sits); trim is the Percy
+// shortening, applied at the tail side.
+export function longNoteGeometry(input: {
+  upscroll: boolean;
+  headEndY: number;
+  tailEndY: number;
+  headHeight: number;
+  tailHeight: number;
+  trim?: number;
+}): SkinPreviewLongNoteGeometry {
+  const { upscroll, headEndY, tailEndY, headHeight, tailHeight } = input;
+  const trim = input.trim ?? 0;
+  const headBoxTop = upscroll ? headEndY : headEndY - headHeight;
+  const tailBoxTop = upscroll ? tailEndY : tailEndY - tailHeight;
+  const headSideY = upscroll ? headEndY + headHeight / 2 : headEndY - headHeight / 2;
+  const tailSideY = (upscroll ? tailEndY + tailHeight / 2 : tailEndY - tailHeight / 2)
+    + (upscroll ? -trim : trim);
+  return {
+    bodyTop: Math.min(headSideY, tailSideY),
+    bodyBottom: Math.max(headSideY, tailSideY),
+    headBoxTop,
+    tailBoxTop,
+  };
 }
 
 function drawLongNote(
@@ -744,30 +743,20 @@ function drawLongNote(
   const headEndY = mapY(ln.headY);
   const tailEndY = mapY(ln.tailY);
   const headHeight = headImage ? noteAssetHeight(headImage) : Math.max(10, laneWidth * 0.3);
+  const tailHeight = tailImage ? noteAssetHeight(tailImage) : 0;
 
   // Percy trim, as in ReplayCanvas: pull the body's tail end back so oversized
   // LN sprites read at their intended length.
   const trim = settings.percy ? Math.min(20, laneWidth * 0.35) : 0;
 
-  // Where the body meets each cap. Running it to the head's visual centre
-  // (what this used to do) only works for art that fills its box: an arrow
-  // head leaves its corners transparent, so the body showed through around it
-  // and stopped with a hard edge halfway down. The body now ends at the cap's
-  // visible art instead, which covers both - the sprite still hides the join,
-  // and nothing pokes out past a cap that sits inset in its own box.
-  const tailBoxTop = upscroll ? tailEndY - tailBoxHeight(tailImage, noteAssetHeight) : tailEndY;
-  const tailInset = tailImage
-    ? artInset(tailImage, !upscroll, upscroll ? "bottom" : "top") * tailBoxHeight(tailImage, noteAssetHeight)
-    : 0;
-  const tailSideY = (upscroll ? tailBoxTop + tailBoxHeight(tailImage, noteAssetHeight) - tailInset : tailBoxTop + tailInset)
-    + (upscroll ? -trim : trim);
-  const headBoxTop = upscroll ? headEndY : headEndY - headHeight;
-  const headInset = headImage
-    ? artInset(headImage, upscroll, upscroll ? "bottom" : "top") * headHeight
-    : headHeight / 2;
-  const headSideY = upscroll ? headBoxTop + headHeight - headInset : headBoxTop + headInset;
-  const bodyTop = Math.min(tailSideY, headSideY);
-  const bodyBottom = Math.max(tailSideY, headSideY);
+  const { bodyTop, bodyBottom, headBoxTop, tailBoxTop } = longNoteGeometry({
+    upscroll,
+    headEndY,
+    tailEndY,
+    headHeight,
+    tailHeight,
+    trim,
+  });
 
   if (bodyImage && bodyBottom > bodyTop) {
     // Cascade, not stretch (stable's default NoteBodyStyle): the image runs at
@@ -796,27 +785,23 @@ function drawLongNote(
     ctx.globalAlpha = 1;
   }
 
-  // The tail sprite grows toward the head from its anchor (down on
-  // downscroll) at full aspect height, as in ReplayCanvas. Stable draws the
-  // tail texture vertically flipped on downscroll (lazer's
-  // LegacyHoldNoteTailPiece inverts the scroll direction for exactly this),
-  // so skins author the tail art upside down; mirror it back here.
+  // The tail is a note at the end position: its box grows away from the
+  // receptor like every other note's, and the texture is drawn flipped
+  // relative to the notes - flipped on downscroll, upright on upscroll
+  // (lazer's LegacyHoldNoteTailPiece inverts the scroll direction for
+  // exactly this). Drawn over the body, which runs to its centre.
   if (tailImage) {
-    const tailHeight = noteAssetHeight(tailImage);
-    const tailTop = upscroll ? tailEndY - tailHeight : tailEndY;
-    if (upscroll) ctx.drawImage(tailImage, laneX, tailTop, laneWidth, tailHeight);
-    else drawImageFlippedY(ctx, tailImage, laneX, tailTop, laneWidth, tailHeight);
+    if (upscroll) ctx.drawImage(tailImage, laneX, tailBoxTop, laneWidth, tailHeight);
+    else drawImageFlippedY(ctx, tailImage, laneX, tailBoxTop, laneWidth, tailHeight);
   }
 
   if (headImage) {
     // Heads flip with the notes (on upscroll), unlike the tail.
-    const headTop = upscroll ? headEndY : headEndY - headHeight;
-    if (upscroll) drawImageFlippedY(ctx, headImage, laneX, headTop, laneWidth, headHeight);
-    else ctx.drawImage(headImage, laneX, headTop, laneWidth, headHeight);
+    if (upscroll) drawImageFlippedY(ctx, headImage, laneX, headBoxTop, laneWidth, headHeight);
+    else ctx.drawImage(headImage, laneX, headBoxTop, laneWidth, headHeight);
   } else {
-    const top = upscroll ? headEndY : headEndY - headHeight;
     ctx.fillStyle = profile.lnHeadColors[ln.column] || profile.lnHeadColor || "#ffffff";
-    fillRoundedRect(ctx, laneX + 1, top, laneWidth - 2, headHeight, 4);
+    fillRoundedRect(ctx, laneX + 1, headBoxTop, laneWidth - 2, headHeight, 4);
   }
 }
 

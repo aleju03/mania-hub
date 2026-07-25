@@ -79,6 +79,8 @@ describe("replay skin settings", () => {
           columnLineColor: "",
           columnBackgrounds: [],
           judgementLine: true,
+          columnStart: null,
+          lightPosition: null,
           noteHeightScale: 50,
           assets: {
             columns: [],

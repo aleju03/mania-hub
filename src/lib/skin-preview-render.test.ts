@@ -4,33 +4,61 @@ import {
   bodyTileRects,
   buildSkinPreviewPattern,
   computeSkinPreviewLayout,
+  longNoteGeometry,
   mulberry32,
   SKIN_PREVIEW_HEIGHT,
   SKIN_PREVIEW_WIDTH,
 } from "./skin-preview-render";
 
 describe("computeSkinPreviewLayout", () => {
-  const profile = { columnWidth: 36, columnWidths: [], columnSpacing: 0 };
+  const profile = { columnWidth: 36, columnWidths: [], columnSpacing: 0, columnStart: null };
 
-  it("centers the stage and scales lanes like the game (skin units are 480ths of the height)", () => {
+  it("scales lanes like the game (skin units are 480ths of the height)", () => {
     const layout = computeSkinPreviewLayout(profile, 4);
     // 36-unit columns at a 720-high canvas: 36 * (720 / 480) = 54px each.
     expect(layout.laneWidths[0]).toBeCloseTo(36 * (SKIN_PREVIEW_HEIGHT / 480), 5);
-    const left = layout.stageX;
-    const right = SKIN_PREVIEW_WIDTH - (layout.stageX + layout.stageWidth);
-    expect(Math.abs(left - right)).toBeLessThan(0.001);
     expect(layout.laneXs).toHaveLength(4);
     expect(layout.laneWidths).toHaveLength(4);
   });
 
+  it("puts an undeclared stage at stable's default ColumnStart, left of centre", () => {
+    const layout = computeSkinPreviewLayout(profile, 4);
+    expect(layout.stageX).toBeCloseTo(136 * (SKIN_PREVIEW_HEIGHT / 480), 5);
+  });
+
+  it("positions the stage at the skin's ColumnStart (RESIDENT sits at the left)", () => {
+    const layout = computeSkinPreviewLayout(
+      { columnWidth: 28, columnWidths: [28, 22, 28, 22, 28, 22, 28], columnSpacing: 0, columnStart: 120 },
+      7,
+    );
+    expect(layout.stageX).toBeCloseTo(120 * (SKIN_PREVIEW_HEIGHT / 480), 5);
+  });
+
+  it("lands the 427 - width/2 centring formula in the middle of the card", () => {
+    // O2Jam FHD 4K: ColumnStart 316 with four 55-unit columns.
+    const layout = computeSkinPreviewLayout(
+      { columnWidth: 55, columnWidths: [55, 55, 55, 55], columnSpacing: 0, columnStart: 316 },
+      4,
+    );
+    const center = layout.stageX + layout.stageWidth / 2;
+    // The author rounded 316.67 down to 316, so allow the same slack.
+    expect(Math.abs(center - SKIN_PREVIEW_WIDTH / 2)).toBeLessThan(2);
+  });
+
+  it("keeps a far-right ColumnStart on the card", () => {
+    const layout = computeSkinPreviewLayout({ ...profile, columnStart: 830 }, 4);
+    expect(layout.stageX + layout.stageWidth).toBeLessThanOrEqual(SKIN_PREVIEW_WIDTH);
+  });
+
   it("clamps ultra-wide stages to the canvas", () => {
-    const layout = computeSkinPreviewLayout({ columnWidth: 160, columnWidths: [], columnSpacing: 0 }, 10);
+    const layout = computeSkinPreviewLayout({ columnWidth: 160, columnWidths: [], columnSpacing: 0, columnStart: null }, 10);
     expect(layout.stageWidth).toBeLessThanOrEqual(SKIN_PREVIEW_WIDTH * 0.94 + 0.001);
     expect(layout.stageX).toBeGreaterThanOrEqual(0);
+    expect(layout.stageX + layout.stageWidth).toBeLessThanOrEqual(SKIN_PREVIEW_WIDTH + 0.001);
   });
 
   it("honours per-column widths from the skin", () => {
-    const layout = computeSkinPreviewLayout({ columnWidth: 30, columnWidths: [30, 60, 30, 60], columnSpacing: 0 }, 4);
+    const layout = computeSkinPreviewLayout({ columnWidth: 30, columnWidths: [30, 60, 30, 60], columnSpacing: 0, columnStart: null }, 4);
     expect(layout.laneWidths[1]).toBeCloseTo(layout.laneWidths[0] * 2, 5);
     // lanes tile the stage without gaps when spacing is zero
     expect(layout.laneXs[1]).toBeCloseTo(layout.laneXs[0] + layout.laneWidths[0], 5);
@@ -115,6 +143,51 @@ describe("buildSkinPreviewPattern", () => {
     for (const tap of pattern.taps) {
       expect(tap.y).toBeLessThanOrEqual(500);
     }
+  });
+});
+
+describe("longNoteGeometry", () => {
+  // Stable's hold-note layout: the body lies half-way under the head and the
+  // tail (lazer's DrawableHoldNote), and the tail is a note at the end
+  // position whose box grows away from the receptor. ArrowMania-ish numbers:
+  // 96px square caps, head line at 600, tail line at 300, downscroll.
+  const downscroll = { upscroll: false, headEndY: 600, tailEndY: 300, headHeight: 96, tailHeight: 96 };
+
+  it("runs the body from the tail's centre to the head's centre", () => {
+    const geometry = longNoteGeometry(downscroll);
+    expect(geometry.bodyTop).toBe(300 - 48);
+    expect(geometry.bodyBottom).toBe(600 - 48);
+  });
+
+  it("keeps both caps' boxes on the receptor-away side of their position lines", () => {
+    const geometry = longNoteGeometry(downscroll);
+    expect(geometry.headBoxTop).toBe(600 - 96);
+    expect(geometry.tailBoxTop).toBe(300 - 96);
+    // The body overlaps into each cap's box (the cap art covers the join)...
+    expect(geometry.bodyBottom).toBeGreaterThan(geometry.headBoxTop);
+    expect(geometry.bodyTop).toBeGreaterThan(geometry.tailBoxTop);
+    // ...but never past either box's far edge.
+    expect(geometry.bodyTop).toBeGreaterThanOrEqual(geometry.tailBoxTop);
+    expect(geometry.bodyBottom).toBeLessThanOrEqual(600);
+  });
+
+  it("mirrors for upscroll", () => {
+    const geometry = longNoteGeometry({ upscroll: true, headEndY: 120, tailEndY: 420, headHeight: 96, tailHeight: 96 });
+    expect(geometry.bodyTop).toBe(120 + 48);
+    expect(geometry.bodyBottom).toBe(420 + 48);
+    expect(geometry.headBoxTop).toBe(120);
+    expect(geometry.tailBoxTop).toBe(420);
+  });
+
+  it("shortens the body at the tail side by the Percy trim", () => {
+    expect(longNoteGeometry({ ...downscroll, trim: 20 }).bodyTop).toBe(300 - 48 + 20);
+    const upscroll = longNoteGeometry({ upscroll: true, headEndY: 120, tailEndY: 420, headHeight: 96, tailHeight: 96, trim: 20 });
+    expect(upscroll.bodyBottom).toBe(420 + 48 - 20);
+  });
+
+  it("runs the body to the position line when the skin ships no tail art", () => {
+    const geometry = longNoteGeometry({ ...downscroll, tailHeight: 0 });
+    expect(geometry.bodyTop).toBe(300);
   });
 });
 

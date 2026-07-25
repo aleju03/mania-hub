@@ -142,6 +142,15 @@ export interface ReplaySkinKeymodeProfile {
   // skin.ini JudgementLine: the white line at HitPosition. Circle/arrow skins
   // almost always turn it off; stable defaults it on.
   judgementLine: boolean;
+  // skin.ini ColumnStart: the stage's left edge in osu!pixels from the left
+  // edge of the screen (853.33 units wide at 16:9). Skins centre themselves
+  // with 427 - width/2; BMS-style skins sit at the left on purpose. null
+  // means the key was absent, which in stable is 136 - left of centre.
+  columnStart: number | null;
+  // skin.ini LightPosition: where the column light's bottom edge sits, in the
+  // same top-down 480-space as HitPosition. null falls back to stable's 413
+  // (11 units below the default hit position, overlapping the key tops).
+  lightPosition: number | null;
   noteHeightScale: number;
   assets: ReplaySkinKeymodeAssets;
 }
@@ -337,6 +346,8 @@ export const DEFAULT_REPLAY_SKIN_PROFILE: ReplaySkinKeymodeProfile = {
   columnLineColor: "",
   columnBackgrounds: [],
   judgementLine: true,
+  columnStart: null,
+  lightPosition: null,
   noteHeightScale: REPLAY_SKIN_DEFAULT_COLUMN_WIDTH,
   assets: EMPTY_REPLAY_SKIN_ASSETS,
 };
@@ -345,6 +356,11 @@ export const REPLAY_SKIN_MAX_COLUMN_LINE_WIDTH = 20;
 // osu!stable draws 2-unit column lines at every boundary when a skin does not
 // set ColumnLineWidth at all.
 export const OSU_MANIA_DEFAULT_COLUMN_LINE_WIDTH = 2;
+// Stable's stage defaults when skin.ini stays silent: columns start 136
+// osu!pixels from the screen's left edge, and the column light's bottom edge
+// sits at 413 of 480.
+export const OSU_MANIA_DEFAULT_COLUMN_START = 136;
+export const OSU_MANIA_DEFAULT_LIGHT_POSITION = 413;
 
 export const DEFAULT_REPLAY_SKIN_SETTINGS: ReplaySkinSettings = {
   version: 2,
@@ -631,9 +647,21 @@ function normalizeKeymodeProfile(value: unknown, fallback?: Partial<ReplaySkinKe
     columnLineColor: normalizeLineColor(raw.columnLineColor),
     columnBackgrounds: normalizeColumnColors(raw.columnBackgrounds),
     judgementLine: typeof raw.judgementLine === "boolean" ? raw.judgementLine : true,
+    columnStart: normalizeNullableStagePosition(raw.columnStart, 853),
+    lightPosition: normalizeNullableStagePosition(raw.lightPosition, 480),
     noteHeightScale: normalizeNoteHeightScale(raw.noteHeightScale ?? fallback?.noteHeightScale, smallestColumnWidth),
     assets: normalizeKeymodeAssets(raw.assets),
   };
+}
+
+// ColumnStart / LightPosition: nullable and fractional (O2Jam FHD centres 7K
+// at 313.5), where null means the skin never set the key and stable's default
+// applies at draw time.
+function normalizeNullableStagePosition(value: unknown, max: number): number | null {
+  if (value == null) return null;
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  return Math.max(0, Math.min(max, parsed));
 }
 
 function normalizeKeymodeProfiles(value: unknown, fallback: ReplaySkinKeymodeProfile, persistedVersion: number): Record<string, ReplaySkinKeymodeProfile> {
