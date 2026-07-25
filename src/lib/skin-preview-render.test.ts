@@ -4,6 +4,7 @@ import {
   bodyTileRects,
   buildSkinPreviewPattern,
   computeSkinPreviewLayout,
+  lnTailArtEdgeFraction,
   longNoteGeometry,
   mulberry32,
   SKIN_PREVIEW_HEIGHT,
@@ -191,6 +192,28 @@ describe("longNoteGeometry", () => {
   it("runs the body to the position line when the skin ships no tail art", () => {
     const geometry = longNoteGeometry({ ...downscroll, tailHeight: 0 });
     expect(geometry.bodyTop).toBe(300);
+  });
+});
+
+describe("lnTailArtEdgeFraction", () => {
+  // StepMania Reborn's roof cap: art begins 63 rows into its 122-row texture,
+  // so the flipped downscroll cap's base lands at 48.4% of the box - just shy
+  // of the centre the body runs to, which is the seam the body extension
+  // closes. The texture's top edge faces the body in both scroll directions
+  // (downscroll flips the cap, upscroll leaves it upright below the body).
+  it("flips the art's top edge to face the body on downscroll", () => {
+    expect(lnTailArtEdgeFraction(63 / 122, false)).toBeCloseTo(1 - 63 / 122);
+  });
+
+  it("keeps the art's top edge as-is on upscroll", () => {
+    expect(lnTailArtEdgeFraction(63 / 122, true)).toBeCloseTo(63 / 122);
+  });
+
+  it("puts full-box art at the far edge, where the centre rule already covers it", () => {
+    // Art starting at the very top of the texture reaches the receptor-side
+    // edge of the box once flipped; the body's centre stop overlaps it, so
+    // the min/max in the renderer leaves stable's layout untouched.
+    expect(lnTailArtEdgeFraction(0, false)).toBe(1);
   });
 });
 

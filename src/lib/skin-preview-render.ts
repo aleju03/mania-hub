@@ -403,9 +403,21 @@ export async function renderSkinPreview(
   const bottomAsset = stage.bottom;
   const bottomImage = bottomAsset ? images.get(bottomAsset.src) : undefined;
   if (bottomImage) {
-    const height = stageScale(bottomAsset, bottomImage);
-    if (upscroll) drawImageFlippedY(ctx, bottomImage, layout.stageX, 0, layout.stageWidth, height);
-    else ctx.drawImage(bottomImage, layout.stageX, SKIN_PREVIEW_HEIGHT - height, layout.stageWidth, height);
+    // Stable never stretches this element ("this element will not be
+    // stretched to fit the stage width"), and unlike the other furniture its
+    // height is NOT 0.625x: the texture is "skinned for a 480px playfield
+    // height", one pixel per playfield unit, origin Bottom. A canvas taller
+    // than 480 therefore hangs off the TOP of the screen and is clipped -
+    // tekkito2's 576-tall canvas keeps only the lower slice of its black
+    // bar, a strip hugging the very top of the field, not a box mid-stage.
+    const bottomScale = bottomAsset?.scale && bottomAsset.scale > 0 ? bottomAsset.scale : 1;
+    const nativeWidth = (bottomAsset?.width && bottomAsset.width > 0 ? bottomAsset.width : bottomImage.naturalWidth || 1) / bottomScale;
+    const nativeHeight = (bottomAsset?.height && bottomAsset.height > 0 ? bottomAsset.height : bottomImage.naturalHeight || 1) / bottomScale;
+    const width = Math.max(1, nativeWidth * (480 / 768) * layout.scale);
+    const height = Math.max(1, nativeHeight * layout.scale);
+    const x = layout.stageX + (layout.stageWidth - width) / 2;
+    if (upscroll) drawImageFlippedY(ctx, bottomImage, x, 0, width, height);
+    else ctx.drawImage(bottomImage, x, SKIN_PREVIEW_HEIGHT - height, width, height);
   }
 
   for (const [asset, side] of [[stage.left, "left"], [stage.right, "right"]] as const) {
@@ -437,7 +449,7 @@ export async function renderSkinPreview(
     ctx.restore();
   }
 
-  drawJudgementAndCombo(ctx, profile, images, layout);
+  drawJudgementAndCombo(ctx, profile, images, layout, settings);
 
   const blob = await canvasToBlob(canvas);
   return { blob, width: SKIN_PREVIEW_WIDTH, height: SKIN_PREVIEW_HEIGHT, mime: blob.type || "image/png", accent };
@@ -682,6 +694,60 @@ function tintedImage(image: HTMLImageElement, color: string): CanvasImageSource 
   return canvas;
 }
 
+// The vertical extent of a texture's visible pixels, as fractions of its
+// height (0 = top edge). Read once per texture from a scratch canvas and
+// cached by source; null when the art is fully transparent or unreadable.
+// The tail cap needs it: where its art actually sits inside the box decides
+// how far the body has to run to meet it.
+const alphaBoundsCache = new Map<string, { top: number; bottom: number } | null>();
+const ALPHA_BOUNDS_THRESHOLD = 25;
+
+function imageAlphaBounds(image: HTMLImageElement): { top: number; bottom: number } | null {
+  const key = image.src;
+  const cached = alphaBoundsCache.get(key);
+  if (cached !== undefined) return cached;
+  let bounds: { top: number; bottom: number } | null = null;
+  const width = image.naturalWidth || 0;
+  const height = image.naturalHeight || 0;
+  if (width > 0 && height > 0) {
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (ctx) {
+        ctx.drawImage(image, 0, 0);
+        const alpha = ctx.getImageData(0, 0, width, height).data;
+        const rowVisible = (row: number) => {
+          const start = row * width * 4;
+          for (let index = start + 3; index < start + width * 4; index += 4) {
+            if (alpha[index] >= ALPHA_BOUNDS_THRESHOLD) return true;
+          }
+          return false;
+        };
+        let top = 0;
+        while (top < height && !rowVisible(top)) top += 1;
+        if (top < height) {
+          let bottom = height - 1;
+          while (bottom > top && !rowVisible(bottom)) bottom -= 1;
+          bounds = { top: top / height, bottom: (bottom + 1) / height };
+        }
+      }
+    } catch {
+      bounds = null;
+    }
+  }
+  alphaBoundsCache.set(key, bounds);
+  return bounds;
+}
+
+// Where the tail cap's art meets the body, as a fraction of the tail box's
+// height from its top. Downscroll draws the cap flipped, so the texture's
+// TOP edge faces the body in both scroll directions.
+export function lnTailArtEdgeFraction(artTopFraction: number, upscroll: boolean): number {
+  return upscroll ? artTopFraction : 1 - artTopFraction;
+}
+
 export interface SkinPreviewLongNoteGeometry {
   bodyTop: number;
   bodyBottom: number;
@@ -745,13 +811,30 @@ function drawLongNote(
   const headHeight = headImage ? noteAssetHeight(headImage) : Math.max(10, laneWidth * 0.3);
   const tailHeight = tailImage ? noteAssetHeight(tailImage) : 0;
 
-  const { bodyTop, bodyBottom, headBoxTop, tailBoxTop } = longNoteGeometry({
+  const geometry = longNoteGeometry({
     upscroll,
     headEndY,
     tailEndY,
     headHeight,
     tailHeight,
   });
+  const { headBoxTop, tailBoxTop } = geometry;
+  let { bodyTop, bodyBottom } = geometry;
+
+  if (tailImage && tailHeight > 0) {
+    // Stable's run-the-body-to-the-cap-centre rule assumes the cap art fills
+    // the near half of its box. StepMania-style roof caps sit shy of the
+    // centre (the Reborn cap's base is at 48% of its box), which showed as a
+    // seam of backdrop between body and cap. Run the body a pixel under the
+    // art's actual edge instead of stopping blind at the middle; caps whose
+    // art already crosses the centre are left exactly as stable lays them out.
+    const bounds = imageAlphaBounds(tailImage);
+    if (bounds) {
+      const artEdgeY = tailBoxTop + lnTailArtEdgeFraction(bounds.top, upscroll) * tailHeight;
+      if (upscroll) bodyBottom = Math.max(bodyBottom, artEdgeY + 1);
+      else bodyTop = Math.min(bodyTop, artEdgeY - 1);
+    }
+  }
 
   if (bodyImage && bodyBottom > bodyTop) {
     // Cascade, not stretch (stable's default NoteBodyStyle): the image runs at
@@ -805,6 +888,7 @@ function drawJudgementAndCombo(
   profile: ReplaySkinKeymodeProfile,
   images: Map<string, HTMLImageElement>,
   layout: SkinPreviewLayout,
+  settings: ReplaySkinSettings,
 ): void {
   const centerX = layout.stageX + layout.stageWidth / 2;
   const averageLane = layout.stageWidth / Math.max(1, layout.laneWidths.length);
@@ -837,7 +921,18 @@ function drawJudgementAndCombo(
   const widths = digitImages.map((image) => image!.naturalWidth * (digitHeight / image!.naturalHeight));
   const totalWidth = widths.reduce((sum, width) => sum + width, 0) - overlap * (widths.length - 1);
   let x = centerX - totalWidth / 2;
-  const y = SKIN_PREVIEW_HEIGHT * 0.34;
+  // Centred on skin.ini ComboPosition (kept by the importer as the replay
+  // viewer's from-the-bottom 768-space), through the same stage zoom as the
+  // hit line so it stays aligned with the stage furniture. Skins design
+  // around the declared spot - tekkito2 paints a mania-stage-bottom bar
+  // there as the counter's backdrop - so a fixed height left that art
+  // orphaned. Clamped to the card for degenerate values.
+  const comboCenter = SKIN_PREVIEW_HEIGHT
+    - Math.max(0, Math.min(768, settings.comboPosition)) * (480 / 768) * layout.scale;
+  const y = Math.max(
+    SKIN_PREVIEW_HEIGHT * 0.05,
+    Math.min(SKIN_PREVIEW_HEIGHT * 0.8, comboCenter - digitHeight / 2),
+  );
   digitImages.forEach((image, index) => {
     ctx.drawImage(image!, x, y, widths[index], digitHeight);
     x += widths[index] - overlap;
