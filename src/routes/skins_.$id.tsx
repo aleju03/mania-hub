@@ -1,4 +1,4 @@
-import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Download, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ManiaRain } from "../components/home/ManiaRain";
@@ -8,7 +8,6 @@ import { SKIN_FALLBACK_ACCENT, SkinKeymodeTags } from "../components/skins/SkinC
 import { SkinAssetExplorer } from "../components/skins/SkinAssetExplorer";
 import { Avatar } from "../components/ui/Avatar";
 import { useAuth } from "../lib/auth-context";
-import { canUseDevFeatures } from "../lib/auth-shared";
 import { formatTimeAgo } from "../lib/format";
 import { skinEventProperties } from "../lib/analytics-skins";
 import { track } from "../lib/posthog";
@@ -16,13 +15,6 @@ import { deleteMySkin, fetchSkinById, formatKeymodes, formatSkinFileSize, markSk
 import { pageSeo } from "../lib/seo";
 
 export const Route = createFileRoute("/skins_/$id")({
-  // Dev-gated while unfinished, same as /skins.
-  beforeLoad: ({ context }) => {
-    if (!canUseDevFeatures(context.auth)) {
-      throw notFound();
-    }
-    return undefined as never;
-  },
   loader: async ({ params }) => {
     try {
       return await fetchSkinById({ data: { id: params.id } });
@@ -51,7 +43,6 @@ export const Route = createFileRoute("/skins_/$id")({
       // Skins without a rendered preview fall back to the falling-notes card.
       image: skin.previewUrl ?? undefined,
       imageKind: "skins",
-      noindex: true,
     });
   },
   component: SkinDetailPage,

@@ -1,4 +1,4 @@
-import { createFileRoute, notFound, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
 import { Layers, Upload } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { ManiaRain } from "../components/home/ManiaRain";
@@ -11,7 +11,7 @@ import { Pagination } from "../components/ui/Pagination";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { OsuLogo } from "../components/ui/OsuLogo";
 import { useAuth } from "../lib/auth-context";
-import { canUseDevFeatures, isAdmin } from "../lib/auth-shared";
+import { isAdmin } from "../lib/auth-shared";
 import { isLiveBackendConfigured } from "../lib/live-backend";
 import { fetchSkinsListAsAdmin, fetchSkinsListDirect, SKINS_PAGE_SIZE, type SkinsListResult, type SkinsSort, type SkinSummary } from "../lib/skins";
 import { pageSeo } from "../lib/seo";
@@ -54,17 +54,7 @@ export const Route = createFileRoute("/skins")({
     path: "/skins",
     origin: match.context.origin,
     imageKind: "skins",
-    noindex: true,
   }),
-  // Dev-gated while unfinished (the /discord pattern): visible in local dev
-  // and to dev users on the preview host, a 404 in production. Drop this
-  // beforeLoad, the noindex above, and re-add the sitemap entry to ship it.
-  beforeLoad: ({ context }) => {
-    if (!canUseDevFeatures(context.auth)) {
-      throw notFound();
-    }
-    return undefined as never;
-  },
   search: {
     middlewares: [stripSearchParams(DEFAULT_SKINS_SEARCH)],
   },

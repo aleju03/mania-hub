@@ -124,8 +124,6 @@ export function Nav() {
     // Discord bot is dev-gated for now: visible in local dev and on the dev
     // preview host, hidden in production.
     if (leaf.id === "discord") return devMode;
-    // Skins is dev-gated while unfinished; the route 404s outside dev too.
-    if (leaf.id === "skins") return devMode;
     if (leaf.id === "snipes") return showSnipesLink;
     return true;
   };
