@@ -53,6 +53,7 @@ export const Route = createFileRoute("/skins")({
     description: "Browse and download osu!mania skins with previews rendered from each skin's own notes, or publish a skin from an .osk file.",
     path: "/skins",
     origin: match.context.origin,
+    imageKind: "skins",
     noindex: true,
   }),
   // Dev-gated while unfinished (the /discord pattern): visible in local dev

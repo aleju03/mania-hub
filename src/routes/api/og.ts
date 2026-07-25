@@ -3602,6 +3602,225 @@ async function renderPacksOg(request: Request): Promise<Response> {
   return response;
 }
 
+/* Skins layout: the falling-note rain from the skins page frozen
+   mid-fall. The scatter reuses the sprites ManiaRain drops, at mixed
+   sizes and opacities for depth, two of them stretched into long notes
+   (rounded body trailing above the head, ManiaRain's LN shape), plus a
+   few colour-matched streaks so the fall still reads in a still. */
+interface SkinsOgNote {
+  img: string; // file name under /images/notes, without extension
+  x: number; // centre of the note head on the canvas
+  y: number;
+  size: number; // head box; bars draw at ManiaRain's 1.4w x 0.3h of this
+  rotate?: number;
+  opacity: number;
+  lnHeight?: number; // long note: body extends this far above the head
+  trail?: string; // motion streak colour fading in above the head
+}
+
+// Listed back-to-front: faint background notes first so brighter
+// foreground notes overlap them, stickers draw over everything.
+const SKINS_OG_NOTES: SkinsOgNote[] = [
+  { img: "circle-pink", x: 726, y: 96, size: 28, rotate: 40, opacity: 0.25 },
+  { img: "circle-green", x: 516, y: 306, size: 26, rotate: -20, opacity: 0.2 },
+  { img: "circle-blue", x: 1084, y: 614, size: 24, rotate: 10, opacity: 0.3 },
+  { img: "circle-white", x: 68, y: 352, size: 26, rotate: -12, opacity: 0.25 },
+  { img: "circle-white", x: 486, y: 478, size: 34, rotate: -35, opacity: 0.35 },
+  { img: "circle-gray", x: 146, y: 472, size: 42, rotate: 22, opacity: 0.4 },
+  { img: "circle-navy", x: 972, y: 306, size: 40, rotate: 15, opacity: 0.45 },
+  { img: "arrow-down-gray", x: 298, y: 170, size: 44, rotate: 10, opacity: 0.45 },
+  { img: "circle-white", x: 1146, y: 196, size: 42, rotate: -32, opacity: 0.5 },
+  { img: "circle-violet", x: 66, y: 204, size: 38, rotate: -25, opacity: 0.5 },
+  { img: "bar-blue", x: 588, y: 586, size: 52, rotate: 6, opacity: 0.5 },
+  { img: "bar-gray", x: 556, y: 138, size: 58, rotate: -12, opacity: 0.55 },
+  { img: "arrow-left-gray", x: 394, y: 64, size: 50, rotate: 20, opacity: 0.6 },
+  { img: "circle-blue-light", x: 648, y: 54, size: 46, rotate: 30, opacity: 0.6 },
+  { img: "bar-blue", x: 668, y: 568, size: 62, opacity: 0.62, lnHeight: 150 },
+  { img: "arrow-right-green", x: 838, y: 252, size: 54, rotate: -10, opacity: 0.65 },
+  { img: "circle-blue", x: 338, y: 516, size: 54, rotate: 18, opacity: 0.7 },
+  { img: "circle-purple", x: 1122, y: 514, size: 54, rotate: 38, opacity: 0.7 },
+  { img: "bar-red", x: 1158, y: 342, size: 68, rotate: -6, opacity: 0.75 },
+  { img: "bar-yellow", x: 1032, y: 84, size: 88, rotate: 7, opacity: 0.8 },
+  { img: "circle-green", x: 924, y: 556, size: 58, rotate: 24, opacity: 0.85, trail: "rgba(166,228,120,0.3)" },
+  { img: "circle-pink", x: 176, y: 96, size: 64, rotate: -15, opacity: 0.9, trail: "rgba(255,131,192,0.3)" },
+  { img: "circle-blue", x: 872, y: 138, size: 74, rotate: -18, opacity: 0.9, trail: "rgba(102,186,255,0.3)" },
+  { img: "arrow-up-pink", x: 748, y: 338, size: 78, rotate: 12, opacity: 0.95, trail: "rgba(255,131,192,0.3)" },
+  { img: "circle-pink-glow", x: 1048, y: 442, size: 92, opacity: 0.95, lnHeight: 230 },
+];
+
+/* Satori fetches every <img> itself; two dozen parallel self-requests
+   for the sprites is enough to get connections dropped (notes silently
+   missing, or the whole render dying on "socket hang up"). Prefetch
+   each unique sprite once, cache it, and hand satori data: URLs. */
+const noteSpriteCache = new Map<string, Promise<string>>();
+
+function getNoteSpriteDataUrl(origin: string, img: string): Promise<string> {
+  const url = new URL(`/images/notes/${img}.png`, origin).toString();
+  const cached = noteSpriteCache.get(url);
+  if (cached) return cached;
+
+  const promise = (async () => {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to load note sprite ${img}: ${response.status}`);
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    return `data:image/png;base64,${buffer.toString("base64")}`;
+  })();
+
+  noteSpriteCache.set(url, promise);
+  promise.catch(() => noteSpriteCache.delete(url));
+  return promise;
+}
+
+function skinsFallingNote(src: string, note: SkinsOgNote, key: string): ReactNode[] {
+  const isBar = note.img.startsWith("bar");
+  const headW = isBar ? note.size * 1.4 : note.size;
+  const headH = isBar ? note.size * 0.3 : note.size;
+  const parts: ReactNode[] = [];
+
+  if (note.trail) {
+    // Wide, short, and ending under the head centre so it reads as motion
+    // blur; a narrow line reads as a string the note hangs from instead.
+    const trailW = Math.round(note.size * 0.5);
+    const trailH = Math.round(note.size * 1.8);
+    parts.push(
+      h("div", {
+        key: `${key}-trail`,
+        style: {
+          position: "absolute",
+          left: `${Math.round(note.x - trailW / 2)}px`,
+          top: `${Math.round(note.y - trailH)}px`,
+          width: `${trailW}px`,
+          height: `${trailH}px`,
+          borderRadius: `${trailW / 2}px`,
+          background: `linear-gradient(to bottom, rgba(0,0,0,0) 0%, ${note.trail} 100%)`,
+          opacity: note.opacity,
+        },
+      }),
+    );
+  }
+
+  if (note.lnHeight) {
+    // The body's flat bottom ends at the head centre, so the opaque
+    // middle of the head sprite covers the seam (ManiaRain punches the
+    // head out of the body instead, which Satori can't do).
+    const bodyW = Math.round(note.size * 0.5);
+    parts.push(
+      h("div", {
+        key: `${key}-body`,
+        style: {
+          position: "absolute",
+          left: `${Math.round(note.x - bodyW / 2)}px`,
+          top: `${Math.round(note.y - note.lnHeight)}px`,
+          width: `${bodyW}px`,
+          height: `${note.lnHeight}px`,
+          borderTopLeftRadius: `${bodyW / 2}px`,
+          borderTopRightRadius: `${bodyW / 2}px`,
+          background: "rgba(255,255,255,0.3)",
+          opacity: note.opacity,
+        },
+      }),
+    );
+  }
+
+  parts.push(
+    h("img", {
+      key: `${key}-head`,
+      src,
+      style: {
+        position: "absolute",
+        left: `${Math.round(note.x - headW / 2)}px`,
+        top: `${Math.round(note.y - headH / 2)}px`,
+        width: `${Math.round(headW)}px`,
+        height: `${Math.round(headH)}px`,
+        opacity: note.opacity,
+        ...(note.rotate ? { transform: `rotate(${note.rotate}deg)` } : {}),
+      },
+    }),
+  );
+
+  return parts;
+}
+
+async function renderSkinsOg(request: Request): Promise<Response> {
+  const [regularFont, heavyFont] = await loadOgFonts(request);
+  const origin = getAssetOrigin(request);
+
+  // Sequential on purpose: the dev server serving this route also serves
+  // the sprites, and a parallel burst is what broke satori's own loading.
+  const sprites = new Map<string, string>();
+  for (const img of new Set(SKINS_OG_NOTES.map((note) => note.img))) {
+    sprites.set(img, await getNoteSpriteDataUrl(origin, img));
+  }
+
+  const response = new ImageResponse(
+    h(
+      "div",
+      {
+        style: {
+          width: `${WIDTH}px`,
+          height: `${HEIGHT}px`,
+          display: "flex",
+          position: "relative",
+          overflow: "hidden",
+          background: SURFACE_COLOR,
+          fontFamily: '"Torus OG"',
+          color: "#ffffff",
+        },
+      },
+      [
+        ...SKINS_OG_NOTES.flatMap((note, i) =>
+          skinsFallingNote(sprites.get(note.img) ?? "", note, `note-${i}`),
+        ),
+
+        sticker({
+          key: "title",
+          text: "skins",
+          subText: "PREVIEWS FROM EACH SKIN'S OWN NOTES",
+          fontSize: 72,
+          background: "#ff66aa",
+          color: "#1a1317",
+          paddingX: 30,
+          paddingY: 22,
+          rotate: -2,
+          top: 236,
+          left: 70,
+        }),
+
+        sticker({
+          key: "how",
+          text: "browse, download, or publish an .osk",
+          fontSize: 24,
+          background: "#f3ece4",
+          color: "#1a1317",
+          paddingX: 14,
+          paddingY: 10,
+          rotate: 2,
+          top: 404,
+          left: 96,
+        }),
+
+        sticker({
+          key: "brand",
+          text: "Mania Tracker",
+          fontSize: 16,
+          background: "#f3ece4",
+          color: "#1a1317",
+          paddingX: 10,
+          paddingY: 6,
+          rotate: -2,
+          top: 560,
+          left: 74,
+        }),
+      ],
+    ),
+    { width: WIDTH, height: HEIGHT, fonts: ogFontList(regularFont, heavyFont) },
+  );
+  response.headers.set("Cache-Control", OG_CACHE_HEADER);
+  return response;
+}
+
 /* BBCode editor layout: the editor's split view as two cards — a dark
    code pane with highlighted BBCode markup on the left, and a paper
    preview pane showing the rendered result on the right. The two small
@@ -4274,6 +4493,7 @@ export const Route = createFileRoute("/api/og")({
           "maps-search": renderMapsSearchOg,
           "maps-collections": renderMapsCollectionsOg,
           packs: renderPacksOg,
+          skins: renderSkinsOg,
           bbcode: renderBBCodeOg,
           discord: renderDiscordOg,
         };

@@ -15,6 +15,7 @@ type PresetKind =
   | "maps-collections"
   | "farm-helper"
   | "packs"
+  | "skins"
   | "bbcode"
   | "discord"
   | "replay";
@@ -26,6 +27,7 @@ const STATIC_KINDS: ReadonlySet<PresetKind> = new Set([
   "maps-collections",
   "farm-helper",
   "packs",
+  "skins",
   "bbcode",
   "discord",
 ]);
@@ -39,6 +41,8 @@ const STATIC_KIND_NOTES: Record<string, string> = {
     "Static farm helper card: reason stickers (missing / improve / old pb) in the app's accent colors, pp-gain tags, grade badges, and the global mania top 50 as the dim avatar backdrop.",
   packs:
     "Static card-packs card: five mini maniacards fanned by rarity tier using the real tier gradients and triangle texture, each with a mystery \"?\" player slot.",
+  skins:
+    "Static skins card: the skins page's falling-note rain frozen mid-fall, built from the real ManiaRain note sprites at mixed depths, with two long notes and colour-matched motion streaks. Page is dev-gated but the card ships ready.",
   bbcode:
     "Static bbcode-editor card: dark code pane with highlighted BBCode markup next to a paper preview pane showing the rendered result.",
   discord:
@@ -136,6 +140,15 @@ const PRESETS: Preset[] = [
     title: "Card Packs",
     subtitle: "Tear open a booster pack of five maniacards: random osu!mania players minted as collectible cards with skill stats and rarity tiers.",
     path: "/packs",
+  },
+  {
+    key: "skins",
+    label: "Skins",
+    kind: "skins",
+    title: "osu!mania skins",
+    subtitle: "Browse and download osu!mania skins with previews rendered from each skin's own notes, or publish a skin from an .osk file.",
+    path: "/skins",
+    noindex: true,
   },
   {
     key: "bbcode",

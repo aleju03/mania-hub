@@ -38,6 +38,7 @@ export const Route = createFileRoute("/skins_/$id")({
         description: "osu!mania skins on Mania Hub.",
         path: `/skins/${match.params.id}`,
         origin: match.context.origin,
+        imageKind: "skins",
         noindex: true,
       });
     }
@@ -47,7 +48,9 @@ export const Route = createFileRoute("/skins_/$id")({
         || `${skin.name}, an osu!mania skin for ${formatKeymodes(skin.keymodes) || "mania"} uploaded by ${skin.ownerUsername}. Download the .osk or browse more skins.`,
       path: `/skins/${skin.slug ?? skin.id}`,
       origin: match.context.origin,
+      // Skins without a rendered preview fall back to the falling-notes card.
       image: skin.previewUrl ?? undefined,
+      imageKind: "skins",
       noindex: true,
     });
   },
