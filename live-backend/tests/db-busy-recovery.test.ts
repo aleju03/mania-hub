@@ -9,7 +9,7 @@ import { join } from "node:path";
 // distinct in the fail-fast test below.
 process.env.SQLITE_BUSY_RETRY_MS = "300";
 process.env.SQLITE_BEST_EFFORT_WRITE_BUDGET_MS = "60";
-const { createDb, exec, getSqliteBusyRetryStats } = await import("../src/db.js");
+const { createDb, exec, execBatch, getSqliteBusyRetryStats } = await import("../src/db.js");
 
 describe("sqlite busy-exhaustion wedged-connection recovery", () => {
   it("reopens a connection pinned to a stale snapshot and retries the write (the 2026-07-18/19 server freeze)", async () => {
@@ -101,6 +101,85 @@ describe("sqlite busy-exhaustion wedged-connection recovery", () => {
       await b.execute("rollback");
       await exec(a, "insert into t (id) values (2)", [], { bestEffort: true });
       expect(Number((await exec(a, "select count(*) as cnt from t")).rows[0]?.cnt)).toBe(1);
+      a.close();
+      b.close();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("reopens a poisoned batch connection before retrying (the 2026-07-25 write-lock stall)", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "mania-live-batchbusy-"));
+    try {
+      const url = `file:${join(dir, "test.db")}`;
+      const a = await createDb({ databaseUrl: url, sqliteBusyTimeoutMs: 10 });
+      const b = await createDb({ databaseUrl: url, sqliteBusyTimeoutMs: 10 });
+      await a.execute("pragma journal_mode = wal");
+      await exec(a, "create table t (id integer primary key, v text)");
+
+      // B holds the write lock while A's batch first fires, then releases —
+      // the retention/checkpoint collision that poisoned prod. On 0.17.3 the
+      // failed batch leaves A inside an invisible open transaction: without
+      // the reopen-before-retry, A's later writes report success but never
+      // commit (and hold the DB-wide write lock), and batch retries fail
+      // forever with "cannot commit transaction - SQL statements in progress".
+      await b.execute("begin immediate");
+      const releaseLock = (async () => {
+        await new Promise((resolve) => setTimeout(resolve, 80));
+        await b.execute("rollback");
+      })();
+
+      const before = getSqliteBusyRetryStats();
+      const batchDone = execBatch(a, [
+        { sql: "insert into t (id, v) values (1, 'a')" },
+        { sql: "insert into t (id, v) values (2, 'b')" },
+      ]);
+      // Interleave a plain write on A while the batch is between retries: on a
+      // poisoned connection it would phantom-succeed and vanish; on the
+      // reopened connection it must end up durable.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      const interleaved = exec(a, "insert into t (id, v) values (3, 'c')");
+      await Promise.all([batchDone, interleaved, releaseLock]);
+
+      const after = getSqliteBusyRetryStats();
+      expect(after.batchBusyReconnects).toBeGreaterThan(before.batchBusyReconnects);
+
+      // Every write is durable as seen from the OTHER connection — the
+      // phantom-write regression guard.
+      const rows = (await b.execute("select count(*) as cnt from t")).rows;
+      expect(Number(rows[0]?.cnt)).toBe(3);
+      // And A leaked no transaction: B can take the write lock immediately.
+      await b.execute("begin immediate");
+      await b.execute("rollback");
+      a.close();
+      b.close();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("a batch that never wins the lock fails within budget and leaves no leaked lock", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "mania-live-batchbusy-"));
+    try {
+      const url = `file:${join(dir, "test.db")}`;
+      const a = await createDb({ databaseUrl: url, sqliteBusyTimeoutMs: 10 });
+      const b = await createDb({ databaseUrl: url, sqliteBusyTimeoutMs: 10 });
+      await a.execute("pragma journal_mode = wal");
+      await exec(a, "create table t (id integer primary key)");
+
+      await b.execute("begin immediate");
+      await expect(execBatch(a, [{ sql: "insert into t (id) values (1)" }]))
+        .rejects.toThrow(/SQLITE_BUSY|database is locked/i);
+      await b.execute("rollback");
+
+      // The failure left A on a fresh connection with nothing leaked. The
+      // plain write goes FIRST: on a still-poisoned handle it would silently
+      // join the leaked transaction and vanish, so its durability (checked
+      // from B below) is the guard for the exhaustion path's reopen.
+      await exec(a, "insert into t (id) values (3)");
+      await execBatch(a, [{ sql: "insert into t (id) values (2)" }]);
+      const rows = (await b.execute("select count(*) as cnt from t")).rows;
+      expect(Number(rows[0]?.cnt)).toBe(2);
       a.close();
       b.close();
     } finally {

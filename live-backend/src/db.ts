@@ -59,6 +59,10 @@ export interface SqliteBusyRetryStats {
   // wait out the durable budget. Tracked separately so it never looks like a
   // wedge (which the operations/attempts/exhausted counters above indicate).
   bestEffortWriteSkips: number;
+  // Connections reopened because a .batch() surfaced SQLITE_BUSY (see
+  // reopenPoisonedBatchConnection). Counted apart from `reconnects` so plain
+  // write contention hitting batches does not spike the write-freeze signal.
+  batchBusyReconnects: number;
 }
 
 const sqliteBusyRetryStats: SqliteBusyRetryStats = {
@@ -74,6 +78,7 @@ const sqliteBusyRetryStats: SqliteBusyRetryStats = {
   lastReconnectAt: null,
   migrationReconnects: 0,
   bestEffortWriteSkips: 0,
+  batchBusyReconnects: 0,
 };
 
 // A local libsql connection can wedge permanently: once it is left inside (or
@@ -87,8 +92,9 @@ const RECONNECT = Symbol("mania.sqliteReconnect");
 const RECONNECT_MIN_INTERVAL_MS = 5_000;
 // Why a connection is being reopened. "wedge" is the stale-snapshot recovery
 // above; "migration" is migrate() discarding a connection that lost the write
-// lock. They are counted and rate-limited differently.
-type ReconnectReason = "wedge" | "migration";
+// lock; "batch" is a .batch() that surfaced SQLITE_BUSY and left the
+// connection poisoned. They are counted and rate-limited differently.
+type ReconnectReason = "wedge" | "migration" | "batch";
 type ReconnectHook = (reason: ReconnectReason) => Promise<boolean>;
 
 export async function createDb(config: Pick<Config, "databaseUrl" | "databaseAuthToken"> & PragmaConfig): Promise<Db> {
@@ -118,8 +124,12 @@ export async function createDb(config: Pick<Config, "databaseUrl" | "databaseAut
     // different animal: it is deliberate, already bounded by the migration's
     // contention budget, and separated from the next one by a whole migration
     // pass — and refusing it would strand migrate() on a connection whose writes
-    // can never commit. So it is never rate-limited.
-    if (reason !== "migration" && now - lastReconnectAtMs < RECONNECT_MIN_INTERVAL_MS) return false;
+    // can never commit. So it is never rate-limited. Neither is a batch-poison
+    // reopen: a connection whose .batch() surfaced SQLITE_BUSY must never carry
+    // another write (later writes silently join its leaked transaction), so
+    // under sustained contention every failed batch attempt needs a fresh
+    // connection — refusing one would force a retry on a poisoned handle.
+    if (reason === "wedge" && now - lastReconnectAtMs < RECONNECT_MIN_INTERVAL_MS) return false;
     lastReconnectAtMs = now;
     const previous = inner;
     inner = await open();
@@ -130,9 +140,12 @@ export async function createDb(config: Pick<Config, "databaseUrl" | "databaseAut
     }
     // Counted apart, so "reconnects" keeps meaning "a long-lived connection went
     // stale" — the write-freeze signal /api/status and /valley watch — instead of
-    // also meaning "a deploy was contended".
+    // also meaning "a deploy was contended" or "a batch lost a write race".
     if (reason === "migration") {
       sqliteBusyRetryStats.migrationReconnects += 1;
+    } else if (reason === "batch") {
+      sqliteBusyRetryStats.batchBusyReconnects += 1;
+      sqliteBusyRetryStats.lastReconnectAt = new Date().toISOString();
     } else {
       sqliteBusyRetryStats.reconnects += 1;
       sqliteBusyRetryStats.lastReconnectAt = new Date().toISOString();
@@ -544,7 +557,7 @@ export async function execBatch(db: Db, statements: DbStatement[], mode: Transac
     const chunk = statements
       .slice(index, index + EXEC_BATCH_MAX_STATEMENTS)
       .map(({ sql, args = [] }) => ({ sql, args }));
-    results.push(...await withSqliteBusyRetry(() => db.batch(chunk, mode), { recoverDb: db }));
+    results.push(...await withSqliteBusyRetry(() => db.batch(chunk, mode), { recoverDb: db, reopenBeforeRetry: true }));
   }
   return results;
 }
@@ -589,11 +602,23 @@ interface BusyRetryOptions {
   // Best-effort writes record a skip counter instead of the wedge stats and
   // never attempt connection recovery.
   bestEffort?: boolean;
+  // Set by execBatch: a SQLITE_BUSY from .batch() poisons the connection (see
+  // reopenPoisonedBatchConnection), so recoverDb is reopened before EVERY
+  // retry instead of only at budget exhaustion. Retrying a batch in place on
+  // the same connection is what held the DB-wide write lock for ~5 minutes on
+  // 2026-07-25.
+  reopenBeforeRetry?: boolean;
 }
 
 async function withSqliteBusyRetry<T>(operation: () => Promise<T>, options: BusyRetryOptions = {}): Promise<T> {
   const { recoverDb, bestEffort = false } = options;
   const budgetMs = options.budgetMs ?? SQLITE_BUSY_RETRY_MS;
+  // Only file-backed connections carry the reconnect hook; a remote (Turso)
+  // client falls back to plain retry-in-place, where the poisoning does not
+  // apply (no shared local handle to leak a transaction on).
+  const reopenBeforeRetry = options.reopenBeforeRetry === true
+    && recoverDb != null
+    && (recoverDb as unknown as Record<symbol, unknown>)[RECONNECT] != null;
   if (budgetMs <= 0) {
     try {
       return await operation();
@@ -617,6 +642,16 @@ async function withSqliteBusyRetry<T>(operation: () => Promise<T>, options: Busy
       const elapsedMs = Date.now() - startedAt;
       operationAttempts += 1;
       if (elapsedMs >= budgetMs) {
+        if (reopenBeforeRetry) {
+          // The budget died on a poisoned batch connection. Reopen before
+          // surfacing the error — the budget is spent either way, but a later
+          // write on this handle must not silently join the leaked
+          // transaction while waiting for the next batch to trip the cure.
+          await reopenPoisonedBatchConnection(recoverDb!, error);
+          if (bestEffort) sqliteBusyRetryStats.bestEffortWriteSkips += 1;
+          else recordSqliteBusyRetry(error, 0, true, operationAttempts);
+          throw error;
+        }
         if (!recoveryAttempted && recoverDb && await tryRecoverWedgedConnection(recoverDb, error)) {
           // The connection was likely wedged on a stale read snapshot (the
           // 2026-07-18/19 server write freezes) — reopening it is the only
@@ -635,10 +670,56 @@ async function withSqliteBusyRetry<T>(operation: () => Promise<T>, options: Busy
       // Best-effort skips are expected and frequent under load; keep them out of
       // the wedge stats (only the final give-up bumps the skip counter).
       if (!bestEffort) recordSqliteBusyRetry(error, waitMs, false, operationAttempts);
+      if (reopenBeforeRetry) {
+        // The busy .batch() has poisoned this connection; it must be reopened
+        // before the retry, or the retry both fails forever and turns later
+        // writes on the connection into silent no-ops that hold the DB-wide
+        // write lock (see reopenPoisonedBatchConnection). A reopen failure is
+        // surfaced as the original busy error: the connection cannot be
+        // trusted with a retry, and callers own their own retry machinery.
+        if (!(await reopenPoisonedBatchConnection(recoverDb!, error))) {
+          if (bestEffort) sqliteBusyRetryStats.bestEffortWriteSkips += 1;
+          else recordSqliteBusyRetry(error, 0, true, operationAttempts);
+          throw error;
+        }
+      }
       await sleep(waitMs);
       delayMs = Math.min(SQLITE_BUSY_RETRY_MAX_DELAY_MS, Math.ceil(delayMs * 1.6));
     }
   }
+}
+
+// Why reopening (not ROLLBACK, not retrying) is the only sound answer to a
+// SQLITE_BUSY surfaced by .batch() — every step verified against
+// @libsql/client 0.17.3 local file connections, and the proven mechanism of
+// the 2026-07-25 prod write stall (osu! rate 0/55 for ~5 minutes), consistent
+// with the 2026-07-18/19 freezes:
+//   - The failed batch leaves its connection inside an invisible open
+//     transaction: the failed statement is never finalized, so the client's
+//     cleanup ROLLBACK is defeated, and sqlite itself then reports "cannot
+//     rollback - no transaction is active" — no probe can see the state
+//     (which is why the wedge recovery's hadOpenTxn forensics stayed false
+//     through the whole incident).
+//   - The next write on the connection silently joins that transaction: it
+//     reports success, is visible only to this connection, takes the DB-wide
+//     WAL write lock, and is discarded when the connection closes. Both
+//     processes' writers then starve while the holder looks perfectly healthy.
+//   - Retrying the batch in place fails forever ("cannot commit transaction -
+//     SQL statements in progress") no matter how free the lock is.
+async function reopenPoisonedBatchConnection(db: Db, cause: unknown): Promise<boolean> {
+  const reconnect = (db as unknown as Record<symbol, unknown>)[RECONNECT] as ReconnectHook | undefined;
+  if (!reconnect) return false;
+  try {
+    if (!(await reconnect("batch"))) return false;
+  } catch (error) {
+    logWarn("sqlite_reconnect_failed", errorContext(error));
+    return false;
+  }
+  logWarn("sqlite_batch_busy_connection_reopened", {
+    detail: "a .batch() surfaced SQLITE_BUSY; the connection is presumed to hold a leaked open transaction and was reopened before the retry",
+    ...errorContext(cause),
+  });
+  return true;
 }
 
 // Busy-exhaustion last resort. First a ROLLBACK probe purely for forensics:
