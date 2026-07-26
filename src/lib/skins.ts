@@ -273,6 +273,9 @@ interface SkinsBackend {
   headers: HeadersInit;
   userId: number;
   username: string;
+  // A true admin, the same flag requireTrueAdminAccess checks. Moderation
+  // paths forward it so an admin can fix up someone else's skin.
+  isAdmin: boolean;
 }
 
 async function resolveSkinsBackend(): Promise<SkinsBackend | null> {
@@ -283,7 +286,7 @@ async function resolveSkinsBackend(): Promise<SkinsBackend | null> {
   if (!base) return null;
   const headers: HeadersInit = { "content-type": "application/json" };
   if (process.env.LIVE_ADMIN_TOKEN) headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
-  return { base, headers, userId: auth.viewer.id, username: auth.viewer.username };
+  return { base, headers, userId: auth.viewer.id, username: auth.viewer.username, isAdmin: auth.isAdmin === true };
 }
 
 export const startSkinUpload = createServerFn({ method: "POST" })
@@ -407,6 +410,85 @@ export const deleteMySkin = createServerFn({ method: "POST" })
       return { ok: false };
     }
   });
+
+// Repoints an already published skin's card cover at another keymode's stored
+// preview. No re-render, no upload: the images all exist, this only says which
+// one fronts the card.
+export const setSkinCoverKeymode = createServerFn({ method: "POST" })
+  .validator((data: { id?: unknown; keys?: unknown }) => {
+    const id = typeof data.id === "string" ? data.id.trim() : "";
+    const keys = Math.round(Number(data.keys));
+    if (!id || id.length > 64 || !Number.isInteger(keys) || keys < 1 || keys > 10) {
+      throw new Error("Invalid cover request.");
+    }
+    return { id, keys };
+  })
+  .handler(async ({ data }): Promise<{ ok: boolean; skin?: SkinSummary }> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const cfg = await resolveSkinsBackend();
+    if (!cfg) return { ok: false };
+    try {
+      const response = await fetch(`${cfg.base}/api/skins/cover`, {
+        method: "POST",
+        headers: cfg.headers,
+        body: JSON.stringify({ userId: cfg.userId, id: data.id, keys: data.keys, asAdmin: cfg.isAdmin }),
+      });
+      const body = (await response.json().catch(() => null)) as { ok?: boolean; skin?: SkinSummary } | null;
+      if (!response.ok || !body?.ok) return { ok: false };
+      return { ok: true, skin: body.skin };
+    } catch {
+      return { ok: false };
+    }
+  });
+
+// Mints an upload ticket against a published skin so its owner can re-render
+// the keymode previews against a different backdrop. The ticket only unlocks
+// preview uploads; the .osk and the screenshots stay as published.
+export const startSkinPreviewEdit = createServerFn({ method: "POST" })
+  .validator((data: { id?: unknown }) => {
+    const id = typeof data.id === "string" ? data.id.trim() : "";
+    if (!id || id.length > 64) throw new Error("Invalid skin id.");
+    return { id };
+  })
+  .handler(async ({ data }): Promise<StartSkinUploadResult> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const cfg = await resolveSkinsBackend();
+    if (!cfg) return { ok: false, error: "not_logged_in" };
+    try {
+      const response = await fetch(`${cfg.base}/api/skins/edit-start`, {
+        method: "POST",
+        headers: cfg.headers,
+        body: JSON.stringify({ userId: cfg.userId, id: data.id, asAdmin: cfg.isAdmin }),
+      });
+      const body = (await response.json().catch(() => null)) as
+        | { ok?: boolean; id?: string; token?: string; expiresAt?: string; error?: string }
+        | null;
+      if (response.ok && body?.ok && body.id && body.token) {
+        return { ok: true, id: body.id, token: body.token, expiresAt: body.expiresAt ?? "" };
+      }
+      if (body?.error === "skin_storage_not_configured") return { ok: false, error: "storage_not_configured" };
+      return { ok: false, error: "unavailable" };
+    } catch {
+      return { ok: false, error: "unavailable" };
+    }
+  });
+
+// Closes an edit ticket and hands back the skin as it now stands. Direct to
+// the backend like finishSkinUpload: the ticket is the credential.
+export async function finishSkinPreviewEdit(id: string, token: string): Promise<SkinSummary> {
+  const base = getLiveBackendUrl();
+  if (!base) throw new SkinUploadError("unavailable", "Server is not configured.");
+  const query = new URLSearchParams({ id, token });
+  const response = await fetch(`${base}/api/skins/edit-finish?${query.toString()}`, { method: "POST", credentials: "omit" });
+  const body = (await response.json().catch(() => null)) as { ok?: boolean; skin?: SkinSummary; error?: string } | null;
+  if (!response.ok || !body?.ok || !body.skin) {
+    const code = body?.error ?? "upload_failed";
+    throw new SkinUploadError(code, uploadErrorMessage(code, response.status), response.status);
+  }
+  return body.skin;
+}
 
 export const moderateSkin = createServerFn({ method: "POST" })
   .validator((data: { id?: unknown; action?: unknown }) => {

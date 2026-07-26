@@ -1,11 +1,12 @@
 import { createFileRoute, Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { ArrowLeft, Download, Trash2 } from "lucide-react";
+import { ArrowLeft, Download, ImageIcon, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ManiaRain } from "../components/home/ManiaRain";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { PageHeader } from "../components/layout/PageHeader";
 import { SKIN_FALLBACK_ACCENT, SkinKeymodeTags } from "../components/skins/SkinCard";
 import { SkinAssetExplorer } from "../components/skins/SkinAssetExplorer";
+import { SkinPreviewEditorModal } from "../components/skins/SkinPreviewEditorModal";
 import { Avatar } from "../components/ui/Avatar";
 import { useAuth } from "../lib/auth-context";
 import { formatTimeAgo } from "../lib/format";
@@ -56,12 +57,18 @@ interface GalleryItem {
 }
 
 function SkinDetailPage() {
-  const skin = Route.useLoaderData() as SkinSummary | null;
+  const loaded = Route.useLoaderData() as SkinSummary | null;
+  // Editing the previews hands back the updated skin; holding it locally shows
+  // the new cover and renders right away, without waiting out the browser
+  // cache on /api/skins/get.
+  const [edited, setEdited] = useState<SkinSummary | null>(null);
+  const skin = edited?.id === loaded?.id ? edited ?? loaded : loaded;
   const params = Route.useParams();
   const auth = useAuth();
   const navigate = useNavigate();
   const historyIndex = useRouterState({ select: (state) => state.location.state.__TSR_index });
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [editingPreviews, setEditingPreviews] = useState(false);
 
   // Stepping back keeps the browse page's filters, page and scroll; only a skin
   // reached from somewhere else takes the plain /skins route.
@@ -310,6 +317,17 @@ function SkinDetailPage() {
                       <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
                         {auth.isAdmin && !isOwner ? "Moderation" : "Your skin"}
                       </span>
+                      {!confirmingDelete && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingPreviews(true)}
+                          disabled={busy}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-osu-b3/50 px-3 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white disabled:opacity-50"
+                        >
+                          <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                          Edit previews
+                        </button>
+                      )}
                       {confirmingDelete ? (
                         <span className="ml-auto flex items-center gap-2 text-[12px]">
                           <span className="text-osu-f1">Delete for good?</span>
@@ -343,6 +361,12 @@ function SkinDetailPage() {
                         </button>
                       )}
                       {actionError && <span className="text-[12px] font-semibold text-osu-red-light">{actionError}</span>}
+                      <SkinPreviewEditorModal
+                        skin={skin}
+                        open={editingPreviews}
+                        onClose={() => setEditingPreviews(false)}
+                        onSaved={setEdited}
+                      />
                     </div>
                   )}
                 </div>

@@ -52,8 +52,8 @@ import {
   writeReplayVideoUpload,
 } from "../replay-video/exports.js";
 import { isReplayVideoStorageConfigured } from "../replay-video/r2.js";
-import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, findPublishedSkinByOskSha256, withoutDownloadCount, finishSkin, getSkin, getSkinByRef, getSkinForUpload, listSkins, recordSkinDownload, setSkinAccent, setSkinHidden, SKIN_MAX_SCREENSHOTS, toSkinSummary, upsertSkinKeymodePreview } from "../features/skins.js";
-import { deleteSkinObjects, getSkinObject, isSkinStorageConfigured, skinKeymodePreviewKey, skinOskKey, skinPreviewKey, skinScreenshotKey, uploadSkinObject } from "../skins/r2.js";
+import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, findPublishedSkinByOskSha256, withoutDownloadCount, finishSkin, finishSkinEdit, getSkin, getSkinByRef, getSkinForPreviewEdit, getSkinForUpload, listSkins, recordSkinDownload, setSkinAccent, setSkinCoverKeymode, setSkinHidden, SKIN_MAX_SCREENSHOTS, startSkinEdit, toSkinSummary, upsertSkinKeymodePreview } from "../features/skins.js";
+import { deleteSkinObjects, getSkinObject, isSkinStorageConfigured, nextSkinPreviewRevision, skinKeymodePreviewKey, skinOskKey, skinPreviewKey, skinScreenshotKey, uploadSkinObject } from "../skins/r2.js";
 import { sniffImage, validateOskBuffer } from "../skins/validate-osk.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
 import { COMPRESSIBLE_MIN_BYTES, prepareJsonResponse, type PreparedJsonResponse } from "./prepared-json.js";
@@ -1559,9 +1559,11 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     sendJson(req, res, ctx, 200, { ok: true, id: result.id, token: result.token, expiresAt: result.expiresAt });
     return true;
   }
-  if (url.pathname === "/api/skins/upload" || url.pathname === "/api/skins/finish") {
+  if (url.pathname === "/api/skins/upload" || url.pathname === "/api/skins/finish" || url.pathname === "/api/skins/edit-finish") {
     // Ticket-authenticated: the token minted by /api/skins/start is the credential, so the
     // browser can POST the 65MB .osk directly here without the Vercel body-size ceiling.
+    // /api/skins/edit-start mints the same kind of ticket against a published skin, which
+    // only unlocks preview re-uploads (see the part guard below).
     if (req.method !== "POST") {
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
       return true;
@@ -1585,12 +1587,32 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 200, { ok: true, skin: withoutDownloadCount(result.skin) });
       return true;
     }
-    const skin = id && token ? await getSkinForUpload(ctx.db, id, token) : null;
+    if (url.pathname === "/api/skins/edit-finish") {
+      const result = await finishSkinEdit(ctx.serveWriteDb ?? ctx.db, id, token);
+      if (!result.ok) {
+        sendJson(req, res, ctx, 403, { ok: false, error: "invalid_ticket" });
+        return true;
+      }
+      logInfo("skin_previews_edited", { id, ownerUserId: result.skin.ownerUserId });
+      sendJson(req, res, ctx, 200, { ok: true, skin: withoutDownloadCount(result.skin) });
+      return true;
+    }
+    const pending = id && token ? await getSkinForUpload(ctx.db, id, token) : null;
+    // A published skin whose owner is re-rendering its previews. The row keeps
+    // its status, so nothing else about it can be touched through this ticket.
+    const editing = pending ? null : (id && token ? await getSkinForPreviewEdit(ctx.db, id, token) : null);
+    const skin = pending ?? editing;
     if (!skin) {
       sendJson(req, res, ctx, 403, { ok: false, error: "invalid_ticket" });
       return true;
     }
     const part = url.searchParams.get("part") ?? "";
+    if (editing && part !== "preview") {
+      // An edit ticket swaps preview renders and nothing else: the .osk and the
+      // screenshots of a published skin stay as uploaded.
+      sendJson(req, res, ctx, 400, { ok: false, error: "invalid_part" });
+      return true;
+    }
     if (part === "osk") {
       const buffer = await readBodyBuffer(req, ctx.config.skinOskMaxBytes);
       const validation = await validateOskBuffer(buffer);
@@ -1647,7 +1669,13 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         const keysParam = Math.round(Number(url.searchParams.get("keys")));
         const keys = Number.isInteger(keysParam) && keysParam >= 1 && keysParam <= 10 ? keysParam : null;
         if (keys != null) {
-          const key = skinKeymodePreviewKey(skin.id, keys, sniffed.ext);
+          // Preview objects are cached immutably, so a re-render has to land on
+          // a new key; the displaced object is deleted once the row points at
+          // the fresh one.
+          const previous = skin.previews.find((preview) => preview.keys === keys) ?? null;
+          const key = previous
+            ? skinKeymodePreviewKey(skin.id, keys, sniffed.ext, nextSkinPreviewRevision(previous.key))
+            : skinKeymodePreviewKey(skin.id, keys, sniffed.ext);
           const uploaded = await uploadSkinObject(ctx.config, key, buffer, sniffed.mime, "inline");
           const isCover = url.searchParams.get("cover") === "1";
           const upserted = await upsertSkinKeymodePreview(
@@ -1660,6 +1688,25 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
             await deleteSkinObjects(ctx.config, [key]).catch(() => {});
             sendJson(req, res, ctx, 400, { ok: false, error: upserted.error });
             return true;
+          }
+          // What the row no longer points at: the displaced render, plus the
+          // standalone cover object of a pre-keymode skin whose card this
+          // render just took over.
+          const stillReferenced = new Set(
+            skin.previews.filter((preview) => preview.keys !== keys).map((preview) => preview.key),
+          );
+          stillReferenced.add(key);
+          // The cover columns follow a re-render of the keymode they point at,
+          // so that key counts as referenced only while it stays the cover.
+          if (!isCover && skin.previewKey && skin.previewKey !== upserted.replaced?.key) {
+            stillReferenced.add(skin.previewKey);
+          }
+          const staleKeys = [upserted.replaced?.key, isCover ? skin.previewKey : null]
+            .filter((candidate): candidate is string => !!candidate && !stillReferenced.has(candidate));
+          if (staleKeys.length > 0) {
+            await deleteSkinObjects(ctx.config, [...new Set(staleKeys)]).catch((error) => {
+              logWarn("skin_preview_stale_cleanup_failed", { id: skin.id, keys, ...errorContext(error) });
+            });
           }
         } else {
           const key = skinPreviewKey(skin.id, sniffed.ext);
@@ -1680,6 +1727,53 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     sendJson(req, res, ctx, 400, { ok: false, error: "invalid_part" });
+    return true;
+  }
+  if (url.pathname === "/api/skins/edit-start" || url.pathname === "/api/skins/cover") {
+    // Admin-token gated like /api/skins/delete: the frontend server fn forwards the
+    // osu!-verified viewer id, and the ownership check below keeps a user off anyone
+    // else's skin. asAdmin is set only by the server fn that verified a true admin.
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    if (url.pathname === "/api/skins/edit-start" && !isSkinStorageConfigured(ctx.config)) {
+      sendJson(req, res, ctx, 503, { error: "skin_storage_not_configured" });
+      return true;
+    }
+    const body = parseJson<{ userId?: unknown; id?: unknown; keys?: unknown; asAdmin?: unknown }>((await readBody(req)) || "{}", {});
+    const userId = Number(body.userId);
+    const id = typeof body.id === "string" ? body.id : "";
+    if (!Number.isInteger(userId) || userId <= 0 || !id) {
+      sendJson(req, res, ctx, 400, { error: "invalid_request" });
+      return true;
+    }
+    const ownerUserId = body.asAdmin === true ? null : userId;
+    if (url.pathname === "/api/skins/cover") {
+      const keys = Math.round(Number(body.keys));
+      if (!Number.isInteger(keys) || keys < 1 || keys > 10) {
+        sendJson(req, res, ctx, 400, { error: "invalid_request" });
+        return true;
+      }
+      const result = await setSkinCoverKeymode(ctx.serveWriteDb ?? ctx.db, id, keys, ownerUserId);
+      if (!result.ok) {
+        sendJson(req, res, ctx, result.error === "forbidden" ? 403 : 404, { ok: false, error: result.error });
+        return true;
+      }
+      logInfo("skin_cover_changed", { id, keys, by: ownerUserId == null ? "admin" : "owner" });
+      sendJson(req, res, ctx, 200, { ok: true, skin: withoutDownloadCount(result.skin) });
+      return true;
+    }
+    const started = await startSkinEdit(ctx.serveWriteDb ?? ctx.db, id, ownerUserId);
+    if (!started.ok) {
+      sendJson(req, res, ctx, started.error === "forbidden" ? 403 : 404, { ok: false, error: started.error });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true, id: started.id, token: started.token, expiresAt: started.expiresAt });
     return true;
   }
   if (url.pathname === "/api/skins/delete") {

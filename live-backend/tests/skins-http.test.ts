@@ -334,6 +334,56 @@ describe("skins HTTP endpoints", () => {
     expect((await call(mockReq("GET", `/api/skins/file/${id}/preview.png`, ADMIN))).status).toBe(200);
   });
 
+  it("re-renders previews and moves the card cover after publishing", async () => {
+    const { id, token } = await startUpload();
+    await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=osk`, await buildOskBuffer()));
+    await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=preview&keys=4&cover=1&w=1280&h=720`, PNG_BYTES));
+    await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=preview&keys=7&w=1280&h=720`, PNG_BYTES));
+    await call(mockReq("POST", `/api/skins/finish?id=${id}&token=${token}`));
+    expect((await call(mockReq("GET", `/api/skins/get?id=${id}`))).body.skin.previewUrl).toContain("preview-4k");
+
+    // Cover only: no image work, and only the owner (or an admin) may ask.
+    expect((await call(bodyReq("POST", "/api/skins/cover", JSON.stringify({ userId: 101, id, keys: 7 })))).status).toBe(401);
+    expect((await call(bodyReq("POST", "/api/skins/cover", JSON.stringify({ userId: 202, id, keys: 7 }), ADMIN))).status).toBe(403);
+    const cover = await call(bodyReq("POST", "/api/skins/cover", JSON.stringify({ userId: 101, id, keys: 7 }), ADMIN));
+    expect(cover.status).toBe(200);
+    expect(cover.body.skin.previewUrl).toContain("preview-7k");
+    expect((await call(bodyReq("POST", "/api/skins/cover", JSON.stringify({ userId: 202, id, keys: 4, asAdmin: true }), ADMIN))).status).toBe(200);
+
+    // Backdrop change: an edit ticket, then a re-uploaded render per keymode.
+    expect((await call(bodyReq("POST", "/api/skins/edit-start", JSON.stringify({ userId: 202, id }), ADMIN))).status).toBe(403);
+    const edit = await call(bodyReq("POST", "/api/skins/edit-start", JSON.stringify({ userId: 101, id }), ADMIN));
+    expect(edit.status).toBe(200);
+    const editId = edit.body.id as string;
+    const editToken = edit.body.token as string;
+    // The skin stays published and downloadable while it is being edited.
+    expect((await call(mockReq("GET", `/api/skins/get?id=${id}`))).body.skin.status).toBe("published");
+
+    // An edit ticket only unlocks previews: the published .osk stays as it is.
+    const swapOsk = await call(bodyReq("POST", `/api/skins/upload?id=${editId}&token=${editToken}&part=osk`, await buildOskBuffer()));
+    expect(swapOsk.status).toBe(400);
+    expect(swapOsk.body).toMatchObject({ error: "invalid_part" });
+
+    vi.mocked(deleteSkinObjects).mockClear();
+    const rerender = await call(bodyReq("POST", `/api/skins/upload?id=${editId}&token=${editToken}&part=preview&keys=4&w=1280&h=720`, PNG_BYTES));
+    expect(rerender.status).toBe(200);
+    // The new render lands on a fresh key (the old one is cached immutably),
+    // the displaced object is deleted, and the cover follows the keymode.
+    const uploadedKey = vi.mocked(uploadSkinObject).mock.calls.at(-1)?.[1] as string;
+    expect(uploadedKey).toBe(`skins/${id}/preview-4k-r1.png`);
+    expect(vi.mocked(deleteSkinObjects).mock.calls.at(-1)?.[1]).toEqual([`skins/${id}/preview-4k.png`]);
+
+    const finished = await call(mockReq("POST", `/api/skins/edit-finish?id=${editId}&token=${editToken}`));
+    expect(finished.status).toBe(200);
+    expect(finished.body.skin.previewUrl).toBe(`https://cdn.test/skins/${id}/preview-4k-r1.png`);
+    expect(finished.body.skin.previews.map((preview: { keys: number }) => preview.keys)).toEqual([4, 7]);
+    expect(finished.body.skin.status).toBe("published");
+
+    // The ticket dies with the edit.
+    expect((await call(mockReq("POST", `/api/skins/edit-finish?id=${editId}&token=${editToken}`))).status).toBe(403);
+    expect((await call(bodyReq("POST", `/api/skins/upload?id=${editId}&token=${editToken}&part=preview&keys=4`, PNG_BYTES))).status).toBe(403);
+  });
+
   it("rejects oversized osk uploads before buffering", async () => {
     const { id, token } = await startUpload();
     const oversized = await call(mockReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=osk`, {

@@ -13,23 +13,27 @@ import {
   deleteSkin,
   findPublishedSkinByOskSha256,
   finishSkin,
+  finishSkinEdit,
   getSkin,
   getSkinByRef,
+  getSkinForPreviewEdit,
   getSkinForUpload,
   listExpiredPendingSkins,
   listSkins,
   setSkinAccent,
+  setSkinCoverKeymode,
   setSkinHidden,
   SKIN_DESCRIPTION_MAX_LENGTH,
   SKIN_MAX_PENDING_PER_USER,
   SKIN_MAX_PER_USER,
   SKIN_MAX_SCREENSHOTS,
+  startSkinEdit,
   toSkinSummary,
   upsertSkinKeymodePreview,
 } from "../src/features/skins.js";
 import { runRetention } from "../src/retention.js";
 import { sniffImage, validateOskBuffer } from "../src/skins/validate-osk.js";
-import { oskFilename, skinOskKey, skinPreviewKey } from "../src/skins/r2.js";
+import { nextSkinPreviewRevision, oskFilename, skinKeymodePreviewKey, skinOskKey, skinPreviewKey } from "../src/skins/r2.js";
 import { slugifySkinName } from "../src/skins/slug.js";
 
 let dir = "";
@@ -317,7 +321,7 @@ describe("skins feature", () => {
         width: 1280,
         height: 720,
       }, cover);
-      expect(upserted).toEqual({ ok: true });
+      expect(upserted.ok).toBe(true);
     }
     const row = await getSkin(db, created.id);
     expect(row?.previews.map((preview) => preview.keys)).toEqual([4, 7]);
@@ -664,5 +668,110 @@ describe("skin storage keys", () => {
     expect(oskFilename("My Cool Skin v2.osk")).toBe("My Cool Skin v2.osk");
     expect(skinOskKey("abc-123", "x/y")).toBe("skins/abc-123/y.osk");
     expect(skinPreviewKey("abc-123", "svg")).toBe("skins/abc-123/preview.png");
+  });
+
+  it("moves a re-rendered preview onto a new key so caches cannot serve the old image", () => {
+    const first = skinKeymodePreviewKey("abc-123", 4, "webp");
+    expect(first).toBe("skins/abc-123/preview-4k.webp");
+    const second = skinKeymodePreviewKey("abc-123", 4, "webp", nextSkinPreviewRevision(first));
+    expect(second).toBe("skins/abc-123/preview-4k-r1.webp");
+    const third = skinKeymodePreviewKey("abc-123", 4, "webp", nextSkinPreviewRevision(second));
+    expect(third).toBe("skins/abc-123/preview-4k-r2.webp");
+    // An unreadable or missing previous key still moves off the original name.
+    expect(nextSkinPreviewRevision(null)).toBe(1);
+    expect(nextSkinPreviewRevision("skins/abc-123/preview.webp")).toBe(1);
+  });
+});
+
+describe("editing a published skin's previews", () => {
+  async function previewedSkin(): Promise<string> {
+    const id = await createPublishedSkin({ ...OWNER, keymodes: [4, 7] });
+    for (const keys of [4, 7]) {
+      await upsertSkinKeymodePreview(db, id, {
+        keys,
+        key: `skins/${id}/preview-${keys}k.webp`,
+        url: `https://cdn.example/skins/${id}/preview-${keys}k.webp`,
+        width: 1280,
+        height: 720,
+      }, keys === 4);
+    }
+    return id;
+  }
+
+  it("repoints the card cover at another keymode's stored preview", async () => {
+    const id = await previewedSkin();
+    expect((await getSkin(db, id))?.previewUrl).toContain("preview-4k");
+
+    const moved = await setSkinCoverKeymode(db, id, 7, OWNER.ownerUserId);
+    expect(moved.ok).toBe(true);
+    if (moved.ok) expect(moved.skin.previewUrl).toContain("preview-7k");
+
+    // Keymodes the skin has no render for, and other people's skins, are out.
+    expect(await setSkinCoverKeymode(db, id, 5, OWNER.ownerUserId)).toEqual({ ok: false, error: "no_preview" });
+    expect(await setSkinCoverKeymode(db, id, 4, OWNER.ownerUserId + 1)).toEqual({ ok: false, error: "forbidden" });
+    // The admin path skips the ownership check.
+    expect((await setSkinCoverKeymode(db, id, 4, null)).ok).toBe(true);
+  });
+
+  it("mints an edit ticket that leaves the skin published", async () => {
+    const id = await previewedSkin();
+    const started = await startSkinEdit(db, id, OWNER.ownerUserId);
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+
+    const row = await getSkin(db, id);
+    expect(row?.status).toBe("published");
+    expect(row?.publishedAt).not.toBeNull();
+    // An edit ticket is not a publish ticket: the upload flow refuses it.
+    expect(await getSkinForUpload(db, id, started.token)).toBeNull();
+    expect((await getSkinForPreviewEdit(db, id, started.token))?.id).toBe(id);
+    expect(await getSkinForPreviewEdit(db, id, "wrong-token-of-same-length!")).toBeNull();
+
+    const finished = await finishSkinEdit(db, id, started.token);
+    expect(finished.ok).toBe(true);
+    expect((await getSkin(db, id))?.uploadToken).toBeNull();
+    // A spent ticket cannot be replayed.
+    expect(await getSkinForPreviewEdit(db, id, started.token)).toBeNull();
+  });
+
+  it("refuses an edit ticket for someone else's skin, and expires like an upload ticket", async () => {
+    const id = await previewedSkin();
+    expect(await startSkinEdit(db, id, OWNER.ownerUserId + 1)).toEqual({ ok: false, error: "forbidden" });
+
+    const started = await startSkinEdit(db, id, null);
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+    await exec(db, "update skins set token_expires_at = ? where id = ?", [new Date(Date.now() - 1000).toISOString(), id]);
+    expect(await getSkinForPreviewEdit(db, id, started.token)).toBeNull();
+  });
+
+  it("keeps the cover on a keymode that is re-rendered, and reports the displaced object", async () => {
+    const id = await previewedSkin();
+    const replacement = {
+      keys: 4,
+      key: `skins/${id}/preview-4k-r1.webp`,
+      url: `https://cdn.example/skins/${id}/preview-4k-r1.webp`,
+      width: 1280,
+      height: 720,
+    };
+    // isCover false: the cover was already this keymode, so it has to follow
+    // the new object rather than point at the one about to be deleted.
+    const upserted = await upsertSkinKeymodePreview(db, id, replacement, false);
+    expect(upserted).toEqual({ ok: true, replaced: expect.objectContaining({ key: `skins/${id}/preview-4k.webp` }) });
+
+    const row = await getSkin(db, id);
+    expect(row?.previewUrl).toBe(replacement.url);
+    expect(row?.previewKey).toBe(replacement.key);
+    expect(row?.previews.map((preview) => preview.key)).toEqual([replacement.key, `skins/${id}/preview-7k.webp`]);
+  });
+
+  it("leaves a published skin carrying a stale edit ticket alone at retention time", async () => {
+    const id = await previewedSkin();
+    expect((await startSkinEdit(db, id, OWNER.ownerUserId)).ok).toBe(true);
+    // An edit abandoned two days ago: the ticket is long expired, but the row
+    // is a published skin, and retention only sweeps pending ones.
+    await exec(db, "update skins set token_expires_at = ? where id = ?", [new Date(Date.now() - 48 * 3600_000).toISOString(), id]);
+
+    expect(await listExpiredPendingSkins(db, new Date().toISOString())).toEqual([]);
   });
 });

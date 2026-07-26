@@ -237,7 +237,11 @@ export async function setSkinAccent(db: Db, id: string, accentColor: string): Pr
   );
 }
 
-export type UpsertPreviewResult = { ok: true } | { ok: false; error: "preview_limit" | "not_found" };
+export type UpsertPreviewResult =
+  // The entry this one displaced, when there was one: its stored object is now
+  // unreferenced, so the caller deletes it from R2.
+  | { ok: true; replaced: SkinKeymodePreview | null }
+  | { ok: false; error: "preview_limit" | "not_found" };
 
 // One playfield preview per keymode; re-uploading the same keymode replaces
 // its entry. When isCover is set the entry also becomes the card cover.
@@ -249,6 +253,7 @@ export async function upsertSkinKeymodePreview(
 ): Promise<UpsertPreviewResult> {
   const row = await getSkin(db, id);
   if (!row) return { ok: false, error: "not_found" };
+  const replaced = row.previews.find((preview) => preview.keys === entry.keys) ?? null;
   const next = [...row.previews.filter((preview) => preview.keys !== entry.keys), entry]
     .sort((a, b) => a.keys - b.keys);
   if (next.length > 10) return { ok: false, error: "preview_limit" };
@@ -257,8 +262,80 @@ export async function upsertSkinKeymodePreview(
     "update skins set previews_json = ?, updated_at = ? where id = ?",
     [JSON.stringify(next), nowIso(), id],
   );
-  if (isCover) await attachSkinPreview(db, id, entry);
-  return { ok: true };
+  // A re-render of the keymode that already fronts the card keeps fronting it:
+  // the cover columns point at the object being replaced, so they have to move
+  // with it or the card would show a key that is about to be deleted.
+  if (isCover || (replaced && row.previewKey === replaced.key)) await attachSkinPreview(db, id, entry);
+  return { ok: true, replaced };
+}
+
+export type SetSkinCoverResult =
+  | { ok: true; skin: SkinSummary }
+  | { ok: false; error: "not_found" | "forbidden" | "no_preview" };
+
+// Repoints the card cover at an already-rendered keymode preview. No image
+// work: the previews are all stored, this only picks which one fronts the
+// skin. ownerUserId null is the admin path, which skips the ownership check.
+export async function setSkinCoverKeymode(
+  db: Db,
+  id: string,
+  keys: number,
+  ownerUserId: number | null,
+): Promise<SetSkinCoverResult> {
+  const row = await getSkin(db, id);
+  if (!row || row.status === "pending") return { ok: false, error: "not_found" };
+  if (ownerUserId != null && row.ownerUserId !== ownerUserId) return { ok: false, error: "forbidden" };
+  const entry = row.previews.find((preview) => preview.keys === keys);
+  if (!entry) return { ok: false, error: "no_preview" };
+  await attachSkinPreview(db, id, entry);
+  const updated = await getSkin(db, id);
+  return updated ? { ok: true, skin: toSkinSummary(updated) } : { ok: false, error: "not_found" };
+}
+
+export type StartSkinEditResult =
+  | { ok: true; id: string; token: string; expiresAt: string }
+  | { ok: false; error: "not_found" | "forbidden" };
+
+// Mints an upload ticket against an already published skin so its owner can
+// re-render the keymode previews (a different backdrop, say) without
+// republishing. Same token column as the publish flow, but the row keeps its
+// status, so retention - which only sweeps pending rows - leaves it alone.
+export async function startSkinEdit(db: Db, id: string, ownerUserId: number | null): Promise<StartSkinEditResult> {
+  const row = await getSkin(db, id);
+  if (!row || row.status === "pending") return { ok: false, error: "not_found" };
+  if (ownerUserId != null && row.ownerUserId !== ownerUserId) return { ok: false, error: "forbidden" };
+  const token = crypto.randomBytes(24).toString("base64url");
+  const expiresAt = new Date(Date.now() + SKIN_TOKEN_TTL_MS).toISOString();
+  await exec(
+    db,
+    "update skins set upload_token = ?, token_expires_at = ?, updated_at = ? where id = ?",
+    [token, expiresAt, nowIso(), id],
+  );
+  return { ok: true, id, token, expiresAt };
+}
+
+// The edit-ticket counterpart of getSkinForUpload: published (or hidden) rows
+// only, so an edit ticket can never be mistaken for a publish ticket.
+export async function getSkinForPreviewEdit(db: Db, id: string, token: string): Promise<SkinRow | null> {
+  const row = await getSkin(db, id);
+  if (!row || row.status === "pending" || !row.uploadToken || !row.tokenExpiresAt) return null;
+  if (!tokenMatches(row.uploadToken, token)) return null;
+  if (row.tokenExpiresAt <= new Date().toISOString()) return null;
+  return row;
+}
+
+export type FinishSkinEditResult = { ok: true; skin: SkinSummary } | { ok: false; error: "not_found" };
+
+export async function finishSkinEdit(db: Db, id: string, token: string): Promise<FinishSkinEditResult> {
+  const row = await getSkinForPreviewEdit(db, id, token);
+  if (!row) return { ok: false, error: "not_found" };
+  await exec(
+    db,
+    "update skins set upload_token = null, token_expires_at = null, updated_at = ? where id = ?",
+    [nowIso(), id],
+  );
+  const updated = await getSkin(db, id);
+  return updated ? { ok: true, skin: toSkinSummary(updated) } : { ok: false, error: "not_found" };
 }
 
 export type AppendScreenshotResult =

@@ -39,8 +39,22 @@ export function skinPreviewKey(id: string, ext: string): string {
   return `${SKINS_PREFIX}${safeId(id)}/preview.${safeExt(ext)}`;
 }
 
-export function skinKeymodePreviewKey(id: string, keys: number, ext: string): string {
-  return `${SKINS_PREFIX}${safeId(id)}/preview-${Math.max(1, Math.min(10, Math.floor(keys)))}k.${safeExt(ext)}`;
+// Preview objects are written with an immutable cache-control, so a re-render
+// of an already published keymode must land on a new key or every browser and
+// edge cache keeps serving the old image. Revision 0 is the shape the upload
+// flow has always written ("preview-4k.webp"); later revisions carry a suffix.
+export function skinKeymodePreviewKey(id: string, keys: number, ext: string, revision = 0): string {
+  const lane = Math.max(1, Math.min(10, Math.floor(keys)));
+  const suffix = revision > 0 ? `-r${Math.floor(revision)}` : "";
+  return `${SKINS_PREFIX}${safeId(id)}/preview-${lane}k${suffix}.${safeExt(ext)}`;
+}
+
+// The revision to write next given the key currently on the row. Unknown or
+// missing keys start at 1, so an edit never reuses the original key.
+export function nextSkinPreviewRevision(previousKey: string | null | undefined): number {
+  const match = /-r(\d+)\.[a-z]+$/.exec(previousKey ?? "");
+  const current = match ? Number(match[1]) : 0;
+  return Number.isFinite(current) && current > 0 ? current + 1 : 1;
 }
 
 export function skinScreenshotKey(id: string, index: number, ext: string): string {
