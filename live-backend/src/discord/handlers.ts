@@ -10,7 +10,7 @@ import { getTopPlaysSnapshot } from "../features/top-plays.js";
 import { getFarmHelperSnapshot, FarmHelperUserNotFoundError, type FarmHelperKeyMode } from "../features/farm-helper.js";
 import { readFarmHelperKeyStatsForUsers, type FarmHelperKeyStat } from "../features/farm-helper-key-stats.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
-import { getMapsRandomDraw, getMapsSnapshot, mapsRandomDrawQuery } from "../features/maps.js";
+import { getGlobalMapsRandomFarmedMap, getMapsPageSnapshot, getMapsRandomDraw, getMapsSnapshot, mapsRandomDrawQuery } from "../features/maps.js";
 import { getTrackerSnapshot } from "../features/tracker.js";
 import { getPlayerActivitySnapshot } from "../features/activity.js";
 import { listUserGoalsWithProgress } from "../features/goals.js";
@@ -628,17 +628,24 @@ const mapsHandler: CommandHandler = async (deps, interaction) => {
   const page = pageOf(interaction);
   const pageSize = 10;
   try {
-    const snapshot = await getMapsSnapshot(deps.db, deps.queue, country, MAPS_MAX_AGE_MS, "core");
+    const snapshot = await getMapsPageSnapshot(deps.db, deps.queue, country, MAPS_MAX_AGE_MS, {
+      tab,
+      page: page - 1,
+      pageSize,
+      key: keysRaw === "4k" ? "4k" : keysRaw === "7k" ? "7k" : "all",
+      beatmapSort: "players",
+      farmedSort: "players",
+      dir: "desc",
+      status: "all",
+      pp: 0,
+      mod: "all",
+      q: "",
+    });
     const data = snapshot.value;
     if (!data) return noticeBody(`Maps for ${countryLabel(country)} are still generating, try again shortly.`);
-    const keyMatch = (cs: number): boolean =>
-      keysRaw === "4k" ? Math.round(cs) === 4 : keysRaw === "7k" ? Math.round(cs) === 7 : true;
-    const farmedAll = data.farmed.filter((m) => keyMatch(m.cs));
-    const popularAll = data.mostPlayed;
-    const total = tab === "popular" ? popularAll.length : farmedAll.length;
-    const farmedSlice = farmedAll.slice((page - 1) * pageSize, page * pageSize);
-    const popularSlice = popularAll.slice((page - 1) * pageSize, page * pageSize);
-    const hasNext = page * pageSize < total;
+    const farmedSlice = tab === "farmed" ? data.items as Parameters<typeof mapsListEmbed>[0]["farmed"] : [];
+    const popularSlice = tab === "popular" ? data.items as Parameters<typeof mapsListEmbed>[0]["popular"] : [];
+    const hasNext = page * pageSize < data.total;
     const body = mapsListEmbed({
       farmed: farmedSlice,
       popular: popularSlice,
@@ -836,21 +843,32 @@ const randomFarmHandler: CommandHandler = async (deps, interaction) => {
   const starsMax = numberOption(interaction, "stars_max");
   const minPp = numberOption(interaction, "min_pp");
   try {
-    const snapshot = await getMapsSnapshot(deps.db, deps.queue, country, MAPS_MAX_AGE_MS, "core");
-    const data = snapshot.value;
-    if (!data) return noticeBody(`Maps for ${countryLabel(country)} are still generating, try again shortly.`);
-    const pool = data.farmed.filter((m) => {
-      if (keysRaw === "4k" && Math.round(m.cs) !== 4) return false;
-      if (keysRaw === "7k" && Math.round(m.cs) !== 7) return false;
-      if (status && statusBucket(m.status) !== status) return false;
-      if (starsMin != null && (m.difficultyRating ?? 0) < starsMin) return false;
-      if (starsMax != null && (m.difficultyRating ?? Number.MAX_VALUE) > starsMax) return false;
-      if (minPp != null && (m.maxPp ?? 0) < minPp) return false;
-      return true;
-    });
-    if (pool.length === 0) return noticeBody(randomEmptyNotice(country));
-    // "Popular" bias: a map farmed by more players is likelier to surface.
-    const pick = weightedPick(pool, (m) => Math.max(1, m.playerCount));
+    let pick;
+    if (isGlobalCountry(country)) {
+      pick = await getGlobalMapsRandomFarmedMap(deps.db, {
+        key: keysRaw === "4k" ? "4k" : keysRaw === "7k" ? "7k" : "all",
+        status: status === "ranked" || status === "loved" || status === "graveyard" ? status : status ? "other" : "all",
+        starsMin: starsMin ?? null,
+        starsMax: starsMax ?? null,
+        minPp: minPp ?? 0,
+      });
+    } else {
+      const snapshot = await getMapsSnapshot(deps.db, deps.queue, country, MAPS_MAX_AGE_MS, "core");
+      const data = snapshot.value;
+      if (!data) return noticeBody(`Maps for ${countryLabel(country)} are still generating, try again shortly.`);
+      const pool = data.farmed.filter((m) => {
+        if (keysRaw === "4k" && Math.round(m.cs) !== 4) return false;
+        if (keysRaw === "7k" && Math.round(m.cs) !== 7) return false;
+        if (status && statusBucket(m.status) !== status) return false;
+        if (starsMin != null && (m.difficultyRating ?? 0) < starsMin) return false;
+        if (starsMax != null && (m.difficultyRating ?? Number.MAX_VALUE) > starsMax) return false;
+        if (minPp != null && (m.maxPp ?? 0) < minPp) return false;
+        return true;
+      });
+      // "Popular" bias: a map farmed by more players is likelier to surface.
+      pick = pool.length > 0 ? weightedPick(pool, (m) => Math.max(1, m.playerCount)) : null;
+    }
+    if (!pick) return noticeBody(randomEmptyNotice(country));
     const params = {
       country, keys: keysRaw ?? "", status: status ?? "",
       stars_min: numStr(starsMin), stars_max: numStr(starsMax), min_pp: numStr(minPp),

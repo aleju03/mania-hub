@@ -23,7 +23,7 @@ import { decoratePlayerSkillBreakdown } from "../features/skill-baseline.js";
 import { FARM_HELPER_DEFAULT_LIMIT, FARM_HELPER_MAX_LIMIT, FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperNeighbors, getFarmHelperSnapshot, type FarmHelperKeyMode, type FarmHelperView } from "../features/farm-helper.js";
 import type { ScoreSpeedBucket } from "../shared/score.js";
 import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalRankingsSnapshot, type GlobalRankingsSort } from "../features/global-rankings.js";
-import { enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRandomDraw, getMapsRefreshProgress, getMapsSnapshot, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, MAPS_RANDOM_DRAW_DEFAULT_COUNT, MAPS_RANDOM_DRAW_EXCLUDE_SETS_MAX, MAPS_RANDOM_DRAW_EXCLUDE_USERS_MAX, MAPS_RANDOM_DRAW_HIDE_USERS_MAX, MAPS_RANDOM_DRAW_MAX_COUNT, MAPS_RANDOM_DRAW_STAR_MAX, MAPS_RANDOM_KEY_BUCKETS, MAPS_RANDOM_PATTERN_NAMES, MAPS_RANDOM_STATUS_BUCKETS, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery, type MapsRandomDrawQuery } from "../features/maps.js";
+import { enqueueGlobalMapsRefresh, enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRandomDraw, getMapsRefreshProgress, getMapsSnapshot, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, MAPS_RANDOM_DRAW_DEFAULT_COUNT, MAPS_RANDOM_DRAW_EXCLUDE_SETS_MAX, MAPS_RANDOM_DRAW_EXCLUDE_USERS_MAX, MAPS_RANDOM_DRAW_HIDE_USERS_MAX, MAPS_RANDOM_DRAW_MAX_COUNT, MAPS_RANDOM_DRAW_STAR_MAX, MAPS_RANDOM_KEY_BUCKETS, MAPS_RANDOM_PATTERN_NAMES, MAPS_RANDOM_STATUS_BUCKETS, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery, type MapsRandomDrawQuery } from "../features/maps.js";
 import { getMapSearchPage, getMapSearchSetEntry, MAP_SEARCH_PATTERNS, MAP_SEARCH_SUB_PATTERNS, type MapSearchQuery, type MapSearchSort } from "../features/map-search.js";
 import { getMapCollection, getMapCollections, getMapCollectionsRotation, rebuildMapCollections } from "../features/map-collections.js";
 import { getPackWallet, listPackCollectionCards, listPackCollectionOwnedUserIds, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
@@ -1850,7 +1850,11 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 400, { error: "global_is_not_country" });
       return true;
     }
-    sendJson(req, res, ctx, 200, { ok: true, country, deleted: await deleteCountryData(ctx.serveWriteDb ?? ctx.db, country) });
+    const writeDb = ctx.serveWriteDb ?? ctx.db;
+    const writeQueue = ctx.serveWriteQueue ?? ctx.queue;
+    const deleted = await deleteCountryData(writeDb, country);
+    await enqueueGlobalMapsRefresh(writeQueue, { priority: 90, replaceDone: true });
+    sendJson(req, res, ctx, 200, { ok: true, country, deleted });
     return true;
   }
   if (url.pathname === "/api/admin/refresh-maps") {
@@ -2395,15 +2399,14 @@ export function warmStatusBodyCache(ctx: HttpContext): void {
   void statusBody(ctx, {}).catch(() => undefined);
 }
 
-// The first pp/mod-filtered GLOBAL farmed request after a restart pays the
-// full multi-second global board build (maps.ts keeps the board cached per
-// snapshot generation after that). Build it in the background shortly after
+// The first GLOBAL farmed request after a restart packs the durable player
+// projection (maps.ts patches later revisions by beatmap). Build it shortly after
 // boot so a user never fronts that cost. Runs on the maps snapshot thread; if
 // the thread is unavailable (memory DB, MAPS_SNAPSHOT_THREAD=0, vitest) this
 // deliberately does nothing rather than stall the main event loop.
 //
-// The build is a pure read (it never takes the write lock), but it pegs a core
-// for ~32s, streams ~200MB and grows a ~700MB heap, so landing it on top of a
+// The build is a pure read (it never takes the write lock), but packing a
+// production-sized player corpus still pegs a core, so landing it on top of a
 // deploy's schema migration on a 2-vCPU / 3.7GB box starves the writer of CPU
 // and page cache. No constant can separate the two: migrate() may now spend up
 // to SQLITE_MIGRATION_TOTAL_BUSY_WAIT_MS purely waiting out a concurrent writer,

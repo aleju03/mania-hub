@@ -152,6 +152,15 @@ export async function deleteCountryData(db: Db, country: string): Promise<Record
   await deleteFrom("country_maps_farmed_scores");
   await deleteFrom("country_maps_most_played");
   await deleteFrom("country_maps_favourite_sets");
+  if ((deleted.country_maps_snapshots ?? 0) > 0 || (deleted.country_maps_farmed_scores ?? 0) > 0) {
+    deleted.global_maps_farmed_projection_invalidated = Number((await exec(
+      db,
+      `update global_maps_farmed_state
+       set initialized = 0, updated_at = ?
+       where singleton = 1`,
+      [nowIso()],
+    )).rowsAffected ?? 0);
+  }
   await deleteFrom("player_activity_score_refs");
   await deleteFrom("player_activity_days");
   await deleteFrom("player_activity_maps");

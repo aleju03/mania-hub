@@ -277,6 +277,52 @@ create table if not exists country_maps_farmed_scores (
   primary key (country, user_id, beatmap_id)
 );
 
+-- GLOBAL's farmed board is derived from every non-GLOBAL country row, but is
+-- stored at the same (beatmap, player) granularity as its source.  The old
+-- country_maps_snapshots GLOBAL blob remains the compatibility/readiness row;
+-- live farmed pages read this projection so one changed player never requires
+-- re-folding and re-serialising the entire world.
+create table if not exists global_maps_farmed_scores (
+  beatmap_id integer not null,
+  user_id integer not null,
+  pp real not null,
+  mods_json text,
+  speed_mod text,
+  score_url text,
+  played_at text,
+  detected_at text not null,
+  source_country text not null,
+  source_updated_at text not null,
+  primary key (beatmap_id, user_id)
+);
+
+create table if not exists global_maps_farmed_aggregates (
+  beatmap_id integer primary key,
+  player_count integer not null,
+  pp_sum real not null,
+  avg_pp real not null,
+  max_pp real not null,
+  dominant_mod text,
+  revision integer not null,
+  updated_at text not null
+);
+
+-- One latest change per beatmap is enough for a serving process to patch its
+-- packed in-memory board after a worker-process write.  This table is bounded
+-- by the number of farmed beatmaps rather than by the number of updates.
+create table if not exists global_maps_farmed_changes (
+  beatmap_id integer primary key,
+  revision integer not null,
+  updated_at text not null
+);
+
+create table if not exists global_maps_farmed_state (
+  singleton integer primary key check (singleton = 1),
+  initialized integer not null default 0,
+  revision integer not null default 0,
+  updated_at text not null
+);
+
 create table if not exists country_maps_most_played (
   country text not null,
   user_id integer not null,
@@ -492,6 +538,9 @@ create index if not exists idx_country_maps_farmed_scores_country_updated on cou
 create index if not exists idx_country_maps_farmed_scores_country_beatmap on country_maps_farmed_scores(country, beatmap_id);
 create index if not exists idx_country_maps_farmed_scores_user on country_maps_farmed_scores(user_id, beatmap_id, pp);
 create index if not exists idx_country_maps_farmed_scores_beatmap_user on country_maps_farmed_scores(beatmap_id, user_id, pp desc);
+create index if not exists idx_global_maps_farmed_scores_beatmap_pp on global_maps_farmed_scores(beatmap_id, pp desc, user_id);
+create index if not exists idx_global_maps_farmed_aggregates_players on global_maps_farmed_aggregates(player_count desc, avg_pp desc, beatmap_id);
+create index if not exists idx_global_maps_farmed_changes_revision on global_maps_farmed_changes(revision, beatmap_id);
 create index if not exists idx_country_maps_most_played_country_beatmap on country_maps_most_played(country, beatmap_id);
 create index if not exists idx_country_maps_favourite_sets_country_set on country_maps_favourite_sets(country, beatmapset_id);
 -- Beatmap(set)-first covering indexes for the per-map player boards: the GLOBAL

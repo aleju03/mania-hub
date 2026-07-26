@@ -10,7 +10,7 @@ import { computeDanEstimateJob } from "./features/dan-estimates.js";
 import { reconcileStatGoalsForCountry } from "./features/goals.js";
 import { runMapSearchIndexBuildJob } from "./features/map-search.js";
 import { rebuildMapCollections } from "./features/map-collections.js";
-import { MapsEmptyResultError, MapsRosterNotReadyError, enqueueGlobalMapsRefresh, globalMapsFarmedRefreshRunAfter, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores } from "./features/maps.js";
+import { MapsEmptyResultError, MapsRosterNotReadyError, enqueueGlobalMapsRefresh, globalMapsRefreshRunAfter, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores } from "./features/maps.js";
 import { REFRESH_QUALIFIED_MAPS_JOB, runQualifiedMapsWatch } from "./features/qualified-maps-watch.js";
 import { RECONCILE_SETTLED_SETS_JOB, runSettledSetsReconcile } from "./features/settled-sets-reconcile.js";
 import { recordSnipeScoreHistory, updateSnipeProjection } from "./features/snipes.js";
@@ -437,7 +437,6 @@ export class WorkerRunner {
       const farmedStartedAt = Date.now();
       const result = await refreshUserMapsFarmedScores(this.db, this.osu, this.queue, job.payload as { userId: number; country: string });
       logInfo("refresh_user_maps_farmed_scores_done", { user_id: result.userId, country: result.country, score_count: result.scoreCount, duration_ms: Date.now() - farmedStartedAt });
-      await enqueueGlobalMapsRefresh(this.queue, { priority: 15, replaceDone: true, runAfter: globalMapsFarmedRefreshRunAfter() });
       await this.events.append(
         "maps_farmed_update",
         result.country,
@@ -469,13 +468,21 @@ export class WorkerRunner {
     }
     if (job.type === "refresh_country_maps") {
       await refreshCountryMaps(this.db, this.osu, this.queue, job.payload as { country: string });
-      await enqueueGlobalMapsRefresh(this.queue, { priority: 15, replaceDone: true });
+      // Popular/favourite/random still use the compatibility GLOBAL snapshot,
+      // but repeated country refreshes coalesce into one quiet-period rebuild.
+      // Farmed data is already current in its row-granular projection.
+      await enqueueGlobalMapsRefresh(this.queue, {
+        priority: 15,
+        replaceDone: true,
+        runAfter: globalMapsRefreshRunAfter(),
+        debounce: true,
+      });
       return;
     }
     if (job.type === "refresh_global_maps") {
-      // The GLOBAL rollup is the single largest memory transient this service
-      // has, and the ceilings it drives are worth reading off a live metric
-      // rather than a number someone once wrote down. Sample here rather than
+      // Keep the historical peak metric while the row-projection rollout so a
+      // live run proves the old farmed fold/serialization transient is gone.
+      // Sample here rather than
       // around handleWithWatchdog: the watchdog rejects while the handler keeps
       // running detached, so a wrapper outside it would stop the sampler early
       // and under-report the peak of the run that actually mattered.
@@ -909,8 +916,7 @@ export class WorkerRunner {
 // Parking it a day out fixes that without pretending the refresh succeeded: a
 // completed job would drop out of hasActiveMapsRefresh and let every page view
 // re-enqueue the refresh, and every successful refresh_country_maps enqueues a
-// refresh_global_maps behind it — the most expensive transient this service
-// has. A parked job still counts as active (failed or queued with a future
+// refresh_global_maps behind it. A parked job still counts as active (failed or queued with a future
 // run_after), so nothing re-enqueues; activeDepth ignores future run_after, so
 // the reserved lane frees up immediately; and an admin refresh still pulls it
 // forward because enqueue() merges run_after with min().

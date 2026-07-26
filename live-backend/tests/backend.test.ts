@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { createDb, exec, migrate } from "../src/db.js";
 import { getSnipesSnapshot, updateSnipeProjection } from "../src/features/snipes.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../src/features/activity.js";
-import { enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, globalMapsFarmedRefreshRunAfter, recordMapsFarmedScore, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores, waitForGlobalFarmedBoardBuild, type MapsPageQuery } from "../src/features/maps.js";
+import { enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, recordMapsFarmedScore, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores, waitForGlobalFarmedBoardBuild, type MapsPageQuery } from "../src/features/maps.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu } from "../src/features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../src/features/rank-snapshots.js";
@@ -4472,7 +4472,7 @@ describe("live backend", () => {
     expect(Number((await exec(db, "select count(*) as count from jobs where type = 'analyze_beatmap_chart' and dedupe_key like '%:10000'")).rows[0].count)).toBe(0);
   });
 
-  it("queues a global maps rebuild after a player farmed overlay refresh", async () => {
+  it("patches the Global farmed projection without queueing a Global rebuild", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-12T11:00:00.000Z"));
     const { db, queue, events, ingestor } = await setup();
@@ -4486,9 +4486,67 @@ describe("live backend", () => {
     await worker.runOnce();
 
     expect(Number((await exec(db, "select count(*) as count from country_maps_farmed_scores where country = 'CR' and user_id = 101")).rows[0].count)).toBe(1);
-    const job = (await exec(db, "select type, dedupe_key, status, run_after from jobs where type = 'refresh_global_maps'")).rows[0];
-    expect(job).toMatchObject({ type: "refresh_global_maps", dedupe_key: "maps:GLOBAL", status: "queued" });
-    expect(String(job.run_after)).toBe(globalMapsFarmedRefreshRunAfter().toISOString());
+    expect(Number((await exec(db, "select count(*) as count from global_maps_farmed_scores where beatmap_id = 501 and user_id = 101")).rows[0].count)).toBe(1);
+    expect((await exec(db, "select player_count, max_pp from global_maps_farmed_aggregates where beatmap_id = 501")).rows[0]).toMatchObject({
+      player_count: 1,
+      max_pp: 550,
+    });
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_global_maps'")).rows[0].count)).toBe(0);
+
+    // The one-time upgrade backfill can reconstruct the same projection from
+    // normalized rows even when no country snapshot exists yet.
+    await refreshGlobalMaps(db);
+    expect((await exec(db, "select initialized from global_maps_farmed_state where singleton = 1")).rows[0]?.initialized).toBe(1);
+    expect(Number((await exec(db, "select count(*) as count from global_maps_farmed_scores where beatmap_id = 501 and user_id = 101")).rows[0].count)).toBe(1);
+
+    // A farmed-only database deliberately has an empty compatibility blob.
+    // It is still a finished GLOBAL build, not a reason to queue forever.
+    const popular = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, {
+      tab: "popular", page: 0, pageSize: 24, key: "all", beatmapSort: "players", farmedSort: "players", dir: "desc", status: "all", pp: 0, mod: "all", q: "",
+    });
+    expect(popular.value?.items).toEqual([]);
+    expect(popular.refreshQueued).toBe(false);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_global_maps'")).rows[0].count)).toBe(0);
+  });
+
+  it("reconciles only touched maps when a player's top-score window is replaced", async () => {
+    const { db, queue } = await setup();
+    await refreshGlobalMaps(db);
+    const [baseScore] = await fixture<OscScore[]>("scores.json");
+    const score = (beatmapId: number, pp: number): OscScore => ({
+      ...baseScore,
+      id: 90_000 + beatmapId,
+      legacy_score_id: 90_000 + beatmapId,
+      user_id: 101,
+      user: { id: 101, username: "Projection User", avatar_url: "https://a.ppy.sh/101", country_code: "CR" },
+      pp,
+      beatmap_id: beatmapId,
+      beatmap: { ...baseScore.beatmap!, id: beatmapId, beatmapset_id: beatmapId + 10_000, mode: "mania", convert: false, status: "ranked" },
+      beatmapset: { ...baseScore.beatmapset!, id: beatmapId + 10_000, status: "ranked" },
+    });
+    let current = [score(1_001, 600), score(1_002, 550)];
+    const osu = { getUserBestScoresWindow: vi.fn(async () => current) };
+    const query: MapsPageQuery = {
+      tab: "farmed", page: 0, pageSize: 24, key: "all", beatmapSort: "players", farmedSort: "max-pp", dir: "desc", status: "all", pp: 0, mod: "all", q: "",
+    };
+
+    await refreshUserMapsFarmedScores(db, osu, queue, { country: "CR", userId: 101 });
+    const first = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query);
+    expect(first.value?.items.map((item) => (item as { beatmapId: number }).beatmapId)).toEqual([1_001, 1_002]);
+
+    current = [score(1_002, 525), score(1_003, 700)];
+    await refreshUserMapsFarmedScores(db, osu, queue, { country: "CR", userId: 101 });
+
+    const rows = (await exec(
+      db,
+      "select beatmap_id, pp from global_maps_farmed_scores where user_id = 101 order by beatmap_id",
+    )).rows;
+    expect(rows.map((row) => [Number(row.beatmap_id), Number(row.pp)])).toEqual([[1_002, 525], [1_003, 700]]);
+    expect((await exec(db, "select 1 from global_maps_farmed_aggregates where beatmap_id = 1001")).rows).toHaveLength(0);
+
+    const patched = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query);
+    expect(patched.value?.items.map((item) => (item as { beatmapId: number }).beatmapId)).toEqual([1_003, 1_002]);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_global_maps'")).rows[0].count)).toBe(0);
   });
 
   it("treats missing users as a terminal maps farmed refresh", async () => {
@@ -5402,8 +5460,11 @@ describe("live backend", () => {
       mostPlayed: Array<{ playerCount: number; players: unknown[] }>;
       favourites: Array<{ playerCount: number; players: unknown[] }>;
     };
-    expect(payload.farmed[0].playerCount).toBe(90);
-    expect(payload.farmed[0].players).toHaveLength(80);
+    // Farmed players no longer ride in the GLOBAL blob; their row projection
+    // keeps every player and its aggregate separately.
+    expect(payload.farmed).toEqual([]);
+    expect(Number((await exec(db, "select count(*) as count from global_maps_farmed_scores where beatmap_id = 11")).rows[0].count)).toBe(90);
+    expect((await exec(db, "select player_count from global_maps_farmed_aggregates where beatmap_id = 11")).rows[0]?.player_count).toBe(90);
     expect(payload.mostPlayed[0].playerCount).toBe(90);
     expect(payload.mostPlayed[0].players).toHaveLength(80);
     expect(payload.favourites[0].playerCount).toBe(90);
@@ -5418,7 +5479,7 @@ describe("live backend", () => {
     expect(filteredTop.players).toHaveLength(4);
   });
 
-  it("caches the filtered global farmed board per generation and rebuilds it in the background", async () => {
+  it("patches changed beatmaps into the packed Global board without rebuilding its base", async () => {
     const { db, queue } = await setup();
     const now = "2026-05-12T12:10:00.000Z";
     await exec(
@@ -5471,29 +5532,31 @@ describe("live backend", () => {
     const firstTop = first.value?.items[0] as { playerCount: number };
     expect(firstTop.playerCount).toBe(81);
 
-    // New farmed-score rows do not appear until the global snapshot generation
-    // bumps: the merged board is cached per refreshed_at, by design.
+    // The production write point updates the normalized country row and the
+    // one affected GLOBAL player/aggregate row together.
     const scoredAt = "2026-05-12T13:00:00Z";
-    await exec(
-      db,
-      `insert into country_maps_farmed_scores
-         (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at)
-       values ('CR', 999, 11, 42, 650, '{}', '["DT"]', 'https://osu.ppy.sh/scores/6665949113', ?, ?, ?)`,
-      [scoredAt, now, now],
-    );
-    const cached = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query);
-    expect((cached.value?.items[0] as { playerCount: number }).playerCount).toBe(81);
+    const [baseScore] = await fixture<OscScore[]>("scores.json");
+    await recordMapsFarmedScore(db, "CR", {
+      ...baseScore,
+      id: 6_665_949_113,
+      legacy_score_id: 6_665_949_113,
+      user_id: 999,
+      user: { id: 999, username: "Projection Player", avatar_url: "https://a.ppy.sh/999", country_code: "CR" },
+      pp: 650,
+      mods: [{ acronym: "DT" }],
+      ended_at: scoredAt,
+      created_at: scoredAt,
+      beatmap_id: 11,
+      beatmap: { ...baseScore.beatmap!, id: 11, beatmapset_id: 10, mode: "mania", convert: false, status: "ranked" },
+      beatmapset: { ...baseScore.beatmapset!, id: 10, status: "ranked" },
+    }, scoredAt);
 
-    // Generation bump: the request is served from the stale board while the
-    // rebuild runs in the background, then the fresh board takes over.
-    await exec(db, "update country_maps_snapshots set refreshed_at = '2026-05-12T14:00:00.000Z' where country = 'GLOBAL'");
-    const stale = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query);
-    expect((stale.value?.items[0] as { playerCount: number }).playerCount).toBe(81);
-
-    await waitForGlobalFarmedBoardBuild(db);
+    // No snapshot generation changes and no refresh job runs: the next read
+    // sees revision 2 and overlays just beatmap 11 on the packed base.
     const fresh = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query);
     const freshTop = fresh.value?.items[0] as { playerCount: number; players: Array<Record<string, unknown>> };
     expect(freshTop.playerCount).toBe(82);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_global_maps'")).rows[0].count)).toBe(0);
     // The packed board round-trips the new score's fields exactly.
     expect(freshTop.players[0]).toMatchObject({
       id: 999,

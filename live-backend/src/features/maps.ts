@@ -26,7 +26,7 @@ const FARMED_SINGLE_PLAYER_PP_MIN = 500;
 // 40%+ DT among all farmers (DT vs nomod) already reads as "this is DT farm".
 const FARMED_DOMINANT_MOD_SHARE = 0.4;
 const USER_FAVOURITES_MAX_PAGES = 10;
-const GLOBAL_MAPS_FARMED_REFRESH_DEBOUNCE_MS = 10 * 60_000;
+const GLOBAL_MAPS_REFRESH_DEBOUNCE_MS = 10 * 60_000;
 const MAPS_FARMED_OVERLAY_META_PREFIX = "maps_farmed_overlay_updated_at:";
 const MAPS_FARMED_USER_OVERLAY_META_PREFIX = "maps_farmed_user_overlay_refreshed_at:";
 const MAPS_USER_LIBRARY_META_PREFIX = "maps_user_library_refreshed_at:";
@@ -35,10 +35,11 @@ const MAPS_USER_LIBRARY_STALE_REFRESH_LIMIT = 25;
 const MAPS_REFRESH_PROGRESS_META_PREFIX = "maps_refresh_progress:";
 const MAPS_REFRESH_PROGRESS_WRITE_INTERVAL_MS = 1_000;
 const MAPS_METADATA_BATCH_FLUSH_STATEMENTS = 500;
-// The GLOBAL rollup folds every country's farmed-score rows (>1M on prod). libsql
-// materialises a whole result set at once, so the rows are paged by rowid and each
-// page is folded then released instead of holding the full table in memory.
-const GLOBAL_MAPS_FARMED_ROWS_PAGE = 50_000;
+const GLOBAL_MAPS_FARMED_ROWS_PAGE = 25_000;
+// Each map contributes five statements to an atomic projection patch, plus
+// one revision-publish statement. Stay below execBatch's 500-statement chunk
+// boundary so a revision and every change carrying it commit together.
+const GLOBAL_MAPS_FARMED_PROJECTION_BATCH = 90;
 
 function heapUsedMb(): number {
   return Math.round(process.memoryUsage().heapUsed / (1024 * 1024));
@@ -303,21 +304,35 @@ export async function enqueueMapsRefresh(queue: JobQueue, country: string, optio
   );
 }
 
-// The Global maps aggregate is rebuilt by merging every country's stored
-// snapshot, so it gets its own job type (no roster fetch). It still shares the
+// The compatibility GLOBAL snapshot (popular/favourites/random stamps) is
+// rebuilt by merging country snapshots, so it keeps its own job type. Farmed
+// data is maintained separately per changed map. The job still shares the
 // `maps:GLOBAL` dedupe key so hasActiveMapsRefresh(db, "GLOBAL") works.
-export async function enqueueGlobalMapsRefresh(queue: JobQueue, options: { priority?: number; replaceDone?: boolean; runAfter?: Date } = {}): Promise<void> {
+export async function enqueueGlobalMapsRefresh(
+  queue: JobQueue,
+  options: { priority?: number; replaceDone?: boolean; runAfter?: Date; debounce?: boolean } = {},
+): Promise<void> {
   await queue.enqueue(
     "refresh_global_maps",
     `maps:${GLOBAL_COUNTRY_CODE}`,
     {},
-    { priority: mapsPriority(options.priority, MAPS_REFRESH_PRIORITY), replaceDone: options.replaceDone ?? true, runAfter: options.runAfter },
+    {
+      priority: mapsPriority(options.priority, MAPS_REFRESH_PRIORITY),
+      replaceDone: options.replaceDone ?? true,
+      runAfter: options.runAfter,
+      debounce: options.debounce,
+    },
   );
 }
 
-export function globalMapsFarmedRefreshRunAfter(now = Date.now()): Date {
-  return new Date(now + GLOBAL_MAPS_FARMED_REFRESH_DEBOUNCE_MS);
+export function globalMapsRefreshRunAfter(now = Date.now()): Date {
+  return new Date(now + GLOBAL_MAPS_REFRESH_DEBOUNCE_MS);
 }
+
+// Kept as an API alias for maintenance scripts and older tests. The debounce
+// now covers the remaining non-farmed GLOBAL sections; farmed writes no longer
+// enqueue a GLOBAL rebuild at all.
+export const globalMapsFarmedRefreshRunAfter = globalMapsRefreshRunAfter;
 
 export async function enqueueGlobalMapsRefreshIfDue(
   db: Db,
@@ -326,13 +341,22 @@ export async function enqueueGlobalMapsRefreshIfDue(
   options: { priority?: number; replaceDone?: boolean } = {},
 ): Promise<boolean> {
   const meta = await getMapsSnapshotMeta(db, GLOBAL_COUNTRY_CODE);
+  const projectionReady = (await readGlobalMapsFarmedProjectionState(db))?.initialized === true;
   const refreshedMs = meta.refreshedAt ? new Date(meta.refreshedAt).getTime() : 0;
   const isBehindSource = isIsoAfter(meta.sourceRefreshedAt, meta.refreshedAt);
-  const isBehindFarmedOverlay = isIsoAfter(meta.farmedOverlayUpdatedAt, meta.refreshedAt);
-  const isStale = !Number.isFinite(refreshedMs) || Date.now() - refreshedMs > maxAgeMs || isBehindSource;
-  if (!isStale && !isBehindFarmedOverlay) return false;
+  const isPastMaxAge = !Number.isFinite(refreshedMs) || Date.now() - refreshedMs > maxAgeMs;
+  const isStale = !projectionReady || isPastMaxAge || isBehindSource;
+  if (!isStale) return false;
   if (await hasActiveMapsRefresh(db, GLOBAL_COUNTRY_CODE)) return true;
-  await enqueueGlobalMapsRefresh(queue, options);
+  await enqueueGlobalMapsRefresh(queue, {
+    ...options,
+    // A burst of country snapshot writes should produce one compatibility
+    // rebuild after the burst. A genuinely old/missing snapshot still starts
+    // immediately so cold GLOBAL pages do not wait ten extra minutes.
+    ...(projectionReady && isBehindSource && !isPastMaxAge
+      ? { runAfter: globalMapsRefreshRunAfter(), debounce: true }
+      : {}),
+  });
   return true;
 }
 
@@ -485,6 +509,13 @@ export async function getMapsPageSnapshot(
   query: MapsPageQuery,
 ): Promise<MapsSnapshotResponse<MapsPageValue>> {
   const normalized = country.toUpperCase();
+  if (isGlobalCountry(normalized) && query.tab === "farmed") {
+    const projectionState = await readGlobalMapsFarmedProjectionState(db);
+    if (projectionState?.initialized) {
+      return getGlobalFarmedProjectionPageSnapshot(db, queue, normalized, maxAgeMs, query, projectionState);
+    }
+    await enqueueGlobalMapsRefreshIfDue(db, queue, maxAgeMs);
+  }
   // Filtered GLOBAL farmed requests are answered from the packed board; when
   // it is current for the snapshot row's generation, skip readRawMapsSnapshot
   // entirely — its multi-MB GLOBAL payload_json parse would be pure overhead
@@ -684,8 +715,13 @@ export async function getMapsSnapshotMeta(
   const sourceRefreshedAt = isGlobalCountry(normalized)
     ? await readLatestCountryMapsSourceRefreshedAt(db)
     : null;
+  const projectionState = isGlobalCountry(normalized)
+    ? await readGlobalMapsFarmedProjectionState(db)
+    : null;
   const farmedOverlayUpdatedAt = isGlobalCountry(normalized)
-    ? await readGlobalMapsFarmedOverlayUpdatedAt(db)
+    ? projectionState?.initialized
+      ? projectionState.updatedAt
+      : await readGlobalMapsFarmedOverlayUpdatedAt(db)
     : await readMapsFarmedOverlayUpdatedAt(db, normalized);
   return {
     generatedAt: row?.generated_at == null ? null : String(row.generated_at),
@@ -728,7 +764,11 @@ async function readMapsSnapshot(
   const refreshedMs = refreshedAt ? new Date(refreshedAt).getTime() : 0;
   const parsed = row ? parseJson<unknown>(row.payload_json, null) : null;
   const value = parsed ? await hydrateStoredMapsSnapshot(db, parsed) : null;
-  const isUsable = isUsableMapsData(value);
+  const isUsable = isUsableMapsData(value) || (
+    value != null &&
+    isGlobalCountry(normalized) &&
+    (await readGlobalMapsFarmedProjectionState(db))?.initialized === true
+  );
   const isStale = !Number.isFinite(refreshedMs) || Date.now() - refreshedMs > maxAgeMs || (!!row && !isUsable);
   return {
     value,
@@ -826,9 +866,16 @@ async function readMapsRandomSnapshot(
     ? (await exec(db, "select payload_json from country_maps_snapshots where country = ?", [normalized])).rows[0]?.payload_json
     : row?.payload_json;
   const parsed = row ? parseJson<unknown>(payload, null) : null;
-  const usable = isStoredCountryMapsData(parsed)
+  let usable = isStoredCountryMapsData(parsed)
     ? isUsableStoredMapsData(parsed)
     : isCountryMapsDataShape(parsed) && isUsableMapsData(parsed);
+  if (
+    !usable &&
+    (isStoredCountryMapsData(parsed) || isCountryMapsDataShape(parsed)) &&
+    isGlobalCountry(normalized)
+  ) {
+    usable = (await readGlobalMapsFarmedProjectionState(db))?.initialized === true;
+  }
   return {
     value: usable && (isStoredCountryMapsData(parsed) || isCountryMapsDataShape(parsed))
       ? await hydrateMapsRandomSnapshotSection(db, parsed)
@@ -878,9 +925,16 @@ async function readRawMapsSnapshot(
   )).rows[0];
   const refreshedAt = row?.refreshed_at == null ? null : String(row.refreshed_at);
   const parsed = row ? parseJson<unknown>(row.payload_json, null) : null;
-  const usable = isStoredCountryMapsData(parsed)
+  let usable = isStoredCountryMapsData(parsed)
     ? isUsableStoredMapsData(parsed)
     : isCountryMapsDataShape(parsed) && isUsableMapsData(parsed);
+  if (
+    !usable &&
+    (isStoredCountryMapsData(parsed) || isCountryMapsDataShape(parsed)) &&
+    isGlobalCountry(normalized)
+  ) {
+    usable = (await readGlobalMapsFarmedProjectionState(db))?.initialized === true;
+  }
   const globalStale = isGlobalCountry(normalized)
     ? await isGlobalMapsSnapshotBehindSources(db, refreshedAt)
     : false;
@@ -1637,8 +1691,12 @@ export async function getMapsRandomDraw(
   const isStale = !Number.isFinite(refreshedMs) || Date.now() - refreshedMs > maxAgeMs || globalStale;
   let refreshQueued = await hasActiveMapsRefresh(db, normalized);
   if (isStale && !refreshQueued) {
-    await enqueueMapsRefresh(queue, normalized);
-    refreshQueued = true;
+    if (isGlobalCountry(normalized)) {
+      refreshQueued = await enqueueGlobalMapsRefreshIfDue(db, queue, maxAgeMs);
+    } else {
+      await enqueueMapsRefresh(queue, normalized);
+      refreshQueued = true;
+    }
   }
   const progress = refreshQueued ? await readActiveMapsRefreshProgress(db, normalized) : null;
 
@@ -1925,6 +1983,110 @@ async function buildGlobalFarmedBoardPageValue(db: Db, board: GlobalFarmedBoard,
   };
 }
 
+async function getGlobalFarmedProjectionPageSnapshot(
+  db: Db,
+  queue: JobQueue,
+  normalized: string,
+  maxAgeMs: number,
+  query: MapsPageQuery,
+  projectionState: GlobalMapsFarmedProjectionState,
+): Promise<MapsSnapshotResponse<MapsPageValue>> {
+  const row = (await exec(
+    db,
+    "select generated_at, refreshed_at from country_maps_snapshots where country = ?",
+    [normalized],
+  )).rows[0];
+  const generatedAt = row?.generated_at == null ? projectionState.updatedAt : String(row.generated_at);
+  const refreshedAt = row?.refreshed_at == null ? projectionState.updatedAt : String(row.refreshed_at);
+  const refreshedMs = new Date(refreshedAt).getTime();
+  const globalStale = await isGlobalMapsSnapshotBehindSources(db, refreshedAt);
+  const isStale = !Number.isFinite(refreshedMs) || Date.now() - refreshedMs > maxAgeMs || globalStale;
+  let refreshQueued = await hasActiveMapsRefresh(db, normalized);
+  if (isStale && !refreshQueued) {
+    refreshQueued = await enqueueGlobalMapsRefreshIfDue(db, queue, maxAgeMs);
+  }
+
+  const board = await getGlobalFarmedProjectionBoard(db, projectionState, {
+    generatedAt,
+    farmedGeneratedAt: projectionState.updatedAt,
+    favouritesGeneratedAt: generatedAt,
+  });
+  return {
+    value: await buildGlobalFarmedBoardPageValue(db, board, query),
+    generatedAt,
+    refreshedAt,
+    isStale,
+    refreshQueued,
+    progress: refreshQueued ? await readActiveMapsRefreshProgress(db, normalized) : null,
+  };
+}
+
+export interface GlobalMapsRandomFarmedQuery {
+  key: MapsKeyFilter;
+  status: MapsStatusFilter;
+  starsMin: number | null;
+  starsMax: number | null;
+  minPp: number;
+}
+
+// Discord's /randomfarm needs a weighted draw rather than a ranked page. Keep
+// that small consumer on the same packed projection so removing the farmed
+// array from the compatibility GLOBAL blob does not narrow its pool.
+export async function getGlobalMapsRandomFarmedMap(
+  db: Db,
+  query: GlobalMapsRandomFarmedQuery,
+): Promise<CountryMapsData["farmed"][number] | null> {
+  const state = await readGlobalMapsFarmedProjectionState(db);
+  if (!state?.initialized) return null;
+  const row = (await exec(
+    db,
+    "select generated_at from country_maps_snapshots where country = ?",
+    [GLOBAL_COUNTRY_CODE],
+  )).rows[0];
+  const generatedAt = String(row?.generated_at ?? state.updatedAt);
+  const board = await getGlobalFarmedProjectionBoard(db, state, {
+    generatedAt,
+    farmedGeneratedAt: state.updatedAt,
+    favouritesGeneratedAt: generatedAt,
+  });
+  const ranked = filterSortGlobalFarmedBoard(board, {
+    tab: "farmed",
+    page: 0,
+    pageSize: 1,
+    key: query.key,
+    beatmapSort: "players",
+    farmedSort: "players",
+    dir: "desc",
+    status: "all",
+    pp: Math.max(0, query.minPp),
+    mod: "all",
+    q: "",
+  }).filter((entry) => {
+    const meta = board.metadata.get(entry.beatmapId);
+    if (!meta || !matchesMapsStatusFilter(meta.status, query.status)) return false;
+    if (query.starsMin != null && meta.difficultyRating < query.starsMin) return false;
+    if (query.starsMax != null && meta.difficultyRating > query.starsMax) return false;
+    return true;
+  });
+  if (ranked.length === 0) return null;
+
+  const totalWeight = ranked.reduce((sum, entry) => sum + Math.max(1, entry.playerCount), 0);
+  let pick = Math.random() * totalWeight;
+  let selected = ranked[ranked.length - 1];
+  for (const entry of ranked) {
+    pick -= Math.max(1, entry.playerCount);
+    if (pick <= 0) {
+      selected = entry;
+      break;
+    }
+  }
+  const hydrated = await hydrateMapsPageItemUsers(
+    db,
+    await hydrateCompactFarmedEntries(db, [materializeGlobalFarmedBoardEntry(board, selected)]),
+  );
+  return hydrated[0] ?? null;
+}
+
 // Serve a filtered GLOBAL farmed page without touching payload_json: only
 // possible while the cached board matches the snapshot row's generation.
 // Returns null whenever the full (parse + board build) path must run instead.
@@ -1970,14 +2132,9 @@ async function getGlobalFarmedBoardPageSnapshot(
 // ---------------------------------------------------------------------------
 // Global farmed board cache
 //
-// A pp/mod-filtered GLOBAL farmed page cannot be answered from the stored
-// GLOBAL rollup: its per-map player lists are truncated to the top
-// GLOBAL_MAPS_PLAYERS_PER_ENTRY by pp, and the filter must recount every
-// player. The full union (every country snapshot plus >1M farmed-score rows)
-// used to be re-merged from scratch on every uncached request — a 10-15s build
-// per distinct page/pp/sort/mod combination. The union does not depend on the
-// query at all, so it is built once per GLOBAL snapshot generation and kept
-// here; each request then filters/sorts it in memory.
+// A pp/mod-filtered GLOBAL farmed page must recount every player. The durable
+// projection supplies the already-deduplicated rows, which are packed once per
+// process; later revisions patch only changed beatmaps over that base.
 //
 // Memory is the constraint (this cache lives for the life of the process, on
 // the maps snapshot thread in production): per-player fields are packed into
@@ -1987,11 +2144,8 @@ async function getGlobalFarmedBoardPageSnapshot(
 // stored as their numeric score id (every prod row is
 // https://osu.ppy.sh/scores/<id>; the rare mismatch goes to an override map).
 //
-// Freshness follows the GLOBAL snapshot row's refreshed_at, the same
-// generation marker the HTTP response cache uses: when it changes, the first
-// request serves the previous board and kicks a rebuild in the background, so
-// only the very first filtered request of a process lifetime ever waits for a
-// build.
+// The bounded override map is occasionally repacked in the background so a
+// long-lived serving process cannot slowly recreate an object-heavy full board.
 
 interface GlobalFarmedBoardEntry {
   beatmapId: number;
@@ -2025,12 +2179,18 @@ interface GlobalFarmedBoard {
   modsDict: string[][];
   modsFlags: Uint8Array;
   metadata: Map<number, MapsFarmedPageMetadata>;
+  projectionRevision: number | null;
+  // Changed maps are tiny compared with the packed base. Keeping them as row
+  // objects lets a serving process patch cross-process writes in O(changed
+  // maps) without copying every typed array on each update.
+  overrides: Map<number, StoredMapsFarmedEntry | null>;
 }
 
 interface GlobalFarmedBoardState {
   board: GlobalFarmedBoard | null;
   inflight: Promise<GlobalFarmedBoard> | null;
   inflightGeneration: string | null;
+  deltaInflight: Promise<void> | null;
 }
 
 // Per-Db so tests with separate databases never share a board; production has
@@ -2039,7 +2199,7 @@ const globalFarmedBoardStates = new WeakMap<Db, GlobalFarmedBoardState>();
 
 async function getGlobalFarmedBoard(db: Db, parsed: StoredCountryMapsData, generation: string): Promise<GlobalFarmedBoard> {
   let state = globalFarmedBoardStates.get(db);
-  if (!state) globalFarmedBoardStates.set(db, (state = { board: null, inflight: null, inflightGeneration: null }));
+  if (!state) globalFarmedBoardStates.set(db, (state = { board: null, inflight: null, inflightGeneration: null, deltaInflight: null }));
   const stateRef = state;
   const current = stateRef.board;
   if (current && current.generation === generation) return current;
@@ -2066,6 +2226,73 @@ async function getGlobalFarmedBoard(db: Db, parsed: StoredCountryMapsData, gener
   return stateRef.inflight;
 }
 
+interface GlobalFarmedBoardStamps {
+  generatedAt: string;
+  farmedGeneratedAt: string;
+  favouritesGeneratedAt: string;
+}
+
+const GLOBAL_FARMED_PROJECTION_GENERATION = "projection:v1";
+const GLOBAL_FARMED_PROJECTION_REPACK_OVERRIDES = 5_000;
+
+async function getGlobalFarmedProjectionBoard(
+  db: Db,
+  projectionState: GlobalMapsFarmedProjectionState,
+  stamps: GlobalFarmedBoardStamps,
+): Promise<GlobalFarmedBoard> {
+  let state = globalFarmedBoardStates.get(db);
+  if (!state) globalFarmedBoardStates.set(db, (state = { board: null, inflight: null, inflightGeneration: null, deltaInflight: null }));
+  const stateRef = state;
+  const current = stateRef.board;
+
+  if (current?.generation === GLOBAL_FARMED_PROJECTION_GENERATION) {
+    if ((current.projectionRevision ?? 0) < projectionState.revision) {
+      if (!stateRef.deltaInflight) {
+        stateRef.deltaInflight = applyGlobalFarmedProjectionDeltas(db, current, projectionState)
+          .finally(() => {
+            stateRef.deltaInflight = null;
+          });
+      }
+      await stateRef.deltaInflight;
+    }
+    current.generatedAt = stamps.generatedAt;
+    current.farmedGeneratedAt = projectionState.updatedAt;
+    current.favouritesGeneratedAt = stamps.favouritesGeneratedAt;
+    if (current.overrides.size >= GLOBAL_FARMED_PROJECTION_REPACK_OVERRIDES && !stateRef.inflight) {
+      const repackToken = `${GLOBAL_FARMED_PROJECTION_GENERATION}:repack:${current.projectionRevision ?? 0}`;
+      stateRef.inflightGeneration = repackToken;
+      const repack = buildGlobalFarmedProjectionBoard(db, projectionState, stamps);
+      stateRef.inflight = repack;
+      repack
+        .then((board) => {
+          if (stateRef.inflightGeneration === repackToken) stateRef.board = board;
+        })
+        .catch((error) => logWarn("global_farmed_projection_board_repack_failed", errorContext(error)))
+        .finally(() => {
+          if (stateRef.inflight === repack) stateRef.inflight = null;
+        });
+    }
+    return current;
+  }
+
+  if (!stateRef.inflight || stateRef.inflightGeneration !== GLOBAL_FARMED_PROJECTION_GENERATION) {
+    stateRef.inflightGeneration = GLOBAL_FARMED_PROJECTION_GENERATION;
+    const build = buildGlobalFarmedProjectionBoard(db, projectionState, stamps);
+    stateRef.inflight = build;
+    build
+      .then((board) => {
+        if (stateRef.inflightGeneration === GLOBAL_FARMED_PROJECTION_GENERATION) stateRef.board = board;
+      })
+      .catch((error) => logWarn("global_farmed_projection_board_build_failed", errorContext(error)))
+      .finally(() => {
+        if (stateRef.inflight === build) stateRef.inflight = null;
+      });
+  }
+
+  if (current) return current;
+  return stateRef.inflight;
+}
+
 /** Test hook: settle the in-flight board build (if any) for this Db. */
 export async function waitForGlobalFarmedBoardBuild(db: Db): Promise<void> {
   const inflight = globalFarmedBoardStates.get(db)?.inflight;
@@ -2085,6 +2312,184 @@ async function buildGlobalFarmedBoard(db: Db, parsed: StoredCountryMapsData, gen
     heap_used_mb: heapUsedMb(),
   });
   return board;
+}
+
+async function readGlobalFarmedChangeRevision(db: Db): Promise<number> {
+  const row = (await exec(db, "select max(revision) as revision from global_maps_farmed_changes")).rows[0];
+  return Math.max(0, Number(row?.revision ?? 0));
+}
+
+async function buildGlobalFarmedProjectionBoard(
+  db: Db,
+  projectionState: GlobalMapsFarmedProjectionState,
+  stamps: GlobalFarmedBoardStamps,
+): Promise<GlobalFarmedBoard> {
+  const startedAt = Date.now();
+  const baseRevision = await readGlobalFarmedChangeRevision(db);
+  const source = await readGlobalFarmedProjectionEntries(db);
+  const metadata = await readMapsFarmedPageMetadataByIds(db, source.map((entry) => entry.beatmapId));
+  const parsed: StoredCountryMapsData = {
+    schemaVersion: 2,
+    farmed: [],
+    mostPlayed: [],
+    favourites: [],
+    favouritesByPlayer: [],
+    beatmapsetsPool: [],
+    generatedAt: stamps.generatedAt,
+    farmedGeneratedAt: projectionState.updatedAt,
+    favouritesGeneratedAt: stamps.favouritesGeneratedAt,
+  };
+  const board = encodeGlobalFarmedBoard(GLOBAL_FARMED_PROJECTION_GENERATION, parsed, source, metadata);
+  board.projectionRevision = baseRevision;
+  const latestState = await readGlobalMapsFarmedProjectionState(db);
+  if (latestState && latestState.revision > baseRevision) {
+    await applyGlobalFarmedProjectionDeltas(db, board, latestState);
+  }
+  logInfo("global_farmed_projection_board_built", {
+    revision: board.projectionRevision,
+    entries: board.entries.length,
+    players: board.userIds.length,
+    duration_ms: Date.now() - startedAt,
+    heap_used_mb: heapUsedMb(),
+  });
+  return board;
+}
+
+async function readGlobalFarmedProjectionEntries(
+  db: Db,
+  beatmapIds?: number[],
+): Promise<StoredMapsFarmedEntry[]> {
+  const ids = beatmapIds
+    ? [...new Set(beatmapIds)].filter((id) => Number.isSafeInteger(id) && id > 0)
+    : null;
+  if (ids && ids.length === 0) return [];
+
+  const aggregateRows: Record<string, unknown>[] = [];
+  if (ids) {
+    for (let index = 0; index < ids.length; index += 900) {
+      const chunk = ids.slice(index, index + 900);
+      aggregateRows.push(...(await exec(
+        db,
+        `select beatmap_id, player_count, avg_pp, max_pp, dominant_mod
+         from global_maps_farmed_aggregates
+         where beatmap_id in (${sqlPlaceholders(chunk)})`,
+        chunk,
+      )).rows);
+    }
+  } else {
+    aggregateRows.push(...(await exec(
+      db,
+      "select beatmap_id, player_count, avg_pp, max_pp, dominant_mod from global_maps_farmed_aggregates",
+    )).rows);
+  }
+
+  const byBeatmap = new Map<number, StoredMapsFarmedEntry>();
+  for (const row of aggregateRows) {
+    const beatmapId = Number(row.beatmap_id);
+    if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0) continue;
+    byBeatmap.set(beatmapId, {
+      beatmapId,
+      playerCount: Number(row.player_count ?? 0),
+      avgPp: Number(row.avg_pp ?? 0),
+      maxPp: Number(row.max_pp ?? 0),
+      dominantMod: row.dominant_mod === "DT" || row.dominant_mod === "HT" ? row.dominant_mod : null,
+      players: [],
+    });
+  }
+  if (byBeatmap.size === 0) return [];
+
+  if (ids) {
+    for (let index = 0; index < ids.length; index += 900) {
+      const chunk = ids.slice(index, index + 900);
+      const rows = (await exec(
+        db,
+        `select beatmap_id, user_id, pp, mods_json, score_url, played_at
+         from global_maps_farmed_scores
+         where beatmap_id in (${sqlPlaceholders(chunk)})
+         order by beatmap_id asc, pp desc, user_id asc`,
+        chunk,
+      )).rows;
+      appendGlobalMapsFarmedProjectionPlayers(byBeatmap, rows);
+    }
+  } else {
+    let cursor = 0;
+    for (;;) {
+      const rows = (await exec(
+        db,
+        `select s.rowid as rid, s.beatmap_id, s.user_id, s.pp, s.mods_json, s.score_url, s.played_at
+         from global_maps_farmed_scores s
+         join global_maps_farmed_aggregates a on a.beatmap_id = s.beatmap_id
+         where s.rowid > ?
+         order by s.rowid
+         limit ?`,
+        [cursor, GLOBAL_MAPS_FARMED_ROWS_PAGE],
+      )).rows;
+      if (rows.length === 0) break;
+      cursor = Number(rows[rows.length - 1].rid);
+      appendGlobalMapsFarmedProjectionPlayers(byBeatmap, rows);
+      await yieldToEventLoop();
+      if (rows.length < GLOBAL_MAPS_FARMED_ROWS_PAGE) break;
+    }
+  }
+
+  for (const entry of byBeatmap.values()) entry.players.sort((a, b) => b.pp - a.pp || a.id - b.id);
+  return [...byBeatmap.values()].sort((a, b) => a.beatmapId - b.beatmapId);
+}
+
+function appendGlobalMapsFarmedProjectionPlayers(
+  byBeatmap: Map<number, StoredMapsFarmedEntry>,
+  rows: Record<string, unknown>[],
+): void {
+  for (const row of rows) {
+    const entry = byBeatmap.get(Number(row.beatmap_id));
+    if (!entry) continue;
+    const userId = Number(row.user_id);
+    const pp = Number(row.pp ?? 0);
+    if (!Number.isSafeInteger(userId) || userId <= 0 || !Number.isFinite(pp) || pp <= 0) continue;
+    entry.players.push({
+      id: userId,
+      pp,
+      mods: parseJson<string[]>(row.mods_json, []),
+      scoreUrl: row.score_url == null ? null : String(row.score_url),
+      playedAt: row.played_at == null ? null : String(row.played_at),
+    });
+  }
+}
+
+async function applyGlobalFarmedProjectionDeltas(
+  db: Db,
+  board: GlobalFarmedBoard,
+  projectionState: GlobalMapsFarmedProjectionState,
+): Promise<void> {
+  const fromRevision = board.projectionRevision ?? 0;
+  const changes = (await exec(
+    db,
+    `select beatmap_id, revision, updated_at
+     from global_maps_farmed_changes
+     where revision > ?
+     order by revision, beatmap_id`,
+    [fromRevision],
+  )).rows;
+  if (changes.length === 0) {
+    // An initialized-but-empty projection still advances the state revision.
+    // Mark it observed so an empty GLOBAL board does not re-run this query on
+    // every request forever.
+    board.projectionRevision = Math.max(fromRevision, projectionState.revision);
+    board.farmedGeneratedAt = projectionState.updatedAt;
+    return;
+  }
+  const beatmapIds = changes.map((row) => Number(row.beatmap_id));
+  const entries = await readGlobalFarmedProjectionEntries(db, beatmapIds);
+  const byBeatmap = new Map(entries.map((entry) => [entry.beatmapId, entry]));
+  const metadata = await readMapsFarmedPageMetadataByIds(db, beatmapIds);
+  for (const beatmapId of beatmapIds) {
+    board.overrides.set(beatmapId, byBeatmap.get(beatmapId) ?? null);
+    const meta = metadata.get(beatmapId);
+    if (meta) board.metadata.set(beatmapId, meta);
+    else board.metadata.delete(beatmapId);
+  }
+  board.projectionRevision = Math.max(fromRevision, ...changes.map((row) => Number(row.revision ?? 0)));
+  board.farmedGeneratedAt = projectionState.updatedAt;
 }
 
 const GLOBAL_FARMED_SCORE_URL_PATTERN = /^https:\/\/osu\.ppy\.sh\/scores\/(\d+)$/;
@@ -2156,11 +2561,15 @@ function encodeGlobalFarmedBoard(
     modsDict,
     modsFlags: Uint8Array.from(modsFlags),
     metadata,
+    projectionRevision: null,
+    overrides: new Map(),
   };
 }
 
 interface GlobalFarmedBoardRanked {
+  beatmapId: number;
   boardIndex: number;
+  overrideEntry?: StoredMapsFarmedEntry;
   /** Players meeting the pp filter — a prefix, since players sort by pp desc. */
   keptCount: number;
   playerCount: number;
@@ -2179,6 +2588,7 @@ function filterSortGlobalFarmedBoard(board: GlobalFarmedBoard, query: MapsPageQu
 
   for (let boardIndex = 0; boardIndex < entries.length; boardIndex++) {
     const entry = entries[boardIndex];
+    if (board.overrides.has(entry.beatmapId)) continue;
     const meta = metadata.get(entry.beatmapId);
     if (!meta) continue;
     if (!matchesMapsKeyFilter(meta.cs, query.key)) continue;
@@ -2234,6 +2644,7 @@ function filterSortGlobalFarmedBoard(board: GlobalFarmedBoard, query: MapsPageQu
     }
 
     ranked.push({
+      beatmapId: entry.beatmapId,
       boardIndex,
       keptCount: kept,
       playerCount: kept,
@@ -2241,6 +2652,48 @@ function filterSortGlobalFarmedBoard(board: GlobalFarmedBoard, query: MapsPageQu
       maxPp,
       dominantMod,
       latestPlayedAtMs: latest,
+      stars: meta.difficultyRating,
+    });
+  }
+
+  for (const overrideEntry of board.overrides.values()) {
+    if (!overrideEntry) continue;
+    const meta = metadata.get(overrideEntry.beatmapId);
+    if (!meta) continue;
+    if (!matchesMapsKeyFilter(meta.cs, query.key)) continue;
+    if (!matchesMapsSearch(query.q, [meta.title, meta.artist, meta.creator, meta.version])) continue;
+
+    let kept = overrideEntry.players.length;
+    if (query.pp > 0) {
+      let lo = 0;
+      let hi = overrideEntry.players.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (overrideEntry.players[mid].pp >= query.pp) lo = mid + 1;
+        else hi = mid;
+      }
+      kept = lo;
+    }
+    const keptPlayers = overrideEntry.players.slice(0, kept);
+    const maxPp = keptPlayers[0]?.pp ?? 0;
+    if (kept < 2 && maxPp < FARMED_SINGLE_PLAYER_PP_MIN) continue;
+    const dominantMod = getDominantStoredMapsSpeedMod(keptPlayers);
+    if (query.mod !== "all") {
+      if (query.mod === "dt" && dominantMod !== "DT") continue;
+      if (query.mod === "ht" && dominantMod !== "HT") continue;
+      if (query.mod !== "dt" && query.mod !== "ht" && dominantMod !== null) continue;
+    }
+
+    ranked.push({
+      beatmapId: overrideEntry.beatmapId,
+      boardIndex: -1,
+      overrideEntry,
+      keptCount: kept,
+      playerCount: kept,
+      avgPp: kept > 0 ? keptPlayers.reduce((sum, player) => sum + player.pp, 0) / kept : 0,
+      maxPp,
+      dominantMod,
+      latestPlayedAtMs: getLatestStoredFarmedPlayTime({ ...overrideEntry, players: keptPlayers }),
       stars: meta.difficultyRating,
     });
   }
@@ -2263,6 +2716,19 @@ function filterSortGlobalFarmedBoard(board: GlobalFarmedBoard, query: MapsPageQu
 // materializing (and user-hydrating) a popular map's thousands of players
 // would be pure waste.
 function materializeGlobalFarmedBoardEntry(board: GlobalFarmedBoard, ranked: GlobalFarmedBoardRanked): StoredMapsFarmedEntry {
+  if (ranked.overrideEntry) {
+    return {
+      beatmapId: ranked.overrideEntry.beatmapId,
+      playerCount: ranked.playerCount,
+      avgPp: ranked.avgPp,
+      maxPp: ranked.maxPp,
+      dominantMod: ranked.dominantMod,
+      players: ranked.overrideEntry.players.slice(0, Math.min(ranked.keptCount, MAPS_PAGE_PREVIEW_PLAYERS)).map((player) => ({
+        ...player,
+        mods: [...player.mods],
+      })),
+    };
+  }
   const entry = board.entries[ranked.boardIndex];
   const players: StoredMapsFarmedPlayer[] = [];
   const materializeCount = Math.min(ranked.keptCount, MAPS_PAGE_PREVIEW_PLAYERS);
@@ -2612,6 +3078,7 @@ interface MapsFarmedPageMetadata {
   title: string;
   artist: string;
   creator: string;
+  status: string;
 }
 
 async function filterSortStoredFarmedMapsForPage(
@@ -3062,27 +3529,356 @@ export async function refreshCountryMaps(
 // farmed-score rows through /api/snapshots/maps-players.
 const GLOBAL_MAPS_PLAYERS_PER_ENTRY = 80;
 
-// Rebuilds the synthetic GLOBAL maps snapshot by merging every country's stored
-// snapshot. Works entirely on the compact (ID-only) stored form: the beatmap,
-// beatmapset and user display rows the read path hydrates from were already
-// written by each country's own refresh, so no osu! API calls are needed.
-//
-// Memory-bounded: on prod this box has 3.8GB and no swap, and the GLOBAL row is
-// ~60MB of JSON built from ~50 country snapshots plus >1M farmed-score rows. So
-// this streams its inputs — one country payload parsed and released at a time
-// (no shared parse cache), and the farmed-score table paged by rowid — instead
-// of materialising everything at once, and it skips hydrating the final blob
-// back into display form (the caller discards the return value; the read path
-// hydrates on demand from the persisted compact snapshot).
+interface GlobalMapsFarmedProjectionState {
+  initialized: boolean;
+  revision: number;
+  updatedAt: string;
+}
+
+async function readGlobalMapsFarmedProjectionState(db: Db): Promise<GlobalMapsFarmedProjectionState | null> {
+  const row = (await exec(
+    db,
+    "select initialized, revision, updated_at from global_maps_farmed_state where singleton = 1",
+  )).rows[0];
+  if (!row) return null;
+  return {
+    initialized: Number(row.initialized ?? 0) === 1,
+    revision: Math.max(0, Number(row.revision ?? 0)),
+    updatedAt: String(row.updated_at ?? ""),
+  };
+}
+
+function mapsFarmedSpeedMod(mods: string[]): "DT" | "HT" | null {
+  if (mods.includes("DT") || mods.includes("NC")) return "DT";
+  if (mods.includes("HT")) return "HT";
+  return null;
+}
+
+function mapsFarmedSpeedModSql(alias: string): string {
+  return `case
+    when exists (select 1 from json_each(coalesce(${alias}.mods_json, '[]')) where value in ('DT', 'NC')) then 'DT'
+    when exists (select 1 from json_each(coalesce(${alias}.mods_json, '[]')) where value = 'HT') then 'HT'
+    else null
+  end`;
+}
+
+function publishGlobalMapsFarmedRevisionStatement(updatedAt: string, initialized = false): DbStatement {
+  return {
+    sql: `insert into global_maps_farmed_state (singleton, initialized, revision, updated_at)
+          values (1, ?, 1, ?)
+          on conflict(singleton) do update set
+            initialized = max(global_maps_farmed_state.initialized, excluded.initialized),
+            revision = global_maps_farmed_state.revision + 1,
+            updated_at = max(global_maps_farmed_state.updated_at, excluded.updated_at)`,
+    args: [initialized ? 1 : 0, updatedAt],
+  };
+}
+
+function rebuildGlobalMapsFarmedAggregateStatements(
+  beatmapId: number,
+  updatedAt: string,
+): DbStatement[] {
+  return [
+    { sql: "delete from global_maps_farmed_aggregates where beatmap_id = ?", args: [beatmapId] },
+    {
+      sql: `insert into global_maps_farmed_aggregates
+         (beatmap_id, player_count, pp_sum, avg_pp, max_pp, dominant_mod, revision, updated_at)
+       select
+         s.beatmap_id,
+         count(*) as player_count,
+         sum(s.pp) as pp_sum,
+         avg(s.pp) as avg_pp,
+         max(s.pp) as max_pp,
+         case
+           when sum(case when s.speed_mod = 'DT' then 1 else 0 end) >= sum(case when s.speed_mod = 'HT' then 1 else 0 end)
+             and sum(case when s.speed_mod = 'DT' then 1 else 0 end) > count(*) * ? then 'DT'
+           when sum(case when s.speed_mod = 'HT' then 1 else 0 end) > sum(case when s.speed_mod = 'DT' then 1 else 0 end)
+             and sum(case when s.speed_mod = 'HT' then 1 else 0 end) > count(*) * ?
+             and (select top.speed_mod
+                  from global_maps_farmed_scores top
+                  where top.beatmap_id = s.beatmap_id
+                  order by top.pp desc, top.user_id asc
+                  limit 1) = 'HT' then 'HT'
+           else null
+         end,
+         (select revision from global_maps_farmed_state where singleton = 1), ?
+       from global_maps_farmed_scores s
+       where s.beatmap_id = ?
+       group by s.beatmap_id
+       having count(*) >= 2 or max(s.pp) >= ?`,
+      args: [FARMED_DOMINANT_MOD_SHARE, FARMED_DOMINANT_MOD_SHARE, updatedAt, beatmapId, FARMED_SINGLE_PLAYER_PP_MIN],
+    },
+    {
+      sql: `insert into global_maps_farmed_changes (beatmap_id, revision, updated_at)
+            select ?, revision, ? from global_maps_farmed_state where singleton = 1
+            on conflict(beatmap_id) do update set revision = excluded.revision, updated_at = excluded.updated_at`,
+      args: [beatmapId, updatedAt],
+    },
+  ];
+}
+
+// Reconcile only one player's rows on the maps their country overlay changed.
+// The normalized country table remains the source of truth; this projection is
+// disposable and can always be rebuilt by refreshGlobalMaps().
+async function syncGlobalMapsFarmedUserBeatmaps(
+  db: Db,
+  userId: number,
+  beatmapIds: number[],
+  updatedAt: string,
+): Promise<void> {
+  const ids = [...new Set(beatmapIds)]
+    .filter((beatmapId) => Number.isSafeInteger(beatmapId) && beatmapId > 0);
+  if (ids.length === 0) return;
+
+  for (let index = 0; index < ids.length; index += GLOBAL_MAPS_FARMED_PROJECTION_BATCH) {
+    const chunk = ids.slice(index, index + GLOBAL_MAPS_FARMED_PROJECTION_BATCH);
+    // SQLite serializes these transactions. Publishing the revision inside the
+    // same batch as its rows means commit order and revision order are always
+    // identical, even when live ingest and a bulk top-200 replace overlap.
+    const statements: DbStatement[] = [publishGlobalMapsFarmedRevisionStatement(updatedAt)];
+    for (const beatmapId of chunk) {
+      statements.push({
+        sql: `insert into global_maps_farmed_scores
+           (beatmap_id, user_id, pp, mods_json, speed_mod, score_url, played_at, detected_at, source_country, source_updated_at)
+         select s.beatmap_id, s.user_id, s.pp, s.mods_json, ${mapsFarmedSpeedModSql("s")},
+                s.score_url, s.played_at, s.detected_at, s.country, s.updated_at
+         from country_maps_farmed_scores s
+         where s.country != ? and s.user_id = ? and s.beatmap_id = ? and s.pp > 0
+         order by s.pp desc, s.detected_at desc, s.country asc
+         limit 1
+         on conflict(beatmap_id, user_id) do update set
+           pp = excluded.pp,
+           mods_json = excluded.mods_json,
+           speed_mod = excluded.speed_mod,
+           score_url = excluded.score_url,
+           played_at = excluded.played_at,
+           detected_at = excluded.detected_at,
+           source_country = excluded.source_country,
+           source_updated_at = excluded.source_updated_at`,
+        args: [GLOBAL_COUNTRY_CODE, userId, beatmapId],
+      });
+      statements.push({
+        sql: `delete from global_maps_farmed_scores
+              where beatmap_id = ? and user_id = ?
+                and not exists (
+                  select 1 from country_maps_farmed_scores s
+                  where s.country != ? and s.user_id = ? and s.beatmap_id = ? and s.pp > 0
+                )`,
+        args: [beatmapId, userId, GLOBAL_COUNTRY_CODE, userId, beatmapId],
+      });
+      statements.push(...rebuildGlobalMapsFarmedAggregateStatements(beatmapId, updatedAt));
+    }
+    await execBatch(db, statements);
+    await yieldToEventLoop();
+  }
+}
+
+function globalMapsFarmedProjectionUpsertStatement(
+  beatmapId: number,
+  player: StoredMapsFarmedPlayer,
+  sourceCountry: string,
+  sourceUpdatedAt: string,
+): DbStatement {
+  const detectedAt = player.playedAt || sourceUpdatedAt;
+  return {
+    sql: `insert into global_maps_farmed_scores
+       (beatmap_id, user_id, pp, mods_json, speed_mod, score_url, played_at, detected_at, source_country, source_updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     on conflict(beatmap_id, user_id) do update set
+       pp = excluded.pp,
+       mods_json = excluded.mods_json,
+       speed_mod = excluded.speed_mod,
+       score_url = excluded.score_url,
+       played_at = excluded.played_at,
+       detected_at = excluded.detected_at,
+       source_country = excluded.source_country,
+       source_updated_at = excluded.source_updated_at
+     where excluded.pp > global_maps_farmed_scores.pp
+        or (excluded.pp = global_maps_farmed_scores.pp and excluded.detected_at >= global_maps_farmed_scores.detected_at)`,
+    args: [
+      beatmapId,
+      player.id,
+      player.pp,
+      json(player.mods ?? []),
+      mapsFarmedSpeedMod(player.mods ?? []),
+      player.scoreUrl,
+      player.playedAt,
+      detectedAt,
+      sourceCountry,
+      sourceUpdatedAt,
+    ],
+  };
+}
+
+async function backfillGlobalMapsFarmedProjection(db: Db, signal?: AbortSignal): Promise<void> {
+  const state = await readGlobalMapsFarmedProjectionState(db);
+  if (state?.initialized) return;
+
+  const startedAt = Date.now();
+  logInfo("global_maps_farmed_projection_backfill", { phase: "start" });
+  await execBatch(db, [
+    { sql: "delete from global_maps_farmed_changes" },
+    { sql: "delete from global_maps_farmed_aggregates" },
+    { sql: "delete from global_maps_farmed_scores" },
+    {
+      sql: `insert into global_maps_farmed_state (singleton, initialized, revision, updated_at)
+            values (1, 0, 0, ?)
+            on conflict(singleton) do update set initialized = 0, revision = 0, updated_at = excluded.updated_at`,
+      args: [nowIso()],
+    },
+  ]);
+
+  // Preserve every already-materialized country player while upgrading an
+  // existing DB. Country snapshots are not player-truncated, and only one
+  // country's JSON tree is resident at a time.
+  const countries = (await exec(
+    db,
+    "select country, refreshed_at from country_maps_snapshots where country != ? order by country",
+    [GLOBAL_COUNTRY_CODE],
+  )).rows;
+  let snapshotPlayers = 0;
+  for (const countryRow of countries) {
+    throwIfAborted(signal);
+    const country = String(countryRow.country);
+    const row = (await exec(db, "select payload_json from country_maps_snapshots where country = ?", [country])).rows[0];
+    const stored = row ? toStoredCountryMapsData(parseJson<unknown>(row.payload_json, null)) : null;
+    if (!stored) continue;
+    const sourceUpdatedAt = String(countryRow.refreshed_at ?? stored.farmedGeneratedAt);
+    let statements: DbStatement[] = [];
+    for (const entry of stored.farmed) {
+      for (const player of entry.players) {
+        statements.push(globalMapsFarmedProjectionUpsertStatement(entry.beatmapId, player, country, sourceUpdatedAt));
+        snapshotPlayers++;
+        if (statements.length >= 500) {
+          await execBatch(db, statements);
+          statements = [];
+        }
+      }
+    }
+    await execBatch(db, statements);
+    await yieldToEventLoop();
+  }
+
+  // The normalized rows are newer and complete; page the insert by rowid so a
+  // one-time upgrade never creates a million-row JS result or one giant WAL
+  // transaction.
+  let cursor = 0;
+  let normalizedRows = 0;
+  for (;;) {
+    throwIfAborted(signal);
+    const edge = (await exec(
+      db,
+      `select max(rid) as rid, count(*) as count from (
+         select rowid as rid
+         from country_maps_farmed_scores
+         where rowid > ? and country != ?
+         order by rowid
+         limit ?
+       )`,
+      [cursor, GLOBAL_COUNTRY_CODE, GLOBAL_MAPS_FARMED_ROWS_PAGE],
+    )).rows[0];
+    const count = Number(edge?.count ?? 0);
+    if (count === 0) break;
+    const end = Number(edge?.rid ?? cursor);
+    await exec(
+      db,
+      `insert into global_maps_farmed_scores
+         (beatmap_id, user_id, pp, mods_json, speed_mod, score_url, played_at, detected_at, source_country, source_updated_at)
+       select s.beatmap_id, s.user_id, s.pp, s.mods_json, ${mapsFarmedSpeedModSql("s")},
+              s.score_url, s.played_at, s.detected_at, s.country, s.updated_at
+       from country_maps_farmed_scores s
+       where s.rowid > ? and s.rowid <= ? and s.country != ? and s.pp > 0
+       on conflict(beatmap_id, user_id) do update set
+         pp = excluded.pp,
+         mods_json = excluded.mods_json,
+         speed_mod = excluded.speed_mod,
+         score_url = excluded.score_url,
+         played_at = excluded.played_at,
+         detected_at = excluded.detected_at,
+         source_country = excluded.source_country,
+         source_updated_at = excluded.source_updated_at
+       where excluded.pp > global_maps_farmed_scores.pp
+          or (excluded.pp = global_maps_farmed_scores.pp and excluded.detected_at >= global_maps_farmed_scores.detected_at)`,
+      [cursor, end, GLOBAL_COUNTRY_CODE],
+    );
+    cursor = end;
+    normalizedRows += count;
+    await yieldToEventLoop();
+  }
+
+  const completedAt = nowIso();
+  await execBatch(db, [
+    // This short final transaction closes the backfill/ingest race. A source
+    // write either published its projection patch before this batch (and is
+    // included below), or publishes after initialized=1 with a later revision.
+    publishGlobalMapsFarmedRevisionStatement(completedAt, true),
+    {
+      sql: `insert into global_maps_farmed_aggregates
+         (beatmap_id, player_count, pp_sum, avg_pp, max_pp, dominant_mod, revision, updated_at)
+       select
+         s.beatmap_id,
+         count(*),
+         sum(s.pp),
+         avg(s.pp),
+         max(s.pp),
+         case
+           when sum(case when s.speed_mod = 'DT' then 1 else 0 end) >= sum(case when s.speed_mod = 'HT' then 1 else 0 end)
+             and sum(case when s.speed_mod = 'DT' then 1 else 0 end) > count(*) * ? then 'DT'
+           when sum(case when s.speed_mod = 'HT' then 1 else 0 end) > sum(case when s.speed_mod = 'DT' then 1 else 0 end)
+             and sum(case when s.speed_mod = 'HT' then 1 else 0 end) > count(*) * ?
+             and (select top.speed_mod from global_maps_farmed_scores top
+                  where top.beatmap_id = s.beatmap_id
+                  order by top.pp desc, top.user_id asc limit 1) = 'HT' then 'HT'
+           else null
+         end,
+         (select revision from global_maps_farmed_state where singleton = 1), ?
+       from global_maps_farmed_scores s
+       group by s.beatmap_id
+       having count(*) >= 2 or max(s.pp) >= ?
+       on conflict(beatmap_id) do update set
+         player_count = excluded.player_count,
+         pp_sum = excluded.pp_sum,
+         avg_pp = excluded.avg_pp,
+         max_pp = excluded.max_pp,
+         dominant_mod = excluded.dominant_mod,
+         revision = excluded.revision,
+         updated_at = excluded.updated_at`,
+      args: [FARMED_DOMINANT_MOD_SHARE, FARMED_DOMINANT_MOD_SHARE, completedAt, FARMED_SINGLE_PLAYER_PP_MIN],
+    },
+    {
+      sql: `insert into global_maps_farmed_changes (beatmap_id, revision, updated_at)
+            select a.beatmap_id, s.revision, ?
+            from global_maps_farmed_aggregates a
+            cross join global_maps_farmed_state s
+            where s.singleton = 1
+            on conflict(beatmap_id) do update set
+              revision = excluded.revision,
+              updated_at = excluded.updated_at`,
+      args: [completedAt],
+    },
+  ]);
+  logInfo("global_maps_farmed_projection_backfill", {
+    phase: "done",
+    countries: countries.length,
+    snapshot_players: snapshotPlayers,
+    normalized_rows: normalizedRows,
+    duration_ms: Date.now() - startedAt,
+  });
+}
+
+// Rebuilds the compatibility GLOBAL snapshot for popular/favourites/random.
+// The farmed section is deliberately absent: it lives in the row-granular
+// projection above and is served from its packed board. Consequently this job
+// never folds >1M score rows or serializes the old ~60 MB farmed blob.
 export async function refreshGlobalMaps(db: Db, signal?: AbortSignal): Promise<{ generatedAt: string; farmed: number; mostPlayed: number; favourites: number; beatmapsetPool: number }> {
   logInfo("refresh_global_maps_memory", { phase: "start", heap_used_mb: heapUsedMb() });
+  await backfillGlobalMapsFarmedProjection(db, signal);
   const countryRows = (await exec(
     db,
     "select country from country_maps_snapshots where country != ? order by country",
     [GLOBAL_COUNTRY_CODE],
   )).rows;
 
-  const farmedByBeatmap = new Map<number, Map<number, StoredMapsFarmedPlayer>>();
   const mostPlayedByBeatmap = new Map<number, Map<number, StoredMapsCountPlayer>>();
   const favouritesByBeatmapset = new Map<number, Set<number>>();
   const favouritesByPlayerSets = new Map<number, Set<number>>();
@@ -3103,14 +3899,6 @@ export async function refreshGlobalMaps(db: Db, signal?: AbortSignal): Promise<{
     )).rows[0];
     const stored = payloadRow ? toStoredCountryMapsData(parseJson<unknown>(payloadRow.payload_json, null)) : null;
     if (!stored) continue;
-    for (const entry of stored.farmed) {
-      let players = farmedByBeatmap.get(entry.beatmapId);
-      if (!players) farmedByBeatmap.set(entry.beatmapId, (players = new Map()));
-      for (const player of entry.players) {
-        const existing = players.get(player.id);
-        if (!existing || player.pp > existing.pp) players.set(player.id, player);
-      }
-    }
     for (const entry of stored.mostPlayed) {
       let players = mostPlayedByBeatmap.get(entry.beatmapId);
       if (!players) mostPlayedByBeatmap.set(entry.beatmapId, (players = new Map()));
@@ -3133,79 +3921,6 @@ export async function refreshGlobalMaps(db: Db, signal?: AbortSignal): Promise<{
     for (const id of stored.beatmapsetsPool) pool.add(id);
   }
   logInfo("refresh_global_maps_memory", { phase: "countries_merged", countries: countryRows.length, heap_used_mb: heapUsedMb() });
-
-  // Farmed scores also live in a compact row table as players refresh over
-  // time. Merge those in so Global farmed counts are not limited to whatever
-  // was present in the last per-country snapshot. Paged by rowid (the table
-  // holds >1M rows on prod) so each page is folded then released.
-  let farmedRowsProcessed = 0;
-  let cursor = 0;
-  for (;;) {
-    throwIfAborted(signal);
-    const page = (await exec(
-      db,
-      `select rowid as rid, beatmap_id, user_id, pp, mods_json, score_url, played_at
-       from country_maps_farmed_scores
-       where rowid > ? and country != ?
-       order by rowid
-       limit ?`,
-      [cursor, GLOBAL_COUNTRY_CODE, GLOBAL_MAPS_FARMED_ROWS_PAGE],
-    )).rows;
-    if (page.length === 0) break;
-    for (const row of page) {
-      farmedRowsProcessed += 1;
-      cursor = Number(row.rid);
-      const beatmapId = Number(row.beatmap_id);
-      const userId = Number(row.user_id);
-      const pp = Number(row.pp ?? 0);
-      if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0 || !Number.isSafeInteger(userId) || userId <= 0 || !Number.isFinite(pp) || pp <= 0) {
-        continue;
-      }
-      let players = farmedByBeatmap.get(beatmapId);
-      if (!players) farmedByBeatmap.set(beatmapId, (players = new Map()));
-      const player: StoredMapsFarmedPlayer = {
-        id: userId,
-        pp,
-        mods: parseJson<string[]>(row.mods_json, []),
-        scoreUrl: row.score_url == null ? null : String(row.score_url),
-        playedAt: row.played_at == null ? null : String(row.played_at),
-      };
-      const existing = players.get(userId);
-      if (!existing || player.pp > existing.pp || (player.pp === existing.pp && (player.playedAt ?? "") > (existing.playedAt ?? ""))) {
-        players.set(userId, player);
-      }
-    }
-    // Yield after each page so the event loop is never held for a whole page's
-    // fold, and let the page result set be reclaimed before the next fetch.
-    await yieldToEventLoop();
-    if (page.length < GLOBAL_MAPS_FARMED_ROWS_PAGE) break;
-  }
-  logInfo("refresh_global_maps_memory", { phase: "farmed_rows_merged", farmed_rows: farmedRowsProcessed, heap_used_mb: heapUsedMb() });
-
-  // The remaining aggregate/sort blocks are each a solid chunk of CPU; yield
-  // between them to bound how long the event loop is held at a stretch.
-  await yieldToEventLoop();
-  throwIfAborted(signal);
-  const farmed = [...farmedByBeatmap.entries()]
-    .flatMap(([beatmapId, playerMap]): StoredCountryMapsData["farmed"] => {
-      const players = [...playerMap.values()].sort((a, b) => b.pp - a.pp);
-      const maxPp = players.reduce((max, player) => Math.max(max, player.pp), 0);
-      if (players.length < 2 && maxPp < FARMED_SINGLE_PLAYER_PP_MIN) return [];
-      const avgPp = players.reduce((sum, player) => sum + player.pp, 0) / players.length;
-      return [{
-        beatmapId,
-        playerCount: players.length,
-        avgPp,
-        maxPp,
-        // Computed over the full player union, before the players list is
-        // truncated to the top GLOBAL_MAPS_PLAYERS_PER_ENTRY by pp. Otherwise
-        // the flag is derived from the highest-pp scores (which skew DT) rather
-        // than the majority of farmers.
-        dominantMod: getDominantStoredMapsSpeedMod(players),
-        players: players.slice(0, GLOBAL_MAPS_PLAYERS_PER_ENTRY),
-      }];
-    })
-    .sort((a, b) => b.playerCount - a.playerCount || b.avgPp - a.avgPp);
 
   await yieldToEventLoop();
   const mostPlayed = [...mostPlayedByBeatmap.entries()]
@@ -3240,15 +3955,20 @@ export async function refreshGlobalMaps(db: Db, signal?: AbortSignal): Promise<{
     .sort((a, b) => (favouritesByBeatmapset.get(b)?.size ?? 0) - (favouritesByBeatmapset.get(a)?.size ?? 0));
 
   const generatedAt = nowIso();
+  const projectionState = await readGlobalMapsFarmedProjectionState(db);
+  const farmedCount = Number((await exec(
+    db,
+    "select count(*) as count from global_maps_farmed_aggregates",
+  )).rows[0]?.count ?? 0);
   const stored: StoredCountryMapsData = {
     schemaVersion: 2,
-    farmed,
+    farmed: [],
     mostPlayed,
     favourites,
     favouritesByPlayer,
     beatmapsetsPool,
     generatedAt,
-    farmedGeneratedAt: generatedAt,
+    farmedGeneratedAt: projectionState?.updatedAt || generatedAt,
     favouritesGeneratedAt: generatedAt,
   };
 
@@ -3262,7 +3982,8 @@ export async function refreshGlobalMaps(db: Db, signal?: AbortSignal): Promise<{
   });
 
   const refreshedAt = nowIso();
-  // json(stored) serialises the whole global snapshot in one synchronous pass.
+  // The compatibility payload no longer contains the large farmed board, so
+  // this serialization is limited to popular/favourites/random data.
   await yieldToEventLoop();
   await exec(
     db,
@@ -3272,14 +3993,13 @@ export async function refreshGlobalMaps(db: Db, signal?: AbortSignal): Promise<{
     [GLOBAL_COUNTRY_CODE, json(stored), generatedAt, refreshedAt],
   );
 
-  // Intentionally does not hydrate `stored` back into display form: hydrating
-  // the whole ~60MB blob (joining every beatmap/beatmapset/user) is a large
-  // memory spike, and the only caller (the refresh_global_maps job) discards the
-  // return value. The read path hydrates on demand from the persisted snapshot.
+  // Intentionally does not hydrate `stored` back into display form: the only
+  // caller (the refresh_global_maps job) discards the return value, and the read
+  // path hydrates the requested page on demand from the persisted snapshot.
   logInfo("refresh_global_maps_memory", { phase: "persisted", heap_used_mb: heapUsedMb() });
   return {
     generatedAt,
-    farmed: stored.farmed.length,
+    farmed: farmedCount,
     mostPlayed: stored.mostPlayed.length,
     favourites: stored.favourites.length,
     beatmapsetPool: stored.beatmapsetsPool.length,
@@ -3637,7 +4357,8 @@ async function readMapsFarmedPageMetadataByIds(db: Db, ids: number[]): Promise<M
        b.version,
        bs.title,
        bs.artist,
-       bs.creator
+       bs.creator,
+       coalesce(nullif(bs.status, ''), b.status, '') as status
      from maps_beatmaps b
      left join beatmaps raw on raw.beatmap_id = b.beatmap_id
      left join maps_beatmapsets bs on bs.beatmapset_id = b.beatmapset_id
@@ -3655,6 +4376,7 @@ async function readMapsFarmedPageMetadataByIds(db: Db, ids: number[]): Promise<M
       title: String(row.title ?? ""),
       artist: String(row.artist ?? ""),
       creator: String(row.creator ?? ""),
+      status: String(row.status ?? ""),
     }];
   }));
 }
@@ -3863,6 +4585,7 @@ export async function recordMapsFarmedScore(
     ],
   );
   if (Number(result.rowsAffected ?? 0) === 0) return null;
+  await syncGlobalMapsFarmedUserBeatmaps(db, row.userId, [row.beatmapId], updatedAt);
   await refreshFarmHelperKeyStatsForUser(db, row.userId, updatedAt);
   await touchMapsFarmedOverlay(db, row.country, updatedAt);
   return { country: row.country, userId: row.userId, beatmapId: row.beatmapId, updatedAt };
@@ -4573,6 +5296,13 @@ async function replaceUserMapsFarmedOverlay(
   rows: MapsFarmedOverlayWriteRow[],
   updatedAt: string,
 ): Promise<void> {
+  const previousBeatmapIds = (await exec(
+    db,
+    "select beatmap_id from country_maps_farmed_scores where country = ? and user_id = ?",
+    [country, userId],
+  )).rows
+    .map((row) => Number(row.beatmap_id))
+    .filter((beatmapId) => Number.isSafeInteger(beatmapId) && beatmapId > 0);
   const statements: DbStatement[] = [
     { sql: "delete from country_maps_farmed_scores where country = ? and user_id = ?", args: [country, userId] },
   ];
@@ -4607,6 +5337,10 @@ async function replaceUserMapsFarmedOverlay(
   }
   const results = await execBatch(db, statements);
   const deleted = results[0];
+  const affectedBeatmapIds = [...new Set([...previousBeatmapIds, ...rows.map((row) => row.beatmapId)])];
+  if (affectedBeatmapIds.length > 0) {
+    await syncGlobalMapsFarmedUserBeatmaps(db, userId, affectedBeatmapIds, updatedAt);
+  }
   await markUserMapsFarmedOverlaySeeded(db, country, userId, updatedAt);
   if (rows.length > 0 || Number(deleted?.rowsAffected ?? 0) > 0) {
     await refreshFarmHelperKeyStatsForUser(db, userId, updatedAt);
@@ -5079,10 +5813,10 @@ async function readLatestCountryMapsSourceRefreshedAt(db: Db): Promise<string | 
 }
 
 async function isGlobalMapsSnapshotBehindSources(db: Db, refreshedAt: string | null): Promise<boolean> {
-  return (
-    isIsoAfter(await readLatestCountryMapsSourceRefreshedAt(db), refreshedAt) ||
-    isIsoAfter(await readGlobalMapsFarmedOverlayUpdatedAt(db), refreshedAt)
-  );
+  // Farmed freshness is tracked by global_maps_farmed_state and patched onto
+  // the packed board. Only the blob-backed popular/favourite/random sections
+  // can make the compatibility GLOBAL snapshot stale now.
+  return isIsoAfter(await readLatestCountryMapsSourceRefreshedAt(db), refreshedAt);
 }
 
 function isIsoAfter(candidate: string | null | undefined, baseline: string | null | undefined): boolean {
