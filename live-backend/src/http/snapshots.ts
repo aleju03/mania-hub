@@ -52,7 +52,7 @@ import {
   writeReplayVideoUpload,
 } from "../replay-video/exports.js";
 import { isReplayVideoStorageConfigured } from "../replay-video/r2.js";
-import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, findPublishedSkinByOskSha256, withoutDownloadCount, finishSkin, finishSkinEdit, getSkin, getSkinByRef, getSkinForPreviewEdit, getSkinForUpload, listSkins, recordSkinDownload, setSkinAccent, setSkinCoverKeymode, setSkinHidden, SKIN_MAX_SCREENSHOTS, startSkinEdit, toSkinSummary, upsertSkinKeymodePreview } from "../features/skins.js";
+import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, findPublishedSkinByOskSha256, withoutDownloadCount, finishSkin, finishSkinEdit, getSkin, getSkinByRef, getSkinForPreviewEdit, getSkinForUpload, listSkins, recordSkinDownload, renameSkin, setSkinAccent, setSkinCoverKeymode, setSkinHidden, SKIN_MAX_SCREENSHOTS, startSkinEdit, toSkinSummary, upsertSkinKeymodePreview } from "../features/skins.js";
 import { deleteSkinObjects, getSkinObject, isSkinStorageConfigured, nextSkinPreviewRevision, skinKeymodePreviewKey, skinOskKey, skinPreviewKey, skinScreenshotKey, uploadSkinObject } from "../skins/r2.js";
 import { sniffImage, validateOskBuffer } from "../skins/validate-osk.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
@@ -1729,7 +1729,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     sendJson(req, res, ctx, 400, { ok: false, error: "invalid_part" });
     return true;
   }
-  if (url.pathname === "/api/skins/edit-start" || url.pathname === "/api/skins/cover") {
+  if (url.pathname === "/api/skins/edit-start" || url.pathname === "/api/skins/cover" || url.pathname === "/api/skins/rename") {
     // Admin-token gated like /api/skins/delete: the frontend server fn forwards the
     // osu!-verified viewer id, and the ownership check below keeps a user off anyone
     // else's skin. asAdmin is set only by the server fn that verified a true admin.
@@ -1745,7 +1745,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 503, { error: "skin_storage_not_configured" });
       return true;
     }
-    const body = parseJson<{ userId?: unknown; id?: unknown; keys?: unknown; asAdmin?: unknown }>((await readBody(req)) || "{}", {});
+    const body = parseJson<{ userId?: unknown; id?: unknown; keys?: unknown; name?: unknown; asAdmin?: unknown }>((await readBody(req)) || "{}", {});
     const userId = Number(body.userId);
     const id = typeof body.id === "string" ? body.id : "";
     if (!Number.isInteger(userId) || userId <= 0 || !id) {
@@ -1753,6 +1753,22 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     const ownerUserId = body.asAdmin === true ? null : userId;
+    if (url.pathname === "/api/skins/rename") {
+      const result = await renameSkin(
+        ctx.serveWriteDb ?? ctx.db,
+        id,
+        typeof body.name === "string" ? body.name : "",
+        ownerUserId,
+      );
+      if (!result.ok) {
+        const status = result.error === "forbidden" ? 403 : result.error === "invalid_name" ? 400 : 404;
+        sendJson(req, res, ctx, status, { ok: false, error: result.error });
+        return true;
+      }
+      logInfo("skin_renamed", { id, by: ownerUserId == null ? "admin" : "owner" });
+      sendJson(req, res, ctx, 200, { ok: true, skin: withoutDownloadCount(result.skin) });
+      return true;
+    }
     if (url.pathname === "/api/skins/cover") {
       const keys = Math.round(Number(body.keys));
       if (!Number.isInteger(keys) || keys < 1 || keys > 10) {

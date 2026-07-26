@@ -55,6 +55,7 @@ export interface SkinsListResult {
 }
 
 export const SKINS_PAGE_SIZE = 24;
+export const SKIN_NAME_MAX_LENGTH = 80;
 export const SKIN_AUTHOR_MAX_LENGTH = 64;
 export const SKIN_DESCRIPTION_MAX_LENGTH = 500;
 export const SKIN_OSK_MAX_BYTES = 50 * 1024 * 1024;
@@ -436,6 +437,34 @@ export const setSkinCoverKeymode = createServerFn({ method: "POST" })
       });
       const body = (await response.json().catch(() => null)) as { ok?: boolean; skin?: SkinSummary } | null;
       if (!response.ok || !body?.ok) return { ok: false };
+      return { ok: true, skin: body.skin };
+    } catch {
+      return { ok: false };
+    }
+  });
+
+// Retitles an already published skin. The URL slug is not rebuilt: it was
+// assigned at publish time and is what shared links point at.
+export const renameSkin = createServerFn({ method: "POST" })
+  .validator((data: { id?: unknown; name?: unknown }) => {
+    const id = typeof data.id === "string" ? data.id.trim() : "";
+    const name = typeof data.name === "string" ? data.name.slice(0, SKIN_NAME_MAX_LENGTH).trim() : "";
+    if (!id || id.length > 64 || !name) throw new Error("Invalid rename request.");
+    return { id, name };
+  })
+  .handler(async ({ data }): Promise<{ ok: boolean; skin?: SkinSummary }> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const cfg = await resolveSkinsBackend();
+    if (!cfg) return { ok: false };
+    try {
+      const response = await fetch(`${cfg.base}/api/skins/rename`, {
+        method: "POST",
+        headers: cfg.headers,
+        body: JSON.stringify({ userId: cfg.userId, id: data.id, name: data.name, asAdmin: cfg.isAdmin }),
+      });
+      const body = (await response.json().catch(() => null)) as { ok?: boolean; skin?: SkinSummary } | null;
+      if (!response.ok || !body?.ok || !body.skin) return { ok: false };
       return { ok: true, skin: body.skin };
     } catch {
       return { ok: false };

@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { ArrowLeft, Download, ImageIcon, Trash2 } from "lucide-react";
+import { ArrowLeft, Download, ImageIcon, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ManiaRain } from "../components/home/ManiaRain";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
@@ -12,7 +12,7 @@ import { useAuth } from "../lib/auth-context";
 import { formatTimeAgo } from "../lib/format";
 import { skinEventProperties } from "../lib/analytics-skins";
 import { track } from "../lib/posthog";
-import { deleteMySkin, fetchSkinById, formatKeymodes, formatSkinFileSize, markSkinsListStale, moderateSkin, readSkinsBrowseEntry, skinDownloadUrl, type SkinSummary } from "../lib/skins";
+import { deleteMySkin, fetchSkinById, formatKeymodes, formatSkinFileSize, markSkinsListStale, moderateSkin, readSkinsBrowseEntry, renameSkin, SKIN_NAME_MAX_LENGTH, skinDownloadUrl, type SkinSummary } from "../lib/skins";
 import { pageSeo } from "../lib/seo";
 
 export const Route = createFileRoute("/skins_/$id")({
@@ -42,7 +42,11 @@ export const Route = createFileRoute("/skins_/$id")({
       path: `/skins/${skin.slug ?? skin.id}`,
       origin: match.context.origin,
       // Skins without a rendered preview fall back to the falling-notes card.
+      // The preview renders 16:9, not the 1.91:1 of the generated cards, so its
+      // real size travels with it or scrapers crop the embed.
       image: skin.previewUrl ?? undefined,
+      imageWidth: skin.previewWidth,
+      imageHeight: skin.previewHeight,
       imageKind: "skins",
     });
   },
@@ -69,6 +73,8 @@ function SkinDetailPage() {
   const historyIndex = useRouterState({ select: (state) => state.location.state.__TSR_index });
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [editingPreviews, setEditingPreviews] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
 
   // Stepping back keeps the browse page's filters, page and scroll; only a skin
   // reached from somewhere else takes the plain /skins route.
@@ -133,6 +139,40 @@ function SkinDetailPage() {
       setActionError("The delete failed. Try again.");
       setConfirmingDelete(false);
     }
+  };
+
+  const openRename = () => {
+    if (!skin) return;
+    setNameDraft(skin.name);
+    setActionError(null);
+    setRenaming(true);
+  };
+
+  const submitRename = async () => {
+    if (!skin || busy) return;
+    const name = nameDraft.trim();
+    if (!name) {
+      setActionError("The skin needs a name.");
+      return;
+    }
+    if (name === skin.name) {
+      setRenaming(false);
+      return;
+    }
+    setBusy(true);
+    setActionError(null);
+    const result = await renameSkin({ data: { id: skin.id, name } }).catch(() => ({ ok: false as const, skin: undefined }));
+    setBusy(false);
+    if (!result.ok || !result.skin) {
+      setActionError("The rename failed. Try again.");
+      return;
+    }
+    // The browse list is browser-cached, so its card would keep the old title.
+    markSkinsListStale();
+    // The endpoint drops the owner-only download count; carrying the loaded one
+    // across keeps the fact row from blinking out until the next page load.
+    setEdited({ ...result.skin, downloadCount: result.skin.downloadCount ?? skin.downloadCount });
+    setRenaming(false);
   };
 
   return (
@@ -318,15 +358,26 @@ function SkinDetailPage() {
                         {auth.isAdmin && !isOwner ? "Moderation" : "Your skin"}
                       </span>
                       {!confirmingDelete && (
-                        <button
-                          type="button"
-                          onClick={() => setEditingPreviews(true)}
-                          disabled={busy}
-                          className="inline-flex items-center gap-1.5 rounded-full border border-osu-b3/50 px-3 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white disabled:opacity-50"
-                        >
-                          <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
-                          Edit previews
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setEditingPreviews(true)}
+                            disabled={busy}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-osu-b3/50 px-3 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white disabled:opacity-50"
+                          >
+                            <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                            Edit previews
+                          </button>
+                          <button
+                            type="button"
+                            onClick={renaming ? () => setRenaming(false) : openRename}
+                            disabled={busy}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-osu-b3/50 px-3 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white disabled:opacity-50"
+                          >
+                            <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                            Rename
+                          </button>
+                        </>
                       )}
                       {confirmingDelete ? (
                         <span className="ml-auto flex items-center gap-2 text-[12px]">
@@ -359,6 +410,44 @@ function SkinDetailPage() {
                           <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                           Delete skin
                         </button>
+                      )}
+                      {renaming && !confirmingDelete && (
+                        <form
+                          className="flex w-full flex-wrap items-center gap-2"
+                          onSubmit={(event) => {
+                            event.preventDefault();
+                            void submitRename();
+                          }}
+                        >
+                          <input
+                            type="text"
+                            autoFocus
+                            value={nameDraft}
+                            maxLength={SKIN_NAME_MAX_LENGTH}
+                            disabled={busy}
+                            onChange={(event) => setNameDraft(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Escape") setRenaming(false);
+                            }}
+                            aria-label="Skin name"
+                            className="min-w-0 flex-1 rounded-lg border border-osu-b3/30 bg-osu-b5 px-3 py-2 text-[13.5px] text-osu-l1 transition-colors focus:border-osu-pink/50 focus:outline-none"
+                          />
+                          <button
+                            type="submit"
+                            disabled={busy || !nameDraft.trim()}
+                            className="rounded-full bg-osu-pink px-4 py-1.5 text-[12px] font-bold text-white transition cursor-pointer hover:brightness-110 disabled:opacity-50"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setRenaming(false)}
+                            disabled={busy}
+                            className="px-1 text-[12px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1 disabled:opacity-50"
+                          >
+                            Cancel
+                          </button>
+                        </form>
                       )}
                       {actionError && <span className="text-[12px] font-semibold text-osu-red-light">{actionError}</span>}
                       <SkinPreviewEditorModal

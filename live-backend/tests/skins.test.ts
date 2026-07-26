@@ -20,6 +20,7 @@ import {
   getSkinForUpload,
   listExpiredPendingSkins,
   listSkins,
+  renameSkin,
   setSkinAccent,
   setSkinCoverKeymode,
   setSkinHidden,
@@ -763,6 +764,41 @@ describe("editing a published skin's previews", () => {
     expect(row?.previewUrl).toBe(replacement.url);
     expect(row?.previewKey).toBe(replacement.key);
     expect(row?.previews.map((preview) => preview.key)).toEqual([replacement.key, `skins/${id}/preview-7k.webp`]);
+  });
+
+  it("renames a published skin, keeping its slug and refreshing what search matches", async () => {
+    const id = await createPublishedSkin({ ...OWNER, name: "Untitled Skin" });
+    const slug = (await getSkin(db, id))?.slug;
+    expect(slug).toBe("untitled-skin");
+
+    const renamed = await renameSkin(db, id, "  Aqua   Mania  ", OWNER.ownerUserId);
+    expect(renamed.ok).toBe(true);
+    if (renamed.ok) expect(renamed.skin.name).toBe("Aqua Mania");
+
+    const row = await getSkin(db, id);
+    // The slug is what shared links point at, so a rename must not move it.
+    expect(row?.slug).toBe(slug);
+    expect((await getSkinByRef(db, "untitled-skin"))?.id).toBe(id);
+    // Search follows the new title, and stops matching the old one.
+    expect((await listSkins(db, { q: "aqua" })).skins.map((skin) => skin.id)).toEqual([id]);
+    expect((await listSkins(db, { q: "untitled" })).total).toBe(0);
+    // The uploader stays searchable after the retitle.
+    expect((await listSkins(db, { q: OWNER.ownerUsername })).total).toBe(1);
+  });
+
+  it("refuses a rename from a non-owner or with an empty name", async () => {
+    const id = await createPublishedSkin({ ...OWNER, name: "Keep This" });
+
+    expect(await renameSkin(db, id, "Stolen", OWNER.ownerUserId + 1)).toEqual({ ok: false, error: "forbidden" });
+    expect(await renameSkin(db, id, "   ", OWNER.ownerUserId)).toEqual({ ok: false, error: "invalid_name" });
+    expect(await renameSkin(db, "no-such-skin", "Whatever", OWNER.ownerUserId)).toEqual({ ok: false, error: "not_found" });
+    expect((await getSkin(db, id))?.name).toBe("Keep This");
+
+    // The admin path skips the ownership check, and the name is trimmed to the
+    // same cap the upload form enforces.
+    const long = await renameSkin(db, id, "z".repeat(200), null);
+    expect(long.ok).toBe(true);
+    if (long.ok) expect(long.skin.name).toHaveLength(80);
   });
 
   it("leaves a published skin carrying a stale edit ticket alone at retention time", async () => {

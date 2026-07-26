@@ -292,6 +292,35 @@ export async function setSkinCoverKeymode(
   return updated ? { ok: true, skin: toSkinSummary(updated) } : { ok: false, error: "not_found" };
 }
 
+export type RenameSkinResult =
+  | { ok: true; skin: SkinSummary }
+  | { ok: false; error: "not_found" | "forbidden" | "invalid_name" };
+
+// Retitles a published skin. The slug deliberately stays as it was published:
+// it is what every shared link points at, and a rename must not 404 them. The
+// stored .osk keeps the filename it was uploaded under for the same reason -
+// its key is baked into osk_url, which browser and edge caches already hold.
+// ownerUserId null is the admin path, which skips the ownership check.
+export async function renameSkin(
+  db: Db,
+  id: string,
+  rawName: string,
+  ownerUserId: number | null,
+): Promise<RenameSkinResult> {
+  const name = cleanText(rawName, SKIN_NAME_MAX_LENGTH);
+  if (!name) return { ok: false, error: "invalid_name" };
+  const row = await getSkin(db, id);
+  if (!row || row.status === "pending") return { ok: false, error: "not_found" };
+  if (ownerUserId != null && row.ownerUserId !== ownerUserId) return { ok: false, error: "forbidden" };
+  await exec(
+    db,
+    "update skins set name = ?, search_text = ?, updated_at = ? where id = ?",
+    [name, buildSearchText(name, row.ownerUsername, row.author), nowIso(), id],
+  );
+  const updated = await getSkin(db, id);
+  return updated ? { ok: true, skin: toSkinSummary(updated) } : { ok: false, error: "not_found" };
+}
+
 export type StartSkinEditResult =
   | { ok: true; id: string; token: string; expiresAt: string }
   | { ok: false; error: "not_found" | "forbidden" };

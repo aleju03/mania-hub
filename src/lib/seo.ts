@@ -77,6 +77,11 @@ export interface PageSeoInput {
   path: string;
   origin: string;
   image?: string;
+  /* Pixel size of a custom `image`. The generated /api/og cards are always
+     1200x630, so only pages passing their own image need these; declaring the
+     wrong ratio makes scrapers crop or letterbox the embed. */
+  imageWidth?: number | null;
+  imageHeight?: number | null;
   imageCountry?: string;
   imageKind?: string;
   type?: "website" | "article" | "profile";
@@ -96,6 +101,8 @@ export function pageSeo({
   path,
   origin,
   image,
+  imageWidth,
+  imageHeight,
   imageCountry,
   imageKind,
   type = "website",
@@ -109,6 +116,11 @@ export function pageSeo({
     image ?? ogImagePath(title, { country: imageCountry, kind: imageKind }),
     origin,
   );
+  // A custom image of unknown size gets no dimension hints at all; that reads
+  // better to a scraper than the generated card's 1200x630 asserted over it.
+  const size = image
+    ? (imageWidth && imageHeight ? { width: imageWidth, height: imageHeight } : null)
+    : { width: 1200, height: 630 };
 
   const meta: MetaEntry[] = [
     { title: fullTitle },
@@ -123,13 +135,17 @@ export function pageSeo({
       { property: "og:description", content: description },
       { property: "og:url", content: url },
       { property: "og:image", content: imageUrl },
-      { property: "og:image:width", content: "1200" },
-      { property: "og:image:height", content: "630" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: fullTitle },
       { name: "twitter:description", content: description },
       { name: "twitter:image", content: imageUrl },
     );
+    if (size) {
+      meta.push(
+        { property: "og:image:width", content: String(size.width) },
+        { property: "og:image:height", content: String(size.height) },
+      );
+    }
   }
 
   if (noindex) {

@@ -384,6 +384,31 @@ describe("skins HTTP endpoints", () => {
     expect((await call(bodyReq("POST", `/api/skins/upload?id=${editId}&token=${editToken}&part=preview&keys=4`, PNG_BYTES))).status).toBe(403);
   });
 
+  it("renames a published skin for its owner only", async () => {
+    const { id, token } = await startUpload();
+    await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=osk`, await buildOskBuffer()));
+    await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=preview&keys=4&cover=1&w=1280&h=720`, PNG_BYTES));
+    await call(mockReq("POST", `/api/skins/finish?id=${id}&token=${token}`));
+    const slug = (await call(mockReq("GET", `/api/skins/get?id=${id}`))).body.skin.slug as string;
+
+    const rename = (payload: object, headers?: Record<string, string>) =>
+      call(bodyReq("POST", "/api/skins/rename", JSON.stringify(payload), headers));
+
+    expect((await rename({ userId: 101, id, name: "Renamed" })).status).toBe(401);
+    expect((await rename({ userId: 202, id, name: "Renamed" }, ADMIN)).status).toBe(403);
+    expect((await rename({ userId: 101, id, name: "  " }, ADMIN)).status).toBe(400);
+
+    const renamed = await rename({ userId: 101, id, name: "Renamed Skin" }, ADMIN);
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.skin.name).toBe("Renamed Skin");
+    // The slug is untouched, so links shared under the old title still resolve.
+    expect(renamed.body.skin.slug).toBe(slug);
+    expect((await call(mockReq("GET", `/api/skins/get?id=${slug}`))).body.skin.name).toBe("Renamed Skin");
+
+    // A true admin may retitle someone else's skin.
+    expect((await rename({ userId: 202, id, name: "Moderated", asAdmin: true }, ADMIN)).status).toBe(200);
+  });
+
   it("rejects oversized osk uploads before buffering", async () => {
     const { id, token } = await startUpload();
     const oversized = await call(mockReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=osk`, {
