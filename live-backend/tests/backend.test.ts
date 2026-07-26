@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { createDb, exec, execBatch, migrate } from "../src/db.js";
 import { getSnipesSnapshot, updateSnipeProjection } from "../src/features/snipes.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../src/features/activity.js";
-import { enqueueMapsRefresh, enqueueMapsRefreshIfDue, getGlobalFarmedBoardCacheStatsForTests, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, recordMapsFarmedScore, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores, waitForGlobalFarmedBoardBuild, type MapsPageQuery } from "../src/features/maps.js";
+import { enqueueMapsRefresh, enqueueMapsRefreshIfDue, getGlobalFarmedBoardCacheStatsForTests, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, recordMapsFarmedScore, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores, type MapsPageQuery } from "../src/features/maps.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu } from "../src/features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../src/features/rank-snapshots.js";
