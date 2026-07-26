@@ -24,7 +24,8 @@ import {
   normalizeBeatmapChecksumPayload,
   normalizeReplayParsedPayload,
   normalizeScorePayload,
-  parseBoundedInt
+  parseBoundedInt,
+  parseOptionalBeatmapChecksum
 } from "./validators";
 import { decodeStableManiaReplayFrames, getStableManiaReplayScrollSpeedScale } from "../replay-frames";
 
@@ -282,20 +283,26 @@ export const lookupBeatmapByChecksum = createServerFn({ method: "GET" })
 export const getBeatmapFile = createServerFn({ method: "GET" })
   .validator((input: unknown) => {
     const data = normalizeBeatmapPayload(input);
-    const beatmapsetIdRaw = typeof input === "object" && input !== null && "beatmapsetId" in input
-      ? (input as { beatmapsetId?: unknown }).beatmapsetId
-      : undefined;
-    const beatmapsetId = beatmapsetIdRaw == null || beatmapsetIdRaw === ""
+    const record = typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
+    const beatmapsetId = record.beatmapsetId == null || record.beatmapsetId === ""
       ? null
-      : parseBoundedInt(beatmapsetIdRaw, "beatmapsetId", { min: 1, max: 10_000_000 });
-    return { ...data, beatmapsetId };
+      : parseBoundedInt(record.beatmapsetId, "beatmapsetId", { min: 1, max: 10_000_000 });
+    const checksum = parseOptionalBeatmapChecksum(record.checksum);
+    return { ...data, beatmapsetId, checksum };
   })
-  .handler(async ({ data }: { data: { beatmapId: number; beatmapsetId: number | null } }) => {
-    // The .osu content only changes when the map is updated, and it is already
-    // KV-cached for 30 days; edge-cache it so repeat replay views skip the
-    // serverless + KV round trip entirely.
-    edgeCache(3600, 86400);
-    return await fetchBeatmapFileWithMeta(data.beatmapId, data.beatmapsetId);
+  .handler(async ({ data }: { data: { beatmapId: number; beatmapsetId: number | null; checksum: string | null } }) => {
+    const result = await fetchBeatmapFileWithMeta(data.beatmapId, data.beatmapsetId, data.checksum);
+    if (result.checksumMatched === false) {
+      // Wrong revision (backend refresh throttled/failed, or an old backend
+      // that ignores the param): serve it, but never let the CDN pin it under
+      // this checksum URL - the next request should get another chance.
+      noStore();
+    } else {
+      // The checksum rides in the URL, so an updated map busts this edge cache
+      // as soon as callers start sending the new value.
+      edgeCache(3600, 86400);
+    }
+    return result;
   });
 
 // Community-supplied .osu for a replay whose map osu! can't serve. Keyed only by

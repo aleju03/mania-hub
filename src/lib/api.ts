@@ -287,6 +287,10 @@ type BeatmapFileCacheValue = {
 };
 export type BeatmapFileResult = BeatmapFileCacheValue & {
   cacheStatus: "hit" | "miss";
+  /** Whether the content's md5 equals the checksum the caller asked for; null
+   *  when no checksum was requested. False means every source could only offer
+   *  a different revision (stale backend cache mid-throttle, archive copy). */
+  checksumMatched: boolean | null;
 };
 
 // Truncate API error response bodies before they hit logs / analytics. osu!
@@ -356,23 +360,34 @@ export async function osuFetchBinary(
   return await throwLiveBackendOsuError(response, caller, path, "binary", context, options?.expectedStatuses);
 }
 
-export async function fetchBeatmapFileWithMeta(beatmapId: number, beatmapsetId?: number | null): Promise<BeatmapFileResult> {
+export async function fetchBeatmapFileWithMeta(beatmapId: number, beatmapsetId?: number | null, expectedChecksum?: string | null): Promise<BeatmapFileResult> {
+  // The osu! checksum (md5 of the .osu file) changes when a map is updated, so
+  // a caller that has one (score/beatmap API payloads) can invalidate a stale
+  // cached chart here and in the backend's durable cache behind the proxy.
+  const checksum = normalizeBeatmapFileChecksum(expectedChecksum);
   const cacheKey = `beatmap-file:v1:${beatmapId}`;
   const cached = await getPersistentCacheEntry<BeatmapFileCacheValue>(cacheKey);
-  if (cached.hit && cached.value.content.trim()) {
-    return { ...cached.value, cacheStatus: "hit" };
+  const matches = async (content: string): Promise<boolean | null> =>
+    checksum ? (await beatmapFileMd5(content)) === checksum : null;
+
+  if (cached.hit && cached.value.content.trim()
+      && (!checksum || await matches(cached.value.content))) {
+    return { ...cached.value, cacheStatus: "hit", checksumMatched: checksum ? true : null };
   }
 
   const errors: string[] = [];
   try {
-    const osuFile = await fetchLiveBackendBeatmapFile(beatmapId, "fetchBeatmapFile");
+    const osuFile = await fetchLiveBackendBeatmapFile(beatmapId, "fetchBeatmapFile", checksum);
     const result = {
       content: osuFile,
       source: "osu",
       cachedAt: Date.now(),
     } satisfies BeatmapFileCacheValue;
+    // A mismatching copy (backend refresh throttled or failed) is still cached:
+    // the md5 gate above keeps checksum-carrying callers from trusting it while
+    // checksum-less callers get the usual cache behavior.
     await setPersistentCache(cacheKey, result, BEATMAP_FILE_CACHE_TTL);
-    return { ...result, cacheStatus: "miss" };
+    return { ...result, cacheStatus: "miss", checksumMatched: await matches(osuFile) };
   } catch (error) {
     errors.push(`server (${error instanceof Error ? error.message : String(error)})`);
   }
@@ -390,7 +405,7 @@ export async function fetchBeatmapFileWithMeta(beatmapId: number, beatmapsetId?:
         cachedAt: Date.now(),
       } satisfies BeatmapFileCacheValue;
       await setPersistentCache(cacheKey, result, BEATMAP_FILE_CACHE_TTL);
-      return { ...result, cacheStatus: "miss" };
+      return { ...result, cacheStatus: "miss", checksumMatched: await matches(archiveFile) };
     } catch (archiveError) {
       errors.push(`archive (${archiveError instanceof Error ? archiveError.message : String(archiveError)})`);
     }
@@ -406,6 +421,19 @@ export async function fetchBeatmapFile(beatmapId: number, beatmapsetId?: number 
 function isLikelyBeatmapFile(content: string): boolean {
   const trimmed = content.trimStart();
   return trimmed.startsWith("osu file format") && content.includes("[HitObjects]");
+}
+
+function normalizeBeatmapFileChecksum(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const checksum = value.trim().toLowerCase();
+  return /^[a-f0-9]{32}$/.test(checksum) ? checksum : null;
+}
+
+// Dynamic import keeps node:crypto out of any client bundle that ends up
+// pulling this module in; the function only ever runs server-side.
+async function beatmapFileMd5(content: string): Promise<string> {
+  const { createHash } = await import("node:crypto");
+  return createHash("md5").update(content, "utf8").digest("hex");
 }
 
 function getServerLiveBackendUrl(): string {
@@ -458,11 +486,12 @@ async function fetchLiveBackendOsu(
   );
 }
 
-async function fetchLiveBackendBeatmapFile(beatmapId: number, caller: string): Promise<string> {
+async function fetchLiveBackendBeatmapFile(beatmapId: number, caller: string, checksum?: string | null): Promise<string> {
   const base = getServerLiveBackendUrl();
   const url = new URL(`${base}/api/osu/beatmap-file`);
   url.searchParams.set("beatmapId", String(beatmapId));
   url.searchParams.set("caller", caller);
+  if (checksum) url.searchParams.set("checksum", checksum);
   const response = await fetchWithTimeout(
     url,
     { headers: liveBackendHeaders() },

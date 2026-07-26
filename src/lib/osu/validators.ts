@@ -173,6 +173,14 @@ export function normalizeBeatmapPayload(data: unknown): { beatmapId: number } {
   return { beatmapId: parseOsuId(input.beatmapId, "beatmap id") };
 }
 
+// Lenient variant for checksums that are only cache-freshness hints: malformed
+// or missing values become null instead of rejecting the request.
+export function parseOptionalBeatmapChecksum(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const checksum = value.trim().toLowerCase();
+  return /^[a-f0-9]{32}$/.test(checksum) ? checksum : null;
+}
+
 export function normalizeBeatmapChecksumPayload(data: unknown): { checksum: string } {
   const input = asInputRecord(data);
   const checksum = String(input.checksum ?? "").trim().toLowerCase();

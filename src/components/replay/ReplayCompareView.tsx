@@ -228,7 +228,7 @@ export function ReplayCompareView({
         throw new Error(`These runs used different rates (${rateA}x vs ${rateB}x). Compare needs both replays at the same rate.`);
       }
       const beatmapFilePromise = getBeatmapFile({
-        data: { beatmapId, beatmapsetId: scoreA.beatmapset?.id },
+        data: { beatmapId, beatmapsetId: scoreA.beatmapset?.id, checksum: scoreA.beatmap?.checksum },
       }).catch(() => null);
       const [sideA, sideB] = await Promise.all([
         loadCompareSide(scoreA, beatmapFilePromise),

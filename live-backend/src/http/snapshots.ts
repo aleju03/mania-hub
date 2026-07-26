@@ -39,7 +39,7 @@ import type { LiveEventLog } from "../live/event-log.js";
 import { readJobMemoryMetric, readRuntimeStatus, setWorkersPaused, type RuntimeStatusSnapshot } from "../live/runtime-status.js";
 import type { OscStatus } from "../osc/client.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
-import { getCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
+import { getCachedBeatmapFile, normalizeBeatmapFileChecksum } from "../osu/beatmap-file-cache.js";
 import { cancelOscCountryCatchup, enqueueOscBackfill, enqueueOscCountryCatchup } from "../osc/backfill.js";
 import {
   cancelReplayVideoExport,
@@ -1311,6 +1311,12 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 400, { error: "invalid_beatmap_id" });
       return true;
     }
+    const rawChecksum = url.searchParams.get("checksum");
+    const expectedChecksum = normalizeBeatmapFileChecksum(rawChecksum);
+    if (rawChecksum && !expectedChecksum) {
+      sendJson(req, res, ctx, 400, { error: "invalid_checksum" });
+      return true;
+    }
     try {
       // cachedOnly=1 serves from beatmap_osu_files / stored archives without ever
       // calling the osu! API; callers opt back into the network with a plain request.
@@ -1320,7 +1326,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         ctx.osu,
         Math.floor(beatmapId),
         normalizeCaller(url.searchParams.get("caller")),
-        cachedOnly ? { allowArchive: true, allowDirect: false } : {},
+        cachedOnly ? { allowArchive: true, allowDirect: false, expectedChecksum } : { expectedChecksum },
       );
       sendCors(req, res, ctx);
       res.statusCode = 200;

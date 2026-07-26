@@ -122,6 +122,9 @@ export interface OsuBeatmap {
   count_sliders: number; // hold notes in mania
   count_spinners: number;
   max_combo?: number;
+  // md5 of the current .osu file; identifies the map revision, so it doubles
+  // as a cache-buster for locally cached chart files.
+  checksum?: string | null;
   version: string; // difficulty name
   url: string;
 }

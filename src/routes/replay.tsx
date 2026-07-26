@@ -862,7 +862,7 @@ function ReplayPage() {
       }
       const assetsStartMs = performance.now();
       const beatmapFilePromise = score?.beatmap?.id
-        ? getBeatmapFile({ data: { beatmapId: score.beatmap.id, beatmapsetId: score.beatmapset?.id } })
+        ? getBeatmapFile({ data: { beatmapId: score.beatmap.id, beatmapsetId: score.beatmapset?.id, checksum: score.beatmap.checksum } })
           .then((result) => {
             beatmapFileMs = performance.now() - assetsStartMs;
             beatmapFileFinalStatus = result.cacheStatus === "hit" ? "cached" : "fetched";
@@ -1236,7 +1236,14 @@ function ReplayPage() {
 
     let bmResult: Awaited<ReturnType<typeof getBeatmapFile>>;
     try {
-      bmResult = await getBeatmapFile({ data: { beatmapId: beatmapMeta.id, beatmapsetId } });
+      // The replay's own chart checksum: prefer the exact revision the play
+      // was made on when deciding whether the cached .osu is the right one.
+      bmResult = await getBeatmapFile({ data: { beatmapId: beatmapMeta.id, beatmapsetId, checksum } });
+      // Wrong revision (a stale cache the backend couldn't refresh yet): a
+      // contributed community copy is keyed by this exact checksum, so it is
+      // strictly better when it exists. Otherwise the fetched file is still
+      // this map, just not this revision - watchable, judged approximately.
+      if (bmResult.checksumMatched === false && await tryCommunityBeatmap(beatmapMeta)) return;
       setReplayBeatmapFileStatus(bmResult.cacheStatus === "hit" ? "cached" : "fetched");
     } catch {
       if (await tryCommunityBeatmap(beatmapMeta)) return;
