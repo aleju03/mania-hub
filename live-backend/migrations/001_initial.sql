@@ -320,6 +320,7 @@ create table if not exists global_maps_farmed_state (
   singleton integer primary key check (singleton = 1),
   initialized integer not null default 0,
   revision integer not null default 0,
+  seed_epoch integer not null default 0,
   updated_at text not null
 );
 

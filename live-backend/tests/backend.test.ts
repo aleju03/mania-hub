@@ -4,10 +4,10 @@ import { brotliDecompressSync, gunzipSync } from "node:zlib";
 import { EventEmitter } from "node:events";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createDb, exec, migrate } from "../src/db.js";
+import { createDb, exec, execBatch, migrate } from "../src/db.js";
 import { getSnipesSnapshot, updateSnipeProjection } from "../src/features/snipes.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../src/features/activity.js";
-import { enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, recordMapsFarmedScore, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores, waitForGlobalFarmedBoardBuild, type MapsPageQuery } from "../src/features/maps.js";
+import { enqueueMapsRefresh, enqueueMapsRefreshIfDue, getGlobalFarmedBoardCacheStatsForTests, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, recordMapsFarmedScore, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores, waitForGlobalFarmedBoardBuild, type MapsPageQuery } from "../src/features/maps.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu } from "../src/features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../src/features/rank-snapshots.js";
@@ -223,6 +223,34 @@ afterEach(async () => {
 });
 
 describe("live backend", () => {
+  it("adds a seed epoch to an existing Global farmed projection state", async () => {
+    dir = await mkdtemp(join(tmpdir(), "mania-live-projection-migration-"));
+    const db = await createDb({ databaseUrl: `file:${join(dir, "test.db")}` });
+    await exec(
+      db,
+      `create table global_maps_farmed_state (
+         singleton integer primary key check (singleton = 1),
+         initialized integer not null default 0,
+         revision integer not null default 0,
+         updated_at text not null
+       )`,
+    );
+    await exec(
+      db,
+      "insert into global_maps_farmed_state (singleton, initialized, revision, updated_at) values (1, 1, 7, ?)",
+      ["2026-05-12T12:00:00.000Z"],
+    );
+
+    await migrate(db);
+
+    const columns = (await exec(db, "pragma table_info(global_maps_farmed_state)")).rows.map((row) => String(row.name));
+    expect(columns).toContain("seed_epoch");
+    expect((await exec(
+      db,
+      "select initialized, revision, seed_epoch from global_maps_farmed_state where singleton = 1",
+    )).rows[0]).toMatchObject({ initialized: 1, revision: 7, seed_epoch: 0 });
+  });
+
   it("migrates a fresh DB and ingests mocked oSC idempotently", async () => {
     const { db, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");
@@ -5565,6 +5593,146 @@ describe("live backend", () => {
       scoreUrl: "https://osu.ppy.sh/scores/6665949113",
       playedAt: scoredAt,
     });
+  });
+
+  it("replaces a running process's packed board after a country-delete re-seed", async () => {
+    const { db, queue } = await setup();
+    const now = "2026-05-12T12:00:00.000Z";
+    await exec(
+      db,
+      `insert into maps_beatmapsets
+         (beatmapset_id, title, artist, creator, status, covers_json, global_play_count, global_favourite_count, preview_url, bpm, mania_keys_json, patterns_json, updated_at)
+       values (10, 'CR Set', 'Artist', 'Mapper', 'ranked', '{}', 1, 1, '', 180, '[4]', '[]', ?),
+              (20, 'MX Set', 'Artist', 'Mapper', 'ranked', '{}', 1, 1, '', 180, '[4]', '[]', ?)`,
+      [now, now],
+    );
+    await exec(
+      db,
+      `insert into maps_beatmaps
+         (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, total_length, version, url, updated_at)
+       values (11, 10, 'mania', 'ranked', 4, 5.5, 180, 120, '[4K] CR', 'https://osu.ppy.sh/beatmaps/11', ?),
+              (21, 20, 'mania', 'ranked', 4, 6.5, 180, 120, '[4K] MX', 'https://osu.ppy.sh/beatmaps/21', ?)`,
+      [now, now],
+    );
+    await exec(
+      db,
+      `insert into country_maps_farmed_scores
+         (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at)
+       values ('CR', 101, 11, 1101, 600, '{}', '[]', null, ?, ?, ?),
+              ('MX', 202, 21, 2102, 700, '{}', '[]', null, ?, ?, ?)`,
+      [now, now, now, now, now, now],
+    );
+    await refreshGlobalMaps(db);
+
+    const query: MapsPageQuery = {
+      tab: "farmed", page: 0, pageSize: 24, key: "all", beatmapSort: "players", farmedSort: "max-pp", dir: "desc", status: "all", pp: 0, mod: "all", q: "",
+    };
+    const first = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query);
+    expect(first.value?.items.map((item) => (item as { beatmapId: number }).beatmapId)).toEqual([21, 11]);
+    const before = (await exec(
+      db,
+      "select revision, seed_epoch from global_maps_farmed_state where singleton = 1",
+    )).rows[0];
+
+    await deleteCountryData(db, "MX");
+    await refreshGlobalMaps(db);
+
+    const after = (await exec(
+      db,
+      "select revision, seed_epoch from global_maps_farmed_state where singleton = 1",
+    )).rows[0];
+    expect(Number(after.revision)).toBeGreaterThan(Number(before.revision));
+    expect(Number(after.seed_epoch)).toBeGreaterThan(Number(before.seed_epoch));
+
+    // Same Db means the old packed board is still resident. The new seed epoch
+    // must force a full replacement; revision deltas alone cannot describe the
+    // removed MX-only map.
+    const reseeded = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query);
+    expect(reseeded.value?.items.map((item) => (item as { beatmapId: number }).beatmapId)).toEqual([11]);
+    expect(getGlobalFarmedBoardCacheStatsForTests(db)?.generation).toContain(`seed:${Number(after.seed_epoch)}`);
+  });
+
+  it("fully repacks instead of materializing an oversized Global delta backlog", async () => {
+    const { db, queue } = await setup();
+    const now = "2026-05-12T12:00:00.000Z";
+    await exec(
+      db,
+      `insert into maps_beatmapsets
+         (beatmapset_id, title, artist, creator, status, covers_json, global_play_count, global_favourite_count, preview_url, bpm, mania_keys_json, patterns_json, updated_at)
+       values (10, 'Base Set', 'Artist', 'Mapper', 'ranked', '{}', 1, 1, '', 180, '[4]', '[]', ?)`,
+      [now],
+    );
+    await exec(
+      db,
+      `insert into maps_beatmaps
+         (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, total_length, version, url, updated_at)
+       values (11, 10, 'mania', 'ranked', 4, 5.5, 180, 120, '[4K] Base', 'https://osu.ppy.sh/beatmaps/11', ?)`,
+      [now],
+    );
+    await exec(
+      db,
+      `insert into country_maps_farmed_scores
+         (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at)
+       values ('CR', 101, 11, 1101, 600, '{}', '[]', null, ?, ?, ?)`,
+      [now, now, now],
+    );
+    await refreshGlobalMaps(db);
+    const query: MapsPageQuery = {
+      tab: "farmed", page: 0, pageSize: 24, key: "all", beatmapSort: "players", farmedSort: "players", dir: "desc", status: "all", pp: 0, mod: "all", q: "",
+    };
+    await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query);
+
+    // 5,001 distinct changed maps exceed the bounded override policy. Generate
+    // them set-wise so the test exercises the production backlog shape without
+    // spending thousands of JS/SQLite round trips.
+    await execBatch(db, [
+      {
+        sql: `update global_maps_farmed_state
+              set revision = revision + 1, updated_at = ?
+              where singleton = 1`,
+        args: ["2026-05-12T13:00:00.000Z"],
+      },
+      {
+        sql: `with recursive seq(n) as (
+                select 0 union all select n + 1 from seq where n < 5000
+              )
+              insert into global_maps_farmed_scores
+                (beatmap_id, user_id, pp, mods_json, speed_mod, score_url, played_at, detected_at, source_country, source_updated_at)
+              select 100000 + n, 200000 + n, 550, '[]', null, null, ?, ?, 'CR', ? from seq`,
+        args: [now, now, now],
+      },
+      {
+        sql: `with recursive seq(n) as (
+                select 0 union all select n + 1 from seq where n < 5000
+              )
+              insert into global_maps_farmed_aggregates
+                (beatmap_id, player_count, pp_sum, avg_pp, max_pp, dominant_mod, revision, updated_at)
+              select 100000 + n, 1, 550, 550, 550, null,
+                     (select revision from global_maps_farmed_state where singleton = 1), ?
+              from seq`,
+        args: [now],
+      },
+      {
+        sql: `with recursive seq(n) as (
+                select 0 union all select n + 1 from seq where n < 5000
+              )
+              insert into global_maps_farmed_changes (beatmap_id, revision, updated_at)
+              select 100000 + n,
+                     (select revision from global_maps_farmed_state where singleton = 1), ?
+              from seq`,
+        args: [now],
+      },
+    ]);
+
+    const page = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query);
+    expect((page.value?.items[0] as { beatmapId: number }).beatmapId).toBe(11);
+    const stats = getGlobalFarmedBoardCacheStatsForTests(db);
+    expect(stats?.buildToken).toContain(":catchup:");
+    expect(stats?.overrides).toBe(0);
+    expect(stats?.revision).toBe(Number((await exec(
+      db,
+      "select revision from global_maps_farmed_state where singleton = 1",
+    )).rows[0].revision));
   });
 
   it("paginates and searches the map detail player list", async () => {

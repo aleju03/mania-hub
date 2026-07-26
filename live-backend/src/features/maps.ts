@@ -2190,7 +2190,7 @@ interface GlobalFarmedBoardState {
   board: GlobalFarmedBoard | null;
   inflight: Promise<GlobalFarmedBoard> | null;
   inflightGeneration: string | null;
-  deltaInflight: Promise<void> | null;
+  deltaInflight: Promise<boolean> | null;
 }
 
 // Per-Db so tests with separate databases never share a board; production has
@@ -2234,6 +2234,33 @@ interface GlobalFarmedBoardStamps {
 
 const GLOBAL_FARMED_PROJECTION_GENERATION = "projection:v1";
 const GLOBAL_FARMED_PROJECTION_REPACK_OVERRIDES = 5_000;
+const GLOBAL_FARMED_PROJECTION_MAX_DELTA_MAPS = 5_000;
+
+function globalFarmedProjectionGeneration(seedEpoch: number): string {
+  return `${GLOBAL_FARMED_PROJECTION_GENERATION}:seed:${seedEpoch}`;
+}
+
+function startGlobalFarmedProjectionBoardBuild(
+  db: Db,
+  state: GlobalFarmedBoardState,
+  projectionState: GlobalMapsFarmedProjectionState,
+  stamps: GlobalFarmedBoardStamps,
+  token: string,
+): Promise<GlobalFarmedBoard> {
+  if (state.inflight && state.inflightGeneration === token) return state.inflight;
+  state.inflightGeneration = token;
+  const build = buildGlobalFarmedProjectionBoard(db, projectionState, stamps);
+  state.inflight = build;
+  build
+    .then((board) => {
+      if (state.inflightGeneration === token) state.board = board;
+    })
+    .catch((error) => logWarn("global_farmed_projection_board_build_failed", { token, ...errorContext(error) }))
+    .finally(() => {
+      if (state.inflight === build) state.inflight = null;
+    });
+  return build;
+}
 
 async function getGlobalFarmedProjectionBoard(
   db: Db,
@@ -2244,59 +2271,72 @@ async function getGlobalFarmedProjectionBoard(
   if (!state) globalFarmedBoardStates.set(db, (state = { board: null, inflight: null, inflightGeneration: null, deltaInflight: null }));
   const stateRef = state;
   const current = stateRef.board;
+  const generation = globalFarmedProjectionGeneration(projectionState.seedEpoch);
 
-  if (current?.generation === GLOBAL_FARMED_PROJECTION_GENERATION) {
-    if ((current.projectionRevision ?? 0) < projectionState.revision) {
+  if (current?.generation === generation) {
+    while ((current.projectionRevision ?? 0) < projectionState.revision) {
       if (!stateRef.deltaInflight) {
         stateRef.deltaInflight = applyGlobalFarmedProjectionDeltas(db, current, projectionState)
           .finally(() => {
             stateRef.deltaInflight = null;
           });
       }
-      await stateRef.deltaInflight;
+      const patched = await stateRef.deltaInflight;
+      if (!patched) {
+        // A large idle-period backlog is cheaper and safer to repack once than
+        // to materialize thousands of full per-map player arrays as overrides.
+        // Await it: unlike an ordinary same-epoch repack, the old board is too
+        // far behind to be a useful stale response.
+        return startGlobalFarmedProjectionBoardBuild(
+          db,
+          stateRef,
+          projectionState,
+          stamps,
+          `${generation}:catchup:${projectionState.revision}`,
+        );
+      }
     }
     current.generatedAt = stamps.generatedAt;
     current.farmedGeneratedAt = projectionState.updatedAt;
     current.favouritesGeneratedAt = stamps.favouritesGeneratedAt;
     if (current.overrides.size >= GLOBAL_FARMED_PROJECTION_REPACK_OVERRIDES && !stateRef.inflight) {
-      const repackToken = `${GLOBAL_FARMED_PROJECTION_GENERATION}:repack:${current.projectionRevision ?? 0}`;
-      stateRef.inflightGeneration = repackToken;
-      const repack = buildGlobalFarmedProjectionBoard(db, projectionState, stamps);
-      stateRef.inflight = repack;
-      repack
-        .then((board) => {
-          if (stateRef.inflightGeneration === repackToken) stateRef.board = board;
-        })
-        .catch((error) => logWarn("global_farmed_projection_board_repack_failed", errorContext(error)))
-        .finally(() => {
-          if (stateRef.inflight === repack) stateRef.inflight = null;
-        });
+      void startGlobalFarmedProjectionBoardBuild(
+        db,
+        stateRef,
+        projectionState,
+        stamps,
+        `${generation}:repack:${current.projectionRevision ?? 0}`,
+      ).catch((error) => logWarn("global_farmed_projection_board_repack_failed", errorContext(error)));
     }
     return current;
   }
 
-  if (!stateRef.inflight || stateRef.inflightGeneration !== GLOBAL_FARMED_PROJECTION_GENERATION) {
-    stateRef.inflightGeneration = GLOBAL_FARMED_PROJECTION_GENERATION;
-    const build = buildGlobalFarmedProjectionBoard(db, projectionState, stamps);
-    stateRef.inflight = build;
-    build
-      .then((board) => {
-        if (stateRef.inflightGeneration === GLOBAL_FARMED_PROJECTION_GENERATION) stateRef.board = board;
-      })
-      .catch((error) => logWarn("global_farmed_projection_board_build_failed", errorContext(error)))
-      .finally(() => {
-        if (stateRef.inflight === build) stateRef.inflight = null;
-      });
-  }
-
-  if (current) return current;
-  return stateRef.inflight;
+  // Never stale-serve across seed epochs: a re-seed can remove an entire
+  // country, so the previous board may contain rows that no delta in the new
+  // corpus can describe. Block the first request on a fresh pack instead.
+  return startGlobalFarmedProjectionBoardBuild(db, stateRef, projectionState, stamps, generation);
 }
 
 /** Test hook: settle the in-flight board build (if any) for this Db. */
 export async function waitForGlobalFarmedBoardBuild(db: Db): Promise<void> {
   const inflight = globalFarmedBoardStates.get(db)?.inflight;
   if (inflight) await inflight.then(() => undefined, () => undefined);
+}
+
+/** Test hook for asserting whether a request patched or fully repacked. */
+export function getGlobalFarmedBoardCacheStatsForTests(
+  db: Db,
+): { generation: string; revision: number; overrides: number; buildToken: string | null } | null {
+  const state = globalFarmedBoardStates.get(db);
+  const board = state?.board;
+  return board
+    ? {
+        generation: board.generation,
+        revision: board.projectionRevision ?? 0,
+        overrides: board.overrides.size,
+        buildToken: state?.inflightGeneration ?? null,
+      }
+    : null;
 }
 
 async function buildGlobalFarmedBoard(db: Db, parsed: StoredCountryMapsData, generation: string): Promise<GlobalFarmedBoard> {
@@ -2339,7 +2379,7 @@ async function buildGlobalFarmedProjectionBoard(
     farmedGeneratedAt: projectionState.updatedAt,
     favouritesGeneratedAt: stamps.favouritesGeneratedAt,
   };
-  const board = encodeGlobalFarmedBoard(GLOBAL_FARMED_PROJECTION_GENERATION, parsed, source, metadata);
+  const board = encodeGlobalFarmedBoard(globalFarmedProjectionGeneration(projectionState.seedEpoch), parsed, source, metadata);
   board.projectionRevision = baseRevision;
   const latestState = await readGlobalMapsFarmedProjectionState(db);
   if (latestState && latestState.revision > baseRevision) {
@@ -2460,23 +2500,32 @@ async function applyGlobalFarmedProjectionDeltas(
   db: Db,
   board: GlobalFarmedBoard,
   projectionState: GlobalMapsFarmedProjectionState,
-): Promise<void> {
+): Promise<boolean> {
   const fromRevision = board.projectionRevision ?? 0;
   const changes = (await exec(
     db,
     `select beatmap_id, revision, updated_at
      from global_maps_farmed_changes
      where revision > ?
-     order by revision, beatmap_id`,
-    [fromRevision],
+     order by revision, beatmap_id
+     limit ?`,
+    [fromRevision, GLOBAL_FARMED_PROJECTION_MAX_DELTA_MAPS + 1],
   )).rows;
+  if (changes.length > GLOBAL_FARMED_PROJECTION_MAX_DELTA_MAPS) {
+    logInfo("global_farmed_projection_delta_repack", {
+      from_revision: fromRevision,
+      to_revision: projectionState.revision,
+      threshold_maps: GLOBAL_FARMED_PROJECTION_MAX_DELTA_MAPS,
+    });
+    return false;
+  }
   if (changes.length === 0) {
     // An initialized-but-empty projection still advances the state revision.
     // Mark it observed so an empty GLOBAL board does not re-run this query on
     // every request forever.
     board.projectionRevision = Math.max(fromRevision, projectionState.revision);
     board.farmedGeneratedAt = projectionState.updatedAt;
-    return;
+    return true;
   }
   const beatmapIds = changes.map((row) => Number(row.beatmap_id));
   const entries = await readGlobalFarmedProjectionEntries(db, beatmapIds);
@@ -2488,8 +2537,12 @@ async function applyGlobalFarmedProjectionDeltas(
     if (meta) board.metadata.set(beatmapId, meta);
     else board.metadata.delete(beatmapId);
   }
-  board.projectionRevision = Math.max(fromRevision, ...changes.map((row) => Number(row.revision ?? 0)));
+  board.projectionRevision = changes.reduce((latest, row) => {
+    const revision = Number(row.revision ?? 0);
+    return Number.isFinite(revision) ? Math.max(latest, revision) : latest;
+  }, fromRevision);
   board.farmedGeneratedAt = projectionState.updatedAt;
+  return true;
 }
 
 const GLOBAL_FARMED_SCORE_URL_PATTERN = /^https:\/\/osu\.ppy\.sh\/scores\/(\d+)$/;
@@ -3532,18 +3585,20 @@ const GLOBAL_MAPS_PLAYERS_PER_ENTRY = 80;
 interface GlobalMapsFarmedProjectionState {
   initialized: boolean;
   revision: number;
+  seedEpoch: number;
   updatedAt: string;
 }
 
 async function readGlobalMapsFarmedProjectionState(db: Db): Promise<GlobalMapsFarmedProjectionState | null> {
   const row = (await exec(
     db,
-    "select initialized, revision, updated_at from global_maps_farmed_state where singleton = 1",
+    "select initialized, revision, seed_epoch, updated_at from global_maps_farmed_state where singleton = 1",
   )).rows[0];
   if (!row) return null;
   return {
     initialized: Number(row.initialized ?? 0) === 1,
     revision: Math.max(0, Number(row.revision ?? 0)),
+    seedEpoch: Math.max(0, Number(row.seed_epoch ?? 0)),
     updatedAt: String(row.updated_at ?? ""),
   };
 }
@@ -3713,6 +3768,7 @@ function globalMapsFarmedProjectionUpsertStatement(
 async function backfillGlobalMapsFarmedProjection(db: Db, signal?: AbortSignal): Promise<void> {
   const state = await readGlobalMapsFarmedProjectionState(db);
   if (state?.initialized) return;
+  const includeLegacySnapshotFallback = state == null;
 
   const startedAt = Date.now();
   logInfo("global_maps_farmed_projection_backfill", { phase: "start" });
@@ -3721,21 +3777,28 @@ async function backfillGlobalMapsFarmedProjection(db: Db, signal?: AbortSignal):
     { sql: "delete from global_maps_farmed_aggregates" },
     { sql: "delete from global_maps_farmed_scores" },
     {
-      sql: `insert into global_maps_farmed_state (singleton, initialized, revision, updated_at)
-            values (1, 0, 0, ?)
-            on conflict(singleton) do update set initialized = 0, revision = 0, updated_at = excluded.updated_at`,
+      sql: `insert into global_maps_farmed_state (singleton, initialized, revision, seed_epoch, updated_at)
+            values (1, 0, 1, 1, ?)
+            on conflict(singleton) do update set
+              initialized = 0,
+              revision = global_maps_farmed_state.revision + 1,
+              seed_epoch = global_maps_farmed_state.seed_epoch + 1,
+              updated_at = excluded.updated_at`,
       args: [nowIso()],
     },
   ]);
 
-  // Preserve every already-materialized country player while upgrading an
-  // existing DB. Country snapshots are not player-truncated, and only one
-  // country's JSON tree is resident at a time.
-  const countries = (await exec(
-    db,
-    "select country, refreshed_at from country_maps_snapshots where country != ? order by country",
-    [GLOBAL_COUNTRY_CODE],
-  )).rows;
+  // On the first upgrade only, preserve already-materialized players that
+  // predate the normalized source table. A destructive re-seed must use the
+  // normalized rows exclusively: country blobs can lag a user's latest top-200
+  // replacement and would otherwise resurrect scores that were deleted there.
+  const countries = includeLegacySnapshotFallback
+    ? (await exec(
+        db,
+        "select country, refreshed_at from country_maps_snapshots where country != ? order by country",
+        [GLOBAL_COUNTRY_CODE],
+      )).rows
+    : [];
   let snapshotPlayers = 0;
   for (const countryRow of countries) {
     throwIfAborted(signal);
@@ -3860,6 +3923,7 @@ async function backfillGlobalMapsFarmedProjection(db: Db, signal?: AbortSignal):
   logInfo("global_maps_farmed_projection_backfill", {
     phase: "done",
     countries: countries.length,
+    legacy_snapshot_fallback: includeLegacySnapshotFallback,
     snapshot_players: snapshotPlayers,
     normalized_rows: normalizedRows,
     duration_ms: Date.now() - startedAt,

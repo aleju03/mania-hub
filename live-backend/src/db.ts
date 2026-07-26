@@ -306,6 +306,7 @@ async function runMigrationPass(target: Db, statements: string[], startedAtIso: 
   await migrateScoreEventsIdentity(target);
   await migrateProfileSnapshots(target);
   await migrateMapsFarmedOverlay(target);
+  await migrateGlobalMapsFarmedSeedEpoch(target);
   await migrateUserVariantPp(target);
   await migrateFarmHelperShape(target);
   await migrateApiCallTargets(target);
@@ -476,6 +477,17 @@ async function migrateCountryMapsSnapshotStampsIndex(db: Db): Promise<void> {
   await db.execute(
     "create index if not exists idx_country_maps_snapshots_stamps on country_maps_snapshots(country, generated_at, refreshed_at)",
   );
+}
+
+// GLOBAL farmed projection v1 originally identified a packed board only by its
+// revision. A destructive re-seed can remove maps, so it needs a separate epoch
+// that changes once per seed and forces serving processes to discard boards
+// from the previous corpus. Existing databases receive epoch 0; the next seed
+// advances it before writing any replacement rows.
+async function migrateGlobalMapsFarmedSeedEpoch(db: Db): Promise<void> {
+  const columns = (await db.execute("pragma table_info(global_maps_farmed_state)")).rows.map((row) => String(row.name));
+  if (columns.includes("seed_epoch")) return;
+  await db.execute("alter table global_maps_farmed_state add column seed_epoch integer not null default 0");
 }
 
 export async function dbHealth(db: Db): Promise<boolean> {
