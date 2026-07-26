@@ -833,7 +833,9 @@ export const Route = createFileRoute("/maps")({
         description: isSearch
           ? "Search every ranked osu!mania map by title, keymode, stars, and status."
           : "Browse rotating osu!mania map packs grouped by pattern, dan estimate, and MSD.",
-        path: withSearchParams("/maps", { tab }),
+        // Search is the default tab and its default search param is stripped
+        // from the visible URL, so keep the canonical aligned with /maps.
+        path: isSearch ? "/maps" : withSearchParams("/maps", { tab }),
         origin: match.context.origin,
         imageKind: isSearch ? "maps-search" : "maps-collections",
       });

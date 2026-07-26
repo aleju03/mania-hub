@@ -16,11 +16,9 @@ const STATIC_PATHS = [
 ] as const;
 
 function buildSitemap(origin: string): string {
-  const lastmod = new Date().toISOString().split("T")[0];
   const urls = STATIC_PATHS.map(({ path, changefreq, priority }) => {
     return `  <url>
     <loc>${origin}${path}</loc>
-    <lastmod>${lastmod}</lastmod>
     <changefreq>${changefreq}</changefreq>
     <priority>${priority}</priority>
   </url>`;
