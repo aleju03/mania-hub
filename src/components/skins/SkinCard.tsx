@@ -3,7 +3,7 @@ import { Download } from "lucide-react";
 import type { CSSProperties } from "react";
 import { rememberSkinName } from "../../lib/analytics-skins";
 import { formatTimeAgo } from "../../lib/format";
-import { formatSkinFileSize, type SkinSummary } from "../../lib/skins";
+import { formatSkinFileSize, rememberSkinsBrowseEntry, type SkinSummary } from "../../lib/skins";
 import { Avatar } from "../ui/Avatar";
 
 const MAX_KEYMODE_TAGS = 3;
@@ -43,6 +43,8 @@ export function SkinCard({ skin, onClick }: { skin: SkinSummary; onClick?: () =>
         // The detail pageview only sees a slug, so the card hands the real
         // name forward for the activity feed.
         rememberSkinName(skin.slug ?? skin.id, skin.name);
+        // Lets the skin page's back button return to this exact browse state.
+        rememberSkinsBrowseEntry();
         onClick?.();
       }}
       style={{ "--skin-accent": accent } as CSSProperties}

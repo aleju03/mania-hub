@@ -78,11 +78,74 @@ const SKINS_LIST_STALE_UNTIL_KEY = "mania-hub-skins-list-stale-until";
 const SKINS_LIST_CACHE_WINDOW_MS = 6 * 60 * 1000;
 
 export function markSkinsListStale(): void {
+  skinsListMemory.clear();
   if (typeof window === "undefined") return;
   try {
     window.sessionStorage.setItem(SKINS_LIST_STALE_UNTIL_KEY, String(Date.now() + SKINS_LIST_CACHE_WINDOW_MS));
   } catch {
     // Private-mode storage failures just fall back to cached lists.
+  }
+}
+
+// Coming back from a skin page remounts /skins and refires the list fetch, so
+// the grid fell back to skeletons even though the exact same page had just been
+// on screen. Results stay in memory for the tab's lifetime; the page renders
+// them at once and revalidates quietly behind them.
+const SKINS_LIST_MEMORY_TTL_MS = 5 * 60 * 1000;
+const SKINS_LIST_MEMORY_MAX = 12;
+const skinsListMemory = new Map<string, { at: number; result: SkinsListResult }>();
+
+export function skinsListCacheKey(params: SkinsListParams, admin: boolean): string {
+  return [admin ? "a" : "p", params.q?.trim() ?? "", params.page ?? 0, params.sort ?? "newest", params.k ?? 0].join("|");
+}
+
+export function readCachedSkinsList(key: string): SkinsListResult | null {
+  const entry = skinsListMemory.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.at > SKINS_LIST_MEMORY_TTL_MS) {
+    skinsListMemory.delete(key);
+    return null;
+  }
+  return entry.result;
+}
+
+export function writeCachedSkinsList(key: string, result: SkinsListResult): void {
+  skinsListMemory.set(key, { at: Date.now(), result });
+  // Oldest insertion first, so the map stays bounded across a long browse.
+  while (skinsListMemory.size > SKINS_LIST_MEMORY_MAX) {
+    const oldest = skinsListMemory.keys().next();
+    if (oldest.done) break;
+    skinsListMemory.delete(oldest.value);
+  }
+}
+
+// The skin page's back button wants the browse page exactly as it was left,
+// filters, page and scroll included, which only a real history.back() gives.
+// Opening a skin from the grid stamps the browse entry's history index; the
+// back button only steps back when that entry is still the one behind it, so a
+// skin opened from anywhere else falls back to a plain /skins navigation.
+const SKINS_BROWSE_ENTRY_KEY = "mania-hub-skins-browse-entry";
+
+export function rememberSkinsBrowseEntry(): void {
+  if (typeof window === "undefined") return;
+  if (!window.location.pathname.startsWith("/skins")) return;
+  try {
+    const index = (window.history.state as { __TSR_index?: number } | null)?.__TSR_index;
+    if (typeof index !== "number") return;
+    window.sessionStorage.setItem(SKINS_BROWSE_ENTRY_KEY, String(index));
+  } catch {
+    // Storage failures just cost the back button its exact target.
+  }
+}
+
+export function readSkinsBrowseEntry(): number | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(SKINS_BROWSE_ENTRY_KEY);
+    const index = Number(raw);
+    return raw != null && Number.isInteger(index) ? index : null;
+  } catch {
+    return null;
   }
 }
 

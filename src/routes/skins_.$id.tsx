@@ -1,5 +1,5 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Download, Trash2 } from "lucide-react";
+import { createFileRoute, Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { ArrowLeft, Download, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ManiaRain } from "../components/home/ManiaRain";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
@@ -11,7 +11,7 @@ import { useAuth } from "../lib/auth-context";
 import { formatTimeAgo } from "../lib/format";
 import { skinEventProperties } from "../lib/analytics-skins";
 import { track } from "../lib/posthog";
-import { deleteMySkin, fetchSkinById, formatKeymodes, formatSkinFileSize, markSkinsListStale, moderateSkin, skinDownloadUrl, type SkinSummary } from "../lib/skins";
+import { deleteMySkin, fetchSkinById, formatKeymodes, formatSkinFileSize, markSkinsListStale, moderateSkin, readSkinsBrowseEntry, skinDownloadUrl, type SkinSummary } from "../lib/skins";
 import { pageSeo } from "../lib/seo";
 
 export const Route = createFileRoute("/skins_/$id")({
@@ -60,7 +60,19 @@ function SkinDetailPage() {
   const params = Route.useParams();
   const auth = useAuth();
   const navigate = useNavigate();
+  const historyIndex = useRouterState({ select: (state) => state.location.state.__TSR_index });
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  // Stepping back keeps the browse page's filters, page and scroll; only a skin
+  // reached from somewhere else takes the plain /skins route.
+  const goBackToBrowse = () => {
+    const browseEntry = readSkinsBrowseEntry();
+    if (browseEntry != null && browseEntry === historyIndex - 1 && typeof window !== "undefined" && window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    void navigate({ to: "/skins", search: {} });
+  };
 
   // Canonicalize pre-slug links: a skin opened via its raw id gets its URL
   // swapped for the slug without a reload.
@@ -131,6 +143,16 @@ function SkinDetailPage() {
               <Link to="/skins" search={{}} className="transition-colors hover:text-white">
                 osu!mania skins
               </Link>
+            }
+            right={
+              <button
+                type="button"
+                onClick={goBackToBrowse}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-osu-b4 px-2.5 py-1.5 text-[11px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:bg-osu-b3 hover:text-white"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>back to skins</span>
+              </button>
             }
           />
 
@@ -205,7 +227,12 @@ function SkinDetailPage() {
                 <div className="flex min-w-0 flex-col gap-4">
                   <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 px-4 py-4">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h1 className="text-[18px] font-bold leading-tight text-white">{skin.name}</h1>
+                      {/* Skin names run long and often carry no spaces, so the
+                          heading breaks mid-word rather than spilling out of
+                          the 320px column. */}
+                      <h1 className="min-w-0 max-w-full break-words text-[18px] font-bold leading-tight text-white [overflow-wrap:anywhere]">
+                        {skin.name}
+                      </h1>
                       {skin.status === "hidden" && (
                         <span className="rounded bg-osu-b5 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-osu-f1">
                           hidden

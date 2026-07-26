@@ -13,7 +13,17 @@ import { OsuLogo } from "../components/ui/OsuLogo";
 import { useAuth } from "../lib/auth-context";
 import { isAdmin } from "../lib/auth-shared";
 import { isLiveBackendConfigured } from "../lib/live-backend";
-import { fetchSkinsListAsAdmin, fetchSkinsListDirect, SKINS_PAGE_SIZE, type SkinsListResult, type SkinsSort, type SkinSummary } from "../lib/skins";
+import {
+  fetchSkinsListAsAdmin,
+  fetchSkinsListDirect,
+  readCachedSkinsList,
+  skinsListCacheKey,
+  SKINS_PAGE_SIZE,
+  writeCachedSkinsList,
+  type SkinsListResult,
+  type SkinsSort,
+  type SkinSummary,
+} from "../lib/skins";
 import { pageSeo } from "../lib/seo";
 
 // All fields optional at the type level so links can target /skins without a
@@ -103,7 +113,9 @@ function SkinsPage() {
   const auth = useAuth();
   const admin = isAdmin(auth);
 
-  const [data, setData] = useState<SkinsListResult | null>(null);
+  // Seeded from the in-memory list cache so walking back from a skin page
+  // paints the same grid it left, not a screen of skeletons.
+  const [data, setData] = useState<SkinsListResult | null>(() => readCachedSkinsList(skinsListCacheKey({ q, page, sort, k }, admin)));
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [showUploader, setShowUploader] = useState(false);
@@ -139,7 +151,12 @@ function SkinsPage() {
       return;
     }
     const controller = new AbortController();
-    setLoading(true);
+    const cacheKey = skinsListCacheKey({ q, page, sort, k }, admin);
+    // A cached page shows immediately and the fetch behind it only swaps the
+    // data in; without one this is a cold load and the skeletons are honest.
+    const cached = readCachedSkinsList(cacheKey);
+    if (cached) setData(cached);
+    setLoading(!cached);
     setFailed(false);
     // Admins take the server-fn route: it forwards the admin token, which is
     // what makes the backend send download counts back. Everyone else (and an
@@ -151,13 +168,15 @@ function SkinsPage() {
       : fetchSkinsListDirect({ q, page, sort, k }, { signal: controller.signal });
     load
       .then((result) => {
+        writeCachedSkinsList(cacheKey, result);
         if (controller.signal.aborted) return;
         setData(result);
         setLoading(false);
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) return;
-        setFailed(true);
+        // With a cached page on screen, a failed revalidation stays silent.
+        if (!cached) setFailed(true);
         setLoading(false);
       });
     return () => controller.abort();
