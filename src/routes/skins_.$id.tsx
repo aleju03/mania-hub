@@ -353,67 +353,73 @@ function SkinDetailPage() {
                   </dl>
 
                   {(isOwner || auth.isAdmin) && (
-                    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-osu-b3/20 bg-osu-b4 px-4 py-3">
+                    <div className="flex flex-col gap-2.5 rounded-xl border border-osu-b3/20 bg-osu-b4 px-4 py-3">
                       <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
                         {auth.isAdmin && !isOwner ? "Moderation" : "Your skin"}
                       </span>
-                      {!confirmingDelete && (
-                        <>
+                      {/* The column is a fixed 320px, so the label and three
+                          buttons cannot share a line. They flow as one plain
+                          row instead: pushing delete to the far right left the
+                          buttons stepping up and down as the row wrapped. */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {!confirmingDelete && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setEditingPreviews(true)}
+                              disabled={busy}
+                              className="inline-flex items-center gap-1.5 rounded-full border border-osu-b3/50 px-3 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white disabled:opacity-50"
+                            >
+                              <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                              Edit previews
+                            </button>
+                            <button
+                              type="button"
+                              onClick={renaming ? () => setRenaming(false) : openRename}
+                              disabled={busy}
+                              className="inline-flex items-center gap-1.5 rounded-full border border-osu-b3/50 px-3 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white disabled:opacity-50"
+                            >
+                              <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                              Rename
+                            </button>
+                          </>
+                        )}
+                        {confirmingDelete ? (
+                          <span className="flex flex-wrap items-center gap-2 text-[12px]">
+                            <span className="text-osu-f1">Delete for good?</span>
+                            <button
+                              type="button"
+                              onClick={() => void removeSkin()}
+                              disabled={busy}
+                              className="inline-flex items-center gap-1.5 rounded-full bg-osu-red/25 px-3 py-1.5 font-bold text-osu-red-light transition-colors cursor-pointer hover:bg-osu-red/40 disabled:opacity-50"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                              Delete
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmingDelete(false)}
+                              disabled={busy}
+                              className="font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1"
+                            >
+                              Keep it
+                            </button>
+                          </span>
+                        ) : (
                           <button
                             type="button"
-                            onClick={() => setEditingPreviews(true)}
+                            onClick={() => setConfirmingDelete(true)}
                             disabled={busy}
-                            className="inline-flex items-center gap-1.5 rounded-full border border-osu-b3/50 px-3 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white disabled:opacity-50"
-                          >
-                            <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" />
-                            Edit previews
-                          </button>
-                          <button
-                            type="button"
-                            onClick={renaming ? () => setRenaming(false) : openRename}
-                            disabled={busy}
-                            className="inline-flex items-center gap-1.5 rounded-full border border-osu-b3/50 px-3 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white disabled:opacity-50"
-                          >
-                            <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                            Rename
-                          </button>
-                        </>
-                      )}
-                      {confirmingDelete ? (
-                        <span className="ml-auto flex items-center gap-2 text-[12px]">
-                          <span className="text-osu-f1">Delete for good?</span>
-                          <button
-                            type="button"
-                            onClick={() => void removeSkin()}
-                            disabled={busy}
-                            className="inline-flex items-center gap-1.5 rounded-full bg-osu-red/25 px-3 py-1.5 font-bold text-osu-red-light transition-colors cursor-pointer hover:bg-osu-red/40 disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 rounded-full border border-osu-red/35 px-3 py-1.5 text-[12px] font-semibold text-osu-red-light transition-colors cursor-pointer hover:bg-osu-red/20 disabled:opacity-50"
                           >
                             <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                            Delete
+                            Delete skin
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => setConfirmingDelete(false)}
-                            disabled={busy}
-                            className="font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1"
-                          >
-                            Keep it
-                          </button>
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setConfirmingDelete(true)}
-                          disabled={busy}
-                          className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-osu-red/35 px-3 py-1.5 text-[12px] font-semibold text-osu-red-light transition-colors cursor-pointer hover:bg-osu-red/20 disabled:opacity-50"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                          Delete skin
-                        </button>
-                      )}
+                        )}
+                      </div>
                       {renaming && !confirmingDelete && (
                         <form
-                          className="flex w-full flex-wrap items-center gap-2"
+                          className="flex flex-wrap items-center gap-2"
                           onSubmit={(event) => {
                             event.preventDefault();
                             void submitRename();
