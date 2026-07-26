@@ -69,6 +69,9 @@ export interface AnalyticsFeedEvent {
   profileUsername: string | null;
   replayPlayer: string | null;
   replayScoreId: string | null;
+  replayTitle: string | null;
+  replayArtist: string | null;
+  replayDifficulty: string | null;
   viewUrl: string | null;
   farmHelperUser: string | null;
   farmMapTitle: string | null;
@@ -439,6 +442,9 @@ export class AnalyticsStore {
       profileUsername: str("profile_username"),
       replayPlayer: str("replay_player"),
       replayScoreId: str("replay_score_id"),
+      replayTitle: str("replay_title"),
+      replayArtist: str("replay_artist"),
+      replayDifficulty: str("replay_difficulty"),
       viewUrl: str("$current_url"),
       farmHelperUser: str("farm_helper_user"),
       packType: str("pack_type"),

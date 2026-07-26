@@ -324,6 +324,9 @@ interface AnalyticsRecentEventRow {
   profileUsername: string | null;
   replayPlayer: string | null;
   replayScoreId: string | null;
+  replayTitle: string | null;
+  replayArtist: string | null;
+  replayDifficulty: string | null;
   viewUrl: string | null;
   farmHelperUser: string | null;
   farmMapTitle: string | null;
@@ -721,7 +724,7 @@ async function fetchAnalyticsMonitorDataFromPostHog({
     ),
     runQuery(
       "recent activity",
-      `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id, properties.maps_tab, properties.rankings_page, properties.profile_username, properties.replay_player, properties.replay_score_id, properties.$screen_width, properties.$viewport_width, properties.$current_url, properties.farm_helper_user, properties.pack_type, properties.pack_username, properties.farm_map_title, properties.farm_map_user, properties.viewer_username, properties.maps_query, properties.maps_filters, properties.maps_sort, properties.maps_collection, properties.maps_page, properties.maps_beatmap_id, properties.$insert_id, properties.skins_query, properties.skins_keys, properties.skins_sort, properties.skins_page, properties.skin_ref, properties.skin_name, properties.skin_keymodes, properties.skin_upload_error FROM events WHERE timestamp > ${since} AND distinct_id != 'server'${recentRealVisitorClause}${recentCountryClause} AND (properties.$pathname IS NULL OR properties.$pathname NOT LIKE '/admin/%') AND NOT (event = '$pageview' AND properties.$pathname = '/') ORDER BY timestamp DESC LIMIT ${ANALYTICS_RECENT_EVENTS_LIMIT}`,
+      `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id, properties.maps_tab, properties.rankings_page, properties.profile_username, properties.replay_player, properties.replay_score_id, properties.$screen_width, properties.$viewport_width, properties.$current_url, properties.farm_helper_user, properties.pack_type, properties.pack_username, properties.farm_map_title, properties.farm_map_user, properties.viewer_username, properties.maps_query, properties.maps_filters, properties.maps_sort, properties.maps_collection, properties.maps_page, properties.maps_beatmap_id, properties.$insert_id, properties.skins_query, properties.skins_keys, properties.skins_sort, properties.skins_page, properties.skin_ref, properties.skin_name, properties.skin_keymodes, properties.skin_upload_error, properties.replay_title, properties.replay_artist, properties.replay_difficulty FROM events WHERE timestamp > ${since} AND distinct_id != 'server'${recentRealVisitorClause}${recentCountryClause} AND (properties.$pathname IS NULL OR properties.$pathname NOT LIKE '/admin/%') AND NOT (event = '$pageview' AND properties.$pathname = '/') ORDER BY timestamp DESC LIMIT ${ANALYTICS_RECENT_EVENTS_LIMIT}`,
     ),
     runQuery(
       "physical countries",
@@ -796,6 +799,9 @@ async function fetchAnalyticsMonitorDataFromPostHog({
       profileUsername: row[8] ? String(row[8]) : null,
       replayPlayer: row[9] ? String(row[9]) : null,
       replayScoreId: row[10] ? String(row[10]) : null,
+      replayTitle: row[35] ? String(row[35]) : null,
+      replayArtist: row[36] ? String(row[36]) : null,
+      replayDifficulty: row[37] ? String(row[37]) : null,
       viewUrl: row[13] ? String(row[13]) : null,
       farmHelperUser: row[14] ? String(row[14]) : null,
       packType: row[15] ? String(row[15]) : null,
@@ -2085,7 +2091,50 @@ function formatAnalyticsMapsLabel(row: AnalyticsRecentEventRow): string {
   return parts.join(" · ");
 }
 
-function formatAnalyticsRecentEventLabel(row: AnalyticsRecentEventRow): string {
+interface AnalyticsReplayMapInfo {
+  title: string | null;
+  artist: string | null;
+  difficulty: string | null;
+}
+
+type AnalyticsReplayMapIndex = Map<string, AnalyticsReplayMapInfo>;
+
+function analyticsReplayScoreId(row: AnalyticsRecentEventRow): string | null {
+  return row.replayScoreId || analyticsUrlParam(row.viewUrl, "scoreId");
+}
+
+// The /replay pageview fires while the score is still loading, so only the
+// follow-up replay_view event knows the map. Both carry the same score id, so
+// the feed borrows the map details from whichever event in view has them.
+function buildAnalyticsReplayMapIndex(rows: AnalyticsRecentEventRow[]): AnalyticsReplayMapIndex {
+  const index: AnalyticsReplayMapIndex = new Map();
+  for (const row of rows) {
+    if (!row.replayTitle) continue;
+    const scoreId = analyticsReplayScoreId(row);
+    if (!scoreId || index.has(scoreId)) continue;
+    index.set(scoreId, { title: row.replayTitle, artist: row.replayArtist, difficulty: row.replayDifficulty });
+  }
+  return index;
+}
+
+function formatAnalyticsReplayLabel(row: AnalyticsRecentEventRow, mapIndex?: AnalyticsReplayMapIndex): string {
+  const scoreId = analyticsReplayScoreId(row);
+  const borrowed = scoreId ? mapIndex?.get(scoreId) : undefined;
+  const title = row.replayTitle || borrowed?.title || null;
+  const artist = row.replayArtist || borrowed?.artist || null;
+  const difficulty = row.replayDifficulty || borrowed?.difficulty || null;
+
+  const head = row.replayPlayer
+    ? `Replay / ${row.replayPlayer}`
+    : scoreId
+      ? `Replay / #${scoreId.slice(-6)}`
+      : "Replay";
+  if (!title) return head;
+  const map = `${artist ? `${artist} - ` : ""}${title}${difficulty ? ` [${difficulty}]` : ""}`;
+  return `${head} · ${map}`;
+}
+
+function formatAnalyticsRecentEventLabel(row: AnalyticsRecentEventRow, replayMaps?: AnalyticsReplayMapIndex): string {
   // A skin the visitor actually took away, and what tripped up an upload:
   // both say more than the page they happened on.
   if (row.event === "skin_download") {
@@ -2125,11 +2174,7 @@ function formatAnalyticsRecentEventLabel(row: AnalyticsRecentEventRow): string {
     return beatmapId ? `Farm map · #${beatmapId}${subject}` : `Farm map${subject}`;
   }
   if (path === "/packs") return "Packs";
-  if (path === "/replay") {
-    if (row.replayPlayer) return `Replay / ${row.replayPlayer}`;
-    if (row.replayScoreId) return `Replay / #${row.replayScoreId.slice(-6)}`;
-    return "Replay";
-  }
+  if (path === "/replay") return formatAnalyticsReplayLabel(row, replayMaps);
   if (path === "/snipes") return "Snipes";
   return path;
 }
@@ -2213,6 +2258,7 @@ function AnalyticsRecentEventsCard({
   onCountryChange: (country: string | null) => void;
 }) {
   const groups = useMemo(() => buildVisitorGroups(rows), [rows]);
+  const replayMaps = useMemo(() => buildAnalyticsReplayMapIndex(rows), [rows]);
   const countryOptions = useMemo(() => {
     const byCountry = new Map<string, AnalyticsCountryRow>();
     countries.forEach((entry) => {
@@ -2268,6 +2314,7 @@ function AnalyticsRecentEventsCard({
             const color = VISITOR_COLORS[group.slot % VISITOR_COLORS.length];
             const open = toggled.has(group.distinctId) !== defaultOpen;
             const latest = group.events[0];
+            const latestLabel = formatAnalyticsRecentEventLabel(latest, replayMaps);
             return (
               <div key={group.distinctId} className="rounded-md border border-osu-b3/20 bg-osu-b5/40 overflow-hidden">
                 <button
@@ -2294,8 +2341,8 @@ function AnalyticsRecentEventsCard({
                     <span className="h-[10px] w-[15px] rounded-[1px] bg-osu-b3/40 flex-shrink-0" />
                   )}
                   <AnalyticsVisitorDeviceIcon deviceKind={group.deviceKind} />
-                  <span className="text-osu-c2 truncate flex-1" title={formatAnalyticsRecentEventLabel(latest)}>
-                    {formatAnalyticsRecentEventLabel(latest)}
+                  <span className="text-osu-c2 truncate flex-1" title={latestLabel}>
+                    {latestLabel}
                   </span>
                   <span className="text-osu-f1 flex-shrink-0">
                     {group.events.length} event{group.events.length === 1 ? "" : "s"}
@@ -2309,7 +2356,7 @@ function AnalyticsRecentEventsCard({
                       const href = analyticsViewHref(row.viewUrl);
                       const inspectionHref = href ? analyticsInspectionHref(href) : null;
                       const rowClass = "flex items-center gap-2 text-[10px] py-1 pl-5 pr-2 hover:bg-osu-b3/30 transition-colors duration-[100ms]";
-                      const label = formatAnalyticsRecentEventLabel(row);
+                      const label = formatAnalyticsRecentEventLabel(row, replayMaps);
                       const content = (
                         <>
                           <span className="text-osu-f1 font-mono w-20 flex-shrink-0">{row.timestamp || "—"}</span>
