@@ -330,6 +330,48 @@ function getLiveTrackerTotal(country: string, total: number | null | undefined):
   return isGlobalScope(country) ? normalizedTotal : Math.min(TRACKER_FEED_SCORE_LIMIT, normalizedTotal);
 }
 
+/**
+ * How many scores the feed believes exist for the current scope. The backend's
+ * total normally acts as a floor so pagination is sized before every page has
+ * been fetched -- but that total counts stored passes while the feed only
+ * renders displayable ones (getScoreDisplayValues hides D ranks). Once a
+ * snapshot comes back short of its limit we hold everything the backend has, so
+ * the floor has to drop: keeping it would leave the page permanently short of a
+ * target it can never reach, spinning skeletons forever on any country whose
+ * whole history fits in one page (CW, AD).
+ */
+export function getTrackerWindowCount(options: {
+  displayableCount: number;
+  selectedCountry: string;
+  liveTrackerTotal: number | null;
+  liveFilteredTotal: number | null;
+  liveBackendEnabled: boolean;
+  hasActiveScoreFilters: boolean;
+  useLiveBackendFilteredScores: boolean;
+  drained: boolean;
+}): number {
+  const { displayableCount, selectedCountry, liveTrackerTotal, drained } = options;
+  if (options.useLiveBackendFilteredScores) return options.liveFilteredTotal ?? 0;
+  if (!options.liveBackendEnabled || options.hasActiveScoreFilters) return displayableCount;
+  if (drained) return displayableCount;
+  const availableCount = liveTrackerTotal == null
+    ? (isGlobalScope(selectedCountry) ? displayableCount : TRACKER_FEED_SCORE_LIMIT)
+    : getLiveTrackerTotal(selectedCountry, liveTrackerTotal);
+  return Math.max(displayableCount, availableCount);
+}
+
+// How many scores must be in hand before the current page can stop showing
+// skeletons. Zero when the feed isn't backend-paginated.
+export function getRequiredScoreCountForPage(options: {
+  currentPage: number;
+  trackerWindowCount: number;
+  liveBackendEnabled: boolean;
+  hasActiveScoreFilters: boolean;
+}): number {
+  if (!options.liveBackendEnabled || options.hasActiveScoreFilters) return 0;
+  return Math.min((options.currentPage + 1) * TRACKER_PAGE_SIZE, options.trackerWindowCount);
+}
+
 const EMPTY_SCORES: LeanTrackerScore[] = [];
 const EMPTY_KEY_SET: ReadonlySet<string> = new Set<string>();
 
@@ -373,6 +415,10 @@ function ScoresPage() {
   const [timeTick, setTimeTick] = useState(0);
   const [liveSnapshotLoading, setLiveSnapshotLoading] = useState(false);
   const [liveTrackerTotal, setLiveTrackerTotal] = useState<number | null>(null);
+  // Country whose whole feed already fits in one snapshot, so the backend has
+  // nothing left to hand over. Country-keyed rather than a bare flag so a
+  // switch can't carry the previous country's exhaustion into the new one.
+  const [exhaustedTrackerCountry, setExhaustedTrackerCountry] = useState<string | null>(null);
   const [liveFeedState, setLiveFeedState] = useState<"live" | "delayed" | "reconnecting">("live");
   const [livePageScores, setLivePageScores] = useState<LeanTrackerScore[]>([]);
   const [livePageSnapshotKey, setLivePageSnapshotKey] = useState<string | null>(null);
@@ -463,6 +509,12 @@ function ScoresPage() {
       if (Number.isFinite(liveSnapshot.total)) {
         setLiveTrackerTotal(getLiveTrackerTotal(requestedCountry, liveSnapshot.total));
       }
+      // A short snapshot means we hold every score the backend has. That
+      // matters because its total counts stored passes while the feed only
+      // shows displayable ones (getScoreDisplayValues hides D ranks), so on a
+      // country whose entire history is shorter than one page the gap is
+      // permanent: the page would wait forever on rows that never come.
+      setExhaustedTrackerCountry(liveSnapshot.scores.length < requestedLimit ? requestedCountry : null);
       const passedScores = liveSnapshot.scores.filter(isDisplayedPassed);
       if (passedScores.length > 0) addFeedScores(requestedCountry, passedScores);
       if (Object.keys(liveSnapshot.gains).length > 0) {
@@ -557,6 +609,7 @@ function ScoresPage() {
     lastLiveSnapshotAtRef.current = 0;
     setLiveSnapshotLoading(false);
     setLiveTrackerTotal(null);
+    setExhaustedTrackerCountry(null);
     setLivePageScores([]);
     setLivePageSnapshotKey(null);
     setLivePageLoading(false);
@@ -839,21 +892,26 @@ function ScoresPage() {
       : "Sorting lowest star rating first - left click to clear, right click for descending"
     : "Left click for highest star rating first, right click for lowest first";
   const listKey = `${filter}:${gradeFilter}:${keyFilter}:${missFilter}:${trackerSort}:${trackerSortDirection}:${selectedPlayersKey}`;
-  const liveTrackerAvailableCount = liveTrackerTotal == null
-    ? (selectedIsGlobal ? filtered.length : TRACKER_FEED_SCORE_LIMIT)
-    : getLiveTrackerTotal(selectedCountry, liveTrackerTotal);
-  const trackerWindowCount = useLiveBackendFilteredScores
-    ? (liveFilteredTotal ?? 0)
-    : liveBackendEnabled && !hasActiveScoreFilters
-    ? Math.max(filtered.length, liveTrackerAvailableCount)
-    : filtered.length;
+  const trackerWindowCount = getTrackerWindowCount({
+    displayableCount: filtered.length,
+    selectedCountry,
+    liveTrackerTotal,
+    liveFilteredTotal,
+    liveBackendEnabled,
+    hasActiveScoreFilters,
+    useLiveBackendFilteredScores,
+    drained: exhaustedTrackerCountry === selectedCountry,
+  });
   const totalPages = Math.max(1, Math.ceil(
     trackerWindowCount / TRACKER_PAGE_SIZE,
   ));
   const currentPage = Math.min(page, totalPages - 1);
-  const requiredScoreCountForPage = liveBackendEnabled && !hasActiveScoreFilters
-    ? Math.min((currentPage + 1) * TRACKER_PAGE_SIZE, trackerWindowCount)
-    : 0;
+  const requiredScoreCountForPage = getRequiredScoreCountForPage({
+    currentPage,
+    trackerWindowCount,
+    liveBackendEnabled,
+    hasActiveScoreFilters,
+  });
   const livePageOffset = currentPage * TRACKER_PAGE_SIZE;
   const expectedLivePageSize = useLiveBackendFilteredScores && liveFilteredTotal == null
     ? TRACKER_PAGE_SIZE
