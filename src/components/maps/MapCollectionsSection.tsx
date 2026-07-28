@@ -29,7 +29,7 @@ interface Props {
 }
 
 const PATTERN_DESCRIPTION: Record<string, string> = {
-  jack: "Repeated notes hammered on the same columns — single jacks, chordjack, all of it.",
+  jack: "Repeated notes hammered on the same columns: single jacks, chordjack, all of it.",
   stream: "Fast single-note runs flowing across the keys.",
   jumpstream: "Streams broken up by two-note jumps.",
   handstream: "Streams thickened with three-note hand chords.",

@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { createDb, exec, execBatch, migrate } from "../src/db.js";
 import { getSnipesSnapshot, updateSnipeProjection } from "../src/features/snipes.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../src/features/activity.js";
-import { enqueueMapsRefresh, enqueueMapsRefreshIfDue, getGlobalFarmedBoardCacheStatsForTests, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, recordMapsFarmedScore, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores, type MapsPageQuery } from "../src/features/maps.js";
+import { enqueueMapsRefresh, enqueueMapsRefreshIfDue, getGlobalFarmedBoardCacheStatsForTests, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, recordMapsFarmedScore, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores, waitForGlobalFarmedBoardBuild, type MapsPageQuery } from "../src/features/maps.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu } from "../src/features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../src/features/rank-snapshots.js";
@@ -1190,7 +1190,11 @@ describe("live backend", () => {
 
     await queue.shedPressure();
 
-    expect(await queue.depth()).toBe(90);
+    // 80, not 90: recent-reconcile runs in a reserved lane, and reserved lanes
+    // are deliberately invisible to the shared depth measure so keeping their
+    // reserve full cannot push the shared pool into shedding. Its 10 active
+    // jobs are still asserted below, just not counted here.
+    expect(await queue.depth()).toBe(80);
     expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_user_top_scores' and status in ('queued', 'failed', 'running')")).rows[0].count)).toBe(80);
     expect(Number((await exec(db, "select count(*) as count from jobs where type = 'reconcile_user_recent_scores' and status in ('queued', 'failed', 'running')")).rows[0].count)).toBe(10);
     expect(Number((await exec(db, "select count(*) as count from jobs where status = 'deferred_pressure'")).rows[0].count)).toBe(60);
@@ -5652,7 +5656,7 @@ describe("live backend", () => {
     expect(getGlobalFarmedBoardCacheStatsForTests(db)?.generation).toContain(`seed:${Number(after.seed_epoch)}`);
   });
 
-  it("fully repacks instead of materializing an oversized Global delta backlog", async () => {
+  it("serves the packed board while repacking an oversized Global delta backlog", async () => {
     const { db, queue } = await setup();
     const now = "2026-05-12T12:00:00.000Z";
     await exec(
@@ -5724,15 +5728,35 @@ describe("live backend", () => {
       },
     ]);
 
-    const page = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query);
-    expect((page.value?.items[0] as { beatmapId: number }).beatmapId).toBe(11);
-    const stats = getGlobalFarmedBoardCacheStatsForTests(db);
-    expect(stats?.buildToken).toContain(":catchup:");
-    expect(stats?.overrides).toBe(0);
-    expect(stats?.revision).toBe(Number((await exec(
+    const stateRevision = Number((await exec(
       db,
       "select revision from global_maps_farmed_state where singleton = 1",
-    )).rows[0].revision));
+    )).rows[0].revision);
+
+    // The backlog is past the override policy, so a full repack is the right
+    // move -- but the request must not wait on it. Packing this board is ~20-25s
+    // on prod, and every reader of the page joins that one build, so awaiting is
+    // what turned an idle gap into a 25s page load. Serve the board we have.
+    const page = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query);
+    expect((page.value?.items[0] as { beatmapId: number }).beatmapId).toBe(11);
+    expect(page.value?.items).toHaveLength(1);
+    const duringCatchup = getGlobalFarmedBoardCacheStatsForTests(db);
+    expect(duringCatchup?.buildToken).toContain(":catchup:");
+    expect(duringCatchup?.revision).toBeLessThan(stateRevision);
+
+    // The scheduled pack still has to land, and carry the whole backlog with it.
+    // (The injected maps have no beatmap/beatmapset rows, so they only ever
+    // count as backlog volume -- the rendered page stays at the one real map.)
+    await waitForGlobalFarmedBoardBuild(db);
+    const packed = getGlobalFarmedBoardCacheStatsForTests(db);
+    expect(packed?.revision).toBe(stateRevision);
+    expect(packed?.overrides).toBe(0);
+
+    // Converged: the next request serves straight off the packed board instead
+    // of scheduling another catch-up.
+    const after = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query);
+    expect((after.value?.items[0] as { beatmapId: number }).beatmapId).toBe(11);
+    expect(getGlobalFarmedBoardCacheStatsForTests(db)?.revision).toBe(stateRevision);
   });
 
   it("paginates and searches the map detail player list", async () => {

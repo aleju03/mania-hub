@@ -2274,7 +2274,14 @@ async function getGlobalFarmedProjectionBoard(
   const generation = globalFarmedProjectionGeneration(projectionState.seedEpoch);
 
   if (current?.generation === generation) {
+    let caughtUp = true;
     while ((current.projectionRevision ?? 0) < projectionState.revision) {
+      // A repack is already running for this board; serve it as-is instead of
+      // re-probing the delta backlog on every request until that pack lands.
+      if (stateRef.inflight) {
+        caughtUp = false;
+        break;
+      }
       if (!stateRef.deltaInflight) {
         stateRef.deltaInflight = applyGlobalFarmedProjectionDeltas(db, current, projectionState)
           .finally(() => {
@@ -2285,20 +2292,28 @@ async function getGlobalFarmedProjectionBoard(
       if (!patched) {
         // A large idle-period backlog is cheaper and safer to repack once than
         // to materialize thousands of full per-map player arrays as overrides.
-        // Await it: unlike an ordinary same-epoch repack, the old board is too
-        // far behind to be a useful stale response.
-        return startGlobalFarmedProjectionBoardBuild(
+        // Never await it: packing this board measures ~20-25s on prod (19k
+        // entries, 1.5M player rows), and every request for the page joins that
+        // one build, so awaiting turns an idle gap into a 25s page load. A board
+        // a few thousand maps behind is a far better answer than no answer.
+        void startGlobalFarmedProjectionBoardBuild(
           db,
           stateRef,
           projectionState,
           stamps,
           `${generation}:catchup:${projectionState.revision}`,
-        );
+        ).catch((error) => logWarn("global_farmed_projection_board_catchup_failed", errorContext(error)));
+        caughtUp = false;
+        break;
       }
     }
-    current.generatedAt = stamps.generatedAt;
-    current.farmedGeneratedAt = projectionState.updatedAt;
-    current.favouritesGeneratedAt = stamps.favouritesGeneratedAt;
+    // Only claim the projection's stamps once the board actually carries every
+    // change up to them; a board serving mid-catchup is older than they say.
+    if (caughtUp) {
+      current.generatedAt = stamps.generatedAt;
+      current.farmedGeneratedAt = projectionState.updatedAt;
+      current.favouritesGeneratedAt = stamps.favouritesGeneratedAt;
+    }
     if (current.overrides.size >= GLOBAL_FARMED_PROJECTION_REPACK_OVERRIDES && !stateRef.inflight) {
       void startGlobalFarmedProjectionBoardBuild(
         db,
@@ -2313,7 +2328,10 @@ async function getGlobalFarmedProjectionBoard(
 
   // Never stale-serve across seed epochs: a re-seed can remove an entire
   // country, so the previous board may contain rows that no delta in the new
-  // corpus can describe. Block the first request on a fresh pack instead.
+  // corpus can describe. Nothing safe exists to answer with, so this one does
+  // block on the pack -- the caller has to wait for it either way. The boot
+  // warm (warmGlobalMapsFarmedBoard) is what keeps a real visitor off this
+  // path after a restart.
   return startGlobalFarmedProjectionBoardBuild(db, stateRef, projectionState, stamps, generation);
 }
 

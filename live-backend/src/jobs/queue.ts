@@ -38,7 +38,6 @@ const SHEDDABLE_TYPES: string[] = [];
 
 const ACTIVE_TYPE_CAPS: Record<string, number> = {
   refresh_user_top_scores: 80,
-  reconcile_user_recent_scores: 10,
 };
 
 // Types with a reserved lane: invisible to the shared depth/shedding pool so
@@ -79,6 +78,15 @@ const RESERVED_LANE_TYPES: Record<string, number> = {
   refresh_qualified_maps: 1,
   refresh_user_maps_farmed_scores: 2,
   refresh_country_roster: 2,
+  // The type the SHEDDABLE_TYPES note names as the thing pinning the queue at
+  // the soft-pressure cap. As a shared-pool capped type it starved on its own
+  // backlog: the cap only trims above QUEUE_TARGET_DEPTH and reactivation only
+  // runs below QUEUE_SOFT_PRESSURE_DEPTH, so a queue resting between the two
+  // (which its own self-chaining inflow guarantees) neither trimmed nor
+  // revived, and parked reconciles sat for hours -- players stopped appearing
+  // in the tracker while still playing. A reserve keeps a trickle runnable
+  // under any pressure, same remedy as every other former shared-pool type.
+  reconcile_user_recent_scores: 10,
   // Both backfills chain their next page from inside the running job:
   // runner + queued continuation.
   osc_backfill: 2,
