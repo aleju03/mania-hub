@@ -22,6 +22,7 @@ import { getPlayerSkillBreakdown } from "../features/player-skills.js";
 import { decoratePlayerSkillBreakdown } from "../features/skill-baseline.js";
 import { FARM_HELPER_DEFAULT_LIMIT, FARM_HELPER_MAX_LIMIT, FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperNeighbors, getFarmHelperSnapshot, type FarmHelperKeyMode, type FarmHelperView } from "../features/farm-helper.js";
 import type { ScoreSpeedBucket } from "../shared/score.js";
+import type { OscScore } from "../shared/types.js";
 import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalRankingsSnapshot, type GlobalRankingsSort } from "../features/global-rankings.js";
 import { enqueueGlobalMapsRefresh, enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRandomDraw, getMapsRefreshProgress, getMapsSnapshot, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, MAPS_RANDOM_DRAW_DEFAULT_COUNT, MAPS_RANDOM_DRAW_EXCLUDE_SETS_MAX, MAPS_RANDOM_DRAW_EXCLUDE_USERS_MAX, MAPS_RANDOM_DRAW_HIDE_USERS_MAX, MAPS_RANDOM_DRAW_MAX_COUNT, MAPS_RANDOM_DRAW_STAR_MAX, MAPS_RANDOM_KEY_BUCKETS, MAPS_RANDOM_PATTERN_NAMES, MAPS_RANDOM_STATUS_BUCKETS, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery, type MapsRandomDrawQuery } from "../features/maps.js";
 import { getMapSearchPage, getMapSearchSetEntry, MAP_SEARCH_PATTERNS, MAP_SEARCH_SUB_PATTERNS, type MapSearchQuery, type MapSearchSort } from "../features/map-search.js";
@@ -294,7 +295,12 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       }
       if (source === "osu") {
         if (!checkRate(req, res, ctx, "publicCostly")) return true;
-        sendJson(req, res, ctx, 200, await getPlayerRecentScoresFromOsu(ctx.serveWriteDb ?? ctx.db, ctx.osu, userId));
+        sendJson(req, res, ctx, 200, await getPlayerRecentScoresFromOsu(
+          ctx.serveWriteDb ?? ctx.db,
+          ctx.osu,
+          userId,
+          { onFreshScores: (scores) => void ingestProfileRecentScores(ctx, userId, scores) },
+        ));
         return true;
       }
       sendJson(req, res, ctx, 200, await getPlayerRecentScores(ctx.serveWriteDb ?? ctx.db, userId));
@@ -2531,6 +2537,42 @@ const MAPS_GLOBAL_FARMED_WARMUP_DELAY_MS = 15_000;
 // behind, and none of those is a reason to leave the board cold forever.
 const MAPS_GLOBAL_FARMED_WARMUP_POLL_MS = 5_000;
 const MAPS_GLOBAL_FARMED_WARMUP_MAX_WAIT_MS = SQLITE_MIGRATION_TOTAL_BUSY_WAIT_MS + 60_000;
+
+/**
+ * Feed a profile's "Load osu! recents" payload into the score pipeline.
+ *
+ * That button fetches exactly what the recent-score reconcile job fetches, so
+ * ingesting it here costs no extra osu! API budget and lets a profile view top
+ * up the tracker while that player's own reconcile is still parked behind queue
+ * pressure. Strictly opportunistic: it only fires when someone actually opens a
+ * profile, so the queued job stays the real path. Runs detached from the
+ * response, on the serving write connection, and never fails the request.
+ */
+async function ingestProfileRecentScores(ctx: HttpContext, userId: number, scores: OscScore[]): Promise<void> {
+  // No dedicated write connection means this process serves read-only (tests,
+  // worker role); the reconcile job covers those.
+  if (!ctx.serveWriteDb) return;
+  const passed = scores
+    .filter((score) => score.passed)
+    .map((score) => ({ ...score, ruleset_id: score.ruleset_id ?? 3 }));
+  if (passed.length === 0) return;
+  try {
+    const { ScoreIngestor } = await import("../ingest/score-ingestor.js");
+    const ingestor = new ScoreIngestor(ctx.serveWriteDb, ctx.serveWriteQueue ?? ctx.queue, ctx.events, ctx.config);
+    // Both flags match what reconcileUserRecentScores passes. They are set
+    // explicitly rather than left to default, because the ingestor infers them
+    // from the source string and only "osu_recent" gets the cheap behaviour.
+    const result = await ingestor.ingestBatch(passed, "profile_recent", {
+      enqueueRecentReconcile: false,
+      processLeaderboardFeatures: false,
+    });
+    if (result.inserted > 0) {
+      logInfo("profile_recent_scores_ingested", { user_id: userId, inserted: result.inserted, skipped: result.skipped });
+    }
+  } catch (error) {
+    logWarn("profile_recent_scores_ingest_failed", { user_id: userId, ...errorContext(error) });
+  }
+}
 
 export function warmGlobalMapsFarmedBoard(ctx: HttpContext): void {
   void (async () => {

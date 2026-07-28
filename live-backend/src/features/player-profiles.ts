@@ -218,13 +218,27 @@ export async function getPlayerRecentScoresFromOsu(
   db: Db,
   osu: Pick<OsuApiClient, "getUserRecentScores">,
   userId: number,
+  options: {
+    /**
+     * Called with the untrimmed osu! response, and only when this call actually
+     * hit the API -- a cache hit carries nothing new to act on. Lets the caller
+     * reuse a payload it has already paid for (see the profile recent handler).
+     */
+    onFreshScores?: (scores: OscScore[]) => void;
+  } = {},
 ): Promise<PlayerProfileSection> {
+  let freshScores: OscScore[] | null = null;
   const section = await getProfileSection(
     db,
     "recent",
     userId,
-    async () => osu.getUserRecentScores(userId, "api:profile_recent:optional"),
+    async () => {
+      const scores = await osu.getUserRecentScores(userId, "api:profile_recent:optional");
+      freshScores = scores;
+      return scores;
+    },
   );
+  if (freshScores) options.onFreshScores?.(freshScores);
   return {
     ...section,
     payload: filterProfileRecentScoresToWindow(readProfileRecentScores(section.payload)),

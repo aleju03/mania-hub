@@ -1,10 +1,10 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
-import { getCachedPlayerProfileSnapshot } from "../src/features/player-profiles.js";
+import { getCachedPlayerProfileSnapshot, getPlayerRecentScoresFromOsu } from "../src/features/player-profiles.js";
 import type { OscScore } from "../src/shared/types.js";
 
 let dir = "";
@@ -310,6 +310,41 @@ describe("player profile snapshots", () => {
 
     expect(snapshot?.bestScores.find((entry) => entry.id === 30)?.beatmap?.note_bpm).toBe(160.5);
     expect(snapshot?.bestScores.find((entry) => entry.id === 31)?.beatmap?.note_bpm).toBeUndefined();
+  });
+});
+
+// The profile "Load osu! recents" button pays for an osu! call that fetches
+// exactly what the reconcile job fetches, so the handler reuses the payload to
+// top up the tracker. That hand-off rides on this callback.
+describe("profile recent osu! hand-off", () => {
+  it("hands over the untrimmed payload once, and never on a cache hit", async () => {
+    const now = Date.now();
+    const fresh = score({ id: 1, beatmapId: 101, title: "Fresh", pp: 40, endedAt: new Date(now - 60_000).toISOString() });
+    // Older than the profile's display window: the UI drops it, but the tracker
+    // still wants it, so the callback must see the untrimmed list.
+    const old = score({ id: 2, beatmapId: 102, title: "Old", pp: 30, endedAt: new Date(now - 25 * 60 * 60_000).toISOString() });
+    const getUserRecentScores = vi.fn(async () => [fresh, old]);
+
+    const handed: OscScore[][] = [];
+    const first = await getPlayerRecentScoresFromOsu(db, { getUserRecentScores }, USER_ID, {
+      onFreshScores: (scores) => handed.push(scores),
+    });
+
+    expect(getUserRecentScores).toHaveBeenCalledTimes(1);
+    expect(handed).toHaveLength(1);
+    expect(handed[0].map((entry) => entry.id)).toEqual([1, 2]);
+    // The response itself stays trimmed to the display window.
+    expect(first.payload).toHaveLength(1);
+
+    // Second call is served from profile_section_cache: no API call, and
+    // nothing to hand over, or every click would re-ingest the same scores.
+    const second = await getPlayerRecentScoresFromOsu(db, { getUserRecentScores }, USER_ID, {
+      onFreshScores: (scores) => handed.push(scores),
+    });
+
+    expect(getUserRecentScores).toHaveBeenCalledTimes(1);
+    expect(handed).toHaveLength(1);
+    expect(second.payload).toHaveLength(1);
   });
 });
 
