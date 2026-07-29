@@ -21,12 +21,13 @@ import { StarRangePill } from "./StarRangePill";
 import {
   ACCENT_CHIP_TEXT,
   accentChipRing,
-  Chip,
   ChipGroup,
   DirButton,
   SortSelect,
-  StatusChip,
+  STATUS_COLOR,
+  TriStatePill,
 } from "./FilterChips";
+import type { TriStateMode } from "../../lib/maps-random-filter";
 
 const SEARCH_PAGE_SIZE = 24;
 const SEARCH_INITIAL_SKELETON_COUNT = 12;
@@ -60,8 +61,11 @@ const SORT_OPTIONS = [
 export interface MapSearchUiState {
   q: string;
   keys: string[];
+  keysExclude: string[];
   statuses: string[];
+  statusesExclude: string[];
   patterns: string[];
+  patternsExclude: string[];
   starMin: number;
   starMax: number;
   bpmMin: number;
@@ -81,8 +85,28 @@ interface Props {
   liveBackendEnabled: boolean;
 }
 
-function toggle(list: string[], value: string): string[] {
-  return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
+function facetMode(includes: string[], excludes: string[], value: string): TriStateMode | undefined {
+  if (includes.includes(value)) return "include";
+  if (excludes.includes(value)) return "exclude";
+  return undefined;
+}
+
+function cycleFacet(
+  includes: string[],
+  excludes: string[],
+  value: string,
+  reverse = false,
+): { includes: string[]; excludes: string[] } {
+  const mode = facetMode(includes, excludes, value);
+  const withoutValue = (list: string[]) => list.filter((item) => item !== value);
+  if (reverse) {
+    if (mode === "include") return { includes: withoutValue(includes), excludes };
+    if (mode === "exclude") return { includes: [...withoutValue(includes), value], excludes: withoutValue(excludes) };
+    return { includes, excludes: [...excludes, value] };
+  }
+  if (mode === "include") return { includes: withoutValue(includes), excludes: [...withoutValue(excludes), value] };
+  if (mode === "exclude") return { includes, excludes: withoutValue(excludes) };
+  return { includes: [...includes, value], excludes };
 }
 
 // Order-independent identity of a filter set, so we can tell our own URL echo
@@ -91,8 +115,11 @@ function stateKey(s: MapSearchUiState): string {
   return JSON.stringify([
     s.q,
     [...s.keys].sort(),
+    [...s.keysExclude].sort(),
     [...s.statuses].sort(),
+    [...s.statusesExclude].sort(),
     [...s.patterns].sort(),
+    [...s.patternsExclude].sort(),
     s.starMin, s.starMax, s.bpmMin, s.bpmMax, s.lenMin, s.lenMax, s.danMin, s.danMax,
     s.sort, s.dir, s.page,
   ]);
@@ -105,17 +132,29 @@ type ApplyFn = (patch: Partial<MapSearchUiState>) => void;
 function KeysChips({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
   // A keymode switch changes the pattern vocabulary; drop pattern picks the
   // new keymode can't express so no filter survives without a visible chip.
-  const toggleKey = (id: string) => {
-    const keys = toggle(ui.keys, id);
-    const valid = validPatternIds(keys);
-    apply({ keys, patterns: ui.patterns.filter((pattern) => valid.has(pattern)), page: 0 });
+  const cycleKey = (id: string, reverse = false) => {
+    const next = cycleFacet(ui.keys, ui.keysExclude, id, reverse);
+    const valid = validPatternIds(next.includes);
+    apply({
+      keys: next.includes,
+      keysExclude: next.excludes,
+      patterns: ui.patterns.filter((pattern) => valid.has(pattern)),
+      patternsExclude: ui.patternsExclude.filter((pattern) => valid.has(pattern)),
+      page: 0,
+    });
   };
   return (
     <ChipGroup label="Keys">
       {KEY_OPTIONS.map((option) => (
-        <Chip key={option.id} active={ui.keys.includes(option.id)} onClick={() => toggleKey(option.id)}>
+        <TriStatePill
+          key={option.id}
+          mode={facetMode(ui.keys, ui.keysExclude, option.id)}
+          hasAnyActive={ui.keys.length + ui.keysExclude.length > 0}
+          onClick={() => cycleKey(option.id)}
+          onContextMenu={() => cycleKey(option.id, true)}
+        >
           {option.label}
-        </Chip>
+        </TriStatePill>
       ))}
     </ChipGroup>
   );
@@ -125,13 +164,23 @@ function StatusChips({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
   return (
     <ChipGroup label="Status">
       {STATUS_OPTIONS.map((option) => (
-        <StatusChip
+        <TriStatePill
           key={option.id}
-          id={option.id}
-          label={option.label}
-          active={ui.statuses.includes(option.id)}
-          onClick={() => apply({ statuses: toggle(ui.statuses, option.id), page: 0 })}
-        />
+          color={STATUS_COLOR[option.id]}
+          pill
+          mode={facetMode(ui.statuses, ui.statusesExclude, option.id)}
+          hasAnyActive={ui.statuses.length + ui.statusesExclude.length > 0}
+          onClick={() => {
+            const next = cycleFacet(ui.statuses, ui.statusesExclude, option.id);
+            apply({ statuses: next.includes, statusesExclude: next.excludes, page: 0 });
+          }}
+          onContextMenu={() => {
+            const next = cycleFacet(ui.statuses, ui.statusesExclude, option.id, true);
+            apply({ statuses: next.includes, statusesExclude: next.excludes, page: 0 });
+          }}
+        >
+          {option.label}
+        </TriStatePill>
       ))}
     </ChipGroup>
   );
@@ -228,7 +277,15 @@ function DanBadgeWall({ ui, apply }: { ui: MapSearchUiState; apply: ApplyFn }) {
     if (ambiguous && lo != null) {
       const keys = [group.keysId];
       const valid = validPatternIds(keys);
-      apply({ danMin: lo, danMax: hi, keys, patterns: ui.patterns.filter((pattern) => valid.has(pattern)), page: 0 });
+      apply({
+        danMin: lo,
+        danMax: hi,
+        keys,
+        keysExclude: [],
+        patterns: ui.patterns.filter((pattern) => valid.has(pattern)),
+        patternsExclude: ui.patternsExclude.filter((pattern) => valid.has(pattern)),
+        page: 0,
+      });
       return;
     }
     apply({ danMin: lo, danMax: hi, page: 0 });
@@ -850,8 +907,11 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
     fetchLiveMapSearch({
       q: ui.q,
       keys: ui.keys,
+      keysExclude: ui.keysExclude,
       statuses: ui.statuses,
+      statusesExclude: ui.statusesExclude,
       patterns: ui.patterns,
+      patternsExclude: ui.patternsExclude,
       starMin: ui.starMin > 0 ? ui.starMin : null,
       starMax: ui.starMax > 0 ? ui.starMax : null,
       bpmMin: ui.bpmMin > 0 ? ui.bpmMin : null,
@@ -897,8 +957,11 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
   const hasActiveFilters =
     ui.q.trim() !== "" ||
     ui.keys.length > 0 ||
+    ui.keysExclude.length > 0 ||
     ui.statuses.length > 0 ||
+    ui.statusesExclude.length > 0 ||
     ui.patterns.length > 0 ||
+    ui.patternsExclude.length > 0 ||
     ui.starMin > 0 || ui.starMax > 0 ||
     ui.bpmMin > 0 || ui.bpmMax > 0 ||
     ui.lenMin > 0 || ui.lenMax > 0 ||
@@ -907,8 +970,8 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
   // How many collapsed filters are active, for the mobile toggle's badge.
   // Patterns stay visible above the toggle, so they don't count.
   const collapsedFilterCount =
-    ui.keys.length +
-    ui.statuses.length +
+    ui.keys.length + ui.keysExclude.length +
+    ui.statuses.length + ui.statusesExclude.length +
     (ui.starMin > 0 || ui.starMax > 0 ? 1 : 0) +
     (ui.bpmMin > 0 || ui.bpmMax > 0 ? 1 : 0) +
     (ui.lenMin > 0 || ui.lenMax > 0 ? 1 : 0) +
@@ -917,7 +980,7 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
   const clearFilters = () => {
     setSearchInput("");
     apply({
-      q: "", keys: [], statuses: [], patterns: [],
+      q: "", keys: [], keysExclude: [], statuses: [], statusesExclude: [], patterns: [], patternsExclude: [],
       starMin: 0, starMax: 0, bpmMin: 0, bpmMax: 0, lenMin: 0, lenMax: 0,
       danMin: null, danMax: null,
       page: 0,
@@ -966,7 +1029,15 @@ export function MapSearchSection({ state, onChange, liveBackendEnabled }: Props)
         {/* Pattern — the headline filter, each shown as a mini note-chart */}
         <div className="flex flex-col gap-2">
           <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Pattern</span>
-          <PatternPicker selected={ui.patterns} keys={ui.keys} onToggle={(pattern) => apply({ patterns: toggle(ui.patterns, pattern), page: 0 })} />
+          <PatternPicker
+            selected={ui.patterns}
+            excluded={ui.patternsExclude}
+            keys={ui.keys}
+            onToggle={(pattern, reverse) => {
+              const next = cycleFacet(ui.patterns, ui.patternsExclude, pattern, reverse);
+              apply({ patterns: next.includes, patternsExclude: next.excludes, page: 0 });
+            }}
+          />
         </div>
 
         {/* Mobile toolbar: secondary filters collapse behind a toggle, sort is a dropdown */}

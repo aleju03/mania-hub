@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { motion } from "framer-motion";
+import type { TriStateMode } from "../../lib/maps-random-filter";
 
 // The filter-chip language shared by the maps search tab and the browse tabs
 // (farmed / most played / favourites / random): outlined accent chips that fill
@@ -65,6 +67,84 @@ export function StatusChip({ id, label, active, onClick }: { id: string; label: 
       }
     >
       {label}
+    </motion.button>
+  );
+}
+
+// Shared tri-state chip: click cycles none -> include -> exclude -> none;
+// right-click runs that cycle in reverse so a neutral option can be excluded
+// immediately. Search and Random use the same interaction and visual language.
+export function TriStatePill({
+  mode,
+  hasAnyActive,
+  onClick,
+  onContextMenu,
+  color,
+  pill = false,
+  children,
+}: {
+  mode: TriStateMode | undefined;
+  hasAnyActive: boolean;
+  onClick: () => void;
+  onContextMenu: () => void;
+  color?: string;
+  pill?: boolean;
+  children: React.ReactNode;
+}) {
+  const style: CSSProperties = color
+    ? mode === "include"
+      ? { background: color, color: "#11111a" }
+      : {
+          background: "transparent",
+          color,
+          boxShadow: `inset 0 0 0 1.5px ${color}59`,
+          opacity: mode === "exclude" ? 0.8 : hasAnyActive ? 0.55 : 1,
+        }
+    : mode === "include"
+      ? { background: ACCENT_CHIP_FILL, color: "#11111a" }
+      : mode === "exclude"
+        ? {
+            background: "transparent",
+            color: "var(--color-osu-red-light)",
+            boxShadow: "inset 0 0 0 1.5px color-mix(in srgb, var(--color-osu-red) 55%, transparent)",
+          }
+        : {
+            background: "transparent",
+            color: ACCENT_CHIP_TEXT,
+            boxShadow: accentChipRing(35),
+            opacity: hasAnyActive ? 0.55 : 1,
+          };
+  const title = mode === "include"
+    ? "Including (click to exclude)"
+    : mode === "exclude"
+      ? "Excluding (click to clear)"
+      : "Click to include, right-click to exclude";
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onContextMenu();
+      }}
+      aria-pressed={mode === "exclude" ? "mixed" : mode === "include"}
+      whileTap={{ scale: 0.94 }}
+      transition={{ type: "spring", stiffness: 600, damping: 30 }}
+      title={title}
+      className={`relative cursor-pointer transition-[background-color,color,opacity] duration-150 ${
+        pill
+          ? "inline-flex items-center rounded-full px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide leading-none"
+          : "rounded-md px-3.5 py-1.5 text-[12.5px] font-bold"
+      }`}
+      style={style}
+    >
+      <span className={mode === "exclude" ? "opacity-70" : ""}>{children}</span>
+      {mode === "exclude" && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute left-2.5 right-2.5 top-1/2 h-[1.5px] -translate-y-1/2 rotate-[-8deg] rounded-full bg-osu-red/80"
+        />
+      )}
     </motion.button>
   );
 }

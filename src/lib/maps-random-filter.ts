@@ -59,3 +59,10 @@ export function getTriStateMode<T extends string>(sel: TriStateSelection<T>, val
 export function triStateActive<T extends string>(sel: TriStateSelection<T>): number {
   return sel.includes.size + sel.excludes.size;
 }
+
+export function serializeTriStateCsv(
+  includes: Iterable<string>,
+  excludes: Iterable<string>,
+): string {
+  return [...includes, ...[...excludes].map((value) => `-${value}`)].join(",");
+}

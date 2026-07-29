@@ -23,15 +23,13 @@ import {
   writeSearchSortPreference,
 } from "../components/maps/searchSortPreference";
 import {
-  ACCENT_CHIP_FILL,
-  ACCENT_CHIP_TEXT,
-  accentChipRing,
   Chip,
   ChipGroup,
   DirButton,
   SortSelect,
   StatusChip,
   STATUS_COLOR,
+  TriStatePill,
   type SortOption,
 } from "../components/maps/FilterChips";
 import { StarRangePill } from "../components/maps/StarRangePill";
@@ -88,9 +86,9 @@ import {
   getTriStateMode,
   parseTriStateCsv,
   reverseCycleTriStateCsv,
+  serializeTriStateCsv,
   triStateActive,
 } from "../lib/maps-random-filter";
-import type { TriStateMode } from "../lib/maps-random-filter";
 import {
   RANDOM_KEY_OPTIONS,
   RANDOM_PATTERN_OPTIONS,
@@ -270,11 +268,22 @@ function clampDanLevel(raw: unknown): number | null {
   return Math.round(Math.min(20, Math.max(0, n)));
 }
 
-// Multi-select facets ride in the URL as a CSV; keep only allowed tokens.
-function sanitizeSearchCsv(raw: unknown, allowed: string[]): string {
+// Search facets use Random's signed CSV convention: `value` includes and
+// `-value` excludes. Existing unsigned links remain valid includes. When a
+// hand-written URL repeats a value, its final occurrence wins.
+function sanitizeSearchTriStateCsv(raw: unknown, allowed: string[]): string {
   if (typeof raw !== "string" || !raw) return "";
   const allowedSet = new Set(allowed);
-  return [...new Set(raw.toLowerCase().split(",").map((value) => value.trim()).filter((value) => allowedSet.has(value)))].join(",");
+  const modes = new Map<string, "include" | "exclude">();
+  for (const part of raw.toLowerCase().split(",")) {
+    const trimmed = part.trim();
+    const exclude = trimmed.startsWith("-");
+    const value = exclude ? trimmed.slice(1) : trimmed;
+    if (!allowedSet.has(value)) continue;
+    modes.delete(value);
+    modes.set(value, exclude ? "exclude" : "include");
+  }
+  return [...modes].map(([value, mode]) => mode === "exclude" ? `-${value}` : value).join(",");
 }
 
 type RandomPickSettings = Pick<MapsSearch, "rWeight" | "rAvoidRepeats">;
@@ -904,8 +913,8 @@ export const Route = createFileRoute("/maps")({
     rWeight: search.rWeight === "players" || search.rWeight === "favourites" ? search.rWeight : DEFAULT_MAPS_SEARCH.rWeight,
     rAvoidRepeats: typeof search.rAvoidRepeats === "boolean" ? search.rAvoidRepeats : DEFAULT_MAPS_SEARCH.rAvoidRepeats,
     sQ: typeof search.sQ === "string" ? search.sQ.slice(0, 120) : DEFAULT_MAPS_SEARCH.sQ,
-    sKeys: sanitizeSearchCsv(search.sKeys, SEARCH_KEY_VALUES),
-    sStatuses: sanitizeSearchCsv(search.sStatuses, SEARCH_STATUS_VALUES),
+    sKeys: sanitizeSearchTriStateCsv(search.sKeys, SEARCH_KEY_VALUES),
+    sStatuses: sanitizeSearchTriStateCsv(search.sStatuses, SEARCH_STATUS_VALUES),
     sStarMin: clampSearchNumber(search.sStarMin, 0, 20),
     sStarMax: clampSearchNumber(search.sStarMax, 0, 20),
     sBpmMin: clampSearchNumber(search.sBpmMin, 0, 2000),
@@ -914,7 +923,7 @@ export const Route = createFileRoute("/maps")({
     sLenMax: clampSearchNumber(search.sLenMax, 0, 100000),
     sDanMin: clampDanLevel(search.sDanMin),
     sDanMax: clampDanLevel(search.sDanMax),
-    sPatterns: sanitizeSearchCsv(search.sPatterns, SEARCH_PATTERN_VALUES),
+    sPatterns: sanitizeSearchTriStateCsv(search.sPatterns, SEARCH_PATTERN_VALUES),
     sCountryOnly: false,
     sSort: SEARCH_SORT_VALUES.includes(String(search.sSort)) ? String(search.sSort) : DEFAULT_MAPS_SEARCH.sSort,
     sDir: search.sDir === "asc" ? "asc" : DEFAULT_MAPS_SEARCH.sDir,
@@ -1279,30 +1288,46 @@ function MapsPage() {
   const favouritesFamilyActive = tab === "favourites" || tab === "random";
 
   // Bridge the route's s-prefixed params <-> the Search section's UI state.
-  const csvToArray = (value: string): string[] => (value ? value.split(",").filter(Boolean) : []);
-  const searchUiState: MapSearchUiState = useMemo(() => ({
-    q: mapsSearch.sQ,
-    keys: csvToArray(mapsSearch.sKeys),
-    statuses: csvToArray(mapsSearch.sStatuses),
-    patterns: csvToArray(mapsSearch.sPatterns),
-    starMin: mapsSearch.sStarMin,
-    starMax: mapsSearch.sStarMax,
-    bpmMin: mapsSearch.sBpmMin,
-    bpmMax: mapsSearch.sBpmMax,
-    lenMin: mapsSearch.sLenMin,
-    lenMax: mapsSearch.sLenMax,
-    danMin: mapsSearch.sDanMin,
-    danMax: mapsSearch.sDanMax,
-    sort: mapsSearch.sSort,
-    dir: mapsSearch.sDir,
-    page: mapsSearch.page,
-  }), [mapsSearch]);
+  const searchUiState: MapSearchUiState = useMemo(() => {
+    const keys = parseTriStateCsv(mapsSearch.sKeys, SEARCH_KEY_VALUES);
+    const statuses = parseTriStateCsv(mapsSearch.sStatuses, SEARCH_STATUS_VALUES);
+    const patterns = parseTriStateCsv(mapsSearch.sPatterns, SEARCH_PATTERN_VALUES);
+    return {
+      q: mapsSearch.sQ,
+      keys: [...keys.includes],
+      keysExclude: [...keys.excludes],
+      statuses: [...statuses.includes],
+      statusesExclude: [...statuses.excludes],
+      patterns: [...patterns.includes],
+      patternsExclude: [...patterns.excludes],
+      starMin: mapsSearch.sStarMin,
+      starMax: mapsSearch.sStarMax,
+      bpmMin: mapsSearch.sBpmMin,
+      bpmMax: mapsSearch.sBpmMax,
+      lenMin: mapsSearch.sLenMin,
+      lenMax: mapsSearch.sLenMax,
+      danMin: mapsSearch.sDanMin,
+      danMax: mapsSearch.sDanMax,
+      sort: mapsSearch.sSort,
+      dir: mapsSearch.sDir,
+      page: mapsSearch.page,
+    };
+  }, [mapsSearch]);
   const updateSearchUi = useCallback((patch: Partial<MapSearchUiState>) => {
     const next: Partial<MapsSearch> = {};
     if (patch.q !== undefined) next.sQ = patch.q;
-    if (patch.keys !== undefined) next.sKeys = patch.keys.join(",");
-    if (patch.statuses !== undefined) next.sStatuses = patch.statuses.join(",");
-    if (patch.patterns !== undefined) next.sPatterns = patch.patterns.join(",");
+    if (patch.keys !== undefined || patch.keysExclude !== undefined) {
+      const current = parseTriStateCsv(mapsSearchRef.current.sKeys, SEARCH_KEY_VALUES);
+      next.sKeys = serializeTriStateCsv(patch.keys ?? current.includes, patch.keysExclude ?? current.excludes);
+    }
+    if (patch.statuses !== undefined || patch.statusesExclude !== undefined) {
+      const current = parseTriStateCsv(mapsSearchRef.current.sStatuses, SEARCH_STATUS_VALUES);
+      next.sStatuses = serializeTriStateCsv(patch.statuses ?? current.includes, patch.statusesExclude ?? current.excludes);
+    }
+    if (patch.patterns !== undefined || patch.patternsExclude !== undefined) {
+      const current = parseTriStateCsv(mapsSearchRef.current.sPatterns, SEARCH_PATTERN_VALUES);
+      next.sPatterns = serializeTriStateCsv(patch.patterns ?? current.includes, patch.patternsExclude ?? current.excludes);
+    }
     if (patch.starMin !== undefined) next.sStarMin = patch.starMin;
     if (patch.starMax !== undefined) next.sStarMax = patch.starMax;
     if (patch.bpmMin !== undefined) next.sBpmMin = patch.bpmMin;
@@ -2469,88 +2494,6 @@ function RandomCardSkeleton() {
 }
 
 // ── Filter UI ──────────────────────────────────────────────────────────────
-
-// Tri-state chip for random filters: click cycles none → include → exclude →
-// none. Speaks the search tab's chip language: outlined when neutral, filled
-// when including, a red strikethrough when excluding. `color` swaps the theme
-// accent for a facet colour (status badges, pattern palette) while keeping the
-// tri-state semantics; the strikethrough carries the exclusion so the chip
-// keeps its identity colour. `pill` dresses it as the card status badges
-// (rounded, uppercase).
-function TriStatePill({
-  mode,
-  hasAnyActive,
-  onClick,
-  onContextMenu,
-  color,
-  pill = false,
-  children,
-}: {
-  mode: TriStateMode | undefined;
-  hasAnyActive: boolean;
-  onClick: () => void;
-  onContextMenu: () => void;
-  color?: string;
-  pill?: boolean;
-  children: React.ReactNode;
-}) {
-  const style: CSSProperties = color
-    ? mode === "include"
-      ? { background: color, color: "#11111a" }
-      : {
-          background: "transparent",
-          color,
-          boxShadow: `inset 0 0 0 1.5px ${color}59`,
-          opacity: mode === "exclude" ? 0.8 : hasAnyActive ? 0.55 : 1,
-        }
-    : mode === "include"
-      ? { background: ACCENT_CHIP_FILL, color: "#11111a" }
-      : mode === "exclude"
-        ? {
-            background: "transparent",
-            color: "var(--color-osu-red-light)",
-            boxShadow: "inset 0 0 0 1.5px color-mix(in srgb, var(--color-osu-red) 55%, transparent)",
-          }
-        : {
-            background: "transparent",
-            color: ACCENT_CHIP_TEXT,
-            boxShadow: accentChipRing(35),
-            opacity: hasAnyActive ? 0.55 : 1,
-          };
-  const title = mode === "include"
-    ? "Including (click to exclude)"
-    : mode === "exclude"
-      ? "Excluding (click to clear)"
-      : "Click to include";
-  return (
-    <motion.button
-      type="button"
-      onClick={onClick}
-      onContextMenu={(event) => {
-        event.preventDefault();
-        onContextMenu();
-      }}
-      whileTap={{ scale: 0.94 }}
-      transition={{ type: "spring", stiffness: 600, damping: 30 }}
-      title={title}
-      aria-label={title}
-      className={`relative cursor-pointer transition-[background-color,color,opacity] duration-150 ${
-        pill
-          ? "inline-flex items-center rounded-full px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide leading-none"
-          : "rounded-md px-3.5 py-1.5 text-[12.5px] font-bold"
-      }`}
-      style={style}
-    >
-      <span className={mode === "exclude" ? "opacity-70" : ""}>{children}</span>
-      {mode === "exclude" && (
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute left-2.5 right-2.5 top-1/2 h-[1.5px] -translate-y-1/2 rotate-[-8deg] rounded-full bg-osu-red/80"
-        />
-      )}
-    </motion.button>
-  );
-}
 
 // Single-thumb slider for farmed "Min PP". Commits on release, rounded to
 // FARMED_PP_STEP. 0 = filter disabled (thumb at floor).

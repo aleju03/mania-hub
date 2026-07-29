@@ -73,8 +73,11 @@ export type SortDirection = "asc" | "desc";
 export interface MapSearchQuery {
   q: string;
   keys: string[];
+  keysExclude: string[];
   statuses: string[];
+  statusesExclude: string[];
   patterns: string[];
+  patternsExclude: string[];
   starMin: number | null;
   starMax: number | null;
   bpmMin: number | null;
@@ -973,9 +976,13 @@ function buildWhereParts(query: MapSearchQuery, p = ""): { conditions: string[];
 
   const keyClause = orClause(query.keys, KEY_CLAUSES, p);
   if (keyClause) conditions.push(keyClause);
+  const keyExcludeClause = orClause(query.keysExclude, KEY_CLAUSES, p);
+  if (keyExcludeClause) conditions.push(`not ${keyExcludeClause}`);
 
   const statusClause = orClause(query.statuses, STATUS_CLAUSES, p);
   if (statusClause) conditions.push(statusClause);
+  const statusExcludeClause = orClause(query.statusesExclude, STATUS_CLAUSES, p);
+  if (statusExcludeClause) conditions.push(`not ${statusExcludeClause}`);
 
   const parsedText = parseMapSearchText(query.q);
   for (const term of parsedText.terms) {
@@ -1033,6 +1040,29 @@ function buildWhereParts(query: MapSearchQuery, p = ""): { conditions: string[];
     // real charts (same policy as the dan filter). They stay reachable
     // without the pattern facet.
     conditions.push(`${p}vibro = 0`);
+  }
+
+  // Excluded families and subfamilies are also ORed into one match, then the
+  // whole match is negated: excluding Jack and LN means neither may describe
+  // the chart. Family exclusions follow the card's secondary-pattern threshold
+  // (>= 0.5), rather than checking only primary_pattern; otherwise a
+  // Chordjack-primary chart visibly tagged Stream survives a Stream exclusion.
+  // Unlike an include-only pattern search this does not hide vibro charts
+  // globally; it only removes vibro rows that match an excluded tag.
+  const excluded = [...new Set(query.patternsExclude)];
+  const excludedFamilies = excluded.filter((pattern) => PATTERN_COLUMNS[pattern]);
+  const excludedSubs = excluded.filter((pattern) => SUB_PATTERN_SET.has(pattern));
+  const excludedPatternClauses: string[] = [];
+  for (const family of excludedFamilies) {
+    const column = patternScoreColumn(family);
+    if (column) excludedPatternClauses.push(`${p}${column} >= 0.5`);
+  }
+  for (const sub of excludedSubs) {
+    excludedPatternClauses.push(`${p}pattern_tags like ?`);
+    args.push(`% ${sub} %`);
+  }
+  if (excludedPatternClauses.length > 0) {
+    conditions.push(`not (${excludedPatternClauses.join(" or ")})`);
   }
 
   // danMin/danMax are integer dan levels, inclusive of the whole dan: verdict

@@ -173,6 +173,29 @@ describe("map search index", () => {
     expect(ranged.items.map((item) => item.beatmapId)).toEqual([2]);
   });
 
+  it("excludes key, status, and pattern facets", async () => {
+    const db = await makeDb();
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, cs: 4, status: "ranked", primary: "tech", patterns: { tech: 1 } });
+    await seedMap(db, { beatmapId: 2, beatmapsetId: 20, cs: 7, status: "loved", primary: "jack", patterns: { jack: 1 } });
+    await seedMap(db, { beatmapId: 3, beatmapsetId: 30, cs: 6, status: "graveyard", primary: "stream", patterns: { stream: 1 } });
+    // Regression from the UI: Stream is a visible secondary chip (>= 0.5) on
+    // this Chordjack-primary chart, so excluding Stream must remove it too.
+    await seedMap(db, { beatmapId: 4, beatmapsetId: 40, cs: 4, status: "ranked", primary: "chordjack", patterns: { chordjack: 1, stream: 0.7 } });
+    await buildAll(db);
+
+    const ids = async (patch: Partial<MapSearchQuery>) => {
+      const page = await getMapSearchPage(db, { ...baseQuery(), ...patch, sort: "stars", dir: "asc" });
+      return page.items.map((item) => item.beatmapId).sort();
+    };
+
+    expect(await ids({ keysExclude: ["4k"] })).toEqual([2, 3]);
+    expect(await ids({ statusesExclude: ["loved"] })).toEqual([1, 3, 4]);
+    expect(await ids({ patternsExclude: ["jack"] })).toEqual([1, 3, 4]);
+    expect(await ids({ patternsExclude: ["stream"] })).toEqual([1, 2]);
+    expect(await ids({ patterns: ["chordjack"], patternsExclude: ["stream"] })).toEqual([]);
+    expect(await ids({ keys: ["4k", "7k"], keysExclude: ["7k"] })).toEqual([1, 4]);
+  });
+
   it("text search matches title/artist/creator/version", async () => {
     const db = await makeDb();
     await seedMap(db, { beatmapId: 1, beatmapsetId: 10, title: "Banger", artist: "Camellia", primary: "stream", patterns: { stream: 1 } });
@@ -592,7 +615,7 @@ describe("map search + collections HTTP", () => {
     } as never;
 
     const search = mockRes();
-    await routeHttp(mockReq("GET", "/api/snapshots/maps-search?keys=4k&patterns=stream"), search.res, ctx);
+    await routeHttp(mockReq("GET", "/api/snapshots/maps-search?keys=4k&patterns=stream&statusesExclude=loved"), search.res, ctx);
     const searchBody = JSON.parse(search.writes.join(""));
     expect(searchBody.total).toBe(1);
     expect(searchBody.items[0].beatmapId).toBe(1);
@@ -669,8 +692,11 @@ function baseQuery(): MapSearchQuery {
   return {
     q: "",
     keys: [],
+    keysExclude: [],
     statuses: [],
+    statusesExclude: [],
     patterns: [],
+    patternsExclude: [],
     starMin: null,
     starMax: null,
     bpmMin: null,

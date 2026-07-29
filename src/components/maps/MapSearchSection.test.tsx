@@ -5,7 +5,7 @@
 // firing with the SSR default and being superseded (the local-ui mirror used
 // to adopt the restored prop one commit after the fetch effect saw it).
 import { StrictMode } from "react";
-import { act, render } from "@testing-library/react";
+import { act, fireEvent, render, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MapSearchSection, type MapSearchUiState } from "./MapSearchSection";
 import { fetchLiveMapSearch } from "../../lib/live-backend";
@@ -31,8 +31,11 @@ vi.stubGlobal("ResizeObserver", ResizeObserverStub);
 const DEFAULT_STATE: MapSearchUiState = {
   q: "",
   keys: [],
+  keysExclude: [],
   statuses: [],
+  statusesExclude: [],
   patterns: [],
+  patternsExclude: [],
   starMin: 0,
   starMax: 0,
   bpmMin: 0,
@@ -130,5 +133,52 @@ describe("MapSearchSection cold-load fetch", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("sends excluded facets to the search request", () => {
+    renderSection({
+      ...DEFAULT_STATE,
+      keysExclude: ["7k"],
+      statusesExclude: ["loved"],
+      patternsExclude: ["jack"],
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toMatchObject({
+      keysExclude: ["7k"],
+      statusesExclude: ["loved"],
+      patternsExclude: ["jack"],
+    });
+  });
+
+  it("right-clicking a neutral pattern excludes it", () => {
+    const onChange = vi.fn();
+    const view = render(
+      <MapSearchSection state={DEFAULT_STATE} onChange={onChange} liveBackendEnabled={true} />,
+    );
+
+    fireEvent.contextMenu(within(view.container).getByRole("button", { name: "Jack" }));
+
+    expect(onChange).toHaveBeenLastCalledWith({ patterns: [], patternsExclude: ["jack"], page: 0 });
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toMatchObject({ patterns: [], patternsExclude: ["jack"] });
+  });
+
+  it("right-clicking neutral key and status chips excludes them", () => {
+    const onChange = vi.fn();
+    const view = render(
+      <MapSearchSection state={DEFAULT_STATE} onChange={onChange} liveBackendEnabled={true} />,
+    );
+    const page = within(view.container);
+
+    fireEvent.contextMenu(page.getByRole("button", { name: "4K" }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      keys: [],
+      keysExclude: ["4k"],
+      patterns: [],
+      patternsExclude: [],
+      page: 0,
+    });
+
+    fireEvent.contextMenu(page.getByRole("button", { name: "Ranked" }));
+    expect(onChange).toHaveBeenLastCalledWith({ statuses: [], statusesExclude: ["ranked"], page: 0 });
   });
 });

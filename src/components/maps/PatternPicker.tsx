@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { PATTERN_COLOR, patternLabel } from "./SearchCard";
 import { playPatternHit } from "./patternSfx";
+import type { TriStateMode } from "../../lib/maps-random-filter";
 
 // Hit-to-select: tapping a pattern lands like hitting a note. An osu-style ring
 // bursts outward and a soft hitsound plays, then the chip stays lit in its color.
@@ -54,15 +55,17 @@ export function validPatternIds(keys: string[]): Set<string> {
 
 function PatternChip({
   pattern,
-  active,
+  mode,
+  hasAnyActive,
   onToggle,
   small = false,
   attachRight = false,
   className = "",
 }: {
   pattern: string;
-  active: boolean;
-  onToggle: (pattern: string) => void;
+  mode: TriStateMode | undefined;
+  hasAnyActive: boolean;
+  onToggle: (pattern: string, reverse: boolean) => void;
   small?: boolean;
   attachRight?: boolean;
   className?: string;
@@ -72,18 +75,32 @@ function PatternChip({
   const [burst, setBurst] = useState(0);
 
   const handleClick = () => {
-    const willActivate = !active;
-    onToggle(pattern);
-    playPatternHit(willActivate);
-    if (willActivate) setBurst((value) => value + 1);
+    const willInclude = mode == null;
+    onToggle(pattern, false);
+    playPatternHit(willInclude);
+    if (willInclude) setBurst((value) => value + 1);
+  };
+  const handleContextMenu = (event: React.MouseEvent) => {
+    event.preventDefault();
+    const willInclude = mode === "exclude";
+    onToggle(pattern, true);
+    playPatternHit(willInclude);
+    if (willInclude) setBurst((value) => value + 1);
   };
 
   const radius = attachRight ? "rounded-md rounded-r-none" : "rounded-md";
+  const title = mode === "include"
+    ? "Including (click to exclude)"
+    : mode === "exclude"
+      ? "Excluding (click to clear)"
+      : "Click to include, right-click to exclude";
   return (
     <motion.button
       type="button"
       onClick={handleClick}
-      aria-pressed={active}
+      onContextMenu={handleContextMenu}
+      aria-pressed={mode === "exclude" ? "mixed" : mode === "include"}
+      title={title}
       whileHover={{ scale: small ? 1.04 : 1.03 }}
       whileTap={{ scale: 0.95 }}
       transition={{ type: "spring", stiffness: 600, damping: 30 }}
@@ -93,9 +110,14 @@ function PatternChip({
           : "px-2 py-1 text-[11px] sm:px-3.5 sm:py-1.5 sm:text-[12.5px]"
       } ${className}`}
       style={
-        active
+        mode === "include"
           ? { background: color, color: "#11111a" }
-          : { background: "transparent", color, boxShadow: `inset 0 0 0 1.5px ${color}59` }
+          : {
+              background: "transparent",
+              color,
+              boxShadow: `inset 0 0 0 1.5px ${color}59`,
+              opacity: mode === "exclude" ? 0.8 : hasAnyActive ? 0.55 : 1,
+            }
       }
     >
       {/* osu-style hit burst: a ring that expands out and fades on each select */}
@@ -110,7 +132,13 @@ function PatternChip({
           transition={{ duration: 0.4, ease: "easeOut" }}
         />
       )}
-      <span className="relative z-10">{patternLabel(pattern)}</span>
+      <span className={`relative z-10 ${mode === "exclude" ? "opacity-70" : ""}`}>{patternLabel(pattern)}</span>
+      {mode === "exclude" && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute left-2 right-2 top-1/2 z-20 h-[1.5px] -translate-y-1/2 rotate-[-8deg] rounded-full bg-osu-red/80"
+        />
+      )}
     </motion.button>
   );
 }
@@ -165,12 +193,14 @@ function SubfamilyCaret({
 
 export function PatternPicker({
   selected,
+  excluded = [],
   keys = [],
   onToggle,
 }: {
   selected: string[];
+  excluded?: string[];
   keys?: string[];
-  onToggle: (pattern: string) => void;
+  onToggle: (pattern: string, reverse: boolean) => void;
 }) {
   const [openFamily, setOpenFamily] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -178,7 +208,11 @@ export function PatternPicker({
   // Selections outside this keymode's vocabulary (a shared URL, usually) still
   // render as plain chips so an active filter is never invisible.
   const reachable = new Set([...options, ...Object.values(subfamilies).flat()]);
-  const orphans = selected.filter((pattern) => !reachable.has(pattern));
+  const activePatterns = [...new Set([...selected, ...excluded])];
+  const orphans = activePatterns.filter((pattern) => !reachable.has(pattern));
+  const hasAnyActive = activePatterns.length > 0;
+  const modeFor = (pattern: string): TriStateMode | undefined =>
+    selected.includes(pattern) ? "include" : excluded.includes(pattern) ? "exclude" : undefined;
 
   // A keymode switch can drop the family whose flyout is open.
   const vocabularyKey = options.join(",");
@@ -216,19 +250,21 @@ export function PatternPicker({
             <PatternChip
               key={pattern}
               pattern={pattern}
-              active={selected.includes(pattern)}
+              mode={modeFor(pattern)}
+              hasAnyActive={hasAnyActive}
               onToggle={onToggle}
               className="w-full text-center sm:w-auto sm:text-left"
             />
           );
         }
         const open = openFamily === pattern;
-        const selectedSubs = subs.filter((sub) => selected.includes(sub)).length;
+        const selectedSubs = subs.filter((sub) => selected.includes(sub) || excluded.includes(sub)).length;
         return (
           <span key={pattern} className="relative inline-flex w-full items-stretch gap-px sm:w-auto">
             <PatternChip
               pattern={pattern}
-              active={selected.includes(pattern)}
+              mode={modeFor(pattern)}
+              hasAnyActive={hasAnyActive}
               onToggle={onToggle}
               attachRight
               className="min-w-0 flex-1 text-center sm:flex-none sm:text-left"
@@ -246,7 +282,14 @@ export function PatternPicker({
                 className="absolute left-0 top-[calc(100%+6px)] z-30 flex w-max max-w-[min(280px,80vw)] flex-wrap gap-1.5 rounded-lg bg-osu-b4 p-2 ring-1 ring-white/10 shadow-xl"
               >
                 {subs.map((sub) => (
-                  <PatternChip key={sub} pattern={sub} active={selected.includes(sub)} onToggle={onToggle} small />
+                  <PatternChip
+                    key={sub}
+                    pattern={sub}
+                    mode={modeFor(sub)}
+                    hasAnyActive={hasAnyActive}
+                    onToggle={onToggle}
+                    small
+                  />
                 ))}
               </div>
             )}
@@ -257,7 +300,8 @@ export function PatternPicker({
         <PatternChip
           key={pattern}
           pattern={pattern}
-          active
+          mode={modeFor(pattern)}
+          hasAnyActive={hasAnyActive}
           onToggle={onToggle}
           className="w-full text-center sm:w-auto sm:text-left"
         />

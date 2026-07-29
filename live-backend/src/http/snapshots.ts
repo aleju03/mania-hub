@@ -3746,8 +3746,11 @@ function parseMapSearchQuery(params: URLSearchParams): MapSearchQuery {
   return {
     q: (params.get("q") ?? "").trim().slice(0, 120),
     keys: parseCsvSubset(params.get("keys"), ["4k", "7k", "other"]),
+    keysExclude: parseCsvSubset(params.get("keysExclude"), ["4k", "7k", "other"]),
     statuses: parseCsvSubset(params.get("statuses"), ["ranked", "qualified", "loved", "graveyard", "other"]),
+    statusesExclude: parseCsvSubset(params.get("statusesExclude"), ["ranked", "qualified", "loved", "graveyard", "other"]),
     patterns: parseCsvSubset(params.get("patterns"), [...MAP_SEARCH_PATTERNS, ...MAP_SEARCH_SUB_PATTERNS]),
+    patternsExclude: parseCsvSubset(params.get("patternsExclude"), [...MAP_SEARCH_PATTERNS, ...MAP_SEARCH_SUB_PATTERNS]),
     starMin: stars.min,
     starMax: stars.max,
     bpmMin: bpm.min,

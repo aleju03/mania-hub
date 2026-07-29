@@ -527,8 +527,11 @@ function DanClassifierPage() {
           const result = await fetchLiveMapSearch({
             q: trimmed,
             keys: [],
+            keysExclude: [],
             statuses: [],
+            statusesExclude: [],
             patterns: [],
+            patternsExclude: [],
             starMin: null,
             starMax: null,
             bpmMin: null,

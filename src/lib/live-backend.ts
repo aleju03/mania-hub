@@ -1314,8 +1314,11 @@ export interface LiveMapSearchResult {
 export interface LiveMapSearchParams {
   q: string;
   keys: string[];
+  keysExclude: string[];
   statuses: string[];
+  statusesExclude: string[];
   patterns: string[];
+  patternsExclude: string[];
   starMin: number | null;
   starMax: number | null;
   bpmMin: number | null;
@@ -1375,8 +1378,11 @@ export async function fetchLiveMapSearch(params: LiveMapSearchParams): Promise<L
   });
   if (params.q.trim()) query.set("q", params.q.trim());
   if (params.keys.length) query.set("keys", params.keys.join(","));
+  if (params.keysExclude.length) query.set("keysExclude", params.keysExclude.join(","));
   if (params.statuses.length) query.set("statuses", params.statuses.join(","));
+  if (params.statusesExclude.length) query.set("statusesExclude", params.statusesExclude.join(","));
   if (params.patterns.length) query.set("patterns", params.patterns.join(","));
+  if (params.patternsExclude.length) query.set("patternsExclude", params.patternsExclude.join(","));
   if (params.starMin != null) query.set("starMin", String(params.starMin));
   if (params.starMax != null) query.set("starMax", String(params.starMax));
   if (params.bpmMin != null) query.set("bpmMin", String(params.bpmMin));

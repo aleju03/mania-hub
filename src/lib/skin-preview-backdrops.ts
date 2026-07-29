@@ -83,10 +83,13 @@ const CATALOG_MAX_PAGE = 40;
 const CATALOG_QUERY: LiveMapSearchParams = {
   q: "",
   keys: [],
+  keysExclude: [],
   // Ranked and loved only: those covers are curated art, unlike a lot of the
   // graveyard.
   statuses: ["ranked", "loved"],
+  statusesExclude: [],
   patterns: [],
+  patternsExclude: [],
   starMin: null,
   starMax: null,
   bpmMin: null,
