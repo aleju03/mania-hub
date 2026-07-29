@@ -408,7 +408,6 @@ export async function enqueueMapsRefreshIfDue(
   return true;
 }
 
-export type MapsSnapshotSection = "core" | "random";
 export type MapsBrowseTab = "farmed" | "popular" | "favourites";
 export type MapsKeyFilter = "all" | "4k" | "7k" | "other";
 export type MapsBeatmapSort = "players" | "plays" | "stars" | "length";
@@ -483,13 +482,10 @@ export async function getMapsSnapshot(
   queue: JobQueue,
   country: string,
   maxAgeMs: number,
-  section: MapsSnapshotSection = "core",
 ): Promise<MapsSnapshotResponse<CountryMapsData>> {
   const normalized = country.toUpperCase();
-  const snapshot = section === "random"
-    ? await readMapsRandomSnapshot(db, normalized, maxAgeMs)
-    : await readMapsSnapshot(db, normalized, maxAgeMs);
-  const value = section === "core" && snapshot.value && !isGlobalCountry(normalized)
+  const snapshot = await readMapsSnapshot(db, normalized, maxAgeMs);
+  const value = snapshot.value && !isGlobalCountry(normalized)
     ? await applyMapsFarmedOverlay(db, normalized, snapshot.value, snapshot.refreshedAt)
     : snapshot.value;
   let refreshQueued = await hasActiveMapsRefresh(db, normalized);
@@ -498,7 +494,12 @@ export async function getMapsSnapshot(
     refreshQueued = true;
   }
   const progress = refreshQueued ? await readActiveMapsRefreshProgress(db, normalized) : null;
-  return { ...snapshot, value: section === "random" ? value : sliceMapsSnapshotSection(value, section), refreshQueued, progress };
+  return {
+    ...snapshot,
+    value: value ? { ...value, beatmapsetsPool: {} } : value,
+    refreshQueued,
+    progress,
+  };
 }
 
 export async function getMapsPageSnapshot(
@@ -700,7 +701,7 @@ async function readMapsDetailsPlayersPage(
 /**
  * Timestamp-only read of a country's maps snapshot row — no payload_json parse
  * or user hydration. The HTTP layer uses refreshedAt to key its response cache
- * so a cache hit can skip the (expensive) getMapsSnapshot() path entirely.
+ * so a cache hit can skip the (expensive) getMapsPageSnapshot() path entirely.
  */
 export async function getMapsSnapshotMeta(
   db: Db,
@@ -731,28 +732,6 @@ export async function getMapsSnapshotMeta(
   };
 }
 
-// The maps snapshot is served in two parts so /maps first paint stays small.
-// "core" carries the three browsable tabs; "random" carries only the heavy
-// beatmapsetsPool the Random tab needs. favouritesByPlayer is tiny, so it
-// always rides with "core" — that lets the client tell "no random pool exists"
-// apart from "random pool not loaded yet".
-function sliceMapsSnapshotSection(value: CountryMapsData | null, section: MapsSnapshotSection): CountryMapsData | null {
-  if (!value) return value;
-  if (section === "random") {
-    // The Random tab only needs each set's filter/label fields here; the heavy
-    // covers, per-difficulty list and preview audio are fetched per pick via
-    // getMapsRandomBeatmapsets, so drop them from the wire entirely (the
-    // frontend restores empty defaults after fetch).
-    const beatmapsetsPool: Record<number, MapsFavouriteBeatmapset> = {};
-    for (const [id, set] of Object.entries(value.beatmapsetsPool)) {
-      const { covers: _covers, maniaBeatmaps: _maniaBeatmaps, previewUrl: _previewUrl, ...lean } = set;
-      beatmapsetsPool[Number(id)] = lean;
-    }
-    return { ...value, farmed: [], mostPlayed: [], favourites: [], beatmapsetsPool };
-  }
-  return { ...value, beatmapsetsPool: {} };
-}
-
 async function readMapsSnapshot(
   db: Db,
   country: string,
@@ -775,135 +754,6 @@ async function readMapsSnapshot(
     generatedAt: row?.generated_at == null ? null : String(row.generated_at),
     refreshedAt,
     isStale,
-  };
-}
-
-/**
- * The Random section reads two fields out of a stored maps payload
- * (favouritesByPlayer + beatmapsetsPool) and discards the rest — 97 % of a
- * GLOBAL row, whose whole-row JSON.parse costs 207 ms and +212 MiB of
- * transient heap inside the serving process. One multi-path json_extract
- * returns just those two (1.9 MB instead of 67.6 MB) for 126 ms and +6 MiB.
- *
- * Narrow reading is limited to compact schemaVersion 2 rows that actually
- * carry a random section. Everything else still gets `payload_json` in the
- * same round trip, so the whole-row path below stays reachable without a
- * second query:
- *  - unparseable payloads (json_valid keeps json_extract from raising, and the
- *    fallback is what answers "still building" instead of throwing),
- *  - legacy hydrated rows, whose pool is an object rather than an id list,
- *  - rows with both random sections empty, where usability is decided by the
- *    farmed / mostPlayed / favourites sections this read skips.
- *
- * SQLite caches the parse across the json_ calls of one statement, so the
- * repeated probes cost nothing (measured identical to a single extract).
- */
-const MAPS_RANDOM_NARROW_CONDITION = `json_valid(payload_json)
-       and json_extract(payload_json, '$.schemaVersion') = 2
-       and (json_array_length(payload_json, '$.favouritesByPlayer') > 0
-            or json_array_length(payload_json, '$.beatmapsetsPool') > 0)`;
-
-const MAPS_RANDOM_SNAPSHOT_SQL = `select
-     generated_at,
-     refreshed_at,
-     case when ${MAPS_RANDOM_NARROW_CONDITION}
-          then json_extract(
-            payload_json,
-            '$.generatedAt',
-            '$.farmedGeneratedAt',
-            '$.favouritesGeneratedAt',
-            '$.favouritesByPlayer',
-            '$.beatmapsetsPool'
-          ) end as parts,
-     case when ${MAPS_RANDOM_NARROW_CONDITION}
-          then null else payload_json end as payload_json
-   from country_maps_snapshots
-   where country = ?`;
-
-async function readMapsRandomSnapshot(
-  db: Db,
-  country: string,
-  maxAgeMs: number,
-): Promise<{ value: CountryMapsData | null; generatedAt: string | null; refreshedAt: string | null; isStale: boolean }> {
-  const normalized = country.toUpperCase();
-  let row: Record<string, unknown> | undefined;
-  try {
-    row = (await exec(db, MAPS_RANDOM_SNAPSHOT_SQL, [normalized])).rows[0];
-  } catch (error) {
-    // A SQLite build without JSON1 (or a json_extract behaviour change) must
-    // degrade to the plain read, never take the endpoint down.
-    logWarn("maps_random_narrow_read_failed", { country: normalized, ...errorContext(error) });
-    const raw = await readRawMapsSnapshot(db, normalized, maxAgeMs);
-    return {
-      value: raw.parsed ? await hydrateMapsRandomSnapshotSection(db, raw.parsed) : null,
-      generatedAt: raw.generatedAt,
-      refreshedAt: raw.refreshedAt,
-      isStale: raw.isStale,
-    };
-  }
-
-  const generatedAt = row?.generated_at == null ? null : String(row.generated_at);
-  const refreshedAt = row?.refreshed_at == null ? null : String(row.refreshed_at);
-  const globalStale = isGlobalCountry(normalized)
-    ? await isGlobalMapsSnapshotBehindSources(db, refreshedAt)
-    : false;
-  const pastMaxAge = isMapsSnapshotPastMaxAge(refreshedAt, maxAgeMs);
-
-  const narrow = row ? narrowMapsRandomPayload(row.parts) : null;
-  if (narrow) {
-    return {
-      value: await hydrateMapsRandomSnapshotSection(db, narrow),
-      generatedAt,
-      refreshedAt,
-      isStale: pastMaxAge || globalStale,
-    };
-  }
-
-  // The statement withholds payload_json exactly when it judged the row
-  // narrow-readable. Should that judgement and the shape checks above ever
-  // disagree, re-read the row rather than report a built country as empty.
-  const payload = row && row.parts != null && row.payload_json == null
-    ? (await exec(db, "select payload_json from country_maps_snapshots where country = ?", [normalized])).rows[0]?.payload_json
-    : row?.payload_json;
-  const parsed = row ? parseJson<unknown>(payload, null) : null;
-  let usable = isStoredCountryMapsData(parsed)
-    ? isUsableStoredMapsData(parsed)
-    : isCountryMapsDataShape(parsed) && isUsableMapsData(parsed);
-  if (
-    !usable &&
-    (isStoredCountryMapsData(parsed) || isCountryMapsDataShape(parsed)) &&
-    isGlobalCountry(normalized)
-  ) {
-    usable = (await readGlobalMapsFarmedProjectionState(db))?.initialized === true;
-  }
-  return {
-    value: usable && (isStoredCountryMapsData(parsed) || isCountryMapsDataShape(parsed))
-      ? await hydrateMapsRandomSnapshotSection(db, parsed)
-      : null,
-    generatedAt,
-    refreshedAt,
-    isStale: pastMaxAge || (!!row && !usable) || globalStale,
-  };
-}
-
-// Rebuilds the compact payload from the extracted parts, or gives up (null) so
-// the caller falls back to the whole row.
-function narrowMapsRandomPayload(parts: unknown): StoredCountryMapsData | null {
-  const values = parseJson<unknown>(parts, null);
-  if (!Array.isArray(values) || values.length !== 5) return null;
-  const [generatedAt, farmedGeneratedAt, favouritesGeneratedAt, favouritesByPlayer, beatmapsetsPool] = values;
-  if (typeof generatedAt !== "string" || typeof farmedGeneratedAt !== "string" || typeof favouritesGeneratedAt !== "string") return null;
-  if (!Array.isArray(favouritesByPlayer) || !Array.isArray(beatmapsetsPool)) return null;
-  return {
-    schemaVersion: 2,
-    farmed: [],
-    mostPlayed: [],
-    favourites: [],
-    favouritesByPlayer: favouritesByPlayer as StoredCountryMapsData["favouritesByPlayer"],
-    beatmapsetsPool: beatmapsetsPool as number[],
-    generatedAt,
-    farmedGeneratedAt,
-    favouritesGeneratedAt,
   };
 }
 
@@ -953,43 +803,6 @@ async function hydrateStoredMapsSnapshot(db: Db, parsed: unknown): Promise<Count
   }
   if (!isCountryMapsDataShape(parsed)) return null;
   return hydrateMapsSnapshotUsers(db, parsed);
-}
-
-async function hydrateMapsRandomSnapshotSection(
-  db: Db,
-  parsed: StoredCountryMapsData | CountryMapsData,
-): Promise<CountryMapsData | null> {
-  if (!isStoredCountryMapsData(parsed)) {
-    return sliceMapsSnapshotSection(await hydrateMapsSnapshotUsers(db, parsed), "random");
-  }
-
-  const pool = await readMapsRandomPoolByBeatmapsetIds(db, parsed.beatmapsetsPool);
-  const favouritesByPlayer = parsed.favouritesByPlayer.map((player) => ({
-    id: player.id,
-    username: "",
-    avatarUrl: "",
-    beatmapsetIds: player.beatmapsetIds,
-  }));
-  const users = await readMapsUserDisplayByIds(db, favouritesByPlayer.map((player) => player.id));
-  for (const player of favouritesByPlayer) {
-    const user = users.get(player.id);
-    if (user?.username) player.username = user.username;
-    if (user?.avatarUrl) player.avatarUrl = user.avatarUrl;
-  }
-
-  return {
-    farmed: [],
-    mostPlayed: [],
-    favourites: [],
-    favouritesByPlayer,
-    beatmapsetsPool: Object.fromEntries(parsed.beatmapsetsPool.flatMap((id): Array<[number, MapsFavouriteBeatmapset]> => {
-      const beatmapset = pool.get(id);
-      return beatmapset ? [[id, beatmapset]] : [];
-    })),
-    generatedAt: parsed.generatedAt,
-    farmedGeneratedAt: parsed.farmedGeneratedAt,
-    favouritesGeneratedAt: parsed.favouritesGeneratedAt,
-  };
 }
 
 function isCountryMapsDataShape(value: unknown): value is CountryMapsData {
@@ -4474,67 +4287,6 @@ async function readMapsBeatmapsetsByIds(db: Db, ids: number[]): Promise<Map<numb
   return new Map(rows.map((row) => {
     const beatmapset = rowToMapsBeatmapsetMetadata(row);
     return [beatmapset.beatmapsetId, beatmapset];
-  }));
-}
-
-async function readMapsRandomPoolByBeatmapsetIds(db: Db, ids: number[]): Promise<Map<number, MapsFavouriteBeatmapset>> {
-  const rows = await selectRowsByIntegerSet(
-    db,
-    `select
-       bs.beatmapset_id,
-       bs.title,
-       bs.artist,
-       bs.creator,
-       bs.status,
-       bs.global_play_count,
-       bs.global_favourite_count,
-       bs.bpm,
-       bs.mania_keys_json,
-       bs.patterns_json,
-       min(b.difficulty_rating) as star_min,
-       max(b.difficulty_rating) as star_max,
-       group_concat(distinct b.cs) as key_values
-     from maps_beatmapsets bs
-     left join maps_beatmaps b on b.beatmapset_id = bs.beatmapset_id
-     left join beatmaps raw on raw.beatmap_id = b.beatmap_id
-     where bs.beatmapset_id in`,
-    ids,
-    `and ${nativeManiaBeatmapSql("b")}
-     group by
-       bs.beatmapset_id,
-       bs.title,
-       bs.artist,
-       bs.creator,
-       bs.status,
-       bs.global_play_count,
-       bs.global_favourite_count,
-       bs.bpm,
-       bs.mania_keys_json,
-       bs.patterns_json`,
-  );
-  return new Map(rows.map((row) => {
-    const id = Number(row.beatmapset_id);
-    const storedKeys = parseJson<number[]>(row.mania_keys_json, []);
-    const aggregateKeys = String(row.key_values ?? "")
-      .split(",")
-      .map((value) => Number(value))
-      .filter((value) => Number.isFinite(value) && value > 0)
-      .sort((a, b) => a - b);
-    const beatmapset: MapsFavouriteBeatmapset = {
-      id,
-      title: String(row.title ?? ""),
-      artist: String(row.artist ?? ""),
-      creator: String(row.creator ?? ""),
-      status: String(row.status ?? ""),
-      globalPlayCount: Number(row.global_play_count ?? 0),
-      globalFavouriteCount: Number(row.global_favourite_count ?? 0),
-      maniaKeys: storedKeys.length > 0 ? storedKeys : [...new Set(aggregateKeys)],
-      starMin: Number(row.star_min ?? 0),
-      starMax: Number(row.star_max ?? 0),
-      bpm: Number(row.bpm ?? 0),
-      patterns: parseJson<string[]>(row.patterns_json, []),
-    };
-    return [id, beatmapset];
   }));
 }
 

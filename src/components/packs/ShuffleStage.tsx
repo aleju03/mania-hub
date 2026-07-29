@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { useWindowActive } from "#/lib/window-activity";
-import { createCardBackCanvas } from "./packArt";
+import { getCachedCardBackDataUrl } from "./packArt";
 import { playShuffleWhisk } from "./packSfx";
 
 /* Shown between the pack rip and the reveal when the player draw is still in
@@ -34,7 +34,7 @@ export function ShuffleStage({ reducedMotion, count }: ShuffleStageProps) {
   const [slow, setSlow] = useState(false);
 
   useEffect(() => {
-    setCardBack(createCardBackCanvas().toDataURL("image/png"));
+    setCardBack(getCachedCardBackDataUrl());
   }, []);
 
   useEffect(() => {

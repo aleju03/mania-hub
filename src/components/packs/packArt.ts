@@ -9,6 +9,10 @@ export const PACK_ASPECT = PACK_ART_WIDTH / PACK_ART_HEIGHT;
 // PackStage reads these so the DOM tear interaction lines up with the art.
 export const PACK_CRIMP_FRACTION = 0.078;
 export const PACK_TEAR_FRACTION = 0.16;
+// The torn strip never extends below the interaction's cut band. Keeping its
+// texture cropped to this fraction avoids uploading a mostly transparent
+// full-pack canvas when the rip begins.
+export const PACK_RIP_STRIP_FRACTION = 0.27;
 
 const FONT = "Torus, Arial, sans-serif";
 
@@ -29,6 +33,25 @@ export const DEFAULT_PACK_ART_STYLE: PackArtStyle = {
   subtitle: "BOOSTER PACK",
   cardCount: 5,
 };
+
+const packFrontCanvasCache = new Map<string, HTMLCanvasElement>();
+let cachedCardBackCanvas: HTMLCanvasElement | null = null;
+let cachedCardBackDataUrl: string | null = null;
+
+function packArtCacheKey(
+  style: PackArtStyle,
+  options: { subtitle?: boolean; cardCount?: boolean },
+): string {
+  return [
+    style.accent.r,
+    style.accent.g,
+    style.accent.b,
+    style.subtitle,
+    style.cardCount ?? 5,
+    options.subtitle !== false ? 1 : 0,
+    options.cardCount !== false ? 1 : 0,
+  ].join(":");
+}
 
 type Rgb = PackArtStyle["accent"];
 
@@ -83,6 +106,22 @@ export function createPackFrontCanvas(
   drawTearPerforation(context, width, height);
   drawSideWelds(context, width, height);
 
+  return canvas;
+}
+
+/* Pack art is immutable after it is drawn. The selector thumbnails and the
+   live 3D pouch can therefore share the same source canvas instead of paying
+   the full foil draw again when a pack type is selected. Callers must treat
+   the returned canvas as read-only. */
+export function getCachedPackFrontCanvas(
+  style: PackArtStyle = DEFAULT_PACK_ART_STYLE,
+  options: { subtitle?: boolean; cardCount?: boolean } = {},
+): HTMLCanvasElement {
+  const key = packArtCacheKey(style, options);
+  const cached = packFrontCanvasCache.get(key);
+  if (cached) return cached;
+  const canvas = createPackFrontCanvas(style, options);
+  packFrontCanvasCache.set(key, canvas);
   return canvas;
 }
 
@@ -425,4 +464,19 @@ export function createCardBackCanvas(): HTMLCanvasElement {
   context.fillText("M A N I A C A R D", cx, height - 44);
 
   return canvas;
+}
+
+/* The neutral back is used by the shuffle, reveal stack, and 3D renderer.
+   Canvas drawing and PNG encoding are both synchronous, so keep one immutable
+   copy for the session and warm it while the unopened pack is idle. */
+export function getCachedCardBackCanvas(): HTMLCanvasElement {
+  if (!cachedCardBackCanvas) cachedCardBackCanvas = createCardBackCanvas();
+  return cachedCardBackCanvas;
+}
+
+export function getCachedCardBackDataUrl(): string {
+  if (!cachedCardBackDataUrl) {
+    cachedCardBackDataUrl = getCachedCardBackCanvas().toDataURL("image/png");
+  }
+  return cachedCardBackDataUrl;
 }

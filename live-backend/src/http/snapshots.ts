@@ -24,7 +24,7 @@ import { FARM_HELPER_DEFAULT_LIMIT, FARM_HELPER_MAX_LIMIT, FarmHelperUserNotFoun
 import type { ScoreSpeedBucket } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
 import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalRankingsSnapshot, type GlobalRankingsSort } from "../features/global-rankings.js";
-import { enqueueGlobalMapsRefresh, enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRandomDraw, getMapsRefreshProgress, getMapsSnapshot, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, MAPS_RANDOM_DRAW_DEFAULT_COUNT, MAPS_RANDOM_DRAW_EXCLUDE_SETS_MAX, MAPS_RANDOM_DRAW_EXCLUDE_USERS_MAX, MAPS_RANDOM_DRAW_HIDE_USERS_MAX, MAPS_RANDOM_DRAW_MAX_COUNT, MAPS_RANDOM_DRAW_STAR_MAX, MAPS_RANDOM_KEY_BUCKETS, MAPS_RANDOM_PATTERN_NAMES, MAPS_RANDOM_STATUS_BUCKETS, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery, type MapsRandomDrawQuery } from "../features/maps.js";
+import { enqueueGlobalMapsRefresh, enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRandomDraw, getMapsRefreshProgress, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, MAPS_RANDOM_DRAW_DEFAULT_COUNT, MAPS_RANDOM_DRAW_EXCLUDE_SETS_MAX, MAPS_RANDOM_DRAW_EXCLUDE_USERS_MAX, MAPS_RANDOM_DRAW_HIDE_USERS_MAX, MAPS_RANDOM_DRAW_MAX_COUNT, MAPS_RANDOM_DRAW_STAR_MAX, MAPS_RANDOM_KEY_BUCKETS, MAPS_RANDOM_PATTERN_NAMES, MAPS_RANDOM_STATUS_BUCKETS, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery, type MapsRandomDrawQuery } from "../features/maps.js";
 import { getMapSearchPage, getMapSearchSetEntry, MAP_SEARCH_PATTERNS, MAP_SEARCH_SUB_PATTERNS, type MapSearchQuery, type MapSearchSort } from "../features/map-search.js";
 import { getMapCollection, getMapCollections, getMapCollectionsRotation, rebuildMapCollections } from "../features/map-collections.js";
 import { getPackWallet, listPackCollectionCards, listPackCollectionOwnedUserIds, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
@@ -852,20 +852,6 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     // 202 while the country's first maps build is still running, matching the
     // pool endpoint it replaces; the client polls on a null value either way.
     await sendAccentEnrichedJson(req, res, ctx, draw.value ? 200 : 202, draw);
-    return true;
-  }
-  if (url.pathname === "/api/snapshots/maps") {
-    // Only the Random tab's pool is public here; Maps browsing uses
-    // /api/snapshots/maps-page. The full "core" payload (an entire country's
-    // farmed/favourite boards) had no frontend caller left, and its GLOBAL
-    // hydrate/stringify peaked over a GiB — legacy callers get a controlled
-    // 410 before any snapshot row is read, hydrated, or activation runs.
-    if (url.searchParams.get("section") !== "random") {
-      sendJson(req, res, ctx, 410, { error: "maps_core_snapshot_removed", detail: "Use /api/snapshots/maps-page, or section=random for the Random pool." });
-      return true;
-    }
-    if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
-    await handleMapsSnapshot(req, res, ctx, country);
     return true;
   }
   if (url.pathname === "/api/snapshots/maps-players") {
@@ -2806,7 +2792,7 @@ async function buildStatusBody(ctx: HttpContext, options: { includeWorkerActivit
   };
 }
 
-// Entry counts and body bytes for the maps prepared-response caches, surfaced
+// Entry count and body bytes for the maps-page prepared-response cache, surfaced
 // in /api/admin/status so the byte budgets are observable in production.
 function mapsResponseCacheMetrics(db: Db) {
   const state = getMapsResponseCacheState(db);
@@ -2818,7 +2804,6 @@ function mapsResponseCacheMetrics(db: Db) {
     maxEntryBytes: cache.maxEntryBytes,
   });
   return {
-    mapsSnapshot: describe(state.responses),
     mapsPage: describe(state.pageResponses),
   };
 }
@@ -3415,54 +3400,29 @@ function setServerTiming(req: IncomingMessage, res: ServerResponse): void {
   res.setHeader("server-timing", `app;dur=${durationMs.toFixed(1)}`);
 }
 
-// /api/snapshots/maps serves only the Random tab's pool (the public "core"
-// section — a whole country roster's farmed + favourite boards — was removed;
-// legacy callers get 410 in the router). The stored snapshot only changes when
-// the maps refresh job rewrites the row, yet every visit otherwise re-parses,
-// re-slices and re-compresses it from scratch. We cache the finished
-// (already-compressed) response body keyed on the row's refreshed_at: that key
-// IS the real cache lifetime — it stays valid until the next rebuild, then
-// changes on its own. The TTL is just a periodic re-check so the volatile
-// isStale / refreshQueued flags in the body can't stay wrong indefinitely if
-// a rebuild stalls; the refresh itself is enqueued on cache misses (inside
-// getMapsSnapshot) and on the activatePublicCountry path.
-//
-// Random caches at the full TTL even mid-refresh: its pool is identical for
-// a given refreshed_at regardless of staleness flags, and GLOBAL is
-// permanently "behind sources" (any country refresh or ingested score
-// re-stales it), so a settled-state requirement would keep GLOBAL — a
-// hydrate of ~45k sets — uncached forever, which is what made Random crawl.
-// The short refreshing TTL below applies to /maps-page country responses,
-// whose bodies do carry refresh-state flags worth re-checking sooner.
-const MAPS_RESPONSE_CACHE_TTL_MS = 60 * 60_000;
-const MAPS_RESPONSE_CACHE_MAX_ENTRIES = 32;
+// Prepared /maps-page responses are cached already serialized and compressed.
+// The shorter TTL while a country refresh is running bounds how long volatile
+// refresh-state flags can lag; generation markers invalidate settled entries.
 const MAPS_PAGE_RESPONSE_CACHE_TTL_MS = 10 * 60_000;
 const MAPS_PAGE_RESPONSE_CACHE_MAX_ENTRIES = 128;
 const MAPS_REFRESHING_RESPONSE_CACHE_TTL_MS = 30_000;
 // Byte budgets (Phase 7). Entry counts alone can't bound memory: one entry may
-// hold a multi-MiB body. Measured on the prod snapshot (2026-07-24): GLOBAL
-// random is 13.0 MiB raw / 3.2 gzip / 2.5 brotli; country randoms are <= ~1 MiB
-// raw; maps-page bodies are <= ~64 KiB. So the compressed working set is a few
-// MiB and these budgets are safety ceilings, not tuning knobs.
-const MAPS_RESPONSE_CACHE_MAX_BYTES = 48 * 1024 * 1024;
+// hold a large body. Maps-page bodies are normally <= ~64 KiB, so this budget
+// is a safety ceiling rather than a tuning knob.
 const MAPS_PAGE_RESPONSE_CACHE_MAX_BYTES = 32 * 1024 * 1024;
 // No single body may occupy a meaningful slice of a cache budget. Larger
 // bodies are still served, just never retained.
 const MAPS_RESPONSE_CACHE_MAX_ENTRY_BYTES = 8 * 1024 * 1024;
 // A 200 body above this size is only served compressed: clients that accept
 // neither br nor gzip get a cached 406 instead. This keeps very large identity
-// bodies (GLOBAL random is 13 MiB raw) out of the cache without opening a
-// rebuild-per-request path for Accept-Encoding-less clients — the tiny 406 is
-// cached under the identity key. Every browser and standard HTTP library
-// sends Accept-Encoding.
+// bodies out of the cache without opening a rebuild-per-request path for
+// Accept-Encoding-less clients — the tiny 406 is cached under the identity
+// key. Every browser and standard HTTP library sends Accept-Encoding.
 const MAPS_IDENTITY_RESPONSE_MAX_BYTES = 2 * 1024 * 1024;
 // How long past its TTL a GLOBAL entry may still be served while a background
-// rebuild replaces it. GLOBAL hydrates are the expensive ones (a ~45k-set
-// random pool) and, with local libsql running queries synchronously on the
-// event loop, a foreground rebuild stalls every other request on the process —
-// so GLOBAL requests get the previous generation instantly and the rebuild
-// runs once, off the request path. Country entries don't opt in (staleServeMs
-// 0): their builds are sub-second.
+// rebuild replaces it. GLOBAL page builds can be expensive, so requests get
+// the previous generation instantly and the rebuild runs once off the request
+// path. Country entries don't opt in (staleServeMs 0).
 const MAPS_GLOBAL_STALE_SERVE_MS = 45 * 60_000;
 
 export interface MapsResponseCacheEntry extends PreparedJsonResponse {
@@ -3488,9 +3448,7 @@ export interface MapsResponseCache {
 // that GLOBAL keys are stable across generations instead of embedding
 // refreshed_at.
 interface MapsResponseCacheState {
-  responses: MapsResponseCache;
   pageResponses: MapsResponseCache;
-  inflight: Map<string, Promise<PreparedJsonResponse>>;
   pageInflight: Map<string, Promise<PreparedJsonResponse>>;
 }
 
@@ -3508,9 +3466,7 @@ function getMapsResponseCacheState(db: Db): MapsResponseCacheState {
   let state = mapsResponseCacheByDb.get(db);
   if (!state) {
     state = {
-      responses: createMapsResponseCache(MAPS_RESPONSE_CACHE_MAX_ENTRIES, MAPS_RESPONSE_CACHE_MAX_BYTES),
       pageResponses: createMapsResponseCache(MAPS_PAGE_RESPONSE_CACHE_MAX_ENTRIES, MAPS_PAGE_RESPONSE_CACHE_MAX_BYTES),
-      inflight: new Map(),
       pageInflight: new Map(),
     };
     mapsResponseCacheByDb.set(db, state);
@@ -3574,8 +3530,8 @@ function enforceCompressedLargeBody(
   return { prepared: { status: 406, encoding: null, vary: true, body }, cacheTtlMs: result.cacheTtlMs };
 }
 
-// Try to run a GLOBAL maps build on the snapshot worker thread, where its
-// synchronous libsql reads and the ~136MB stringify can't stall the server's
+// Try to run a GLOBAL maps-page build on the snapshot worker thread, where its
+// synchronous libsql reads and multi-second hydrate can't stall the server's
 // event loop. Null means the thread genuinely can't run here (disabled, or it
 // never managed to spawn — e.g. under vitest) and the caller should build
 // inline. Anything that went wrong after the thread has been online (build
@@ -3965,61 +3921,6 @@ async function handleMapsPageSnapshot(
         : !global && snapshot.refreshQueued
           ? MAPS_REFRESHING_RESPONSE_CACHE_TTL_MS
           : MAPS_PAGE_RESPONSE_CACHE_TTL_MS;
-      return enforceCompressedLargeBody({ prepared, cacheTtlMs }, encoding);
-    },
-  });
-}
-
-async function handleMapsSnapshot(
-  req: IncomingMessage,
-  res: ServerResponse,
-  ctx: HttpContext,
-  country: string,
-): Promise<void> {
-  const cacheState = getMapsResponseCacheState(ctx.db);
-  pruneMapsResponseCache(cacheState.responses, Date.now());
-
-  const encoding = negotiateEncoding(req);
-  const normalized = country.toUpperCase();
-  const global = isGlobalCountry(normalized);
-  // Cheap timestamp-only read first: a cache hit must avoid getMapsSnapshot(),
-  // which is itself the expensive payload_json parse/hydrate/slice path.
-  const meta = await getMapsSnapshotMeta(ctx.db, country);
-  // The random slice depends only on this row's pool ids plus beatmapset
-  // metadata, so refreshed_at alone marks its generation — the key stays
-  // stable across generations and the freshnessKey invalidates it.
-  const cacheKey = meta.refreshedAt ? `${normalized}|random|${encoding ?? "identity"}` : null;
-
-  await serveMapsResponseCached(req, res, ctx, {
-    cache: cacheState.responses,
-    inflight: cacheState.inflight,
-    key: cacheKey,
-    freshnessKey: meta.refreshedAt ?? "",
-    staleServeMs: global ? MAPS_GLOBAL_STALE_SERVE_MS : 0,
-    build: async () => {
-      if (global) {
-        const prepared = await buildGlobalMapsResponseOnThread(ctx, {
-          kind: "maps",
-          country,
-          section: "random",
-          encoding,
-          maxAgeMs: ctx.config.mapsRefreshIntervalMs,
-        });
-        if (prepared) {
-          return enforceCompressedLargeBody(
-            { prepared, cacheTtlMs: prepared.status === 200 ? MAPS_RESPONSE_CACHE_TTL_MS : null },
-            encoding,
-          );
-        }
-      }
-      const snapshot = await getMapsSnapshot(ctx.db, ctx.queue, country, ctx.config.mapsRefreshIntervalMs, "random");
-      const status = snapshot.value ? 200 : 202;
-      const prepared = await prepareJsonResponse(status, snapshot, encoding);
-      // Only cache populated 200s — never the cold "still building" 202/null
-      // state, whose body changes the moment the first real snapshot lands.
-      // The random pool is identical for a given refreshed_at regardless of
-      // refresh state, so it always takes the full TTL (see the cache comment).
-      const cacheTtlMs = status !== 200 || snapshot.value == null ? null : MAPS_RESPONSE_CACHE_TTL_MS;
       return enforceCompressedLargeBody({ prepared, cacheTtlMs }, encoding);
     },
   });

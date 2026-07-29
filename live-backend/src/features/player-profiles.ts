@@ -682,7 +682,8 @@ async function upsertDisplayUser(
 }
 
 async function buildServedSnapshot(db: Db, row: ProfileSnapshotRow, forceStale: boolean, recentScores: OscScore[] = []): Promise<PlayerProfileSnapshot> {
-  const user = unpackJson<Record<string, unknown>>(row.user_json, {});
+  const storedUser = unpackJson<Record<string, unknown>>(row.user_json, {});
+  const user = mergeTrackedLastVisit(storedUser, await getLatestTrackedPlayAt(db, row.user_id));
   const rawBestScores = await hydrateScoresDisplayMetadata(db, unpackJson<OscScore[]>(row.best_scores_json, []));
   const userFetchedAt = row.user_fetched_at ?? row.fetched_at;
   const projectionBaselineAt = latestValidTimestamp(row.fetched_at, userFetchedAt);
@@ -705,6 +706,47 @@ async function buildServedSnapshot(db: Db, row: ProfileSnapshotRow, forceStale: 
       provenanceByScoreId: projection.provenanceByScoreId,
     },
   };
+}
+
+/**
+ * osu!'s last_visit reflects Bancho/site presence and can stay stale while a
+ * player is actively setting scores. A tracked score proves they were present
+ * at least that recently, so profile responses use the newer timestamp without
+ * rewriting the authoritative cached osu! payload.
+ *
+ * Activity refs outlive raw score_events; score_events cover the small window
+ * before a freshly ingested score has reached the activity projection.
+ */
+async function getLatestTrackedPlayAt(db: Db, userId: number): Promise<string | null> {
+  const row = (await exec(
+    db,
+    `select coalesce(max(activity_at, event_at), activity_at, event_at) as played_at
+     from (
+       select
+         (select ended_at
+          from player_activity_score_refs
+          where user_id = ?
+          order by ended_at desc
+          limit 1) as activity_at,
+         (select ended_at
+          from score_events
+          where user_id = ? and ruleset_id = 3
+          order by ended_at desc
+          limit 1) as event_at
+     )`,
+    [userId, userId],
+  )).rows[0];
+  const playedAt = readString(row?.played_at);
+  return playedAt && Number.isFinite(Date.parse(playedAt)) ? playedAt : null;
+}
+
+function mergeTrackedLastVisit(user: Record<string, unknown>, trackedPlayAt: string | null): Record<string, unknown> {
+  if (!trackedPlayAt) return user;
+  const lastVisit = readString(user.last_visit);
+  const lastVisitMs = lastVisit ? Date.parse(lastVisit) : NaN;
+  const trackedPlayMs = Date.parse(trackedPlayAt);
+  if (Number.isFinite(lastVisitMs) && lastVisitMs >= trackedPlayMs) return user;
+  return { ...user, last_visit: trackedPlayAt };
 }
 
 // Attaches the note-weighted song tempo from chart analysis onto each served

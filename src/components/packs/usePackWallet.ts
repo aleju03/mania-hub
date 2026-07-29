@@ -56,6 +56,12 @@ export interface PackWalletApi {
 
 const PUSH_DEBOUNCE_MS = 1200;
 const PUSH_RETRY_MS = 15_000;
+const LOCAL_WRITE_TIMEOUT_MS = 900;
+
+type WindowWithIdleCallback = Window & {
+  requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
+  cancelIdleCallback?: (handle: number) => void;
+};
 
 interface SyncState {
   enabled: boolean;
@@ -101,6 +107,9 @@ export function usePackWallet(): PackWalletApi {
   const [syncStatus, setSyncStatus] = useState<PackSyncStatus>("local");
   const walletRef = useRef<PackWallet | null>(null);
   const keyRef = useRef<string>(packWalletStorageKey(viewerId));
+  const pendingLocalWriteRef = useRef<{ key: string; wallet: PackWallet } | null>(null);
+  const localWriteIdleRef = useRef<number | null>(null);
+  const localWriteTimeoutRef = useRef<number | null>(null);
   const syncRef = useRef<SyncState>({
     enabled: false,
     rev: 0,
@@ -111,6 +120,45 @@ export function usePackWallet(): PackWalletApi {
     pushing: false,
     generation: 0,
   });
+
+  const cancelScheduledLocalWrite = () => {
+    if (typeof window === "undefined") return;
+    const idleWindow = window as WindowWithIdleCallback;
+    if (localWriteIdleRef.current !== null) {
+      idleWindow.cancelIdleCallback?.(localWriteIdleRef.current);
+      localWriteIdleRef.current = null;
+    }
+    if (localWriteTimeoutRef.current !== null) {
+      window.clearTimeout(localWriteTimeoutRef.current);
+      localWriteTimeoutRef.current = null;
+    }
+  };
+
+  const flushLocalWrite = () => {
+    cancelScheduledLocalWrite();
+    const pending = pendingLocalWriteRef.current;
+    pendingLocalWriteRef.current = null;
+    if (pending) writePackWallet(pending.key, pending.wallet);
+  };
+
+  const scheduleLocalWrite = (key: string, next: PackWallet) => {
+    pendingLocalWriteRef.current = { key, wallet: next };
+    if (typeof window === "undefined") return;
+    cancelScheduledLocalWrite();
+    const idleWindow = window as WindowWithIdleCallback;
+    const write = () => {
+      localWriteIdleRef.current = null;
+      localWriteTimeoutRef.current = null;
+      flushLocalWrite();
+    };
+    if (idleWindow.requestIdleCallback) {
+      localWriteIdleRef.current = idleWindow.requestIdleCallback(write, { timeout: LOCAL_WRITE_TIMEOUT_MS });
+    } else {
+      // Keep storage serialization out of the input/animation task even on
+      // Safari, which still lacks requestIdleCallback.
+      localWriteTimeoutRef.current = window.setTimeout(write, 180);
+    }
+  };
 
   const schedulePush = (delayMs = PUSH_DEBOUNCE_MS) => {
     const sync = syncRef.current;
@@ -155,7 +203,7 @@ export function usePackWallet(): PackWalletApi {
           sync.lastSyncedPayload = strippedPayload;
           sync.cardsMode = "delta";
           walletRef.current = stripped;
-          writePackWallet(keyRef.current, stripped);
+          scheduleLocalWrite(keyRef.current, stripped);
           setWallet(stripped);
           setSyncStatus("synced");
         }
@@ -190,7 +238,7 @@ export function usePackWallet(): PackWalletApi {
 
   const commit = (next: PackWallet, syncEligible = true) => {
     walletRef.current = next;
-    writePackWallet(keyRef.current, next);
+    scheduleLocalWrite(keyRef.current, next);
     setWallet(next);
     // Keep countdowns honest immediately after a spend instead of waiting
     // for the next interval tick.
@@ -208,7 +256,7 @@ export function usePackWallet(): PackWalletApi {
     sync.lastSyncedPayload = serialized;
     sync.cardsMode = "delta";
     walletRef.current = stripped;
-    writePackWallet(keyRef.current, stripped);
+    scheduleLocalWrite(keyRef.current, stripped);
     setWallet(stripped);
     setNowMs(Date.now());
     setSyncStatus("synced");
@@ -249,6 +297,9 @@ export function usePackWallet(): PackWalletApi {
   };
 
   useEffect(() => {
+    // A viewer switch changes the storage key; finish the previous scope's
+    // pending write before moving the ref to the new one.
+    flushLocalWrite();
     const sync = syncRef.current;
     sync.generation += 1;
     sync.enabled = false;
@@ -266,7 +317,7 @@ export function usePackWallet(): PackWalletApi {
     const loaded = loadWalletForViewer(viewerId, Date.now());
     sync.cardsMode = Object.keys(loaded.cards).length > 0 ? "snapshot" : "delta";
     walletRef.current = loaded;
-    writePackWallet(keyRef.current, loaded);
+    scheduleLocalWrite(keyRef.current, loaded);
     setWallet(loaded);
     setNowMs(Date.now());
 
@@ -295,12 +346,13 @@ export function usePackWallet(): PackWalletApi {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewerId]);
 
-  // Flush a pending push when the tab goes to background, so closing the
-  // browser right after a pack rarely loses the debounce window.
+  // Flush local durability and a pending server push when the page is leaving
+  // or backgrounded. Normal interaction writes stay off animation frames.
   useEffect(() => {
     if (typeof document === "undefined") return;
     const flush = () => {
       if (document.visibilityState !== "hidden") return;
+      flushLocalWrite();
       const sync = syncRef.current;
       if (sync.enabled && sync.pushTimer) {
         clearTimeout(sync.pushTimer);
@@ -308,8 +360,14 @@ export function usePackWallet(): PackWalletApi {
         void runPushNow();
       }
     };
+    const onPageHide = () => flushLocalWrite();
     document.addEventListener("visibilitychange", flush);
-    return () => document.removeEventListener("visibilitychange", flush);
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      document.removeEventListener("visibilitychange", flush);
+      window.removeEventListener("pagehide", onPageHide);
+      flushLocalWrite();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

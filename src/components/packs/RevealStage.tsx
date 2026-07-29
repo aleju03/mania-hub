@@ -22,7 +22,7 @@ import {
   COLLECTION_CARD_THUMB_WIDTH,
   rememberCardThumbnailDataUrl,
 } from "./cardThumbnailCache";
-import { createCardBackCanvas } from "./packArt";
+import { getCachedCardBackCanvas, getCachedCardBackDataUrl } from "./packArt";
 import { playCardDraw, playFlipWhoosh, playRevealChime } from "./packSfx";
 import { TierBurst } from "./TierBurst";
 
@@ -392,9 +392,9 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     // Reset on every mount: StrictMode runs mount -> cleanup -> mount, and a
     // stale true here would silently abort every reveal.
     cancelledRef.current = false;
-    const backCanvas = createCardBackCanvas();
+    const backCanvas = getCachedCardBackCanvas();
     backCanvasRef.current = backCanvas;
-    setCardBack(backCanvas.toDataURL("image/png"));
+    setCardBack(getCachedCardBackDataUrl());
     return () => {
       cancelledRef.current = true;
       rendererRef.current?.dispose({ deferGpuRelease: true });
@@ -539,6 +539,9 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     try {
       await ensureRendererReady(data);
       if (cancelledRef.current) return;
+      // PNG encoding is synchronous. Snapshot while the UI is still in its
+      // preparing beat so the reveal flip and tier landing stay animation-only.
+      const thumbnail = rendererRef.current?.snapshotFrontCanvas(COLLECTION_CARD_THUMB_WIDTH) ?? null;
       setActiveData(data);
       setActiveFallback(null);
       setPhase("flipping");
@@ -553,7 +556,6 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
       // Tray thumbnail comes from the front texture the renderer already
       // drew; rebuilding it through the full texture pipeline used to run
       // concurrently with the flip and stutter the animation.
-      const thumbnail = rendererRef.current?.snapshotFrontCanvas(COLLECTION_CARD_THUMB_WIDTH);
       if (thumbnail) {
         updateThumbnail(cardIndex, thumbnail);
         void rememberCardThumbnailDataUrl(data, thumbnail, COLLECTION_CARD_THUMB_WIDTH);

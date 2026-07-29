@@ -853,7 +853,7 @@ const randomFarmHandler: CommandHandler = async (deps, interaction) => {
         minPp: minPp ?? 0,
       });
     } else {
-      const snapshot = await getMapsSnapshot(deps.db, deps.queue, country, MAPS_MAX_AGE_MS, "core");
+      const snapshot = await getMapsSnapshot(deps.db, deps.queue, country, MAPS_MAX_AGE_MS);
       const data = snapshot.value;
       if (!data) return noticeBody(`Maps for ${countryLabel(country)} are still generating, try again shortly.`);
       const pool = data.farmed.filter((m) => {

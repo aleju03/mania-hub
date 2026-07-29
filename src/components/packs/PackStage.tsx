@@ -4,15 +4,13 @@ import type { PackTypeDef } from "#/lib/packs";
 import { useWindowActive } from "#/lib/window-activity";
 import {
   createPackBackCanvas,
-  createPackFrontCanvas,
   DEFAULT_PACK_ART_STYLE,
-  drawPackCardCount,
-  drawPackSubtitle,
+  getCachedPackFrontCanvas,
   PACK_ART_HEIGHT,
   PACK_ART_WIDTH,
   PACK_ASPECT,
+  PACK_RIP_STRIP_FRACTION,
   PACK_TEAR_FRACTION,
-  type PackArtStyle,
 } from "./packArt";
 import { createPackScene, type PackScene } from "./packScene";
 import { playPackRip, playSlashTick } from "./packSfx";
@@ -23,7 +21,7 @@ import { playPackRip, playSlashTick } from "./packSfx";
 const BIN_COUNT = 48;
 // Rendering samples the cut at a finer resolution than the recorded bins so
 // the tear reads as a smooth curve instead of stair steps.
-const SLICES_PER_BIN = 4;
+const SLICES_PER_BIN = 2;
 const TEAR_COMPLETE_COVERAGE = 0.7;
 // Vertical band (fractions of pack height) where a drag counts as a slash
 // instead of a tilt. Kept tight around the perforation line (at 0.16) so the
@@ -43,6 +41,12 @@ const MAX_LIFT_FRACTION = 0.02;
 // lifetimes make the streak chase the cursor instead of trailing a rope.
 const TRAIL_LIFE_MS = 220;
 const TRAIL_MAX_POINTS = 36;
+// A fixed full-viewport canvas at native mobile/retina DPR can exceed 30m
+// pixels. The blade is a soft, short-lived effect, so keep its backing store
+// within a small GPU budget and let CSS upscale it when necessary.
+const TRAIL_PIXEL_BUDGET = 2_500_000;
+const TRAIL_MAX_SCALE = 1.5;
+const TRAIL_MIN_SCALE = 0.5;
 
 interface SlashSpark {
   id: number;
@@ -77,6 +81,7 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
   const liveCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const artCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const backCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const ripStripCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const sceneRef = useRef<PackScene | null>(null);
   const [artReady, setArtReady] = useState(false);
   // Flips when the async scene creation lands, so effects that push state
@@ -103,11 +108,12 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
   const trailHeldRef = useRef(false);
   const trailCursorRef = useRef<{ x: number; y: number } | null>(null);
   const trailRafRef = useRef<number | null>(null);
-  const artFadeRafRef = useRef<number | null>(null);
-  const artStyleRef = useRef<PackArtStyle | null>(null);
   const reducedMotionRef = useRef(reducedMotion);
   reducedMotionRef.current = reducedMotion;
   const windowActive = useWindowActive();
+  const windowActiveRef = useRef(windowActive);
+  const stageVisibleRef = useRef(true);
+  windowActiveRef.current = windowActive;
 
   const recomputeCutFields = () => {
     const bins = binsRef.current;
@@ -298,6 +304,10 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
     liveCanvasRef.current = live;
     const back = createPackBackCanvas();
     backCanvasRef.current = back;
+    const strip = document.createElement("canvas");
+    strip.width = PACK_ART_WIDTH;
+    strip.height = Math.ceil(PACK_ART_HEIGHT * PACK_RIP_STRIP_FRACTION);
+    ripStripCanvasRef.current = strip;
     // Async: the shared renderer/environment/shaders build staged across
     // frames on the first ever mount (and resolve instantly afterwards), so
     // the route transition never pays the whole WebGL setup in one frame.
@@ -325,83 +335,45 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
       sceneRef.current?.dispose();
       sceneRef.current = null;
       liveCanvasRef.current = null;
+      ripStripCanvasRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    sceneRef.current?.setWindowActive(windowActive);
+    sceneRef.current?.setWindowActive(windowActive && stageVisibleRef.current);
   }, [windowActive, sceneReady]);
+
+  useEffect(() => {
+    const host = packRef.current;
+    if (!host || typeof IntersectionObserver !== "function") return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.some((entry) => entry.isIntersecting);
+        stageVisibleRef.current = visible;
+        sceneRef.current?.setWindowActive(windowActiveRef.current && visible);
+      },
+      { rootMargin: "120px" },
+    );
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     sceneRef.current?.setReducedMotion(reducedMotion);
   }, [reducedMotion, sceneReady]);
 
   useEffect(() => {
-    const nextStyle: PackArtStyle = packType
+    const nextStyle = packType
       ? { accent: packType.accent, subtitle: packType.artSubtitle, cardCount: packType.cardCount }
       : DEFAULT_PACK_ART_STYLE;
-    const previousStyle = artStyleRef.current;
-    artStyleRef.current = nextStyle;
-    const next = createPackFrontCanvas(nextStyle);
+    const next = getCachedPackFrontCanvas(nextStyle);
     setArtReady(true);
-    if (artFadeRafRef.current !== null) {
-      cancelAnimationFrame(artFadeRafRef.current);
-      artFadeRafRef.current = null;
-    }
-    if (!previousStyle || reducedMotionRef.current || rippingRef.current) {
-      artCanvasRef.current = next;
-      drawFrame();
-      return;
-    }
-    // Switching pack types recolors the same pack in place: the foil accent
-    // crossfades while the subtitle and card count fade out as the old
-    // wording and back in as the new one (blending two different texts at
-    // the same spot reads as a garbled double exposure).
-    const prevBase = createPackFrontCanvas(previousStyle, { subtitle: false, cardCount: false });
-    const nextBase = createPackFrontCanvas(nextStyle, { subtitle: false, cardCount: false });
-    const prevCount = previousStyle.cardCount ?? 5;
-    const nextCount = nextStyle.cardCount ?? 5;
-    const blend = document.createElement("canvas");
-    blend.width = PACK_ART_WIDTH;
-    blend.height = PACK_ART_HEIGHT;
-    const blendContext = blend.getContext("2d");
-    if (!blendContext) {
-      artCanvasRef.current = next;
-      drawFrame();
-      return;
-    }
-    artCanvasRef.current = blend;
-    const fadeMs = 360;
-    const startedAt = performance.now();
-    const step = (now: number) => {
-      artFadeRafRef.current = null;
-      const t = Math.min(1, (now - startedAt) / fadeMs);
-      blendContext.clearRect(0, 0, blend.width, blend.height);
-      blendContext.globalAlpha = 1;
-      blendContext.drawImage(prevBase, 0, 0);
-      blendContext.globalAlpha = t;
-      blendContext.drawImage(nextBase, 0, 0);
-      blendContext.globalAlpha = 1;
-      drawPackSubtitle(blendContext, blend.width, blend.height, previousStyle.subtitle, 1 - Math.min(1, t / 0.45));
-      drawPackSubtitle(blendContext, blend.width, blend.height, nextStyle.subtitle, Math.max(0, (t - 0.55) / 0.45));
-      if (prevCount === nextCount) {
-        drawPackCardCount(blendContext, blend.width, blend.height, nextCount);
-      } else {
-        drawPackCardCount(blendContext, blend.width, blend.height, prevCount, 1 - Math.min(1, t / 0.45));
-        drawPackCardCount(blendContext, blend.width, blend.height, nextCount, Math.max(0, (t - 0.55) / 0.45));
-      }
-      if (t >= 1) artCanvasRef.current = next;
-      drawFrame();
-      if (t < 1) artFadeRafRef.current = requestAnimationFrame(step);
-    };
-    artFadeRafRef.current = requestAnimationFrame(step);
-    return () => {
-      if (artFadeRafRef.current !== null) {
-        cancelAnimationFrame(artFadeRafRef.current);
-        artFadeRafRef.current = null;
-      }
-    };
+    // A per-frame blend redraws and uploads a 600x1000 texture for the whole
+    // duration. Swapping the cached source in one frame keeps selection input
+    // responsive and avoids a competing animation while the pack floats.
+    artCanvasRef.current = next;
+    drawFrame();
   }, [packType]);
 
   // Blade trail: while the pointer is held down anywhere on the stage, a
@@ -413,16 +385,21 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
       trailRafRef.current = null;
       const canvas = trailCanvasRef.current;
       if (!canvas) return;
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const vw = window.innerWidth;
       const vh = window.innerHeight;
-      if (canvas.width !== Math.round(vw * dpr) || canvas.height !== Math.round(vh * dpr)) {
-        canvas.width = Math.round(vw * dpr);
-        canvas.height = Math.round(vh * dpr);
+      const areaScale = Math.sqrt(TRAIL_PIXEL_BUDGET / Math.max(1, vw * vh));
+      const renderScale = clampNumber(
+        Math.min(window.devicePixelRatio || 1, areaScale),
+        TRAIL_MIN_SCALE,
+        TRAIL_MAX_SCALE,
+      );
+      if (canvas.width !== Math.round(vw * renderScale) || canvas.height !== Math.round(vh * renderScale)) {
+        canvas.width = Math.round(vw * renderScale);
+        canvas.height = Math.round(vh * renderScale);
       }
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
       ctx.clearRect(0, 0, vw, vh);
 
       const now = performance.now();
@@ -538,7 +515,12 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
      foil's remaining body - a real slash goes through both layers, so the
      back shell has to lose its top too. The 3D scene maps them onto the
      pouch geometry for the rip animation. */
-  const buildRipCanvases = (art: HTMLCanvasElement, back: HTMLCanvasElement) => {
+  const buildRipStrip = (
+    art: HTMLCanvasElement,
+    back: HTMLCanvasElement,
+    body: HTMLCanvasElement,
+    strip: HTMLCanvasElement,
+  ) => {
     const width = PACK_ART_WIDTH;
     const height = PACK_ART_HEIGHT;
     const bins = binsRef.current;
@@ -561,23 +543,32 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
     bodyPath.lineTo(width, height);
     bodyPath.lineTo(0, height);
     bodyPath.closePath();
-    const clip = (source: HTMLCanvasElement, path: Path2D) => {
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return canvas;
-      ctx.save();
-      ctx.clip(path);
-      ctx.drawImage(source, 0, 0);
-      ctx.restore();
-      return canvas;
-    };
-    return {
-      strip: clip(art, stripPath),
-      body: clip(art, bodyPath),
-      backBody: clip(back, bodyPath),
-    };
+    const stripContext = strip.getContext("2d");
+    const bodyContext = body.getContext("2d");
+    const backContext = back.getContext("2d");
+    if (!stripContext || !bodyContext || !backContext) return null;
+
+    stripContext.clearRect(0, 0, strip.width, strip.height);
+    stripContext.save();
+    stripContext.clip(stripPath);
+    stripContext.drawImage(art, 0, 0);
+    stripContext.restore();
+
+    bodyContext.clearRect(0, 0, width, height);
+    bodyContext.save();
+    bodyContext.clip(bodyPath);
+    bodyContext.drawImage(art, 0, 0);
+    bodyContext.restore();
+
+    // The back texture already points at this canvas. Punching its top away
+    // in place avoids allocating, uploading, and later disposing another
+    // full-size body texture at the exact moment the rip starts.
+    backContext.save();
+    backContext.globalCompositeOperation = "destination-out";
+    backContext.fillStyle = "#000";
+    backContext.fill(stripPath);
+    backContext.restore();
+    return strip;
   };
 
   const triggerRip = () => {
@@ -592,7 +583,12 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
     fillUncutBins();
     const art = artCanvasRef.current;
     const back = backCanvasRef.current;
-    if (art && back) sceneRef.current?.beginRip(buildRipCanvases(art, back));
+    const body = liveCanvasRef.current;
+    const strip = ripStripCanvasRef.current;
+    if (art && back && body && strip) {
+      const builtStrip = buildRipStrip(art, back, body, strip);
+      if (builtStrip) sceneRef.current?.beginRip(builtStrip);
+    }
     setRipping(true);
     window.setTimeout(onOpened, reducedMotion ? 220 : 880);
   };

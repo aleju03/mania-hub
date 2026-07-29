@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { brotliDecompressSync, gunzipSync } from "node:zlib";
 import { EventEmitter } from "node:events";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -91,61 +90,6 @@ function mockRes() {
   };
   res = partial as unknown as ServerResponse & { statusCode: number };
   return { res, writes, headers };
-}
-
-// Like mockRes but byte-accurate: compressed bodies round-trip through String()
-// lossily, so encoding tests need the raw buffers.
-async function binaryRequest(
-  ctx: never,
-  url: string,
-  headers: IncomingMessage["headers"] = {},
-): Promise<{ status: number; headers: Record<string, string>; body: Buffer }> {
-  const chunks: Buffer[] = [];
-  const headerBag: Record<string, string> = {};
-  const res = {
-    statusCode: 200,
-    setHeader(key: string, value: number | string | readonly string[]) {
-      headerBag[key.toLowerCase()] = Array.isArray(value) ? value.join(",") : String(value);
-      return res;
-    },
-    getHeader(key: string) {
-      return headerBag[key.toLowerCase()];
-    },
-    writeHead(status: number, extra?: Record<string, string>) {
-      res.statusCode = status;
-      for (const [key, value] of Object.entries(extra ?? {})) headerBag[key.toLowerCase()] = String(value);
-      return res;
-    },
-    write(chunk: string | Buffer) {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-      return true;
-    },
-    end(chunk?: string | Buffer) {
-      if (chunk != null) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    },
-  };
-  await routeHttp(mockReq("GET", url, headers), res as unknown as ServerResponse, ctx);
-  return { status: res.statusCode, headers: headerBag, body: Buffer.concat(chunks) };
-}
-
-// A legacy-shape maps snapshot payload whose size scales with playerCount
-// (~2 KiB per player), for exercising the response-cache byte rules.
-function mapsSnapshotPayload(refreshedAt: string, playerCount: number): string {
-  return JSON.stringify({
-    farmed: [],
-    mostPlayed: [],
-    favourites: [],
-    favouritesByPlayer: Array.from({ length: playerCount }, (_, index) => ({
-      id: 101 + index,
-      username: `player-${index}-${"x".repeat(2000)}`,
-      avatarUrl: "https://assets.example/player.png",
-      beatmapsetIds: [1],
-    })),
-    beatmapsetsPool: {},
-    generatedAt: refreshedAt,
-    farmedGeneratedAt: refreshedAt,
-    favouritesGeneratedAt: refreshedAt,
-  });
 }
 
 function baseConfig(overrides: Record<string, unknown> = {}) {
@@ -2515,9 +2459,8 @@ describe("live backend", () => {
       topPlays: 1,
       snipes: 1,
     });
-    expect(body.responseCaches?.mapsSnapshot).toMatchObject({ entries: 0, bytes: 0 });
     expect(body.responseCaches?.mapsPage).toMatchObject({ entries: 0, bytes: 0 });
-    expect(body.responseCaches?.mapsSnapshot.maxBytes).toBeGreaterThan(0);
+    expect(body.responseCaches?.mapsPage.maxBytes).toBeGreaterThan(0);
     expect(body.responseCaches?.mapsPage.maxEntryBytes).toBeGreaterThan(0);
     // Process memory. Role is unset in this ctx, so both sides fall back to
     // this process: the pids match, which is exactly how the dashboard tells
@@ -4287,171 +4230,14 @@ describe("live backend", () => {
     expect(snapshot.value?.farmedGeneratedAt).toBe("2026-05-12T00:05:00.000Z");
   });
 
-  it("rejects non-random maps snapshot requests with 410 before reading or hydrating the snapshot", async () => {
-    const { db, queue, events } = await setup();
-    // A stale GLOBAL row whose payload is not even valid JSON: if the core
-    // path still ran, the request would read this row (410 proves it never
-    // did — a build over a corrupt row answers 202, not 410) and its
-    // staleness would enqueue a maps refresh.
-    const staleRefreshedAt = "2020-01-01T00:00:00.000Z";
-    await exec(
-      db,
-      `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
-       values ('GLOBAL', ?, ?, ?)`,
-      ["{not json", staleRefreshedAt, staleRefreshedAt],
-    );
-    const ctx = {
-      db,
-      queue,
-      events,
-      config: baseConfig(),
-      osu: {},
-      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
-    } as never;
-    const request = async (path: string) => {
-      const { res, writes } = mockRes();
-      await routeHttp(mockReq("GET", path), res, ctx);
-      return { status: res.statusCode, body: JSON.parse(writes.join("")) as { error?: string } };
-    };
-
+  it("does not route the removed maps snapshot endpoint", async () => {
     for (const path of [
-      "/api/snapshots/maps?country=GLOBAL",
-      "/api/snapshots/maps?country=GLOBAL&section=core",
       "/api/snapshots/maps?country=CR",
-      "/api/snapshots/maps?country=CR&section=core",
+      "/api/snapshots/maps?country=CR&section=random",
     ]) {
-      const { status, body } = await request(path);
-      expect(status, path).toBe(410);
-      expect(body.error, path).toBe("maps_core_snapshot_removed");
+      const { res } = mockRes();
+      expect(await routeHttp(mockReq("GET", path), res, { config: baseConfig() } as never), path).toBe(false);
     }
-
-    // The 410 fires in the router: no snapshot hydration ran, so neither the
-    // stale GLOBAL row (refresh_global_maps) nor the CR requests
-    // (refresh_country_maps) enqueued a refresh job.
-    expect(Number((await exec(db, "select count(*) as count from jobs where type in ('refresh_country_maps', 'refresh_global_maps')")).rows[0].count)).toBe(0);
-  });
-
-  it("keeps the GLOBAL maps random response cached while overlay and source stamps churn", async () => {
-    const { db, queue, events } = await setup();
-    const refreshedAt = new Date().toISOString();
-    await exec(
-      db,
-      `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
-       values ('GLOBAL', ?, ?, ?)`,
-      [
-        JSON.stringify({
-          farmed: [],
-          mostPlayed: [],
-          favourites: [],
-          favouritesByPlayer: [{
-            id: 101,
-            username: "Player",
-            avatarUrl: "https://assets.example/player.png",
-            beatmapsetIds: [1],
-          }],
-          beatmapsetsPool: {},
-          generatedAt: refreshedAt,
-          farmedGeneratedAt: refreshedAt,
-          favouritesGeneratedAt: refreshedAt,
-        }),
-        refreshedAt,
-        refreshedAt,
-      ],
-    );
-    const ctx = {
-      db,
-      queue,
-      events,
-      config: baseConfig(),
-      osu: {},
-      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
-    } as never;
-    const request = async () => {
-      const { res, writes } = mockRes();
-      await routeHttp(mockReq("GET", "/api/snapshots/maps?country=GLOBAL&section=random"), res, ctx);
-      return { status: res.statusCode, body: JSON.parse(writes.join("")) as { value: { farmed: unknown[] } | null } };
-    };
-
-    const first = await request();
-    expect(first.status).toBe(200);
-    expect(first.body.value?.farmed).toHaveLength(0);
-
-    // Churn the stamps that used to sit in the GLOBAL cache key: a fresher
-    // country refresh (sourceRefreshedAt) and a farmed-overlay update. Then
-    // corrupt the stored payload so a rebuild would fail — a still-good
-    // response proves it came from the cache. Under the old key every
-    // ingested score was a miss that re-paid the full GLOBAL hydrate.
-    const countryRefreshedAt = new Date(Date.now() + 1000).toISOString();
-    await exec(
-      db,
-      "insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at) values ('CR', '{}', ?, ?)",
-      [countryRefreshedAt, countryRefreshedAt],
-    );
-    const score = { ...(await fixture<OscScore[]>("scores.json"))[0], pp: 550 };
-    await recordMapsFarmedScore(db, "CR", score, countryRefreshedAt);
-    await exec(db, "update country_maps_snapshots set payload_json = ? where country = 'GLOBAL'", ["{not json"]);
-
-    const churned = await request();
-    expect(churned.status).toBe(200);
-    expect(churned.body.value?.farmed).toHaveLength(0);
-  });
-
-  it("serves the previous GLOBAL maps random generation and swaps in the rebuild in the background", async () => {
-    const { db, queue, events } = await setup();
-    const writeGlobalPayload = (playerId: number, refreshedAt: string) =>
-      JSON.stringify({
-        farmed: [],
-        mostPlayed: [],
-        favourites: [],
-        favouritesByPlayer: [{
-          id: playerId,
-          username: `player-${playerId}`,
-          avatarUrl: "https://assets.example/player.png",
-          beatmapsetIds: [1],
-        }],
-        beatmapsetsPool: {},
-        generatedAt: refreshedAt,
-        farmedGeneratedAt: refreshedAt,
-        favouritesGeneratedAt: refreshedAt,
-      });
-    const firstRefreshedAt = new Date().toISOString();
-    await exec(
-      db,
-      `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
-       values ('GLOBAL', ?, ?, ?)`,
-      [writeGlobalPayload(101, firstRefreshedAt), firstRefreshedAt, firstRefreshedAt],
-    );
-    const ctx = {
-      db,
-      queue,
-      events,
-      config: baseConfig(),
-      osu: {},
-      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
-    } as never;
-    const request = async () => {
-      const { res, writes } = mockRes();
-      await routeHttp(mockReq("GET", "/api/snapshots/maps?country=GLOBAL&section=random"), res, ctx);
-      const body = JSON.parse(writes.join("")) as { value: { favouritesByPlayer: Array<{ id: number }> } | null };
-      return body.value?.favouritesByPlayer[0]?.id;
-    };
-
-    expect(await request()).toBe(101);
-
-    const secondRefreshedAt = new Date(Date.now() + 1000).toISOString();
-    await exec(
-      db,
-      "update country_maps_snapshots set payload_json = ?, refreshed_at = ? where country = 'GLOBAL'",
-      [writeGlobalPayload(202, secondRefreshedAt), secondRefreshedAt],
-    );
-
-    // The first request after the generation bump still serves the previous
-    // body instantly (stale-while-revalidate)...
-    expect(await request()).toBe(101);
-    // ...while the single-flight background rebuild swaps the entry in.
-    await vi.waitFor(async () => {
-      expect(await request()).toBe(202);
-    });
   });
 
   it("refreshes a player's farmed overlay from their top-200 best-score window", async () => {
@@ -4908,7 +4694,7 @@ describe("live backend", () => {
     });
   });
 
-  it("splits maps snapshots into core and random sections", async () => {
+  it("keeps the random pool out of internal core maps snapshots", async () => {
     const { db, queue } = await setup();
     const now = new Date().toISOString();
     await exec(
@@ -4966,18 +4752,12 @@ describe("live backend", () => {
     );
 
     const core = await getMapsSnapshot(db, queue, "CR", 7 * 24 * 60 * 60 * 1000);
-    const random = await getMapsSnapshot(db, queue, "CR", 7 * 24 * 60 * 60 * 1000, "random");
 
     expect(core.value?.farmed).toHaveLength(1);
     expect(core.value?.mostPlayed).toHaveLength(1);
     expect(core.value?.favourites).toHaveLength(1);
     expect(core.value?.favouritesByPlayer).toHaveLength(1);
     expect(core.value?.beatmapsetsPool).toEqual({});
-
-    expect(random.value?.farmed).toEqual([]);
-    expect(random.value?.mostPlayed).toEqual([]);
-    expect(random.value?.favourites).toEqual([]);
-    expect(random.value?.beatmapsetsPool[10]?.title).toBe("Favourite");
   });
 
   it("ranks all tracked rosters together for the Global leaderboard", async () => {
@@ -5823,8 +5603,8 @@ describe("live backend", () => {
     expect(secondPage.players[0].rank).toBe(51);
   });
 
-  it("ships a lean random pool and serves full set records on demand", async () => {
-    const { db, queue } = await setup();
+  it("serves full random set records on demand", async () => {
+    const { db } = await setup();
     const now = "2026-05-12T12:00:00.000Z";
 
     await exec(
@@ -5864,40 +5644,7 @@ describe("live backend", () => {
       );
     }
 
-    await exec(
-      db,
-      `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
-       values ('CR', ?, ?, ?)`,
-      [
-        JSON.stringify({
-          schemaVersion: 2,
-          farmed: [],
-          mostPlayed: [],
-          favourites: [],
-          favouritesByPlayer: [{ id: 101, beatmapsetIds: [7000] }],
-          beatmapsetsPool: [7000],
-          generatedAt: now,
-          farmedGeneratedAt: now,
-          favouritesGeneratedAt: now,
-        }),
-        now,
-        now,
-      ],
-    );
-
-    // The random pool keeps filter/label fields but drops the heavy media.
-    const snapshot = await getMapsSnapshot(db, queue, "CR", 7 * 24 * 60 * 60 * 1000, "random");
-    const poolSet = snapshot.value?.beatmapsetsPool[7000];
-    expect(poolSet?.title).toBe("Pool Song");
-    expect(poolSet?.maniaKeys).toEqual([4, 7]);
-    expect(poolSet?.patterns).toEqual(["stream"]);
-    expect(poolSet?.starMin).toBeCloseTo(3.2);
-    expect(poolSet?.starMax).toBeCloseTo(5.6);
-    expect(poolSet?.covers).toBeUndefined();
-    expect(poolSet?.maniaBeatmaps).toBeUndefined();
-    expect(poolSet?.previewUrl).toBeUndefined();
-
-    // The on-demand per-set record carries the full difficulty list, but only
+    // The per-set record carries the full difficulty list, but only
     // the three cover variants the card actually renders.
     const [full] = await getMapsRandomBeatmapsets(db, [7000]);
     expect(full.id).toBe(7000);
@@ -6238,178 +5985,7 @@ describe("live backend", () => {
     expect(String(metric?.hint)).toContain("not the job's own allocation");
   });
 
-  it("queues maps refreshes from the maps snapshot HTTP endpoint", async () => {
-    const { db, queue, events } = await setup();
-    const writes: string[] = [];
-    const req = new EventEmitter() as IncomingMessage;
-    req.method = "GET";
-    req.url = "/api/snapshots/maps?country=CR&section=random";
-    req.headers = { host: "localhost" };
-    const res = {
-      setHeader: vi.fn(),
-      end: (chunk: string) => {
-        writes.push(chunk);
-      },
-    } as unknown as ServerResponse;
-
-    expect(await routeHttp(req, res, {
-      db,
-      queue,
-      events,
-      config: {
-        allowedOrigins: ["http://localhost:3000"],
-        trackedCountries: ["CR"],
-        rosterRefreshIntervalMs: 24 * 60 * 60 * 1000,
-        mapsRefreshIntervalMs: 7 * 24 * 60 * 60 * 1000,
-      },
-      osu: {},
-      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
-    } as never)).toBe(true);
-
-    expect(JSON.parse(writes.join(""))).toMatchObject({ value: null, isStale: true, refreshQueued: true });
-    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_country_maps'")).rows[0].count)).toBe(1);
-  });
-
-  it("caches the maps snapshot HTTP response until the row's refreshed_at changes", async () => {
-    const { db, queue, events } = await setup();
-    const refreshedAt = new Date().toISOString();
-    const writePayload = () =>
-      JSON.stringify({
-        farmed: [],
-        mostPlayed: [],
-        favourites: [],
-        favouritesByPlayer: [{
-          id: 101,
-          username: "Player",
-          avatarUrl: "https://assets.example/player.png",
-          beatmapsetIds: [1],
-        }],
-        beatmapsetsPool: {},
-        generatedAt: refreshedAt,
-        farmedGeneratedAt: refreshedAt,
-        favouritesGeneratedAt: refreshedAt,
-      });
-    await exec(
-      db,
-      `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
-       values ('CR', ?, ?, ?)`,
-      [writePayload(), refreshedAt, refreshedAt],
-    );
-
-    const ctx = {
-      db,
-      queue,
-      events,
-      config: baseConfig(),
-      osu: {},
-      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
-    } as never;
-    const request = async () => {
-      const { res, writes } = mockRes();
-      await routeHttp(mockReq("GET", "/api/snapshots/maps?country=CR&section=random"), res, ctx);
-      return { status: res.statusCode, body: JSON.parse(writes.join("")) as { value: unknown } };
-    };
-
-    const first = await request();
-    expect(first.status).toBe(200);
-    expect(first.body.value).toBeTruthy();
-
-    // Corrupt the stored payload but keep refreshed_at: a fresh build would now
-    // fail to parse, so a still-good response proves it came from the cache.
-    await exec(db, "update country_maps_snapshots set payload_json = ? where country = 'CR'", ["{not json"]);
-    const cached = await request();
-    expect(cached.status).toBe(200);
-    expect(cached.body.value).toBeTruthy();
-
-    // Bumping refreshed_at changes the cache key, so the next request misses
-    // and sees the corrupt payload.
-    await exec(
-      db,
-      "update country_maps_snapshots set refreshed_at = ? where country = 'CR'",
-      [new Date(Date.now() + 1000).toISOString()],
-    );
-    const afterRefresh = await request();
-    expect(afterRefresh.status).toBe(202);
-    expect(afterRefresh.body.value).toBeNull();
-  });
-
-  it("serves maps snapshots compressed per accept-encoding and varies correctly", async () => {
-    const { db, queue, events } = await setup();
-    const refreshedAt = new Date().toISOString();
-    await exec(
-      db,
-      `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
-       values ('CR', ?, ?, ?)`,
-      [mapsSnapshotPayload(refreshedAt, 10), refreshedAt, refreshedAt],
-    );
-    const ctx = {
-      db,
-      queue,
-      events,
-      config: baseConfig(),
-      osu: {},
-      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
-    } as never;
-
-    const brotli = await binaryRequest(ctx, "/api/snapshots/maps?country=CR&section=random", { "accept-encoding": "br" });
-    expect(brotli.status).toBe(200);
-    expect(brotli.headers["content-encoding"]).toBe("br");
-    expect(brotli.headers.vary).toBe("accept-encoding");
-    const brotliBody = JSON.parse(brotliDecompressSync(brotli.body).toString("utf8")) as { value: unknown };
-    expect(brotliBody.value).toBeTruthy();
-
-    const gzipped = await binaryRequest(ctx, "/api/snapshots/maps?country=CR&section=random", { "accept-encoding": "gzip" });
-    expect(gzipped.status).toBe(200);
-    expect(gzipped.headers["content-encoding"]).toBe("gzip");
-    expect(gzipped.headers.vary).toBe("accept-encoding");
-    expect((JSON.parse(gunzipSync(gzipped.body).toString("utf8")) as { value: unknown }).value).toBeTruthy();
-
-    // No Accept-Encoding: identity body, still varies (it could have been
-    // compressed for another client), no content-encoding header.
-    const identity = await binaryRequest(ctx, "/api/snapshots/maps?country=CR&section=random");
-    expect(identity.status).toBe(200);
-    expect(identity.headers["content-encoding"]).toBeUndefined();
-    expect(identity.headers.vary).toBe("accept-encoding");
-    expect((JSON.parse(identity.body.toString("utf8")) as { value: unknown }).value).toBeTruthy();
-  });
-
-  it("refuses very large identity bodies with a cacheable 406 while compressed clients get 200", async () => {
-    const { db, queue, events } = await setup();
-    const refreshedAt = new Date().toISOString();
-    // ~2.6 MiB of favouritesByPlayer: over the 2 MiB identity threshold but a
-    // few hundred KiB compressed.
-    await exec(
-      db,
-      `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
-       values ('CR', ?, ?, ?)`,
-      [mapsSnapshotPayload(refreshedAt, 1300), refreshedAt, refreshedAt],
-    );
-    const ctx = {
-      db,
-      queue,
-      events,
-      config: baseConfig(),
-      osu: {},
-      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
-    } as never;
-
-    const identity = await binaryRequest(ctx, "/api/snapshots/maps?country=CR&section=random");
-    expect(identity.status).toBe(406);
-    expect(identity.headers.vary).toBe("accept-encoding");
-    expect(JSON.parse(identity.body.toString("utf8"))).toMatchObject({ error: "compression_required" });
-
-    const gzipped = await binaryRequest(ctx, "/api/snapshots/maps?country=CR&section=random", { "accept-encoding": "gzip" });
-    expect(gzipped.status).toBe(200);
-    expect(gzipped.headers["content-encoding"]).toBe("gzip");
-
-    // The tiny 406 (not the 2.6 MiB identity body) is what got cached: corrupt
-    // the stored payload so a rebuild would return 202, then re-request.
-    await exec(db, "update country_maps_snapshots set payload_json = ? where country = 'CR'", ["{not json"]);
-    const cached = await binaryRequest(ctx, "/api/snapshots/maps?country=CR&section=random");
-    expect(cached.status).toBe(406);
-  });
-
-  it("bounds prepared maps response caches by bytes, entry size, and entry count", () => {
+  it("bounds the prepared maps page cache by bytes, entry size, and entry count", () => {
     const entry = (body: string, storedAt = Date.now()): MapsResponseCacheEntry => ({
       status: 200,
       encoding: null,
@@ -6451,55 +6027,6 @@ describe("live backend", () => {
     mapsResponseCacheSet(small, "c", entry("3"));
     expect([...small.entries.keys()]).toEqual(["b", "c"]);
     expect(small.totalBytes).toBe(2);
-  });
-
-  it("coalesces concurrent maps snapshot misses into one build", async () => {
-    const { db, queue, events } = await setup();
-    const refreshedAt = new Date().toISOString();
-    await exec(
-      db,
-      `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
-       values ('CR', ?, ?, ?)`,
-      [mapsSnapshotPayload(refreshedAt, 5), refreshedAt, refreshedAt],
-    );
-
-    // Count the expensive payload_json reads through a counting proxy; the
-    // cheap meta read selects refreshed_at only and stays uncounted.
-    let payloadReads = 0;
-    const countingDb = new Proxy(db, {
-      get(target, prop, receiver) {
-        if (prop === "execute") {
-          return (arg: { sql?: string } | string) => {
-            const sql = typeof arg === "string" ? arg : arg?.sql ?? "";
-            if (sql.includes("payload_json") && sql.trimStart().startsWith("select")) payloadReads += 1;
-            return target.execute(arg as never);
-          };
-        }
-        const value = Reflect.get(target, prop, receiver);
-        return typeof value === "function" ? value.bind(target) : value;
-      },
-    });
-    const ctx = {
-      db: countingDb,
-      queue,
-      events,
-      config: baseConfig(),
-      osu: {},
-      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
-    } as never;
-
-    const request = async () => {
-      const { res, writes } = mockRes();
-      await routeHttp(mockReq("GET", "/api/snapshots/maps?country=CR&section=random"), res, ctx);
-      return { status: res.statusCode, body: JSON.parse(writes.join("")) as { value: unknown } };
-    };
-
-    const [first, second] = await Promise.all([request(), request()]);
-    expect(first.status).toBe(200);
-    expect(second.status).toBe(200);
-    expect(first.body.value).toBeTruthy();
-    expect(second.body.value).toBeTruthy();
-    expect(payloadReads).toBe(1);
   });
 
   it("marks large JSON responses as varying by accept-encoding", () => {

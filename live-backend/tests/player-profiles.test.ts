@@ -23,6 +23,62 @@ afterEach(async () => {
 });
 
 describe("player profile snapshots", () => {
+  it("uses the latest tracked play when osu!'s last visit is older", async () => {
+    const snapshotFetchedAt = "2026-06-01T03:28:53Z";
+    const osuLastVisit = "2026-06-06T10:00:00Z";
+    const trackedPlayAt = "2026-06-07T22:24:05Z";
+    await insertProfileSnapshot({ snapshotFetchedAt, lastVisit: osuLastVisit });
+    await insertTrackedScore(score({
+      id: 1,
+      beatmapId: 101,
+      title: "Latest tracked play",
+      pp: 40,
+      endedAt: trackedPlayAt,
+    }));
+
+    const snapshot = await getCachedPlayerProfileSnapshot(db, "MnShiny");
+
+    expect(snapshot?.user.last_visit).toBe(trackedPlayAt);
+  });
+
+  it("keeps a newer osu! last visit", async () => {
+    const snapshotFetchedAt = "2026-06-01T03:28:53Z";
+    const trackedPlayAt = "2026-06-07T22:24:05Z";
+    const osuLastVisit = "2026-06-08T10:00:00Z";
+    await insertProfileSnapshot({ snapshotFetchedAt, lastVisit: osuLastVisit });
+    await insertTrackedScore(score({
+      id: 1,
+      beatmapId: 101,
+      title: "Older tracked play",
+      pp: 40,
+      endedAt: trackedPlayAt,
+    }));
+
+    const snapshot = await getCachedPlayerProfileSnapshot(db, "MnShiny");
+
+    expect(snapshot?.user.last_visit).toBe(osuLastVisit);
+  });
+
+  it("uses durable activity after the raw tracked score has expired", async () => {
+    const snapshotFetchedAt = "2026-06-01T03:28:53Z";
+    const trackedPlayAt = "2026-06-07T22:24:05Z";
+    await insertProfileSnapshot({
+      snapshotFetchedAt,
+      lastVisit: "2026-06-06T10:00:00Z",
+    });
+    await exec(
+      db,
+      `insert into player_activity_score_refs
+       (country, score_identity, user_id, day, beatmap_id, passed, ended_at, created_at)
+       values ('CR', 'official:1', ?, '2026-06-07', 101, 1, ?, ?)`,
+      [USER_ID, trackedPlayAt, trackedPlayAt],
+    );
+
+    const snapshot = await getCachedPlayerProfileSnapshot(db, "MnShiny");
+
+    expect(snapshot?.user.last_visit).toBe(trackedPlayAt);
+  });
+
   it("overlays fresh tracked top-score candidates onto stale best-score snapshots", async () => {
     const snapshotFetchedAt = "2026-06-01T03:28:53Z";
     const oldBest = score({
@@ -312,6 +368,36 @@ describe("player profile snapshots", () => {
     expect(snapshot?.bestScores.find((entry) => entry.id === 31)?.beatmap?.note_bpm).toBeUndefined();
   });
 });
+
+async function insertProfileSnapshot({
+  snapshotFetchedAt,
+  lastVisit,
+}: {
+  snapshotFetchedAt: string;
+  lastVisit: string | null;
+}): Promise<void> {
+  await exec(
+    db,
+    `insert into profile_snapshots
+     (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at)
+     values (?, ?, ?, '[]', 200, ?, ?, ?)`,
+    [
+      USER_ID,
+      "mnshiny",
+      JSON.stringify({
+        id: USER_ID,
+        username: "MnShiny",
+        country_code: "CR",
+        avatar_url: "https://example.test/avatar.png",
+        last_visit: lastVisit,
+        statistics: { pp: 1000 },
+      }),
+      snapshotFetchedAt,
+      snapshotFetchedAt,
+      snapshotFetchedAt,
+    ],
+  );
+}
 
 // The profile "Load osu! recents" button pays for an osu! call that fetches
 // exactly what the reconcile job fetches, so the handler reuses the payload to

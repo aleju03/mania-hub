@@ -1,12 +1,16 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { Recycle } from "lucide-react";
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { PageHeader } from "../components/layout/PageHeader";
 import { AlbumView } from "../components/packs/album/AlbumView";
 import { CollectionPanel } from "../components/packs/CollectionPanel";
-import { createPackFrontCanvas, PACK_ASPECT } from "../components/packs/packArt";
+import {
+  getCachedCardBackDataUrl,
+  getCachedPackFrontCanvas,
+  PACK_ASPECT,
+} from "../components/packs/packArt";
 import { PackStage } from "../components/packs/PackStage";
 import { PackSummary } from "../components/packs/PackSummary";
 import {
@@ -164,8 +168,8 @@ async function getDuplicateProtectionOwnedIds(
 
 /* Thumbnail renders of each pack type's foil art, generated once per session
    and kept across route visits. Each full-size foil draw costs ~20ms, so the
-   types render one per frame instead of all in the mount frame (which would
-   stutter the tab switch alongside the 3D pack's own setup). */
+   types render in separate idle tasks instead of competing with the 3D pack's
+   setup or interaction frames. */
 const packThumbCache = new Map<PackTypeId, string>();
 
 function usePackArtThumbs(): Partial<Record<PackTypeId, string>> {
@@ -176,13 +180,27 @@ function usePackArtThumbs(): Partial<Record<PackTypeId, string>> {
     const pending = PACK_TYPES.filter((type) => !packThumbCache.has(type.id));
     if (pending.length === 0) return;
     let cancelled = false;
-    let handle: number | null = null;
+    const idleWindow = window as WindowWithIdleCallback;
+    let idleHandle: number | null = null;
+    let timeoutHandle: number | null = null;
+    const scheduleNext = () => {
+      if (idleWindow.requestIdleCallback) {
+        idleHandle = idleWindow.requestIdleCallback(renderNext, { timeout: 900 });
+      } else {
+        timeoutHandle = window.setTimeout(renderNext, 100);
+      }
+    };
     const renderNext = () => {
-      handle = null;
+      idleHandle = null;
+      timeoutHandle = null;
       if (cancelled) return;
       const type = pending.shift();
       if (!type) return;
-      const full = createPackFrontCanvas({ accent: type.accent, subtitle: type.artSubtitle, cardCount: type.cardCount });
+      const full = getCachedPackFrontCanvas({
+        accent: type.accent,
+        subtitle: type.artSubtitle,
+        cardCount: type.cardCount,
+      });
       const small = document.createElement("canvas");
       small.width = 160;
       small.height = Math.round(160 / PACK_ASPECT);
@@ -193,12 +211,13 @@ function usePackArtThumbs(): Partial<Record<PackTypeId, string>> {
         packThumbCache.set(type.id, url);
         setThumbs((current) => ({ ...current, [type.id]: url }));
       }
-      if (pending.length > 0) handle = window.requestAnimationFrame(renderNext);
+      if (pending.length > 0) scheduleNext();
     };
-    handle = window.requestAnimationFrame(renderNext);
+    scheduleNext();
     return () => {
       cancelled = true;
-      if (handle !== null) window.cancelAnimationFrame(handle);
+      if (idleHandle !== null) idleWindow.cancelIdleCallback?.(idleHandle);
+      if (timeoutHandle !== null) window.clearTimeout(timeoutHandle);
     };
   }, []);
   return thumbs;
@@ -303,6 +322,11 @@ function PacksPage() {
   const [summaryFlyFrom, setSummaryFlyFrom] = useState<Map<number, FlightRect> | null>(null);
   const [dealError, setDealError] = useState(false);
   const [collectionPanelReady, setCollectionPanelReady] = useState(true);
+  const [collectionPanelMounted, setCollectionPanelMounted] = useState(true);
+  // Holds the last wallet the visible collection rendered. Spending a pack
+  // changes the live wallet, but the hidden panel should not reconcile its
+  // large grid/album subtree in the same frame as the opening handoff.
+  const collectionWalletRef = useRef<PackWallet | null>(null);
   /* The Grid/Album swap runs on local state so it lands in the click's own
      render; the router navigation (route re-match + full route re-render)
      only trails behind to keep the URL shareable. Waiting on it made the
@@ -317,6 +341,7 @@ function PacksPage() {
   }, [view]);
 
   const wallet = walletApi.wallet;
+  if (phase === "pack" && wallet) collectionWalletRef.current = wallet;
   /* Identity-stable for the memoized album view. */
   const trackedCountries = useMemo(
     () => countryFeatures?.countries.map((entry) => entry.country) ?? null,
@@ -326,6 +351,28 @@ function PacksPage() {
   const charges = wallet?.charges ?? 0;
   const shards = wallet?.shards ?? 0;
   const nextChargeMs = wallet ? msUntilNextCharge(wallet, walletApi.nowMs || Date.now()) : null;
+
+  // Build and encode the neutral reveal back while the unopened pack is idle.
+  // RevealStage can then mount without a synchronous canvas + PNG spike.
+  useEffect(() => {
+    const idleWindow = window as WindowWithIdleCallback;
+    let idleId: number | null = null;
+    let timeoutId: number | null = null;
+    const warm = () => {
+      idleId = null;
+      timeoutId = null;
+      getCachedCardBackDataUrl();
+    };
+    if (idleWindow.requestIdleCallback) {
+      idleId = idleWindow.requestIdleCallback(warm, { timeout: 700 });
+    } else {
+      timeoutId = window.setTimeout(warm, 120);
+    }
+    return () => {
+      if (idleId !== null) idleWindow.cancelIdleCallback?.(idleId);
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+    };
+  }, []);
 
   /* Deal a fresh pack from the tracked pool (uniform odds within the pack
      type's slice), then ask the backend to warm the profile snapshots and
@@ -386,13 +433,22 @@ function PacksPage() {
   useEffect(() => {
     if (phase === "pack") {
       setCollectionPanelReady(true);
+      setCollectionPanelMounted(true);
       return;
     }
 
     setCollectionPanelReady(false);
-    if (phase !== "summary") return;
+    if (phase === "reveal") {
+      // Hide immediately, then let the browser choose an idle window for the
+      // expensive album/grid unmount after the reveal stack has painted.
+      return scheduleCollectionPanelMount(() => setCollectionPanelMounted(false), reducedMotion);
+    }
 
-    return scheduleCollectionPanelMount(() => setCollectionPanelReady(true), reducedMotion);
+    setCollectionPanelMounted(false);
+    return scheduleCollectionPanelMount(() => {
+      setCollectionPanelMounted(true);
+      setCollectionPanelReady(true);
+    }, reducedMotion);
   }, [phase, reducedMotion]);
 
   const openAnother = () => {
@@ -419,7 +475,8 @@ function PacksPage() {
   };
 
   const canOpen = canAffordPack(wallet, selectedType);
-  const showCollectionPanel = !dealError && (phase === "pack" || (phase === "summary" && collectionPanelReady));
+  const showCollectionPanel = phase === "pack" || (phase === "summary" && collectionPanelReady);
+  const collectionWallet = collectionWalletRef.current;
 
   return (
     <div className="relative flex min-h-screen flex-col">
@@ -495,8 +552,8 @@ function PacksPage() {
                       </div>
                     ) : (
                       // No packTypeId key: the stage stays mounted across
-                      // type switches and crossfades the foil to the new
-                      // accent instead of remounting a fresh pack.
+                      // type switches and swaps its cached foil texture
+                      // instead of remounting a fresh WebGL scene.
                       <PackStage
                         reducedMotion={reducedMotion}
                         onOpened={handleOpened}
@@ -558,8 +615,8 @@ function PacksPage() {
               </AnimatePresence>
             )}
 
-            {showCollectionPanel && wallet && (
-              <div className="mt-14">
+            {!dealError && collectionPanelMounted && collectionWallet && (
+              <div className={showCollectionPanel ? "mt-14" : "hidden"}>
                 <div className="mx-auto mb-3 flex w-full max-w-[820px] items-center justify-end gap-1">
                   {(["grid", "album"] as const).map((mode) => {
                     const active = albumOpen === (mode === "album");
@@ -602,7 +659,7 @@ function PacksPage() {
                 {albumMounted && (
                   <div className={albumOpen ? undefined : "hidden"}>
                     <MemoAlbumView
-                      wallet={wallet}
+                      wallet={collectionWallet}
                       syncStatus={walletApi.syncStatus}
                       trackedCountries={trackedCountries}
                       viewerId={auth.viewer?.id ?? null}
@@ -611,7 +668,7 @@ function PacksPage() {
                 )}
                 <div className={albumOpen ? "hidden" : undefined}>
                   <MemoCollectionPanel
-                    wallet={wallet}
+                    wallet={collectionWallet}
                     showLoginNudge={!auth.viewer && auth.loginAvailable}
                     syncStatus={walletApi.syncStatus}
                     onRecycleCard={walletApi.recycleCard}

@@ -20,7 +20,7 @@ import {
   Vector3,
   WebGLRenderer,
 } from "three";
-import { PACK_ASPECT, PACK_CRIMP_FRACTION } from "./packArt";
+import { PACK_ASPECT, PACK_CRIMP_FRACTION, PACK_RIP_STRIP_FRACTION } from "./packArt";
 
 // World size of the pack; bulge depths are fractions of the width. A real
 // booster is a thin lens: ~5 cards plus air is roughly 9% of the width in
@@ -43,6 +43,8 @@ const BODY_DELAY_MS = 220;
 const BODY_MS = 500;
 const BODY_DROP_Y = 0.92;
 const REDUCED_RIP_MS = 180;
+const IDLE_FRAME_MS = 1000 / 30;
+const STRIP_BASE_Y = (PACK_WORLD_HEIGHT * (1 - PACK_RIP_STRIP_FRACTION)) / 2;
 
 function clamp01(t: number) {
   return Math.min(1, Math.max(0, t));
@@ -86,6 +88,20 @@ function createPouchGeometry(bulge: number) {
     const u = positions.getX(index) / PACK_WORLD_WIDTH + 0.5;
     const v = 0.5 - positions.getY(index) / PACK_WORLD_HEIGHT;
     positions.setZ(index, packSurfaceZ(u, v, bulge));
+  }
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function createPouchStripGeometry(bulge: number) {
+  const fraction = PACK_RIP_STRIP_FRACTION;
+  const height = PACK_WORLD_HEIGHT * fraction;
+  const geometry = new PlaneGeometry(PACK_WORLD_WIDTH, height, 72, Math.max(8, Math.round(96 * fraction)));
+  const positions = geometry.attributes.position;
+  for (let index = 0; index < positions.count; index += 1) {
+    const u = positions.getX(index) / PACK_WORLD_WIDTH + 0.5;
+    const localV = 0.5 - positions.getY(index) / height;
+    positions.setZ(index, packSurfaceZ(u, localV * fraction, bulge));
   }
   geometry.computeVertexNormals();
   return geometry;
@@ -136,6 +152,8 @@ interface PackSceneCore {
   bodyGroup: Group;
   frontMaterial: MeshStandardMaterial;
   backMaterial: MeshStandardMaterial;
+  stripMaterial: MeshStandardMaterial;
+  stripMesh: Mesh;
   frontGeometry: PlaneGeometry;
   backGeometry: PlaneGeometry;
   /* 1x1 parked maps: they give renderer.compile() the USE_MAP shader variant
@@ -172,7 +190,10 @@ function makeCanvasTexture(renderer: WebGLRenderer, canvas: HTMLCanvasElement) {
 
 async function buildCore(): Promise<PackSceneCore> {
   const renderer = new WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  // The pouch canvas is already 1.8x larger than its host for tilt/rip
+  // overscan. Retina 2x made that backing store needlessly expensive for a
+  // softly lit foil surface that is continuously animated.
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   const canvas = renderer.domElement;
   canvas.style.display = "block";
   canvas.style.position = "absolute";
@@ -223,6 +244,7 @@ async function buildCore(): Promise<PackSceneCore> {
     metalness: 0.18,
     envMapIntensity: 1.0,
     alphaTest: 0.5,
+    transparent: true,
   });
   // Matte: its inner face shows through the cut slit as the dark inside
   // of the pack, and a glossy inside sparkles with env-map glints.
@@ -231,6 +253,8 @@ async function buildCore(): Promise<PackSceneCore> {
     roughness: 0.6,
     metalness: 0.1,
     envMapIntensity: 0.35,
+    alphaTest: 0.01,
+    transparent: true,
   });
 
   const frontGeometry = createPouchGeometry(FRONT_BULGE);
@@ -240,15 +264,39 @@ async function buildCore(): Promise<PackSceneCore> {
   // DoubleSide: the inside of the back shell shows through the torn gap.
   backMaterial.side = DoubleSide;
   const backMesh = new Mesh(backGeometry, backMaterial);
+  // The strip uses a permanently mapped/transparent material so its shader is
+  // compiled during core warmup instead of on the first frame of every rip.
+  const stripMaterial = new MeshStandardMaterial({
+    map: parkedFrontMap,
+    roughness: 0.4,
+    metalness: 0.18,
+    envMapIntensity: 1.0,
+    transparent: true,
+    alphaTest: 0.01,
+    depthWrite: false,
+  });
+  const stripMesh = new Mesh(createPouchStripGeometry(FRONT_BULGE), stripMaterial);
+  stripMesh.position.set(0, STRIP_BASE_Y, 0.03);
+  stripMesh.renderOrder = 2;
   const bodyGroup = new Group();
   bodyGroup.add(backMesh, frontMesh);
   const packGroup = new Group();
-  packGroup.add(bodyGroup);
+  // The parked map is a transparent 1x1 canvas. Keep the mesh in the scene for
+  // compile(), then detach it until beginRip swaps in the real strip texture.
+  packGroup.add(bodyGroup, stripMesh);
   scene.add(packGroup);
   await nextBreath();
 
-  // Shader warmup in its own frame: the first render otherwise pays the
-  // whole program compile while the pack is already supposed to be moving.
+  // Shader warmup in its own frames: compile the transparent body + strip
+  // variants used by the rip first, then the cheaper opaque body used while
+  // the unopened pack is floating.
+  renderer.compile(scene, camera);
+  packGroup.remove(stripMesh);
+  frontMaterial.transparent = false;
+  backMaterial.transparent = false;
+  frontMaterial.needsUpdate = true;
+  backMaterial.needsUpdate = true;
+  await nextBreath();
   renderer.compile(scene, camera);
 
   const core: PackSceneCore = {
@@ -259,6 +307,8 @@ async function buildCore(): Promise<PackSceneCore> {
     bodyGroup,
     frontMaterial,
     backMaterial,
+    stripMaterial,
+    stripMesh,
     frontGeometry,
     backGeometry,
     parkedFrontMap,
@@ -332,15 +382,15 @@ export class PackScene {
   private readonly backMaterial: MeshStandardMaterial;
   private readonly frontTexture: CanvasTexture;
   private readonly backTexture: CanvasTexture;
-  private readonly frontGeometry: PlaneGeometry;
-  private stripMesh: Mesh | null = null;
-  private stripMaterial: MeshStandardMaterial | null = null;
-  private ripTextures: CanvasTexture[] = [];
+  private readonly stripMesh: Mesh;
+  private readonly stripMaterial: MeshStandardMaterial;
+  private stripTexture: CanvasTexture | null = null;
   private tiltTarget = { x: 0, y: 0 };
   private tiltCurrent = { x: 0, y: 0 };
   private reducedMotion: boolean;
   private windowActive = true;
   private frameId: number | null = null;
+  private lastRenderedAt = 0;
   private disposed = false;
   private rip: { startedAt: number | null } | null = null;
 
@@ -355,7 +405,8 @@ export class PackScene {
     this.bodyGroup = core.bodyGroup;
     this.frontMaterial = core.frontMaterial;
     this.backMaterial = core.backMaterial;
-    this.frontGeometry = core.frontGeometry;
+    this.stripMaterial = core.stripMaterial;
+    this.stripMesh = core.stripMesh;
     this.host.appendChild(this.renderer.domElement);
 
     this.frontTexture = this.makeTexture(options.textureCanvas);
@@ -369,13 +420,18 @@ export class PackScene {
     this.frontMaterial.needsUpdate = true;
     this.backMaterial.map = this.backTexture;
     this.backMaterial.transparent = false;
-    this.backMaterial.alphaTest = 0;
+    this.backMaterial.alphaTest = 0.01;
     this.backMaterial.opacity = 1;
     this.backMaterial.needsUpdate = true;
     this.packGroup.rotation.set(0, 0, 0);
     this.packGroup.position.set(0, 0, 0);
     this.bodyGroup.position.set(0, 0, 0);
     this.bodyGroup.scale.setScalar(1);
+    this.packGroup.remove(this.stripMesh);
+    this.stripMesh.position.set(0, STRIP_BASE_Y, 0.03);
+    this.stripMesh.rotation.set(0, 0, 0);
+    this.stripMaterial.map = core.parkedFrontMap;
+    this.stripMaterial.opacity = 1;
 
     this.resize();
     this.start();
@@ -441,34 +497,23 @@ export class PackScene {
   /* Starts the tear-off: both shells swap to body-only textures (a slash
      goes through both foil layers, so the whole top empties out) and a strip
      mesh (same bulged geometry, strip-only texture) flies away. */
-  beginRip(clips: { strip: HTMLCanvasElement; body: HTMLCanvasElement; backBody: HTMLCanvasElement }) {
+  beginRip(stripCanvas: HTMLCanvasElement) {
     if (this.disposed || this.rip) return;
-    const bodyTexture = this.makeTexture(clips.body);
-    const stripTexture = this.makeTexture(clips.strip);
-    const backBodyTexture = this.makeTexture(clips.backBody);
-    this.ripTextures.push(bodyTexture, stripTexture, backBodyTexture);
+    const stripTexture = this.makeTexture(stripCanvas);
+    this.stripTexture = stripTexture;
 
-    this.frontMaterial.map = bodyTexture;
+    // PackStage mutated the two source canvases in place, so their existing
+    // CanvasTextures only need an upload. Replacing them here used to allocate
+    // two more full-size textures in the pointer event that completed the cut.
+    this.frontTexture.needsUpdate = true;
+    this.backTexture.needsUpdate = true;
     this.frontMaterial.transparent = true;
     this.frontMaterial.alphaTest = 0.01;
     this.frontMaterial.needsUpdate = true;
-    this.backMaterial.map = backBodyTexture;
     this.backMaterial.transparent = true;
-    this.backMaterial.alphaTest = 0.01;
     this.backMaterial.needsUpdate = true;
-
-    this.stripMaterial = new MeshStandardMaterial({
-      map: stripTexture,
-      roughness: 0.4,
-      metalness: 0.18,
-      envMapIntensity: 1.0,
-      transparent: true,
-      alphaTest: 0.01,
-      depthWrite: false,
-    });
-    this.stripMesh = new Mesh(this.frontGeometry, this.stripMaterial);
-    this.stripMesh.position.set(0, 0, 0.03);
-    this.stripMesh.renderOrder = 2;
+    this.stripMaterial.map = stripTexture;
+    this.stripMaterial.opacity = 1;
     this.packGroup.add(this.stripMesh);
 
     this.tiltTarget = { x: 0, y: 0 };
@@ -497,15 +542,17 @@ export class PackScene {
     if (this.frameId !== null) cancelAnimationFrame(this.frameId);
     this.frameId = null;
     this.renderer.domElement.remove();
-    if (this.stripMesh) this.packGroup.remove(this.stripMesh);
-    this.stripMaterial?.dispose();
+    this.packGroup.remove(this.stripMesh);
+    this.stripMaterial.map = this.core.parkedFrontMap;
+    this.stripMaterial.opacity = 1;
     // Park the map slots so the shared materials never point at disposed
     // textures while no pack is mounted.
     this.frontMaterial.map = this.core.parkedFrontMap;
     this.backMaterial.map = this.core.parkedBackMap;
     this.frontTexture.dispose();
     this.backTexture.dispose();
-    for (const texture of this.ripTextures) texture.dispose();
+    this.stripTexture?.dispose();
+    this.stripTexture = null;
     releaseCore();
   }
 
@@ -521,6 +568,14 @@ export class PackScene {
   }
 
   private tick(timeMs: number) {
+    const tiltMoving =
+      Math.abs(this.tiltTarget.x - this.tiltCurrent.x) > 0.02 ||
+      Math.abs(this.tiltTarget.y - this.tiltCurrent.y) > 0.02;
+    // Keep direct interaction and the rip at display refresh rate. Once the
+    // pack is only doing its slow ambient float, render at 30fps to halve the
+    // steady GPU load while preserving the motion.
+    if (!this.rip && !tiltMoving && timeMs - this.lastRenderedAt < IDLE_FRAME_MS) return;
+    this.lastRenderedAt = timeMs;
     const damp = this.reducedMotion ? 1 : 0.16;
     this.tiltCurrent.x += (this.tiltTarget.x - this.tiltCurrent.x) * damp;
     this.tiltCurrent.y += (this.tiltTarget.y - this.tiltCurrent.y) * damp;
@@ -538,16 +593,14 @@ export class PackScene {
         const fade = 1 - clamp01(elapsed / REDUCED_RIP_MS);
         this.frontMaterial.opacity = fade;
         this.backMaterial.opacity = fade;
-        if (this.stripMaterial) this.stripMaterial.opacity = fade;
+        this.stripMaterial.opacity = fade;
       } else {
         const stripProgress = clamp01(elapsed / STRIP_MS);
         const stripEase = 1 - Math.pow(1 - stripProgress, 3);
-        if (this.stripMesh && this.stripMaterial) {
-          this.stripMesh.position.y = stripEase * STRIP_TRAVEL_Y;
-          this.stripMesh.position.x = stripEase * STRIP_TRAVEL_X;
-          this.stripMesh.rotation.z = stripEase * STRIP_SPIN_RAD;
-          this.stripMaterial.opacity = 1 - stripEase;
-        }
+        this.stripMesh.position.y = STRIP_BASE_Y + stripEase * STRIP_TRAVEL_Y;
+        this.stripMesh.position.x = stripEase * STRIP_TRAVEL_X;
+        this.stripMesh.rotation.z = stripEase * STRIP_SPIN_RAD;
+        this.stripMaterial.opacity = 1 - stripEase;
         const bodyProgress = clamp01((elapsed - BODY_DELAY_MS) / BODY_MS);
         const bodyEase = bodyProgress * bodyProgress;
         this.bodyGroup.position.y = -bodyEase * BODY_DROP_Y;

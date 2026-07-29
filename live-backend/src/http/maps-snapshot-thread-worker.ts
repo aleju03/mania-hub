@@ -1,15 +1,14 @@
-// Worker-thread entry for building maps snapshot responses off the server's
+// Worker-thread entry for building GLOBAL maps-page responses off the server's
 // event loop. Local libsql runs every query synchronously on the calling
-// thread, and the GLOBAL maps hydrate is the heaviest read in the process
-// (~10-15s: a multi-MB payload_json parse, hydrate, JSON.stringify of a
-// ~136MB body, compression). Running the whole build here keeps the main
-// thread serving requests while it happens. The thread opens its own libsql
-// connection to the same database file (WAL handles the concurrency, exactly
-// like the split worker process does).
+// thread, and a GLOBAL maps page can require a multi-second payload parse and
+// hydrate. Running the whole build here keeps the main thread serving requests
+// while it happens. The thread opens its own libsql connection to the same
+// database file (WAL handles the concurrency, exactly like the split worker
+// process does).
 import { parentPort, workerData } from "node:worker_threads";
 import { createDb } from "../db.js";
 import { JobQueue } from "../jobs/queue.js";
-import { getMapsPageSnapshot, getMapsSnapshot } from "../features/maps.js";
+import { getMapsPageSnapshot } from "../features/maps.js";
 import { prepareJsonResponse } from "./prepared-json.js";
 import type { MapsSnapshotThreadRequest, MapsSnapshotThreadResponse } from "./maps-snapshot-thread.js";
 
@@ -40,9 +39,7 @@ async function handle(request: MapsSnapshotThreadRequest): Promise<void> {
   };
   try {
     const { db, queue } = await connection;
-    const snapshot = request.kind === "maps"
-      ? await getMapsSnapshot(db, queue, request.country, request.maxAgeMs, request.section)
-      : await getMapsPageSnapshot(db, queue, request.country, request.maxAgeMs, request.query);
+    const snapshot = await getMapsPageSnapshot(db, queue, request.country, request.maxAgeMs, request.query);
     const status = snapshot.value ? 200 : 202;
     const prepared = await prepareJsonResponse(status, snapshot, request.encoding);
     // Transfer the body's ArrayBuffer when the Buffer owns it outright (large

@@ -188,7 +188,6 @@ interface LiveBackendStatus {
   // persisted to live_meta so the serving process can report it.
   globalMapsRefresh?: JobMemoryRecord | null;
   responseCaches?: {
-    mapsSnapshot: ResponseCacheMetrics;
     mapsPage: ResponseCacheMetrics;
   };
   // Null when the database is remote: there is no local disk to run out of.
@@ -4107,8 +4106,8 @@ function StatusCard({ status, connectionState, country, snapshots }: { status: L
   const thread = status?.mapsSnapshotThread;
   const threadView = getSnapshotThreadView(thread);
   const caches = status?.responseCaches;
-  const cacheBytes = caches ? caches.mapsSnapshot.bytes + caches.mapsPage.bytes : null;
-  const cacheEntries = caches ? caches.mapsSnapshot.entries + caches.mapsPage.entries : null;
+  const cacheBytes = caches?.mapsPage.bytes ?? null;
+  const cacheEntries = caches?.mapsPage.entries ?? null;
   const disk = status?.disk ?? null;
   const diskCardTone = diskTone(disk);
 
@@ -4296,9 +4295,8 @@ function StatusCard({ status, connectionState, country, snapshots }: { status: L
       detail: (
         <>
           <div className="rounded-md bg-osu-b4/30 px-3 py-2 text-[10px] leading-relaxed text-osu-f1">
-            Maps responses kept in memory already serialized and compressed, and the worker thread that builds the GLOBAL maps page off the request path. Each cache is bounded by entry count, by total bytes, and by the size of a single response.
+            Maps pages kept in memory already serialized and compressed, and the worker thread that builds the GLOBAL maps page off the request path. The cache is bounded by entry count, by total bytes, and by the size of a single response.
           </div>
-          <ResponseCacheRow label="Maps snapshot cache" cache={caches?.mapsSnapshot} />
           <ResponseCacheRow label="Maps page cache" cache={caches?.mapsPage} />
           {thread ? (
             <>
