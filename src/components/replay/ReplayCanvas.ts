@@ -204,9 +204,6 @@ interface RendererOptions {
   // judging ruleset; pass it explicitly when re-judging a replay on the
   // other client (the "what if" toggle). Defaults to the judging mode.
   legacyReplayFrameRounding?: boolean;
-  // False for maps that can't award pp (unranked/loved/graveyard); hides the
-  // pp overlay entirely instead of showing a fictional number.
-  mapAwardsPp?: boolean;
   od?: number;
   showInputOverlay?: boolean;
   inputOverlayOnly?: boolean;
@@ -443,7 +440,6 @@ export class ManiaReplayRenderer {
   private judgmentCounts: number[] = [0, 0, 0, 0, 0, 0, 0];
   private starRatingTimeline: ManiaStarRatingTimelinePoint[] = [];
   private ppModMultiplier = 1;
-  private mapAwardsPp = true;
   private leftHandMisses = 0;
   private rightHandMisses = 0;
   private recentHitOffsets: number[] = [];
@@ -639,7 +635,6 @@ export class ManiaReplayRenderer {
     // Live PP counter inputs: lazer-style timed star ratings over the same
     // post-mod note list the judgements are simulated on. Skipped where the
     // HUD can never render (chart previews, bare playfields).
-    this.mapAwardsPp = options?.mapAwardsPp ?? true;
     this.ppModMultiplier = getManiaPpModMultiplier([...mods]);
     this.rebuildStarRatingTimeline();
 
@@ -888,7 +883,7 @@ export class ManiaReplayRenderer {
   }
 
   private rebuildStarRatingTimeline() {
-    this.starRatingTimeline = !this.mapAwardsPp || this.hideHud || this.barePlayfield
+    this.starRatingTimeline = this.hideHud || this.barePlayfield
       ? []
       : calculateManiaStarRatingTimeline(this.notes, this.keyCount, this.modRate);
   }
@@ -2946,7 +2941,6 @@ export class ManiaReplayRenderer {
   }
 
   private renderPpOverlay(layout: Layout) {
-    if (!this.mapAwardsPp) return;
     const scale = this.getOverlayScale(layout, "pp");
     const width = this.getTextOverlayWidth(this.hudCachedPp, 18 * scale, scale, "700");
     const height = 26 * scale;

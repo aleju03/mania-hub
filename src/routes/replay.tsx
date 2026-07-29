@@ -5,7 +5,7 @@ import { ChevronLeft, LoaderCircle, Maximize2, Minimize2, Pause, Play } from "lu
 import { getReplayParsed, getBeatmapFile, getCommunityBeatmapFile, getScore, getUser, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores, lookupBeatmapByChecksum, submitCommunityBeatmap } from "../lib/osu";
 import { calculateManiaStarRating } from "../lib/mania-star-rating";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
-import { beatmapStatusAwardsPp, getEffectiveManiaKeyCount, getManiaKeyModCount, getManiaParseKeyCount, getModAcronyms, getScoreRate, modShiftsPitchWithRate, scoreHasReplay, scoreUsesLazerScoring } from "../lib/score";
+import { getEffectiveManiaKeyCount, getManiaKeyModCount, getManiaParseKeyCount, getModAcronyms, getScoreRate, modShiftsPitchWithRate, scoreHasReplay, scoreUsesLazerScoring } from "../lib/score";
 import { useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
 import { PageHeader } from "../components/layout/PageHeader";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
@@ -2607,7 +2607,6 @@ function ReplayViewer({
             isConvert: (scoreInfo?.beatmap?.convert ?? false) || (beatmap?.isConvert ?? false),
             isLazer: judgeAsLazer,
             legacyReplayFrameRounding: !sourceIsLazer,
-            mapAwardsPp: beatmapStatusAwardsPp(scoreInfo?.beatmap?.status),
             od: beatmap?.od,
             showInputOverlay: showInputOverlayRef.current,
             mods: rendererMods,
@@ -3210,7 +3209,6 @@ function ReplayViewer({
           isConvert: (scoreInfo?.beatmap?.convert ?? false) || (beatmap?.isConvert ?? false),
           isLazer: judgeAsLazer,
           legacyReplayFrameRounding: !sourceIsLazer,
-          mapAwardsPp: beatmapStatusAwardsPp(scoreInfo?.beatmap?.status),
           od: beatmap?.od,
           showInputOverlay: exportShowInputOverlay,
           mods: rendererMods,

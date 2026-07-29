@@ -112,10 +112,9 @@ describe("ManiaReplayRenderer initialization", () => {
     expect(source).toContain("counts: { perfect: c[1], great: c[2], good: c[3], ok: c[4], meh: c[5], miss: c[6] },");
     expect(source).toContain("modMultiplier: this.ppModMultiplier,");
     expect(source).toContain("this.renderPpOverlay(layout);");
-    // Unranked maps award no pp; the overlay hides instead of showing fiction.
-    expect(source).toContain("this.mapAwardsPp = options?.mapAwardsPp ?? true;");
-    expect(source).toContain("this.starRatingTimeline = !this.mapAwardsPp || this.hideHud || this.barePlayfield");
-    expect(source).toContain("if (!this.mapAwardsPp) return;");
+    // The opt-in calculator stays available on unranked maps as a hypothetical value.
+    expect(source).toContain("this.starRatingTimeline = this.hideHud || this.barePlayfield");
+    expect(source).not.toContain("mapAwardsPp");
   });
 
   it("keeps released hold remainders dimmed and scrolling past instead of despawning at the tail judgement", () => {
