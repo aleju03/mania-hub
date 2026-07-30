@@ -63,10 +63,12 @@ export async function refreshCountryRoster(db: Db, osu: Pick<OsuApiClient, "getR
   let count = 0;
   const statements: DbStatement[] = [
     // Ranked members are reset to untracked here and re-marked below if still in the top N.
-    { sql: "update country_rosters set rank = null, is_tracked = 0, refreshed_at = ? where country = ? and source != 'manual'", args: [now, country] },
-    // Manual opt-in members stay tracked across refreshes, but drop any stale rank so they only
-    // re-enter ranking scope if the upsert below places them back in the top N this run.
-    { sql: "update country_rosters set rank = null, refreshed_at = ? where country = ? and source = 'manual'", args: [now, country] },
+    { sql: "update country_rosters set rank = null, is_tracked = 0, refreshed_at = ? where country = ? and source not in ('manual', 'score')", args: [now, country] },
+    // Manual opt-in and score-sourced members stay tracked across refreshes, but drop any stale
+    // rank so they only re-enter ranking scope if the upsert below places them back in the top N
+    // this run. Score rows must survive here: the osu! /scores fallback feed carries no user
+    // metadata, so an untracked score member could never be re-added by ingest.
+    { sql: "update country_rosters set rank = null, refreshed_at = ? where country = ? and source in ('manual', 'score')", args: [now, country] },
   ];
   for (let index = 0; index < Math.min(rows.length, config.rosterSize); index++) {
     const row = rows[index];
@@ -113,9 +115,9 @@ export async function enqueueRosterRefreshes(queue: JobQueue, countries: string[
 
 /**
  * Ranked roster members carry a non-null country rank (the top-N pulled from osu! rankings).
- * Manual opt-in members and transient `score`-sourced members are tracked for activity but
- * rank null, so they are deliberately excluded from ranking surfaces (global rankings, the
- * country maps board, snipe boards, rank deltas). This is the shared discriminator for that.
+ * Manual opt-in members and `score`-sourced members are tracked for activity but rank null,
+ * so they are deliberately excluded from ranking surfaces (global rankings, the country maps
+ * board, snipe boards, rank deltas). This is the shared discriminator for that.
  */
 export async function isRankedRosterMember(db: Db, country: string, userId: number): Promise<boolean> {
   const row = (await exec(

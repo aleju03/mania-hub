@@ -322,8 +322,13 @@ export class ScoreIngestor {
       const activeCountries = await getActiveCountryCodes(this.db, this.config);
       if (score.user.country_code && activeCountries.includes(score.user.country_code.toUpperCase())) {
         statements.push({
-          sql: `insert or ignore into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
-                values (?, ?, null, 'score', 1, ?)`,
+          // Also revives an untracked non-manual row: play evidence carrying user metadata is
+          // the only path that can, since the /scores fallback feed has no user objects. Manual
+          // rows are excluded so an explicit opt-out stays opted out.
+          sql: `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+                values (?, ?, null, 'score', 1, ?)
+                on conflict(country, user_id) do update set is_tracked = 1, refreshed_at = excluded.refreshed_at
+                where country_rosters.source != 'manual' and country_rosters.is_tracked = 0`,
           args: [score.user.country_code, score.user.id, now],
         });
       }

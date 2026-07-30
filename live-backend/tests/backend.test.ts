@@ -206,6 +206,21 @@ describe("live backend", () => {
     expect(Number((await exec(db, "select count(*) as count from jobs where status = 'queued'")).rows[0].count)).toBeGreaterThanOrEqual(1);
   });
 
+  it("revives an untracked score-sourced roster row on play evidence but keeps manual opt-outs", async () => {
+    const { db, ingestor } = await setup();
+    const [score] = await fixture<OscScore[]>("scores.json");
+    await exec(db, "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values ('CR', 101, null, 'score', 0, '2026-05-01T00:00:00.000Z')");
+
+    await ingestor.ingestBatch([score]);
+    let row = (await exec(db, "select source, is_tracked from country_rosters where country = 'CR' and user_id = 101")).rows[0];
+    expect(`${row.source}:${Number(row.is_tracked)}`).toBe("score:1");
+
+    await exec(db, "update country_rosters set source = 'manual', is_tracked = 0 where country = 'CR' and user_id = 101");
+    await ingestor.ingestBatch([{ ...score, id: 9101, ended_at: "2026-05-12T00:04:00.000Z" }]);
+    row = (await exec(db, "select source, is_tracked from country_rosters where country = 'CR' and user_id = 101")).rows[0];
+    expect(`${row.source}:${Number(row.is_tracked)}`).toBe("manual:0");
+  });
+
   it("projects tracked player activity by year without double-counting duplicate ingestion", async () => {
     const { db, queue, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");
@@ -1333,7 +1348,9 @@ describe("live backend", () => {
       "111:null:0",
       "222:1:1",
       "333:2:1",
-      "444:null:0",
+      // Score-sourced members stay tracked: the /scores fallback feed has no user metadata, so
+      // a refresh-untracked score row could never be re-added by ingest.
+      "444:null:1",
     ]);
 
     const users = (await exec(
