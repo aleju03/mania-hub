@@ -4,7 +4,7 @@ import { exec, json, parseJson } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { calculateApproxPpGainMap, calculateReplacementPpGain, calculateWeightedPp, calculateWeightedPpTotal, getScoreTimestamp, nowIso, scoreHasPublicLeaderboard } from "../shared/score.js";
 import { evaluatePpGoals } from "./goals.js";
-import { compactScoreForStorage, hydrateScoresDisplayMetadata, persistScoresDisplayMetadata, replaceUserTopScores } from "../shared/score-storage.js";
+import { compactScoreForStorage, hydrateScoresDisplayMetadata, persistScoresDisplayMetadata, readStoredUserTopScores, replaceUserTopScores } from "../shared/score-storage.js";
 import type { CountryTopPlay, OscScore, ScoreUser } from "../shared/types.js";
 import type { LiveEventLog } from "../live/event-log.js";
 import type { OsuApiClient } from "../osu/client.js";
@@ -79,6 +79,12 @@ export async function confirmTopPlay(
 ): Promise<boolean> {
   const bestScores = dedupeScoresById(await getUserBestScoresForPpGain(osu, payload.userId));
   const refreshedAt = nowIso();
+  // Snapshot the projection before replaceUserTopScores overwrites it: osu!
+  // unpreserves (and hides from the score-history endpoint) a same-map best
+  // the moment a new score supersedes it, so by confirmation time this stored
+  // copy can be the only surviving record of the score the pp gain must be
+  // measured against.
+  const previousTopScores = await readStoredUserTopScores(db, payload.userId);
   await updateUserTopPlayThreshold(db, payload.userId, bestScores, refreshedAt);
   // The window was fetched anyway, so store it: user_top_scores is what lets
   // cached profile snapshots and pack cards serve this player's best scores
@@ -97,7 +103,7 @@ export async function confirmTopPlay(
   const score = bestScores[confirmedIndex];
   if (score.pp == null || !score.user) return false;
   const confirmedScoreId = score.id;
-  const ppGain = await calculateTopPlayPpGain(osu, bestScores, score);
+  const ppGain = await calculateTopPlayPpGain(osu, bestScores, score, previousTopScores);
   await upsertTopPlayUser(db, score.user, refreshedAt);
   const event: CountryTopPlay = {
     user: { id: score.user_id, username: score.user.username, avatar_url: score.user.avatar_url, country_code: score.user.country_code },
@@ -253,13 +259,20 @@ async function calculateTopPlayPpGain(
   osu: Pick<OsuApiClient, "getBeatmapUserScoresAll">,
   bestScores: OscScore[],
   score: OscScore,
+  previousTopScores: OscScore[],
 ): Promise<number> {
   const beatmapId = score.beatmap_id ?? score.beatmap?.id;
   if (!beatmapId) return calculateApproxPpGainMap(bestScores)[score.id] ?? 0;
 
+  // The score-history endpoint only returns preserved scores, and osu! drops
+  // the preserve flag from a same-map best as soon as the new score beats it.
+  // The pre-refresh top-scores projection still holds that score, so it
+  // competes with the fetched history for the replacement baseline; the
+  // history comes first so a fresher copy of the same score id wins the dedupe.
+  const storedSameMap = previousTopScores.filter((stored) => (stored.beatmap_id ?? stored.beatmap?.id) === beatmapId);
   try {
     const history = await osu.getBeatmapUserScoresAll(beatmapId, score.user_id, "job:refresh_user_top_scores:pp_gain");
-    return calculateReplacementPpGain(bestScores, score.id, getPreviousBeatmapBestScore(history, score));
+    return calculateReplacementPpGain(bestScores, score.id, getPreviousBeatmapBestScore(dedupeScoresById([...history, ...storedSameMap]), score));
   } catch (error) {
     console.warn("[top-plays] failed to fetch same-beatmap score history for pp gain", {
       beatmapId,
@@ -267,6 +280,8 @@ async function calculateTopPlayPpGain(
       userId: score.user_id,
       error: error instanceof Error ? error.message : String(error),
     });
+    const storedPrevious = getPreviousBeatmapBestScore(storedSameMap, score);
+    if (storedPrevious) return calculateReplacementPpGain(bestScores, score.id, storedPrevious);
     return calculateApproxPpGainMap(bestScores)[score.id] ?? 0;
   }
 }

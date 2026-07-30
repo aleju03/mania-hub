@@ -46,6 +46,14 @@ export async function replaceUserTopScores(db: Db, userId: number, bestScores: O
   await execBatch(db, statements);
 }
 
+export async function readStoredUserTopScores(db: Db, userId: number): Promise<OscScore[]> {
+  const rows = (await exec(db, "select score_json from user_top_scores where user_id = ? order by position asc", [userId])).rows;
+  return rows.flatMap((row) => {
+    const score = parseJson<OscScore | null>(row.score_json, null);
+    return score && Number.isSafeInteger(score.id) && score.id > 0 ? [score] : [];
+  });
+}
+
 export async function persistScoresDisplayMetadata(db: Db, scores: OscScore[], updatedAt: string): Promise<void> {
   const statements: DbStatement[] = [];
   const seenUsers = new Set<number>();
