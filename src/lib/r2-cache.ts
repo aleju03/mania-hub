@@ -11,10 +11,14 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-// Cache growth is bounded by R2 lifecycle rules configured per prefix in the Cloudflare dashboard
-// (audio/ and background/ 30d, replays/ 60d, og/ 7d; community-beatmaps/ and videos/ never expire),
-// replacing the old Turso-tracked LRU. Age-based expiry is fine here: a miss re-uploads and
-// refreshes the object's age. Replay endpoint kind rides on S3 object metadata.
+// Cache growth is bounded by R2 lifecycle rules configured per prefix in the Cloudflare
+// dashboard. As of 2026-07-30 the only rules are: parsed/ 90d, uploaded-replay-desc/ 90d,
+// and the default multipart-abort (7d). Everything else (audio/, background/, blob/, og/,
+// maniacards/, replays/, community-beatmaps/, uploaded-replays/, videos/) never expires.
+// uploaded-replays/, community-beatmaps/, and videos/ hold user data with no other durable
+// copy and must NEVER get a lifecycle rule; the rest is re-derivable cache, so adding a
+// rule later is safe (a miss re-uploads and refreshes the object's age). Replay endpoint
+// kind rides on S3 object metadata.
 const REPLAY_CACHE_BUCKET = "mania-hub-replay-cache";
 const REPLAY_CACHE_PREFIX = "replay-cache/";
 const SIGNED_URL_EXPIRES_SECONDS = 6 * 60 * 60;
@@ -168,6 +172,42 @@ export function getBeatmapAssetStorageKey(kind: BeatmapAssetKind, beatmapsetId: 
   const hash = crypto.createHash("sha256").update(filename).digest("hex").slice(0, 16);
   const objectName = kind === "audio" ? getAudioPlaybackObjectName(filename) : sanitizeFilename(filename);
   return `${REPLAY_CACHE_PREFIX}${kind}/${beatmapsetId}/${hash}-${objectName}`;
+}
+
+// Beatmap assets are content-addressed so identical files shared by several
+// beatmapsets (tournament re-uploads, uprate packs) are stored once: the payload
+// lives at blob/{kind}/{sha256}, and the per-set key holds a zero-byte pointer
+// whose `blobkey` metadata names it. Per-set keys written before this scheme
+// still hold the payload directly and are served as-is until the one-off
+// migration script converts them (scripts/migrate-r2-asset-dedup.mjs). The live
+// backend applies the same scheme to blob/audio/ (live-backend/src/audio/r2-assets.ts).
+const BLOB_KEY_METADATA = "blobkey";
+
+export function getBeatmapAssetBlobKey(kind: BeatmapAssetKind, buffer: Buffer, mimeType: string): string {
+  const hash = crypto.createHash("sha256").update(buffer).digest("hex");
+  return `${REPLAY_CACHE_PREFIX}blob/${kind}/${hash}${getBlobExtension(mimeType)}`;
+}
+
+export function getPointerBlobKey(kind: BeatmapAssetKind, metadata: Record<string, string> | undefined): string | null {
+  const blobKey = metadata?.[BLOB_KEY_METADATA];
+  if (!blobKey || !blobKey.startsWith(`${REPLAY_CACHE_PREFIX}blob/${kind}/`)) return null;
+  return blobKey;
+}
+
+function getBlobExtension(mimeType: string): string {
+  switch (mimeType) {
+    case "image/jpeg": return ".jpg";
+    case "image/png": return ".png";
+    case "image/webp": return ".webp";
+    case "image/gif": return ".gif";
+    case "audio/mp4": return ".mp4";
+    case "audio/mpeg":
+    case "audio/mp3": return ".mp3";
+    case "audio/ogg": return ".ogg";
+    case "audio/wav": return ".wav";
+    case "audio/flac": return ".flac";
+    default: return ".bin";
+  }
 }
 
 export function getReplayStorageKey(scoreId: number): string {
@@ -498,13 +538,31 @@ export async function getCachedBeatmapAssetUrl(
       Bucket: REPLAY_CACHE_BUCKET,
       Key: storageKey,
     }));
-    const sizeBytes = head.ContentLength ?? 0;
-    const mimeType = head.ContentType ?? "application/octet-stream";
+
+    const blobKey = getPointerBlobKey(kind, head.Metadata);
+    if (!blobKey) {
+      const sizeBytes = head.ContentLength ?? 0;
+      const mimeType = head.ContentType ?? "application/octet-stream";
+      return {
+        storageKey,
+        sizeBytes,
+        mimeType,
+        signedUrl: await signGetUrl(storageKey, mimeType),
+      };
+    }
+
+    // A pointer whose blob is gone (manual delete via the admin UI) must read
+    // as a miss so the next put re-uploads the blob and heals the cache.
+    const blobHead = await r2.send(new HeadObjectCommand({
+      Bucket: REPLAY_CACHE_BUCKET,
+      Key: blobKey,
+    }));
+    const mimeType = blobHead.ContentType ?? "application/octet-stream";
     return {
-      storageKey,
-      sizeBytes,
+      storageKey: blobKey,
+      sizeBytes: blobHead.ContentLength ?? 0,
       mimeType,
-      signedUrl: await signGetUrl(storageKey, mimeType),
+      signedUrl: await signGetUrl(blobKey, mimeType),
     };
   } catch {
     return null;
@@ -693,21 +751,37 @@ export async function putBeatmapAssetAndGetUrl(
   if (!r2) return null;
 
   const storageKey = getBeatmapAssetStorageKey(kind, beatmapsetId, filename);
+  const blobKey = getBeatmapAssetBlobKey(kind, buffer, mimeType);
   assertReplayCacheKey(storageKey);
+  assertReplayCacheKey(blobKey);
+
+  const blobExists = await r2.send(new HeadObjectCommand({
+    Bucket: REPLAY_CACHE_BUCKET,
+    Key: blobKey,
+  })).then(() => true, () => false);
+  if (!blobExists) {
+    await r2.send(new PutObjectCommand({
+      Bucket: REPLAY_CACHE_BUCKET,
+      Key: blobKey,
+      Body: buffer,
+      ContentType: mimeType,
+      CacheControl: "public, max-age=31536000, immutable",
+    }));
+  }
 
   await r2.send(new PutObjectCommand({
     Bucket: REPLAY_CACHE_BUCKET,
     Key: storageKey,
-    Body: buffer,
+    Body: Buffer.alloc(0),
     ContentType: mimeType,
-    CacheControl: "public, max-age=86400, immutable",
+    Metadata: { [BLOB_KEY_METADATA]: blobKey },
   }));
 
   return {
-    storageKey,
+    storageKey: blobKey,
     sizeBytes: buffer.length,
     mimeType,
-    signedUrl: await signGetUrl(storageKey, mimeType),
+    signedUrl: await signGetUrl(blobKey, mimeType),
   };
 }
 

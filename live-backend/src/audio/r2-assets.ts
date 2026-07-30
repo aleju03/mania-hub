@@ -10,6 +10,15 @@ const REPLAY_CACHE_PREFIX = "replay-cache/";
 // corrupt or not ours; re-preparing it is cheaper than holding it in the heap.
 const MAX_CACHED_OBJECT_BYTES = 64 * 1024 * 1024;
 
+// Storage is content-addressed so identical audio shared by several beatmapsets
+// (tournament re-uploads, uprate packs with untouched mp3s) is stored once: the
+// payload lives at blob/audio/{sha256}, and the per-set key holds a zero-byte
+// pointer whose `blobkey` metadata names it. Per-set keys written before this
+// scheme still hold the payload directly and are served as-is until the one-off
+// migration script converts them (scripts/migrate-r2-asset-dedup.mjs at repo root).
+const AUDIO_BLOB_PREFIX = `${REPLAY_CACHE_PREFIX}blob/audio/`;
+const BLOB_KEY_METADATA = "blobkey";
+
 export type BeatmapAudioAsset = {
   storageKey: string;
   sizeBytes: number;
@@ -44,11 +53,28 @@ export async function getCachedBeatmapAudioAsset(
       Bucket: requireBucket(config),
       Key: storageKey,
     }));
+
+    const blobKey = getPointerBlobKey(head.Metadata);
+    if (!blobKey) {
+      return {
+        storageKey,
+        sizeBytes: head.ContentLength ?? 0,
+        mimeType: head.ContentType ?? "application/octet-stream",
+        publicUrl: getPublicObjectUrl(config, storageKey),
+      };
+    }
+
+    // A pointer whose blob is gone (manual delete via the admin UI) must read
+    // as a miss so the next prepare re-uploads the blob and heals the cache.
+    const blobHead = await client.send(new s3.HeadObjectCommand({
+      Bucket: requireBucket(config),
+      Key: blobKey,
+    }));
     return {
-      storageKey,
-      sizeBytes: head.ContentLength ?? 0,
-      mimeType: head.ContentType ?? "application/octet-stream",
-      publicUrl: getPublicObjectUrl(config, storageKey),
+      storageKey: blobKey,
+      sizeBytes: blobHead.ContentLength ?? 0,
+      mimeType: blobHead.ContentType ?? "application/octet-stream",
+      publicUrl: getPublicObjectUrl(config, blobKey),
     };
   } catch {
     return null;
@@ -67,25 +93,50 @@ export async function readCachedBeatmapAudioAsset(
   assertReplayCacheKey(storageKey);
 
   try {
-    const object = await client.send(new s3.GetObjectCommand({
-      Bucket: requireBucket(config),
-      Key: storageKey,
-    }));
-    if ((object.ContentLength ?? 0) > MAX_CACHED_OBJECT_BYTES) {
-      throw new Error(`Cached audio object is too large (${object.ContentLength} bytes)`);
+    const object = await getObjectWithinCap(s3, client, config, storageKey);
+    const blobKey = getPointerBlobKey(object.Metadata);
+    if (!blobKey) {
+      const buffer = await readObjectBody(object.Body, MAX_CACHED_OBJECT_BYTES);
+      if (buffer.length === 0) return null;
+      return {
+        storageKey,
+        buffer,
+        sizeBytes: object.ContentLength ?? buffer.length,
+        mimeType: object.ContentType ?? "application/octet-stream",
+        publicUrl: getPublicObjectUrl(config, storageKey),
+      };
     }
-    const buffer = await readObjectBody(object.Body, MAX_CACHED_OBJECT_BYTES);
+
+    await readObjectBody(object.Body, MAX_CACHED_OBJECT_BYTES);
+    const blob = await getObjectWithinCap(s3, client, config, blobKey);
+    const buffer = await readObjectBody(blob.Body, MAX_CACHED_OBJECT_BYTES);
     if (buffer.length === 0) return null;
     return {
-      storageKey,
+      storageKey: blobKey,
       buffer,
-      sizeBytes: object.ContentLength ?? buffer.length,
-      mimeType: object.ContentType ?? "application/octet-stream",
-      publicUrl: getPublicObjectUrl(config, storageKey),
+      sizeBytes: blob.ContentLength ?? buffer.length,
+      mimeType: blob.ContentType ?? "application/octet-stream",
+      publicUrl: getPublicObjectUrl(config, blobKey),
     };
   } catch {
     return null;
   }
+}
+
+async function getObjectWithinCap(
+  s3: S3Module,
+  client: S3Client,
+  config: Config,
+  storageKey: string,
+): Promise<GetObjectCommandOutput> {
+  const object = await client.send(new s3.GetObjectCommand({
+    Bucket: requireBucket(config),
+    Key: storageKey,
+  }));
+  if ((object.ContentLength ?? 0) > MAX_CACHED_OBJECT_BYTES) {
+    throw new Error(`Cached audio object is too large (${object.ContentLength} bytes)`);
+  }
+  return object;
 }
 
 export async function uploadBeatmapAudioAsset(
@@ -98,23 +149,63 @@ export async function uploadBeatmapAudioAsset(
   const s3 = await loadS3Module();
   const client = getClient(s3, config);
   const storageKey = getBeatmapAudioStorageKey(beatmapsetId, filename);
+  const blobKey = getAudioBlobKey(buffer, mimeType);
   assertReplayCacheKey(storageKey);
+  assertReplayCacheKey(blobKey);
+
+  const blobExists = await client.send(new s3.HeadObjectCommand({
+    Bucket: requireBucket(config),
+    Key: blobKey,
+  })).then(() => true, () => false);
+  if (!blobExists) {
+    await client.send(new s3.PutObjectCommand({
+      Bucket: requireBucket(config),
+      Key: blobKey,
+      Body: buffer,
+      ContentType: mimeType,
+      CacheControl: "public, max-age=31536000, immutable",
+      ContentDisposition: `inline; filename="${getAudioPlaybackObjectName(filename)}"`,
+    }));
+  }
 
   await client.send(new s3.PutObjectCommand({
     Bucket: requireBucket(config),
     Key: storageKey,
-    Body: buffer,
+    Body: Buffer.alloc(0),
     ContentType: mimeType,
-    CacheControl: "public, max-age=86400, immutable",
-    ContentDisposition: `inline; filename="${getAudioPlaybackObjectName(filename)}"`,
+    Metadata: { [BLOB_KEY_METADATA]: blobKey },
   }));
 
   return {
-    storageKey,
+    storageKey: blobKey,
     sizeBytes: buffer.length,
     mimeType,
-    publicUrl: getPublicObjectUrl(config, storageKey),
+    publicUrl: getPublicObjectUrl(config, blobKey),
   };
+}
+
+export function getPointerBlobKey(metadata: Record<string, string> | undefined): string | null {
+  const blobKey = metadata?.[BLOB_KEY_METADATA];
+  if (!blobKey || !blobKey.startsWith(AUDIO_BLOB_PREFIX)) return null;
+  return blobKey;
+}
+
+export function getAudioBlobKey(buffer: Buffer, mimeType: string): string {
+  const hash = crypto.createHash("sha256").update(buffer).digest("hex");
+  return `${AUDIO_BLOB_PREFIX}${hash}${getBlobExtension(mimeType)}`;
+}
+
+function getBlobExtension(mimeType: string): string {
+  switch (mimeType) {
+    case "audio/mp4": return ".mp4";
+    case "audio/mpeg":
+    case "audio/mp3": return ".mp3";
+    case "audio/ogg": return ".ogg";
+    case "audio/wav": return ".wav";
+    case "audio/flac": return ".flac";
+    case "application/zip": return ".zip";
+    default: return ".bin";
+  }
 }
 
 function getClient(s3: S3Module, config: Config): S3Client {
