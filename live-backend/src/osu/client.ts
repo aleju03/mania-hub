@@ -2,6 +2,7 @@ import type { Config } from "../config.js";
 import type { OscScore } from "../shared/types.js";
 
 const BEATMAP_FILE_FETCH_TIMEOUT_MS = 15_000;
+const USER_RECENT_SCORES_LIMIT = 100;
 const BEATMAP_FILE_FETCH_HEADERS = {
   "user-agent": "mania-hub/1.0 (+https://mania-tracker.com)",
   accept: "text/plain,*/*;q=0.8",
@@ -394,7 +395,10 @@ export class OsuApiClient {
   }
 
   async getUserRecentScores(userId: number, caller = "unknown"): Promise<OscScore[]> {
-    const apiScores = await this.getJson<OscScore[]>(`/users/${userId}/scores/recent?mode=mania&include_fails=1&limit=20`, caller);
+    const apiScores = await this.getJson<OscScore[]>(
+      `/users/${userId}/scores/recent?mode=mania&include_fails=1&limit=${USER_RECENT_SCORES_LIMIT}`,
+      caller,
+    );
     if (!apiScores.some((score) => score.id <= 0)) return apiScores;
 
     try {
@@ -511,7 +515,7 @@ export class OsuApiClient {
   }
 
   private async getUserRecentScoresWeb(userId: number, caller: string): Promise<OscScore[]> {
-    const path = `/users/${userId}/scores/recent?mode=mania&include_fails=1&limit=20`;
+    const path = `/users/${userId}/scores/recent?mode=mania&include_fails=1&limit=${USER_RECENT_SCORES_LIMIT}`;
     return this.coalesce(`web:${path}`, () => this.limiter.schedule(caller, `web:${path}`, async () => {
       const response = await this.fetchImpl(`https://osu.ppy.sh${path}`, {
         headers: { accept: "application/json" },

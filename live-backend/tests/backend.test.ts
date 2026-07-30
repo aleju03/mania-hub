@@ -1953,6 +1953,11 @@ describe("live backend", () => {
 
     const scores = await osu.getUserRecentScores(101, "test:recent-web-fallback");
 
+    const recentUrls = fetchMock.mock.calls
+      .map(([input]) => String(input))
+      .filter((url) => url.includes("/users/101/scores/recent"));
+    expect(recentUrls).toHaveLength(2);
+    expect(recentUrls.every((url) => new URL(url).searchParams.get("limit") === "100")).toBe(true);
     expect(scores[0].id).toBe(123456);
     expect(scores[0].type).toBe("solo_score");
     expect(scores[0].rank).toBe("A");
