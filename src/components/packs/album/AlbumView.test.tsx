@@ -174,6 +174,18 @@ describe("AlbumShelf", () => {
   const sections = buildAlbumSections(["CR", "US", "JP"]);
   const counts = new Map([["CR", 3]]);
 
+  /* The sort choice is persisted, so a leftover value would leak into the
+     next test's shelf. */
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  function shelfOrder(container: HTMLElement): string[] {
+    return Array.from(container.querySelectorAll("button[aria-label^='Open the ']")).map(
+      (node) => node.getAttribute("aria-label") ?? "",
+    );
+  }
+
   it("filters by name and reports the count against the full shelf", () => {
     const { getByLabelText, getByText, queryByLabelText } = render(
       <AlbumShelf sections={sections} counts={counts} onOpen={() => {}} />,
@@ -202,6 +214,44 @@ describe("AlbumShelf", () => {
     );
     fireEvent.click(getByLabelText("Open the Costa Rica album"));
     expect(onOpen).toHaveBeenCalledWith("CR");
+  });
+
+  it("shelves the albums alphabetically until the reader asks for their biggest collections", () => {
+    const owned = new Map([
+      ["CR", 3],
+      ["US", 12],
+    ]);
+    const { container, getByRole } = render(
+      <AlbumShelf sections={sections} counts={owned} onOpen={() => {}} />,
+    );
+    expect(shelfOrder(container)).toEqual([
+      "Open the Global album",
+      "Open the Costa Rica album",
+      "Open the Japan album",
+      "Open the United States album",
+    ]);
+
+    fireEvent.click(getByRole("button", { name: "Most cards" }));
+    expect(shelfOrder(container)).toEqual([
+      "Open the Global album",
+      "Open the United States album",
+      "Open the Costa Rica album",
+      "Open the Japan album",
+    ]);
+
+    fireEvent.click(getByRole("button", { name: "A-Z" }));
+    expect(shelfOrder(container)[1]).toBe("Open the Costa Rica album");
+  });
+
+  it("remembers the chosen sort for the next visit", () => {
+    const { getByRole, unmount } = render(
+      <AlbumShelf sections={sections} counts={counts} onOpen={() => {}} />,
+    );
+    fireEvent.click(getByRole("button", { name: "Most cards" }));
+    unmount();
+
+    const second = render(<AlbumShelf sections={sections} counts={counts} onOpen={() => {}} />);
+    expect(second.getByRole("button", { name: "Most cards" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("is a memo barrier, so an open album's page turns never re-render the hidden shelf", () => {

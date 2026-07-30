@@ -23,9 +23,10 @@ export function buildAlbumSections(trackedCountries: readonly string[]): AlbumSe
   return [{ code: GLOBAL_SCOPE_CODE, name: "Global" }, ...countries];
 }
 
-/* Shelf order: Global stays first, albums holding cards follow (biggest
-   collection first, name breaking ties), and the empty countries keep
-   their alphabetical order behind them. */
+/* The optional "most cards" shelf order: Global stays first, albums holding
+   cards follow (biggest collection first, name breaking ties), and the empty
+   countries keep their alphabetical order behind them. The default order is
+   the alphabetical one buildAlbumSections returns. */
 export function orderShelfSections(
   sections: readonly AlbumSection[],
   countByCode: ReadonlyMap<string, number>,

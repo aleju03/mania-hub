@@ -101,10 +101,11 @@ function writeRosterTotalCache(code: string, total: number): void {
 
 /* Last-known per-album card counts for a synced viewer. A synced wallet
    keeps its cards server-side, so on the shelf's first mount every count is
-   zero until the collection fetch lands, and orderShelfSections re-sorts
-   the covers under the cursor a beat later. Seeding the counts from this
-   cache lets the shelf mount already sorted (and labeled); the fresh
-   fetch still takes over, so a drift only costs one re-sort. */
+   zero until the collection fetch lands, and every cover would read "0 cards"
+   (with the most-cards order, if picked, re-sorting the covers under the
+   cursor a beat later). Seeding the counts from this cache lets the shelf
+   mount already labeled; the fresh fetch still takes over, so a drift only
+   costs one repaint. */
 const SHELF_COUNT_CACHE_KEY = "mania-hub-album-shelf-counts-v1";
 
 function readShelfCountCache(viewerId: number | null): Map<string, number> | null {
@@ -132,6 +133,29 @@ function writeShelfCountCache(viewerId: number | null, counts: ReadonlyMap<strin
     window.localStorage.setItem(SHELF_COUNT_CACHE_KEY, JSON.stringify({ viewerId, counts: record }));
   } catch {
     // Best-effort cache; the server collection is the source of truth.
+  }
+}
+
+/* Shelf order is a preference, not derived state: the shelf lists countries
+   alphabetically unless the reader asks for their biggest collections first,
+   and that choice survives leaving the page. */
+export type ShelfSort = "az" | "cards";
+const SHELF_SORT_KEY = "mania-hub-album-shelf-sort-v1";
+
+function readShelfSort(): ShelfSort {
+  if (typeof window === "undefined") return "az";
+  try {
+    return window.localStorage.getItem(SHELF_SORT_KEY) === "cards" ? "cards" : "az";
+  } catch {
+    return "az";
+  }
+}
+
+function writeShelfSort(sort: ShelfSort): void {
+  try {
+    window.localStorage.setItem(SHELF_SORT_KEY, sort);
+  } catch {
+    // Best-effort preference; the shelf just reopens on the default order.
   }
 }
 
@@ -518,15 +542,15 @@ export function albumSubtitle(code: string): string {
   return isGlobalScope(code) ? `Top ${GLOBAL_ALBUM_CAP} players` : "Card collection";
 }
 
-/* Memoized, and it owns its search box. The shelf stays mounted (just hidden)
-   behind an open album and React has no idea about display:none, so without a
-   boundary here every page turn, roster chunk and thumbnail arrival re-rendered
-   every cover on the shelf -- the bulk of the work in an AlbumView render, none
-   of it on screen. Both data props are memoized upstream and onOpen is
-   identity-stable, so this now re-renders only when the collection itself
-   changes. The query moved in for the same reason: left in AlbumView it would
-   re-render the open book on every keystroke, and the filtered array it
-   produces would defeat the memo anyway. */
+/* Memoized, and it owns its search box and sort choice. The shelf stays
+   mounted (just hidden) behind an open album and React has no idea about
+   display:none, so without a boundary here every page turn, roster chunk and
+   thumbnail arrival re-rendered every cover on the shelf -- the bulk of the
+   work in an AlbumView render, none of it on screen. Both data props are
+   memoized upstream and onOpen is identity-stable, so this now re-renders only
+   when the collection itself changes. The query moved in for the same reason:
+   left in AlbumView it would re-render the open book on every keystroke, and
+   the filtered array it produces would defeat the memo anyway. */
 export const AlbumShelf = memo(function AlbumShelf({
   sections,
   counts,
@@ -537,14 +561,24 @@ export const AlbumShelf = memo(function AlbumShelf({
   onOpen: (code: string) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<ShelfSort>(readShelfSort);
+  const ordered = useMemo(
+    () => (sort === "cards" ? orderShelfSections(sections, counts) : sections),
+    [sort, sections, counts],
+  );
   const trimmed = query.trim().toLowerCase();
   const visible = trimmed
-    ? sections.filter(
+    ? ordered.filter(
         (section) =>
           section.code.toLowerCase().includes(trimmed) ||
           section.name.toLowerCase().includes(trimmed),
       )
-    : sections;
+    : ordered;
+
+  const pickSort = (next: ShelfSort) => {
+    setSort(next);
+    writeShelfSort(next);
+  };
 
   return (
     <>
@@ -553,13 +587,33 @@ export const AlbumShelf = memo(function AlbumShelf({
         <span className="text-[12px] text-osu-f1 tabular-nums">
           {trimmed ? `${visible.length} of ${sections.length} albums` : `${sections.length} albums`}
         </span>
+        <div className="ml-auto flex items-center gap-1">
+          {([
+            { mode: "az", label: "A-Z" },
+            { mode: "cards", label: "Most cards" },
+          ] as const).map(({ mode, label }) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => pickSort(mode)}
+              aria-pressed={sort === mode}
+              className={`h-7 cursor-pointer rounded-full border px-2.5 text-[10px] font-bold uppercase tracking-wide transition-colors ${
+                sort === mode
+                  ? "border-osu-pink/50 bg-osu-b4 text-white"
+                  : "border-osu-b3/30 bg-osu-b4/30 text-osu-f1 hover:bg-osu-b4/70"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <input
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="find a country"
           aria-label="Find a country album"
-          className="ml-auto h-7 w-[180px] select-text rounded-full border border-osu-b3/40 bg-osu-b4/40 px-3 text-[12px] text-white outline-none placeholder:text-osu-f1/70 focus:border-osu-pink/50"
+          className="h-7 w-[180px] select-text rounded-full border border-osu-b3/40 bg-osu-b4/40 px-3 text-[12px] text-white outline-none placeholder:text-osu-f1/70 focus:border-osu-pink/50"
         />
       </div>
       {visible.length === 0 && (
@@ -894,11 +948,6 @@ export function AlbumView({
     return counts;
   }, [collectedById, serverCards, seededShelfCounts]);
 
-  const shelfSections = useMemo(
-    () => orderShelfSections(sections, walletCountByCode),
-    [sections, walletCountByCode],
-  );
-
   /* Warm the flip engine chunk while the shelf is browsed, so opening an
      album doesn't wait on a dynamic import. */
   useEffect(() => {
@@ -1143,7 +1192,7 @@ export function AlbumView({
      never re-renders the shelf itself. */
   const shelfView = (
     <div className={openSection ? "hidden" : undefined}>
-      <AlbumShelf sections={shelfSections} counts={walletCountByCode} onOpen={openAlbum} />
+      <AlbumShelf sections={sections} counts={walletCountByCode} onOpen={openAlbum} />
     </div>
   );
 

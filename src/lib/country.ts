@@ -305,12 +305,27 @@ export function getCountryFlagLargeUrl(code?: string | null): string {
 
 /**
  * Returns a CSS gradient approximating the country's flag for use on the osu! logo circle.
- * Only covers countries with simple stripe-based flags. Returns null for complex flags,
- * in which case the caller should fall back to the flag image.
+ * Covers flags that stripes, crosses and hard-edged wedges can carry; returns null for
+ * complex ones (emblems, the ZA/KR motifs), where the caller falls back to the flag image.
+ * Entries may layer several backgrounds, first listed painting on top. Every stop pair must
+ * share a position so the edges stay hard rather than smearing one colour into the next.
+ * Note the favicon route only rasterises single-layer linear gradients and fetches the real
+ * flag PNG for the rest, so a layered entry costs it a network hop but never breaks it.
+ *
+ * Emblems are drawn only when they read at ~40px: a shape in the emblem's colour and
+ * footprint, never fake detail. Countries whose civil flag drops the emblem entirely
+ * (CR, PE, EC, VE, BO, GT, SV, PY) are left as plain stripes, which is a real variant
+ * rather than an approximation.
  */
+// The one emblem worth drawing properly: at logo size Canada is otherwise just
+// red/white/red, indistinguishable from Peru. Path lifted from the public-domain
+// Flag_of_Canada.svg, with the viewBox cropped to the leaf's bounding box.
+const CA_MAPLE_LEAF =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='2940 410 3720 4020'%3E%3Cpath fill='%23ff0000' d='m4890 4430-45-863a95 95 0 0 1 111-98l859 151-116-320a65 65 0 0 1 20-73l941-762-212-99a65 65 0 0 1-34-79l186-572-542 115a65 65 0 0 1-73-38l-105-247-423 454a65 65 0 0 1-111-57l204-1052-327 189a65 65 0 0 1-91-27l-332-652-332 652a65 65 0 0 1-91 27l-327-189 204 1052a65 65 0 0 1-111 57l-423-454-105 247a65 65 0 0 1-73 38l-542-115 186 572a65 65 0 0 1-34 79l-212 99 941 762a65 65 0 0 1 20 73l-116 320 859-151a95 95 0 0 1 111 98l-45 863z'/%3E%3C/svg%3E\") center / 40% 43% no-repeat";
+
 const FLAG_GRADIENTS: Record<string, string> = {
-  // Horizontal stripes (top to bottom)
-  CR: "linear-gradient(180deg, #002b7f 20%, #fff 20%, #fff 35%, #ce1126 35%, #ce1126 65%, #fff 65%, #fff 80%, #002b7f 80%)",
+  // Horizontal stripes (top to bottom), sized 1:1:2:1:1 like the real flag
+  CR: "linear-gradient(180deg, #002b7f 17%, #fff 17%, #fff 33%, #ce1126 33%, #ce1126 67%, #fff 67%, #fff 83%, #002b7f 83%)",
   DE: "linear-gradient(180deg, #000 33%, #dd0000 33%, #dd0000 67%, #ffcc00 67%)",
   FR: "linear-gradient(90deg, #002395 33%, #fff 33%, #fff 67%, #ed2939 67%)",
   IT: "linear-gradient(90deg, #009246 33%, #fff 33%, #fff 67%, #ce2b37 67%)",
@@ -325,42 +340,63 @@ const FLAG_GRADIENTS: Record<string, string> = {
   BE: "linear-gradient(90deg, #000 33%, #ffd90c 33%, #ffd90c 67%, #f31830 67%)",
   IE: "linear-gradient(90deg, #169b62 33%, #fff 33%, #fff 67%, #ff883e 67%)",
   RO: "linear-gradient(90deg, #002b7f 33%, #fcd116 33%, #fcd116 67%, #ce1126 67%)",
-  CO: "linear-gradient(180deg, #fcd116 50%, #003893 75%, #ce1126 75%)",
-  AR: "linear-gradient(180deg, #74acdf 33%, #fff 33%, #fff 67%, #74acdf 67%)",
-  CL: "linear-gradient(#0039a6, #0039a6) top left / 50% 50% no-repeat, linear-gradient(180deg, #fff 50%, #d52b1e 50%)",
+  CO: "linear-gradient(180deg, #fcd116 50%, #003893 50%, #003893 75%, #ce1126 75%)",
+  // Sol de Mayo, sized to the white band it sits in.
+  AR: "radial-gradient(circle at 50% 50%, #f6b40e 0 11%, transparent 11%), linear-gradient(180deg, #74acdf 33%, #fff 33%, #fff 67%, #74acdf 67%)",
+  // Canton is a third of the width and half the height, with the star inside it.
+  CL: "radial-gradient(circle at 17% 25%, #fff 0 5%, transparent 5%), linear-gradient(#0039a6, #0039a6) top left / 33% 50% no-repeat, linear-gradient(180deg, #fff 50%, #d52b1e 50%)",
   PE: "linear-gradient(90deg, #d91023 33%, #fff 33%, #fff 67%, #d91023 67%)",
   JP: "radial-gradient(circle, #bc002d 30%, #fff 30%)",
   // KR is intentionally absent: the taegeuk + trigrams can't be approximated by
   // a stripe gradient, so it falls back to the real flag image.
   TH: "linear-gradient(180deg, #ed1c24 17%, #fff 17%, #fff 33%, #241d4f 33%, #241d4f 67%, #fff 67%, #fff 83%, #ed1c24 83%)",
   ID: "linear-gradient(180deg, #ce1126 50%, #fff 50%)",
-  PH: "linear-gradient(180deg, #0038a8 50%, #ce1126 50%)",
+  // The white hoist triangle is a 90deg wedge pointing left, drawn from its apex
+  // at 44% width (the sun and stars inside it are too fine to approximate).
+  PH: "conic-gradient(from 225deg at 44% 50%, #fff 0deg 90deg, transparent 90deg), linear-gradient(180deg, #0038a8 50%, #ce1126 50%)",
   US: "linear-gradient(#3c3b6e, #3c3b6e) top left / 40% 54% no-repeat, linear-gradient(180deg, #b22234 8%, #fff 8%, #fff 15%, #b22234 15%, #b22234 23%, #fff 23%, #fff 31%, #b22234 31%, #b22234 38%, #fff 38%, #fff 46%, #b22234 46%, #b22234 54%, #fff 54%, #fff 62%, #b22234 62%, #b22234 69%, #fff 69%, #fff 77%, #b22234 77%, #b22234 85%, #fff 85%, #fff 92%, #b22234 92%)",
-  CA: "linear-gradient(90deg, #ff0000 25%, #fff 25%, #fff 75%, #ff0000 75%)",
-  MX: "linear-gradient(90deg, #006847 33%, #fff 33%, #fff 67%, #ce1126 67%)",
-  SE: "linear-gradient(180deg, #005293 40%, #fecc02 40%, #fecc02 60%, #005293 60%)",
-  NO: "linear-gradient(180deg, #ef2b2d 30%, #fff 30%, #fff 38%, #002868 38%, #002868 62%, #fff 62%, #fff 70%, #ef2b2d 70%)",
-  DK: "linear-gradient(180deg, #c8102e 43%, #fff 43%, #fff 57%, #c8102e 57%)",
-  FI: "linear-gradient(180deg, #fff 40%, #003580 40%, #003580 60%, #fff 60%)",
-  ES: "linear-gradient(180deg, #aa151b 25%, #f1bf00 25%, #f1bf00 75%, #aa151b 75%)",
-  PT: "linear-gradient(90deg, #006600 40%, #ff0000 40%)",
-  GR: "linear-gradient(180deg, #0d5eaf 11%, #fff 11%, #fff 22%, #0d5eaf 22%, #0d5eaf 33%, #fff 33%, #fff 44%, #0d5eaf 44%, #0d5eaf 56%, #fff 56%, #fff 67%, #0d5eaf 67%, #0d5eaf 78%, #fff 78%, #fff 89%, #0d5eaf 89%)",
-  IN: "linear-gradient(180deg, #ff9933 33%, #fff 33%, #fff 67%, #138808 67%)",
-  EG: "linear-gradient(180deg, #ce1126 33%, #fff 33%, #fff 67%, #000 67%)",
+  CA: `${CA_MAPLE_LEAF}, linear-gradient(90deg, #ff0000 25%, #fff 25%, #fff 75%, #ff0000 75%)`,
+  // Without a mark in the white band Mexico is pixel-identical to Italy, so the
+  // eagle-and-cactus emblem gets a disc in its colours and footprint.
+  MX: "radial-gradient(circle at 50% 50%, #7a5c2e 0 9%, transparent 9%), linear-gradient(90deg, #006847 33%, #fff 33%, #fff 67%, #ce1126 67%)",
+  // Nordic crosses: a vertical bar offset toward the hoist layered over the
+  // horizontal one, both the same thickness (a lone horizontal band would read
+  // as a plain triband).
+  SE: "linear-gradient(90deg, transparent 28%, #fecc02 28%, #fecc02 48%, transparent 48%), linear-gradient(180deg, #005293 40%, #fecc02 40%, #fecc02 60%, #005293 60%)",
+  NO: "linear-gradient(90deg, transparent 28%, #002868 28%, #002868 52%, transparent 52%), linear-gradient(180deg, transparent 38%, #002868 38%, #002868 62%, transparent 62%), linear-gradient(90deg, transparent 20%, #fff 20%, #fff 60%, transparent 60%), linear-gradient(180deg, #ef2b2d 30%, #fff 30%, #fff 70%, #ef2b2d 70%)",
+  DK: "linear-gradient(90deg, transparent 32%, #fff 32%, #fff 46%, transparent 46%), linear-gradient(180deg, #c8102e 43%, #fff 43%, #fff 57%, #c8102e 57%)",
+  FI: "linear-gradient(90deg, transparent 28%, #003580 28%, #003580 48%, transparent 48%), linear-gradient(180deg, #fff 40%, #003580 40%, #003580 60%, #fff 60%)",
+  ES: "radial-gradient(ellipse 9% 12% at 33% 50%, #ad1519 0 100%, transparent 100%), linear-gradient(180deg, #aa151b 25%, #f1bf00 25%, #f1bf00 75%, #aa151b 75%)",
+  // Armillary sphere as a gold ring straddling the green/red seam.
+  PT: "radial-gradient(circle at 40% 50%, transparent 0 7%, #ffd033 7% 10%, transparent 10%), linear-gradient(90deg, #006600 40%, #ff0000 40%)",
+  // Square canton (five stripes tall) carrying the white cross, over the nine stripes.
+  GR: "linear-gradient(90deg, transparent 40%, #fff 40%, #fff 60%, transparent 60%) top left / 56% 56% no-repeat, linear-gradient(180deg, transparent 40%, #fff 40%, #fff 60%, transparent 60%) top left / 56% 56% no-repeat, linear-gradient(#0d5eaf, #0d5eaf) top left / 56% 56% no-repeat, linear-gradient(180deg, #0d5eaf 11%, #fff 11%, #fff 22%, #0d5eaf 22%, #0d5eaf 33%, #fff 33%, #fff 44%, #0d5eaf 44%, #0d5eaf 56%, #fff 56%, #fff 67%, #0d5eaf 67%, #0d5eaf 78%, #fff 78%, #fff 89%, #0d5eaf 89%)",
+  // Ashoka Chakra as a navy ring; its 24 spokes are sub-pixel at logo size.
+  IN: "radial-gradient(circle at 50% 50%, transparent 0 8%, #06038d 8% 10%, transparent 10%), linear-gradient(180deg, #ff9933 33%, #fff 33%, #fff 67%, #138808 67%)",
+  // Eagle of Saladin, filling the white band like the real emblem does.
+  EG: "radial-gradient(circle at 50% 50%, #c09300 0 9%, transparent 9%), linear-gradient(180deg, #ce1126 33%, #fff 33%, #fff 67%, #000 67%)",
   NG: "linear-gradient(90deg, #008751 33%, #fff 33%, #fff 67%, #008751 67%)",
-  ZA: "linear-gradient(180deg, #e03c31 33%, #fff 33%, #fff 37%, #007749 37%, #007749 63%, #fff 63%, #fff 67%, #001489 67%)",
-  SG: "linear-gradient(180deg, #ee2536 50%, #fff 50%)",
-  CZ: "linear-gradient(180deg, #fff 50%, #d7141a 50%)",
-  EC: "linear-gradient(180deg, #ffd100 50%, #034ea2 75%, #ce1126 75%)",
+  // ZA is intentionally absent: the flag's green Y, black hoist triangle and gold
+  // fimbriation don't survive a stripe gradient (it lost the black and gold
+  // entirely), so it falls back to the real flag image.
+  // Crescent carved out by laying a red disc over a white one; the five stars in
+  // its opening would be sub-pixel, so they are left out.
+  SG: "radial-gradient(circle at 31% 26%, #ee2536 0 11.5%, transparent 11.5%), radial-gradient(circle at 24% 26%, #fff 0 13%, transparent 13%), linear-gradient(180deg, #ee2536 50%, #fff 50%)",
+  CZ: "conic-gradient(from 225deg at 50% 50%, #11457e 0deg 90deg, transparent 90deg), linear-gradient(180deg, #fff 50%, #d7141a 50%)",
+  EC: "linear-gradient(180deg, #ffd100 50%, #034ea2 50%, #034ea2 75%, #ce1126 75%)",
   VE: "linear-gradient(180deg, #fcf75e 33%, #0035ad 33%, #0035ad 67%, #cf142b 67%)",
   PY: "linear-gradient(180deg, #d52b1e 33%, #fff 33%, #fff 67%, #0038a8 67%)",
   BO: "linear-gradient(180deg, #d52b1e 33%, #f9e300 33%, #f9e300 67%, #007934 67%)",
   GT: "linear-gradient(90deg, #4997d0 33%, #fff 33%, #fff 67%, #4997d0 67%)",
-  HN: "linear-gradient(180deg, #0073cf 33%, #fff 33%, #fff 67%, #0073cf 67%)",
+  // The five stars are what separate Honduras from the other blue/white/blue
+  // Central American flags, so they are worth the extra layers.
+  HN: "radial-gradient(circle at 50% 50%, #0073cf 0 3%, transparent 3%), radial-gradient(circle at 37% 42%, #0073cf 0 3%, transparent 3%), radial-gradient(circle at 63% 42%, #0073cf 0 3%, transparent 3%), radial-gradient(circle at 37% 58%, #0073cf 0 3%, transparent 3%), radial-gradient(circle at 63% 58%, #0073cf 0 3%, transparent 3%), linear-gradient(180deg, #0073cf 33%, #fff 33%, #fff 67%, #0073cf 67%)",
   SV: "linear-gradient(180deg, #0047ab 33%, #fff 33%, #fff 67%, #0047ab 67%)",
-  NI: "linear-gradient(180deg, #0067c6 33%, #fff 33%, #fff 67%, #0067c6 67%)",
-  BZ: "linear-gradient(180deg, #ce1126 10%, #003f87 10%, #003f87 90%, #ce1126 90%)",
-  DO: "linear-gradient(180deg, #002d62 33%, #fff 33%, #fff 67%, #ce1126 67%)",
+  NI: "radial-gradient(circle at 50% 50%, #92c1e9 0 7%, transparent 7%), linear-gradient(180deg, #0067c6 33%, #fff 33%, #fff 67%, #0067c6 67%)",
+  // The arms sit in a large white disc that reads clearly even at logo size.
+  BZ: "radial-gradient(circle at 50% 50%, #fff 0 27%, transparent 27%), linear-gradient(180deg, #ce1126 10%, #003f87 10%, #003f87 90%, #ce1126 90%)",
+  // Quartered by a white cross: blue top-left/bottom-right, red top-right/bottom-left.
+  DO: "linear-gradient(90deg, transparent 43%, #fff 43%, #fff 57%, transparent 57%), linear-gradient(180deg, transparent 43%, #fff 43%, #fff 57%, transparent 57%), linear-gradient(#ce1126, #ce1126) top right / 50% 50% no-repeat, linear-gradient(#ce1126, #ce1126) bottom left / 50% 50% no-repeat, linear-gradient(#002d62, #002d62)",
 };
 
 export function getCountryFlagGradient(code?: string | null): string | null {
