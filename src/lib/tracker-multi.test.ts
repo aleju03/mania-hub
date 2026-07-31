@@ -114,6 +114,30 @@ describe("detectTrackerMultis", () => {
     expect(multis.has(getScoreIdentity(bystander))).toBe(false);
   });
 
+  it("merges split sessions when a later round bridges them", () => {
+    // One lobby whose early rounds paired different subsets: {1,3}, then
+    // {1,2}, then all three. The third round shares >= 2 players with both
+    // drafts, so they collapse into a single session and player 3 gets
+    // confirmed by their two rounds.
+    const r1a = makeScore({ userId: 1, beatmapId: 100, endedAt: at(0) });
+    const r1c = makeScore({ userId: 3, beatmapId: 100, endedAt: at(1) });
+    const r2a = makeScore({ userId: 1, beatmapId: 200, endedAt: at(325) });
+    const r2b = makeScore({ userId: 2, beatmapId: 200, endedAt: at(326) });
+    const r3a = makeScore({ userId: 1, beatmapId: 300, endedAt: at(563) });
+    const r3b = makeScore({ userId: 2, beatmapId: 300, endedAt: at(565) });
+    const r3c = makeScore({ userId: 3, beatmapId: 300, endedAt: at(565) });
+    const multis = detectTrackerMultis([r1a, r1c, r2a, r2b, r3a, r3b, r3c]);
+    const group = multis.get(getScoreIdentity(r3c));
+    expect(group).toBeDefined();
+    expect(group?.playerCount).toBe(3);
+    expect(group?.rounds.map((round) => round.scores)).toEqual([
+      [r1a, r1c],
+      [r2a, r2b],
+      [r3a, r3b, r3c],
+    ]);
+    expect(group?.key).toBe(`multi:100:normal:${new Date(at(0)).getTime()}`);
+  });
+
   it("ignores one player retrying the same map quickly", () => {
     const scores = [
       makeScore({ userId: 1, beatmapId: 100, endedAt: at(0) }),

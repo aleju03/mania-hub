@@ -11,12 +11,15 @@ import type { LeanTrackerScore } from "./types";
 // 1. Round candidate: >= 2 players finish the same map (same rate bucket)
 //    with consecutive gaps of at most TRACKER_MULTI_WINDOW_MS.
 // 2. Session: candidates whose player sets share >= 2 players, at most
-//    TRACKER_MULTI_SESSION_GAP_MS apart (a long map plus song select).
+//    TRACKER_MULTI_SESSION_GAP_MS apart (a long map plus song select, with
+//    slack for an idle chat break between maps). A candidate sharing >= 2
+//    players with several sessions bridges them: they were one lobby whose
+//    earlier rounds happened to pair up different subsets of its players.
 // 3. Confirmation: a session needs >= TRACKER_MULTI_MIN_ROUNDS rounds, and a
 //    player must appear in >= 2 of its rounds to be counted - anyone swept
 //    into a single round by coincidence is trimmed back out.
 export const TRACKER_MULTI_WINDOW_MS = 5_000;
-export const TRACKER_MULTI_SESSION_GAP_MS = 15 * 60_000;
+export const TRACKER_MULTI_SESSION_GAP_MS = 20 * 60_000;
 export const TRACKER_MULTI_MIN_ROUNDS = 2;
 
 export interface TrackerMultiRound {
@@ -102,20 +105,25 @@ export function detectTrackerMultis(scores: LeanTrackerScore[]): Map<string, Tra
   candidates.sort((a, b) => a.startMs - b.startMs);
   const sessions: SessionDraft[] = [];
   for (const candidate of candidates) {
-    let attached: SessionDraft | null = null;
-    for (let i = sessions.length - 1; i >= 0; i--) {
-      const session = sessions[i];
+    const matches: SessionDraft[] = [];
+    for (const session of sessions) {
       if (candidate.startMs - session.endMs > TRACKER_MULTI_SESSION_GAP_MS) continue;
       let shared = 0;
       for (const id of candidate.players) {
         if (session.players.has(id)) shared++;
       }
-      if (shared >= 2) {
-        attached = session;
-        break;
-      }
+      if (shared >= 2) matches.push(session);
     }
-    if (attached) {
+    if (matches.length > 0) {
+      // Every matched session is the same lobby: merge them into the first.
+      const attached = matches[0];
+      for (const extra of matches.slice(1)) {
+        attached.rounds.push(...extra.rounds);
+        for (const id of extra.players) attached.players.add(id);
+        attached.endMs = Math.max(attached.endMs, extra.endMs);
+        sessions.splice(sessions.indexOf(extra), 1);
+      }
+      if (matches.length > 1) attached.rounds.sort((a, b) => a.startMs - b.startMs);
       attached.rounds.push(candidate);
       for (const id of candidate.players) attached.players.add(id);
       attached.endMs = Math.max(attached.endMs, candidate.endMs);
