@@ -6,15 +6,19 @@ import { createDb, exec, migrate } from "../src/db.js";
 import { JobQueue } from "../src/jobs/queue.js";
 import {
   catchUpGlobalFarmedBoard,
+  getGlobalFarmedBoardCacheStatsForTests,
   getMapsPageSnapshot,
   refreshGlobalMaps,
   registerGlobalFarmedBoardDiskCache,
+  registerGlobalFarmedBoardRepackDelegation,
+  runGlobalFarmedBoardRepackJob,
   waitForGlobalFarmedBoardBuild,
   type MapsPageQuery,
 } from "../src/features/maps.js";
 import {
   GLOBAL_FARMED_BOARD_DISK_FORMAT_VERSION,
   loadGlobalFarmedBoardFromDisk,
+  readGlobalFarmedBoardDiskHeader,
   saveGlobalFarmedBoardToDisk,
   type PersistedGlobalFarmedBoard,
 } from "../src/features/maps-farmed-board-disk.js";
@@ -304,5 +308,115 @@ describe("global farmed board persistence and catch-up", () => {
     await catchUpGlobalFarmedBoard(db);
     await waitForGlobalFarmedBoardBuild(db);
     expect(pageIds(await getMapsPageSnapshot(db, queue, "GLOBAL", WEEK_MS, QUERY))).toEqual([21, 11]);
+  });
+});
+
+describe("global farmed board disk header peek", () => {
+  it("reads the header without loading or deleting the snapshot", async () => {
+    dir = await mkdtemp(join(tmpdir(), "mania-farmed-board-"));
+    const path = join(dir, "board.bin");
+    const board = sampleBoard();
+    await saveGlobalFarmedBoardToDisk(path, board);
+    expect(await readGlobalFarmedBoardDiskHeader(path)).toEqual({
+      generation: board.generation,
+      projectionRevision: board.projectionRevision,
+    });
+    // Unlike the full loader, a peek must never destroy the file: a corrupt
+    // read can be a race with an in-flight writer.
+    const garbled = Buffer.from(await readFile(path));
+    garbled.write("NOPE", 0, "ascii");
+    await writeFile(path, garbled);
+    expect(await readGlobalFarmedBoardDiskHeader(path)).toBeNull();
+    expect(await fileExists(path)).toBe(true);
+  });
+
+  it("returns null for a missing file", async () => {
+    dir = await mkdtemp(join(tmpdir(), "mania-farmed-board-"));
+    expect(await readGlobalFarmedBoardDiskHeader(join(dir, "absent.bin"))).toBeNull();
+  });
+});
+
+async function stateRevision(db: Awaited<ReturnType<typeof createDb>>): Promise<number> {
+  const row = (await exec(db, "select revision from global_maps_farmed_state where singleton = 1")).rows[0];
+  return Number(row?.revision ?? 0);
+}
+
+// A change backlog spanning more distinct maps than the delta threshold, so
+// patching declines and the catch-up machinery decides a full repack is due.
+async function injectOversizedBacklog(db: Awaited<ReturnType<typeof createDb>>, maps: number): Promise<number> {
+  const base = await stateRevision(db);
+  await exec(
+    db,
+    `insert into global_maps_farmed_changes (beatmap_id, revision, updated_at)
+     with recursive cnt(x) as (select 1 union all select x + 1 from cnt where x < ?)
+     select 900000 + x, ? + x, ? from cnt`,
+    [maps, base, NOW],
+  );
+  await exec(db, "update global_maps_farmed_state set revision = ?, updated_at = ? where singleton = 1", [base + maps, NOW]);
+  return base + maps;
+}
+
+describe("delegated global farmed board repack", () => {
+  it("requests the worker job instead of packing inline, then adopts the worker's snapshot", async () => {
+    const { db, queue, databaseUrl } = await setupDb();
+    registerGlobalFarmedBoardDiskCache(db, databaseUrl);
+    let repackRequests = 0;
+    registerGlobalFarmedBoardRepackDelegation(db, async () => {
+      repackRequests += 1;
+    });
+    await seedFarmedMap(db, 10, 11, [{ id: 101, pp: 650 }, { id: 102, pp: 600 }]);
+    await refreshGlobalMaps(db);
+    // Cold path with nothing to stale-serve still builds inline (and persists
+    // the snapshot), delegation or not.
+    expect(pageIds(await getMapsPageSnapshot(db, queue, "GLOBAL", WEEK_MS, QUERY))).toEqual([11]);
+    expect(repackRequests).toBe(0);
+    const packedRevision = getGlobalFarmedBoardCacheStatsForTests(db)!.revision;
+
+    const target = await injectOversizedBacklog(db, 5_001);
+
+    // The tick decides a repack is due; with delegation registered it must
+    // keep serving the stale board and ask the worker instead of packing.
+    await catchUpGlobalFarmedBoard(db);
+    await waitForGlobalFarmedBoardBuild(db);
+    expect(repackRequests).toBeGreaterThan(0);
+    expect(getGlobalFarmedBoardCacheStatsForTests(db)!.revision).toBe(packedRevision);
+
+    // Worker side: a separate connection packs and persists the snapshot.
+    const workerDb = await createDb({ databaseUrl });
+    registerGlobalFarmedBoardDiskCache(workerDb, databaseUrl);
+    const result = await runGlobalFarmedBoardRepackJob(workerDb);
+    expect(result.built).toBe(true);
+    expect(result.revision).toBe(target);
+
+    // The next tick adopts the fresh snapshot; the board serves the new
+    // revision without this process ever running the full pack.
+    await catchUpGlobalFarmedBoard(db);
+    await waitForGlobalFarmedBoardBuild(db);
+    expect(getGlobalFarmedBoardCacheStatsForTests(db)!.revision).toBe(target);
+    expect(pageIds(await getMapsPageSnapshot(db, queue, "GLOBAL", WEEK_MS, QUERY))).toEqual([11]);
+  });
+
+  it("repack job short-circuits when the disk snapshot is already at the projection head", async () => {
+    const { db, queue, databaseUrl } = await setupDb();
+    registerGlobalFarmedBoardDiskCache(db, databaseUrl);
+    await seedFarmedMap(db, 10, 11, [{ id: 101, pp: 650 }]);
+    await refreshGlobalMaps(db);
+    await getMapsPageSnapshot(db, queue, "GLOBAL", WEEK_MS, QUERY);
+
+    const workerDb = await createDb({ databaseUrl });
+    registerGlobalFarmedBoardDiskCache(workerDb, databaseUrl);
+    const result = await runGlobalFarmedBoardRepackJob(workerDb);
+    expect(result).toMatchObject({ built: false, reason: "disk_snapshot_fresh" });
+  });
+
+  it("repack job declines without a registered disk cache", async () => {
+    const { db, databaseUrl } = await setupDb();
+    registerGlobalFarmedBoardDiskCache(db, databaseUrl);
+    await seedFarmedMap(db, 10, 11, [{ id: 101, pp: 650 }]);
+    await refreshGlobalMaps(db);
+
+    const workerDb = await createDb({ databaseUrl });
+    const result = await runGlobalFarmedBoardRepackJob(workerDb);
+    expect(result).toMatchObject({ built: false, reason: "disk_cache_unregistered" });
   });
 });

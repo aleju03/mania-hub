@@ -96,6 +96,10 @@ const RESERVED_LANE_TYPES: Record<string, number> = {
   // would break its pacing — the continuation would enqueue as deferred and
   // reactivation resets run_after to now, collapsing the 15-minute gap.
   backfill_user_top_scores_sweep: 2,
+  // The serving process's delegated GLOBAL board repack. The board it refreshes
+  // is user-visible, so it must trickle through even when the queue rides the
+  // soft-pressure cap; one slot suffices — requests dedupe onto a single job.
+  repack_global_farmed_board: 1,
 };
 
 export class JobQueue {

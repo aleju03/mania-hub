@@ -26,6 +26,7 @@
 // of the board beyond the arrays themselves.
 import { mkdir, open, rename, unlink, type FileHandle } from "node:fs/promises";
 import { dirname } from "node:path";
+import { threadId } from "node:worker_threads";
 import type { GlobalFarmedBoardEntry, MapsFarmedPageMetadata } from "./maps.js";
 
 export const GLOBAL_FARMED_BOARD_DISK_FORMAT_VERSION = 1;
@@ -114,16 +115,27 @@ export async function saveGlobalFarmedBoardToDisk(filePath: string, board: Persi
   // Write to a temp sibling and rename so a crash mid-write can never leave a
   // truncated file at the real path (loads would reject it anyway, but the
   // rename keeps the previous good snapshot serving until the new one lands).
-  const tmpPath = `${filePath}.tmp`;
-  const handle = await open(tmpPath, "w");
+  // The temp name carries pid + threadId: the worker process, the serving
+  // process's cold-boot fallback, and the maps snapshot thread can all write
+  // this file, and two writers sharing one temp path would interleave into a
+  // corrupt rename. Concurrent renames are safe (last one wins atomically).
+  const tmpPath = `${filePath}.tmp-${process.pid}-${threadId}`;
   try {
-    for (const chunk of chunks) {
-      if (chunk.byteLength > 0) await handle.write(chunk);
+    const handle = await open(tmpPath, "w");
+    try {
+      for (const chunk of chunks) {
+        if (chunk.byteLength > 0) await handle.write(chunk);
+      }
+    } finally {
+      await handle.close();
     }
-  } finally {
-    await handle.close();
+    await rename(tmpPath, filePath);
+  } catch (error) {
+    // The per-pid temp name means nothing else will ever reclaim it; a failed
+    // write (disk full, I/O error) must not leak ~60MB per attempt.
+    await unlink(tmpPath).catch(() => undefined);
+    throw error;
   }
-  await rename(tmpPath, filePath);
 }
 
 /**
@@ -254,6 +266,45 @@ export async function loadGlobalFarmedBoardFromDisk(
     };
   } catch {
     return invalidate(filePath);
+  } finally {
+    await handle.close().catch(() => undefined);
+  }
+}
+
+export interface GlobalFarmedBoardDiskHeaderPeek {
+  generation: string;
+  projectionRevision: number;
+}
+
+/**
+ * Reads only the 12-byte prefix and header JSON — cheap enough to poll — so a
+ * process waiting on a worker-side repack can tell whether the snapshot on
+ * disk is newer than its resident board without paying the full ~60MB load.
+ * Returns null on any structural problem but never deletes the file: a peek
+ * racing an in-flight writer must not destroy the snapshot the full loader
+ * would happily read a moment later.
+ */
+export async function readGlobalFarmedBoardDiskHeader(filePath: string): Promise<GlobalFarmedBoardDiskHeaderPeek | null> {
+  let handle: FileHandle;
+  try {
+    handle = await open(filePath, "r");
+  } catch {
+    return null;
+  }
+  try {
+    const prefix = Buffer.alloc(PREFIX_BYTES);
+    await readExact(handle, prefix, 0);
+    if (!prefix.subarray(0, 4).equals(MAGIC)) return null;
+    if (prefix.readUInt32LE(4) !== GLOBAL_FARMED_BOARD_DISK_FORMAT_VERSION) return null;
+    const headerBytes = prefix.readUInt32LE(8);
+    if (headerBytes <= 0 || headerBytes > 64 * 1024 * 1024) return null;
+    const headerBuf = Buffer.alloc(headerBytes);
+    await readExact(handle, headerBuf, PREFIX_BYTES);
+    const header = JSON.parse(headerBuf.toString("utf8")) as Partial<DiskHeader>;
+    if (typeof header.generation !== "string" || !isCount(header.projectionRevision)) return null;
+    return { generation: header.generation, projectionRevision: header.projectionRevision };
+  } catch {
+    return null;
   } finally {
     await handle.close().catch(() => undefined);
   }

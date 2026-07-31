@@ -16,7 +16,7 @@ import { markUserMissing } from "../users.js";
 import { enqueueMissingChartAnalyses } from "./chart-analysis.js";
 import { refreshFarmHelperKeyStatsForUser } from "./farm-helper-key-stats.js";
 import { buildMapStatusPropagationStatement } from "./map-search.js";
-import { loadGlobalFarmedBoardFromDisk, saveGlobalFarmedBoardToDisk } from "./maps-farmed-board-disk.js";
+import { loadGlobalFarmedBoardFromDisk, readGlobalFarmedBoardDiskHeader, saveGlobalFarmedBoardToDisk } from "./maps-farmed-board-disk.js";
 
 const MAPS_REFRESH_PRIORITY = -100;
 const MAPS_FARMED_REFRESH_PRIORITY = -100;
@@ -2019,6 +2019,10 @@ interface GlobalFarmedBoardState {
   inflight: Promise<GlobalFarmedBoard> | null;
   inflightGeneration: string | null;
   deltaInflight: Promise<boolean> | null;
+  // Last time this process asked the worker for a full repack. The delegated
+  // build branch resolves in milliseconds, so state.inflight no longer
+  // throttles re-entry the way the ~25s inline pack did; this is the throttle.
+  lastRepackRequestAtMs: number;
 }
 
 // Per-Db so tests with separate databases never share a board; production has
@@ -2043,6 +2047,143 @@ export function registerGlobalFarmedBoardDiskCache(db: Db, databaseUrl: string):
   globalFarmedBoardDiskPaths.set(db, join(dirname(dbPath), "global-farmed-board-cache.bin"));
 }
 
+// Connections whose full repacks are delegated to the worker process instead
+// of running inline. The value enqueues the repack job; it must never write on
+// the page-serving connection (the serving process passes a closure over its
+// dedicated write queue, the snapshot thread one over its own connection).
+const globalFarmedBoardRepackDelegates = new WeakMap<Db, () => Promise<void>>();
+
+export const GLOBAL_FARMED_BOARD_REPACK_JOB = "repack_global_farmed_board";
+
+/**
+ * Opts a connection out of running full board repacks inline: whenever the
+ * catch-up machinery decides a repack is due, the connection instead (a) tries
+ * to adopt a fresher snapshot from disk, and failing that (b) calls
+ * requestRepack to enqueue the worker-side job and keeps serving the stale
+ * board. Full builds materialize every projection row as JS objects (~1.4GB
+ * transient on prod) and the freed pages never return to the OS, so the
+ * serving process must not run them; the worker's memory budget already
+ * covers transients this size. The cold-boot path (no board and no usable
+ * disk snapshot) still builds inline, because there is nothing to stale-serve.
+ */
+export function registerGlobalFarmedBoardRepackDelegation(db: Db, requestRepack: () => Promise<void>): void {
+  globalFarmedBoardRepackDelegates.set(db, requestRepack);
+}
+
+/** Enqueues the worker-side full repack; deduped, so callers can re-request freely. */
+export async function enqueueGlobalFarmedBoardRepack(queue: JobQueue): Promise<void> {
+  await queue.enqueue(
+    GLOBAL_FARMED_BOARD_REPACK_JOB,
+    "maps:global-farmed-board-repack",
+    {},
+    // Above the background refresh types in its lane: a stale GLOBAL board is
+    // user-visible. debounce (max-merge on run_after) is what preserves a
+    // failed run's retry backoff: the serving process re-requests on a
+    // cooldown, and the default min-merge would drag a backed-off failed
+    // row's run_after back to now — retrying a crashing ~1.4GB pack every
+    // cooldown instead of every backoff window.
+    { priority: 5, replaceDone: true, debounce: true },
+  );
+}
+
+/**
+ * Worker-side handler for GLOBAL_FARMED_BOARD_REPACK_JOB: full pack from the
+ * projection tables, persisted to the shared disk snapshot for the serving
+ * process to adopt. The built board is returned to the GC immediately — this
+ * process never serves from it.
+ */
+export async function runGlobalFarmedBoardRepackJob(db: Db): Promise<{ built: boolean; reason?: string; revision?: number; entries?: number; players?: number }> {
+  const projectionState = await readGlobalMapsFarmedProjectionState(db);
+  if (!projectionState?.initialized) return { built: false, reason: "projection_not_initialized" };
+  const filePath = globalFarmedBoardDiskPaths.get(db);
+  // Without a registered disk path the pack would be discarded unseen; the
+  // serving process would wait forever on a snapshot that never appears.
+  if (!filePath) return { built: false, reason: "disk_cache_unregistered" };
+  const generation = globalFarmedProjectionGeneration(projectionState.seedEpoch);
+  const header = await readGlobalFarmedBoardDiskHeader(filePath);
+  if (header && header.generation === generation && header.projectionRevision >= projectionState.revision) {
+    // A concurrent pack (another queued request, a cold-boot fallback build)
+    // already wrote a snapshot at least as new as the projection.
+    return { built: false, reason: "disk_snapshot_fresh", revision: header.projectionRevision };
+  }
+  const stamps = await readGlobalFarmedBoardStampsFromSnapshotRow(db, projectionState);
+  const board = await buildGlobalFarmedProjectionBoard(db, projectionState, stamps);
+  // The build's own persist is best-effort (the serving-process inline path
+  // treats the file as an optional cache), but for this job the file IS the
+  // deliverable: a silently failed write would leave the serving process
+  // re-requesting packs forever while this worker reports success. Write it
+  // again ourselves — post-trailing-deltas, so it is even fresher than the
+  // build's copy — and let a failure fail the job into its retry backoff.
+  await saveGlobalFarmedBoardToDisk(filePath, { ...board, projectionRevision: board.projectionRevision ?? 0 });
+  return {
+    built: true,
+    revision: board.projectionRevision ?? 0,
+    entries: board.entries.length,
+    players: board.userIds.length,
+  };
+}
+
+/**
+ * Adoption side of the delegated repack: if the disk snapshot is newer than
+ * the resident board (the worker finished a pack), load and adopt it. The
+ * header peek keeps the waiting poll cheap; the full load only happens when
+ * there is actually something newer to take.
+ */
+async function adoptRepackedGlobalFarmedBoardFromDisk(
+  db: Db,
+  current: GlobalFarmedBoard,
+  projectionState: GlobalMapsFarmedProjectionState,
+): Promise<GlobalFarmedBoard | null> {
+  const filePath = globalFarmedBoardDiskPaths.get(db);
+  if (!filePath) return null;
+  const header = await readGlobalFarmedBoardDiskHeader(filePath);
+  if (!header) return null;
+  const generation = globalFarmedProjectionGeneration(projectionState.seedEpoch);
+  if (header.generation !== generation) return null;
+  if (header.projectionRevision > projectionState.revision) return null;
+  // A reseed (current board on the old generation) adopts regardless of
+  // revision, since revisions across seed epochs are not comparable.
+  if (current.generation === generation && header.projectionRevision <= (current.projectionRevision ?? 0)) {
+    // The board is not behind the snapshot, so the only reason to adopt is
+    // shedding an oversized override map — and only when the snapshot is
+    // recent enough that the load-time delta patch reaches the projection
+    // head. Adopting an unpatchable snapshot would regress the served data
+    // to the snapshot's revision. The bound is strictly below the repack
+    // threshold, not the patch limit: the patched-forward maps become the
+    // adopted board's overrides, and change rows are keyed per map, so a
+    // backlog of exactly REPACK_OVERRIDES would produce a board that
+    // triggers the repack again immediately — re-adopting this same
+    // snapshot every tick and never asking the worker for a fresh pack.
+    if (current.overrides.size < GLOBAL_FARMED_PROJECTION_REPACK_OVERRIDES) return null;
+    const backlog = (await exec(
+      db,
+      "select count(*) as n from (select 1 from global_maps_farmed_changes where revision > ? limit ?)",
+      [header.projectionRevision, GLOBAL_FARMED_PROJECTION_REPACK_OVERRIDES],
+    )).rows[0];
+    if (Number(backlog?.n ?? Number.POSITIVE_INFINITY) >= GLOBAL_FARMED_PROJECTION_REPACK_OVERRIDES) return null;
+  }
+  const restored = await restoreGlobalFarmedProjectionBoardFromDisk(db, projectionState);
+  if (!restored) return null;
+  // The pre-checks above and the restore's own delta patch are separate reads
+  // with a multi-second disk load between them; if the backlog outgrew the
+  // patch limit in that window the restored board sits below what is being
+  // served. Never install a regression — drop it and let the next tick
+  // re-request a fresh pack.
+  if (restored.generation === current.generation && (restored.projectionRevision ?? 0) < (current.projectionRevision ?? 0)) {
+    logWarn("global_farmed_board_repack_adopt_regressed", {
+      restored_revision: restored.projectionRevision ?? 0,
+      board_revision: current.projectionRevision ?? 0,
+    });
+    return null;
+  }
+  logInfo("global_farmed_board_repack_adopted", {
+    revision: restored.projectionRevision,
+    entries: restored.entries.length,
+    players: restored.userIds.length,
+  });
+  return restored;
+}
+
 // How often the resident board checks the projection state for pending deltas.
 // Small enough that per-tick work stays a handful of maps under normal ingest;
 // the point is that no request ever pays for an idle-period backlog (B1).
@@ -2051,7 +2192,7 @@ const GLOBAL_FARMED_BOARD_CATCHUP_TICK_MS = 30_000;
 function ensureGlobalFarmedBoardState(db: Db): GlobalFarmedBoardState {
   let state = globalFarmedBoardStates.get(db);
   if (!state) {
-    state = { board: null, inflight: null, inflightGeneration: null, deltaInflight: null };
+    state = { board: null, inflight: null, inflightGeneration: null, deltaInflight: null, lastRepackRequestAtMs: 0 };
     globalFarmedBoardStates.set(db, state);
     startGlobalFarmedBoardCatchUpTicker(db);
   }
@@ -2166,6 +2307,9 @@ interface GlobalFarmedBoardStamps {
 const GLOBAL_FARMED_PROJECTION_GENERATION = "projection:v1";
 const GLOBAL_FARMED_PROJECTION_REPACK_OVERRIDES = 5_000;
 const GLOBAL_FARMED_PROJECTION_MAX_DELTA_MAPS = 5_000;
+// Matches the catch-up ticker cadence: one worker request per tick is the
+// most the delegated flow can make progress on anyway.
+const GLOBAL_FARMED_REPACK_REQUEST_COOLDOWN_MS = 30_000;
 
 function globalFarmedProjectionGeneration(seedEpoch: number): string {
   return `${GLOBAL_FARMED_PROJECTION_GENERATION}:seed:${seedEpoch}`;
@@ -2191,6 +2335,39 @@ function startGlobalFarmedProjectionBoardBuild(
       } catch (error) {
         logWarn("global_farmed_board_disk_restore_failed", errorContext(error));
       }
+    }
+    // Delegated repack: with a board to stale-serve, this process never runs
+    // the full build itself. Adopt the worker's snapshot if one has landed;
+    // otherwise (re-)request the job and keep serving what we have — the
+    // catch-up ticker retries this funnel until adoption succeeds. Cold
+    // processes (no board, and the disk restore above came up empty) still
+    // build inline: a stale answer beats a blocked one, but no answer at all
+    // does not.
+    const requestRepack = globalFarmedBoardRepackDelegates.get(db);
+    const current = state.board;
+    if (requestRepack && current) {
+      try {
+        const adopted = await adoptRepackedGlobalFarmedBoardFromDisk(db, current, projectionState);
+        if (adopted) return adopted;
+      } catch (error) {
+        logWarn("global_farmed_board_repack_adopt_failed", errorContext(error));
+      }
+      // Throttled: the inline pack this branch replaces held state.inflight
+      // for its whole ~25s run, which is what kept the request path from
+      // re-entering; this branch resolves in milliseconds, so without a
+      // cooldown every cache-miss during the staleness window would repeat
+      // the enqueue cycle. Requests dedupe onto one job row regardless — the
+      // cooldown just keeps the serving process from churning its own queue.
+      if (Date.now() - state.lastRepackRequestAtMs >= GLOBAL_FARMED_REPACK_REQUEST_COOLDOWN_MS) {
+        state.lastRepackRequestAtMs = Date.now();
+        try {
+          await requestRepack();
+          logInfo("global_farmed_board_repack_requested", { token, board_revision: current.projectionRevision ?? 0, projection_revision: projectionState.revision });
+        } catch (error) {
+          logWarn("global_farmed_board_repack_request_failed", errorContext(error));
+        }
+      }
+      return current;
     }
     return buildGlobalFarmedProjectionBoard(db, projectionState, stamps);
   })();

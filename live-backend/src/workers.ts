@@ -10,7 +10,7 @@ import { computeDanEstimateJob } from "./features/dan-estimates.js";
 import { reconcileStatGoalsForCountry } from "./features/goals.js";
 import { runMapSearchIndexBuildJob } from "./features/map-search.js";
 import { rebuildMapCollections } from "./features/map-collections.js";
-import { MapsEmptyResultError, MapsRosterNotReadyError, enqueueGlobalMapsRefresh, globalMapsRefreshRunAfter, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores } from "./features/maps.js";
+import { GLOBAL_FARMED_BOARD_REPACK_JOB, MapsEmptyResultError, MapsRosterNotReadyError, enqueueGlobalMapsRefresh, globalMapsRefreshRunAfter, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores, runGlobalFarmedBoardRepackJob } from "./features/maps.js";
 import { REFRESH_QUALIFIED_MAPS_JOB, runQualifiedMapsWatch } from "./features/qualified-maps-watch.js";
 import { RECONCILE_SETTLED_SETS_JOB, runSettledSetsReconcile } from "./features/settled-sets-reconcile.js";
 import { recordSnipeScoreHistory, updateSnipeProjection } from "./features/snipes.js";
@@ -103,7 +103,11 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
   },
   {
     name: "maps-refresh",
-    jobTypes: ["refresh_user_maps_farmed_scores", "refresh_country_maps", "refresh_global_maps", REFRESH_QUALIFIED_MAPS_JOB, RECONCILE_SETTLED_SETS_JOB],
+    // GLOBAL_FARMED_BOARD_REPACK_JOB runs here: it is the serving process's
+    // delegated full board pack (~1.4GB transient), the same scale of work as
+    // refresh_global_maps, and claimLimit 1 keeps the two from ballooning the
+    // worker concurrently.
+    jobTypes: ["refresh_user_maps_farmed_scores", "refresh_country_maps", "refresh_global_maps", GLOBAL_FARMED_BOARD_REPACK_JOB, REFRESH_QUALIFIED_MAPS_JOB, RECONCILE_SETTLED_SETS_JOB],
     claimLimit: 1,
     intervalMs: 1_000,
   },
@@ -456,6 +460,21 @@ export class WorkerRunner {
       // Per-user 404s are handled inside the chunk (markUserMissing + skip);
       // only transient API errors reach the job's fail/backoff path.
       await runTopScoresBackfillJob(this.db, this.queue, this.osu, job.payload as { cursor?: number }, signal);
+      return;
+    }
+    if (job.type === GLOBAL_FARMED_BOARD_REPACK_JOB) {
+      // The heaviest job this worker runs (~1.4GB transient, same scale as
+      // refresh_global_maps); keep the same peak-memory metric so the admin
+      // dashboard can see what a pack actually costs.
+      const sampler = startPeakMemorySampler();
+      try {
+        const repackResult = await runGlobalFarmedBoardRepackJob(this.db);
+        await writeJobMemoryMetric(this.db, job.type, sampler.stop(true), { concurrentJobs: this.countActiveJobs() });
+        logInfo("global_farmed_board_repack_job_done", { job_id: job.id, ...repackResult });
+      } catch (error) {
+        await writeJobMemoryMetric(this.db, job.type, sampler.stop(false, error), { concurrentJobs: this.countActiveJobs() });
+        throw error;
+      }
       return;
     }
     if (job.type === "refresh_user_maps_farmed_scores") {

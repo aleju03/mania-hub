@@ -33,6 +33,10 @@ interface MapsSnapshotThreadConfig {
   sqliteSynchronous?: string;
   sqliteCacheMb?: number;
   sqliteMmapMb?: number;
+  // Two-process split: the thread delegates full GLOBAL board repacks to the
+  // worker process instead of running the ~1.4GB pack inside the serving
+  // process (see registerGlobalFarmedBoardRepackDelegation).
+  delegateBoardRepacks?: boolean;
 }
 
 interface PendingBuild {
@@ -277,6 +281,7 @@ export function getMapsSnapshotThread(config: {
   databaseUrl?: string;
   sqliteBusyTimeoutMs?: number;
   sqliteSynchronous?: string;
+  role?: string;
 }): MapsSnapshotThread | null {
   const databaseUrl = config.databaseUrl;
   if (!databaseUrl || mapsSnapshotThreadDisabledReason(databaseUrl)) return null;
@@ -288,6 +293,7 @@ export function getMapsSnapshotThread(config: {
       sqliteSynchronous: config.sqliteSynchronous,
       sqliteCacheMb: THREAD_SQLITE_CACHE_MB,
       sqliteMmapMb: THREAD_SQLITE_MMAP_MB,
+      delegateBoardRepacks: config.role === "server",
     });
     threadsByDatabaseUrl.set(databaseUrl, thread);
   }

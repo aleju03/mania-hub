@@ -9,7 +9,7 @@ import { ScoreIngestor } from "./ingest/score-ingestor.js";
 import { JobQueue } from "./jobs/queue.js";
 import { LiveEventLog } from "./live/event-log.js";
 import { startRuntimeStatusMirror } from "./live/runtime-status.js";
-import { enqueueGlobalMapsRefreshIfDue, enqueueMapsRefreshIfDue, registerGlobalFarmedBoardDiskCache } from "./features/maps.js";
+import { enqueueGlobalFarmedBoardRepack, enqueueGlobalMapsRefreshIfDue, enqueueMapsRefreshIfDue, registerGlobalFarmedBoardDiskCache, registerGlobalFarmedBoardRepackDelegation } from "./features/maps.js";
 import { cleanupBogusLnPatternTags, ensureMapSearchIndexSeeded, pruneMapSearchPlaceholderRows, reconcileMapSearchIndexPlayCounts, reconcileMapSearchIndexStatuses } from "./features/map-search.js";
 import { enqueueQualifiedMapsWatchIfDue } from "./features/qualified-maps-watch.js";
 import { enqueueSettledSetsReconcileIfDue } from "./features/settled-sets-reconcile.js";
@@ -161,6 +161,14 @@ export async function createApp() {
   // HTTP, so it does not need one.
   const serveWriteDb = config.role === "worker" ? null : await createDb({ ...config, sqliteCacheMb: 2, sqliteMmapMb: 0 });
   const serveWriteQueue = serveWriteDb ? new JobQueue(serveWriteDb) : null;
+  // Two-process split only: the serving process never runs the ~1.4GB full
+  // GLOBAL board pack itself — it asks the worker process (via the dedicated
+  // write connection, never the serving one) and adopts the resulting disk
+  // snapshot. Covers the main-isolate fallback board; the maps snapshot
+  // thread registers its own delegation (maps-snapshot-thread-worker.ts).
+  if (isServerRole && serveWriteQueue) {
+    registerGlobalFarmedBoardRepackDelegation(db, () => enqueueGlobalFarmedBoardRepack(serveWriteQueue));
+  }
   // In-house analytics lives in its own SQLite file on its own connection,
   // owned by the HTTP-serving process (capture posts, admin queries, live
   // SSE); a pure worker process never opens it.
