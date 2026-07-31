@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { Coffee, X } from "lucide-react";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest, setCookie } from "@tanstack/react-start/server";
+import { ChangelogModal } from "../components/layout/ChangelogModal";
 import { CustomCursor } from "../components/layout/CustomCursor";
 import { Nav } from "../components/layout/Nav";
 import { RouteLoadingBar } from "../components/layout/RouteLoadingBar";
@@ -11,6 +12,7 @@ import { GoalToasts } from "../components/me/GoalToasts";
 import { TrackingToasts } from "../components/me/TrackingToasts";
 import { AuthContext } from "../lib/auth-context";
 import { getCurrentAuth } from "../lib/auth";
+import { useHasUnseenChangelog } from "../lib/changelog";
 import { InitialCountryContext } from "../lib/country-context";
 import type { AuthState } from "../lib/auth-shared";
 import {
@@ -546,6 +548,32 @@ function KofiSupportButton() {
   );
 }
 
+// A dot marks releases the reader hasn't opened yet. It only ever appears after
+// the changelog has been opened once, so it reads as "something new since you
+// last looked" rather than as a permanent decoration.
+function ChangelogFooterLink() {
+  const [open, setOpen] = useState(false);
+  const unseen = useHasUnseenChangelog();
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={`inline-flex cursor-pointer items-center gap-1 transition-colors hover:text-osu-pink-light/60${unseen ? " text-osu-pink-light/55" : ""}`}
+      >
+        changelog
+        {unseen ? (
+          <>
+            <span aria-hidden className="h-1 w-1 rounded-full bg-osu-pink shadow-[0_0_6px_var(--color-osu-pink)]" />
+            <span className="sr-only">(new updates)</span>
+          </>
+        ) : null}
+      </button>
+      <ChangelogModal open={open} onClose={() => setOpen(false)} />
+    </>
+  );
+}
+
 function RootLayout() {
   const { auth, initialCountry, backendStatus, countryFeatures } = Route.useRouteContext();
   seedClientRootSlowContext({ auth, backendStatus, countryFeatures });
@@ -582,6 +610,8 @@ function RootLayout() {
             <Link to="/terms" className="hover:text-osu-pink-light/60 transition-colors">
               terms
             </Link>
+            <span>·</span>
+            <ChangelogFooterLink />
             <span>·</span>
             <span>
               made by{" "}
