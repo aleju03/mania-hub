@@ -850,6 +850,58 @@ describe("map search primary derivation", () => {
     expect(lnOnly.items.map((item) => item.beatmapId).sort()).toEqual([2, 3]);
   });
 
+  it("demotes non-4K chordjack primaries the chart analyzer does not corroborate", async () => {
+    const db = await makeDb();
+    // ALL*NIGHTER shape (5603945): holds-heavy 7K chart whose activity primary
+    // was lnGeneral; the lnRatio-0.46 de-route used to land on the force-capped
+    // phantom chordjack=1.0 even though the analyzer never detected chordjack.
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, cs: 7, primary: "lnGeneral", patterns: { chordjack: 1, tech: 0.98, stream: 0.96, ln: 0.99 } });
+    await seedAnalysis(db, 1, {
+      lnRatio: 0.46,
+      patterns: [{ id: "ln", score: 0.62 }, { id: "lngeneral", score: 0.28 }, { id: "chordstream", score: 0.23 }],
+    });
+    // Bracket/jumpstream 7K file (5700185 shape) the in-house chooser called
+    // chordjack outright: falls to its strongest remaining family instead.
+    await seedMap(db, { beatmapId: 2, beatmapsetId: 20, cs: 7, primary: "chordjack", patterns: { chordjack: 1, tech: 0.91, stream: 0.46 } });
+    await seedAnalysis(db, 2, {
+      lnRatio: 0.005,
+      patterns: [{ id: "tech", score: 0.76 }, { id: "chordstream", score: 0.54 }, { id: "chordjack", score: 0.48 }],
+    });
+    await buildAll(db);
+
+    const all = await getMapSearchPage(db, { ...baseQuery(), keys: ["7k"] });
+    const byId = new Map(all.items.flatMap((item) => item.diffs.length ? item.diffs.map((d) => [d.beatmapId, d] as const) : [[item.beatmapId, item] as const]));
+    expect(byId.get(1)?.primaryPattern).toBe("ln");
+    expect(byId.get(2)?.primaryPattern).toBe("tech");
+    // The phantom 1.0 chip clamps to the analyzer's measured score: gone when
+    // chordjack was never detected, sub-facet-bar when it was marginal.
+    expect(byId.get(1)?.patterns.chordjack).toBeUndefined();
+    expect(byId.get(2)?.patterns.chordjack).toBeCloseTo(0.48, 3);
+
+    const cjScoped = await getMapSearchPage(db, { ...baseQuery(), keys: ["7k"], patterns: ["chordjack"] });
+    expect(cjScoped.total).toBe(0);
+  });
+
+  it("keeps analyzer-corroborated chordjack primaries, including LN de-routes", async () => {
+    const db = await makeDb();
+    // Genuinely chordjack 32%-holds 7K chart (4893442 shape): the LN de-route
+    // lands on chordjack and the analyzer agrees, so the primary stands.
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, cs: 7, primary: "lnTech", patterns: { chordjack: 1, ln: 0.93, stream: 0.76 } });
+    await seedAnalysis(db, 1, {
+      lnRatio: 0.32,
+      patterns: [{ id: "lntech", score: 0.91 }, { id: "ln", score: 0.62 }, { id: "chordjack", score: 0.55 }],
+    });
+    // No chart analysis yet: nothing to corroborate against, the primary stands
+    // until the analysis lands and the row re-upserts.
+    await seedMap(db, { beatmapId: 2, beatmapsetId: 20, cs: 7, primary: "chordjack", patterns: { chordjack: 1, stamina: 0.92 } });
+    await buildAll(db);
+
+    const cjScoped = await getMapSearchPage(db, { ...baseQuery(), keys: ["7k"], patterns: ["chordjack"] });
+    expect(cjScoped.items.map((item) => item.beatmapId).sort()).toEqual([1, 2]);
+    const byId = new Map(cjScoped.items.map((item) => [item.beatmapId, item] as const));
+    expect(byId.get(1)?.patterns.chordjack).toBe(1);
+  });
+
   it("excludes vibro charts from dan-filtered searches only", async () => {
     const db = await makeDb();
     await seedMap(db, { beatmapId: 1, beatmapsetId: 10, primary: "ln", patterns: { ln: 1 } });

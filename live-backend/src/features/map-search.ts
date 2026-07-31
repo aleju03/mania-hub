@@ -19,9 +19,12 @@ export const MAP_SEARCH_BUILD_JOB = "build_map_search_index";
 // r5: msd_overall column for MSD-bucketed collections; r6: split-trill charts
 // no longer take MinaCalc's artifact jack-family primaries; r7: msd_ln_json so
 // bulk rows carry the LN-adjusted MSD - the detail modal showed the base value
-// first and visibly corrected upward once the analysis fetch landed).
+// first and visibly corrected upward once the analysis fetch landed; r8:
+// non-4K chordjack primaries require the chart analyzer's corroboration - the
+// activity scorer's force-cap was minting phantom chordjack rows, 819 of 2204
+// 7K chordjack primaries were really LN or bracket/jumpstream files).
 // The rebuild is pure DB work, no osu! API.
-const BUILD_REVISION = 7;
+const BUILD_REVISION = 8;
 const BUILD_META_KEY = `map_search_index_built:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
 const BUILD_CURSOR_KEY = `map_search_index_build_cursor:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
 const BUILD_BATCH_SIZE = 400;
@@ -203,6 +206,18 @@ function readMsdValues(msdJson: unknown): Record<string, number> | null {
   return parsed.values as Record<string, number>;
 }
 
+// The chart analyzer's detection score for one pattern id; 0 when absent.
+function analyzerPatternScore(classification: { patterns?: unknown } | null, id: string): number {
+  if (!classification || !Array.isArray(classification.patterns)) return 0;
+  for (const hit of classification.patterns as Array<{ id?: unknown; score?: unknown }>) {
+    if (String(hit?.id ?? "") === id) return clamp01(Number(hit?.score ?? 0));
+  }
+  return 0;
+}
+
+// Same "has this pattern" bar the exclude filters apply to pat_* scores.
+const CHORDJACK_CORROBORATION_MIN = 0.5;
+
 // The chart's family identity, from the strongest available signal per row.
 //
 // The in-house activity scorer force-caps its chosen family to 1.0 and reads
@@ -219,7 +234,7 @@ function derivePatternProfile(row: Record<string, unknown>): { primary: string; 
   const { primary, scores } = readPatternProfile(row.skills_json);
   let result = primary;
 
-  const classification = parseJson<{ lnRatio?: unknown; clusterCategory?: unknown } | null>(row.ca_classification_json, null);
+  const classification = parseJson<{ lnRatio?: unknown; clusterCategory?: unknown; patterns?: unknown } | null>(row.ca_classification_json, null);
   // MinaCalc reads split trills as jacks: each column repeats every second row,
   // which JackSpeed/Chordjack score as same-column speed even though the chart
   // never hits a column twice in a row (gdmem 3814262: 0.2% of row pairs share
@@ -264,6 +279,7 @@ function derivePatternProfile(row: Record<string, unknown>): { primary: string; 
   }
 
   const lnRatio = classification != null && Number.isFinite(Number(classification.lnRatio)) ? Number(classification.lnRatio) : null;
+  let lnDerouted = false;
   if (lnRatio != null && lnRatio >= 0.5) {
     result = "ln";
     scores.ln = 1;
@@ -277,7 +293,42 @@ function derivePatternProfile(row: Record<string, unknown>): { primary: string; 
         bestValue = scores[family];
       }
     }
-    result = bestValue > 0 ? best : result;
+    if (bestValue > 0) {
+      result = best;
+      lnDerouted = true;
+    }
+  }
+
+  // The activity scorer force-caps its chosen family to 1.0 before its own LN
+  // override runs, so every holds-heavy chord chart carries a phantom
+  // chordjack=1.0 that the LN de-route above lands on -- and the in-house
+  // chooser over-calls chordjack outright on dense 7K bracket/jumpstream
+  // files. 4K primaries are re-derived from MinaCalc above; for the other
+  // keymodes, keep a chordjack primary only when the chart analyzer also
+  // detected chordjack. An uncorroborated LN de-route goes back to ln (both
+  // engines read those charts as LN-first, they only miss the 0.5 lnRatio
+  // dan-routing bar); anything else falls to its strongest remaining family.
+  // Either way the phantom chip clamps to the analyzer's measured score, so
+  // chordjack chips and excludes track the corroborated amount.
+  if (result === "chordjack" && intOr(row.cs) !== 4 && classification != null) {
+    const corroboration = analyzerPatternScore(classification, "chordjack");
+    if (corroboration < CHORDJACK_CORROBORATION_MIN) {
+      scores.chordjack = Math.min(scores.chordjack, corroboration);
+      if (lnDerouted) {
+        result = "ln";
+      } else {
+        let best = "unknown";
+        let bestValue = 0;
+        for (const family of MAP_SEARCH_PATTERNS) {
+          if (family === "chordjack" || family === "ln") continue;
+          if (scores[family] > bestValue) {
+            best = family;
+            bestValue = scores[family];
+          }
+        }
+        if (bestValue > 0) result = best;
+      }
+    }
   }
 
   return { primary: result, scores };
