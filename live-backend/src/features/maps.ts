@@ -2555,21 +2555,18 @@ async function buildGlobalFarmedProjectionBoard(
 ): Promise<GlobalFarmedBoard> {
   const startedAt = Date.now();
   const baseRevision = await readGlobalFarmedChangeRevision(db);
-  const source = await readGlobalFarmedProjectionEntries(db);
-  const metadata = await readMapsFarmedPageMetadataByIds(db, source.map((entry) => entry.beatmapId));
-  const parsed: StoredCountryMapsData = {
-    schemaVersion: 2,
-    farmed: [],
-    mostPlayed: [],
-    favourites: [],
-    favouritesByPlayer: [],
-    beatmapsetsPool: [],
+  const columns = await readGlobalFarmedProjectionBoardColumns(db);
+  const metadata = await readMapsFarmedPageMetadataByIds(db, columns.entries.map((entry) => entry.beatmapId));
+  const board: GlobalFarmedBoard = {
+    generation: globalFarmedProjectionGeneration(projectionState.seedEpoch),
     generatedAt: stamps.generatedAt,
     farmedGeneratedAt: projectionState.updatedAt,
     favouritesGeneratedAt: stamps.favouritesGeneratedAt,
+    ...columns,
+    metadata,
+    projectionRevision: baseRevision,
+    overrides: new Map(),
   };
-  const board = encodeGlobalFarmedBoard(globalFarmedProjectionGeneration(projectionState.seedEpoch), parsed, source, metadata);
-  board.projectionRevision = baseRevision;
   // Persist before the trailing delta apply: the typed columns never change
   // after encode but the metadata/override maps do, and a clean board plus the
   // load-time delta patch is strictly simpler than serializing overrides. The
@@ -2641,29 +2638,20 @@ async function restoreGlobalFarmedProjectionBoardFromDisk(
 
 async function readGlobalFarmedProjectionEntries(
   db: Db,
-  beatmapIds?: number[],
+  beatmapIds: number[],
 ): Promise<StoredMapsFarmedEntry[]> {
-  const ids = beatmapIds
-    ? [...new Set(beatmapIds)].filter((id) => Number.isSafeInteger(id) && id > 0)
-    : null;
-  if (ids && ids.length === 0) return [];
+  const ids = [...new Set(beatmapIds)].filter((id) => Number.isSafeInteger(id) && id > 0);
+  if (ids.length === 0) return [];
 
   const aggregateRows: Record<string, unknown>[] = [];
-  if (ids) {
-    for (let index = 0; index < ids.length; index += 900) {
-      const chunk = ids.slice(index, index + 900);
-      aggregateRows.push(...(await exec(
-        db,
-        `select beatmap_id, player_count, avg_pp, max_pp, dominant_mod
-         from global_maps_farmed_aggregates
-         where beatmap_id in (${sqlPlaceholders(chunk)})`,
-        chunk,
-      )).rows);
-    }
-  } else {
+  for (let index = 0; index < ids.length; index += 900) {
+    const chunk = ids.slice(index, index + 900);
     aggregateRows.push(...(await exec(
       db,
-      "select beatmap_id, player_count, avg_pp, max_pp, dominant_mod from global_maps_farmed_aggregates",
+      `select beatmap_id, player_count, avg_pp, max_pp, dominant_mod
+       from global_maps_farmed_aggregates
+       where beatmap_id in (${sqlPlaceholders(chunk)})`,
+      chunk,
     )).rows);
   }
 
@@ -2682,42 +2670,210 @@ async function readGlobalFarmedProjectionEntries(
   }
   if (byBeatmap.size === 0) return [];
 
-  if (ids) {
-    for (let index = 0; index < ids.length; index += 900) {
-      const chunk = ids.slice(index, index + 900);
-      const rows = (await exec(
-        db,
-        `select beatmap_id, user_id, pp, mods_json, score_url, played_at
-         from global_maps_farmed_scores
-         where beatmap_id in (${sqlPlaceholders(chunk)})
-         order by beatmap_id asc, pp desc, user_id asc`,
-        chunk,
-      )).rows;
-      appendGlobalMapsFarmedProjectionPlayers(byBeatmap, rows);
-    }
-  } else {
-    let cursor = 0;
-    for (;;) {
-      const rows = (await exec(
-        db,
-        `select s.rowid as rid, s.beatmap_id, s.user_id, s.pp, s.mods_json, s.score_url, s.played_at
-         from global_maps_farmed_scores s
-         join global_maps_farmed_aggregates a on a.beatmap_id = s.beatmap_id
-         where s.rowid > ?
-         order by s.rowid
-         limit ?`,
-        [cursor, GLOBAL_MAPS_FARMED_ROWS_PAGE],
-      )).rows;
-      if (rows.length === 0) break;
-      cursor = Number(rows[rows.length - 1].rid);
-      appendGlobalMapsFarmedProjectionPlayers(byBeatmap, rows);
-      await yieldToEventLoop();
-      if (rows.length < GLOBAL_MAPS_FARMED_ROWS_PAGE) break;
-    }
+  for (let index = 0; index < ids.length; index += 900) {
+    const chunk = ids.slice(index, index + 900);
+    const rows = (await exec(
+      db,
+      `select beatmap_id, user_id, pp, mods_json, score_url, played_at
+       from global_maps_farmed_scores
+       where beatmap_id in (${sqlPlaceholders(chunk)})
+       order by beatmap_id asc, pp desc, user_id asc`,
+      chunk,
+    )).rows;
+    appendGlobalMapsFarmedProjectionPlayers(byBeatmap, rows);
   }
 
   for (const entry of byBeatmap.values()) entry.players.sort((a, b) => b.pp - a.pp || a.id - b.id);
   return [...byBeatmap.values()].sort((a, b) => a.beatmapId - b.beatmapId);
+}
+
+/** The packed columns of a GlobalFarmedBoard, minus stamps/metadata/overrides. */
+interface GlobalFarmedBoardColumns {
+  entries: GlobalFarmedBoardEntry[];
+  userIds: Float64Array;
+  pps: Float64Array;
+  modsIdx: Uint32Array;
+  playedAtMs: Float64Array;
+  scoreIds: Float64Array;
+  scoreUrlOverrides: Map<number, string>;
+  modsDict: string[][];
+  modsFlags: Uint8Array;
+}
+
+/**
+ * Builds the packed board columns by streaming score rows straight into typed
+ * arrays. The object path this replaced (accumulate every row as a
+ * StoredMapsFarmedPlayer, then encode) kept all ~1.6M rows alive as JS objects
+ * until the encode finished — ~650MB peak heap / +720MB RSS measured on prod —
+ * whereas here at most one 25k-row page of row objects is ever live: rows land
+ * in unsorted scan columns, a sorted index permutation reproduces the board
+ * order (beatmapId asc, pp desc, userId asc — exactly what the object path's
+ * sorts produced), and a final gather writes the ordered columns. Exported
+ * only so tests can assert the columns elementwise.
+ */
+export async function readGlobalFarmedProjectionBoardColumns(db: Db): Promise<GlobalFarmedBoardColumns> {
+  // Aggregates decide which beatmaps exist on the board (zero-score maps
+  // included, matching the object path) and give an exact-in-practice
+  // capacity for the scan columns.
+  const aggregateRows = (await exec(
+    db,
+    "select beatmap_id, player_count from global_maps_farmed_aggregates",
+  )).rows;
+  const boardBeatmapIds = new Set<number>();
+  let expectedRows = 0;
+  for (const row of aggregateRows) {
+    const beatmapId = Number(row.beatmap_id);
+    if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0) continue;
+    boardBeatmapIds.add(beatmapId);
+    const count = Number(row.player_count ?? 0);
+    if (Number.isFinite(count) && count > 0) expectedRows += Math.floor(count);
+  }
+
+  let capacity = Math.max(1024, expectedRows);
+  let scanBeatmapIds = new Float64Array(capacity);
+  let scanUserIds = new Float64Array(capacity);
+  let scanPps = new Float64Array(capacity);
+  let scanModsIdx = new Uint32Array(capacity);
+  let scanPlayedAtMs = new Float64Array(capacity);
+  let scanScoreIds = new Float64Array(capacity);
+  const scanUrlOverrides = new Map<number, string>();
+  const modsDict: string[][] = [];
+  const modsFlags: number[] = [];
+  const dictIndexByKey = new Map<string, number>();
+  // mods_json repeats a handful of raw strings across millions of rows;
+  // memoizing raw string -> dict index skips the parse + canonical-key
+  // stringify for all but the first sighting. Keyed separately from the
+  // canonical key so two raw spellings of one combo still share a dict entry.
+  const dictIndexByRawMods = new Map<string, number>();
+  let total = 0;
+
+  const grow = (needed: number) => {
+    capacity = Math.max(needed, Math.ceil(capacity * 1.5));
+    const growF64 = (source: Float64Array) => {
+      const next = new Float64Array(capacity);
+      next.set(source);
+      return next;
+    };
+    scanBeatmapIds = growF64(scanBeatmapIds);
+    scanUserIds = growF64(scanUserIds);
+    scanPps = growF64(scanPps);
+    scanPlayedAtMs = growF64(scanPlayedAtMs);
+    scanScoreIds = growF64(scanScoreIds);
+    const nextModsIdx = new Uint32Array(capacity);
+    nextModsIdx.set(scanModsIdx);
+    scanModsIdx = nextModsIdx;
+  };
+
+  let rowidCursor = 0;
+  for (;;) {
+    const rows = (await exec(
+      db,
+      `select s.rowid as rid, s.beatmap_id, s.user_id, s.pp, s.mods_json, s.score_url, s.played_at
+       from global_maps_farmed_scores s
+       join global_maps_farmed_aggregates a on a.beatmap_id = s.beatmap_id
+       where s.rowid > ?
+       order by s.rowid
+       limit ?`,
+      [rowidCursor, GLOBAL_MAPS_FARMED_ROWS_PAGE],
+    )).rows;
+    if (rows.length === 0) break;
+    rowidCursor = Number(rows[rows.length - 1].rid);
+    for (const row of rows) {
+      const beatmapId = Number(row.beatmap_id);
+      const userId = Number(row.user_id);
+      const pp = Number(row.pp ?? 0);
+      if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0) continue;
+      if (!Number.isSafeInteger(userId) || userId <= 0 || !Number.isFinite(pp) || pp <= 0) continue;
+      if (total >= capacity) grow(total + 1);
+      // The join can admit a beatmap whose aggregate row appeared after the
+      // read above; track it so the entry walk below covers every scanned row.
+      boardBeatmapIds.add(beatmapId);
+
+      const rawMods = String(row.mods_json);
+      let dictIndex = dictIndexByRawMods.get(rawMods);
+      if (dictIndex === undefined) {
+        const parsedMods = parseJson<string[]>(row.mods_json, []);
+        const mods = Array.isArray(parsedMods) ? parsedMods : [];
+        const modsKey = JSON.stringify(mods);
+        dictIndex = dictIndexByKey.get(modsKey);
+        if (dictIndex === undefined) {
+          dictIndex = modsDict.length;
+          dictIndexByKey.set(modsKey, dictIndex);
+          modsDict.push([...mods]);
+          modsFlags.push(
+            (mods.includes("DT") || mods.includes("NC") ? GLOBAL_FARMED_MOD_FLAG_DT : 0)
+            | (mods.includes("HT") ? GLOBAL_FARMED_MOD_FLAG_HT : 0),
+          );
+        }
+        dictIndexByRawMods.set(rawMods, dictIndex);
+      }
+
+      scanBeatmapIds[total] = beatmapId;
+      scanUserIds[total] = userId;
+      scanPps[total] = pp;
+      scanModsIdx[total] = dictIndex;
+      const playedMs = row.played_at == null ? Number.NaN : Date.parse(String(row.played_at));
+      scanPlayedAtMs[total] = Number.isFinite(playedMs) ? playedMs : Number.NaN;
+      const scoreUrl = row.score_url == null ? null : String(row.score_url);
+      if (scoreUrl != null && scoreUrl !== "") {
+        const match = GLOBAL_FARMED_SCORE_URL_PATTERN.exec(scoreUrl);
+        const scoreId = match ? Number(match[1]) : Number.NaN;
+        if (Number.isSafeInteger(scoreId) && scoreId > 0) scanScoreIds[total] = scoreId;
+        else scanUrlOverrides.set(total, scoreUrl);
+      }
+      total++;
+    }
+    await yieldToEventLoop();
+    if (rows.length < GLOBAL_MAPS_FARMED_ROWS_PAGE) break;
+  }
+
+  const order = new Uint32Array(total);
+  for (let index = 0; index < total; index++) order[index] = index;
+  order.sort((a, b) =>
+    scanBeatmapIds[a] - scanBeatmapIds[b]
+    || scanPps[b] - scanPps[a]
+    || scanUserIds[a] - scanUserIds[b]);
+
+  const userIds = new Float64Array(total);
+  const pps = new Float64Array(total);
+  const modsIdx = new Uint32Array(total);
+  const playedAtMs = new Float64Array(total);
+  const scoreIds = new Float64Array(total);
+  const scoreUrlOverrides = new Map<number, string>();
+  for (let index = 0; index < total; index++) {
+    const src = order[index];
+    userIds[index] = scanUserIds[src];
+    pps[index] = scanPps[src];
+    modsIdx[index] = scanModsIdx[src];
+    playedAtMs[index] = scanPlayedAtMs[src];
+    scoreIds[index] = scanScoreIds[src];
+    if (scanUrlOverrides.size !== 0) {
+      const url = scanUrlOverrides.get(src);
+      if (url !== undefined) scoreUrlOverrides.set(index, url);
+    }
+  }
+
+  // Every kept row's beatmapId is in boardBeatmapIds, so this walk consumes
+  // the whole ordered range and count-0 entries appear for scoreless maps.
+  const entries: GlobalFarmedBoardEntry[] = [];
+  let cursor = 0;
+  for (const beatmapId of [...boardBeatmapIds].sort((a, b) => a - b)) {
+    const start = cursor;
+    while (cursor < total && scanBeatmapIds[order[cursor]] === beatmapId) cursor++;
+    entries.push({ beatmapId, start, count: cursor - start });
+  }
+
+  return {
+    entries,
+    userIds,
+    pps,
+    modsIdx,
+    playedAtMs,
+    scoreIds,
+    scoreUrlOverrides,
+    modsDict,
+    modsFlags: Uint8Array.from(modsFlags),
+  };
 }
 
 function appendGlobalMapsFarmedProjectionPlayers(

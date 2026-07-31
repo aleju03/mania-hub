@@ -8,6 +8,7 @@ import {
   catchUpGlobalFarmedBoard,
   getGlobalFarmedBoardCacheStatsForTests,
   getMapsPageSnapshot,
+  readGlobalFarmedProjectionBoardColumns,
   refreshGlobalMaps,
   registerGlobalFarmedBoardDiskCache,
   registerGlobalFarmedBoardRepackDelegation,
@@ -494,5 +495,100 @@ describe("delegated global farmed board repack", () => {
     const workerDb = await createDb({ databaseUrl });
     const result = await runGlobalFarmedBoardRepackJob(workerDb);
     expect(result).toMatchObject({ built: false, reason: "disk_cache_unregistered" });
+  });
+});
+
+async function seedProjectionScore(
+  db: Awaited<ReturnType<typeof createDb>>,
+  row: { beatmapId: number; userId: number; pp: number; modsJson?: string; scoreUrl?: string | null; playedAt?: string | null },
+): Promise<void> {
+  await exec(
+    db,
+    `insert into global_maps_farmed_scores
+       (beatmap_id, user_id, pp, mods_json, speed_mod, score_url, played_at, detected_at, source_country, source_updated_at)
+     values (?, ?, ?, ?, null, ?, ?, ?, 'CR', ?)`,
+    [row.beatmapId, row.userId, row.pp, row.modsJson ?? "[]", row.scoreUrl ?? null, row.playedAt ?? null, NOW, NOW],
+  );
+}
+
+async function seedProjectionAggregate(
+  db: Awaited<ReturnType<typeof createDb>>,
+  beatmapId: number,
+  playerCount: number,
+): Promise<void> {
+  await exec(
+    db,
+    `insert into global_maps_farmed_aggregates (beatmap_id, player_count, pp_sum, avg_pp, max_pp, dominant_mod, revision, updated_at)
+     values (?, ?, 0, 0, 0, null, 1, ?)`,
+    [beatmapId, playerCount, NOW],
+  );
+}
+
+describe("streaming board column builder", () => {
+  it("produces the exact board order, dictionary, and edge-case columns", async () => {
+    const { db } = await setupDb();
+    await seedProjectionAggregate(db, 100, 3);
+    await seedProjectionAggregate(db, 200, 0); // scoreless map: count-0 entry
+    await seedProjectionAggregate(db, 300, 1);
+    // Map 100: a pp tie (users 5 and 7) breaks by userId asc; user 9 leads on
+    // pp. Mods cover dict reuse across maps, a raw-spelling variant of ["DT"],
+    // a canonical score URL, a non-canonical one, and null/garbage played_at.
+    await seedProjectionScore(db, { beatmapId: 100, userId: 7, pp: 500, modsJson: "[\"DT\"]", scoreUrl: "https://example.com/foo", playedAt: null });
+    await seedProjectionScore(db, { beatmapId: 100, userId: 9, pp: 600, modsJson: "[ \"DT\" ]", scoreUrl: "https://osu.ppy.sh/scores/12345", playedAt: NOW });
+    await seedProjectionScore(db, { beatmapId: 100, userId: 5, pp: 500, modsJson: "[]", scoreUrl: null, playedAt: "not-a-date" });
+    await seedProjectionScore(db, { beatmapId: 300, userId: 3, pp: 700, modsJson: "[\"NC\"]", scoreUrl: null, playedAt: null });
+    // Filtered out: non-positive pp, and a beatmap with no aggregate row.
+    await seedProjectionScore(db, { beatmapId: 300, userId: 4, pp: 0 });
+    await seedProjectionScore(db, { beatmapId: 999, userId: 8, pp: 800 });
+
+    const columns = await readGlobalFarmedProjectionBoardColumns(db);
+    expect(columns.entries).toEqual([
+      { beatmapId: 100, start: 0, count: 3 },
+      { beatmapId: 200, start: 3, count: 0 },
+      { beatmapId: 300, start: 3, count: 1 },
+    ]);
+    expect([...columns.userIds]).toEqual([9, 5, 7, 3]);
+    expect([...columns.pps]).toEqual([600, 500, 500, 700]);
+    const modsPerRow = [...columns.modsIdx].map((idx) => columns.modsDict[idx]);
+    expect(modsPerRow).toEqual([["DT"], [], ["DT"], ["NC"]]);
+    // "[\"DT\"]" and "[ \"DT\" ]" collapse to one dictionary combo.
+    expect(columns.modsIdx[0]).toBe(columns.modsIdx[2]);
+    const flagsPerRow = [...columns.modsIdx].map((idx) => columns.modsFlags[idx]);
+    expect(flagsPerRow).toEqual([1, 0, 1, 1]); // DT flag for DT and NC rows
+    expect([...columns.scoreIds]).toEqual([12345, 0, 0, 0]);
+    expect(columns.scoreUrlOverrides).toEqual(new Map([[2, "https://example.com/foo"]]));
+    expect(columns.playedAtMs[0]).toBe(Date.parse(NOW));
+    expect(Number.isNaN(columns.playedAtMs[1])).toBe(true);
+    expect(Number.isNaN(columns.playedAtMs[2])).toBe(true);
+  });
+
+  it("grows past an undercounted aggregate capacity without dropping rows", async () => {
+    const { db } = await setupDb();
+    // player_count 1 makes the initial capacity the 1024 floor; 1030 real rows
+    // force the growth path. A missed grow would silently drop rows, because
+    // typed-array writes past the end are no-ops.
+    await seedProjectionAggregate(db, 100, 1);
+    const rows: string[] = [];
+    const params: number[] = [];
+    for (let userId = 1; userId <= 1030; userId++) {
+      rows.push(`(100, ?, ?, '[]', null, null, null, '${NOW}', 'CR', '${NOW}')`);
+      params.push(userId, userId); // pp = userId: distinct, positive
+      if (rows.length === 200 || userId === 1030) {
+        await exec(
+          db,
+          `insert into global_maps_farmed_scores
+             (beatmap_id, user_id, pp, mods_json, speed_mod, score_url, played_at, detected_at, source_country, source_updated_at)
+           values ${rows.join(", ")}`,
+          params.splice(0),
+        );
+        rows.length = 0;
+      }
+    }
+
+    const columns = await readGlobalFarmedProjectionBoardColumns(db);
+    expect(columns.entries).toEqual([{ beatmapId: 100, start: 0, count: 1030 }]);
+    expect(columns.userIds).toHaveLength(1030);
+    expect(columns.userIds[0]).toBe(1030); // pp desc: highest pp first
+    expect(columns.pps[1029]).toBe(1);
   });
 });
