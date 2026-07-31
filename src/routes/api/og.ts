@@ -56,7 +56,10 @@ function getFont(request: Request, fileName: string): Promise<ArrayBuffer> {
   return promise;
 }
 
-const OG_CACHE_HEADER = "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800";
+// Every OG URL carries v=OG_IMAGE_VERSION, so layout changes always mint new
+// URLs; a long shared-cache TTL is safe and keeps daily edge re-misses (a full
+// incompressible PNG from origin each time) from recurring per URL.
+const OG_CACHE_HEADER = "public, max-age=86400, s-maxage=2592000, stale-while-revalidate=604800";
 
 // Rasterizing an OG card (Satori + resvg) is the most CPU-heavy work on the
 // Vercel side, multiple seconds per image. The CDN caches each URL for a day,
@@ -4995,10 +4998,18 @@ export const Route = createFileRoute("/api/og")({
             }
           }
 
-          // No recognized kind — generic country scoreboard fallback.
-          const fallbackTitle = url.searchParams.get("title") ?? "";
+          // No recognized kind — generic country scoreboard fallback. The
+          // rendered title is part of the card, so it joins the R2 key;
+          // clamped + slugged to keep the key space bounded by real page
+          // titles rather than raw query input.
+          const fallbackTitle = clamp(url.searchParams.get("title") ?? "", MAX_TITLE_LEN);
+          const fallbackTitleKey =
+            fallbackTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "none";
           try {
-            return await renderCountryOg(request, country, fallbackTitle);
+            return await serveOg(
+              `country:${country}:${fallbackTitleKey}:v${version}`,
+              () => renderCountryOg(request, country, fallbackTitle),
+            );
           } catch (err) {
             console.warn("[og] country render failed, falling back", err);
           }

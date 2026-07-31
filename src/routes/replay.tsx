@@ -1644,18 +1644,27 @@ function ReplayPage() {
   useEffect(() => {
     if (!loadingBeatmapScores || !selectedDiffId) return;
 
+    // Progressive results only exist for country lookups; global lookups have
+    // no status/partial store, so polling them would be pure request noise.
+    if (selectedIsGlobal) return;
+
     let cancelled = false;
     const requestId = beatmapScoreRequestRef.current;
+    // The status payload is tiny; the partial score list is not (unslimmed
+    // OsuScore[]). Only fetch the list when the status counter says the
+    // lookup found more scores than we've already applied.
+    let appliedFoundCount = 0;
     const poll = async () => {
-      const scoreCountry = selectedIsGlobal ? undefined : selectedCountry;
+      const scoreCountry = selectedCountry;
       try {
-        const [status, partial] = await Promise.all([
-          getBeatmapScoreLookupStatus({ data: { beatmapId: selectedDiffId, country: scoreCountry, page: beatmapScorePage } }),
-          getPartialBeatmapScores({ data: { beatmapId: selectedDiffId, country: scoreCountry, page: beatmapScorePage } }),
-        ]);
+        const status = await getBeatmapScoreLookupStatus({ data: { beatmapId: selectedDiffId, country: scoreCountry, page: beatmapScorePage } });
         if (cancelled || beatmapScoreRequestRef.current !== requestId) return;
         setBeatmapScoreLookupStatus(status);
+        if (!status || status.found <= appliedFoundCount) return;
+        const partial = await getPartialBeatmapScores({ data: { beatmapId: selectedDiffId, country: scoreCountry, page: beatmapScorePage } });
+        if (cancelled || beatmapScoreRequestRef.current !== requestId) return;
         if (partial.length > 0) {
+          appliedFoundCount = Math.max(appliedFoundCount, partial.length, status.found);
           setPartialBeatmapScores(partial);
         }
       } catch {

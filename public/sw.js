@@ -118,7 +118,7 @@ const PRECACHE_URLS = [
   "/images/icons/store.svg",
   "/images/icons/supporter.svg",
   "/images/icons/tournaments.svg",
-  "/images/discord/bot-favicon.png",
+  "/images/favicon-256.png",
   // Note images
   "/images/notes/arrow-down-gray.png",
   "/images/notes/arrow-down-green.png",

@@ -122,12 +122,24 @@ const DOCUMENT_CACHE_BY_PATH: Record<string, DocumentCacheConfig> = {
   // Replay pages are an app shell; the real replay/beatmap data is loaded
   // via server functions. Long TTL since the shell rarely changes.
   "/replay": { sMaxage: 300, swr: 1800 },
+  // App-shell pages whose data loads client-side; without an entry here they
+  // shipped with no Cache-Control at all and every visit hit the function.
+  "/skins": DEFAULT_DOCUMENT_CACHE,
+  "/packs": DEFAULT_DOCUMENT_CACHE,
+  "/bbcode": { sMaxage: 300, swr: 1800 },
+  "/goals": { sMaxage: 300, swr: 1800 },
+  "/valley": { sMaxage: 300, swr: 1800 },
 };
 
 function getDocumentCacheForPathname(pathname: string): DocumentCacheConfig | null {
   const exact = DOCUMENT_CACHE_BY_PATH[pathname];
   if (exact) return exact;
-  if (pathname.startsWith("/player/")) return { sMaxage: 60, swr: 300 };
+  // The embedded player snapshot goes stale as new scores land, but the page
+  // refreshes it from the live backend shortly after mount, so a longer
+  // document TTL only affects the first paint.
+  if (pathname.startsWith("/player/")) return { sMaxage: 300, swr: 1800 };
+  if (pathname.startsWith("/skins/")) return DEFAULT_DOCUMENT_CACHE;
+  if (pathname.startsWith("/farm-helper/map/")) return DEFAULT_DOCUMENT_CACHE;
   return null;
 }
 

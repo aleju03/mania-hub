@@ -112,6 +112,11 @@ const PROFILE_USER_METADATA_RETRY_DELAYS_MS = [1200, 3500, 8000, 15000] as const
 // run ~0.5-1.5s. Waiting one out beats serving a skeleton: a miss costs the
 // visitor a multi-second client-side refetch instead.
 const PROFILE_CACHED_SNAPSHOT_LOADER_TIMEOUT_MS = 1_200;
+// The SSR document only needs enough scores to paint the initial view (5 rows
+// plus the insights strip); the deferred post-mount refresh streams the full
+// 200-score window straight from the live backend. Embedding all 200 made the
+// player document the biggest origin-transfer line on Vercel.
+const PROFILE_LOADER_BEST_SCORES_LIMIT = 50;
 const INITIAL_SCORE_BATCH_SIZE = 5;
 const SHOW_MORE_BATCH_SIZE = 50;
 const BEST_SCORES_WINDOW_SIZE = 200;
@@ -317,7 +322,7 @@ function slimLoaderSnapshot(snapshot: LivePlayerProfileSnapshot): LivePlayerProf
   return {
     ...snapshot,
     user: slimLoaderUser(snapshot.user),
-    bestScores: snapshot.bestScores.map(slimLoaderScore),
+    bestScores: snapshot.bestScores.slice(0, PROFILE_LOADER_BEST_SCORES_LIMIT).map(slimLoaderScore),
   };
 }
 
@@ -346,6 +351,11 @@ async function fetchCachedSnapshotWithRetry(username: string): Promise<LivePlaye
 }
 
 export async function loadPlayerRouteData(username: string): Promise<PlayerLoaderData> {
+  // SSR only: on client navigations the page's own deferred snapshot fetch
+  // goes straight to the live backend, so running the loader would round-trip
+  // the same payload through a server function for nothing.
+  if (typeof document !== "undefined") return { cachedSnapshot: null };
+
   let cachedSnapshot: LivePlayerProfileSnapshot | null = null;
   try {
     cachedSnapshot = await withProfileLoaderBudget(

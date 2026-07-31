@@ -5,8 +5,8 @@ describe("getProgressPollDelay", () => {
   it("backs off progress polling after the first few seconds", () => {
     expect(getProgressPollDelay(0)).toBe(750);
     expect(getProgressPollDelay(4_999)).toBe(750);
-    expect(getProgressPollDelay(5_000)).toBe(1_500);
-    expect(getProgressPollDelay(19_999)).toBe(1_500);
-    expect(getProgressPollDelay(20_000)).toBe(2_500);
+    expect(getProgressPollDelay(5_000)).toBe(2_000);
+    expect(getProgressPollDelay(19_999)).toBe(2_000);
+    expect(getProgressPollDelay(20_000)).toBe(4_000);
   });
 });

@@ -353,7 +353,7 @@ export const Route = createRootRoute({
       { name: "theme-color", content: "#1a1517" },
     ],
     links: [
-      { rel: "icon", type: "image/png", sizes: "1024x1024", href: SITE_FAVICON_HREF },
+      { rel: "icon", type: "image/png", sizes: "256x256", href: SITE_FAVICON_HREF },
       { rel: "manifest", href: "/manifest.json" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },

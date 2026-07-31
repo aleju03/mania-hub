@@ -1,6 +1,8 @@
 export const SITE_NAME = "Mania Tracker";
-export const SITE_FAVICON_URL = "/images/discord/bot-favicon.png";
-export const SITE_FAVICON_VERSION = "5";
+// 256px repack of images/discord/bot-favicon.png (the 1024px original is
+// 372KB and shipped on every page as the tab icon).
+export const SITE_FAVICON_URL = "/images/favicon-256.png";
+export const SITE_FAVICON_VERSION = "6";
 export const SITE_FAVICON_HREF = `${SITE_FAVICON_URL}?v=${SITE_FAVICON_VERSION}`;
 
 export const DEFAULT_DESCRIPTION =
@@ -16,7 +18,13 @@ export function ogImagePath(
   title = SITE_NAME,
   options?: { country?: string | null; kind?: string | null },
 ): string {
-  const params = new URLSearchParams({ title, v: OG_IMAGE_VERSION });
+  const params = new URLSearchParams({ v: OG_IMAGE_VERSION });
+  // The title only appears in the rendered card on the country-scoreboard
+  // fallback (country, no kind). Everywhere else it was dead weight in the
+  // URL that forked one CDN cache entry per page title for the same image.
+  if (options?.country && !options?.kind) {
+    params.set("title", title);
+  }
   if (options?.country) {
     params.set("country", options.country);
   }

@@ -1,7 +1,7 @@
 export function getProgressPollDelay(elapsedMs: number): number {
   if (elapsedMs < 5_000) return 750;
-  if (elapsedMs < 20_000) return 1_500;
-  return 2_500;
+  if (elapsedMs < 20_000) return 2_000;
+  return 4_000;
 }
 
 export function startProgressPoll(poll: () => void | Promise<void>): () => void {
