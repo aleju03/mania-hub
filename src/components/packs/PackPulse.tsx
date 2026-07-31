@@ -9,6 +9,7 @@ import {
   type LivePackPulledStats,
   type LivePackPullFeedEntry,
 } from "#/lib/live-backend";
+import { formatPreciseTimeAgo } from "#/lib/format";
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
 import { CountryFlag } from "../ui/CountryFlag";
 
@@ -126,6 +127,9 @@ export function PackPulse({ viewerId, hidden = false }: { viewerId: number | nul
     typeof window === "undefined" ? [] : savedRailEntries.filter((entry) => entry.expiresAt > Date.now()),
   );
   const [pulledStats, setPulledStats] = useState<LivePackPulledStats | null>(null);
+  // Drives the "Xs ago" labels; ticked by the 1s sweep interval below. Safe
+  // against hydration mismatch because entries render [] on the server.
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     restoreFeedStateOnce();
@@ -181,6 +185,7 @@ export function PackPulse({ viewerId, hidden = false }: { viewerId: number | nul
     }, DRIP_TICK_MS);
     const sweepInterval = window.setInterval(() => {
       const now = Date.now();
+      setNow(now);
       setEntries((current) => {
         const alive = current.filter((entry) => entry.expiresAt > now);
         return alive.length === current.length ? current : alive;
@@ -290,6 +295,9 @@ export function PackPulse({ viewerId, hidden = false }: { viewerId: number | nul
                         </span>
                       ) : (
                         <span className="text-osu-f1/70">pulled</span>
+                      )}
+                      {pull.pulledAt > 0 && (
+                        <span className="tabular-nums text-osu-f1/50"> · {formatPreciseTimeAgo(pull.pulledAt, now)}</span>
                       )}
                     </span>
                   </span>

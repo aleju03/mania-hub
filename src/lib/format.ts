@@ -42,6 +42,20 @@ export function formatTimeAgo(dateStr: string): string {
   return `${months}mo ago`;
 }
 
+/* Seconds granularity for live tickers; nowMs is a parameter so a ticking
+   state value can drive re-renders and tests stay deterministic. */
+export function formatPreciseTimeAgo(timestampMs: number, nowMs: number): string {
+  const secs = Math.floor((nowMs - timestampMs) / 1000);
+  if (secs < 5) return "just now";
+  if (secs < 60) return `${secs}s ago`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 export function formatDetailedTimeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);

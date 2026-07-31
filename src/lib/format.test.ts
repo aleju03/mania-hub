@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { formatDate, formatDetailedTimeAgo, formatTimeAgo } from "./format";
+import { formatDate, formatDetailedTimeAgo, formatPreciseTimeAgo, formatTimeAgo } from "./format";
 
 describe("formatDate", () => {
   // SSR (UTC server) and client (any viewer timezone) must render identical
@@ -17,6 +17,28 @@ describe("formatTimeAgo", () => {
     vi.setSystemTime(new Date("2026-06-11T22:38:00.000-06:00"));
 
     expect(formatTimeAgo("2026-06-11T18:45:00.000-06:00")).toBe("3h ago");
+  });
+});
+
+describe("formatPreciseTimeAgo", () => {
+  const now = 1_750_000_000_000;
+
+  it("labels the freshest pulls as just now", () => {
+    expect(formatPreciseTimeAgo(now - 3_000, now)).toBe("just now");
+  });
+
+  it("counts seconds under a minute", () => {
+    expect(formatPreciseTimeAgo(now - 42_000, now)).toBe("42s ago");
+  });
+
+  it("rolls over to minutes, hours, and days", () => {
+    expect(formatPreciseTimeAgo(now - 5 * 60_000, now)).toBe("5m ago");
+    expect(formatPreciseTimeAgo(now - 3 * 3_600_000, now)).toBe("3h ago");
+    expect(formatPreciseTimeAgo(now - 2 * 86_400_000, now)).toBe("2d ago");
+  });
+
+  it("treats clock skew into the future as just now", () => {
+    expect(formatPreciseTimeAgo(now + 10_000, now)).toBe("just now");
   });
 });
 
