@@ -43,8 +43,9 @@ export const TOP_SCORES_BACKFILL_PROGRESS_META_KEY = "top_scores_backfill_progre
 // chunk finishes in ~35s, far under the 10-minute job watchdog.
 const TOP_SCORES_BACKFILL_CHUNK = 25;
 const TOP_SCORES_BACKFILL_CHAIN_DELAY_MS = 15 * 60_000;
-// Below every other background sweep (skill baseline / DT sweep at -10, pool
-// warm at -8) so the shared fast lane always prefers interactive work.
+// The job runs in its own worker lane with a reserved slot pair (see
+// RESERVED_LANE_TYPES), so priority no longer decides whether it runs; it is
+// kept below the other background sweeps only for queue-listing clarity.
 const TOP_SCORES_BACKFILL_JOB_PRIORITY = -15;
 
 /**

@@ -91,6 +91,11 @@ const RESERVED_LANE_TYPES: Record<string, number> = {
   // runner + queued continuation.
   osc_backfill: 2,
   osc_country_catchup: 2,
+  // The top-scores backfill sweep chains its next chunk (runAfter +15min)
+  // from inside the running job: runner + queued continuation. A reserve of 1
+  // would break its pacing — the continuation would enqueue as deferred and
+  // reactivation resets run_after to now, collapsing the 15-minute gap.
+  backfill_user_top_scores_sweep: 2,
 };
 
 export class JobQueue {

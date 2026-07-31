@@ -81,10 +81,7 @@ const REPLAY_VIDEO_LANE_NAMES = new Set(["replay-video-render", "replay-video-fi
 const DEFAULT_WORKER_LANES: WorkerLane[] = [
   {
     name: "fast",
-    // TOP_SCORES_BACKFILL_JOB shares this lane because it is the same work as
-    // refresh_user_top_scores (one best-scores call per user); at priority -15
-    // the claim order always prefers the interactive types above it.
-    jobTypes: ["refresh_user_top_scores", "refresh_country_roster", "enrich_user", "enrich_beatmap", "reconcile_user_recent_scores", TOP_SCORES_BACKFILL_JOB],
+    jobTypes: ["refresh_user_top_scores", "refresh_country_roster", "enrich_user", "enrich_beatmap", "reconcile_user_recent_scores"],
     claimLimit: 3,
     intervalMs: 750,
   },
@@ -149,6 +146,18 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     // with a long runAfter; the lane just needs to pick each link up.
     name: "profile-pool-warm",
     jobTypes: [PROFILE_POOL_WARM_JOB],
+    claimLimit: 1,
+    intervalMs: 5_000,
+  },
+  {
+    // The top-scores backfill chain originally shared the fast lane at
+    // priority -15 ("run when the lane is quiet"), but fallback-mode ingest
+    // keeps that lane's queue permanently non-empty, so the chain's first
+    // chunk was never claimed at all. Its own lane makes the claim
+    // unconditional; the 15-minute chain runAfter still sets the pace, and
+    // the osu! token bucket still governs the actual request rate.
+    name: "top-scores-backfill",
+    jobTypes: [TOP_SCORES_BACKFILL_JOB],
     claimLimit: 1,
     intervalMs: 5_000,
   },
