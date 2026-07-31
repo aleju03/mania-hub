@@ -1727,7 +1727,7 @@ function ReadingGuide({
               count={counts?.improve ?? null}
               body="You have a score, but players near you score higher on it."
             />
-            <GuideItem reason="stale" count={counts?.stale ?? null} body="An old PB a fresh run would comfortably beat." />
+            <GuideItem reason="stale" count={counts?.stale ?? null} body="An old PB you could probably beat." />
             <GuideItem
               reason="push"
               count={counts?.push ?? null}
@@ -2078,7 +2078,7 @@ function PlayerPicker({ viewer, onPick }: { viewer: ReturnType<typeof useAuth>["
           <PickerLegend
             icon={<History className="h-3.5 w-3.5 shrink-0 text-osu-yellow" />}
             label="old pb"
-            body="an old score a fresh run would beat"
+            body="an old score you could probably beat"
           />
         </div>
       </div>
