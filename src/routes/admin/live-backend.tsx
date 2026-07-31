@@ -7,6 +7,7 @@ import { requireAdminAccess } from "../../lib/auth";
 import {
   fetchLiveBackendAdminStatus,
   fetchLiveBackendStorageBreakdown,
+  fetchLiveBackendSweeps,
   fetchLiveBackendTableRows,
   getLiveBackendUrl,
   getServerLiveBackendUrl,
@@ -15,6 +16,7 @@ import {
   setLiveBackendUserActive,
   wipeLiveBackendUserData,
   type LiveBackendStorageBreakdown,
+  type LiveBackendSweep,
   type LiveBackendTableCell,
   type LiveBackendTablePreview,
   type LiveBackendUserActiveResult,
@@ -1387,6 +1389,10 @@ function LiveBackendPage() {
                 <QueueSummaryCard status={status} />
               </div>
             </div>
+          </Section>
+
+          <Section title="Sweeps" subtitle="Background sweeps and folds coordinated through live_meta done keys">
+            <SweepsCard />
           </Section>
 
           <Section title="Traffic guard" subtitle="In-memory abuse guard pressure for public traffic and SSE connections">
@@ -5654,6 +5660,131 @@ function QueueSummaryRow({ row }: { row: NonNullable<LiveBackendStatus["queueSum
         <span className="text-[11px] font-bold text-white">{formatNumber(row.count)}</span>
       </div>
       {row.newestError ? <div className="mt-1 text-[10px] font-mono text-osu-red-light/80 truncate">{row.newestError}</div> : null}
+    </div>
+  );
+}
+
+const SWEEPS_REFRESH_MS = 30_000;
+
+const SWEEP_STATUS_CHIP: Record<LiveBackendSweep["status"], string> = {
+  done: "bg-osu-green/15 text-osu-green-light",
+  running: "bg-osu-blue/15 text-osu-blue animate-pulse",
+  pending: "bg-osu-b3/30 text-osu-f1",
+  unknown: "bg-osu-yellow/15 text-osu-yellow",
+};
+
+function SweepsCard() {
+  const [sweeps, setSweeps] = useState<LiveBackendSweep[] | null>(null);
+  const [unsupported, setUnsupported] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const result = await fetchLiveBackendSweeps();
+        if (cancelled) return;
+        if (result === null) {
+          setUnsupported(true);
+          setSweeps([]);
+        } else {
+          setUnsupported(false);
+          setSweeps(result.sweeps);
+        }
+        setError(null);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      }
+    };
+    void load();
+    const id = window.setInterval(() => {
+      void load();
+    }, SWEEPS_REFRESH_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, []);
+
+  const running = sweeps?.filter((sweep) => sweep.status === "running").length ?? 0;
+  const done = sweeps?.filter((sweep) => sweep.status === "done").length ?? 0;
+
+  return (
+    <SectionCard
+      title="Background sweeps"
+      subtitle="One-time backfills and recurring folds; refreshes every 30s"
+      actions={
+        sweeps ? (
+          <span className="text-[10px] text-osu-f1">
+            {formatNumber(done)}/{formatNumber(sweeps.length)} done{running > 0 ? `, ${formatNumber(running)} running` : ""}
+          </span>
+        ) : null
+      }
+    >
+      {error ? (
+        <div className="text-[11px] text-osu-red-light">{error}</div>
+      ) : unsupported ? (
+        <div className="text-[11px] text-osu-f1">The backend does not expose /api/admin/sweeps yet (deploy pending).</div>
+      ) : sweeps === null ? (
+        <div className="text-[11px] text-osu-f1 text-center py-6">Loading sweeps...</div>
+      ) : sweeps.length === 0 ? (
+        <div className="text-[11px] text-osu-f1 text-center py-6">No sweeps reported.</div>
+      ) : (
+        <div className="space-y-1.5">
+          {sweeps.map((sweep) => (
+            <SweepRow key={sweep.id} sweep={sweep} />
+          ))}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+function formatSweepCounters(progress: Record<string, number>): string {
+  return Object.entries(progress)
+    .filter(([key]) => key !== "total")
+    .map(([key, value]) => `${key} ${formatNumber(value)}`)
+    .join(" · ");
+}
+
+function SweepRow({ sweep }: { sweep: LiveBackendSweep }) {
+  const progress = sweep.progress ?? {};
+  const hasFraction = typeof progress.total === "number" && progress.total > 0 && typeof progress.processed === "number";
+  const fraction = hasFraction ? Math.min(1, Math.max(0, progress.processed! / progress.total!)) : null;
+  const counters = formatSweepCounters(progress);
+  return (
+    <div className="rounded-md bg-osu-b5/60 border border-osu-b3/20 px-3 py-2" title={sweep.description}>
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-white">{sweep.label}</span>
+        <span className="flex-shrink-0 rounded-full bg-osu-b3/30 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">
+          {sweep.kind}
+        </span>
+        <span className={`flex-shrink-0 rounded-full px-1.5 py-0.5 text-[9px] uppercase tracking-wider font-semibold ${SWEEP_STATUS_CHIP[sweep.status] ?? SWEEP_STATUS_CHIP.unknown}`}>
+          {sweep.status}
+        </span>
+        {sweep.updatedAt ? (
+          <span className="flex-shrink-0 text-[10px] text-osu-f1">{formatTimeAgo(sweep.updatedAt)}</span>
+        ) : null}
+      </div>
+      {hasFraction ? (
+        <div className="mt-1.5">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-mono text-osu-c2">
+              {formatNumber(progress.processed!)} / {formatNumber(progress.total!)}
+            </span>
+            <span className="text-[10px] text-osu-f1">{Math.round((fraction ?? 0) * 100)}%</span>
+          </div>
+          <div className="mt-1 h-1 rounded-full bg-osu-b3/30 overflow-hidden">
+            <div className="h-full rounded-full bg-osu-blue" style={{ width: `${(fraction ?? 0) * 100}%` }} />
+          </div>
+        </div>
+      ) : counters ? (
+        <div className="mt-1 text-[10px] font-mono text-osu-c2 truncate">{counters}</div>
+      ) : null}
+      <div className="mt-1 flex items-baseline gap-2 min-w-0">
+        <span className="min-w-0 flex-1 truncate text-[10px] text-osu-f1">{sweep.description}</span>
+        {sweep.detail ? <span className="flex-shrink-0 max-w-[45%] truncate text-[10px] font-mono text-osu-l2/75">{sweep.detail}</span> : null}
+      </div>
     </div>
   );
 }

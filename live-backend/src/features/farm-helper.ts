@@ -1,7 +1,7 @@
 import type { Db } from "../db.js";
 import { exec, execBatch, parseJson, type DbStatement } from "../db.js";
 import { logWarn } from "../logger.js";
-import { loadActiveFarmHelperFeedback, type FarmHelperFeedbackVerdict } from "./farm-helper-feedback.js";
+import { loadActiveFarmHelperFeedback, type ActiveFarmHelperFeedbackMark, type FarmHelperFeedbackVerdict } from "./farm-helper-feedback.js";
 import { getPlayerProfileSnapshot, PROFILE_BEST_SCORES_LIMIT } from "./player-profiles.js";
 import { calculateManiaCustomAccuracy, calculateWeightedPpTotal, extractManiaVariantPps, getModAcronyms, getScoreSpeedBucket, nowIso, type ScoreSpeedBucket } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
@@ -145,6 +145,12 @@ export interface FarmHelperSnapshot {
   // plays are analyzed. Emitted on both views. Additive; absent on older
   // cached snapshots.
   modelsReady?: boolean;
+  // Transparency: the per-keymode feasibility-margin adjustment the subject's
+  // accumulated feedback marks applied to this build, as a signed fraction of
+  // the base margin (e.g. { "4k": -0.10 } = the 4K margins ran 10% tighter).
+  // Gain view only; omitted whenever no adjustment applied. Additive; the
+  // frontend may ignore it.
+  feedbackMarginAdjust?: Partial<Record<ConcreteFarmHelperKeyMode, number>>;
   recs: FarmHelperRec[];
   generatedAt: string;
 }
@@ -248,6 +254,30 @@ const FEASIBILITY_SECONDARY_AXIS_WINDOW = 1.0;
 // 1.0x vector. No chart-identity data involved; replace with a stored 0.75x
 // sweep if one ever lands.
 const FEASIBILITY_HT_RATE_MSD_RATIO = 0.75;
+// Feedback generalization: the subject's active too_hard/too_easy marks vote
+// on the feasibility gate's per-keymode margins, so a handful of marks
+// auto-adjusts recommendations beyond the marked lanes themselves. Each usable
+// mark is classified against the gate's CURRENT (base-margin) verdict for the
+// marked chart on the same MSD ruler the gate uses:
+//  - too_hard on a chart the gate would PASS -> a tighten vote (the ceiling
+//    let through something the player says is out of reach);
+//  - too_easy on a chart the gate would DROP, or that passes only inside the
+//    margin band (some checked axis above the subject's rating) -> a loosen
+//    vote (the ceiling is too strict);
+//  - marks that agree with the gate (too_hard on an already-dropped chart,
+//    too_easy on a comfortably-passing one) carry no signal.
+// Per keymode, net = tighten - loosen votes; nothing moves below
+// FEEDBACK_MIN_NET_VOTES. The margin then scales by 1 + adjust, where
+// abs(adjust) = FEEDBACK_MARGIN_STEP per net vote beyond the first, clamped
+// to FEEDBACK_MARGIN_MAX_ADJUST (tighten shrinks the margin, loosen widens
+// it). Gain view only, never when the skill breakdown is not ready (the gate
+// is off entirely there), and never on the backtest path (no marks load).
+// Per-lane effects keep precedence on their own lane: a too_easy-marked lane
+// still bypasses the gate outright even under a tightened ceiling. Resolved
+// marks drop out of the active set, retiring their votes automatically.
+const FEEDBACK_MIN_NET_VOTES = 2;
+const FEEDBACK_MARGIN_STEP = 0.05;
+const FEEDBACK_MARGIN_MAX_ADJUST = 0.15;
 const PEER_MIN_COUNT = 3;
 const PEER_MIN_FRACTION = 0.12;
 // A peer only counts toward the peerFraction denominator once it has farmed at
@@ -680,6 +710,11 @@ interface BuildCtx {
   // none and on the backtest path (marks are live player state, and the
   // reconcile writes; a historical reconstruction must do neither).
   activeFeedback?: Map<string, FarmHelperFeedbackVerdict>;
+  // Per-keymode feasibility-margin adjustment generalized from the active
+  // marks (see the FEEDBACK_MARGIN_* block), computed once in buildSnapshot
+  // and read by every mode run's gate. Absent when no adjustment applies
+  // (popular view, backtest, breakdown not ready, or below the vote floor).
+  feedbackMarginAdjust?: Partial<Record<ConcreteFarmHelperKeyMode, number>>;
 }
 
 // Subject state prepared once per request and shared by every mode run.
@@ -734,8 +769,11 @@ async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Pro
   // and the reconcile writes). Best-effort: a feedback failure never fails
   // the snapshot. The reconcile's writes go through ctx.writeDb when the
   // caller provided one (the HTTP serving-path invariant).
+  let activeMarks: ActiveFarmHelperFeedbackMark[] | undefined;
   if (ctx.asOf == null) {
-    ctx.activeFeedback = await loadActiveFeedbackForBuild(db, ctx.writeDb ?? db, ctx.userId, subject);
+    const feedback = await loadActiveFeedbackForBuild(db, ctx.writeDb ?? db, ctx.userId, subject);
+    ctx.activeFeedback = feedback?.byLane;
+    activeMarks = feedback?.marks;
   }
 
   // Subject skill breakdown, read once per request and shared by every mode
@@ -746,6 +784,21 @@ async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Pro
     ? await getPlayerSkillBreakdown(db, ctx.queue, ctx.userId)
     : await getPlayerSkillBreakdown(db, NOOP_QUEUE, ctx.userId, { allowEnqueue: false });
   ctx.skillBreakdown = skillBreakdown;
+
+  // Feedback generalization (see the FEEDBACK_MARGIN_* block): the active
+  // marks vote on the per-keymode feasibility margins. Gain view only, and
+  // never when the breakdown is not ready (the gate is off entirely there).
+  // Best-effort like the mark load: a failure never fails the snapshot.
+  if (!isPopular && activeMarks && activeMarks.length > 0 && skillBreakdown.status === "ready") {
+    try {
+      ctx.feedbackMarginAdjust = await computeFeedbackMarginAdjust(db, activeMarks, skillBreakdown);
+    } catch (error) {
+      logWarn("farm_helper_feedback_margin_adjust_failed", {
+        user_id: ctx.userId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 
   // Personal accuracy model (A8): one small select per request, shared by
   // every mode run; never read per candidate. Null (benchmarks stay
@@ -808,6 +861,8 @@ async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Pro
     // Gain view only (the popular browse never hides on marks); 0 included so
     // the UI can rely on the field's presence.
     ...(isPopular ? {} : { feedbackHiddenCount: runs.reduce((sum, run) => sum + run.feedbackHidden, 0) }),
+    // Transparency: the margin adjustment the marks applied (absent when none).
+    ...(ctx.feedbackMarginAdjust ? { feedbackMarginAdjust: ctx.feedbackMarginAdjust } : {}),
   };
 
   const merged = runs.flatMap((run) => run.scored);
@@ -895,7 +950,7 @@ async function loadActiveFeedbackForBuild(
   writeDb: Db,
   userId: number,
   subject: PreparedSubject,
-): Promise<Map<string, FarmHelperFeedbackVerdict> | undefined> {
+): Promise<{ byLane: Map<string, FarmHelperFeedbackVerdict>; marks: ActiveFarmHelperFeedbackMark[] } | undefined> {
   let marks;
   try {
     marks = await loadActiveFarmHelperFeedback(db, userId);
@@ -920,6 +975,7 @@ async function loadActiveFeedbackForBuild(
   }
 
   const active = new Map<string, FarmHelperFeedbackVerdict>();
+  const activeMarks: ActiveFarmHelperFeedbackMark[] = [];
   const statements: DbStatement[] = [];
   const now = Date.now();
   for (const mark of marks) {
@@ -927,6 +983,7 @@ async function loadActiveFeedbackForBuild(
     const later = (playsByLane.get(lane) ?? []).filter((play) => play.endedAtMs > mark.createdAt);
     if (later.length === 0) {
       active.set(lane, mark.verdict);
+      activeMarks.push(mark);
       continue;
     }
     const bestPp = later.reduce((max, play) => Math.max(max, play.pp), 0);
@@ -950,7 +1007,7 @@ async function loadActiveFeedbackForBuild(
       });
     }
   }
-  return active.size > 0 ? active : undefined;
+  return active.size > 0 ? { byLane: active, marks: activeMarks } : undefined;
 }
 
 // Everything before cohort selection: subject top plays, baseline, per-keymode
@@ -1220,7 +1277,13 @@ async function scoreCandidates(
     if (!isPopular && feasibility && feasibilityEntry && laneFeedback !== "too_easy") {
       const margins = FEASIBILITY_MARGINS[meta.keys];
       if (margins) {
-        const marginScale = feasibilityEntry.sparse ? FEASIBILITY_SPARSE_MARGIN_RATIO : 1;
+        // Feedback generalization: the subject's accumulated marks shrink
+        // (net too_hard) or widen (net too_easy) this keymode's margins by a
+        // bounded fraction, uniformly across axes and lanes (see the
+        // FEEDBACK_MARGIN_* block). Gain view only - this branch already is.
+        const chartKeyMode = beatmapKeyMode(meta.keys);
+        const feedbackScale = 1 + (chartKeyMode ? ctx.feedbackMarginAdjust?.[chartKeyMode] ?? 0 : 0);
+        const marginScale = (feasibilityEntry.sparse ? FEASIBILITY_SPARSE_MARGIN_RATIO : 1) * feedbackScale;
         if (agg.speedBucket === "normal"
           && isChartInfeasible(feasibility.chartMsd.get(agg.beatmapId), chartPat, feasibilityEntry, margins.normal * marginScale)) continue;
         if (agg.speedBucket === "dt"
@@ -2493,6 +2556,83 @@ function isChartInfeasible(
 // The HT lane's rate-scaled MSD approximation (no stored 0.75x sweep).
 function scaleMsdVector(msd: number[] | undefined, ratio: number): number[] | undefined {
   return msd ? msd.map((value) => value * ratio) : undefined;
+}
+
+// Generalizes the subject's active feedback marks into a bounded per-keymode
+// feasibility-margin adjustment (see the FEEDBACK_MARGIN_* block for the vote
+// rules). Each mark's chart is resolved on the same MSD ruler the gate uses
+// for that lane (1.0x for normal, the stored 1.5x sweep for DT, the
+// rate-scaled 1.0x vector for HT) and classified against the gate's current
+// base-margin verdict; unresolvable charts (no MSD, no meta, no gated
+// keymode) are skipped, never guessed. Returns undefined when no keymode
+// reaches the vote floor.
+async function computeFeedbackMarginAdjust(
+  db: Db,
+  marks: ActiveFarmHelperFeedbackMark[],
+  breakdown: PlayerSkillBreakdown,
+): Promise<Partial<Record<ConcreteFarmHelperKeyMode, number>> | undefined> {
+  const beatmapIds = [...new Set(marks.map((mark) => mark.beatmapId))];
+  const beatmapMeta = await readBeatmapMeta(db, beatmapIds);
+  const chartData = await readChartShapeData(db, beatmapIds);
+  // Same context builder as the gate itself: subject per-keymode evidence plus
+  // the marked charts' 1.0x and DT MSD vectors. Null = no usable ruler at all.
+  const feasibility = await buildFeasibilityContext(db, breakdown, chartData.rawMsd);
+  if (!feasibility) return undefined;
+
+  const votes = new Map<ConcreteFarmHelperKeyMode, number>();
+  for (const mark of marks) {
+    const meta = beatmapMeta.get(mark.beatmapId);
+    if (!meta) continue;
+    const keyMode = beatmapKeyMode(meta.keys);
+    const margins = FEASIBILITY_MARGINS[meta.keys];
+    const entry = feasibility.byKeys.get(meta.keys);
+    if (!keyMode || !margins || !entry) continue;
+    const marginScale = entry.sparse ? FEASIBILITY_SPARSE_MARGIN_RATIO : 1;
+    const chartPat = chartData.shapes.get(mark.beatmapId)?.pat ?? null;
+    let msd: number[] | undefined;
+    let margin: number;
+    // DT lanes without a stored 1.5x sweep (7K, unswept charts) fall back to
+    // the 1.0x vector, which is only a LOWER bound on the DT difficulty: it
+    // can certify "at or over the ceiling region" (so a too_easy loosen vote
+    // still counts) but never "the gate would pass" (so a too_hard tighten
+    // vote is skipped rather than guessed).
+    let lowerBoundOnly = false;
+    if (mark.speedBucket === "dt") {
+      msd = feasibility.chartMsdDt.get(mark.beatmapId);
+      if (!msd) {
+        msd = feasibility.chartMsd.get(mark.beatmapId);
+        lowerBoundOnly = true;
+      }
+      margin = margins.dt * marginScale;
+    } else if (mark.speedBucket === "ht") {
+      msd = scaleMsdVector(feasibility.chartMsd.get(mark.beatmapId), FEASIBILITY_HT_RATE_MSD_RATIO);
+      margin = margins.normal * marginScale;
+    } else {
+      msd = feasibility.chartMsd.get(mark.beatmapId);
+      margin = margins.normal * marginScale;
+    }
+    if (!msd || msd.length !== MSD_SKILLSETS.length) continue;
+    const drops = isChartInfeasible(msd, chartPat, entry, margin);
+    // "Near the ceiling": passes the gate, but only because of the margin
+    // (some checked axis sits above the subject's rating itself).
+    const aboveRating = drops || isChartInfeasible(msd, chartPat, entry, 0);
+    let vote = 0;
+    if (mark.verdict === "too_hard") {
+      if (!drops && !lowerBoundOnly) vote = 1;
+    } else if (drops || aboveRating) {
+      vote = -1;
+    }
+    if (vote !== 0) votes.set(keyMode, (votes.get(keyMode) ?? 0) + vote);
+  }
+
+  const adjust: Partial<Record<ConcreteFarmHelperKeyMode, number>> = {};
+  for (const [keyMode, net] of votes) {
+    if (Math.abs(net) < FEEDBACK_MIN_NET_VOTES) continue;
+    const magnitude = Math.min(FEEDBACK_MARGIN_MAX_ADJUST, (Math.abs(net) - 1) * FEEDBACK_MARGIN_STEP);
+    // Positive net = tighten = a smaller margin, so the sign flips here.
+    adjust[keyMode] = net > 0 ? -magnitude : magnitude;
+  }
+  return Object.keys(adjust).length > 0 ? adjust : undefined;
 }
 
 async function readBeatmapMeta(db: Db, ids: number[]): Promise<Map<number, BeatmapMeta>> {

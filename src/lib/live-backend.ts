@@ -545,6 +545,59 @@ export const fetchLiveBackendStorageBreakdown = createServerFn({ method: "GET" }
     return { storage: body.storage ?? null, scanning: !!body.scanning, stale: !!body.stale };
   });
 
+export type LiveBackendSweepStatus = "done" | "running" | "pending" | "unknown";
+
+export interface LiveBackendSweep {
+  id: string;
+  label: string;
+  description: string;
+  kind: "one-time" | "recurring";
+  status: LiveBackendSweepStatus;
+  progress?: Record<string, number>;
+  updatedAt?: string | null;
+  detail?: string | null;
+}
+
+export interface LiveBackendSweepsResponse {
+  sweeps: LiveBackendSweep[];
+}
+
+// Status of the backend's long-running background sweeps (done-key/self-chaining
+// jobs coordinated through live_meta) for the admin Sweeps section. Admin-gated;
+// the token is injected server-side (never in the browser), mirroring
+// fetchLiveBackendStorageBreakdown. Returns null when the backend predates the
+// endpoint (404).
+export const fetchLiveBackendSweeps = createServerFn({ method: "GET" })
+  .handler(async (): Promise<LiveBackendSweepsResponse | null> => {
+    await requireAdminAccess("Server sweeps status");
+    const base = getServerLiveBackendUrl();
+    if (!base) throw new Error("LIVE_BACKEND_URL is not configured.");
+    const headers: HeadersInit = {};
+    if (process.env.LIVE_ADMIN_TOKEN) {
+      headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), LIVE_BACKEND_ADMIN_STATUS_TIMEOUT_MS);
+    let response: Response;
+    try {
+      response = await fetch(`${base}/api/admin/sweeps`, { headers, signal: controller.signal });
+    } catch (err) {
+      if (isAbortError(err)) throw new Error("Sweeps status timed out.");
+      throw err;
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (response.status === 404) return null;
+    const body = await response.json() as LiveBackendSweepsResponse & { error?: unknown };
+    if (!response.ok) {
+      const message = body && typeof body === "object" && "error" in body
+        ? String((body as { error?: unknown }).error)
+        : `Server ${response.status} for /api/admin/sweeps`;
+      throw new Error(message);
+    }
+    return { sweeps: Array.isArray(body.sweeps) ? body.sweeps : [] };
+  });
+
 export type LiveBackendTableCell = string | number | boolean | null;
 
 export interface LiveBackendTablePreview {

@@ -21,6 +21,7 @@ import { enqueueProfilePoolWarmIfIdle } from "./features/profile-pool-warm.js";
 import { enqueuePlayerSkills, PLAYER_SKILLS_JOB, PLAYER_SKILLS_VERSION } from "./features/player-skills.js";
 import { enqueueSkillBaselineIfDue } from "./features/skill-baseline.js";
 import { ensureTopScoresBackfillSeeded } from "./features/top-scores-backfill.js";
+import { ensureSkillVectorBackfillSeeded } from "./features/skill-vector-backfill.js";
 import { backfillSkinSlugs } from "./features/skins.js";
 import { AbuseGuard } from "./http/abuse-guard.js";
 import { CountryClientTracker } from "./live/country-clients.js";
@@ -318,6 +319,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       // Guarded by its done key: post-completion boots schedule nothing.
       if (app.config.enableOsuApiJobs) {
         void ensureTopScoresBackfillSeeded(app.db, app.queue).catch((error) => console.warn("[top-scores-backfill] seed failed", error));
+        // Skill-vector version backfill: almost entirely local CPU over the
+        // cached .osu corpus, but the shared compute path can fall through to
+        // an osu! download on a cache miss, so it takes the same gate.
+        void ensureSkillVectorBackfillSeeded(app.db, app.queue).catch((error) => console.warn("[skill-vector-backfill] seed failed", error));
       }
     }
     if (app.config.enableScheduledRefreshes && app.config.enableOsuApiJobs) {

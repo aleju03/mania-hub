@@ -15,6 +15,7 @@ import { REFRESH_QUALIFIED_MAPS_JOB, runQualifiedMapsWatch } from "./features/qu
 import { RECONCILE_SETTLED_SETS_JOB, runSettledSetsReconcile } from "./features/settled-sets-reconcile.js";
 import { recordSnipeScoreHistory, updateSnipeProjection } from "./features/snipes.js";
 import { PLAYER_SKILLS_JOB, computePlayerSkillsJob } from "./features/player-skills.js";
+import { SKILL_VECTOR_BACKFILL_JOB, runSkillVectorBackfillJob } from "./features/skill-vector-backfill.js";
 import { SKILL_BASELINE_JOB, runSkillBaselineJob } from "./features/skill-baseline.js";
 import { PROFILE_POOL_WARM_JOB, runProfilePoolWarmJob } from "./features/profile-pool-warm.js";
 import { confirmTopPlay, TopPlayConfirmationPendingError } from "./features/top-plays.js";
@@ -118,8 +119,11 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     intervalMs: 1_000,
   },
   {
+    // SKILL_VECTOR_BACKFILL_JOB shares this lane because it runs the same
+    // per-map compute as analyze_activity_beatmap; its deep negative priority
+    // keeps interactive analyses ahead of the sweep chain.
     name: "activity-analysis",
-    jobTypes: ["analyze_activity_beatmap"],
+    jobTypes: ["analyze_activity_beatmap", SKILL_VECTOR_BACKFILL_JOB],
     claimLimit: 1,
     intervalMs: 1_500,
   },
@@ -216,6 +220,10 @@ const OSU_API_JOB_TYPES = new Set([
   BEATMAP_OSU_FILE_BACKFILL_JOB,
   PROFILE_POOL_WARM_JOB,
   TOP_SCORES_BACKFILL_JOB,
+  // Mostly local CPU over the cached .osu corpus, but a cache miss falls
+  // through to an osu! download inside the shared compute path, so it pauses
+  // with the rest of the API jobs like analyze_activity_beatmap does.
+  SKILL_VECTOR_BACKFILL_JOB,
 ]);
 
 // The replay-video lanes exist only where ENABLE_REPLAY_VIDEO is on (the
@@ -525,6 +533,10 @@ export class WorkerRunner {
     }
     if (job.type === "analyze_activity_beatmap") {
       await computeBeatmapActivitySkillVector(this.db, this.osu, job.payload as { beatmapId: number });
+      return;
+    }
+    if (job.type === SKILL_VECTOR_BACKFILL_JOB) {
+      await runSkillVectorBackfillJob(this.db, this.queue, this.osu, job.payload as { cursor?: number }, signal);
       return;
     }
     if (job.type === PLAYER_SKILLS_JOB) {

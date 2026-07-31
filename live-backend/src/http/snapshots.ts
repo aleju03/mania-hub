@@ -32,6 +32,7 @@ import { getPackWallet, listPackCollectionCards, listPackCollectionOwnedUserIds,
 import { buildPackCardProfileSnapshot, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, warmProfileSnapshots } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
 import { getSnipesSnapshot } from "../features/snipes.js";
+import { getSweepReports } from "../features/sweeps-status.js";
 import { getTopPlaysSnapshot, type TopPlaysSnapshotOptions } from "../features/top-plays.js";
 import { getTrackerSnapshot, type TrackerSnapshotFilters } from "../features/tracker.js";
 import { type AbuseBucket, type AbuseGuard, normalizeCountryParam, type RateLimitResult } from "./abuse-guard.js";
@@ -2235,6 +2236,16 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     sendJson(req, res, ctx, 200, await getDanClassifierSets(ctx.db, beatmapsetIds, beatmapIds));
+    return true;
+  }
+  if (url.pathname === "/api/admin/sweeps") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    // Read-only status over the done-key/self-chaining background sweeps
+    // (registry in features/sweeps-status.ts).
+    sendJson(req, res, ctx, 200, { sweeps: await getSweepReports(ctx.db) });
     return true;
   }
   if (url.pathname === "/api/admin/chart-analysis/backfill") {
