@@ -2740,7 +2740,7 @@ async function applyGlobalFarmedProjectionDeltas(
   const maxDeltaMaps = globalFarmedBoardRepackDelegates.has(db)
     ? GLOBAL_FARMED_DELEGATED_MAX_DELTA_MAPS
     : GLOBAL_FARMED_PROJECTION_MAX_DELTA_MAPS;
-  const changes = (await exec(
+  let changes = (await exec(
     db,
     `select beatmap_id, revision, updated_at
      from global_maps_farmed_changes
@@ -2749,13 +2749,37 @@ async function applyGlobalFarmedProjectionDeltas(
      limit ?`,
     [fromRevision, maxDeltaMaps + 1],
   )).rows;
+  let chunked = false;
   if (changes.length > maxDeltaMaps) {
-    logInfo("global_farmed_projection_delta_repack", {
+    // A delegated process chunks instead of declining outright: apply the
+    // fully-fetched revisions now and let the 30s ticker chain the rest, so
+    // a multi-thousand-map catch-up (or a bulk-refresh churn storm) converges
+    // a few hundred maps per tick with bounded memory — declining here would
+    // send every storm to the worker as a full 1.4GB pack per cooldown. The
+    // cut must fall on a revision boundary: bulk refreshes give many maps one
+    // revision, and advancing projectionRevision past a half-applied revision
+    // would skip its remaining maps forever. An uncuttable backlog (a single
+    // revision wider than the cap) still declines into the repack funnel.
+    const cutRevision = Number(changes[maxDeltaMaps].revision ?? 0);
+    const kept = globalFarmedBoardRepackDelegates.has(db)
+      ? changes.slice(0, maxDeltaMaps).filter((row) => Number(row.revision ?? 0) < cutRevision)
+      : [];
+    if (kept.length === 0) {
+      logInfo("global_farmed_projection_delta_repack", {
+        from_revision: fromRevision,
+        to_revision: projectionState.revision,
+        threshold_maps: maxDeltaMaps,
+      });
+      return false;
+    }
+    chunked = true;
+    changes = kept;
+    logInfo("global_farmed_projection_delta_chunk", {
       from_revision: fromRevision,
-      to_revision: projectionState.revision,
-      threshold_maps: maxDeltaMaps,
+      applied_maps: kept.length,
+      cut_revision: cutRevision,
+      projection_revision: projectionState.revision,
     });
-    return false;
   }
   if (changes.length === 0) {
     // An initialized-but-empty projection still advances the state revision.
@@ -2779,7 +2803,9 @@ async function applyGlobalFarmedProjectionDeltas(
     const revision = Number(row.revision ?? 0);
     return Number.isFinite(revision) ? Math.max(latest, revision) : latest;
   }, fromRevision);
-  board.farmedGeneratedAt = projectionState.updatedAt;
+  // A chunked pass leaves the board mid-backlog; claiming the projection
+  // head's timestamp would overstate its freshness. The final chunk sets it.
+  if (!chunked) board.farmedGeneratedAt = projectionState.updatedAt;
   return true;
 }
 

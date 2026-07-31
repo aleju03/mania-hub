@@ -341,9 +341,25 @@ async function stateRevision(db: Awaited<ReturnType<typeof createDb>>): Promise<
   return Number(row?.revision ?? 0);
 }
 
-// A change backlog spanning more distinct maps than the delta threshold, so
-// patching declines and the catch-up machinery decides a full repack is due.
-async function injectOversizedBacklog(db: Awaited<ReturnType<typeof createDb>>, maps: number): Promise<number> {
+// A bulk change backlog: every map shares ONE revision, so a delegated chunk
+// cannot cut it on a revision boundary and patching declines into the repack
+// funnel. This is the shape a single mass refresh produces.
+async function injectBulkBacklog(db: Awaited<ReturnType<typeof createDb>>, maps: number): Promise<number> {
+  const base = await stateRevision(db);
+  await exec(
+    db,
+    `insert into global_maps_farmed_changes (beatmap_id, revision, updated_at)
+     with recursive cnt(x) as (select 1 union all select x + 1 from cnt where x < ?)
+     select 900000 + x, ?, ? from cnt`,
+    [maps, base + 1, NOW],
+  );
+  await exec(db, "update global_maps_farmed_state set revision = ?, updated_at = ? where singleton = 1", [base + 1, NOW]);
+  return base + 1;
+}
+
+// A spread backlog: one revision per map, so a delegated process can chunk it
+// in-process a few hundred maps per tick.
+async function injectSpreadBacklog(db: Awaited<ReturnType<typeof createDb>>, maps: number): Promise<number> {
   const base = await stateRevision(db);
   await exec(
     db,
@@ -372,7 +388,7 @@ describe("delegated global farmed board repack", () => {
     expect(repackRequests).toBe(0);
     const packedRevision = getGlobalFarmedBoardCacheStatsForTests(db)!.revision;
 
-    const target = await injectOversizedBacklog(db, 5_001);
+    const target = await injectBulkBacklog(db, 5_001);
 
     // The tick decides a repack is due; with delegation registered it must
     // keep serving the stale board and ask the worker instead of packing.
@@ -410,7 +426,7 @@ describe("delegated global farmed board repack", () => {
 
     // 501 changed maps: a non-delegating process would patch this inline
     // (limit 5000) and balloon its heap; a delegating one must hand it over.
-    const target = await injectOversizedBacklog(db, 501);
+    const target = await injectBulkBacklog(db, 501);
     await catchUpGlobalFarmedBoard(db);
     await waitForGlobalFarmedBoardBuild(db);
     expect(repackRequests).toBeGreaterThan(0);
@@ -423,6 +439,35 @@ describe("delegated global farmed board repack", () => {
     await catchUpGlobalFarmedBoard(db);
     await waitForGlobalFarmedBoardBuild(db);
     expect(getGlobalFarmedBoardCacheStatsForTests(db)!.revision).toBe(target);
+  });
+
+  it("chunks an oversized multi-revision backlog in-process instead of packing", async () => {
+    const { db, queue, databaseUrl } = await setupDb();
+    registerGlobalFarmedBoardDiskCache(db, databaseUrl);
+    let repackRequests = 0;
+    registerGlobalFarmedBoardRepackDelegation(db, async () => {
+      repackRequests += 1;
+    });
+    await seedFarmedMap(db, 10, 11, [{ id: 101, pp: 650 }]);
+    await refreshGlobalMaps(db);
+    await getMapsPageSnapshot(db, queue, "GLOBAL", WEEK_MS, QUERY);
+    const packedRevision = getGlobalFarmedBoardCacheStatsForTests(db)!.revision;
+
+    // 501 maps across 501 revisions: cuttable, so the delegated process must
+    // make partial progress per tick and never go to the worker.
+    const target = await injectSpreadBacklog(db, 501);
+    await catchUpGlobalFarmedBoard(db);
+    await waitForGlobalFarmedBoardBuild(db);
+    const afterFirstTick = getGlobalFarmedBoardCacheStatsForTests(db)!.revision;
+    expect(afterFirstTick).toBeGreaterThan(packedRevision);
+    expect(afterFirstTick).toBeLessThan(target);
+
+    for (let tick = 0; tick < 3 && getGlobalFarmedBoardCacheStatsForTests(db)!.revision < target; tick++) {
+      await catchUpGlobalFarmedBoard(db);
+      await waitForGlobalFarmedBoardBuild(db);
+    }
+    expect(getGlobalFarmedBoardCacheStatsForTests(db)!.revision).toBe(target);
+    expect(repackRequests).toBe(0);
   });
 
   it("repack job short-circuits when the disk snapshot is already at the projection head", async () => {
