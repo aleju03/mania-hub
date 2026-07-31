@@ -316,6 +316,7 @@ async function runMigrationPass(target: Db, statements: string[], startedAtIso: 
   await migrateTrackerIndexes(target);
   await migrateSnipePersonalBests(target);
   await migrateUserGoals(target);
+  await migrateFarmHelperFeedback(target);
   await migrateBeatmapOsuFileCache(target);
   await migrateMapSearchIndex(target);
   await migrateMapCollections(target);
@@ -1585,6 +1586,31 @@ async function migrateUserGoals(db: Db): Promise<void> {
   `);
 }
 
+async function migrateFarmHelperFeedback(db: Db): Promise<void> {
+  // Per-player farm-helper feedback marks: "too hard" / "too easy" on one
+  // recommendation lane (beatmap + speed bucket). Timestamps are epoch ms
+  // (matching user_goals). A null resolved_at means the mark is active; when a
+  // real score lands on the lane after the mark was set, auto-resolution stamps
+  // resolved_at plus the score's pp and the real play drives recs again.
+  await db.execute(`
+    create table if not exists farm_helper_feedback (
+      user_id integer not null,
+      beatmap_id integer not null,
+      speed_bucket text not null,
+      verdict text not null,
+      created_at integer not null,
+      updated_at integer not null,
+      resolved_at integer,
+      resolved_pp real,
+      primary key (user_id, beatmap_id, speed_bucket)
+    )
+  `);
+  await db.execute(`
+    create index if not exists idx_farm_helper_feedback_user_resolved
+      on farm_helper_feedback(user_id, resolved_at)
+  `);
+}
+
 async function migrateSkins(db: Db): Promise<void> {
   // Community skin uploads. A row is created in 'pending' status when an upload
   // ticket is minted (upload_token + token_expires_at are the ticket); the .osk,
@@ -1920,6 +1946,7 @@ async function migrateMapSearchIndex(db: Db): Promise<void> {
       raw_dan real,
       msd_json text,
       msd_overall real,
+      msd_ln_json text,
       pattern_tags text not null default '',
       vibro integer not null default 0,
       updated_at text not null
@@ -1943,6 +1970,13 @@ async function migrateMapSearchIndex(db: Db): Promise<void> {
     // Plain real column for MSD-bucketed collections and future search sorts;
     // backfilled by the r5 BUILD_REVISION re-upsert.
     await db.execute("alter table map_search_index add column msd_overall real");
+  }
+  if (!mapSearchColumns.has("msd_ln_json")) {
+    // Raw tail-aware MSD calc run (same semantics as
+    // beatmap_chart_analysis.msd_ln_json; readers blend by keymode weight), so
+    // bulk search rows carry the LN-adjusted MSD without a per-diff analysis
+    // fetch. Backfilled by the r7 BUILD_REVISION re-upsert.
+    await db.execute("alter table map_search_index add column msd_ln_json text");
   }
   await db.execute("create index if not exists idx_map_search_key_stars on map_search_index(key_count, stars)");
   await db.execute("create index if not exists idx_map_search_key_plays on map_search_index(key_count, play_count desc)");

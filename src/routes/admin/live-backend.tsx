@@ -13,10 +13,12 @@ import {
   openLiveEventSource,
   runLiveBackendAdminAction,
   setLiveBackendUserActive,
+  wipeLiveBackendUserData,
   type LiveBackendStorageBreakdown,
   type LiveBackendTableCell,
   type LiveBackendTablePreview,
   type LiveBackendUserActiveResult,
+  type LiveBackendUserWipeResult,
   type LiveEventName,
 } from "../../lib/live-backend";
 import { formatNumber, formatTimeAgo } from "../../lib/format";
@@ -1395,8 +1397,9 @@ function LiveBackendPage() {
             <RateBreakdownCard status={status} />
           </Section>
 
-          <Section title="Users" subtitle="Soft-deactivate a banned or cheating player, or reactivate one. Reversible: this untracks them and marks them inactive, it does not delete their rows.">
+          <Section title="Users" subtitle="Two controls: a reversible soft-deactivate/reactivate (untracks the player and marks them inactive, deletes nothing), and an irreversible wipe that also deletes their board/score projections.">
             <UserModerationCard />
+            <UserWipeCard />
           </Section>
             </>
           ) : (
@@ -3748,6 +3751,106 @@ function UserModerationCard() {
           {result.active
             ? result.retrackedRosters ? ` · re-tracked ${result.retrackedRosters} roster${result.retrackedRosters === 1 ? "" : "s"}` : ""
             : `${result.untrackedRosters ? ` · untracked ${result.untrackedRosters} roster${result.untrackedRosters === 1 ? "" : "s"}` : ""}${result.deletedJobs ? ` · cleared ${result.deletedJobs} pending job${result.deletedJobs === 1 ? "" : "s"}` : ""}`}.
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// The heavier, irreversible counterpart to UserModerationCard: deactivates the
+// player AND permanently deletes their board/score projections. Same
+// id-or-username input flow, but with its own confirm step (the same two-step
+// pattern as the row button) since nothing here can be undone.
+function UserWipeCard() {
+  const [query, setQuery] = useState("");
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<LiveBackendUserWipeResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const arm = () => {
+    if (!query.trim()) { setError("Enter a user id or username."); return; }
+    setError(null);
+    setConfirming(true);
+  };
+
+  const submit = () => {
+    const trimmed = query.trim();
+    if (!trimmed) { setError("Enter a user id or username."); setConfirming(false); return; }
+    const asId = Number(trimmed);
+    const payload = Number.isInteger(asId) && asId > 0 ? { userId: asId } : { username: trimmed };
+    setBusy(true);
+    setError(null);
+    setResult(null);
+    wipeLiveBackendUserData({ data: payload })
+      .then((res) => setResult(res))
+      .catch((err) => setError(err instanceof Error ? err.message : "Action failed."))
+      .finally(() => { setBusy(false); setConfirming(false); });
+  };
+
+  const deletedEntries = result ? Object.entries(result.deleted ?? {}) : [];
+  const deletedTotal = deletedEntries.reduce((sum, [, count]) => sum + count, 0);
+
+  return (
+    <div className="rounded-lg border border-osu-red/30 bg-osu-b4/30 p-3">
+      <div className="text-[11px] text-osu-f1">
+        Wipe data: deactivates the player AND permanently deletes their board/score projections
+        (farmed maps, snipe boards, top scores, key stats, skill ratings, feedback marks).
+        Irreversible; re-tracking them later would rebuild only from future fetches.
+      </div>
+      <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+        <input
+          value={query}
+          onChange={(event) => { setQuery(event.target.value); setConfirming(false); }}
+          onKeyDown={(event) => { if (event.key === "Enter") arm(); }}
+          placeholder="User id or username"
+          className="min-w-0 flex-1 rounded-md border border-osu-b3/40 bg-osu-b5 px-2.5 py-1.5 text-[12px] text-osu-l2 placeholder:text-osu-f1/50 focus:border-osu-c2/60 focus:outline-none"
+        />
+        <div className="flex gap-2">
+          {confirming ? (
+            <>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={submit}
+                className="inline-flex items-center gap-1.5 rounded-md bg-osu-red px-3 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-osu-red-light disabled:opacity-50 cursor-pointer"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> {busy ? "..." : `Confirm wipe ${query.trim()}`}
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setConfirming(false)}
+                className="rounded-md px-2 py-1.5 text-[12px] text-osu-f1 hover:text-white disabled:opacity-50 cursor-pointer"
+              >
+                cancel
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={arm}
+              className="inline-flex items-center gap-1.5 rounded-md border border-osu-red/40 bg-osu-red/15 px-3 py-1.5 text-[12px] text-osu-red-light transition-colors hover:bg-osu-red/30 disabled:opacity-50 cursor-pointer"
+            >
+              <Trash2 className="h-3.5 w-3.5" /> {busy ? "..." : "Wipe data"}
+            </button>
+          )}
+        </div>
+      </div>
+      {error ? <div className="mt-2 text-[11px] text-osu-red-light">{error}</div> : null}
+      {result ? (
+        <div className="mt-2 text-[11px] text-osu-f1">
+          <div>
+            Wiped {result.username ?? `User ${result.userId}`} (#{result.userId}): deleted {formatNumber(deletedTotal)} row{deletedTotal === 1 ? "" : "s"}
+            {result.untrackedRosters ? ` · untracked ${result.untrackedRosters} roster${result.untrackedRosters === 1 ? "" : "s"}` : ""}
+            {result.deletedJobs ? ` · cleared ${result.deletedJobs} pending job${result.deletedJobs === 1 ? "" : "s"}` : ""}. The user row stays as an inactive tombstone.
+          </div>
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-[10px] text-osu-f1/80">
+            {deletedEntries.map(([table, count]) => (
+              <span key={table}>{table}: <span className="text-osu-l2">{formatNumber(count)}</span></span>
+            ))}
+          </div>
         </div>
       ) : null}
     </div>

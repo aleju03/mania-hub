@@ -653,6 +653,54 @@ export const setLiveBackendUserActive = createServerFn({ method: "POST" })
     return body;
   });
 
+export interface LiveBackendUserWipeResult {
+  ok: boolean;
+  userId: number;
+  username: string | null;
+  untrackedRosters?: number;
+  deletedJobs?: number;
+  deleted: Record<string, number>;
+}
+
+// Admin hard purge: deactivates the player AND permanently deletes their
+// board/score projection rows (farmed scores, snipe boards, top scores, key
+// stats, skill ratings, feedback marks). Irreversible; re-tracking rebuilds
+// only from future fetches. Accepts a user id or username like set-user-active.
+export const wipeLiveBackendUserData = createServerFn({ method: "POST" })
+  .validator((data: { userId?: unknown; username?: unknown }) => {
+    const userId = Number(data?.userId);
+    const username = typeof data?.username === "string" ? data.username.trim().slice(0, 60) : "";
+    if ((!Number.isInteger(userId) || userId <= 0) && !username) {
+      throw new Error("Provide a user id or username.");
+    }
+    return {
+      userId: Number.isInteger(userId) && userId > 0 ? userId : null,
+      username: username || null,
+    };
+  })
+  .handler(async ({ data }): Promise<LiveBackendUserWipeResult> => {
+    await requireAdminAccess("Server wipe user data");
+    const base = getServerLiveBackendUrl();
+    if (!base) throw new Error("LIVE_BACKEND_URL is not configured.");
+    const headers: HeadersInit = { "content-type": "application/json" };
+    if (process.env.LIVE_ADMIN_TOKEN) {
+      headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+    }
+    const response = await fetch(`${base}/api/admin/wipe-user-data`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ userId: data.userId, username: data.username }),
+    });
+    const body = await response.json() as LiveBackendUserWipeResult & { error?: unknown };
+    if (!response.ok) {
+      const message = body && typeof body === "object" && "error" in body
+        ? String((body as { error?: unknown }).error)
+        : `Server ${response.status} for /api/admin/wipe-user-data`;
+      throw new Error(message === "user_not_found" ? "No user with that id or username." : message);
+    }
+    return body;
+  });
+
 export interface DiscordPublicInfo {
   configured: boolean;
   applicationId: string | null;
@@ -1080,6 +1128,9 @@ export interface LiveFarmHelperRec {
   // True when the backend judged this lane a risky clear (survival below its
   // threshold): render it as a clear attempt, not a farm.
   clearRisk?: boolean;
+  // Active feedback mark from the snapshot's own player on this lane. Only set
+  // on owner requests; optional so older backends still parse.
+  feedback?: "too_hard" | "too_easy";
 }
 
 export interface LiveFarmHelperPeerBand {
@@ -1112,18 +1163,36 @@ export interface LiveFarmHelperSnapshot {
   // Optional: older backend builds don't send it. Count of qualifying recs
   // before server-side truncation to the requested limit.
   totalQualifying?: number;
+  // Gain view only: lanes hidden because the player marked them too_hard.
+  // Optional so older backends still parse.
+  feedbackHiddenCount?: number;
+  // False while the backend has not analyzed enough of this player's plays to
+  // trust its models yet. Absent means ready (older backends don't send it).
+  modelsReady?: boolean;
   recs: LiveFarmHelperRec[];
   generatedAt: string;
 }
 
 export async function fetchLiveFarmHelperSnapshot(
   userKey: string,
-  params?: { keyMode?: LiveFarmHelperKeyMode; view?: LiveFarmHelperView; limit?: number; signal?: AbortSignal },
+  params?: {
+    keyMode?: LiveFarmHelperKeyMode;
+    view?: LiveFarmHelperView;
+    limit?: number;
+    fresh?: boolean | number;
+    signal?: AbortSignal;
+  },
 ): Promise<LiveFarmHelperSnapshot> {
   const query = new URLSearchParams({ user: userKey });
   if (params?.keyMode) query.set("key", params.keyMode);
   if (params?.view) query.set("view", params.view);
   if (params?.limit != null) query.set("limit", String(params.limit));
+  // Cache-buster: the endpoint serves max-age=60, so fetches right after a
+  // feedback mutation must skip the browser HTTP cache. Passing a number uses
+  // it as a stable epoch, so every fetch in the same epoch shares one cache
+  // entry; `true` is a one-off buster. The backend ignores unknown params.
+  if (typeof params?.fresh === "number") query.set("ts", String(params.fresh));
+  else if (params?.fresh) query.set("ts", String(Date.now()));
   return fetchLiveJson(`/api/snapshots/farm-helper?${query.toString()}`, params?.signal ? { signal: params.signal } : undefined);
 }
 
@@ -1336,9 +1405,10 @@ export interface LiveMapSearchEntry {
   // once the DT-rate sweep covers the chart; used to show real DT difficulty.
   danDt?: { label: string; family: string; rawDan: number } | null;
   msdDt?: Record<string, number> | null;
-  // LN-adjusted (tail-aware) MSD at 1.0x, present on the single-map detail
-  // entry for hold-bearing charts once the LN MSD sweep covers them. Already
-  // blended server-side; matches the skill-rating engine's valuation.
+  // LN-adjusted (tail-aware) MSD at 1.0x for hold-bearing charts, on bulk
+  // search rows and diffs as well as the single-map detail entry (absent only
+  // on payloads cached before the field shipped). Already blended server-side;
+  // matches the skill-rating engine's valuation.
   msdLn?: Record<string, number> | null;
   // Vibro-like chart per the classifier: ratings are unreliable and dan-scoped
   // searches skip these server-side.

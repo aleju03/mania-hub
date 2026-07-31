@@ -22,11 +22,12 @@ async function withDb(run: (db: Awaited<ReturnType<typeof createDb>>) => Promise
   }
 }
 
-// A dense 4K stream chart, long enough for MinaCalc to rate it above 0.
-function buildStreamBeatmapFile(): string {
+// A dense stream chart in the given keymode, long enough for MinaCalc to rate
+// it above 0. Column x positions follow osu!mania's floor(x * keys / 512).
+function buildStreamBeatmapFile(keyCount = 4): string {
   const notes = Array.from({ length: 700 }, (_, index) => {
-    const column = [0, 2, 1, 3][index % 4];
-    const x = 64 + column * 128;
+    const column = index % keyCount;
+    const x = Math.floor((512 * (column + 0.5)) / keyCount);
     const time = 1000 + index * 88;
     return `${x},192,${time},1,0,0:0:0:0:`;
   }).join("\n");
@@ -40,10 +41,10 @@ Mode: 3
 Title: DT Rate Test
 Artist: Test
 Creator: Mapper
-Version: 4K Stream
+Version: ${keyCount}K Stream
 
 [Difficulty]
-CircleSize:4
+CircleSize:${keyCount}
 OverallDifficulty:8
 
 [TimingPoints]
@@ -54,13 +55,13 @@ ${notes}
 `;
 }
 
-async function seedReadyAnalysis(db: Awaited<ReturnType<typeof createDb>>, beatmapId: number): Promise<void> {
+async function seedReadyAnalysis(db: Awaited<ReturnType<typeof createDb>>, beatmapId: number, keyCount = 4): Promise<void> {
   const now = nowIso();
   await exec(
     db,
     `insert into beatmap_chart_analysis (beatmap_id, analysis_version, status, key_count, updated_at)
-     values (?, ?, 'ready', 4, ?)`,
-    [beatmapId, CHART_ANALYSIS_VERSION, now],
+     values (?, ?, 'ready', ?, ?)`,
+    [beatmapId, CHART_ANALYSIS_VERSION, keyCount, now],
   );
 }
 
@@ -123,6 +124,44 @@ describe("DT-rate analysis sweep", () => {
       // Idempotent: the row now has msd_dt_json, so a second sweep skips it.
       const again = await recomputeDtRateChunk(db, 0);
       expect(again.computed).not.toContain(dtMap);
+    });
+  }, 30_000);
+
+  it("computes 1.5x MSD/dan for a DT-farmed 7K chart, and skips other keymodes", async () => {
+    await withDb(async (db) => {
+      const dtMap7k = 5300;
+      const dtMap6k = 5301;
+      await storeCachedBeatmapFile(db, dtMap7k, buildStreamBeatmapFile(7), { source: "test" });
+      await seedReadyAnalysis(db, dtMap7k, 7);
+      await seedDtFarmed(db, dtMap7k, ["NC"]);
+      // A DT-farmed 6K chart stays outside the sweep: the eligibility
+      // predicate is key_count in (4, 7).
+      await storeCachedBeatmapFile(db, dtMap6k, buildStreamBeatmapFile(6), { source: "test" });
+      await seedReadyAnalysis(db, dtMap6k, 6);
+      await seedDtFarmed(db, dtMap6k, ["DT"]);
+
+      const result = await recomputeDtRateChunk(db, 0);
+      expect(result.computed).toContain(dtMap7k);
+      expect(result.computed).not.toContain(dtMap6k);
+      expect(result.done).toBe(true);
+
+      const row = (await exec(
+        db,
+        "select msd_dt_json, dan_dt_json from beatmap_chart_analysis where beatmap_id = ? and analysis_version = ?",
+        [dtMap7k, CHART_ANALYSIS_VERSION],
+      )).rows[0];
+      expect(row.msd_dt_json).toBeTruthy();
+      expect(row.dan_dt_json).toBeTruthy();
+      // MinaCalc rates 7K at 1.5x the same way it does at 1.0x.
+      const parsed = JSON.parse(String(row.msd_dt_json));
+      expect(parsed.values.Overall).toBeGreaterThan(0);
+
+      const untouched = (await exec(
+        db,
+        "select msd_dt_json from beatmap_chart_analysis where beatmap_id = ? and analysis_version = ?",
+        [dtMap6k, CHART_ANALYSIS_VERSION],
+      )).rows[0];
+      expect(untouched.msd_dt_json).toBeNull();
     });
   }, 30_000);
 

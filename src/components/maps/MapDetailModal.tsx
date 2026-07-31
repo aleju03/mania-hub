@@ -79,8 +79,10 @@ function danSuffix(label: string): string {
 function MsdBlock({ entry, msdLn }: { entry: LiveMapSearchEntry; msdLn?: Record<string, number> | null }) {
   // The LN-adjusted (tail-aware) values simply ARE the msd shown when the
   // chart has holds: they match what the skill-rating engine credits a play
-  // here. Lands with the lazily fetched analysis; base values show meanwhile.
-  const msd = msdLn ?? entry.msd ?? null;
+  // here. Bulk search rows carry them, so the final number shows from first
+  // paint; the lazily fetched analysis only overrides when it is fresher than
+  // the index (base msd remains for pre-msdLn cached payloads).
+  const msd = msdLn ?? entry.msdLn ?? entry.msd ?? null;
   if (!msd) return null;
   const skillsets = MSD_SKILLSETS
     .map((name) => ({ name, value: Number(msd[name] ?? 0) }))

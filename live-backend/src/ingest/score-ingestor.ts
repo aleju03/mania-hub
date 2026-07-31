@@ -10,6 +10,8 @@ import { maybeEnqueueTopPlayRefresh } from "../features/top-plays.js";
 import { enqueuePlayerSkillsAfterSession } from "../features/player-skills.js";
 import { getHydratedScoreByIdentity } from "../features/tracker.js";
 import { evaluateScoreGoals } from "../features/goals.js";
+import { invalidateFarmHelperCacheForUser } from "../features/farm-helper.js";
+import { resolveFarmHelperFeedbackForScore } from "../features/farm-helper-feedback.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { hasPendingRecentReconcileJob, promotePendingRecentReconcileJobs, RECENT_RECONCILE_JOB_TYPE } from "../jobs/recent-reconcile.js";
 import type { LiveEventLog } from "../live/event-log.js";
@@ -64,6 +66,22 @@ export class ScoreIngestor {
     const scoreId = Number(score.id);
     const beatmapId = Number(score.beatmap_id ?? score.beatmap?.id);
     if (!Number.isFinite(scoreId) || scoreId < 0 || !Number.isFinite(beatmapId) || beatmapId <= 0) return false;
+    // Farm-helper feedback auto-resolution: a genuinely new passed score on a
+    // marked lane retires the mark (the real play drives recs from now on) and
+    // evicts this process's snapshot cache for the player. Runs before the
+    // roster gate on purpose: marks belong to whoever set them, and a player on
+    // no tracked roster still plays. The userMightHaveFeedback index inside the
+    // resolver keeps this near-free for the 99.9% of users with no marks, and
+    // its `resolved_at is null and created_at < scoreTime` predicate makes a
+    // re-delivered score a no-op, so running ahead of the score_events dedupe
+    // is safe. Guarded like goals: a feedback bug can never drop a score off
+    // the ingest hot path.
+    try {
+      const resolvedMarks = await resolveFarmHelperFeedbackForScore(this.db, score);
+      if (resolvedMarks > 0) invalidateFarmHelperCacheForUser(this.db, Number(score.user_id));
+    } catch (error) {
+      logWarn("farm_helper_feedback_resolve_failed", { user_id: score.user_id, error: error instanceof Error ? error.message : String(error) });
+    }
     const receivedAt = nowIso();
     const countries = await this.getTrackedCountries(score, options.countryAllowlist);
     if (countries.length === 0) return false;

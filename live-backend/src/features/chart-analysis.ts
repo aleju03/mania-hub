@@ -1232,15 +1232,17 @@ async function enqueueChordjackTagRecompute(queue: JobQueue, cursor: number): Pr
 
 // ── One-shot rate-adjusted (DT / 1.5x) analysis sweep ─────────────────────────
 // Stored analysis is 1.0x only, so the farm helper's feasibility gate can only
-// screen normal-speed 4K recs; DT recs bypass it and far-too-hard-under-1.5x maps
+// screen normal-speed recs; DT recs bypass it and far-too-hard-under-1.5x maps
 // slip through. This boot-seeded chunked sweep computes 1.5x MSD (and a lean dan
-// verdict) for the 4K charts that are actually DT-farmed, storing them in the
-// msd_dt_json / dan_dt_json columns so the gate can screen DT recs too. Same
+// verdict) for the 4K and 7K charts that are actually DT-farmed, storing them in
+// the msd_dt_json / dan_dt_json columns so the gate can screen DT recs too. Same
 // playbook as the vibro sweep above: chunked, self-chaining, boot-seeded, done in
 // live_meta. Purely local work (cached .osu corpus), no osu! API.
+// v2: the v1 sweep was 4K-only; the bump reseeds it so 7K charts backfill (4K
+// rows already carrying msd_dt_json are skipped by the null filter).
 
 export const DT_RATE_ANALYSIS_JOB = "recompute_dt_rate_analysis_sweep";
-const DT_RATE_ANALYSIS_META_KEY = "dt_rate_analysis_done:v1";
+const DT_RATE_ANALYSIS_META_KEY = "dt_rate_analysis_done:v2";
 const DT_RATE_ANALYSIS_CHUNK = 40;
 const DT_RATE = 1.5;
 
@@ -1267,7 +1269,7 @@ export async function recomputeDtRateChunk(
     `select a.beatmap_id as beatmap_id
      from beatmap_chart_analysis a
      where a.analysis_version = ? and a.status = 'ready'
-       and a.key_count = 4 and a.msd_dt_json is null
+       and a.key_count in (4, 7) and a.msd_dt_json is null
        and a.beatmap_id > ?
        and exists (
          select 1 from country_maps_farmed_scores f
@@ -1288,7 +1290,9 @@ export async function recomputeDtRateChunk(
     if (!osuText) continue;
     try {
       const map = parseManiaBeatmap(osuText);
-      if (map.keyCount !== 4) continue;
+      // The .osu is the truth for the keymode; a stored key_count the parser
+      // disagrees with keeps its null DT columns.
+      if (map.keyCount !== 4 && map.keyCount !== 7) continue;
       const starRating = Number((await exec(
         db,
         "select difficulty_rating from beatmaps where beatmap_id = ? limit 1",
@@ -1301,9 +1305,10 @@ export async function recomputeDtRateChunk(
         version: map.version,
       });
       // The classifier and MinaCalc are the CPU bursts; yield between them and
-      // between charts so ingest/SSE keep moving.
+      // between charts so ingest/SSE keep moving. MinaCalc rates 4K and 7K the
+      // same way at 1.5x as it does at 1.0x (musicRate passes straight through).
       await new Promise<void>((resolve) => setImmediate(resolve));
-      const msd = await computeMsd(osuText, { keyCount: 4, rate: DT_RATE }).catch(() => null);
+      const msd = await computeMsd(osuText, { keyCount: map.keyCount, rate: DT_RATE }).catch(() => null);
       if (!msd) continue;
 
       const lean = leanClassification(classification);
@@ -1449,6 +1454,18 @@ export async function ensureLnMsdSweepSeeded(db: Db, queue: JobQueue): Promise<v
 export async function runLnMsdSweepJob(db: Db, queue: JobQueue, payload: { cursor?: number } | undefined): Promise<void> {
   const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
   const result = await recomputeLnMsdChunk(db, cursor);
+  if (result.computed.length > 0) {
+    // The sweep updates the analysis row in place, so the map_search_index
+    // copy of msd_ln_json goes stale without a per-row refresh. Dynamic import
+    // keeps the static graph acyclic (map-search imports this module).
+    await import("./map-search.js")
+      .then(async (module) => {
+        for (const beatmapId of result.computed) {
+          await module.upsertMapSearchIndexRow(db, beatmapId);
+        }
+      })
+      .catch(() => {});
+  }
   if (result.done) {
     const now = nowIso();
     await exec(
@@ -1521,7 +1538,11 @@ export async function recomputeLnSourceChunk(
     if (!osuText || !storedLn) continue;
     try {
       const map = parseManiaBeatmap(osuText);
-      if (map.keyCount !== 4) continue;
+      // The candidate SQL above is 4K-scoped (the LN kNN corpus extension was a
+      // 4K change); this parse re-check only rejects files that disagree with
+      // the stored key_count, and matches the DT sweep's 4K/7K coverage so the
+      // inline dan_dt refresh below never hardcodes a keymode.
+      if (map.keyCount !== 4 && map.keyCount !== 7) continue;
       // Recompute just the kNN half with the same inputs the full analysis job
       // uses; a matching verdict means re-analysis would store the same thing.
       const starRating = Number((await exec(

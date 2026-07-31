@@ -17,9 +17,11 @@ export const MAP_SEARCH_BUILD_JOB = "build_map_search_index";
 // indexed fields are derived (r2: length was stored as the source row's column
 // count for every map; r4: MSD-based 4K primaries, lnRatio LN routing, vibro;
 // r5: msd_overall column for MSD-bucketed collections; r6: split-trill charts
-// no longer take MinaCalc's artifact jack-family primaries).
+// no longer take MinaCalc's artifact jack-family primaries; r7: msd_ln_json so
+// bulk rows carry the LN-adjusted MSD - the detail modal showed the base value
+// first and visibly corrected upward once the analysis fetch landed).
 // The rebuild is pure DB work, no osu! API.
-const BUILD_REVISION = 6;
+const BUILD_REVISION = 7;
 const BUILD_META_KEY = `map_search_index_built:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
 const BUILD_CURSOR_KEY = `map_search_index_build_cursor:v${ACTIVITY_SKILL_ANALYSIS_VERSION}:r${BUILD_REVISION}`;
 const BUILD_BATCH_SIZE = 400;
@@ -116,6 +118,10 @@ export interface MapSearchEntry {
   dan: { label: string; family: string; rawDan: number } | null;
   /** MinaCalc MSD skillset values at 1.0x, null until the chart analysis lands. */
   msd: Record<string, number> | null;
+  /** LN-adjusted (tail-aware, keymode-blended) MSD at 1.0x; null until the LN
+   *  calc covers this chart or when the chart has no meaningful LN content.
+   *  On bulk rows so detail surfaces show the final value from first paint. */
+  msdLn: Record<string, number> | null;
   /** Vibro-like chart per the classifier; ratings are unreliable, dan filters skip these. */
   vibro: boolean;
 }
@@ -133,10 +139,6 @@ export interface MapSearchSetEntry extends MapSearchEntry {
    *  covered this chart yet. */
   danDt?: { label: string; family: string; rawDan: number } | null;
   msdDt?: Record<string, number> | null;
-  /** LN-adjusted (tail-aware, keymode-blended) MSD at 1.0x; null until the LN
-   *  MSD sweep covers this chart or when the chart has no meaningful LN
-   *  content. Absent on bulk search rows. */
-  msdLn?: Record<string, number> | null;
 }
 
 export interface MapSearchPage {
@@ -338,6 +340,7 @@ const SOURCE_SELECT = `
     ca.raw_dan as ca_raw_dan,
     ca.msd_json as ca_msd_json,
     ca.msd_overall as ca_msd_overall,
+    ca.msd_ln_json as ca_msd_ln_json,
     ca.classification_json as ca_classification_json,
     json_extract(ca.classification_json, '$.vibro') as ca_vibro
   from beatmap_skill_vectors sv
@@ -411,6 +414,7 @@ function buildIndexUpsert(row: Record<string, unknown>): DbStatement | null {
     row.ca_raw_dan == null ? null : realOr(row.ca_raw_dan),
     row.ca_msd_json == null ? null : String(row.ca_msd_json),
     row.ca_msd_overall == null ? null : realOr(row.ca_msd_overall),
+    row.ca_msd_ln_json == null ? null : String(row.ca_msd_ln_json),
     readPatternTags(row.ca_classification_json),
     intOr(row.ca_vibro) === 1 ? 1 : 0,
     nowIso(),
@@ -421,8 +425,8 @@ function buildIndexUpsert(row: Record<string, unknown>): DbStatement | null {
         search_text, key_count, stars, bpm, length, status, play_count, pass_count, ln_count,
         primary_pattern, pat_jack, pat_stream, pat_jumpstream, pat_handstream, pat_stamina,
         pat_chordjack, pat_tech, pat_ln, covers_json, ranked_date,
-        dan_label, dan_family, raw_dan, msd_json, msd_overall, pattern_tags, vibro, updated_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        dan_label, dan_family, raw_dan, msd_json, msd_overall, msd_ln_json, pattern_tags, vibro, updated_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       on conflict(beatmap_id) do update set
         beatmapset_id = excluded.beatmapset_id,
         analysis_version = excluded.analysis_version,
@@ -437,6 +441,7 @@ function buildIndexUpsert(row: Record<string, unknown>): DbStatement | null {
         covers_json = excluded.covers_json, ranked_date = excluded.ranked_date,
         dan_label = excluded.dan_label, dan_family = excluded.dan_family, raw_dan = excluded.raw_dan,
         msd_json = excluded.msd_json, msd_overall = excluded.msd_overall,
+        msd_ln_json = excluded.msd_ln_json,
         pattern_tags = excluded.pattern_tags, vibro = excluded.vibro,
         updated_at = excluded.updated_at`,
     args,
@@ -749,7 +754,7 @@ const SELECT_COLUMNS = `
   beatmap_id, beatmapset_id, title, artist, creator, version, status, key_count,
   stars, bpm, length as length_seconds, play_count, ln_count, primary_pattern,
   pat_jack, pat_stream, pat_jumpstream, pat_handstream, pat_stamina, pat_chordjack, pat_tech, pat_ln,
-  pattern_tags, covers_json, dan_label, dan_family, raw_dan, msd_json, vibro`;
+  pattern_tags, covers_json, dan_label, dan_family, raw_dan, msd_json, msd_ln_json, vibro`;
 
 const KEY_CLAUSES: Record<string, (p: string) => string> = {
   "4k": (p) => `${p}key_count = 4`,
@@ -1264,7 +1269,9 @@ export async function getMapSearchSetEntry(db: Db, beatmapId: number): Promise<M
     [beatmapId, CHART_ANALYSIS_VERSION],
   )).rows[0];
   const { danDt, msdDt } = parseDtRateVerdict(dtRow);
-  const msdLn = parseLnAdjustedMsd(dtRow, entry.msd, entry.keyCount);
+  // The analysis row can be fresher than the index copy (the LN sweep updates
+  // it in place); prefer it, fall back to the index-derived blend.
+  const msdLn = parseLnAdjustedMsd(dtRow, entry.msd, entry.keyCount) ?? entry.msdLn;
   return { ...entry, diffCount: diffs.length, diffs, danDt, msdDt, msdLn };
 }
 
@@ -1344,6 +1351,13 @@ function rowToEntry(row: Record<string, unknown>): MapSearchEntry {
     ? null
     : parseJson<{ values?: Record<string, number> } | null>(row.msd_json, null);
   const msd = msdParsed && msdParsed.values && typeof msdParsed.values === "object" ? msdParsed.values : null;
+  const keyCount = intOr(row.key_count);
+  // msd_ln_json holds the raw tail-aware calc run; blending at read time (not
+  // at index build) means a keymode-weight retune lands without a rebuild.
+  const lnParsed = row.msd_ln_json == null
+    ? null
+    : parseJson<{ values?: Record<string, number> } | null>(row.msd_ln_json, null);
+  const lnTails = lnParsed && lnParsed.values && typeof lnParsed.values === "object" ? lnParsed.values : null;
   return {
     beatmapId: intOr(row.beatmap_id),
     beatmapsetId: intOr(row.beatmapset_id),
@@ -1352,7 +1366,7 @@ function rowToEntry(row: Record<string, unknown>): MapSearchEntry {
     creator: row.creator == null ? "" : String(row.creator),
     version: String(row.version ?? ""),
     status: String(row.status ?? ""),
-    keyCount: intOr(row.key_count),
+    keyCount,
     stars: realOr(row.stars),
     bpm: realOr(row.bpm),
     length: intOr(row.length_seconds),
@@ -1366,6 +1380,7 @@ function rowToEntry(row: Record<string, unknown>): MapSearchEntry {
     covers: covers && typeof covers === "object" ? covers : null,
     dan,
     msd,
+    msdLn: lnAdjustedMsd(msd, lnTails, keyCount),
     vibro: intOr(row.vibro) === 1,
   };
 }

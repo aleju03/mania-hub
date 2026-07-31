@@ -363,6 +363,20 @@ create table if not exists farm_helper_user_key_stats (
   primary key (key_count, user_id)
 );
 
+-- Per-player farm-helper feedback marks (too hard / too easy on one rec lane)
+-- Epoch-ms timestamps, a null resolved_at means the mark is active
+create table if not exists farm_helper_feedback (
+  user_id integer not null,
+  beatmap_id integer not null,
+  speed_bucket text not null,
+  verdict text not null,
+  created_at integer not null,
+  updated_at integer not null,
+  resolved_at integer,
+  resolved_pp real,
+  primary key (user_id, beatmap_id, speed_bucket)
+);
+
 create table if not exists replay_video_exports (
   id text primary key,
   score_id integer,
@@ -570,6 +584,7 @@ create index if not exists idx_country_maps_favourite_sets_beatmapset_user on co
 create index if not exists idx_country_maps_favourite_sets_user_set on country_maps_favourite_sets(user_id, beatmapset_id, country);
 create index if not exists idx_farm_helper_user_key_stats_weighted on farm_helper_user_key_stats(key_count, weighted_pp);
 create index if not exists idx_farm_helper_user_key_stats_user on farm_helper_user_key_stats(user_id);
+create index if not exists idx_farm_helper_feedback_user_resolved on farm_helper_feedback(user_id, resolved_at);
 create index if not exists idx_replay_video_exports_status_time on replay_video_exports(status, updated_at desc);
 create index if not exists idx_dan_estimates_updated on dan_estimates(updated_at desc);
 create index if not exists idx_beatmap_skill_vectors_status_updated on beatmap_skill_vectors(status, updated_at desc);

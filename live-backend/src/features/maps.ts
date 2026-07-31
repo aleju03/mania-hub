@@ -3707,8 +3707,12 @@ function rebuildGlobalMapsFarmedAggregateStatements(
 
 // Reconcile only one player's rows on the maps their country overlay changed.
 // The normalized country table remains the source of truth; this projection is
-// disposable and can always be rebuilt by refreshGlobalMaps().
-async function syncGlobalMapsFarmedUserBeatmaps(
+// disposable and can always be rebuilt by refreshGlobalMaps(). Exported for the
+// admin wipe-user-data purge: after the country rows are deleted, this removes
+// the user's global rows, rebuilds the touched per-beatmap aggregates, and
+// publishes the revision + per-beatmap changes that make every serving
+// process's packed in-memory board (and its disk cache) catch up.
+export async function syncGlobalMapsFarmedUserBeatmaps(
   db: Db,
   userId: number,
   beatmapIds: number[],

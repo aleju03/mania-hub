@@ -16,9 +16,11 @@ import { enqueueSettledSetsReconcileIfDue } from "./features/settled-sets-reconc
 import { ensureChordjackTagRecomputeSeeded, ensureDanFloorPinRecomputeSeeded, ensureDtRateAnalysisSeeded, ensureLnMsdSweepSeeded, ensureLnSourceRecomputeSeeded, ensureLnSubtypeRecomputeSeeded, ensureNoteBpmRecomputeSeeded, ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
 import { enqueueMapCollectionsRebuildIfDue } from "./features/map-collections.js";
 import { startGoalUserIndexRefresh } from "./features/goals.js";
+import { startFarmHelperFeedbackUserIndexRefresh } from "./features/farm-helper-feedback.js";
 import { enqueueProfilePoolWarmIfIdle } from "./features/profile-pool-warm.js";
 import { enqueuePlayerSkills, PLAYER_SKILLS_JOB, PLAYER_SKILLS_VERSION } from "./features/player-skills.js";
 import { enqueueSkillBaselineIfDue } from "./features/skill-baseline.js";
+import { ensureTopScoresBackfillSeeded } from "./features/top-scores-backfill.js";
 import { backfillSkinSlugs } from "./features/skins.js";
 import { AbuseGuard } from "./http/abuse-guard.js";
 import { CountryClientTracker } from "./live/country-clients.js";
@@ -61,6 +63,7 @@ const REQUIRED_SCHEMA_TABLES = [
   "pack_collection_cards",
   "api_rate_limit_reservations",
   "user_goals",
+  "farm_helper_feedback",
   "beatmap_osu_files",
   "map_search_index",
   "map_collections",
@@ -85,7 +88,7 @@ const REQUIRED_SCHEMA_TABLES = [
 //   - This poll must outlast that: 300s of contention + 120s of slack for the
 //     uncontended part of a fresh-database migration (106 schema statements plus
 //     27 helpers, including the big index batch) = 420s (7 min).
-// On an existing database this is a no-op: all 23 required tables already exist,
+// On an existing database this is a no-op: all 24 required tables already exist,
 // so the first poll returns in milliseconds no matter what the worker is doing.
 // It only bites on a first boot, where the server genuinely must wait for the
 // worker to reach migrateSkins (step 18 of 27).
@@ -191,6 +194,9 @@ export async function createApp() {
     // the ingest hot path skips a DB lookup for players with no goals (and learns of goals created
     // by a separate server-role process within a refresh interval).
     startGoalUserIndexRefresh(db);
+    // Same shape for farm-helper feedback marks: the ingest hot path's
+    // auto-resolution skips a table lookup for players with no active marks.
+    startFarmHelperFeedbackUserIndexRefresh(db);
   } else if (serveWriteDb) {
     // A server-role process must not write on its serving connection, but the
     // registry read path (/api/countries/features, /api/status) needs the pinned
@@ -307,6 +313,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       void ensureDtRateAnalysisSeeded(app.db, app.queue).catch((error) => console.warn("[dt-rate-analysis] seed failed", error));
       void ensureLnMsdSweepSeeded(app.db, app.queue).catch((error) => console.warn("[ln-msd-sweep] seed failed", error));
       void ensureNoteBpmRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[note-bpm-recompute] seed failed", error));
+      // Unlike the sweeps above this one consumes osu! API budget (one best-
+      // scores call per user), so it also requires osu! API jobs to be enabled.
+      // Guarded by its done key: post-completion boots schedule nothing.
+      if (app.config.enableOsuApiJobs) {
+        void ensureTopScoresBackfillSeeded(app.db, app.queue).catch((error) => console.warn("[top-scores-backfill] seed failed", error));
+      }
     }
     if (app.config.enableScheduledRefreshes && app.config.enableOsuApiJobs) {
       startRosterScheduler(app.db, app.queue, app.config);

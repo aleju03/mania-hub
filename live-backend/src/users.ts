@@ -1,5 +1,8 @@
 import type { Db } from "./db.js";
 import { exec, json } from "./db.js";
+import { clearFarmHelperCache } from "./features/farm-helper.js";
+import { clearFarmHelperKeyStatsCaches } from "./features/farm-helper-key-stats.js";
+import { syncGlobalMapsFarmedUserBeatmaps } from "./features/maps.js";
 import { nowIso } from "./shared/score.js";
 
 const USER_SCOPED_JOB_TYPES = [
@@ -63,6 +66,73 @@ export async function reactivateUser(db: Db, userId: number): Promise<{ retracke
     [now, safeUserId],
   );
   return { retrackedRosters: Number(rosterResult.rowsAffected ?? 0) };
+}
+
+export interface WipeUserProjectionsResult {
+  userId: number;
+  untrackedRosters: number;
+  deletedJobs: number;
+  deleted: Record<string, number>;
+}
+
+// Hard purge for permanent cases (cheaters, ban-evasion accounts). Runs the
+// same soft-deactivate ban detection uses (untrack + inactive + queued jobs
+// dropped), then deletes the user's rows from the public projection tables so
+// they vanish from boards immediately instead of merely stopping updates.
+// Deliberately preserved:
+// - the users row itself (the inactive tombstone read-time exclusion keys on),
+// - score_events / live_event_log (retention prunes them) and snipe_events /
+//   top_play_events (historical records, not projections of the player),
+// - goals, pack wallets, skins (personal data, not public boards).
+// Irreversible: re-tracking the user later rebuilds only from future fetches.
+export async function wipeUserProjections(db: Db, userId: number): Promise<WipeUserProjectionsResult> {
+  const safeUserId = Math.floor(userId);
+  if (!Number.isFinite(safeUserId) || safeUserId <= 0) throw new Error("Invalid user id");
+  const missing = await markUserMissing(db, safeUserId, "admin: wipe user data");
+
+  // Collect the touched beatmaps BEFORE deleting so the global farmed
+  // projection can be reconciled per beatmap instead of forcing a full reseed.
+  const beatmapIds = new Set<number>();
+  for (const table of ["country_maps_farmed_scores", "global_maps_farmed_scores"]) {
+    const rows = (await exec(db, `select distinct beatmap_id from ${table} where user_id = ?`, [safeUserId])).rows;
+    for (const row of rows) {
+      const beatmapId = Number(row.beatmap_id);
+      if (Number.isSafeInteger(beatmapId) && beatmapId > 0) beatmapIds.add(beatmapId);
+    }
+  }
+
+  const deleted: Record<string, number> = {};
+  const deleteFrom = async (table: string) => {
+    deleted[table] = Number((await exec(db, `delete from ${table} where user_id = ?`, [safeUserId])).rowsAffected ?? 0);
+  };
+  await deleteFrom("country_maps_farmed_scores");
+  // The global rows are counted up front but deleted inside the reconcile: with
+  // every country row gone, syncGlobalMapsFarmedUserBeatmaps drops the user's
+  // global rows in the same batches that rebuild the per-beatmap aggregates and
+  // publish the revision + change rows the packed board catch-up consumes.
+  deleted.global_maps_farmed_scores = Number(
+    (await exec(db, "select count(*) as n from global_maps_farmed_scores where user_id = ?", [safeUserId])).rows[0]?.n ?? 0,
+  );
+  await syncGlobalMapsFarmedUserBeatmaps(db, safeUserId, [...beatmapIds], nowIso());
+  await deleteFrom("farm_helper_user_key_stats");
+  await deleteFrom("user_top_scores");
+  await deleteFrom("country_beatmap_scores");
+  await deleteFrom("farm_helper_feedback");
+  await deleteFrom("player_skill_ratings");
+  await deleteFrom("player_skill_baseline");
+
+  // In-process caches may still hold the user inside other subjects' snapshots
+  // and cohort pools; wipes are rare, so a wholesale clear is fine. (Sibling
+  // processes converge via the 5-minute TTLs.)
+  clearFarmHelperCache(db);
+  clearFarmHelperKeyStatsCaches(db);
+
+  return {
+    userId: safeUserId,
+    untrackedRosters: missing.untrackedRosters,
+    deletedJobs: missing.deletedJobs,
+    deleted,
+  };
 }
 
 export interface UserActiveResult {

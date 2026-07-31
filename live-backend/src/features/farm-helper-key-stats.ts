@@ -120,6 +120,14 @@ interface CachedCalibration {
 const poolCache = new WeakMap<Db, Map<FarmHelperKeyCount, CachedPool>>();
 const calibrationCache = new WeakMap<Db, Map<FarmHelperKeyCount, CachedCalibration>>();
 
+// Wholesale clear of this Db's cached peer pools and calibrations. Used by the
+// admin wipe-user-data purge so the wiped user drops out of keymode cohorts
+// immediately instead of after the 5-minute pool TTL.
+export function clearFarmHelperKeyStatsCaches(db: Db): void {
+  poolCache.delete(db);
+  calibrationCache.delete(db);
+}
+
 // Fetches every qualifying key-mode peer once per keyCount (subject-independent,
 // cached 5 min) alongside the proxy calibration. Per-subject kernel selection
 // then runs in JS, replacing the old per-subject band-ladder SQL.
@@ -134,7 +142,10 @@ export async function getKeyModePeerPool(
   if (cached && cached.expiresAt > now) return { peers: cached.peers, calibration: cached.calibration };
 
   // The variants LIKE probe runs once per pool refresh (cached 5 min), not per
-  // request, so it stays off the hot path.
+  // request, so it stays off the hot path. u.is_active = 1 keeps deactivated
+  // players out of the peer pool at read time even when their key-stat rows
+  // still exist (the join already requires a users row, so this never rejects
+  // anyone for merely missing data).
   const rows = (await exec(
     db,
     `select s.user_id, u.pp, s.weighted_pp, ${variantPpColumn(keyCount)} as variant_pp,
@@ -144,7 +155,8 @@ export async function getKeyModePeerPool(
      where s.key_count = ?
        and s.score_count >= ?
        and u.pp is not null
-       and u.pp > 0`,
+       and u.pp > 0
+       and u.is_active = 1`,
     [keyCount, KEYMODE_MIN_PROXY_SCORES],
   )).rows;
   const peers: RawKeyModePeer[] = [];
@@ -180,6 +192,7 @@ export async function getProxyCalibration(db: Db, keyCount: FarmHelperKeyCount):
      join users u on u.user_id = s.user_id
      where s.key_count = ?
        and s.score_count >= ?
+       and u.is_active = 1
        and ${variantPpColumn(keyCount)} is not null
        and ${variantPpColumn(keyCount)} > 0`,
     [keyCount, KEYMODE_MIN_PROXY_SCORES],
@@ -279,6 +292,10 @@ function mapFor<K, V>(weak: WeakMap<Db, Map<K, V>>, db: Db): Map<K, V> {
   return map;
 }
 
+// Rebuilds one user's key stats from their farmed rows. The not-exists guard
+// means a refresh for a deactivated user deletes their stats and re-inserts
+// nothing (write-time hygiene), while a user with no users row at all still
+// gets stats (never reject on missing data).
 export async function refreshFarmHelperKeyStatsForUser(db: Db, userId: number, updatedAt = nowIso()): Promise<void> {
   if (!Number.isSafeInteger(userId) || userId <= 0) return;
   await exec(db, "delete from farm_helper_user_key_stats where user_id = ?", [userId]);
@@ -288,7 +305,8 @@ export async function refreshFarmHelperKeyStatsForUser(db: Db, userId: number, u
      from country_maps_farmed_scores s
      left join maps_beatmaps mb on mb.beatmap_id = s.beatmap_id
      left join beatmaps b on b.beatmap_id = s.beatmap_id
-     where s.user_id = ?`,
+     where s.user_id = ?
+       and not exists (select 1 from users u where u.user_id = s.user_id and u.is_active = 0)`,
     [userId],
   )).rows;
   const stats = collectStats(rows);
@@ -303,7 +321,8 @@ async function rebuildFarmHelperKeyStats(db: Db, keyCount: FarmHelperKeyCount): 
      from country_maps_farmed_scores s
      left join maps_beatmaps mb on mb.beatmap_id = s.beatmap_id
      left join beatmaps b on b.beatmap_id = s.beatmap_id
-     where round(coalesce(mb.cs, b.cs, 0)) = ?`,
+     where round(coalesce(mb.cs, b.cs, 0)) = ?
+       and not exists (select 1 from users u where u.user_id = s.user_id and u.is_active = 0)`,
     [keyCount],
   )).rows;
 

@@ -65,6 +65,10 @@ describe("getMapsRandomDraw", () => {
   let queue: JobQueue;
 
   beforeEach(async () => {
+    // Staleness compares refreshed_at against the real clock, so pin the clock
+    // to the fixture stamps; otherwise the suite starts failing once the
+    // calendar drifts past the snapshot max age.
+    vi.useFakeTimers({ now: new Date(NOW), toFake: ["Date"] });
     dir = await mkdtemp(join(tmpdir(), "mania-maps-random-draw-"));
     db = await createDb({ databaseUrl: `file:${join(dir, "test.db")}` });
     await migrate(db);
@@ -72,6 +76,7 @@ describe("getMapsRandomDraw", () => {
     await seedFixture();
   });
   afterEach(async () => {
+    vi.useRealTimers();
     await rm(dir, { recursive: true, force: true });
   });
 

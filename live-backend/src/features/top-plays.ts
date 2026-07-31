@@ -147,6 +147,26 @@ export async function confirmTopPlay(
   return true;
 }
 
+/**
+ * Fetch-and-store a user's best-scores window through the same path
+ * confirmTopPlay uses (budgeted client, threshold update, display metadata,
+ * user_top_scores replacement), without the confirmation/event side. Used by
+ * the one-time top-scores backfill sweep to populate the projection for
+ * roster members who never had a confirmed top play.
+ */
+export async function refreshUserTopScoresProjection(
+  db: Db,
+  osu: Pick<OsuApiClient, "getUserBestScores"> & Partial<Pick<OsuApiClient, "getUserBestScoresWindow">>,
+  userId: number,
+): Promise<{ scoreCount: number; refreshedAt: string }> {
+  const bestScores = dedupeScoresById(await getUserBestScoresForPpGain(osu, userId));
+  const refreshedAt = nowIso();
+  await updateUserTopPlayThreshold(db, userId, bestScores, refreshedAt);
+  await persistScoresDisplayMetadata(db, bestScores, refreshedAt);
+  await replaceUserTopScores(db, userId, bestScores, refreshedAt);
+  return { scoreCount: bestScores.length, refreshedAt };
+}
+
 async function getUserBestScoresForPpGain(
   osu: Pick<OsuApiClient, "getUserBestScores"> & Partial<Pick<OsuApiClient, "getUserBestScoresWindow">>,
   userId: number,

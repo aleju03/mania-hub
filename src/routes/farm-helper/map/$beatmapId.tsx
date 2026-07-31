@@ -102,7 +102,11 @@ const SPEED_RATES: Record<LiveFarmHelperSpeedBucket, number> = {
   dt: 1.5,
 };
 
-const FARM_MAP_CONTEXT_KEY_PREFIX = "mania-hub-farm-helper-map-context-v1:";
+// The board writes one blob per (beatmap, speed lane, user) so NM/DT lanes and
+// different players never overwrite each other. Reads must use the same
+// composite key and treat stale or mismatched blobs as no context at all.
+const FARM_MAP_CONTEXT_KEY_PREFIX = "mania-hub-farm-helper-map-context-v2:";
+const FARM_MAP_CONTEXT_MAX_AGE_MS = 30 * 60 * 1000;
 
 export const Route = createFileRoute("/farm-helper/map/$beatmapId")({
   validateSearch: (search: Record<string, unknown>): FarmMapSearch => ({
@@ -167,7 +171,12 @@ function FarmMapDetailPage() {
   }, [beatmapId]);
 
   const selectedBeatmap = beatmapset?.maniaBeatmaps.find((map) => map.id === selectedBeatmapId) ?? beatmapset?.maniaBeatmaps[0] ?? null;
-  const farmRate = getFarmSpeedRate(farmContext?.speed);
+  const contextRate = getFarmSpeedRate(farmContext?.speed);
+  // The farm verdict, its badges, and the speed-rate scaling all describe the
+  // lane the board scored: this exact beatmap at this exact rate. Any other
+  // difficulty gets the generic 1.0x presentation.
+  const isContextDiff = selectedBeatmap == null || selectedBeatmap.id === beatmapId;
+  const farmRate = isContextDiff ? contextRate : 1;
   const displayedBpm = Math.round((selectedBeatmap?.bpm ?? beatmapset?.bpm ?? 0) * farmRate);
   const displayedLength = selectedBeatmap ? Math.max(1, Math.round(selectedBeatmap.totalLength / farmRate)) : 0;
 
@@ -203,14 +212,9 @@ function FarmMapDetailPage() {
   const cardUrl = beatmapset?.covers.card ?? beatmapset?.covers.list ?? coverUrl;
   const heroImageUrl = farmContext?.cover ?? cardUrl;
   const heroBackdropUrl = coverUrl || farmContext?.cover || cardUrl;
-  const hasFarmContext = Boolean(farmContext && (
-    farmContext.gain != null ||
-    farmContext.benchmark != null ||
-    farmContext.subjectPp != null ||
-    farmContext.peerCount != null ||
-    farmContext.peerFraction != null ||
-    farmContext.median != null
-  ));
+  const hasFarmContext = hasFarmVerdictContext(farmContext);
+  const showFarmVerdict = hasFarmContext && isContextDiff;
+  const showFarmersPanel = Boolean(farmContext?.userKey);
 
   return (
     <div className="relative flex min-h-screen flex-col bg-osu-b5">
@@ -261,9 +265,9 @@ function FarmMapDetailPage() {
                 <div className="min-w-0 self-center">
                   <div className="mb-2 flex flex-wrap items-center gap-1.5">
                     <StatusBadge status={selectedBeatmap.status ?? beatmapset.status} />
-                    {farmContext?.reason ? <ContextBadge>{REASON_LABELS[farmContext.reason]}</ContextBadge> : null}
-                    {farmContext?.clearRisk ? <ClearRiskBadge /> : null}
-                    {farmContext?.speed ? <ContextBadge>{SPEED_LABELS[farmContext.speed]}</ContextBadge> : null}
+                    {isContextDiff && farmContext?.reason ? <ContextBadge>{REASON_LABELS[farmContext.reason]}</ContextBadge> : null}
+                    {isContextDiff && farmContext?.clearRisk ? <ClearRiskBadge /> : null}
+                    {isContextDiff && farmContext?.speed ? <ContextBadge>{SPEED_LABELS[farmContext.speed]}</ContextBadge> : null}
                     {farmContext?.keyMode ? <ContextBadge>{farmContext.keyMode.toUpperCase()}</ContextBadge> : null}
                   </div>
                   <h1 className="truncate text-2xl font-black text-osu-c1 sm:text-3xl">
@@ -274,7 +278,12 @@ function FarmMapDetailPage() {
                   </div>
                   <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-osu-f1">
                     <span className="truncate font-semibold text-osu-l2">[{selectedBeatmap.version}]</span>
-                    <span className="tabular-nums text-osu-yellow">{selectedBeatmap.difficultyRating.toFixed(2)} stars</span>
+                    {/* Stars stay unscaled like the board; the (NM) tag ties them
+                        to 1.0x while BPM/length next door are rate-adjusted. */}
+                    <span className="tabular-nums text-osu-yellow" title={farmRate !== 1 ? "star rating shown for 1.0x" : undefined}>
+                      {selectedBeatmap.difficultyRating.toFixed(2)} stars
+                      {farmRate !== 1 ? <span className="ml-1 text-[10px] font-semibold text-osu-f1">(NM)</span> : null}
+                    </span>
                     <span>{Math.round(selectedBeatmap.cs)}K</span>
                     <span>{displayedBpm} BPM</span>
                     <span>{formatDuration(displayedLength)}</span>
@@ -293,7 +302,8 @@ function FarmMapDetailPage() {
                     <DifficultyStrip
                       beatmaps={beatmapset.maniaBeatmaps}
                       selectedBeatmapId={selectedBeatmap.id}
-                      speedRate={farmRate}
+                      speedRate={contextRate}
+                      speedRateBeatmapId={beatmapId}
                       onSelect={setSelectedBeatmapId}
                     />
                   ) : null}
@@ -319,7 +329,7 @@ function FarmMapDetailPage() {
               </div>
             </section>
 
-            <div className={`grid gap-4 ${hasFarmContext || farmContext?.userKey ? "xl:grid-cols-[minmax(0,1fr)_360px]" : ""}`}>
+            <div className={`grid gap-4 ${showFarmVerdict || showFarmersPanel ? "xl:grid-cols-[minmax(0,1fr)_360px]" : ""}`}>
               <div className="min-w-0 space-y-4">
                 <ChartPreviewPanel
                   beatmapset={beatmapset}
@@ -384,29 +394,48 @@ function FarmMapDetailPage() {
                 </section>
               </div>
 
-              {hasFarmContext || farmContext?.userKey ? (
+              {showFarmVerdict || showFarmersPanel ? (
                 <aside className="flex flex-col gap-4 xl:sticky xl:top-4">
-                  {hasFarmContext ? (
+                  {showFarmVerdict ? (
                     <section className="shrink-0 rounded-lg border border-osu-b3/25 bg-osu-b4 p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">farm verdict</div>
-                          <div className="mt-1 text-2xl font-black tabular-nums text-osu-pink">
-                            {farmContext?.gain != null
-                              ? `+${formatPp(farmContext.gain)}${!farmContext.gainUnit || farmContext.gainUnit === "pp" ? "pp" : ` ${farmContext.gainUnit}`}`
-                              : "unknown"}
+                      {farmContext?.gain != null && farmContext.gain <= 0 ? (
+                        // Zero-gain owned lanes: the benchmark can degenerate to
+                        // the player's own score, so a "+0pp" headline and a
+                        // target would be misleading. Mirror the board preview
+                        // and lead with the peer play share instead.
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">farm verdict</div>
+                            <div className="mt-1 text-2xl font-black tabular-nums text-osu-c1">
+                              {farmContext.peerFraction != null ? `${Math.round(farmContext.peerFraction * 100)}%` : "unknown"}
+                            </div>
+                            <div className="text-[10px] font-semibold text-osu-f1">of players near you farm this</div>
+                          </div>
+                          <div className="grid min-w-[150px] gap-1.5">
+                            <CompactRow label="your score" value={farmContext.subjectPp != null ? `${formatPp(farmContext.subjectPp)}pp` : "not played"} />
                           </div>
                         </div>
-                        <div className="grid min-w-[150px] gap-1.5">
-                          <CompactRow label="your score" value={farmContext?.subjectPp != null ? `${formatPp(farmContext.subjectPp)}pp` : "not played"} />
-                          <CompactRow label="target" value={farmContext?.benchmark != null ? `${formatPp(farmContext.benchmark)}pp` : "unknown"} />
-                          <CompactRow label="peers farming" value={farmContext?.peerFraction != null ? `${Math.round(farmContext.peerFraction * 100)}%` : "unknown"} />
+                      ) : (
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">farm verdict</div>
+                            <div className="mt-1 text-2xl font-black tabular-nums text-osu-pink">
+                              {farmContext?.gain != null
+                                ? `+${formatPp(farmContext.gain)}${!farmContext.gainUnit || farmContext.gainUnit === "pp" ? "pp" : ` ${farmContext.gainUnit}`}`
+                                : "unknown"}
+                            </div>
+                          </div>
+                          <div className="grid min-w-[150px] gap-1.5">
+                            <CompactRow label="your score" value={farmContext?.subjectPp != null ? `${formatPp(farmContext.subjectPp)}pp` : "not played"} />
+                            <CompactRow label="target" value={farmContext?.benchmark != null ? `${formatPp(farmContext.benchmark)}pp` : "unknown"} />
+                            <CompactRow label="peers farming" value={farmContext?.peerFraction != null ? `${Math.round(farmContext.peerFraction * 100)}%` : "unknown"} />
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </section>
                   ) : null}
 
-                  {farmContext?.userKey ? (
+                  {showFarmersPanel && farmContext?.userKey ? (
                     <section className="flex max-h-[640px] min-h-[360px] flex-col overflow-hidden rounded-lg border border-osu-b3/25 bg-osu-b4">
                       <div className="shrink-0 border-b border-osu-b3/20 p-3">
                         <h2 className="text-base font-bold text-osu-c1">Who farms this</h2>
@@ -694,11 +723,15 @@ function DifficultyStrip({
   beatmaps,
   selectedBeatmapId,
   speedRate,
+  speedRateBeatmapId,
   onSelect,
 }: {
   beatmaps: DetailBeatmap[];
   selectedBeatmapId: number;
   speedRate: number;
+  // Only the lane the farm context scored gets the rate; every other
+  // difficulty reads at 1.0x.
+  speedRateBeatmapId: number;
   onSelect: (beatmapId: number) => void;
 }) {
   return (
@@ -712,6 +745,7 @@ function DifficultyStrip({
       <div className="flex gap-2 overflow-x-auto pb-1">
         {beatmaps.map((beatmap) => {
           const selected = beatmap.id === selectedBeatmapId;
+          const rate = beatmap.id === speedRateBeatmapId ? speedRate : 1;
           return (
             <button
               key={beatmap.id}
@@ -725,14 +759,17 @@ function DifficultyStrip({
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="truncate text-[12px] font-bold text-osu-c1">[{beatmap.version}]</span>
-                <span className="shrink-0 text-[11px] font-black tabular-nums text-osu-yellow">
+                <span
+                  className="shrink-0 text-[11px] font-black tabular-nums text-osu-yellow"
+                  title={rate !== 1 ? "star rating shown for 1.0x" : undefined}
+                >
                   {beatmap.difficultyRating.toFixed(2)}
                 </span>
               </div>
               <div className="mt-1 flex items-center gap-2 text-[10px] font-semibold uppercase text-osu-f1">
                 <span>{Math.round(beatmap.cs)}K</span>
-                <span>{Math.round((beatmap.bpm ?? 0) * speedRate)} BPM</span>
-                <span>{formatDuration(Math.max(1, Math.round(beatmap.totalLength / Math.max(0.1, speedRate))))}</span>
+                <span>{Math.round((beatmap.bpm ?? 0) * rate)} BPM</span>
+                <span>{formatDuration(Math.max(1, Math.round(beatmap.totalLength / Math.max(0.1, rate))))}</span>
               </div>
             </button>
           );
@@ -806,6 +843,11 @@ function ClearRiskBadge() {
 
 function DetailSkeleton({ farmContext, farmRate }: { farmContext: FarmMapContext | null; farmRate: number }) {
   const hasKnownMap = Boolean(farmContext?.title);
+  // Same gates as the loaded page: verdict skeleton only when verdict numbers
+  // exist, farmers skeleton only when a user is attached. Anything looser
+  // flashes a card that vanishes on load.
+  const hasVerdict = hasFarmVerdictContext(farmContext);
+  const hasFarmers = Boolean(farmContext?.userKey);
   const displayedBpm = farmContext?.bpm != null ? Math.round(farmContext.bpm * farmRate) : null;
   const displayedLength = farmContext?.lengthSec != null
     ? formatDuration(Math.max(1, Math.round(farmContext.lengthSec / Math.max(0.1, farmRate))))
@@ -843,7 +885,12 @@ function DetailSkeleton({ farmContext, farmRate }: { farmContext: FarmMapContext
               </div>
               <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-osu-f1">
                 {farmContext?.version ? <span className="truncate font-semibold text-osu-l2">[{farmContext.version}]</span> : null}
-                {farmContext?.stars != null ? <span className="tabular-nums text-osu-yellow">{farmContext.stars.toFixed(2)} stars</span> : null}
+                {farmContext?.stars != null ? (
+                  <span className="tabular-nums text-osu-yellow" title={farmRate !== 1 ? "star rating shown for 1.0x" : undefined}>
+                    {farmContext.stars.toFixed(2)} stars
+                    {farmRate !== 1 ? <span className="ml-1 text-[10px] font-semibold text-osu-f1">(NM)</span> : null}
+                  </span>
+                ) : null}
                 {farmContext?.keys != null ? <span>{Math.round(farmContext.keys)}K</span> : null}
                 {displayedBpm != null ? <span>{displayedBpm} BPM</span> : null}
                 {displayedLength ? <span>{displayedLength}</span> : null}
@@ -882,7 +929,7 @@ function DetailSkeleton({ farmContext, farmRate }: { farmContext: FarmMapContext
       ) : (
         <Skeleton className="h-56 w-full rounded-lg" />
       )}
-      <div className={`grid gap-4 ${farmContext ? "xl:grid-cols-[minmax(0,1fr)_360px]" : ""}`}>
+      <div className={`grid gap-4 ${hasVerdict || hasFarmers ? "xl:grid-cols-[minmax(0,1fr)_360px]" : ""}`}>
         <div className="min-w-0 space-y-4">
           <Skeleton className="h-[360px] w-full rounded-lg sm:h-[400px] xl:h-[460px]" />
           <div className="rounded-lg border border-osu-b3/25 bg-osu-b4 p-4">
@@ -904,34 +951,38 @@ function DetailSkeleton({ farmContext, farmRate }: { farmContext: FarmMapContext
           </div>
         </div>
 
-        {farmContext ? (
+        {hasVerdict || hasFarmers ? (
           <div className="flex flex-col gap-4">
-            <div className="rounded-lg border border-osu-b3/25 bg-osu-b4 p-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="space-y-1.5">
-                  <Skeleton className="h-2.5 w-20" />
-                  <Skeleton className="h-7 w-24" />
+            {hasVerdict ? (
+              <div className="rounded-lg border border-osu-b3/25 bg-osu-b4 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="space-y-1.5">
+                    <Skeleton className="h-2.5 w-20" />
+                    <Skeleton className="h-7 w-24" />
+                  </div>
+                  <div className="grid min-w-[150px] gap-1.5">
+                    <Skeleton className="h-3 w-full" />
+                    <Skeleton className="h-3 w-full" />
+                    <Skeleton className="h-3 w-full" />
+                  </div>
                 </div>
-                <div className="grid min-w-[150px] gap-1.5">
-                  <Skeleton className="h-3 w-full" />
-                  <Skeleton className="h-3 w-full" />
-                  <Skeleton className="h-3 w-full" />
+              </div>
+            ) : null}
+            {hasFarmers ? (
+              <div className="flex h-[480px] flex-col overflow-hidden rounded-lg border border-osu-b3/25 bg-osu-b4">
+                <div className="border-b border-osu-b3/20 p-3">
+                  <Skeleton className="h-5 w-32" />
+                </div>
+                <div className="px-3 pt-2.5">
+                  <Skeleton className="h-7 w-full rounded-lg" />
+                </div>
+                <div className="flex-1 space-y-1.5 p-2.5">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <Skeleton key={i} className="h-9 rounded-lg" />
+                  ))}
                 </div>
               </div>
-            </div>
-            <div className="flex h-[480px] flex-col overflow-hidden rounded-lg border border-osu-b3/25 bg-osu-b4">
-              <div className="border-b border-osu-b3/20 p-3">
-                <Skeleton className="h-5 w-32" />
-              </div>
-              <div className="px-3 pt-2.5">
-                <Skeleton className="h-7 w-full rounded-lg" />
-              </div>
-              <div className="flex-1 space-y-1.5 p-2.5">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <Skeleton key={i} className="h-9 rounded-lg" />
-                ))}
-              </div>
-            </div>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -939,8 +990,22 @@ function DetailSkeleton({ farmContext, farmRate }: { farmContext: FarmMapContext
   );
 }
 
+// Same rounding as the farm-helper board: integers everywhere.
 function formatPp(value: number): string {
-  return value >= 100 ? Math.round(value).toLocaleString() : value.toFixed(1);
+  return Math.round(value).toLocaleString("en-US");
+}
+
+// True when the context carries verdict numbers worth an aside card, as
+// opposed to a bare ?user= URL that only powers the who-farms panel.
+function hasFarmVerdictContext(context: FarmMapContext | null): boolean {
+  return Boolean(context && (
+    context.gain != null ||
+    context.benchmark != null ||
+    context.subjectPp != null ||
+    context.peerCount != null ||
+    context.peerFraction != null ||
+    context.median != null
+  ));
 }
 
 function clamp01(value: number): number {
@@ -948,7 +1013,7 @@ function clamp01(value: number): number {
 }
 
 function readFarmMapContext(beatmapId: number, search: FarmMapSearch): FarmMapContext | null {
-  const stored = readStoredFarmContext(beatmapId);
+  const stored = readStoredFarmContext(beatmapId, search);
   if (!stored && !search.user && !search.key && !search.speed) return null;
   return {
     ...(stored ?? {}),
@@ -958,14 +1023,30 @@ function readFarmMapContext(beatmapId: number, search: FarmMapSearch): FarmMapCo
   };
 }
 
-function readStoredFarmContext(beatmapId: number): FarmMapContext | null {
+function readStoredFarmContext(beatmapId: number, search: FarmMapSearch): FarmMapContext | null {
   if (typeof window === "undefined" || !Number.isSafeInteger(beatmapId)) return null;
+  // The board keys blobs by the numeric user id; a URL without one can never
+  // match a stored blob, so bail before touching storage.
+  const userKey = search.user;
+  if (!userKey || !/^\d+$/.test(userKey)) return null;
+  const speedBucket: LiveFarmHelperSpeedBucket = search.speed ?? "normal";
   try {
-    const raw = window.sessionStorage.getItem(`${FARM_MAP_CONTEXT_KEY_PREFIX}${beatmapId}`);
+    const raw = window.sessionStorage.getItem(`${FARM_MAP_CONTEXT_KEY_PREFIX}${beatmapId}:${speedBucket}:${userKey}`);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
     const data = parsed as Record<string, unknown>;
+    // Stale numbers are worse than none: the board rewrites the blob on every
+    // detail open, so anything older than 30 minutes is a dead tab or a reload
+    // after the board's numbers moved on.
+    const writtenAt = Number(data.writtenAt);
+    if (!Number.isFinite(writtenAt) || Date.now() - writtenAt > FARM_MAP_CONTEXT_MAX_AGE_MS) return null;
+    // Guard against key collisions: never overlay a blob written for another
+    // player or another speed lane, even if it landed under this key.
+    const storedUserKey = typeof data.userKey === "string" ? data.userKey : undefined;
+    if (storedUserKey != null && storedUserKey !== userKey) return null;
+    const storedSpeed = data.speed === "ht" || data.speed === "normal" || data.speed === "dt" ? data.speed : undefined;
+    if ((storedSpeed ?? "normal") !== speedBucket) return null;
     return {
       beatmapsetId: finiteNumber(data.beatmapsetId),
       title: finiteString(data.title),
@@ -979,10 +1060,10 @@ function readStoredFarmContext(beatmapId: number): FarmMapContext | null {
       bpm: finiteNumber(data.bpm),
       lengthSec: finiteNumber(data.lengthSec),
       mapUrl: finiteString(data.mapUrl),
-      userKey: typeof data.userKey === "string" ? data.userKey : undefined,
+      userKey: storedUserKey,
       userName: finiteString(data.userName),
       keyMode: data.keyMode === "4k" || data.keyMode === "7k" || data.keyMode === "any" ? data.keyMode : undefined,
-      speed: data.speed === "ht" || data.speed === "normal" || data.speed === "dt" ? data.speed : undefined,
+      speed: storedSpeed,
       reason:
         data.reason === "missing" || data.reason === "improve" || data.reason === "stale" || data.reason === "owned" || data.reason === "push"
           ? data.reason

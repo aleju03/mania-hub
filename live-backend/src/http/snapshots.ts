@@ -20,7 +20,8 @@ import { GOAL_KINDS, GOAL_MAP_KINDS, GOAL_SPEED_BUCKETS, GOAL_TARGET_GRADES, cre
 import { getMyDataSummary, getUserTopPlaysFeed, getUserTrackedFeed, type MyDataTopPlaysQuery, type MyDataTrackedFeedQuery } from "../features/my-data.js";
 import { getPlayerSkillBreakdown } from "../features/player-skills.js";
 import { decoratePlayerSkillBreakdown } from "../features/skill-baseline.js";
-import { FARM_HELPER_DEFAULT_LIMIT, FARM_HELPER_MAX_LIMIT, FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperNeighbors, getFarmHelperSnapshot, type FarmHelperKeyMode, type FarmHelperView } from "../features/farm-helper.js";
+import { FARM_HELPER_DEFAULT_LIMIT, FARM_HELPER_MAX_LIMIT, FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperNeighbors, getFarmHelperSnapshot, invalidateFarmHelperCacheForUser, type FarmHelperKeyMode, type FarmHelperView } from "../features/farm-helper.js";
+import { clearFarmHelperFeedback, listFarmHelperFeedback, normalizeFarmHelperFeedbackSpeedBucket, normalizeFarmHelperFeedbackVerdict, setFarmHelperFeedback } from "../features/farm-helper-feedback.js";
 import type { ScoreSpeedBucket } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
 import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalRankingsSnapshot, type GlobalRankingsSort } from "../features/global-rankings.js";
@@ -62,7 +63,7 @@ import { getMapsSnapshotThread, mapsSnapshotThreadStatus, MapsSnapshotBuildError
 import { addManualRosterMember, enqueueRosterRefreshes, removeManualRosterMember } from "../rosters/country-rosters.js";
 import { getDbDiskUsage, getLocalDbStorage, getStorageBreakdownSnapshot, getStorageFootprint, getTablePreview, runRetention } from "../retention.js";
 import { readProcessMemory, type ProcessMemorySample } from "../shared/process-memory.js";
-import { setUserActive } from "../users.js";
+import { setUserActive, wipeUserProjections } from "../users.js";
 import { getDiscordPublicInfo, type DiscordRuntime } from "../discord/index.js";
 import { getDiscordShowcase } from "../discord/showcase.js";
 import { listAllSubscriptions, removeSubscriptionById } from "../discord/subscriptions.js";
@@ -530,6 +531,47 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     sendJson(req, res, ctx, 200, { ok: true, ...result });
     return true;
   }
+  if (url.pathname === "/api/admin/wipe-user-data") {
+    // Heavier sibling of set-user-active: deactivates AND permanently deletes
+    // the player's public projection rows (boards, farmed scores, key stats,
+    // skill ratings). The users row survives as the inactive tombstone.
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<{ userId?: unknown; username?: unknown }>((await readBody(req)) || "{}", {});
+    let userId = Number(body.userId);
+    let userRow = Number.isInteger(userId) && userId > 0
+      ? (await exec(ctx.db, "select user_id, username from users where user_id = ? limit 1", [userId])).rows[0]
+      : undefined;
+    if (!userRow) {
+      const username = typeof body.username === "string" ? body.username.trim() : "";
+      if (username) {
+        userRow = (await exec(ctx.db, "select user_id, username from users where lower(username) = lower(?) limit 1", [username])).rows[0];
+        if (userRow) userId = Number(userRow.user_id);
+      }
+    }
+    if (!userRow || !Number.isInteger(userId) || userId <= 0) {
+      sendJson(req, res, ctx, 404, { error: "user_not_found" });
+      return true;
+    }
+    const username = userRow.username == null ? null : String(userRow.username);
+    const result = await wipeUserProjections(ctx.serveWriteDb ?? ctx.db, userId);
+    logInfo("admin_wipe_user_data", { userId, username, deleted: result.deleted, untrackedRosters: result.untrackedRosters, deletedJobs: result.deletedJobs });
+    sendJson(req, res, ctx, 200, {
+      ok: true,
+      userId,
+      username,
+      untrackedRosters: result.untrackedRosters,
+      deletedJobs: result.deletedJobs,
+      deleted: result.deleted,
+    });
+    return true;
+  }
   if (url.pathname === "/api/roster/self-add" || url.pathname === "/api/roster/self-remove") {
     // Admin-token gated: the frontend server fn forwards the osu!-verified viewer id with the
     // shared admin token (the pack-wallet pattern), so a user can only ever opt themselves in.
@@ -658,6 +700,73 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     // A just-created goal may already be satisfied by the player's stored tracker/top-play data.
     await reconcileGoalsForUser(ctx.serveWriteDb ?? ctx.db, ctx.events, userId, [kind]).catch(() => {});
     sendJson(req, res, ctx, 200, { ok: true, goal: (await getUserGoal(ctx.db, created.id)) ?? created });
+    return true;
+  }
+  if (url.pathname === "/api/farm-helper/feedback" || url.pathname === "/api/farm-helper/feedback/set" || url.pathname === "/api/farm-helper/feedback/clear") {
+    // Same trust contract as the goals endpoints above: admin-token gated and
+    // called server-to-server, with the frontend server fn injecting the
+    // osu!-verified viewer id, so a user only ever touches their own marks.
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (url.pathname === "/api/farm-helper/feedback") {
+      if (req.method !== "GET") {
+        sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+        return true;
+      }
+      const userId = Number(url.searchParams.get("userId"));
+      if (!Number.isInteger(userId) || userId <= 0) {
+        sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
+        return true;
+      }
+      sendJson(req, res, ctx, 200, { marks: await listFarmHelperFeedback(ctx.db, userId) });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<{ userId?: unknown; beatmapId?: unknown; speedBucket?: unknown; verdict?: unknown }>((await readBody(req)) || "{}", {});
+    const userId = Number(body.userId);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
+      return true;
+    }
+    const beatmapId = Number(body.beatmapId);
+    if (!Number.isInteger(beatmapId) || beatmapId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_beatmap" });
+      return true;
+    }
+    const speedBucket = normalizeFarmHelperFeedbackSpeedBucket(body.speedBucket);
+    if (!speedBucket) {
+      sendJson(req, res, ctx, 400, { error: "invalid_speed_bucket" });
+      return true;
+    }
+    if (url.pathname === "/api/farm-helper/feedback/clear") {
+      await clearFarmHelperFeedback(ctx.serveWriteDb ?? ctx.db, userId, beatmapId, speedBucket);
+      // Evict the per-subject snapshot cache on the serving Db: snapshots are
+      // built and cached against ctx.db, not the write connection.
+      invalidateFarmHelperCacheForUser(ctx.db, userId);
+      sendJson(req, res, ctx, 200, { ok: true });
+      return true;
+    }
+    const verdict = normalizeFarmHelperFeedbackVerdict(body.verdict);
+    if (!verdict) {
+      sendJson(req, res, ctx, 400, { error: "invalid_verdict" });
+      return true;
+    }
+    const result = await setFarmHelperFeedback(ctx.serveWriteDb ?? ctx.db, { userId, beatmapId, speedBucket, verdict });
+    if (!result.ok) {
+      // Active-mark cap: the module refuses NEW lanes past the cap (updates
+      // and reactivations stay exempt); surface that as a client error.
+      sendJson(req, res, ctx, 400, { error: result.reason });
+      return true;
+    }
+    const { ok: _ok, ...mark } = result;
+    void _ok;
+    invalidateFarmHelperCacheForUser(ctx.db, userId);
+    sendJson(req, res, ctx, 200, { ok: true, mark });
     return true;
   }
   if (url.pathname === "/api/my-data/summary") {
@@ -970,7 +1079,10 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         keyMode: parseFarmHelperKeyMode(url.searchParams.get("key")),
         view: parseFarmHelperView(url.searchParams.get("view")),
         limit: clampInteger(url.searchParams.get("limit"), 1, FARM_HELPER_MAX_LIMIT, FARM_HELPER_DEFAULT_LIMIT),
-      }, ctx.queue);
+        // The build's read-time feedback reconcile writes; keep those writes
+        // off the read connection that serves page loads (the serveWriteDb
+        // invariant, same as the feedback mutation endpoints below).
+      }, ctx.queue, { writeDb: ctx.serveWriteDb ?? ctx.db });
       res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
       await sendAccentEnrichedJson(req, res, ctx, 200, snapshot);
     } catch (error) {

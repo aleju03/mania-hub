@@ -18,6 +18,7 @@ import { PLAYER_SKILLS_JOB, computePlayerSkillsJob } from "./features/player-ski
 import { SKILL_BASELINE_JOB, runSkillBaselineJob } from "./features/skill-baseline.js";
 import { PROFILE_POOL_WARM_JOB, runProfilePoolWarmJob } from "./features/profile-pool-warm.js";
 import { confirmTopPlay, TopPlayConfirmationPendingError } from "./features/top-plays.js";
+import { TOP_SCORES_BACKFILL_JOB, runTopScoresBackfillJob } from "./features/top-scores-backfill.js";
 import { getHydratedScoresForMetadata } from "./features/tracker.js";
 import type { ClaimOptions, Job, JobQueue } from "./jobs/queue.js";
 import { hasPendingRecentReconcileJob, RECENT_RECONCILE_JOB_TYPE, requeueDeferredRecentReconcileJobs } from "./jobs/recent-reconcile.js";
@@ -79,7 +80,10 @@ const REPLAY_VIDEO_LANE_NAMES = new Set(["replay-video-render", "replay-video-fi
 const DEFAULT_WORKER_LANES: WorkerLane[] = [
   {
     name: "fast",
-    jobTypes: ["refresh_user_top_scores", "refresh_country_roster", "enrich_user", "enrich_beatmap", "reconcile_user_recent_scores"],
+    // TOP_SCORES_BACKFILL_JOB shares this lane because it is the same work as
+    // refresh_user_top_scores (one best-scores call per user); at priority -15
+    // the claim order always prefers the interactive types above it.
+    jobTypes: ["refresh_user_top_scores", "refresh_country_roster", "enrich_user", "enrich_beatmap", "reconcile_user_recent_scores", TOP_SCORES_BACKFILL_JOB],
     claimLimit: 3,
     intervalMs: 750,
   },
@@ -211,6 +215,7 @@ const OSU_API_JOB_TYPES = new Set([
   // wholesale here.
   BEATMAP_OSU_FILE_BACKFILL_JOB,
   PROFILE_POOL_WARM_JOB,
+  TOP_SCORES_BACKFILL_JOB,
 ]);
 
 // The replay-video lanes exist only where ENABLE_REPLAY_VIDEO is on (the
@@ -428,6 +433,12 @@ export class WorkerRunner {
     }
     if (job.type === PROFILE_POOL_WARM_JOB) {
       await runProfilePoolWarmJob(this.db, this.queue, this.osu, job.payload as { seq?: number });
+      return;
+    }
+    if (job.type === TOP_SCORES_BACKFILL_JOB) {
+      // Per-user 404s are handled inside the chunk (markUserMissing + skip);
+      // only transient API errors reach the job's fail/backoff path.
+      await runTopScoresBackfillJob(this.db, this.queue, this.osu, job.payload as { cursor?: number }, signal);
       return;
     }
     if (job.type === "refresh_user_maps_farmed_scores") {

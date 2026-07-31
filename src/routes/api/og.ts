@@ -2881,12 +2881,12 @@ async function renderFarmHelperOg(request: Request): Promise<Response> {
         mosaic,
 
         // Title sticker on the left, vertically centred against the
-        // card stack. Sub-line echoes the app's own "+Npp on the table"
+        // card stack. Sub-line echoes the app's own "you could gain"
         // header copy.
         sticker({
           key: "title",
           text: "farm helper",
-          subText: "PP ON THE TABLE",
+          subText: "PP YOU COULD GAIN",
           fontSize: 76,
           background: "#ff66aa",
           color: "#1a1317",

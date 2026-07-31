@@ -27,6 +27,8 @@ export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | 
   const replayVideoCutoff = daysAgo(config.replayVideoJobRetentionDays);
   const rankSnapshotCutoff = daysAgo(config.rankSnapshotRetentionDays);
   const activityCutoffDay = activityRetentionCutoffDay(config.activityRetentionYears);
+  // farm_helper_feedback stores epoch-ms timestamps, so its cutoff is numeric.
+  const resolvedFeedbackCutoffMs = Date.now() - RESOLVED_FARM_HELPER_FEEDBACK_RETENTION_DAYS * 24 * 60 * 60 * 1000;
   const oldReplayVideoJobs = (await exec(
     db,
     "select id from replay_video_exports where status in ('done', 'failed', 'cancelled') and updated_at < ?",
@@ -59,6 +61,10 @@ export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | 
     // Discord "last map in channel" memory is only useful while fresh, so 30d is
     // plenty; stale rows just mean /pb asks the user to run /recent again.
     discordChannelContext: Number((await exec(db, "delete from discord_channel_map_context where updated_at < ?", [daysAgo(30)])).rowsAffected ?? 0),
+    // Resolved farm-helper feedback marks are spent evidence (the play that
+    // retired them drives recs now); active (unresolved) marks are the
+    // player's standing preferences and are never pruned.
+    farmHelperFeedbackResolved: Number((await exec(db, "delete from farm_helper_feedback where resolved_at is not null and resolved_at < ?", [resolvedFeedbackCutoffMs])).rowsAffected ?? 0),
     // Slow self-healing refresh: a pruned accent recomputes the next time the
     // avatar shows up in a payload. Also bounds churn from avatar changes.
     avatarAccents: await pruneAvatarAccents(db),
@@ -108,6 +114,11 @@ export function startRetentionScheduler(db: Db, config: Config): () => void {
 function daysAgo(days: number): string {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 }
+
+// Long enough that "you already beat this" history stays visible on the
+// feedback list for a couple of seasons, short enough that resolved rows do
+// not accumulate forever alongside the never-pruned active marks.
+export const RESOLVED_FARM_HELPER_FEEDBACK_RETENTION_DAYS = 180;
 
 export function activityRetentionCutoffDay(retentionYears: number, now = new Date()): string {
   const years = Math.max(1, Math.floor(retentionYears));

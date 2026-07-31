@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
-import { buildFarmHelperSnapshotForBacktest, computeAccBenchmarkScale, computeSurvival, FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapshot, SURVIVAL_CLEAR_RISK_MAX } from "../src/features/farm-helper.js";
+import { buildFarmHelperSnapshotForBacktest, computeAccBenchmarkScale, computeSurvival, FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapshot, invalidateFarmHelperCacheForUser, SURVIVAL_CLEAR_RISK_MAX } from "../src/features/farm-helper.js";
 import { ACC_MODEL_PRIOR_TYPICAL_ACC, ACC_MODEL_VERSION, predictPlayerAccuracy, type AccModelMode, type PlayerAccModel } from "../src/features/player-acc-model.js";
 import { PLAYER_SKILLS_VERSION } from "../src/features/player-skills.js";
 import { SKILL_BASELINE_VERSION } from "../src/features/skill-baseline.js";
@@ -453,6 +453,27 @@ describe("farm helper", () => {
     }
     expect(result.farmers[0].username).toMatch(/^Peer/);
     expect(result.farmers[0].avatarUrl).toContain("a.ppy.sh");
+  });
+
+  it("excludes deactivated users from who-farms and the peer cohort while identical active peers stay", async () => {
+    const bestScores = buildSubjectBestScores();
+    await seedPeers();
+    // An inactive clone of the active peers: identical farmed + filler rows,
+    // only the users row differs (is_active = 0, the ban-detection tombstone).
+    await insertUser(500, SUBJECT_PP, "CR", "BannedPeer");
+    await exec(db, "update users set is_active = 0 where user_id = 500");
+    await insertFarmed("CR", 500, BM_MISSING, 640, nowIso());
+    await farmFiller4k("CR", 500);
+
+    const farmers = await getFarmHelperFarmers(db, makeOsuStub(bestScores), "Subject", BM_MISSING);
+    expect(farmers.total).toBe(15);
+    expect(farmers.farmers.some((farmer) => farmer.userId === 500)).toBe(false);
+    expect(farmers.farmers.some((farmer) => farmer.userId === 100)).toBe(true);
+
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const rec = snapshot.recs.find((candidate) => candidate.beatmapId === BM_MISSING);
+    expect(rec?.peerCount).toBe(15);
+    expect(rec?.topPeers.some((peer) => peer.userId === 500)).toBe(false);
   });
 
   it("dedupes the same peer's farm score across countries by map speed lane", async () => {
@@ -1822,18 +1843,21 @@ describe("farm helper", () => {
   it("falls back to the total-pp cohort when the subject has no keymode evidence", async () => {
     const recent = nowIso();
     const target = 8700;
+    const target4k = 8701;
     // Subject plays only 5K: neither the 4K nor 7K pipeline is eligible. Their top
     // play (700) sets the benchmark cap above the peers' 600pp target.
     const owned = Array.from({ length: 10 }, (_, i) => 700 - i * 5);
     const ownedIds = Array.from({ length: 10 }, (_, i) => 8710 + i);
     const bestScores = ownedIds.map((beatmapId, i) => subjectScore(beatmapId, owned[i], recent, 5, 5));
     await insertBeatmapMeta(target, 5, 5);
+    await insertBeatmapMeta(target4k, 4, 5);
     for (const beatmapId of ownedIds) await insertBeatmapMeta(beatmapId, 5, 5);
 
     for (let i = 0; i < 15; i += 1) {
       const id = 8800 + i;
       await insertUser(id, SUBJECT_PP + i, i < 8 ? "CR" : "US", `TotalPeer${i}`);
       await insertFarmed(i < 8 ? "CR" : "US", id, target, 600, recent);
+      await insertFarmed(i < 8 ? "CR" : "US", id, target4k, 600, recent);
     }
 
     const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores, SUBJECT_PP), "Subject", { keyMode: "any" });
@@ -1841,6 +1865,14 @@ describe("farm helper", () => {
     expect(snapshot.peerBand.mode).toBe("total_pp_fallback");
     expect(snapshot.peerBands).toBeUndefined();
     expect(snapshot.recs.some((rec) => rec.beatmapId === target)).toBe(true);
+
+    // 4K/7K candidates have no per-mode cap evidence for a pure 5K player;
+    // they fall back to the overall cap (700 * 1.15) instead of dropping, so
+    // the mostly-4K/7K farm tables still populate the board. (The old
+    // behavior dropped every 4K/7K candidate on the null per-mode cap.)
+    const rec4k = snapshot.recs.find((rec) => rec.beatmapId === target4k);
+    expect(rec4k?.reason).toBe("missing");
+    expect(rec4k?.benchmarkPp).toBe(600);
   });
 
   it("exposes per-keymode peerBands only on the merged Any view", async () => {
@@ -2367,5 +2399,352 @@ describe("farm helper survival term (A10)", () => {
     expect(disabledRec).toBeDefined();
     expect(disabledRec?.survival).toBeNull();
     expect(disabledRec?.clearRisk).toBe(false);
+  });
+
+  it("discounts ranking on population-only risk but never sets the personal clearRisk label", async () => {
+    const bestScores = buildSubjectBestScores();
+    await seedPeers();
+    // Terrible population pass stats on BM_MISSING, but NO acc model at all:
+    // predictPlayerChoke never runs, so the survival discount is purely the
+    // population prior. It must sink the ranking (survival < 1) without
+    // claiming "finishing this looks risky for YOU".
+    await insertSearchIndex(BM_MISSING, STREAM_PAT, 4);
+    await setPassStats(BM_MISSING, 20_000, 500);
+
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const rec = snapshot.recs.find((candidate) => candidate.beatmapId === BM_MISSING);
+    expect(rec).toBeDefined();
+    // popFactor bottoms out at the 0.5 floor for this pass rate; well below
+    // the clear-risk threshold, yet unlabelled without a personal signal.
+    expect(rec?.survival).toBeCloseTo(0.5, 2);
+    expect(rec?.survival ?? 1).toBeLessThan(SURVIVAL_CLEAR_RISK_MAX);
+    expect(rec?.clearRisk).toBe(false);
+  });
+});
+
+describe("farm helper benchmark kernel symmetry (D)", () => {
+  it("admits slightly-below peers into the benchmark kernel without granting discovery weight", async () => {
+    const recent = nowIso();
+    const target = 41_000;
+    const support = Array.from({ length: 8 }, (_, i) => 41_010 + i);
+    // Subject: 10 owned 4K plays (top 700 keeps the cap at 805, above every
+    // benchmark here), pinned to a 10,000 4K variant pp.
+    const subjectMaps = Array.from({ length: 10 }, (_, i) => 41_050 + i);
+    const bestScores = subjectMaps.map((beatmapId, i) => subjectScore(beatmapId, 700 - i * 5, recent, 4, 5));
+    await insertBeatmapMeta(target, 4, 5);
+    for (const beatmapId of [...support, ...subjectMaps]) await insertBeatmapMeta(beatmapId, 4, 5);
+
+    // 13 near peers at exactly the subject's 4K pp (d = 0: full wD and wB)
+    // farm the target at 700; 60 "slightly below" peers at d = -0.081 sit
+    // just past the discovery kernel (0.08) but inside the benchmark kernel
+    // (0.10): wD = 0, wB ~ 0.19 each (~11.4 total mass). They farm the
+    // target at 400.
+    for (let i = 0; i < 13; i += 1) {
+      const id = 41_100 + i;
+      await insertUser(id, 15_000, "CR", `NearPeer${i}`);
+      await exec(db, "update users set pp_4k = 10000 where user_id = ?", [id]);
+      await insertFarmed("CR", id, target, 700, recent);
+      for (const beatmapId of support) await insertFarmed("CR", id, beatmapId, 300, recent);
+    }
+    for (let i = 0; i < 60; i += 1) {
+      const id = 41_200 + i;
+      await insertUser(id, 15_000, "US", `BelowPeer${i}`);
+      await exec(db, "update users set pp_4k = 9190 where user_id = ?", [id]);
+      await insertFarmed("US", id, target, 400, recent);
+      for (const beatmapId of support) await insertFarmed("US", id, beatmapId, 300, recent);
+    }
+
+    const osu = makeOsuStub(bestScores, 15_000, { "4k": 10_000 });
+    const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" });
+    const rec = snapshot.recs.find((candidate) => candidate.beatmapId === target);
+
+    expect(snapshot.peerBand.mode).toBe("knn");
+    expect(snapshot.peerBand.count).toBe(73);
+    expect(rec).toBeDefined();
+    // Both cohorts contribute entries: the below peers are cohort members now
+    // (the old wD-only admission dropped all 60 of them).
+    expect(rec?.peerCount).toBe(73);
+    // Discovery stays wD-only: the below peers hold zero discovery weight, so
+    // the fraction is still "all 13 discovery peers farm this" = 1.
+    expect(rec?.peerFraction).toBe(1);
+    // The missing-map benchmark (q0.4 of the benchmark kernel) now sees the
+    // below-you mass and lands in the 400 block; the old clipped cohort read
+    // a pure-700 kernel and quoted 700.
+    expect(rec?.benchmarkPp ?? 700).toBeLessThan(550);
+    expect(rec?.benchmarkPp ?? 0).toBeGreaterThanOrEqual(400);
+  });
+});
+
+describe("farm helper peerFraction eligibility (E)", () => {
+  it("excludes drive-by farmers from the fraction numerator like the denominator", async () => {
+    const recent = nowIso();
+    const target = 42_000;
+    const support = Array.from({ length: 5 }, (_, i) => 42_010 + i);
+    // Pure 5K subject -> total-pp fallback cohort (no keymode pool floor, so
+    // peers with a single farmed row can exist at all).
+    const ownedIds = Array.from({ length: 10 }, (_, i) => 42_050 + i);
+    const bestScores = ownedIds.map((beatmapId, i) => subjectScore(beatmapId, 700 - i * 5, recent, 5, 5));
+    await insertBeatmapMeta(target, 5, 5);
+    for (const beatmapId of [...support, ...ownedIds]) await insertBeatmapMeta(beatmapId, 5, 5);
+
+    // 6 meaningful-sample peers (5 support rows each; >= MIN_FARMED_FOR_SAMPLE),
+    // 3 of whom also farm the target. 4 drive-by peers farm ONLY the target.
+    for (let i = 0; i < 6; i += 1) {
+      const id = 42_100 + i;
+      await insertUser(id, SUBJECT_PP, "CR", `SamplePeer${i}`);
+      for (const beatmapId of support) await insertFarmed("CR", id, beatmapId, 600, recent);
+      if (i < 3) await insertFarmed("CR", id, target, 600, recent);
+    }
+    for (let i = 0; i < 4; i += 1) {
+      const id = 42_200 + i;
+      await insertUser(id, SUBJECT_PP, "US", `DriveByPeer${i}`);
+      await insertFarmed("US", id, target, 600, recent);
+    }
+
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores, SUBJECT_PP), "Subject", { keyMode: "any" });
+    const rec = snapshot.recs.find((candidate) => candidate.beatmapId === target);
+
+    expect(snapshot.peerBand.mode).toBe("total_pp_fallback");
+    expect(rec).toBeDefined();
+    // All 7 farmers appear as entries, but only the 3 eligible ones count
+    // toward the fraction: 3 of 6 meaningful-sample peers = 0.5. The old
+    // numerator summed all 7 against the 6-peer denominator and hid the
+    // overflow behind the Math.min(1, ...) clamp.
+    expect(rec?.peerCount).toBe(7);
+    expect(rec?.peerSampleSize).toBe(6);
+    expect(rec?.peerFraction).toBe(0.5);
+  });
+});
+
+describe("farm helper quantile reliability guard (F)", () => {
+  const target = 43_000;
+  const support = Array.from({ length: 8 }, (_, i) => 43_010 + i);
+
+  // Subject owns the target lane (with judgement counts, so a push target is
+  // available) plus 10 4K plays pinning the variant pp. 15 near peers (d = 0,
+  // full wB) farm ONLY the support maps; 11 far peers at d = +0.12 sit inside
+  // the discovery kernel (wD ~ 0.2) but OUTSIDE the benchmark kernel (wB = 0)
+  // and are the target lane's only farmers: the lane's entries clear
+  // PEER_MIN_COUNT while its benchmark kernel is empty.
+  async function seedEmptyKernelLane(): Promise<OscScore[]> {
+    const recent = nowIso();
+    const subjectMaps = Array.from({ length: 10 }, (_, i) => 43_050 + i);
+    const bestScores = subjectMaps.map((beatmapId, i) => subjectScore(beatmapId, 480 - i * 5, recent, 4, 5));
+    bestScores.push(subjectScore(target, 400, recent, 4, 5, [], statsForCustomAcc(0.97)));
+    await insertBeatmapMeta(target, 4, 5);
+    for (const beatmapId of [...support, ...subjectMaps]) await insertBeatmapMeta(beatmapId, 4, 5);
+
+    for (let i = 0; i < 15; i += 1) {
+      const id = 43_100 + i;
+      await insertUser(id, 15_000, "CR", `NearPeer${i}`);
+      await exec(db, "update users set pp_4k = 10000 where user_id = ?", [id]);
+      for (const beatmapId of support) await insertFarmed("CR", id, beatmapId, 300, recent);
+    }
+    for (let i = 0; i < 11; i += 1) {
+      const id = 43_200 + i;
+      await insertUser(id, 15_000, "US", `FarPeer${i}`);
+      await exec(db, "update users set pp_4k = 11200 where user_id = ?", [id]);
+      await insertFarmed("US", id, target, 395, recent);
+      for (let j = 0; j < 7; j += 1) await insertFarmed("US", id, support[j], 300, recent);
+    }
+    return bestScores;
+  }
+
+  it("gain view never ships a rec whose benchmark kernel holds fewer than two peers", async () => {
+    const bestScores = await seedEmptyKernelLane();
+    const osu = makeOsuStub(bestScores, 15_000, { "4k": 10_000 });
+    const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" });
+    // The old behavior shipped a push rec here with peerPpMedian 0 (every
+    // benchmark weight is 0, weightedQuantile of an empty kernel).
+    expect(snapshot.recs.some((rec) => rec.beatmapId === target)).toBe(false);
+    expect(snapshot.recs.every((rec) => rec.peerPpMedian > 0)).toBe(true);
+  });
+
+  it("popular view falls back to unweighted quantiles instead of a 0 median", async () => {
+    const bestScores = await seedEmptyKernelLane();
+    const osu = makeOsuStub(bestScores, 15_000, { "4k": 10_000 });
+    const popular = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k", view: "popular" });
+    const rec = popular.recs.find((candidate) => candidate.beatmapId === target);
+    expect(rec).toBeDefined();
+    expect(rec?.reason).toBe("owned");
+    // The unweighted fallback median over the 11 far entries, not 0.
+    expect(rec?.peerPpMedian).toBe(395);
+  });
+});
+
+describe("farm helper stale recency (G/H)", () => {
+  const BM_ABANDONED = 17;
+  const BM_REPLAYED = 18;
+
+  it("does not call a map stale when peers only refreshed it, not played it", async () => {
+    const old = "2022-01-01T00:00:00Z";
+    const oldPlayedAt = "2023-01-01T00:00:00.000Z";
+    const recent = nowIso();
+    const bestScores = [...buildSubjectBestScores(), subjectScore(BM_ABANDONED, 600, old)];
+    await seedPeers();
+    await insertBeatmapMeta(BM_ABANDONED);
+    // Peer rows on the abandoned map: p75 clears the margin, updated_at is
+    // fresh (the periodic refresh rewrites it for every row), but nobody has
+    // actually PLAYED it since 2023. The old updated_at-based gate always
+    // passed; the real play recency must fail it.
+    for (let i = 0; i < 15; i += 1) {
+      await insertFarmed(i < 8 ? "CR" : "US", 100 + i, BM_ABANDONED, i < 10 ? 600 : 660, recent, [], oldPlayedAt);
+    }
+
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    expect(snapshot.recs.some((rec) => rec.beatmapId === BM_ABANDONED)).toBe(false);
+    // Control: BM_STALE (identical spread, recently played peers) still fires.
+    expect(snapshot.recs.find((rec) => rec.beatmapId === BM_STALE)?.reason).toBe("stale");
+  });
+
+  it("does not call a lane stale when the subject replayed it recently below their PB", async () => {
+    const old = "2022-01-01T00:00:00Z";
+    // Genuinely recent (within STALE_AGE_MS of now), unlike the fixture's
+    // frozen 2024 "recent" which has itself aged past the threshold.
+    const recent = new Date(Date.now() - 5 * 86_400_000).toISOString();
+    const bestScores = [
+      ...buildSubjectBestScores(),
+      // Old PB at 600 plus a recent lower play on the same lane (distinct
+      // score id): the lane is fresh engagement, not an old PB gathering dust.
+      subjectScore(BM_REPLAYED, 600, old),
+      { ...subjectScore(BM_REPLAYED, 500, recent), id: 999_918 },
+    ];
+    await seedPeers();
+    await insertBeatmapMeta(BM_REPLAYED);
+    // Median 600 (no improve), p75 660 (stale headroom) - the BM_STALE shape.
+    for (let i = 0; i < 15; i += 1) {
+      await insertFarmed(i < 8 ? "CR" : "US", 100 + i, BM_REPLAYED, i < 10 ? 600 : 660, nowIso());
+    }
+
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    expect(snapshot.recs.some((rec) => rec.beatmapId === BM_REPLAYED)).toBe(false);
+    // Control: the same peer shape with no recent replay still reads stale,
+    // and the displayed date stays the PB's ("your 600pp score is X old").
+    const stale = snapshot.recs.find((rec) => rec.beatmapId === BM_STALE);
+    expect(stale?.reason).toBe("stale");
+    expect(stale?.subjectPlayedAt).toBe(old);
+  });
+});
+
+describe("farm helper popular view parity (K)", () => {
+  const BM_ACC = 14;
+  const BM_OVER_CAP = 44_000;
+  const STREAM_PAT = [0, 1, 0, 0, 0, 0, 0, 0];
+
+  it("quotes the same acc-scaled, capped numbers as the gain view; rows clamp instead of dropping", async () => {
+    const bestScores = buildSubjectBestScores();
+    await seedPeers();
+    await insertBeatmapMeta(BM_ACC, 4, 5);
+    await insertSearchIndex(BM_ACC, STREAM_PAT, 4, { Stream: 24 });
+    await insertBeatmapMeta(BM_OVER_CAP, 4, 5);
+    for (let i = 0; i < 15; i += 1) {
+      await insertFarmed(i < 8 ? "CR" : "US", 100 + i, BM_ACC, 620, nowIso());
+      // Far above the subject's cap (700 * 1.15 = 805): the gain view drops
+      // it, popular keeps the row but clamps the target to the cap instead
+      // of quoting the uncapped 900.
+      await insertFarmed(i < 8 ? "CR" : "US", 100 + i, BM_OVER_CAP, 900, nowIso());
+    }
+    // A weak accuracy curve discounts BM_ACC's target below the peers' 620.
+    const model: PlayerAccModel = {
+      v: ACC_MODEL_VERSION,
+      modes: {
+        "4": {
+          keys: 4, rating: 25, n: 100, w: 1000, a: Math.log(0.10), bn: 0.085, bp: 0.15,
+          s: 0.3, mean: 0.95, lo: -10, hi: 10, fam: {}, choke: [],
+        },
+      },
+    };
+    await seedSubjectSkillRatings(SUBJECT_ID, 4, { Overall: 25 }, 40);
+    await exec(db, "update player_skill_ratings set acc_model_json = ? where user_id = ?", [JSON.stringify(model), SUBJECT_ID]);
+
+    const gain = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const popular = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { view: "popular" });
+
+    const gainAcc = gain.recs.find((rec) => rec.beatmapId === BM_ACC);
+    const popularAcc = popular.recs.find((rec) => rec.beatmapId === BM_ACC);
+    expect(gainAcc).toBeDefined();
+    expect(popularAcc).toBeDefined();
+    // Same map, same number on both views (the old popular forced accModel
+    // null and quoted the unscaled 620).
+    expect(popularAcc?.benchmarkPp).toBe(gainAcc?.benchmarkPp);
+    expect(popularAcc?.benchmarkPp ?? 620).toBeLessThan(620);
+    expect(popularAcc?.estimatedPpGain).toBe(gainAcc?.estimatedPpGain);
+
+    // The over-cap map: dropped from gain, clamped (not uncapped) on popular.
+    expect(gain.recs.some((rec) => rec.beatmapId === BM_OVER_CAP)).toBe(false);
+    const popularCapped = popular.recs.find((rec) => rec.beatmapId === BM_OVER_CAP);
+    expect(popularCapped?.benchmarkPp).toBeCloseTo(700 * 1.15, 1);
+  });
+});
+
+describe("farm helper gain-view lane collapse (L)", () => {
+  it("keeps one lane per beatmap on the gain board, preferring the stronger lane", async () => {
+    const BM_DUAL = 19;
+    const bestScores = buildSubjectBestScores();
+    await seedPeers();
+    await insertBeatmapMeta(BM_DUAL);
+    // Every peer farms the same chart in BOTH speed lanes; each lane alone
+    // qualifies, and both claim (nearly) the full gain against the shared
+    // baseline. The board must spend one slot, not two. (The farmed table is
+    // unique per country+user+beatmap, so the DT rows live under a third
+    // country; lanes are still keyed per user across countries.)
+    for (let i = 0; i < 15; i += 1) {
+      const country = i < 8 ? "CR" : "US";
+      await insertFarmed(country, 100 + i, BM_DUAL, 620, nowIso());
+      await insertFarmed("JP", 100 + i, BM_DUAL, 630, nowIso(), ["DT"]);
+    }
+
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const dualRecs = snapshot.recs.filter((rec) => rec.beatmapId === BM_DUAL);
+    expect(dualRecs.length).toBe(1);
+    // The DT lane's higher benchmark wins the collapse.
+    expect(dualRecs[0]?.speedBucket).toBe("dt");
+    // totalQualifying counts collapsed lanes (3 seedPeers maps + 1 here).
+    expect(snapshot.totalQualifying).toBe(4);
+  });
+});
+
+describe("farm helper lane-scaled meta (M)", () => {
+  it("emits rate-adjusted bpm and length on DT/HT lanes and raw meta on normal lanes", async () => {
+    const BM_DT = 45_000;
+    const bestScores = buildSubjectBestScores();
+    await seedPeers();
+    await insertBeatmapMeta(BM_DT, 4, 5);
+    for (let i = 0; i < 15; i += 1) {
+      await insertFarmed(i < 8 ? "CR" : "US", 100 + i, BM_DT, 620, nowIso(), ["DT"]);
+    }
+
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const dt = snapshot.recs.find((rec) => rec.beatmapId === BM_DT);
+    expect(dt?.speedBucket).toBe("dt");
+    // Base meta is 180 bpm / 120s: the DT lane plays at 270 bpm for 80s,
+    // which is what the map detail page shows at the 1.5x rate. Stars stay
+    // NM-scaled on both surfaces.
+    expect(dt?.bpm).toBe(270);
+    expect(dt?.lengthSec).toBe(80);
+    expect(dt?.stars).toBe(5);
+
+    const normal = snapshot.recs.find((rec) => rec.beatmapId === BM_MISSING);
+    expect(normal?.bpm).toBe(180);
+    expect(normal?.lengthSec).toBe(120);
+  });
+});
+
+describe("farm helper modelsReady flag (N)", () => {
+  it("reports whether the subject's skill breakdown is ready, on both views", async () => {
+    const bestScores = buildSubjectBestScores();
+    await seedPeers();
+
+    const before = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const beforePopular = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { view: "popular" });
+    expect(before.modelsReady).toBe(false);
+    expect(beforePopular.modelsReady).toBe(false);
+
+    await seedSubjectSkillRatings(SUBJECT_ID, 4, { Overall: 25 }, 40);
+    invalidateFarmHelperCacheForUser(db, SUBJECT_ID);
+    const after = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const afterPopular = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { view: "popular" });
+    expect(after.modelsReady).toBe(true);
+    expect(afterPopular.modelsReady).toBe(true);
   });
 });
