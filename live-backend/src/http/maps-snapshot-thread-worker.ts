@@ -8,7 +8,7 @@
 import { parentPort, workerData } from "node:worker_threads";
 import { createDb } from "../db.js";
 import { JobQueue } from "../jobs/queue.js";
-import { getMapsPageSnapshot } from "../features/maps.js";
+import { getMapsPageSnapshot, registerGlobalFarmedBoardDiskCache } from "../features/maps.js";
 import { prepareJsonResponse } from "./prepared-json.js";
 import type { MapsSnapshotThreadRequest, MapsSnapshotThreadResponse } from "./maps-snapshot-thread.js";
 
@@ -26,6 +26,9 @@ if (!port) throw new Error("maps-snapshot-thread-worker must run as a worker thr
 const init = workerData as MapsSnapshotThreadInit;
 const connection = (async () => {
   const db = await createDb(init);
+  // This thread is where the packed GLOBAL farmed board lives in production;
+  // registering enables its disk snapshot (persist on pack, restore at boot).
+  registerGlobalFarmedBoardDiskCache(db, init.databaseUrl);
   return { db, queue: new JobQueue(db) };
 })();
 

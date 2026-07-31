@@ -7,7 +7,7 @@
 // raw BPM/density scale.
 
 import type { OsuScore, OsuScoreStatistics } from "./types";
-import { getModAcronyms, getScoreRate, getStableScaleManiaAccuracy, isLazerScore } from "./score";
+import { calculateWeightedPpTotal, getModAcronyms, getScoreRate, getStableScaleManiaAccuracy, isLazerScore } from "./score";
 
 export interface ManiaSkills {
   // Average star rating across the considered plays (raw, unrounded).
@@ -448,6 +448,30 @@ function computeElitePpPrestige(pp: number | null | undefined): number {
   return curve(normalize(value, 16_000, 22_000), 0.85);
 }
 
+// For a genuine account the weighted 0.95^n sum over its top plays is a strict
+// lower bound of the profile total (the total adds every play plus bonus pp),
+// so profile pp sitting meaningfully below that sum is implausible: restricted,
+// long-inactive, or reset accounts report 0/null/stale pp while their stored
+// plays still demonstrate the real standing. Require the sum to exceed the
+// profile value by a clear margin so slightly stale but sane profiles keep
+// using the official number.
+const PP_FALLBACK_PLAUSIBILITY_RATIO = 0.9;
+
+// When the profile pp is implausible, rebuild standing from the scores the card
+// already receives. The weighted top-100 sum excludes osu!'s bonus pp, so the
+// fallback reads slightly low; that conservative bias is acceptable here, so no
+// bonus adjustment is applied.
+export function resolveCardGlobalPp(
+  globalPp: number | null | undefined,
+  scores: Array<Pick<OsuScore, "pp" | "id">>,
+): number {
+  const profilePp = Math.max(0, globalPp ?? 0);
+  const weightedPp = calculateWeightedPpTotal(scores);
+  if (!Number.isFinite(weightedPp) || weightedPp <= 0) return profilePp;
+  if (profilePp >= weightedPp * PP_FALLBACK_PLAUSIBILITY_RATIO) return profilePp;
+  return weightedPp;
+}
+
 export function computeManiaSkills(scores: OsuScore[], options: { globalPp?: number | null } = {}): ManiaSkills | null {
   const pool = scores.filter(isUsable).slice(0, MAX_PLAYS);
   if (pool.length === 0) return null;
@@ -486,16 +510,21 @@ export function computeManiaSkills(scores: OsuScore[], options: { globalPp?: num
   if (profiles.length === 0) return null;
 
   const blended = blendProfiles(profiles);
+  // Restricted/inactive accounts report 0/null profile pp, which would zero
+  // both prestige terms and hard-cap the card regardless of demonstrated skill;
+  // resolveCardGlobalPp falls back to the weighted top-play sum in that case
+  // and leaves accounts with a plausible profile pp untouched.
+  const effectiveGlobalPp = resolveCardGlobalPp(options.globalPp, scores);
   // Same weights and terms as before; the only change is that the main PP term
   // now reads standing on a per-keymode scale (computeKeymodePpPrestige) instead
   // of a single fixed band, so a 7K main isn't measured on 4K PP economics. This
   // can only raise a 7K player's standing and leaves 4K and the sub-floor casual
   // base untouched, so no card is nerfed by the change.
   const ppPrestige = computeKeymodePpPrestige(
-    options.globalPp,
+    effectiveGlobalPp,
     profiles.map((profile) => ({ keyMode: profile.keyMode, weight: profile.weight })),
   );
-  const elitePpPrestige = computeElitePpPrestige(options.globalPp);
+  const elitePpPrestige = computeElitePpPrestige(effectiveGlobalPp);
   const cardPower =
     blended.peak * 0.33 +
     ppPrestige * 0.39 +

@@ -27,10 +27,11 @@ import {
   rollPackRanks,
   rollUniformPositions,
   sortIntoRevealOrder,
+  startBoundedPrefetches,
   toPackPlayer,
 } from "./packs";
 import {
-  fetchLivePlayerCachedProfileSnapshotDirect,
+  fetchLivePackCardSnapshotDirect,
   fetchLivePlayerProfileSnapshotDirect,
   isLiveBackendConfigured,
 } from "./live-backend";
@@ -39,7 +40,7 @@ import { getUserScoresBestWindow } from "./osu";
 vi.mock("./live-backend", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./live-backend")>()),
   isLiveBackendConfigured: vi.fn(() => true),
-  fetchLivePlayerCachedProfileSnapshotDirect: vi.fn(),
+  fetchLivePackCardSnapshotDirect: vi.fn(),
   fetchLivePlayerProfileSnapshotDirect: vi.fn(),
 }));
 
@@ -444,12 +445,13 @@ describe("reveal order", () => {
 });
 
 describe("fetchPackPlayerScores", () => {
-  const cachedFetch = vi.mocked(fetchLivePlayerCachedProfileSnapshotDirect);
+  const cachedFetch = vi.mocked(fetchLivePackCardSnapshotDirect);
   const directFetch = vi.mocked(fetchLivePlayerProfileSnapshotDirect);
   const osuWindowFetch = vi.mocked(getUserScoresBestWindow);
 
   function snapshotWith(scores: OsuScore[]) {
-    return { bestScores: scores } as Awaited<ReturnType<typeof fetchLivePlayerProfileSnapshotDirect>>;
+    return { bestScores: scores } as Awaited<ReturnType<typeof fetchLivePlayerProfileSnapshotDirect>> &
+      Awaited<ReturnType<typeof fetchLivePackCardSnapshotDirect>>;
   }
 
   const scores = [{ id: 1, pp: 100 } as OsuScore];
@@ -489,5 +491,59 @@ describe("fetchPackPlayerScores", () => {
     osuWindowFetch.mockResolvedValue(scores);
     await expect(fetchPackPlayerScores(101)).resolves.toEqual(scores);
     expect(osuWindowFetch).toHaveBeenCalledWith({ data: { userId: 101, totalLimit: 200, parallel: true } });
+  });
+});
+
+describe("startBoundedPrefetches", () => {
+  function deferredRunner() {
+    const started: number[] = [];
+    const resolvers = new Map<number, { resolve: (value: string) => void; reject: (error: Error) => void }>();
+    const run = (item: number) => {
+      started.push(item);
+      return new Promise<string>((resolve, reject) => {
+        resolvers.set(item, { resolve, reject });
+      });
+    };
+    return { started, resolvers, run };
+  }
+
+  async function settle(): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  it("keeps at most `concurrency` runs in flight and dispatches in item order", async () => {
+    const { started, resolvers, run } = deferredRunner();
+    const results = startBoundedPrefetches([1, 2, 3, 4, 5], run, 2);
+    await settle();
+    expect(started).toEqual([1, 2]);
+
+    resolvers.get(1)!.resolve("one");
+    await settle();
+    expect(started).toEqual([1, 2, 3]);
+    await expect(results[0]).resolves.toBe("one");
+
+    resolvers.get(3)!.resolve("three");
+    resolvers.get(2)!.resolve("two");
+    await settle();
+    expect(started).toEqual([1, 2, 3, 4, 5]);
+    resolvers.get(4)!.resolve("four");
+    resolvers.get(5)!.resolve("five");
+    await expect(Promise.all(results)).resolves.toEqual(["one", "two", "three", "four", "five"]);
+  });
+
+  it("resolves a failed run to null without poisoning the rest of the batch", async () => {
+    const { resolvers, run } = deferredRunner();
+    const results = startBoundedPrefetches([1, 2, 3], run, 2);
+    await settle();
+    resolvers.get(1)!.reject(new Error("network"));
+    await settle();
+    resolvers.get(2)!.resolve("two");
+    resolvers.get(3)!.resolve("three");
+    await expect(Promise.all(results)).resolves.toEqual([null, "two", "three"]);
+  });
+
+  it("runs everything even when the bound exceeds the item count", async () => {
+    const results = startBoundedPrefetches([1, 2], async (item) => item * 10, 8);
+    await expect(Promise.all(results)).resolves.toEqual([10, 20]);
   });
 });

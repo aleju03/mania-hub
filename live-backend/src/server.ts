@@ -9,8 +9,8 @@ import { ScoreIngestor } from "./ingest/score-ingestor.js";
 import { JobQueue } from "./jobs/queue.js";
 import { LiveEventLog } from "./live/event-log.js";
 import { startRuntimeStatusMirror } from "./live/runtime-status.js";
-import { enqueueGlobalMapsRefreshIfDue, enqueueMapsRefreshIfDue } from "./features/maps.js";
-import { ensureMapSearchIndexSeeded, pruneMapSearchPlaceholderRows, reconcileMapSearchIndexStatuses } from "./features/map-search.js";
+import { enqueueGlobalMapsRefreshIfDue, enqueueMapsRefreshIfDue, registerGlobalFarmedBoardDiskCache } from "./features/maps.js";
+import { cleanupBogusLnPatternTags, ensureMapSearchIndexSeeded, pruneMapSearchPlaceholderRows, reconcileMapSearchIndexPlayCounts, reconcileMapSearchIndexStatuses } from "./features/map-search.js";
 import { enqueueQualifiedMapsWatchIfDue } from "./features/qualified-maps-watch.js";
 import { enqueueSettledSetsReconcileIfDue } from "./features/settled-sets-reconcile.js";
 import { ensureChordjackTagRecomputeSeeded, ensureDanFloorPinRecomputeSeeded, ensureDtRateAnalysisSeeded, ensureLnMsdSweepSeeded, ensureLnSourceRecomputeSeeded, ensureLnSubtypeRecomputeSeeded, ensureNoteBpmRecomputeSeeded, ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
@@ -103,6 +103,10 @@ export async function createApp() {
     });
   }
   const db = await createDb(config);
+  // The GLOBAL farmed board normally lives on the maps snapshot thread (which
+  // registers its own connection); this covers the inline fallback path, e.g.
+  // source-mode dev where the thread is disabled.
+  registerGlobalFarmedBoardDiskCache(db, config.databaseUrl);
   // Exactly one process owns schema DDL. A "server"-role process attaches to a
   // DB the worker process migrates, so it waits for readiness instead of racing
   // the worker on concurrent ALTER/CREATE (which would throw duplicate-column).
@@ -645,8 +649,11 @@ function startMapsScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: Job
 // search index materializes status from beatmap metadata (refreshed only by the
 // API-backed enrich job), but a tracked player's score on a newly-ranked map
 // updates the beatmaps.status column for free; this copies that fresher status
-// into the index. Pure DB work, no osu! API, so it runs regardless of the
-// osu!-API scheduler gating (like retention).
+// into the index. Piggybacked on the same tick: the play/pass-count sweep
+// (metadata_json refreshes with no index write attached, so the counts froze
+// at first indexing otherwise) and the bogus-ln-tag cleanup. Pure DB work, no
+// osu! API, so it runs regardless of the osu!-API scheduler gating (like
+// retention).
 function startMapSearchStatusReconciler(db: Awaited<ReturnType<typeof createDb>>): void {
   const tick = async () => {
     const healed = await reconcileMapSearchIndexStatuses(db).catch((error) => {
@@ -659,6 +666,16 @@ function startMapSearchStatusReconciler(db: Awaited<ReturnType<typeof createDb>>
       return 0;
     });
     if (pruned > 0) console.log(`[map-search] pruned ${pruned} placeholder diff row(s)`);
+    const counted = await reconcileMapSearchIndexPlayCounts(db).catch((error) => {
+      console.warn("[map-search] play count reconcile failed", error);
+      return 0;
+    });
+    if (counted > 0) console.log(`[map-search] refreshed play counts on ${counted} map row(s)`);
+    const untagged = await cleanupBogusLnPatternTags(db).catch((error) => {
+      console.warn("[map-search] ln tag cleanup failed", error);
+      return 0;
+    });
+    if (untagged > 0) console.log(`[map-search] stripped bogus ln tag from ${untagged} zero-LN map row(s)`);
     setTimeout(tick, 60 * 60_000).unref();
   };
   setTimeout(tick, 30_000).unref();

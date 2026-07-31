@@ -28,7 +28,7 @@ import { enqueueGlobalMapsRefresh, enqueueGlobalMapsRefreshIfDue, enqueueMapsRef
 import { getMapSearchPage, getMapSearchSetEntry, MAP_SEARCH_PATTERNS, MAP_SEARCH_SUB_PATTERNS, type MapSearchQuery, type MapSearchSort } from "../features/map-search.js";
 import { getMapCollection, getMapCollections, getMapCollectionsRotation, rebuildMapCollections } from "../features/map-collections.js";
 import { getPackWallet, listPackCollectionCards, listPackCollectionOwnedUserIds, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
-import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, warmProfileSnapshots } from "../features/player-profiles.js";
+import { buildPackCardProfileSnapshot, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, warmProfileSnapshots } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
 import { getSnipesSnapshot } from "../features/snipes.js";
 import { getTopPlaysSnapshot, type TopPlaysSnapshotOptions } from "../features/top-plays.js";
@@ -268,13 +268,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     if (profileRoute.kind === "cached-snapshot") {
-      const snapshot = await getCachedPlayerProfileSnapshot(ctx.serveWriteDb ?? ctx.db, profileRoute.key, ctx.osu);
-      if (!snapshot) {
-        sendJson(req, res, ctx, 404, { error: "not_cached" });
-        return true;
-      }
-      res.setHeader("cache-control", "public, max-age=15, stale-while-revalidate=60");
-      await sendAccentEnrichedJson(req, res, ctx, 200, snapshot);
+      await handleCachedProfileSnapshot(req, res, ctx, url, profileRoute.key);
       return true;
     }
     if (profileRoute.kind === "snapshot") {
@@ -3657,6 +3651,83 @@ function getCachedGlobalTrackerSnapshot(key: string, produce: () => Promise<Trac
     if (trackerGlobalSnapshotCache.get(key)?.snapshot === snapshot) trackerGlobalSnapshotCache.delete(key);
   });
   return snapshot;
+}
+
+// Serving a cached profile snapshot is a pure DB read, but every hit still
+// pays gunzip of two compressed columns, display-metadata hydration, the
+// top-play projection and a fresh stringify + compress of an up-to-700KB
+// body. Pack opening fetches several profiles back to back and retries on
+// card flip, so a short prepared-response memo (keyed by profile key, view
+// and encoding) makes repeat hits free. The TTL stays short because profiles
+// update live from the score pipeline; the byte budget stays small because
+// the VPS has no memory to spare.
+const PROFILE_SNAPSHOT_RESPONSE_CACHE_TTL_MS = 20_000;
+const PROFILE_SNAPSHOT_RESPONSE_CACHE_MAX_ENTRIES = 64;
+const PROFILE_SNAPSHOT_RESPONSE_CACHE_MAX_BYTES = 8 * 1024 * 1024;
+const PROFILE_SNAPSHOT_RESPONSE_CACHE_MAX_ENTRY_BYTES = 2 * 1024 * 1024;
+
+interface ProfileSnapshotResponseState {
+  responses: MapsResponseCache;
+  inflight: Map<string, Promise<PreparedJsonResponse>>;
+}
+
+// Per-Db so entries never leak across databases (tests spin up a fresh Db
+// each; production holds one per process).
+const profileSnapshotResponseStateByDb = new WeakMap<Db, ProfileSnapshotResponseState>();
+
+function getProfileSnapshotResponseState(db: Db): ProfileSnapshotResponseState {
+  let state = profileSnapshotResponseStateByDb.get(db);
+  if (!state) {
+    state = {
+      responses: createMapsResponseCache(
+        PROFILE_SNAPSHOT_RESPONSE_CACHE_MAX_ENTRIES,
+        PROFILE_SNAPSHOT_RESPONSE_CACHE_MAX_BYTES,
+        PROFILE_SNAPSHOT_RESPONSE_CACHE_MAX_ENTRY_BYTES,
+      ),
+      inflight: new Map(),
+    };
+    profileSnapshotResponseStateByDb.set(db, state);
+  }
+  return state;
+}
+
+async function handleCachedProfileSnapshot(
+  req: IncomingMessage,
+  res: ServerResponse,
+  ctx: HttpContext,
+  url: URL,
+  key: string,
+): Promise<void> {
+  // view=card serves the slim pack-card projection; the default stays the
+  // full snapshot the profile page consumes.
+  const view = url.searchParams.get("view") === "card" ? "card" : "full";
+  const db = ctx.serveWriteDb ?? ctx.db;
+  const encoding = negotiateEncoding(req);
+  const state = getProfileSnapshotResponseState(db);
+  pruneMapsResponseCache(state.responses, Date.now());
+  res.setHeader("cache-control", "public, max-age=15, stale-while-revalidate=60");
+  await serveMapsResponseCached(req, res, ctx, {
+    cache: state.responses,
+    inflight: state.inflight,
+    key: [key.toLowerCase(), view, encoding ?? "identity"].join("|"),
+    freshnessKey: "",
+    staleServeMs: 0,
+    build: async () => {
+      const snapshot = await getCachedPlayerProfileSnapshot(db, key, ctx.osu);
+      if (!snapshot) {
+        return {
+          prepared: await prepareJsonResponse(404, { error: "not_cached" }, encoding),
+          cacheTtlMs: PROFILE_SNAPSHOT_RESPONSE_CACHE_TTL_MS,
+        };
+      }
+      const body = view === "card" ? buildPackCardProfileSnapshot(snapshot) : snapshot;
+      await enrichPayloadAvatarAccents(ctx.db, ctx.queue ?? null, body);
+      return {
+        prepared: await prepareJsonResponse(200, body, encoding),
+        cacheTtlMs: PROFILE_SNAPSHOT_RESPONSE_CACHE_TTL_MS,
+      };
+    },
+  });
 }
 
 function parseMapsPageQuery(params: URLSearchParams): MapsPageQuery {

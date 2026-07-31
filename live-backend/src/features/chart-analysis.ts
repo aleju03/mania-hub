@@ -1621,13 +1621,22 @@ async function enqueueLnSourceRecompute(queue: JobQueue, cursor: number): Promis
   );
 }
 
+// One beatmap's stored 1.5x (DT-rate) MSD: the raw skillset vector in
+// MSD_SKILLSETS order plus the sweep's own Overall (null when the stored
+// JSON predates the Overall field or carries an invalid value).
+export interface DtRateMsd {
+  msd: number[];
+  overall: number | null;
+}
+
 // Reads stored 1.5x MSD for the given beatmaps, as raw skillset vectors in
 // MSD_SKILLSETS order (the farm helper's feasibility gate compares absolute
-// values). Rows without a valid msd_dt_json are skipped. Mirrors the normal-speed
-// raw MSD read in farm-helper-shape.ts.
-export async function readDtRateMsd(db: Db, beatmapIds: number[]): Promise<Map<number, number[]>> {
+// values) plus the sweep's Overall (the accuracy model's DT difficulty axis).
+// Rows without a valid msd_dt_json are skipped. Mirrors the normal-speed raw
+// MSD read in farm-helper-shape.ts.
+export async function readDtRateMsd(db: Db, beatmapIds: number[]): Promise<Map<number, DtRateMsd>> {
   const ids = [...new Set(beatmapIds.filter((id) => Number.isSafeInteger(id) && id > 0))];
-  const result = new Map<number, number[]>();
+  const result = new Map<number, DtRateMsd>();
   for (let i = 0; i < ids.length; i += 900) {
     const chunk = ids.slice(i, i + 900);
     if (chunk.length === 0) continue;
@@ -1646,7 +1655,11 @@ export async function readDtRateMsd(db: Db, beatmapIds: number[]): Promise<Map<n
       if (!values || typeof values !== "object") continue;
       const vector = MSD_SKILLSETS.map((skill) => Number(values[skill]));
       if (!vector.every((v) => Number.isFinite(v))) continue;
-      result.set(beatmapId, vector);
+      const overall = Number(values.Overall);
+      result.set(beatmapId, {
+        msd: vector,
+        overall: Number.isFinite(overall) && overall > 0 ? overall : null,
+      });
     }
   }
   return result;

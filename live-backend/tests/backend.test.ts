@@ -3275,6 +3275,99 @@ describe("live backend", () => {
     expect(getUserRecentScores).toHaveBeenCalledTimes(1);
   });
 
+  it("serves the slim card view and memoizes cached-snapshot responses", async () => {
+    const { db, queue, events } = await setup();
+    const fetchedAt = new Date().toISOString();
+    const bestScore = {
+      id: 9001,
+      user_id: 101,
+      accuracy: 0.99,
+      beatmap_id: 501,
+      mods: [{ acronym: "CL" }],
+      score: 950000,
+      max_combo: 800,
+      passed: true,
+      rank: "S",
+      statistics: { count_geki: 700, count_300: 100 },
+      pp: 321,
+      ended_at: fetchedAt,
+      beatmap: {
+        id: 501,
+        beatmapset_id: 601,
+        difficulty_rating: 4.2,
+        mode: "mania",
+        cs: 4,
+        bpm: 175,
+        accuracy: 8,
+        drain: 7,
+        total_length: 130,
+        count_circles: 850,
+        count_sliders: 90,
+        version: "[4K] Hard",
+        url: "https://osu.ppy.sh/beatmaps/501",
+      },
+      beatmapset: { id: 601, title: "Card Song", artist: "Artist", covers: {} },
+    };
+    await exec(
+      db,
+      `insert into profile_snapshots
+       (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at)
+       values (101, 'sniper', ?, ?, 200, ?, ?, ?)`,
+      [
+        JSON.stringify({ id: 101, username: "Sniper", avatar_url: "https://assets.example/sniper.png", country_code: "CR", statistics: { pp: 1234, global_rank: 100, play_count: 999 } }),
+        JSON.stringify([bestScore]),
+        fetchedAt,
+        fetchedAt,
+        fetchedAt,
+      ],
+    );
+    const ctx = {
+      db,
+      queue,
+      events,
+      config: baseConfig(),
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never;
+
+    const cardResponse = mockRes();
+    await routeHttp(mockReq("GET", "/api/profiles/101/cached-snapshot?view=card"), cardResponse.res, ctx);
+    expect(cardResponse.res.statusCode).toBe(200);
+    const card = JSON.parse(cardResponse.writes.join(""));
+    expect(card.view).toBe("card");
+    expect(card.projection).toBeUndefined();
+    expect(card.user).toMatchObject({ id: 101, username: "Sniper", statistics: { pp: 1234 } });
+    expect(card.user.statistics.play_count).toBeUndefined();
+    expect(card.bestScores).toHaveLength(1);
+    expect(card.bestScores[0]).toMatchObject({
+      pp: 321,
+      mods: [{ acronym: "CL" }],
+      statistics: { count_geki: 700 },
+      beatmap: { difficulty_rating: 4.2, cs: 4, drain: 7, count_circles: 850 },
+    });
+    expect(card.bestScores[0].beatmapset).toBeUndefined();
+    expect(card.bestScores[0].beatmap.url).toBeUndefined();
+
+    // The default view stays the full snapshot the profile page consumes.
+    const fullResponse = mockRes();
+    await routeHttp(mockReq("GET", "/api/profiles/101/cached-snapshot"), fullResponse.res, ctx);
+    expect(fullResponse.res.statusCode).toBe(200);
+    const full = JSON.parse(fullResponse.writes.join(""));
+    expect(full.projection).toBeDefined();
+    expect(full.bestScores[0].beatmapset).toMatchObject({ title: "Card Song" });
+
+    // Short-TTL response memo: a repeat hit within the TTL replays the
+    // prepared body instead of re-reading the (now mutated) row.
+    await exec(
+      db,
+      "update profile_snapshots set user_json = ? where user_id = 101",
+      [JSON.stringify({ id: 101, username: "Renamed", avatar_url: "https://assets.example/sniper.png", country_code: "CR", statistics: { pp: 9999 } })],
+    );
+    const repeatResponse = mockRes();
+    await routeHttp(mockReq("GET", "/api/profiles/101/cached-snapshot"), repeatResponse.res, ctx);
+    expect(repeatResponse.res.statusCode).toBe(200);
+    expect(repeatResponse.writes.join("")).toBe(fullResponse.writes.join(""));
+  });
+
   it("deduplicates repeated best-score ids in the stored top-score rows", async () => {
     const { db, events, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");
@@ -4418,6 +4511,11 @@ describe("live backend", () => {
     expect(rows.map((row) => [Number(row.beatmap_id), Number(row.pp)])).toEqual([[1_002, 525], [1_003, 700]]);
     expect((await exec(db, "select 1 from global_maps_farmed_aggregates where beatmap_id = 1001")).rows).toHaveLength(0);
 
+    // The request path never pays for catch-up: the stale board answers first
+    // and the background patch lands for the next read.
+    const stale = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query);
+    expect(stale.value?.items.map((item) => (item as { beatmapId: number }).beatmapId)).toEqual([1_001, 1_002]);
+    await waitForGlobalFarmedBoardBuild(db);
     const patched = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query);
     expect(patched.value?.items.map((item) => (item as { beatmapId: number }).beatmapId)).toEqual([1_003, 1_002]);
     expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_global_maps'")).rows[0].count)).toBe(0);
@@ -5419,8 +5517,13 @@ describe("live backend", () => {
       beatmapset: { ...baseScore.beatmapset!, id: 10, status: "ranked" },
     }, scoredAt);
 
-    // No snapshot generation changes and no refresh job runs: the next read
-    // sees revision 2 and overlays just beatmap 11 on the packed base.
+    // No snapshot generation changes and no refresh job runs. The read after
+    // the write still serves the packed base (catch-up never runs on the
+    // request path); the background patch overlays just beatmap 11 for the
+    // next read.
+    const stale = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query);
+    expect((stale.value?.items[0] as { playerCount: number }).playerCount).toBe(81);
+    await waitForGlobalFarmedBoardBuild(db);
     const fresh = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query);
     const freshTop = fresh.value?.items[0] as { playerCount: number; players: Array<Record<string, unknown>> };
     expect(freshTop.playerCount).toBe(82);
@@ -5485,8 +5588,12 @@ describe("live backend", () => {
     expect(Number(after.seed_epoch)).toBeGreaterThan(Number(before.seed_epoch));
 
     // Same Db means the old packed board is still resident. The new seed epoch
-    // must force a full replacement; revision deltas alone cannot describe the
-    // removed MX-only map.
+    // must force a full replacement (revision deltas alone cannot describe the
+    // removed MX-only map), but the pack runs in the background: the first
+    // read after the re-seed still serves the pre-seed corpus.
+    const staleEpoch = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query);
+    expect(staleEpoch.value?.items.map((item) => (item as { beatmapId: number }).beatmapId)).toEqual([21, 11]);
+    await waitForGlobalFarmedBoardBuild(db);
     const reseeded = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query);
     expect(reseeded.value?.items.map((item) => (item as { beatmapId: number }).beatmapId)).toEqual([11]);
     expect(getGlobalFarmedBoardCacheStatsForTests(db)?.generation).toContain(`seed:${Number(after.seed_epoch)}`);
@@ -5576,15 +5683,16 @@ describe("live backend", () => {
     const page = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query);
     expect((page.value?.items[0] as { beatmapId: number }).beatmapId).toBe(11);
     expect(page.value?.items).toHaveLength(1);
-    const duringCatchup = getGlobalFarmedBoardCacheStatsForTests(db);
-    expect(duringCatchup?.buildToken).toContain(":catchup:");
-    expect(duringCatchup?.revision).toBeLessThan(stateRevision);
+    // The backlog probe runs in the background, so the served board is still
+    // behind right after the request returns.
+    expect(getGlobalFarmedBoardCacheStatsForTests(db)?.revision).toBeLessThan(stateRevision);
 
     // The scheduled pack still has to land, and carry the whole backlog with it.
     // (The injected maps have no beatmap/beatmapset rows, so they only ever
     // count as backlog volume -- the rendered page stays at the one real map.)
     await waitForGlobalFarmedBoardBuild(db);
     const packed = getGlobalFarmedBoardCacheStatsForTests(db);
+    expect(packed?.buildToken).toContain(":catchup:");
     expect(packed?.revision).toBe(stateRevision);
     expect(packed?.overrides).toBe(0);
 

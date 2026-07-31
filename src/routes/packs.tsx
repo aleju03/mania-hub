@@ -40,8 +40,10 @@ import { fetchServerPackCollectionOwnedIds } from "../lib/pack-wallet-sync";
 import {
   drawPackPlayers,
   fetchPackPlayerScores,
+  PACK_SCORE_PREFETCH_CONCURRENCY,
   PACK_TYPES,
   packTypeById,
+  startBoundedPrefetches,
   type PackPlayer,
   type PackTypeDef,
   type PackTypeId,
@@ -129,20 +131,23 @@ function scheduleCollectionPanelMount(callback: () => void, reducedMotion: boole
   };
 }
 
-/* Starts each player's best-scores prefetch, sequentially in card order (and
-   coalescing server-side, so nothing fetches twice): when the osu! API budget
-   is tight, card 1's fetch must not queue behind the other players'. */
+/* Starts each player's best-scores prefetch in card order with a small
+   concurrency bound (coalescing server-side, so nothing fetches twice). Warm
+   players are one backend DB read each, so a few in parallel makes reveal-all
+   near-instant; the bound protects the cold-player path, which blocks on
+   osu! API fetches. A resolved null = the fetch failed (network, rate
+   limit), as opposed to a player with genuinely no ranked plays; the reveal
+   retries it. */
 function buildCardStates(players: PackPlayer[]): PackCardState[] {
-  let previous: Promise<unknown> = Promise.resolve();
-  return players.map((player) => {
-    /* null = the fetch failed (network, rate limit), as opposed to a
-       player with genuinely no ranked plays; the reveal retries it. */
-    const scoresPromise = previous
-      .then(() => fetchPackPlayerScores(player.user.id))
-      .catch(() => null);
-    previous = scoresPromise;
-    return { player, scoresPromise };
-  });
+  const scoresPromises = startBoundedPrefetches(
+    players,
+    (player) => fetchPackPlayerScores(player.user.id),
+    PACK_SCORE_PREFETCH_CONCURRENCY,
+  );
+  return players.map((player, index) => ({
+    player,
+    scoresPromise: scoresPromises[index] ?? Promise.resolve(null),
+  }));
 }
 
 function canAffordPack(wallet: PackWallet | null, type: PackTypeDef): boolean {

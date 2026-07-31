@@ -35,7 +35,7 @@ const SNAPSHOT_LIMIT = 200;
 const FARM_HELPER_KEY_MODES = ["any", "4k", "7k"] as const;
 const FARM_HELPER_VIEWS = ["gain", "popular"] as const;
 
-type ReasonFilter = "all" | "missing" | "improve" | "stale";
+type ReasonFilter = "all" | "missing" | "improve" | "stale" | "push";
 type SortMode = "gain" | "popularity" | "players" | "difficulty" | "recent";
 type SortDirection = "asc" | "desc";
 type LayoutMode = "list" | "grid";
@@ -74,7 +74,7 @@ function defaultSortForView(view: LiveFarmHelperView): SortMode {
 }
 
 function parseReasonFilter(value: unknown): ReasonFilter {
-  return value === "missing" || value === "improve" || value === "stale" ? value : "all";
+  return value === "missing" || value === "improve" || value === "stale" || value === "push" ? value : "all";
 }
 
 function parseSortMode(value: unknown): SortMode | undefined {
@@ -197,6 +197,7 @@ const REASON_META: Record<LiveFarmHelperRec["reason"], { label: string; accent: 
   improve: { label: "improve", accent: "bg-osu-green-light", text: "text-osu-green-light" },
   stale: { label: "old pb", accent: "bg-osu-yellow", text: "text-osu-yellow" },
   owned: { label: "cleared", accent: "bg-osu-pink", text: "text-osu-pink" },
+  push: { label: "push acc", accent: "bg-osu-purple", text: "text-osu-purple" },
 };
 
 const FARM_MAP_CONTEXT_KEY_PREFIX = "mania-hub-farm-helper-map-context-v1:";
@@ -948,7 +949,7 @@ function Filters({
       {showReason ? (
         <ChipGroup label="show">
           <SegmentedControl>
-            {(["all", "missing", "improve", "stale"] as const).map((reason) => (
+            {(["all", "missing", "improve", "stale", "push"] as const).map((reason) => (
               <SegmentButton key={reason} active={reasonFilter === reason} onClick={() => onReason(reason)}>
                 {reason === "stale" ? "old" : reason}
                 <span className={`tabular-nums ${reasonFilter === reason ? "text-osu-pink-light/70" : "text-osu-f1/70"}`}>
@@ -1189,6 +1190,14 @@ function RecRow({
           </div>
           <div className="flex flex-wrap items-center gap-x-2 text-[11px] leading-tight">
             <span className={`font-bold uppercase tracking-wide ${meta.text}`}>{farmStatusLabel(rec)}</span>
+            {rec.clearRisk ? (
+              <span
+                className="font-bold uppercase tracking-wide text-osu-orange"
+                title="Finishing this looks risky for you; treat it as a clear attempt, not a farm"
+              >
+                clear attempt
+              </span>
+            ) : null}
             <span className="tabular-nums text-osu-yellow">★{rec.stars.toFixed(2)}</span>
             <span className="tabular-nums text-osu-green-light">{fit}% fit</span>
             <span className="min-w-0 truncate text-osu-f1">
@@ -1287,6 +1296,14 @@ function RecCard({
       <div className="px-2.5 py-2">
         <div className="flex items-center gap-1.5">
           <span className="flex-1 truncate text-[10px] text-osu-l2">[{rec.version}]</span>
+          {rec.clearRisk ? (
+            <span
+              className="shrink-0 rounded bg-osu-orange/15 px-1 py-0.5 text-[8px] font-bold uppercase text-osu-orange"
+              title="Finishing this looks risky for you; treat it as a clear attempt, not a farm"
+            >
+              clear attempt
+            </span>
+          ) : null}
           <ModList mods={rec.recommendedMods ?? []} size={0.5} className="max-w-[72px]" />
           <span className="shrink-0 text-[9px] text-osu-f1">{formatLength(rec.lengthSec)}</span>
         </div>
@@ -1370,6 +1387,7 @@ function buildFarmMapDetailContext(
     keyMode,
     speed: rec.speedBucket,
     reason: rec.reason,
+    clearRisk: rec.clearRisk === true ? true : undefined,
     gain: Math.round(rec.estimatedPpGain * 10) / 10,
     gainUnit,
     benchmark: Math.round(rec.benchmarkPp * 10) / 10,
@@ -1441,6 +1459,7 @@ function farmStatusLabel(rec: LiveFarmHelperRec): string {
   if (rec.reason === "owned") return "cleared";
   if (rec.reason === "missing") return rec.peerFraction >= 0.45 ? "common pick" : "missing";
   if (rec.reason === "stale") return "old pb";
+  if (rec.reason === "push") return "push acc";
   if (rec.estimatedPpGain >= 70) return "large gap";
   return "improve";
 }
@@ -1769,6 +1788,16 @@ function comparisonBar(rec: LiveFarmHelperRec): { left: string; right: string; p
     };
   }
   const subjectPp = rec.subjectPp ?? 0;
+  if (rec.reason === "push") {
+    // Self-improvement target: the peer median sits at or below the player's
+    // own score, so compare against the accuracy-rescaled benchmark instead.
+    const pushTarget = rec.benchmarkPp;
+    return {
+      left: `your ${formatPp(subjectPp)}pp`,
+      right: `acc push ${formatPp(pushTarget)}pp`,
+      pct: pushTarget > 0 ? clampPct(Math.round((subjectPp / pushTarget) * 100)) : 4,
+    };
+  }
   const target = rec.reason === "stale" ? rec.peerPpP75 : rec.peerPpMedian;
   const pct = target > 0 ? clampPct(Math.round((subjectPp / target) * 100)) : 4;
   if (rec.reason === "stale") {
@@ -1791,7 +1820,7 @@ function clampPct(value: number): number {
 }
 
 function countReasons(recs: LiveFarmHelperRec[]): Record<ReasonFilter, number> {
-  const counts: Record<ReasonFilter, number> = { all: recs.length, missing: 0, improve: 0, stale: 0 };
+  const counts: Record<ReasonFilter, number> = { all: recs.length, missing: 0, improve: 0, stale: 0, push: 0 };
   // "owned" only appears in the popular view, where the reason filter is hidden.
   for (const rec of recs) {
     if (rec.reason !== "owned") counts[rec.reason] += 1;

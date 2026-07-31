@@ -915,6 +915,40 @@ export async function fetchLivePlayerCachedProfileSnapshotDirect(key: string): P
   return snapshot;
 }
 
+/* Slim cached-snapshot view for pack card minting: the same projected best
+   scores, trimmed server-side to the fields the maniacard pipeline reads
+   (score pp/mods/statistics plus beatmap difficulty numbers, and the user's
+   id/name/pp). bestScores is typed OsuScore[] for the card pipeline's sake,
+   but each score carries only that subset; do not feed it to surfaces that
+   render beatmapset or per-score user data. */
+export interface LivePackCardSnapshot {
+  view: "card";
+  user: {
+    id: number;
+    username: string;
+    avatar_url: string;
+    country_code: string;
+    statistics: { pp: number | null; global_rank: number | null };
+  };
+  bestScores: OsuScore[];
+  fetchedAt: string;
+  userFetchedAt: string;
+  isStale: boolean;
+}
+
+export async function fetchLivePackCardSnapshotDirect(key: string): Promise<LivePackCardSnapshot | null> {
+  const trimmed = key.trim().slice(0, 120);
+  if (!trimmed) throw new Error("Invalid profile key.");
+  const base = getLiveBackendUrl();
+  if (!base) throw new Error("Server is not configured.");
+  const response = await fetch(`${base}/api/profiles/${encodeURIComponent(trimmed)}/cached-snapshot?view=card`, { credentials: "omit" });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`Server ${response.status}`);
+  const snapshot = await response.json() as LivePackCardSnapshot;
+  harvestAvatarAccents(snapshot);
+  return snapshot;
+}
+
 export async function fetchLivePlayerRecentScoresDirect(
   userId: number,
   source: LivePlayerRecentSource = "tracked",
@@ -991,7 +1025,7 @@ export async function fetchLiveTrackerSnapshot(
   return fetchLiveJson(`/api/snapshots/tracker?${query.toString()}`);
 }
 
-export type LiveFarmHelperReason = "missing" | "improve" | "stale" | "owned";
+export type LiveFarmHelperReason = "missing" | "improve" | "stale" | "owned" | "push";
 export type LiveFarmHelperKeyMode = "4k" | "7k" | "any";
 export type LiveFarmHelperView = "gain" | "popular";
 export type LiveFarmHelperSpeedBucket = "ht" | "normal" | "dt";
@@ -1038,6 +1072,14 @@ export interface LiveFarmHelperRec {
   scoreUrl: string | null;
   mapUrl: string;
   rankScore: number;
+  // P(finish) estimate in [0,1] for lanes the player has not cleared (1 = no
+  // risk detected). Null on the popular browse; optional so older backends
+  // still parse. The gain/target shown are if-you-finish values; the backend
+  // ranking already discounts by this.
+  survival?: number | null;
+  // True when the backend judged this lane a risky clear (survival below its
+  // threshold): render it as a clear attempt, not a farm.
+  clearRisk?: boolean;
 }
 
 export interface LiveFarmHelperPeerBand {
@@ -1282,6 +1324,10 @@ export interface LiveMapSearchEntry {
   lnCount: number;
   primaryPattern: string;
   patterns: Record<string, number>;
+  // Detected subfamily tags from the chart analysis (bracket, speedjack,
+  // lngeneral, ...), strongest first; empty (or absent on cached payloads)
+  // until the analysis lands.
+  patternTags?: string[];
   covers: Record<string, string> | null;
   // From the unified chart analysis; null until the chart's analysis job lands.
   dan?: { label: string; family: string; rawDan: number } | null;

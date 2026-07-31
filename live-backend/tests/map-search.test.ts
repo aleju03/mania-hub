@@ -7,7 +7,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { createDb, exec, json, migrate, type Db } from "../src/db.js";
 import { ACTIVITY_SKILL_ANALYSIS_VERSION } from "../src/features/activity.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
-import { buildMapSearchIndexBatch, buildMapStatusPropagationStatement, ensureMapSearchIndexSeeded, getMapSearchPage, getMapSearchSetEntry, MAP_SEARCH_BUILD_JOB, reconcileMapSearchIndexStatuses, type MapSearchQuery } from "../src/features/map-search.js";
+import { buildMapSearchIndexBatch, buildMapStatusPropagationStatement, cleanupBogusLnPatternTags, ensureMapSearchIndexSeeded, getMapSearchPage, getMapSearchSetEntry, MAP_SEARCH_BUILD_JOB, reconcileMapSearchIndexPlayCounts, reconcileMapSearchIndexStatuses, type MapSearchQuery } from "../src/features/map-search.js";
 import { getMapCollection, getMapCollections, rebuildMapCollections } from "../src/features/map-collections.js";
 import { routeHttp } from "../src/http/snapshots.js";
 import { JobQueue } from "../src/jobs/queue.js";
@@ -39,6 +39,7 @@ interface SeedMap {
   creator?: string;
   version?: string;
   playcount?: number;
+  lnCount?: number;
   totalLength?: number;
   rankedDate?: string;
   mode?: string;
@@ -81,7 +82,7 @@ async function seedMap(db: Db, map: SeedMap): Promise<void> {
         mode: map.mode ?? "mania",
         playcount: map.playcount ?? 1000,
         passcount: 100,
-        count_sliders: 50,
+        count_sliders: map.lnCount ?? 50,
         total_length: map.totalLength ?? 120,
         status: map.status ?? "ranked",
         convert: map.convert ?? false,
@@ -724,6 +725,7 @@ async function seedAnalysis(
     label?: string;
     family?: string;
     clusterCategory?: string;
+    patterns?: Array<{ id: string; label?: string; score: number; confidence?: number }>;
   },
 ): Promise<void> {
   const now = "2026-01-01T00:00:00Z";
@@ -743,7 +745,12 @@ async function seedAnalysis(
       json({
         lnRatio: options.lnRatio ?? 0.1,
         vibro: options.vibro ?? false,
-        patterns: [],
+        patterns: (options.patterns ?? []).map((hit) => ({
+          id: hit.id,
+          label: hit.label ?? hit.id,
+          score: hit.score,
+          confidence: hit.confidence ?? hit.score,
+        })),
         clusterCategory: options.clusterCategory ?? null,
       }),
       options.msdValues ? json({ etternaVersion: "0.72.3", values: options.msdValues }) : null,
@@ -961,5 +968,87 @@ describe("map search chart-analysis join", () => {
     // family + sub mix ORs within the facet
     const mixed = await getMapSearchPage(db, { ...baseQuery(), patterns: ["jack", "dumpstream"] });
     expect(mixed.items.map((item) => item.beatmapId).sort()).toEqual([9101, 9102]);
+  });
+
+  it("exposes subfamily tags on entries and never writes zero-score ids", async () => {
+    const db = await makeDb();
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, lnCount: 0, primary: "stream", patterns: { stream: 1 } });
+    // Pre-fix analyzer shape: a legitimately detected family + subfamily plus
+    // the force-appended score-0 ln candidate on a zero-LN chart.
+    await seedAnalysis(db, 1, {
+      patterns: [
+        { id: "stream", score: 0.9 },
+        { id: "dumpstream", score: 0.6 },
+        { id: "ln", score: 0 },
+      ],
+    });
+    await buildAll(db);
+
+    const tagsRow = (await exec(db, "select pattern_tags from map_search_index where beatmap_id = 1")).rows[0];
+    expect(String(tagsRow?.pattern_tags)).toBe(" stream dumpstream ");
+
+    // Entries carry only the subfamily vocabulary; families already ride in
+    // patterns/primaryPattern.
+    const entry = await getMapSearchSetEntry(db, 1);
+    expect(entry?.patternTags).toEqual(["dumpstream"]);
+    expect(entry?.diffs?.[0]?.patternTags).toEqual(["dumpstream"]);
+    const page = await getMapSearchPage(db, baseQuery());
+    expect(page.items[0]?.patternTags).toEqual(["dumpstream"]);
+  });
+});
+
+describe("map search play count reconciliation", () => {
+  it("copies fresher metadata playcounts into the index without a rebuild", async () => {
+    const db = await makeDb();
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, playcount: 77, primary: "stream", patterns: { stream: 1 } });
+    await buildAll(db);
+    expect((await getMapSearchSetEntry(db, 1))?.playCount).toBe(77);
+
+    // Ingest / enrich_beatmap refresh metadata_json with no index write, the
+    // exact staleness the sweep exists to heal.
+    await exec(db, "update beatmaps set metadata_json = json_set(metadata_json, '$.playcount', 320, '$.passcount', 45) where beatmap_id = 1");
+    expect(await reconcileMapSearchIndexPlayCounts(db)).toBe(1);
+    expect((await getMapSearchSetEntry(db, 1))?.playCount).toBe(320);
+    const row = (await exec(db, "select pass_count from map_search_index where beatmap_id = 1")).rows[0];
+    expect(Number(row?.pass_count)).toBe(45);
+
+    // Idempotent: a second sweep changes nothing.
+    expect(await reconcileMapSearchIndexPlayCounts(db)).toBe(0);
+  });
+
+  it("never zeroes counts from metadata that lacks a playcount", async () => {
+    const db = await makeDb();
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, playcount: 500, primary: "stream", patterns: { stream: 1 } });
+    await buildAll(db);
+    await exec(db, "update beatmaps set metadata_json = json_remove(metadata_json, '$.playcount') where beatmap_id = 1");
+    expect(await reconcileMapSearchIndexPlayCounts(db)).toBe(0);
+    expect((await getMapSearchSetEntry(db, 1))?.playCount).toBe(500);
+  });
+});
+
+describe("bogus ln pattern tag cleanup", () => {
+  it("strips the stale ln tag only where the chart's LN signal is zero", async () => {
+    const db = await makeDb();
+    // Rice chart (0 LN notes, no LN share): carries the pre-fix bogus tag.
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, lnCount: 0, primary: "stream", patterns: { stream: 1 } });
+    // Real LN chart: its ln tag is a genuine detection and must survive.
+    await seedMap(db, { beatmapId: 2, beatmapsetId: 20, lnCount: 400, primary: "ln", patterns: { ln: 1 } });
+    // Rice chart whose only tag was the bogus ln: collapses to empty.
+    await seedMap(db, { beatmapId: 3, beatmapsetId: 30, lnCount: 0, primary: "jack", patterns: { jack: 1 } });
+    await buildAll(db);
+    await exec(db, "update map_search_index set pattern_tags = ' stream ln ' where beatmap_id = 1");
+    await exec(db, "update map_search_index set pattern_tags = ' lngeneral ln ' where beatmap_id = 2");
+    await exec(db, "update map_search_index set pattern_tags = ' ln ' where beatmap_id = 3");
+
+    expect(await cleanupBogusLnPatternTags(db)).toBe(2);
+    const tags = async (beatmapId: number) => String(
+      (await exec(db, "select pattern_tags from map_search_index where beatmap_id = ?", [beatmapId])).rows[0]?.pattern_tags,
+    );
+    expect(await tags(1)).toBe(" stream ");
+    expect(await tags(2)).toBe(" lngeneral ln ");
+    expect(await tags(3)).toBe("");
+
+    // Idempotent: a second pass finds nothing left to heal.
+    expect(await cleanupBogusLnPatternTags(db)).toBe(0);
   });
 });

@@ -6,10 +6,11 @@ import { createDb, exec, json, migrate } from "../db.js";
 import { compactCountryMapsSnapshots } from "../features/maps.js";
 import { toStoredScoreEvent } from "../ingest/score-ingestor.js";
 import { compactLiveEventLogPayloadForStorage } from "../live/event-log.js";
-import { getModAcronyms, getScoreTimestamp, nowIso } from "../shared/score.js";
+import { nowIso } from "../shared/score.js";
 import { compactScoreForStorage, compactScoresForStorage, persistScoresDisplayMetadata } from "../shared/score-storage.js";
 import { packJson, unpackJson } from "../shared/compressed-json.js";
 import type { CountryTopPlay, OscScore } from "../shared/types.js";
+import { compactMapsFarmedOverlay } from "./maps-farmed-compaction.js";
 
 interface CompactOptions {
   batchSize: number;
@@ -36,7 +37,7 @@ if (options.vacuum) {
   await assertVacuumHeadroom(config.databaseUrl, options.force);
 }
 
-const farmed = await compactMapsFarmedOverlay(options.batchSize);
+const farmed = await compactMapsFarmedOverlay(db, options.batchSize);
 console.log(`country_maps_farmed_scores: compacted ${farmed.compacted}, failed ${farmed.failed}, scanned ${farmed.scanned}`);
 await releaseMemory();
 
@@ -179,62 +180,6 @@ async function compactTopPlayEvents(batchSize: number): Promise<{ scanned: numbe
       );
       result.compacted++;
       await releaseMemory();
-    }
-
-    await releaseMemory();
-    if (rows.length < batchSize) break;
-  }
-
-  return result;
-}
-
-async function compactMapsFarmedOverlay(batchSize: number): Promise<{ scanned: number; compacted: number; failed: number }> {
-  const result = { scanned: 0, compacted: 0, failed: 0 };
-
-  while (true) {
-    const rows = (await exec(
-      db,
-      `select country, user_id, beatmap_id, score_json, updated_at
-       from country_maps_farmed_scores
-       where score_json is not null
-         and score_json <> ''
-         and score_json <> '{}'
-         and json_valid(score_json)
-       limit ?`,
-      [batchSize],
-    )).rows;
-
-    if (rows.length === 0) break;
-    result.scanned += rows.length;
-
-    for (const row of rows) {
-      const score = parseScore(row.score_json);
-      if (!score) {
-        result.failed++;
-        continue;
-      }
-
-      await persistScoresDisplayMetadata(db, [score], String(row.updated_at ?? nowIso()));
-      await exec(
-        db,
-        `update country_maps_farmed_scores
-         set score_id = ?,
-             score_json = '{}',
-             mods_json = ?,
-             score_url = ?,
-             played_at = ?
-         where country = ? and user_id = ? and beatmap_id = ?`,
-        [
-          getMapsFarmedDisplayScoreId(score),
-          json(getModAcronyms(score.mods)),
-          getScoreUrl(score),
-          getScoreTimestamp(score) || null,
-          String(row.country),
-          Number(row.user_id),
-          Number(row.beatmap_id),
-        ],
-      );
-      result.compacted++;
     }
 
     await releaseMemory();
@@ -482,16 +427,6 @@ function compactTopPlayPayload(event: Partial<CountryTopPlay>): Partial<CountryT
 
 function parseUnknownJson(value: unknown): unknown | null {
   return unpackJson<unknown | null>(value, null);
-}
-
-function getMapsFarmedDisplayScoreId(score: OscScore): number {
-  return score.legacy_score_id != null && score.legacy_score_id > 0 ? score.legacy_score_id : score.id;
-}
-
-function getScoreUrl(score: OscScore): string | null {
-  if (score.id <= 0) return null;
-  if (score.type === "solo_score") return `https://osu.ppy.sh/scores/${score.id}`;
-  return `https://osu.ppy.sh/scores/${score.beatmap?.mode ?? "mania"}/${score.id}`;
 }
 
 // VACUUM rebuilds the whole database into a second copy before swapping it in,

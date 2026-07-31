@@ -9,7 +9,7 @@ import { calculateWeightedPpTotal, getScoreIdentity, getScoreTimestamp, nowIso, 
 import { compactScoresForStorage, hydrateScoresDisplayMetadata, persistScoresDisplayMetadata } from "../shared/score-storage.js";
 import { packJson, unpackJson } from "../shared/compressed-json.js";
 import { readNoteBpms } from "./chart-analysis.js";
-import type { OscScore } from "../shared/types.js";
+import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
 
 const PROFILE_SNAPSHOT_TTL_MS = 24 * 60 * 60_000;
 const PROFILE_USER_TTL_MS = 10 * 60_000;
@@ -198,6 +198,113 @@ export async function getCachedPlayerProfileSnapshot(
     fetched_at: fetchedAt,
     user_fetched_at: fetchedAt,
   }, true, await getTrackedProfileRecentScores(db, Number(userRow.user_id), PROFILE_TRACKED_OVERLAY_LIMIT));
+}
+
+/* Pack card view of a profile snapshot. The maniacard pipeline consumes up to
+   200 best scores, but per score it reads only pp/mods/statistics, the score's
+   own combo/accuracy/lazer-detection fields, and a handful of beatmap
+   difficulty numbers; from the user it reads name/id/avatar plus
+   statistics.pp. The full snapshot re-attaches beatmapset covers and per-score
+   users and carries the whole projection envelope, none of which the card
+   renders, so this projection cuts the payload to roughly a tenth. */
+export interface PackCardScore {
+  id: number;
+  legacy_score_id?: number | null;
+  user_id: number;
+  accuracy: number;
+  mods: OsuMod[];
+  score: number;
+  total_score?: number;
+  legacy_total_score?: number;
+  max_combo: number;
+  passed: boolean;
+  rank: string;
+  statistics: OsuScoreStatistics;
+  pp: number | null;
+  type?: string;
+  beatmap?: {
+    id: number;
+    difficulty_rating: number;
+    cs: number;
+    bpm: number;
+    accuracy?: number;
+    drain?: number;
+    total_length?: number;
+    count_circles?: number;
+    count_sliders?: number;
+    max_combo?: number;
+  };
+}
+
+export interface PackCardProfileSnapshot {
+  view: "card";
+  user: Record<string, unknown>;
+  bestScores: PackCardScore[];
+  fetchedAt: string;
+  userFetchedAt: string;
+  isStale: boolean;
+}
+
+export function buildPackCardProfileSnapshot(snapshot: PlayerProfileSnapshot): PackCardProfileSnapshot {
+  return {
+    view: "card",
+    user: buildPackCardUser(snapshot.user),
+    bestScores: snapshot.bestScores.map(toPackCardScore),
+    fetchedAt: snapshot.fetchedAt,
+    userFetchedAt: snapshot.userFetchedAt,
+    isStale: snapshot.isStale,
+  };
+}
+
+function buildPackCardUser(user: Record<string, unknown>): Record<string, unknown> {
+  const statistics = readRecord(user.statistics);
+  return {
+    id: user.id,
+    username: user.username,
+    avatar_url: user.avatar_url,
+    country_code: user.country_code,
+    statistics: {
+      pp: readNumber(statistics?.pp),
+      global_rank: readInteger(statistics?.global_rank),
+    },
+  };
+}
+
+function toPackCardScore(score: OscScore): PackCardScore {
+  /* The lean OsuBeatmap type omits the difficulty fields the card computes
+     traits from (OD, HP, note counts, length), but the hydrated beatmap spreads
+     the stored osu! metadata_json, so they are present at runtime. */
+  const beatmap = score.beatmap as (NonNullable<OscScore["beatmap"]> & Record<string, unknown>) | undefined;
+  return {
+    id: score.id,
+    legacy_score_id: score.legacy_score_id ?? null,
+    user_id: score.user_id,
+    accuracy: score.accuracy,
+    mods: score.mods,
+    score: score.score,
+    total_score: score.total_score,
+    legacy_total_score: score.legacy_total_score,
+    max_combo: score.max_combo,
+    passed: score.passed,
+    rank: score.rank,
+    statistics: score.statistics,
+    pp: score.pp,
+    type: score.type,
+    beatmap: beatmap
+      ? {
+        id: beatmap.id,
+        difficulty_rating: beatmap.difficulty_rating,
+        cs: beatmap.cs,
+        bpm: beatmap.bpm,
+        accuracy: readNumber(beatmap.accuracy) ?? undefined,
+        drain: readNumber(beatmap.drain) ?? undefined,
+        total_length: readNumber(beatmap.total_length) ?? undefined,
+        count_circles: readNumber(beatmap.count_circles) ?? undefined,
+        count_sliders: readNumber(beatmap.count_sliders) ?? undefined,
+        max_combo: beatmap.max_combo,
+      }
+      : undefined,
+  };
 }
 
 export async function getPlayerRecentScores(

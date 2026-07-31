@@ -90,6 +90,19 @@ export function calculateStableAccuracy(stats: OsuScoreStatistics): number {
   return (counts.countMax * 300 + counts.count300 * 300 + counts.count200 * 200 + counts.count100 * 100 + counts.count50 * 50) / (total * 300);
 }
 
+// ManiaPerformanceCalculator.calculateCustomAccuracy: the 320-weighted
+// judgement accuracy mania pp is computed from (Perfect weighs 320 here,
+// unlike stable's 300-weighted display accuracy). For a fixed map+mods, mania
+// pp is linear in (5 * customAcc - 4); the farm helper's "push" targets rely
+// on exactly that. Returns null when the score carries no judgement counts.
+export function calculateManiaCustomAccuracy(stats: OsuScoreStatistics | null | undefined): number | null {
+  const counts = getHitCounts(stats);
+  const total = counts.countMax + counts.count300 + counts.count200 + counts.count100 + counts.count50 + counts.countMiss;
+  if (total <= 0) return null;
+  const weighted = counts.countMax * 320 + counts.count300 * 300 + counts.count200 * 200 + counts.count100 * 100 + counts.count50 * 50;
+  return Math.min(1, Math.max(0, weighted / (total * 320)));
+}
+
 function deriveStableManiaRank(score: ScoreLike): string | null {
   const mode = score.beatmap?.mode ?? "mania";
   if (mode !== "mania") return null;
@@ -142,6 +155,32 @@ export function getScoreIdentity(score: ScoreLike): string {
 export function getDisplayedAccuracy(score: ScoreLike): number {
   if (isLazerScore(score) && Number.isFinite(score.accuracy) && score.accuracy > 0) return score.accuracy;
   return calculateStableAccuracy(score.statistics) || score.accuracy;
+}
+
+/**
+ * Accuracy persisted on farmed-score rows for "typical peer accuracy"
+ * consumers (farm-helper benchmark scaling). Deliberately the 320-weighted
+ * mania pp accuracy (calculateManiaCustomAccuracy), not the displayed
+ * accuracy: for a fixed map+mods, mania pp is linear in (5 * customAcc - 4),
+ * so a stored peer accuracy plugs straight into that scaling. Computed from
+ * judgement counts alone, it is also identical for stable and lazer
+ * submissions of the same play. Null when the payload carries no judgement
+ * counts (note_count is null in exactly the same case).
+ */
+export function getStoredScoreAccuracy(score: ScoreLike): number | null {
+  const accuracy = calculateManiaCustomAccuracy(score.statistics);
+  return accuracy != null && accuracy > 0 ? accuracy : null;
+}
+
+/**
+ * Total judged objects of a play (every hit result including misses), stored
+ * alongside the accuracy so a peer-accuracy consumer can weight long charts
+ * against short ones. Null when the payload carries no statistics.
+ */
+export function getScoreJudgementCount(score: ScoreLike): number | null {
+  const counts = getScoreHitCounts(score);
+  const total = counts.max + counts.great + counts.good + counts.ok + counts.meh + counts.miss;
+  return total > 0 ? total : null;
 }
 
 export function getDisplayedRank(score: ScoreLike): string {

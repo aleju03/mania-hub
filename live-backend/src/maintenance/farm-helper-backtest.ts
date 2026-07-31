@@ -4,6 +4,15 @@ import { readConfig } from "../config.js";
 import { createDb, exec, migrate, type Db } from "../db.js";
 import { unpackJson } from "../shared/compressed-json.js";
 import { buildFarmHelperSnapshotForBacktest, type FarmHelperKeyMode } from "../features/farm-helper.js";
+import {
+  buildAccSamples,
+  evaluateAccHoldout,
+  fitAccModelFromSamples,
+  loadAccChartDifficulty,
+  readPlayerAccModel,
+  type AccModelPlay,
+  type PlayerAccModel,
+} from "../features/player-acc-model.js";
 import { hydrateScoresDisplayMetadata } from "../shared/score-storage.js";
 import type { OscScore } from "../shared/types.js";
 
@@ -21,6 +30,25 @@ import type { OscScore } from "../shared/types.js";
 // Usage:
 //   npm run backtest:farm-helper -- --label baseline
 //   npm run backtest:farm-helper -- --label stage2 --limit 150 --out ./backtest-out
+//   npm run backtest:farm-helper -- --acc-only        (accuracy-model holdout only)
+//   npm run backtest:farm-helper -- --no-acc-scaling  (A/B: disable the A8
+//                                    predicted-accuracy benchmark scaling)
+//   npm run backtest:farm-helper -- --no-survival     (A/B: disable the A10
+//                                    survival ranking discount)
+//
+// NOTE ON A8 LEAKAGE: the personal accuracy model comes from the CURRENT
+// player_skill_ratings row (stored acc_model_json, or fitted on the fly from
+// the stored plays when the skills job has not persisted one yet), i.e. from
+// plays that may postdate the as-of cutoff. The before/after comparison
+// (--no-acc-scaling vs default) is still apples-to-apples; absolute numbers
+// carry that mild optimism.
+//
+// Accuracy-model holdout (A7): for each subject with stored skill ratings,
+// hold out ~20% of their rated plays (deterministic identity hash), fit the
+// personal accuracy model on the rest, and report the MAE of the median
+// predicted custom accuracy on the holdout, next to the naive baseline
+// (player-mean accuracy per keymode). --acc-only skips the heavy snapshot
+// reconstruction and reports just this metric.
 //
 // NOTE ON WINDOW: the plan specified a >=60-day event span, but the live event
 // log only covers ~85 days, which leaves just 8 eligible subjects. The default
@@ -36,6 +64,9 @@ interface Args {
   cutDays: number;
   recLimit: number;
   keyMode: FarmHelperKeyMode;
+  accOnly: boolean;
+  noAccScaling: boolean;
+  noSurvival: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -59,7 +90,84 @@ function parseArgs(argv: string[]): Args {
     cutDays: num("--cut-days", 30),
     recLimit: num("--rec-limit", 100),
     keyMode,
+    accOnly: argv.includes("--acc-only"),
+    noAccScaling: argv.includes("--no-acc-scaling"),
+    noSurvival: argv.includes("--no-survival"),
   };
+}
+
+interface AccHoldoutSubject {
+  userId: number;
+  n: number;
+  mae: number;
+  naiveMae: number;
+}
+
+// The subject's stored skill row (plays + per-keymode Overall ratings), the
+// input both the acc holdout and the on-the-fly model fit need.
+async function readStoredSkillPlays(
+  db: Db,
+  userId: number,
+): Promise<{ plays: AccModelPlay[]; ratingByKeys: Map<number, number> } | null> {
+  const row = (await exec(
+    db,
+    `select modes_json, plays_json from player_skill_ratings
+     where user_id = ? and status = 'ready'
+     order by analysis_version desc limit 1`,
+    [userId],
+  )).rows[0];
+  if (!row) return null;
+  let modes: { modes?: Array<{ keyCount: number; ratings?: Record<string, number> }> };
+  let playsWrap: { plays?: AccModelPlay[] };
+  try {
+    modes = JSON.parse(String(row.modes_json ?? ""));
+    playsWrap = JSON.parse(String(row.plays_json ?? ""));
+  } catch {
+    return null;
+  }
+  const plays = playsWrap.plays ?? [];
+  const ratingByKeys = new Map<number, number>();
+  for (const mode of modes.modes ?? []) {
+    const rating = Number(mode.ratings?.Overall ?? 0);
+    if (rating > 0) ratingByKeys.set(mode.keyCount, rating);
+  }
+  if (ratingByKeys.size === 0) return null;
+  return { plays, ratingByKeys };
+}
+
+// 80/20 holdout of the subject's rated plays against the personal accuracy
+// model (player-acc-model.ts). Reads the stored skill row; null when the
+// subject has no ready ratings or too few joinable plays.
+async function runAccHoldout(db: Db, userId: number): Promise<AccHoldoutSubject | null> {
+  const stored = await readStoredSkillPlays(db, userId);
+  if (!stored || stored.plays.length < 20) return null;
+  const { plays, ratingByKeys } = stored;
+  const chartData = await loadAccChartDifficulty(db, plays.map((play) => play.beatmapId));
+  const samples = buildAccSamples(plays, ratingByKeys, chartData);
+  const result = evaluateAccHoldout(
+    samples,
+    [...ratingByKeys.entries()].map(([keyCount, rating]) => ({ keyCount, rating })),
+  );
+  if (!result) return null;
+  return { userId, ...result };
+}
+
+// The subject's acc model for the A8 scaling run: the stored acc_model_json
+// when the skills job already fitted one, else a fresh fit from the stored
+// plays via the exact machinery the job uses (fitAccModelFromSamples). Keeps
+// the backtest read-only on DBs synced before the job's first A7 pass. Null
+// when the subject has no ready ratings (scaling then simply stays off).
+async function loadOrFitAccModel(db: Db, userId: number): Promise<PlayerAccModel | null> {
+  const stored = await readPlayerAccModel(db, userId).catch(() => null);
+  if (stored) return stored;
+  const skillRow = await readStoredSkillPlays(db, userId);
+  if (!skillRow) return null;
+  const chartData = await loadAccChartDifficulty(db, skillRow.plays.map((play) => play.beatmapId));
+  const samples = buildAccSamples(skillRow.plays, skillRow.ratingByKeys, chartData);
+  return fitAccModelFromSamples(
+    samples,
+    [...skillRow.ratingByKeys.entries()].map(([keyCount, rating]) => ({ keyCount, rating })),
+  );
 }
 
 interface SubjectRow {
@@ -196,6 +304,7 @@ async function main(): Promise<void> {
   const subjects = await selectSubjects(db, args);
   console.log(
     `[backtest] label=${args.label} rev=${gitRev} keyMode=${args.keyMode} cutDays=${args.cutDays} `
+    + `accScaling=${args.noAccScaling ? "off" : "on"} survival=${args.noSurvival ? "off" : "on"} `
     + `subjects=${subjects.length} (>=${args.minEvents} events, span>=${args.minSpanDays}d) `
     + `farmed played_at null fraction=${round(nullFraction, 4)}`,
   );
@@ -203,10 +312,24 @@ async function main(): Promise<void> {
   const results: SubjectResult[] = [];
   let subjectsWithRecs = 0;
   let subjectsWithEmptyG = 0;
+  let subjectsWithAccModel = 0;
   const pooledBenchErrors: number[] = [];
+  const accResults: AccHoldoutSubject[] = [];
+  let accSkipped = 0;
 
   for (let i = 0; i < subjects.length; i++) {
     const subject = subjects[i];
+
+    // Accuracy-model holdout runs for every subject with stored ratings,
+    // independent of the ground-truth window the rec metrics need.
+    const accResult = await runAccHoldout(db, subject.userId).catch(() => null);
+    if (accResult) accResults.push(accResult);
+    else accSkipped++;
+    if (args.accOnly) {
+      if ((i + 1) % 25 === 0) console.log(`[backtest] processed ${i + 1}/${subjects.length}...`);
+      continue;
+    }
+
     let user: Record<string, unknown>;
     let rawScores: OscScore[];
     try {
@@ -228,11 +351,20 @@ async function main(): Promise<void> {
     }
 
     const hydrated = await hydrateScoresDisplayMetadata(db, rawScores);
+    // A8 scaling: serve the stored model or fit one on the fly (read-only).
+    let accModel: PlayerAccModel | null = null;
+    if (!args.noAccScaling) {
+      accModel = await loadOrFitAccModel(db, subject.userId).catch(() => null);
+      if (accModel) subjectsWithAccModel++;
+    }
     const snapshot = await buildFarmHelperSnapshotForBacktest(db, user, hydrated, {
       asOf,
       keyMode: args.keyMode,
       view: "gain",
       limit: args.recLimit,
+      noAccScaling: args.noAccScaling,
+      noSurvival: args.noSurvival,
+      accModel,
     });
 
     const recBeatmaps = snapshot.recs.map((rec) => rec.beatmapId);
@@ -288,8 +420,31 @@ async function main(): Promise<void> {
   const perSubjectMae = results.map((r) => r.benchMae).filter((v): v is number => v != null);
 
   console.log("");
+  console.log(`==== Accuracy-model holdout: ${args.label} (rev ${gitRev}) ====`);
+  if (accResults.length > 0) {
+    const maes = accResults.map((r) => r.mae);
+    const naives = accResults.map((r) => r.naiveMae);
+    const totalN = accResults.reduce((sum, r) => sum + r.n, 0);
+    const pooledMae = accResults.reduce((sum, r) => sum + r.mae * r.n, 0) / totalN;
+    const pooledNaive = accResults.reduce((sum, r) => sum + r.naiveMae * r.n, 0) / totalN;
+    console.log(`subjects: ${accResults.length} (skipped: ${accSkipped}) | holdout plays: ${totalN}`);
+    console.log(`model MAE   mean=${round(mean(maes), 5)} median=${round(median(maes), 5)} pooled=${round(pooledMae, 5)}`);
+    console.log(`naive MAE   mean=${round(mean(naives), 5)} median=${round(median(naives), 5)} pooled=${round(pooledNaive, 5)} (player-mean accuracy baseline)`);
+  } else {
+    console.log(`no subjects with stored skill ratings (skipped: ${accSkipped})`);
+  }
+
+  if (args.accOnly) {
+    db.close();
+    process.exit(0);
+  }
+
+  console.log("");
   console.log(`==== Farm helper backtest: ${args.label} (rev ${gitRev}) ====`);
-  console.log(`subjects scored: ${results.length} | with recs: ${subjectsWithRecs} | skipped (empty ground truth): ${subjectsWithEmptyG}`);
+  console.log(
+    `subjects scored: ${results.length} | with recs: ${subjectsWithRecs} | skipped (empty ground truth): ${subjectsWithEmptyG}`
+    + ` | acc models served: ${args.noAccScaling ? "off" : subjectsWithAccModel}`,
+  );
   const table: Array<[string, string, string]> = [
     ["metric", "mean", "median"],
     ["precision@25", round(mean(p25)).toString(), round(median(p25)).toString()],

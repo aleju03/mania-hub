@@ -328,6 +328,7 @@ async function runMigrationPass(target: Db, statements: string[], startedAtIso: 
   await migrateChartAnalysisDtRate(target);
   await migrateTopPlayEventsHotColumns(target);
   await migratePlayerSkillBaseline(target);
+  await migratePlayerSkillAccModel(target);
   await migrateActivityMapsBestPayload(target);
   await setMigrationSentinel(target, SCHEMA_MIGRATION_META_KEY, {
     startedAt: startedAtIso,
@@ -1068,6 +1069,16 @@ async function migratePlayerSkillBaseline(db: Db): Promise<void> {
   }
 }
 
+// Personal accuracy curve model (features/player-acc-model.ts), fitted by the
+// skills job and persisted beside the ratings it derives from. Nullable; rows
+// backfill on each player's next skills recompute.
+async function migratePlayerSkillAccModel(db: Db): Promise<void> {
+  const columns = (await db.execute("pragma table_info(player_skill_ratings)")).rows.map((row) => String(row.name));
+  if (columns.length > 0 && !columns.includes("acc_model_json")) {
+    await db.execute("alter table player_skill_ratings add column acc_model_json text");
+  }
+}
+
 // The day-best rows outlive raw score payloads by ~2 years, and the skill
 // pipeline reads them back as archived evidence. Mods and judgement counts
 // are the two fields that evidence needs beyond accuracy (real rate, wife
@@ -1156,6 +1167,8 @@ async function migrateMapsFarmedOverlay(db: Db): Promise<void> {
       played_at text,
       detected_at text not null,
       updated_at text not null,
+      accuracy real,
+      note_count integer,
       primary key (country, user_id, beatmap_id)
     )
   `);
@@ -1168,6 +1181,25 @@ async function migrateMapsFarmedOverlay(db: Db): Promise<void> {
   }
   if (!farmedColumns.includes("played_at")) {
     await db.execute("alter table country_maps_farmed_scores add column played_at text");
+  }
+  // Peer accuracy columns: compaction blanks score_json, so accuracy and the
+  // play's judged-object count get their own nullable columns. Existing rows
+  // stay null until a maps-farmed refresh (or a compaction pass over rows that
+  // still hold full score_json) fills them in.
+  if (!farmedColumns.includes("accuracy")) {
+    await db.execute("alter table country_maps_farmed_scores add column accuracy real");
+  }
+  if (!farmedColumns.includes("note_count")) {
+    await db.execute("alter table country_maps_farmed_scores add column note_count integer");
+  }
+  // The GLOBAL projection mirrors the country rows, so it carries the same
+  // nullable columns (its table is created by migrations/001_initial.sql).
+  const globalFarmedColumns = (await db.execute("pragma table_info(global_maps_farmed_scores)")).rows.map((row) => String(row.name));
+  if (globalFarmedColumns.length > 0 && !globalFarmedColumns.includes("accuracy")) {
+    await db.execute("alter table global_maps_farmed_scores add column accuracy real");
+  }
+  if (globalFarmedColumns.length > 0 && !globalFarmedColumns.includes("note_count")) {
+    await db.execute("alter table global_maps_farmed_scores add column note_count integer");
   }
   await db.execute(`
     create index if not exists idx_country_maps_farmed_scores_country_updated

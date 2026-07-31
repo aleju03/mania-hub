@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
-import { getCachedPlayerProfileSnapshot, getPlayerRecentScoresFromOsu } from "../src/features/player-profiles.js";
+import { buildPackCardProfileSnapshot, getCachedPlayerProfileSnapshot, getPlayerRecentScoresFromOsu } from "../src/features/player-profiles.js";
 import type { OscScore } from "../src/shared/types.js";
 
 let dir = "";
@@ -366,6 +366,96 @@ describe("player profile snapshots", () => {
 
     expect(snapshot?.bestScores.find((entry) => entry.id === 30)?.beatmap?.note_bpm).toBe(160.5);
     expect(snapshot?.bestScores.find((entry) => entry.id === 31)?.beatmap?.note_bpm).toBeUndefined();
+  });
+});
+
+describe("pack card snapshot projection", () => {
+  it("trims scores and user to the fields the maniacard reads", async () => {
+    const snapshotFetchedAt = new Date().toISOString();
+    const best = score({ id: 41, beatmapId: 401, title: "Card play", pp: 412.5, endedAt: snapshotFetchedAt });
+    // The stored osu! beatmap carries the full difficulty block; the lean
+    // OsuBeatmap type just doesn't declare these fields.
+    best.beatmap = {
+      ...best.beatmap!,
+      accuracy: 8,
+      drain: 7.5,
+      total_length: 121,
+      count_circles: 900,
+      count_sliders: 120,
+      max_combo: 1315,
+    } as typeof best.beatmap;
+
+    await exec(
+      db,
+      `insert into profile_snapshots
+       (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        USER_ID,
+        "mnshiny",
+        JSON.stringify({
+          id: USER_ID,
+          username: "MnShiny",
+          country_code: "CR",
+          avatar_url: "https://example.test/avatar.png",
+          statistics: { pp: 1000, global_rank: 777, play_count: 55555 },
+        }),
+        JSON.stringify([best]),
+        200,
+        snapshotFetchedAt,
+        snapshotFetchedAt,
+        snapshotFetchedAt,
+      ],
+    );
+
+    const snapshot = await getCachedPlayerProfileSnapshot(db, "MnShiny");
+    expect(snapshot).not.toBeNull();
+    const card = buildPackCardProfileSnapshot(snapshot!);
+
+    expect(card.view).toBe("card");
+    expect(card.isStale).toBe(false);
+    expect(card.user).toEqual({
+      id: USER_ID,
+      username: "MnShiny",
+      avatar_url: "https://example.test/avatar.png",
+      country_code: "CR",
+      statistics: { pp: 1000, global_rank: 777 },
+    });
+
+    expect(card.bestScores).toHaveLength(1);
+    const entry = card.bestScores[0];
+    expect(entry).toMatchObject({
+      id: 41,
+      pp: 412.5,
+      accuracy: 0.98,
+      max_combo: 500,
+      mods: [{ acronym: "CL" }],
+      statistics: {},
+      beatmap: {
+        id: 401,
+        difficulty_rating: 3.5,
+        cs: 4,
+        bpm: 180,
+        accuracy: 8,
+        drain: 7.5,
+        total_length: 121,
+        count_circles: 900,
+        count_sliders: 120,
+        max_combo: 1315,
+      },
+    });
+
+    // The envelope and per-score hydration the card never reads must not ship.
+    const raw = JSON.parse(JSON.stringify(card)) as Record<string, unknown>;
+    expect(raw.projection).toBeUndefined();
+    const rawScore = (raw.bestScores as Record<string, unknown>[])[0];
+    expect(rawScore.beatmapset).toBeUndefined();
+    expect(rawScore.user).toBeUndefined();
+    const rawBeatmap = rawScore.beatmap as Record<string, unknown>;
+    expect(rawBeatmap.url).toBeUndefined();
+    expect(rawBeatmap.version).toBeUndefined();
+    const rawUser = raw.user as Record<string, unknown>;
+    expect((rawUser.statistics as Record<string, unknown>).play_count).toBeUndefined();
   });
 });
 

@@ -3,12 +3,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
-import { buildFarmHelperSnapshotForBacktest, FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapshot } from "../src/features/farm-helper.js";
+import { buildFarmHelperSnapshotForBacktest, computeAccBenchmarkScale, computeSurvival, FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapshot, SURVIVAL_CLEAR_RISK_MAX } from "../src/features/farm-helper.js";
+import { ACC_MODEL_PRIOR_TYPICAL_ACC, ACC_MODEL_VERSION, predictPlayerAccuracy, type AccModelMode, type PlayerAccModel } from "../src/features/player-acc-model.js";
 import { PLAYER_SKILLS_VERSION } from "../src/features/player-skills.js";
 import { SKILL_BASELINE_VERSION } from "../src/features/skill-baseline.js";
-import { calculateWeightedPpTotal, nowIso } from "../src/shared/score.js";
+import { calculateManiaCustomAccuracy, calculateWeightedPpTotal, nowIso } from "../src/shared/score.js";
 import { OsuApiError, type OsuApiClient } from "../src/osu/client.js";
-import type { OscScore, OsuMod } from "../src/shared/types.js";
+import type { OscScore, OsuMod, OsuScoreStatistics } from "../src/shared/types.js";
 
 let dir = "";
 let db: Db;
@@ -18,6 +19,7 @@ const SUBJECT_PP = 5000;
 const BM_IMPROVE = 10;
 const BM_STALE = 11;
 const BM_MISSING = 12;
+const BM_PUSH = 13;
 
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "mania-farm-helper-"));
@@ -29,7 +31,15 @@ afterEach(async () => {
   if (dir) await rm(dir, { recursive: true, force: true });
 });
 
-function subjectScore(beatmapId: number, pp: number, endedAt: string, keys = 4, stars = 5, mods: string[] = []): OscScore {
+function subjectScore(
+  beatmapId: number,
+  pp: number,
+  endedAt: string,
+  keys = 4,
+  stars = 5,
+  mods: string[] = [],
+  statistics: OsuScoreStatistics = {},
+): OscScore {
   return {
     id: beatmapId,
     user_id: SUBJECT_ID,
@@ -39,7 +49,7 @@ function subjectScore(beatmapId: number, pp: number, endedAt: string, keys = 4, 
     max_combo: 1000,
     passed: true,
     rank: "S",
-    statistics: {},
+    statistics,
     pp,
     beatmap_id: beatmapId,
     beatmap: {
@@ -54,6 +64,13 @@ function subjectScore(beatmapId: number, pp: number, endedAt: string, keys = 4, 
     },
     ended_at: endedAt,
   };
+}
+
+// Judgement counts hitting a target 320-weighted custom accuracy exactly using
+// only Perfect/300 judgements: acc = 1 - great / (16 * total).
+function statsForCustomAcc(acc: number, total = 1000): OsuScoreStatistics {
+  const great = Math.round(16 * total * (1 - acc));
+  return { count_geki: total - great, count_300: great };
 }
 
 function buildSubjectBestScores(): OscScore[] {
@@ -114,13 +131,14 @@ async function insertFarmed(
   updatedAt: string,
   mods: string[] = [],
   playedAt = updatedAt,
+  accuracy: number | null = null,
 ): Promise<void> {
   await exec(
     db,
     `insert into country_maps_farmed_scores
-       (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at)
-     values (?, ?, ?, ?, ?, '{}', ?, null, ?, ?, ?)`,
-    [country, userId, beatmapId, nextScoreId++, pp, JSON.stringify(mods), playedAt, updatedAt, updatedAt],
+       (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at, accuracy)
+     values (?, ?, ?, ?, ?, '{}', ?, null, ?, ?, ?, ?)`,
+    [country, userId, beatmapId, nextScoreId++, pp, JSON.stringify(mods), playedAt, updatedAt, updatedAt, accuracy],
   );
 }
 
@@ -175,13 +193,26 @@ async function insertDtRateAnalysis(beatmapId: number, msdValues: Record<string,
   );
 }
 
-async function seedSubjectSkillRatings(userId: number, keyCount: number, ratings: Record<string, number>, analyzedPlays: number): Promise<void> {
+interface SeededSkillMode {
+  keyCount: number;
+  analyzedPlays: number;
+  ratings: Record<string, number>;
+  patterns?: Array<{ id: string; rating: number; plays: number }>;
+}
+
+async function seedSubjectSkillModes(userId: number, modes: SeededSkillMode[]): Promise<void> {
+  const analyzedPlays = modes.reduce((sum, mode) => sum + mode.analyzedPlays, 0);
   const modesJson = JSON.stringify({
     totalPlays: analyzedPlays,
     analyzedPlays,
     pendingPlays: 0,
     unsupportedPlays: 0,
-    modes: [{ keyCount, analyzedPlays, ratings, patterns: [] }],
+    modes: modes.map((mode) => ({
+      keyCount: mode.keyCount,
+      analyzedPlays: mode.analyzedPlays,
+      ratings: mode.ratings,
+      patterns: mode.patterns ?? [],
+    })),
   });
   const now = nowIso();
   await exec(
@@ -190,6 +221,10 @@ async function seedSubjectSkillRatings(userId: number, keyCount: number, ratings
      values (?, ?, 'ready', '[]', ?, ?, ?)`,
     [userId, PLAYER_SKILLS_VERSION, modesJson, now, now],
   );
+}
+
+async function seedSubjectSkillRatings(userId: number, keyCount: number, ratings: Record<string, number>, analyzedPlays: number): Promise<void> {
+  await seedSubjectSkillModes(userId, [{ keyCount, analyzedPlays, ratings }]);
 }
 
 const stubQueue = { enqueue: async () => {} } as unknown as Parameters<typeof getFarmHelperSnapshot>[4];
@@ -315,6 +350,92 @@ describe("farm helper", () => {
 
     expect(missing?.topPeers.length).toBeGreaterThan(0);
     expect(missing?.topPeers[0]?.username).toMatch(/^Peer/);
+  });
+
+  it("offers a push target for an owned strong score with no peers above", async () => {
+    const recent = "2024-06-01T00:00:00Z";
+    const bestScores = buildSubjectBestScores();
+    // The #1's high accuracy sets the demonstrated-best cap above the push target.
+    bestScores[0] = subjectScore(990, 700, recent, 4, 5, [], statsForCustomAcc(0.99));
+    bestScores.push(subjectScore(BM_PUSH, 400, recent, 4, 5, [], statsForCustomAcc(0.97)));
+    await seedPeers();
+    await insertBeatmapMeta(BM_PUSH);
+    // Every peer farms the map BELOW the subject's 400pp: no improve, no stale.
+    for (let i = 0; i < 15; i += 1) {
+      await insertFarmed(i < 8 ? "CR" : "US", 100 + i, BM_PUSH, 395, nowIso());
+    }
+
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const push = snapshot.recs.find((rec) => rec.beatmapId === BM_PUSH);
+
+    expect(push?.reason).toBe("push");
+    expect(push?.subjectPp).toBe(400);
+    // pp is linear in (5*acc - 4): target = own pp rescaled a fixed accuracy step up.
+    const accNow = calculateManiaCustomAccuracy(statsForCustomAcc(0.97))!;
+    const targetAcc = accNow + 0.0075;
+    const expectedBenchmark = 400 * (5 * targetAcc - 4) / (5 * accNow - 4);
+    expect(push?.benchmarkPp).toBeCloseTo(expectedBenchmark, 1);
+    expect(push?.estimatedPpGain).toBeCloseTo(expectedGain(bestScores, BM_PUSH, expectedBenchmark), 1);
+    // Fixture scores without judgement counts never push: the only recs are the
+    // three peer-driven ones plus this push target.
+    expect(snapshot.recs.length).toBe(4);
+  });
+
+  it("does not push a score already at the player's demonstrated best accuracy", async () => {
+    const recent = "2024-06-01T00:00:00Z";
+    const bestScores = buildSubjectBestScores();
+    // The only stat-bearing score IS the demonstrated best: the accuracy cap
+    // (best + headroom) leaves less than the minimum meaningful delta. At 700pp
+    // even that capped delta would clear the pp margin, so an absent rec proves
+    // the accuracy guardrail (not the margin gate) blocked it.
+    bestScores.push(subjectScore(BM_PUSH, 700, recent, 4, 5, [], statsForCustomAcc(0.97)));
+    await seedPeers();
+    await insertBeatmapMeta(BM_PUSH);
+    for (let i = 0; i < 15; i += 1) {
+      await insertFarmed(i < 8 ? "CR" : "US", 100 + i, BM_PUSH, 600, nowIso());
+    }
+
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    expect(snapshot.recs.find((rec) => rec.beatmapId === BM_PUSH)).toBeUndefined();
+  });
+
+  it("never replaces an improve or stale reason with push", async () => {
+    const recent = "2024-06-01T00:00:00Z";
+    const old = "2022-01-01T00:00:00Z";
+    const bestScores = buildSubjectBestScores();
+    // Give the improve/stale scores judgement counts so push COULD fire on them
+    // if the branch order were wrong.
+    bestScores[1] = subjectScore(BM_IMPROVE, 400, recent, 4, 5, [], statsForCustomAcc(0.97));
+    bestScores[2] = subjectScore(BM_STALE, 600, old, 4, 5, [], statsForCustomAcc(0.97));
+    bestScores[0] = subjectScore(990, 700, recent, 4, 5, [], statsForCustomAcc(0.99));
+    await seedPeers();
+
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const byBeatmap = new Map(snapshot.recs.map((rec) => [rec.beatmapId, rec]));
+
+    expect(byBeatmap.get(BM_IMPROVE)?.reason).toBe("improve");
+    expect(byBeatmap.get(BM_STALE)?.reason).toBe("stale");
+    expect(snapshot.recs.filter((rec) => rec.reason === "push").length).toBe(0);
+  });
+
+  it("drops push targets below the minimum visible gain", async () => {
+    const recent = "2024-06-01T00:00:00Z";
+    // A deep baseline: the owned 300pp map sits past position 60, so its
+    // ~13pp raw push improvement is worth well under MIN_VISIBLE_GAIN_PP once
+    // weighted (0.95^61 ~ 0.044).
+    const bestScores: OscScore[] = [subjectScore(990, 700, recent, 4, 5, [], statsForCustomAcc(0.99))];
+    for (let i = 0; i < 60; i += 1) {
+      bestScores.push(subjectScore(900 + i, 690 - i * 3, recent));
+    }
+    bestScores.push(subjectScore(BM_PUSH, 300, recent, 4, 5, [], statsForCustomAcc(0.97)));
+    await seedPeers();
+    await insertBeatmapMeta(BM_PUSH);
+    for (let i = 0; i < 15; i += 1) {
+      await insertFarmed(i < 8 ? "CR" : "US", 100 + i, BM_PUSH, 295, nowIso());
+    }
+
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    expect(snapshot.recs.find((rec) => rec.beatmapId === BM_PUSH)).toBeUndefined();
   });
 
   it("lists every peer who farmed a map, ranked by pp", async () => {
@@ -651,7 +772,9 @@ describe("farm helper", () => {
     for (let i = 0; i < 12; i += 1) {
       const id = 9000 + i;
       await insertUser(id, 15_000, "US", `Strong7kPeer${i}`);
-      await insertFarmed("US", id, targetBeatmap, 950, recent);
+      // 660 stays under the subject's demonstrated-top growth cap (600 * 1.15)
+      // so the rec survives; the point here is cohort selection, not the cap.
+      await insertFarmed("US", id, targetBeatmap, 660, recent);
       for (let j = 0; j < supportBeatmaps.length; j += 1) {
         await insertFarmed("US", id, supportBeatmaps[j], (strongSupportPps[j] ?? 0) - i, recent);
       }
@@ -1075,6 +1198,279 @@ describe("farm helper", () => {
     expect(popular.recs.some((rec) => rec.beatmapId === riceSpeed)).toBe(true);
   });
 
+  it("gates a sparse keymode via cross-keymode transfer and caps its targets at the demonstrated top play", async () => {
+    const recent = nowIso();
+    // Subject is a 7K main (50 analyzed plays, all axes rated 16) dabbling in
+    // 4K (9 analyzed plays, inflated axis ratings of 20 from that tiny
+    // sample). The old behavior omitted the sparse 4K keymode entirely, so
+    // exactly these subjects got zero 4K filtering.
+    const hard4k = 9950; // Technical 19: inside the full 3.0 margin, outside the tighter sparse one (16 + 1.5)
+    const easy4k = 9951; // Technical 17, farmed at 290: feasible and under the demonstrated-top cap
+    const mid4k = 9952; // Technical 17 but farmed at 500: feasible MSD, dropped by the 300 * 1.04 top-play cap
+    const own4k = Array.from({ length: 5 }, (_, i) => 9960 + i);
+    const own7k = Array.from({ length: 10 }, (_, i) => 9970 + i);
+    const bestScores = [
+      ...own7k.map((beatmapId, i) => subjectScore(beatmapId, 600 - i * 5, recent, 7, 5)),
+      ...own4k.map((beatmapId, i) => subjectScore(beatmapId, 300 - i * 10, recent, 4, 5)),
+    ];
+    const msd = (technical: number) => ({ Stream: 10, Jumpstream: 10, Handstream: 10, Stamina: 10, JackSpeed: 10, Chordjack: 10, Technical: technical });
+    const flat = (value: number) => ({ Stream: value, Jumpstream: value, Handstream: value, Stamina: value, JackSpeed: value, Chordjack: value, Technical: value });
+
+    for (const beatmapId of [hard4k, easy4k, mid4k]) await insertBeatmapMeta(beatmapId, 4, 5);
+    await insertSearchIndex(hard4k, [0, 0, 0, 0, 0, 0, 1, 0], 4, msd(19));
+    await insertSearchIndex(easy4k, [0, 0, 0, 0, 0, 0, 1, 0], 4, msd(17));
+    await insertSearchIndex(mid4k, [0, 0, 0, 0, 0, 0, 1, 0], 4, msd(17));
+    for (const beatmapId of own4k) await insertBeatmapMeta(beatmapId, 4, 5);
+    for (const beatmapId of own7k) await insertBeatmapMeta(beatmapId, 7, 5);
+
+    for (let i = 0; i < 12; i += 1) {
+      const id = 30_000 + i;
+      await insertUser(id, 10_000, "CR", `SparsePeer${i}`);
+      await insertFarmed("CR", id, hard4k, 290, recent);
+      await insertFarmed("CR", id, easy4k, 290, recent);
+      await insertFarmed("CR", id, mid4k, 500, recent);
+      // 8 farmed 4K maps total per peer clears the keymode pool floor.
+      for (const beatmapId of own4k) await insertFarmed("CR", id, beatmapId, 280, recent);
+    }
+    await seedSubjectSkillModes(SUBJECT_ID, [
+      { keyCount: 7, analyzedPlays: 50, ratings: { ...flat(16), Overall: 20 } },
+      { keyCount: 4, analyzedPlays: 9, ratings: { ...flat(20), Overall: 20 } },
+    ]);
+    const osu = makeOsuStub(bestScores, 10_000, { "4k": 2_300, "7k": 6_000 });
+
+    const gain = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" }, stubQueue);
+    expect(gain.recs.some((rec) => rec.beatmapId === easy4k)).toBe(true);
+    // Transferred ratings: per-axis min(own 20, donor 16 scaled by the Overall
+    // ratio) = 16, and the sparse margin is 1.5, so Technical 19 drops even
+    // though the subject's own thin 4K ratings would have allowed it.
+    expect(gain.recs.some((rec) => rec.beatmapId === hard4k)).toBe(false);
+    // Feasible MSD, but the 500pp peer benchmark exceeds the demonstrated 4K
+    // top play (300) plus headroom: projection, not a target.
+    expect(gain.recs.some((rec) => rec.beatmapId === mid4k)).toBe(false);
+
+    // Popular still browses everything (the gate and caps are gain-only).
+    const popular = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k", view: "popular" }, stubQueue);
+    expect(popular.recs.some((rec) => rec.beatmapId === hard4k)).toBe(true);
+    expect(popular.recs.some((rec) => rec.beatmapId === mid4k)).toBe(true);
+  });
+
+  it("gates on the chart's pattern family rating even when the MSD axes pass", async () => {
+    const recent = nowIso();
+    // 7K LN main: every MSD axis rated 16 (LN-earned), family ratings say LN 24
+    // but jack only 12. Two charts with IDENTICAL MSD (JackSpeed 16 dominant,
+    // within the axis margin) differ only in pattern family: the jack-family
+    // chart outstrips what the player has shown on jack charts and drops.
+    const riceChart = 9930;
+    const lnChart = 9931;
+    const support = Array.from({ length: 8 }, (_, i) => 9935 + i);
+    const bestScores = [
+      subjectScore(9944, 520, recent, 7, 5),
+      ...support.map((beatmapId, i) => subjectScore(beatmapId, 480 - i * 5, recent, 7, 5)),
+    ];
+    const msd = (jackSpeed: number) => ({ Stream: 10, Jumpstream: 10, Handstream: 10, Stamina: 10, JackSpeed: jackSpeed, Chordjack: 10, Technical: 10 });
+
+    await insertBeatmapMeta(riceChart, 7, 5);
+    await insertBeatmapMeta(lnChart, 7, 5);
+    await insertSearchIndex(riceChart, [1, 0, 0, 0, 0, 0, 0, 0], 7, msd(16));
+    await insertSearchIndex(lnChart, [0, 0, 0, 0, 0, 0, 0, 1], 7, msd(16));
+    for (const beatmapId of support) await insertBeatmapMeta(beatmapId, 7, 5);
+
+    for (let i = 0; i < 12; i += 1) {
+      const id = 31_000 + i;
+      await insertUser(id, 10_000, "CR", `FamilyPeer${i}`);
+      await insertFarmed("CR", id, riceChart, 500, recent);
+      await insertFarmed("CR", id, lnChart, 500, recent);
+      for (const beatmapId of support) await insertFarmed("CR", id, beatmapId, 400, recent);
+    }
+    await seedSubjectSkillModes(SUBJECT_ID, [{
+      keyCount: 7,
+      analyzedPlays: 50,
+      ratings: { ...msd(16), Overall: 20 },
+      patterns: [
+        { id: "ln", rating: 24, plays: 30 },
+        { id: "jack", rating: 12, plays: 4 },
+      ],
+    }]);
+    const osu = makeOsuStub(bestScores, 10_000, { "7k": 3000 });
+
+    const gain = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "7k" }, stubQueue);
+    expect(gain.recs.some((rec) => rec.beatmapId === lnChart)).toBe(true);
+    // JackSpeed 16 <= 16 + 3.5 passes the axis check, but the chart's primary
+    // family is jack and 16 > 12 + 3.5: family evidence gates it.
+    expect(gain.recs.some((rec) => rec.beatmapId === riceChart)).toBe(false);
+
+    const popular = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "7k", view: "popular" }, stubQueue);
+    expect(popular.recs.some((rec) => rec.beatmapId === riceChart)).toBe(true);
+  });
+
+  it("gates on near-dominant secondary MSD axes but ignores far-below-dominant ones", async () => {
+    const recent = nowIso();
+    // Subject: strong everywhere (20) except JackSpeed (10). Both charts share
+    // a within-reach dominant Technical 21; one is nearly co-dominant on
+    // JackSpeed (20.5, checked, far above 10 + 3), the other's JackSpeed 15
+    // sits well below the dominant (unchecked texture, even though 15 > 13).
+    const secondaryHeavy = 9940;
+    const secondaryLight = 9941;
+    const support = Array.from({ length: 8 }, (_, i) => 9945 + i);
+    const bestScores = [
+      subjectScore(9954, 500, recent, 4, 5),
+      ...support.map((beatmapId, i) => subjectScore(beatmapId, 450 - i * 5, recent, 4, 5)),
+    ];
+    const msd = (jackSpeed: number) => ({ Stream: 10, Jumpstream: 10, Handstream: 10, Stamina: 10, JackSpeed: jackSpeed, Chordjack: 10, Technical: 21 });
+
+    await insertBeatmapMeta(secondaryHeavy, 4, 5);
+    await insertBeatmapMeta(secondaryLight, 4, 5);
+    await insertSearchIndex(secondaryHeavy, [0, 0, 0, 0, 0, 0, 1, 0], 4, msd(20.5));
+    await insertSearchIndex(secondaryLight, [0, 0, 0, 0, 0, 0, 1, 0], 4, msd(15));
+    for (const beatmapId of support) await insertBeatmapMeta(beatmapId, 4, 5);
+
+    for (let i = 0; i < 12; i += 1) {
+      const id = 32_000 + i;
+      await insertUser(id, 10_000, "CR", `AxisPeer${i}`);
+      await insertFarmed("CR", id, secondaryHeavy, 500, recent);
+      await insertFarmed("CR", id, secondaryLight, 500, recent);
+      for (const beatmapId of support) await insertFarmed("CR", id, beatmapId, 400, recent);
+    }
+    await seedSubjectSkillRatings(SUBJECT_ID, 4, { Stream: 20, Jumpstream: 20, Handstream: 20, Stamina: 20, JackSpeed: 10, Chordjack: 20, Technical: 20 }, 50);
+    const osu = makeOsuStub(bestScores, 10_000, { "4k": 3000 });
+
+    const gain = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" }, stubQueue);
+    expect(gain.recs.some((rec) => rec.beatmapId === secondaryLight)).toBe(true);
+    expect(gain.recs.some((rec) => rec.beatmapId === secondaryHeavy)).toBe(false);
+  });
+
+  it("gates HT-lane recs on rate-scaled 1.0x MSD", async () => {
+    const recent = nowIso();
+    // No stored 0.75x MSD exists, so the HT lane screens the 1.0x vector
+    // scaled by the rate: Technical 30 -> 22.5 (above 15 + 3, drops) while
+    // Technical 22 -> 16.5 (kept, even though the NORMAL lane would drop 22).
+    const hardHt = 9970;
+    const easyHt = 9971;
+    const support = Array.from({ length: 8 }, (_, i) => 9975 + i);
+    const bestScores = [
+      subjectScore(9985, 500, recent, 4, 5),
+      ...support.map((beatmapId, i) => subjectScore(beatmapId, 450 - i * 5, recent, 4, 5)),
+    ];
+    const msd = (technical: number) => ({ Stream: 10, Jumpstream: 10, Handstream: 10, Stamina: 10, JackSpeed: 10, Chordjack: 10, Technical: technical });
+
+    await insertBeatmapMeta(hardHt, 4, 5);
+    await insertBeatmapMeta(easyHt, 4, 5);
+    await insertSearchIndex(hardHt, [0, 0, 0, 0, 0, 0, 1, 0], 4, msd(30));
+    await insertSearchIndex(easyHt, [0, 0, 0, 0, 0, 0, 1, 0], 4, msd(22));
+    for (const beatmapId of support) await insertBeatmapMeta(beatmapId, 4, 5);
+
+    for (let i = 0; i < 12; i += 1) {
+      const id = 33_000 + i;
+      await insertUser(id, 10_000, "CR", `HtGatePeer${i}`);
+      await insertFarmed("CR", id, hardHt, 500, recent, ["HT"]);
+      await insertFarmed("CR", id, easyHt, 500, recent, ["HT"]);
+      for (const beatmapId of support) await insertFarmed("CR", id, beatmapId, 400, recent);
+    }
+    await seedSubjectSkillRatings(SUBJECT_ID, 4, msd(15), 50);
+    const osu = makeOsuStub(bestScores, 10_000, { "4k": 3000 });
+
+    const gain = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" }, stubQueue);
+    const easyRec = gain.recs.find((rec) => rec.beatmapId === easyHt);
+    expect(easyRec).toBeDefined();
+    expect(easyRec?.speedBucket).toBe("ht");
+    expect(gain.recs.some((rec) => rec.beatmapId === hardHt)).toBe(false);
+
+    // Popular still browses the out-of-reach HT chart (the gate is gain-only).
+    const popular = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k", view: "popular" }, stubQueue);
+    expect(popular.recs.some((rec) => rec.beatmapId === hardHt)).toBe(true);
+  });
+
+  it("caps targets by the demonstrated top play in the chart's pattern family, not variant pp", async () => {
+    const recent = nowIso();
+    // 7K player: LN family demonstrated at 1000pp, jack family at only 300pp.
+    // Peers farm both targets at 800. The old cap (20% of variant pp = 1872)
+    // never bound, so the 800pp rice target sailed through; the family cap
+    // binds it at 300 * 1.15 while the LN target stays within 1000 * 1.15.
+    const riceTarget = 9955;
+    const lnTarget = 9956;
+    const ownLn = Array.from({ length: 10 }, (_, i) => 9960 + i);
+    const ownJack = [9975, 9976];
+    const LN = [0, 0, 0, 0, 0, 0, 0, 1];
+    const JACK = [1, 0, 0, 0, 0, 0, 0, 0];
+    const bestScores = [
+      ...ownLn.map((beatmapId, i) => subjectScore(beatmapId, 1000 - i * 5, recent, 7, 5)),
+      ...ownJack.map((beatmapId, i) => subjectScore(beatmapId, 300 - i * 10, recent, 7, 5)),
+    ];
+    for (const beatmapId of ownLn) {
+      await insertBeatmapMeta(beatmapId, 7, 5);
+      await insertSearchIndex(beatmapId, LN, 7);
+    }
+    for (const beatmapId of ownJack) {
+      await insertBeatmapMeta(beatmapId, 7, 5);
+      await insertSearchIndex(beatmapId, JACK, 7);
+    }
+    await insertBeatmapMeta(riceTarget, 7, 5);
+    await insertSearchIndex(riceTarget, JACK, 7);
+    await insertBeatmapMeta(lnTarget, 7, 5);
+    await insertSearchIndex(lnTarget, LN, 7);
+
+    for (let i = 0; i < 12; i += 1) {
+      const id = 34_000 + i;
+      await insertUser(id, 10_000, "CR", `CapPeer${i}`);
+      await insertFarmed("CR", id, riceTarget, 800, recent);
+      await insertFarmed("CR", id, lnTarget, 800, recent);
+      for (const beatmapId of ownLn) await insertFarmed("CR", id, beatmapId, 700, recent);
+    }
+    // No skill ratings seeded: the feasibility gate stays off, isolating the
+    // family cap.
+    const osu = makeOsuStub(bestScores, 10_000, { "7k": 9_000 });
+    const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "7k" });
+
+    expect(snapshot.recs.some((rec) => rec.beatmapId === lnTarget)).toBe(true);
+    expect(snapshot.recs.some((rec) => rec.beatmapId === riceTarget)).toBe(false);
+  });
+
+  it("exercises the feasibility gate on the queue-less backtest path", async () => {
+    const recent = nowIso();
+    const hard = 9990; // dominant Technical 30, above the subject's 15 + margin
+    const easy = 9991; // dominant Technical 15, within reach
+    const support = Array.from({ length: 8 }, (_, i) => 9910 + i);
+    const bestScores = [
+      subjectScore(9905, 500, recent, 4, 5),
+      ...support.map((beatmapId, i) => subjectScore(beatmapId, 450 - i * 5, recent, 4, 5)),
+    ];
+    const msd = (technical: number) => ({ Stream: 10, Jumpstream: 10, Handstream: 10, Stamina: 10, JackSpeed: 10, Chordjack: 10, Technical: technical });
+
+    await insertBeatmapMeta(hard, 4, 5);
+    await insertBeatmapMeta(easy, 4, 5);
+    await insertSearchIndex(hard, [0, 0, 0, 0, 0, 0, 1, 0], 4, msd(30));
+    await insertSearchIndex(easy, [0, 0, 0, 0, 0, 0, 1, 0], 4, msd(15));
+    for (const beatmapId of support) await insertBeatmapMeta(beatmapId, 4, 5);
+
+    for (let i = 0; i < 12; i += 1) {
+      const id = 35_000 + i;
+      await insertUser(id, 10_000, "CR", `BacktestGatePeer${i}`);
+      await insertFarmed("CR", id, hard, 500, recent);
+      await insertFarmed("CR", id, easy, 500, recent);
+      for (const beatmapId of support) await insertFarmed("CR", id, beatmapId, 400, recent);
+    }
+    await seedSubjectSkillRatings(SUBJECT_ID, 4, msd(15), 50);
+
+    const user = {
+      id: SUBJECT_ID,
+      username: "Subject",
+      avatar_url: "https://a.ppy.sh/1",
+      statistics: {
+        pp: 10_000,
+        variants: [{ mode: "mania", variant: "4k", pp: 3000, global_rank: null, country_rank: null }],
+      },
+    };
+    const snapshot = await buildFarmHelperSnapshotForBacktest(db, user, bestScores, {
+      asOf: Date.now() + 60_000,
+      keyMode: "4k",
+      view: "gain",
+      limit: 100,
+    });
+
+    expect(snapshot.recs.some((rec) => rec.beatmapId === easy)).toBe(true);
+    expect(snapshot.recs.some((rec) => rec.beatmapId === hard)).toBe(false);
+  });
+
   it("computes key-mode peer distance on mode pp, not identical total pp", async () => {
     const recent = nowIso();
     const targetBeatmap = 90;
@@ -1239,7 +1635,7 @@ describe("farm helper", () => {
     expect(lnRec?.patternFit ?? 1).toBeLessThan(0.1);
   });
 
-  it("does not share cached snapshots between queue-less and queue-ful callers", async () => {
+  it("applies the feasibility gate to queue-less callers (Discord/backtest parity)", async () => {
     const recent = nowIso();
     const hard = 9400; // dominant Technical 30, above the subject's 15 + margin
     const support = Array.from({ length: 8 }, (_, i) => 9410 + i);
@@ -1261,15 +1657,16 @@ describe("farm helper", () => {
     await seedSubjectSkillRatings(SUBJECT_ID, 4, msd(15), 50);
     const osu = makeOsuStub(bestScores, 10_000, { "4k": 3000 });
 
-    // Queue-less caller (Discord-style): feasibility gate disabled, the over-MSD
-    // chart stays visible. This primes the snapshot cache.
-    const ungated = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" });
-    expect(ungated.recs.some((rec) => rec.beatmapId === hard)).toBe(true);
+    // Queue-less caller (Discord-style): the gate reads the stored ratings
+    // without enqueueing anything, so the over-MSD chart drops here too. The
+    // old behavior disabled the gate entirely without a queue, which meant
+    // Discord (and the backtest) served ungated lists.
+    const noQueue = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" });
+    expect(noQueue.recs.some((rec) => rec.beatmapId === hard)).toBe(false);
 
-    // A queue-ful caller with otherwise identical params must not be served the
-    // cached ungated list: its feasibility gate drops the chart.
-    const gated = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" }, stubQueue);
-    expect(gated.recs.some((rec) => rec.beatmapId === hard)).toBe(false);
+    // A queue-ful caller sees the same content (and may share the cache entry).
+    const withQueue = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" }, stubQueue);
+    expect(withQueue.recs.some((rec) => rec.beatmapId === hard)).toBe(false);
   });
 
   it("self-heals proxy-only cohort peers by enqueueing their variant enrichment", async () => {
@@ -1594,5 +1991,381 @@ describe("farm helper", () => {
     const support = snapshot.recs.find((candidate) => candidate.beatmapId === supports[0]);
     expect(support?.estimatedPpGain ?? 0).toBeGreaterThan(1);
     expect(support?.estimatedPpGain ?? 0).toBeLessThan(300 * 0.4);
+  });
+});
+
+// A8: peer benchmarks scaled by the subject's predicted custom accuracy,
+// benchmark * (5 * accYou - 4) / (5 * accTypical - 4), clamped to [0, 1].
+describe("farm helper predicted-accuracy benchmark scaling", () => {
+  const BM_ACC = 14;
+  // pat order: jack, stream, jumpstream, handstream, stamina, chordjack, tech, ln.
+  const STREAM_PAT = [0, 1, 0, 0, 0, 0, 0, 0];
+
+  // A ready acc model row for the subject's 4K keymode. The partial msd
+  // fixtures below (only Stream set) give the chart an msd_overall without a
+  // full skillset vector, so the hard feasibility gate stays out of the way
+  // and every drop/discount observed here comes from the multiplier.
+  function accModelForTest(overrides: Partial<AccModelMode> = {}): PlayerAccModel {
+    const mode: AccModelMode = {
+      keys: 4,
+      rating: 25,
+      n: 100,
+      w: 1000,
+      a: -2.8,
+      bn: 0.085,
+      bp: 0.15,
+      s: 0.3,
+      mean: 0.95,
+      lo: -10,
+      hi: 10,
+      fam: {},
+      choke: [],
+      ...overrides,
+    };
+    return { v: ACC_MODEL_VERSION, modes: { "4": mode } };
+  }
+
+  async function seedSubjectAccModel(model: PlayerAccModel): Promise<void> {
+    await seedSubjectSkillRatings(SUBJECT_ID, 4, { Overall: 25 }, 40);
+    await exec(db, "update player_skill_ratings set acc_model_json = ? where user_id = ?", [
+      JSON.stringify(model),
+      SUBJECT_ID,
+    ]);
+  }
+
+  it("floors the multiplier at zero and clamps it at one", () => {
+    // (5 * acc - 4) hits 0 at 80% and goes negative below: floored at 0.
+    expect(computeAccBenchmarkScale({ accConservative: 0.75 }, 0.94)).toBe(0);
+    expect(computeAccBenchmarkScale({ accConservative: 0.8 }, 0.94)).toBe(0);
+    // A prediction above the typical accuracy never inflates the benchmark.
+    expect(computeAccBenchmarkScale({ accConservative: 0.999 }, 0.94)).toBe(1);
+    expect(computeAccBenchmarkScale({ accConservative: 0.9 }, 0.94))
+      .toBeCloseTo((5 * 0.9 - 4) / (5 * 0.94 - 4), 6);
+    // Degenerate typical accuracy (denominator <= 0): leave unscaled.
+    expect(computeAccBenchmarkScale({ accConservative: 0.9 }, 0.8)).toBe(1);
+  });
+
+  it("shrinks the target for a chart the model predicts weak accuracy on", async () => {
+    const bestScores = buildSubjectBestScores();
+    await seedPeers();
+    await insertBeatmapMeta(BM_ACC, 4, 5);
+    // msd_overall 24 (gap -1 against the model's rating 25).
+    await insertSearchIndex(BM_ACC, STREAM_PAT, 4, { Stream: 24 });
+    for (let i = 0; i < 15; i += 1) {
+      await insertFarmed(i < 8 ? "CR" : "US", 100 + i, BM_ACC, 620, nowIso());
+    }
+    // A weak curve: ~90% median custom accuracy even 1 MSD below the
+    // player's level.
+    const model = accModelForTest({ a: Math.log(0.10) });
+    await seedSubjectAccModel(model);
+
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const rec = snapshot.recs.find((candidate) => candidate.beatmapId === BM_ACC);
+
+    const prediction = predictPlayerAccuracy(model, { keyCount: 4, chartOverall: 24, family: "stream" })!;
+    const scale = computeAccBenchmarkScale(prediction, ACC_MODEL_PRIOR_TYPICAL_ACC);
+    expect(scale).toBeGreaterThan(0);
+    expect(scale).toBeLessThan(1);
+
+    expect(rec?.reason).toBe("missing");
+    expect(rec?.benchmarkPp).toBeCloseTo(620 * scale, 1);
+    expect(rec?.benchmarkPp ?? 620).toBeLessThan(620);
+    // Raw peer stats stay unscaled: they describe the peers, not the target.
+    expect(rec?.peerPpMedian).toBe(620);
+  });
+
+  it("prefers stored peer accuracy over the prior once enough rows carry one", async () => {
+    const bestScores = buildSubjectBestScores();
+    await seedPeers();
+    await insertBeatmapMeta(BM_ACC, 4, 5);
+    await insertSearchIndex(BM_ACC, STREAM_PAT, 4, { Stream: 24 });
+    // All 15 farmed rows carry the A9 accuracy column (>= the 5-row floor).
+    for (let i = 0; i < 15; i += 1) {
+      await insertFarmed(i < 8 ? "CR" : "US", 100 + i, BM_ACC, 620, nowIso(), [], nowIso(), 0.97);
+    }
+    const model = accModelForTest({ a: Math.log(0.10) });
+    await seedSubjectAccModel(model);
+
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const rec = snapshot.recs.find((candidate) => candidate.beatmapId === BM_ACC);
+
+    const prediction = predictPlayerAccuracy(model, { keyCount: 4, chartOverall: 24, family: "stream" })!;
+    const storedScale = computeAccBenchmarkScale(prediction, 0.97);
+    const priorScale = computeAccBenchmarkScale(prediction, ACC_MODEL_PRIOR_TYPICAL_ACC);
+    // The stored 97% typical accuracy discounts harder than the ~93.9% prior.
+    expect(storedScale).toBeLessThan(priorScale);
+    expect(rec?.benchmarkPp).toBeCloseTo(620 * storedScale, 1);
+  });
+
+  it("drops a chart whose predicted accuracy collapses the multiplier to zero", async () => {
+    const bestScores = buildSubjectBestScores();
+    await seedPeers();
+    await insertBeatmapMeta(BM_ACC, 4, 5);
+    // 2.5 MSD above the model's rating with the steepest above-level slope:
+    // predicted error rate saturates, accConservative <= 80%, multiplier 0.
+    await insertSearchIndex(BM_ACC, STREAM_PAT, 4, { Stream: 27.5 });
+    for (let i = 0; i < 15; i += 1) {
+      await insertFarmed(i < 8 ? "CR" : "US", 100 + i, BM_ACC, 620, nowIso());
+    }
+    const model = accModelForTest({ bp: 0.9 });
+    await seedSubjectAccModel(model);
+
+    const prediction = predictPlayerAccuracy(model, { keyCount: 4, chartOverall: 27.5, family: "stream" })!;
+    expect(computeAccBenchmarkScale(prediction, ACC_MODEL_PRIOR_TYPICAL_ACC)).toBe(0);
+
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    // The zero-multiplier chart falls out of the ranking entirely...
+    expect(snapshot.recs.find((candidate) => candidate.beatmapId === BM_ACC)).toBeUndefined();
+    // ...while an un-covered chart (no msd_overall -> no prediction) stays.
+    expect(snapshot.recs.find((candidate) => candidate.beatmapId === BM_MISSING)?.reason).toBe("missing");
+  });
+
+  it("leaves benchmarks unscaled when the subject has no acc model", async () => {
+    const bestScores = buildSubjectBestScores();
+    await seedPeers();
+    await insertBeatmapMeta(BM_ACC, 4, 5);
+    await insertSearchIndex(BM_ACC, STREAM_PAT, 4, { Stream: 24 });
+    for (let i = 0; i < 15; i += 1) {
+      await insertFarmed(i < 8 ? "CR" : "US", 100 + i, BM_ACC, 620, nowIso());
+    }
+    // Ready skill ratings but no acc_model_json: readPlayerAccModel is null.
+    await seedSubjectSkillRatings(SUBJECT_ID, 4, { Overall: 25 }, 40);
+
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const rec = snapshot.recs.find((candidate) => candidate.beatmapId === BM_ACC);
+    expect(rec?.reason).toBe("missing");
+    expect(rec?.benchmarkPp).toBe(620);
+  });
+
+  it("still binds the existing caps on the scaled value", async () => {
+    const bestScores = buildSubjectBestScores();
+    await seedPeers();
+    // BM_IMPROVE (owned at 400, peers at 600) gets an msd_overall so the
+    // multiplier applies; the strong curve clamps the multiplier at 1, and
+    // the nextPlayedMapBenchmark cap (400 + 30) must still bind.
+    await insertSearchIndex(BM_IMPROVE, STREAM_PAT, 4, { Stream: 24 });
+    const model = accModelForTest({ a: Math.log(0.04) });
+    await seedSubjectAccModel(model);
+
+    const prediction = predictPlayerAccuracy(model, { keyCount: 4, chartOverall: 24, family: "stream" })!;
+    expect(computeAccBenchmarkScale(prediction, ACC_MODEL_PRIOR_TYPICAL_ACC)).toBe(1);
+
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const rec = snapshot.recs.find((candidate) => candidate.beatmapId === BM_IMPROVE);
+    expect(rec?.reason).toBe("improve");
+    expect(rec?.benchmarkPp).toBe(430);
+  });
+
+  it("never double-scales push targets", async () => {
+    const recent = "2024-06-01T00:00:00Z";
+    const bestScores = buildSubjectBestScores();
+    bestScores[0] = subjectScore(990, 700, recent, 4, 5, [], statsForCustomAcc(0.99));
+    bestScores.push(subjectScore(BM_PUSH, 400, recent, 4, 5, [], statsForCustomAcc(0.97)));
+    await seedPeers();
+    await insertBeatmapMeta(BM_PUSH);
+    // The push chart has an msd_overall and the model discounts it (< 1), so
+    // a double-applied multiplier would show up as a much lower target.
+    await insertSearchIndex(BM_PUSH, STREAM_PAT, 4, { Stream: 24 });
+    for (let i = 0; i < 15; i += 1) {
+      await insertFarmed(i < 8 ? "CR" : "US", 100 + i, BM_PUSH, 395, nowIso());
+    }
+    const model = accModelForTest({ a: Math.log(0.10) });
+    await seedSubjectAccModel(model);
+
+    const prediction = predictPlayerAccuracy(model, { keyCount: 4, chartOverall: 24, family: "stream" })!;
+    const scale = computeAccBenchmarkScale(prediction, ACC_MODEL_PRIOR_TYPICAL_ACC);
+    expect(scale).toBeLessThan(1);
+
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const push = snapshot.recs.find((rec) => rec.beatmapId === BM_PUSH);
+
+    expect(push?.reason).toBe("push");
+    // The push benchmark is the subject's own accuracy rescale, untouched by
+    // the peer multiplier.
+    const accNow = calculateManiaCustomAccuracy(statsForCustomAcc(0.97))!;
+    const targetAcc = accNow + 0.0075;
+    const expectedBenchmark = 400 * (5 * targetAcc - 4) / (5 * accNow - 4);
+    expect(push?.benchmarkPp).toBeCloseTo(expectedBenchmark, 1);
+  });
+});
+
+describe("farm helper survival term (A10)", () => {
+  const BM_RISKY = 15;
+  const BM_SAFE = 16;
+  // pat order: jack, stream, jumpstream, handstream, stamina, chordjack, tech, ln.
+  const STREAM_PAT = [0, 1, 0, 0, 0, 0, 0, 0];
+  // Six choke bins (gap centers -7..3), all well above the min-n floor and
+  // heavily choked: the subject drops combo on charts at every gap.
+  const HEAVY_CHOKE = Array.from({ length: 6 }, () => ({ n: 10, c: 0.9, m: 0.05 }));
+
+  // A ready 4K acc model whose accuracy curve is strong (the A8 multiplier
+  // clamps at 1, so every gain difference observed here comes from the
+  // survival term alone), with configurable choke bins.
+  function chokeModelForTest(choke: Array<{ n: number; c: number; m: number }>): PlayerAccModel {
+    const mode: AccModelMode = {
+      keys: 4,
+      rating: 25,
+      n: 100,
+      w: 1000,
+      a: Math.log(0.04),
+      bn: 0.085,
+      bp: 0.15,
+      s: 0.3,
+      mean: 0.95,
+      lo: -10,
+      hi: 10,
+      fam: {},
+      choke,
+    };
+    return { v: ACC_MODEL_VERSION, modes: { "4": mode } };
+  }
+
+  async function seedSubjectAccModel(model: PlayerAccModel): Promise<void> {
+    await seedSubjectSkillRatings(SUBJECT_ID, 4, { Overall: 25 }, 40);
+    await exec(db, "update player_skill_ratings set acc_model_json = ? where user_id = ?", [
+      JSON.stringify(model),
+      SUBJECT_ID,
+    ]);
+  }
+
+  async function setPassStats(beatmapId: number, playCount: number, passCount: number): Promise<void> {
+    await exec(db, "update map_search_index set play_count = ?, pass_count = ? where beatmap_id = ?", [
+      playCount,
+      passCount,
+      beatmapId,
+    ]);
+  }
+
+  it("treats missing signals as neutral (never punish missing data)", () => {
+    expect(computeSurvival({ playCount: null, passCount: null, lengthSec: 0, choke: null })).toBe(1);
+    // play_count 0 = never counted, not "nobody passes".
+    expect(computeSurvival({ playCount: 0, passCount: 0, lengthSec: 0, choke: null })).toBe(1);
+    // Length alone never discounts: with no choke signal the exponent is a no-op.
+    expect(computeSurvival({ playCount: null, passCount: null, lengthSec: 600, choke: null })).toBe(1);
+    // A healthy pass rate maps to neutral.
+    expect(computeSurvival({ playCount: 10_000, passCount: 5_000, lengthSec: 120, choke: null })).toBe(1);
+    // A thin play count barely moves even a zero pass count (shrunk to prior).
+    expect(computeSurvival({ playCount: 10, passCount: 0, lengthSec: 120, choke: null })).toBeGreaterThan(0.9);
+  });
+
+  it("is monotone in each signal and only labels genuinely risky lanes", () => {
+    // Mild signals stay above the clear-risk threshold.
+    const mild = computeSurvival({
+      playCount: 10_000,
+      passCount: 5_000,
+      lengthSec: 120,
+      choke: { chokeRate: 0.3, confidence: 0.5 },
+    });
+    expect(mild).toBeGreaterThan(SURVIVAL_CLEAR_RISK_MAX);
+    // Low pass rate + heavy personal choke + a long map falls below it.
+    const risky = computeSurvival({
+      playCount: 20_000,
+      passCount: 500,
+      lengthSec: 240,
+      choke: { chokeRate: 0.9, confidence: 0.8 },
+    });
+    expect(risky).toBeLessThan(SURVIVAL_CLEAR_RISK_MAX);
+    // Monotone: a lower pass rate, a higher choke rate, and a longer map each
+    // only lower the estimate.
+    const base = { playCount: 20_000, passCount: 8_000, lengthSec: 120, choke: { chokeRate: 0.5, confidence: 0.8 } };
+    expect(computeSurvival({ ...base, passCount: 2_000 })).toBeLessThan(computeSurvival(base));
+    expect(computeSurvival({ ...base, choke: { chokeRate: 0.9, confidence: 0.8 } })).toBeLessThan(computeSurvival(base));
+    expect(computeSurvival({ ...base, lengthSec: 300 })).toBeLessThan(computeSurvival(base));
+  });
+
+  it("sinks a low pass-rate high-choke lane below a safer equal-gain lane and labels it", async () => {
+    const bestScores = buildSubjectBestScores();
+    await seedPeers();
+    await insertBeatmapMeta(BM_RISKY, 4, 5);
+    await insertBeatmapMeta(BM_SAFE, 4, 5);
+    // The risky chart has an msd_overall (gap -1 against the model's rating
+    // 25, feeding the choke curve) and terrible population pass stats; the
+    // safe chart has no index row at all (all survival signals neutral).
+    await insertSearchIndex(BM_RISKY, STREAM_PAT, 4, { Stream: 24 });
+    await setPassStats(BM_RISKY, 20_000, 500);
+    for (let i = 0; i < 15; i += 1) {
+      const country = i < 8 ? "CR" : "US";
+      await insertFarmed(country, 100 + i, BM_RISKY, 620, nowIso());
+      await insertFarmed(country, 100 + i, BM_SAFE, 620, nowIso());
+    }
+    await seedSubjectAccModel(chokeModelForTest(HEAVY_CHOKE));
+
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const risky = snapshot.recs.find((rec) => rec.beatmapId === BM_RISKY);
+    const safe = snapshot.recs.find((rec) => rec.beatmapId === BM_SAFE);
+    expect(risky).toBeDefined();
+    expect(safe).toBeDefined();
+
+    // Identical peer evidence: the if-you-finish target and gain match.
+    expect(risky?.benchmarkPp).toBe(safe?.benchmarkPp);
+    expect(risky?.estimatedPpGain).toBe(safe?.estimatedPpGain);
+
+    // popFactor 0.5 (pass rate far below typical) * chokeFactor 0.64
+    // (chokeRate 0.9 at confidence 60/90) at the 120s reference length.
+    expect(risky?.survival).toBeCloseTo(0.32, 2);
+    expect(risky?.clearRisk).toBe(true);
+    expect(safe?.survival).toBe(1);
+    expect(safe?.clearRisk).toBe(false);
+
+    // The ranking runs on expected gain, so the risky lane sinks.
+    const riskyIndex = snapshot.recs.findIndex((rec) => rec.beatmapId === BM_RISKY);
+    const safeIndex = snapshot.recs.findIndex((rec) => rec.beatmapId === BM_SAFE);
+    expect(riskyIndex).toBeGreaterThan(safeIndex);
+    expect(risky!.rankScore).toBeLessThan(safe!.rankScore);
+
+    // A chart with no index row anywhere (BM_MISSING) stays neutral too.
+    const uncovered = snapshot.recs.find((rec) => rec.beatmapId === BM_MISSING);
+    expect(uncovered?.survival).toBe(1);
+    expect(uncovered?.clearRisk).toBe(false);
+
+    // The payload fields survive JSON serialization (the HTTP snapshot path).
+    const roundTripped = JSON.parse(JSON.stringify(snapshot)) as typeof snapshot;
+    const serialized = roundTripped.recs.find((rec) => rec.beatmapId === BM_RISKY);
+    expect(serialized?.survival).toBeCloseTo(0.32, 2);
+    expect(serialized?.clearRisk).toBe(true);
+  });
+
+  it("keeps already-cleared lanes neutral even with terrible population stats", async () => {
+    const bestScores = buildSubjectBestScores();
+    await seedPeers();
+    // BM_IMPROVE is owned by the subject (400pp vs peer median 600): the lane
+    // is proven finishable, so awful pass stats must not label it.
+    await insertSearchIndex(BM_IMPROVE, STREAM_PAT, 4);
+    await setPassStats(BM_IMPROVE, 50_000, 100);
+
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const improve = snapshot.recs.find((rec) => rec.beatmapId === BM_IMPROVE);
+    expect(improve?.reason).toBe("improve");
+    expect(improve?.survival).toBe(1);
+    expect(improve?.clearRisk).toBe(false);
+  });
+
+  it("leaves survival null on the popular view and under the backtest A/B flag", async () => {
+    const bestScores = buildSubjectBestScores();
+    await seedPeers();
+    await insertSearchIndex(BM_MISSING, STREAM_PAT, 4);
+    await setPassStats(BM_MISSING, 20_000, 500);
+
+    const popular = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { view: "popular" });
+    const popularRec = popular.recs.find((rec) => rec.beatmapId === BM_MISSING);
+    expect(popularRec?.survival).toBeNull();
+    expect(popularRec?.clearRisk).toBe(false);
+
+    const user = {
+      id: SUBJECT_ID,
+      username: "Subject",
+      avatar_url: "",
+      statistics: { pp: SUBJECT_PP },
+    } as Record<string, unknown>;
+    const disabled = await buildFarmHelperSnapshotForBacktest(db, user, bestScores, {
+      asOf: Date.now(),
+      view: "gain",
+      limit: 100,
+      noSurvival: true,
+    });
+    const disabledRec = disabled.recs.find((rec) => rec.beatmapId === BM_MISSING);
+    expect(disabledRec).toBeDefined();
+    expect(disabledRec?.survival).toBeNull();
+    expect(disabledRec?.clearRisk).toBe(false);
   });
 });

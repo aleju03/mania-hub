@@ -114,10 +114,11 @@ describe("DT-rate analysis sweep", () => {
       expect(dan).toHaveProperty("rawDan");
 
       const readBack = await readDtRateMsd(db, [dtMap]);
-      const vector = readBack.get(dtMap);
-      expect(vector).toBeDefined();
-      expect(vector?.length).toBe(7);
-      expect(vector?.[0]).toBeCloseTo(parsed.values.Stream, 5);
+      const entry = readBack.get(dtMap);
+      expect(entry).toBeDefined();
+      expect(entry?.msd.length).toBe(7);
+      expect(entry?.msd[0]).toBeCloseTo(parsed.values.Stream, 5);
+      expect(entry?.overall).toBeCloseTo(parsed.values.Overall, 5);
 
       // Idempotent: the row now has msd_dt_json, so a second sweep skips it.
       const again = await recomputeDtRateChunk(db, 0);

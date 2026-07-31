@@ -8,7 +8,8 @@ import { CHART_ANALYSIS_VERSION, enqueueMissingChartAnalyses } from "./chart-ana
 import { getCachedBeatmapFile, readCachedBeatmapFile } from "../osu/beatmap-file-cache.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { fetchAndStoreProfileSnapshotShared, getCachedPlayerProfileSnapshot, persistSessionProfileSnapshot } from "./player-profiles.js";
-import { calculateStableAccuracy, getDisplayedAccuracy, getScoreIdentity, isLazerScore, nowIso } from "../shared/score.js";
+import { calculateStableAccuracy, getDisplayedAccuracy, getScoreIdentity, getStoredScoreAccuracy, isLazerScore, nowIso } from "../shared/score.js";
+import { buildPlayerAccModel } from "./player-acc-model.js";
 import { danTableLabelFor } from "../dan/chart-classifier.js";
 import { parseDan } from "../dan/dan-estimator/labels.js";
 import { parseLnDan } from "../dan/dan-estimator/ln.js";
@@ -213,6 +214,12 @@ interface StoredPlaySsr {
   // Clear evidence for player dan, stored so retained plays keep qualifying
   // after their score payload ages out of score_events retention.
   accuracy?: number;
+  // 320-weighted custom accuracy (calculateManiaCustomAccuracy), the quantity
+  // mania pp is linear in via (5 * acc - 4) and the accuracy model's target.
+  // Backfills on the next recompute for still-visible plays; retained plays
+  // cached before the field existed stay undefined and the model estimates
+  // them from stableAccuracy + goal (player-acc-model.ts).
+  customAccuracy?: number | null;
   // Stable-formula accuracy from the judgement counts (MAX counted as 300):
   // the one currency both clients share for rice, so lazer rice clears are
   // not judged ~0.5pp harsher than stable ones. Null when counts are gone
@@ -696,6 +703,7 @@ export async function computePlayerSkillRatings(
       source,
       accuracy: getDisplayedAccuracy(score),
       stableAccuracy: calculateStableAccuracy(score.statistics ?? {}) || null,
+      customAccuracy: getStoredScoreAccuracy(score),
       missShare: getMissShare(score.statistics),
       endedAt: score.ended_at ?? score.created_at ?? null,
     };
@@ -867,15 +875,23 @@ export async function computePlayerSkillsJob(db: Db, osu: ProfileOsuClient, queu
       trackedScores: [...trackedScores, ...archived.scores],
       untrustedIdentities: archived.unknownModsIdentities,
     });
+    // Personal accuracy curve model (A7), fitted from the same rated plays in
+    // this job (never on a request path) and persisted beside the ratings.
+    // Best-effort: a model failure must never fail or delay the ratings write.
+    const accModel = await buildPlayerAccModel(db, result.plays, result.summary.modes).catch((error) => {
+      logWarn("player_acc_model_fit_failed", { userId, ...errorContext(error) });
+      return null;
+    });
     const computedAt = nowIso();
     await exec(
       db,
       `update player_skill_ratings
-       set status = 'ready', modes_json = ?, plays_json = ?, source_fetched_at = ?, error = null, computed_at = ?, updated_at = ?
+       set status = 'ready', modes_json = ?, plays_json = ?, acc_model_json = ?, source_fetched_at = ?, error = null, computed_at = ?, updated_at = ?
        where user_id = ? and analysis_version = ?`,
       [
         json(result.summary),
         json({ version: PLAYER_SKILLS_VERSION, plays: result.plays }),
+        accModel ? json(accModel) : null,
         snapshot.fetchedAt,
         computedAt,
         computedAt,

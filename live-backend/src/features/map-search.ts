@@ -109,6 +109,8 @@ export interface MapSearchEntry {
   lnCount: number;
   primaryPattern: string;
   patterns: Record<string, number>;
+  /** Detected subfamily tags (bracket, speedjack, lngeneral, ...) from the chart analysis, strongest first; empty until it lands. */
+  patternTags: string[];
   covers: Record<string, string> | null;
   /** Unified-classifier dan verdict, null until the chart analysis lands. */
   dan: { label: string; family: string; rawDan: number } | null;
@@ -280,11 +282,18 @@ function derivePatternProfile(row: Record<string, unknown>): { primary: string; 
 }
 
 // The detected-pattern ids from the chart analysis, space-delimited with outer
-// spaces so subfamily filters can match with like '% id %'.
+// spaces so subfamily filters can match with like '% id %'. Zero-score entries
+// are skipped: they are not detections (pre-fix classifications carry a
+// force-appended score-0 ln candidate even on charts with zero long notes).
 function readPatternTags(classificationJson: unknown): string {
-  const parsed = parseJson<{ patterns?: Array<{ id?: unknown }> } | null>(classificationJson, null);
+  const parsed = parseJson<{ patterns?: Array<{ id?: unknown; score?: unknown }> } | null>(classificationJson, null);
   if (!parsed || !Array.isArray(parsed.patterns)) return "";
-  const ids = [...new Set(parsed.patterns.map((hit) => String(hit?.id ?? "")).filter(Boolean))];
+  const ids = [...new Set(
+    parsed.patterns
+      .filter((hit) => Number(hit?.score ?? 0) > 0)
+      .map((hit) => String(hit?.id ?? ""))
+      .filter(Boolean),
+  )];
   return ids.length > 0 ? ` ${ids.join(" ")} ` : "";
 }
 
@@ -514,6 +523,54 @@ export async function reconcileMapSearchIndexStatuses(db: Db): Promise<number> {
   return Number(result.rowsAffected ?? 0);
 }
 
+// Periodic backstop for play_count/pass_count: the index materializes both from
+// beatmaps.metadata_json only on index writes, and the full build runs once per
+// BUILD_REVISION, so the counts froze at whatever ingest had stored when each
+// row was first indexed. Meanwhile ingest and the enrich_beatmap job keep
+// refreshing metadata_json with no index write attached. This copies the
+// fresher, already-in-DB counts into the index; pure DB work, no osu! API,
+// same playbook as the status heal above. Returns the rows refreshed.
+export async function reconcileMapSearchIndexPlayCounts(db: Db): Promise<number> {
+  const result = await exec(
+    db,
+    `update map_search_index
+        set play_count = (select cast(json_extract(b.metadata_json, '$.playcount') as integer)
+                            from beatmaps b where b.beatmap_id = map_search_index.beatmap_id),
+            pass_count = (select cast(coalesce(json_extract(b.metadata_json, '$.passcount'), 0) as integer)
+                            from beatmaps b where b.beatmap_id = map_search_index.beatmap_id),
+            updated_at = ?
+      where exists (select 1 from beatmaps b
+                     where b.beatmap_id = map_search_index.beatmap_id
+                       and json_extract(b.metadata_json, '$.playcount') is not null
+                       and (cast(json_extract(b.metadata_json, '$.playcount') as integer) != map_search_index.play_count
+                         or cast(coalesce(json_extract(b.metadata_json, '$.passcount'), 0) as integer) != map_search_index.pass_count))`,
+    [nowIso()],
+  );
+  return Number(result.rowsAffected ?? 0);
+}
+
+// Idempotent cleanup for the bogus ` ln ` pattern tag: the analyzer used to
+// force-append its ln candidate even at score 0, so every pre-fix
+// classification carries an ln entry and readPatternTags copied it into
+// pattern_tags on charts with zero long notes. New writes filter zero-score
+// ids (see readPatternTags); this strips the stale tag from existing rows
+// where the chart's own LN signal is zero (no LN notes counted and no LN
+// share in the skill vector). Cheap and self-terminating: 0 after the first
+// pass, so it is safe to run at boot and hourly. Returns the rows healed.
+export async function cleanupBogusLnPatternTags(db: Db): Promise<number> {
+  const result = await exec(
+    db,
+    `update map_search_index
+        set pattern_tags = case when trim(replace(pattern_tags, ' ln ', ' ')) = ''
+                                then ''
+                                else replace(pattern_tags, ' ln ', ' ') end,
+            updated_at = ?
+      where pattern_tags like '% ln %' and ln_count = 0 and pat_ln = 0`,
+    [nowIso()],
+  );
+  return Number(result.rowsAffected ?? 0);
+}
+
 // One-time (idempotent) cleanup for placeholder-diff rows indexed before the
 // SOURCE_SELECT star floor shipped. New builds already skip them, and any
 // re-touched row self-heals (upsertMapSearchIndexRow deletes a row whose source
@@ -692,7 +749,7 @@ const SELECT_COLUMNS = `
   beatmap_id, beatmapset_id, title, artist, creator, version, status, key_count,
   stars, bpm, length as length_seconds, play_count, ln_count, primary_pattern,
   pat_jack, pat_stream, pat_jumpstream, pat_handstream, pat_stamina, pat_chordjack, pat_tech, pat_ln,
-  covers_json, dan_label, dan_family, raw_dan, msd_json, vibro`;
+  pattern_tags, covers_json, dan_label, dan_family, raw_dan, msd_json, vibro`;
 
 const KEY_CLAUSES: Record<string, (p: string) => string> = {
   "4k": (p) => `${p}key_count = 4`,
@@ -1303,6 +1360,9 @@ function rowToEntry(row: Record<string, unknown>): MapSearchEntry {
     lnCount: intOr(row.ln_count),
     primaryPattern: String(row.primary_pattern ?? "unknown"),
     patterns,
+    // Only the canonical subfamily vocabulary reaches clients; family-level
+    // detections already ride in `patterns`/`primaryPattern`.
+    patternTags: String(row.pattern_tags ?? "").split(" ").filter((tag) => SUB_PATTERN_SET.has(tag)),
     covers: covers && typeof covers === "object" ? covers : null,
     dan,
     msd,

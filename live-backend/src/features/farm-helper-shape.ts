@@ -7,10 +7,33 @@ import { exec, parseJson } from "../db.js";
 // the chart side only (map_search_index), never from per-peer skill ratings.
 
 // Pattern-mix vector: the 8 map_search_index pat_* columns in this fixed order.
-const PAT_COLUMNS = [
+// Exported for the accuracy model's chart-difficulty read (player-acc-model.ts).
+export const PAT_COLUMNS = [
   "pat_jack", "pat_stream", "pat_jumpstream", "pat_handstream",
   "pat_stamina", "pat_chordjack", "pat_tech", "pat_ln",
 ] as const;
+// The chart-analysis family ids behind each pat_* column, in the same order.
+// These are the ids the player-skills pattern ratings use, so a chart's
+// primary family can be looked up directly against a player's family ratings.
+export const PAT_FAMILY_IDS = [
+  "jack", "stream", "jumpstream", "handstream",
+  "stamina", "chordjack", "tech", "ln",
+] as const;
+
+// The dominant pattern family of a pat vector, or null when the vector is
+// missing or carries no signal (all zero: no direction to name).
+export function primaryPatternFamily(pat: number[] | null | undefined): string | null {
+  if (!pat || pat.length !== PAT_FAMILY_IDS.length) return null;
+  let bestIdx = -1;
+  let bestValue = 0;
+  for (let i = 0; i < pat.length; i++) {
+    if (Number.isFinite(pat[i]) && pat[i] > bestValue) {
+      bestValue = pat[i];
+      bestIdx = i;
+    }
+  }
+  return bestIdx >= 0 ? PAT_FAMILY_IDS[bestIdx] : null;
+}
 // MinaCalc skillsets (excluding Overall), normalized by Overall to capture shape
 // rather than level. Values exist per keymode (4K on its calc, 6K/7K on
 // theirs); subjects, peers, and charts only ever compare within one keymode,
@@ -43,6 +66,14 @@ export interface UserShape {
 export interface ChartShapeData {
   shapes: Map<number, ChartShape>;
   rawMsd: Map<number, number[]>;
+  // MSD Overall at 1.0x (map_search_index.msd_overall): the difficulty axis
+  // the personal accuracy model predicts against (farm-helper A8 scaling).
+  overall: Map<number, number>;
+  // osu! population play/pass counts (map_search_index.play_count/pass_count,
+  // healed hourly by the map-search reconciler): the A10 survival term's
+  // population pass-rate signal. Only charts with a positive play_count are
+  // present; play_count 0 means "never counted", not "nobody passes".
+  passStats: Map<number, { playCount: number; passCount: number }>;
 }
 
 // Batch-reads chart shapes (and raw MSD) from map_search_index. Uses the real
@@ -52,6 +83,8 @@ export async function readChartShapeData(db: Db, beatmapIds: number[]): Promise<
   const ids = [...new Set(beatmapIds.filter((id) => Number.isSafeInteger(id) && id > 0))];
   const shapes = new Map<number, ChartShape>();
   const rawMsd = new Map<number, number[]>();
+  const overall = new Map<number, number>();
+  const passStats = new Map<number, { playCount: number; passCount: number }>();
   const patCols = PAT_COLUMNS.join(", ");
   for (let i = 0; i < ids.length; i += 900) {
     const chunk = ids.slice(i, i + 900);
@@ -59,7 +92,7 @@ export async function readChartShapeData(db: Db, beatmapIds: number[]): Promise<
     const placeholders = chunk.map(() => "?").join(",");
     const rows = (await exec(
       db,
-      `select beatmap_id, key_count, ${patCols}, msd_overall, msd_json
+      `select beatmap_id, key_count, ${patCols}, msd_overall, msd_json, play_count, pass_count
        from map_search_index where beatmap_id in (${placeholders})`,
       chunk,
     )).rows;
@@ -69,9 +102,19 @@ export async function readChartShapeData(db: Db, beatmapIds: number[]): Promise<
       const msd = readMsdVectors(row);
       shapes.set(beatmapId, { pat: readPatVector(row), msd: msd?.normalized ?? null });
       if (msd?.raw) rawMsd.set(beatmapId, msd.raw);
+      const overallValue = Number(row.msd_overall);
+      if (Number.isFinite(overallValue) && overallValue > 0) overall.set(beatmapId, overallValue);
+      const playCount = Number(row.play_count);
+      const passCount = Number(row.pass_count);
+      if (Number.isFinite(playCount) && playCount > 0) {
+        passStats.set(beatmapId, {
+          playCount,
+          passCount: Number.isFinite(passCount) && passCount > 0 ? passCount : 0,
+        });
+      }
     }
   }
-  return { shapes, rawMsd };
+  return { shapes, rawMsd, overall, passStats };
 }
 
 export async function readChartShapes(db: Db, beatmapIds: number[]): Promise<Map<number, ChartShape>> {

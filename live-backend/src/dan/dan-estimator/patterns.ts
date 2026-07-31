@@ -481,7 +481,12 @@ export function analyzeManiaPatterns(
     .sort((a, b) => b.score - a.score || a.label.localeCompare(b.label));
   const visiblePatterns = allPatterns.filter((pattern) => pattern.score >= 0.2).slice(0, 5);
   const lnPattern = allPatterns.find((pattern) => pattern.id === "ln");
-  const patterns = lnPattern && !visiblePatterns.some((pattern) => pattern.id === "ln")
+  // Surface the LN axis alongside the visible patterns only when the chart has
+  // a real LN signal (a nonzero score or any holds at all). Unconditionally
+  // force-appending it stamped a score-0 ln entry onto every rice chart, which
+  // leaked into stored classifications and pattern tags downstream.
+  const hasLnSignal = lnPattern != null && (lnPattern.score > 0 || metrics.holdRatio > 0);
+  const patterns = lnPattern && hasLnSignal && !visiblePatterns.some((pattern) => pattern.id === "ln")
     ? [...visiblePatterns, lnPattern]
     : visiblePatterns;
 

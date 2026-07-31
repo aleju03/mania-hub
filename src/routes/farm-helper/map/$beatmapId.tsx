@@ -31,6 +31,9 @@ type FarmMapContext = {
   keyMode?: LiveFarmHelperKeyMode;
   speed?: LiveFarmHelperSpeedBucket;
   reason?: LiveFarmHelperReason;
+  // True when the farm helper judged this lane a risky clear (A10 survival
+  // below the backend threshold): shown as a clear-attempt badge.
+  clearRisk?: boolean;
   gain?: number;
   // "pp" or a variant-pp unit ("4K pp"/"7K pp") when the gain came from a
   // concrete-keymode farm-helper run measuring that keymode's variant pp.
@@ -84,6 +87,7 @@ const REASON_LABELS: Record<LiveFarmHelperReason, string> = {
   improve: "improve",
   stale: "old pb",
   owned: "cleared",
+  push: "push acc",
 };
 
 const SPEED_LABELS: Record<LiveFarmHelperSpeedBucket, string> = {
@@ -258,6 +262,7 @@ function FarmMapDetailPage() {
                   <div className="mb-2 flex flex-wrap items-center gap-1.5">
                     <StatusBadge status={selectedBeatmap.status ?? beatmapset.status} />
                     {farmContext?.reason ? <ContextBadge>{REASON_LABELS[farmContext.reason]}</ContextBadge> : null}
+                    {farmContext?.clearRisk ? <ClearRiskBadge /> : null}
                     {farmContext?.speed ? <ContextBadge>{SPEED_LABELS[farmContext.speed]}</ContextBadge> : null}
                     {farmContext?.keyMode ? <ContextBadge>{farmContext.keyMode.toUpperCase()}</ContextBadge> : null}
                   </div>
@@ -786,6 +791,19 @@ function ContextBadge({ children }: { children: ReactNode }) {
   );
 }
 
+// A10 survival: the farm helper judged this lane a risky clear for this
+// player, so label it honestly instead of selling it as a farm.
+function ClearRiskBadge() {
+  return (
+    <span
+      className="inline-flex rounded-full border border-osu-orange/40 bg-osu-orange/10 px-2.5 py-1 text-[10px] font-bold uppercase leading-none text-osu-orange"
+      title="Finishing this looks risky for you; treat it as a clear attempt, not a farm"
+    >
+      clear attempt
+    </span>
+  );
+}
+
 function DetailSkeleton({ farmContext, farmRate }: { farmContext: FarmMapContext | null; farmRate: number }) {
   const hasKnownMap = Boolean(farmContext?.title);
   const displayedBpm = farmContext?.bpm != null ? Math.round(farmContext.bpm * farmRate) : null;
@@ -813,6 +831,7 @@ function DetailSkeleton({ farmContext, farmRate }: { farmContext: FarmMapContext
               <div className="mb-2 flex flex-wrap items-center gap-1.5">
                 {farmContext?.status ? <StatusBadge status={farmContext.status} /> : null}
                 {farmContext?.reason ? <ContextBadge>{REASON_LABELS[farmContext.reason]}</ContextBadge> : null}
+                {farmContext?.clearRisk ? <ClearRiskBadge /> : null}
                 {farmContext?.speed ? <ContextBadge>{SPEED_LABELS[farmContext.speed]}</ContextBadge> : null}
                 {farmContext?.keyMode ? <ContextBadge>{farmContext.keyMode.toUpperCase()}</ContextBadge> : null}
               </div>
@@ -965,9 +984,10 @@ function readStoredFarmContext(beatmapId: number): FarmMapContext | null {
       keyMode: data.keyMode === "4k" || data.keyMode === "7k" || data.keyMode === "any" ? data.keyMode : undefined,
       speed: data.speed === "ht" || data.speed === "normal" || data.speed === "dt" ? data.speed : undefined,
       reason:
-        data.reason === "missing" || data.reason === "improve" || data.reason === "stale" || data.reason === "owned"
+        data.reason === "missing" || data.reason === "improve" || data.reason === "stale" || data.reason === "owned" || data.reason === "push"
           ? data.reason
           : undefined,
+      clearRisk: data.clearRisk === true ? true : undefined,
       gain: finiteNumber(data.gain),
       gainUnit: finiteString(data.gainUnit),
       benchmark: finiteNumber(data.benchmark),

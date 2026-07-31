@@ -1,4 +1,5 @@
 import type { InValue } from "@libsql/client";
+import { dirname, join, resolve } from "node:path";
 import { setImmediate as yieldToEventLoop } from "node:timers/promises";
 import { readConfig } from "../config.js";
 import { GLOBAL_COUNTRY_CODE, isGlobalCountry } from "../countries.js";
@@ -7,7 +8,7 @@ import { exec, execBatch, json, parseJson } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { isRankedRosterMember } from "../rosters/country-rosters.js";
-import { getModAcronyms, getScoreIdentity, getScoreTimestamp, nowIso } from "../shared/score.js";
+import { getModAcronyms, getScoreIdentity, getScoreJudgementCount, getScoreTimestamp, getStoredScoreAccuracy, nowIso } from "../shared/score.js";
 import { throwIfAborted } from "../shared/abort.js";
 import type { OscScore } from "../shared/types.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
@@ -15,6 +16,7 @@ import { markUserMissing } from "../users.js";
 import { enqueueMissingChartAnalyses } from "./chart-analysis.js";
 import { refreshFarmHelperKeyStatsForUser } from "./farm-helper-key-stats.js";
 import { buildMapStatusPropagationStatement } from "./map-search.js";
+import { loadGlobalFarmedBoardFromDisk, saveGlobalFarmedBoardToDisk } from "./maps-farmed-board-disk.js";
 
 const MAPS_REFRESH_PRIORITY = -100;
 const MAPS_FARMED_REFRESH_PRIORITY = -100;
@@ -1960,7 +1962,7 @@ async function getGlobalFarmedBoardPageSnapshot(
 // The bounded override map is occasionally repacked in the background so a
 // long-lived serving process cannot slowly recreate an object-heavy full board.
 
-interface GlobalFarmedBoardEntry {
+export interface GlobalFarmedBoardEntry {
   beatmapId: number;
   /** Index of this map's first player in the flat player arrays. */
   start: number;
@@ -2010,10 +2012,113 @@ interface GlobalFarmedBoardState {
 // one Db per process (the snapshot thread's own connection).
 const globalFarmedBoardStates = new WeakMap<Db, GlobalFarmedBoardState>();
 
-async function getGlobalFarmedBoard(db: Db, parsed: StoredCountryMapsData, generation: string): Promise<GlobalFarmedBoard> {
+// Where each Db persists its packed board between restarts (B2). Absent for
+// unregistered connections (memory databases, most tests), which simply skip
+// the disk tier.
+const globalFarmedBoardDiskPaths = new WeakMap<Db, string>();
+
+/**
+ * Opts a connection into the on-disk board snapshot: every pack writes the
+ * typed-array columns to a file next to the SQLite database, and a cold
+ * process restores from it (validated against the projection state, patched
+ * forward with deltas) instead of paying the ~20-25s full repack at boot.
+ * The file is a cache and always safe to delete.
+ */
+export function registerGlobalFarmedBoardDiskCache(db: Db, databaseUrl: string): void {
+  if (!databaseUrl.startsWith("file:")) return;
+  const dbPath = resolve(databaseUrl.slice("file:".length));
+  globalFarmedBoardDiskPaths.set(db, join(dirname(dbPath), "global-farmed-board-cache.bin"));
+}
+
+// How often the resident board checks the projection state for pending deltas.
+// Small enough that per-tick work stays a handful of maps under normal ingest;
+// the point is that no request ever pays for an idle-period backlog (B1).
+const GLOBAL_FARMED_BOARD_CATCHUP_TICK_MS = 30_000;
+
+function ensureGlobalFarmedBoardState(db: Db): GlobalFarmedBoardState {
   let state = globalFarmedBoardStates.get(db);
-  if (!state) globalFarmedBoardStates.set(db, (state = { board: null, inflight: null, inflightGeneration: null, deltaInflight: null }));
-  const stateRef = state;
+  if (!state) {
+    state = { board: null, inflight: null, inflightGeneration: null, deltaInflight: null };
+    globalFarmedBoardStates.set(db, state);
+    startGlobalFarmedBoardCatchUpTicker(db);
+  }
+  return state;
+}
+
+// The ticker holds only a WeakRef to the Db: a strong reference from the
+// interval closure would pin every test database (and its board) in memory
+// forever through the WeakMap above. When the Db is collected the ticker
+// dismantles itself. unref'd so it never keeps an exiting process alive.
+function startGlobalFarmedBoardCatchUpTicker(db: Db): void {
+  const ref = new WeakRef(db);
+  const timer = setInterval(() => {
+    const live = ref.deref();
+    if (!live) {
+      clearInterval(timer);
+      return;
+    }
+    void catchUpGlobalFarmedBoard(live).catch((error) => logWarn("global_farmed_board_catchup_tick_failed", errorContext(error)));
+  }, GLOBAL_FARMED_BOARD_CATCHUP_TICK_MS);
+  timer.unref();
+}
+
+/**
+ * One background catch-up pass for the resident GLOBAL board: applies pending
+ * projection deltas, or starts a repack when the seed epoch changed or the
+ * backlog/override pressure calls for one. Runs from the 30s ticker so the
+ * board converges even with zero traffic; exported so tests can drive a tick
+ * directly instead of waiting on the interval.
+ */
+export async function catchUpGlobalFarmedBoard(db: Db): Promise<void> {
+  const state = globalFarmedBoardStates.get(db);
+  const board = state?.board;
+  if (!state || !board || state.inflight || state.deltaInflight) return;
+  // Only projection-generation boards participate; a legacy payload-derived
+  // board is replaced through its own generation check on the request path.
+  if (!board.generation.startsWith(`${GLOBAL_FARMED_PROJECTION_GENERATION}:`)) return;
+  const projectionState = await readGlobalMapsFarmedProjectionState(db);
+  if (!projectionState?.initialized) return;
+  const generation = globalFarmedProjectionGeneration(projectionState.seedEpoch);
+  const stamps = await readGlobalFarmedBoardStampsFromSnapshotRow(db, projectionState);
+  if (board.generation !== generation) {
+    // Seed epoch changed: no delta in the new corpus can describe this board,
+    // only a full pack replaces it.
+    void startGlobalFarmedProjectionBoardBuild(db, state, projectionState, stamps, generation)
+      .catch((error) => logWarn("global_farmed_projection_board_reseed_repack_failed", errorContext(error)));
+    return;
+  }
+  if ((board.projectionRevision ?? 0) < projectionState.revision) {
+    scheduleGlobalFarmedProjectionCatchUp(db, state, board, projectionState, stamps, generation);
+    return;
+  }
+  if (board.overrides.size >= GLOBAL_FARMED_PROJECTION_REPACK_OVERRIDES) {
+    void startGlobalFarmedProjectionBoardBuild(
+      db,
+      state,
+      projectionState,
+      stamps,
+      `${generation}:repack:${board.projectionRevision ?? 0}`,
+    ).catch((error) => logWarn("global_farmed_projection_board_repack_failed", errorContext(error)));
+  }
+}
+
+// The ticker runs outside any request, so it rebuilds the response stamps the
+// same way getGlobalFarmedProjectionPageSnapshot does for its callers.
+async function readGlobalFarmedBoardStampsFromSnapshotRow(
+  db: Db,
+  projectionState: GlobalMapsFarmedProjectionState,
+): Promise<GlobalFarmedBoardStamps> {
+  const row = (await exec(
+    db,
+    "select generated_at from country_maps_snapshots where country = ?",
+    [GLOBAL_COUNTRY_CODE],
+  )).rows[0];
+  const generatedAt = row?.generated_at == null ? projectionState.updatedAt : String(row.generated_at);
+  return { generatedAt, farmedGeneratedAt: projectionState.updatedAt, favouritesGeneratedAt: generatedAt };
+}
+
+async function getGlobalFarmedBoard(db: Db, parsed: StoredCountryMapsData, generation: string): Promise<GlobalFarmedBoard> {
+  const stateRef = ensureGlobalFarmedBoardState(db);
   const current = stateRef.board;
   if (current && current.generation === generation) return current;
 
@@ -2059,10 +2164,23 @@ function startGlobalFarmedProjectionBoardBuild(
   projectionState: GlobalMapsFarmedProjectionState,
   stamps: GlobalFarmedBoardStamps,
   token: string,
+  options?: { tryDiskRestore?: boolean },
 ): Promise<GlobalFarmedBoard> {
   if (state.inflight && state.inflightGeneration === token) return state.inflight;
   state.inflightGeneration = token;
-  const build = buildGlobalFarmedProjectionBoard(db, projectionState, stamps);
+  const build = (async () => {
+    if (options?.tryDiskRestore) {
+      // Cold-boot path only: repacks and catch-up packs must rebuild from the
+      // projection tables, never from the (older) disk snapshot.
+      try {
+        const restored = await restoreGlobalFarmedProjectionBoardFromDisk(db, projectionState);
+        if (restored) return restored;
+      } catch (error) {
+        logWarn("global_farmed_board_disk_restore_failed", errorContext(error));
+      }
+    }
+    return buildGlobalFarmedProjectionBoard(db, projectionState, stamps);
+  })();
   state.inflight = build;
   build
     .then((board) => {
@@ -2080,52 +2198,27 @@ async function getGlobalFarmedProjectionBoard(
   projectionState: GlobalMapsFarmedProjectionState,
   stamps: GlobalFarmedBoardStamps,
 ): Promise<GlobalFarmedBoard> {
-  let state = globalFarmedBoardStates.get(db);
-  if (!state) globalFarmedBoardStates.set(db, (state = { board: null, inflight: null, inflightGeneration: null, deltaInflight: null }));
-  const stateRef = state;
+  const stateRef = ensureGlobalFarmedBoardState(db);
   const current = stateRef.board;
   const generation = globalFarmedProjectionGeneration(projectionState.seedEpoch);
 
   if (current?.generation === generation) {
-    let caughtUp = true;
-    while ((current.projectionRevision ?? 0) < projectionState.revision) {
-      // A repack is already running for this board; serve it as-is instead of
-      // re-probing the delta backlog on every request until that pack lands.
-      if (stateRef.inflight) {
-        caughtUp = false;
-        break;
-      }
-      if (!stateRef.deltaInflight) {
-        stateRef.deltaInflight = applyGlobalFarmedProjectionDeltas(db, current, projectionState)
-          .finally(() => {
-            stateRef.deltaInflight = null;
-          });
-      }
-      const patched = await stateRef.deltaInflight;
-      if (!patched) {
-        // A large idle-period backlog is cheaper and safer to repack once than
-        // to materialize thousands of full per-map player arrays as overrides.
-        // Never await it: packing this board measures ~20-25s on prod (19k
-        // entries, 1.5M player rows), and every request for the page joins that
-        // one build, so awaiting turns an idle gap into a 25s page load. A board
-        // a few thousand maps behind is a far better answer than no answer.
-        void startGlobalFarmedProjectionBoardBuild(
-          db,
-          stateRef,
-          projectionState,
-          stamps,
-          `${generation}:catchup:${projectionState.revision}`,
-        ).catch((error) => logWarn("global_farmed_projection_board_catchup_failed", errorContext(error)));
-        caughtUp = false;
-        break;
-      }
-    }
-    // Only claim the projection's stamps once the board actually carries every
-    // change up to them; a board serving mid-catchup is older than they say.
-    if (caughtUp) {
+    if ((current.projectionRevision ?? 0) >= projectionState.revision) {
+      // Only claim the projection's stamps once the board actually carries
+      // every change up to them; a board serving mid-catchup is older than
+      // they say and keeps its own stamps instead.
       current.generatedAt = stamps.generatedAt;
       current.farmedGeneratedAt = projectionState.updatedAt;
       current.favouritesGeneratedAt = stamps.favouritesGeneratedAt;
+    } else if (!stateRef.inflight) {
+      // Behind the projection: never pay for catch-up on the request path.
+      // Serve the board as-is and patch it in the background; the 30s ticker
+      // (catchUpGlobalFarmedBoard) converges the board even with no traffic,
+      // this nudge just makes a visited page converge sooner. Mirrors the
+      // long-standing stale-serve for the >5,000-map backlog: a board a few
+      // revisions behind is a far better answer than a blocked request (the
+      // sync catch-up here measured 11s after a 52-minute idle gap on prod).
+      scheduleGlobalFarmedProjectionCatchUp(db, stateRef, current, projectionState, stamps, generation);
     }
     if (current.overrides.size >= GLOBAL_FARMED_PROJECTION_REPACK_OVERRIDES && !stateRef.inflight) {
       void startGlobalFarmedProjectionBoardBuild(
@@ -2139,19 +2232,73 @@ async function getGlobalFarmedProjectionBoard(
     return current;
   }
 
-  // Never stale-serve across seed epochs: a re-seed can remove an entire
-  // country, so the previous board may contain rows that no delta in the new
-  // corpus can describe. Nothing safe exists to answer with, so this one does
-  // block on the pack -- the caller has to wait for it either way. The boot
-  // warm (warmGlobalMapsFarmedBoard) is what keeps a real visitor off this
-  // path after a restart.
-  return startGlobalFarmedProjectionBoardBuild(db, stateRef, projectionState, stamps, generation);
+  if (current) {
+    // Seed epoch changed while this process holds a packed board. A re-seed
+    // can remove an entire country, so no delta in the new corpus can describe
+    // this board and only a full pack replaces it -- but that pack is ~20-25s
+    // on prod, and blocking every visitor on it is worse than briefly serving
+    // the pre-seed corpus. Re-seeds are admin-triggered and rare, and the
+    // ticker replaces the board within a tick even with no traffic.
+    void startGlobalFarmedProjectionBoardBuild(db, stateRef, projectionState, stamps, generation)
+      .catch((error) => logWarn("global_farmed_projection_board_reseed_repack_failed", errorContext(error)));
+    return current;
+  }
+
+  // Cold process with nothing to serve: this request has to wait for a board
+  // either way. The disk snapshot (written at every pack, patched forward with
+  // deltas on load) makes that wait sub-second instead of the ~20-25s full
+  // pack; the boot warm (warmGlobalMapsFarmedBoard) is what keeps real
+  // visitors off even that.
+  return startGlobalFarmedProjectionBoardBuild(db, stateRef, projectionState, stamps, generation, { tryDiskRestore: true });
 }
 
-/** Test hook: settle the in-flight board build (if any) for this Db. */
+// Fire-and-forget delta catch-up; the caller keeps serving the current board.
+// An oversized backlog falls through to a full background repack: it is
+// cheaper and safer to repack once than to materialize thousands of full
+// per-map player arrays as overrides.
+function scheduleGlobalFarmedProjectionCatchUp(
+  db: Db,
+  state: GlobalFarmedBoardState,
+  board: GlobalFarmedBoard,
+  projectionState: GlobalMapsFarmedProjectionState,
+  stamps: GlobalFarmedBoardStamps,
+  generation: string,
+): void {
+  if (state.inflight || state.deltaInflight) return;
+  state.deltaInflight = applyGlobalFarmedProjectionDeltas(db, board, projectionState)
+    .then((patched) => {
+      if (!patched) {
+        void startGlobalFarmedProjectionBoardBuild(
+          db,
+          state,
+          projectionState,
+          stamps,
+          `${generation}:catchup:${projectionState.revision}`,
+        ).catch((error) => logWarn("global_farmed_projection_board_catchup_failed", errorContext(error)));
+      }
+      return patched;
+    })
+    .catch((error) => {
+      logWarn("global_farmed_projection_delta_apply_failed", errorContext(error));
+      return false;
+    })
+    .finally(() => {
+      state.deltaInflight = null;
+    });
+}
+
+/**
+ * Test hook: settle the in-flight board work (delta catch-up and builds) for
+ * this Db. Loops because a delta catch-up that finds an oversized backlog
+ * hands off to a background repack.
+ */
 export async function waitForGlobalFarmedBoardBuild(db: Db): Promise<void> {
-  const inflight = globalFarmedBoardStates.get(db)?.inflight;
-  if (inflight) await inflight.then(() => undefined, () => undefined);
+  for (;;) {
+    const state = globalFarmedBoardStates.get(db);
+    const pending: Promise<unknown> | null = state?.deltaInflight ?? state?.inflight ?? null;
+    if (!pending) return;
+    await pending.then(() => undefined, () => undefined);
+  }
 }
 
 /** Test hook for asserting whether a request patched or fully repacked. */
@@ -2212,6 +2359,11 @@ async function buildGlobalFarmedProjectionBoard(
   };
   const board = encodeGlobalFarmedBoard(globalFarmedProjectionGeneration(projectionState.seedEpoch), parsed, source, metadata);
   board.projectionRevision = baseRevision;
+  // Persist before the trailing delta apply: the typed columns never change
+  // after encode but the metadata/override maps do, and a clean board plus the
+  // load-time delta patch is strictly simpler than serializing overrides. The
+  // write streams views over the live arrays, so no second board copy exists.
+  await persistGlobalFarmedBoardToDisk(db, board);
   const latestState = await readGlobalMapsFarmedProjectionState(db);
   if (latestState && latestState.revision > baseRevision) {
     await applyGlobalFarmedProjectionDeltas(db, board, latestState);
@@ -2220,6 +2372,56 @@ async function buildGlobalFarmedProjectionBoard(
     revision: board.projectionRevision,
     entries: board.entries.length,
     players: board.userIds.length,
+    duration_ms: Date.now() - startedAt,
+    heap_used_mb: heapUsedMb(),
+  });
+  return board;
+}
+
+// Best-effort by design: a failed write only means the next cold boot repacks.
+async function persistGlobalFarmedBoardToDisk(db: Db, board: GlobalFarmedBoard): Promise<void> {
+  const filePath = globalFarmedBoardDiskPaths.get(db);
+  if (!filePath) return;
+  const startedAt = Date.now();
+  try {
+    await saveGlobalFarmedBoardToDisk(filePath, { ...board, projectionRevision: board.projectionRevision ?? 0 });
+    logInfo("global_farmed_board_disk_saved", {
+      revision: board.projectionRevision ?? 0,
+      entries: board.entries.length,
+      players: board.userIds.length,
+      duration_ms: Date.now() - startedAt,
+    });
+  } catch (error) {
+    logWarn("global_farmed_board_disk_save_failed", errorContext(error));
+  }
+}
+
+async function restoreGlobalFarmedProjectionBoardFromDisk(
+  db: Db,
+  projectionState: GlobalMapsFarmedProjectionState,
+): Promise<GlobalFarmedBoard | null> {
+  const filePath = globalFarmedBoardDiskPaths.get(db);
+  if (!filePath) return null;
+  const startedAt = Date.now();
+  // The loader rejects (and deletes) any snapshot from another format version,
+  // seed epoch, or a revision ahead of this database (a restored backup).
+  const persisted = await loadGlobalFarmedBoardFromDisk(filePath, {
+    generation: globalFarmedProjectionGeneration(projectionState.seedEpoch),
+    maxRevision: projectionState.revision,
+  });
+  if (!persisted) return null;
+  const board: GlobalFarmedBoard = { ...persisted, overrides: new Map() };
+  if ((board.projectionRevision ?? 0) < projectionState.revision) {
+    // Patch forward with the deltas written since the snapshot. An oversized
+    // backlog leaves the board where it is; the normal catch-up machinery then
+    // repacks in the background while this board serves.
+    await applyGlobalFarmedProjectionDeltas(db, board, projectionState);
+  }
+  logInfo("global_farmed_board_disk_restored", {
+    revision: board.projectionRevision,
+    entries: board.entries.length,
+    players: board.userIds.length,
+    overrides: board.overrides.size,
     duration_ms: Date.now() - startedAt,
     heap_used_mb: heapUsedMb(),
   });
@@ -2954,7 +3156,7 @@ function filterSortFarmedMaps(items: MapsFarmedEntry[], query: MapsPageQuery): M
     });
 }
 
-interface MapsFarmedPageMetadata {
+export interface MapsFarmedPageMetadata {
   beatmapId: number;
   cs: number;
   difficultyRating: number;
@@ -3525,9 +3727,9 @@ async function syncGlobalMapsFarmedUserBeatmaps(
     for (const beatmapId of chunk) {
       statements.push({
         sql: `insert into global_maps_farmed_scores
-           (beatmap_id, user_id, pp, mods_json, speed_mod, score_url, played_at, detected_at, source_country, source_updated_at)
+           (beatmap_id, user_id, pp, mods_json, speed_mod, score_url, played_at, detected_at, source_country, source_updated_at, accuracy, note_count)
          select s.beatmap_id, s.user_id, s.pp, s.mods_json, ${mapsFarmedSpeedModSql("s")},
-                s.score_url, s.played_at, s.detected_at, s.country, s.updated_at
+                s.score_url, s.played_at, s.detected_at, s.country, s.updated_at, s.accuracy, s.note_count
          from country_maps_farmed_scores s
          where s.country != ? and s.user_id = ? and s.beatmap_id = ? and s.pp > 0
          order by s.pp desc, s.detected_at desc, s.country asc
@@ -3540,7 +3742,9 @@ async function syncGlobalMapsFarmedUserBeatmaps(
            played_at = excluded.played_at,
            detected_at = excluded.detected_at,
            source_country = excluded.source_country,
-           source_updated_at = excluded.source_updated_at`,
+           source_updated_at = excluded.source_updated_at,
+           accuracy = excluded.accuracy,
+           note_count = excluded.note_count`,
         args: [GLOBAL_COUNTRY_CODE, userId, beatmapId],
       });
       statements.push({
@@ -3566,10 +3770,13 @@ function globalMapsFarmedProjectionUpsertStatement(
   sourceUpdatedAt: string,
 ): DbStatement {
   const detectedAt = player.playedAt || sourceUpdatedAt;
+  // Legacy snapshot players carry no per-score statistics, so accuracy and
+  // note_count stay null here; the normalized-row backfill that runs after
+  // this fallback overwrites the row with real values where they exist.
   return {
     sql: `insert into global_maps_farmed_scores
-       (beatmap_id, user_id, pp, mods_json, speed_mod, score_url, played_at, detected_at, source_country, source_updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       (beatmap_id, user_id, pp, mods_json, speed_mod, score_url, played_at, detected_at, source_country, source_updated_at, accuracy, note_count)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, null, null)
      on conflict(beatmap_id, user_id) do update set
        pp = excluded.pp,
        mods_json = excluded.mods_json,
@@ -3677,9 +3884,9 @@ async function backfillGlobalMapsFarmedProjection(db: Db, signal?: AbortSignal):
     await exec(
       db,
       `insert into global_maps_farmed_scores
-         (beatmap_id, user_id, pp, mods_json, speed_mod, score_url, played_at, detected_at, source_country, source_updated_at)
+         (beatmap_id, user_id, pp, mods_json, speed_mod, score_url, played_at, detected_at, source_country, source_updated_at, accuracy, note_count)
        select s.beatmap_id, s.user_id, s.pp, s.mods_json, ${mapsFarmedSpeedModSql("s")},
-              s.score_url, s.played_at, s.detected_at, s.country, s.updated_at
+              s.score_url, s.played_at, s.detected_at, s.country, s.updated_at, s.accuracy, s.note_count
        from country_maps_farmed_scores s
        where s.rowid > ? and s.rowid <= ? and s.country != ? and s.pp > 0
        on conflict(beatmap_id, user_id) do update set
@@ -3690,7 +3897,9 @@ async function backfillGlobalMapsFarmedProjection(db: Db, signal?: AbortSignal):
          played_at = excluded.played_at,
          detected_at = excluded.detected_at,
          source_country = excluded.source_country,
-         source_updated_at = excluded.source_updated_at
+         source_updated_at = excluded.source_updated_at,
+         accuracy = excluded.accuracy,
+         note_count = excluded.note_count
        where excluded.pp > global_maps_farmed_scores.pp
           or (excluded.pp = global_maps_farmed_scores.pp and excluded.detected_at >= global_maps_farmed_scores.detected_at)`,
       [cursor, end, GLOBAL_COUNTRY_CODE],
@@ -4391,8 +4600,8 @@ export async function recordMapsFarmedScore(
   const result = await exec(
     db,
     `insert into country_maps_farmed_scores
-       (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at, accuracy, note_count)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      on conflict(country, user_id, beatmap_id) do update set
        score_id = excluded.score_id,
        pp = excluded.pp,
@@ -4401,7 +4610,9 @@ export async function recordMapsFarmedScore(
        score_url = excluded.score_url,
        played_at = excluded.played_at,
        detected_at = excluded.detected_at,
-       updated_at = excluded.updated_at
+       updated_at = excluded.updated_at,
+       accuracy = excluded.accuracy,
+       note_count = excluded.note_count
      where excluded.pp > country_maps_farmed_scores.pp
         or (excluded.pp = country_maps_farmed_scores.pp and excluded.detected_at >= country_maps_farmed_scores.detected_at)`,
     [
@@ -4416,6 +4627,8 @@ export async function recordMapsFarmedScore(
       row.playedAt,
       row.detectedAt,
       row.updatedAt,
+      row.accuracy,
+      row.noteCount,
     ],
   );
   if (Number(result.rowsAffected ?? 0) === 0) return null;
@@ -5085,6 +5298,8 @@ interface MapsFarmedOverlayWriteRow {
   playedAt: string | null;
   detectedAt: string;
   updatedAt: string;
+  accuracy: number | null;
+  noteCount: number | null;
 }
 
 function buildMapsFarmedOverlayRows(country: string, scores: OscScore[], updatedAt: string, fallbackUserId?: number): MapsFarmedOverlayWriteRow[] {
@@ -5113,6 +5328,12 @@ function buildMapsFarmedOverlayRows(country: string, scores: OscScore[], updated
       playedAt,
       detectedAt,
       updatedAt,
+      // Peer accuracy is captured here, before the bulky score payload is
+      // dropped: the pp-linear mania custom accuracy (see
+      // getStoredScoreAccuracy) plus the play's judged-object count as a
+      // chart-length weight.
+      accuracy: getStoredScoreAccuracy(score),
+      noteCount: getScoreJudgementCount(score),
     };
     const existing = rows.get(key);
     if (!existing || pp > existing.pp || (pp === existing.pp && detectedAt >= existing.detectedAt)) {
@@ -5143,8 +5364,8 @@ async function replaceUserMapsFarmedOverlay(
   for (const row of rows) {
     statements.push({
       sql: `insert into country_maps_farmed_scores
-         (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at)
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at, accuracy, note_count)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        on conflict(country, user_id, beatmap_id) do update set
          score_id = excluded.score_id,
          pp = excluded.pp,
@@ -5153,7 +5374,9 @@ async function replaceUserMapsFarmedOverlay(
          score_url = excluded.score_url,
          played_at = excluded.played_at,
          detected_at = excluded.detected_at,
-         updated_at = excluded.updated_at`,
+         updated_at = excluded.updated_at,
+         accuracy = excluded.accuracy,
+         note_count = excluded.note_count`,
       args: [
         row.country,
         row.userId,
@@ -5166,6 +5389,8 @@ async function replaceUserMapsFarmedOverlay(
         row.playedAt,
         row.detectedAt,
         row.updatedAt,
+        row.accuracy,
+        row.noteCount,
       ],
     });
   }

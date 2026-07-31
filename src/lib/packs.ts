@@ -1,6 +1,6 @@
 import {
   fetchLiveGlobalRankings,
-  fetchLivePlayerCachedProfileSnapshotDirect,
+  fetchLivePackCardSnapshotDirect,
   fetchLivePlayerProfileSnapshotDirect,
   isLiveBackendConfigured,
   type LiveGlobalRankingEntry,
@@ -593,8 +593,10 @@ export async function fetchPackPlayerScores(userId: number): Promise<OsuScore[]>
       // projection): a pure DB read on the backend, so a card flips
       // instantly for any player the backend has ever fetched. Staleness is
       // fine for minting a card, and the deal-time warm refreshes cold or
-      // expired players in the background anyway.
-      const cached = await fetchLivePlayerCachedProfileSnapshotDirect(String(userId));
+      // expired players in the background anyway. The card view trims each
+      // score to the fields the maniacard reads, roughly a tenth of the
+      // full snapshot payload.
+      const cached = await fetchLivePackCardSnapshotDirect(String(userId));
       if (cached && Array.isArray(cached.bestScores) && cached.bestScores.length > 0) {
         return cached.bestScores;
       }
@@ -616,4 +618,42 @@ export async function fetchPackPlayerScores(userId: number): Promise<OsuScore[]>
     }
   }
   return getUserScoresBestWindow({ data: { userId, totalLimit: 200, parallel: true } });
+}
+
+/* How many pack card prefetches run at once. Warm players cost one backend DB
+   read each, but a truly cold player falls through to the blocking /snapshot
+   endpoint and direct osu! fetches, and the cached endpoint can itself kick
+   off a background warm, so the fan-out stays bounded to protect the osu! API
+   budget instead of going fully parallel. */
+export const PACK_SCORE_PREFETCH_CONCURRENCY = 4;
+
+/* Starts `run` for every item with at most `concurrency` calls in flight,
+   dispatching in item order, and returns one promise per item (same order).
+   A failed run resolves to null so one bad fetch never poisons the batch. */
+export function startBoundedPrefetches<T, R>(
+  items: readonly T[],
+  run: (item: T) => Promise<R>,
+  concurrency: number,
+): Array<Promise<R | null>> {
+  const resolvers: Array<(value: R | null) => void> = [];
+  const results = items.map((_, index) =>
+    new Promise<R | null>((resolve) => {
+      resolvers[index] = resolve;
+    }),
+  );
+  let nextIndex = 0;
+  const worker = async (): Promise<void> => {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      try {
+        resolvers[index](await run(items[index]));
+      } catch {
+        resolvers[index](null);
+      }
+    }
+  };
+  const workerCount = Math.min(Math.max(1, Math.floor(concurrency)), Math.max(1, items.length));
+  for (let slot = 0; slot < workerCount; slot += 1) void worker();
+  return results;
 }

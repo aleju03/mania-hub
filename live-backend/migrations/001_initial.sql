@@ -274,6 +274,13 @@ create table if not exists country_maps_farmed_scores (
   played_at text,
   detected_at text not null,
   updated_at text not null,
+  -- Peer accuracy survives score_json compaction via these dedicated columns.
+  -- accuracy is the 320-weighted mania pp accuracy (0..1, see
+  -- getStoredScoreAccuracy) and note_count is the total judged objects of the
+  -- play. Both are null on rows written before these columns existed until a
+  -- refresh re-fetches the score.
+  accuracy real,
+  note_count integer,
   primary key (country, user_id, beatmap_id)
 );
 
@@ -293,6 +300,11 @@ create table if not exists global_maps_farmed_scores (
   detected_at text not null,
   source_country text not null,
   source_updated_at text not null,
+  -- Mirrors country_maps_farmed_scores.accuracy / note_count. Nullable, since
+  -- the legacy snapshot backfill path has no per-score statistics to derive
+  -- them from.
+  accuracy real,
+  note_count integer,
   primary key (beatmap_id, user_id)
 );
 
@@ -741,6 +753,10 @@ create table if not exists player_skill_ratings (
   status text not null,
   modes_json text,
   plays_json text,
+  -- Personal accuracy curve model (features/player-acc-model.ts): compact
+  -- fitted parameters, written by the skills job in the same pass as the
+  -- ratings. Existing DBs get the column via migratePlayerSkillAccModel.
+  acc_model_json text,
   source_fetched_at text,
   error text,
   computed_at text,

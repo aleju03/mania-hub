@@ -187,6 +187,36 @@ function setPatterns(diffs: LiveMapSearchEntry[]): string[] {
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([key]) => key);
 }
 
+const MAX_CARD_SUB_TAGS = 2;
+
+// Detected subfamily tags (bracket, speedjack, lngeneral, ...) for the card:
+// an attribute strip after the family chips. Works for both card shapes: a
+// single-diff card passes [entry], a multi-diff card unions the set's tags,
+// most common first. The vocabularies are disjoint by construction, but the
+// tags are still deduped against the family chips so an overlap can't render
+// a chip twice.
+export function subPatternTags(diffs: LiveMapSearchEntry[], familyTags: string[], max = MAX_CARD_SUB_TAGS): string[] {
+  const counts = new Map<string, number>();
+  for (const diff of diffs) {
+    for (const tag of diff.patternTags ?? []) {
+      if (!PATTERN_LABEL[tag] || familyTags.includes(tag)) continue;
+      counts.set(tag, (counts.get(tag) ?? 0) + 1);
+    }
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, max).map(([tag]) => tag);
+}
+
+// Subfamily chip: outlined rather than filled, so detected subpattern tags
+// read as attributes of the chart, distinct from the filled family chips that
+// state its identity. py compensates for the border to match chip heights.
+export function SubPatternChip({ pattern }: { pattern: string }) {
+  return (
+    <span className="px-2 py-[3px] rounded border border-osu-b3/60 text-osu-f1 text-[10px] leading-none">
+      {patternLabel(pattern)}
+    </span>
+  );
+}
+
 function keyModeLabel(diffs: LiveMapSearchEntry[]): string {
   const modes = [...new Set(diffs.map((diff) => diff.keyCount))].sort((a, b) => a - b);
   if (modes.length > 2) return `${modes[0]}K–${modes[modes.length - 1]}K`;
@@ -210,7 +240,8 @@ export function SearchCard({
   const multi = diffs.length > 1;
   const starLo = Math.min(...diffs.map((diff) => diff.stars));
   const starHi = Math.max(...diffs.map((diff) => diff.stars));
-  const patternTags = multi ? setPatterns(diffs) : [entry.primaryPattern, ...secondaryPatterns(entry)];
+  const familyTags = multi ? setPatterns(diffs) : [entry.primaryPattern, ...secondaryPatterns(entry)];
+  const subTags = subPatternTags(diffs, familyTags);
   const vibro = diffs.some((diff) => diff.vibro) || entry.vibro === true;
   const clickable = !!onOpen;
 
@@ -287,7 +318,7 @@ export function SearchCard({
         </div>
 
         <div className="flex flex-wrap items-center gap-1">
-          {patternTags.map((pattern, index) => (
+          {familyTags.map((pattern, index) => (
             <span
               key={pattern}
               className={
@@ -298,6 +329,9 @@ export function SearchCard({
             >
               {patternLabel(pattern)}
             </span>
+          ))}
+          {subTags.map((pattern) => (
+            <SubPatternChip key={pattern} pattern={pattern} />
           ))}
           {vibro && (
             <span

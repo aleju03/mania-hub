@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { computeKeymodePpPrestige, computeManiaSkills, getNextManiaCardTier } from "./maniacard";
+import { computeKeymodePpPrestige, computeManiaSkills, getNextManiaCardTier, resolveCardGlobalPp } from "./maniacard";
+import { calculateWeightedPpTotal } from "./score";
 import type { OsuScore } from "./types";
 
 function score(overrides: Partial<OsuScore> = {}): OsuScore {
@@ -379,6 +380,70 @@ describe("computeManiaSkills", () => {
 
     const gap = Math.abs((highRatio?.accuracy ?? 0) - (lowRatio?.accuracy ?? 0));
     expect(gap).toBeLessThan(60);
+  });
+
+  test("falls back to the weighted top-play sum when profile pp is implausible", () => {
+    // A restricted/inactive world-class account: strong stored plays, 0 profile pp.
+    const strongPlays = Array.from({ length: 100 }, (_, i) =>
+      score({
+        id: i + 1,
+        accuracy: 0.995,
+        pp: 950 - i * 3,
+        beatmap: {
+          ...score().beatmap,
+          difficulty_rating: 9,
+          accuracy: 9.5,
+          bpm: 260,
+          total_length: 190,
+          count_circles: 1600,
+          max_combo: 1600,
+        },
+        max_combo: 1600,
+      }),
+    );
+    const weighted = calculateWeightedPpTotal(strongPlays);
+    expect(weighted).toBeGreaterThan(12_000);
+
+    const restricted = computeManiaSkills(strongPlays, { globalPp: 0 });
+    const nullPp = computeManiaSkills(strongPlays, { globalPp: null });
+    const explicitWeighted = computeManiaSkills(strongPlays, { globalPp: weighted });
+    if (!restricted || !nullPp || !explicitWeighted) throw new Error("expected cards to be computable");
+
+    // The fallback resolves to exactly the weighted sum, for 0 and null alike.
+    expect(restricted.cardPower).toBe(explicitWeighted.cardPower);
+    expect(nullPp.cardPower).toBe(explicitWeighted.cardPower);
+    // Without the fallback both prestige terms zero out and power caps at 610;
+    // a demonstrated world-class account must be able to clear that ceiling.
+    expect(restricted.cardPower).toBeGreaterThan(610);
+  });
+
+  test("keeps the profile pp for normal accounts", () => {
+    const strongPlays = Array.from({ length: 100 }, (_, i) =>
+      score({ id: i + 1, accuracy: 0.99, pp: 950 - i * 3 }),
+    );
+    const weighted = calculateWeightedPpTotal(strongPlays);
+
+    // Plausible profile pp (at or above the weighted sum) is used as-is.
+    expect(resolveCardGlobalPp(20_000, strongPlays)).toBe(20_000);
+    // Slightly stale but sane values stay official too (weighted sum lags the
+    // bonus-pp-inclusive total, so a small shortfall is normal).
+    const slightlyStale = Math.round(weighted * 0.95);
+    expect(resolveCardGlobalPp(slightlyStale, strongPlays)).toBe(slightlyStale);
+    // Implausibly low or missing values fall back to the weighted sum.
+    expect(resolveCardGlobalPp(0, strongPlays)).toBe(weighted);
+    expect(resolveCardGlobalPp(null, strongPlays)).toBe(weighted);
+    expect(resolveCardGlobalPp(undefined, strongPlays)).toBe(weighted);
+    expect(resolveCardGlobalPp(Math.round(weighted * 0.5), strongPlays)).toBe(weighted);
+    // No scores means nothing to reconstruct from.
+    expect(resolveCardGlobalPp(0, [])).toBe(0);
+    expect(resolveCardGlobalPp(null, [])).toBe(0);
+
+    // End to end: a plausible profile pp still drives prestige, it is not
+    // replaced by the (lower) weighted sum.
+    const normal = computeManiaSkills(strongPlays, { globalPp: 24_000 });
+    const weightedOnly = computeManiaSkills(strongPlays, { globalPp: weighted });
+    if (!normal || !weightedOnly) throw new Error("expected cards to be computable");
+    expect(normal.cardPower).toBeGreaterThan(weightedOnly.cardPower);
   });
 
   test("does not over-credit low-star perfects as top-tier precision", () => {
