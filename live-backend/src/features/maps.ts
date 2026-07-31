@@ -2154,7 +2154,7 @@ async function adoptRepackedGlobalFarmedBoardFromDisk(
     // backlog of exactly REPACK_OVERRIDES would produce a board that
     // triggers the repack again immediately — re-adopting this same
     // snapshot every tick and never asking the worker for a fresh pack.
-    if (current.overrides.size < GLOBAL_FARMED_PROJECTION_REPACK_OVERRIDES) return null;
+    if (!boardNeedsOverrideShed(current)) return null;
     const backlog = (await exec(
       db,
       "select count(*) as n from (select 1 from global_maps_farmed_changes where revision > ? limit ?)",
@@ -2245,7 +2245,7 @@ export async function catchUpGlobalFarmedBoard(db: Db): Promise<void> {
     scheduleGlobalFarmedProjectionCatchUp(db, state, board, projectionState, stamps, generation);
     return;
   }
-  if (board.overrides.size >= GLOBAL_FARMED_PROJECTION_REPACK_OVERRIDES) {
+  if (boardNeedsOverrideShed(board)) {
     void startGlobalFarmedProjectionBoardBuild(
       db,
       state,
@@ -2307,14 +2307,18 @@ interface GlobalFarmedBoardStamps {
 const GLOBAL_FARMED_PROJECTION_GENERATION = "projection:v1";
 const GLOBAL_FARMED_PROJECTION_REPACK_OVERRIDES = 5_000;
 const GLOBAL_FARMED_PROJECTION_MAX_DELTA_MAPS = 5_000;
-// Matches the catch-up ticker cadence: one worker request per tick is the
-// most the delegated flow can make progress on anyway.
-const GLOBAL_FARMED_REPACK_REQUEST_COOLDOWN_MS = 30_000;
-// In-process patch ceiling for repack-delegating processes (~250KB heap per
-// patched map -> ~125MB worst case, vs ~940MB measured at the 5,000 limit).
-// Normal 30s ticker backlogs are a handful of maps; only boot catch-ups and
-// idle gaps exceed this, and those adopt the worker's pack instead.
+// A pack takes ~30s; requesting more often than every couple of minutes just
+// re-queues the same deduped job while the previous pack is still in flight.
+const GLOBAL_FARMED_REPACK_REQUEST_COOLDOWN_MS = 120_000;
+// In-process patch ceilings for repack-delegating processes. The map cap
+// bounds the query fan-out; the player budget bounds the real cost — changed
+// maps skew toward popular farm maps whose player lists dominate the heap
+// (~850B per retained player row measured on prod, so 100k ≈ ~85MB).
 const GLOBAL_FARMED_DELEGATED_MAX_DELTA_MAPS = 500;
+const GLOBAL_FARMED_DELEGATED_PATCH_PLAYER_BUDGET = 100_000;
+// Override-shed trigger by retained player mass (≈250MB at ~850B/row) —
+// the 5,000-count threshold alone is blind to how heavy the overrides are.
+const GLOBAL_FARMED_REPACK_OVERRIDE_PLAYERS = 300_000;
 
 function globalFarmedProjectionGeneration(seedEpoch: number): string {
   return `${GLOBAL_FARMED_PROJECTION_GENERATION}:seed:${seedEpoch}`;
@@ -2415,7 +2419,7 @@ async function getGlobalFarmedProjectionBoard(
       // sync catch-up here measured 11s after a 52-minute idle gap on prod).
       scheduleGlobalFarmedProjectionCatchUp(db, stateRef, current, projectionState, stamps, generation);
     }
-    if (current.overrides.size >= GLOBAL_FARMED_PROJECTION_REPACK_OVERRIDES && !stateRef.inflight) {
+    if (boardNeedsOverrideShed(current) && !stateRef.inflight) {
       void startGlobalFarmedProjectionBoardBuild(
         db,
         stateRef,
@@ -2462,7 +2466,15 @@ function scheduleGlobalFarmedProjectionCatchUp(
   if (state.inflight || state.deltaInflight) return;
   state.deltaInflight = applyGlobalFarmedProjectionDeltas(db, board, projectionState)
     .then((patched) => {
-      if (!patched) {
+      // A delegated partial chunk (patched, but still behind the projection
+      // head) also nudges the funnel: the chunk chain and the worker's pack
+      // race, and whichever lands first wins — the funnel's adopt path plus
+      // the request cooldown keep the nudge cheap. Non-delegated processes
+      // never patch partially, so for them this stays the declined-only path.
+      const partial = patched
+        && globalFarmedBoardRepackDelegates.has(db)
+        && (board.projectionRevision ?? 0) < projectionState.revision;
+      if (!patched || partial) {
         void startGlobalFarmedProjectionBoardBuild(
           db,
           state,
@@ -2750,20 +2762,20 @@ async function applyGlobalFarmedProjectionDeltas(
     [fromRevision, maxDeltaMaps + 1],
   )).rows;
   let chunked = false;
-  if (changes.length > maxDeltaMaps) {
-    // A delegated process chunks instead of declining outright: apply the
-    // fully-fetched revisions now and let the 30s ticker chain the rest, so
-    // a multi-thousand-map catch-up (or a bulk-refresh churn storm) converges
-    // a few hundred maps per tick with bounded memory — declining here would
-    // send every storm to the worker as a full 1.4GB pack per cooldown. The
-    // cut must fall on a revision boundary: bulk refreshes give many maps one
-    // revision, and advancing projectionRevision past a half-applied revision
-    // would skip its remaining maps forever. An uncuttable backlog (a single
-    // revision wider than the cap) still declines into the repack funnel.
-    const cutRevision = Number(changes[maxDeltaMaps].revision ?? 0);
-    const kept = globalFarmedBoardRepackDelegates.has(db)
-      ? changes.slice(0, maxDeltaMaps).filter((row) => Number(row.revision ?? 0) < cutRevision)
-      : [];
+  if (globalFarmedBoardRepackDelegates.has(db) && changes.length > 0) {
+    // A delegated process chunks instead of declining outright: apply a
+    // bounded slice now and let the 30s ticker chain the rest, so a
+    // multi-thousand-map catch-up (or a bulk-refresh churn storm) converges
+    // with bounded memory — declining here would send every storm to the
+    // worker as a full 1.4GB pack per cooldown. The bound is PLAYER mass,
+    // not just map count: changed maps skew toward popular farm maps, and a
+    // 469-map chunk of those was measured at ~800MB in the serving isolate.
+    // The cut must fall on a revision boundary (bulk refreshes give many
+    // maps one revision; advancing projectionRevision past a half-applied
+    // revision would skip its remaining maps forever). An uncuttable
+    // backlog — a single revision wider than the map cap — still declines
+    // into the repack funnel.
+    const kept = await cutDelegatedDeltaChunk(db, changes, maxDeltaMaps);
     if (kept.length === 0) {
       logInfo("global_farmed_projection_delta_repack", {
         from_revision: fromRevision,
@@ -2772,14 +2784,22 @@ async function applyGlobalFarmedProjectionDeltas(
       });
       return false;
     }
-    chunked = true;
-    changes = kept;
-    logInfo("global_farmed_projection_delta_chunk", {
+    if (kept.length < changes.length) {
+      chunked = true;
+      changes = kept;
+      logInfo("global_farmed_projection_delta_chunk", {
+        from_revision: fromRevision,
+        applied_maps: kept.length,
+        projection_revision: projectionState.revision,
+      });
+    }
+  } else if (changes.length > maxDeltaMaps) {
+    logInfo("global_farmed_projection_delta_repack", {
       from_revision: fromRevision,
-      applied_maps: kept.length,
-      cut_revision: cutRevision,
-      projection_revision: projectionState.revision,
+      to_revision: projectionState.revision,
+      threshold_maps: maxDeltaMaps,
     });
+    return false;
   }
   if (changes.length === 0) {
     // An initialized-but-empty projection still advances the state revision.
@@ -2807,6 +2827,65 @@ async function applyGlobalFarmedProjectionDeltas(
   // head's timestamp would overstate its freshness. The final chunk sets it.
   if (!chunked) board.farmedGeneratedAt = projectionState.updatedAt;
   return true;
+}
+
+/**
+ * Slices a delegated process's change backlog to a patchable chunk: at most
+ * maxMaps rows, cumulative aggregate player_count within the patch budget,
+ * cut on a revision boundary. Always keeps at least the first complete
+ * revision (min-progress) so a single popular map can never wedge the patch
+ * path; returns [] only when the first revision alone is wider than maxMaps
+ * (an uncuttable bulk), which the caller declines into the repack funnel.
+ */
+async function cutDelegatedDeltaChunk<T extends Record<string, unknown>>(
+  db: Db,
+  rows: T[],
+  maxMaps: number,
+): Promise<T[]> {
+  const candidate = rows.slice(0, maxMaps);
+  const playerCounts = new Map<number, number>();
+  for (let index = 0; index < candidate.length; index += 900) {
+    const chunk = candidate.slice(index, index + 900).map((row) => Number(row.beatmap_id));
+    const counts = (await exec(
+      db,
+      `select beatmap_id, player_count from global_maps_farmed_aggregates
+       where beatmap_id in (${sqlPlaceholders(chunk)})`,
+      chunk,
+    )).rows;
+    for (const row of counts) playerCounts.set(Number(row.beatmap_id), Number(row.player_count ?? 0));
+  }
+  let cumulativePlayers = 0;
+  let keptEnd = 0;
+  for (let i = 0; i < candidate.length; i++) {
+    cumulativePlayers += playerCounts.get(Number(candidate[i].beatmap_id)) ?? 0;
+    const revision = Number(candidate[i].revision ?? 0);
+    // Boundary detection must look at the full fetch (rows may hold one row
+    // beyond the map cap): a revision that continues past the candidate
+    // window is incomplete and cannot be a cut point.
+    const nextRevision = i + 1 < rows.length ? Number(rows[i + 1].revision ?? 0) : Number.NaN;
+    const atBoundary = nextRevision !== revision;
+    if (atBoundary && (cumulativePlayers <= GLOBAL_FARMED_DELEGATED_PATCH_PLAYER_BUDGET || keptEnd === 0)) {
+      keptEnd = i + 1;
+    }
+    if (cumulativePlayers > GLOBAL_FARMED_DELEGATED_PATCH_PLAYER_BUDGET && keptEnd > 0) break;
+  }
+  return candidate.slice(0, keptEnd);
+}
+
+/**
+ * Whether the board's override map needs shedding via a repack. Count alone
+ * is blind to weight: 469 popular-map overrides were measured holding
+ * ~hundreds of MB of live player arrays, far under the count threshold, so
+ * the trigger also sums the retained player rows.
+ */
+function boardNeedsOverrideShed(board: GlobalFarmedBoard): boolean {
+  if (board.overrides.size >= GLOBAL_FARMED_PROJECTION_REPACK_OVERRIDES) return true;
+  let players = 0;
+  for (const entry of board.overrides.values()) {
+    players += entry?.players.length ?? 0;
+    if (players >= GLOBAL_FARMED_REPACK_OVERRIDE_PLAYERS) return true;
+  }
+  return false;
 }
 
 const GLOBAL_FARMED_SCORE_URL_PATTERN = /^https:\/\/osu\.ppy\.sh\/scores\/(\d+)$/;

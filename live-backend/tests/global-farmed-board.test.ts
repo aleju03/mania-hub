@@ -453,21 +453,23 @@ describe("delegated global farmed board repack", () => {
     await getMapsPageSnapshot(db, queue, "GLOBAL", WEEK_MS, QUERY);
     const packedRevision = getGlobalFarmedBoardCacheStatsForTests(db)!.revision;
 
-    // 501 maps across 501 revisions: cuttable, so the delegated process must
-    // make partial progress per tick and never go to the worker.
+    // 501 maps across 501 revisions: cuttable, so the delegated process makes
+    // partial progress per tick (it also nudges the worker — the chunk chain
+    // and the pack race — but here the stub never packs, so convergence
+    // proves the chunks alone carry the board to the head).
     const target = await injectSpreadBacklog(db, 501);
     await catchUpGlobalFarmedBoard(db);
     await waitForGlobalFarmedBoardBuild(db);
     const afterFirstTick = getGlobalFarmedBoardCacheStatsForTests(db)!.revision;
     expect(afterFirstTick).toBeGreaterThan(packedRevision);
     expect(afterFirstTick).toBeLessThan(target);
+    expect(repackRequests).toBeGreaterThanOrEqual(1);
 
     for (let tick = 0; tick < 3 && getGlobalFarmedBoardCacheStatsForTests(db)!.revision < target; tick++) {
       await catchUpGlobalFarmedBoard(db);
       await waitForGlobalFarmedBoardBuild(db);
     }
     expect(getGlobalFarmedBoardCacheStatsForTests(db)!.revision).toBe(target);
-    expect(repackRequests).toBe(0);
   });
 
   it("repack job short-circuits when the disk snapshot is already at the projection head", async () => {
