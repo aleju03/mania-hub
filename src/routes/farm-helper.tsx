@@ -1130,7 +1130,9 @@ function BoardToolbar({
     <div className="sticky top-[60px] z-20 -mx-1 mb-3 rounded-xl border border-osu-b3/20 bg-osu-b5/85 px-1 backdrop-blur-md">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-2 py-2">
         {showReason ? (
-          <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
+          /* Phones give the tabs their own row: sharing one with the search and
+             sort left them ~90px, so three of the five scrolled out of sight. */
+          <div className="flex w-full min-w-0 items-center gap-0.5 overflow-x-auto sm:w-auto sm:flex-1">
             {tabs.map((tab) => (
               <button
                 key={tab.value}
@@ -1148,13 +1150,13 @@ function BoardToolbar({
             ))}
           </div>
         ) : (
-          <div className="min-w-0 flex-1 text-[12px] font-semibold text-osu-l2">
+          <div className="w-full min-w-0 text-[12px] font-semibold text-osu-l2 sm:w-auto sm:flex-1">
             maps players near you farm
             {countLabel ? <span className="ml-1.5 font-normal text-osu-f1">{countLabel}</span> : null}
           </div>
         )}
 
-        <div className="flex items-center gap-2">
+        <div className="flex w-full items-center gap-2 sm:w-auto">
           {showReason && countLabel ? (
             <span className="hidden text-[11px] tabular-nums text-osu-f1 lg:inline">{countLabel}</span>
           ) : null}
@@ -1168,7 +1170,7 @@ function BoardToolbar({
 
 function ToolbarSearch({ value, onChange }: { value: string; onChange: (next: string) => void }) {
   return (
-    <div className="relative w-[140px] sm:w-[200px]">
+    <div className="relative min-w-0 flex-1 sm:w-[200px] sm:flex-none">
       <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-osu-f1" />
       <input
         value={value}
