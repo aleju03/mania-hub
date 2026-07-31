@@ -2307,9 +2307,13 @@ interface GlobalFarmedBoardStamps {
 const GLOBAL_FARMED_PROJECTION_GENERATION = "projection:v1";
 const GLOBAL_FARMED_PROJECTION_REPACK_OVERRIDES = 5_000;
 const GLOBAL_FARMED_PROJECTION_MAX_DELTA_MAPS = 5_000;
-// A pack takes ~30s; requesting more often than every couple of minutes just
-// re-queues the same deduped job while the previous pack is still in flight.
-const GLOBAL_FARMED_REPACK_REQUEST_COOLDOWN_MS = 120_000;
+// Floor on how often one process asks the worker for a pack. At 120s,
+// sustained fallback-mode churn rode the floor (packs every ~2.5min) and the
+// worker never released between packs — observed hovering at ~1GB. 300s gives
+// it recovery room; the serving side stays bounded regardless, because
+// patching pauses once the override mass needs shedding (it serves stale
+// until the pack is adopted, never stacking overrides past the threshold).
+const GLOBAL_FARMED_REPACK_REQUEST_COOLDOWN_MS = 300_000;
 // In-process patch ceilings for repack-delegating processes. The map cap
 // bounds the query fan-out; the player budget bounds the real cost — changed
 // maps skew toward popular farm maps whose player lists dominate the heap
@@ -2763,6 +2767,18 @@ async function applyGlobalFarmedProjectionDeltas(
   )).rows;
   let chunked = false;
   if (globalFarmedBoardRepackDelegates.has(db) && changes.length > 0) {
+    // Once the override map already needs shedding, further patching only
+    // grows the retained mass while waiting for the pack; stop chunking and
+    // serve stale until the adoption clears the overrides. This is the hard
+    // bound on the serving process's live board memory — without it, a long
+    // pack cooldown would let sustained churn stack overrides indefinitely.
+    if (boardNeedsOverrideShed(board)) {
+      logInfo("global_farmed_projection_patch_paused_for_shed", {
+        from_revision: fromRevision,
+        overrides: board.overrides.size,
+      });
+      return false;
+    }
     // A delegated process chunks instead of declining outright: apply a
     // bounded slice now and let the 30s ticker chain the rest, so a
     // multi-thousand-map catch-up (or a bulk-refresh churn storm) converges
