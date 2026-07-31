@@ -1261,9 +1261,38 @@ async function renderManiacardOg(request: Request, rawUsername: string): Promise
   if (!skills) throw new OgFallbackError(`no card for ${username}`);
 
   const tier = getManiaCardTier(skills.cardPower);
-  const style = MANIA_TIER_STYLES[tier];
   const avatarUrl = user.avatar_url || (user.id ? `https://a.ppy.sh/${user.id}` : "");
 
+  const response = new ImageResponse(
+    maniaTierCardElement({ username: user.username || "Unknown", avatarUrl, tier, skills }),
+    {
+      width: MANIACARD_W,
+      height: MANIACARD_H,
+      fonts: ogFontList(regularFont, heavyFont),
+    },
+  );
+
+  response.headers.set("Cache-Control", OG_CACHE_HEADER);
+  return response;
+}
+
+// The card art shared by the maniacard and pull OGs: everything the portrait
+// needs, decoupled from where the numbers came from (live top plays vs the
+// minted skills snapshot stored on a collection card).
+interface ManiaTierCardArt {
+  username: string;
+  avatarUrl: string;
+  tier: ManiaCardTier;
+  skills: { fingerControl: number; speed: number; accuracy: number; starAvg: number };
+}
+
+const MANIACARD_W = 720;
+const MANIACARD_H = 1008;
+const MANIACARD_FOOTER_H = 72;
+
+function maniaTierCardElement(art: ManiaTierCardArt) {
+  const { skills, tier, avatarUrl } = art;
+  const style = MANIA_TIER_STYLES[tier];
   const statRows: Array<[string, number]> = [
     ["Control", skills.fingerControl],
     ["Speed", skills.speed],
@@ -1277,17 +1306,17 @@ async function renderManiacardOg(request: Request, rawUsername: string): Promise
     return starDataUrl(fill);
   });
 
-  const CARD_W = 720;
-  const CARD_H = 1008;
+  const CARD_W = MANIACARD_W;
+  const CARD_H = MANIACARD_H;
   const textShadow = "0 2px 5px rgba(0,0,0,0.55)";
 
-  const response = new ImageResponse(
-    h(
+  return h(
       "div",
       {
         style: {
-          width: "100%",
-          height: "100%",
+          width: `${CARD_W}px`,
+          height: `${CARD_H}px`,
+          flexShrink: 0,
           position: "relative",
           display: "flex",
           overflow: "hidden",
@@ -1347,7 +1376,7 @@ async function renderManiacardOg(request: Request, rawUsername: string): Promise
           h(
             "div",
             { style: { fontSize: "40px", fontWeight: 900, color: "#ffffff", textShadow, whiteSpace: "nowrap" } },
-            user.username || "Unknown",
+            art.username,
           ),
         ),
         // Tier label (right).
@@ -1461,10 +1490,112 @@ async function renderManiacardOg(request: Request, rawUsername: string): Promise
           ],
         ),
       ],
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Pulled card: the /pull/{owner}/{card} permalink embed. Same card art as the
+// maniacard OG but rendered from the minted skills snapshot stored on the
+// owner's collection row, with a "pulled by" footer.
+// ---------------------------------------------------------------------------
+
+interface SharedPackCardPayload {
+  owner?: { userId?: number; username?: string };
+  card?: {
+    userId?: number;
+    username?: string;
+    avatarUrl?: string;
+    tier?: string | null;
+    skills?: {
+      fingerControl?: number;
+      speed?: number;
+      accuracy?: number;
+      starAvg?: number;
+      cardPower?: number;
+    } | null;
+  };
+}
+
+async function renderPulledCardOg(request: Request, ownerId: number, cardId: number): Promise<Response> {
+  const base = getServerLiveBackendUrl();
+  if (!base) throw new OgFallbackError("live backend not configured");
+
+  const [[regularFont, heavyFont], payloadResponse] = await Promise.all([
+    loadOgFonts(request),
+    fetch(`${base}/api/packs/pulled-card/${ownerId}/${cardId}`),
+  ]);
+  if (payloadResponse.status === 404) throw new OgFallbackError(`no pulled card ${ownerId}/${cardId}`);
+  if (!payloadResponse.ok) throw new OgFallbackError(`pulled card ${payloadResponse.status}`);
+  const payload = (await payloadResponse.json()) as SharedPackCardPayload;
+  const card = payload.card;
+  const skills = card?.skills;
+  if (
+    !card ||
+    !skills ||
+    ![skills.fingerControl, skills.speed, skills.accuracy, skills.starAvg].every((value) => Number.isFinite(Number(value)))
+  ) {
+    throw new OgFallbackError(`pulled card ${ownerId}/${cardId} has no minted skills`);
+  }
+
+  const tier: ManiaCardTier =
+    card.tier && card.tier in MANIA_TIER_STYLES
+      ? (card.tier as ManiaCardTier)
+      : getManiaCardTier(Number(skills.cardPower) || 0);
+  const style = MANIA_TIER_STYLES[tier];
+  const art: ManiaTierCardArt = {
+    username: card.username || "Unknown",
+    avatarUrl: card.avatarUrl || (card.userId ? `https://a.ppy.sh/${card.userId}` : ""),
+    tier,
+    skills: {
+      fingerControl: Number(skills.fingerControl),
+      speed: Number(skills.speed),
+      accuracy: Number(skills.accuracy),
+      starAvg: Number(skills.starAvg),
+    },
+  };
+  const ownerName = payload.owner?.username || "a collector";
+
+  const response = new ImageResponse(
+    h(
+      "div",
+      {
+        style: {
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
+          background: "#120d15",
+          fontFamily: '"Torus OG"',
+        },
+      },
+      [
+        maniaTierCardElement(art),
+        h(
+          "div",
+          {
+            key: "footer",
+            style: {
+              width: "100%",
+              height: `${MANIACARD_FOOTER_H}px`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "#120d15",
+              borderTop: `3px solid ${style.glowColor}`,
+            },
+          },
+          [
+            h("div", { key: "by", style: { display: "flex", fontSize: "27px", color: "rgba(255,255,255,0.55)" } }, "Pulled by"),
+            h("div", { key: "owner", style: { display: "flex", fontSize: "30px", fontWeight: 900, color: "#ffffff", marginLeft: "12px" } }, ownerName),
+            h("div", { key: "dot", style: { display: "flex", fontSize: "27px", color: "rgba(255,255,255,0.35)", margin: "0 14px" } }, "·"),
+            h("div", { key: "site", style: { display: "flex", fontSize: "25px", fontWeight: 700, color: "rgba(255,102,170,0.9)" } }, "mania-tracker.com"),
+          ],
+        ),
+      ],
     ),
     {
-      width: CARD_W,
-      height: CARD_H,
+      width: MANIACARD_W,
+      height: MANIACARD_H + MANIACARD_FOOTER_H,
       fonts: ogFontList(regularFont, heavyFont),
     },
   );
@@ -2446,184 +2577,353 @@ function scoreboardRow(
   );
 }
 
-/* Bare flag sticker: a country flag rendered as a tilted card on the
-   surface. No polaroid frame — that's reserved for the focal flag on
-   the country pages, where the flag IS the hero. On the default
-   layout we want flags to feel like decorative stickers/stamps, not
-   hero cards, so we drop the white frame and just render the flag
-   image with a thin border to keep the edges crisp. */
-function flagSticker(props: {
-  country: string;
-  width: number;
-  rotate: number;
-  top: number;
-  left: number;
-  key: string;
-}) {
-  const { country, width, rotate, top, left, key } = props;
-  // Flags are rendered at 3:2 (matching flagcdn.com's source aspect).
-  const height = Math.round(width * 0.66);
+/* Palette for the default card. The rest of the OG layouts inline
+   these hex values; they only get names here because the playfield
+   helper below needs them in a few places. */
+const OG_PINK = "#ff66aa";
+const OG_MUTED = "#a89cb4";
+
+// Surfaces named on the default card, in chip reading order. Not a
+// ranking, and not the full site map — just enough for someone seeing
+// the link preview to know what they'd be clicking into.
+const DEFAULT_OG_FEATURES = [
+  "rankings",
+  "live tracker",
+  "top plays",
+  "maps",
+  "replays",
+];
+
+// One chip is filled instead of outlined so the row has a focal point
+// and the card carries the accent colour below the fold of the title.
+function featureChip(label: string, key: string, accent = false) {
   return h(
     "div",
     {
       key,
       style: {
-        position: "absolute",
-        top: `${top}px`,
-        left: `${left}px`,
         display: "flex",
-        width: `${width}px`,
-        height: `${height}px`,
-        transform: `rotate(${rotate}deg)`,
-        overflow: "hidden",
+        alignItems: "center",
+        padding: "9px 16px",
+        marginRight: "10px",
+        marginTop: "10px",
+        background: accent ? OG_PINK : "rgba(255,255,255,0.06)",
+        border: `1px solid ${accent ? OG_PINK : "rgba(255,255,255,0.12)"}`,
+        borderRadius: "999px",
+        color: accent ? "#1a1317" : "#cfc6d8",
+        fontSize: "20px",
+        fontWeight: 900,
+        letterSpacing: "0.05em",
       },
     },
-    h("img", {
-      src: flagImageUrl(country),
-      style: {
-        width: `${width}px`,
-        height: `${height}px`,
-        objectFit: "cover",
-      },
-    }),
+    label,
   );
 }
 
-/* Grade sticker: a stylised badge floating on the surface, no
-   polaroid frame, no caption. The grade SVG is rendered at the
-   requested size and tilted just like the polaroid cards so it sits
-   in the same plane. Used in the default layout to nod at osu!mania
-   scoring without competing with the polaroid avatar/flag cards. */
-function gradeSticker(props: {
-  grade: keyof typeof GRADE_FILE;
-  width: number;
-  rotate: number;
-  top: number;
-  left: number;
-  request: Request;
+type ColumnNote = { y: number; ln?: number; accent?: boolean };
+
+// Note colours by lane, the way a 4K skin usually reads: pale outer
+// lanes, blue inner lanes. `accent` overrides both with the site pink
+// so a couple of notes carry the brand colour.
+const NOTE_STYLES = {
+  pale: { solid: "#f3ece4", soft: "rgba(243,236,228,0.30)", trail: "rgba(243,236,228,0.11)" },
+  blue: { solid: "#8ecbff", soft: "rgba(142,203,255,0.32)", trail: "rgba(142,203,255,0.15)" },
+  pink: { solid: OG_PINK, soft: "rgba(255,102,170,0.42)", trail: "rgba(255,102,170,0.20)" },
+};
+
+/* A stylised mania playfield: n columns of notes falling toward a lit
+   receptor line, with one lane caught mid-hit. Drawn with plain rects
+   (not skin sprites) so the palette stays on-brand and the render has
+   no asset dependency.
+
+   The motion trails behind each note are what sell it as a play in
+   progress rather than a static chart diagram, so they scale with note
+   size instead of being a fixed length. */
+function maniaColumns(props: {
   key: string;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  columns: ColumnNote[][];
+  colWidth: number;
+  gap: number;
+  receptorY: number;
+  noteHeight: number;
+  // Lane index that just got hit: it gets column lighting, a flash on
+  // the receptor and a burst of sparks.
+  hitColumn?: number;
+  opacity?: number;
 }) {
-  const { grade, width, rotate, top, left, request, key } = props;
-  // The score-ranks-v2019 SVGs are 32x16 (2:1).
-  const height = Math.round(width * 0.5);
-  return h(
-    "div",
-    {
-      key,
-      style: {
-        position: "absolute",
-        top: `${top}px`,
-        left: `${left}px`,
-        display: "flex",
-        width: `${width}px`,
-        height: `${height}px`,
-        transform: `rotate(${rotate}deg)`,
+  const {
+    key, left, top, width, height, columns, colWidth, gap,
+    receptorY, noteHeight, hitColumn, opacity = 1,
+  } = props;
+  const bandWidth = columns.length * colWidth + (columns.length - 1) * gap;
+  const padLeft = Math.round((width - bandWidth) / 2);
+  const trailHeight = Math.round(noteHeight * 4.2);
+
+  const cols = columns.map((notes, ci) => {
+    const inner = ci > 0 && ci < columns.length - 1;
+    const lane = inner ? NOTE_STYLES.blue : NOTE_STYLES.pale;
+    const colLeft = padLeft + ci * (colWidth + gap);
+    const children: ReactNode[] = [];
+
+    for (const [ni, note] of notes.entries()) {
+      const style = note.accent ? NOTE_STYLES.pink : lane;
+      if (note.ln) {
+        children.push(
+          h("div", {
+            key: `ln-${ci}-${ni}`,
+            style: {
+              position: "absolute",
+              left: `${Math.round(colWidth * 0.16)}px`,
+              top: `${note.y - note.ln}px`,
+              width: `${Math.round(colWidth * 0.68)}px`,
+              // Like the trails, the body runs under the head so its
+              // rounded end doesn't show as a seam above the note.
+              height: `${note.ln + noteHeight}px`,
+              borderTopLeftRadius: "6px",
+              borderTopRightRadius: "6px",
+              background: style.soft,
+            },
+          }),
+        );
+      } else {
+        // Only tap notes get a trail; a held note's body already reads
+        // as length, and stacking the two just looks smeared.
+        children.push(
+          h("div", {
+            key: `tr-${ci}-${ni}`,
+            style: {
+              position: "absolute",
+              left: `${Math.round(colWidth * 0.2)}px`,
+              // Runs past the note's top edge so the note covers the
+              // trail's end; stopping at note.y leaves the rounded
+              // bottom poking out as a cup shape.
+              top: `${note.y - trailHeight}px`,
+              width: `${Math.round(colWidth * 0.6)}px`,
+              height: `${trailHeight + noteHeight}px`,
+              borderTopLeftRadius: `${Math.round(colWidth * 0.3)}px`,
+              borderTopRightRadius: `${Math.round(colWidth * 0.3)}px`,
+              background: `linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0) 46%, ${style.trail} 100%)`,
+            },
+          }),
+        );
+      }
+      children.push(
+        h("div", {
+          key: `n-${ci}-${ni}`,
+          style: {
+            position: "absolute",
+            left: "0px",
+            top: `${note.y}px`,
+            width: `${colWidth}px`,
+            height: `${noteHeight}px`,
+            borderRadius: "7px",
+            background: style.solid,
+          },
+        }),
+      );
+    }
+
+    // Hit lighting: the struck lane glows from the receptor upward.
+    if (ci === hitColumn) {
+      children.unshift(
+        h("div", {
+          key: `lit-${ci}`,
+          style: {
+            position: "absolute",
+            left: "0px",
+            top: `${receptorY - 260}px`,
+            width: `${colWidth}px`,
+            height: "260px",
+            background: "linear-gradient(to bottom, rgba(255,102,170,0) 0%, rgba(255,102,170,0.38) 100%)",
+          },
+        }),
+      );
+    }
+
+    return h(
+      "div",
+      {
+        key: `col-${ci}`,
+        style: {
+          position: "absolute",
+          left: `${colLeft}px`,
+          top: "0px",
+          width: `${colWidth}px`,
+          height: `${height}px`,
+          display: "flex",
+          background: inner ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.03)",
+        },
       },
-    },
-    h("img", {
-      src: gradeImgUrl(request, grade),
-      style: { width: `${width}px`, height: `${height}px` },
-    }),
-  );
-}
-
-/* Default layout: shown when nobody has selected a country (bare site
-   URL). Same polaroid scrapbook language as the country pages, but
-   instead of one country flag we scatter a curated set of mania-active
-   countries' flags as polaroids and dot the canvas with grade badge
-   stickers. The backdrop pulls the global mania top 50 avatars (one
-   getRankings call with no country filter), so the page still feels
-   populated by real players. The focal centre is a pink
-   "Mania Tracker" sticker. */
-async function renderDefaultPolaroidOg(request: Request): Promise<Response> {
-  // Curated list of countries with active mania scenes / visually
-  // distinctive flags. Costa Rica leads (project's home scene). The
-  // rest is a mix of historic mania-strong countries and visually
-  // distinct flags so the scatter reads as "around the world." Order
-  // isn't a ranking — it's the position in the foreground scatter
-  // (see FLAG_SLOTS below).
-  const FEATURED_COUNTRIES = [
-    "CR", "KR", "JP", "US", "BR", "FI", "PL",
-    "RU", "DE", "FR", "CN", "TW", "AU", "MX",
-  ];
-
-  // Hand-tuned scatter for the foreground flag stickers. 14 slots,
-  // sizes in the 100-130px range (flags are 3:2 so they're wider
-  // than they are tall). The centre band stays open for the
-  // "Mania Tracker" focal sticker.
-  const FLAG_SLOTS: Array<{
-    top: number;
-    left: number;
-    rotate: number;
-    width: number;
-  }> = [
-    { top: 30, left: 40, rotate: -7, width: 130 },
-    { top: 50, left: 230, rotate: 5, width: 115 },
-    { top: 22, left: 410, rotate: -3, width: 110 },
-    { top: 40, left: 740, rotate: 4, width: 110 },
-    { top: 26, left: 920, rotate: -5, width: 120 },
-    { top: 44, left: 1080, rotate: 6, width: 100 },
-    { top: 250, left: 24, rotate: 6, width: 110 },
-    { top: 260, left: 1090, rotate: -5, width: 110 },
-    { top: 460, left: 40, rotate: 4, width: 130 },
-    { top: 478, left: 230, rotate: -6, width: 115 },
-    { top: 490, left: 410, rotate: 5, width: 110 },
-    { top: 478, left: 740, rotate: -4, width: 110 },
-    { top: 462, left: 920, rotate: 6, width: 120 },
-    { top: 480, left: 1080, rotate: -7, width: 100 },
-  ];
-
-  // Grade badge stickers scattered across the canvas. Picked
-  // positions tucked between flag polaroids so they read as decorative
-  // badges, not as part of the polaroid grid.
-  const GRADE_SLOTS: Array<{
-    grade: keyof typeof GRADE_FILE;
-    width: number;
-    rotate: number;
-    top: number;
-    left: number;
-  }> = [
-    { grade: "SS", width: 150, rotate: -10, top: 158, left: 200 },
-    { grade: "S", width: 120, rotate: 8, top: 178, left: 940 },
-    { grade: "A", width: 110, rotate: -6, top: 360, left: 200 },
-    { grade: "B", width: 100, rotate: 7, top: 374, left: 940 },
-  ];
-
-  const [regularFont, heavyFont, rankings] = await Promise.all([
-    getFont(request, "Torus-Regular.otf"),
-    getFont(request, "Torus-Heavy.otf"),
-    // Global mania performance top 50 for the dim backdrop.
-    getRankings({ data: { type: "performance", page: 1 } }),
-  ]);
-
-  const backdropPlayers = rankings.ranking
-    .slice(0, 50)
-    .map((entry) => ({ url: entry.user.avatar_url }));
-
-  const flagCards = FEATURED_COUNTRIES.map((cc, i) => {
-    const slot = FLAG_SLOTS[i];
-    if (!slot) return null;
-    return flagSticker({
-      key: `flag-${cc}`,
-      country: cc,
-      width: slot.width,
-      rotate: slot.rotate,
-      top: slot.top,
-      left: slot.left,
-    });
+      children,
+    );
   });
 
-  const gradeBadges = GRADE_SLOTS.map((s, i) =>
-    gradeSticker({
-      key: `grade-${i}`,
-      grade: s.grade,
-      width: s.width,
-      rotate: s.rotate,
-      top: s.top,
-      left: s.left,
-      request,
-    }),
+  const hitLeft = hitColumn == null ? 0 : padLeft + hitColumn * (colWidth + gap);
+  const hitCentre = hitLeft + colWidth / 2;
+  // Sparks thrown off the hit, biased upward the way an explosion frame
+  // reads at a single instant.
+  const sparks: Array<{ dx: number; dy: number; r: number; a: number }> = [
+    { dx: -0.72, dy: -46, r: 7, a: 0.85 },
+    { dx: 0.66, dy: -62, r: 5, a: 0.7 },
+    { dx: -0.34, dy: -96, r: 4, a: 0.5 },
+    { dx: 0.9, dy: -18, r: 6, a: 0.6 },
+    { dx: -1.02, dy: -12, r: 5, a: 0.45 },
+    { dx: 0.28, dy: -130, r: 3, a: 0.35 },
+  ];
+
+  return h(
+    "div",
+    {
+      key,
+      style: {
+        position: "absolute",
+        left: `${left}px`,
+        top: `${top}px`,
+        width: `${width}px`,
+        height: `${height}px`,
+        display: "flex",
+        overflow: "hidden",
+        opacity,
+      },
+    },
+    [
+      ...cols,
+      // Receptor glow, then the lit judgement line itself.
+      h("div", {
+        key: "glow",
+        style: {
+          position: "absolute",
+          left: `${padLeft - 20}px`,
+          top: `${receptorY - 170}px`,
+          width: `${bandWidth + 40}px`,
+          height: "180px",
+          background: "linear-gradient(to bottom, rgba(255,102,170,0) 0%, rgba(255,102,170,0.24) 100%)",
+        },
+      }),
+      h("div", {
+        key: "receptor",
+        style: {
+          position: "absolute",
+          left: `${padLeft}px`,
+          top: `${receptorY}px`,
+          width: `${bandWidth}px`,
+          height: "5px",
+          background: OG_PINK,
+        },
+      }),
+      hitColumn == null
+        ? null
+        : h("div", {
+            key: "burst",
+            style: {
+              position: "absolute",
+              left: `${Math.round(hitCentre - colWidth * 1.15)}px`,
+              top: `${receptorY - 84}px`,
+              width: `${Math.round(colWidth * 2.3)}px`,
+              height: "168px",
+              borderRadius: "50%",
+              background:
+                "radial-gradient(closest-side, rgba(255,255,255,0.55) 0%, rgba(255,102,170,0.45) 38%, rgba(255,102,170,0) 100%)",
+            },
+          }),
+      hitColumn == null
+        ? null
+        : h("div", {
+            key: "flash",
+            style: {
+              position: "absolute",
+              left: `${hitLeft}px`,
+              top: `${receptorY - 6}px`,
+              width: `${colWidth}px`,
+              height: "12px",
+              borderRadius: "6px",
+              background: "#ffffff",
+            },
+          }),
+      ...(hitColumn == null
+        ? []
+        : sparks.map((s, i) =>
+            h("div", {
+              key: `spark-${i}`,
+              style: {
+                position: "absolute",
+                left: `${Math.round(hitCentre + s.dx * colWidth * 0.5 - s.r)}px`,
+                top: `${receptorY + s.dy - s.r}px`,
+                width: `${s.r * 2}px`,
+                height: `${s.r * 2}px`,
+                borderRadius: "50%",
+                background: "#ffb3d5",
+                opacity: s.a,
+              },
+            }),
+          )),
+      // Notes fade in at the top rather than getting sliced by the
+      // canvas edge, which reads as depth instead of a crop.
+      h("div", {
+        key: "fade-top",
+        style: {
+          position: "absolute",
+          left: "0px",
+          top: "0px",
+          width: `${width}px`,
+          height: "150px",
+          background: `linear-gradient(to bottom, ${SURFACE_COLOR} 0%, rgba(26,22,32,0) 100%)`,
+        },
+      }),
+      // Everything past the judgement line fades out, so the eye stops
+      // at the receptor instead of running off the canvas.
+      h("div", {
+        key: "fade",
+        style: {
+          position: "absolute",
+          left: "0px",
+          top: `${receptorY + 8}px`,
+          width: `${width}px`,
+          height: `${height - receptorY - 8}px`,
+          background: "linear-gradient(to bottom, rgba(26,22,32,0.55) 0%, rgba(26,22,32,1) 70%)",
+        },
+      }),
+    ],
   );
+}
+
+/* Default layout: shown when nobody has selected a country (bare
+   site URL). Brand lockup on the left, a stylised 4K playfield
+   bleeding off the right edge. Deliberately not the scrapbook
+   language of the country/player cards: this one is the front door,
+   so it names the site and its surfaces instead of showing whoever
+   happens to be ranked today. It also takes no upstream data, so the
+   most-shared card of the site never waits on the osu! API.
+
+   Bump OG_IMAGE_VERSION in src/lib/seo.ts when this layout changes.
+*/
+async function renderDefaultBrandOg(request: Request): Promise<Response> {
+  const [regularFont, heavyFont] = await loadOgFonts(request);
+
+  // Lane 3 is caught exactly on the receptor, which is what the burst,
+  // flash and MAX judgement below are reacting to.
+  const FIELD_LEFT = 716;
+  const FIELD_WIDTH = 484;
+  const COL_WIDTH = 96;
+  const COL_GAP = 8;
+  const RECEPTOR_Y = 500;
+  const HIT_COLUMN = 2;
+  const bandWidth = 4 * COL_WIDTH + 3 * COL_GAP;
+  const bandLeft = FIELD_LEFT + Math.round((FIELD_WIDTH - bandWidth) / 2);
+  const hitCentre = bandLeft + HIT_COLUMN * (COL_WIDTH + COL_GAP) + COL_WIDTH / 2;
+
+  // Reads as a real pattern rather than scattered blocks: a roll down
+  // the lanes up top, a chord, then a hold and the note being hit.
+  const columns: ColumnNote[][] = [
+    [{ y: -20 }, { y: 150 }, { y: 268 }, { y: 396 }],
+    [{ y: 60 }, { y: 208 }, { y: 340, ln: 88 }],
+    [{ y: 24 }, { y: 118 }, { y: 268 }, { y: RECEPTOR_Y - 13 }],
+    [{ y: 88 }, { y: 208 }, { y: 470, ln: 120, accent: true }],
+  ];
 
   const response = new ImageResponse(
     h(
@@ -2641,38 +2941,182 @@ async function renderDefaultPolaroidOg(request: Request): Promise<Response> {
         },
       },
       [
-        // Dimmed avatar backdrop — global mania top 50, scattered
-        // behind the foreground cards.
-        ...backdropAvatars("__default__", backdropPlayers),
-
-        // Foreground scatter: flag polaroids first, then grade
-        // stickers on top, then the focal sticker last so it dominates.
-        ...flagCards,
-        ...gradeBadges,
-
-        // Centre focal sticker: large pink "Mania Tracker" with a
-        // small product line. Plays the role the flag polaroid does on
-        // the country pages.
-        sticker({
-          key: "title",
-          text: "Mania Tracker",
-          subText: "RANKS / SCORES / MAPS / REPLAYS",
-          fontSize: 80,
-          background: "#ff66aa",
-          color: "#1a1317",
-          paddingX: 32,
-          paddingY: 24,
-          rotate: -2,
-          top: 240,
-          left: 280,
+        // Two washes, warm on the lockup side and cool under the
+        // playfield, so the surface isn't a flat sheet of charcoal.
+        h("div", {
+          key: "wash",
+          style: {
+            position: "absolute",
+            inset: "0",
+            background:
+              "radial-gradient(circle at 22% 38%, rgba(255,102,170,0.16) 0%, rgba(255,102,170,0) 55%)",
+          },
         }),
+        h("div", {
+          key: "wash-cool",
+          style: {
+            position: "absolute",
+            inset: "0",
+            background:
+              "radial-gradient(circle at 82% 88%, rgba(142,203,255,0.14) 0%, rgba(142,203,255,0) 52%)",
+          },
+        }),
+        maniaColumns({
+          key: "field",
+          left: FIELD_LEFT,
+          top: 0,
+          width: FIELD_WIDTH,
+          height: HEIGHT,
+          columns,
+          colWidth: COL_WIDTH,
+          gap: COL_GAP,
+          receptorY: RECEPTOR_Y,
+          noteHeight: 26,
+          hitColumn: HIT_COLUMN,
+        }),
+        // The judgement for the note being hit, popped next to the
+        // burst at in-game scale instead of as a caption over the card.
+        h(
+          "div",
+          {
+            key: "judgement",
+            style: {
+              position: "absolute",
+              left: `${Math.round(hitCentre - 80)}px`,
+              top: `${RECEPTOR_Y - 116}px`,
+              width: "160px",
+              display: "flex",
+              justifyContent: "center",
+              fontSize: "34px",
+              fontWeight: 900,
+              letterSpacing: "0.2em",
+              color: JUDGEMENT_COLORS.MAX,
+            },
+          },
+          "MAX",
+        ),
+        // Soft separator so the playfield band reads as a panel.
+        h("div", {
+          key: "edge",
+          style: {
+            position: "absolute",
+            left: `${FIELD_LEFT}px`,
+            top: "0px",
+            width: "1px",
+            height: `${HEIGHT}px`,
+            background: "rgba(255,255,255,0.10)",
+          },
+        }),
+        h(
+          "div",
+          {
+            key: "lockup",
+            style: {
+              position: "absolute",
+              left: "80px",
+              top: "86px",
+              width: "600px",
+              display: "flex",
+              flexDirection: "column",
+            },
+          },
+          [
+            h(
+              "div",
+              {
+                key: "eyebrow",
+                style: { display: "flex", alignItems: "center" },
+              },
+              [
+                h("img", {
+                  key: "logo",
+                  src: new URL("/logo512.png", getAssetOrigin(request)).toString(),
+                  style: { width: "54px", height: "54px", borderRadius: "50%" },
+                }),
+                h(
+                  "div",
+                  {
+                    key: "text",
+                    style: {
+                      display: "flex",
+                      marginLeft: "16px",
+                      fontSize: "22px",
+                      fontWeight: 900,
+                      letterSpacing: "0.26em",
+                      color: OG_PINK,
+                    },
+                  },
+                  "OSU!MANIA",
+                ),
+              ],
+            ),
+            h(
+              "div",
+              {
+                key: "title",
+                style: {
+                  display: "flex",
+                  marginTop: "16px",
+                  fontSize: "92px",
+                  fontWeight: 900,
+                  lineHeight: "1.0",
+                  letterSpacing: "-0.01em",
+                  // Satori supports background-clip: text, so the
+                  // wordmark can carry the accent instead of sitting
+                  // flat white next to a colourful playfield.
+                  backgroundImage: "linear-gradient(115deg, #ffffff 34%, #ff9ecd 100%)",
+                  backgroundClip: "text",
+                  WebkitBackgroundClip: "text",
+                  color: "transparent",
+                },
+              },
+              "Mania Tracker",
+            ),
+            h(
+              "div",
+              {
+                key: "sub",
+                style: {
+                  display: "flex",
+                  marginTop: "20px",
+                  fontSize: "27px",
+                  color: OG_MUTED,
+                  lineHeight: "1.25",
+                  maxWidth: "560px",
+                },
+              },
+              "Live scores, rankings and map tools for the mania community.",
+            ),
+            h(
+              "div",
+              {
+                key: "chips",
+                style: { display: "flex", flexWrap: "wrap", marginTop: "16px", maxWidth: "530px" },
+              },
+              DEFAULT_OG_FEATURES.map((f, i) =>
+                featureChip(f, `chip-${i}`, f === "live tracker"),
+              ),
+            ),
+            h(
+              "div",
+              {
+                key: "domain",
+                style: {
+                  display: "flex",
+                  marginTop: "26px",
+                  fontSize: "21px",
+                  fontWeight: 900,
+                  letterSpacing: "0.12em",
+                  color: "#6f6579",
+                },
+              },
+              "MANIA-TRACKER.COM",
+            ),
+          ],
+        ),
       ],
     ),
-    {
-      width: WIDTH,
-      height: HEIGHT,
-      fonts: ogFontList(regularFont, heavyFont),
-    },
+    { width: WIDTH, height: HEIGHT, fonts: ogFontList(regularFont, heavyFont) },
   );
 
   response.headers.set("Cache-Control", OG_CACHE_HEADER);
@@ -4446,6 +4890,22 @@ export const Route = createFileRoute("/api/og")({
           }
         }
 
+        // Pull permalink route: owner + card ids, art from the stored mint.
+        if (kind === "pull") {
+          const ownerId = Number(url.searchParams.get("owner"));
+          const cardId = Number(url.searchParams.get("card"));
+          if (Number.isInteger(ownerId) && ownerId > 0 && Number.isInteger(cardId) && cardId > 0) {
+            try {
+              return await serveOg(
+                `pull:${ownerId}:${cardId}:v${version}`,
+                () => renderPulledCardOg(request, ownerId, cardId),
+              );
+            } catch (err) {
+              if (!isOgFallbackError(err)) console.warn("[og] pull render failed, falling back", err);
+            }
+          }
+        }
+
         // Dan emblem thumbnail for the /dan command (rasterizes an svg emblem).
         if (kind === "dan-emblem") {
           const label = (url.searchParams.get("label") ?? "").trim().toLowerCase().slice(0, 8);
@@ -4544,13 +5004,13 @@ export const Route = createFileRoute("/api/og")({
           }
         }
 
-        // Default polaroid layout — used when nothing else matched
+        // Default branded layout — used when nothing else matched
         // (no country, no recognised kind). Falls back to the
         // title-only minimal layout on error.
         try {
-          return await serveOg(`default:v${version}`, () => renderDefaultPolaroidOg(request));
+          return await serveOg(`default:v${version}`, () => renderDefaultBrandOg(request));
         } catch (err) {
-          console.warn("[og] default polaroid render failed, falling back", err);
+          console.warn("[og] default brand render failed, falling back", err);
         }
         return renderDefaultOg(request, url);
       },

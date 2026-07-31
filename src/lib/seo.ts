@@ -6,7 +6,7 @@ export const SITE_FAVICON_HREF = `${SITE_FAVICON_URL}?v=${SITE_FAVICON_VERSION}`
 export const DEFAULT_DESCRIPTION =
   "See what's happening in osu!mania with live scores, country rankings, top plays, map stats, player profiles, and replays.";
 
-export const OG_IMAGE_VERSION = "32";
+export const OG_IMAGE_VERSION = "36";
 
 /* Builds the og:image URL. The image itself only needs title + country —
    the description stays in the HTML `<meta>` for social-card body text
@@ -53,6 +53,12 @@ export function mapsOgImagePath(country: string): string {
 
 export function replayOgImagePath(scoreId: number): string {
   return kindOgImagePath("replay", { scoreId: String(scoreId) });
+}
+
+/* Pull permalink OG: the pulled maniacard rendered at its minted tier with a
+   "pulled by" footer. 720x1080 portrait, like the maniacard OG. */
+export function pullOgImagePath(ownerId: number, cardId: number): string {
+  return kindOgImagePath("pull", { owner: String(ownerId), card: String(cardId) });
 }
 
 export const DEFAULT_OG_IMAGE_PATH = ogImagePath();

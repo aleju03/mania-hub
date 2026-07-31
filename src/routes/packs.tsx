@@ -36,7 +36,8 @@ import {
   readPendingPack,
   writePendingPack,
 } from "../lib/pack-pending";
-import { fetchServerPackCollectionOwnedIds } from "../lib/pack-wallet-sync";
+import { fetchServerPackCollectionOwnedIds, recordServerPackPulls } from "../lib/pack-wallet-sync";
+import { PackPulse } from "../components/packs/PackPulse";
 import {
   drawPackPlayers,
   fetchPackPlayerScores,
@@ -302,7 +303,7 @@ function PackTypeSelector({
         })}
       </div>
       <div className="mt-4 text-center text-[11px] text-osu-f1">
-        {selectedType.blurb}. +{PACK_OPEN_SHARD_REWARD} shards per pack; recycle dupes for more.
+        {selectedType.blurb}. +{PACK_OPEN_SHARD_REWARD} shards per pack; recycle duplicates for more.
       </div>
     </div>
   );
@@ -489,6 +490,10 @@ function PacksPage() {
         <OsuTriangleBackdrop />
         <div className="relative z-10 flex flex-1 flex-col">
           <PageHeader iconSrc="/images/icons/packs.svg" title="Maniacard packs" />
+          {/* Ambient side rails (live pull ticker + your-card fun fact).
+              Stays mounted and merely hides during the reveal: unmounting
+              would reset the feed and replay its whole cascade afterwards. */}
+          <PackPulse viewerId={auth.viewer?.id ?? null} hidden={phase === "reveal"} />
 
           <div className="mx-auto w-full max-w-[960px] flex-1 px-4 py-8 sm:px-5 sm:py-12">
             {wallet && phase !== "reveal" && (
@@ -607,6 +612,23 @@ function PacksPage() {
                         }}
                         onComplete={(pulls, handoff) => {
                           clearPendingPack();
+                          /* Log the opened pack into the community pull feed.
+                             Fire-and-forget: the reveal is already done and
+                             the wallet is the source of truth either way. */
+                          if (auth.viewer && pulls.length > 0) {
+                            void recordServerPackPulls({
+                              data: {
+                                packType: selectedType.id,
+                                cards: pulls.map((pull) => ({
+                                  userId: pull.player.user.id,
+                                  username: pull.player.user.username,
+                                  countryCode: pull.player.user.country_code,
+                                  tier: pull.tier,
+                                  isNew: pull.isNew,
+                                })),
+                              },
+                            }).catch(() => {});
+                          }
                           setRevealed(pulls);
                           setSummaryFlyFrom(handoff?.sourceRects ?? null);
                           setPhase("summary");

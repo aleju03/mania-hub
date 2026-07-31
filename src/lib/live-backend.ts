@@ -1816,6 +1816,87 @@ export async function warmLivePackPlayers(userIds: number[]): Promise<void> {
   });
 }
 
+export interface LivePackCardStats {
+  userId: number;
+  owners: number;
+  copies: number;
+}
+
+export interface LivePackPulledStats {
+  userId: number;
+  owners: number;
+  copies: number;
+  pullEvents7d: number;
+  lastPulledAt: number | null;
+}
+
+export interface LivePackPullFeedEntry {
+  id: number;
+  ownerUserId: number;
+  ownerUsername: string;
+  cardUserId: number;
+  cardUsername: string;
+  cardCountryCode: string;
+  cardAvatarUrl: string | null;
+  tier: string | null;
+  packType: string;
+  isNew: boolean;
+  isFirstGlobal: boolean;
+  pulledAt: number;
+}
+
+/* Community ownership counts for a hand of cards ("owned by N collectors"). */
+export async function fetchLivePackCardStats(userIds: number[]): Promise<LivePackCardStats[]> {
+  const uniqueUserIds = [...new Set(userIds)]
+    .filter((id) => Number.isInteger(id) && id > 0)
+    .slice(0, 10);
+  if (uniqueUserIds.length === 0) return [];
+  const body = await fetchLiveJson<{ cards?: LivePackCardStats[] }>(
+    `/api/packs/card-stats?ids=${uniqueUserIds.join(",")}`,
+  );
+  return Array.isArray(body.cards) ? body.cards : [];
+}
+
+/* How the community holds one player's own card ("your card got pulled"). */
+export async function fetchLivePackPulledStats(userId: number): Promise<LivePackPulledStats> {
+  return fetchLiveJson(`/api/packs/pulled-stats/${userId}`);
+}
+
+export interface LiveSharedPackCard {
+  owner: { userId: number; username: string };
+  card: {
+    userId: number;
+    username: string;
+    avatarUrl: string;
+    countryCode: string;
+    tier: string | null;
+    tierLabel: string | null;
+    skills: unknown | null;
+    pp: number;
+    globalRank: number;
+    copies: number;
+    firstPulledAt: number;
+  };
+  owners: number;
+}
+
+/* One owned card as a shareable artifact: backs the /pull/{owner}/{card}
+   permalink page. Throws on 404 (card recycled away or never synced). */
+export async function fetchLivePackSharedCard(ownerId: number, cardId: number): Promise<LiveSharedPackCard> {
+  return fetchLiveJson(`/api/packs/pulled-card/${Math.floor(ownerId)}/${Math.floor(cardId)}`);
+}
+
+/* The public pull feed: notable-only by default (high mints and first-ever
+   pulls); includeAll pulls in everything for the ambient live ticker. */
+export async function fetchLivePackRecentPulls(
+  limit = 20,
+  options?: { includeAll?: boolean },
+): Promise<LivePackPullFeedEntry[]> {
+  const query = `limit=${Math.max(1, Math.floor(limit))}${options?.includeAll ? "&all=1" : ""}`;
+  const body = await fetchLiveJson<{ pulls?: LivePackPullFeedEntry[] }>(`/api/packs/recent-pulls?${query}`);
+  return Array.isArray(body.pulls) ? body.pulls : [];
+}
+
 export function openLiveEventSource(country: string, options?: { observe?: boolean }): EventSource | null {
   const base = getLiveBackendUrl();
   if (!base || typeof EventSource === "undefined") return null;

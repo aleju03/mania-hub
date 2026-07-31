@@ -230,7 +230,7 @@ export function PackSummary({ cards, onOpenAnother, reducedMotion, flyFrom = nul
         {newCount > 0
           ? `${newCount} new card${newCount === 1 ? "" : "s"} added to your collection.`
           : "All duplicates."}
-        {dupeShards > 0 && ` Dupes worth ${dupeShards} shard${dupeShards === 1 ? "" : "s"} if recycled.`}
+        {dupeShards > 0 && ` Duplicates worth ${dupeShards} shard${dupeShards === 1 ? "" : "s"} if recycled.`}
       </div>
 
       <CardSpotlight

@@ -719,6 +719,8 @@ async function seedAnalysis(
   beatmapId: number,
   options: {
     msdValues?: Record<string, number>;
+    /** Raw tail-aware calc values (stored unblended, as the sweep writes them). */
+    msdLnValues?: Record<string, number>;
     lnRatio?: number;
     vibro?: boolean;
     rawDan?: number;
@@ -733,8 +735,8 @@ async function seedAnalysis(
     db,
     `insert or replace into beatmap_chart_analysis
        (beatmap_id, analysis_version, status, key_count, primary_label, primary_family, raw_dan, msd_overall,
-        classification_json, msd_json, computed_at, updated_at)
-     values (?, ?, 'ready', 4, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        classification_json, msd_json, msd_ln_json, computed_at, updated_at)
+     values (?, ?, 'ready', 4, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       beatmapId,
       CHART_ANALYSIS_VERSION,
@@ -754,6 +756,7 @@ async function seedAnalysis(
         clusterCategory: options.clusterCategory ?? null,
       }),
       options.msdValues ? json({ etternaVersion: "0.72.3", values: options.msdValues }) : null,
+      options.msdLnValues ? json({ etternaVersion: "0.72.3", values: options.msdLnValues }) : null,
       now,
       now,
     ],
@@ -862,6 +865,60 @@ describe("map search primary derivation", () => {
 
     const danScoped = await getMapSearchPage(db, { ...baseQuery(), danMin: 10, danMax: 10 });
     expect(danScoped.items.map((item) => item.beatmapId)).toEqual([2]);
+  });
+});
+
+describe("map search LN-adjusted MSD", () => {
+  it("carries the blended msdLn on bulk rows and diffs, so detail surfaces never flicker", async () => {
+    const db = await makeDb();
+    // Hold-bearing 4K chart: the sweep stored the raw tail-aware calc, the
+    // entry must carry the keymode-blended (0.1 for 4K) display values.
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, primary: "stream", patterns: { stream: 1 } });
+    await seedAnalysis(db, 1, {
+      lnRatio: 0.3,
+      msdValues: { Overall: 20, Stream: 18 },
+      msdLnValues: { Overall: 24, Stream: 22 },
+    });
+    // Rice chart: no tail calc, msdLn stays null.
+    await seedMap(db, { beatmapId: 2, beatmapsetId: 20, primary: "jack", patterns: { jack: 1 } });
+    await seedAnalysis(db, 2, { lnRatio: 0.01, msdValues: { Overall: 15, JackSpeed: 15 } });
+    // Tail calc present but identical to base (holds too sparse to matter):
+    // blending changes nothing, so the redundant readout is suppressed.
+    await seedMap(db, { beatmapId: 3, beatmapsetId: 30, primary: "tech", patterns: { tech: 1 } });
+    await seedAnalysis(db, 3, {
+      lnRatio: 0.05,
+      msdValues: { Overall: 17, Technical: 17 },
+      msdLnValues: { Overall: 17, Technical: 17 },
+    });
+    await buildAll(db);
+
+    const all = await getMapSearchPage(db, baseQuery());
+    const byId = new Map(all.items.map((item) => [item.beatmapId, item]));
+    expect(byId.get(1)?.msdLn?.Overall).toBeCloseTo(20.4, 5);
+    expect(byId.get(1)?.msdLn?.Stream).toBeCloseTo(18.4, 5);
+    expect(byId.get(1)?.diffs[0]?.msdLn?.Overall).toBeCloseTo(20.4, 5);
+    expect(byId.get(2)?.msdLn).toBeNull();
+    expect(byId.get(3)?.msdLn).toBeNull();
+
+    // The single-map detail entry agrees with the bulk row.
+    const detail = await getMapSearchSetEntry(db, 1);
+    expect(detail?.msdLn?.Overall).toBeCloseTo(20.4, 5);
+  });
+
+  it("serves a sweep-updated tail calc on the detail entry before the index copy refreshes", async () => {
+    const db = await makeDb();
+    await seedMap(db, { beatmapId: 1, beatmapsetId: 10, primary: "stream", patterns: { stream: 1 } });
+    await seedAnalysis(db, 1, { lnRatio: 0.3, msdValues: { Overall: 20, Stream: 18 } });
+    await buildAll(db);
+    expect((await getMapSearchSetEntry(db, 1))?.msdLn).toBeNull();
+
+    // The LN sweep updates the analysis row in place, index row untouched.
+    await exec(
+      db,
+      "update beatmap_chart_analysis set msd_ln_json = json(?) where beatmap_id = 1",
+      [json({ etternaVersion: "0.72.3", values: { Overall: 24, Stream: 22 } })],
+    );
+    expect((await getMapSearchSetEntry(db, 1))?.msdLn?.Overall).toBeCloseTo(20.4, 5);
   });
 });
 

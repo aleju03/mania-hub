@@ -26,7 +26,12 @@ const FARMED_SINGLE_PLAYER_PP_MIN = 500;
 // A speed mod counts as a map's dominant farm mod when more than this share of
 // the farming roster used it. Below a strict majority because, on farm maps,
 // 40%+ DT among all farmers (DT vs nomod) already reads as "this is DT farm".
+// This only drives the card badge; the DT/HT filters use the count below.
 const FARMED_DOMINANT_MOD_SHARE = 0.4;
+// The DT/HT filter matches any map with at least this many kept scores using
+// the mod. Dominance is deliberately not required: HT-dominant maps barely
+// exist, so a share rule left the HT filter nearly empty.
+const FARMED_MOD_FILTER_MIN_SCORES = 2;
 const USER_FAVOURITES_MAX_PAGES = 10;
 const GLOBAL_MAPS_REFRESH_DEBOUNCE_MS = 10 * 60_000;
 const MAPS_FARMED_OVERLAY_META_PREFIX = "maps_farmed_overlay_updated_at:";
@@ -1977,6 +1982,14 @@ export interface GlobalFarmedBoardEntry {
 const GLOBAL_FARMED_MOD_FLAG_DT = 1;
 const GLOBAL_FARMED_MOD_FLAG_HT = 2;
 
+// Same bucketing as the dominant/count loops: DT wins when both bits are set,
+// so a combo can never count for both filters.
+function globalFarmedFlagsMatchMod(flags: number, modFlag: number): boolean {
+  const isDt = (flags & GLOBAL_FARMED_MOD_FLAG_DT) !== 0;
+  if (modFlag === GLOBAL_FARMED_MOD_FLAG_DT) return isDt;
+  return !isDt && (flags & GLOBAL_FARMED_MOD_FLAG_HT) !== 0;
+}
+
 interface GlobalFarmedBoard {
   generation: string;
   // Response stamps captured from the payload this board was built from.
@@ -2658,6 +2671,9 @@ interface GlobalFarmedBoardRanked {
   overrideEntry?: StoredMapsFarmedEntry;
   /** Players meeting the pp filter — a prefix, since players sort by pp desc. */
   keptCount: number;
+  /** GLOBAL_FARMED_MOD_FLAG_* when a DT/HT filter is active: materialize only
+   * that mod's players out of the kept prefix. 0 = take the prefix as-is. */
+  modFlag: number;
   playerCount: number;
   avgPp: number;
   maxPp: number;
@@ -2723,16 +2739,43 @@ function filterSortGlobalFarmedBoard(board: GlobalFarmedBoard, query: MapsPageQu
       }
     }
 
-    if (query.mod !== "all") {
-      if (query.mod === "dt" && dominantMod !== "DT") continue;
-      if (query.mod === "ht" && dominantMod !== "HT") continue;
-      if (query.mod !== "dt" && query.mod !== "ht" && dominantMod !== null) continue;
+    if (query.mod === "dt" || query.mod === "ht") {
+      const modCount = query.mod === "dt" ? dtCount : htCount;
+      if (modCount < FARMED_MOD_FILTER_MIN_SCORES) continue;
+      // The page shows only this mod's scores, so aggregates come from that
+      // subset; only maps that pass the filter pay this second scan.
+      const modFlag = query.mod === "dt" ? GLOBAL_FARMED_MOD_FLAG_DT : GLOBAL_FARMED_MOD_FLAG_HT;
+      let modPpSum = 0;
+      let modMaxPp = 0;
+      let modLatest = 0;
+      for (let i = start; i < start + kept; i++) {
+        if (!globalFarmedFlagsMatchMod(modsFlags[modsIdx[i]], modFlag)) continue;
+        modPpSum += pps[i];
+        if (pps[i] > modMaxPp) modMaxPp = pps[i];
+        const played = playedAtMs[i];
+        if (played > modLatest) modLatest = played;
+      }
+      ranked.push({
+        beatmapId: entry.beatmapId,
+        boardIndex,
+        keptCount: kept,
+        modFlag,
+        playerCount: modCount,
+        avgPp: modPpSum / modCount,
+        maxPp: modMaxPp,
+        dominantMod: query.mod === "dt" ? "DT" : "HT",
+        latestPlayedAtMs: modLatest,
+        stars: meta.difficultyRating,
+      });
+      continue;
     }
+    if (query.mod === "nm" && dominantMod !== null) continue;
 
     ranked.push({
       beatmapId: entry.beatmapId,
       boardIndex,
       keptCount: kept,
+      modFlag: 0,
       playerCount: kept,
       avgPp: kept > 0 ? ppSum / kept : 0,
       maxPp,
@@ -2762,19 +2805,34 @@ function filterSortGlobalFarmedBoard(board: GlobalFarmedBoard, query: MapsPageQu
     }
     const keptPlayers = overrideEntry.players.slice(0, kept);
     const maxPp = keptPlayers[0]?.pp ?? 0;
+    if (query.mod === "dt" || query.mod === "ht") {
+      const modPlayers = filterMapsPlayersBySpeedMod(keptPlayers, query.mod);
+      if (modPlayers.length < FARMED_MOD_FILTER_MIN_SCORES) continue;
+      ranked.push({
+        beatmapId: overrideEntry.beatmapId,
+        boardIndex: -1,
+        overrideEntry: { ...overrideEntry, players: modPlayers },
+        keptCount: modPlayers.length,
+        modFlag: 0,
+        playerCount: modPlayers.length,
+        avgPp: modPlayers.reduce((sum, player) => sum + player.pp, 0) / modPlayers.length,
+        maxPp: modPlayers[0].pp,
+        dominantMod: query.mod === "dt" ? "DT" : "HT",
+        latestPlayedAtMs: getLatestStoredFarmedPlayTime({ ...overrideEntry, players: modPlayers }),
+        stars: meta.difficultyRating,
+      });
+      continue;
+    }
     if (kept < 2 && maxPp < FARMED_SINGLE_PLAYER_PP_MIN) continue;
     const dominantMod = getDominantStoredMapsSpeedMod(keptPlayers);
-    if (query.mod !== "all") {
-      if (query.mod === "dt" && dominantMod !== "DT") continue;
-      if (query.mod === "ht" && dominantMod !== "HT") continue;
-      if (query.mod !== "dt" && query.mod !== "ht" && dominantMod !== null) continue;
-    }
+    if (query.mod === "nm" && dominantMod !== null) continue;
 
     ranked.push({
       beatmapId: overrideEntry.beatmapId,
       boardIndex: -1,
       overrideEntry,
       keptCount: kept,
+      modFlag: 0,
       playerCount: kept,
       avgPp: kept > 0 ? keptPlayers.reduce((sum, player) => sum + player.pp, 0) / kept : 0,
       maxPp,
@@ -2817,8 +2875,9 @@ function materializeGlobalFarmedBoardEntry(board: GlobalFarmedBoard, ranked: Glo
   }
   const entry = board.entries[ranked.boardIndex];
   const players: StoredMapsFarmedPlayer[] = [];
-  const materializeCount = Math.min(ranked.keptCount, MAPS_PAGE_PREVIEW_PLAYERS);
-  for (let i = entry.start; i < entry.start + materializeCount; i++) {
+  const materializeCount = Math.min(ranked.playerCount, MAPS_PAGE_PREVIEW_PLAYERS);
+  for (let i = entry.start; i < entry.start + ranked.keptCount && players.length < materializeCount; i++) {
+    if (ranked.modFlag !== 0 && !globalFarmedFlagsMatchMod(board.modsFlags[board.modsIdx[i]], ranked.modFlag)) continue;
     const playedMs = board.playedAtMs[i];
     const scoreId = board.scoreIds[i];
     players.push({
@@ -3118,31 +3177,36 @@ function filterSortMapsPageItems(value: CountryMapsData, query: MapsPageQuery): 
 }
 
 function filterSortFarmedMaps(items: MapsFarmedEntry[], query: MapsPageQuery): MapsFarmedEntry[] {
+  const modFilter = query.mod === "dt" || query.mod === "ht" ? query.mod : null;
   return items
     .map((entry) => {
-      if (query.pp <= 0) return entry;
-      const players = entry.players.filter((player) => player.pp >= query.pp);
-      const maxPp = Math.max(...players.map((player) => player.pp), 0);
-      if (players.length < 2 && maxPp < FARMED_SINGLE_PLAYER_PP_MIN) return null;
+      if (query.pp <= 0 && !modFilter) return entry;
+      let players = query.pp > 0 ? entry.players.filter((player) => player.pp >= query.pp) : entry.players;
+      if (modFilter) {
+        players = filterMapsPlayersBySpeedMod(players, modFilter);
+        if (players.length < FARMED_MOD_FILTER_MIN_SCORES) return null;
+      } else {
+        const keptMaxPp = Math.max(...players.map((player) => player.pp), 0);
+        if (players.length < 2 && keptMaxPp < FARMED_SINGLE_PLAYER_PP_MIN) return null;
+      }
       return {
         ...entry,
         players,
         playerCount: players.length,
         avgPp: players.reduce((sum, player) => sum + player.pp, 0) / players.length,
-        maxPp,
-        // pp filter narrows the roster, so recompute the dominant over the kept players.
-        dominantMod: getDominantMapsSpeedMod(players),
+        maxPp: Math.max(...players.map((player) => player.pp), 0),
+        // The pp/mod filters narrow the roster, so recompute over the kept
+        // players; a DT/HT page keeps only that mod's scores, so it is the
+        // dominant by construction.
+        dominantMod: modFilter ? modFilter === "dt" ? "DT" as const : "HT" as const : getDominantMapsSpeedMod(players),
       };
     })
     .filter((entry): entry is MapsFarmedEntry => {
       if (entry === null) return false;
       if (!matchesMapsKeyFilter(entry.cs, query.key)) return false;
       if (!matchesMapsSearch(query.q, [entry.title, entry.artist, entry.creator, entry.version])) return false;
-      if (query.mod === "all") return true;
-      const dominant = resolveStoredDominantMod(entry.dominantMod, () => getDominantMapsSpeedMod(entry.players));
-      if (query.mod === "dt") return dominant === "DT";
-      if (query.mod === "ht") return dominant === "HT";
-      return dominant === null;
+      if (query.mod !== "nm") return true;
+      return resolveStoredDominantMod(entry.dominantMod, () => getDominantMapsSpeedMod(entry.players)) === null;
     })
     .sort((a, b) => {
       const flip = query.dir === "asc" ? -1 : 1;
@@ -3173,12 +3237,20 @@ async function filterSortStoredFarmedMapsForPage(
   query: MapsPageQuery,
 ): Promise<StoredMapsFarmedEntry[]> {
   const metadata = await readMapsFarmedPageMetadataByIds(db, items.map((entry) => entry.beatmapId));
+  const modFilter = query.mod === "dt" || query.mod === "ht" ? query.mod : null;
   return items
     .map((entry) => {
-      if (query.pp <= 0) return entry;
-      const players = entry.players.filter((player) => Number(player.pp ?? 0) >= query.pp);
-      const maxPp = Math.max(...players.map((player) => Number(player.pp ?? 0)), 0);
-      if (players.length < 2 && maxPp < FARMED_SINGLE_PLAYER_PP_MIN) return null;
+      if (query.pp <= 0 && !modFilter) return entry;
+      let players = query.pp > 0
+        ? entry.players.filter((player) => Number(player.pp ?? 0) >= query.pp)
+        : entry.players;
+      if (modFilter) {
+        players = filterMapsPlayersBySpeedMod(players, modFilter);
+        if (players.length < FARMED_MOD_FILTER_MIN_SCORES) return null;
+      } else {
+        const keptMaxPp = Math.max(...players.map((player) => Number(player.pp ?? 0)), 0);
+        if (players.length < 2 && keptMaxPp < FARMED_SINGLE_PLAYER_PP_MIN) return null;
+      }
       return {
         ...entry,
         players,
@@ -3186,9 +3258,11 @@ async function filterSortStoredFarmedMapsForPage(
         avgPp: players.length > 0
           ? players.reduce((sum, player) => sum + Number(player.pp ?? 0), 0) / players.length
           : 0,
-        maxPp,
-        // pp filter narrows the roster, so recompute the dominant over the kept players.
-        dominantMod: getDominantStoredMapsSpeedMod(players),
+        maxPp: Math.max(...players.map((player) => Number(player.pp ?? 0)), 0),
+        // The pp/mod filters narrow the roster, so recompute over the kept
+        // players; a DT/HT page keeps only that mod's scores, so it is the
+        // dominant by construction.
+        dominantMod: modFilter ? modFilter === "dt" ? "DT" as const : "HT" as const : getDominantStoredMapsSpeedMod(players),
       };
     })
     .filter((entry): entry is StoredMapsFarmedEntry => {
@@ -3197,11 +3271,8 @@ async function filterSortStoredFarmedMapsForPage(
       if (!meta) return false;
       if (!matchesMapsKeyFilter(meta.cs, query.key)) return false;
       if (!matchesMapsSearch(query.q, [meta.title, meta.artist, meta.creator, meta.version])) return false;
-      if (query.mod === "all") return true;
-      const dominant = resolveStoredDominantMod(entry.dominantMod, () => getDominantStoredMapsSpeedMod(entry.players));
-      if (query.mod === "dt") return dominant === "DT";
-      if (query.mod === "ht") return dominant === "HT";
-      return dominant === null;
+      if (query.mod !== "nm") return true;
+      return resolveStoredDominantMod(entry.dominantMod, () => getDominantStoredMapsSpeedMod(entry.players)) === null;
     })
     .sort((a, b) => {
       const flip = query.dir === "asc" ? -1 : 1;
@@ -3298,6 +3369,17 @@ function resolveStoredDominantMod(
   recompute: () => "DT" | "HT" | null,
 ): "DT" | "HT" | null {
   return stored === undefined ? recompute() : stored;
+}
+
+// A DT/HT-filtered page shows only the scores set with that mod, so each card's
+// roster/aggregates come from this subset (see FARMED_MOD_FILTER_MIN_SCORES).
+// DT buckets NC with DT, mirroring the dominant-mod counting above.
+function filterMapsPlayersBySpeedMod<T extends { mods?: string[] | null }>(players: T[], mod: "dt" | "ht"): T[] {
+  return players.filter((player) => {
+    const mods = player.mods ?? [];
+    const isDt = mods.includes("DT") || mods.includes("NC");
+    return mod === "dt" ? isDt : !isDt && mods.includes("HT");
+  });
 }
 
 function getDominantMapsSpeedMod(players: MapsFarmedEntry["players"]): "DT" | "HT" | null {

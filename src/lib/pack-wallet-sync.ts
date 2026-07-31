@@ -168,6 +168,66 @@ export const fetchServerPackCollectionOwnedIds = createServerFn({ method: "GET" 
   },
 );
 
+export interface PackPullRecordCard {
+  userId: number;
+  username: string;
+  countryCode: string;
+  tier: ManiaCardTier | null;
+  isNew: boolean;
+}
+
+/* Logs a just-opened pack into the backend's community pull feed. The owner
+   identity always comes from the login cookie; a tampered client can only
+   ever log pulls as itself, and the data is social flavor, never economy. */
+export const recordServerPackPulls = createServerFn({ method: "POST" })
+  .validator((input: { packType?: unknown; cards?: unknown }) => {
+    const packType =
+      typeof input?.packType === "string" && /^[a-z_]{1,24}$/.test(input.packType) ? input.packType : null;
+    const cards: PackPullRecordCard[] = (Array.isArray(input?.cards) ? input.cards : [])
+      .slice(0, 10)
+      .map((raw: unknown) => {
+        const card = raw as Partial<PackPullRecordCard> | null;
+        const userId = Math.floor(Number(card?.userId) || 0);
+        if (userId <= 0 || typeof card?.username !== "string" || !card.username) return null;
+        return {
+          userId,
+          username: card.username.slice(0, 40),
+          countryCode: typeof card.countryCode === "string" ? card.countryCode.slice(0, 2) : "",
+          tier: typeof card.tier === "string" ? (card.tier as ManiaCardTier) : null,
+          isNew: card.isNew === true,
+        };
+      })
+      .filter((card): card is PackPullRecordCard => card !== null);
+    if (!packType || cards.length === 0) throw new Error("Invalid pack pull record.");
+    return { packType, cards };
+  })
+  .handler(async ({ data }): Promise<{ recorded: number } | null> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const { readCurrentAuth } = await import("./auth-server");
+    const auth = await readCurrentAuth();
+    if (!auth.viewer) return null;
+    const base = process.env.LIVE_BACKEND_URL?.trim().replace(/\/$/, "");
+    if (!base) return null;
+    const headers: HeadersInit = { "content-type": "application/json" };
+    if (process.env.LIVE_ADMIN_TOKEN) {
+      headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+    }
+    const response = await fetch(`${base}/api/packs/pulls`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        userId: auth.viewer.id,
+        username: auth.viewer.username,
+        packType: data.packType,
+        cards: data.cards,
+      }),
+    });
+    if (!response.ok) throw new Error(`Pack pull record failed (${response.status}).`);
+    const body = (await response.json()) as { recorded?: unknown };
+    return { recorded: Number(body.recorded) || 0 };
+  });
+
 export type ServerPackRecycleMode = "duplicates" | "whole" | "all_duplicates" | "whole_matching";
 
 export const recycleServerPackCollection = createServerFn({ method: "POST" })

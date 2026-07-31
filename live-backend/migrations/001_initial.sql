@@ -636,6 +636,33 @@ create index if not exists idx_pack_collection_owner_tier
 create index if not exists idx_pack_collection_owner_username
   on pack_collection_cards(owner_user_id, username);
 
+-- Append-only pack pull log: the community layer (live feed, per-card
+-- ownership counts, "your card got pulled" stats). Self-reported by clients,
+-- so it never feeds the economy. Usernames are frozen at pull time and
+-- overlaid with the live users row at read time.
+create table if not exists pack_pull_events (
+  id integer primary key autoincrement,
+  owner_user_id integer not null,
+  owner_username text not null,
+  card_user_id integer not null,
+  card_username text not null,
+  card_country_code text not null default '',
+  tier text,
+  pack_type text not null,
+  is_new integer not null default 0,
+  is_first_global integer not null default 0,
+  notable integer not null default 0,
+  pulled_at integer not null
+);
+create index if not exists idx_pack_pull_events_card_time
+  on pack_pull_events(card_user_id, pulled_at desc);
+create index if not exists idx_pack_pull_events_owner_time
+  on pack_pull_events(owner_user_id, pulled_at desc);
+create index if not exists idx_pack_pull_events_time
+  on pack_pull_events(pulled_at);
+create index if not exists idx_pack_pull_events_notable_time
+  on pack_pull_events(pulled_at desc) where notable = 1;
+
 -- Discord bot: live-feed channel subscriptions. A row means "post events of
 -- feed_type for `country` into Discord channel_id". The unique key keeps a
 -- channel from being subscribed twice to the same feed/country pair.

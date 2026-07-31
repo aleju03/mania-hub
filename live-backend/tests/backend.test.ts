@@ -5111,7 +5111,7 @@ describe("live backend", () => {
     const { db, queue } = await setup();
     const now = "2026-05-12T12:00:00.000Z";
 
-    for (const setId of [40, 50, 60]) {
+    for (const setId of [40, 50, 60, 70, 80]) {
       await exec(
         db,
         `insert into maps_beatmapsets
@@ -5146,6 +5146,17 @@ describe("live backend", () => {
       ...Array.from({ length: 90 }, (_, i) => player(6000 + i, ["DT"], 750 - i)),
       ...Array.from({ length: 110 }, (_, i) => player(7000 + i, [], 300)),
     ];
+    // bm71: only 2 HT scores among 200 - far from dominant, but enough for the
+    // count-based HT filter.
+    const bm71 = [
+      ...Array.from({ length: 2 }, (_, i) => player(8000 + i, ["HT"], 400 - i)),
+      ...Array.from({ length: 198 }, (_, i) => player(8100 + i, [], 300)),
+    ];
+    // bm81: a single HT score does not qualify.
+    const bm81 = [
+      player(9000, ["HT"], 400),
+      ...Array.from({ length: 199 }, (_, i) => player(9100 + i, [], 300)),
+    ];
 
     await exec(
       db,
@@ -5156,6 +5167,8 @@ describe("live backend", () => {
           { beatmapId: 41, playerCount: bm41.length, avgPp: 0, maxPp: 700, players: bm41 },
           { beatmapId: 51, playerCount: bm51.length, avgPp: 0, maxPp: 800, players: bm51 },
           { beatmapId: 61, playerCount: bm61.length, avgPp: 0, maxPp: 750, players: bm61 },
+          { beatmapId: 71, playerCount: bm71.length, avgPp: 0, maxPp: 400, players: bm71 },
+          { beatmapId: 81, playerCount: bm81.length, avgPp: 0, maxPp: 400, players: bm81 },
         ],
         mostPlayed: [], favourites: [], favouritesByPlayer: [], beatmapsetsPool: [],
       }), now, now],
@@ -5182,16 +5195,52 @@ describe("live backend", () => {
     // 45% DT is over the 40% threshold (but under a strict majority), so it flags DT.
     expect(map61?.dominantMod).toBe("DT");
 
-    // The mod filter (full-population path) agrees with the badge.
+    // The mod filter matches on score count (2+), not the badge: bm41's 85 DT
+    // scores qualify it for the DT filter even though its badge is null. A
+    // filtered page scopes each card to that mod's scores only.
+    type ModFilteredItem = {
+      beatmapId: number;
+      playerCount: number;
+      avgPp: number;
+      maxPp: number;
+      dominantMod?: string | null;
+      players: Array<{ mods: string[] }>;
+    };
     const dtFiltered = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query("dt"));
-    const dtIds = (dtFiltered.value?.items ?? []).map((it) => (it as { beatmapId: number }).beatmapId);
+    const dtItems = (dtFiltered.value?.items ?? []) as ModFilteredItem[];
+    const dtIds = dtItems.map((it) => it.beatmapId);
+    expect(dtIds).toContain(41);
     expect(dtIds).toContain(51);
     expect(dtIds).toContain(61);
-    expect(dtIds).not.toContain(41);
+    const dt41 = dtItems.find((it) => it.beatmapId === 41);
+    expect(dt41?.playerCount).toBe(85);
+    expect(dt41?.dominantMod).toBe("DT");
+    expect(dt41?.players.every((player) => player.mods.includes("DT"))).toBe(true);
 
+    // HT matches any map with 2+ HT scores (bm71); one lone HT score (bm81)
+    // is not enough, and pure DT/nomod rosters never show.
+    const htFiltered = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query("ht"));
+    const htItems = (htFiltered.value?.items ?? []) as ModFilteredItem[];
+    const htIds = htItems.map((it) => it.beatmapId);
+    expect(htIds).toContain(71);
+    expect(htIds).not.toContain(81);
+    expect(htIds).not.toContain(41);
+    expect(htIds).not.toContain(51);
+    expect(htIds).not.toContain(61);
+    const ht71 = htItems.find((it) => it.beatmapId === 71);
+    expect(ht71?.playerCount).toBe(2);
+    expect(ht71?.avgPp).toBeCloseTo(399.5);
+    expect(ht71?.maxPp).toBe(400);
+    expect(ht71?.dominantMod).toBe("HT");
+    expect(ht71?.players).toHaveLength(2);
+    expect(ht71?.players.every((player) => player.mods.includes("HT"))).toBe(true);
+
+    // NM still means "no dominant speed mod", so mostly-DT maps stay out.
     const noneFiltered = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query("nm"));
     const noneIds = (noneFiltered.value?.items ?? []).map((it) => (it as { beatmapId: number }).beatmapId);
     expect(noneIds).toContain(41);
+    expect(noneIds).toContain(71);
+    expect(noneIds).toContain(81);
     expect(noneIds).not.toContain(51);
     expect(noneIds).not.toContain(61);
   });

@@ -29,6 +29,11 @@ export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | 
   const activityCutoffDay = activityRetentionCutoffDay(config.activityRetentionYears);
   // farm_helper_feedback stores epoch-ms timestamps, so its cutoff is numeric.
   const resolvedFeedbackCutoffMs = Date.now() - RESOLVED_FARM_HELPER_FEEDBACK_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  // pack_pull_events also stores epoch-ms. Ordinary pulls only matter while
+  // recent (7-day "got pulled" counts); notable ones back the feed and keep a
+  // longer tail. Durable ownership counts live in pack_collection_cards.
+  const packPullCutoffMs = Date.now() - PACK_PULL_EVENT_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  const packPullNotableCutoffMs = Date.now() - NOTABLE_PACK_PULL_EVENT_RETENTION_DAYS * 24 * 60 * 60 * 1000;
   const oldReplayVideoJobs = (await exec(
     db,
     "select id from replay_video_exports where status in ('done', 'failed', 'cancelled') and updated_at < ?",
@@ -65,6 +70,8 @@ export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | 
     // retired them drives recs now); active (unresolved) marks are the
     // player's standing preferences and are never pruned.
     farmHelperFeedbackResolved: Number((await exec(db, "delete from farm_helper_feedback where resolved_at is not null and resolved_at < ?", [resolvedFeedbackCutoffMs])).rowsAffected ?? 0),
+    packPullEvents: Number((await exec(db, "delete from pack_pull_events where notable = 0 and pulled_at < ?", [packPullCutoffMs])).rowsAffected ?? 0),
+    packPullEventsNotable: Number((await exec(db, "delete from pack_pull_events where notable = 1 and pulled_at < ?", [packPullNotableCutoffMs])).rowsAffected ?? 0),
     // Slow self-healing refresh: a pruned accent recomputes the next time the
     // avatar shows up in a payload. Also bounds churn from avatar changes.
     avatarAccents: await pruneAvatarAccents(db),
@@ -119,6 +126,11 @@ function daysAgo(days: number): string {
 // feedback list for a couple of seasons, short enough that resolved rows do
 // not accumulate forever alongside the never-pruned active marks.
 export const RESOLVED_FARM_HELPER_FEEDBACK_RETENTION_DAYS = 180;
+
+// Ordinary pack pulls feed only short-window stats; notable ones back the
+// community feed and are rare enough to keep for a year.
+export const PACK_PULL_EVENT_RETENTION_DAYS = 60;
+export const NOTABLE_PACK_PULL_EVENT_RETENTION_DAYS = 365;
 
 export function activityRetentionCutoffDay(retentionYears: number, now = new Date()): string {
   const years = Math.max(1, Math.floor(retentionYears));

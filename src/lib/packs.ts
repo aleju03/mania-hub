@@ -199,7 +199,10 @@ export const PACK_TYPES: PackTypeDef[] = [
     id: "elite",
     name: "Elite",
     artSubtitle: "ELITE PACK",
-    cost: { kind: "shards", amount: 32 },
+    // Premium tiers are deliberately steep: shards flow constantly from
+    // opened packs and recycling, so cheap top-slice packs made the whole
+    // ladder trivial to skip.
+    cost: { kind: "shards", amount: 100 },
     topFraction: 0.1,
     cardCount: 7,
     guaranteesNew: true,
@@ -210,7 +213,7 @@ export const PACK_TYPES: PackTypeDef[] = [
     id: "legend",
     name: "Legend",
     artSubtitle: "LEGEND PACK",
-    cost: { kind: "shards", amount: 60 },
+    cost: { kind: "shards", amount: 250 },
     topFraction: 0.02,
     cardCount: PACK_SIZE,
     guaranteesNew: true,

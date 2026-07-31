@@ -29,6 +29,7 @@ import { enqueueGlobalMapsRefresh, enqueueGlobalMapsRefreshIfDue, enqueueMapsRef
 import { getMapSearchPage, getMapSearchSetEntry, MAP_SEARCH_PATTERNS, MAP_SEARCH_SUB_PATTERNS, type MapSearchQuery, type MapSearchSort } from "../features/map-search.js";
 import { getMapCollection, getMapCollections, getMapCollectionsRotation, rebuildMapCollections } from "../features/map-collections.js";
 import { getPackWallet, listPackCollectionCards, listPackCollectionOwnedUserIds, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
+import { getPackCardStats, getPackPulledStats, getSharedPackCard, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../features/pack-pulls.js";
 import { buildPackCardProfileSnapshot, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, warmProfileSnapshots } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
 import { getSnipesSnapshot } from "../features/snipes.js";
@@ -1285,6 +1286,102 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     sendJson(req, res, ctx, 202, await warmProfileSnapshots(ctx.serveWriteDb ?? ctx.db, ctx.osu, userIds));
+    return true;
+  }
+  if (url.pathname === "/api/packs/pulls") {
+    // Server-to-server only, like the wallet sync: the frontend's server
+    // function authenticates the osu! login cookie and forwards the verified
+    // viewer identity, so an event can only ever be logged as yourself.
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
+    const ownerUserId = Math.floor(Number(body.userId) || 0);
+    const ownerUsername = typeof body.username === "string" ? body.username : "";
+    if (ownerUserId <= 0 || !ownerUsername) {
+      sendJson(req, res, ctx, 400, { error: "invalid_pull_owner" });
+      return true;
+    }
+    sendJson(
+      req,
+      res,
+      ctx,
+      202,
+      await recordPackPullEvents(ctx.serveWriteDb ?? ctx.db, ownerUserId, ownerUsername, body.packType, body.cards),
+    );
+    return true;
+  }
+  if (url.pathname === "/api/packs/card-stats") {
+    // Community ownership counts for a hand of revealed cards. Public and
+    // cheap (one grouped indexed count over pack_collection_cards).
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    if (!checkRate(req, res, ctx, "publicApi")) return true;
+    const ids = (url.searchParams.get("ids") ?? "")
+      .split(",")
+      .map((raw) => Math.floor(Number(raw) || 0))
+      .filter((id) => id > 0)
+      .slice(0, PACK_PULL_MAX_CARDS_PER_EVENT);
+    if (ids.length === 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user_ids" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { cards: await getPackCardStats(ctx.db, ids) });
+    return true;
+  }
+  const packPulledStatsMatch = url.pathname.match(/^\/api\/packs\/pulled-stats\/(\d+)$/);
+  if (packPulledStatsMatch) {
+    // How the community holds one player's card ("your card got pulled").
+    // Public aggregate counts, nothing per-viewer in the response.
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    if (!checkRate(req, res, ctx, "publicApi")) return true;
+    const cardUserId = Number(packPulledStatsMatch[1]);
+    if (!Number.isInteger(cardUserId) || cardUserId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, await getPackPulledStats(ctx.db, cardUserId));
+    return true;
+  }
+  const packPulledCardMatch = url.pathname.match(/^\/api\/packs\/pulled-card\/(\d+)\/(\d+)$/);
+  if (packPulledCardMatch) {
+    // One owned card as a shareable artifact: backs the /pull/{owner}/{card}
+    // permalink page and its OG image. Public; reads the durable collection
+    // row so the link outlives pull-event retention.
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    if (!checkRate(req, res, ctx, "publicApi")) return true;
+    const shared = await getSharedPackCard(ctx.db, Number(packPulledCardMatch[1]), Number(packPulledCardMatch[2]));
+    if (!shared) {
+      sendJson(req, res, ctx, 404, { error: "pulled_card_not_found" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, shared);
+    return true;
+  }
+  if (url.pathname === "/api/packs/recent-pulls") {
+    // The public pull feed: notable-only by default (high mints and
+    // first-ever pulls); ?all=1 includes every pull for the live ticker.
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    if (!checkRate(req, res, ctx, "publicApi")) return true;
+    const limit = Number(url.searchParams.get("limit")) || 20;
+    const notableOnly = url.searchParams.get("all") !== "1";
+    sendJson(req, res, ctx, 200, { pulls: await listRecentPackPulls(ctx.db, limit, notableOnly) });
     return true;
   }
   const packWalletMatch = url.pathname.match(/^\/api\/pack-wallet\/(\d+)$/);

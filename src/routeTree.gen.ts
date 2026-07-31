@@ -55,6 +55,7 @@ import { Route as PlayerUsernameActivityRouteImport } from './routes/player/$use
 import { Route as PlayerUsernameManiacardRouteImport } from './routes/player/$username/maniacard'
 import { Route as PlayerUsernameRecentRouteImport } from './routes/player/$username/recent'
 import { Route as PlayerUsernameSkillsRouteImport } from './routes/player/$username/skills'
+import { Route as PullOwnerIdCardIdRouteImport } from './routes/pull/$ownerId/$cardId'
 import { Route as VideosIdFilenameRouteImport } from './routes/videos/$id/$filename'
 import { Route as ApiAuthOsuCallbackRouteImport } from './routes/api/auth/osu/callback'
 
@@ -288,6 +289,11 @@ const PlayerUsernameSkillsRoute = PlayerUsernameSkillsRouteImport.update({
   path: '/skills',
   getParentRoute: () => PlayerUsernameRoute,
 } as any)
+const PullOwnerIdCardIdRoute = PullOwnerIdCardIdRouteImport.update({
+  id: '/pull/$ownerId/$cardId',
+  path: '/pull/$ownerId/$cardId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const VideosIdFilenameRoute = VideosIdFilenameRouteImport.update({
   id: '/videos/$id/$filename',
   path: '/videos/$id/$filename',
@@ -346,6 +352,7 @@ export interface FileRoutesByFullPath {
   '/player/$username/maniacard': typeof PlayerUsernameManiacardRoute
   '/player/$username/recent': typeof PlayerUsernameRecentRoute
   '/player/$username/skills': typeof PlayerUsernameSkillsRoute
+  '/pull/$ownerId/$cardId': typeof PullOwnerIdCardIdRoute
   '/videos/$id/$filename': typeof VideosIdFilenameRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
 }
@@ -396,6 +403,7 @@ export interface FileRoutesByTo {
   '/player/$username/maniacard': typeof PlayerUsernameManiacardRoute
   '/player/$username/recent': typeof PlayerUsernameRecentRoute
   '/player/$username/skills': typeof PlayerUsernameSkillsRoute
+  '/pull/$ownerId/$cardId': typeof PullOwnerIdCardIdRoute
   '/videos/$id/$filename': typeof VideosIdFilenameRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
 }
@@ -447,6 +455,7 @@ export interface FileRoutesById {
   '/player/$username/maniacard': typeof PlayerUsernameManiacardRoute
   '/player/$username/recent': typeof PlayerUsernameRecentRoute
   '/player/$username/skills': typeof PlayerUsernameSkillsRoute
+  '/pull/$ownerId/$cardId': typeof PullOwnerIdCardIdRoute
   '/videos/$id/$filename': typeof VideosIdFilenameRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
 }
@@ -499,6 +508,7 @@ export interface FileRouteTypes {
     | '/player/$username/maniacard'
     | '/player/$username/recent'
     | '/player/$username/skills'
+    | '/pull/$ownerId/$cardId'
     | '/videos/$id/$filename'
     | '/api/auth/osu/callback'
   fileRoutesByTo: FileRoutesByTo
@@ -549,6 +559,7 @@ export interface FileRouteTypes {
     | '/player/$username/maniacard'
     | '/player/$username/recent'
     | '/player/$username/skills'
+    | '/pull/$ownerId/$cardId'
     | '/videos/$id/$filename'
     | '/api/auth/osu/callback'
   id:
@@ -599,6 +610,7 @@ export interface FileRouteTypes {
     | '/player/$username/maniacard'
     | '/player/$username/recent'
     | '/player/$username/skills'
+    | '/pull/$ownerId/$cardId'
     | '/videos/$id/$filename'
     | '/api/auth/osu/callback'
   fileRoutesById: FileRoutesById
@@ -644,6 +656,7 @@ export interface RootRouteChildren {
   SkinsIdRoute: typeof SkinsIdRoute
   ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
   ApiAuthOsuRoute: typeof ApiAuthOsuRouteWithChildren
+  PullOwnerIdCardIdRoute: typeof PullOwnerIdCardIdRoute
   VideosIdFilenameRoute: typeof VideosIdFilenameRoute
 }
 
@@ -971,6 +984,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlayerUsernameSkillsRouteImport
       parentRoute: typeof PlayerUsernameRoute
     }
+    '/pull/$ownerId/$cardId': {
+      id: '/pull/$ownerId/$cardId'
+      path: '/pull/$ownerId/$cardId'
+      fullPath: '/pull/$ownerId/$cardId'
+      preLoaderRoute: typeof PullOwnerIdCardIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/videos/$id/$filename': {
       id: '/videos/$id/$filename'
       path: '/videos/$id/$filename'
@@ -1073,6 +1093,7 @@ const rootRouteChildren: RootRouteChildren = {
   SkinsIdRoute: SkinsIdRoute,
   ApiAuthLogoutRoute: ApiAuthLogoutRoute,
   ApiAuthOsuRoute: ApiAuthOsuRouteWithChildren,
+  PullOwnerIdCardIdRoute: PullOwnerIdCardIdRoute,
   VideosIdFilenameRoute: VideosIdFilenameRoute,
 }
 export const routeTree = rootRouteImport

@@ -1,7 +1,10 @@
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
+import { Check, Share2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useAuth } from "#/lib/auth-context";
+import { fetchLivePackCardStats, isLiveBackendConfigured } from "#/lib/live-backend";
 import { getManiaCardTier, MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
 import type { CollectedCard } from "#/lib/pack-collection";
 import { ManiaCardRenderer } from "../player/maniacard3d/ManiaCardRenderer";
@@ -69,7 +72,53 @@ export function CardSpotlight({
   const rendererRef = useRef<ManiaCardRenderer | null>(null);
   const [canvasReady, setCanvasReady] = useState(false);
   const [hiResFallback, setHiResFallback] = useState<string | null>(null);
+  const [ownerCount, setOwnerCount] = useState<number | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
   const reducedMotion = prefersReducedMotion();
+  const viewerId = useAuth().viewer?.id ?? null;
+
+  /* Community context: how many collections hold this card. */
+  useEffect(() => {
+    setOwnerCount(null);
+    const cardUserId = target?.card.userId;
+    if (!cardUserId || !isLiveBackendConfigured()) return;
+    let cancelled = false;
+    void fetchLivePackCardStats([cardUserId])
+      .then((stats) => {
+        if (!cancelled) setOwnerCount(stats[0]?.owners ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [target?.card.userId]);
+
+  useEffect(() => {
+    setShareCopied(false);
+  }, [target?.card.userId]);
+
+  const shareCard = async (card: CollectedCard) => {
+    // Signed-in collectors share the pull itself (/pull/{owner}/{card}: their
+    // minted card, "pulled by them", with an OG embed). Local-only wallets
+    // have no server row to link, so those share the player's card page.
+    const url = viewerId
+      ? `${window.location.origin}/pull/${viewerId}/${card.userId}`
+      : `${window.location.origin}/player/${encodeURIComponent(card.username)}/maniacard`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareCopied(true);
+      window.setTimeout(() => setShareCopied(false), 1600);
+    } catch {
+      // Clipboard can be unavailable (permissions, http); the native share
+      // sheet is the fallback rather than the default so desktop gets the
+      // predictable copy behavior.
+      try {
+        await navigator.share?.({ url, title: `${card.username} maniacard` });
+      } catch {
+        // The user closed the share sheet; nothing to do.
+      }
+    }
+  };
 
   useEffect(() => {
     if (!target) return;
@@ -281,14 +330,37 @@ export function CardSpotlight({
                 {Math.round(card.pp).toLocaleString()}pp
                 {card.globalRank > 0 && <> &middot; #{card.globalRank.toLocaleString()} global</>}
                 {card.copies > 1 && <> &middot; x{card.copies} copies</>}
+                {ownerCount !== null && ownerCount > 0 && (
+                  <> &middot; in {ownerCount.toLocaleString()} {ownerCount === 1 ? "collection" : "collections"}</>
+                )}
               </div>
-              <Link
-                to="/player/$username"
-                params={{ username: card.username }}
-                className="mt-1.5 rounded-full bg-osu-pink px-4 py-1.5 text-[12px] font-bold text-white transition hover:brightness-110"
-              >
-                View profile
-              </Link>
+              <div className="mt-1.5 flex items-center gap-2">
+                <Link
+                  to="/player/$username"
+                  params={{ username: card.username }}
+                  className="rounded-full bg-osu-pink px-4 py-1.5 text-[12px] font-bold text-white transition hover:brightness-110"
+                >
+                  View profile
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => void shareCard(card)}
+                  className="flex items-center gap-1.5 rounded-full bg-osu-b3/80 px-4 py-1.5 text-[12px] font-bold text-white transition hover:bg-osu-b3 cursor-pointer"
+                  aria-label={`Share ${card.username}'s maniacard`}
+                >
+                  {shareCopied ? (
+                    <>
+                      <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
+                      Share
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </motion.div>
         </div>

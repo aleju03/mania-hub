@@ -313,6 +313,7 @@ async function runMigrationPass(target: Db, statements: string[], startedAtIso: 
   await migrateApiRateLimitReservations(target);
   await migratePlayerActivity(target);
   await migratePackCollectionCards(target);
+  await migratePackPullEvents(target);
   await migrateTrackerIndexes(target);
   await migrateSnipePersonalBests(target);
   await migrateUserGoals(target);
@@ -1463,6 +1464,41 @@ async function migratePackCollectionCards(db: Db): Promise<void> {
   await db.execute(`
     create index if not exists idx_pack_collection_owner_username
       on pack_collection_cards(owner_user_id, username)
+  `);
+}
+
+async function migratePackPullEvents(db: Db): Promise<void> {
+  await db.execute(`
+    create table if not exists pack_pull_events (
+      id integer primary key autoincrement,
+      owner_user_id integer not null,
+      owner_username text not null,
+      card_user_id integer not null,
+      card_username text not null,
+      card_country_code text not null default '',
+      tier text,
+      pack_type text not null,
+      is_new integer not null default 0,
+      is_first_global integer not null default 0,
+      notable integer not null default 0,
+      pulled_at integer not null
+    )
+  `);
+  await db.execute(`
+    create index if not exists idx_pack_pull_events_card_time
+      on pack_pull_events(card_user_id, pulled_at desc)
+  `);
+  await db.execute(`
+    create index if not exists idx_pack_pull_events_owner_time
+      on pack_pull_events(owner_user_id, pulled_at desc)
+  `);
+  await db.execute(`
+    create index if not exists idx_pack_pull_events_time
+      on pack_pull_events(pulled_at)
+  `);
+  await db.execute(`
+    create index if not exists idx_pack_pull_events_notable_time
+      on pack_pull_events(pulled_at desc) where notable = 1
   `);
 }
 
