@@ -2310,6 +2310,11 @@ const GLOBAL_FARMED_PROJECTION_MAX_DELTA_MAPS = 5_000;
 // Matches the catch-up ticker cadence: one worker request per tick is the
 // most the delegated flow can make progress on anyway.
 const GLOBAL_FARMED_REPACK_REQUEST_COOLDOWN_MS = 30_000;
+// In-process patch ceiling for repack-delegating processes (~250KB heap per
+// patched map -> ~125MB worst case, vs ~940MB measured at the 5,000 limit).
+// Normal 30s ticker backlogs are a handful of maps; only boot catch-ups and
+// idle gaps exceed this, and those adopt the worker's pack instead.
+const GLOBAL_FARMED_DELEGATED_MAX_DELTA_MAPS = 500;
 
 function globalFarmedProjectionGeneration(seedEpoch: number): string {
   return `${GLOBAL_FARMED_PROJECTION_GENERATION}:seed:${seedEpoch}`;
@@ -2725,6 +2730,16 @@ async function applyGlobalFarmedProjectionDeltas(
   projectionState: GlobalMapsFarmedProjectionState,
 ): Promise<boolean> {
   const fromRevision = board.projectionRevision ?? 0;
+  // A patch materializes every changed map's full player list in this
+  // process (~250KB heap per map measured on prod: a 3,551-map boot catch-up
+  // ballooned the serving isolate to ~940MB, pages that never return to the
+  // OS). A repack-delegating process therefore only patches small backlogs
+  // and hands anything larger to the worker via the same declined-patch ->
+  // repack funnel; processes that run their own packs keep the wide limit,
+  // where declining would just trade the patch for a full 1.4GB pack.
+  const maxDeltaMaps = globalFarmedBoardRepackDelegates.has(db)
+    ? GLOBAL_FARMED_DELEGATED_MAX_DELTA_MAPS
+    : GLOBAL_FARMED_PROJECTION_MAX_DELTA_MAPS;
   const changes = (await exec(
     db,
     `select beatmap_id, revision, updated_at
@@ -2732,13 +2747,13 @@ async function applyGlobalFarmedProjectionDeltas(
      where revision > ?
      order by revision, beatmap_id
      limit ?`,
-    [fromRevision, GLOBAL_FARMED_PROJECTION_MAX_DELTA_MAPS + 1],
+    [fromRevision, maxDeltaMaps + 1],
   )).rows;
-  if (changes.length > GLOBAL_FARMED_PROJECTION_MAX_DELTA_MAPS) {
+  if (changes.length > maxDeltaMaps) {
     logInfo("global_farmed_projection_delta_repack", {
       from_revision: fromRevision,
       to_revision: projectionState.revision,
-      threshold_maps: GLOBAL_FARMED_PROJECTION_MAX_DELTA_MAPS,
+      threshold_maps: maxDeltaMaps,
     });
     return false;
   }

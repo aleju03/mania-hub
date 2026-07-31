@@ -396,6 +396,35 @@ describe("delegated global farmed board repack", () => {
     expect(pageIds(await getMapsPageSnapshot(db, queue, "GLOBAL", WEEK_MS, QUERY))).toEqual([11]);
   });
 
+  it("delegated processes decline mid-size patches (over the delegated cap, under the wide one) and converge via the worker", async () => {
+    const { db, queue, databaseUrl } = await setupDb();
+    registerGlobalFarmedBoardDiskCache(db, databaseUrl);
+    let repackRequests = 0;
+    registerGlobalFarmedBoardRepackDelegation(db, async () => {
+      repackRequests += 1;
+    });
+    await seedFarmedMap(db, 10, 11, [{ id: 101, pp: 650 }]);
+    await refreshGlobalMaps(db);
+    await getMapsPageSnapshot(db, queue, "GLOBAL", WEEK_MS, QUERY);
+    const packedRevision = getGlobalFarmedBoardCacheStatsForTests(db)!.revision;
+
+    // 501 changed maps: a non-delegating process would patch this inline
+    // (limit 5000) and balloon its heap; a delegating one must hand it over.
+    const target = await injectOversizedBacklog(db, 501);
+    await catchUpGlobalFarmedBoard(db);
+    await waitForGlobalFarmedBoardBuild(db);
+    expect(repackRequests).toBeGreaterThan(0);
+    expect(getGlobalFarmedBoardCacheStatsForTests(db)!.revision).toBe(packedRevision);
+
+    const workerDb = await createDb({ databaseUrl });
+    registerGlobalFarmedBoardDiskCache(workerDb, databaseUrl);
+    expect((await runGlobalFarmedBoardRepackJob(workerDb)).built).toBe(true);
+
+    await catchUpGlobalFarmedBoard(db);
+    await waitForGlobalFarmedBoardBuild(db);
+    expect(getGlobalFarmedBoardCacheStatsForTests(db)!.revision).toBe(target);
+  });
+
   it("repack job short-circuits when the disk snapshot is already at the projection head", async () => {
     const { db, queue, databaseUrl } = await setupDb();
     registerGlobalFarmedBoardDiskCache(db, databaseUrl);
