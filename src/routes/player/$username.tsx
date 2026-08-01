@@ -4734,7 +4734,10 @@ function RankHeroCard({
             </div>
             {peakRank && peakRankDate && (
               <div className="mt-2 text-[10px] text-osu-f1">
-                achieved <span className="text-osu-l2">{formatDate(peakRankDate)}</span> · {formatTimeAgo(peakRankDate)}
+                achieved <span className="text-osu-l2">{formatDate(peakRankDate)}</span> ·{" "}
+                {/* Wrapped so only the Date.now()-relative half opts out of
+                    hydration matching; the absolute date still gets checked. */}
+                <span suppressHydrationWarning>{formatTimeAgo(peakRankDate)}</span>
               </div>
             )}
           </div>
@@ -4935,7 +4938,10 @@ function TopPlayCard({ label, snapshot }: { label: string; snapshot: InsightScor
             {snapshot.mods.map((mod) => (
               <ModBadge key={mod} mod={mod} />
             ))}
-            <span className="text-[10px] text-osu-f1">{formatTimeAgo(snapshot.date)}</span>
+            {/* Relative to Date.now(): the newest top play is usually minutes old,
+                so SSR and hydration routinely land on different sides of a minute
+                boundary. Let the client text win. */}
+            <span className="text-[10px] text-osu-f1" suppressHydrationWarning>{formatTimeAgo(snapshot.date)}</span>
             {snapshot.date && (
               <span className="text-[10px] text-osu-f1 hidden sm:inline">{formatDate(snapshot.date)}</span>
             )}
@@ -5060,7 +5066,10 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
           <span className="hidden sm:inline flex-shrink-0"><DanBadge score={score} /></span>
         </div>
         <span className="text-[10px] text-osu-f1">
-          {score.beatmapset?.artist} &middot; {formatTimeAgo(getScoreTimestamp(score))}
+          {score.beatmapset?.artist} &middot;{" "}
+          {/* Fresh scores are minutes old, so this half drifts between SSR and
+              hydration; the artist name stays hydration-checked. */}
+          <span suppressHydrationWarning>{formatTimeAgo(getScoreTimestamp(score))}</span>
         </span>
         {/* Mobile-only metadata row */}
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 sm:hidden">
