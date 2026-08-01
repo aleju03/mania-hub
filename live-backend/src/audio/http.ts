@@ -263,7 +263,8 @@ export async function handleBeatmapHitsoundsRequest(
 
 // GET /api/storyboard?beatmapsetId=…
 // Serves the set's storyboard bundle (root .osb + referenced images) as one
-// zip, or 302 to the R2 copy. An empty zip means the set has no storyboard.
+// zip, or 302 to the R2 copy. Known-negative sets return a cacheable 204 so
+// clients can remember the absence without following an empty-object redirect.
 export async function handleBeatmapStoryboardRequest(
   req: IncomingMessage,
   res: ServerResponse,
@@ -286,6 +287,14 @@ export async function handleBeatmapStoryboardRequest(
 
   try {
     const bundle = await getPreparedStoryboardBundle(config, beatmapsetId);
+    if (!bundle.hasStoryboard) {
+      sendAudioCors(req, res, config);
+      res.statusCode = 204;
+      for (const [key, value] of Object.entries(AUDIO_IMMUTABLE_CACHE_HEADERS)) res.setHeader(key, value);
+      res.setHeader("x-mania-storyboard", "none");
+      res.end();
+      return;
+    }
     if (bundle.publicUrl) {
       sendAudioCors(req, res, config);
       res.statusCode = 302;

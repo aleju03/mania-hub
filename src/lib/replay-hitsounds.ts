@@ -192,6 +192,7 @@ const DEFAULT_SAMPLE_FILES = [
   "drum-hitclap.wav",
   "combobreak.mp3",
 ];
+const DEFAULT_SAMPLE_BUNDLE_URL = "/assets/replay-default-hitsounds-v1.zip";
 
 // Polyphony cap. The default samples carry long reverb tails (~0.8-1.2s), so
 // dense chords keep many voices alive at once; hitting the cap steals the
@@ -262,19 +263,40 @@ export class ReplayHitsoundPlayer {
   loadDefaultSamples(): Promise<void> {
     if (typeof window === "undefined") return Promise.resolve();
     if (!this.defaultsLoaded) {
-      this.defaultsLoaded = Promise.all(DEFAULT_SAMPLE_FILES.map(async (file) => {
-        try {
-          const response = await fetch(`/audio/hitsounds/${file}`);
-          if (!response.ok) return;
-          this.addSample("default", file, await response.arrayBuffer());
-        } catch {
-          // Missing defaults degrade to silence for that sample.
-        }
-      })).then(() => {
-        this.decodeAllLoaded();
-      });
+      this.defaultsLoaded = this.loadDefaultSampleBundle()
+        // Deployment skew or an old cached frontend must not make hitsounds
+        // disappear. The individual files are a failure-only fallback.
+        .catch(() => this.loadDefaultSampleFiles())
+        .then(() => {
+          this.decodeAllLoaded();
+        });
     }
     return this.defaultsLoaded;
+  }
+
+  private async loadDefaultSampleBundle(): Promise<void> {
+    const response = await fetch(DEFAULT_SAMPLE_BUNDLE_URL);
+    if (!response.ok) throw new Error(`Default hitsound bundle failed (${response.status})`);
+    const { default: JSZip } = await import("jszip");
+    const zip = await JSZip.loadAsync(await response.arrayBuffer());
+    const samples = await Promise.all(DEFAULT_SAMPLE_FILES.map(async (file) => {
+      const entry = zip.file(file);
+      if (!entry) throw new Error(`Default hitsound bundle is missing ${file}`);
+      return [file, await entry.async("arraybuffer")] as const;
+    }));
+    for (const [file, data] of samples) this.addSample("default", file, data);
+  }
+
+  private async loadDefaultSampleFiles(): Promise<void> {
+    await Promise.all(DEFAULT_SAMPLE_FILES.map(async (file) => {
+      try {
+        const response = await fetch(`/audio/hitsounds/${file}`);
+        if (!response.ok) return;
+        this.addSample("default", file, await response.arrayBuffer());
+      } catch {
+        // Missing defaults degrade to silence for that sample.
+      }
+    }));
   }
 
   setSkinSamples(samples: ReadonlyMap<string, ArrayBuffer> | null): void {

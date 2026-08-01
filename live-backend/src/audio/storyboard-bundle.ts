@@ -24,6 +24,7 @@ export const STORYBOARD_BUNDLE_MIME_TYPE = "application/zip";
 export const STORYBOARD_BUNDLE_STORAGE_FILENAME = "storyboard-bundle-v1.zip";
 export const STORYBOARD_BUNDLE_OSB_PATH = "storyboard.osb";
 export const STORYBOARD_BUNDLE_FILE_PREFIX = "files/";
+export const EMPTY_STORYBOARD_BUNDLE_SIZE_BYTES = buildStoredZip([]).length;
 
 const BUNDLE_CACHE_TTL = 15 * 60 * 1000;
 const BUNDLE_CACHE_MAX_ENTRIES = 4;
@@ -34,6 +35,7 @@ export type PreparedStoryboardBundle = {
   buffer: Buffer | null;
   sizeBytes: number;
   publicUrl: string | null;
+  hasStoryboard: boolean;
 };
 
 type BundleCacheEntry = {
@@ -45,6 +47,10 @@ type BundleCacheEntry = {
 
 const bundleCache = new Map<string, BundleCacheEntry>();
 const bundlePromises = new Map<string, Promise<PreparedStoryboardBundle>>();
+
+export function storyboardBundleHasContent(sizeBytes: number): boolean {
+  return sizeBytes > EMPTY_STORYBOARD_BUNDLE_SIZE_BYTES;
+}
 
 export function normalizeStoryboardPath(path: string): string {
   let p = path.trim();
@@ -193,12 +199,22 @@ export async function getPreparedStoryboardBundle(
 
   const cachedAsset = await getCachedBeatmapAudioAsset(config, beatmapsetId, STORYBOARD_BUNDLE_STORAGE_FILENAME);
   if (cachedAsset?.publicUrl) {
-    return { buffer: null, sizeBytes: cachedAsset.sizeBytes, publicUrl: cachedAsset.publicUrl };
+    return {
+      buffer: null,
+      sizeBytes: cachedAsset.sizeBytes,
+      publicUrl: cachedAsset.publicUrl,
+      hasStoryboard: storyboardBundleHasContent(cachedAsset.sizeBytes),
+    };
   }
   if (cachedAsset) {
     const object = await readCachedBeatmapAudioAsset(config, beatmapsetId, STORYBOARD_BUNDLE_STORAGE_FILENAME);
     if (object) {
-      const value = { buffer: object.buffer, sizeBytes: object.buffer.length, publicUrl: object.publicUrl };
+      const value = {
+        buffer: object.buffer,
+        sizeBytes: object.buffer.length,
+        publicUrl: object.publicUrl,
+        hasStoryboard: storyboardBundleHasContent(object.buffer.length),
+      };
       setBundleMemoryCache(cacheKey, value);
       return value;
     }
@@ -257,6 +273,7 @@ async function prepareStoryboardBundle(
         buffer: uploaded.publicUrl ? null : buffer,
         sizeBytes: buffer.length,
         publicUrl: uploaded.publicUrl,
+        hasStoryboard: storyboardBundleHasContent(buffer.length),
       };
       if (!uploaded.publicUrl) setBundleMemoryCache(cacheKey, value);
       return value;
@@ -266,7 +283,12 @@ async function prepareStoryboardBundle(
     }
   }
 
-  const value = { buffer, sizeBytes: buffer.length, publicUrl: null };
+  const value = {
+    buffer,
+    sizeBytes: buffer.length,
+    publicUrl: null,
+    hasStoryboard: storyboardBundleHasContent(buffer.length),
+  };
   setBundleMemoryCache(cacheKey, value);
   return value;
 }

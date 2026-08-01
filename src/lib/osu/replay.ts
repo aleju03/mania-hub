@@ -27,6 +27,7 @@ import {
   parseBoundedInt,
   parseOptionalBeatmapChecksum
 } from "./validators";
+import { getScoreEndpointOrder } from "./score-endpoint-order";
 import { decodeStableManiaReplayFrames, getStableManiaReplayScrollSpeedScale } from "../replay-frames";
 
 // ── Replay (parsed server-side via osu-parsers) ────────────────────────────
@@ -86,16 +87,6 @@ function replayEndpointPath(endpointKind: ReplayEndpointKind, mode: string, scor
     : `/scores/${scoreId}/download`;
 }
 
-// Stable mania score ids sit around 6.6e8 and grow slowly; lazer-era solo
-// score ids (what tracker/top-plays links carry) are in the billions. Probing
-// the endpoint that matches the id range first avoids a guaranteed 404 round
-// trip against the osu! API on the first view of a score.
-const LAZER_SCORE_ID_MIN = 1_000_000_000;
-
-function defaultEndpointOrder(scoreId: number): ReplayEndpointKind[] {
-  return scoreId >= LAZER_SCORE_ID_MIN ? ["modern", "legacy"] : ["legacy", "modern"];
-}
-
 function replaySleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -106,7 +97,7 @@ async function downloadReplay(
 ): Promise<ReplayDownload> {
   const endpointKinds: ReplayEndpointKind[] = preferredEndpointKind
     ? [preferredEndpointKind, preferredEndpointKind === "legacy" ? "modern" : "legacy"]
-    : defaultEndpointOrder(data.scoreId);
+    : getScoreEndpointOrder(data.scoreId);
   let firstError: unknown = null;
 
   for (const endpointKind of endpointKinds) {
@@ -348,23 +339,28 @@ export const getScore = createServerFn({ method: "GET" })
   .handler(async ({ data }: { data: { scoreId: number; mode?: string } }) => {
     edgeCache(300, 1800);
     const mode = data.mode ?? "mania";
+    let firstError: unknown = null;
 
-    try {
-      const legacyScore = await osuFetch<OsuScore>(
-        `/scores/${mode}/${data.scoreId}`,
-        undefined,
-        { caller: "getScore:legacy", expectedStatuses: [404] },
-      );
-      const resolvedMode = legacyScore.beatmap?.mode ?? mode;
-      if (resolvedMode === mode) {
-        return legacyScore;
+    for (const endpointKind of getScoreEndpointOrder(data.scoreId)) {
+      try {
+        if (endpointKind === "modern") {
+          return await osuFetch<OsuScore>(`/scores/${data.scoreId}`, undefined, {
+            caller: "getScore:modern",
+            expectedStatuses: [404],
+          });
+        }
+
+        const legacyScore = await osuFetch<OsuScore>(
+          `/scores/${mode}/${data.scoreId}`,
+          undefined,
+          { caller: "getScore:legacy", expectedStatuses: [404] },
+        );
+        const resolvedMode = legacyScore.beatmap?.mode ?? mode;
+        if (resolvedMode === mode) return legacyScore;
+      } catch (error) {
+        firstError ??= error;
       }
-    } catch {
-      // Fall back to modern score lookup below.
     }
 
-    return osuFetch<OsuScore>(`/scores/${data.scoreId}`, undefined, {
-      caller: "getScore:modern",
-      expectedStatuses: [404],
-    });
+    throw firstError instanceof Error ? firstError : new Error("Failed to fetch score");
   });

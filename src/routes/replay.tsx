@@ -2,7 +2,7 @@ import { createFileRoute, useCanGoBack, useNavigate, useRouter } from "@tanstack
 import { useState, useRef, useEffect, useCallback, useMemo, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronsRight, LoaderCircle, Maximize2, Menu, Minimize2, Pause, Play, Plus, Repeat2, Send, Smartphone, X } from "lucide-react";
-import { getReplayParsed, getBeatmapFile, getCommunityBeatmapFile, getScore, getUser, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores, lookupBeatmapByChecksum, submitCommunityBeatmap } from "../lib/osu";
+import { getReplayParsed, getBeatmapFile, getCommunityBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores, lookupBeatmapByChecksum, submitCommunityBeatmap } from "../lib/osu";
 import { calculateManiaStarRating } from "../lib/mania-star-rating";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
 import { getDisplayedAccuracy, getDisplayedRank, getEffectiveManiaKeyCount, getManiaKeyModCount, getManiaParseKeyCount, getModAcronyms, getModDisplayList, getScoreRate, modShiftsPitchWithRate, scoreHasReplay, scoreUsesLazerScoring } from "../lib/score";
@@ -186,6 +186,16 @@ const REPLAY_VIDEO_EXPORT_RESOLUTIONS: Record<ReplayVideoExportOptions["resoluti
   "1080p": { width: 1920, height: 1080 },
 };
 const REPLAY_END_AUDIO_FADE_MS = 1500;
+const REPLAY_COVER_FALLBACK_DELAY_MS = 200;
+const REPLAY_AUDIO_RECOVERY_DELAY_MS = 1500;
+
+function replayAudioNeedsDefaultSamples(settings: ReplayAudioSettings): boolean {
+  return settings.hitsoundsEnabled && (
+    settings.beatmapHitsounds ||
+    settings.keypressHitsounds ||
+    settings.comboBreakSound
+  );
+}
 const UPLOADED_REPLAY_ID_PATTERN = /^[A-Za-z0-9_-]{16,64}$/;
 
 type ReplayVideoExportState = {
@@ -719,7 +729,6 @@ function ReplayPage() {
   // [Events] section and the widescreen flag from it.
   const [beatmapFileContent, setBeatmapFileContent] = useState<string | null>(null);
   const [scoreInfo, setScoreInfo] = useState<OsuScore | null>(null);
-  const [playerProfile, setPlayerProfile] = useState<ReplayPlayerProfile | null>(null);
   const [uploadedReplayMods, setUploadedReplayMods] = useState<OsuMod[]>([]);
   const [uploadedBeatmapsetId, setUploadedBeatmapsetId] = useState<number | undefined>(undefined);
   const [uploadedReplayShareUrl, setUploadedReplayShareUrl] = useState<string | null>(null);
@@ -837,45 +846,19 @@ function ReplayPage() {
     return () => window.clearInterval(interval);
   }, [loading, replayLoadingStartedAt]);
 
-  // Resolve the replay player's avatar + profile banner for the info bar. Seed
-  // from the score's embedded user (instant avatar), then fetch the full profile
-  // to pull the cover image. Falls back to a name-only header if lookup fails.
+  // The score already embeds the identity and avatar needed by the replay info
+  // bar. Avoid a full osu! profile request solely to decorate it with a banner.
   const scoreUserId = scoreInfo?.user?.id;
   const scoreUserName = scoreInfo?.user?.username;
   const scoreUserAvatar = scoreInfo?.user?.avatar_url;
-  useEffect(() => {
-    if (!replay) {
-      setPlayerProfile(null);
-      return;
-    }
-    const lookupKey = scoreUserId
-      ? String(scoreUserId)
-      : (scoreUserName || replay.header.playerName || "").trim();
-    if (!lookupKey) {
-      setPlayerProfile(null);
-      return;
-    }
-
-    setPlayerProfile({
+  const playerProfile = useMemo<ReplayPlayerProfile | null>(() => {
+    if (!replay) return null;
+    return {
       id: scoreUserId ?? null,
       username: scoreUserName || replay.header.playerName,
       avatarUrl: scoreUserAvatar,
       coverUrl: undefined,
-    });
-
-    let cancelled = false;
-    getUser({ data: { key: lookupKey } })
-      .then((user) => {
-        if (cancelled || !user) return;
-        setPlayerProfile({
-          id: user.id ?? scoreUserId ?? null,
-          username: user.username || scoreUserName || replay.header.playerName,
-          avatarUrl: user.avatar_url || scoreUserAvatar,
-          coverUrl: user.cover_url || user.cover?.custom_url || undefined,
-        });
-      })
-      .catch(() => { /* keep the score-seeded avatar/name */ });
-    return () => { cancelled = true; };
+    };
   }, [replay, scoreUserId, scoreUserName, scoreUserAvatar]);
 
   const loadReplay = useCallback(async (sid: number, initialScore?: OsuScore | null) => {
@@ -2146,9 +2129,9 @@ function ReplayViewer({
   const [pendingPlay, setPendingPlay] = useState(false);
   const [buffering, setBuffering] = useState(false);
   // Full copy of the song downloaded in the background once playback starts;
-  // the <audio> element is swapped to this blob: URL so network hiccups can't
-  // stall the replay mid-play.
+  // now fetched only as a recovery path after a sustained stream stall.
   const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
+  const [audioRecoveryRequested, setAudioRecoveryRequested] = useState(false);
   const [bgSrc, setBgSrc] = useState<string | null>(null);
   const [localReplayVideoExportAvailable, setLocalReplayVideoExportAvailable] = useState(false);
   const [videoExport, setVideoExport] = useState<ReplayVideoExportState>({
@@ -2187,6 +2170,7 @@ function ReplayViewer({
   const audioBlobUrlRef = useRef<string | null>(null);
   const audioBlobFetchKeyRef = useRef<string | null>(null);
   const audioBlobAbortRef = useRef<AbortController | null>(null);
+  const audioRecoveryTimeoutRef = useRef<number | null>(null);
   const audioResyncDoneRef = useRef<string | null>(null);
   const volumeRef = useRef(volume);
   const recoveredVideoScoreIdRef = useRef<number | null>(null);
@@ -2832,6 +2816,7 @@ function ReplayViewer({
     ? getBeatmapAudioUrl(effectiveBeatmapsetId, beatmap.audioFilename)
     : null;
   const audioUrl = localAudioUrl ?? remoteAudioUrl;
+  const canRecoverRemoteAudio = remoteAudioUrl != null && audioUrl === remoteAudioUrl;
   // What the <audio> element actually plays: the local blob once downloaded,
   // the streaming URL until then. Everything else (video export, hitsounds)
   // keeps using audioUrl.
@@ -2844,9 +2829,13 @@ function ReplayViewer({
     ? `/api/background?beatmapsetId=${encodeURIComponent(String(effectiveBeatmapsetId))}&filename=${encodeURIComponent(beatmap.backgroundFilename)}`
     : null);
 
-  // Prefer the map's real background from the beatmap archive, then fall back to the set cover.
+  // Prefer the map's real background from the beatmap archive. Give it a short
+  // head start before requesting the cover fallback so the common successful
+  // path does not download both images.
   useEffect(() => {
     let cancelled = false;
+    let coverTimer: number | null = null;
+    let coverStarted = false;
 
     if (!beatmapBackgroundUrl && !coverUrl) {
       setBgSrc(null);
@@ -2855,26 +2844,37 @@ function ReplayViewer({
       };
     }
 
-    if (coverUrl) {
+    const startCoverFallback = () => {
+      if (cancelled || coverStarted || !coverUrl) return;
+      coverStarted = true;
       const img = new Image();
       img.decoding = "async";
       img.onload = () => {
-        if (!cancelled) setBgSrc((current) => current ?? coverUrl);
+        if (!cancelled) setBgSrc(coverUrl);
       };
       img.src = coverUrl;
-    }
+    };
 
     if (beatmapBackgroundUrl) {
       const img = new Image();
       img.decoding = "async";
       img.onload = () => {
-        if (!cancelled) setBgSrc(beatmapBackgroundUrl);
+        if (cancelled) return;
+        if (coverTimer != null) window.clearTimeout(coverTimer);
+        setBgSrc(beatmapBackgroundUrl);
       };
+      img.onerror = startCoverFallback;
       img.src = beatmapBackgroundUrl;
+      if (coverUrl) {
+        coverTimer = window.setTimeout(startCoverFallback, REPLAY_COVER_FALLBACK_DELAY_MS);
+      }
+    } else {
+      startCoverFallback();
     }
 
     return () => {
       cancelled = true;
+      if (coverTimer != null) window.clearTimeout(coverTimer);
     };
   }, [beatmapBackgroundUrl, coverUrl]);
 
@@ -2953,6 +2953,11 @@ function ReplayViewer({
     setAudioError(null);
     setAudioReady(false);
     setBuffering(false);
+    setAudioRecoveryRequested(false);
+    if (audioRecoveryTimeoutRef.current != null) {
+      window.clearTimeout(audioRecoveryTimeoutRef.current);
+      audioRecoveryTimeoutRef.current = null;
+    }
     shouldResumeAudioRef.current = false;
     audioUrlActiveRef.current = !!audioUrl;
   }, [audioUrl, cancelReplayEndAudioFade]);
@@ -2963,6 +2968,10 @@ function ReplayViewer({
     return () => {
       audioBlobAbortRef.current?.abort();
       audioBlobAbortRef.current = null;
+      if (audioRecoveryTimeoutRef.current != null) {
+        window.clearTimeout(audioRecoveryTimeoutRef.current);
+        audioRecoveryTimeoutRef.current = null;
+      }
       audioBlobFetchKeyRef.current = null;
       audioResyncDoneRef.current = null;
       if (audioBlobUrlRef.current) {
@@ -2973,11 +2982,11 @@ function ReplayViewer({
     };
   }, [audioUrl]);
 
-  // Once playback starts, download the whole song in the background and hand
-  // the <audio> element a local blob: URL. Streaming keeps startup instant;
-  // the blob makes mid-play network stalls impossible afterwards.
+  // Normal playback stays on the browser's single ranged media request. If
+  // that stream actually stalls, fetch the whole song once and hand the audio
+  // element a local blob so the rest of the replay is network-independent.
   useEffect(() => {
-    if (!audioUrl || !audioEnabled || !isPlaying || audioError) return;
+    if (!audioUrl || !audioEnabled || !audioRecoveryRequested || !canRecoverRemoteAudio || audioError) return;
     if (audioBlobFetchKeyRef.current === audioUrl) return;
     audioBlobFetchKeyRef.current = audioUrl;
     const controller = new AbortController();
@@ -2992,14 +3001,15 @@ function ReplayViewer({
         audioBlobUrlRef.current = objectUrl;
         setAudioBlobUrl(objectUrl);
       } catch {
-        // Streaming playback keeps working; allow another attempt on the
-        // next pause/play cycle.
+        // Streaming playback keeps working; allow a later sustained stall to
+        // try the recovery download again.
         if (audioBlobFetchKeyRef.current === audioUrl) {
           audioBlobFetchKeyRef.current = null;
+          setAudioRecoveryRequested(false);
         }
       }
     })();
-  }, [audioUrl, audioEnabled, isPlaying, audioError]);
+  }, [audioUrl, audioEnabled, audioRecoveryRequested, canRecoverRemoteAudio, audioError]);
 
   // Swapping the element's src (streaming -> blob, or back after a blob
   // failure) runs the media load algorithm, which resets position, rate, and
@@ -3106,7 +3116,7 @@ function ReplayViewer({
     player.setKeypressSoundsEnabled(initial.keypressHitsounds);
     player.setChannelVolume("keypress", initial.keypressHitsoundVolume);
     player.setComboBreakEnabled(initial.comboBreakSound);
-    void player.loadDefaultSamples();
+    if (replayAudioNeedsDefaultSamples(initial)) void player.loadDefaultSamples();
 
     let cancelled = false;
     const loadSkinSounds = () => {
@@ -3163,6 +3173,7 @@ function ReplayViewer({
     player.setKeypressSoundsEnabled(audioSettings.keypressHitsounds);
     player.setChannelVolume("keypress", audioSettings.keypressHitsoundVolume);
     player.setComboBreakEnabled(audioSettings.comboBreakSound);
+    if (replayAudioNeedsDefaultSamples(audioSettings)) void player.loadDefaultSamples();
   }, [audioSettings]);
 
   useEffect(() => {
@@ -3674,14 +3685,26 @@ function ReplayViewer({
       );
     };
 
-    const handleCanPlay = () => { resumeAudioIfNeeded(); updateBuffering(); };
-    const handleCanPlayThrough = () => { resumeAudioIfNeeded(); updateBuffering(); };
+    const clearAudioRecoveryTimer = () => {
+      if (audioRecoveryTimeoutRef.current == null) return;
+      window.clearTimeout(audioRecoveryTimeoutRef.current);
+      audioRecoveryTimeoutRef.current = null;
+    };
+    const scheduleAudioRecovery = () => {
+      if (!isPlaying || !audioEnabled || !canRecoverRemoteAudio || audioBlobUrlRef.current || audioRecoveryTimeoutRef.current != null) return;
+      audioRecoveryTimeoutRef.current = window.setTimeout(() => {
+        audioRecoveryTimeoutRef.current = null;
+        setAudioRecoveryRequested(true);
+      }, REPLAY_AUDIO_RECOVERY_DELAY_MS);
+    };
+    const handleCanPlay = () => { clearAudioRecoveryTimer(); resumeAudioIfNeeded(); updateBuffering(); };
+    const handleCanPlayThrough = () => { clearAudioRecoveryTimer(); resumeAudioIfNeeded(); updateBuffering(); };
     const handleSeeked = () => { resumeAudioIfNeeded(); updateBuffering(); };
-    const handleLoadedData = () => { resumeAudioIfNeeded(); updateBuffering(); };
+    const handleLoadedData = () => { clearAudioRecoveryTimer(); resumeAudioIfNeeded(); updateBuffering(); };
     const handleLoadedMetadata = () => { setAudioReady(true); updateBuffering(); };
-    const handlePlaying = () => updateBuffering();
-    const handleWaiting = () => updateBuffering();
-    const handleStalled = () => updateBuffering();
+    const handlePlaying = () => { clearAudioRecoveryTimer(); updateBuffering(); };
+    const handleWaiting = () => { updateBuffering(); scheduleAudioRecovery(); };
+    const handleStalled = () => { updateBuffering(); scheduleAudioRecovery(); };
     const handleSeeking = () => updateBuffering();
     const handleEnded = () => {
       cancelReplayEndAudioFade();
@@ -3744,6 +3767,7 @@ function ReplayViewer({
     }
 
     return () => {
+      clearAudioRecoveryTimer();
       audio.removeEventListener("canplay", handleCanPlay);
       audio.removeEventListener("canplaythrough", handleCanPlayThrough);
       audio.removeEventListener("seeked", handleSeeked);
@@ -3759,7 +3783,7 @@ function ReplayViewer({
         document.removeEventListener("visibilitychange", handleVisibility);
       }
     };
-  }, [audioEnabled, isPlaying, effectiveRate, volume, audioUrl, startReplayEndAudioFade, cancelReplayEndAudioFade]);
+  }, [audioEnabled, isPlaying, effectiveRate, volume, audioUrl, canRecoverRemoteAudio, startReplayEndAudioFade, cancelReplayEndAudioFade]);
 
   // Sync audio time on seek — pause first to force re-buffer, then resume
   const syncAudioTime = (timeMs: number) => {

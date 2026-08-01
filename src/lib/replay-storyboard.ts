@@ -15,6 +15,11 @@ import { SB_LAYER_OVERLAY, type ReplayStoryboardData } from "./storyboard/types"
 // Matches the live backend's bundle layout (storyboard-bundle.ts).
 const BUNDLE_OSB_PATH = "storyboard.osb";
 const BUNDLE_FILE_PREFIX = "files/";
+const STORYBOARD_NEGATIVE_CACHE_KEY = "mania-hub-replay-storyboard-negatives-v1";
+const STORYBOARD_NEGATIVE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const STORYBOARD_NEGATIVE_CACHE_MAX_ENTRIES = 128;
+
+type StoryboardNegativeCache = Record<string, number>;
 
 export interface LoadedReplayStoryboard {
   data: ReplayStoryboardData;
@@ -35,6 +40,51 @@ export interface LoadReplayStoryboardOptions {
   // does not reference the background image itself.
   backgroundImageUrl: string | null;
   signal?: AbortSignal;
+}
+
+function readStoryboardNegativeCache(): StoryboardNegativeCache {
+  if (typeof window === "undefined") return {};
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(STORYBOARD_NEGATIVE_CACHE_KEY) ?? "{}");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const entries = Object.entries(parsed as Record<string, unknown>)
+      .filter(([key, value]) => /^\d+$/.test(key) && typeof value === "number" && Number.isFinite(value));
+    return Object.fromEntries(entries) as StoryboardNegativeCache;
+  } catch {
+    return {};
+  }
+}
+
+function writeStoryboardNegativeCache(cache: StoryboardNegativeCache): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(STORYBOARD_NEGATIVE_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // Availability hints are optional; quota/privacy failures only cost a
+    // later empty storyboard request.
+  }
+}
+
+export function isReplayStoryboardKnownUnavailable(beatmapsetId: number, now = Date.now()): boolean {
+  const checkedAt = readStoryboardNegativeCache()[String(beatmapsetId)];
+  return typeof checkedAt === "number" && now - checkedAt < STORYBOARD_NEGATIVE_CACHE_TTL_MS;
+}
+
+export function rememberReplayStoryboardUnavailable(beatmapsetId: number, now = Date.now()): void {
+  const cache = readStoryboardNegativeCache();
+  cache[String(beatmapsetId)] = now;
+  const entries = Object.entries(cache)
+    .filter(([, checkedAt]) => now - checkedAt < STORYBOARD_NEGATIVE_CACHE_TTL_MS)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, STORYBOARD_NEGATIVE_CACHE_MAX_ENTRIES);
+  writeStoryboardNegativeCache(Object.fromEntries(entries));
+}
+
+export function forgetReplayStoryboardUnavailable(beatmapsetId: number): void {
+  const cache = readStoryboardNegativeCache();
+  if (!(String(beatmapsetId) in cache)) return;
+  delete cache[String(beatmapsetId)];
+  writeStoryboardNegativeCache(cache);
 }
 
 function getImageMimeType(path: string): string {
@@ -113,9 +163,16 @@ async function fetchStoryboardBundle(
   if (!url) return null;
 
   const response = await fetch(url, { signal });
+  if (response.status === 204 || response.headers.get("x-mania-storyboard") === "none") {
+    rememberReplayStoryboardUnavailable(beatmapsetId);
+    return null;
+  }
   if (!response.ok) return null;
   const bundleBytes = await response.arrayBuffer();
-  if (bundleBytes.byteLength === 0) return null;
+  if (bundleBytes.byteLength === 0) {
+    rememberReplayStoryboardUnavailable(beatmapsetId);
+    return null;
+  }
 
   const { default: JSZip } = await import("jszip");
   const zip = await JSZip.loadAsync(bundleBytes);
@@ -132,7 +189,11 @@ async function fetchStoryboardBundle(
       images.set(path, new Blob([bytes], { type: getImageMimeType(path) }));
     }
   }
-  if (!osbText && images.size === 0) return null;
+  if (!osbText && images.size === 0) {
+    rememberReplayStoryboardUnavailable(beatmapsetId);
+    return null;
+  }
+  forgetReplayStoryboardUnavailable(beatmapsetId);
   return { osbText, images };
 }
 
@@ -141,7 +202,7 @@ export async function loadReplayStoryboard(options: LoadReplayStoryboardOptions)
   const osuHasStoryboard = osuFileContent != null && osuFileHasStoryboardElements(osuFileContent);
 
   let bundle: { osbText: string | null; images: Map<string, Blob> } | null = null;
-  if (beatmapsetId != null) {
+  if (beatmapsetId != null && (osuHasStoryboard || !isReplayStoryboardKnownUnavailable(beatmapsetId))) {
     try {
       bundle = await fetchStoryboardBundle(beatmapsetId, signal);
     } catch {

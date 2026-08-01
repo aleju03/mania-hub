@@ -7,9 +7,11 @@ import {
   type ZipDirectoryEntry,
 } from "../src/audio/beatmap-archive.js";
 import {
+  EMPTY_STORYBOARD_BUNDLE_SIZE_BYTES,
   collectStoryboardImagePaths,
   normalizeStoryboardPath,
   osuTextHasStoryboardElements,
+  storyboardBundleHasContent,
 } from "../src/audio/storyboard-bundle.js";
 
 function entry(overrides: Partial<ZipDirectoryEntry> & { path: string }): ZipDirectoryEntry {
@@ -113,6 +115,14 @@ describe("osuTextHasStoryboardElements", () => {
 });
 
 describe("buildStoredZip deflate entries", () => {
+  it("recognizes the durable empty-zip storyboard marker", () => {
+    const empty = buildStoredZip([]);
+    const populated = buildStoredZip([{ path: "storyboard.osb", data: Buffer.from("[Events]") }]);
+    expect(empty.length).toBe(EMPTY_STORYBOARD_BUNDLE_SIZE_BYTES);
+    expect(storyboardBundleHasContent(empty.length)).toBe(false);
+    expect(storyboardBundleHasContent(populated.length)).toBe(true);
+  });
+
   it("round-trips deflated text next to stored binaries", () => {
     const text = Buffer.from("[Events]\n".repeat(1000), "utf8");
     const image = Buffer.from([1, 2, 3, 4]);
