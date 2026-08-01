@@ -39,6 +39,39 @@ describe("side by side tab", () => {
     expect(viewSource).toContain("renderer.setExternalClock(");
   });
 
+  // Rotating a phone used to swap the route between a rotate prompt and the
+  // view, which unmounted both renderers and refetched both replays on the way
+  // back. The orientation rules now live inside the view, on one mounted tree.
+  it("never branches the route on orientation", () => {
+    expect(routeSource).not.toContain("isPortraitPhone");
+    expect(routeSource).not.toContain("side-by-side-rotate");
+    // A fade wrapper's opacity would also trap the phone overlay under the navbar.
+    expect(routeSource).toContain("<div key={`side-by-side-${sideBySide.left}-${sideBySide.right}`}>");
+    expect(routeSource).toContain("const stageActive = viewerActive || Boolean(sideBySide);");
+  });
+
+  it("covers the whole screen on a phone and asks for real fullscreen", () => {
+    expect(viewSource).toContain("resolveSideBySideLayout(viewport, fullscreen)");
+    // Overlay vs inline is a class swap on the one persistent root.
+    expect(viewSource).toContain('layout.overlay ? "fixed inset-0 z-[100] h-[100dvh] w-screen" : "relative h-[calc(100dvh-60px)]"');
+    expect(viewSource).toContain("requestNativeFullscreen(container)");
+    expect(viewSource).toContain("lockLandscapeOrientation()");
+    // Portrait parks the loaded replays behind a prompt instead of dropping them.
+    expect(viewSource).toContain("layout.rotatePrompt && (");
+    expect(viewSource).toContain("if (layout.rotatePrompt) pause();");
+  });
+
+  it("keeps the height for the playfields on a short viewport", () => {
+    // Every chrome block reads the same compact flag.
+    expect(viewSource).toContain("const compact = layout.compact;");
+    expect(viewSource).toContain("<StatsColumn stats={stats} compact={compact} />");
+    expect(viewSource).toContain("{!compact && <MapFacts");
+    // Rotations and the mobile browser chrome sliding away both resize the
+    // canvases, and the renderers only re-measure when told to.
+    expect(viewSource).toContain("new ResizeObserver(() => window.requestAnimationFrame(resizeRenderers))");
+    expect(viewSource).toContain('window.addEventListener("orientationchange", onOrientationChange)');
+  });
+
   it("leaves no compare action on the score info card", () => {
     expect(infoSource).not.toContain("onCompare");
     expect(infoSource).not.toContain("compareCandidates");

@@ -60,3 +60,38 @@ export function getSideBySideIssue(left: OsuScore, right: OsuScore): SideBySideI
 export function getSideBySideCandidateIssue(candidate: OsuScore, picked: OsuScore | null): SideBySideIssue | null {
   return picked ? getSideBySideIssue(picked, candidate) : getSideBySideScoreIssue(candidate);
 }
+
+/* How the stage lays itself out for the viewport it landed in. Pure, and kept
+   next to the pair rules, because the phone behaviour is the fiddly part: the
+   view must never unmount across a rotation (that would drop both replays and
+   refetch them), so every orientation is a class swap on the same tree. */
+
+export const SIDE_BY_SIDE_PORTRAIT_PHONE_QUERY = "(orientation: portrait) and (max-width: 639px)";
+/** Landscape phones sit around 320-450px tall; laptops start near 700px. */
+export const SIDE_BY_SIDE_SHORT_VIEWPORT_QUERY = "(max-height: 600px)";
+export const SIDE_BY_SIDE_TOUCH_QUERY = "(pointer: coarse)";
+
+export interface SideBySideViewport {
+  portraitPhone: boolean;
+  shortViewport: boolean;
+  touch: boolean;
+}
+
+export interface SideBySideLayout {
+  /** Cover the whole viewport, navbar included, instead of sitting under it. */
+  overlay: boolean;
+  /** Squeeze the chrome so the two playfields keep the height they need. */
+  compact: boolean;
+  /** Playfields stay mounted and paused behind a rotate prompt. */
+  rotatePrompt: boolean;
+}
+
+export function resolveSideBySideLayout(viewport: SideBySideViewport, fullscreen: boolean): SideBySideLayout {
+  return {
+    // A portrait phone keeps the navbar: the rotate prompt is a dead end
+    // otherwise, with no way back to the rest of the site.
+    overlay: fullscreen || (viewport.touch && !viewport.portraitPhone),
+    compact: viewport.shortViewport,
+    rotatePrompt: viewport.portraitPhone,
+  };
+}

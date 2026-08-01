@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { getSideBySideCandidateIssue, getSideBySideIssue, getSideBySideScoreIssue } from "./replay-side-by-side";
+import {
+  getSideBySideCandidateIssue,
+  getSideBySideIssue,
+  getSideBySideScoreIssue,
+  resolveSideBySideLayout,
+  type SideBySideViewport,
+} from "./replay-side-by-side";
 import type { OsuScore } from "./types";
 
 function score(overrides: Partial<OsuScore>): OsuScore {
@@ -64,6 +70,55 @@ describe("getSideBySideIssue", () => {
       score({ id: 2, beatmap: { id: 999, mode: "mania" } as OsuScore["beatmap"] }),
     );
     expect(issue?.code).toBe("unplayable");
+  });
+});
+
+describe("resolveSideBySideLayout", () => {
+  const viewport = (overrides: Partial<SideBySideViewport> = {}): SideBySideViewport => ({
+    portraitPhone: false,
+    shortViewport: false,
+    touch: false,
+    ...overrides,
+  });
+
+  const desktop = viewport();
+  const landscapePhone = viewport({ touch: true, shortViewport: true });
+  const portraitPhone = viewport({ touch: true, portraitPhone: true });
+
+  it("leaves a desktop stage in the page, under the navbar", () => {
+    expect(resolveSideBySideLayout(desktop, false)).toEqual({
+      overlay: false,
+      compact: false,
+      rotatePrompt: false,
+    });
+  });
+
+  it("takes the whole screen on a landscape phone, chrome squeezed", () => {
+    expect(resolveSideBySideLayout(landscapePhone, false)).toEqual({
+      overlay: true,
+      compact: true,
+      rotatePrompt: false,
+    });
+  });
+
+  // Covering the navbar behind a rotate prompt would leave no way off the
+  // page but the prompt's own button.
+  it("keeps the navbar reachable on a portrait phone", () => {
+    expect(resolveSideBySideLayout(portraitPhone, false)).toEqual({
+      overlay: false,
+      compact: false,
+      rotatePrompt: true,
+    });
+  });
+
+  it("only overlays a mouse-driven browser once it asked for fullscreen", () => {
+    expect(resolveSideBySideLayout(desktop, true).overlay).toBe(true);
+    // A short desktop window is cramped, not a phone: compact chrome, no takeover.
+    expect(resolveSideBySideLayout(viewport({ shortViewport: true }), false)).toEqual({
+      overlay: false,
+      compact: true,
+      rotatePrompt: false,
+    });
   });
 });
 

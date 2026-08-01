@@ -143,6 +143,9 @@ export function ReplaySideBySidePicker({
       <h3 className="text-center text-sm font-semibold uppercase tracking-wider text-osu-f1">
         Watch two runs of the same map at once
       </h3>
+      {/* Said here rather than after the tap: on a phone this only plays in
+          landscape, and it takes the whole screen when it does. */}
+      <p className="mt-1 text-center text-[11px] text-osu-f1/70 sm:hidden">Turn your phone sideways to watch.</p>
 
       <div className="mt-4 grid items-stretch gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-2">
         <Slot
@@ -405,7 +408,8 @@ function CandidateList({ candidates, loading, slots, targetLabel, onPick }: {
             disabled={alreadyPicked || issue != null}
             title={alreadyPicked ? "Already picked" : issue?.message ?? `Use as the ${targetLabel.toLowerCase()} run`}
             onClick={() => onPick(candidate)}
-            className="group grid w-full grid-cols-[1.75rem_1.5rem_minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-1.5 py-1.5 text-left transition-colors hover:bg-osu-b5 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent cursor-pointer"
+            // Roomier rows on phones, where this list is picked with a thumb.
+            className="group grid w-full grid-cols-[1.75rem_1.5rem_minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-1.5 py-2.5 text-left transition-colors hover:bg-osu-b5 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent cursor-pointer sm:py-1.5"
           >
             <span className="text-[10px] font-semibold tabular-nums text-osu-f1">#{index + 1}</span>
             <img

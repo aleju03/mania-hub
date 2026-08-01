@@ -1,7 +1,7 @@
 import { createFileRoute, useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
 import { useState, useRef, useEffect, useCallback, useMemo, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronLeft, ChevronsRight, LoaderCircle, Maximize2, Menu, Minimize2, Pause, Play, Plus, Repeat2, Send, Smartphone, X } from "lucide-react";
+import { ChevronLeft, ChevronsRight, LoaderCircle, Maximize2, Menu, Minimize2, Pause, Play, Plus, Repeat2, Send, X } from "lucide-react";
 import { getReplayParsed, getBeatmapFile, getCommunityBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores, lookupBeatmapByChecksum, submitCommunityBeatmap } from "../lib/osu";
 import { calculateManiaStarRating } from "../lib/mania-star-rating";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
@@ -9,6 +9,7 @@ import { getDisplayedAccuracy, getDisplayedRank, getEffectiveManiaKeyCount, getM
 import { useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
 import { PageHeader } from "../components/layout/PageHeader";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
+import { exitNativeFullscreen, getNativeFullscreenElement, requestNativeFullscreen } from "../lib/fullscreen";
 import { MissingBeatmapPanel, ReplayBrowseView } from "../components/replay/ReplayBrowseView";
 import type { ReplayBrowseMode } from "../components/replay/ReplayBrowseView";
 import { ReplayControls, ReplayProgressBar } from "../components/replay/ReplayControls";
@@ -148,15 +149,6 @@ type PlayerScoreGroups = { best: OsuScore[]; firsts: OsuScore[]; pinned: OsuScor
 type PlayerScoreGroupLoading = Record<keyof PlayerScoreGroups, boolean>;
 type ReplayBeatmapFileStatus = "unknown" | "cached" | "fetched" | "unavailable";
 
-type FullscreenDocument = Document & {
-  webkitFullscreenElement?: Element | null;
-  webkitExitFullscreen?: () => Promise<void> | void;
-};
-
-type FullscreenTarget = HTMLElement & {
-  webkitRequestFullscreen?: () => Promise<void> | void;
-};
-
 const MOBILE_FULLSCREEN_BUTTON_HIDE_MS = 2000;
 const FULLSCREEN_POINTER_CHROME_HIDE_MS = 1800;
 const FULLSCREEN_TAP_CHROME_HIDE_MS = 3000;
@@ -276,35 +268,6 @@ function isLocalReplayVideoExportHost(): boolean {
   if (!import.meta.env.DEV || typeof window === "undefined") return false;
   const hostname = window.location.hostname.toLowerCase();
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
-}
-
-function getNativeFullscreenElement() {
-  if (typeof document === "undefined") return null;
-  const doc = document as FullscreenDocument;
-  return document.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
-}
-
-async function requestNativeFullscreen(element: HTMLElement) {
-  const target = element as FullscreenTarget;
-  if (target.requestFullscreen) {
-    await target.requestFullscreen({ navigationUI: "hide" } as FullscreenOptions);
-    return true;
-  }
-  if (target.webkitRequestFullscreen) {
-    await target.webkitRequestFullscreen();
-    return true;
-  }
-  return false;
-}
-
-async function exitNativeFullscreen() {
-  if (typeof document === "undefined") return;
-  const doc = document as FullscreenDocument;
-  if (document.exitFullscreen) {
-    await document.exitFullscreen();
-  } else if (doc.webkitExitFullscreen) {
-    await doc.webkitExitFullscreen();
-  }
 }
 
 function isMobileReplayPointer(event: ReactPointerEvent<HTMLElement>) {
@@ -743,16 +706,6 @@ function ReplayPage() {
   const [localBeatmapAssets, setLocalBeatmapAssets] = useState<LocalBeatmapAssets>(EMPTY_LOCAL_BEATMAP_ASSETS);
   const localBeatmapAssetUrlsRef = useRef<string[]>([]);
   const [loading, setLoading] = useState(false);
-  // Side-by-side compare needs a wide screen; portrait phones get a rotate
-  // prompt instead of two crushed stages (and never mount their renderers).
-  const [isPortraitPhone, setIsPortraitPhone] = useState(false);
-  useEffect(() => {
-    const query = window.matchMedia("(orientation: portrait) and (max-width: 639px)");
-    const update = () => setIsPortraitPhone(query.matches);
-    update();
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
-  }, []);
   const [replayLoadingStep, setReplayLoadingStep] = useState<ReplayLoadingStep>("score");
   const [replayBeatmapFileStatus, setReplayBeatmapFileStatus] = useState<ReplayBeatmapFileStatus>("unknown");
   const [replayLoadingStartedAt, setReplayLoadingStartedAt] = useState(0);
@@ -1839,7 +1792,7 @@ function ReplayPage() {
 
   const viewerActive = Boolean(replay && !loading);
   // Both stages run edge to edge under the navbar, without the page header.
-  const stageActive = viewerActive || Boolean(sideBySide && !isPortraitPhone);
+  const stageActive = viewerActive || Boolean(sideBySide);
 
   return (
     <div className="flex-1">
@@ -1859,28 +1812,17 @@ function ReplayPage() {
               exit pass let the viewer linger a few frames inside the narrow
               non-viewer chrome on browser back. Mount fades don't need it. */}
           {sideBySide ? (
-              isPortraitPhone ? (
-                <motion.div key="side-by-side-rotate" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center px-4 py-20 text-center">
-                  <Smartphone className="mb-4 h-10 w-10 rotate-90 text-osu-pink" aria-hidden="true" />
-                  <p className="text-sm font-semibold text-osu-l2">Rotate your device to watch both</p>
-                  <p className="mt-1 max-w-md text-xs leading-relaxed text-osu-f1">Two playfields and the stats between them need a landscape screen.</p>
-                  <button
-                    type="button"
-                    onClick={() => navigate({ to: "/replay", search: { tab: "side-by-side" } })}
-                    className="mt-4 rounded-lg bg-white/10 px-4 py-2 text-xs font-semibold text-osu-f1 hover:bg-white/20 hover:text-white transition-colors cursor-pointer"
-                  >
-                    Pick two scores
-                  </button>
-                </motion.div>
-              ) : (
-                <motion.div key={`side-by-side-${sideBySide.left}-${sideBySide.right}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <ReplaySideBySideView
-                    leftScoreId={sideBySide.left}
-                    rightScoreId={sideBySide.right}
-                    onExit={() => navigate({ to: "/replay", search: { tab: "side-by-side" } })}
-                  />
-                </motion.div>
-              )
+              // No fade wrapper and no orientation branch: the view owns both
+              // (a mid-fade opacity would trap its phone overlay under the
+              // navbar's stacking context, and swapping branches on rotation
+              // used to drop both replays and refetch them on the way back).
+              <div key={`side-by-side-${sideBySide.left}-${sideBySide.right}`}>
+                <ReplaySideBySideView
+                  leftScoreId={sideBySide.left}
+                  rightScoreId={sideBySide.right}
+                  onExit={() => navigate({ to: "/replay", search: { tab: "side-by-side" } })}
+                />
+              </div>
             ) : loading ? (
               <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center px-4 py-20 text-center">
                 <div className="mb-4 h-10 w-10 rounded-full border-2 border-osu-pink/40 border-t-osu-pink animate-spin" />

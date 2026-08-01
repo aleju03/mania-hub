@@ -1,10 +1,17 @@
 import { Link } from "@tanstack/react-router";
-import { ChevronLeft, LoaderCircle, Pause, Play, Volume2, VolumeX } from "lucide-react";
+import { ChevronLeft, LoaderCircle, Maximize2, Minimize2, Pause, Play, Smartphone, Volume2, VolumeX } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 
 import { getBeatmapAudioUrl } from "../../lib/audio-url";
 import type { ManiaBeatmap } from "../../lib/beatmap-parser";
 import { formatDate } from "../../lib/format";
+import {
+  exitNativeFullscreen,
+  getNativeFullscreenElement,
+  lockLandscapeOrientation,
+  requestNativeFullscreen,
+  unlockOrientation,
+} from "../../lib/fullscreen";
 import { formatLazerScore, formatStableScore } from "../../lib/mania-score-simulation";
 import { calculateManiaStarRating } from "../../lib/mania-star-rating";
 import { getBeatmapFile, getReplayParsed, getScore } from "../../lib/osu";
@@ -14,7 +21,14 @@ import { unpackReplayFrames } from "../../lib/replay-frames";
 import { buildKeypressHeatmap } from "../../lib/replay-keypress-heatmap";
 import { readReplayVolume } from "../../lib/replay-preferences";
 import { readReplayScrollSpeed } from "../../lib/replay-scroll-speed";
-import { getSideBySideIssue } from "../../lib/replay-side-by-side";
+import {
+  SIDE_BY_SIDE_PORTRAIT_PHONE_QUERY,
+  SIDE_BY_SIDE_SHORT_VIEWPORT_QUERY,
+  SIDE_BY_SIDE_TOUCH_QUERY,
+  getSideBySideIssue,
+  resolveSideBySideLayout,
+  type SideBySideViewport,
+} from "../../lib/replay-side-by-side";
 import { readReplaySkinSettings } from "../../lib/replay-skin";
 import { getScoreExpectedCounts, type ReplayLiveStats, type ReplayRendererLike, type ServerReplay } from "../../lib/replay-types";
 import {
@@ -44,7 +58,15 @@ import { ReplayProgressBar } from "./ReplayControls";
 
    The playfields deliberately run without the HUD: no keypresses, no
    leaderboard, no accuracy readout. Everything worth comparing lives in the
-   middle column, where the two runs sit on the same line. */
+   middle column, where the two runs sit on the same line.
+
+   Phones get the whole screen: on a touch device the stage covers the navbar
+   the moment it opens, and the first play asks for real fullscreen plus a
+   landscape lock (best effort - iPhone Safari has neither, hence the overlay
+   underneath it). Short viewports switch to a compact chrome so the two
+   playfields, not the headers, own the height. Rotating never remounts: a
+   portrait phone parks the loaded replays behind a rotate prompt instead of
+   tearing them down, so turning back is instant and costs no refetch. */
 
 const SPEED_OPTIONS = [0.5, 0.75, 1, 1.5, 2];
 
@@ -126,6 +148,8 @@ export function ReplaySideBySideView({
   rightScoreId: number;
   onExit: () => void;
 }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const canvasLeftRef = useRef<HTMLCanvasElement>(null);
   const canvasRightRef = useRef<HTMLCanvasElement>(null);
   const renderersRef = useRef<ReplayRendererLike[]>([]);
@@ -145,6 +169,14 @@ export function ReplaySideBySideView({
   const audioEnabledRef = useRef(true);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [audioFailed, setAudioFailed] = useState(false);
+
+  const viewport = useSideBySideViewport();
+  const [fullscreen, setFullscreen] = useState(false);
+  const layout = resolveSideBySideLayout(viewport, fullscreen);
+  // Real fullscreen needs a user gesture, so the first play doubles as one.
+  // Once per mount only: leaving fullscreen and hitting play again must not
+  // drag the phone back in.
+  const autoFullscreenRef = useRef(false);
 
   const readClockTime = useCallback(() => {
     const clock = clockRef.current;
@@ -211,7 +243,6 @@ export function ReplaySideBySideView({
   useEffect(() => {
     if (!sides) return;
     let cancelled = false;
-    let handleResize: (() => void) | null = null;
 
     void (async () => {
       try {
@@ -284,10 +315,6 @@ export function ReplaySideBySideView({
         renderersRef.current = created;
         masterRendererRef.current = created[0] ?? null;
         maxDurationRef.current = Math.max(...created.map((renderer) => renderer.duration));
-        handleResize = () => {
-          for (const renderer of renderersRef.current) renderer.resize();
-        };
-        window.addEventListener("resize", handleResize);
         setSpeed(1);
         setReady(true);
       } catch (e) {
@@ -297,7 +324,6 @@ export function ReplaySideBySideView({
 
     return () => {
       cancelled = true;
-      if (handleResize) window.removeEventListener("resize", handleResize);
       for (const renderer of renderersRef.current) renderer.destroy();
       renderersRef.current = [];
       masterRendererRef.current = null;
@@ -305,6 +331,108 @@ export function ReplaySideBySideView({
       setIsPlaying(false);
     };
   }, [readClockTime, sides]);
+
+  const resizeRenderers = useCallback(() => {
+    for (const renderer of renderersRef.current) renderer.resize();
+  }, []);
+
+  const enterFullscreen = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    // The overlay goes up first and stands on its own if the request is
+    // refused: iPhone Safari has no element fullscreen to give.
+    setFullscreen(true);
+    void (async () => {
+      const entered = await requestNativeFullscreen(container).catch(() => false);
+      if (entered) {
+        await lockLandscapeOrientation();
+        return;
+      }
+      // Refused, and a phone is already showing the overlay: drop the flag so
+      // the button doesn't offer an exit from something that never happened.
+      if (viewport.touch) setFullscreen(false);
+    })();
+  }, [viewport.touch]);
+
+  const exitFullscreen = useCallback(() => {
+    setFullscreen(false);
+    unlockOrientation();
+    if (getNativeFullscreenElement()) void exitNativeFullscreen().catch(() => {});
+  }, []);
+
+  // The browser's own exits - Esc, the Android back gesture, the swipe-down
+  // pill - have to put the button and the layout back in sync.
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      if (getNativeFullscreenElement()) return;
+      setFullscreen(false);
+      unlockOrientation();
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", onFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", onFullscreenChange);
+    };
+  }, []);
+
+  // Leaving the comparison must never strand the phone fullscreen or locked
+  // to landscape. The node is captured on mount: by cleanup time the ref may
+  // already be detached.
+  useEffect(() => {
+    const container = containerRef.current;
+    return () => {
+      unlockOrientation();
+      if (container && getNativeFullscreenElement() === container) void exitNativeFullscreen().catch(() => {});
+    };
+  }, []);
+
+  // Nothing behind the overlay should scroll or rubber-band under a finger.
+  useEffect(() => {
+    if (!layout.overlay || typeof document === "undefined") return;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousOverscroll = document.documentElement.style.overscrollBehavior;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overscrollBehavior = "none";
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overscrollBehavior = previousOverscroll;
+    };
+  }, [layout.overlay]);
+
+  // A rotation, the mobile browser chrome sliding away, entering fullscreen:
+  // each one changes the canvas box, and the renderers only re-measure when
+  // told to. Watching the stage catches every cause in one place.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stage = stageRef.current;
+    if (stage && typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(() => window.requestAnimationFrame(resizeRenderers));
+      observer.observe(stage);
+      return () => observer.disconnect();
+    }
+    window.addEventListener("resize", resizeRenderers);
+    return () => window.removeEventListener("resize", resizeRenderers);
+  }, [ready, resizeRenderers]);
+
+  // Phones report the pre-rotation viewport for a beat afterwards, so measure
+  // again once it has settled.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const timeouts: number[] = [];
+    const onOrientationChange = () => {
+      window.requestAnimationFrame(resizeRenderers);
+      timeouts.push(window.setTimeout(resizeRenderers, 200), window.setTimeout(resizeRenderers, 500));
+    };
+    const orientation = window.screen?.orientation;
+    window.addEventListener("orientationchange", onOrientationChange);
+    orientation?.addEventListener("change", onOrientationChange);
+    return () => {
+      for (const id of timeouts) window.clearTimeout(id);
+      window.removeEventListener("orientationchange", onOrientationChange);
+      orientation?.removeEventListener("change", onOrientationChange);
+    };
+  }, [resizeRenderers]);
 
   const pause = useCallback(() => {
     const clock = clockRef.current;
@@ -315,8 +443,20 @@ export function ReplaySideBySideView({
     setIsPlaying(false);
   }, [readClockTime]);
 
+  // Turning the phone upright parks the playfields behind the rotate prompt;
+  // stop the transport there instead of letting it run on blind.
+  useEffect(() => {
+    if (layout.rotatePrompt) pause();
+  }, [layout.rotatePrompt, pause]);
+
   const play = useCallback(() => {
     if (renderersRef.current.length === 0) return;
+    // This tap is the gesture fullscreen needs, and a phone watching two
+    // playfields wants every pixel of the screen.
+    if (viewport.touch && !autoFullscreenRef.current) {
+      autoFullscreenRef.current = true;
+      enterFullscreen();
+    }
     const clock = clockRef.current;
     // Replaying from the end restarts the run.
     if (readClockTime() >= maxDurationRef.current - 1) {
@@ -334,7 +474,7 @@ export function ReplaySideBySideView({
       void audio.play().catch(() => {});
     }
     setIsPlaying(true);
-  }, [readClockTime]);
+  }, [enterFullscreen, readClockTime, viewport.touch]);
 
   const seekBoth = useCallback((timeMs: number) => {
     const clock = clockRef.current;
@@ -417,6 +557,18 @@ export function ReplaySideBySideView({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [pause, play, readClockTime, ready, seekBoth]);
 
+  // Escape leaves the overlay the same way it leaves real fullscreen; when the
+  // browser gave us the real thing it fires fullscreenchange and this is a
+  // no-op on top of it.
+  useEffect(() => {
+    if (!fullscreen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") exitFullscreen();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [exitFullscreen, fullscreen]);
+
   const stats = useLiveStats(renderersRef, ready);
   const toggle = useCallback(() => {
     if (clockRef.current.playing) pause();
@@ -436,46 +588,25 @@ export function ReplaySideBySideView({
     return calculateManiaStarRating(side.beatmap.notes, side.beatmap.keyCount, side.rate);
   }, [sides]);
 
-  // Both interstitials fill the same stage the comparison will, so the page
-  // doesn't jump when the replays land.
-  if (loading) {
-    return (
-      <div className="flex h-[calc(100dvh-60px)] flex-col items-center justify-center px-4 text-center">
-        <div className="mb-4 h-10 w-10 rounded-full border-2 border-osu-pink/40 border-t-osu-pink animate-spin" />
-        <p className="text-sm font-semibold text-osu-l2">Loading both replays...</p>
-        <p className="mt-1 max-w-md text-xs leading-relaxed text-osu-f1">Fetching the two runs and the beatmap.</p>
-        <button
-          type="button"
-          onClick={onExit}
-          className="mt-5 rounded-lg bg-white/10 px-4 py-2 text-xs font-semibold text-osu-f1 transition-colors hover:bg-white/20 hover:text-white cursor-pointer"
-        >
-          Cancel
-        </button>
-      </div>
-    );
-  }
-
-  if (error || !sides) {
-    return (
-      <div className="flex h-[calc(100dvh-60px)] flex-col items-center justify-center px-4 text-center">
-        <div className="text-sm font-bold text-white">Couldn't start the comparison</div>
-        <div className="mt-2 max-w-[460px] text-[12px] text-osu-f1">{error ?? "Something went wrong."}</div>
-        <button
-          type="button"
-          onClick={onExit}
-          className="mt-5 rounded-full bg-osu-pink px-6 py-2 text-sm font-bold text-white hover:brightness-110 transition cursor-pointer"
-        >
-          Pick two scores
-        </button>
-      </div>
-    );
-  }
-
-  const beatmapsetId = sides[0].score.beatmapset?.id;
+  const compact = layout.compact;
+  const beatmapsetId = sides?.[0].score.beatmapset?.id;
   const coverUrl = beatmapsetId ? `https://assets.ppy.sh/beatmaps/${beatmapsetId}/covers/cover@2x.jpg` : null;
 
+  // One root for every state - loading, failed, playing - because swapping the
+  // wrapper out mid-flight would take the canvases (and both replays) with it.
+  // The overlay/inline choice is a class on it, never a different tree.
   return (
-    <div className="relative flex h-[calc(100dvh-60px)] flex-col overflow-hidden bg-[#07070b]">
+    <div
+      ref={containerRef}
+      className={`flex flex-col overflow-hidden overscroll-none bg-[#07070b] ${
+        layout.overlay ? "fixed inset-0 z-[100] h-[100dvh] w-screen" : "relative h-[calc(100dvh-60px)]"
+      }`}
+      // Notched phones in landscape put the camera cutout over the left or
+      // right edge, exactly where a playfield would sit.
+      style={layout.overlay
+        ? { paddingLeft: "env(safe-area-inset-left)", paddingRight: "env(safe-area-inset-right)" }
+        : undefined}
+    >
       {coverUrl && (
         <div className="pointer-events-none absolute inset-0" aria-hidden="true">
           <div className="absolute inset-0 scale-110 bg-cover bg-center blur-xl" style={{ backgroundImage: `url(${coverUrl})` }} />
@@ -483,89 +614,195 @@ export function ReplaySideBySideView({
         </div>
       )}
 
-      <div className="relative flex min-h-0 flex-1 flex-col gap-2 px-2 py-2 sm:px-3">
-        <div className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-2">
-          <PlayerHeader side={sides[0]} accentIndex={0} />
-          <MapHeader side={sides[0]} stars={stars} onExit={onExit} />
-          <PlayerHeader side={sides[1]} accentIndex={1} align="right" />
+      {/* Both interstitials fill the same stage the comparison will, so the
+          page doesn't jump when the replays land. */}
+      {loading && (
+        <div className="relative flex flex-1 flex-col items-center justify-center px-4 text-center">
+          <div className="mb-4 h-10 w-10 rounded-full border-2 border-osu-pink/40 border-t-osu-pink animate-spin" />
+          <p className="text-sm font-semibold text-osu-l2">Loading both replays...</p>
+          <p className="mt-1 max-w-md text-xs leading-relaxed text-osu-f1">Fetching the two runs and the beatmap.</p>
+          <button
+            type="button"
+            onClick={onExit}
+            className="mt-5 rounded-lg bg-white/10 px-4 py-2 text-xs font-semibold text-osu-f1 transition-colors hover:bg-white/20 hover:text-white cursor-pointer"
+          >
+            Cancel
+          </button>
         </div>
+      )}
 
-        <ScoreLeadBar sides={sides} stats={stats} />
-
-        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(190px,250px)_minmax(0,1fr)] gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(250px,300px)_minmax(0,1fr)]">
-          <Stage canvasRef={canvasLeftRef} ready={ready} accentIndex={0} onToggle={toggle} />
-          <StatsColumn stats={stats} />
-          <Stage canvasRef={canvasRightRef} ready={ready} accentIndex={1} onToggle={toggle} />
+      {!loading && (error || !sides) && (
+        <div className="relative flex flex-1 flex-col items-center justify-center px-4 text-center">
+          <div className="text-sm font-bold text-white">Couldn't start the comparison</div>
+          <div className="mt-2 max-w-[460px] text-[12px] text-osu-f1">{error ?? "Something went wrong."}</div>
+          <button
+            type="button"
+            onClick={onExit}
+            className="mt-5 rounded-full bg-osu-pink px-6 py-2 text-sm font-bold text-white hover:brightness-110 transition cursor-pointer"
+          >
+            Pick two scores
+          </button>
         </div>
+      )}
 
-        <div className="shrink-0 border-t border-white/[0.07] px-1 pt-2">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => (isPlaying ? pause() : play())}
-              disabled={!ready}
-              aria-label={isPlaying ? "Pause both replays" : "Play both replays"}
-              className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-osu-pink text-white transition hover:bg-osu-pink-light active:scale-95 disabled:opacity-50"
-            >
-              {isPlaying ? (
-                <Pause className="h-4 w-4" fill="currentColor" strokeWidth={2.4} />
-              ) : (
-                <Play className="ml-0.5 h-4 w-4" fill="currentColor" strokeWidth={2.4} />
-              )}
-            </button>
-            <div className="min-w-0 flex-1">
-              <ReplayProgressBar
-                rendererRef={masterRendererRef}
-                heatmap={heatmap}
-                sliderClass=""
-                className="!gap-2 !px-0 !pb-0 !pt-0"
-                fillTrack
-                onPointerDown={() => {
-                  scrubResumeRef.current = isPlaying;
-                  if (isPlaying) pause();
-                }}
-                onPointerUp={() => {
-                  if (scrubResumeRef.current) play();
-                  scrubResumeRef.current = false;
-                }}
-                onSeek={seekBoth}
-                onContextMenu={() => {}}
-              />
-            </div>
-            {audioUrl && !audioFailed && (
+      {sides && !error && (
+        <div className={`relative flex min-h-0 flex-1 flex-col ${compact ? "gap-1 px-1.5 py-1" : "gap-2 px-2 py-2 sm:px-3"}`}>
+          <div className={`grid shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] ${compact ? "items-center gap-1.5" : "items-start gap-2"}`}>
+            <PlayerHeader side={sides[0]} accentIndex={0} compact={compact} />
+            <MapHeader side={sides[0]} stars={stars} compact={compact} onExit={onExit} />
+            <PlayerHeader side={sides[1]} accentIndex={1} compact={compact} align="right" />
+          </div>
+
+          <ScoreLeadBar sides={sides} stats={stats} compact={compact} />
+
+          <div
+            ref={stageRef}
+            className={`grid min-h-0 flex-1 ${
+              compact
+                ? "gap-1 grid-cols-[minmax(0,1fr)_minmax(148px,190px)_minmax(0,1fr)]"
+                : "gap-2 grid-cols-[minmax(0,1fr)_minmax(190px,250px)_minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_minmax(250px,300px)_minmax(0,1fr)]"
+            }`}
+          >
+            <Stage canvasRef={canvasLeftRef} ready={ready} accentIndex={0} onToggle={toggle} />
+            <StatsColumn stats={stats} compact={compact} />
+            <Stage canvasRef={canvasRightRef} ready={ready} accentIndex={1} onToggle={toggle} />
+          </div>
+
+          <div className={`shrink-0 border-t border-white/[0.07] ${compact ? "px-0.5 pt-1.5" : "px-1 pt-2"}`}>
+            <div className={`flex items-center ${compact ? "gap-2" : "gap-3"}`}>
               <button
                 type="button"
-                onClick={toggleAudio}
-                title={audioEnabled ? "Mute" : "Unmute"}
-                aria-pressed={!audioEnabled}
+                onClick={() => (isPlaying ? pause() : play())}
+                disabled={!ready}
+                aria-label={isPlaying ? "Pause both replays" : "Play both replays"}
+                className={`flex shrink-0 cursor-pointer items-center justify-center rounded-full bg-osu-pink text-white transition hover:bg-osu-pink-light active:scale-95 disabled:opacity-50 ${
+                  compact ? "h-8 w-8" : "h-9 w-9"
+                }`}
+              >
+                {isPlaying ? (
+                  <Pause className="h-4 w-4" fill="currentColor" strokeWidth={2.4} />
+                ) : (
+                  <Play className="ml-0.5 h-4 w-4" fill="currentColor" strokeWidth={2.4} />
+                )}
+              </button>
+              <div className="min-w-0 flex-1">
+                <ReplayProgressBar
+                  rendererRef={masterRendererRef}
+                  heatmap={heatmap}
+                  // A thumb sized for a mouse is a poor scrub handle for a finger.
+                  sliderClass={viewport.touch ? "[&::-webkit-slider-thumb]:!h-4 [&::-webkit-slider-thumb]:!w-4" : ""}
+                  className="!gap-2 !px-0 !pb-0 !pt-0"
+                  fillTrack
+                  onPointerDown={() => {
+                    scrubResumeRef.current = isPlaying;
+                    if (isPlaying) pause();
+                  }}
+                  onPointerUp={() => {
+                    if (scrubResumeRef.current) play();
+                    scrubResumeRef.current = false;
+                  }}
+                  onSeek={seekBoth}
+                  onContextMenu={() => {}}
+                />
+              </div>
+              {audioUrl && !audioFailed && (
+                <button
+                  type="button"
+                  onClick={toggleAudio}
+                  title={audioEnabled ? "Mute" : "Unmute"}
+                  aria-pressed={!audioEnabled}
+                  className="shrink-0 rounded p-1 text-osu-f1 hover:text-white transition-colors cursor-pointer"
+                >
+                  {audioEnabled ? <Volume2 className="h-4 w-4" aria-hidden="true" /> : <VolumeX className="h-4 w-4" aria-hidden="true" />}
+                </button>
+              )}
+              <div className={`hidden items-center sm:flex ${compact ? "gap-0" : "gap-1"}`}>
+                {SPEED_OPTIONS.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => applySpeed(option)}
+                    className={`rounded font-semibold tabular-nums transition-colors cursor-pointer ${
+                      compact ? "px-1 py-0.5 text-[10px]" : "px-1.5 py-0.5 text-[11px]"
+                    } ${speed === option ? "bg-osu-pink/20 text-osu-pink-light" : "text-osu-f1 hover:text-white"}`}
+                  >
+                    {option}x
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={fullscreen ? exitFullscreen : enterFullscreen}
+                title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+                aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+                aria-pressed={fullscreen}
                 className="shrink-0 rounded p-1 text-osu-f1 hover:text-white transition-colors cursor-pointer"
               >
-                {audioEnabled ? <Volume2 className="h-4 w-4" aria-hidden="true" /> : <VolumeX className="h-4 w-4" aria-hidden="true" />}
+                {fullscreen
+                  ? <Minimize2 className="h-4 w-4" aria-hidden="true" />
+                  : <Maximize2 className="h-4 w-4" aria-hidden="true" />}
               </button>
-            )}
-            <div className="hidden items-center gap-1 sm:flex">
-              {SPEED_OPTIONS.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => applySpeed(option)}
-                  className={`rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums transition-colors cursor-pointer ${
-                    speed === option ? "bg-osu-pink/20 text-osu-pink-light" : "text-osu-f1 hover:text-white"
-                  }`}
-                >
-                  {option}x
-                </button>
-              ))}
             </div>
+            {audioUrl && !audioFailed && (
+              <audio ref={audioRef} src={audioUrl} preload="auto" onError={() => setAudioFailed(true)} />
+            )}
+            {!compact && <MapFacts side={sides[0]} className="mt-2 hidden sm:flex" />}
           </div>
-          {audioUrl && !audioFailed && (
-            <audio ref={audioRef} src={audioUrl} preload="auto" onError={() => setAudioFailed(true)} />
-          )}
-          <MapFacts side={sides[0]} className="mt-2 hidden sm:flex" />
         </div>
-      </div>
+      )}
+
+      {/* Portrait: a cover, not a branch. The replays underneath stay loaded
+          and paused, so turning back costs nothing. */}
+      {layout.rotatePrompt && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-[#07070b]/95 px-6 text-center">
+          <Smartphone className="mb-2 h-10 w-10 rotate-90 text-osu-pink" aria-hidden="true" />
+          <p className="text-sm font-semibold text-osu-l2">Rotate your phone to watch both</p>
+          <p className="max-w-xs text-xs leading-relaxed text-osu-f1">
+            Two playfields with the stats between them need a landscape screen.
+            {sides ? " Both runs stay loaded - turn back and they're right where you left them." : ""}
+          </p>
+          <button
+            type="button"
+            onClick={onExit}
+            className="mt-3 rounded-lg bg-white/10 px-4 py-2 text-xs font-semibold text-osu-f1 hover:bg-white/20 hover:text-white transition-colors cursor-pointer"
+          >
+            Pick two scores
+          </button>
+        </div>
+      )}
     </div>
   );
+}
+
+/* Live viewport facts the stage reacts to. All three are media queries rather
+   than measurements so a rotation is one state update, not a resize storm. */
+function useSideBySideViewport(): SideBySideViewport {
+  const [viewport, setViewport] = useState<SideBySideViewport>({
+    portraitPhone: false,
+    shortViewport: false,
+    touch: false,
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const queries = [
+      window.matchMedia(SIDE_BY_SIDE_PORTRAIT_PHONE_QUERY),
+      window.matchMedia(SIDE_BY_SIDE_SHORT_VIEWPORT_QUERY),
+      window.matchMedia(SIDE_BY_SIDE_TOUCH_QUERY),
+    ];
+    const update = () => setViewport({
+      portraitPhone: queries[0].matches,
+      shortViewport: queries[1].matches,
+      touch: queries[2].matches,
+    });
+    update();
+    for (const query of queries) query.addEventListener("change", update);
+    return () => {
+      for (const query of queries) query.removeEventListener("change", update);
+    };
+  }, []);
+
+  return viewport;
 }
 
 // The stats tick 10 times a second; memoised so that never touches the two
@@ -578,7 +815,13 @@ const Stage = memo(function Stage({ canvasRef, ready, accentIndex, onToggle }: {
 }) {
   return (
     <div className={`relative min-h-0 overflow-hidden rounded-lg bg-black/55 ring-1 ${SIDE_ACCENTS[accentIndex].ring}`}>
-      <canvas ref={canvasRef} className="absolute inset-0 block h-full w-full" onClick={onToggle} />
+      {/* touch-manipulation: a tap is play/pause, so it must not wait on a
+          double-tap-to-zoom that would also zoom the stage out of the screen. */}
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 block h-full w-full touch-manipulation select-none"
+        onClick={onToggle}
+      />
       {!ready && (
         <div className="absolute inset-0 grid place-items-center">
           <LoaderCircle className="h-6 w-6 animate-spin text-osu-pink" strokeWidth={2.4} />
@@ -613,7 +856,11 @@ const LEAD_BAR_MAX_TILT = 0.42;
 // The tournament-overlay scoreboard: one bar whose split sits in the middle
 // while the runs are level and slides toward whoever is behind, so the leader
 // takes more of it. The scores read underneath, leader bright.
-function ScoreLeadBar({ sides, stats }: { sides: [SideBySideSide, SideBySideSide]; stats: (ReplayLiveStats | null)[] }) {
+function ScoreLeadBar({ sides, stats, compact }: {
+  sides: [SideBySideSide, SideBySideSide];
+  stats: (ReplayLiveStats | null)[];
+  compact: boolean;
+}) {
   const leftScore = stats[0]?.score ?? 0;
   const rightScore = stats[1]?.score ?? 0;
   const lead = leftScore - rightScore;
@@ -625,7 +872,7 @@ function ScoreLeadBar({ sides, stats }: { sides: [SideBySideSide, SideBySideSide
 
   return (
     <div className="shrink-0">
-      <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-osu-b4">
+      <div className={`relative w-full overflow-hidden rounded-full bg-osu-b4 ${compact ? "h-1" : "h-1.5"}`}>
         <div
           className="absolute inset-y-0 left-0 bg-osu-pink transition-[width] duration-300 ease-out"
           style={{ width: `${leftShare * 100}%` }}
@@ -639,22 +886,24 @@ function ScoreLeadBar({ sides, stats }: { sides: [SideBySideSide, SideBySideSide
           style={{ left: `${leftShare * 100}%` }}
         />
       </div>
-      <div className="mt-1.5 flex items-baseline justify-center gap-3">
+      <div className={`flex items-baseline justify-center ${compact ? "mt-0.5 gap-2" : "mt-1.5 gap-3"}`}>
         <LeadScore
           side={sides[0]}
           stats={stats[0]}
           accentIndex={0}
           state={leader == null ? "tied" : leader === 0 ? "leading" : "trailing"}
           delta={leader === 1 ? deltaLabel : null}
+          compact={compact}
           align="right"
         />
-        <span className="text-[9px] uppercase tracking-[0.2em] text-white/30">Score</span>
+        <span className={`uppercase tracking-[0.2em] text-white/30 ${compact ? "text-[8px]" : "text-[9px]"}`}>Score</span>
         <LeadScore
           side={sides[1]}
           stats={stats[1]}
           accentIndex={1}
           state={leader == null ? "tied" : leader === 1 ? "leading" : "trailing"}
           delta={leader === 0 ? deltaLabel : null}
+          compact={compact}
           align="left"
         />
       </div>
@@ -662,13 +911,14 @@ function ScoreLeadBar({ sides, stats }: { sides: [SideBySideSide, SideBySideSide
   );
 }
 
-function LeadScore({ side, stats, accentIndex, state, delta, align }: {
+function LeadScore({ side, stats, accentIndex, state, delta, compact, align }: {
   side: SideBySideSide;
   stats: ReplayLiveStats | null;
   accentIndex: 0 | 1;
   state: "leading" | "trailing" | "tied";
   /** Only set on the side that is behind. */
   delta: string | null;
+  compact: boolean;
   align: "left" | "right";
 }) {
   const value = stats
@@ -680,16 +930,17 @@ function LeadScore({ side, stats, accentIndex, state, delta, align }: {
       ? "font-bold text-white/75"
       : "font-bold text-white/45";
   return (
-    <span className={`flex flex-1 items-baseline gap-2 ${align === "right" ? "justify-end" : "flex-row-reverse justify-end"}`}>
-      {delta && <span className="text-[11px] font-semibold tabular-nums text-white/35">{delta}</span>}
-      <span className={`text-[26px] tabular-nums transition-colors ${tone}`}>{value}</span>
+    <span className={`flex min-w-0 flex-1 items-baseline ${compact ? "gap-1.5" : "gap-2"} ${align === "right" ? "justify-end" : "flex-row-reverse justify-end"}`}>
+      {delta && <span className={`font-semibold tabular-nums text-white/35 ${compact ? "text-[10px]" : "text-[11px]"}`}>{delta}</span>}
+      <span className={`truncate tabular-nums transition-colors ${compact ? "text-[17px]" : "text-[26px]"} ${tone}`}>{value}</span>
     </span>
   );
 }
 
-function PlayerHeader({ side, accentIndex, align = "left" }: {
+function PlayerHeader({ side, accentIndex, compact, align = "left" }: {
   side: SideBySideSide;
   accentIndex: 0 | 1;
+  compact: boolean;
   align?: "left" | "right";
 }) {
   const accent = SIDE_ACCENTS[accentIndex];
@@ -698,25 +949,46 @@ function PlayerHeader({ side, accentIndex, align = "left" }: {
   const playedAt = getScoreTimestamp(score);
   const mods = getModDisplayList(score.mods);
   const right = align === "right";
+  const nameNode = score.user?.username ? (
+    <Link
+      to="/player/$username"
+      params={{ username: score.user.username }}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`truncate font-bold ${compact ? "text-[13px]" : "text-[17px]"} ${accent.text} hover:underline underline-offset-2`}
+    >
+      {name}
+    </Link>
+  ) : (
+    <span className={`truncate font-bold text-white ${compact ? "text-[13px]" : "text-[17px]"}`}>{name}</span>
+  );
+
+  // Compact folds the two rows into one and drops the date: on a landscape
+  // phone every line here is a line the playfields don't get.
+  if (compact) {
+    return (
+      <div className={`flex min-w-0 items-center gap-1.5 ${right ? "flex-row-reverse text-right" : "text-left"}`}>
+        <GradeImg grade={getDisplayedRank(score)} size={20} />
+        <CountryFlag code={score.user?.country_code} size="sm" decorative />
+        {nameNode}
+        {mods.length > 0 && (
+          <span className="flex shrink-0 items-center gap-0.5">
+            {mods.map((mod, index) => (
+              <ModBadge key={`${mod.acronym}-${index}`} mod={mod.acronym} rate={mod.rate} size={0.6} />
+            ))}
+          </span>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className={`flex min-w-0 items-center gap-2.5 ${right ? "flex-row-reverse text-right" : "text-left"}`}>
       <GradeImg grade={getDisplayedRank(score)} size={32} />
       <div className={`min-w-0 ${right ? "items-end" : "items-start"} flex flex-col gap-0.5`}>
         <div className={`flex min-w-0 items-center gap-1.5 ${right ? "flex-row-reverse" : ""}`}>
           <CountryFlag code={score.user?.country_code} size="md" decorative />
-          {score.user?.username ? (
-            <Link
-              to="/player/$username"
-              params={{ username: score.user.username }}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`truncate text-[17px] font-bold ${accent.text} hover:underline underline-offset-2`}
-            >
-              {name}
-            </Link>
-          ) : (
-            <span className="truncate text-[17px] font-bold text-white">{name}</span>
-          )}
+          {nameNode}
         </div>
         <div className={`flex items-center gap-2 ${right ? "flex-row-reverse" : ""}`}>
           {playedAt && <span className="text-[12px] tabular-nums text-white/55">{formatDate(playedAt)}</span>}
@@ -733,7 +1005,12 @@ function PlayerHeader({ side, accentIndex, align = "left" }: {
   );
 }
 
-function MapHeader({ side, stars, onExit }: { side: SideBySideSide; stars: number | null; onExit: () => void }) {
+function MapHeader({ side, stars, compact, onExit }: {
+  side: SideBySideSide;
+  stars: number | null;
+  compact: boolean;
+  onExit: () => void;
+}) {
   const set = side.score.beatmapset;
   const title = set?.title ?? side.beatmap?.title ?? "Unknown map";
   const artist = set?.artist ?? side.beatmap?.artist;
@@ -742,6 +1019,30 @@ function MapHeader({ side, stars, onExit }: { side: SideBySideSide; stars: numbe
   const mapUrl = beatmapsetId
     ? `https://osu.ppy.sh/beatmapsets/${beatmapsetId}${side.score.beatmap?.id ? `#mania/${side.score.beatmap.id}` : ""}`
     : null;
+  const fullTitle = `${artist ? `${artist} - ` : ""}${title}`;
+
+  // Compact runs the whole header on one line, and the title stops being a
+  // link: it sits under a thumb mid-run, and a stray tap that opens osu! would
+  // throw the phone out of fullscreen.
+  if (compact) {
+    return (
+      <div className="flex min-w-0 max-w-[46vw] items-center justify-center gap-1.5 px-1">
+        <button
+          type="button"
+          onClick={onExit}
+          aria-label="Back to the picker"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-white/20 bg-white/15 text-white transition-colors hover:bg-white/25 cursor-pointer"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+        {stars != null && <StarRatingBadge stars={stars} size={1.1} />}
+        <span className="min-w-0 truncate text-[11px] font-semibold text-white" title={`${fullTitle} [${version ?? ""}]`}>
+          {fullTitle}
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-w-0 max-w-[520px] flex-col items-center gap-1 px-2 text-center">
       <div className="flex items-center gap-2">
@@ -761,12 +1062,12 @@ function MapHeader({ side, stars, onExit }: { side: SideBySideSide; stars: numbe
           target="_blank"
           rel="noopener noreferrer"
           className="min-w-0 truncate text-[14px] font-semibold text-white transition-colors hover:text-osu-pink-light"
-          title={`${artist ? `${artist} - ` : ""}${title} [${version ?? ""}]`}
+          title={`${fullTitle} [${version ?? ""}]`}
         >
-          {artist ? `${artist} - ` : ""}{title}
+          {fullTitle}
         </a>
       ) : (
-        <span className="min-w-0 truncate text-[14px] font-semibold text-white">{artist ? `${artist} - ` : ""}{title}</span>
+        <span className="min-w-0 truncate text-[14px] font-semibold text-white">{fullTitle}</span>
       )}
       {version && <span className="min-w-0 truncate text-[12px] text-white/55">[{version}]</span>}
     </div>
@@ -815,6 +1116,8 @@ interface StatRow {
   rank?: (stats: ReplayLiveStats) => number;
   better?: "higher" | "lower";
   valueClass?: string;
+  /** Used on short viewports, where the default sizes would overflow. */
+  compactValueClass?: string;
 }
 
 const JUDGEMENT_ROWS: StatRow[] = [
@@ -837,8 +1140,8 @@ const TIMING_ROWS: StatRow[] = [
 ];
 
 const HEADLINE_ROWS: StatRow[] = [
-  { label: "Accuracy", format: (s) => `${s.accuracy.toFixed(2)}%`, rank: (s) => s.accuracy, better: "higher", valueClass: "text-[19px]" },
-  { label: "UR", format: (s) => s.unstableRate.toFixed(2), rank: (s) => s.unstableRate, better: "lower", valueClass: "text-[16px]" },
+  { label: "Accuracy", format: (s) => `${s.accuracy.toFixed(2)}%`, rank: (s) => s.accuracy, better: "higher", valueClass: "text-[19px]", compactValueClass: "text-[14px]" },
+  { label: "UR", format: (s) => s.unstableRate.toFixed(2), rank: (s) => s.unstableRate, better: "lower", valueClass: "text-[16px]", compactValueClass: "text-[12px]" },
 ];
 
 const PP_ROWS: StatRow[] = [
@@ -848,42 +1151,58 @@ const PP_ROWS: StatRow[] = [
     rank: (s) => s.pp,
     better: "higher",
     valueClass: "text-[16px]",
+    compactValueClass: "text-[12px]",
   },
 ];
 
 // Deliberately unboxed: the stages either side carry their own frames, so
 // panelling these numbers as well just stacks borders in the middle of the
 // screen. One centred block, hairlines between the groups.
-function StatsColumn({ stats }: { stats: (ReplayLiveStats | null)[] }) {
+//
+// Compact drops the timing group rather than letting the column scroll: a
+// readout you have to swipe through mid-run is worse than one that shows
+// fewer numbers, and accuracy/judgements/pp are what the runs are read on.
+function StatsColumn({ stats, compact }: { stats: (ReplayLiveStats | null)[]; compact: boolean }) {
   const left = stats[0] ?? null;
   const right = stats[1] ?? null;
 
   return (
-    <div className="flex min-h-0 flex-col justify-center gap-3.5 overflow-y-auto px-1 py-2">
-      <StatGroup rows={HEADLINE_ROWS} left={left} right={right} />
-      <StatGroup rows={JUDGEMENT_ROWS} left={left} right={right} divider />
-      <StatGroup rows={TIMING_ROWS} left={left} right={right} divider />
-      <StatGroup rows={PP_ROWS} left={left} right={right} divider />
+    // min-h-full on the inner column, not justify-center on the scroller: a
+    // centred flex child that outgrows its scroll box clips its own top away
+    // with no way to scroll back up to it.
+    <div className="min-h-0 overflow-y-auto overscroll-contain">
+      <div className={`flex min-h-full flex-col justify-center ${compact ? "gap-1.5 px-0.5" : "gap-3.5 px-1 py-2"}`}>
+        <StatGroup rows={HEADLINE_ROWS} left={left} right={right} compact={compact} />
+        <StatGroup rows={JUDGEMENT_ROWS} left={left} right={right} compact={compact} divider />
+        {!compact && <StatGroup rows={TIMING_ROWS} left={left} right={right} compact={compact} divider />}
+        <StatGroup rows={PP_ROWS} left={left} right={right} compact={compact} divider />
+      </div>
     </div>
   );
 }
 
-function StatGroup({ rows, left, right, divider = false }: {
+function StatGroup({ rows, left, right, compact, divider = false }: {
   rows: StatRow[];
   left: ReplayLiveStats | null;
   right: ReplayLiveStats | null;
+  compact: boolean;
   divider?: boolean;
 }) {
   return (
-    <div className={divider ? "border-t border-white/[0.07] pt-3.5" : ""}>
+    <div className={divider ? `border-t border-white/[0.07] ${compact ? "pt-1.5" : "pt-3.5"}` : ""}>
       {rows.map((row) => (
-        <StatLine key={row.label} row={row} left={left} right={right} />
+        <StatLine key={row.label} row={row} left={left} right={right} compact={compact} />
       ))}
     </div>
   );
 }
 
-function StatLine({ row, left, right }: { row: StatRow; left: ReplayLiveStats | null; right: ReplayLiveStats | null }) {
+function StatLine({ row, left, right, compact }: {
+  row: StatRow;
+  left: ReplayLiveStats | null;
+  right: ReplayLiveStats | null;
+  compact: boolean;
+}) {
   // Whoever is ahead on this line right now reads bright; the other dims. It
   // is the whole point of the column, so it has to be legible at a glance.
   let leader: 0 | 1 | null = null;
@@ -892,15 +1211,16 @@ function StatLine({ row, left, right }: { row: StatRow; left: ReplayLiveStats | 
     const b = row.rank(right);
     if (a !== b) leader = (row.better === "higher") === (a > b) ? 0 : 1;
   }
+  const size = compact ? row.compactValueClass ?? "text-[12px]" : row.valueClass ?? "text-[15px]";
   const valueClass = (index: 0 | 1) =>
-    `truncate font-bold tabular-nums ${row.valueClass ?? "text-[15px]"} ${
+    `truncate font-bold tabular-nums ${size} ${
       leader == null ? "text-white/85" : leader === index ? "text-white" : "text-white/40"
     }`;
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-baseline gap-x-2.5 py-[3px]">
+    <div className={`grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-baseline ${compact ? "gap-x-1.5 py-0" : "gap-x-2.5 py-[3px]"}`}>
       <span className={`${valueClass(0)} text-right`}>{left ? row.format(left) : "-"}</span>
-      <span className={`text-[10px] font-semibold uppercase tracking-[0.1em] ${row.labelClass ?? "text-white/40"}`}>{row.label}</span>
+      <span className={`font-semibold uppercase tracking-[0.1em] ${compact ? "text-[9px]" : "text-[10px]"} ${row.labelClass ?? "text-white/40"}`}>{row.label}</span>
       <span className={`${valueClass(1)} text-left`}>{right ? row.format(right) : "-"}</span>
     </div>
   );
