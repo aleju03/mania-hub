@@ -44,6 +44,11 @@ export type PackWalletCardsMode = "snapshot" | "delta";
 
 const PAYLOAD_MAX_CHARS = 3_500_000;
 
+// Mirrors PACK_COLLECTION_MAX_PAGE_SIZE in the live backend's pack-wallets
+// feature; the album pages the whole collection, so a wide page keeps that
+// walk to a few round trips instead of a dozen.
+export const PACK_COLLECTION_MAX_PAGE_SIZE = 250;
+
 async function getSyncTarget(): Promise<{ url: string; headers: HeadersInit } | null> {
   const { readCurrentAuth } = await import("./auth-server");
   const auth = await readCurrentAuth();
@@ -124,7 +129,7 @@ export const pushServerPackWallet = createServerFn({ method: "POST" })
 export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
   .validator((input: { page?: unknown; pageSize?: unknown; tier?: unknown; query?: unknown }) => {
     const page = Math.max(0, Math.floor(Number(input?.page) || 0));
-    const pageSize = Math.min(60, Math.max(1, Math.floor(Number(input?.pageSize) || 15)));
+    const pageSize = Math.min(PACK_COLLECTION_MAX_PAGE_SIZE, Math.max(1, Math.floor(Number(input?.pageSize) || 15)));
     const tier = typeof input?.tier === "string" ? input.tier : "all";
     const query = typeof input?.query === "string" ? input.query : "";
     return { page, pageSize, tier, query };

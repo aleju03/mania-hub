@@ -465,6 +465,9 @@ export function CollectionPanel({
   onApplyMint,
 }: CollectionPanelProps) {
   const [query, setQuery] = useState("");
+  // Searching a synced collection is a server round trip per distinct query, so
+  // it waits for a pause in typing instead of firing a request per keystroke.
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [tierFilter, setTierFilter] = useState<ManiaCardTier | "all" | "unrated">("all");
   // Recycling the last copy removes the card from the collection, so it
   // takes a second tap to confirm.
@@ -649,11 +652,14 @@ export function CollectionPanel({
 
   const walletReady = wallet !== null;
   const useServerCollection = walletReady && syncStatus !== "local";
+  // Only the server path pays for a keystroke; a local wallet filters in
+  // memory, so it keeps searching as you type.
+  const activeQuery = useServerCollection ? debouncedQuery : query;
   const serverRequest = {
     page: collectionPage,
     pageSize: COLLECTION_PAGE_SIZE,
     tier: tierFilter,
-    query: query.trim().toLowerCase(),
+    query: activeQuery.trim().toLowerCase(),
   };
   const serverCacheKey = serverCollectionCacheKey(serverRequest);
   const serverFilterKey = serverCollectionFilterKey(serverRequest);
@@ -740,6 +746,11 @@ export function CollectionPanel({
     : visibleCards.reduce((sum, card) => sum + card.copies * shardValueForTier(card.tier), 0);
   const selectedCount = selectionScope === "all" ? filteredTotal : selected.size;
   const bulkShardTotal = selectionScope === "all" ? filteredShardTotal : selectedShardTotal;
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query), 250);
+    return () => clearTimeout(timer);
+  }, [query]);
 
   useEffect(() => {
     setCollectionPage(0);
@@ -1040,7 +1051,10 @@ export function CollectionPanel({
         </div>
       ) : filteredTotal === 0 && !serverLoading && !serverPagePending ? (
         <div className="mt-6 rounded-xl border border-osu-b3/40 bg-osu-b4/40 px-6 py-8 text-center text-[12px] text-osu-f1">
-          No cards match{trimmedQuery ? ` "${query.trim()}"` : " the selected rarity"}.
+          {/* Quotes the query the results actually came from, not what is in
+              the box right now, so the count and the text agree while a
+              debounced search is still settling. */}
+          No cards match{trimmedQuery ? ` "${activeQuery.trim()}"` : " the selected rarity"}.
         </div>
       ) : (
         <div className={`mt-4 grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-5 ${selecting ? "select-none" : ""}`}>

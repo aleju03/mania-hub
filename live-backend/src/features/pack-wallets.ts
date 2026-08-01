@@ -40,6 +40,11 @@ export interface PackCollectionPage {
   filteredShardTotal: number;
 }
 
+/* The album needs the whole collection, and it walks pages to get there, so a
+   small ceiling turns one browse into a dozen round trips. Cards are a few
+   hundred bytes each, so a wide page is still a small response. */
+export const PACK_COLLECTION_MAX_PAGE_SIZE = 250;
+
 export type PackRecycleMode = "duplicates" | "whole" | "all_duplicates" | "whole_matching";
 export type PackWalletCardImportMode = "snapshot" | "delta";
 
@@ -365,7 +370,7 @@ export async function listPackCollectionCards(
   userId: number,
   options: { page: number; pageSize: number; tier?: string | null; query?: string | null },
 ): Promise<PackCollectionPage> {
-  const pageSize = Math.min(60, Math.max(1, Math.floor(options.pageSize)));
+  const pageSize = Math.min(PACK_COLLECTION_MAX_PAGE_SIZE, Math.max(1, Math.floor(options.pageSize)));
   const page = Math.max(0, Math.floor(options.page));
   const where = ["owner_user_id = ?", "copies > 0"];
   const args: InValue[] = [userId];

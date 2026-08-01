@@ -49,6 +49,17 @@ describe("buildManiaCardRenderData", () => {
     expect(data.user.id).toBe(123);
     expect(data.user.username).toBe("PlayerWithAVeryLongName");
     expect(data.avatarUrl).toBe("/api/avatar?u=123");
+  });
+
+  // Card textures need the CORS proxy, so every thumbnail render is an origin
+  // fetch unless the URL is stable. Carrying osu!'s version token through makes
+  // the proxy URL immutable and cacheable for good.
+  test("carries the osu! avatar version into the proxy URL", () => {
+    const versioned = { ...user, avatar_url: "https://a.ppy.sh/123?1730000000.jpeg" } as OsuUser;
+    const data = buildManiaCardRenderData({ user: versioned, scores: [score(6.2, 420)] });
+
+    if (data.status !== "ready") throw new Error("expected ready data");
+    expect(data.avatarUrl).toBe("/api/avatar?u=123&v=1730000000.jpeg");
     expect(data.stats).toEqual([
       { label: "Control", value: data.skills.fingerControl },
       { label: "Speed", value: data.skills.speed },

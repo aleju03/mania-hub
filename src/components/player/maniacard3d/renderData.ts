@@ -1,3 +1,4 @@
+import { avatarImageSrc } from "#/components/ui/Avatar";
 import {
   computeManiaSkills,
   getManiaCardTier,
@@ -50,7 +51,11 @@ export function buildManiaCardRenderDataFromSkills({
   return {
     status: "ready",
     user,
-    avatarUrl: `/api/avatar?u=${user.id}`,
+    // Card textures go onto a canvas, so they need the CORS-bearing proxy
+    // rather than a.ppy.sh directly. Passing the stored avatar URL through
+    // carries osu!'s version token into the proxy URL, which makes each one
+    // immutable and lets the CDN hold it instead of re-fetching per render.
+    avatarUrl: avatarImageSrc(user.avatar_url, user.id, { proxy: true }) ?? `/api/avatar?u=${user.id}`,
     scores,
     skills,
     tier,

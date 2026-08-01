@@ -7,6 +7,7 @@ import { ownedCards, type CollectedCard, type PackWallet } from "#/lib/pack-coll
 import {
   fetchServerPackCollectionOwnedIds,
   fetchServerPackCollectionPage,
+  PACK_COLLECTION_MAX_PAGE_SIZE,
 } from "#/lib/pack-wallet-sync";
 import {
   fetchLiveGlobalRankings,
@@ -220,11 +221,15 @@ async function loadFullServerCollection(): Promise<CollectedCard[] | null> {
   if (serverCollectionPromise) return serverCollectionPromise;
   serverCollectionPromise = (async () => {
     try {
-      const pageSize = 60;
+      const pageSize = PACK_COLLECTION_MAX_PAGE_SIZE;
       const first = await fetchServerPackCollectionPage({ data: { page: 0, pageSize, tier: "all", query: "" } });
       if (!first) return null;
       const cards: CollectedCard[] = [...first.cards];
-      const totalPages = Math.ceil(first.total / pageSize);
+      // The backend clamps to its own ceiling, which can be lower than what we
+      // asked for while a deploy is only half rolled out. Paging by the width
+      // it actually returned keeps the walk from striding past whole pages.
+      const effectivePageSize = first.cards.length || pageSize;
+      const totalPages = Math.ceil(first.total / effectivePageSize);
       for (let page = 1; page < totalPages; page += 1) {
         const next = await fetchServerPackCollectionPage({ data: { page, pageSize, tier: "all", query: "" } });
         if (!next) break;
