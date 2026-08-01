@@ -154,15 +154,9 @@ const MANIA_BAR_NOTE_HEIGHT_RATIO = 0.22;
 // height, so the taller redesigned stage adds lookahead rather than speed.
 const MOBILE_PORTRAIT_REFERENCE_HEIGHT = 430;
 const BACKGROUND_OVERSCAN_SCALE = 1.02;
-// Pixi explicitly loses its WebGL context during destroy. Reopening a replay
-// immediately afterwards can wedge ANGLE while the old loss is still settling,
-// so that one rapid remount uses the Canvas backend instead.
-const RAPID_WEBGL_RECREATE_GUARD_MS = 5000;
 // Events crossed more than this far behind the playback clock (lag spikes,
 // tab switches) stay silent instead of firing as a burst.
 const HITSOUND_MAX_LATENESS_MS = 200;
-
-let lastReplayWebglDestroyedAt = Number.NEGATIVE_INFINITY;
 
 function getLiveWebglDiagnostics(renderer: Application["renderer"]): Record<string, unknown> {
   const webglRenderer = renderer as Application["renderer"] & {
@@ -889,21 +883,9 @@ export class ManiaReplayRenderer {
     this.markInitProgress("pixi_application_create_started");
     const app = new Application();
     this.markInitProgress("pixi_application_created");
-    const sinceWebglDestroy = performance.now() - lastReplayWebglDestroyedAt;
-    const useRapidRemountCanvasFallback = sinceWebglDestroy >= 0
-      && sinceWebglDestroy < RAPID_WEBGL_RECREATE_GUARD_MS;
-    // Chrome/ANGLE is especially prone to wedging when a GPU context is
-    // created while its tab is backgrounded. Canvas is slower but safe, and a
-    // replay opened in the background should still become usable on return.
-    const useBackgroundTabCanvasFallback = document.visibilityState !== "visible";
-    const rendererPreference: Array<"webgl" | "canvas"> = useRapidRemountCanvasFallback
-      || useBackgroundTabCanvasFallback
-      ? ["canvas"]
-      : ["webgl", "canvas"];
+    const rendererPreference: Array<"webgl" | "canvas"> = ["webgl", "canvas"];
     this.markInitProgress("renderer_context_requested", {
       renderer_preference: rendererPreference.join(","),
-      rapid_remount_canvas_fallback: useRapidRemountCanvasFallback,
-      background_tab_canvas_fallback: useBackgroundTabCanvasFallback,
       visibility_state: document.visibilityState,
       power_preference: "high-performance",
       canvas_width: Math.max(1, this.cssWidth),
@@ -6520,9 +6502,6 @@ export class ManiaReplayRenderer {
     this.storyboardSpritePool = [];
     const destroyApp = () => {
       if (!this.app) return;
-      if (formatPixiRendererType(this.app.renderer.type, this.app.renderer.name) === "WebGL") {
-        lastReplayWebglDestroyedAt = performance.now();
-      }
       this.clearTextLayer();
       this.clearComboTextLayer();
       this.clearSkinSprites();

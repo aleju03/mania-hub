@@ -14,11 +14,9 @@ describe("ManiaReplayRenderer initialization", () => {
 
     expect(source).not.toContain('preference: "webgl"');
     expect(source).toContain('const rendererPreference: Array<"webgl" | "canvas">');
-    expect(source).toContain('? ["canvas"]');
-    expect(source).toContain(': ["webgl", "canvas"]');
+    expect(source).toContain('= ["webgl", "canvas"];');
     expect(source).toContain("preference: rendererPreference");
-    expect(source).toContain("RAPID_WEBGL_RECREATE_GUARD_MS = 5000");
-    expect(source).toContain('const useBackgroundTabCanvasFallback = document.visibilityState !== "visible";');
+    expect(source).not.toContain('= ["canvas"];');
   });
 
   it("maps the 1-40 scroll speed setting through lazer's mania time range", () => {
