@@ -18,6 +18,7 @@ tmp-*.mjs
 tmp-*.js
 tmp-*.ts
 cache/replay-fixtures/
+cache/replay-captures/
 capture-replays/*
 !capture-replays/.gitkeep
 
