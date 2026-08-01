@@ -113,31 +113,6 @@ function clearRecord(record: BeaconRecord) {
 
 const toMb = (bytes: number) => Math.round(bytes / 1048576);
 
-// Probes a throwaway WebGL context for GPU identity + WebGL availability. This
-// distinguishes a GPU/driver crash on a specific card (gpu_renderer set, WebGL
-// supported) from a no-WebGL Canvas-fallback grind (webgl_supported false). The
-// context is dropped immediately so it never counts against the browser's live
-// WebGL context limit.
-function getGpuInfo(): Record<string, unknown> {
-  try {
-    if (typeof document === "undefined") return {};
-    const canvas = document.createElement("canvas");
-    const gl2 = canvas.getContext("webgl2");
-    const gl = (gl2 ?? canvas.getContext("webgl")) as WebGLRenderingContext | null;
-    if (!gl) return { webgl_supported: false };
-    const info: Record<string, unknown> = { webgl_supported: true, webgl_version: gl2 ? 2 : 1 };
-    const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
-    if (debugInfo) {
-      info.gpu_renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) ?? null;
-      info.gpu_vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) ?? null;
-    }
-    gl.getExtension("WEBGL_lose_context")?.loseContext();
-    return info;
-  } catch {
-    return {};
-  }
-}
-
 // Merges late diagnostics into the live beacon (e.g. the resolved Pixi renderer
 // backend once it initialises, or a WebGL context-loss marker). No-op when no
 // session is active.
@@ -243,7 +218,7 @@ export function startReplayWatchBeacon(
   if (typeof window === "undefined") return () => {};
 
   const startedAt = Date.now();
-  const initialStage: ReplayWatchTraceEntry = { stage: "gpu_probe_started", atMs: 0 };
+  const initialStage: ReplayWatchTraceEntry = { stage: "beacon_started", atMs: 0 };
   const record: BeaconRecord = {
     sessionId: crypto.randomUUID(),
     startedAt,
@@ -265,11 +240,11 @@ export function startReplayWatchBeacon(
     lastError: null,
   };
   activeRecord = record;
-  // Persist before asking the browser for the diagnostic WebGL context. A bad
-  // driver can die during the probe itself, in which case this is the only
-  // marker that can survive.
+  // Never create a diagnostic WebGL context here. Creating and immediately
+  // losing a throwaway context just before Pixi requests the real one can hang
+  // ANGLE/the GPU process. GPU identity is read from Pixi's live context after
+  // initialization instead.
   writeRecord(record);
-  markReplayRendererInitStage("gpu_probe_finished", getGpuInfo());
 
   const sample = () => {
     record.lastSampleAt = Date.now();

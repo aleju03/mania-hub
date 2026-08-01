@@ -13,7 +13,7 @@ import { MissingBeatmapPanel, ReplayBrowseView } from "../components/replay/Repl
 import type { ReplayBrowseMode } from "../components/replay/ReplayBrowseView";
 import { ReplayControls, ReplayProgressBar } from "../components/replay/ReplayControls";
 import type { ReplayVideoExportOptions } from "../components/replay/ReplayControls";
-import { ReplayCompareView } from "../components/replay/ReplayCompareView";
+import { ReplaySideBySideView } from "../components/replay/ReplaySideBySideView";
 import { ReplayInfo } from "../components/replay/ReplayInfo";
 import type { ReplayPlayerProfile } from "../components/replay/ReplayInfo";
 import { ReplaySkinSettingsModal } from "../components/replay/ReplaySkinSettingsModal";
@@ -126,9 +126,22 @@ interface ReplaySearch {
   beatmapsetId?: number;
   uploadId?: string;
   t?: number; // timestamp in seconds to seek to on load
-  tab?: "player" | "beatmap" | "upload";
+  tab?: ReplayBrowseTab;
   player?: string; // selected player username (for URL state)
-  compareId?: number; // second score for side-by-side compare mode
+  // The two runs of the Side by Side tab; both present or neither.
+  compareA?: number;
+  compareB?: number;
+}
+
+/** Browse tabs that survive in the URL ("player" is the default, so it doesn't). */
+type ReplayBrowseTab = "beatmap" | "side-by-side" | "upload";
+
+function isReplayBrowseTab(value: unknown): value is ReplayBrowseTab {
+  return value === "beatmap" || value === "side-by-side" || value === "upload";
+}
+
+function browseModeFromTab(tab: unknown): ReplayBrowseMode {
+  return isReplayBrowseTab(tab) ? tab : "player";
 }
 
 type PlayerScoreGroups = { best: OsuScore[]; firsts: OsuScore[]; pinned: OsuScore[]; recent: OsuScore[] };
@@ -579,6 +592,7 @@ export const Route = createFileRoute("/replay")({
       && typeof beatmapsetId !== "number"
       && !playerName
       && !match.search.tab
+      && typeof match.search.compareA !== "number"
       && typeof match.search.t !== "number";
     const title = hasSharedScore
       ? buildReplaySeoTitle(scoreId, loaderData?.seoScore, playerName)
@@ -605,15 +619,25 @@ export const Route = createFileRoute("/replay")({
     });
   },
   component: ReplayPage,
-  validateSearch: (s: Record<string, unknown>): ReplaySearch => ({
-    scoreId: Number(s.scoreId) || undefined,
-    beatmapsetId: Number(s.beatmapsetId) || undefined,
-    uploadId: typeof s.uploadId === "string" && UPLOADED_REPLAY_ID_PATTERN.test(s.uploadId) ? s.uploadId : undefined,
-    t: Number(s.t) || undefined,
-    tab: s.tab === "beatmap" || s.tab === "upload" ? s.tab : undefined,
-    player: (s.player as string) || undefined,
-    compareId: Number(s.compareId) || undefined,
-  }),
+  validateSearch: (s: Record<string, unknown>): ReplaySearch => {
+    const scoreId = Number(s.scoreId) || undefined;
+    // Side by side used to be entered from the score card, as
+    // ?scoreId=A&compareId=B. Those links still open the comparison.
+    const legacyCompareId = Number(s.compareId) || undefined;
+    const compareA = Number(s.compareA) || (legacyCompareId ? scoreId : undefined);
+    const compareB = Number(s.compareB) || legacyCompareId;
+    const comparing = Boolean(compareA && compareB);
+    return {
+      scoreId: comparing ? undefined : scoreId,
+      beatmapsetId: Number(s.beatmapsetId) || undefined,
+      uploadId: typeof s.uploadId === "string" && UPLOADED_REPLAY_ID_PATTERN.test(s.uploadId) ? s.uploadId : undefined,
+      t: Number(s.t) || undefined,
+      tab: isReplayBrowseTab(s.tab) ? s.tab : undefined,
+      player: (s.player as string) || undefined,
+      compareA: comparing ? compareA : undefined,
+      compareB: comparing ? compareB : undefined,
+    };
+  },
 });
 
 function mergeScoresById(...groups: OsuScore[][]): OsuScore[] {
@@ -674,7 +698,8 @@ async function fetchReplayCachedProfileSnapshot(key: string): Promise<LivePlayer
 }
 
 function ReplayPage() {
-  const { scoreId, beatmapsetId, uploadId, t: initialTime, tab, player: playerParam, compareId } = Route.useSearch();
+  const { scoreId, beatmapsetId, uploadId, t: initialTime, tab, player: playerParam, compareA, compareB } = Route.useSearch();
+  const sideBySide = compareA != null && compareB != null ? { left: compareA, right: compareB } : null;
   const loaderData = Route.useLoaderData();
   const navigate = useNavigate();
   const router = useRouter();
@@ -743,7 +768,7 @@ function ReplayPage() {
   const playerIdsByParamRef = useRef<Map<string, number>>(new Map());
 
   // Browse mode
-  const [browseMode, setBrowseMode] = useState<ReplayBrowseMode>(tab === "beatmap" || tab === "upload" ? tab : "player");
+  const [browseMode, setBrowseMode] = useState<ReplayBrowseMode>(() => browseModeFromTab(tab));
 
   // Beatmap browse state
   const [beatmapQuery, setBeatmapQuery] = useState("");
@@ -772,14 +797,6 @@ function ReplayPage() {
     () => visibleRawBeatmapScores.filter((s) => scoreHasReplay(s)),
     [visibleRawBeatmapScores],
   );
-  // Compare picker candidates: strictly the leaderboard already sitting in
-  // memory from the browse tab (no fetch). Empty when the viewer was reached
-  // some other way, in which case the compare form falls back to link-paste.
-  const compareCandidates = useMemo(() => {
-    const beatmapId = scoreInfo?.beatmap?.id;
-    if (!beatmapId || selectedDiffId !== beatmapId) return [];
-    return beatmapScores.filter((s) => s.id !== scoreInfo?.id);
-  }, [beatmapScores, scoreInfo, selectedDiffId]);
   const normalizedPlayerParam = normalizeReplayPlayerParam(playerParam);
   const playerSearchScoreId = parseReplayScoreInput(playerSearchQuery);
   // Replays for scores set moments ago are usually still being processed by
@@ -983,9 +1000,10 @@ function ReplayPage() {
   }, []);
 
   useEffect(() => {
-    // Compare mode owns its own loading; fall through to the reset branch so
-    // no single-replay viewer state lingers behind the comparison.
-    if (scoreId && !compareId) {
+    // Side by side owns its own loading (and clears scoreId in validateSearch),
+    // so it falls through to the reset branch below: no single-replay viewer
+    // state lingers behind the comparison.
+    if (scoreId) {
       playerScoreRequestRef.current += 1;
       setLoadingScores(false);
       setPlayerScoreLoadingByGroup(createPlayerScoreGroupLoading(false));
@@ -1009,11 +1027,11 @@ function ReplayPage() {
     setScorePreviewLoading(false);
     setScorePreviewError(null);
     setPlayerScoreLoadingByGroup(createPlayerScoreGroupLoading(false));
-  }, [scoreId, compareId, uploadId, loadReplay, loaderData.score]);
+  }, [scoreId, uploadId, loadReplay, loaderData.score]);
 
   useEffect(() => {
     if (scoreId) return;
-    setBrowseMode(tab === "beatmap" || tab === "upload" ? tab : "player");
+    setBrowseMode(browseModeFromTab(tab));
   }, [scoreId, tab]);
 
   useEffect(() => {
@@ -1808,7 +1826,7 @@ function ReplayPage() {
     setLocalBeatmapError(null);
     applyLocalBeatmapAssets(EMPTY_LOCAL_BEATMAP_ASSETS);
 
-    const backNavigation = getReplayBackNavigation({ canGoBack, playerParam, tab: tab === "beatmap" || tab === "upload" ? tab : undefined });
+    const backNavigation = getReplayBackNavigation({ canGoBack, playerParam, tab });
     if (backNavigation.type === "history") {
       router.history.back();
       return;
@@ -1832,23 +1850,19 @@ function ReplayPage() {
       playerProfile={playerProfile}
       judgeAsLazer={judgeAsLazer}
       onSelectClient={setClientJudgeAsLazer}
-      compareCandidates={compareCandidates}
       onClear={handleClearReplay}
-      // Compare only works for scores with online replays, so uploaded
-      // replays (no score id) don't get the action.
-      onCompare={scoreInfo?.id && scoreId
-        ? (otherScoreId) => navigate({ to: "/replay", search: { scoreId, compareId: otherScoreId } })
-        : undefined}
     />
   ) : null;
 
-  const viewerActive = Boolean(replay && !loading && !(scoreId && compareId));
+  const viewerActive = Boolean(replay && !loading);
+  // Both stages run edge to edge under the navbar, without the page header.
+  const stageActive = viewerActive || Boolean(sideBySide && !isPortraitPhone);
 
   return (
     <div className="flex-1">
       {/* With a replay loaded the stage is the page: edge-to-edge under the
           navbar like the osu! client, header hidden, info card below the fold. */}
-      <div className={viewerActive ? "hidden" : ""}>
+      <div className={stageActive ? "hidden" : ""}>
         <PageHeader
           iconSrc="/images/icons/home.svg"
           title={REPLAY_LANDING_SEO_TITLE}
@@ -1856,31 +1870,31 @@ function ReplayPage() {
       </div>
 
       <div className="bg-osu-b5 min-h-[80vh]">
-        <div className={`mx-auto ${viewerActive ? "max-w-none" : "max-w-[1200px] px-3 py-3 sm:px-5 sm:py-6"}`}>
+        <div className={`mx-auto ${stageActive ? "max-w-none" : "max-w-[1200px] px-3 py-3 sm:px-5 sm:py-6"}`}>
           {/* No AnimatePresence here on purpose: none of these branches has
               an exit animation, and keeping the old branch mounted for the
               exit pass let the viewer linger a few frames inside the narrow
               non-viewer chrome on browser back. Mount fades don't need it. */}
-          {scoreId && compareId ? (
+          {sideBySide ? (
               isPortraitPhone ? (
-                <motion.div key="compare-rotate" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center px-4 py-20 text-center">
+                <motion.div key="side-by-side-rotate" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center px-4 py-20 text-center">
                   <Smartphone className="mb-4 h-10 w-10 rotate-90 text-osu-pink" aria-hidden="true" />
-                  <p className="text-sm font-semibold text-osu-l2">Rotate your device to compare</p>
-                  <p className="mt-1 max-w-md text-xs leading-relaxed text-osu-f1">Side-by-side score comparison needs a landscape screen.</p>
+                  <p className="text-sm font-semibold text-osu-l2">Rotate your device to watch both</p>
+                  <p className="mt-1 max-w-md text-xs leading-relaxed text-osu-f1">Two playfields and the stats between them need a landscape screen.</p>
                   <button
                     type="button"
-                    onClick={() => navigate({ to: "/replay", search: { scoreId } })}
+                    onClick={() => navigate({ to: "/replay", search: { tab: "side-by-side" } })}
                     className="mt-4 rounded-lg bg-white/10 px-4 py-2 text-xs font-semibold text-osu-f1 hover:bg-white/20 hover:text-white transition-colors cursor-pointer"
                   >
-                    Back to the replay
+                    Pick two scores
                   </button>
                 </motion.div>
               ) : (
-                <motion.div key={`compare-${scoreId}-${compareId}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                  <ReplayCompareView
-                    scoreIdA={scoreId}
-                    scoreIdB={compareId}
-                    onExit={() => navigate({ to: "/replay", search: { scoreId } })}
+                <motion.div key={`side-by-side-${sideBySide.left}-${sideBySide.right}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                  <ReplaySideBySideView
+                    leftScoreId={sideBySide.left}
+                    rightScoreId={sideBySide.right}
+                    onExit={() => navigate({ to: "/replay", search: { tab: "side-by-side" } })}
                   />
                 </motion.div>
               )
@@ -1940,9 +1954,13 @@ function ReplayPage() {
                   clearTimeout(beatmapTimerRef.current);
                   beatmapSearchRequestRef.current += 1;
                   setError(null);
-                  navigate({ to: "/replay", search: mode === "beatmap" || mode === "upload" ? { tab: mode } : {}, replace: true });
+                  navigate({ to: "/replay", search: isReplayBrowseTab(mode) ? { tab: mode } : {}, replace: true });
                 }}
                 onUploadReplay={handleUploadReplay}
+                onStartSideBySide={(leftScoreId, rightScoreId) => navigate({
+                  to: "/replay",
+                  search: { compareA: leftScoreId, compareB: rightScoreId },
+                })}
                 onPlayerSearch={handlePlayerSearch}
                 onSelectPlayer={handleSelectPlayer}
                 onPlayerSearchSubmit={handlePlayerSearchSubmit}

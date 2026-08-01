@@ -13,6 +13,7 @@ import type { ReplayOverlayId, ReplayOverlaySettings } from "../../lib/replay-ov
 import { DEFAULT_REPLAY_SCROLL_SPEED } from "../../lib/replay-scroll-speed";
 import { DEFAULT_REPLAY_COMBO_FONT_SET, DEFAULT_REPLAY_JUDGEMENT_SET, DEFAULT_REPLAY_SKIN_SETTINGS, OSU_MANIA_DEFAULT_LIGHT_POSITION, REPLAY_SKIN_DEFAULT_HIT_POSITION, getReplayComboFontStyle, getReplayJudgementScale, getReplayJudgementSetAssets, getReplaySkinProfile, normalizeReplaySkinSettings } from "../../lib/replay-skin";
 import type { ReplayComboFontStyle, ReplaySkinColumnAssets, ReplaySkinImageAsset, ReplaySkinKeymodeProfile, ReplaySkinSettings } from "../../lib/replay-skin";
+import type { ReplayLiveStats } from "../../lib/replay-types";
 import type { ReplayHitCounts } from "../../lib/replay-validation";
 import { buildStableReplayComboEvents, resolveReplayJudgementEvents } from "../../lib/replay-validation";
 import type { HitsoundAnchor, ReplayHitsoundTrigger } from "../../lib/replay-hitsounds";
@@ -153,9 +154,37 @@ const MANIA_BAR_NOTE_HEIGHT_RATIO = 0.22;
 // height, so the taller redesigned stage adds lookahead rather than speed.
 const MOBILE_PORTRAIT_REFERENCE_HEIGHT = 430;
 const BACKGROUND_OVERSCAN_SCALE = 1.02;
+// Pixi explicitly loses its WebGL context during destroy. Reopening a replay
+// immediately afterwards can wedge ANGLE while the old loss is still settling,
+// so that one rapid remount uses the Canvas backend instead.
+const RAPID_WEBGL_RECREATE_GUARD_MS = 5000;
 // Events crossed more than this far behind the playback clock (lag spikes,
 // tab switches) stay silent instead of firing as a burst.
 const HITSOUND_MAX_LATENESS_MS = 200;
+
+let lastReplayWebglDestroyedAt = Number.NEGATIVE_INFINITY;
+
+function getLiveWebglDiagnostics(renderer: Application["renderer"]): Record<string, unknown> {
+  const webglRenderer = renderer as Application["renderer"] & {
+    gl?: WebGLRenderingContext | WebGL2RenderingContext;
+    context?: { webGLVersion?: number };
+  };
+  const gl = webglRenderer.gl;
+  if (!gl) return {};
+  const info: Record<string, unknown> = {
+    webgl_version: webglRenderer.context?.webGLVersion ?? null,
+  };
+  try {
+    const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
+    if (debugInfo) {
+      info.gpu_renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) ?? null;
+      info.gpu_vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) ?? null;
+    }
+  } catch {
+    // The renderer still works when privacy settings hide GPU identity.
+  }
+  return info;
+}
 
 type ArrowDirection = "left" | "right" | "up" | "down";
 
@@ -296,6 +325,9 @@ interface RendererOptions {
   blackPlayfield?: boolean;
   hideHud?: boolean;
   hidePerformanceStats?: boolean;
+  // Keeps the score/pp machinery running for getLiveStats() even with the HUD
+  // hidden, so chrome outside the canvas can draw the same numbers.
+  liveStats?: boolean;
   showCombo?: boolean;
   initialCombo?: number;
   barePlayfield?: boolean;
@@ -478,6 +510,7 @@ export class ManiaReplayRenderer {
   private blackPlayfield = false;
   private hideHud = false;
   private hidePerformanceStats = false;
+  private liveStats = false;
   private showCombo = false;
   private initialCombo = 0;
   private hiddenCoverageReference = getManiaHiddenCoverageReference(0);
@@ -609,6 +642,14 @@ export class ManiaReplayRenderer {
   private currentKeyState = 0;
   private urSum = 0;
   private urSumSq = 0;
+  // Whole-run counterparts of the rolling ur* sums above: the HUD's hit-error
+  // bar wants the last few hits, getLiveStats wants the run so far.
+  private totalHits = 0;
+  private totalHitOffsetSum = 0;
+  private totalHitOffsetSumSq = 0;
+  private earlyHits = 0;
+  private lateHits = 0;
+  private maxPp = 0;
 
   private staticGraphics = new Graphics();
   private staticDirty = true;
@@ -710,6 +751,7 @@ export class ManiaReplayRenderer {
     this.blackPlayfield = options?.blackPlayfield ?? false;
     this.hideHud = options?.hideHud ?? false;
     this.hidePerformanceStats = options?.hidePerformanceStats ?? false;
+    this.liveStats = options?.liveStats ?? false;
     this.showCombo = options?.showCombo ?? false;
     this.initialCombo = Math.max(0, Math.floor(options?.initialCombo ?? 0));
     this.combo = this.initialCombo;
@@ -847,8 +889,22 @@ export class ManiaReplayRenderer {
     this.markInitProgress("pixi_application_create_started");
     const app = new Application();
     this.markInitProgress("pixi_application_created");
+    const sinceWebglDestroy = performance.now() - lastReplayWebglDestroyedAt;
+    const useRapidRemountCanvasFallback = sinceWebglDestroy >= 0
+      && sinceWebglDestroy < RAPID_WEBGL_RECREATE_GUARD_MS;
+    // Chrome/ANGLE is especially prone to wedging when a GPU context is
+    // created while its tab is backgrounded. Canvas is slower but safe, and a
+    // replay opened in the background should still become usable on return.
+    const useBackgroundTabCanvasFallback = document.visibilityState !== "visible";
+    const rendererPreference: Array<"webgl" | "canvas"> = useRapidRemountCanvasFallback
+      || useBackgroundTabCanvasFallback
+      ? ["canvas"]
+      : ["webgl", "canvas"];
     this.markInitProgress("renderer_context_requested", {
-      renderer_preference: "webgl,canvas",
+      renderer_preference: rendererPreference.join(","),
+      rapid_remount_canvas_fallback: useRapidRemountCanvasFallback,
+      background_tab_canvas_fallback: useBackgroundTabCanvasFallback,
+      visibility_state: document.visibilityState,
       power_preference: "high-performance",
       canvas_width: Math.max(1, this.cssWidth),
       canvas_height: Math.max(1, this.cssHeight),
@@ -864,11 +920,13 @@ export class ManiaReplayRenderer {
       antialias: true,
       backgroundAlpha: 0,
       powerPreference: "high-performance",
-      preference: ["webgl", "canvas"],
+      preference: rendererPreference,
     });
 
+    const rendererBackend = formatPixiRendererType(app.renderer.type, app.renderer.name);
     this.markInitProgress("renderer_context_acquired", {
-      renderer_backend: formatPixiRendererType(app.renderer.type, app.renderer.name),
+      renderer_backend: rendererBackend,
+      ...getLiveWebglDiagnostics(app.renderer),
     });
 
     if (this.destroyed) {
@@ -1011,6 +1069,11 @@ export class ManiaReplayRenderer {
     this.hitErrorAvgDisplayed = null;
     this.urSum = 0;
     this.urSumSq = 0;
+    this.totalHits = 0;
+    this.totalHitOffsetSum = 0;
+    this.totalHitOffsetSumSq = 0;
+    this.earlyHits = 0;
+    this.lateHits = 0;
     this.lastJudgment = 0;
     this.lastJudgmentTime = 0;
     this.keyStateCursor = 0;
@@ -1114,6 +1177,11 @@ export class ManiaReplayRenderer {
         this.recentHitTimes.push(event.time);
         this.urSum += offset;
         this.urSumSq += offset * offset;
+        this.totalHits++;
+        this.totalHitOffsetSum += offset;
+        this.totalHitOffsetSumSq += offset * offset;
+        if (offset < 0) this.earlyHits++;
+        else if (offset > 0) this.lateHits++;
         if (this.recentHitOffsets.length > 40) {
           const removed = this.recentHitOffsets.shift()!;
           this.recentHitTimes.shift();
@@ -1159,7 +1227,7 @@ export class ManiaReplayRenderer {
   }
 
   private rebuildStarRatingTimeline() {
-    this.starRatingTimeline = this.hideHud || this.barePlayfield
+    this.starRatingTimeline = (this.hideHud || this.barePlayfield) && !this.liveStats
       ? []
       : calculateManiaStarRatingTimeline(this.notes, this.keyCount, this.modRate);
   }
@@ -1168,7 +1236,7 @@ export class ManiaReplayRenderer {
   // time to learn the simulated final, pins that to the real score when one
   // is known, then rewinds so advanceStats can feed it incrementally.
   private buildScoreSimulator(realTotalScore: number | null) {
-    if (this.hideHud || this.barePlayfield) {
+    if ((this.hideHud || this.barePlayfield) && !this.liveStats) {
       this.scoreSimulator = null;
       return;
     }
@@ -1176,6 +1244,15 @@ export class ManiaReplayRenderer {
     for (const event of this.judgmentEvents) {
       if (event.judgment != null && event.judgment > 0) totalJudgements++;
     }
+    // The run's SS ceiling: every judgement a MAX against the finished chart's
+    // stars. Constant for the run, so price it once here.
+    this.maxPp = totalJudgements > 0 && this.starRatingTimeline.length > 0
+      ? calculateManiaPp({
+          starRating: this.starRatingTimeline[this.starRatingTimeline.length - 1].stars,
+          counts: { perfect: totalJudgements, great: 0, good: 0, ok: 0, meh: 0, miss: 0 },
+          modMultiplier: this.ppModMultiplier,
+        })
+      : 0;
     if (totalJudgements === 0) {
       this.scoreSimulator = null;
       return;
@@ -6379,6 +6456,33 @@ export class ManiaReplayRenderer {
     }
   }
 
+  // Everything the HUD would be showing right now, for chrome drawn outside
+  // the canvas. Reads the same accumulators the HUD does, so a stats panel
+  // next to the stage can never drift from the stage itself.
+  getLiveStats(): ReplayLiveStats {
+    const counts = this.judgmentCounts;
+    let totalJudgements = 0;
+    for (let i = 1; i < counts.length; i++) totalJudgements += counts[i];
+    const mean = this.totalHits > 0 ? this.totalHitOffsetSum / this.totalHits : 0;
+    const variance = this.totalHits > 1
+      ? Math.max(0, this.totalHitOffsetSumSq / this.totalHits - mean * mean)
+      : 0;
+    return {
+      counts: counts.slice(),
+      totalJudgements,
+      accuracy: this.getAccuracy(),
+      combo: this.combo,
+      maxCombo: this.maxComboSoFar,
+      score: this.scoreSimulator?.value ?? 0,
+      pp: this.getPp(),
+      maxPp: this.maxPp,
+      unstableRate: Math.sqrt(variance) * 10,
+      early: this.earlyHits,
+      late: this.lateHits,
+      meanOffsetMs: mean,
+    };
+  }
+
   getDiagnostics(): { rendererBackend: string; judgementBuildMs: number | null } {
     return {
       rendererBackend: this.app ? formatPixiRendererType(this.app.renderer.type, this.app.renderer.name) : "uninitialized",
@@ -6416,6 +6520,9 @@ export class ManiaReplayRenderer {
     this.storyboardSpritePool = [];
     const destroyApp = () => {
       if (!this.app) return;
+      if (formatPixiRendererType(this.app.renderer.type, this.app.renderer.name) === "WebGL") {
+        lastReplayWebglDestroyedAt = performance.now();
+      }
       this.clearTextLayer();
       this.clearComboTextLayer();
       this.clearSkinSprites();

@@ -1,6 +1,9 @@
+/** Browse tabs that survive in the URL; "player" is the default, so it doesn't. */
+export type ReplayBrowseTabParam = "beatmap" | "side-by-side" | "upload";
+
 export type ReplayBackSearch = {
   player?: string;
-  tab?: "beatmap" | "upload";
+  tab?: ReplayBrowseTabParam;
 };
 
 export type ReplayScoreSearch = {
@@ -19,11 +22,11 @@ export function getReplayBackNavigation({
 }: {
   canGoBack: boolean;
   playerParam?: string;
-  tab?: "beatmap" | "upload";
+  tab?: ReplayBrowseTabParam;
 }): ReplayBackNavigation {
   if (canGoBack) return { type: "history" };
   if (playerParam) return { type: "route", search: { player: playerParam } };
-  if (tab === "beatmap" || tab === "upload") return { type: "route", search: { tab } };
+  if (tab) return { type: "route", search: { tab } };
   return { type: "route", search: {} };
 }
 

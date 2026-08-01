@@ -13,7 +13,12 @@ describe("ManiaReplayRenderer initialization", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
     expect(source).not.toContain('preference: "webgl"');
-    expect(source).toContain('preference: ["webgl", "canvas"]');
+    expect(source).toContain('const rendererPreference: Array<"webgl" | "canvas">');
+    expect(source).toContain('? ["canvas"]');
+    expect(source).toContain(': ["webgl", "canvas"]');
+    expect(source).toContain("preference: rendererPreference");
+    expect(source).toContain("RAPID_WEBGL_RECREATE_GUARD_MS = 5000");
+    expect(source).toContain('const useBackgroundTabCanvasFallback = document.visibilityState !== "visible";');
   });
 
   it("maps the 1-40 scroll speed setting through lazer's mania time range", () => {
@@ -113,7 +118,9 @@ describe("ManiaReplayRenderer initialization", () => {
     expect(source).toContain("modMultiplier: this.ppModMultiplier,");
     expect(source).toContain("this.renderPpOverlay(layout);");
     // The opt-in calculator stays available on unranked maps as a hypothetical value.
-    expect(source).toContain("this.starRatingTimeline = this.hideHud || this.barePlayfield");
+    // Skipped where the HUD can never render, unless something outside the
+    // canvas is reading the numbers (side by side).
+    expect(source).toContain("this.starRatingTimeline = (this.hideHud || this.barePlayfield) && !this.liveStats");
     expect(source).not.toContain("mapAwardsPp");
   });
 

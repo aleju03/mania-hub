@@ -23,7 +23,6 @@ beforeEach(() => {
   window.sessionStorage.clear();
   window.localStorage.clear();
   track.mockClear();
-  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
 });
 
 afterEach(() => {
@@ -36,6 +35,15 @@ afterEach(() => {
 });
 
 describe("replay crash beacon renderer progress", () => {
+  test("does not create a throwaway WebGL context for diagnostics", () => {
+    const getContext = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+    vi.spyOn(console, "debug").mockImplementation(() => {});
+
+    stopBeacon = startReplayWatchBeacon({ score_id: 7189878496 }, () => null);
+
+    expect(getContext).not.toHaveBeenCalled();
+  });
+
   test("persists each renderer init marker synchronously", () => {
     stopBeacon = startReplayWatchBeacon({ score_id: 7189878496 }, () => null);
 

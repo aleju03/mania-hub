@@ -28,6 +28,31 @@ export interface ServerReplay {
   stableScrollSpeedScale?: number;
 }
 
+/** Running totals at the playback clock, for chrome drawn outside the canvas
+ *  (the side-by-side comparison's stats column). Only populated on renderers
+ *  created with `liveStats`; everything here is what the HUD would be showing
+ *  at this instant, so the two never disagree. */
+export interface ReplayLiveStats {
+  /** Judgment-indexed like the renderer: [_, MAX, 300, 200, 100, 50, miss]. */
+  counts: number[];
+  totalJudgements: number;
+  /** Displayed accuracy percent (0-100) under the run's own ruleset. */
+  accuracy: number;
+  combo: number;
+  maxCombo: number;
+  score: number;
+  pp: number;
+  /** SS pp for the whole chart with these mods; constant for the run. */
+  maxPp: number;
+  /** Unstable rate over every hit so far, not the HUD's rolling window. */
+  unstableRate: number;
+  /** Hits landed before / after the note. */
+  early: number;
+  late: number;
+  /** Mean hit offset in ms; negative is early. */
+  meanOffsetMs: number;
+}
+
 export interface ReplayRendererLike {
   readonly duration: number;
   readonly displayDuration: number;
@@ -70,6 +95,7 @@ export interface ReplayRendererLike {
   setSpectatorCount?: (count: number) => void;
   setHitsoundTrigger?: (trigger: ReplayHitsoundTrigger | null) => void;
   ready: () => Promise<void>;
+  getLiveStats?: () => ReplayLiveStats;
   getDiagnostics?: () => { rendererBackend: string; judgementBuildMs: number | null };
 }
 

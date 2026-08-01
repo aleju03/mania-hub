@@ -9,12 +9,12 @@ describe("replay upload mode", () => {
     const uploadSource = fs.readFileSync(path.resolve(__dirname, "../lib/replay-upload.ts"), "utf8");
     const apiSource = fs.readFileSync(path.resolve(__dirname, "api/replay-upload.ts"), "utf8");
 
-    expect(browseSource).toContain('export type ReplayBrowseMode = "player" | "beatmap" | "upload"');
-    expect(browseSource).toContain('(["player", "upload"] as const)');
+    expect(browseSource).toContain('export type ReplayBrowseMode = "player" | "beatmap" | "side-by-side" | "upload"');
+    expect(browseSource).toContain('{ mode: "upload", label: "Upload" }');
     expect(browseSource).toContain("<UploadReplayBrowser");
     expect(browseSource).toContain('accept=".osr,application/octet-stream"');
     expect(browseSource).toContain("Uploading gives you a share link");
-    expect(routeSource).toContain('tab: s.tab === "beatmap" || s.tab === "upload" ? s.tab : undefined');
+    expect(routeSource).toContain("tab: isReplayBrowseTab(s.tab) ? s.tab : undefined");
     expect(routeSource).toContain("uploadId: typeof s.uploadId");
     expect(routeSource).toContain("postUploadedReplay(buffer, file.name)");
     expect(routeSource).toContain("fetchUploadedReplayBuffer(id)");

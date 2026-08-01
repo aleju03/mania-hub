@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowLeftRight, Check, Copy } from "lucide-react";
 import { StarRatingBadge } from "#/components/maps/SearchCard";
-import { ReplayCompareEntry } from "#/components/replay/ReplayCompareView";
 import { avatarImageSrc } from "#/components/ui/Avatar";
 import { ModBadge } from "#/components/ui/ModBadge";
 import { formatDate } from "#/lib/format";
@@ -36,15 +35,10 @@ interface ReplayInfoProps {
   judgeAsLazer?: boolean;
   /** Enables the Client stat's stable/lazer toggle. */
   onSelectClient?: (lazer: boolean) => void;
-  /** Already-loaded leaderboard scores for the compare picker (never fetched here). */
-  compareCandidates?: OsuScore[];
   onClear: () => void;
-  /** When set, the card grows a compare action that reveals a paste-a-score form. */
-  onCompare?: (otherScoreId: number) => void;
 }
 
-export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatmapsetId, shareUrl, playerProfile, judgeAsLazer, onSelectClient, compareCandidates, onClear, onCompare }: ReplayInfoProps) {
-  const [compareOpen, setCompareOpen] = useState(false);
+export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatmapsetId, shareUrl, playerProfile, judgeAsLazer, onSelectClient, onClear }: ReplayInfoProps) {
   const h = replay.header;
   const totalHits = h.countGeki + h.count300 + h.countKatu + h.count100 + h.count50;
   const accuracy = score
@@ -82,14 +76,6 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
     : "text-osu-f1";
   const mapTextShadow = beatmapCoverUrl ? " [text-shadow:0_1px_3px_rgba(0,0,0,0.85)]" : "";
   const displayMods = getModDisplayList(mods);
-  const compareEntry = onCompare && compareOpen ? (
-    <ReplayCompareEntry
-      onCompare={onCompare}
-      onClose={() => setCompareOpen(false)}
-      candidates={compareCandidates}
-      requiredRate={getScoreRate(mods)}
-    />
-  ) : null;
 
   // Client what-if: flipping the Client stat re-judges the same keypresses
   // under the other ruleset. The stats below mirror what the viewer is now
@@ -181,7 +167,7 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             {shareUrl && <ShareReplayButton shareUrl={shareUrl} compact />}
-            <button onClick={onClear} className="px-3 py-1.5 rounded-lg bg-white/10 text-xs text-osu-f1 hover:text-white hover:bg-white/20 transition-colors cursor-pointer">Back</button>
+            <BackButton onClear={onClear} />
           </div>
         </div>
 
@@ -229,21 +215,6 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
             </div>
           )}
         </div>
-        {/* The header cluster is already tight on phones (an extra icon there
-            starves the map title), so mobile gets a slim bottom row instead
-            that swaps into the form when tapped. Side-by-side compare needs
-            a wide screen, so the whole affair only exists in landscape. */}
-        {onCompare && !compareOpen && (
-          <button
-            type="button"
-            onClick={() => setCompareOpen(true)}
-            className="mt-2 hidden w-full items-center justify-center gap-1.5 rounded-lg bg-white/5 px-2.5 py-2 text-[11px] font-semibold text-osu-f1 hover:text-white transition-colors cursor-pointer landscape:flex"
-          >
-            <ArrowLeftRight className="h-3.5 w-3.5" aria-hidden="true" />
-            Compare with another score
-          </button>
-        )}
-        <div className="portrait:hidden">{compareEntry}</div>
       </div>
 
       {/* Desktop: a full-bleed footer strip welded to the stage, the map's
@@ -319,12 +290,10 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2 self-start pt-1.5">
-            {onCompare && <CompareToggleButton open={compareOpen} onToggle={() => setCompareOpen((open) => !open)} />}
             {shareUrl && <ShareReplayButton shareUrl={shareUrl} />}
-            <button onClick={onClear} className="px-3 py-1.5 rounded-lg bg-white/10 text-xs text-osu-f1 hover:text-white hover:bg-white/20 transition-colors cursor-pointer">Back</button>
+            <BackButton onClear={onClear} />
           </div>
         </div>
-        {compareEntry && <div className="relative mx-auto max-w-[1400px] px-6 pb-4">{compareEntry}</div>}
       </div>
     </>
   );
@@ -459,22 +428,17 @@ function getReplayHeaderClientLabel(gameVersion: number | undefined): "Lazer" | 
   return gameVersion >= 30_000_000 ? "Lazer" : "Stable";
 }
 
-// Deliberately quiet (muted icon, same treatment as Back): compare is a side
-// tool, not a headline action, so it lives in the card's action cluster and
-// only expands into a form on demand.
-function CompareToggleButton({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+// On desktop this sits over the map's cover art, where muted grey on a bright
+// crop was barely legible: solid white text over a heavier plate, outlined the
+// same way the strip's other text is.
+function BackButton({ onClear }: { onClear: () => void }) {
   return (
     <button
       type="button"
-      onClick={onToggle}
-      title="Compare with another score"
-      aria-label="Compare with another score"
-      aria-expanded={open}
-      className={`inline-flex items-center justify-center rounded-lg p-1.5 transition-colors cursor-pointer ${
-        open ? "bg-white/20 text-white" : "bg-white/10 text-osu-f1 hover:text-white hover:bg-white/20"
-      }`}
+      onClick={onClear}
+      className="rounded-lg border border-white/20 bg-white/15 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:border-white/30 hover:bg-white/25 [text-shadow:0_1px_2px_rgba(0,0,0,0.8)] cursor-pointer"
     >
-      <ArrowLeftRight className="h-4 w-4" aria-hidden="true" />
+      Back
     </button>
   );
 }

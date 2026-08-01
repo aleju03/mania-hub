@@ -12,6 +12,8 @@ export function ReplayRecentlyViewed({
   onRemove,
   onClear,
   variant = "grid",
+  title = "Recently Watched",
+  showRemove = true,
   className = "",
 }: {
   entries: RecentReplayEntry[];
@@ -20,6 +22,10 @@ export function ReplayRecentlyViewed({
   onClear: () => void;
   /** "sidebar" stacks the cards in one narrow column beside other content. */
   variant?: "grid" | "sidebar";
+  /** Reworded where opening a card does something other than watch it. */
+  title?: string;
+  /** Off where the list is a picker, not the user's own history to prune. */
+  showRemove?: boolean;
   className?: string;
 }) {
   if (entries.length === 0) return null;
@@ -30,15 +36,17 @@ export function ReplayRecentlyViewed({
     <div className={`${sidebar ? "w-full" : "max-w-5xl mx-auto"} ${className}`}>
       <div className={`relative mb-3 flex items-center ${sidebar ? "justify-between gap-3" : "justify-center"}`}>
         <h4 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">
-          Recently Watched
+          {title}
         </h4>
-        <button
-          type="button"
-          onClick={onClear}
-          className={`rounded-lg px-2 py-1 text-[11px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:bg-osu-b4 hover:text-white ${sidebar ? "-mr-2" : "absolute right-0"}`}
-        >
-          Clear
-        </button>
+        {showRemove && (
+          <button
+            type="button"
+            onClick={onClear}
+            className={`rounded-lg px-2 py-1 text-[11px] font-semibold text-osu-f1 transition-colors cursor-pointer hover:bg-osu-b4 hover:text-white ${sidebar ? "-mr-2" : "absolute right-0"}`}
+          >
+            Clear
+          </button>
+        )}
       </div>
 
       <div
@@ -110,14 +118,16 @@ export function ReplayRecentlyViewed({
 
               {/* Touch has no hover to reveal on, so the remove button stays
                   visible below sm and only fades in on pointer devices. */}
-              <button
-                type="button"
-                onClick={() => onRemove(entry.key)}
-                aria-label={`Remove ${entry.title} from recently watched`}
-                className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full text-osu-f1 transition-[opacity,color,background-color] cursor-pointer hover:bg-osu-b3 hover:text-white focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-              >
-                <X className="h-3 w-3" />
-              </button>
+              {showRemove && (
+                <button
+                  type="button"
+                  onClick={() => onRemove(entry.key)}
+                  aria-label={`Remove ${entry.title} from recently watched`}
+                  className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full text-osu-f1 transition-[opacity,color,background-color] cursor-pointer hover:bg-osu-b3 hover:text-white focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
             </motion.div>
           );
         })}

@@ -8,6 +8,7 @@ import { getManiaJudgementStats } from "#/components/ui/ManiaJudgementStats";
 import { ModBadge } from "#/components/ui/ModBadge";
 import { SearchInput } from "#/components/ui/SearchInput";
 import { ReplayRecentlyViewed } from "#/components/replay/ReplayRecentlyViewed";
+import { ReplaySideBySidePicker } from "#/components/replay/ReplaySideBySidePicker";
 import { getCountryName } from "#/lib/country";
 import { formatAccuracy, formatNumber, formatPP, formatTimeAgo } from "#/lib/format";
 import { getDisplayedAccuracy, getDisplayedRank, getModDisplayList, getScoreTimestamp, scoreHasReplay } from "#/lib/score";
@@ -17,7 +18,15 @@ import { filterBeatmapSearchResults } from "#/lib/beatmap-search";
 import type { RecentReplayEntry } from "#/lib/replay-recent";
 import type { BeatmapScoreLookupStatus, OsuBeatmap, OsuBeatmapset, OsuScore } from "#/lib/types";
 
-export type ReplayBrowseMode = "player" | "beatmap" | "upload";
+export type ReplayBrowseMode = "player" | "beatmap" | "side-by-side" | "upload";
+
+// "beatmap" is reachable by link only (opening a score from the maps search),
+// so it has no tab of its own.
+const BROWSE_TABS: { mode: ReplayBrowseMode; label: string }[] = [
+  { mode: "player", label: "By Player" },
+  { mode: "side-by-side", label: "Side by Side" },
+  { mode: "upload", label: "Upload" },
+];
 type PlayerReplaySectionKey = "pinned" | "best" | "firsts" | "recent";
 type PlayerScoreGroups = { best: OsuScore[]; firsts: OsuScore[]; pinned: OsuScore[]; recent: OsuScore[] };
 type PlayerScoreLoadingByGroup = Record<PlayerReplaySectionKey, boolean>;
@@ -37,6 +46,7 @@ interface ReplayBrowseViewProps {
   selectedCountry: string;
   onModeChange: (mode: ReplayBrowseMode) => void;
   onUploadReplay: (file: File) => void;
+  onStartSideBySide: (leftScoreId: number, rightScoreId: number) => void;
   onPlayerSearch: (query: string) => Promise<{ id: number; username: string; avatar_url: string; country_code: string }[]>;
   onSelectPlayer: (user: { id: number; username: string }) => void;
   onPlayerSearchSubmit: (query: string) => void;
@@ -88,6 +98,7 @@ export function ReplayBrowseView({
   selectedCountry,
   onModeChange,
   onUploadReplay,
+  onStartSideBySide,
   onPlayerSearch,
   onSelectPlayer,
   onPlayerSearchSubmit,
@@ -127,17 +138,17 @@ export function ReplayBrowseView({
     <motion.div key="browse" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <div className="flex justify-center mb-3">
         <div className="flex bg-osu-b4 rounded-lg border border-osu-b3/50 overflow-hidden">
-          {(["player", "upload"] as const).map((nextMode) => (
+          {BROWSE_TABS.map((tab) => (
             <button
-              key={nextMode}
-              onClick={() => onModeChange(nextMode)}
-              className={`px-5 py-2 text-xs font-semibold uppercase tracking-wider cursor-pointer transition-colors ${
-                mode === nextMode
+              key={tab.mode}
+              onClick={() => onModeChange(tab.mode)}
+              className={`px-4 py-2 text-xs font-semibold uppercase tracking-wider cursor-pointer transition-colors sm:px-5 ${
+                mode === tab.mode
                   ? "bg-osu-pink/20 text-osu-pink-light"
                   : "text-osu-f1 hover:text-white"
               }`}
             >
-              {nextMode === "player" ? "By Player" : "Upload"}
+              {tab.label}
             </button>
           ))}
         </div>
@@ -192,6 +203,10 @@ export function ReplayBrowseView({
           onOpenBeatmapScore={onOpenBeatmapScore}
           onLoadMoreBeatmapScores={onLoadMoreBeatmapScores}
         />
+      )}
+
+      {mode === "side-by-side" && (
+        <ReplaySideBySidePicker recentReplays={recentReplays} onStart={onStartSideBySide} />
       )}
 
       {mode === "upload" && (
