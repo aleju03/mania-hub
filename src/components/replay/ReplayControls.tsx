@@ -40,6 +40,11 @@ interface ReplayControlsProps {
   blackPlayfield: boolean;
   storyboardOn: boolean;
   storyboardLoading?: boolean;
+  // The replay player's published skin: available once it loaded for this
+  // replay, on while it is the skin on the stage.
+  ownerSkinAvailable?: boolean;
+  ownerSkinOn?: boolean;
+  ownerSkinName?: string | null;
   videoExporting?: boolean;
   videoExportProgress?: number;
   videoExportError?: string | null;
@@ -59,6 +64,7 @@ interface ReplayControlsProps {
   onToggleInputOverlayKeyHistory: () => void;
   onSetInputOverlayColor: (color: string) => void;
   onOpenSkinSettings: () => void;
+  onToggleOwnerSkin?: () => void;
   onSetScrollSpeed: (speed: number) => void;
   onSetBgDim: (dim: number) => void;
   onToggleBlackPlayfield: () => void;
@@ -131,6 +137,9 @@ export function ReplayControls({
   blackPlayfield,
   storyboardOn,
   storyboardLoading,
+  ownerSkinAvailable,
+  ownerSkinOn,
+  ownerSkinName,
   videoExporting = false,
   videoExportProgress = 0,
   videoExportError = null,
@@ -150,6 +159,7 @@ export function ReplayControls({
   onToggleInputOverlayKeyHistory,
   onSetInputOverlayColor,
   onOpenSkinSettings,
+  onToggleOwnerSkin,
   onSetScrollSpeed,
   onSetBgDim,
   onToggleBlackPlayfield,
@@ -806,6 +816,14 @@ export function ReplayControls({
               onClick={onToggleStoryboard}
               title="Show the map's storyboard behind (and over) the playfield"
             />
+            {ownerSkinAvailable && onToggleOwnerSkin && (
+              <OsuToggleRow
+                label="Player's skin"
+                on={ownerSkinOn ?? false}
+                onClick={onToggleOwnerSkin}
+                title={ownerSkinName ? `Watch with the player's own skin (${ownerSkinName})` : "Watch with the player's own skin"}
+              />
+            )}
             {inputsMenu}
             {keypressOverlayEnabled && (
               <OsuToggleRow label="Key history" on={inputOverlayKeyHistory} onClick={onToggleInputOverlayKeyHistory} />
@@ -931,6 +949,20 @@ export function ReplayControls({
           >
             Storyboard
           </button>
+
+          {ownerSkinAvailable && onToggleOwnerSkin && (
+            <button
+              type="button"
+              onClick={onToggleOwnerSkin}
+              title={ownerSkinName ? `Watch with the player's own skin (${ownerSkinName})` : "Watch with the player's own skin"}
+              aria-pressed={ownerSkinOn}
+              className={`order-12 sm:order-none px-2 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors ${
+                ownerSkinOn ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
+              }`}
+            >
+              Player's skin
+            </button>
+          )}
         </div>
       )}
     </div>

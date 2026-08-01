@@ -28,7 +28,7 @@ import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalR
 import { enqueueGlobalMapsRefresh, enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRandomDraw, getMapsRefreshProgress, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, MAPS_RANDOM_DRAW_DEFAULT_COUNT, MAPS_RANDOM_DRAW_EXCLUDE_SETS_MAX, MAPS_RANDOM_DRAW_EXCLUDE_USERS_MAX, MAPS_RANDOM_DRAW_HIDE_USERS_MAX, MAPS_RANDOM_DRAW_MAX_COUNT, MAPS_RANDOM_DRAW_STAR_MAX, MAPS_RANDOM_KEY_BUCKETS, MAPS_RANDOM_PATTERN_NAMES, MAPS_RANDOM_STATUS_BUCKETS, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery, type MapsRandomDrawQuery } from "../features/maps.js";
 import { getMapSearchPage, getMapSearchSetEntry, MAP_SEARCH_PATTERNS, MAP_SEARCH_SUB_PATTERNS, type MapSearchQuery, type MapSearchSort } from "../features/map-search.js";
 import { getMapCollection, getMapCollections, getMapCollectionsRotation, rebuildMapCollections } from "../features/map-collections.js";
-import { getPackWallet, listPackCollectionCards, listPackCollectionOwnedUserIds, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
+import { getPackWallet, listPackCollectionCards, listPackCollectionOwnedUserIds, PACK_COLLECTION_MAX_PAGE_SIZE, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
 import { getPackCardStats, getPackPulledStats, getSharedPackCard, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../features/pack-pulls.js";
 import { buildPackCardProfileSnapshot, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, warmProfileSnapshots } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
@@ -57,6 +57,7 @@ import {
 } from "../replay-video/exports.js";
 import { isReplayVideoStorageConfigured } from "../replay-video/r2.js";
 import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, findPublishedSkinByOskSha256, withoutDownloadCount, finishSkin, finishSkinEdit, getSkin, getSkinByRef, getSkinForEdit, getSkinForUpload, listSkins, recordSkinDownload, renameSkin, replaceSkinOsk, setSkinAccent, setSkinCoverKeymode, setSkinHidden, SKIN_MAX_SCREENSHOTS, startSkinEdit, toSkinSummary, upsertSkinKeymodePreview } from "../features/skins.js";
+import { clearUserReplaySkin, getUserReplaySkin, setUserReplaySkin, USER_REPLAY_SKIN_PAYLOAD_MAX_CHARS } from "../features/user-replay-skins.js";
 import { deleteSkinObjects, getSkinObject, isSkinStorageConfigured, nextSkinOskRevision, nextSkinPreviewRevision, oskFilename, skinKeymodePreviewKey, skinOskKey, skinPreviewKey, skinScreenshotKey, uploadSkinObject } from "../skins/r2.js";
 import { sniffImage, validateOskBuffer } from "../skins/validate-osk.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
@@ -1506,7 +1507,10 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     const page = Math.max(0, Math.floor(Number(url.searchParams.get("page")) || 0));
-    const pageSize = Math.min(60, Math.max(1, Math.floor(Number(url.searchParams.get("pageSize")) || 15)));
+    const pageSize = Math.min(
+      PACK_COLLECTION_MAX_PAGE_SIZE,
+      Math.max(1, Math.floor(Number(url.searchParams.get("pageSize")) || 15)),
+    );
     const tier = url.searchParams.get("tier");
     const query = url.searchParams.get("q");
     sendJson(req, res, ctx, 200, await listPackCollectionCards(ctx.db, walletUserId, { page, pageSize, tier, query }));
@@ -1732,6 +1736,90 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     res.setHeader("cache-control", "public, max-age=86400, s-maxage=31536000, immutable");
     object.body.on("error", () => res.destroy());
     object.body.pipe(res);
+    return true;
+  }
+  if (url.pathname === "/api/replay-skin") {
+    // Which community skin (and settings) viewers see on this player's
+    // replays. Public by osu! user id: anyone watching a replay resolves it.
+    // "No choice", "hidden skin", and "deleted skin" all read back as the same
+    // null so a moderation state never leaks through here - the viewer just
+    // falls back to its default skin.
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    if (!checkRate(req, res, ctx, "publicApi")) return true;
+    const userId = Number(url.searchParams.get("userId"));
+    if (!Number.isInteger(userId) || userId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user" });
+      return true;
+    }
+    // Nothing viewer-specific in the response, so it caches like the public
+    // skins list.
+    res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
+    const row = await getUserReplaySkin(ctx.db, userId);
+    const skin = row ? await getSkin(ctx.db, row.skinId) : null;
+    if (!row || !skin || skin.status !== "published") {
+      sendJson(req, res, ctx, 200, { replaySkin: null });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, {
+      replaySkin: {
+        skin: withoutDownloadCount(toSkinSummary(skin)),
+        settings: parseJson<unknown>(row.payloadJson, null),
+        updatedAt: row.updatedAt,
+      },
+    });
+    return true;
+  }
+  if (url.pathname === "/api/replay-skin/set" || url.pathname === "/api/replay-skin/clear") {
+    // Same trust contract as the goals endpoints: admin-token gated and called
+    // server-to-server, with the frontend server fn injecting the osu!-verified
+    // viewer id, so a user only ever points their own replays at a skin.
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<{ userId?: unknown; skinId?: unknown; settings?: unknown }>(
+      (await readBodyBuffer(req, REPLAY_SKIN_BODY_LIMIT_BYTES)).toString("utf8") || "{}",
+      {},
+    );
+    const userId = Number(body.userId);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user" });
+      return true;
+    }
+    if (url.pathname === "/api/replay-skin/clear") {
+      await clearUserReplaySkin(ctx.serveWriteDb ?? ctx.db, userId);
+      sendJson(req, res, ctx, 200, { ok: true });
+      return true;
+    }
+    // A skin id longer than any real one can never resolve, so it fails the
+    // same way an unknown id does instead of earning its own error shape.
+    const skinId = typeof body.skinId === "string" ? body.skinId : "";
+    const skin = skinId && skinId.length <= 64 ? await getSkin(ctx.db, skinId) : null;
+    if (!skin || skin.status !== "published") {
+      sendJson(req, res, ctx, 404, { error: "skin_not_found" });
+      return true;
+    }
+    const payloadJson = JSON.stringify(body.settings ?? {});
+    if (payloadJson.length > USER_REPLAY_SKIN_PAYLOAD_MAX_CHARS) {
+      sendJson(req, res, ctx, 413, { error: "payload_too_large" });
+      return true;
+    }
+    // Settings must reference assets by path inside the .osk; a payload that
+    // smuggles the images or sounds themselves would turn this table into a
+    // second, unmoderated skin store.
+    if (payloadJson.includes("data:image/") || payloadJson.includes("data:audio/")) {
+      sendJson(req, res, ctx, 400, { error: "embedded_data_url" });
+      return true;
+    }
+    await setUserReplaySkin(ctx.serveWriteDb ?? ctx.db, userId, skin.id, payloadJson);
+    sendJson(req, res, ctx, 200, { ok: true });
     return true;
   }
   if (url.pathname === "/api/skins/start") {
@@ -4617,6 +4705,11 @@ const DEFAULT_BODY_LIMIT_BYTES = 1024 * 1024;
 // so pack wallet pushes get more headroom than the default body limit.
 const PACK_WALLET_BODY_LIMIT_BYTES = 4 * 1024 * 1024;
 const PACK_WALLET_PAYLOAD_MAX_CHARS = 3_500_000;
+
+// The replay-skin settings payload caps at USER_REPLAY_SKIN_PAYLOAD_MAX_CHARS,
+// so the body read gets that plus headroom for the JSON envelope around it;
+// the default 1MB limit would 413 a maximal payload before it could be judged.
+const REPLAY_SKIN_BODY_LIMIT_BYTES = 1_100_000;
 
 class HttpRequestError extends Error {
   constructor(readonly status: number, readonly code: string, message: string) {

@@ -11,7 +11,7 @@ import type { ManiaStarRatingTimelinePoint } from "../../lib/mania-star-rating";
 import { DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
 import type { ReplayOverlayId, ReplayOverlaySettings } from "../../lib/replay-overlays";
 import { DEFAULT_REPLAY_SCROLL_SPEED } from "../../lib/replay-scroll-speed";
-import { DEFAULT_REPLAY_COMBO_FONT_SET, DEFAULT_REPLAY_JUDGEMENT_SET, DEFAULT_REPLAY_SKIN_SETTINGS, REPLAY_SKIN_DEFAULT_HIT_POSITION, getReplayComboFontStyle, getReplayJudgementScale, getReplayJudgementSetAssets, getReplaySkinProfile, normalizeReplaySkinSettings } from "../../lib/replay-skin";
+import { DEFAULT_REPLAY_COMBO_FONT_SET, DEFAULT_REPLAY_JUDGEMENT_SET, DEFAULT_REPLAY_SKIN_SETTINGS, OSU_MANIA_DEFAULT_LIGHT_POSITION, REPLAY_SKIN_DEFAULT_HIT_POSITION, getReplayComboFontStyle, getReplayJudgementScale, getReplayJudgementSetAssets, getReplaySkinProfile, normalizeReplaySkinSettings } from "../../lib/replay-skin";
 import type { ReplayComboFontStyle, ReplaySkinColumnAssets, ReplaySkinImageAsset, ReplaySkinKeymodeProfile, ReplaySkinSettings } from "../../lib/replay-skin";
 import type { ReplayHitCounts } from "../../lib/replay-validation";
 import { buildStableReplayComboEvents, resolveReplayJudgementEvents } from "../../lib/replay-validation";
@@ -1928,6 +1928,35 @@ export class ManiaReplayRenderer {
     return !this.hideHud && this.shouldRenderCustomOverlays(layout);
   }
 
+  // The bottom chrome (Visual Settings drawer, fullscreen playbar) must not
+  // slide up over an overlay parked near the bottom edge: it would cover the
+  // overlay, its handles and its close button. True while a
+  // drag/resize/pinch/marquee runs, while the pointer rests on an overlay or
+  // its close button, and - with chromeBandPx set to how far up the chrome
+  // reaches - while an overlay sits in the straight-down approach path, so
+  // reaching for one never summons the thing that would bury it.
+  isOverlayEditPoint(clientX: number, clientY: number, chromeBandPx = 0): boolean {
+    if (this.draggingOverlay || this.resizingOverlay || this.pinchingOverlay || this.selectingOverlays) return true;
+    if (!this.canEditOverlays()) return false;
+    const rect = this.canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    const scaleY = this.cssHeight / rect.height;
+    const x = (clientX - rect.left) * (this.cssWidth / rect.width);
+    const y = (clientY - rect.top) * scaleY;
+    if (this.getOverlayCloseButtonAtPoint(x, y) != null || this.getOverlayAtPoint(x, y) != null) return true;
+    if (chromeBandPx <= 0) return false;
+    const bandTop = this.cssHeight - chromeBandPx * scaleY;
+    for (const box of this.overlayHitboxes) {
+      const frame = this.getOverlayInteractionFrame(box);
+      const bottom = frame.y + frame.height;
+      // Only overlays below the pointer, in the column it is descending, and
+      // low enough for the chrome to reach them.
+      if (bottom < y || bottom < bandTop) continue;
+      if (x >= frame.x && x <= frame.x + frame.width) return true;
+    }
+    return false;
+  }
+
   private installOverlayPointerHandlers() {
     this.previousCanvasTouchAction = this.canvas.style.touchAction;
     this.canvas.style.touchAction = "none";
@@ -2514,6 +2543,7 @@ export class ManiaReplayRenderer {
     this.renderBackground(layout);
     this.renderStoryboard(layout);
     this.renderSegmentOverlays(layout);
+    this.renderStageFurnitureUnder(layout);
     if (this.showInputOverlay && this.inputOverlayOnly) {
       this.renderInputOverlayNotes(layout);
     } else {
@@ -2521,6 +2551,7 @@ export class ManiaReplayRenderer {
     }
     this.renderJudgmentLine(layout);
     this.renderReceptors(layout);
+    this.renderStageFurnitureOver(layout);
     if (this.hasFlashlightMod) this.renderFlashlightOverlay(layout);
     if (this.showHealthBar) this.renderHealthBar(layout);
     this.overlayHitboxes = [];
@@ -2567,17 +2598,37 @@ export class ManiaReplayRenderer {
   private renderStaticPlayfield(layout: Layout) {
     this.renderStaticBackgroundBands(layout);
     const { w, h, playfieldX, playfieldWidth } = layout;
-    const showColumnDividers = this.skinSettings.style === "bars";
+    // The alternating column tints, boundary lines and border rect are the
+    // built-in "bars" look. A skin with real column art drives its own stage
+    // (Colour{n} backgrounds, ColumnLineWidth lines, stage frame), and the
+    // extra cosmetics read as lines the skin never had.
+    const hasImportedColumnArt = this.skinProfile.assets.columns.some(
+      (column) => column && Object.values(column).some(Boolean),
+    );
+    const showColumnDividers = this.skinSettings.style === "bars" && !hasImportedColumnArt;
     const g = this.staticGraphics;
 
     if (!this.barePlayfield) {
       this.fillRectInto(g, 0, 0, playfieldX, h, "#000000", 0.24);
       this.fillRectInto(g, playfieldX + playfieldWidth, 0, w - playfieldX - playfieldWidth, h, "#000000", 0.24);
-      this.fillRectInto(g, playfieldX, 0, playfieldWidth, h, "#000000", this.blackPlayfield ? 1 : 0.12);
+      this.fillRectInto(g, playfieldX, 0, playfieldWidth, h, "#000000", this.blackPlayfield ? 1 : hasImportedColumnArt ? 0 : 0.12);
 
       for (let col = 0; showColumnDividers && col < this.keyCount; col++) {
         const { x, width } = this.getColumnLayout(col, layout);
         this.fillRectInto(g, x, 0, width, h, "#ffffff", col % 2 === 0 ? 0.02 : 0.04);
+      }
+    }
+
+    // skin.ini Colour{n}: the column background, alpha included - it decides
+    // how much of the map art shows through each lane, so it paints over the
+    // default playfield fill rather than replacing the note palette.
+    if (this.skinSettings.style === "bars") {
+      for (let col = 0; col < this.keyCount; col++) {
+        const declared = this.skinProfile.columnBackgrounds[col];
+        if (!declared) continue;
+        const { x, width } = this.getColumnLayout(col, layout);
+        const alpha = declared.length === 9 ? parseInt(declared.slice(7, 9), 16) / 255 : 1;
+        this.fillRectInto(g, x, 0, width, h, declared.slice(0, 7), alpha);
       }
     }
 
@@ -2590,7 +2641,7 @@ export class ManiaReplayRenderer {
     }
     if (this.barePlayfield) {
       if (showColumnDividers) this.lineInto(g, playfieldX, h - 1, playfieldX + playfieldWidth, h - 1, "#ffffff", 0.1, 2);
-    } else {
+    } else if (!hasImportedColumnArt) {
       this.rectInto(g, playfieldX, 0, playfieldWidth, h, "#ffffff", 0.15, 2);
     }
 
@@ -2626,6 +2677,158 @@ export class ManiaReplayRenderer {
     }
   }
 
+  // Native @1x dimensions for stage furniture: imported assets carry their
+  // pixel size, and the texture stands in for older stored settings that do
+  // not. Null while the texture is still decoding - callers skip that frame
+  // and the load's re-render picks it up.
+  private getStageAssetNativeSize(asset: ReplaySkinImageAsset): { width: number; height: number } | null {
+    const scale = asset.scale && asset.scale > 0 ? asset.scale : 1;
+    let rawWidth = asset.width && asset.width > 0 ? asset.width : 0;
+    let rawHeight = asset.height && asset.height > 0 ? asset.height : 0;
+    if (!rawWidth || !rawHeight) {
+      const texture = this.getTexture(asset);
+      if (texture === Texture.EMPTY) return null;
+      rawWidth = rawWidth || texture.width;
+      rawHeight = rawHeight || texture.height;
+    }
+    if (!(rawWidth > 0) || !(rawHeight > 0)) return null;
+    return { width: rawWidth / scale, height: rawHeight / scale };
+  }
+
+  // Furniture height rule shared with the catalog preview renderer: @1x
+  // pixels are 768-space units, converted into the 480-unit stage space and
+  // then to canvas px via layoutScale.
+  private getStageAssetHeight(asset: ReplaySkinImageAsset, layout: Layout): number {
+    const native = this.getStageAssetNativeSize(asset);
+    return Math.max(1, (native?.height ?? 0) * (480 / 768) * layout.layoutScale);
+  }
+
+  // Stage furniture under the notes: the column light beneath held keys and
+  // the hit-position hint strip. Bars style only - it is the style every .osk
+  // import forces, and the synthetic styles have no stage art to draw.
+  private renderStageFurnitureUnder(layout: Layout) {
+    if (this.skinSettings.style !== "bars") return;
+    const stage = this.skinProfile.assets.stage;
+    if (!stage.light && !stage.hint) return;
+    const { judgmentY, playfieldX, playfieldWidth } = layout;
+    const upscroll = this.skinSettings.upscroll;
+
+    if (stage.light) {
+      // Bottom edge at skin.ini LightPosition, not the hit position: the
+      // shift between the two is what lets O2Jam-style decks overlap their
+      // key tops (see skin-preview-render for the derivation).
+      const height = this.getStageAssetHeight(stage.light, layout);
+      const hitUnits = Math.max(0, Math.min(768, this.skinSettings.hitPosition)) * (480 / 768);
+      const lightUnits = 480 - (this.skinProfile.lightPosition ?? OSU_MANIA_DEFAULT_LIGHT_POSITION);
+      const lightShift = (hitUnits - lightUnits) * layout.layoutScale;
+      for (let col = 0; col < this.keyCount; col++) {
+        if ((this.currentKeyState & (1 << col)) === 0) continue;
+        const { x, width } = this.getColumnLayout(col, layout);
+        const tintColor = stage.lightColors[col] || "";
+        const tint = tintColor ? hexToNumber(tintColor) : 0xffffff;
+        if (upscroll) {
+          this.drawSkinImage(stage.light, x + width / 2, judgmentY - lightShift, width, height, 0.5, 0, 1, tint, true);
+        } else {
+          this.drawSkinImage(stage.light, x + width / 2, judgmentY + lightShift - height, width, height, 0.5, 0, 1, tint);
+        }
+      }
+    }
+
+    if (stage.hint) {
+      // The hint marks the hit position across the whole stage, centred on
+      // the judgement line (hung below it, flipped, on upscroll).
+      const height = this.getStageAssetHeight(stage.hint, layout);
+      const centerX = playfieldX + playfieldWidth / 2;
+      if (upscroll) {
+        this.drawSkinImage(stage.hint, centerX, judgmentY, playfieldWidth, height, 0.5, 0, 1, 0xffffff, true);
+      } else {
+        this.drawSkinImage(stage.hint, centerX, judgmentY - height / 2, playfieldWidth, height, 0.5, 0, 1);
+      }
+    }
+  }
+
+  // Stage furniture over the notes, the layering the game uses: the deck art
+  // overlapping the bottom of the stage and the frame flanking it.
+  private renderStageFurnitureOver(layout: Layout) {
+    if (this.skinSettings.style !== "bars") return;
+    const stage = this.skinProfile.assets.stage;
+    if (!stage.bottom && !stage.left && !stage.right) return;
+    const { h, playfieldX, playfieldWidth } = layout;
+    const upscroll = this.skinSettings.upscroll;
+
+    if (stage.bottom) {
+      // Never stretched to the stage width, and unlike the rest of the
+      // furniture its height is 1 texture pixel per playfield unit ("skinned
+      // for a 480px playfield height", origin Bottom) - so a too-tall canvas
+      // hangs off the top edge and clips, exactly as in game.
+      const native = this.getStageAssetNativeSize(stage.bottom);
+      if (native) {
+        const width = Math.max(1, native.width * (480 / 768) * layout.layoutScale);
+        const height = Math.max(1, native.height * layout.layoutScale);
+        const centerX = playfieldX + playfieldWidth / 2;
+        if (upscroll) this.drawSkinImage(stage.bottom, centerX, 0, width, height, 0.5, 0, 1, 0xffffff, true);
+        else this.drawSkinImage(stage.bottom, centerX, h - height, width, height, 0.5, 0, 1);
+      }
+    }
+
+    for (const [asset, side] of [[stage.left, "left"], [stage.right, "right"]] as const) {
+      if (!asset) continue;
+      // The frame hangs outside the columns at its own width, stretched down
+      // the full stage the way stable scales it to the playfield height.
+      const native = this.getStageAssetNativeSize(asset);
+      if (!native) continue;
+      const width = Math.max(1, native.width * (480 / 768) * layout.layoutScale);
+      const x = side === "left" ? playfieldX - width / 2 : playfieldX + playfieldWidth + width / 2;
+      this.drawSkinImage(asset, x, 0, width, h, 0.5, 0, 1);
+    }
+  }
+
+  // scorebar-bg + scorebar-colour, mounted the way stable rotates them for
+  // mania: vertical against the stage's right edge, the art's left edge at
+  // the bottom, the fill cropping away from the top as health drains.
+  private renderSkinHealthBar(layout: Layout, health: number): boolean {
+    const stage = this.skinProfile.assets.stage;
+    const colour = stage.scorebarColour;
+    if (!colour) return false;
+    const colourNative = this.getStageAssetNativeSize(colour);
+    // Textures still decoding: hold the frame rather than flashing the
+    // default bar; the finished load re-renders.
+    if (!colourNative) return true;
+    const { h, playfieldX, playfieldWidth } = layout;
+    const bgNative = stage.scorebarBg ? this.getStageAssetNativeSize(stage.scorebarBg) : null;
+    // One uniform scale for both pieces so the art keeps its proportions,
+    // capped so a full-length bar stays within the stage height.
+    const unitScale = (480 / 768) * layout.layoutScale;
+    const referenceLength = Math.max(bgNative?.width ?? 0, colourNative.width) * unitScale;
+    const maxLength = h * 0.62;
+    const pieceScale = referenceLength > maxLength ? (maxLength / referenceLength) * unitScale : unitScale;
+    const x = playfieldX + playfieldWidth + 8;
+    const bgThickness = (bgNative?.height ?? colourNative.height) * pieceScale;
+
+    if (stage.scorebarBg && bgNative) {
+      this.drawSkinImageRotatedCcw(stage.scorebarBg, x, h, bgNative.width * pieceScale, bgThickness, 1);
+    }
+    const colourThickness = colourNative.height * pieceScale;
+    const colourX = x + Math.max(0, (bgThickness - colourThickness) / 2);
+    const colourLength = colourNative.width * pieceScale;
+    if (health > 0) {
+      this.drawSkinImageRotatedCcw(colour, colourX, h, colourLength, colourThickness, 0.98, health);
+    }
+
+    // No synthetic fallback marker: a Graphics circle would render under the
+    // sprite layer anyway, and skins that want a marker ship one.
+    if (stage.scorebarMarker && health > 0) {
+      const markerNative = this.getStageAssetNativeSize(stage.scorebarMarker);
+      if (markerNative) {
+        const fillY = h - colourLength * health;
+        const markerWidth = Math.max(1, markerNative.width * pieceScale);
+        const markerHeight = Math.max(1, markerNative.height * pieceScale);
+        this.drawSkinImage(stage.scorebarMarker, colourX + colourThickness / 2, fillY, markerWidth, markerHeight, 0.5, 0.5, 1);
+      }
+    }
+    return true;
+  }
+
   // Vertical health bar right of the stage, styled per client: stable gets
   // the chunky near-white bar with the marker riding the fill edge, lazer the
   // rounded glowy capsule. Both tint toward red as health drains.
@@ -2634,6 +2837,7 @@ export class ManiaReplayRenderer {
 
     const { h, playfieldX, playfieldWidth } = layout;
     const health = this.getHealthAtTime(this.currentTime);
+    if (this.skinSettings.style === "bars" && this.renderSkinHealthBar(layout, health)) return;
     const isLazer = this.ruleset.accuracyMode === "lazer";
     const barWidth = Math.max(7, Math.min(10, layout.laneWidth * 0.17));
     const x = playfieldX + playfieldWidth + 13;
@@ -3310,9 +3514,13 @@ export class ManiaReplayRenderer {
         : assets?.receptor;
       if (receptorAsset) {
         if (pressed) this.receptorFlashTimestamps[col] = this.currentTime;
-        const receptorHeight = this.getAssetHeightForWidth(receptorAsset, colWidth, colWidth, layout.receptorHeight);
-        const receptorY = this.skinSettings.upscroll ? judgmentY - receptorHeight : judgmentY;
-        this.drawSkinImage(receptorAsset, x + colWidth / 2, receptorY, colWidth, receptorHeight, 0.5, 0, 1);
+        // Stable stretches key images to fill the gap between the hit
+        // position and the screen edge. Keeping the art's aspect instead
+        // crops tall key images (75x200 is common) down to an invisible
+        // sliver when HitPosition sits near the edge.
+        const receptorFillHeight = Math.max(1, this.skinSettings.upscroll ? judgmentY : layout.h - judgmentY);
+        const receptorY = this.skinSettings.upscroll ? 0 : judgmentY;
+        this.drawSkinImage(receptorAsset, x + colWidth / 2, receptorY, colWidth, receptorFillHeight, 0.5, 0, 1);
         continue;
       }
       const color = this.colors[col];
@@ -4794,7 +5002,15 @@ export class ManiaReplayRenderer {
   }
 
   private getJudgementAsset(judgment: Judgment): ReplaySkinImageAsset | undefined {
-    const assets = getReplayJudgementSetAssets(this.skinSettings.judgementSet) ?? this.skinProfile.assets.judgements;
+    // The "skin" set means the imported skin's own art, which lives per
+    // keymode. A skin without art for this keymode (4K-only skin on a 7K
+    // chart) must fall back to the default built-in set instead of erasing
+    // judgements entirely.
+    const skinAssets = this.skinProfile.assets.judgements;
+    const hasSkinJudgements = Object.values(skinAssets).some(Boolean);
+    const assets = getReplayJudgementSetAssets(this.skinSettings.judgementSet)
+      ?? (hasSkinJudgements ? skinAssets : getReplayJudgementSetAssets(DEFAULT_REPLAY_JUDGEMENT_SET))
+      ?? skinAssets;
     switch (judgment) {
       case 1:
         return assets.hit300g;
@@ -5598,10 +5814,80 @@ export class ManiaReplayRenderer {
     sprite.y = y;
     sprite.width = width;
     sprite.height = height;
-    // Pooled sprites keep their scale sign across draws; set it explicitly.
+    // Pooled sprites keep their scale sign and rotation across draws; set
+    // both explicitly.
+    sprite.rotation = 0;
     sprite.scale.y = (flipY ? -1 : 1) * Math.abs(sprite.scale.y);
     sprite.alpha = alpha;
     sprite.tint = tint;
+  }
+
+  // Draws a skin image rotated 90° counter-clockwise: the art's left edge
+  // lands at yBottom and it extends `length` px upward, `thickness` px to the
+  // right of x. fillFrac < 1 crops the art's width (the scorebar fill) so the
+  // drawn strip shortens without stretching the texture.
+  private drawSkinImageRotatedCcw(
+    asset: ReplaySkinImageAsset,
+    x: number,
+    yBottom: number,
+    length: number,
+    thickness: number,
+    alpha: number,
+    fillFrac = 1,
+  ) {
+    if (length <= 0 || thickness <= 0 || alpha <= 0 || fillFrac <= 0) return;
+    const texture = this.getTexture(asset);
+    if (texture === Texture.EMPTY) return;
+    const frac = Math.min(1, fillFrac);
+
+    const slot = this.skinSpritePoolCursor;
+    let sprite = this.skinSpritePool[slot];
+    if (!sprite) {
+      sprite = new Sprite(texture);
+      this.skinSpritePool.push(sprite);
+      this.skinSpriteLayer.addChild(sprite);
+    }
+    this.skinSpritePoolCursor++;
+
+    // Rotated atlas frames don't slice cleanly; those draw at full length.
+    if (frac >= 1 || texture.rotate !== 0) {
+      sprite.texture = texture;
+    } else {
+      let strip = this.skinStripTexturePool[slot];
+      if (!strip || strip.destroyed) {
+        strip = new Texture({
+          source: texture.source,
+          frame: new Rectangle(0, 0, texture.source.width, texture.source.height),
+          orig: new Rectangle(0, 0, texture.source.width, texture.source.height),
+          dynamic: true,
+        });
+        this.skinStripTexturePool[slot] = strip;
+      } else if (strip.source !== texture.source) {
+        strip.source = texture.source;
+      }
+      const baseFrame = texture.frame;
+      strip.frame.x = baseFrame.x;
+      strip.frame.y = baseFrame.y;
+      strip.frame.width = baseFrame.width * frac;
+      strip.frame.height = baseFrame.height;
+      strip.orig.x = 0;
+      strip.orig.y = 0;
+      strip.orig.width = strip.frame.width;
+      strip.orig.height = strip.frame.height;
+      strip.update();
+      sprite.texture = strip;
+    }
+
+    sprite.visible = true;
+    sprite.anchor.set(0, 0);
+    sprite.x = x;
+    sprite.y = yBottom;
+    sprite.width = length * frac;
+    sprite.height = thickness;
+    sprite.rotation = -Math.PI / 2;
+    sprite.scale.y = Math.abs(sprite.scale.y);
+    sprite.alpha = alpha;
+    sprite.tint = 0xffffff;
   }
 
   // Draws only the [fracTop, fracBottom] vertical band of a skin image, so LN
@@ -5673,7 +5959,8 @@ export class ManiaReplayRenderer {
     sprite.y = y;
     sprite.width = width;
     sprite.height = height;
-    // Reset any flip left behind by a drawSkinImage call on this pool slot.
+    // Reset any flip or rotation left behind by another draw on this slot.
+    sprite.rotation = 0;
     sprite.scale.y = Math.abs(sprite.scale.y);
     sprite.alpha = alpha;
     sprite.tint = 0xffffff;
@@ -5739,6 +6026,10 @@ export class ManiaReplayRenderer {
         if (digit) this.getTexture(digit);
       }
       if (assets.combo.x) this.getTexture(assets.combo.x);
+    }
+    const stage = assets.stage;
+    for (const asset of [stage.left, stage.right, stage.bottom, stage.hint, stage.light, stage.lighting, stage.scorebarBg, stage.scorebarColour, stage.scorebarMarker]) {
+      if (asset) this.getTexture(asset);
     }
   }
 
@@ -5912,8 +6203,12 @@ export class ManiaReplayRenderer {
   }
 
   destroy() {
-    this.pause();
+    // Route cleanup can win a race with ready(), whose cancelled continuation
+    // also calls destroy. Keep teardown idempotent so the late continuation
+    // cannot destroy Pixi children or shared textures twice.
+    if (this.destroyed) return;
     this.destroyed = true;
+    this.pause();
     this.canvas.style.visibility = "hidden";
     if (this.handleContextLost) {
       this.canvas.removeEventListener("webglcontextlost", this.handleContextLost);

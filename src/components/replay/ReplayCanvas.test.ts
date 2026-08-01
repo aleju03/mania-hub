@@ -354,10 +354,10 @@ describe("ManiaReplayRenderer skin customization", () => {
     expect(source).toContain("desiredPlayfieldWidth * targetLayoutScale");
   });
 
-  it("shows playfield lane dividers and lane tint only for bar skins", () => {
+  it("shows playfield lane dividers and lane tint only for bar skins without imported art", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
-    expect(source).toContain('const showColumnDividers = this.skinSettings.style === "bars";');
+    expect(source).toContain('const showColumnDividers = this.skinSettings.style === "bars" && !hasImportedColumnArt;');
     expect(source).toContain("for (let col = 0; showColumnDividers && col < this.keyCount; col++)");
     expect(source).toContain("if (showColumnDividers) {");
   });
@@ -442,5 +442,60 @@ describe("ManiaReplayRenderer skin customization", () => {
 
     expect(source).toContain("const direction = this.skinSettings.upscroll ? 1 : -1;");
     expect(source).toContain("const timeWindow = (this.skinSettings.upscroll ? h - judgmentY : judgmentY) / pixelsPerMs;");
+  });
+
+  it("layers stage furniture around the notes the way the game does", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    // Column light + hint go under the notes, deck + frame over them; sprite
+    // order inside the pooled layer is call order, so the render sequence is
+    // the layering.
+    const under = source.indexOf("this.renderStageFurnitureUnder(layout);");
+    const notes = source.indexOf("this.renderNotes(layout);");
+    const over = source.indexOf("this.renderStageFurnitureOver(layout);");
+    expect(under).toBeGreaterThan(-1);
+    expect(over).toBeGreaterThan(notes);
+    expect(notes).toBeGreaterThan(under);
+    // Furniture only renders for bar skins, like the rest of the skin art.
+    expect(source).toContain("private renderStageFurnitureUnder(layout: Layout) {\n    if (this.skinSettings.style !== \"bars\") return;");
+    expect(source).toContain("private renderStageFurnitureOver(layout: Layout) {\n    if (this.skinSettings.style !== \"bars\") return;");
+    // The column light bottoms out at skin.ini LightPosition, not HitPosition.
+    expect(source).toContain("const lightUnits = 480 - (this.skinProfile.lightPosition ?? OSU_MANIA_DEFAULT_LIGHT_POSITION);");
+    // skin.ini Colour{n} paints the static column backgrounds, alpha included.
+    expect(source).toContain("const declared = this.skinProfile.columnBackgrounds[col];");
+  });
+
+  it("renders the skinned scorebar instead of the synthetic health bar when the skin ships one", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain('if (this.skinSettings.style === "bars" && this.renderSkinHealthBar(layout, health)) return;');
+    // The art mounts rotated 90° CCW and the fill crops with health, so the
+    // texture never stretches.
+    expect(source).toContain("private drawSkinImageRotatedCcw(");
+    expect(source).toContain("sprite.rotation = -Math.PI / 2;");
+    // Pooled sprites must shed rotation between draws or a scorebar frame
+    // would tilt whatever note reuses its slot.
+    expect(source).toContain("sprite.rotation = 0;");
+  });
+
+  it("renders imported key images stable-style and mutes built-in stage cosmetics under skin art", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    // Key images stretch from the hit position to the screen edge (stable
+    // behavior); aspect-scaling crops tall key art into an invisible sliver.
+    expect(source).toContain("const receptorFillHeight = Math.max(1, this.skinSettings.upscroll ? judgmentY : layout.h - judgmentY);");
+    // The alternating tints / boundary lines / border rect are the built-in
+    // bars look; a skin with real column art must not get them stacked on top.
+    expect(source).toContain('const showColumnDividers = this.skinSettings.style === "bars" && !hasImportedColumnArt;');
+    expect(source).toContain("this.blackPlayfield ? 1 : hasImportedColumnArt ? 0 : 0.12");
+  });
+
+  it("falls back to the default judgement set when the skin has no art for the keymode", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    // A 4K-only skin on a 7K chart selects judgementSet "skin" with an empty
+    // per-keymode asset map; judgements must not vanish.
+    expect(source).toContain("const hasSkinJudgements = Object.values(skinAssets).some(Boolean);");
+    expect(source).toContain("hasSkinJudgements ? skinAssets : getReplayJudgementSetAssets(DEFAULT_REPLAY_JUDGEMENT_SET)");
   });
 });

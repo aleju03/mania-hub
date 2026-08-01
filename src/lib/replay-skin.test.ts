@@ -1,17 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_REPLAY_SKIN_SETTINGS,
+  REPLAY_SKIN_PRESETS_STORAGE_KEY,
   REPLAY_SKIN_STORAGE_KEY,
+  createReplaySkinPreset,
   createReplaySkinShareKey,
   getReplaySkinColumnColor,
   getReplaySkinProfile,
   normalizeReplaySkinSettings,
   osuManiaHitPositionToReplayHitPosition,
   parseReplaySkinShareKey,
+  readReplaySkinPresets,
   readReplaySkinSettings,
   replayHitPositionToOsuManiaHitPosition,
+  writeReplaySkinPresets,
   writeReplaySkinSettings,
 } from "./replay-skin";
+import type { SkinSummary } from "./skins";
 
 describe("replay skin settings", () => {
   beforeEach(() => {
@@ -308,5 +313,31 @@ describe("replay skin settings", () => {
     expect(readReplaySkinSettings()).toEqual(DEFAULT_REPLAY_SKIN_SETTINGS);
 
     expect(warn).toHaveBeenCalledOnce();
+  });
+
+  it("round-trips community preset links through the preset store", () => {
+    const skin = { id: "sk_1", name: "aleju03 lazer" } as SkinSummary;
+    const payload = { v: 1, settings: { style: "bars" } };
+    const community = createReplaySkinPreset("aleju03 lazer", DEFAULT_REPLAY_SKIN_SETTINGS, { skin, payload });
+    const plain = createReplaySkinPreset("plain", DEFAULT_REPLAY_SKIN_SETTINGS);
+    writeReplaySkinPresets([community, plain]);
+
+    const read = readReplaySkinPresets();
+    expect(read).toHaveLength(2);
+    expect(read[0].community?.skin.id).toBe("sk_1");
+    expect(read[0].community?.payload).toEqual(payload);
+    expect(read[1].community).toBeUndefined();
+  });
+
+  it("drops a malformed community link but keeps the preset", () => {
+    window.localStorage.setItem(REPLAY_SKIN_PRESETS_STORAGE_KEY, JSON.stringify([
+      { id: "p1", name: "broken link", settings: {}, community: { skin: {}, payload: { v: 1 } } },
+      { id: "p2", name: "no payload", settings: {}, community: { skin: { id: "sk_2" } } },
+    ]));
+
+    const read = readReplaySkinPresets();
+    expect(read).toHaveLength(2);
+    expect(read[0].community).toBeUndefined();
+    expect(read[1].community).toBeUndefined();
   });
 });

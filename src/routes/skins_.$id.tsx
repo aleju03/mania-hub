@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { ArrowLeft, Download, ImageIcon, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, Download, ImageIcon, MonitorPlay, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ManiaRain } from "../components/home/ManiaRain";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
@@ -13,7 +13,9 @@ import { useAuth } from "../lib/auth-context";
 import { formatTimeAgo } from "../lib/format";
 import { skinEventProperties } from "../lib/analytics-skins";
 import { track } from "../lib/analytics";
-import { deleteMySkin, fetchSkinById, formatKeymodes, formatSkinFileSize, markSkinsListStale, moderateSkin, readSkinsBrowseEntry, renameSkin, SKIN_NAME_MAX_LENGTH, skinDownloadUrl, type SkinSummary } from "../lib/skins";
+import { canUseReplaySkinImport, dehydrateReplaySkinSettings, getMyReplaySkin, setMyReplaySkin } from "../lib/replay-owner-skin";
+import { importReplaySkinFromOsk } from "../lib/replay-skin-import";
+import { deleteMySkin, fetchSkinById, formatKeymodes, formatSkinFileSize, markSkinsListStale, moderateSkin, readSkinsBrowseEntry, renameSkin, SKIN_NAME_MAX_LENGTH, skinDownloadUrl, skinOskFileUrl, type SkinSummary } from "../lib/skins";
 import { pageSeo } from "../lib/seo";
 
 export const Route = createFileRoute("/skins_/$id")({
@@ -98,6 +100,63 @@ function SkinDetailPage() {
   }, [skin?.slug, params.id, navigate]);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  // "Use for my replays": idle -> working (download + import + save) -> set.
+  const [replaySkinStatus, setReplaySkinStatus] = useState<"idle" | "working" | "set">("idle");
+  const [replaySkinError, setReplaySkinError] = useState<string | null>(null);
+
+  // Whether THIS skin is already the viewer's replay skin, fetched after
+  // mount so the page never blocks on it; the button starts in its idle
+  // state and flips to "yours" once the answer lands.
+  const viewerId = auth.viewer?.id ?? null;
+  const skinId = skin?.id ?? null;
+  const skinStatus = skin?.status ?? null;
+  const canUseSkinImport = canUseReplaySkinImport(auth);
+  useEffect(() => {
+    if (!canUseSkinImport || !viewerId || !skinId || skinStatus !== "published") return;
+    let cancelled = false;
+    void getMyReplaySkin()
+      .then((record) => {
+        if (!cancelled && record?.skin.id === skinId) setReplaySkinStatus("set");
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [canUseSkinImport, viewerId, skinId, skinStatus]);
+
+  const setAsMyReplaySkin = async () => {
+    if (!skin || replaySkinStatus !== "idle") return;
+    // The streaming endpoint is CORS-safe and does not count as a download.
+    const oskFileUrl = skinOskFileUrl(skin);
+    if (!oskFileUrl) return;
+    setReplaySkinStatus("working");
+    setReplaySkinError(null);
+    try {
+      const response = await fetch(oskFileUrl);
+      if (!response.ok) throw new Error("osk_fetch_failed");
+      const blob = await response.blob();
+      const result = await importReplaySkinFromOsk(new File([blob], `${skin.name}.osk`), {
+        targetKeyCount: skin.keymodes[0] ?? 4,
+      });
+      const payload = dehydrateReplaySkinSettings(result.settings);
+      const outcome = await setMyReplaySkin({ data: { skinId: skin.id, settingsJson: JSON.stringify(payload) } });
+      if (!outcome.ok) {
+        setReplaySkinStatus("idle");
+        setReplaySkinError(
+          outcome.error === "not_logged_in"
+            ? "Sign in to set a replay skin."
+            : outcome.error === "payload_too_large"
+              ? "This skin's settings are too large to store."
+              : "Setting the replay skin failed. Try again.",
+        );
+        return;
+      }
+      setReplaySkinStatus("set");
+    } catch {
+      setReplaySkinStatus("idle");
+      setReplaySkinError("Setting the replay skin failed. Try again.");
+    }
+  };
 
   // Gallery: one playfield preview per keymode, then uploader screenshots.
   // Older uploads only have the single cover preview.
@@ -341,6 +400,38 @@ function SkinDetailPage() {
                           <span className="font-semibold text-white/75 tabular-nums">{formatSkinFileSize(skin.oskSizeBytes)}</span>
                         ) : null}
                       </a>
+                    )}
+                    {canUseSkinImport && auth.viewer && skin.status === "published" && skin.oskUrl && (
+                      <div className="mt-2">
+                        {replaySkinStatus === "set" ? (
+                          <>
+                            <div className="flex w-full items-center justify-center gap-2 rounded-full border border-osu-pink/45 bg-osu-pink/10 px-5 py-2 text-[13px] font-bold text-osu-pink-light">
+                              <Check className="h-4 w-4" aria-hidden="true" />
+                              Your replay skin
+                            </div>
+                            <p className="mt-1.5 text-center text-[11px] text-osu-f1">
+                              Anyone watching your replays sees it.{" "}
+                              <Link to="/settings" className="font-semibold text-osu-l2 transition-colors hover:text-white">
+                                customize it in settings
+                              </Link>
+                            </p>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => void setAsMyReplaySkin()}
+                            disabled={replaySkinStatus === "working"}
+                            title="Play this skin in your own replays for everyone who watches them"
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-osu-b3/50 px-5 py-2 text-[13px] font-bold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white disabled:opacity-50"
+                          >
+                            <MonitorPlay className="h-4 w-4" aria-hidden="true" />
+                            {replaySkinStatus === "working" ? "Setting up…" : "Use for my replays"}
+                          </button>
+                        )}
+                        {replaySkinError && (
+                          <p className="mt-1.5 text-center text-[12px] font-semibold text-osu-red-light">{replaySkinError}</p>
+                        )}
+                      </div>
                     )}
                   </div>
 

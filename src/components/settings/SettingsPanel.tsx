@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
+import { Link } from "@tanstack/react-router";
 import { AnimatePresence } from "framer-motion";
 import { ArrowDown, ArrowUp, Loader2, Pencil, RotateCcw, Search, Volume1, Volume2, VolumeX, X } from "lucide-react";
 
@@ -8,6 +9,7 @@ import { PageTabs } from "../layout/PageTabs";
 import { Avatar } from "../ui/Avatar";
 import { CountryFlag } from "../ui/CountryFlag";
 import { ReplaySkinSettingsModal } from "../replay/ReplaySkinSettingsModal";
+import { OwnerReplaySkinCustomizeModal } from "./OwnerReplaySkinCustomizeModal";
 import {
   ReplaySkinColorWheel,
   ReplaySkinValueSlider,
@@ -35,10 +37,20 @@ import {
   normalizeReplayBackgroundDim,
   normalizeReplayVolume,
   readReplayBackgroundDim,
+  readReplayOwnerSkinEnabled,
   readReplayVolume,
   writeReplayBackgroundDim,
+  writeReplayOwnerSkinEnabled,
   writeReplayVolume,
 } from "../../lib/replay-preferences";
+import {
+  canUseReplaySkinImport,
+  clearMyReplaySkin,
+  getMyReplaySkin,
+  parseOwnerReplaySkinRecordWire,
+} from "../../lib/replay-owner-skin";
+import type { OwnerReplaySkinRecord } from "../../lib/replay-owner-skin";
+import { useAuth } from "../../lib/auth-context";
 import {
   DEFAULT_REPLAY_OVERLAY_SETTINGS,
   normalizeReplayOverlaySettings,
@@ -476,6 +488,53 @@ function SkinPanel({
   onUpdateSkin: (patch: Partial<ReplaySkinSettings>) => void;
   onOpenAdvanced: () => void;
 }) {
+  const auth = useAuth();
+  const viewerId = auth.viewer?.id ?? null;
+  const canUseSkinImport = canUseReplaySkinImport(auth);
+  /* Same hydration rule as the cursor settings above: the switch and the
+     my-replay-skin block render from stored/async values, so they start at
+     their defaults and load after mount. */
+  const [ownerSkinEnabled, setOwnerSkinEnabled] = useState(true);
+  const [myReplaySkin, setMyReplaySkinRecord] = useState<OwnerReplaySkinRecord | null>(null);
+  const [myReplaySkinLoaded, setMyReplaySkinLoaded] = useState(false);
+  const [customizing, setCustomizing] = useState(false);
+
+  useEffect(() => {
+    setOwnerSkinEnabled(readReplayOwnerSkinEnabled());
+  }, []);
+
+  useEffect(() => {
+    if (!viewerId) {
+      setMyReplaySkinRecord(null);
+      setMyReplaySkinLoaded(false);
+      return;
+    }
+    let cancelled = false;
+    setMyReplaySkinLoaded(false);
+    void getMyReplaySkin()
+      .then((wire) => {
+        if (cancelled) return;
+        setMyReplaySkinRecord(wire ? parseOwnerReplaySkinRecordWire(wire) : null);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setMyReplaySkinLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [viewerId]);
+
+  const updateOwnerSkinEnabled = (enabled: boolean) => {
+    setOwnerSkinEnabled(enabled);
+    writeReplayOwnerSkinEnabled(enabled);
+  };
+
+  const removeMyReplaySkin = () => {
+    void clearMyReplaySkin();
+    setMyReplaySkinRecord(null);
+  };
+
   return (
     <div className="space-y-6">
       <PanelGroup label="Note shape">
@@ -540,6 +599,94 @@ function SkinPanel({
           Customize the look and feel of replays.
         </p>
       </PanelGroup>
+
+      {canUseSkinImport ? (
+      <PanelGroup label="Replay skin">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-[12px] font-semibold text-osu-l1">Watch replays with the player's skin</div>
+            <div className="text-[11px] text-osu-f1">
+              Replays play with their player's published skin. Turn off to always use yours.
+            </div>
+          </div>
+          <Switch checked={ownerSkinEnabled} onChange={updateOwnerSkinEnabled} />
+        </div>
+        {viewerId ? (
+          <div className="rounded-lg border border-osu-b3/40 bg-osu-b5/40 px-3 py-2.5">
+            <div className="mb-1.5 text-[11px] font-semibold text-osu-l1">Your replay skin</div>
+            {!myReplaySkinLoaded ? null : myReplaySkin ? (
+              <div className="flex flex-wrap items-center gap-3">
+                {myReplaySkin.skin.previewUrl ? (
+                  <img
+                    src={myReplaySkin.skin.previewUrl}
+                    alt=""
+                    className="h-10 w-[71px] shrink-0 rounded-md object-cover"
+                  />
+                ) : null}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[13px] font-semibold text-osu-l1">{myReplaySkin.skin.name}</div>
+                  <div className="text-[11px] text-osu-f1">
+                    updated{" "}
+                    {new Date(myReplaySkin.updatedAt).toLocaleDateString(undefined, {
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </div>
+                </div>
+                <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setCustomizing(true)}
+                    className="inline-flex h-7 cursor-pointer items-center rounded-md border border-osu-pink/40 bg-osu-pink/10 px-2.5 text-[10px] font-bold uppercase tracking-wider text-osu-pink-light transition-colors hover:border-osu-pink hover:bg-osu-pink/20 hover:text-white"
+                  >
+                    Customize
+                  </button>
+                  <Link
+                    to="/skins"
+                    search={{}}
+                    className="inline-flex h-7 items-center rounded-md border border-osu-b3/60 bg-osu-b5/70 px-2.5 text-[10px] font-bold uppercase tracking-wider text-osu-f1 transition-colors hover:border-osu-b2 hover:text-white"
+                  >
+                    Change
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={removeMyReplaySkin}
+                    className="inline-flex h-7 cursor-pointer items-center rounded-md border border-osu-b3/60 bg-osu-b5/70 px-2.5 text-[10px] font-bold uppercase tracking-wider text-osu-f1 transition-colors hover:border-osu-red/60 hover:bg-osu-red/10 hover:text-osu-red"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-[12px] text-osu-f1">
+                None set.{" "}
+                <Link
+                  to="/skins"
+                  search={{}}
+                  className="font-semibold text-osu-pink-light transition-colors hover:text-white"
+                >
+                  Pick one from the skins page
+                </Link>
+                .
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="text-[12px] text-osu-f1">Sign in to set a replay skin for your plays.</p>
+        )}
+      </PanelGroup>
+      ) : null}
+
+      <AnimatePresence>
+        {customizing && myReplaySkin ? (
+          <OwnerReplaySkinCustomizeModal
+            record={myReplaySkin}
+            onSaved={setMyReplaySkinRecord}
+            onClose={() => setCustomizing(false)}
+          />
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

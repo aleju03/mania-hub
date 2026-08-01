@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -47,10 +47,27 @@ import {
   replayStagePositionToOsuManiaPosition,
   writeReplaySkinPresets,
 } from "#/lib/replay-skin";
-import { importReplaySkinSoundsFromOsk } from "#/lib/replay-skin-import";
-import type { ReplaySkinImageAsset, ReplaySkinJudgementAssets, ReplaySkinKeymodeProfile, ReplaySkinPreset, ReplaySkinSettings, ReplaySkinStyle } from "#/lib/replay-skin";
+import { extractSkinSoundsFromArchive, importReplaySkinFromOsk, listOskImageEntries, loadOskImageAssetByPath, openOskArchive } from "#/lib/replay-skin-import";
+import type { OskArchive, OskImageEntry } from "#/lib/replay-skin-import";
+import type { ReplaySkinColumnAssets, ReplaySkinImageAsset, ReplaySkinJudgementAssets, ReplaySkinKeymodeAssets, ReplaySkinKeymodeProfile, ReplaySkinPreset, ReplaySkinPresetCommunityLink, ReplaySkinSettings, ReplaySkinStageAssets, ReplaySkinStyle } from "#/lib/replay-skin";
 import { readReplayAudioSettings, writeReplayAudioSettings, type ReplayAudioSettings } from "#/lib/replay-preferences";
 import { clearReplaySkinSounds, readReplaySkinSounds, writeReplaySkinSounds } from "#/lib/replay-skin-sounds";
+import { useAuth } from "#/lib/auth-context";
+import { getLiveBackendUrl } from "#/lib/live-backend";
+import {
+  canUseReplaySkinImport,
+  dehydrateReplaySkinSettings,
+  getMyReplaySkin,
+  loadOwnerReplaySkin,
+  parseOwnerReplaySkinRecordWire,
+  readAppliedCommunityReplaySkin,
+  rehydrateOwnerReplaySkinSettings,
+  replaySkinSettingsEmbedAssets,
+  setMyReplaySkin,
+} from "#/lib/replay-owner-skin";
+import type { AppliedCommunitySkinDraft, OwnerReplaySkinRecord } from "#/lib/replay-owner-skin";
+import { fetchSkinsListDirect, formatKeymodes, skinOskFileUrl } from "#/lib/skins";
+import type { SkinSummary } from "#/lib/skins";
 
 const MANIA_ARROW_ICON_STYLE: CSSProperties = {
   WebkitMask: "url('/images/notes/mania-arrow-right.svg') center / contain no-repeat",
@@ -90,8 +107,60 @@ const PREVIEW_BAR_COLUMN_COLORS: Record<number, string[]> = {
 type ColorTarget = "tap" | "lnHead" | "lnBody" | "outline";
 type OverrideKind = "tap" | "lnHead";
 type PreviewMode = "tap" | "ln";
-type ReplaySkinSettingsTab = "style" | "layout" | "hud" | "overlays" | "audio";
+type ReplaySkinSettingsTab = "style" | "layout" | "hud" | "overlays" | "audio" | "assets";
 type ArrowDirection = "left" | "right" | "up" | "down";
+
+// Assets tab (only mounted when an .osk archive rides along, i.e. the
+// owner-replay-skin customize flow): which draft slot a picked image lands in.
+type AssetStageKey = "left" | "right" | "bottom" | "hint" | "light" | "scorebarBg" | "scorebarColour" | "scorebarMarker";
+type AssetPickerTarget =
+  | { kind: "column"; column: number; assetKey: keyof ReplaySkinColumnAssets; label: string }
+  | { kind: "judgement"; assetKey: keyof ReplaySkinJudgementAssets; label: string }
+  | { kind: "stage"; assetKey: AssetStageKey; label: string };
+
+const ASSET_COLUMN_ROWS: ReadonlyArray<{ key: keyof ReplaySkinColumnAssets; label: string }> = [
+  { key: "tap", label: "Note" },
+  { key: "lnHead", label: "LN head" },
+  { key: "lnBody", label: "LN body" },
+  { key: "lnTail", label: "LN tail" },
+  { key: "receptor", label: "Key" },
+  { key: "receptorPressed", label: "Key pressed" },
+];
+const ASSET_JUDGEMENT_ROWS: ReadonlyArray<{ key: keyof ReplaySkinJudgementAssets; label: string }> = [
+  { key: "hit0", label: "MISS" },
+  { key: "hit50", label: "50" },
+  { key: "hit100", label: "100" },
+  { key: "hit200", label: "200" },
+  { key: "hit300", label: "300" },
+  { key: "hit300g", label: "300g" },
+];
+const ASSET_STAGE_ROWS: ReadonlyArray<{ key: AssetStageKey; label: string }> = [
+  { key: "left", label: "Left" },
+  { key: "right", label: "Right" },
+  { key: "bottom", label: "Bottom" },
+  { key: "hint", label: "Hint" },
+  { key: "light", label: "Light" },
+  { key: "scorebarBg", label: "HP bar bg" },
+  { key: "scorebarColour", label: "HP bar fill" },
+  { key: "scorebarMarker", label: "HP bar marker" },
+];
+// A skin can hold hundreds of images; the picker renders at most this many
+// rows and asks for a narrower search beyond it, so thumbnails only ever
+// decode for the visible slice.
+const ASSET_PICKER_MAX_ENTRIES = 60;
+
+function loadCachedOskAsset(
+  archive: OskArchive,
+  path: string,
+  cache: Map<string, Promise<ReplaySkinImageAsset | undefined>>,
+): Promise<ReplaySkinImageAsset | undefined> {
+  let promise = cache.get(path);
+  if (!promise) {
+    promise = loadOskImageAssetByPath(archive, path).catch(() => undefined);
+    cache.set(path, promise);
+  }
+  return promise;
+}
 
 type SelectionMode = "replace" | "toggle" | "range";
 
@@ -132,15 +201,22 @@ function applySelection(current: number[], column: number, mode: SelectionMode):
   return [column];
 }
 
+// Keymodes whose profile carries any column art (notes or receptors). With
+// the importer synthesizing undeclared keymodes from stable's default
+// filenames, an empty list here means the skin genuinely has nothing to show
+// for that keymode.
+function keymodesWithSkinArt(settings: ReplaySkinSettings): number[] {
+  return Object.entries(settings.keymodeProfiles)
+    .filter(([, profile]) => profile.assets.columns.some((column) => Object.values(column).some(Boolean)))
+    .map(([key]) => Number(key))
+    .sort((a, b) => a - b);
+}
+
 function arraysEqualUnordered(a: number[], b: number[]): boolean {
   if (a.length !== b.length) return false;
   const sa = [...a].sort((x, y) => x - y);
   const sb = [...b].sort((x, y) => x - y);
   return sa.every((v, i) => v === sb[i]);
-}
-
-function replaySkinSettingsEqual(a: ReplaySkinSettings, b: ReplaySkinSettings): boolean {
-  return JSON.stringify(normalizeReplaySkinSettings(a)) === JSON.stringify(normalizeReplaySkinSettings(b));
 }
 
 function fallbackPreviewBarColors(keyCount: number): string[] {
@@ -180,11 +256,20 @@ interface ReplaySkinSettingsModalProps {
   settings: ReplaySkinSettings;
   overlaySettings: ReplayOverlaySettings;
   keyCount: number;
-  onSave: (settings: ReplaySkinSettings) => void;
+  // `community` is set when the applied draft embeds community-skin art: the
+  // replay page persists the asset-free copy plus this pointer instead of
+  // multi-MB data URLs (which blow the localStorage quota and silently
+  // revert the apply).
+  onSave: (settings: ReplaySkinSettings, community?: AppliedCommunitySkinDraft | null) => void;
   onSaveOverlays: (settings: ReplayOverlaySettings) => void;
   // Audio settings apply immediately (not part of the draft/save flow).
   onAudioSettingsChange?: (settings: ReplayAudioSettings) => void;
   onClose: () => void;
+  // The open .osk behind the settings being edited. Only the owner-replay-skin
+  // customize flow passes it; when present, an Assets tab appears that swaps
+  // individual draft assets for other images from the archive.
+  assetArchive?: OskArchive | null;
+  assetSourceName?: string | null;
 }
 
 export function ReplaySkinSettingsModal({
@@ -195,6 +280,8 @@ export function ReplaySkinSettingsModal({
   onSaveOverlays,
   onAudioSettingsChange,
   onClose,
+  assetArchive = null,
+  assetSourceName = null,
 }: ReplaySkinSettingsModalProps) {
   const modalRef = useRef<HTMLDivElement | null>(null);
   const matchedInitialPresetRef = useRef(false);
@@ -232,14 +319,49 @@ export function ReplaySkinSettingsModal({
   const [activeTab, setActiveTab] = useState<ReplaySkinSettingsTab>(() => readWindowTab());
   const [audioSettings, setAudioSettings] = useState<ReplayAudioSettings>(readReplayAudioSettings);
   const [skinSoundsInfo, setSkinSoundsInfo] = useState<{ name: string | null; keys: string[] } | null>(null);
-  const skinSoundsInputRef = useRef<HTMLInputElement | null>(null);
-  const [importingSkinSounds, setImportingSkinSounds] = useState(false);
   const soundPreviewContextRef = useRef<AudioContext | null>(null);
   const [columnEditorOpen, setColumnEditorOpen] = useState(false);
   const [overrideKind, setOverrideKind] = useState<OverrideKind>("tap");
   const [barColorOverrideBackup, setBarColorOverrideBackup] = useState<string[]>([]);
   const [selectedColumns, setSelectedColumns] = useState<number[]>([]);
   const [previewMode, setPreviewMode] = useState<PreviewMode>("tap");
+  const [assetPicker, setAssetPicker] = useState<AssetPickerTarget | null>(null);
+
+  // ---- community skin (Style tab) -------------------------------------------
+  const auth = useAuth();
+  const viewerId = auth.viewer?.id ?? null;
+  const canUseSkinImport = canUseReplaySkinImport(auth);
+  // The whole block needs the catalog backend; without it there is nothing to
+  // browse, download or save against.
+  const liveBackendAvailable = getLiveBackendUrl() != null && canUseSkinImport;
+  // A catalog skin imported during this editing session. Its archive powers
+  // the Assets tab exactly like the assetArchive prop does; the prop (the
+  // settings-page customize flow) acts as the seed until a session load
+  // replaces it.
+  const [loadedCatalogSkin, setLoadedCatalogSkin] = useState<{ skin: SkinSummary; archive: OskArchive } | null>(null);
+  const [skinBrowserOpen, setSkinBrowserOpen] = useState(false);
+  const [communityBusy, setCommunityBusy] = useState<null | "import" | "preset" | "load-mine" | "save-mine">(null);
+  // Open archives by skin id, so re-selecting a community preset in the same
+  // session never re-downloads or re-parses the .osk.
+  const archiveCacheRef = useRef(new Map<string, Promise<OskArchive | null>>());
+  const [importProgress, setImportProgress] = useState<number | null>(null);
+  // Gameplay samples pulled out of the last imported .osk. They only persist
+  // (IndexedDB) when the user hits Apply; Cancel drops them with the draft.
+  const pendingSkinSoundsRef = useRef<{ name: string; sounds: Record<string, ArrayBuffer> } | null>(null);
+  const [myReplaySkinRecord, setMyReplaySkinRecord] = useState<OwnerReplaySkinRecord | null>(null);
+
+  // Null for non-admins, which also hides the Assets tab: swapping individual
+  // .osk assets is part of the same gated import feature.
+  const activeAssetArchive = canUseSkinImport ? loadedCatalogSkin?.archive ?? assetArchive ?? null : null;
+  const activeAssetSourceName = loadedCatalogSkin?.skin.name ?? assetSourceName ?? null;
+  // Decoded picker thumbnails, keyed by zip path. Loading is deduped through
+  // the promise so a re-search never decodes the same image twice; a fresh map
+  // per archive keeps same-named paths from colliding across skins.
+  const assetThumbCache = useMemo(
+    () => new Map<string, Promise<ReplaySkinImageAsset | undefined>>(),
+    [activeAssetArchive],
+  );
+  const assetEntries = useMemo(() => (activeAssetArchive ? listOskImageEntries(activeAssetArchive) : []), [activeAssetArchive]);
   const profile = getReplaySkinProfile(draft, selectedKeyCount);
   const isCompactWindow = (windowRect?.w ?? WINDOW_DEFAULT_WIDTH) < WINDOW_COMPACT_WIDTH;
   // Tabs without a note preview span the full window width.
@@ -352,34 +474,6 @@ export function ReplaySkinSettingsModal({
     pushStatus("Removed imported skin hitsounds");
   };
 
-  const importSkinSoundsOsk = async (file: File) => {
-    setImportingSkinSounds(true);
-    try {
-      const result = await importReplaySkinSoundsFromOsk(file);
-      const count = Object.keys(result.sounds).length;
-      if (count === 0) {
-        pushStatus("No gameplay hitsounds were found in that .osk", "error");
-        return;
-      }
-      const stored = await writeReplaySkinSounds({
-        skinName: result.name,
-        updatedAt: Date.now(),
-        samples: result.sounds,
-      });
-      if (!stored) {
-        pushStatus("The skin hitsounds could not be stored", "error");
-        return;
-      }
-      setSkinSoundsInfo({ name: result.name, keys: Object.keys(result.sounds) });
-      pushStatus(`Imported ${count} hitsounds from ${result.name}`);
-    } catch (error) {
-      pushStatus(error instanceof Error ? error.message : "Failed to import .osk", "error");
-    } finally {
-      setImportingSkinSounds(false);
-      if (skinSoundsInputRef.current) skinSoundsInputRef.current.value = "";
-    }
-  };
-
   useEffect(() => {
     setSelectedColumns((current) => {
       const filtered = current.filter((col) => col < selectedKeyCount);
@@ -433,7 +527,22 @@ export function ReplaySkinSettingsModal({
   useEffect(() => {
     if (matchedInitialPresetRef.current) return;
     matchedInitialPresetRef.current = true;
-    const match = presets.find((preset) => replaySkinSettingsEqual(preset.settings, draft));
+    // An applied community skin re-selects its preset on open. The settings
+    // comparison below cannot see it: the draft carries the rebuilt data-URL
+    // art while the preset stores the asset-free copy.
+    const applied = readAppliedCommunityReplaySkin();
+    if (applied) {
+      const communityMatch = presets.find((preset) => preset.community?.skin.id === applied.skin.id);
+      if (communityMatch) {
+        setSelectedPresetId(communityMatch.id);
+        return;
+      }
+    }
+    // Stringify the draft once, not once per preset: after a community skin
+    // was applied the draft carries data-URL assets and re-serializing it 24
+    // times stalls the modal open.
+    const draftKey = JSON.stringify(normalizeReplaySkinSettings(draft));
+    const match = presets.find((preset) => JSON.stringify(normalizeReplaySkinSettings(preset.settings)) === draftKey);
     if (match) setSelectedPresetId(match.id);
   }, [draft, presets]);
 
@@ -442,6 +551,28 @@ export function ReplaySkinSettingsModal({
     setActiveColor(null);
     setOverrideKind((current) => (current === "lnHead" ? "tap" : current));
   }, [draft.style]);
+
+  // The active tab persists across sessions; a stored "assets" must not strand
+  // a modal opened without an archive on an empty tab.
+  useEffect(() => {
+    if (activeTab === "assets" && !activeAssetArchive) setActiveTab("style");
+  }, [activeTab, activeAssetArchive]);
+
+  // The signed-in user's stored replay skin, for the community-skin block's
+  // "Your replay skin" row. Fetched once after mount; never blocks the modal.
+  useEffect(() => {
+    if (!viewerId || !liveBackendAvailable) return;
+    let cancelled = false;
+    void getMyReplaySkin()
+      .then((wire) => {
+        if (cancelled) return;
+        setMyReplaySkinRecord(wire ? parseOwnerReplaySkinRecordWire(wire) : null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [viewerId, liveBackendAvailable]);
 
   const handleHeaderPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
@@ -581,6 +712,255 @@ export function ReplaySkinSettingsModal({
     });
   };
 
+  // Clones the selected keymode's asset tree like updateProfile clones the
+  // profile, so a picked image never mutates the saved settings in place.
+  const updateProfileAssets = (mutate: (assets: ReplaySkinKeymodeAssets) => ReplaySkinKeymodeAssets) => {
+    setDraft((current) => {
+      const currentProfile = getReplaySkinProfile(current, selectedKeyCount);
+      return normalizeReplaySkinSettings({
+        ...current,
+        keymodeProfiles: {
+          ...current.keymodeProfiles,
+          [selectedKeyCount]: {
+            ...currentProfile,
+            assets: mutate(currentProfile.assets),
+          },
+        },
+        version: 2,
+      });
+    });
+  };
+
+  // asset undefined clears the slot; the renderer falls back to flat shapes.
+  const applyAssetPick = (target: AssetPickerTarget, asset: ReplaySkinImageAsset | undefined, applyToAllColumns: boolean) => {
+    if (target.kind === "column") {
+      updateProfileAssets((assets) => {
+        const columns = Array.from(
+          { length: Math.max(selectedKeyCount, assets.columns.length) },
+          (_, index) => ({ ...(assets.columns[index] ?? {}) }),
+        );
+        const targets = applyToAllColumns
+          ? Array.from({ length: selectedKeyCount }, (_, index) => index)
+          : [target.column];
+        for (const column of targets) {
+          if (column < 0 || column >= columns.length) continue;
+          if (asset) columns[column][target.assetKey] = asset;
+          else delete columns[column][target.assetKey];
+        }
+        return { ...assets, columns };
+      });
+      return;
+    }
+    if (target.kind === "judgement") {
+      updateProfileAssets((assets) => {
+        const judgements = { ...assets.judgements };
+        if (asset) judgements[target.assetKey] = asset;
+        else delete judgements[target.assetKey];
+        return { ...assets, judgements };
+      });
+      // Imported judgement art only draws under the "skin" judgement set, so
+      // picking some must not look like a no-op while a built-in set is active.
+      if (asset) update({ judgementSet: "skin" });
+      return;
+    }
+    updateProfileAssets((assets) => ({
+      ...assets,
+      stage: { ...assets.stage, [target.assetKey]: asset } as ReplaySkinStageAssets,
+    }));
+  };
+
+  // A freshly imported skin replaces the draft the way a preset load does.
+  // The caller follows up with upsertCommunityPreset, which re-attaches the
+  // selection to the skin's preset entry.
+  const adoptImportedSettings = (
+    settings: ReplaySkinSettings,
+    skin: SkinSummary,
+    archive: OskArchive,
+    keymodes: number[],
+    preferredKeyCount: number | null,
+  ) => {
+    setDraft(normalizeReplaySkinSettings(settings));
+    setLoadedCatalogSkin({ skin, archive });
+    setSelectedPresetId(DRAFT_PRESET_ID);
+    setDraftPresetName(DEFAULT_DRAFT_PRESET_NAME);
+    setActiveColor(null);
+    if (!keymodes.includes(selectedKeyCount)) {
+      const next = preferredKeyCount ?? keymodes[0];
+      if (next) setSelectedKeyCount(Math.max(1, Math.min(10, next)));
+    }
+  };
+
+  // Every loaded community skin also lives in Skin preset under the skin's
+  // name, storing the dehydrated payload (asset paths, no pixels), so the
+  // localStorage entry stays a few KB. Re-importing the same skin refreshes
+  // its preset instead of stacking duplicates.
+  const upsertCommunityPreset = (skin: SkinSummary, settings: ReplaySkinSettings) => {
+    const payload = dehydrateReplaySkinSettings(settings);
+    const community: ReplaySkinPresetCommunityLink = { skin, payload };
+    const assetFree = normalizeReplaySkinSettings(payload.settings);
+    const existing = presets.find((preset) => preset.community?.skin.id === skin.id);
+    const preset = existing
+      ? { ...existing, settings: assetFree, community, updatedAt: Date.now() }
+      : createReplaySkinPreset(skin.name, assetFree, community);
+    persistPresets(existing
+      ? presets.map((candidate) => (candidate.id === preset.id ? preset : candidate))
+      : [preset, ...presets].slice(0, 24));
+    setSelectedPresetId(preset.id);
+  };
+
+  const getArchiveForSkin = (skin: SkinSummary): Promise<OskArchive | null> => {
+    const cache = archiveCacheRef.current;
+    const cached = cache.get(skin.id);
+    if (cached) return cached;
+    const promise = (async () => {
+      const url = skinOskFileUrl(skin);
+      if (!url) return null;
+      // The streaming endpoint is CORS-safe and does not count as a download.
+      const response = await fetch(url, { credentials: "omit" });
+      if (!response.ok) return null;
+      return openOskArchive(await response.arrayBuffer());
+    })().catch(() => null);
+    cache.set(skin.id, promise);
+    // A failed download must not poison the cache for the next attempt.
+    void promise.then((archive) => {
+      if (!archive) cache.delete(skin.id);
+    });
+    return promise;
+  };
+
+  // Selecting a community preset re-downloads the catalog .osk (session and
+  // HTTP cached) and rehydrates the stored asset paths. If the download
+  // fails, the preset's asset-free settings still apply so colors and layout
+  // survive without the art.
+  const applyCommunityPreset = async (preset: ReplaySkinPreset, community: ReplaySkinPresetCommunityLink) => {
+    if (communityBusy) return;
+    setSelectedPresetId(preset.id);
+    setDraftPresetName(DEFAULT_DRAFT_PRESET_NAME);
+    setActiveColor(null);
+    setCommunityBusy("preset");
+    try {
+      const archive = await getArchiveForSkin(community.skin);
+      const settings = archive ? await rehydrateOwnerReplaySkinSettings(community.payload, archive) : null;
+      if (!archive || !settings) {
+        setDraft(preset.settings);
+        pushStatus(`${community.skin.name} could not be downloaded, applied colors only`, "error");
+        return;
+      }
+      setDraft(settings);
+      setLoadedCatalogSkin({ skin: community.skin, archive });
+      const sounds = await extractSkinSoundsFromArchive(archive);
+      pendingSkinSoundsRef.current = Object.keys(sounds).length > 0
+        ? { name: community.skin.name, sounds }
+        : null;
+      pushStatus(`Loaded ${preset.name}`);
+    } finally {
+      setCommunityBusy(null);
+    }
+  };
+
+  const importCatalogSkin = async (skin: SkinSummary) => {
+    if (communityBusy) return;
+    const oskFileUrl = skinOskFileUrl(skin);
+    if (!oskFileUrl) {
+      pushStatus("That skin has no downloadable file", "error");
+      return;
+    }
+    setSkinBrowserOpen(false);
+    setCommunityBusy("import");
+    setImportProgress(0);
+    try {
+      // The streaming endpoint is CORS-safe and does not count as a download.
+      const response = await fetch(oskFileUrl, { credentials: "omit" });
+      if (!response.ok) throw new Error("osk_fetch_failed");
+      const file = new File([await response.blob()], `${skin.name}.osk`);
+      const result = await importReplaySkinFromOsk(file, {
+        targetKeyCount: selectedKeyCount,
+        baseSettings: draft,
+        extractSounds: true,
+        onProgress: (done, total) => {
+          const percent = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 100;
+          setImportProgress((current) => (current === percent ? current : percent));
+        },
+      });
+      const archive = await openOskArchive(file);
+      archiveCacheRef.current.set(skin.id, Promise.resolve(archive));
+      // Prefer the keymodes that actually resolved art (synthesized ones
+      // included) so the editor stays on the replay's keymode whenever the
+      // skin can dress it.
+      const artKeymodes = result.summary.assetKeymodes.length > 0
+        ? result.summary.assetKeymodes
+        : result.summary.keymodes;
+      adoptImportedSettings(result.settings, skin, archive, artKeymodes, result.summary.selectedKeyCount);
+      upsertCommunityPreset(skin, result.settings);
+      pendingSkinSoundsRef.current = Object.keys(result.sounds).length > 0
+        ? { name: result.summary.name, sounds: result.sounds }
+        : null;
+      pushStatus(`Loaded ${skin.name}`);
+    } catch (error) {
+      pushStatus(error instanceof Error && error.message.includes("skin.ini")
+        ? error.message
+        : `Loading ${skin.name} failed`, "error");
+    } finally {
+      setCommunityBusy(null);
+      setImportProgress(null);
+    }
+  };
+
+  const loadMyReplaySkinIntoDraft = async () => {
+    const record = myReplaySkinRecord;
+    if (!record || communityBusy) return;
+    setCommunityBusy("load-mine");
+    try {
+      const loaded = await loadOwnerReplaySkin(record);
+      if (!loaded) {
+        pushStatus("Your replay skin could not be loaded", "error");
+        return;
+      }
+      archiveCacheRef.current.set(record.skin.id, Promise.resolve(loaded.archive));
+      const artKeymodes = keymodesWithSkinArt(loaded.settings);
+      adoptImportedSettings(
+        loaded.settings,
+        record.skin,
+        loaded.archive,
+        artKeymodes.length > 0 ? artKeymodes : record.skin.keymodes,
+        record.skin.keymodes[0] ?? null,
+      );
+      upsertCommunityPreset(record.skin, loaded.settings);
+      pendingSkinSoundsRef.current = Object.keys(loaded.sounds).length > 0
+        ? { name: record.skin.name, sounds: loaded.sounds }
+        : null;
+      pushStatus(`Loaded ${record.skin.name}`);
+    } finally {
+      setCommunityBusy(null);
+    }
+  };
+
+  const saveDraftAsMyReplaySkin = async () => {
+    const targetSkin = loadedCatalogSkin?.skin
+      ?? presets.find((preset) => preset.id === selectedPresetId)?.community?.skin
+      ?? null;
+    if (!targetSkin || !viewerId || communityBusy) return;
+    setCommunityBusy("save-mine");
+    try {
+      const payload = dehydrateReplaySkinSettings(draft);
+      const result = await setMyReplaySkin({
+        data: { skinId: targetSkin.id, settingsJson: JSON.stringify(payload) },
+      });
+      if (result.ok) {
+        setMyReplaySkinRecord({ skin: targetSkin, settings: payload, updatedAt: new Date().toISOString() });
+        pushStatus("Saved as your replay skin");
+      } else {
+        pushStatus(result.error === "payload_too_large"
+          ? "The customized settings are too large to store"
+          : "Saving your replay skin failed", "error");
+      }
+    } catch {
+      pushStatus("Saving your replay skin failed", "error");
+    } finally {
+      setCommunityBusy(null);
+    }
+  };
+
   const updateBaseColor = (kind: "tap" | "lnHead", value: string) => {
     if (kind === "tap") updateProfile({ tapColor: value });
     else updateProfile({ lnHeadColor: value });
@@ -629,6 +1009,10 @@ export function ReplaySkinSettingsModal({
   };
 
   const selectedPreset = presets.find((preset) => preset.id === selectedPresetId) ?? null;
+  // The community skin currently in play: the session-loaded archive wins,
+  // otherwise the selected community preset (a reopened modal has the preset
+  // selected but no archive until something reloads it).
+  const communitySkinContext = loadedCatalogSkin?.skin ?? selectedPreset?.community?.skin ?? null;
   const noteHeightDefault = Math.max(
     REPLAY_SKIN_MIN_NOTE_HEIGHT_SCALE,
     Math.min(
@@ -638,6 +1022,7 @@ export function ReplaySkinSettingsModal({
   );
   const hasNoteAssets = profile.assets.columns.some((col) => col?.tap || col?.lnHead || col?.lnBody || col?.lnTail);
   const showNoteHeightScale = draft.style === "bars" || hasNoteAssets;
+  const keymodeHasSkinArt = profile.assets.columns.some((column) => Object.values(column).some(Boolean));
 
   const persistPresets = (nextPresets: ReplaySkinPreset[]) => {
     setPresets(nextPresets);
@@ -649,6 +1034,10 @@ export function ReplaySkinSettingsModal({
     if (presetId === DRAFT_PRESET_ID) return;
     const preset = presets.find((candidate) => candidate.id === presetId);
     if (!preset) return;
+    if (preset.community) {
+      void applyCommunityPreset(preset, preset.community);
+      return;
+    }
     setDraft(preset.settings);
     setDraftPresetName(DEFAULT_DRAFT_PRESET_NAME);
     setActiveColor(null);
@@ -667,7 +1056,19 @@ export function ReplaySkinSettingsModal({
       onSubmit: (name) => {
         const trimmed = name.trim();
         if (!trimmed) return;
-        const preset = createReplaySkinPreset(trimmed, draft);
+        // With a community skin loaded, the new preset keeps the skin link
+        // and stores the dehydrated payload; embedded data URLs must never
+        // land in the localStorage preset store.
+        let preset: ReplaySkinPreset;
+        if (loadedCatalogSkin) {
+          const payload = dehydrateReplaySkinSettings(draft);
+          preset = createReplaySkinPreset(trimmed, normalizeReplaySkinSettings(payload.settings), {
+            skin: loadedCatalogSkin.skin,
+            payload,
+          });
+        } else {
+          preset = createReplaySkinPreset(trimmed, draft);
+        }
         persistPresets([preset, ...presets].slice(0, 24));
         setSelectedPresetId(preset.id);
         setDraftPresetName(DEFAULT_DRAFT_PRESET_NAME);
@@ -752,18 +1153,52 @@ export function ReplaySkinSettingsModal({
   const save = () => {
     const normalized = normalizeReplaySkinSettings(draft);
     const normalizedOverlays = normalizeReplayOverlaySettings(overlayDraft);
-    const namedDraft = draftPresetName.trim();
-    if (selectedPreset) {
-      const nextPreset = {
-        ...selectedPreset,
-        settings: normalized,
+    // Hitsounds staged by a community-skin import persist only on Apply;
+    // writeReplaySkinSounds dispatches the change event itself, same as the
+    // Audio tab's import flow.
+    const pendingSounds = pendingSkinSoundsRef.current;
+    if (pendingSounds) {
+      pendingSkinSoundsRef.current = null;
+      void writeReplaySkinSounds({
+        skinName: pendingSounds.name,
         updatedAt: Date.now(),
-      };
+        samples: pendingSounds.sounds,
+      });
+    }
+    const namedDraft = draftPresetName.trim();
+    let appliedCommunity: AppliedCommunitySkinDraft | null = null;
+    if (selectedPreset) {
+      // Community presets persist dehydrated (asset paths, no pixels);
+      // regular presets keep the full normalized settings as before.
+      let nextPreset: ReplaySkinPreset;
+      if (selectedPreset.community) {
+        const payload = dehydrateReplaySkinSettings(normalized);
+        const assetFree = normalizeReplaySkinSettings(payload.settings);
+        nextPreset = {
+          ...selectedPreset,
+          settings: assetFree,
+          community: { skin: selectedPreset.community.skin, payload },
+          updatedAt: Date.now(),
+        };
+        appliedCommunity = { skin: selectedPreset.community.skin, payload, assetFree };
+      } else {
+        nextPreset = { ...selectedPreset, settings: normalized, updatedAt: Date.now() };
+      }
       persistPresets(presets.map((preset) => preset.id === selectedPreset.id ? nextPreset : preset));
     } else if (namedDraft && namedDraft !== DEFAULT_DRAFT_PRESET_NAME) {
       persistPresets([createReplaySkinPreset(namedDraft, normalized), ...presets].slice(0, 24));
     }
-    onSave(normalized);
+    // Draft slot with a community skin loaded: the applied settings still
+    // embed its art, so they still need the pointer to persist.
+    if (!appliedCommunity && loadedCatalogSkin && replaySkinSettingsEmbedAssets(normalized)) {
+      const payload = dehydrateReplaySkinSettings(normalized);
+      appliedCommunity = {
+        skin: loadedCatalogSkin.skin,
+        payload,
+        assetFree: normalizeReplaySkinSettings(payload.settings),
+      };
+    }
+    onSave(normalized, appliedCommunity);
     onSaveOverlays(normalizedOverlays);
     onClose();
   };
@@ -1024,7 +1459,10 @@ export function ReplaySkinSettingsModal({
               ["hud", "HUD"],
               ["overlays", "Overlays"],
               ["audio", "Audio"],
-            ] as const).map(([tab, label]) => (
+              // Only with an archive to pick from - the assetArchive prop or a
+              // community skin loaded this session; otherwise five tabs.
+              ...(activeAssetArchive ? ([["assets", "Assets"]] as const) : []),
+            ] as ReadonlyArray<readonly [ReplaySkinSettingsTab, string]>).map(([tab, label]) => (
               <button
                 key={tab}
                 type="button"
@@ -1094,6 +1532,89 @@ export function ReplaySkinSettingsModal({
 
             {activeTab === "style" ? (
               <>
+                {liveBackendAvailable ? (
+                  <section>
+                    <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">Community skin</div>
+                    <div className="space-y-2 rounded-lg border border-osu-b3/50 bg-osu-b5/35 p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-2">
+                          {communitySkinContext?.previewUrl && communityBusy !== "import" && communityBusy !== "preset" ? (
+                            <img
+                              src={communitySkinContext.previewUrl}
+                              alt=""
+                              draggable={false}
+                              className="h-6 w-10 shrink-0 rounded object-cover"
+                            />
+                          ) : null}
+                          <span className="min-w-0 truncate text-xs font-semibold text-osu-l1">
+                            {communityBusy === "import"
+                              ? `Importing… ${importProgress ?? 0}%`
+                              : communityBusy === "preset"
+                                ? "Loading skin…"
+                                : communitySkinContext
+                                  ? `${communitySkinContext.name} loaded`
+                                  : "No community skin loaded"}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSkinBrowserOpen(true)}
+                          disabled={communityBusy != null}
+                          className="shrink-0 cursor-pointer rounded-lg bg-osu-b3/50 px-3 py-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white disabled:cursor-default disabled:opacity-50"
+                        >
+                          Browse skins
+                        </button>
+                      </div>
+                      <p className="text-[11px] leading-relaxed text-osu-f1/80">
+                        Picking a skin loads it into the editor and saves it as a preset under its name.
+                        {viewerId ? " Set as my replay skin shows it to everyone watching your replays." : ""}
+                      </p>
+                      {communitySkinContext && communityBusy == null && !keymodeHasSkinArt ? (
+                        <p className="text-[11px] leading-relaxed text-osu-yellow">
+                          This skin has no {selectedKeyCount}K art, so {selectedKeyCount}K plays render flat shapes with its colors instead.
+                        </p>
+                      ) : null}
+                      {viewerId ? (
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-osu-b3/40 pt-2">
+                          <span className="min-w-0 truncate text-[11px] text-osu-f1">
+                            Your replay skin:{" "}
+                            {myReplaySkinRecord ? (
+                              <span className="font-semibold text-osu-l2">{myReplaySkinRecord.skin.name}</span>
+                            ) : (
+                              "none set"
+                            )}
+                          </span>
+                          <span className="flex shrink-0 items-center gap-1.5">
+                            {myReplaySkinRecord ? (
+                              <button
+                                type="button"
+                                onClick={() => void loadMyReplaySkinIntoDraft()}
+                                disabled={communityBusy != null}
+                                title="Load your replay skin into the editor to customize it"
+                                className="cursor-pointer rounded-lg bg-osu-b3/50 px-3 py-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white disabled:cursor-default disabled:opacity-50"
+                              >
+                                {communityBusy === "load-mine" ? "Loading…" : "Load"}
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              onClick={() => void saveDraftAsMyReplaySkin()}
+                              disabled={!communitySkinContext || communityBusy != null}
+                              title="Saves the current draft as-is; everyone watching your replays sees it"
+                              className="cursor-pointer rounded-lg border border-osu-pink/40 bg-osu-pink/10 px-3 py-1.5 text-xs font-semibold text-osu-pink-light transition-colors hover:border-osu-pink hover:bg-osu-pink/20 hover:text-white disabled:cursor-default disabled:opacity-45 disabled:hover:border-osu-pink/40 disabled:hover:bg-osu-pink/10 disabled:hover:text-osu-pink-light"
+                            >
+                              {communityBusy === "save-mine" ? "Saving…" : "Set as my replay skin"}
+                            </button>
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="border-t border-osu-b3/40 pt-2 text-[11px] text-osu-f1">
+                          Sign in to set a replay skin for your plays.
+                        </div>
+                      )}
+                    </div>
+                  </section>
+                ) : null}
                 <section>
                   <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">Note shape</div>
                   <div className="grid grid-cols-3 gap-2">
@@ -1338,6 +1859,57 @@ export function ReplaySkinSettingsModal({
                   />
                 ))}
               </section>
+            ) : activeTab === "assets" && activeAssetArchive ? (
+              <section className="space-y-4">
+                <p className="text-[11px] leading-relaxed text-osu-f1">
+                  Swap any element for another image from {activeAssetSourceName ?? "this skin"}. Note and key art draws
+                  under the Bars style; cleared elements fall back to flat shapes.
+                </p>
+                {columns.map((column) => (
+                  <div key={`asset-column-${column}`} className="rounded-lg border border-osu-b3/50 bg-osu-b5/35 p-3">
+                    <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">Column {column + 1}</div>
+                    <div className="space-y-1.5">
+                      {ASSET_COLUMN_ROWS.map(({ key, label }) => (
+                        <ReplaySkinAssetRow
+                          key={key}
+                          label={label}
+                          asset={profile.assets.columns[column]?.[key]}
+                          onChange={() => setAssetPicker({ kind: "column", column, assetKey: key, label })}
+                          onClear={() => applyAssetPick({ kind: "column", column, assetKey: key, label }, undefined, false)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <div className="rounded-lg border border-osu-b3/50 bg-osu-b5/35 p-3">
+                  <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">Judgements</div>
+                  <div className="space-y-1.5">
+                    {ASSET_JUDGEMENT_ROWS.map(({ key, label }) => (
+                      <ReplaySkinAssetRow
+                        key={key}
+                        label={label}
+                        asset={profile.assets.judgements[key]}
+                        onChange={() => setAssetPicker({ kind: "judgement", assetKey: key, label })}
+                        onClear={() => applyAssetPick({ kind: "judgement", assetKey: key, label }, undefined, false)}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-osu-b3/50 bg-osu-b5/35 p-3">
+                  <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">Stage</div>
+                  <div className="space-y-1.5">
+                    {ASSET_STAGE_ROWS.map(({ key, label }) => (
+                      <ReplaySkinAssetRow
+                        key={key}
+                        label={label}
+                        asset={profile.assets.stage[key]}
+                        onChange={() => setAssetPicker({ kind: "stage", assetKey: key, label })}
+                        onClear={() => applyAssetPick({ kind: "stage", assetKey: key, label }, undefined, false)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </section>
             ) : (
               <section className="max-w-xl space-y-4">
                 <div className="flex items-center justify-between gap-3">
@@ -1408,38 +1980,18 @@ export function ReplaySkinSettingsModal({
                         <div className="truncate text-[10px] text-osu-f1">
                           {skinSoundsInfo
                             ? `${skinSoundsInfo.keys.length} ${skinSoundsInfo.keys.length === 1 ? "sound" : "sounds"} from ${skinSoundsInfo.name ?? "an imported skin"}`
-                            : "Import a .osk to play its hitsounds. Without them, the default osu! samples play."}
+                            : "Load a community skin in the Style tab to use its hitsounds. Without them, the default osu! samples play."}
                         </div>
                       </div>
-                      <div className="flex shrink-0 items-center gap-1.5">
+                      {skinSoundsInfo ? (
                         <button
                           type="button"
-                          onClick={() => skinSoundsInputRef.current?.click()}
-                          disabled={importingSkinSounds}
-                          className="cursor-pointer rounded-lg bg-osu-b3/50 px-3 py-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white disabled:cursor-default disabled:opacity-50"
+                          onClick={clearImportedSkinSounds}
+                          className="shrink-0 cursor-pointer rounded-lg bg-osu-b3/50 px-3 py-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
                         >
-                          {importingSkinSounds ? "Importing…" : "Import .osk"}
+                          Remove
                         </button>
-                        {skinSoundsInfo ? (
-                          <button
-                            type="button"
-                            onClick={clearImportedSkinSounds}
-                            className="cursor-pointer rounded-lg bg-osu-b3/50 px-3 py-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
-                          >
-                            Remove
-                          </button>
-                        ) : null}
-                      </div>
-                      <input
-                        ref={skinSoundsInputRef}
-                        type="file"
-                        accept=".osk,.zip,application/zip"
-                        className="hidden"
-                        onChange={(event) => {
-                          const file = event.currentTarget.files?.[0];
-                          if (file) void importSkinSoundsOsk(file);
-                        }}
-                      />
+                      ) : null}
                     </div>
                     {skinSoundsInfo && skinSoundsInfo.keys.length > 0 ? (
                       <div className="mt-2.5 space-y-1.5">
@@ -1690,6 +2242,28 @@ export function ReplaySkinSettingsModal({
           />
         ) : null}
       </AnimatePresence>
+
+      {skinBrowserOpen ? (
+        <ReplaySkinCatalogBrowserDialog
+          onPick={(skin) => void importCatalogSkin(skin)}
+          onClose={() => setSkinBrowserOpen(false)}
+        />
+      ) : null}
+
+      {assetPicker && activeAssetArchive ? (
+        <ReplaySkinAssetPickerDialog
+          target={assetPicker}
+          archive={activeAssetArchive}
+          entries={assetEntries}
+          sourceName={activeAssetSourceName}
+          thumbCache={assetThumbCache}
+          onPick={(asset, applyToAllColumns) => {
+            applyAssetPick(assetPicker, asset, applyToAllColumns);
+            setAssetPicker(null);
+          }}
+          onClose={() => setAssetPicker(null)}
+        />
+      ) : null}
 
       {promptDialog ? (
         <ReplaySkinPromptDialog
@@ -2983,7 +3557,7 @@ type WindowRect = { x: number; y: number; w: number; h: number };
 type ResizeDirection = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 
 function isReplaySkinSettingsTab(value: unknown): value is ReplaySkinSettingsTab {
-  return value === "style" || value === "layout" || value === "hud" || value === "overlays" || value === "audio";
+  return value === "style" || value === "layout" || value === "hud" || value === "overlays" || value === "audio" || value === "assets";
 }
 
 function readWindowTab(): ReplaySkinSettingsTab {
@@ -3434,6 +4008,332 @@ function ReplaySkinKeyDialog({
           >
             <Copy className="h-3.5 w-3.5" />
             Copy
+          </button>
+        </div>
+      </motion.div>
+    </>
+  );
+}
+
+// The "Browse skins" picker: the published /skins catalog inside the modal,
+// searched against the live backend's public list endpoint. Picking a card
+// hands the SkinSummary back; the modal downloads and imports from there.
+function ReplaySkinCatalogBrowserDialog({
+  onPick,
+  onClose,
+}: {
+  onPick: (skin: SkinSummary) => void;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SkinSummary[]>([]);
+  const [status, setStatus] = useState<"loading" | "idle" | "error">("loading");
+  const requestRef = useRef(0);
+
+  useEffect(() => {
+    const requestId = ++requestRef.current;
+    setStatus("loading");
+    // The first page loads immediately; typing debounces ~300ms.
+    const timer = window.setTimeout(async () => {
+      try {
+        const result = await fetchSkinsListDirect({ q: query.trim(), page: 0 });
+        if (requestRef.current !== requestId) return;
+        setResults(result.skins);
+        setStatus("idle");
+      } catch {
+        if (requestRef.current !== requestId) return;
+        setResults([]);
+        setStatus("error");
+      }
+    }, query.trim() ? 300 : 0);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  return (
+    <>
+      <motion.div
+        className="fixed inset-0 z-[130] bg-black/55 backdrop-blur-[2px]"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.1 }}
+        onClick={onClose}
+      />
+      <motion.div
+        role="dialog"
+        aria-modal="true"
+        initial={{ opacity: 0, y: -12, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: -8, scale: 0.98 }}
+        transition={{ duration: 0.14 }}
+        className="fixed left-1/2 top-1/2 z-[131] w-[min(480px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="border-b border-osu-b3/50 px-5 py-3">
+          <div className="text-sm font-bold text-white">Browse community skins</div>
+          <div className="mt-0.5 text-[10px] text-osu-f1">Pick one to load it into the editor.</div>
+        </div>
+        <div className="space-y-2 px-5 py-4">
+          <input
+            type="text"
+            autoFocus
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search skins by name"
+            onKeyDown={(event) => {
+              if (event.key === "Escape") onClose();
+            }}
+            className="h-9 w-full rounded-md border border-osu-b3/60 bg-osu-b5/70 px-3 text-xs font-semibold text-white outline-none transition-colors focus:border-osu-pink/70"
+          />
+          <div className="max-h-[340px] overflow-y-auto rounded-md border border-osu-b3/50 bg-osu-b5/40">
+            {status === "error" ? (
+              <div className="px-3 py-4 text-[11px] text-osu-f1">The skin list could not be loaded. Try again.</div>
+            ) : status === "loading" && results.length === 0 ? (
+              <div className="px-3 py-4 text-[11px] text-osu-f1">Loading skins…</div>
+            ) : results.length === 0 ? (
+              <div className="px-3 py-4 text-[11px] text-osu-f1">No skins match that search.</div>
+            ) : (
+              results.map((skin) => (
+                <button
+                  key={skin.id}
+                  type="button"
+                  onClick={() => onPick(skin)}
+                  className="flex w-full cursor-pointer items-center gap-2.5 border-b border-osu-b3/30 px-2.5 py-1.5 text-left transition-colors last:border-b-0 hover:bg-osu-b3/40"
+                >
+                  <span className="grid h-9 w-16 shrink-0 place-items-center overflow-hidden rounded bg-black/40">
+                    {skin.previewUrl ? (
+                      <img src={skin.previewUrl} alt="" loading="lazy" draggable={false} className="h-full w-full object-cover" />
+                    ) : (
+                      <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-white/10" />
+                    )}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-xs font-semibold text-osu-l1">{skin.name}</span>
+                    <span className="block truncate text-[10px] text-osu-f1">
+                      {[skin.author ?? skin.ownerUsername, formatKeymodes(skin.keymodes)].filter(Boolean).join(" · ")}
+                    </span>
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t border-osu-b3/50 px-5 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="cursor-pointer rounded-lg bg-osu-b3/50 px-4 py-2 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
+          >
+            Cancel
+          </button>
+        </div>
+      </motion.div>
+    </>
+  );
+}
+
+function ReplaySkinAssetRow({
+  label,
+  asset,
+  onChange,
+  onClear,
+}: {
+  label: string;
+  asset: ReplaySkinImageAsset | undefined;
+  onChange: () => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2.5 rounded-md border border-osu-b3/40 bg-osu-b5/40 px-2.5 py-1.5">
+      <span className="w-20 shrink-0 text-[11px] font-semibold text-osu-l1">{label}</span>
+      <span className="flex min-w-0 flex-1 items-center gap-2">
+        {asset ? (
+          <>
+            <span className="grid h-7 w-10 shrink-0 place-items-center overflow-hidden rounded bg-black/40">
+              <img src={asset.src} alt="" draggable={false} className="max-h-7 max-w-10 object-contain" />
+            </span>
+            <span className="truncate font-mono text-[10px] text-osu-c1" title={asset.path ?? asset.name}>
+              {asset.name}
+            </span>
+          </>
+        ) : (
+          <span className="text-[11px] text-osu-f1">default</span>
+        )}
+      </span>
+      <span className="flex shrink-0 items-center gap-1.5">
+        <button
+          type="button"
+          onClick={onChange}
+          className="cursor-pointer rounded-md bg-osu-b3/50 px-2.5 py-1 text-[11px] font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
+        >
+          Change
+        </button>
+        {asset ? (
+          <button
+            type="button"
+            onClick={onClear}
+            className="cursor-pointer rounded-md px-2 py-1 text-[11px] font-semibold text-osu-f1 transition-colors hover:text-white"
+          >
+            Clear
+          </button>
+        ) : null}
+      </span>
+    </div>
+  );
+}
+
+// Lazy picker thumbnail: decodes the image the first time it scrolls into the
+// rendered slice and keeps riding the shared promise cache afterwards.
+function OskEntryThumbnail({
+  archive,
+  path,
+  cache,
+}: {
+  archive: OskArchive;
+  path: string;
+  cache: Map<string, Promise<ReplaySkinImageAsset | undefined>>;
+}) {
+  const [asset, setAsset] = useState<ReplaySkinImageAsset | null | undefined>(undefined);
+  useEffect(() => {
+    let cancelled = false;
+    void loadCachedOskAsset(archive, path, cache).then((loaded) => {
+      if (!cancelled) setAsset(loaded ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [archive, path, cache]);
+  return (
+    <span className="grid h-9 w-14 shrink-0 place-items-center overflow-hidden rounded bg-black/40">
+      {asset ? (
+        <img src={asset.src} alt="" draggable={false} className="max-h-9 max-w-14 object-contain" />
+      ) : (
+        <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-white/10" />
+      )}
+    </span>
+  );
+}
+
+function ReplaySkinAssetPickerDialog({
+  target,
+  archive,
+  entries,
+  sourceName,
+  thumbCache,
+  onPick,
+  onClose,
+}: {
+  target: AssetPickerTarget;
+  archive: OskArchive;
+  entries: OskImageEntry[];
+  sourceName?: string | null;
+  thumbCache: Map<string, Promise<ReplaySkinImageAsset | undefined>>;
+  onPick: (asset: ReplaySkinImageAsset, applyToAllColumns: boolean) => void;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [applyToAll, setApplyToAll] = useState(false);
+  const [picking, setPicking] = useState<string | null>(null);
+  const trimmed = query.trim().toLowerCase();
+  const matches = trimmed ? entries.filter((entry) => entry.path.toLowerCase().includes(trimmed)) : entries;
+  const visible = matches.slice(0, ASSET_PICKER_MAX_ENTRIES);
+
+  const pick = async (entry: OskImageEntry) => {
+    if (picking) return;
+    setPicking(entry.path);
+    const asset = await loadCachedOskAsset(archive, entry.path, thumbCache);
+    setPicking(null);
+    if (!asset) return;
+    onPick(asset, applyToAll);
+  };
+
+  return (
+    <>
+      <motion.div
+        className="fixed inset-0 z-[130] bg-black/55 backdrop-blur-[2px]"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.1 }}
+        onClick={onClose}
+      />
+      <motion.div
+        role="dialog"
+        aria-modal="true"
+        initial={{ opacity: 0, y: -12, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: -8, scale: 0.98 }}
+        transition={{ duration: 0.14 }}
+        className="fixed left-1/2 top-1/2 z-[131] w-[min(460px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="border-b border-osu-b3/50 px-5 py-3">
+          <div className="text-sm font-bold text-white">
+            Change {target.label}
+            {target.kind === "column" ? ` · Column ${target.column + 1}` : ""}
+          </div>
+          {sourceName ? <div className="mt-0.5 text-[10px] text-osu-f1">Images from {sourceName}</div> : null}
+        </div>
+        <div className="space-y-2 px-5 py-4">
+          <input
+            type="text"
+            autoFocus
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search images by file name"
+            onKeyDown={(event) => {
+              if (event.key === "Escape") onClose();
+            }}
+            className="h-9 w-full rounded-md border border-osu-b3/60 bg-osu-b5/70 px-3 text-xs font-semibold text-white outline-none transition-colors focus:border-osu-pink/70"
+          />
+          <div className="max-h-[320px] overflow-y-auto rounded-md border border-osu-b3/50 bg-osu-b5/40">
+            {visible.length === 0 ? (
+              <div className="px-3 py-4 text-[11px] text-osu-f1">No images match that search.</div>
+            ) : (
+              visible.map((entry) => (
+                <button
+                  key={entry.path}
+                  type="button"
+                  onClick={() => void pick(entry)}
+                  disabled={picking != null}
+                  className="flex w-full cursor-pointer items-center gap-2.5 border-b border-osu-b3/30 px-2.5 py-1.5 text-left transition-colors last:border-b-0 hover:bg-osu-b3/40 disabled:cursor-default"
+                >
+                  <OskEntryThumbnail archive={archive} path={entry.path} cache={thumbCache} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-xs font-semibold text-osu-l1">{entry.name}</span>
+                    <span className="block truncate font-mono text-[10px] text-osu-f1">{entry.path}</span>
+                  </span>
+                  {picking === entry.path ? (
+                    <span className="shrink-0 text-[10px] font-semibold text-osu-f1">Loading…</span>
+                  ) : null}
+                </button>
+              ))
+            )}
+          </div>
+          {matches.length > visible.length ? (
+            <div className="text-[10px] text-osu-f1">
+              Showing {visible.length} of {matches.length} images. Refine your search to see the rest.
+            </div>
+          ) : null}
+          {target.kind === "column" ? (
+            <label className="flex w-fit cursor-pointer items-center gap-2 text-[11px] font-semibold text-osu-l1">
+              <input
+                type="checkbox"
+                checked={applyToAll}
+                onChange={(event) => setApplyToAll(event.target.checked)}
+                className="h-3.5 w-3.5 cursor-pointer accent-osu-pink"
+              />
+              Apply to all columns
+            </label>
+          ) : null}
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t border-osu-b3/50 px-5 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="cursor-pointer rounded-lg bg-osu-b3/50 px-4 py-2 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
+          >
+            Cancel
           </button>
         </div>
       </motion.div>

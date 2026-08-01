@@ -322,6 +322,7 @@ async function runMigrationPass(target: Db, statements: string[], startedAtIso: 
   await migrateMapSearchIndex(target);
   await migrateMapCollections(target);
   await migrateSkins(target);
+  await migrateUserReplaySkins(target);
   await migrateAdminTodos(target);
   await migrateDanBenchmark(target);
   await migrateAvatarAccents(target);
@@ -1733,6 +1734,23 @@ async function migrateSkins(db: Db): Promise<void> {
   await db.execute(`
     create index if not exists idx_skins_osk_sha256
       on skins(osk_sha256) where osk_sha256 is not null
+  `);
+}
+
+async function migrateUserReplaySkins(db: Db): Promise<void> {
+  // Which published community skin (skins table) fronts a player's replays,
+  // plus their customized settings as JSON. The payload references assets by
+  // path inside the .osk only - the HTTP layer rejects embedded data: URLs.
+  // Timestamps are ISO text (matching skins). Read by PK from the public
+  // replay-skin endpoint, so no extra indexes. Durable: retention never prunes
+  // it; a row whose skin was hidden or deleted simply reads back as "no skin".
+  await db.execute(`
+    create table if not exists user_replay_skins (
+      user_id integer primary key,
+      skin_id text not null,
+      payload_json text not null,
+      updated_at text not null
+    )
   `);
 }
 

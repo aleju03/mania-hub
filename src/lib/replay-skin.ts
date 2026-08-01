@@ -1,3 +1,5 @@
+import type { SkinSummary } from "./skins";
+
 export const REPLAY_SKIN_STORAGE_KEY = "mania-hub-replay-skin-v1";
 export const REPLAY_SKIN_PRESETS_STORAGE_KEY = "mania-hub-replay-skin-presets-v1";
 
@@ -104,6 +106,12 @@ export interface ReplaySkinStageAssets {
   hint?: ReplaySkinImageAsset;
   light?: ReplaySkinImageAsset;
   lighting?: ReplaySkinImageAsset;
+  // scorebar-bg / scorebar-colour / scorebar-marker: the HP bar art. Global
+  // skin files rather than [Mania] keys, but kept per keymode with the rest of
+  // the furniture so one import pass fills everything.
+  scorebarBg?: ReplaySkinImageAsset;
+  scorebarColour?: ReplaySkinImageAsset;
+  scorebarMarker?: ReplaySkinImageAsset;
   // skin.ini LightingNWidth, per column, in 480-space units. Empty means the
   // key was absent and the glow keeps the art's own width.
   lightingWidths: number[];
@@ -181,12 +189,23 @@ export interface ReplaySkinSettings {
   keymodeProfiles: Record<string, ReplaySkinKeymodeProfile>;
 }
 
+// A preset backed by a published community skin. `payload` is the dehydrated
+// owner-skin format (assets referenced by path inside the catalog .osk, no
+// pixels), so the preset stays a few KB in localStorage; loading it re-fetches
+// the archive and rehydrates. `settings` on the preset itself holds the
+// asset-free normalization of that payload as an offline fallback.
+export interface ReplaySkinPresetCommunityLink {
+  skin: SkinSummary;
+  payload: unknown;
+}
+
 export interface ReplaySkinPreset {
   id: string;
   name: string;
   settings: ReplaySkinSettings;
   createdAt: number;
   updatedAt: number;
+  community?: ReplaySkinPresetCommunityLink;
 }
 
 export interface ReplaySkinSharePayload {
@@ -622,6 +641,9 @@ function normalizeStageAssets(value: unknown): ReplaySkinStageAssets {
     hint: normalizeImageAsset(raw.hint),
     light: normalizeImageAsset(raw.light),
     lighting: normalizeImageAsset(raw.lighting),
+    scorebarBg: normalizeImageAsset(raw.scorebarBg),
+    scorebarColour: normalizeImageAsset(raw.scorebarColour),
+    scorebarMarker: normalizeImageAsset(raw.scorebarMarker),
     lightingWidths: normalizeNumberList(raw.lightingWidths, 1, 400, REPLAY_SKIN_MAX_COLUMNS),
     lightColors: normalizeColumnColors(raw.lightColors),
   };
@@ -802,18 +824,30 @@ function normalizePresetName(value: unknown): string {
   return trimmed ? trimmed.slice(0, 80) : "Untitled preset";
 }
 
+function normalizePresetCommunityLink(value: unknown): ReplaySkinPresetCommunityLink | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const raw = value as Partial<Record<keyof ReplaySkinPresetCommunityLink, unknown>>;
+  const skin = raw.skin;
+  if (!skin || typeof skin !== "object" || Array.isArray(skin)) return undefined;
+  if (typeof (skin as { id?: unknown }).id !== "string" || !(skin as { id: string }).id) return undefined;
+  if (raw.payload == null || typeof raw.payload !== "object") return undefined;
+  return { skin: skin as SkinSummary, payload: raw.payload };
+}
+
 function normalizePreset(value: unknown): ReplaySkinPreset | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const raw = value as Partial<Record<keyof ReplaySkinPreset, unknown>>;
   const id = typeof raw.id === "string" && raw.id.trim() ? raw.id.trim().slice(0, 80) : cryptoRandomId();
   const createdAt = Math.max(0, Math.round(Number(raw.createdAt) || Date.now()));
   const updatedAt = Math.max(createdAt, Math.round(Number(raw.updatedAt) || createdAt));
+  const community = normalizePresetCommunityLink(raw.community);
   return {
     id,
     name: normalizePresetName(raw.name),
     settings: normalizeReplaySkinSettings(raw.settings),
     createdAt,
     updatedAt,
+    ...(community ? { community } : {}),
   };
 }
 
@@ -848,7 +882,11 @@ export function writeReplaySkinPresets(presets: ReplaySkinPreset[]): void {
   }
 }
 
-export function createReplaySkinPreset(name: string, settings: ReplaySkinSettings): ReplaySkinPreset {
+export function createReplaySkinPreset(
+  name: string,
+  settings: ReplaySkinSettings,
+  community?: ReplaySkinPresetCommunityLink,
+): ReplaySkinPreset {
   const now = Date.now();
   return {
     id: cryptoRandomId(),
@@ -856,6 +894,7 @@ export function createReplaySkinPreset(name: string, settings: ReplaySkinSetting
     settings: normalizeReplaySkinSettings(settings),
     createdAt: now,
     updatedAt: now,
+    ...(community ? { community } : {}),
   };
 }
 

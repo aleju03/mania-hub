@@ -42,6 +42,12 @@ export interface ReplayRendererLike {
   getOverlayIdAtClientPoint?: (clientX: number, clientY: number) => ReplayOverlayId | null;
   /** False on phones or with the HUD hidden, where overlays are not editable. */
   canEditOverlays?: () => boolean;
+  /**
+   * Client point is busy with overlay editing, so bottom chrome must stay down:
+   * an edit gesture, the pointer on an overlay, or an overlay below it inside
+   * the chrome's band (`chromeBandPx`, measured up from the stage bottom).
+   */
+  isOverlayEditPoint?: (clientX: number, clientY: number, chromeBandPx?: number) => boolean;
   pause: () => void;
   play: () => void;
   resize: () => void;

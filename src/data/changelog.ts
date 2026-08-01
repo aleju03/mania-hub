@@ -26,6 +26,9 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-07-31", text: "New in-game style look for the replay viewer", to: "/replay" },
+  { date: "2026-07-31", text: "Added support for storyboards on replays", to: "/replay" },
+  { date: "2026-07-31", text: "Customize the replay HUD: drag, resize or remove any element", to: "/replay" },
   { date: "2026-07-31", text: "See how many times your own skins have been downloaded", to: "/skins" },
   { date: "2026-07-31", text: "Update your skin with a newer .osk, keeping its page and its downloads", to: "/skins" },
   { date: "2026-07-31", text: "Download a skin straight from the grid, without opening it first", to: "/skins" },

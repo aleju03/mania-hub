@@ -1,6 +1,7 @@
+import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
 
-import { decodeUncompressedTiff } from "./replay-skin-import";
+import { decodeUncompressedTiff, importReplaySkinFromOsk } from "./replay-skin-import";
 
 // Builds a minimal little-endian uncompressed TIFF the way Photoshop lays it
 // out: header, pixel strip, then one IFD. Enough to cover the renamed-TIFF
@@ -106,5 +107,75 @@ describe("decodeUncompressedTiff", () => {
     });
     expect(decodeUncompressedTiff(compressed)).toBeNull();
     expect(decodeUncompressedTiff(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0]))).toBeNull();
+  });
+});
+
+// 1x1 transparent PNG.
+const PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
+async function buildOsk(skinIni: string, imagePaths: string[]): Promise<File> {
+  const zip = new JSZip();
+  zip.file("skin.ini", skinIni);
+  const bytes = Uint8Array.from(atob(PNG_BASE64), (char) => char.charCodeAt(0));
+  for (const path of imagePaths) zip.file(path, bytes);
+  const buffer = await zip.generateAsync({ type: "arraybuffer" });
+  return new File([buffer], "test-skin.osk");
+}
+
+describe("importReplaySkinFromOsk keymode synthesis", () => {
+  it("synthesizes undeclared keymodes from stable's default filenames", async () => {
+    const file = await buildOsk(
+      ["[General]", "Name: FourOnly", "[Mania]", "Keys: 4", "NoteImage0: mania/custom1"].join("\n"),
+      ["mania/custom1.png", "mania-note1.png", "mania-note2.png", "mania-noteS.png", "mania-key1.png"],
+    );
+    const result = await importReplaySkinFromOsk(file, { targetKeyCount: 7 });
+
+    expect(result.summary.keymodes).toEqual([4]);
+    expect(result.summary.assetKeymodes).toContain(7);
+    const profile7 = result.settings.keymodeProfiles["7"];
+    expect(profile7).toBeDefined();
+    // Stable's 7K layout is 1,2,1,S,1,2,1: the middle lane resolves noteS.
+    expect(profile7.assets.columns[3].tap?.name).toBe("mania-noteS.png");
+    expect(profile7.assets.columns[0].tap?.name).toBe("mania-note1.png");
+    expect(profile7.assets.columns[1].tap?.name).toBe("mania-note2.png");
+    expect(profile7.assets.columns[0].receptor?.name).toBe("mania-key1.png");
+    // The declared 4K block still wins its own explicit reference.
+    expect(result.settings.keymodeProfiles["4"].assets.columns[0].tap?.name).toBe("custom1.png");
+  });
+
+  it("retries -0 judgement frames and falls through combo prefixes like the game does", async () => {
+    const file = await buildOsk(
+      [
+        "[General]",
+        "Name: LazerEdit",
+        "[Fonts]",
+        "ComboPrefix: c\\combo",
+        "[Mania]",
+        "Keys: 4",
+        // Points at digits that do not exist at the root; the [Fonts] prefix
+        // is what the game actually shows.
+        "FontCombo: combo",
+        // Only the animated -0 frame exists on disk.
+        "Hit300: judge\\mania-hit300",
+      ].join("\n"),
+      ["c/combo-0.png", "c/combo-1.png", "judge/mania-hit300-0.png", "mania-note1.png"],
+    );
+    const result = await importReplaySkinFromOsk(file, { targetKeyCount: 4 });
+    const profile = result.settings.keymodeProfiles["4"];
+
+    expect(profile.assets.judgements.hit300?.path).toBe("judge/mania-hit300-0.png");
+    expect(profile.assets.combo?.digits[0]?.path).toBe("c/combo-0.png");
+    expect(profile.assets.combo?.digits[1]?.path).toBe("c/combo-1.png");
+  });
+
+  it("keeps undeclared keymodes untouched when no default-named art exists", async () => {
+    const file = await buildOsk(
+      ["[General]", "Name: FourOnly", "[Mania]", "Keys: 4", "NoteImage0: mania/custom1"].join("\n"),
+      ["mania/custom1.png"],
+    );
+    const result = await importReplaySkinFromOsk(file, { targetKeyCount: 7 });
+
+    expect(result.summary.assetKeymodes).toEqual([4]);
+    expect(result.settings.keymodeProfiles["7"]).toBeUndefined();
   });
 });

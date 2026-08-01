@@ -294,9 +294,12 @@ export const getBeatmapFile = createServerFn({ method: "GET" })
     const result = await fetchBeatmapFileWithMeta(data.beatmapId, data.beatmapsetId, data.checksum);
     if (result.checksumMatched === false) {
       // Wrong revision (backend refresh throttled/failed, or an old backend
-      // that ignores the param): serve it, but never let the CDN pin it under
-      // this checksum URL - the next request should get another chance.
-      noStore();
+      // that ignores the param). Don't pin it under this checksum URL for the
+      // full hour, but a `.osu` is a fat body to re-stream through the
+      // function on every viewer of the same replay: a minute is short enough
+      // that the next refresh still gets its chance, and no stale window on
+      // top of it so the corrected file is never served late.
+      edgeCache(60, 0);
     } else {
       // The checksum rides in the URL, so an updated map busts this edge cache
       // as soon as callers start sending the new value.

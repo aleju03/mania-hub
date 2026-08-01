@@ -35,6 +35,11 @@ export interface ReplaySkinImportSummary {
   name: string;
   author: string | null;
   keymodes: number[];
+  // Keymodes whose profile carries note or receptor art after the import,
+  // including keymodes synthesized from stable's default filenames. The
+  // declared `keymodes` list is what the skin.ini ships; this is what
+  // actually renders skinned.
+  assetKeymodes: number[];
   selectedKeyCount: number | null;
   noteAssets: number;
   receptorAssets: number;
@@ -73,7 +78,9 @@ export async function importReplaySkinFromOsk(
     onProgress?: (done: number, total: number) => void;
   },
 ): Promise<ReplaySkinImportResult> {
-  const zip = await JSZip.loadAsync(file);
+  // Buffer-first so the same code runs in the browser and under node (JSZip
+  // cannot read node's File/Blob objects directly).
+  const zip = await JSZip.loadAsync(await file.arrayBuffer());
   const skinIni = await readSkinIni(zip);
   if (!skinIni) throw new Error("No skin.ini was found in this .osk file.");
 
@@ -104,12 +111,21 @@ export async function importReplaySkinFromOsk(
   let judgementAssets = 0;
   let comboDigits = 0;
 
+  // Stable also plays keymodes the skin.ini never declares by resolving each
+  // element from the default filenames (mania-note1/2/S and mania-key1/2/S in
+  // the symmetric column layout), so a 4K-only skin still shows its art on a
+  // 7K chart in game. Mirror that: undeclared keymodes import through an
+  // empty block, and only keep the profile when it actually resolved art.
+  const declaredKeys = new Set(maniaBlocks.map((entry) => entry.keys));
+  const synthesizedKeys = Array.from({ length: REPLAY_SKIN_MAX_COLUMNS }, (_, index) => index + 1)
+    .filter((keys) => !declaredKeys.has(keys));
+
   // One tick per resolveAssetReference call; undefined references resolve
   // instantly, so the bar sprints through them and crawls on real decodes.
   const totalReferences = maniaBlocks.reduce((sum, { block, keys }) => {
     const comboPrefix = block.FontCombo || parsed.fonts.ComboPrefix || "";
     return sum + keys * 6 + 6 + (comboPrefix ? 11 : 0);
-  }, 0);
+  }, 0) + synthesizedKeys.reduce((sum, keys) => sum + keys * 6 + 6 + (parsed.fonts.ComboPrefix ? 11 : 0), 0);
   let doneReferences = 0;
   const onTick = options.onProgress
     ? () => options.onProgress?.((doneReferences += 1), totalReferences)
@@ -134,6 +150,24 @@ export async function importReplaySkinFromOsk(
     comboDigits += imported.comboDigits;
   }
 
+  // The synthesized keymodes share the decode cache with the declared ones,
+  // so this pass mostly re-reads already-decoded defaults. The summary
+  // counters stay declared-only: they describe what the skin ships.
+  for (const keys of synthesizedKeys) {
+    const imported = await buildProfileFromManiaBlock({
+      zip,
+      lookup,
+      assetCache,
+      block: {},
+      fonts: parsed.fonts,
+      baseProfile: getReplaySkinProfile(nextSettings, keys),
+      keys,
+      onTick,
+    });
+    if (imported.noteAssets + imported.receptorAssets === 0) continue;
+    keymodeProfiles[String(keys)] = imported.profile;
+  }
+
   const selectedProfile = keymodeProfiles[String(selectedBlock.keys)];
   const selectedBlockSettings = settingsFromManiaBlock(selectedBlock.block);
   nextSettings = normalizeReplaySkinSettings({
@@ -143,6 +177,12 @@ export async function importReplaySkinFromOsk(
     // style (circles/arrows are the synthetic shape styles), so a skin that
     // ships any assets must switch to it or it renders as flat shapes.
     style: hasAnyImportedAssets(selectedProfile.assets) ? "bars" : nextSettings.style,
+    // A full import should look like the skin, so its own judgement art and
+    // digit font win over whichever built-in set the base settings carried.
+    // "skin" routes getJudgementAsset to the imported art, and "set1" is the
+    // sentinel renderComboImages accepts for skin combo digits.
+    judgementSet: judgementAssets > 0 ? "skin" : nextSettings.judgementSet,
+    comboFontSet: comboDigits > 0 ? "set1" : nextSettings.comboFontSet,
     tapColor: selectedProfile.tapColor,
     tapColors: selectedProfile.tapColors,
     lnHeadColor: selectedProfile.lnHeadColor,
@@ -166,6 +206,10 @@ export async function importReplaySkinFromOsk(
       // skin.ini: a file may repeat a [Mania] block for the same key count,
       // and each keymode is one preview, one tile, one render.
       keymodes: [...new Set(maniaBlocks.map((entry) => entry.keys))].sort((a, b) => a - b),
+      assetKeymodes: Object.entries(keymodeProfiles)
+        .filter(([, profile]) => hasAnyImportedAssets(profile.assets))
+        .map(([key]) => Number(key))
+        .sort((a, b) => a - b),
       selectedKeyCount: selectedBlock.keys,
       noteAssets,
       receptorAssets,
@@ -201,20 +245,63 @@ export async function readOskManifest(file: File): Promise<OskManifest> {
   return { name: parsed.name ?? stripExtension(file.name), author: parsed.author, keymodes };
 }
 
-export interface ReplaySkinSoundsImportResult {
-  name: string;
-  sounds: Record<string, ArrayBuffer>;
+// A .osk opened once and queried many times: the owner-skin flows resolve
+// stored asset paths and picker choices against the same archive without
+// re-unzipping per asset.
+export interface OskArchive {
+  zip: JSZip;
+  lookup: Map<string, JSZip.JSZipObject>;
+  // Decode results by lowercased zip path. Rehydration references the same
+  // file once per keymode/column that uses it; without this every reference
+  // re-inflates and re-decodes the image, which stalls the page for seconds
+  // on asset-heavy skins.
+  assetCache: Map<string, Promise<ReplaySkinImageAsset | undefined>>;
 }
 
-// Sounds-only import used by the Audio tab: pulls the gameplay samples out of
-// a .osk without touching the visual skin settings. skin.ini is optional here,
-// it is only read for the skin's display name.
-export async function importReplaySkinSoundsFromOsk(file: File): Promise<ReplaySkinSoundsImportResult> {
+export async function openOskArchive(file: Blob | ArrayBuffer): Promise<OskArchive> {
   const zip = await JSZip.loadAsync(file);
-  const skinIni = await readSkinIni(zip);
-  const parsed = skinIni ? parseSkinIni(skinIni) : null;
-  const sounds = await extractSkinSounds(buildZipLookup(zip));
-  return { name: parsed?.name ?? stripExtension(file.name), sounds };
+  return { zip, lookup: buildZipLookup(zip), assetCache: new Map() };
+}
+
+// Loads one image out of an already-open archive by its exact zip path; the
+// rehydration path for stored replay-skin configs, which reference assets by
+// path instead of embedding them. Scale re-derives from the filename's @2x
+// marker, matching what buildAssetCandidates assigned at import time.
+export function loadOskImageAssetByPath(archive: OskArchive, path: string): Promise<ReplaySkinImageAsset | undefined> {
+  const clean = cleanReference(path);
+  if (!clean) return Promise.resolve(undefined);
+  const key = clean.toLowerCase();
+  const cached = archive.assetCache.get(key);
+  if (cached) return cached;
+  const file = archive.lookup.get(key);
+  if (!file) return Promise.resolve(undefined);
+  const extension = /\.([a-z0-9]+)$/i.exec(clean)?.[1]?.toLowerCase();
+  const mime = extension === "jpg" || extension === "jpeg" ? "image/jpeg" : "image/png";
+  const scale = /@2x\.[a-z0-9]+$/i.test(clean) ? 2 : 1;
+  const promise = readImageAsset(archive.zip, { file, path: file.name, mime, scale });
+  archive.assetCache.set(key, promise);
+  return promise;
+}
+
+export async function extractSkinSoundsFromArchive(archive: OskArchive): Promise<Record<string, ArrayBuffer>> {
+  return extractSkinSounds(archive.lookup);
+}
+
+export interface OskImageEntry {
+  path: string;
+  name: string;
+}
+
+// Every image the archive could offer as a replacement asset, for the
+// customization picker. Paths only; the picker decodes previews lazily.
+export function listOskImageEntries(archive: OskArchive): OskImageEntry[] {
+  const entries: OskImageEntry[] = [];
+  for (const file of archive.lookup.values()) {
+    const path = normalizeZipPath(file.name);
+    if (!/\.(png|jpe?g)$/i.test(path)) continue;
+    entries.push({ path, name: basename(path) });
+  }
+  return entries.sort((a, b) => a.path.localeCompare(b.path));
 }
 
 async function extractSkinSounds(lookup: Map<string, JSZip.JSZipObject>): Promise<Record<string, ArrayBuffer>> {
@@ -413,8 +500,11 @@ async function buildProfileFromManiaBlock({
   ] as const) {
     // Stable falls back to the default filenames when the block sets no Hit*
     // reference; the animated first frame outranks the static image (skinners
-    // often blank the static copy but keep the animation).
+    // often blank the static copy but keep the animation). A declared
+    // reference also gets the -0 frame retry: lazer edits routinely point
+    // Hit300 at a folder that only ships mania-hit300-0.png.
     const asset = (await resolveAssetReference(zip, lookup, assetCache, block[skinKey]))
+      ?? (block[skinKey] ? await resolveAssetReference(zip, lookup, assetCache, `${block[skinKey]}-0`) : undefined)
       ?? (await resolveAssetReference(zip, lookup, assetCache, `mania-${outputKey}-0`))
       ?? (await resolveAssetReference(zip, lookup, assetCache, `mania-${outputKey}`));
     onTick?.();
@@ -443,6 +533,13 @@ async function buildProfileFromManiaBlock({
     // only one, and either reads as "the hit glow" on a still preview.
     lighting: (await resolveStage(block.LightingN, "lightingN"))
       ?? (await resolveStage(block.LightingL, "lightingL")),
+    // The HP bar art. Global filenames (no [Mania] key), animated frame 0
+    // stands in for a missing static image like the rest of the furniture;
+    // scorebar-ki is the classic marker name older skins ship.
+    scorebarBg: await resolveStage(undefined, "scorebar-bg"),
+    scorebarColour: await resolveStage(undefined, "scorebar-colour"),
+    scorebarMarker: (await resolveStage(undefined, "scorebar-marker"))
+      ?? (await resolveStage(undefined, "scorebar-ki")),
     lightingWidths: parseNumberList(block.LightingNWidth).slice(0, keys),
     lightColors,
   };
@@ -450,15 +547,27 @@ async function buildProfileFromManiaBlock({
     .filter(Boolean).length;
 
   // Stable's [Fonts] ComboPrefix defaults to "score", so skins that ship only
-  // score-* digit art still get a combo font.
-  const comboPrefix = block.FontCombo || fonts.ComboPrefix || "score";
+  // score-* digit art still get a combo font. A block FontCombo that points
+  // at digits which do not exist (moved folders are common in lazer edits)
+  // must not kill the combo font either: fall through the candidates until
+  // one resolves, which is the font the game actually shows.
   const comboOverlap = clampInteger(parseNumber(fonts.ComboOverlap) ?? 0, -80, 80);
-  const comboDigitsAssets = comboPrefix
-    ? await Promise.all(Array.from({ length: 10 }, (_, digit) =>
-        resolveTracked(`${comboPrefix}-${digit}`),
-      ))
-    : [];
-  const comboX = comboPrefix ? await resolveTracked(`${comboPrefix}-x`) : undefined;
+  const comboPrefixCandidates = [...new Set([block.FontCombo, fonts.ComboPrefix, "score"].filter((value): value is string => Boolean(value)))];
+  let comboPrefix = comboPrefixCandidates[0] ?? "score";
+  let comboDigitsAssets: Array<ReplaySkinImageAsset | undefined> = [];
+  let comboX: ReplaySkinImageAsset | undefined;
+  for (const candidate of comboPrefixCandidates) {
+    const digitsAssets = await Promise.all(Array.from({ length: 10 }, (_, digit) =>
+      resolveTracked(`${candidate}-${digit}`),
+    ));
+    const x = await resolveTracked(`${candidate}-x`);
+    if (digitsAssets.some(Boolean) || x) {
+      comboPrefix = candidate;
+      comboDigitsAssets = digitsAssets;
+      comboX = x;
+      break;
+    }
+  }
   const comboDigits = comboDigitsAssets.filter(Boolean).length;
   const combo = comboDigits > 0 || comboX
     ? {

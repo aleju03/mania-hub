@@ -71,6 +71,7 @@ const REQUIRED_SCHEMA_TABLES = [
   "map_collections",
   "map_collection_members",
   "skins",
+  "user_replay_skins",
 ];
 
 // Same temporal-dead-zone hazard as REQUIRED_SCHEMA_TABLES above, and a sharper
@@ -89,11 +90,11 @@ const REQUIRED_SCHEMA_TABLES = [
 //     (10s) of overshoot.
 //   - This poll must outlast that: 300s of contention + 120s of slack for the
 //     uncontended part of a fresh-database migration (106 schema statements plus
-//     27 helpers, including the big index batch) = 420s (7 min).
-// On an existing database this is a no-op: all 24 required tables already exist,
+//     32 helpers, including the big index batch) = 420s (7 min).
+// On an existing database this is a no-op: all 25 required tables already exist,
 // so the first poll returns in milliseconds no matter what the worker is doing.
 // It only bites on a first boot, where the server genuinely must wait for the
-// worker to reach migrateSkins (step 18 of 27).
+// worker to reach migrateUserReplaySkins (step 22 of 32).
 export const SCHEMA_WAIT_TIMEOUT_MS = SQLITE_MIGRATION_TOTAL_BUSY_WAIT_MS + 120_000;
 const SCHEMA_WAIT_LOG_INTERVAL_MS = 15_000;
 
