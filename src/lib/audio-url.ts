@@ -24,3 +24,11 @@ export function getBeatmapHitsoundsUrl(beatmapsetId: number | string, excludeFil
   const exclude = excludeFilename ? `&exclude=${encodeURIComponent(excludeFilename)}` : "";
   return `${liveBackendUrl}/api/hitsounds?beatmapsetId=${encodeURIComponent(String(beatmapsetId))}${exclude}`;
 }
+
+// Zip bundle of the beatmapset's storyboard (root .osb plus referenced
+// images). Only served by the live backend; an empty zip means no storyboard.
+export function getStoryboardBundleUrl(beatmapsetId: number | string): string | null {
+  const liveBackendUrl = getLiveBackendUrl();
+  if (!liveBackendUrl) return null;
+  return `${liveBackendUrl}/api/storyboard?beatmapsetId=${encodeURIComponent(String(beatmapsetId))}`;
+}

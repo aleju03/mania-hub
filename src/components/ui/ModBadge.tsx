@@ -1,4 +1,4 @@
-const fileMap: Record<string, string> = {
+export const MOD_BADGE_FILE_NAMES: Record<string, string> = {
   // Classic / stable mods
   HD: "hidden", HR: "hard-rock", DT: "double-time", FL: "flashlight",
   EZ: "easy", NF: "no-fail", HT: "half-time", NC: "nightcore",
@@ -26,7 +26,7 @@ const fileMap: Record<string, string> = {
 
 // Category colors follow lazer's OsuColour.ForModType / osu-web's mod badges:
 // Red1 / Lime1 / Purple1 / Blue1 / Pink1 / yellow.
-const typeColor: Record<string, string> = {
+export const MOD_BADGE_TYPE_COLORS: Record<string, string> = {
   // Difficulty increase (red)
   HR: "#ff6666", DT: "#ff6666", FL: "#ff6666", HD: "#ff6666", NC: "#ff6666",
   FI: "#ff6666", CO: "#ff6666", SD: "#ff6666", PF: "#ff6666", AC: "#ff6666",
@@ -59,8 +59,8 @@ const iconInset: Record<string, number> = {
 
 export function ModBadge({ mod, size = 1, rate, color }: { mod: string; size?: number; rate?: number; color?: string }) {
   if (!mod) return null;
-  const file = fileMap[mod];
-  const bg = color ?? typeColor[mod] ?? "#ff6666";
+  const file = MOD_BADGE_FILE_NAMES[mod];
+  const bg = color ?? MOD_BADGE_TYPE_COLORS[mod] ?? "#ff6666";
   const inset = (iconInset[mod] ?? 1) * size;
   const width = 36 * size;
   const height = 24 * size;

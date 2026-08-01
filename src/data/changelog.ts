@@ -21,12 +21,9 @@ export interface ChangelogUpdate {
   to?: string;
 }
 
-/** Short list of what is being worked on now. Keep it to three or four. */
-export const WIP: string[] = [
-  "A replay viewer that looks in-game",
-  "Importing your own skin into replays",
-  "A better side-by-side replay compare",
-];
+/** Short list of what is being worked on now. Keep it to three or four.
+    Leave it empty to hide the section entirely. */
+export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
   { date: "2026-07-31", text: "See how many times your own skins have been downloaded", to: "/skins" },

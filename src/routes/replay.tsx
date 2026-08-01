@@ -1,7 +1,7 @@
 import { createFileRoute, useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
-import { useState, useRef, useEffect, useCallback, useMemo, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronLeft, ChevronsRight, LoaderCircle, Maximize2, Minimize2, Pause, Play } from "lucide-react";
+import { ChevronLeft, ChevronsRight, LoaderCircle, Maximize2, Menu, Minimize2, Pause, Play, Plus, Repeat2, Send, Smartphone, X } from "lucide-react";
 import { getReplayParsed, getBeatmapFile, getCommunityBeatmapFile, getScore, getUser, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores, lookupBeatmapByChecksum, submitCommunityBeatmap } from "../lib/osu";
 import { calculateManiaStarRating } from "../lib/mania-star-rating";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
@@ -38,6 +38,8 @@ import { ReplayHitsoundPlayer } from "../lib/replay-hitsounds";
 import { REPLAY_SKIN_SOUNDS_CHANGE_EVENT, readReplaySkinSounds } from "../lib/replay-skin-sounds";
 import { DEFAULT_REPLAY_SCROLL_SPEED, REPLAY_SCROLL_SPEED_CHANGE_EVENT, normalizeReplayScrollSpeed, readReplayScrollSpeed, writeReplayScrollSpeed } from "../lib/replay-scroll-speed";
 import {
+  REPLAY_OVERLAY_IDS,
+  REPLAY_OVERLAY_LABELS,
   REPLAY_OVERLAY_SETTINGS_CHANGE_EVENT,
   normalizeReplayOverlaySettings,
   readReplayOverlaySettings,
@@ -72,6 +74,8 @@ import {
   readReplayInputKeyHistory,
   readReplayInputOnly,
   readReplayInputOverlay,
+  readReplayLeaderboardVisible,
+  readReplayStoryboardEnabled,
   readReplayVolume,
   writeReplayAudioSettings,
   writeReplayBackgroundDim,
@@ -80,12 +84,15 @@ import {
   writeReplayInputKeyHistory,
   writeReplayInputOnly,
   writeReplayInputOverlay,
+  writeReplayLeaderboardVisible,
+  writeReplayStoryboardEnabled,
   writeReplayVolume,
   type ReplayAudioSettings,
 } from "../lib/replay-preferences";
+import { loadReplayStoryboard, type LoadedReplayStoryboard } from "../lib/replay-storyboard";
 import type { ManiaBeatmap } from "../lib/beatmap-parser";
 import type { ReplaySkinSettings } from "../lib/replay-skin";
-import type { ReplayOverlaySettings } from "../lib/replay-overlays";
+import type { ReplayOverlayId, ReplayOverlaySettings } from "../lib/replay-overlays";
 import type { BeatmapScoreLookupStatus, OsuMod, OsuScore, OsuBeatmapset, OsuBeatmap } from "../lib/types";
 import type { ReplayRendererLike, ServerReplay } from "../lib/replay-types";
 import { getScoreExpectedCounts } from "../lib/replay-types";
@@ -119,9 +126,9 @@ const MOBILE_FULLSCREEN_BUTTON_HIDE_MS = 2000;
 const FULLSCREEN_POINTER_CHROME_HIDE_MS = 1800;
 const FULLSCREEN_TAP_CHROME_HIDE_MS = 3000;
 // How long after the pointer leaves the bottom reveal zone the Visual
-// Settings drawer starts retracting. Stable pulls it back almost instantly;
-// the small grace only forgives overshooting the seek thumb at the top edge.
-const INLINE_POINTER_CHROME_HIDE_MS = 150;
+// Settings drawer starts retracting. Stable pulls it back instantly; the
+// sliver of grace only debounces jitter along the drawer's top edge.
+const INLINE_POINTER_CHROME_HIDE_MS = 50;
 const REPLAY_VIDEO_EXPORT_CLIP_SECONDS = 20;
 const MAX_UPLOAD_REPLAY_BYTES = 25 * 1024 * 1024;
 const REPLAY_PLAYER_LIVE_CACHE_TIMEOUT_MS = 900;
@@ -656,6 +663,9 @@ function ReplayPage() {
   );
   const [replay, setReplay] = useState<ServerReplay | null>(null);
   const [beatmap, setBeatmap] = useState<ManiaBeatmap | null>(null);
+  // Raw .osu text backing `beatmap`; the storyboard loader reads the
+  // [Events] section and the widescreen flag from it.
+  const [beatmapFileContent, setBeatmapFileContent] = useState<string | null>(null);
   const [scoreInfo, setScoreInfo] = useState<OsuScore | null>(null);
   const [playerProfile, setPlayerProfile] = useState<ReplayPlayerProfile | null>(null);
   const [uploadedReplayMods, setUploadedReplayMods] = useState<OsuMod[]>([]);
@@ -672,6 +682,16 @@ function ReplayPage() {
   const [localBeatmapAssets, setLocalBeatmapAssets] = useState<LocalBeatmapAssets>(EMPTY_LOCAL_BEATMAP_ASSETS);
   const localBeatmapAssetUrlsRef = useRef<string[]>([]);
   const [loading, setLoading] = useState(false);
+  // Side-by-side compare needs a wide screen; portrait phones get a rotate
+  // prompt instead of two crushed stages (and never mount their renderers).
+  const [isPortraitPhone, setIsPortraitPhone] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia("(orientation: portrait) and (max-width: 639px)");
+    const update = () => setIsPortraitPhone(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
   const [replayLoadingStep, setReplayLoadingStep] = useState<ReplayLoadingStep>("score");
   const [replayBeatmapFileStatus, setReplayBeatmapFileStatus] = useState<ReplayBeatmapFileStatus>("unknown");
   const [replayLoadingStartedAt, setReplayLoadingStartedAt] = useState(0);
@@ -825,6 +845,7 @@ function ReplayPage() {
     setLoading(true);
     setReplay(null);
     setBeatmap(null);
+    setBeatmapFileContent(null);
     setScoreInfo(null);
     setUploadedReplayMods([]);
     setUploadedBeatmapsetId(undefined);
@@ -906,6 +927,7 @@ function ReplayPage() {
       });
       if (parsedBeatmap) {
         setBeatmap(parsedBeatmap);
+        setBeatmapFileContent(bmResult?.content ?? null);
       }
 
       // Loads that cross the "Still loading" threshold report where the time
@@ -945,6 +967,7 @@ function ReplayPage() {
     setLoading(false);
     setReplay(null);
     setBeatmap(null);
+    setBeatmapFileContent(null);
     setScoreInfo(null);
     setUploadedReplayMods([]);
     setUploadedBeatmapsetId(undefined);
@@ -1173,6 +1196,7 @@ function ReplayPage() {
     applyLocalBeatmapAssets(localAssets ?? EMPTY_LOCAL_BEATMAP_ASSETS);
     setReplay({ ...uploaded.replay, keyCount: parsedBeatmap.keyCount });
     setBeatmap(parsedBeatmap);
+    setBeatmapFileContent(content);
     setScoreInfo(uploadedScore);
     setUploadedReplayMods(mods);
     setUploadedBeatmapsetId(beatmapsetId);
@@ -1332,6 +1356,7 @@ function ReplayPage() {
     setLoading(true);
     setReplay(null);
     setBeatmap(null);
+    setBeatmapFileContent(null);
     setScoreInfo(null);
     setUploadedReplayMods([]);
     setUploadedBeatmapsetId(undefined);
@@ -1347,6 +1372,7 @@ function ReplayPage() {
     } catch (e) {
       setReplay(null);
       setBeatmap(null);
+      setBeatmapFileContent(null);
       setScoreInfo(null);
       setUploadedReplayMods([]);
       setUploadedBeatmapsetId(undefined);
@@ -1376,6 +1402,7 @@ function ReplayPage() {
     setLoading(true);
     setReplay(null);
     setBeatmap(null);
+    setBeatmapFileContent(null);
     setScoreInfo(null);
     setUploadedReplayMods([]);
     setUploadedBeatmapsetId(undefined);
@@ -1394,6 +1421,7 @@ function ReplayPage() {
     } catch (e) {
       setReplay(null);
       setBeatmap(null);
+      setBeatmapFileContent(null);
       setScoreInfo(null);
       setUploadedReplayMods([]);
       setUploadedBeatmapsetId(undefined);
@@ -1688,6 +1716,7 @@ function ReplayPage() {
     dismissedUploadIdRef.current = uploadId ?? null;
     setReplay(null);
     setBeatmap(null);
+    setBeatmapFileContent(null);
     setScoreInfo(null);
     setUploadedReplayMods([]);
     setUploadedBeatmapsetId(undefined);
@@ -1747,15 +1776,33 @@ function ReplayPage() {
 
       <div className="bg-osu-b5 min-h-[80vh]">
         <div className={`mx-auto ${viewerActive ? "max-w-none" : "max-w-[1200px] px-3 py-3 sm:px-5 sm:py-6"}`}>
-          <AnimatePresence mode="wait">
-            {scoreId && compareId ? (
-              <motion.div key={`compare-${scoreId}-${compareId}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <ReplayCompareView
-                  scoreIdA={scoreId}
-                  scoreIdB={compareId}
-                  onExit={() => navigate({ to: "/replay", search: { scoreId } })}
-                />
-              </motion.div>
+          {/* No AnimatePresence here on purpose: none of these branches has
+              an exit animation, and keeping the old branch mounted for the
+              exit pass let the viewer linger a few frames inside the narrow
+              non-viewer chrome on browser back. Mount fades don't need it. */}
+          {scoreId && compareId ? (
+              isPortraitPhone ? (
+                <motion.div key="compare-rotate" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center px-4 py-20 text-center">
+                  <Smartphone className="mb-4 h-10 w-10 rotate-90 text-osu-pink" aria-hidden="true" />
+                  <p className="text-sm font-semibold text-osu-l2">Rotate your device to compare</p>
+                  <p className="mt-1 max-w-md text-xs leading-relaxed text-osu-f1">Side-by-side score comparison needs a landscape screen.</p>
+                  <button
+                    type="button"
+                    onClick={() => navigate({ to: "/replay", search: { scoreId } })}
+                    className="mt-4 rounded-lg bg-white/10 px-4 py-2 text-xs font-semibold text-osu-f1 hover:bg-white/20 hover:text-white transition-colors cursor-pointer"
+                  >
+                    Back to the replay
+                  </button>
+                </motion.div>
+              ) : (
+                <motion.div key={`compare-${scoreId}-${compareId}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                  <ReplayCompareView
+                    scoreIdA={scoreId}
+                    scoreIdB={compareId}
+                    onExit={() => navigate({ to: "/replay", search: { scoreId } })}
+                  />
+                </motion.div>
+              )
             ) : loading ? (
               <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center px-4 py-20 text-center">
                 <div className="mb-4 h-10 w-10 rounded-full border-2 border-osu-pink/40 border-t-osu-pink animate-spin" />
@@ -1764,8 +1811,10 @@ function ReplayPage() {
               </motion.div>
             ) : replay ? (
               <motion.div key="viewer" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <ReplayViewer replay={replay} beatmap={beatmap} scoreInfo={scoreInfo} replayMods={uploadedReplayMods} judgeAsLazer={judgeAsLazer} sourceIsLazer={sourceIsLazer} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} initialTime={initialTime} localAudioUrl={localBeatmapAssets.audioUrl} localBackgroundUrl={localBeatmapAssets.backgroundUrl} presenceKey={scoreId != null ? `score:${scoreId}` : uploadId ? `upload:${uploadId}` : null} onClear={handleClearReplay}>
-                  <div className="mx-auto w-full max-w-[1200px] px-3 sm:px-5 sm:pt-3">{replayInfoCard}</div>
+                <ReplayViewer replay={replay} beatmap={beatmap} beatmapFileContent={beatmapFileContent} scoreInfo={scoreInfo} replayMods={uploadedReplayMods} judgeAsLazer={judgeAsLazer} sourceIsLazer={sourceIsLazer} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} initialTime={initialTime} localAudioUrl={localBeatmapAssets.audioUrl} localBackgroundUrl={localBeatmapAssets.backgroundUrl} presenceKey={scoreId != null ? `score:${scoreId}` : uploadId ? `upload:${uploadId}` : null} onClear={handleClearReplay}>
+                  {/* Phones scroll the card inside a padded list; on desktop
+                      the strip runs edge to edge, flush against the stage. */}
+                  <div className="mx-auto w-full max-w-[1200px] px-3 sm:max-w-none sm:px-0">{replayInfoCard}</div>
                 </ReplayViewer>
               </motion.div>
             ) : pendingBeatmapUpload ? (
@@ -1853,7 +1902,6 @@ function ReplayPage() {
                 onLoadMoreBeatmapScores={handleLoadMoreBeatmapScores}
               />
             )}
-          </AnimatePresence>
         </div>
       </div>
     </div>
@@ -1863,6 +1911,7 @@ function ReplayPage() {
 function ReplayViewer({
   replay,
   beatmap,
+  beatmapFileContent,
   scoreInfo,
   replayMods,
   judgeAsLazer,
@@ -1877,6 +1926,9 @@ function ReplayViewer({
 }: {
   replay: ServerReplay;
   beatmap: ManiaBeatmap | null;
+  // Raw .osu text backing `beatmap`; source of the embedded storyboard
+  // events and the WidescreenStoryboard flag.
+  beatmapFileContent: string | null;
   scoreInfo: OsuScore | null;
   replayMods?: OsuMod[];
   /** Ruleset to judge with; differs from sourceIsLazer while the info bar's
@@ -1954,6 +2006,13 @@ function ReplayViewer({
   const audioPreservesPitch = !modShiftsPitchWithRate(effectiveReplayMods);
   const [scrollSpeed, setScrollSpeed] = useState(() => replayStableScrollSpeed ?? readReplayScrollSpeed());
   const [bgDim, setBgDim] = useState(readReplayBackgroundDim);
+  const bgDimRef = useRef(readReplayBackgroundDim());
+  const [storyboardEnabled, setStoryboardEnabled] = useState(readReplayStoryboardEnabled);
+  const storyboardEnabledRef = useRef(storyboardEnabled);
+  const [storyboardStatus, setStoryboardStatus] = useState<"idle" | "loading" | "active" | "unavailable" | "error">("idle");
+  const storyboardRef = useRef<LoadedReplayStoryboard | null>(null);
+  const storyboardAttemptedRef = useRef(false);
+  const storyboardGenerationRef = useRef(0);
   const [blackPlayfield, setBlackPlayfield] = useState(readReplayBlackPlayfield);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [volume, setVolume] = useState(readReplayVolume);
@@ -2118,6 +2177,51 @@ function ReplayViewer({
     writeReplayOverlaySettings(normalized);
   }, []);
 
+  // Right-click overlay menu on the stage: on an overlay it offers removal,
+  // on a bare spot it lists the hidden overlays to add back. Coordinates are
+  // stage-relative so the menu tracks the canvas, not the viewport.
+  const [overlayMenu, setOverlayMenu] = useState<{ x: number; y: number; targetId: ReplayOverlayId | null } | null>(null);
+  const overlayMenuRef = useRef<HTMLDivElement | null>(null);
+  const handleCanvasContextMenu = useCallback((event: ReactMouseEvent<HTMLCanvasElement>) => {
+    const renderer = rendererRef.current;
+    if (!renderer?.canEditOverlays?.() || !renderer.getOverlayIdAtClientPoint) return;
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    setOverlayMenu({
+      // Clamped so the menu never spills past the stage edges.
+      x: Math.max(8, Math.min(event.clientX - rect.left, rect.width - 200)),
+      y: Math.max(8, Math.min(event.clientY - rect.top, rect.height - 280)),
+      targetId: renderer.getOverlayIdAtClientPoint(event.clientX, event.clientY),
+    });
+  }, []);
+  useEffect(() => {
+    if (!overlayMenu) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (target && overlayMenuRef.current?.contains(target)) return;
+      setOverlayMenu(null);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      setOverlayMenu(null);
+    };
+    window.addEventListener("pointerdown", onPointerDown, true);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown, true);
+      window.removeEventListener("keydown", onKeyDown, true);
+    };
+  }, [overlayMenu]);
+  const setOverlayEnabledFromMenu = useCallback((id: ReplayOverlayId, enabled: boolean) => {
+    const current = overlaySettingsRef.current;
+    applyOverlaySettings({ ...current, [id]: { ...current[id], enabled } });
+    setOverlayMenu(null);
+  }, [applyOverlaySettings]);
+  const hiddenOverlayIds = overlayMenu && !overlayMenu.targetId
+    ? REPLAY_OVERLAY_IDS.filter((id) => !overlaySettings[id]?.enabled)
+    : [];
+
   useEffect(() => {
     const refreshSharedReplaySettings = () => {
       if (replayStableScrollSpeed == null || scrollSpeedUserOverrideRef.current) {
@@ -2213,14 +2317,24 @@ function ReplayViewer({
       setSpectatorCount(null);
     };
   }, [presenceKey, presenceObserveOnly]);
+  const spectatorCountRef = useRef(0);
+  useEffect(() => {
+    spectatorCountRef.current = spectatorCount ?? 0;
+    rendererRef.current?.setSpectatorCount?.(spectatorCount ?? 0);
+  }, [spectatorCount]);
 
   // Ingame leaderboard: the map's global top plays for the score's beatmap.
   // The renderer inserts the watched player's live simulated score among
   // them, so overtakes happen at the moments they were earned.
+  // Tab toggles the scoreboard, like ingame. The choice persists, and while
+  // the board is off the map's top-50 is never fetched, so a hidden
+  // scoreboard costs no osu! API call at all.
+  const [leaderboardVisible, setLeaderboardVisible] = useState(readReplayLeaderboardVisible);
+  const leaderboardVisibleRef = useRef(leaderboardVisible);
   const [leaderboardScores, setLeaderboardScores] = useState<OsuScore[] | null>(null);
   useEffect(() => {
     const beatmapId = scoreInfo?.beatmap?.id;
-    if (!beatmapId) {
+    if (!beatmapId || !leaderboardVisible) {
       setLeaderboardScores(null);
       return;
     }
@@ -2235,17 +2349,21 @@ function ReplayViewer({
     return () => {
       cancelled = true;
     };
-  }, [scoreInfo?.beatmap?.id]);
+  }, [scoreInfo?.beatmap?.id, leaderboardVisible]);
 
   const rendererLeaderboard = useMemo(() => {
     if (!leaderboardScores) return [];
     return leaderboardScores
-      // The watched play would double up against its own live row.
-      .filter((score) => score.id !== scoreInfo?.id)
-      .map((score) => ({
+      // Real board positions are captured before dropping the watched play
+      // (it would double up against its own live row), so the remaining rows
+      // keep their true rank numbers instead of closing the gap.
+      .map((score, index) => ({ score, rank: index + 1 }))
+      .filter(({ score }) => score.id !== scoreInfo?.id)
+      .map(({ score, rank }) => ({
         name: score.user?.username ?? "player",
         score: (judgeAsLazer ? score.total_score : score.legacy_total_score ?? score.score) ?? score.score,
         combo: score.max_combo ?? 0,
+        rank,
       }));
   }, [leaderboardScores, scoreInfo?.id, judgeAsLazer]);
   const leaderboardPlayerName = scoreInfo?.user?.username ?? replay.header.playerName ?? "player";
@@ -2257,10 +2375,7 @@ function ReplayViewer({
     rendererRef.current?.setLeaderboard?.(rendererLeaderboard, leaderboardPlayerName);
   }, [rendererLeaderboard, leaderboardPlayerName]);
 
-  // Tab toggles the scoreboard, like ingame. Shift+Tab keeps normal focus
-  // navigation, and typing fields are left alone.
-  const [leaderboardVisible, setLeaderboardVisible] = useState(true);
-  const leaderboardVisibleRef = useRef(leaderboardVisible);
+  // Shift+Tab keeps normal focus navigation, and typing fields are left alone.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Tab" || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
@@ -2275,6 +2390,7 @@ function ReplayViewer({
   useEffect(() => {
     leaderboardVisibleRef.current = leaderboardVisible;
     rendererRef.current?.setLeaderboardVisible?.(leaderboardVisible);
+    writeReplayLeaderboardVisible(leaderboardVisible);
   }, [leaderboardVisible]);
 
   // The Visual Settings drawer on the non-fullscreen stage: hidden until the
@@ -2334,6 +2450,22 @@ function ReplayViewer({
     return () => clearInterval(id);
   }, [firstNoteTimeMs]);
 
+  // Space skips the lead-in like ingame. The action lives in a ref because
+  // the seek helper is defined further down the component.
+  const skipIntroActionRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (!showSkipIntro) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== "Space" || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.tagName === "BUTTON" || target.isContentEditable)) return;
+      event.preventDefault();
+      skipIntroActionRef.current?.();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showSkipIntro]);
+
   // The cursor hides over the stage only after sitting idle mid-playback,
   // video-player style; any movement brings it straight back.
   const [stageCursorIdle, setStageCursorIdle] = useState(false);
@@ -2380,6 +2512,9 @@ function ReplayViewer({
   }, [isCanvasFullscreen, isPlaying, markCursorActive, revealInlineChrome, scheduleInlineChromeHide, showFullscreenChrome, showFullscreenChromeTemporarily]);
 
   const handleReplayCanvasPointerDown = useCallback((event: ReactPointerEvent<HTMLCanvasElement>) => {
+    canvasPressRef.current = event.pointerType === "mouse" && event.button === 0
+      ? { x: event.clientX, y: event.clientY }
+      : null;
     if (!isMobileReplayPointer(event)) return;
     if (isCanvasFullscreen && showFullscreenChrome) {
       suppressNextMobileCanvasPointerUpRef.current = true;
@@ -2402,6 +2537,49 @@ function ReplayViewer({
     }
     showFullscreenChromeTemporarily(true, FULLSCREEN_TAP_CHROME_HIDE_MS);
   }, [isCanvasFullscreen, showFullscreenChromeTemporarily]);
+
+  // Clicking the bare playfield toggles playback, video-player style. Pointer
+  // events, not click: the renderer's pointerdown handlers preventDefault for
+  // overlay drags and the selection marquee, which suppresses derived mouse
+  // click events entirely. The press position is remembered so a drag that
+  // ends over the lanes doesn't register as a click.
+  const canvasPressRef = useRef<{ x: number; y: number } | null>(null);
+  const togglePlayRef = useRef<(() => void) | null>(null);
+  // Pausing via the playfield brings up the osu!-style pause screen; any
+  // resume (from anywhere) tears it down.
+  const [pauseMenuVisible, setPauseMenuVisible] = useState(false);
+  useEffect(() => {
+    if (isPlaying) setPauseMenuVisible(false);
+  }, [isPlaying]);
+  // Esc works like ingame: pause + pause screen while playing, resume while
+  // the pause screen is up. It stays quiet when something else owns the key
+  // (typing fields, the settings modal, or pseudo-fullscreen's exit).
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || isPseudoFullscreen || skinSettingsOpen) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable)) return;
+      if (rendererRef.current?.isPlaying) {
+        togglePlayRef.current?.();
+        setPauseMenuVisible(true);
+      } else if (pauseMenuVisible) {
+        setPauseMenuVisible(false);
+        togglePlayRef.current?.();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isPseudoFullscreen, skinSettingsOpen, pauseMenuVisible]);
+  const handleCanvasTogglePointerUp = useCallback((event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const press = canvasPressRef.current;
+    canvasPressRef.current = null;
+    if (!press || event.pointerType !== "mouse" || event.button !== 0) return;
+    if (Math.abs(event.clientX - press.x) > 4 || Math.abs(event.clientY - press.y) > 4) return;
+    if (!rendererRef.current?.isPlayfieldClickPoint?.(event.clientX, event.clientY)) return;
+    const wasPlaying = rendererRef.current?.isPlaying === true;
+    togglePlayRef.current?.();
+    if (wasPlaying) setPauseMenuVisible(true);
+  }, []);
 
   const handleReplayCanvasPointerLeave = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (scrubbingRef.current || isMobileReplayPointer(event)) return;
@@ -2770,6 +2948,102 @@ function ReplayViewer({
     };
   }, [beatmap, hasBeatmapHitsounds, effectiveBeatmapsetId, audioSettings.hitsoundsEnabled, audioSettings.beatmapHitsounds]);
 
+  // Storyboard: fetch the set's storyboard bundle (root .osb + images) from
+  // the live backend, merge any .osu-embedded events, compile, and hand the
+  // result to the renderer. The compiled storyboard is cached per map and
+  // survives toggling, so re-enabling skips the fetch and the 40 MB reparse.
+  // The DOM background only stands down once the renderer reports every
+  // texture resident, so there is never a half-loaded flash. Best-effort:
+  // any failure just leaves the normal background view in place.
+
+  // Per-map cache lifecycle. The generation counter invalidates any load
+  // still in flight when the map changes or the viewer unmounts.
+  useEffect(() => {
+    return () => {
+      storyboardGenerationRef.current++;
+      rendererRef.current?.setStoryboard?.(null);
+      storyboardRef.current?.dispose();
+      storyboardRef.current = null;
+      storyboardAttemptedRef.current = false;
+    };
+  }, [beatmapFileContent, effectiveBeatmapsetId, beatmap, beatmapBackgroundUrl]);
+
+  useEffect(() => {
+    if (!storyboardEnabled) {
+      rendererRef.current?.setStoryboard?.(null);
+      setStoryboardStatus("idle");
+      return;
+    }
+
+    let cancelled = false;
+    const attach = (loaded: LoadedReplayStoryboard | null) => {
+      if (cancelled) return;
+      if (!loaded) {
+        setStoryboardStatus("unavailable");
+        return;
+      }
+      const renderer = rendererRef.current;
+      // No renderer yet: the renderer-create effect attaches the cached
+      // storyboard and completes the loading -> active handshake itself.
+      if (!renderer) {
+        setStoryboardStatus("loading");
+        return;
+      }
+      setStoryboardStatus("loading");
+      renderer.setStoryboard?.(loaded.data);
+      const ready = renderer.storyboardReady?.();
+      if (!ready) {
+        setStoryboardStatus("active");
+        return;
+      }
+      void ready.then(() => {
+        if (!cancelled) setStoryboardStatus("active");
+      });
+    };
+
+    if (storyboardAttemptedRef.current) {
+      attach(storyboardRef.current);
+      return () => {
+        cancelled = true;
+      };
+    }
+    if (beatmapFileContent == null && effectiveBeatmapsetId == null) {
+      setStoryboardStatus("unavailable");
+      return;
+    }
+
+    const generation = storyboardGenerationRef.current;
+    setStoryboardStatus("loading");
+    void loadReplayStoryboard({
+      beatmapsetId: effectiveBeatmapsetId ?? null,
+      osuFileContent: beatmapFileContent,
+      backgroundFilename: beatmap?.backgroundFilename ?? null,
+      // Inline variant: the storyboard background becomes a WebGL texture, so
+      // it needs same-origin bytes rather than a 302 to signed storage.
+      backgroundImageUrl: getExportBackgroundUrl(beatmapBackgroundUrl),
+    })
+      .then((loaded) => {
+        if (storyboardGenerationRef.current !== generation) {
+          // The map changed (or the viewer unmounted) mid-load.
+          loaded?.dispose();
+          return;
+        }
+        // Cache even if the toggle flipped mid-load: the map is unchanged,
+        // so the next enable reuses the result instantly.
+        storyboardAttemptedRef.current = true;
+        storyboardRef.current = loaded;
+        attach(loaded);
+      })
+      .catch(() => {
+        if (!cancelled && storyboardGenerationRef.current === generation) setStoryboardStatus("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [storyboardEnabled, beatmapFileContent, effectiveBeatmapsetId, beatmap, beatmapBackgroundUrl]);
+
+  const storyboardActive = storyboardStatus === "active";
+
   // Crash forensics: if a previous page load left a watch beacon behind, the
   // tab died without unloading (crash/OOM kill) - report it with its heap
   // trajectory, then track the current session the same way.
@@ -2867,9 +3141,20 @@ function ReplayViewer({
         });
         renderer.setSkinSettings(skinSettingsRef.current);
         renderer.setOverlaySettings(overlaySettingsRef.current);
+        renderer.setBackgroundDim(bgDimRef.current);
+        // Re-attach a cached storyboard across renderer rebuilds; the status
+        // flips to active only once its textures are resident again.
+        const storyboardData = storyboardEnabledRef.current ? storyboardRef.current?.data ?? null : null;
+        renderer.setStoryboard?.(storyboardData);
+        if (storyboardData) {
+          void renderer.storyboardReady?.()?.then(() => {
+            if (rendererRef.current === renderer && storyboardEnabledRef.current) setStoryboardStatus("active");
+          });
+        }
         renderer.setHitsoundTrigger?.(hitsoundPlayerRef.current);
         renderer.setLeaderboard?.(rendererLeaderboardRef.current, leaderboardPlayerNameRef.current);
         renderer.setLeaderboardVisible?.(leaderboardVisibleRef.current);
+        renderer.setSpectatorCount?.(spectatorCountRef.current);
         rendererRef.current = renderer;
 
         // Record the resolved renderer backend (WebGL vs Canvas fallback) and
@@ -3034,9 +3319,16 @@ function ReplayViewer({
   }, [inputOverlayColor]);
 
   useEffect(() => {
+    bgDimRef.current = bgDim;
     if (typeof window === "undefined") return;
     writeReplayBackgroundDim(bgDim);
   }, [bgDim]);
+
+  useEffect(() => {
+    storyboardEnabledRef.current = storyboardEnabled;
+    if (typeof window === "undefined") return;
+    writeReplayStoryboardEnabled(storyboardEnabled);
+  }, [storyboardEnabled]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -3215,6 +3507,9 @@ function ReplayViewer({
     }
     startPlayback();
   };
+  // The playfield click handler is memoized, so it reaches the toggle through
+  // a ref that always points at the current closure.
+  togglePlayRef.current = togglePlay;
 
   // Auto-start playback once the audio has metadata (or failed, or audio was
   // disabled) after the user already clicked play.
@@ -3328,6 +3623,26 @@ function ReplayViewer({
     if (!scrubbingRef.current) {
       syncAudioTime(timeMs);
     }
+  };
+
+  const skipIntro = () => {
+    if (firstNoteTimeMs == null) return;
+    handleProgressSeek(Math.max(0, firstNoteTimeMs - 2500));
+    // Skipping while paused also resumes; landing right before the first
+    // note on a frozen stage would just look broken.
+    setPauseMenuVisible(false);
+    if (!rendererRef.current?.isPlaying) togglePlayRef.current?.();
+  };
+  skipIntroActionRef.current = skipIntro;
+
+  const resumeFromPauseMenu = () => {
+    setPauseMenuVisible(false);
+    if (!rendererRef.current?.isPlaying) togglePlayRef.current?.();
+  };
+  const restartFromPauseMenu = () => {
+    setPauseMenuVisible(false);
+    handleProgressSeek(0);
+    if (!rendererRef.current?.isPlaying) togglePlayRef.current?.();
   };
 
   const exportReplayVideo = useCallback(async (options: ReplayVideoExportRequest): Promise<ReplayVideoJobPayload | null> => {
@@ -3491,6 +3806,13 @@ function ReplayViewer({
       exportRenderer.setScrollSpeed(exportScrollSpeed);
       exportRenderer.setSpeed(speed);
       exportRenderer.setLeaderboard?.(rendererLeaderboardRef.current, leaderboardPlayerNameRef.current);
+      exportRenderer.setBackgroundDim(exportBgDim);
+      const exportStoryboard = storyboardActive ? storyboardRef.current?.data ?? null : null;
+      if (exportStoryboard) {
+        exportRenderer.setStoryboard?.(exportStoryboard);
+        // Textures must be resident before the first frame encodes.
+        await exportRenderer.storyboardReady?.();
+      }
 
       const width = cssWidth;
       const height = cssHeight;
@@ -3500,7 +3822,9 @@ function ReplayViewer({
       const ctx = compositeCanvas.getContext("2d", { alpha: false });
       if (!ctx) throw new Error("Couldn't create the video compositor.");
 
-      let backgroundImage = exportBgDim >= 100
+      // With a storyboard active the Pixi canvas is opaque (it draws its own
+      // background and dim), so the composite background never shows.
+      let backgroundImage = exportBgDim >= 100 || exportStoryboard
         ? null
         : await loadFirstExportBackground([beatmapBackgroundUrl, bgSrc, coverProxyUrl, coverUrl]);
       const drawCompositeFrame = () => {
@@ -3648,6 +3972,7 @@ function ReplayViewer({
     showInputOverlay,
     skinSettings,
     speed,
+    storyboardActive,
   ]);
 
   useEffect(() => {
@@ -3697,6 +4022,8 @@ function ReplayViewer({
       scrollSpeed={scrollSpeed}
       bgDim={bgDim}
       blackPlayfield={blackPlayfield}
+      storyboardOn={storyboardEnabled}
+      storyboardLoading={storyboardStatus === "loading"}
       videoExporting={videoExport.exporting}
       videoExportProgress={videoExport.progress}
       videoExportError={videoExport.error}
@@ -3768,6 +4095,7 @@ function ReplayViewer({
         rendererRef.current?.setBackgroundDim(normalized);
       }}
       onToggleBlackPlayfield={() => setBlackPlayfield((value) => !value)}
+      onToggleStoryboard={() => setStoryboardEnabled((value) => !value)}
       onPointerDown={handleProgressPointerDown}
       onPointerUp={handleProgressPointerUp}
       onSeek={handleProgressSeek}
@@ -3776,7 +4104,9 @@ function ReplayViewer({
   );
 
   return (
-    <div className="space-y-3">
+    // Phones stack the stage and the cards below it with breathing room; on
+    // desktop the info strip is welded to the stage, so no gap there.
+    <div className="space-y-3 sm:space-y-0">
       {/* Stage: canvas + (mobile) transport strip. Pinned under the 60px navbar
           on phones so scrolling and the browser chrome hiding/reappearing never
           move it; the info and settings cards scroll underneath. While
@@ -3802,7 +4132,7 @@ function ReplayViewer({
           style={{ background: "linear-gradient(180deg, #0a0a18 0%, #1a1016 50%, #0c0c14 100%)" }}
         />
         <AnimatePresence>
-          {bgSrc && (
+          {bgSrc && !storyboardActive && (
             <motion.img
               key={bgSrc}
               src={bgSrc}
@@ -3815,10 +4145,14 @@ function ReplayViewer({
             />
           )}
         </AnimatePresence>
-        <div
-          className="absolute inset-0 pointer-events-none bg-black transition-opacity"
-          style={{ opacity: bgDim / 100 }}
-        />
+        {/* While a storyboard is active the canvas is opaque and draws its
+            own background and dim, so the DOM layers stand down. */}
+        {!storyboardActive && (
+          <div
+            className="absolute inset-0 pointer-events-none bg-black transition-opacity"
+            style={{ opacity: bgDim / 100 }}
+          />
+        )}
         <canvas
           // A canvas that has hosted a (now destroyed) WebGL context can't get
           // a fresh one, so the client what-if toggle must remount the node;
@@ -3827,6 +4161,8 @@ function ReplayViewer({
           key={judgeAsLazer ? "stage-lazer" : "stage-stable"}
           ref={canvasRef}
           onPointerDown={handleReplayCanvasPointerDown}
+          onPointerUp={handleCanvasTogglePointerUp}
+          onContextMenu={handleCanvasContextMenu}
           className={`relative z-10 w-full ${
             isCanvasFullscreen
               ? "h-[100dvh] min-h-0 max-h-none"
@@ -3870,6 +4206,44 @@ function ReplayViewer({
         >
           {isCanvasFullscreen ? <Minimize2 className="h-[18px] w-[18px]" /> : <Maximize2 className="h-[18px] w-[18px]" />}
         </button>
+        {overlayMenu && (
+          <div
+            ref={overlayMenuRef}
+            className="absolute z-[40] w-44 overflow-hidden rounded-lg border border-white/10 bg-[#0b0b11]/95 py-1 shadow-[0_10px_40px_rgba(0,0,0,0.65)] backdrop-blur-sm"
+            style={{ left: overlayMenu.x, top: overlayMenu.y }}
+            onContextMenu={(event) => event.preventDefault()}
+          >
+            {overlayMenu.targetId ? (
+              <button
+                type="button"
+                onClick={() => setOverlayEnabledFromMenu(overlayMenu.targetId!, false)}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] font-semibold text-white/85 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="h-3.5 w-3.5 text-osu-red-light" aria-hidden="true" />
+                Remove {REPLAY_OVERLAY_LABELS[overlayMenu.targetId].toLowerCase()}
+              </button>
+            ) : (
+              <>
+                <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40">Add overlay</div>
+                {hiddenOverlayIds.length > 0 ? (
+                  hiddenOverlayIds.map((id) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setOverlayEnabledFromMenu(id, true)}
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] font-semibold text-white/85 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+                    >
+                      <Plus className="h-3.5 w-3.5 text-osu-green-light" aria-hidden="true" />
+                      {REPLAY_OVERLAY_LABELS[id]}
+                    </button>
+                  ))
+                ) : (
+                  <div className="px-3 py-1.5 text-[12px] text-white/40">All overlays are shown</div>
+                )}
+              </>
+            )}
+          </div>
+        )}
         {isCanvasFullscreen && (
           <div
             className={`absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/70 via-black/30 to-transparent px-2 pb-3 pt-14 transition-opacity duration-150 ${
@@ -3920,29 +4294,62 @@ function ReplayViewer({
             </div>
           </div>
         )}
-        {/* osu!-style spectator list, left edge a third of the way down:
-            count only, never names. */}
-        {spectatorCount != null && spectatorCount > 0 && (
-          <div className="pointer-events-none absolute left-0 top-[30%] z-20 hidden select-none sm:block">
-            <div className="bg-gradient-to-r from-black/50 via-black/30 to-transparent py-1 pl-3 pr-10 text-[13px] font-semibold text-white/90 [text-shadow:0_1px_2px_rgba(0,0,0,0.9)]">
-              Spectators ({spectatorCount})
-            </div>
-          </div>
-        )}
-        {/* Skip-intro, bottom-right like the clients' skip arrows. */}
+        {/* Skip-intro, centered at 70% height where lazer floats its skip
+            button, driven by Space like ingame. Down in the bottom corner it
+            sat inside the Visual Settings reveal zone and summoned the
+            drawer whenever you reached for it. */}
         {showSkipIntro && (
           <button
             type="button"
-            onClick={() => {
-              if (firstNoteTimeMs == null) return;
-              handleProgressSeek(Math.max(0, firstNoteTimeMs - 2500));
-            }}
-            className="absolute bottom-28 right-6 z-30 flex cursor-pointer items-center gap-0.5 rounded-md bg-black/55 py-2 pl-4 pr-2.5 text-[13px] font-bold text-white/90 backdrop-blur-sm transition hover:bg-black/75 hover:text-white active:scale-95"
+            onClick={skipIntro}
+            className="absolute left-1/2 top-[70%] z-30 flex -translate-x-1/2 -translate-y-1/2 cursor-pointer flex-col items-center gap-1 rounded-lg bg-black/55 px-7 py-3 text-white/90 backdrop-blur-sm transition hover:bg-black/75 hover:text-white active:scale-95"
           >
-            Skip
-            <ChevronsRight className="h-5 w-5" />
+            <div className="flex items-center gap-1 text-[15px] font-bold tracking-wide">
+              SKIP
+              <ChevronsRight className="h-5 w-5" />
+            </div>
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55">
+              Space
+            </div>
           </button>
         )}
+        {/* osu!-style pause screen for playfield-click pauses: the dimmed
+            backdrop stays click-through so clicking the lanes still resumes;
+            only the three buttons capture the pointer. */}
+        <AnimatePresence>
+          {pauseMenuVisible && (
+            <motion.div
+              key="pause-menu"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.16 }}
+              className="pointer-events-none absolute inset-0 z-[26] hidden items-center justify-center bg-black/60 sm:flex"
+            >
+              <div className="flex flex-col gap-9">
+                {[
+                  { label: "Resume this map", Icon: Send, onClick: resumeFromPauseMenu },
+                  { label: "Try this again", Icon: Repeat2, onClick: restartFromPauseMenu },
+                  { label: "Back to menu", Icon: Menu, onClick: onClear },
+                ].map(({ label, Icon, onClick }) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={onClick}
+                    className="pointer-events-auto group flex cursor-pointer items-center gap-5 text-left"
+                  >
+                    <span className="flex h-14 w-14 -rotate-3 items-center justify-center rounded-xl bg-white text-[#222] shadow-[0_5px_14px_rgba(0,0,0,0.55)] transition-transform group-hover:rotate-0 group-hover:scale-105 group-active:scale-95">
+                      <Icon className="h-6 w-6" />
+                    </span>
+                    <span className="text-[16px] font-bold uppercase tracking-[0.14em] text-white/90 [text-shadow:0_2px_6px_rgba(0,0,0,0.9)] transition-colors group-hover:text-white">
+                      {label}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
         {/* The stable-style Visual Settings drawer: rises smoothly from the
             bottom edge, and on close drops with one bounce off the floor
             like the client's panel. The wrapper spans the whole stage so the

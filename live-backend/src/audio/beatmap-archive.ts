@@ -1146,3 +1146,211 @@ export async function extractBeatmapArchiveHitsounds(
     (archive) => extractHitsoundsFromArchiveBuffer(archive, excludeBasename, maxTotalBytes),
   );
 }
+
+// Storyboard extraction: the set's root .osb (if any) plus every image the
+// storyboard references, for the replay viewer's storyboard bundle. The
+// storyboard-format knowledge (which paths a .osb/.osu references) stays with
+// the caller via callbacks; this module only knows archives.
+
+export interface BeatmapArchiveStoryboardCallbacks {
+  // Whether a .osu file's [Events] section declares storyboard sprites.
+  osuTextHasStoryboard(osuText: string): boolean;
+  // Normalized (lowercase, forward-slash) image paths referenced by the
+  // storyboard across the root .osb and every .osu file.
+  collectImagePaths(osbText: string | null, osuTexts: string[]): Set<string>;
+}
+
+export interface BeatmapArchiveStoryboardResult {
+  osbText: string | null;
+  // `path` is the normalized referenced path, ready to serve as a bundle key.
+  images: BeatmapArchiveHitsoundFile[];
+  dropped: number;
+}
+
+const STORYBOARD_IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg"] as const;
+const MAX_STORYBOARD_OSB_BYTES = 48 * 1024 * 1024;
+const MAX_STORYBOARD_IMAGE_BYTES = 8 * 1024 * 1024;
+const DEFAULT_MAX_STORYBOARD_TOTAL_IMAGE_BYTES = 32 * 1024 * 1024;
+const MAX_STORYBOARD_IMAGE_FILES = 400;
+// Above this many .osu files a probe costs more range requests than one
+// archive download.
+const MAX_STORYBOARD_PROBE_OSU_FILES = 12;
+const MAX_STORYBOARD_OSU_SCAN_FILES = 64;
+const MAX_STORYBOARD_OSU_SCAN_TOTAL_BYTES = 64 * 1024 * 1024;
+
+function isRootOsbEntry(entry: ZipDirectoryEntry): boolean {
+  return !entry.path.endsWith("/")
+    && !entry.path.includes("/")
+    && entry.path.toLowerCase().endsWith(".osb")
+    && entry.uncompressedSize > 0
+    && entry.uncompressedSize <= MAX_STORYBOARD_OSB_BYTES
+    && entry.compressedSize <= MAX_STORYBOARD_OSB_BYTES
+    && (entry.flags & 0x1) === 0
+    && (entry.compressionMethod === 0 || entry.compressionMethod === 8);
+}
+
+// The root .osb is the one osu! loads ("Artist - Title (Creator).osb");
+// stray .osb files in subfolders are leftovers. If several sit at the root,
+// the largest is overwhelmingly the real storyboard.
+function pickRootOsbEntry(entries: ZipDirectoryEntry[]): ZipDirectoryEntry | null {
+  let best: ZipDirectoryEntry | null = null;
+  for (const entry of entries) {
+    if (!isRootOsbEntry(entry)) continue;
+    if (!best || entry.uncompressedSize > best.uncompressedSize) best = entry;
+  }
+  return best;
+}
+
+function normalizeStoryboardEntryPath(path: string): string {
+  return path.replace(/\\/g, "/").toLowerCase();
+}
+
+// Definitive "this set has no storyboard" without downloading the archive:
+// the central directory names the root .osb directly, and a handful of small
+// range reads settle whether any .osu embeds storyboard sprites.
+async function probeStoryboardAbsenceByRange(
+  beatmapsetId: string,
+  callbacks: BeatmapArchiveStoryboardCallbacks,
+): Promise<boolean> {
+  const errors: string[] = [];
+  for (const source of getArchiveSourceOrder()) {
+    if (isArchiveSourceCoolingDown(source.name)) {
+      errors.push(`${source.name}: cooling down`);
+      continue;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), ARCHIVE_FETCH_TIMEOUT_MS);
+    try {
+      return await withArchiveSourceSlot(source.name, controller.signal, async () => {
+        const rangeUrl = await resolveArchiveRangeUrl(source, beatmapsetId, controller.signal);
+        const entries = await readZipDirectoryEntriesByRangeFromUrl(rangeUrl, controller.signal);
+        if (pickRootOsbEntry(entries)) return false;
+        const osuEntries = entries.filter(isArchiveOsuEntry);
+        if (osuEntries.length > MAX_STORYBOARD_PROBE_OSU_FILES) {
+          throw new Error(`too many .osu files to probe (${osuEntries.length})`);
+        }
+        for (const entry of osuEntries) {
+          const text = decodeOsuFile(
+            await extractZipEntryByRangeFromUrl(rangeUrl, entry, controller.signal, entry.path, MAX_OSU_FILE_BYTES),
+          );
+          if (callbacks.osuTextHasStoryboard(text)) return false;
+        }
+        return true;
+      });
+    } catch (error) {
+      if (shouldCooldownArchiveError(error)) cooldownArchiveSource(source.name);
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`${source.name}: ${message}`);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  throw new Error(`Storyboard probe failed for beatmapset ${beatmapsetId} (${errors.join("; ")})`);
+}
+
+function extractStoryboardFromArchiveBuffer(
+  archiveBuffer: ArrayBuffer,
+  callbacks: BeatmapArchiveStoryboardCallbacks,
+  maxTotalImageBytes: number,
+): BeatmapArchiveStoryboardResult {
+  const entries = readZipDirectoryEntriesFromBuffer(archiveBuffer);
+
+  let osbText: string | null = null;
+  const osbEntry = pickRootOsbEntry(entries);
+  if (osbEntry) {
+    osbText = decodeOsuFile(extractZipEntryFromBuffer(archiveBuffer, osbEntry, osbEntry.path, MAX_STORYBOARD_OSB_BYTES));
+  }
+
+  const osuTexts: string[] = [];
+  let osuBytes = 0;
+  for (const entry of entries.filter(isArchiveOsuEntry).slice(0, MAX_STORYBOARD_OSU_SCAN_FILES)) {
+    if (osuBytes + entry.uncompressedSize > MAX_STORYBOARD_OSU_SCAN_TOTAL_BYTES) break;
+    try {
+      const text = decodeOsuFile(extractZipEntryFromBuffer(archiveBuffer, entry, entry.path, MAX_OSU_FILE_BYTES));
+      if (callbacks.osuTextHasStoryboard(text)) {
+        osuTexts.push(text);
+        osuBytes += entry.uncompressedSize;
+      }
+    } catch {
+      // An unreadable diff cannot contribute storyboard images; skip it.
+    }
+  }
+
+  if (!osbText && osuTexts.length === 0) return { osbText: null, images: [], dropped: 0 };
+
+  const referenced = callbacks.collectImagePaths(osbText, osuTexts);
+  const byNormalizedPath = new Map<string, ZipDirectoryEntry>();
+  for (const entry of entries) {
+    if (entry.path.endsWith("/")) continue;
+    const lower = normalizeStoryboardEntryPath(entry.path);
+    if (!STORYBOARD_IMAGE_EXTENSIONS.some((ext) => lower.endsWith(ext))) continue;
+    if (!byNormalizedPath.has(lower)) byNormalizedPath.set(lower, entry);
+  }
+
+  const images: BeatmapArchiveHitsoundFile[] = [];
+  let dropped = 0;
+  let totalBytes = 0;
+  for (const path of referenced) {
+    // Legacy storyboards may reference images without an extension.
+    const entry = byNormalizedPath.get(path)
+      ?? STORYBOARD_IMAGE_EXTENSIONS.map((ext) => byNormalizedPath.get(`${path}${ext}`)).find(Boolean);
+    if (!entry) continue;
+    if (entry.uncompressedSize > MAX_STORYBOARD_IMAGE_BYTES || entry.compressedSize > MAX_STORYBOARD_IMAGE_BYTES) {
+      dropped++;
+      continue;
+    }
+    if (images.length >= MAX_STORYBOARD_IMAGE_FILES || totalBytes + entry.uncompressedSize > maxTotalImageBytes) {
+      dropped++;
+      continue;
+    }
+    try {
+      images.push({
+        path,
+        data: extractZipEntryFromBuffer(archiveBuffer, entry, entry.path, MAX_STORYBOARD_IMAGE_BYTES),
+      });
+      totalBytes += entry.uncompressedSize;
+    } catch {
+      dropped++;
+    }
+  }
+
+  return { osbText, images, dropped };
+}
+
+export async function extractBeatmapArchiveStoryboard(
+  beatmapsetId: string,
+  callbacks: BeatmapArchiveStoryboardCallbacks,
+  options: { maxArchiveBytes?: number; maxTotalImageBytes?: number } = {},
+): Promise<BeatmapArchiveStoryboardResult> {
+  try {
+    const absent = await probeStoryboardAbsenceByRange(beatmapsetId, callbacks);
+    if (absent) return { osbText: null, images: [], dropped: 0 };
+  } catch {
+    // Probe was inconclusive (no range support, too many diffs); the guarded
+    // full-archive path below settles it.
+  }
+
+  return extractFromFullArchive(
+    beatmapsetId,
+    options.maxArchiveBytes ?? DEFAULT_MAX_ARCHIVE_BYTES,
+    "Archive storyboard fetch failed",
+    (archive) => extractStoryboardFromArchiveBuffer(
+      archive,
+      callbacks,
+      options.maxTotalImageBytes ?? DEFAULT_MAX_STORYBOARD_TOTAL_IMAGE_BYTES,
+    ),
+  );
+}
+
+export function __extractStoryboardFromArchiveBufferForTest(
+  archiveBuffer: ArrayBuffer,
+  callbacks: BeatmapArchiveStoryboardCallbacks,
+  maxTotalImageBytes = DEFAULT_MAX_STORYBOARD_TOTAL_IMAGE_BYTES,
+): BeatmapArchiveStoryboardResult {
+  return extractStoryboardFromArchiveBuffer(archiveBuffer, callbacks, maxTotalImageBytes);
+}
+
+export function __pickRootOsbEntryForTest(entries: ZipDirectoryEntry[]): ZipDirectoryEntry | null {
+  return pickRootOsbEntry(entries);
+}

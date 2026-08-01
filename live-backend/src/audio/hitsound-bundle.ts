@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { deflateRawSync } from "node:zlib";
 import type { Config } from "../config.js";
 import { logWarn } from "../logger.js";
 import { extractBeatmapArchiveHitsounds, type BeatmapArchiveHitsoundFile } from "./beatmap-archive.js";
@@ -53,17 +54,21 @@ function crc32(data: Buffer): number {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-// Store-only (uncompressed) zip: local file headers, central directory, EOCD.
-// The entries are already-compressed audio, so deflating them again buys
-// nothing. Sizes/counts stay far below any zip64 threshold.
-export function buildStoredZip(files: BeatmapArchiveHitsoundFile[]): Buffer {
+// Store-mostly zip: local file headers, central directory, EOCD. Audio and
+// image entries are already-compressed formats, so deflating them again buys
+// nothing; entries that opt in via `deflate` (storyboard .osb text shrinks
+// ~4x) are raw-deflated. Sizes/counts stay far below any zip64 threshold.
+export type ZipBundleFile = BeatmapArchiveHitsoundFile & { deflate?: boolean };
+
+export function buildStoredZip(files: ZipBundleFile[]): Buffer {
   // Sized up front and written in place: concatenating the parts afterwards
   // would hold a second full copy of the bundle (up to ~24 MiB) at once.
   const names = files.map((file) => Buffer.from(file.path, "utf8"));
+  const payloads = files.map((file) => (file.deflate ? deflateRawSync(file.data) : file.data));
   let localSize = 0;
   let centralSize = 0;
-  for (const [index, file] of files.entries()) {
-    localSize += 30 + names[index].length + file.data.length;
+  for (const [index] of files.entries()) {
+    localSize += 30 + names[index].length + payloads[index].length;
     centralSize += 46 + names[index].length;
   }
 
@@ -73,6 +78,8 @@ export function buildStoredZip(files: BeatmapArchiveHitsoundFile[]): Buffer {
 
   for (const [index, file] of files.entries()) {
     const nameBytes = names[index];
+    const payload = payloads[index];
+    const method = file.deflate ? 8 : 0;
     // Flag the name as UTF-8 when it isn't plain ASCII.
     const flags = nameBytes.length === file.path.length ? 0 : 0x800;
     const checksum = crc32(file.data);
@@ -81,27 +88,27 @@ export function buildStoredZip(files: BeatmapArchiveHitsoundFile[]): Buffer {
     out.writeUInt32LE(0x04034b50, localOffset);
     out.writeUInt16LE(20, localOffset + 4); // version needed
     out.writeUInt16LE(flags, localOffset + 6);
-    out.writeUInt16LE(0, localOffset + 8); // method: store
+    out.writeUInt16LE(method, localOffset + 8);
     out.writeUInt16LE(0, localOffset + 10); // time
     out.writeUInt16LE(ZIP_DOS_DATE, localOffset + 12);
     out.writeUInt32LE(checksum, localOffset + 14);
-    out.writeUInt32LE(file.data.length, localOffset + 18);
+    out.writeUInt32LE(payload.length, localOffset + 18);
     out.writeUInt32LE(file.data.length, localOffset + 22);
     out.writeUInt16LE(nameBytes.length, localOffset + 26);
     out.writeUInt16LE(0, localOffset + 28); // extra length
     localOffset += 30;
     localOffset += nameBytes.copy(out, localOffset);
-    localOffset += file.data.copy(out, localOffset);
+    localOffset += payload.copy(out, localOffset);
 
     out.writeUInt32LE(0x02014b50, centralOffset);
     out.writeUInt16LE(20, centralOffset + 4); // version made by
     out.writeUInt16LE(20, centralOffset + 6); // version needed
     out.writeUInt16LE(flags, centralOffset + 8);
-    out.writeUInt16LE(0, centralOffset + 10); // method: store
+    out.writeUInt16LE(method, centralOffset + 10);
     out.writeUInt16LE(0, centralOffset + 12); // time
     out.writeUInt16LE(ZIP_DOS_DATE, centralOffset + 14);
     out.writeUInt32LE(checksum, centralOffset + 16);
-    out.writeUInt32LE(file.data.length, centralOffset + 20);
+    out.writeUInt32LE(payload.length, centralOffset + 20);
     out.writeUInt32LE(file.data.length, centralOffset + 24);
     out.writeUInt16LE(nameBytes.length, centralOffset + 28);
     out.writeUInt16LE(0, centralOffset + 30); // extra length

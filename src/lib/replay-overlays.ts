@@ -5,6 +5,18 @@ export const REPLAY_OVERLAY_IDS = ["keypresses", "kps", "misses", "accuracy", "p
 
 export type ReplayOverlayId = typeof REPLAY_OVERLAY_IDS[number];
 
+// Shared by the settings modal and the stage's right-click overlay menu.
+export const REPLAY_OVERLAY_LABELS: Record<ReplayOverlayId, string> = {
+  keypresses: "Keypresses",
+  kps: "KPS counter",
+  misses: "L/R miss counter",
+  accuracy: "Accuracy",
+  pp: "PP counter",
+  judgements: "Judgements",
+  progress: "Progress pie",
+  leaderboard: "Leaderboard",
+};
+
 export interface ReplayOverlayPlacement {
   enabled: boolean;
   x: number;
@@ -17,10 +29,36 @@ export type ReplayOverlaySettings = Record<ReplayOverlayId, ReplayOverlayPlaceme
 export const REPLAY_OVERLAY_MIN_SCALE = 0.5;
 export const REPLAY_OVERLAY_MAX_SCALE = 2.5;
 
-// The fixed osu!-style score block (score + accuracy + progress pie) took
-// over the top corner, so the draggable accuracy/progress overlays default
-// off and the judgement counts moved below the score block.
+// The fixed osu!-style score block (score + progress pie) owns the top-right
+// corner, so accuracy defaults to a big draggable readout on the left and
+// the judgement counts sit below the score block.
 export const DEFAULT_REPLAY_OVERLAY_SETTINGS: ReplayOverlaySettings = {
+  keypresses: { enabled: false, x: 0.035, y: 0.68, scale: 0.75 },
+  kps: { enabled: false, x: 0.035, y: 0.77, scale: 0.75 },
+  misses: { enabled: true, x: 0.085, y: 0.77, scale: 1 },
+  accuracy: { enabled: true, x: 0.03, y: 0.03, scale: 1 },
+  pp: { enabled: false, x: 0.88, y: 0.02, scale: 1 },
+  judgements: { enabled: true, x: 0.92, y: 0.2, scale: 1.5 },
+  // Below the accuracy readout: the detached pie must not land on top of
+  // the cluster it just left, or toggling it looks like a no-op.
+  progress: { enabled: false, x: 0.03, y: 0.1, scale: 1 },
+  leaderboard: { enabled: true, x: 0, y: 0.24, scale: 1 },
+};
+
+// Earlier cuts of the left-side accuracy readout shipped over- and
+// under-sized; users still on those exact placements follow the default
+// forward.
+const PREVIOUS_ACCURACY_OVERLAY_DEFAULTS: ReplayOverlayPlacement[] = [
+  { enabled: true, x: 0.03, y: 0.03, scale: 1.5 },
+  { enabled: true, x: 0.03, y: 0.03, scale: 1.1 },
+  { enabled: true, x: 0.03, y: 0.03, scale: 0.95 },
+  { enabled: true, x: 0.03, y: 0.03, scale: 0.8 },
+];
+
+// What the defaults were when the ingame-clone HUD first landed (accuracy
+// folded into the fixed score block, smaller judgement counts); users still
+// on these exact placements follow the defaults forward.
+const SCORE_BLOCK_HUD_DEFAULTS: ReplayOverlaySettings = {
   keypresses: { enabled: false, x: 0.035, y: 0.68, scale: 0.75 },
   kps: { enabled: false, x: 0.035, y: 0.77, scale: 0.75 },
   misses: { enabled: true, x: 0.085, y: 0.77, scale: 1 },
@@ -106,7 +144,9 @@ export function normalizeReplayOverlaySettings(value: unknown): ReplayOverlaySet
     settings[id] = placementMatches(placement, LEGACY_PLAYFIELD_OVERLAY_DEFAULTS[id])
       || placementMatches(placement, OVERLAPPING_LEFT_CLUSTER_DEFAULTS[id])
       || placementMatches(placement, PRE_INGAME_HUD_DEFAULTS[id])
+      || placementMatches(placement, SCORE_BLOCK_HUD_DEFAULTS[id])
       || (id === "misses" && placementMatches(placement, COMPACT_MISS_OVERLAY_DEFAULT))
+      || (id === "accuracy" && PREVIOUS_ACCURACY_OVERLAY_DEFAULTS.some((previous) => placementMatches(placement, previous)))
       ? DEFAULT_REPLAY_OVERLAY_SETTINGS[id]
       : placement;
     return settings;

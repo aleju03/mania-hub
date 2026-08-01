@@ -13,6 +13,8 @@ export const REPLAY_BEATMAP_HITSOUNDS_STORAGE_KEY = "mania-hub-replay-beatmap-hi
 export const REPLAY_BEATMAP_HITSOUND_VOLUME_STORAGE_KEY = "mania-hub-replay-beatmap-hitsound-volume";
 export const REPLAY_KEYPRESS_HITSOUNDS_STORAGE_KEY = "mania-hub-replay-keypress-hitsounds";
 export const REPLAY_COMBOBREAK_SOUND_STORAGE_KEY = "mania-hub-replay-combobreak-sound";
+export const REPLAY_STORYBOARD_STORAGE_KEY = "mania-hub-replay-storyboard";
+export const REPLAY_LEADERBOARD_STORAGE_KEY = "mania-hub-replay-leaderboard";
 export const DEFAULT_REPLAY_VOLUME = 0.5;
 export const DEFAULT_REPLAY_BG_DIM = 80;
 export const DEFAULT_REPLAY_HITSOUND_VOLUME = 0.1;
@@ -187,6 +189,25 @@ export function readReplayComboBreakSound(): boolean {
 
 export function writeReplayComboBreakSound(enabled: boolean): void {
   writeStoredBoolean(REPLAY_COMBOBREAK_SOUND_STORAGE_KEY, enabled);
+}
+
+export function readReplayStoryboardEnabled(): boolean {
+  return readStoredBoolean(REPLAY_STORYBOARD_STORAGE_KEY, true);
+}
+
+export function writeReplayStoryboardEnabled(enabled: boolean): void {
+  writeStoredBoolean(REPLAY_STORYBOARD_STORAGE_KEY, enabled);
+}
+
+// Tab toggles the ingame scoreboard. Persisting it lets the viewer skip the
+// map's top-50 fetch entirely while the board is off, so "leaderboard hidden"
+// costs no osu! API call at all.
+export function readReplayLeaderboardVisible(): boolean {
+  return readStoredBoolean(REPLAY_LEADERBOARD_STORAGE_KEY, true);
+}
+
+export function writeReplayLeaderboardVisible(visible: boolean): void {
+  writeStoredBoolean(REPLAY_LEADERBOARD_STORAGE_KEY, visible);
 }
 
 export interface ReplayAudioSettings {

@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { performance } from "node:perf_hooks";
 import { brotliCompress, constants as zlibConstants, gzip } from "node:zlib";
 import type { Config } from "../config.js";
-import { handleBeatmapAudioRequest, handleBeatmapHitsoundsRequest, handlePreviewAudioRequest } from "../audio/http.js";
+import { handleBeatmapAudioRequest, handleBeatmapHitsoundsRequest, handleBeatmapStoryboardRequest, handlePreviewAudioRequest } from "../audio/http.js";
 import { activateCountry, deleteCountryData, getCountryRegistry, getCountryRegistryRow, GLOBAL_COUNTRY_CODE, isCountryFeatureAtLeast, isGlobalCountry, setCountryFeatureTier, setCountryPaused, setCountryStatus, type CountryFeatureTier, type CountryRegistryStatus } from "../countries.js";
 import type { Db } from "../db.js";
 import { dbHealth, exec, getSqliteBusyRetryStats, parseJson, readSchemaMigrationState, SQLITE_MIGRATION_TOTAL_BUSY_WAIT_MS } from "../db.js";
@@ -133,11 +133,11 @@ type TimedRequest = IncomingMessage & { [REQUEST_STARTED_AT]?: number };
 // endpoints are exempt: their handlers legitimately stay open for as long as
 // the client keeps reading.
 const SLOW_HTTP_LOG_MS = 2_000;
-const SLOW_HTTP_LOG_EXEMPT = new Set(["/api/live", "/api/audio", "/api/hitsounds", "/api/preview-audio"]);
+const SLOW_HTTP_LOG_EXEMPT = new Set(["/api/live", "/api/audio", "/api/hitsounds", "/api/preview-audio", "/api/storyboard"]);
 
 // Beatmap media: served before the general public gate, rate-limited on their
 // own window (see the dispatch block for why).
-const MEDIA_PATHS = new Set(["/api/audio", "/api/hitsounds", "/api/preview-audio"]);
+const MEDIA_PATHS = new Set(["/api/audio", "/api/hitsounds", "/api/preview-audio", "/api/storyboard"]);
 const MEDIA_RATE_SUFFIX = "media";
 
 export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: HttpContext): Promise<boolean> {
@@ -204,6 +204,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     if (!checkRate(req, res, ctx, "publicCostly", MEDIA_RATE_SUFFIX)) return true;
     if (url.pathname === "/api/audio") await handleBeatmapAudioRequest(req, res, ctx.config, url);
     else if (url.pathname === "/api/hitsounds") await handleBeatmapHitsoundsRequest(req, res, ctx.config, url);
+    else if (url.pathname === "/api/storyboard") await handleBeatmapStoryboardRequest(req, res, ctx.config, url);
     else await handlePreviewAudioRequest(req, res, ctx.config, url);
     return true;
   }

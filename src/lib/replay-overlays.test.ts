@@ -7,7 +7,35 @@ describe("replay overlay settings", () => {
   });
 
   it("uses a larger judgement overlay in the default layout", () => {
-    expect(DEFAULT_REPLAY_OVERLAY_SETTINGS.judgements.scale).toBe(1.25);
+    expect(DEFAULT_REPLAY_OVERLAY_SETTINGS.judgements.scale).toBe(1.5);
+  });
+
+  it("ships accuracy as a draggable readout on the left", () => {
+    expect(DEFAULT_REPLAY_OVERLAY_SETTINGS.accuracy).toEqual({ enabled: true, x: 0.03, y: 0.03, scale: 1 });
+  });
+
+  it("keeps the detached progress pie clear of the accuracy cluster", () => {
+    expect(DEFAULT_REPLAY_OVERLAY_SETTINGS.progress).toEqual({ enabled: false, x: 0.03, y: 0.1, scale: 1 });
+  });
+
+  it("migrates the mis-sized accuracy readout defaults to the current default", () => {
+    for (const scale of [1.5, 1.1, 0.95, 0.8]) {
+      const settings = normalizeReplayOverlaySettings({
+        accuracy: { enabled: true, x: 0.03, y: 0.03, scale },
+      });
+
+      expect(settings.accuracy).toEqual(DEFAULT_REPLAY_OVERLAY_SETTINGS.accuracy);
+    }
+  });
+
+  it("migrates the score-block era defaults to the current defaults", () => {
+    const settings = normalizeReplayOverlaySettings({
+      accuracy: { enabled: false, x: 0.74, y: 0.02, scale: 1 },
+      judgements: { enabled: true, x: 0.92, y: 0.2, scale: 1.25 },
+    });
+
+    expect(settings.accuracy).toEqual(DEFAULT_REPLAY_OVERLAY_SETTINGS.accuracy);
+    expect(settings.judgements).toEqual(DEFAULT_REPLAY_OVERLAY_SETTINGS.judgements);
   });
 
   it("migrates the old compact miss counter default to the current default", () => {
@@ -26,7 +54,7 @@ describe("replay overlay settings", () => {
     expect(settings.judgements).toEqual(DEFAULT_REPLAY_OVERLAY_SETTINGS.judgements);
   });
 
-  it("ships the pp counter disabled by default, placed next to accuracy", () => {
+  it("ships the pp counter disabled by default, in the top-right corner", () => {
     expect(DEFAULT_REPLAY_OVERLAY_SETTINGS.pp).toEqual({ enabled: false, x: 0.88, y: 0.02, scale: 1 });
     expect(normalizeReplayOverlaySettings({}).pp).toEqual(DEFAULT_REPLAY_OVERLAY_SETTINGS.pp);
   });

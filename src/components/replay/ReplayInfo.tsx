@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowLeftRight, Check, Copy } from "lucide-react";
 import { StarRatingBadge } from "#/components/maps/SearchCard";
 import { ReplayCompareEntry } from "#/components/replay/ReplayCompareView";
@@ -128,7 +128,11 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
 
   return (
     <>
-      <div className="sm:hidden relative overflow-hidden bg-osu-b4 rounded-xl p-3 border border-osu-b3/20">
+      {/* Desktop dresses in the viewer's near-black chrome as a full-bleed
+          strip welded to the stage. Phones keep a rounded card in the site
+          palette: it scrolls with the page, and the near-black base read as
+          a black hole against the regular background. */}
+      <div className="sm:hidden relative overflow-hidden rounded-xl border border-white/10 bg-osu-b4/70 p-3">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <div className="relative flex items-center gap-2">
@@ -177,7 +181,7 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             {shareUrl && <ShareReplayButton shareUrl={shareUrl} compact />}
-            <button onClick={onClear} className="px-3 py-1.5 rounded-lg bg-osu-b3/50 text-xs text-osu-f1 hover:text-white hover:bg-osu-b2 transition-colors cursor-pointer">Back</button>
+            <button onClick={onClear} className="px-3 py-1.5 rounded-lg bg-white/10 text-xs text-osu-f1 hover:text-white hover:bg-white/20 transition-colors cursor-pointer">Back</button>
           </div>
         </div>
 
@@ -190,7 +194,7 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
         {(clientLabel || canToggleClient || playedDate || shownPp != null) && (
           <div className={`mt-1.5 grid gap-1.5 ${shownPp != null ? "grid-cols-3" : "grid-cols-2"}`}>
             {canToggleClient && onSelectClient ? (
-              <div className="min-w-0 rounded-lg bg-osu-b5/55 px-1 py-1.5 text-center">
+              <div className="min-w-0 rounded-lg bg-white/5 px-1 py-1.5 text-center">
                 <div className="text-[8px] uppercase tracking-wider text-osu-f1">Client</div>
                 <ClientToggle compact judgingIsLazer={judgingIsLazer} simActive={simActive} onSelect={onSelectClient} />
               </div>
@@ -198,7 +202,7 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
               <MobileReplayStat label="Client" value={clientLabel} valueClassName={clientLabel === "Stable" ? "text-osu-pink-light" : "text-osu-l2"} compact />
             ) : null}
             {shownPp != null && (
-              <div className="min-w-0 rounded-lg bg-osu-b5/55 px-1 py-1.5 text-center">
+              <div className="min-w-0 rounded-lg bg-white/5 px-1 py-1.5 text-center">
                 <div className="text-[8px] uppercase tracking-wider text-osu-f1">PP</div>
                 <div className="truncate text-xs font-bold tabular-nums text-white">{Math.round(shownPp)}pp<DeltaChip delta={ppDelta} suffix="pp" /></div>
               </div>
@@ -206,16 +210,16 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
             {playedDate && <MobileReplayStat label="Played" value={playedDate} compact />}
           </div>
         )}
-        <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg bg-osu-b5/55 px-3 py-2.5">
+        <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg bg-white/5 px-3 py-2.5">
           <div className="min-w-0">
             <div className="mb-1 text-[8px] uppercase tracking-wider text-osu-f1">Judgments</div>
             <div className="grid grid-cols-6 gap-1.5 text-center text-[11px] font-bold tabular-nums">
-              <span className="rounded bg-osu-b4/70 px-1 py-1 text-osu-yellow">{shownCounts.geki}</span>
-              <span className="rounded bg-osu-b4/70 px-1 py-1 text-osu-blue">{shownCounts.c300}</span>
-              <span className="rounded bg-osu-b4/70 px-1 py-1 text-osu-green-light">{shownCounts.katu}</span>
-              <span className="rounded bg-osu-b4/70 px-1 py-1 text-osu-green">{shownCounts.c100}</span>
-              <span className="rounded bg-osu-b4/70 px-1 py-1 text-osu-orange">{shownCounts.c50}</span>
-              <span className="rounded bg-osu-b4/70 px-1 py-1 text-osu-red-light">{shownCounts.miss}</span>
+              <span className="rounded bg-white/10 px-1 py-1 text-osu-yellow">{shownCounts.geki}</span>
+              <span className="rounded bg-white/10 px-1 py-1 text-osu-blue">{shownCounts.c300}</span>
+              <span className="rounded bg-white/10 px-1 py-1 text-osu-green-light">{shownCounts.katu}</span>
+              <span className="rounded bg-white/10 px-1 py-1 text-osu-green">{shownCounts.c100}</span>
+              <span className="rounded bg-white/10 px-1 py-1 text-osu-orange">{shownCounts.c50}</span>
+              <span className="rounded bg-white/10 px-1 py-1 text-osu-red-light">{shownCounts.miss}</span>
             </div>
           </div>
           {beatmap && (
@@ -227,90 +231,100 @@ export function ReplayInfo({ replay, score, beatmap, stars, mods, fallbackBeatma
         </div>
         {/* The header cluster is already tight on phones (an extra icon there
             starves the map title), so mobile gets a slim bottom row instead
-            that swaps into the form when tapped. */}
+            that swaps into the form when tapped. Side-by-side compare needs
+            a wide screen, so the whole affair only exists in landscape. */}
         {onCompare && !compareOpen && (
           <button
             type="button"
             onClick={() => setCompareOpen(true)}
-            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-osu-b5/55 px-2.5 py-2 text-[11px] font-semibold text-osu-f1 hover:text-white transition-colors cursor-pointer"
+            className="mt-2 hidden w-full items-center justify-center gap-1.5 rounded-lg bg-white/5 px-2.5 py-2 text-[11px] font-semibold text-osu-f1 hover:text-white transition-colors cursor-pointer landscape:flex"
           >
             <ArrowLeftRight className="h-3.5 w-3.5" aria-hidden="true" />
             Compare with another score
           </button>
         )}
-        {compareEntry}
+        <div className="portrait:hidden">{compareEntry}</div>
       </div>
 
-      <div className="hidden sm:block relative overflow-hidden bg-osu-b4 rounded-xl p-4 mb-4 border border-osu-b3/20">
-        {/* Two rows: identity on top (player, full-width map title, actions),
-            the stat strip below. The stats used to share the single row and
-            starved the map title at most widths. The player cell spans both
-            rows so its banner still bleeds to the card's top and bottom
-            edges (stopping at the row while the compare form is open); the
-            map cell only bleeds upward now that the stats sit under it. */}
-        <div className="grid grid-cols-[minmax(64px,max-content)_minmax(0,1fr)_auto] grid-rows-[auto_auto] items-center gap-x-4 sm:gap-x-6 gap-y-2.5">
-          <div className={`relative row-span-full self-stretch flex flex-col justify-center ${compareOpen ? "-mt-4 pt-4" : "-my-4 py-4"} -ml-4 pl-4 pr-2 min-w-0`}>
-            <PlayerBanner coverUrl={playerCoverUrl} />
-            <div className="relative flex items-center gap-2.5 min-w-0">
-              <PlayerAvatar src={avatarSrc} name={displayName} size={36} />
-              <div className="min-w-0"><div className={`text-[9px] uppercase tracking-wider ${playerLabelClass}`}>Player</div><div className={`text-sm font-bold text-white truncate${playerNameShadow}`}>{displayName}</div></div>
+      {/* Desktop: a full-bleed footer strip welded to the stage, the map's
+          cover art running behind the whole thing like the client's song
+          bar. One row: player identity, then the map title with the stats
+          under it, actions on the right. */}
+      <div className="hidden sm:block relative overflow-hidden border-t border-white/10 bg-[#08080d]">
+        {beatmapCoverUrl && (
+          <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+            <div
+              className="absolute inset-0 bg-cover bg-center opacity-60"
+              style={{ backgroundImage: `url(${beatmapCoverUrl})` }}
+            />
+            {/* Edges settle into the page background so content stays
+                readable; the art breathes through the middle. */}
+            <div className="absolute inset-0 bg-gradient-to-r from-[#08080d]/65 via-[#08080d]/35 to-[#08080d]/65" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#08080d]/70 via-transparent to-[#08080d]/30" />
+          </div>
+        )}
+        <div className="relative mx-auto flex max-w-[1400px] items-center gap-6 px-6 py-4">
+          <div className="flex min-w-0 shrink-0 items-center gap-3">
+            <PlayerAvatar src={avatarSrc} name={displayName} size={46} />
+            <div className="min-w-0">
+              <div className="text-[9px] uppercase tracking-[0.16em] text-white/50">Player</div>
+              <div className="max-w-[180px] truncate text-[15px] font-bold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.85)]">{displayName}</div>
             </div>
           </div>
-          {beatmap && (
-            <div className="relative col-start-2 row-start-1 self-stretch -mt-4 pt-4 flex flex-col justify-center min-w-0">
-              {/* The map column starts 24px further left than it used to (the player
-                  block gave up padding), so bleed the cover 24px less to keep its
-                  on-screen position unchanged. */}
-              <BeatmapBanner coverUrl={beatmapCoverUrl} fade={BEATMAP_BANNER_FADE_MAP} bottomFade={BEATMAP_BANNER_BOTTOM_FADE} className="absolute inset-y-0 -left-14 right-0" />
-              <div className="relative">
-                <div className={`text-[9px] uppercase tracking-wider ${mapLabelClass}`}>Map</div>
-                <div className="flex items-center gap-2 min-w-0">
-                  {mapUrl ? (
-                    <a href={mapUrl} target="_blank" rel="noopener noreferrer" className={`min-w-0 truncate text-sm font-medium text-osu-l2 hover:text-osu-pink-light transition-colors${mapTextShadow}`} title={`${beatmap.title} [${beatmap.version}]`}>
-                      {beatmap.title} [{beatmap.version}]
-                    </a>
-                  ) : (
-                    <div className={`min-w-0 truncate text-sm font-medium text-osu-l2${mapTextShadow}`} title={`${beatmap.title} [${beatmap.version}]`}>{beatmap.title} [{beatmap.version}]</div>
-                  )}
-                  {stars != null && <StarRatingBadge stars={stars} className="shrink-0" />}
-                  {displayMods.length > 0 && (
-                    <div className="flex shrink-0 items-center gap-0.5">
-                      {displayMods.map((mod, index) => (
-                        <ModBadge key={`${mod.acronym}-${index}`} mod={mod.acronym} rate={mod.rate} size={0.75} />
-                      ))}
-                    </div>
-                  )}
+          <div className="h-11 w-px shrink-0 bg-white/10" />
+          <div className="min-w-0 flex-1">
+            {beatmap && (
+              <div className="flex items-center gap-2 min-w-0">
+                {mapUrl ? (
+                  <a href={mapUrl} target="_blank" rel="noopener noreferrer" className="min-w-0 truncate text-[15px] font-semibold text-white transition-colors hover:text-osu-pink-light [text-shadow:0_1px_3px_rgba(0,0,0,0.85)]" title={`${beatmap.title} [${beatmap.version}]`}>
+                    {beatmap.title} <span className="font-medium text-white/75">[{beatmap.version}]</span>
+                  </a>
+                ) : (
+                  <div className="min-w-0 truncate text-[15px] font-semibold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.85)]" title={`${beatmap.title} [${beatmap.version}]`}>
+                    {beatmap.title} <span className="font-medium text-white/75">[{beatmap.version}]</span>
+                  </div>
+                )}
+                {stars != null && <StarRatingBadge stars={stars} className="shrink-0" size={1.2} />}
+                {displayMods.length > 0 && (
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    {displayMods.map((mod, index) => (
+                      <ModBadge key={`${mod.acronym}-${index}`} mod={mod.acronym} rate={mod.rate} size={0.75} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-6 gap-y-1.5 min-w-0">
+              <StripStat label="Keys" valueClassName="text-osu-yellow">{replay.keyCount}K</StripStat>
+              <StripStat label="Accuracy">{shownAccuracy.toFixed(2)}%<DeltaChip delta={accDelta} suffix="%" decimals={2} /></StripStat>
+              {shownPp != null && <StripStat label="PP">{Math.round(shownPp)}pp<DeltaChip delta={ppDelta} suffix="pp" /></StripStat>}
+              <StripStat label="Score" valueClassName={`text-white${realOnlyDim}`} title={simActive ? "From the real play (not simulated)" : undefined}>{h.totalScore.toLocaleString()}</StripStat>
+              <StripStat label="Combo" valueClassName={`text-white${realOnlyDim}`} title={simActive ? "From the real play (not simulated)" : undefined}>{h.maxCombo}x</StripStat>
+              {canToggleClient && onSelectClient ? (
+                <div>
+                  <div className="text-[9px] uppercase tracking-[0.16em] text-white/50">Client</div>
+                  <ClientToggle judgingIsLazer={judgingIsLazer} simActive={simActive} onSelect={onSelectClient} />
+                </div>
+              ) : clientLabel ? (
+                <StripStat label="Client" valueClassName={clientLabel === "Stable" ? "text-osu-pink-light" : "text-osu-l2"}>{clientLabel}</StripStat>
+              ) : null}
+              {playedDate && <StripStat label="Played">{playedDate}</StripStat>}
+              <div>
+                <div className="text-[9px] uppercase tracking-[0.16em] text-white/50">Judgments</div>
+                <div className="text-xs font-semibold tabular-nums [text-shadow:0_1px_2px_rgba(0,0,0,0.8)]">
+                  <span className="text-osu-yellow">{shownCounts.geki}</span><span className="text-white/40">/</span><span className="text-osu-blue">{shownCounts.c300}</span><span className="text-white/40">/</span><span className="text-osu-green-light">{shownCounts.katu}</span><span className="text-white/40">/</span><span className="text-osu-green">{shownCounts.c100}</span><span className="text-white/40">/</span><span className="text-osu-orange">{shownCounts.c50}</span><span className="text-white/40">/</span><span className="text-osu-red-light">{shownCounts.miss}</span>
                 </div>
               </div>
+              {beatmap && <StripStat label="Notes" valueClassName="text-white/80">{beatmap.notes.length.toLocaleString()}</StripStat>}
             </div>
-          )}
-          <div className="col-start-2 col-span-2 row-start-2 flex flex-wrap items-center gap-x-4 sm:gap-x-6 gap-y-2 min-w-0">
-            <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Keys</div><div className="text-sm font-bold text-osu-yellow">{replay.keyCount}K</div></div>
-            <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Accuracy</div><div className="text-sm font-bold text-white">{shownAccuracy.toFixed(2)}%<DeltaChip delta={accDelta} suffix="%" decimals={2} /></div></div>
-            {shownPp != null && <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">PP</div><div className="text-sm font-bold text-white">{Math.round(shownPp)}pp<DeltaChip delta={ppDelta} suffix="pp" /></div></div>}
-            <div title={simActive ? "From the real play (not simulated)" : undefined}><div className="text-[9px] uppercase tracking-wider text-osu-f1">Score</div><div className={`text-sm font-bold text-white${realOnlyDim}`}>{h.totalScore.toLocaleString()}</div></div>
-            <div title={simActive ? "From the real play (not simulated)" : undefined}><div className="text-[9px] uppercase tracking-wider text-osu-f1">Combo</div><div className={`text-sm font-bold text-white${realOnlyDim}`}>{h.maxCombo}x</div></div>
-            {canToggleClient && onSelectClient ? (
-              <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Client</div><ClientToggle judgingIsLazer={judgingIsLazer} simActive={simActive} onSelect={onSelectClient} /></div>
-            ) : clientLabel ? (
-              <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Client</div><div className={`text-sm font-bold ${clientLabel === "Stable" ? "text-osu-pink-light" : "text-osu-l2"}`}>{clientLabel}</div></div>
-            ) : null}
-            {playedDate && <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Played</div><div className="text-sm font-bold text-white">{playedDate}</div></div>}
-            <div>
-              <div className="text-[9px] uppercase tracking-wider text-osu-f1">Judgments</div>
-              <div className="text-xs text-osu-f1">
-                <span className="text-osu-yellow">{shownCounts.geki}</span>/<span className="text-osu-blue">{shownCounts.c300}</span>/<span className="text-osu-green-light">{shownCounts.katu}</span>/<span className="text-osu-green">{shownCounts.c100}</span>/<span className="text-osu-orange">{shownCounts.c50}</span>/<span className="text-osu-red-light">{shownCounts.miss}</span>
-              </div>
-            </div>
-            {beatmap && <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Notes</div><div className="text-sm font-bold text-osu-f1">{beatmap.notes.length.toLocaleString()}</div></div>}
           </div>
-          <div className="col-start-3 row-start-1 justify-self-end flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2 self-start pt-1.5">
             {onCompare && <CompareToggleButton open={compareOpen} onToggle={() => setCompareOpen((open) => !open)} />}
             {shareUrl && <ShareReplayButton shareUrl={shareUrl} />}
-            <button onClick={onClear} className="px-3 py-1.5 rounded-lg bg-osu-b3/50 text-xs text-osu-f1 hover:text-white hover:bg-osu-b2 transition-colors cursor-pointer">Back</button>
+            <button onClick={onClear} className="px-3 py-1.5 rounded-lg bg-white/10 text-xs text-osu-f1 hover:text-white hover:bg-white/20 transition-colors cursor-pointer">Back</button>
           </div>
         </div>
-        {compareEntry}
+        {compareEntry && <div className="relative mx-auto max-w-[1400px] px-6 pb-4">{compareEntry}</div>}
       </div>
     </>
   );
@@ -380,27 +394,17 @@ function PlayerBanner({ coverUrl }: { coverUrl?: string }) {
         className="absolute inset-0 bg-cover bg-center opacity-60"
         style={{ backgroundImage: `url(${coverUrl})` }}
       />
-      <div className="absolute inset-0 bg-osu-b4/30" />
+      <div className="absolute inset-0 bg-black/30" />
     </div>
   );
 }
 
-// Beatmap cover, mirrored against the player banner. On desktop it's scoped to the map
-// column (bled left to meet the player cover's fade) so it physically can't reach the
-// stat columns at any width; the mask dissolves it in from that seam and back out
-// before the column's right edge. The compact variant fills the mobile top row, which
-// has no stats beside it.
-// Front-loaded fade-in (already ~half strength a fifth of the way across) so the cover
-// catches the player banner mid-dissolve and fills the seam instead of dipping dark.
-const BEATMAP_BANNER_FADE_MAP = "linear-gradient(to right, transparent 0%, rgba(0,0,0,0.55) 22%, #000 46%, #000 82%, transparent 100%)";
+// Beatmap cover for the mobile card's top row (desktop paints its own
+// full-strip backdrop inline); the mask dissolves it in past the player
+// cluster and back out before the card's right edge.
 const BEATMAP_BANNER_FADE_COMPACT = "linear-gradient(to right, transparent 18%, #000 44%, #000 82%, transparent 100%)";
-// The desktop map cover only spans the identity row now, so its bottom edge
-// lands mid-card; without a vertical dissolve it reads as a hard straight
-// line crossing the player banner's fade. Nested masks multiply, giving the
-// strip a soft bottom in addition to the horizontal fade.
-const BEATMAP_BANNER_BOTTOM_FADE = "linear-gradient(to bottom, #000 40%, transparent 98%)";
 
-function BeatmapBanner({ coverUrl, fade, bottomFade, className = "absolute inset-0" }: { coverUrl?: string; fade: string; bottomFade?: string; className?: string }) {
+function BeatmapBanner({ coverUrl, fade, className = "absolute inset-0" }: { coverUrl?: string; fade: string; className?: string }) {
   if (!coverUrl) return null;
   return (
     <div
@@ -409,15 +413,10 @@ function BeatmapBanner({ coverUrl, fade, bottomFade, className = "absolute inset
       aria-hidden="true"
     >
       <div
-        className="absolute inset-0"
-        style={bottomFade ? { maskImage: bottomFade, WebkitMaskImage: bottomFade } : undefined}
-      >
-        <div
-          className="absolute inset-0 bg-cover bg-center opacity-50"
-          style={{ backgroundImage: `url(${coverUrl})` }}
-        />
-        <div className="absolute inset-0 bg-osu-b4/30" />
-      </div>
+        className="absolute inset-0 bg-cover bg-center opacity-50"
+        style={{ backgroundImage: `url(${coverUrl})` }}
+      />
+      <div className="absolute inset-0 bg-black/30" />
     </div>
   );
 }
@@ -472,7 +471,7 @@ function CompareToggleButton({ open, onToggle }: { open: boolean; onToggle: () =
       aria-label="Compare with another score"
       aria-expanded={open}
       className={`inline-flex items-center justify-center rounded-lg p-1.5 transition-colors cursor-pointer ${
-        open ? "bg-osu-b2 text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b2"
+        open ? "bg-white/20 text-white" : "bg-white/10 text-osu-f1 hover:text-white hover:bg-white/20"
       }`}
     >
       <ArrowLeftRight className="h-4 w-4" aria-hidden="true" />
@@ -507,9 +506,25 @@ function ShareReplayButton({ shareUrl, compact = false }: { shareUrl: string; co
   );
 }
 
+// One stat in the desktop footer strip: whisper label over a bold value,
+// shadowed so it reads over the cover art.
+function StripStat({ label, children, valueClassName = "text-white", title }: {
+  label: string;
+  children: ReactNode;
+  valueClassName?: string;
+  title?: string;
+}) {
+  return (
+    <div title={title}>
+      <div className="text-[9px] uppercase tracking-[0.16em] text-white/50">{label}</div>
+      <div className={`text-[13.5px] font-bold tabular-nums [text-shadow:0_1px_2px_rgba(0,0,0,0.8)] ${valueClassName}`}>{children}</div>
+    </div>
+  );
+}
+
 function MobileReplayStat({ label, value, valueClassName = "text-white", compact = false }: { label: string; value: string; valueClassName?: string; compact?: boolean }) {
   return (
-    <div className={`min-w-0 rounded-lg bg-osu-b5/55 text-center ${compact ? "px-1 py-1.5" : "px-2 py-2"}`}>
+    <div className={`min-w-0 rounded-lg bg-white/5 text-center ${compact ? "px-1 py-1.5" : "px-2 py-2"}`}>
       <div className="text-[8px] uppercase tracking-wider text-osu-f1">{label}</div>
       <div className={`truncate text-xs font-bold tabular-nums ${valueClassName}`}>{value}</div>
     </div>

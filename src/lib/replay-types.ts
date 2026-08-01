@@ -1,7 +1,8 @@
 import type { ReplayHitCounts } from "./replay-validation";
 import type { ReplayHitsoundTrigger } from "./replay-hitsounds";
-import type { ReplayOverlaySettings } from "./replay-overlays";
+import type { ReplayOverlayId, ReplayOverlaySettings } from "./replay-overlays";
 import type { ReplaySkinSettings } from "./replay-skin";
+import type { ReplayStoryboardData } from "./storyboard/types";
 import type { ReplayFrame, ReplayLifeBarFrame, OsuScore } from "./types";
 
 export interface ServerReplay {
@@ -35,6 +36,12 @@ export interface ReplayRendererLike {
   destroy: () => void;
   getFailTime?: () => number | null;
   getMissTimes?: () => number[];
+  /** Client point is on the bare playfield, clear of every draggable overlay. */
+  isPlayfieldClickPoint?: (clientX: number, clientY: number) => boolean;
+  /** Which overlay sits under a client point, for the right-click menu. */
+  getOverlayIdAtClientPoint?: (clientX: number, clientY: number) => ReplayOverlayId | null;
+  /** False on phones or with the HUD hidden, where overlays are not editable. */
+  canEditOverlays?: () => boolean;
   pause: () => void;
   play: () => void;
   resize: () => void;
@@ -50,8 +57,11 @@ export interface ReplayRendererLike {
   setOverlaySettings: (settings: ReplayOverlaySettings) => void;
   setSkinSettings: (settings: ReplaySkinSettings) => void;
   setSpeed: (value: number) => void;
-  setLeaderboard?: (entries: { name: string; score: number; combo: number }[], playerName: string) => void;
+  setStoryboard?: (data: ReplayStoryboardData | null) => void;
+  storyboardReady?: () => Promise<void>;
+  setLeaderboard?: (entries: { name: string; score: number; combo: number; rank?: number }[], playerName: string) => void;
   setLeaderboardVisible?: (visible: boolean) => void;
+  setSpectatorCount?: (count: number) => void;
   setHitsoundTrigger?: (trigger: ReplayHitsoundTrigger | null) => void;
   ready: () => Promise<void>;
   getDiagnostics?: () => { rendererBackend: string; judgementBuildMs: number | null };

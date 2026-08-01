@@ -8,6 +8,7 @@ import { ReplaySkinColorPanel } from "./ReplaySkinColorPanel";
 import {
   DEFAULT_REPLAY_OVERLAY_SETTINGS,
   REPLAY_OVERLAY_IDS,
+  REPLAY_OVERLAY_LABELS,
   normalizeReplayOverlaySettings,
 } from "#/lib/replay-overlays";
 import type { ReplayOverlayId, ReplayOverlaySettings } from "#/lib/replay-overlays";
@@ -2695,17 +2696,6 @@ function PresetTextButton({
   );
 }
 
-
-const REPLAY_OVERLAY_LABELS: Record<ReplayOverlayId, string> = {
-  keypresses: "Keypresses",
-  kps: "KPS counter",
-  misses: "L/R miss counter",
-  accuracy: "Accuracy",
-  pp: "PP counter",
-  judgements: "Judgements",
-  progress: "Progress pie",
-  leaderboard: "Leaderboard",
-};
 
 const REPLAY_OVERLAY_DESCRIPTIONS: Record<ReplayOverlayId, string> = {
   keypresses: "Per-column press count.",

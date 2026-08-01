@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import type { MutableRefObject, ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, Film, Maximize2, Settings } from "lucide-react";
+import { Check, ChevronDown, Film, Maximize2, Settings } from "lucide-react";
 
 import type { ReplayRendererLike } from "#/lib/replay-types";
 import { ReplaySkinColorPanel } from "./ReplaySkinColorPanel";
@@ -38,6 +38,8 @@ interface ReplayControlsProps {
   scrollSpeed: number;
   bgDim: number;
   blackPlayfield: boolean;
+  storyboardOn: boolean;
+  storyboardLoading?: boolean;
   videoExporting?: boolean;
   videoExportProgress?: number;
   videoExportError?: string | null;
@@ -60,6 +62,7 @@ interface ReplayControlsProps {
   onSetScrollSpeed: (speed: number) => void;
   onSetBgDim: (dim: number) => void;
   onToggleBlackPlayfield: () => void;
+  onToggleStoryboard: () => void;
   onPointerDown: () => void;
   onPointerUp: () => void;
   onSeek: (timeMs: number) => void;
@@ -126,6 +129,8 @@ export function ReplayControls({
   scrollSpeed,
   bgDim,
   blackPlayfield,
+  storyboardOn,
+  storyboardLoading,
   videoExporting = false,
   videoExportProgress = 0,
   videoExportError = null,
@@ -148,6 +153,7 @@ export function ReplayControls({
   onSetScrollSpeed,
   onSetBgDim,
   onToggleBlackPlayfield,
+  onToggleStoryboard,
   onPointerDown,
   onPointerUp,
   onSeek,
@@ -226,6 +232,24 @@ export function ReplayControls({
     }
     setVolumeMixerOpen(true);
   };
+
+  // The mixer pops up over the controls above it (the drawer's play button
+  // sits right there), so hovering only opens it after the pointer actually
+  // rests on the cluster; passing through on the way up stays harmless.
+  const volumeMixerHoverTimerRef = useRef<number | null>(null);
+  const cancelVolumeMixerHoverTimer = () => {
+    if (volumeMixerHoverTimerRef.current == null) return;
+    window.clearTimeout(volumeMixerHoverTimerRef.current);
+    volumeMixerHoverTimerRef.current = null;
+  };
+  const scheduleVolumeMixerOpen = () => {
+    cancelVolumeMixerHoverTimer();
+    volumeMixerHoverTimerRef.current = window.setTimeout(() => {
+      volumeMixerHoverTimerRef.current = null;
+      openVolumeMixer();
+    }, 300);
+  };
+  useEffect(() => cancelVolumeMixerHoverTimer, []);
 
   // Touch devices never fire mouseleave, so close the mixer on outside taps.
   useEffect(() => {
@@ -358,8 +382,11 @@ export function ReplayControls({
     <div
       ref={volumeMixerRef}
       className={`${isOverlay ? "" : "order-2 ml-auto sm:order-none sm:ml-0 "}relative flex items-center gap-1.5`}
-      onMouseEnter={isCoarsePointer ? undefined : openVolumeMixer}
-      onMouseLeave={isCoarsePointer ? undefined : () => setVolumeMixerOpen(false)}
+      onMouseEnter={isCoarsePointer ? undefined : scheduleVolumeMixerOpen}
+      onMouseLeave={isCoarsePointer ? undefined : () => {
+        cancelVolumeMixerHoverTimer();
+        setVolumeMixerOpen(false);
+      }}
     >
       <button
         onClick={() => {
@@ -733,7 +760,11 @@ export function ReplayControls({
             shareLabel={shareLabel}
             copied={copied}
             onClose={() => setShareUrl(null)}
-            onCopied={() => setCopied(true)}
+            // Confirm, then get out of the way instead of sitting over the bar.
+            onCopied={() => {
+              setCopied(true);
+              window.setTimeout(() => setShareUrl(null), 900);
+            }}
           />
         </ReplayProgressBar>
       </div>
@@ -768,6 +799,12 @@ export function ReplayControls({
               on={blackPlayfield}
               onClick={onToggleBlackPlayfield}
               title="Fill the playfield with a solid black background"
+            />
+            <OsuToggleRow
+              label={storyboardLoading ? "Storyboard…" : "Storyboard"}
+              on={storyboardOn}
+              onClick={onToggleStoryboard}
+              title="Show the map's storyboard behind (and over) the playfield"
             />
             {inputsMenu}
             {keypressOverlayEnabled && (
@@ -881,6 +918,18 @@ export function ReplayControls({
             }`}
           >
             Black playfield
+          </button>
+
+          <button
+            type="button"
+            onClick={onToggleStoryboard}
+            title="Show the map's storyboard behind (and over) the playfield"
+            aria-pressed={storyboardOn}
+            className={`order-11 sm:order-none px-2 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors ${
+              storyboardOn ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
+            }${storyboardLoading ? " animate-pulse" : ""}`}
+          >
+            Storyboard
           </button>
         </div>
       )}
@@ -1252,38 +1301,73 @@ function ShareTimestampTooltip({
   onClose: () => void;
   onCopied: () => void;
 }) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  // Esc closes it like every other transient layer on the stage. Clicking
+  // away closes it too, but via a window listener rather than a full-screen
+  // catcher div: that div used to swallow the stage's pointermove, which is
+  // what tells the Visual Settings drawer the pointer left its zone, so the
+  // drawer stayed pinned open for as long as this popover lived.
+  useEffect(() => {
+    if (!shareUrl) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      onClose();
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (target && panelRef.current?.contains(target)) return;
+      onClose();
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("pointerdown", onPointerDown, true);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("pointerdown", onPointerDown, true);
+    };
+  }, [shareUrl, onClose]);
+
+  const width = 292;
+  const left = typeof window === "undefined"
+    ? sharePos.x
+    : Math.max(8, Math.min(sharePos.x - width / 2, window.innerWidth - width - 8));
+
   return (
     <AnimatePresence>
       {shareUrl && (
         <>
-          <div className="fixed inset-0 z-[99]" onClick={onClose} />
+          {/* One quiet row in the viewer's near-black chrome: the timestamp
+              you right-clicked, the link, and the copy action. */}
           <motion.div
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 4 }}
-            transition={{ duration: 0.1 }}
-            style={{ left: Math.min(sharePos.x, window.innerWidth - 340), top: sharePos.y - 8 }}
-            className="fixed -translate-y-full z-[100] bg-osu-b3 border border-osu-b2 rounded-lg shadow-2xl p-2.5 w-80"
+            ref={panelRef}
+            initial={{ opacity: 0, y: 6, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 6, scale: 0.97 }}
+            transition={{ duration: 0.12 }}
+            style={{ left, top: sharePos.y - 14, width }}
+            className="fixed z-[100] flex -translate-y-full items-center gap-2 rounded-lg border border-white/10 bg-[#0b0b11]/95 p-1.5 shadow-[0_10px_40px_rgba(0,0,0,0.65)] backdrop-blur-sm"
           >
-            <div className="text-[11px] text-osu-f1 mb-1.5">Copy URL at {shareLabel}</div>
-            <div className="flex gap-1.5">
-              <input
-                type="text"
-                readOnly
-                value={shareUrl}
-                className="flex-1 min-w-0 bg-osu-b4 text-[10px] text-osu-f0 rounded px-2 py-1 border border-osu-b2 outline-none select-all"
-                onFocus={(e) => e.target.select()}
-              />
-          <button
-            onClick={() => {
-              navigator.clipboard.writeText(shareUrl);
-              onCopied();
-            }}
-                className="px-2.5 py-1 rounded bg-osu-pink hover:bg-osu-pink-light text-white text-[11px] font-medium transition-colors cursor-pointer shrink-0"
-              >
-                {copied ? "Copied!" : "Copy"}
-              </button>
-            </div>
+            <span className="shrink-0 pl-1 text-[12px] font-bold tabular-nums text-white/90">{shareLabel}</span>
+            <input
+              type="text"
+              readOnly
+              value={shareUrl}
+              className="min-w-0 flex-1 select-all truncate rounded bg-black/40 px-2 py-1.5 text-[11px] text-white/55 outline-none"
+              onFocus={(e) => e.target.select()}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                void copyTextToClipboard(shareUrl);
+                onCopied();
+              }}
+              className={`flex shrink-0 items-center gap-1 rounded px-2.5 py-1.5 text-[11px] font-bold transition-colors cursor-pointer ${
+                copied ? "text-osu-green" : "bg-osu-pink text-white hover:bg-osu-pink-light"
+              }`}
+            >
+              {copied ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : null}
+              {copied ? "Copied" : "Copy"}
+            </button>
           </motion.div>
         </>
       )}

@@ -237,7 +237,11 @@ describe("ManiaReplayRenderer skin customization", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
     expect(source).toContain("private renderModIcons(layout: Layout");
-    expect(source).toContain("MOD_BADGE_COLORS[acronym]");
+    // Stable uses the extracted selection-mod sprites, lazer the tinted
+    // shield + glyph art shared with the site's ModBadge component.
+    expect(source).toContain("/images/badges/mods/stable/");
+    expect(source).toContain("MOD_BADGE_TYPE_COLORS[acronym]");
+    expect(source).toContain("MOD_BADGE_FILE_NAMES[acronym]");
     // Stable fades the stack out after the map starts; lazer keeps it.
     expect(source).toContain("const fadeStart = this.firstNoteTime + 3000;");
   });
@@ -258,8 +262,10 @@ describe("ManiaReplayRenderer skin customization", () => {
     const match = /private renderCircleReceptors\(layout: Layout\) \{([\s\S]*?)\n  \}/.exec(source);
 
     expect(match?.[1]).toBeTruthy();
-    expect(match![1]).toContain('this.circle(');
+    expect(match![1]).toContain("this.strokeCircle(");
     expect(match![1]).toContain("pressed ? 1 : 0.5");
+    // Presses brighten the ring only; no interior fill, beam, or glow.
+    expect(match![1]).not.toContain("this.circle(");
     expect(match![1]).not.toContain("receptorBeam");
     expect(match![1]).not.toContain("flashIntensity");
   });

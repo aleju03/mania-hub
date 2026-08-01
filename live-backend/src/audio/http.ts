@@ -7,6 +7,7 @@ import {
   type PreparedBeatmapAudio,
 } from "./beatmap-audio.js";
 import { HITSOUND_BUNDLE_MIME_TYPE, getPreparedHitsoundBundle } from "./hitsound-bundle.js";
+import { STORYBOARD_BUNDLE_MIME_TYPE, getPreparedStoryboardBundle } from "./storyboard-bundle.js";
 
 const AUDIO_CACHE_HEADERS = {
   "cache-control": "public, max-age=300, s-maxage=300, stale-while-revalidate=3600",
@@ -256,6 +257,55 @@ export async function handleBeatmapHitsoundsRequest(
     res.end(bundle.buffer);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown hitsound extraction error";
+    sendAudioText(req, res, config, 404, message);
+  }
+}
+
+// GET /api/storyboard?beatmapsetId=…
+// Serves the set's storyboard bundle (root .osb + referenced images) as one
+// zip, or 302 to the R2 copy. An empty zip means the set has no storyboard.
+export async function handleBeatmapStoryboardRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  config: Config,
+  url: URL,
+): Promise<void> {
+  if (req.method !== "GET") {
+    sendAudioCors(req, res, config);
+    res.statusCode = 405;
+    res.setHeader("allow", "GET");
+    res.end("Method not allowed");
+    return;
+  }
+
+  const beatmapsetId = url.searchParams.get("beatmapsetId");
+  if (!beatmapsetId || !/^\d+$/.test(beatmapsetId)) {
+    sendAudioText(req, res, config, 400, "Invalid beatmapsetId");
+    return;
+  }
+
+  try {
+    const bundle = await getPreparedStoryboardBundle(config, beatmapsetId);
+    if (bundle.publicUrl) {
+      sendAudioCors(req, res, config);
+      res.statusCode = 302;
+      for (const [key, value] of Object.entries(AUDIO_CACHE_HEADERS)) res.setHeader(key, value);
+      res.setHeader("location", bundle.publicUrl);
+      res.end();
+      return;
+    }
+    if (!bundle.buffer) {
+      sendAudioText(req, res, config, 404, "Storyboard is not available");
+      return;
+    }
+    sendAudioCors(req, res, config);
+    res.statusCode = 200;
+    for (const [key, value] of Object.entries(AUDIO_IMMUTABLE_CACHE_HEADERS)) res.setHeader(key, value);
+    res.setHeader("content-type", STORYBOARD_BUNDLE_MIME_TYPE);
+    res.setHeader("content-length", String(bundle.buffer.length));
+    res.end(bundle.buffer);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown storyboard extraction error";
     sendAudioText(req, res, config, 404, message);
   }
 }

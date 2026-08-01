@@ -18,7 +18,12 @@ import { buildStableReplayComboEvents, resolveReplayJudgementEvents } from "../.
 import type { HitsoundAnchor, ReplayHitsoundTrigger } from "../../lib/replay-hitsounds";
 import { buildComboBreakSoundTimes, buildHitsoundAnchorsByColumn, selectHitsoundAnchor } from "../../lib/replay-hitsounds";
 import { MANIA_FLASHLIGHT_DIM_ALPHA, dampManiaHiddenCoverageReference, getManiaFlashlightBand, getManiaHiddenAlphaAtY, getManiaHiddenCoverageReference, getManiaHiddenCoverageReferencePx, getManiaHiddenFadePx } from "../../lib/replay-visibility-mods";
+import { StoryboardActiveSet, createStoryboardSpriteState, evaluateStoryboardSprite } from "../../lib/storyboard/timeline";
+import { SB_LAYER_COUNT, SB_LAYER_FAIL, SB_LAYER_OVERLAY, STORYBOARD_HEIGHT, STORYBOARD_WIDTH } from "../../lib/storyboard/types";
+import type { CompiledStoryboardSprite, ReplayStoryboardData } from "../../lib/storyboard/types";
+import { peekStoryboardTexture, releaseStoryboardTexture, retainStoryboardTexture } from "./replay-storyboard-textures";
 import { formatPixiRendererType } from "./renderer-debug";
+import { MOD_BADGE_FILE_NAMES, MOD_BADGE_TYPE_COLORS } from "../ui/ModBadge";
 
 type ReplaySegment = {
   start: number;
@@ -29,6 +34,8 @@ export interface ReplayLeaderboardEntry {
   name: string;
   score: number;
   combo: number;
+  /** Real board position; the display never renumbers rows live. */
+  rank?: number;
 }
 
 type ReplayLeaderboardRowKind = "other" | "target" | "player";
@@ -59,29 +66,67 @@ const JUDGMENT_LABELS: Record<number, string> = {
   1: "MAX", 2: "300", 3: "200", 4: "100", 5: "50", 6: "MISS",
 };
 
-// Mod badge tints, loosely following the clients' icon colors: green for
-// difficulty reductions, red/orange for increases, blue for rate-ups, yellow
-// for visibility mods, violet for conversions.
-const MOD_BADGE_COLORS: Record<string, string> = {
-  EZ: "#88da20",
-  NF: "#88da20",
-  HT: "#88da20",
-  DC: "#88da20",
-  HR: "#ff6666",
-  DT: "#66ccff",
-  NC: "#66ccff",
-  HD: "#ffcc22",
-  FI: "#ffcc22",
-  FL: "#ffcc22",
-  CO: "#ffcc22",
-  MR: "#b3a0ff",
-  DA: "#b3a0ff",
-  CS: "#b3a0ff",
-  NR: "#b3a0ff",
-  HO: "#b3a0ff",
-  AT: "#9aa0b0",
-  CN: "#9aa0b0",
+// The classic selection-mod sprites extracted from the stable default skin,
+// keyed by acronym; the rarer entries only exist as @1x art. ScoreV2 comes
+// through as either "SV2" or "V2" depending on the source.
+const STABLE_MOD_ICON_FILES: Record<string, string> = {
+  EZ: "EZ", NF: "NF", HT: "HT", HR: "HR", SD: "SD", PF: "PF",
+  DT: "DT", NC: "NC", HD: "HD", FI: "FI", FL: "FL", RD: "RD",
+  MR: "MR", AT: "AT", CN: "CN", SV2: "SV2", V2: "SV2",
+  "1K": "1K", "2K": "2K", "3K": "3K", "4K": "4K", "5K": "5K",
+  "6K": "6K", "7K": "7K", "8K": "8K", "9K": "9K", "10K": "10K",
 };
+
+const stableModIconAssets = new Map<string, ReplaySkinImageAsset>();
+
+function getStableModIconAsset(acronym: string): ReplaySkinImageAsset | null {
+  const file = STABLE_MOD_ICON_FILES[acronym];
+  if (!file) return null;
+  let asset = stableModIconAssets.get(file);
+  if (!asset) {
+    asset = { name: `mod-${file}`, src: `/images/badges/mods/stable/${file}.png` };
+    stableModIconAssets.set(file, asset);
+  }
+  return asset;
+}
+
+// Lazer badges reuse the site's ModBadge art: the white shield SVG tinted by
+// mod type with the white glyph SVG tinted dark on top.
+const LAZER_MOD_BADGE_SHAPE_ASSET: ReplaySkinImageAsset = { name: "mod-badge-shape", src: "/images/badges/mods/mod-icon.svg" };
+// The shield SVG viewBox; the glyph sheets share its aspect with their own
+// built-in padding, so both draw into the same rect.
+const LAZER_MOD_BADGE_ASPECT = 100 / 70;
+
+const lazerModGlyphAssets = new Map<string, ReplaySkinImageAsset>();
+
+function getLazerModGlyphAsset(file: string): ReplaySkinImageAsset {
+  let asset = lazerModGlyphAssets.get(file);
+  if (!asset) {
+    asset = { name: `mod-glyph-${file}`, src: `/images/badges/mods/mod-${file}.svg` };
+    lazerModGlyphAssets.set(file, asset);
+  }
+  return asset;
+}
+
+// color-mix(in srgb-linear, black, color 10%), matching the glyph color the
+// ModBadge component computes in CSS; the canvas needs it as a concrete hex.
+const darkenedModColorCache = new Map<string, string>();
+
+function darkenModBadgeColor(hex: string): string {
+  let darkened = darkenedModColorCache.get(hex);
+  if (!darkened) {
+    const channel = (offset: number) => {
+      const raw = parseInt(hex.slice(offset, offset + 2), 16) / 255;
+      const linear = raw <= 0.04045 ? raw / 12.92 : ((raw + 0.055) / 1.055) ** 2.4;
+      const mixed = linear * 0.1;
+      const srgb = mixed <= 0.0031308 ? mixed * 12.92 : 1.055 * mixed ** (1 / 2.4) - 0.055;
+      return Math.round(srgb * 255).toString(16).padStart(2, "0");
+    };
+    darkened = `#${channel(1)}${channel(3)}${channel(5)}`;
+    darkenedModColorCache.set(hex, darkened);
+  }
+  return darkened;
+}
 
 const HOLD_VISUAL_GRACE_MS = 60;
 const BACKGROUND_FADE_DURATION_MS = 180;
@@ -328,6 +373,32 @@ export class ManiaReplayRenderer {
   private backgroundLayer = new Container();
   private backgroundSprite: Sprite | null = null;
   private previousBackgroundSprite: Sprite | null = null;
+  private storyboardData: ReplayStoryboardData | null = null;
+  private storyboardActiveSet: StoryboardActiveSet | null = null;
+  // Opaque base under the storyboard (osu! renders storyboards on black).
+  private storyboardBackdrop = new Graphics();
+  // Background/Fail/Pass/Foreground layers + the map background, under the
+  // playfield; the dim rect sits between them and the playfield.
+  private storyboardBackRoot = new Container();
+  private storyboardDim = new Graphics();
+  // Overlay layer, above the notes but below HUD text.
+  private storyboardOverlayRoot = new Container();
+  private storyboardLayerContainers: Container[] = [];
+  private storyboardBackgroundSprite: Sprite | null = null;
+  private storyboardMaskBack: Graphics | null = null;
+  private storyboardMaskOverlay: Graphics | null = null;
+  private storyboardPixiBySprite = new Map<CompiledStoryboardSprite, Sprite>();
+  private storyboardSpritePool: Sprite[] = [];
+  private storyboardRetainedUrls: string[] = [];
+  private storyboardScratchState = createStoryboardSpriteState();
+  private storyboardShapesW = 0;
+  private storyboardShapesH = 0;
+  private storyboardShapesDim = -1;
+  private storyboardReadyPromise: Promise<void> = Promise.resolve();
+  // The storyboard only draws once every texture is resident; until then the
+  // stage stays transparent so the page's normal background keeps showing
+  // instead of a half-loaded flash.
+  private storyboardTexturesReady = false;
   private receptorBeamGradients = new Map<string, FillGradient>();
   private inputHistoryTopFadeGradient: FillGradient | null = null;
   private flashlightFadeToClearGradient: FillGradient | null = null;
@@ -403,6 +474,10 @@ export class ManiaReplayRenderer {
   // constructor; surfaced to crash diagnostics to catch main-thread hangs.
   private judgementBuildMs: number | null = null;
   private overlayHitboxes: ReplayOverlayHitbox[] = [];
+  private overlayCloseButtons: Array<{ id: ReplayOverlayId; x: number; y: number; radius: number }> = [];
+  // Set when a close button eats a press: the release then lands on bare
+  // playfield (the overlay is gone) and must not read as click-to-pause.
+  private suppressPlayfieldClickAt = -Infinity;
   private selectedOverlayIds = new Set<ReplayOverlayId>();
   private activeOverlayPointers = new Map<number, { id: ReplayOverlayId; x: number; y: number }>();
   private previousCanvasTouchAction = "";
@@ -488,12 +563,19 @@ export class ManiaReplayRenderer {
   private leaderboardPrevRank: number | null = null;
   private leaderboardFlashAt = -Infinity;
   private leaderboardAnimTs = 0;
+  private leaderboardGlowAsset: ReplaySkinImageAsset | null = null;
   private suppressOvertakeFlash = false;
+  private spectatorCount = 0;
   private starRatingTimeline: ManiaStarRatingTimelinePoint[] = [];
   private ppModMultiplier = 1;
   private leftHandMisses = 0;
   private rightHandMisses = 0;
   private recentHitOffsets: number[] = [];
+  private recentHitTimes: number[] = [];
+  // Wall-clock eased position of the hit-error average marker; both clients
+  // glide it toward each new value instead of snapping per hit.
+  private hitErrorAvgDisplayed: number | null = null;
+  private hitErrorAvgTs = 0;
   private lastJudgment: Judgment = 0;
   private lastJudgmentTime = 0;
 
@@ -697,6 +779,7 @@ export class ManiaReplayRenderer {
 
     this.buildHitsoundTimeline();
 
+    this.setupStoryboardContainers();
     this.measureCanvas();
     this.installTextFontInvalidation();
     this.initPromise = this.initPixi();
@@ -754,9 +837,13 @@ export class ManiaReplayRenderer {
     this.canvas.addEventListener("webglcontextlost", this.handleContextLost);
     this.canvas.addEventListener("webglcontextrestored", this.handleContextRestored);
     app.stage.addChild(this.backgroundLayer);
+    app.stage.addChild(this.storyboardBackdrop);
+    app.stage.addChild(this.storyboardBackRoot);
+    app.stage.addChild(this.storyboardDim);
     app.stage.addChild(this.staticGraphics);
     app.stage.addChild(this.graphics);
     app.stage.addChild(this.skinSpriteLayer);
+    app.stage.addChild(this.storyboardOverlayRoot);
     app.stage.addChild(this.textLayer);
     app.stage.addChild(this.comboTextLayer);
     this.rebuildBackgroundSprites();
@@ -829,6 +916,13 @@ export class ManiaReplayRenderer {
     if (!this._isPlaying) this.render();
   }
 
+  // Live anonymous watcher count shown osu!-style above the scoreboard.
+  setSpectatorCount(count: number) {
+    if (this.spectatorCount === count) return;
+    this.spectatorCount = count;
+    if (!this._isPlaying) this.render();
+  }
+
   private generateColors(n: number): string[] {
     return Array.from({ length: n }, (_, i) => `#${Math.floor(0xffffff * (0.45 + 0.55 * Math.sin((i / n) * Math.PI))).toString(16).padStart(6, "0")}`);
   }
@@ -849,6 +943,8 @@ export class ManiaReplayRenderer {
     this.leftHandMisses = 0;
     this.rightHandMisses = 0;
     this.recentHitOffsets = [];
+    this.recentHitTimes = [];
+    this.hitErrorAvgDisplayed = null;
     this.urSum = 0;
     this.urSumSq = 0;
     this.lastJudgment = 0;
@@ -951,10 +1047,12 @@ export class ManiaReplayRenderer {
       if (event.judgment <= 5) {
         const offset = event.offsetMs;
         this.recentHitOffsets.push(offset);
+        this.recentHitTimes.push(event.time);
         this.urSum += offset;
         this.urSumSq += offset * offset;
         if (this.recentHitOffsets.length > 40) {
           const removed = this.recentHitOffsets.shift()!;
+          this.recentHitTimes.shift();
           this.urSum -= removed;
           this.urSumSq -= removed * removed;
         }
@@ -1534,6 +1632,232 @@ export class ManiaReplayRenderer {
     if (!this._isPlaying) this.render();
   }
 
+  setStoryboard(data: ReplayStoryboardData | null) {
+    if (data === this.storyboardData) return;
+    this.clearStoryboardSprites();
+    for (const url of this.storyboardRetainedUrls) releaseStoryboardTexture(url);
+    this.storyboardRetainedUrls = [];
+    this.storyboardData = data;
+    this.storyboardActiveSet = data ? new StoryboardActiveSet(data.sprites) : null;
+    this.storyboardTexturesReady = false;
+    // Force the backdrop/dim/mask shapes to rebuild for the new storyboard.
+    this.storyboardShapesDim = -1;
+
+    if (data) {
+      const pending: Promise<unknown>[] = [];
+      for (const url of data.imageUrls.values()) {
+        this.storyboardRetainedUrls.push(url);
+        pending.push(retainStoryboardTexture(url));
+      }
+      if (data.backgroundImageUrl) {
+        this.storyboardRetainedUrls.push(data.backgroundImageUrl);
+        pending.push(retainStoryboardTexture(data.backgroundImageUrl));
+      }
+      const ready = Promise.all(pending).then(() => {});
+      this.storyboardReadyPromise = ready;
+      void ready.then(() => {
+        if (this.destroyed || this.storyboardData !== data) return;
+        this.storyboardTexturesReady = true;
+        if (!this._isPlaying) this.render();
+      });
+    } else {
+      this.storyboardReadyPromise = Promise.resolve();
+    }
+
+    this.rebuildStoryboardBackgroundSprite();
+    if (!this._isPlaying) this.render();
+  }
+
+  // Resolves when every storyboard texture finished loading (or failed); the
+  // video exporter awaits this so the first frames are not blank.
+  storyboardReady(): Promise<void> {
+    return this.storyboardReadyPromise;
+  }
+
+  private setupStoryboardContainers() {
+    for (let layer = 0; layer < SB_LAYER_COUNT; layer++) {
+      const container = new Container();
+      container.sortableChildren = true;
+      this.storyboardLayerContainers.push(container);
+      if (layer === SB_LAYER_OVERLAY) this.storyboardOverlayRoot.addChild(container);
+      else this.storyboardBackRoot.addChild(container);
+    }
+    // Replays show the passing state; the fail layer stays hidden.
+    this.storyboardLayerContainers[SB_LAYER_FAIL].visible = false;
+  }
+
+  private rebuildStoryboardBackgroundSprite() {
+    if (this.storyboardBackgroundSprite) {
+      this.storyboardBackgroundSprite.parent?.removeChild(this.storyboardBackgroundSprite);
+      this.storyboardBackgroundSprite.destroy({ texture: false, textureSource: false });
+      this.storyboardBackgroundSprite = null;
+    }
+    const url = this.storyboardData?.backgroundImageUrl;
+    if (!url) return;
+    const sprite = new Sprite(Texture.EMPTY);
+    this.storyboardBackgroundSprite = sprite;
+    this.storyboardBackRoot.addChildAt(sprite, 0);
+  }
+
+  private clearStoryboardSprites() {
+    for (const sprite of this.storyboardPixiBySprite.values()) this.releaseStoryboardSprite(sprite);
+    this.storyboardPixiBySprite.clear();
+  }
+
+  private releaseStoryboardSprite(sprite: Sprite) {
+    sprite.parent?.removeChild(sprite);
+    sprite.visible = false;
+    sprite.texture = Texture.EMPTY;
+    this.storyboardSpritePool.push(sprite);
+  }
+
+  private getStoryboardTexture(path: string): Texture {
+    const url = this.storyboardData?.imageUrls.get(path);
+    if (!url) return Texture.EMPTY;
+    return peekStoryboardTexture(url) ?? Texture.EMPTY;
+  }
+
+  // Backdrop, dim, and 4:3 mask only depend on canvas size and dim level;
+  // rebuilt when those change instead of every frame.
+  private updateStoryboardShapes(layout: Layout) {
+    if (
+      this.storyboardShapesW === layout.w &&
+      this.storyboardShapesH === layout.h &&
+      this.storyboardShapesDim === this.backgroundDim
+    ) {
+      return;
+    }
+    this.storyboardShapesW = layout.w;
+    this.storyboardShapesH = layout.h;
+    this.storyboardShapesDim = this.backgroundDim;
+
+    this.storyboardBackdrop.clear();
+    this.storyboardBackdrop.rect(0, 0, layout.w, layout.h).fill({ color: 0x000000, alpha: 1 });
+
+    this.storyboardDim.clear();
+    const dimAlpha = this.backgroundDim / 100;
+    if (dimAlpha > 0) {
+      this.storyboardDim.rect(0, 0, layout.w, layout.h).fill({ color: 0x000000, alpha: dimAlpha });
+    }
+
+    // Non-widescreen storyboards are clipped to the 4:3 storyboard area.
+    const widescreen = this.storyboardData?.widescreen ?? true;
+    if (!widescreen) {
+      const scale = layout.h / STORYBOARD_HEIGHT;
+      const maskWidth = STORYBOARD_WIDTH * scale;
+      const maskX = (layout.w - maskWidth) / 2;
+      if (!this.storyboardMaskBack) {
+        this.storyboardMaskBack = new Graphics();
+        this.storyboardBackRoot.addChild(this.storyboardMaskBack);
+        this.storyboardBackRoot.mask = this.storyboardMaskBack;
+      }
+      if (!this.storyboardMaskOverlay) {
+        this.storyboardMaskOverlay = new Graphics();
+        this.storyboardOverlayRoot.addChild(this.storyboardMaskOverlay);
+        this.storyboardOverlayRoot.mask = this.storyboardMaskOverlay;
+      }
+      for (const mask of [this.storyboardMaskBack, this.storyboardMaskOverlay]) {
+        mask.clear();
+        mask.rect(maskX, 0, maskWidth, layout.h).fill({ color: 0xffffff, alpha: 1 });
+      }
+    } else {
+      if (this.storyboardMaskBack) {
+        this.storyboardBackRoot.mask = null;
+        this.storyboardBackRoot.removeChild(this.storyboardMaskBack);
+        this.storyboardMaskBack.destroy();
+        this.storyboardMaskBack = null;
+      }
+      if (this.storyboardMaskOverlay) {
+        this.storyboardOverlayRoot.mask = null;
+        this.storyboardOverlayRoot.removeChild(this.storyboardMaskOverlay);
+        this.storyboardMaskOverlay.destroy();
+        this.storyboardMaskOverlay = null;
+      }
+    }
+  }
+
+  private positionStoryboardBackgroundSprite(layout: Layout) {
+    const sprite = this.storyboardBackgroundSprite;
+    if (!sprite) return;
+    const url = this.storyboardData?.backgroundImageUrl;
+    const texture = url ? peekStoryboardTexture(url) : null;
+    if (!texture || texture.width <= 0 || texture.height <= 0) {
+      sprite.visible = false;
+      return;
+    }
+    if (sprite.texture !== texture) sprite.texture = texture;
+    sprite.visible = true;
+    const imgAspect = texture.width / texture.height;
+    const canvasAspect = layout.w / layout.h;
+    if (imgAspect > canvasAspect) {
+      sprite.height = layout.h;
+      sprite.width = layout.h * imgAspect;
+    } else {
+      sprite.width = layout.w;
+      sprite.height = layout.w / imgAspect;
+    }
+    sprite.x = (layout.w - sprite.width) / 2;
+    sprite.y = (layout.h - sprite.height) / 2;
+  }
+
+  private renderStoryboard(layout: Layout) {
+    const data = this.storyboardData;
+    const activeSet = this.storyboardActiveSet;
+    const hasStoryboard = data != null && activeSet != null && this.storyboardTexturesReady;
+    this.storyboardBackdrop.visible = hasStoryboard;
+    this.storyboardBackRoot.visible = hasStoryboard;
+    this.storyboardDim.visible = hasStoryboard;
+    this.storyboardOverlayRoot.visible = hasStoryboard;
+    if (!hasStoryboard) return;
+
+    this.updateStoryboardShapes(layout);
+    this.positionStoryboardBackgroundSprite(layout);
+
+    // Storyboard space is 640x480 scaled to the canvas height and centered;
+    // widescreen sprites simply extend beyond the 640-wide band.
+    const scale = layout.h / STORYBOARD_HEIGHT;
+    const offsetX = (layout.w - STORYBOARD_WIDTH * scale) / 2;
+    for (const container of this.storyboardLayerContainers) {
+      container.position.set(offsetX, 0);
+      container.scale.set(scale);
+    }
+
+    const t = this.currentTime;
+    const update = activeSet.update(t);
+    for (const sprite of update.exited) {
+      const pixi = this.storyboardPixiBySprite.get(sprite);
+      if (pixi) {
+        this.storyboardPixiBySprite.delete(sprite);
+        this.releaseStoryboardSprite(pixi);
+      }
+    }
+    for (const sprite of update.entered) {
+      const pixi = this.storyboardSpritePool.pop() ?? new Sprite();
+      pixi.visible = true;
+      this.storyboardLayerContainers[sprite.layer].addChild(pixi);
+      // Declaration order decides stacking within a layer.
+      pixi.zIndex = sprite.order;
+      this.storyboardPixiBySprite.set(sprite, pixi);
+    }
+
+    const state = this.storyboardScratchState;
+    for (const sprite of update.active) {
+      const pixi = this.storyboardPixiBySprite.get(sprite);
+      if (!pixi) continue;
+      evaluateStoryboardSprite(sprite, t, state);
+      const path = sprite.framePaths ? sprite.framePaths[state.frameIndex] : sprite.filePath;
+      const texture = this.getStoryboardTexture(path);
+      if (pixi.texture !== texture) pixi.texture = texture;
+      pixi.anchor.set(sprite.originX, sprite.originY);
+      pixi.position.set(state.x, state.y);
+      pixi.scale.set(state.flipH ? -state.scaleX : state.scaleX, state.flipV ? -state.scaleY : state.scaleY);
+      pixi.rotation = state.rotation;
+      pixi.alpha = state.alpha;
+      pixi.tint = state.tint;
+      pixi.blendMode = state.additive ? "add" : "normal";
+    }
+  }
+
   setShowInputOverlay(show: boolean) {
     this.showInputOverlay = show;
     if (!this._isPlaying) this.render();
@@ -1569,6 +1893,40 @@ export class ManiaReplayRenderer {
   get time() { return this.currentTime; }
   get duration() { return this.totalDuration; }
   get displayDuration() { return this.totalDuration / this.modRate; }
+
+  // True when the given client point lands on the bare playfield: inside the
+  // lanes and clear of every draggable overlay. Lets the page treat a click
+  // there as play/pause without stealing overlay drags.
+  isPlayfieldClickPoint(clientX: number, clientY: number): boolean {
+    if (performance.now() - this.suppressPlayfieldClickAt < 700) {
+      this.suppressPlayfieldClickAt = -Infinity;
+      return false;
+    }
+    const rect = this.canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    const x = (clientX - rect.left) * (this.cssWidth / rect.width);
+    const y = (clientY - rect.top) * (this.cssHeight / rect.height);
+    const layout = this.cachedLayout ?? this.getLayout();
+    if (x < layout.playfieldX || x > layout.playfieldX + layout.playfieldWidth) return false;
+    if (y < 0 || y > layout.h) return false;
+    return this.getOverlayAtPoint(x, y) == null;
+  }
+
+  // Support for the stage's right-click overlay menu: which overlay (if any)
+  // sits under a client point, and whether overlays are editable here at all
+  // (they are not on phones or with the HUD hidden).
+  getOverlayIdAtClientPoint(clientX: number, clientY: number): ReplayOverlayId | null {
+    const rect = this.canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    const x = (clientX - rect.left) * (this.cssWidth / rect.width);
+    const y = (clientY - rect.top) * (this.cssHeight / rect.height);
+    return this.getOverlayAtPoint(x, y)?.id ?? null;
+  }
+
+  canEditOverlays(): boolean {
+    const layout = this.cachedLayout ?? this.getLayout();
+    return !this.hideHud && this.shouldRenderCustomOverlays(layout);
+  }
 
   private installOverlayPointerHandlers() {
     this.previousCanvasTouchAction = this.canvas.style.touchAction;
@@ -1612,6 +1970,13 @@ export class ManiaReplayRenderer {
 
   private getOverlaySelectionPad(): number {
     return Math.max(2, Math.min(5, this.cssWidth * 0.004));
+  }
+
+  private getOverlayCloseButtonAtPoint(x: number, y: number): { id: ReplayOverlayId; x: number; y: number; radius: number } | null {
+    for (const button of this.overlayCloseButtons) {
+      if (Math.hypot(x - button.x, y - button.y) <= button.radius) return button;
+    }
+    return null;
   }
 
   private getOverlayInteractionFrame(box: ReplayOverlayHitbox): ReplayOverlayHitbox {
@@ -1719,6 +2084,7 @@ export class ManiaReplayRenderer {
   }
 
   private getOverlayPointerCursor(x: number, y: number): string {
+    if (this.getOverlayCloseButtonAtPoint(x, y)) return "pointer";
     const hitbox = this.getOverlayAtPoint(x, y);
     if (!hitbox) return "";
     const direction = this.getOverlayResizeDirection(hitbox, x, y);
@@ -1761,6 +2127,17 @@ export class ManiaReplayRenderer {
   private handleOverlayPointerDown = (event: PointerEvent) => {
     if (event.button !== 0 || this.hideHud) return;
     const point = this.getCanvasPointerPoint(event);
+    if (this.canUseDesktopOverlaySelection(event)) {
+      const closeButton = this.getOverlayCloseButtonAtPoint(point.x, point.y);
+      if (closeButton) {
+        this.selectedOverlayIds.delete(closeButton.id);
+        this.suppressPlayfieldClickAt = performance.now();
+        this.updateOverlayPlacement(closeButton.id, { enabled: false });
+        this.canvas.style.cursor = "";
+        event.preventDefault();
+        return;
+      }
+    }
     const hitbox = this.getOverlayAtPoint(point.x, point.y);
     const desktopSelection = this.canUseDesktopOverlaySelection(event);
     if (!hitbox) {
@@ -2086,9 +2463,11 @@ export class ManiaReplayRenderer {
   }
 
   private resetFpsCounter(now = performance.now()) {
+    // Restart the sampling window but keep the last reading on screen:
+    // zeroing it made the corner counter blink out for the first half-second
+    // after every resume.
     this.fpsSampleStartedAt = now;
     this.fpsFrameCount = 0;
-    this.measuredFps = 0;
   }
 
   private updateFpsCounter(now: number) {
@@ -2133,6 +2512,7 @@ export class ManiaReplayRenderer {
     this.beginTextFrame();
 
     this.renderBackground(layout);
+    this.renderStoryboard(layout);
     this.renderSegmentOverlays(layout);
     if (this.showInputOverlay && this.inputOverlayOnly) {
       this.renderInputOverlayNotes(layout);
@@ -2982,7 +3362,7 @@ export class ManiaReplayRenderer {
     for (let col = 0; col < this.keyCount; col++) {
       const { x, width: colWidth } = this.getColumnLayout(col, layout);
       const pressed = (currentState & (1 << col)) !== 0;
-      this.circle(x + colWidth / 2, receptorCenterY, radius, "#ffffff", pressed ? 0.14 : 0);
+      // Presses brighten the ring only; filling the inside reads as a note.
       this.strokeCircle(x + colWidth / 2, receptorCenterY, radius, "#ffffff", pressed ? 1 : 0.5, strokeWidth);
     }
   }
@@ -3121,17 +3501,25 @@ export class ManiaReplayRenderer {
     return { frame, metrics };
   }
 
+  // Accuracy travels with the progress pie as one unit like the ingame
+  // cluster; enabling the standalone progress overlay detaches the pie.
   private renderAccuracyOverlay(layout: Layout) {
     const scale = this.getOverlayScale(layout, "accuracy");
-    const width = this.getTextOverlayWidth(this.hudCachedAccuracy, 18 * scale, scale, "700");
+    const fontSize = 18 * scale;
+    const textWidth = this.getTextOverlayWidth(this.hudCachedAccuracy, fontSize, scale, "700");
     const height = 26 * scale;
-    const frame = this.getOverlayFrame(layout, "accuracy", width, height);
+    const pieAttached = !this.overlaySettings.progress.enabled;
+    const pieRadius = fontSize * 0.54;
+    const pieSpan = pieAttached ? pieRadius * 2 + 6 * scale : 0;
+    const frame = this.getOverlayFrame(layout, "accuracy", pieSpan + textWidth, height);
     if (!frame) return;
-    this.addText(this.hudCachedAccuracy, frame.x, frame.y, {
-      fontSize: 18 * scale,
+    if (pieAttached) this.drawProgressPie(frame.x + pieRadius, frame.y + height / 2, pieRadius);
+    this.addText(this.hudCachedAccuracy, frame.x + pieSpan, frame.y + height / 2, {
+      fontSize,
       fill: "#ffffff",
       alpha: 0.85,
       fontWeight: "700",
+      anchorY: 0.5,
     });
   }
 
@@ -3281,6 +3669,7 @@ export class ManiaReplayRenderer {
   }
 
   private renderOverlaySelectionAffordances(layout: Layout) {
+    this.overlayCloseButtons = [];
     if (!this.shouldRenderCustomOverlays(layout) || this.hideHud) return;
     this.pruneSelectedOverlays();
 
@@ -3289,6 +3678,17 @@ export class ManiaReplayRenderer {
       const pad = this.getOverlaySelectionPad();
       this.fillRect(box.x - pad, box.y - pad, box.width + pad * 2, box.height + pad * 2, "#5a8fff", 0.08);
       this.rect(box.x - pad, box.y - pad, box.width + pad * 2, box.height + pad * 2, "#5a8fff", 0.9, Math.max(1, layout.w * 0.0016));
+      // Close button on the outline's top-right corner: one click disables
+      // the overlay, same as unticking it in the settings.
+      const radius = 8;
+      const cx = Math.min(layout.w - radius - 1, box.x + box.width + pad);
+      const cy = Math.max(radius + 1, box.y - pad);
+      this.circle(cx, cy, radius, "#14141d", 0.96);
+      this.strokeCircle(cx, cy, radius, "#5a8fff", 0.9, Math.max(1, layout.w * 0.0012));
+      const arm = radius * 0.38;
+      this.line(cx - arm, cy - arm, cx + arm, cy + arm, "#ffffff", 0.92, 1.4);
+      this.line(cx - arm, cy + arm, cx + arm, cy - arm, "#ffffff", 0.92, 1.4);
+      this.overlayCloseButtons.push({ id: box.id, x: cx, y: cy, radius: radius + 4 });
     }
 
     const marquee = this.getSelectionRect();
@@ -3501,10 +3901,12 @@ export class ManiaReplayRenderer {
   }
 
   // --- osu!-style fixed HUD -------------------------------------------------
-  // Both clients anchor the score in the top-right corner with the progress
-  // pie + accuracy under it, so nothing sits over the centered playfield.
-  // Stable formats the score zero-padded to 8 digits, lazer comma-separated.
-  // Fixed like the real clients, not draggable.
+  // Both clients anchor the score in the top-right corner, so nothing sits
+  // over the centered playfield. Stable formats the score zero-padded to 8
+  // digits, lazer comma-separated. Fixed like the real clients, not
+  // draggable; the pie + accuracy cluster lives in the draggable "accuracy"
+  // overlay except on small layouts, where overlays don't render and it
+  // stays pinned under the score.
 
   private renderScoreBlock(layout: Layout) {
     const { w, h } = layout;
@@ -3519,25 +3921,37 @@ export class ManiaReplayRenderer {
 
     const accFontSize = scoreFontSize * 0.44;
     const accY = scoreTop + scoreFontSize * 1.12;
-    const accWidth = this.drawHudNumberText(this.hudCachedAccuracy, scoreRight, accY, accFontSize, "right", 0.92);
-    const pieRadius = accFontSize * 0.54;
-    this.drawProgressPie(
-      scoreRight - accWidth - pieRadius - 9 * hudScale,
-      accY + accFontSize * 0.62,
-      pieRadius,
-    );
-    this.renderModIcons(layout, scoreRight, accY + accFontSize * 1.7);
+    let modTop = accY + accFontSize * 1.7;
+    if (!this.shouldRenderCustomOverlays(layout)) {
+      // Phones draw the accuracy here (no draggable overlays), and 44% of
+      // an already-clamped score font lands around 8px; floor it readable.
+      const mobileAccSize = Math.max(13, accFontSize);
+      const accWidth = this.drawHudNumberText(this.hudCachedAccuracy, scoreRight, accY, mobileAccSize, "right", 0.92);
+      // On portrait phones the corner is already cramped; the accuracy
+      // number stands alone and the pie waits for landscape.
+      const portrait = typeof window !== "undefined" && window.innerHeight > window.innerWidth;
+      if (!portrait) {
+        const pieRadius = mobileAccSize * 0.54;
+        this.drawProgressPie(
+          scoreRight - accWidth - pieRadius - 9 * hudScale,
+          accY + mobileAccSize * 0.62,
+          pieRadius,
+        );
+      }
+      modTop = accY + mobileAccSize * 1.7;
+    }
+    this.renderModIcons(layout, scoreRight, modTop);
   }
 
-  // Mod badges under the accuracy, like the clients show the active mod
-  // stack. Stable fades them out a few seconds into the map; lazer keeps
-  // them up.
+  // Mod badges under the score block, drawn with the real client art: stable
+  // stamps its classic selection-mod sprites, lazer its tinted shield badges.
+  // Stable fades the stack out a few seconds into the map; lazer keeps it up.
   private renderModIcons(layout: Layout, rightX: number, topY: number) {
     const mods = this.modAcronyms.filter((mod) => mod && mod !== "CL");
     if (mods.length === 0) return;
 
     const isLazer = this.ruleset.accuracyMode === "lazer";
-    let alpha = 0.92;
+    let alpha = isLazer ? 0.94 : 1;
     if (!isLazer) {
       const fadeStart = this.firstNoteTime + 3000;
       const fadeProgress = (this.currentTime - fadeStart) / 800;
@@ -3546,37 +3960,95 @@ export class ManiaReplayRenderer {
     }
 
     const hudScale = this.getHudScale(layout);
-    const fontSize = 11 * hudScale;
-    const badgeHeight = 20 * hudScale;
+    if (isLazer) this.renderLazerModBadges(mods, rightX, topY, hudScale, alpha);
+    else this.renderStableModBadges(mods, rightX, topY, hudScale, alpha);
+  }
+
+  // Stable's square icons stack right-to-left with a slight overlap, the
+  // rightmost on top.
+  private renderStableModBadges(mods: string[], rightX: number, topY: number, hudScale: number, alpha: number) {
+    const iconHeight = 42 * hudScale;
+    const advance = iconHeight * 0.66;
+    const centerY = topY + iconHeight / 2;
+    const placed: { acronym: string; centerX: number }[] = [];
+    let centerX = rightX - iconHeight / 2;
+    for (let index = mods.length - 1; index >= 0; index--) {
+      placed.push({ acronym: mods[index], centerX });
+      centerX -= advance;
+    }
+    // Draw left-to-right so the overlap keeps the newer icon on top.
+    placed.reverse();
+    for (const icon of placed) {
+      const asset = getStableModIconAsset(icon.acronym);
+      if (asset) {
+        const width = this.getAssetWidthForHeight(asset, iconHeight, iconHeight);
+        this.drawSkinImage(asset, icon.centerX, centerY, width, iconHeight, 0.5, 0.5, alpha);
+      } else {
+        this.drawFallbackModPill(icon.acronym, icon.centerX, centerY, hudScale, alpha);
+      }
+    }
+  }
+
+  private renderLazerModBadges(mods: string[], rightX: number, topY: number, hudScale: number, alpha: number) {
+    const badgeHeight = 26 * hudScale;
+    const badgeWidth = badgeHeight * LAZER_MOD_BADGE_ASPECT;
     const gap = 5 * hudScale;
+    const inset = 1 * hudScale;
+    const centerY = topY + badgeHeight / 2;
     let x = rightX;
     for (let index = mods.length - 1; index >= 0; index--) {
       const acronym = mods[index];
-      const textWidth = this.measureTextWidth(acronym, fontSize, "700");
-      const badgeWidth = textWidth + 14 * hudScale;
       x -= badgeWidth;
-      this.roundRect(x, topY, badgeWidth, badgeHeight, 5 * hudScale, MOD_BADGE_COLORS[acronym] ?? "#9aa0b0", alpha);
-      this.addText(acronym, x + badgeWidth / 2, topY + badgeHeight / 2, {
-        fontSize,
-        fill: "#141414",
-        alpha: Math.min(1, alpha + 0.05),
-        fontWeight: "700",
-        anchorX: 0.5,
-        anchorY: 0.5,
-      });
+      const centerX = x + badgeWidth / 2;
+      const color = MOD_BADGE_TYPE_COLORS[acronym] ?? "#ff6666";
+      const glyphColor = darkenModBadgeColor(color);
+      this.drawSkinImage(LAZER_MOD_BADGE_SHAPE_ASSET, centerX, centerY, badgeWidth, badgeHeight, 0.5, 0.5, alpha, hexToNumber(color));
+      const glyphFile = MOD_BADGE_FILE_NAMES[acronym];
+      if (glyphFile) {
+        this.drawSkinImage(getLazerModGlyphAsset(glyphFile), centerX, centerY, badgeWidth - 2 * inset, badgeHeight - 2 * inset, 0.5, 0.5, alpha, hexToNumber(glyphColor));
+      } else {
+        this.addText(acronym, centerX, centerY, {
+          fontSize: 12 * hudScale,
+          fill: glyphColor,
+          alpha,
+          fontWeight: "700",
+          anchorX: 0.5,
+          anchorY: 0.5,
+        });
+      }
       x -= gap;
     }
   }
 
+  // For stable mods with no extracted sprite; keeps unknown acronyms visible.
+  private drawFallbackModPill(acronym: string, centerX: number, centerY: number, hudScale: number, alpha: number) {
+    const fontSize = 11 * hudScale;
+    const height = 20 * hudScale;
+    const width = this.measureTextWidth(acronym, fontSize, "700") + 14 * hudScale;
+    this.roundRect(centerX - width / 2, centerY - height / 2, width, height, 5 * hudScale, MOD_BADGE_TYPE_COLORS[acronym] ?? "#9aa0b0", alpha);
+    this.addText(acronym, centerX, centerY, {
+      fontSize,
+      fill: "#141414",
+      alpha: Math.min(1, alpha + 0.05),
+      fontWeight: "700",
+      anchorX: 0.5,
+      anchorY: 0.5,
+    });
+  }
+
   // The ingame leaderboard, stable-style: slots whose background fades out
   // to the right, name over score on the left, cyan combo bottom-right, and
-  // a big ghosted rank number filling the slot. The watched player's live
-  // simulated score climbs through the static rows; overtakes flash the
-  // player slot white (stable) or pulse it in the accent blue (lazer). It is
-  // a draggable overlay ("leaderboard") like the rest of the custom HUD.
+  // a big ghosted rank number filling the slot. Like stable, the board
+  // scrolls with the player while keeping the actual #1 pinned on top: on a
+  // full board you see #1 then fight #50 first, the ranks between counting
+  // down as the player climbs, overtaken slots sliding out below.
+  // Overtakes burst a soft white bloom over the player
+  // slot (stable) or pulse it in the accent blue (lazer). It is a draggable
+  // overlay ("leaderboard") like the rest of the custom HUD.
   private renderLeaderboard(layout: Layout) {
-    if (this.leaderboardEntries.length === 0 || !this.scoreSimulator) return;
     if (!this.shouldRenderCustomOverlays(layout)) return;
+    this.renderSpectatorLabel(layout);
+    if (this.leaderboardEntries.length === 0 || !this.scoreSimulator) return;
 
     const playerScore = this.scoreSimulator.value;
     const entries = this.leaderboardEntries;
@@ -3596,7 +4068,7 @@ export class ManiaReplayRenderer {
     }
 
     const scale = this.getOverlayScale(layout, "leaderboard");
-    const slotWidth = 185 * scale;
+    const slotWidth = 152 * scale;
     const slotHeight = 40 * scale;
     const gap = 2 * scale;
     const isLazer = this.ruleset.accuracyMode === "lazer";
@@ -3609,13 +4081,17 @@ export class ManiaReplayRenderer {
       kind: ReplayLeaderboardRowKind;
       rankNumber: number;
     }
+    // Like stable, other rows keep their real board ranks forever (no live
+    // renumbering when the player slides past), and the player is unranked
+    // until they actually overtake someone; from then on they wear the rank
+    // of whoever they most recently displaced.
     const merged: Row[] = entries.map((entry, index) => ({
       key: `e${index}`,
       name: entry.name,
       score: entry.score,
       combo: entry.combo,
       kind: "other" as ReplayLeaderboardRowKind,
-      rankNumber: 0,
+      rankNumber: entry.rank ?? index + 1,
     }));
     merged.splice(rank, 0, {
       key: "player",
@@ -3623,21 +4099,27 @@ export class ManiaReplayRenderer {
       score: playerScore,
       combo: this.combo,
       kind: "player",
-      rankNumber: 0,
+      rankNumber: rank < entries.length ? entries[rank].rank ?? rank + 1 : 0,
     });
-    merged.forEach((row, index) => {
-      row.rankNumber = index + 1;
-    });
+    // The visible stack pins the actual #1 on the first slot (stable always
+    // shows the top score you're chasing; if the watched player takes it,
+    // the pin naturally becomes the next best) and keeps the player on the
+    // bottom slot with the next targets in between, so the shown ranks count
+    // down as they climb. Near the top the pin merges into the contiguous
+    // list and overtaken scores fill in below.
     const maxRows = 6;
-    const rows = rank < maxRows
-      ? merged.slice(0, maxRows)
-      : [...merged.slice(0, maxRows - 1), merged[rank]];
+    const pinsTop = rank >= maxRows;
+    const windowBase = pinsTop ? rank - (maxRows - 2) : 0;
+    const rows = pinsTop
+      ? [merged[0], ...merged.slice(windowBase, rank + 1)]
+      : merged.slice(0, maxRows);
     const playerRowIndex = rows.findIndex((row) => row.kind === "player");
     if (playerRowIndex > 0 && rows[playerRowIndex - 1].kind === "other") {
       rows[playerRowIndex - 1].kind = "target";
     }
 
-    const totalHeight = rows.length * (slotHeight + gap) - gap;
+    const advance = slotHeight + gap;
+    const totalHeight = rows.length * advance - gap;
     const frame = this.getOverlayFrame(layout, "leaderboard", slotWidth, totalHeight);
     if (!frame) {
       this.leaderboardSlotYs.clear();
@@ -3645,21 +4127,79 @@ export class ManiaReplayRenderer {
       return;
     }
 
+    const freshMount = this.leaderboardSlotYs.size === 0;
     const dt = this.leaderboardAnimTs > 0 ? Math.min(120, nowWall - this.leaderboardAnimTs) : 16;
     this.leaderboardAnimTs = nowWall;
     const ease = 1 - Math.exp(-dt / 90);
     const seen = new Set<string>();
-    rows.forEach((row, index) => {
-      const targetY = frame.y + index * (slotHeight + gap);
+    const slotFor = (index: number): number | null => {
+      if (!pinsTop) return index <= maxRows ? index : null;
+      if (index === 0) return 0;
+      const slot = index - windowBase + 1;
+      return slot >= 1 && slot <= maxRows ? slot : null;
+    };
+    // Rows one slot beyond the window keep animating so overtaken scores
+    // slide out through the bottom (fading on the way) instead of vanishing.
+    // Entering targets spawn behind the pinned slot and slide down out of
+    // it; the pin and then the player draw last to stay on top of sliders.
+    let pinnedDraw: { row: Row; y: number } | null = null;
+    let playerDraw: { row: Row; y: number } | null = null;
+    merged.forEach((row, index) => {
+      const slot = slotFor(index);
+      if (slot == null) return;
+      const targetY = frame.y + slot * advance;
       const currentY = this.leaderboardSlotYs.get(row.key);
-      const y = currentY == null ? targetY : currentY + (targetY - currentY) * ease;
+      const y = currentY == null
+        ? (freshMount || slot === 0 || slot >= maxRows ? targetY : targetY - advance)
+        : currentY + (targetY - currentY) * ease;
       this.leaderboardSlotYs.set(row.key, y);
       seen.add(row.key);
-      this.drawLeaderboardSlot(row, frame.x, y, slotWidth, slotHeight, scale, isLazer, nowWall);
+      const overshoot = Math.max(frame.y - y, y + slotHeight - (frame.y + totalHeight));
+      const slideAlpha = overshoot > 0 ? Math.max(0, 1 - overshoot / slotHeight) : 1;
+      if (slideAlpha <= 0.02) return;
+      if (row.kind === "player") {
+        playerDraw = { row, y };
+        return;
+      }
+      if (pinsTop && index === 0) {
+        pinnedDraw = { row, y };
+        return;
+      }
+      this.drawLeaderboardSlot(row, frame.x, y, slotWidth, slotHeight, scale, isLazer, nowWall, slideAlpha);
     });
+    if (pinnedDraw != null) {
+      const draw = pinnedDraw as { row: Row; y: number };
+      this.drawLeaderboardSlot(draw.row, frame.x, draw.y, slotWidth, slotHeight, scale, isLazer, nowWall, 1);
+    }
+    if (playerDraw != null) {
+      const draw = playerDraw as { row: Row; y: number };
+      this.drawLeaderboardSlot(draw.row, frame.x, draw.y, slotWidth, slotHeight, scale, isLazer, nowWall, 1);
+    }
     for (const key of [...this.leaderboardSlotYs.keys()]) {
       if (!seen.has(key)) this.leaderboardSlotYs.delete(key);
     }
+  }
+
+  // osu!-style spectator counter (count only, never names) riding just above
+  // the scoreboard's slot. It is not an overlay itself: it follows the
+  // leaderboard's position but survives the board being Tab-hidden or
+  // removed outright, and is never draggable or selectable.
+  private renderSpectatorLabel(layout: Layout) {
+    if (this.spectatorCount <= 0) return;
+    const scale = this.getOverlayScale(layout, "leaderboard");
+    const height = 26 * scale;
+    const width = 152 * scale;
+    const placement = this.overlaySettings.leaderboard;
+    const anchorX = Math.max(0, Math.min(Math.max(0, layout.w - width), placement.x * layout.w));
+    const anchorY = Math.max(0, Math.min(Math.max(0, layout.h - height), placement.y * layout.h));
+    const y = Math.max(0, anchorY - height - 4 * scale);
+    this.addText(`Spectators (${this.spectatorCount})`, anchorX + 8 * scale, y + height / 2, {
+      fontSize: 15 * scale,
+      fill: "#ffffff",
+      alpha: 0.95,
+      fontWeight: "600",
+      anchorY: 0.5,
+    });
   }
 
   private getLeaderboardSlotGradient(color: string): FillGradient {
@@ -3691,46 +4231,62 @@ export class ManiaReplayRenderer {
     scale: number,
     isLazer: boolean,
     nowWall: number,
+    rowAlpha: number,
   ) {
     const flashElapsed = nowWall - this.leaderboardFlashAt;
-    const flashActive = row.kind === "player" && flashElapsed >= 0 && flashElapsed < 420;
-    const flashStrength = flashActive ? 1 - flashElapsed / 420 : 0;
+    const flashDuration = isLazer ? 420 : 800;
+    const flashActive = row.kind === "player" && flashElapsed >= 0 && flashElapsed < flashDuration;
+    const flashStrength = flashActive ? (1 - flashElapsed / flashDuration) ** 1.4 : 0;
 
     if (isLazer) {
       const radius = 9 * scale;
       const background = row.kind === "player" ? "#123a52" : row.kind === "target" ? "#4a1d1d" : "#000000";
       const backgroundAlpha = row.kind === "player" ? 0.82 : row.kind === "target" ? 0.62 : 0.55;
-      this.graphics.roundRect(x, y, width, height, radius).fill({ color: hexToNumber(background), alpha: backgroundAlpha });
+      this.graphics.roundRect(x, y, width, height, radius).fill({ color: hexToNumber(background), alpha: backgroundAlpha * rowAlpha });
       if (row.kind === "player") {
         this.graphics.roundRect(x, y, width, height, radius).stroke({
           color: hexToNumber("#66ccff"),
-          alpha: 0.55 + flashStrength * 0.45,
+          alpha: (0.55 + flashStrength * 0.45) * rowAlpha,
           width: Math.max(1.2, (1.4 + flashStrength * 1.6) * scale),
         });
       }
       if (flashActive) {
-        this.graphics.roundRect(x, y, width, height, radius).fill({ color: 0x66ccff, alpha: 0.4 * flashStrength });
+        this.graphics.roundRect(x, y, width, height, radius).fill({ color: 0x66ccff, alpha: 0.4 * flashStrength * rowAlpha });
       }
     } else {
       const background = row.kind === "player" ? "#1f4a6e" : row.kind === "target" ? "#6e1f1f" : "#0c0c12";
-      this.graphics.rect(x, y, width, height).fill({ fill: this.getLeaderboardSlotGradient(background), alpha: 1 });
+      this.graphics.rect(x, y, width, height).fill({ fill: this.getLeaderboardSlotGradient(background), alpha: rowAlpha });
       if (flashActive) {
-        this.fillRect(x, y, width, height, "#ffffff", 0.85 * flashStrength);
+        // Stable's overtake burst: the slot whites out hard while a huge
+        // soft bloom explodes from its left edge, bleeding well past the
+        // board; stacked layers push the core into overexposure.
+        this.fillRect(x, y, width, height, "#ffffff", 0.75 * flashStrength * rowAlpha);
+        const glow = this.getLeaderboardGlowAsset();
+        if (glow) {
+          const glowCx = x + width * 0.16;
+          const glowCy = y + height / 2;
+          this.drawSkinImage(glow, glowCx, glowCy, width * 3, height * 5, 0.5, 0.5, 0.95 * flashStrength * rowAlpha);
+          this.drawSkinImage(glow, glowCx, glowCy, width * 1.6, height * 2.6, 0.5, 0.5, flashStrength * rowAlpha);
+          this.drawSkinImage(glow, glowCx, glowCy, width * 0.9, height * 1.5, 0.5, 0.5, flashStrength * rowAlpha);
+        }
       }
     }
 
-    // Ghosted rank number filling the slot's right side, stable-style.
-    this.addText(String(row.rankNumber), x + width - 5 * scale, y + height * 0.52, {
-      fontSize: height * 0.82,
-      fill: "#ffffff",
-      alpha: row.kind === "player" ? 0.28 : 0.15,
-      fontWeight: "700",
-      tabularNums: true,
-      anchorX: 1,
-      anchorY: 0.5,
-    });
+    // Ghosted rank number filling the slot's right side, stable-style. An
+    // unranked player slot (hasn't overtaken anyone yet) shows none.
+    if (row.rankNumber > 0) {
+      this.addText(String(row.rankNumber), x + width - 5 * scale, y + height * 0.52, {
+        fontSize: height * 0.82,
+        fill: "#ffffff",
+        alpha: (row.kind === "player" ? 0.28 : 0.15) * rowAlpha,
+        fontWeight: "700",
+        tabularNums: true,
+        anchorX: 1,
+        anchorY: 0.5,
+      });
+    }
 
-    const textAlpha = row.kind === "other" ? 0.85 : 0.97;
+    const textAlpha = (row.kind === "other" ? 0.85 : 0.97) * rowAlpha;
     this.addText(row.name, x + 7 * scale, y + 3 * scale, {
       fontSize: 13 * scale,
       fill: "#ffffff",
@@ -3747,11 +4303,36 @@ export class ManiaReplayRenderer {
     this.addText(`${row.combo.toLocaleString("en-US")}x`, x + width - 8 * scale, y + height - 3 * scale, {
       fontSize: 11.5 * scale,
       fill: isLazer ? "#66ccff" : "#7fd8f2",
-      alpha: 0.95,
+      alpha: 0.95 * rowAlpha,
       tabularNums: true,
       anchorX: 1,
       anchorY: 1,
     });
+  }
+
+  // A radial white falloff rendered once to a canvas; the overtake bloom
+  // stretches it into wide soft ellipses over the player slot.
+  private getLeaderboardGlowAsset(): ReplaySkinImageAsset | null {
+    if (this.leaderboardGlowAsset) return this.leaderboardGlowAsset;
+    if (typeof document === "undefined") return null;
+    const size = 256;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+    const gradient = context.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    gradient.addColorStop(0, "rgba(255,255,255,1)");
+    gradient.addColorStop(0.22, "rgba(255,255,255,0.98)");
+    gradient.addColorStop(0.45, "rgba(255,255,255,0.55)");
+    gradient.addColorStop(0.7, "rgba(255,255,255,0.18)");
+    gradient.addColorStop(1, "rgba(255,255,255,0)");
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, size, size);
+    const src = "internal:leaderboard-glow";
+    this.skinTextureCache.set(src, Texture.from(canvas));
+    this.leaderboardGlowAsset = { name: "leaderboard-glow", src };
+    return this.leaderboardGlowAsset;
   }
 
   private drawHudNumberText(
@@ -3849,7 +4430,13 @@ export class ManiaReplayRenderer {
     this.recentHitOffsets.forEach((offset, index) => {
       const normalized = Math.max(-1, Math.min(1, offset / range));
       const x = centerX + normalized * halfWidth;
-      const alpha = 0.14 + ((index + 1) / this.recentHitOffsets.length) * 0.72;
+      // Ticks decay continuously with age like the clients fade theirs,
+      // instead of stepping every tick one slot dimmer per new hit; the
+      // extra ramp over the oldest few keeps window eviction from popping.
+      const age = this.currentTime - this.recentHitTimes[index];
+      const timeFade = Math.max(0, 1 - age / 4000);
+      const evictionFade = Math.min(1, (index + 1) / 6);
+      const alpha = 0.1 + 0.76 * timeFade * evictionFade;
       this.roundRect(x - 1, barY - tickHeight / 2, 2, tickHeight, isLazer ? 1 : 0, "#ffffff", alpha);
     });
     const last = this.recentHitOffsets[this.recentHitOffsets.length - 1];
@@ -3859,10 +4446,20 @@ export class ManiaReplayRenderer {
     }
 
     // Rolling-average marker: stable points a triangle down from above the
-    // bar; lazer floats a dot under it.
+    // bar; lazer floats a dot under it. Both clients glide it toward each
+    // new average (lazer eases its arrow over 400ms), so damp the displayed
+    // position instead of snapping per hit.
     if (this.recentHitOffsets.length > 0) {
       const mean = this.urSum / this.recentHitOffsets.length;
-      const avgX = centerX + Math.max(-1, Math.min(1, mean / range)) * halfWidth;
+      const nowWall = performance.now();
+      const dt = nowWall - this.hitErrorAvgTs;
+      this.hitErrorAvgTs = nowWall;
+      if (this.hitErrorAvgDisplayed == null || dt > 500) {
+        this.hitErrorAvgDisplayed = mean;
+      } else {
+        this.hitErrorAvgDisplayed += (mean - this.hitErrorAvgDisplayed) * (1 - Math.exp(-dt / 90));
+      }
+      const avgX = centerX + Math.max(-1, Math.min(1, this.hitErrorAvgDisplayed / range)) * halfWidth;
       if (isLazer) {
         this.circle(avgX, barY + bandHeight / 2 + 5 * scale, 2.6 * scale, "#ffffff", 0.95);
       } else {
@@ -5329,6 +5926,15 @@ export class ManiaReplayRenderer {
     this.removeOverlayPointerHandlers();
     this.previousBackgroundImage = null;
     this.backgroundTransitionStartedAt = 0;
+    this.clearStoryboardSprites();
+    for (const url of this.storyboardRetainedUrls) releaseStoryboardTexture(url);
+    this.storyboardRetainedUrls = [];
+    this.storyboardData = null;
+    this.storyboardActiveSet = null;
+    // Pooled storyboard sprites are detached from the stage, so the app
+    // destroy below cannot reach them.
+    for (const sprite of this.storyboardSpritePool) sprite.destroy();
+    this.storyboardSpritePool = [];
     const destroyApp = () => {
       if (!this.app) return;
       this.clearTextLayer();

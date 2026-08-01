@@ -112,14 +112,19 @@ export function starSpectrumGradient(lo: number, hi: number, position?: (stars: 
 
 // osu-web's difficulty-badge: pill filled with the spectrum colour, dark text
 // that flips to the expert-plus yellow at 6.5★ and above.
-export function StarRatingBadge({ stars, label, className = "" }: { stars: number; label?: string; className?: string }) {
+export function StarRatingBadge({ stars, label, className = "", size = 1 }: { stars: number; label?: string; className?: string; size?: number }) {
   const textColor = stars >= 6.5 ? "hsl(45, 100%, 70%)" : "hsl(200, 10%, 10%)";
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold leading-none tabular-nums ${className}`}
-      style={{ background: starRatingColor(stars), color: textColor }}
+      className={`inline-flex items-center gap-1 rounded-full font-bold leading-none tabular-nums ${className}`}
+      style={{
+        background: starRatingColor(stars),
+        color: textColor,
+        fontSize: 10 * size,
+        padding: `${2 * size}px ${8 * size}px`,
+      }}
     >
-      <svg viewBox="0 0 24 24" className="h-[9px] w-[9px]" fill="currentColor" aria-hidden="true">
+      <svg viewBox="0 0 24 24" style={{ width: 9 * size, height: 9 * size }} fill="currentColor" aria-hidden="true">
         <path d="M12 1.7l3.1 6.9 7.2.8-5.4 5 1.5 7.2L12 17.9l-6.4 3.7 1.5-7.2-5.4-5 7.2-.8L12 1.7z" />
       </svg>
       {label ?? stars.toFixed(2)}
