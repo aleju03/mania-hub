@@ -129,6 +129,10 @@ const DOCUMENT_CACHE_BY_PATH: Record<string, DocumentCacheConfig> = {
   "/bbcode": { sMaxage: 300, swr: 1800 },
   "/goals": { sMaxage: 300, swr: 1800 },
   "/valley": { sMaxage: 300, swr: 1800 },
+  // Fixed copy that only changes on deploy.
+  "/legal": { sMaxage: 3600, swr: 86400 },
+  "/privacy": { sMaxage: 3600, swr: 86400 },
+  "/terms": { sMaxage: 3600, swr: 86400 },
 };
 
 function getDocumentCacheForPathname(pathname: string): DocumentCacheConfig | null {
@@ -140,6 +144,10 @@ function getDocumentCacheForPathname(pathname: string): DocumentCacheConfig | nu
   if (pathname.startsWith("/player/")) return { sMaxage: 300, swr: 1800 };
   if (pathname.startsWith("/skins/")) return DEFAULT_DOCUMENT_CACHE;
   if (pathname.startsWith("/farm-helper/map/")) return DEFAULT_DOCUMENT_CACHE;
+  // A pull share page describes one card pull that already happened, so it
+  // never changes. These are made to be pasted into chat, which means repeat
+  // visitors arriving from the same link.
+  if (pathname.startsWith("/pull/")) return { sMaxage: 3600, swr: 86400 };
   return null;
 }
 

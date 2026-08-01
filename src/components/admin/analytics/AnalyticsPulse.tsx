@@ -1,6 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { formatNumber } from "../../../lib/format";
 import {
+  buildAnalyticsTimelineTicks,
   formatAnalyticsRangeLabel,
   type AnalyticsMonitorData,
   type AnalyticsRange,
@@ -35,6 +36,14 @@ export function AnalyticsPulse({
   const peak = useMemo(() => timeline.reduce((max, bucket) => Math.max(max, bucket.events), 0), [timeline]);
   const spanMs = (data.bucketMs || 0) * Math.max(1, timeline.length);
   const live = data.activeVisitors > 0;
+  const [hovered, setHovered] = useState<number | null>(null);
+  const startTs = timeline.length > 0 ? timeline[0].ts : 0;
+  const ticks = useMemo(
+    () => (timeline.length > 0 ? buildAnalyticsTimelineTicks(startTs, startTs + spanMs) : []),
+    [timeline.length, startTs, spanMs],
+  );
+  const hoveredBucket = hovered != null ? timeline[hovered] : undefined;
+  const bucketWidth = formatBucketWidth(data.bucketMs);
 
   return (
     <div className="rounded-xl border border-osu-b3/30 bg-gradient-to-b from-osu-b4/50 to-osu-b4/20 overflow-hidden">
@@ -73,43 +82,74 @@ export function AnalyticsPulse({
       </div>
 
       <div className="border-t border-osu-b3/20 px-4 pb-3 pt-2.5">
-        <div className="flex items-baseline justify-between gap-3 text-[10px]">
+        {/* The legend rides with the title so the axis row underneath is nothing
+            but clock labels. */}
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[10px]">
           <span className="uppercase tracking-wider text-osu-f1 font-semibold">Traffic</span>
-          <span className="text-osu-f1">
-            {peak > 0 ? `peak ${formatNumber(peak)} events per ${formatBucketWidth(data.bucketMs)}` : "no traffic in range"}
-          </span>
-        </div>
-        <div className="mt-2 flex h-16 items-end gap-px" role="img" aria-label={`Traffic over the ${hint}`}>
-          {timeline.map((bucket) => {
-            const height = peak > 0 ? Math.max(bucket.events > 0 ? 4 : 1, Math.round((bucket.events / peak) * 100)) : 1;
-            const pageviewShare = bucket.events > 0 ? Math.min(1, bucket.pageviews / bucket.events) : 0;
-            return (
-              <div
-                key={bucket.ts}
-                className="group relative flex-1 rounded-sm bg-osu-b3/25 transition-colors duration-[120ms] hover:bg-osu-b3/50"
-                style={{ height: "100%" }}
-                title={`${formatClock(bucket.ts, spanMs)} · ${formatNumber(bucket.events)} events · ${formatNumber(bucket.pageviews)} pageviews · ${formatNumber(bucket.visitors)} visitors`}
-              >
-                <div
-                  className="absolute inset-x-0 bottom-0 rounded-sm bg-osu-pink/35"
-                  style={{ height: `${height}%` }}
-                >
-                  <div
-                    className="absolute inset-x-0 bottom-0 rounded-sm bg-osu-pink"
-                    style={{ height: `${Math.round(pageviewShare * 100)}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <div className="mt-1.5 flex items-center justify-between text-[9px] font-mono text-osu-f1">
-          <span>{timeline.length > 0 ? formatClock(timeline[0].ts, spanMs) : ""}</span>
-          <span className="flex items-center gap-2 font-sans">
+          <span className="flex items-center gap-2 text-osu-l2/70">
             <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-[1px] bg-osu-pink" />pageviews</span>
             <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-[1px] bg-osu-pink/35" />other events</span>
           </span>
-          <span>now</span>
+          {/* Reading out the hovered bucket here beats waiting on a native
+              tooltip, and it never covers the bars it describes. */}
+          <span className={`ml-auto truncate ${hoveredBucket ? "text-osu-l2" : "text-osu-f1"}`}>
+            {hoveredBucket
+              ? `${formatClock(hoveredBucket.ts, spanMs)} · ${formatNumber(hoveredBucket.events)} events · ${formatNumber(hoveredBucket.pageviews)} pageviews · ${formatNumber(hoveredBucket.visitors)} visitor${hoveredBucket.visitors === 1 ? "" : "s"}`
+              : peak > 0
+                ? `peak ${formatNumber(peak)} events per ${bucketWidth}`
+                : "no traffic in range"}
+          </span>
+        </div>
+        <div className="relative mt-2 h-16" onMouseLeave={() => setHovered(null)}>
+          <div className="flex h-full items-end gap-px" role="img" aria-label={`Traffic over the ${hint}`}>
+            {timeline.map((bucket, index) => {
+              const height = peak > 0 ? Math.max(bucket.events > 0 ? 4 : 1, Math.round((bucket.events / peak) * 100)) : 1;
+              const pageviewShare = bucket.events > 0 ? Math.min(1, bucket.pageviews / bucket.events) : 0;
+              return (
+                <div
+                  key={bucket.ts}
+                  onMouseEnter={() => setHovered(index)}
+                  className={`group relative h-full flex-1 rounded-sm transition-colors duration-[120ms] ${
+                    hovered === index ? "bg-osu-b3/50" : "bg-osu-b3/25"
+                  }`}
+                  title={`${formatClock(bucket.ts, spanMs)} · ${formatNumber(bucket.events)} events · ${formatNumber(bucket.pageviews)} pageviews · ${formatNumber(bucket.visitors)} visitors`}
+                >
+                  <div
+                    className="absolute inset-x-0 bottom-0 rounded-sm bg-osu-pink/35"
+                    style={{ height: `${height}%` }}
+                  >
+                    <div
+                      className="absolute inset-x-0 bottom-0 rounded-sm bg-osu-pink"
+                      style={{ height: `${Math.round(pageviewShare * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {ticks.map((tick) => (
+            <span
+              key={tick.ts}
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 hidden w-px bg-white/10 sm:block"
+              style={{ left: `${tick.position * 100}%` }}
+            />
+          ))}
+        </div>
+        {/* Ticks land on round clock times (:15, :30, the hour, midnight), so a
+            spike can be placed without hovering it. */}
+        <div className="relative mt-1.5 h-3 text-[9px] font-mono text-osu-f1">
+          <span className="absolute left-0 top-0">{timeline.length > 0 ? formatClock(startTs, spanMs) : ""}</span>
+          {ticks.map((tick) => (
+            <span
+              key={tick.ts}
+              className="absolute top-0 hidden -translate-x-1/2 whitespace-nowrap sm:block"
+              style={{ left: `${tick.position * 100}%` }}
+            >
+              {formatClock(tick.ts, spanMs)}
+            </span>
+          ))}
+          <span className="absolute right-0 top-0">now</span>
         </div>
       </div>
     </div>

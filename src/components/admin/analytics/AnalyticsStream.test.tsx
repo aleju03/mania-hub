@@ -4,7 +4,8 @@
    timestamp, no map details, an event kind we have no phrasing for) must never
    blank the admin dashboard. */
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { ANALYTICS_STREAM_MODE_STORAGE_KEY } from "../../../lib/analytics-monitor";
 import {
   buildAnalyticsReplayMapIndex,
   buildAnalyticsSessions,
@@ -95,6 +96,7 @@ function renderStream(rows = ROWS) {
 }
 
 afterEach(cleanup);
+beforeEach(() => window.localStorage.removeItem(ANALYTICS_STREAM_MODE_STORAGE_KEY));
 
 describe("AnalyticsStream", () => {
   it("reads every event as a sentence", () => {
@@ -132,6 +134,15 @@ describe("AnalyticsStream", () => {
     fireEvent.click(visitorRow);
     // Expanded, the earlier search in the same session shows up.
     expect(screen.getByText('"camellia"')).toBeTruthy();
+  });
+
+  it("comes back in the reading mode it was left in", () => {
+    renderStream();
+    fireEvent.click(screen.getByRole("button", { name: /Sessions/ }));
+    expect(window.localStorage.getItem(ANALYTICS_STREAM_MODE_STORAGE_KEY)).toBe("sessions");
+    cleanup();
+    renderStream();
+    expect(screen.getAllByText(/^\d+ steps?$/)).toHaveLength(3);
   });
 
   it("says so instead of emptying out when the range has nothing in it", () => {
@@ -197,6 +208,24 @@ describe("AnalyticsPulse", () => {
     expect(screen.getByText("from 3 countries")).toBeTruthy();
     expect(screen.getByText("38%")).toBeTruthy();
     expect(screen.getByText("peak 40 events per 30m")).toBeTruthy();
+  });
+
+  it("reads the hovered bucket out next to the title", () => {
+    const { container } = render(<AnalyticsPulse data={base} range={24} onlineCountries={3} />);
+    const bars = container.querySelectorAll('[role="img"] > div');
+    fireEvent.mouseEnter(bars[bars.length - 1]);
+    expect(screen.getByText(/40 events · 30 pageviews · 6 visitors/)).toBeTruthy();
+    // Leaving the chart puts the peak summary back.
+    fireEvent.mouseLeave(bars[bars.length - 1].parentElement!.parentElement!);
+    expect(screen.getByText("peak 40 events per 30m")).toBeTruthy();
+  });
+
+  it("labels the axis with round clock times between the range edges", () => {
+    const { container } = render(<AnalyticsPulse data={base} range={24} onlineCountries={3} />);
+    const axis = container.querySelector(".font-mono")!;
+    // Range start, "now", and the ticks in between.
+    expect(axis.childElementCount).toBeGreaterThan(2);
+    expect(within(axis as HTMLElement).getByText("now")).toBeTruthy();
   });
 
   it("survives a backend too old to send a timeline", () => {

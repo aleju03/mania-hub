@@ -15,14 +15,18 @@ import {
   type AnalyticsReplayMapIndex,
   type AnalyticsSession,
 } from "../../../lib/analytics-feed";
-import { ANALYTICS_RECENT_EVENTS_LIMIT, type AnalyticsCountryRow } from "../../../lib/analytics-monitor";
+import {
+  ANALYTICS_RECENT_EVENTS_LIMIT,
+  readStoredAnalyticsStreamMode,
+  storeAnalyticsStreamMode,
+  type AnalyticsCountryRow,
+  type AnalyticsStreamMode,
+} from "../../../lib/analytics-monitor";
 import { ACTIVITY_KIND_STYLES, AnalyticsCountryFilter, AnalyticsEmptyMessage, VisitorChip, visitorColor } from "./shared";
 
 /* The feed, read two ways. "Stream" interleaves every visitor so the page reads
    like a running commentary of the site; "Sessions" folds it back per visitor
    so a single journey can be followed end to end. */
-
-type StreamMode = "stream" | "sessions";
 
 const PAGE_SIZE = 150;
 // Rows younger than this get a highlight so new arrivals catch the eye.
@@ -47,9 +51,16 @@ export function AnalyticsStream({
   now: number;
   onCountryChange: (country: string | null) => void;
 }) {
-  const [mode, setMode] = useState<StreamMode>("stream");
+  // Safe to read storage during init: this panel only ever mounts on the client,
+  // after the first snapshot lands, so there is no server render to mismatch.
+  const [mode, setMode] = useState<AnalyticsStreamMode>(() => readStoredAnalyticsStreamMode() ?? "stream");
   const [kinds, setKinds] = useState<Set<AnalyticsActivityKind>>(new Set());
   const [limit, setLimit] = useState(PAGE_SIZE);
+
+  const selectMode = (next: AnalyticsStreamMode) => {
+    setMode(next);
+    storeAnalyticsStreamMode(next);
+  };
 
   const slotByVisitor = useMemo(() => {
     const slots = new Map<string, number>();
@@ -111,8 +122,8 @@ export function AnalyticsStream({
           </div>
           <div className="ml-auto flex items-center gap-2">
             <div className="flex items-center rounded-md border border-osu-b3/30 bg-osu-b5/70 p-0.5">
-              <ModeButton active={mode === "stream"} onClick={() => setMode("stream")} icon={<List className="h-3 w-3" />} label="Stream" />
-              <ModeButton active={mode === "sessions"} onClick={() => setMode("sessions")} icon={<LayoutGrid className="h-3 w-3" />} label="Sessions" />
+              <ModeButton active={mode === "stream"} onClick={() => selectMode("stream")} icon={<List className="h-3 w-3" />} label="Stream" />
+              <ModeButton active={mode === "sessions"} onClick={() => selectMode("sessions")} icon={<LayoutGrid className="h-3 w-3" />} label="Sessions" />
             </div>
             <AnalyticsCountryFilter country={country} options={countries} onChange={onCountryChange} />
           </div>

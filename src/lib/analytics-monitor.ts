@@ -132,6 +132,7 @@ export interface AnalyticsMonitorData {
    seconds cadence without cost. */
 export const ANALYTICS_REFRESH_MS = 5_000;
 export const ANALYTICS_RANGE_STORAGE_KEY = "mh_monitor_range";
+export const ANALYTICS_STREAM_MODE_STORAGE_KEY = "mh_monitor_stream_mode";
 export const ANALYTICS_DEFAULT_RANGE_HOURS = 24;
 const ANALYTICS_MIN_RANGE_HOURS = 1;
 const ANALYTICS_MAX_RANGE_HOURS = 720;
@@ -170,6 +171,85 @@ export function parseAnalyticsRangeHours(value: unknown): AnalyticsRange | null 
   const amount = Number(match[1]);
   const unit = match[2].startsWith("d") ? 24 : 1;
   return clampAnalyticsRangeHours(amount * unit);
+}
+
+/* Round wall-clock steps for the traffic axis. A tick every "11:30 PM" reads at
+   a glance; ticks every "11:27 PM" (evenly spaced buckets) do not. */
+const ANALYTICS_TICK_INTERVALS_MS = [
+  60_000,
+  2 * 60_000,
+  5 * 60_000,
+  10 * 60_000,
+  15 * 60_000,
+  30 * 60_000,
+  60 * 60_000,
+  2 * 60 * 60_000,
+  3 * 60 * 60_000,
+  6 * 60 * 60_000,
+  12 * 60 * 60_000,
+  24 * 60 * 60_000,
+  2 * 24 * 60 * 60_000,
+  7 * 24 * 60 * 60_000,
+] as const;
+
+export interface AnalyticsTimelineTick {
+  ts: number;
+  /** 0..1 across the plotted span, for absolute positioning. */
+  position: number;
+}
+
+// Snap up to the next round local-clock step: hours land on the hour and days on
+// local midnight, whatever the viewer's offset is.
+function ceilToLocalStep(ts: number, stepMs: number): number {
+  const offsetMs = new Date(ts).getTimezoneOffset() * 60_000;
+  return Math.ceil((ts - offsetMs) / stepMs) * stepMs + offsetMs;
+}
+
+export function buildAnalyticsTimelineTicks(
+  startTs: number,
+  endTs: number,
+  maxTicks = 5,
+): AnalyticsTimelineTick[] {
+  const span = endTs - startTs;
+  if (!Number.isFinite(span) || span <= 0 || maxTicks < 1) return [];
+  const step =
+    ANALYTICS_TICK_INTERVALS_MS.find((interval) => span / interval <= maxTicks) ??
+    ANALYTICS_TICK_INTERVALS_MS[ANALYTICS_TICK_INTERVALS_MS.length - 1];
+  const ticks: AnalyticsTimelineTick[] = [];
+  for (let ts = ceilToLocalStep(startTs, step); ts < endTs; ts += step) {
+    const position = (ts - startTs) / span;
+    // The edges belong to the range's own start/"now" labels; a tick there would
+    // just print the same clock twice.
+    if (position < 0.04 || position > 0.9) continue;
+    ticks.push({ ts, position });
+  }
+  return ticks;
+}
+
+/* The activity feed's two readings. Persisted so the dashboard comes back the
+   way it was left instead of snapping to "stream" on every visit. */
+export type AnalyticsStreamMode = "stream" | "sessions";
+
+export function parseAnalyticsStreamMode(value: unknown): AnalyticsStreamMode | null {
+  return value === "stream" || value === "sessions" ? value : null;
+}
+
+export function readStoredAnalyticsStreamMode(): AnalyticsStreamMode | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return parseAnalyticsStreamMode(window.localStorage.getItem(ANALYTICS_STREAM_MODE_STORAGE_KEY));
+  } catch {
+    return null;
+  }
+}
+
+export function storeAnalyticsStreamMode(mode: AnalyticsStreamMode): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(ANALYTICS_STREAM_MODE_STORAGE_KEY, mode);
+  } catch {
+    // ignore
+  }
 }
 
 export function formatAnalyticsRangeLabel(rangeHours: AnalyticsRange): string {

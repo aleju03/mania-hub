@@ -63,6 +63,68 @@ function getBaseProperties(): Record<string, unknown> {
   };
 }
 
+/* Events cluster: a route change emits a pageview alongside whatever the page
+   itself reports, and an interaction often fires two or three in the same
+   tick. Each one used to be its own request, so they are collected over a
+   short window and sent as one batch instead. Every event carries its own
+   timestamp, so the delay never distorts the data. Anything still queued is
+   flushed when the page is hidden or unloaded, which is what sendBeacon
+   exists for, so batching never costs an event. */
+const FLUSH_DELAY_MS = 500;
+// Kept well under the /api/sync body limit: an oversized body is rejected as a
+// whole, so a batch that grows past it would lose every event in it rather
+// than just the fat one.
+const MAX_BATCH_EVENTS = 10;
+
+let pendingEvents: unknown[] = [];
+let flushTimer: number | null = null;
+let unloadFlushHooked = false;
+
+function postEvents(events: unknown[]) {
+  if (events.length === 0) return;
+  try {
+    // Inside the try with everything else: a batch carries up to ten events
+    // now, so one unserializable property would throw out of a timer or a
+    // pagehide listener rather than just failing its own send.
+    const body = JSON.stringify({ events });
+    if (typeof navigator.sendBeacon === "function") {
+      const blob = new Blob([body], { type: "application/json" });
+      if (navigator.sendBeacon(ENDPOINT, blob)) return;
+    }
+    fetch(ENDPOINT, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body,
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    // swallow — analytics must never throw in user code
+  }
+}
+
+function flushEvents() {
+  if (flushTimer !== null) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+  if (pendingEvents.length === 0) return;
+  const events = pendingEvents;
+  pendingEvents = [];
+  postEvents(events);
+}
+
+function hookUnloadFlush() {
+  if (unloadFlushHooked) return;
+  unloadFlushHooked = true;
+  // pagehide (not unload) so the page stays bfcache-eligible; the hidden
+  // check covers tab switches and mobile backgrounding, which is where a
+  // session usually ends without ever firing pagehide.
+  window.addEventListener("pagehide", flushEvents);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushEvents();
+  });
+}
+
 export function track(event: string, properties?: Record<string, unknown>) {
   if (typeof window === "undefined") return;
   if (isAdminAnalyticsInspection()) return;
@@ -80,20 +142,15 @@ export function track(event: string, properties?: Record<string, unknown>) {
       $insert_id: eventId,
     },
   };
-  const body = JSON.stringify(payload);
-  try {
-    if (typeof navigator.sendBeacon === "function") {
-      const blob = new Blob([body], { type: "application/json" });
-      if (navigator.sendBeacon(ENDPOINT, blob)) return;
-    }
-    fetch(ENDPOINT, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body,
-      keepalive: true,
-    }).catch(() => {});
-  } catch {
-    // swallow — analytics must never throw in user code
+
+  hookUnloadFlush();
+  pendingEvents.push(payload);
+  if (pendingEvents.length >= MAX_BATCH_EVENTS) {
+    flushEvents();
+    return;
+  }
+  if (flushTimer === null) {
+    flushTimer = window.setTimeout(flushEvents, FLUSH_DELAY_MS);
   }
 }
 

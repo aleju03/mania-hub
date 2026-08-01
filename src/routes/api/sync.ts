@@ -22,6 +22,25 @@ function getLiveBackendBase(): string | null {
   return base ? base.replace(/\/+$/, "") : null;
 }
 
+/* The client batches events over a short window and posts them as
+   `{ events: [...] }`. A bare event object is the pre-batching shape and is
+   still accepted, so tabs running an older bundle keep reporting across a
+   deploy. */
+const MAX_FORWARDED_EVENTS = 20;
+
+function readCapturedEvents(body: ArrayBuffer): unknown[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(new TextDecoder().decode(body));
+  } catch {
+    return [];
+  }
+  if (parsed && typeof parsed === "object" && Array.isArray((parsed as { events?: unknown }).events)) {
+    return (parsed as { events: unknown[] }).events.slice(0, MAX_FORWARDED_EVENTS);
+  }
+  return parsed ? [parsed] : [];
+}
+
 /* Second write target: the in-house analytics store on the live backend.
    Wrapped (not raw-forwarded) so the backend gets the Vercel-derived GeoIP
    country and a bot verdict without trusting client-supplied properties. */
@@ -29,12 +48,9 @@ function forwardToLiveAnalytics(request: Request, body: ArrayBuffer): void {
   const base = getLiveBackendBase();
   const token = process.env.LIVE_ADMIN_TOKEN;
   if (!base || !token) return;
-  let payload: unknown;
-  try {
-    payload = JSON.parse(new TextDecoder().decode(body));
-  } catch {
-    return;
-  }
+  const events = readCapturedEvents(body);
+  if (events.length === 0) return;
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), LIVE_ANALYTICS_FORWARD_TIMEOUT_MS);
   waitUntil(
@@ -44,8 +60,10 @@ function forwardToLiveAnalytics(request: Request, body: ArrayBuffer): void {
         "content-type": "application/json",
         authorization: `Bearer ${token}`,
       },
+      // The store unwraps a `batch` payload into individual events itself, so
+      // a browser batch stays one forward rather than one per event.
       body: JSON.stringify({
-        payload,
+        payload: { batch: events },
         geo_country: request.headers.get("x-vercel-ip-country"),
         is_bot: isLikelyBotUserAgent(request.headers.get("user-agent")),
       }),
