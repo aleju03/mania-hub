@@ -69,6 +69,7 @@ export interface ManiaReplaySimulationOptions {
   stableHighKeyReleaseDelayRawThreshold?: number;
   stableLateRegrabMehFloor?: boolean;
   stableLongNoteBodyGrab?: boolean;
+  stableRateDownLateHeadWindow?: boolean;
   stableRegrabWithinOkKeepsHeadDelta?: boolean;
   stableMissedInsideConsumedSegmentJudgment?: Judgment;
   stableMissedInsideConsumedNoAdvanceJudgment?: Judgment;
@@ -1176,6 +1177,8 @@ export function simulateManiaReplayJudgements(
   const stableBrokenTailPressAfterTailMisses = options.stableBrokenTailPressAfterTailMisses
     ?? (!isLazer && Boolean(options.legacyReplayFrameRounding));
   const stableHeldKeyActivatesLongNoteHead = options.stableHeldKeyActivatesLongNoteHead ?? false;
+  const stableRateDownLateHeadWindow = options.stableRateDownLateHeadWindow
+    ?? (!isLazer && Boolean(options.legacyReplayFrameRounding));
   const stableBrokenTailReleaseGrace = options.stableBrokenTailReleaseGrace ?? null;
   const stableLateRegrabMehFloor = options.stableLateRegrabMehFloor ?? false;
   const stableLongNoteBodyGrab = options.stableLongNoteBodyGrab ?? false;
@@ -1350,6 +1353,39 @@ export function simulateManiaReplayJudgements(
               }
             }
           }
+          break;
+        }
+      }
+
+      // Rate-down replays compress the scaled head window; live captures show
+      // stable still honors presses out to the unscaled window, but only when
+      // the next note has no claim on the press.
+      if (
+        matchedSegmentIndex === -1
+        && !isLazer
+        && isLN
+        && stableRateDownLateHeadWindow
+        && options.legacyReplayFrameRounding
+        && (options.speedMultiplier ?? 1) < 1
+      ) {
+        const extendedDeadline = note.time + Math.floor(windows.meh / (options.speedMultiplier ?? 1));
+        for (let s = segmentCursor; s < columnSegments.length; s++) {
+          const segment = columnSegments[s];
+          const pressRange = getStableSegmentPressRange(segment);
+          if (pressRange.min > extendedDeadline) break;
+          const pressTime = getStablePressEstimate(
+            segment,
+            note.time,
+            useStableCoarsePressPlayback,
+            stableCoarseEdgePlaybackDelay,
+            stablePreciseEdgePosition,
+          );
+          if (pressTime > extendedDeadline) break;
+          if (pressTime <= note.time + Math.floor(windows.meh)) continue;
+          if (nextNote != null && pressTime >= nextNote.time - Math.floor(windows.miss)) break;
+          matchedSegmentIndex = s;
+          headJudgment = 5;
+          headTime = pressTime;
           break;
         }
       }
@@ -2085,6 +2121,11 @@ export function simulateManiaReplayJudgements(
       const brokenTailPressAfterTail = stableBrokenTailPressAfterTailMisses
         && dropTailPressAfterTail
         && hadHardDrop;
+      // Soft-dropped hold with the key up at the tail: judged at the tail from
+      // the drop release; an after-tail press belongs to the next note.
+      const softDropJudgedAtTail = stableBrokenTailPressAfterTailMisses
+        && dropTailPressAfterTail
+        && !hadHardDrop;
       const brokenTailDroppedBeforeTail = stableBrokenTailReleaseGrace != null
         && brokenRegrabTail
         && !tailWasHeldAtJudgement
@@ -2097,6 +2138,20 @@ export function simulateManiaReplayJudgements(
         tailOffsetMs = bodyBreakMiss.offsetMs;
         scoringHeadOffsetMs = getStableLongNoteScoringHeadTime(note, scoringPressTime, windows) - note.time;
         scoringTailOffsetMs = bodyBreakMiss.offsetMs;
+      } else if (softDropJudgedAtTail) {
+        const dropReleaseTime = bodyBreakTimes.length > 0
+          ? bodyBreakTimes[bodyBreakTimes.length - 1]
+          : previousReleaseTime ?? tailEarlyBound;
+        const headOffset = getStableLongNoteScoringHeadTime(note, headTime, windows) - note.time;
+        const dropTailOffset = dropReleaseTime - note.endTime;
+        combinedJudgment = Math.max(
+          judgeStableLongNoteCombined(headOffset, dropTailOffset, bodyBreakCapJudgment, windows),
+          5,
+        ) as Judgment;
+        combinedTime = note.endTime;
+        tailOffsetMs = dropTailOffset;
+        scoringHeadOffsetMs = headOffset;
+        scoringTailOffsetMs = dropTailOffset;
       } else if (brokenTailPressAfterTail || brokenTailDroppedBeforeTail) {
         combinedJudgment = 6;
         combinedTime = note.endTime + Math.floor(windows.miss);
