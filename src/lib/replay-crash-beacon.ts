@@ -14,6 +14,7 @@ import { track } from "./analytics";
 const STORAGE_KEY = "mh_replay_watch_beacon";
 const SAMPLE_INTERVAL_MS = 10_000;
 const MAX_SAMPLES = 40;
+const MAX_INIT_TRACE_ENTRIES = 30;
 
 interface ChromeMemoryInfo {
   usedJSHeapSize: number;
@@ -39,6 +40,12 @@ interface BeaconRecord {
   // Last uncaught error / rejection seen during the session. A crash usually
   // takes the error detail with it, so this is our best chance at a cause.
   lastError: BeaconLastError | null;
+}
+
+interface ReplayWatchTraceEntry {
+  stage: string;
+  atMs: number;
+  details?: Record<string, unknown>;
 }
 
 // The in-memory handle to the live session so late-arriving diagnostics (the
@@ -116,6 +123,55 @@ export function updateReplayWatchBeaconContext(patch: Record<string, unknown>) {
   writeRecord(activeRecord);
 }
 
+// Persists replay progress synchronously. If GPU work kills the renderer
+// process, the last completed marker survives in sessionStorage and is
+// reported after the tab reloads. Keep this callback tiny and guarded: crash
+// forensics must never become a reason playback fails.
+function markReplayStage(
+  stage: string,
+  details?: Record<string, unknown>,
+  rendererInit = false,
+) {
+  if (typeof window === "undefined" || !activeRecord) return;
+  try {
+    const atMs = Date.now() - activeRecord.startedAt;
+    const existing = Array.isArray(activeRecord.context.replay_watch_trace)
+      ? activeRecord.context.replay_watch_trace as ReplayWatchTraceEntry[]
+      : [];
+    const entry: ReplayWatchTraceEntry = details
+      ? { stage, atMs, details }
+      : { stage, atMs };
+    activeRecord.context = {
+      ...activeRecord.context,
+      ...details,
+      replay_watch_stage: stage,
+      replay_watch_stage_at_ms: atMs,
+      replay_watch_trace: [...existing, entry].slice(-MAX_INIT_TRACE_ENTRIES),
+    };
+    if (rendererInit) {
+      const existingInit = Array.isArray(activeRecord.context.renderer_init_trace)
+        ? activeRecord.context.renderer_init_trace as ReplayWatchTraceEntry[]
+        : [];
+      activeRecord.context.renderer_init_stage = stage;
+      activeRecord.context.renderer_init_stage_at_ms = atMs;
+      activeRecord.context.renderer_init_trace = [...existingInit, entry].slice(-MAX_INIT_TRACE_ENTRIES);
+    }
+    writeRecord(activeRecord);
+    console.debug(`[replay watch] +${atMs}ms ${stage}`, details ?? "");
+  } catch {
+    // Diagnostics are best-effort and must not affect playback.
+  }
+}
+
+// Generic watch-session marker for visibility/focus/resume work after init.
+export function markReplayWatchStage(stage: string, details?: Record<string, unknown>) {
+  markReplayStage(stage, details);
+}
+
+export function markReplayRendererInitStage(stage: string, details?: Record<string, unknown>) {
+  markReplayStage(stage, details, true);
+}
+
 // Reports (and clears) a watch session left behind by a previous page load.
 // Call once when the replay page mounts, before a new beacon starts.
 export function reportCrashedReplayWatchSession() {
@@ -127,8 +183,13 @@ export function reportCrashedReplayWatchSession() {
   const samples = record.samples ?? [];
   const lastSample = samples[samples.length - 1] ?? null;
   const lastError = record.lastError ?? null;
-  track("replay_watch_crash", {
+  const crashReport = {
     ...record.context,
+    crash_detected_at: new Date().toISOString(),
+    session_started_at: new Date(record.startedAt).toISOString(),
+    last_sample_at: new Date(record.lastSampleAt).toISOString(),
+    replay_url: window.location.href,
+    user_agent: navigator.userAgent,
     watched_ms: record.watchedMs,
     session_ms: record.lastSampleAt - record.startedAt,
     heap_limit_mb: record.heapLimitMb,
@@ -139,7 +200,13 @@ export function reportCrashedReplayWatchSession() {
     last_error_message: lastError?.message ?? null,
     last_error_stack: lastError?.stack ? lastError.stack.slice(0, MAX_STACK_CHARS) : null,
     last_error_at_ms: lastError ? lastError.at - record.startedAt : null,
-  });
+  };
+
+  // This is deliberately local as well as analytics-backed. After reproducing
+  // a hard crash, reload the crashed tab and copy the JSON line from DevTools.
+  console.error("[replay crash] The previous replay renderer died without unloading.", crashReport);
+  console.info("[replay crash] COPY THIS JSON", JSON.stringify(crashReport));
+  track("replay_watch_crash", crashReport);
 }
 
 // Marks a watch session as active and samples the JS heap until stopped.
@@ -151,17 +218,33 @@ export function startReplayWatchBeacon(
 ): () => void {
   if (typeof window === "undefined") return () => {};
 
+  const startedAt = Date.now();
+  const initialStage: ReplayWatchTraceEntry = { stage: "gpu_probe_started", atMs: 0 };
   const record: BeaconRecord = {
-    startedAt: Date.now(),
-    lastSampleAt: Date.now(),
+    startedAt,
+    lastSampleAt: startedAt,
     watchedMs: null,
     heapLimitMb: null,
     peakUsedMb: null,
     samples: [],
-    context: { ...context, ...getGpuInfo() },
+    context: {
+      ...context,
+      replay_watch_url: window.location.href,
+      replay_watch_stage: initialStage.stage,
+      replay_watch_stage_at_ms: initialStage.atMs,
+      replay_watch_trace: [initialStage],
+      renderer_init_stage: initialStage.stage,
+      renderer_init_stage_at_ms: initialStage.atMs,
+      renderer_init_trace: [initialStage],
+    },
     lastError: null,
   };
   activeRecord = record;
+  // Persist before asking the browser for the diagnostic WebGL context. A bad
+  // driver can die during the probe itself, in which case this is the only
+  // marker that can survive.
+  writeRecord(record);
+  markReplayRendererInitStage("gpu_probe_finished", getGpuInfo());
 
   const sample = () => {
     record.lastSampleAt = Date.now();
