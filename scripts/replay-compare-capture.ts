@@ -3860,6 +3860,28 @@ function uniqueStableTimingVariants(simulation: SimulationResult): StableTimingV
     options: { stableSuppressHiddenBodyBreakCap: true },
   });
   addVariant({
+    label: "broken tail press-after-tail consumes again",
+    options: { stableBrokenTailPressAfterTailMisses: false },
+  });
+  for (const grace of [17, 43]) {
+    addVariant({
+      label: `broken tail release grace ${grace}ms`,
+      options: { stableBrokenTailReleaseGrace: grace },
+    });
+  }
+  addVariant({
+    label: "late regrab meh floor",
+    options: { stableLateRegrabMehFloor: true },
+  });
+  addVariant({
+    label: "in-window regrab keeps head delta",
+    options: { stableRegrabWithinOkKeepsHeadDelta: true },
+  });
+  addVariant({
+    label: "LN body grab",
+    options: { stableLongNoteBodyGrab: true },
+  });
+  addVariant({
     label: "preserve LN scoring press after break",
     options: { stablePreserveLongNoteScoringPressAfterBreak: true },
   });

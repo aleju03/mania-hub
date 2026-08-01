@@ -2,9 +2,9 @@ import { useEffect } from "react";
 import { useRouterState } from "@tanstack/react-router";
 import { useSelectedCountry } from "../store";
 import { useAuth } from "./auth-context";
-import { capturePageview, registerSuperProperties } from "./posthog";
+import { capturePageview, registerSuperProperties } from "./analytics";
 
-export function PostHogProvider({ children }: { children: React.ReactNode }) {
+export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const searchKey = useRouterState({
     select: (s) => JSON.stringify(s.location.search ?? {}),

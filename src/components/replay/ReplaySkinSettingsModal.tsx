@@ -2704,6 +2704,7 @@ const REPLAY_OVERLAY_LABELS: Record<ReplayOverlayId, string> = {
   pp: "PP counter",
   judgements: "Judgements",
   progress: "Progress pie",
+  leaderboard: "Leaderboard",
 };
 
 const REPLAY_OVERLAY_DESCRIPTIONS: Record<ReplayOverlayId, string> = {
@@ -2714,9 +2715,10 @@ const REPLAY_OVERLAY_DESCRIPTIONS: Record<ReplayOverlayId, string> = {
   pp: "Live performance points.",
   judgements: "Hit counts and unstable rate.",
   progress: "Map completion percentage.",
+  leaderboard: "Ingame scoreboard with live rank climbing. Tab toggles it.",
 };
 
-const REPLAY_OVERLAY_PREVIEWS: Record<ReplayOverlayId, string> = {
+const REPLAY_OVERLAY_PREVIEWS: Partial<Record<ReplayOverlayId, string>> = {
   keypresses: "/images/replay-overlays/keypresses.webp",
   kps: "/images/replay-overlays/kps-v2.webp",
   misses: "/images/replay-overlays/misses.webp",
@@ -2757,14 +2759,32 @@ function ReplayOverlaySettingsRow({
     >
       <div className="relative aspect-[16/9] w-full overflow-hidden bg-black" style={{ backgroundColor: "#000" }}>
         <div className="absolute inset-0 bg-black" aria-hidden="true" />
-        <img
-          src={REPLAY_OVERLAY_PREVIEWS[id]}
-          alt=""
-          loading="lazy"
-          draggable={false}
-          className="relative h-full w-full object-contain"
-          style={{ backgroundColor: "#000" }}
-        />
+        {REPLAY_OVERLAY_PREVIEWS[id] ? (
+          <img
+            src={REPLAY_OVERLAY_PREVIEWS[id]}
+            alt=""
+            loading="lazy"
+            draggable={false}
+            className="relative h-full w-full object-contain"
+            style={{ backgroundColor: "#000" }}
+          />
+        ) : id === "leaderboard" ? (
+          <div className="relative flex h-full w-full items-center px-6" aria-hidden="true">
+            <div className="w-3/5 space-y-1">
+              {[["#101018", "1"], ["#1f4a6e", "2"], ["#101018", "3"]].map(([color, rankNumber]) => (
+                <div
+                  key={rankNumber}
+                  className="relative h-7 rounded-r px-1.5 py-0.5"
+                  style={{ background: `linear-gradient(90deg, ${color}ee, ${color}22)` }}
+                >
+                  <div className="h-1.5 w-12 rounded-sm bg-white/80" />
+                  <div className="mt-1 h-1 w-8 rounded-sm bg-white/50" />
+                  <span className="absolute right-1 top-0 text-[18px] font-bold leading-7 text-white/20">{rankNumber}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <div
           className={`absolute right-2 top-2 grid h-5 w-5 place-items-center rounded-full transition-colors ${
             enabled

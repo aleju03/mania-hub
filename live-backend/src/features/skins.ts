@@ -30,6 +30,11 @@ export interface SkinKeymodePreview extends SkinScreenshot {
   keys: number;
 }
 
+// What an upload ticket minted against an already published skin unlocks.
+// 'previews' is the backdrop re-render editor; 'replace' also accepts a newer
+// .osk, which is how an uploader ships an update without republishing.
+export type SkinTokenScope = "previews" | "replace";
+
 export interface SkinRow {
   id: string;
   slug: string | null;
@@ -46,10 +51,14 @@ export interface SkinRow {
   status: "pending" | "published" | "hidden";
   uploadToken: string | null;
   tokenExpiresAt: string | null;
+  tokenScope: SkinTokenScope | null;
   oskKey: string | null;
   oskUrl: string | null;
   oskSizeBytes: number | null;
   oskSha256: string | null;
+  // When the .osk was last replaced with a newer build; null while the skin
+  // still carries the file it was published with.
+  oskUpdatedAt: string | null;
   previewKey: string | null;
   previewUrl: string | null;
   previewWidth: number | null;
@@ -71,10 +80,10 @@ export interface SkinSummary {
   ownerUsername: string;
   keymodes: number[];
   accentColor: string | null;
-  // Null on every response that did not carry the admin token: the count is
-  // owner-only, so it is dropped at the HTTP boundary rather than left for the
-  // client to hide. Sorting by downloads still works - it never exposes the
-  // numbers themselves.
+  // Null unless the request identified the uploader of this very skin (or a
+  // true admin): the count is private, so it is dropped at the HTTP boundary
+  // rather than left for the client to hide. Sorting by downloads still works
+  // for everyone - it never exposes the numbers themselves.
   downloadCount: number | null;
   previewUrl: string | null;
   previewWidth: number | null;
@@ -84,6 +93,7 @@ export interface SkinSummary {
   oskUrl: string | null;
   oskSizeBytes: number | null;
   oskSha256: string | null;
+  oskUpdatedAt: string | null;
   status: "pending" | "published" | "hidden";
   publishedAt: string | null;
 }
@@ -214,6 +224,29 @@ export async function attachSkinOsk(
   );
 }
 
+// Swaps a published skin's .osk for a newer build. Unlike attachSkinOsk this
+// overwrites the keymodes outright (the new archive decides which ones the
+// skin ships) and stamps osk_updated_at, which is what the skin page reads
+// back as "Updated". The accent is left alone: the re-rendered cover preview
+// that lands right after this carries the colour sampled from the new notes.
+export async function replaceSkinOsk(
+  db: Db,
+  skin: SkinRow,
+  patch: { key: string; url: string; sizeBytes: number; sha256: string; keymodes: number[]; iniAuthor: string | null },
+): Promise<void> {
+  const author = skin.author ?? (cleanText(patch.iniAuthor ?? "", SKIN_AUTHOR_MAX_LENGTH) || null);
+  const now = nowIso();
+  await exec(
+    db,
+    `update skins set
+       osk_key = ?, osk_url = ?, osk_size_bytes = ?, osk_sha256 = ?,
+       keymodes_json = ?, author = ?, search_text = ?, osk_updated_at = ?, updated_at = ?
+     where id = ?`,
+    [patch.key, patch.url, patch.sizeBytes, patch.sha256, JSON.stringify(normalizeKeymodes(patch.keymodes)),
+     author, buildSearchText(skin.name, skin.ownerUsername, author), now, now, skin.id],
+  );
+}
+
 export async function attachSkinPreview(
   db: Db,
   id: string,
@@ -322,14 +355,20 @@ export async function renameSkin(
 }
 
 export type StartSkinEditResult =
-  | { ok: true; id: string; token: string; expiresAt: string }
+  | { ok: true; id: string; token: string; expiresAt: string; scope: SkinTokenScope }
   | { ok: false; error: "not_found" | "forbidden" };
 
 // Mints an upload ticket against an already published skin so its owner can
-// re-render the keymode previews (a different backdrop, say) without
-// republishing. Same token column as the publish flow, but the row keeps its
-// status, so retention - which only sweeps pending rows - leaves it alone.
-export async function startSkinEdit(db: Db, id: string, ownerUserId: number | null): Promise<StartSkinEditResult> {
+// re-render the keymode previews (a different backdrop, say) or ship a newer
+// .osk without republishing. Same token column as the publish flow, but the
+// row keeps its status, so retention - which only sweeps pending rows - leaves
+// it alone. The scope is what the upload endpoint checks each part against.
+export async function startSkinEdit(
+  db: Db,
+  id: string,
+  ownerUserId: number | null,
+  scope: SkinTokenScope = "previews",
+): Promise<StartSkinEditResult> {
   const row = await getSkin(db, id);
   if (!row || row.status === "pending") return { ok: false, error: "not_found" };
   if (ownerUserId != null && row.ownerUserId !== ownerUserId) return { ok: false, error: "forbidden" };
@@ -337,15 +376,16 @@ export async function startSkinEdit(db: Db, id: string, ownerUserId: number | nu
   const expiresAt = new Date(Date.now() + SKIN_TOKEN_TTL_MS).toISOString();
   await exec(
     db,
-    "update skins set upload_token = ?, token_expires_at = ?, updated_at = ? where id = ?",
-    [token, expiresAt, nowIso(), id],
+    "update skins set upload_token = ?, token_expires_at = ?, token_scope = ?, updated_at = ? where id = ?",
+    [token, expiresAt, scope, nowIso(), id],
   );
-  return { ok: true, id, token, expiresAt };
+  return { ok: true, id, token, expiresAt, scope };
 }
 
 // The edit-ticket counterpart of getSkinForUpload: published (or hidden) rows
-// only, so an edit ticket can never be mistaken for a publish ticket.
-export async function getSkinForPreviewEdit(db: Db, id: string, token: string): Promise<SkinRow | null> {
+// only, so an edit ticket can never be mistaken for a publish ticket. What the
+// ticket may touch is on the row as tokenScope.
+export async function getSkinForEdit(db: Db, id: string, token: string): Promise<SkinRow | null> {
   const row = await getSkin(db, id);
   if (!row || row.status === "pending" || !row.uploadToken || !row.tokenExpiresAt) return null;
   if (!tokenMatches(row.uploadToken, token)) return null;
@@ -353,18 +393,41 @@ export async function getSkinForPreviewEdit(db: Db, id: string, token: string): 
   return row;
 }
 
-export type FinishSkinEditResult = { ok: true; skin: SkinSummary } | { ok: false; error: "not_found" };
+export type FinishSkinEditResult =
+  // Preview objects the row no longer points at, for the caller to delete from
+  // R2: a replaced .osk can drop keymodes the old build shipped.
+  | { ok: true; skin: SkinSummary; staleKeys: string[] }
+  | { ok: false; error: "not_found" };
 
 export async function finishSkinEdit(db: Db, id: string, token: string): Promise<FinishSkinEditResult> {
-  const row = await getSkinForPreviewEdit(db, id, token);
+  const row = await getSkinForEdit(db, id, token);
   if (!row) return { ok: false, error: "not_found" };
+  const staleKeys = row.tokenScope === "replace" ? await pruneOrphanedPreviews(db, row) : [];
   await exec(
     db,
-    "update skins set upload_token = null, token_expires_at = null, updated_at = ? where id = ?",
+    "update skins set upload_token = null, token_expires_at = null, token_scope = null, updated_at = ? where id = ?",
     [nowIso(), id],
   );
   const updated = await getSkin(db, id);
-  return updated ? { ok: true, skin: toSkinSummary(updated) } : { ok: false, error: "not_found" };
+  return updated ? { ok: true, skin: toSkinSummary(updated), staleKeys } : { ok: false, error: "not_found" };
+}
+
+// Drops the keymode previews of a skin whose new .osk no longer ships those
+// keymodes, and moves the card cover off one of them if that is where it sat.
+// Returns the storage keys nothing points at any more. A row that would be
+// left with no previews at all keeps what it has: an update that failed to
+// re-render is better than a skin with no images.
+async function pruneOrphanedPreviews(db: Db, row: SkinRow): Promise<string[]> {
+  const kept = row.previews.filter((preview) => row.keymodes.includes(preview.keys));
+  if (kept.length === row.previews.length || kept.length === 0) return [];
+  const dropped = row.previews.filter((preview) => !row.keymodes.includes(preview.keys));
+  await exec(db, "update skins set previews_json = ?, updated_at = ? where id = ?", [JSON.stringify(kept), nowIso(), row.id]);
+  if (row.previewKey && dropped.some((preview) => preview.key === row.previewKey)) {
+    // 4K is the keymode a skin is recognised by, so it takes the card when the
+    // cover's own keymode is gone.
+    await attachSkinPreview(db, row.id, kept.find((preview) => preview.keys === 4) ?? kept[0]);
+  }
+  return dropped.map((preview) => preview.key);
 }
 
 export type AppendScreenshotResult =
@@ -577,12 +640,14 @@ export function toSkinSummary(row: SkinRow): SkinSummary {
     oskUrl: row.oskUrl,
     oskSizeBytes: row.oskSizeBytes,
     oskSha256: row.oskSha256,
+    oskUpdatedAt: row.oskUpdatedAt,
     status: row.status,
     publishedAt: row.publishedAt,
   };
 }
 
-// Applied to every public response; see SkinSummary.downloadCount.
+// Applied to every skin a response's asker does not own; see
+// SkinSummary.downloadCount.
 export function withoutDownloadCount(summary: SkinSummary): SkinSummary {
   return { ...summary, downloadCount: null };
 }
@@ -608,10 +673,12 @@ function rowToSkin(row: Record<string, unknown>): SkinRow {
     status,
     uploadToken: textOrNull(row.upload_token),
     tokenExpiresAt: textOrNull(row.token_expires_at),
+    tokenScope: row.token_scope === "replace" ? "replace" : row.token_scope === "previews" ? "previews" : null,
     oskKey: textOrNull(row.osk_key),
     oskUrl: textOrNull(row.osk_url),
     oskSizeBytes: numberOrNull(row.osk_size_bytes),
     oskSha256: textOrNull(row.osk_sha256),
+    oskUpdatedAt: textOrNull(row.osk_updated_at),
     previewKey: textOrNull(row.preview_key),
     previewUrl: textOrNull(row.preview_url),
     previewWidth: numberOrNull(row.preview_width),

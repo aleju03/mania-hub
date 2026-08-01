@@ -5,7 +5,7 @@ import { Check, Copy, Shuffle, Star, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { skinEventProperties } from "../../lib/analytics-skins";
-import { track } from "../../lib/posthog";
+import { track } from "../../lib/analytics";
 import { importReplaySkinFromOsk, type ReplaySkinImportResult } from "../../lib/replay-skin-import";
 import { buildSkinAssetGroups, type SkinAssetGroup } from "../../lib/skin-asset-explorer";
 import { SkinAssetTiles } from "./SkinAssetExplorer";

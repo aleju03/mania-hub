@@ -42,6 +42,7 @@ import { Route as ApiBackgroundRouteImport } from './routes/api/background'
 import { Route as ApiCatboxUploadRouteImport } from './routes/api/catbox-upload'
 import { Route as ApiFaviconRouteImport } from './routes/api/favicon'
 import { Route as ApiOgRouteImport } from './routes/api/og'
+import { Route as ApiOszRouteImport } from './routes/api/osz'
 import { Route as ApiReplayUploadRouteImport } from './routes/api/replay-upload'
 import { Route as ApiSyncRouteImport } from './routes/api/sync'
 import { Route as DevOptInPreviewRouteImport } from './routes/dev.opt-in-preview'
@@ -224,6 +225,11 @@ const ApiOgRoute = ApiOgRouteImport.update({
   path: '/api/og',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiOszRoute = ApiOszRouteImport.update({
+  id: '/api/osz',
+  path: '/api/osz',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiReplayUploadRoute = ApiReplayUploadRouteImport.update({
   id: '/api/replay-upload',
   path: '/api/replay-upload',
@@ -339,6 +345,7 @@ export interface FileRoutesByFullPath {
   '/api/catbox-upload': typeof ApiCatboxUploadRoute
   '/api/favicon': typeof ApiFaviconRoute
   '/api/og': typeof ApiOgRoute
+  '/api/osz': typeof ApiOszRoute
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/sync': typeof ApiSyncRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
@@ -390,6 +397,7 @@ export interface FileRoutesByTo {
   '/api/catbox-upload': typeof ApiCatboxUploadRoute
   '/api/favicon': typeof ApiFaviconRoute
   '/api/og': typeof ApiOgRoute
+  '/api/osz': typeof ApiOszRoute
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/sync': typeof ApiSyncRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
@@ -442,6 +450,7 @@ export interface FileRoutesById {
   '/api/catbox-upload': typeof ApiCatboxUploadRoute
   '/api/favicon': typeof ApiFaviconRoute
   '/api/og': typeof ApiOgRoute
+  '/api/osz': typeof ApiOszRoute
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/sync': typeof ApiSyncRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
@@ -495,6 +504,7 @@ export interface FileRouteTypes {
     | '/api/catbox-upload'
     | '/api/favicon'
     | '/api/og'
+    | '/api/osz'
     | '/api/replay-upload'
     | '/api/sync'
     | '/dev/opt-in-preview'
@@ -546,6 +556,7 @@ export interface FileRouteTypes {
     | '/api/catbox-upload'
     | '/api/favicon'
     | '/api/og'
+    | '/api/osz'
     | '/api/replay-upload'
     | '/api/sync'
     | '/dev/opt-in-preview'
@@ -597,6 +608,7 @@ export interface FileRouteTypes {
     | '/api/catbox-upload'
     | '/api/favicon'
     | '/api/og'
+    | '/api/osz'
     | '/api/replay-upload'
     | '/api/sync'
     | '/dev/opt-in-preview'
@@ -649,6 +661,7 @@ export interface RootRouteChildren {
   ApiCatboxUploadRoute: typeof ApiCatboxUploadRoute
   ApiFaviconRoute: typeof ApiFaviconRoute
   ApiOgRoute: typeof ApiOgRoute
+  ApiOszRoute: typeof ApiOszRoute
   ApiReplayUploadRoute: typeof ApiReplayUploadRoute
   ApiSyncRoute: typeof ApiSyncRoute
   DevOptInPreviewRoute: typeof DevOptInPreviewRoute
@@ -893,6 +906,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiOgRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/osz': {
+      id: '/api/osz'
+      path: '/api/osz'
+      fullPath: '/api/osz'
+      preLoaderRoute: typeof ApiOszRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/replay-upload': {
       id: '/api/replay-upload'
       path: '/api/replay-upload'
@@ -1086,6 +1106,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCatboxUploadRoute: ApiCatboxUploadRoute,
   ApiFaviconRoute: ApiFaviconRoute,
   ApiOgRoute: ApiOgRoute,
+  ApiOszRoute: ApiOszRoute,
   ApiReplayUploadRoute: ApiReplayUploadRoute,
   ApiSyncRoute: ApiSyncRoute,
   DevOptInPreviewRoute: DevOptInPreviewRoute,

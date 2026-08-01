@@ -9,7 +9,7 @@
 // performance.memory) so the report distinguishes a heap OOM (usedJSHeapSize
 // climbing toward jsHeapSizeLimit) from a GPU/other renderer death (flat heap).
 
-import { track } from "./posthog";
+import { track } from "./analytics";
 
 const STORAGE_KEY = "mh_replay_watch_beacon";
 const SAMPLE_INTERVAL_MS = 10_000;

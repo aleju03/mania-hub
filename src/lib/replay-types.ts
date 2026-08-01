@@ -33,6 +33,7 @@ export interface ReplayRendererLike {
   readonly time: number;
   readonly isPlaying: boolean;
   destroy: () => void;
+  getFailTime?: () => number | null;
   getMissTimes?: () => number[];
   pause: () => void;
   play: () => void;
@@ -49,6 +50,8 @@ export interface ReplayRendererLike {
   setOverlaySettings: (settings: ReplayOverlaySettings) => void;
   setSkinSettings: (settings: ReplaySkinSettings) => void;
   setSpeed: (value: number) => void;
+  setLeaderboard?: (entries: { name: string; score: number; combo: number }[], playerName: string) => void;
+  setLeaderboardVisible?: (visible: boolean) => void;
   setHitsoundTrigger?: (trigger: ReplayHitsoundTrigger | null) => void;
   ready: () => Promise<void>;
   getDiagnostics?: () => { rendererBackend: string; judgementBuildMs: number | null };

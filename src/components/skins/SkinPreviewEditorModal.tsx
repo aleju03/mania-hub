@@ -3,19 +3,19 @@ import { Star, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { SkinBackdropPicker, useSkinBackdropPool } from "./SkinBackdropPicker";
-import { track } from "../../lib/posthog";
+import { track } from "../../lib/analytics";
 import { skinEventProperties } from "../../lib/analytics-skins";
 import { importReplaySkinFromOsk, type ReplaySkinImportResult } from "../../lib/replay-skin-import";
 import type { BackdropScope, PreviewBackdrop } from "../../lib/skin-preview-backdrops";
 import { renderSkinPreview } from "../../lib/skin-preview-render";
 import {
-  finishSkinPreviewEdit,
+  finishSkinEdit,
   formatSkinFileSize,
   markSkinsListStale,
   setSkinCoverKeymode,
   skinOskFileUrl,
   SkinUploadError,
-  startSkinPreviewEdit,
+  startSkinEdit,
   uploadSkinPart,
   type SkinSummary,
 } from "../../lib/skins";
@@ -256,7 +256,7 @@ export function SkinPreviewEditorModal({
       let current: SkinSummary | null = null;
       if (uploads.length > 0) {
         setProgress({ done: 0, total: 0, label: "Preparing the update." });
-        const started = await startSkinPreviewEdit({ data: { id: skin.id } });
+        const started = await startSkinEdit({ data: { id: skin.id, scope: "previews" } });
         if (!started.ok) {
           setError(started.error === "not_logged_in"
             ? "Log in with osu! again to edit this skin."
@@ -286,7 +286,7 @@ export function SkinPreviewEditorModal({
           doneBytes += render.blob.size;
         }
         setProgress({ done: totalBytes, total: totalBytes, label: "Saving." });
-        current = await finishSkinPreviewEdit(started.id, started.token);
+        current = await finishSkinEdit(started.id, started.token);
       }
       // A cover that moved to a keymode nobody re-rendered is just a pointer
       // move; no image work involved.
@@ -325,6 +325,13 @@ export function SkinPreviewEditorModal({
     if (saving) return;
     onClose();
   }, [saving, onClose]);
+
+  // The cached parse survives openings, but not a .osk that was swapped for a
+  // newer build: re-renders would otherwise draw notes nobody can download.
+  useEffect(() => {
+    setImported(null);
+    setNeedsSkinFile(false);
+  }, [skin.oskUrl]);
 
   // Everything but the parsed .osk resets between openings: the parse is the
   // slow part, and it is still valid for the same skin.

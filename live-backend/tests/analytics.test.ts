@@ -50,7 +50,7 @@ afterEach(async () => {
 });
 
 describe("normalizeAnalyticsEvent", () => {
-  it("extracts columns from a PostHog-shaped payload", () => {
+  it("extracts columns from a capture payload", () => {
     const record = normalizeAnalyticsEvent(pageview({ properties: { viewer_username: "someone", selected_country: "CR" } }), { geoCountry: "de", now: NOW });
     expect(record).not.toBeNull();
     expect(record!.event).toBe("$pageview");
@@ -142,6 +142,43 @@ describe("AnalyticsStore capture + monitor", () => {
     expect(event.eventId).toEqual(expect.any(String));
   });
 
+  it("carries epoch ms and the referring domain on feed rows", async () => {
+    store.capture(pageview({ distinctId: "real", path: "/maps", minutesAgo: 3, properties: { $referring_domain: "Google.com" } }), {});
+    await store.flush();
+    const data = await store.getMonitorData({ rangeHours: 24, now: NOW });
+    const event = data.recentEvents[0]!;
+    expect(event.ts).toBeGreaterThan(NOW - 4 * 60_000);
+    expect(event.ts).toBeLessThanOrEqual(NOW);
+    expect(event.referrer).toBe("google.com");
+  });
+
+  it("buckets a dense traffic timeline across the range", async () => {
+    store.capture(pageview({ distinctId: "a", path: "/maps", minutesAgo: 5 }), {});
+    store.capture(pageview({ distinctId: "b", path: "/maps", minutesAgo: 5 }), {});
+    store.capture(pageview({ distinctId: "a", path: "/admin/live-backend", minutesAgo: 5 }), {});
+    store.capture(pageview({ distinctId: "c", path: "/tracker", minutesAgo: 12 * 60 }), {});
+    await store.flush();
+
+    const data = await store.getMonitorData({ rangeHours: 24, now: NOW });
+    expect(data.timeline).toHaveLength(48);
+    expect(data.bucketMs).toBe(30 * 60_000);
+    // Dense: every bucket present, ascending, aligned to the range start.
+    data.timeline.forEach((bucket, index) => {
+      if (index === 0) return;
+      expect(bucket.ts - data.timeline[index - 1]!.ts).toBe(data.bucketMs);
+    });
+    const totals = data.timeline.reduce(
+      (acc, bucket) => ({ events: acc.events + bucket.events, pageviews: acc.pageviews + bucket.pageviews }),
+      { events: 0, pageviews: 0 },
+    );
+    expect(totals.events).toBe(4);
+    // /admin pageviews stay out of the pageview series, same as the KPI.
+    expect(totals.pageviews).toBe(3);
+    const latest = data.timeline.at(-1)!;
+    expect(latest.events).toBe(3);
+    expect(latest.visitors).toBe(2);
+  });
+
   it("applies the recent-feed country filter", async () => {
     store.capture(pageview({ distinctId: "a", path: "/maps" }), { geoCountry: "CR" });
     store.capture(pageview({ distinctId: "b", path: "/maps" }), { geoCountry: "DE" });
@@ -201,6 +238,65 @@ describe("AnalyticsStore capture + monitor", () => {
     expect(data.shareEvents).toBe(1);
     expect(data.sharesByPlatform).toEqual([{ platform: "Discord", count: 1 }]);
     expect(data.topSharedPages).toEqual([{ path: "/player/juan", subject: "juan", subjectType: "player", count: 1 }]);
+  });
+
+  it("builds a durable roster of every signed-in osu! account", async () => {
+    const signedIn = (username: string, viewerId: number, minutesAgo: number, country?: string) =>
+      pageview({ distinctId: `d${viewerId}`, minutesAgo, properties: { viewer_username: username, viewer_id: viewerId, ...(country ? { $geoip_country_code: country } : {}) } });
+
+    store.capture(signedIn("juan", 111, 60), {});
+    store.capture(signedIn("juan", 111, 5, "cr"), {});
+    store.capture(signedIn("kanaria", 222, 30, "jp"), {});
+    // Anonymous and bot traffic never joins the roster.
+    store.capture(pageview({ distinctId: "anon" }), {});
+    store.capture(signedIn("botlike", 333, 2), { isBot: true });
+    await store.flush();
+
+    expect(await store.countViewers()).toBe(2);
+    const viewers = await store.getViewers();
+    // Newest activity first.
+    expect(viewers.map((v) => v.username)).toEqual(["juan", "kanaria"]);
+    const juan = viewers[0]!;
+    expect(juan.viewerId).toBe(111);
+    expect(juan.events).toBe(2);
+    expect(juan.country).toBe("CR");
+    expect(juan.lastSeen - juan.firstSeen).toBeGreaterThan(50 * 60_000);
+  });
+
+  it("keeps counting a returning viewer across flushes and follows renames", async () => {
+    const visit = (username: string, minutesAgo: number) =>
+      pageview({ distinctId: "d1", minutesAgo, properties: { viewer_username: username, viewer_id: 111 } });
+
+    store.capture(visit("oldname", 120), {});
+    await store.flush();
+    store.capture(visit("newname", 10), {});
+    await store.flush();
+
+    const viewers = await store.getViewers();
+    expect(viewers).toHaveLength(1);
+    expect(viewers[0]).toMatchObject({ viewerId: 111, username: "newname", events: 2 });
+
+    // An out-of-order older event must not roll the name back.
+    store.capture(visit("oldname", 240), {});
+    await store.flush();
+    const after = await store.getViewers();
+    expect(after[0]).toMatchObject({ username: "newname", events: 3 });
+    expect(after[0]!.firstSeen).toBeLessThan(NOW - 200 * 60_000);
+  });
+
+  it("seeds the roster from events already stored when the table is new", async () => {
+    store.capture(pageview({ distinctId: "d1", minutesAgo: 90, properties: { viewer_username: "juan", viewer_id: 111 } }), {});
+    store.capture(pageview({ distinctId: "d1", minutesAgo: 20, properties: { viewer_username: "juan", viewer_id: 111 } }), { geoCountry: "CR" });
+    await store.flush();
+    await exec(db, "drop table analytics_viewers");
+
+    // A fresh store over the same file is the first-boot-after-deploy case.
+    const reopened = new AnalyticsStore(db, { retentionDays: 90 });
+    await reopened.ensureSchema();
+    const viewers = await reopened.getViewers();
+    reopened.stop();
+    expect(viewers).toHaveLength(1);
+    expect(viewers[0]).toMatchObject({ viewerId: 111, username: "juan", events: 2, country: "CR" });
   });
 
   it("answers the valley slice", async () => {

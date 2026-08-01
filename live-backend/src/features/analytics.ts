@@ -2,13 +2,13 @@ import { randomUUID } from "node:crypto";
 import { exec, execBatch, json, parseJson, type Db, type DbStatement } from "../db.js";
 import { logInfo, logWarn, errorContext } from "../logger.js";
 
-// In-house analytics: the PostHog replacement. The Vercel capture proxy
-// (/api/sync) forwards every tracked event here; rows land in a SEPARATE
+// In-house web analytics, the site's only analytics sink. The Vercel capture
+// proxy (/api/sync) forwards every tracked event here; rows land in a SEPARATE
 // SQLite file (its own WAL) so analytics volume can never bloat the main
-// serving DB, and every admin dashboard query is a local read instead of a
-// rate-limited HogQL round trip. Commonly-filtered fields are extracted into
-// real columns at ingest; everything else stays in the props JSON and is
-// json_extract'ed at query time (the feed is LIMIT-bounded, so that's cheap).
+// serving DB, and every admin dashboard query is a local read against it.
+// Commonly-filtered fields are extracted into real columns at ingest;
+// everything else stays in the props JSON and is json_extract'ed at query time
+// (the feed is LIMIT-bounded, so that's cheap).
 
 const FLUSH_INTERVAL_MS = 1_000;
 const MAX_BUFFERED_EVENTS = 5_000;
@@ -17,8 +17,9 @@ const MAX_EVENTS_PER_CAPTURE = 50;
 const PRUNE_INTERVAL_MS = 60 * 60_000;
 const LIVE_TICKET_TTL_MS = 10 * 60_000;
 const ACTIVE_VISITOR_WINDOW_MS = 5 * 60_000;
+const TIMELINE_BUCKETS = 48;
 
-// Query-side display defaults, matching the HogQL queries this replaces.
+// Query-side display defaults.
 const DEFAULT_DISPLAY_TIME_ZONE = "America/Costa_Rica";
 const DEFAULT_FEED_HOSTS = ["mania-tracker.com", "www.mania-tracker.com"];
 const DEFAULT_FEED_EXCLUDED_VIEWER = "aleju03";
@@ -52,6 +53,10 @@ export interface AnalyticsEventRecord {
 export interface AnalyticsFeedEvent {
   eventId: string | null;
   timestamp: string;
+  /* Epoch ms alongside the display label: the admin feed needs it to age rows
+     ("12s ago"), stitch sessions, and keep live SSE rows ordered against a
+     snapshot. */
+  ts: number;
   event: string;
   path: string;
   country: string | null;
@@ -87,10 +92,22 @@ export interface AnalyticsFeedEvent {
   skinKeymodes: string | null;
   skinUploadError: string | null;
   viewerUsername: string | null;
+  referrer: string | null;
+}
+
+export interface AnalyticsTimelineBucket {
+  ts: number;
+  events: number;
+  pageviews: number;
+  visitors: number;
 }
 
 export interface AnalyticsMonitorResponse {
   rangeHours: number;
+  /* Width of one timeline bucket; the series is dense (empty buckets included)
+     so the admin chart can render it without gap-filling. */
+  bucketMs: number;
+  timeline: AnalyticsTimelineBucket[];
   activeVisitors: number;
   pageviewsInRange: number;
   uniqueVisitorsInRange: number;
@@ -132,6 +149,15 @@ export interface AnalyticsMonitorResponse {
   }>;
 }
 
+export interface AnalyticsViewerRow {
+  viewerId: number;
+  username: string;
+  firstSeen: number;
+  lastSeen: number;
+  events: number;
+  country: string | null;
+}
+
 export interface AnalyticsValleyResponse {
   activeVisitors: number;
   recent: Array<{
@@ -159,8 +185,8 @@ function normalizeCountryCode(value: unknown): string | null {
   return country && /^[A-Z]{2}$/.test(country) ? country : null;
 }
 
-/* One PostHog-shaped capture payload ({event, distinct_id, timestamp,
-   properties}) into a typed record. Returns null for garbage. */
+/* One capture payload ({event, distinct_id, timestamp, properties}) into a
+   typed record. Returns null for garbage. */
 export function normalizeAnalyticsEvent(
   payload: unknown,
   meta: { geoCountry?: string | null; isBot?: boolean; now?: number },
@@ -249,6 +275,51 @@ export class AnalyticsStore {
     `);
     await exec(this.db, "create index if not exists idx_analytics_events_ts on analytics_events(ts desc)");
     await exec(this.db, "create index if not exists idx_analytics_events_event_ts on analytics_events(event, ts desc)");
+
+    // Durable roster of every osu! account that has browsed while signed in.
+    // Kept as its own projection because analytics_events is pruned at
+    // ANALYTICS_RETENTION_DAYS, and "who has ever signed in" must outlive that.
+    await exec(this.db, `
+      create table if not exists analytics_viewers (
+        viewer_id integer primary key,
+        username text not null,
+        first_seen integer not null,
+        last_seen integer not null,
+        events integer not null default 0,
+        last_country text
+      )
+    `);
+    await exec(this.db, "create index if not exists idx_analytics_viewers_last_seen on analytics_viewers(last_seen desc)");
+    await this.backfillViewers();
+  }
+
+  /* One-shot seed so the roster isn't empty on the first boot after deploy:
+     everything still inside the events retention window gets folded in. */
+  private async backfillViewers(): Promise<void> {
+    const existing = (await exec(this.db, "select count(*) as n from analytics_viewers")).rows[0];
+    if (Number(existing?.n ?? 0) > 0) return;
+    // The `latest` side uses a single max(ts), so SQLite's bare-column rule
+    // makes username/country come from that newest row.
+    const result = await exec(this.db, `
+      insert into analytics_viewers (viewer_id, username, first_seen, last_seen, events, last_country)
+      select agg.vid, latest.viewer_username, agg.first_seen, agg.last_seen, agg.events, latest.country
+      from (
+        select cast(json_extract(props, '$.viewer_id') as integer) as vid,
+               min(ts) as first_seen, max(ts) as last_seen, count(*) as events
+        from analytics_events
+        where is_bot = 0 and viewer_username is not null and json_extract(props, '$.viewer_id') is not null
+        group by vid
+      ) agg
+      join (
+        select cast(json_extract(props, '$.viewer_id') as integer) as vid,
+               max(ts) as t, viewer_username, country
+        from analytics_events
+        where is_bot = 0 and viewer_username is not null and json_extract(props, '$.viewer_id') is not null
+        group by vid
+      ) latest on latest.vid = agg.vid
+    `);
+    const seeded = result.rowsAffected ?? 0;
+    if (seeded > 0) logInfo("analytics_viewers_backfilled", { viewers: seeded });
   }
 
   start(): void {
@@ -273,8 +344,8 @@ export class AnalyticsStore {
     this.pruneTimer = null;
   }
 
-  /* Accepts one capture body from the proxy: either a single PostHog-shaped
-     payload or {batch: [...]}. Returns how many events were accepted. */
+  /* Accepts one capture body from the proxy: either a single payload or
+     {batch: [...]}. Returns how many events were accepted. */
   capture(body: unknown, meta: { geoCountry?: string | null; isBot?: boolean } = {}): number {
     const payloads = Array.isArray((body as { batch?: unknown })?.batch)
       ? ((body as { batch: unknown[] }).batch).slice(0, MAX_EVENTS_PER_CAPTURE)
@@ -357,11 +428,35 @@ export class AnalyticsStore {
         propsJsonFor(record),
       ],
     }));
+    statements.push(...viewerUpsertStatements(batch));
     try {
       await execBatch(this.db, statements);
     } catch (error) {
       logWarn("analytics_flush_failed", { events: batch.length, ...errorContext(error) });
     }
+  }
+
+  /* Every osu! account that has browsed while signed in, newest activity
+     first. Survives event pruning, so this really is "who has signed in". */
+  async getViewers(limit = 500): Promise<AnalyticsViewerRow[]> {
+    await this.flush();
+    const rows = (await exec(this.db, `
+      select viewer_id, username, first_seen, last_seen, events, last_country
+      from analytics_viewers order by last_seen desc limit ?
+    `, [Math.min(2000, Math.max(1, Math.round(limit)))])).rows;
+    return rows.map((row) => ({
+      viewerId: Number(row.viewer_id),
+      username: String(row.username ?? ""),
+      firstSeen: Number(row.first_seen),
+      lastSeen: Number(row.last_seen),
+      events: Number(row.events ?? 0),
+      country: row.last_country == null ? null : String(row.last_country),
+    }));
+  }
+
+  async countViewers(): Promise<number> {
+    const row = (await exec(this.db, "select count(*) as n from analytics_viewers")).rows[0];
+    return Number(row?.n ?? 0);
   }
 
   async prune(now = Date.now()): Promise<number> {
@@ -425,6 +520,7 @@ export class AnalyticsStore {
     return {
       eventId: str("$insert_id"),
       timestamp: this.timeLabel(record.ts),
+      ts: record.ts,
       event: record.event,
       path: record.path ?? "",
       country: record.country,
@@ -460,6 +556,7 @@ export class AnalyticsStore {
       skinKeymodes: str("skin_keymodes"),
       skinUploadError: str("skin_upload_error"),
       viewerUsername: record.viewerUsername,
+      referrer: record.referringDomain,
     };
   }
 
@@ -508,7 +605,7 @@ export class AnalyticsStore {
     if (recentCountry) recentArgs.push(recentCountry);
     recentArgs.push(recentLimit);
     const recent = (await exec(this.db, `
-      select ts, event, path, country, selected_country, distinct_id, screen_width, viewport_width, viewer_username, props
+      select ts, event, path, country, selected_country, distinct_id, screen_width, viewport_width, viewer_username, referring_domain, props
       from analytics_events
       where ts > ? and is_bot = 0 and distinct_id != 'server'${feedHostClause}${feedViewerClause}${recentCountry ? " and country = ?" : ""}
         and (path is null or path not like '/admin/%')
@@ -580,6 +677,34 @@ export class AnalyticsStore {
       group by c order by n desc limit 12
     `, [since])).rows;
 
+    // Traffic shape over the range, bucketed so the admin chart is a fixed
+    // width regardless of range. Buckets are aligned to `since` (not to wall
+    // clock) so the newest bucket always ends at "now".
+    const bucketMs = Math.max(60_000, Math.ceil((rangeHours * 60 * 60_000) / TIMELINE_BUCKETS));
+    const timelineRows = (await exec(this.db, `
+      select cast((ts - ?) / ? as integer) as b,
+        count(*) as events,
+        sum(case when event = '$pageview' and (path is null or path not like '/admin/%') then 1 else 0 end) as pageviews,
+        count(distinct distinct_id) as visitors
+      from analytics_events
+      where ts > ? and is_bot = 0 and distinct_id != 'server'
+      group by b order by b
+    `, [since, bucketMs, since])).rows;
+    const timelineByBucket = new Map<number, AnalyticsTimelineBucket>();
+    for (const row of timelineRows) {
+      const bucket = Number(row.b);
+      if (!Number.isFinite(bucket) || bucket < 0 || bucket >= TIMELINE_BUCKETS) continue;
+      timelineByBucket.set(bucket, {
+        ts: since + bucket * bucketMs,
+        events: Number(row.events ?? 0),
+        pageviews: Number(row.pageviews ?? 0),
+        visitors: Number(row.visitors ?? 0),
+      });
+    }
+    const timeline: AnalyticsTimelineBucket[] = Array.from({ length: TIMELINE_BUCKETS }, (_, index) => (
+      timelineByBucket.get(index) ?? { ts: since + index * bucketMs, events: 0, pageviews: 0, visitors: 0 }
+    ));
+
     const sharePages = (await exec(this.db, `
       select json_extract(props, '$.pathname') as p, json_extract(props, '$.subject') as s,
         json_extract(props, '$.subject_type') as t, count(*) as n
@@ -591,6 +716,8 @@ export class AnalyticsStore {
 
     return {
       rangeHours,
+      bucketMs,
+      timeline,
       activeVisitors: Number(overview?.active ?? 0),
       pageviewsInRange: Number(overview?.pageviews ?? 0),
       uniqueVisitorsInRange: Number(overview?.visitors ?? 0),
@@ -609,7 +736,7 @@ export class AnalyticsStore {
         country: row.country == null ? null : String(row.country),
         selectedCountry: row.selected_country == null ? null : String(row.selected_country),
         viewerUsername: row.viewer_username == null ? null : String(row.viewer_username),
-        referringDomain: null,
+        referringDomain: row.referring_domain == null ? null : String(row.referring_domain),
         screenWidth: row.screen_width == null ? null : Number(row.screen_width),
         viewportWidth: row.viewport_width == null ? null : Number(row.viewport_width),
         isBot: false,
@@ -692,6 +819,48 @@ export class AnalyticsStore {
       })),
     };
   }
+}
+
+/* Folds a flush batch into the durable viewer roster. Collapsed per viewer
+   first so a burst of pageviews is one upsert instead of twenty. */
+export function viewerUpsertStatements(batch: AnalyticsEventRecord[]): DbStatement[] {
+  const byViewer = new Map<number, { username: string; first: number; last: number; events: number; country: string | null }>();
+  for (const record of batch) {
+    if (record.isBot || !record.viewerUsername) continue;
+    const viewerId = asFiniteNumber(record.properties.viewer_id);
+    if (viewerId == null || !Number.isInteger(viewerId) || viewerId <= 0) continue;
+    const existing = byViewer.get(viewerId);
+    if (!existing) {
+      byViewer.set(viewerId, {
+        username: record.viewerUsername,
+        first: record.ts,
+        last: record.ts,
+        events: 1,
+        country: record.country,
+      });
+      continue;
+    }
+    existing.events += 1;
+    if (record.ts < existing.first) existing.first = record.ts;
+    // Usernames change on osu!, so the newest event in the batch wins.
+    if (record.ts >= existing.last) {
+      existing.last = record.ts;
+      existing.username = record.viewerUsername;
+      if (record.country) existing.country = record.country;
+    }
+  }
+  return Array.from(byViewer.entries()).map(([viewerId, entry]) => ({
+    sql: `insert into analytics_viewers (viewer_id, username, first_seen, last_seen, events, last_country)
+      values (?, ?, ?, ?, ?, ?)
+      on conflict(viewer_id) do update set
+        username = case when excluded.last_seen >= analytics_viewers.last_seen then excluded.username else analytics_viewers.username end,
+        last_country = case when excluded.last_seen >= analytics_viewers.last_seen and excluded.last_country is not null
+          then excluded.last_country else analytics_viewers.last_country end,
+        first_seen = min(analytics_viewers.first_seen, excluded.first_seen),
+        last_seen = max(analytics_viewers.last_seen, excluded.last_seen),
+        events = analytics_viewers.events + excluded.events`,
+    args: [viewerId, entry.username, entry.first, entry.last, entry.events, entry.country],
+  }));
 }
 
 export function deviceKindFor(screenWidth: number | null, viewportWidth: number | null): "mobile" | "desktop" | "unknown" {

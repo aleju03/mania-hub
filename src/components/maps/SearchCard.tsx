@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { LiveMapSearchEntry } from "../../lib/live-backend";
+import { oszDownloadUrl } from "../../lib/beatmap-mirrors";
 import { formatDuration, formatNumber } from "../../lib/format";
 import { OsuLogo } from "../ui/OsuLogo";
 import { MapPreviewButton, type MapPreviewAudio } from "./MapPreviewAudio";
@@ -152,11 +153,9 @@ export function osuDirectUrl(beatmapsetId: number): string {
   return `osu://dl/${beatmapsetId}`;
 }
 
-// Direct .osz download via a mirror (no server proxy). catboy.best mirrors the
-// same hosts the backend's archive layer uses.
-export function oszDownloadUrl(beatmapsetId: number): string {
-  return `https://catboy.best/d/${beatmapsetId}`;
-}
+// .osz download via /api/osz, which probes the mirror list server-side and
+// 302s to a healthy one; the archive bytes still flow mirror-to-browser.
+export { oszDownloadUrl } from "../../lib/beatmap-mirrors";
 
 function statusPill(status: string): { label: string; className: string } | null {
   const s = status.toLowerCase();

@@ -14,18 +14,20 @@ import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
 import { CountryFlag } from "../ui/CountryFlag";
 
 /* People spam-open packs all day, so the feed is an ambient live ticker at
-   the page's edge, not a section of the page: every pull (not just the rare
-   ones) slides in at the top left, lingers for a moment and fades away.
+   the page's edge, not a section of the page: every pull that lands while you
+   are watching (not just the rare ones) slides in at the top left, lingers for a moment and fades away.
    Notable tiers glow, commons stay dim. The "players own your card" number
    is a fun fact, so it sits quietly on the opposite side. Both rails only
    exist on viewports wide enough to have true margins. */
 
 const FEED_POLL_MS = 15_000;
 const FEED_LIMIT = 20;
-// How long one entry stays on screen once it has entered. Entries enter one
-// at a time from a drip queue, so their exits stagger on their own; a busy
+// How long one entry stays on screen once it has entered. Live entries enter
+// one at a time from a drip queue, so their exits stagger on their own; a busy
 // rail is the point, it should read as "this page is alive".
 const ENTRY_TTL_MS = 75_000;
+// Backlog placed instantly on the first poll to give the rail a starting
+// state. These are old pulls, so they never animate; see RailEntry.instant.
 const SEED_COUNT = 15;
 const MAX_VISIBLE = 15;
 // The drip: buffered pulls enter one at a time so nothing lands in the same
@@ -44,6 +46,10 @@ const NOTABLE_TIERS = new Set<string>(["ultraRare", "legendary", "mythic", "asce
 interface RailEntry {
   pull: LivePackPullFeedEntry;
   expiresAt: number;
+  // Placed as pre-existing history (first-poll seed, or a restore), so it
+  // renders where it is instead of sliding in. The flow-in belongs to pulls
+  // that actually land while you are watching.
+  instant?: boolean;
 }
 
 /* Session-lifetime feed state at module scope (like the pack-art thumb
@@ -133,7 +139,9 @@ export function PackPulse({ viewerId, hidden = false }: { viewerId: number | nul
 
   useEffect(() => {
     restoreFeedStateOnce();
-    const alive = savedRailEntries.filter((entry) => entry.expiresAt > Date.now());
+    const alive = savedRailEntries
+      .filter((entry) => entry.expiresAt > Date.now())
+      .map((entry) => ({ ...entry, instant: true }));
     savedRailEntries = alive;
     if (alive.length > 0) {
       setEntriesState((current) => (current.length > 0 ? current : alive));
@@ -159,15 +167,28 @@ export function PackPulse({ viewerId, hidden = false }: { viewerId: number | nul
         .then((pulls) => {
           if (cancelled) return;
           const fresh = pulls.filter((pull) => !seenPullIds.has(pull.id));
-          // The first poll of the session seeds a taste of recent history;
-          // after that only unseen pulls enter the rail. Everything goes
-          // through the drip queue, oldest first, so a batch enters as a
-          // stream with the newest pull landing on top last.
-          const additions = feedSeeded ? fresh : fresh.slice(0, SEED_COUNT);
+          const wasSeeded = feedSeeded;
           for (const pull of pulls) seenPullIds.add(pull.id);
           feedSeeded = true;
-          if (additions.length > 0) {
-            pullQueue.push(...[...additions].reverse());
+          if (!wasSeeded) {
+            // The first poll of the session fills the rail with a taste of
+            // recent history. That history is minutes or hours old, so it is
+            // placed in one frame, already there when you look: nothing
+            // slides in. Newest first, matching the live prepend order.
+            const seedNow = Date.now();
+            const seeds = fresh
+              .slice(0, SEED_COUNT)
+              .map((pull) => ({ pull, expiresAt: seedNow + ENTRY_TTL_MS, instant: true }));
+            if (seeds.length > 0) {
+              setEntries((current) => [...current, ...seeds].slice(0, MAX_VISIBLE));
+            }
+            return;
+          }
+          // Afterwards only unseen pulls enter, through the drip queue,
+          // oldest first, so a batch streams in with the newest landing on
+          // top last.
+          if (fresh.length > 0) {
+            pullQueue.push(...[...fresh].reverse());
           }
         })
         .catch(() => {});
@@ -239,7 +260,7 @@ export function PackPulse({ viewerId, hidden = false }: { viewerId: number | nul
               recent global pulls
             </motion.div>
           )}
-          {entries.map(({ pull }) => {
+          {entries.map(({ pull, instant }) => {
             const notable = pull.isFirstGlobal || (pull.tier !== null && NOTABLE_TIERS.has(pull.tier));
             const style = tierStyle(pull.tier);
             const accent = tierAccentRgb(pull.tier);
@@ -247,7 +268,7 @@ export function PackPulse({ viewerId, hidden = false }: { viewerId: number | nul
               <motion.div
                 key={pull.id}
                 layout
-                initial={{ opacity: 0, x: -10 }}
+                initial={instant ? false : { opacity: 0, x: -10 }}
                 animate={{ opacity: notable ? 0.95 : 0.6, x: 0 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.25 }}

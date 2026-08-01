@@ -19,6 +19,7 @@
     "live-db:update": "npm --prefix live-backend run db:sync-from-vps -- --fresh",
     "replay:capture-stable": "node --env-file-if-exists=.env scripts/replay-capture-stable.ts",
     "replay:compare-capture": "node --env-file-if-exists=.env scripts/replay-compare-capture.ts",
+    "replay:convert-capture": "node scripts/replay-capture-convert.mjs",
     "replay:source-audit": "node --env-file-if-exists=.env scripts/stable-replay-source-audit.ts",
     "replay:validate": "node --env-file-if-exists=.env scripts/replay-validate.ts",
     "skins:build-preview-backdrops": "node scripts/build-skin-preview-backdrops.mjs",

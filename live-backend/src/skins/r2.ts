@@ -31,8 +31,23 @@ export function isSkinStorageConfigured(config: SkinStorageConfig): boolean {
   );
 }
 
-export function skinOskKey(id: string, name: string): string {
-  return `${SKINS_PREFIX}${safeId(id)}/${oskFilename(name)}`;
+// The .osk is stored with the same immutable cache-control as the images, so
+// an uploader shipping a newer build has to land on a key no cache has seen:
+// revision 0 is the shape the publish flow has always written, later ones
+// carry a suffix. The download keeps the clean filename either way (the
+// content-disposition is written separately from the key).
+export function skinOskKey(id: string, name: string, revision = 0): string {
+  const filename = oskFilename(name);
+  const suffix = revision > 0 ? `-r${Math.floor(revision)}` : "";
+  return `${SKINS_PREFIX}${safeId(id)}/${filename.replace(/\.osk$/i, "")}${suffix}.osk`;
+}
+
+// The revision to write next given the key currently on the row, mirroring
+// nextSkinPreviewRevision: an unversioned (or missing) key starts at 1.
+export function nextSkinOskRevision(previousKey: string | null | undefined): number {
+  const match = /-r(\d+)\.osk$/i.exec(previousKey ?? "");
+  const current = match ? Number(match[1]) : 0;
+  return Number.isFinite(current) && current > 0 ? current + 1 : 1;
 }
 
 export function skinPreviewKey(id: string, ext: string): string {
@@ -73,10 +88,14 @@ export async function uploadSkinObject(
   buffer: Buffer,
   contentType: string,
   disposition: "attachment" | "inline",
+  // What the browser saves the object as, when that should not follow the
+  // storage key: a re-uploaded .osk lives under a versioned key but still
+  // downloads under the skin's own name.
+  downloadFilename?: string,
 ): Promise<UploadedSkinObject> {
   const s3 = await loadS3Module();
   const client = getClient(s3, config);
-  const filename = key.split("/").pop() ?? "file";
+  const filename = downloadFilename || key.split("/").pop() || "file";
   await client.send(new s3.PutObjectCommand({
     Bucket: requireBucket(config),
     Key: key,

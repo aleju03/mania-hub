@@ -1,7 +1,7 @@
 import { createFileRoute, useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
 import { useState, useRef, useEffect, useCallback, useMemo, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronLeft, LoaderCircle, Maximize2, Minimize2, Pause, Play } from "lucide-react";
+import { ChevronLeft, ChevronsRight, LoaderCircle, Maximize2, Minimize2, Pause, Play } from "lucide-react";
 import { getReplayParsed, getBeatmapFile, getCommunityBeatmapFile, getScore, getUser, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores, lookupBeatmapByChecksum, submitCommunityBeatmap } from "../lib/osu";
 import { calculateManiaStarRating } from "../lib/mania-star-rating";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
@@ -17,7 +17,7 @@ import { ReplayCompareView } from "../components/replay/ReplayCompareView";
 import { ReplayInfo } from "../components/replay/ReplayInfo";
 import type { ReplayPlayerProfile } from "../components/replay/ReplayInfo";
 import { ReplaySkinSettingsModal } from "../components/replay/ReplaySkinSettingsModal";
-import { track } from "../lib/posthog";
+import { track } from "../lib/analytics";
 import { reportCrashedReplayWatchSession, startReplayWatchBeacon, updateReplayWatchBeaconContext } from "../lib/replay-crash-beacon";
 import { withTimeout } from "../lib/promise-timeout";
 import {
@@ -54,6 +54,7 @@ import {
   fetchLivePlayerRecentScoresDirect,
   getLiveBackendUrl,
   isLiveBackendConfigured,
+  openReplayPresenceEventSource,
   type LiveGlobalRankingEntry,
   type LivePlayerProfileSnapshot,
 } from "../lib/live-backend";
@@ -117,6 +118,10 @@ type FullscreenTarget = HTMLElement & {
 const MOBILE_FULLSCREEN_BUTTON_HIDE_MS = 2000;
 const FULLSCREEN_POINTER_CHROME_HIDE_MS = 1800;
 const FULLSCREEN_TAP_CHROME_HIDE_MS = 3000;
+// The inline (non-fullscreen) desktop stage overlays its playbar like the
+// osu! client overlays nothing: controls fade out during playback and come
+// back on pointer activity.
+const INLINE_POINTER_CHROME_HIDE_MS = 2600;
 const REPLAY_VIDEO_EXPORT_CLIP_SECONDS = 20;
 const MAX_UPLOAD_REPLAY_BYTES = 25 * 1024 * 1024;
 const REPLAY_PLAYER_LIVE_CACHE_TIMEOUT_MS = 900;
@@ -904,8 +909,8 @@ function ReplayPage() {
       }
 
       // Loads that cross the "Still loading" threshold report where the time
-      // went, so slow-load complaints are diagnosable from PostHog instead of
-      // guesswork (score lookup vs replay fetch vs chart fetch vs parsing).
+      // went, so slow-load complaints are diagnosable from the analytics feed
+      // instead of guesswork (score lookup vs replay fetch vs chart fetch vs parsing).
       const totalMs = performance.now() - loadStartMs;
       if (totalMs >= 5_000) {
         track("replay_load_slow", {
@@ -1727,9 +1732,13 @@ function ReplayPage() {
     />
   ) : null;
 
+  const viewerActive = Boolean(replay && !loading && !(scoreId && compareId));
+
   return (
     <div className="flex-1">
-      <div className={replay ? "hidden sm:block" : ""}>
+      {/* With a replay loaded the stage is the page: edge-to-edge under the
+          navbar like the osu! client, header hidden, info card below the fold. */}
+      <div className={viewerActive ? "hidden" : ""}>
         <PageHeader
           iconSrc="/images/icons/home.svg"
           title={REPLAY_LANDING_SEO_TITLE}
@@ -1737,10 +1746,7 @@ function ReplayPage() {
       </div>
 
       <div className="bg-osu-b5 min-h-[80vh]">
-        {/* With a replay loaded the mobile stage bleeds edge-to-edge and sits flush
-            under the navbar, so the container's mobile padding moves onto the
-            individual scrolling cards instead. */}
-        <div className={`max-w-[1200px] mx-auto ${replay && !loading ? "pb-4 sm:px-5 sm:py-6" : "px-3 py-3 sm:px-5 sm:py-6"}`}>
+        <div className={`mx-auto ${viewerActive ? "max-w-none" : "max-w-[1200px] px-3 py-3 sm:px-5 sm:py-6"}`}>
           <AnimatePresence mode="wait">
             {scoreId && compareId ? (
               <motion.div key={`compare-${scoreId}-${compareId}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
@@ -1757,10 +1763,9 @@ function ReplayPage() {
                 <p className="mt-1 max-w-md text-xs leading-relaxed text-osu-f1">{replayLoadingCopy.detail}</p>
               </motion.div>
             ) : replay ? (
-              <motion.div key="viewer" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <div className="hidden sm:block">{replayInfoCard}</div>
-                <ReplayViewer replay={replay} beatmap={beatmap} scoreInfo={scoreInfo} replayMods={uploadedReplayMods} judgeAsLazer={judgeAsLazer} sourceIsLazer={sourceIsLazer} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} initialTime={initialTime} localAudioUrl={localBeatmapAssets.audioUrl} localBackgroundUrl={localBeatmapAssets.backgroundUrl} onClear={handleClearReplay}>
-                  <div className="px-3 sm:hidden">{replayInfoCard}</div>
+              <motion.div key="viewer" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                <ReplayViewer replay={replay} beatmap={beatmap} scoreInfo={scoreInfo} replayMods={uploadedReplayMods} judgeAsLazer={judgeAsLazer} sourceIsLazer={sourceIsLazer} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} initialTime={initialTime} localAudioUrl={localBeatmapAssets.audioUrl} localBackgroundUrl={localBeatmapAssets.backgroundUrl} presenceKey={scoreId != null ? `score:${scoreId}` : uploadId ? `upload:${uploadId}` : null} onClear={handleClearReplay}>
+                  <div className="mx-auto w-full max-w-[1200px] px-3 sm:px-5 sm:pt-3">{replayInfoCard}</div>
                 </ReplayViewer>
               </motion.div>
             ) : pendingBeatmapUpload ? (
@@ -1866,6 +1871,7 @@ function ReplayViewer({
   initialTime,
   localAudioUrl,
   localBackgroundUrl,
+  presenceKey,
   onClear,
   children,
 }: {
@@ -1884,6 +1890,9 @@ function ReplayViewer({
   // isn't downloadable from osu! or the mirrors.
   localAudioUrl?: string | null;
   localBackgroundUrl?: string | null;
+  /** Identity of the watched replay for the anonymous spectator counter
+   *  (`score:<id>` / `upload:<id>`); null disables presence entirely. */
+  presenceKey?: string | null;
   onClear: () => void;
   // Mobile-only content (the score info card) slotted between the sticky
   // stage and the settings card so it scrolls under the pinned player.
@@ -1925,6 +1934,15 @@ function ReplayViewer({
     () => (judgeAsLazer === sourceIsLazer ? getScoreExpectedCounts(scoreInfo, replay) : undefined),
     [judgeAsLazer, sourceIsLazer, scoreInfo, replay],
   );
+  // Pins the HUD score counter's end state to the score the play actually
+  // earned. Meaningless while the what-if toggle judges on the other client,
+  // so the counter falls back to the raw simulation there.
+  const rendererRealTotalScore = useMemo(() => {
+    if (judgeAsLazer !== sourceIsLazer) return null;
+    if (judgeAsLazer) return scoreInfo?.total_score ?? null;
+    const stableTotal = scoreInfo?.legacy_total_score ?? scoreInfo?.score ?? replay.header?.totalScore;
+    return stableTotal != null && stableTotal > 0 ? stableTotal : null;
+  }, [judgeAsLazer, sourceIsLazer, scoreInfo, replay]);
   const keypressHeatmap = useMemo(() => {
     const frames = replay.frames;
     if (frames.length < 2) return [];
@@ -2168,14 +2186,193 @@ function ReplayViewer({
     })();
   };
 
+  // Anonymous concurrent-watcher count for this replay, osu! spectator-list
+  // style. Connecting registers this viewer, so the count includes them.
+  // Admins observe without counting: their own site visits never trigger or
+  // inflate the spectator number.
+  const presenceObserveOnly = auth?.isAdmin === true;
+  const [spectatorCount, setSpectatorCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (!presenceKey) {
+      setSpectatorCount(null);
+      return;
+    }
+    const source = openReplayPresenceEventSource(presenceKey, { observe: presenceObserveOnly });
+    if (!source) return;
+    const onCount = (event: MessageEvent) => {
+      try {
+        const parsed = JSON.parse(event.data as string) as { count?: unknown };
+        if (typeof parsed.count === "number") setSpectatorCount(parsed.count);
+      } catch {
+        // Malformed payload: keep the previous count.
+      }
+    };
+    source.addEventListener("count", onCount as EventListener);
+    return () => {
+      source.close();
+      setSpectatorCount(null);
+    };
+  }, [presenceKey, presenceObserveOnly]);
+
+  // Ingame leaderboard: the map's global top plays for the score's beatmap.
+  // The renderer inserts the watched player's live simulated score among
+  // them, so overtakes happen at the moments they were earned.
+  const [leaderboardScores, setLeaderboardScores] = useState<OsuScore[] | null>(null);
+  useEffect(() => {
+    const beatmapId = scoreInfo?.beatmap?.id;
+    if (!beatmapId) {
+      setLeaderboardScores(null);
+      return;
+    }
+    let cancelled = false;
+    getBeatmapScores({ data: { beatmapId, page: 1 } })
+      .then((res) => {
+        if (!cancelled) setLeaderboardScores((res as { scores?: OsuScore[] } | null)?.scores ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setLeaderboardScores(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [scoreInfo?.beatmap?.id]);
+
+  const rendererLeaderboard = useMemo(() => {
+    if (!leaderboardScores) return [];
+    return leaderboardScores
+      // The watched play would double up against its own live row.
+      .filter((score) => score.id !== scoreInfo?.id)
+      .map((score) => ({
+        name: score.user?.username ?? "player",
+        score: (judgeAsLazer ? score.total_score : score.legacy_total_score ?? score.score) ?? score.score,
+        combo: score.max_combo ?? 0,
+      }));
+  }, [leaderboardScores, scoreInfo?.id, judgeAsLazer]);
+  const leaderboardPlayerName = scoreInfo?.user?.username ?? replay.header.playerName ?? "player";
+  const rendererLeaderboardRef = useRef(rendererLeaderboard);
+  const leaderboardPlayerNameRef = useRef(leaderboardPlayerName);
+  useEffect(() => {
+    rendererLeaderboardRef.current = rendererLeaderboard;
+    leaderboardPlayerNameRef.current = leaderboardPlayerName;
+    rendererRef.current?.setLeaderboard?.(rendererLeaderboard, leaderboardPlayerName);
+  }, [rendererLeaderboard, leaderboardPlayerName]);
+
+  // Tab toggles the scoreboard, like ingame. Shift+Tab keeps normal focus
+  // navigation, and typing fields are left alone.
+  const [leaderboardVisible, setLeaderboardVisible] = useState(true);
+  const leaderboardVisibleRef = useRef(leaderboardVisible);
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Tab" || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable)) return;
+      event.preventDefault();
+      setLeaderboardVisible((visible) => !visible);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+  useEffect(() => {
+    leaderboardVisibleRef.current = leaderboardVisible;
+    rendererRef.current?.setLeaderboardVisible?.(leaderboardVisible);
+  }, [leaderboardVisible]);
+
+  // Inline overlay chrome (playbar + floating buttons) on the non-fullscreen
+  // stage: visible while paused, auto-hides during playback, reveals on
+  // pointer activity.
+  const [inlineChromeVisible, setInlineChromeVisible] = useState(true);
+  const inlineChromeTimeoutRef = useRef<number | null>(null);
+  const clearInlineChromeTimeout = useCallback(() => {
+    if (inlineChromeTimeoutRef.current == null) return;
+    window.clearTimeout(inlineChromeTimeoutRef.current);
+    inlineChromeTimeoutRef.current = null;
+  }, []);
+  const revealInlineChrome = useCallback((autoHide: boolean) => {
+    setInlineChromeVisible(true);
+    clearInlineChromeTimeout();
+    if (!autoHide) return;
+    inlineChromeTimeoutRef.current = window.setTimeout(() => {
+      inlineChromeTimeoutRef.current = null;
+      if (!scrubbingRef.current) setInlineChromeVisible(false);
+    }, INLINE_POINTER_CHROME_HIDE_MS);
+  }, [clearInlineChromeTimeout]);
+
+  useEffect(() => {
+    revealInlineChrome(isPlaying);
+  }, [isPlaying, revealInlineChrome]);
+
+  useEffect(() => () => clearInlineChromeTimeout(), [clearInlineChromeTimeout]);
+
+  // Skip-intro: visible during a long lead-in like the clients' skip arrows;
+  // clicking jumps to shortly before the first note. Note times are game
+  // time, same clock the renderer reports.
+  const firstNoteTimeMs = useMemo(() => {
+    const notes = beatmap?.notes;
+    if (!notes?.length) return null;
+    let min = Infinity;
+    for (const note of notes) min = Math.min(min, note.time);
+    return Number.isFinite(min) ? min : null;
+  }, [beatmap?.notes]);
+  const [showSkipIntro, setShowSkipIntro] = useState(false);
+  useEffect(() => {
+    if (firstNoteTimeMs == null || firstNoteTimeMs < 6000) {
+      setShowSkipIntro(false);
+      return;
+    }
+    const update = () => {
+      const time = rendererRef.current?.time ?? 0;
+      setShowSkipIntro(time < firstNoteTimeMs - 4000);
+    };
+    update();
+    const id = setInterval(update, 400);
+    return () => clearInterval(id);
+  }, [firstNoteTimeMs]);
+
+  // The cursor hides over the stage only after sitting idle mid-playback,
+  // video-player style; any movement brings it straight back.
+  const [stageCursorIdle, setStageCursorIdle] = useState(false);
+  const cursorIdleTimeoutRef = useRef<number | null>(null);
+  const clearCursorIdleTimeout = useCallback(() => {
+    if (cursorIdleTimeoutRef.current == null) return;
+    window.clearTimeout(cursorIdleTimeoutRef.current);
+    cursorIdleTimeoutRef.current = null;
+  }, []);
+  const markCursorActive = useCallback((rearm: boolean) => {
+    setStageCursorIdle(false);
+    clearCursorIdleTimeout();
+    if (!rearm) return;
+    cursorIdleTimeoutRef.current = window.setTimeout(() => {
+      cursorIdleTimeoutRef.current = null;
+      setStageCursorIdle(true);
+    }, 2000);
+  }, [clearCursorIdleTimeout]);
+
+  useEffect(() => {
+    if (!isPlaying) markCursorActive(false);
+  }, [isPlaying, markCursorActive]);
+
+  useEffect(() => () => clearCursorIdleTimeout(), [clearCursorIdleTimeout]);
+
   const handleReplayCanvasPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!isCanvasFullscreen) return;
+    markCursorActive(isPlaying);
+    if (!isCanvasFullscreen) {
+      if (!isPlaying) {
+        revealInlineChrome(false);
+        return;
+      }
+      // During playback only bottom proximity reveals the playbar; moving
+      // over the playfield keeps the stage clean like ingame.
+      const rect = event.currentTarget.getBoundingClientRect();
+      const bottomDistance = rect.bottom - event.clientY;
+      if (bottomDistance <= 150) revealInlineChrome(true);
+      return;
+    }
     const rect = event.currentTarget.getBoundingClientRect();
     const bottomDistance = rect.bottom - event.clientY;
     if (bottomDistance <= 190 || showFullscreenChrome) {
       showFullscreenChromeTemporarily();
     }
-  }, [isCanvasFullscreen, showFullscreenChrome, showFullscreenChromeTemporarily]);
+  }, [isCanvasFullscreen, isPlaying, markCursorActive, revealInlineChrome, showFullscreenChrome, showFullscreenChromeTemporarily]);
 
   const handleReplayCanvasPointerDown = useCallback((event: ReactPointerEvent<HTMLCanvasElement>) => {
     if (!isMobileReplayPointer(event)) return;
@@ -2202,11 +2399,17 @@ function ReplayViewer({
   }, [isCanvasFullscreen, showFullscreenChromeTemporarily]);
 
   const handleReplayCanvasPointerLeave = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!isCanvasFullscreen || scrubbingRef.current) return;
-    if (isMobileReplayPointer(event)) return;
+    if (scrubbingRef.current || isMobileReplayPointer(event)) return;
+    if (!isCanvasFullscreen) {
+      if (isPlaying) {
+        clearInlineChromeTimeout();
+        setInlineChromeVisible(false);
+      }
+      return;
+    }
     clearFullscreenChromeTimeout();
     setShowFullscreenChrome(false);
-  }, [clearFullscreenChromeTimeout, isCanvasFullscreen]);
+  }, [clearFullscreenChromeTimeout, clearInlineChromeTimeout, isCanvasFullscreen, isPlaying]);
 
   // Build full audio URL from the server archive extractor using beatmapset ID + audio filename from .osu.
   const effectiveBeatmapsetId = scoreInfo?.beatmapset?.id ?? fallbackBeatmapsetId;
@@ -2625,6 +2828,7 @@ function ReplayViewer({
             blackPlayfield: blackPlayfieldRef.current,
             scrollVelocities: beatmap?.scrollVelocities,
             expectedCounts: rendererExpectedCounts,
+            realTotalScore: rendererRealTotalScore,
             lifeBarFrames: replay.lifeBarFrames,
             skinSettings: skinSettingsRef.current,
             overlaySettings: overlaySettingsRef.current,
@@ -2659,6 +2863,8 @@ function ReplayViewer({
         renderer.setSkinSettings(skinSettingsRef.current);
         renderer.setOverlaySettings(overlaySettingsRef.current);
         renderer.setHitsoundTrigger?.(hitsoundPlayerRef.current);
+        renderer.setLeaderboard?.(rendererLeaderboardRef.current, leaderboardPlayerNameRef.current);
+        renderer.setLeaderboardVisible?.(leaderboardVisibleRef.current);
         rendererRef.current = renderer;
 
         // Record the resolved renderer backend (WebGL vs Canvas fallback) and
@@ -2735,7 +2941,7 @@ function ReplayViewer({
         rendererRef.current = null;
       }
     };
-  }, [replay, beatmap, initialTime, modRate, rendererMods, rendererExpectedCounts, judgeAsLazer, sourceIsLazer, scoreInfo?.beatmap?.convert, scoreInfo?.beatmap?.status, beatmap?.isConvert, applyOverlaySettings]);
+  }, [replay, beatmap, initialTime, modRate, rendererMods, rendererExpectedCounts, rendererRealTotalScore, judgeAsLazer, sourceIsLazer, scoreInfo?.beatmap?.convert, scoreInfo?.beatmap?.status, beatmap?.isConvert, applyOverlaySettings]);
 
   // Detect when the renderer reaches the end on its own (no more frames) and
   // flip isPlaying back. ReplayProgressBar polls the renderer independently
@@ -2752,6 +2958,31 @@ function ReplayViewer({
     }, 250);
     return () => clearInterval(id);
   }, [isPlaying, startReplayEndAudioFade]);
+
+  // Freeze on the fail screen like the client: once playback crosses the
+  // fail point (plus enough time for the fail animation), pause. Resuming is
+  // a deliberate act and plays the rest; scrubbing back re-arms the freeze.
+  const failPauseArmedRef = useRef(true);
+  useEffect(() => {
+    if (!isPlaying) return;
+    const id = setInterval(() => {
+      const r = rendererRef.current;
+      if (!r) return;
+      const failTime = r.getFailTime?.() ?? null;
+      if (failTime == null) return;
+      if (r.time < failTime - 400) {
+        failPauseArmedRef.current = true;
+        return;
+      }
+      if (failPauseArmedRef.current && r.time >= failTime + 650) {
+        failPauseArmedRef.current = false;
+        r.pause();
+        audioRef.current?.pause();
+        setIsPlaying(false);
+      }
+    }, 200);
+    return () => clearInterval(id);
+  }, [isPlaying]);
 
   // Sync audio with replay play/pause/seek
   useEffect(() => {
@@ -3010,6 +3241,15 @@ function ReplayViewer({
     }
   };
 
+  // Master volume: shared by the playbar slider, the mixer, and the wheel
+  // over the playbar's volume control.
+  const applyVolumeChange = useCallback((nextVolume: number) => {
+    const normalized = normalizeReplayVolume(nextVolume);
+    volumeRef.current = normalized;
+    setVolume(normalized);
+    if (normalized > 0) setAudioEnabled(true);
+    if (audioRef.current && !replayEndAudioFadeActiveRef.current) audioRef.current.volume = normalized;
+  }, []);
 
   const handleAudioError = () => {
     // A failing blob copy shouldn't kill audio: fall back to streaming from
@@ -3228,6 +3468,7 @@ function ReplayViewer({
           hidePerformanceStats: true,
           scrollVelocities: beatmap?.scrollVelocities,
           expectedCounts: rendererExpectedCounts,
+          realTotalScore: rendererRealTotalScore,
           lifeBarFrames: replay.lifeBarFrames,
           skinSettings: exportSkinSettings,
           overlaySettings: exportOverlaySettings,
@@ -3244,6 +3485,7 @@ function ReplayViewer({
       );
       exportRenderer.setScrollSpeed(exportScrollSpeed);
       exportRenderer.setSpeed(speed);
+      exportRenderer.setLeaderboard?.(rendererLeaderboardRef.current, leaderboardPlayerNameRef.current);
 
       const width = cssWidth;
       const height = cssHeight;
@@ -3418,6 +3660,115 @@ function ReplayViewer({
 
   const fullscreenChromeVisible = isCanvasFullscreen && showFullscreenChrome;
   const mobileFullscreenButtonVisible = !isCanvasFullscreen && showFullscreenChrome;
+  const stageCursorHidden = isPlaying && stageCursorIdle;
+
+  // One set of controls, two mounts: a card in the page flow on phones, the
+  // osu!-style overlay playbar inside the stage from sm up.
+  const renderReplayControls = (variant: "card" | "overlay") => (
+    <ReplayControls
+      variant={variant}
+      rendererRef={rendererRef}
+      heatmap={keypressHeatmap}
+      audioUrl={audioUrl}
+      audioError={audioError}
+      isPlaying={isPlaying}
+      buffering={buffering}
+      pendingPlay={pendingPlay}
+      speed={speed}
+      modRate={modRate}
+      audioEnabled={audioEnabled}
+      volume={volume}
+      beatmapHitsoundsAvailable={hasBeatmapHitsounds}
+      beatmapHitsoundsOn={audioSettings.hitsoundsEnabled && audioSettings.beatmapHitsounds}
+      beatmapHitsoundVolume={audioSettings.beatmapHitsoundVolume}
+      keypressHitsoundsOn={audioSettings.hitsoundsEnabled && audioSettings.keypressHitsounds}
+      keypressHitsoundVolume={audioSettings.keypressHitsoundVolume}
+      showInputOverlay={showInputOverlay}
+      inputOverlayOnly={inputOverlayOnly}
+      inputOverlayKeyHistory={inputOverlayKeyHistory}
+      inputOverlayColor={inputOverlayColor}
+      keypressOverlayEnabled={overlaySettings.keypresses.enabled}
+      skinSettingsOpen={skinSettingsOpen}
+      scrollSpeed={scrollSpeed}
+      bgDim={bgDim}
+      blackPlayfield={blackPlayfield}
+      videoExporting={videoExport.exporting}
+      videoExportProgress={videoExport.progress}
+      videoExportError={videoExport.error}
+      videoExportUrl={videoExport.url}
+      onTogglePlay={togglePlay}
+      onToggleFullscreen={toggleReplayFullscreen}
+      onExportVideo={replayVideoExportAvailable ? exportReplayVideo : undefined}
+      onSetSpeed={(nextSpeed) => {
+        setSpeed(nextSpeed);
+        rendererRef.current?.setSpeed(nextSpeed);
+        if (audioRef.current) {
+          audioRef.current.playbackRate = nextSpeed * modRate;
+          setAudioPreservesPitch(audioRef.current, audioPreservesPitch);
+        }
+      }}
+      onToggleAudio={toggleAudio}
+      onSetVolume={applyVolumeChange}
+      onSetBeatmapHitsoundVolume={(nextVolume) => {
+        const normalized = Math.max(0, Math.min(1, nextVolume));
+        setAudioSettings((current) => ({
+          ...current,
+          beatmapHitsoundVolume: normalized,
+          // Dragging the slider up from "off" re-enables the channel.
+          ...(normalized > 0 ? { beatmapHitsounds: true, hitsoundsEnabled: true } : {}),
+        }));
+      }}
+      onToggleBeatmapHitsounds={() => {
+        setAudioSettings((current) => {
+          const nextOn = !(current.hitsoundsEnabled && current.beatmapHitsounds);
+          return {
+            ...current,
+            beatmapHitsounds: nextOn,
+            hitsoundsEnabled: nextOn ? true : current.hitsoundsEnabled,
+          };
+        });
+      }}
+      onSetKeypressHitsoundVolume={(nextVolume) => {
+        const normalized = Math.max(0, Math.min(1, nextVolume));
+        setAudioSettings((current) => ({
+          ...current,
+          keypressHitsoundVolume: normalized,
+          ...(normalized > 0 ? { keypressHitsounds: true, hitsoundsEnabled: true } : {}),
+        }));
+      }}
+      onToggleKeypressHitsounds={() => {
+        setAudioSettings((current) => {
+          const nextOn = !(current.hitsoundsEnabled && current.keypressHitsounds);
+          return {
+            ...current,
+            keypressHitsounds: nextOn,
+            hitsoundsEnabled: nextOn ? true : current.hitsoundsEnabled,
+          };
+        });
+      }}
+      onToggleInputOverlay={() => setShowInputOverlay((value) => !value)}
+      onToggleInputOverlayOnly={() => setInputOverlayOnly((value) => !value)}
+      onToggleInputOverlayKeyHistory={() => setInputOverlayKeyHistory((value) => !value)}
+      onSetInputOverlayColor={(color) => setInputOverlayColor(normalizeReplayInputColor(color))}
+      onOpenSkinSettings={() => setSkinSettingsOpen(true)}
+      onSetScrollSpeed={(nextSpeed) => {
+        const normalized = normalizeReplayScrollSpeed(nextSpeed);
+        scrollSpeedUserOverrideRef.current = true;
+        applyScrollSpeed(normalized, true);
+        rendererRef.current?.setScrollSpeed(normalized);
+      }}
+      onSetBgDim={(nextDim) => {
+        const normalized = normalizeReplayBackgroundDim(nextDim);
+        setBgDim(normalized);
+        rendererRef.current?.setBackgroundDim(normalized);
+      }}
+      onToggleBlackPlayfield={() => setBlackPlayfield((value) => !value)}
+      onPointerDown={handleProgressPointerDown}
+      onPointerUp={handleProgressPointerUp}
+      onSeek={handleProgressSeek}
+      onContextMenu={() => {}}
+    />
+  );
 
   return (
     <div className="space-y-3">
@@ -3437,8 +3788,8 @@ function ReplayViewer({
         className={`group/replay-canvas relative overflow-hidden bg-[#0a0a18] ${
           isCanvasFullscreen
             ? `${isPseudoFullscreen ? "fixed inset-0 z-[100]" : ""} h-[100dvh] w-screen max-w-none rounded-none border-0`
-            : "border-y border-osu-b3/20 sm:rounded-xl sm:border"
-        }`}
+            : "border-y border-osu-b3/20 sm:border-0"
+        }${stageCursorHidden ? " cursor-none" : ""}`}
         style={isCanvasFullscreen ? { width: "100vw", height: "100dvh", maxWidth: "none" } : undefined}
       >
         <div
@@ -3478,7 +3829,9 @@ function ReplayViewer({
                 // browser chrome collapsing on scroll, so the stage never resizes.
                 // 172px = 60px navbar + 48px transport strip + a peek of the cards
                 // below to hint that the page scrolls.
-                "h-[calc(100svh-172px)] min-h-[360px] max-h-[540px] sm:h-[min(70vh,600px)] sm:min-h-0 sm:max-h-none"
+                // From sm up the stage is the whole viewport minus the 60px
+                // navbar, like being ingame.
+                "h-[calc(100svh-172px)] min-h-[360px] max-h-[540px] sm:h-[calc(100dvh-60px)] sm:min-h-[420px] sm:max-h-none"
           }`}
         />
         {!isCanvasFullscreen && (
@@ -3501,9 +3854,9 @@ function ReplayViewer({
           className={`absolute bottom-3 right-3 z-30 h-8 w-8 cursor-pointer items-center justify-center rounded-sm text-white/70 drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)] transition hover:bg-white/10 hover:text-white hover:opacity-100 focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-white/50 active:scale-95 sm:h-9 sm:w-9 ${
             isCanvasFullscreen
               ? fullscreenChromeVisible ? "flex opacity-90" : "flex opacity-0"
-              : // Phones enter fullscreen from the transport strip; this floating
-                // toggle only exists for sm+ (hover reveal, tap reveal on tablets).
-                `hidden sm:flex ${mobileFullscreenButtonVisible ? "opacity-90" : "opacity-0 group-hover/replay-canvas:opacity-90"}`
+              : // Phones enter fullscreen from the transport strip; on sm+ the
+                // overlay playbar carries the fullscreen toggle instead.
+                "hidden"
           }`}
           style={isCanvasFullscreen ? {
             bottom: "max(0.75rem, env(safe-area-inset-bottom))",
@@ -3560,6 +3913,60 @@ function ReplayViewer({
                 />
               </div>
             </div>
+          </div>
+        )}
+        {/* osu!-style spectator list, left edge a third of the way down:
+            count only, never names. */}
+        {spectatorCount != null && spectatorCount > 0 && (
+          <div className="pointer-events-none absolute left-0 top-[30%] z-20 hidden select-none sm:block">
+            <div className="bg-gradient-to-r from-black/50 via-black/30 to-transparent py-1 pl-3 pr-10 text-[13px] font-semibold text-white/90 [text-shadow:0_1px_2px_rgba(0,0,0,0.9)]">
+              Spectators ({spectatorCount})
+            </div>
+          </div>
+        )}
+        {/* Skip-intro, bottom-right like the clients' skip arrows. */}
+        {showSkipIntro && (
+          <button
+            type="button"
+            onClick={() => {
+              if (firstNoteTimeMs == null) return;
+              handleProgressSeek(Math.max(0, firstNoteTimeMs - 2500));
+            }}
+            className="absolute bottom-28 right-6 z-30 flex cursor-pointer items-center gap-0.5 rounded-md bg-black/55 py-2 pl-4 pr-2.5 text-[13px] font-bold text-white/90 backdrop-blur-sm transition hover:bg-black/75 hover:text-white active:scale-95"
+          >
+            Skip
+            <ChevronsRight className="h-5 w-5" />
+          </button>
+        )}
+        {/* The stable-style Visual Settings drawer: rises smoothly from the
+            bottom edge, and on close drops with one bounce off the floor
+            like the client's panel. */}
+        {!isCanvasFullscreen && (
+          <div className="absolute inset-x-0 bottom-0 z-20 hidden overflow-hidden sm:block pointer-events-none">
+            <AnimatePresence>
+              {inlineChromeVisible && (
+                <motion.div
+                  key="visual-settings"
+                  initial={{ y: "104%" }}
+                  animate={{ y: "0%", transition: { duration: 0.26, ease: [0.22, 0.9, 0.3, 1] } }}
+                  exit={{
+                    y: ["0%", "104%", "88%", "104%"],
+                    transition: { duration: 0.52, times: [0, 0.5, 0.76, 1], ease: ["easeIn", "easeOut", "easeIn"] },
+                  }}
+                  className="pointer-events-auto"
+                  onPointerEnter={() => revealInlineChrome(false)}
+                  onPointerLeave={() => {
+                    if (isPlaying && !scrubbingRef.current) revealInlineChrome(true);
+                  }}
+                  onFocusCapture={() => revealInlineChrome(false)}
+                  onBlurCapture={() => {
+                    if (isPlaying) revealInlineChrome(true);
+                  }}
+                >
+                  {renderReplayControls("overlay")}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         )}
         {rendererError && (
@@ -3628,116 +4035,10 @@ function ReplayViewer({
         />
       )}
 
-      {/* Settings card; on phones the transport (play/scrub) lives in the sticky
-          strip above, so this card hides its own copy below sm. */}
-      <div className="mx-3 sm:mx-0">
-      <ReplayControls
-        rendererRef={rendererRef}
-        heatmap={keypressHeatmap}
-        audioUrl={audioUrl}
-        audioError={audioError}
-        isPlaying={isPlaying}
-        buffering={buffering}
-        pendingPlay={pendingPlay}
-        speed={speed}
-        modRate={modRate}
-        audioEnabled={audioEnabled}
-        volume={volume}
-        beatmapHitsoundsAvailable={hasBeatmapHitsounds}
-        beatmapHitsoundsOn={audioSettings.hitsoundsEnabled && audioSettings.beatmapHitsounds}
-        beatmapHitsoundVolume={audioSettings.beatmapHitsoundVolume}
-        keypressHitsoundsOn={audioSettings.hitsoundsEnabled && audioSettings.keypressHitsounds}
-        keypressHitsoundVolume={audioSettings.keypressHitsoundVolume}
-        showInputOverlay={showInputOverlay}
-        inputOverlayOnly={inputOverlayOnly}
-        inputOverlayKeyHistory={inputOverlayKeyHistory}
-        inputOverlayColor={inputOverlayColor}
-        keypressOverlayEnabled={overlaySettings.keypresses.enabled}
-        skinSettingsOpen={skinSettingsOpen}
-        scrollSpeed={scrollSpeed}
-        bgDim={bgDim}
-        blackPlayfield={blackPlayfield}
-        videoExporting={videoExport.exporting}
-        videoExportProgress={videoExport.progress}
-        videoExportError={videoExport.error}
-        videoExportUrl={videoExport.url}
-        onTogglePlay={togglePlay}
-        onExportVideo={replayVideoExportAvailable ? exportReplayVideo : undefined}
-        onSetSpeed={(nextSpeed) => {
-          setSpeed(nextSpeed);
-          rendererRef.current?.setSpeed(nextSpeed);
-          if (audioRef.current) {
-            audioRef.current.playbackRate = nextSpeed * modRate;
-            setAudioPreservesPitch(audioRef.current, audioPreservesPitch);
-          }
-        }}
-        onToggleAudio={toggleAudio}
-        onSetVolume={(nextVolume) => {
-          const normalized = normalizeReplayVolume(nextVolume);
-          volumeRef.current = normalized;
-          setVolume(normalized);
-          if (!audioEnabled && normalized > 0) setAudioEnabled(true);
-          if (audioRef.current && !replayEndAudioFadeActiveRef.current) audioRef.current.volume = normalized;
-        }}
-        onSetBeatmapHitsoundVolume={(nextVolume) => {
-          const normalized = Math.max(0, Math.min(1, nextVolume));
-          setAudioSettings((current) => ({
-            ...current,
-            beatmapHitsoundVolume: normalized,
-            // Dragging the slider up from "off" re-enables the channel.
-            ...(normalized > 0 ? { beatmapHitsounds: true, hitsoundsEnabled: true } : {}),
-          }));
-        }}
-        onToggleBeatmapHitsounds={() => {
-          setAudioSettings((current) => {
-            const nextOn = !(current.hitsoundsEnabled && current.beatmapHitsounds);
-            return {
-              ...current,
-              beatmapHitsounds: nextOn,
-              hitsoundsEnabled: nextOn ? true : current.hitsoundsEnabled,
-            };
-          });
-        }}
-        onSetKeypressHitsoundVolume={(nextVolume) => {
-          const normalized = Math.max(0, Math.min(1, nextVolume));
-          setAudioSettings((current) => ({
-            ...current,
-            keypressHitsoundVolume: normalized,
-            ...(normalized > 0 ? { keypressHitsounds: true, hitsoundsEnabled: true } : {}),
-          }));
-        }}
-        onToggleKeypressHitsounds={() => {
-          setAudioSettings((current) => {
-            const nextOn = !(current.hitsoundsEnabled && current.keypressHitsounds);
-            return {
-              ...current,
-              keypressHitsounds: nextOn,
-              hitsoundsEnabled: nextOn ? true : current.hitsoundsEnabled,
-            };
-          });
-        }}
-        onToggleInputOverlay={() => setShowInputOverlay((value) => !value)}
-        onToggleInputOverlayOnly={() => setInputOverlayOnly((value) => !value)}
-        onToggleInputOverlayKeyHistory={() => setInputOverlayKeyHistory((value) => !value)}
-        onSetInputOverlayColor={(color) => setInputOverlayColor(normalizeReplayInputColor(color))}
-        onOpenSkinSettings={() => setSkinSettingsOpen(true)}
-        onSetScrollSpeed={(nextSpeed) => {
-          const normalized = normalizeReplayScrollSpeed(nextSpeed);
-          scrollSpeedUserOverrideRef.current = true;
-          applyScrollSpeed(normalized, true);
-          rendererRef.current?.setScrollSpeed(normalized);
-        }}
-        onSetBgDim={(nextDim) => {
-          const normalized = normalizeReplayBackgroundDim(nextDim);
-          setBgDim(normalized);
-          rendererRef.current?.setBackgroundDim(normalized);
-        }}
-        onToggleBlackPlayfield={() => setBlackPlayfield((value) => !value)}
-        onPointerDown={handleProgressPointerDown}
-        onPointerUp={handleProgressPointerUp}
-        onSeek={handleProgressSeek}
-        onContextMenu={() => {}}
-      />
+      {/* Settings card, phones only; from sm up the same controls live in the
+          overlay playbar inside the stage. */}
+      <div className="mx-3 sm:hidden">
+      {renderReplayControls("card")}
       </div>
 
       <AnimatePresence>

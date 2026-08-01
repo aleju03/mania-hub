@@ -26,8 +26,8 @@ import {
   resolveDetectedCountry,
   resolveInitialCountry,
 } from "../lib/country-cookie";
-import { PostHogProvider } from "../lib/posthog-provider";
-import { track } from "../lib/posthog";
+import { AnalyticsProvider } from "../lib/analytics-provider";
+import { track } from "../lib/analytics";
 import { getCanonicalOrigin } from "../lib/origin";
 import { DEFAULT_DESCRIPTION, SITE_FAVICON_HREF, SITE_NAME, websiteJsonLd } from "../lib/seo";
 import { activateLiveCountryOnServer, fetchLiveBackendBootstrap } from "../lib/live-backend";
@@ -581,7 +581,7 @@ function RootLayout() {
   return (
     <InitialCountryContext.Provider value={initialCountry}>
       <AuthContext.Provider value={auth}>
-        <PostHogProvider>
+        <AnalyticsProvider>
           <ThemeRecovery />
           <WindowActivityAttribute />
           <CustomCursor />
@@ -625,7 +625,7 @@ function RootLayout() {
               </a>
             </span>
           </footer>
-        </PostHogProvider>
+        </AnalyticsProvider>
       </AuthContext.Provider>
     </InitialCountryContext.Provider>
   );

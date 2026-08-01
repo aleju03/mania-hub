@@ -1,7 +1,7 @@
 export const REPLAY_OVERLAY_SETTINGS_STORAGE_KEY = "mania-hub-replay-overlays";
 export const REPLAY_OVERLAY_SETTINGS_CHANGE_EVENT = "mania-hub:replay-overlay-settings-change";
 
-export const REPLAY_OVERLAY_IDS = ["keypresses", "kps", "misses", "accuracy", "pp", "judgements", "progress"] as const;
+export const REPLAY_OVERLAY_IDS = ["keypresses", "kps", "misses", "accuracy", "pp", "judgements", "progress", "leaderboard"] as const;
 
 export type ReplayOverlayId = typeof REPLAY_OVERLAY_IDS[number];
 
@@ -17,7 +17,23 @@ export type ReplayOverlaySettings = Record<ReplayOverlayId, ReplayOverlayPlaceme
 export const REPLAY_OVERLAY_MIN_SCALE = 0.5;
 export const REPLAY_OVERLAY_MAX_SCALE = 2.5;
 
+// The fixed osu!-style score block (score + accuracy + progress pie) took
+// over the top corner, so the draggable accuracy/progress overlays default
+// off and the judgement counts moved below the score block.
 export const DEFAULT_REPLAY_OVERLAY_SETTINGS: ReplayOverlaySettings = {
+  keypresses: { enabled: false, x: 0.035, y: 0.68, scale: 0.75 },
+  kps: { enabled: false, x: 0.035, y: 0.77, scale: 0.75 },
+  misses: { enabled: true, x: 0.085, y: 0.77, scale: 1 },
+  accuracy: { enabled: false, x: 0.74, y: 0.02, scale: 1 },
+  pp: { enabled: false, x: 0.88, y: 0.02, scale: 1 },
+  judgements: { enabled: true, x: 0.92, y: 0.2, scale: 1.25 },
+  progress: { enabled: false, x: 0.03, y: 0.03, scale: 1 },
+  leaderboard: { enabled: true, x: 0, y: 0.24, scale: 1 },
+};
+
+// What the defaults were before the ingame-clone HUD; users still on these
+// exact placements follow the defaults forward.
+const PRE_INGAME_HUD_DEFAULTS: ReplayOverlaySettings = {
   keypresses: { enabled: false, x: 0.035, y: 0.68, scale: 0.75 },
   kps: { enabled: false, x: 0.035, y: 0.77, scale: 0.75 },
   misses: { enabled: true, x: 0.085, y: 0.77, scale: 1 },
@@ -25,6 +41,9 @@ export const DEFAULT_REPLAY_OVERLAY_SETTINGS: ReplayOverlaySettings = {
   pp: { enabled: false, x: 0.88, y: 0.02, scale: 1 },
   judgements: { enabled: true, x: 0.74, y: 0.07, scale: 1.25 },
   progress: { enabled: true, x: 0.03, y: 0.03, scale: 1 },
+  // "leaderboard" postdates every legacy layout; matching the current
+  // default makes the migration a no-op for it (same in the sets below).
+  leaderboard: { enabled: true, x: 0, y: 0.24, scale: 1 },
 };
 
 const COMPACT_MISS_OVERLAY_DEFAULT: ReplayOverlayPlacement = { enabled: true, x: 0.085, y: 0.77, scale: 0.75 };
@@ -39,6 +58,7 @@ const OVERLAPPING_LEFT_CLUSTER_DEFAULTS: ReplayOverlaySettings = {
   pp: { enabled: false, x: 0.88, y: 0.02, scale: 1 },
   judgements: { enabled: true, x: 0.74, y: 0.07, scale: 1 },
   progress: { enabled: true, x: 0.03, y: 0.03, scale: 1 },
+  leaderboard: { enabled: true, x: 0, y: 0.24, scale: 1 },
 };
 
 const LEGACY_PLAYFIELD_OVERLAY_DEFAULTS: ReplayOverlaySettings = {
@@ -49,6 +69,7 @@ const LEGACY_PLAYFIELD_OVERLAY_DEFAULTS: ReplayOverlaySettings = {
   pp: { enabled: false, x: 0.88, y: 0.02, scale: 1 },
   judgements: { enabled: true, x: 0.68, y: 0.07, scale: 1 },
   progress: { enabled: true, x: 0.03, y: 0.03, scale: 1 },
+  leaderboard: { enabled: true, x: 0, y: 0.24, scale: 1 },
 };
 
 function normalizeNumber(value: unknown, fallback: number, min: number, max: number): number {
@@ -84,6 +105,7 @@ export function normalizeReplayOverlaySettings(value: unknown): ReplayOverlaySet
     const placement = normalizePlacement(raw[id], DEFAULT_REPLAY_OVERLAY_SETTINGS[id]);
     settings[id] = placementMatches(placement, LEGACY_PLAYFIELD_OVERLAY_DEFAULTS[id])
       || placementMatches(placement, OVERLAPPING_LEFT_CLUSTER_DEFAULTS[id])
+      || placementMatches(placement, PRE_INGAME_HUD_DEFAULTS[id])
       || (id === "misses" && placementMatches(placement, COMPACT_MISS_OVERLAY_DEFAULT))
       ? DEFAULT_REPLAY_OVERLAY_SETTINGS[id]
       : placement;

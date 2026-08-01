@@ -1,0 +1,207 @@
+// @vitest-environment jsdom
+/* Render smoke tests for the two live surfaces. They exist because the feed is
+   fed straight from captured events: a visitor with an odd row shape (no
+   timestamp, no map details, an event kind we have no phrasing for) must never
+   blank the admin dashboard. */
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  buildAnalyticsReplayMapIndex,
+  buildAnalyticsSessions,
+  type AnalyticsRecentEventRow,
+} from "../../../lib/analytics-feed";
+import { AnalyticsLiveBoard } from "./AnalyticsLiveBoard";
+import { AnalyticsPulse } from "./AnalyticsPulse";
+import { AnalyticsStream } from "./AnalyticsStream";
+
+const NOW = 1_800_000_000_000;
+
+function row(overrides: Partial<AnalyticsRecentEventRow> = {}): AnalyticsRecentEventRow {
+  return {
+    eventId: `e${Math.random()}`,
+    timestamp: "02:31:45 PM",
+    ts: NOW - 10_000,
+    event: "$pageview",
+    path: "/tracker",
+    country: "CR",
+    selectedCountry: null,
+    deviceKind: "desktop",
+    distinctId: "visitor-1",
+    mapsTab: null,
+    mapsQuery: null,
+    mapsFilters: null,
+    mapsSort: null,
+    mapsCollection: null,
+    mapsPage: null,
+    mapsBeatmapId: null,
+    rankingsPage: null,
+    profileUsername: null,
+    replayPlayer: null,
+    replayScoreId: null,
+    replayTitle: null,
+    replayArtist: null,
+    replayDifficulty: null,
+    viewUrl: null,
+    farmHelperUser: null,
+    farmMapTitle: null,
+    farmMapUser: null,
+    packType: null,
+    packUsername: null,
+    skinsQuery: null,
+    skinsKeys: null,
+    skinsSort: null,
+    skinsPage: null,
+    skinRef: null,
+    skinName: null,
+    skinKeymodes: null,
+    skinUploadError: null,
+    viewerUsername: null,
+    referrer: null,
+    ...overrides,
+  };
+}
+
+const ROWS: AnalyticsRecentEventRow[] = [
+  row({
+    distinctId: "a",
+    ts: NOW - 5_000,
+    event: "replay_view",
+    path: "/replay",
+    replayTitle: "Ghost",
+    replayArtist: "Camellia",
+    replayDifficulty: "4K Insane",
+    replayPlayer: "cheesecake",
+  }),
+  row({ distinctId: "a", ts: NOW - 60_000, path: "/maps", mapsQuery: "camellia", mapsTab: "farmed" }),
+  row({ distinctId: "b", ts: NOW - 90_000, path: "/player/juan", profileUsername: "juan", country: "DE", deviceKind: "mobile" }),
+  // Hostile shapes: no epoch timestamp, and an event we have no phrasing for.
+  row({ distinctId: "c", ts: undefined as unknown as number, event: "brand_new_event", path: "/whatever" }),
+];
+
+function renderStream(rows = ROWS) {
+  const sessions = buildAnalyticsSessions(rows, NOW);
+  const replayMaps = buildAnalyticsReplayMapIndex(rows);
+  return render(
+    <AnalyticsStream
+      rows={rows}
+      sessions={sessions}
+      replayMaps={replayMaps}
+      countries={[{ country: "CR", count: 2 }]}
+      country={null}
+      now={NOW}
+      onCountryChange={() => {}}
+    />,
+  );
+}
+
+afterEach(cleanup);
+
+describe("AnalyticsStream", () => {
+  it("reads every event as a sentence", () => {
+    renderStream();
+    expect(screen.getByText("watched")).toBeTruthy();
+    expect(screen.getByText("Camellia - Ghost [4K Insane]")).toBeTruthy();
+    expect(screen.getByText("by cheesecake")).toBeTruthy();
+    expect(screen.getByText("searched")).toBeTruthy();
+    expect(screen.getByText('"camellia"')).toBeTruthy();
+    expect(screen.getByText("juan's profile")).toBeTruthy();
+    // The unknown event still lands as a plain visit rather than vanishing.
+    expect(screen.getByText("/whatever")).toBeTruthy();
+  });
+
+  it("counts the range in its header", () => {
+    renderStream();
+    expect(screen.getByText("4 events from 3 visitors")).toBeTruthy();
+  });
+
+  it("narrows to one kind of activity when a filter chip is pressed", () => {
+    renderStream();
+    fireEvent.click(screen.getByRole("button", { name: /^Replays/ }));
+    expect(screen.getByText("Camellia - Ghost [4K Insane]")).toBeTruthy();
+    expect(screen.queryByText('"camellia"')).toBeNull();
+    expect(screen.queryByText("juan's profile")).toBeNull();
+  });
+
+  it("folds the same events back into per-visitor journeys", () => {
+    renderStream();
+    fireEvent.click(screen.getByRole("button", { name: /Sessions/ }));
+    // Three visitors, each collapsed to its latest step.
+    expect(screen.getAllByText(/^\d+ steps?$/)).toHaveLength(3);
+    const visitorRow = screen.getByText("V1").closest("button")!;
+    expect(within(visitorRow).getByText("watched")).toBeTruthy();
+    fireEvent.click(visitorRow);
+    // Expanded, the earlier search in the same session shows up.
+    expect(screen.getByText('"camellia"')).toBeTruthy();
+  });
+
+  it("says so instead of emptying out when the range has nothing in it", () => {
+    renderStream([]);
+    expect(screen.getByText("0 events from 0 visitors")).toBeTruthy();
+    expect(screen.getByText("No matching events in the selected range.")).toBeTruthy();
+  });
+});
+
+describe("AnalyticsLiveBoard", () => {
+  it("gives every online visitor a card with their current action", () => {
+    const sessions = buildAnalyticsSessions(ROWS, NOW);
+    render(<AnalyticsLiveBoard sessions={sessions} replayMaps={buildAnalyticsReplayMapIndex(ROWS)} now={NOW} />);
+    expect(screen.getByText("Camellia - Ghost [4K Insane]")).toBeTruthy();
+    expect(screen.getByText("juan's profile")).toBeTruthy();
+    // The visitor with no epoch timestamp can't be proven online, so no card.
+    expect(screen.queryByText("V3")).toBeNull();
+  });
+
+  it("falls back to a calm empty state when the site is quiet", () => {
+    const stale = [row({ distinctId: "a", ts: NOW - 60 * 60_000 })];
+    const sessions = buildAnalyticsSessions(stale, NOW);
+    render(<AnalyticsLiveBoard sessions={sessions} replayMaps={new Map()} now={NOW} />);
+    expect(screen.getByText("Nobody on the site right now.")).toBeTruthy();
+    expect(screen.getByText("Last visitor was here 1h ago.")).toBeTruthy();
+  });
+});
+
+describe("AnalyticsPulse", () => {
+  const base = {
+    rangeHours: 24,
+    cacheState: "fresh" as const,
+    source: "live" as const,
+    bucketMs: 30 * 60_000,
+    timeline: Array.from({ length: 48 }, (_, index) => ({
+      ts: NOW - (47 - index) * 30 * 60_000,
+      events: index === 47 ? 40 : index % 5,
+      pageviews: index === 47 ? 30 : 1,
+      visitors: index === 47 ? 6 : 1,
+    })),
+    activeVisitors: 7,
+    pageviewsInRange: 1_140,
+    uniqueVisitorsInRange: 142,
+    eventsInRange: 3_400,
+    bounce: { bounced: 19, landers: 50 },
+    topRoutes: [],
+    recentEvents: [],
+    topPhysicalCountries: [],
+    topProfiles: [],
+    topReplays: [],
+    topReferrers: [],
+    shareEvents: 0,
+    sharesByPlatform: [],
+    topSharedPages: [],
+    serverErrors: [],
+    recentServerErrors: [],
+    fetchedAt: NOW,
+  };
+
+  it("headlines who is here and the totals behind them", () => {
+    render(<AnalyticsPulse data={base} range={24} onlineCountries={3} />);
+    expect(screen.getByText("7")).toBeTruthy();
+    expect(screen.getByText("from 3 countries")).toBeTruthy();
+    expect(screen.getByText("38%")).toBeTruthy();
+    expect(screen.getByText("peak 40 events per 30m")).toBeTruthy();
+  });
+
+  it("survives a backend too old to send a timeline", () => {
+    const legacy = { ...base, timeline: undefined as never, bucketMs: undefined as never };
+    render(<AnalyticsPulse data={legacy} range={24} onlineCountries={0} />);
+    expect(screen.getByText("no traffic in range")).toBeTruthy();
+  });
+});

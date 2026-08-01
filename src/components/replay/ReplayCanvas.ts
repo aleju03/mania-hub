@@ -4,6 +4,8 @@ import type { ManiaNote, ManiaScrollVelocity, ManiaTimingPoint } from "../../lib
 import type { Judgment, ManiaReplayHitWindows, ManiaReplayRuleset, ReplayJudgementEvent, ReplayNoteState } from "../../lib/mania-replay-judgement";
 import { applyManiaReplayModsToNotes, buildReplaySegments, calculateReplayAccuracy, getManiaReplayHitWindows, getManiaReplayRuleset, simulateManiaReplayJudgements } from "../../lib/mania-replay-judgement";
 import { calculateManiaPp, getManiaPpModMultiplier } from "../../lib/mania-pp";
+import { createManiaScoreSimulator, formatLazerScore, formatStableScore, getScoreScaleToReal } from "../../lib/mania-score-simulation";
+import type { ManiaScoreSimulator } from "../../lib/mania-score-simulation";
 import { calculateManiaStarRatingTimeline } from "../../lib/mania-star-rating";
 import type { ManiaStarRatingTimelinePoint } from "../../lib/mania-star-rating";
 import { DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
@@ -22,6 +24,14 @@ type ReplaySegment = {
   start: number;
   end: number;
 };
+
+export interface ReplayLeaderboardEntry {
+  name: string;
+  score: number;
+  combo: number;
+}
+
+type ReplayLeaderboardRowKind = "other" | "target" | "player";
 
 const COLUMN_COLORS: Record<number, string[]> = {
   1: ["#fff"],
@@ -47,6 +57,30 @@ const JUDGMENT_COLORS: Record<number, string> = {
 
 const JUDGMENT_LABELS: Record<number, string> = {
   1: "MAX", 2: "300", 3: "200", 4: "100", 5: "50", 6: "MISS",
+};
+
+// Mod badge tints, loosely following the clients' icon colors: green for
+// difficulty reductions, red/orange for increases, blue for rate-ups, yellow
+// for visibility mods, violet for conversions.
+const MOD_BADGE_COLORS: Record<string, string> = {
+  EZ: "#88da20",
+  NF: "#88da20",
+  HT: "#88da20",
+  DC: "#88da20",
+  HR: "#ff6666",
+  DT: "#66ccff",
+  NC: "#66ccff",
+  HD: "#ffcc22",
+  FI: "#ffcc22",
+  FL: "#ffcc22",
+  CO: "#ffcc22",
+  MR: "#b3a0ff",
+  DA: "#b3a0ff",
+  CS: "#b3a0ff",
+  NR: "#b3a0ff",
+  HO: "#b3a0ff",
+  AT: "#9aa0b0",
+  CN: "#9aa0b0",
 };
 
 const HOLD_VISUAL_GRACE_MS = 60;
@@ -221,6 +255,9 @@ interface RendererOptions {
   barePlayfield?: boolean;
   scrollVelocities?: ManiaScrollVelocity[];
   expectedCounts?: ReplayHitCounts;
+  // Score the play actually earned; pins the simulated HUD score counter's
+  // end state to the real total (absorbs mod-multiplier edge cases).
+  realTotalScore?: number | null;
   lifeBarFrames?: ReplayLifeBarFrame[];
   showHealthBar?: boolean;
   skinSettings?: ReplaySkinSettings;
@@ -314,6 +351,7 @@ export class ManiaReplayRenderer {
   private audioClockAnchorTime: number | null = null;
   private audioClockAnchorNow = 0;
   private fpsSampleStartedAt = 0;
+  private fpsMaxObserved = 0;
   private fpsFrameCount = 0;
   private measuredFps = 0;
   private colors: string[];
@@ -438,6 +476,19 @@ export class ManiaReplayRenderer {
   private hitsoundPressCursors: number[] = [];
   private comboBreakSoundCursor = 0;
   private judgmentCounts: number[] = [0, 0, 0, 0, 0, 0, 0];
+  private scoreSimulator: ManiaScoreSimulator | null = null;
+  private modAcronyms: string[] = [];
+  private firstNoteTime = 0;
+  private failTime: number | null = null;
+  private leaderboardEntries: ReplayLeaderboardEntry[] = [];
+  private leaderboardHidden = false;
+  private leaderboardPlayerName = "";
+  private leaderboardSlotYs = new Map<string, number>();
+  private leaderboardSlotGradients = new Map<string, FillGradient>();
+  private leaderboardPrevRank: number | null = null;
+  private leaderboardFlashAt = -Infinity;
+  private leaderboardAnimTs = 0;
+  private suppressOvertakeFlash = false;
   private starRatingTimeline: ManiaStarRatingTimelinePoint[] = [];
   private ppModMultiplier = 1;
   private leftHandMisses = 0;
@@ -457,11 +508,11 @@ export class ManiaReplayRenderer {
   private staticDirty = true;
 
   private hudSnapshotTime = -Infinity;
+  private hudCachedScore = "00000000";
   private hudCachedAccuracy = "100.00%";
   private hudCachedPp = "0pp";
   private hudCachedUr = "0";
   private hudCachedTime = "0:00";
-  private hudCachedFps = "--";
   private hudCachedJudgmentCounts: string[] = ["0", "0", "0", "0", "0", "0", "0"];
   private hudCachedLeftMisses = "0";
   private hudCachedRightMisses = "0";
@@ -498,6 +549,7 @@ export class ManiaReplayRenderer {
 
     const inputMods = (options?.mods ?? []).filter(Boolean);
     const mods = new Set(inputMods.map((m) => getModAcronym(m)).filter(Boolean));
+    this.modAcronyms = [...mods] as string[];
     const flashlightMod = inputMods.find((m) => getModAcronym(m) === "FL");
     const speedMultiplier = Number(options?.speedMultiplier);
     this.modRate = Number.isFinite(speedMultiplier) && speedMultiplier > 0
@@ -530,6 +582,7 @@ export class ManiaReplayRenderer {
       timingPoints: options?.timingPoints,
     });
     this.ruleset = getManiaReplayRuleset(options?.isLazer ?? false, [...mods], options?.isConvert ?? false, this.modRate);
+    this.firstNoteTime = this.computeFirstNoteTime();
 
     this.backgroundImage = options?.backgroundImage ?? null;
     this.backgroundDim = options?.backgroundDim ?? 80;
@@ -617,6 +670,9 @@ export class ManiaReplayRenderer {
           lifeBarFrames: this.lifeBarFrames,
         }).events
       : simulated.events;
+    // Fail detection must read the .osr's real life bar, never the simulated
+    // fallback below (whose HP can legitimately die under an all-miss tail).
+    this.failTime = this.computeFailTime();
     if (this.lifeBarFrames.length === 0) {
       this.lifeBarFrames = this.buildFallbackLifeBarFrames(this.judgmentEvents);
     }
@@ -637,6 +693,7 @@ export class ManiaReplayRenderer {
     // HUD can never render (chart previews, bare playfields).
     this.ppModMultiplier = getManiaPpModMultiplier([...mods]);
     this.rebuildStarRatingTimeline();
+    this.buildScoreSimulator(options?.realTotalScore ?? null);
 
     this.buildHitsoundTimeline();
 
@@ -722,6 +779,56 @@ export class ManiaReplayRenderer {
     return out;
   }
 
+  private computeFirstNoteTime(): number {
+    let min = Infinity;
+    for (const note of this.notes) min = Math.min(min, note.time);
+    return Number.isFinite(min) ? min : 0;
+  }
+
+  // A failed replay's life bar graph ends at zero and its inputs stop well
+  // before the chart does. Both must hold: a pass whose graph merely ends
+  // low, or a file with a truncated graph, is not a fail.
+  private computeFailTime(): number | null {
+    const lifeFrames = this.lifeBarFrames;
+    if (lifeFrames.length === 0) return null;
+    if (lifeFrames[lifeFrames.length - 1].health > 0.001) return null;
+    const lastInputTime = this.frames.length > 0 ? this.frames[this.frames.length - 1].time : 0;
+    const lastNoteTime = maxNoteEndTime(this.notes);
+    if (lastNoteTime > 0 && lastInputTime >= lastNoteTime - 1500) return null;
+    // Walk back to where the terminal zero-health run starts.
+    let failAt = lifeFrames[lifeFrames.length - 1].time;
+    for (let i = lifeFrames.length - 1; i >= 0 && lifeFrames[i].health <= 0.001; i--) {
+      failAt = lifeFrames[i].time;
+    }
+    return failAt > 0 ? failAt : null;
+  }
+
+  getFailTime(): number | null {
+    return this.failTime;
+  }
+
+  // The ingame leaderboard's static rows: the map's top scores (already
+  // scaled to the judging client's scoring), minus the watched play itself.
+  setLeaderboard(entries: ReplayLeaderboardEntry[], playerName: string) {
+    this.leaderboardEntries = entries
+      .filter((entry) => entry && typeof entry.name === "string" && Number.isFinite(entry.score) && entry.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 50);
+    this.leaderboardPlayerName = playerName;
+    this.leaderboardSlotYs.clear();
+    this.leaderboardPrevRank = null;
+    this.suppressOvertakeFlash = true;
+    if (!this._isPlaying) this.render();
+  }
+
+  // Tab toggles the scoreboard, like ingame. Rank tracking stays live while
+  // hidden so re-showing it never fires a stale overtake flash.
+  setLeaderboardVisible(visible: boolean) {
+    if (this.leaderboardHidden === !visible) return;
+    this.leaderboardHidden = !visible;
+    if (!this._isPlaying) this.render();
+  }
+
   private generateColors(n: number): string[] {
     return Array.from({ length: n }, (_, i) => `#${Math.floor(0xffffff * (0.45 + 0.55 * Math.sin((i / n) * Math.PI))).toString(16).padStart(6, "0")}`);
   }
@@ -735,6 +842,10 @@ export class ManiaReplayRenderer {
     this.comboAnimationTime = -Infinity;
     this.comboAnimationKind = null;
     this.judgmentCounts = [0, 0, 0, 0, 0, 0, 0];
+    this.scoreSimulator?.reset();
+    // A seek re-derives the leaderboard rank from scratch; that jump is not
+    // an overtake.
+    this.suppressOvertakeFlash = true;
     this.leftHandMisses = 0;
     this.rightHandMisses = 0;
     this.recentHitOffsets = [];
@@ -832,7 +943,10 @@ export class ManiaReplayRenderer {
         continue;
       }
 
-      if (event.judgment > 0) this.judgmentCounts[event.judgment]++;
+      if (event.judgment > 0) {
+        this.judgmentCounts[event.judgment]++;
+        this.scoreSimulator?.applyJudgment(event.judgment);
+      }
 
       if (event.judgment <= 5) {
         const offset = event.offsetMs;
@@ -888,6 +1002,36 @@ export class ManiaReplayRenderer {
       : calculateManiaStarRatingTimeline(this.notes, this.keyCount, this.modRate);
   }
 
+  // The HUD score counter: replays the whole judgement stream once at build
+  // time to learn the simulated final, pins that to the real score when one
+  // is known, then rewinds so advanceStats can feed it incrementally.
+  private buildScoreSimulator(realTotalScore: number | null) {
+    if (this.hideHud || this.barePlayfield) {
+      this.scoreSimulator = null;
+      return;
+    }
+    let totalJudgements = 0;
+    for (const event of this.judgmentEvents) {
+      if (event.judgment != null && event.judgment > 0) totalJudgements++;
+    }
+    if (totalJudgements === 0) {
+      this.scoreSimulator = null;
+      return;
+    }
+    const simulator = createManiaScoreSimulator({
+      mode: this.ruleset.accuracyMode,
+      totalJudgements,
+      mods: this.modAcronyms,
+      rate: this.modRate,
+    });
+    for (const event of this.judgmentEvents) {
+      if (event.judgment != null && event.judgment > 0) simulator.applyJudgment(event.judgment);
+    }
+    simulator.setScale(getScoreScaleToReal(simulator.value, realTotalScore));
+    simulator.reset();
+    this.scoreSimulator = simulator;
+  }
+
   // PP as if the map ended at the playback clock: current judgement counts
   // against the star rating of the chart processed so far. Same recipe as
   // lazer's PerformancePointsCounter (timed difficulty attributes + the
@@ -926,6 +1070,10 @@ export class ManiaReplayRenderer {
     if (!force && elapsed < 50 && Number.isFinite(this.hudSnapshotTime)) return;
     this.hudSnapshotTime = performance.now();
 
+    const scoreValue = this.scoreSimulator?.value ?? 0;
+    this.hudCachedScore = this.ruleset.accuracyMode === "stable"
+      ? formatStableScore(scoreValue)
+      : formatLazerScore(scoreValue);
     this.hudCachedAccuracy = this.formatAccuracy(this.getAccuracy());
     this.hudCachedPp = `${Math.round(this.getPp())}pp`;
     this.hudCachedUr = String(Math.round(this.getUr()));
@@ -933,7 +1081,6 @@ export class ManiaReplayRenderer {
     const mins = Math.floor(wallTime / 60000);
     const secs = String(Math.floor((wallTime % 60000) / 1000)).padStart(2, "0");
     this.hudCachedTime = `${mins}:${secs}`;
-    this.hudCachedFps = this.measuredFps > 0 ? String(this.measuredFps) : "--";
     for (let i = 1; i < this.judgmentCounts.length; i++) {
       const v = String(this.judgmentCounts[i]);
       if (this.hudCachedJudgmentCounts[i] !== v) this.hudCachedJudgmentCounts[i] = v;
@@ -1251,6 +1398,7 @@ export class ManiaReplayRenderer {
     this.frames = frames;
     this.keyCount = Math.max(1, Math.floor(keyCount));
     this.notes = [...notes];
+    this.firstNoteTime = this.computeFirstNoteTime();
     this.colors = COLUMN_COLORS[this.keyCount] || this.generateColors(this.keyCount);
     for (const c of this.colors) hexToNumber(c);
 
@@ -1295,6 +1443,8 @@ export class ManiaReplayRenderer {
     this.judgmentEvents = simulated.events;
     this.missTimesCache = null;
     this.lifeBarFrames = this.buildFallbackLifeBarFrames(this.judgmentEvents);
+    // Previews carry no real life bar, so they can never be fails.
+    this.failTime = null;
     this.noteStates = simulated.noteStates;
     this.comboEvents = this.ruleset.accuracyMode === "stable"
       ? rawStableComboEvents ?? buildStableReplayComboEvents(this.notes, this.noteStates)
@@ -1307,6 +1457,7 @@ export class ManiaReplayRenderer {
       : 0;
     this.totalDuration = Math.max(this.totalDuration, lastJudgementTime);
     this.rebuildStarRatingTimeline();
+    this.buildScoreSimulator(null);
     this.buildHitsoundTimeline();
 
     this.currentTime = 0;
@@ -1946,9 +2097,21 @@ export class ManiaReplayRenderer {
     const elapsed = now - this.fpsSampleStartedAt;
     if (elapsed >= 500) {
       this.measuredFps = Math.round((this.fpsFrameCount * 1000) / elapsed);
+      this.fpsMaxObserved = Math.max(this.fpsMaxObserved, this.measuredFps);
       this.fpsSampleStartedAt = now;
       this.fpsFrameCount = 0;
     }
+  }
+
+  // The display refresh rate the renderer is realistically chasing: rAF locks
+  // to the monitor, so the highest fps ever observed snapped to a common
+  // refresh rate is the "960" in stable's "935/960fps" readout.
+  private getFpsTarget(): number {
+    const candidates = [60, 75, 90, 120, 144, 165, 240, 360, 480];
+    for (const candidate of candidates) {
+      if (this.fpsMaxObserved <= candidate + 2) return candidate;
+    }
+    return candidates[candidates.length - 1];
   }
 
   private render(forceHudSnapshot = false) {
@@ -2083,22 +2246,52 @@ export class ManiaReplayRenderer {
     }
   }
 
+  // Vertical health bar right of the stage, styled per client: stable gets
+  // the chunky near-white bar with the marker riding the fill edge, lazer the
+  // rounded glowy capsule. Both tint toward red as health drains.
   private renderHealthBar(layout: Layout) {
     if (this.lifeBarFrames.length === 0) return;
 
     const { h, playfieldX, playfieldWidth } = layout;
     const health = this.getHealthAtTime(this.currentTime);
-    const barWidth = Math.max(6, Math.min(8, layout.laneWidth * 0.14));
+    const isLazer = this.ruleset.accuracyMode === "lazer";
+    const barWidth = Math.max(7, Math.min(10, layout.laneWidth * 0.17));
     const x = playfieldX + playfieldWidth + 13;
     const height = Math.max(136, h * 0.52);
     const y = h - height;
     const fillHeight = height * health;
     const fillY = y + height - fillHeight;
-    const color = health <= 0.2 ? "#ff4444" : health <= 0.45 ? "#ffcc22" : "#b3f5ff";
 
+    if (isLazer) {
+      const radius = barWidth / 2;
+      const color = health <= 0.2 ? "#ff6666" : "#66ccff";
+      this.graphics.roundRect(x, y, barWidth, height, radius).fill({ color: 0x000000, alpha: 0.55 });
+      if (fillHeight > barWidth) {
+        this.graphics.roundRect(x, fillY, barWidth, fillHeight, radius).fill({ color: hexToNumber(color), alpha: 0.9 });
+        // Inner highlight strip for the glowy look.
+        this.graphics.roundRect(x + barWidth * 0.28, fillY + radius, barWidth * 0.22, Math.max(0, fillHeight - barWidth), barWidth * 0.11)
+          .fill({ color: 0xffffff, alpha: 0.35 });
+      }
+      if (health > 0) {
+        this.circle(x + barWidth / 2, fillY + radius, radius * 1.35, color, 0.5);
+        this.circle(x + barWidth / 2, fillY + radius, radius * 0.8, "#ffffff", 0.9);
+      }
+      return;
+    }
+
+    const color = health <= 0.2 ? "#ff4444" : health <= 0.45 ? "#ffcc22" : "#eef7ff";
     this.fillRect(x, y, barWidth, height, "#05050a", 0.62);
-    this.fillRect(x, fillY, barWidth, fillHeight, color, 0.96);
+    if (fillHeight > 0) {
+      this.fillRect(x, fillY, barWidth, fillHeight, color, 0.92);
+      // Brighter cap where the fill ends, under the marker.
+      this.fillRect(x, fillY, barWidth, Math.min(10, fillHeight), "#ffffff", 0.85);
+    }
     this.rect(x - 0.5, y, barWidth + 1, height, "#ffffff", 0.26, 1);
+    if (health > 0) {
+      const markerRadius = barWidth * 0.85;
+      this.circle(x + barWidth / 2, fillY, markerRadius, color, 0.45);
+      this.circle(x + barWidth / 2, fillY, markerRadius * 0.62, "#ffffff", 0.95);
+    }
   }
 
   private renderFlashlightOverlay(layout: Layout) {
@@ -2773,7 +2966,7 @@ export class ManiaReplayRenderer {
       const timeSinceFlash = this.currentTime - (this.receptorFlashTimestamps[col] || 0);
       const flashIntensity = pressed ? 1 : Math.max(0, 1 - timeSinceFlash / 140);
 
-      this.arrowStroke(cx, receptorCenterY, arrowSize, direction, "#ffffff", Math.max(pressed ? 0.95 : 0.4, flashIntensity * 0.65), 2.25);
+      this.arrowStroke(cx, receptorCenterY, arrowSize, direction, "#ffffff", Math.max(pressed ? 0.95 : 0.4, flashIntensity * 0.65), Math.max(2.5, arrowSize * 0.055));
     }
   }
 
@@ -2782,12 +2975,14 @@ export class ManiaReplayRenderer {
     const currentState = this.currentKeyState;
     const radius = this.getCircleDiameter(layout) / 2;
     const receptorCenterY = this.getVisualCenterY(judgmentY, radius);
-    const strokeWidth = Math.max(2, Math.min(3, radius * 0.12));
+    // Uncapped: a 3px ring on a fullscreen-sized receptor reads as a thin
+    // aliased wire; the ring has to thicken with the circle.
+    const strokeWidth = Math.max(2.5, radius * 0.11);
 
     for (let col = 0; col < this.keyCount; col++) {
       const { x, width: colWidth } = this.getColumnLayout(col, layout);
       const pressed = (currentState & (1 << col)) !== 0;
-      this.circle(x + colWidth / 2, receptorCenterY, radius, "#ffffff", 0);
+      this.circle(x + colWidth / 2, receptorCenterY, radius, "#ffffff", pressed ? 0.14 : 0);
       this.strokeCircle(x + colWidth / 2, receptorCenterY, radius, "#ffffff", pressed ? 1 : 0.5, strokeWidth);
     }
   }
@@ -3113,7 +3308,7 @@ export class ManiaReplayRenderer {
   }
 
   private renderHUD(layout: Layout) {
-    const { w, h, playfieldX, playfieldWidth, judgmentY } = layout;
+    const { w, h, playfieldX, playfieldWidth } = layout;
     const playfieldCenterX = playfieldX + playfieldWidth / 2;
     const scoreY = this.getStagePositionY(this.skinSettings.scorePosition, layout);
 
@@ -3159,6 +3354,8 @@ export class ManiaReplayRenderer {
     }
 
     this.renderCombo(layout);
+    this.renderScoreBlock(layout);
+    this.renderLeaderboard(layout);
     if (this.shouldRenderCustomOverlays(layout)) {
       this.renderKeypressOverlay(layout);
       this.renderKpsOverlay(layout);
@@ -3169,22 +3366,7 @@ export class ManiaReplayRenderer {
       this.renderProgressOverlay(layout);
     }
 
-    const urBarWidth = Math.min(playfieldWidth * 0.68, 180);
-    const urBarX = playfieldCenterX - urBarWidth / 2;
-    const receptorBottom = this.skinSettings.style === "circles" || this.skinSettings.style === "arrows"
-      ? judgmentY
-      : judgmentY + layout.receptorHeight + 2;
-    const urBarY = Math.min(h - 10, receptorBottom > h - 40 ? receptorBottom + 12 : h - 26);
-    const urRange = this.hitWindows.meh;
-
-    this.fillRect(urBarX, urBarY, urBarWidth, 3, "#ffffff", 0.08);
-    this.fillRect(playfieldCenterX - 1, urBarY - 4, 2, 11, "#ffffff", 0.25);
-    this.recentHitOffsets.forEach((offset, index) => {
-      const normalized = Math.max(-1, Math.min(1, offset / urRange));
-      const x = playfieldCenterX + normalized * (urBarWidth / 2);
-      const alpha = 0.2 + ((index + 1) / this.recentHitOffsets.length) * 0.8;
-      this.fillRect(x - 1.5, urBarY - 3, 3, 9, "#b3f5ff", alpha);
-    });
+    this.renderHitErrorBar(layout);
     this.addText(this.hudCachedTime, 8, h - 8, { fontSize: 11, fill: "#ffffff", alpha: 0.4, anchorY: 1 });
     this.addText(`${this.playbackSpeed * this.modRate}x`, w - 8, h - 8, {
       fontSize: 11,
@@ -3193,49 +3375,501 @@ export class ManiaReplayRenderer {
       anchorX: 1,
       anchorY: 1,
     });
-    if (!this.shouldRenderCustomOverlays(layout)) {
-      // Wherever the draggable overlay HUD is unavailable (phones, and any
-      // narrow non-fullscreen canvas regardless of pointer type, e.g. mobile
-      // emulators), draw a fixed always-on accuracy readout under the FPS
-      // counter. It sits over the beatmap background (which can be bright and
-      // undimmed), so back it with a dark chip like the miss overlay instead
-      // of relying on bare white text.
-      const accFontSize = 15;
-      const accPadX = 7;
-      const accBoxHeight = 24;
-      const accBoxWidth = this.measureTextWidth(this.hudCachedAccuracy, accFontSize, "700") + accPadX * 2;
-      const accBoxY = 26;
-      this.fillRect(w - 8 - accBoxWidth, accBoxY, accBoxWidth, accBoxHeight, "#0a0a12", 0.62);
-      this.addText(this.hudCachedAccuracy, w - 8 - accPadX, accBoxY + accBoxHeight / 2, {
-        fontSize: accFontSize,
-        fill: "#ffffff",
-        alpha: 0.95,
-        fontWeight: "700",
-        anchorX: 1,
-        anchorY: 0.5,
-      });
-    }
+    this.renderFailOverlay(layout);
     if (this.hidePerformanceStats) return;
-    this.addText(`FPS ${this.hudCachedFps}`, w - 8, 8, {
-      fontSize: 11,
-      fill: this.measuredFps >= 55 || this.measuredFps === 0 ? "#ffffff" : "#ffcc22",
-      alpha: 0.52,
-      fontWeight: "700",
-      anchorX: 1,
-    });
+    this.renderFpsCounter(layout);
     if (import.meta.env.DEV && this.app && w >= 520) {
       this.addText(
         `Renderer ${formatPixiRendererType(this.app.renderer.type, this.app.renderer.name)}`,
         w - 8,
-        24,
+        h - 76,
         {
           fontSize: 10,
           fill: "#ffffff",
           alpha: 0.42,
           fontWeight: "700",
           anchorX: 1,
+          anchorY: 1,
         },
       );
+    }
+  }
+
+  // The fail moment, styled per client: stable dims the stage and stamps
+  // FAILED; lazer flashes red first, then settles into the same dim. The
+  // state persists past the fail point so scrubbing beyond it still reads
+  // as a dead run.
+  private renderFailOverlay(layout: Layout) {
+    if (this.failTime == null || this.currentTime < this.failTime) return;
+    const { w, h } = layout;
+    const elapsed = this.currentTime - this.failTime;
+    const t = Math.max(0, Math.min(1, elapsed / 700));
+    const isLazer = this.ruleset.accuracyMode === "lazer";
+    if (isLazer && elapsed < 260) {
+      this.fillRect(0, 0, w, h, "#ff2222", 0.34 * (1 - elapsed / 260));
+    }
+    this.fillRect(0, 0, w, h, "#000000", (isLazer ? 0.6 : 0.55) * t);
+    const centerX = layout.playfieldX + layout.playfieldWidth / 2;
+    this.addText("FAILED", centerX, h * 0.42, {
+      fontSize: Math.max(30, h * 0.07),
+      fill: isLazer ? "#ff6666" : "#ffffff",
+      alpha: 0.95 * t,
+      fontWeight: "700",
+      anchorX: 0.5,
+      anchorY: 0.5,
+    });
+  }
+
+  // The fps readout, cloned per client. Stable: the classic bottom-right
+  // pills, amber "935/960fps" over a green "1.5ms" frame-time box, black bold
+  // text. Lazer: plain green "1.0 ms" over "721 fps" text, no boxes.
+  private renderFpsCounter(layout: Layout) {
+    const { w, h } = layout;
+    const fps = this.measuredFps;
+    if (fps <= 0) return;
+    const s = Math.min(this.getHudScale(layout), 1.35);
+    const frameMs = 1000 / fps;
+    const msText = `${frameMs.toFixed(1)}ms`;
+    const right = w - 8;
+    const bottom = h - 24;
+
+    if (this.ruleset.accuracyMode === "lazer") {
+      const color = fps >= 55 ? "#b3d944" : fps >= 30 ? "#ffcc22" : "#ff6666";
+      this.addText(`${frameMs.toFixed(1)} ms`, right, bottom - 19 * s, {
+        fontSize: 16 * s,
+        fill: color,
+        alpha: 0.95,
+        fontWeight: "600",
+        tabularNums: true,
+        anchorX: 1,
+        anchorY: 1,
+      });
+      this.addText(`${fps} fps`, right, bottom, {
+        fontSize: 14.5 * s,
+        fill: color,
+        alpha: 0.9,
+        fontWeight: "600",
+        tabularNums: true,
+        anchorX: 1,
+        anchorY: 1,
+      });
+      return;
+    }
+
+    const target = this.getFpsTarget();
+    const pillHeight = 24 * s;
+    const padX = 8 * s;
+    const bigText = String(fps);
+    const smallText = `/${target}fps`;
+    const bigWidth = this.measureTextWidth(bigText, 16 * s, "700");
+    const smallWidth = this.measureTextWidth(smallText, 11.5 * s, "700");
+    const fpsPillWidth = bigWidth + smallWidth + padX * 2 + 1;
+    const msWidth = this.measureTextWidth(msText, 15 * s, "700");
+    const msPillWidth = msWidth + padX * 2;
+    const msPillY = bottom - pillHeight;
+    const fpsPillY = msPillY - pillHeight - 6 * s;
+
+    this.roundRect(right - fpsPillWidth, fpsPillY, fpsPillWidth, pillHeight, 5 * s, "#f2a127", 0.95);
+    this.addText(bigText, right - fpsPillWidth + padX, fpsPillY + pillHeight / 2, {
+      fontSize: 16 * s,
+      fill: "#221503",
+      fontWeight: "700",
+      tabularNums: true,
+      anchorY: 0.5,
+    });
+    this.addText(smallText, right - padX, fpsPillY + pillHeight / 2 + 2 * s, {
+      fontSize: 11.5 * s,
+      fill: "#221503",
+      alpha: 0.72,
+      fontWeight: "700",
+      tabularNums: true,
+      anchorX: 1,
+      anchorY: 0.5,
+    });
+
+    this.roundRect(right - msPillWidth, msPillY, msPillWidth, pillHeight, 5 * s, fps >= 30 ? "#aad620" : "#e05555", 0.95);
+    this.addText(msText, right - msPillWidth / 2, msPillY + pillHeight / 2, {
+      fontSize: 15 * s,
+      fill: "#17210a",
+      fontWeight: "700",
+      tabularNums: true,
+      anchorX: 0.5,
+      anchorY: 0.5,
+    });
+  }
+
+  // --- osu!-style fixed HUD -------------------------------------------------
+  // Both clients anchor the score in the top-right corner with the progress
+  // pie + accuracy under it, so nothing sits over the centered playfield.
+  // Stable formats the score zero-padded to 8 digits, lazer comma-separated.
+  // Fixed like the real clients, not draggable.
+
+  private renderScoreBlock(layout: Layout) {
+    const { w, h } = layout;
+    const hudScale = this.getHudScale(layout);
+    const margin = Math.max(6, Math.round(w * 0.005));
+    // Height-proportional already; multiplying by hudScale too would double
+    // up now that the hud scale applies outside fullscreen.
+    const scoreFontSize = Math.min(42, Math.max(18, h * 0.044));
+    const scoreRight = w - margin;
+    const scoreTop = Math.max(2, h * 0.004);
+    this.drawHudNumberText(this.hudCachedScore, scoreRight, scoreTop, scoreFontSize, "right", 0.97);
+
+    const accFontSize = scoreFontSize * 0.44;
+    const accY = scoreTop + scoreFontSize * 1.12;
+    const accWidth = this.drawHudNumberText(this.hudCachedAccuracy, scoreRight, accY, accFontSize, "right", 0.92);
+    const pieRadius = accFontSize * 0.54;
+    this.drawProgressPie(
+      scoreRight - accWidth - pieRadius - 9 * hudScale,
+      accY + accFontSize * 0.62,
+      pieRadius,
+    );
+    this.renderModIcons(layout, scoreRight, accY + accFontSize * 1.7);
+  }
+
+  // Mod badges under the accuracy, like the clients show the active mod
+  // stack. Stable fades them out a few seconds into the map; lazer keeps
+  // them up.
+  private renderModIcons(layout: Layout, rightX: number, topY: number) {
+    const mods = this.modAcronyms.filter((mod) => mod && mod !== "CL");
+    if (mods.length === 0) return;
+
+    const isLazer = this.ruleset.accuracyMode === "lazer";
+    let alpha = 0.92;
+    if (!isLazer) {
+      const fadeStart = this.firstNoteTime + 3000;
+      const fadeProgress = (this.currentTime - fadeStart) / 800;
+      alpha *= 1 - Math.max(0, Math.min(1, fadeProgress));
+      if (alpha <= 0.01) return;
+    }
+
+    const hudScale = this.getHudScale(layout);
+    const fontSize = 11 * hudScale;
+    const badgeHeight = 20 * hudScale;
+    const gap = 5 * hudScale;
+    let x = rightX;
+    for (let index = mods.length - 1; index >= 0; index--) {
+      const acronym = mods[index];
+      const textWidth = this.measureTextWidth(acronym, fontSize, "700");
+      const badgeWidth = textWidth + 14 * hudScale;
+      x -= badgeWidth;
+      this.roundRect(x, topY, badgeWidth, badgeHeight, 5 * hudScale, MOD_BADGE_COLORS[acronym] ?? "#9aa0b0", alpha);
+      this.addText(acronym, x + badgeWidth / 2, topY + badgeHeight / 2, {
+        fontSize,
+        fill: "#141414",
+        alpha: Math.min(1, alpha + 0.05),
+        fontWeight: "700",
+        anchorX: 0.5,
+        anchorY: 0.5,
+      });
+      x -= gap;
+    }
+  }
+
+  // The ingame leaderboard, stable-style: slots whose background fades out
+  // to the right, name over score on the left, cyan combo bottom-right, and
+  // a big ghosted rank number filling the slot. The watched player's live
+  // simulated score climbs through the static rows; overtakes flash the
+  // player slot white (stable) or pulse it in the accent blue (lazer). It is
+  // a draggable overlay ("leaderboard") like the rest of the custom HUD.
+  private renderLeaderboard(layout: Layout) {
+    if (this.leaderboardEntries.length === 0 || !this.scoreSimulator) return;
+    if (!this.shouldRenderCustomOverlays(layout)) return;
+
+    const playerScore = this.scoreSimulator.value;
+    const entries = this.leaderboardEntries;
+    let rank = 0;
+    while (rank < entries.length && entries[rank].score > playerScore) rank++;
+
+    const nowWall = performance.now();
+    if (this.leaderboardPrevRank != null && rank < this.leaderboardPrevRank && !this.suppressOvertakeFlash) {
+      this.leaderboardFlashAt = nowWall;
+    }
+    this.leaderboardPrevRank = rank;
+    this.suppressOvertakeFlash = false;
+    if (this.leaderboardHidden) {
+      this.leaderboardSlotYs.clear();
+      this.leaderboardAnimTs = 0;
+      return;
+    }
+
+    const scale = this.getOverlayScale(layout, "leaderboard");
+    const slotWidth = 185 * scale;
+    const slotHeight = 40 * scale;
+    const gap = 2 * scale;
+    const isLazer = this.ruleset.accuracyMode === "lazer";
+
+    interface Row {
+      key: string;
+      name: string;
+      score: number;
+      combo: number;
+      kind: ReplayLeaderboardRowKind;
+      rankNumber: number;
+    }
+    const merged: Row[] = entries.map((entry, index) => ({
+      key: `e${index}`,
+      name: entry.name,
+      score: entry.score,
+      combo: entry.combo,
+      kind: "other" as ReplayLeaderboardRowKind,
+      rankNumber: 0,
+    }));
+    merged.splice(rank, 0, {
+      key: "player",
+      name: this.leaderboardPlayerName,
+      score: playerScore,
+      combo: this.combo,
+      kind: "player",
+      rankNumber: 0,
+    });
+    merged.forEach((row, index) => {
+      row.rankNumber = index + 1;
+    });
+    const maxRows = 6;
+    const rows = rank < maxRows
+      ? merged.slice(0, maxRows)
+      : [...merged.slice(0, maxRows - 1), merged[rank]];
+    const playerRowIndex = rows.findIndex((row) => row.kind === "player");
+    if (playerRowIndex > 0 && rows[playerRowIndex - 1].kind === "other") {
+      rows[playerRowIndex - 1].kind = "target";
+    }
+
+    const totalHeight = rows.length * (slotHeight + gap) - gap;
+    const frame = this.getOverlayFrame(layout, "leaderboard", slotWidth, totalHeight);
+    if (!frame) {
+      this.leaderboardSlotYs.clear();
+      this.leaderboardAnimTs = 0;
+      return;
+    }
+
+    const dt = this.leaderboardAnimTs > 0 ? Math.min(120, nowWall - this.leaderboardAnimTs) : 16;
+    this.leaderboardAnimTs = nowWall;
+    const ease = 1 - Math.exp(-dt / 90);
+    const seen = new Set<string>();
+    rows.forEach((row, index) => {
+      const targetY = frame.y + index * (slotHeight + gap);
+      const currentY = this.leaderboardSlotYs.get(row.key);
+      const y = currentY == null ? targetY : currentY + (targetY - currentY) * ease;
+      this.leaderboardSlotYs.set(row.key, y);
+      seen.add(row.key);
+      this.drawLeaderboardSlot(row, frame.x, y, slotWidth, slotHeight, scale, isLazer, nowWall);
+    });
+    for (const key of [...this.leaderboardSlotYs.keys()]) {
+      if (!seen.has(key)) this.leaderboardSlotYs.delete(key);
+    }
+  }
+
+  private getLeaderboardSlotGradient(color: string): FillGradient {
+    let gradient = this.leaderboardSlotGradients.get(color);
+    if (!gradient) {
+      gradient = new FillGradient({
+        type: "linear",
+        start: { x: 0, y: 0 },
+        end: { x: 1, y: 0 },
+        textureSpace: "local",
+        textureSize: 128,
+        colorStops: [
+          { offset: 0, color: colorWithAlpha(color, 0.92) },
+          { offset: 0.7, color: colorWithAlpha(color, 0.58) },
+          { offset: 1, color: colorWithAlpha(color, 0.16) },
+        ],
+      });
+      this.leaderboardSlotGradients.set(color, gradient);
+    }
+    return gradient;
+  }
+
+  private drawLeaderboardSlot(
+    row: { name: string; score: number; combo: number; kind: ReplayLeaderboardRowKind; rankNumber: number },
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    scale: number,
+    isLazer: boolean,
+    nowWall: number,
+  ) {
+    const flashElapsed = nowWall - this.leaderboardFlashAt;
+    const flashActive = row.kind === "player" && flashElapsed >= 0 && flashElapsed < 420;
+    const flashStrength = flashActive ? 1 - flashElapsed / 420 : 0;
+
+    if (isLazer) {
+      const radius = 9 * scale;
+      const background = row.kind === "player" ? "#123a52" : row.kind === "target" ? "#4a1d1d" : "#000000";
+      const backgroundAlpha = row.kind === "player" ? 0.82 : row.kind === "target" ? 0.62 : 0.55;
+      this.graphics.roundRect(x, y, width, height, radius).fill({ color: hexToNumber(background), alpha: backgroundAlpha });
+      if (row.kind === "player") {
+        this.graphics.roundRect(x, y, width, height, radius).stroke({
+          color: hexToNumber("#66ccff"),
+          alpha: 0.55 + flashStrength * 0.45,
+          width: Math.max(1.2, (1.4 + flashStrength * 1.6) * scale),
+        });
+      }
+      if (flashActive) {
+        this.graphics.roundRect(x, y, width, height, radius).fill({ color: 0x66ccff, alpha: 0.4 * flashStrength });
+      }
+    } else {
+      const background = row.kind === "player" ? "#1f4a6e" : row.kind === "target" ? "#6e1f1f" : "#0c0c12";
+      this.graphics.rect(x, y, width, height).fill({ fill: this.getLeaderboardSlotGradient(background), alpha: 1 });
+      if (flashActive) {
+        this.fillRect(x, y, width, height, "#ffffff", 0.85 * flashStrength);
+      }
+    }
+
+    // Ghosted rank number filling the slot's right side, stable-style.
+    this.addText(String(row.rankNumber), x + width - 5 * scale, y + height * 0.52, {
+      fontSize: height * 0.82,
+      fill: "#ffffff",
+      alpha: row.kind === "player" ? 0.28 : 0.15,
+      fontWeight: "700",
+      tabularNums: true,
+      anchorX: 1,
+      anchorY: 0.5,
+    });
+
+    const textAlpha = row.kind === "other" ? 0.85 : 0.97;
+    this.addText(row.name, x + 7 * scale, y + 3 * scale, {
+      fontSize: 13 * scale,
+      fill: "#ffffff",
+      alpha: textAlpha,
+      fontWeight: "700",
+    });
+    this.addText(row.score.toLocaleString("en-US"), x + 7 * scale, y + height - 3 * scale, {
+      fontSize: 12 * scale,
+      fill: "#ffffff",
+      alpha: textAlpha * 0.93,
+      tabularNums: true,
+      anchorY: 1,
+    });
+    this.addText(`${row.combo.toLocaleString("en-US")}x`, x + width - 8 * scale, y + height - 3 * scale, {
+      fontSize: 11.5 * scale,
+      fill: isLazer ? "#66ccff" : "#7fd8f2",
+      alpha: 0.95,
+      tabularNums: true,
+      anchorX: 1,
+      anchorY: 1,
+    });
+  }
+
+  private drawHudNumberText(
+    text: string,
+    anchorX: number,
+    y: number,
+    fontSize: number,
+    align: "right" | "center",
+    alpha: number,
+  ): number {
+    const fontWeight = "400";
+    const digitAdvance = Math.max(
+      ...Array.from({ length: 10 }, (_, digit) => this.measureTextWidth(String(digit), fontSize, fontWeight)),
+    );
+    const chars = Array.from(text);
+    const advances = chars.map((char) => (
+      char >= "0" && char <= "9" ? digitAdvance : this.measureTextWidth(char, fontSize, fontWeight)
+    ));
+    const totalWidth = advances.reduce((sum, advance) => sum + advance, 0);
+    let x = align === "right" ? anchorX - totalWidth : anchorX - totalWidth / 2;
+    const shadowOffset = Math.max(1, fontSize * 0.045);
+    chars.forEach((char, index) => {
+      const cx = x + advances[index] / 2;
+      this.addText(char, cx + shadowOffset, y + shadowOffset, {
+        fontSize,
+        fill: "#000000",
+        alpha: alpha * 0.45,
+        anchorX: 0.5,
+      });
+      this.addText(char, cx, y, {
+        fontSize,
+        fill: "#ffffff",
+        alpha,
+        anchorX: 0.5,
+      });
+      x += advances[index];
+    });
+    return totalWidth;
+  }
+
+  private drawProgressPie(cx: number, cy: number, radius: number) {
+    const progress = this.totalDuration > 0
+      ? Math.max(0, Math.min(1, this.currentTime / this.totalDuration))
+      : 0;
+    const strokeWidth = Math.max(1.2, radius * 0.11);
+    this.circle(cx, cy, radius, "#000000", 0.28);
+    this.pieWedge(cx, cy, radius, progress, "#f0f0f0", 0.64);
+    this.strokeCircle(cx, cy, radius, "#f0f0f0", 0.92, strokeWidth);
+    this.circle(cx, cy, Math.max(1.6, radius * 0.16), "#f0f0f0", 0.92);
+  }
+
+  // The hit error ("early/late") meter, styled after each client's bottom
+  // bar: colored bands sized by the real hit windows (blue = 300, green =
+  // 100, orange = 50 in stable's default palette), fading judgement ticks,
+  // and a rolling-average marker.
+  private renderHitErrorBar(layout: Layout) {
+    const { h, playfieldX, playfieldWidth, judgmentY } = layout;
+    const centerX = playfieldX + playfieldWidth / 2;
+    const range = this.hitWindows.meh;
+    if (!(range > 0)) return;
+
+    const scale = Math.min(this.getHudScale(layout), 1.3);
+    const receptorBottom = this.skinSettings.style === "circles" || this.skinSettings.style === "arrows"
+      ? judgmentY
+      : judgmentY + layout.receptorHeight + 2;
+    const barY = Math.min(h - 12, receptorBottom > h - 44 ? receptorBottom + 14 : h - 26);
+    const halfWidth = Math.min(playfieldWidth * 0.45, 170 * scale);
+    const pxPerMs = halfWidth / range;
+    const isLazer = this.ruleset.accuracyMode === "lazer";
+
+    const colors = isLazer
+      ? { inner: "#66ccff", mid: "#b3d944", outer: "#ffcc22" }
+      : { inner: "#46b8e8", mid: "#85cc26", outer: "#e8a733" };
+    const bandHeight = (isLazer ? 6 : 5) * scale;
+    const bandRadius = isLazer ? bandHeight / 2 : 0;
+    const drawBand = (halfMs: number, color: string, alpha: number) => {
+      const half = Math.min(halfWidth, halfMs * pxPerMs);
+      if (half <= 0) return;
+      this.roundRect(centerX - half, barY - bandHeight / 2, half * 2, bandHeight, bandRadius, color, alpha);
+    };
+    drawBand(this.hitWindows.meh, colors.outer, 0.8);
+    drawBand(this.hitWindows.ok, colors.mid, 0.85);
+    drawBand(this.hitWindows.great, colors.inner, 0.9);
+
+    // Center marker.
+    this.fillRect(centerX - 1, barY - 9 * scale, 2, 18 * scale, "#ffffff", isLazer ? 0.65 : 0.9);
+
+    const tickColorFor = (offset: number) => {
+      const abs = Math.abs(offset);
+      if (abs <= this.hitWindows.great) return colors.inner;
+      if (abs <= this.hitWindows.ok) return colors.mid;
+      return colors.outer;
+    };
+    const tickHeight = 14 * scale;
+    this.recentHitOffsets.forEach((offset, index) => {
+      const normalized = Math.max(-1, Math.min(1, offset / range));
+      const x = centerX + normalized * halfWidth;
+      const alpha = 0.14 + ((index + 1) / this.recentHitOffsets.length) * 0.72;
+      this.roundRect(x - 1, barY - tickHeight / 2, 2, tickHeight, isLazer ? 1 : 0, "#ffffff", alpha);
+    });
+    const last = this.recentHitOffsets[this.recentHitOffsets.length - 1];
+    if (last != null) {
+      const normalized = Math.max(-1, Math.min(1, last / range));
+      this.roundRect(centerX + normalized * halfWidth - 1.5, barY - tickHeight / 2, 3, tickHeight, isLazer ? 1.5 : 0, tickColorFor(last), 0.95);
+    }
+
+    // Rolling-average marker: stable points a triangle down from above the
+    // bar; lazer floats a dot under it.
+    if (this.recentHitOffsets.length > 0) {
+      const mean = this.urSum / this.recentHitOffsets.length;
+      const avgX = centerX + Math.max(-1, Math.min(1, mean / range)) * halfWidth;
+      if (isLazer) {
+        this.circle(avgX, barY + bandHeight / 2 + 5 * scale, 2.6 * scale, "#ffffff", 0.95);
+      } else {
+        const size = 8 * scale;
+        const tipY = barY - bandHeight / 2 - 2;
+        this.graphics
+          .poly([avgX, tipY, avgX - size / 2, tipY - size, avgX + size / 2, tipY - size])
+          .fill({ color: 0xffffff, alpha: 0.92 });
+      }
     }
   }
 
@@ -3541,7 +4175,9 @@ export class ManiaReplayRenderer {
   }
 
   private getHudScale(layout: Layout): number {
-    if (!this.fullscreenLayout) return 1;
+    // The inline stage is fullscreen-sized now, so the HUD scales with the
+    // stage everywhere, not just in true fullscreen. Small canvases clamp to
+    // 1 via layoutScale.
     return Math.min(1.45, Math.max(1, layout.layoutScale * 0.85));
   }
 

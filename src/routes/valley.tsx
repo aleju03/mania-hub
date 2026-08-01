@@ -10,7 +10,6 @@ import { eventLabelForPath, type ValleyVisitors } from "#/lib/valley/types";
 const STATUS_POLL_MS = 5_000;
 const VISITORS_POLL_MS = 30_000;
 const LIVE_VISITORS_POLL_MS = 10_000;
-const POSTHOG_QUERY_TIMEOUT_MS = 15_000;
 
 /* Villager layer, in-house path: the live backend's analytics store answers
    in milliseconds from a local file, so the valley can poll it faster. */
@@ -38,8 +37,8 @@ async function getValleyVisitorsFromLiveBackend(base: string): Promise<ValleyVis
 }
 
 // Small analytics slice for the villager layer: active visitor count + recent
-// pageviews. Prefers the in-house store; falls back to PostHog, then degrades
-// to unavailable so the valley still runs from backend status alone.
+// pageviews. Degrades to unavailable when the in-house store can't answer, so
+// the valley still runs from backend status alone.
 const getValleyVisitors = createServerFn({ method: "GET" }).handler(async (): Promise<ValleyVisitors> => {
   await requireAdminAccess("Valley visitors");
   const liveBase = getServerLiveBackendUrl();
@@ -47,60 +46,10 @@ const getValleyVisitors = createServerFn({ method: "GET" }).handler(async (): Pr
     try {
       return await getValleyVisitorsFromLiveBackend(liveBase);
     } catch {
-      // Fall through to the PostHog path below.
+      // Villagers are optional; fall through to the unavailable slice.
     }
   }
-  const apiKey = process.env.POSTHOG_PERSONAL_API_KEY;
-  const projectId = process.env.POSTHOG_PROJECT_ID;
-  if (!apiKey || !projectId) {
-    return { available: false, activeVisitors: 0, recent: [], fetchedAt: Date.now() };
-  }
-  const endpoint = `https://us.posthog.com/api/projects/${projectId}/query/`;
-
-  async function runQuery(query: string): Promise<unknown[][]> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), POSTHOG_QUERY_TIMEOUT_MS);
-    try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({ query: { kind: "HogQLQuery", query } }),
-        signal: controller.signal,
-      });
-      if (!res.ok) throw new Error(`PostHog query failed (${res.status})`);
-      const body = (await res.json()) as { results?: unknown[][] };
-      return body.results ?? [];
-    } finally {
-      clearTimeout(timeout);
-    }
-  }
-
-  const [active, recent] = await Promise.all([
-    runQuery(
-      `SELECT count(DISTINCT distinct_id) FROM events WHERE timestamp > now() - interval 5 minute AND distinct_id != 'server'`,
-    ),
-    runQuery(
-      `SELECT toString(timestamp), properties.$pathname, properties.$geoip_country_code, distinct_id, properties.profile_username FROM events WHERE event IN ('$pageview', 'replay_view') AND timestamp > now() - interval 10 minute AND distinct_id != 'server' AND (properties.$pathname IS NULL OR properties.$pathname NOT LIKE '/admin/%') ORDER BY timestamp DESC LIMIT 30`,
-    ),
-  ]);
-
-  return {
-    available: true,
-    activeVisitors: Number(active[0]?.[0] ?? 0),
-    recent: recent.map((row) => {
-      const path = row[1] ? String(row[1]) : null;
-      return {
-        key: `${String(row[0] ?? "")}:${String(row[3] ?? "")}`,
-        label: eventLabelForPath(path, row[4] ? String(row[4]) : null),
-        path: path ?? "/",
-        country: row[2] ? String(row[2]) : null,
-      };
-    }),
-    fetchedAt: Date.now(),
-  };
+  return { available: false, activeVisitors: 0, recent: [], fetchedAt: Date.now() };
 });
 
 export const Route = createFileRoute("/valley")({

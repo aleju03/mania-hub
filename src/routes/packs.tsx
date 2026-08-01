@@ -50,7 +50,7 @@ import {
   type PackTypeId,
 } from "../lib/packs";
 import { pageSeo } from "../lib/seo";
-import { track } from "../lib/posthog";
+import { track } from "../lib/analytics";
 
 export const Route = createFileRoute("/packs")({
   validateSearch: (search: Record<string, unknown>): { view?: "album" } =>

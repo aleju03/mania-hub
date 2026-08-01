@@ -190,7 +190,7 @@ export function parseValleyStatus(raw: unknown): ValleyStatus {
   };
 }
 
-// --- analytics (PostHog) slice ---
+// --- analytics slice ---
 
 export interface ValleyVisitorEvent {
   key: string; // unique per event, for diffing

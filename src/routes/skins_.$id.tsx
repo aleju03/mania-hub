@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { ArrowLeft, Download, ImageIcon, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, Download, ImageIcon, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ManiaRain } from "../components/home/ManiaRain";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
@@ -7,11 +7,12 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { SKIN_FALLBACK_ACCENT, SkinKeymodeTags } from "../components/skins/SkinCard";
 import { SkinAssetExplorer } from "../components/skins/SkinAssetExplorer";
 import { SkinPreviewEditorModal } from "../components/skins/SkinPreviewEditorModal";
+import { SkinUpdateModal } from "../components/skins/SkinUpdateModal";
 import { Avatar } from "../components/ui/Avatar";
 import { useAuth } from "../lib/auth-context";
 import { formatTimeAgo } from "../lib/format";
 import { skinEventProperties } from "../lib/analytics-skins";
-import { track } from "../lib/posthog";
+import { track } from "../lib/analytics";
 import { deleteMySkin, fetchSkinById, formatKeymodes, formatSkinFileSize, markSkinsListStale, moderateSkin, readSkinsBrowseEntry, renameSkin, SKIN_NAME_MAX_LENGTH, skinDownloadUrl, type SkinSummary } from "../lib/skins";
 import { pageSeo } from "../lib/seo";
 
@@ -73,6 +74,7 @@ function SkinDetailPage() {
   const historyIndex = useRouterState({ select: (state) => state.location.state.__TSR_index });
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [editingPreviews, setEditingPreviews] = useState(false);
+  const [updatingFile, setUpdatingFile] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
 
@@ -241,7 +243,21 @@ function SkinDetailPage() {
                     />
                   </div>
                   {gallery.length > 1 && (
-                    <div className="mt-3 flex flex-wrap gap-2">
+                    // Thumbnails share the column evenly instead of stopping
+                    // short of it: a fixed width left a stub of dead space at
+                    // the end of the row, against the full-width hero above and
+                    // the .osk strip below. auto-fit drops the tracks nothing
+                    // sits in, so the row fills whatever the gallery holds. The
+                    // width cap is for the two or three preview case, where a
+                    // track would otherwise run a third of the column wide: it
+                    // holds tiles to 160px and centres the short row.
+                    // (The track max has to stay 1fr. A definite one - 160px,
+                    // say - is what auto-fit counts columns with, which lays
+                    // five previews out three-then-two.)
+                    <div
+                      className="mx-auto mt-3 grid grid-cols-[repeat(auto-fit,minmax(96px,1fr))] gap-2"
+                      style={{ maxWidth: gallery.length * 160 + (gallery.length - 1) * 8 }}
+                    >
                       {gallery.map((item, index) => (
                         <button
                           key={item.url}
@@ -249,7 +265,7 @@ function SkinDetailPage() {
                           onClick={() => setHeroIndex(index)}
                           aria-pressed={index === heroIndex}
                           aria-label={`Show ${item.label}`}
-                          className={`w-[108px] overflow-hidden rounded-lg border text-left transition-colors duration-100 cursor-pointer ${
+                          className={`w-full overflow-hidden rounded-lg border text-left transition-colors duration-100 cursor-pointer ${
                             index === heroIndex ? "border-osu-pink" : "border-osu-b3/40 hover:border-osu-f1/40"
                           }`}
                         >
@@ -350,6 +366,15 @@ function SkinDetailPage() {
                         </span>
                       </FactRow>
                     )}
+                    {/* Only there once the uploader has shipped a newer build
+                        of the file; a rename or a preview edit is not that. */}
+                    {skin.oskUpdatedAt && (
+                      <FactRow label="File updated">
+                        <span className="tabular-nums text-osu-l1" suppressHydrationWarning>
+                          {new Date(skin.oskUpdatedAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
+                        </span>
+                      </FactRow>
+                    )}
                   </dl>
 
                   {(isOwner || auth.isAdmin) && (
@@ -364,6 +389,18 @@ function SkinDetailPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         {!confirmingDelete && (
                           <>
+                            {/* Ships a newer build of the same skin: the page,
+                                its link and its download count stay put. */}
+                            <button
+                              type="button"
+                              onClick={() => setUpdatingFile(true)}
+                              disabled={busy}
+                              title="Replace the .osk with a newer build of this skin"
+                              className="inline-flex items-center gap-1.5 rounded-full border border-osu-b3/50 px-3 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white disabled:opacity-50"
+                            >
+                              <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                              Update file
+                            </button>
                             <button
                               type="button"
                               onClick={() => setEditingPreviews(true)}
@@ -461,6 +498,17 @@ function SkinDetailPage() {
                         open={editingPreviews}
                         onClose={() => setEditingPreviews(false)}
                         onSaved={setEdited}
+                      />
+                      <SkinUpdateModal
+                        skin={skin}
+                        open={updatingFile}
+                        onClose={() => setUpdatingFile(false)}
+                        // The endpoint drops the owner-only download count, so
+                        // the loaded one rides across like the rename does.
+                        onUpdated={(next) => {
+                          setEdited({ ...next, downloadCount: next.downloadCount ?? skin.downloadCount });
+                          setHeroIndex(0);
+                        }}
                       />
                     </div>
                   )}

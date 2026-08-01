@@ -1,12 +1,16 @@
 import { memo, useEffect, useRef, useState } from "react";
 import type { MutableRefObject, ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, Film, Settings } from "lucide-react";
+import { ChevronDown, Film, Maximize2, Settings } from "lucide-react";
 
 import type { ReplayRendererLike } from "#/lib/replay-types";
 import { ReplaySkinColorPanel } from "./ReplaySkinColorPanel";
 
 interface ReplayControlsProps {
+  /** "card" is the classic settings card in the page flow (phones); "overlay"
+   *  restyles the same controls as the osu!-adapted translucent playbar laid
+   *  over the bottom of the stage. */
+  variant?: "card" | "overlay";
   rendererRef: MutableRefObject<ReplayRendererLike | null>;
   heatmap: number[];
   audioUrl: string | null;
@@ -39,6 +43,7 @@ interface ReplayControlsProps {
   videoExportError?: string | null;
   videoExportUrl?: string | null;
   onTogglePlay: () => void;
+  onToggleFullscreen?: () => void;
   onExportVideo?: (options: ReplayVideoExportOptions) => void;
   onSetSpeed: (speed: number) => void;
   onToggleAudio: () => void;
@@ -95,6 +100,7 @@ async function copyTextToClipboard(text: string): Promise<boolean> {
 }
 
 export function ReplayControls({
+  variant = "card",
   rendererRef,
   heatmap,
   audioUrl,
@@ -125,6 +131,7 @@ export function ReplayControls({
   videoExportError = null,
   videoExportUrl = null,
   onTogglePlay,
+  onToggleFullscreen,
   onExportVideo,
   onSetSpeed,
   onToggleAudio,
@@ -193,6 +200,23 @@ export function ReplayControls({
       document.removeEventListener("keydown", onKey);
     };
   }, [videoMenuOpen]);
+
+  // Wheel over the volume cluster nudges master volume in 5% steps, like
+  // scrolling the volume ingame, without ever hijacking page scroll
+  // elsewhere. Native non-passive listener because React's synthetic wheel
+  // handlers can't preventDefault.
+  useEffect(() => {
+    const el = volumeMixerRef.current;
+    if (!el) return;
+    const onWheel = (event: WheelEvent) => {
+      if (event.deltaY === 0 || event.ctrlKey) return;
+      event.preventDefault();
+      const step = event.deltaY < 0 ? 0.05 : -0.05;
+      onSetVolume(Math.max(0, Math.min(1, (audioEnabled ? volume : 0) + step)));
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [audioEnabled, volume, onSetVolume, audioUrl]);
 
   const openVolumeMixer = () => {
     const el = volumeMixerRef.current;
@@ -288,8 +312,23 @@ export function ReplayControls({
     if (next !== scrollSpeed) onSetScrollSpeed(next);
   };
 
+  const isOverlay = variant === "overlay";
+
   return (
-    <div className="bg-osu-b4 rounded-xl border border-osu-b3/20">
+    <div
+      className={
+        isOverlay
+          ? "relative border-t-[3px] border-[#4a8fd6] bg-[#0b0b11]/95 pb-1 shadow-[0_-10px_30px_rgba(0,0,0,0.55)]"
+          : "bg-osu-b4 rounded-xl border border-osu-b3/20"
+      }
+    >
+      {/* Stable's stacked Visual Settings wordmark. */}
+      {isOverlay && (
+        <div aria-hidden="true" className="pointer-events-none absolute left-4 top-5 z-10 select-none leading-none">
+          <div className="text-[24px] font-bold text-[#8fc7ee] [text-shadow:0_2px_4px_rgba(0,0,0,0.8)]">Visual</div>
+          <div className="-mt-1 ml-9 text-[22px] font-bold text-white [text-shadow:0_2px_4px_rgba(0,0,0,0.8)]">Settings</div>
+        </div>
+      )}
       {audioError && (
         <div className="text-[11px] text-osu-yellow bg-osu-yellow/10 border-b border-osu-yellow/20 px-4 py-2 rounded-t-xl">
           {audioError}
@@ -334,7 +373,8 @@ export function ReplayControls({
         <ReplayProgressBar
           rendererRef={rendererRef}
           heatmap={heatmap}
-          sliderClass=""
+          sliderClass={isOverlay ? "!h-[4px] !rounded-none !bg-[#25476e] [&::-webkit-slider-thumb]:!bg-white" : ""}
+          className={isOverlay ? "!px-2 !pt-1 !pb-0" : ""}
           clipPreviewSeconds={null}
           clipPreviewRate={speed * modRate}
           customPreviewRange={onExportVideo && videoClipMode && videoExportKind === "custom"
@@ -360,7 +400,7 @@ export function ReplayControls({
           wrap-row into three deliberate rows: playback (speed + volume), view
           (scroll + dim), tools (overlays, settings, export, black field). From
           sm up everything keeps its DOM order in one wrapping row. */}
-      <div className="flex items-center gap-x-2 gap-y-2.5 sm:gap-3 px-3 sm:px-4 py-3 flex-wrap">
+      <div className={`flex items-center gap-x-2 gap-y-2.5 sm:gap-3 flex-wrap ${isOverlay ? "py-2.5 pl-44 pr-2" : "px-3 sm:px-4 py-3"}`}>
         <button
           onClick={onTogglePlay}
           title={pendingPlay ? "Waiting for audio to load..." : isPlaying && buffering ? "Buffering..." : undefined}
@@ -769,6 +809,18 @@ export function ReplayControls({
         >
           Black playfield
         </button>
+
+        {isOverlay && onToggleFullscreen && (
+          <button
+            type="button"
+            onClick={onToggleFullscreen}
+            aria-label="Enter fullscreen"
+            title="Fullscreen"
+            className="order-11 sm:order-2 w-7 h-7 rounded flex items-center justify-center cursor-pointer transition-colors bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
+          >
+            <Maximize2 className="h-4 w-4" strokeWidth={2.2} />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -1087,6 +1139,7 @@ export function ReplayProgressBar({
   const displayDuration = rendererRef.current?.displayDuration ?? 0;
   const duration = rendererRef.current?.duration ?? 0;
   const missTimes = rendererRef.current?.getMissTimes?.() ?? [];
+  const failTime = rendererRef.current?.getFailTime?.() ?? null;
   const leftLabel = formatReplayMs(progress * displayDuration);
   const rightLabel = formatReplayMs(displayDuration);
 
@@ -1120,6 +1173,13 @@ export function ReplayProgressBar({
           className={`block w-full h-1.5 appearance-none bg-osu-b3 rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink ${sliderClass}`}
         />
         <ReplayMissMarkers missTimes={missTimes} duration={duration} heatmap={heatmap} />
+        {failTime != null && duration > 0 && (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute top-1/2 z-10 h-3 w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-osu-red-light shadow-[0_0_4px_rgba(255,60,60,0.8)]"
+            style={{ left: `${Math.max(0, Math.min(1, failTime / duration)) * 100}%` }}
+          />
+        )}
         <ClipPreviewRange
           progress={progress}
           duration={duration}

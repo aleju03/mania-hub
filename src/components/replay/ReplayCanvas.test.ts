@@ -197,13 +197,60 @@ describe("ManiaReplayRenderer skin customization", () => {
     expect(source).toContain('if (this.skinSettings.style !== "bars") return;');
   });
 
-  it("renders the bottom UR timing bar in both skin modes", () => {
+  it("renders the bottom hit error bar in both skin modes", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
-    const hud = /private renderHUD\(layout: Layout\) \{([\s\S]*?)\n  private renderCombo/.exec(source);
+    const hud = /private renderHUD\(layout: Layout\) \{([\s\S]*?)\n  \/\/ --- osu!-style fixed HUD/.exec(source);
+    const bar = /private renderHitErrorBar\(layout: Layout\) \{([\s\S]*?)\n  \}/.exec(source);
 
     expect(hud?.[1]).toBeTruthy();
-    expect(hud![1]).toContain('this.fillRect(urBarX, urBarY, urBarWidth, 3, "#ffffff", 0.08);');
-    expect(hud![1]).not.toContain('if (this.skinSettings.style !== "circles") {');
+    expect(hud![1]).toContain("this.renderHitErrorBar(layout);");
+    expect(bar?.[1]).toBeTruthy();
+    expect(bar![1]).toContain("drawBand(this.hitWindows.meh, colors.outer, 0.8);");
+    expect(bar![1]).not.toContain('if (this.skinSettings.style !== "circles") {');
+  });
+
+  it("renders the ingame leaderboard with seek-safe overtake flashes", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain("setLeaderboard(entries: ReplayLeaderboardEntry[], playerName: string)");
+    expect(source).toContain("if (this.leaderboardPrevRank != null && rank < this.leaderboardPrevRank && !this.suppressOvertakeFlash)");
+    expect(source).toContain('rows[playerRowIndex - 1].kind = "target";');
+    // Seeks re-derive the rank from scratch; that jump must not flash.
+    const recompute = /private recomputeStatsUpTo\(time: number\) \{([\s\S]*?)\n  \}/.exec(source);
+    expect(recompute?.[1]).toContain("this.suppressOvertakeFlash = true;");
+  });
+
+  it("detects fails from the real life bar only and renders the fail overlay", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    // Detection runs before the simulated fallback life bar is built, and
+    // requires inputs to stop early as well as HP ending at zero.
+    expect(source.indexOf("this.failTime = this.computeFailTime();"))
+      .toBeLessThan(source.indexOf("this.lifeBarFrames = this.buildFallbackLifeBarFrames(this.judgmentEvents);"));
+    expect(source).toContain("if (lifeFrames[lifeFrames.length - 1].health > 0.001) return null;");
+    expect(source).toContain("if (lastNoteTime > 0 && lastInputTime >= lastNoteTime - 1500) return null;");
+    expect(source).toContain("private renderFailOverlay(layout: Layout)");
+    expect(source).toContain("getFailTime(): number | null {");
+  });
+
+  it("draws mod icons under the score block", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain("private renderModIcons(layout: Layout");
+    expect(source).toContain("MOD_BADGE_COLORS[acronym]");
+    // Stable fades the stack out after the map starts; lazer keeps it.
+    expect(source).toContain("const fadeStart = this.firstNoteTime + 3000;");
+  });
+
+  it("simulates the ingame score counter and pins it to the real total", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain("private buildScoreSimulator(realTotalScore: number | null)");
+    expect(source).toContain("this.scoreSimulator?.applyJudgment(event.judgment);");
+    expect(source).toContain("this.scoreSimulator?.reset();");
+    expect(source).toContain("simulator.setScale(getScoreScaleToReal(simulator.value, realTotalScore));");
+    expect(source).toContain("? formatStableScore(scoreValue)");
+    expect(source).toContain(": formatLazerScore(scoreValue);");
   });
 
   it("draws circle receptors without the bar receptor beam or glow path", () => {

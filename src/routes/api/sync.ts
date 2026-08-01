@@ -1,14 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { waitUntil } from "@vercel/functions";
 
-const POSTHOG_CAPTURE_URL = "https://us.i.posthog.com/capture/";
 const MAX_SYNC_BODY_BYTES = 64 * 1024;
-const POSTHOG_FORWARD_TIMEOUT_MS = 5_000;
 const LIVE_ANALYTICS_FORWARD_TIMEOUT_MS = 5_000;
 
 // Link-unfurl crawlers and monitoring agents that execute JS still send
 // obviously non-browser user agents; flag them so the in-house store can keep
-// them out of visitor counts (PostHog does this at ingest).
+// them out of visitor counts.
 const BOT_USER_AGENT_PATTERN =
   /bot|crawler|spider|crawling|facebookexternalhit|whatsapp|telegram|discord|slurp|bingpreview|headless|lighthouse|gtmetrix|pingdom|uptime|statuscake|python-requests|python-urllib|curl\/|wget\/|go-http-client|okhttp|axios\//i;
 
@@ -104,42 +102,6 @@ async function forwardCapture(request: Request): Promise<Response> {
   const body = await readRequestBodyWithLimit(request, MAX_SYNC_BODY_BYTES);
   if (!body) {
     return new Response("Payload Too Large", { status: 413 });
-  }
-
-  const headers = new Headers();
-  headers.set("content-type", "application/json");
-
-  const clientIp =
-    request.headers.get("x-forwarded-for")
-    ?? request.headers.get("x-real-ip")
-    ?? request.headers.get("cf-connecting-ip");
-  if (clientIp) headers.set("x-forwarded-for", clientIp);
-
-  const userAgent = request.headers.get("user-agent");
-  if (userAgent) headers.set("user-agent", userAgent);
-
-  // Fire-and-forget: forward to PostHog without blocking the response.
-  // The client (browser sendBeacon) doesn't need the upstream body and
-  // holding the connection open starves the browser's per-origin
-  // concurrent connection budget, queueing other server function calls.
-  // waitUntil keeps the Vercel function alive until the upstream fetch
-  // resolves so events aren't dropped when the runtime recycles the
-  // instance; it's a no-op outside Vercel.
-  // The PostHog leg only runs while VITE_POSTHOG_KEY is set: unsetting it
-  // ends the dual-write and leaves the in-house store as the sole sink.
-  if (process.env.VITE_POSTHOG_KEY) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), POSTHOG_FORWARD_TIMEOUT_MS);
-    waitUntil(
-      fetch(POSTHOG_CAPTURE_URL, {
-        method: "POST",
-        headers,
-        body,
-        signal: controller.signal,
-      }).catch(() => {}).finally(() => {
-        clearTimeout(timeout);
-      }),
-    );
   }
 
   forwardToLiveAnalytics(request, body);

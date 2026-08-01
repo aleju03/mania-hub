@@ -1,0 +1,215 @@
+import { describe, expect, it } from "vitest";
+import {
+  buildAnalyticsReplayMapIndex,
+  buildAnalyticsSessions,
+  describeAnalyticsEvent,
+  formatAnalyticsActivityText,
+  formatAnalyticsAgo,
+  formatAnalyticsDuration,
+  type AnalyticsRecentEventRow,
+} from "./analytics-feed";
+
+const NOW = 1_800_000_000_000;
+
+function row(overrides: Partial<AnalyticsRecentEventRow> = {}): AnalyticsRecentEventRow {
+  return {
+    eventId: "e1",
+    timestamp: "02:31:45 PM",
+    ts: NOW,
+    event: "$pageview",
+    path: "/tracker",
+    country: "CR",
+    selectedCountry: null,
+    deviceKind: "desktop",
+    distinctId: "visitor-1",
+    mapsTab: null,
+    mapsQuery: null,
+    mapsFilters: null,
+    mapsSort: null,
+    mapsCollection: null,
+    mapsPage: null,
+    mapsBeatmapId: null,
+    rankingsPage: null,
+    profileUsername: null,
+    replayPlayer: null,
+    replayScoreId: null,
+    replayTitle: null,
+    replayArtist: null,
+    replayDifficulty: null,
+    viewUrl: null,
+    farmHelperUser: null,
+    farmMapTitle: null,
+    farmMapUser: null,
+    packType: null,
+    packUsername: null,
+    skinsQuery: null,
+    skinsKeys: null,
+    skinsSort: null,
+    skinsPage: null,
+    skinRef: null,
+    skinName: null,
+    skinKeymodes: null,
+    skinUploadError: null,
+    viewerUsername: null,
+    referrer: null,
+    ...overrides,
+  };
+}
+
+describe("describeAnalyticsEvent", () => {
+  it("reads a plain pageview as a visit", () => {
+    expect(describeAnalyticsEvent(row())).toEqual({
+      kind: "visit",
+      verb: "visited",
+      subject: "the tracker",
+      detail: null,
+    });
+  });
+
+  it("calls a typed maps query a search and keeps the facets as context", () => {
+    const activity = describeAnalyticsEvent(row({
+      path: "/maps",
+      mapsTab: "farmed",
+      mapsQuery: "camellia",
+      mapsSort: "pp",
+      mapsPage: "2",
+    }));
+    expect(activity.kind).toBe("search");
+    expect(activity.verb).toBe("searched");
+    expect(activity.subject).toBe('"camellia"');
+    expect(activity.detail).toBe("in Maps · Most farmed · sort: pp · page 2");
+  });
+
+  it("calls a maps tab without a query browsing", () => {
+    const activity = describeAnalyticsEvent(row({ path: "/maps", mapsTab: "popular" }));
+    expect(activity).toMatchObject({ kind: "visit", verb: "browsed", subject: "Maps · Widely played" });
+  });
+
+  it("names the map a replay_view watched, and who played it", () => {
+    const activity = describeAnalyticsEvent(row({
+      event: "replay_view",
+      path: "/replay",
+      replayTitle: "Ghost",
+      replayArtist: "Camellia",
+      replayDifficulty: "4K Insane",
+      replayPlayer: "cheesecake",
+    }));
+    expect(activity.kind).toBe("replay");
+    expect(formatAnalyticsActivityText(activity)).toBe("watched Camellia - Ghost [4K Insane] · by cheesecake");
+  });
+
+  it("borrows map details from a sibling event for the bare /replay pageview", () => {
+    const rows = [
+      row({ path: "/replay", replayScoreId: "999" }),
+      row({
+        event: "replay_view",
+        path: "/replay",
+        replayScoreId: "999",
+        replayTitle: "Ghost",
+        replayArtist: "Camellia",
+      }),
+    ];
+    const index = buildAnalyticsReplayMapIndex(rows);
+    expect(describeAnalyticsEvent(rows[0], index).subject).toBe("Camellia - Ghost");
+    // Without the index there is nothing to borrow, so it degrades to the id.
+    expect(describeAnalyticsEvent(rows[0]).subject).toBe("replay #999");
+  });
+
+  it("describes profiles, farm help, packs and skins", () => {
+    expect(describeAnalyticsEvent(row({ path: "/player/juan", profileUsername: "juan" }))).toMatchObject({
+      kind: "profile",
+      verb: "viewed",
+      subject: "juan's profile",
+    });
+    expect(describeAnalyticsEvent(row({ path: "/farm-helper", farmHelperUser: "juan" }))).toMatchObject({
+      kind: "farm",
+      subject: "farm help for juan",
+    });
+    expect(describeAnalyticsEvent(row({ event: "pack_open", packType: "elite", packUsername: "juan" }))).toMatchObject({
+      kind: "pack",
+      verb: "opened",
+      subject: "an Elite pack",
+      detail: "as juan",
+    });
+    expect(describeAnalyticsEvent(row({ event: "skin_download", skinName: "Freedom Dive" }))).toMatchObject({
+      kind: "skin",
+      verb: "downloaded",
+      subject: "Freedom Dive",
+    });
+    expect(describeAnalyticsEvent(row({ event: "skin_file_updated", skinName: "Freedom Dive", skinKeymodes: "4K/7K" }))).toMatchObject({
+      kind: "skin",
+      verb: "shipped a new build of",
+      subject: "Freedom Dive",
+      detail: "4K/7K",
+    });
+  });
+
+  it("buckets failures as errors", () => {
+    expect(describeAnalyticsEvent(row({ event: "replay_watch_crash" })).kind).toBe("error");
+    expect(describeAnalyticsEvent(row({ event: "route_error", path: "/maps" }))).toMatchObject({
+      kind: "error",
+      subject: "a page error",
+      detail: "/maps",
+    });
+    expect(describeAnalyticsEvent(row({ event: "skin_upload_failed", skinUploadError: "too big" }))).toMatchObject({
+      kind: "error",
+      detail: "too big",
+    });
+  });
+
+  it("falls back to the raw path for pages it has no phrasing for", () => {
+    expect(describeAnalyticsEvent(row({ path: "/something-new" }))).toMatchObject({
+      verb: "visited",
+      subject: "/something-new",
+    });
+  });
+});
+
+describe("buildAnalyticsSessions", () => {
+  it("groups by visitor, keeps arrival order and measures the session", () => {
+    const rows = [
+      row({ distinctId: "a", ts: NOW - 10_000, path: "/maps" }),
+      row({ distinctId: "b", ts: NOW - 30_000, path: "/tracker", country: null, deviceKind: "unknown" }),
+      row({ distinctId: "a", ts: NOW - 120_000, path: "/", referrer: "google.com" }),
+      row({ distinctId: "b", ts: NOW - 40 * 60_000, path: "/snipes", country: "DE", deviceKind: "mobile" }),
+    ];
+    const sessions = buildAnalyticsSessions(rows, NOW);
+    expect(sessions.map((session) => session.distinctId)).toEqual(["a", "b"]);
+    expect(sessions[0]).toMatchObject({ label: "V1", slot: 0, online: true, referrer: "google.com" });
+    expect(sessions[0].durationMs).toBe(110_000);
+    expect(sessions[0].events).toHaveLength(2);
+    // Later rows backfill the fields the newest event was missing.
+    expect(sessions[1]).toMatchObject({ label: "V2", country: "DE", deviceKind: "mobile", online: true });
+  });
+
+  it("marks a visitor whose last event aged out as offline", () => {
+    const sessions = buildAnalyticsSessions([row({ ts: NOW - 20 * 60_000 })], NOW);
+    expect(sessions[0].online).toBe(false);
+  });
+
+  it("never claims a visitor is online when the rows carry no epoch timestamp", () => {
+    const sessions = buildAnalyticsSessions([row({ ts: undefined as unknown as number })], NOW);
+    expect(sessions[0].online).toBe(false);
+    expect(sessions[0].durationMs).toBe(0);
+  });
+});
+
+describe("clock formatting", () => {
+  it("ages events compactly", () => {
+    expect(formatAnalyticsAgo(1_000)).toBe("now");
+    expect(formatAnalyticsAgo(42_000)).toBe("42s");
+    expect(formatAnalyticsAgo(7 * 60_000)).toBe("7m");
+    expect(formatAnalyticsAgo(3 * 3_600_000 + 20 * 60_000)).toBe("3h 20m");
+    expect(formatAnalyticsAgo(2 * 24 * 3_600_000)).toBe("2d");
+    expect(formatAnalyticsAgo(-5)).toBe("now");
+    // A backend too old to send epoch timestamps must not read as "just now".
+    expect(formatAnalyticsAgo(Number.NaN)).toBe("—");
+  });
+
+  it("spells out session durations", () => {
+    expect(formatAnalyticsDuration(0)).toBe("0s");
+    expect(formatAnalyticsDuration(95_000)).toBe("1m 35s");
+    expect(formatAnalyticsDuration(120_000)).toBe("2m");
+    expect(formatAnalyticsDuration(3 * 3_600_000)).toBe("3h");
+  });
+});

@@ -1,5 +1,5 @@
 import JSZip from "jszip";
-import { ChevronDown, ChevronLeft, ChevronRight, Pause, Play, Volume2, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, FolderOpen, ImageIcon, Loader2, Music, Pause, Play, Volume2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -36,6 +36,8 @@ const GROUP_HINTS: Record<string, string> = {
 
 export function SkinAssetExplorer({ skin }: { skin: SkinSummary }) {
   const [state, setState] = useState<ExplorerState>({ phase: "idle" });
+  // Collapsing keeps the parsed archive around, so reopening is instant.
+  const [open, setOpen] = useState(false);
   const objectUrlsRef = useRef<Map<string, string>>(new Map());
   const oskUrl = skinOskFileUrl(skin);
 
@@ -46,6 +48,17 @@ export function SkinAssetExplorer({ skin }: { skin: SkinSummary }) {
       urls.clear();
     };
   }, []);
+
+  // The uploader just shipped a newer build: what is parsed here belongs to
+  // the file that is gone, so the strip closes back up and reads the new one
+  // on the next click.
+  useEffect(() => {
+    setState({ phase: "idle" });
+    setOpen(false);
+    const urls = objectUrlsRef.current;
+    for (const url of urls.values()) URL.revokeObjectURL(url);
+    urls.clear();
+  }, [oskUrl]);
 
   // One object URL per zip path, shared by thumbs and the sound player;
   // everything gets revoked together when the page unmounts.
@@ -89,38 +102,81 @@ export function SkinAssetExplorer({ skin }: { skin: SkinSummary }) {
       const iniFile = zip.file(/(^|\/)skin\.ini$/i)[0];
       const ini = iniFile ? await iniFile.async("string").catch(() => "") : "";
       setState({ phase: "ready", zip, groups, stageRefs: ini ? extractSkinIniStageReferences(ini) : [] });
+      setOpen(true);
     } catch {
       setState({ phase: "error" });
     }
   }, [oskUrl]);
 
+  // What the archive turned out to hold, for the header line once it is open.
+  const counts = useMemo(() => {
+    if (state.phase !== "ready") return null;
+    let images = 0;
+    let sounds = 0;
+    for (const group of state.groups) {
+      for (const entry of group.entries) {
+        if (entry.kind === "sound") sounds += 1;
+        else images += 1;
+      }
+    }
+    return { images, sounds };
+  }, [state]);
+
   if (!oskUrl) return null;
 
+  const loading = state.phase === "loading";
+  const ready = state.phase === "ready";
+
   return (
-    <section className="mt-4 rounded-xl border border-osu-b3/20 bg-osu-b4">
-      <div className="flex flex-wrap items-center gap-3 px-4 py-3">
-        <h2 className="text-[11px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Inside the .osk</h2>
-        {state.phase === "idle" && (
-          <button
-            type="button"
-            onClick={() => void load()}
-            className="ml-auto rounded-full border border-osu-b3/60 px-3.5 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white"
-          >
-            Open the archive
-            {skin.oskSizeBytes ? <span className="ml-1.5 text-osu-f1 tabular-nums">{formatSkinFileSize(skin.oskSizeBytes)}</span> : null}
-          </button>
-        )}
-        {state.phase === "loading" && <span className="ml-auto text-[12px] text-osu-f1">Reading the archive...</span>}
-        {state.phase === "error" && (
-          <span className="ml-auto flex items-center gap-2 text-[12px]">
-            <span className="font-semibold text-osu-red-light">The archive could not be read.</span>
-            <button type="button" onClick={() => void load()} className="font-semibold text-osu-f1 transition-colors cursor-pointer hover:text-osu-l1">
-              Retry
-            </button>
+    // One clickable strip that opens the archive and then toggles it, rather
+    // than a header with a lone button floating at the far end of an empty row.
+    <section className="mt-4 overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4">
+      <button
+        type="button"
+        disabled={loading}
+        onClick={() => (ready ? setOpen((previous) => !previous) : void load())}
+        aria-expanded={ready && open}
+        className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors cursor-pointer hover:bg-osu-b3/25 disabled:cursor-default"
+      >
+        <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg transition-colors ${
+          ready ? "bg-osu-pink/15 text-osu-pink-light" : "bg-osu-b5 text-osu-f1"
+        }`}>
+          {loading
+            ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            : <FolderOpen className="h-4 w-4" aria-hidden="true" />}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[13px] font-bold leading-tight text-white">Inside the .osk</span>
+          <span className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11.5px] text-osu-f1">
+            {state.phase === "error" ? (
+              <span className="font-semibold text-osu-red-light">The archive could not be read. Tap to try again.</span>
+            ) : loading ? (
+              <span>Reading the archive...</span>
+            ) : counts ? (
+              <>
+                <span className="flex items-center gap-1">
+                  <ImageIcon className="h-3 w-3" aria-hidden="true" />
+                  <span className="tabular-nums">{counts.images}</span> images
+                </span>
+                <span className="flex items-center gap-1">
+                  <Music className="h-3 w-3" aria-hidden="true" />
+                  <span className="tabular-nums">{counts.sounds}</span> sounds
+                </span>
+              </>
+            ) : (
+              <span>Browse every image and sound this skin ships, without downloading it.</span>
+            )}
           </span>
-        )}
-      </div>
-      {state.phase === "ready" && (
+        </span>
+        {skin.oskSizeBytes ? (
+          <span className="shrink-0 text-[11.5px] text-osu-f1 tabular-nums">{formatSkinFileSize(skin.oskSizeBytes)}</span>
+        ) : null}
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-osu-f1 transition-transform ${ready && open ? "" : "-rotate-90"}`}
+          aria-hidden="true"
+        />
+      </button>
+      {ready && open && (
         <div className="border-t border-osu-b3/25 px-4 pb-3">
           {state.groups.length === 0 ? (
             <p className="py-3 text-[12px] text-osu-f1">No images or sounds were found in the archive.</p>

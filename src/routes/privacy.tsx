@@ -68,9 +68,7 @@ function PrivacyPage() {
           localStorage. The ID is not derived from or linked to your osu! account, and clearing
           site data removes it. The country shown in analytics is derived from the request at
           the hosting edge; the IP address itself and the browser user agent are not stored.
-          During a transition period events are also sent to PostHog, which receives the request
-          IP address and browser user agent with each event for its country and device
-          breakdowns; Mania Tracker itself stores neither.
+          Analytics events are not sent to any third-party service.
         </LegalParagraph>
         <LegalParagraph>
           To prevent abuse, the server counts requests per IP address for rate limiting and caps

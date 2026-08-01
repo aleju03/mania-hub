@@ -1,7 +1,7 @@
 import { StrictMode, startTransition } from "react";
 import { hydrateRoot } from "react-dom/client";
 import { StartClient } from "@tanstack/react-start/client";
-import { track } from "./lib/posthog";
+import { track } from "./lib/analytics";
 import { reapplyThemeToDom } from "./store";
 
 // Mirrors @tanstack/react-start's default client entry

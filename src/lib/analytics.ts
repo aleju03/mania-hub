@@ -1,7 +1,6 @@
 import { getMapsPageviewProperties } from "./analytics-maps";
 import { getSkinDetailPageviewProperties, getSkinsPageviewProperties } from "./analytics-skins";
 
-const API_KEY = import.meta.env.VITE_POSTHOG_KEY as string | undefined;
 const ENDPOINT = "/api/sync";
 const VISITOR_ID_KEY = "mh_vid";
 const ADMIN_ANALYTICS_INSPECT_PARAM = "mh_admin_inspect";
@@ -69,10 +68,7 @@ export function track(event: string, properties?: Record<string, unknown>) {
   if (isAdminAnalyticsInspection()) return;
   const distinctId = getVisitorId();
   const eventId = crypto.randomUUID();
-  // api_key is only meaningful to the PostHog leg of the /api/sync dual-write;
-  // capture must keep flowing to the in-house store without it.
   const payload = {
-    api_key: API_KEY,
     event,
     distinct_id: distinctId,
     timestamp: new Date().toISOString(),

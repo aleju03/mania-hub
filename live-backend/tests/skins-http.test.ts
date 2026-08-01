@@ -140,9 +140,10 @@ async function call(req: IncomingMessage) {
   return { status: response.res.statusCode, body, headers: response.headers };
 }
 
-async function buildOskBuffer(): Promise<Buffer> {
+async function buildOskBuffer(keymodes: number[] = [4, 7]): Promise<Buffer> {
   const zip = new JSZip();
-  zip.file("skin.ini", "[General]\nName: Cloudy Skies\nAuthor: sona\n\n[Mania]\nKeys: 4\nColourLight1: 255,102,170\n\n[Mania]\nKeys: 7\n");
+  const mania = keymodes.map((keys) => `\n[Mania]\nKeys: ${keys}\nColourLight1: 255,102,170\n`).join("");
+  zip.file("skin.ini", `[General]\nName: Cloudy Skies\nAuthor: sona\n${mania}`);
   return zip.generateAsync({ type: "nodebuffer" });
 }
 
@@ -221,7 +222,8 @@ describe("skins HTTP endpoints", () => {
     expect((await call(mockReq("GET", "/api/skins/download?id=missing"))).status).toBe(404);
   });
 
-  it("keeps download counts to admin responses", async () => {
+  it("keeps download counts to the skin's own uploader and to admins", async () => {
+    // startUpload publishes as userId 101.
     const { id, token } = await startUpload();
     await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=osk`, await buildOskBuffer()));
     await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=preview`, PNG_BYTES));
@@ -232,13 +234,32 @@ describe("skins HTTP endpoints", () => {
     await call(mockReq("GET", `/api/skins/download?id=${id}`));
     await call(mockReq("GET", `/api/skins/download?id=${id}`));
 
+    const publicList = await call(mockReq("GET", "/api/skins/list"));
     expect((await call(mockReq("GET", `/api/skins/get?id=${id}`))).body.skin.downloadCount).toBeNull();
-    expect((await call(mockReq("GET", "/api/skins/list"))).body.skins[0].downloadCount).toBeNull();
+    expect(publicList.body.skins[0].downloadCount).toBeNull();
+    // Nothing viewer-specific in it, so the public list stays cacheable.
+    expect(publicList.headers["cache-control"]).toContain("max-age=60");
 
+    // The uploader, as the frontend server fn forwards them: their verified id
+    // alongside the admin token.
+    const ownList = await call(mockReq("GET", "/api/skins/list?viewerUserId=101", ADMIN));
+    expect(ownList.body.skins[0].downloadCount).toBe(2);
+    expect((await call(mockReq("GET", `/api/skins/get?id=${id}&viewerUserId=101`, ADMIN))).body.skin.downloadCount).toBe(2);
+    // Counts belong to one viewer, so the response must not be shared.
+    expect(ownList.headers["cache-control"]).toBe("private, no-store");
+
+    // Another signed-in visitor gets nothing back for a skin that is not theirs.
+    expect((await call(mockReq("GET", "/api/skins/list?viewerUserId=202", ADMIN))).body.skins[0].downloadCount).toBeNull();
+    expect((await call(mockReq("GET", `/api/skins/get?id=${id}&viewerUserId=202`, ADMIN))).body.skin.downloadCount).toBeNull();
+    // The id alone proves nothing: without the token it is just a query param.
+    expect((await call(mockReq("GET", `/api/skins/get?id=${id}&viewerUserId=101`))).body.skin.downloadCount).toBeNull();
+    expect((await call(mockReq("GET", "/api/skins/list?viewerUserId=101"))).body.skins[0].downloadCount).toBeNull();
+
+    // An admin sees every count: server to server with no viewer attached, and
+    // as a signed-in admin browsing someone else's skin.
     expect((await call(mockReq("GET", `/api/skins/get?id=${id}`, ADMIN))).body.skin.downloadCount).toBe(2);
     expect((await call(mockReq("GET", "/api/skins/list", ADMIN))).body.skins[0].downloadCount).toBe(2);
-    // An admin read must not land in a shared cache.
-    expect((await call(mockReq("GET", "/api/skins/list", ADMIN))).headers["cache-control"]).toBeUndefined();
+    expect((await call(mockReq("GET", "/api/skins/list?viewerUserId=202&asAdmin=1", ADMIN))).body.skins[0].downloadCount).toBe(2);
   });
 
   it("requires both osk and preview before finish", async () => {
@@ -279,6 +300,58 @@ describe("skins HTTP endpoints", () => {
     expect(uploadSkinObject).not.toHaveBeenCalled();
   });
 
+  it("ships a newer .osk against a published skin through a replace ticket", async () => {
+    const { id, token } = await startUpload();
+    await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=osk`, await buildOskBuffer()));
+    for (const keys of [4, 7]) {
+      await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=preview&keys=${keys}${keys === 4 ? "&cover=1" : ""}`, PNG_BYTES));
+    }
+    await call(mockReq("POST", `/api/skins/finish?id=${id}&token=${token}`));
+    const publishedOskKey = `skins/${id}/Cloudy Skies.osk`;
+
+    // A previews ticket is not a licence to swap the file.
+    const previewsTicket = await call(bodyReq("POST", "/api/skins/edit-start", JSON.stringify({ userId: 101, id }), ADMIN));
+    const refused = await call(bodyReq(
+      "POST",
+      `/api/skins/upload?id=${id}&token=${previewsTicket.body.token}&part=osk`,
+      await buildOskBuffer([4]),
+    ));
+    expect(refused.status).toBe(400);
+    expect(refused.body).toMatchObject({ error: "invalid_part" });
+
+    const ticket = await call(bodyReq("POST", "/api/skins/edit-start", JSON.stringify({ userId: 101, id, scope: "replace" }), ADMIN));
+    expect(ticket.body.scope).toBe("replace");
+    vi.mocked(uploadSkinObject).mockClear();
+    vi.mocked(deleteSkinObjects).mockClear();
+
+    // The new build drops 7K.
+    const replaced = await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${ticket.body.token}&part=osk`, await buildOskBuffer([4])));
+    expect(replaced.status).toBe(200);
+    expect(replaced.body).toMatchObject({ keymodes: [4] });
+    // Stored objects are cached immutably, so it lands on a fresh key while the
+    // download keeps the skin's own filename; the old build goes.
+    const [, writtenKey, , , , downloadFilename] = vi.mocked(uploadSkinObject).mock.calls[0];
+    expect(writtenKey).toBe(`skins/${id}/Cloudy Skies-r1.osk`);
+    expect(downloadFilename).toBe("Cloudy Skies.osk");
+    expect(vi.mocked(deleteSkinObjects).mock.calls[0][1]).toEqual([publishedOskKey]);
+
+    await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${ticket.body.token}&part=preview&keys=4&cover=1`, PNG_BYTES));
+    const finished = await call(mockReq("POST", `/api/skins/edit-finish?id=${id}&token=${ticket.body.token}`));
+    expect(finished.status).toBe(200);
+
+    const after = (await call(mockReq("GET", `/api/skins/get?id=${id}`))).body.skin;
+    expect(after.keymodes).toEqual([4]);
+    // The 7K preview belongs to a build nobody can download any more.
+    expect(after.previews.map((preview: { keys: number }) => preview.keys)).toEqual([4]);
+    expect(vi.mocked(deleteSkinObjects).mock.calls.at(-1)?.[1]).toEqual([`skins/${id}/preview-7k.png`]);
+    // The mock builds its url straight off the key, hence no escaping here.
+    expect(after.oskUrl).toContain("Cloudy Skies-r1.osk");
+    expect(after.oskUpdatedAt).not.toBeNull();
+    // The page it was published at is untouched.
+    expect(after.slug).toBe("cloudy-skies");
+    expect(after.publishedAt).not.toBeNull();
+  });
+
   it("hides, unhides, and deletes through moderation, and enforces owner-only deletes", async () => {
     const { id, token } = await startUpload();
     await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=osk`, await buildOskBuffer()));
@@ -293,6 +366,10 @@ describe("skins HTTP endpoints", () => {
     expect((await call(mockReq("GET", "/api/skins/list?includeHidden=1", ADMIN))).body.total).toBe(1);
     // includeHidden is admin-only
     expect((await call(mockReq("GET", "/api/skins/list?includeHidden=1"))).body.total).toBe(0);
+    // Hidden is a moderation state: a signed-in uploader reading their own
+    // skin back through the viewer path does not get to see it either.
+    expect((await call(mockReq("GET", `/api/skins/get?id=${id}&viewerUserId=101`, ADMIN))).status).toBe(404);
+    expect((await call(mockReq("GET", "/api/skins/list?includeHidden=1&viewerUserId=101", ADMIN))).body.total).toBe(0);
 
     const unhide = await call(bodyReq("POST", "/api/admin/skins/moderate", JSON.stringify({ id, action: "unhide" }), ADMIN));
     expect(unhide.status).toBe(200);

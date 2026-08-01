@@ -6,11 +6,16 @@ import {
   buildAutoplayFrames,
   findDensestPreviewStartTime,
   getChartPreviewPlaybackPlan,
+  getSetPreviewReferenceBeatmap,
   hasPreviewNotes,
   getPreviewNotes,
   getPreviewScrollVelocities,
+  isLikelyTimedRateVariantSet,
+  parseDifficultyRate,
+  parseSelectedDifficultyRate,
   pickPreviewStartTime,
   resolveInitialChartPreviewAudioMode,
+  shouldUseSetPreviewForReplayAudio,
 } from "./chart-preview";
 
 const baseBeatmap: ManiaBeatmap = {
@@ -246,5 +251,85 @@ describe("chart preview helpers", () => {
       hasDifficultyPicker: false,
       timedRateVariant: false,
     })).toBe("selected-file");
+  });
+});
+
+function difficulty(version: string, totalLength: number, difficultyRating = 5, cs = 4) {
+  return { version, totalLength, difficultyRating, cs };
+}
+
+describe("set preview audio source", () => {
+  it("plays the set preview when every difficulty is the same song", () => {
+    expect(shouldUseSetPreviewForReplayAudio("Paralyzer", [
+      difficulty("[6K] Sweatin'", 191),
+      difficulty("[7K] Hard ROCK!", 191),
+      difficulty("[6K] Breezin'", 195),
+    ])).toBe(true);
+  });
+
+  it("downloads the song when difficulty lengths scatter across a dan course set", () => {
+    expect(shouldUseSetPreviewForReplayAudio("Regular Dan Phase I", [
+      difficulty("[7K] 0th Dan (Marathon)", 422),
+      difficulty("[7K] 1st Dan (Marathon)", 476),
+      difficulty("[7K] 2nd Dan (Marathon)", 521),
+      difficulty("[7K] 3rd Dan (Marathon)", 531),
+    ])).toBe(false);
+  });
+
+  it("keeps the set preview for rate variants, whose lengths differ by their own rate", () => {
+    const beatmaps = [difficulty("[4K] Macabre", 120), difficulty("[4K] Macabre 1.2x", 100)];
+    expect(isLikelyTimedRateVariantSet(beatmaps)).toBe(true);
+    expect(shouldUseSetPreviewForReplayAudio("Odoru Mizushibuki", beatmaps)).toBe(true);
+  });
+
+  it("vetoes compilations by name when their songs happen to share a length", () => {
+    const beatmaps = [difficulty("[6K] Alex c. feat. Yasmin", 114), difficulty("[6K] P*Light", 116)];
+    expect(shouldUseSetPreviewForReplayAudio("Some Song", beatmaps)).toBe(true);
+    expect(shouldUseSetPreviewForReplayAudio("Alipay's 6k practice pack Vol.2", beatmaps)).toBe(false);
+  });
+
+  it("vetoes on the difficulty name too, not just the set title", () => {
+    expect(shouldUseSetPreviewForReplayAudio("far in the blue sky", [
+      difficulty("[4K] chordjack practice 1", 184),
+      difficulty("[4K] chordjack practice 2", 187),
+    ])).toBe(false);
+  });
+
+  it("always uses the set preview for a single-difficulty set", () => {
+    expect(shouldUseSetPreviewForReplayAudio("Pack of One", [difficulty("[4K] Only", 200)])).toBe(true);
+  });
+
+  it("ignores difficulties with no usable length", () => {
+    expect(shouldUseSetPreviewForReplayAudio("TAKECORE OF YOURSELF", [
+      difficulty("[4K] Normal", 0),
+      difficulty("[4K] Hard", 280),
+      difficulty("[4K] Insane", 283),
+    ])).toBe(true);
+  });
+});
+
+describe("rate variant parsing", () => {
+  it("reads comma decimals, which non-English mappers use for rates", () => {
+    expect(parseDifficultyRate("[4K] Supersensory [1,05x Rate]")).toBe(1.05);
+    expect(parseDifficultyRate("[4K] Meowscarada [0,85x Rate]")).toBe(0.85);
+    expect(parseDifficultyRate("[4K] Macabre 1.2x")).toBe(1.2);
+    expect(parseDifficultyRate("[4K] Insane")).toBe(1);
+  });
+
+  it("treats a comma-decimal set as a rate variant rather than two songs", () => {
+    const beatmaps = [difficulty("[4K] Supersensory", 150), difficulty("[4K] Supersensory [1,05x Rate]", 143)];
+    expect(isLikelyTimedRateVariantSet(beatmaps)).toBe(true);
+    expect(shouldUseSetPreviewForReplayAudio("x7124", beatmaps)).toBe(true);
+  });
+
+  it("scales bracket-BPM variants against the base BPM", () => {
+    const beatmaps = [difficulty("[4K] Song [130]", 200), difficulty("[4K] Song [160]", 163)];
+    expect(parseSelectedDifficultyRate(beatmaps[1], beatmaps)).toBeCloseTo(160 / 130, 5);
+    expect(parseSelectedDifficultyRate(beatmaps[0], beatmaps)).toBe(1);
+  });
+
+  it("points the reference beatmap at the unscaled difficulty", () => {
+    const beatmaps = [difficulty("[4K] Macabre 1.2x", 100), difficulty("[4K] Macabre", 120)];
+    expect(getSetPreviewReferenceBeatmap(beatmaps)?.version).toBe("[4K] Macabre");
   });
 });

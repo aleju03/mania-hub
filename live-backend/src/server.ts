@@ -25,6 +25,7 @@ import { ensureSkillVectorBackfillSeeded } from "./features/skill-vector-backfil
 import { backfillSkinSlugs } from "./features/skins.js";
 import { AbuseGuard } from "./http/abuse-guard.js";
 import { CountryClientTracker } from "./live/country-clients.js";
+import { handleReplayPresence } from "./live/replay-presence.js";
 import { handleSse } from "./live/sse.js";
 import { enqueueOscBackfill } from "./osc/backfill.js";
 import { OscSocketClient } from "./osc/client.js";
@@ -279,6 +280,7 @@ export async function createApp() {
   const server = createServer(async (req, res) => {
     try {
       if (await handleSse(req, res, ctx)) return;
+      if (handleReplayPresence(req, res, ctx)) return;
       if (await routeHttp(req, res, ctx)) return;
       sendNotFound(res);
     } catch (error) {

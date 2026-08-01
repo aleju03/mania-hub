@@ -29,6 +29,9 @@ export const WIP: string[] = [
 ];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-07-31", text: "See how many times your own skins have been downloaded", to: "/skins" },
+  { date: "2026-07-31", text: "Update your skin with a newer .osk, keeping its page and its downloads", to: "/skins" },
+  { date: "2026-07-31", text: "Download a skin straight from the grid, without opening it first", to: "/skins" },
   { date: "2026-07-31", text: "See the best pulls as they happen, and how many collections a card is in", to: "/packs" },
   { date: "2026-07-31", text: "Every pull has a page you can share", to: "/packs" },
   { date: "2026-07-31", text: "New farm helper board, easier to read and quicker to pick from", to: "/farm-helper" },

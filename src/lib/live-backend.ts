@@ -1897,6 +1897,18 @@ export async function fetchLivePackRecentPulls(
   return Array.isArray(body.pulls) ? body.pulls : [];
 }
 
+/** Anonymous per-replay presence stream for the viewer's ingame-style
+ *  "Spectators (N)" counter. `key` is `score:<id>` or `upload:<id>`; the
+ *  stream emits `count` events and carries no identities. `observe` receives
+ *  counts without registering as a watcher (the admin ignoring themselves). */
+export function openReplayPresenceEventSource(key: string, options?: { observe?: boolean }): EventSource | null {
+  const base = getLiveBackendUrl();
+  if (!base || typeof EventSource === "undefined") return null;
+  const query = new URLSearchParams({ key });
+  if (options?.observe) query.set("observe", "1");
+  return new EventSource(`${base}/api/replay/presence?${query.toString()}`);
+}
+
 export function openLiveEventSource(country: string, options?: { observe?: boolean }): EventSource | null {
   const base = getLiveBackendUrl();
   if (!base || typeof EventSource === "undefined") return null;

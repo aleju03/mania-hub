@@ -1,4 +1,5 @@
 import JSZip from "jszip";
+import { BEATMAP_MIRRORS, type BeatmapMirrorName } from "./beatmap-mirrors";
 
 const ARCHIVE_CACHE_TTL = 15 * 60 * 1000;
 const ARCHIVE_CACHE_MAX_ENTRIES = 6;
@@ -10,30 +11,9 @@ const MAX_ZIP_CENTRAL_DIRECTORY_BYTES = 8 * 1024 * 1024;
 const MAX_ARCHIVE_BYTES = 120 * 1024 * 1024;
 const MAX_EXTRACTED_FILE_BYTES = 60 * 1024 * 1024;
 
-const ARCHIVE_SOURCES = [
-  {
-    name: "osu.direct",
-    url: (beatmapsetId: string) => `https://osu.direct/api/d/${encodeURIComponent(beatmapsetId)}`,
-  },
-  {
-    name: "catboy",
-    url: (beatmapsetId: string) => `https://catboy.best/d/${encodeURIComponent(beatmapsetId)}`,
-  },
-  {
-    name: "hinai",
-    url: (beatmapsetId: string) => `https://mirror.hinamizawa.ai/d/${encodeURIComponent(beatmapsetId)}?redirect=true`,
-  },
-  {
-    name: "nerinyan",
-    url: (beatmapsetId: string) => `https://api.nerinyan.moe/d/${encodeURIComponent(beatmapsetId)}`,
-  },
-  {
-    name: "sayobot",
-    url: (beatmapsetId: string) => `https://txy1.sayobot.cn/beatmaps/download/full/${encodeURIComponent(beatmapsetId)}`,
-  },
-] as const;
+const ARCHIVE_SOURCES = BEATMAP_MIRRORS;
 
-type ArchiveSourceName = (typeof ARCHIVE_SOURCES)[number]["name"];
+type ArchiveSourceName = BeatmapMirrorName;
 
 type ArchiveCacheEntry = {
   expiresAt: number;

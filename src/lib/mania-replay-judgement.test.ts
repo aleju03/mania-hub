@@ -742,6 +742,60 @@ describe("mania replay judgement helpers", () => {
     ]);
   });
 
+  it("misses dropped stable LNs whose next press starts after the tail and leaves that press for the next note", () => {
+    const ruleset = getManiaReplayRuleset(false, []);
+    const windows = getManiaReplayHitWindows(5, ruleset);
+    const notes: ManiaNote[] = [
+      { column: 0, time: 1000, endTime: 1400, isHold: true },
+      { column: 0, time: 1450, endTime: 1450, isHold: false },
+    ];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 985, keyState: 1 },
+      { time: 1100, keyState: 0 },
+      { time: 1440, keyState: 0 },
+      { time: 1444, keyState: 1 },
+      { time: 1520, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 2000);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable", {
+      legacyReplayFrameRounding: true,
+    });
+
+    expect(simulated.events).toEqual([
+      expect.objectContaining({ part: "hold-break", judgment: null, time: 1100 }),
+      expect.objectContaining({ part: "note", noteIndex: 1, judgment: 1 }),
+      expect.objectContaining({ part: "hold-combined", noteIndex: 0, judgment: 6, time: 1573 }),
+    ]);
+  });
+
+  it("keeps the old dropped-LN tail consumption when the press-after-tail rule is disabled", () => {
+    const ruleset = getManiaReplayRuleset(false, []);
+    const windows = getManiaReplayHitWindows(5, ruleset);
+    const notes: ManiaNote[] = [
+      { column: 0, time: 1000, endTime: 1400, isHold: true },
+      { column: 0, time: 1450, endTime: 1450, isHold: false },
+    ];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 985, keyState: 1 },
+      { time: 1100, keyState: 0 },
+      { time: 1440, keyState: 0 },
+      { time: 1444, keyState: 1 },
+      { time: 1520, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 2000);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable", {
+      legacyReplayFrameRounding: true,
+      stableBrokenTailPressAfterTailMisses: false,
+    });
+
+    const combined = simulated.events.find((event) => event.part === "hold-combined");
+    expect(combined?.judgment).not.toBe(6);
+  });
+
   it("does not miss stable tail-edge releases exactly on the early tail edge", () => {
     const ruleset = getManiaReplayRuleset(false, []);
     const windows = getManiaReplayHitWindows(5, ruleset);

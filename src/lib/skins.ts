@@ -32,8 +32,9 @@ export interface SkinSummary {
   ownerUsername: string;
   keymodes: number[];
   accentColor: string | null;
-  // Owner-only: the backend nulls it on every response that did not carry the
-  // admin token, so the UI simply has nothing to show for everyone else.
+  // Uploader-only: the backend nulls it unless the request carried the viewer
+  // who owns the skin (or a true admin), so the UI simply has nothing to show
+  // for everyone else.
   downloadCount: number | null;
   previewUrl: string | null;
   previewWidth: number | null;
@@ -43,6 +44,9 @@ export interface SkinSummary {
   oskUrl: string | null;
   oskSizeBytes: number | null;
   oskSha256: string | null;
+  // When the uploader last swapped the .osk for a newer build; null while the
+  // skin still carries the file it was published with.
+  oskUpdatedAt: string | null;
   status: "pending" | "published" | "hidden";
   publishedAt: string | null;
 }
@@ -96,8 +100,10 @@ const SKINS_LIST_MEMORY_TTL_MS = 5 * 60 * 1000;
 const SKINS_LIST_MEMORY_MAX = 12;
 const skinsListMemory = new Map<string, { at: number; result: SkinsListResult }>();
 
-export function skinsListCacheKey(params: SkinsListParams, admin: boolean): string {
-  return [admin ? "a" : "p", params.q?.trim() ?? "", params.page ?? 0, params.sort ?? "newest", params.k ?? 0].join("|");
+// scope keeps one viewer's cached pages away from the next: the same page
+// carries download counts for whoever asked for it, and nobody else.
+export function skinsListCacheKey(params: SkinsListParams, scope: string): string {
+  return [scope || "p", params.q?.trim() ?? "", params.page ?? 0, params.sort ?? "newest", params.k ?? 0].join("|");
 }
 
 export function readCachedSkinsList(key: string): SkinsListResult | null {
@@ -176,10 +182,12 @@ export async function fetchSkinsListDirect(params: SkinsListParams, init?: Reque
   return response.json() as Promise<SkinsListResult>;
 }
 
-// Same list as fetchSkinsListDirect, routed through the server so the admin
-// token can ride along; that is the only way download counts come back. Throws
-// for anyone who is not a true admin, so callers fall back to the direct fetch.
-export const fetchSkinsListAsAdmin = createServerFn({ method: "GET" })
+// Same list as fetchSkinsListDirect, routed through the server so the viewer
+// resolved from the auth cookie can ride along with the admin token; that is
+// the only way download counts come back, and an uploader only gets them for
+// their own skins (an admin gets all of them). Throws for a signed-out visitor,
+// so callers fall back to the direct, cacheable fetch.
+export const fetchSkinsListAsViewer = createServerFn({ method: "GET" })
   .validator((data: SkinsListParams) => ({
     q: typeof data.q === "string" ? data.q.slice(0, 80) : "",
     page: Number.isFinite(data.page) ? Math.max(0, Math.floor(Number(data.page))) : 0,
@@ -187,8 +195,9 @@ export const fetchSkinsListAsAdmin = createServerFn({ method: "GET" })
     k: Number.isInteger(data.k) && Number(data.k) >= 1 && Number(data.k) <= 10 ? Number(data.k) : 0,
   }))
   .handler(async ({ data }): Promise<SkinsListResult> => {
-    const { requireTrueAdminAccess } = await import("./auth-server");
-    await requireTrueAdminAccess("Skin download counts");
+    const { readCurrentAuth } = await import("./auth-server");
+    const auth = await readCurrentAuth();
+    if (!auth.viewer) throw new Error("Not signed in.");
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     setResponseHeader("Cache-Control", "private, no-store");
     const base = getServerLiveBackendUrl();
@@ -199,6 +208,8 @@ export const fetchSkinsListAsAdmin = createServerFn({ method: "GET" })
     if (data.sort === "downloads") query.set("sort", "downloads");
     if (data.k) query.set("k", String(data.k));
     query.set("pageSize", String(SKINS_PAGE_SIZE));
+    query.set("viewerUserId", String(auth.viewer.id));
+    if (auth.isAdmin) query.set("asAdmin", "1");
     const headers: HeadersInit = {};
     if (process.env.LIVE_ADMIN_TOKEN) headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
     const response = await fetch(`${base}/api/skins/list?${query.toString()}`, { headers });
@@ -217,14 +228,19 @@ export const fetchSkinById = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<SkinSummary | null> => {
     const base = getServerLiveBackendUrl();
     if (!base) return null;
-    // A true admin also sees hidden skins (to unhide them); everyone else gets
-    // the public published-only view.
+    // The signed-in viewer rides along with the admin token so the backend can
+    // hand this skin's download count back to whoever uploaded it. A true admin
+    // also sees hidden skins (to unhide them) and every count; everyone else
+    // gets the public, cacheable published-only view.
+    const query = new URLSearchParams({ id: data.id });
     const headers: HeadersInit = {};
     try {
       const { readCurrentAuth } = await import("./auth-server");
       const auth = await readCurrentAuth();
-      if (auth.isAdmin && process.env.LIVE_ADMIN_TOKEN) {
+      if (auth.viewer && process.env.LIVE_ADMIN_TOKEN) {
         headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+        query.set("viewerUserId", String(auth.viewer.id));
+        if (auth.isAdmin) query.set("asAdmin", "1");
         const { setResponseHeader } = await import("@tanstack/react-start/server");
         setResponseHeader("Cache-Control", "private, no-store");
       }
@@ -232,7 +248,7 @@ export const fetchSkinById = createServerFn({ method: "GET" })
       // Anonymous read path: no auth context available.
     }
     try {
-      const response = await fetch(`${base}/api/skins/get?id=${encodeURIComponent(data.id)}`, { headers });
+      const response = await fetch(`${base}/api/skins/get?${query.toString()}`, { headers });
       if (!response.ok) return null;
       const body = (await response.json()) as { skin?: SkinSummary };
       return body.skin ?? null;
@@ -471,14 +487,17 @@ export const renameSkin = createServerFn({ method: "POST" })
     }
   });
 
-// Mints an upload ticket against a published skin so its owner can re-render
-// the keymode previews against a different backdrop. The ticket only unlocks
-// preview uploads; the .osk and the screenshots stay as published.
-export const startSkinPreviewEdit = createServerFn({ method: "POST" })
-  .validator((data: { id?: unknown }) => {
+// Mints an upload ticket against a published skin. Scope "previews" only
+// unlocks preview re-renders (a different backdrop, say); "replace" also takes
+// a newer .osk, which is how an uploader ships an updated build without
+// republishing. Screenshots stay as published either way.
+export type SkinEditScope = "previews" | "replace";
+
+export const startSkinEdit = createServerFn({ method: "POST" })
+  .validator((data: { id?: unknown; scope?: unknown }) => {
     const id = typeof data.id === "string" ? data.id.trim() : "";
     if (!id || id.length > 64) throw new Error("Invalid skin id.");
-    return { id };
+    return { id, scope: (data.scope === "replace" ? "replace" : "previews") as SkinEditScope };
   })
   .handler(async ({ data }): Promise<StartSkinUploadResult> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
@@ -489,7 +508,7 @@ export const startSkinPreviewEdit = createServerFn({ method: "POST" })
       const response = await fetch(`${cfg.base}/api/skins/edit-start`, {
         method: "POST",
         headers: cfg.headers,
-        body: JSON.stringify({ userId: cfg.userId, id: data.id, asAdmin: cfg.isAdmin }),
+        body: JSON.stringify({ userId: cfg.userId, id: data.id, scope: data.scope, asAdmin: cfg.isAdmin }),
       });
       const body = (await response.json().catch(() => null)) as
         | { ok?: boolean; id?: string; token?: string; expiresAt?: string; error?: string }
@@ -506,7 +525,7 @@ export const startSkinPreviewEdit = createServerFn({ method: "POST" })
 
 // Closes an edit ticket and hands back the skin as it now stands. Direct to
 // the backend like finishSkinUpload: the ticket is the credential.
-export async function finishSkinPreviewEdit(id: string, token: string): Promise<SkinSummary> {
+export async function finishSkinEdit(id: string, token: string): Promise<SkinSummary> {
   const base = getLiveBackendUrl();
   if (!base) throw new SkinUploadError("unavailable", "Server is not configured.");
   const query = new URLSearchParams({ id, token });

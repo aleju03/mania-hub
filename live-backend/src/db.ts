@@ -1704,6 +1704,17 @@ async function migrateSkins(db: Db): Promise<void> {
     // who uploaded it; primary attribution on the browse cards.
     await db.execute("alter table skins add column author text");
   }
+  if (!skinColumns.includes("token_scope")) {
+    // What an outstanding ticket unlocks on a published skin: 'previews' only
+    // re-renders the keymode images, 'replace' also accepts a newer .osk.
+    // Null on publish tickets, which unlock everything on a pending row.
+    await db.execute("alter table skins add column token_scope text");
+  }
+  if (!skinColumns.includes("osk_updated_at")) {
+    // When the .osk was last swapped for a newer build by its uploader; null
+    // on skins that still carry the file they were published with.
+    await db.execute("alter table skins add column osk_updated_at text");
+  }
   await db.execute(`
     create unique index if not exists idx_skins_slug
       on skins(slug) where slug is not null
