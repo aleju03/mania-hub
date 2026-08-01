@@ -376,7 +376,9 @@ type ReplayRendererMod = string | {
 
 export class ManiaReplayRenderer {
   private canvas: HTMLCanvasElement;
-  private app: Application | null = null;
+  // Typed to the renderers initPixi actually builds, so the destroy helper
+  // (which reaches into the WebGL context) still type-checks against it.
+  private app: Application<WebGLRenderer | CanvasRenderer> | null = null;
   private gameplayGraphics = new Graphics();
   private hudGraphics = new Graphics();
   private graphics = this.gameplayGraphics;
@@ -866,21 +868,25 @@ export class ManiaReplayRenderer {
     // ANGLE/driver combinations hang the whole renderer process during that
     // create-loss-create sequence. Request the actual replay context once and
     // pass it into the renderer so Pixi never runs the destructive probe.
-    const gl2 = this.canvas.getContext("webgl2", contextAttributes);
-    const gl = gl2 ?? this.canvas.getContext("webgl", contextAttributes);
+    const gl = this.canvas.getContext("webgl2", contextAttributes);
+    // Pixi 8 takes a WebGL2 context object and nothing else. On a canvas that
+    // can only do WebGL1 we still create the context here and let Pixi ask for
+    // it through preferWebGLVersion: getContext hands back the context already
+    // on the canvas, so the destructive probe stays skipped either way.
+    const gl1 = gl ? null : this.canvas.getContext("webgl", contextAttributes);
     let renderer: WebGLRenderer | CanvasRenderer;
-    if (gl) {
+    if (gl || gl1) {
       const webglRenderer = new WebGLRenderer();
       await webglRenderer.init({
         canvas: this.canvas,
         context: gl,
+        preferWebGLVersion: gl ? 2 : 1,
         width,
         height,
         resolution: this.dpr,
         autoDensity: true,
         antialias: true,
         backgroundAlpha: 0,
-        powerPreference: contextAttributes.powerPreference,
       });
       renderer = webglRenderer;
     } else {
@@ -906,7 +912,6 @@ export class ManiaReplayRenderer {
       autoStart: false,
       antialias: true,
       backgroundAlpha: 0,
-      powerPreference: contextAttributes.powerPreference,
     };
     Application._plugins.forEach((plugin) => plugin.init.call(app, applicationOptions));
 

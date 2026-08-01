@@ -17,7 +17,10 @@ describe("ManiaReplayRenderer initialization", () => {
     expect(source).toContain('this.canvas.getContext("webgl", contextAttributes)');
     expect(source).toContain("const webglRenderer = new WebGLRenderer();");
     expect(source).toContain("await webglRenderer.init({");
+    // Pixi 8 accepts a WebGL2 context object only; the WebGL1 canvas still
+    // gets its context made here and picked up through preferWebGLVersion.
     expect(source).toContain("context: gl,");
+    expect(source).toContain("preferWebGLVersion: gl ? 2 : 1,");
     expect(source).toContain("const canvasRenderer = new CanvasRenderer();");
     expect(source).toContain('powerPreference: "default"');
     expect(source).toContain("app.renderer.context.extensions.loseContext = undefined;");
