@@ -6,14 +6,13 @@ const { track } = vi.hoisted(() => ({ track: vi.fn() }));
 vi.mock("./analytics", () => ({ track }));
 
 import {
-  markReplayRendererInitStage,
-  markReplayWatchStage,
-  REPLAY_WATCH_DEBUG_STORAGE_KEY,
   reportCrashedReplayWatchSession,
   startReplayWatchBeacon,
+  updateReplayWatchBeaconContext,
 } from "./replay-crash-beacon";
 
 const STORAGE_KEY = "mh_replay_watch_beacon";
+const LEGACY_DEBUG_STORAGE_KEY = "mh_replay_watch_beacon_debug";
 
 let stopBeacon: (() => void) | null = null;
 
@@ -34,122 +33,56 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
-describe("replay crash beacon renderer progress", () => {
+describe("replay crash beacon", () => {
   test("does not create a throwaway WebGL context for diagnostics", () => {
     const getContext = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
-    vi.spyOn(console, "debug").mockImplementation(() => {});
 
     stopBeacon = startReplayWatchBeacon({ score_id: 7189878496 }, () => null);
 
     expect(getContext).not.toHaveBeenCalled();
   });
 
-  test("persists each renderer init marker synchronously", () => {
-    stopBeacon = startReplayWatchBeacon({ score_id: 7189878496 }, () => null);
-
-    vi.advanceTimersByTime(12);
-    markReplayRendererInitStage("renderer_context_requested", { canvas_width: 1366 });
-    vi.advanceTimersByTime(7);
-    markReplayRendererInitStage("renderer_context_acquired", { renderer_backend: "WebGL 2" });
+  test("persists lightweight renderer diagnostics in session storage only", () => {
+    stopBeacon = startReplayWatchBeacon({ score_id: 7189878496 }, () => 1234);
+    updateReplayWatchBeaconContext({ renderer_backend: "WebGL", judgement_build_ms: 23 });
 
     const record = JSON.parse(window.sessionStorage.getItem(STORAGE_KEY) ?? "{}") as {
       context: Record<string, unknown>;
     };
-    expect(window.localStorage.getItem(REPLAY_WATCH_DEBUG_STORAGE_KEY)).toBe(
-      window.sessionStorage.getItem(STORAGE_KEY),
-    );
     expect(record.context).toMatchObject({
       score_id: 7189878496,
-      replay_watch_stage: "renderer_context_acquired",
-      renderer_init_stage: "renderer_context_acquired",
-      renderer_init_stage_at_ms: 19,
-      renderer_backend: "WebGL 2",
+      renderer_backend: "WebGL",
+      judgement_build_ms: 23,
     });
-    expect((record.context.renderer_init_trace as unknown[]).slice(-2)).toEqual([
-      {
-        stage: "renderer_context_requested",
-        atMs: 12,
-        details: { canvas_width: 1366 },
-      },
-      {
-        stage: "renderer_context_acquired",
-        atMs: 19,
-        details: { renderer_backend: "WebGL 2" },
-      },
-    ]);
+    expect(window.localStorage.getItem(LEGACY_DEBUG_STORAGE_KEY)).toBeNull();
   });
 
-  test("leaves a newer tab's shared debug record intact during cleanup", () => {
-    vi.spyOn(console, "debug").mockImplementation(() => {});
+  test("clears the active record on a normal stop", () => {
     stopBeacon = startReplayWatchBeacon({ score_id: 7189878496 }, () => null);
-    const newerRecord = JSON.stringify({ sessionId: "newer-tab", context: { score_id: 2 } });
-    window.localStorage.setItem(REPLAY_WATCH_DEBUG_STORAGE_KEY, newerRecord);
 
     stopBeacon();
     stopBeacon = null;
 
-    expect(window.localStorage.getItem(REPLAY_WATCH_DEBUG_STORAGE_KEY)).toBe(newerRecord);
     expect(window.sessionStorage.getItem(STORAGE_KEY)).toBeNull();
   });
 
-  test("records tab visibility and focus work without overwriting the last init stage", () => {
-    vi.spyOn(console, "debug").mockImplementation(() => {});
-    stopBeacon = startReplayWatchBeacon({ score_id: 7189878496 }, () => 1234);
-    markReplayRendererInitStage("renderer_attached", { renderer_backend: "WebGL 2" });
-    markReplayWatchStage("document_visibility_changed", { visibility_state: "hidden" });
-    markReplayWatchStage("shared_settings_refresh_started", { settings_refresh_reason: "focus" });
-
-    const record = JSON.parse(window.sessionStorage.getItem(STORAGE_KEY) ?? "{}") as {
-      context: Record<string, unknown>;
-    };
-    expect(record.context).toMatchObject({
-      replay_watch_stage: "shared_settings_refresh_started",
-      settings_refresh_reason: "focus",
-      renderer_init_stage: "renderer_attached",
-      renderer_backend: "WebGL 2",
-    });
-    expect((record.context.replay_watch_trace as unknown[]).slice(-2)).toEqual([
-      {
-        stage: "document_visibility_changed",
-        atMs: 0,
-        details: { visibility_state: "hidden" },
-      },
-      {
-        stage: "shared_settings_refresh_started",
-        atMs: 0,
-        details: { settings_refresh_reason: "focus" },
-      },
-    ]);
-  });
-
-  test("prints copy-ready JSON and sends the same init trace after a crash", () => {
+  test("reports a leftover session without writing debug console or localStorage output", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const info = vi.spyOn(console, "info").mockImplementation(() => {});
-    vi.spyOn(console, "debug").mockImplementation(() => {});
     stopBeacon = startReplayWatchBeacon({ score_id: 7189878496 }, () => 0);
-    markReplayRendererInitStage("first_frame_gpu_submit_started", {
-      renderer_backend: "WebGL 2",
-    });
+    updateReplayWatchBeaconContext({ renderer_backend: "WebGL" });
+    window.localStorage.setItem(LEGACY_DEBUG_STORAGE_KEY, "old debug trace");
 
     reportCrashedReplayWatchSession();
 
-    expect(error).toHaveBeenCalledWith(
-      "[replay crash] The previous replay renderer died without unloading.",
-      expect.objectContaining({
-        replay_watch_stage: "first_frame_gpu_submit_started",
-        renderer_init_stage: "first_frame_gpu_submit_started",
-      }),
-    );
-    expect(info).toHaveBeenCalledWith("[replay crash] COPY THIS JSON", expect.any(String));
-    const copyJson = JSON.parse(info.mock.calls[0][1] as string) as Record<string, unknown>;
-    expect(copyJson).toMatchObject({
+    expect(error).not.toHaveBeenCalled();
+    expect(info).not.toHaveBeenCalled();
+    expect(track).toHaveBeenCalledWith("replay_watch_crash", expect.objectContaining({
       score_id: 7189878496,
-      renderer_init_stage: "first_frame_gpu_submit_started",
-      renderer_backend: "WebGL 2",
+      renderer_backend: "WebGL",
       crash_detected_at: "2026-08-01T06:15:48.000Z",
-    });
-    expect(track).toHaveBeenCalledWith("replay_watch_crash", copyJson);
+    }));
     expect(window.sessionStorage.getItem(STORAGE_KEY)).toBeNull();
-    expect(window.localStorage.getItem(REPLAY_WATCH_DEBUG_STORAGE_KEY)).toBeNull();
+    expect(window.localStorage.getItem(LEGACY_DEBUG_STORAGE_KEY)).toBeNull();
   });
 });

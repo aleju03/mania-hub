@@ -18,7 +18,7 @@ import { ReplayInfo } from "../components/replay/ReplayInfo";
 import type { ReplayPlayerProfile } from "../components/replay/ReplayInfo";
 import { ReplaySkinSettingsModal } from "../components/replay/ReplaySkinSettingsModal";
 import { track } from "../lib/analytics";
-import { markReplayRendererInitStage, markReplayWatchStage, REPLAY_WATCH_DEBUG_STORAGE_KEY, reportCrashedReplayWatchSession, startReplayWatchBeacon, updateReplayWatchBeaconContext } from "../lib/replay-crash-beacon";
+import { reportCrashedReplayWatchSession, startReplayWatchBeacon, updateReplayWatchBeaconContext } from "../lib/replay-crash-beacon";
 import { withTimeout } from "../lib/promise-timeout";
 import {
   REPLAY_SKIN_SETTINGS_CHANGE_EVENT,
@@ -2400,16 +2400,7 @@ function ReplayViewer({
     : [];
 
   useEffect(() => {
-    const refreshSharedReplaySettings = (event?: Event) => {
-      // The crash beacon mirrors progress through localStorage so another tab
-      // can recover a hung tab's trace. That write is not a settings change.
-      if (event instanceof StorageEvent && event.key === REPLAY_WATCH_DEBUG_STORAGE_KEY) return;
-      const reason = event?.type ?? "direct";
-      markReplayWatchStage("shared_settings_refresh_started", {
-        settings_refresh_reason: reason,
-        visibility_state: document.visibilityState,
-        renderer_playing: rendererRef.current?.isPlaying ?? null,
-      });
+    const refreshSharedReplaySettings = () => {
       if (replayStableScrollSpeed == null || scrollSpeedUserOverrideRef.current) {
         applyScrollSpeed(readReplayScrollSpeed());
       }
@@ -2426,11 +2417,6 @@ function ReplayViewer({
         if (applied) void hydrateAppliedCommunitySkin(applied);
       }
       setOverlaySettings(readReplayOverlaySettings());
-      markReplayWatchStage("shared_settings_refresh_queued", {
-        settings_refresh_reason: reason,
-        applied_community_skin: applied != null,
-        reused_community_skin: applied != null && cachedFull?.key === appliedCommunityReplaySkinKey(applied),
-      });
     };
     window.addEventListener("storage", refreshSharedReplaySettings);
     window.addEventListener(REPLAY_SCROLL_SPEED_CHANGE_EVENT, refreshSharedReplaySettings);
@@ -3085,23 +3071,12 @@ function ReplayViewer({
 
   useEffect(() => {
     skinSettingsRef.current = activeSkinSettings;
-    const renderer = rendererRef.current;
-    if (!renderer) return;
-    markReplayWatchStage("skin_settings_apply_started", {
-      skin_style: activeSkinSettings.style,
-      key_count: replay.keyCount,
-    });
-    renderer.setSkinSettings(activeSkinSettings);
-    markReplayWatchStage("skin_settings_applied");
-  }, [activeSkinSettings, replay.keyCount]);
+    rendererRef.current?.setSkinSettings(activeSkinSettings);
+  }, [activeSkinSettings]);
 
   useEffect(() => {
     overlaySettingsRef.current = overlaySettings;
-    const renderer = rendererRef.current;
-    if (!renderer) return;
-    markReplayWatchStage("overlay_settings_apply_started");
-    renderer.setOverlaySettings(overlaySettings);
-    markReplayWatchStage("overlay_settings_applied");
+    rendererRef.current?.setOverlaySettings(overlaySettings);
   }, [overlaySettings]);
 
   // Hitsound player: lives for the whole viewer session, independent of
@@ -3358,16 +3333,13 @@ function ReplayViewer({
 
     void (async () => {
       try {
-        markReplayRendererInitStage("renderer_module_import_started");
         const { ManiaReplayRenderer } = await withTimeout(
           import("../components/replay/ReplayCanvas"),
           8000,
           "Timed out loading the replay renderer.",
         );
-        markReplayRendererInitStage("renderer_module_imported");
         if (cancelled || !canvasRef.current) return;
 
-        markReplayRendererInitStage("renderer_constructor_started");
         renderer = new ManiaReplayRenderer(
           canvasRef.current,
           replay.frames,
@@ -3394,26 +3366,16 @@ function ReplayViewer({
             inputOverlayOnly: inputOverlayOnlyRef.current,
             inputOverlayColor: inputOverlayColorRef.current,
             inputOverlayKeyHistory: inputOverlayKeyHistoryRef.current,
-            onContextLost: () => {
-              updateReplayWatchBeaconContext({ webgl_context_lost: true });
-              markReplayRendererInitStage("webgl_context_lost");
-            },
-            onContextRestored: () => {
-              updateReplayWatchBeaconContext({ webgl_context_restored: true });
-              markReplayRendererInitStage("webgl_context_restored");
-            },
-            onInitProgress: markReplayRendererInitStage,
+            onContextLost: () => updateReplayWatchBeaconContext({ webgl_context_lost: true }),
+            onContextRestored: () => updateReplayWatchBeaconContext({ webgl_context_restored: true }),
           },
         ) as ReplayRendererLike;
-        markReplayRendererInitStage("renderer_constructed");
 
-        markReplayRendererInitStage("renderer_ready_wait_started");
         await withTimeout(
           renderer.ready(),
           8000,
           "Timed out starting the replay renderer.",
         );
-        markReplayRendererInitStage("renderer_ready");
 
         if (cancelled) {
           renderer.destroy();
@@ -3445,7 +3407,6 @@ function ReplayViewer({
         renderer.setLeaderboardVisible?.(leaderboardVisibleRef.current);
         renderer.setSpectatorCount?.(spectatorCountRef.current);
         rendererRef.current = renderer;
-        markReplayRendererInitStage("renderer_attached");
 
         // Record the resolved renderer backend (WebGL vs Canvas fallback) and
         // judgement-build cost into the crash beacon so a later hard crash can
@@ -3489,7 +3450,6 @@ function ReplayViewer({
         window.addEventListener("resize", handleResize);
       } catch (e) {
         const message = e instanceof Error ? e.message : "Failed to start the replay renderer.";
-        markReplayRendererInitStage("renderer_init_failed", { renderer_init_error: message });
         console.error("Replay renderer failed to start", e);
         renderer?.destroy();
         renderer = null;
@@ -3660,17 +3620,9 @@ function ReplayViewer({
       audio.playbackRate = effectiveRate;
       setAudioPreservesPitch(audio, audioPreservesPitch);
       audio.volume = volume;
-      markReplayWatchStage("audio_resume_play_requested", {
-        audio_ready_state: audio.readyState,
-        renderer_time_ms: renderer.time,
+      audio.play().catch(() => {
+        shouldResumeAudioRef.current = true;
       });
-      audio.play().then(
-        () => markReplayWatchStage("audio_resume_playing"),
-        () => {
-          shouldResumeAudioRef.current = true;
-          markReplayWatchStage("audio_resume_play_rejected");
-        },
-      );
     };
 
     const updateBuffering = () => {
@@ -3743,24 +3695,9 @@ function ReplayViewer({
     // can start advancing again.
     const handleVisibility = () => {
       if (typeof document === "undefined") return;
-      const visibilityState = document.visibilityState;
-      markReplayWatchStage("document_visibility_changed", {
-        visibility_state: visibilityState,
-        renderer_playing: rendererRef.current?.isPlaying ?? null,
-        renderer_time_ms: rendererRef.current?.time ?? null,
-        audio_paused: audio.paused,
-        audio_ready_state: audio.readyState,
-      });
-      if (visibilityState !== "visible") return;
-      markReplayWatchStage("tab_return_audio_resume_started");
+      if (document.visibilityState !== "visible") return;
       resumeAudioIfNeeded();
       updateBuffering();
-      markReplayWatchStage("tab_return_audio_resume_finished");
-      requestAnimationFrame(() => {
-        markReplayWatchStage("tab_return_animation_frame_reached", {
-          renderer_time_ms: rendererRef.current?.time ?? null,
-        });
-      });
     };
     if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", handleVisibility);

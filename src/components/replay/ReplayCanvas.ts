@@ -158,25 +158,6 @@ const BACKGROUND_OVERSCAN_SCALE = 1.02;
 // tab switches) stay silent instead of firing as a burst.
 const HITSOUND_MAX_LATENESS_MS = 200;
 
-function getLiveWebglDiagnostics(
-  gl: WebGLRenderingContext | WebGL2RenderingContext,
-  webglVersion: 1 | 2,
-): Record<string, unknown> {
-  const info: Record<string, unknown> = {
-    webgl_version: webglVersion,
-  };
-  try {
-    const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
-    if (debugInfo) {
-      info.gpu_renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) ?? null;
-      info.gpu_vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) ?? null;
-    }
-  } catch {
-    // The renderer still works when privacy settings hide GPU identity.
-  }
-  return info;
-}
-
 function destroyReplayPixiApplication(app: Application<WebGLRenderer | CanvasRenderer>) {
   if (app.renderer instanceof WebGLRenderer) {
     // Pixi normally calls WEBGL_lose_context during destroy. A replay opened
@@ -346,7 +327,6 @@ interface RendererOptions {
   onOverlaySettingsChange?: (settings: ReplayOverlaySettings) => void;
   onContextLost?: () => void;
   onContextRestored?: () => void;
-  onInitProgress?: (stage: string, details?: Record<string, unknown>) => void;
 }
 
 interface Layout {
@@ -525,11 +505,8 @@ export class ManiaReplayRenderer {
   private onOverlaySettingsChange: ((settings: ReplayOverlaySettings) => void) | null = null;
   private onContextLost: (() => void) | null = null;
   private onContextRestored: (() => void) | null = null;
-  private onInitProgress: ((stage: string, details?: Record<string, unknown>) => void) | null = null;
   private handleContextLost: ((event: Event) => void) | null = null;
   private handleContextRestored: (() => void) | null = null;
-  private firstFrameDrawn = false;
-  private pendingSkinTextureUploads = 0;
   // Wall-clock cost of the synchronous judgement simulation done in the
   // constructor; surfaced to crash diagnostics to catch main-thread hangs.
   private judgementBuildMs: number | null = null;
@@ -680,8 +657,6 @@ export class ManiaReplayRenderer {
     notes: ManiaNote[] = [],
     options?: RendererOptions,
   ) {
-    this.onInitProgress = options?.onInitProgress ?? null;
-    this.markInitProgress("renderer_constructor_entered");
     this.canvas = canvas;
     this.canvas.style.visibility = "";
     this.frames = frames;
@@ -785,7 +760,6 @@ export class ManiaReplayRenderer {
       if (n.isHold) this.maxHoldDuration = Math.max(this.maxHoldDuration, n.endTime - n.time);
     }
 
-    this.markInitProgress("judgement_build_started");
     const judgementBuildStart = typeof performance !== "undefined" ? performance.now() : 0;
     this.segments = buildReplaySegments(this.frames, this.keyCount, this.totalDuration);
     const simulated = simulateManiaReplayJudgements(
@@ -802,9 +776,6 @@ export class ManiaReplayRenderer {
     );
     if (typeof performance !== "undefined") {
       this.judgementBuildMs = performance.now() - judgementBuildStart;
-      this.markInitProgress("judgement_build_finished", {
-        judgement_build_ms: this.judgementBuildMs,
-      });
       // These loops run synchronously on the main thread; a multi-second run can
       // hang the tab into a "page unresponsive" kill. Flag it so we can catch
       // pathological charts and consider moving the work off-thread.
@@ -857,17 +828,8 @@ export class ManiaReplayRenderer {
     this.setupStoryboardContainers();
     this.measureCanvas();
     this.installTextFontInvalidation();
-    this.markInitProgress("renderer_cpu_setup_finished");
     this.initPromise = this.initPixi();
     this.installOverlayPointerHandlers();
-  }
-
-  private markInitProgress(stage: string, details?: Record<string, unknown>) {
-    try {
-      this.onInitProgress?.(stage, details);
-    } catch {
-      // Startup diagnostics must never interfere with the renderer.
-    }
   }
 
   private installTextFontInvalidation() {
@@ -889,9 +851,7 @@ export class ManiaReplayRenderer {
   }
 
   private async initPixi() {
-    this.markInitProgress("pixi_application_create_started");
     const app = new Application<WebGLRenderer | CanvasRenderer>();
-    this.markInitProgress("pixi_application_created");
     const width = Math.max(1, this.cssWidth);
     const height = Math.max(1, this.cssHeight);
     const contextAttributes: WebGLContextAttributes = {
@@ -901,15 +861,6 @@ export class ManiaReplayRenderer {
       stencil: true,
       powerPreference: "default",
     };
-    this.markInitProgress("renderer_context_requested", {
-      renderer_preference: "webgl,canvas",
-      visibility_state: document.visibilityState,
-      power_preference: contextAttributes.powerPreference,
-      canvas_width: width,
-      canvas_height: height,
-      device_pixel_ratio: this.dpr,
-    });
-
     // Pixi's autoDetectRenderer probes WebGL on a throwaway canvas and
     // immediately loses that context before requesting the real one. Some
     // ANGLE/driver combinations hang the whole renderer process during that
@@ -919,12 +870,7 @@ export class ManiaReplayRenderer {
     const gl = gl2 ?? this.canvas.getContext("webgl", contextAttributes);
     let renderer: WebGLRenderer | CanvasRenderer;
     if (gl) {
-      this.markInitProgress("webgl_context_acquired", {
-        renderer_backend: "WebGL",
-        ...getLiveWebglDiagnostics(gl, gl2 ? 2 : 1),
-      });
       const webglRenderer = new WebGLRenderer();
-      this.markInitProgress("pixi_webgl_renderer_init_started");
       await webglRenderer.init({
         canvas: this.canvas,
         context: gl,
@@ -938,7 +884,6 @@ export class ManiaReplayRenderer {
       });
       renderer = webglRenderer;
     } else {
-      this.markInitProgress("canvas_renderer_fallback_started");
       const canvasRenderer = new CanvasRenderer();
       await canvasRenderer.init({
         canvas: this.canvas,
@@ -965,11 +910,6 @@ export class ManiaReplayRenderer {
     };
     Application._plugins.forEach((plugin) => plugin.init.call(app, applicationOptions));
 
-    const rendererBackend = formatPixiRendererType(app.renderer.type, app.renderer.name);
-    this.markInitProgress("renderer_context_acquired", {
-      renderer_backend: rendererBackend,
-    });
-
     if (this.destroyed) {
       destroyReplayPixiApplication(app);
       return;
@@ -992,7 +932,6 @@ export class ManiaReplayRenderer {
     };
     this.canvas.addEventListener("webglcontextlost", this.handleContextLost);
     this.canvas.addEventListener("webglcontextrestored", this.handleContextRestored);
-    this.markInitProgress("renderer_stage_setup_started");
     app.stage.addChild(this.backgroundLayer);
     app.stage.addChild(this.storyboardBackdrop);
     app.stage.addChild(this.storyboardBackRoot);
@@ -1006,11 +945,7 @@ export class ManiaReplayRenderer {
     app.stage.addChild(this.textLayer);
     app.stage.addChild(this.comboTextLayer);
     this.rebuildBackgroundSprites();
-    this.markInitProgress("texture_uploads_started");
     this.prewarmSkinTextures();
-    this.markInitProgress("texture_uploads_queued", {
-      pending_skin_textures: this.skinTextureLoadPromises.size,
-    });
     this.resize();
   }
 
@@ -2736,10 +2671,6 @@ export class ManiaReplayRenderer {
   private render(forceHudSnapshot = false) {
     if (!this.app) return;
 
-    const isFirstFrame = !this.firstFrameDrawn;
-    const skinTextureUploadCount = this.pendingSkinTextureUploads;
-    if (isFirstFrame) this.markInitProgress("first_frame_build_started");
-
     const layout = this.getLayout();
     this.currentKeyState = this.getCurrentKeyState();
     this.updateHiddenCoverage();
@@ -2788,25 +2719,7 @@ export class ManiaReplayRenderer {
     this.finishTextFrame();
     this.graphics = this.gameplayGraphics;
     this.activeSkinSprites = this.gameplaySkinSprites;
-    if (skinTextureUploadCount > 0) {
-      this.markInitProgress("texture_upload_gpu_submit_started", {
-        skin_texture_count: skinTextureUploadCount,
-      });
-    }
-    if (isFirstFrame) this.markInitProgress("first_frame_gpu_submit_started");
     this.app.render();
-    if (skinTextureUploadCount > 0) {
-      this.pendingSkinTextureUploads = Math.max(0, this.pendingSkinTextureUploads - skinTextureUploadCount);
-      this.markInitProgress("textures_uploaded", {
-        skin_texture_count: skinTextureUploadCount,
-      });
-    }
-    if (isFirstFrame) {
-      this.firstFrameDrawn = true;
-      this.markInitProgress("first_frame_drawn", {
-        initial_textures_uploaded: true,
-      });
-    }
   }
 
   private renderBackground(_layout: Layout) {
@@ -6274,7 +6187,6 @@ export class ManiaReplayRenderer {
       .then((texture) => {
         if (!texture) return null;
         this.skinTextureCache.set(src, texture);
-        this.pendingSkinTextureUploads++;
         return texture;
       })
       .catch(() => {

@@ -1,21 +1,16 @@
 // Crash forensics for the replay viewer.
 //
-// A record in sessionStorage marks a watch session as in progress. A second
-// copy in localStorage makes the last marker readable from another same-origin
-// tab when the replay tab is hung too hard to reload. Ordinary page exits clear
-// both. The record carries periodic JS heap samples (Chrome exposes
+// A record in sessionStorage marks a watch session as in progress. Ordinary
+// page exits clear it. The record carries periodic JS heap samples (Chrome exposes
 // performance.memory) so the report distinguishes a heap OOM (usedJSHeapSize
 // climbing toward jsHeapSizeLimit) from a GPU/other renderer death (flat heap).
 
 import { track } from "./analytics";
 
 const STORAGE_KEY = "mh_replay_watch_beacon";
-// Shared across same-origin tabs so a second tab can retrieve diagnostics while
-// the replay tab's main thread is permanently hung and cannot reload.
-export const REPLAY_WATCH_DEBUG_STORAGE_KEY = "mh_replay_watch_beacon_debug";
+const LEGACY_DEBUG_STORAGE_KEY = "mh_replay_watch_beacon_debug";
 const SAMPLE_INTERVAL_MS = 10_000;
 const MAX_SAMPLES = 40;
-const MAX_INIT_TRACE_ENTRIES = 30;
 
 interface ChromeMemoryInfo {
   usedJSHeapSize: number;
@@ -30,7 +25,6 @@ interface BeaconLastError {
 }
 
 interface BeaconRecord {
-  sessionId: string;
   startedAt: number;
   lastSampleAt: number;
   watchedMs: number | null;
@@ -42,12 +36,6 @@ interface BeaconRecord {
   // Last uncaught error / rejection seen during the session. A crash usually
   // takes the error detail with it, so this is our best chance at a cause.
   lastError: BeaconLastError | null;
-}
-
-interface ReplayWatchTraceEntry {
-  stage: string;
-  atMs: number;
-  details?: Record<string, unknown>;
 }
 
 // The in-memory handle to the live session so late-arriving diagnostics (the
@@ -74,40 +62,26 @@ function readRecord(): BeaconRecord | null {
 }
 
 function writeRecord(record: BeaconRecord) {
-  let raw: string;
   try {
-    raw = JSON.stringify(record);
+    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(record));
   } catch {
-    return;
-  }
-  try {
-    window.sessionStorage.setItem(STORAGE_KEY, raw);
-  } catch {
-    // Keep trying the shared mirror below.
-  }
-  try {
-    window.localStorage.setItem(REPLAY_WATCH_DEBUG_STORAGE_KEY, raw);
-  } catch {
-    // Quota/security failures just disable the cross-tab mirror.
+    // Quota/security failures just disable the diagnostics.
   }
 }
 
-function clearRecord(record: BeaconRecord) {
+function clearRecord() {
   try {
     window.sessionStorage.removeItem(STORAGE_KEY);
   } catch {
     // Ignore.
   }
+}
+
+function clearLegacyDebugRecord() {
   try {
-    const sharedRaw = window.localStorage.getItem(REPLAY_WATCH_DEBUG_STORAGE_KEY);
-    if (!sharedRaw) return;
-    const shared = JSON.parse(sharedRaw) as Partial<BeaconRecord>;
-    // Do not let an older replay tab remove a newer tab's diagnostic record.
-    if (!record.sessionId || shared.sessionId === record.sessionId) {
-      window.localStorage.removeItem(REPLAY_WATCH_DEBUG_STORAGE_KEY);
-    }
+    window.localStorage.removeItem(LEGACY_DEBUG_STORAGE_KEY);
   } catch {
-    // Ignore malformed/unavailable shared storage.
+    // Ignore unavailable storage.
   }
 }
 
@@ -122,62 +96,14 @@ export function updateReplayWatchBeaconContext(patch: Record<string, unknown>) {
   writeRecord(activeRecord);
 }
 
-// Persists replay progress synchronously. If GPU work kills the renderer
-// process, the last completed marker survives in sessionStorage and is
-// reported after the tab reloads. Keep this callback tiny and guarded: crash
-// forensics must never become a reason playback fails.
-function markReplayStage(
-  stage: string,
-  details?: Record<string, unknown>,
-  rendererInit = false,
-) {
-  if (typeof window === "undefined" || !activeRecord) return;
-  try {
-    const atMs = Date.now() - activeRecord.startedAt;
-    const existing = Array.isArray(activeRecord.context.replay_watch_trace)
-      ? activeRecord.context.replay_watch_trace as ReplayWatchTraceEntry[]
-      : [];
-    const entry: ReplayWatchTraceEntry = details
-      ? { stage, atMs, details }
-      : { stage, atMs };
-    activeRecord.context = {
-      ...activeRecord.context,
-      ...details,
-      replay_watch_stage: stage,
-      replay_watch_stage_at_ms: atMs,
-      replay_watch_trace: [...existing, entry].slice(-MAX_INIT_TRACE_ENTRIES),
-    };
-    if (rendererInit) {
-      const existingInit = Array.isArray(activeRecord.context.renderer_init_trace)
-        ? activeRecord.context.renderer_init_trace as ReplayWatchTraceEntry[]
-        : [];
-      activeRecord.context.renderer_init_stage = stage;
-      activeRecord.context.renderer_init_stage_at_ms = atMs;
-      activeRecord.context.renderer_init_trace = [...existingInit, entry].slice(-MAX_INIT_TRACE_ENTRIES);
-    }
-    writeRecord(activeRecord);
-    console.debug(`[replay watch] +${atMs}ms ${stage}`, details ?? "");
-  } catch {
-    // Diagnostics are best-effort and must not affect playback.
-  }
-}
-
-// Generic watch-session marker for visibility/focus/resume work after init.
-export function markReplayWatchStage(stage: string, details?: Record<string, unknown>) {
-  markReplayStage(stage, details);
-}
-
-export function markReplayRendererInitStage(stage: string, details?: Record<string, unknown>) {
-  markReplayStage(stage, details, true);
-}
-
 // Reports (and clears) a watch session left behind by a previous page load.
 // Call once when the replay page mounts, before a new beacon starts.
 export function reportCrashedReplayWatchSession() {
   if (typeof window === "undefined") return;
   const record = readRecord();
+  clearRecord();
+  clearLegacyDebugRecord();
   if (!record) return;
-  clearRecord(record);
 
   const samples = record.samples ?? [];
   const lastSample = samples[samples.length - 1] ?? null;
@@ -201,10 +127,6 @@ export function reportCrashedReplayWatchSession() {
     last_error_at_ms: lastError ? lastError.at - record.startedAt : null,
   };
 
-  // This is deliberately local as well as analytics-backed. After reproducing
-  // a hard crash, reload the crashed tab and copy the JSON line from DevTools.
-  console.error("[replay crash] The previous replay renderer died without unloading.", crashReport);
-  console.info("[replay crash] COPY THIS JSON", JSON.stringify(crashReport));
   track("replay_watch_crash", crashReport);
 }
 
@@ -218,25 +140,14 @@ export function startReplayWatchBeacon(
   if (typeof window === "undefined") return () => {};
 
   const startedAt = Date.now();
-  const initialStage: ReplayWatchTraceEntry = { stage: "beacon_started", atMs: 0 };
   const record: BeaconRecord = {
-    sessionId: crypto.randomUUID(),
     startedAt,
     lastSampleAt: startedAt,
     watchedMs: null,
     heapLimitMb: null,
     peakUsedMb: null,
     samples: [],
-    context: {
-      ...context,
-      replay_watch_url: window.location.href,
-      replay_watch_stage: initialStage.stage,
-      replay_watch_stage_at_ms: initialStage.atMs,
-      replay_watch_trace: [initialStage],
-      renderer_init_stage: initialStage.stage,
-      renderer_init_stage_at_ms: initialStage.atMs,
-      renderer_init_trace: [initialStage],
-    },
+    context: { ...context, replay_watch_url: window.location.href },
     lastError: null,
   };
   activeRecord = record;
@@ -267,7 +178,7 @@ export function startReplayWatchBeacon(
   const intervalId = window.setInterval(sample, SAMPLE_INTERVAL_MS);
 
   // A real navigation/close unloads the page; a crash never fires pagehide.
-  const handlePageHide = () => clearRecord(record);
+  const handlePageHide = () => clearRecord();
   // Restored from bfcache: the session is live again, re-arm the record.
   const handlePageShow = (event: PageTransitionEvent) => {
     if (event.persisted) sample();
@@ -301,6 +212,6 @@ export function startReplayWatchBeacon(
     window.removeEventListener("error", handleError);
     window.removeEventListener("unhandledrejection", handleRejection);
     if (activeRecord === record) activeRecord = null;
-    clearRecord(record);
+    clearRecord();
   };
 }
