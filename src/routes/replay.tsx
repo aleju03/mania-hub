@@ -118,10 +118,10 @@ type FullscreenTarget = HTMLElement & {
 const MOBILE_FULLSCREEN_BUTTON_HIDE_MS = 2000;
 const FULLSCREEN_POINTER_CHROME_HIDE_MS = 1800;
 const FULLSCREEN_TAP_CHROME_HIDE_MS = 3000;
-// The inline (non-fullscreen) desktop stage overlays its playbar like the
-// osu! client overlays nothing: controls fade out during playback and come
-// back on pointer activity.
-const INLINE_POINTER_CHROME_HIDE_MS = 2600;
+// How long after the pointer leaves the bottom reveal zone the Visual
+// Settings drawer starts retracting. Stable pulls it back almost instantly;
+// the small grace only forgives overshooting the seek thumb at the top edge.
+const INLINE_POINTER_CHROME_HIDE_MS = 150;
 const REPLAY_VIDEO_EXPORT_CLIP_SECONDS = 20;
 const MAX_UPLOAD_REPLAY_BYTES = 25 * 1024 * 1024;
 const REPLAY_PLAYER_LIVE_CACHE_TIMEOUT_MS = 900;
@@ -2277,29 +2277,35 @@ function ReplayViewer({
     rendererRef.current?.setLeaderboardVisible?.(leaderboardVisible);
   }, [leaderboardVisible]);
 
-  // Inline overlay chrome (playbar + floating buttons) on the non-fullscreen
-  // stage: visible while paused, auto-hides during playback, reveals on
-  // pointer activity.
-  const [inlineChromeVisible, setInlineChromeVisible] = useState(true);
+  // The Visual Settings drawer on the non-fullscreen stage: hidden until the
+  // pointer nears the bottom edge (playing or paused, like the client), pinned
+  // while hovered, retracted shortly after the pointer moves away.
+  const [inlineChromeVisible, setInlineChromeVisible] = useState(false);
   const inlineChromeTimeoutRef = useRef<number | null>(null);
+  const inlineChromeHoverRef = useRef(false);
   const clearInlineChromeTimeout = useCallback(() => {
     if (inlineChromeTimeoutRef.current == null) return;
     window.clearTimeout(inlineChromeTimeoutRef.current);
     inlineChromeTimeoutRef.current = null;
   }, []);
-  const revealInlineChrome = useCallback((autoHide: boolean) => {
-    setInlineChromeVisible(true);
+  const revealInlineChrome = useCallback(() => {
     clearInlineChromeTimeout();
-    if (!autoHide) return;
+    setInlineChromeVisible(true);
+  }, [clearInlineChromeTimeout]);
+  // Armed once when the pointer leaves the reveal zone; later moves outside
+  // the zone must not keep pushing the retract back.
+  const scheduleInlineChromeHide = useCallback(() => {
+    if (inlineChromeTimeoutRef.current != null) return;
     inlineChromeTimeoutRef.current = window.setTimeout(() => {
       inlineChromeTimeoutRef.current = null;
-      if (!scrubbingRef.current) setInlineChromeVisible(false);
+      if (scrubbingRef.current) return;
+      // The drawer can hide with the pointer still on it (focus loss); reset
+      // the hover pin so proximity can summon it again, since pointerleave
+      // never fires on an unmounted element.
+      inlineChromeHoverRef.current = false;
+      setInlineChromeVisible(false);
     }, INLINE_POINTER_CHROME_HIDE_MS);
-  }, [clearInlineChromeTimeout]);
-
-  useEffect(() => {
-    revealInlineChrome(isPlaying);
-  }, [isPlaying, revealInlineChrome]);
+  }, []);
 
   useEffect(() => () => clearInlineChromeTimeout(), [clearInlineChromeTimeout]);
 
@@ -2356,15 +2362,14 @@ function ReplayViewer({
   const handleReplayCanvasPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     markCursorActive(isPlaying);
     if (!isCanvasFullscreen) {
-      if (!isPlaying) {
-        revealInlineChrome(false);
-        return;
-      }
-      // During playback only bottom proximity reveals the playbar; moving
-      // over the playfield keeps the stage clean like ingame.
+      // Only bottom proximity summons the drawer, playing or paused; moving
+      // over the playfield keeps the stage clean like ingame. Hovering the
+      // drawer itself pins it open (its own enter handler owns that state).
+      if (inlineChromeHoverRef.current) return;
       const rect = event.currentTarget.getBoundingClientRect();
       const bottomDistance = rect.bottom - event.clientY;
-      if (bottomDistance <= 150) revealInlineChrome(true);
+      if (bottomDistance <= 150) revealInlineChrome();
+      else scheduleInlineChromeHide();
       return;
     }
     const rect = event.currentTarget.getBoundingClientRect();
@@ -2372,7 +2377,7 @@ function ReplayViewer({
     if (bottomDistance <= 190 || showFullscreenChrome) {
       showFullscreenChromeTemporarily();
     }
-  }, [isCanvasFullscreen, isPlaying, markCursorActive, revealInlineChrome, showFullscreenChrome, showFullscreenChromeTemporarily]);
+  }, [isCanvasFullscreen, isPlaying, markCursorActive, revealInlineChrome, scheduleInlineChromeHide, showFullscreenChrome, showFullscreenChromeTemporarily]);
 
   const handleReplayCanvasPointerDown = useCallback((event: ReactPointerEvent<HTMLCanvasElement>) => {
     if (!isMobileReplayPointer(event)) return;
@@ -3940,9 +3945,12 @@ function ReplayViewer({
         )}
         {/* The stable-style Visual Settings drawer: rises smoothly from the
             bottom edge, and on close drops with one bounce off the floor
-            like the client's panel. */}
+            like the client's panel. The wrapper spans the whole stage so the
+            panel's upward popovers and the seek heatmap are not clipped at
+            its top edge; overflow-hidden only swallows the slide below the
+            stage bottom. */}
         {!isCanvasFullscreen && (
-          <div className="absolute inset-x-0 bottom-0 z-20 hidden overflow-hidden sm:block pointer-events-none">
+          <div className="absolute inset-0 z-20 hidden overflow-hidden pointer-events-none sm:flex flex-col justify-end">
             <AnimatePresence>
               {inlineChromeVisible && (
                 <motion.div
@@ -3954,14 +3962,16 @@ function ReplayViewer({
                     transition: { duration: 0.52, times: [0, 0.5, 0.76, 1], ease: ["easeIn", "easeOut", "easeIn"] },
                   }}
                   className="pointer-events-auto"
-                  onPointerEnter={() => revealInlineChrome(false)}
+                  onPointerEnter={() => {
+                    inlineChromeHoverRef.current = true;
+                    revealInlineChrome();
+                  }}
                   onPointerLeave={() => {
-                    if (isPlaying && !scrubbingRef.current) revealInlineChrome(true);
+                    inlineChromeHoverRef.current = false;
+                    if (!scrubbingRef.current) scheduleInlineChromeHide();
                   }}
-                  onFocusCapture={() => revealInlineChrome(false)}
-                  onBlurCapture={() => {
-                    if (isPlaying) revealInlineChrome(true);
-                  }}
+                  onFocusCapture={() => revealInlineChrome()}
+                  onBlurCapture={() => scheduleInlineChromeHide()}
                 >
                   {renderReplayControls("overlay")}
                 </motion.div>

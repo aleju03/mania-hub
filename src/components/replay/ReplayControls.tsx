@@ -314,21 +314,360 @@ export function ReplayControls({
 
   const isOverlay = variant === "overlay";
 
+  // Control clusters shared by both variants: the card keeps its compact
+  // wrap-row look while the overlay spreads them through the tall osu!-style
+  // Visual Settings panel, so each cluster branches its classes on isOverlay.
+  const playButton = (
+    <button
+      onClick={onTogglePlay}
+      title={pendingPlay ? "Waiting for audio to load..." : isPlaying && buffering ? "Buffering..." : undefined}
+      className={`${isOverlay ? "w-10 h-10" : "w-9 h-9"} rounded-full bg-osu-pink hover:bg-osu-pink-light transition-colors hidden sm:flex items-center justify-center cursor-pointer shrink-0`}
+    >
+      {pendingPlay || (isPlaying && buffering) ? (
+        <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" className="w-4 h-4 animate-spin">
+          <path d="M12 2a10 10 0 0 1 10 10" />
+        </svg>
+      ) : isPlaying ? (
+        <svg viewBox="0 0 24 24" fill="white" className="w-4 h-4">
+          <rect x="6" y="4" width="4" height="16" rx="1" />
+          <rect x="14" y="4" width="4" height="16" rx="1" />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 24 24" fill="white" className="w-4 h-4 ml-0.5">
+          <path d="M8 5v14l11-7z" />
+        </svg>
+      )}
+    </button>
+  );
+
+  const speedButtons = (
+    <div className={isOverlay ? "flex items-center gap-1" : "order-1 sm:order-none flex items-center gap-0.5"}>
+      {[0.25, 0.5, 1, 1.5, 2].map((nextSpeed) => (
+        <button
+          key={nextSpeed}
+          onClick={() => onSetSpeed(nextSpeed)}
+          className={`${isOverlay ? "px-2 py-1 text-[11px]" : "px-1.5 sm:px-2 py-1 text-[10px]"} rounded font-semibold cursor-pointer transition-colors ${speed === nextSpeed ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"}`}
+        >
+          {nextSpeed}x
+        </button>
+      ))}
+    </div>
+  );
+
+  const volumeCluster = audioUrl ? (
+    <div
+      ref={volumeMixerRef}
+      className={`${isOverlay ? "" : "order-2 ml-auto sm:order-none sm:ml-0 "}relative flex items-center gap-1.5`}
+      onMouseEnter={isCoarsePointer ? undefined : openVolumeMixer}
+      onMouseLeave={isCoarsePointer ? undefined : () => setVolumeMixerOpen(false)}
+    >
+      <button
+        onClick={() => {
+          if (isCoarsePointer) {
+            if (volumeMixerOpen) setVolumeMixerOpen(false);
+            else openVolumeMixer();
+          } else {
+            onToggleAudio();
+          }
+        }}
+        className="w-7 h-7 rounded flex items-center justify-center cursor-pointer transition-colors hover:bg-osu-b3/50"
+      >
+        <VolumeIcon muted={!audioEnabled || volume === 0} low={volume < 0.5} />
+      </button>
+      <input
+        type="range"
+        min={0}
+        max={1}
+        step={0.05}
+        value={audioEnabled ? volume : 0}
+        onChange={(e) => onSetVolume(Number(e.target.value))}
+        // On touch devices the speaker opens the mixer popover, which
+        // already has both sliders; the inline one just wastes bar space.
+        className={`${isOverlay ? "w-24" : "w-12 sm:w-16"} pointer-coarse:hidden ${sliderClass}`}
+      />
+      <AnimatePresence>
+        {volumeMixerOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            transition={{ duration: 0.1 }}
+            // pb instead of mb keeps the gap hoverable so the popover
+            // survives the pointer travelling up into it.
+            className={`absolute bottom-full z-50 pb-1.5 ${volumeMixerAlignRight ? "right-0" : "left-0"}`}
+          >
+            <div className="w-48 space-y-3 rounded-lg border border-osu-b2 bg-osu-b3 p-3 shadow-2xl">
+              <VolumeMixerRow
+                label="Music"
+                display={audioEnabled ? `${Math.round(volume * 100)}%` : "muted"}
+                value={audioEnabled ? volume : 0}
+                onChange={onSetVolume}
+                onToggle={onToggleAudio}
+              />
+              {beatmapHitsoundsAvailable && (
+                <VolumeMixerRow
+                  label="Beatmap hitsounds"
+                  display={beatmapHitsoundsOn ? `${Math.round(beatmapHitsoundVolume * 100)}%` : "off"}
+                  value={beatmapHitsoundsOn ? beatmapHitsoundVolume : 0}
+                  onChange={onSetBeatmapHitsoundVolume}
+                  onToggle={onToggleBeatmapHitsounds}
+                />
+              )}
+              <VolumeMixerRow
+                label={beatmapHitsoundsAvailable ? "Key hitsounds" : "Hitsounds"}
+                display={keypressHitsoundsOn ? `${Math.round(keypressHitsoundVolume * 100)}%` : "off"}
+                value={keypressHitsoundsOn ? keypressHitsoundVolume : 0}
+                onChange={onSetKeypressHitsoundVolume}
+                onToggle={onToggleKeypressHitsounds}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  ) : null;
+
+  const inputsMenu = (
+    <InputOverlayMenu
+      variant={variant}
+      showInputOverlay={showInputOverlay}
+      inputOverlayOnly={inputOverlayOnly}
+      inputOverlayKeyHistory={inputOverlayKeyHistory}
+      inputOverlayColor={inputOverlayColor}
+      keypressOverlayEnabled={keypressOverlayEnabled}
+      onToggleInputOverlay={onToggleInputOverlay}
+      onToggleInputOverlayOnly={onToggleInputOverlayOnly}
+      onToggleInputOverlayKeyHistory={onToggleInputOverlayKeyHistory}
+      onSetInputOverlayColor={onSetInputOverlayColor}
+    />
+  );
+
+  const settingsButton = (
+    <button
+      onClick={onOpenSkinSettings}
+      aria-label="Replay settings"
+      title="Replay settings"
+      className={`${isOverlay ? "w-9 h-9" : "order-8 sm:order-none w-7 h-7"} rounded flex items-center justify-center cursor-pointer transition-colors ${
+        skinSettingsOpen
+          ? "bg-osu-pink text-white"
+          : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
+      }`}
+    >
+      <Settings className="h-4 w-4" strokeWidth={2.2} />
+    </button>
+  );
+
+  const videoExportCluster = onExportVideo ? (
+    <div ref={videoMenuRef} className={`${isOverlay ? "" : "order-9 sm:order-none "}relative inline-flex`}>
+      <button
+        type="button"
+        onClick={() => {
+          if (videoExportKind === "custom") {
+            markCustomVideoPoint();
+          } else {
+            setVideoClipMode((enabled) => !enabled);
+          }
+        }}
+        disabled={videoExporting}
+        aria-label="Generate replay video URL"
+        className={`${isOverlay ? "h-9 text-[11px]" : "h-7 text-[10px]"} rounded-l px-2.5 font-semibold transition-colors flex items-center gap-1.5 ${
+          videoExporting
+            ? "cursor-default bg-osu-b3/40 text-osu-f1"
+            : videoClipMode
+              ? "cursor-pointer bg-osu-pink text-white hover:bg-osu-pink-light"
+              : "cursor-pointer bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
+        }`}
+      >
+        <Film className="h-3.5 w-3.5" strokeWidth={2.3} />
+        <span className="tabular-nums">
+          {videoExporting
+            ? `${Math.round(videoExportProgress * 100)}%`
+            : selectedExportLabel}
+        </span>
+      </button>
+      <button
+        type="button"
+        onClick={() => setVideoMenuOpen((open) => !open)}
+        disabled={videoExporting}
+        aria-label="Replay video export options"
+        aria-expanded={videoMenuOpen}
+        className={`${isOverlay ? "h-9" : "h-7"} rounded-r border-l border-osu-b4/40 px-1 transition-colors flex items-center ${
+          videoExporting
+            ? "cursor-default bg-osu-b3/40 text-osu-f1"
+            : videoClipMode
+              ? "cursor-pointer bg-osu-pink text-white hover:bg-osu-pink-light"
+              : "cursor-pointer bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
+        }`}
+      >
+        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${videoMenuOpen ? "" : "rotate-180"}`} strokeWidth={2.3} />
+      </button>
+      <AnimatePresence>
+        {videoMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            transition={{ duration: 0.1 }}
+            className={`absolute bottom-full z-50 mb-1.5 w-36 rounded-lg border border-osu-b2 bg-osu-b3 p-1.5 shadow-2xl ${isOverlay ? "right-0" : "left-0"}`}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                if (videoExportKind === "custom" && videoClipMode) {
+                  setVideoClipMode(false);
+                  setVideoCustomStartMs(null);
+                  setVideoCustomEndMs(null);
+                } else {
+                  setVideoExportKind("custom");
+                  setVideoClipMode(true);
+                }
+              }}
+              className={`flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium hover:bg-osu-b4 ${
+                videoExportKind === "custom" && videoClipMode ? "text-white" : "text-osu-f0"
+              }`}
+            >
+              <span>Custom</span>
+              <CheckMark on={videoExportKind === "custom" && videoClipMode} />
+            </button>
+            {videoExportKind === "custom" && videoClipMode && (
+              <div className="space-y-1.5 px-1 pb-1">
+                <div className="grid grid-cols-2 gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVideoCustomStartMs(currentReplayTimeMs());
+                      setVideoClipMode(true);
+                    }}
+                    className={`cursor-pointer rounded px-1.5 py-1 text-[10px] font-semibold transition-colors ${
+                      videoCustomStartMs != null
+                        ? "bg-osu-pink/25 text-white ring-1 ring-inset ring-osu-pink/50"
+                        : "bg-osu-b4 text-osu-f0 hover:text-white"
+                    }`}
+                  >
+                    Start here
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVideoCustomEndMs(currentReplayTimeMs());
+                      setVideoClipMode(true);
+                    }}
+                    className={`cursor-pointer rounded px-1.5 py-1 text-[10px] font-semibold transition-colors ${
+                      videoCustomEndMs != null
+                        ? "bg-osu-pink/25 text-white ring-1 ring-inset ring-osu-pink/50"
+                        : "bg-osu-b4 text-osu-f0 hover:text-white"
+                    }`}
+                  >
+                    End here
+                  </button>
+                </div>
+                <div className="rounded bg-osu-b4/60 px-1.5 py-1 text-[10px] leading-tight text-osu-f1">
+                  <div className="flex justify-between gap-2">
+                    <span>Start</span>
+                    <span className={videoCustomStartMs != null ? "font-semibold text-white" : ""}>
+                      {videoCustomStartMs != null ? formatReplayMs(videoCustomStartMs / modRate) : "--:--"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span>End</span>
+                    <span className={videoCustomEndMs != null ? "font-semibold text-white" : ""}>
+                      {videoCustomEndMs != null ? formatReplayMs(videoCustomEndMs / modRate) : "--:--"}
+                    </span>
+                  </div>
+                </div>
+                {(videoCustomStartMs != null || videoCustomEndMs != null) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVideoCustomStartMs(null);
+                      setVideoCustomEndMs(null);
+                    }}
+                    className="w-full cursor-pointer rounded bg-osu-b4/70 px-1.5 py-1 text-[10px] font-semibold text-osu-f0 hover:text-white"
+                  >
+                    Clear marks
+                  </button>
+                )}
+              </div>
+            )}
+            <div className="my-1 h-px bg-osu-b2" />
+            <button
+              type="button"
+              onClick={() => {
+                setVideoExportKind("full");
+                setVideoClipMode(false);
+              }}
+              className={`flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium hover:bg-osu-b4 ${
+                videoExportKind === "full" ? "text-white" : "text-osu-f0"
+              }`}
+            >
+              <span>Full play</span>
+              <CheckMark on={videoExportKind === "full"} />
+            </button>
+            <div className="my-1 h-px bg-osu-b2" />
+            <button
+              type="button"
+              onClick={() => {
+                setVideoClipMode(true);
+                setVideoMenuOpen(false);
+                if (videoExportKind === "full") {
+                  onExportVideo({ kind: "full", resolution: videoResolution, fps: videoFps });
+                } else if (videoExportKind === "custom") {
+                  if (!hasCustomRange) return;
+                  onExportVideo({ kind: "custom", startTimeMs: customStart, endTimeMs: customEnd, resolution: videoResolution, fps: videoFps });
+                }
+              }}
+              disabled={videoExportKind === "custom" && !hasCustomRange}
+              className="flex w-full cursor-pointer items-center justify-center rounded bg-osu-pink px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-osu-pink-light disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-osu-pink"
+            >
+              Generate URL
+            </button>
+            <div className="px-1 py-1 text-center text-[10px] leading-tight text-osu-f1">
+              For Discord embeds
+            </div>
+            <div className="my-1 h-px bg-osu-b2" />
+            <div className="grid grid-cols-2 gap-1">
+              {(["720p", "1080p"] as const).map((resolution) => (
+                <button
+                  key={resolution}
+                  type="button"
+                  onClick={() => setVideoResolution(resolution)}
+                  className={`cursor-pointer rounded px-2 py-1.5 text-[11px] font-semibold hover:bg-osu-b4 ${
+                    videoResolution === resolution ? "bg-osu-pink text-white" : "text-osu-f0"
+                  }`}
+                >
+                  {resolution}
+                </button>
+              ))}
+            </div>
+            <div className="my-1 h-px bg-osu-b2" />
+            <div className="grid grid-cols-3 gap-1">
+              {([30, 48, 60] as const).map((fps) => (
+                <button
+                  key={fps}
+                  type="button"
+                  onClick={() => setVideoFps(fps)}
+                  className={`cursor-pointer rounded px-2 py-1.5 text-[11px] font-semibold hover:bg-osu-b4 ${
+                    videoFps === fps ? "bg-osu-pink text-white" : "text-osu-f0"
+                  }`}
+                >
+                  {fps}
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  ) : null;
+
   return (
     <div
       className={
         isOverlay
-          ? "relative border-t-[3px] border-[#4a8fd6] bg-[#0b0b11]/95 pb-1 shadow-[0_-10px_30px_rgba(0,0,0,0.55)]"
+          ? "relative border-t-[3px] border-[#4a8fd6] bg-[#0b0b11]/95 shadow-[0_-10px_30px_rgba(0,0,0,0.55)]"
           : "bg-osu-b4 rounded-xl border border-osu-b3/20"
       }
     >
-      {/* Stable's stacked Visual Settings wordmark. */}
-      {isOverlay && (
-        <div aria-hidden="true" className="pointer-events-none absolute left-4 top-5 z-10 select-none leading-none">
-          <div className="text-[24px] font-bold text-[#8fc7ee] [text-shadow:0_2px_4px_rgba(0,0,0,0.8)]">Visual</div>
-          <div className="-mt-1 ml-9 text-[22px] font-bold text-white [text-shadow:0_2px_4px_rgba(0,0,0,0.8)]">Settings</div>
-        </div>
-      )}
       {audioError && (
         <div className="text-[11px] text-osu-yellow bg-osu-yellow/10 border-b border-osu-yellow/20 px-4 py-2 rounded-t-xl">
           {audioError}
@@ -373,8 +712,11 @@ export function ReplayControls({
         <ReplayProgressBar
           rendererRef={rendererRef}
           heatmap={heatmap}
-          sliderClass={isOverlay ? "!h-[4px] !rounded-none !bg-[#25476e] [&::-webkit-slider-thumb]:!bg-white" : ""}
-          className={isOverlay ? "!px-2 !pt-1 !pb-0" : ""}
+          // The filled white track keeps the seek bar from reading as a second
+          // flat blue line under the panel's blue top border.
+          fillTrack={isOverlay}
+          sliderClass={isOverlay ? "!h-[5px] !rounded-full [&::-webkit-slider-thumb]:!bg-white" : ""}
+          className={isOverlay ? "!px-3 !pt-2 !pb-0" : ""}
           clipPreviewSeconds={null}
           clipPreviewRate={speed * modRate}
           customPreviewRange={onExportVideo && videoClipMode && videoExportKind === "custom"
@@ -396,432 +738,152 @@ export function ReplayControls({
         </ReplayProgressBar>
       </div>
 
-      {/* Below sm the order-* classes plus the two basis-full breaks regroup this
-          wrap-row into three deliberate rows: playback (speed + volume), view
-          (scroll + dim), tools (overlays, settings, export, black field). From
-          sm up everything keeps its DOM order in one wrapping row. */}
-      <div className={`flex items-center gap-x-2 gap-y-2.5 sm:gap-3 flex-wrap ${isOverlay ? "py-2.5 pl-44 pr-2" : "px-3 sm:px-4 py-3"}`}>
-        <button
-          onClick={onTogglePlay}
-          title={pendingPlay ? "Waiting for audio to load..." : isPlaying && buffering ? "Buffering..." : undefined}
-          className="w-9 h-9 rounded-full bg-osu-pink hover:bg-osu-pink-light transition-colors hidden sm:flex items-center justify-center cursor-pointer shrink-0"
-        >
-          {pendingPlay || (isPlaying && buffering) ? (
-            <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" className="w-4 h-4 animate-spin">
-              <path d="M12 2a10 10 0 0 1 10 10" />
-            </svg>
-          ) : isPlaying ? (
-            <svg viewBox="0 0 24 24" fill="white" className="w-4 h-4">
-              <rect x="6" y="4" width="4" height="16" rx="1" />
-              <rect x="14" y="4" width="4" height="16" rx="1" />
-            </svg>
-          ) : (
-            <svg viewBox="0 0 24 24" fill="white" className="w-4 h-4 ml-0.5">
-              <path d="M8 5v14l11-7z" />
-            </svg>
-          )}
-        </button>
+      {isOverlay ? (
+        /* The tall stable-style Visual Settings panel: wordmark on the left,
+           labeled sliders and radio-circle toggles spread across it like the
+           client's drawer. */
+        <div className="flex min-h-[170px] items-start gap-10 px-6 pb-5 pt-3">
+          <div aria-hidden="true" className="shrink-0 select-none leading-none">
+            <div className="text-[30px] font-bold text-[#8fc7ee] [text-shadow:0_2px_4px_rgba(0,0,0,0.8)]">Visual</div>
+            <div className="-mt-1 ml-11 text-[27px] font-bold text-white [text-shadow:0_2px_4px_rgba(0,0,0,0.8)]">Settings</div>
+          </div>
 
-        <div className="order-1 sm:order-none flex items-center gap-0.5">
-          {[0.25, 0.5, 1, 1.5, 2].map((nextSpeed) => (
-            <button
-              key={nextSpeed}
-              onClick={() => onSetSpeed(nextSpeed)}
-              className={`px-1.5 sm:px-2 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors ${speed === nextSpeed ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"}`}
-            >
-              {nextSpeed}x
-            </button>
-          ))}
+          <div className="w-60 shrink-0 space-y-4">
+            <OsuSliderRow label="Background dim:" display={`${bgDim}%`} min={0} max={100} step={5} value={bgDim} onChange={onSetBgDim} />
+            <OsuSliderRow label="Scroll speed:" display={String(scrollSpeed)} min={1} max={40} step={1} value={scrollSpeed} onChange={(value) => onSetScrollSpeed(Math.round(value))} />
+          </div>
+
+          <div className="shrink-0 space-y-3">
+            <div className="flex items-center gap-3">
+              {playButton}
+              {speedButtons}
+            </div>
+            {volumeCluster}
+          </div>
+
+          <div className="shrink-0">
+            <div className="mb-1.5 text-[15px] font-bold text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.7)]">Toggles</div>
+            <OsuToggleRow
+              label="Black playfield"
+              on={blackPlayfield}
+              onClick={onToggleBlackPlayfield}
+              title="Fill the playfield with a solid black background"
+            />
+            {inputsMenu}
+            {keypressOverlayEnabled && (
+              <OsuToggleRow label="Key history" on={inputOverlayKeyHistory} onClick={onToggleInputOverlayKeyHistory} />
+            )}
+          </div>
+
+          <div className="ml-auto flex shrink-0 flex-col items-end gap-2">
+            <div className="flex items-center gap-2">
+              {settingsButton}
+              {onToggleFullscreen && (
+                <button
+                  type="button"
+                  onClick={onToggleFullscreen}
+                  aria-label="Enter fullscreen"
+                  title="Fullscreen"
+                  className="w-9 h-9 rounded flex items-center justify-center cursor-pointer transition-colors bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
+                >
+                  <Maximize2 className="h-4 w-4" strokeWidth={2.2} />
+                </button>
+              )}
+            </div>
+            {videoExportCluster}
+          </div>
         </div>
+      ) : (
+        /* Below sm the order-* classes plus the two basis-full breaks regroup this
+           wrap-row into three deliberate rows: playback (speed + volume), view
+           (scroll + dim), tools (overlays, settings, export, black field). From
+           sm up everything keeps its DOM order in one wrapping row. */
+        <div className="flex items-center gap-x-2 gap-y-2.5 sm:gap-3 flex-wrap px-3 sm:px-4 py-3">
+          {playButton}
+          {speedButtons}
 
-        <div className="w-px h-5 bg-osu-b3/40 hidden sm:block" />
+          <div className="w-px h-5 bg-osu-b3/40 hidden sm:block" />
 
-        {audioUrl && (
-          <div
-            ref={volumeMixerRef}
-            className="order-2 ml-auto sm:order-none sm:ml-0 relative flex items-center gap-1.5"
-            onMouseEnter={isCoarsePointer ? undefined : openVolumeMixer}
-            onMouseLeave={isCoarsePointer ? undefined : () => setVolumeMixerOpen(false)}
-          >
+          {volumeCluster}
+
+          {/* Mobile row break: playback row ends here. */}
+          <div className="order-3 h-0 basis-full sm:hidden" aria-hidden="true" />
+
+          <div className="w-px h-5 bg-osu-b3/40 hidden sm:block" />
+
+          <div className="order-7 sm:order-none">{inputsMenu}</div>
+
+          {settingsButton}
+
+          {videoExportCluster}
+
+          <div className="order-4 sm:order-none flex items-center gap-1">
+            <span className="text-[10px] text-osu-f1 mr-0.5">Scroll</span>
             <button
-              onClick={() => {
-                if (isCoarsePointer) {
-                  if (volumeMixerOpen) setVolumeMixerOpen(false);
-                  else openVolumeMixer();
-                } else {
-                  onToggleAudio();
+              onClick={() => onSetScrollSpeed(Math.max(1, scrollSpeed - 1))}
+              className="w-5 h-5 rounded bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3 transition-colors cursor-pointer flex items-center justify-center text-xs leading-none"
+            >
+              -
+            </button>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={scrollSpeedInput}
+              aria-label="Scroll speed"
+              onFocus={() => setEditingScrollSpeed(true)}
+              onChange={(event) => setScrollSpeedInput(event.target.value.replace(/[^\d]/g, "").slice(0, 2))}
+              onBlur={commitScrollSpeedInput}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+                if (event.key === "Escape") {
+                  cancelScrollSpeedCommitRef.current = true;
+                  setScrollSpeedInput(String(scrollSpeed));
+                  setEditingScrollSpeed(false);
+                  event.currentTarget.blur();
                 }
               }}
-              className="w-7 h-7 rounded flex items-center justify-center cursor-pointer transition-colors hover:bg-osu-b3/50"
+              className="h-5 w-7 rounded bg-transparent text-center text-xs font-bold text-white tabular-nums outline-none transition-colors focus:bg-osu-b3/60 focus:ring-1 focus:ring-osu-pink/40"
+            />
+            <button
+              onClick={() => onSetScrollSpeed(Math.min(40, scrollSpeed + 1))}
+              className="w-5 h-5 rounded bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3 transition-colors cursor-pointer flex items-center justify-center text-xs leading-none"
             >
-              <VolumeIcon muted={!audioEnabled || volume === 0} low={volume < 0.5} />
+              +
             </button>
+          </div>
+
+          {/* Mobile row break: view row (scroll + dim) ends here. */}
+          <div className="order-6 h-0 basis-full sm:hidden" aria-hidden="true" />
+
+          {/* sm:order-1 keeps the desktop right cluster reading [Black playfield][BG Dim]
+              even though BG Dim comes first in the DOM for the mobile rows. */}
+          <div className="order-5 ml-auto sm:order-1 sm:ml-0 flex items-center gap-2">
+            <span className="text-[10px] text-osu-f1">BG Dim</span>
             <input
               type="range"
               min={0}
-              max={1}
-              step={0.05}
-              value={audioEnabled ? volume : 0}
-              onChange={(e) => onSetVolume(Number(e.target.value))}
-              // On touch devices the speaker opens the mixer popover, which
-              // already has both sliders; the inline one just wastes bar space.
-              className={`w-12 sm:w-16 pointer-coarse:hidden ${sliderClass}`}
+              max={100}
+              step={5}
+              value={bgDim}
+              onChange={(e) => onSetBgDim(Number(e.target.value))}
+              className={`w-24 sm:w-20 ${sliderClass}`}
             />
-            <AnimatePresence>
-              {volumeMixerOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 4 }}
-                  transition={{ duration: 0.1 }}
-                  // pb instead of mb keeps the gap hoverable so the popover
-                  // survives the pointer travelling up into it.
-                  className={`absolute bottom-full z-50 pb-1.5 ${volumeMixerAlignRight ? "right-0" : "left-0"}`}
-                >
-                  <div className="w-48 space-y-3 rounded-lg border border-osu-b2 bg-osu-b3 p-3 shadow-2xl">
-                    <VolumeMixerRow
-                      label="Music"
-                      display={audioEnabled ? `${Math.round(volume * 100)}%` : "muted"}
-                      value={audioEnabled ? volume : 0}
-                      onChange={onSetVolume}
-                      onToggle={onToggleAudio}
-                    />
-                    {beatmapHitsoundsAvailable && (
-                      <VolumeMixerRow
-                        label="Beatmap hitsounds"
-                        display={beatmapHitsoundsOn ? `${Math.round(beatmapHitsoundVolume * 100)}%` : "off"}
-                        value={beatmapHitsoundsOn ? beatmapHitsoundVolume : 0}
-                        onChange={onSetBeatmapHitsoundVolume}
-                        onToggle={onToggleBeatmapHitsounds}
-                      />
-                    )}
-                    <VolumeMixerRow
-                      label={beatmapHitsoundsAvailable ? "Key hitsounds" : "Hitsounds"}
-                      display={keypressHitsoundsOn ? `${Math.round(keypressHitsoundVolume * 100)}%` : "off"}
-                      value={keypressHitsoundsOn ? keypressHitsoundVolume : 0}
-                      onChange={onSetKeypressHitsoundVolume}
-                      onToggle={onToggleKeypressHitsounds}
-                    />
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            <span className="text-[10px] text-osu-f1 tabular-nums w-7">{bgDim}%</span>
           </div>
-        )}
 
-        {/* Mobile row break: playback row ends here. */}
-        <div className="order-3 h-0 basis-full sm:hidden" aria-hidden="true" />
-
-        <div className="w-px h-5 bg-osu-b3/40 hidden sm:block" />
-
-        <div className="order-7 sm:order-none">
-        <InputOverlayMenu
-          showInputOverlay={showInputOverlay}
-          inputOverlayOnly={inputOverlayOnly}
-          inputOverlayKeyHistory={inputOverlayKeyHistory}
-          inputOverlayColor={inputOverlayColor}
-          keypressOverlayEnabled={keypressOverlayEnabled}
-          onToggleInputOverlay={onToggleInputOverlay}
-          onToggleInputOverlayOnly={onToggleInputOverlayOnly}
-          onToggleInputOverlayKeyHistory={onToggleInputOverlayKeyHistory}
-          onSetInputOverlayColor={onSetInputOverlayColor}
-        />
-        </div>
-
-        <button
-          onClick={onOpenSkinSettings}
-          aria-label="Replay settings"
-          title="Replay settings"
-          className={`order-8 sm:order-none w-7 h-7 rounded flex items-center justify-center cursor-pointer transition-colors ${
-            skinSettingsOpen
-              ? "bg-osu-pink text-white"
-              : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
-          }`}
-        >
-          <Settings className="h-4 w-4" strokeWidth={2.2} />
-        </button>
-
-        {onExportVideo && (
-          <div ref={videoMenuRef} className="order-9 sm:order-none relative inline-flex">
-            <button
-              type="button"
-              onClick={() => {
-                if (videoExportKind === "custom") {
-                  markCustomVideoPoint();
-                } else {
-                  setVideoClipMode((enabled) => !enabled);
-                }
-              }}
-              disabled={videoExporting}
-              aria-label="Generate replay video URL"
-              className={`h-7 rounded-l px-2.5 text-[10px] font-semibold transition-colors flex items-center gap-1.5 ${
-                videoExporting
-                  ? "cursor-default bg-osu-b3/40 text-osu-f1"
-                  : videoClipMode
-                    ? "cursor-pointer bg-osu-pink text-white hover:bg-osu-pink-light"
-                    : "cursor-pointer bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
-              }`}
-            >
-              <Film className="h-3.5 w-3.5" strokeWidth={2.3} />
-              <span className="tabular-nums">
-                {videoExporting
-                  ? `${Math.round(videoExportProgress * 100)}%`
-                  : selectedExportLabel}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setVideoMenuOpen((open) => !open)}
-              disabled={videoExporting}
-              aria-label="Replay video export options"
-              aria-expanded={videoMenuOpen}
-              className={`h-7 rounded-r border-l border-osu-b4/40 px-1 transition-colors flex items-center ${
-                videoExporting
-                  ? "cursor-default bg-osu-b3/40 text-osu-f1"
-                  : videoClipMode
-                    ? "cursor-pointer bg-osu-pink text-white hover:bg-osu-pink-light"
-                    : "cursor-pointer bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
-              }`}
-            >
-              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${videoMenuOpen ? "" : "rotate-180"}`} strokeWidth={2.3} />
-            </button>
-            <AnimatePresence>
-              {videoMenuOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 4 }}
-                  transition={{ duration: 0.1 }}
-                  className="absolute left-0 bottom-full z-50 mb-1.5 w-36 rounded-lg border border-osu-b2 bg-osu-b3 p-1.5 shadow-2xl"
-                >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (videoExportKind === "custom" && videoClipMode) {
-                        setVideoClipMode(false);
-                        setVideoCustomStartMs(null);
-                        setVideoCustomEndMs(null);
-                      } else {
-                        setVideoExportKind("custom");
-                        setVideoClipMode(true);
-                      }
-                    }}
-                    className={`flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium hover:bg-osu-b4 ${
-                      videoExportKind === "custom" && videoClipMode ? "text-white" : "text-osu-f0"
-                    }`}
-                  >
-                    <span>Custom</span>
-                    <CheckMark on={videoExportKind === "custom" && videoClipMode} />
-                  </button>
-                  {videoExportKind === "custom" && videoClipMode && (
-                    <div className="space-y-1.5 px-1 pb-1">
-                      <div className="grid grid-cols-2 gap-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setVideoCustomStartMs(currentReplayTimeMs());
-                            setVideoClipMode(true);
-                          }}
-                          className={`cursor-pointer rounded px-1.5 py-1 text-[10px] font-semibold transition-colors ${
-                            videoCustomStartMs != null
-                              ? "bg-osu-pink/25 text-white ring-1 ring-inset ring-osu-pink/50"
-                              : "bg-osu-b4 text-osu-f0 hover:text-white"
-                          }`}
-                        >
-                          Start here
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setVideoCustomEndMs(currentReplayTimeMs());
-                            setVideoClipMode(true);
-                          }}
-                          className={`cursor-pointer rounded px-1.5 py-1 text-[10px] font-semibold transition-colors ${
-                            videoCustomEndMs != null
-                              ? "bg-osu-pink/25 text-white ring-1 ring-inset ring-osu-pink/50"
-                              : "bg-osu-b4 text-osu-f0 hover:text-white"
-                          }`}
-                        >
-                          End here
-                        </button>
-                      </div>
-                      <div className="rounded bg-osu-b4/60 px-1.5 py-1 text-[10px] leading-tight text-osu-f1">
-                        <div className="flex justify-between gap-2">
-                          <span>Start</span>
-                          <span className={videoCustomStartMs != null ? "font-semibold text-white" : ""}>
-                            {videoCustomStartMs != null ? formatReplayMs(videoCustomStartMs / modRate) : "--:--"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between gap-2">
-                          <span>End</span>
-                          <span className={videoCustomEndMs != null ? "font-semibold text-white" : ""}>
-                            {videoCustomEndMs != null ? formatReplayMs(videoCustomEndMs / modRate) : "--:--"}
-                          </span>
-                        </div>
-                      </div>
-                      {(videoCustomStartMs != null || videoCustomEndMs != null) && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setVideoCustomStartMs(null);
-                            setVideoCustomEndMs(null);
-                          }}
-                          className="w-full cursor-pointer rounded bg-osu-b4/70 px-1.5 py-1 text-[10px] font-semibold text-osu-f0 hover:text-white"
-                        >
-                          Clear marks
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  <div className="my-1 h-px bg-osu-b2" />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setVideoExportKind("full");
-                      setVideoClipMode(false);
-                    }}
-                    className={`flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium hover:bg-osu-b4 ${
-                      videoExportKind === "full" ? "text-white" : "text-osu-f0"
-                    }`}
-                  >
-                    <span>Full play</span>
-                    <CheckMark on={videoExportKind === "full"} />
-                  </button>
-                  <div className="my-1 h-px bg-osu-b2" />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setVideoClipMode(true);
-                      setVideoMenuOpen(false);
-                      if (videoExportKind === "full") {
-                        onExportVideo({ kind: "full", resolution: videoResolution, fps: videoFps });
-                      } else if (videoExportKind === "custom") {
-                        if (!hasCustomRange) return;
-                        onExportVideo({ kind: "custom", startTimeMs: customStart, endTimeMs: customEnd, resolution: videoResolution, fps: videoFps });
-                      }
-                    }}
-                    disabled={videoExportKind === "custom" && !hasCustomRange}
-                    className="flex w-full cursor-pointer items-center justify-center rounded bg-osu-pink px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-osu-pink-light disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-osu-pink"
-                  >
-                    Generate URL
-                  </button>
-                  <div className="px-1 py-1 text-center text-[10px] leading-tight text-osu-f1">
-                    For Discord embeds
-                  </div>
-                  <div className="my-1 h-px bg-osu-b2" />
-                  <div className="grid grid-cols-2 gap-1">
-                    {(["720p", "1080p"] as const).map((resolution) => (
-                      <button
-                        key={resolution}
-                        type="button"
-                        onClick={() => setVideoResolution(resolution)}
-                        className={`cursor-pointer rounded px-2 py-1.5 text-[11px] font-semibold hover:bg-osu-b4 ${
-                          videoResolution === resolution ? "bg-osu-pink text-white" : "text-osu-f0"
-                        }`}
-                      >
-                        {resolution}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="my-1 h-px bg-osu-b2" />
-                  <div className="grid grid-cols-3 gap-1">
-                    {([30, 48, 60] as const).map((fps) => (
-                      <button
-                        key={fps}
-                        type="button"
-                        onClick={() => setVideoFps(fps)}
-                        className={`cursor-pointer rounded px-2 py-1.5 text-[11px] font-semibold hover:bg-osu-b4 ${
-                          videoFps === fps ? "bg-osu-pink text-white" : "text-osu-f0"
-                        }`}
-                      >
-                        {fps}
-                      </button>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        )}
-
-        <div className="order-4 sm:order-none flex items-center gap-1">
-          <span className="text-[10px] text-osu-f1 mr-0.5">Scroll</span>
-          <button
-            onClick={() => onSetScrollSpeed(Math.max(1, scrollSpeed - 1))}
-            className="w-5 h-5 rounded bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3 transition-colors cursor-pointer flex items-center justify-center text-xs leading-none"
-          >
-            -
-          </button>
-          <input
-            type="text"
-            inputMode="numeric"
-            value={scrollSpeedInput}
-            aria-label="Scroll speed"
-            onFocus={() => setEditingScrollSpeed(true)}
-            onChange={(event) => setScrollSpeedInput(event.target.value.replace(/[^\d]/g, "").slice(0, 2))}
-            onBlur={commitScrollSpeedInput}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") event.currentTarget.blur();
-              if (event.key === "Escape") {
-                cancelScrollSpeedCommitRef.current = true;
-                setScrollSpeedInput(String(scrollSpeed));
-                setEditingScrollSpeed(false);
-                event.currentTarget.blur();
-              }
-            }}
-            className="h-5 w-7 rounded bg-transparent text-center text-xs font-bold text-white tabular-nums outline-none transition-colors focus:bg-osu-b3/60 focus:ring-1 focus:ring-osu-pink/40"
-          />
-          <button
-            onClick={() => onSetScrollSpeed(Math.min(40, scrollSpeed + 1))}
-            className="w-5 h-5 rounded bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3 transition-colors cursor-pointer flex items-center justify-center text-xs leading-none"
-          >
-            +
-          </button>
-        </div>
-
-        {/* Mobile row break: view row (scroll + dim) ends here. */}
-        <div className="order-6 h-0 basis-full sm:hidden" aria-hidden="true" />
-
-        {/* sm:order-1 keeps the desktop right cluster reading [Black playfield][BG Dim]
-            even though BG Dim comes first in the DOM for the mobile rows. */}
-        <div className="order-5 ml-auto sm:order-1 sm:ml-0 flex items-center gap-2">
-          <span className="text-[10px] text-osu-f1">BG Dim</span>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={5}
-            value={bgDim}
-            onChange={(e) => onSetBgDim(Number(e.target.value))}
-            className={`w-24 sm:w-20 ${sliderClass}`}
-          />
-          <span className="text-[10px] text-osu-f1 tabular-nums w-7">{bgDim}%</span>
-        </div>
-
-        <button
-          type="button"
-          onClick={onToggleBlackPlayfield}
-          title="Fill the playfield with a solid black background"
-          aria-pressed={blackPlayfield}
-          className={`order-10 ml-auto sm:order-none px-2 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors ${
-            blackPlayfield ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
-          }`}
-        >
-          Black playfield
-        </button>
-
-        {isOverlay && onToggleFullscreen && (
           <button
             type="button"
-            onClick={onToggleFullscreen}
-            aria-label="Enter fullscreen"
-            title="Fullscreen"
-            className="order-11 sm:order-2 w-7 h-7 rounded flex items-center justify-center cursor-pointer transition-colors bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
+            onClick={onToggleBlackPlayfield}
+            title="Fill the playfield with a solid black background"
+            aria-pressed={blackPlayfield}
+            className={`order-10 ml-auto sm:order-none px-2 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors ${
+              blackPlayfield ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
+            }`}
           >
-            <Maximize2 className="h-4 w-4" strokeWidth={2.2} />
+            Black playfield
           </button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -889,7 +951,62 @@ function VolumeIcon({ muted, low }: { muted: boolean; low: boolean }) {
   );
 }
 
+// The osu!-style rows the overlay Visual Settings panel is built from: a
+// radio-circle toggle and a labeled slider, like the client's drawer.
+function OsuToggleRow({ label, on, onClick, title, disabled = false }: {
+  label: string;
+  on: boolean;
+  onClick: () => void;
+  title?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-pressed={on}
+      disabled={disabled}
+      className={`group flex items-center gap-2.5 py-1 text-left ${disabled ? "cursor-not-allowed opacity-45" : "cursor-pointer"}`}
+    >
+      <span className={`flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded-full border-2 transition-colors ${on ? "border-osu-pink" : `border-osu-pink/45${disabled ? "" : " group-hover:border-osu-pink/80"}`}`}>
+        <span className={`h-[7px] w-[7px] rounded-full bg-osu-pink transition-opacity ${on ? "opacity-100" : "opacity-0"}`} />
+      </span>
+      <span className={`text-[14px] font-semibold transition-colors ${on ? "text-white" : `text-osu-f1${disabled ? "" : " group-hover:text-white"}`}`}>{label}</span>
+    </button>
+  );
+}
+
+function OsuSliderRow({ label, display, min, max, step, value, onChange }: {
+  label: string;
+  display: string;
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div>
+      <div className="mb-1 flex items-baseline justify-between">
+        <span className="text-[15px] font-bold text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.7)]">{label}</span>
+        <span className="text-[12px] font-semibold tabular-nums text-osu-f1">{display}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="h-[3px] w-full cursor-pointer appearance-none rounded-full bg-[#432235] [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink [&::-webkit-slider-thumb]:shadow-[0_0_6px_rgba(232,60,144,0.55)]"
+      />
+    </div>
+  );
+}
+
 function InputOverlayMenu({
+  variant = "card",
   showInputOverlay,
   inputOverlayOnly,
   inputOverlayKeyHistory,
@@ -900,6 +1017,7 @@ function InputOverlayMenu({
   onToggleInputOverlayKeyHistory,
   onSetInputOverlayColor,
 }: {
+  variant?: "card" | "overlay";
   showInputOverlay: boolean;
   inputOverlayOnly: boolean;
   inputOverlayKeyHistory: boolean;
@@ -939,29 +1057,8 @@ function InputOverlayMenu({
   const keyHistoryVisible = keypressOverlayEnabled && inputOverlayKeyHistory;
   const anyInputVisualization = showInputOverlay || keyHistoryVisible;
 
-  return (
-    <div ref={containerRef} className="relative inline-flex items-stretch">
-      <button
-        onClick={onToggleInputOverlay}
-        title="Toggle field input overlay"
-        className={`pl-2.5 pr-2 py-1 rounded-l text-[10px] font-semibold cursor-pointer transition-colors ${
-          showInputOverlay ? activeBtn : inactiveBtn
-        }`}
-      >
-        Inputs
-      </button>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        aria-label="Input overlay options"
-        aria-expanded={open}
-        title="Input overlay options"
-        className={`px-1 py-1 rounded-r border-l border-osu-b4/40 cursor-pointer transition-colors ${
-          anyInputVisualization ? activeBtn : inactiveBtn
-        }`}
-      >
-        <ChevronDown className={`h-3 w-3 transition-transform ${open ? "" : "rotate-180"}`} strokeWidth={2.5} />
-      </button>
-      <AnimatePresence>
+  const popover = (
+    <AnimatePresence>
         {open && (
           <motion.div
             initial={{ opacity: 0, y: 4 }}
@@ -982,7 +1079,7 @@ function InputOverlayMenu({
               disabled={!showInputOverlay}
               className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-[11px] font-medium text-osu-f0 hover:bg-osu-b4 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
             >
-              <span>Notes only</span>
+              <span>Convert hits to notes</span>
               <CheckMark on={inputOverlayOnly} />
             </button>
             {keypressOverlayEnabled && (
@@ -1021,7 +1118,105 @@ function InputOverlayMenu({
             )}
           </motion.div>
         )}
-      </AnimatePresence>
+    </AnimatePresence>
+  );
+
+  // The overlay popover matches the Visual Settings panel it floats over
+  // (near-black, blue top edge, radio rows) instead of the site card look.
+  // Column presses and Key history already sit as rows in the panel's
+  // Toggles column, so only the extras live here.
+  const overlayPopover = (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 4 }}
+          transition={{ duration: 0.1 }}
+          className={`absolute left-0 bottom-full z-50 mb-2 rounded-sm border-t-2 border-[#4a8fd6] bg-[#0b0b11]/95 p-3 shadow-[0_10px_30px_rgba(0,0,0,0.6)] ${colorOpen ? "w-64" : "w-56"}`}
+        >
+          <OsuToggleRow
+            label="Convert hits to notes"
+            on={inputOverlayOnly}
+            onClick={onToggleInputOverlayOnly}
+            disabled={!showInputOverlay}
+          />
+          <div className="my-2 h-px bg-white/10" />
+          <button
+            type="button"
+            onClick={() => {
+              if (anyInputVisualization) setColorOpen((v) => !v);
+            }}
+            disabled={!anyInputVisualization}
+            aria-expanded={colorOpen}
+            className={`flex w-full items-center justify-between gap-2 py-0.5 text-[13px] font-semibold ${anyInputVisualization ? "cursor-pointer text-osu-f1 hover:text-white" : "cursor-not-allowed text-osu-f1/40"}`}
+          >
+            <span>Color</span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="text-[11px] tabular-nums text-osu-f1">{inputOverlayColor.toUpperCase()}</span>
+              <span
+                className="h-4 w-4 rounded border border-white/20"
+                style={{ backgroundColor: inputOverlayColor }}
+              />
+              <ChevronDown className={`h-3 w-3 transition-transform ${colorOpen ? "rotate-180" : ""}`} strokeWidth={2.5} />
+            </span>
+          </button>
+          {colorOpen && anyInputVisualization && (
+            <div className="mt-1.5 rounded-sm border border-white/10 bg-white/5 p-2">
+              <ReplaySkinColorPanel value={inputOverlayColor} onChange={onSetInputOverlayColor} />
+            </div>
+          )}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  if (variant === "overlay") {
+    return (
+      <div ref={containerRef} className="relative flex items-center gap-0.5">
+        <OsuToggleRow
+          label="Column presses"
+          on={showInputOverlay}
+          onClick={onToggleInputOverlay}
+          title="Toggle field input overlay"
+        />
+        <button
+          onClick={() => setOpen((v) => !v)}
+          aria-label="Input overlay options"
+          aria-expanded={open}
+          title="Input overlay options"
+          className="flex h-5 w-5 cursor-pointer items-center justify-center rounded text-osu-f1 transition-colors hover:text-white"
+        >
+          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "" : "rotate-180"}`} strokeWidth={2.5} />
+        </button>
+        {overlayPopover}
+      </div>
+    );
+  }
+
+  return (
+    <div ref={containerRef} className="relative inline-flex items-stretch">
+      <button
+        onClick={onToggleInputOverlay}
+        title="Toggle field input overlay"
+        className={`pl-2.5 pr-2 py-1 rounded-l text-[10px] font-semibold cursor-pointer transition-colors ${
+          showInputOverlay ? activeBtn : inactiveBtn
+        }`}
+      >
+        Inputs
+      </button>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-label="Input overlay options"
+        aria-expanded={open}
+        title="Input overlay options"
+        className={`px-1 py-1 rounded-r border-l border-osu-b4/40 cursor-pointer transition-colors ${
+          anyInputVisualization ? activeBtn : inactiveBtn
+        }`}
+      >
+        <ChevronDown className={`h-3 w-3 transition-transform ${open ? "" : "rotate-180"}`} strokeWidth={2.5} />
+      </button>
+      {popover}
     </div>
   );
 }
@@ -1101,6 +1296,7 @@ export function ReplayProgressBar({
   heatmap,
   sliderClass,
   className = "",
+  fillTrack = false,
   clipPreviewSeconds = null,
   clipPreviewRate = 1,
   customPreviewRange = null,
@@ -1114,6 +1310,9 @@ export function ReplayProgressBar({
   heatmap: number[];
   sliderClass: string;
   className?: string;
+  /** Paints the played portion of the track bright and the rest faint, so the
+   *  bar reads as a seek bar instead of a flat line. */
+  fillTrack?: boolean;
   clipPreviewSeconds?: number | null;
   clipPreviewRate?: number;
   customPreviewRange?: { startMs: number | null; endMs: number | null } | null;
@@ -1171,6 +1370,9 @@ export function ReplayProgressBar({
             if (r) onSeek(v * r.duration);
           }}
           className={`block w-full h-1.5 appearance-none bg-osu-b3 rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink ${sliderClass}`}
+          style={fillTrack ? {
+            background: `linear-gradient(90deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.9) ${progress * 100}%, rgba(255,255,255,0.13) ${progress * 100}%, rgba(255,255,255,0.13) 100%)`,
+          } : undefined}
         />
         <ReplayMissMarkers missTimes={missTimes} duration={duration} heatmap={heatmap} />
         {failTime != null && duration > 0 && (
@@ -1200,7 +1402,7 @@ const ReplayMissMarkers = memo(function ReplayMissMarkers({ missTimes, duration,
   if (duration <= 0 || missTimes.length === 0) return null;
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-full z-20 h-5 opacity-0 transition-opacity duration-150 group-hover:opacity-90" aria-hidden="true">
+    <div className="pointer-events-none absolute inset-x-0 bottom-full z-20 h-7 opacity-0 transition-opacity duration-150 group-hover:opacity-90" aria-hidden="true">
       {missTimes.map((time, index) => {
         const left = Math.max(0, Math.min(1, time / duration));
         const top = getHeatmapLineTopPercent(heatmap, left);
@@ -1258,13 +1460,13 @@ const KeypressHeatmap = memo(function KeypressHeatmap({ heatmap }: { heatmap: nu
     <svg
       viewBox={`0 0 ${width} ${height}`}
       preserveAspectRatio="none"
-      className="absolute inset-x-0 bottom-full h-5 w-full pointer-events-none text-osu-pink opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+      className="absolute inset-x-0 bottom-full h-7 w-full pointer-events-none text-osu-pink opacity-0 group-hover:opacity-100 transition-opacity duration-200"
       aria-hidden="true"
     >
       <defs>
         <linearGradient id="replay-keypress-heatmap-fade" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="currentColor" stopOpacity="0.6" />
-          <stop offset="40%" stopColor="currentColor" stopOpacity="0.1" />
+          <stop offset="0%" stopColor="currentColor" stopOpacity="0.8" />
+          <stop offset="45%" stopColor="currentColor" stopOpacity="0.2" />
           <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
         </linearGradient>
       </defs>
@@ -1273,7 +1475,7 @@ const KeypressHeatmap = memo(function KeypressHeatmap({ heatmap }: { heatmap: nu
         d={topD}
         fill="none"
         stroke="currentColor"
-        strokeWidth={1.5}
+        strokeWidth={2}
         strokeLinejoin="round"
         strokeLinecap="round"
         vectorEffect="non-scaling-stroke"

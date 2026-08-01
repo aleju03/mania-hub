@@ -15,7 +15,7 @@ describe("replay miss markers", () => {
     expect(controlsSource).toContain("getHeatmapLineTopPercent");
     expect(controlsSource).toContain("top: `${top}%`");
     expect(controlsSource).toContain("group-hover:opacity-90");
-    expect(controlsSource).toContain("bottom-full z-20 h-5");
+    expect(controlsSource).toContain("bottom-full z-20 h-7");
     expect(controlsSource).toContain("bg-osu-red-light");
     expect(controlsSource).not.toContain("drop-shadow-[0_0_4px_rgba(255,68,68,0.8)]");
   });

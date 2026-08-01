@@ -770,6 +770,29 @@ describe("mania replay judgement helpers", () => {
     ]);
   });
 
+  it("lets a soft-dropped stable LN (release inside the miss window) recover a Meh from an after-tail press", () => {
+    const ruleset = getManiaReplayRuleset(false, []);
+    const windows = getManiaReplayHitWindows(5, ruleset);
+    const notes: ManiaNote[] = [{ column: 0, time: 1000, endTime: 1400, isHold: true }];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 990, keyState: 1 },
+      { time: 1240, keyState: 0 },
+      { time: 1450, keyState: 1 },
+      { time: 1560, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 2000);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable", {
+      legacyReplayFrameRounding: true,
+    });
+
+    expect(simulated.events).toEqual([
+      expect.objectContaining({ part: "hold-break", judgment: null, time: 1240 }),
+      expect.objectContaining({ part: "hold-combined", judgment: 5 }),
+    ]);
+  });
+
   it("keeps the old dropped-LN tail consumption when the press-after-tail rule is disabled", () => {
     const ruleset = getManiaReplayRuleset(false, []);
     const windows = getManiaReplayHitWindows(5, ruleset);

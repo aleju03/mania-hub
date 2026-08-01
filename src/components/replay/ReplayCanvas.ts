@@ -3427,7 +3427,9 @@ export class ManiaReplayRenderer {
     const { w, h } = layout;
     const fps = this.measuredFps;
     if (fps <= 0) return;
-    const s = Math.min(this.getHudScale(layout), 1.35);
+    // Slightly under the shared HUD scale: full size read as too chunky in
+    // the corner next to the score block.
+    const s = Math.min(this.getHudScale(layout), 1.35) * 0.85;
     const frameMs = 1000 / fps;
     const msText = `${frameMs.toFixed(1)}ms`;
     const right = w - 8;

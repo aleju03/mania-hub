@@ -64,6 +64,7 @@ export interface ManiaReplaySimulationOptions {
   stableHeldOkTimeoutJudgment?: Judgment;
   stableHeldTailTimeoutMode?: "timeout" | "first-sample" | "segment-end";
   stableHighKeyReleaseDelayMaxHeadOffset?: number;
+  stableHeldKeyActivatesLongNoteHead?: boolean;
   stableHighKeyReleaseDelayMissOnly?: boolean;
   stableHighKeyReleaseDelayRawThreshold?: number;
   stableLateRegrabMehFloor?: boolean;
@@ -1174,6 +1175,7 @@ export function simulateManiaReplayJudgements(
     : options.stableBodyBreakCapJudgment;
   const stableBrokenTailPressAfterTailMisses = options.stableBrokenTailPressAfterTailMisses
     ?? (!isLazer && Boolean(options.legacyReplayFrameRounding));
+  const stableHeldKeyActivatesLongNoteHead = options.stableHeldKeyActivatesLongNoteHead ?? false;
   const stableBrokenTailReleaseGrace = options.stableBrokenTailReleaseGrace ?? null;
   const stableLateRegrabMehFloor = options.stableLateRegrabMehFloor ?? false;
   const stableLongNoteBodyGrab = options.stableLongNoteBodyGrab ?? false;
@@ -1523,6 +1525,21 @@ export function simulateManiaReplayJudgements(
           && previousConsumedSegment != null
           && previousConsumedSegment.start < note.time
           && previousConsumedSegment.end > note.time;
+
+        // A key still held across the head (its press consumed by an earlier
+        // note) activates the hold when the head scrolls by, with an on-time
+        // head delta; the tail then judges from the same segment's release.
+        // Only keys that stay held into the tail window count: letting go
+        // mid-body leaves the untouched hold to miss like any other.
+        if (
+          stableMissedInsideConsumedSegment
+          && stableHeldKeyActivatesLongNoteHead
+          && previousConsumedSegment.end >= note.endTime - Math.floor(windows.perfect)
+        ) {
+          matchedSegmentIndex = Math.max(0, segmentCursor) - 1;
+          headJudgment = 1;
+          headTime = note.time;
+        } else {
         const stableMissedInsideConsumedNoAdvance = stableMissedInsideConsumedSegment
           && timedOutHeldSegmentIndex < segmentCursor;
         const stableMissedInsideConsumedJudgment = stableMissedInsideConsumedNoAdvance
@@ -1552,6 +1569,7 @@ export function simulateManiaReplayJudgements(
         missState.stableNextSegmentCursor = segmentCursor;
         noteStates[noteIndex] = missState;
         continue;
+        }
       }
 
       const headSegment = columnSegments[matchedSegmentIndex];
@@ -1750,6 +1768,10 @@ export function simulateManiaReplayJudgements(
       let bodyBreakTime: number | null = null;
       const bodyBreakTimes: number[] = [];
       let bodyBreakCapJudgment: Judgment | null = null;
+      // A release beyond the tail's miss window is a hard drop: the hold is
+      // dead and only misses from there (a soft drop inside the miss window
+      // keeps the hold judgeable, usually recovering a Meh).
+      let hadHardDrop = false;
       const heldSegments: ReplaySegment[] = [];
       let releaseTime = headSegment.end;
       let scanIndex = matchedSegmentIndex;
@@ -1911,6 +1933,12 @@ export function simulateManiaReplayJudgements(
             && nextSegmentCoversTailEdge;
 
           if (!canBridgeTailEdgeGap && (releasedAfterHead || releasedMatchedPreHeadPress)) {
+            // The hard/soft boundary is the tighter of the replay-time and
+            // real-time miss windows (rate-up mods keep the real window,
+            // rate-down mods keep the scaled one).
+            if (segment.end < note.endTime - Math.floor(Math.min(windows.miss, windows.miss / (options.speedMultiplier ?? 1)))) {
+              hadHardDrop = true;
+            }
             const capJudgment = stableBodyBreakCapJudgment;
             if (capJudgment != null) {
               bodyBreakCapJudgment = bodyBreakCapJudgment == null
@@ -2029,6 +2057,7 @@ export function simulateManiaReplayJudgements(
       // recover at most a Meh: the re-grab is too far from the head for the
       // combined rule to score above 50 in stable.
       const brokenRegrabTail = bodyBreakTime != null
+        && hadHardDrop
         && tailSegmentIndex != null
         && tailSegmentIndex !== matchedSegmentIndex;
       if (
@@ -2042,14 +2071,20 @@ export function simulateManiaReplayJudgements(
           : Math.max(bodyBreakCapJudgment, 5) as Judgment;
       }
 
-      // A dropped hold only earns its (capped) judgement when the re-grab is
-      // still holding at the tail; letting go again before the tail leaves the
-      // note to miss, and a press that starts after the tail never counts as
-      // the dropped hold's tail (it stays available for the next note).
-      const brokenTailPressAfterTail = stableBrokenTailPressAfterTailMisses
-        && brokenRegrabTail
+      // After a HARD drop, a press that starts after the tail never counts as
+      // the dropped hold's tail: the hold misses and the press stays available
+      // for the next note. After a SOFT drop the hold is still judgeable: a
+      // press inside the tail's Ok window regrabs it (usually recovering a
+      // Meh) while the segment also stays available for the next note, and a
+      // press beyond the Ok window leaves the hold to miss.
+      const dropTailPressAfterTail = bodyBreakTime != null
+        && tailSegmentIndex != null
+        && tailSegmentIndex !== matchedSegmentIndex
         && tailSegmentPressRangeMin != null
         && tailSegmentPressRangeMin > note.endTime;
+      const brokenTailPressAfterTail = stableBrokenTailPressAfterTailMisses
+        && dropTailPressAfterTail
+        && hadHardDrop;
       const brokenTailDroppedBeforeTail = stableBrokenTailReleaseGrace != null
         && brokenRegrabTail
         && !tailWasHeldAtJudgement
