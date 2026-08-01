@@ -18,7 +18,7 @@ import { ReplayInfo } from "../components/replay/ReplayInfo";
 import type { ReplayPlayerProfile } from "../components/replay/ReplayInfo";
 import { ReplaySkinSettingsModal } from "../components/replay/ReplaySkinSettingsModal";
 import { track } from "../lib/analytics";
-import { markReplayRendererInitStage, markReplayWatchStage, reportCrashedReplayWatchSession, startReplayWatchBeacon, updateReplayWatchBeaconContext } from "../lib/replay-crash-beacon";
+import { markReplayRendererInitStage, markReplayWatchStage, REPLAY_WATCH_DEBUG_STORAGE_KEY, reportCrashedReplayWatchSession, startReplayWatchBeacon, updateReplayWatchBeaconContext } from "../lib/replay-crash-beacon";
 import { withTimeout } from "../lib/promise-timeout";
 import {
   REPLAY_SKIN_SETTINGS_CHANGE_EVENT,
@@ -2399,6 +2399,9 @@ function ReplayViewer({
 
   useEffect(() => {
     const refreshSharedReplaySettings = (event?: Event) => {
+      // The crash beacon mirrors progress through localStorage so another tab
+      // can recover a hung tab's trace. That write is not a settings change.
+      if (event instanceof StorageEvent && event.key === REPLAY_WATCH_DEBUG_STORAGE_KEY) return;
       const reason = event?.type ?? "direct";
       markReplayWatchStage("shared_settings_refresh_started", {
         settings_refresh_reason: reason,

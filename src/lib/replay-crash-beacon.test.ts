@@ -8,6 +8,7 @@ vi.mock("./analytics", () => ({ track }));
 import {
   markReplayRendererInitStage,
   markReplayWatchStage,
+  REPLAY_WATCH_DEBUG_STORAGE_KEY,
   reportCrashedReplayWatchSession,
   startReplayWatchBeacon,
 } from "./replay-crash-beacon";
@@ -20,6 +21,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-08-01T06:15:48.000Z"));
   window.sessionStorage.clear();
+  window.localStorage.clear();
   track.mockClear();
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
 });
@@ -30,6 +32,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
   window.sessionStorage.clear();
+  window.localStorage.clear();
 });
 
 describe("replay crash beacon renderer progress", () => {
@@ -44,6 +47,9 @@ describe("replay crash beacon renderer progress", () => {
     const record = JSON.parse(window.sessionStorage.getItem(STORAGE_KEY) ?? "{}") as {
       context: Record<string, unknown>;
     };
+    expect(window.localStorage.getItem(REPLAY_WATCH_DEBUG_STORAGE_KEY)).toBe(
+      window.sessionStorage.getItem(STORAGE_KEY),
+    );
     expect(record.context).toMatchObject({
       score_id: 7189878496,
       replay_watch_stage: "renderer_context_acquired",
@@ -63,6 +69,19 @@ describe("replay crash beacon renderer progress", () => {
         details: { renderer_backend: "WebGL 2" },
       },
     ]);
+  });
+
+  test("leaves a newer tab's shared debug record intact during cleanup", () => {
+    vi.spyOn(console, "debug").mockImplementation(() => {});
+    stopBeacon = startReplayWatchBeacon({ score_id: 7189878496 }, () => null);
+    const newerRecord = JSON.stringify({ sessionId: "newer-tab", context: { score_id: 2 } });
+    window.localStorage.setItem(REPLAY_WATCH_DEBUG_STORAGE_KEY, newerRecord);
+
+    stopBeacon();
+    stopBeacon = null;
+
+    expect(window.localStorage.getItem(REPLAY_WATCH_DEBUG_STORAGE_KEY)).toBe(newerRecord);
+    expect(window.sessionStorage.getItem(STORAGE_KEY)).toBeNull();
   });
 
   test("records tab visibility and focus work without overwriting the last init stage", () => {
@@ -123,5 +142,6 @@ describe("replay crash beacon renderer progress", () => {
     });
     expect(track).toHaveBeenCalledWith("replay_watch_crash", copyJson);
     expect(window.sessionStorage.getItem(STORAGE_KEY)).toBeNull();
+    expect(window.localStorage.getItem(REPLAY_WATCH_DEBUG_STORAGE_KEY)).toBeNull();
   });
 });

@@ -1,17 +1,18 @@
 // Crash forensics for the replay viewer.
 //
-// A record in sessionStorage marks a watch session as in progress. Session
-// storage survives a renderer crash + reload of the same tab, but is gone
-// after a normal tab close, and the pagehide listener clears it on ordinary
-// navigations - so finding a record from a previous page load means the tab
-// died without unloading (crash, out-of-memory kill, or force-close of a hung
-// page). The record carries periodic JS heap samples (Chrome exposes
+// A record in sessionStorage marks a watch session as in progress. A second
+// copy in localStorage makes the last marker readable from another same-origin
+// tab when the replay tab is hung too hard to reload. Ordinary page exits clear
+// both. The record carries periodic JS heap samples (Chrome exposes
 // performance.memory) so the report distinguishes a heap OOM (usedJSHeapSize
 // climbing toward jsHeapSizeLimit) from a GPU/other renderer death (flat heap).
 
 import { track } from "./analytics";
 
 const STORAGE_KEY = "mh_replay_watch_beacon";
+// Shared across same-origin tabs so a second tab can retrieve diagnostics while
+// the replay tab's main thread is permanently hung and cannot reload.
+export const REPLAY_WATCH_DEBUG_STORAGE_KEY = "mh_replay_watch_beacon_debug";
 const SAMPLE_INTERVAL_MS = 10_000;
 const MAX_SAMPLES = 40;
 const MAX_INIT_TRACE_ENTRIES = 30;
@@ -29,6 +30,7 @@ interface BeaconLastError {
 }
 
 interface BeaconRecord {
+  sessionId: string;
   startedAt: number;
   lastSampleAt: number;
   watchedMs: number | null;
@@ -72,18 +74,40 @@ function readRecord(): BeaconRecord | null {
 }
 
 function writeRecord(record: BeaconRecord) {
+  let raw: string;
   try {
-    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(record));
+    raw = JSON.stringify(record);
   } catch {
-    // Quota/security failures just disable the diagnostics.
+    return;
+  }
+  try {
+    window.sessionStorage.setItem(STORAGE_KEY, raw);
+  } catch {
+    // Keep trying the shared mirror below.
+  }
+  try {
+    window.localStorage.setItem(REPLAY_WATCH_DEBUG_STORAGE_KEY, raw);
+  } catch {
+    // Quota/security failures just disable the cross-tab mirror.
   }
 }
 
-function clearRecord() {
+function clearRecord(record: BeaconRecord) {
   try {
     window.sessionStorage.removeItem(STORAGE_KEY);
   } catch {
     // Ignore.
+  }
+  try {
+    const sharedRaw = window.localStorage.getItem(REPLAY_WATCH_DEBUG_STORAGE_KEY);
+    if (!sharedRaw) return;
+    const shared = JSON.parse(sharedRaw) as Partial<BeaconRecord>;
+    // Do not let an older replay tab remove a newer tab's diagnostic record.
+    if (!record.sessionId || shared.sessionId === record.sessionId) {
+      window.localStorage.removeItem(REPLAY_WATCH_DEBUG_STORAGE_KEY);
+    }
+  } catch {
+    // Ignore malformed/unavailable shared storage.
   }
 }
 
@@ -177,8 +201,8 @@ export function markReplayRendererInitStage(stage: string, details?: Record<stri
 export function reportCrashedReplayWatchSession() {
   if (typeof window === "undefined") return;
   const record = readRecord();
-  clearRecord();
   if (!record) return;
+  clearRecord(record);
 
   const samples = record.samples ?? [];
   const lastSample = samples[samples.length - 1] ?? null;
@@ -221,6 +245,7 @@ export function startReplayWatchBeacon(
   const startedAt = Date.now();
   const initialStage: ReplayWatchTraceEntry = { stage: "gpu_probe_started", atMs: 0 };
   const record: BeaconRecord = {
+    sessionId: crypto.randomUUID(),
     startedAt,
     lastSampleAt: startedAt,
     watchedMs: null,
@@ -267,7 +292,7 @@ export function startReplayWatchBeacon(
   const intervalId = window.setInterval(sample, SAMPLE_INTERVAL_MS);
 
   // A real navigation/close unloads the page; a crash never fires pagehide.
-  const handlePageHide = () => clearRecord();
+  const handlePageHide = () => clearRecord(record);
   // Restored from bfcache: the session is live again, re-arm the record.
   const handlePageShow = (event: PageTransitionEvent) => {
     if (event.persisted) sample();
@@ -301,6 +326,6 @@ export function startReplayWatchBeacon(
     window.removeEventListener("error", handleError);
     window.removeEventListener("unhandledrejection", handleRejection);
     if (activeRecord === record) activeRecord = null;
-    clearRecord();
+    clearRecord(record);
   };
 }
