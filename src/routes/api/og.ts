@@ -309,6 +309,11 @@ async function renderMapsOg(request: Request, country: string): Promise<Response
 
   const countryName = getCountryName(country) || country;
   const flagUrl = `https://osu.ppy.sh/images/flags/${country}.png`;
+  // "Costa Rica's mania maps" read as maps *made* by Costa Ricans; the page is
+  // about what the country plays.
+  const title = `Maps played in ${countryName}`;
+  // Long country names would otherwise wrap the title onto a second line.
+  const titleFontSize = title.length > 30 ? 44 : 54;
 
   const response = new ImageResponse(
     h(
@@ -430,12 +435,12 @@ async function renderMapsOg(request: Request, country: string): Promise<Response
                   {
                     key: "title",
                     style: {
-                      fontSize: "54px",
+                      fontSize: `${titleFontSize}px`,
                       fontWeight: 900,
                       lineHeight: "1.0",
                     },
                   },
-                  `${countryName}'s mania maps`,
+                  title,
                 ),
               ],
             ),

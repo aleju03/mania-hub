@@ -1,9 +1,24 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 const AVATAR_TTL_MS = 10 * 60 * 1000;
+// A `v`-keyed URL names one immutable image: osu! mints a new version in the
+// avatar URL whenever the player changes it, so the bytes behind this key can
+// never change and the entry is worth holding far longer.
+const AVATAR_VERSIONED_TTL_MS = 12 * 60 * 60 * 1000;
 const CACHE_MAX_ENTRIES = 256;
 const AVATAR_FETCH_TIMEOUT_MS = 10_000;
 const AVATAR_VERSION_PATTERN = /^[A-Za-z0-9._~-]{1,128}$/;
+
+/* This route exists because canvas/Three.js callers need CORS headers that
+   a.ppy.sh does not send, so the bytes have to pass through the function (a
+   302 would defeat the point). That makes the CDN TTL the only thing standing
+   between a card-thumbnail render pass and one origin fetch per avatar, so
+   both branches are cached as hard as correctness allows: versioned URLs are
+   immutable, and the id-only fallback trades a day of staleness for not
+   re-fetching the same image every ten minutes. */
+const AVATAR_VERSIONED_CACHE_HEADER =
+  "public, max-age=86400, s-maxage=31536000, stale-while-revalidate=604800, immutable";
+const AVATAR_CACHE_HEADER = "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800";
 
 type AvatarEntry = {
   buffer: Buffer;
@@ -52,7 +67,7 @@ async function fetchAvatar(userId: number, version: string | null): Promise<Avat
   return {
     buffer,
     contentType,
-    expiresAt: Date.now() + AVATAR_TTL_MS,
+    expiresAt: Date.now() + (version ? AVATAR_VERSIONED_TTL_MS : AVATAR_TTL_MS),
     lastAccessedAt: Date.now(),
   };
 }
@@ -88,7 +103,7 @@ export const Route = createFileRoute("/api/avatar")({
             headers: {
               "Content-Type": entry.contentType,
               "Content-Length": String(entry.buffer.length),
-              "Cache-Control": "public, max-age=60, s-maxage=600, stale-while-revalidate=3600",
+              "Cache-Control": version ? AVATAR_VERSIONED_CACHE_HEADER : AVATAR_CACHE_HEADER,
               "Access-Control-Allow-Origin": "*",
             },
           });
