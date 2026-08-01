@@ -359,8 +359,11 @@ export class ManiaReplayRenderer {
   private textPool: Text[] = [];
   private textPoolCursor = 0;
   private textMeasureContext: CanvasRenderingContext2D | null = null;
+  private textWidthCache = new Map<string, number>();
   private textFontRevision = 0;
   private comboTextLayer = new Container();
+  private comboTextPool: Text[] = [];
+  private comboTextPoolCursor = 0;
   private skinSpriteLayer = new Container();
   private skinSpritePool: Sprite[] = [];
   private skinSpritePoolCursor = 0;
@@ -791,7 +794,12 @@ export class ManiaReplayRenderer {
     void document.fonts.ready.then(() => {
       if (this.destroyed) return;
       this.textFontRevision++;
+      this.textWidthCache.clear();
       for (const label of this.textPool as Array<Text & { __sig?: string }>) {
+        label.__sig = undefined;
+        label.text = "";
+      }
+      for (const label of this.comboTextPool as Array<Text & { __sig?: string }>) {
         label.__sig = undefined;
         label.text = "";
       }
@@ -3595,8 +3603,18 @@ export class ManiaReplayRenderer {
   ): number {
     const context = this.getTextMeasureContext();
     if (!context) return text.length * fontSize * 0.58;
-    context.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`;
-    return context.measureText(text).width;
+    const font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`;
+    // Canvas measureText is called dozens of times per frame (every tabular
+    // number re-measures all ten digits to find its advance), and the answer
+    // only changes when the font does - which bumps textFontRevision.
+    const key = `${font}|${text}`;
+    const cached = this.textWidthCache.get(key);
+    if (cached !== undefined) return cached;
+    context.font = font;
+    const width = context.measureText(text).width;
+    if (this.textWidthCache.size > 4096) this.textWidthCache.clear();
+    this.textWidthCache.set(key, width);
+    return width;
   }
 
   private getTextOverlayWidth(
@@ -4742,6 +4760,11 @@ export class ManiaReplayRenderer {
     });
   }
 
+  // Pooled exactly like addText. This used to allocate a Text per digit per
+  // frame and destroy it on the next one, so a visible combo counter cost a
+  // glyph rasterisation plus a GPU texture upload and delete for every digit
+  // of every frame - the single most expensive thing in the frame, and the
+  // reason fps tracked the combo's digit count instead of the note density.
   private addComboText(
     text: string,
     x: number,
@@ -4759,21 +4782,44 @@ export class ManiaReplayRenderer {
       scaleY: number;
     },
   ) {
-    const label = new Text({
-      text,
-      style: {
-        fontFamily: options.fontFamily,
-        fontSize: options.fontSize,
-        fontWeight: options.fontWeight,
-        fontStyle: options.fontStyle ?? "normal",
-        fill: options.fill,
-      },
-    });
-    label.anchor.set(options.anchorX, options.anchorY);
-    label.position.set(x, y);
-    label.alpha = options.alpha;
-    label.scale.set(options.scaleX, options.scaleY);
-    this.comboTextLayer.addChild(label);
+    let label = this.comboTextPool[this.comboTextPoolCursor] as
+      | (Text & { __sig?: string; __ax?: number; __ay?: number })
+      | undefined;
+    if (!label) {
+      label = new Text({
+        text: "",
+        style: { fontFamily: options.fontFamily },
+      }) as Text & { __sig?: string; __ax?: number; __ay?: number };
+      this.comboTextPool.push(label);
+      this.comboTextLayer.addChild(label);
+    }
+
+    this.comboTextPoolCursor++;
+    if (!label.visible) label.visible = true;
+
+    const fontStyle = options.fontStyle ?? "normal";
+    const sig = `${this.textFontRevision}|${options.fontSize}|${options.fontFamily}|${options.fontWeight}|${fontStyle}|${options.fill}`;
+    if (label.__sig !== sig) {
+      label.style.fontFamily = options.fontFamily;
+      label.style.fontSize = options.fontSize;
+      label.style.fontWeight = options.fontWeight;
+      label.style.fontStyle = fontStyle;
+      label.style.fill = options.fill;
+      label.__sig = sig;
+    }
+    if (label.text !== text) label.text = text;
+
+    if (label.x !== x) label.x = x;
+    if (label.y !== y) label.y = y;
+    if (label.alpha !== options.alpha) label.alpha = options.alpha;
+    if (label.scale.x !== options.scaleX || label.scale.y !== options.scaleY) {
+      label.scale.set(options.scaleX, options.scaleY);
+    }
+    if (label.__ax !== options.anchorX || label.__ay !== options.anchorY) {
+      label.anchor.set(options.anchorX, options.anchorY);
+      label.__ax = options.anchorX;
+      label.__ay = options.anchorY;
+    }
   }
 
   private getComboAnimationState(): { value: number; scaleX: number; scaleY: number; alpha: number; color: string; tint: number } | null {
@@ -6045,23 +6091,30 @@ export class ManiaReplayRenderer {
 
   private beginTextFrame() {
     this.textPoolCursor = 0;
-    this.clearComboTextLayer();
+    this.comboTextPoolCursor = 0;
   }
 
   private finishTextFrame() {
     for (let i = this.textPoolCursor; i < this.textPool.length; i++) {
       this.textPool[i].visible = false;
     }
+    for (let i = this.comboTextPoolCursor; i < this.comboTextPool.length; i++) {
+      this.comboTextPool[i].visible = false;
+    }
   }
 
   private clearTextLayer() {
     const children = this.textLayer.removeChildren();
     for (const child of children) child.destroy();
+    this.textPool = [];
+    this.textPoolCursor = 0;
   }
 
   private clearComboTextLayer() {
     const children = this.comboTextLayer.removeChildren();
     for (const child of children) child.destroy();
+    this.comboTextPool = [];
+    this.comboTextPoolCursor = 0;
   }
 
   private clearSkinSprites() {
