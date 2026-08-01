@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LATEST_UPDATE_DATE } from "../data/changelog";
+import { LATEST_UPDATE_DATE, type ChangelogUpdate } from "../data/changelog";
 
 // Own tiny localStorage key rather than the main `mania-hub-cache-v5` blob: a
 // quota eviction there would resurrect the footer dot for every entry the
@@ -46,6 +46,31 @@ export function formatReleaseAge(date: string, now: number = Date.now()): string
   if (months < 12) return `${months} months ago`;
   const years = Math.floor(days / 365);
   return years === 1 ? "last year" : `${years} years ago`;
+}
+
+export interface ChangelogDay {
+  date: string;
+  updates: ChangelogUpdate[];
+}
+
+/**
+ * Collapses the flat newest-first list into one entry per release day, so the
+ * modal prints the age label once instead of repeating "yesterday" down a
+ * column of rows that all shipped together.
+ *
+ * Only merges neighbours, which keeps the input order: the list is already
+ * sorted newest first (a content test enforces it), and a stray out-of-order
+ * date is better shown twice than silently hoisted somewhere the author did
+ * not put it.
+ */
+export function groupUpdatesByDay(updates: readonly ChangelogUpdate[]): ChangelogDay[] {
+  const days: ChangelogDay[] = [];
+  for (const update of updates) {
+    const current = days[days.length - 1];
+    if (current && current.date === update.date) current.updates.push(update);
+    else days.push({ date: update.date, updates: [update] });
+  }
+  return days;
 }
 
 export function readChangelogSeenDate(): string | null {

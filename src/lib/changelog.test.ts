@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatReleaseAge, hasUnseenChangelog } from "./changelog";
+import { formatReleaseAge, groupUpdatesByDay, hasUnseenChangelog } from "./changelog";
 import { UPDATES, WIP } from "../data/changelog";
 
 const NOW = Date.parse("2026-07-29T09:00:00Z");
@@ -30,6 +30,38 @@ describe("formatReleaseAge", () => {
 
   it("returns an empty label instead of NaN text for a malformed date", () => {
     expect(formatReleaseAge("not-a-date", NOW)).toBe("");
+  });
+});
+
+describe("groupUpdatesByDay", () => {
+  it("collapses a run of same-day updates into one group, in order", () => {
+    const groups = groupUpdatesByDay([
+      { date: "2026-07-29", text: "a" },
+      { date: "2026-07-29", text: "b" },
+      { date: "2026-07-28", text: "c" },
+    ]);
+    expect(groups).toEqual([
+      { date: "2026-07-29", updates: [{ date: "2026-07-29", text: "a" }, { date: "2026-07-29", text: "b" }] },
+      { date: "2026-07-28", updates: [{ date: "2026-07-28", text: "c" }] },
+    ]);
+  });
+
+  it("keeps an out-of-order date where the author put it rather than merging across", () => {
+    const groups = groupUpdatesByDay([
+      { date: "2026-07-29", text: "a" },
+      { date: "2026-07-28", text: "b" },
+      { date: "2026-07-29", text: "c" },
+    ]);
+    expect(groups.map((group) => group.date)).toEqual(["2026-07-29", "2026-07-28", "2026-07-29"]);
+  });
+
+  it("handles an empty list", () => {
+    expect(groupUpdatesByDay([])).toEqual([]);
+  });
+
+  it("covers every update exactly once for the real content", () => {
+    const flat = groupUpdatesByDay(UPDATES).flatMap((group) => group.updates);
+    expect(flat).toEqual(UPDATES);
   });
 });
 
