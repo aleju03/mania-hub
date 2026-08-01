@@ -136,6 +136,16 @@ describe("AnalyticsStream", () => {
     expect(screen.getByText('"camellia"')).toBeTruthy();
   });
 
+  it("names signed-out visitors instead of leaving the row blank", () => {
+    renderStream([
+      ROWS[0],
+      row({ distinctId: "d", ts: NOW - 30_000, path: "/maps", viewerUsername: "Aleju03" }),
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: /Sessions/ }));
+    expect(within(screen.getByText("V1").closest("button")!).getByText("Guest")).toBeTruthy();
+    expect(within(screen.getByText("V2").closest("button")!).getByText("Aleju03")).toBeTruthy();
+  });
+
   it("comes back in the reading mode it was left in", () => {
     renderStream();
     fireEvent.click(screen.getByRole("button", { name: /Sessions/ }));

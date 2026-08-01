@@ -116,7 +116,13 @@ export function VisitorChip({
         >
           {viewerUsername}
         </span>
-      ) : null}
+      ) : (
+        // Most visitors browse signed out; naming them keeps the row from
+        // reading as a missing username.
+        <span className="min-w-0 truncate text-[10px] font-semibold text-osu-f1/50" title="Not signed in">
+          Guest
+        </span>
+      )}
     </>
   );
 }
