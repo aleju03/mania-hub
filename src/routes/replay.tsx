@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronsRight, LoaderCircle, Maximize2, Menu, Minimize2, P
 import { getReplayParsed, getBeatmapFile, getCommunityBeatmapFile, getScore, getUser, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores, lookupBeatmapByChecksum, submitCommunityBeatmap } from "../lib/osu";
 import { calculateManiaStarRating } from "../lib/mania-star-rating";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
-import { getEffectiveManiaKeyCount, getManiaKeyModCount, getManiaParseKeyCount, getModAcronyms, getScoreRate, modShiftsPitchWithRate, scoreHasReplay, scoreUsesLazerScoring } from "../lib/score";
+import { getDisplayedAccuracy, getDisplayedRank, getEffectiveManiaKeyCount, getManiaKeyModCount, getManiaParseKeyCount, getModAcronyms, getModDisplayList, getScoreRate, modShiftsPitchWithRate, scoreHasReplay, scoreUsesLazerScoring } from "../lib/score";
 import { useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
 import { PageHeader } from "../components/layout/PageHeader";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
@@ -18,7 +18,7 @@ import { ReplayInfo } from "../components/replay/ReplayInfo";
 import type { ReplayPlayerProfile } from "../components/replay/ReplayInfo";
 import { ReplaySkinSettingsModal } from "../components/replay/ReplaySkinSettingsModal";
 import { track } from "../lib/analytics";
-import { reportCrashedReplayWatchSession, startReplayWatchBeacon, updateReplayWatchBeaconContext } from "../lib/replay-crash-beacon";
+import { markReplayRendererInitStage, markReplayWatchStage, reportCrashedReplayWatchSession, startReplayWatchBeacon, updateReplayWatchBeaconContext } from "../lib/replay-crash-beacon";
 import { withTimeout } from "../lib/promise-timeout";
 import {
   REPLAY_SKIN_SETTINGS_CHANGE_EVENT,
@@ -103,6 +103,15 @@ import {
   type AppliedCommunitySkinDraft,
   type LoadedOwnerReplaySkin,
 } from "../lib/replay-owner-skin";
+import {
+  clearRecentReplays,
+  readRecentReplays,
+  recordRecentReplay,
+  recentReplayScoreKey,
+  recentReplayUploadKey,
+  removeRecentReplay,
+  type RecentReplayEntry,
+} from "../lib/replay-recent";
 import type { ManiaBeatmap } from "../lib/beatmap-parser";
 import type { ReplaySkinSettings } from "../lib/replay-skin";
 import type { ReplayOverlayId, ReplayOverlaySettings } from "../lib/replay-overlays";
@@ -719,6 +728,9 @@ function ReplayPage() {
   const [scorePreview, setScorePreview] = useState<OsuScore | null>(null);
   const [scorePreviewLoading, setScorePreviewLoading] = useState(false);
   const [scorePreviewError, setScorePreviewError] = useState<string | null>(null);
+  // Locally remembered replays; read after mount so SSR and hydration agree.
+  const [recentReplays, setRecentReplays] = useState<RecentReplayEntry[]>([]);
+  const recordedRecentReplayKeyRef = useRef<string | null>(null);
 
   // Player browse state
   const [playerScoreGroups, setPlayerScoreGroups] = useState<PlayerScoreGroups | null>(null);
@@ -1003,6 +1015,57 @@ function ReplayPage() {
     if (scoreId) return;
     setBrowseMode(tab === "beatmap" || tab === "upload" ? tab : "player");
   }, [scoreId, tab]);
+
+  useEffect(() => {
+    setRecentReplays(readRecentReplays());
+  }, []);
+
+  // One entry per replay that actually reached the viewer, whether it came from
+  // a score id or an uploaded .osr. Clearing the ref when the viewer unmounts
+  // lets a re-watch move the same replay back to the front of the list.
+  useEffect(() => {
+    if (!replay) {
+      recordedRecentReplayKeyRef.current = null;
+      return;
+    }
+    const key = scoreId != null
+      ? recentReplayScoreKey(scoreId)
+      : loadedUploadId
+        ? recentReplayUploadKey(loadedUploadId)
+        : null;
+    if (!key || recordedRecentReplayKeyRef.current === key) return;
+    recordedRecentReplayKeyRef.current = key;
+
+    const mods = getModDisplayList(scoreInfo?.mods ?? uploadedReplayMods)
+      .map((mod) => (mod.rate == null ? { acronym: mod.acronym } : { acronym: mod.acronym, rate: mod.rate }));
+    setRecentReplays(recordRecentReplay({
+      ...(scoreId != null ? { scoreId } : { uploadId: loadedUploadId ?? undefined }),
+      beatmapsetId: scoreInfo?.beatmapset?.id ?? uploadedBeatmapsetId ?? beatmapsetId,
+      title: scoreInfo?.beatmapset?.title ?? beatmap?.title ?? "Unknown beatmap",
+      artist: scoreInfo?.beatmapset?.artist ?? beatmap?.artist,
+      version: scoreInfo?.beatmap?.version ?? beatmap?.version,
+      keyCount: replay.keyCount,
+      playerName: scoreInfo?.user?.username ?? replay.header.playerName,
+      coverUrl: scoreInfo?.beatmapset?.covers?.list,
+      grade: scoreInfo ? getDisplayedRank(scoreInfo) : undefined,
+      accuracy: scoreInfo ? getDisplayedAccuracy(scoreInfo) : undefined,
+      pp: scoreInfo?.pp ?? undefined,
+      mods,
+      viewedAt: Date.now(),
+    }));
+  }, [replay, scoreId, loadedUploadId, scoreInfo, beatmap, beatmapsetId, uploadedBeatmapsetId, uploadedReplayMods]);
+
+  const handleOpenRecentReplay = useCallback((entry: RecentReplayEntry) => {
+    if (entry.scoreId != null) {
+      navigate({ to: "/replay", search: { scoreId: entry.scoreId, beatmapsetId: entry.beatmapsetId } });
+      return;
+    }
+    if (!entry.uploadId) return;
+    // The upload was dismissed earlier in this session only to leave the
+    // viewer; reopening it from the list is a fresh request.
+    dismissedUploadIdRef.current = null;
+    navigate({ to: "/replay", search: { uploadId: entry.uploadId } });
+  }, [navigate]);
 
   // Debounced beatmap search
   useEffect(() => {
@@ -1918,6 +1981,10 @@ function ReplayPage() {
                 onSelectDifficulty={handleSelectDifficulty}
                 onOpenBeatmapScore={(score) => navigate({ to: "/replay", search: { scoreId: score.id, beatmapsetId: selectedBeatmapset?.id, tab: "beatmap" } })}
                 onLoadMoreBeatmapScores={handleLoadMoreBeatmapScores}
+                recentReplays={recentReplays}
+                onOpenRecentReplay={handleOpenRecentReplay}
+                onRemoveRecentReplay={(key) => setRecentReplays(removeRecentReplay(key))}
+                onClearRecentReplays={() => setRecentReplays(clearRecentReplays())}
               />
             )}
         </div>
@@ -2331,7 +2398,13 @@ function ReplayViewer({
     : [];
 
   useEffect(() => {
-    const refreshSharedReplaySettings = () => {
+    const refreshSharedReplaySettings = (event?: Event) => {
+      const reason = event?.type ?? "direct";
+      markReplayWatchStage("shared_settings_refresh_started", {
+        settings_refresh_reason: reason,
+        visibility_state: document.visibilityState,
+        renderer_playing: rendererRef.current?.isPlaying ?? null,
+      });
       if (replayStableScrollSpeed == null || scrollSpeedUserOverrideRef.current) {
         applyScrollSpeed(readReplayScrollSpeed());
       }
@@ -2348,6 +2421,11 @@ function ReplayViewer({
         if (applied) void hydrateAppliedCommunitySkin(applied);
       }
       setOverlaySettings(readReplayOverlaySettings());
+      markReplayWatchStage("shared_settings_refresh_queued", {
+        settings_refresh_reason: reason,
+        applied_community_skin: applied != null,
+        reused_community_skin: applied != null && cachedFull?.key === appliedCommunityReplaySkinKey(applied),
+      });
     };
     window.addEventListener("storage", refreshSharedReplaySettings);
     window.addEventListener(REPLAY_SCROLL_SPEED_CHANGE_EVENT, refreshSharedReplaySettings);
@@ -2976,14 +3054,23 @@ function ReplayViewer({
 
   useEffect(() => {
     skinSettingsRef.current = activeSkinSettings;
-    if (rendererRef.current) {
-      rendererRef.current.setSkinSettings(activeSkinSettings);
-    }
-  }, [activeSkinSettings]);
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+    markReplayWatchStage("skin_settings_apply_started", {
+      skin_style: activeSkinSettings.style,
+      key_count: replay.keyCount,
+    });
+    renderer.setSkinSettings(activeSkinSettings);
+    markReplayWatchStage("skin_settings_applied");
+  }, [activeSkinSettings, replay.keyCount]);
 
   useEffect(() => {
     overlaySettingsRef.current = overlaySettings;
-    rendererRef.current?.setOverlaySettings(overlaySettings);
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+    markReplayWatchStage("overlay_settings_apply_started");
+    renderer.setOverlaySettings(overlaySettings);
+    markReplayWatchStage("overlay_settings_applied");
   }, [overlaySettings]);
 
   // Hitsound player: lives for the whole viewer session, independent of
@@ -3239,13 +3326,16 @@ function ReplayViewer({
 
     void (async () => {
       try {
+        markReplayRendererInitStage("renderer_module_import_started");
         const { ManiaReplayRenderer } = await withTimeout(
           import("../components/replay/ReplayCanvas"),
           8000,
           "Timed out loading the replay renderer.",
         );
+        markReplayRendererInitStage("renderer_module_imported");
         if (cancelled || !canvasRef.current) return;
 
+        markReplayRendererInitStage("renderer_constructor_started");
         renderer = new ManiaReplayRenderer(
           canvasRef.current,
           replay.frames,
@@ -3272,16 +3362,26 @@ function ReplayViewer({
             inputOverlayOnly: inputOverlayOnlyRef.current,
             inputOverlayColor: inputOverlayColorRef.current,
             inputOverlayKeyHistory: inputOverlayKeyHistoryRef.current,
-            onContextLost: () => updateReplayWatchBeaconContext({ webgl_context_lost: true }),
-            onContextRestored: () => updateReplayWatchBeaconContext({ webgl_context_restored: true }),
+            onContextLost: () => {
+              updateReplayWatchBeaconContext({ webgl_context_lost: true });
+              markReplayRendererInitStage("webgl_context_lost");
+            },
+            onContextRestored: () => {
+              updateReplayWatchBeaconContext({ webgl_context_restored: true });
+              markReplayRendererInitStage("webgl_context_restored");
+            },
+            onInitProgress: markReplayRendererInitStage,
           },
         ) as ReplayRendererLike;
+        markReplayRendererInitStage("renderer_constructed");
 
+        markReplayRendererInitStage("renderer_ready_wait_started");
         await withTimeout(
           renderer.ready(),
           8000,
           "Timed out starting the replay renderer.",
         );
+        markReplayRendererInitStage("renderer_ready");
 
         if (cancelled) {
           renderer.destroy();
@@ -3313,6 +3413,7 @@ function ReplayViewer({
         renderer.setLeaderboardVisible?.(leaderboardVisibleRef.current);
         renderer.setSpectatorCount?.(spectatorCountRef.current);
         rendererRef.current = renderer;
+        markReplayRendererInitStage("renderer_attached");
 
         // Record the resolved renderer backend (WebGL vs Canvas fallback) and
         // judgement-build cost into the crash beacon so a later hard crash can
@@ -3356,6 +3457,7 @@ function ReplayViewer({
         window.addEventListener("resize", handleResize);
       } catch (e) {
         const message = e instanceof Error ? e.message : "Failed to start the replay renderer.";
+        markReplayRendererInitStage("renderer_init_failed", { renderer_init_error: message });
         console.error("Replay renderer failed to start", e);
         renderer?.destroy();
         renderer = null;
@@ -3526,9 +3628,17 @@ function ReplayViewer({
       audio.playbackRate = effectiveRate;
       setAudioPreservesPitch(audio, audioPreservesPitch);
       audio.volume = volume;
-      audio.play().catch(() => {
-        shouldResumeAudioRef.current = true;
+      markReplayWatchStage("audio_resume_play_requested", {
+        audio_ready_state: audio.readyState,
+        renderer_time_ms: renderer.time,
       });
+      audio.play().then(
+        () => markReplayWatchStage("audio_resume_playing"),
+        () => {
+          shouldResumeAudioRef.current = true;
+          markReplayWatchStage("audio_resume_play_rejected");
+        },
+      );
     };
 
     const updateBuffering = () => {
@@ -3589,9 +3699,24 @@ function ReplayViewer({
     // can start advancing again.
     const handleVisibility = () => {
       if (typeof document === "undefined") return;
-      if (document.visibilityState !== "visible") return;
+      const visibilityState = document.visibilityState;
+      markReplayWatchStage("document_visibility_changed", {
+        visibility_state: visibilityState,
+        renderer_playing: rendererRef.current?.isPlaying ?? null,
+        renderer_time_ms: rendererRef.current?.time ?? null,
+        audio_paused: audio.paused,
+        audio_ready_state: audio.readyState,
+      });
+      if (visibilityState !== "visible") return;
+      markReplayWatchStage("tab_return_audio_resume_started");
       resumeAudioIfNeeded();
       updateBuffering();
+      markReplayWatchStage("tab_return_audio_resume_finished");
+      requestAnimationFrame(() => {
+        markReplayWatchStage("tab_return_animation_frame_reached", {
+          renderer_time_ms: rendererRef.current?.time ?? null,
+        });
+      });
     };
     if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", handleVisibility);

@@ -7,12 +7,14 @@ import { GradeImg } from "#/components/ui/GradeImg";
 import { getManiaJudgementStats } from "#/components/ui/ManiaJudgementStats";
 import { ModBadge } from "#/components/ui/ModBadge";
 import { SearchInput } from "#/components/ui/SearchInput";
+import { ReplayRecentlyViewed } from "#/components/replay/ReplayRecentlyViewed";
 import { getCountryName } from "#/lib/country";
 import { formatAccuracy, formatNumber, formatPP, formatTimeAgo } from "#/lib/format";
 import { getDisplayedAccuracy, getDisplayedRank, getModDisplayList, getScoreTimestamp, scoreHasReplay } from "#/lib/score";
 import { getReplayScoreAvailability } from "#/lib/replay-score-availability";
 import { searchBeatmaps, getUserBeatmapScores } from "#/lib/osu";
 import { filterBeatmapSearchResults } from "#/lib/beatmap-search";
+import type { RecentReplayEntry } from "#/lib/replay-recent";
 import type { BeatmapScoreLookupStatus, OsuBeatmap, OsuBeatmapset, OsuScore } from "#/lib/types";
 
 export type ReplayBrowseMode = "player" | "beatmap" | "upload";
@@ -74,6 +76,10 @@ interface ReplayBrowseViewProps {
   onSelectDifficulty: (beatmap: OsuBeatmap) => void;
   onOpenBeatmapScore: (score: OsuScore) => void;
   onLoadMoreBeatmapScores: () => void;
+  recentReplays: RecentReplayEntry[];
+  onOpenRecentReplay: (entry: RecentReplayEntry) => void;
+  onRemoveRecentReplay: (key: string) => void;
+  onClearRecentReplays: () => void;
 }
 
 export function ReplayBrowseView({
@@ -112,6 +118,10 @@ export function ReplayBrowseView({
   onSelectDifficulty,
   onOpenBeatmapScore,
   onLoadMoreBeatmapScores,
+  recentReplays,
+  onOpenRecentReplay,
+  onRemoveRecentReplay,
+  onClearRecentReplays,
 }: ReplayBrowseViewProps) {
   return (
     <motion.div key="browse" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -157,6 +167,10 @@ export function ReplayBrowseView({
           suggestionPlayers={suggestionPlayers}
           hasError={!!error}
           onOpenPlayerScore={onOpenPlayerScore}
+          recentReplays={recentReplays}
+          onOpenRecentReplay={onOpenRecentReplay}
+          onRemoveRecentReplay={onRemoveRecentReplay}
+          onClearRecentReplays={onClearRecentReplays}
         />
       )}
 
@@ -181,7 +195,13 @@ export function ReplayBrowseView({
       )}
 
       {mode === "upload" && (
-        <UploadReplayBrowser onUploadReplay={onUploadReplay} />
+        <UploadReplayBrowser
+          onUploadReplay={onUploadReplay}
+          recentReplays={recentReplays}
+          onOpenRecentReplay={onOpenRecentReplay}
+          onRemoveRecentReplay={onRemoveRecentReplay}
+          onClearRecentReplays={onClearRecentReplays}
+        />
       )}
     </motion.div>
   );
@@ -211,7 +231,13 @@ const UPLOAD_BG_TRIANGLES: UploadBgTriangle[] = [
 
 function UploadReplayBrowser({
   onUploadReplay,
-}: Pick<ReplayBrowseViewProps, "onUploadReplay">) {
+  recentReplays,
+  onOpenRecentReplay,
+  onRemoveRecentReplay,
+  onClearRecentReplays,
+}: Pick<ReplayBrowseViewProps,
+  "onUploadReplay" | "recentReplays" | "onOpenRecentReplay" | "onRemoveRecentReplay" | "onClearRecentReplays"
+>) {
   const [dragActive, setDragActive] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -223,88 +249,98 @@ function UploadReplayBrowser({
   }, [onUploadReplay]);
 
   return (
-    <div className="mx-auto max-w-xl">
-      <h3 className="mb-3 text-center text-sm font-semibold uppercase tracking-wider text-osu-f1">
-        Drop your own .osr file
-      </h3>
+    <>
+      <div className="mx-auto max-w-xl">
+        <h3 className="mb-3 text-center text-sm font-semibold uppercase tracking-wider text-osu-f1">
+          Drop your own .osr file
+        </h3>
 
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        onDragEnter={(event) => {
-          event.preventDefault();
-          setDragActive(true);
-        }}
-        onDragOver={(event) => {
-          event.preventDefault();
-          setDragActive(true);
-        }}
-        onDragLeave={(event) => {
-          event.preventDefault();
-          setDragActive(false);
-        }}
-        onDrop={(event) => {
-          event.preventDefault();
-          setDragActive(false);
-          handleFiles(event.dataTransfer.files);
-        }}
-        className={`relative block w-full overflow-hidden rounded-xl border transition-colors cursor-pointer ${
-          dragActive
-            ? "border-osu-pink/70 bg-osu-b5"
-            : "border-osu-b3/60 bg-osu-b4 hover:border-osu-pink/45"
-        }`}
-      >
-        <svg
-          viewBox="0 0 640 260"
-          preserveAspectRatio="xMidYMid slice"
-          className={`pointer-events-none absolute inset-0 h-full w-full transition-[color,opacity] duration-150 ${
-            dragActive ? "text-osu-pink-light opacity-100" : "text-osu-pink opacity-80"
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          onDragEnter={(event) => {
+            event.preventDefault();
+            setDragActive(true);
+          }}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setDragActive(true);
+          }}
+          onDragLeave={(event) => {
+            event.preventDefault();
+            setDragActive(false);
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragActive(false);
+            handleFiles(event.dataTransfer.files);
+          }}
+          className={`relative block w-full overflow-hidden rounded-xl border transition-colors cursor-pointer ${
+            dragActive
+              ? "border-osu-pink/70 bg-osu-b5"
+              : "border-osu-b3/60 bg-osu-b4 hover:border-osu-pink/45"
           }`}
-          aria-hidden="true"
         >
-          {UPLOAD_BG_TRIANGLES.map((triangle, index) => (
-            <polygon
-              key={index}
-              points={triangle.points}
-              fill="currentColor"
-              fillOpacity={triangle.opacity}
-            />
-          ))}
-        </svg>
-
-        <div className="relative z-10 flex min-h-[244px] flex-col items-center justify-center gap-2.5 px-6 py-12 text-center">
-          <Upload
-            className={`h-8 w-8 transition-colors ${dragActive ? "text-osu-pink-light" : "text-osu-f1"}`}
+          <svg
+            viewBox="0 0 640 260"
+            preserveAspectRatio="xMidYMid slice"
+            className={`pointer-events-none absolute inset-0 h-full w-full transition-[color,opacity] duration-150 ${
+              dragActive ? "text-osu-pink-light opacity-100" : "text-osu-pink opacity-80"
+            }`}
             aria-hidden="true"
-          />
-          <div>
-            <div className="text-sm font-semibold text-white">
-              {dragActive ? "Drop to load it" : "Drag an .osr here, or click to browse"}
+          >
+            {UPLOAD_BG_TRIANGLES.map((triangle, index) => (
+              <polygon
+                key={index}
+                points={triangle.points}
+                fill="currentColor"
+                fillOpacity={triangle.opacity}
+              />
+            ))}
+          </svg>
+
+          <div className="relative z-10 flex min-h-[244px] flex-col items-center justify-center gap-2.5 px-6 py-12 text-center">
+            <Upload
+              className={`h-8 w-8 transition-colors ${dragActive ? "text-osu-pink-light" : "text-osu-f1"}`}
+              aria-hidden="true"
+            />
+            <div>
+              <div className="text-sm font-semibold text-white">
+                {dragActive ? "Drop to load it" : "Drag an .osr here, or click to browse"}
+              </div>
+              <div className="mt-1 text-[11px] text-osu-f1">osu!mania replays only</div>
             </div>
-            <div className="mt-1 text-[11px] text-osu-f1">osu!mania replays only</div>
+          </div>
+        </button>
+
+        <input
+          ref={inputRef}
+          type="file"
+          accept=".osr,application/octet-stream"
+          className="sr-only"
+          onChange={(event) => handleFiles(event.target.files)}
+        />
+
+        <div className="mt-3 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-center sm:gap-5">
+          <div className="flex items-center gap-2 text-[11px] text-osu-f1">
+            <FileDown className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+            <span>In osu!, right-click a score and choose Export to file.</span>
+          </div>
+          <div className="flex items-center gap-2 text-[11px] text-osu-f1">
+            <Link2 className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+            <span>Uploading gives you a share link for the replay. Sign in with osu! to upload.</span>
           </div>
         </div>
-      </button>
-
-      <input
-        ref={inputRef}
-        type="file"
-        accept=".osr,application/octet-stream"
-        className="sr-only"
-        onChange={(event) => handleFiles(event.target.files)}
-      />
-
-      <div className="mt-3 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-center sm:gap-5">
-        <div className="flex items-center gap-2 text-[11px] text-osu-f1">
-          <FileDown className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
-          <span>In osu!, right-click a score and choose Export to file.</span>
-        </div>
-        <div className="flex items-center gap-2 text-[11px] text-osu-f1">
-          <Link2 className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
-          <span>Uploading gives you a share link for the replay. Sign in with osu! to upload.</span>
-        </div>
       </div>
-    </div>
+
+      <ReplayRecentlyViewed
+        entries={recentReplays}
+        onOpen={onOpenRecentReplay}
+        onRemove={onRemoveRecentReplay}
+        onClear={onClearRecentReplays}
+        className="mt-8"
+      />
+    </>
   );
 }
 
@@ -467,11 +503,16 @@ function PlayerReplayBrowser({
   suggestionPlayers,
   hasError,
   onOpenPlayerScore,
+  recentReplays,
+  onOpenRecentReplay,
+  onRemoveRecentReplay,
+  onClearRecentReplays,
 }: Pick<ReplayBrowseViewProps,
   "selectedCountry" | "onPlayerSearch" | "onSelectPlayer" | "onPlayerSearchSubmit" | "onPlayerQueryChange" |
   "playerSearchScoreId" | "scorePreview" | "scorePreviewLoading" | "scorePreviewError" | "onOpenScorePreview" |
   "loadingScores" | "playerScoreGroups" | "playerScoreLoadingByGroup" | "playerLookupUserId" | "playerParam" |
-  "suggestionPlayers" | "onOpenPlayerScore"
+  "suggestionPlayers" | "onOpenPlayerScore" | "recentReplays" | "onOpenRecentReplay" | "onRemoveRecentReplay" |
+  "onClearRecentReplays"
 > & { hasError: boolean }) {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const [activePlayerSection, setActivePlayerSection] = useState<PlayerReplaySectionKey>("pinned");
@@ -566,17 +607,31 @@ function PlayerReplayBrowser({
       )}
 
       {!loadingScores && !hasLoadingScoreSection && !playerScoreGroups && !hasError && (
-        suggestionPlayers.length > 0 ? (
-          <PlayerSuggestions
-            selectedCountry={selectedCountry}
-            suggestionPlayers={suggestionPlayers}
-            onSelectPlayer={onSelectPlayer}
+        // Once the viewport has room for a rail beside the centred 5xl player
+        // grid (512px half-width + gap + rail), the recent list floats out of
+        // flow into that gutter, so the grid keeps its width and stays centred.
+        // Narrower screens stack it above the grid instead.
+        <div className="relative">
+          <ReplayRecentlyViewed
+            entries={recentReplays}
+            onOpen={onOpenRecentReplay}
+            onRemove={onRemoveRecentReplay}
+            onClear={onClearRecentReplays}
+            variant="sidebar"
+            className="mb-8 min-[1650px]:absolute min-[1650px]:top-0 min-[1650px]:left-[calc(50%+528px)] min-[1650px]:mb-0 min-[1650px]:w-[280px]"
           />
-        ) : (
-          <div className="text-center py-12 text-osu-f1 text-sm">
-            Search for a player above to browse their available replays
-          </div>
-        )
+          {suggestionPlayers.length > 0 ? (
+            <PlayerSuggestions
+              selectedCountry={selectedCountry}
+              suggestionPlayers={suggestionPlayers}
+              onSelectPlayer={onSelectPlayer}
+            />
+          ) : (
+            <div className="text-center py-12 text-osu-f1 text-sm">
+              Search for a player above to browse their available replays
+            </div>
+          )}
+        </div>
       )}
     </>
   );
