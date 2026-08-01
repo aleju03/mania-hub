@@ -143,14 +143,17 @@ function fetchUserScoresFromOsu(
   userId: number,
   options: { limit: number; offset: number; includeFails?: boolean },
 ): Promise<OsuScore[]> {
+  const params = {
+    mode: "mania",
+    limit: options.limit,
+    offset: options.offset,
+    include_fails: type === "recent" && options.includeFails ? 1 : 0,
+  };
   return osuFetch<OsuScore[]>(
     `/users/${userId}/scores/${type}`,
-    getScoreRequestParams({
-      mode: "mania",
-      limit: options.limit,
-      offset: options.offset,
-      include_fails: type === "recent" && options.includeFails ? 1 : 0,
-    }),
+    // osu! ignores legacy_only on best/pinned but honours it on firsts, where it
+    // drops every lazer-native #1 (no legacy_score_id) and leaves the tab empty.
+    type === "firsts" ? params : getScoreRequestParams(params),
     {
       caller: `getUserScores:${type}`,
       // Recent scores must stay live; the stable lists can share across instances.
