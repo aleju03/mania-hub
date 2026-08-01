@@ -89,6 +89,10 @@ export interface ReplayStoryboardData {
   sprites: CompiledStoryboardSprite[];
   // Normalized image path -> object URL (or same-origin URL) for textures.
   imageUrls: Map<string, string>;
+  // Images proven to have no transparent pixels. The renderer uses this only
+  // for conservative coverage checks; an unclassified image remains visible
+  // but never suppresses gameplay drawing beneath it.
+  opaqueImagePaths: Set<string>;
   widescreen: boolean;
   // Map background to draw beneath the storyboard when the storyboard does
   // not use the background image itself; null hides it (osu! behavior).

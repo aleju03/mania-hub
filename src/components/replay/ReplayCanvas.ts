@@ -18,6 +18,7 @@ import { buildStableReplayComboEvents, resolveReplayJudgementEvents } from "../.
 import type { HitsoundAnchor, ReplayHitsoundTrigger } from "../../lib/replay-hitsounds";
 import { buildComboBreakSoundTimes, buildHitsoundAnchorsByColumn, selectHitsoundAnchor } from "../../lib/replay-hitsounds";
 import { MANIA_FLASHLIGHT_DIM_ALPHA, dampManiaHiddenCoverageReference, getManiaFlashlightBand, getManiaHiddenAlphaAtY, getManiaHiddenCoverageReference, getManiaHiddenCoverageReferencePx, getManiaHiddenFadePx } from "../../lib/replay-visibility-mods";
+import { opaqueStoryboardSpriteCoversRect, type StoryboardRect } from "../../lib/storyboard/occlusion";
 import { StoryboardActiveSet, createStoryboardSpriteState, evaluateStoryboardSprite } from "../../lib/storyboard/timeline";
 import { SB_LAYER_COUNT, SB_LAYER_FAIL, SB_LAYER_OVERLAY, STORYBOARD_HEIGHT, STORYBOARD_WIDTH } from "../../lib/storyboard/types";
 import type { CompiledStoryboardSprite, ReplayStoryboardData } from "../../lib/storyboard/types";
@@ -310,6 +311,7 @@ interface RendererOptions {
   onOverlaySettingsChange?: (settings: ReplayOverlaySettings) => void;
   onContextLost?: () => void;
   onContextRestored?: () => void;
+  onInitProgress?: (stage: string, details?: Record<string, unknown>) => void;
 }
 
 interface Layout {
@@ -346,6 +348,12 @@ type ReplayOverlayPlacementSnapshot = {
   width: number;
   height: number;
 };
+type SkinSpriteFramePool = {
+  layer: Container;
+  sprites: Sprite[];
+  stripTextures: (Texture | null)[];
+  cursor: number;
+};
 type ReplayRendererMod = string | {
   acronym?: string;
   settings?: Record<string, string | number | boolean>;
@@ -354,7 +362,9 @@ type ReplayRendererMod = string | {
 export class ManiaReplayRenderer {
   private canvas: HTMLCanvasElement;
   private app: Application | null = null;
-  private graphics = new Graphics();
+  private gameplayGraphics = new Graphics();
+  private hudGraphics = new Graphics();
+  private graphics = this.gameplayGraphics;
   private textLayer = new Container();
   private textPool: Text[] = [];
   private textPoolCursor = 0;
@@ -364,12 +374,19 @@ export class ManiaReplayRenderer {
   private comboTextLayer = new Container();
   private comboTextPool: Text[] = [];
   private comboTextPoolCursor = 0;
-  private skinSpriteLayer = new Container();
-  private skinSpritePool: Sprite[] = [];
-  private skinSpritePoolCursor = 0;
-  // Per-sprite-slot sub-frame textures used to draw vertical strips of a skin
-  // image (visibility-mod fades across LN bodies) without new GPU uploads.
-  private skinStripTexturePool: (Texture | null)[] = [];
+  private gameplaySkinSprites: SkinSpriteFramePool = {
+    layer: new Container(),
+    sprites: [],
+    stripTextures: [],
+    cursor: 0,
+  };
+  private hudSkinSprites: SkinSpriteFramePool = {
+    layer: new Container(),
+    sprites: [],
+    stripTextures: [],
+    cursor: 0,
+  };
+  private activeSkinSprites = this.gameplaySkinSprites;
   private skinTextureCache = new Map<string, Texture>();
   private skinTextureLoadPromises = new Map<string, Promise<Texture | null>>();
   private skinTextureFailedSources = new Set<string>();
@@ -384,7 +401,7 @@ export class ManiaReplayRenderer {
   // playfield; the dim rect sits between them and the playfield.
   private storyboardBackRoot = new Container();
   private storyboardDim = new Graphics();
-  // Overlay layer, above the notes but below HUD text.
+  // Overlay layer, above the playfield but below every part of the HUD.
   private storyboardOverlayRoot = new Container();
   private storyboardLayerContainers: Container[] = [];
   private storyboardBackgroundSprite: Sprite | null = null;
@@ -402,6 +419,7 @@ export class ManiaReplayRenderer {
   // stage stays transparent so the page's normal background keeps showing
   // instead of a half-loaded flash.
   private storyboardTexturesReady = false;
+  private storyboardOccludesPlayfield = false;
   private receptorBeamGradients = new Map<string, FillGradient>();
   private inputHistoryTopFadeGradient: FillGradient | null = null;
   private flashlightFadeToClearGradient: FillGradient | null = null;
@@ -471,8 +489,11 @@ export class ManiaReplayRenderer {
   private onOverlaySettingsChange: ((settings: ReplayOverlaySettings) => void) | null = null;
   private onContextLost: (() => void) | null = null;
   private onContextRestored: (() => void) | null = null;
+  private onInitProgress: ((stage: string, details?: Record<string, unknown>) => void) | null = null;
   private handleContextLost: ((event: Event) => void) | null = null;
   private handleContextRestored: (() => void) | null = null;
+  private firstFrameDrawn = false;
+  private pendingSkinTextureUploads = 0;
   // Wall-clock cost of the synchronous judgement simulation done in the
   // constructor; surfaced to crash diagnostics to catch main-thread hangs.
   private judgementBuildMs: number | null = null;
@@ -615,6 +636,8 @@ export class ManiaReplayRenderer {
     notes: ManiaNote[] = [],
     options?: RendererOptions,
   ) {
+    this.onInitProgress = options?.onInitProgress ?? null;
+    this.markInitProgress("renderer_constructor_entered");
     this.canvas = canvas;
     this.canvas.style.visibility = "";
     this.frames = frames;
@@ -717,6 +740,7 @@ export class ManiaReplayRenderer {
       if (n.isHold) this.maxHoldDuration = Math.max(this.maxHoldDuration, n.endTime - n.time);
     }
 
+    this.markInitProgress("judgement_build_started");
     const judgementBuildStart = typeof performance !== "undefined" ? performance.now() : 0;
     this.segments = buildReplaySegments(this.frames, this.keyCount, this.totalDuration);
     const simulated = simulateManiaReplayJudgements(
@@ -733,6 +757,9 @@ export class ManiaReplayRenderer {
     );
     if (typeof performance !== "undefined") {
       this.judgementBuildMs = performance.now() - judgementBuildStart;
+      this.markInitProgress("judgement_build_finished", {
+        judgement_build_ms: this.judgementBuildMs,
+      });
       // These loops run synchronously on the main thread; a multi-second run can
       // hang the tab into a "page unresponsive" kill. Flag it so we can catch
       // pathological charts and consider moving the work off-thread.
@@ -785,8 +812,17 @@ export class ManiaReplayRenderer {
     this.setupStoryboardContainers();
     this.measureCanvas();
     this.installTextFontInvalidation();
+    this.markInitProgress("renderer_cpu_setup_finished");
     this.initPromise = this.initPixi();
     this.installOverlayPointerHandlers();
+  }
+
+  private markInitProgress(stage: string, details?: Record<string, unknown>) {
+    try {
+      this.onInitProgress?.(stage, details);
+    } catch {
+      // Startup diagnostics must never interfere with the renderer.
+    }
   }
 
   private installTextFontInvalidation() {
@@ -808,7 +844,16 @@ export class ManiaReplayRenderer {
   }
 
   private async initPixi() {
+    this.markInitProgress("pixi_application_create_started");
     const app = new Application();
+    this.markInitProgress("pixi_application_created");
+    this.markInitProgress("renderer_context_requested", {
+      renderer_preference: "webgl,canvas",
+      power_preference: "high-performance",
+      canvas_width: Math.max(1, this.cssWidth),
+      canvas_height: Math.max(1, this.cssHeight),
+      device_pixel_ratio: this.dpr,
+    });
     await app.init({
       canvas: this.canvas,
       width: Math.max(1, this.cssWidth),
@@ -820,6 +865,10 @@ export class ManiaReplayRenderer {
       backgroundAlpha: 0,
       powerPreference: "high-performance",
       preference: ["webgl", "canvas"],
+    });
+
+    this.markInitProgress("renderer_context_acquired", {
+      renderer_backend: formatPixiRendererType(app.renderer.type, app.renderer.name),
     });
 
     if (this.destroyed) {
@@ -844,18 +893,25 @@ export class ManiaReplayRenderer {
     };
     this.canvas.addEventListener("webglcontextlost", this.handleContextLost);
     this.canvas.addEventListener("webglcontextrestored", this.handleContextRestored);
+    this.markInitProgress("renderer_stage_setup_started");
     app.stage.addChild(this.backgroundLayer);
     app.stage.addChild(this.storyboardBackdrop);
     app.stage.addChild(this.storyboardBackRoot);
     app.stage.addChild(this.storyboardDim);
     app.stage.addChild(this.staticGraphics);
-    app.stage.addChild(this.graphics);
-    app.stage.addChild(this.skinSpriteLayer);
+    app.stage.addChild(this.gameplayGraphics);
+    app.stage.addChild(this.gameplaySkinSprites.layer);
     app.stage.addChild(this.storyboardOverlayRoot);
+    app.stage.addChild(this.hudGraphics);
+    app.stage.addChild(this.hudSkinSprites.layer);
     app.stage.addChild(this.textLayer);
     app.stage.addChild(this.comboTextLayer);
     this.rebuildBackgroundSprites();
+    this.markInitProgress("texture_uploads_started");
     this.prewarmSkinTextures();
+    this.markInitProgress("texture_uploads_queued", {
+      pending_skin_textures: this.skinTextureLoadPromises.size,
+    });
     this.resize();
   }
 
@@ -1825,6 +1881,17 @@ export class ManiaReplayRenderer {
     // widescreen sprites simply extend beyond the 640-wide band.
     const scale = layout.h / STORYBOARD_HEIGHT;
     const offsetX = (layout.w - STORYBOARD_WIDTH * scale) / 2;
+    const storyboardMask: StoryboardRect | null = data.widescreen
+      ? null
+      : { left: offsetX, top: 0, right: offsetX + STORYBOARD_WIDTH * scale, bottom: layout.h };
+    // One extra pixel on either side covers antialiasing at the playfield
+    // boundary. Vertical edges coincide with the canvas clip and need no pad.
+    const playfieldCoverageTarget: StoryboardRect = {
+      left: layout.playfieldX - 1,
+      top: 0,
+      right: layout.playfieldX + layout.playfieldWidth + 1,
+      bottom: layout.h,
+    };
     for (const container of this.storyboardLayerContainers) {
       container.position.set(offsetX, 0);
       container.scale.set(scale);
@@ -1863,6 +1930,24 @@ export class ManiaReplayRenderer {
       pixi.alpha = state.alpha;
       pixi.tint = state.tint;
       pixi.blendMode = state.additive ? "add" : "normal";
+
+      if (
+        !this.storyboardOccludesPlayfield
+        && sprite.layer === SB_LAYER_OVERLAY
+        && data.opaqueImagePaths.has(path)
+        && texture !== Texture.EMPTY
+        && opaqueStoryboardSpriteCoversRect({
+          sprite,
+          state,
+          textureWidth: texture.width,
+          textureHeight: texture.height,
+          viewportScale: scale,
+          viewportOffsetX: offsetX,
+          mask: storyboardMask,
+        }, playfieldCoverageTarget)
+      ) {
+        this.storyboardOccludesPlayfield = true;
+      }
     }
   }
 
@@ -2533,6 +2618,10 @@ export class ManiaReplayRenderer {
   private render(forceHudSnapshot = false) {
     if (!this.app) return;
 
+    const isFirstFrame = !this.firstFrameDrawn;
+    const skinTextureUploadCount = this.pendingSkinTextureUploads;
+    if (isFirstFrame) this.markInitProgress("first_frame_build_started");
+
     const layout = this.getLayout();
     this.currentKeyState = this.getCurrentKeyState();
     this.updateHiddenCoverage();
@@ -2544,23 +2633,34 @@ export class ManiaReplayRenderer {
       this.staticDirty = false;
     }
 
-    this.graphics.clear();
+    this.gameplayGraphics.clear();
+    this.hudGraphics.clear();
+    this.graphics = this.gameplayGraphics;
     this.beginSkinSpriteFrame();
     this.beginTextFrame();
 
+    this.storyboardOccludesPlayfield = false;
     this.renderBackground(layout);
     this.renderStoryboard(layout);
-    this.renderSegmentOverlays(layout);
-    this.renderStageFurnitureUnder(layout);
-    if (this.showInputOverlay && this.inputOverlayOnly) {
-      this.renderInputOverlayNotes(layout);
-    } else {
-      this.renderNotes(layout);
+    if (!this.storyboardOccludesPlayfield) {
+      this.renderSegmentOverlays(layout);
+      this.renderStageFurnitureUnder(layout);
+      if (this.showInputOverlay && this.inputOverlayOnly) {
+        this.renderInputOverlayNotes(layout);
+      } else {
+        this.renderNotes(layout);
+      }
+      this.renderJudgmentLine(layout);
+      this.renderReceptors(layout);
     }
-    this.renderJudgmentLine(layout);
-    this.renderReceptors(layout);
     this.renderStageFurnitureOver(layout);
     if (this.hasFlashlightMod) this.renderFlashlightOverlay(layout);
+
+    // Storyboard Overlay sprites cover the playfield, not the interface. Keep
+    // both HUD geometry and imported HUD skin sprites above that layer; text
+    // already has its own later stage containers.
+    this.graphics = this.hudGraphics;
+    this.activeSkinSprites = this.hudSkinSprites;
     if (this.showHealthBar) this.renderHealthBar(layout);
     this.overlayHitboxes = [];
     if (!this.hideHud) this.renderHUD(layout);
@@ -2568,7 +2668,27 @@ export class ManiaReplayRenderer {
     this.renderOverlaySelectionAffordances(layout);
     this.finishSkinSpriteFrame();
     this.finishTextFrame();
+    this.graphics = this.gameplayGraphics;
+    this.activeSkinSprites = this.gameplaySkinSprites;
+    if (skinTextureUploadCount > 0) {
+      this.markInitProgress("texture_upload_gpu_submit_started", {
+        skin_texture_count: skinTextureUploadCount,
+      });
+    }
+    if (isFirstFrame) this.markInitProgress("first_frame_gpu_submit_started");
     this.app.render();
+    if (skinTextureUploadCount > 0) {
+      this.pendingSkinTextureUploads = Math.max(0, this.pendingSkinTextureUploads - skinTextureUploadCount);
+      this.markInitProgress("textures_uploaded", {
+        skin_texture_count: skinTextureUploadCount,
+      });
+    }
+    if (isFirstFrame) {
+      this.firstFrameDrawn = true;
+      this.markInitProgress("first_frame_drawn", {
+        initial_textures_uploaded: true,
+      });
+    }
   }
 
   private renderBackground(_layout: Layout) {
@@ -5843,14 +5963,15 @@ export class ManiaReplayRenderer {
     const texture = this.getTexture(asset);
     if (texture === Texture.EMPTY) return;
 
-    let sprite = this.skinSpritePool[this.skinSpritePoolCursor];
+    const pool = this.activeSkinSprites;
+    let sprite = pool.sprites[pool.cursor];
     if (!sprite) {
       sprite = new Sprite(texture);
-      this.skinSpritePool.push(sprite);
-      this.skinSpriteLayer.addChild(sprite);
+      pool.sprites.push(sprite);
+      pool.layer.addChild(sprite);
     }
 
-    this.skinSpritePoolCursor++;
+    pool.cursor++;
     sprite.visible = true;
     sprite.texture = texture;
     // A flipped sprite mirrors about its anchor, so the anchor swaps sides to
@@ -5886,20 +6007,21 @@ export class ManiaReplayRenderer {
     if (texture === Texture.EMPTY) return;
     const frac = Math.min(1, fillFrac);
 
-    const slot = this.skinSpritePoolCursor;
-    let sprite = this.skinSpritePool[slot];
+    const pool = this.activeSkinSprites;
+    const slot = pool.cursor;
+    let sprite = pool.sprites[slot];
     if (!sprite) {
       sprite = new Sprite(texture);
-      this.skinSpritePool.push(sprite);
-      this.skinSpriteLayer.addChild(sprite);
+      pool.sprites.push(sprite);
+      pool.layer.addChild(sprite);
     }
-    this.skinSpritePoolCursor++;
+    pool.cursor++;
 
     // Rotated atlas frames don't slice cleanly; those draw at full length.
     if (frac >= 1 || texture.rotate !== 0) {
       sprite.texture = texture;
     } else {
-      let strip = this.skinStripTexturePool[slot];
+      let strip = pool.stripTextures[slot];
       if (!strip || strip.destroyed) {
         strip = new Texture({
           source: texture.source,
@@ -5907,7 +6029,7 @@ export class ManiaReplayRenderer {
           orig: new Rectangle(0, 0, texture.source.width, texture.source.height),
           dynamic: true,
         });
-        this.skinStripTexturePool[slot] = strip;
+        pool.stripTextures[slot] = strip;
       } else if (strip.source !== texture.source) {
         strip.source = texture.source;
       }
@@ -5963,16 +6085,17 @@ export class ManiaReplayRenderer {
       return;
     }
 
-    const slot = this.skinSpritePoolCursor;
-    let sprite = this.skinSpritePool[slot];
+    const pool = this.activeSkinSprites;
+    const slot = pool.cursor;
+    let sprite = pool.sprites[slot];
     if (!sprite) {
       sprite = new Sprite(texture);
-      this.skinSpritePool.push(sprite);
-      this.skinSpriteLayer.addChild(sprite);
+      pool.sprites.push(sprite);
+      pool.layer.addChild(sprite);
     }
-    this.skinSpritePoolCursor++;
+    pool.cursor++;
 
-    let strip = this.skinStripTexturePool[slot];
+    let strip = pool.stripTextures[slot];
     if (!strip || strip.destroyed) {
       strip = new Texture({
         source: texture.source,
@@ -5982,7 +6105,7 @@ export class ManiaReplayRenderer {
         orig: new Rectangle(0, 0, texture.source.width, texture.source.height),
         dynamic: true,
       });
-      this.skinStripTexturePool[slot] = strip;
+      pool.stripTextures[slot] = strip;
     } else if (strip.source !== texture.source) {
       strip.source = texture.source;
     }
@@ -6033,6 +6156,7 @@ export class ManiaReplayRenderer {
       .then((texture) => {
         if (!texture) return null;
         this.skinTextureCache.set(src, texture);
+        this.pendingSkinTextureUploads++;
         return texture;
       })
       .catch(() => {
@@ -6080,12 +6204,16 @@ export class ManiaReplayRenderer {
   }
 
   private beginSkinSpriteFrame() {
-    this.skinSpritePoolCursor = 0;
+    this.gameplaySkinSprites.cursor = 0;
+    this.hudSkinSprites.cursor = 0;
+    this.activeSkinSprites = this.gameplaySkinSprites;
   }
 
   private finishSkinSpriteFrame() {
-    for (let i = this.skinSpritePoolCursor; i < this.skinSpritePool.length; i++) {
-      this.skinSpritePool[i].visible = false;
+    for (const pool of [this.gameplaySkinSprites, this.hudSkinSprites]) {
+      for (let i = pool.cursor; i < pool.sprites.length; i++) {
+        pool.sprites[i].visible = false;
+      }
     }
   }
 
@@ -6118,14 +6246,17 @@ export class ManiaReplayRenderer {
   }
 
   private clearSkinSprites() {
-    const children = this.skinSpriteLayer.removeChildren();
-    for (const child of children) child.destroy();
-    for (const strip of this.skinStripTexturePool) {
-      if (strip && !strip.destroyed) strip.destroy(false);
+    for (const pool of [this.gameplaySkinSprites, this.hudSkinSprites]) {
+      const children = pool.layer.removeChildren();
+      for (const child of children) child.destroy();
+      for (const strip of pool.stripTextures) {
+        if (strip && !strip.destroyed) strip.destroy(false);
+      }
+      pool.stripTextures = [];
+      pool.sprites = [];
+      pool.cursor = 0;
     }
-    this.skinStripTexturePool = [];
-    this.skinSpritePool = [];
-    this.skinSpritePoolCursor = 0;
+    this.activeSkinSprites = this.gameplaySkinSprites;
     this.skinTextureCache.clear();
   }
 

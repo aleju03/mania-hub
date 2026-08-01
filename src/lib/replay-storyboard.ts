@@ -10,7 +10,7 @@ import {
   osuFileHasStoryboardElements,
   parseStoryboardTextsAsync,
 } from "./storyboard/parser";
-import type { ReplayStoryboardData } from "./storyboard/types";
+import { SB_LAYER_OVERLAY, type ReplayStoryboardData } from "./storyboard/types";
 
 // Matches the live backend's bundle layout (storyboard-bundle.ts).
 const BUNDLE_OSB_PATH = "storyboard.osb";
@@ -41,6 +41,61 @@ function getImageMimeType(path: string): string {
   if (path.endsWith(".png")) return "image/png";
   if (path.endsWith(".jpg") || path.endsWith(".jpeg")) return "image/jpeg";
   return "application/octet-stream";
+}
+
+const MAX_OPACITY_PROBE_BYTES = 4096;
+const MAX_OPACITY_PROBE_PIXELS = 64;
+
+async function isTinyOpaqueImage(blob: Blob): Promise<boolean> {
+  if (blob.size > MAX_OPACITY_PROBE_BYTES) return false;
+  if (typeof createImageBitmap !== "function" || typeof document === "undefined") return false;
+
+  let bitmap: ImageBitmap | null = null;
+  try {
+    bitmap = await createImageBitmap(blob);
+    if (bitmap.width <= 0 || bitmap.height <= 0 || bitmap.width * bitmap.height > MAX_OPACITY_PROBE_PIXELS) return false;
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) return false;
+    context.drawImage(bitmap, 0, 0);
+    const pixels = context.getImageData(0, 0, bitmap.width, bitmap.height).data;
+    for (let i = 3; i < pixels.length; i += 4) {
+      if (pixels[i] !== 255) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  } finally {
+    bitmap?.close();
+  }
+}
+
+async function findOpaqueOverlayImagePaths(
+  sprites: ReplayStoryboardData["sprites"],
+  images: Map<string, Blob>,
+): Promise<Set<string>> {
+  const overlayPaths = new Set<string>();
+  for (const sprite of sprites) {
+    if (sprite.layer !== SB_LAYER_OVERLAY) continue;
+    if (sprite.framePaths) {
+      for (const path of sprite.framePaths) overlayPaths.add(path);
+    } else {
+      overlayPaths.add(sprite.filePath);
+    }
+  }
+
+  const opaque = new Set<string>();
+  await Promise.all([...overlayPaths].map(async (path) => {
+    const blob = images.get(path);
+    if (!blob) return;
+    // JPEG has no alpha channel by definition. For PNG/WebP pixel textures,
+    // decode only tiny files; solid 1x1 sprites are the common storyboard
+    // idiom for an opaque screen or playfield cover.
+    if (blob.type === "image/jpeg" || await isTinyOpaqueImage(blob)) opaque.add(path);
+  }));
+  return opaque;
 }
 
 export function readWidescreenStoryboardFlag(osuFileContent: string | null): boolean {
@@ -107,6 +162,11 @@ export async function loadReplayStoryboard(options: LoadReplayStoryboardOptions)
   const parsed = await parseStoryboardTextsAsync(texts);
   if (signal?.aborted || parsed.sprites.length === 0) return null;
 
+  const opaqueImagePaths = bundle
+    ? await findOpaqueOverlayImagePaths(parsed.sprites, bundle.images)
+    : new Set<string>();
+  if (signal?.aborted) return null;
+
   const imageUrls = new Map<string, string>();
   if (bundle) {
     for (const path of parsed.referencedPaths) {
@@ -126,6 +186,7 @@ export async function loadReplayStoryboard(options: LoadReplayStoryboardOptions)
   const data: ReplayStoryboardData = {
     sprites: parsed.sprites,
     imageUrls,
+    opaqueImagePaths,
     widescreen: readWidescreenStoryboardFlag(osuFileContent),
     backgroundImageUrl: backgroundReferenced ? null : options.backgroundImageUrl,
   };

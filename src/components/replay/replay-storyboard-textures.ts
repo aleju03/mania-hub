@@ -33,8 +33,9 @@ export function retainStoryboardTexture(url: string, onSettled?: () => void): Pr
   const held = entry;
   // Storyboard images arrive as object URLs (and the background as an inline
   // proxy URL); neither carries a file extension, so the texture parser must
-  // be named explicitly or Pixi refuses to load them.
-  held.promise = Assets.load<Texture>({ src: url, loadParser: "loadTextures" })
+  // be named explicitly or Pixi refuses to load them. The parser is "texture"
+  // since Pixi 8: the old "loadTextures" name still resolves but warns.
+  held.promise = Assets.load<Texture>({ src: url, parser: "texture" })
     .then((texture) => {
       // Released (or replaced) while loading: drop the asset again.
       if (entries.get(url) !== held || held.refs <= 0) {

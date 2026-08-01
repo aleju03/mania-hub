@@ -422,8 +422,22 @@ describe("ManiaReplayRenderer skin customization", () => {
 
     expect(source).toContain("this.getStagePositionY(this.skinSettings.scorePosition, layout)");
     expect(source).toContain("this.getStagePositionY(this.skinSettings.comboPosition, layout)");
-    expect(source).toContain("private skinSpriteLayer = new Container();");
+    expect(source).toContain("private gameplaySkinSprites: SkinSpriteFramePool");
+    expect(source).toContain("private hudSkinSprites: SkinSpriteFramePool");
     expect(source).toContain("private renderHoldSkinImages(");
+  });
+
+  it("keeps storyboard overlays below HUD geometry and skin sprites", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    const storyboardLayer = source.indexOf("app.stage.addChild(this.storyboardOverlayRoot);");
+    const hudGraphics = source.indexOf("app.stage.addChild(this.hudGraphics);");
+    const hudSprites = source.indexOf("app.stage.addChild(this.hudSkinSprites.layer);");
+    expect(storyboardLayer).toBeGreaterThan(-1);
+    expect(hudGraphics).toBeGreaterThan(storyboardLayer);
+    expect(hudSprites).toBeGreaterThan(hudGraphics);
+    expect(source).toContain("this.graphics = this.hudGraphics;");
+    expect(source).toContain("this.activeSkinSprites = this.hudSkinSprites;");
   });
 
   it("uses the configured hit position for receptors without changing scroll density", () => {
