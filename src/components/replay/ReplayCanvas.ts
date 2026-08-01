@@ -1,4 +1,4 @@
-import { Application, Assets, Container, FillGradient, Graphics, GraphicsPath, Matrix, Rectangle, Sprite, Text, Texture } from "pixi.js";
+import { Application, Assets, CanvasRenderer, Container, FillGradient, Graphics, GraphicsPath, Matrix, Rectangle, Sprite, Text, Texture, WebGLRenderer } from "pixi.js";
 import type { ReplayFrame, ReplayLifeBarFrame } from "../../lib/types";
 import type { ManiaNote, ManiaScrollVelocity, ManiaTimingPoint } from "../../lib/beatmap-parser";
 import type { Judgment, ManiaReplayHitWindows, ManiaReplayRuleset, ReplayJudgementEvent, ReplayNoteState } from "../../lib/mania-replay-judgement";
@@ -158,15 +158,12 @@ const BACKGROUND_OVERSCAN_SCALE = 1.02;
 // tab switches) stay silent instead of firing as a burst.
 const HITSOUND_MAX_LATENESS_MS = 200;
 
-function getLiveWebglDiagnostics(renderer: Application["renderer"]): Record<string, unknown> {
-  const webglRenderer = renderer as Application["renderer"] & {
-    gl?: WebGLRenderingContext | WebGL2RenderingContext;
-    context?: { webGLVersion?: number };
-  };
-  const gl = webglRenderer.gl;
-  if (!gl) return {};
+function getLiveWebglDiagnostics(
+  gl: WebGLRenderingContext | WebGL2RenderingContext,
+  webglVersion: 1 | 2,
+): Record<string, unknown> {
   const info: Record<string, unknown> = {
-    webgl_version: webglRenderer.context?.webGLVersion ?? null,
+    webgl_version: webglVersion,
   };
   try {
     const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
@@ -178,6 +175,18 @@ function getLiveWebglDiagnostics(renderer: Application["renderer"]): Record<stri
     // The renderer still works when privacy settings hide GPU identity.
   }
   return info;
+}
+
+function destroyReplayPixiApplication(app: Application<WebGLRenderer | CanvasRenderer>) {
+  if (app.renderer instanceof WebGLRenderer) {
+    // Pixi normally calls WEBGL_lose_context during destroy. A replay opened
+    // immediately afterwards can then hit the same ANGLE create-loss-create
+    // driver hang as the auto-detection probe. Pixi still deletes its GPU
+    // resources below; let the browser retire the detached canvas context
+    // naturally instead of forcing a context-loss event during navigation.
+    app.renderer.context.extensions.loseContext = undefined;
+  }
+  app.destroy({ removeView: false }, { children: true });
 }
 
 type ArrowDirection = "left" | "right" | "up" | "down";
@@ -881,38 +890,88 @@ export class ManiaReplayRenderer {
 
   private async initPixi() {
     this.markInitProgress("pixi_application_create_started");
-    const app = new Application();
+    const app = new Application<WebGLRenderer | CanvasRenderer>();
     this.markInitProgress("pixi_application_created");
-    const rendererPreference: Array<"webgl" | "canvas"> = ["webgl", "canvas"];
+    const width = Math.max(1, this.cssWidth);
+    const height = Math.max(1, this.cssHeight);
+    const contextAttributes: WebGLContextAttributes = {
+      alpha: true,
+      antialias: true,
+      premultipliedAlpha: true,
+      stencil: true,
+      powerPreference: "default",
+    };
     this.markInitProgress("renderer_context_requested", {
-      renderer_preference: rendererPreference.join(","),
+      renderer_preference: "webgl,canvas",
       visibility_state: document.visibilityState,
-      power_preference: "high-performance",
-      canvas_width: Math.max(1, this.cssWidth),
-      canvas_height: Math.max(1, this.cssHeight),
+      power_preference: contextAttributes.powerPreference,
+      canvas_width: width,
+      canvas_height: height,
       device_pixel_ratio: this.dpr,
     });
-    await app.init({
+
+    // Pixi's autoDetectRenderer probes WebGL on a throwaway canvas and
+    // immediately loses that context before requesting the real one. Some
+    // ANGLE/driver combinations hang the whole renderer process during that
+    // create-loss-create sequence. Request the actual replay context once and
+    // pass it into the renderer so Pixi never runs the destructive probe.
+    const gl2 = this.canvas.getContext("webgl2", contextAttributes);
+    const gl = gl2 ?? this.canvas.getContext("webgl", contextAttributes);
+    let renderer: WebGLRenderer | CanvasRenderer;
+    if (gl) {
+      this.markInitProgress("webgl_context_acquired", {
+        renderer_backend: "WebGL",
+        ...getLiveWebglDiagnostics(gl, gl2 ? 2 : 1),
+      });
+      const webglRenderer = new WebGLRenderer();
+      this.markInitProgress("pixi_webgl_renderer_init_started");
+      await webglRenderer.init({
+        canvas: this.canvas,
+        context: gl,
+        width,
+        height,
+        resolution: this.dpr,
+        autoDensity: true,
+        antialias: true,
+        backgroundAlpha: 0,
+        powerPreference: contextAttributes.powerPreference,
+      });
+      renderer = webglRenderer;
+    } else {
+      this.markInitProgress("canvas_renderer_fallback_started");
+      const canvasRenderer = new CanvasRenderer();
+      await canvasRenderer.init({
+        canvas: this.canvas,
+        width,
+        height,
+        resolution: this.dpr,
+        autoDensity: true,
+        antialias: true,
+        backgroundAlpha: 0,
+      });
+      renderer = canvasRenderer;
+    }
+    app.renderer = renderer;
+    const applicationOptions = {
       canvas: this.canvas,
-      width: Math.max(1, this.cssWidth),
-      height: Math.max(1, this.cssHeight),
+      width,
+      height,
       resolution: this.dpr,
       autoDensity: true,
       autoStart: false,
       antialias: true,
       backgroundAlpha: 0,
-      powerPreference: "high-performance",
-      preference: rendererPreference,
-    });
+      powerPreference: contextAttributes.powerPreference,
+    };
+    Application._plugins.forEach((plugin) => plugin.init.call(app, applicationOptions));
 
     const rendererBackend = formatPixiRendererType(app.renderer.type, app.renderer.name);
     this.markInitProgress("renderer_context_acquired", {
       renderer_backend: rendererBackend,
-      ...getLiveWebglDiagnostics(app.renderer),
     });
 
     if (this.destroyed) {
-      app.destroy({ removeView: false }, { children: true });
+      destroyReplayPixiApplication(app);
       return;
     }
 
@@ -6507,7 +6566,7 @@ export class ManiaReplayRenderer {
       this.clearSkinSprites();
       for (const gradient of this.receptorBeamGradients.values()) gradient.destroy();
       this.receptorBeamGradients.clear();
-      this.app.destroy({ removeView: false }, { children: true });
+      destroyReplayPixiApplication(this.app);
       this.app = null;
     };
     if (this.app) {

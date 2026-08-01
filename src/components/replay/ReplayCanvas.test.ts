@@ -9,14 +9,19 @@ describe("ManiaReplayRenderer initialization", () => {
     expect(source.match(/this\.initPromise = this\.initPixi\(\);/g)).toHaveLength(1);
   });
 
-  it("prefers WebGL with a Canvas fallback", () => {
+  it("initializes the actual replay canvas without Pixi's throwaway WebGL probe", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
-    expect(source).not.toContain('preference: "webgl"');
-    expect(source).toContain('const rendererPreference: Array<"webgl" | "canvas">');
-    expect(source).toContain('= ["webgl", "canvas"];');
-    expect(source).toContain("preference: rendererPreference");
-    expect(source).not.toContain('= ["canvas"];');
+    expect(source).not.toContain("await app.init(");
+    expect(source).toContain('this.canvas.getContext("webgl2", contextAttributes)');
+    expect(source).toContain('this.canvas.getContext("webgl", contextAttributes)');
+    expect(source).toContain("const webglRenderer = new WebGLRenderer();");
+    expect(source).toContain("await webglRenderer.init({");
+    expect(source).toContain("context: gl,");
+    expect(source).toContain("const canvasRenderer = new CanvasRenderer();");
+    expect(source).toContain('powerPreference: "default"');
+    expect(source).toContain("app.renderer.context.extensions.loseContext = undefined;");
+    expect(source.match(/destroyReplayPixiApplication\(/g)).toHaveLength(3);
   });
 
   it("maps the 1-40 scroll speed setting through lazer's mania time range", () => {
