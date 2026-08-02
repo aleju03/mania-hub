@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { responseStartsWithZipArchive } from "#/lib/beatmap-archive-probe";
 import { mirrorOrderFor, type BeatmapMirrorName } from "#/lib/beatmap-mirrors";
 
 // Redirect target for the "osz" download buttons. Mirrors ratelimit and go
 // down independently, and a plain cross-origin download link cannot see the
-// failure, so this route probes the mirrors (1-byte range request) and 302s
+// failure, so this route probes the mirrors (small range request) and 302s
 // to the first one that is actually serving archives. The osz bytes never
 // pass through this function.
 
@@ -21,16 +22,20 @@ async function probeMirror(url: string): Promise<ProbeResult> {
   const timeout = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
   try {
     const response = await fetch(url, {
-      headers: { Range: "bytes=0-0" },
+      headers: { Range: "bytes=0-3" },
       signal: controller.signal,
     });
-    await response.body?.cancel().catch(() => {});
     if (response.status === 200 || response.status === 206) {
-      // Some mirrors answer 200 with a JSON error payload while ratelimited;
-      // only an archive-looking content type counts as healthy.
+      // Some mirrors answer with resolver JSON while claiming both an archive
+      // content type and an .osz filename. Verify the ZIP signature too.
       const type = (response.headers.get("content-type") ?? "").toLowerCase();
-      return type.includes("json") || type.includes("html") ? "unhealthy" : "healthy";
+      if (type.includes("json") || type.includes("html")) {
+        await response.body?.cancel().catch(() => {});
+        return "unhealthy";
+      }
+      return await responseStartsWithZipArchive(response) ? "healthy" : "unhealthy";
     }
+    await response.body?.cancel().catch(() => {});
     // 404s are per-set (the mirror may just not carry it); ratelimits and
     // server errors are per-mirror and worth a cooldown.
     return response.status === 403 || response.status === 429 || response.status >= 500
@@ -65,20 +70,33 @@ export const Route = createFileRoute("/api/osz")({
 
         const order = mirrorOrderFor(Number(beatmapsetId));
         const now = Date.now();
+        let browserFallback: string | null = null;
         for (const mirror of order) {
-          if ((mirrorCooldowns.get(mirror.name) ?? 0) > now) continue;
           const target = mirror.url(beatmapsetId);
+          if ((mirrorCooldowns.get(mirror.name) ?? 0) > now) {
+            // Cooldowns reflect the server's IP. A browser may still be able
+            // to reach this mirror if every server-side probe fails.
+            browserFallback ??= target;
+            continue;
+          }
           const result = await probeMirror(target);
           if (result === "healthy") return redirectTo(target);
           if (result === "ratelimited") {
+            browserFallback ??= target;
             mirrorCooldowns.set(mirror.name, Date.now() + MIRROR_COOLDOWN_MS);
           }
         }
 
-        // Every mirror looked unhealthy from here, but ratelimits are per IP:
-        // the browser may still succeed where this function's IP did not, so
-        // fall back to the set's preferred mirror instead of failing hard.
-        return redirectTo(order[0].url(beatmapsetId));
+        // Only retry a mirror whose failure may be specific to the server's
+        // IP. Never redirect to a response we already proved was not a ZIP.
+        if (browserFallback) return redirectTo(browserFallback);
+        return new Response("No beatmap mirror is serving a valid .osz", {
+          status: 503,
+          headers: {
+            "Cache-Control": "no-store",
+            "Retry-After": "30",
+          },
+        });
       },
     },
   },
