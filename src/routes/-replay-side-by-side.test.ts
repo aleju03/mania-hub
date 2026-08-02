@@ -61,6 +61,37 @@ describe("side by side tab", () => {
     expect(viewSource).toContain("if (layout.rotatePrompt) pause();");
   });
 
+  // Chasing it the other way round - a wall clock with the audio seeked back
+  // onto it every 200ms - is what made the track stutter: writing currentTime
+  // mid-playback IS an audible seek, and the seek's own latency puts the drift
+  // straight back over the threshold, so the corrections never stop.
+  it("runs both playfields off the audio clock, like the single viewer", () => {
+    expect(viewSource).toContain("if (audio && audioMasterRef.current) return audio.currentTime * 1000;");
+    expect(viewSource).toContain("time: audio.currentTime * 1000,");
+    expect(viewSource).toContain("stalled: audio.paused || audio.seeking || audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA,");
+    // No drift-correction loop, and no seek on resume or on a speed change.
+    expect(viewSource).not.toContain("const drift =");
+    expect(viewSource).not.toContain("audio.currentTime = clock.anchorTime / 1000");
+    // A refused play(), a failed file or a finished track must hand the
+    // timeline back instead of freezing both stages on a clock that won't tick.
+    expect(viewSource).toContain("void audio.play().catch(() => releaseAudioClock());");
+    expect(viewSource).toContain("onEnded={handleAudioEnded}");
+  });
+
+  // Three ways the master clock could have stranded the pair, all found in
+  // review: a chart outliving its mp3 (play() on an ended element rewinds it to
+  // zero, dragging both playfields to the start), an interruption nobody asked
+  // for (a call, a media key, a backgrounded tab) holding them on one frame
+  // forever, and the shorter run's frame loop never restarting after a seek
+  // back inside it.
+  it("never hands the clock to a spent, interrupted or ended track", () => {
+    expect(viewSource).toContain("if (timeMs >= endMs - AUDIO_TAIL_GUARD_MS) {");
+    expect(viewSource).toContain("releaseAudioClock(timeMs);");
+    expect(viewSource).toContain("if (now - audioStalledSinceRef.current > AUDIO_STALL_GIVE_UP_MS) releaseAudioClock();");
+    expect(viewSource).toContain("if (audio.paused && !audio.seeking && !audio.ended");
+    expect(viewSource).toContain("if (clock.playing) renderer.play();");
+  });
+
   it("keeps the height for the playfields on a short viewport", () => {
     // Every chrome block reads the same compact flag.
     expect(viewSource).toContain("const compact = layout.compact;");

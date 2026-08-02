@@ -70,6 +70,17 @@ import { ReplayProgressBar } from "./ReplayControls";
 
 const SPEED_OPTIONS = [0.5, 0.75, 1, 1.5, 2];
 
+// Close enough to the transport that re-seeking the track would cost more (an
+// audible seek) than the offset does.
+const AUDIO_SEEK_EPSILON_MS = 40;
+// The track is treated as spent this far from its end: seeking to within a
+// frame of the end lands on it, and an ended element rewinds itself on play().
+const AUDIO_TAIL_GUARD_MS = 40;
+// How long both playfields may sit on the audio's stall before the run is
+// handed to the wall clock and carries on silently. Long enough for ordinary
+// buffering to recover, short enough that an interruption never looks frozen.
+const AUDIO_STALL_GIVE_UP_MS = 2500;
+
 interface SideBySideSide {
   score: OsuScore;
   replay: ServerReplay;
@@ -167,8 +178,10 @@ export function ReplaySideBySideView({
   const [speed, setSpeed] = useState(1);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioEnabledRef = useRef(true);
+  const audioFailedRef = useRef(false);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [audioFailed, setAudioFailed] = useState(false);
+  const [buffering, setBuffering] = useState(false);
 
   const viewport = useSideBySideViewport();
   const [fullscreen, setFullscreen] = useState(false);
@@ -178,20 +191,96 @@ export function ReplaySideBySideView({
   // drag the phone back in.
   const autoFullscreenRef = useRef(false);
 
-  const readClockTime = useCallback(() => {
+  /* THE CLOCK. When the track is playable it is the clock: audio.currentTime
+     is map time (the chart is timed against this file), it advances at
+     playbackRate = transport speed x mod rate, and it is the one timeline that
+     cannot be argued with. The playfields follow it, exactly as the single
+     replay viewer does.
+
+     Chasing it the other way round - a performance.now() clock with the audio
+     seeked back onto it - is what made this stutter: writing currentTime mid
+     playback IS an audible seek, and the latency of the seek itself puts the
+     drift straight back over any threshold, so the corrections never stop.
+     Nothing here writes currentTime while playing except a user seek.
+
+     The wall clock below stays as the understudy for the runs with no track,
+     a muted transport, or a file that failed. */
+  const audioMasterRef = useRef(false);
+  /* performance.now() of the first tick that found the master clock stalled;
+     0 while it is running. */
+  const audioStalledSinceRef = useRef(0);
+
+  const readWallClockTime = useCallback(() => {
     const clock = clockRef.current;
     if (!clock.playing) return clock.anchorTime;
     return clock.anchorTime + (performance.now() - clock.anchorPerf) * clock.speed * clock.rate;
   }, []);
 
+  const readClockTime = useCallback(() => {
+    const audio = audioRef.current;
+    if (audio && audioMasterRef.current) return audio.currentTime * 1000;
+    return readWallClockTime();
+  }, [readWallClockTime]);
+
+  /* Hands the timeline back to the wall clock, so a mute, a failed file, an
+     interruption or a refused play() never strands the transport (a stalled
+     master clock freezes both playfields indefinitely). Takes the position to
+     resume from, because the caller sometimes knows it better than the track
+     does - past the end of the audio, currentTime has been clamped. */
+  const releaseAudioClock = useCallback((atMs?: number) => {
+    if (!audioMasterRef.current) return;
+    const clock = clockRef.current;
+    clock.anchorTime = atMs ?? readClockTime();
+    clock.anchorPerf = performance.now();
+    audioMasterRef.current = false;
+  }, [readClockTime]);
+
+  /* Puts the track where the transport is and decides who owns the clock.
+
+     The guard that matters: a chart outlives its mp3 more often than not
+     (totalDuration runs to the last frame plus a miss window, the audio is cut
+     at the last note), and play() on an element sitting at its end is spec'd to
+     rewind it to zero. Handing the clock to that would drag both playfields
+     back to the start mid-run. Past the end of the track, only the wall clock
+     can carry the tail - which is exactly what it already does after `ended`. */
+  const alignAudio = useCallback((timeMs: number, resume: boolean) => {
+    const audio = audioRef.current;
+    if (!audio || !audioEnabledRef.current || audioFailedRef.current) return;
+    const endMs = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration * 1000 : Infinity;
+    if (timeMs >= endMs - AUDIO_TAIL_GUARD_MS) {
+      releaseAudioClock(timeMs);
+      audio.pause();
+      return;
+    }
+    if (Math.abs(audio.currentTime * 1000 - timeMs) > AUDIO_SEEK_EPSILON_MS) {
+      audio.currentTime = Math.max(0, timeMs / 1000);
+    }
+    if (!resume) return;
+    // Authority passes to the track now, before it has actually started: until
+    // it does it reports stalled, which holds both playfields on this frame.
+    // Running them off the wall clock for those first tens of milliseconds
+    // would only make them snap back when the sound arrives.
+    audioMasterRef.current = true;
+    audioStalledSinceRef.current = 0;
+    // Refused (autoplay policy, no gesture, decode failure): the wall clock
+    // keeps the run going silently rather than freezing both playfields on a
+    // clock that will never tick.
+    void audio.play().catch(() => releaseAudioClock());
+  }, [releaseAudioClock]);
+
   // The rate-match guard means both players heard the same song at the same
-  // rate, so one audio track is correct for both sides. It follows the
-  // transport clock (clock time is map time; audio.currentTime maps 1:1).
+  // rate, so one audio track is correct for both sides.
   const audioUrl = useMemo(() => {
     const setId = sides?.[0]?.score.beatmapset?.id;
     const filename = sides?.[0]?.beatmap?.audioFilename;
     return setId && filename ? getBeatmapAudioUrl(setId, filename) : null;
   }, [sides]);
+
+  useEffect(() => {
+    audioMasterRef.current = false;
+    audioFailedRef.current = false;
+    setAudioFailed(false);
+  }, [audioUrl]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -305,7 +394,21 @@ export function ReplaySideBySideView({
         clock.rate = sides[0].rate;
         for (const [index, renderer] of created.entries()) {
           renderer.setScrollSpeed(scrollSpeed);
-          renderer.setExternalClock(() => ({ time: readClockTime(), stalled: !clockRef.current.playing }));
+          // Always an object, never null: null would let each renderer free-run
+          // on its own internal clock, and two runs on two clocks is the one
+          // thing this view cannot ship. While the audio buffers or seeks it
+          // reports stalled, which holds BOTH playfields on the same frame
+          // instead of letting them run ahead of the sound.
+          renderer.setExternalClock(() => {
+            const audio = audioRef.current;
+            if (audio && audioMasterRef.current) {
+              return {
+                time: audio.currentTime * 1000,
+                stalled: audio.paused || audio.seeking || audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA,
+              };
+            }
+            return { time: readWallClockTime(), stalled: !clockRef.current.playing };
+          });
           // playbackSpeed only feeds the renderer's clock smoothing; matching
           // each side's effective rate to the shared clock keeps the
           // prediction drift-free.
@@ -330,7 +433,7 @@ export function ReplaySideBySideView({
       setReady(false);
       setIsPlaying(false);
     };
-  }, [readClockTime, sides]);
+  }, [readWallClockTime, sides]);
 
   const resizeRenderers = useCallback(() => {
     for (const renderer of renderersRef.current) renderer.resize();
@@ -439,6 +542,7 @@ export function ReplaySideBySideView({
     clock.anchorTime = Math.min(readClockTime(), maxDurationRef.current);
     clock.playing = false;
     for (const renderer of renderersRef.current) renderer.pause();
+    // Left where it is, not rewound: resuming then costs no seek at all.
     audioRef.current?.pause();
     setIsPlaying(false);
   }, [readClockTime]);
@@ -459,32 +563,35 @@ export function ReplaySideBySideView({
     }
     const clock = clockRef.current;
     // Replaying from the end restarts the run.
-    if (readClockTime() >= maxDurationRef.current - 1) {
-      clock.anchorTime = 0;
+    const restart = readClockTime() >= maxDurationRef.current - 1;
+    const startAt = restart ? 0 : readClockTime();
+    if (restart) {
       for (const renderer of renderersRef.current) renderer.seek(0);
-    } else {
-      clock.anchorTime = readClockTime();
     }
+    clock.anchorTime = startAt;
     clock.anchorPerf = performance.now();
     clock.playing = true;
     for (const renderer of renderersRef.current) renderer.play();
-    const audio = audioRef.current;
-    if (audio && audioEnabledRef.current) {
-      audio.currentTime = Math.max(0, clock.anchorTime / 1000);
-      void audio.play().catch(() => {});
-    }
+    alignAudio(startAt, true);
     setIsPlaying(true);
-  }, [enterFullscreen, readClockTime, viewport.touch]);
+  }, [alignAudio, enterFullscreen, readClockTime, viewport.touch]);
 
   const seekBoth = useCallback((timeMs: number) => {
     const clock = clockRef.current;
     const clamped = Math.max(0, Math.min(timeMs, maxDurationRef.current));
     clock.anchorTime = clamped;
     clock.anchorPerf = performance.now();
-    for (const renderer of renderersRef.current) renderer.seek(clamped);
-    const audio = audioRef.current;
-    if (audio) audio.currentTime = clamped / 1000;
-  }, []);
+    for (const renderer of renderersRef.current) {
+      renderer.seek(clamped);
+      // The shorter run stops its own frame loop the moment it reaches its end
+      // (ReplayCanvas.tick). Seeking back inside it has to restart that loop,
+      // or it sits frozen beside a playfield that is still moving.
+      if (clock.playing) renderer.play();
+    }
+    // The one place that writes currentTime mid-run, because the user asked for
+    // it. Both playfields hold on `stalled` until the seek settles.
+    alignAudio(clamped, clock.playing);
+  }, [alignAudio]);
 
   const applySpeed = useCallback((next: number) => {
     if (!sides) return;
@@ -495,11 +602,10 @@ export function ReplaySideBySideView({
     for (const [index, renderer] of renderersRef.current.entries()) {
       renderer.setSpeed((next * sides[0].rate) / sides[index].rate);
     }
+    // playbackRate alone: the track keeps playing from where it is, and the
+    // renderers' clock smoothing re-anchors on the new rate by itself.
     const audio = audioRef.current;
-    if (audio) {
-      audio.playbackRate = next * clock.rate;
-      audio.currentTime = clock.anchorTime / 1000;
-    }
+    if (audio) audio.playbackRate = next * clock.rate;
     setSpeed(next);
   }, [readClockTime, sides]);
 
@@ -509,32 +615,73 @@ export function ReplaySideBySideView({
       audioEnabledRef.current = next;
       const audio = audioRef.current;
       if (audio) {
-        if (next && clockRef.current.playing) {
-          audio.currentTime = Math.max(0, readClockTime() / 1000);
-          void audio.play().catch(() => {});
+        if (next && !audioFailedRef.current) {
+          // Unmuting mid-run: the one moment the track has to be put back onto
+          // the transport, and a deliberate user action rather than a chase.
+          alignAudio(readClockTime(), clockRef.current.playing);
         } else {
+          releaseAudioClock();
           audio.pause();
         }
       }
       return next;
     });
-  }, [readClockTime]);
+  }, [alignAudio, readClockTime, releaseAudioClock]);
 
   // The shorter replay freezes on its last frame; stop the transport once the
-  // longer one ends too. The same tick nudges the audio back onto the clock
-  // when it drifts (buffering hiccups, tab throttling).
+  // longer one ends too. The same tick reads whether the track is holding both
+  // playfields, which is the honest thing to show while it buffers - the
+  // alternative, running the visuals on ahead of the sound, is the desync this
+  // clock exists to prevent.
   useEffect(() => {
-    if (!isPlaying) return;
+    if (!isPlaying) {
+      setBuffering(false);
+      audioStalledSinceRef.current = 0;
+      return;
+    }
     const id = window.setInterval(() => {
       const audio = audioRef.current;
-      if (audio && audioEnabledRef.current && !audio.paused) {
-        const drift = Math.abs(audio.currentTime * 1000 - readClockTime());
-        if (drift > 120) audio.currentTime = readClockTime() / 1000;
+      const stalled = Boolean(audio && audioMasterRef.current
+        && (audio.paused || audio.seeking || audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA));
+      setBuffering(stalled);
+      if (stalled && audio) {
+        const now = performance.now();
+        if (audioStalledSinceRef.current === 0) audioStalledSinceRef.current = now;
+        // A pause nobody asked for - a call taking audio focus, a media key, a
+        // backgrounded tab - stops the clock both playfields wait on. Every
+        // pause of ours clears `playing` or mastership first, so anything that
+        // reaches here is an interruption: try to take it back.
+        if (audio.paused && !audio.seeking && !audio.ended
+          && (typeof document === "undefined" || document.visibilityState === "visible")) {
+          void audio.play().catch(() => {});
+        }
+        // Still nothing. Rather than hold the comparison on a frame forever,
+        // carry on off the wall clock from where the sound got to; it plays on
+        // silently instead of looking broken.
+        if (now - audioStalledSinceRef.current > AUDIO_STALL_GIVE_UP_MS) releaseAudioClock();
+      } else {
+        audioStalledSinceRef.current = 0;
       }
       if (readClockTime() >= maxDurationRef.current) pause();
     }, 200);
-    return () => window.clearInterval(id);
-  }, [isPlaying, pause, readClockTime]);
+    return () => {
+      window.clearInterval(id);
+      setBuffering(false);
+    };
+  }, [isPlaying, pause, readClockTime, releaseAudioClock]);
+
+  // A track shorter than the longer replay must not take the run down with it,
+  // and a file that fails mid-run must not freeze it: both hand the tail back
+  // to the wall clock, which picks up from wherever the audio got to. Wrapped
+  // rather than passed straight to onEnded, which would hand the DOM event in
+  // as the resume position.
+  const handleAudioEnded = useCallback(() => releaseAudioClock(), [releaseAudioClock]);
+
+  const handleAudioError = useCallback(() => {
+    audioFailedRef.current = true;
+    releaseAudioClock();
+    setAudioFailed(true);
+  }, [releaseAudioClock]);
 
   useEffect(() => {
     if (!ready) return;
@@ -657,7 +804,7 @@ export function ReplaySideBySideView({
 
           <div
             ref={stageRef}
-            className={`grid min-h-0 flex-1 ${
+            className={`relative grid min-h-0 flex-1 ${
               compact
                 ? "gap-1 grid-cols-[minmax(0,1fr)_minmax(148px,190px)_minmax(0,1fr)]"
                 : "gap-2 grid-cols-[minmax(0,1fr)_minmax(190px,250px)_minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_minmax(250px,300px)_minmax(0,1fr)]"
@@ -666,6 +813,14 @@ export function ReplaySideBySideView({
             <Stage canvasRef={canvasLeftRef} ready={ready} accentIndex={0} onToggle={toggle} />
             <StatsColumn stats={stats} compact={compact} />
             <Stage canvasRef={canvasRightRef} ready={ready} accentIndex={1} onToggle={toggle} />
+            {buffering && (
+              <div className="pointer-events-none absolute inset-x-0 top-2 flex justify-center">
+                <span className="flex items-center gap-1.5 rounded-full bg-black/70 px-2.5 py-1 text-[10px] font-semibold text-white/80">
+                  <LoaderCircle className="h-3 w-3 animate-spin" aria-hidden="true" />
+                  Buffering audio
+                </span>
+              </div>
+            )}
           </div>
 
           <div className={`shrink-0 border-t border-white/[0.07] ${compact ? "px-0.5 pt-1.5" : "px-1 pt-2"}`}>
@@ -744,7 +899,13 @@ export function ReplaySideBySideView({
               </button>
             </div>
             {audioUrl && !audioFailed && (
-              <audio ref={audioRef} src={audioUrl} preload="auto" onError={() => setAudioFailed(true)} />
+              <audio
+                ref={audioRef}
+                src={audioUrl}
+                preload="auto"
+                onEnded={handleAudioEnded}
+                onError={handleAudioError}
+              />
             )}
             {!compact && <MapFacts side={sides[0]} className="mt-2 hidden sm:flex" />}
           </div>
