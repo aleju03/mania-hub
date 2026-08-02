@@ -624,6 +624,16 @@ function MobileFilterSheet({
   hasActiveFilters: boolean;
   resultsLabel: string;
 }) {
+  // The sheet is always mounted (see above) and portals into document.body,
+  // which the app hydrates as part of the whole document (hydrateRoot(document)
+  // in client.tsx). A `typeof document` guard alone would render nothing on the
+  // server but a real <div> on the very first client render, so React would find
+  // an element the server HTML never had and throw out the SSR tree (#418, the
+  // top error on /maps). Gating on mount keeps the first client render matching
+  // the server; the portal then appears a tick later, still long before any open.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   // Swipe-to-dismiss, mirroring the random-tab filter sheet in maps.tsx: the
   // open/close slide is a CSS transition (compositor thread, buttery on phones),
   // and the transition only switches off while a finger is actively dragging.
@@ -677,7 +687,7 @@ function MobileFilterSheet({
     };
   }, [open, onClose]);
 
-  if (typeof document === "undefined") return null;
+  if (!mounted) return null;
 
   return createPortal(
     <div
