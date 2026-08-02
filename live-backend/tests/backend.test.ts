@@ -901,6 +901,44 @@ describe("live backend", () => {
     expect(body.queueDepth).toBeUndefined();
   });
 
+  // The site's player boxes type into this, so it has to answer from the users
+  // table; an osu! call per keystroke would eat the whole API budget.
+  it("searches stored players by name without touching the osu! API", async () => {
+    const { db, queue, events } = await setup();
+    const now = new Date().toISOString();
+    await exec(
+      db,
+      `insert into users (user_id, username, avatar_url, country_code, is_active, pp, updated_at)
+       values
+         (401, 'Kalkai', 'https://assets.example/kalkai.png', 'KR', 1, 15000, ?),
+         (402, 'KalkaiFanboy', 'https://assets.example/fan.png', 'KR', 1, 900, ?),
+         (403, 'NotKalkaiAtAll', 'https://assets.example/not.png', 'US', 1, 12000, ?),
+         (404, 'KalkaiGone', 'https://assets.example/gone.png', 'US', 0, 20000, ?)`,
+      [now, now, now, now],
+    );
+
+    const response = mockRes();
+    await routeHttp(mockReq("GET", "/api/users/search?q=kalkai&limit=5"), response.res, {
+      db,
+      queue,
+      events,
+      config: baseConfig(),
+      osu: { limiter: { state: () => ({ hardPerMinute: 60, usedLastMinute: 0, byCaller: [], byPath: [] }) } },
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never);
+
+    const body = JSON.parse(response.writes.join(""));
+    expect(response.res.statusCode).toBe(200);
+    // Exact match first, then the prefix, then the merely-containing one; a
+    // deactivated account is not offered at all.
+    expect(body.users.map((user: { username: string }) => user.username)).toEqual([
+      "Kalkai",
+      "KalkaiFanboy",
+      "NotKalkaiAtAll",
+    ]);
+    expect(body.users[0]).toMatchObject({ id: 401, countryCode: "KR", pp: 15000 });
+  });
+
   it("keeps health checks lightweight instead of building the full status body", async () => {
     const { db, queue, events } = await setup();
     const response = mockRes();

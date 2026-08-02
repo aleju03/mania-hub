@@ -9,7 +9,7 @@ import { CountrySelector } from "./CountrySelector";
 import { SettingsDrawer } from "./SettingsDrawer";
 import { ThemePicker } from "./ThemePicker";
 import { useAuth } from "../../lib/auth-context";
-import { searchUsers } from "../../lib/osu";
+import { searchPlayers } from "../../lib/player-search";
 import { DEFAULT_SNIPES_FILTERS, useAppStore, useHasHydrated, useSelectedCountry } from "../../store";
 import { readCountryFromSearchStr } from "../../lib/country-search";
 import { getCountryFlagGradient, getCountryFlagLargeUrl, getCountryName, isGlobalScope, isSupportedCountryCode } from "../../lib/country";
@@ -388,15 +388,9 @@ export function Nav() {
     </Link>
   );
 
-  const handleSearch = async (q: string) => {
-    const res = await searchUsers({ data: { query: q } });
-    return (res.user?.data ?? []).slice(0, 6).map((u: { id: number; username: string; avatar_url: string; country_code: string }) => ({
-      id: u.id,
-      username: u.username,
-      avatar_url: u.avatar_url,
-      country_code: u.country_code,
-    }));
-  };
+  // Stored players answer this without an osu! call; the API is only asked when
+  // the name belongs to nobody we track (see lib/player-search).
+  const handleSearch = (q: string) => searchPlayers(q);
 
   const handleCountrySelect = (country: string) => {
     setSelectedCountry(country);

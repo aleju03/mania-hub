@@ -1635,6 +1635,32 @@ export async function fetchLiveChartAnalysis(beatmapId: number): Promise<LiveCha
   }
 }
 
+/* Player search off the backend's stored users (roster members plus anyone seen
+   in ingest). The site's search boxes call this per typed query, which the osu!
+   /search endpoint could not absorb: its calls come out of the same ~45/min
+   budget as ingest. Untracked players are the gap, so the boxes that must find
+   any osu! player fall back to the API only when this comes back empty
+   (src/lib/player-search.ts). */
+
+export interface LiveUserSearchEntry {
+  id: number;
+  username: string;
+  avatarUrl: string;
+  countryCode: string | null;
+  pp: number | null;
+  globalRank: number | null;
+  avatarAccent?: string | null;
+}
+
+export async function fetchLiveUserSearch(query: string, limit?: number): Promise<LiveUserSearchEntry[]> {
+  const trimmed = query.trim();
+  if (trimmed.length < 2) return [];
+  const params = new URLSearchParams({ q: trimmed });
+  if (limit != null) params.set("limit", String(limit));
+  const response = await fetchLiveJson<{ users?: LiveUserSearchEntry[] }>(`/api/users/search?${params.toString()}`);
+  return response?.users ?? [];
+}
+
 export interface LiveGlobalRankingEntry {
   rank: number;
   user: { id: number; username: string; avatar_url: string; cover_url: string; country_code: string; avatar_accent: string | null };

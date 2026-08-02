@@ -36,6 +36,7 @@ import { getSnipesSnapshot } from "../features/snipes.js";
 import { getSweepReports } from "../features/sweeps-status.js";
 import { getTopPlaysSnapshot, type TopPlaysSnapshotOptions } from "../features/top-plays.js";
 import { getTrackerSnapshot, type TrackerSnapshotFilters } from "../features/tracker.js";
+import { searchUsers as searchStoredUsers, USER_SEARCH_DEFAULT_LIMIT, USER_SEARCH_MAX_LIMIT } from "../features/user-search.js";
 import { type AbuseBucket, type AbuseGuard, normalizeCountryParam, type RateLimitResult } from "./abuse-guard.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { CountryClientTracker } from "../live/country-clients.js";
@@ -243,6 +244,20 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   if (url.pathname === "/api/countries/features") {
     res.setHeader("cache-control", "public, max-age=30");
     sendJson(req, res, ctx, 200, await countryFeaturesBody(ctx));
+    return true;
+  }
+  // Player search off the stored users table. The site's search boxes call this
+  // per typed query, so it must never cost an osu! API call: the ~45/min budget
+  // in osu/client.ts is shared with ingest and would be spent on typing alone.
+  if (url.pathname === "/api/users/search") {
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const query = url.searchParams.get("q") ?? "";
+    const limit = clampInteger(url.searchParams.get("limit"), 1, USER_SEARCH_MAX_LIMIT, USER_SEARCH_DEFAULT_LIMIT);
+    res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=600");
+    await sendAccentEnrichedJson(req, res, ctx, 200, { users: await searchStoredUsers(ctx.db, query, limit) });
     return true;
   }
   if (url.pathname === "/api/discord/info") {
