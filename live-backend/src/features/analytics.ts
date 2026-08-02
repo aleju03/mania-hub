@@ -233,11 +233,25 @@ function propsJsonFor(record: AnalyticsEventRecord): string {
   return json({ _truncated: true, $insert_id: record.properties.$insert_id });
 }
 
+/* How long a client key can still claim a visitor id it established. Long
+   enough to cover a crawl or a browsing session of full page loads, short
+   enough that an address handed to someone else starts fresh. */
+export const CLIENT_STITCH_WINDOW_MS = 30 * 60_000;
+// Both maps are pruned by age, but a burst could still grow them between
+// prunes; these are the hard ceilings.
+const MAX_STITCH_ENTRIES = 5_000;
+
 export class AnalyticsStore {
   private readonly db: Db;
   private readonly options: Required<AnalyticsStoreOptions>;
   private buffer: AnalyticsEventRecord[] = [];
   private dropped = 0;
+  /* Visitor stitching, in memory and nowhere else: client key -> the visitor
+     id it first arrived with, and every visitor id seen recently. Nothing here
+     is written to the store; the key exists only to answer "is this a new
+     visitor, or the same one that lost its storage again?". */
+  private readonly visitorByClientKey = new Map<string, { distinctId: string; ts: number }>();
+  private readonly recentVisitorIds = new Map<string, number>();
   private flushTimer: ReturnType<typeof setInterval> | null = null;
   private pruneTimer: ReturnType<typeof setInterval> | null = null;
   private flushing: Promise<void> = Promise.resolve();
@@ -346,7 +360,7 @@ export class AnalyticsStore {
 
   /* Accepts one capture body from the proxy: either a single payload or
      {batch: [...]}. Returns how many events were accepted. */
-  capture(body: unknown, meta: { geoCountry?: string | null; isBot?: boolean } = {}): number {
+  capture(body: unknown, meta: { geoCountry?: string | null; isBot?: boolean; clientKey?: string | null } = {}): number {
     const payloads = Array.isArray((body as { batch?: unknown })?.batch)
       ? ((body as { batch: unknown[] }).batch).slice(0, MAX_EVENTS_PER_CAPTURE)
       : [body];
@@ -354,6 +368,7 @@ export class AnalyticsStore {
     for (const payload of payloads) {
       const record = normalizeAnalyticsEvent(payload, meta);
       if (!record) continue;
+      this.stitchVisitor(record, meta.clientKey ?? null);
       if (this.buffer.length >= MAX_BUFFERED_EVENTS) {
         this.dropped += 1;
         continue;
@@ -369,6 +384,48 @@ export class AnalyticsStore {
       }
     }
     return accepted;
+  }
+
+  /* Gives an event the visitor id its client already established, when the id
+     it arrived with is one nobody has ever seen.
+
+     That last condition is what keeps this honest. A returning visitor carries
+     an id we know, so it is never reassigned - two people behind one address
+     stay two visitors for as long as either has been here before. Only an id
+     with no history at all can be stitched, which is precisely the client that
+     threw its storage away between page loads, and precisely the case where we
+     had no information to lose. Signed-in events are left alone entirely:
+     they are already identified by a username.
+
+     Failure here must never cost an event, so it only ever rewrites a field. */
+  private stitchVisitor(record: AnalyticsEventRecord, clientKey: string | null): void {
+    const now = Date.now();
+    this.pruneStitchMaps(now);
+    const alreadyKnown = this.recentVisitorIds.has(record.distinctId);
+    this.recentVisitorIds.set(record.distinctId, now);
+    if (!clientKey || record.isBot || record.viewerUsername || record.distinctId === "server") return;
+
+    const established = this.visitorByClientKey.get(clientKey);
+    if (established && !alreadyKnown && established.distinctId !== record.distinctId) {
+      // The id it arrived with is kept on the event, so a visitor that was
+      // stitched can always be taken back apart if one of these looks wrong.
+      record.properties.$stitched_from = record.distinctId;
+      record.distinctId = established.distinctId;
+    }
+    this.visitorByClientKey.set(clientKey, { distinctId: record.distinctId, ts: now });
+    this.recentVisitorIds.set(record.distinctId, now);
+  }
+
+  private pruneStitchMaps(now: number): void {
+    const cutoff = now - CLIENT_STITCH_WINDOW_MS;
+    if (this.visitorByClientKey.size > MAX_STITCH_ENTRIES) this.visitorByClientKey.clear();
+    if (this.recentVisitorIds.size > MAX_STITCH_ENTRIES) this.recentVisitorIds.clear();
+    for (const [key, entry] of this.visitorByClientKey) {
+      if (entry.ts < cutoff) this.visitorByClientKey.delete(key);
+    }
+    for (const [id, ts] of this.recentVisitorIds) {
+      if (ts < cutoff) this.recentVisitorIds.delete(id);
+    }
   }
 
   subscribe(listener: (event: AnalyticsEventRecord) => void): () => void {

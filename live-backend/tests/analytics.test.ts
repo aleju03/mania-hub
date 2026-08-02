@@ -372,4 +372,59 @@ describe("AnalyticsStore realtime", () => {
     expect(store.consumeLiveTicket("nope", NOW)).toBe(false);
     expect(store.consumeLiveTicket(null, NOW)).toBe(false);
   });
+
+  /* One crawl of the site on 2026-08-01 arrived as eight "visitors": a client
+     that keeps no storage mints a fresh id on every page load, and the board
+     groups strictly by that id. The proxy's client key exists to recognise
+     those loads as one client - and, just as importantly, to leave every other
+     visitor exactly where they were.
+
+     Paths avoid "/" throughout: the recent feed drops home-page views on
+     purpose, so a crawl of the home page would prove nothing here. */
+  describe("visitor stitching", () => {
+    const CRAWLER_KEY = "abc123def456";
+
+    async function feedIds(): Promise<string[]> {
+      const data = await store.getMonitorData({ rangeHours: 24, now: NOW });
+      return data.recentEvents.map((row) => row.distinctId);
+    }
+
+    it("folds a storage-less client's page loads into one visitor", async () => {
+      for (const [index, path] of ["/packs", "/skins", "/rankings", "/terms"].entries()) {
+        store.capture(pageview({ distinctId: `fresh-uuid-${index}`, path }), { clientKey: CRAWLER_KEY });
+      }
+      const ids = await feedIds();
+      expect(ids).toHaveLength(4);
+      expect(new Set(ids)).toEqual(new Set(["fresh-uuid-0"]));
+    });
+
+    it("never reassigns an id that has been seen before", async () => {
+      // Two people behind one address: the second is new to us, so it stitches
+      // - but once each has a history, neither is ever moved again.
+      store.capture(pageview({ distinctId: "known-visitor", path: "/maps" }), { clientKey: CRAWLER_KEY });
+      store.capture(pageview({ distinctId: "known-visitor", path: "/skins" }), { clientKey: CRAWLER_KEY });
+      store.capture(pageview({ distinctId: "other-visitor", path: "/packs" }), { clientKey: "different-key" });
+      store.capture(pageview({ distinctId: "other-visitor", path: "/rankings" }), { clientKey: CRAWLER_KEY });
+      expect(new Set(await feedIds())).toEqual(new Set(["known-visitor", "other-visitor"]));
+    });
+
+    it("leaves signed-in visitors alone and never lets a bot claim the key", async () => {
+      store.capture(pageview({ distinctId: "guest-first", path: "/maps" }), { clientKey: CRAWLER_KEY });
+      store.capture(
+        pageview({ distinctId: "signed-in-id", path: "/my-stats", properties: { viewer_username: "Mxethical" } }),
+        { clientKey: CRAWLER_KEY },
+      );
+      store.capture(pageview({ distinctId: "bot-id", path: "/terms" }), { clientKey: CRAWLER_KEY, isBot: true });
+      const ids = await feedIds();
+      // The signed-in visitor keeps their own id; the bot never reaches the feed.
+      expect(new Set(ids)).toEqual(new Set(["guest-first", "signed-in-id"]));
+    });
+
+    it("does nothing at all without a client key", async () => {
+      store.capture(pageview({ distinctId: "no-key-1", path: "/maps" }), {});
+      store.capture(pageview({ distinctId: "no-key-2", path: "/skins" }), {});
+      expect(new Set(await feedIds())).toEqual(new Set(["no-key-1", "no-key-2"]));
+    });
+  });
+
 });

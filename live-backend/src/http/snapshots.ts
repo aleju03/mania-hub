@@ -376,10 +376,11 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
       return true;
     }
-    const body = parseJson<{ payload?: unknown; geo_country?: unknown; is_bot?: unknown }>((await readBody(req)) || "{}", {});
+    const body = parseJson<{ payload?: unknown; geo_country?: unknown; is_bot?: unknown; client_key?: unknown }>((await readBody(req)) || "{}", {});
     const accepted = ctx.analytics.capture(body.payload, {
       geoCountry: typeof body.geo_country === "string" ? body.geo_country : null,
       isBot: body.is_bot === true,
+      clientKey: typeof body.client_key === "string" ? body.client_key.slice(0, 64) : null,
     });
     sendJson(req, res, ctx, 202, { accepted });
     return true;

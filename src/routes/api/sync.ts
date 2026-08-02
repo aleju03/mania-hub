@@ -15,6 +15,48 @@ function isLikelyBotUserAgent(userAgent: string | null): boolean {
   return BOT_USER_AGENT_PATTERN.test(userAgent);
 }
 
+/* A client that keeps no storage between page loads mints a fresh visitor id
+   every time, so one crawl of eight pages reads as eight visitors (seen on
+   2026-08-01: identical 800x600-screen fingerprint, one pageview each). The
+   browser can't fix that about itself, so the proxy - the only place that sees
+   the address and the user agent - hands the store a key it can use to
+   recognise the same client across those loads.
+
+   Deliberately narrow: the address is hashed with the day and a secret, never
+   forwarded or stored raw, and the salt rotates at UTC midnight so the key
+   cannot follow anyone from one day to the next. The store keeps it in memory
+   for a stitching window and writes it nowhere. That makes it strictly less
+   durable than the permanent localStorage id it is backing up.
+
+   The secret is the admin token this route already needs to forward anything
+   at all, so there is no new env var to set and nothing silently degrades. */
+const CLIENT_KEY_LENGTH = 16;
+
+function getClientAddress(request: Request): string | null {
+  const forwarded = request.headers.get("x-forwarded-for") ?? request.headers.get("x-vercel-forwarded-for");
+  const first = forwarded?.split(",")[0]?.trim();
+  return first || request.headers.get("x-real-ip") || null;
+}
+
+export async function buildClientKey(request: Request, secret: string): Promise<string | null> {
+  const address = getClientAddress(request);
+  const userAgent = request.headers.get("user-agent");
+  if (!address || !userAgent) return null;
+  try {
+    const utcDay = new Date().toISOString().slice(0, 10);
+    const data = new TextEncoder().encode(`${secret}|${utcDay}|${address}|${userAgent}`);
+    const digest = await crypto.subtle.digest("SHA-256", data);
+    return Array.from(new Uint8Array(digest))
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("")
+      .slice(0, CLIENT_KEY_LENGTH);
+  } catch {
+    // No Web Crypto in this runtime: the store falls back to the client's own
+    // id, which is exactly today's behaviour.
+    return null;
+  }
+}
+
 // Mirrors getServerLiveBackendUrl without importing the client-side live
 // backend module into this lean capture route.
 function getLiveBackendBase(): string | null {
@@ -54,21 +96,25 @@ function forwardToLiveAnalytics(request: Request, body: ArrayBuffer): void {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), LIVE_ANALYTICS_FORWARD_TIMEOUT_MS);
   waitUntil(
-    fetch(`${base}/api/analytics/capture`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${token}`,
-      },
-      // The store unwraps a `batch` payload into individual events itself, so
-      // a browser batch stays one forward rather than one per event.
-      body: JSON.stringify({
-        payload: { batch: events },
-        geo_country: request.headers.get("x-vercel-ip-country"),
-        is_bot: isLikelyBotUserAgent(request.headers.get("user-agent")),
-      }),
-      signal: controller.signal,
-    }).catch(() => {}).finally(() => {
+    (async () => {
+      const clientKey = await buildClientKey(request, token);
+      await fetch(`${base}/api/analytics/capture`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${token}`,
+        },
+        // The store unwraps a `batch` payload into individual events itself, so
+        // a browser batch stays one forward rather than one per event.
+        body: JSON.stringify({
+          payload: { batch: events },
+          geo_country: request.headers.get("x-vercel-ip-country"),
+          is_bot: isLikelyBotUserAgent(request.headers.get("user-agent")),
+          client_key: clientKey,
+        }),
+        signal: controller.signal,
+      });
+    })().catch(() => {}).finally(() => {
       clearTimeout(timeout);
     }),
   );
