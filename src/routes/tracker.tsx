@@ -25,6 +25,7 @@ import { CountryFlag } from "../components/ui/CountryFlag";
 
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
+import { FilterField, SegmentedControl } from "../components/ui/SegmentedControl";
 import { ModBadge } from "../components/ui/ModBadge";
 import { DanBadge } from "../components/ui/DanBadge";
 import { TrackerRowSkeleton } from "../components/ui/LoadingSkeleton";
@@ -875,11 +876,16 @@ function ScoresPage() {
     });
     updateTrackerSearch({ page: 0 });
   };
+  // Desktop shows the three combo states as segments, so they can be picked
+  // directly; the compact mobile control still cycles through them.
+  const selectMissFilter = (next: MissFilter) => {
+    setMissFilter(next);
+    updateTrackerSearch({ page: 0 });
+  };
   useEffect(() => {
     if (!liveBackendEnabled || !windowActive || !hasActiveScoreFilters || useLiveBackendFilteredScores || feedScores.length >= TRACKER_FEED_SCORE_LIMIT) return;
     void reconcileLiveSnapshot(selectedCountry, { force: true, limit: TRACKER_FEED_SCORE_LIMIT });
   }, [feedScores.length, hasActiveScoreFilters, liveBackendEnabled, reconcileLiveSnapshot, selectedCountry, useLiveBackendFilteredScores, windowActive]);
-  const missButtonLabel = missFilter === "fc_choke" ? "Choke" : "FC";
   const mobileMissButtonLabel = missFilter === "fc_choke" ? "Ch" : "FC";
   const missButtonTitle = missFilter === "fc"
     ? "Showing full combos (0 misses) - left click for FC chokes, right click to clear"
@@ -1117,7 +1123,7 @@ function ScoresPage() {
   }, [currentPage, page, updateTrackerSearch]);
 
   const mobileHeaderKeymodeControls = (
-    <div className="flex rounded-lg overflow-hidden border border-osu-b3/30 shrink-0 sm:hidden">
+    <div className="flex shrink-0 overflow-hidden rounded-lg border border-osu-b3/25 sm:hidden">
       {keymodes.map((item) => (
         <button
           key={item.id}
@@ -1125,7 +1131,7 @@ function ScoresPage() {
           title={item.id === "other" ? "Show non-4K scores" : "Filter by keymode"}
           className={`px-2 py-1 text-[10px] font-semibold cursor-pointer transition-colors duration-[120ms] tabular-nums ${
             keyFilter === item.id
-              ? "bg-osu-b3 text-osu-l2"
+              ? "bg-osu-pink/15 text-osu-pink-light"
               : "bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
           }`}
         >
@@ -1219,99 +1225,86 @@ function ScoresPage() {
       <OsuTriangleBackdrop />
       <div className="relative z-10 bg-osu-d5/90 border-b border-osu-b3/30 backdrop-blur-[1px]">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-0">
-          {/* Desktop: single row with all filters */}
-          <div className="hidden sm:flex items-center gap-0 w-auto">
+          {/* Desktop: labelled filter groups on the left, sort pinned right. The
+              groups are segmented controls rather than underlined tabs, which
+              this site uses for navigation. */}
+          <div className="hidden w-full items-center gap-x-5 gap-y-2 py-2.5 sm:flex">
             {selectedPlayerIds.length > 0 && (
-              <>
-                <button
-                  onClick={clearPlayerFilter}
-                  className="mr-2 px-2.5 py-1 rounded-lg bg-osu-pink/15 text-[11px] font-medium text-osu-pink-light hover:bg-osu-pink/25 transition-colors cursor-pointer"
-                >
-                  Clear player filter
-                </button>
-                <div className="w-px h-5 bg-osu-b3/40 mr-2" />
-              </>
+              <button
+                onClick={clearPlayerFilter}
+                className="shrink-0 rounded-lg bg-osu-pink/15 px-2.5 py-1.5 text-[11px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/25 cursor-pointer"
+              >
+                Clear player filter
+              </button>
             )}
-            {filters.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => { setFilter(item.id); if (item.id !== "all") setGradeFilter("all"); updateTrackerSearch({ page: 0 }); }}
-                className={`px-4 py-2.5 text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] border-b-2 ${
-                  filter === item.id
-                    ? "text-osu-c1 border-osu-h1"
-                    : "text-osu-f1 border-transparent hover:text-osu-l2"
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-            <div className="w-px h-5 bg-osu-b3/40 mx-2" />
-            {grades.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => { setGradeFilter(item.id); if (item.id !== "all") setFilter("all"); updateTrackerSearch({ page: 0 }); }}
-                className={`px-2.5 py-2 cursor-pointer transition-all duration-[120ms] border-b-2 flex items-center ${
-                  gradeFilter === item.id
-                    ? "border-osu-h1 opacity-100"
-                    : "border-transparent opacity-50 hover:opacity-80"
-                }`}
-              >
-                {item.id === "all" ? (
-                  <span className="text-[11px] font-semibold text-osu-f1">Any</span>
-                ) : (
-                  <GradeImg grade={item.id} size={20} />
-                )}
-              </button>
-            ))}
-            <div className="w-px h-5 bg-osu-b3/40 mx-2" />
-            {keymodes.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => { setKeyFilter(item.id); updateTrackerSearch({ page: 0 }); }}
-                title={item.id === "other" ? "Show non-4K scores" : "Filter by keymode"}
-                className={`px-2.5 py-2.5 text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] border-b-2 tabular-nums ${
-                  keyFilter === item.id
-                    ? "text-osu-c1 border-osu-h1"
-                    : "text-osu-f1 border-transparent hover:text-osu-l2"
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-            <div className="w-px h-5 bg-osu-b3/40 mx-2" />
-            <button
-              onClick={() => cycleMissFilter(1)}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                cycleMissFilter(-1);
-              }}
-              title={missButtonTitle}
-              className={`px-3 py-2.5 text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] border-b-2 ${
-                missFilter === "fc"
-                  ? "text-osu-c1 border-osu-h1"
-                  : missFilter === "fc_choke"
-                    ? "text-osu-yellow border-osu-yellow"
-                    : "text-osu-f1 border-transparent hover:text-osu-l2"
-              }`}
-            >
-              {missButtonLabel}
-            </button>
-            <div className="w-px h-5 bg-osu-b3/40 mx-2" />
-            <button
-              onClick={() => cycleStarSort(1)}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                cycleStarSort(-1);
-              }}
-              title={starSortTitle}
-              className={`px-3 py-2.5 text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] border-b-2 ${
-                trackerSort === "stars"
-                  ? "text-osu-c1 border-osu-h1"
-                  : "text-osu-f1 border-transparent hover:text-osu-l2"
-              }`}
-            >
-              Stars{trackerSort === "stars" ? (trackerSortDirection === "desc" ? " ↓" : " ↑") : ""}
-            </button>
+            <FilterField label="Scores">
+              <SegmentedControl
+                id="tracker-source"
+                value={filter}
+                options={filters.map((item) => ({ value: item.id, label: item.label }))}
+                onChange={(id) => { setFilter(id); if (id !== "all") setGradeFilter("all"); updateTrackerSearch({ page: 0 }); }}
+              />
+            </FilterField>
+            <FilterField label="Grade">
+              <SegmentedControl
+                id="tracker-grade"
+                size="icon"
+                dimInactive
+                value={gradeFilter}
+                options={grades.map((item) => ({
+                  value: item.id,
+                  title: item.id === "all" ? "Any grade" : `${item.label} only`,
+                  label: item.id === "all"
+                    ? <span className="px-1 text-[11px]">Any</span>
+                    : <GradeImg grade={item.id} size={20} />,
+                }))}
+                onChange={(id) => { setGradeFilter(id); if (id !== "all") setFilter("all"); updateTrackerSearch({ page: 0 }); }}
+              />
+            </FilterField>
+            <FilterField label="Keys">
+              <SegmentedControl
+                id="tracker-keys"
+                value={keyFilter}
+                className="tabular-nums"
+                options={keymodes.map((item) => ({
+                  value: item.id,
+                  label: item.label,
+                  title: item.id === "other" ? "Show non-4K scores" : undefined,
+                }))}
+                onChange={(id) => { setKeyFilter(id); updateTrackerSearch({ page: 0 }); }}
+              />
+            </FilterField>
+            <FilterField label="Combo">
+              <SegmentedControl
+                id="tracker-miss"
+                value={missFilter}
+                options={[
+                  { value: "all", label: "Any" },
+                  { value: "fc", label: "FC", title: "Full combos only (0 misses)" },
+                  { value: "fc_choke", label: "Choke", title: "FC chokes only (1 miss)" },
+                ]}
+                onChange={selectMissFilter}
+              />
+            </FilterField>
+            <div className="ml-auto">
+              <FilterField label="Sort">
+                <button
+                  onClick={() => cycleStarSort(1)}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    cycleStarSort(-1);
+                  }}
+                  title={starSortTitle}
+                  className={`cursor-pointer rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold tabular-nums transition-colors duration-150 ${
+                    trackerSort === "stars"
+                      ? "border-osu-pink/30 bg-osu-pink/15 text-osu-pink-light"
+                      : "border-osu-b3/25 bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
+                  }`}
+                >
+                  Stars{trackerSort === "stars" ? (trackerSortDirection === "desc" ? " ↓" : " ↑") : ""}
+                </button>
+              </FilterField>
+            </div>
           </div>
           {/* Mobile: compact single row */}
           <div className="sm:hidden w-full py-2">
@@ -1324,14 +1317,14 @@ function ScoresPage() {
               </button>
             )}
             <div className="flex items-center justify-between gap-1">
-              <div className="flex rounded-lg overflow-hidden border border-osu-b3/30 flex-shrink-0">
+              <div className="flex flex-shrink-0 overflow-hidden rounded-lg border border-osu-b3/25">
                 {filters.map((item) => (
                   <button
                     key={item.id}
                     onClick={() => { setFilter(item.id); if (item.id !== "all") setGradeFilter("all"); updateTrackerSearch({ page: 0 }); }}
-                    className={`px-2 py-1.5 text-[11px] font-medium cursor-pointer transition-colors duration-[120ms] ${
+                    className={`px-2 py-1.5 text-[11px] font-semibold cursor-pointer transition-colors duration-[120ms] ${
                       filter === item.id && gradeFilter === "all"
-                        ? "bg-osu-b3 text-osu-l2"
+                        ? "bg-osu-pink/15 text-osu-pink-light"
                         : "bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
                     }`}
                   >
@@ -1345,9 +1338,9 @@ function ScoresPage() {
                     cycleMissFilter(-1);
                   }}
                   title={missButtonTitle}
-                  className={`w-8 py-1.5 text-[11px] font-medium cursor-pointer transition-colors duration-[120ms] ${
+                  className={`w-8 py-1.5 text-[11px] font-semibold cursor-pointer transition-colors duration-[120ms] ${
                     missFilter === "fc"
-                      ? "bg-osu-pink/20 text-osu-pink-light"
+                      ? "bg-osu-pink/15 text-osu-pink-light"
                       : missFilter === "fc_choke"
                         ? "bg-osu-yellow/15 text-osu-yellow"
                         : "bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
@@ -1384,10 +1377,10 @@ function ScoresPage() {
                   cycleStarSort(-1);
                 }}
                 title={starSortTitle}
-                className={`flex-shrink-0 rounded-lg border border-osu-b3/30 px-2 py-1.5 text-[11px] font-medium cursor-pointer transition-colors duration-[120ms] ${
+                className={`flex-shrink-0 cursor-pointer rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition-colors duration-[120ms] ${
                   trackerSort === "stars"
-                    ? "bg-osu-b3 text-osu-l2"
-                    : "bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
+                    ? "border-osu-pink/30 bg-osu-pink/15 text-osu-pink-light"
+                    : "border-osu-b3/25 bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
                 }`}
               >
                 Stars{trackerSort === "stars" ? (trackerSortDirection === "desc" ? " ↓" : " ↑") : ""}

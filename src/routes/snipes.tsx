@@ -7,6 +7,7 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
+import { FilterField, SegmentedControl, type SegmentedOption } from "../components/ui/SegmentedControl";
 import { LazerBadge } from "../components/ui/LazerBadge";
 import { ModBadge } from "../components/ui/ModBadge";
 import { Pagination } from "../components/ui/Pagination";
@@ -473,21 +474,33 @@ function SnipesPage() {
               </button>
             </div>
 
-            <FilterGroup label="Range">
-              {(["24h", "7d", "30d"] as RangeFilter[]).map((r) => (
-                <FilterPill key={r} active={search.range === r} onClick={() => updateSearch({ range: r, page: 0 })}>
-                  {r === "24h" ? "24h" : r === "7d" ? "7 days" : "30 days"}
-                </FilterPill>
-              ))}
-            </FilterGroup>
+            <FilterField label="Range">
+              <SegmentedControl
+                id="snipes-range"
+                value={search.range}
+                className="max-sm:flex max-sm:w-full max-sm:*:flex-1"
+                options={[
+                  { value: "24h", label: "24h" },
+                  { value: "7d", label: "7 days" },
+                  { value: "30d", label: "30 days" },
+                ] satisfies SegmentedOption<RangeFilter>[]}
+                onChange={(range) => updateSearch({ range, page: 0 })}
+              />
+            </FilterField>
 
-            <FilterGroup label="Keys">
-              {(["all", "4k", "7k"] as KeyFilter[]).map((k) => (
-                <FilterPill key={k} active={search.keys === k} onClick={() => updateSearch({ keys: k, page: 0 })}>
-                  {k === "all" ? "All" : k.toUpperCase()}
-                </FilterPill>
-              ))}
-            </FilterGroup>
+            <FilterField label="Keys">
+              <SegmentedControl
+                id="snipes-keys"
+                value={search.keys}
+                className="max-sm:flex max-sm:w-full max-sm:*:flex-1"
+                options={[
+                  { value: "all", label: "All" },
+                  { value: "4k", label: "4K" },
+                  { value: "7k", label: "7K" },
+                ] satisfies SegmentedOption<KeyFilter>[]}
+                onChange={(keys) => updateSearch({ keys, page: 0 })}
+              />
+            </FilterField>
 
           </div>
 
@@ -604,12 +617,23 @@ function SnipeRow({
     const diff = sniperMs - previousMs;
     if (diff <= 0) return null;
     const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+    // Seeded boards routinely displace scores from years back, and "1631 days"
+    // is not a figure anyone reads.
+    if (days >= 365) {
+      const years = Math.floor(days / 365);
+      return `${years} ${years === 1 ? "year" : "years"}`;
+    }
+    if (days >= 60) return `${Math.floor(days / 30)} months`;
     if (days >= 1) return `${days} ${days === 1 ? "day" : "days"}`;
     const hours = Math.max(1, Math.floor(diff / (60 * 60 * 1000)));
     return `${hours} ${hours === 1 ? "hour" : "hours"}`;
   }, [event.timestamp, event.victimTimestamp]);
 
   const relationLabel = "sniped";
+  const hasVictimScore = event.victimTotalScore != null && event.victimTotalScore > 0;
+  const hasSniperPp = event.pp != null && event.pp > 0;
+  const hasVictimPp = event.victimPp != null && event.victimPp > 0;
+  const victimPpLeads = hasSniperPp && hasVictimPp && event.victimPp! > event.pp!;
 
   return (
     <div className="rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden">
@@ -678,31 +702,56 @@ function SnipeRow({
             </span>
           </div>
 
-          {/* Row 2: beatmap title + diff + keys */}
-          <div className="flex items-center justify-between sm:justify-start gap-2 mt-0.5">
+          {/* Row 2: cover + beatmap title + diff + keys + board rank */}
+          <div className="flex items-center justify-between sm:justify-start gap-2 mt-1">
             <div className="flex items-center gap-2 min-w-0">
               <GradeImg grade={event.rank} size={20} />
-              {beatmapHref ? (
-                <a
-                  href={beatmapHref}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="text-xs text-white truncate hover:text-osu-pink-light underline-offset-2 hover:underline"
-                  title="Open beatmap on osu!"
-                >
-                  {event.beatmapset.title}
-                </a>
-              ) : (
-                <span className="text-xs text-white truncate">{event.beatmapset.title}</span>
+              {event.beatmapset.cover_url && (
+                <img
+                  src={event.beatmapset.cover_url}
+                  alt=""
+                  loading="lazy"
+                  className="h-6 w-9 flex-shrink-0 rounded object-cover"
+                />
               )}
-              <span className="text-[10px] text-osu-f1 truncate">[{event.beatmap.version}]</span>
+              <div className="min-w-0">
+                <div className="flex items-baseline gap-2 min-w-0">
+                  {beatmapHref ? (
+                    <a
+                      href={beatmapHref}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-xs text-white truncate hover:text-osu-pink-light underline-offset-2 hover:underline"
+                      title="Open beatmap on osu!"
+                    >
+                      {event.beatmapset.title}
+                    </a>
+                  ) : (
+                    <span className="text-xs text-white truncate">{event.beatmapset.title}</span>
+                  )}
+                  <span className="text-[10px] text-osu-f1 truncate">[{event.beatmap.version}]</span>
+                </div>
+                <div className="text-[10px] text-osu-f1 truncate">{event.beatmapset.artist}</div>
+              </div>
             </div>
-            {keys > 0 && (
-              <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 text-osu-yellow flex-shrink-0">
-                {keys}K
-              </span>
-            )}
+            <div className="flex flex-shrink-0 items-center gap-1.5">
+              {/* The board position taken is what separates a headline snipe
+                  from a routine one, and it was only ever shown in Discord. */}
+              {event.boardRank != null && event.boardRank > 0 && (
+                <span
+                  className="rounded bg-osu-pink/15 px-1.5 py-0.5 text-[9px] font-bold tabular-nums text-osu-pink-light"
+                  title={`Took the country board's #${event.boardRank} spot`}
+                >
+                  #{event.boardRank}
+                </span>
+              )}
+              {keys > 0 && (
+                <span className="rounded bg-osu-b3/50 px-1 py-0.5 text-[8px] font-bold text-osu-yellow">
+                  {keys}K
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Row 3 (mobile): mods + acc + pp */}
@@ -766,55 +815,80 @@ function SnipeRow({
           className="relative px-4 pb-3 pt-2 border-t border-osu-b3/20 overflow-hidden detail-enter"
         >
           {event.beatmapset.cover_url && <CoverBackdrop url={event.beatmapset.cover_url} />}
-          {/* flex-wrap + justify-center so an orphan last row (e.g. 5 stats in
-              a 2/4/5-col layout) centers itself instead of hugging the left
-              edge. Each cell's basis matches the old grid's column width minus
-              its share of the gap. */}
-          <div className="relative flex flex-wrap justify-center gap-3 text-center">
-            <StatCell label="Score" value={formatNumber(event.totalScore)} />
-            <StatCell label="Accuracy" value={formatAccuracy(event.accuracy)} color="text-osu-l2" />
-            {event.pp != null && event.pp > 0 && (
-              <div className="basis-[calc(50%-6px)] sm:basis-[calc(25%-9px)] lg:basis-[calc(20%-9.6px)] py-1.5">
-                <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">PP</div>
-                <div className="text-sm font-bold">
-                  <span
-                    className={
-                      event.victimPp != null && event.victimPp > event.pp
-                        ? "text-osu-yellow"
-                        : "text-osu-pink"
-                    }
-                  >
-                    {Math.round(event.pp)}pp
-                  </span>
-                  {event.victimPp != null && event.victimPp > 0 && (
-                    <span className="ml-1 text-[11px] font-normal text-osu-f1">
-                      vs {Math.round(event.victimPp)}pp
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-            <StatCell label="Stars" value={event.beatmap.difficulty_rating.toFixed(2)} />
-            {event.victimTotalScore != null && event.victimTotalScore > 0 && (
-              <StatCell
-                label="Margin"
-                value={`+${formatNumber(Math.max(0, event.totalScore - event.victimTotalScore))}`}
-                color="text-osu-pink-light"
+          {/* A snipe is one score displacing another, so the detail reads as a
+              head to head rather than a flat strip of the sniper's numbers.
+              The previous holder's score and pp are in the payload and used to
+              only show up folded into a "margin" figure. */}
+          <div className="relative mx-auto grid w-full max-w-[540px] grid-cols-[1fr_auto_1fr] items-center gap-x-3 gap-y-2 sm:gap-x-6">
+            <div className="min-w-0 text-right">
+              <UsernameText
+                username={event.sniper.username}
+                avatarUrl={event.sniper.avatar_url}
+                className="block truncate text-xs font-semibold"
+              />
+              <div className="text-[9px] uppercase tracking-wider text-osu-f1">Sniper</div>
+            </div>
+            <div className="text-[9px] uppercase tracking-wider text-osu-f1">vs</div>
+            <div className="min-w-0 text-left">
+              <UsernameText
+                username={event.victim.username}
+                avatarUrl={event.victim.avatar_url}
+                className="block truncate text-xs font-semibold"
+              />
+              <div className="text-[9px] uppercase tracking-wider text-osu-f1">Previously</div>
+            </div>
+
+            <VersusRow
+              label="Score"
+              sniper={formatNumber(event.totalScore)}
+              victim={hasVictimScore ? formatNumber(event.victimTotalScore!) : null}
+              sniperLeads
+            />
+            {(hasSniperPp || hasVictimPp) && (
+              <VersusRow
+                label="PP"
+                sniper={hasSniperPp ? `${Math.round(event.pp!)}pp` : "-"}
+                victim={hasVictimPp ? `${Math.round(event.victimPp!)}pp` : "-"}
+                // Mania totalScore rides on combo, so the sniper can take the
+                // board with the weaker play. Worth calling out rather than
+                // colouring them as the winner across the board.
+                sniperLeads={!victimPpLeads}
               />
             )}
-            {previousScoreAge && (
-              <StatCell label="Previous score age" value={previousScoreAge} color="text-osu-yellow" />
-            )}
+            <VersusRow
+              label="Set"
+              sniper={formatTimeAgo(event.timestamp)}
+              victim={previousScoreAge ? `${previousScoreAge} earlier` : formatTimeAgo(event.victimTimestamp)}
+              sniperLeads={false}
+              muted
+            />
           </div>
-          <div className="relative mt-2 flex items-center justify-between gap-2 text-[10px] text-osu-f1">
+
+          <div className="relative mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-osu-b3/20 pt-2.5 text-[10px] text-osu-f1">
+            {hasVictimScore && (
+              <span>
+                Margin <strong className="font-bold tabular-nums text-osu-pink-light">+{formatNumber(Math.max(0, event.totalScore - event.victimTotalScore!))}</strong>
+              </span>
+            )}
             <span>
-              {`${event.sniper.username} sniped ${event.victim.username}`}
+              Accuracy <strong className="font-bold tabular-nums text-osu-l2">{formatAccuracy(event.accuracy)}</strong>
             </span>
+            <span>
+              Stars <strong className="font-bold tabular-nums text-white">{event.beatmap.difficulty_rating.toFixed(2)}</strong>
+            </span>
+            {event.boardRank != null && event.boardRank > 0 && (
+              <span>
+                Board spot <strong className="font-bold tabular-nums text-osu-pink-light">#{event.boardRank}</strong>
+              </span>
+            )}
+            {victimPpLeads && (
+              <span className="text-osu-yellow">Won on score, not pp</span>
+            )}
             <a
               href={beatmapHref}
               target="_blank"
               rel="noreferrer"
-              className="hover:text-osu-pink-light underline-offset-2 hover:underline transition-colors flex-shrink-0"
+              className="ml-auto flex-shrink-0 underline-offset-2 transition-colors hover:text-osu-pink-light hover:underline"
             >
               View beatmap →
             </a>
@@ -825,37 +899,33 @@ function SnipeRow({
   );
 }
 
-function StatCell({ label, value, color }: { label: string; value: string; color?: string }) {
+/**
+ * One metric across the snipe: the sniper's figure, the label, then whoever
+ * held the spot before. The leading side keeps full contrast so the comparison
+ * is readable at a glance without an extra marker.
+ */
+function VersusRow({
+  label,
+  sniper,
+  victim,
+  sniperLeads,
+  muted = false,
+}: {
+  label: string;
+  sniper: string;
+  victim: string | null;
+  sniperLeads: boolean;
+  muted?: boolean;
+}) {
+  const winner = muted ? "text-osu-l2" : "text-white";
+  const loser = "text-osu-f1";
   return (
-    <div className="basis-[calc(50%-6px)] sm:basis-[calc(25%-9px)] lg:basis-[calc(20%-9.6px)] py-1.5">
-      <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</div>
-      <div className={`text-sm font-bold ${color ?? "text-white"}`}>{value}</div>
-    </div>
-  );
-}
-
-// ── Filter UI helpers (copied from /maps for consistency) ────────────────
-
-function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex w-full min-w-0 flex-col gap-1 sm:w-auto sm:flex-row sm:items-center sm:gap-1.5">
-      <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold shrink-0">{label}</span>
-      <div className="flex min-w-0 flex-wrap gap-0.5">{children}</div>
-    </div>
-  );
-}
-
-function FilterPill({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${
-        active
-          ? "bg-osu-pink/20 text-osu-pink-light"
-          : "bg-osu-b4 text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3"
-      }`}
-    >
-      {children}
-    </button>
+    <>
+      <div className={`text-right text-sm font-bold tabular-nums ${sniperLeads ? winner : loser}`}>{sniper}</div>
+      <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-osu-f1">{label}</div>
+      <div className={`text-left text-sm font-bold tabular-nums ${!sniperLeads && !muted ? winner : loser}`}>
+        {victim ?? "-"}
+      </div>
+    </>
   );
 }
