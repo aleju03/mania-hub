@@ -1,9 +1,11 @@
 import { avatarImageSrc } from "#/components/ui/Avatar";
 import {
   computeManiaSkills,
+  getHonoraryTier,
   getManiaCardTier,
   getNextManiaCardTier,
   MANIA_TIER_STYLES,
+  type ManiaCardTier,
   type ManiaSkills,
 } from "#/lib/maniacard";
 import type {
@@ -16,7 +18,7 @@ import type {
 
 const EMPTY_CARD_MESSAGE = "Need at least one ranked play with full beatmap data to mint a card.";
 
-export function buildManiaCardRenderData({ user, scores }: ManiaCardRenderInput): ManiaCardRenderData {
+export function buildManiaCardRenderData({ user, scores, tierOverride }: ManiaCardRenderInput): ManiaCardRenderData {
   const skills = computeManiaSkills(
     scores.map((score) => ({
       ...score,
@@ -28,7 +30,7 @@ export function buildManiaCardRenderData({ user, scores }: ManiaCardRenderInput)
     return { status: "empty", message: EMPTY_CARD_MESSAGE };
   }
 
-  return buildManiaCardRenderDataFromSkills({ user, skills, scores });
+  return buildManiaCardRenderDataFromSkills({ user, skills, scores, tierOverride });
 }
 
 /* Rebuilds renderable card data from an already computed skills snapshot.
@@ -39,14 +41,19 @@ export function buildManiaCardRenderDataFromSkills({
   user,
   skills,
   scores = [],
+  tierOverride,
 }: {
   user: ManiaCardRenderInput["user"];
   skills: ManiaSkills;
   scores?: ManiaCardRenderInput["scores"];
+  tierOverride?: ManiaCardTier;
 }): ManiaCardReadyData {
-  const tier = getManiaCardTier(skills.cardPower);
+  const honoraryTier = getHonoraryTier(user.id);
+  const tier = tierOverride ?? honoraryTier ?? getManiaCardTier(skills.cardPower);
   const tierStyle = MANIA_TIER_STYLES[tier];
-  const nextTier = getNextManiaCardTier(skills.cardPower);
+  // An honorary tier sits off the cardPower ladder, so there is nothing to
+  // progress toward and the ladder strip stays hidden.
+  const nextTier = tierOverride || honoraryTier ? null : getNextManiaCardTier(skills.cardPower);
 
   return {
     status: "ready",

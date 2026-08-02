@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { searchHonoraryPlayers } from "../honorary-players";
 import {
   beatmapScoreLookupPartialKey,
   beatmapScoreLookupStatusKey,
@@ -252,7 +253,7 @@ export const searchUsers = createServerFn({ method: "GET" })
   .validator(normalizeSearchUsersPayload)
   .handler(async ({ data }: { data: { query: string } }) => {
     edgeCache(60, 600);
-    return osuFetch<UserSearchResponse>(
+    const response = await osuFetch<UserSearchResponse>(
       "/search",
       {
         mode: "user",
@@ -260,4 +261,31 @@ export const searchUsers = createServerFn({ method: "GET" })
       },
       { caller: "searchUsers" },
     );
+    return mergeHonoraryMatches(response, data.query);
   });
+
+/* osu!'s user search can't return a deleted account, so the honorary roster is
+   merged in locally. Matches go first (someone typing "jakads" wants Jakads,
+   not the live accounts that merely contain the string) and existing rows for
+   the same id are dropped so a still-live honorary player isn't listed twice. */
+function mergeHonoraryMatches(response: UserSearchResponse, query: string): UserSearchResponse {
+  const matches = searchHonoraryPlayers(query);
+  if (matches.length === 0) return response;
+
+  const matchIds = new Set(matches.map((player) => player.id));
+  const existing = (response.user?.data ?? []).filter((entry) => !matchIds.has(entry.id));
+  const merged = matches.map((player) => ({
+    id: player.id,
+    username: player.username,
+    avatar_url: player.avatarUrl,
+    country_code: player.countryCode,
+    is_online: false,
+  }));
+
+  return {
+    user: {
+      data: [...merged, ...existing],
+      total: (response.user?.total ?? existing.length) + merged.length,
+    },
+  };
+}

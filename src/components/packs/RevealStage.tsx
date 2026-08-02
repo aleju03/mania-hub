@@ -23,7 +23,8 @@ import {
   rememberCardThumbnailDataUrl,
 } from "./cardThumbnailCache";
 import { getCachedCardBackCanvas, getCachedCardBackDataUrl } from "./packArt";
-import { playCardDraw, playFlipWhoosh, playRevealChime } from "./packSfx";
+import { playCardDraw, playFlipWhoosh, playGoatFanfare, playRevealChime } from "./packSfx";
+import { GoatBurst } from "./GoatBurst";
 import { TierBurst } from "./TierBurst";
 
 export interface PackCardState {
@@ -336,7 +337,9 @@ function CascadeTile({ entry, username, cardBack, landed, reducedMotion, onLande
           its whole coordinate space down to tile scale. */}
       {landed && !reducedMotion && entry?.tier && entry.glowColor && (
         <div className="pointer-events-none absolute inset-0" style={{ transform: "scale(0.5)" }}>
-          <TierBurst tier={entry.tier} glowColor={entry.glowColor} />
+          {entry.tier === "goat"
+            ? <GoatBurst glowColor={entry.glowColor} />
+            : <TierBurst tier={entry.tier} glowColor={entry.glowColor} />}
         </div>
       )}
     </div>
@@ -562,7 +565,8 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
       }
       setPhase("shown");
       if (!reducedMotion) setBurst({ key: position, tier: data.tier, glowColor: data.glowColor });
-      playRevealChime(tierRank(data.tier) / 8, revealedRef.current[cardIndex]?.isNew ?? false);
+      if (data.tier === "goat") playGoatFanfare();
+      else playRevealChime(tierRank(data.tier) / 8, revealedRef.current[cardIndex]?.isNew ?? false);
     } catch {
       // WebGL unavailable: fall back to the 2D front image.
       if (cancelledRef.current) return;
@@ -578,7 +582,8 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
       }
       setActiveData(data);
       setPhase("shown");
-      playRevealChime(tierRank(data.tier) / 8, revealedRef.current[cardIndex]?.isNew ?? false);
+      if (data.tier === "goat") playGoatFanfare();
+      else playRevealChime(tierRank(data.tier) / 8, revealedRef.current[cardIndex]?.isNew ?? false);
     }
   };
 
@@ -684,7 +689,8 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     setCascadeLanded((current) => (current.includes(position) ? current : [...current, position]));
     const entry = revealedRef.current[position];
     if (!entry || entry.tier === null) return;
-    playRevealChime(tierRank(entry.tier) / 8, entry.isNew);
+    if (entry.tier === "goat") playGoatFanfare();
+    else playRevealChime(tierRank(entry.tier) / 8, entry.isNew);
   };
 
   // Resolves every remaining card without the one-by-one ceremony: the
@@ -999,7 +1005,9 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
           </div>
         )}
 
-        {burst && <TierBurst key={burst.key} tier={burst.tier} glowColor={burst.glowColor} />}
+        {burst && (burst.tier === "goat"
+          ? <GoatBurst key={burst.key} glowColor={burst.glowColor} />
+          : <TierBurst key={burst.key} tier={burst.tier} glowColor={burst.glowColor} />)}
       </motion.div>
 
       {/* Caption */}
@@ -1043,8 +1051,15 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
                     {current.tierLabel}
                   </span>
                 )}
-                <span className="text-osu-f1 tabular-nums">#{current.player.globalRank.toLocaleString()}</span>
-                <span className="text-osu-f1 tabular-nums">{Math.round(current.player.pp).toLocaleString()}pp</span>
+                {/* Honorary cards can carry no known rank or pp (accounts wiped
+                    or deleted before the stats existed); an invented "#10,000
+                    0pp" reads as real data, so show nothing instead. */}
+                {current.player.user.statistics.global_rank !== null && (
+                  <span className="text-osu-f1 tabular-nums">#{current.player.globalRank.toLocaleString()}</span>
+                )}
+                {current.player.pp > 0 && (
+                  <span className="text-osu-f1 tabular-nums">{Math.round(current.player.pp).toLocaleString()}pp</span>
+                )}
               </div>
             </motion.div>
           ) : (

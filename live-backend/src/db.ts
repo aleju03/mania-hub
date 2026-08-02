@@ -306,6 +306,7 @@ async function runMigrationPass(target: Db, statements: string[], startedAtIso: 
   await migrateScoreEventsIdentity(target);
   await migrateProfileSnapshots(target);
   await migrateMapsFarmedOverlay(target);
+  await migrateCardTiers(target);
   await migrateGlobalMapsFarmedSeedEpoch(target);
   await migrateUserVariantPp(target);
   await migrateFarmHelperShape(target);
@@ -1120,6 +1121,28 @@ async function migrateChartAnalysisDtRate(db: Db): Promise<void> {
   if (!columns.includes("msd_ln_json")) {
     await db.execute("alter table beatmap_chart_analysis add column msd_ln_json text");
   }
+}
+
+/* Maniacard tier per player, so packs can draw by rarity.
+   The tier itself is derived from a player's real scores by the frontend's
+   maniacard module (the single source of that algorithm); this only caches the
+   result so a pack draw doesn't need every player's 200-score window. Written
+   by scripts/compute-pack-card-tiers.ts through /api/admin/card-tiers. Stale
+   values only skew draw odds slightly - the tier a card actually renders with
+   is always recomputed from live scores at reveal. */
+async function migrateCardTiers(db: Db): Promise<void> {
+  const userColumns = (await db.execute("pragma table_info(users)")).rows.map((row) => String(row.name));
+  if (!userColumns.includes("card_tier")) {
+    await db.execute("alter table users add column card_tier text");
+  }
+  if (!userColumns.includes("card_power")) {
+    await db.execute("alter table users add column card_power real");
+  }
+  if (!userColumns.includes("card_tier_computed_at")) {
+    await db.execute("alter table users add column card_tier_computed_at text");
+  }
+  // The draw filters by tier across the whole tracked pool on every pack.
+  await db.execute("create index if not exists idx_users_card_tier on users(card_tier)");
 }
 
 async function migrateMapsFarmedOverlay(db: Db): Promise<void> {

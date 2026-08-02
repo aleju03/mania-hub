@@ -37,7 +37,7 @@ import {
   writePendingPack,
 } from "../lib/pack-pending";
 import { fetchServerPackCollectionOwnedIds, recordServerPackPulls } from "../lib/pack-wallet-sync";
-import { PackPulse } from "../components/packs/PackPulse";
+import { PackPulse, refreshPackPulseFeed } from "../components/packs/PackPulse";
 import {
   drawPackPlayers,
   fetchPackPlayerScores,
@@ -149,6 +149,15 @@ function buildCardStates(players: PackPlayer[]): PackCardState[] {
     player,
     scoresPromise: scoresPromises[index] ?? Promise.resolve(null),
   }));
+}
+
+/* Dev only: `/packs?forceGoat=1` pins the honorary slot so the GOAT reveal can
+   be reviewed on demand instead of waiting out a 0.25-3% roll. Vite strips the
+   DEV branch from production builds, so this can't mint a card on the live
+   site; the search param is deliberately not part of the route's schema. */
+function devForceGoatPull(): boolean {
+  if (!import.meta.env.DEV || typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).has("forceGoat");
 }
 
 function canAffordPack(wallet: PackWallet | null, type: PackTypeDef): boolean {
@@ -409,6 +418,8 @@ function PacksPage() {
         const draw = await drawPackPlayers(Math.random, {
           topFraction: type.topFraction,
           count: type.cardCount,
+          honoraryChance: devForceGoatPull() ? 1 : type.honoraryChance,
+          tierWeights: type.tierWeights,
           ownedUserIds,
         });
         if (cancelled) return;
@@ -627,7 +638,14 @@ function PacksPage() {
                                   isNew: pull.isNew,
                                 })),
                               },
-                            }).catch(() => {});
+                            })
+                              // Once they are logged, pull the ticker forward
+                              // so your own pack lands in the rail alongside
+                              // the summary instead of on the next poll.
+                              .then((result) => {
+                                if (result && result.recorded > 0) refreshPackPulseFeed();
+                              })
+                              .catch(() => {});
                           }
                           setRevealed(pulls);
                           setSummaryFlyFrom(handoff?.sourceRects ?? null);

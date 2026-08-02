@@ -9,6 +9,8 @@ export interface ManiaCardPanelProps {
   loading: boolean;
   /** True only when the signed-in viewer is looking at their own card. Gates the "You" ladder badge. */
   isOwnProfile?: boolean;
+  /** Forces a tier instead of deriving it from cardPower. Preview-only. */
+  tierOverride?: ManiaCardTier;
 }
 
 export interface ManiaCardStat {
@@ -53,4 +55,5 @@ export type ManiaCardRenderData = ManiaCardReadyData | ManiaCardEmptyData;
 export interface ManiaCardRenderInput {
   user: ManiaCardPanelProps["user"];
   scores: OsuScore[];
+  tierOverride?: ManiaCardTier;
 }

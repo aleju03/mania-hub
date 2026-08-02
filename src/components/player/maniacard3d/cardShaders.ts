@@ -16,6 +16,10 @@ uniform float uFoil;
 uniform float uStarfield;
 uniform vec2 uLight;
 uniform vec3 uTierColor;
+// Color of the starfield's bright cores, and how much of the holo flow stays a
+// full rainbow (lower values pull it toward the tier color).
+uniform vec3 uStarTint;
+uniform float uRainbow;
 uniform vec4 uAvatarMask;
 uniform vec2 uTextureSize;
 uniform float uAvatarRadius;
@@ -174,6 +178,9 @@ void main() {
   float coordB = dot(vUv, axisB);
   float hueShift = coordA * 1.4 + coordB * 0.9 + uTime * 0.08 + light.x * 0.4 - light.y * 0.2;
   vec3 rainbow = 0.5 + 0.5 * cos(6.28318 * (vec3(0.0, 0.33, 0.67) + hueShift));
+  // Warm/monochrome tiers keep the moving bands but shed most of the spectrum,
+  // otherwise the rainbow reads as a color cast over the tier's own palette.
+  rainbow = mix(uTierColor * 1.5 + 0.12, rainbow, uRainbow);
 
   // Holo: tier-tinted rainbow, lit only where the bands pass.
   vec3 holo = screen(uTierColor * 0.42, rainbow * 0.85)
@@ -182,9 +189,9 @@ void main() {
   // Specular streak (white core along the beam).
   vec3 sweep = vec3(bandSharp * 0.62 + glare * 0.22);
 
-  // Mint-white star cores so the starfield reads as light points rather than
+  // Tinted star cores so the starfield reads as light points rather than
   // rainbow blobs.
-  vec3 starGlow = vec3(0.78, 1.0, 0.90) * stars * 0.55;
+  vec3 starGlow = uStarTint * stars * 0.55;
 
   float inAvatar = roundedRectMaskPx(vUv, uAvatarMask, uAvatarRadius, uTextureSize);
   float foilGain = mix(1.0, 0.30, inAvatar);

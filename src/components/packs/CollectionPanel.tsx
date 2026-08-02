@@ -61,6 +61,7 @@ const COLLECTION_PAGE_SIZE = 15;
 const skeletonThumbnailCache = new Map<ManiaCardTier, string>();
 const serverCollectionPageCache = new Map<string, ServerPackCollectionPage>();
 const COLLECTION_TIER_ORDER: ManiaCardTier[] = [
+  "goat",
   "worldClass",
   "ascendant",
   "mythic",

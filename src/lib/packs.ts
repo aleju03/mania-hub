@@ -1,10 +1,13 @@
 import {
+  fetchLiveDrawByTier,
   fetchLiveGlobalRankings,
   fetchLivePackCardSnapshotDirect,
   fetchLivePlayerProfileSnapshotDirect,
   isLiveBackendConfigured,
   type LiveGlobalRankingEntry,
+  type LiveTierDrawPlayer,
 } from "./live-backend";
+import { HONORARY_PACK_POOL, type HonoraryPlayer } from "./honorary-players";
 import { getRankings, getUserScoresBestWindow } from "./osu";
 import type { LeanRankingEntry, OsuScore } from "./types";
 
@@ -167,9 +170,43 @@ export interface PackTypeDef {
   cardCount: number;
   /* Replaces owned pulls with unowned cards from the same slice when possible. */
   guaranteesNew?: boolean;
+  /* Probability (0-1) that one slot in the pack is replaced by a random
+     honorary player. They are absent from the ranked pool by design (see
+     honorary-players.ts), so this is the only way to pull them. */
+  honoraryChance: number;
+  /* Per-card tier odds, as relative weights that sum to 100. Every table is
+     non-increasing from common up to World Class, so a rarer tier is never
+     more likely than a commoner one; premium packs shift mass upward while
+     keeping that order. Without this the odds were whatever the pool happened
+     to contain, which put Legendary ahead of Ultra Rare. */
+  tierWeights: Record<CardDrawTier, number>;
   blurb: string;
   accent: { r: number; g: number; b: number };
 }
+
+export const CARD_DRAW_TIERS = [
+  "common", "rare", "elite", "superRare", "ultraRare",
+  "legendary", "mythic", "ascendant", "worldClass",
+] as const;
+
+export type CardDrawTier = (typeof CARD_DRAW_TIERS)[number];
+
+const STANDARD_TIER_WEIGHTS: Record<CardDrawTier, number> = {
+  common: 17, rare: 15.5, elite: 14, superRare: 12.5, ultraRare: 11.3,
+  legendary: 11, mythic: 9, ascendant: 6.7, worldClass: 3,
+};
+
+// Premium packs keep the same non-increasing shape but flatten it, so the top
+// of the ladder is several times likelier without ever overtaking a lower tier.
+const ELITE_TIER_WEIGHTS: Record<CardDrawTier, number> = {
+  common: 14, rare: 14, elite: 13, superRare: 13, ultraRare: 12,
+  legendary: 11, mythic: 10, ascendant: 8, worldClass: 5,
+};
+
+const LEGEND_TIER_WEIGHTS: Record<CardDrawTier, number> = {
+  common: 12, rare: 12, elite: 12, superRare: 12, ultraRare: 11,
+  legendary: 11, mythic: 11, ascendant: 10, worldClass: 9,
+};
 
 export const PACK_TYPES: PackTypeDef[] = [
   {
@@ -179,6 +216,8 @@ export const PACK_TYPES: PackTypeDef[] = [
     cost: { kind: "charge" },
     topFraction: 1,
     cardCount: PACK_SIZE,
+    honoraryChance: 0.0025,
+    tierWeights: STANDARD_TIER_WEIGHTS,
     blurb: "Every tracked player, same odds",
     accent: { r: 167, g: 139, b: 250 },
   },
@@ -186,12 +225,14 @@ export const PACK_TYPES: PackTypeDef[] = [
     id: "wild",
     name: "Wild",
     artSubtitle: "WILD PACK",
-    // The volume pack: double the cards, priced under 2x the old 5-card
-    // rate so bulk stays the draw.
-    cost: { kind: "shards", amount: 14 },
+    // The volume pack: double the cards, priced so bulk is a convenience
+    // rather than the cheapest route to a full collection.
+    cost: { kind: "shards", amount: 30 },
     topFraction: 1,
     cardCount: 10,
     guaranteesNew: true,
+    honoraryChance: 0.0075,
+    tierWeights: STANDARD_TIER_WEIGHTS,
     blurb: "Whole pool, new cards first",
     accent: { r: 52, g: 211, b: 153 },
   },
@@ -206,6 +247,8 @@ export const PACK_TYPES: PackTypeDef[] = [
     topFraction: 0.1,
     cardCount: 7,
     guaranteesNew: true,
+    honoraryChance: 0.01,
+    tierWeights: ELITE_TIER_WEIGHTS,
     blurb: "Top 10%, new cards first",
     accent: { r: 251, g: 191, b: 36 },
   },
@@ -217,6 +260,8 @@ export const PACK_TYPES: PackTypeDef[] = [
     topFraction: 0.02,
     cardCount: PACK_SIZE,
     guaranteesNew: true,
+    honoraryChance: 0.03,
+    tierWeights: LEGEND_TIER_WEIGHTS,
     blurb: "Top 2%, new cards first",
     accent: { r: 244, g: 114, b: 182 },
   },
@@ -397,6 +442,11 @@ export interface PackDrawOptions {
   topFraction?: number;
   /* Cards to draw (defaults to PACK_SIZE). */
   count?: number;
+  /* Chance (0-1) that one slot becomes a random honorary player. */
+  honoraryChance?: number;
+  /* Per-card tier odds. When set, the draw rolls a tier per slot and asks the
+     backend for players of that tier instead of picking uniformly. */
+  tierWeights?: Record<CardDrawTier, number>;
   /* Collected card ids. When set, every owned slot is replaced with an
      unowned player from the same draw slice when one exists. Near-complete
      collections keep only the repeats that have no unowned replacement. */
@@ -514,6 +564,49 @@ export interface PackDraw {
   poolTotal: number | null;
 }
 
+export function honoraryToPackPlayer(player: HonoraryPlayer): PackPlayer {
+  return {
+    user: {
+      id: player.id,
+      username: player.username,
+      avatar_url: player.avatarUrl,
+      country_code: player.countryCode,
+      statistics: { global_rank: player.peakRank, pp: player.peakPp },
+    },
+    // Peak rank is the honest figure for this roster: most of them are
+    // unranked or deleted today. Unknown peaks sort to the back.
+    globalRank: player.peakRank ?? MAX_PACK_RANK,
+    pp: player.peakPp,
+  };
+}
+
+/* Rolls the pack's honorary chance and, on a hit, replaces the final slot (the
+   pack's reveal climax) with a random honorary player. Skips players the opener
+   already owns when the pack guarantees new cards, and never duplicates a
+   player already dealt in this pack. */
+export function applyHonoraryHit(
+  players: PackPlayer[],
+  rng: () => number,
+  chance: number,
+  ownedUserIds?: ReadonlySet<number>,
+): PackPlayer[] {
+  if (!(chance > 0) || players.length === 0) return players;
+  if (rng() >= chance) return players;
+
+  const dealt = new Set(players.map((player) => player.user.id));
+  const candidates = HONORARY_PACK_POOL.filter((player) => !dealt.has(player.id));
+  const unowned = ownedUserIds ? candidates.filter((player) => !ownedUserIds.has(player.id)) : [];
+  // Prefer one they don't have; fall back to the whole roster rather than
+  // silently dropping the hit once the set is complete.
+  const pool = unowned.length > 0 ? unowned : candidates;
+  if (pool.length === 0) return players;
+
+  const chosen = pool[Math.min(pool.length - 1, Math.floor(rng() * pool.length))];
+  const next = [...players];
+  next[next.length - 1] = honoraryToPackPlayer(chosen);
+  return next;
+}
+
 /* Primary draw: the server's tracked-player pool. Free of osu! API
    calls - the global rankings snapshot is a local DB read on the backend.
    Draws uniformly over the whole pool, or over its top slice for the
@@ -540,7 +633,88 @@ export async function drawPackPlayersFromPool(
     await replaceOwnedPoolEntries(entries, pagesByNumber, head, fetchPage, drawTotal, options.ownedUserIds, rng);
   }
 
-  return { players: sortIntoRevealOrder(entries.map(liveEntryToPackPlayer)), poolTotal: total };
+  const players = sortIntoRevealOrder(entries.map(liveEntryToPackPlayer));
+  return {
+    players: applyHonoraryHit(players, rng, options.honoraryChance ?? 0, options.ownedUserIds),
+    poolTotal: total,
+  };
+}
+
+export function rollDrawTier(weights: Record<CardDrawTier, number>, rng: () => number): CardDrawTier {
+  const total = CARD_DRAW_TIERS.reduce((sum, tier) => sum + Math.max(0, weights[tier] ?? 0), 0);
+  if (total <= 0) return "common";
+  let roll = rng() * total;
+  for (const tier of CARD_DRAW_TIERS) {
+    roll -= Math.max(0, weights[tier] ?? 0);
+    if (roll < 0) return tier;
+  }
+  return "common";
+}
+
+function tierDrawToPackPlayer(entry: LiveTierDrawPlayer): PackPlayer {
+  return {
+    user: {
+      id: entry.userId,
+      username: entry.username,
+      avatar_url: entry.avatarUrl,
+      country_code: entry.countryCode,
+      statistics: { global_rank: entry.globalRank, pp: entry.pp },
+    },
+    globalRank: entry.globalRank ?? MAX_PACK_RANK,
+    pp: entry.pp,
+  };
+}
+
+/* Weighted draw: roll a tier per slot, then ask the backend for players who
+   hold it. Slots are grouped so a 5-card pack costs at most a handful of
+   requests. Returns null when the tier index is not populated (fresh database,
+   script never run), so the caller can fall back to the uniform pool draw
+   rather than dealing a short pack. */
+export async function drawPackPlayersByTier(
+  rng: () => number,
+  weights: Record<CardDrawTier, number>,
+  options: PackDrawOptions = {},
+): Promise<PackPlayer[] | null> {
+  const count = options.count ?? PACK_SIZE;
+  const wanted = new Map<CardDrawTier, number>();
+  for (let slot = 0; slot < count; slot += 1) {
+    const tier = rollDrawTier(weights, rng);
+    wanted.set(tier, (wanted.get(tier) ?? 0) + 1);
+  }
+
+  const drawn: PackPlayer[] = [];
+  const taken: number[] = [];
+  for (const [tier, needed] of wanted) {
+    const players = await fetchLiveDrawByTier({
+      tier,
+      count: needed,
+      excludeUserIds: taken,
+      topFraction: options.topFraction,
+    });
+    for (const player of players) {
+      drawn.push(tierDrawToPackPlayer(player));
+      taken.push(player.userId);
+    }
+  }
+
+  // A thin tier (or an unpopulated index) can return fewer players than the
+  // roll asked for; a short pack is worse than slightly-off odds, so top up
+  // from the whole pool.
+  if (drawn.length === 0) return null;
+  if (drawn.length < count) {
+    const filler = await drawPackPlayersFromPool(rng, defaultPoolPageFetcher, {
+      ...options,
+      count: count - drawn.length,
+      honoraryChance: 0,
+    });
+    for (const player of filler.players) {
+      if (taken.includes(player.user.id)) continue;
+      drawn.push(player);
+      taken.push(player.user.id);
+    }
+  }
+
+  return sortIntoRevealOrder(drawn.slice(0, count));
 }
 
 export async function drawPackPlayers(
@@ -549,6 +723,22 @@ export async function drawPackPlayers(
 ): Promise<PackDraw> {
   const needsDuplicateProtection = Boolean(options.ownedUserIds && options.ownedUserIds.size > 0);
   if (isLiveBackendConfigured()) {
+    // Weighted-by-tier first; it is the only path that honours configured
+    // rarity odds. Falls through to the uniform pool draw if the tier index
+    // is missing or the request fails.
+    if (options.tierWeights) {
+      try {
+        const players = await drawPackPlayersByTier(rng, options.tierWeights, options);
+        if (players && players.length > 0) {
+          return {
+            players: applyHonoraryHit(players, rng, options.honoraryChance ?? 0, options.ownedUserIds),
+            poolTotal: null,
+          };
+        }
+      } catch {
+        // Tier draw unavailable: the uniform pool draw below still deals a pack.
+      }
+    }
     try {
       return await drawPackPlayersFromPool(rng, defaultPoolPageFetcher, options);
     } catch {
@@ -557,7 +747,11 @@ export async function drawPackPlayers(
     }
   }
   if (needsDuplicateProtection) throw new Error("Duplicate-protected packs require the tracked player pool.");
-  return { players: await drawPackPlayersFromOsuApi(rng, options.count ?? PACK_SIZE), poolTotal: null };
+  const players = await drawPackPlayersFromOsuApi(rng, options.count ?? PACK_SIZE);
+  return {
+    players: applyHonoraryHit(players, rng, options.honoraryChance ?? 0, options.ownedUserIds),
+    poolTotal: null,
+  };
 }
 
 export async function drawPackPlayersFromOsuApi(

@@ -66,6 +66,7 @@ const TIER_ORDER: ManiaCardTier[] = [
   "mythic",
   "ascendant",
   "worldClass",
+  "goat",
 ];
 
 const TIER_SHARD_VALUES: Record<ManiaCardTier, number> = {
@@ -78,6 +79,9 @@ const TIER_SHARD_VALUES: Record<ManiaCardTier, number> = {
   mythic: 20,
   ascendant: 28,
   worldClass: 40,
+  // A GOAT card is one of ten in the game; recycling one should be a real
+  // decision, not a rounding error next to World Class's 40.
+  goat: 1000,
 };
 
 export function tierRank(tier: ManiaCardTier | null): number {

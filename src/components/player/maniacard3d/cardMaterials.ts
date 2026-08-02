@@ -10,6 +10,7 @@ import {
 import type { Texture } from "three";
 import { CARD_TEXTURE_HEIGHT, CARD_TEXTURE_WIDTH, type ShaderQuality } from "./layout";
 import { cardOverlayFragmentShader, cardOverlayVertexShader } from "./cardShaders";
+import { getCosmicTierPalette } from "./cardTexture";
 import type { FaceLayout } from "./textureLayout";
 import type { ManiaCardReadyData } from "./types";
 
@@ -35,6 +36,7 @@ export function createOverlayMaterial(
   shaderQuality: ShaderQuality = "high",
 ) {
   const avatar = layout.masks.avatar;
+  const cosmic = getCosmicTierPalette(data.tier);
   return new ShaderMaterial({
     transparent: true,
     depthWrite: false,
@@ -48,10 +50,12 @@ export function createOverlayMaterial(
       uIntensity: { value: 0.88 },
       // Common cards keep the triangle sparkle but drop the holo/foil sheen.
       uFoil: { value: data.tier === "common" ? 0 : 1 },
-      // World Class trades the triangle sparkle for a drifting starfield.
-      uStarfield: { value: data.tier === "worldClass" ? 1 : 0 },
+      // Cosmic tiers trade the triangle sparkle for a drifting starfield.
+      uStarfield: { value: cosmic ? 1 : 0 },
       uLight: { value: new Vector2(0.5, 0.38) },
       uTierColor: { value: new Vector3(data.glowColor.r / 255, data.glowColor.g / 255, data.glowColor.b / 255) },
+      uStarTint: { value: new Vector3(...(cosmic?.starTint ?? [0.78, 1.0, 0.9])) },
+      uRainbow: { value: cosmic?.rainbow ?? 1 },
       uAvatarMask: {
         value: new Vector4(
           avatar.x / CARD_TEXTURE_WIDTH,

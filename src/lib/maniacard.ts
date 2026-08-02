@@ -36,7 +36,10 @@ export type ManiaCardTier =
   | "legendary"
   | "mythic"
   | "ascendant"
-  | "worldClass";
+  | "worldClass"
+  // Honorary tier for the all-time greats. Never reachable via cardPower
+  // (getManiaCardTier can't return it); assigned by player list.
+  | "goat";
 
 const MAX_PLAYS = 200;
 
@@ -558,6 +561,29 @@ export function computeManiaSkills(scores: OsuScore[], options: { globalPp?: num
   };
 }
 
+/* The honorary tier is awarded by name, not by cardPower: these are the players
+   the mode was built around, several of whom stopped playing before the rating
+   ladder existed. Keyed by osu! user id so a rename can't move the tier onto
+   whoever claims the freed username. */
+export const HONORARY_TIER: ManiaCardTier = "goat";
+
+export const HONORARY_TIER_USER_IDS: ReadonlyMap<number, string> = new Map([
+  [259972, "Jakads"],
+  [1190879, "WindyS"],
+  [140148, "jhlee0133"],
+  [8474029, "wonder5193"],
+  [86188, "Staiain"],
+  [5610085, "EtienneXC"],
+  [3360737, "Jinjin"],
+  [2531335, "Fullerene-"],
+  [2520707, "Shoegazer"],
+  [4140104, "Abcdullah"],
+]);
+
+export function getHonoraryTier(userId: number | null | undefined): ManiaCardTier | null {
+  return userId != null && HONORARY_TIER_USER_IDS.has(userId) ? HONORARY_TIER : null;
+}
+
 export function getManiaCardTier(cardPower: number): ManiaCardTier {
   if (cardPower >= 700) return "worldClass";
   if (cardPower >= 635) return "ascendant";
@@ -755,5 +781,19 @@ export const MANIA_TIER_STYLES: Record<ManiaCardTier, ManiaCardTierStyle> = {
       "linear-gradient(142deg, #ecfdf5 0%, #22c55e 30%, #052e16 66%, #020617 100%)",
     badgeHalo: "rgba(34,197,94,0.68)",
     badgeGlyphShadow: "rgba(2,44,34,0.58)",
+  },
+  goat: {
+    label: "GOAT",
+    background: "from-black via-amber-950 to-zinc-950",
+    border: "border-amber-100/95",
+    glow: "shadow-[0_18px_90px_rgba(245,158,11,0.5)]",
+    edgeFill: "rgba(69, 39, 5, 0.97)",
+    glowColor: "rgba(245, 158, 11, 0.46)",
+    starColor: "text-amber-100",
+    badgeColor: "text-amber-50",
+    badgeGradient:
+      "linear-gradient(142deg, #fef3c7 0%, #f59e0b 34%, #78350f 70%, #0c0a09 100%)",
+    badgeHalo: "rgba(245,158,11,0.7)",
+    badgeGlyphShadow: "rgba(69,39,5,0.58)",
   },
 };

@@ -3,12 +3,88 @@ import { CARD_TEXTURE_HEIGHT, CARD_TEXTURE_WIDTH } from "./layout";
 import { buildFaceLayout } from "./textureLayout";
 import type { FaceLayout } from "./textureLayout";
 import type { ManiaCardReadyData } from "./types";
+import type { ManiaCardTier } from "#/lib/maniacard";
 
 const FONT = "Torus, Arial, sans-serif";
 const CARD_CORNER_RADIUS = 58;
 const TRIANGLE_HEIGHT_RATIO = 1.18;
 const MANIA_GLYPH_D =
   "M500 48q-21 0-35 15t-15 35v504q0 21 15 36t35 14 36-14 14-36v-504q0-21-14-35t-36-15z m-110 192v220q0 21-14 36t-36 14-35-14-15-36v-220q0-21 15-35t35-15 36 15 14 35z m320 0v220q0 21-14 36t-36 14-35-14-15-36v-220q0-21 15-35t35-15 36 15 14 35z m-210 500q-106 0-197-53-88-52-140-140-53-91-53-197t53-197q52-88 140-140 91-53 197-53t197 53q88 52 140 140 53 91 53 197t-53 197q-52 88-140 140-91 53-197 53z m0 80q97 0 182-36t150-102q64-62 101-148t37-184-36-182-102-150q-62-64-148-101t-184-37-182 36-150 102q-64 62-101 149t-37 183 37 182 101 150q62 64 149 101t183 37v0z";
+
+// Tiers at the top of the ladder drop the tier gradient and triangle flecks for
+// a dark starfield front. One palette entry per tier drives the background
+// wash, the star colors, and the foil rim.
+export interface CosmicTierPalette {
+  base: Array<[number, string]>;
+  foilA: [string, string];
+  foilB: [string, string];
+  aurora: [string, string, string, string, string];
+  stars: string[];
+  // Star-core color and holo rainbow amount for the overlay shader (0-1 rgb).
+  starTint: [number, number, number];
+  rainbow: number;
+  rim: Array<[number, string]>;
+  rimGlow: string;
+  glint: string;
+  // Draws a large faint laurel + star behind the avatar, echoing the card back.
+  laurelWatermark?: boolean;
+}
+
+const COSMIC_TIERS: Partial<Record<ManiaCardTier, CosmicTierPalette>> = {
+  worldClass: {
+    base: [[0, "#010409"], [0.38, "#020617"], [0.72, "#030712"], [1, "#000000"]],
+    foilA: ["rgba(74, 222, 128, 0.26)", "rgba(16, 185, 129, 0.14)"],
+    foilB: ["rgba(45, 212, 191, 0.16)", "rgba(22, 163, 74, 0.1)"],
+    aurora: [
+      "rgba(20, 83, 45, 0)",
+      "rgba(34, 197, 94, 0.13)",
+      "rgba(6, 182, 212, 0.08)",
+      "rgba(21, 128, 61, 0.1)",
+      "rgba(20, 83, 45, 0)",
+    ],
+    stars: ["255, 255, 255", "187, 247, 208", "153, 246, 228", "209, 250, 229"],
+    starTint: [0.78, 1.0, 0.9],
+    rainbow: 1,
+    rim: [
+      [0, "rgba(236,253,245,0.72)"],
+      [0.18, "rgba(34,197,94,0.88)"],
+      [0.5, "rgba(6,182,212,0.26)"],
+      [0.78, "rgba(34,197,94,0.72)"],
+      [1, "rgba(236,253,245,0.62)"],
+    ],
+    rimGlow: "rgba(34,197,94,0.52)",
+    glint: "rgba(220,252,231,0.88)",
+  },
+  goat: {
+    base: [[0, "#0c0a09"], [0.38, "#1a1006"], [0.72, "#120a03"], [1, "#000000"]],
+    foilA: ["rgba(251, 191, 36, 0.30)", "rgba(217, 119, 6, 0.14)"],
+    foilB: ["rgba(253, 230, 138, 0.16)", "rgba(180, 83, 9, 0.1)"],
+    aurora: [
+      "rgba(120, 53, 15, 0)",
+      "rgba(245, 158, 11, 0.12)",
+      "rgba(253, 224, 71, 0.07)",
+      "rgba(146, 64, 14, 0.1)",
+      "rgba(120, 53, 15, 0)",
+    ],
+    stars: ["253, 230, 138", "251, 191, 36", "254, 243, 199", "252, 211, 77"],
+    starTint: [1.0, 0.9, 0.62],
+    rainbow: 0.3,
+    rim: [
+      [0, "rgba(254,243,199,0.72)"],
+      [0.18, "rgba(245,158,11,0.9)"],
+      [0.5, "rgba(253,224,71,0.28)"],
+      [0.78, "rgba(217,119,6,0.75)"],
+      [1, "rgba(254,243,199,0.62)"],
+    ],
+    rimGlow: "rgba(245,158,11,0.52)",
+    glint: "rgba(254,243,199,0.9)",
+    laurelWatermark: true,
+  },
+};
+
+export function getCosmicTierPalette(tier: ManiaCardTier) {
+  return COSMIC_TIERS[tier] ?? null;
+}
 
 export interface CardTextureSet {
   frontTexture: CanvasTexture;
@@ -40,7 +116,7 @@ export async function createCardTextures(
     loadImage("/images/maniacard/laurel-wreath.svg").catch(() => null),
   ]);
 
-  drawFront(front, data, layout, avatar);
+  drawFront(front, data, layout, avatar, laurel);
   drawBack(back, data, layout, laurel);
 
   const frontTexture = toTexture(frontCanvas);
@@ -95,14 +171,17 @@ function drawFront(
   data: ManiaCardReadyData,
   layout: FaceLayout,
   avatar: HTMLImageElement | null,
+  laurel: HTMLImageElement | null,
 ) {
   context.save();
   clipCard(context);
   drawTierBackground(context, data);
-  // World Class skips the triangle flecks entirely - its front is a clean
+  // Cosmic tiers skip the triangle flecks entirely - their front is a clean
   // starfield (static here, drifting/twinkling in the overlay shader).
-  if (data.tier === "worldClass") {
-    drawWorldClassFoilAccents(context);
+  const cosmic = COSMIC_TIERS[data.tier];
+  if (cosmic) {
+    if (cosmic.laurelWatermark) drawLaurelWatermark(context, data, laurel);
+    drawCosmicFoilAccents(context, cosmic);
   } else {
     drawTrianglePattern(context, 0.18);
   }
@@ -650,8 +729,9 @@ function drawLaurelHalf(context: CanvasRenderingContext2D, side: 1 | -1) {
 }
 
 function drawTierBackground(context: CanvasRenderingContext2D, data: ManiaCardReadyData) {
-  if (data.tier === "worldClass") {
-    drawWorldClassBackground(context);
+  const cosmic = COSMIC_TIERS[data.tier];
+  if (cosmic) {
+    drawCosmicBackground(context, cosmic);
     return;
   }
 
@@ -664,48 +744,44 @@ function drawTierBackground(context: CanvasRenderingContext2D, data: ManiaCardRe
   context.fillRect(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
 }
 
-function drawWorldClassBackground(context: CanvasRenderingContext2D) {
+function drawCosmicBackground(context: CanvasRenderingContext2D, tier: CosmicTierPalette) {
   context.save();
 
   const base = context.createLinearGradient(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
-  base.addColorStop(0, "#010409");
-  base.addColorStop(0.38, "#020617");
-  base.addColorStop(0.72, "#030712");
-  base.addColorStop(1, "#000000");
+  for (const [offset, color] of tier.base) base.addColorStop(offset, color);
   context.fillStyle = base;
   context.fillRect(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
 
   const foilA = context.createRadialGradient(250, 210, 0, 250, 210, 560);
-  foilA.addColorStop(0, "rgba(74, 222, 128, 0.26)");
-  foilA.addColorStop(0.2, "rgba(16, 185, 129, 0.14)");
-  foilA.addColorStop(0.62, "rgba(16, 185, 129, 0)");
+  foilA.addColorStop(0, tier.foilA[0]);
+  foilA.addColorStop(0.2, tier.foilA[1]);
+  foilA.addColorStop(0.62, "rgba(0, 0, 0, 0)");
   context.fillStyle = foilA;
   context.fillRect(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
 
   const foilB = context.createRadialGradient(800, 1110, 0, 800, 1110, 520);
-  foilB.addColorStop(0, "rgba(45, 212, 191, 0.16)");
-  foilB.addColorStop(0.26, "rgba(22, 163, 74, 0.1)");
-  foilB.addColorStop(0.76, "rgba(22, 163, 74, 0)");
+  foilB.addColorStop(0, tier.foilB[0]);
+  foilB.addColorStop(0.26, tier.foilB[1]);
+  foilB.addColorStop(0.76, "rgba(0, 0, 0, 0)");
   context.fillStyle = foilB;
   context.fillRect(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
 
   const aurora = context.createLinearGradient(0, 180, CARD_TEXTURE_WIDTH, 880);
-  aurora.addColorStop(0, "rgba(20, 83, 45, 0)");
-  aurora.addColorStop(0.34, "rgba(34, 197, 94, 0.13)");
-  aurora.addColorStop(0.46, "rgba(6, 182, 212, 0.08)");
-  aurora.addColorStop(0.66, "rgba(21, 128, 61, 0.1)");
-  aurora.addColorStop(1, "rgba(20, 83, 45, 0)");
+  aurora.addColorStop(0, tier.aurora[0]);
+  aurora.addColorStop(0.34, tier.aurora[1]);
+  aurora.addColorStop(0.46, tier.aurora[2]);
+  aurora.addColorStop(0.66, tier.aurora[3]);
+  aurora.addColorStop(1, tier.aurora[4]);
   context.fillStyle = aurora;
   context.fillRect(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
 
-  drawWorldClassStarfield(context);
+  drawCosmicStarfield(context, tier.stars);
 
   context.restore();
 }
 
-function drawWorldClassStarfield(context: CanvasRenderingContext2D) {
+function drawCosmicStarfield(context: CanvasRenderingContext2D, palette: string[]) {
   context.save();
-  const palette = ["255, 255, 255", "187, 247, 208", "153, 246, 228", "209, 250, 229"];
   for (let index = 0; index < 130; index += 1) {
     const x = random01(index * 19.43 + 2.1) * CARD_TEXTURE_WIDTH;
     const y = random01(index * 31.77 + 8.4) * CARD_TEXTURE_HEIGHT;
@@ -732,19 +808,15 @@ function drawWorldClassStarfield(context: CanvasRenderingContext2D) {
   context.restore();
 }
 
-function drawWorldClassFoilAccents(context: CanvasRenderingContext2D) {
+function drawCosmicFoilAccents(context: CanvasRenderingContext2D, tier: CosmicTierPalette) {
   context.save();
 
   const rim = context.createLinearGradient(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
-  rim.addColorStop(0, "rgba(236,253,245,0.72)");
-  rim.addColorStop(0.18, "rgba(34,197,94,0.88)");
-  rim.addColorStop(0.5, "rgba(6,182,212,0.26)");
-  rim.addColorStop(0.78, "rgba(34,197,94,0.72)");
-  rim.addColorStop(1, "rgba(236,253,245,0.62)");
+  for (const [offset, color] of tier.rim) rim.addColorStop(offset, color);
   roundedRect(context, 10, 10, CARD_TEXTURE_WIDTH - 20, CARD_TEXTURE_HEIGHT - 20, CARD_CORNER_RADIUS - 6);
   context.strokeStyle = rim;
   context.lineWidth = 6;
-  context.shadowColor = "rgba(34,197,94,0.52)";
+  context.shadowColor = tier.rimGlow;
   context.shadowBlur = 18;
   context.stroke();
 
@@ -754,11 +826,43 @@ function drawWorldClassFoilAccents(context: CanvasRenderingContext2D) {
     [808, 1010, 36, 0.42],
     [214, 1140, 22, 0.36],
   ];
-  context.fillStyle = "rgba(220,252,231,0.88)";
+  context.fillStyle = tier.glint;
   for (const [x, y, size, opacity] of glints) {
     drawSparkle(context, x, y, size, opacity);
   }
 
+  context.restore();
+}
+
+// Oversized laurel wreath framing the avatar, in the tier's glow color. Reuses
+// the card back's wreath art so both faces read as the same emblem. Drawn
+// before the avatar so the leaves sit behind it and read as a frame.
+function drawLaurelWatermark(
+  context: CanvasRenderingContext2D,
+  data: ManiaCardReadyData,
+  laurel: HTMLImageElement | null,
+) {
+  if (!laurel) return;
+  const { r, g, b } = data.glowColor;
+  // Preserve the SVG's natural aspect (~1.145) so the leaves don't squash.
+  const height = 740;
+  const width = height * 1.145;
+  const cx = 500;
+  const cy = 600;
+
+  const tinted = document.createElement("canvas");
+  tinted.width = width;
+  tinted.height = height;
+  const tintedContext = tinted.getContext("2d");
+  if (!tintedContext) return;
+  tintedContext.drawImage(laurel, 0, 0, width, height);
+  tintedContext.globalCompositeOperation = "source-in";
+  tintedContext.fillStyle = `rgb(${r}, ${g}, ${b})`;
+  tintedContext.fillRect(0, 0, width, height);
+
+  context.save();
+  context.globalAlpha = 0.13;
+  context.drawImage(tinted, cx - width / 2, cy - height / 2);
   context.restore();
 }
 

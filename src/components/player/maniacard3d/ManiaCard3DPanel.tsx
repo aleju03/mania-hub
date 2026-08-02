@@ -107,6 +107,7 @@ const TIER_TEXT_COLOR: Record<string, string> = {
   mythic: "text-red-200",
   ascendant: "text-white",
   worldClass: "text-emerald-200",
+  goat: "text-amber-200",
 };
 
 const TIER_FILL_COLOR: Record<string, string> = {
@@ -119,6 +120,7 @@ const TIER_FILL_COLOR: Record<string, string> = {
   mythic: "rgb(248, 113, 113)",
   ascendant: "rgb(226, 232, 240)",
   worldClass: "rgb(110, 231, 183)",
+  goat: "rgb(251, 191, 36)",
 };
 
 // Full tier ladder (lowest -> highest), derived from the shared thresholds so
@@ -128,7 +130,13 @@ const TIER_LADDER: Array<{ tier: ManiaCardTier; min: number }> = [
   ...MANIA_CARD_TIER_THRESHOLDS.map(({ tier, threshold }) => ({ tier, min: threshold })),
 ];
 
-export function ManiaCard3DPanel({ user, scores, loading, isOwnProfile = false }: ManiaCardPanelProps) {
+export function ManiaCard3DPanel({
+  user,
+  scores,
+  loading,
+  isOwnProfile = false,
+  tierOverride,
+}: ManiaCardPanelProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<ManiaCardRenderer | null>(null);
   const latestReadyDataRef = useRef<ManiaCardReadyData | null>(null);
@@ -139,7 +147,10 @@ export function ManiaCard3DPanel({ user, scores, loading, isOwnProfile = false }
   const [readySignature, setReadySignature] = useState<string | null>(null);
   const [ratingModalOpen, setRatingModalOpen] = useState(false);
   const reducedMotion = useReducedMotion();
-  const data = useMemo(() => buildManiaCardRenderData({ user, scores }), [user, scores]);
+  const data = useMemo(
+    () => buildManiaCardRenderData({ user, scores, tierOverride }),
+    [user, scores, tierOverride],
+  );
   const dataSignature = useMemo(() => getManiaCardRenderDataSignature(data), [data]);
   const rendererReady = readySignature === dataSignature;
 

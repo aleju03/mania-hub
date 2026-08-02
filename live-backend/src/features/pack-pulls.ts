@@ -17,7 +17,14 @@ export const PACK_PULL_FEED_MAX_LIMIT = 50;
 
 // The feed only carries pulls worth broadcasting: high mints and cards nobody
 // had ever pulled before.
-const NOTABLE_TIERS = new Set(["ultraRare", "legendary", "mythic", "ascendant", "worldClass"]);
+const NOTABLE_TIERS = new Set([
+  "ultraRare",
+  "legendary",
+  "mythic",
+  "ascendant",
+  "worldClass",
+  "goat",
+]);
 
 const VALID_TIERS = new Set([
   "common",
@@ -29,6 +36,7 @@ const VALID_TIERS = new Set([
   "mythic",
   "ascendant",
   "worldClass",
+  "goat",
 ]);
 
 export interface PackPullCardInput {

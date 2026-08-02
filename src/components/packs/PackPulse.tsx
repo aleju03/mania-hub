@@ -41,7 +41,14 @@ function dripGapMs(queueLength: number): number {
   return 500;
 }
 
-const NOTABLE_TIERS = new Set<string>(["ultraRare", "legendary", "mythic", "ascendant", "worldClass"]);
+const NOTABLE_TIERS = new Set<string>([
+  "ultraRare",
+  "legendary",
+  "mythic",
+  "ascendant",
+  "worldClass",
+  "goat",
+]);
 
 interface RailEntry {
   pull: LivePackPullFeedEntry;
@@ -69,6 +76,15 @@ let savedRailEntries: RailEntry[] = [];
    seed cascade. */
 const FEED_STATE_KEY = "mania-hub-pack-pulse-v1";
 let feedStateRestored = false;
+
+/* Your own pack is in the log the moment the reveal ends, but the rail would
+   not notice until the next poll lands, so your cards trickled in up to
+   FEED_POLL_MS after you had already moved on. The packs route pings this
+   right after recording, and the pulls enter through the normal drip. */
+let pollFeedNow: (() => void) | null = null;
+export function refreshPackPulseFeed(): void {
+  pollFeedNow?.();
+}
 
 function restoreFeedStateOnce(): void {
   if (feedStateRestored || typeof window === "undefined") return;
@@ -194,6 +210,7 @@ export function PackPulse({ viewerId, hidden = false }: { viewerId: number | nul
         .catch(() => {});
     };
     load();
+    pollFeedNow = load;
     const pollInterval = window.setInterval(load, FEED_POLL_MS);
     const dripInterval = window.setInterval(() => {
       if (pullQueue.length === 0) return;
@@ -214,6 +231,7 @@ export function PackPulse({ viewerId, hidden = false }: { viewerId: number | nul
     }, 1_000);
     return () => {
       cancelled = true;
+      if (pollFeedNow === load) pollFeedNow = null;
       window.clearInterval(pollInterval);
       window.clearInterval(dripInterval);
       window.clearInterval(sweepInterval);

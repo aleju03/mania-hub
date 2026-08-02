@@ -214,6 +214,36 @@ export function playRevealChime(intensity: number, isNew: boolean) {
   }
 }
 
+// A major triad walking up two octaves: the reveal chime's notes are a scale
+// fragment, so a triad reads as "different event", not "louder chime".
+const GOAT_FANFARE_NOTES = [392, 494, 587, 784, 988, 1175, 1568];
+
+/* The GOAT pull. Longer and fuller than playRevealChime by design - this tier
+   drops at most 3% of the time in the best pack, so it gets a fanfare rather
+   than a bigger bell: a low swell under a rising triad, then a struck bell. */
+export function playGoatFanfare() {
+  const ctx = ensureAudio();
+  if (!ctx) return;
+
+  // Low swell that opens the moment and carries under the arpeggio.
+  playTone(ctx, { freq: 98, endFreq: 196, duration: 1.6, gain: 0.075, type: "sine" });
+  playTone(ctx, { freq: 147, duration: 1.4, gain: 0.045, type: "sine" });
+  playNoise(ctx, { duration: 1.1, gain: 0.05, startFreq: 400, endFreq: 7200, q: 0.6 });
+
+  GOAT_FANFARE_NOTES.forEach((freq, index) => {
+    const at = 0.1 + index * 0.085;
+    playTone(ctx, { at, freq, duration: 0.9, gain: 0.1, type: "sine" });
+    playTone(ctx, { at, freq: freq * 2, duration: 0.6, gain: 0.03, type: "sine" });
+    playTone(ctx, { at, freq: freq * 3, duration: 0.35, gain: 0.012, type: "sine" });
+  });
+
+  // Struck bell on the landing, with a shimmer tail.
+  const landing = 0.1 + GOAT_FANFARE_NOTES.length * 0.085;
+  playTone(ctx, { at: landing, freq: 2093, duration: 1.8, gain: 0.085, type: "sine" });
+  playTone(ctx, { at: landing, freq: 3136, duration: 1.4, gain: 0.03, type: "sine" });
+  playNoise(ctx, { at: landing, duration: 1.2, gain: 0.035, startFreq: 9000, q: 0.8 });
+}
+
 /* Shard clinks when cards are recycled; a bigger haul jingles longer. */
 export function playRecycleClink(gained: number) {
   const ctx = ensureAudio();

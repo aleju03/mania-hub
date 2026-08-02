@@ -82,11 +82,13 @@ const TIER_SHARD_VALUES: Record<string, number> = {
   mythic: 20,
   ascendant: 28,
   worldClass: 40,
+  goat: 1000,
   unrated: 1,
 };
 
 function tierRankSql(alias = "tier") {
   return `case ${alias}
+    when 'goat' then 9
     when 'worldClass' then 8
     when 'ascendant' then 7
     when 'mythic' then 6
@@ -102,6 +104,7 @@ function tierRankSql(alias = "tier") {
 
 function shardValueSql(alias = "tier") {
   return `case ${alias}
+    when 'goat' then 1000
     when 'worldClass' then 40
     when 'ascendant' then 28
     when 'mythic' then 20
@@ -131,6 +134,26 @@ function liveUserFieldSql(field: "username" | "avatar_url" | "country_code"): st
 
 const displayUsernameSql = `coalesce(nullif(${liveUserFieldSql("username")}, ''), username)`;
 
+/* The honorary roster, mirrored from src/lib/honorary-players.ts. Only these
+   ten players can hold the GOAT tier.
+
+   Collection cards arrive from the client and their tier is otherwise taken on
+   trust, which was harmless when the rarest card recycled for 40 shards. GOAT
+   recycles for 1000, so an unchecked `tier: "goat"` on any player is a shard
+   printer: sync a forged card, recycle it, repeat. Membership is a fixed list
+   of ids, so the check is exact and needs no tier index. */
+const HONORARY_USER_IDS = new Set([
+  259972, 1190879, 140148, 8474029, 86188, 5610085, 3360737, 2531335, 2520707, 4140104,
+]);
+
+function claimedTier(raw: { tier?: unknown }, userId: number): string | null {
+  if (typeof raw.tier !== "string") return null;
+  // A rejected claim falls back to unrated (1 shard) rather than erroring, so a
+  // stale or hand-edited local wallet still syncs.
+  if (raw.tier === "goat" && !HONORARY_USER_IDS.has(userId)) return null;
+  return raw.tier;
+}
+
 function normalizeCard(value: unknown): StoredPackCard | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Partial<WalletCardPayload>;
@@ -142,8 +165,8 @@ function normalizeCard(value: unknown): StoredPackCard | null {
     avatarUrl: typeof raw.avatarUrl === "string" ? raw.avatarUrl : typeof raw.avatar_url === "string" ? raw.avatar_url : "",
     countryCode:
       typeof raw.countryCode === "string" ? raw.countryCode : typeof raw.country_code === "string" ? raw.country_code : "",
-    tier: typeof raw.tier === "string" ? raw.tier : null,
-    tierLabel: typeof raw.tierLabel === "string" ? raw.tierLabel : null,
+    tier: claimedTier(raw, userId),
+    tierLabel: claimedTier(raw, userId) === null ? null : (typeof raw.tierLabel === "string" ? raw.tierLabel : null),
     skills: raw.skills && typeof raw.skills === "object" ? raw.skills : null,
     pp: toFiniteNumber(raw.pp, 0),
     globalRank: Math.floor(toFiniteNumber(raw.globalRank ?? raw.global_rank, 0)),

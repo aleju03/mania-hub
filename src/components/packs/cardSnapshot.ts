@@ -1,5 +1,5 @@
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
-import { createCardTextures } from "../player/maniacard3d/cardTexture";
+import { createCardTextures, getCosmicTierPalette } from "../player/maniacard3d/cardTexture";
 import { drawManiaGlyph } from "../player/maniacard3d/cardTexture";
 import { CARD_TEXTURE_HEIGHT, CARD_TEXTURE_WIDTH } from "../player/maniacard3d/layout";
 import { parseGradientStops } from "../player/maniacard3d/renderData";
@@ -97,7 +97,7 @@ function drawSkeletonFront(context: CanvasRenderingContext2D, tier: ManiaCardTie
   roundedRect(context, 0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT, 58);
   context.clip();
   drawSkeletonTierBackground(context, tier);
-  if (tier === "worldClass") drawSkeletonWorldClassAccents(context);
+  if (getCosmicTierPalette(tier)) drawSkeletonCosmicAccents(context, tier);
   else drawSkeletonTrianglePattern(context, 0.18);
   drawSkeletonModeBadge(context, tier);
   drawSkeletonNamePlate(context);
@@ -108,32 +108,30 @@ function drawSkeletonFront(context: CanvasRenderingContext2D, tier: ManiaCardTie
 }
 
 function drawSkeletonTierBackground(context: CanvasRenderingContext2D, tier: ManiaCardTier) {
-  if (tier === "worldClass") {
+  const cosmic = getCosmicTierPalette(tier);
+  if (cosmic) {
     const base = context.createLinearGradient(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
-    base.addColorStop(0, "#010409");
-    base.addColorStop(0.38, "#020617");
-    base.addColorStop(0.72, "#030712");
-    base.addColorStop(1, "#000000");
+    for (const [offset, color] of cosmic.base) base.addColorStop(offset, color);
     context.fillStyle = base;
     context.fillRect(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
 
     const foilA = context.createRadialGradient(250, 210, 0, 250, 210, 560);
-    foilA.addColorStop(0, "rgba(74, 222, 128, 0.26)");
-    foilA.addColorStop(0.2, "rgba(16, 185, 129, 0.14)");
-    foilA.addColorStop(0.62, "rgba(16, 185, 129, 0)");
+    foilA.addColorStop(0, cosmic.foilA[0]);
+    foilA.addColorStop(0.2, cosmic.foilA[1]);
+    foilA.addColorStop(0.62, "rgba(0, 0, 0, 0)");
     context.fillStyle = foilA;
     context.fillRect(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
 
     const aurora = context.createLinearGradient(0, 180, CARD_TEXTURE_WIDTH, 880);
-    aurora.addColorStop(0, "rgba(20, 83, 45, 0)");
-    aurora.addColorStop(0.34, "rgba(34, 197, 94, 0.13)");
-    aurora.addColorStop(0.46, "rgba(6, 182, 212, 0.08)");
-    aurora.addColorStop(0.66, "rgba(21, 128, 61, 0.1)");
-    aurora.addColorStop(1, "rgba(20, 83, 45, 0)");
+    aurora.addColorStop(0, cosmic.aurora[0]);
+    aurora.addColorStop(0.34, cosmic.aurora[1]);
+    aurora.addColorStop(0.46, cosmic.aurora[2]);
+    aurora.addColorStop(0.66, cosmic.aurora[3]);
+    aurora.addColorStop(1, cosmic.aurora[4]);
     context.fillStyle = aurora;
     context.fillRect(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
 
-    drawSkeletonStarfield(context);
+    drawSkeletonStarfield(context, cosmic.stars);
     return;
   }
 
@@ -146,21 +144,20 @@ function drawSkeletonTierBackground(context: CanvasRenderingContext2D, tier: Man
   context.fillRect(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
 }
 
-function drawSkeletonWorldClassAccents(context: CanvasRenderingContext2D) {
+function drawSkeletonCosmicAccents(context: CanvasRenderingContext2D, tier: ManiaCardTier) {
+  const cosmic = getCosmicTierPalette(tier);
+  if (!cosmic) return;
+
   const rim = context.createLinearGradient(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
-  rim.addColorStop(0, "rgba(236,253,245,0.72)");
-  rim.addColorStop(0.18, "rgba(34,197,94,0.88)");
-  rim.addColorStop(0.5, "rgba(6,182,212,0.26)");
-  rim.addColorStop(0.78, "rgba(34,197,94,0.72)");
-  rim.addColorStop(1, "rgba(236,253,245,0.62)");
+  for (const [offset, color] of cosmic.rim) rim.addColorStop(offset, color);
   roundedRect(context, 10, 10, CARD_TEXTURE_WIDTH - 20, CARD_TEXTURE_HEIGHT - 20, 52);
   context.strokeStyle = rim;
   context.lineWidth = 6;
-  context.shadowColor = "rgba(34,197,94,0.52)";
+  context.shadowColor = cosmic.rimGlow;
   context.shadowBlur = 18;
   context.stroke();
 
-  context.fillStyle = "rgba(220,252,231,0.76)";
+  context.fillStyle = cosmic.glint;
   drawSkeletonSparkle(context, 152, 130, 42, 0.58);
   drawSkeletonSparkle(context, 832, 178, 26, 0.4);
   drawSkeletonSparkle(context, 808, 1010, 36, 0.32);
@@ -296,8 +293,7 @@ function drawSkeletonTrianglePattern(context: CanvasRenderingContext2D, opacity:
   context.restore();
 }
 
-function drawSkeletonStarfield(context: CanvasRenderingContext2D) {
-  const palette = ["255, 255, 255", "187, 247, 208", "153, 246, 228", "209, 250, 229"];
+function drawSkeletonStarfield(context: CanvasRenderingContext2D, palette: string[]) {
   for (let index = 0; index < 130; index += 1) {
     const x = random01(index * 19.43 + 2.1) * CARD_TEXTURE_WIDTH;
     const y = random01(index * 31.77 + 8.4) * CARD_TEXTURE_HEIGHT;
