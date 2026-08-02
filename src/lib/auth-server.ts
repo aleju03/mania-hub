@@ -9,6 +9,7 @@ import {
 } from "./auth-shared";
 import type { AuthState, AuthViewer } from "./auth-shared";
 import { isLocalDevAccessGranted } from "./auth-local-dev";
+import { getCanonicalOrigin } from "./origin";
 
 const DEFAULT_DEV_OSU_USER_IDS: number[] = [];
 const DEFAULT_ADMIN_OSU_USER_IDS = [7095193];
@@ -352,15 +353,18 @@ export function clearOAuthStateCookieHeader(request: Request): string {
 }
 
 export function getAuthRedirectUri(request: Request): string {
-  const url = new URL(request.url);
-  return `${url.origin}/api/auth/osu/callback`;
+  // Not `request.url`: behind a TLS-terminating proxy that origin is the
+  // internal http:// one, and osu! rejects a redirect_uri that does not match
+  // the registered https:// value exactly.
+  return `${getCanonicalOrigin(request)}/api/auth/osu/callback`;
 }
 
 export function normalizeAuthNext(value: string | null | undefined, request: Request): string {
   if (!value) return "/";
   try {
-    const url = new URL(value, new URL(request.url).origin);
-    if (url.origin !== new URL(request.url).origin) return "/";
+    const origin = getCanonicalOrigin(request);
+    const url = new URL(value, origin);
+    if (url.origin !== new URL(origin).origin) return "/";
     return `${url.pathname}${url.search}${url.hash}`;
   } catch {
     return "/";

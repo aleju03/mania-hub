@@ -1,5 +1,11 @@
 const PRIMARY_SITE_ORIGIN = "https://mania-tracker.com";
 const PRIMARY_SITE_HOSTS = ["mania-tracker.com", "www.mania-tracker.com"];
+/** The dev/admin host. It has to resolve to itself rather than to the
+    production alias: dev and admin features key off this exact hostname
+    (allowsOsuDevAccess in auth-server.ts) and it registers its own osu!
+    redirect uri. */
+const DEV_SITE_HOST = "ninja.mania-tracker.com";
+const DEV_SITE_ORIGIN = `https://${DEV_SITE_HOST}`;
 const DEFAULT_ALLOWED_HOST_SUFFIXES = [".vercel.app", ".loca.lt"];
 
 function readEnv(name: string): string | undefined {
@@ -44,7 +50,7 @@ function getAllowedHosts(): string[] {
     ?.split(",")
     .map((host) => host.trim().toLowerCase())
     .filter(Boolean) ?? [];
-  return [...PRIMARY_SITE_HOSTS, ...configured];
+  return [...PRIMARY_SITE_HOSTS, DEV_SITE_HOST, ...configured];
 }
 
 function isAllowedHost(host: string): boolean {
@@ -109,6 +115,14 @@ export function getCanonicalOrigin(request: Request): string {
   const allowedRequestHost = allowedRequestOrigin ? originHost(allowedRequestOrigin) : null;
   if (allowedRequestHost && isPrimarySiteHost(allowedRequestHost)) {
     return PRIMARY_SITE_ORIGIN;
+  }
+  // Ahead of the Vercel production alias, which would otherwise rewrite ninja's
+  // own origin to the production one and break its osu! callback. Deliberately
+  // not a general "prefer the request host" rule: preview *.vercel.app hosts
+  // still fall through to the production alias, since their throwaway URLs are
+  // not registered redirect uris.
+  if (allowedRequestHost === DEV_SITE_HOST) {
+    return DEV_SITE_ORIGIN;
   }
 
   return getVercelProductionOrigin() ?? allowedRequestOrigin ?? requestOrigin(request);
