@@ -918,10 +918,6 @@ export function ReplaySideBySideView({
         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-[#07070b]/95 px-6 text-center">
           <Smartphone className="mb-2 h-10 w-10 rotate-90 text-osu-pink" aria-hidden="true" />
           <p className="text-sm font-semibold text-osu-l2">Rotate your phone to watch both</p>
-          <p className="max-w-xs text-xs leading-relaxed text-osu-f1">
-            Two playfields with the stats between them need a landscape screen.
-            {sides ? " Both runs stay loaded - turn back and they're right where you left them." : ""}
-          </p>
           <button
             type="button"
             onClick={onExit}
