@@ -419,7 +419,6 @@ function PacksPage() {
           topFraction: type.topFraction,
           count: type.cardCount,
           honoraryChance: devForceGoatPull() ? 1 : type.honoraryChance,
-          tierWeights: type.tierWeights,
           ownedUserIds,
         });
         if (cancelled) return;

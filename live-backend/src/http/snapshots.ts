@@ -30,7 +30,6 @@ import { getMapSearchPage, getMapSearchSetEntry, MAP_SEARCH_PATTERNS, MAP_SEARCH
 import { getMapCollection, getMapCollections, getMapCollectionsRotation, rebuildMapCollections } from "../features/map-collections.js";
 import { getPackWallet, listPackCollectionCards, listPackCollectionOwnedUserIds, PACK_COLLECTION_MAX_PAGE_SIZE, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
 import { getPackCardStats, getPackPulledStats, getSharedPackCard, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../features/pack-pulls.js";
-import { drawPlayersByTier, getCardTierCounts, normalizeCardTierInput, writeCardTiers } from "../features/card-tiers.js";
 import { buildPackCardProfileSnapshot, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, warmProfileSnapshots } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
 import { getSnipesSnapshot } from "../features/snipes.js";
@@ -399,31 +398,6 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       clientKey: typeof body.client_key === "string" ? body.client_key.slice(0, 64) : null,
     });
     sendJson(req, res, ctx, 202, { accepted });
-    return true;
-  }
-  if (url.pathname === "/api/admin/card-tiers") {
-    // Bulk write of computed maniacard tiers. The tier algorithm lives in the
-    // frontend (src/lib/maniacard.ts) and is not duplicated here, so
-    // scripts/compute-pack-card-tiers.ts runs it over the pool and posts the
-    // results in batches.
-    if (!isAdmin(req, ctx)) {
-      sendJson(req, res, ctx, 401, { error: "unauthorized" });
-      return true;
-    }
-    if (req.method !== "POST") {
-      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
-      return true;
-    }
-    const body = parseJson<{ entries?: unknown }>((await readBody(req)) || "{}", {});
-    const entries = (Array.isArray(body.entries) ? body.entries : [])
-      .map(normalizeCardTierInput)
-      .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
-    if (entries.length === 0) {
-      sendJson(req, res, ctx, 400, { error: "no_valid_entries" });
-      return true;
-    }
-    const written = await writeCardTiers(ctx.serveWriteDb ?? ctx.db, entries);
-    sendJson(req, res, ctx, 200, { received: entries.length, written });
     return true;
   }
   if (url.pathname === "/api/admin/analytics/monitor") {
@@ -1396,38 +1370,6 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     sendJson(req, res, ctx, 200, { cards: await getPackCardStats(ctx.db, ids) });
-    return true;
-  }
-  if (url.pathname === "/api/packs/draw-by-tier") {
-    // Random tracked players of one tier, so a pack can roll rarity by weight
-    // instead of inheriting whatever the pool happens to contain. Public and
-    // cheap (indexed pick over users.card_tier).
-    if (req.method !== "GET") {
-      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
-      return true;
-    }
-    if (!checkRate(req, res, ctx, "publicApi")) return true;
-    const tier = url.searchParams.get("tier") ?? "";
-    const players = await drawPlayersByTier(ctx.db, {
-      tier,
-      count: Number(url.searchParams.get("count") ?? 1),
-      excludeUserIds: (url.searchParams.get("exclude") ?? "")
-        .split(",")
-        .map((raw) => Math.floor(Number(raw) || 0))
-        .filter((id) => id > 0),
-      topFraction: Number(url.searchParams.get("topFraction") ?? 1),
-    });
-    sendJson(req, res, ctx, 200, { tier, players });
-    return true;
-  }
-  if (url.pathname === "/api/packs/tier-counts") {
-    // Drawable population per tier; backs the odds readout on /packs.
-    if (req.method !== "GET") {
-      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
-      return true;
-    }
-    if (!checkRate(req, res, ctx, "publicApi")) return true;
-    sendJson(req, res, ctx, 200, { tiers: await getCardTierCounts(ctx.db) });
     return true;
   }
   const packPulledStatsMatch = url.pathname.match(/^\/api\/packs\/pulled-stats\/(\d+)$/);

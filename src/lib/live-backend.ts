@@ -1697,51 +1697,6 @@ export interface LiveGlobalRankingsParams {
 }
 
 // The combined leaderboard across every tracked country's roster, ranked by pp.
-export interface LiveTierDrawPlayer {
-  userId: number;
-  username: string;
-  avatarUrl: string;
-  countryCode: string;
-  pp: number;
-  globalRank: number | null;
-  cardTier: string | null;
-}
-
-/* Random tracked players of one maniacard tier. Backs the weighted pack draw:
-   the pack rolls a tier, then asks for players who have it. Returns [] when the
-   tier index has not been computed yet, which the caller treats as "fall back
-   to the uniform pool draw". */
-export async function fetchLiveDrawByTier(params: {
-  tier: string;
-  count: number;
-  excludeUserIds?: number[];
-  topFraction?: number;
-}): Promise<LiveTierDrawPlayer[]> {
-  const query = new URLSearchParams({
-    tier: params.tier,
-    count: String(Math.max(1, Math.min(20, Math.floor(params.count) || 1))),
-  });
-  if (params.excludeUserIds?.length) query.set("exclude", params.excludeUserIds.slice(0, 50).join(","));
-  if (params.topFraction != null && params.topFraction < 1) query.set("topFraction", String(params.topFraction));
-  const payload = await fetchLiveJson<{ players?: unknown }>(`/api/packs/draw-by-tier?${query.toString()}`);
-  if (!Array.isArray(payload.players)) return [];
-  return payload.players.flatMap((raw) => {
-    if (!raw || typeof raw !== "object") return [];
-    const entry = raw as Record<string, unknown>;
-    const userId = readPositiveInteger(entry.userId);
-    if (!userId || typeof entry.username !== "string") return [];
-    return [{
-      userId,
-      username: entry.username,
-      avatarUrl: typeof entry.avatarUrl === "string" ? entry.avatarUrl : "",
-      countryCode: typeof entry.countryCode === "string" ? entry.countryCode : "",
-      pp: readFiniteNumber(entry.pp) ?? 0,
-      globalRank: readPositiveInteger(entry.globalRank) ?? null,
-      cardTier: typeof entry.cardTier === "string" ? entry.cardTier : null,
-    }];
-  });
-}
-
 export async function fetchLiveGlobalRankings(options: number | LiveGlobalRankingsParams = 100): Promise<LiveGlobalRankingsSnapshot> {
   const params = typeof options === "number" ? { page: 1, pageSize: options } : options;
   const query = new URLSearchParams({
