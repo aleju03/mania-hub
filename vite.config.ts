@@ -63,6 +63,9 @@ const config = defineConfig({
     },
   },
   nitro: {
+    // Pinned rather than auto-detected: the build no longer runs on Vercel, and
+    // a wrong guess here produces an output shape systemd cannot start.
+    preset: 'node-server',
     rollupConfig: {
       onwarn: suppressDependencyBuildWarnings,
     },

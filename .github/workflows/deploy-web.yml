@@ -1,0 +1,97 @@
+name: Deploy frontend to VPS
+
+# Manual only for now. Once the ninja.mania-tracker.com trial is proven we can
+# add `push: branches: [main]` here, but during the migration an accidental
+# deploy is worse than an extra click.
+on:
+  workflow_dispatch:
+    inputs:
+      restart:
+        description: Restart mania-hub-web after deploying
+        type: boolean
+        default: true
+
+concurrency:
+  group: deploy-web
+  cancel-in-progress: false
+
+env:
+  VPS_HOST: ${{ secrets.VPS_HOST }}
+  VPS_USER: ${{ secrets.VPS_USER }}
+  WEB_DIR: /home/${{ secrets.VPS_USER }}/apps/mania-hub-web
+  # Baked into the browser bundle at build time, so it must be the public
+  # origin - never the loopback address the server itself uses.
+  VITE_LIVE_BACKEND_URL: https://api.mania-tracker.com
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # `npm run build` already ends in scripts/verify-build-assets.mjs, which
+      # fails the build if the output references an asset that is not there.
+      - name: Build
+        run: npm run build
+
+      - name: Fail early if the server bundle is missing
+        run: test -f .output/server/index.mjs || { echo "no .output/server/index.mjs - wrong nitro preset?"; exit 1; }
+
+      - name: Authorise SSH
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      # Upload into a per-commit release dir, then flip a symlink. A half-copied
+      # release is never the one being served, and the previous one stays on
+      # disk so rollback is one symlink swap.
+      - name: Upload release
+        run: |
+          REL="$WEB_DIR/releases/${{ github.sha }}"
+          ssh "$VPS_USER@$VPS_HOST" "mkdir -p '$REL'"
+          rsync -az --delete .output/ "$VPS_USER@$VPS_HOST:$REL/.output/"
+
+      - name: Activate release
+        run: |
+          REL="$WEB_DIR/releases/${{ github.sha }}"
+          ssh "$VPS_USER@$VPS_HOST" "ln -sfn '$REL' '$WEB_DIR/current.new' && mv -T '$WEB_DIR/current.new' '$WEB_DIR/current'"
+
+      - name: Restart
+        if: inputs.restart
+        run: ssh "$VPS_USER@$VPS_HOST" "sudo -n systemctl restart mania-hub-web"
+
+      - name: Health check
+        if: inputs.restart
+        run: |
+          ssh "$VPS_USER@$VPS_HOST" '
+            for i in $(seq 1 30); do
+              code=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: ninja.mania-tracker.com" http://127.0.0.1:3000/ || true)
+              if [ "$code" = "200" ]; then echo "healthy after ${i}s"; exit 0; fi
+              sleep 1
+            done
+            echo "never returned 200 (last: $code)"; systemctl --no-pager -n 40 status mania-hub-web || true; exit 1
+          '
+
+      # Keep the 3 newest releases; older ones are just disk. Never touches
+      # whatever `current` points at.
+      - name: Prune old releases
+        if: always()
+        run: |
+          ssh "$VPS_USER@$VPS_HOST" '
+            cd '"$WEB_DIR"'/releases || exit 0
+            keep=$(basename "$(readlink -f '"$WEB_DIR"'/current)")
+            ls -1dt */ 2>/dev/null | tail -n +4 | sed "s#/##" | while read -r d; do
+              [ "$d" = "$keep" ] && continue
+              rm -rf -- "$d"
+            done
+          '
