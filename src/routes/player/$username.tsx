@@ -28,6 +28,7 @@ import {
   formatNumber,
   formatAccuracy,
   formatTimeAgo,
+  formatTimeAgoTooltip,
   formatDetailedTimeAgo,
   formatDate,
   formatPP,
@@ -58,6 +59,7 @@ import { DanBadge } from "../../components/ui/DanBadge";
 import { ScoreRowSkeleton, Skeleton } from "../../components/ui/LoadingSkeleton";
 import { UsernameText } from "../../components/ui/UsernameText";
 import { ManiaCard3DPanel as ManiaCardPanel } from "../../components/player/maniacard3d/ManiaCard3DPanel";
+import type { ManiaCardTier } from "../../lib/maniacard";
 import { SkillBreakdownBody, SkillModePanel, qualifyingSkillModes, skillRatingAccent } from "../../components/player/SkillBreakdown";
 import type { InsightScoreSnapshot, OsuCovers, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
 import { buildPpDistribution, calculateUserProfileInsights } from "../../lib/profile-insights";
@@ -112,10 +114,11 @@ const PROFILE_USER_METADATA_RETRY_DELAYS_MS = [1200, 3500, 8000, 15000] as const
 // run ~0.5-1.5s. Waiting one out beats serving a skeleton: a miss costs the
 // visitor a multi-second client-side refetch instead.
 const PROFILE_CACHED_SNAPSHOT_LOADER_TIMEOUT_MS = 1_200;
-// The SSR document only needs enough scores to paint the initial view (5 rows
-// plus the insights strip); the deferred post-mount refresh streams the full
-// 200-score window straight from the live backend. Embedding all 200 made the
-// player document the biggest origin-transfer line on Vercel.
+// The SSR document only needs enough scores to paint the initial list; the
+// profile-wide insight projection is calculated separately before this slice.
+// The deferred post-mount refresh streams the full 200-score window straight
+// from the live backend. Embedding all 200 made the player document the biggest
+// origin-transfer line on Vercel.
 const PROFILE_LOADER_BEST_SCORES_LIMIT = 50;
 const INITIAL_SCORE_BATCH_SIZE = 5;
 const SHOW_MORE_BATCH_SIZE = 50;
@@ -226,6 +229,7 @@ function hasLegacyShowCountryParam(searchStr: string): boolean {
 
 export type PlayerLoaderData = {
   cachedSnapshot: LivePlayerProfileSnapshot | null;
+  cachedInsights: UserProfileInsights | null;
 };
 
 // The cached snapshot is dehydrated into the SSR HTML, so every byte here is
@@ -326,6 +330,19 @@ function slimLoaderSnapshot(snapshot: LivePlayerProfileSnapshot): LivePlayerProf
   };
 }
 
+// Keep the SSR score payload capped without changing the meaning of the
+// profile-wide insight cards. Those cards summarize the whole top-200 window,
+// so calculate their small projection before trimming the scores used to paint
+// the initial list.
+export function buildPlayerLoaderData(snapshot: LivePlayerProfileSnapshot | null): PlayerLoaderData {
+  return {
+    cachedSnapshot: snapshot ? slimLoaderSnapshot(snapshot) : null,
+    cachedInsights: snapshot?.bestScores.length
+      ? calculateUserProfileInsights(snapshot.bestScores)
+      : null,
+  };
+}
+
 function withProfileLoaderBudget<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
   const timeoutPromise = new Promise<null>((resolve) => {
@@ -354,7 +371,7 @@ export async function loadPlayerRouteData(username: string): Promise<PlayerLoade
   // SSR only: on client navigations the page's own deferred snapshot fetch
   // goes straight to the live backend, so running the loader would round-trip
   // the same payload through a server function for nothing.
-  if (typeof document !== "undefined") return { cachedSnapshot: null };
+  if (typeof document !== "undefined") return buildPlayerLoaderData(null);
 
   let cachedSnapshot: LivePlayerProfileSnapshot | null = null;
   try {
@@ -366,7 +383,7 @@ export async function loadPlayerRouteData(username: string): Promise<PlayerLoade
     cachedSnapshot = null;
   }
 
-  return { cachedSnapshot: cachedSnapshot ? slimLoaderSnapshot(cachedSnapshot) : null };
+  return buildPlayerLoaderData(cachedSnapshot);
 }
 
 export function buildPlayerRouteHead({
@@ -967,6 +984,18 @@ function PlayerDefaultRoute() {
   );
 }
 
+// `?cardTier=goat` renders the card in an honorary tier the cardPower ladder
+// can never reach, so the two candidate designs can be reviewed on a real
+// profile. Read off the raw location so the route keeps its search schema.
+const CARD_TIER_PREVIEWS = new Set<ManiaCardTier>(["goat"]);
+
+function useCardTierPreview(): ManiaCardTier | undefined {
+  const location = useLocation();
+  const requested = (location.search as Record<string, unknown> | undefined)?.cardTier;
+  if (typeof requested !== "string") return undefined;
+  return CARD_TIER_PREVIEWS.has(requested as ManiaCardTier) ? (requested as ManiaCardTier) : undefined;
+}
+
 export function PlayerProfilePage({
   username,
   loaderData,
@@ -980,20 +1009,23 @@ export function PlayerProfilePage({
 }) {
   const navigate = useNavigate();
   const hasHydrated = useHasHydrated();
+  const cardTierPreview = useCardTierPreview();
   const loaderSnapshot = loaderData?.cachedSnapshot ?? null;
   const loaderBestScores = useMemo(
     () => loaderSnapshot ? dedupeScores(loaderSnapshot.bestScores) : [],
     [loaderSnapshot],
   );
+  // Never infer profile-wide insights from loaderBestScores: SSR deliberately
+  // caps that list at 50, while these cards promise to describe the full
+  // top-play window.
+  const loaderProfileInsights = loaderData?.cachedInsights ?? null;
   const [user, setUser] = useState<OsuUser | null>(() => loaderSnapshot?.user ?? null);
   const [best, setBest] = useState<OsuScore[]>(() => loaderBestScores);
   const [recent, setRecent] = useState<OsuScore[]>([]);
   const [aboutHtml, setAboutHtml] = useState<string | null>(null);
   const [aboutRaw, setAboutRaw] = useState<string | null>(null);
   const [aboutEditing, setAboutEditing] = useState(false);
-  const [profileInsights, setProfileInsights] = useState<UserProfileInsights | null>(() =>
-    loaderBestScores.length > 0 ? calculateUserProfileInsights(loaderBestScores) : null,
-  );
+  const [profileInsights, setProfileInsights] = useState<UserProfileInsights | null>(() => loaderProfileInsights);
   const [loadingUser, setLoadingUser] = useState(() => !loaderSnapshot?.user);
   // The player shell seeded from a ranking row carries no rank history or peak
   // rank, so the hero card waits for the snapshot rather than reflowing.
@@ -1001,7 +1033,7 @@ export function PlayerProfilePage({
   const [loadingRecent, setLoadingRecent] = useState(true);
   const [loadingOsuRecent, setLoadingOsuRecent] = useState(false);
   const [loadingAbout, setLoadingAbout] = useState(false);
-  const [loadingInsights, setLoadingInsights] = useState(() => loaderBestScores.length === 0);
+  const [loadingInsights, setLoadingInsights] = useState(() => loaderProfileInsights === null);
   const [userError, setUserError] = useState<string | null>(null);
   const [bestError, setBestError] = useState<string | null>(null);
   const [recentError, setRecentError] = useState<string | null>(null);
@@ -1026,7 +1058,7 @@ export function PlayerProfilePage({
   const [waitingForSnapshotBest, setWaitingForSnapshotBest] = useState(() => loaderBestScores.length === 0);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [modModalOpen, setModModalOpen] = useState(false);
-  const [includeNoModUsage, setIncludeNoModUsage] = useState(true);
+  const [includeNoModUsage, setIncludeNoModUsage] = useState(false);
   const [hoveredMod, setHoveredMod] = useState<string | null>(null);
   const [bpmModalOpen, setBpmModalOpen] = useState(false);
   const [ppModalOpen, setPpModalOpen] = useState(false);
@@ -1125,6 +1157,7 @@ export function PlayerProfilePage({
     let metadataRetryTimer: number | null = null;
     let metadataRetryAttempt = 0;
     const hasLoaderBestScores = loaderBestScores.length > 0;
+    const hasLoaderInsights = loaderProfileInsights !== null;
     const playerShell = readPlayerShell(username);
     const seededUser = loaderSnapshot?.user
       ? mergeOnlinePresenceSignal(
@@ -1144,12 +1177,12 @@ export function PlayerProfilePage({
     if (isNewProfile) {
       setUser(seededUser);
       setBest(loaderBestScores);
-      setProfileInsights(hasLoaderBestScores ? calculateUserProfileInsights(loaderBestScores) : null);
+      setProfileInsights(loaderProfileInsights);
       setBestWindowLoaded(hasLoaderBestScores);
       setWaitingForSnapshotBest(!hasLoaderBestScores);
       setLoadingUser(!seededUser);
       setLoadingRankHistory(!loaderSnapshot?.user);
-      setLoadingInsights(!hasLoaderBestScores);
+      setLoadingInsights(!hasLoaderInsights);
     }
     setRecent([]);
     setAboutHtml(null);
@@ -1301,7 +1334,7 @@ export function PlayerProfilePage({
       if (snapshotTimer) window.clearTimeout(snapshotTimer);
       clearMetadataRetry();
     };
-  }, [initialTab, loaderBestScores, loaderSnapshot, username]);
+  }, [initialTab, loaderBestScores, loaderProfileInsights, loaderSnapshot, username]);
 
   useEffect(() => {
     if (!user || bestWindowLoaded || waitingForSnapshotBest) return;
@@ -2167,7 +2200,6 @@ export function PlayerProfilePage({
               <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-white/50">
                 {heroMeta.map((item, index) => (
                   <span key={index} className="inline-flex items-center gap-2">
-                    {index > 0 && <span className="text-white/20">·</span>}
                     {item}
                   </span>
                 ))}
@@ -2527,6 +2559,7 @@ export function PlayerProfilePage({
                   scores={best}
                   loading={!bestWindowLoaded}
                   isOwnProfile={!!auth.viewer && !!user && auth.viewer.id === user.id}
+                  tierOverride={cardTierPreview}
                 />
               </motion.div>
             ) : tab === "activity" ? (
@@ -5054,7 +5087,7 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
           <span className="text-sm font-medium text-white truncate">
             {score.beatmapset?.title || "Unknown"}
           </span>
-          <span className="text-[10px] text-osu-f1 truncate hidden sm:inline">
+          <span className="text-[11px] text-osu-f1 truncate hidden sm:inline">
             [{score.beatmap?.version}]
           </span>
           {keymodeLabel && (
@@ -5064,11 +5097,22 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
           )}
           <span className="hidden sm:inline flex-shrink-0"><DanBadge score={score} /></span>
         </div>
-        <span className="text-[10px] text-osu-f1">
+        <span className="text-[11px] text-osu-f1">
           {score.beatmapset?.artist} &middot;{" "}
           {/* Fresh scores are minutes old, so this half drifts between SSR and
               hydration; the artist name stays hydration-checked. */}
-          <span suppressHydrationWarning>{formatTimeAgo(getScoreTimestamp(score))}</span>
+          {/* pointer-events-auto opts this one span back into hit testing: the
+              content layer is inert so the full-row link overlay can take the
+              clicks, and an element that never sees the pointer never shows its
+              title. The click handler keeps the patch acting like the row. */}
+          <span
+            suppressHydrationWarning
+            title={formatTimeAgoTooltip(getScoreTimestamp(score))}
+            className="pointer-events-auto"
+            onClick={() => linkUrl && window.open(linkUrl, "_blank", "noopener,noreferrer")}
+          >
+            {formatTimeAgo(getScoreTimestamp(score))}
+          </span>
         </span>
         {/* Mobile-only metadata row */}
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 sm:hidden">
