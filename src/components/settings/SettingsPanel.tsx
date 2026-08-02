@@ -23,6 +23,7 @@ import { HIDDEN_USERS_LIMIT } from "../../store";
 import type { HiddenUser } from "../../store";
 import {
   DEFAULT_REPLAY_SKIN_SETTINGS,
+  REPLAY_SKIN_SETTINGS_CHANGE_EVENT,
   normalizeReplaySkinSettings,
   readReplaySkinSettings,
   writeReplaySkinSettings,
@@ -47,9 +48,14 @@ import {
   canUseReplaySkinImport,
   clearMyReplaySkin,
   getMyReplaySkin,
+  loadAppliedCommunityReplaySkinSettings,
   parseOwnerReplaySkinRecordWire,
+  readAppliedCommunityReplaySkin,
+  replaySkinSettingsEmbedAssets,
+  replaySkinSettingsWithoutAssets,
+  writeAppliedCommunityReplaySkin,
 } from "../../lib/replay-owner-skin";
-import type { OwnerReplaySkinRecord } from "../../lib/replay-owner-skin";
+import type { AppliedCommunitySkinDraft, OwnerReplaySkinRecord } from "../../lib/replay-owner-skin";
 import { useAuth } from "../../lib/auth-context";
 import {
   DEFAULT_REPLAY_OVERLAY_SETTINGS,
@@ -117,6 +123,8 @@ interface SettingsPanelProps {
 }
 
 export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps) {
+  const panelAuth = useAuth();
+  const canUseSkinImport = canUseReplaySkinImport(panelAuth);
   const [scrollSpeed, setScrollSpeed] = useState(readReplayScrollSpeed);
   const [bgDim, setBgDim] = useState(readReplayBackgroundDim);
   const [volume, setVolume] = useState(readReplayVolume);
@@ -134,15 +142,46 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
     setCursorSettings(readCursorSettings());
   }, []);
 
+  // The stored settings are asset-free while a skin is applied, so rebuild the
+  // decoded copy from the pointer on mount: the editor and its preview open on
+  // the skin that is actually in play instead of on flat defaults.
+  useEffect(() => {
+    if (!canUseSkinImport) return;
+    const applied = readAppliedCommunityReplaySkin();
+    if (!applied) return;
+    let cancelled = false;
+    void loadAppliedCommunityReplaySkinSettings(applied).then((full) => {
+      if (!cancelled && full) setSkinSettings(full);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [canUseSkinImport]);
+
   const updateCursor = (patch: Partial<CursorSettings>) => {
     const next = normalizeCursorSettings({ ...cursorSettings, ...patch });
     setCursorSettings(next);
     writeCursorSettings(next);
   };
 
-  const saveSkinSettings = (settings: ReplaySkinSettings) => {
+  // Settings that embed a skin's art are megabytes of data URLs, which
+  // localStorage rejects: the decoded copy stays in memory here and the
+  // stored one keeps paths only, with the pointer beside it to rebuild from.
+  // Without this the editor reopened on "Default" with the skin gone.
+  const persistSkinSettings = (next: ReplaySkinSettings) => {
+    setSkinSettings(next);
+    writeReplaySkinSettings(replaySkinSettingsEmbedAssets(next) ? replaySkinSettingsWithoutAssets(next) : next);
+  };
+
+  const saveSkinSettings = (settings: ReplaySkinSettings, community?: AppliedCommunitySkinDraft | null) => {
     const normalized = normalizeReplaySkinSettings(settings);
     setSkinSettings(normalized);
+    if (community) {
+      writeAppliedCommunityReplaySkin({ skin: community.skin, payload: community.payload });
+      writeReplaySkinSettings(community.assetFree);
+      return;
+    }
+    writeAppliedCommunityReplaySkin(null);
     writeReplaySkinSettings(normalized);
   };
 
@@ -153,9 +192,7 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
   };
 
   const updateSkin = (patch: Partial<ReplaySkinSettings>) => {
-    const next = normalizeReplaySkinSettings({ ...skinSettings, ...patch, version: 2 });
-    setSkinSettings(next);
-    writeReplaySkinSettings(next);
+    persistSkinSettings(normalizeReplaySkinSettings({ ...skinSettings, ...patch, version: 2 }));
   };
 
   const resetReplaySettings = () => {
@@ -167,6 +204,9 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
     writeReplayVolume(0.5);
     setSkinSettings(DEFAULT_REPLAY_SKIN_SETTINGS);
     writeReplaySkinSettings(DEFAULT_REPLAY_SKIN_SETTINGS);
+    // Drop the applied skin too, or the next read would rebuild it over the
+    // defaults that were just written.
+    writeAppliedCommunityReplaySkin(null);
     setOverlaySettings(DEFAULT_REPLAY_OVERLAY_SETTINGS);
     writeReplayOverlaySettings(DEFAULT_REPLAY_OVERLAY_SETTINGS);
     setCursorSettings(DEFAULT_CURSOR_SETTINGS);
@@ -498,10 +538,24 @@ function SkinPanel({
   const [myReplaySkin, setMyReplaySkinRecord] = useState<OwnerReplaySkinRecord | null>(null);
   const [myReplaySkinLoaded, setMyReplaySkinLoaded] = useState(false);
   const [customizing, setCustomizing] = useState(false);
+  /* A custom skin brings its own notes and LN caps, and its art only draws
+     under the Bars style, so the shape buttons and the tail trim have nothing
+     to act on. The editor hides them for the same reason. Read after mount
+     like the values above: localStorage is empty during SSR. */
+  const [hasCustomSkinArt, setHasCustomSkinArt] = useState(false);
 
   useEffect(() => {
     setOwnerSkinEnabled(readReplayOwnerSkinEnabled());
   }, []);
+
+  useEffect(() => {
+    const sync = () => {
+      setHasCustomSkinArt(readAppliedCommunityReplaySkin() != null || replaySkinSettingsEmbedAssets(skinSettings));
+    };
+    sync();
+    window.addEventListener(REPLAY_SKIN_SETTINGS_CHANGE_EVENT, sync);
+    return () => window.removeEventListener(REPLAY_SKIN_SETTINGS_CHANGE_EVENT, sync);
+  }, [skinSettings]);
 
   useEffect(() => {
     if (!viewerId) {
@@ -537,21 +591,23 @@ function SkinPanel({
 
   return (
     <div className="space-y-6">
-      <PanelGroup label="Note shape">
-        <div className="grid grid-cols-3 gap-2">
-          {(Object.keys(STYLE_LABELS) as ReplaySkinStyle[]).map((style) => (
-            <ShapeOption
-              key={style}
-              active={skinSettings.style === style}
-              label={STYLE_LABELS[style]}
-              icon={<span aria-hidden="true" className="h-5 w-5 bg-current" style={STYLE_ICON_BY_NAME[style]} />}
-              onClick={() => onUpdateSkin({ style })}
-            />
-          ))}
-        </div>
-      </PanelGroup>
+      {hasCustomSkinArt ? null : (
+        <PanelGroup label="Note shape">
+          <div className="grid grid-cols-3 gap-2">
+            {(Object.keys(STYLE_LABELS) as ReplaySkinStyle[]).map((style) => (
+              <ShapeOption
+                key={style}
+                active={skinSettings.style === style}
+                label={STYLE_LABELS[style]}
+                icon={<span aria-hidden="true" className="h-5 w-5 bg-current" style={STYLE_ICON_BY_NAME[style]} />}
+                onClick={() => onUpdateSkin({ style })}
+              />
+            ))}
+          </div>
+        </PanelGroup>
+      )}
 
-      <PanelGroup label="Direction & long notes">
+      <PanelGroup label={hasCustomSkinArt ? "Direction" : "Direction & long notes"}>
         <div className="grid gap-3 sm:grid-cols-2">
           <SegmentedField
             label="Scroll direction"
@@ -562,23 +618,25 @@ function SkinPanel({
             ]}
             onChange={(value) => onUpdateSkin({ upscroll: value === "up" })}
           />
-          <SegmentedField
-            label="LN tail"
-            value={skinSettings.percy ? "cut" : "full"}
-            options={[
-              {
-                value: "full",
-                label: "Full",
-                icon: <span aria-hidden="true" className="block h-3 w-2 rounded-sm bg-current" />,
-              },
-              {
-                value: "cut",
-                label: "Cut",
-                icon: <span aria-hidden="true" className="block h-1.5 w-2 rounded-sm bg-current" />,
-              },
-            ]}
-            onChange={(value) => onUpdateSkin({ percy: value === "cut" })}
-          />
+          {hasCustomSkinArt ? null : (
+            <SegmentedField
+              label="LN tail"
+              value={skinSettings.percy ? "cut" : "full"}
+              options={[
+                {
+                  value: "full",
+                  label: "Full",
+                  icon: <span aria-hidden="true" className="block h-3 w-2 rounded-sm bg-current" />,
+                },
+                {
+                  value: "cut",
+                  label: "Cut",
+                  icon: <span aria-hidden="true" className="block h-1.5 w-2 rounded-sm bg-current" />,
+                },
+              ]}
+              onChange={(value) => onUpdateSkin({ percy: value === "cut" })}
+            />
+          )}
         </div>
       </PanelGroup>
 

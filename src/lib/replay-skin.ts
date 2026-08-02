@@ -112,6 +112,13 @@ export interface ReplaySkinStageAssets {
   scorebarBg?: ReplaySkinImageAsset;
   scorebarColour?: ReplaySkinImageAsset;
   scorebarMarker?: ReplaySkinImageAsset;
+  // pause-overlay / pause-continue / pause-retry / pause-back: stable's pause
+  // screen. Global files too, and a skin that ships the buttons gets its own
+  // pause menu over the stage.
+  pauseOverlay?: ReplaySkinImageAsset;
+  pauseContinue?: ReplaySkinImageAsset;
+  pauseRetry?: ReplaySkinImageAsset;
+  pauseBack?: ReplaySkinImageAsset;
   // skin.ini LightingNWidth, per column, in 480-space units. Empty means the
   // key was absent and the glow keeps the art's own width.
   lightingWidths: number[];
@@ -159,6 +166,13 @@ export interface ReplaySkinKeymodeProfile {
   // same top-down 480-space as HitPosition. null falls back to stable's 413
   // (11 units below the default hit position, overlapping the key tops).
   lightPosition: number | null;
+  // skin.ini KeysUnderNotes: the key area draws below the notes instead of
+  // over them. Stable defaults it off.
+  keysUnderNotes: boolean;
+  // Multiplier on the combo counter's drawn size, from the lazer skin's
+  // MainHUDComponents.json (LegacyManiaComboCounter Scale). 1 means the skin
+  // never resized it.
+  comboScale: number;
   noteHeightScale: number;
   assets: ReplaySkinKeymodeAssets;
 }
@@ -367,6 +381,8 @@ export const DEFAULT_REPLAY_SKIN_PROFILE: ReplaySkinKeymodeProfile = {
   judgementLine: true,
   columnStart: null,
   lightPosition: null,
+  keysUnderNotes: false,
+  comboScale: 1,
   noteHeightScale: REPLAY_SKIN_DEFAULT_COLUMN_WIDTH,
   assets: EMPTY_REPLAY_SKIN_ASSETS,
 };
@@ -380,6 +396,9 @@ export const OSU_MANIA_DEFAULT_COLUMN_LINE_WIDTH = 2;
 // sits at 413 of 480.
 export const OSU_MANIA_DEFAULT_COLUMN_START = 136;
 export const OSU_MANIA_DEFAULT_LIGHT_POSITION = 413;
+// Skin units span the screen's height 480 times over, so a 16:9 screen is
+// 853.33 units wide. ColumnStart is measured across that.
+export const OSU_MANIA_SCREEN_WIDTH = (480 * 16) / 9;
 
 export const DEFAULT_REPLAY_SKIN_SETTINGS: ReplaySkinSettings = {
   version: 2,
@@ -644,6 +663,10 @@ function normalizeStageAssets(value: unknown): ReplaySkinStageAssets {
     scorebarBg: normalizeImageAsset(raw.scorebarBg),
     scorebarColour: normalizeImageAsset(raw.scorebarColour),
     scorebarMarker: normalizeImageAsset(raw.scorebarMarker),
+    pauseOverlay: normalizeImageAsset(raw.pauseOverlay),
+    pauseContinue: normalizeImageAsset(raw.pauseContinue),
+    pauseRetry: normalizeImageAsset(raw.pauseRetry),
+    pauseBack: normalizeImageAsset(raw.pauseBack),
     lightingWidths: normalizeNumberList(raw.lightingWidths, 1, 400, REPLAY_SKIN_MAX_COLUMNS),
     lightColors: normalizeColumnColors(raw.lightColors),
   };
@@ -671,9 +694,20 @@ function normalizeKeymodeProfile(value: unknown, fallback?: Partial<ReplaySkinKe
     judgementLine: typeof raw.judgementLine === "boolean" ? raw.judgementLine : true,
     columnStart: normalizeNullableStagePosition(raw.columnStart, 853),
     lightPosition: normalizeNullableStagePosition(raw.lightPosition, 480),
+    keysUnderNotes: raw.keysUnderNotes === true,
+    comboScale: normalizeComboScale(raw.comboScale),
     noteHeightScale: normalizeNoteHeightScale(raw.noteHeightScale ?? fallback?.noteHeightScale, smallestColumnWidth),
     assets: normalizeKeymodeAssets(raw.assets),
   };
+}
+
+// Players shrink the combo counter far more often than they grow it, so the
+// range is generous downwards and capped where the digits would swallow the
+// stage.
+function normalizeComboScale(value: unknown): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_REPLAY_SKIN_PROFILE.comboScale;
+  return Math.max(0.1, Math.min(4, parsed));
 }
 
 // ColumnStart / LightPosition: nullable and fractional (O2Jam FHD centres 7K

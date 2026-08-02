@@ -125,6 +125,27 @@ describe("owner replay skin dehydrate/rehydrate", () => {
     expect(second).toBe(first);
   });
 
+  it("forces the bars style on stored art so it actually draws", async () => {
+    // The renderer only draws imported art under "bars", so a payload saved
+    // while the note shape said circles rebuilt every texture and showed none
+    // of them - which is how a player's skin came out looking like the
+    // built-in default.
+    const payload = dehydrateReplaySkinSettings({ ...settingsWithAssets(), style: "circles" }) as { settings: { style: string } };
+    expect(payload.settings.style).toBe("circles");
+    const archive = await buildArchive(["mania/note1.png", "mania/key1.png"]);
+
+    const settings = await rehydrateOwnerReplaySkinSettings(payload, archive);
+    expect(settings?.style).toBe("bars");
+  });
+
+  it("leaves the style alone when the payload carries no art", async () => {
+    const payload = dehydrateReplaySkinSettings(normalizeReplaySkinSettings({ ...DEFAULT_REPLAY_SKIN_SETTINGS, style: "arrows" }));
+    const archive = await buildArchive([]);
+
+    const settings = await rehydrateOwnerReplaySkinSettings(payload, archive);
+    expect(settings?.style).toBe("arrows");
+  });
+
   it("rejects unknown payload shapes", async () => {
     const archive = await buildArchive([]);
     expect(await rehydrateOwnerReplaySkinSettings(null, archive)).toBeNull();

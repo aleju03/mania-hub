@@ -25,6 +25,7 @@ import {
   normalizeReplaySkinSettings,
   OSU_MANIA_MAX_HIT_POSITION,
   OSU_MANIA_MIN_HIT_POSITION,
+  OSU_MANIA_SCREEN_WIDTH,
   osuManiaHitPositionToReplayHitPosition,
   osuManiaStagePositionToReplayPosition,
   createReplaySkinPreset,
@@ -180,6 +181,90 @@ function getJudgementSetLabel(set: ReplaySkinSettings["judgementSet"]): string {
 
 function getJudgementPreviewAsset(settings: ReplaySkinSettings): ReplaySkinImageAsset | undefined {
   return getReplayJudgementSetAssets(settings.judgementSet)?.hit300g;
+}
+
+// The MAX judgement exactly as the skin defines it, like the catalog preview:
+// a skin that ships a transparent 300g hides perfect hits in game, so the
+// preview stays empty there too. hit300 only stands in when there is no 300g.
+function getSkinJudgementPreviewAsset(
+  settings: ReplaySkinSettings,
+  profile: ReplaySkinKeymodeProfile,
+): ReplaySkinImageAsset | undefined {
+  if (getReplayJudgementSetAssets(settings.judgementSet)) return undefined;
+  return profile.assets.judgements.hit300g ?? profile.assets.judgements.hit300;
+}
+
+// Native pixels in the game's 768-unit space, the rule every piece of
+// imported art follows on the stage.
+function getSkinAssetPreviewSize(
+  asset: ReplaySkinImageAsset,
+  layoutScale: number,
+  extraScale = 1,
+): { width: number; height: number } | null {
+  const scale = asset.scale && asset.scale > 0 ? asset.scale : 1;
+  const width = asset.width && asset.width > 0 ? asset.width / scale : 0;
+  const height = asset.height && asset.height > 0 ? asset.height / scale : 0;
+  if (!(width > 0) || !(height > 0)) return null;
+  const unit = (480 / 768) * layoutScale * extraScale;
+  return { width: Math.max(1, width * unit), height: Math.max(1, height * unit) };
+}
+
+// "1234x" in the skin's own digits, at the size and overlap the stage uses
+// (including the lazer HUD scale the importer picked up).
+function getSkinComboPreviewGlyphs(
+  profile: ReplaySkinKeymodeProfile,
+  layoutScale: number,
+): { glyphs: Array<{ asset: ReplaySkinImageAsset; width: number; height: number }>; overlap: number } | null {
+  const combo = profile.assets.combo;
+  if (!combo) return null;
+  const digits = [1, 2, 3, 4].map((digit) => combo.digits[digit]);
+  if (!digits.every((asset): asset is ReplaySkinImageAsset => Boolean(asset))) return null;
+  // The "x" glyph is optional: plenty of skins point the mania combo at a
+  // score font that ships digits only, and the stage draws the number alone
+  // there rather than falling back to a different font entirely.
+  const assets = combo.x ? [...digits, combo.x] : digits;
+  const glyphs: Array<{ asset: ReplaySkinImageAsset; width: number; height: number }> = [];
+  for (const asset of assets) {
+    const size = getSkinAssetPreviewSize(asset, layoutScale, profile.comboScale);
+    if (!size) return null;
+    glyphs.push({ asset, ...size });
+  }
+  return { glyphs, overlap: combo.overlap * (480 / 768) * layoutScale * profile.comboScale };
+}
+
+function getPreviewKeyAreaHeight(asset: ReplaySkinImageAsset, layoutScale: number, fallbackHeight: number): number {
+  const scale = asset.scale && asset.scale > 0 ? asset.scale : 1;
+  const height = asset.height && asset.height > 0 ? asset.height / scale : 0;
+  return height > 0 ? Math.max(1, height * (480 / 768) * layoutScale) : fallbackHeight;
+}
+
+// One repeat of a cascading LN body, in preview pixels. Stable runs the body
+// art at its natural aspect from the tail end and repeats it (its default
+// NoteBodyStyle) instead of squashing one copy over the hold, which is what
+// keeps a Percy body's rounded cap and its transparent lead-in visible.
+function getPreviewLnBodyTileHeight(asset: ReplaySkinImageAsset, laneWidth: number, span: number): number {
+  const width = asset.width && asset.width > 0 ? asset.width : 0;
+  const height = asset.height && asset.height > 0 ? asset.height : 0;
+  if (!(width > 0) || !(height > 0)) return Math.max(1, span);
+  return Math.max(1, height * (laneWidth / width));
+}
+
+// Total stage width in skin units, which both the centred ColumnStart and the
+// preview's placement measure against.
+function getStageUnitWidth(profile: ReplaySkinKeymodeProfile, keyCount: number): number {
+  const keys = Math.max(1, keyCount);
+  let total = 0;
+  for (let col = 0; col < keys; col += 1) {
+    total += profile.columnWidths[col] ?? profile.columnWidth;
+    if (col < keys - 1) total += profile.columnSpacings[col] ?? profile.columnSpacing;
+  }
+  return total;
+}
+
+// The ColumnStart that leaves the stage centred, which is where the viewer
+// puts it when skin.ini names no value.
+function getCenteredColumnStart(profile: ReplaySkinKeymodeProfile, keyCount: number): number {
+  return Math.max(0, Math.round((OSU_MANIA_SCREEN_WIDTH - getStageUnitWidth(profile, keyCount)) / 2));
 }
 
 function applySelection(current: number[], column: number, mode: SelectionMode): number[] {
@@ -363,6 +448,13 @@ export function ReplaySkinSettingsModal({
   );
   const assetEntries = useMemo(() => (activeAssetArchive ? listOskImageEntries(activeAssetArchive) : []), [activeAssetArchive]);
   const profile = getReplaySkinProfile(draft, selectedKeyCount);
+  const keymodeHasSkinArt = profile.assets.columns.some((column) => Object.values(column).some(Boolean));
+  const keymodeHasComboArt = Boolean(profile.assets.combo?.digits.some(Boolean));
+  const keymodeHasJudgementArt = Object.values(profile.assets.judgements).some(Boolean);
+  // Both of the HUD tab's blocks pick art the stage would ignore once the skin
+  // ships its own, leaving nothing on the tab that changes what plays. The
+  // judgement size still does, so it moves to Layout next to its position.
+  const showHudTab = !keymodeHasComboArt || !keymodeHasJudgementArt;
   const isCompactWindow = (windowRect?.w ?? WINDOW_DEFAULT_WIDTH) < WINDOW_COMPACT_WIDTH;
   // Tabs without a note preview span the full window width.
   const isFullWidthTab = activeTab === "overlays" || activeTab === "audio";
@@ -373,6 +465,11 @@ export function ReplaySkinSettingsModal({
     : undefined;
   const [columnWidthInput, setColumnWidthInput] = useState(() => String(profile.columnWidth));
   const [columnSpacingInput, setColumnSpacingInput] = useState(() => String(profile.columnSpacing));
+  // ColumnStart is stored null while the stage stays centred, so the control
+  // shows the centred value as its number and resets back to it.
+  const centeredColumnStart = getCenteredColumnStart(profile, selectedKeyCount);
+  const columnStartValue = profile.columnStart ?? centeredColumnStart;
+  const [columnStartInput, setColumnStartInput] = useState(() => String(columnStartValue));
   const [noteHeightScaleInput, setNoteHeightScaleInput] = useState(() => String(profile.noteHeightScale));
   const [outlineWidthInput, setOutlineWidthInput] = useState(() => String(draft.outlineWidth));
   const [hitPositionInput, setHitPositionInput] = useState(() => String(replayHitPositionToOsuManiaHitPosition(draft.hitPosition)));
@@ -388,6 +485,10 @@ export function ReplaySkinSettingsModal({
   useEffect(() => {
     setColumnSpacingInput(String(profile.columnSpacing));
   }, [profile.columnSpacing]);
+
+  useEffect(() => {
+    setColumnStartInput(String(columnStartValue));
+  }, [columnStartValue]);
 
   useEffect(() => {
     setNoteHeightScaleInput(String(profile.noteHeightScale));
@@ -553,10 +654,12 @@ export function ReplaySkinSettingsModal({
   }, [draft.style]);
 
   // The active tab persists across sessions; a stored "assets" must not strand
-  // a modal opened without an archive on an empty tab.
+  // a modal opened without an archive on an empty tab, and neither must "hud"
+  // once the loaded skin draws its own judgements and combo.
   useEffect(() => {
     if (activeTab === "assets" && !activeAssetArchive) setActiveTab("style");
-  }, [activeTab, activeAssetArchive]);
+    if (activeTab === "hud" && !showHudTab) setActiveTab("style");
+  }, [activeTab, activeAssetArchive, showHudTab]);
 
   // The signed-in user's stored replay skin, for the community-skin block's
   // "Your replay skin" row. Fetched once after mount; never blocks the modal.
@@ -1022,8 +1125,6 @@ export function ReplaySkinSettingsModal({
   );
   const hasNoteAssets = profile.assets.columns.some((col) => col?.tap || col?.lnHead || col?.lnBody || col?.lnTail);
   const showNoteHeightScale = draft.style === "bars" || hasNoteAssets;
-  const keymodeHasSkinArt = profile.assets.columns.some((column) => Object.values(column).some(Boolean));
-
   const persistPresets = (nextPresets: ReplaySkinPreset[]) => {
     setPresets(nextPresets);
     writeReplaySkinPresets(nextPresets);
@@ -1031,7 +1132,21 @@ export function ReplaySkinSettingsModal({
 
   const applyPreset = (presetId: string) => {
     setSelectedPresetId(presetId);
-    if (presetId === DRAFT_PRESET_ID) return;
+    // The draft slot reads as "Default" in the dropdown, so picking it with a
+    // skin loaded has to mean the built-in one. It used to only relabel the
+    // slot: the art stayed in the draft, the preview kept drawing it, and
+    // Apply wrote the same skin straight back through the pointer. A draft
+    // that carries no skin art is still the user's own work, so leave it be.
+    if (presetId === DRAFT_PRESET_ID) {
+      if (!loadedCatalogSkin && !replaySkinSettingsEmbedAssets(draft)) return;
+      pendingSkinSoundsRef.current = null;
+      setLoadedCatalogSkin(null);
+      setDraft(DEFAULT_REPLAY_SKIN_SETTINGS);
+      setDraftPresetName(DEFAULT_DRAFT_PRESET_NAME);
+      setActiveColor(null);
+      pushStatus("Loaded the built-in skin");
+      return;
+    }
     const preset = presets.find((candidate) => candidate.id === presetId);
     if (!preset) return;
     if (preset.community) {
@@ -1043,6 +1158,25 @@ export function ReplaySkinSettingsModal({
     setActiveColor(null);
     pushStatus(`Loaded ${preset.name}`);
   };
+
+  // A reopened editor lands on the applied skin's preset with its art already
+  // in the draft but no .osk open, which is what hid the Assets tab and left
+  // "Set as my replay skin" dead. Pull the archive back quietly (session and
+  // HTTP cached, so it is the same file the page already fetched).
+  const communityPresetSkin = selectedPreset?.community?.skin ?? null;
+  useEffect(() => {
+    if (!canUseSkinImport || !communityPresetSkin) return;
+    if (loadedCatalogSkin || communityBusy) return;
+    let cancelled = false;
+    void getArchiveForSkin(communityPresetSkin).then((archive) => {
+      if (cancelled || !archive) return;
+      setLoadedCatalogSkin((current) => current ?? { skin: communityPresetSkin, archive });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canUseSkinImport, communityPresetSkin?.id, loadedCatalogSkin, communityBusy]);
 
   const createPresetFromDraft = () => {
     setPromptDialog({
@@ -1246,6 +1380,17 @@ export function ReplaySkinSettingsModal({
     const next = Math.max(REPLAY_SKIN_MIN_COLUMN_SPACING, Math.min(REPLAY_SKIN_MAX_COLUMN_SPACING, Math.round(parsed)));
     setColumnSpacingInput(String(next));
     updateProfile({ columnSpacing: next, columnSpacings: [] });
+  };
+
+  const commitColumnStartInput = () => {
+    const parsed = Number(columnStartInput);
+    if (!Number.isFinite(parsed)) {
+      setColumnStartInput(String(columnStartValue));
+      return;
+    }
+    const next = Math.max(0, Math.min(Math.round(OSU_MANIA_SCREEN_WIDTH), Math.round(parsed)));
+    setColumnStartInput(String(next));
+    updateProfile({ columnStart: next });
   };
 
   const commitNoteHeightScaleInput = () => {
@@ -1456,7 +1601,7 @@ export function ReplaySkinSettingsModal({
             {([
               ["style", "Style"],
               ["layout", "Layout"],
-              ["hud", "HUD"],
+              ...(showHudTab ? ([["hud", "HUD"]] as const) : []),
               ["overlays", "Overlays"],
               ["audio", "Audio"],
               // Only with an archive to pick from - the assetArchive prop or a
@@ -1534,7 +1679,7 @@ export function ReplaySkinSettingsModal({
               <>
                 {liveBackendAvailable ? (
                   <section>
-                    <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">Community skin</div>
+                    <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">Custom skin</div>
                     <div className="space-y-2 rounded-lg border border-osu-b3/50 bg-osu-b5/35 p-3">
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-2">
@@ -1553,7 +1698,10 @@ export function ReplaySkinSettingsModal({
                                 ? "Loading skin…"
                                 : communitySkinContext
                                   ? `${communitySkinContext.name} loaded`
-                                  : "No community skin loaded"}
+                                  // "Loaded" means loaded into this editor,
+                                  // which is not the same as the skin saved on
+                                  // your profile: the row below names that one.
+                                  : "No skin loaded in the editor"}
                           </span>
                         </div>
                         <button
@@ -1615,29 +1763,34 @@ export function ReplaySkinSettingsModal({
                     </div>
                   </section>
                 ) : null}
-                <section>
-                  <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">Note shape</div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <ReplaySkinShapeButton
-                      active={draft.style === "circles"}
-                      icon={<ReplaySkinShapeIcon style={MANIA_CIRCLE_ICON_STYLE} />}
-                      label="Circles"
-                      onClick={() => updateStyle("circles")}
-                    />
-                    <ReplaySkinShapeButton
-                      active={draft.style === "bars"}
-                      icon={<ReplaySkinShapeIcon style={MANIA_BAR_ICON_STYLE} />}
-                      label="Bars"
-                      onClick={() => updateStyle("bars")}
-                    />
-                    <ReplaySkinShapeButton
-                      active={draft.style === "arrows"}
-                      icon={<ReplaySkinShapeIcon style={MANIA_ARROW_ICON_STYLE} />}
-                      label="Arrows"
-                      onClick={() => updateStyle("arrows")}
-                    />
-                  </div>
-                </section>
+                {/* A loaded skin brings its own notes, colours and LN caps, so
+                    the built-in shapes and the colour/trim switches have
+                    nothing left to act on. */}
+                {keymodeHasSkinArt ? null : (
+                  <section>
+                    <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">Note shape</div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <ReplaySkinShapeButton
+                        active={draft.style === "circles"}
+                        icon={<ReplaySkinShapeIcon style={MANIA_CIRCLE_ICON_STYLE} />}
+                        label="Circles"
+                        onClick={() => updateStyle("circles")}
+                      />
+                      <ReplaySkinShapeButton
+                        active={draft.style === "bars"}
+                        icon={<ReplaySkinShapeIcon style={MANIA_BAR_ICON_STYLE} />}
+                        label="Bars"
+                        onClick={() => updateStyle("bars")}
+                      />
+                      <ReplaySkinShapeButton
+                        active={draft.style === "arrows"}
+                        icon={<ReplaySkinShapeIcon style={MANIA_ARROW_ICON_STYLE} />}
+                        label="Arrows"
+                        onClick={() => updateStyle("arrows")}
+                      />
+                    </div>
+                  </section>
+                )}
 
                 {showBaseColorControls ? (
                   <section className="space-y-2 pt-2">
@@ -1698,37 +1851,41 @@ export function ReplaySkinSettingsModal({
                 ) : null}
 
                 <section className="space-y-3 pt-1">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-semibold text-osu-l1">{draft.style === "bars" ? "Bar colors" : "Per-column colors"}</span>
-                    <span className="flex items-center gap-2">
-                      <ReplaySkinSwitch
-                        checked={barColorSwitchChecked}
-                        onChange={(checked) => {
-                          if (draft.style !== "bars") {
-                            setColumnEditorOpen(checked);
-                            return;
-                          }
-                          if (checked) {
-                            enableBarColorOverrides();
-                          } else {
-                            disableBarColorOverrides();
-                          }
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setColumnEditorOpen((value) => !value)}
-                        aria-label="Edit per-column colors"
-                        className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg border border-osu-b3/60 bg-osu-b5/70 text-osu-f1 transition-colors hover:border-osu-b2 hover:text-white"
-                      >
-                        <Settings className="h-4 w-4" />
-                      </button>
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-semibold text-osu-l1">Cut LN tail</span>
-                    <ReplaySkinSwitch checked={draft.percy} onChange={(checked) => update({ percy: checked })} />
-                  </div>
+                  {keymodeHasSkinArt ? null : (
+                    <>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-semibold text-osu-l1">{draft.style === "bars" ? "Bar colors" : "Per-column colors"}</span>
+                        <span className="flex items-center gap-2">
+                          <ReplaySkinSwitch
+                            checked={barColorSwitchChecked}
+                            onChange={(checked) => {
+                              if (draft.style !== "bars") {
+                                setColumnEditorOpen(checked);
+                                return;
+                              }
+                              if (checked) {
+                                enableBarColorOverrides();
+                              } else {
+                                disableBarColorOverrides();
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setColumnEditorOpen((value) => !value)}
+                            aria-label="Edit per-column colors"
+                            className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg border border-osu-b3/60 bg-osu-b5/70 text-osu-f1 transition-colors hover:border-osu-b2 hover:text-white"
+                          >
+                            <Settings className="h-4 w-4" />
+                          </button>
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-semibold text-osu-l1">Cut LN tail</span>
+                        <ReplaySkinSwitch checked={draft.percy} onChange={(checked) => update({ percy: checked })} />
+                      </div>
+                    </>
+                  )}
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-sm font-semibold text-osu-l1">Upscroll</span>
                     <ReplaySkinSwitch checked={draft.upscroll} onChange={(checked) => update({ upscroll: checked })} />
@@ -1760,6 +1917,19 @@ export function ReplaySkinSettingsModal({
                   onInputChange={handleColumnSpacingInputChange}
                   onCommit={commitColumnSpacingInput}
                   onResetToDefault={() => updateProfile({ columnSpacing: 0, columnSpacings: [] })}
+                />
+                <LayoutNumberControl
+                  label="Column start"
+                  inputValue={columnStartInput}
+                  numericValue={columnStartValue}
+                  min={0}
+                  max={Math.round(OSU_MANIA_SCREEN_WIDTH)}
+                  defaultValue={centeredColumnStart}
+                  onSliderChange={(value) => updateProfile({ columnStart: value })}
+                  onInputChange={setColumnStartInput}
+                  onCommit={commitColumnStartInput}
+                  onResetToDefault={() => updateProfile({ columnStart: null })}
+                  hint="Stage's left edge, skin.ini ColumnStart."
                 />
                 {showNoteHeightScale ? (
                   <LayoutNumberControl
@@ -1802,6 +1972,21 @@ export function ReplaySkinSettingsModal({
                   onResetToDefault={() => update({ scorePosition: osuManiaStagePositionToReplayPosition(OSU_MANIA_DEFAULT_SCORE_POSITION) })}
                   hint="Hitburst and judgement height."
                 />
+                {showHudTab ? null : (
+                  <LayoutNumberControl
+                    label="Judgement size"
+                    inputValue={judgementScaleInput}
+                    numericValue={currentJudgementScale}
+                    min={REPLAY_SKIN_MIN_JUDGEMENT_SCALE}
+                    max={REPLAY_SKIN_MAX_JUDGEMENT_SCALE}
+                    defaultValue={REPLAY_SKIN_DEFAULT_JUDGEMENT_SCALE}
+                    onSliderChange={updateJudgementScale}
+                    onInputChange={handleJudgementScaleInputChange}
+                    onCommit={commitJudgementScaleInput}
+                    onResetToDefault={() => updateJudgementScale(REPLAY_SKIN_DEFAULT_JUDGEMENT_SCALE)}
+                    hint="Scales the skin's hitburst art."
+                  />
+                )}
                 <LayoutNumberControl
                   label="ComboPosition"
                   inputValue={comboPositionInput}
@@ -1818,22 +2003,27 @@ export function ReplaySkinSettingsModal({
               </section>
             ) : activeTab === "hud" ? (
               <section className="space-y-4">
-                <div className="rounded-lg border border-osu-b3/50 bg-osu-b5/35 p-3">
-                  <FancySelect
-                    label="Combo font"
-                    value={draft.comboFontSet}
-                    onChange={(value) => update({ comboFontSet: value as ReplaySkinSettings["comboFontSet"] })}
-                    options={comboFontOptions}
-                  />
-                  <div className="mt-3 flex h-20 items-center justify-center rounded-lg border border-osu-b3/40 bg-black/20">
-                    <span
-                      className="text-4xl text-white"
-                      style={getComboFontPreviewStyle(draft.comboFontSet)}
-                    >
-                      123x
-                    </span>
+                {/* The built-in fonts are what the counter falls back to. A
+                    skin that ships its own digits draws those instead, so the
+                    picker and its sample would only misrepresent the stage. */}
+                {keymodeHasComboArt ? null : (
+                  <div className="rounded-lg border border-osu-b3/50 bg-osu-b5/35 p-3">
+                    <FancySelect
+                      label="Combo font"
+                      value={draft.comboFontSet}
+                      onChange={(value) => update({ comboFontSet: value as ReplaySkinSettings["comboFontSet"] })}
+                      options={comboFontOptions}
+                    />
+                    <div className="mt-3 flex h-20 items-center justify-center rounded-lg border border-osu-b3/40 bg-black/20">
+                      <span
+                        className="text-4xl text-white"
+                        style={getComboFontPreviewStyle(draft.comboFontSet)}
+                      >
+                        123x
+                      </span>
+                    </div>
                   </div>
-                </div>
+                )}
                 <div className="rounded-lg border border-osu-b3/50 bg-osu-b5/35 p-3">
                   <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-osu-f1">Judgement set</span>
                   <JudgementSetGallery
@@ -1980,7 +2170,7 @@ export function ReplaySkinSettingsModal({
                         <div className="truncate text-[10px] text-osu-f1">
                           {skinSoundsInfo
                             ? `${skinSoundsInfo.keys.length} ${skinSoundsInfo.keys.length === 1 ? "sound" : "sounds"} from ${skinSoundsInfo.name ?? "an imported skin"}`
-                            : "Load a community skin in the Style tab to use its hitsounds. Without them, the default osu! samples play."}
+                            : "Load a custom skin in the Style tab to use its hitsounds. Without them, the default osu! samples play."}
                         </div>
                       </div>
                       {skinSoundsInfo ? (
@@ -2046,6 +2236,10 @@ export function ReplaySkinSettingsModal({
               selectedColumns={selectedColumns}
               expectedWidth={previewContentWidth}
               onSelectionChange={(next) => {
+                // Column selection exists to open the per-column colour
+                // editor, and colours do nothing to a skin that ships its own
+                // note art, so the click stays inert there.
+                if (keymodeHasSkinArt) return;
                 setSelectedColumns((current) => (arraysEqualUnordered(current, next) ? current : next));
                 if (next.length > 0) {
                   setOverrideKind(previewMode === "ln" && showLnHeadColorControls ? "lnHead" : "tap");
@@ -2053,9 +2247,11 @@ export function ReplaySkinSettingsModal({
                 }
               }}
             />
-            <div className="mt-2 text-[10px] text-osu-f1">
-              Click a column to select. Drag a box for multi-select. Hold Shift for range, Ctrl/Cmd to toggle.
-            </div>
+            {keymodeHasSkinArt ? null : (
+              <div className="mt-2 text-[10px] text-osu-f1">
+                Click a column to select. Drag a box for multi-select. Hold Shift for range, Ctrl/Cmd to toggle.
+              </div>
+            )}
           </div>
         </div>
 
@@ -2304,6 +2500,11 @@ export function ReplaySkinSettingsModal({
 
 const PREVIEW_TAP_Y_OFFSETS_DOWN: ReadonlyArray<number> = [60, 95, 130, 165, 200];
 const PREVIEW_LN_LENGTHS: ReadonlyArray<number> = [120, 95, 75];
+// Holds drawn with the skin's own body art get a share of the card instead of
+// a fixed length: a cascading body spends its first stretch on the art's cap
+// (and on the transparent lead-in a Percy body uses to read shorter), which
+// leaves a bars-sized stand-in with no body left to show.
+const PREVIEW_SKIN_LN_LENGTH_RATIOS: ReadonlyArray<number> = [0.62, 0.5, 0.4];
 const PREVIEW_ARROW_PATH = "M5.8 17.5H20l-2.6-2.6c-2.6-2.6-2.6-6.8 0-9.4l2.4-2.4c2.4-2.4 6.2-2.4 8.6 0l16.9 16.9c2.2 2.2 2.2 5.8 0 8L28.4 44.9c-2.4 2.4-6.2 2.4-8.6 0l-2.4-2.4c-2.6-2.6-2.6-6.8 0-9.4l2.6-2.6H5.8C2.6 30.5 0 27.6 0 24s2.6-6.5 5.8-6.5Z";
 
 function getPreviewAssetHeight(asset: ReplaySkinImageAsset, targetWidth: number, heightScaleWidth: number, fallbackHeight: number): number {
@@ -2536,12 +2737,28 @@ function ReplaySkinPreview({
   const playfieldWidth = Math.min(width * 0.82, desiredPlayfieldWidth * targetLayoutScale);
   const layoutScale = desiredPlayfieldWidth > 0 ? playfieldWidth / desiredPlayfieldWidth : 1;
   const averageLaneWidth = columnWidths.reduce((sum, value) => sum + value, 0) / Math.max(1, columnWidths.length) * layoutScale;
-  const playfieldX = (width - playfieldWidth) / 2;
+  // ColumnStart mapped across the card rather than measured in skin units: the
+  // card keeps the notes at a readable size, so a faithful 16:9 screen would
+  // be several times its width and any off-centre stage would drift out of
+  // view or pin itself to an edge. Proportional placement keeps the whole
+  // stage on the card and still reads as left, centre or right.
+  const columnStartRange = Math.max(1, OSU_MANIA_SCREEN_WIDTH - getStageUnitWidth(profile, keyCount));
+  const playfieldX = profile.columnStart == null
+    ? (width - playfieldWidth) / 2
+    : Math.max(0, Math.min(1, profile.columnStart / columnStartRange)) * Math.max(0, width - playfieldWidth);
   const receptorY = height * (settings.upscroll ? settings.hitPosition : 768 - settings.hitPosition) / 768;
   const scoreY = height * (settings.upscroll ? settings.scorePosition : 768 - settings.scorePosition) / 768;
   const comboY = height * (settings.upscroll ? settings.comboPosition : 768 - settings.comboPosition) / 768;
   const previewJudgementAsset = getJudgementPreviewAsset(settings);
   const judgementScale = getReplayJudgementScale(settings);
+  // Imported judgement art and combo digits draw at the same native size the
+  // stage gives them, so the card reads like the skin does in play.
+  const hasSkinArt = profile.assets.columns.some((column) => Object.values(column).some(Boolean));
+  const skinJudgementAsset = getSkinJudgementPreviewAsset(settings, profile);
+  const skinJudgementSize = skinJudgementAsset
+    ? getSkinAssetPreviewSize(skinJudgementAsset, layoutScale, judgementScale / 100)
+    : null;
+  const comboGlyphs = getSkinComboPreviewGlyphs(profile, layoutScale);
   const noteSize = settings.style === "circles" || settings.style === "arrows"
     ? Math.max(18, Math.min(averageLaneWidth - 4, Math.max(28, averageLaneWidth * 0.9)))
     : Math.max(8, Math.min(18, averageLaneWidth - 6));
@@ -2584,7 +2801,11 @@ function ReplaySkinPreview({
 
   const lnLengthForColumn = (col: number) => {
     const base = PREVIEW_LN_LENGTHS[col % PREVIEW_LN_LENGTHS.length];
-    return settings.percy ? Math.max(50, base - 30) : base;
+    const hasBodyArt = settings.style === "bars" && Boolean(profile.assets.columns[col]?.lnBody);
+    const length = hasBodyArt
+      ? Math.max(base, height * PREVIEW_SKIN_LN_LENGTH_RATIOS[col % PREVIEW_SKIN_LN_LENGTH_RATIOS.length])
+      : base;
+    return settings.percy ? Math.max(50, length - 30) : length;
   };
 
   const findColumnAtX = (localX: number): number | null => {
@@ -2691,7 +2912,9 @@ function ReplaySkinPreview({
       className="relative overflow-hidden rounded-lg border border-osu-b3/60 bg-[#07070c] select-none touch-none"
       style={{ height }}
     >
-      {settings.style === "bars" ? (
+      {/* The lane dividers are part of the built-in bars look, like the stage
+          mutes them under imported column art. */}
+      {settings.style === "bars" && !hasSkinArt ? (
         <div className="pointer-events-none absolute inset-y-0" style={{ left: playfieldX, width: playfieldWidth }}>
           {[...lanePositions.map((lane) => lane.startX - playfieldX), playfieldWidth].map((left, index) => (
             <div
@@ -2714,14 +2937,20 @@ function ReplaySkinPreview({
           />
         );
       })}
-      {settings.style === "bars" ? (
+      {/* skin.ini JudgementLine, same as the stage: skins that draw their own
+          hit line turn it off. */}
+      {settings.style === "bars" && profile.judgementLine ? (
         <div className="pointer-events-none absolute h-0.5 bg-white/70" style={{ left: playfieldX, width: playfieldWidth, top: receptorY }} />
       ) : null}
       {lanePositions.map(({ col, cx, width: laneWidth }) => {
         const isSelected = selectedColumns.includes(col);
         const receptorAsset = settings.style === "bars" ? profile.assets.columns[col]?.receptor : undefined;
         if (receptorAsset) {
-          const receptorHeight = getPreviewAssetHeight(receptorAsset, laneWidth, laneWidth, noteSize);
+          // Key area at the game's scale: native height in 768-space,
+          // stretched to the lane, sitting on the bottom edge of the stage
+          // (hanging from the top on upscroll). Hanging it off the hit line
+          // instead pushed all but a sliver below the card.
+          const receptorHeight = getPreviewKeyAreaHeight(receptorAsset, layoutScale, noteSize);
           return (
             <img
               key={`receptor-${col}`}
@@ -2731,9 +2960,10 @@ function ReplaySkinPreview({
               className="pointer-events-none absolute object-fill"
               style={{
                 left: cx - laneWidth / 2,
-                top: settings.upscroll ? receptorY - receptorHeight : receptorY,
+                top: settings.upscroll ? 0 : height - receptorHeight,
                 width: laneWidth,
                 height: receptorHeight,
+                transform: settings.upscroll ? "scaleY(-1)" : undefined,
                 opacity: isSelected ? 1 : 0.62,
               }}
             />
@@ -2871,12 +3101,23 @@ function ReplaySkinPreview({
               return (
                 <div key={`ln-${col}`} className="pointer-events-none">
                   {bodyAsset ? (
-                    <img
-                      src={bodyAsset.src}
-                      alt=""
-                      draggable={false}
-                      className="absolute object-fill"
-                      style={{ left: cx - laneWidth / 2, top: lnTop, width: laneWidth, height: lnBottom - lnTop }}
+                    // Cascaded from the tail end at natural aspect, like the
+                    // stage: a stretched copy flattens the art's cap into the
+                    // body and loses the shorter-looking lead-in. On upscroll
+                    // the tail sits at the bottom, so the whole band mirrors.
+                    <div
+                      className="absolute"
+                      style={{
+                        left: cx - laneWidth / 2,
+                        top: lnTop,
+                        width: laneWidth,
+                        height: lnBottom - lnTop,
+                        backgroundImage: `url("${bodyAsset.src}")`,
+                        backgroundRepeat: "repeat-y",
+                        backgroundSize: `100% ${getPreviewLnBodyTileHeight(bodyAsset, laneWidth, lnBottom - lnTop)}px`,
+                        backgroundPosition: "top center",
+                        transform: settings.upscroll ? "scaleY(-1)" : undefined,
+                      }}
                     />
                   ) : (
                     <div
@@ -2994,19 +3235,55 @@ function ReplaySkinPreview({
               </div>
             );
           })}
-      <div
-        className="pointer-events-none absolute flex -translate-y-1/2 items-center justify-center text-[15px] font-bold leading-none"
-        style={{
-          left: playfieldX,
-          width: playfieldWidth,
-          top: comboY,
-          color: "rgba(255,255,255,0.85)",
-          ...getComboFontPreviewStyle(settings.comboFontSet),
-        }}
-      >
-        1234x
-      </div>
-      {previewJudgementAsset ? (
+      {comboGlyphs ? (
+        <div
+          className="pointer-events-none absolute flex -translate-y-1/2 items-center justify-center"
+          style={{ left: playfieldX, width: playfieldWidth, top: comboY }}
+        >
+          {comboGlyphs.glyphs.map((glyph, index) => (
+            <img
+              key={`combo-${index}`}
+              src={glyph.asset.src}
+              alt=""
+              draggable={false}
+              className="object-fill"
+              style={{
+                width: glyph.width,
+                height: glyph.height,
+                marginLeft: index === 0 ? 0 : -comboGlyphs.overlap,
+              }}
+            />
+          ))}
+        </div>
+      ) : (
+        <div
+          className="pointer-events-none absolute flex -translate-y-1/2 items-center justify-center text-[15px] font-bold leading-none"
+          style={{
+            left: playfieldX,
+            width: playfieldWidth,
+            top: comboY,
+            color: "rgba(255,255,255,0.85)",
+            ...getComboFontPreviewStyle(settings.comboFontSet),
+          }}
+        >
+          1234x
+        </div>
+      )}
+      {skinJudgementSize && skinJudgementAsset ? (
+        <img
+          src={skinJudgementAsset.src}
+          alt=""
+          draggable={false}
+          className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 object-fill"
+          style={{
+            left: playfieldX + playfieldWidth / 2,
+            top: scoreY,
+            width: skinJudgementSize.width,
+            height: skinJudgementSize.height,
+            maxWidth: "none",
+          }}
+        />
+      ) : previewJudgementAsset ? (
         <img
           src={previewJudgementAsset.src}
           alt=""
@@ -3019,7 +3296,9 @@ function ReplaySkinPreview({
             maxWidth: "none",
           }}
         />
-      ) : settings.judgementSet === "skin" ? (
+      ) : settings.judgementSet === "skin" && !skinJudgementAsset ? (
+        // Judgement set "skin" with no art for this keymode: the stage falls
+        // back to the built-in labels, so the preview shows one too.
         <div
           className="pointer-events-none absolute flex -translate-y-1/2 items-center justify-center text-[11px] font-bold leading-none"
           style={{
@@ -4015,6 +4294,9 @@ function ReplaySkinKeyDialog({
   );
 }
 
+// 0 is "any"; the rest mirrors the /skins catalog's keys filter.
+const CATALOG_KEYMODE_FILTERS = [0, 4, 5, 6, 7, 8, 9, 10];
+
 // The "Browse skins" picker: the published /skins catalog inside the modal,
 // searched against the live backend's public list endpoint. Picking a card
 // hands the SkinSummary back; the modal downloads and imports from there.
@@ -4026,6 +4308,8 @@ function ReplaySkinCatalogBrowserDialog({
   onClose: () => void;
 }) {
   const [query, setQuery] = useState("");
+  // 0 is no filter, matching the /skins catalog's own keys row.
+  const [keymode, setKeymode] = useState(0);
   const [results, setResults] = useState<SkinSummary[]>([]);
   const [status, setStatus] = useState<"loading" | "idle" | "error">("loading");
   const requestRef = useRef(0);
@@ -4036,7 +4320,7 @@ function ReplaySkinCatalogBrowserDialog({
     // The first page loads immediately; typing debounces ~300ms.
     const timer = window.setTimeout(async () => {
       try {
-        const result = await fetchSkinsListDirect({ q: query.trim(), page: 0 });
+        const result = await fetchSkinsListDirect({ q: query.trim(), page: 0, k: keymode });
         if (requestRef.current !== requestId) return;
         setResults(result.skins);
         setStatus("idle");
@@ -4047,7 +4331,7 @@ function ReplaySkinCatalogBrowserDialog({
       }
     }, query.trim() ? 300 : 0);
     return () => window.clearTimeout(timer);
-  }, [query]);
+  }, [query, keymode]);
 
   return (
     <>
@@ -4070,7 +4354,7 @@ function ReplaySkinCatalogBrowserDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b border-osu-b3/50 px-5 py-3">
-          <div className="text-sm font-bold text-white">Browse community skins</div>
+          <div className="text-sm font-bold text-white">Browse skins</div>
           <div className="mt-0.5 text-[10px] text-osu-f1">Pick one to load it into the editor.</div>
         </div>
         <div className="space-y-2 px-5 py-4">
@@ -4085,6 +4369,23 @@ function ReplaySkinCatalogBrowserDialog({
             }}
             className="h-9 w-full rounded-md border border-osu-b3/60 bg-osu-b5/70 px-3 text-xs font-semibold text-white outline-none transition-colors focus:border-osu-pink/70"
           />
+          <div className="flex flex-wrap items-center gap-1">
+            {CATALOG_KEYMODE_FILTERS.map((keys) => (
+              <button
+                key={keys}
+                type="button"
+                onClick={() => setKeymode(keymode === keys ? 0 : keys)}
+                aria-pressed={keymode === keys}
+                className={`cursor-pointer rounded-md px-2 py-1 text-[11px] font-bold transition-colors ${
+                  keymode === keys
+                    ? "bg-osu-pink/20 text-osu-pink-light"
+                    : "bg-osu-b5/70 text-osu-f1 hover:bg-osu-b3/60 hover:text-white"
+                }`}
+              >
+                {keys === 0 ? "any" : `${keys}K`}
+              </button>
+            ))}
+          </div>
           <div className="max-h-[340px] overflow-y-auto rounded-md border border-osu-b3/50 bg-osu-b5/40">
             {status === "error" ? (
               <div className="px-3 py-4 text-[11px] text-osu-f1">The skin list could not be loaded. Try again.</div>

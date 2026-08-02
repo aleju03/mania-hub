@@ -225,32 +225,37 @@ describe("chart preview helpers", () => {
     expect(plan.audioMode).toBe("set-preview");
   });
 
-  it("keeps single-diff chart previews on the set preview audio until seek", () => {
+  it("keeps chart previews on the set preview audio until seek", () => {
     expect(resolveInitialChartPreviewAudioMode({
       plannedAudioMode: "set-preview",
       hasSelectedAudioFile: true,
       hasSetPreviewAudio: true,
-      hasDifficultyPicker: false,
-      timedRateVariant: false,
     })).toBe("set-preview");
   });
 
-  it("uses selected audio for multi-diff set-preview plans and missing preview audio", () => {
+  it("does not download the song just because the set has a difficulty picker", () => {
+    // A multi-difficulty set used to be forced onto the full audio file here,
+    // which meant waiting out an .osz download before anything played even
+    // when every difficulty was the same song.
     expect(resolveInitialChartPreviewAudioMode({
       plannedAudioMode: "set-preview",
       hasSelectedAudioFile: true,
       hasSetPreviewAudio: true,
-      hasDifficultyPicker: true,
-      timedRateVariant: false,
-    })).toBe("selected-file");
+    })).toBe("set-preview");
+  });
 
+  it("uses selected audio when the set has no preview clip", () => {
     expect(resolveInitialChartPreviewAudioMode({
       plannedAudioMode: "set-preview",
       hasSelectedAudioFile: true,
       hasSetPreviewAudio: false,
-      hasDifficultyPicker: false,
-      timedRateVariant: false,
     })).toBe("selected-file");
+
+    expect(resolveInitialChartPreviewAudioMode({
+      plannedAudioMode: "set-preview",
+      hasSelectedAudioFile: false,
+      hasSetPreviewAudio: false,
+    })).toBe("set-preview");
   });
 });
 

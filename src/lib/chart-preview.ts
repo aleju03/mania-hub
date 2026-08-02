@@ -207,25 +207,24 @@ export function shouldUseSetPreviewForReplayAudio(title: string, beatmaps: Chart
   return !beatmaps.some((beatmap) => COMPILATION_WORDS.test(beatmap.version));
 }
 
+// This used to force the full song download whenever the set had more than one
+// difficulty, on the theory that a set worth browsing could not be trusted to
+// the shared clip. shouldUseSetPreviewForReplayAudio decides that properly now,
+// so a multi-difficulty set starts on the clip like any other and only pays for
+// the download when the user scrubs (which switches the mode on demand).
 export function resolveInitialChartPreviewAudioMode({
   plannedAudioMode,
   hasSelectedAudioFile,
   hasSetPreviewAudio,
-  hasDifficultyPicker,
-  timedRateVariant,
 }: {
   plannedAudioMode: ChartPreviewAudioMode;
   hasSelectedAudioFile: boolean;
   hasSetPreviewAudio: boolean;
-  hasDifficultyPicker: boolean;
-  timedRateVariant: boolean;
 }): ChartPreviewAudioMode {
   if (plannedAudioMode !== "set-preview" || !hasSelectedAudioFile) {
     return plannedAudioMode;
   }
-  if (!hasSetPreviewAudio) return "selected-file";
-  if (timedRateVariant) return "set-preview";
-  return hasDifficultyPicker ? "selected-file" : "set-preview";
+  return hasSetPreviewAudio ? "set-preview" : "selected-file";
 }
 
 const previewNotesCache = new WeakMap<ManiaBeatmap, Map<string, ManiaNote[]>>();

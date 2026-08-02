@@ -4,9 +4,9 @@
 // image assets), so they live in IndexedDB as a single record that is replaced
 // on each skin import.
 
-const DB_NAME = "mania-hub-replay";
-const DB_VERSION = 1;
-const STORE_NAME = "skin-sounds";
+import { REPLAY_SKIN_SOUNDS_STORE, withReplayStore } from "./replay-idb";
+
+const STORE_NAME = REPLAY_SKIN_SOUNDS_STORE;
 const RECORD_KEY = "current";
 
 export const REPLAY_SKIN_SOUNDS_CHANGE_EVENT = "mania-hub:replay-skin-sounds-change";
@@ -23,37 +23,11 @@ export interface ReplaySkinSoundsRecord {
   samples: Record<string, ArrayBuffer>;
 }
 
-function openDatabase(): Promise<IDBDatabase | null> {
-  if (typeof window === "undefined" || !window.indexedDB) return Promise.resolve(null);
-  return new Promise((resolve) => {
-    const request = window.indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => resolve(null);
-    request.onblocked = () => resolve(null);
-  });
-}
-
-async function withStore<T>(
+function withStore<T>(
   mode: IDBTransactionMode,
   run: (store: IDBObjectStore) => IDBRequest<T>,
 ): Promise<T | null> {
-  const db = await openDatabase();
-  if (!db) return null;
-  try {
-    return await new Promise<T | null>((resolve) => {
-      const tx = db.transaction(STORE_NAME, mode);
-      const request = run(tx.objectStore(STORE_NAME));
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => resolve(null);
-      tx.onabort = () => resolve(null);
-    });
-  } finally {
-    db.close();
-  }
+  return withReplayStore(STORE_NAME, mode, run);
 }
 
 export async function readReplaySkinSounds(): Promise<ReplaySkinSoundsRecord | null> {

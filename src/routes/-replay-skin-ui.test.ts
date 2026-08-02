@@ -53,7 +53,7 @@ describe("replay skin settings UI", () => {
     // imports published skins (visuals + staged hitsounds), so the local
     // sounds-only .osk import is gone. The Audio tab keeps the status row
     // (preview + remove) for whichever skin's sounds are active.
-    expect(source).toContain("Community skin");
+    expect(source).toContain("Custom skin");
     expect(source).toContain("Browse skins");
     expect(source).toContain("Set as my replay skin");
     expect(source).toContain("importReplaySkinFromOsk");
@@ -83,6 +83,192 @@ describe("replay skin settings UI", () => {
     expect(source).toContain("Reset");
   });
 
+  it("persists an applied skin from the settings page the same way as the replay page", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "../components/settings/SettingsPanel.tsx"), "utf8");
+
+    // This copy of the apply flow wrote the decoded settings straight to
+    // localStorage and never wrote the pointer, so the quota rejected it and
+    // reopening the editor came back on "Default" with the skin gone.
+    expect(source).toContain("writeAppliedCommunityReplaySkin");
+    expect(source).toContain("writeReplaySkinSettings(community.assetFree)");
+    expect(source).toContain("replaySkinSettingsWithoutAssets");
+    // And the decoded copy comes back from the pointer on mount.
+    expect(source).toContain("loadAppliedCommunityReplaySkinSettings");
+  });
+
+  it("steps the built-in style controls aside once a skin brings its own art", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplaySkinSettingsModal.tsx"), "utf8");
+
+    // Note shape, the colour switches and the LN trim all act on the built-in
+    // shapes, which an imported skin replaces outright.
+    expect(source).toContain("const keymodeHasSkinArt = ");
+    expect(source).toContain("{keymodeHasSkinArt ? null : (");
+    // And the card shows the skin instead of stand-ins: key area at the game's
+    // scale, the skin's own judgement art and combo digits, and the hit line
+    // only when skin.ini asks for one.
+    expect(source).toContain("getPreviewKeyAreaHeight");
+    expect(source).toContain("getSkinJudgementPreviewAsset");
+    expect(source).toContain("getSkinComboPreviewGlyphs");
+    expect(source).toContain('settings.style === "bars" && profile.judgementLine');
+    // LN bodies cascade from the tail at natural aspect, like the stage and
+    // the catalog preview; a stretched copy flattened the art's cap away.
+    expect(source).toContain("getPreviewLnBodyTileHeight");
+    expect(source).toContain('backgroundRepeat: "repeat-y"');
+    expect(source).toContain('backgroundPosition: "top center"');
+  });
+
+  it("brings the .osk back when the editor reopens on an applied skin", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplaySkinSettingsModal.tsx"), "utf8");
+
+    // Without the archive the Assets tab is hidden and "Set as my replay skin"
+    // is dead, even though the preset and the art are right there.
+    expect(source).toContain("const communityPresetSkin = selectedPreset?.community?.skin ?? null;");
+    expect(source).toContain("setLoadedCatalogSkin((current) => current ?? { skin: communityPresetSkin, archive });");
+  });
+
+  it("exposes ColumnStart in the layout tab and moves the preview with it", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplaySkinSettingsModal.tsx"), "utf8");
+
+    expect(source).toContain('label="Column start"');
+    // Stored null while centred, so the reset goes back to centred rather than
+    // to some skin's imported value.
+    expect(source).toContain("function getCenteredColumnStart(");
+    expect(source).toContain("onResetToDefault={() => updateProfile({ columnStart: null })}");
+    // The card is far narrower than a 16:9 screen at this note size, so it
+    // places the stage proportionally instead of in raw skin units.
+    expect(source).toContain("const columnStartRange = Math.max(1, OSU_MANIA_SCREEN_WIDTH - getStageUnitWidth(profile, keyCount));");
+  });
+
+  it("pushes the player's-skin preference to a running replay without a refresh", () => {
+    const prefs = fs.readFileSync(path.resolve(__dirname, "../lib/replay-preferences.ts"), "utf8");
+    const routeSource = fs.readFileSync(path.resolve(__dirname, "replay.tsx"), "utf8");
+
+    // The settings drawer opens over the stage, and "storage" never fires in
+    // the tab that wrote the value.
+    expect(prefs).toContain('export const REPLAY_OWNER_SKIN_CHANGE_EVENT = "mania-hub:replay-owner-skin-change";');
+    expect(prefs).toContain("window.dispatchEvent(new CustomEvent(REPLAY_OWNER_SKIN_CHANGE_EVENT, { detail: enabled }));");
+    expect(routeSource).toContain("window.addEventListener(REPLAY_OWNER_SKIN_CHANGE_EVENT, sync);");
+    expect(routeSource).toContain("if (!canUseSkinImport || !ownerUserId || !ownerSkinPreferred) {");
+    expect(routeSource).toContain("}, [ownerUserId, canUseSkinImport, ownerSkinPreferred, releaseOwnerSkinHold]);");
+  });
+
+  it("drops the built-in combo font picker when the skin ships digits", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplaySkinSettingsModal.tsx"), "utf8");
+
+    // The stage draws the skin's own digits there, so the picker and its
+    // sample would only misrepresent it.
+    expect(source).toContain("const keymodeHasComboArt = Boolean(profile.assets.combo?.digits.some(Boolean));");
+    expect(source).toContain("{keymodeHasComboArt ? null : (");
+  });
+
+  it("returns to the built-in skin when the Default preset slot is picked", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplaySkinSettingsModal.tsx"), "utf8");
+
+    // The slot only relabelled itself before: the art stayed in the draft, the
+    // preview kept drawing it, and Apply wrote the same skin back through the
+    // pointer, so the editor reopened on the skin the user just left.
+    expect(source).toContain("if (!loadedCatalogSkin && !replaySkinSettingsEmbedAssets(draft)) return;");
+    expect(source).toContain("setLoadedCatalogSkin(null);");
+    expect(source).toContain("setDraft(DEFAULT_REPLAY_SKIN_SETTINGS);");
+  });
+
+  it("filters the in-editor skin catalog by keymode", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplaySkinSettingsModal.tsx"), "utf8");
+
+    expect(source).toContain("const CATALOG_KEYMODE_FILTERS = [0, 4, 5, 6, 7, 8, 9, 10];");
+    expect(source).toContain("fetchSkinsListDirect({ q: query.trim(), page: 0, k: keymode })");
+    expect(source).toContain("}, [query, keymode]);");
+  });
+
+  it("drops the note shape and LN tail controls from settings under a custom skin", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "../components/settings/SettingsPanel.tsx"), "utf8");
+
+    // Skin art only draws under the Bars style and carries its own LN caps, so
+    // both controls act on shapes the stage no longer draws. The editor's Style
+    // tab already hides them; the quick panel was the inconsistent one.
+    expect(source).toContain("setHasCustomSkinArt(readAppliedCommunityReplaySkin() != null || replaySkinSettingsEmbedAssets(skinSettings));");
+    expect(source).toContain("{hasCustomSkinArt ? null : (");
+    expect(source).toContain('<PanelGroup label={hasCustomSkinArt ? "Direction" : "Direction & long notes"}>');
+  });
+
+  it("drops the HUD tab once the skin draws both its judgements and its combo", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplaySkinSettingsModal.tsx"), "utf8");
+
+    // Nothing left on the tab would change the stage.
+    expect(source).toContain("const keymodeHasJudgementArt = Object.values(profile.assets.judgements).some(Boolean);");
+    expect(source).toContain("const showHudTab = !keymodeHasComboArt || !keymodeHasJudgementArt;");
+    expect(source).toContain('...(showHudTab ? ([["hud", "HUD"]] as const) : []),');
+    // A stored "hud" tab must not strand the modal on a tab it no longer draws.
+    expect(source).toContain('if (activeTab === "hud" && !showHudTab) setActiveTab("style");');
+    // Judgement size still moves the stage, so it survives on Layout next to
+    // the position it shares a section with in game.
+    expect(source).toContain("{showHudTab ? null : (");
+    expect(source).toContain('label="Judgement size"');
+  });
+
+  it("paints the stage with the player's skin already on, and caches the decode", () => {
+    const routeSource = fs.readFileSync(path.resolve(__dirname, "replay.tsx"), "utf8");
+    const ownerSource = fs.readFileSync(path.resolve(__dirname, "../lib/replay-owner-skin.ts"), "utf8");
+    const idbSource = fs.readFileSync(path.resolve(__dirname, "../lib/replay-idb.ts"), "utf8");
+    const soundsSource = fs.readFileSync(path.resolve(__dirname, "../lib/replay-skin-sounds.ts"), "utf8");
+
+    // The stage used to paint the viewer's own skin for the second or so the
+    // .osk spent downloading and decoding, then swap.
+    expect(routeSource).toContain("const OWNER_SKIN_HOLD_MAX_MS = 2000;");
+    expect(routeSource).toContain("const [ownerSkinHold, setOwnerSkinHold] = useState(() => canUseSkinImport && ownerUserId != null);");
+    expect(routeSource).toContain("${ownerSkinHold ? \"invisible\" : \"\"}");
+    // Released once and never re-held: a skin arriving late must not blank a
+    // stage that is already up.
+    expect(routeSource).toContain("const releaseOwnerSkinHold = useCallback(() => setOwnerSkinHold(false), []);");
+    expect(routeSource).toContain("if (!cancelled) releaseOwnerSkinHold();");
+    // And the decoded result keeps, so later replays by that player skip the
+    // download and the decode entirely.
+    expect(routeSource).toContain("loadOwnerReplaySkinCached(record)");
+    expect(ownerSource).toContain("export async function loadOwnerReplaySkinCached(");
+    expect(ownerSource).toContain("readCachedReplaySkin(key)");
+    expect(ownerSource).toContain("writeCachedReplaySkin(key,");
+    // One database, one version, both stores in the same upgrade: opening it
+    // at two versions from two modules fails the lower one outright.
+    expect(idbSource).toContain("const DB_VERSION = 2;");
+    expect(idbSource).toContain('export const REPLAY_OWNER_SKINS_STORE = "owner-skins";');
+    expect(soundsSource).toContain('import { REPLAY_SKIN_SOUNDS_STORE, withReplayStore } from "./replay-idb";');
+    expect(soundsSource).not.toContain("window.indexedDB.open");
+  });
+
+  it("gives preview stages the viewer's applied skin, art included", () => {
+    const hookSource = fs.readFileSync(path.resolve(__dirname, "../lib/use-replay-skin-settings.ts"), "utf8");
+    const ownerSource = fs.readFileSync(path.resolve(__dirname, "../lib/replay-owner-skin.ts"), "utf8");
+
+    // Reading localStorage alone gives previews the asset-free copy, so a
+    // custom skin showed up as flat bars there while the replay page had art.
+    expect(hookSource).toContain("export function useReplaySkinSettings()");
+    expect(hookSource).toContain("loadAppliedReplaySkinSettings()");
+    expect(hookSource).toContain("return applied ?? stored;");
+    expect(hookSource).toContain("canUseReplaySkinImport(auth)");
+    // Memoized per pointer so several stages on one page decode once.
+    expect(ownerSource).toContain("export function loadAppliedReplaySkinSettings()");
+    expect(ownerSource).toContain("if (appliedFullSettings?.key !== key) {");
+  });
+
+  it("draws the skin's own pause screen when it ships one", () => {
+    const routeSource = fs.readFileSync(path.resolve(__dirname, "replay.tsx"), "utf8");
+    const skinSource = fs.readFileSync(path.resolve(__dirname, "../lib/replay-skin.ts"), "utf8");
+    const importSource = fs.readFileSync(path.resolve(__dirname, "../lib/replay-skin-import.ts"), "utf8");
+    const ownerSource = fs.readFileSync(path.resolve(__dirname, "../lib/replay-owner-skin.ts"), "utf8");
+
+    // Global filenames, no [Mania] key, like the scorebar art.
+    expect(importSource).toContain('pauseContinue: await resolveStage(undefined, "pause-continue"),');
+    expect(importSource).toContain('pauseOverlay: await resolveStage(undefined, "pause-overlay"),');
+    expect(skinSource).toContain("pauseOverlay: normalizeImageAsset(raw.pauseOverlay),");
+    // And they survive the dehydrate/rehydrate round trip like every other
+    // stage asset, or a shared skin would lose its pause screen.
+    expect(ownerSource).toContain('"pauseContinue",');
+    // Half a set would draw a half-finished menu; the built-in one stands in.
+    expect(routeSource).toContain("if (!stage.pauseContinue || !stage.pauseRetry || !stage.pauseBack) return null;");
+    expect(routeSource).toContain("function skinPauseButtonHeightPercent(");
+    expect(routeSource).toContain("style={{ height: `${skinPauseButtonHeightPercent(asset)}%` }}");
+  });
+
   it("keeps the .osk import feature admin/dev gated on every surface", () => {
     // Unfinished parser (key-area sizing, oversized LN bodies, lazer HUD
     // scale): the public must not see the import UI, and viewers must not get
@@ -99,7 +285,7 @@ describe("replay skin settings UI", () => {
     }
 
     const routeSource = fs.readFileSync(path.resolve(__dirname, "replay.tsx"), "utf8");
-    expect(routeSource).toContain("if (!canUseSkinImport || !ownerUserId || !readReplayOwnerSkinEnabled()) return;");
+    expect(routeSource).toContain("if (!canUseSkinImport || !ownerUserId || !ownerSkinPreferred) {");
   });
 
   it("exposes input overlay-only and color controls", () => {

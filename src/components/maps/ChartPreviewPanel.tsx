@@ -4,7 +4,8 @@ import { getBeatmapFile } from "../../lib/osu";
 import { getBeatmapAudioUrl } from "../../lib/audio-url";
 import { parseCachedManiaBeatmap } from "../../lib/parsed-beatmap-cache";
 import { REPLAY_SCROLL_SPEED_CHANGE_EVENT, normalizeReplayScrollSpeed, readReplayScrollSpeed, writeReplayScrollSpeed } from "../../lib/replay-scroll-speed";
-import { REPLAY_SKIN_SETTINGS_CHANGE_EVENT, readReplaySkinSettings, type ReplaySkinSettings } from "../../lib/replay-skin";
+import type { ReplaySkinSettings } from "../../lib/replay-skin";
+import { useReplaySkinSettings } from "../../lib/use-replay-skin-settings";
 import type { ManiaBeatmap, ManiaNote, ManiaScrollVelocity } from "../../lib/beatmap-parser";
 import type { MapsFavouriteBeatmapset, ReplayFrame } from "../../lib/types";
 import {
@@ -297,8 +298,6 @@ export function ChartPreviewPanel({
             plannedAudioMode: plan.audioMode,
             hasSelectedAudioFile: Boolean(plan.beatmap.audioFilename),
             hasSetPreviewAudio: Boolean(previewUrl),
-            hasDifficultyPicker: maniaBeatmaps.length > 1,
-            timedRateVariant,
           }));
         }
       })
@@ -1035,7 +1034,7 @@ function ChartPreviewRenderer({
   const isPlayingRef = useRef(isPlaying);
   const getClockRef = useRef(getClock);
   const scrollSpeedRef = useRef(scrollSpeed);
-  const [localSkinSettings, setLocalSkinSettings] = useState(readReplaySkinSettings);
+  const localSkinSettings = useReplaySkinSettings();
   const skinSettings = skinSettingsOverride ?? localSkinSettings;
   const skinSettingsRef = useRef(skinSettings);
   skinSettingsRef.current = skinSettings;
@@ -1052,20 +1051,6 @@ function ChartPreviewRenderer({
   useEffect(() => {
     getClockRef.current = getClock;
   }, [getClock]);
-
-  useEffect(() => {
-    const refreshSharedReplaySettings = () => {
-      setLocalSkinSettings(readReplaySkinSettings());
-    };
-    window.addEventListener("storage", refreshSharedReplaySettings);
-    window.addEventListener(REPLAY_SKIN_SETTINGS_CHANGE_EVENT, refreshSharedReplaySettings);
-    window.addEventListener("focus", refreshSharedReplaySettings);
-    return () => {
-      window.removeEventListener("storage", refreshSharedReplaySettings);
-      window.removeEventListener(REPLAY_SKIN_SETTINGS_CHANGE_EVENT, refreshSharedReplaySettings);
-      window.removeEventListener("focus", refreshSharedReplaySettings);
-    };
-  }, []);
 
   useEffect(() => {
     scrollSpeedRef.current = scrollSpeed;

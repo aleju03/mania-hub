@@ -1,7 +1,7 @@
 import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
 
-import { decodeUncompressedTiff, importReplaySkinFromOsk } from "./replay-skin-import";
+import { applyTextureCap, decodeUncompressedTiff, importReplaySkinFromOsk, planTextureCap } from "./replay-skin-import";
 
 // Builds a minimal little-endian uncompressed TIFF the way Photoshop lays it
 // out: header, pixel strip, then one IFD. Enough to cover the renamed-TIFF
@@ -110,16 +110,77 @@ describe("decodeUncompressedTiff", () => {
   });
 });
 
+describe("oversized skin texture cap", () => {
+  // A strip whose first rows carry art (the Percy cap) over a uniform run.
+  function stripRgba(width: number, height: number, artRows: number): Uint8ClampedArray<ArrayBuffer> {
+    const rgba = new Uint8ClampedArray(width * height * 4);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const at = (y * width + x) * 4;
+        rgba[at] = y < artRows ? y : 0;
+        rgba[at + 3] = 255;
+      }
+    }
+    return rgba;
+  }
+
+  it("crops a Percy-style LN body strip instead of scaling it", () => {
+    const width = 2;
+    const height = 40000;
+    const plan = planTextureCap(width, height);
+    // Scaling would shrink the cap 10x, and because stable cascades bodies at
+    // natural aspect the whole pattern would then repeat inside one hold.
+    expect(plan).toEqual({ width: 2, height: 4096, crop: true });
+
+    const capped = applyTextureCap({ width, height, rgba: stripRgba(width, height, 200) }, plan!);
+    expect(capped.height).toBe(4096);
+    // Row for row with the source, not resampled: the cap keeps its pixels.
+    expect(capped.rgba[0]).toBe(0);
+    expect(capped.rgba[(150 * width) * 4]).toBe(150);
+    expect(capped.rgba[(300 * width) * 4]).toBe(0);
+  });
+
+  it("scales down oversized art that is not a strip", () => {
+    const plan = planTextureCap(6000, 5000);
+    expect(plan).toEqual({ width: 4096, height: 4096, crop: false });
+  });
+
+  it("leaves art within the cap alone", () => {
+    expect(planTextureCap(4096, 4096)).toBeNull();
+    expect(planTextureCap(138, 900)).toBeNull();
+  });
+});
+
 // 1x1 transparent PNG.
 const PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
-async function buildOsk(skinIni: string, imagePaths: string[]): Promise<File> {
+async function buildOsk(skinIni: string, imagePaths: string[], textFiles: Record<string, string> = {}): Promise<File> {
   const zip = new JSZip();
   zip.file("skin.ini", skinIni);
   const bytes = Uint8Array.from(atob(PNG_BASE64), (char) => char.charCodeAt(0));
   for (const path of imagePaths) zip.file(path, bytes);
+  for (const [path, content] of Object.entries(textFiles)) zip.file(path, content);
   const buffer = await zip.generateAsync({ type: "arraybuffer" });
   return new File([buffer], "test-skin.osk");
+}
+
+// One mania HUD component, laid out the way lazer writes it: TopCentre anchor
+// (17), position measured down from that edge, uniform scale.
+function hudComponentsJson(entry: { scale?: number; y?: number; anchor?: number }): string {
+  return JSON.stringify({
+    Version: 1,
+    DrawableInfo: {
+      mania: [
+        {
+          Type: "osu.Game.Rulesets.Mania.Skinning.Legacy.LegacyManiaComboCounter, osu.Game.Rulesets.Mania",
+          Position: { x: 0, y: entry.y ?? 0 },
+          Scale: { x: entry.scale ?? 1, y: entry.scale ?? 1 },
+          Anchor: entry.anchor ?? 17,
+          Origin: entry.anchor ?? 17,
+        },
+      ],
+    },
+  });
 }
 
 describe("importReplaySkinFromOsk keymode synthesis", () => {
@@ -177,5 +238,56 @@ describe("importReplaySkinFromOsk keymode synthesis", () => {
 
     expect(result.summary.assetKeymodes).toEqual([4]);
     expect(result.settings.keymodeProfiles["7"]).toBeUndefined();
+  });
+});
+
+describe("importReplaySkinFromOsk stage flags and lazer HUD layout", () => {
+  const iniLines = ["[General]", "Name: Deck", "[Mania]", "Keys: 4", "KeysUnderNotes: 1", "ComboPosition: 150"];
+
+  it("reads KeysUnderNotes and leaves the combo alone without a lazer layout file", async () => {
+    const file = await buildOsk(iniLines.join("\n"), ["mania-note1.png", "mania-key1.png"]);
+    const result = await importReplaySkinFromOsk(file, { targetKeyCount: 4 });
+
+    expect(result.settings.keymodeProfiles["4"].keysUnderNotes).toBe(true);
+    expect(result.settings.keymodeProfiles["4"].comboScale).toBe(1);
+    // skin.ini ComboPosition 150 (top-down 480-space) in replay coordinates.
+    expect(result.settings.comboPosition).toBe(Math.round((480 - 150) * 1.6));
+  });
+
+  it("takes the combo counter's size and spot from lazer's MainHUDComponents.json", async () => {
+    const file = await buildOsk(
+      iniLines.join("\n"),
+      ["mania-note1.png", "mania-key1.png"],
+      { "MainHUDComponents.json": hudComponentsJson({ scale: 0.74, y: 258.42 }) },
+    );
+    const result = await importReplaySkinFromOsk(file, { targetKeyCount: 4 });
+
+    // Applied to every keymode: the file has no per-keymode form.
+    expect(result.settings.keymodeProfiles["4"].comboScale).toBeCloseTo(0.74, 5);
+    // Anchored to the top of lazer's 768-tall HUD, kept from the bottom here.
+    expect(result.settings.comboPosition).toBe(Math.round(768 - 258.42));
+  });
+
+  it("ignores a layout file with no mania combo counter", async () => {
+    const file = await buildOsk(
+      iniLines.join("\n"),
+      ["mania-note1.png", "mania-key1.png"],
+      { "MainHUDComponents.json": JSON.stringify({ Version: 1, DrawableInfo: { mania: [], global: [] } }) },
+    );
+    const result = await importReplaySkinFromOsk(file, { targetKeyCount: 4 });
+
+    expect(result.settings.keymodeProfiles["4"].comboScale).toBe(1);
+    expect(result.settings.comboPosition).toBe(Math.round((480 - 150) * 1.6));
+  });
+
+  it("survives a corrupt layout file", async () => {
+    const file = await buildOsk(
+      iniLines.join("\n"),
+      ["mania-note1.png", "mania-key1.png"],
+      { "MainHUDComponents.json": "{not json" },
+    );
+    const result = await importReplaySkinFromOsk(file, { targetKeyCount: 4 });
+
+    expect(result.settings.keymodeProfiles["4"].comboScale).toBe(1);
   });
 });

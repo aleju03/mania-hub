@@ -16,6 +16,9 @@ export const REPLAY_COMBOBREAK_SOUND_STORAGE_KEY = "mania-hub-replay-combobreak-
 export const REPLAY_STORYBOARD_STORAGE_KEY = "mania-hub-replay-storyboard";
 export const REPLAY_LEADERBOARD_STORAGE_KEY = "mania-hub-replay-leaderboard";
 export const REPLAY_OWNER_SKIN_STORAGE_KEY = "mania-hub-replay-owner-skin";
+// The settings drawer opens over a running replay, so the toggle has to reach
+// the stage in the same tab: "storage" only fires in the other ones.
+export const REPLAY_OWNER_SKIN_CHANGE_EVENT = "mania-hub:replay-owner-skin-change";
 export const DEFAULT_REPLAY_VOLUME = 0.5;
 export const DEFAULT_REPLAY_BG_DIM = 80;
 export const DEFAULT_REPLAY_HITSOUND_VOLUME = 0.1;
@@ -211,6 +214,8 @@ export function readReplayOwnerSkinEnabled(): boolean {
 
 export function writeReplayOwnerSkinEnabled(enabled: boolean): void {
   writeStoredBoolean(REPLAY_OWNER_SKIN_STORAGE_KEY, enabled);
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(REPLAY_OWNER_SKIN_CHANGE_EVENT, { detail: enabled }));
 }
 
 export function readReplayLeaderboardVisible(): boolean {

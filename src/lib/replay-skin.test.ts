@@ -86,6 +86,8 @@ describe("replay skin settings", () => {
           judgementLine: true,
           columnStart: null,
           lightPosition: null,
+          keysUnderNotes: false,
+          comboScale: 1,
           noteHeightScale: 50,
           assets: {
             columns: [],

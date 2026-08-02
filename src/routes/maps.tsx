@@ -72,7 +72,7 @@ import {
   shouldUseSetPreviewForReplayAudio,
 } from "../lib/chart-preview";
 import { REPLAY_SCROLL_SPEED_CHANGE_EVENT, readReplayScrollSpeed } from "../lib/replay-scroll-speed";
-import { REPLAY_SKIN_SETTINGS_CHANGE_EVENT, readReplaySkinSettings } from "../lib/replay-skin";
+import { useReplaySkinSettings } from "../lib/use-replay-skin-settings";
 import type { ReplaySkinSettings } from "../lib/replay-skin";
 import { useAuth } from "../lib/auth-context";
 import {
@@ -3847,7 +3847,7 @@ function RandomReplayPreview({
   const getClockRef = useRef(getClock);
   const scrollSpeedRef = useRef(readReplayScrollSpeed());
   const [scrollSpeed, setScrollSpeed] = useState(readReplayScrollSpeed);
-  const [skinSettings, setSkinSettings] = useState(readReplaySkinSettings);
+  const skinSettings = useReplaySkinSettings();
   const [canvasReady, setCanvasReady] = useState(false);
   const initialCombo = useMemo(() => beatmap ? getPreviewInitialCombo(beatmap, startTimeMs) : 0, [beatmap, startTimeMs]);
   const notes = useMemo(() => beatmap ? getPreviewNotes(beatmap, startTimeMs, timeScale, windowMs) : [], [beatmap, startTimeMs, timeScale, windowMs]);
@@ -3865,16 +3865,13 @@ function RandomReplayPreview({
   useEffect(() => {
     const refreshSharedReplaySettings = () => {
       setScrollSpeed(readReplayScrollSpeed());
-      setSkinSettings(readReplaySkinSettings());
     };
     window.addEventListener("storage", refreshSharedReplaySettings);
     window.addEventListener(REPLAY_SCROLL_SPEED_CHANGE_EVENT, refreshSharedReplaySettings);
-    window.addEventListener(REPLAY_SKIN_SETTINGS_CHANGE_EVENT, refreshSharedReplaySettings);
     window.addEventListener("focus", refreshSharedReplaySettings);
     return () => {
       window.removeEventListener("storage", refreshSharedReplaySettings);
       window.removeEventListener(REPLAY_SCROLL_SPEED_CHANGE_EVENT, refreshSharedReplaySettings);
-      window.removeEventListener(REPLAY_SKIN_SETTINGS_CHANGE_EVENT, refreshSharedReplaySettings);
       window.removeEventListener("focus", refreshSharedReplaySettings);
     };
   }, []);
@@ -3883,6 +3880,14 @@ function RandomReplayPreview({
     scrollSpeedRef.current = scrollSpeed;
     rendererRef.current?.setScrollSpeed(scrollSpeed);
   }, [scrollSpeed]);
+
+  // Through a ref, not the effect's closure: the applied skin is rebuilt
+  // asynchronously, so on a reroll it can land while the renderer's dynamic
+  // import is still in flight. The push below then hits a null renderer and
+  // the stage is built from whatever the closure captured, which is the
+  // asset-free copy - a stage with the skin's colors and none of its art.
+  const skinSettingsRef = useRef(skinSettings);
+  skinSettingsRef.current = skinSettings;
 
   useEffect(() => {
     rendererRef.current?.setSkinSettings(skinSettings);
@@ -3913,11 +3918,11 @@ function RandomReplayPreview({
           barePlayfield: true,
           showHealthBar: false,
           scrollVelocities,
-          skinSettings,
+          skinSettings: skinSettingsRef.current,
         },
       ) as RandomPreviewRendererLike;
       renderer.setScrollSpeed(scrollSpeedRef.current);
-      renderer.setSkinSettings(skinSettings);
+      renderer.setSkinSettings(skinSettingsRef.current);
       renderer.setExternalClock(() => getClockRef.current());
       rendererRef.current = renderer;
       handleResize = () => renderer?.resize();
@@ -4328,8 +4333,6 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
             plannedAudioMode: previewPlan.audioMode,
             hasSelectedAudioFile: Boolean(previewPlan.beatmap.audioFilename),
             hasSetPreviewAudio: Boolean(previewUrl),
-            hasDifficultyPicker: maniaBeatmaps.length > 1,
-            timedRateVariant,
           }));
         }
       })

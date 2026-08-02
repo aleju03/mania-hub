@@ -168,11 +168,22 @@ export async function importReplaySkinFromOsk(
     keymodeProfiles[String(keys)] = imported.profile;
   }
 
+  // The combo counter is the one thing players routinely resize and nudge in
+  // lazer's HUD editor, and lazer keeps that outside skin.ini. Applied to
+  // every keymode: the file has no per-keymode form.
+  const hudCombo = await readLazerComboLayout(lookup);
+  if (hudCombo?.scale != null) {
+    for (const [key, profile] of Object.entries(keymodeProfiles)) {
+      keymodeProfiles[key] = { ...profile, comboScale: hudCombo.scale };
+    }
+  }
+
   const selectedProfile = keymodeProfiles[String(selectedBlock.keys)];
   const selectedBlockSettings = settingsFromManiaBlock(selectedBlock.block);
   nextSettings = normalizeReplaySkinSettings({
     ...nextSettings,
     ...selectedBlockSettings,
+    ...(hudCombo?.position != null ? { comboPosition: hudCombo.position } : {}),
     // The renderer only draws imported note/receptor art under the "bars"
     // style (circles/arrows are the synthetic shape styles), so a skin that
     // ships any assets must switch to it or it renders as flat shapes.
@@ -283,6 +294,18 @@ export function loadOskImageAssetByPath(archive: OskArchive, path: string): Prom
   return promise;
 }
 
+// Loads a skin element by its stable filename (extension, @2x and animation
+// frame 0 all resolved the way an import does). Stored configs only name the
+// assets that existed when they were saved, so this is how a skin saved before
+// the viewer understood an element still gets it.
+export async function resolveOskAssetByName(
+  archive: OskArchive,
+  name: string,
+): Promise<ReplaySkinImageAsset | undefined> {
+  return (await resolveAssetReference(archive.zip, archive.lookup, archive.assetCache, name))
+    ?? (await resolveAssetReference(archive.zip, archive.lookup, archive.assetCache, `${name}-0`));
+}
+
 export async function extractSkinSoundsFromArchive(archive: OskArchive): Promise<Record<string, ArrayBuffer>> {
   return extractSkinSounds(archive.lookup);
 }
@@ -337,6 +360,67 @@ async function readSkinIni(zip: JSZip): Promise<string | null> {
     return !entry.dir && name.endsWith("/skin.ini");
   });
   return file ? file.async("string") : null;
+}
+
+interface LazerComboLayout {
+  // Multiplier on the drawn digit size.
+  scale?: number;
+  // Replay 768-space, measured from the bottom edge, like every other stage
+  // position in the settings.
+  position?: number;
+}
+
+// osu!lazer stores HUD-editor tweaks in MainHUDComponents.json, which stable
+// ignores entirely - so a player who shrank their mania combo counter in lazer
+// has that size recorded nowhere else. The mania list holds the ruleset's own
+// components; only the combo counter is on screen during a replay here.
+//
+// Its space is lazer's 768-tall HUD, matching the 768-space the viewer already
+// uses for HitPosition and friends: the anchor picks the origin edge and
+// Position.y offsets from it, downwards.
+export async function readLazerComboLayout(lookup: Map<string, JSZip.JSZipObject>): Promise<LazerComboLayout | null> {
+  const file = lookup.get("mainhudcomponents.json")
+    ?? [...lookup.entries()].find(([path]) => path.endsWith("/mainhudcomponents.json"))?.[1];
+  if (!file) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stripBom(await file.async("string")));
+  } catch {
+    return null;
+  }
+  const mania = (parsed as { DrawableInfo?: { mania?: unknown } } | null)?.DrawableInfo?.mania;
+  if (!Array.isArray(mania)) return null;
+  const entry = mania.find((item): item is Record<string, unknown> => (
+    Boolean(item)
+    && typeof item === "object"
+    && typeof (item as { Type?: unknown }).Type === "string"
+    && (item as { Type: string }).Type.includes("LegacyManiaComboCounter")
+  ));
+  if (!entry) return null;
+
+  const layout: LazerComboLayout = {};
+  const scale = entry.Scale as { x?: unknown; y?: unknown } | undefined;
+  const scaleY = typeof scale?.y === "number" ? scale.y : typeof scale?.x === "number" ? scale.x : null;
+  if (scaleY != null && Number.isFinite(scaleY) && scaleY > 0 && scaleY !== 1) {
+    layout.scale = Math.max(0.1, Math.min(4, scaleY));
+  }
+
+  const positionY = (entry.Position as { y?: unknown } | undefined)?.y;
+  const anchor = typeof entry.Anchor === "number" ? entry.Anchor : 0;
+  if (typeof positionY === "number" && Number.isFinite(positionY)) {
+    // osu!framework anchor bits: 1 top, 2 vertical centre, 4 bottom.
+    const originY = (anchor & 4) !== 0 ? LAZER_HUD_HEIGHT : (anchor & 2) !== 0 ? LAZER_HUD_HEIGHT / 2 : 0;
+    const fromBottom = LAZER_HUD_HEIGHT - (originY + positionY);
+    if (fromBottom > 0 && fromBottom < LAZER_HUD_HEIGHT) layout.position = Math.round(fromBottom);
+  }
+
+  return layout.scale == null && layout.position == null ? null : layout;
+}
+
+const LAZER_HUD_HEIGHT = 768;
+
+function stripBom(value: string): string {
+  return value.charCodeAt(0) === 0xfeff ? value.slice(1) : value;
 }
 
 function parseSkinIni(content: string): SkinIniData {
@@ -427,6 +511,9 @@ async function buildProfileFromManiaBlock({
   const columnStart = columnStartValue == null ? null : Math.max(0, Math.min(853, columnStartValue));
   const lightPositionValue = parseNumber(block.LightPosition);
   const lightPosition = lightPositionValue == null ? null : Math.max(0, Math.min(480, lightPositionValue));
+  // KeysUnderNotes puts the key area below the notes, which is how arrow and
+  // deck skins keep their receptors from covering the hit.
+  const keysUnderNotes = parseNumber(block.KeysUnderNotes) === 1;
   const columnWidth = clampInteger(columnWidths[0] ?? parseNumber(block.ColumnWidth) ?? baseProfile.columnWidth, 20, 160);
   const columnSpacing = clampInteger(columnSpacings[0] ?? parseNumber(block.ColumnSpacing) ?? baseProfile.columnSpacing, 0, 40);
   const noteHeightScale = clampInteger(
@@ -540,6 +627,13 @@ async function buildProfileFromManiaBlock({
     scorebarColour: await resolveStage(undefined, "scorebar-colour"),
     scorebarMarker: (await resolveStage(undefined, "scorebar-marker"))
       ?? (await resolveStage(undefined, "scorebar-ki")),
+    // The pause screen. Most skins ship the buttons and leave the backdrop to
+    // the default skin, so the overlay is optional and the buttons are what
+    // decide whether the skin has a pause screen at all.
+    pauseOverlay: await resolveStage(undefined, "pause-overlay"),
+    pauseContinue: await resolveStage(undefined, "pause-continue"),
+    pauseRetry: await resolveStage(undefined, "pause-retry"),
+    pauseBack: await resolveStage(undefined, "pause-back"),
     lightingWidths: parseNumberList(block.LightingNWidth).slice(0, keys),
     lightColors,
   };
@@ -594,6 +688,7 @@ async function buildProfileFromManiaBlock({
       judgementLine,
       columnStart,
       lightPosition,
+      keysUnderNotes,
       noteHeightScale,
       columnBackgrounds,
       assets: {
@@ -692,19 +787,34 @@ async function readImageAsset(_zip: JSZip, resolved: ResolvedZipAsset): Promise<
   if (!data) return undefined;
   let src = `data:${resolved.mime};base64,${data}`;
   let size: { width: number; height: number } | null = null;
+  let capped = false;
   // Some skins ship TIFFs renamed to .png (Percy-style LN bodies especially;
   // osu!stable decodes by content, so they work in game). Browsers cannot
   // decode TIFF at all, so transcode the common Photoshop flavour to PNG here.
   // "SUkq" / "TU0AK" are the base64 spellings of the II*/MM* TIFF magic.
   if (data.startsWith("SUkq") || data.startsWith("TU0AK")) {
     const decoded = decodeUncompressedTiff(base64ToBytes(data));
-    const transcoded = decoded ? rgbaToPngDataUrl(decoded) : null;
+    // Capped before the canvas, not after: these are the 138x40000 LN body
+    // strips, and browsers refuse a canvas that tall outright (Chrome stops
+    // at 32767), so transcoding one at full size produced nothing at all.
+    const plan = decoded ? planTextureCap(decoded.width, decoded.height) : null;
+    const transcoded = decoded ? rgbaToPngDataUrl(plan ? applyTextureCap(decoded, plan) : decoded) : null;
     if (decoded && transcoded) {
       src = transcoded;
-      size = { width: decoded.width, height: decoded.height };
+      size = plan?.crop ? { width: plan.width, height: plan.height } : { width: decoded.width, height: decoded.height };
+      capped = true;
     }
   }
   if (!size) size = await readImageSize(src).catch(() => null);
+  const plan = capped || !size ? null : planTextureCap(size.width, size.height);
+  if (plan) {
+    const shrunk = await capImageDataUrl(src, size!, plan).catch(() => null);
+    if (shrunk) {
+      src = shrunk;
+      // A cropped strip really is shorter now; a scaled-down image is not.
+      if (plan.crop) size = { width: plan.width, height: plan.height };
+    }
+  }
   return {
     name: basename(resolved.path),
     path: normalizeZipPath(resolved.path),
@@ -713,6 +823,103 @@ async function readImageAsset(_zip: JSZip, resolved: ResolvedZipAsset): Promise<
     height: size?.height,
     scale: resolved.scale,
   };
+}
+
+// WebGL rejects a texture past its max size (16384 on desktop, half that on
+// plenty of phones) and the upload silently fails, which is how a skin ends up
+// with invisible long notes. A canvas that big is refused outright well before
+// that, so the transcode of a renamed TIFF produces nothing at all.
+const MAX_SKIN_TEXTURE_PX = 4096;
+
+// Past this ratio the art is a strip, not a picture, and the only strips this
+// long in a mania skin are Percy-style LN bodies.
+const TEXTURE_STRIP_ASPECT = 8;
+
+interface TextureCapPlan {
+  width: number;
+  height: number;
+  // Keep the leading rows/columns at full resolution instead of scaling the
+  // whole thing down.
+  crop: boolean;
+}
+
+// How to bring an oversized texture under the cap.
+//
+// Percy-style LN bodies are a 138x40000 strip whose art - the rounded cap and
+// the transparent lead-in that makes the hold read shorter than it is - lives
+// in the first rows, followed by tens of thousands of rows of one colour. They
+// have to be CROPPED: stable cascades a body at natural aspect from the tail
+// end, so scaling the strip down would shrink that cap by the same factor and
+// start repeating the whole pattern within a single hold. Cropping keeps the
+// cap pixel-for-pixel and only shortens the uniform run, which no realistic
+// hold reaches (4096 rows of a 138-wide strip cascade past 2000px on screen).
+//
+// Anything that is not a strip has no such convention about where its art
+// sits, so it scales down instead and keeps all of it.
+export function planTextureCap(width: number, height: number): TextureCapPlan | null {
+  if (!(width > MAX_SKIN_TEXTURE_PX || height > MAX_SKIN_TEXTURE_PX)) return null;
+  const longest = Math.max(width, height);
+  const shortest = Math.max(1, Math.min(width, height));
+  return {
+    width: Math.min(width, MAX_SKIN_TEXTURE_PX),
+    height: Math.min(height, MAX_SKIN_TEXTURE_PX),
+    crop: longest / shortest >= TEXTURE_STRIP_ASPECT,
+  };
+}
+
+// Nearest-neighbour when scaling, because the images that reach here are long
+// gradients and stretches of flat colour where a box filter buys nothing for
+// the extra passes.
+export function applyTextureCap(decoded: DecodedTiff, plan: TextureCapPlan): DecodedTiff {
+  const { width, height } = plan;
+  if (width === decoded.width && height === decoded.height) return decoded;
+  const rgba = new Uint8ClampedArray(width * height * 4);
+  for (let y = 0; y < height; y += 1) {
+    const sourceY = plan.crop ? y : Math.min(decoded.height - 1, Math.floor((y * decoded.height) / height));
+    for (let x = 0; x < width; x += 1) {
+      const sourceX = plan.crop ? x : Math.min(decoded.width - 1, Math.floor((x * decoded.width) / width));
+      const from = (sourceY * decoded.width + sourceX) * 4;
+      const to = (y * width + x) * 4;
+      rgba[to] = decoded.rgba[from];
+      rgba[to + 1] = decoded.rgba[from + 1];
+      rgba[to + 2] = decoded.rgba[from + 2];
+      rgba[to + 3] = decoded.rgba[from + 3];
+    }
+  }
+  return { width, height, rgba };
+}
+
+function capImageDataUrl(
+  src: string,
+  size: { width: number; height: number },
+  plan: TextureCapPlan,
+): Promise<string | null> {
+  if (typeof document === "undefined" || typeof Image === "undefined") return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.decoding = "async";
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = plan.width;
+        canvas.height = plan.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(null);
+          return;
+        }
+        // Cropping takes the leading region 1:1; scaling takes the whole image.
+        const sourceWidth = plan.crop ? plan.width : size.width;
+        const sourceHeight = plan.crop ? plan.height : size.height;
+        ctx.drawImage(img, 0, 0, sourceWidth, sourceHeight, 0, 0, plan.width, plan.height);
+        resolve(canvas.toDataURL("image/png"));
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
 }
 
 interface DecodedTiff {
@@ -906,7 +1113,7 @@ function firstColor(colors: string[]): string | null {
   return colors.find((color) => color) ?? null;
 }
 
-function hasAnyImportedAssets(assets: ReplaySkinKeymodeAssets | undefined): boolean {
+export function hasAnyImportedAssets(assets: ReplaySkinKeymodeAssets | undefined): boolean {
   const normalized = assets ?? EMPTY_REPLAY_SKIN_ASSETS;
   return normalized.columns.some((column) => Object.values(column).some(Boolean)) ||
     Object.values(normalized.judgements).some(Boolean) ||

@@ -4,8 +4,8 @@ import { canUseAdminFeatures } from "./auth-shared";
 import type { AuthState } from "./auth-shared";
 import { getLiveBackendUrl } from "./live-backend";
 import { normalizeReplaySkinSettings } from "./replay-skin";
-import type { ReplaySkinImageAsset, ReplaySkinSettings } from "./replay-skin";
-import { extractSkinSoundsFromArchive, loadOskImageAssetByPath, openOskArchive } from "./replay-skin-import";
+import type { ReplaySkinImageAsset, ReplaySkinSettings, ReplaySkinStageAssets } from "./replay-skin";
+import { extractSkinSoundsFromArchive, hasAnyImportedAssets, loadOskImageAssetByPath, openOskArchive } from "./replay-skin-import";
 import type { OskArchive } from "./replay-skin-import";
 import { skinOskFileUrl } from "./skins";
 import type { SkinSummary } from "./skins";
@@ -56,6 +56,10 @@ const STAGE_ASSET_KEYS = [
   "scorebarBg",
   "scorebarColour",
   "scorebarMarker",
+  "pauseOverlay",
+  "pauseContinue",
+  "pauseRetry",
+  "pauseBack",
 ] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -166,7 +170,52 @@ export async function rehydrateOwnerReplaySkinSettings(
   }
 
   await Promise.all(loads);
-  return normalizeReplaySkinSettings(settings);
+  await fillGlobalStageAssets(settings, archive);
+  const rehydrated = normalizeReplaySkinSettings(settings);
+  // The renderer only draws imported art under the "bars" style, so a payload
+  // saved while the note shape said circles or arrows would rebuild every
+  // texture and then show none of them. The importer forces bars for the same
+  // reason; stored settings have to be held to it too.
+  const hasArt = Object.values(rehydrated.keymodeProfiles).some((profile) => hasAnyImportedAssets(profile.assets));
+  return hasArt && rehydrated.style !== "bars"
+    ? normalizeReplaySkinSettings({ ...rehydrated, style: "bars" })
+    : rehydrated;
+}
+
+// Skin elements that live under fixed filenames rather than a skin.ini key.
+// A payload saved before the viewer understood one of these never mentions it,
+// so the element is looked up in the archive instead of being lost until the
+// owner re-saves their skin.
+const GLOBAL_STAGE_ASSET_FILES: ReadonlyArray<readonly [Extract<keyof ReplaySkinStageAssets, string>, string]> = [
+  ["pauseOverlay", "pause-overlay"],
+  ["pauseContinue", "pause-continue"],
+  ["pauseRetry", "pause-retry"],
+  ["pauseBack", "pause-back"],
+];
+
+async function fillGlobalStageAssets(settings: Record<string, unknown>, archive: OskArchive): Promise<void> {
+  const profiles = isRecord(settings.keymodeProfiles) ? settings.keymodeProfiles : {};
+  const stages = Object.values(profiles)
+    .map((profile) => (isRecord(profile) && isRecord(profile.assets) && isRecord(profile.assets.stage) ? profile.assets.stage : null))
+    .filter((stage): stage is Record<string, unknown> => stage != null);
+  if (stages.length === 0) return;
+
+  const { resolveOskAssetByName } = await import("./replay-skin-import");
+  await Promise.all(GLOBAL_STAGE_ASSET_FILES.map(async ([key, file]) => {
+    const missing = stages.filter((stage) => !isRecord(stage[key]));
+    if (missing.length === 0) return;
+    const asset = await resolveOskAssetByName(archive, file);
+    if (!asset) return;
+    for (const stage of missing) stage[key] = asset;
+  }));
+}
+
+// The same settings with every embedded image reduced to its path. This is
+// what goes in the settings key while the pointer holds what rebuilds it;
+// writing the decoded copy there blows the localStorage quota, and the failed
+// write used to revert the apply on the next read.
+export function replaySkinSettingsWithoutAssets(settings: ReplaySkinSettings): ReplaySkinSettings {
+  return normalizeReplaySkinSettings(dehydrateReplaySkinSettings(settings).settings);
 }
 
 // Whether any keymode profile embeds decoded image data. Settings that do are
@@ -279,19 +328,39 @@ export async function fetchUserReplaySkin(userId: number, init?: RequestInit): P
   }
 }
 
+// Opened archives, by .osk URL. The route effect that loads a player's skin
+// re-runs a couple of times per page (the owner id arrives after the score),
+// and a skin is several MB to fetch and unzip; without this each run pays for
+// it again. Small because a viewer sees one or two skins in a session, and an
+// entry only holds the zip plus whatever assets have been decoded from it.
+const skinArchiveCache = new Map<string, Promise<OskArchive | null>>();
+const SKIN_ARCHIVE_CACHE_MAX = 3;
+
 // Downloads the .osk through the catalog's CORS-safe streaming endpoint (which
-// does not count as a download). The archive rides HTTP caching: the endpoint
-// serves immutable cache headers, so repeat fetches cost no re-transfer.
-export async function fetchSkinArchive(skin: SkinSummary, init?: RequestInit): Promise<OskArchive | null> {
+// does not count as a download). The archive rides HTTP caching too: the
+// endpoint serves immutable cache headers.
+export function fetchSkinArchive(skin: SkinSummary, init?: RequestInit): Promise<OskArchive | null> {
   const url = skinOskFileUrl(skin);
-  if (!url) return null;
-  try {
+  if (!url) return Promise.resolve(null);
+  const cached = skinArchiveCache.get(url);
+  if (cached) return cached;
+
+  const promise = (async () => {
     const response = await fetch(url, { credentials: "omit", ...init });
     if (!response.ok) return null;
     return await openOskArchive(await response.arrayBuffer());
-  } catch {
-    return null;
+  })().catch(() => null).then((archive) => {
+    // A failed load must not stick, or a retry would keep serving the null.
+    if (!archive) skinArchiveCache.delete(url);
+    return archive;
+  });
+
+  skinArchiveCache.set(url, promise);
+  if (skinArchiveCache.size > SKIN_ARCHIVE_CACHE_MAX) {
+    const oldest = skinArchiveCache.keys().next().value;
+    if (oldest != null && oldest !== url) skinArchiveCache.delete(oldest);
   }
+  return promise;
 }
 
 // Rebuilds the full settings + gameplay sounds for a player's replay skin.
@@ -309,6 +378,64 @@ export async function loadOwnerReplaySkin(
   } catch {
     return null;
   }
+}
+
+// What the stage needs from a player's skin: no archive, so a cached load can
+// skip the .osk entirely. The customization UI keeps using loadOwnerReplaySkin,
+// which hands back the open archive for its asset picker.
+export interface CachedOwnerReplaySkin {
+  record: OwnerReplaySkinRecord;
+  settings: ReplaySkinSettings;
+  sounds: Record<string, ArrayBuffer>;
+}
+
+// Same load, served from IndexedDB when this browser has already decoded that
+// exact skin (see replay-skin-cache for why that is worth caching).
+export async function loadOwnerReplaySkinCached(
+  record: OwnerReplaySkinRecord,
+  init?: RequestInit,
+): Promise<CachedOwnerReplaySkin | null> {
+  const { readCachedReplaySkin, writeCachedReplaySkin } = await import("./replay-skin-cache");
+  const key = `owner:${record.skin.id}:${record.updatedAt}`;
+  const cached = await readCachedReplaySkin(key).catch(() => null);
+  if (cached) return { record, settings: normalizeReplaySkinSettings(cached.settings), sounds: cached.sounds };
+
+  const loaded = await loadOwnerReplaySkin(record, init);
+  if (!loaded) return null;
+  void writeCachedReplaySkin(key, { settings: loaded.settings, sounds: loaded.sounds }, Date.now()).catch(() => {});
+  return { record: loaded.record, settings: loaded.settings, sounds: loaded.sounds };
+}
+
+// The viewer's own applied skin, with its art. localStorage only keeps the
+// asset-free copy while a community skin is on (the pointer split), so every
+// surface that draws the viewer's skin has to rebuild it; memoized per pointer
+// so the several stages on a page decode once between them, and cached on disk
+// so the next visit skips the .osk entirely.
+let appliedFullSettings: { key: string; promise: Promise<ReplaySkinSettings | null> } | null = null;
+
+export function loadAppliedReplaySkinSettings(): Promise<ReplaySkinSettings | null> {
+  const applied = readAppliedCommunityReplaySkin();
+  if (!applied) {
+    appliedFullSettings = null;
+    return Promise.resolve(null);
+  }
+  const key = appliedCommunityReplaySkinKey(applied);
+  if (appliedFullSettings?.key !== key) {
+    appliedFullSettings = {
+      key,
+      promise: (async () => {
+        const { readCachedReplaySkin, writeCachedReplaySkin } = await import("./replay-skin-cache");
+        const cacheKey = `applied:${key}`;
+        const cached = await readCachedReplaySkin(cacheKey).catch(() => null);
+        if (cached) return normalizeReplaySkinSettings(cached.settings);
+        const settings = await loadAppliedCommunityReplaySkinSettings(applied);
+        if (!settings) return null;
+        void writeCachedReplaySkin(cacheKey, { settings, sounds: {} }, Date.now()).catch(() => {});
+        return settings;
+      })().catch(() => null),
+    };
+  }
+  return appliedFullSettings.promise;
 }
 
 // ---- owner side (auth-cookie server fns, the goals bridge) ------------------
