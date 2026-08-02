@@ -1,0 +1,750 @@
+{
+ "user_id": 1190879,
+ "username_key": "windys",
+ "user": {
+  "id": 1190879,
+  "username": "WindyS",
+  "avatar_url": "https://a.ppy.sh/1190879?1560742539.jpg",
+  "country_code": "KR",
+  "country": {
+   "code": "KR",
+   "name": ""
+  },
+  "join_date": "2011-11-05T10:07:11+00:00",
+  "last_visit": null,
+  "is_active": false,
+  "is_bot": false,
+  "is_deleted": false,
+  "is_online": false,
+  "is_supporter": false,
+  "playmode": "mania",
+  "title": "osu!mania Champion",
+  "cover": {},
+  "page": {
+   "html": "<div class='bbcode bbcode--profile-page'><a rel=\"nofollow\" href=\"http://twitch.tv/o2windy\"></a><center><a rel=\"nofollow\" href=\"http://twitch.tv/o2windy\"><span style=\"color:#BF40FF;\"><span class=\"size-150\">TWITCH</span></span></a></center><a rel=\"nofollow\" href=\"http://twitch.tv/o2windy\"></a> <a rel=\"nofollow\" href=\"https://www.youtube.com/channel/UCvHCDXDMAZOARWAKBRe4mHQ\"></a><center><a rel=\"nofollow\" href=\"https://www.youtube.com/channel/UCvHCDXDMAZOARWAKBRe4mHQ\"><span style=\"color:#FF0000;\"><span class=\"size-150\">YOUTUBE</span></span></a></center><a rel=\"nofollow\" href=\"https://www.youtube.com/channel/UCvHCDXDMAZOARWAKBRe4mHQ\"></a><br /><center><img src=\"data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==\" data-normal=\"https://i.ppy.sh/7edd9b14486c3fe577616bc18742180cb69d4498/68747470733a2f2f692e696d6775722e636f6d2f6137527176366e2e6a7067\" alt=\"\" /></center></div>",
+   "raw": "[url=http://twitch.tv/o2windy][centre][color=#BF40FF][size=150]TWITCH[/size][/color][/centre][/url] [url=https://www.youtube.com/channel/UCvHCDXDMAZOARWAKBRe4mHQ][centre][color=#FF0000][size=150]YOUTUBE[/size][/color][/centre][/url]\n[centre][img]https://i.imgur.com/a7Rqv6n.jpg[/img][/centre]"
+  },
+  "statistics": {
+   "pp": 19196.5,
+   "global_rank": null,
+   "country_rank": null,
+   "rank": {
+    "country": null
+   },
+   "hit_accuracy": 98.0524,
+   "accuracy": 0.9805240000000001,
+   "ranked_score": 609944878,
+   "play_count": 14101,
+   "play_time": 842916,
+   "total_score": 5117038910,
+   "total_hits": 14723794,
+   "count_300": 0,
+   "count_100": 0,
+   "count_50": 0,
+   "count_miss": 0,
+   "level": {
+    "current": 91,
+    "progress": 13
+   },
+   "replays_watched_by_others": 117911,
+   "maximum_combo": 10660,
+   "grade_counts": {
+    "ss": 133,
+    "ssh": 0,
+    "s": 478,
+    "sh": 0,
+    "a": 17
+   },
+   "is_ranked": false
+  },
+  "rank_highest": null,
+  "scores_first_count": 0,
+  "scores_best_count": 9,
+  "archived": true,
+  "archived_note": "Reconstructed from Wayback Machine captures; account deleted. Profile state from the 2021-01-18 capture, by which time the account had been renamed to 2ard (earlier names: WindyS, dksgo). He had 100 top plays and 47 #1 ranks; 9 are recoverable. Every Wayback capture of the profile embeds only the top 6 plays plus 6 #1s, and only three distinct capture dates exist (2019-12, 2020-05/11, 2021-01); no capture of the mania score endpoints, the pre-2018 AJAX profile includes, or any third-party tracker survives, and osu!Stats/osu!track purge deleted accounts. Three further recovered #1 ranks (289pp, 97pp, 27pp) are omitted: real scores, but far below a top-100 cutoff at this pp."
+ },
+ "best_scores": [
+  {
+   "id": 343164455,
+   "legacy_score_id": 343164455,
+   "user_id": 1190879,
+   "accuracy": 0.9872,
+   "beatmap_id": 2220863,
+   "mods": [
+    {
+     "acronym": "DT"
+    },
+    {
+     "acronym": "MR"
+    }
+   ],
+   "score": 946504,
+   "legacy_total_score": 946504,
+   "max_combo": 4557,
+   "passed": true,
+   "ranked": true,
+   "rank": "S",
+   "statistics": {
+    "count_miss": 21,
+    "miss": 21
+   },
+   "pp": 1424.04,
+   "beatmap": {
+    "id": 2220863,
+    "beatmapset_id": 974689,
+    "difficulty_rating": 7.22648,
+    "mode": "mania",
+    "status": "ranked",
+    "total_length": 471,
+    "cs": 7,
+    "drain": 9,
+    "accuracy": 7.5,
+    "ar": 5,
+    "bpm": 176,
+    "convert": false,
+    "count_circles": 3023,
+    "count_sliders": 2510,
+    "count_spinners": 0,
+    "max_combo": 13516,
+    "checksum": "d65ad6d32105eed7d51011cb0f6033e9",
+    "version": "[7K] New Palettes",
+    "url": "https://osu.ppy.sh/beatmaps/2220863"
+   },
+   "beatmapset": {
+    "id": 974689,
+    "title": "Monochrome and Vivid",
+    "artist": "penoreri",
+    "creator": "ruka",
+    "covers": {
+     "cover": "https://assets.ppy.sh/beatmaps/974689/covers/cover.jpg?1622162459",
+     "cover@2x": "https://assets.ppy.sh/beatmaps/974689/covers/cover@2x.jpg?1622162459",
+     "card": "https://assets.ppy.sh/beatmaps/974689/covers/card.jpg?1622162459",
+     "card@2x": "https://assets.ppy.sh/beatmaps/974689/covers/card@2x.jpg?1622162459",
+     "list": "https://assets.ppy.sh/beatmaps/974689/covers/list.jpg?1622162459",
+     "list@2x": "https://assets.ppy.sh/beatmaps/974689/covers/list@2x.jpg?1622162459",
+     "slimcover": "https://assets.ppy.sh/beatmaps/974689/covers/slimcover.jpg?1622162459",
+     "slimcover@2x": "https://assets.ppy.sh/beatmaps/974689/covers/slimcover@2x.jpg?1622162459"
+    }
+   },
+   "user": {
+    "id": 1190879,
+    "username": "WindyS",
+    "avatar_url": "https://a.ppy.sh/1190879?1560742539.jpg",
+    "country_code": "KR"
+   },
+   "ended_at": "2020-03-06T00:00:00+00:00",
+   "created_at": "2020-03-06T00:00:00+00:00",
+   "has_replay": false,
+   "type": "solo_score",
+   "weight": {
+    "percentage": 100,
+    "pp": 1424.04
+   }
+  },
+  {
+   "id": 343162126,
+   "legacy_score_id": 343162126,
+   "user_id": 1190879,
+   "accuracy": 0.9904999999999999,
+   "beatmap_id": 2119517,
+   "mods": [
+    {
+     "acronym": "DT"
+    },
+    {
+     "acronym": "MR"
+    }
+   ],
+   "score": 957454,
+   "legacy_total_score": 957454,
+   "max_combo": 3078,
+   "passed": true,
+   "ranked": true,
+   "rank": "S",
+   "statistics": {
+    "count_miss": 8,
+    "miss": 8
+   },
+   "pp": 1246.25,
+   "beatmap": {
+    "id": 2119517,
+    "beatmapset_id": 1012634,
+    "difficulty_rating": 6.73115,
+    "mode": "mania",
+    "status": "ranked",
+    "total_length": 325,
+    "cs": 7,
+    "drain": 8.4,
+    "accuracy": 7.1,
+    "ar": 5,
+    "bpm": 170,
+    "convert": false,
+    "count_circles": 2180,
+    "count_sliders": 3096,
+    "count_spinners": 0,
+    "max_combo": 9276,
+    "checksum": "8df93a49b561d1eb52d5fae91bfd3544",
+    "version": "Cosmic Journey // 7K",
+    "url": "https://osu.ppy.sh/beatmaps/2119517"
+   },
+   "beatmapset": {
+    "id": 1012634,
+    "title": "Shironaga Star Jet -aquamarine mix-",
+    "artist": "Maverick",
+    "creator": "_Kobii",
+    "covers": {
+     "cover": "https://assets.ppy.sh/beatmaps/1012634/covers/cover.jpg?1650684639",
+     "cover@2x": "https://assets.ppy.sh/beatmaps/1012634/covers/cover@2x.jpg?1650684639",
+     "card": "https://assets.ppy.sh/beatmaps/1012634/covers/card.jpg?1650684639",
+     "card@2x": "https://assets.ppy.sh/beatmaps/1012634/covers/card@2x.jpg?1650684639",
+     "list": "https://assets.ppy.sh/beatmaps/1012634/covers/list.jpg?1650684639",
+     "list@2x": "https://assets.ppy.sh/beatmaps/1012634/covers/list@2x.jpg?1650684639",
+     "slimcover": "https://assets.ppy.sh/beatmaps/1012634/covers/slimcover.jpg?1650684639",
+     "slimcover@2x": "https://assets.ppy.sh/beatmaps/1012634/covers/slimcover@2x.jpg?1650684639"
+    }
+   },
+   "user": {
+    "id": 1190879,
+    "username": "WindyS",
+    "avatar_url": "https://a.ppy.sh/1190879?1560742539.jpg",
+    "country_code": "KR"
+   },
+   "ended_at": "2020-03-06T00:00:00+00:00",
+   "created_at": "2020-03-06T00:00:00+00:00",
+   "has_replay": false,
+   "type": "solo_score",
+   "weight": {
+    "percentage": 95,
+    "pp": 1183.9375
+   }
+  },
+  {
+   "id": 323981997,
+   "legacy_score_id": 323981997,
+   "user_id": 1190879,
+   "accuracy": 0.9924,
+   "beatmap_id": 2027282,
+   "mods": [
+    {
+     "acronym": "DT"
+    }
+   ],
+   "score": 964668,
+   "legacy_total_score": 964668,
+   "max_combo": 1578,
+   "passed": true,
+   "ranked": true,
+   "rank": "S",
+   "statistics": {
+    "count_miss": 4,
+    "miss": 4
+   },
+   "pp": 1147.7,
+   "beatmap": {
+    "id": 2027282,
+    "beatmapset_id": 968909,
+    "difficulty_rating": 6.42471,
+    "mode": "mania",
+    "status": "ranked",
+    "total_length": 118,
+    "cs": 7,
+    "drain": 8.5,
+    "accuracy": 7.5,
+    "ar": 5,
+    "bpm": 177,
+    "convert": false,
+    "count_circles": 1187,
+    "count_sliders": 1146,
+    "count_spinners": 0,
+    "max_combo": 3667,
+    "checksum": "4aefdb7e59b7214a32be8fba9a99929c",
+    "version": "[7K] HEAVENLY",
+    "url": "https://osu.ppy.sh/beatmaps/2027282"
+   },
+   "beatmapset": {
+    "id": 968909,
+    "title": "Melty Sweets",
+    "artist": "Ironami",
+    "creator": "_Kobii",
+    "covers": {
+     "cover": "https://assets.ppy.sh/beatmaps/968909/covers/cover.jpg?1650679817",
+     "cover@2x": "https://assets.ppy.sh/beatmaps/968909/covers/cover@2x.jpg?1650679817",
+     "card": "https://assets.ppy.sh/beatmaps/968909/covers/card.jpg?1650679817",
+     "card@2x": "https://assets.ppy.sh/beatmaps/968909/covers/card@2x.jpg?1650679817",
+     "list": "https://assets.ppy.sh/beatmaps/968909/covers/list.jpg?1650679817",
+     "list@2x": "https://assets.ppy.sh/beatmaps/968909/covers/list@2x.jpg?1650679817",
+     "slimcover": "https://assets.ppy.sh/beatmaps/968909/covers/slimcover.jpg?1650679817",
+     "slimcover@2x": "https://assets.ppy.sh/beatmaps/968909/covers/slimcover@2x.jpg?1650679817"
+    }
+   },
+   "user": {
+    "id": 1190879,
+    "username": "WindyS",
+    "avatar_url": "https://a.ppy.sh/1190879?1560742539.jpg",
+    "country_code": "KR"
+   },
+   "ended_at": "2019-09-11T00:00:00+00:00",
+   "created_at": "2019-09-11T00:00:00+00:00",
+   "has_replay": false,
+   "type": "solo_score",
+   "weight": {
+    "percentage": 90.25,
+    "pp": 1035.79925
+   }
+  },
+  {
+   "id": 323377896,
+   "legacy_score_id": 323377896,
+   "user_id": 1190879,
+   "accuracy": 0.9963,
+   "beatmap_id": 1742328,
+   "mods": [
+    {
+     "acronym": "DT"
+    },
+    {
+     "acronym": "MR"
+    }
+   ],
+   "score": 984173,
+   "legacy_total_score": 984173,
+   "max_combo": 7047,
+   "passed": true,
+   "ranked": true,
+   "rank": "S",
+   "statistics": {
+    "count_miss": 1,
+    "miss": 1
+   },
+   "pp": 1134.4,
+   "beatmap": {
+    "id": 1742328,
+    "beatmapset_id": 831653,
+    "difficulty_rating": 6.14691,
+    "mode": "mania",
+    "status": "ranked",
+    "total_length": 302,
+    "cs": 7,
+    "drain": 8.7,
+    "accuracy": 7.5,
+    "ar": 5,
+    "bpm": 174,
+    "convert": false,
+    "count_circles": 2039,
+    "count_sliders": 2002,
+    "count_spinners": 0,
+    "max_combo": 8037,
+    "checksum": "54790f0c434dcdfe45cca25bf316c468",
+    "version": "Celestial Radiance // 7K",
+    "url": "https://osu.ppy.sh/beatmaps/1742328"
+   },
+   "beatmapset": {
+    "id": 831653,
+    "title": "starlights feat. TEA",
+    "artist": "kamome sano",
+    "creator": "K a b i -",
+    "covers": {
+     "cover": "https://assets.ppy.sh/beatmaps/831653/covers/cover.jpg?1650669824",
+     "cover@2x": "https://assets.ppy.sh/beatmaps/831653/covers/cover@2x.jpg?1650669824",
+     "card": "https://assets.ppy.sh/beatmaps/831653/covers/card.jpg?1650669824",
+     "card@2x": "https://assets.ppy.sh/beatmaps/831653/covers/card@2x.jpg?1650669824",
+     "list": "https://assets.ppy.sh/beatmaps/831653/covers/list.jpg?1650669824",
+     "list@2x": "https://assets.ppy.sh/beatmaps/831653/covers/list@2x.jpg?1650669824",
+     "slimcover": "https://assets.ppy.sh/beatmaps/831653/covers/slimcover.jpg?1650669824",
+     "slimcover@2x": "https://assets.ppy.sh/beatmaps/831653/covers/slimcover@2x.jpg?1650669824"
+    }
+   },
+   "user": {
+    "id": 1190879,
+    "username": "WindyS",
+    "avatar_url": "https://a.ppy.sh/1190879?1560742539.jpg",
+    "country_code": "KR"
+   },
+   "ended_at": "2019-09-05T00:00:00+00:00",
+   "created_at": "2019-09-05T00:00:00+00:00",
+   "has_replay": false,
+   "type": "solo_score",
+   "weight": {
+    "percentage": 85.73749999999998,
+    "pp": 972.6062
+   }
+  },
+  {
+   "id": 322083921,
+   "legacy_score_id": 322083921,
+   "user_id": 1190879,
+   "accuracy": 0.9759,
+   "beatmap_id": 1648263,
+   "mods": [
+    {
+     "acronym": "DT"
+    }
+   ],
+   "score": 896161,
+   "legacy_total_score": 896161,
+   "max_combo": 1788,
+   "passed": true,
+   "ranked": true,
+   "rank": "S",
+   "statistics": {
+    "count_miss": 23,
+    "miss": 23
+   },
+   "pp": 1087.11,
+   "beatmap": {
+    "id": 1648263,
+    "beatmapset_id": 785196,
+    "difficulty_rating": 7.11191,
+    "mode": "mania",
+    "status": "ranked",
+    "total_length": 121,
+    "cs": 7,
+    "drain": 9,
+    "accuracy": 8,
+    "ar": 5,
+    "bpm": 180,
+    "convert": false,
+    "count_circles": 1981,
+    "count_sliders": 637,
+    "count_spinners": 0,
+    "max_combo": 3733,
+    "checksum": "3f6e673c2c96946286daf034019e7d5a",
+    "version": "[7K] HEAVENLY",
+    "url": "https://osu.ppy.sh/beatmaps/1648263"
+   },
+   "beatmapset": {
+    "id": 785196,
+    "title": "planetarium",
+    "artist": "SUi",
+    "creator": "Reba",
+    "covers": {
+     "cover": "https://assets.ppy.sh/beatmaps/785196/covers/cover.jpg?1622140293",
+     "cover@2x": "https://assets.ppy.sh/beatmaps/785196/covers/cover@2x.jpg?1622140293",
+     "card": "https://assets.ppy.sh/beatmaps/785196/covers/card.jpg?1622140293",
+     "card@2x": "https://assets.ppy.sh/beatmaps/785196/covers/card@2x.jpg?1622140293",
+     "list": "https://assets.ppy.sh/beatmaps/785196/covers/list.jpg?1622140293",
+     "list@2x": "https://assets.ppy.sh/beatmaps/785196/covers/list@2x.jpg?1622140293",
+     "slimcover": "https://assets.ppy.sh/beatmaps/785196/covers/slimcover.jpg?1622140293",
+     "slimcover@2x": "https://assets.ppy.sh/beatmaps/785196/covers/slimcover@2x.jpg?1622140293"
+    }
+   },
+   "user": {
+    "id": 1190879,
+    "username": "WindyS",
+    "avatar_url": "https://a.ppy.sh/1190879?1560742539.jpg",
+    "country_code": "KR"
+   },
+   "ended_at": "2019-08-24T00:00:00+00:00",
+   "created_at": "2019-08-24T00:00:00+00:00",
+   "has_replay": false,
+   "type": "solo_score",
+   "weight": {
+    "percentage": 81.45062499999999,
+    "pp": 885.4578894374998
+   }
+  },
+  {
+   "id": 342990006,
+   "legacy_score_id": 342990006,
+   "user_id": 1190879,
+   "accuracy": 0.9934000000000001,
+   "beatmap_id": 1701215,
+   "mods": [
+    {
+     "acronym": "DT"
+    },
+    {
+     "acronym": "MR"
+    }
+   ],
+   "score": 970045,
+   "legacy_total_score": 970045,
+   "max_combo": 2435,
+   "passed": true,
+   "ranked": true,
+   "rank": "S",
+   "statistics": {
+    "count_miss": 12,
+    "miss": 12
+   },
+   "pp": 1016.51,
+   "beatmap": {
+    "id": 1701215,
+    "beatmapset_id": 810911,
+    "difficulty_rating": 6.38565,
+    "mode": "mania",
+    "status": "ranked",
+    "total_length": 366,
+    "cs": 7,
+    "drain": 8.8,
+    "accuracy": 7.7,
+    "ar": 5,
+    "bpm": 172,
+    "convert": false,
+    "count_circles": 3413,
+    "count_sliders": 3137,
+    "count_spinners": 0,
+    "max_combo": 9351,
+    "checksum": "c2f9e184beef03b75c0f297e86c26d21",
+    "version": "[7K] Be Happy",
+    "url": "https://osu.ppy.sh/beatmaps/1701215"
+   },
+   "beatmapset": {
+    "id": 810911,
+    "title": "Smiling",
+    "artist": "Lime",
+    "creator": "Kawawa",
+    "covers": {
+     "cover": "https://assets.ppy.sh/beatmaps/810911/covers/cover.jpg?1631510913",
+     "cover@2x": "https://assets.ppy.sh/beatmaps/810911/covers/cover@2x.jpg?1631510913",
+     "card": "https://assets.ppy.sh/beatmaps/810911/covers/card.jpg?1631510913",
+     "card@2x": "https://assets.ppy.sh/beatmaps/810911/covers/card@2x.jpg?1631510913",
+     "list": "https://assets.ppy.sh/beatmaps/810911/covers/list.jpg?1631510913",
+     "list@2x": "https://assets.ppy.sh/beatmaps/810911/covers/list@2x.jpg?1631510913",
+     "slimcover": "https://assets.ppy.sh/beatmaps/810911/covers/slimcover.jpg?1631510913",
+     "slimcover@2x": "https://assets.ppy.sh/beatmaps/810911/covers/slimcover@2x.jpg?1631510913"
+    }
+   },
+   "user": {
+    "id": 1190879,
+    "username": "WindyS",
+    "avatar_url": "https://a.ppy.sh/1190879?1560742539.jpg",
+    "country_code": "KR"
+   },
+   "ended_at": "2020-03-05T00:00:00+00:00",
+   "created_at": "2020-03-05T00:00:00+00:00",
+   "has_replay": false,
+   "type": "solo_score",
+   "weight": {
+    "percentage": 77.37809374999998,
+    "pp": 786.5560607781248
+   }
+  },
+  {
+   "id": 323370560,
+   "legacy_score_id": 323370560,
+   "user_id": 1190879,
+   "accuracy": 0.9851000000000001,
+   "beatmap_id": 888793,
+   "mods": [
+    {
+     "acronym": "DT"
+    },
+    {
+     "acronym": "MR"
+    }
+   ],
+   "score": 929465,
+   "legacy_total_score": 929465,
+   "max_combo": 2616,
+   "passed": true,
+   "ranked": true,
+   "rank": "S",
+   "statistics": {
+    "count_miss": 12,
+    "miss": 12
+   },
+   "pp": 993.831,
+   "beatmap": {
+    "id": 888793,
+    "beatmapset_id": 409440,
+    "difficulty_rating": 6.76405,
+    "mode": "mania",
+    "status": "ranked",
+    "total_length": 260,
+    "cs": 7,
+    "drain": 9,
+    "accuracy": 8,
+    "ar": 9.5,
+    "bpm": 170,
+    "convert": false,
+    "count_circles": 2388,
+    "count_sliders": 1695,
+    "count_spinners": 0,
+    "max_combo": 7362,
+    "checksum": "51607b49183f52e2a3bdad0487501c8d",
+    "version": "[7K] Resolve",
+    "url": "https://osu.ppy.sh/beatmaps/888793"
+   },
+   "beatmapset": {
+    "id": 409440,
+    "title": "Just Hold on (To All Fighters)",
+    "artist": "void",
+    "creator": "Blocko",
+    "covers": {
+     "cover": "https://assets.ppy.sh/beatmaps/409440/covers/cover.jpg?1650650587",
+     "cover@2x": "https://assets.ppy.sh/beatmaps/409440/covers/cover@2x.jpg?1650650587",
+     "card": "https://assets.ppy.sh/beatmaps/409440/covers/card.jpg?1650650587",
+     "card@2x": "https://assets.ppy.sh/beatmaps/409440/covers/card@2x.jpg?1650650587",
+     "list": "https://assets.ppy.sh/beatmaps/409440/covers/list.jpg?1650650587",
+     "list@2x": "https://assets.ppy.sh/beatmaps/409440/covers/list@2x.jpg?1650650587",
+     "slimcover": "https://assets.ppy.sh/beatmaps/409440/covers/slimcover.jpg?1650650587",
+     "slimcover@2x": "https://assets.ppy.sh/beatmaps/409440/covers/slimcover@2x.jpg?1650650587"
+    }
+   },
+   "user": {
+    "id": 1190879,
+    "username": "WindyS",
+    "avatar_url": "https://a.ppy.sh/1190879?1560742539.jpg",
+    "country_code": "KR"
+   },
+   "ended_at": "2019-09-05T00:00:00+00:00",
+   "created_at": "2019-09-05T00:00:00+00:00",
+   "has_replay": false,
+   "type": "solo_score",
+   "weight": {
+    "percentage": 73.50918906249998,
+    "pp": 730.5571087517342
+   }
+  },
+  {
+   "id": 323874855,
+   "legacy_score_id": 323874855,
+   "user_id": 1190879,
+   "accuracy": 0.9952,
+   "beatmap_id": 1231418,
+   "mods": [
+    {
+     "acronym": "DT"
+    },
+    {
+     "acronym": "MR"
+    }
+   ],
+   "score": 971301,
+   "legacy_total_score": 971301,
+   "max_combo": 3562,
+   "passed": true,
+   "ranked": true,
+   "rank": "S",
+   "statistics": {
+    "count_miss": 9,
+    "miss": 9
+   },
+   "pp": 974,
+   "beatmap": {
+    "id": 1231418,
+    "beatmapset_id": 581509,
+    "difficulty_rating": 6.3855,
+    "mode": "mania",
+    "status": "ranked",
+    "total_length": 351,
+    "cs": 7,
+    "drain": 9,
+    "accuracy": 8,
+    "ar": 5,
+    "bpm": 165,
+    "convert": false,
+    "count_circles": 3983,
+    "count_sliders": 1737,
+    "count_spinners": 0,
+    "max_combo": 7156,
+    "checksum": "5ae1052009c7e96778292fe6d40c72cb",
+    "version": "Meteor Shower // pporse's 7K",
+    "url": "https://osu.ppy.sh/beatmaps/1231418"
+   },
+   "beatmapset": {
+    "id": 581509,
+    "title": "Hoshi ga Furanai Machi",
+    "artist": "Chroma",
+    "creator": "Wonki",
+    "covers": {
+     "cover": "https://assets.ppy.sh/beatmaps/581509/covers/cover.jpg?1650647902",
+     "cover@2x": "https://assets.ppy.sh/beatmaps/581509/covers/cover@2x.jpg?1650647902",
+     "card": "https://assets.ppy.sh/beatmaps/581509/covers/card.jpg?1650647902",
+     "card@2x": "https://assets.ppy.sh/beatmaps/581509/covers/card@2x.jpg?1650647902",
+     "list": "https://assets.ppy.sh/beatmaps/581509/covers/list.jpg?1650647902",
+     "list@2x": "https://assets.ppy.sh/beatmaps/581509/covers/list@2x.jpg?1650647902",
+     "slimcover": "https://assets.ppy.sh/beatmaps/581509/covers/slimcover.jpg?1650647902",
+     "slimcover@2x": "https://assets.ppy.sh/beatmaps/581509/covers/slimcover@2x.jpg?1650647902"
+    }
+   },
+   "user": {
+    "id": 1190879,
+    "username": "WindyS",
+    "avatar_url": "https://a.ppy.sh/1190879?1560742539.jpg",
+    "country_code": "KR"
+   },
+   "ended_at": "2019-09-10T00:00:00+00:00",
+   "created_at": "2019-09-10T00:00:00+00:00",
+   "has_replay": false,
+   "type": "solo_score",
+   "weight": {
+    "percentage": 69.83372960937497,
+    "pp": 680.1805263953122
+   }
+  },
+  {
+   "id": 342554253,
+   "legacy_score_id": 342554253,
+   "user_id": 1190879,
+   "accuracy": 0.9998999999999999,
+   "beatmap_id": 1536787,
+   "mods": [],
+   "score": 996311,
+   "legacy_total_score": 996311,
+   "max_combo": 2730,
+   "passed": true,
+   "ranked": true,
+   "rank": "S",
+   "statistics": {
+    "count_miss": 0,
+    "miss": 0
+   },
+   "pp": 641.058,
+   "beatmap": {
+    "id": 1536787,
+    "beatmapset_id": 725078,
+    "difficulty_rating": 7.40598,
+    "mode": "mania",
+    "status": "ranked",
+    "total_length": 124,
+    "cs": 7,
+    "drain": 8.5,
+    "accuracy": 8.5,
+    "ar": 5,
+    "bpm": 228,
+    "convert": false,
+    "count_circles": 2730,
+    "count_sliders": 0,
+    "count_spinners": 0,
+    "max_combo": 2730,
+    "checksum": "b07422ec8332090c91a4cb3320a33474",
+    "version": "[7K] Ultra",
+    "url": "https://osu.ppy.sh/beatmaps/1536787"
+   },
+   "beatmapset": {
+    "id": 725078,
+    "title": "Deublithick",
+    "artist": "Gekikara Mania",
+    "creator": "_underjoy",
+    "covers": {
+     "cover": "https://assets.ppy.sh/beatmaps/725078/covers/cover.jpg?1650659190",
+     "cover@2x": "https://assets.ppy.sh/beatmaps/725078/covers/cover@2x.jpg?1650659190",
+     "card": "https://assets.ppy.sh/beatmaps/725078/covers/card.jpg?1650659190",
+     "card@2x": "https://assets.ppy.sh/beatmaps/725078/covers/card@2x.jpg?1650659190",
+     "list": "https://assets.ppy.sh/beatmaps/725078/covers/list.jpg?1650659190",
+     "list@2x": "https://assets.ppy.sh/beatmaps/725078/covers/list@2x.jpg?1650659190",
+     "slimcover": "https://assets.ppy.sh/beatmaps/725078/covers/slimcover.jpg?1650659190",
+     "slimcover@2x": "https://assets.ppy.sh/beatmaps/725078/covers/slimcover@2x.jpg?1650659190"
+    }
+   },
+   "user": {
+    "id": 1190879,
+    "username": "WindyS",
+    "avatar_url": "https://a.ppy.sh/1190879?1560742539.jpg",
+    "country_code": "KR"
+   },
+   "ended_at": "2020-03-01T00:00:00+00:00",
+   "created_at": "2020-03-01T00:00:00+00:00",
+   "has_replay": false,
+   "type": "solo_score",
+   "weight": {
+    "percentage": 66.34204312890623,
+    "pp": 425.29097484130364
+   }
+  }
+ ],
+ "best_scores_limit": 9,
+ "archived": true
+}

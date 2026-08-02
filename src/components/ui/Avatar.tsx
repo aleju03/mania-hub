@@ -27,6 +27,10 @@ export function avatarImageSrc(
   userId?: number | string | null,
   options?: { proxy?: boolean },
 ): string | undefined {
+  // Locally hosted avatars (archived players, whose a.ppy.sh image is gone and
+  // now resolves to the guest default) are already same-origin: no id rewrite,
+  // no proxy.
+  if (url?.startsWith("/")) return url;
   const parsedUrl = parseAvatarUrl(url);
   const parsedUserId = userId == null || userId === "" ? null : Number(userId);
   const id = parsedUserId !== null && Number.isSafeInteger(parsedUserId) && parsedUserId > 0

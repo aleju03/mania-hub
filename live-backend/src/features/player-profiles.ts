@@ -61,6 +61,29 @@ interface ProfileSnapshotRow {
   user_fetched_at?: string | null;
 }
 
+/* Seeded reconstructions of deleted osu! accounts carry `archived: true` on the
+   stored user. See archived-players.ts for why they never refresh. */
+function isArchivedProfileRow(row: ProfileSnapshotRow): boolean {
+  const user = unpackJson<Record<string, unknown>>(row.user_json, {});
+  return user.archived === true;
+}
+
+/* The recovered about-me of an archived player, or null for everyone else. */
+async function readArchivedProfilePage(
+  db: Db,
+  userId: number,
+): Promise<{ html: string | null; raw: string | null } | null> {
+  const row = (await exec(db, "select user_json from profile_snapshots where user_id = ? limit 1", [userId])).rows[0];
+  if (!row) return null;
+  const user = unpackJson<Record<string, unknown>>(row.user_json as string | Uint8Array, {});
+  if (user.archived !== true) return null;
+  const page = readRecord(user.page);
+  return {
+    html: typeof page?.html === "string" && page.html ? page.html : null,
+    raw: typeof page?.raw === "string" && page.raw ? page.raw : null,
+  };
+}
+
 const PROFILE_PAGE_SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
   allowedTags: [
     "a", "b", "br", "blockquote", "center", "code", "del", "div", "em", "h1",
@@ -118,6 +141,12 @@ export async function getPlayerProfileSnapshot(
   const key = normalizeProfileKey(rawKey);
   const row = await getStoredProfileSnapshot(db, key);
   if (row) {
+    // Archived players have no live osu! account, so every refresh path would
+    // 404 and stamp refresh_error over a reconstruction that will never get
+    // fresher. Serve the seeded row as-is.
+    if (isArchivedProfileRow(row)) {
+      return buildServedSnapshot(db, row, false, []);
+    }
     const snapshotExpired = isExpired(row.fetched_at, PROFILE_SNAPSHOT_TTL_MS);
     const servedRow = await refreshProfileUserForServe(db, osu, row);
     const trackedRecentScores = await getTrackedProfileRecentScores(db, servedRow.user_id, PROFILE_TRACKED_OVERLAY_LIMIT);
@@ -357,6 +386,22 @@ export async function getPlayerAbout(
   osu: Pick<OsuApiClient, "getUser">,
   userId: number,
 ): Promise<PlayerProfileSection> {
+  // An archived player's about text is part of their seeded snapshot; the osu!
+  // API has nothing to serve for them.
+  const archivedPage = await readArchivedProfilePage(db, userId);
+  if (archivedPage) {
+    return {
+      userId,
+      section: "about",
+      payload: {
+        html: archivedPage.html ? await sanitizeProfilePageHtml(archivedPage.html) : null,
+        raw: archivedPage.raw,
+      },
+      fetchedAt: nowIso(),
+      isStale: false,
+    };
+  }
+
   return getProfileSection(db, "about", userId, async () => {
     const user = await osu.getUser(userId, "api:profile_about");
     const page = readRecord(user.page);

@@ -16,7 +16,7 @@ import { getCachedOgImage, putOgImage } from "../../lib/r2-cache";
 import { OG_IMAGE_VERSION } from "../../lib/seo";
 import { computeManiaSkills, getManiaCardTier, MANIA_TIER_STYLES } from "../../lib/maniacard";
 import type { ManiaCardTier } from "../../lib/maniacard";
-import type { OsuCovers, OsuScore } from "../../lib/types";
+import type { OsuCovers, OsuScore, OsuUser } from "../../lib/types";
 
 const WIDTH = 1200;
 const HEIGHT = 630;
@@ -878,6 +878,40 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
   return response;
 }
 
+/* Archived players (deleted osu! accounts, seeded into profile_snapshots)
+   404 on every osu! API path, so the OG render falls back to the backend's
+   cached snapshot: the same row the profile page itself renders from. A
+   snapshot is also better than the generic card during an osu! outage, so
+   any lookup failure takes this path, not just 404s. */
+async function fetchCachedProfileUser(key: string): Promise<OsuUser | null> {
+  const base = getServerLiveBackendUrl();
+  if (!base) return null;
+  const response = await fetch(`${base}/api/profiles/${encodeURIComponent(key)}/cached-snapshot`);
+  if (!response.ok) return null;
+  const snapshot = (await response.json()) as { user?: OsuUser | null };
+  return snapshot.user ?? null;
+}
+
+/* Satori fetches avatars itself, so a snapshot's site-relative path (archived
+   players keep their portrait in public/) has to be absolute. */
+function ogAvatarUrl(request: Request, avatarUrl: string | null | undefined, userId?: number): string {
+  if (avatarUrl && !/^(https?:)?\/\//i.test(avatarUrl) && !avatarUrl.startsWith("data:")) {
+    return new URL(avatarUrl, getAssetOrigin(request)).toString();
+  }
+  if (avatarUrl) return avatarUrl;
+  return userId ? `https://a.ppy.sh/${userId}` : "";
+}
+
+async function resolveOgPlayer(request: Request, username: string): Promise<OsuUser> {
+  try {
+    return await getCachedUser(username);
+  } catch (error) {
+    const cached = await fetchCachedProfileUser(username);
+    if (!cached?.statistics) throw error;
+    return { ...cached, avatar_url: ogAvatarUrl(request, cached.avatar_url, cached.id) };
+  }
+}
+
 /* Player card layout: cover-art ambient background, a big rounded-square
    avatar (osu! site style, not a circle), and a stat stack on the right
    with flag + country, username, global/country rank, PP, acc. */
@@ -886,7 +920,7 @@ async function renderPlayerOg(request: Request, rawUsername: string): Promise<Re
   const [regularFont, heavyFont, user] = await Promise.all([
     getFont(request, "Torus-Regular.otf"),
     getFont(request, "Torus-Heavy.otf"),
-    getCachedUser(username),
+    resolveOgPlayer(request, username),
   ]);
 
   const stats = user.statistics;
@@ -1269,7 +1303,7 @@ async function renderManiacardOg(request: Request, rawUsername: string): Promise
   if (!skills) throw new OgFallbackError(`no card for ${username}`);
 
   const tier = getManiaCardTier(skills.cardPower);
-  const avatarUrl = user.avatar_url || (user.id ? `https://a.ppy.sh/${user.id}` : "");
+  const avatarUrl = ogAvatarUrl(request, user.avatar_url, user.id);
 
   const response = new ImageResponse(
     maniaTierCardElement({ username: user.username || "Unknown", avatarUrl, tier, skills }),

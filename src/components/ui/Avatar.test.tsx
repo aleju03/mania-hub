@@ -21,4 +21,13 @@ describe("avatarImageSrc", () => {
   it("falls through to the original url when no user id can be resolved", () => {
     expect(avatarImageSrc("https://example.com/x.png")).toBe("https://example.com/x.png");
   });
+
+  it("keeps a locally hosted avatar as-is, even with an id and proxy set", () => {
+    expect(avatarImageSrc("/images/archived-players/jakads.jpg", 259972)).toBe(
+      "/images/archived-players/jakads.jpg",
+    );
+    expect(avatarImageSrc("/images/archived-players/jakads.jpg", 259972, { proxy: true })).toBe(
+      "/images/archived-players/jakads.jpg",
+    );
+  });
 });
