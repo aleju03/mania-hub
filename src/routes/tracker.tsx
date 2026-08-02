@@ -1972,7 +1972,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                 />
               )}
             </div>
-            <span className="text-[10px] text-osu-f1 flex-shrink-0 sm:hidden">{formatTimeAgo(getScoreTimestamp(score))}</span>
+            <span className="text-[11px] text-osu-f1 flex-shrink-0 sm:hidden">{formatTimeAgo(getScoreTimestamp(score))}</span>
           </div>
           {/* Row 2: Beatmap title + keys (the multi card shows the map once in
               its header, so embedded member rows skip it) */}
@@ -1993,7 +1993,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                 ) : (
                   <span className="text-xs text-white truncate">{score.beatmapset?.title}</span>
                 )}
-                <span className="text-[10px] text-osu-f1 truncate">[{score.beatmap?.version}]</span>
+                <span className="text-[11px] text-osu-f1 truncate">[{score.beatmap?.version}]</span>
               </div>
               {keymodeLabel && (
                 <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 text-osu-yellow flex-shrink-0">
@@ -2064,7 +2064,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
               &#9654; Watch
             </button>
           )}
-          <span className="text-[10px] text-osu-f1 w-12 text-right">
+          <span className="text-[11px] text-osu-f1 w-14 text-right">
             {formatTimeAgo(getScoreTimestamp(score))}
           </span>
         </div>

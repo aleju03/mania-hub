@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { formatDate, formatDetailedTimeAgo, formatPreciseTimeAgo, formatTimeAgo } from "./format";
+import {
+  formatDate,
+  formatDetailedTimeAgo,
+  formatPreciseTimeAgo,
+  formatTimeAgo,
+  formatTimeAgoTooltip,
+} from "./format";
 
 describe("formatDate", () => {
   // SSR (UTC server) and client (any viewer timezone) must render identical
@@ -17,6 +23,26 @@ describe("formatTimeAgo", () => {
     vi.setSystemTime(new Date("2026-06-11T22:38:00.000-06:00"));
 
     expect(formatTimeAgo("2026-06-11T18:45:00.000-06:00")).toBe("3h ago");
+  });
+
+  it("rolls months over to years instead of counting past 12", () => {
+    vi.setSystemTime(new Date("2026-06-11T22:38:00.000Z"));
+
+    expect(formatTimeAgo("2025-09-11T22:38:00.000Z")).toBe("9mo ago");
+    // 360-364 days counts as 12 30-day months but is not yet a year, so the
+    // label stays in months rather than rounding down to "0y ago".
+    expect(formatTimeAgo("2025-06-14T22:38:00.000Z")).toBe("12mo ago");
+    expect(formatTimeAgo("2025-06-10T22:38:00.000Z")).toBe("1y ago");
+    expect(formatTimeAgo("2014-06-04T22:38:00.000Z")).toBe("12y ago");
+  });
+});
+
+describe("formatTimeAgoTooltip", () => {
+  it("spells out the month count only once the label is in years", () => {
+    vi.setSystemTime(new Date("2026-06-11T22:38:00.000Z"));
+
+    expect(formatTimeAgoTooltip("2025-09-11T22:38:00.000Z")).toBeUndefined();
+    expect(formatTimeAgoTooltip("2014-06-04T22:38:00.000Z")).toBe("146 months ago");
   });
 });
 

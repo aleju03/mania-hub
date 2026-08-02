@@ -38,8 +38,18 @@ export function formatTimeAgo(dateStr: string): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   if (days < 30) return `${days}d ago`;
+  if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+  return `${Math.floor(days / 365)}y ago`;
+}
+
+/* Hover detail for the year labels above: past a year "5y ago" reads faster
+   than "63mo ago", but the month count is still the useful number, so keep it
+   one hover away. Undefined below a year, where the label is already exact. */
+export function formatTimeAgoTooltip(dateStr: string): string | undefined {
+  const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
+  if (days < 365) return undefined;
   const months = Math.floor(days / 30);
-  return `${months}mo ago`;
+  return `${months} months ago`;
 }
 
 /* Seconds granularity for live tickers; nowMs is a parameter so a ticking
@@ -66,8 +76,8 @@ export function formatDetailedTimeAgo(dateStr: string): string {
   if (hours < 24) return remainingMins > 0 ? `${hours}h ${remainingMins}m ago` : `${hours}h ago`;
   const days = Math.floor(hours / 24);
   if (days < 30) return `${days}d ago`;
-  const months = Math.floor(days / 30);
-  return `${months}mo ago`;
+  if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+  return `${Math.floor(days / 365)}y ago`;
 }
 
 export function formatDuration(totalSeconds: number): string {

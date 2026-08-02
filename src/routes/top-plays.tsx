@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
 import { CLIENT_CACHE_TTL } from "../lib/cache";
 import { getCountryName, isGlobalScope } from "../lib/country";
-import { formatNumber, formatAccuracy, formatTimeAgo, formatPpGain } from "../lib/format";
+import { formatNumber, formatAccuracy, formatTimeAgo, formatTimeAgoTooltip, formatPpGain } from "../lib/format";
 import { getBeatmapUrl, getBeatmapKeymodeLabel, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getModDisplayList, getScoreUrl, isLazerScore, scoreHasReplay } from "../lib/score";
 import { PageHeader } from "../components/layout/PageHeader";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
@@ -798,7 +798,7 @@ function PopOffsPage() {
                               <CountryFlag code={p.user.country_code} size="sm" />
                             ) : null}
                           </div>
-                          <span className="text-[10px] text-osu-f1 flex-shrink-0 sm:hidden">{formatTimeAgo(p.time)}</span>
+                          <span className="text-[11px] text-osu-f1 flex-shrink-0 sm:hidden" title={formatTimeAgoTooltip(p.time)}>{formatTimeAgo(p.time)}</span>
                         </div>
                         {/* Row 2: Beatmap title */}
                         <div className="flex items-center gap-2 mt-0.5">
@@ -818,7 +818,7 @@ function PopOffsPage() {
                               {p.score.beatmapset?.title}
                             </span>
                           )}
-                          <span className="text-[10px] text-osu-f1 truncate">
+                          <span className="text-[11px] text-osu-f1 truncate">
                             [{p.score.beatmap?.version}]
                           </span>
                           {keymodeLabel && (
@@ -879,7 +879,7 @@ function PopOffsPage() {
                             ▶ Watch
                           </button>
                         )}
-                        <span className="text-[10px] text-osu-f1 w-14 text-right">
+                        <span className="text-[11px] text-osu-f1 w-16 text-right" title={formatTimeAgoTooltip(p.time)}>
                           {formatTimeAgo(p.time)}
                         </span>
                       </div>

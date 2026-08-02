@@ -1,6 +1,6 @@
 import { GradeImg } from "../ui/GradeImg";
 import { ModBadge } from "../ui/ModBadge";
-import { formatAccuracy, formatPP, formatTimeAgo } from "../../lib/format";
+import { formatAccuracy, formatPP, formatTimeAgo, formatTimeAgoTooltip } from "../../lib/format";
 import { getDisplayedAccuracy, getDisplayedRank, getModDisplayList, getScoreTimestamp } from "../../lib/score";
 import type { LeanTrackerScore } from "../../lib/types";
 
@@ -79,7 +79,9 @@ export function MeScoreRow({ score, isNew, ppGain }: { score: MyDataScoreRow; is
           <span className="text-[13px] font-bold tabular-nums text-white">{showExactStats ? formatPP(score.pp) : "archived"}</span>
           {ppGain != null && ppGain >= 1 ? <span className="text-[10px] font-semibold tabular-nums text-osu-green">+{Math.round(ppGain)}</span> : null}
         </div>
-        <span className="text-[9px] text-osu-f1">{formatTimeAgo(getScoreTimestamp(score))}</span>
+        <span className="text-[9px] text-osu-f1" title={formatTimeAgoTooltip(getScoreTimestamp(score))}>
+          {formatTimeAgo(getScoreTimestamp(score))}
+        </span>
       </div>
     </div>
   );

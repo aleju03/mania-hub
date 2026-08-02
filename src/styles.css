@@ -61,7 +61,9 @@ html {
   --color-osu-d6: hsl(var(--theme-hue), calc(20% * var(--theme-sat)), calc(10% - 8% * (1 - var(--theme-sat)))); --color-osu-d5: hsl(var(--theme-hue), calc(20% * var(--theme-sat)), calc(15% - 8% * (1 - var(--theme-sat)))); --color-osu-d4: hsl(var(--theme-hue), calc(20% * var(--theme-sat)), calc(20% - 8% * (1 - var(--theme-sat))));
   --color-osu-c1: hsl(var(--theme-hue), calc(40% * var(--theme-sat)), 100%); --color-osu-c2: hsl(var(--theme-hue), calc(40% * var(--theme-sat)), 90%);
   --color-osu-l1: hsl(var(--theme-hue), calc(40% * var(--theme-sat)), 80%); --color-osu-l2: hsl(var(--theme-hue), calc(40% * var(--theme-sat)), 75%);
-  --color-osu-f1: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), 60%);
+  /* Secondary text. Most of its uses are 9-11px, so it sits higher than a
+     "muted gray" normally would: 60% only cleared AA on the darkest rows. */
+  --color-osu-f1: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), 70%);
   --color-osu-h1: hsl(var(--theme-hue), calc(100% * var(--theme-sat)), 70%); --color-osu-h2: hsl(var(--theme-hue), calc(50% * var(--theme-sat)), 45%);
   --color-osu-pink: hsl(var(--theme-hue), calc(100% * var(--theme-sat)), 70%);
   --color-osu-pink-light: hsl(var(--theme-hue), calc(100% * var(--theme-sat)), 80%);
