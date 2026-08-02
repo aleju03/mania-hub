@@ -63,9 +63,11 @@ const config = defineConfig({
     },
   },
   nitro: {
-    // Pinned rather than auto-detected: the build no longer runs on Vercel, and
-    // a wrong guess here produces an output shape systemd cannot start.
-    preset: 'node-server',
+    // node-server everywhere except on Vercel itself, where the preset has to
+    // stay 'vercel' or the build writes .output instead of .vercel/output and
+    // Vercel fails looking for it. Vercel remains the rollback target for the
+    // VPS migration, so it has to keep building.
+    preset: process.env.VERCEL ? 'vercel' : 'node-server',
     rollupConfig: {
       onwarn: suppressDependencyBuildWarnings,
     },
