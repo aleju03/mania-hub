@@ -15,6 +15,7 @@ import { getLnReferenceComparisonMetrics, getLnReferenceNeighbors } from "../src
 import { estimateDanielDan } from "../src/lib/daniel-estimator.ts";
 import { estimateLeoBlackDan } from "../src/lib/leoblack-estimator.ts";
 import { classifyChart } from "../src/lib/chart-classifier.ts";
+import { classifyChartWithCompanella } from "../src/lib/companella.ts";
 import type { DanEstimate, DanFeatureMetrics } from "../src/lib/dan-estimator/types.ts";
 import {
   type DanBenchmarkFamily,
@@ -54,6 +55,7 @@ interface CliOptions {
   json: boolean;
   matchKinds: Set<MatchKind> | null;
   neighbors: number;
+  noCompanella: boolean;
   rate: number;
   showChangesFrom: string | null;
   summaryBySet: boolean;
@@ -192,6 +194,7 @@ function usage(exitCode = 2): never {
     "Options:",
     "  --family normal|ln|ranked Benchmark family. Default: normal",
     "  --classifier unified|aleju|daniel|leoblack  Estimator to run. Default: unified (the production classifier); the rest are baselines",
+    "  --no-companella          unified only: skip the Companella pass and keep the Sunny fallback on the 4K LN-hybrid slice",
     "  --rate N                 Playback rate. Default: 1",
     "  --set IDS                Comma-separated beatmapset IDs to run",
     "  --beatmap IDS            Comma-separated beatmap IDs/diffs to run",
@@ -266,6 +269,7 @@ function parseArgs(argv: string[]): CliOptions {
     cacheDir: DEFAULT_CACHE_DIR,
     classifier: "unified",
     compareFiles: null,
+    noCompanella: false,
     debug: false,
     expectedLabels: null,
     explainWrong: false,
@@ -301,6 +305,8 @@ function parseArgs(argv: string[]): CliOptions {
       const value = argv[++i];
       if (value !== "unified" && value !== "aleju" && value !== "daniel" && value !== "leoblack") usage();
       options.classifier = value;
+    } else if (arg === "--no-companella") {
+      options.noCompanella = true;
     } else if (arg === "--rate") {
       const value = Number(argv[++i]);
       if (!Number.isFinite(value) || value <= 0.4 || value >= 2.5) usage();
@@ -359,14 +365,15 @@ function splitVariant(label: string): { base: string; variant: string } {
   return { base: match[1], variant: match[2] ?? "" };
 }
 
-function runClassifier(
+async function runClassifier(
   classifier: ClassifierId,
   family: DanBenchmarkFamily,
   text: string,
   rate: number,
   starRating: number | null,
   beatmapId: number | null,
-): { estimate: DanEstimate; map: ManiaBeatmap; version: string; title: string; artist: string } {
+  noCompanella: boolean,
+): Promise<{ estimate: DanEstimate; map: ManiaBeatmap; version: string; title: string; artist: string }> {
   const map = parseManiaBeatmap(text);
   if (map.keyCount !== 4) {
     throw new Error(`beatmap ${beatmapId ?? "?"} is ${map.keyCount}K, benchmark requires 4K`);
@@ -380,7 +387,12 @@ function runClassifier(
   };
   let estimate: DanEstimate;
   if (classifier === "unified") {
-    const classification = classifyChart(map, text, { ...input, preferFamily: family === "ln" ? "ln" : "rc" });
+    const classifyInput = { ...input, preferFamily: (family === "ln" ? "ln" : "rc") as "ln" | "rc" };
+    // --no-companella reproduces the pre-Companella verdicts (the Sunny
+    // fallback on the 4K LN-hybrid slice), so the two runs can be --compare'd.
+    const classification = noCompanella
+      ? classifyChart(map, text, classifyInput)
+      : await classifyChartWithCompanella(map, text, classifyInput);
     if (!classification.estimate) {
       throw new Error(`unified classifier produced no dan verdict (${classification.verdictText ?? "no verdict"})`);
     }
@@ -1249,13 +1261,14 @@ async function main(): Promise<void> {
   await mapWithConcurrency(work, 4, async ({ setIndex, rowIndex, meta }) => {
     const target = setShells[setIndex].rows[rowIndex];
     try {
-      const { estimate, map, version, title, artist } = runClassifier(
+      const { estimate, map, version, title, artist } = await runClassifier(
         options.classifier,
         options.family,
         meta.text,
         options.rate,
         meta.starRating,
         meta.beatmapId,
+        options.noCompanella,
       );
       target.version = version;
       target.predicted = estimate.displayName;

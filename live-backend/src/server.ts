@@ -13,7 +13,7 @@ import { enqueueGlobalFarmedBoardRepack, enqueueGlobalMapsRefreshIfDue, enqueueM
 import { cleanupBogusLnPatternTags, ensureMapSearchIndexSeeded, pruneMapSearchPlaceholderRows, reconcileMapSearchIndexPlayCounts, reconcileMapSearchIndexStatuses } from "./features/map-search.js";
 import { enqueueQualifiedMapsWatchIfDue } from "./features/qualified-maps-watch.js";
 import { enqueueSettledSetsReconcileIfDue } from "./features/settled-sets-reconcile.js";
-import { ensureChordjackTagRecomputeSeeded, ensureDanFloorPinRecomputeSeeded, ensureDtRateAnalysisSeeded, ensureLnMsdSweepSeeded, ensureLnSourceRecomputeSeeded, ensureLnSubtypeRecomputeSeeded, ensureNoteBpmRecomputeSeeded, ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
+import { ensureChordjackTagRecomputeSeeded, ensureCompanellaRecomputeSeeded, ensureDanFloorPinRecomputeSeeded, ensureDtRateAnalysisSeeded, ensureLnMsdSweepSeeded, ensureLnSourceRecomputeSeeded, ensureLnSubtypeRecomputeSeeded, ensureNoteBpmRecomputeSeeded, ensureVibroRecomputeSeeded } from "./features/chart-analysis.js";
 import { enqueueMapCollectionsRebuildIfDue } from "./features/map-collections.js";
 import { startGoalUserIndexRefresh } from "./features/goals.js";
 import { startFarmHelperFeedbackUserIndexRefresh } from "./features/farm-helper-feedback.js";
@@ -23,6 +23,7 @@ import { enqueueSkillBaselineIfDue } from "./features/skill-baseline.js";
 import { ensureTopScoresBackfillSeeded } from "./features/top-scores-backfill.js";
 import { ensureSkillVectorBackfillSeeded } from "./features/skill-vector-backfill.js";
 import { backfillSkinSlugs } from "./features/skins.js";
+import { ensureArchivedPlayers } from "./archived-players.js";
 import { AbuseGuard } from "./http/abuse-guard.js";
 import { CountryClientTracker } from "./live/country-clients.js";
 import { handleReplayPresence } from "./live/replay-presence.js";
@@ -147,6 +148,10 @@ export async function createApp() {
     // Data backfill rides with schema ownership: assign slugs to skins
     // published before the slug column existed.
     await bootWrite("backfill_skin_slugs", () => backfillSkinSlugs(db));
+    // Seeds the checked-in archived-player profiles (deleted osu! accounts we
+    // reconstructed from the Wayback Machine). Content-addressed, so this is a
+    // no-op on every boot after the first that sees a given file.
+    await bootWrite("seed_archived_players", () => ensureArchivedPlayers(db));
   }
   // The shared osu! limiter only touches api_rate_limit_reservations (a few
   // hundred rows, pruned to a 60s window) and one live_meta key. Inheriting the
@@ -326,6 +331,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       void ensureDanFloorPinRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[dan-floor-pin] seed failed", error));
       void ensureLnSubtypeRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[ln-subtype] seed failed", error));
       void ensureChordjackTagRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[chordjack-tag] seed failed", error));
+      void ensureCompanellaRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[companella-recompute] seed failed", error));
       void ensureLnSourceRecomputeSeeded(app.db, app.queue).catch((error) => console.warn("[ln-source] seed failed", error));
       void ensureDtRateAnalysisSeeded(app.db, app.queue).catch((error) => console.warn("[dt-rate-analysis] seed failed", error));
       void ensureLnMsdSweepSeeded(app.db, app.queue).catch((error) => console.warn("[ln-msd-sweep] seed failed", error));

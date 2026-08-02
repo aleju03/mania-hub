@@ -6,6 +6,7 @@
     "#/*": "./src/*"
   },
   "scripts": {
+    "postinstall": "node scripts/prune-onnxruntime-web.mjs",
     "dev": "vite dev --port 3000",
     "dev:all": "node scripts/dev/run-dev-stack.mjs",
     "build": "node scripts/build-replay-hitsound-bundle.mjs && vite build && node scripts/verify-build-assets.mjs",
@@ -46,6 +47,7 @@
     "lzma-purejs": "^0.9.3",
     "mediabunny": "^1.50.6",
     "nitro": "^3.0.260311-beta",
+    "onnxruntime-web": "^1.27.0",
     "osu-parsers": "^4.1.7",
     "page-flip": "^2.0.7",
     "pixi.js": "^8.18.1",

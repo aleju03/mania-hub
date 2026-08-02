@@ -76,6 +76,42 @@ function makeMixedMap(keyCount: number, rows: Array<Array<number | { column: num
   };
 }
 
+// Uneven row gaps, with hold releases landing exactly on a later row. Fixed
+// intervals can't express either, and LN tech needs both: rhythmic irregularity
+// for the tech term, and head/tail switches to tell it apart from inverse
+// (release then immediate re-press) and from release-only spam.
+function makeUnevenLnMap(
+  keyCount: number,
+  gaps: number[],
+  holds: Array<{ row: number; column: number; endRow: number }>,
+  taps: number[][],
+  units: number,
+): ManiaBeatmap {
+  const notes: ManiaNote[] = [];
+  const unitMs = gaps.reduce((total, gap) => total + gap, 0);
+  const rowTime = (unit: number, row: number) =>
+    unit * unitMs + gaps.slice(0, row).reduce((total, gap) => total + gap, 0);
+  for (let unit = 0; unit < units; unit++) {
+    for (const hold of holds) {
+      notes.push({
+        column: hold.column,
+        time: rowTime(unit, hold.row),
+        endTime: rowTime(unit + Math.floor(hold.endRow / gaps.length), hold.endRow % gaps.length),
+        isHold: true,
+      });
+    }
+    taps.forEach((columns, row) => {
+      for (const column of columns) {
+        notes.push({ column, time: rowTime(unit, row), endTime: rowTime(unit, row), isHold: false });
+      }
+    });
+  }
+  const map = makeMap(keyCount, [], 100);
+  map.notes = notes;
+  map.totalLength = units * unitMs;
+  return map;
+}
+
 function repeatRows(pattern: number[][], times: number): number[][] {
   return Array.from({ length: times }).flatMap(() => pattern);
 }
@@ -163,6 +199,79 @@ describe("analyzeManiaPatterns", () => {
     expect(analyzeManiaPatterns(makeMixedMap(7, releaseRows, 60)).primary?.id).toBe("lnrelease");
     expect(analyzeManiaPatterns(makeMixedMap(7, generalRows, 100)).primary?.id).toBe("lngeneral");
     expect(analyzeManiaPatterns(makeMixedMap(7, techRows, 55)).primary?.id).toBe("lntech");
+  });
+
+  it("detects 4K LN subtypes, minus release", () => {
+    // Column period 520ms against a 420ms hold: a short same-column release gap
+    // repeated across all four columns, which is what 4K inverse looks like.
+    const inverseRows = Array.from({ length: 4 * 36 }, (_, index) => [
+      { column: index % 4, holdMs: 420 },
+    ]);
+    const generalRows = repeatRows([
+      [0, 2],
+      [1, 3],
+      [2, 3],
+      [0, 1],
+      [1, 2],
+      [0, 3],
+    ], 36).map((columns) => columns.map((column) => ({ column, holdMs: 100 })));
+    const techMap = makeUnevenLnMap(
+      4,
+      [60, 55, 110, 55, 165, 55, 82, 110, 55, 137, 55, 96],
+      [
+        { row: 0, column: 0, endRow: 3 },
+        { row: 1, column: 2, endRow: 4 },
+        { row: 2, column: 1, endRow: 6 },
+        { row: 5, column: 2, endRow: 9 },
+        { row: 7, column: 0, endRow: 10 },
+        { row: 8, column: 3, endRow: 11 },
+      ],
+      [[2], [3], [3], [1], [0, 3], [0], [0], [2], [1], [0], [1], [2]],
+      30,
+    );
+
+    const inverse = analyzeManiaPatterns(makeMixedMap(4, inverseRows, 130));
+    const general = analyzeManiaPatterns(makeMixedMap(4, generalRows, 100));
+    const tech = analyzeManiaPatterns(techMap);
+    expect(inverse.patterns.map((pattern) => pattern.id)).toContain("lninverse");
+    expect(general.patterns.map((pattern) => pattern.id)).toContain("lngeneral");
+    expect(tech.patterns.map((pattern) => pattern.id)).toContain("lntech");
+
+    // 4K never mints lnrelease: on four columns the release-only signal is
+    // manufactured by short-hold vibro spam, so the tag is 7K-only. The same
+    // shape at 7K still resolves to lnrelease.
+    const releaseRows = (keyCount: number, stride: number) => Array.from({ length: keyCount * 36 }, (_, index) => [
+      { column: index % keyCount, holdMs: 45 },
+      { column: (index + stride) % keyCount, holdMs: 45 },
+    ]);
+    const release4k = analyzeManiaPatterns(makeMixedMap(4, releaseRows(4, 2), 60));
+    const release7k = analyzeManiaPatterns(makeMixedMap(7, releaseRows(7, 3), 60));
+    expect(release4k.allPatterns.find((pattern) => pattern.id === "lnrelease")).toBeUndefined();
+    expect(release7k.patterns.map((pattern) => pattern.id)).toContain("lnrelease");
+  });
+
+  it("keeps LN subtypes off keymodes they were never calibrated for", () => {
+    const inverseRows = Array.from({ length: 6 * 36 }, (_, index) => [
+      { column: index % 6, holdMs: 620 },
+    ]);
+    const analysis = analyzeManiaPatterns(makeMixedMap(6, inverseRows, 130));
+    expect(analysis.allPatterns.filter((pattern) => pattern.id.startsWith("ln") && pattern.id !== "ln")).toEqual([]);
+    expect(analysis.patterns.map((pattern) => pattern.id)).toContain("ln");
+  });
+
+  it("records an LN subtype the top-5 visible slice would otherwise drop", () => {
+    // A busy 4K chart fields ten rice candidates, so a qualifying subtype can
+    // score well and still miss the cut. It belongs in the tags regardless: a
+    // subtype describes the chart, it doesn't have to outrank the rice families.
+    const inverseRows = Array.from({ length: 4 * 36 }, (_, index) => [
+      { column: index % 4, holdMs: 420 },
+    ]);
+    const analysis = analyzeManiaPatterns(makeMixedMap(4, inverseRows, 130));
+    const inverse = analysis.allPatterns.find((pattern) => pattern.id === "lninverse");
+    expect(inverse?.score).toBeGreaterThanOrEqual(0.2);
+    expect(analysis.patterns.map((pattern) => pattern.id)).toContain("lninverse");
+    // The primary is still whatever actually scored highest, not the overflow.
+    expect(analysis.primary?.id).toBe(analysis.allPatterns[0]?.id);
   });
 
   it("detects slow-tempo LN inverse whose beat-fraction release gaps exceed 120ms", () => {

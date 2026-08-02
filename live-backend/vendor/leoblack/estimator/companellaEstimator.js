@@ -19,6 +19,20 @@ const VARIANT_TEXT = {
 let ortNamespacePromise = null;
 let modelSessionPromise = null;
 
+const IS_NODE_RUNTIME = typeof process === "object"
+    && typeof process.versions === "object"
+    && typeof process.versions.node === "string"
+    && typeof window === "undefined";
+
+// Upstream vendors a trimmed onnxruntime-web build under ./companella/ort/ and
+// picks the entry by hand (ort.wasm.min.mjs in the browser, ort.node.min.mjs in
+// Node). We take the same runtime from npm instead, so the ~13MB wasm never
+// enters git: the package's own export map already resolves the Node entry, and
+// ./wasm is the wasm-only browser build (no webgpu/jsep), which is what upstream
+// slimmed down to. The bare specifier is hidden from Vite behind a variable so
+// the Node branch never pulls the runtime into the client graph.
+const ORT_NODE_SPECIFIER = "onnxruntime-web";
+
 function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
 }
@@ -40,7 +54,9 @@ function resolveOrtNamespace(moduleValue) {
 
 async function getOrtNamespace() {
     if (!ortNamespacePromise) {
-        ortNamespacePromise = import("./companella/ort/ort.min.mjs")
+        ortNamespacePromise = (IS_NODE_RUNTIME
+            ? import(/* @vite-ignore */ ORT_NODE_SPECIFIER)
+            : import("onnxruntime-web/wasm"))
             .then(resolveOrtNamespace);
     }
     return ortNamespacePromise;
@@ -52,8 +68,29 @@ async function getModelSession() {
             const ort = await getOrtNamespace();
 
             if (ort.env && ort.env.wasm) {
-                ort.env.wasm.wasmPaths = new URL("./companella/ort/", import.meta.url).toString();
+                // The site sends no COOP/COEP headers, so SharedArrayBuffer is
+                // unavailable and a threaded runtime would fail to start. This
+                // model is a 10-feature MLP; one thread is not the bottleneck.
+                // wasmPaths is deliberately unset: the npm ".bundle." build
+                // locates its own wasm through import.meta.url, which Vite
+                // resolves, and the Node entry reads it off disk.
                 ort.env.wasm.numThreads = 1;
+            }
+
+            // Node cannot fetch() a file:// URL, so hand the session raw bytes
+            // there; the browser keeps the URL form, which Vite emits as an
+            // asset. Same split as upstream's Node fix, one layer up.
+            if (IS_NODE_RUNTIME) {
+                const [{ readFile }, { fileURLToPath }] = await Promise.all([
+                    import(/* @vite-ignore */ "node:fs/promises"),
+                    import(/* @vite-ignore */ "node:url"),
+                ]);
+                const modelBytes = await readFile(
+                    fileURLToPath(new URL("./companella/dan_model.onnx", import.meta.url)),
+                );
+                return ort.InferenceSession.create(new Uint8Array(modelBytes), {
+                    executionProviders: ["wasm"],
+                });
             }
 
             const modelUrl = new URL("./companella/dan_model.onnx", import.meta.url).toString();

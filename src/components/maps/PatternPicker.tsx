@@ -22,9 +22,11 @@ const SUBFAMILIES: Record<string, string[]> = {
 
 // Each keymode speaks its own pattern vocabulary, mirroring the per-keymode
 // branches in the backend analyzer: 4K charts are tagged with jump/hand/quad/
-// dumpstream and jack subfamilies, 7K charts with chordstream/delay/bracket
-// plus the LN subfamilies, everything else with the wide-key stream set. Jack
-// and stream stay in every list: the analyzer detects both for all keymodes.
+// dumpstream and jack subfamilies, 7K charts with chordstream/delay/bracket,
+// everything else with the wide-key stream set. Jack and stream stay in every
+// list: the analyzer detects both for all keymodes. The LN subfamilies are 4K
+// and 7K only, and 4K omits LN Release: on 4 columns the analyzer can't tell
+// release-focused LN from vibro spam, so it doesn't emit the tag at all.
 // The full generic list only shows when the Keys facet is empty or mixed.
 const KEYMODE_PATTERN_OPTIONS: Record<string, string[]> = {
   "4k": ["jack", "stream", "jumpstream", "handstream", "stamina", "chordjack", "tech", "ln"],
@@ -33,7 +35,11 @@ const KEYMODE_PATTERN_OPTIONS: Record<string, string[]> = {
 };
 
 const KEYMODE_SUBFAMILIES: Record<string, Record<string, string[]>> = {
-  "4k": { jack: ["speedjack", "handjack"], stream: ["dumpstream", "quadstream"] },
+  "4k": {
+    jack: ["speedjack", "handjack"],
+    stream: ["dumpstream", "quadstream"],
+    ln: ["lngeneral", "lninverse", "lntech"],
+  },
   "7k": { ln: ["lngeneral", "lnrelease", "lninverse", "lntech"] },
   other: {},
 };

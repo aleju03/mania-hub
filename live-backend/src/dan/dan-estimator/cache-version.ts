@@ -3,4 +3,7 @@
 // v11: upstream leoblack fix for the 4K LN interval table (osumania_map_analyser
 // PR #38): the 4.963-5.213 band had an inverted LN 6 mid/low range, so cached
 // estimates in that window carry wrong labels.
-export const DAN_ESTIMATE_CACHE_VERSION = 11;
+// v12: Companella wired (companella.ts). The RC half of 4K LN-hybrid charts
+// under 9 Sunny stars now comes from the ONNX model instead of the Sunny
+// fallback, which moves roughly a fifth of cached 4K estimates.
+export const DAN_ESTIMATE_CACHE_VERSION = 12;

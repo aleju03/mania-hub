@@ -20,7 +20,8 @@ import {
 } from "./leoblack/patterns/service.js";
 import { PATTERNS_CONFIG } from "./leoblack/patterns/config.js";
 import { detectVibroFromLongjackPattern } from "./leoblack/vibro.js";
-import type { LeoBlackReworkResult } from "./leoblack/estimator/mixedEstimator.js";
+import { applyCompanellaToMixedResult, type LeoBlackReworkResult } from "./leoblack/estimator/mixedEstimator.js";
+import type { CompanellaEstimate } from "./leoblack/estimator/companellaEstimator";
 
 // The single chart classifier. Routes each chart to the best-performing engine
 // per the benchmark in src/lib/leoblack/PORT_NOTES.md:
@@ -31,7 +32,7 @@ import type { LeoBlackReworkResult } from "./leoblack/estimator/mixedEstimator.j
 // Callers should treat this as THE classifier; estimateDan/estimateDanielDan/
 // estimateLeoBlackDan remain only as internals and benchmark baselines.
 
-export type DanVerdictSource = "leoblack-mixed" | "leoblack-sunny-table" | "inhouse-ln-knn";
+export type DanVerdictSource = "leoblack-mixed" | "leoblack-companella" | "leoblack-sunny-table" | "inhouse-ln-knn";
 
 export interface DanVerdictHalf {
   kind: "rc" | "ln";
@@ -63,12 +64,24 @@ export interface ChartClassification {
   patterns: ManiaPatternAnalysis;
   clusters: { report: LeoBlackPatternReport; topFiveClusters: LeoBlackPatternCluster[] } | null;
   vibro: boolean;
+  /**
+   * True when Mixed wanted Companella for the RC half but none was supplied,
+   * so the verdict is still the Sunny fallback. Re-running through
+   * classifyChartWithCompanella resolves it.
+   */
+  companellaPending: boolean;
   warnings: string[];
 }
 
 export interface ClassifyChartInput extends DanEstimateInput {
   /** Which half becomes the primary verdict; "auto" picks LN when lnRatio >= 0.5. */
   preferFamily?: "rc" | "ln" | "auto";
+  /**
+   * Companella verdict for the RC half, when the caller has already run the
+   * model. Ignored on charts Mixed did not ask for it. Async by nature, hence
+   * an input rather than something this sync function computes.
+   */
+  companella?: CompanellaEstimate | null;
 }
 
 const TIER_VARIANTS: Record<string, string | null> = {
@@ -280,8 +293,15 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
   }
 
   let mixed: LeoBlackReworkResult | null = null;
+  let companellaApplied = false;
   try {
-    const candidate = runLeoBlackMixed(osuText, { speedRate: rate });
+    const rawMixed = runLeoBlackMixed(osuText, { speedRate: rate });
+    // Applied before the reroute check so the pin guard sees the final RC
+    // verdict; a no-op when Mixed asked for no Companella or none was given.
+    companellaApplied = input.companella != null && rawMixed.mixedCompanellaPlan != null;
+    const candidate = input.companella
+      ? applyCompanellaToMixedResult(rawMixed, input.companella)
+      : rawMixed;
     // A Sunny failure inside the reroute check throws into the catch below,
     // leaving mixed null: better no verdict than the known-bad pinned one.
     const reroute = sunnyLowEndReroute(candidate, osuText, rate);
@@ -321,7 +341,7 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
     if (map.keyCount === 4) {
       const parsedRc = parseLeoBlackRcHalf(rcText, mixed.numericDifficulty);
       if (parsedRc) {
-        rc = toHalf(parsedRc, "rc", "leoblack-mixed", sunnySr ?? 0, parsedRc.boundary ? 0.4 : rcConfidence, rcText);
+        rc = toHalf(parsedRc, "rc", companellaApplied ? "leoblack-companella" : "leoblack-mixed", sunnySr ?? 0, parsedRc.boundary ? 0.4 : rcConfidence, rcText);
       }
       if (lnText) {
         const parsedLn = parseLeoBlackLnHalf(lnText);
@@ -330,7 +350,7 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
         }
       }
       if (mixed.mixedCompanellaPlan) {
-        warnings.push("RC half below 9 stars normally uses Companella, which is not wired; showing the Sunny fallback.");
+        warnings.push("RC half below 9 stars wants Companella, which was not supplied; showing the Sunny fallback.");
       }
     } else if (map.keyCount === 6 || map.keyCount === 7) {
       const tables = DAN_INDEX[map.keyCount];
@@ -408,6 +428,7 @@ export function classifyChart(map: ManiaBeatmap, osuText: string, input: Classif
     patterns,
     clusters,
     vibro,
+    companellaPending: mixed?.mixedCompanellaPlan != null,
     warnings,
   };
 }

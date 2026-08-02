@@ -5,7 +5,8 @@ import { parseManiaBeatmap } from "../dan/beatmap-parser.js";
 import { extractDanFeatures } from "../dan/dan-estimator/features.js";
 import { estimateLnDan } from "../dan/dan-estimator/ln.js";
 import { analyzeManiaPatterns } from "../dan/dan-estimator/patterns.js";
-import { classifyChart, detectLnVibro, detectRiceVibro, sunnyLowEndReroute, type ChartClassification, type DanVerdictHalf } from "../dan/chart-classifier.js";
+import { detectLnVibro, detectRiceVibro, sunnyLowEndReroute, type ChartClassification, type DanVerdictHalf } from "../dan/chart-classifier.js";
+import { classifyChartWithCompanella } from "../dan/companella.js";
 import { runLeoBlackMixed } from "../dan/leoblack-estimator.js";
 import { LN_TAIL_MIN_RATIO, computeMsd } from "../dan/msd.js";
 import { computeNoteBpm } from "../dan/note-bpm.js";
@@ -150,16 +151,19 @@ export async function computeBeatmapChartAnalysis(
       [beatmapId],
     )).rows[0]?.difficulty_rating ?? 0);
 
-    const classification = classifyChart(map, osuText, {
-      starRating: Number.isFinite(starRating) && starRating > 0 ? starRating : undefined,
-      totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
-      version: map.version,
-    });
+    // MSD first: it is stored either way, and Companella needs the same raw
+    // values, so computing it up front saves the 4K LN-hybrid slice a second
+    // MinaCalc pass.
+    const msd = await computeMsd(osuText, { keyCount: map.keyCount }).catch(() => null);
 
     // Let the event loop breathe between the two CPU bursts.
     await new Promise<void>((resolve) => setImmediate(resolve));
 
-    const msd = await computeMsd(osuText, { keyCount: map.keyCount }).catch(() => null);
+    const classification = await classifyChartWithCompanella(map, osuText, {
+      starRating: Number.isFinite(starRating) && starRating > 0 ? starRating : undefined,
+      totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
+      version: map.version,
+    }, { msdValues: msd?.values });
 
     // Tail-aware MSD for hold-bearing charts (stored raw; readers blend by
     // the keymode weight). Same shape as msd_json.
@@ -1006,16 +1010,19 @@ async function enqueueDanFloorPinRecompute(queue: JobQueue, cursor: number): Pro
   );
 }
 
-// The LN inverse gap cap became tempo-aware (dan-estimator/patterns.ts) after
-// the corpus was analyzed: slow 7K inverse charts (release gaps charted as
-// 1/8-1/4 beat, over the old fixed 120ms cap) were stored without the
-// lninverse tag. Same playbook again: a boot-seeded chunked job recomputes the
-// pattern analyzer verdict for stored 7K LN charts from the cached .osu and
-// re-enqueues the full analysis job for the ones whose visible pattern tags or
-// primary changed. Purely local work, no osu! API.
-
+// The LN subtypes (lngeneral/lninverse/lntech) now fire on 4K as well, so every
+// stored 4K LN chart predates the tags it should carry. Same playbook as the v1
+// sweep (which fixed the tempo-aware inverse gap cap on 7K): a boot-seeded
+// chunked job recomputes the pattern analyzer verdict for stored LN charts from
+// the cached .osu and re-enqueues the full analysis job for the ones whose
+// visible pattern tags or primary changed. Purely local work, no osu! API.
+//
+// v2 scans 4K and 7K. 4K subtype scores are all new, and 7K picks up the
+// subtypes that used to be dropped by the top-5 visible slice (~1% of stored
+// 7K LN verdicts), so both keymodes can differ from what is stored.
 export const LN_SUBTYPE_RECOMPUTE_JOB = "recompute_ln_subtype_sweep";
-const LN_SUBTYPE_META_KEY = "ln_subtype_recompute_done:v1";
+const LN_SUBTYPE_META_KEY = "ln_subtype_recompute_done:v2";
+const LN_SUBTYPE_SWEEP_KEY_COUNTS = [4, 7];
 const LN_SUBTYPE_CHUNK = 50;
 // Subtype scores are gated on the composite LN score, which needs some hold
 // presence; charts with near-zero LN share can't change tags.
@@ -1038,7 +1045,7 @@ export async function recomputeLnSubtypeChunk(
     `select beatmap_id, classification_json
      from beatmap_chart_analysis
      where analysis_version = ? and status = 'ready'
-       and key_count = 7
+       and key_count in (${LN_SUBTYPE_SWEEP_KEY_COUNTS.join(", ")})
        and json_extract(classification_json, '$.lnRatio') >= ?
        and beatmap_id > ?
      order by beatmap_id
@@ -1057,7 +1064,7 @@ export async function recomputeLnSubtypeChunk(
     if (!osuText) continue;
     try {
       const map = parseManiaBeatmap(osuText);
-      if (map.keyCount !== 7) continue;
+      if (!LN_SUBTYPE_SWEEP_KEY_COUNTS.includes(map.keyCount)) continue;
       // Same analyzer inputs the full analysis job uses, so a matching verdict
       // here means re-analysis would store the same tags.
       const analysis = analyzeManiaPatterns(map, {
@@ -1116,6 +1123,116 @@ async function enqueueLnSubtypeRecompute(queue: JobQueue, cursor: number): Promi
   await queue.enqueue(
     LN_SUBTYPE_RECOMPUTE_JOB,
     `${LN_SUBTYPE_RECOMPUTE_JOB}:${cursor}`,
+    { cursor },
+    { priority: -10, replaceDone: true },
+  );
+}
+
+// One-shot sweep re-analyzing the charts whose RC verdict changed when
+// Companella was wired (dan/companella.ts). Mixed reaches for Companella on 4K
+// charts whose mode tag is not RC and whose Sunny star is under 9; everything
+// stored before the wiring carries the Sunny fallback there instead.
+//
+// Unlike the other sweeps this needs no .osu read and no re-run of the
+// analyzer: the gate is a pure function of two values already in
+// classification_json. `modeTagFromLnRatio` in mixedEstimator.js returns "RC"
+// at lnRatio <= 0.15, and Mixed only builds a Companella plan outside that,
+// under 9 stars, on 4K. So the SQL below *is* the predicate, verified against
+// classifyChart's companellaPending over 500 stored 4K rows with zero false
+// negatives (2026-08-02). A null sunnySr means Mixed produced no star and no
+// plan, and NULL < 9 already excludes it.
+//
+// This is deliberately a targeted sweep rather than a CHART_ANALYSIS_VERSION
+// bump: bumping would hide all ~122k stored rows at once, blanking the
+// analysis-derived columns in /maps and, worse, opening farm-helper's DT
+// feasibility gate (readDtRateMsd finds no row and the chart passes) until the
+// backfill caught up. 6K/7K charts cannot change here at all.
+export const COMPANELLA_RECOMPUTE_JOB = "recompute_companella_sweep";
+const COMPANELLA_META_KEY = "companella_recompute_done:v1";
+const COMPANELLA_CHUNK = 200;
+const COMPANELLA_MODE_TAG_MIN_LN_RATIO = 0.15;
+const COMPANELLA_MAX_SUNNY_STAR = 9;
+
+export interface CompanellaRecomputeChunkResult {
+  nextCursor: number;
+  scanned: number;
+  changed: number[];
+  done: boolean;
+}
+
+export async function recomputeCompanellaChunk(
+  db: Db,
+  cursor: number,
+  limit = COMPANELLA_CHUNK,
+): Promise<CompanellaRecomputeChunkResult> {
+  const rows = (await exec(
+    db,
+    `select beatmap_id
+     from beatmap_chart_analysis
+     where analysis_version = ? and status = 'ready' and key_count = 4
+       and json_extract(classification_json, '$.lnRatio') > ?
+       and json_extract(classification_json, '$.sunnySr') < ?
+       and beatmap_id > ?
+     order by beatmap_id
+     limit ?`,
+    [
+      CHART_ANALYSIS_VERSION,
+      COMPANELLA_MODE_TAG_MIN_LN_RATIO,
+      COMPANELLA_MAX_SUNNY_STAR,
+      Math.max(0, Math.floor(cursor)),
+      Math.max(1, Math.floor(limit)),
+    ],
+  )).rows;
+
+  let nextCursor = cursor;
+  const changed: number[] = [];
+  for (const row of rows) {
+    const beatmapId = Number(row.beatmap_id);
+    nextCursor = Math.max(nextCursor, beatmapId);
+    changed.push(beatmapId);
+  }
+
+  return { nextCursor, scanned: rows.length, changed, done: rows.length < limit };
+}
+
+export async function ensureCompanellaRecomputeSeeded(db: Db, queue: JobQueue): Promise<void> {
+  const done = (await exec(db, "select 1 from live_meta where key = ? limit 1", [COMPANELLA_META_KEY])).rows[0];
+  if (done) return;
+  const pending = (await exec(
+    db,
+    "select 1 from jobs where type = ? and status in ('queued', 'running', 'failed', 'deferred_pressure') limit 1",
+    [COMPANELLA_RECOMPUTE_JOB],
+  )).rows[0];
+  if (pending) return;
+  await enqueueCompanellaRecompute(queue, 0);
+}
+
+export async function runCompanellaRecomputeJob(
+  db: Db,
+  queue: JobQueue,
+  payload: { cursor?: number } | undefined,
+): Promise<void> {
+  const cursor = Math.max(0, Math.floor(Number(payload?.cursor ?? 0)));
+  const result = await recomputeCompanellaChunk(db, cursor);
+  // Each re-analysis upserts its own search-index row, so refreshed verdicts
+  // reach /maps without a full index rebuild.
+  for (const beatmapId of result.changed) await enqueueChartAnalysis(queue, beatmapId);
+  if (result.done) {
+    const now = nowIso();
+    await exec(
+      db,
+      "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)",
+      [COMPANELLA_META_KEY, json({ finishedAt: now }), now],
+    );
+    return;
+  }
+  await enqueueCompanellaRecompute(queue, result.nextCursor);
+}
+
+async function enqueueCompanellaRecompute(queue: JobQueue, cursor: number): Promise<void> {
+  await queue.enqueue(
+    COMPANELLA_RECOMPUTE_JOB,
+    `${COMPANELLA_RECOMPUTE_JOB}:${cursor}`,
     { cursor },
     { priority: -10, replaceDone: true },
   );
@@ -1298,18 +1415,19 @@ export async function recomputeDtRateChunk(
         "select difficulty_rating from beatmaps where beatmap_id = ? limit 1",
         [beatmapId],
       )).rows[0]?.difficulty_rating ?? 0);
-      const classification = classifyChart(map, osuText, {
+      // The classifier and MinaCalc are the CPU bursts; yield between them and
+      // between charts so ingest/SSE keep moving. MinaCalc rates 4K and 7K the
+      // same way at 1.5x as it does at 1.0x (musicRate passes straight through).
+      // MSD leads so Companella can reuse it instead of running MinaCalc twice.
+      const msd = await computeMsd(osuText, { keyCount: map.keyCount, rate: DT_RATE }).catch(() => null);
+      if (!msd) continue;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      const classification = await classifyChartWithCompanella(map, osuText, {
         rate: DT_RATE,
         starRating: Number.isFinite(starRating) && starRating > 0 ? starRating : undefined,
         totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
         version: map.version,
-      });
-      // The classifier and MinaCalc are the CPU bursts; yield between them and
-      // between charts so ingest/SSE keep moving. MinaCalc rates 4K and 7K the
-      // same way at 1.5x as it does at 1.0x (musicRate passes straight through).
-      await new Promise<void>((resolve) => setImmediate(resolve));
-      const msd = await computeMsd(osuText, { keyCount: map.keyCount, rate: DT_RATE }).catch(() => null);
-      if (!msd) continue;
+      }, { msdValues: msd.values });
 
       const lean = leanClassification(classification);
       const danDt = {
@@ -1568,7 +1686,7 @@ export async function recomputeLnSourceChunk(
       // Refresh the DT dan verdict before the full analysis job runs, so its
       // search-index upsert reads current DT columns.
       if (Number(row.has_dt)) {
-        const classification = classifyChart(map, osuText, {
+        const classification = await classifyChartWithCompanella(map, osuText, {
           rate: DT_RATE,
           starRating: Number.isFinite(starRating) && starRating > 0 ? starRating : undefined,
           totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,

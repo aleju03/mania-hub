@@ -328,6 +328,13 @@ const SWEEP_DEFINITIONS: SweepDefinition[] = [
     jobType: "recompute_ln_subtype_sweep",
   }),
   chartAnalysisSweep({
+    id: "companella-recompute",
+    label: "Companella recompute sweep",
+    description: "Re-analyzes 4K LN-hybrid charts under 9 stars whose RC verdict predates the Companella wiring.",
+    doneKey: "companella_recompute_done:v1",
+    jobType: "recompute_companella_sweep",
+  }),
+  chartAnalysisSweep({
     id: "chordjack-tag-recompute",
     label: "Chordjack tag recompute sweep",
     description: "Re-derives chordjack pattern tags on stored chart analyses.",

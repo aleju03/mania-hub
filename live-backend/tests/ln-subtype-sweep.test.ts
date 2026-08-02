@@ -29,16 +29,18 @@ async function makeDb(): Promise<Db> {
   return db;
 }
 
-// 7K inverse chart at 80 BPM: one hold per row cycling the columns, each hold
-// filling most of the 910ms column period and releasing 150ms before the next
-// press - a 1/4-beat-ish inverse gap that the old fixed 120ms cap misread as
-// not-inverse. This is exactly the stale-corpus shape the sweep exists to fix.
-function buildSlowInverseOsuFile(): string {
-  const rows = Array.from({ length: 7 * 36 }, (_, index) => {
-    const column = index % 7;
+// Inverse chart at 80 BPM: one hold per row cycling the columns, each hold
+// filling most of its column period and releasing a short 1/4-beat-ish gap
+// before the next press. The 4K build is the shape the v2 sweep exists to fix
+// (every stored 4K LN chart predates the 4K subtypes); the 7K build is the
+// out-of-band control.
+function buildInverseOsuFile(keyCount = 4): string {
+  const holdMs = keyCount === 7 ? 760 : 420;
+  const rows = Array.from({ length: keyCount * 36 }, (_, index) => {
+    const column = index % keyCount;
     const time = 1000 + index * 130;
-    const x = Math.floor(((column + 0.5) * 512) / 7);
-    return `${x},192,${time},128,0,${time + 760}:0:0:0:0:`;
+    const x = Math.floor(((column + 0.5) * 512) / keyCount);
+    return `${x},192,${time},128,0,${time + holdMs}:0:0:0:0:`;
   });
   return `osu file format v14
 
@@ -50,10 +52,10 @@ Mode: 3
 Title: LN Subtype Sweep Test
 Artist: Test
 Creator: Mapper
-Version: 7K
+Version: ${keyCount}K
 
 [Difficulty]
-CircleSize:7
+CircleSize:${keyCount}
 OverallDifficulty:8
 
 [TimingPoints]
@@ -89,17 +91,17 @@ async function seedAnalyzedChart(db: Db, beatmapId: number, osuText: string, opt
     `insert into beatmap_chart_analysis
        (beatmap_id, analysis_version, status, key_count, primary_label, primary_family, raw_dan, classification_json, computed_at, updated_at)
      values (?, ?, 'ready', ?, '4-', 'ln', 4, ?, ?, ?)`,
-    [beatmapId, CHART_ANALYSIS_VERSION, options.keyCount ?? 7, JSON.stringify(classification), now, now],
+    [beatmapId, CHART_ANALYSIS_VERSION, options.keyCount ?? 4, JSON.stringify(classification), now, now],
   );
 }
 
 describe("LN subtype recompute sweep", () => {
   it("flags charts whose stored pattern tags differ from the fresh analyzer verdict", async () => {
     const db = await makeDb();
-    const osuText = buildSlowInverseOsuFile();
+    const osuText = buildInverseOsuFile();
 
-    // Stale verdict from before the tempo-aware gap cap: stored as lngeneral.
-    await seedAnalyzedChart(db, 1, osuText, { patternIds: ["lngeneral", "ln"], category: "LN General" });
+    // Stale verdict from before 4K had LN subtypes at all: stored as plain ln.
+    await seedAnalyzedChart(db, 1, osuText, { patternIds: ["ln"], category: "LN" });
 
     // In-sync control: stored tags match what the analyzer says today.
     const map = parseManiaBeatmap(osuText);
@@ -112,8 +114,8 @@ describe("LN subtype recompute sweep", () => {
       category: fresh.primary?.label ?? null,
     });
 
-    // Outside the candidate band: 4K charts have no 7K LN subtypes.
-    await seedAnalyzedChart(db, 3, osuText, { keyCount: 4 });
+    // Outside the candidate band: the sweep only looks at 4K and 7K.
+    await seedAnalyzedChart(db, 3, osuText, { keyCount: 6 });
 
     const result = await recomputeLnSubtypeChunk(db, 0, 50);
     expect(result.done).toBe(true);
@@ -125,7 +127,7 @@ describe("LN subtype recompute sweep", () => {
 
   it("runs once: re-enqueues analysis for changed charts, marks itself done, never re-seeds", async () => {
     const db = await makeDb();
-    await seedAnalyzedChart(db, 1, buildSlowInverseOsuFile(), { patternIds: ["lngeneral", "ln"] });
+    await seedAnalyzedChart(db, 1, buildInverseOsuFile(), { patternIds: ["lngeneral", "ln"] });
     const queue = new JobQueue(db);
 
     await ensureLnSubtypeRecomputeSeeded(db, queue);

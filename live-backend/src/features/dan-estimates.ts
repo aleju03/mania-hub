@@ -1,7 +1,7 @@
 import type { Db } from "../db.js";
 import { exec } from "../db.js";
 import { DAN_ESTIMATE_CACHE_VERSION } from "../dan/dan-estimator/cache-version.js";
-import { classifyChart } from "../dan/chart-classifier.js";
+import { classifyChartWithCompanella } from "../dan/companella.js";
 import { parseManiaBeatmap, type ManiaBeatmap } from "../dan/beatmap-parser.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { logWarn } from "../logger.js";
@@ -181,7 +181,7 @@ async function computeAndStoreDanEstimate(
     throw error;
   }
   const { map, osuText } = parsed;
-  const classification = classifyChart(map, osuText, {
+  const classification = await classifyChartWithCompanella(map, osuText, {
     starRating,
     totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
     version: map.version,

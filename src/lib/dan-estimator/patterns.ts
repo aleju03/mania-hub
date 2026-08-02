@@ -46,6 +46,10 @@ export const SUPPORTED_MANIA_PATTERN_IDS: ManiaPatternId[] = [
   "lntech",
 ];
 
+// The LN axis subfamilies, as opposed to the primary rice families. Fired on 4K
+// and 7K only; see the subtype gate in analyzeManiaPatterns.
+const LN_SUBTYPE_IDS = new Set<string>(["lngeneral", "lnrelease", "lninverse", "lntech"]);
+
 interface RowPatternStats {
   rowCount: number;
   chordRows: number;
@@ -321,7 +325,12 @@ export function analyzeManiaPatterns(
     minGate(pressure(metrics.lnReleasePressure, 1.2, 5.5), pressure(metrics.holdRatio, 0.015, 0.16)),
     minGate(pressure(metrics.lnChordPressure, 0.15, 0.65), pressure(metrics.holdRatio, 0.02, 0.18)),
   );
-  const lnSubtypeGate = metrics.keyCount === 7 ? pressure(lnScore, 0.18, 0.58) : 0;
+  // 4K and 7K both get LN subtypes; the shapes are real on 4 columns too. The
+  // raw LN row stats are keymode-neutral, but their distributions are not, so
+  // the individual subtypes re-ramp themselves below where 4 columns shift the
+  // population (measured over the 63k cached 4K charts that carry long notes).
+  const lnSubtypeKeys = metrics.keyCount === 7 || metrics.keyCount === 4;
+  const lnSubtypeGate = lnSubtypeKeys ? pressure(lnScore, 0.18, 0.58) : 0;
   const lnInverseScore = lnSubtypeGate * minGate(
     pressure(lnStats.inverseReleaseRatio, 0.24, 0.62),
     pressure(metrics.lnDensity, 0.12, 0.5),
@@ -331,24 +340,46 @@ export function analyzeManiaPatterns(
     ),
     clamp01((0.16 - lnStats.mixedRowRatio) / 0.16),
   );
-  const lnReleaseScore = lnSubtypeGate * minGate(
-    pressure(lnStats.releaseOnlyRatio, 0.48, 0.68),
-    pressure(metrics.lnReleasePressure, 12, 30),
-    clamp01((0.45 - lnStats.inverseReleaseRatio) / 0.32),
-    clamp01((520 - metrics.lnHoldDurationP90) / 260),
-  );
+  // Release stays 7K-only. On 4 columns, short-hold vibro spam manufactures
+  // release-only rows, so the highest-scoring 4K charts in the corpus were
+  // vibro packs, vibro dan courses and jumptrill memes rather than anything
+  // release-focused. The vibro flag catches under 5% of them, so there is no
+  // cheap filter that rescues it.
+  const lnReleaseScore = metrics.keyCount === 7
+    ? lnSubtypeGate * minGate(
+      pressure(lnStats.releaseOnlyRatio, 0.48, 0.68),
+      pressure(metrics.lnReleasePressure, 12, 30),
+      clamp01((0.45 - lnStats.inverseReleaseRatio) / 0.32),
+      clamp01((520 - metrics.lnHoldDurationP90) / 260),
+    )
+    : 0;
   const lnTechBurst = Math.max(
     pressure(metrics.fastRowRatio, 0.18, 0.36),
     pressure(metrics.rowBurstPressure, 16, 26),
   );
-  const lnTechCoordination = Math.max(
-    pressure(lnStats.tapWhileHoldingRatio, 0.04, 0.11),
-    pressure(lnStats.headTailSwitchRatio, 0.52, 0.72),
-    pressure(metrics.chordSizeChangeRate, 0.55, 0.78),
-  );
+  // 4K charts tap while holding at roughly half the 7K rate (corpus p50 0.117
+  // vs 0.281) and the 7K ramp starts below both populations, so on 4K it
+  // saturates and stops discriminating, leaving lntech decided by the burst and
+  // tech terms alone. Re-ramped onto the 4K distribution, and the chord-size
+  // leg dropped: it carries no LN signal, and it was admitting pure tech and
+  // dump charts (Figue Folle, Canon Rock) as LN tech.
+  const lnTechCoordination = metrics.keyCount === 4
+    ? Math.max(
+      pressure(lnStats.tapWhileHoldingRatio, 0.1, 0.25),
+      pressure(lnStats.headTailSwitchRatio, 0.3, 0.55),
+    )
+    : Math.max(
+      pressure(lnStats.tapWhileHoldingRatio, 0.04, 0.11),
+      pressure(lnStats.headTailSwitchRatio, 0.52, 0.72),
+      pressure(metrics.chordSizeChangeRate, 0.55, 0.78),
+    );
+  // A 4K hold leaves three free lanes, so tech-flavoured rice with a token LN
+  // still clears the coordination term. Demand actual LN content as well.
+  const lnTechContentFloor = metrics.keyCount === 4 ? pressure(metrics.holdRatio, 0.2, 0.4) : 1;
   const lnTechScore = lnSubtypeGate * minGate(
     lnTechBurst,
     lnTechCoordination,
+    lnTechContentFloor,
     Math.max(
       pressure(metrics.techPressure, 4.2, 8.4),
       pressure(metrics.rowIntervalEntropy, 2.0, 2.45),
@@ -379,13 +410,17 @@ export function analyzeManiaPatterns(
     dataConfidence,
     `${compactPercent(metrics.holdRatio)} holds, release pressure ${metrics.lnReleasePressure.toFixed(1)}`,
   ));
-  if (metrics.keyCount === 7) {
+  if (lnSubtypeKeys) {
     candidates.push(
       hit("lngeneral", lnGeneralScore, dataConfidence, `${compactPercent(metrics.lnChordPressure)} LN chord rows, ${compactPercent(lnStats.headTailSwitchRatio)} head/tail switches`),
-      hit("lnrelease", lnReleaseScore, dataConfidence, `${compactPercent(lnStats.releaseOnlyRatio)} release-only rows, release pressure ${metrics.lnReleasePressure.toFixed(1)}`),
       hit("lninverse", lnInverseScore, dataConfidence, `${compactPercent(lnStats.inverseReleaseRatio)} short same-column release gaps, p50 gap ${Math.round(lnStats.sameColumnReleaseGapP50)}ms`),
       hit("lntech", lnTechScore, dataConfidence, `${compactPercent(lnStats.tapWhileHoldingRatio)} tap-with-hold rows, burst pressure ${metrics.rowBurstPressure.toFixed(1)}`),
     );
+    if (metrics.keyCount === 7) {
+      candidates.push(
+        hit("lnrelease", lnReleaseScore, dataConfidence, `${compactPercent(lnStats.releaseOnlyRatio)} release-only rows, release pressure ${metrics.lnReleasePressure.toFixed(1)}`),
+      );
+    }
   }
 
   if (metrics.keyCount === 4) {
@@ -481,9 +516,20 @@ export function analyzeManiaPatterns(
     .sort((a, b) => b.score - a.score || a.label.localeCompare(b.label));
   const visiblePatterns = allPatterns.filter((pattern) => pattern.score >= 0.2).slice(0, 5);
   const lnPattern = allPatterns.find((pattern) => pattern.id === "ln");
-  const patterns = lnPattern && !visiblePatterns.some((pattern) => pattern.id === "ln")
+  const lnAxisPatterns = lnPattern && !visiblePatterns.some((pattern) => pattern.id === "ln")
     ? [...visiblePatterns, lnPattern]
     : visiblePatterns;
+  // Same escape hatch for the LN subtypes. A 4K chart fields ten rice
+  // candidates against 7K's eight and doesn't damp its ln score, so the top-5
+  // slice was dropping a third of the 4K lngeneral tags that cleared the bar
+  // (and ~1% of 7K's). A subtype is an attribute of the chart, not a claim on
+  // its identity, so it shouldn't have to outrank the rice families to be
+  // recorded. Appended after, so the primary is unaffected.
+  const subtypeOverflow = allPatterns.filter((pattern) =>
+    LN_SUBTYPE_IDS.has(pattern.id)
+    && pattern.score >= 0.2
+    && !lnAxisPatterns.some((visible) => visible.id === pattern.id));
+  const patterns = subtypeOverflow.length > 0 ? [...lnAxisPatterns, ...subtypeOverflow] : lnAxisPatterns;
 
   return {
     keyCount: metrics.keyCount,

@@ -61,6 +61,7 @@ describe("sweeps status registry", () => {
       "note-bpm-recompute",
       "dan-floor-pin-recompute",
       "ln-subtype-recompute",
+      "companella-recompute",
       "chordjack-tag-recompute",
       "ln-msd-backfill",
       "ln-source-recompute",

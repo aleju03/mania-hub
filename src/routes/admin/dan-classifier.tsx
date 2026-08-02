@@ -4,7 +4,7 @@ import { Check, ClipboardList, Copy, Download, FileSpreadsheet, RotateCcw, X } f
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseManiaBeatmap } from "#/lib/beatmap-parser";
 import { getDanImageSrc } from "#/lib/dan-images";
-import { classifyChart } from "#/lib/chart-classifier";
+import { classifyChartWithCompanella } from "#/lib/companella";
 import type { ChartClassification, DanVerdictHalf } from "#/lib/chart-classifier";
 import { canUseAdminFeatures, canUseDevFeatures } from "#/lib/auth-shared";
 import {
@@ -29,6 +29,7 @@ type PreferFamily = "rc" | "ln" | "auto";
 
 const VERDICT_SOURCE_LABELS: Record<DanVerdictHalf["source"], string> = {
   "leoblack-mixed": "LeoBlack Mixed",
+  "leoblack-companella": "Companella",
   "leoblack-sunny-table": "Sunny table",
   "inhouse-ln-knn": "LN kNN",
 };
@@ -592,11 +593,11 @@ function DanClassifierPage() {
         ));
         return;
       }
-      // let the spinner paint before the synchronous classify
+      // let the spinner paint before the classify
       await new Promise((resolve) => setTimeout(resolve, 0));
       if (analyzeRequestRef.current !== requestId) return;
       const map = parseManiaBeatmap(file.content);
-      const classification = classifyChart(map, file.content, {
+      const classification = await classifyChartWithCompanella(map, file.content, {
         rate: rateUsed,
         starRating: target.starRating ?? 0,
         title: map.title,
@@ -1530,14 +1531,14 @@ function BenchmarkView({
       const preferFamily: PreferFamily = family === "ln" ? "ln" : "rc";
       for (const row of targets) {
         if (cancelled) return;
-        // classifyChart is synchronous and can take a few hundred ms; yield between charts
+        // classification can take a few hundred ms (longer when Companella runs); yield between charts
         await yieldToUi();
         if (cancelled) return;
         const content = row.content;
         if (content == null) continue;
         try {
           const map = parseManiaBeatmap(content);
-          const classification = classifyChart(map, content, {
+          const classification = await classifyChartWithCompanella(map, content, {
             rate,
             starRating: row.starRating,
             title: map.title,
@@ -1600,7 +1601,7 @@ function BenchmarkView({
         if (file.content == null) throw new Error("Chart not available.");
         await new Promise((resolve) => setTimeout(resolve, 0));
         const map = parseManiaBeatmap(file.content);
-        const classification = classifyChart(map, file.content, {
+        const classification = await classifyChartWithCompanella(map, file.content, {
           rate: currentRate,
           starRating: target.starRating,
           title: map.title,
