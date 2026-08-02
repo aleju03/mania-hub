@@ -1,8 +1,8 @@
 import { Link } from "@tanstack/react-router";
-import { ChevronLeft, LoaderCircle, Maximize2, Minimize2, Pause, Play, Smartphone, Volume2, VolumeX } from "lucide-react";
+import { ChevronLeft, LoaderCircle, Maximize2, Minimize2, Pause, Play, SlidersHorizontal, Smartphone, Volume2, VolumeX } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 
-import { getBeatmapAudioUrl } from "../../lib/audio-url";
+import { getBeatmapAudioUrl, getInlineBackgroundUrl } from "../../lib/audio-url";
 import type { ManiaBeatmap } from "../../lib/beatmap-parser";
 import { formatDate } from "../../lib/format";
 import {
@@ -19,7 +19,13 @@ import { parseCachedManiaBeatmap } from "../../lib/parsed-beatmap-cache";
 import { withTimeout } from "../../lib/promise-timeout";
 import { unpackReplayFrames } from "../../lib/replay-frames";
 import { buildKeypressHeatmap } from "../../lib/replay-keypress-heatmap";
-import { readReplayVolume } from "../../lib/replay-preferences";
+import {
+  readReplayBackgroundDim,
+  readReplayStoryboardEnabled,
+  readReplayVolume,
+  writeReplayBackgroundDim,
+  writeReplayStoryboardEnabled,
+} from "../../lib/replay-preferences";
 import { readReplayScrollSpeed } from "../../lib/replay-scroll-speed";
 import {
   SIDE_BY_SIDE_PORTRAIT_PHONE_QUERY,
@@ -30,6 +36,7 @@ import {
   type SideBySideViewport,
 } from "../../lib/replay-side-by-side";
 import { readReplaySkinSettings } from "../../lib/replay-skin";
+import { loadReplayStoryboard, type LoadedReplayStoryboard } from "../../lib/replay-storyboard";
 import { getScoreExpectedCounts, type ReplayLiveStats, type ReplayRendererLike, type ServerReplay } from "../../lib/replay-types";
 import {
   getDisplayedRank,
@@ -58,7 +65,15 @@ import { ReplayProgressBar } from "./ReplayControls";
 
    The playfields deliberately run without the HUD: no keypresses, no
    leaderboard, no accuracy readout. Everything worth comparing lives in the
-   middle column, where the two runs sit on the same line.
+   middle column, where the two runs sit on the same line. Combo and the
+   judgement pop stay, because both belong over the notes rather than to the
+   chrome - a stage that never tells you what a hit was judged as is not a
+   replay you can read.
+
+   The two stages have no frames of their own: they are transparent canvases
+   over one full-bleed map background, each drawing nothing but its own black
+   playfield, pulled toward the middle column (playfieldAlign) so the pair
+   reads as one screen instead of two panels pushed to opposite edges.
 
    Phones get the whole screen: on a touch device the stage covers the navbar
    the moment it opens, and the first play asks for real fullscreen plus a
@@ -91,9 +106,14 @@ interface SideBySideSide {
 }
 
 const SIDE_ACCENTS = [
-  { text: "text-osu-pink-light", bar: "bg-osu-pink", ring: "ring-osu-pink/40" },
-  { text: "text-osu-blue", bar: "bg-osu-blue", ring: "ring-osu-blue/40" },
+  { text: "text-osu-pink-light" },
+  { text: "text-osu-blue" },
 ] as const;
+
+// How far each playfield is pushed toward the stats column, as a share of the
+// slack in its half (0 = flush left, 1 = flush right). Short of the edge, so
+// the two runs sit next to the numbers rather than against them.
+const SIDE_PLAYFIELD_ALIGN = [0.88, 0.12] as const;
 
 // Browsers default preservesPitch to true (the DT/HT behavior); NC/DC need
 // the pitch to follow the playback rate. Vendor-prefixed for older Safari.
@@ -163,7 +183,11 @@ export function ReplaySideBySideView({
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasLeftRef = useRef<HTMLCanvasElement>(null);
   const canvasRightRef = useRef<HTMLCanvasElement>(null);
+  const storyboardCanvasRef = useRef<HTMLCanvasElement>(null);
   const renderersRef = useRef<ReplayRendererLike[]>([]);
+  /* The full-bleed storyboard layer, when one is loaded and switched on. It
+     follows the same clock as the two stages but draws no playfield. */
+  const storyboardRendererRef = useRef<ReplayRendererLike | null>(null);
   const masterRendererRef = useRef<ReplayRendererLike | null>(null);
   /* Shared map-time clock both renderers follow via setExternalClock. */
   const clockRef = useRef({ anchorPerf: 0, anchorTime: 0, playing: false, speed: 1, rate: 1 });
@@ -171,6 +195,9 @@ export function ReplaySideBySideView({
   const scrubResumeRef = useRef(false);
 
   const [sides, setSides] = useState<[SideBySideSide, SideBySideSide] | null>(null);
+  /* Raw .osu text of the (shared) chart: the storyboard loader reads the
+     embedded [Events] and the widescreen flag out of it. */
+  const [beatmapFileContent, setBeatmapFileContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
@@ -215,6 +242,19 @@ export function ReplaySideBySideView({
     if (!clock.playing) return clock.anchorTime;
     return clock.anchorTime + (performance.now() - clock.anchorPerf) * clock.speed * clock.rate;
   }, []);
+
+  /* What every renderer on this screen - both stages and the storyboard layer
+     - reads its time from. */
+  const readSharedClock = useCallback(() => {
+    const audio = audioRef.current;
+    if (audio && audioMasterRef.current) {
+      return {
+        time: audio.currentTime * 1000,
+        stalled: audio.paused || audio.seeking || audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA,
+      };
+    }
+    return { time: readWallClockTime(), stalled: !clockRef.current.playing };
+  }, [readWallClockTime]);
 
   const readClockTime = useCallback(() => {
     const audio = audioRef.current;
@@ -282,6 +322,39 @@ export function ReplaySideBySideView({
     setAudioFailed(false);
   }, [audioUrl]);
 
+  const beatmapsetId = sides?.[0]?.score.beatmapset?.id;
+  const backgroundFilename = sides?.[0]?.beatmap?.backgroundFilename;
+
+  /* The map's own background, full bleed behind both stages - the same image
+     the single viewer puts behind its playfield, at the dim set here (shared
+     with that viewer's setting). The archive copy is the real thing; the set
+     cover (same proxy, no filename) covers maps whose archive we can't read. */
+  const [coverFallback, setCoverFallback] = useState(false);
+  const [backgroundLoaded, setBackgroundLoaded] = useState(false);
+  const backgroundUrl = useMemo(() => {
+    if (!beatmapsetId) return null;
+    const base = `/api/background?beatmapsetId=${encodeURIComponent(String(beatmapsetId))}`;
+    return backgroundFilename && !coverFallback
+      ? `${base}&filename=${encodeURIComponent(backgroundFilename)}`
+      : base;
+  }, [backgroundFilename, beatmapsetId, coverFallback]);
+  useEffect(() => {
+    setCoverFallback(false);
+    setBackgroundLoaded(false);
+  }, [beatmapsetId, backgroundFilename]);
+
+  const [backgroundDim, setBackgroundDim] = useState(readReplayBackgroundDim);
+  // Read when the storyboard layer is built, which can happen long after the
+  // slider was last moved.
+  const dimRef = useRef(backgroundDim);
+  useEffect(() => {
+    dimRef.current = backgroundDim;
+    writeReplayBackgroundDim(backgroundDim);
+    // Only the storyboard layer draws its own background; the two stages are
+    // transparent and take the dim from the DOM layer underneath them.
+    storyboardRendererRef.current?.setBackgroundDim(backgroundDim);
+  }, [backgroundDim]);
+
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !sides) return;
@@ -294,6 +367,7 @@ export function ReplaySideBySideView({
   useEffect(() => {
     let cancelled = false;
     setSides(null);
+    setBeatmapFileContent(null);
     setError(null);
     setReady(false);
     setIsPlaying(false);
@@ -311,11 +385,14 @@ export function ReplaySideBySideView({
       const beatmapFilePromise = getBeatmapFile({
         data: { beatmapId, beatmapsetId: scoreLeft.beatmapset?.id, checksum: scoreLeft.beatmap?.checksum },
       }).catch(() => null);
-      const [sideLeft, sideRight] = await Promise.all([
+      const [sideLeft, sideRight, beatmapFile] = await Promise.all([
         loadSide(scoreLeft, beatmapFilePromise),
         loadSide(scoreRight, beatmapFilePromise),
+        beatmapFilePromise,
       ]);
-      if (!cancelled) setSides([sideLeft, sideRight]);
+      if (cancelled) return;
+      setBeatmapFileContent(beatmapFile?.content ?? null);
+      setSides([sideLeft, sideRight]);
     })()
       .catch((e) => {
         if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load the replays.");
@@ -360,12 +437,20 @@ export function ReplaySideBySideView({
               mods: side.score.mods,
               speedMultiplier: side.rate,
               timingPoints: side.beatmap?.timingPoints,
+              // The map's background is one image under both canvases, and the
+              // lanes are solid black over it, the way the game draws them:
+              // the notes have to read at a glance on both stages at once.
               transparentBackground: true,
+              blackPlayfield: true,
               // Bare stages: the middle column is the HUD here, and two copies
               // of every overlay (keypresses included) would just crowd the
-              // playfields. Combo stays, since it belongs over the notes.
+              // playfields. Combo and the judgement pop stay, since both belong
+              // over the notes.
               hideHud: true,
               showCombo: true,
+              showJudgements: true,
+              // Pulled toward the middle so the runs sit beside the numbers.
+              playfieldAlign: SIDE_PLAYFIELD_ALIGN[index],
               showHealthBar: false,
               hidePerformanceStats: true,
               liveStats: true,
@@ -399,16 +484,7 @@ export function ReplaySideBySideView({
           // thing this view cannot ship. While the audio buffers or seeks it
           // reports stalled, which holds BOTH playfields on the same frame
           // instead of letting them run ahead of the sound.
-          renderer.setExternalClock(() => {
-            const audio = audioRef.current;
-            if (audio && audioMasterRef.current) {
-              return {
-                time: audio.currentTime * 1000,
-                stalled: audio.paused || audio.seeking || audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA,
-              };
-            }
-            return { time: readWallClockTime(), stalled: !clockRef.current.playing };
-          });
+          renderer.setExternalClock(readSharedClock);
           // playbackSpeed only feeds the renderer's clock smoothing; matching
           // each side's effective rate to the shared clock keeps the
           // prediction drift-free.
@@ -433,11 +509,133 @@ export function ReplaySideBySideView({
       setReady(false);
       setIsPlaying(false);
     };
-  }, [readWallClockTime, sides]);
+  }, [readSharedClock, sides]);
+
+  /* Storyboard. Fetched once per map (the bundle plus the .osu-embedded
+     events), kept across toggles so switching it back on costs no refetch and
+     no reparse, and drawn by one full-bleed renderer behind both stages: a
+     storyboard is authored for a screen, and a copy squeezed into each half
+     would be centred on neither playfield. */
+  const [storyboardEnabled, setStoryboardEnabled] = useState(readReplayStoryboardEnabled);
+  const [storyboardData, setStoryboardData] = useState<LoadedReplayStoryboard | null>(null);
+  const [storyboardStatus, setStoryboardStatus] = useState<"idle" | "loading" | "active" | "unavailable" | "error">("idle");
+
+  useEffect(() => {
+    writeReplayStoryboardEnabled(storyboardEnabled);
+  }, [storyboardEnabled]);
+
+  // The object URLs behind the sprites belong to the handle, so the one that
+  // is being replaced (new map) or dropped (unmount) has to free them.
+  useEffect(() => () => storyboardData?.dispose(), [storyboardData]);
+
+  useEffect(() => {
+    setStoryboardData(null);
+    setStoryboardStatus("idle");
+  }, [leftScoreId, rightScoreId]);
+
+  useEffect(() => {
+    if (!storyboardEnabled || !sides) return;
+    if (storyboardData) return;
+    if (beatmapFileContent == null && beatmapsetId == null) {
+      setStoryboardStatus("unavailable");
+      return;
+    }
+    let cancelled = false;
+    setStoryboardStatus("loading");
+    void loadReplayStoryboard({
+      beatmapsetId: beatmapsetId ?? null,
+      osuFileContent: beatmapFileContent,
+      backgroundFilename: backgroundFilename ?? null,
+      notes: sides[0].beatmap?.notes ?? null,
+      // The storyboard backdrop becomes a WebGL texture, so it needs
+      // same-origin bytes rather than a 302 to signed storage.
+      backgroundImageUrl: getInlineBackgroundUrl(backgroundUrl),
+    })
+      .then((loaded) => {
+        if (cancelled) {
+          loaded?.dispose();
+          return;
+        }
+        if (!loaded) {
+          setStoryboardStatus("unavailable");
+          return;
+        }
+        setStoryboardData(loaded);
+      })
+      .catch(() => {
+        if (!cancelled) setStoryboardStatus("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [backgroundFilename, backgroundUrl, beatmapFileContent, beatmapsetId, sides, storyboardData, storyboardEnabled]);
+
+  // The storyboard layer itself: created only once there is something to draw,
+  // torn down the moment the toggle goes off, so a run without it costs no
+  // extra WebGL context. It carries no replay of its own - empty frames over
+  // the chart's notes give it the right duration and nothing to judge.
+  useEffect(() => {
+    if (!ready || !sides || !storyboardEnabled || !storyboardData) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { ManiaReplayRenderer } = await import("./ReplayCanvas");
+        const canvas = storyboardCanvasRef.current;
+        if (cancelled || !canvas) return;
+        const renderer = new ManiaReplayRenderer(canvas, [], sides[0].replay.keyCount, sides[0].beatmap?.notes ?? [], {
+          storyboardOnly: true,
+          transparentBackground: true,
+          hideHud: true,
+          showHealthBar: false,
+          hidePerformanceStats: true,
+          backgroundDim: dimRef.current,
+          mods: sides[0].score.mods,
+          speedMultiplier: sides[0].rate,
+          timingPoints: sides[0].beatmap?.timingPoints,
+        }) as ReplayRendererLike;
+        await renderer.ready();
+        if (cancelled) {
+          renderer.destroy();
+          return;
+        }
+        renderer.setStoryboard?.(storyboardData.data);
+        renderer.setExternalClock(readSharedClock);
+        renderer.setSpeed(clockRef.current.speed);
+        renderer.seek(readClockTime());
+        if (clockRef.current.playing) renderer.play();
+        storyboardRendererRef.current = renderer;
+        const texturesReady = renderer.storyboardReady?.();
+        if (!texturesReady) {
+          setStoryboardStatus("active");
+          return;
+        }
+        void texturesReady.then(() => {
+          if (!cancelled) setStoryboardStatus("active");
+        });
+      } catch {
+        if (!cancelled) setStoryboardStatus("error");
+      }
+    })();
+    return () => {
+      cancelled = true;
+      storyboardRendererRef.current?.destroy();
+      storyboardRendererRef.current = null;
+    };
+  }, [readClockTime, readSharedClock, ready, sides, storyboardData, storyboardEnabled]);
+
+  const storyboardActive = storyboardEnabled && storyboardStatus === "active";
+
+  /* Everything the transport drives: the two stages, plus the storyboard layer
+     when one is up. They all read the same clock, so they all have to be
+     started, stopped and seeked together. */
+  const allRenderers = useCallback((): ReplayRendererLike[] => {
+    const storyboardRenderer = storyboardRendererRef.current;
+    return storyboardRenderer ? [...renderersRef.current, storyboardRenderer] : renderersRef.current;
+  }, []);
 
   const resizeRenderers = useCallback(() => {
-    for (const renderer of renderersRef.current) renderer.resize();
-  }, []);
+    for (const renderer of allRenderers()) renderer.resize();
+  }, [allRenderers]);
 
   const enterFullscreen = useCallback(() => {
     const container = containerRef.current;
@@ -541,11 +739,11 @@ export function ReplaySideBySideView({
     const clock = clockRef.current;
     clock.anchorTime = Math.min(readClockTime(), maxDurationRef.current);
     clock.playing = false;
-    for (const renderer of renderersRef.current) renderer.pause();
+    for (const renderer of allRenderers()) renderer.pause();
     // Left where it is, not rewound: resuming then costs no seek at all.
     audioRef.current?.pause();
     setIsPlaying(false);
-  }, [readClockTime]);
+  }, [allRenderers, readClockTime]);
 
   // Turning the phone upright parks the playfields behind the rotate prompt;
   // stop the transport there instead of letting it run on blind.
@@ -566,22 +764,22 @@ export function ReplaySideBySideView({
     const restart = readClockTime() >= maxDurationRef.current - 1;
     const startAt = restart ? 0 : readClockTime();
     if (restart) {
-      for (const renderer of renderersRef.current) renderer.seek(0);
+      for (const renderer of allRenderers()) renderer.seek(0);
     }
     clock.anchorTime = startAt;
     clock.anchorPerf = performance.now();
     clock.playing = true;
-    for (const renderer of renderersRef.current) renderer.play();
+    for (const renderer of allRenderers()) renderer.play();
     alignAudio(startAt, true);
     setIsPlaying(true);
-  }, [alignAudio, enterFullscreen, readClockTime, viewport.touch]);
+  }, [alignAudio, allRenderers, enterFullscreen, readClockTime, viewport.touch]);
 
   const seekBoth = useCallback((timeMs: number) => {
     const clock = clockRef.current;
     const clamped = Math.max(0, Math.min(timeMs, maxDurationRef.current));
     clock.anchorTime = clamped;
     clock.anchorPerf = performance.now();
-    for (const renderer of renderersRef.current) {
+    for (const renderer of allRenderers()) {
       renderer.seek(clamped);
       // The shorter run stops its own frame loop the moment it reaches its end
       // (ReplayCanvas.tick). Seeking back inside it has to restart that loop,
@@ -591,7 +789,7 @@ export function ReplaySideBySideView({
     // The one place that writes currentTime mid-run, because the user asked for
     // it. Both playfields hold on `stalled` until the seek settles.
     alignAudio(clamped, clock.playing);
-  }, [alignAudio]);
+  }, [alignAudio, allRenderers]);
 
   const applySpeed = useCallback((next: number) => {
     if (!sides) return;
@@ -602,6 +800,8 @@ export function ReplaySideBySideView({
     for (const [index, renderer] of renderersRef.current.entries()) {
       renderer.setSpeed((next * sides[0].rate) / sides[index].rate);
     }
+    // The storyboard layer runs on the shared clock's own rate.
+    storyboardRendererRef.current?.setSpeed(next);
     // playbackRate alone: the track keeps playing from where it is, and the
     // renderers' clock smoothing re-anchors on the new rate by itself.
     const audio = audioRef.current;
@@ -736,8 +936,6 @@ export function ReplaySideBySideView({
   }, [sides]);
 
   const compact = layout.compact;
-  const beatmapsetId = sides?.[0].score.beatmapset?.id;
-  const coverUrl = beatmapsetId ? `https://assets.ppy.sh/beatmaps/${beatmapsetId}/covers/cover@2x.jpg` : null;
 
   // One root for every state - loading, failed, playing - because swapping the
   // wrapper out mid-flight would take the canvases (and both replays) with it.
@@ -754,12 +952,27 @@ export function ReplaySideBySideView({
         ? { paddingLeft: "env(safe-area-inset-left)", paddingRight: "env(safe-area-inset-right)" }
         : undefined}
     >
-      {coverUrl && (
-        <div className="pointer-events-none absolute inset-0" aria-hidden="true">
-          <div className="absolute inset-0 scale-110 bg-cover bg-center blur-xl" style={{ backgroundImage: `url(${coverUrl})` }} />
-          <div className="absolute inset-0 bg-[#07070b]/85" />
-        </div>
-      )}
+      {/* The map, once, behind everything. A live storyboard draws its own
+          backdrop, background and dim on its canvas, so the still image and
+          the DOM dim stand down the moment it is up. */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+        {backgroundUrl && !storyboardActive && (
+          <img
+            key={backgroundUrl}
+            src={backgroundUrl}
+            alt=""
+            onLoad={() => setBackgroundLoaded(true)}
+            onError={() => setCoverFallback(true)}
+            className={`absolute inset-0 h-full w-full scale-[1.02] select-none object-cover transition-opacity duration-500 ${
+              backgroundLoaded ? "opacity-100" : "opacity-0"
+            }`}
+          />
+        )}
+        {!storyboardActive && <div className="absolute inset-0 bg-black" style={{ opacity: backgroundDim / 100 }} />}
+        {storyboardEnabled && storyboardData && (
+          <canvas ref={storyboardCanvasRef} className="absolute inset-0 block h-full w-full" />
+        )}
+      </div>
 
       {/* Both interstitials fill the same stage the comparison will, so the
           page doesn't jump when the replays land. */}
@@ -793,26 +1006,38 @@ export function ReplaySideBySideView({
       )}
 
       {sides && !error && (
-        <div className={`relative flex min-h-0 flex-1 flex-col ${compact ? "gap-1 px-1.5 py-1" : "gap-2 px-2 py-2 sm:px-3"}`}>
-          <div className={`grid shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] ${compact ? "items-center gap-1.5" : "items-start gap-2"}`}>
-            <PlayerHeader side={sides[0]} accentIndex={0} compact={compact} />
-            <MapHeader side={sides[0]} stars={stars} compact={compact} onExit={onExit} />
-            <PlayerHeader side={sides[1]} accentIndex={1} compact={compact} align="right" />
-          </div>
+        <div className={`relative flex min-h-0 flex-1 flex-col ${compact ? "px-1.5" : "px-2 sm:px-3"}`}>
+          {/* The scoreboard block carries its own scrim: names, map and scores
+              have to read over any map, and a gradient that ends inside the
+              block does that without drawing a panel around it. */}
+          <div
+            className={`shrink-0 bg-gradient-to-b from-black/85 via-black/60 to-transparent ${
+              compact ? "flex flex-col gap-1 pt-1 pb-2" : "flex flex-col gap-2 pt-2 pb-4"
+            }`}
+          >
+            <div className={`grid shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] ${compact ? "items-center gap-1.5" : "items-start gap-2"}`}>
+              <PlayerHeader side={sides[0]} accentIndex={0} compact={compact} />
+              <MapHeader side={sides[0]} stars={stars} compact={compact} onExit={onExit} />
+              <PlayerHeader side={sides[1]} accentIndex={1} compact={compact} align="right" />
+            </div>
 
-          <ScoreLeadBar sides={sides} stats={stats} compact={compact} />
+            <ScoreLeadBar sides={sides} stats={stats} compact={compact} />
+          </div>
 
           <div
             ref={stageRef}
-            className={`relative grid min-h-0 flex-1 ${
+            // The middle column is the whole gap between the two runs now that
+            // the playfields lean into it, so it stays as narrow as the numbers
+            // allow rather than growing with the screen.
+            className={`relative grid min-h-0 flex-1 gap-1 ${
               compact
-                ? "gap-1 grid-cols-[minmax(0,1fr)_minmax(148px,190px)_minmax(0,1fr)]"
-                : "gap-2 grid-cols-[minmax(0,1fr)_minmax(190px,250px)_minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_minmax(250px,300px)_minmax(0,1fr)]"
+                ? "grid-cols-[minmax(0,1fr)_minmax(160px,196px)_minmax(0,1fr)]"
+                : "grid-cols-[minmax(0,1fr)_minmax(236px,268px)_minmax(0,1fr)]"
             }`}
           >
-            <Stage canvasRef={canvasLeftRef} ready={ready} accentIndex={0} onToggle={toggle} />
+            <Stage canvasRef={canvasLeftRef} ready={ready} onToggle={toggle} />
             <StatsColumn stats={stats} compact={compact} />
-            <Stage canvasRef={canvasRightRef} ready={ready} accentIndex={1} onToggle={toggle} />
+            <Stage canvasRef={canvasRightRef} ready={ready} onToggle={toggle} />
             {buffering && (
               <div className="pointer-events-none absolute inset-x-0 top-2 flex justify-center">
                 <span className="flex items-center gap-1.5 rounded-full bg-black/70 px-2.5 py-1 text-[10px] font-semibold text-white/80">
@@ -823,7 +1048,11 @@ export function ReplaySideBySideView({
             )}
           </div>
 
-          <div className={`shrink-0 border-t border-white/[0.07] ${compact ? "px-0.5 pt-1.5" : "px-1 pt-2"}`}>
+          <div
+            className={`shrink-0 bg-gradient-to-t from-black/85 via-black/60 to-transparent ${
+              compact ? "px-0.5 pt-3 pb-1" : "px-1 pt-5 pb-2"
+            }`}
+          >
             <div className={`flex items-center ${compact ? "gap-2" : "gap-3"}`}>
               <button
                 type="button"
@@ -885,6 +1114,13 @@ export function ReplaySideBySideView({
                   </button>
                 ))}
               </div>
+              <VisualSettings
+                dim={backgroundDim}
+                onSetDim={setBackgroundDim}
+                storyboardOn={storyboardEnabled}
+                storyboardStatus={storyboardStatus}
+                onToggleStoryboard={() => setStoryboardEnabled((on) => !on)}
+              />
               <button
                 type="button"
                 onClick={fullscreen ? exitFullscreen : enterFullscreen}
@@ -962,16 +1198,103 @@ function useSideBySideViewport(): SideBySideViewport {
   return viewport;
 }
 
+/* Everything about how the screen looks, behind one button: the dim the map
+   is watched at and whether its storyboard runs. Two settings do not earn a
+   permanent strip across a transport this narrow, and both are set once and
+   left alone. */
+function VisualSettings({ dim, onSetDim, storyboardOn, storyboardStatus, onToggleStoryboard }: {
+  dim: number;
+  onSetDim: (value: number) => void;
+  storyboardOn: boolean;
+  storyboardStatus: "idle" | "loading" | "active" | "unavailable" | "error";
+  onToggleStoryboard: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      // Stopped here: Escape also leaves fullscreen, and closing the panel is
+      // the nearer thing to have meant.
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown, true);
+    };
+  }, [open]);
+
+  const storyboardLabel = storyboardStatus === "loading" && storyboardOn
+    ? "Loading..."
+    : storyboardOn && (storyboardStatus === "unavailable" || storyboardStatus === "error")
+      ? storyboardStatus === "error" ? "Failed" : "None on this map"
+      : null;
+
+  return (
+    <div ref={rootRef} className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        title="Background dim and storyboard"
+        aria-label="Background dim and storyboard"
+        aria-expanded={open}
+        className={`rounded p-1 transition-colors cursor-pointer ${open ? "text-white" : "text-osu-f1 hover:text-white"}`}
+      >
+        <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+      </button>
+      {open && (
+        <div className="absolute bottom-full right-0 z-30 mb-2 w-56 rounded-lg border border-white/10 bg-[#0b0b12]/95 p-3 shadow-xl backdrop-blur">
+          <div className="flex items-center justify-between text-[11px] font-semibold text-white/70">
+            <span>Background dim</span>
+            <span className="tabular-nums text-white">{dim}%</span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={5}
+            value={dim}
+            onChange={(event) => onSetDim(Number(event.target.value))}
+            aria-label="Background dim"
+            className="mt-2 w-full"
+          />
+          <button
+            type="button"
+            onClick={onToggleStoryboard}
+            aria-pressed={storyboardOn}
+            className={`mt-3 flex w-full items-center justify-between rounded px-2 py-1.5 text-[11px] font-semibold transition-colors cursor-pointer ${
+              storyboardOn ? "bg-osu-pink text-white" : "bg-white/10 text-osu-f1 hover:bg-white/20 hover:text-white"
+            }`}
+          >
+            <span>Storyboard</span>
+            {storyboardLabel && <span className="text-[10px] font-medium opacity-75">{storyboardLabel}</span>}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // The stats tick 10 times a second; memoised so that never touches the two
 // canvases sitting either side of it.
-const Stage = memo(function Stage({ canvasRef, ready, accentIndex, onToggle }: {
+const Stage = memo(function Stage({ canvasRef, ready, onToggle }: {
   canvasRef: RefObject<HTMLCanvasElement | null>;
   ready: boolean;
-  accentIndex: 0 | 1;
   onToggle: () => void;
 }) {
+  // No frame, no fill: the stage is the map's background with a playfield
+  // drawn on it. Which run is which is answered by the headers and the score
+  // line above, not by a box around each canvas.
   return (
-    <div className={`relative min-h-0 overflow-hidden rounded-lg bg-black/55 ring-1 ${SIDE_ACCENTS[accentIndex].ring}`}>
+    <div className="relative min-h-0 overflow-hidden">
       {/* touch-manipulation: a tap is play/pause, so it must not wait on a
           double-tap-to-zoom that would also zoom the stage out of the screen. */}
       <canvas
@@ -1122,9 +1445,13 @@ function PlayerHeader({ side, accentIndex, compact, align = "left" }: {
 
   // Compact folds the two rows into one and drops the date: on a landscape
   // phone every line here is a line the playfields don't get.
+  // justify-end on both sides packs each player toward the middle column (in a
+  // row-reverse row, main-end is the left edge), so the two names sit either
+  // side of the map title, over the playfields they belong to, instead of at
+  // opposite edges of the screen.
   if (compact) {
     return (
-      <div className={`flex min-w-0 items-center gap-1.5 ${right ? "flex-row-reverse text-right" : "text-left"}`}>
+      <div className={`flex min-w-0 items-center justify-end gap-1.5 ${right ? "flex-row-reverse text-right" : "text-left"}`}>
         <GradeImg grade={getDisplayedRank(score)} size={20} />
         <CountryFlag code={score.user?.country_code} size="sm" decorative />
         {nameNode}
@@ -1140,7 +1467,7 @@ function PlayerHeader({ side, accentIndex, compact, align = "left" }: {
   }
 
   return (
-    <div className={`flex min-w-0 items-center gap-2.5 ${right ? "flex-row-reverse text-right" : "text-left"}`}>
+    <div className={`flex min-w-0 items-center justify-end gap-2.5 ${right ? "flex-row-reverse text-right" : "text-left"}`}>
       <GradeImg grade={getDisplayedRank(score)} size={32} />
       <div className={`min-w-0 ${right ? "items-end" : "items-start"} flex flex-col gap-0.5`}>
         <div className={`flex min-w-0 items-center gap-1.5 ${right ? "flex-row-reverse" : ""}`}>
@@ -1297,8 +1624,10 @@ const TIMING_ROWS: StatRow[] = [
 ];
 
 const HEADLINE_ROWS: StatRow[] = [
-  { label: "Accuracy", format: (s) => `${s.accuracy.toFixed(2)}%`, rank: (s) => s.accuracy, better: "higher", valueClass: "text-[19px]", compactValueClass: "text-[14px]" },
-  { label: "UR", format: (s) => s.unstableRate.toFixed(2), rank: (s) => s.unstableRate, better: "lower", valueClass: "text-[16px]", compactValueClass: "text-[12px]" },
+  // "Acc", not "Accuracy": at this size the label was taking the width the two
+  // percentages needed, and both were truncating to "100.0...".
+  { label: "Acc", format: (s) => `${s.accuracy.toFixed(2)}%`, rank: (s) => s.accuracy, better: "higher", valueClass: "text-[24px]", compactValueClass: "text-[16px]" },
+  { label: "UR", format: (s) => s.unstableRate.toFixed(2), rank: (s) => s.unstableRate, better: "lower", valueClass: "text-[19px]", compactValueClass: "text-[13px]" },
 ];
 
 const PP_ROWS: StatRow[] = [
@@ -1307,8 +1636,8 @@ const PP_ROWS: StatRow[] = [
     format: (s) => (s.maxPp > 0 ? `${Math.round(s.pp)}/${Math.round(s.maxPp)}` : String(Math.round(s.pp))),
     rank: (s) => s.pp,
     better: "higher",
-    valueClass: "text-[16px]",
-    compactValueClass: "text-[12px]",
+    valueClass: "text-[18px]",
+    compactValueClass: "text-[13px]",
   },
 ];
 
@@ -1324,15 +1653,25 @@ function StatsColumn({ stats, compact }: { stats: (ReplayLiveStats | null)[]; co
   const right = stats[1] ?? null;
 
   return (
-    // min-h-full on the inner column, not justify-center on the scroller: a
-    // centred flex child that outgrows its scroll box clips its own top away
-    // with no way to scroll back up to it.
-    <div className="min-h-0 overflow-y-auto overscroll-contain">
+    // The scrim is a sibling, not a background on the scroller: masking the
+    // element that holds the numbers would fade the outermost digits with it.
+    // It reaches past the column into both stages so its edges have room to
+    // disappear instead of drawing a band down the middle of the screen.
+    <div className="relative flex min-h-0 flex-col">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-y-0 -left-8 -right-8 bg-black/45 backdrop-blur-[3px] [mask-image:linear-gradient(to_right,transparent,black_24%,black_76%,transparent)]"
+      />
+      {/* min-h-full on the inner column, not justify-center on the scroller: a
+          centred flex child that outgrows its scroll box clips its own top away
+          with no way to scroll back up to it. */}
+      <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain">
       <div className={`flex min-h-full flex-col justify-center ${compact ? "gap-1.5 px-0.5" : "gap-3.5 px-1 py-2"}`}>
         <StatGroup rows={HEADLINE_ROWS} left={left} right={right} compact={compact} />
         <StatGroup rows={JUDGEMENT_ROWS} left={left} right={right} compact={compact} divider />
         {!compact && <StatGroup rows={TIMING_ROWS} left={left} right={right} compact={compact} divider />}
         <StatGroup rows={PP_ROWS} left={left} right={right} compact={compact} divider />
+      </div>
       </div>
     </div>
   );
@@ -1368,16 +1707,16 @@ function StatLine({ row, left, right, compact }: {
     const b = row.rank(right);
     if (a !== b) leader = (row.better === "higher") === (a > b) ? 0 : 1;
   }
-  const size = compact ? row.compactValueClass ?? "text-[12px]" : row.valueClass ?? "text-[15px]";
+  const size = compact ? row.compactValueClass ?? "text-[13px]" : row.valueClass ?? "text-[18px]";
   const valueClass = (index: 0 | 1) =>
     `truncate font-bold tabular-nums ${size} ${
       leader == null ? "text-white/85" : leader === index ? "text-white" : "text-white/40"
     }`;
 
   return (
-    <div className={`grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-baseline ${compact ? "gap-x-1.5 py-0" : "gap-x-2.5 py-[3px]"}`}>
+    <div className={`grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-baseline ${compact ? "gap-x-1.5 py-0" : "gap-x-3 py-[3px]"}`}>
       <span className={`${valueClass(0)} text-right`}>{left ? row.format(left) : "-"}</span>
-      <span className={`font-semibold uppercase tracking-[0.1em] ${compact ? "text-[9px]" : "text-[10px]"} ${row.labelClass ?? "text-white/40"}`}>{row.label}</span>
+      <span className={`font-semibold uppercase tracking-[0.1em] ${compact ? "text-[9px]" : "text-[11px]"} ${row.labelClass ?? "text-white/45"}`}>{row.label}</span>
       <span className={`${valueClass(1)} text-left`}>{right ? row.format(right) : "-"}</span>
     </div>
   );

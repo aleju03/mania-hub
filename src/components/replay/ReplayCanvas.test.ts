@@ -185,10 +185,21 @@ describe("ManiaReplayRenderer initialization", () => {
 
   it("uses the saved replay skin for chart previews", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "../../routes/maps.tsx"), "utf8");
+    const panelSource = fs.readFileSync(path.resolve(__dirname, "../maps/ChartPreviewPanel.tsx"), "utf8");
 
-    expect(source).toContain("readReplaySkinSettings");
-    expect(source).toContain("skinSettings,");
-    expect(source).toContain("renderer.setSkinSettings(skinSettings)");
+    // Through the shared hook, which also rebuilds the art for an applied
+    // custom skin: localStorage alone holds the asset-free copy.
+    expect(source).toContain("const skinSettings = useReplaySkinSettings();");
+    expect(panelSource).toContain("const localSkinSettings = useReplaySkinSettings();");
+    // Both stages build from the ref, never the effect's closure: rebuilding
+    // an applied skin's art is async, so on a reroll it can land while the
+    // renderer's dynamic import is still in flight, and a stage built from the
+    // captured value would keep the asset-free copy until something else
+    // changed the settings.
+    expect(source).toContain("skinSettings: skinSettingsRef.current,");
+    expect(source).toContain("renderer.setSkinSettings(skinSettingsRef.current);");
+    expect(panelSource).toContain("skinSettings: skinSettingsRef.current,");
+    expect(panelSource).toContain("renderer.setSkinSettings(skinSettingsRef.current);");
   });
 });
 
@@ -349,6 +360,47 @@ describe("ManiaReplayRenderer skin customization", () => {
     expect(source).not.toContain("bodyAlpha * bodyVisibilityAlpha");
   });
 
+  it("cascades skin LN bodies from the tail instead of stretching one copy", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    // Stable's default NoteBodyStyle. Percy bodies (a 4000px tall strip whose
+    // rounded cap hides behind a transparent lead-in) came out with a flat
+    // tail while one copy was squashed over the whole hold.
+    expect(source).toContain("private lnBodyTiles(");
+    expect(source).toContain("const tileHeight = sourceHeight * (colWidth / sourceWidth);");
+    expect(source).toContain("if (span > tileHeight * MAX_LN_BODY_TILES) return stretched;");
+    expect(source).toContain("const MAX_LN_BODY_TILES = 8;");
+    // The old whole-span stretch is gone from the skin body path.
+    expect(source).not.toContain("(segmentTop - bodyTop) / bodyHeight,");
+    // Tail-anchored means the tile grows upward on upscroll, mirrored.
+    expect(source).toContain("top: upscroll ? bodyBottom - far : bodyTop + near,");
+    expect(source).toContain("flipY: upscroll,");
+    expect(source).toContain("const nearOffset = tile.flipY ? tile.bottom - segmentBottom : segmentTop - tile.top;");
+    expect(source).toContain("sprite.anchor.set(0.5, flipY ? 1 : 0);");
+    // Whole-pixel tile edges: partial rows at a seam composite to under full
+    // opacity, which shows as a line across the body.
+    expect(source).toContain("const near = Math.round(offset);");
+    // A tall strip covers any hold on its own (and gets cropped at import for
+    // the GPU texture limit), so repeating it would replay the art's
+    // transparent lead-in partway up and cut the hold in half.
+    expect(source).toContain("const LN_BODY_STRIP_ASPECT = 8;");
+    expect(source).toContain("if (sourceHeight / sourceWidth >= LN_BODY_STRIP_ASPECT) {");
+    expect(source).toContain("if (span - covered > 0.5) push(covered, span, Math.max(0, 1 - LN_BODY_FILLER_ROWS / sourceHeight), 1);");
+  });
+
+  it("places the stage at skin.ini ColumnStart across a centred 16:9 box", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    // Measuring from the canvas edge would drift the stage further left the
+    // wider the window gets; the value was authored against a 16:9 screen.
+    expect(source).toContain("private getPlayfieldX(");
+    expect(source).toContain("const boxWidth = OSU_MANIA_SCREEN_WIDTH * layoutScale;");
+    expect(source).toContain("const x = (w - boxWidth) / 2 + columnStart * layoutScale;");
+    // No value, an explicit align (video/card renders) or a bare stage keeps
+    // the centred playfield.
+    expect(source).toContain("if (columnStart == null || this.playfieldAlign != null || this.barePlayfield) return aligned;");
+  });
+
   it("scales circle notes and receptors with the lane width", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
@@ -382,11 +434,40 @@ describe("ManiaReplayRenderer skin customization", () => {
     expect(source).toContain('if (showColumnDividers) this.lineInto(g, playfieldX, h - 1, playfieldX + playfieldWidth, h - 1, "#ffffff", 0.1, 2);');
   });
 
+  // The pop used to live inside renderHUD, so hiding the HUD (side by side)
+  // also hid what every hit was judged as - on the one screen whose whole job
+  // is comparing two sets of judgements.
+  it("keeps the judgement pop on a stage with the HUD hidden", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain("private renderJudgementPop(layout: Layout) {");
+    expect(source).toContain("if (this.showJudgements) this.renderJudgementPop(layout);");
+    expect(source).toContain("if (this.showCombo) this.renderCombo(layout);");
+    // Still one implementation, drawn under the same conditions as before.
+    expect(source.match(/this\.renderJudgementPop\(layout\);/g)).toHaveLength(2);
+  });
+
+  // Side by side draws the storyboard once for the screen instead of once per
+  // stage; that renderer has no playfield to draw under it.
+  it("stops a storyboard-only canvas after the storyboard", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain("if (this.storyboardOnly) {");
+    const render = source.slice(source.indexOf("this.renderStoryboard(layout);"));
+    const stop = render.indexOf("if (this.storyboardOnly) {");
+    const notes = render.indexOf("this.renderNotes(layout);");
+    expect(stop).toBeGreaterThan(-1);
+    expect(stop).toBeLessThan(notes);
+  });
+
   it("biases 5k+ wide bare preview playfields left", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
     expect(source).toContain("const barePreviewBias = this.barePlayfield && this.keyCount >= 5 && w >= 380 ? 0.32 : 0.5;");
-    expect(source).toContain("const playfieldX = (w - playfieldWidth) * barePreviewBias;");
+    // An explicit alignment (side by side pulls each stage toward the middle)
+    // overrides the bias; everything else keeps it.
+    expect(source).toContain("const aligned = (w - playfieldWidth) * (this.playfieldAlign ?? bias);");
+    expect(source).toContain("const playfieldX = this.getPlayfieldX(w, playfieldWidth, layoutScale, barePreviewBias);");
   });
 
   it("draws bar LNs as one continuous body without separate caps", () => {
@@ -492,6 +573,14 @@ describe("ManiaReplayRenderer skin customization", () => {
     expect(source).toContain("const declared = this.skinProfile.columnBackgrounds[col];");
   });
 
+  it("keeps preview stages transparent under a skin that declares black lanes", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    // Chart previews float over the page's own art with no stage behind them,
+    // and most skins set Colour{n} to opaque black for their stage image.
+    expect(source).toContain('if (this.skinSettings.style === "bars" && !this.barePlayfield) {');
+  });
+
   it("renders the skinned scorebar instead of the synthetic health bar when the skin ships one", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
@@ -508,9 +597,15 @@ describe("ManiaReplayRenderer skin customization", () => {
   it("renders imported key images stable-style and mutes built-in stage cosmetics under skin art", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
-    // Key images stretch from the hit position to the screen edge (stable
-    // behavior); aspect-scaling crops tall key art into an invisible sliver.
-    expect(source).toContain("const receptorFillHeight = Math.max(1, this.skinSettings.upscroll ? judgmentY : layout.h - judgmentY);");
+    // Key images keep their native height in the game's 768-space and sit on
+    // the bottom edge of the stage (lazer's LegacyKeyArea rule, shared with
+    // the catalog preview). Stretching them to the gap under the hit line
+    // smeared tall key art into a flat line.
+    expect(source).toContain("const height = Math.max(1, native.height * (480 / 768) * layout.layoutScale);");
+    expect(source).toContain("this.drawSkinImage(receptorAsset, x + colWidth / 2, layout.h - height, colWidth, height, 0.5, 0, 1);");
+    // skin.ini KeysUnderNotes flips the draw order, nothing else.
+    expect(source).toContain("if (keysUnderNotes) this.renderReceptors(layout);");
+    expect(source).toContain("if (!keysUnderNotes) this.renderReceptors(layout);");
     // The alternating tints / boundary lines / border rect are the built-in
     // bars look; a skin with real column art must not get them stacked on top.
     expect(source).toContain('const showColumnDividers = this.skinSettings.style === "bars" && !hasImportedColumnArt;');
@@ -522,7 +617,31 @@ describe("ManiaReplayRenderer skin customization", () => {
 
     // A 4K-only skin on a 7K chart selects judgementSet "skin" with an empty
     // per-keymode asset map; judgements must not vanish.
-    expect(source).toContain("const hasSkinJudgements = Object.values(skinAssets).some(Boolean);");
-    expect(source).toContain("hasSkinJudgements ? skinAssets : getReplayJudgementSetAssets(DEFAULT_REPLAY_JUDGEMENT_SET)");
+    expect(source).toContain("&& Object.values(this.skinProfile.assets.judgements).some(Boolean);");
+    expect(source).toContain("this.usingSkinJudgements() ? skinAssets : getReplayJudgementSetAssets(DEFAULT_REPLAY_JUDGEMENT_SET)");
+  });
+
+  it("honours skin.ini JudgementLine and stops LN bodies at the head cap centre", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    // Skins that draw their own hit line (JudgementLine: 0) got a white bar
+    // through art that has none.
+    expect(source).toContain('if (this.skinSettings.style !== "bars" || !this.skinProfile.judgementLine) return;');
+    // Cap art is widest at its centre, so a body carried to the cap's far
+    // edge pokes out around a round note.
+    expect(source).toContain("const bodyHeadY = this.skinSettings.upscroll ? headEndY + headHeight / 2 : headEndY - headHeight / 2;");
+  });
+
+  it("draws imported judgements and combo digits at their native skin size", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    // The fraction-of-canvas rule is for the built-in judgement sets; skin art
+    // put through it drew about 1.6x bigger than the game does.
+    expect(source).toContain("const native = this.usingSkinJudgements() ? this.getStageAssetNativeSize(asset) : null;");
+    expect(source).toContain("const unit = (480 / 768) * layout.layoutScale * scale;");
+    // Combo digits follow the same rule, times the counter's own scale from
+    // lazer's MainHUDComponents.json.
+    expect(source).toContain("return (480 / 768) * layout.layoutScale * this.skinProfile.comboScale;");
+    expect(source).toContain("const overlap = combo.overlap * this.getComboUnitScale(layout);");
   });
 });

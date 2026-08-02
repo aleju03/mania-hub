@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest";
 const routeSource = fs.readFileSync(path.resolve(__dirname, "replay.tsx"), "utf8");
 const browseSource = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplayBrowseView.tsx"), "utf8");
 const viewSource = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplaySideBySideView.tsx"), "utf8");
+const pickerSource = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplaySideBySidePicker.tsx"), "utf8");
+const searchSource = fs.readFileSync(path.resolve(__dirname, "../lib/player-search.ts"), "utf8");
 const infoSource = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplayInfo.tsx"), "utf8");
 
 describe("side by side tab", () => {
@@ -33,6 +35,8 @@ describe("side by side tab", () => {
   it("runs both playfields bare, with the stats read off the renderers", () => {
     expect(viewSource).toContain("hideHud: true,");
     expect(viewSource).toContain("showCombo: true,");
+    // Bare is not silent: what each hit was judged as still pops over the notes.
+    expect(viewSource).toContain("showJudgements: true,");
     expect(viewSource).toContain("liveStats: true,");
     expect(viewSource).toContain("renderer.getLiveStats?.()");
     // One clock for both sides is the whole premise.
@@ -92,6 +96,58 @@ describe("side by side tab", () => {
     expect(viewSource).toContain("if (clock.playing) renderer.play();");
   });
 
+  // Two framed panels pushed to opposite edges of the screen, over a blurred
+  // cover: the runs were as far apart as the layout could put them, and the
+  // map itself was a smear.
+  it("puts both runs on the map's own background, leaning into the middle", () => {
+    // The real archive background, with the set cover as the fallback.
+    expect(viewSource).toContain("/api/background?beatmapsetId=");
+    expect(viewSource).toContain("&filename=${encodeURIComponent(backgroundFilename)}");
+    expect(viewSource).toContain("onError={() => setCoverFallback(true)}");
+    expect(viewSource).not.toContain("blur-xl");
+    // The stages carry no frame of their own.
+    expect(viewSource).not.toContain("ring-osu-pink/40");
+    expect(viewSource).toContain('<div className="relative min-h-0 overflow-hidden">');
+    // ...and each playfield sits toward the stats column rather than centred
+    // in its half.
+    expect(viewSource).toContain("const SIDE_PLAYFIELD_ALIGN = [0.88, 0.12] as const;");
+    expect(viewSource).toContain("playfieldAlign: SIDE_PLAYFIELD_ALIGN[index],");
+  });
+
+  // The dim was fixed at whatever the single viewer had been left on, and a
+  // map's storyboard never ran here at all.
+  it("watches at a dim you can set, with the map's storyboard behind both runs", () => {
+    // Both settings persist, and both are shared with the single viewer.
+    expect(viewSource).toContain("writeReplayBackgroundDim(backgroundDim);");
+    expect(viewSource).toContain("writeReplayStoryboardEnabled(storyboardEnabled);");
+    expect(viewSource).toContain('<VisualSettings');
+    expect(viewSource).toContain("onSetDim={setBackgroundDim}");
+    expect(viewSource).toContain("onToggleStoryboard={() => setStoryboardEnabled((on) => !on)}");
+    // One storyboard for the screen, not one per stage: it is authored for a
+    // screen, and a copy squeezed into each half is centred on neither run.
+    expect(viewSource).toContain("storyboardOnly: true,");
+    expect(viewSource.match(/storyboardOnly: true,/g)).toHaveLength(1);
+    expect(viewSource).toContain("renderer.setStoryboard?.(storyboardData.data);");
+    // It follows the same clock as the stages, and the transport drives it too.
+    expect(viewSource).toContain("renderer.setExternalClock(readSharedClock);");
+    expect(viewSource).toContain("for (const renderer of allRenderers()) renderer.play();");
+    expect(viewSource).toContain("for (const renderer of allRenderers()) renderer.pause();");
+    // A live storyboard paints its own backdrop, background and dim.
+    expect(viewSource).toContain("{backgroundUrl && !storyboardActive && (");
+    expect(viewSource).toContain("{!storyboardActive && <div className=\"absolute inset-0 bg-black\"");
+  });
+
+  // Over a bright map the middle column and the scores were unreadable.
+  it("scrims the chrome instead of leaving it on the raw map", () => {
+    expect(viewSource).toContain("bg-gradient-to-b from-black/85 via-black/60 to-transparent");
+    expect(viewSource).toContain("bg-gradient-to-t from-black/85 via-black/60 to-transparent");
+    // The stats scrim is a sibling of the numbers: masking the element that
+    // holds them would fade the outermost digits away with its edges.
+    expect(viewSource).toContain("[mask-image:linear-gradient(to_right,transparent,black_24%,black_76%,transparent)]");
+    // "Accuracy" no longer fits beside two percentages this size.
+    expect(viewSource).toContain('{ label: "Acc", format: (s) => `${s.accuracy.toFixed(2)}%`');
+  });
+
   it("keeps the height for the playfields on a short viewport", () => {
     // Every chrome block reads the same compact flag.
     expect(viewSource).toContain("const compact = layout.compact;");
@@ -101,6 +157,49 @@ describe("side by side tab", () => {
     // canvases, and the renderers only re-measure when told to.
     expect(viewSource).toContain("new ResizeObserver(() => window.requestAnimationFrame(resizeRenderers))");
     expect(viewSource).toContain('window.addEventListener("orientationchange", onOrientationChange)');
+  });
+
+  // Filling a side used to mean leaving to find a score URL, even though the
+  // backend already keeps every tracked player's top 200.
+  it("fills a side from a player's stored top plays, without a score link", () => {
+    expect(pickerSource).toContain("fetchLivePlayerCachedProfileSnapshotDirect(String(userId))");
+    expect(pickerSource).toContain("return snapshot?.bestScores ?? [];");
+  });
+
+  // Browsing must not spend the osu! API budget: only committing to a run does,
+  // and only because the projection can't know the rate a run was played at.
+  it("browses entirely off stored data, with getScore the only osu! call", () => {
+    const osuImport = /import \{([^}]*)\} from "#\/lib\/osu";/.exec(pickerSource);
+    expect(osuImport?.[1].trim()).toBe("getScore");
+    expect(pickerSource).toContain('searchPlayers(trimmedQuery, { fallbackToOsu: false })');
+    expect(pickerSource).toContain('fetchLiveMapsPlayersSnapshot("GLOBAL", "farmed", beatmapId');
+    // The nav and the By Player box reach any osu! account, so they keep the
+    // API as a last resort; the picker cannot use a player it holds no data on.
+    expect(searchSource).toContain("if (options.fallbackToOsu === false) return [];");
+    expect(searchSource).toContain("const stored = await fetchLiveUserSearch(trimmed, limit);");
+  });
+
+  // One box, whose meaning follows from what is in it: a second control per
+  // way in is what made this screen a wall of inputs.
+  it("drives every way in from the one search box", () => {
+    const inputs = pickerSource.match(/<input\b/g) ?? [];
+    expect(inputs).toHaveLength(1);
+    expect(pickerSource).toContain("const queryScoreId = parseReplayScoreInput(query);");
+    expect(pickerSource).toContain('"Search a player, or paste a score link..."');
+    expect(pickerSource).toContain("`Filter ${player.username}'s runs...`");
+    // Picking a row fills whichever card is active, so the cards are the target
+    // selector rather than each carrying their own form.
+    expect(pickerSource).toContain("next[activeSlot] = score;");
+    expect(pickerSource).toContain("slotIndex={activeSlot}");
+  });
+
+  it("shows who we know has played the map once a side is filled", () => {
+    expect(pickerSource).toContain("fetchMapBoardRuns(anchorBeatmapId, player.username)");
+    // A board row has no mod settings, so it is resolved before it is trusted:
+    // the pair rules compare rates, and a row can't answer that.
+    expect(pickerSource).toContain("onClick={() => onPickById(run.scoreId)}");
+    expect(pickerSource).toContain("getSideBySideCandidateIssue(score, anchor)");
+    expect(pickerSource).toContain('key={anchorBeatmapId ?? "no-map"}');
   });
 
   it("leaves no compare action on the score info card", () => {

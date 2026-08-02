@@ -2,7 +2,8 @@ import { createFileRoute, useCanGoBack, useNavigate, useRouter } from "@tanstack
 import { useState, useRef, useEffect, useCallback, useMemo, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronsRight, LoaderCircle, Maximize2, Menu, Minimize2, Pause, Play, Plus, Repeat2, Send, X } from "lucide-react";
-import { getReplayParsed, getBeatmapFile, getCommunityBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores, lookupBeatmapByChecksum, submitCommunityBeatmap } from "../lib/osu";
+import { getReplayParsed, getBeatmapFile, getCommunityBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores, lookupBeatmapByChecksum, submitCommunityBeatmap } from "../lib/osu";
+import { searchPlayers } from "../lib/player-search";
 import { calculateManiaStarRating } from "../lib/mania-star-rating";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
 import { getDisplayedAccuracy, getDisplayedRank, getEffectiveManiaKeyCount, getManiaKeyModCount, getManiaParseKeyCount, getModAcronyms, getModDisplayList, getScoreRate, modShiftsPitchWithRate, scoreHasReplay, scoreUsesLazerScoring } from "../lib/score";
@@ -23,6 +24,7 @@ import { reportCrashedReplayWatchSession, startReplayWatchBeacon, updateReplayWa
 import { withTimeout } from "../lib/promise-timeout";
 import {
   REPLAY_SKIN_SETTINGS_CHANGE_EVENT,
+  getReplaySkinProfile,
   normalizeReplaySkinSettings,
   readReplaySkinSettings,
   writeReplaySkinSettings,
@@ -34,7 +36,7 @@ import { buildKeypressHeatmap } from "../lib/replay-keypress-heatmap";
 import { parseReplayScoreInput } from "../lib/replay-score-input";
 import { getReplayScoreAvailability } from "../lib/replay-score-availability";
 import { buildReplaySeoTitle, type ReplaySeoScore } from "../lib/replay-seo";
-import { getBeatmapAudioUrl, getBeatmapHitsoundsUrl } from "../lib/audio-url";
+import { getBeatmapAudioUrl, getBeatmapHitsoundsUrl, getInlineBackgroundUrl } from "../lib/audio-url";
 import { ReplayHitsoundPlayer } from "../lib/replay-hitsounds";
 import { REPLAY_SKIN_SOUNDS_CHANGE_EVENT, readReplaySkinSounds } from "../lib/replay-skin-sounds";
 import { DEFAULT_REPLAY_SCROLL_SPEED, REPLAY_SCROLL_SPEED_CHANGE_EVENT, normalizeReplayScrollSpeed, readReplayScrollSpeed, writeReplayScrollSpeed } from "../lib/replay-scroll-speed";
@@ -79,6 +81,7 @@ import {
   readReplayOwnerSkinEnabled,
   readReplayStoryboardEnabled,
   readReplayVolume,
+  REPLAY_OWNER_SKIN_CHANGE_EVENT,
   writeReplayAudioSettings,
   writeReplayBackgroundDim,
   writeReplayBlackPlayfield,
@@ -97,12 +100,12 @@ import {
   canUseReplaySkinImport,
   fetchUserReplaySkin,
   loadAppliedCommunityReplaySkinSettings,
-  loadOwnerReplaySkin,
+  loadOwnerReplaySkinCached,
   readAppliedCommunityReplaySkin,
   writeAppliedCommunityReplaySkin,
   type AppliedCommunityReplaySkin,
   type AppliedCommunitySkinDraft,
-  type LoadedOwnerReplaySkin,
+  type CachedOwnerReplaySkin,
 } from "../lib/replay-owner-skin";
 import {
   clearRecentReplays,
@@ -114,7 +117,7 @@ import {
   type RecentReplayEntry,
 } from "../lib/replay-recent";
 import type { ManiaBeatmap } from "../lib/beatmap-parser";
-import type { ReplaySkinSettings } from "../lib/replay-skin";
+import type { ReplaySkinImageAsset, ReplaySkinSettings } from "../lib/replay-skin";
 import type { ReplayOverlayId, ReplayOverlaySettings } from "../lib/replay-overlays";
 import type { BeatmapScoreLookupStatus, OsuMod, OsuScore, OsuBeatmapset, OsuBeatmap } from "../lib/types";
 import type { ReplayRendererLike, ServerReplay } from "../lib/replay-types";
@@ -180,6 +183,21 @@ const REPLAY_VIDEO_EXPORT_RESOLUTIONS: Record<ReplayVideoExportOptions["resoluti
 const REPLAY_END_AUDIO_FADE_MS = 1500;
 const REPLAY_COVER_FALLBACK_DELAY_MS = 200;
 const REPLAY_AUDIO_RECOVERY_DELAY_MS = 1500;
+// Longest the stage waits for the player's skin before painting with the
+// viewer's own. A cached skin lands in well under this; a cold one takes about
+// as long as the download plus its image decoding.
+const OWNER_SKIN_HOLD_MAX_MS = 2000;
+// osu! screen units: skin art is authored against a 480-unit-tall screen.
+const MANIA_SKIN_SCREEN_HEIGHT = 480;
+
+// A skin's pause button at the size it has in game, expressed as a share of
+// the stage's height so it tracks the window without measuring it.
+function skinPauseButtonHeightPercent(asset: ReplaySkinImageAsset): number {
+  const scale = asset.scale && asset.scale > 0 ? asset.scale : 1;
+  const height = asset.height && asset.height > 0 ? asset.height / scale : 0;
+  if (!(height > 0)) return 12;
+  return Math.max(4, Math.min(30, (height / MANIA_SKIN_SCREEN_HEIGHT) * 100));
+}
 
 function replayAudioNeedsDefaultSamples(settings: ReplayAudioSettings): boolean {
   return settings.hitsoundsEnabled && (
@@ -308,27 +326,13 @@ function loadExportBackground(src: string | null): Promise<HTMLImageElement | nu
 async function loadFirstExportBackground(sources: Array<string | null | undefined>): Promise<HTMLImageElement | null> {
   const seen = new Set<string>();
   for (const source of sources) {
-    const url = getExportBackgroundUrl(source ?? null);
+    const url = getInlineBackgroundUrl(source ?? null);
     if (!url || seen.has(url)) continue;
     seen.add(url);
     const image = await loadExportBackground(url);
     if (image) return image;
   }
   return null;
-}
-
-function getExportBackgroundUrl(src: string | null): string | null {
-  if (!src) return null;
-  try {
-    const url = new URL(src, window.location.origin);
-    if (url.origin === window.location.origin && url.pathname === "/api/background") {
-      url.searchParams.set("inline", "1");
-      return `${url.pathname}${url.search}`;
-    }
-  } catch {
-    // Fall through and try the original value.
-  }
-  return src;
 }
 
 function sanitizeReplayVideoFilename(value: string): string {
@@ -1052,11 +1056,8 @@ function ReplayPage() {
 
   const handlePlayerSearch = async (q: string) => {
     if (parseReplayScoreInput(q)) return [];
-
-    const res = await searchUsers({ data: { query: q } });
-    return (res.user?.data ?? []).slice(0, 6).map((u: { id: number; username: string; avatar_url: string; country_code: string }) => ({
-      id: u.id, username: u.username, avatar_url: u.avatar_url, country_code: u.country_code,
-    }));
+    // Stored players first, so typing a name costs no osu! API call.
+    return searchPlayers(q);
   };
 
   const loadPlayerScores = useCallback(async (
@@ -1633,10 +1634,8 @@ function ReplayPage() {
           return;
         }
 
-        const res = await searchUsers({ data: { query: playerParam! } });
-        const match = (res.user?.data ?? []).find(
-          (u: { username: string }) => u.username.toLowerCase() === normalizedPlayerParam,
-        );
+        const found = await searchPlayers(playerParam!);
+        const match = found.find((user) => user.username.toLowerCase() === normalizedPlayerParam);
         if (cancelled) return;
 
         if (match) {
@@ -2063,7 +2062,7 @@ function ReplayViewer({
   // The replay player's own published skin, pulled from the community
   // catalog, and whether it is the one on the stage right now. It only ever
   // lives in memory: the viewer's saved skin settings are never overwritten.
-  const [ownerSkin, setOwnerSkin] = useState<LoadedOwnerReplaySkin | null>(null);
+  const [ownerSkin, setOwnerSkin] = useState<CachedOwnerReplaySkin | null>(null);
   const [ownerSkinApplied, setOwnerSkinApplied] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
   const [rendererError, setRendererError] = useState<string | null>(null);
@@ -2106,7 +2105,7 @@ function ReplayViewer({
   const skinSettingsRef = useRef<ReplaySkinSettings>(skinSettings);
   const overlaySettingsRef = useRef<ReplayOverlaySettings>(overlaySettings);
   // Mirrors for the hitsound loader, which lives in a mount-once effect.
-  const ownerSkinRef = useRef<LoadedOwnerReplaySkin | null>(null);
+  const ownerSkinRef = useRef<CachedOwnerReplaySkin | null>(null);
   const ownerSkinAppliedRef = useRef(false);
   const shouldResumeAudioRef = useRef(false);
   const audioBlobUrlRef = useRef<string | null>(null);
@@ -2273,23 +2272,57 @@ function ReplayViewer({
   // skins page (and the viewer has not opted out in settings), fetch the
   // pointer, pull the .osk from the catalog and rebuild their settings in
   // memory. Failures of any kind just leave the viewer's own skin on.
+  // The settings drawer sits on top of the running replay, so the preference
+  // has to be state here rather than a read at fetch time: flipping it mid
+  // replay used to need a refresh to show.
+  const [ownerSkinPreferred, setOwnerSkinPreferred] = useState(true);
+  useEffect(() => {
+    const sync = () => setOwnerSkinPreferred(readReplayOwnerSkinEnabled());
+    sync();
+    window.addEventListener(REPLAY_OWNER_SKIN_CHANGE_EVENT, sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener(REPLAY_OWNER_SKIN_CHANGE_EVENT, sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
+
+  // Holds the stage's first paint while that skin is on its way, so the viewer
+  // never sees their own skin for a beat before it swaps. Only when the
+  // player's id is known at mount (an upload has none, and a skin arriving
+  // late must not blank a stage that is already up), and only ever released:
+  // the cap below means a slow or missing skin costs a moment, not the replay.
+  const [ownerSkinHold, setOwnerSkinHold] = useState(() => canUseSkinImport && ownerUserId != null);
+  const releaseOwnerSkinHold = useCallback(() => setOwnerSkinHold(false), []);
+  useEffect(() => {
+    if (!ownerSkinHold) return;
+    const timeout = window.setTimeout(releaseOwnerSkinHold, OWNER_SKIN_HOLD_MAX_MS);
+    return () => window.clearTimeout(timeout);
+  }, [ownerSkinHold, releaseOwnerSkinHold]);
+
   useEffect(() => {
     setOwnerSkin(null);
     setOwnerSkinApplied(false);
-    if (!canUseSkinImport || !ownerUserId || !readReplayOwnerSkinEnabled()) return;
+    if (!canUseSkinImport || !ownerUserId || !ownerSkinPreferred) {
+      releaseOwnerSkinHold();
+      return;
+    }
     let cancelled = false;
     void fetchUserReplaySkin(ownerUserId)
-      .then((record) => (cancelled || !record ? null : loadOwnerReplaySkin(record)))
+      .then((record) => (cancelled || !record ? null : loadOwnerReplaySkinCached(record)))
       .then((loaded) => {
         if (cancelled || !loaded) return;
         setOwnerSkin(loaded);
         setOwnerSkinApplied(true);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) releaseOwnerSkinHold();
+      });
     return () => {
       cancelled = true;
     };
-  }, [ownerUserId, canUseSkinImport]);
+  }, [ownerUserId, canUseSkinImport, ownerSkinPreferred, releaseOwnerSkinHold]);
 
   // What the stage actually renders: the player's skin while applied, the
   // viewer's own settings otherwise. The settings modal always edits the
@@ -3211,9 +3244,10 @@ function ReplayViewer({
       beatmapsetId: effectiveBeatmapsetId ?? null,
       osuFileContent: beatmapFileContent,
       backgroundFilename: beatmap?.backgroundFilename ?? null,
+      notes: beatmap?.notes ?? null,
       // Inline variant: the storyboard background becomes a WebGL texture, so
       // it needs same-origin bytes rather than a 302 to signed storage.
-      backgroundImageUrl: getExportBackgroundUrl(beatmapBackgroundUrl),
+      backgroundImageUrl: getInlineBackgroundUrl(beatmapBackgroundUrl),
     })
       .then((loaded) => {
         if (storyboardGenerationRef.current !== generation) {
@@ -3859,6 +3893,22 @@ function ReplayViewer({
     if (!rendererRef.current?.isPlaying) togglePlayRef.current?.();
   };
 
+  // A skin that ships pause-continue/retry/back gets its own pause screen,
+  // the same three actions wearing the skin's art. Anything short of the full
+  // set keeps the built-in menu rather than a half-drawn one.
+  const skinPauseMenu = (() => {
+    const stage = getReplaySkinProfile(activeSkinSettings, replay.keyCount).assets.stage;
+    if (!stage.pauseContinue || !stage.pauseRetry || !stage.pauseBack) return null;
+    return {
+      overlay: stage.pauseOverlay,
+      buttons: [
+        { key: "Resume this map", asset: stage.pauseContinue, onClick: resumeFromPauseMenu },
+        { key: "Try this again", asset: stage.pauseRetry, onClick: restartFromPauseMenu },
+        { key: "Back to menu", asset: stage.pauseBack, onClick: onClear },
+      ],
+    };
+  })();
+
   const exportReplayVideo = useCallback(async (options: ReplayVideoExportRequest): Promise<ReplayVideoJobPayload | null> => {
     const sourceCanvas = canvasRef.current;
     const sourceRenderer = rendererRef.current;
@@ -4381,7 +4431,10 @@ function ReplayViewer({
           onPointerDown={handleReplayCanvasPointerDown}
           onPointerUp={handleCanvasTogglePointerUp}
           onContextMenu={handleCanvasContextMenu}
-          className={`relative z-10 w-full ${
+          // Hidden, not unmounted, while the player's skin is on its way: the
+          // renderer needs the node, it just must not paint the viewer's skin
+          // for a beat first.
+          className={`relative z-10 w-full ${ownerSkinHold ? "invisible" : ""} ${
             isCanvasFullscreen
               ? "h-[100dvh] min-h-0 max-h-none"
               : // svh (not dvh) on phones: the small-viewport height ignores the
@@ -4533,7 +4586,9 @@ function ReplayViewer({
         )}
         {/* osu!-style pause screen for playfield-click pauses: the dimmed
             backdrop stays click-through so clicking the lanes still resumes;
-            only the three buttons capture the pointer. */}
+            only the three buttons capture the pointer. It sits above the
+            canvas but below the chrome (z-20) so the dim covers the playfield
+            and leaves the Visual Settings drawer at full brightness. */}
         <AnimatePresence>
           {pauseMenuVisible && (
             <motion.div
@@ -4542,29 +4597,61 @@ function ReplayViewer({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.16 }}
-              className="pointer-events-none absolute inset-0 z-[26] hidden items-center justify-center bg-black/60 sm:flex"
+              className={`pointer-events-none absolute inset-0 z-[15] hidden items-center justify-center sm:flex ${
+                skinPauseMenu ? "" : "bg-black/60"
+              }`}
             >
-              <div className="flex flex-col gap-9">
-                {[
-                  { label: "Resume this map", Icon: Send, onClick: resumeFromPauseMenu },
-                  { label: "Try this again", Icon: Repeat2, onClick: restartFromPauseMenu },
-                  { label: "Back to menu", Icon: Menu, onClick: onClear },
-                ].map(({ label, Icon, onClick }) => (
-                  <button
-                    key={label}
-                    type="button"
-                    onClick={onClick}
-                    className="pointer-events-auto group flex cursor-pointer items-center gap-5 text-left"
-                  >
-                    <span className="flex h-14 w-14 -rotate-3 items-center justify-center rounded-xl bg-white text-[#222] shadow-[0_5px_14px_rgba(0,0,0,0.55)] transition-transform group-hover:rotate-0 group-hover:scale-105 group-active:scale-95">
-                      <Icon className="h-6 w-6" />
-                    </span>
-                    <span className="text-[16px] font-bold uppercase tracking-[0.14em] text-white/90 [text-shadow:0_2px_6px_rgba(0,0,0,0.9)] transition-colors group-hover:text-white">
-                      {label}
-                    </span>
-                  </button>
-                ))}
-              </div>
+              {skinPauseMenu ? (
+                <>
+                  {/* Skins mostly ship the buttons and leave the backdrop to
+                      the default skin, so the dim stands in for a missing
+                      pause-overlay. */}
+                  {skinPauseMenu.overlay ? (
+                    <img src={skinPauseMenu.overlay.src} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />
+                  ) : (
+                    <div className="absolute inset-0 bg-black/60" />
+                  )}
+                  <div className="relative flex flex-col items-center">
+                    {skinPauseMenu.buttons.map(({ key, asset, onClick }) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={onClick}
+                        aria-label={key}
+                        className="pointer-events-auto cursor-pointer transition-transform hover:scale-[1.03] active:scale-95"
+                        // Native pixels in the game's 480-unit screen, as a
+                        // share of the stage's height: the art lands at the
+                        // size it has in game whatever the window is doing.
+                        style={{ height: `${skinPauseButtonHeightPercent(asset)}%` }}
+                      >
+                        <img src={asset.src} alt="" draggable={false} className="h-full w-auto" />
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col gap-9">
+                  {[
+                    { label: "Resume this map", Icon: Send, onClick: resumeFromPauseMenu },
+                    { label: "Try this again", Icon: Repeat2, onClick: restartFromPauseMenu },
+                    { label: "Back to menu", Icon: Menu, onClick: onClear },
+                  ].map(({ label, Icon, onClick }) => (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={onClick}
+                      className="pointer-events-auto group flex cursor-pointer items-center gap-5 text-left"
+                    >
+                      <span className="flex h-14 w-14 -rotate-3 items-center justify-center rounded-xl bg-white text-[#222] shadow-[0_5px_14px_rgba(0,0,0,0.55)] transition-transform group-hover:rotate-0 group-hover:scale-105 group-active:scale-95">
+                        <Icon className="h-6 w-6" />
+                      </span>
+                      <span className="text-[16px] font-bold uppercase tracking-[0.14em] text-white/90 [text-shadow:0_2px_6px_rgba(0,0,0,0.9)] transition-colors group-hover:text-white">
+                        {label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

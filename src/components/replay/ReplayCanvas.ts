@@ -11,7 +11,7 @@ import type { ManiaStarRatingTimelinePoint } from "../../lib/mania-star-rating";
 import { DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
 import type { ReplayOverlayId, ReplayOverlaySettings } from "../../lib/replay-overlays";
 import { DEFAULT_REPLAY_SCROLL_SPEED } from "../../lib/replay-scroll-speed";
-import { DEFAULT_REPLAY_COMBO_FONT_SET, DEFAULT_REPLAY_JUDGEMENT_SET, DEFAULT_REPLAY_SKIN_SETTINGS, OSU_MANIA_DEFAULT_LIGHT_POSITION, REPLAY_SKIN_DEFAULT_HIT_POSITION, getReplayComboFontStyle, getReplayJudgementScale, getReplayJudgementSetAssets, getReplaySkinProfile, normalizeReplaySkinSettings } from "../../lib/replay-skin";
+import { DEFAULT_REPLAY_COMBO_FONT_SET, DEFAULT_REPLAY_JUDGEMENT_SET, DEFAULT_REPLAY_SKIN_SETTINGS, OSU_MANIA_DEFAULT_LIGHT_POSITION, OSU_MANIA_SCREEN_WIDTH, REPLAY_SKIN_DEFAULT_HIT_POSITION, getReplayComboFontStyle, getReplayJudgementScale, getReplayJudgementSetAssets, getReplaySkinProfile, normalizeReplaySkinSettings } from "../../lib/replay-skin";
 import type { ReplayComboFontStyle, ReplaySkinColumnAssets, ReplaySkinImageAsset, ReplaySkinKeymodeProfile, ReplaySkinSettings } from "../../lib/replay-skin";
 import type { ReplayLiveStats } from "../../lib/replay-types";
 import type { ReplayHitCounts } from "../../lib/replay-validation";
@@ -149,6 +149,17 @@ const MANIA_SKIN_STAGE_HEIGHT = 480;
 const MANIA_DEFAULT_HIT_POSITION = (480 - 402) * 1.6;
 const MANIA_HIT_TARGET_POSITION = REPLAY_SKIN_DEFAULT_HIT_POSITION;
 const MANIA_BAR_NOTE_HEIGHT_RATIO = 0.22;
+// How many times a cascading LN body may repeat before it is stretched
+// instead. Art short enough to need more tiles than this is the uniform kind,
+// where a stretch is the same picture for one draw call rather than dozens.
+const MAX_LN_BODY_TILES = 8;
+// Body art at least this much taller than it is wide is a cover-the-whole-hold
+// strip (the importer's own cutoff for the ones it crops), so it runs once and
+// then holds its end rather than repeating.
+const LN_BODY_STRIP_ASPECT = 8;
+// How much of a strip's far end is stretched over a hold that outruns it. Far
+// from the cap these bodies are uniform, so a few rows carry any distance.
+const LN_BODY_FILLER_ROWS = 8;
 // What the inline mobile canvas used to be (~390-430px tall). Inline portrait
 // layouts anchor skin scale and scroll speed to this instead of the real
 // height, so the taller redesigned stage adds lookahead rather than speed.
@@ -313,8 +324,21 @@ interface RendererOptions {
   // hidden, so chrome outside the canvas can draw the same numbers.
   liveStats?: boolean;
   showCombo?: boolean;
+  // Keeps the judgement pop over the notes with the rest of the HUD hidden.
+  // It reads as part of the play, not as chrome, so a bare stage still shows
+  // what every hit was judged as.
+  showJudgements?: boolean;
   initialCombo?: number;
   barePlayfield?: boolean;
+  // Draws the storyboard (with its backdrop, background and dim) and nothing
+  // else: no notes, no stage, no HUD. Side by side runs one of these full
+  // bleed behind both playfields, so the storyboard is drawn once for the
+  // screen instead of once per stage, centred on neither playfield.
+  storyboardOnly?: boolean;
+  // Where the playfield sits across the canvas: 0 flush left, 1 flush right,
+  // 0.5 centred. Side by side pulls each stage toward the middle so the two
+  // runs read as a pair instead of sitting a screen apart.
+  playfieldAlign?: number;
   scrollVelocities?: ManiaScrollVelocity[];
   expectedCounts?: ReplayHitCounts;
   // Score the play actually earned; pins the simulated HUD score counter's
@@ -340,6 +364,17 @@ interface Layout {
   noteHeight: number;
   receptorHeight: number;
   pixelsPerMs: number;
+}
+
+// One repeat of a cascading LN body: a destination band plus the slice of the
+// source it shows. flipY marks the upscroll case, where the art runs from the
+// band's bottom edge upward.
+interface LnBodyTile {
+  top: number;
+  bottom: number;
+  fracTop: number;
+  fracBottom: number;
+  flipY: boolean;
 }
 
 type Hand = "left" | "right" | "center";
@@ -497,10 +532,13 @@ export class ManiaReplayRenderer {
   private hidePerformanceStats = false;
   private liveStats = false;
   private showCombo = false;
+  private showJudgements = false;
+  private playfieldAlign: number | null = null;
   private initialCombo = 0;
   private hiddenCoverageReference = getManiaHiddenCoverageReference(0);
   private hiddenCoverageUpdatedAt = 0;
   private barePlayfield = false;
+  private storyboardOnly = false;
   private showHealthBar = true;
   private skinSettings: ReplaySkinSettings = DEFAULT_REPLAY_SKIN_SETTINGS;
   private overlaySettings: ReplayOverlaySettings = DEFAULT_REPLAY_OVERLAY_SETTINGS;
@@ -733,11 +771,16 @@ export class ManiaReplayRenderer {
     this.hidePerformanceStats = options?.hidePerformanceStats ?? false;
     this.liveStats = options?.liveStats ?? false;
     this.showCombo = options?.showCombo ?? false;
+    this.showJudgements = options?.showJudgements ?? false;
+    this.playfieldAlign = options?.playfieldAlign != null
+      ? Math.max(0, Math.min(1, options.playfieldAlign))
+      : null;
     this.initialCombo = Math.max(0, Math.floor(options?.initialCombo ?? 0));
     this.combo = this.initialCombo;
     this.hiddenCoverageReference = getManiaHiddenCoverageReference(this.combo);
     this.maxComboSoFar = this.combo;
     this.barePlayfield = options?.barePlayfield ?? false;
+    this.storyboardOnly = options?.storyboardOnly ?? false;
     this.showHealthBar = options?.showHealthBar ?? true;
     this.skinSettings = normalizeReplaySkinSettings(options?.skinSettings);
     this.overlaySettings = normalizeReplayOverlaySettings(options?.overlaySettings);
@@ -1530,7 +1573,7 @@ export class ManiaReplayRenderer {
     const averageColumnWidth = configuredColumnWidths.reduce((sum, width) => sum + width, 0) / Math.max(1, configuredColumnWidths.length);
     const laneWidth = averageColumnWidth * layoutScale;
     const barePreviewBias = this.barePlayfield && this.keyCount >= 5 && w >= 380 ? 0.32 : 0.5;
-    const playfieldX = (w - playfieldWidth) * barePreviewBias;
+    const playfieldX = this.getPlayfieldX(w, playfieldWidth, layoutScale, barePreviewBias);
     const hitPosition = this.skinSettings.hitPosition ?? MANIA_HIT_TARGET_POSITION;
     const judgmentY = h * (this.skinSettings.upscroll ? hitPosition : MANIA_REFERENCE_HEIGHT - hitPosition) / MANIA_REFERENCE_HEIGHT;
     const noteHeight = Math.max(6, this.skinProfile.noteHeightScale * layoutScale * MANIA_BAR_NOTE_HEIGHT_RATIO);
@@ -1551,6 +1594,22 @@ export class ManiaReplayRenderer {
       return column;
     });
     return layout;
+  }
+
+  // skin.ini ColumnStart puts the stage's left edge that many skin units from
+  // the left of the screen, and the Layout tab exposes it. The canvas is
+  // usually wider than the 16:9 the value was authored against, so measure
+  // from a centred 16:9 box in the same units the columns are drawn in: the
+  // stage lands where it does in game instead of drifting further left the
+  // wider the window gets. No value keeps the viewer's centred stage, as do
+  // the bare preview and card renders.
+  private getPlayfieldX(w: number, playfieldWidth: number, layoutScale: number, bias: number): number {
+    const aligned = (w - playfieldWidth) * (this.playfieldAlign ?? bias);
+    const columnStart = this.skinProfile.columnStart;
+    if (columnStart == null || this.playfieldAlign != null || this.barePlayfield) return aligned;
+    const boxWidth = OSU_MANIA_SCREEN_WIDTH * layoutScale;
+    const x = (w - boxWidth) / 2 + columnStart * layoutScale;
+    return Math.max(0, Math.min(Math.max(0, w - playfieldWidth), x));
   }
 
   private getColumnLayout(col: number, layout: Layout): { x: number; width: number } {
@@ -2696,16 +2755,29 @@ export class ManiaReplayRenderer {
     this.storyboardOccludesPlayfield = false;
     this.renderBackground(layout);
     this.renderStoryboard(layout);
+    // A storyboard-only canvas is the whole render: everything below draws a
+    // playfield this instance does not have.
+    if (this.storyboardOnly) {
+      this.finishSkinSpriteFrame();
+      this.finishTextFrame();
+      this.app.render();
+      return;
+    }
     if (!this.storyboardOccludesPlayfield) {
       this.renderSegmentOverlays(layout);
       this.renderStageFurnitureUnder(layout);
+      // skin.ini KeysUnderNotes: the key area belongs below the notes, which
+      // is how arrow and deck skins keep their receptors from covering the
+      // hit. Sprite order is draw order, so this is the whole implementation.
+      const keysUnderNotes = this.skinSettings.style === "bars" && this.skinProfile.keysUnderNotes;
+      if (keysUnderNotes) this.renderReceptors(layout);
       if (this.showInputOverlay && this.inputOverlayOnly) {
         this.renderInputOverlayNotes(layout);
       } else {
         this.renderNotes(layout);
       }
       this.renderJudgmentLine(layout);
-      this.renderReceptors(layout);
+      if (!keysUnderNotes) this.renderReceptors(layout);
     }
     this.renderStageFurnitureOver(layout);
     if (this.hasFlashlightMod) this.renderFlashlightOverlay(layout);
@@ -2717,8 +2789,12 @@ export class ManiaReplayRenderer {
     this.activeSkinSprites = this.hudSkinSprites;
     if (this.showHealthBar) this.renderHealthBar(layout);
     this.overlayHitboxes = [];
-    if (!this.hideHud) this.renderHUD(layout);
-    else if (this.showCombo) this.renderCombo(layout);
+    if (!this.hideHud) {
+      this.renderHUD(layout);
+    } else {
+      if (this.showJudgements) this.renderJudgementPop(layout);
+      if (this.showCombo) this.renderCombo(layout);
+    }
     this.renderOverlaySelectionAffordances(layout);
     this.finishSkinSpriteFrame();
     this.finishTextFrame();
@@ -2785,8 +2861,10 @@ export class ManiaReplayRenderer {
 
     // skin.ini Colour{n}: the column background, alpha included - it decides
     // how much of the map art shows through each lane, so it paints over the
-    // default playfield fill rather than replacing the note palette.
-    if (this.skinSettings.style === "bars") {
+    // default playfield fill rather than replacing the note palette. Preview
+    // stages skip it: they sit on the page's own art with no stage behind
+    // them, and most skins declare an opaque black lane there.
+    if (this.skinSettings.style === "bars" && !this.barePlayfield) {
       for (let col = 0; col < this.keyCount; col++) {
         const declared = this.skinProfile.columnBackgrounds[col];
         if (!declared) continue;
@@ -3651,7 +3729,10 @@ export class ManiaReplayRenderer {
   }
 
   private renderJudgmentLine(layout: Layout) {
-    if (this.skinSettings.style !== "bars") return;
+    // skin.ini JudgementLine: the white bar across the hit position. Skins
+    // that draw their own hit line (or want none) turn it off, and stable
+    // honours that; drawing it anyway put a line through art that has none.
+    if (this.skinSettings.style !== "bars" || !this.skinProfile.judgementLine) return;
     const { playfieldX, playfieldWidth, judgmentY } = layout;
     this.line(playfieldX, judgmentY, playfieldX + playfieldWidth, judgmentY, "#ffffff", 0.82, 2);
   }
@@ -3678,13 +3759,21 @@ export class ManiaReplayRenderer {
         : assets?.receptor;
       if (receptorAsset) {
         if (pressed) this.receptorFlashTimestamps[col] = this.currentTime;
-        // Stable stretches key images to fill the gap between the hit
-        // position and the screen edge. Keeping the art's aspect instead
-        // crops tall key images (75x200 is common) down to an invisible
-        // sliver when HitPosition sits near the edge.
-        const receptorFillHeight = Math.max(1, this.skinSettings.upscroll ? judgmentY : layout.h - judgmentY);
-        const receptorY = this.skinSettings.upscroll ? 0 : judgmentY;
-        this.drawSkinImage(receptorAsset, x + colWidth / 2, receptorY, colWidth, receptorFillHeight, 0.5, 0, 1);
+        // The key area is stretched to the lane's width but keeps its NATIVE
+        // height in the game's 768-space, sitting on the bottom edge of the
+        // stage (hanging from the top on upscroll, which flips the stage).
+        // This is lazer's LegacyKeyArea rule, shared with the stage furniture
+        // and the catalog preview. Stretching it to the gap under the hit
+        // line instead squashed tall key art into a flat smear.
+        const native = this.getStageAssetNativeSize(receptorAsset);
+        if (native) {
+          const height = Math.max(1, native.height * (480 / 768) * layout.layoutScale);
+          if (this.skinSettings.upscroll) {
+            this.drawSkinImage(receptorAsset, x + colWidth / 2, 0, colWidth, height, 0.5, 0, 1, 0xffffff, true);
+          } else {
+            this.drawSkinImage(receptorAsset, x + colWidth / 2, layout.h - height, colWidth, height, 0.5, 0, 1);
+          }
+        }
         continue;
       }
       const color = this.colors[col];
@@ -3793,23 +3882,13 @@ export class ManiaReplayRenderer {
     width: number,
     height: number,
   ): ReplayOverlayFrame | null {
-    const frame = this.getRawOverlayFrame(layout, id, width, height);
-    if (!frame) return null;
-    this.overlayHitboxes.push({ id, ...frame });
-    return frame;
-  }
-
-  private getRawOverlayFrame(
-    layout: Layout,
-    id: ReplayOverlayId,
-    width: number,
-    height: number,
-  ): ReplayOverlayFrame | null {
     const placement = this.overlaySettings[id];
     if (!placement.enabled) return null;
     const x = Math.max(0, Math.min(Math.max(0, layout.w - width), placement.x * layout.w));
     const y = Math.max(0, Math.min(Math.max(0, layout.h - height), placement.y * layout.h));
-    return { x, y, width, height };
+    const frame = { x, y, width, height };
+    this.overlayHitboxes.push({ id, ...frame });
+    return frame;
   }
 
   private getKeypressOverlayMetrics(scale: number): KeypressOverlayMetrics {
@@ -3818,69 +3897,6 @@ export class ManiaReplayRenderer {
     const keyBoxHeight = Math.round(38 * scale);
     const width = this.keyCount * keyBoxWidth + Math.max(0, this.keyCount - 1) * keyGap;
     return { scale, keyGap, keyBoxWidth, keyBoxHeight, width, height: keyBoxHeight };
-  }
-
-  private keypressOverlayOverlapsPlayfield(layout: Layout, frame: ReplayOverlayFrame, margin: number): boolean {
-    const playfieldLeft = layout.playfieldX;
-    const playfieldRight = layout.playfieldX + layout.playfieldWidth;
-    return frame.x < playfieldRight + margin && frame.x + frame.width > playfieldLeft - margin;
-  }
-
-  private getLargestKeypressScaleForWidth(preferredScale: number, minScale: number, maxWidth: number): number {
-    if (maxWidth <= 0 || this.getKeypressOverlayMetrics(minScale).width > maxWidth) return minScale;
-
-    let low = minScale;
-    let high = preferredScale;
-    for (let i = 0; i < 12; i++) {
-      const mid = (low + high) / 2;
-      if (this.getKeypressOverlayMetrics(mid).width <= maxWidth) low = mid;
-      else high = mid;
-    }
-    return low;
-  }
-
-  private getSmartKeypressOverlayFrame(layout: Layout, preferredScale: number): { frame: ReplayOverlayFrame; metrics: KeypressOverlayMetrics } | null {
-    let metrics = this.getKeypressOverlayMetrics(preferredScale);
-    const rawFrame = this.getRawOverlayFrame(layout, "keypresses", metrics.width, metrics.height);
-    if (!rawFrame) return null;
-
-    const margin = Math.max(8, Math.min(22, layout.w * 0.012));
-    if (!this.keypressOverlayOverlapsPlayfield(layout, rawFrame, margin)) {
-      return { frame: rawFrame, metrics };
-    }
-
-    const playfieldLeft = layout.playfieldX;
-    const playfieldRight = layout.playfieldX + layout.playfieldWidth;
-    const playfieldCenter = playfieldLeft + layout.playfieldWidth / 2;
-    const rawCenter = rawFrame.x + rawFrame.width / 2;
-    const leftSpace = Math.max(0, playfieldLeft - margin);
-    const rightSpace = Math.max(0, layout.w - playfieldRight - margin);
-    const minScale = Math.min(preferredScale, this.getHudScale(layout) * REPLAY_OVERLAY_MIN_SCALE);
-    const minWidth = this.getKeypressOverlayMetrics(minScale).width;
-
-    let side: "left" | "right" = rawCenter <= playfieldCenter ? "left" : "right";
-    const preferredSpace = side === "left" ? leftSpace : rightSpace;
-    const fallbackSpace = side === "left" ? rightSpace : leftSpace;
-    if (preferredSpace < minWidth && fallbackSpace > preferredSpace) {
-      side = side === "left" ? "right" : "left";
-    }
-
-    const availableWidth = side === "left" ? leftSpace : rightSpace;
-    const smartScale = metrics.width > availableWidth
-      ? this.getLargestKeypressScaleForWidth(preferredScale, minScale, availableWidth)
-      : preferredScale;
-    metrics = this.getKeypressOverlayMetrics(smartScale);
-
-    const targetX = side === "left"
-      ? playfieldLeft - margin - metrics.width
-      : playfieldRight + margin;
-    const frame = {
-      x: Math.max(0, Math.min(Math.max(0, layout.w - metrics.width), targetX)),
-      y: Math.max(0, Math.min(Math.max(0, layout.h - metrics.height), rawFrame.y)),
-      width: metrics.width,
-      height: metrics.height,
-    };
-    return { frame, metrics };
   }
 
   // Accuracy travels with the progress pie as one unit like the ingame
@@ -3942,11 +3958,10 @@ export class ManiaReplayRenderer {
   }
 
   private renderKeypressOverlay(layout: Layout) {
-    const result = this.getSmartKeypressOverlayFrame(layout, this.getOverlayScale(layout, "keypresses"));
-    if (!result) return;
-    const { frame, metrics } = result;
+    const metrics = this.getKeypressOverlayMetrics(this.getOverlayScale(layout, "keypresses"));
     const { scale, keyGap, keyBoxWidth, keyBoxHeight } = metrics;
-    this.overlayHitboxes.push({ id: "keypresses", ...frame });
+    const frame = this.getOverlayFrame(layout, "keypresses", metrics.width, metrics.height);
+    if (!frame) return;
 
     const currentState = this.currentKeyState;
     this.renderKeyInputHistory(layout, frame.x, frame.y, keyBoxWidth, keyBoxHeight, keyGap);
@@ -4089,52 +4104,53 @@ export class ManiaReplayRenderer {
     return this.fullscreenLayout || layout.w >= 640;
   }
 
-  private renderHUD(layout: Layout) {
-    const { w, h, playfieldX, playfieldWidth } = layout;
+  // The judgement that popped over the playfield on the last hit. Lives apart
+  // from the rest of the HUD because it belongs to the play rather than to the
+  // interface: bare stages (side by side) draw it without any of the chrome.
+  private renderJudgementPop(layout: Layout) {
+    if (this.lastJudgment <= 0) return;
+    const { h, playfieldX, playfieldWidth } = layout;
+    const timeSince = this.currentTime - this.lastJudgmentTime;
+    const judgementDuration = REPLAY_JUDGEMENT_POP_DURATION_MS
+      + REPLAY_JUDGEMENT_HOLD_DURATION_MS
+      + REPLAY_JUDGEMENT_FADE_DURATION_MS;
+    if (timeSince >= judgementDuration) return;
+
     const playfieldCenterX = playfieldX + playfieldWidth / 2;
-    const scoreY = this.getStagePositionY(this.skinSettings.scorePosition, layout);
-
-    if (this.lastJudgment > 0) {
-      const timeSince = this.currentTime - this.lastJudgmentTime;
-      const judgementDuration = REPLAY_JUDGEMENT_POP_DURATION_MS
-        + REPLAY_JUDGEMENT_HOLD_DURATION_MS
-        + REPLAY_JUDGEMENT_FADE_DURATION_MS;
-      if (timeSince < judgementDuration) {
-        const fadeStart = REPLAY_JUDGEMENT_POP_DURATION_MS + REPLAY_JUDGEMENT_HOLD_DURATION_MS;
-        const fadeProgress = timeSince <= fadeStart
-          ? 0
-          : Math.max(0, Math.min(1, (timeSince - fadeStart) / REPLAY_JUDGEMENT_FADE_DURATION_MS));
-        const alpha = 1 - fadeProgress;
-        const popProgress = Math.max(0, Math.min(1, timeSince / REPLAY_JUDGEMENT_POP_DURATION_MS));
-        const animationScale = 0.8 + 0.2 * easeOutElastic(popProgress);
-        const judgementScale = getReplayJudgementScale(this.skinSettings) / 100;
-        const judgmentAsset = this.getJudgementAsset(this.lastJudgment);
-        const y = scoreY;
-        if (judgmentAsset) {
-          const rawHeight = this.getHudAssetHeight(judgmentAsset, h * REPLAY_JUDGEMENT_ASSET_HEIGHT_RATIO, layout);
-          const clampedHeight = Math.min(h * 0.085, Math.max(h * 0.04, rawHeight));
-          const aspectScale = this.getJudgementAspectScale(judgmentAsset);
-          const targetHeight = clampedHeight * judgementScale * animationScale * aspectScale;
-          const targetWidth = this.getAssetWidthForHeight(judgmentAsset, targetHeight, targetHeight * 2);
-          this.drawSkinImage(judgmentAsset, playfieldCenterX, y, targetWidth, targetHeight, 0.5, 0.5, alpha);
-        } else if (this.skinSettings.judgementSet === DEFAULT_REPLAY_JUDGEMENT_SET) {
-          this.addText(
-            JUDGMENT_LABELS[this.lastJudgment],
-            playfieldCenterX,
-            y,
-            {
-              fontSize: Math.max(16, h * 0.035) * judgementScale * animationScale,
-              fill: JUDGMENT_COLORS[this.lastJudgment],
-              fontWeight: "700",
-              anchorX: 0.5,
-              anchorY: 0.5,
-              alpha,
-            },
-          );
-        }
-      }
+    const fadeStart = REPLAY_JUDGEMENT_POP_DURATION_MS + REPLAY_JUDGEMENT_HOLD_DURATION_MS;
+    const fadeProgress = timeSince <= fadeStart
+      ? 0
+      : Math.max(0, Math.min(1, (timeSince - fadeStart) / REPLAY_JUDGEMENT_FADE_DURATION_MS));
+    const alpha = 1 - fadeProgress;
+    const popProgress = Math.max(0, Math.min(1, timeSince / REPLAY_JUDGEMENT_POP_DURATION_MS));
+    const animationScale = 0.8 + 0.2 * easeOutElastic(popProgress);
+    const judgementScale = getReplayJudgementScale(this.skinSettings) / 100;
+    const judgmentAsset = this.getJudgementAsset(this.lastJudgment);
+    const y = this.getStagePositionY(this.skinSettings.scorePosition, layout);
+    if (judgmentAsset) {
+      const size = this.getJudgementDrawSize(judgmentAsset, layout, judgementScale * animationScale);
+      this.drawSkinImage(judgmentAsset, playfieldCenterX, y, size.width, size.height, 0.5, 0.5, alpha);
+    } else if (this.skinSettings.judgementSet === DEFAULT_REPLAY_JUDGEMENT_SET) {
+      this.addText(
+        JUDGMENT_LABELS[this.lastJudgment],
+        playfieldCenterX,
+        y,
+        {
+          fontSize: Math.max(16, h * 0.035) * judgementScale * animationScale,
+          fill: JUDGMENT_COLORS[this.lastJudgment],
+          fontWeight: "700",
+          anchorX: 0.5,
+          anchorY: 0.5,
+          alpha,
+        },
+      );
     }
+  }
 
+  private renderHUD(layout: Layout) {
+    const { w, h } = layout;
+
+    this.renderJudgementPop(layout);
     this.renderCombo(layout);
     this.renderScoreBlock(layout);
     this.renderLeaderboard(layout);
@@ -5203,15 +5219,41 @@ export class ManiaReplayRenderer {
     return REPLAY_JUDGEMENT_REFERENCE_ASPECT / aspect;
   }
 
+  // True while the judgements on screen are the imported skin's own art: the
+  // "skin" set is selected and this keymode actually has art for it.
+  private usingSkinJudgements(): boolean {
+    return getReplayJudgementSetAssets(this.skinSettings.judgementSet) == null
+      && Object.values(this.skinProfile.assets.judgements).some(Boolean);
+  }
+
+  private getJudgementDrawSize(asset: ReplaySkinImageAsset, layout: Layout, scale: number): { width: number; height: number } {
+    const native = this.usingSkinJudgements() ? this.getStageAssetNativeSize(asset) : null;
+    if (native) {
+      // Imported judgement art draws at its native size in the game's
+      // 768-space, the rule every other piece of skin art follows. The
+      // fraction-of-canvas sizing below belongs to the built-in sets, which
+      // are authored for it; putting skin art through it drew it about 1.6x
+      // too big. Only absurdly wide art is reined in, at the stage's width.
+      const unit = (480 / 768) * layout.layoutScale * scale;
+      const width = native.width * unit;
+      const maxWidth = layout.playfieldWidth * 0.9;
+      const fit = width > maxWidth ? maxWidth / width : 1;
+      return { width: Math.max(1, width * fit), height: Math.max(1, native.height * unit * fit) };
+    }
+    const rawHeight = this.getHudAssetHeight(asset, layout.h * REPLAY_JUDGEMENT_ASSET_HEIGHT_RATIO, layout);
+    const clampedHeight = Math.min(layout.h * 0.085, Math.max(layout.h * 0.04, rawHeight));
+    const height = clampedHeight * scale * this.getJudgementAspectScale(asset);
+    return { width: this.getAssetWidthForHeight(asset, height, height * 2), height };
+  }
+
   private getJudgementAsset(judgment: Judgment): ReplaySkinImageAsset | undefined {
     // The "skin" set means the imported skin's own art, which lives per
     // keymode. A skin without art for this keymode (4K-only skin on a 7K
     // chart) must fall back to the default built-in set instead of erasing
     // judgements entirely.
     const skinAssets = this.skinProfile.assets.judgements;
-    const hasSkinJudgements = Object.values(skinAssets).some(Boolean);
     const assets = getReplayJudgementSetAssets(this.skinSettings.judgementSet)
-      ?? (hasSkinJudgements ? skinAssets : getReplayJudgementSetAssets(DEFAULT_REPLAY_JUDGEMENT_SET))
+      ?? (this.usingSkinJudgements() ? skinAssets : getReplayJudgementSetAssets(DEFAULT_REPLAY_JUDGEMENT_SET))
       ?? skinAssets;
     switch (judgment) {
       case 1:
@@ -5254,26 +5296,39 @@ export class ManiaReplayRenderer {
     const headHeight = headAsset ? this.getNoteAssetHeight(headAsset, colWidth, layout, layout.noteHeight) : layout.noteHeight;
     const tailHeight = tailAsset ? this.getNoteAssetHeight(tailAsset, colWidth, layout, layout.noteHeight) : layout.noteHeight;
     const tailDelta = this.skinSettings.upscroll ? -tailTrimDelta : tailTrimDelta;
-    const bodyHeadY = headEndY;
+    // Stable runs the body to the MIDDLE of the head cap, not to its far
+    // edge (the shared rule in longNoteGeometry). Cap art is widest at its
+    // centre, so a body carried past that pokes out around a round note as a
+    // nub of body colour below it.
+    const bodyHeadY = this.skinSettings.upscroll ? headEndY + headHeight / 2 : headEndY - headHeight / 2;
     const bodyTailY = tailEndY + tailDelta;
     const bodyTop = Math.min(bodyHeadY, bodyTailY);
     const bodyBottom = Math.max(bodyHeadY, bodyTailY);
 
     if (bodyAsset && bodyBottom > bodyTop) {
       const baseAlpha = bodyAlpha * this.topFadeAlpha(Math.max(0, Math.min(bodyBottom, fadeHeight)), fadeHeight, 0.55);
-      const bodyHeight = bodyBottom - bodyTop;
-      this.forEachVisibilitySegment(bodyTop, bodyBottom, visibilityLayout, (segmentTop, segmentBottom, visibilityAlpha) => {
-        this.drawSkinImageVerticalStrip(
-          bodyAsset,
-          colX + colWidth / 2,
-          segmentTop,
-          colWidth,
-          segmentBottom - segmentTop,
-          (segmentTop - bodyTop) / bodyHeight,
-          (segmentBottom - bodyTop) / bodyHeight,
-          baseAlpha * visibilityAlpha,
-        );
-      });
+      for (const tile of this.lnBodyTiles(bodyAsset, colWidth, bodyTop, bodyBottom)) {
+        const tileHeight = tile.bottom - tile.top;
+        if (tileHeight <= 0) continue;
+        const fracSpan = tile.fracBottom - tile.fracTop;
+        this.forEachVisibilitySegment(tile.top, tile.bottom, visibilityLayout, (segmentTop, segmentBottom, visibilityAlpha) => {
+          // A tail-anchored tile runs its source upward on upscroll, so the
+          // segment's slice of it is measured from the tile's other end.
+          const nearOffset = tile.flipY ? tile.bottom - segmentBottom : segmentTop - tile.top;
+          const farOffset = tile.flipY ? tile.bottom - segmentTop : segmentBottom - tile.top;
+          this.drawSkinImageVerticalStrip(
+            bodyAsset,
+            colX + colWidth / 2,
+            segmentTop,
+            colWidth,
+            segmentBottom - segmentTop,
+            tile.fracTop + fracSpan * (nearOffset / tileHeight),
+            tile.fracTop + fracSpan * (farOffset / tileHeight),
+            baseAlpha * visibilityAlpha,
+            tile.flipY,
+          );
+        });
+      }
     } else {
       this.barLnBodyWithTopFade(colX + 3, bodyTop, colWidth - 6, bodyBottom - bodyTop, this.skinSettings.lnBodyColor, bodyAlpha, fadeHeight, 0.55, visibilityLayout);
     }
@@ -5299,6 +5354,66 @@ export class ManiaReplayRenderer {
 
     if (!bodyAsset && !headAsset && !tailAsset && bottom > top) return false;
     return true;
+  }
+
+  // Stable cascades the LN body instead of stretching it (its default
+  // NoteBodyStyle): the art runs at its natural aspect from the tail end
+  // toward the head and repeats when the hold outruns it. Percy bodies live or
+  // die by this - one 4000px tall strip whose rounded cap sits behind a
+  // transparent lead-in, so the hold shows a cap and reads shorter than it is.
+  // Stretched, both collapse into a couple of pixels and the tail goes flat.
+  private lnBodyTiles(
+    asset: ReplaySkinImageAsset,
+    colWidth: number,
+    bodyTop: number,
+    bodyBottom: number,
+  ): LnBodyTile[] {
+    const stretched: LnBodyTile[] = [{ top: bodyTop, bottom: bodyBottom, fracTop: 0, fracBottom: 1, flipY: false }];
+    const span = bodyBottom - bodyTop;
+    if (!(span > 0) || !(colWidth > 0)) return stretched;
+    const texture = this.getTexture(asset);
+    const sourceWidth = asset.width && asset.width > 0 ? asset.width : texture.width;
+    const sourceHeight = asset.height && asset.height > 0 ? asset.height : texture.height;
+    if (!(sourceWidth > 0) || !(sourceHeight > 0)) return stretched;
+    const tileHeight = sourceHeight * (colWidth / sourceWidth);
+    if (!(tileHeight > 0)) return stretched;
+
+    const upscroll = this.skinSettings.upscroll;
+    const tiles: LnBodyTile[] = [];
+    // Whole-pixel edges: two half-covered rows composited one after the other
+    // come to less than full opacity, which reads as a seam at every boundary.
+    // Both edges round the same way, so neighbouring tiles stay flush.
+    const push = (offset: number, end: number, fracTop: number, fracBottom: number) => {
+      const near = Math.round(offset);
+      const far = Math.round(end);
+      if (far <= near) return;
+      tiles.push({
+        top: upscroll ? bodyBottom - far : bodyTop + near,
+        bottom: upscroll ? bodyBottom - near : bodyTop + far,
+        fracTop,
+        fracBottom,
+        flipY: upscroll,
+      });
+    };
+
+    if (sourceHeight / sourceWidth >= LN_BODY_STRIP_ASPECT) {
+      // A strip this tall is drawn to cover any hold on its own, and ours may
+      // have been cropped at import to fit the GPU's texture limit. Repeating
+      // it would replay the art's transparent lead-in partway up the hold,
+      // which reads as an LN cut in half. Run one copy from the tail and hold
+      // its last rows for whatever is left over.
+      const covered = Math.min(span, tileHeight);
+      push(0, covered, 0, covered / tileHeight);
+      if (span - covered > 0.5) push(covered, span, Math.max(0, 1 - LN_BODY_FILLER_ROWS / sourceHeight), 1);
+      return tiles.length > 0 ? tiles : stretched;
+    }
+
+    if (span > tileHeight * MAX_LN_BODY_TILES) return stretched;
+    for (let offset = 0; offset < span - 0.01 && tiles.length < MAX_LN_BODY_TILES; offset += tileHeight) {
+      const end = Math.min(span, offset + tileHeight);
+      push(offset, end, 0, (end - offset) / tileHeight);
+    }
+    return tiles.length > 0 ? tiles : stretched;
   }
 
   private getNoteAssetHeight(asset: ReplaySkinImageAsset, columnWidth: number, layout: Layout, fallbackHeight: number): number {
@@ -5328,6 +5443,24 @@ export class ManiaReplayRenderer {
     return Math.max(1, fallbackWidth);
   }
 
+  // Skin digits draw at their native size in the game's 768-space, times the
+  // combo counter's own scale (skin.ini has no such key; lazer's HUD editor
+  // writes it to MainHUDComponents.json, and shrinking the counter is one of
+  // the first things players do there).
+  private getComboUnitScale(layout: Layout): number {
+    return (480 / 768) * layout.layoutScale * this.skinProfile.comboScale;
+  }
+
+  private getComboGlyphSize(asset: ReplaySkinImageAsset, layout: Layout): { width: number; height: number } {
+    const native = this.getStageAssetNativeSize(asset);
+    if (native) {
+      const unit = this.getComboUnitScale(layout);
+      return { width: Math.max(1, native.width * unit), height: Math.max(1, native.height * unit) };
+    }
+    const fallbackHeight = Math.max(22, layout.h * 0.05);
+    return { width: fallbackHeight * 0.7, height: fallbackHeight };
+  }
+
   private renderComboImages(
     text: string,
     centerX: number,
@@ -5345,18 +5478,11 @@ export class ManiaReplayRenderer {
     });
     if (!glyphs.every((glyph): glyph is ReplaySkinImageAsset => Boolean(glyph))) return false;
 
-    const fallbackHeight = Math.max(22, layout.h * 0.05);
-    const sizes = glyphs.map((asset) => {
-      const height = this.getHudAssetHeight(asset, fallbackHeight, layout);
-      return { width: this.getAssetWidthForHeight(asset, height, fallbackHeight * 0.7), height };
-    });
+    const sizes = glyphs.map((asset) => this.getComboGlyphSize(asset, layout));
     const tabularDigitWidths = combo.digits
       .filter((asset): asset is ReplaySkinImageAsset => Boolean(asset))
-      .map((asset) => {
-        const height = this.getHudAssetHeight(asset, fallbackHeight, layout);
-        return this.getAssetWidthForHeight(asset, height, fallbackHeight * 0.7);
-      });
-    const overlap = combo.overlap * (layout.h / 480);
+      .map((asset) => this.getComboGlyphSize(asset, layout).width);
+    const overlap = combo.overlap * this.getComboUnitScale(layout);
     const cellWidth = Math.max(...sizes.map((size) => size.width), ...tabularDigitWidths);
     const totalWidth = (cellWidth * sizes.length) - (overlap * Math.max(0, sizes.length - 1));
     let x = centerX - totalWidth / 2;
@@ -6106,10 +6232,11 @@ export class ManiaReplayRenderer {
     fracTop: number,
     fracBottom: number,
     alpha: number,
+    flipY = false,
   ) {
     if (width <= 0 || height <= 0 || alpha <= 0 || fracBottom <= fracTop) return;
     if (fracTop <= 0 && fracBottom >= 1) {
-      this.drawSkinImage(asset, x, y, width, height, 0.5, 0, alpha);
+      this.drawSkinImage(asset, x, y, width, height, 0.5, 0, alpha, 0xffffff, flipY);
       return;
     }
 
@@ -6117,7 +6244,7 @@ export class ManiaReplayRenderer {
     if (texture === Texture.EMPTY) return;
     // Rotated atlas frames don't slice cleanly; draw whole as a fallback.
     if (texture.rotate !== 0) {
-      this.drawSkinImage(asset, x, y, width, height, 0.5, 0, alpha);
+      this.drawSkinImage(asset, x, y, width, height, 0.5, 0, alpha, 0xffffff, flipY);
       return;
     }
 
@@ -6159,14 +6286,16 @@ export class ManiaReplayRenderer {
 
     sprite.visible = true;
     sprite.texture = strip;
-    sprite.anchor.set(0.5, 0);
+    // A flipped sprite mirrors about its anchor, so the anchor swaps sides to
+    // keep the drawn band at [y, y + height].
+    sprite.anchor.set(0.5, flipY ? 1 : 0);
     sprite.x = x;
     sprite.y = y;
     sprite.width = width;
     sprite.height = height;
-    // Reset any flip or rotation left behind by another draw on this slot.
+    // Reset any rotation left behind by another draw on this slot.
     sprite.rotation = 0;
-    sprite.scale.y = Math.abs(sprite.scale.y);
+    sprite.scale.y = (flipY ? -1 : 1) * Math.abs(sprite.scale.y);
     sprite.alpha = alpha;
     sprite.tint = 0xffffff;
   }
