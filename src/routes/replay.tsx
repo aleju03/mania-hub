@@ -36,6 +36,7 @@ import { buildKeypressHeatmap } from "../lib/replay-keypress-heatmap";
 import { parseReplayScoreInput } from "../lib/replay-score-input";
 import { getReplayScoreAvailability } from "../lib/replay-score-availability";
 import { buildReplaySeoTitle, type ReplaySeoScore } from "../lib/replay-seo";
+import { buildReplayShareUrl } from "../lib/replay-share";
 import { getBeatmapAudioUrl, getBeatmapHitsoundsUrl, getInlineBackgroundUrl } from "../lib/audio-url";
 import { ReplayHitsoundPlayer } from "../lib/replay-hitsounds";
 import { REPLAY_SKIN_SOUNDS_CHANGE_EVENT, readReplaySkinSounds } from "../lib/replay-skin-sounds";
@@ -98,7 +99,7 @@ import { loadReplayStoryboard, type LoadedReplayStoryboard } from "../lib/replay
 import {
   appliedCommunityReplaySkinKey,
   fetchUserReplaySkin,
-  loadAppliedCommunityReplaySkinSettings,
+  loadAppliedReplaySkinSettings,
   loadOwnerReplaySkinCached,
   readAppliedCommunityReplaySkin,
   writeAppliedCommunityReplaySkin,
@@ -186,6 +187,10 @@ const REPLAY_AUDIO_RECOVERY_DELAY_MS = 1500;
 // viewer's own. A cached skin lands in well under this; a cold one takes about
 // as long as the download plus its image decoding.
 const OWNER_SKIN_HOLD_MAX_MS = 2000;
+// IndexedDB reads are asynchronous too, so keep the first paint covered until
+// the viewer's persisted community skin has been restored and handed to the
+// renderer. The cap prevents a stalled .osk request from blanking the stage.
+const APPLIED_SKIN_HOLD_MAX_MS = 8000;
 // osu! screen units: skin art is authored against a 480-unit-tall screen.
 const MANIA_SKIN_SCREEN_HEIGHT = 480;
 
@@ -1769,6 +1774,19 @@ function ReplayPage() {
     navigate({ to: "/replay", search: backNavigation.search });
   };
 
+  // The link the Share controls hand out: an uploaded replay's own shared URL,
+  // or a clean ?scoreId= link for a score (the address bar usually still holds
+  // the browse tab and player the viewer was opened from).
+  const replayShareUrl = useMemo(() => {
+    if (typeof window === "undefined" || !replay) return null;
+    const uploaded = loadedUploadId != null || uploadId != null;
+    return buildReplayShareUrl({
+      origin: window.location.origin,
+      scoreId: uploaded ? undefined : scoreId,
+      uploadShareUrl: uploaded ? uploadedReplayShareUrl : null,
+    });
+  }, [replay, loadedUploadId, uploadId, uploadedReplayShareUrl, scoreId]);
+
   // Rendered twice: above the viewer for desktop, and inside the viewer's
   // scrolling area (below the sticky stage) for mobile. ReplayInfo's own
   // responsive variants make sure only one copy is ever visible.
@@ -1780,7 +1798,7 @@ function ReplayPage() {
       stars={starRating}
       mods={starMods}
       fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId}
-      shareUrl={uploadedReplayShareUrl ?? undefined}
+      shareUrl={replayShareUrl ?? undefined}
       playerProfile={playerProfile}
       judgeAsLazer={judgeAsLazer}
       onSelectClient={setClientJudgeAsLazer}
@@ -1829,7 +1847,7 @@ function ReplayPage() {
               </motion.div>
             ) : replay ? (
               <motion.div key="viewer" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <ReplayViewer replay={replay} beatmap={beatmap} beatmapFileContent={beatmapFileContent} scoreInfo={scoreInfo} replayMods={uploadedReplayMods} judgeAsLazer={judgeAsLazer} sourceIsLazer={sourceIsLazer} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} initialTime={initialTime} localAudioUrl={localBeatmapAssets.audioUrl} localBackgroundUrl={localBeatmapAssets.backgroundUrl} presenceKey={scoreId != null ? `score:${scoreId}` : uploadId ? `upload:${uploadId}` : null} ownerUserId={playerProfile?.id ?? null} onClear={handleClearReplay}>
+                <ReplayViewer replay={replay} beatmap={beatmap} beatmapFileContent={beatmapFileContent} scoreInfo={scoreInfo} replayMods={uploadedReplayMods} judgeAsLazer={judgeAsLazer} sourceIsLazer={sourceIsLazer} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} initialTime={initialTime} localAudioUrl={localBeatmapAssets.audioUrl} localBackgroundUrl={localBeatmapAssets.backgroundUrl} presenceKey={scoreId != null ? `score:${scoreId}` : uploadId ? `upload:${uploadId}` : null} ownerUserId={playerProfile?.id ?? null} shareUrl={replayShareUrl} onClear={handleClearReplay}>
                   {/* Phones scroll the card inside a padded list; on desktop
                       the strip runs edge to edge, flush against the stage. */}
                   <div className="mx-auto w-full max-w-[1200px] px-3 sm:max-w-none sm:px-0">{replayInfoCard}</div>
@@ -1948,6 +1966,7 @@ function ReplayViewer({
   localBackgroundUrl,
   presenceKey,
   ownerUserId,
+  shareUrl,
   onClear,
   children,
 }: {
@@ -1975,6 +1994,8 @@ function ReplayViewer({
   /** osu! id of the replay's player, to auto-load their published replay
    *  skin. Null while unknown (an upload whose player has not resolved). */
   ownerUserId?: number | null;
+  /** Canonical link to this replay for the controls' Share button. */
+  shareUrl?: string | null;
   onClear: () => void;
   // Mobile-only content (the score info card) slotted between the sticky
   // stage and the settings card so it scrolls under the pinned player.
@@ -2103,6 +2124,7 @@ function ReplayViewer({
   // Mirrors for the hitsound loader, which lives in a mount-once effect.
   const ownerSkinRef = useRef<CachedOwnerReplaySkin | null>(null);
   const ownerSkinAppliedRef = useRef(false);
+  const ownerSkinReadyToRevealRef = useRef(false);
   const shouldResumeAudioRef = useRef(false);
   const audioBlobUrlRef = useRef<string | null>(null);
   const audioBlobFetchKeyRef = useRef<string | null>(null);
@@ -2204,31 +2226,65 @@ function ReplayViewer({
   // localStorage settings key only holds the asset-free copy, so the shared
   // refresh below must know to keep serving this one instead.
   const appliedCommunityFullRef = useRef<{ key: string; settings: ReplaySkinSettings } | null>(null);
-  const hydratingAppliedKeyRef = useRef<string | null>(null);
+  const hydratingAppliedRef = useRef<{
+    key: string;
+    promise: Promise<ReplaySkinSettings | null>;
+  } | null>(null);
+  const [hasInitialAppliedSkin] = useState(() => readAppliedCommunityReplaySkin() != null);
+  const [appliedSkinHold, setAppliedSkinHold] = useState(hasInitialAppliedSkin);
+  const [appliedSkinHydrated, setAppliedSkinHydrated] = useState(!hasInitialAppliedSkin);
+  const appliedSkinHydratedRef = useRef(!hasInitialAppliedSkin);
+  const releaseAppliedSkinHold = useCallback(() => setAppliedSkinHold(false), []);
 
   // Rebuilds the full art for a persisted community pointer (page load, or a
   // pointer another tab wrote) and swaps it in unless the pointer changed
   // while the .osk was downloading.
-  const hydrateAppliedCommunitySkin = useCallback(async (applied: AppliedCommunityReplaySkin) => {
+  const hydrateAppliedCommunitySkin = useCallback((applied: AppliedCommunityReplaySkin): Promise<ReplaySkinSettings | null> => {
     const key = appliedCommunityReplaySkinKey(applied);
-    if (hydratingAppliedKeyRef.current === key || appliedCommunityFullRef.current?.key === key) return;
-    hydratingAppliedKeyRef.current = key;
-    try {
-      const settings = await loadAppliedCommunityReplaySkinSettings(applied);
-      if (!settings) return;
+    if (appliedCommunityFullRef.current?.key === key) {
+      return Promise.resolve(appliedCommunityFullRef.current.settings);
+    }
+    if (hydratingAppliedRef.current?.key === key) return hydratingAppliedRef.current.promise;
+
+    // This loader checks the decoded IndexedDB entry first. Only a cache miss
+    // downloads and unpacks the .osk again.
+    const promise = (async () => {
+      const settings = await loadAppliedReplaySkinSettings();
+      if (!settings) return null;
       const current = readAppliedCommunityReplaySkin();
-      if (!current || appliedCommunityReplaySkinKey(current) !== key) return;
+      if (!current || appliedCommunityReplaySkinKey(current) !== key) return null;
       appliedCommunityFullRef.current = { key, settings };
       setSkinSettings(settings);
-    } finally {
-      if (hydratingAppliedKeyRef.current === key) hydratingAppliedKeyRef.current = null;
-    }
+      return settings;
+    })().catch(() => null);
+
+    hydratingAppliedRef.current = { key, promise };
+    void promise.then(() => {
+      if (hydratingAppliedRef.current?.promise === promise) hydratingAppliedRef.current = null;
+    });
+    return promise;
   }, []);
 
   useEffect(() => {
     const applied = readAppliedCommunityReplaySkin();
-    if (applied) void hydrateAppliedCommunitySkin(applied);
+    if (!applied) {
+      setAppliedSkinHydrated(true);
+      return;
+    }
+    let cancelled = false;
+    void hydrateAppliedCommunitySkin(applied).then(() => {
+      if (!cancelled) setAppliedSkinHydrated(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [hydrateAppliedCommunitySkin]);
+
+  useEffect(() => {
+    if (!appliedSkinHold) return;
+    const timeout = window.setTimeout(releaseAppliedSkinHold, APPLIED_SKIN_HOLD_MAX_MS);
+    return () => window.clearTimeout(timeout);
+  }, [appliedSkinHold, releaseAppliedSkinHold]);
 
   const applySkinSettings = useCallback((next: ReplaySkinSettings, community?: AppliedCommunitySkinDraft | null) => {
     const normalized = normalizeReplaySkinSettings(next);
@@ -2298,6 +2354,7 @@ function ReplayViewer({
   useEffect(() => {
     setOwnerSkin(null);
     setOwnerSkinApplied(false);
+    ownerSkinReadyToRevealRef.current = false;
     if (!ownerUserId || !ownerSkinPreferred) {
       releaseOwnerSkinHold();
       return;
@@ -2306,12 +2363,15 @@ function ReplayViewer({
     void fetchUserReplaySkin(ownerUserId)
       .then((record) => (cancelled || !record ? null : loadOwnerReplaySkinCached(record)))
       .then((loaded) => {
-        if (cancelled || !loaded) return;
+        if (cancelled) return;
+        if (!loaded) {
+          releaseOwnerSkinHold();
+          return;
+        }
         setOwnerSkin(loaded);
         setOwnerSkinApplied(true);
       })
-      .catch(() => {})
-      .finally(() => {
+      .catch(() => {
         if (!cancelled) releaseOwnerSkinHold();
       });
     return () => {
@@ -2323,6 +2383,9 @@ function ReplayViewer({
   // viewer's own settings otherwise. The settings modal always edits the
   // viewer's own copy.
   const activeSkinSettings = ownerSkinApplied && ownerSkin ? ownerSkin.settings : skinSettings;
+  // A ready player skin makes the viewer's own pending hydration irrelevant;
+  // if the player skin is toggled off early, the viewer hold takes over again.
+  const skinStageHold = ownerSkinHold || (appliedSkinHold && !ownerSkinApplied);
 
   // Right-click overlay menu on the stage: on an overlay it offers removal,
   // on a bare spot it lists the hidden overlays to add back. Coordinates are
@@ -2382,9 +2445,12 @@ function ReplayViewer({
       const cachedFull = appliedCommunityFullRef.current;
       if (applied && cachedFull && cachedFull.key === appliedCommunityReplaySkinKey(applied)) {
         setSkinSettings(cachedFull.settings);
+      } else if (applied) {
+        // Keep the current full skin on screen until the replacement is ready;
+        // dropping to the stored asset-free copy would flash the built-in bars.
+        void hydrateAppliedCommunitySkin(applied);
       } else {
         setSkinSettings(readReplaySkinSettings());
-        if (applied) void hydrateAppliedCommunitySkin(applied);
       }
       setOverlaySettings(readReplayOverlaySettings());
     };
@@ -3042,7 +3108,15 @@ function ReplayViewer({
   useEffect(() => {
     skinSettingsRef.current = activeSkinSettings;
     rendererRef.current?.setSkinSettings(activeSkinSettings);
-  }, [activeSkinSettings]);
+    if (ownerSkinApplied && ownerSkin) {
+      ownerSkinReadyToRevealRef.current = true;
+      if (rendererRef.current) releaseOwnerSkinHold();
+    }
+    if (appliedSkinHydrated) {
+      appliedSkinHydratedRef.current = true;
+      if (rendererRef.current) releaseAppliedSkinHold();
+    }
+  }, [activeSkinSettings, appliedSkinHydrated, ownerSkin, ownerSkinApplied, releaseAppliedSkinHold, releaseOwnerSkinHold]);
 
   useEffect(() => {
     overlaySettingsRef.current = overlaySettings;
@@ -3378,6 +3452,8 @@ function ReplayViewer({
         renderer.setLeaderboardVisible?.(leaderboardVisibleRef.current);
         renderer.setSpectatorCount?.(spectatorCountRef.current);
         rendererRef.current = renderer;
+        if (ownerSkinReadyToRevealRef.current) releaseOwnerSkinHold();
+        if (appliedSkinHydratedRef.current) releaseAppliedSkinHold();
 
         // Record the resolved renderer backend (WebGL vs Canvas fallback) and
         // judgement-build cost into the crash beacon so a later hard crash can
@@ -3461,7 +3537,7 @@ function ReplayViewer({
         ownedRenderer.destroy();
       }
     };
-  }, [replay, beatmap, initialTime, modRate, rendererMods, rendererExpectedCounts, rendererRealTotalScore, judgeAsLazer, sourceIsLazer, scoreInfo?.beatmap?.convert, scoreInfo?.beatmap?.status, beatmap?.isConvert, applyOverlaySettings]);
+  }, [replay, beatmap, initialTime, modRate, rendererMods, rendererExpectedCounts, rendererRealTotalScore, judgeAsLazer, sourceIsLazer, scoreInfo?.beatmap?.convert, scoreInfo?.beatmap?.status, beatmap?.isConvert, applyOverlaySettings, releaseAppliedSkinHold, releaseOwnerSkinHold]);
 
   // Detect when the renderer reaches the end on its own (no more frames) and
   // flip isPlaying back. ReplayProgressBar polls the renderer independently
@@ -4291,6 +4367,7 @@ function ReplayViewer({
       videoExportProgress={videoExport.progress}
       videoExportError={videoExport.error}
       videoExportUrl={videoExport.url}
+      shareUrl={shareUrl ?? null}
       onTogglePlay={togglePlay}
       onToggleFullscreen={toggleReplayFullscreen}
       onExportVideo={replayVideoExportAvailable ? exportReplayVideo : undefined}
@@ -4426,10 +4503,10 @@ function ReplayViewer({
           onPointerDown={handleReplayCanvasPointerDown}
           onPointerUp={handleCanvasTogglePointerUp}
           onContextMenu={handleCanvasContextMenu}
-          // Hidden, not unmounted, while the player's skin is on its way: the
-          // renderer needs the node, it just must not paint the viewer's skin
+          // Hidden, not unmounted, while either selected skin is on its way:
+          // the renderer needs the node, it just must not paint fallback bars
           // for a beat first.
-          className={`relative z-10 w-full ${ownerSkinHold ? "invisible" : ""} ${
+          className={`relative z-10 w-full ${skinStageHold ? "invisible" : ""} ${
             isCanvasFullscreen
               ? "h-[100dvh] min-h-0 max-h-none"
               : // svh (not dvh) on phones: the small-viewport height ignores the

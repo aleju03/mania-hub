@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ArrowLeftRight, Check, Copy } from "lucide-react";
+import { ArrowLeftRight, Check, Share2 } from "lucide-react";
 import { StarRatingBadge } from "#/components/maps/SearchCard";
 import { avatarImageSrc } from "#/components/ui/Avatar";
 import { ModBadge } from "#/components/ui/ModBadge";
@@ -446,7 +446,11 @@ function BackButton({ onClear }: { onClear: () => void }) {
 function ShareReplayButton({ shareUrl, compact = false }: { shareUrl: string; compact?: boolean }) {
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = async () => {
+  // Straight to the clipboard, never the browser's own share sheet: desktop
+  // Chrome answers that with a QR-code-and-email window, which is not what
+  // anyone pressing this expects. The controls' Share panel keeps the sheet
+  // for touch devices, where it is genuinely the fastest way into a DM.
+  const handleShare = async () => {
     try {
       await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
@@ -456,16 +460,16 @@ function ShareReplayButton({ shareUrl, compact = false }: { shareUrl: string; co
     }
   };
 
-  const Icon = copied ? Check : Copy;
+  const Icon = copied ? Check : Share2;
   return (
     <button
       type="button"
-      onClick={handleCopy}
+      onClick={handleShare}
       className={`inline-flex items-center gap-1.5 rounded-lg bg-osu-pink/20 font-semibold text-osu-pink-light transition-colors cursor-pointer hover:bg-osu-pink/30 hover:text-white ${compact ? "px-2.5 py-1.5 text-[11px]" : "px-3 py-1.5 text-xs"}`}
       title={shareUrl}
     >
       <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-      {copied ? "Copied" : "Copy Link"}
+      {copied ? "Copied" : "Share"}
     </button>
   );
 }

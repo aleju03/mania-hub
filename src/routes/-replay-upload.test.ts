@@ -27,7 +27,7 @@ describe("replay upload mode", () => {
     expect(routeSource).toContain("setUploadedReplayMods(mods)");
     expect(routeSource).toContain("lookupBeatmapByChecksum({ data: { checksum } })");
     expect(routeSource).toContain("replayMods={uploadedReplayMods}");
-    expect(routeSource).toContain("shareUrl={uploadedReplayShareUrl");
+    expect(routeSource).toContain("uploadShareUrl: uploaded ? uploadedReplayShareUrl : null");
     const uploadServerSource = fs.readFileSync(path.resolve(__dirname, "../lib/replay-upload-server.ts"), "utf8");
     expect(apiSource).toContain('createFileRoute("/api/replay-upload")');
     expect(apiSource).toContain("handleReplayUploadPost(request)");

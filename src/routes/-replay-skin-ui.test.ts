@@ -216,11 +216,12 @@ describe("replay skin settings UI", () => {
     // .osk spent downloading and decoding, then swap.
     expect(routeSource).toContain("const OWNER_SKIN_HOLD_MAX_MS = 2000;");
     expect(routeSource).toContain("const [ownerSkinHold, setOwnerSkinHold] = useState(() => ownerUserId != null);");
-    expect(routeSource).toContain("${ownerSkinHold ? \"invisible\" : \"\"}");
+    expect(routeSource).toContain("const skinStageHold = ownerSkinHold || (appliedSkinHold && !ownerSkinApplied);");
+    expect(routeSource).toContain("${skinStageHold ? \"invisible\" : \"\"}");
     // Released once and never re-held: a skin arriving late must not blank a
     // stage that is already up.
     expect(routeSource).toContain("const releaseOwnerSkinHold = useCallback(() => setOwnerSkinHold(false), []);");
-    expect(routeSource).toContain("if (!cancelled) releaseOwnerSkinHold();");
+    expect(routeSource).toContain("if (ownerSkinReadyToRevealRef.current) releaseOwnerSkinHold();");
     // And the decoded result keeps, so later replays by that player skip the
     // download and the decode entirely.
     expect(routeSource).toContain("loadOwnerReplaySkinCached(record)");
@@ -233,6 +234,21 @@ describe("replay skin settings UI", () => {
     expect(idbSource).toContain('export const REPLAY_OWNER_SKINS_STORE = "owner-skins";');
     expect(soundsSource).toContain('import { REPLAY_SKIN_SOUNDS_STORE, withReplayStore } from "./replay-idb";');
     expect(soundsSource).not.toContain("window.indexedDB.open");
+  });
+
+  it("restores the viewer's cached skin before revealing the replay stage", () => {
+    const routeSource = fs.readFileSync(path.resolve(__dirname, "replay.tsx"), "utf8");
+
+    // The regular settings entry intentionally contains no imported images.
+    // The decoded IndexedDB copy must win before the canvas can expose those
+    // fallback bars, including when React runs the mount effect twice in dev.
+    expect(routeSource).toContain("loadAppliedReplaySkinSettings()");
+    expect(routeSource).not.toContain("loadAppliedCommunityReplaySkinSettings(applied)");
+    expect(routeSource).toContain("const [appliedSkinHold, setAppliedSkinHold] = useState(hasInitialAppliedSkin);");
+    expect(routeSource).toContain("if (hydratingAppliedRef.current?.key === key) return hydratingAppliedRef.current.promise;");
+    expect(routeSource).toContain("if (rendererRef.current) releaseAppliedSkinHold();");
+    expect(routeSource).toContain("if (appliedSkinHydratedRef.current) releaseAppliedSkinHold();");
+    expect(routeSource).toContain("${skinStageHold ? \"invisible\" : \"\"}");
   });
 
   it("gives preview stages the viewer's applied skin, art included", () => {

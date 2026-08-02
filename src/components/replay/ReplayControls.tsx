@@ -1,9 +1,10 @@
 import { memo, useEffect, useRef, useState } from "react";
 import type { MutableRefObject, ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, ChevronDown, Film, Maximize2, Settings } from "lucide-react";
+import { Check, ChevronDown, Film, Maximize2, Settings, Share2 } from "lucide-react";
 
 import type { ReplayRendererLike } from "#/lib/replay-types";
+import { withReplayShareTime } from "#/lib/replay-share";
 import { ReplaySkinColorPanel } from "./ReplaySkinColorPanel";
 
 interface ReplayControlsProps {
@@ -49,6 +50,8 @@ interface ReplayControlsProps {
   videoExportProgress?: number;
   videoExportError?: string | null;
   videoExportUrl?: string | null;
+  /** Canonical link to this replay; the Share button hides without one. */
+  shareUrl?: string | null;
   onTogglePlay: () => void;
   onToggleFullscreen?: () => void;
   onExportVideo?: (options: ReplayVideoExportOptions) => void;
@@ -144,6 +147,7 @@ export function ReplayControls({
   videoExportProgress = 0,
   videoExportError = null,
   videoExportUrl = null,
+  shareUrl: replayShareUrl = null,
   onTogglePlay,
   onToggleFullscreen,
   onExportVideo,
@@ -173,6 +177,12 @@ export function ReplayControls({
   const [sharePos, setSharePos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [shareLabel, setShareLabel] = useState("");
   const [copied, setCopied] = useState(false);
+  const [sharePanelOpen, setSharePanelOpen] = useState(false);
+  // The replay position captured when the panel opened, so the offered
+  // timestamp stays put even while playback runs on behind the panel.
+  const [sharePlayheadMs, setSharePlayheadMs] = useState(0);
+  const [shareAtTimestamp, setShareAtTimestamp] = useState(false);
+  const [shareLinkCopied, setShareLinkCopied] = useState(false);
   const [videoMenuOpen, setVideoMenuOpen] = useState(false);
   const [videoClipMode, setVideoClipMode] = useState(false);
   const [videoExportKind, setVideoExportKind] = useState<ReplayVideoExportOptions["kind"]>("custom");
@@ -187,6 +197,7 @@ export function ReplayControls({
   const cancelScrollSpeedCommitRef = useRef(false);
   const wasVideoExportingRef = useRef(videoExporting);
   const videoMenuRef = useRef<HTMLDivElement>(null);
+  const sharePanelRef = useRef<HTMLDivElement>(null);
   const volumeMixerRef = useRef<HTMLDivElement>(null);
   const [volumeMixerOpen, setVolumeMixerOpen] = useState(false);
   const [volumeMixerAlignRight, setVolumeMixerAlignRight] = useState(false);
@@ -194,6 +205,10 @@ export function ReplayControls({
   // button becomes the mixer toggle there instead of an instant mute.
   const [isCoarsePointer] = useState(() =>
     typeof window !== "undefined" && (window.matchMedia?.("(pointer: coarse)").matches ?? false));
+  const [nativeShareSupported] = useState(() => typeof navigator !== "undefined" && typeof navigator.share === "function");
+  // Only phones get the native share sheet: desktop Chrome answers
+  // navigator.share too, with a QR-code-and-email window nobody wants here.
+  const canNativeShare = nativeShareSupported && isCoarsePointer;
   const sliderClass = "h-1 appearance-none bg-osu-b3 rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink";
 
   useEffect(() => {
@@ -216,6 +231,30 @@ export function ReplayControls({
       document.removeEventListener("keydown", onKey);
     };
   }, [videoMenuOpen]);
+
+  useEffect(() => {
+    if (!sharePanelOpen) return;
+    const onDocPointer = (event: PointerEvent) => {
+      const el = sharePanelRef.current;
+      if (el && !el.contains(event.target as Node)) setSharePanelOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSharePanelOpen(false);
+    };
+    document.addEventListener("pointerdown", onDocPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDocPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [sharePanelOpen]);
+
+  // A replay swapped under the panel would leave a stale link behind it.
+  useEffect(() => {
+    setSharePanelOpen(false);
+    setShareAtTimestamp(false);
+    setShareLinkCopied(false);
+  }, [replayShareUrl]);
 
   // Wheel over the volume cluster nudges master volume in 5% steps, like
   // scrolling the volume ingame, without ever hijacking page scroll
@@ -297,16 +336,39 @@ export function ReplayControls({
   const handleProgressContextMenu = (timeMsGame: number, clientX: number, clientY: number) => {
     onContextMenu(timeMsGame, clientX, clientY);
     const wallMs = timeMsGame / modRate;
-    const t = Math.round((wallMs / 1000) * 10) / 10;
-    const url = new URL(window.location.href);
-    url.searchParams.set("t", String(t));
-    setShareUrl(url.toString());
+    setShareUrl(withReplayShareTime(replayShareUrl ?? window.location.href, wallMs / 1000));
     setSharePos({ x: clientX, y: clientY });
     setShareLabel(formatReplayMs(wallMs));
     setCopied(false);
   };
 
   const currentReplayTimeMs = () => rendererRef.current?.time ?? 0;
+
+  // Wall-clock ms, the same unit the ?t= param and the seek bar labels use.
+  const sharePlayheadWallMs = sharePlayheadMs / modRate;
+  const shareLink = replayShareUrl
+    ? withReplayShareTime(replayShareUrl, shareAtTimestamp ? sharePlayheadWallMs / 1000 : null)
+    : null;
+
+  const toggleSharePanel = () => {
+    setSharePanelOpen((open) => {
+      if (open) return false;
+      // Clamped: the playhead sits negative through a map's lead-in.
+      setSharePlayheadMs(Math.max(0, rendererRef.current?.time ?? 0));
+      setShareAtTimestamp(false);
+      setShareLinkCopied(false);
+      return true;
+    });
+  };
+
+  const copyShareLink = () => {
+    if (!shareLink) return;
+    void copyTextToClipboard(shareLink).then((ok) => {
+      if (!ok) return;
+      setShareLinkCopied(true);
+      window.setTimeout(() => setShareLinkCopied(false), 1600);
+    });
+  };
   const customStart = Math.min(videoCustomStartMs ?? 0, videoCustomEndMs ?? 0);
   const customEnd = Math.max(videoCustomStartMs ?? 0, videoCustomEndMs ?? 0);
   const hasCustomRange = videoCustomStartMs != null && videoCustomEndMs != null && customEnd > customStart;
@@ -493,6 +555,81 @@ export function ReplayControls({
       <Settings className="h-4 w-4" strokeWidth={2.2} />
     </button>
   );
+
+  // One obvious way to hand a replay to a friend: the link, optionally seeked
+  // to what you are watching right now, copied or pushed to the phone's own
+  // share sheet.
+  const shareCluster = shareLink ? (
+    <div ref={sharePanelRef} className={`${isOverlay ? "" : "order-8 sm:order-none "}relative inline-flex`}>
+      <button
+        type="button"
+        onClick={toggleSharePanel}
+        aria-label="Share this replay"
+        aria-expanded={sharePanelOpen}
+        title="Share this replay"
+        className={`${isOverlay ? "h-9 text-[11px]" : "h-7 text-[10px]"} flex items-center gap-1.5 rounded px-2.5 font-semibold cursor-pointer transition-colors ${
+          sharePanelOpen ? "bg-osu-pink text-white hover:bg-osu-pink-light" : "bg-osu-b3/50 text-osu-f1 hover:bg-osu-b3 hover:text-white"
+        }`}
+      >
+        <Share2 className="h-3.5 w-3.5" strokeWidth={2.3} />
+        <span>Share</span>
+      </button>
+      <AnimatePresence>
+        {sharePanelOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            transition={{ duration: 0.1 }}
+            className={`absolute bottom-full z-50 mb-1.5 w-64 rounded-lg border border-osu-b2 bg-osu-b3 p-1.5 shadow-2xl ${isOverlay ? "right-0" : "left-0"}`}
+          >
+            <input
+              type="text"
+              readOnly
+              value={shareLink}
+              aria-label="Replay link"
+              className="w-full select-all truncate rounded bg-black/40 px-2 py-1.5 text-[11px] text-white/60 outline-none"
+              onFocus={(event) => event.target.select()}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setShareAtTimestamp((on) => !on);
+                setShareLinkCopied(false);
+              }}
+              className="mt-1 flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium text-osu-f0 hover:bg-osu-b4"
+            >
+              <span>Start at {formatReplayMs(sharePlayheadWallMs)}</span>
+              <CheckMark on={shareAtTimestamp} />
+            </button>
+            <div className="mt-1 flex gap-1">
+              <button
+                type="button"
+                onClick={copyShareLink}
+                className={`flex flex-1 cursor-pointer items-center justify-center gap-1 rounded px-2 py-1.5 text-[11px] font-bold transition-colors ${
+                  shareLinkCopied ? "bg-osu-b4 text-osu-green" : "bg-osu-pink text-white hover:bg-osu-pink-light"
+                }`}
+              >
+                {shareLinkCopied ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : null}
+                {shareLinkCopied ? "Copied" : "Copy link"}
+              </button>
+              {canNativeShare && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void navigator.share?.({ url: shareLink, title: "osu!mania replay" }).catch(() => {});
+                  }}
+                  className="cursor-pointer rounded bg-osu-b4 px-2.5 py-1.5 text-[11px] font-bold text-osu-f0 transition-colors hover:text-white"
+                >
+                  Share…
+                </button>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  ) : null;
 
   const videoExportCluster = onExportVideo ? (
     <div ref={videoMenuRef} className={`${isOverlay ? "" : "order-9 sm:order-none "}relative inline-flex`}>
@@ -832,6 +969,7 @@ export function ReplayControls({
 
           <div className="ml-auto flex shrink-0 flex-col items-end gap-2">
             <div className="flex items-center gap-2">
+              {shareCluster}
               {settingsButton}
               {onToggleFullscreen && (
                 <button
@@ -869,6 +1007,8 @@ export function ReplayControls({
           <div className="order-7 sm:order-none">{inputsMenu}</div>
 
           {settingsButton}
+
+          {shareCluster}
 
           {videoExportCluster}
 
