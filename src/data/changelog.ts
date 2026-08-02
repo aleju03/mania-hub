@@ -26,9 +26,9 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
-  { date: "2026-08-01", text: "Side by side fills the screen on phones, and rotating keeps both replays loaded", to: "/replay" },
+  { date: "2026-08-02", text: "Added import skin support to replays", to: "/replay" },
+  { date: "2026-08-02", text: "Bugfixes and performance optimizations for replays", to: "/replay" },
   { date: "2026-08-01", text: "New feature: Side by side replay comparison", to: "/replay" },
-  { date: "2026-08-01", text: "Two runs, one clock, every judgement stacked between them", to: "/replay" },
   { date: "2026-07-31", text: "New in-game style look for the replay viewer", to: "/replay" },
   { date: "2026-07-31", text: "Added support for storyboards on replays", to: "/replay" },
   { date: "2026-07-31", text: "Customize the replay HUD: drag, resize or remove any element", to: "/replay" },
