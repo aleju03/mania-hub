@@ -514,8 +514,8 @@ describe("ManiaReplayRenderer skin customization", () => {
   it("supports osu!mania skin.ini hud positions and imported sprites", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
-    expect(source).toContain("this.getStagePositionY(this.skinSettings.scorePosition, layout)");
-    expect(source).toContain("this.getStagePositionY(this.skinSettings.comboPosition, layout)");
+    expect(source).toContain('this.getStagePositionY(this.stagePosition("scorePosition"), layout)');
+    expect(source).toContain('this.getStagePositionY(this.stagePosition("comboPosition"), layout)');
     expect(source).toContain("private gameplaySkinSprites: SkinSpriteFramePool");
     expect(source).toContain("private hudSkinSprites: SkinSpriteFramePool");
     expect(source).toContain("private renderHoldSkinImages(");
@@ -537,7 +537,7 @@ describe("ManiaReplayRenderer skin customization", () => {
   it("uses the configured hit position for receptors without changing scroll density", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
-    expect(source).toContain("const hitPosition = this.skinSettings.hitPosition ?? MANIA_HIT_TARGET_POSITION;");
+    expect(source).toContain('const hitPosition = this.stagePosition("hitPosition") ?? MANIA_HIT_TARGET_POSITION;');
     expect(source).toContain("const judgmentY = h * (this.skinSettings.upscroll ? hitPosition : MANIA_REFERENCE_HEIGHT - hitPosition) / MANIA_REFERENCE_HEIGHT;");
     // Scroll density derives from the default hit position and scaleHeight
     // (the real height everywhere except inline portrait), never from the
@@ -573,6 +573,31 @@ describe("ManiaReplayRenderer skin customization", () => {
     expect(source).toContain("const declared = this.skinProfile.columnBackgrounds[col];");
   });
 
+  it("draws no combo counter for a keymode whose skin pushed it off the stage", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+    const cardSource = fs.readFileSync(path.resolve(__dirname, "../../lib/skin-preview-render.ts"), "utf8");
+
+    // ComboPosition past the bottom of the 480-unit stage is how a skin turns
+    // the counter off; the game shows none, so clamping it into range and
+    // pinning it to the bottom edge drew something in game never draws.
+    expect(source).toContain("if (this.skinProfile.comboHidden) return;");
+    expect(cardSource).toContain("if (!combo || profile.comboHidden) return;");
+  });
+
+  it("places the stage from the keymode's own hit position", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    // A skin sets HitPosition per [Mania] block (the Teto edit holds 4K at 440
+    // and 7K at 393) and pads its key art to land on that line, so the hit
+    // line, the key area, the column light and the HUD all have to read the
+    // keymode's value rather than one shared setting.
+    expect(source).toContain('const hitPosition = this.stagePosition("hitPosition") ?? MANIA_HIT_TARGET_POSITION;');
+    expect(source).toContain('const hitUnits = getSkinStagePositionUnits(this.stagePosition("hitPosition"));');
+    expect(source).toContain('const y = this.getStagePositionY(this.stagePosition("scorePosition"), layout);');
+    expect(source).toContain('const comboY = this.getStagePositionY(this.stagePosition("comboPosition"), layout);');
+    expect(source).toContain("return getReplaySkinStagePosition(this.skinProfile, this.skinSettings, key);");
+  });
+
   it("keeps preview stages transparent under a skin that declares black lanes", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
@@ -602,7 +627,15 @@ describe("ManiaReplayRenderer skin customization", () => {
     // the catalog preview). Stretching them to the gap under the hit line
     // smeared tall key art into a flat line.
     expect(source).toContain("const height = Math.max(1, native.height * (480 / 768) * layout.layoutScale);");
-    expect(source).toContain("this.drawSkinImage(receptorAsset, x + colWidth / 2, layout.h - height, colWidth, height, 0.5, 0, 1);");
+    // Standing on the stage's bottom edge, measured from the hit line rather
+    // than from the canvas edge: the two only coincide while the stage's
+    // vertical scale matches its horizontal one, which a preview breaks by
+    // widening its lanes. Key art is padded so its visible key lands on the
+    // hit position, so measuring from the canvas edge dragged the key up off
+    // the line there.
+    expect(source).toContain('const stageEdge = getSkinStagePositionUnits(this.stagePosition("hitPosition")) * layout.layoutScale;');
+    expect(source).toContain("this.drawSkinImage(receptorAsset, x + colWidth / 2, judgmentY + stageEdge - height, colWidth, height, 0.5, 0, 1);");
+    expect(source).toContain("this.drawSkinImage(receptorAsset, x + colWidth / 2, judgmentY - stageEdge, colWidth, height, 0.5, 0, 1, 0xffffff, true);");
     // skin.ini KeysUnderNotes flips the draw order, nothing else.
     expect(source).toContain("if (keysUnderNotes) this.renderReceptors(layout);");
     expect(source).toContain("if (!keysUnderNotes) this.renderReceptors(layout);");

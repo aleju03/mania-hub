@@ -13,7 +13,12 @@ import { useAuth } from "../lib/auth-context";
 import { formatTimeAgo } from "../lib/format";
 import { skinEventProperties } from "../lib/analytics-skins";
 import { track } from "../lib/analytics";
-import { dehydrateReplaySkinSettings, getMyReplaySkin, setMyReplaySkin } from "../lib/replay-owner-skin";
+import {
+  dehydrateReplaySkinSettings,
+  fetchMyReplaySkinCached,
+  setMyReplaySkin,
+  writeMyReplaySkinMemory,
+} from "../lib/replay-owner-skin";
 import { importReplaySkinFromOsk } from "../lib/replay-skin-import";
 import { deleteMySkin, fetchSkinById, formatKeymodes, formatSkinFileSize, markSkinsListStale, moderateSkin, readSkinsBrowseEntry, renameSkin, SKIN_NAME_MAX_LENGTH, skinDownloadUrl, skinOskFileUrl, type SkinSummary } from "../lib/skins";
 import { pageSeo } from "../lib/seo";
@@ -113,9 +118,9 @@ function SkinDetailPage() {
   useEffect(() => {
     if (!viewerId || !skinId || skinStatus !== "published") return;
     let cancelled = false;
-    void getMyReplaySkin()
+    void fetchMyReplaySkinCached(viewerId)
       .then((record) => {
-        if (!cancelled && record?.skin.id === skinId) setReplaySkinStatus("set");
+        if (!cancelled) setReplaySkinStatus(record?.skin.id === skinId ? "set" : "idle");
       })
       .catch(() => {});
     return () => {
@@ -124,7 +129,7 @@ function SkinDetailPage() {
   }, [viewerId, skinId, skinStatus]);
 
   const setAsMyReplaySkin = async () => {
-    if (!skin || replaySkinStatus !== "idle") return;
+    if (!skin || !viewerId || replaySkinStatus !== "idle") return;
     // The streaming endpoint is CORS-safe and does not count as a download.
     const oskFileUrl = skinOskFileUrl(skin);
     if (!oskFileUrl) return;
@@ -150,6 +155,11 @@ function SkinDetailPage() {
         );
         return;
       }
+      writeMyReplaySkinMemory(viewerId, {
+        skin,
+        settings: payload,
+        updatedAt: new Date().toISOString(),
+      });
       setReplaySkinStatus("set");
     } catch {
       setReplaySkinStatus("idle");

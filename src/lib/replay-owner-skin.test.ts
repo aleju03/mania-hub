@@ -2,11 +2,15 @@ import JSZip from "jszip";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  MY_REPLAY_SKIN_MEMORY_TTL_MS,
   appliedCommunityReplaySkinKey,
   dehydrateReplaySkinSettings,
+  fetchMyReplaySkinCached,
+  invalidateMyReplaySkinMemory,
   readAppliedCommunityReplaySkin,
   rehydrateOwnerReplaySkinSettings,
   replaySkinSettingsEmbedAssets,
+  writeMyReplaySkinMemory,
   writeAppliedCommunityReplaySkin,
 } from "./replay-owner-skin";
 import type { SkinSummary } from "./skins";
@@ -55,10 +59,11 @@ function settingsWithAssets(): ReplaySkinSettings {
   });
 }
 
-async function buildArchive(paths: string[]): Promise<Awaited<ReturnType<typeof openOskArchive>>> {
+async function buildArchive(paths: string[], skinIni?: string): Promise<Awaited<ReturnType<typeof openOskArchive>>> {
   const zip = new JSZip();
   const bytes = Uint8Array.from(atob(PNG_BASE64), (char) => char.charCodeAt(0));
   for (const path of paths) zip.file(path, bytes);
+  if (skinIni) zip.file("skin.ini", skinIni);
   const buffer = await zip.generateAsync({ type: "arraybuffer" });
   return openOskArchive(buffer);
 }
@@ -144,6 +149,22 @@ describe("owner replay skin dehydrate/rehydrate", () => {
     expect(settings?.style).toBe("arrows");
   });
 
+  it("fills per-keymode stage positions a payload saved before them never carried", async () => {
+    // The stored payload has the settings-wide value only, so every keymode's
+    // stage would be placed from one block's HitPosition; the archive's own
+    // skin.ini still knows what each keymode declared.
+    const payload = dehydrateReplaySkinSettings(settingsWithAssets());
+    const archive = await buildArchive(
+      ["mania/note1.png", "mania/note2.png", "mania/key1.png", "hit300.png", "mania-stage-hint.png", "scorebar-colour.png"],
+      ["[General]", "Name: TwoModes", "[Mania]", "Keys: 4", "HitPosition: 440", "ComboPosition: 155"].join("\n"),
+    );
+
+    const restored = await rehydrateOwnerReplaySkinSettings(payload, archive);
+
+    expect(restored?.keymodeProfiles["4"].hitPosition).toBe(Math.round((480 - 440) * 1.6));
+    expect(restored?.keymodeProfiles["4"].comboPosition).toBe(Math.round((480 - 155) * 1.6));
+  });
+
   it("rejects unknown payload shapes", async () => {
     const archive = await buildArchive([]);
     expect(await rehydrateOwnerReplaySkinSettings(null, archive)).toBeNull();
@@ -154,6 +175,92 @@ describe("owner replay skin dehydrate/rehydrate", () => {
   it("detects embedded assets in settings", () => {
     expect(replaySkinSettingsEmbedAssets(settingsWithAssets())).toBe(true);
     expect(replaySkinSettingsEmbedAssets(normalizeReplaySkinSettings(DEFAULT_REPLAY_SKIN_SETTINGS))).toBe(false);
+  });
+});
+
+describe("my replay skin memory cache", () => {
+  const userId = 314159;
+  const skin = { id: "sk_cache", name: "Cached skin" } as SkinSummary;
+  const firstRecord = { skin, settings: { v: 1 }, updatedAt: "2026-08-02T12:00:00.000Z" };
+
+  beforeEach(() => {
+    vi.stubEnv("VITE_LIVE_BACKEND_URL", "https://live.test");
+    invalidateMyReplaySkinMemory(userId);
+  });
+
+  afterEach(() => {
+    invalidateMyReplaySkinMemory(userId);
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  function responseWith(replaySkin: unknown): Response {
+    return {
+      ok: true,
+      json: async () => ({ replaySkin }),
+    } as Response;
+  }
+
+  it("deduplicates concurrent reads and reuses the result across mounts", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(responseWith(firstRecord));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const [first, second] = await Promise.all([
+      fetchMyReplaySkinCached(userId),
+      fetchMyReplaySkinCached(userId),
+    ]);
+    const reopened = await fetchMyReplaySkinCached(userId);
+
+    expect(first).toEqual(firstRecord);
+    expect(second).toEqual(firstRecord);
+    expect(reopened).toEqual(firstRecord);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      `https://live.test/api/replay-skin?userId=${userId}`,
+      { credentials: "omit" },
+    );
+  });
+
+  it("refreshes after the memory TTL", async () => {
+    let now = 1_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    const nextRecord = { ...firstRecord, updatedAt: "2026-08-02T12:01:00.000Z" };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(responseWith(firstRecord))
+      .mockResolvedValueOnce(responseWith(nextRecord));
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await fetchMyReplaySkinCached(userId)).toEqual(firstRecord);
+    now += MY_REPLAY_SKIN_MEMORY_TTL_MS;
+    expect(await fetchMyReplaySkinCached(userId)).toEqual(nextRecord);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not cache transport failures", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await fetchMyReplaySkinCached(userId)).toBeNull();
+    expect(await fetchMyReplaySkinCached(userId)).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a mutation that lands while an older read is in flight", async () => {
+    let resolveFetch!: (response: Response) => void;
+    const fetchMock = vi.fn().mockReturnValue(new Promise<Response>((resolve) => {
+      resolveFetch = resolve;
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const pending = fetchMyReplaySkinCached(userId);
+    const savedRecord = { ...firstRecord, updatedAt: "2026-08-02T12:02:00.000Z" };
+    writeMyReplaySkinMemory(userId, savedRecord);
+    resolveFetch(responseWith(firstRecord));
+
+    expect(await pending).toEqual(savedRecord);
+    expect(await fetchMyReplaySkinCached(userId)).toEqual(savedRecord);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 

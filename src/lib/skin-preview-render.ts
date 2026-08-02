@@ -1,6 +1,7 @@
 import type { ReplaySkinKeymodeProfile, ReplaySkinSettings } from "./replay-skin";
 import {
   getReplaySkinProfile,
+  getReplaySkinStagePosition,
   OSU_MANIA_DEFAULT_COLUMN_LINE_WIDTH,
   OSU_MANIA_DEFAULT_COLUMN_START,
   OSU_MANIA_DEFAULT_LIGHT_POSITION,
@@ -251,7 +252,7 @@ export async function renderSkinPreview(
   // convert back to skin units (480-space) and scale with the stage zoom so
   // note/receptor/hit-gap proportions stay exactly as in game. Clamped so a
   // degenerate HitPosition still leaves a usable field.
-  const hitGap = Math.max(0, Math.min(768, settings.hitPosition)) * (480 / 768) * layout.scale;
+  const hitGap = Math.max(0, Math.min(768, getReplaySkinStagePosition(profile, settings, "hitPosition"))) * (480 / 768) * layout.scale;
   const judgmentY = Math.max(
     SKIN_PREVIEW_HEIGHT * HIT_LINE_MIN_FRACTION,
     Math.min(SKIN_PREVIEW_HEIGHT * 0.95, SKIN_PREVIEW_HEIGHT - hitGap),
@@ -331,7 +332,7 @@ export async function renderSkinPreview(
     // to the (possibly clamped) judgement line so the declared gap survives
     // the card's clamping; only the one pressed column shows it here.
     const height = stageScale(lightAsset, lightImage);
-    const hitUnits = Math.max(0, Math.min(768, settings.hitPosition)) * (480 / 768);
+    const hitUnits = Math.max(0, Math.min(768, getReplaySkinStagePosition(profile, settings, "hitPosition"))) * (480 / 768);
     const lightUnits = 480 - (profile.lightPosition ?? OSU_MANIA_DEFAULT_LIGHT_POSITION);
     const lightShift = (hitUnits - lightUnits) * layout.scale;
     const tint = stage.lightColors[pressedColumn] || "";
@@ -910,7 +911,8 @@ function drawJudgementAndCombo(
   }
 
   const combo = profile.assets.combo;
-  if (!combo) return;
+  // ComboPosition pushed off the stage means the skin wants no counter.
+  if (!combo || profile.comboHidden) return;
   const digitImages = "727".split("").map((digit) => {
     const asset = combo.digits[Number(digit)];
     return asset ? images.get(asset.src) : undefined;
@@ -928,7 +930,7 @@ function drawJudgementAndCombo(
   // there as the counter's backdrop - so a fixed height left that art
   // orphaned. Clamped to the card for degenerate values.
   const comboCenter = SKIN_PREVIEW_HEIGHT
-    - Math.max(0, Math.min(768, settings.comboPosition)) * (480 / 768) * layout.scale;
+    - Math.max(0, Math.min(768, getReplaySkinStagePosition(profile, settings, "comboPosition"))) * (480 / 768) * layout.scale;
   const y = Math.max(
     SKIN_PREVIEW_HEIGHT * 0.05,
     Math.min(SKIN_PREVIEW_HEIGHT * 0.8, comboCenter - digitHeight / 2),

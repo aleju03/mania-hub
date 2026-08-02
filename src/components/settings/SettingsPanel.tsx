@@ -46,13 +46,13 @@ import {
 } from "../../lib/replay-preferences";
 import {
   clearMyReplaySkin,
-  getMyReplaySkin,
+  fetchMyReplaySkinCached,
   loadAppliedCommunityReplaySkinSettings,
-  parseOwnerReplaySkinRecordWire,
   readAppliedCommunityReplaySkin,
   replaySkinSettingsEmbedAssets,
   replaySkinSettingsWithoutAssets,
   writeAppliedCommunityReplaySkin,
+  writeMyReplaySkinMemory,
 } from "../../lib/replay-owner-skin";
 import type { AppliedCommunitySkinDraft, OwnerReplaySkinRecord } from "../../lib/replay-owner-skin";
 import { useAuth } from "../../lib/auth-context";
@@ -560,10 +560,10 @@ function SkinPanel({
     }
     let cancelled = false;
     setMyReplaySkinLoaded(false);
-    void getMyReplaySkin()
-      .then((wire) => {
+    void fetchMyReplaySkinCached(viewerId)
+      .then((record) => {
         if (cancelled) return;
-        setMyReplaySkinRecord(wire ? parseOwnerReplaySkinRecordWire(wire) : null);
+        setMyReplaySkinRecord(record);
       })
       .catch(() => {})
       .finally(() => {
@@ -580,8 +580,19 @@ function SkinPanel({
   };
 
   const removeMyReplaySkin = () => {
-    void clearMyReplaySkin();
+    const previous = myReplaySkin;
     setMyReplaySkinRecord(null);
+    if (viewerId) writeMyReplaySkinMemory(viewerId, null);
+    void clearMyReplaySkin()
+      .then((result) => {
+        if (result.ok) return;
+        setMyReplaySkinRecord(previous);
+        if (viewerId) writeMyReplaySkinMemory(viewerId, previous);
+      })
+      .catch(() => {
+        setMyReplaySkinRecord(previous);
+        if (viewerId) writeMyReplaySkinMemory(viewerId, previous);
+      });
   };
 
   return (
@@ -733,7 +744,10 @@ function SkinPanel({
         {customizing && myReplaySkin ? (
           <OwnerReplaySkinCustomizeModal
             record={myReplaySkin}
-            onSaved={setMyReplaySkinRecord}
+            onSaved={(record) => {
+              setMyReplaySkinRecord(record);
+              if (viewerId) writeMyReplaySkinMemory(viewerId, record);
+            }}
             onClose={() => setCustomizing(false)}
           />
         ) : null}

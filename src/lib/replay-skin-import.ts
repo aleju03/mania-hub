@@ -73,14 +73,19 @@ export async function importReplaySkinFromOsk(
     targetKeyCount: number;
     baseSettings?: ReplaySkinSettings;
     extractSounds?: boolean;
+    // Callers that need the archive after importing can open it once and pass
+    // it here. Besides avoiding a second unzip, that same archive keeps the
+    // decoded image promises populated by this import for later rehydration.
+    archive?: OskArchive;
     // Parse progress over the asset references the skin.ini declares (the
     // slow part is extracting and decoding each image out of the zip).
     onProgress?: (done: number, total: number) => void;
   },
 ): Promise<ReplaySkinImportResult> {
-  // Buffer-first so the same code runs in the browser and under node (JSZip
-  // cannot read node's File/Blob objects directly).
-  const zip = await JSZip.loadAsync(await file.arrayBuffer());
+  // Buffer-first when opening here so the same code runs in the browser and
+  // under node (JSZip cannot read node's File/Blob objects directly).
+  const archive = options.archive ?? await openOskArchive(await file.arrayBuffer());
+  const { zip, lookup, assetCache } = archive;
   const skinIni = await readSkinIni(zip);
   if (!skinIni) throw new Error("No skin.ini was found in this .osk file.");
 
@@ -91,8 +96,6 @@ export async function importReplaySkinFromOsk(
     keymodeProfiles: { ...baseSettings.keymodeProfiles },
   });
 
-  const lookup = buildZipLookup(zip);
-  const assetCache = new Map<string, Promise<ReplaySkinImageAsset | undefined>>();
   const targetKeyCount = Math.max(1, Math.min(REPLAY_SKIN_MAX_COLUMNS, Math.round(options.targetKeyCount)));
   const maniaBlocks = parsed.mania
     .map((block) => ({ block, keys: parseInteger(block.Keys) }))
@@ -254,6 +257,36 @@ export async function readOskManifest(file: File): Promise<OskManifest> {
   )].sort((a, b) => a - b);
   if (keymodes.length === 0) throw new Error("The skin.ini has no [Mania] section, so this skin has no mania keymodes.");
   return { name: parsed.name ?? stripExtension(file.name), author: parsed.author, keymodes };
+}
+
+// skin.ini HitPosition / ScorePosition / ComboPosition per keymode, straight
+// out of an opened archive. Skins saved before the viewer kept these per
+// keymode have them missing from their stored payload, and rehydration fills
+// them from here rather than making the owner re-import the skin.
+export interface OskStagePositions {
+  hitPosition: number | null;
+  scorePosition: number | null;
+  comboPosition: number | null;
+  comboHidden: boolean;
+}
+
+export async function readOskStagePositions(
+  archive: OskArchive,
+): Promise<Map<number, OskStagePositions>> {
+  const out = new Map<number, OskStagePositions>();
+  const skinIni = await readSkinIni(archive.zip);
+  if (!skinIni) return out;
+  for (const block of parseSkinIni(skinIni).mania) {
+    const keys = parseInteger(block.Keys);
+    if (keys == null || keys < 1 || keys > REPLAY_SKIN_MAX_COLUMNS || out.has(keys)) continue;
+    out.set(keys, {
+      hitPosition: parseStagePosition(block.HitPosition),
+      scorePosition: parseStagePosition(block.ScorePosition),
+      comboPosition: parseStagePosition(block.ComboPosition),
+      comboHidden: isOffStagePosition(block.ComboPosition),
+    });
+  }
+  return out;
 }
 
 // A .osk opened once and queried many times: the owner-skin flows resolve
@@ -511,6 +544,15 @@ async function buildProfileFromManiaBlock({
   const columnStart = columnStartValue == null ? null : Math.max(0, Math.min(853, columnStartValue));
   const lightPositionValue = parseNumber(block.LightPosition);
   const lightPosition = lightPositionValue == null ? null : Math.max(0, Math.min(480, lightPositionValue));
+  // HitPosition and the two HUD positions belong to the block as much as the
+  // column widths do: a skin can put its 4K hit line at 440 and its 7K one at
+  // 393, and its key art is padded to land on whichever applies. Kept per
+  // keymode as well as in the settings-wide values below, which stay as the
+  // fallback for keymodes the skin never declared.
+  const hitPosition = parseStagePosition(block.HitPosition);
+  const scorePosition = parseStagePosition(block.ScorePosition);
+  const comboPosition = parseStagePosition(block.ComboPosition);
+  const comboHidden = isOffStagePosition(block.ComboPosition);
   // KeysUnderNotes puts the key area below the notes, which is how arrow and
   // deck skins keep their receptors from covering the hit.
   const keysUnderNotes = parseNumber(block.KeysUnderNotes) === 1;
@@ -688,6 +730,10 @@ async function buildProfileFromManiaBlock({
       judgementLine,
       columnStart,
       lightPosition,
+      hitPosition,
+      scorePosition,
+      comboPosition,
+      comboHidden,
       keysUnderNotes,
       noteHeightScale,
       columnBackgrounds,
@@ -715,14 +761,32 @@ function defaultManiaImageSuffix(keys: number, column: number): "1" | "2" | "S" 
   return mirrored % 2 === 0 ? "1" : "2";
 }
 
+// skin.ini stage positions are measured in the 480-unit stage space, and a
+// value outside it cannot mean a spot on the stage: the Teto edit sets its 7K
+// ComboPosition to 800, and clamping that into range turned "off the screen"
+// into "pinned to the bottom edge". Treated as undeclared instead, so the
+// value the rest of the skin uses stands.
+function parseStagePosition(raw: string | undefined): number | null {
+  const value = parseNumber(raw);
+  if (value == null || value < 0 || value > 480) return null;
+  return osuManiaStagePositionToReplayPosition(value);
+}
+
+// A position the skin deliberately pushed past the bottom of the stage, which
+// is how a skin turns the combo counter off.
+function isOffStagePosition(raw: string | undefined): boolean {
+  const value = parseNumber(raw);
+  return value != null && value > 480;
+}
+
 function settingsFromManiaBlock(block: Record<string, string>): Partial<ReplaySkinSettings> {
   const patch: Partial<ReplaySkinSettings> = {};
-  const hitPosition = parseNumber(block.HitPosition);
-  const scorePosition = parseNumber(block.ScorePosition);
-  const comboPosition = parseNumber(block.ComboPosition);
-  if (hitPosition != null) patch.hitPosition = osuManiaStagePositionToReplayPosition(hitPosition);
-  if (scorePosition != null) patch.scorePosition = osuManiaStagePositionToReplayPosition(scorePosition);
-  if (comboPosition != null) patch.comboPosition = osuManiaStagePositionToReplayPosition(comboPosition);
+  const hitPosition = parseStagePosition(block.HitPosition);
+  const scorePosition = parseStagePosition(block.ScorePosition);
+  const comboPosition = parseStagePosition(block.ComboPosition);
+  if (hitPosition != null) patch.hitPosition = hitPosition;
+  if (scorePosition != null) patch.scorePosition = scorePosition;
+  if (comboPosition != null) patch.comboPosition = comboPosition;
   if (block.UpsideDown === "1") patch.upscroll = true;
   if (block.UpsideDown === "0") patch.upscroll = false;
   return patch;

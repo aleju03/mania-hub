@@ -166,6 +166,20 @@ export interface ReplaySkinKeymodeProfile {
   // same top-down 480-space as HitPosition. null falls back to stable's 413
   // (11 units below the default hit position, overlapping the key tops).
   lightPosition: number | null;
+  // skin.ini HitPosition / ScorePosition / ComboPosition, per keymode like the
+  // rest of the [Mania] block: skins routinely set a different hit line for 4K
+  // and 7K (the Teto edit uses 440 and 393), and key art is padded to land on
+  // its own keymode's line. Stored in the settings' 768-space, measured up
+  // from the stage's bottom edge; null means the block never said, so the
+  // settings-wide value stands.
+  hitPosition: number | null;
+  scorePosition: number | null;
+  comboPosition: number | null;
+  // skin.ini ComboPosition past the bottom of the stage, which is how skins
+  // turn the counter off (the Teto edit's 7K block asks for 800 of 480). The
+  // spot itself is meaningless, so it is kept as this flag instead of a
+  // position no drawer could use.
+  comboHidden: boolean;
   // skin.ini KeysUnderNotes: the key area draws below the notes instead of
   // over them. Stable defaults it off.
   keysUnderNotes: boolean;
@@ -381,6 +395,10 @@ export const DEFAULT_REPLAY_SKIN_PROFILE: ReplaySkinKeymodeProfile = {
   judgementLine: true,
   columnStart: null,
   lightPosition: null,
+  hitPosition: null,
+  scorePosition: null,
+  comboPosition: null,
+  comboHidden: false,
   keysUnderNotes: false,
   comboScale: 1,
   noteHeightScale: REPLAY_SKIN_DEFAULT_COLUMN_WIDTH,
@@ -694,6 +712,10 @@ function normalizeKeymodeProfile(value: unknown, fallback?: Partial<ReplaySkinKe
     judgementLine: typeof raw.judgementLine === "boolean" ? raw.judgementLine : true,
     columnStart: normalizeNullableStagePosition(raw.columnStart, 853),
     lightPosition: normalizeNullableStagePosition(raw.lightPosition, 480),
+    hitPosition: normalizeNullableStagePosition(raw.hitPosition, 768),
+    scorePosition: normalizeNullableStagePosition(raw.scorePosition, 768),
+    comboPosition: normalizeNullableStagePosition(raw.comboPosition, 768),
+    comboHidden: raw.comboHidden === true,
     keysUnderNotes: raw.keysUnderNotes === true,
     comboScale: normalizeComboScale(raw.comboScale),
     noteHeightScale: normalizeNoteHeightScale(raw.noteHeightScale ?? fallback?.noteHeightScale, smallestColumnWidth),
@@ -746,6 +768,21 @@ export function getReplaySkinProfile(settings: ReplaySkinSettings, keyCount: num
     assets: EMPTY_REPLAY_SKIN_ASSETS,
   });
   return normalized.keymodeProfiles[String(keyCount)] ?? fallback;
+}
+
+export type ReplaySkinStagePositionKey = "hitPosition" | "scorePosition" | "comboPosition";
+
+// The stage position in force for a keymode: the [Mania] block's own value
+// when the skin declared one, otherwise the settings-wide value the Layout
+// tab edits. Every surface that places the hit line, the key area or the HUD
+// has to resolve it the same way or they drift apart on a skin that sets a
+// different hit position per keymode.
+export function getReplaySkinStagePosition(
+  profile: ReplaySkinKeymodeProfile,
+  settings: ReplaySkinSettings,
+  key: ReplaySkinStagePositionKey,
+): number {
+  return profile[key] ?? settings[key];
 }
 
 export function getReplaySkinColumnColor(
@@ -993,6 +1030,10 @@ function compactKeymodeProfileV3(profile: ReplaySkinKeymodeProfile): Record<stri
   if (profile.columnLineWidths.length > 0) out.n = profile.columnLineWidths;
   if (profile.columnLineColor) out.o = compactColor(profile.columnLineColor);
   if (!profile.judgementLine) out.p = 0;
+  if (profile.hitPosition != null) out.q = profile.hitPosition;
+  if (profile.scorePosition != null) out.r = profile.scorePosition;
+  if (profile.comboPosition != null) out.s = profile.comboPosition;
+  if (profile.comboHidden) out.t = 1;
   if (profile.noteHeightScale !== DEFAULT_REPLAY_SKIN_PROFILE.noteHeightScale) out.l = profile.noteHeightScale;
   const hasAssets = profile.assets.columns.length > 0
     || profile.assets.combo !== null
@@ -1016,6 +1057,10 @@ function expandKeymodeProfileV3(value: unknown): Record<string, unknown> {
     columnLineWidths: raw.n,
     columnLineColor: expandLineColor(raw.o),
     judgementLine: expandBoolean(raw.p),
+    hitPosition: raw.q,
+    scorePosition: raw.r,
+    comboPosition: raw.s,
+    comboHidden: raw.t === 1,
     noteHeightScale: raw.l,
     assets: raw.m,
   };

@@ -1,7 +1,7 @@
 import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
 
-import { applyTextureCap, decodeUncompressedTiff, importReplaySkinFromOsk, planTextureCap } from "./replay-skin-import";
+import { applyTextureCap, decodeUncompressedTiff, importReplaySkinFromOsk, loadOskImageAssetByPath, openOskArchive, planTextureCap } from "./replay-skin-import";
 
 // Builds a minimal little-endian uncompressed TIFF the way Photoshop lays it
 // out: header, pixel strip, then one IFD. Enough to cover the renamed-TIFF
@@ -184,6 +184,21 @@ function hudComponentsJson(entry: { scale?: number; y?: number; anchor?: number 
 }
 
 describe("importReplaySkinFromOsk keymode synthesis", () => {
+  it("reuses a caller-opened archive and leaves its decoded asset cache warm", async () => {
+    const file = await buildOsk(
+      ["[General]", "Name: Warm", "[Mania]", "Keys: 4", "NoteImage0: mania/custom1"].join("\n"),
+      ["mania/custom1.png"],
+    );
+    const archive = await openOskArchive(await file.arrayBuffer());
+    const result = await importReplaySkinFromOsk(file, { targetKeyCount: 4, archive });
+    const cachedPromise = archive.assetCache.get("mania/custom1.png");
+
+    expect(archive.assetCache.size).toBeGreaterThan(0);
+    expect(cachedPromise).toBeDefined();
+    expect(await loadOskImageAssetByPath(archive, "mania/custom1.png")).toBe(await cachedPromise);
+    expect(result.settings.keymodeProfiles["4"].assets.columns[0].tap?.path).toBe("mania/custom1.png");
+  });
+
   it("synthesizes undeclared keymodes from stable's default filenames", async () => {
     const file = await buildOsk(
       ["[General]", "Name: FourOnly", "[Mania]", "Keys: 4", "NoteImage0: mania/custom1"].join("\n"),
@@ -238,6 +253,65 @@ describe("importReplaySkinFromOsk keymode synthesis", () => {
 
     expect(result.summary.assetKeymodes).toEqual([4]);
     expect(result.settings.keymodeProfiles["7"]).toBeUndefined();
+  });
+});
+
+describe("importReplaySkinFromOsk per-keymode stage positions", () => {
+  it("keeps each [Mania] block's own hit, score and combo positions", async () => {
+    // The Teto edit's shape: a lower hit line for 4K than for 7K. Key art is
+    // padded to land on its own keymode's line, so one shared value drew the
+    // 7K key deck tens of units away from where its notes are judged.
+    const file = await buildOsk(
+      [
+        "[General]", "Name: TwoModes",
+        "[Mania]", "Keys: 4", "HitPosition: 440", "ScorePosition: 185", "ComboPosition: 155",
+        "[Mania]", "Keys: 7", "HitPosition: 393", "ScorePosition: 150", "ComboPosition: 300",
+      ].join("\n"),
+      ["mania-note1.png", "mania-note2.png", "mania-noteS.png", "mania-key1.png"],
+    );
+    const result = await importReplaySkinFromOsk(file, { targetKeyCount: 7 });
+
+    const toReplay = (value: number) => Math.round((480 - value) * 1.6);
+    expect(result.settings.keymodeProfiles["4"].hitPosition).toBe(toReplay(440));
+    expect(result.settings.keymodeProfiles["7"].hitPosition).toBe(toReplay(393));
+    expect(result.settings.keymodeProfiles["4"].scorePosition).toBe(toReplay(185));
+    expect(result.settings.keymodeProfiles["7"].comboPosition).toBe(toReplay(300));
+  });
+
+  it("ignores a position outside the stage instead of pinning it to the edge", async () => {
+    // The Teto edit's 7K block asks for ComboPosition 800 on a 480-unit stage.
+    // Clamped, that drew the counter along the bottom edge; undeclared, the
+    // keymode keeps the position the rest of the skin uses.
+    const file = await buildOsk(
+      [
+        "[General]", "Name: OffStage",
+        "[Mania]", "Keys: 4", "ComboPosition: 155",
+        "[Mania]", "Keys: 7", "ComboPosition: 800",
+      ].join("\n"),
+      ["mania-note1.png", "mania-note2.png", "mania-noteS.png", "mania-key1.png"],
+    );
+    const result = await importReplaySkinFromOsk(file, { targetKeyCount: 7 });
+
+    expect(result.settings.keymodeProfiles["7"].comboPosition).toBeNull();
+    // Off the bottom of the stage is how a skin turns the counter off, so the
+    // keymode is marked hidden rather than inheriting a spot.
+    expect(result.settings.keymodeProfiles["7"].comboHidden).toBe(true);
+    expect(result.settings.keymodeProfiles["4"].comboHidden).toBe(false);
+    expect(result.settings.keymodeProfiles["4"].comboPosition).toBe(Math.round((480 - 155) * 1.6));
+    // Nothing usable in the imported keymode's block, so the settings-wide
+    // value stays at the viewer's default rather than borrowing 4K's.
+    expect(result.settings.comboPosition).toBe(Math.round((480 - 177) * 1.6));
+  });
+
+  it("leaves a keymode the skin never positioned on the settings-wide value", async () => {
+    const file = await buildOsk(
+      ["[General]", "Name: FourOnly", "[Mania]", "Keys: 4", "HitPosition: 440"].join("\n"),
+      ["mania-note1.png", "mania-note2.png", "mania-noteS.png", "mania-key1.png"],
+    );
+    const result = await importReplaySkinFromOsk(file, { targetKeyCount: 7 });
+
+    expect(result.settings.keymodeProfiles["4"].hitPosition).toBe(Math.round((480 - 440) * 1.6));
+    expect(result.settings.keymodeProfiles["7"]?.hitPosition ?? null).toBeNull();
   });
 });
 

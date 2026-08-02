@@ -161,6 +161,96 @@ describe("replay skin settings UI", () => {
     expect(source).toContain("{keymodeHasComboArt ? null : (");
   });
 
+  it("rebuilds a stripped draft instead of editing and saving a skin without its art", () => {
+    const modalSource = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplaySkinSettingsModal.tsx"), "utf8");
+    const ownerSource = fs.readFileSync(path.resolve(__dirname, "../lib/replay-owner-skin.ts"), "utf8");
+
+    // The page that owns the settings rebuilds the art asynchronously, so an
+    // editor opened first (or after a failed rebuild) holds the asset-free
+    // copy while its preset name still names the skin.
+    expect(modalSource).toContain("const draftMissingSkinArt = Boolean(communityPresetSkin) && !replaySkinSettingsEmbedAssets(draft);");
+    expect(modalSource).toContain("const rebuilt = await rehydrateOwnerReplaySkinSettings(communityPresetPayload, archive);");
+    // And Apply must not write that draft over the payload that still has the
+    // asset paths, or the preset rebuilds as flat shapes from then on.
+    expect(modalSource).toContain("const keptArt = replaySkinSettingsEmbedAssets(normalized);");
+    expect(modalSource).toContain("const payload = keptArt ? dehydrateReplaySkinSettings(normalized) : selectedPreset.community.payload;");
+    // A failed rebuild must not stick in the memo either.
+    expect(ownerSource).toContain("if (!settings && appliedFullSettings === entry) appliedFullSettings = null;");
+  });
+
+  it("ends an LN body at its head's centre in the card, like the stage", () => {
+    const modalSource = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplaySkinSettingsModal.tsx"), "utf8");
+    const canvasSource = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplayCanvas.ts"), "utf8");
+
+    // Stable runs a hold to the middle of its head cap, never to the cap's far
+    // edge: cap art is widest at its centre, so a body carried past it pokes
+    // out below a round note. The card ran both its skin-art and circle
+    // branches to the head's anchor instead.
+    expect(canvasSource).toContain("const bodyHeadY = this.skinSettings.upscroll ? headEndY + headHeight / 2 : headEndY - headHeight / 2;");
+    expect(canvasSource).toContain("const circleBodyRange = this.getHoldBodyRange(headCenterY, tailEndY, tailTrimDelta);");
+    expect(modalSource).toContain("const bodyHeadY = settings.upscroll ? lnHeadY + headHeight / 2 : lnHeadY - headHeight / 2;");
+    expect(modalSource).toContain("const bodyTop = Math.min(lnHeadCenterY, lnTailEnd);");
+  });
+
+  it("keeps the editor's skin and the published one in separate sections", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplaySkinSettingsModal.tsx"), "utf8");
+
+    // One card held both, so the buttons under "Your replay skin: X" read as
+    // acting on the skin named at the top of the card instead.
+    expect(source).toContain(">Custom skin</div>");
+    expect(source).toContain(">My replay skin</div>");
+    expect(source).toContain("{myReplaySkinRecord ? myReplaySkinRecord.skin.name : \"None set\"}");
+    expect(source).toContain("src={myReplaySkinRecord.skin.previewUrl}");
+  });
+
+  it("only offers Load when the published skin differs from the draft", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplaySkinSettingsModal.tsx"), "utf8");
+
+    // The button pulls the server-side copy down, which is the only route to
+    // it in a browser that never loaded it, and the way back from local edits.
+    // With the draft already holding it, it did nothing visible.
+    expect(source).toContain("const draftMatchesMyReplaySkin = Boolean(myReplaySkinRecord)");
+    // By identity: every edit rebuilds the draft object, while comparing the
+    // stored payloads called a skin "changed" the moment the format gained a
+    // field, which left the button live in the one case it does nothing.
+    expect(source).toContain("&& myReplaySkinDraftRef.current === draft;");
+    expect(source).toContain("myReplaySkinDraftRef.current = adoptImportedSettings(");
+    expect(source).toContain("myReplaySkinDraftRef.current = draft;");
+    expect(source).toContain("disabled={communityBusy != null || draftMatchesMyReplaySkin}");
+    // Named for its direction, next to a button that pushes the other way:
+    // plain "Load" read as acting on the preset above rather than on the skin
+    // named beside it.
+    expect(source).toContain('"Load into editor"');
+    expect(source).toContain("`The editor already holds ${myReplaySkinRecord.skin.name}`");
+  });
+
+  it("points a click in the preview at the asset row it came from", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplaySkinSettingsModal.tsx"), "utf8");
+
+    // Stage art is unrecognisable by filename, so the only way to find "the
+    // black bar across the top" was to clear rows until it went.
+    expect(source).toContain("const identifyAsset = (target: AssetPickerTarget) => {");
+    expect(source).toContain('setActiveTab("assets");');
+    expect(source).toContain('const row = modalRef.current?.querySelector(`[data-asset-row="${highlightedAssetId}"]`);');
+    expect(source).toContain('row?.scrollIntoView({ block: "center", behavior: "smooth" });');
+    expect(source).toContain("onIdentifyAsset={activeAssetArchive ? identifyAsset : undefined}");
+    // Which means the card has to draw the stage's own furniture, and each
+    // element has to take the pointer back from the lane drag-select.
+    expect(source).toContain("const stageArt = (() => {");
+    expect(source).toContain('className: "pointer-events-auto cursor-pointer",');
+    expect(source).toContain("onPointerDown: (event: ReactPointerEvent) => event.stopPropagation(),");
+  });
+
+  it("edits a keymode's own stage positions when the skin declares them", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplaySkinSettingsModal.tsx"), "utf8");
+
+    expect(source).toContain("const stagePositionValue = (key: ReplaySkinStagePositionKey) => getReplaySkinStagePosition(profile, draft, key);");
+    // Per keymode where the skin set one, settings-wide otherwise, so the
+    // built-in skins keep a single hit position across every keymode.
+    expect(source).toContain("if (profile[key] != null) updateProfile({ [key]: value } as Partial<ReplaySkinKeymodeProfile>);");
+    expect(source).toContain("else update({ [key]: value } as Partial<ReplaySkinSettings>);");
+  });
+
   it("returns to the built-in skin when the Default preset slot is picked", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplaySkinSettingsModal.tsx"), "utf8");
 
@@ -170,6 +260,23 @@ describe("replay skin settings UI", () => {
     expect(source).toContain("if (!loadedCatalogSkin && !replaySkinSettingsEmbedAssets(draft)) return;");
     expect(source).toContain("setLoadedCatalogSkin(null);");
     expect(source).toContain("setDraft(DEFAULT_REPLAY_SKIN_SETTINGS);");
+  });
+
+  it("keeps decoded community presets warm when switching through Default", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplaySkinSettingsModal.tsx"), "utf8");
+
+    // Switching away remembers the full data-URL settings object, its open
+    // archive and sounds. Switching back takes this branch before any zip
+    // extraction or per-asset rehydration work.
+    expect(source).toContain("const hydratedPresetCacheRef = useRef(new Map<string, HydratedCommunityPreset>());");
+    expect(source).toContain("rememberHydratedPreset(");
+    expect(source).toContain("let cached = hydratedPresetCacheRef.current.get(preset.id) ?? null;");
+    expect(source).toContain("if (cached?.sounds) {");
+    expect(source).toContain("readCachedReplaySkin(communityPresetCacheKey(preset))");
+    // A first import also retains the exact archive whose asset cache the
+    // importer populated, instead of unzipping into a fresh empty archive.
+    expect(source).toContain("archive,");
+    expect(source).not.toContain("const archive = await openOskArchive(file);");
   });
 
   it("filters the in-editor skin catalog by keymode", () => {

@@ -10,7 +10,7 @@ import { SearchInput } from "#/components/ui/SearchInput";
 import { ReplayRecentlyViewed } from "#/components/replay/ReplayRecentlyViewed";
 import { ReplaySideBySidePicker } from "#/components/replay/ReplaySideBySidePicker";
 import { getCountryName } from "#/lib/country";
-import { formatAccuracy, formatNumber, formatPP, formatTimeAgo } from "#/lib/format";
+import { formatAccuracy, formatNumber, formatPP, formatTimeAgo, formatTimeAgoTooltip } from "#/lib/format";
 import { getDisplayedAccuracy, getDisplayedRank, getModDisplayList, getScoreTimestamp, scoreHasReplay } from "#/lib/score";
 import { getReplayScoreAvailability } from "#/lib/replay-score-availability";
 import { searchBeatmaps, getUserBeatmapScores } from "#/lib/osu";
@@ -1027,7 +1027,7 @@ function PlayerBeatmapScoreRow({ score, onOpen }: { score: OsuScore; onOpen: () 
         <div className="min-w-[90px] shrink-0">
           <div className="flex items-center gap-1.5">
             <span className="text-sm font-bold text-osu-l2">{formatAccuracy(getDisplayedAccuracy(score))}</span>
-            {timestamp && <span className="text-[10px] text-osu-f1">{formatTimeAgo(timestamp)}</span>}
+            {timestamp && <span className="text-[10px] text-osu-f1" title={formatTimeAgoTooltip(timestamp)}>{formatTimeAgo(timestamp)}</span>}
           </div>
           <div className="mt-0.5 flex items-center gap-1.5 text-[10px] font-semibold text-osu-f1">
             <span>{formatNumber(score.max_combo)}x</span>

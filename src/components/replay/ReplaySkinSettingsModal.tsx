@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, ChevronDown, Copy, GripHorizontal, Pencil, Plus, Settings, Trash2, Upload, X } from "lucide-react";
 
@@ -22,11 +22,11 @@ import {
   getReplayJudgementScale,
   getReplayJudgementSetAssets,
   getReplaySkinProfile,
+  getReplaySkinStagePosition,
   normalizeReplaySkinSettings,
   OSU_MANIA_MAX_HIT_POSITION,
   OSU_MANIA_MIN_HIT_POSITION,
   OSU_MANIA_SCREEN_WIDTH,
-  osuManiaHitPositionToReplayHitPosition,
   osuManiaStagePositionToReplayPosition,
   createReplaySkinPreset,
   createReplaySkinShareKey,
@@ -44,26 +44,26 @@ import {
   REPLAY_SKIN_MIN_OUTLINE_WIDTH,
   REPLAY_SKIN_DEFAULT_JUDGEMENT_SCALE,
   REPLAY_SKIN_DEFAULT_OUTLINE_WIDTH,
-  replayHitPositionToOsuManiaHitPosition,
   replayStagePositionToOsuManiaPosition,
   writeReplaySkinPresets,
 } from "#/lib/replay-skin";
 import { extractSkinSoundsFromArchive, importReplaySkinFromOsk, listOskImageEntries, loadOskImageAssetByPath, openOskArchive } from "#/lib/replay-skin-import";
 import type { OskArchive, OskImageEntry } from "#/lib/replay-skin-import";
-import type { ReplaySkinColumnAssets, ReplaySkinImageAsset, ReplaySkinJudgementAssets, ReplaySkinKeymodeAssets, ReplaySkinKeymodeProfile, ReplaySkinPreset, ReplaySkinPresetCommunityLink, ReplaySkinSettings, ReplaySkinStageAssets, ReplaySkinStyle } from "#/lib/replay-skin";
+import { readCachedReplaySkin, writeCachedReplaySkin } from "#/lib/replay-skin-cache";
+import type { ReplaySkinColumnAssets, ReplaySkinImageAsset, ReplaySkinJudgementAssets, ReplaySkinKeymodeAssets, ReplaySkinKeymodeProfile, ReplaySkinPreset, ReplaySkinPresetCommunityLink, ReplaySkinSettings, ReplaySkinStageAssets, ReplaySkinStagePositionKey, ReplaySkinStyle } from "#/lib/replay-skin";
 import { readReplayAudioSettings, writeReplayAudioSettings, type ReplayAudioSettings } from "#/lib/replay-preferences";
 import { clearReplaySkinSounds, readReplaySkinSounds, writeReplaySkinSounds } from "#/lib/replay-skin-sounds";
 import { useAuth } from "#/lib/auth-context";
 import { getLiveBackendUrl } from "#/lib/live-backend";
 import {
   dehydrateReplaySkinSettings,
-  getMyReplaySkin,
+  fetchMyReplaySkinCached,
   loadOwnerReplaySkin,
-  parseOwnerReplaySkinRecordWire,
   readAppliedCommunityReplaySkin,
   rehydrateOwnerReplaySkinSettings,
   replaySkinSettingsEmbedAssets,
   setMyReplaySkin,
+  writeMyReplaySkinMemory,
 } from "#/lib/replay-owner-skin";
 import type { AppliedCommunitySkinDraft, OwnerReplaySkinRecord } from "#/lib/replay-owner-skin";
 import { fetchSkinsListDirect, formatKeymodes, skinOskFileUrl } from "#/lib/skins";
@@ -109,6 +109,18 @@ type OverrideKind = "tap" | "lnHead";
 type PreviewMode = "tap" | "ln";
 type ReplaySkinSettingsTab = "style" | "layout" | "hud" | "overlays" | "audio" | "assets";
 type ArrowDirection = "left" | "right" | "up" | "down";
+
+interface HydratedCommunityPreset {
+  settings: ReplaySkinSettings;
+  archive: OskArchive | null;
+  // Null means the visuals are cached but this preset's sounds have not been
+  // recovered yet. An empty object is a known skin with no gameplay samples.
+  sounds: Record<string, ArrayBuffer> | null;
+}
+
+function communityPresetCacheKey(preset: ReplaySkinPreset): string {
+  return `preset:${preset.id}:${preset.updatedAt}`;
+}
 
 // Assets tab (only mounted when an .osk archive rides along, i.e. the
 // owner-replay-skin customize flow): which draft slot a picked image lands in.
@@ -410,6 +422,16 @@ export function ReplaySkinSettingsModal({
   const [selectedColumns, setSelectedColumns] = useState<number[]>([]);
   const [previewMode, setPreviewMode] = useState<PreviewMode>("tap");
   const [assetPicker, setAssetPicker] = useState<AssetPickerTarget | null>(null);
+  // Set by a click in the preview: the Assets tab opens on that row, scrolls it
+  // into view and rings it for a moment. A skin's stage art is unrecognisable
+  // by filename, so "the black bar across the top" had no way back to its row.
+  const [highlightedAssetId, setHighlightedAssetId] = useState<string | null>(null);
+  const identifyAsset = (target: AssetPickerTarget) => {
+    setActiveTab("assets");
+    setHighlightedAssetId(target.kind === "column"
+      ? `column:${target.column}:${target.assetKey}`
+      : `${target.kind}:${target.assetKey}`);
+  };
 
   // ---- community skin (Style tab) -------------------------------------------
   const auth = useAuth();
@@ -427,10 +449,19 @@ export function ReplaySkinSettingsModal({
   // Open archives by skin id, so re-selecting a community preset in the same
   // session never re-downloads or re-parses the .osk.
   const archiveCacheRef = useRef(new Map<string, Promise<OskArchive | null>>());
+  // Keep decoded preset settings too. The archive cache alone avoids the
+  // download, but rebuilding data URLs from it still decodes every referenced
+  // image and is the visible hitch when switching Default -> custom.
+  const hydratedPresetCacheRef = useRef(new Map<string, HydratedCommunityPreset>());
   const [importProgress, setImportProgress] = useState<number | null>(null);
   // Gameplay samples pulled out of the last imported .osk. They only persist
   // (IndexedDB) when the user hits Apply; Cancel drops them with the draft.
   const pendingSkinSoundsRef = useRef<{ name: string; sounds: Record<string, ArrayBuffer> } | null>(null);
+  const persistedSkinSoundsRef = useRef<{ skinName: string | null; samples: Record<string, ArrayBuffer> } | null>(null);
+  // The exact draft object that came from (or was published as) the viewer's
+  // replay skin; any edit replaces the object, which is what tells "Load"
+  // whether it would do anything.
+  const myReplaySkinDraftRef = useRef<ReplaySkinSettings | null>(null);
   const [myReplaySkinRecord, setMyReplaySkinRecord] = useState<OwnerReplaySkinRecord | null>(null);
 
   // Null until an .osk is open, which also hides the Assets tab: there is
@@ -446,6 +477,7 @@ export function ReplaySkinSettingsModal({
   );
   const assetEntries = useMemo(() => (activeAssetArchive ? listOskImageEntries(activeAssetArchive) : []), [activeAssetArchive]);
   const profile = getReplaySkinProfile(draft, selectedKeyCount);
+  const stagePositionValue = (key: ReplaySkinStagePositionKey) => getReplaySkinStagePosition(profile, draft, key);
   const keymodeHasSkinArt = profile.assets.columns.some((column) => Object.values(column).some(Boolean));
   const keymodeHasComboArt = Boolean(profile.assets.combo?.digits.some(Boolean));
   const keymodeHasJudgementArt = Object.values(profile.assets.judgements).some(Boolean);
@@ -470,9 +502,12 @@ export function ReplaySkinSettingsModal({
   const [columnStartInput, setColumnStartInput] = useState(() => String(columnStartValue));
   const [noteHeightScaleInput, setNoteHeightScaleInput] = useState(() => String(profile.noteHeightScale));
   const [outlineWidthInput, setOutlineWidthInput] = useState(() => String(draft.outlineWidth));
-  const [hitPositionInput, setHitPositionInput] = useState(() => String(replayHitPositionToOsuManiaHitPosition(draft.hitPosition)));
-  const [scorePositionInput, setScorePositionInput] = useState(() => String(replayStagePositionToOsuManiaPosition(draft.scorePosition)));
-  const [comboPositionInput, setComboPositionInput] = useState(() => String(replayStagePositionToOsuManiaPosition(draft.comboPosition)));
+  const hitPositionValue = replayStagePositionToOsuManiaPosition(stagePositionValue("hitPosition"));
+  const [hitPositionInput, setHitPositionInput] = useState(() => String(hitPositionValue));
+  const scorePositionValue = replayStagePositionToOsuManiaPosition(stagePositionValue("scorePosition"));
+  const [scorePositionInput, setScorePositionInput] = useState(() => String(scorePositionValue));
+  const comboPositionValue = replayStagePositionToOsuManiaPosition(stagePositionValue("comboPosition"));
+  const [comboPositionInput, setComboPositionInput] = useState(() => String(comboPositionValue));
   const currentJudgementScale = getReplayJudgementScale(draft);
   const [judgementScaleInput, setJudgementScaleInput] = useState(() => String(currentJudgementScale));
 
@@ -497,16 +532,16 @@ export function ReplaySkinSettingsModal({
   }, [draft.outlineWidth]);
 
   useEffect(() => {
-    setHitPositionInput(String(replayHitPositionToOsuManiaHitPosition(draft.hitPosition)));
-  }, [draft.hitPosition]);
+    setHitPositionInput(String(hitPositionValue));
+  }, [hitPositionValue]);
 
   useEffect(() => {
-    setScorePositionInput(String(replayStagePositionToOsuManiaPosition(draft.scorePosition)));
-  }, [draft.scorePosition]);
+    setScorePositionInput(String(scorePositionValue));
+  }, [scorePositionValue]);
 
   useEffect(() => {
-    setComboPositionInput(String(replayStagePositionToOsuManiaPosition(draft.comboPosition)));
-  }, [draft.comboPosition]);
+    setComboPositionInput(String(comboPositionValue));
+  }, [comboPositionValue]);
 
   useEffect(() => {
     setJudgementScaleInput(String(currentJudgementScale));
@@ -517,9 +552,18 @@ export function ReplaySkinSettingsModal({
   }, [activeTab]);
 
   useEffect(() => {
+    if (!highlightedAssetId) return;
+    const row = modalRef.current?.querySelector(`[data-asset-row="${highlightedAssetId}"]`);
+    row?.scrollIntoView({ block: "center", behavior: "smooth" });
+    const timer = window.setTimeout(() => setHighlightedAssetId(null), 2600);
+    return () => window.clearTimeout(timer);
+  }, [highlightedAssetId, activeTab]);
+
+  useEffect(() => {
     let cancelled = false;
     void readReplaySkinSounds().then((record) => {
       if (cancelled) return;
+      persistedSkinSoundsRef.current = record;
       setSkinSoundsInfo(record ? { name: record.skinName, keys: Object.keys(record.samples) } : null);
     });
     return () => {
@@ -664,10 +708,10 @@ export function ReplaySkinSettingsModal({
   useEffect(() => {
     if (!viewerId || !liveBackendAvailable) return;
     let cancelled = false;
-    void getMyReplaySkin()
-      .then((wire) => {
+    void fetchMyReplaySkinCached(viewerId)
+      .then((record) => {
         if (cancelled) return;
-        setMyReplaySkinRecord(wire ? parseOwnerReplaySkinRecordWire(wire) : null);
+        setMyReplaySkinRecord(record);
       })
       .catch(() => {});
     return () => {
@@ -794,6 +838,26 @@ export function ReplaySkinSettingsModal({
     }));
   };
 
+  // Hit, score and combo positions are per keymode once a skin declares them,
+  // the way ColumnWidth already is: a skin can hold its 4K hit line at 440 and
+  // its 7K one at 393. Editing follows the same split, so a keymode carrying
+  // the skin's own value keeps the edit to itself and every stage on the
+  // settings-wide value (the built-in skins) keeps editing that one.
+  const updateStagePosition = (key: ReplaySkinStagePositionKey, value: number) => {
+    // Placing the counter by hand overrides the skin's "off the stage", or the
+    // slider would move a number that draws nothing.
+    if (key === "comboPosition" && profile.comboHidden) {
+      updateProfile({ comboPosition: value, comboHidden: false });
+      return;
+    }
+    if (profile[key] != null) updateProfile({ [key]: value } as Partial<ReplaySkinKeymodeProfile>);
+    else update({ [key]: value } as Partial<ReplaySkinSettings>);
+  };
+  const resetStagePosition = (key: ReplaySkinStagePositionKey, osuDefault: number) => {
+    if (profile[key] != null) updateProfile({ [key]: null } as Partial<ReplaySkinKeymodeProfile>);
+    else update({ [key]: osuManiaStagePositionToReplayPosition(osuDefault) } as Partial<ReplaySkinSettings>);
+  };
+
   const updateStyle = (style: ReplaySkinStyle) => update({ style });
 
   const updateProfile = (patch: Partial<ReplaySkinKeymodeProfile>) => {
@@ -880,7 +944,8 @@ export function ReplaySkinSettingsModal({
     keymodes: number[],
     preferredKeyCount: number | null,
   ) => {
-    setDraft(normalizeReplaySkinSettings(settings));
+    const adopted = normalizeReplaySkinSettings(settings);
+    setDraft(adopted);
     setLoadedCatalogSkin({ skin, archive });
     setSelectedPresetId(DRAFT_PRESET_ID);
     setDraftPresetName(DEFAULT_DRAFT_PRESET_NAME);
@@ -889,6 +954,41 @@ export function ReplaySkinSettingsModal({
       const next = preferredKeyCount ?? keymodes[0];
       if (next) setSelectedKeyCount(Math.max(1, Math.min(10, next)));
     }
+    return adopted;
+  };
+
+  const rememberHydratedPreset = (
+    preset: ReplaySkinPreset,
+    settings: ReplaySkinSettings,
+    archive: OskArchive | null,
+    sounds: Record<string, ArrayBuffer> | null = null,
+  ) => {
+    const existing = hydratedPresetCacheRef.current.get(preset.id);
+    const persistedSounds = persistedSkinSoundsRef.current;
+    const matchingPersistedSounds = persistedSounds
+      && persistedSounds.skinName === preset.community?.skin.name
+      ? persistedSounds.samples
+      : null;
+    const knownSounds = sounds
+      ?? existing?.sounds
+      ?? matchingPersistedSounds;
+    const entry: HydratedCommunityPreset = {
+      settings,
+      archive: archive ?? existing?.archive ?? null,
+      sounds: knownSounds,
+    };
+    hydratedPresetCacheRef.current.set(preset.id, entry);
+    // IndexedDB makes non-active presets fast after the modal (or page) is
+    // reopened. Only persist when sounds are known so an unfinished preload
+    // cannot masquerade as a skin that intentionally ships no samples.
+    if (knownSounds) {
+      void writeCachedReplaySkin(
+        communityPresetCacheKey(preset),
+        { settings, sounds: knownSounds },
+        Date.now(),
+      ).catch(() => {});
+    }
+    return entry;
   };
 
   // Every loaded community skin also lives in Skin preset under the skin's
@@ -907,6 +1007,7 @@ export function ReplaySkinSettingsModal({
       ? presets.map((candidate) => (candidate.id === preset.id ? preset : candidate))
       : [preset, ...presets].slice(0, 24));
     setSelectedPresetId(preset.id);
+    return preset;
   };
 
   const getArchiveForSkin = (skin: SkinSummary): Promise<OskArchive | null> => {
@@ -938,21 +1039,61 @@ export function ReplaySkinSettingsModal({
     setSelectedPresetId(preset.id);
     setDraftPresetName(DEFAULT_DRAFT_PRESET_NAME);
     setActiveColor(null);
+    const applyCached = (cached: HydratedCommunityPreset) => {
+      setDraft(cached.settings);
+      if (cached.archive) setLoadedCatalogSkin({ skin: community.skin, archive: cached.archive });
+      if (cached.sounds) {
+        pendingSkinSoundsRef.current = Object.keys(cached.sounds).length > 0
+          ? { name: community.skin.name, sounds: cached.sounds }
+          : null;
+      }
+    };
+
+    // The common Default -> custom switch never needs to touch the archive:
+    // selecting Default remembers this decoded object before clearing it.
+    let cached = hydratedPresetCacheRef.current.get(preset.id) ?? null;
+    if (cached?.sounds) {
+      applyCached(cached);
+      pushStatus(`Loaded ${preset.name}`);
+      return;
+    }
+
     setCommunityBusy("preset");
     try {
-      const archive = await getArchiveForSkin(community.skin);
-      const settings = archive ? await rehydrateOwnerReplaySkinSettings(community.payload, archive) : null;
-      if (!archive || !settings) {
+      if (!cached) {
+        const stored = await readCachedReplaySkin(communityPresetCacheKey(preset)).catch(() => null);
+        if (stored) {
+          cached = rememberHydratedPreset(preset, normalizeReplaySkinSettings(stored.settings), null, stored.sounds);
+          applyCached(cached);
+          pushStatus(`Loaded ${preset.name}`);
+          // The existing effect restores the archive quietly for the Assets
+          // tab; gameplay art can switch immediately from the decoded cache.
+          return;
+        }
+      } else {
+        applyCached(cached);
+      }
+
+      const archive = cached?.archive ?? await getArchiveForSkin(community.skin);
+      const settings = cached?.settings
+        ?? (archive ? await rehydrateOwnerReplaySkinSettings(community.payload, archive) : null);
+      if (!settings) {
         setDraft(preset.settings);
         pushStatus(`${community.skin.name} could not be downloaded, applied colors only`, "error");
         return;
       }
       setDraft(settings);
+      if (!archive) {
+        rememberHydratedPreset(preset, settings, null, cached?.sounds ?? null);
+        pushStatus(`Loaded ${preset.name}; archive tools are unavailable`, "error");
+        return;
+      }
       setLoadedCatalogSkin({ skin: community.skin, archive });
-      const sounds = await extractSkinSoundsFromArchive(archive);
+      const sounds = cached?.sounds ?? await extractSkinSoundsFromArchive(archive);
       pendingSkinSoundsRef.current = Object.keys(sounds).length > 0
         ? { name: community.skin.name, sounds }
         : null;
+      rememberHydratedPreset(preset, settings, archive, sounds);
       pushStatus(`Loaded ${preset.name}`);
     } finally {
       setCommunityBusy(null);
@@ -974,16 +1115,20 @@ export function ReplaySkinSettingsModal({
       const response = await fetch(oskFileUrl, { credentials: "omit" });
       if (!response.ok) throw new Error("osk_fetch_failed");
       const file = new File([await response.blob()], `${skin.name}.osk`);
+      // Open once and let the importer populate this archive's decoded-asset
+      // cache. Reopening it after import used to unzip the same .osk twice and
+      // leave the retained archive with an empty image cache.
+      const archive = await openOskArchive(await file.arrayBuffer());
       const result = await importReplaySkinFromOsk(file, {
         targetKeyCount: selectedKeyCount,
         baseSettings: draft,
         extractSounds: true,
+        archive,
         onProgress: (done, total) => {
           const percent = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 100;
           setImportProgress((current) => (current === percent ? current : percent));
         },
       });
-      const archive = await openOskArchive(file);
       archiveCacheRef.current.set(skin.id, Promise.resolve(archive));
       // Prefer the keymodes that actually resolved art (synthesized ones
       // included) so the editor stays on the replay's keymode whenever the
@@ -991,11 +1136,12 @@ export function ReplaySkinSettingsModal({
       const artKeymodes = result.summary.assetKeymodes.length > 0
         ? result.summary.assetKeymodes
         : result.summary.keymodes;
-      adoptImportedSettings(result.settings, skin, archive, artKeymodes, result.summary.selectedKeyCount);
-      upsertCommunityPreset(skin, result.settings);
+      const adopted = adoptImportedSettings(result.settings, skin, archive, artKeymodes, result.summary.selectedKeyCount);
+      const preset = upsertCommunityPreset(skin, result.settings);
       pendingSkinSoundsRef.current = Object.keys(result.sounds).length > 0
         ? { name: result.summary.name, sounds: result.sounds }
         : null;
+      rememberHydratedPreset(preset, adopted, archive, result.sounds);
       pushStatus(`Loaded ${skin.name}`);
     } catch (error) {
       pushStatus(error instanceof Error && error.message.includes("skin.ini")
@@ -1019,17 +1165,18 @@ export function ReplaySkinSettingsModal({
       }
       archiveCacheRef.current.set(record.skin.id, Promise.resolve(loaded.archive));
       const artKeymodes = keymodesWithSkinArt(loaded.settings);
-      adoptImportedSettings(
+      const adopted = myReplaySkinDraftRef.current = adoptImportedSettings(
         loaded.settings,
         record.skin,
         loaded.archive,
         artKeymodes.length > 0 ? artKeymodes : record.skin.keymodes,
         record.skin.keymodes[0] ?? null,
       );
-      upsertCommunityPreset(record.skin, loaded.settings);
+      const preset = upsertCommunityPreset(record.skin, loaded.settings);
       pendingSkinSoundsRef.current = Object.keys(loaded.sounds).length > 0
         ? { name: record.skin.name, sounds: loaded.sounds }
         : null;
+      rememberHydratedPreset(preset, adopted, loaded.archive, loaded.sounds);
       pushStatus(`Loaded ${record.skin.name}`);
     } finally {
       setCommunityBusy(null);
@@ -1048,7 +1195,11 @@ export function ReplaySkinSettingsModal({
         data: { skinId: targetSkin.id, settingsJson: JSON.stringify(payload) },
       });
       if (result.ok) {
-        setMyReplaySkinRecord({ skin: targetSkin, settings: payload, updatedAt: new Date().toISOString() });
+        const record = { skin: targetSkin, settings: payload, updatedAt: new Date().toISOString() };
+        // The draft is now what is published, so "Load" has nothing to fetch.
+        myReplaySkinDraftRef.current = draft;
+        setMyReplaySkinRecord(record);
+        writeMyReplaySkinMemory(viewerId, record);
         pushStatus("Saved as your replay skin");
       } else {
         pushStatus(result.error === "payload_too_large"
@@ -1123,6 +1274,17 @@ export function ReplaySkinSettingsModal({
   );
   const hasNoteAssets = profile.assets.columns.some((col) => col?.tap || col?.lnHead || col?.lnBody || col?.lnTail);
   const showNoteHeightScale = draft.style === "bars" || hasNoteAssets;
+  // "Load" pulls the published copy of your replay skin back down, which is
+  // the only route to it in a browser that has never loaded it and the way
+  // back after local edits. Once the draft IS that copy it has nothing to do,
+  // so it says so instead of looking broken. Identity, not a deep compare:
+  // every edit rebuilds the draft object, while comparing the stored payloads
+  // called a skin "changed" the moment the format gained a field.
+
+  const draftMatchesMyReplaySkin = Boolean(myReplaySkinRecord)
+    && loadedCatalogSkin?.skin.id === myReplaySkinRecord?.skin.id
+    && myReplaySkinDraftRef.current === draft;
+
   const persistPresets = (nextPresets: ReplaySkinPreset[]) => {
     setPresets(nextPresets);
     writeReplaySkinPresets(nextPresets);
@@ -1137,6 +1299,14 @@ export function ReplaySkinSettingsModal({
     // that carries no skin art is still the user's own work, so leave it be.
     if (presetId === DRAFT_PRESET_ID) {
       if (!loadedCatalogSkin && !replaySkinSettingsEmbedAssets(draft)) return;
+      if (selectedPreset?.community && replaySkinSettingsEmbedAssets(draft)) {
+        rememberHydratedPreset(
+          selectedPreset,
+          draft,
+          loadedCatalogSkin?.archive ?? null,
+          pendingSkinSoundsRef.current?.sounds ?? null,
+        );
+      }
       pendingSkinSoundsRef.current = null;
       setLoadedCatalogSkin(null);
       setDraft(DEFAULT_REPLAY_SKIN_SETTINGS);
@@ -1161,20 +1331,37 @@ export function ReplaySkinSettingsModal({
   // in the draft but no .osk open, which is what hid the Assets tab and left
   // "Set as my replay skin" dead. Pull the archive back quietly (session and
   // HTTP cached, so it is the same file the page already fetched).
+  //
+  // The draft can also arrive WITHOUT the art: the page that owns the settings
+  // rebuilds it asynchronously from the pointer, so an editor opened first, or
+  // opened after a failed rebuild, holds the asset-free copy while the preset
+  // name still says the skin is loaded. Rebuild it here from the same archive
+  // rather than letting the editor edit (and Apply save) a stripped skin.
   const communityPresetSkin = selectedPreset?.community?.skin ?? null;
+  const communityPresetPayload = selectedPreset?.community?.payload ?? null;
+  const draftMissingSkinArt = Boolean(communityPresetSkin) && !replaySkinSettingsEmbedAssets(draft);
   useEffect(() => {
     if (!communityPresetSkin) return;
-    if (loadedCatalogSkin || communityBusy) return;
+    if (communityBusy) return;
+    if (loadedCatalogSkin && !draftMissingSkinArt) return;
     let cancelled = false;
-    void getArchiveForSkin(communityPresetSkin).then((archive) => {
+    void getArchiveForSkin(communityPresetSkin).then(async (archive) => {
       if (cancelled || !archive) return;
       setLoadedCatalogSkin((current) => current ?? { skin: communityPresetSkin, archive });
+      if (!draftMissingSkinArt || !communityPresetPayload) {
+        if (selectedPreset) rememberHydratedPreset(selectedPreset, draft, archive);
+        return;
+      }
+      const rebuilt = await rehydrateOwnerReplaySkinSettings(communityPresetPayload, archive);
+      if (cancelled || !rebuilt || !replaySkinSettingsEmbedAssets(rebuilt)) return;
+      setDraft(rebuilt);
+      if (selectedPreset) rememberHydratedPreset(selectedPreset, rebuilt, archive);
     });
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [communityPresetSkin?.id, loadedCatalogSkin, communityBusy]);
+  }, [communityPresetSkin?.id, selectedPreset?.id, loadedCatalogSkin, communityBusy, draftMissingSkinArt]);
 
   const createPresetFromDraft = () => {
     setPromptDialog({
@@ -1200,6 +1387,14 @@ export function ReplaySkinSettingsModal({
           });
         } else {
           preset = createReplaySkinPreset(trimmed, draft);
+        }
+        if (preset.community && loadedCatalogSkin) {
+          rememberHydratedPreset(
+            preset,
+            draft,
+            loadedCatalogSkin.archive,
+            pendingSkinSoundsRef.current?.sounds ?? null,
+          );
         }
         persistPresets([preset, ...presets].slice(0, 24));
         setSelectedPresetId(preset.id);
@@ -1238,6 +1433,7 @@ export function ReplaySkinSettingsModal({
 
   const deleteSelectedPreset = () => {
     if (!selectedPreset) return;
+    hydratedPresetCacheRef.current.delete(selectedPreset.id);
     persistPresets(presets.filter((preset) => preset.id !== selectedPreset.id));
     setSelectedPresetId(DRAFT_PRESET_ID);
     setDraftPresetName(DEFAULT_DRAFT_PRESET_NAME);
@@ -1304,8 +1500,16 @@ export function ReplaySkinSettingsModal({
       // regular presets keep the full normalized settings as before.
       let nextPreset: ReplaySkinPreset;
       if (selectedPreset.community) {
-        const payload = dehydrateReplaySkinSettings(normalized);
-        const assetFree = normalizeReplaySkinSettings(payload.settings);
+        // Dehydrating a draft that never got its art back would write a
+        // payload with no asset paths over the one that has them, and the
+        // preset would rebuild as flat shapes forever after. Keep the stored
+        // payload in that case: the draft holds no art to save anyway.
+        const keptArt = replaySkinSettingsEmbedAssets(normalized);
+        const payload = keptArt ? dehydrateReplaySkinSettings(normalized) : selectedPreset.community.payload;
+        const storedSettings = !keptArt && payload && typeof payload === "object" && "settings" in payload
+          ? (payload as { settings: unknown }).settings
+          : null;
+        const assetFree = normalizeReplaySkinSettings(storedSettings ?? normalized);
         nextPreset = {
           ...selectedPreset,
           settings: assetFree,
@@ -1416,34 +1620,34 @@ export function ReplaySkinSettingsModal({
   const commitHitPositionInput = () => {
     const parsed = Number(hitPositionInput);
     if (!Number.isFinite(parsed)) {
-      setHitPositionInput(String(replayHitPositionToOsuManiaHitPosition(draft.hitPosition)));
+      setHitPositionInput(String(hitPositionValue));
       return;
     }
     const next = Math.max(OSU_MANIA_MIN_HIT_POSITION, Math.min(OSU_MANIA_MAX_HIT_POSITION, Math.round(parsed)));
     setHitPositionInput(String(next));
-    update({ hitPosition: osuManiaHitPositionToReplayHitPosition(next) });
+    updateStagePosition("hitPosition", osuManiaStagePositionToReplayPosition(next));
   };
 
   const commitScorePositionInput = () => {
     const parsed = Number(scorePositionInput);
     if (!Number.isFinite(parsed)) {
-      setScorePositionInput(String(replayStagePositionToOsuManiaPosition(draft.scorePosition)));
+      setScorePositionInput(String(scorePositionValue));
       return;
     }
     const next = Math.max(OSU_MANIA_MIN_HIT_POSITION, Math.min(OSU_MANIA_MAX_HIT_POSITION, Math.round(parsed)));
     setScorePositionInput(String(next));
-    update({ scorePosition: osuManiaStagePositionToReplayPosition(next) });
+    updateStagePosition("scorePosition", osuManiaStagePositionToReplayPosition(next));
   };
 
   const commitComboPositionInput = () => {
     const parsed = Number(comboPositionInput);
     if (!Number.isFinite(parsed)) {
-      setComboPositionInput(String(replayStagePositionToOsuManiaPosition(draft.comboPosition)));
+      setComboPositionInput(String(comboPositionValue));
       return;
     }
     const next = Math.max(OSU_MANIA_MIN_HIT_POSITION, Math.min(OSU_MANIA_MAX_HIT_POSITION, Math.round(parsed)));
     setComboPositionInput(String(next));
-    update({ comboPosition: osuManiaStagePositionToReplayPosition(next) });
+    updateStagePosition("comboPosition", osuManiaStagePositionToReplayPosition(next));
   };
 
   const commitJudgementScaleInput = () => {
@@ -1494,7 +1698,7 @@ export function ReplaySkinSettingsModal({
     if (value.trim() === "") return;
     const parsed = Number(value);
     if (!Number.isFinite(parsed) || parsed < OSU_MANIA_MIN_HIT_POSITION || parsed > OSU_MANIA_MAX_HIT_POSITION) return;
-    update({ hitPosition: osuManiaHitPositionToReplayHitPosition(Math.round(parsed)) });
+    updateStagePosition("hitPosition", osuManiaStagePositionToReplayPosition(Math.round(parsed)));
   };
 
   const handleScorePositionInputChange = (value: string) => {
@@ -1502,7 +1706,7 @@ export function ReplaySkinSettingsModal({
     if (value.trim() === "") return;
     const parsed = Number(value);
     if (!Number.isFinite(parsed) || parsed < OSU_MANIA_MIN_HIT_POSITION || parsed > OSU_MANIA_MAX_HIT_POSITION) return;
-    update({ scorePosition: osuManiaStagePositionToReplayPosition(Math.round(parsed)) });
+    updateStagePosition("scorePosition", osuManiaStagePositionToReplayPosition(Math.round(parsed)));
   };
 
   const handleComboPositionInputChange = (value: string) => {
@@ -1510,7 +1714,7 @@ export function ReplaySkinSettingsModal({
     if (value.trim() === "") return;
     const parsed = Number(value);
     if (!Number.isFinite(parsed) || parsed < OSU_MANIA_MIN_HIT_POSITION || parsed > OSU_MANIA_MAX_HIT_POSITION) return;
-    update({ comboPosition: osuManiaStagePositionToReplayPosition(Math.round(parsed)) });
+    updateStagePosition("comboPosition", osuManiaStagePositionToReplayPosition(Math.round(parsed)));
   };
 
   const handleJudgementScaleInputChange = (value: string) => {
@@ -1675,6 +1879,10 @@ export function ReplaySkinSettingsModal({
 
             {activeTab === "style" ? (
               <>
+                {/* Two subjects, so two sections: the skin open in this
+                    editor, and the one published on your profile. Sharing a
+                    card made "Load into editor" read as acting on the skin
+                    named above it rather than on your own. */}
                 {liveBackendAvailable ? (
                   <section>
                     <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">Custom skin</div>
@@ -1696,9 +1904,6 @@ export function ReplaySkinSettingsModal({
                                 ? "Loading skin…"
                                 : communitySkinContext
                                   ? `${communitySkinContext.name} loaded`
-                                  // "Loaded" means loaded into this editor,
-                                  // which is not the same as the skin saved on
-                                  // your profile: the row below names that one.
                                   : "No skin loaded in the editor"}
                           </span>
                         </div>
@@ -1713,50 +1918,68 @@ export function ReplaySkinSettingsModal({
                       </div>
                       <p className="text-[11px] leading-relaxed text-osu-f1/80">
                         Picking a skin loads it into the editor and saves it as a preset under its name.
-                        {viewerId ? " Set as my replay skin shows it to everyone watching your replays." : ""}
                       </p>
                       {communitySkinContext && communityBusy == null && !keymodeHasSkinArt ? (
                         <p className="text-[11px] leading-relaxed text-osu-yellow">
                           This skin has no {selectedKeyCount}K art, so {selectedKeyCount}K plays render flat shapes with its colors instead.
                         </p>
                       ) : null}
+                    </div>
+                  </section>
+                ) : null}
+                {liveBackendAvailable ? (
+                  <section>
+                    <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">My replay skin</div>
+                    <div className="space-y-2 rounded-lg border border-osu-b3/50 bg-osu-b5/35 p-3">
                       {viewerId ? (
-                        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-osu-b3/40 pt-2">
-                          <span className="min-w-0 truncate text-[11px] text-osu-f1">
-                            Your replay skin:{" "}
-                            {myReplaySkinRecord ? (
-                              <span className="font-semibold text-osu-l2">{myReplaySkinRecord.skin.name}</span>
-                            ) : (
-                              "none set"
-                            )}
-                          </span>
-                          <span className="flex shrink-0 items-center gap-1.5">
-                            {myReplaySkinRecord ? (
+                        <>
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex min-w-0 items-center gap-2">
+                              {myReplaySkinRecord?.skin.previewUrl ? (
+                                <img
+                                  src={myReplaySkinRecord.skin.previewUrl}
+                                  alt=""
+                                  draggable={false}
+                                  className="h-6 w-10 shrink-0 rounded object-cover"
+                                />
+                              ) : null}
+                              <span className="min-w-0 truncate text-xs font-semibold text-osu-l1">
+                                {myReplaySkinRecord ? myReplaySkinRecord.skin.name : "None set"}
+                              </span>
+                            </div>
+                            <span className="flex shrink-0 items-center gap-1.5">
+                              {myReplaySkinRecord ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void loadMyReplaySkinIntoDraft()}
+                                  disabled={communityBusy != null || draftMatchesMyReplaySkin}
+                                  title={draftMatchesMyReplaySkin
+                                    ? `The editor already holds ${myReplaySkinRecord.skin.name}`
+                                    : `Replace the draft with ${myReplaySkinRecord.skin.name}`}
+                                  className="cursor-pointer rounded-lg bg-osu-b3/50 px-3 py-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white disabled:cursor-default disabled:opacity-50"
+                                >
+                                  {communityBusy === "load-mine" ? "Loading…" : "Load into editor"}
+                                </button>
+                              ) : null}
                               <button
                                 type="button"
-                                onClick={() => void loadMyReplaySkinIntoDraft()}
-                                disabled={communityBusy != null}
-                                title="Load your replay skin into the editor to customize it"
-                                className="cursor-pointer rounded-lg bg-osu-b3/50 px-3 py-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white disabled:cursor-default disabled:opacity-50"
+                                onClick={() => void saveDraftAsMyReplaySkin()}
+                                disabled={!communitySkinContext || communityBusy != null}
+                                title="Saves the current draft as-is; everyone watching your replays sees it"
+                                className="cursor-pointer rounded-lg border border-osu-pink/40 bg-osu-pink/10 px-3 py-1.5 text-xs font-semibold text-osu-pink-light transition-colors hover:border-osu-pink hover:bg-osu-pink/20 hover:text-white disabled:cursor-default disabled:opacity-45 disabled:hover:border-osu-pink/40 disabled:hover:bg-osu-pink/10 disabled:hover:text-osu-pink-light"
                               >
-                                {communityBusy === "load-mine" ? "Loading…" : "Load"}
+                                {communityBusy === "save-mine" ? "Saving…" : "Set as my replay skin"}
                               </button>
-                            ) : null}
-                            <button
-                              type="button"
-                              onClick={() => void saveDraftAsMyReplaySkin()}
-                              disabled={!communitySkinContext || communityBusy != null}
-                              title="Saves the current draft as-is; everyone watching your replays sees it"
-                              className="cursor-pointer rounded-lg border border-osu-pink/40 bg-osu-pink/10 px-3 py-1.5 text-xs font-semibold text-osu-pink-light transition-colors hover:border-osu-pink hover:bg-osu-pink/20 hover:text-white disabled:cursor-default disabled:opacity-45 disabled:hover:border-osu-pink/40 disabled:hover:bg-osu-pink/10 disabled:hover:text-osu-pink-light"
-                            >
-                              {communityBusy === "save-mine" ? "Saving…" : "Set as my replay skin"}
-                            </button>
-                          </span>
-                        </div>
+                            </span>
+                          </div>
+                          <p className="text-[11px] leading-relaxed text-osu-f1/80">
+                            Everyone watching your replays sees this skin.
+                          </p>
+                        </>
                       ) : (
-                        <div className="border-t border-osu-b3/40 pt-2 text-[11px] text-osu-f1">
+                        <p className="text-[11px] leading-relaxed text-osu-f1">
                           Sign in to set a replay skin for your plays.
-                        </div>
+                        </p>
                       )}
                     </div>
                   </section>
@@ -1947,27 +2170,27 @@ export function ReplaySkinSettingsModal({
                 <LayoutNumberControl
                   label="Hit position"
                   inputValue={hitPositionInput}
-                  numericValue={replayHitPositionToOsuManiaHitPosition(draft.hitPosition)}
+                  numericValue={hitPositionValue}
                   min={OSU_MANIA_MIN_HIT_POSITION}
                   max={OSU_MANIA_MAX_HIT_POSITION}
                   defaultValue={402}
-                  onSliderChange={(value) => update({ hitPosition: osuManiaHitPositionToReplayHitPosition(value) })}
+                  onSliderChange={(value) => updateStagePosition("hitPosition", osuManiaStagePositionToReplayPosition(value))}
                   onInputChange={handleHitPositionInputChange}
                   onCommit={commitHitPositionInput}
-                  onResetToDefault={() => update({ hitPosition: osuManiaHitPositionToReplayHitPosition(402) })}
+                  onResetToDefault={() => resetStagePosition("hitPosition", 402)}
                   hint="Higher values move receptors lower."
                 />
                 <LayoutNumberControl
                   label="ScorePosition"
                   inputValue={scorePositionInput}
-                  numericValue={replayStagePositionToOsuManiaPosition(draft.scorePosition)}
+                  numericValue={scorePositionValue}
                   min={OSU_MANIA_MIN_HIT_POSITION}
                   max={OSU_MANIA_MAX_HIT_POSITION}
                   defaultValue={OSU_MANIA_DEFAULT_SCORE_POSITION}
-                  onSliderChange={(value) => update({ scorePosition: osuManiaStagePositionToReplayPosition(value) })}
+                  onSliderChange={(value) => updateStagePosition("scorePosition", osuManiaStagePositionToReplayPosition(value))}
                   onInputChange={handleScorePositionInputChange}
                   onCommit={commitScorePositionInput}
-                  onResetToDefault={() => update({ scorePosition: osuManiaStagePositionToReplayPosition(OSU_MANIA_DEFAULT_SCORE_POSITION) })}
+                  onResetToDefault={() => resetStagePosition("scorePosition", OSU_MANIA_DEFAULT_SCORE_POSITION)}
                   hint="Hitburst and judgement height."
                 />
                 {showHudTab ? null : (
@@ -1988,14 +2211,14 @@ export function ReplaySkinSettingsModal({
                 <LayoutNumberControl
                   label="ComboPosition"
                   inputValue={comboPositionInput}
-                  numericValue={replayStagePositionToOsuManiaPosition(draft.comboPosition)}
+                  numericValue={comboPositionValue}
                   min={OSU_MANIA_MIN_HIT_POSITION}
                   max={OSU_MANIA_MAX_HIT_POSITION}
                   defaultValue={OSU_MANIA_DEFAULT_COMBO_POSITION}
-                  onSliderChange={(value) => update({ comboPosition: osuManiaStagePositionToReplayPosition(value) })}
+                  onSliderChange={(value) => updateStagePosition("comboPosition", osuManiaStagePositionToReplayPosition(value))}
                   onInputChange={handleComboPositionInputChange}
                   onCommit={commitComboPositionInput}
-                  onResetToDefault={() => update({ comboPosition: osuManiaStagePositionToReplayPosition(OSU_MANIA_DEFAULT_COMBO_POSITION) })}
+                  onResetToDefault={() => resetStagePosition("comboPosition", OSU_MANIA_DEFAULT_COMBO_POSITION)}
                   hint="Combo counter height."
                 />
               </section>
@@ -2050,8 +2273,9 @@ export function ReplaySkinSettingsModal({
             ) : activeTab === "assets" && activeAssetArchive ? (
               <section className="space-y-4">
                 <p className="text-[11px] leading-relaxed text-osu-f1">
-                  Swap any element for another image from {activeAssetSourceName ?? "this skin"}. Note and key art draws
-                  under the Bars style; cleared elements fall back to flat shapes.
+                  Swap any element for another image from {activeAssetSourceName ?? "this skin"}, or click it in the
+                  preview to find its row. Note and key art draws under the Bars style; cleared elements fall back to
+                  flat shapes.
                 </p>
                 {columns.map((column) => (
                   <div key={`asset-column-${column}`} className="rounded-lg border border-osu-b3/50 bg-osu-b5/35 p-3">
@@ -2060,6 +2284,8 @@ export function ReplaySkinSettingsModal({
                       {ASSET_COLUMN_ROWS.map(({ key, label }) => (
                         <ReplaySkinAssetRow
                           key={key}
+                          rowId={`column:${column}:${key}`}
+                          highlighted={highlightedAssetId === `column:${column}:${key}`}
                           label={label}
                           asset={profile.assets.columns[column]?.[key]}
                           onChange={() => setAssetPicker({ kind: "column", column, assetKey: key, label })}
@@ -2075,6 +2301,8 @@ export function ReplaySkinSettingsModal({
                     {ASSET_JUDGEMENT_ROWS.map(({ key, label }) => (
                       <ReplaySkinAssetRow
                         key={key}
+                        rowId={`judgement:${key}`}
+                        highlighted={highlightedAssetId === `judgement:${key}`}
                         label={label}
                         asset={profile.assets.judgements[key]}
                         onChange={() => setAssetPicker({ kind: "judgement", assetKey: key, label })}
@@ -2089,6 +2317,8 @@ export function ReplaySkinSettingsModal({
                     {ASSET_STAGE_ROWS.map(({ key, label }) => (
                       <ReplaySkinAssetRow
                         key={key}
+                        rowId={`stage:${key}`}
+                        highlighted={highlightedAssetId === `stage:${key}`}
                         label={label}
                         asset={profile.assets.stage[key]}
                         onChange={() => setAssetPicker({ kind: "stage", assetKey: key, label })}
@@ -2233,6 +2463,7 @@ export function ReplaySkinSettingsModal({
               previewMode={previewMode}
               selectedColumns={selectedColumns}
               expectedWidth={previewContentWidth}
+              onIdentifyAsset={activeAssetArchive ? identifyAsset : undefined}
               onSelectionChange={(next) => {
                 // Column selection exists to open the per-column colour
                 // editor, and colours do nothing to a skin that ships its own
@@ -2699,6 +2930,7 @@ function ReplaySkinPreview({
   selectedColumns,
   expectedWidth,
   onSelectionChange,
+  onIdentifyAsset,
 }: {
   settings: ReplaySkinSettings;
   profile: ReplaySkinKeymodeProfile;
@@ -2707,6 +2939,7 @@ function ReplaySkinPreview({
   selectedColumns: number[];
   expectedWidth?: number;
   onSelectionChange: (next: number[]) => void;
+  onIdentifyAsset?: (target: AssetPickerTarget) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [previewWidth, setPreviewWidth] = useState(() => expectedWidth ?? 260);
@@ -2744,9 +2977,13 @@ function ReplaySkinPreview({
   const playfieldX = profile.columnStart == null
     ? (width - playfieldWidth) / 2
     : Math.max(0, Math.min(1, profile.columnStart / columnStartRange)) * Math.max(0, width - playfieldWidth);
-  const receptorY = height * (settings.upscroll ? settings.hitPosition : 768 - settings.hitPosition) / 768;
-  const scoreY = height * (settings.upscroll ? settings.scorePosition : 768 - settings.scorePosition) / 768;
-  const comboY = height * (settings.upscroll ? settings.comboPosition : 768 - settings.comboPosition) / 768;
+  // Per keymode where the skin declared one, like the stage itself.
+  const hitPosition = getReplaySkinStagePosition(profile, settings, "hitPosition");
+  const scorePosition = getReplaySkinStagePosition(profile, settings, "scorePosition");
+  const comboPosition = getReplaySkinStagePosition(profile, settings, "comboPosition");
+  const receptorY = height * (settings.upscroll ? hitPosition : 768 - hitPosition) / 768;
+  const scoreY = height * (settings.upscroll ? scorePosition : 768 - scorePosition) / 768;
+  const comboY = height * (settings.upscroll ? comboPosition : 768 - comboPosition) / 768;
   const previewJudgementAsset = getJudgementPreviewAsset(settings);
   const judgementScale = getReplayJudgementScale(settings);
   // Imported judgement art and combo digits draw at the same native size the
@@ -2756,7 +2993,9 @@ function ReplaySkinPreview({
   const skinJudgementSize = skinJudgementAsset
     ? getSkinAssetPreviewSize(skinJudgementAsset, layoutScale, judgementScale / 100)
     : null;
-  const comboGlyphs = getSkinComboPreviewGlyphs(profile, layoutScale);
+  // A skin that pushed ComboPosition off the stage wants no counter, so the
+  // card shows none either rather than pinning one to its bottom edge.
+  const comboGlyphs = profile.comboHidden ? null : getSkinComboPreviewGlyphs(profile, layoutScale);
   const noteSize = settings.style === "circles" || settings.style === "arrows"
     ? Math.max(18, Math.min(averageLaneWidth - 4, Math.max(28, averageLaneWidth * 0.9)))
     : Math.max(8, Math.min(18, averageLaneWidth - 6));
@@ -2789,6 +3028,79 @@ function ReplaySkinPreview({
     cursorX += laneWidth + (columnSpacings[col] ?? 0) * layoutScale;
     return { col, startX, endX: startX + laneWidth, cx: startX + laneWidth / 2, width: laneWidth };
   });
+
+  // Click-to-find: with an .osk open, every drawn element points back at the
+  // Assets row it came from, so "what is this black bar across the top?" is a
+  // click rather than a hunt through the list. Elements swallow the pointer so
+  // the drag-select below still owns the empty lane space.
+  const identify = (target: AssetPickerTarget | null) => {
+    if (!onIdentifyAsset || !target) return { className: "pointer-events-none", handlers: {} };
+    return {
+      className: "pointer-events-auto cursor-pointer",
+      handlers: {
+        title: `Find ${target.label} in the Assets tab`,
+        onPointerDown: (event: ReactPointerEvent) => event.stopPropagation(),
+        onClick: (event: ReactMouseEvent) => {
+          event.stopPropagation();
+          onIdentifyAsset(target);
+        },
+      },
+    };
+  };
+  const identifyColumn = (column: number, assetKey: keyof ReplaySkinColumnAssets) => {
+    const label = ASSET_COLUMN_ROWS.find((row) => row.key === assetKey)?.label ?? assetKey;
+    return identify({ kind: "column", column, assetKey, label });
+  };
+  const identifyStage = (assetKey: AssetStageKey) => {
+    const label = ASSET_STAGE_ROWS.find((row) => row.key === assetKey)?.label ?? assetKey;
+    return identify({ kind: "stage", assetKey, label });
+  };
+  // Whichever judgement the card is showing, so its row is the one that opens.
+  const skinJudgementKey: keyof ReplaySkinJudgementAssets | null = profile.assets.judgements.hit300g
+    ? "hit300g"
+    : profile.assets.judgements.hit300
+      ? "hit300"
+      : null;
+  const skinJudgementPick = identify(skinJudgementKey
+    ? {
+        kind: "judgement",
+        assetKey: skinJudgementKey,
+        label: ASSET_JUDGEMENT_ROWS.find((row) => row.key === skinJudgementKey)?.label ?? skinJudgementKey,
+      }
+    : null);
+
+  // Stage furniture sizing, the stage's own rules: everything but the deck is
+  // native pixels in the game's 768-space, and mania-stage-bottom is one
+  // texture pixel per playfield unit (so a tall deck hangs off the far edge
+  // and clips, exactly as in game).
+  const stageArt = (() => {
+    const stage = settings.style === "bars" ? profile.assets.stage : null;
+    const hintSize = stage?.hint ? getSkinAssetPreviewSize(stage.hint, layoutScale) : null;
+    const bottomSize = stage?.bottom ? getSkinAssetPreviewSize(stage.bottom, layoutScale) : null;
+    const bottomNativeHeight = stage?.bottom
+      ? (stage.bottom.height ?? 0) / (stage.bottom.scale && stage.bottom.scale > 0 ? stage.bottom.scale : 1)
+      : 0;
+    const sides: Array<{ side: AssetStageKey & ("left" | "right"); asset: ReplaySkinImageAsset; width: number; pick: ReturnType<typeof identify> }> = [];
+    for (const side of ["left", "right"] as const) {
+      const asset = stage?.[side];
+      const size = asset ? getSkinAssetPreviewSize(asset, layoutScale) : null;
+      if (asset && size) sides.push({ side, asset, width: size.width, pick: identifyStage(side) });
+    }
+    return {
+      hint: stage?.hint && hintSize
+        ? { asset: stage.hint, height: hintSize.height, pick: identifyStage("hint") }
+        : null,
+      bottom: stage?.bottom && bottomSize
+        ? {
+            asset: stage.bottom,
+            width: bottomSize.width,
+            height: Math.max(1, bottomNativeHeight * layoutScale),
+            pick: identifyStage("bottom"),
+          }
+        : null,
+      sides,
+    };
+  })();
 
   const tapYForColumn = (col: number) => {
     const offset = PREVIEW_TAP_Y_OFFSETS_DOWN[col % PREVIEW_TAP_Y_OFFSETS_DOWN.length];
@@ -2940,6 +3252,26 @@ function ReplaySkinPreview({
       {settings.style === "bars" && profile.judgementLine ? (
         <div className="pointer-events-none absolute h-0.5 bg-white/70" style={{ left: playfieldX, width: playfieldWidth, top: receptorY }} />
       ) : null}
+      {/* The stage's own furniture, drawn in the game's layering: the hint
+          strip under the notes, the frame and deck over them. The card showed
+          none of it, which left a skin's stage art impossible to recognise
+          (let alone find in the Assets tab) without loading a replay. */}
+      {stageArt.hint ? (
+        <img
+          src={stageArt.hint.asset.src}
+          alt=""
+          draggable={false}
+          className={`${stageArt.hint.pick.className} absolute object-fill`}
+          {...stageArt.hint.pick.handlers}
+          style={{
+            left: playfieldX,
+            width: playfieldWidth,
+            top: settings.upscroll ? receptorY : receptorY - stageArt.hint.height / 2,
+            height: stageArt.hint.height,
+            transform: settings.upscroll ? "scaleY(-1)" : undefined,
+          }}
+        />
+      ) : null}
       {lanePositions.map(({ col, cx, width: laneWidth }) => {
         const isSelected = selectedColumns.includes(col);
         const receptorAsset = settings.style === "bars" ? profile.assets.columns[col]?.receptor : undefined;
@@ -2949,13 +3281,15 @@ function ReplaySkinPreview({
           // (hanging from the top on upscroll). Hanging it off the hit line
           // instead pushed all but a sliver below the card.
           const receptorHeight = getPreviewKeyAreaHeight(receptorAsset, layoutScale, noteSize);
+          const pick = identifyColumn(col, "receptor");
           return (
             <img
               key={`receptor-${col}`}
               src={receptorAsset.src}
               alt=""
               draggable={false}
-              className="pointer-events-none absolute object-fill"
+              className={`${pick.className} absolute object-fill`}
+              {...pick.handlers}
               style={{
                 left: cx - laneWidth / 2,
                 top: settings.upscroll ? 0 : height - receptorHeight,
@@ -3023,13 +3357,15 @@ function ReplaySkinPreview({
             const tapAsset = settings.style === "bars" ? profile.assets.columns[col]?.tap : undefined;
             if (tapAsset) {
               const assetHeight = getPreviewAssetHeight(tapAsset, laneWidth, profile.noteHeightScale * layoutScale, noteSize);
+              const pick = identifyColumn(col, "tap");
               return (
                 <img
                   key={`tap-${col}`}
                   src={tapAsset.src}
                   alt=""
                   draggable={false}
-                  className="pointer-events-none absolute object-fill"
+                  className={`${pick.className} absolute object-fill`}
+                  {...pick.handlers}
                   style={{ left: cx - laneWidth / 2, top: settings.upscroll ? y : y + noteSize - assetHeight, width: laneWidth, height: assetHeight }}
                 />
               );
@@ -3096,31 +3432,43 @@ function ReplaySkinPreview({
               const tailAsset = columnAssets.lnTail;
               const headHeight = headAsset ? getPreviewAssetHeight(headAsset, laneWidth, profile.noteHeightScale * layoutScale, noteSize) : noteSize;
               const tailHeight = tailAsset ? getPreviewAssetHeight(tailAsset, laneWidth, profile.noteHeightScale * layoutScale, noteSize) : noteSize;
+              // Stable runs the body to the MIDDLE of the head cap, not to its
+              // far edge (the stage shares this rule). Round cap art is widest
+              // at its centre, so a body carried past that pokes out below the
+              // head as a nub of body colour, which is exactly what a skin's
+              // rectangular body did under its round note.
+              const bodyHeadY = settings.upscroll ? lnHeadY + headHeight / 2 : lnHeadY - headHeight / 2;
+              const bodyTop = Math.min(bodyHeadY, lnTailEnd);
+              const bodyBottom = Math.max(bodyHeadY, lnTailEnd);
+              const bodyPick = identifyColumn(col, "lnBody");
+              const tailPick = identifyColumn(col, "lnTail");
+              const headPick = identifyColumn(col, columnAssets.lnHead ? "lnHead" : "tap");
               return (
-                <div key={`ln-${col}`} className="pointer-events-none">
+                <div key={`ln-${col}`}>
                   {bodyAsset ? (
                     // Cascaded from the tail end at natural aspect, like the
                     // stage: a stretched copy flattens the art's cap into the
                     // body and loses the shorter-looking lead-in. On upscroll
                     // the tail sits at the bottom, so the whole band mirrors.
                     <div
-                      className="absolute"
+                      className={`${bodyPick.className} absolute`}
+                      {...bodyPick.handlers}
                       style={{
                         left: cx - laneWidth / 2,
-                        top: lnTop,
+                        top: bodyTop,
                         width: laneWidth,
-                        height: lnBottom - lnTop,
+                        height: bodyBottom - bodyTop,
                         backgroundImage: `url("${bodyAsset.src}")`,
                         backgroundRepeat: "repeat-y",
-                        backgroundSize: `100% ${getPreviewLnBodyTileHeight(bodyAsset, laneWidth, lnBottom - lnTop)}px`,
+                        backgroundSize: `100% ${getPreviewLnBodyTileHeight(bodyAsset, laneWidth, bodyBottom - bodyTop)}px`,
                         backgroundPosition: "top center",
                         transform: settings.upscroll ? "scaleY(-1)" : undefined,
                       }}
                     />
                   ) : (
                     <div
-                      className="absolute"
-                      style={{ left: cx - Math.max(10, noteSize * 0.5) / 2, top: lnTop, width: Math.max(10, noteSize * 0.5), height: lnBottom - lnTop, backgroundColor: settings.lnBodyColor }}
+                      className="pointer-events-none absolute"
+                      style={{ left: cx - Math.max(10, noteSize * 0.5) / 2, top: bodyTop, width: Math.max(10, noteSize * 0.5), height: bodyBottom - bodyTop, backgroundColor: settings.lnBodyColor }}
                     />
                   )}
                   {tailAsset ? (
@@ -3128,7 +3476,8 @@ function ReplaySkinPreview({
                       src={tailAsset.src}
                       alt=""
                       draggable={false}
-                      className="absolute object-fill"
+                      className={`${tailPick.className} absolute object-fill`}
+                      {...tailPick.handlers}
                       style={{ left: cx - laneWidth / 2, top: settings.upscroll ? lnTailEnd - tailHeight : lnTailEnd, width: laneWidth, height: tailHeight }}
                     />
                   ) : null}
@@ -3137,7 +3486,8 @@ function ReplaySkinPreview({
                       src={headAsset.src}
                       alt=""
                       draggable={false}
-                      className="absolute object-fill"
+                      className={`${headPick.className} absolute object-fill`}
+                      {...headPick.handlers}
                       style={{ left: cx - laneWidth / 2, top: settings.upscroll ? lnHeadY : lnHeadY - headHeight, width: laneWidth, height: headHeight }}
                     />
                   ) : null}
@@ -3146,15 +3496,21 @@ function ReplaySkinPreview({
             }
             if (settings.style === "circles") {
               const bodyWidth = Math.max(10, noteSize * 0.72);
+              // To the head's CENTRE, the rule the stage holds every style to
+              // (and the arrows branch below): run it to the head's anchor
+              // instead and the body's rounded cap clears the bottom of the
+              // head circle, which reads as the hold spilling past its note.
+              const bodyTop = Math.min(lnHeadCenterY, lnTailEnd);
+              const bodyBottom = Math.max(lnHeadCenterY, lnTailEnd);
               return (
                 <div key={`ln-${col}`} className="pointer-events-none">
                   <div
                     className="absolute"
                     style={{
                       left: cx - bodyWidth / 2,
-                      top: lnTop,
+                      top: bodyTop,
                       width: bodyWidth,
-                      height: lnBottom - lnTop,
+                      height: bodyBottom - bodyTop,
                       backgroundColor: settings.lnBodyColor,
                       borderRadius: bodyWidth / 2,
                     }}
@@ -3253,7 +3609,7 @@ function ReplaySkinPreview({
             />
           ))}
         </div>
-      ) : (
+      ) : profile.comboHidden ? null : (
         <div
           className="pointer-events-none absolute flex -translate-y-1/2 items-center justify-center text-[15px] font-bold leading-none"
           style={{
@@ -3272,7 +3628,8 @@ function ReplaySkinPreview({
           src={skinJudgementAsset.src}
           alt=""
           draggable={false}
-          className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 object-fill"
+          className={`${skinJudgementPick.className} absolute -translate-x-1/2 -translate-y-1/2 object-fill`}
+          {...skinJudgementPick.handlers}
           style={{
             left: playfieldX + playfieldWidth / 2,
             top: scoreY,
@@ -3309,6 +3666,38 @@ function ReplaySkinPreview({
         >
           MAX
         </div>
+      ) : null}
+      {stageArt.sides.map(({ side, asset, width: artWidth, pick }) => (
+        <img
+          key={`stage-${side}`}
+          src={asset.src}
+          alt=""
+          draggable={false}
+          className={`${pick.className} absolute object-fill`}
+          {...pick.handlers}
+          style={{
+            left: side === "left" ? playfieldX - artWidth : playfieldX + playfieldWidth,
+            top: 0,
+            width: artWidth,
+            height,
+          }}
+        />
+      ))}
+      {stageArt.bottom ? (
+        <img
+          src={stageArt.bottom.asset.src}
+          alt=""
+          draggable={false}
+          className={`${stageArt.bottom.pick.className} absolute object-fill`}
+          {...stageArt.bottom.pick.handlers}
+          style={{
+            left: playfieldX + playfieldWidth / 2 - stageArt.bottom.width / 2,
+            top: settings.upscroll ? 0 : height - stageArt.bottom.height,
+            width: stageArt.bottom.width,
+            height: stageArt.bottom.height,
+            transform: settings.upscroll ? "scaleY(-1)" : undefined,
+          }}
+        />
       ) : null}
       {marqueeRect ? (
         <div
@@ -4434,16 +4823,25 @@ function ReplaySkinCatalogBrowserDialog({
 function ReplaySkinAssetRow({
   label,
   asset,
+  rowId,
+  highlighted = false,
   onChange,
   onClear,
 }: {
   label: string;
   asset: ReplaySkinImageAsset | undefined;
+  rowId?: string;
+  highlighted?: boolean;
   onChange: () => void;
   onClear: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2.5 rounded-md border border-osu-b3/40 bg-osu-b5/40 px-2.5 py-1.5">
+    <div
+      data-asset-row={rowId}
+      className={`flex items-center gap-2.5 rounded-md border px-2.5 py-1.5 transition-colors ${
+        highlighted ? "border-osu-pink/70 bg-osu-pink/10" : "border-osu-b3/40 bg-osu-b5/40"
+      }`}
+    >
       <span className="w-20 shrink-0 text-[11px] font-semibold text-osu-l1">{label}</span>
       <span className="flex min-w-0 flex-1 items-center gap-2">
         {asset ? (

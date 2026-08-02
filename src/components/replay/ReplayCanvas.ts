@@ -11,8 +11,8 @@ import type { ManiaStarRatingTimelinePoint } from "../../lib/mania-star-rating";
 import { DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
 import type { ReplayOverlayId, ReplayOverlaySettings } from "../../lib/replay-overlays";
 import { DEFAULT_REPLAY_SCROLL_SPEED } from "../../lib/replay-scroll-speed";
-import { DEFAULT_REPLAY_COMBO_FONT_SET, DEFAULT_REPLAY_JUDGEMENT_SET, DEFAULT_REPLAY_SKIN_SETTINGS, OSU_MANIA_DEFAULT_LIGHT_POSITION, OSU_MANIA_SCREEN_WIDTH, REPLAY_SKIN_DEFAULT_HIT_POSITION, getReplayComboFontStyle, getReplayJudgementScale, getReplayJudgementSetAssets, getReplaySkinProfile, normalizeReplaySkinSettings } from "../../lib/replay-skin";
-import type { ReplayComboFontStyle, ReplaySkinColumnAssets, ReplaySkinImageAsset, ReplaySkinKeymodeProfile, ReplaySkinSettings } from "../../lib/replay-skin";
+import { DEFAULT_REPLAY_COMBO_FONT_SET, DEFAULT_REPLAY_JUDGEMENT_SET, DEFAULT_REPLAY_SKIN_SETTINGS, OSU_MANIA_DEFAULT_LIGHT_POSITION, OSU_MANIA_SCREEN_WIDTH, REPLAY_SKIN_DEFAULT_HIT_POSITION, getReplayComboFontStyle, getReplayJudgementScale, getReplayJudgementSetAssets, getReplaySkinProfile, getReplaySkinStagePosition, normalizeReplaySkinSettings } from "../../lib/replay-skin";
+import type { ReplayComboFontStyle, ReplaySkinColumnAssets, ReplaySkinImageAsset, ReplaySkinKeymodeProfile, ReplaySkinSettings, ReplaySkinStagePositionKey } from "../../lib/replay-skin";
 import type { ReplayLiveStats } from "../../lib/replay-types";
 import type { ReplayHitCounts } from "../../lib/replay-validation";
 import { buildStableReplayComboEvents, resolveReplayJudgementEvents } from "../../lib/replay-validation";
@@ -220,6 +220,13 @@ function maxNoteEndTime(notes: ReadonlyArray<{ endTime: number }>): number {
   let max = 0;
   for (const note of notes) max = Math.max(max, note.endTime);
   return max;
+}
+
+// A stage position (the settings' hit position, kept in the game's 768-space
+// as a distance up from the stage's bottom edge) in the 480-unit stage space
+// that column widths and skin art are measured in.
+function getSkinStagePositionUnits(position: number): number {
+  return Math.max(0, Math.min(768, position)) * (480 / 768);
 }
 
 const HEX_NUMBER_CACHE = new Map<string, number>();
@@ -1574,7 +1581,7 @@ export class ManiaReplayRenderer {
     const laneWidth = averageColumnWidth * layoutScale;
     const barePreviewBias = this.barePlayfield && this.keyCount >= 5 && w >= 380 ? 0.32 : 0.5;
     const playfieldX = this.getPlayfieldX(w, playfieldWidth, layoutScale, barePreviewBias);
-    const hitPosition = this.skinSettings.hitPosition ?? MANIA_HIT_TARGET_POSITION;
+    const hitPosition = this.stagePosition("hitPosition") ?? MANIA_HIT_TARGET_POSITION;
     const judgmentY = h * (this.skinSettings.upscroll ? hitPosition : MANIA_REFERENCE_HEIGHT - hitPosition) / MANIA_REFERENCE_HEIGHT;
     const noteHeight = Math.max(6, this.skinProfile.noteHeightScale * layoutScale * MANIA_BAR_NOTE_HEIGHT_RATIO);
     const receptorHeight = Math.max(6, h * 0.012);
@@ -1603,6 +1610,14 @@ export class ManiaReplayRenderer {
   // stage lands where it does in game instead of drifting further left the
   // wider the window gets. No value keeps the viewer's centred stage, as do
   // the bare preview and card renders.
+  // skin.ini HitPosition / ScorePosition / ComboPosition for the keymode being
+  // played, falling back to the settings-wide value the Layout tab edits. A
+  // skin can set a different hit line per keymode, and its key art is padded
+  // to land on that one.
+  private stagePosition(key: ReplaySkinStagePositionKey): number {
+    return getReplaySkinStagePosition(this.skinProfile, this.skinSettings, key);
+  }
+
   private getPlayfieldX(w: number, playfieldWidth: number, layoutScale: number, bias: number): number {
     const aligned = (w - playfieldWidth) * (this.playfieldAlign ?? bias);
     const columnStart = this.skinProfile.columnStart;
@@ -2960,7 +2975,7 @@ export class ManiaReplayRenderer {
       // shift between the two is what lets O2Jam-style decks overlap their
       // key tops (see skin-preview-render for the derivation).
       const height = this.getStageAssetHeight(stage.light, layout);
-      const hitUnits = Math.max(0, Math.min(768, this.skinSettings.hitPosition)) * (480 / 768);
+      const hitUnits = getSkinStagePositionUnits(this.stagePosition("hitPosition"));
       const lightUnits = 480 - (this.skinProfile.lightPosition ?? OSU_MANIA_DEFAULT_LIGHT_POSITION);
       const lightShift = (hitUnits - lightUnits) * layout.layoutScale;
       for (let col = 0; col < this.keyCount; col++) {
@@ -3760,18 +3775,29 @@ export class ManiaReplayRenderer {
       if (receptorAsset) {
         if (pressed) this.receptorFlashTimestamps[col] = this.currentTime;
         // The key area is stretched to the lane's width but keeps its NATIVE
-        // height in the game's 768-space, sitting on the bottom edge of the
-        // stage (hanging from the top on upscroll, which flips the stage).
-        // This is lazer's LegacyKeyArea rule, shared with the stage furniture
-        // and the catalog preview. Stretching it to the gap under the hit
-        // line instead squashed tall key art into a flat smear.
+        // height in the game's 768-space, standing on the stage's bottom edge
+        // (hanging from the top on upscroll, which flips the stage). This is
+        // lazer's LegacyKeyArea rule, shared with the stage furniture and the
+        // catalog preview. Stretching it to the gap under the hit line instead
+        // squashed tall key art into a flat smear.
+        //
+        // That bottom edge is the hit position's own distance below the line,
+        // not the canvas edge; the two coincide only while the stage's
+        // vertical scale matches its horizontal one. A preview widens its
+        // lanes past what its height implies, and key art is padded so its
+        // visible key lands on the hit position (aleju03's ring ends at unit
+        // 450 of a 450 hit position, Teto's red line spans 391-399 for 393),
+        // so the padding stretched with the lanes and dragged the key up off
+        // the line notes land on. Measuring from the line keeps them together
+        // at any scale, and the overflow runs off the canvas where it did.
         const native = this.getStageAssetNativeSize(receptorAsset);
         if (native) {
           const height = Math.max(1, native.height * (480 / 768) * layout.layoutScale);
+          const stageEdge = getSkinStagePositionUnits(this.stagePosition("hitPosition")) * layout.layoutScale;
           if (this.skinSettings.upscroll) {
-            this.drawSkinImage(receptorAsset, x + colWidth / 2, 0, colWidth, height, 0.5, 0, 1, 0xffffff, true);
+            this.drawSkinImage(receptorAsset, x + colWidth / 2, judgmentY - stageEdge, colWidth, height, 0.5, 0, 1, 0xffffff, true);
           } else {
-            this.drawSkinImage(receptorAsset, x + colWidth / 2, layout.h - height, colWidth, height, 0.5, 0, 1);
+            this.drawSkinImage(receptorAsset, x + colWidth / 2, judgmentY + stageEdge - height, colWidth, height, 0.5, 0, 1);
           }
         }
         continue;
@@ -4126,7 +4152,7 @@ export class ManiaReplayRenderer {
     const animationScale = 0.8 + 0.2 * easeOutElastic(popProgress);
     const judgementScale = getReplayJudgementScale(this.skinSettings) / 100;
     const judgmentAsset = this.getJudgementAsset(this.lastJudgment);
-    const y = this.getStagePositionY(this.skinSettings.scorePosition, layout);
+    const y = this.getStagePositionY(this.stagePosition("scorePosition"), layout);
     if (judgmentAsset) {
       const size = this.getJudgementDrawSize(judgmentAsset, layout, judgementScale * animationScale);
       this.drawSkinImage(judgmentAsset, playfieldCenterX, y, size.width, size.height, 0.5, 0.5, alpha);
@@ -4871,13 +4897,17 @@ export class ManiaReplayRenderer {
   }
 
   private renderCombo(layout: Layout) {
+    // skin.ini pushed the counter off the bottom of the stage for this
+    // keymode, which is how a skin says "no combo counter": the game draws
+    // none there, so neither does the stage.
+    if (this.skinProfile.comboHidden) return;
     const animation = this.getComboAnimationState();
     const breakAnimation = this.getComboBreakAnimationState();
     if (!animation && !breakAnimation) return;
 
     const { h, playfieldX, playfieldWidth } = layout;
     const playfieldCenterX = playfieldX + playfieldWidth / 2;
-    const comboY = this.getStagePositionY(this.skinSettings.comboPosition, layout);
+    const comboY = this.getStagePositionY(this.stagePosition("comboPosition"), layout);
     const comboFont = getReplayComboFontStyle(this.skinSettings.comboFontSet);
     const fontSize = Math.max(22, h * 0.05);
     const drawCombo = (state: { value: number; scaleX: number; scaleY: number; alpha: number; color: string; tint: number }) => {
@@ -5678,7 +5708,7 @@ export class ManiaReplayRenderer {
     if (this.coverMod != null) return layout.h * this.coverMod.coverage;
     return getManiaHiddenCoverageReferencePx({
       coverageReference: this.hiddenCoverageReference,
-      hitPosition: this.skinSettings.hitPosition ?? MANIA_HIT_TARGET_POSITION,
+      hitPosition: this.stagePosition("hitPosition") ?? MANIA_HIT_TARGET_POSITION,
       playfieldHeight: layout.h,
       referenceHeight: MANIA_REFERENCE_HEIGHT,
     });

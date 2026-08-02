@@ -13,7 +13,7 @@ const INDEX_KEY = "index";
 const CACHE_MAX_ENTRIES = 4;
 // Bumped whenever the importer learns a new element: entries decoded by an
 // older build are missing it, and nothing else in the key would change.
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v4";
 
 function versionedKey(key: string): string {
   return `${CACHE_VERSION}:${key}`;

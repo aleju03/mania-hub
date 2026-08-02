@@ -158,6 +158,7 @@ export async function rehydrateOwnerReplaySkinSettings(
 
   await Promise.all(loads);
   await fillGlobalStageAssets(settings, archive);
+  await fillKeymodeStagePositions(settings, archive);
   const rehydrated = normalizeReplaySkinSettings(settings);
   // The renderer only draws imported art under the "bars" style, so a payload
   // saved while the note shape said circles or arrows would rebuild every
@@ -179,6 +180,33 @@ const GLOBAL_STAGE_ASSET_FILES: ReadonlyArray<readonly [Extract<keyof ReplaySkin
   ["pauseRetry", "pause-retry"],
   ["pauseBack", "pause-back"],
 ];
+
+const STAGE_POSITION_KEYS = ["hitPosition", "scorePosition", "comboPosition"] as const;
+
+// Stage positions were settings-wide before they were kept per keymode, so a
+// payload saved back then places every keymode's stage from whichever [Mania]
+// block the import happened to pick. Fill the gaps from the archive's own
+// skin.ini, the same way the global stage assets above are filled, rather than
+// making the owner re-import the skin to get their 7K hit line back.
+async function fillKeymodeStagePositions(settings: Record<string, unknown>, archive: OskArchive): Promise<void> {
+  const profiles = isRecord(settings.keymodeProfiles) ? settings.keymodeProfiles : {};
+  const entries = Object.entries(profiles).filter((entry): entry is [string, Record<string, unknown>] => isRecord(entry[1]));
+  const gaps = entries.filter(([, profile]) => STAGE_POSITION_KEYS.some((key) => profile[key] == null)
+    || profile.comboHidden == null);
+  if (gaps.length === 0) return;
+
+  const { readOskStagePositions } = await import("./replay-skin-import");
+  const declared = await readOskStagePositions(archive).catch(() => null);
+  if (!declared) return;
+  for (const [key, profile] of gaps) {
+    const positions = declared.get(Number(key));
+    if (!positions) continue;
+    for (const positionKey of STAGE_POSITION_KEYS) {
+      if (profile[positionKey] == null && positions[positionKey] != null) profile[positionKey] = positions[positionKey];
+    }
+    if (profile.comboHidden !== true && positions.comboHidden) profile.comboHidden = true;
+  }
+}
 
 async function fillGlobalStageAssets(settings: Record<string, unknown>, archive: OskArchive): Promise<void> {
   const profiles = isRecord(settings.keymodeProfiles) ? settings.keymodeProfiles : {};
@@ -300,19 +328,104 @@ export interface LoadedOwnerReplaySkin {
   archive: OskArchive;
 }
 
+interface UserReplaySkinFetchResult {
+  ok: boolean;
+  value: OwnerReplaySkinRecord | null;
+}
+
+// Keep transport failures distinct from a real "no skin" response. The
+// public helper retains its forgiving null-on-failure contract, while the
+// viewer's small memory cache only remembers successful responses.
+async function requestUserReplaySkin(userId: number, init?: RequestInit): Promise<UserReplaySkinFetchResult> {
+  const base = getLiveBackendUrl();
+  if (!base || !Number.isInteger(userId) || userId <= 0) return { ok: false, value: null };
+  try {
+    const response = await fetch(`${base}/api/replay-skin?userId=${userId}`, { credentials: "omit", ...init });
+    if (!response.ok) return { ok: false, value: null };
+    const body = (await response.json()) as { replaySkin?: OwnerReplaySkinRecord | null };
+    return { ok: true, value: body.replaySkin ?? null };
+  } catch {
+    return { ok: false, value: null };
+  }
+}
+
 // Public, cacheable read straight from the browser: the owner id is already on
 // the page (the score's user), and the backend caches the response briefly.
 export async function fetchUserReplaySkin(userId: number, init?: RequestInit): Promise<OwnerReplaySkinRecord | null> {
-  const base = getLiveBackendUrl();
-  if (!base || !Number.isInteger(userId) || userId <= 0) return null;
-  try {
-    const response = await fetch(`${base}/api/replay-skin?userId=${userId}`, { credentials: "omit", ...init });
-    if (!response.ok) return null;
-    const body = (await response.json()) as { replaySkin?: OwnerReplaySkinRecord | null };
-    return body.replaySkin ?? null;
-  } catch {
-    return null;
-  }
+  return (await requestUserReplaySkin(userId, init)).value;
+}
+
+// Settings, the skin editor and skin detail pages can mount/unmount several
+// times in one visit. Reuse the viewer's answer for the same window as the
+// public endpoint instead of paying another browser -> frontend -> backend
+// round trip on every mount. Concurrent consumers share one request, and
+// mutation call sites update this cache immediately.
+export const MY_REPLAY_SKIN_MEMORY_TTL_MS = 60_000;
+
+interface MyReplaySkinMemoryEntry {
+  value: OwnerReplaySkinRecord | null;
+  expiresAt: number;
+}
+
+interface MyReplaySkinInflightEntry {
+  revision: number;
+  promise: Promise<OwnerReplaySkinRecord | null>;
+}
+
+const myReplaySkinMemory = new Map<number, MyReplaySkinMemoryEntry>();
+const myReplaySkinInflight = new Map<number, MyReplaySkinInflightEntry>();
+const myReplaySkinRevisions = new Map<number, number>();
+
+function myReplaySkinRevision(userId: number): number {
+  return myReplaySkinRevisions.get(userId) ?? 0;
+}
+
+export function writeMyReplaySkinMemory(userId: number, value: OwnerReplaySkinRecord | null): void {
+  if (!Number.isInteger(userId) || userId <= 0) return;
+  myReplaySkinRevisions.set(userId, myReplaySkinRevision(userId) + 1);
+  myReplaySkinInflight.delete(userId);
+  myReplaySkinMemory.set(userId, { value, expiresAt: Date.now() + MY_REPLAY_SKIN_MEMORY_TTL_MS });
+}
+
+export function invalidateMyReplaySkinMemory(userId: number): void {
+  if (!Number.isInteger(userId) || userId <= 0) return;
+  myReplaySkinRevisions.set(userId, myReplaySkinRevision(userId) + 1);
+  myReplaySkinInflight.delete(userId);
+  myReplaySkinMemory.delete(userId);
+}
+
+export function fetchMyReplaySkinCached(userId: number): Promise<OwnerReplaySkinRecord | null> {
+  if (!Number.isInteger(userId) || userId <= 0) return Promise.resolve(null);
+  const cached = myReplaySkinMemory.get(userId);
+  if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.value);
+  if (cached) myReplaySkinMemory.delete(userId);
+
+  const revision = myReplaySkinRevision(userId);
+  const inflight = myReplaySkinInflight.get(userId);
+  if (inflight?.revision === revision) return inflight.promise;
+
+  const promise = requestUserReplaySkin(userId)
+    .then((result) => {
+      // A set/clear may have landed while this GET was in flight. Never let
+      // its older response overwrite or escape past the known mutation.
+      if (myReplaySkinRevision(userId) !== revision) {
+        return myReplaySkinMemory.get(userId)?.value ?? null;
+      }
+      if (result.ok) {
+        myReplaySkinMemory.set(userId, {
+          value: result.value,
+          expiresAt: Date.now() + MY_REPLAY_SKIN_MEMORY_TTL_MS,
+        });
+      }
+      return result.value;
+    })
+    .finally(() => {
+      if (myReplaySkinInflight.get(userId)?.promise === promise) {
+        myReplaySkinInflight.delete(userId);
+      }
+    });
+  myReplaySkinInflight.set(userId, { revision, promise });
+  return promise;
 }
 
 // Opened archives, by .osk URL. The route effect that loads a player's skin
@@ -398,7 +511,12 @@ export async function loadOwnerReplaySkinCached(
 // surface that draws the viewer's skin has to rebuild it; memoized per pointer
 // so the several stages on a page decode once between them, and cached on disk
 // so the next visit skips the .osk entirely.
-let appliedFullSettings: { key: string; promise: Promise<ReplaySkinSettings | null> } | null = null;
+interface AppliedFullSettingsEntry {
+  key: string;
+  promise: Promise<ReplaySkinSettings | null>;
+}
+
+let appliedFullSettings: AppliedFullSettingsEntry | null = null;
 
 export function loadAppliedReplaySkinSettings(): Promise<ReplaySkinSettings | null> {
   const applied = readAppliedCommunityReplaySkin();
@@ -408,19 +526,24 @@ export function loadAppliedReplaySkinSettings(): Promise<ReplaySkinSettings | nu
   }
   const key = appliedCommunityReplaySkinKey(applied);
   if (appliedFullSettings?.key !== key) {
-    appliedFullSettings = {
-      key,
-      promise: (async () => {
-        const { readCachedReplaySkin, writeCachedReplaySkin } = await import("./replay-skin-cache");
-        const cacheKey = `applied:${key}`;
-        const cached = await readCachedReplaySkin(cacheKey).catch(() => null);
-        if (cached) return normalizeReplaySkinSettings(cached.settings);
-        const settings = await loadAppliedCommunityReplaySkinSettings(applied);
-        if (!settings) return null;
-        void writeCachedReplaySkin(cacheKey, { settings, sounds: {} }, Date.now()).catch(() => {});
-        return settings;
-      })().catch(() => null),
-    };
+    const entry: AppliedFullSettingsEntry = { key, promise: Promise.resolve(null) };
+    entry.promise = (async () => {
+      const { readCachedReplaySkin, writeCachedReplaySkin } = await import("./replay-skin-cache");
+      const cacheKey = `applied:${key}`;
+      const cached = await readCachedReplaySkin(cacheKey).catch(() => null);
+      if (cached) return normalizeReplaySkinSettings(cached.settings);
+      const settings = await loadAppliedCommunityReplaySkinSettings(applied);
+      if (!settings) return null;
+      void writeCachedReplaySkin(cacheKey, { settings, sounds: {} }, Date.now()).catch(() => {});
+      return settings;
+    })().catch(() => null).then((settings) => {
+      // A failed rebuild must not stick, same as the archive cache above: the
+      // memo would hand every later stage the null and the whole page would
+      // draw the asset-free copy until a reload.
+      if (!settings && appliedFullSettings === entry) appliedFullSettings = null;
+      return settings;
+    });
+    appliedFullSettings = entry;
   }
   return appliedFullSettings.promise;
 }
@@ -443,43 +566,6 @@ async function resolveOwnerSkinBackend(): Promise<OwnerSkinBackend | null> {
   if (process.env.LIVE_ADMIN_TOKEN) headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
   return { base, headers, userId: auth.viewer.id };
 }
-
-// Server-fn boundary: the customized settings ride as a JSON string (the
-// pack-wallet pattern) because the serializer refuses `unknown` payloads.
-export interface OwnerReplaySkinRecordWire {
-  skin: SkinSummary;
-  settingsJson: string;
-  updatedAt: string;
-}
-
-export function parseOwnerReplaySkinRecordWire(wire: OwnerReplaySkinRecordWire): OwnerReplaySkinRecord | null {
-  try {
-    return { skin: wire.skin, settings: JSON.parse(wire.settingsJson), updatedAt: wire.updatedAt };
-  } catch {
-    return null;
-  }
-}
-
-export const getMyReplaySkin = createServerFn({ method: "GET" })
-  .handler(async (): Promise<OwnerReplaySkinRecordWire | null> => {
-    const { setResponseHeader } = await import("@tanstack/react-start/server");
-    setResponseHeader("Cache-Control", "private, no-store");
-    const cfg = await resolveOwnerSkinBackend();
-    if (!cfg) return null;
-    try {
-      const response = await fetch(`${cfg.base}/api/replay-skin?userId=${cfg.userId}`, { cache: "no-store" });
-      if (!response.ok) return null;
-      const body = (await response.json()) as { replaySkin?: OwnerReplaySkinRecord | null };
-      if (!body.replaySkin) return null;
-      return {
-        skin: body.replaySkin.skin,
-        settingsJson: JSON.stringify(body.replaySkin.settings ?? null),
-        updatedAt: body.replaySkin.updatedAt,
-      };
-    } catch {
-      return null;
-    }
-  });
 
 export type SetMyReplaySkinResult =
   | { ok: true }

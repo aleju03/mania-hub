@@ -7,6 +7,7 @@ import {
   createReplaySkinShareKey,
   getReplaySkinColumnColor,
   getReplaySkinProfile,
+  getReplaySkinStagePosition,
   normalizeReplaySkinSettings,
   osuManiaHitPositionToReplayHitPosition,
   parseReplaySkinShareKey,
@@ -34,6 +35,33 @@ describe("replay skin settings", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it("resolves a stage position per keymode, falling back to the settings-wide value", () => {
+    const settings = normalizeReplaySkinSettings({
+      ...DEFAULT_REPLAY_SKIN_SETTINGS,
+      hitPosition: 110,
+      keymodeProfiles: {
+        "7": { hitPosition: 139 },
+      },
+    });
+
+    // 7K carries the skin's own hit line; 4K never declared one, so the value
+    // the Layout tab edits stands.
+    expect(getReplaySkinStagePosition(getReplaySkinProfile(settings, 7), settings, "hitPosition")).toBe(139);
+    expect(getReplaySkinStagePosition(getReplaySkinProfile(settings, 4), settings, "hitPosition")).toBe(110);
+  });
+
+  it("keeps per-keymode stage positions through a share key round trip", () => {
+    const settings = normalizeReplaySkinSettings({
+      ...DEFAULT_REPLAY_SKIN_SETTINGS,
+      keymodeProfiles: { "7": { hitPosition: 139, scorePosition: 528, comboPosition: 288 } },
+    });
+    const restored = parseReplaySkinShareKey(createReplaySkinShareKey("Two modes", settings));
+
+    expect(restored?.settings.keymodeProfiles["7"].hitPosition).toBe(139);
+    expect(restored?.settings.keymodeProfiles["7"].scorePosition).toBe(528);
+    expect(restored?.settings.keymodeProfiles["7"].comboPosition).toBe(288);
   });
 
   it("uses the shared default replay skin preset", () => {
@@ -86,6 +114,10 @@ describe("replay skin settings", () => {
           judgementLine: true,
           columnStart: null,
           lightPosition: null,
+          hitPosition: null,
+          scorePosition: null,
+          comboPosition: null,
+          comboHidden: false,
           keysUnderNotes: false,
           comboScale: 1,
           noteHeightScale: 50,
