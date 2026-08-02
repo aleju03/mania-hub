@@ -94,8 +94,12 @@ jobs:
 
       # Keep the 3 newest releases; older ones are just disk. Never touches
       # whatever `current` points at.
+      #
+      # Not if: always() - an early failure (a bad lockfile, say) means the SSH
+      # step never ran, so this just fails again with "Host key verification
+      # failed" and buries the real error under a second one.
       - name: Prune old releases
-        if: always()
+        if: success()
         run: |
           ssh "$VPS_USER@$VPS_HOST" '
             cd '"$WEB_DIR"'/releases || exit 0
