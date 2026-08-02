@@ -45,7 +45,6 @@ import {
   writeReplayVolume,
 } from "../../lib/replay-preferences";
 import {
-  canUseReplaySkinImport,
   clearMyReplaySkin,
   getMyReplaySkin,
   loadAppliedCommunityReplaySkinSettings,
@@ -123,8 +122,6 @@ interface SettingsPanelProps {
 }
 
 export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps) {
-  const panelAuth = useAuth();
-  const canUseSkinImport = canUseReplaySkinImport(panelAuth);
   const [scrollSpeed, setScrollSpeed] = useState(readReplayScrollSpeed);
   const [bgDim, setBgDim] = useState(readReplayBackgroundDim);
   const [volume, setVolume] = useState(readReplayVolume);
@@ -146,7 +143,6 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
   // decoded copy from the pointer on mount: the editor and its preview open on
   // the skin that is actually in play instead of on flat defaults.
   useEffect(() => {
-    if (!canUseSkinImport) return;
     const applied = readAppliedCommunityReplaySkin();
     if (!applied) return;
     let cancelled = false;
@@ -156,7 +152,7 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
     return () => {
       cancelled = true;
     };
-  }, [canUseSkinImport]);
+  }, []);
 
   const updateCursor = (patch: Partial<CursorSettings>) => {
     const next = normalizeCursorSettings({ ...cursorSettings, ...patch });
@@ -530,7 +526,6 @@ function SkinPanel({
 }) {
   const auth = useAuth();
   const viewerId = auth.viewer?.id ?? null;
-  const canUseSkinImport = canUseReplaySkinImport(auth);
   /* Same hydration rule as the cursor settings above: the switch and the
      my-replay-skin block render from stored/async values, so they start at
      their defaults and load after mount. */
@@ -658,7 +653,6 @@ function SkinPanel({
         </p>
       </PanelGroup>
 
-      {canUseSkinImport ? (
       <PanelGroup label="Replay skin">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -734,7 +728,6 @@ function SkinPanel({
           <p className="text-[12px] text-osu-f1">Sign in to set a replay skin for your plays.</p>
         )}
       </PanelGroup>
-      ) : null}
 
       <AnimatePresence>
         {customizing && myReplaySkin ? (

@@ -97,7 +97,6 @@ import {
 import { loadReplayStoryboard, type LoadedReplayStoryboard } from "../lib/replay-storyboard";
 import {
   appliedCommunityReplaySkinKey,
-  canUseReplaySkinImport,
   fetchUserReplaySkin,
   loadAppliedCommunityReplaySkinSettings,
   loadOwnerReplaySkinCached,
@@ -1982,9 +1981,6 @@ function ReplayViewer({
   children?: ReactNode;
 }) {
   const auth = useAuth();
-  // The .osk import feature is admin/dev only for now, viewer side included:
-  // nobody gets another player's skin applied while the parser is unfinished.
-  const canUseSkinImport = canUseReplaySkinImport(auth);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<ReplayRendererLike | null>(null);
@@ -2230,10 +2226,9 @@ function ReplayViewer({
   }, []);
 
   useEffect(() => {
-    if (!canUseSkinImport) return;
     const applied = readAppliedCommunityReplaySkin();
     if (applied) void hydrateAppliedCommunitySkin(applied);
-  }, [hydrateAppliedCommunitySkin, canUseSkinImport]);
+  }, [hydrateAppliedCommunitySkin]);
 
   const applySkinSettings = useCallback((next: ReplaySkinSettings, community?: AppliedCommunitySkinDraft | null) => {
     const normalized = normalizeReplaySkinSettings(next);
@@ -2292,7 +2287,7 @@ function ReplayViewer({
   // player's id is known at mount (an upload has none, and a skin arriving
   // late must not blank a stage that is already up), and only ever released:
   // the cap below means a slow or missing skin costs a moment, not the replay.
-  const [ownerSkinHold, setOwnerSkinHold] = useState(() => canUseSkinImport && ownerUserId != null);
+  const [ownerSkinHold, setOwnerSkinHold] = useState(() => ownerUserId != null);
   const releaseOwnerSkinHold = useCallback(() => setOwnerSkinHold(false), []);
   useEffect(() => {
     if (!ownerSkinHold) return;
@@ -2303,7 +2298,7 @@ function ReplayViewer({
   useEffect(() => {
     setOwnerSkin(null);
     setOwnerSkinApplied(false);
-    if (!canUseSkinImport || !ownerUserId || !ownerSkinPreferred) {
+    if (!ownerUserId || !ownerSkinPreferred) {
       releaseOwnerSkinHold();
       return;
     }
@@ -2322,7 +2317,7 @@ function ReplayViewer({
     return () => {
       cancelled = true;
     };
-  }, [ownerUserId, canUseSkinImport, ownerSkinPreferred, releaseOwnerSkinHold]);
+  }, [ownerUserId, ownerSkinPreferred, releaseOwnerSkinHold]);
 
   // What the stage actually renders: the player's skin while applied, the
   // viewer's own settings otherwise. The settings modal always edits the
@@ -2383,7 +2378,7 @@ function ReplayViewer({
       // re-reading them verbatim would strip the art off the stage. Serve the
       // in-memory full copy while the pointer matches, and rebuild it in the
       // background when another tab applied a different one.
-      const applied = canUseSkinImport ? readAppliedCommunityReplaySkin() : null;
+      const applied = readAppliedCommunityReplaySkin();
       const cachedFull = appliedCommunityFullRef.current;
       if (applied && cachedFull && cachedFull.key === appliedCommunityReplaySkinKey(applied)) {
         setSkinSettings(cachedFull.settings);
@@ -2405,7 +2400,7 @@ function ReplayViewer({
       window.removeEventListener(REPLAY_OVERLAY_SETTINGS_CHANGE_EVENT, refreshSharedReplaySettings);
       window.removeEventListener("focus", refreshSharedReplaySettings);
     };
-  }, [applyScrollSpeed, replayStableScrollSpeed, hydrateAppliedCommunitySkin, canUseSkinImport]);
+  }, [applyScrollSpeed, replayStableScrollSpeed, hydrateAppliedCommunitySkin]);
 
   const resizeReplayRenderer = useCallback(() => {
     requestAnimationFrame(() => rendererRef.current?.resize());

@@ -3,14 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   appliedCommunityReplaySkinKey,
-  canUseReplaySkinImport,
   dehydrateReplaySkinSettings,
   readAppliedCommunityReplaySkin,
   rehydrateOwnerReplaySkinSettings,
   replaySkinSettingsEmbedAssets,
   writeAppliedCommunityReplaySkin,
 } from "./replay-owner-skin";
-import { ANONYMOUS_AUTH_STATE } from "./auth-shared";
 import type { SkinSummary } from "./skins";
 import { loadOskImageAssetByPath, openOskArchive } from "./replay-skin-import";
 import { DEFAULT_REPLAY_SKIN_PROFILE, DEFAULT_REPLAY_SKIN_SETTINGS, EMPTY_REPLAY_SKIN_STAGE_ASSETS, normalizeReplaySkinSettings } from "./replay-skin";
@@ -151,17 +149,6 @@ describe("owner replay skin dehydrate/rehydrate", () => {
     expect(await rehydrateOwnerReplaySkinSettings(null, archive)).toBeNull();
     expect(await rehydrateOwnerReplaySkinSettings({ v: 2, settings: {} }, archive)).toBeNull();
     expect(await rehydrateOwnerReplaySkinSettings({ v: 1, settings: "nope" }, archive)).toBeNull();
-  });
-
-  it("gates the import feature to admins and local dev", () => {
-    expect(canUseReplaySkinImport(null)).toBe(false);
-    expect(canUseReplaySkinImport({ ...ANONYMOUS_AUTH_STATE })).toBe(false);
-    // A signed-in non-admin is still locked out.
-    expect(canUseReplaySkinImport({
-      ...ANONYMOUS_AUTH_STATE,
-      viewer: { id: 7, username: "someone", avatarUrl: "", countryCode: "CR" },
-    })).toBe(false);
-    expect(canUseReplaySkinImport({ ...ANONYMOUS_AUTH_STATE, canUseAdminFeatures: true })).toBe(true);
   });
 
   it("detects embedded assets in settings", () => {

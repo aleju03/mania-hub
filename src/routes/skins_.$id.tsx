@@ -13,7 +13,7 @@ import { useAuth } from "../lib/auth-context";
 import { formatTimeAgo } from "../lib/format";
 import { skinEventProperties } from "../lib/analytics-skins";
 import { track } from "../lib/analytics";
-import { canUseReplaySkinImport, dehydrateReplaySkinSettings, getMyReplaySkin, setMyReplaySkin } from "../lib/replay-owner-skin";
+import { dehydrateReplaySkinSettings, getMyReplaySkin, setMyReplaySkin } from "../lib/replay-owner-skin";
 import { importReplaySkinFromOsk } from "../lib/replay-skin-import";
 import { deleteMySkin, fetchSkinById, formatKeymodes, formatSkinFileSize, markSkinsListStale, moderateSkin, readSkinsBrowseEntry, renameSkin, SKIN_NAME_MAX_LENGTH, skinDownloadUrl, skinOskFileUrl, type SkinSummary } from "../lib/skins";
 import { pageSeo } from "../lib/seo";
@@ -110,9 +110,8 @@ function SkinDetailPage() {
   const viewerId = auth.viewer?.id ?? null;
   const skinId = skin?.id ?? null;
   const skinStatus = skin?.status ?? null;
-  const canUseSkinImport = canUseReplaySkinImport(auth);
   useEffect(() => {
-    if (!canUseSkinImport || !viewerId || !skinId || skinStatus !== "published") return;
+    if (!viewerId || !skinId || skinStatus !== "published") return;
     let cancelled = false;
     void getMyReplaySkin()
       .then((record) => {
@@ -122,7 +121,7 @@ function SkinDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [canUseSkinImport, viewerId, skinId, skinStatus]);
+  }, [viewerId, skinId, skinStatus]);
 
   const setAsMyReplaySkin = async () => {
     if (!skin || replaySkinStatus !== "idle") return;
@@ -401,7 +400,7 @@ function SkinDetailPage() {
                         ) : null}
                       </a>
                     )}
-                    {canUseSkinImport && auth.viewer && skin.status === "published" && skin.oskUrl && (
+                    {auth.viewer && skin.status === "published" && skin.oskUrl && (
                       <div className="mt-2">
                         {replaySkinStatus === "set" ? (
                           <>

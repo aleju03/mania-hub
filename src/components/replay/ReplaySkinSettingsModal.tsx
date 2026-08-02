@@ -56,7 +56,6 @@ import { clearReplaySkinSounds, readReplaySkinSounds, writeReplaySkinSounds } fr
 import { useAuth } from "#/lib/auth-context";
 import { getLiveBackendUrl } from "#/lib/live-backend";
 import {
-  canUseReplaySkinImport,
   dehydrateReplaySkinSettings,
   getMyReplaySkin,
   loadOwnerReplaySkin,
@@ -415,10 +414,9 @@ export function ReplaySkinSettingsModal({
   // ---- community skin (Style tab) -------------------------------------------
   const auth = useAuth();
   const viewerId = auth.viewer?.id ?? null;
-  const canUseSkinImport = canUseReplaySkinImport(auth);
   // The whole block needs the catalog backend; without it there is nothing to
   // browse, download or save against.
-  const liveBackendAvailable = getLiveBackendUrl() != null && canUseSkinImport;
+  const liveBackendAvailable = getLiveBackendUrl() != null;
   // A catalog skin imported during this editing session. Its archive powers
   // the Assets tab exactly like the assetArchive prop does; the prop (the
   // settings-page customize flow) acts as the seed until a session load
@@ -435,9 +433,9 @@ export function ReplaySkinSettingsModal({
   const pendingSkinSoundsRef = useRef<{ name: string; sounds: Record<string, ArrayBuffer> } | null>(null);
   const [myReplaySkinRecord, setMyReplaySkinRecord] = useState<OwnerReplaySkinRecord | null>(null);
 
-  // Null for non-admins, which also hides the Assets tab: swapping individual
-  // .osk assets is part of the same gated import feature.
-  const activeAssetArchive = canUseSkinImport ? loadedCatalogSkin?.archive ?? assetArchive ?? null : null;
+  // Null until an .osk is open, which also hides the Assets tab: there is
+  // nothing to swap individual assets from until then.
+  const activeAssetArchive = loadedCatalogSkin?.archive ?? assetArchive ?? null;
   const activeAssetSourceName = loadedCatalogSkin?.skin.name ?? assetSourceName ?? null;
   // Decoded picker thumbnails, keyed by zip path. Loading is deduped through
   // the promise so a re-search never decodes the same image twice; a fresh map
@@ -1165,7 +1163,7 @@ export function ReplaySkinSettingsModal({
   // HTTP cached, so it is the same file the page already fetched).
   const communityPresetSkin = selectedPreset?.community?.skin ?? null;
   useEffect(() => {
-    if (!canUseSkinImport || !communityPresetSkin) return;
+    if (!communityPresetSkin) return;
     if (loadedCatalogSkin || communityBusy) return;
     let cancelled = false;
     void getArchiveForSkin(communityPresetSkin).then((archive) => {
@@ -1176,7 +1174,7 @@ export function ReplaySkinSettingsModal({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canUseSkinImport, communityPresetSkin?.id, loadedCatalogSkin, communityBusy]);
+  }, [communityPresetSkin?.id, loadedCatalogSkin, communityBusy]);
 
   const createPresetFromDraft = () => {
     setPromptDialog({

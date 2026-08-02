@@ -1,7 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 
-import { canUseAdminFeatures } from "./auth-shared";
-import type { AuthState } from "./auth-shared";
 import { getLiveBackendUrl } from "./live-backend";
 import { normalizeReplaySkinSettings } from "./replay-skin";
 import type { ReplaySkinImageAsset, ReplaySkinSettings, ReplaySkinStageAssets } from "./replay-skin";
@@ -19,17 +17,6 @@ import type { SkinSummary } from "./skins";
 // once.
 
 export const OWNER_REPLAY_SKIN_PAYLOAD_MAX_CHARS = 1_000_000;
-
-// The whole .osk import pipeline (community skins in the replay settings
-// modal, the per-player replay skin, the asset picker) stays admin/dev only
-// while it is unfinished: the parser still has known gaps against the game
-// (key-area sizing, oversized LN body textures, lazer HUD scale overrides),
-// so the public would get a broken-looking stage. Gate every surface on this
-// one predicate, including the viewer side - nobody should have another
-// player's skin applied to their replay until this ships properly.
-export function canUseReplaySkinImport(auth: AuthState | undefined | null): boolean {
-  return canUseAdminFeatures(auth);
-}
 
 export interface OwnerReplaySkinRecord {
   skin: SkinSummary;

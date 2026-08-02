@@ -148,8 +148,8 @@ describe("replay skin settings UI", () => {
     expect(prefs).toContain('export const REPLAY_OWNER_SKIN_CHANGE_EVENT = "mania-hub:replay-owner-skin-change";');
     expect(prefs).toContain("window.dispatchEvent(new CustomEvent(REPLAY_OWNER_SKIN_CHANGE_EVENT, { detail: enabled }));");
     expect(routeSource).toContain("window.addEventListener(REPLAY_OWNER_SKIN_CHANGE_EVENT, sync);");
-    expect(routeSource).toContain("if (!canUseSkinImport || !ownerUserId || !ownerSkinPreferred) {");
-    expect(routeSource).toContain("}, [ownerUserId, canUseSkinImport, ownerSkinPreferred, releaseOwnerSkinHold]);");
+    expect(routeSource).toContain("if (!ownerUserId || !ownerSkinPreferred) {");
+    expect(routeSource).toContain("}, [ownerUserId, ownerSkinPreferred, releaseOwnerSkinHold]);");
   });
 
   it("drops the built-in combo font picker when the skin ships digits", () => {
@@ -215,7 +215,7 @@ describe("replay skin settings UI", () => {
     // The stage used to paint the viewer's own skin for the second or so the
     // .osk spent downloading and decoding, then swap.
     expect(routeSource).toContain("const OWNER_SKIN_HOLD_MAX_MS = 2000;");
-    expect(routeSource).toContain("const [ownerSkinHold, setOwnerSkinHold] = useState(() => canUseSkinImport && ownerUserId != null);");
+    expect(routeSource).toContain("const [ownerSkinHold, setOwnerSkinHold] = useState(() => ownerUserId != null);");
     expect(routeSource).toContain("${ownerSkinHold ? \"invisible\" : \"\"}");
     // Released once and never re-held: a skin arriving late must not blank a
     // stage that is already up.
@@ -244,7 +244,6 @@ describe("replay skin settings UI", () => {
     expect(hookSource).toContain("export function useReplaySkinSettings()");
     expect(hookSource).toContain("loadAppliedReplaySkinSettings()");
     expect(hookSource).toContain("return applied ?? stored;");
-    expect(hookSource).toContain("canUseReplaySkinImport(auth)");
     // Memoized per pointer so several stages on one page decode once.
     expect(ownerSource).toContain("export function loadAppliedReplaySkinSettings()");
     expect(ownerSource).toContain("if (appliedFullSettings?.key !== key) {");
@@ -269,23 +268,25 @@ describe("replay skin settings UI", () => {
     expect(routeSource).toContain("style={{ height: `${skinPauseButtonHeightPercent(asset)}%` }}");
   });
 
-  it("keeps the .osk import feature admin/dev gated on every surface", () => {
-    // Unfinished parser (key-area sizing, oversized LN bodies, lazer HUD
-    // scale): the public must not see the import UI, and viewers must not get
-    // another player's skin applied, until it ships properly.
+  it("ships the .osk import feature to everyone", () => {
+    // Released: no surface may re-add an admin gate around the import UI or
+    // around applying the player's skin on the viewer side.
     const files = [
       "replay.tsx",
       "../components/replay/ReplaySkinSettingsModal.tsx",
       "../components/settings/SettingsPanel.tsx",
       "skins_.$id.tsx",
+      "../lib/replay-owner-skin.ts",
+      "../lib/use-replay-skin-settings.ts",
     ];
     for (const file of files) {
       const source = fs.readFileSync(path.resolve(__dirname, file), "utf8");
-      expect(source, file).toContain("canUseReplaySkinImport");
+      expect(source, file).not.toContain("canUseReplaySkinImport");
+      expect(source, file).not.toContain("canUseSkinImport");
     }
 
     const routeSource = fs.readFileSync(path.resolve(__dirname, "replay.tsx"), "utf8");
-    expect(routeSource).toContain("if (!canUseSkinImport || !ownerUserId || !ownerSkinPreferred) {");
+    expect(routeSource).toContain("if (!ownerUserId || !ownerSkinPreferred) {");
   });
 
   it("exposes input overlay-only and color controls", () => {

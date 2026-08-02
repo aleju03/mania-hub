@@ -8,8 +8,7 @@
 // settings.
 
 import { useEffect, useState } from "react";
-import { useAuth } from "./auth-context";
-import { canUseReplaySkinImport, loadAppliedReplaySkinSettings } from "./replay-owner-skin";
+import { loadAppliedReplaySkinSettings } from "./replay-owner-skin";
 import {
   REPLAY_SKIN_SETTINGS_CHANGE_EVENT,
   readReplaySkinSettings,
@@ -17,8 +16,6 @@ import {
 } from "./replay-skin";
 
 export function useReplaySkinSettings(): ReplaySkinSettings {
-  const auth = useAuth();
-  const canUseSkinImport = canUseReplaySkinImport(auth);
   const [stored, setStored] = useState(readReplaySkinSettings);
   const [applied, setApplied] = useState<ReplaySkinSettings | null>(null);
   const [revision, setRevision] = useState(0);
@@ -39,10 +36,6 @@ export function useReplaySkinSettings(): ReplaySkinSettings {
   }, []);
 
   useEffect(() => {
-    if (!canUseSkinImport) {
-      setApplied(null);
-      return;
-    }
     let cancelled = false;
     void loadAppliedReplaySkinSettings().then((settings) => {
       if (!cancelled) setApplied(settings);
@@ -50,7 +43,7 @@ export function useReplaySkinSettings(): ReplaySkinSettings {
     return () => {
       cancelled = true;
     };
-  }, [canUseSkinImport, revision]);
+  }, [revision]);
 
   // The rebuilt copy wins only while the pointer is still the one it came
   // from; clearing the skin drops it on the next refresh.
