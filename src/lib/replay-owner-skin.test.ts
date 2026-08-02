@@ -7,6 +7,7 @@ import {
   dehydrateReplaySkinSettings,
   fetchMyReplaySkinCached,
   invalidateMyReplaySkinMemory,
+  peekMyReplaySkinMemory,
   readAppliedCommunityReplaySkin,
   rehydrateOwnerReplaySkinSettings,
   replaySkinSettingsEmbedAssets,
@@ -215,11 +216,22 @@ describe("my replay skin memory cache", () => {
     expect(first).toEqual(firstRecord);
     expect(second).toEqual(firstRecord);
     expect(reopened).toEqual(firstRecord);
+    expect(peekMyReplaySkinMemory(userId)).toEqual(firstRecord);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(
       `https://live.test/api/replay-skin?userId=${userId}`,
       { credentials: "omit" },
     );
+  });
+
+  it("distinguishes a synchronously remembered empty result from an unknown owner", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(responseWith(null));
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(peekMyReplaySkinMemory(userId)).toBeUndefined();
+    expect(await fetchMyReplaySkinCached(userId)).toBeNull();
+    expect(peekMyReplaySkinMemory(userId)).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("refreshes after the memory TTL", async () => {
@@ -233,7 +245,10 @@ describe("my replay skin memory cache", () => {
 
     expect(await fetchMyReplaySkinCached(userId)).toEqual(firstRecord);
     now += MY_REPLAY_SKIN_MEMORY_TTL_MS;
-    expect(await fetchMyReplaySkinCached(userId)).toEqual(nextRecord);
+    const refresh = fetchMyReplaySkinCached(userId);
+    expect(peekMyReplaySkinMemory(userId)).toEqual(firstRecord);
+    expect(await refresh).toEqual(nextRecord);
+    expect(peekMyReplaySkinMemory(userId)).toEqual(nextRecord);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 

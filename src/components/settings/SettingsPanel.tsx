@@ -48,6 +48,7 @@ import {
   clearMyReplaySkin,
   fetchMyReplaySkinCached,
   loadAppliedCommunityReplaySkinSettings,
+  peekMyReplaySkinMemory,
   readAppliedCommunityReplaySkin,
   replaySkinSettingsEmbedAssets,
   replaySkinSettingsWithoutAssets,
@@ -526,12 +527,17 @@ function SkinPanel({
 }) {
   const auth = useAuth();
   const viewerId = auth.viewer?.id ?? null;
-  /* Same hydration rule as the cursor settings above: the switch and the
-     my-replay-skin block render from stored/async values, so they start at
-     their defaults and load after mount. */
+  /* The first SSR/client render starts from hydration-safe defaults. Drawer
+     remounts happen after hydration, so they can reuse the last known skin
+     synchronously while the effect below revalidates it. */
   const [ownerSkinEnabled, setOwnerSkinEnabled] = useState(true);
-  const [myReplaySkin, setMyReplaySkinRecord] = useState<OwnerReplaySkinRecord | null>(null);
-  const [myReplaySkinLoaded, setMyReplaySkinLoaded] = useState(false);
+  const rememberedMyReplaySkin = viewerId ? peekMyReplaySkinMemory(viewerId) : undefined;
+  const [myReplaySkin, setMyReplaySkinRecord] = useState<OwnerReplaySkinRecord | null>(
+    () => rememberedMyReplaySkin ?? null,
+  );
+  const [myReplaySkinLoaded, setMyReplaySkinLoaded] = useState(
+    () => viewerId != null && rememberedMyReplaySkin !== undefined,
+  );
   const [customizing, setCustomizing] = useState(false);
   /* A custom skin brings its own notes and LN caps, and its art only draws
      under the Bars style, so the shape buttons and the tail trim have nothing
@@ -559,7 +565,9 @@ function SkinPanel({
       return;
     }
     let cancelled = false;
-    setMyReplaySkinLoaded(false);
+    const remembered = peekMyReplaySkinMemory(viewerId);
+    setMyReplaySkinRecord(remembered ?? null);
+    setMyReplaySkinLoaded(remembered !== undefined);
     void fetchMyReplaySkinCached(viewerId)
       .then((record) => {
         if (cancelled) return;

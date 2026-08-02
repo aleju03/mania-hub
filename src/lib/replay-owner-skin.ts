@@ -394,11 +394,19 @@ export function invalidateMyReplaySkinMemory(userId: number): void {
   myReplaySkinMemory.delete(userId);
 }
 
+// Synchronous last-known state for UI that remounts frequently. `undefined`
+// means this browser has never loaded the owner, while `null` is a successful
+// "no replay skin" response. Expired entries remain useful while the async
+// read below refreshes them in the background.
+export function peekMyReplaySkinMemory(userId: number): OwnerReplaySkinRecord | null | undefined {
+  if (!Number.isInteger(userId) || userId <= 0) return undefined;
+  return myReplaySkinMemory.get(userId)?.value;
+}
+
 export function fetchMyReplaySkinCached(userId: number): Promise<OwnerReplaySkinRecord | null> {
   if (!Number.isInteger(userId) || userId <= 0) return Promise.resolve(null);
   const cached = myReplaySkinMemory.get(userId);
   if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.value);
-  if (cached) myReplaySkinMemory.delete(userId);
 
   const revision = myReplaySkinRevision(userId);
   const inflight = myReplaySkinInflight.get(userId);
@@ -417,7 +425,7 @@ export function fetchMyReplaySkinCached(userId: number): Promise<OwnerReplaySkin
           expiresAt: Date.now() + MY_REPLAY_SKIN_MEMORY_TTL_MS,
         });
       }
-      return result.value;
+      return result.ok ? result.value : cached?.value ?? null;
     })
     .finally(() => {
       if (myReplaySkinInflight.get(userId)?.promise === promise) {

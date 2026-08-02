@@ -96,6 +96,18 @@ describe("replay skin settings UI", () => {
     expect(source).toContain("loadAppliedCommunityReplaySkinSettings");
   });
 
+  it("reuses the last known replay-skin state when the settings drawer remounts", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "../components/settings/SettingsPanel.tsx"), "utf8");
+
+    // Closing the drawer unmounts this panel. A synchronous cache peek keeps a
+    // known null from becoming an empty loading row on every subsequent open.
+    expect(source).toContain("const rememberedMyReplaySkin = viewerId ? peekMyReplaySkinMemory(viewerId) : undefined;");
+    expect(source).toContain("() => viewerId != null && rememberedMyReplaySkin !== undefined");
+    // Stale values stay visible while the normal cached fetch revalidates.
+    expect(source).toContain("setMyReplaySkinLoaded(remembered !== undefined);");
+    expect(source).toContain("void fetchMyReplaySkinCached(viewerId)");
+  });
+
   it("steps the built-in style controls aside once a skin brings its own art", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplaySkinSettingsModal.tsx"), "utf8");
 
