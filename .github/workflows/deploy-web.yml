@@ -1,9 +1,18 @@
 name: Deploy frontend to VPS
 
-# Manual only for now. Once the ninja.mania-tracker.com trial is proven we can
-# add `push: branches: [main]` here, but during the migration an accidental
-# deploy is worse than an extra click.
+# develop only, which is what ninja.mania-tracker.com already auto-deployed
+# from on Vercel - same behaviour, different host. Deliberately not main: that
+# is what Vercel builds, and it stays frozen as the rollback target for the
+# whole migration.
+#
+# workflow_dispatch is listed but GitHub only surfaces it from the default
+# branch, so until main carries this file the push trigger is the live one.
 on:
+  push:
+    branches: [develop]
+    paths-ignore:
+      - 'live-backend/**'
+      - '**.md'
   workflow_dispatch:
     inputs:
       restart:
@@ -66,12 +75,14 @@ jobs:
           REL="$WEB_DIR/releases/${{ github.sha }}"
           ssh "$VPS_USER@$VPS_HOST" "ln -sfn '$REL' '$WEB_DIR/current.new' && mv -T '$WEB_DIR/current.new' '$WEB_DIR/current'"
 
+      # inputs.* is undefined on a push, which would silently skip both of these
+      # and leave the old release running against a freshly flipped symlink.
       - name: Restart
-        if: inputs.restart
+        if: github.event_name != 'workflow_dispatch' || inputs.restart
         run: ssh "$VPS_USER@$VPS_HOST" "sudo -n systemctl restart mania-hub-web"
 
       - name: Health check
-        if: inputs.restart
+        if: github.event_name != 'workflow_dispatch' || inputs.restart
         run: |
           ssh "$VPS_USER@$VPS_HOST" '
             for i in $(seq 1 30); do
