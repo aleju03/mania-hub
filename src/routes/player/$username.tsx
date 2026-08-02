@@ -1,5 +1,5 @@
 import { Link, createFileRoute, useLocation, useNavigate } from "@tanstack/react-router";
-import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Pencil, RefreshCw, X } from "lucide-react";
 import {
@@ -59,7 +59,7 @@ import { ScoreRowSkeleton, Skeleton } from "../../components/ui/LoadingSkeleton"
 import { UsernameText } from "../../components/ui/UsernameText";
 import { ManiaCard3DPanel as ManiaCardPanel } from "../../components/player/maniacard3d/ManiaCard3DPanel";
 import { SkillBreakdownBody, SkillModePanel, qualifyingSkillModes, skillRatingAccent } from "../../components/player/SkillBreakdown";
-import type { InsightScoreSnapshot, OsuCovers, OsuManiaVariant, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
+import type { InsightScoreSnapshot, OsuCovers, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
 import { buildPpDistribution, calculateUserProfileInsights } from "../../lib/profile-insights";
 import { playedWithinOnlineWindow, readPlayerRecentPlay, readPlayerShell } from "../../lib/player-shell-cache";
 import { pageSeo, playerOgImagePath } from "../../lib/seo";
@@ -995,6 +995,9 @@ export function PlayerProfilePage({
     loaderBestScores.length > 0 ? calculateUserProfileInsights(loaderBestScores) : null,
   );
   const [loadingUser, setLoadingUser] = useState(() => !loaderSnapshot?.user);
+  // The player shell seeded from a ranking row carries no rank history or peak
+  // rank, so the hero card waits for the snapshot rather than reflowing.
+  const [loadingRankHistory, setLoadingRankHistory] = useState(() => !loaderSnapshot?.user);
   const [loadingRecent, setLoadingRecent] = useState(true);
   const [loadingOsuRecent, setLoadingOsuRecent] = useState(false);
   const [loadingAbout, setLoadingAbout] = useState(false);
@@ -1145,6 +1148,7 @@ export function PlayerProfilePage({
       setBestWindowLoaded(hasLoaderBestScores);
       setWaitingForSnapshotBest(!hasLoaderBestScores);
       setLoadingUser(!seededUser);
+      setLoadingRankHistory(!loaderSnapshot?.user);
       setLoadingInsights(!hasLoaderBestScores);
     }
     setRecent([]);
@@ -1200,6 +1204,7 @@ export function PlayerProfilePage({
       setUser((current) => profileUsersAreEquivalent(current, nextUser) ? current : nextUser);
       setUserError(null);
       setLoadingUser(false);
+      setLoadingRankHistory(false);
       setWaitingForSnapshotBest(false);
       if (result.bestScores.length > 0) {
         const dedupedScores = dedupeScores(result.bestScores);
@@ -1254,6 +1259,7 @@ export function PlayerProfilePage({
       })
       .finally(() => {
         if (cancelled) return;
+        setLoadingRankHistory(false);
         if (!snapshotApplied && !seededUser) setLoadingUser(false);
       });
 
@@ -1267,7 +1273,11 @@ export function PlayerProfilePage({
             return;
           }
           setWaitingForSnapshotBest(false);
-          if (!seededUser) void loadFallbackUser();
+          if (!seededUser) {
+            void loadFallbackUser();
+            return;
+          }
+          setLoadingRankHistory(false);
         })
         .catch(() => {
           if (cancelled) return;
@@ -1276,6 +1286,7 @@ export function PlayerProfilePage({
             void loadFallbackUser();
             return;
           }
+          setLoadingRankHistory(false);
           if (!snapshotApplied && !hasLoaderBestScores) setLoadingInsights(false);
         });
     };
@@ -1570,6 +1581,51 @@ export function PlayerProfilePage({
   // A play we just watched land beats osu!'s `last_visit`, which only tracks
   // website visits and can read weeks stale for someone mid-session.
   const seenPlayingNow = recentPlayAt != null && playedWithinOnlineWindow(recentPlayAt);
+  const isOnlineNow = user.is_online || seenPlayingNow;
+
+  const coverImage = user.cover?.url || user.cover_url || null;
+  const peakRank = user.rank_highest?.rank ?? null;
+  const peakRankDate = user.rank_highest?.updated_at ?? null;
+  const awaitingPeak = loadingRankHistory && !peakRank;
+  const rankHistoryPoints = (user.rank_history?.data ?? []).filter((point) => point > 0);
+  // Positive delta = rank improved (the number went down).
+  const rankDelta90d = rankHistoryPoints.length >= 2
+    ? rankHistoryPoints[0] - rankHistoryPoints[rankHistoryPoints.length - 1]
+    : null;
+  const showTungTungSahur = user.username.toLowerCase() === "sebasrj";
+  // The tab strip sits flush on the section edge unless a filter/sort bar
+  // follows it, which then needs the breathing room back.
+  const hasTabControls = tab === "recent" || (tab === "best" && bestWindowLoaded && best.length > 0);
+  const ppVariants = (stats.variants ?? [])
+    .filter((variant) => variant.mode === "mania" && variant.pp > 0)
+    .sort((a, b) => a.variant.localeCompare(b.variant));
+
+  const heroMeta: ReactNode[] = [
+    <a
+      key="osu"
+      href={`https://osu.ppy.sh/users/${user.id}/mania`}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-1 rounded-full bg-osu-pink/20 px-2 py-0.5 font-semibold text-osu-pink-light transition-colors duration-150 hover:bg-osu-pink/35"
+    >
+      osu! profile
+      <svg className="h-2.5 w-2.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 1.5h7v7" /><path d="M10.5 1.5 1.5 10.5" /></svg>
+    </a>,
+  ];
+  if (!isOnlineNow && user.last_visit) {
+    heroMeta.push(
+      // Relative to Date.now(), so SSR and hydration can land on different
+      // sides of a minute boundary; let the client text win.
+      <span key="seen" title={new Date(user.last_visit).toLocaleString()} suppressHydrationWarning>
+        Last seen {formatDetailedTimeAgo(user.last_visit)}
+      </span>,
+    );
+  }
+  // Joined date and playstyle are static profile facts, not live status, so
+  // they sit on the stat rail with the other facts instead of trailing the
+  // name alongside a link and a presence readout.
+  const joinedValue = !profileStatsProjectedOnly && hasValidDate(user.join_date) ? formatDate(user.join_date) : null;
+  const playstyleValue = user.playstyle?.length ? user.playstyle.join(", ") : null;
 
   return (
     <div className="flex-1">
@@ -2049,105 +2105,171 @@ export function PlayerProfilePage({
         )}
       </AnimatePresence>
 
-      {/* Cover + Avatar */}
-      <div className="relative h-[220px] sm:h-[280px] overflow-hidden bg-osu-b4">
-        <img
-          src={user.cover?.url || user.cover_url}
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover"
-          style={{ filter: "brightness(0.4) blur(1px)" }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-osu-b5" />
-        <div className="absolute bottom-0 left-0 right-0">
-          <div className="max-w-[1200px] mx-auto px-4 sm:px-5 pb-5 flex items-end gap-3 sm:gap-5">
+      {/* Hero: cover art, identity, and the headline ranks share one band, with
+          the 90-day rank trend drawn edge to edge underneath them. */}
+      <header className="relative isolate overflow-hidden bg-osu-b4">
+        {coverImage && (
+          <img
+            src={coverImage}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            style={{ filter: "brightness(0.34) saturate(1.15)" }}
+          />
+        )}
+        <div className="absolute inset-0 bg-[radial-gradient(135%_120%_at_12%_0%,rgba(0,0,0,0.25),rgba(0,0,0,0.82))]" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent to-osu-b5" />
+        <RankTrendline history={rankHistoryPoints} />
+
+        <div className="relative mx-auto max-w-[1200px] px-4 pt-8 pb-7 sm:px-5 sm:pt-12 sm:pb-9">
+          <div className="flex items-center gap-4 sm:gap-5">
             <button
               type="button"
               onClick={() => setAvatarOpen(true)}
-              className="w-[80px] h-[80px] sm:w-[110px] sm:h-[110px] rounded-2xl overflow-hidden border-2 border-osu-b3/60 shadow-[0_4px_20px_rgba(0,0,0,0.5)] translate-y-4 flex-shrink-0 cursor-pointer hover:border-osu-l2/60 transition-colors duration-150"
+              className="h-[84px] w-[84px] flex-shrink-0 cursor-pointer overflow-hidden rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.45)] ring-2 ring-white/15 transition duration-150 hover:ring-osu-pink/70 sm:h-[124px] sm:w-[124px]"
             >
               <img
                 src={avatarSrc}
                 alt={`${user.username}'s avatar`}
-                className="w-full h-full object-cover"
+                className="h-full w-full object-cover"
                 loading="lazy"
               />
             </button>
-            <div className="pb-1 flex-1 min-w-0">
-              <h1 className="flex min-w-0 items-center gap-3 text-3xl font-bold text-white">
-                <UsernameText username={user.username} avatarUrl={user.avatar_url} className="min-w-0 truncate text-2xl sm:text-[34px] font-black text-white" />
+            <div className="min-w-0 flex-1">
+              <h1 className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+                {/* `truncate` clips at the padding box, and with leading-none the
+                    box is tighter than the ink: a capital J overhangs it on the
+                    left and below. The padding/-margin pair buys room on every
+                    side without moving anything. */}
+                <UsernameText username={user.username} avatarUrl={user.avatar_url} className="min-w-0 truncate p-2 -m-2 text-[26px] font-black leading-none text-white sm:text-[40px]" />
                 {showProfileCountryFlag ? (
                   <Link
                     to="/"
                     search={{ country: profileCountryCode }}
-                    className="inline-flex shrink-0 translate-y-[3px] items-center rounded-[3px] ring-1 ring-white/20 transition hover:ring-osu-pink-light/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-osu-pink-light"
+                    className="inline-flex shrink-0 items-center rounded-[3px] ring-1 ring-white/20 transition hover:ring-osu-pink-light/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-osu-pink-light"
                     title={`Open ${profileCountryName} home`}
                     aria-label={`Open ${profileCountryName} home`}
                   >
                     <CountryFlag code={profileCountryCode} size="md" decorative />
                   </Link>
                 ) : null}
-              </h1>
-              <div className="flex items-center gap-3 mt-1">
-                <a
-                  href={`https://osu.ppy.sh/users/${user.id}/mania`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-2 py-0.5 rounded-full bg-osu-pink/20 text-[11px] font-semibold text-osu-pink-light hover:bg-osu-pink/35 transition-colors duration-150"
-                >
-                  osu! profile
-                  <svg className="inline w-2.5 h-2.5 ml-0.5 -mt-px" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 1.5h7v7" /><path d="M10.5 1.5 1.5 10.5" /></svg>
-                </a>
                 {user.is_supporter && (
-                  <span className="inline-flex items-center justify-center h-5 px-1.5 rounded-full bg-osu-pink" title="osu! Supporter">
-                    <img src="/images/icons/supporter.svg" alt="Supporter" className="w-3 h-3 brightness-0 invert" />
+                  <span className="inline-flex h-[22px] items-center justify-center rounded-full bg-osu-pink px-2" title="osu! Supporter">
+                    <img src="/images/icons/supporter.svg" alt="Supporter" className="h-3 w-3 brightness-0 invert" />
                   </span>
                 )}
-                {user.is_online || seenPlayingNow ? (
+                {isOnlineNow ? (
                   <span
-                    className="w-2 h-2 rounded-full bg-osu-green"
+                    className="h-2 w-2 shrink-0 rounded-full bg-osu-green"
                     title={user.is_online || !recentPlayAt ? "Online" : `Set a play ${formatDetailedTimeAgo(recentPlayAt)}`}
                   />
-                ) : user.last_visit ? (
-                  <span
-                    className="text-[11px] text-osu-l2"
-                    title={new Date(user.last_visit).toLocaleString()}
-                    // Relative to Date.now(), so SSR and hydration can land on
-                    // different sides of a minute boundary; let the client text win.
-                    suppressHydrationWarning
-                  >
-                    Last seen {formatDetailedTimeAgo(user.last_visit)}
-                  </span>
                 ) : null}
+              </h1>
+              <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-white/50">
+                {heroMeta.map((item, index) => (
+                  <span key={index} className="inline-flex items-center gap-2">
+                    {index > 0 && <span className="text-white/20">·</span>}
+                    {item}
+                  </span>
+                ))}
               </div>
             </div>
           </div>
+
+          {/* The keycap easter egg stands on the rail below and leans into this
+              corner, so on narrow screens the numbers step out of its way. */}
+          <div className={`mt-7 grid grid-cols-2 gap-x-6 gap-y-5 sm:mt-9 sm:flex sm:flex-wrap sm:items-end sm:gap-x-12 sm:pr-0 ${showTungTungSahur ? "pr-16" : ""}`}>
+            <HeroStat
+              label="Global"
+              value={stats.global_rank ? `#${formatNumber(stats.global_rank)}` : "-"}
+              sub={rankDelta90d != null && rankDelta90d !== 0 ? (
+                <span className={`inline-flex items-center gap-1 ${rankDelta90d > 0 ? "text-osu-green-light" : "text-osu-red-light"}`}>
+                  <svg width="7" height="6" viewBox="0 0 7 6" className="flex-shrink-0" aria-hidden>
+                    <path d={rankDelta90d > 0 ? "M3.5 0 L7 6 L0 6 Z" : "M3.5 6 L0 0 L7 0 Z"} fill="currentColor" />
+                  </svg>
+                  <span className="tabular-nums">{formatNumber(Math.abs(rankDelta90d))}</span>
+                  <span className="text-white/40">in 90d</span>
+                </span>
+              ) : null}
+            />
+            <HeroStat
+              label="Country"
+              value={stats.country_rank ? `#${formatNumber(stats.country_rank)}` : "-"}
+              valueClassName="text-osu-pink-light"
+              sub={profileCountryName ?? (user.country_code || null)}
+            />
+            <HeroStat
+              label="Peak"
+              value={awaitingPeak ? <span className="skeleton-pulse block h-[26px] w-24 rounded sm:h-[34px] sm:w-32" /> : peakRank ? `#${formatNumber(peakRank)}` : "-"}
+              valueClassName={peakRank ? getRankTierClass(peakRank) || "text-white" : "text-white"}
+              sub={peakRank && peakRankDate ? `achieved ${formatDate(peakRankDate)}` : null}
+            />
+            <HeroStat
+              label="Performance"
+              value={`${formatNumber(Math.round(stats.pp))}pp`}
+              valueClassName="text-osu-yellow"
+              sub={ppVariants.length >= 2 ? (
+                <span className="inline-flex items-center gap-2.5 tabular-nums">
+                  {ppVariants.map((variant) => (
+                    <span
+                      key={variant.variant}
+                      title={[
+                        variant.global_rank != null ? `#${formatNumber(variant.global_rank)} global` : null,
+                        variant.country_rank != null ? `#${formatNumber(variant.country_rank)} country` : null,
+                      ].filter(Boolean).join("  •  ") || undefined}
+                    >
+                      <span className="font-bold uppercase text-white/35">{variant.variant} </span>
+                      <span className="font-semibold text-white/70">{formatNumber(Math.round(variant.pp))}</span>
+                    </span>
+                  ))}
+                </span>
+              ) : null}
+            />
+          </div>
         </div>
-      </div>
+      </header>
 
       {/* Stats */}
       <div className="bg-osu-b5">
-        <div className="max-w-[1200px] mx-auto px-5 pt-8 pb-4">
-          {/* Rank hero card: peak rank headliner with current + country + 90d sparkline baked in */}
-          <RankHeroCard
-            peakRank={user.rank_highest?.rank ?? null}
-            peakRankDate={user.rank_highest?.updated_at ?? null}
-            currentRank={stats.global_rank}
-            countryRank={stats.country_rank}
-            countryCode={user.country_code}
-            rankHistory={user.rank_history?.data ?? null}
-            showTungTungSahur={user.username.toLowerCase() === "sebasrj"}
-          />
-
-          {/* Secondary stats strip: compact inline row for the remaining mirror stats */}
-          <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <PpStat pp={stats.pp} variants={stats.variants} />
-            <CompactStat label="Accuracy" value={profileStatsProjectedOnly ? "-" : formatAccuracy(stats.hit_accuracy / 100)} />
-            <CompactStat label="Play Count" value={profileStatsProjectedOnly ? "-" : formatNumber(stats.play_count)} />
-            <CompactStat label="Play Time" value={profileStatsProjectedOnly || stats.play_time == null ? "-" : `${formatNumber(Math.floor(stats.play_time / 3600))}h`} />
+        <div className={`max-w-[1200px] mx-auto px-4 sm:px-5 ${hasTabControls ? "pb-4" : ""}`}>
+          {/* Play totals and the grade tally share one flat rail: no boxes, just
+              the numbers with a hairline under them. */}
+          <div className="relative flex flex-wrap items-center gap-x-8 gap-y-5 border-b border-osu-b3/25 py-5 sm:gap-x-12">
+            {showTungTungSahur && <TungTungSahurKeycap />}
+            <RailStat label="Accuracy" value={profileStatsProjectedOnly ? "-" : formatAccuracy(stats.hit_accuracy / 100)} />
+            <RailStat label="Play Count" value={profileStatsProjectedOnly ? "-" : formatNumber(stats.play_count)} />
+            <RailStat label="Play Time" value={profileStatsProjectedOnly || stats.play_time == null ? "-" : `${formatNumber(Math.floor(stats.play_time / 3600))}h`} />
+            {/* One quiet line rather than two label/value blocks: at rail-stat
+                weight these claimed a whole row to themselves on mobile, which
+                is more than a join date and a playstyle are worth. */}
+            {(joinedValue || playstyleValue) && (
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-osu-f1">
+                {joinedValue && (
+                  <span>Joined <strong className="font-semibold text-osu-l2">{joinedValue}</strong></span>
+                )}
+                {joinedValue && playstyleValue && <span className="text-osu-b1">·</span>}
+                {playstyleValue && (
+                  <span>Plays with <strong className="font-semibold capitalize text-osu-l2">{playstyleValue}</strong></span>
+                )}
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 sm:ml-auto">
+              {([
+                ["SSH", stats.grade_counts.ssh],
+                ["SS", stats.grade_counts.ss],
+                ["SH", stats.grade_counts.sh],
+                ["S", stats.grade_counts.s],
+                ["A", stats.grade_counts.a],
+              ] as [string, number][]).map(([grade, count]) => (
+                <div key={grade} className="flex items-center gap-1.5">
+                  <GradeImg grade={grade} size={26} />
+                  <span className="text-xs font-semibold tabular-nums text-osu-f1">{profileStatsProjectedOnly ? "-" : formatNumber(count)}</span>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Profile insights */}
-          <div className="mt-4">
+          <div className="py-5">
             {loadingInsights ? (
               <InsightsSkeleton />
             ) : insightsError ? (
@@ -2159,87 +2281,85 @@ export function PlayerProfilePage({
               const hasPpDistribution = profileInsights.ppRange != null && profileInsights.ppDistribution.length > 0;
               return (
               <div className="space-y-3">
-                {/* Row 1: Key Split + Most Used Mod + BPM + PP Range */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                {/* One panel, four cells: the 1px gaps show the parent through as
+                    hairlines so this reads as a single object, not four boxes. */}
+                <div className={INSIGHT_PANEL_CLASS}>
                   <KeySplitCard keySplit={profileInsights.keySplit} sampleSize={profileInsights.sampleSize} />
                   <div
-                    className={`bg-osu-b4 rounded-xl p-3.5 border border-osu-b3/20 min-h-[90px] group ${profileInsights.mostUsedMod ? "cursor-pointer hover:border-osu-b3/50 transition-colors" : ""}`}
+                    className={`${INSIGHT_CELL_CLASS} group ${profileInsights.mostUsedMod ? INSIGHT_CELL_INTERACTIVE_CLASS : ""}`}
                     onClick={profileInsights.mostUsedMod ? () => setModModalOpen(true) : undefined}
                   >
                     <div className="flex items-center justify-between">
-                      <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Most Used Mod</div>
+                      <div className={INSIGHT_LABEL_CLASS}>Most Used Mod</div>
                       {profileInsights.mostUsedMod && <ExpandHint />}
                     </div>
                     {profileInsights.mostUsedMod ? (
                       <>
-                        <div className="mt-1.5 flex items-center gap-2">
+                        <div className="mt-2 flex items-center gap-2">
                           <ModBadge mod={profileInsights.mostUsedMod.label} />
-                          <span className="text-lg font-bold text-white">{profileInsights.mostUsedMod.label}</span>
+                          <span className="text-[26px] font-black leading-none text-white">{profileInsights.mostUsedMod.label}</span>
                         </div>
-                        <div className="mt-1.5">
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 h-1 rounded-full bg-osu-b3/40 overflow-hidden">
-                              <div
-                                className="h-full rounded-full bg-osu-yellow"
-                                style={{ width: `${Math.round((profileInsights.mostUsedMod.count / profileInsights.mostUsedMod.total) * 100)}%` }}
-                              />
-                            </div>
-                            <span className="text-[10px] text-osu-f1 tabular-nums">
-                              {Math.round((profileInsights.mostUsedMod.count / profileInsights.mostUsedMod.total) * 100)}%
-                            </span>
+                        <div className="mt-auto flex items-center gap-2 pt-2.5">
+                          <div className="h-1 flex-1 overflow-hidden rounded-full bg-osu-b3/50">
+                            <div
+                              className="h-full rounded-full bg-osu-yellow"
+                              style={{ width: `${Math.round((profileInsights.mostUsedMod.count / profileInsights.mostUsedMod.total) * 100)}%` }}
+                            />
                           </div>
+                          <span className="text-[10px] tabular-nums text-osu-f1">
+                            {Math.round((profileInsights.mostUsedMod.count / profileInsights.mostUsedMod.total) * 100)}%
+                          </span>
                         </div>
                       </>
                     ) : (
-                      <div className="mt-1.5 text-sm text-osu-f1">No mod preference</div>
+                      <div className="mt-2 text-sm text-osu-f1">No mod preference</div>
                     )}
                   </div>
                   <div
-                    className={`bg-osu-b4 rounded-xl p-3.5 border border-osu-b3/20 min-h-[90px] group ${profileInsights.medianBpm != null ? "cursor-pointer hover:border-osu-b3/50 transition-colors" : ""}`}
+                    className={`${INSIGHT_CELL_CLASS} group ${profileInsights.medianBpm != null ? INSIGHT_CELL_INTERACTIVE_CLASS : ""}`}
                     onClick={profileInsights.medianBpm != null ? () => setBpmModalOpen(true) : undefined}
                   >
                     <div className="flex items-center justify-between">
-                      <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Median BPM</div>
+                      <div className={INSIGHT_LABEL_CLASS}>Median BPM</div>
                       {profileInsights.medianBpm != null && <ExpandHint />}
                     </div>
                     {profileInsights.medianBpm != null ? (
                       <>
-                        <div className="mt-1 flex items-baseline gap-2">
-                          <span className="text-xl font-bold text-white">{Math.round(profileInsights.medianBpm)}</span>
-                          <span className="text-xs text-osu-f1">BPM</span>
+                        <div className="mt-2 flex items-baseline gap-1.5">
+                          <span className="text-[26px] font-black leading-none tabular-nums text-white">{Math.round(profileInsights.medianBpm)}</span>
+                          <span className="text-[11px] font-semibold text-osu-f1">BPM</span>
                         </div>
                         {profileInsights.bpmRange && (
-                          <div className="mt-1 text-[11px] text-osu-f1 tabular-nums">
-                            {Math.round(profileInsights.bpmRange.min)} - {Math.round(profileInsights.bpmRange.max)} range
+                          <div className="mt-auto pt-2.5 text-[11px] tabular-nums text-osu-f1">
+                            {Math.round(profileInsights.bpmRange.min)} to {Math.round(profileInsights.bpmRange.max)}
                           </div>
                         )}
                       </>
                     ) : (
-                      <div className="mt-1.5 text-sm text-osu-f1">-</div>
+                      <div className="mt-2 text-sm text-osu-f1">-</div>
                     )}
                   </div>
                   <button
                     type="button"
-                    className={`bg-osu-b4 rounded-xl p-3.5 border border-osu-b3/20 min-h-[90px] w-full text-left group focus:outline-none focus-visible:border-osu-pink/60 focus-visible:ring-2 focus-visible:ring-osu-pink/25 ${hasPpDistribution ? "cursor-pointer hover:border-osu-b3/50 transition-colors" : "cursor-default"}`}
+                    className={`${INSIGHT_CELL_CLASS} group w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-osu-pink/50 ${hasPpDistribution ? INSIGHT_CELL_INTERACTIVE_CLASS : "cursor-default"}`}
                     onClick={hasPpDistribution ? () => setPpModalOpen(true) : undefined}
                     disabled={!hasPpDistribution}
                   >
                     <div className="flex items-center justify-between">
-                      <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">PP Range</div>
+                      <div className={INSIGHT_LABEL_CLASS}>PP Range</div>
                       {hasPpDistribution && <ExpandHint />}
                     </div>
                     {profileInsights.ppRange ? (
                       <>
-                        <div className="mt-1 flex items-baseline gap-1.5">
-                          <span className="text-xl font-bold text-osu-pink-light">{Math.round(profileInsights.ppRange.top)}</span>
-                          <span className="text-xs text-osu-f1">to</span>
-                          <span className="text-xl font-bold text-white">{Math.round(profileInsights.ppRange.bottom)}</span>
-                          <span className="text-xs text-osu-f1">pp</span>
+                        <div className="mt-2 flex items-baseline gap-1.5">
+                          <span className="text-[26px] font-black leading-none tabular-nums text-osu-pink-light">{Math.round(profileInsights.ppRange.top)}</span>
+                          <span className="text-[11px] text-osu-f1">to</span>
+                          <span className="text-[26px] font-black leading-none tabular-nums text-white">{Math.round(profileInsights.ppRange.bottom)}</span>
                         </div>
-                        <div className="mt-1 text-[11px] text-osu-f1">{Math.round(profileInsights.ppRange.top - profileInsights.ppRange.bottom)}pp spread</div>
+                        <div className="mt-auto pt-2.5 text-[11px] text-osu-f1">{Math.round(profileInsights.ppRange.top - profileInsights.ppRange.bottom)}pp spread</div>
                       </>
                     ) : (
-                      <div className="mt-1.5 text-sm text-osu-f1">-</div>
+                      <div className="mt-2 text-sm text-osu-f1">-</div>
                     )}
                   </button>
                 </div>
@@ -2254,50 +2374,25 @@ export function PlayerProfilePage({
             })() : null}
           </div>
 
-          {/* Grades */}
-          <div className="mt-5 pt-4 border-t border-osu-b3/30 flex flex-wrap items-center gap-4">
-            {([
-              ["SSH", stats.grade_counts.ssh],
-              ["SS", stats.grade_counts.ss],
-              ["SH", stats.grade_counts.sh],
-              ["S", stats.grade_counts.s],
-              ["A", stats.grade_counts.a],
-            ] as [string, number][]).map(([grade, count]) => (
-              <div key={grade} className="flex items-center gap-1.5">
-                <GradeImg grade={grade} size={28} />
-                <span className="text-xs text-osu-f1 font-medium">{profileStatsProjectedOnly ? "-" : formatNumber(count)}</span>
-              </div>
-            ))}
-            <div className="w-full sm:w-auto sm:ml-auto text-[11px] text-osu-f1 space-x-4">
-              {!profileStatsProjectedOnly && hasValidDate(user.join_date) && (
-                <span>
-                  Joined <strong className="text-osu-l2">{formatDate(user.join_date)}</strong>
-                </span>
-              )}
-              {user.playstyle && (
-                <span>
-                  Plays with{" "}
-                  <strong className="text-osu-l2">{user.playstyle.join(", ")}</strong>
-                </span>
-              )}
-            </div>
-          </div>
-
           {/* Player tabs */}
-          <div className="mt-5 pt-1 border-t border-osu-b3/30 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div ref={tabsRailRef} className="-mx-5 overflow-x-auto px-5 scrollbar-hide sm:mx-0 sm:px-0">
+          <div className="flex flex-col gap-3 border-t border-osu-b3/25 pt-1 lg:flex-row lg:items-center lg:justify-between">
+            <div ref={tabsRailRef} className="-mx-4 overflow-x-auto px-4 scrollbar-hide sm:mx-0 sm:px-0">
               <div className="flex min-w-max">
                 {playerTabs.map((t) => (
                   <button
                     key={t}
                     data-player-tab={t}
                     onClick={() => handleTabChange(t)}
-                    className={`shrink-0 whitespace-nowrap px-4 py-2.5 text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] capitalize ${tab === t
-                        ? "text-osu-c1 border-b-2 border-osu-h1"
-                        : "text-osu-f1 hover:text-osu-l2"
-                      }`}
+                    className={`relative shrink-0 cursor-pointer whitespace-nowrap px-4 py-3 text-[12px] font-semibold transition-colors duration-[120ms] ${tab === t ? "text-white" : "text-osu-f1 hover:text-osu-l2"}`}
                   >
                     {getPlayerTabLabel(t)}
+                    {tab === t && (
+                      <motion.span
+                        layoutId="player-tab-indicator"
+                        className="absolute inset-x-2.5 bottom-0 h-[2px] rounded-full bg-osu-h1"
+                        transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                      />
+                    )}
                   </button>
                 ))}
               </div>
@@ -2368,7 +2463,7 @@ export function PlayerProfilePage({
 
       {/* Tab body: About card or scores list */}
       <div className="bg-osu-b5 border-t border-osu-b3/20">
-        <div className="max-w-[1200px] mx-auto px-5 py-5 space-y-1.5">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-5 space-y-1.5">
           <AnimatePresence mode="wait" initial={false}>
             {tab === "about" ? (
               <motion.div
@@ -2676,92 +2771,65 @@ function PlayerPageSkeleton({
   const playerTabs = canSeeSkillsTab ? PLAYER_TABS : PLAYER_TABS.filter((t) => t !== "skills");
   return (
     <div className="flex-1 bg-osu-b5">
-      <div className="relative h-[220px] sm:h-[280px] overflow-hidden bg-osu-b4">
+      <div className="relative overflow-hidden bg-osu-b4">
         <div className="absolute inset-0 bg-gradient-to-b from-osu-d5 to-osu-b5" />
-        <div className="absolute bottom-0 left-0 right-0">
-          <div className="max-w-[1200px] mx-auto px-4 sm:px-5 pb-5 flex items-end gap-3 sm:gap-5">
-            <Skeleton className="w-[80px] h-[80px] sm:w-[110px] sm:h-[110px] rounded-2xl translate-y-4 flex-shrink-0" />
-            <div className="pb-1 flex-1 min-w-0 space-y-2">
-              <Skeleton className="h-6 sm:h-8 w-36 sm:w-48" />
-              <Skeleton className="h-4 w-24 sm:w-28" />
+        <div className="relative mx-auto max-w-[1200px] px-4 pt-8 pb-7 sm:px-5 sm:pt-12 sm:pb-9">
+          <div className="flex items-center gap-4 sm:gap-5">
+            <Skeleton className="h-[84px] w-[84px] flex-shrink-0 rounded-2xl sm:h-[124px] sm:w-[124px]" />
+            <div className="min-w-0 flex-1 space-y-3">
+              <Skeleton className="h-7 w-40 sm:h-10 sm:w-64" />
+              <Skeleton className="h-3 w-52" />
             </div>
+          </div>
+          <div className="mt-7 grid grid-cols-2 gap-x-6 gap-y-5 sm:mt-9 sm:flex sm:flex-wrap sm:gap-x-12">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i}>
+                <Skeleton className="h-2.5 w-16" />
+                <Skeleton className="mt-2 h-7 w-28 sm:h-9 sm:w-32" />
+                <Skeleton className="mt-2 h-2.5 w-20" />
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
-      <div className="max-w-[1200px] mx-auto px-5 pt-8 pb-5 space-y-3">
-        {/* Rank hero skeleton */}
-        <div className="bg-osu-b4 rounded-xl p-5 border border-osu-b3/20">
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-5">
-            <div className="space-y-2">
-              <Skeleton className="h-3 w-20" />
-              <Skeleton className="h-10 w-32" />
-              <Skeleton className="h-3 w-40" />
-            </div>
-            <div className="flex items-start gap-8">
-              <div className="space-y-2">
-                <Skeleton className="h-3 w-14" />
-                <Skeleton className="h-6 w-20" />
-              </div>
-              <div className="space-y-2">
-                <Skeleton className="h-3 w-14" />
-                <Skeleton className="h-6 w-12" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Compact stats strip skeleton */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="bg-osu-b4 rounded-xl px-4 py-2.5 border border-osu-b3/20 min-h-[46px] flex items-center justify-between gap-3">
-              <Skeleton className="h-3 w-14" />
-              <Skeleton className="h-4 w-16" />
+      <div className="mx-auto max-w-[1200px] px-4 sm:px-5">
+        <div className="flex flex-wrap items-center gap-x-8 gap-y-5 border-b border-osu-b3/25 py-5 sm:gap-x-12">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i}>
+              <Skeleton className="h-2.5 w-16" />
+              <Skeleton className="mt-2 h-5 w-20" />
             </div>
           ))}
-        </div>
-
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="bg-osu-b4 rounded-xl p-3.5 border border-osu-b3/20 min-h-[90px] space-y-2">
-                <Skeleton className="h-3 w-20" />
-                <Skeleton className="h-5 w-28" />
-                <Skeleton className="h-3 w-20" />
-              </div>
-            ))}
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {Array.from({ length: 2 }).map((_, i) => (
-              <div key={i} className="bg-osu-b4 rounded-xl p-3.5 border border-osu-b3/20 h-[112px]">
-                <Skeleton className="h-3 w-24" />
-                <Skeleton className="h-4 w-40 mt-2" />
-                <Skeleton className="h-3 w-32 mt-1" />
-              </div>
+          <div className="flex items-center gap-4 sm:ml-auto">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-6 w-12" />
             ))}
           </div>
         </div>
 
-        <div className="mt-5 pt-1 border-t border-osu-b3/30">
-          <div className="-mx-5 overflow-x-auto px-5 scrollbar-hide sm:mx-0 sm:px-0">
+        <div className="py-5">
+          <InsightsSkeleton />
+        </div>
+
+        <div className="border-t border-osu-b3/25 pt-1">
+          <div className="-mx-4 overflow-x-auto px-4 scrollbar-hide sm:mx-0 sm:px-0">
             <div className="flex min-w-max">
               {playerTabs.map((t) => (
                 <button
                   key={t}
                   onClick={() => onTabChange(t)}
-                  className={`shrink-0 whitespace-nowrap px-4 py-2.5 text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] capitalize ${tab === t
-                      ? "text-osu-c1 border-b-2 border-osu-h1"
-                      : "text-osu-f1 hover:text-osu-l2"
-                    }`}
+                  className={`relative shrink-0 cursor-pointer whitespace-nowrap px-4 py-3 text-[12px] font-semibold transition-colors duration-[120ms] ${tab === t ? "text-white" : "text-osu-f1 hover:text-osu-l2"}`}
                 >
                   {getPlayerTabLabel(t)}
+                  {tab === t && <span className="absolute inset-x-2.5 bottom-0 h-[2px] rounded-full bg-osu-h1" />}
                 </button>
               ))}
             </div>
           </div>
         </div>
 
-        <div className="space-y-1.5">
+        <div className="space-y-1.5 border-t border-osu-b3/20 py-5">
           {Array.from({ length: 6 }).map((_, i) => (
             <ScoreRowSkeleton key={i} />
           ))}
@@ -4606,210 +4674,141 @@ function ModFilterChip({
   );
 }
 
-function CompactStat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+// A stat on the flat rail under the hero: quiet label, the number carrying the
+// weight. No box, the rail's hairline does the separating.
+function RailStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-osu-b4 rounded-xl px-4 py-2.5 border border-osu-b3/20 min-h-[46px] flex items-center justify-between gap-3">
-      <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</span>
-      <span className={`text-base font-bold tabular-nums ${accent ? "text-osu-yellow" : "text-white"}`}>{value}</span>
+    <div className="min-w-0">
+      <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-osu-f1">{label}</div>
+      <div className="mt-1.5 text-[19px] font-bold leading-none tabular-nums text-white">{value}</div>
     </div>
   );
 }
 
-// PP stat: overall figure keeps the standard CompactStat shape on the left,
-// with a tidy 4k/7k pp split anchored to the right edge. The split is only
-// shown when both keymodes have pp — a single keymode carries no comparison,
-// so single-keymode players keep the plain compact look. Each keymode row
-// carries its global / country rank in a hover title.
-function PpStat({ pp, variants }: { pp: number; variants?: OsuManiaVariant[] }) {
-  const withPp = (variants ?? [])
-    .filter((v) => v.mode === "mania" && v.pp > 0)
-    .sort((a, b) => a.variant.localeCompare(b.variant));
-  const keymodes = withPp.length >= 2 ? withPp : [];
-
-  return (
-    <div className="bg-osu-b4 rounded-xl px-4 py-2.5 border border-osu-b3/20 min-h-[46px] flex items-center justify-between gap-3">
-      <div className="flex flex-col gap-0.5 min-w-0">
-        <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">PP</span>
-        <span className="text-base font-bold tabular-nums text-osu-yellow leading-none">{formatNumber(Math.round(pp))}</span>
-      </div>
-      {keymodes.length > 0 && (
-        <div className="flex flex-col gap-1 text-[10px] tabular-nums shrink-0">
-          {keymodes.map((v) => (
-            <div
-              key={v.variant}
-              className="flex items-center gap-1.5"
-              title={[
-                v.global_rank != null ? `#${formatNumber(v.global_rank)} global` : null,
-                v.country_rank != null ? `#${formatNumber(v.country_rank)} country` : null,
-              ].filter(Boolean).join("  •  ") || undefined}
-            >
-              <span className="font-bold uppercase text-osu-f1/70">{v.variant}</span>
-              <span className="font-semibold text-white/85">{formatNumber(Math.round(v.pp))}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function RankHeroCard({
-  peakRank,
-  peakRankDate,
-  currentRank,
-  countryRank,
-  countryCode,
-  rankHistory,
-  showTungTungSahur = false,
+// A headline figure inside the hero, sitting over the cover art.
+function HeroStat({
+  label,
+  value,
+  valueClassName = "text-white",
+  sub,
 }: {
-  peakRank: number | null;
-  peakRankDate: string | null;
-  currentRank: number | null;
-  countryRank: number | null;
-  countryCode: string;
-  rankHistory: number[] | null;
-  showTungTungSahur?: boolean;
+  label: string;
+  value: ReactNode;
+  valueClassName?: string;
+  sub?: ReactNode;
 }) {
-  const valid = (rankHistory ?? []).filter((d) => d > 0);
-  const has90d = valid.length >= 2;
-  const w = 800;
-  const h = 60;
-  let points = "";
-  if (has90d) {
-    const max = Math.max(...valid);
-    const min = Math.min(...valid);
-    const range = max - min || 1;
-    points = valid
-      .map((v, i) => {
-        const x = (i / (valid.length - 1)) * w;
-        const y = ((v - min) / range) * (h - 4) + 2;
-        return `${x},${y}`;
-      })
-      .join(" ");
-  }
-
-  // Positive delta = rank improved (number went down)
-  const delta90d = has90d ? valid[0] - valid[valid.length - 1] : null;
-  const heroRank = peakRank ?? currentRank;
-
   return (
-    <div className="relative">
-      {showTungTungSahur && <TungTungSahurKeycap />}
-      <div className="relative bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden">
-        {/* 90-day sparkline as background texture */}
-        {has90d && (
-          <svg
-            viewBox={`0 0 ${w} ${h}`}
-            preserveAspectRatio="none"
-            className="absolute inset-x-0 bottom-0 w-full h-[70%] pointer-events-none"
-            aria-hidden
-          >
-            <defs>
-              <linearGradient id="rankHeroGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" style={{ stopColor: "hsl(var(--theme-hue),calc(100% * var(--theme-sat)),70%)", stopOpacity: 0.28 }} />
-                <stop offset="100%" style={{ stopColor: "hsl(var(--theme-hue),calc(100% * var(--theme-sat)),70%)", stopOpacity: 0 }} />
-              </linearGradient>
-            </defs>
-            <polygon points={`0,${h} ${points} ${w},${h}`} fill="url(#rankHeroGrad)" />
-            <polyline
-              points={points}
-              fill="none"
-              style={{ stroke: "hsl(var(--theme-hue),calc(100% * var(--theme-sat)),70%)" }}
-              strokeWidth="2"
-              strokeOpacity="0.85"
-              vectorEffect="non-scaling-stroke"
-            />
-          </svg>
-        )}
-
-        {/* Foreground content */}
-        <div className="relative px-5 py-5 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-5">
-          {/* Peak rank - hero */}
-          <div className="min-w-0">
-            <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">
-              {peakRank ? "Peak Rank" : "Global Rank"}
-            </div>
-            <div className={`mt-0.5 text-4xl sm:text-5xl font-extrabold leading-none tabular-nums ${heroRank ? getRankTierClass(heroRank) || "text-osu-yellow" : "text-osu-yellow"}`}>
-              {heroRank ? `#${formatNumber(heroRank)}` : "-"}
-            </div>
-            {peakRank && peakRankDate && (
-              <div className="mt-2 text-[10px] text-osu-f1">
-                achieved <span className="text-osu-l2">{formatDate(peakRankDate)}</span> ·{" "}
-                {/* Wrapped so only the Date.now()-relative half opts out of
-                    hydration matching; the absolute date still gets checked. */}
-                <span suppressHydrationWarning>{formatTimeAgo(peakRankDate)}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Secondary: current global + country + 90d delta */}
-          <div className="flex items-start gap-6 sm:gap-8">
-            {peakRank && (
-              <div className="min-w-0">
-                <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Current</div>
-                <div className="mt-0.5 text-xl font-bold text-white tabular-nums">
-                  {currentRank ? `#${formatNumber(currentRank)}` : "-"}
-                </div>
-                {delta90d != null && delta90d !== 0 && (
-                  <div className={`mt-1 text-[10px] inline-flex items-center gap-1 ${delta90d > 0 ? "text-osu-green-light" : "text-osu-red-light"}`}>
-                    <svg width="7" height="6" viewBox="0 0 7 6" className="flex-shrink-0" aria-hidden>
-                      <path
-                        d={delta90d > 0 ? "M3.5 0 L7 6 L0 6 Z" : "M3.5 6 L0 0 L7 0 Z"}
-                        fill="currentColor"
-                      />
-                    </svg>
-                    <span className="tabular-nums">{formatNumber(Math.abs(delta90d))}</span>
-                    <span className="text-osu-f1">90d</span>
-                  </div>
-                )}
-              </div>
-            )}
-            <div className="min-w-0">
-              <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Country</div>
-              <div className="mt-0.5 text-xl font-bold text-osu-pink-light tabular-nums">
-                {countryRank ? `#${formatNumber(countryRank)}` : "-"}
-              </div>
-              {countryCode && (
-                <div className="mt-1 text-[10px] text-osu-f1 uppercase tracking-wider">{countryCode}</div>
-              )}
-            </div>
-          </div>
-        </div>
+    <div className="min-w-0">
+      <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/40">{label}</div>
+      <div className={`mt-2 text-[26px] font-black leading-none tabular-nums sm:text-[34px] ${valueClassName}`}>
+        {value}
       </div>
+      <div className="mt-2 min-h-[13px] text-[10px] leading-none text-white/45">{sub}</div>
     </div>
   );
 }
+
+// The 90-day global rank history, drawn edge to edge along the bottom of the
+// hero. Higher rank number = worse = lower on the chart.
+function RankTrendline({ history }: { history: number[] }) {
+  if (history.length < 2) return null;
+  const w = 1000;
+  const h = 100;
+  const max = Math.max(...history);
+  const min = Math.min(...history);
+  const range = max - min || 1;
+  const points = history
+    .map((value, index) => {
+      const x = (index / (history.length - 1)) * w;
+      const y = ((value - min) / range) * (h - 8) + 4;
+      return `${x},${y}`;
+    })
+    .join(" ");
+  const stroke = "hsl(var(--theme-hue),calc(100% * var(--theme-sat)),70%)";
+
+  return (
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      preserveAspectRatio="none"
+      className="pointer-events-none absolute inset-x-0 bottom-0 h-[42%] w-full"
+      aria-hidden
+    >
+      <defs>
+        <linearGradient id="playerRankTrend" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={stroke} stopOpacity="0.2" />
+          <stop offset="100%" stopColor={stroke} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <polygon points={`0,${h} ${points} ${w},${h}`} fill="url(#playerRankTrend)" />
+      <polyline
+        points={points}
+        fill="none"
+        stroke={stroke}
+        strokeWidth="2"
+        strokeOpacity="0.55"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  );
+}
+
+// The insight cells live in one panel: 1px gaps let the parent colour through
+// as hairlines, so four readings read as a single object instead of four boxes.
+const INSIGHT_PANEL_CLASS = "grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-osu-b3/30 lg:grid-cols-4";
+const INSIGHT_CELL_CLASS = "flex min-h-[108px] flex-col bg-osu-b4 p-4";
+const INSIGHT_CELL_INTERACTIVE_CLASS = "cursor-pointer transition-colors duration-150 hover:bg-osu-b3/40";
+const INSIGHT_LABEL_CLASS = "text-[9px] font-semibold uppercase tracking-[0.18em] text-osu-f1";
 
 function KeySplitCard({ keySplit, sampleSize }: { keySplit: UserProfileInsights["keySplit"]; sampleSize: number }) {
-  const colors: Record<number, string> = { 4: "bg-osu-blue", 7: "bg-osu-pink", 6: "bg-osu-purple", 9: "bg-osu-orange" };
-  const textColors: Record<number, string> = { 4: "text-osu-blue", 7: "text-osu-pink-light", 6: "text-osu-purple-light", 9: "text-osu-orange" };
+  // Fixed hues only: osu-pink is derived from --theme-hue, so on a blue or
+  // purple theme it collapsed onto 4K's blue or 6K's purple. Keymode identity
+  // has to read the same under every theme, and 4K/7K (the pair that almost
+  // always appears together) get complementary ends of the range.
+  const colors: Record<number, string> = { 4: "bg-osu-blue", 5: "bg-osu-green-light", 6: "bg-osu-purple-light", 7: "bg-osu-orange", 8: "bg-osu-yellow", 9: "bg-osu-red-light", 10: "bg-osu-green" };
+  const textColors: Record<number, string> = { 4: "text-osu-blue", 5: "text-osu-green-light", 6: "text-osu-purple-light", 7: "text-osu-orange", 8: "text-osu-yellow", 9: "text-osu-red-light", 10: "text-osu-green-light" };
+  // keySplit stays in keymode order, so the dominant share has to be found.
+  const dominantCount = keySplit.reduce((top, entry) => Math.max(top, entry.count), 0);
 
   return (
-    <div className="bg-osu-b4 rounded-xl p-3.5 border border-osu-b3/20 min-h-[90px]">
-      <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Key Split</div>
-      {keySplit.length > 0 ? (
+    <div className={INSIGHT_CELL_CLASS}>
+      <div className={INSIGHT_LABEL_CLASS}>Key Split</div>
+      {keySplit.length === 0 ? (
+        <div className="mt-2 text-sm text-osu-f1">No key data</div>
+      ) : keySplit.length === 1 ? (
+        // A single keymode carries no split to show, so the keymode itself is
+        // the reading.
+        <div className={`mt-2 text-[26px] font-black leading-none ${textColors[keySplit[0].keyCount] ?? "text-white"}`}>
+          {keySplit[0].keyCount}K only
+        </div>
+      ) : (
         <>
-          <div className="mt-2 flex rounded-full h-2.5 overflow-hidden bg-osu-b3/40">
+          {/* The keymode someone actually plays gets the big number; the rest
+              stay legible without competing with it. */}
+          <div className="mt-2.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
             {keySplit.map((b) => (
-              <div
-                key={b.keyCount}
-                className={`${colors[b.keyCount] ?? "bg-osu-b1"} transition-all duration-300`}
-                style={{ width: `${(b.count / sampleSize) * 100}%` }}
-              />
-            ))}
-          </div>
-          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5">
-            {keySplit.map((b) => (
-              <div key={b.keyCount} className="flex items-center gap-1.5">
-                <div className={`w-2 h-2 rounded-full ${colors[b.keyCount] ?? "bg-osu-b1"}`} />
-                <span className={`text-xs font-bold ${textColors[b.keyCount] ?? "text-osu-f1"}`}>{b.keyCount}K</span>
-                <span className="text-[10px] text-osu-f1 tabular-nums">{Math.round((b.count / sampleSize) * 100)}%</span>
+              <div key={b.keyCount} className="flex items-baseline gap-1">
+                <span
+                  className={`font-black leading-none tabular-nums ${b.count === dominantCount ? "text-[26px]" : "text-[17px]"} ${textColors[b.keyCount] ?? "text-white"}`}
+                >
+                  {Math.round((b.count / sampleSize) * 100)}
+                  <span className="text-[13px]">%</span>
+                </span>
+                <span className={`text-[11px] font-bold ${textColors[b.keyCount] ?? "text-osu-f1"}`}>{b.keyCount}K</span>
               </div>
             ))}
           </div>
+          <div className="mt-auto pt-3">
+            <div className="flex h-1 overflow-hidden rounded-full bg-osu-b3/50">
+              {keySplit.map((b) => (
+                <div
+                  key={b.keyCount}
+                  className={`${colors[b.keyCount] ?? "bg-osu-b1"} transition-all duration-300`}
+                  style={{ width: `${(b.count / sampleSize) * 100}%` }}
+                />
+              ))}
+            </div>
+          </div>
         </>
-      ) : (
-        <div className="mt-1.5 text-sm text-osu-f1">No key data</div>
       )}
     </div>
   );
@@ -4904,9 +4903,9 @@ function BpmExtremeRow({ label, bpm, snapshot }: { label: string; bpm: number; s
 function TopPlayCard({ label, snapshot }: { label: string; snapshot: InsightScoreSnapshot | null }) {
   if (!snapshot) {
     return (
-      <div className="bg-osu-b4 rounded-xl p-3.5 border border-osu-b3/20 h-[112px]">
-        <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</div>
-        <div className="mt-1.5 text-sm text-osu-f1">No data</div>
+      <div className="h-[120px] rounded-xl bg-osu-b4 p-4">
+        <div className={INSIGHT_LABEL_CLASS}>{label}</div>
+        <div className="mt-2 text-sm text-osu-f1">No data</div>
       </div>
     );
   }
@@ -4918,22 +4917,22 @@ function TopPlayCard({ label, snapshot }: { label: string; snapshot: InsightScor
       href={href}
       target="_blank"
       rel="noreferrer"
-      className="block relative rounded-xl overflow-hidden border border-osu-b3/20 bg-osu-b4 h-[112px] hover:border-osu-pink/30 transition-colors group/topplay"
+      className="group/topplay relative block h-[120px] overflow-hidden rounded-xl bg-osu-b4 ring-1 ring-inset ring-white/[0.06] transition duration-150 hover:ring-osu-pink/40"
     >
       {snapshot.coverUrl && (
         <img
           src={snapshot.coverUrl}
           alt=""
-          className="absolute -inset-px h-[calc(100%+2px)] w-[calc(100%+2px)] max-w-none object-cover brightness-[0.42]"
+          className="absolute -inset-px h-[calc(100%+2px)] w-[calc(100%+2px)] max-w-none object-cover brightness-[0.38] transition-transform duration-500 group-hover/topplay:scale-[1.03]"
         />
       )}
-      <div className="absolute -inset-px bg-gradient-to-r from-black/45 via-black/10 to-black/35" />
-      <div className="relative h-full p-3.5 flex items-center gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</div>
-          <div className="mt-1 text-sm font-bold text-white truncate">{snapshot.title}</div>
-          <div className="text-[10px] text-osu-l2 truncate">{snapshot.artist} [{snapshot.version}]</div>
-          <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+      <div className="absolute -inset-px bg-gradient-to-r from-black/60 via-black/20 to-black/45" />
+      <div className="relative flex h-full items-center gap-3 p-4">
+        <div className="min-w-0 flex-1">
+          <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/45">{label}</div>
+          <div className="mt-1.5 truncate text-[15px] font-bold text-white">{snapshot.title}</div>
+          <div className="truncate text-[10px] text-white/55">{snapshot.artist} [{snapshot.version}]</div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             <GradeImg grade={snapshot.rank} size={18} />
             {snapshot.mods.map((mod) => (
               <ModBadge key={mod} mod={mod} />
@@ -4941,16 +4940,16 @@ function TopPlayCard({ label, snapshot }: { label: string; snapshot: InsightScor
             {/* Relative to Date.now(): the newest top play is usually minutes old,
                 so SSR and hydration routinely land on different sides of a minute
                 boundary. Let the client text win. */}
-            <span className="text-[10px] text-osu-f1" suppressHydrationWarning>{formatTimeAgo(snapshot.date)}</span>
+            <span className="text-[10px] text-white/45" suppressHydrationWarning>{formatTimeAgo(snapshot.date)}</span>
             {snapshot.date && (
-              <span className="text-[10px] text-osu-f1 hidden sm:inline">{formatDate(snapshot.date)}</span>
+              <span className="hidden text-[10px] text-white/45 sm:inline">{formatDate(snapshot.date)}</span>
             )}
           </div>
         </div>
         {snapshot.pp != null && (
           <div className="flex-shrink-0 text-right">
-            <div className="text-xl font-bold text-osu-pink-light leading-none">{Math.round(snapshot.pp)}</div>
-            <div className="text-[10px] text-osu-f1 mt-0.5">pp</div>
+            <div className="text-[28px] font-black leading-none tabular-nums text-osu-pink-light">{Math.round(snapshot.pp)}</div>
+            <div className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-white/40">pp</div>
           </div>
         )}
       </div>
@@ -4961,21 +4960,21 @@ function TopPlayCard({ label, snapshot }: { label: string; snapshot: InsightScor
 function InsightsSkeleton() {
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className={INSIGHT_PANEL_CLASS}>
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="bg-osu-b4 rounded-xl p-3.5 border border-osu-b3/20 min-h-[90px] space-y-2">
-            <Skeleton className="h-3 w-20" />
-            <Skeleton className="h-5 w-28" />
-            <Skeleton className="h-3 w-20" />
+          <div key={i} className={INSIGHT_CELL_CLASS}>
+            <Skeleton className="h-2.5 w-20" />
+            <Skeleton className="mt-3 h-7 w-24" />
+            <Skeleton className="mt-auto h-2.5 w-20" />
           </div>
         ))}
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {Array.from({ length: 2 }).map((_, i) => (
-          <div key={i} className="bg-osu-b4 rounded-xl p-3.5 border border-osu-b3/20 h-[112px]">
-            <Skeleton className="h-3 w-24" />
-            <Skeleton className="h-4 w-40 mt-2" />
-            <Skeleton className="h-3 w-32 mt-1" />
+          <div key={i} className="h-[120px] rounded-xl bg-osu-b4 p-4">
+            <Skeleton className="h-2.5 w-24" />
+            <Skeleton className="mt-3 h-4 w-40" />
+            <Skeleton className="mt-2 h-3 w-32" />
           </div>
         ))}
       </div>
@@ -5084,7 +5083,7 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
           <div className="ml-auto flex flex-shrink-0 items-center gap-1.5">
             <span className="whitespace-nowrap text-xs text-osu-l2 tabular-nums">{formatAccuracy(display.accuracy)}</span>
             <span className="whitespace-nowrap text-xs text-osu-f1 tabular-nums">{formatNumber(score.max_combo)}x</span>
-            {hasPp && <span className="whitespace-nowrap text-sm font-bold tabular-nums">{formatPP(score.pp)}</span>}
+            {hasPp && <span className="whitespace-nowrap text-sm font-bold tabular-nums text-osu-pink-light">{formatPP(score.pp)}</span>}
             {canReplay && (
               <Link
                 to="/replay"
@@ -5099,7 +5098,8 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
           </div>
         </div>
       </div>
-      {/* Desktop metadata */}
+      {/* Desktop metadata. The numeric cells get fixed widths so accuracy,
+          combo and pp line up down the list instead of drifting per row. */}
       <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
         <div className="flex gap-0.5 justify-end w-24">
           {getModDisplayList(score.mods).map((m) => (
@@ -5109,11 +5109,11 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
         {display.isLazer && (
           <LazerBadge />
         )}
-        <span className="text-xs text-osu-l2">{formatAccuracy(display.accuracy)}</span>
-        <span className="text-xs text-osu-f1">{formatNumber(score.max_combo)}x</span>
-        {hasPp && (
-          <span className="text-sm font-bold">{formatPP(score.pp)}</span>
-        )}
+        <span className="w-16 text-right text-xs tabular-nums text-osu-l2">{formatAccuracy(display.accuracy)}</span>
+        <span className="w-16 text-right text-xs tabular-nums text-osu-f1">{formatNumber(score.max_combo)}x</span>
+        <span className="w-16 text-right text-sm font-bold tabular-nums text-osu-pink-light">
+          {hasPp ? formatPP(score.pp) : ""}
+        </span>
       </div>
     </>
   );
