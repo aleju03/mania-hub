@@ -58,14 +58,26 @@ async function main() {
   const ppById = new Map(board.entries.map((entry) => [entry.user.id, entry.pp]));
   console.log(`pool: ${poolIds.length} players`);
 
-  // Stored scores carry beatmap_id only; difficulty lives in `beatmaps`.
-  const beatmaps = new Map<number, Record<string, unknown>>();
+  // Stored scores carry beatmap_id only; difficulty lives in `beatmaps`. The
+  // rows are held as raw JSON and parsed per lookup: parsing all of them up
+  // front costs several hundred MB of heap, which the 4GB prod box does not
+  // have to spare while the backend is serving.
+  const beatmaps = new Map<number, string>();
   for (const row of db.prepare("select beatmap_id, metadata_json from beatmaps where metadata_json is not null").all() as Array<Record<string, unknown>>) {
-    try {
-      beatmaps.set(Number(row.beatmap_id), JSON.parse(String(row.metadata_json)));
-    } catch { /* a malformed row just costs that map's scores */ }
+    beatmaps.set(Number(row.beatmap_id), String(row.metadata_json));
   }
   console.log(`beatmaps with difficulty metadata: ${beatmaps.size}`);
+
+  /* A malformed row just costs that map's scores, same as skipping it. */
+  const beatmapFor = (id: number): Record<string, unknown> | null => {
+    const raw = beatmaps.get(id);
+    if (raw == null) return null;
+    try {
+      return JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  };
 
   const computed: Array<{ userId: number; tier: string; cardPower: number }> = [];
   let noSnapshot = 0;
@@ -85,7 +97,7 @@ async function main() {
       if (!Array.isArray(stored) || stored.length === 0) { noSkills += 1; continue; }
       const scores = stored
         .map((score) => {
-          const beatmap = beatmaps.get(Number(score.beatmap_id));
+          const beatmap = beatmapFor(Number(score.beatmap_id));
           return beatmap ? { ...score, beatmap } : null;
         })
         .filter(Boolean);
