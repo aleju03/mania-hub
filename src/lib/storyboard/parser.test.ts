@@ -7,6 +7,7 @@ import {
   parseStoryboardTextsAsync,
   splitStoryboardLine,
 } from "./parser";
+import { buildStoryboardHitsoundEvents } from "./triggers";
 import {
   SB_CHAN_ALPHA,
   SB_CHAN_ROTATION,
@@ -188,7 +189,7 @@ describe("parseStoryboardTexts", () => {
     expect(channelSegments(sprite, SB_CHAN_Y)).toEqual([[500, 600, 0, 1, 2]]);
   });
 
-  it("parses and skips trigger groups", () => {
+  it("skips trigger groups when no hit objects were supplied", () => {
     const result = parseStoryboardTexts([
       [
         "[Events]",
@@ -203,6 +204,63 @@ describe("parseStoryboardTexts", () => {
     expect(result.triggerCount).toBe(1);
     expect(channelSegments(sprite, SB_CHAN_ALPHA)).toEqual([[0, 100, 0, 1, 1]]);
     expect(channelSegments(sprite, SB_CHAN_ROTATION)).toEqual([[200, 300, 0, 0, 1]]);
+  });
+
+  it("replays a trigger group at every matching hit object", () => {
+    const events = buildStoryboardHitsoundEvents([
+      { time: 500, sample: { bank: "soft", additionBank: "soft", additions: 2, index: 0 } },
+      { time: 700, sample: { bank: "soft", additionBank: "soft", additions: 8, index: 0 } },
+      { time: 900, sample: { bank: "soft", additionBank: "soft", additions: 2, index: 0 } },
+      // Outside the trigger window.
+      { time: 2000, sample: { bank: "soft", additionBank: "soft", additions: 2, index: 0 } },
+    ]);
+    const result = parseStoryboardTexts(
+      [
+        [
+          "[Events]",
+          'Sprite,Foreground,Centre,"a.png",0,0',
+          " T,HitSoundSoftWhistle,0,1000",
+          "  F,0,0,50,1",
+          "  MY,0,0,50,100,80",
+        ].join("\n"),
+      ],
+      { hitsoundEvents: events },
+    );
+    const sprite = result.sprites[0];
+    expect(channelSegments(sprite, SB_CHAN_ALPHA)).toEqual([
+      [500, 550, 0, 1, 1],
+      [900, 950, 0, 1, 1],
+    ]);
+    expect(channelSegments(sprite, SB_CHAN_Y)).toEqual([
+      [500, 550, 0, 100, 80],
+      [900, 950, 0, 100, 80],
+    ]);
+    expect(sprite.startTime).toBe(500);
+    expect(sprite.endTime).toBe(950);
+  });
+
+  it("drops trigger groups that never fire, and Passing/Failing ones", () => {
+    const events = buildStoryboardHitsoundEvents([
+      { time: 500, sample: { bank: "drum", additionBank: "drum", additions: 8, index: 0 } },
+    ]);
+    const result = parseStoryboardTexts(
+      [
+        [
+          "[Events]",
+          'Sprite,Foreground,Centre,"a.png",0,0',
+          " F,0,0,100,1",
+          " T,HitSoundSoftWhistle,0,1000",
+          "  MY,0,0,50,100,80",
+          " T,Passing,0,1000",
+          "  MX,0,0,50,100,80",
+        ].join("\n"),
+      ],
+      { hitsoundEvents: events },
+    );
+    const sprite = result.sprites[0];
+    expect(result.triggerCount).toBe(2);
+    expect(channelSegments(sprite, SB_CHAN_Y)).toEqual([]);
+    expect(channelSegments(sprite, SB_CHAN_X)).toEqual([]);
   });
 
   it("records parameter intervals, making zero-duration ones permanent", () => {

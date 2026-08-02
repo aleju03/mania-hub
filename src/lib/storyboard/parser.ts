@@ -5,9 +5,15 @@
 //
 // Supported: [Variables] substitution, Sprite/Animation declarations (word or
 // numeric event types), F/M/MX/MY/S/V/R/C/P commands with easing, chained
-// value shorthand, standard loops (L). Triggers (T) are parsed and skipped,
-// Sample/Video events are counted but not rendered.
+// value shorthand, standard loops (L), and HitSound triggers (T) when the
+// chart's hit objects are supplied. Sample/Video events are counted but not
+// rendered.
 
+import {
+  collectStoryboardTriggerTimes,
+  parseStoryboardHitsoundTrigger,
+  type StoryboardHitsoundEvent,
+} from "./triggers";
 import {
   SB_CHANNEL_COUNT,
   SB_CHAN_ALPHA,
@@ -67,9 +73,11 @@ interface PendingSprite {
 }
 
 interface PendingLoop {
+  // Times the group replays at. A trigger group knows them up front; a
+  // standard loop derives them once its iteration duration is known.
+  offsets: number[] | null;
   start: number;
   count: number;
-  trigger: boolean;
   segs: PendingSegment[];
   params: PendingParam[];
 }
@@ -78,6 +86,9 @@ export interface StoryboardParserOptions {
   startOrder?: number;
   maxTotalSegments?: number;
   maxSegmentsPerSprite?: number;
+  // Chart hit objects as trigger sources, sorted by time (see triggers.ts).
+  // Without them, triggered command groups are parsed and dropped.
+  hitsoundEvents?: readonly StoryboardHitsoundEvent[];
 }
 
 const ORIGIN_ANCHORS: Record<string, [number, number]> = {
@@ -167,6 +178,7 @@ export function splitStoryboardLine(line: string): string[] {
 export class StoryboardParser {
   private readonly maxTotalSegments: number;
   private readonly maxSegmentsPerSprite: number;
+  private readonly hitsoundEvents: readonly StoryboardHitsoundEvent[];
 
   private section: "events" | "variables" | "other" = "other";
   private variables: [string, string][] = [];
@@ -188,6 +200,7 @@ export class StoryboardParser {
     this.order = options.startOrder ?? 0;
     this.maxTotalSegments = options.maxTotalSegments ?? DEFAULT_MAX_TOTAL_SEGMENTS;
     this.maxSegmentsPerSprite = options.maxSegmentsPerSprite ?? DEFAULT_MAX_SEGMENTS_PER_SPRITE;
+    this.hitsoundEvents = options.hitsoundEvents ?? [];
   }
 
   // Call between files: closes any open element and resets section state so a
@@ -350,9 +363,9 @@ export class StoryboardParser {
       const count = parseInt(parts[2], 10);
       if (!Number.isFinite(start)) return;
       this.loop = {
+        offsets: null,
         start,
         count: Number.isFinite(count) ? Math.min(Math.max(1, count), MAX_LOOP_ITERATIONS) : 1,
-        trigger: false,
         segs: [],
         params: [],
       };
@@ -362,9 +375,10 @@ export class StoryboardParser {
     if (type === "T") {
       this.closeLoop();
       this.triggerCount++;
-      // Triggered command groups fire off gameplay events; the replay viewer
-      // does not run them, but their child commands must still be swallowed.
-      this.loop = { start: 0, count: 0, trigger: true, segs: [], params: [] };
+      // An unresolvable trigger (Passing/Failing, or any HitSound one with no
+      // chart to match against) fires nowhere; its child commands still have
+      // to be swallowed, so the group is opened either way.
+      this.loop = { offsets: this.resolveTriggerTimes(parts), start: 0, count: 0, segs: [], params: [] };
       return;
     }
 
@@ -468,25 +482,44 @@ export class StoryboardParser {
     }
   }
 
+  // "T,(triggerType),(startTime),(endTime)[,(group)]". Group numbers only
+  // matter for concurrent firings of the same group, and a later firing
+  // already wins in the evaluator (segments resolve to the last one started),
+  // so they need no separate handling.
+  private resolveTriggerTimes(parts: string[]): number[] {
+    if (this.hitsoundEvents.length === 0) return [];
+    const filter = parseStoryboardHitsoundTrigger(parts[1] ?? "");
+    if (!filter) return [];
+    const start = parseFloat(parts[2]);
+    const end = parseFloat(parts[3]);
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return [];
+    return collectStoryboardTriggerTimes(this.hitsoundEvents, filter, start, end, MAX_LOOP_ITERATIONS);
+  }
+
   private closeLoop(): void {
     const loop = this.loop;
     if (!loop) return;
     this.loop = null;
-    if (loop.trigger || !this.current) return;
+    if (!this.current) return;
     if (loop.segs.length === 0 && loop.params.length === 0) return;
 
-    // One iteration spans from 0 to the latest inner end time.
-    let duration = 0;
-    for (const seg of loop.segs) duration = Math.max(duration, seg.end);
-    for (const param of loop.params) {
-      if (Number.isFinite(param.end)) duration = Math.max(duration, param.end);
-      else duration = Math.max(duration, param.start);
+    let offsets = loop.offsets;
+    if (offsets === null) {
+      // One iteration spans from 0 to the latest inner end time.
+      let duration = 0;
+      for (const seg of loop.segs) duration = Math.max(duration, seg.end);
+      for (const param of loop.params) {
+        if (Number.isFinite(param.end)) duration = Math.max(duration, param.end);
+        else duration = Math.max(duration, param.start);
+      }
+
+      const iterations = duration > 0 ? loop.count : 1;
+      offsets = new Array(iterations);
+      for (let i = 0; i < iterations; i++) offsets[i] = loop.start + i * duration;
     }
 
-    const iterations = duration > 0 ? loop.count : 1;
     const sprite = this.current;
-    for (let i = 0; i < iterations; i++) {
-      const offset = loop.start + i * duration;
+    for (const offset of offsets) {
       for (const seg of loop.segs) {
         if (this.segmentCount >= this.maxTotalSegments || sprite.segs.length >= this.maxSegmentsPerSprite) {
           this.droppedSegments++;

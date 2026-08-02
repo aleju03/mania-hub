@@ -10,6 +10,10 @@ import {
   osuFileHasStoryboardElements,
   parseStoryboardTextsAsync,
 } from "./storyboard/parser";
+import {
+  buildStoryboardHitsoundEvents,
+  type StoryboardHitsoundSourceNote,
+} from "./storyboard/triggers";
 import { SB_LAYER_OVERLAY, type ReplayStoryboardData } from "./storyboard/types";
 
 // Matches the live backend's bundle layout (storyboard-bundle.ts).
@@ -39,6 +43,10 @@ export interface LoadReplayStoryboardOptions {
   // URL the renderer should draw beneath the storyboard when the storyboard
   // does not reference the background image itself.
   backgroundImageUrl: string | null;
+  // Parsed chart notes. HitSound-triggered command groups (a jumping sprite
+  // keyed to a keysound, a per-column hit flash) fire off these; without them
+  // those groups never run.
+  notes?: readonly StoryboardHitsoundSourceNote[] | null;
   signal?: AbortSignal;
 }
 
@@ -220,7 +228,8 @@ export async function loadReplayStoryboard(options: LoadReplayStoryboardOptions)
   if (bundle?.osbText) texts.push(bundle.osbText);
   if (osuHasStoryboard && osuFileContent) texts.push(osuFileContent);
 
-  const parsed = await parseStoryboardTextsAsync(texts);
+  const hitsoundEvents = options.notes ? buildStoryboardHitsoundEvents(options.notes) : undefined;
+  const parsed = await parseStoryboardTextsAsync(texts, { hitsoundEvents });
   if (signal?.aborted || parsed.sprites.length === 0) return null;
 
   const opaqueImagePaths = bundle

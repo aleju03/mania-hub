@@ -25,6 +25,24 @@ export function getBeatmapHitsoundsUrl(beatmapsetId: number | string, excludeFil
   return `${liveBackendUrl}/api/hitsounds?beatmapsetId=${encodeURIComponent(String(beatmapsetId))}${exclude}`;
 }
 
+// The same-origin, inline variant of an /api/background URL. Anything that
+// turns the background into a WebGL texture or a canvas draw (the storyboard
+// backdrop, the video exporter) needs the bytes rather than a 302 to signed
+// storage. Non-background URLs pass through untouched.
+export function getInlineBackgroundUrl(src: string | null): string | null {
+  if (!src) return null;
+  try {
+    const url = new URL(src, window.location.origin);
+    if (url.origin === window.location.origin && url.pathname === "/api/background") {
+      url.searchParams.set("inline", "1");
+      return `${url.pathname}${url.search}`;
+    }
+  } catch {
+    // Fall through and try the original value.
+  }
+  return src;
+}
+
 // Zip bundle of the beatmapset's storyboard (root .osb plus referenced
 // images). Only served by the live backend; an empty zip means no storyboard.
 export function getStoryboardBundleUrl(beatmapsetId: number | string): string | null {
