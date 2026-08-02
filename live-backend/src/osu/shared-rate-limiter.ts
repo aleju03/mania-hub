@@ -5,6 +5,15 @@ import { INTERACTIVE_PAUSE_CAP_MS } from "./client.js";
 
 const WINDOW_MS = 60_000;
 const PRUNE_AFTER_MS = 5 * 60_000;
+// How often the reservation table is actually swept. It used to be swept on
+// every reservation ATTEMPT — which is not once per API call but once per
+// wake-up of every caller waiting out its turn, so a saturated API budget
+// produced a storm of write-lock acquisitions on the busiest database in the
+// system exactly when it was already contended, each of them a durable write
+// with the full busy-retry budget behind it. The rows only back a 60s window
+// query and a 5-minute cutoff, so sweeping once a minute (best-effort, skipped
+// the moment the writer is busy) is all this ever needed to be.
+export const PRUNE_INTERVAL_MS = 60_000;
 const PAUSE_KEY = "control:osu_rate_limit_paused_until";
 // Reservation is a retry loop with no queue: every other caller (in this
 // process or the sibling server/worker process) that lands a reservation
@@ -29,6 +38,7 @@ export class SqliteSharedRateLimiter implements SharedLimiter {
   private readonly hardPerMinute: number;
   private readonly maxReserveWaitMs: number;
   private reservationTail: Promise<void> = Promise.resolve();
+  private lastPruneAtMs = 0;
 
   constructor(private readonly db: Db, options: SqliteSharedRateLimiterOptions) {
     this.provider = options.provider ?? "osu";
@@ -85,11 +95,7 @@ export class SqliteSharedRateLimiter implements SharedLimiter {
 
   private async tryReserve(caller: string, path: string, lane: LimiterLane): Promise<number> {
     const now = Date.now();
-    await exec(
-      this.db,
-      "delete from api_rate_limit_reservations where provider = ? and started_at_ms < ?",
-      [this.provider, now - PRUNE_AFTER_MS],
-    );
+    await this.pruneExpired(now);
 
     const pause = await this.readPause();
     // Interactive calls resume after a short cooldown instead of sitting out
@@ -134,6 +140,20 @@ export class SqliteSharedRateLimiter implements SharedLimiter {
       [this.provider, now, caller, path, lane, now],
     );
     return 0;
+  }
+
+  /* Housekeeping, deliberately off the reservation's critical path: the stamp
+     is claimed before the await so concurrent reservations don't stack sweeps,
+     and a busy writer skips it (the rows simply live a little longer). */
+  private async pruneExpired(now: number): Promise<void> {
+    if (now - this.lastPruneAtMs < PRUNE_INTERVAL_MS) return;
+    this.lastPruneAtMs = now;
+    await exec(
+      this.db,
+      "delete from api_rate_limit_reservations where provider = ? and started_at_ms < ?",
+      [this.provider, now - PRUNE_AFTER_MS],
+      { bestEffort: true },
+    ).catch(() => undefined);
   }
 
   private async withReservationLock<T>(operation: () => Promise<T>): Promise<T> {

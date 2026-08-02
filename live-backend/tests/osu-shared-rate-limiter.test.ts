@@ -1,10 +1,11 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { InStatement } from "@libsql/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDb, exec, json, migrate } from "../src/db.js";
 import { INTERACTIVE_PAUSE_CAP_MS } from "../src/osu/client.js";
-import { SqliteSharedRateLimiter } from "../src/osu/shared-rate-limiter.js";
+import { PRUNE_INTERVAL_MS, SqliteSharedRateLimiter } from "../src/osu/shared-rate-limiter.js";
 
 const dirs: string[] = [];
 
@@ -164,5 +165,44 @@ describe("sqlite shared osu! rate limiter", () => {
 
     const row = (await exec(db, "select count(*) as count from api_rate_limit_reservations")).rows[0];
     expect(Number(row.count)).toBe(20);
+  });
+
+  // The sweep used to run inside every reservation attempt, so a saturated
+  // budget (every waiting caller re-attempting on its own wake-up) turned into
+  // a storm of write-lock acquisitions on the busiest DB in the system,
+  // exactly when it was already contended.
+  it("sweeps expired reservations on an interval, not on every attempt", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-01T00:00:00.000Z"));
+    const dir = await mkdtemp(join(tmpdir(), "mania-osu-shared-limiter-"));
+    dirs.push(dir);
+    const db = await createDb({ databaseUrl: `file:${join(dir, "test.db")}` });
+    await migrate(db);
+    const limiter = new SqliteSharedRateLimiter(db, { targetPerMinute: 1000, hardPerMinute: 1000 });
+
+    const deletes: string[] = [];
+    const execute = db.execute.bind(db);
+    db.execute = ((statement: InStatement) => {
+      const sql = typeof statement === "string" ? statement : statement.sql;
+      if (sql.startsWith("delete from api_rate_limit_reservations")) deletes.push(sql);
+      return execute(statement);
+    }) as typeof db.execute;
+
+    // First reservation sweeps; the rest of the minute rides on it.
+    for (let index = 0; index < 5; index += 1) {
+      await limiter.reserve(`api:snapshot:${index}`, `/users/${index}/mania`, "interactive");
+      vi.setSystemTime(new Date(Date.now() + 5_000));
+    }
+    expect(deletes).toHaveLength(1);
+
+    // Past the interval it sweeps again, and the expired rows really do go.
+    vi.setSystemTime(new Date(Date.now() + PRUNE_INTERVAL_MS));
+    await limiter.reserve("api:snapshot:late", "/users/late/mania", "interactive");
+    expect(deletes).toHaveLength(2);
+
+    vi.setSystemTime(new Date(Date.now() + 6 * 60_000));
+    await limiter.reserve("api:snapshot:last", "/users/last/mania", "interactive");
+    const remaining = (await exec(db, "select count(*) as count from api_rate_limit_reservations")).rows[0];
+    expect(Number(remaining.count)).toBe(1);
   });
 });

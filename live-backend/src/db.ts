@@ -792,6 +792,12 @@ function readBoundedEnvInt(name: string, fallback: number, min: number, max: num
   return Math.max(min, Math.min(max, Math.floor(value)));
 }
 
+// Diagnostics, not bookkeeping the system depends on: the osu! budget is held
+// by api_rate_limit_reservations, and this table only feeds the admin call
+// history. So both writes are best-effort — a call log row is never worth
+// holding a connection for the full 15s durable budget, which on the serving
+// connection means holding every page-load read queued behind it (the 3cc0638
+// rule: request-path writes stay off ctx.db, and they stay short).
 export async function logApiCall(
   db: Db,
   entry: { provider: string; caller: string; path: string; startedAt: string; durationMs?: number | null; status?: number | null },
@@ -801,16 +807,21 @@ export async function logApiCall(
     `insert or ignore into api_call_targets (provider, caller, path)
      values (?, ?, ?)`,
     [entry.provider, entry.caller, entry.path],
+    { bestEffort: true },
   );
   const row = (await exec(
     db,
     "select id from api_call_targets where provider = ? and caller = ? and path = ?",
     [entry.provider, entry.caller, entry.path],
   )).rows[0];
+  // The target insert was skipped (busy writer): drop this line rather than
+  // inventing a target id.
+  if (row?.id == null) return;
   await exec(
     db,
     "insert into api_call_log (provider, caller, path, target_id, started_at, duration_ms, status) values (?, '', '', ?, ?, ?, ?)",
     [entry.provider, Number(row.id), entry.startedAt, entry.durationMs ?? null, entry.status ?? null],
+    { bestEffort: true },
   );
 }
 

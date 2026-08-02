@@ -217,7 +217,12 @@ export async function createApp() {
     await ensurePinnedCountries(serveWriteDb, config).catch(() => undefined);
   }
   const logOsuCall = (entry: { caller: string; path: string; startedAt: number; durationMs?: number | null; status?: number | null }) => {
-    void logApiCall(db, {
+    // Never the serving connection: every osu! call logs, including the ones a
+    // page load triggered through the proxy, and libsql runs one connection's
+    // operations serially — a call-log write that lands mid-contention would
+    // stall every read queued behind it (3cc0638). The worker role has no
+    // serving connection to protect and keeps using its own.
+    void logApiCall(serveWriteDb ?? db, {
       provider: "osu",
       caller: entry.caller,
       path: entry.path,
