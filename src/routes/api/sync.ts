@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { waitUntil } from "@vercel/functions";
 
+import { readEdgeCountry } from "../../lib/country-cookie";
+
 const MAX_SYNC_BODY_BYTES = 64 * 1024;
 const LIVE_ANALYTICS_FORWARD_TIMEOUT_MS = 5_000;
 
@@ -84,7 +86,7 @@ function readCapturedEvents(body: ArrayBuffer): unknown[] {
 }
 
 /* Second write target: the in-house analytics store on the live backend.
-   Wrapped (not raw-forwarded) so the backend gets the Vercel-derived GeoIP
+   Wrapped (not raw-forwarded) so the backend gets the edge-derived GeoIP
    country and a bot verdict without trusting client-supplied properties. */
 function forwardToLiveAnalytics(request: Request, body: ArrayBuffer): void {
   const base = getLiveBackendBase();
@@ -108,7 +110,7 @@ function forwardToLiveAnalytics(request: Request, body: ArrayBuffer): void {
         // a browser batch stays one forward rather than one per event.
         body: JSON.stringify({
           payload: { batch: events },
-          geo_country: request.headers.get("x-vercel-ip-country"),
+          geo_country: readEdgeCountry(request.headers),
           is_bot: isLikelyBotUserAgent(request.headers.get("user-agent")),
           client_key: clientKey,
         }),

@@ -1,8 +1,40 @@
 import { describe, expect, it } from "vitest";
-import { resolveInitialCountry } from "./country-cookie";
+import { readEdgeCountry, resolveInitialCountry } from "./country-cookie";
 import { GLOBAL_SCOPE_CODE } from "./country";
 
 const available = new Set(["CR", "US"]);
+
+describe("readEdgeCountry", () => {
+  it("reads Cloudflare's header, which is what fronts the site now", () => {
+    expect(readEdgeCountry(new Headers({ "cf-ipcountry": "DE" }))).toBe("DE");
+  });
+
+  it("still reads the Vercel header, so a rollback keeps geo working", () => {
+    expect(readEdgeCountry(new Headers({ "x-vercel-ip-country": "CR" }))).toBe("CR");
+  });
+
+  // The regression this function exists to prevent: analytics used to read only
+  // x-vercel-ip-country, so every event lost its country the moment the site
+  // moved off Vercel, and the admin flags silently went blank.
+  it("does not depend on any single provider being present", () => {
+    expect(readEdgeCountry(new Headers({ "cloudfront-viewer-country": "JP" }))).toBe("JP");
+    expect(readEdgeCountry(new Headers({ "x-geo-country": "br" }))).toBe("BR");
+  });
+
+  it("keeps countries the site does not track, since analytics wants every flag", () => {
+    expect(readEdgeCountry(new Headers({ "cf-ipcountry": "JP" }))).toBe("JP");
+  });
+
+  it("treats Cloudflare's XX placeholder as no country rather than a bogus flag", () => {
+    expect(readEdgeCountry(new Headers({ "cf-ipcountry": "XX" }))).toBeNull();
+  });
+
+  it("returns null off the edge entirely, and ignores malformed codes", () => {
+    expect(readEdgeCountry(new Headers())).toBeNull();
+    expect(readEdgeCountry(new Headers({ "cf-ipcountry": "T1" }))).toBeNull();
+    expect(readEdgeCountry(new Headers({ "cf-ipcountry": "GERMANY" }))).toBeNull();
+  });
+});
 
 describe("resolveInitialCountry", () => {
   it("honours a manual cookie pick even when that country isn't available", () => {

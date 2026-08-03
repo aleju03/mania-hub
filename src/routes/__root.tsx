@@ -22,6 +22,7 @@ import {
   parseCountryCookieHeader,
   readAutoCountryCookieClient,
   readCountryCookieClient,
+  readEdgeCountry,
   resolveDetectedCountry,
   resolveInitialCountry,
 } from "../lib/country-cookie";
@@ -45,19 +46,11 @@ const getRequestOrigin = createServerFn({ method: "GET" }).handler(() => {
   return getCanonicalOrigin(getRequest());
 });
 
+// Narrowed to a country the site tracks, unlike the analytics path which keeps
+// the raw code: this one picks which country view a visitor lands on, and an
+// untracked code is no more routable here than no code at all.
 function getRequestCountry(): string | null {
-  const headers = getRequest().headers;
-  for (const headerName of [
-    "x-vercel-ip-country",
-    "cf-ipcountry",
-    "cloudfront-viewer-country",
-    "x-country-code",
-    "x-geo-country",
-  ]) {
-    const country = resolveDetectedCountry(headers.get(headerName));
-    if (country) return country;
-  }
-  return null;
+  return resolveDetectedCountry(readEdgeCountry(getRequest().headers));
 }
 
 // The set of country codes the server actually tracks. We only auto-route

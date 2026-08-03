@@ -63,6 +63,33 @@ export function resolveDetectedCountry(country: string | null | undefined): stri
   return normalized && isSupportedCountryCode(normalized) ? normalized : null;
 }
 
+// Every edge provider exposes the visitor's country under its own header name.
+// x-vercel-ip-country stays first so a rollback to Vercel keeps working; on the
+// VPS it is simply absent and cf-ipcountry answers instead.
+const EDGE_COUNTRY_HEADERS = [
+  "x-vercel-ip-country",
+  "cf-ipcountry",
+  "cloudfront-viewer-country",
+  "x-country-code",
+  "x-geo-country",
+] as const;
+
+/** The visitor's country exactly as the edge reported it: any ISO code, *not*
+    narrowed to the countries this site tracks. Analytics wants a flag for every
+    visitor, so it uses this raw value; callers that need a country scope the
+    site can actually route to pass the result through resolveDetectedCountry.
+    Returns null off the edge entirely (direct-to-origin requests carry no geo
+    header at all), which is how this silently went blank after the Vercel move. */
+export function readEdgeCountry(headers: Headers): string | null {
+  for (const headerName of EDGE_COUNTRY_HEADERS) {
+    const value = headers.get(headerName)?.trim().toUpperCase();
+    // XX is Cloudflare's "could not determine", not a country; passing it on
+    // would render as a broken flag rather than as the absence it really is.
+    if (value && value !== "XX" && /^[A-Z]{2}$/.test(value)) return value;
+  }
+  return null;
+}
+
 // A country is only worth routing to automatically when the server
 // actually tracks it. `available` is the set of tracked country codes; when it
 // is null we couldn't reach the backend and treat availability as unknown.
