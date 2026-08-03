@@ -366,6 +366,9 @@ interface ReplaySkinSettingsModalProps {
   // individual draft assets for other images from the archive.
   assetArchive?: OskArchive | null;
   assetSourceName?: string | null;
+  // The regular editor changes how this browser watches replays. The owner
+  // customize flow publishes its primary save for everyone instead.
+  saveScope?: "viewer" | "owner";
 }
 
 export function ReplaySkinSettingsModal({
@@ -378,6 +381,7 @@ export function ReplaySkinSettingsModal({
   onClose,
   assetArchive = null,
   assetSourceName = null,
+  saveScope = "viewer",
 }: ReplaySkinSettingsModalProps) {
   const modalRef = useRef<HTMLDivElement | null>(null);
   const matchedInitialPresetRef = useRef(false);
@@ -1784,7 +1788,9 @@ export function ReplaySkinSettingsModal({
             className="flex cursor-grab touch-none items-center gap-3 px-5 pb-3 pt-4 active:cursor-grabbing sm:pb-2.5"
           >
             <GripHorizontal className="h-4 w-4 shrink-0 text-osu-f1" />
-            <h3 className="text-base font-bold text-white">Replay settings</h3>
+            <h3 className="text-base font-bold text-white">
+              {saveScope === "owner" ? "Customize my replay skin" : "Replay settings"}
+            </h3>
             <button
               onClick={onClose}
               onPointerDown={(e) => e.stopPropagation()}
@@ -1883,7 +1889,7 @@ export function ReplaySkinSettingsModal({
                     editor, and the one published on your profile. Sharing a
                     card made "Load into editor" read as acting on the skin
                     named above it rather than on your own. */}
-                {liveBackendAvailable ? (
+                {saveScope === "viewer" && liveBackendAvailable ? (
                   <section>
                     <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">Custom skin</div>
                     <div className="space-y-2 rounded-lg border border-osu-b3/50 bg-osu-b5/35 p-3">
@@ -1927,7 +1933,7 @@ export function ReplaySkinSettingsModal({
                     </div>
                   </section>
                 ) : null}
-                {liveBackendAvailable ? (
+                {saveScope === "viewer" && liveBackendAvailable ? (
                   <section>
                     <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">My replay skin</div>
                     <div className="space-y-2 rounded-lg border border-osu-b3/50 bg-osu-b5/35 p-3">
@@ -1964,11 +1970,19 @@ export function ReplaySkinSettingsModal({
                               <button
                                 type="button"
                                 onClick={() => void saveDraftAsMyReplaySkin()}
-                                disabled={!communitySkinContext || communityBusy != null}
-                                title="Saves the current draft as-is; everyone watching your replays sees it"
+                                disabled={!communitySkinContext || communityBusy != null || draftMatchesMyReplaySkin}
+                                title={draftMatchesMyReplaySkin
+                                  ? "This exact version is already your replay skin"
+                                  : "Saves the current draft as-is; everyone watching your replays sees it"}
                                 className="cursor-pointer rounded-lg border border-osu-pink/40 bg-osu-pink/10 px-3 py-1.5 text-xs font-semibold text-osu-pink-light transition-colors hover:border-osu-pink hover:bg-osu-pink/20 hover:text-white disabled:cursor-default disabled:opacity-45 disabled:hover:border-osu-pink/40 disabled:hover:bg-osu-pink/10 disabled:hover:text-osu-pink-light"
                               >
-                                {communityBusy === "save-mine" ? "Saving…" : "Set as my replay skin"}
+                                {communityBusy === "save-mine"
+                                  ? "Saving…"
+                                  : draftMatchesMyReplaySkin
+                                    ? "Already set"
+                                    : myReplaySkinRecord?.skin.id === communitySkinContext?.id
+                                      ? "Save changes for everyone"
+                                      : "Set as my replay skin"}
                               </button>
                             </span>
                           </div>
@@ -2484,7 +2498,7 @@ export function ReplaySkinSettingsModal({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2 border-t border-osu-b3/50 px-5 py-4">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-osu-b3/50 px-5 py-4">
           {activeTab !== "overlays" && activeTab !== "audio" ? (
             <button
               onClick={() => {
@@ -2514,11 +2528,28 @@ export function ReplaySkinSettingsModal({
           >
             Cancel
           </button>
+          {saveScope === "viewer" && viewerId && communitySkinContext ? (
+            <button
+              type="button"
+              onClick={() => void saveDraftAsMyReplaySkin()}
+              disabled={communityBusy != null || draftMatchesMyReplaySkin}
+              title={draftMatchesMyReplaySkin
+                ? "This exact version is already shown to everyone watching your replays"
+                : "Save this editor version as the skin everyone sees on your replays"}
+              className="relative z-20 cursor-pointer rounded-lg border border-osu-pink/40 bg-osu-pink/10 px-4 py-2 text-xs font-semibold text-osu-pink-light transition-colors hover:border-osu-pink hover:bg-osu-pink/20 hover:text-white disabled:cursor-default disabled:opacity-45 disabled:hover:border-osu-pink/40 disabled:hover:bg-osu-pink/10 disabled:hover:text-osu-pink-light"
+            >
+              {communityBusy === "save-mine"
+                ? "Saving…"
+                : draftMatchesMyReplaySkin
+                  ? "Saved for everyone"
+                  : "Save for everyone"}
+            </button>
+          ) : null}
           <button
             onClick={save}
             className="relative z-20 cursor-pointer rounded-lg bg-osu-pink px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-osu-pink-light"
           >
-            Apply
+            {saveScope === "owner" ? "Save for everyone" : "Apply for me"}
           </button>
         </div>
 

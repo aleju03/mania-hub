@@ -162,7 +162,7 @@ describe("GET /api/replay-skin", () => {
     const res = await call(mockReq("GET", `/api/replay-skin?userId=${USER}`));
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ replaySkin: null });
-    expect(res.headers["cache-control"]).toBe("public, max-age=60, stale-while-revalidate=300");
+    expect(res.headers["cache-control"]).toBe("public, no-cache");
   });
 
   it("returns the published skin summary plus settings, without download counts", async () => {
@@ -174,7 +174,7 @@ describe("GET /api/replay-skin", () => {
     expect(res.body.replaySkin.skin.downloadCount).toBeNull();
     expect(res.body.replaySkin.settings).toEqual({ noteImage: "mania/note1.png", volume: 0.4 });
     expect(res.body.replaySkin.updatedAt).toBeTruthy();
-    expect(res.headers["cache-control"]).toBe("public, max-age=60, stale-while-revalidate=300");
+    expect(res.headers["cache-control"]).toBe("public, no-cache");
   });
 
   it("reads back as null when the linked skin is hidden or deleted", async () => {

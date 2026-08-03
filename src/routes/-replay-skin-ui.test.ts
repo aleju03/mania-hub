@@ -234,6 +234,26 @@ describe("replay skin settings UI", () => {
     // named beside it.
     expect(source).toContain('"Load into editor"');
     expect(source).toContain("`The editor already holds ${myReplaySkinRecord.skin.name}`");
+    // Publishing the unchanged draft is just as redundant as loading it, so
+    // both directions share the same disabled state.
+    expect(source).toContain("disabled={!communitySkinContext || communityBusy != null || draftMatchesMyReplaySkin}");
+    expect(source).toContain('draftMatchesMyReplaySkin\n                                    ? "Already set"');
+  });
+
+  it("makes viewer-local and public replay-skin saves explicit", () => {
+    const modalSource = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplaySkinSettingsModal.tsx"), "utf8");
+    const panelSource = fs.readFileSync(path.resolve(__dirname, "../components/settings/SettingsPanel.tsx"), "utf8");
+    const ownerModalSource = fs.readFileSync(path.resolve(__dirname, "../components/settings/OwnerReplaySkinCustomizeModal.tsx"), "utf8");
+
+    expect(panelSource).toContain("Viewer editor");
+    expect(panelSource).toContain("This does not change the replay skin other people see on your plays.");
+    expect(modalSource).toContain('saveScope?: "viewer" | "owner";');
+    expect(modalSource).toContain('saveScope === "owner" ? "Save for everyone" : "Apply for me"');
+    // The publish action lives in the persistent footer, so a Layout edit can
+    // be saved publicly without returning to the Style tab.
+    expect(modalSource).toContain('saveScope === "viewer" && viewerId && communitySkinContext');
+    expect(modalSource).toContain('"Saved for everyone"');
+    expect(ownerModalSource).toContain('saveScope="owner"');
   });
 
   it("points a click in the preview at the asset row it came from", () => {

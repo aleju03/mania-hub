@@ -340,7 +340,13 @@ async function requestUserReplaySkin(userId: number, init?: RequestInit): Promis
   const base = getLiveBackendUrl();
   if (!base || !Number.isInteger(userId) || userId <= 0) return { ok: false, value: null };
   try {
-    const response = await fetch(`${base}/api/replay-skin?userId=${userId}`, { credentials: "omit", ...init });
+    const response = await fetch(`${base}/api/replay-skin?userId=${userId}`, {
+      credentials: "omit",
+      // This pointer is changed interactively in settings. Revalidate instead
+      // of letting a prior replay view survive an F5 with the old settings.
+      cache: "no-cache",
+      ...init,
+    });
     if (!response.ok) return { ok: false, value: null };
     const body = (await response.json()) as { replaySkin?: OwnerReplaySkinRecord | null };
     return { ok: true, value: body.replaySkin ?? null };
@@ -349,9 +355,11 @@ async function requestUserReplaySkin(userId: number, init?: RequestInit): Promis
   }
 }
 
-// Public, cacheable read straight from the browser: the owner id is already on
-// the page (the score's user), and the backend caches the response briefly.
+// Public read straight from the browser: the owner id is already on the page
+// (the score's user). A just-saved self record wins over any network cache.
 export async function fetchUserReplaySkin(userId: number, init?: RequestInit): Promise<OwnerReplaySkinRecord | null> {
+  const remembered = myReplaySkinMemory.get(userId);
+  if (remembered && remembered.expiresAt > Date.now()) return remembered.value;
   return (await requestUserReplaySkin(userId, init)).value;
 }
 

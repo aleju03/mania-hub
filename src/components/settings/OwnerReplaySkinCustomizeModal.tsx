@@ -109,6 +109,7 @@ export function OwnerReplaySkinCustomizeModal({
         onClose={handleEditorClose}
         assetArchive={loaded.archive}
         assetSourceName={record.skin.name}
+        saveScope="owner"
       />
     );
   }

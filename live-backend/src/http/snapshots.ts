@@ -1780,9 +1780,10 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 400, { error: "invalid_user" });
       return true;
     }
-    // Nothing viewer-specific in the response, so it caches like the public
-    // skins list.
-    res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
+    // Nothing viewer-specific in the response, but the owner changes this
+    // interactively and expects a refreshed replay to pick it up immediately.
+    // It may be stored by shared caches, but must be revalidated before use.
+    res.setHeader("cache-control", "public, no-cache");
     const row = await getUserReplaySkin(ctx.db, userId);
     const skin = row ? await getSkin(ctx.db, row.skinId) : null;
     if (!row || !skin || skin.status !== "published") {

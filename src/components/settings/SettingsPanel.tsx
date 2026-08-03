@@ -663,12 +663,12 @@ function SkinPanel({
             className="group inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-osu-pink/40 bg-osu-pink/10 px-2.5 text-[10px] font-bold uppercase tracking-wider text-osu-pink-light transition-colors hover:border-osu-pink hover:bg-osu-pink/20 hover:text-white"
           >
             <Pencil className="h-3 w-3" />
-            Open editor
+            Viewer editor
           </button>
         }
       >
         <p className="text-[12px] leading-relaxed text-osu-f1">
-          Customize the look and feel of replays.
+          Customize how replays look for you. This does not change the replay skin other people see on your plays.
         </p>
       </PanelGroup>
 

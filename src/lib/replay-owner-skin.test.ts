@@ -6,6 +6,7 @@ import {
   appliedCommunityReplaySkinKey,
   dehydrateReplaySkinSettings,
   fetchMyReplaySkinCached,
+  fetchUserReplaySkin,
   invalidateMyReplaySkinMemory,
   peekMyReplaySkinMemory,
   readAppliedCommunityReplaySkin,
@@ -40,6 +41,7 @@ function settingsWithAssets(): ReplaySkinSettings {
     keymodeProfiles: {
       4: {
         ...DEFAULT_REPLAY_SKIN_PROFILE,
+        columnStart: 218,
         assets: {
           columns: [
             { tap: importedAsset("note1.png", "mania/note1.png"), receptor: importedAsset("key1.png", "mania/key1.png") },
@@ -77,6 +79,7 @@ describe("owner replay skin dehydrate/rehydrate", () => {
     };
     expect(payload.v).toBe(1);
     expect(payload.settings.style).toBe("bars");
+    expect(payload.settings.keymodeProfiles["4"]).toMatchObject({ columnStart: 218 });
     const assets = payload.settings.keymodeProfiles["4"].assets;
     expect(assets.columns[0].tap).toMatchObject({ src: "", path: "mania/note1.png", width: 64, height: 32, scale: 2 });
     expect(assets.columns[0].receptor.src).toBe("");
@@ -220,8 +223,19 @@ describe("my replay skin memory cache", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(
       `https://live.test/api/replay-skin?userId=${userId}`,
-      { credentials: "omit" },
+      { credentials: "omit", cache: "no-cache" },
     );
+  });
+
+  it("uses a just-saved record when the owner opens their own replay", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(responseWith(firstRecord));
+    vi.stubGlobal("fetch", fetchMock);
+    const savedRecord = { ...firstRecord, updatedAt: "2026-08-02T12:03:00.000Z" };
+
+    writeMyReplaySkinMemory(userId, savedRecord);
+
+    expect(await fetchUserReplaySkin(userId)).toEqual(savedRecord);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("distinguishes a synchronously remembered empty result from an unknown owner", async () => {
