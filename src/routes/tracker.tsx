@@ -1,5 +1,5 @@
 import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect, useCallback, useMemo, memo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, memo, useRef, type ReactNode } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { getCountryName, isGlobalScope } from "../lib/country";
 import { formatAccuracy, formatTimeAgo, formatPP, formatNumber, formatPpGain } from "../lib/format";
@@ -28,6 +28,7 @@ import { GradeImg } from "../components/ui/GradeImg";
 import { FilterField, SegmentedControl } from "../components/ui/SegmentedControl";
 import { ModBadge } from "../components/ui/ModBadge";
 import { DanBadge } from "../components/ui/DanBadge";
+import { StarRatingBadge } from "../components/ui/StarRating";
 import { TrackerRowSkeleton } from "../components/ui/LoadingSkeleton";
 import { Pagination } from "../components/ui/Pagination";
 import { getManiaJudgementStats } from "../components/ui/ManiaJudgementStats";
@@ -2087,7 +2088,11 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                   <StatCell key={judgement.label} label={judgement.label} value={formatNumber(judgement.value)} color={judgement.className} className={JUDGEMENT_MOBILE_ORDER_CLASS[i]} />
                 ))}
                 {score.beatmap?.difficulty_rating != null && (
-                  <StatCell label="Stars" value={score.beatmap.difficulty_rating.toFixed(2)} className="max-sm:order-8" />
+                  <StatCell
+                    label="Stars"
+                    value={<StarRatingBadge stars={score.beatmap.difficulty_rating} size={1.2} />}
+                    className="max-sm:order-8"
+                  />
                 )}
                 {score.beatmap?.bpm != null && (
                   <StatCell label="BPM" value={String(Math.round(score.beatmap.bpm))} className="max-sm:order-9" />
@@ -2130,7 +2135,7 @@ const JUDGEMENT_MOBILE_ORDER_CLASS = [
   "max-sm:order-7",
 ];
 
-function StatCell({ label, value, color, className }: { label: string; value: string; color?: string; className?: string }) {
+function StatCell({ label, value, color, className }: { label: string; value: ReactNode; color?: string; className?: string }) {
   return (
     <div className={`py-1.5${className ? ` ${className}` : ""}`}>
       <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</div>

@@ -1,5 +1,5 @@
 import { createFileRoute, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { CLIENT_CACHE_TTL } from "../lib/cache";
 import { getCountryName, isGlobalScope } from "../lib/country";
@@ -13,6 +13,7 @@ import { CountryFlag } from "../components/ui/CountryFlag";
 import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
 import { DanBadge } from "../components/ui/DanBadge";
+import { StarRatingBadge } from "../components/ui/StarRating";
 import { CoverBackdrop } from "../components/ui/CoverBackdrop";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { getManiaJudgementStats } from "../components/ui/ManiaJudgementStats";
@@ -897,7 +898,11 @@ function PopOffsPage() {
                                 <StatCell key={judgement.label} label={judgement.label} value={formatNumber(judgement.value)} color={judgement.className} className={JUDGEMENT_MOBILE_ORDER_CLASS[i]} />
                               ))}
                               {p.score.beatmap?.difficulty_rating != null && (
-                                <StatCell label="Stars" value={p.score.beatmap.difficulty_rating.toFixed(2)} className="max-sm:order-8" />
+                                <StatCell
+                                  label="Stars"
+                                  value={<StarRatingBadge stars={p.score.beatmap.difficulty_rating} size={1.2} />}
+                                  className="max-sm:order-8"
+                                />
                               )}
                               {p.score.beatmap?.bpm != null && (
                                 <StatCell label="BPM" value={String(Math.round(p.score.beatmap.bpm))} className="max-sm:order-9" />
@@ -997,7 +1002,7 @@ const JUDGEMENT_MOBILE_ORDER_CLASS = [
   "max-sm:order-7",
 ];
 
-function StatCell({ label, value, color, className }: { label: string; value: string; color?: string; className?: string }) {
+function StatCell({ label, value, color, className }: { label: string; value: ReactNode; color?: string; className?: string }) {
   return (
     <div className={`py-1.5${className ? ` ${className}` : ""}`}>
       <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</div>
