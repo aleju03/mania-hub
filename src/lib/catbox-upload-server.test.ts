@@ -137,6 +137,49 @@ describe("handleCatboxUploadPost", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  // Cloudflare replaces 502 and 504 origin responses with its own error page,
+  // body included, so reporting an upstream refusal with either code costs the
+  // user the only sentence that explains it. This is not hypothetical: catbox
+  // paused uploads on 2026-08-03 and the editor showed a bare "Bad gateway".
+  it("reports a catbox refusal with a status the edge forwards, quoting its reason", async () => {
+    const cookie = await authCookie(nextViewerId++);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("Invalid uploader", { status: 412 })));
+    const response = await handleCatboxUploadPost(postRequest(PNG_BYTES, "image/png", { cookie }));
+    expect(response.status).not.toBe(502);
+    expect(response.status).not.toBe(504);
+    expect(response.status).toBe(503);
+    expect((await response.json()).error).toContain("Invalid uploader");
+  });
+
+  it("treats an OK response that is not a URL as a refusal too", async () => {
+    const cookie = await authCookie(nextViewerId++);
+    const paused = "Uploads paused until I can resolve storage issues. Sorry!";
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(paused, { status: 200 })));
+    const response = await handleCatboxUploadPost(postRequest(PNG_BYTES, "image/png", { cookie }));
+    expect(response.status).toBe(503);
+    expect((await response.json()).error).toContain(paused);
+  });
+
+  it("keeps an upstream error page out of the message it shows", async () => {
+    const cookie = await authCookie(nextViewerId++);
+    const html = `<html><body><h1>${"nginx gateway error ".repeat(40)}</h1></body></html>`;
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(html, { status: 502 })));
+    const response = await handleCatboxUploadPost(postRequest(PNG_BYTES, "image/png", { cookie }));
+    const { error } = await response.json();
+    expect(error).not.toContain("<");
+    expect(error.length).toBeLessThan(220);
+  });
+
+  it("says so plainly when catbox cannot be reached at all", async () => {
+    const cookie = await authCookie(nextViewerId++);
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new Error("getaddrinfo ENOTFOUND catbox.moe");
+    }));
+    const response = await handleCatboxUploadPost(postRequest(PNG_BYTES, "image/png", { cookie }));
+    expect(response.status).toBe(503);
+    expect((await response.json()).error).toContain("ENOTFOUND");
+  });
+
   it("rate limits repeated uploads per viewer", async () => {
     stubCatbox();
     const cookie = await authCookie(nextViewerId++);
@@ -226,6 +269,15 @@ describe("handleCatboxProxyGet", () => {
     }
     expect(statuses.slice(0, 30)).toEqual(Array(30).fill(400));
     expect(statuses[30]).toBe(429);
+  });
+
+  it("reports a failed upstream fetch with an edge-visible status", async () => {
+    const cookie = await authCookie(nextViewerId++);
+    const response = await handleCatboxProxyGet(getRequest("https://img.example.test/a.png", { cookie }), {
+      lookupFn: publicLookup,
+      transport: async () => imageResponse(404, { "content-type": "text/html" }),
+    });
+    expect(response.status).toBe(503);
   });
 
   it("rejects oversized upstream bodies", async () => {

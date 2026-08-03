@@ -32,6 +32,36 @@ const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // catbox allows 200MB; profile art s
 const MAX_PROXY_BYTES = 20 * 1024 * 1024;
 const PROXY_FETCH_TIMEOUT_MS = 15_000;
 
+// Cloudflare swaps 502 and 504 origin responses for its own "Bad gateway" page
+// and discards our body along with them; every other status, 503 included,
+// reaches the browser untouched (probed against the live edge 2026-08-03).
+// Upstream failures therefore answer 503, so catbox's own explanation - it
+// replies "Invalid uploader" or "Uploads paused until I can resolve storage
+// issues" in plain text - still shows up in the editor rather than an
+// unexplained gateway error the site looks responsible for.
+const UPSTREAM_FAILURE_STATUS = 503;
+
+/** Maps the two statuses the edge would swallow onto one it forwards. */
+function edgeVisibleStatus(status: number): number {
+  return status === 502 || status === 504 ? UPSTREAM_FAILURE_STATUS : status;
+}
+
+// catbox answers in plain text, but an error page or proxy in front of it can
+// answer in anything, so quote one readable line at most: enough to carry the
+// real reason, not enough to spill a whole HTML document into the UI.
+function describeUpstream(text: string): string {
+  const line = text.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  return line.length > 160 ? `${line.slice(0, 160)}…` : line;
+}
+
+function upstreamRefused(text: string, fallback: string): Response {
+  const detail = describeUpstream(text);
+  return Response.json(
+    { error: detail ? `catbox.moe refused the upload: ${detail}` : fallback },
+    { status: UPSTREAM_FAILURE_STATUS },
+  );
+}
+
 // Per-instance fixed windows keyed by viewer id: enough to stop one account
 // from hammering catbox or the proxy. Per-instance only — the edge/WAF rule
 // for /api/catbox-upload (tracked in findings/README.md Phase 2) is what
@@ -129,15 +159,17 @@ export async function handleCatboxUploadPost(request: Request): Promise<Response
     const res = await fetch(CATBOX_API, { method: "POST", body: form });
     text = (await res.text()).trim();
     if (!res.ok) {
-      return Response.json({ error: text || "catbox upload failed." }, { status: 502 });
+      return upstreamRefused(text, "catbox.moe refused the upload.");
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "catbox upload failed.";
-    return Response.json({ error: message }, { status: 502 });
+    return Response.json({ error: `Could not reach catbox.moe: ${message}` }, { status: UPSTREAM_FAILURE_STATUS });
   }
 
+  // A 200 is no guarantee of a URL: catbox reports several refusals as plain
+  // text with an OK status.
   if (!/^https?:\/\/(files\.)?catbox\.moe\/\S+$/i.test(text)) {
-    return Response.json({ error: text || "catbox returned no URL." }, { status: 502 });
+    return upstreamRefused(text, "catbox.moe returned no URL.");
   }
   return Response.json({ url: text });
 }
@@ -170,7 +202,7 @@ export async function handleCatboxProxyGet(request: Request, seams: CatboxProxyT
     const upstream = await fetchValidatedImage(target, { signal: controller.signal, ...seams });
     if (upstream.status < 200 || upstream.status >= 300) {
       upstream.stream.destroy();
-      return new Response("Image fetch failed", { status: 502 });
+      return new Response("Image fetch failed", { status: UPSTREAM_FAILURE_STATUS });
     }
     if (!normalizeImageMime(upstream.contentType)) {
       upstream.stream.destroy();
@@ -195,7 +227,7 @@ export async function handleCatboxProxyGet(request: Request, seams: CatboxProxyT
       },
     });
   } catch (error) {
-    const status = error instanceof ProxyError ? error.status : 502;
+    const status = error instanceof ProxyError ? edgeVisibleStatus(error.status) : UPSTREAM_FAILURE_STATUS;
     const message = error instanceof ProxyError ? error.message : "Image fetch failed";
     return new Response(message, { status });
   } finally {
