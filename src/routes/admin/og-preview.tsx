@@ -185,7 +185,7 @@ const PRESETS: Preset[] = [
     title: "Score replay",
     subtitle: "",
     path: "/replay",
-    scoreId: 6642167715,
+    scoreId: 7202465428,
     noindex: true,
   },
 ];
@@ -217,7 +217,7 @@ function OgPreviewPage() {
   const [title, setTitle] = useState(PRESETS[0].title);
   const [subtitle, setSubtitle] = useState(PRESETS[0].subtitle);
   const [username, setUsername] = useState("peppy");
-  const [scoreId, setScoreId] = useState("6642167715");
+  const [scoreId, setScoreId] = useState("7202465428");
   const [country, setCountry] = useState("CR");
   const [cacheBuster, setCacheBuster] = useState(() => Date.now());
   const [origin, setOrigin] = useState("");

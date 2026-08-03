@@ -11,7 +11,12 @@ import {
 import { getServerLiveBackendUrl } from "../../lib/live-backend";
 import { getCountryName, isGlobalScope, isSupportedCountryCode } from "../../lib/country";
 import { getAssetOrigin } from "../../lib/origin";
-import { getDisplayedRank, getManiaJudgementCounts, getModAcronyms } from "../../lib/score";
+import {
+  getDisplayedRank,
+  getDisplayedTotalScore,
+  getManiaJudgementCounts,
+  getModAcronyms,
+} from "../../lib/score";
 import { getCachedOgImage, putOgImage } from "../../lib/r2-cache";
 import { OG_IMAGE_VERSION } from "../../lib/seo";
 import { computeManiaSkills, getManiaCardTier, MANIA_TIER_STYLES } from "../../lib/maniacard";
@@ -177,12 +182,6 @@ function pickBeatmapsetCover(score: OsuScore): string | null {
   const covers = score.beatmapset?.covers;
   if (!covers) return null;
   return covers["cover@2x"] || covers.cover || covers["card@2x"] || covers.card || null;
-}
-
-function beatmapDisplayTitle(score: OsuScore): string {
-  const set = score.beatmapset;
-  if (!set) return "Unknown beatmap";
-  return `${set.artist} - ${set.title}`;
 }
 
 function scoreAwardsRankedPp(score: OsuScore): boolean {
@@ -486,11 +485,12 @@ function pickCover(covers: OsuCovers): string | null {
   return covers["cover@2x"] || covers.cover || covers["card@2x"] || covers.card || null;
 }
 
-// Single thin bar split into proportional colored segments — one per
-// judgement bucket. Wide MAX = clean play; a sliver of red = a miss.
-// Tiny labels under each segment carry the actual count. Skipped when
-// total = 0 (e.g. unsupported score statistics).
-function judgementCompositionBar(judgements: Array<{ label: string; value: number }>) {
+/* Judgement breakdown, laid out like the osu! result screen: one column
+   per bucket, count on top of a colored label. The thin bar above turns
+   the same numbers into a shape readable at thumbnail size (wide yellow
+   = clean play, red sliver = the miss that ended the run). Skipped when
+   total = 0 (e.g. unsupported score statistics). */
+function judgementStrip(judgements: Array<{ label: string; value: number }>) {
   const total = judgements.reduce((s, j) => s + j.value, 0);
   if (total === 0) return null;
   const visible = judgements.filter((j) => j.value > 0);
@@ -498,11 +498,11 @@ function judgementCompositionBar(judgements: Array<{ label: string; value: numbe
   return h(
     "div",
     {
-      key: "comp",
+      key: "judgements",
       style: {
         display: "flex",
         flexDirection: "column",
-        marginTop: "10px",
+        marginTop: "26px",
       },
     },
     [
@@ -514,10 +514,10 @@ function judgementCompositionBar(judgements: Array<{ label: string; value: numbe
             display: "flex",
             flexDirection: "row",
             width: "100%",
-            height: "14px",
-            borderRadius: "7px",
+            height: "10px",
+            borderRadius: "5px",
             overflow: "hidden",
-            background: "rgba(0,0,0,0.4)",
+            background: "rgba(0,0,0,0.45)",
           },
         },
         visible.map((j, i) =>
@@ -531,7 +531,7 @@ function judgementCompositionBar(judgements: Array<{ label: string; value: numbe
               background: JUDGEMENT_COLORS[j.label] ?? "#c7b8c1",
               // Keep a hairline gap between segments so colors don't bleed
               // into each other when adjacent values differ wildly.
-              marginLeft: i === 0 ? "0" : "1px",
+              marginLeft: i === 0 ? "0" : "2px",
             },
           }),
         ),
@@ -539,26 +539,22 @@ function judgementCompositionBar(judgements: Array<{ label: string; value: numbe
       h(
         "div",
         {
-          key: "labels",
+          key: "cells",
           style: {
             display: "flex",
             flexDirection: "row",
-            marginTop: "8px",
-            fontSize: "15px",
-            color: "#c7b8c1",
-            gap: "18px",
+            justifyContent: "space-between",
+            marginTop: "16px",
           },
         },
         judgements.map((j) =>
           h(
             "div",
             {
-              key: `lbl-${j.label}`,
+              key: `cell-${j.label}`,
               style: {
                 display: "flex",
-                flexDirection: "row",
-                alignItems: "baseline",
-                gap: "6px",
+                flexDirection: "column",
               },
             },
             [
@@ -567,8 +563,12 @@ function judgementCompositionBar(judgements: Array<{ label: string; value: numbe
                 {
                   key: "v",
                   style: {
+                    fontSize: "34px",
                     fontWeight: 900,
-                    color: JUDGEMENT_COLORS[j.label] ?? "#ffffff",
+                    lineHeight: "1.0",
+                    // Empty buckets stay grey so a clean play reads clean:
+                    // only the judgements that happened carry color.
+                    color: j.value === 0 ? "#6b5a63" : (JUDGEMENT_COLORS[j.label] ?? "#ffffff"),
                   },
                 },
                 formatOgInt(j.value),
@@ -578,12 +578,13 @@ function judgementCompositionBar(judgements: Array<{ label: string; value: numbe
                 {
                   key: "l",
                   style: {
-                    color: "#7a6b74",
-                    letterSpacing: "0.08em",
-                    fontSize: "12px",
+                    marginTop: "6px",
+                    fontSize: "15px",
+                    letterSpacing: "0.14em",
+                    color: "#9d8d97",
                   },
                 },
-                j.label,
+                j.label.toUpperCase(),
               ),
             ],
           ),
@@ -593,12 +594,76 @@ function judgementCompositionBar(judgements: Array<{ label: string; value: numbe
   );
 }
 
-/* Replay: score result card. Layout split into vertical bands so
-   Satori can't get confused by mixing position:absolute children with
-   flex layout (a previous version had an offset bug from that). Top:
-   big REPLAY eyebrow. Middle: grade SVG + username + beatmap title +
-   diff. Then a thin segmented composition bar visualising the judgement
-   distribution, then pp / acc / mods / combo. */
+// Big number over a small caps label: the unit the score-screen stat row
+// and the judgement columns are both built from.
+function ogStatCell(
+  key: string,
+  label: string,
+  value: string,
+  options: { color?: string; size?: number } = {},
+) {
+  return h(
+    "div",
+    { key, style: { display: "flex", flexDirection: "column" } },
+    [
+      h(
+        "div",
+        {
+          key: "v",
+          style: {
+            fontSize: `${options.size ?? 46}px`,
+            fontWeight: 900,
+            lineHeight: "1.0",
+            color: options.color ?? "#ffffff",
+          },
+        },
+        value,
+      ),
+      h(
+        "div",
+        {
+          key: "l",
+          style: {
+            marginTop: "8px",
+            fontSize: "15px",
+            letterSpacing: "0.14em",
+            color: "#9d8d97",
+          },
+        },
+        label,
+      ),
+    ],
+  );
+}
+
+// One entry of the replay card's map metadata line. Returns null for empty
+// values so the caller can drop it along with its separator.
+function metaPart(key: string, text: string): ReactNode {
+  if (!text) return null;
+  return h("div", { key }, text);
+}
+
+function formatOgScoreDate(score: OsuScore): string {
+  const raw = score.ended_at || score.created_at;
+  if (!raw) return "";
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return "";
+  return date
+    .toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+    .toUpperCase();
+}
+
+/* Replay: an osu! result screen rebuilt for a 1200x630 embed. Reading
+   order top to bottom is the same as the game's: which map, who played
+   it, how it went. Bands are plain flex rows inside one absolutely
+   positioned content layer, kept apart from the background layers so
+   Satori can't mix the two coordinate systems (an older version had an
+   offset bug from exactly that).
+
+   Band 1: eyebrow + play date. Band 2: map identity (title, artist,
+   difficulty, keys, stars, mapper). Band 3: player and grade, the two
+   things a passer-by reads first. Band 4: score / accuracy / combo / pp.
+   Band 5: judgement breakdown. */
 async function renderReplayOg(request: Request, scoreId: number): Promise<Response> {
   const [regularFont, heavyFont, score] = await Promise.all([
     getFont(request, "Torus-Regular.otf"),
@@ -607,21 +672,54 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
   ]);
 
   const cover = pickBeatmapsetCover(score);
-  const modsLabel = getModAcronyms(score.mods).join(" · ");
+  const modsLabel = getModAcronyms(score.mods).join("");
   const displayedRank = getDisplayedRank(score);
   const judgements = getManiaJudgementCounts(score.statistics);
-  const keys = score.beatmap?.cs ? `${Math.round(score.beatmap.cs)}K` : "";
-  const versionLine = `[${score.beatmap?.version ?? "?"}]${keys ? `  ${keys}` : ""}`;
+  const totalScore = getDisplayedTotalScore(score);
   const maxCombo = score.max_combo ?? score.beatmap?.max_combo ?? null;
   const showPp = scoreAwardsRankedPp(score);
+  const playDate = formatOgScoreDate(score);
+
+  // Difficulty names routinely already carry the key count ("[7K] Dum
+  // spiro,"), so only add the keymode chip when it isn't in there.
+  const keys = score.beatmap?.cs ? `${Math.round(score.beatmap.cs)}K` : "";
+  const version = (score.beatmap?.version ?? "").trim();
+  const showKeys = !!keys && !new RegExp(`\\b${keys}\\b`, "i").test(version);
+  const stars = score.beatmap?.difficulty_rating;
+  const mapper = score.beatmapset?.creator;
+  const metaParts: ReactNode[] = [
+    metaPart("artist", clamp(score.beatmapset?.artist, 34)),
+    metaPart("version", version ? clamp(version, 32) : ""),
+    metaPart("keys", showKeys ? keys : ""),
+    stars != null && Number.isFinite(stars)
+      ? h(
+          "div",
+          {
+            key: "stars",
+            style: { display: "flex", flexDirection: "row", alignItems: "center", gap: "7px" },
+          },
+          [
+            // Torus has no ★ glyph (it rasterizes as tofu), so the star is
+            // the same inline svg the other cards use.
+            h("img", {
+              key: "icon",
+              src: starDataUrl("#ffcc22"),
+              style: { width: "19px", height: "19px" },
+            }),
+            h("div", { key: "sr" }, stars.toFixed(2)),
+          ],
+        )
+      : null,
+    metaPart("mapper", mapper ? `mapped by ${clamp(mapper, 20)}` : ""),
+  ].filter(Boolean);
 
   const response = new ImageResponse(
     h(
       "div",
       {
-        // Outer canvas: plain block, no flex, no padding. Background art and
-        // content stack via absolute positioning so layout glitches like
-        // "content offset by parent flex" can't happen.
+        // Outer canvas: background art and content stack via absolute
+        // positioning so layout glitches like "content offset by parent
+        // flex" can't happen.
         style: {
           width: `${WIDTH}px`,
           height: `${HEIGHT}px`,
@@ -646,10 +744,12 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
                 height: `${HEIGHT}px`,
                 objectFit: "cover",
                 objectPosition: "center center",
-                opacity: 0.44,
+                opacity: 0.5,
               },
             })
           : null,
+        // Two scrims: a vertical one that darkens toward the stats, and a
+        // wash that keeps the art from fighting the text anywhere.
         h("div", {
           key: "dim",
           style: {
@@ -659,7 +759,7 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
             width: `${WIDTH}px`,
             height: `${HEIGHT}px`,
             background:
-              "linear-gradient(180deg, rgba(15,10,13,0.36) 0%, rgba(15,10,13,0.68) 58%, rgba(15,10,13,0.94) 100%)",
+              "linear-gradient(180deg, rgba(12,8,11,0.58) 0%, rgba(12,8,11,0.74) 44%, rgba(12,8,11,0.93) 100%)",
           },
         }),
         h("div", {
@@ -671,12 +771,12 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
             width: `${WIDTH}px`,
             height: `${HEIGHT}px`,
             background:
-              "linear-gradient(90deg, rgba(9,5,8,0.82) 0%, rgba(9,5,8,0.36) 34%, rgba(9,5,8,0.30) 66%, rgba(9,5,8,0.78) 100%)",
+              "linear-gradient(90deg, rgba(9,5,8,0.66) 0%, rgba(9,5,8,0.10) 42%, rgba(9,5,8,0.10) 62%, rgba(9,5,8,0.62) 100%)",
           },
         }),
 
-        // Content layer: a single absolutely-positioned flex column that
-        // owns its own padding. Decoupled from the bg layer entirely.
+        // Content layer: one absolutely-positioned flex column that owns
+        // its own padding, decoupled from the background layers.
         h(
           "div",
           {
@@ -689,11 +789,10 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
               height: `${HEIGHT}px`,
               display: "flex",
               flexDirection: "column",
-              padding: "42px 64px 52px",
+              padding: "44px 60px 46px",
             },
           },
           [
-            // Top band: REPLAY eyebrow.
             h(
               "div",
               {
@@ -702,6 +801,7 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
                   display: "flex",
                   flexDirection: "row",
                   alignItems: "center",
+                  justifyContent: "space-between",
                 },
               },
               [
@@ -710,19 +810,93 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
                   {
                     key: "eyebrow",
                     style: {
-                      fontSize: "44px",
-                      color: "#ff99cc",
-                      letterSpacing: "0.16em",
+                      fontSize: "22px",
                       fontWeight: 900,
-                      lineHeight: "1.0",
+                      letterSpacing: "0.30em",
+                      color: "#ff8ec2",
                     },
                   },
                   "REPLAY",
                 ),
+                playDate
+                  ? h(
+                      "div",
+                      {
+                        key: "date",
+                        style: {
+                          fontSize: "19px",
+                          letterSpacing: "0.14em",
+                          color: "#9d8d97",
+                        },
+                      },
+                      playDate,
+                    )
+                  : null,
               ],
             ),
 
-            // Middle band: real grade SVG + player + beatmap.
+            // Map identity.
+            h(
+              "div",
+              {
+                key: "map",
+                style: {
+                  display: "flex",
+                  flexDirection: "column",
+                  marginTop: "22px",
+                },
+              },
+              [
+                h(
+                  "div",
+                  {
+                    key: "title",
+                    style: {
+                      fontSize: "48px",
+                      fontWeight: 900,
+                      // overflow:hidden clips at the line box, so the line
+                      // needs room for descenders (g, y, j) or they lose
+                      // their tails.
+                      lineHeight: "1.22",
+                      overflow: "hidden",
+                    },
+                  },
+                  clamp(score.beatmapset?.title ?? "Unknown beatmap", 42),
+                ),
+                h(
+                  "div",
+                  {
+                    key: "meta",
+                    style: {
+                      display: "flex",
+                      flexDirection: "row",
+                      alignItems: "center",
+                      marginTop: "12px",
+                      fontSize: "21px",
+                      color: "#c7b8c1",
+                    },
+                  },
+                  metaParts.flatMap((part, i) =>
+                    i === 0
+                      ? [part]
+                      : [
+                          h(
+                            "div",
+                            {
+                              key: `sep-${i}`,
+                              style: { color: "#6b5a63", padding: "0 12px" },
+                            },
+                            "·",
+                          ),
+                          part,
+                        ],
+                  ),
+                ),
+              ],
+            ),
+
+            // Player and grade: the hero band absorbs the spare vertical
+            // room so the card breathes on short titles.
             h(
               "div",
               {
@@ -731,84 +905,136 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
                   display: "flex",
                   flexDirection: "row",
                   alignItems: "center",
-                  gap: "36px",
+                  justifyContent: "space-between",
                   flex: "1",
-                  marginTop: "6px",
                 },
               },
               [
-                h("img", {
-                  key: "grade",
-                  src: gradeImgUrl(request, displayedRank),
-                  // The SVG has a 32x16 aspect ratio. Render it at 2x scale
-                  // so the result feels weighty next to the 56px username.
-                  style: {
-                    width: "200px",
-                    height: "100px",
-                    flexShrink: 0,
-                  },
-                }),
                 h(
                   "div",
                   {
-                    key: "info",
+                    key: "player",
                     style: {
                       display: "flex",
-                      flexDirection: "column",
-                      gap: "10px",
-                      flex: "1",
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: "24px",
                       minWidth: "0",
                     },
                   },
                   [
+                    h("img", {
+                      key: "avatar",
+                      src: ogAvatarUrl(request, score.user?.avatar_url, score.user?.id),
+                      style: {
+                        width: "120px",
+                        height: "120px",
+                        borderRadius: "26px",
+                        objectFit: "cover",
+                        flexShrink: 0,
+                      },
+                    }),
                     h(
                       "div",
                       {
-                        key: "name",
-                        style: {
-                          fontSize: "56px",
-                          fontWeight: 900,
-                          lineHeight: "1.0",
-                        },
+                        key: "who",
+                        style: { display: "flex", flexDirection: "column", minWidth: "0" },
                       },
-                      score.user.username,
+                      [
+                        h(
+                          "div",
+                          {
+                            key: "name",
+                            style: {
+                              fontSize: "62px",
+                              fontWeight: 900,
+                              // Same as the title: leave descender room so
+                              // usernames like "Aleju03" keep the j's tail.
+                              lineHeight: "1.22",
+                              overflow: "hidden",
+                            },
+                          },
+                          clamp(score.user?.username, 20),
+                        ),
+                        score.user?.country_code
+                          ? h(
+                              "div",
+                              {
+                                key: "country",
+                                style: {
+                                  display: "flex",
+                                  flexDirection: "row",
+                                  alignItems: "center",
+                                  gap: "10px",
+                                  marginTop: "12px",
+                                },
+                              },
+                              [
+                                h("img", {
+                                  key: "flag",
+                                  src: `https://osu.ppy.sh/images/flags/${score.user.country_code}.png`,
+                                  style: {
+                                    width: "32px",
+                                    height: "22px",
+                                    borderRadius: "3px",
+                                    objectFit: "cover",
+                                  },
+                                }),
+                                h(
+                                  "div",
+                                  {
+                                    key: "cname",
+                                    style: { fontSize: "20px", color: "#c7b8c1" },
+                                  },
+                                  getCountryName(score.user.country_code) || score.user.country_code,
+                                ),
+                              ],
+                            )
+                          : null,
+                      ],
                     ),
-                    h(
-                      "div",
-                      {
-                        key: "song",
-                        style: {
-                          fontSize: "26px",
-                          color: "#e8e3ec",
-                          lineHeight: "1.2",
-                          overflow: "hidden",
-                        },
-                      },
-                      clamp(beatmapDisplayTitle(score), 60),
-                    ),
-                    h(
-                      "div",
-                      {
-                        key: "diff",
-                        style: {
-                          fontSize: "20px",
-                          color: "#c7b8c1",
-                        },
-                      },
-                      versionLine,
-                    ),
+                  ],
+                ),
+                h(
+                  "div",
+                  {
+                    key: "result",
+                    style: {
+                      display: "flex",
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: "24px",
+                      flexShrink: 0,
+                    },
+                  },
+                  [
+                    modsLabel
+                      ? h(
+                          "div",
+                          {
+                            key: "mods",
+                            style: {
+                              fontSize: "38px",
+                              fontWeight: 900,
+                              letterSpacing: "0.04em",
+                              color: "#ff8ec2",
+                            },
+                          },
+                          `+${modsLabel}`,
+                        )
+                      : null,
+                    h("img", {
+                      key: "grade",
+                      src: gradeImgUrl(request, displayedRank),
+                      // The grade artwork is 32x16, so keep that ratio.
+                      style: { width: "208px", height: "104px", flexShrink: 0 },
+                    }),
                   ],
                 ),
               ],
             ),
 
-            // Score-composition bar: thin segmented strip where each
-            // segment's width is proportional to its judgement count.
-            // Reads as a visual fingerprint of the score: a wide MAX
-            // segment = clean play, visible miss segment = heartbreak.
-            judgementCompositionBar(judgements),
-
-            // Bottom band: pp / acc / mods / combo.
+            // Score / accuracy / combo / pp, the result-screen numbers.
             h(
               "div",
               {
@@ -816,58 +1042,30 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
                 style: {
                   display: "flex",
                   flexDirection: "row",
-                  alignItems: "baseline",
-                  gap: "30px",
-                  marginTop: "22px",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                  marginTop: "12px",
+                  paddingTop: "28px",
+                  borderTop: "1px solid rgba(255,255,255,0.14)",
                 },
               },
               [
-                showPp
-                  ? h(
-                      "div",
-                      {
-                        key: "pp",
-                        style: { fontSize: "68px", fontWeight: 900, color: "#ff66aa", lineHeight: "1" },
-                      },
-                      `${formatOgInt(score.pp)}pp`,
-                    )
-                  : null,
-                h(
-                  "div",
-                  {
-                    key: "acc",
-                    style: { fontSize: "26px", color: "#e8e3ec" },
-                  },
-                  formatOgAcc(score.accuracy),
+                ogStatCell("score", "SCORE", formatOgInt(totalScore)),
+                ogStatCell("acc", "ACCURACY", formatOgAcc(score.accuracy)),
+                ogStatCell(
+                  "combo",
+                  "MAX COMBO",
+                  maxCombo != null ? `${formatOgInt(maxCombo)}x` : "--",
                 ),
-                maxCombo != null
-                  ? h(
-                      "div",
-                      {
-                        key: "combo",
-                        style: { fontSize: "22px", color: "#c7b8c1" },
-                      },
-                      `${formatOgInt(maxCombo)}x`,
-                    )
-                  : null,
-                modsLabel
-                  ? h(
-                      "div",
-                      {
-                        key: "mods",
-                        style: {
-                          fontSize: "22px",
-                          color: "#ff99cc",
-                          fontWeight: 900,
-                          letterSpacing: "0.08em",
-                          marginLeft: "auto",
-                        },
-                      },
-                      `+ ${modsLabel}`,
-                    )
+                showPp
+                  ? ogStatCell("pp", "PERFORMANCE", `${formatOgInt(score.pp)}pp`, {
+                      color: "#ff66aa",
+                    })
                   : null,
               ],
             ),
+
+            judgementStrip(judgements),
           ],
         ),
       ],
