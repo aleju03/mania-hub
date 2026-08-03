@@ -1899,36 +1899,48 @@ function PreviewSheet({
   onClose: () => void;
 }) {
   const open = rec != null && snapshot != null;
-  const [scrollLocked, setScrollLocked] = useState(false);
+  // The lock is imperative rather than state-driven: driving it from state
+  // meant the sheet re-rendered synchronously in a layout effect on the very
+  // commit its enter animation started, which is enough to make framer
+  // re-read the entry styles and blink the sheet.
+  const lockedOverflowRef = useRef<string | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  const releaseScroll = () => {
+    if (lockedOverflowRef.current == null) return;
+    document.body.style.overflow = lockedOverflowRef.current;
+    lockedOverflowRef.current = null;
+  };
 
   useIsoLayoutEffect(() => {
     if (!open) return;
-    setScrollLocked(true);
+    if (lockedOverflowRef.current == null) {
+      lockedOverflowRef.current = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+    }
+    // The close handler is a fresh arrow on every parent render, so it is read
+    // through a ref here: as a dependency it re-ran this whole effect (and the
+    // lock with it) on renders that had nothing to do with the sheet.
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") onCloseRef.current();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open]);
 
-  // The sheet only mounts below xl (the page gates it on a live media query),
-  // so the lock can be unconditional here: crossing the breakpoint unmounts
-  // the sheet and this cleanup releases the body scroll again.
-  useIsoLayoutEffect(() => {
-    if (!scrollLocked) return;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [scrollLocked]);
+  // The lock outlives the close so the page behind cannot scroll mid-exit;
+  // AnimatePresence releases it below. Crossing the xl breakpoint unmounts the
+  // sheet outright, so unmount has to release it too.
+  useEffect(() => releaseScroll, []);
 
   if (typeof document === "undefined") return null;
 
   return createPortal(
-    <AnimatePresence onExitComplete={() => setScrollLocked(false)}>
+    <AnimatePresence onExitComplete={releaseScroll}>
       {open && rec && snapshot ? (
         <motion.div
+          key="farm-preview-sheet"
           className="fixed inset-0 z-[120] flex items-end justify-center xl:hidden"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
