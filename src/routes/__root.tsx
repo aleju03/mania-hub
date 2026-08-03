@@ -29,6 +29,7 @@ import {
 import { AnalyticsProvider } from "../lib/analytics-provider";
 import { track } from "../lib/analytics";
 import { getCanonicalOrigin } from "../lib/origin";
+import { isStaleRouteModuleMessage } from "../lib/stale-route-error";
 import { DEFAULT_DESCRIPTION, SITE_FAVICON_HREF, SITE_NAME, websiteJsonLd } from "../lib/seo";
 import { activateLiveCountryOnServer, fetchLiveBackendBootstrap } from "../lib/live-backend";
 import type { LiveBackendStatus, LiveCountryFeaturesSnapshot } from "../lib/live-backend";
@@ -250,7 +251,12 @@ const CHUNK_LOAD_ERROR_PATTERNS = [
   "vite:preloaderror",
 ];
 
-const CHUNK_LOAD_RECOVERY_SCRIPT = `(()=>{var key="mania-hub-chunk-reload-v1";var ttl=300000;function text(value){try{if(!value)return"";if(typeof value==="string")return value;if(value instanceof Error)return value.name+" "+value.message;var parts=[];if(typeof value.name==="string")parts.push(value.name);if(typeof value.message==="string")parts.push(value.message);if(typeof value.type==="string")parts.push(value.type);if(value.reason)parts.push(text(value.reason));if(value.payload)parts.push(text(value.payload));return parts.join(" ");}catch(e){return"";}}function isChunkError(value){var message=text(value).toLowerCase();return message.indexOf("failed to fetch dynamically imported module")!==-1||message.indexOf("error loading dynamically imported module")!==-1||message.indexOf("importing a module script failed")!==-1||message.indexOf("failed to load module script")!==-1||message.indexOf("loading chunk")!==-1||message.indexOf("chunkloaderror")!==-1||message.indexOf("vite:preloaderror")!==-1;}function freshen(){var tasks=[];try{if(navigator.serviceWorker&&navigator.serviceWorker.getRegistrations){tasks.push(navigator.serviceWorker.getRegistrations().then(function(registrations){return Promise.all(registrations.map(function(registration){return registration.unregister().catch(function(){});}));}));}}catch(e){}try{if(window.caches&&caches.keys){tasks.push(caches.keys().then(function(keys){return Promise.all(keys.filter(function(name){return /^static-v/.test(name)||/^mania-hub/.test(name);}).map(function(name){return caches.delete(name);}));}));}}catch(e){}Promise.allSettled(tasks).finally(function(){location.reload();});}function recover(value,force){if(!force&&!isChunkError(value))return false;try{var now=Date.now();var href=location.href;var previous=JSON.parse(sessionStorage.getItem(key)||"null");if(previous&&previous.href===href&&now-previous.at<ttl)return false;sessionStorage.setItem(key,JSON.stringify({href:href,at:now}));}catch(e){}freshen();return true;}window.__maniaHubRecoverChunkLoad=recover;window.addEventListener("vite:preloadError",function(event){if(recover(event&&event.payload)){event.preventDefault();}},true);window.addEventListener("unhandledrejection",function(event){recover(event&&event.reason);},true);window.addEventListener("error",function(event){recover(event&&(event.error||event.message));},true);})();`;
+/* One reload per URL per five minutes, counted separately for the two callers.
+   The ambient listeners recover silently, so a page that reloaded once already
+   used to leave the error boundary's forced call guard-blocked -- the user sat
+   on "Something broke" having never seen a refresh of their own. Separate slots
+   keep each path's loop protection intact while letting the boundary try once. */
+const CHUNK_LOAD_RECOVERY_SCRIPT = `(()=>{var key="mania-hub-chunk-reload-v1";var forcedKey="mania-hub-route-reload-v1";var ttl=300000;function text(value){try{if(!value)return"";if(typeof value==="string")return value;if(value instanceof Error)return value.name+" "+value.message;var parts=[];if(typeof value.name==="string")parts.push(value.name);if(typeof value.message==="string")parts.push(value.message);if(typeof value.type==="string")parts.push(value.type);if(value.reason)parts.push(text(value.reason));if(value.payload)parts.push(text(value.payload));return parts.join(" ");}catch(e){return"";}}function isChunkError(value){var message=text(value).toLowerCase();return message.indexOf("failed to fetch dynamically imported module")!==-1||message.indexOf("error loading dynamically imported module")!==-1||message.indexOf("importing a module script failed")!==-1||message.indexOf("failed to load module script")!==-1||message.indexOf("loading chunk")!==-1||message.indexOf("chunkloaderror")!==-1||message.indexOf("vite:preloaderror")!==-1;}function freshen(){var tasks=[];try{if(navigator.serviceWorker&&navigator.serviceWorker.getRegistrations){tasks.push(navigator.serviceWorker.getRegistrations().then(function(registrations){return Promise.all(registrations.map(function(registration){return registration.unregister().catch(function(){});}));}));}}catch(e){}try{if(window.caches&&caches.keys){tasks.push(caches.keys().then(function(keys){return Promise.all(keys.filter(function(name){return /^static-v/.test(name)||/^mania-hub/.test(name);}).map(function(name){return caches.delete(name);}));}));}}catch(e){}Promise.allSettled(tasks).finally(function(){location.reload();});}function recover(value,force){if(!force&&!isChunkError(value))return false;var slot=force?forcedKey:key;try{var now=Date.now();var href=location.href;var previous=JSON.parse(sessionStorage.getItem(slot)||"null");if(previous&&previous.href===href&&now-previous.at<ttl)return false;sessionStorage.setItem(slot,JSON.stringify({href:href,at:now}));}catch(e){}freshen();return true;}window.__maniaHubRecoverChunkLoad=recover;window.addEventListener("vite:preloadError",function(event){if(recover(event&&event.payload)){event.preventDefault();}},true);window.addEventListener("unhandledrejection",function(event){recover(event&&event.reason);},true);window.addEventListener("error",function(event){recover(event&&(event.error||event.message));},true);})();`;
 
 function errorText(error: unknown): string {
   if (!error) return "";
@@ -280,19 +286,12 @@ function isChunkLoadError(error: unknown): boolean {
   return CHUNK_LOAD_ERROR_PATTERNS.some((pattern) => message.includes(pattern));
 }
 
-// Version skew's other face: the lazy import *succeeds* (the CDN serves the
-// new deployment's module), but the old client's route tree doesn't line up
-// with what it exports, and TanStack Router's preload dies reading `.component`
-// off undefined. No chunk-load pattern matches (the fetch worked), so without
-// this the user lands on the error screen instead of getting the silent
-// refresh. Matched only here in the route error boundary -- the global
+// Matched only here in the route error boundary -- the global
 // error/unhandledrejection hooks keep the narrow chunk patterns, so a genuine
 // app bug that happens to read `.component` can at worst cost one guarded
 // reload via this path, not ambient listeners.
-const STALE_ROUTE_MODULE_PATTERN = "cannot read properties of undefined (reading 'component')";
-
 function isStaleRouteModuleError(error: unknown): boolean {
-  return errorText(error).toLowerCase().includes(STALE_ROUTE_MODULE_PATTERN);
+  return isStaleRouteModuleMessage(errorText(error));
 }
 
 function recoverFromChunkLoadError(error: unknown, force = false): boolean {
