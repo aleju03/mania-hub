@@ -1,6 +1,7 @@
+import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronRight } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { CountryFlag } from "../ui/CountryFlag";
 import { useAuth } from "../../lib/auth-context";
 import { formatNumber, formatTimeAgo } from "../../lib/format";
@@ -207,8 +208,25 @@ function GoatHolderRow({
       </button>
       {expanded && owners.length > 0 ? (
         // Oldest first, so the name at the front is whoever pulled it first.
+        // Each name opens that holder's own pull permalink, which is public
+        // and addressable from the two ids anyway.
         <div className="max-h-44 overflow-y-auto pb-2.5 pl-[26px] pr-1 text-[11px] leading-relaxed text-osu-l2/80 [scrollbar-gutter:stable]">
-          {owners.map((owner) => `${owner.username}${owner.copies > 1 ? ` x${owner.copies}` : ""}`).join(" · ")}
+          {owners.map((owner, index) => (
+            <Fragment key={owner.userId}>
+              {index > 0 ? <span className="text-osu-f1"> &middot; </span> : null}
+              <Link
+                to="/pull/$ownerId/$cardId"
+                params={{ ownerId: String(owner.userId), cardId: String(player.id) }}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={`Open ${owner.username}'s pull of ${label}`}
+                className="underline-offset-2 transition-colors hover:text-white hover:underline"
+              >
+                {owner.username}
+                {owner.copies > 1 ? ` x${owner.copies}` : ""}
+              </Link>
+            </Fragment>
+          ))}
           {hidden > 0 ? (
             <span className="text-osu-f1">
               {" "}

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
 import { HONORARY_USER_IDS, recyclePackCollectionCards, savePackWallet } from "../src/features/pack-wallets.js";
-import { getHonoraryPullsReport } from "../src/features/pack-pulls.js";
+import { getHonoraryPullsReport, getSharedPackCard } from "../src/features/pack-pulls.js";
 
 // Collection cards are client-supplied and their tier is otherwise trusted.
 // GOAT recycles for 1000 shards, so a forged `tier: "goat"` would mint shards
@@ -138,5 +138,48 @@ describe("honorary pulls report", () => {
     expect(report.cards[0]?.owners).toHaveLength(1);
     expect(report.cards[0]?.ownerCount).toBe(2);
     expect(report.distinctOwners).toBe(2);
+  });
+});
+
+/* The pull permalink names the pack a GOAT came out of, which only makes sense
+   for a card the log saw arrive at that tier: several roster members sit in
+   the ranked pool too, so plenty of holders pulled them as ordinary cards
+   before the roster ever existed. */
+describe("shared pull provenance", () => {
+  async function logPull(tier: string, packType: string, pulledAt: number) {
+    await exec(
+      db,
+      `insert into pack_pull_events (owner_user_id, owner_username, card_user_id, card_username, tier, pack_type, pulled_at)
+       values (?, ?, ?, ?, ?, ?, ?)`,
+      [OWNER, "Owner", HONORARY_ID, "Jakads", tier, packType, pulledAt],
+    );
+  }
+
+  beforeEach(async () => {
+    await savePackWallet(db, OWNER, JSON.stringify({ cards: { [HONORARY_ID]: card(HONORARY_ID, "goat") }, shards: 0 }), 0);
+  });
+
+  it("names the pack when the card was logged as a GOAT", async () => {
+    await logPull("goat", "legend", 1000);
+    const shared = await getSharedPackCard(db, OWNER, HONORARY_ID);
+    expect(shared?.goatPull).toEqual({ packType: "legend", pulledAt: 1000 });
+  });
+
+  it("stays silent for a card pulled before it carried the tier", async () => {
+    await logPull("worldClass", "standard", 1000);
+    const shared = await getSharedPackCard(db, OWNER, HONORARY_ID);
+    expect(shared?.goatPull).toBeNull();
+  });
+
+  it("stays silent when the pull predates the log", async () => {
+    const shared = await getSharedPackCard(db, OWNER, HONORARY_ID);
+    expect(shared?.goatPull).toBeNull();
+  });
+
+  it("reports the first GOAT pull, not a later duplicate", async () => {
+    await logPull("goat", "legend", 2000);
+    await logPull("goat", "standard", 3000);
+    const shared = await getSharedPackCard(db, OWNER, HONORARY_ID);
+    expect(shared?.goatPull?.packType).toBe("legend");
   });
 });

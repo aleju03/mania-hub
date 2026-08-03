@@ -1966,6 +1966,10 @@ export interface LiveSharedPackCard {
     firstPulledAt: number;
   };
   owners: number;
+  /* Set only when the pull log recorded this card arriving at the GOAT tier.
+     Null for a card pulled out of the ranked pool before the player joined the
+     honorary roster, and for pulls older than the log. */
+  goatPull: { packType: string; pulledAt: number } | null;
 }
 
 /* One owned card as a shareable artifact: backs the /pull/{owner}/{card}

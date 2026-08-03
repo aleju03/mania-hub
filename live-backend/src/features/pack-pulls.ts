@@ -243,6 +243,11 @@ export interface SharedPackCard {
     firstPulledAt: number;
   };
   owners: number;
+  /* Set only when the pull log recorded this card arriving at the GOAT tier,
+     which is the one case where the pack it came from is worth naming. Absent
+     for a card pulled out of the ranked pool before the player joined the
+     honorary roster, and for pulls older than the log. */
+  goatPull: { packType: string; pulledAt: number } | null;
 }
 
 /* One owned card as a shareable artifact ("aleju pulled this"), backing the
@@ -285,6 +290,15 @@ export async function getSharedPackCard(
     "select count(*) as owners from pack_collection_cards where card_user_id = ? and copies > 0",
     [cardUserId],
   )).rows[0];
+  // The first time this owner pulled this card as a GOAT. Earliest rather than
+  // latest: a later duplicate says nothing the first one didn't.
+  const goatRow = (await exec(
+    db,
+    `select pack_type, pulled_at from pack_pull_events
+     where owner_user_id = ? and card_user_id = ? and tier = 'goat'
+     order by pulled_at asc limit 1`,
+    [ownerUserId, cardUserId],
+  )).rows[0];
   let skills: unknown | null = null;
   if (typeof row.skills_json === "string" && row.skills_json) {
     try {
@@ -309,6 +323,9 @@ export async function getSharedPackCard(
       firstPulledAt: Number(row.first_pulled_at) || 0,
     },
     owners: Number(ownersRow?.owners) || 0,
+    goatPull: goatRow
+      ? { packType: String(goatRow.pack_type ?? ""), pulledAt: Number(goatRow.pulled_at) || 0 }
+      : null,
   };
 }
 

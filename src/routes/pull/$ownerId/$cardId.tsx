@@ -12,7 +12,9 @@ import {
   isLiveBackendConfigured,
   type LiveSharedPackCard,
 } from "../../../lib/live-backend";
+import { HONORARY_PACK_POOL } from "../../../lib/honorary-players";
 import { getManiaCardTier, MANIA_TIER_STYLES, type ManiaCardTier, type ManiaSkills } from "../../../lib/maniacard";
+import { PACK_TYPES } from "../../../lib/packs";
 import { pageSeo, pullOgImagePath } from "../../../lib/seo";
 
 export const Route = createFileRoute("/pull/$ownerId/$cardId")({
@@ -54,6 +56,19 @@ function sharedCardTier(shared: LiveSharedPackCard): ManiaCardTier {
   const skills = shared.card.skills as ManiaSkills | null;
   if (skills && Number.isFinite(skills.cardPower)) return getManiaCardTier(skills.cardPower);
   return "common";
+}
+
+/* What a GOAT pull actually cost in luck. The honorary slot rolls the pack's
+   own chance and then picks uniformly from the dealable roster, so the odds of
+   any one of them is the product. Figures are today's: the roster grows, and
+   the pull log records the pack rather than the odds that applied then. */
+function goatPullOdds(packType: string): { pack: string; slotChance: number; oneIn: number } | null {
+  const definition = PACK_TYPES.find((type) => type.id === packType);
+  const poolSize = HONORARY_PACK_POOL.length;
+  if (!definition || poolSize === 0) return null;
+  const chance = definition.honoraryChance / poolSize;
+  if (!(chance > 0)) return null;
+  return { pack: definition.name, slotChance: definition.honoraryChance, oneIn: Math.round(1 / chance) };
 }
 
 function tierAccentRgb(tier: ManiaCardTier): string {
@@ -232,6 +247,7 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
   const tier = sharedCardTier(shared);
   const accent = tierAccentRgb(tier);
   const tierLabel = shared.card.tierLabel ?? MANIA_TIER_STYLES[tier].label;
+  const odds = shared.goatPull ? goatPullOdds(shared.goatPull.packType) : null;
   return (
     <div className="flex flex-col items-center">
       <PulledCardArt shared={shared} />
@@ -264,6 +280,23 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
           )}
           {shared.card.copies > 1 && <span className="tabular-nums"> &middot; x{shared.card.copies} copies</span>}
         </div>
+        {odds && (
+          // Only shown when the log says this card arrived as a GOAT, so a
+          // ranked-pool pull from before the roster change never claims odds
+          // it did not face.
+          <div className="mt-2 flex flex-col items-center gap-0.5">
+            <div className="text-[12px] text-osu-f1">
+              Out of a <span className="font-bold text-white">{odds.pack} pack</span>
+            </div>
+            <div className="text-[12px] text-osu-f1 tabular-nums">
+              {(odds.slotChance * 100).toFixed(2).replace(/\.?0+$/, "")}% GOAT slot, then 1 of{" "}
+              {HONORARY_PACK_POOL.length} on the roster
+            </div>
+            <div className="text-[15px] font-bold tabular-nums text-amber-200">
+              about 1 in {odds.oneIn.toLocaleString()}
+            </div>
+          </div>
+        )}
         <div className="mt-3 flex items-center gap-2">
           <Link
             to="/packs"
