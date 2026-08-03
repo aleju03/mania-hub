@@ -1,6 +1,16 @@
 export const REPLAY_OVERLAY_SETTINGS_STORAGE_KEY = "mania-hub-replay-overlays";
 export const REPLAY_OVERLAY_SETTINGS_CHANGE_EVENT = "mania-hub:replay-overlay-settings-change";
 
+export const REPLAY_MISS_THUMB_HAND_STORAGE_KEY = "mania-hub-replay-miss-thumb-hand";
+export const REPLAY_MISS_THUMB_HAND_CHANGE_EVENT = "mania-hub:replay-miss-thumb-hand-change";
+
+// Odd keymodes have a middle lane that one thumb covers, so the L/R miss split
+// depends on which thumb the player uses there. Right is the common setup and
+// stays the default; lefties flip it from the overlay's right-click menu.
+export type ReplayThumbHand = "left" | "right";
+
+export const DEFAULT_REPLAY_MISS_THUMB_HAND: ReplayThumbHand = "right";
+
 export const REPLAY_OVERLAY_IDS = ["keypresses", "kps", "misses", "accuracy", "pp", "judgements", "progress", "leaderboard"] as const;
 
 export type ReplayOverlayId = typeof REPLAY_OVERLAY_IDS[number];
@@ -163,6 +173,35 @@ export function readReplayOverlaySettings(): ReplayOverlaySettings {
   } catch (error) {
     console.warn("[replay] failed to read replay overlay settings", error);
     return DEFAULT_REPLAY_OVERLAY_SETTINGS;
+  }
+}
+
+export function normalizeReplayMissThumbHand(value: unknown): ReplayThumbHand {
+  return value === "left" ? "left" : DEFAULT_REPLAY_MISS_THUMB_HAND;
+}
+
+export function readReplayMissThumbHand(): ReplayThumbHand {
+  if (typeof window === "undefined") return DEFAULT_REPLAY_MISS_THUMB_HAND;
+
+  try {
+    return normalizeReplayMissThumbHand(window.localStorage.getItem(REPLAY_MISS_THUMB_HAND_STORAGE_KEY));
+  } catch (error) {
+    console.warn("[replay] failed to read replay miss thumb hand", error);
+    return DEFAULT_REPLAY_MISS_THUMB_HAND;
+  }
+}
+
+export function writeReplayMissThumbHand(hand: ReplayThumbHand): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    const normalized = normalizeReplayMissThumbHand(hand);
+    window.localStorage.setItem(REPLAY_MISS_THUMB_HAND_STORAGE_KEY, normalized);
+    if (typeof window.dispatchEvent === "function") {
+      window.dispatchEvent(new CustomEvent(REPLAY_MISS_THUMB_HAND_CHANGE_EVENT, { detail: normalized }));
+    }
+  } catch (error) {
+    console.warn("[replay] failed to write replay miss thumb hand", error);
   }
 }
 

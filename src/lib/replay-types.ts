@@ -1,6 +1,6 @@
 import type { ReplayHitCounts } from "./replay-validation";
 import type { ReplayHitsoundTrigger } from "./replay-hitsounds";
-import type { ReplayOverlayId, ReplayOverlaySettings } from "./replay-overlays";
+import type { ReplayOverlayId, ReplayOverlaySettings, ReplayThumbHand } from "./replay-overlays";
 import type { ReplaySkinSettings } from "./replay-skin";
 import type { ReplayStoryboardData } from "./storyboard/types";
 import type { ReplayFrame, ReplayLifeBarFrame, OsuScore } from "./types";
@@ -86,6 +86,8 @@ export interface ReplayRendererLike {
   setShowInputOverlay: (value: boolean) => void;
   setInputOverlayOptions: (options: { only?: boolean; color?: string; keyHistory?: boolean }) => void;
   setOverlaySettings: (settings: ReplayOverlaySettings) => void;
+  /** Which hand owns the middle lane of an odd keymode in the L/R miss split. */
+  setMissThumbHand?: (hand: ReplayThumbHand) => void;
   setSkinSettings: (settings: ReplaySkinSettings) => void;
   setSpeed: (value: number) => void;
   setStoryboard?: (data: ReplayStoryboardData | null) => void;

@@ -8,8 +8,8 @@ import { createManiaScoreSimulator, formatLazerScore, formatStableScore, getScor
 import type { ManiaScoreSimulator } from "../../lib/mania-score-simulation";
 import { calculateManiaStarRatingTimeline } from "../../lib/mania-star-rating";
 import type { ManiaStarRatingTimelinePoint } from "../../lib/mania-star-rating";
-import { DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
-import type { ReplayOverlayId, ReplayOverlaySettings } from "../../lib/replay-overlays";
+import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
+import type { ReplayOverlayId, ReplayOverlaySettings, ReplayThumbHand } from "../../lib/replay-overlays";
 import { DEFAULT_REPLAY_SCROLL_SPEED } from "../../lib/replay-scroll-speed";
 import { DEFAULT_REPLAY_COMBO_FONT_SET, DEFAULT_REPLAY_JUDGEMENT_SET, DEFAULT_REPLAY_SKIN_SETTINGS, OSU_MANIA_DEFAULT_LIGHT_POSITION, OSU_MANIA_SCREEN_WIDTH, REPLAY_SKIN_DEFAULT_HIT_POSITION, getReplayComboFontStyle, getReplayJudgementScale, getReplayJudgementSetAssets, getReplaySkinProfile, getReplaySkinStagePosition, normalizeReplaySkinSettings } from "../../lib/replay-skin";
 import type { ReplayComboFontStyle, ReplaySkinColumnAssets, ReplaySkinImageAsset, ReplaySkinKeymodeProfile, ReplaySkinSettings, ReplaySkinStagePositionKey } from "../../lib/replay-skin";
@@ -355,6 +355,8 @@ interface RendererOptions {
   showHealthBar?: boolean;
   skinSettings?: ReplaySkinSettings;
   overlaySettings?: ReplayOverlaySettings;
+  // Which hand owns the middle lane of an odd keymode in the L/R miss split.
+  missThumbHand?: ReplayThumbHand;
   onOverlaySettingsChange?: (settings: ReplayOverlaySettings) => void;
   onContextLost?: () => void;
   onContextRestored?: () => void;
@@ -654,6 +656,7 @@ export class ManiaReplayRenderer {
   private ppModMultiplier = 1;
   private leftHandMisses = 0;
   private rightHandMisses = 0;
+  private missThumbHand: ReplayThumbHand = DEFAULT_REPLAY_MISS_THUMB_HAND;
   private recentHitOffsets: number[] = [];
   private recentHitTimes: number[] = [];
   // Wall-clock eased position of the hit-error average marker; both clients
@@ -791,6 +794,7 @@ export class ManiaReplayRenderer {
     this.showHealthBar = options?.showHealthBar ?? true;
     this.skinSettings = normalizeReplaySkinSettings(options?.skinSettings);
     this.overlaySettings = normalizeReplayOverlaySettings(options?.overlaySettings);
+    this.missThumbHand = normalizeReplayMissThumbHand(options?.missThumbHand);
     this.onOverlaySettingsChange = options?.onOverlaySettingsChange ?? null;
     this.onContextLost = options?.onContextLost ?? null;
     this.onContextRestored = options?.onContextRestored ?? null;
@@ -1388,11 +1392,38 @@ export class ManiaReplayRenderer {
 
   private getHandForColumn(column: number): Hand {
     if (column < 0 || column >= this.keyCount) return "center";
-    const leftCount = Math.floor(this.keyCount / 2);
-    const rightStart = leftCount;
+    // Odd keymodes leave a middle lane that a thumb covers; it belongs to
+    // whichever hand that thumb is on. Even keymodes split down the middle and
+    // have no such lane.
+    const leftCount = this.keyCount % 2 === 1 && this.missThumbHand === "left"
+      ? Math.ceil(this.keyCount / 2)
+      : Math.floor(this.keyCount / 2);
     if (column < leftCount) return "left";
-    if (column >= rightStart) return "right";
-    return "center";
+    return "right";
+  }
+
+  // Which thumb plays the middle lane of an odd keymode. Only the L/R miss
+  // split reads it, so switching re-tallies the misses seen so far instead of
+  // replaying the whole run's stats.
+  setMissThumbHand(hand: ReplayThumbHand) {
+    const normalized = normalizeReplayMissThumbHand(hand);
+    if (this.missThumbHand === normalized) return;
+    this.missThumbHand = normalized;
+    this.recomputeHandMisses();
+    this.updateHudSnapshotIfNeeded(true);
+    if (!this._isPlaying) this.render();
+  }
+
+  private recomputeHandMisses() {
+    this.leftHandMisses = 0;
+    this.rightHandMisses = 0;
+    for (let i = 0; i < this.statsScanIndex; i++) {
+      const event = this.judgmentEvents[i];
+      if (event.judgment == null || event.judgment <= 5) continue;
+      const hand = this.getHandForColumn(event.column);
+      if (hand === "left") this.leftHandMisses++;
+      if (hand === "right") this.rightHandMisses++;
+    }
   }
 
   private getUr(): number {

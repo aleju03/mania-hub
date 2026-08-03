@@ -46,11 +46,14 @@ describe("ManiaReplayRenderer initialization", () => {
     expect(source).toContain("collapsed.unshift({ time: 0, multiplier: initialMultiplier });");
   });
 
-  it("counts the odd-key middle column as the right hand", () => {
+  it("counts the odd-key middle column toward the hand playing it with a thumb", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
-    expect(source).toContain("const leftCount = Math.floor(this.keyCount / 2);");
-    expect(source).toContain("const rightStart = leftCount;");
+    expect(source).toContain("const leftCount = this.keyCount % 2 === 1 && this.missThumbHand === \"left\"");
+    expect(source).toContain("? Math.ceil(this.keyCount / 2)");
+    expect(source).toContain(": Math.floor(this.keyCount / 2);");
+    // Switching hands mid-run re-tallies what has already been scanned.
+    expect(source).toContain("this.recomputeHandMisses();");
   });
 
   it("renders replay input notes through the active note skin while overlay-only input is enabled", () => {

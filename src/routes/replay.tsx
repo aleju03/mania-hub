@@ -1,7 +1,7 @@
 import { createFileRoute, useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
 import { useState, useRef, useEffect, useCallback, useMemo, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronLeft, ChevronsRight, LoaderCircle, Maximize2, Menu, Minimize2, Pause, Play, Plus, Repeat2, Send, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronsRight, LoaderCircle, Maximize2, Menu, Minimize2, Pause, Play, Plus, Repeat2, Send, X } from "lucide-react";
 import { getReplayParsed, getBeatmapFile, getCommunityBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores, lookupBeatmapByChecksum, submitCommunityBeatmap } from "../lib/osu";
 import { searchPlayers } from "../lib/player-search";
 import { calculateManiaStarRating } from "../lib/mania-star-rating";
@@ -42,13 +42,17 @@ import { ReplayHitsoundPlayer } from "../lib/replay-hitsounds";
 import { REPLAY_SKIN_SOUNDS_CHANGE_EVENT, readReplaySkinSounds } from "../lib/replay-skin-sounds";
 import { DEFAULT_REPLAY_SCROLL_SPEED, REPLAY_SCROLL_SPEED_CHANGE_EVENT, normalizeReplayScrollSpeed, readReplayScrollSpeed, writeReplayScrollSpeed } from "../lib/replay-scroll-speed";
 import {
+  REPLAY_MISS_THUMB_HAND_CHANGE_EVENT,
   REPLAY_OVERLAY_IDS,
   REPLAY_OVERLAY_LABELS,
   REPLAY_OVERLAY_SETTINGS_CHANGE_EVENT,
   normalizeReplayOverlaySettings,
+  readReplayMissThumbHand,
   readReplayOverlaySettings,
+  writeReplayMissThumbHand,
   writeReplayOverlaySettings,
 } from "../lib/replay-overlays";
+import type { ReplayThumbHand } from "../lib/replay-overlays";
 import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
 import { extractReplayScoreIdFromFilename, parseUploadedReplayBuffer, type UploadedReplayParseResult } from "../lib/replay-upload";
 import { matchLocalBeatmapFile } from "../lib/replay-local-beatmap";
@@ -231,6 +235,7 @@ type ReplayVideoExportRequest = ReplayVideoExportOptions & {
   inputOverlayKeyHistory?: boolean;
   skinSettings?: ReplaySkinSettings;
   overlaySettings?: ReplayOverlaySettings;
+  missThumbHand?: ReplayThumbHand;
 };
 
 type ReplayUploadResponse = {
@@ -2075,6 +2080,7 @@ function ReplayViewer({
   const [inputOverlayColor, setInputOverlayColor] = useState(readReplayInputColor);
   const [skinSettings, setSkinSettings] = useState(readReplaySkinSettings);
   const [overlaySettings, setOverlaySettings] = useState(readReplayOverlaySettings);
+  const [missThumbHand, setMissThumbHand] = useState<ReplayThumbHand>(readReplayMissThumbHand);
   const [skinSettingsOpen, setSkinSettingsOpen] = useState(false);
   // The replay player's own published skin, pulled from the community
   // catalog, and whether it is the one on the stage right now. It only ever
@@ -2121,6 +2127,7 @@ function ReplayViewer({
   const blackPlayfieldRef = useRef(false);
   const skinSettingsRef = useRef<ReplaySkinSettings>(skinSettings);
   const overlaySettingsRef = useRef<ReplayOverlaySettings>(overlaySettings);
+  const missThumbHandRef = useRef<ReplayThumbHand>(missThumbHand);
   // Mirrors for the hitsound loader, which lives in a mount-once effect.
   const ownerSkinRef = useRef<CachedOwnerReplaySkin | null>(null);
   const ownerSkinAppliedRef = useRef(false);
@@ -2319,6 +2326,13 @@ function ReplayViewer({
     writeReplayOverlaySettings(normalized);
   }, []);
 
+  const applyMissThumbHand = useCallback((hand: ReplayThumbHand) => {
+    missThumbHandRef.current = hand;
+    setMissThumbHand(hand);
+    rendererRef.current?.setMissThumbHand?.(hand);
+    writeReplayMissThumbHand(hand);
+  }, []);
+
   // Watch with the player's skin: if the replay's player published one on the
   // skins page (and the viewer has not opted out in settings), fetch the
   // pointer, pull the .osk from the catalog and rebuild their settings in
@@ -2431,6 +2445,9 @@ function ReplayViewer({
   const hiddenOverlayIds = overlayMenu && !overlayMenu.targetId
     ? REPLAY_OVERLAY_IDS.filter((id) => !overlaySettings[id]?.enabled)
     : [];
+  // Only odd keymodes have a lane a thumb covers, so only they can move it
+  // between the two miss counters.
+  const thumbLaneAvailable = replay.keyCount % 2 === 1;
 
   useEffect(() => {
     const refreshSharedReplaySettings = () => {
@@ -2453,17 +2470,20 @@ function ReplayViewer({
         setSkinSettings(readReplaySkinSettings());
       }
       setOverlaySettings(readReplayOverlaySettings());
+      setMissThumbHand(readReplayMissThumbHand());
     };
     window.addEventListener("storage", refreshSharedReplaySettings);
     window.addEventListener(REPLAY_SCROLL_SPEED_CHANGE_EVENT, refreshSharedReplaySettings);
     window.addEventListener(REPLAY_SKIN_SETTINGS_CHANGE_EVENT, refreshSharedReplaySettings);
     window.addEventListener(REPLAY_OVERLAY_SETTINGS_CHANGE_EVENT, refreshSharedReplaySettings);
+    window.addEventListener(REPLAY_MISS_THUMB_HAND_CHANGE_EVENT, refreshSharedReplaySettings);
     window.addEventListener("focus", refreshSharedReplaySettings);
     return () => {
       window.removeEventListener("storage", refreshSharedReplaySettings);
       window.removeEventListener(REPLAY_SCROLL_SPEED_CHANGE_EVENT, refreshSharedReplaySettings);
       window.removeEventListener(REPLAY_SKIN_SETTINGS_CHANGE_EVENT, refreshSharedReplaySettings);
       window.removeEventListener(REPLAY_OVERLAY_SETTINGS_CHANGE_EVENT, refreshSharedReplaySettings);
+      window.removeEventListener(REPLAY_MISS_THUMB_HAND_CHANGE_EVENT, refreshSharedReplaySettings);
       window.removeEventListener("focus", refreshSharedReplaySettings);
     };
   }, [applyScrollSpeed, replayStableScrollSpeed, hydrateAppliedCommunitySkin]);
@@ -3123,6 +3143,11 @@ function ReplayViewer({
     rendererRef.current?.setOverlaySettings(overlaySettings);
   }, [overlaySettings]);
 
+  useEffect(() => {
+    missThumbHandRef.current = missThumbHand;
+    rendererRef.current?.setMissThumbHand?.(missThumbHand);
+  }, [missThumbHand]);
+
   // Hitsound player: lives for the whole viewer session, independent of
   // renderer recreations. Sample sources load in the background.
   useEffect(() => {
@@ -3407,6 +3432,7 @@ function ReplayViewer({
             lifeBarFrames: replay.lifeBarFrames,
             skinSettings: skinSettingsRef.current,
             overlaySettings: overlaySettingsRef.current,
+            missThumbHand: missThumbHandRef.current,
             onOverlaySettingsChange: applyOverlaySettings,
             inputOverlayOnly: inputOverlayOnlyRef.current,
             inputOverlayColor: inputOverlayColorRef.current,
@@ -4020,6 +4046,7 @@ function ReplayViewer({
     const exportInputOverlayKeyHistory = options.inputOverlayKeyHistory ?? inputOverlayKeyHistory;
     const exportSkinSettings = options.skinSettings ?? activeSkinSettings;
     const exportOverlaySettings = options.overlaySettings ?? overlaySettings;
+    const exportMissThumbHand = options.missThumbHand ?? missThumbHand;
     let exportRenderer: ReplayRendererLike | null = null;
     let exportHost: HTMLDivElement | null = null;
     let jobId: string | null = null;
@@ -4059,6 +4086,7 @@ function ReplayViewer({
           inputOverlayKeyHistory: exportInputOverlayKeyHistory,
           skinSettings: exportSkinSettings,
           overlaySettings: exportOverlaySettings,
+          missThumbHand: exportMissThumbHand,
         });
         jobId = job.id;
         const uploaded = await waitForReplayVideoJob(job.id, (progress) => {
@@ -4127,6 +4155,7 @@ function ReplayViewer({
           lifeBarFrames: replay.lifeBarFrames,
           skinSettings: exportSkinSettings,
           overlaySettings: exportOverlaySettings,
+          missThumbHand: exportMissThumbHand,
           inputOverlayOnly: exportInputOverlayOnly,
           inputOverlayColor: exportInputOverlayColor,
           inputOverlayKeyHistory: exportInputOverlayKeyHistory,
@@ -4294,6 +4323,7 @@ function ReplayViewer({
     sourceIsLazer,
     modRate,
     overlaySettings,
+    missThumbHand,
     replay.header.playerName,
     replay.frames,
     replay.keyCount,
@@ -4557,14 +4587,39 @@ function ReplayViewer({
             onContextMenu={(event) => event.preventDefault()}
           >
             {overlayMenu.targetId ? (
-              <button
-                type="button"
-                onClick={() => setOverlayEnabledFromMenu(overlayMenu.targetId!, false)}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] font-semibold text-white/85 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
-              >
-                <X className="h-3.5 w-3.5 text-osu-red-light" aria-hidden="true" />
-                Remove {REPLAY_OVERLAY_LABELS[overlayMenu.targetId].toLowerCase()}
-              </button>
+              <>
+                {overlayMenu.targetId === "misses" && thumbLaneAvailable && (
+                  <>
+                    <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40">Middle lane thumb</div>
+                    {(["left", "right"] as const).map((hand) => (
+                      <button
+                        key={hand}
+                        type="button"
+                        onClick={() => {
+                          applyMissThumbHand(hand);
+                          setOverlayMenu(null);
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] font-semibold text-white/85 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+                      >
+                        <Check
+                          className={`h-3.5 w-3.5 text-osu-pink ${missThumbHand === hand ? "" : "invisible"}`}
+                          aria-hidden="true"
+                        />
+                        {hand === "left" ? "Left thumb" : "Right thumb"}
+                      </button>
+                    ))}
+                    <div className="my-1 h-px bg-white/10" />
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setOverlayEnabledFromMenu(overlayMenu.targetId!, false)}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] font-semibold text-white/85 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="h-3.5 w-3.5 text-osu-red-light" aria-hidden="true" />
+                  Remove {REPLAY_OVERLAY_LABELS[overlayMenu.targetId].toLowerCase()}
+                </button>
+              </>
             ) : (
               <>
                 <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40">Add overlay</div>

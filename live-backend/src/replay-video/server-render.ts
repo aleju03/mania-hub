@@ -22,6 +22,8 @@ export type ServerReplayRenderRequest = {
   inputOverlayKeyHistory?: boolean;
   skinSettings?: unknown;
   overlaySettings?: unknown;
+  // "left" | "right": which hand owns the middle lane in the L/R miss split.
+  missThumbHand?: unknown;
 };
 
 export type ServerReplayRenderResult = {

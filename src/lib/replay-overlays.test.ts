@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_REPLAY_OVERLAY_SETTINGS, normalizeReplayOverlaySettings } from "./replay-overlays";
+import { DEFAULT_REPLAY_MISS_THUMB_HAND, DEFAULT_REPLAY_OVERLAY_SETTINGS, normalizeReplayMissThumbHand, normalizeReplayOverlaySettings } from "./replay-overlays";
 
 describe("replay overlay settings", () => {
   it("uses the larger miss counter in the default layout", () => {
@@ -65,5 +65,17 @@ describe("replay overlay settings", () => {
     });
 
     expect(settings.misses.scale).toBe(1.2);
+  });
+});
+
+describe("miss counter thumb hand", () => {
+  it("assumes the right thumb until the viewer says otherwise", () => {
+    expect(DEFAULT_REPLAY_MISS_THUMB_HAND).toBe("right");
+    expect(normalizeReplayMissThumbHand(null)).toBe("right");
+    expect(normalizeReplayMissThumbHand("nonsense")).toBe("right");
+  });
+
+  it("keeps a stored left-thumb choice", () => {
+    expect(normalizeReplayMissThumbHand("left")).toBe("left");
   });
 });
