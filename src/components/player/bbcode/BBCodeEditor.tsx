@@ -1391,7 +1391,7 @@ export function BBCodeEditor({
     let value = stripUploadTokens(editMode === "visual" ? flushVisual() : sourceRef.current);
 
     // Upload every image that was pasted/dropped but deferred until now, and
-    // swap its blob: URL for the real catbox URL. Bail without copying if any
+    // swap its blob: URL for the real hosted URL. Bail without copying if any
     // upload fails, so a dead blob URL can never reach the clipboard.
     const blobUrls = Array.from(
       new Set(Array.from(value.matchAll(PENDING_IMG_PATTERN), (match) => match[1])),
@@ -1502,7 +1502,7 @@ export function BBCodeEditor({
   /**
    * Stages a pasted/dropped image locally as a blob: URL and drops it in as
    * [img]blob:...[/img]. Nothing is uploaded here - copyBBCode() uploads every
-   * staged image at once and swaps the blob URLs for real catbox URLs.
+   * staged image at once and swaps the blob URLs for real hosted URLs.
    */
   const stagePendingImage = useCallback((file: Blob) => {
     if (!isUploadableImage(file)) {
@@ -1760,7 +1760,7 @@ export function BBCodeEditor({
     }
   }, [editMode, insertVisualHtml, restoreVisualRange]);
 
-  // Context-menu paste: route images through catbox, drop text inline.
+  // Context-menu paste: route images through the upload endpoint, drop text inline.
   const pasteFromClipboard = useCallback(async () => {
     try {
       if (navigator.clipboard?.read) {
@@ -2741,7 +2741,7 @@ export function BBCodeEditor({
                 {uploadStatus.kind === "uploading" ? (
                   <>
                     <span className="h-3.5 w-3.5 rounded-full border-2 border-osu-pink/40 border-t-osu-pink animate-spin" />
-                    Uploading image to catbox.moe...
+                    Uploading image...
                   </>
                 ) : (
                   <>

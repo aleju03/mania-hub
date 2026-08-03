@@ -146,7 +146,7 @@ function isSafeHref(value: string): boolean {
 
 // [img] also accepts blob: URLs so the BBCode editor's not-yet-uploaded pasted
 // images round-trip through the parser. Those blob URLs are swapped for real
-// catbox URLs before anything is copied or saved, so they never reach output.
+// hosted URLs before anything is copied or saved, so they never reach output.
 // Rendering a stray blob URL is harmless (dead cross-origin -> broken image).
 function isImageSrc(value: string): boolean {
   const trimmed = value.trim();

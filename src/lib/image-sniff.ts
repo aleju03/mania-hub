@@ -1,7 +1,7 @@
-// Magic-byte image sniffing for the catbox upload/proxy route. Both handlers
+// Magic-byte image sniffing for the image upload/proxy route. Both handlers
 // verify real bytes instead of trusting a client- or upstream-supplied
-// Content-Type: uploads must be actual images before they are forwarded to
-// catbox, and proxied downloads are re-labelled from their bytes.
+// Content-Type: uploads must be actual images before they are stored, and
+// proxied downloads are re-labelled from their bytes.
 
 export type SniffedImageMime =
   | "image/png"
@@ -18,6 +18,20 @@ function hasBytes(buffer: Uint8Array, offset: number, bytes: number[]): boolean 
 
 function hasAscii(buffer: Uint8Array, offset: number, text: string): boolean {
   return hasBytes(buffer, offset, [...text].map((ch) => ch.charCodeAt(0)));
+}
+
+const EXTENSION_BY_MIME: Record<SniffedImageMime, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "image/bmp": "bmp",
+  "image/avif": "avif",
+};
+
+/** File extension for a sniffed type, so stored names match their real bytes. */
+export function imageMimeExtension(mime: SniffedImageMime): string {
+  return EXTENSION_BY_MIME[mime];
 }
 
 /** Identifies a supported image format from its leading bytes, or null. */

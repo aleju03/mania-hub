@@ -1,7 +1,7 @@
 import { Readable } from "node:stream";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createAuthCookieHeader } from "./auth-server";
-import { handleCatboxProxyGet, handleCatboxUploadPost } from "./catbox-upload-server";
+import { handleCatboxProxyGet, handleCatboxUploadPost, type UploadTestSeams } from "./catbox-upload-server";
 import type { PinnedTransportResponse } from "./safe-image-fetch";
 
 const ORIGIN = "https://mania-tracker.com";
@@ -45,10 +45,14 @@ function getRequest(target: string, { cookie, fetchSite = "same-origin" }: Reque
   });
 }
 
-function stubCatbox(): ReturnType<typeof vi.fn> {
-  const fetchMock = vi.fn(async () => new Response("https://files.catbox.moe/ok.png", { status: 200 }));
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
+type StoreSeam = NonNullable<UploadTestSeams["store"]>;
+
+/** Stands in for the R2 write, recording what the handler decided to store. */
+function stubStore(): ReturnType<typeof vi.fn<StoreSeam>> {
+  return vi.fn<StoreSeam>(async (_buffer, mime) => ({
+    url: `https://cdn.mania-tracker.com/bbcode/deadbeef.${mime.split("/")[1]}`,
+    key: `bbcode/deadbeef.${mime.split("/")[1]}`,
+  }));
 }
 
 function imageResponse(status: number, headers: Record<string, string>, body: Buffer = PNG_BYTES): PinnedTransportResponse {
@@ -68,10 +72,10 @@ afterEach(() => {
 
 describe("handleCatboxUploadPost", () => {
   it("requires a signed session", async () => {
-    const fetchMock = stubCatbox();
-    const response = await handleCatboxUploadPost(postRequest(PNG_BYTES, "image/png"));
+    const store = stubStore();
+    const response = await handleCatboxUploadPost(postRequest(PNG_BYTES, "image/png"), { store });
     expect(response.status).toBe(401);
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(store).not.toHaveBeenCalled();
   });
 
   it("rejects an unsigned tampered cookie", async () => {
@@ -105,87 +109,76 @@ describe("handleCatboxUploadPost", () => {
     expect((await handleCatboxUploadPost(requestWithOrigin())).status).toBe(403);
   });
 
-  it("uploads a valid image and names it from its sniffed bytes", async () => {
-    const fetchMock = stubCatbox();
-    const cookie = await authCookie(nextViewerId++);
+  it("stores a valid image, typed from its sniffed bytes, and returns its URL", async () => {
+    const store = stubStore();
+    const viewerId = nextViewerId++;
+    const cookie = await authCookie(viewerId);
     // Claimed webp, actually png: the sniffed type wins.
-    const response = await handleCatboxUploadPost(postRequest(PNG_BYTES, "image/webp", { cookie }));
+    const response = await handleCatboxUploadPost(postRequest(PNG_BYTES, "image/webp", { cookie }), { store });
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ url: "https://files.catbox.moe/ok.png" });
-    const form = fetchMock.mock.calls[0]?.[1]?.body as FormData;
-    const file = form.get("fileToUpload") as File;
-    expect(file.type).toBe("image/png");
-    expect(file.name).toBe("image.png");
+    expect(await response.json()).toEqual({ url: "https://cdn.mania-tracker.com/bbcode/deadbeef.png" });
+    const [buffer, mime, uploadedBy] = store.mock.calls[0] ?? [];
+    expect(buffer).toEqual(PNG_BYTES);
+    expect(mime).toBe("image/png");
+    // Stored alongside the object so a takedown can be traced to an account.
+    expect(uploadedBy).toBe(`user:${viewerId}`);
   });
 
-  it("rejects bodies that are not really images without contacting catbox", async () => {
-    const fetchMock = stubCatbox();
+  it("rejects bodies that are not really images without storing anything", async () => {
+    const store = stubStore();
     const cookie = await authCookie(nextViewerId++);
     const response = await handleCatboxUploadPost(
       postRequest(Buffer.from("<html>not an image</html>"), "image/png", { cookie }),
+      { store },
     );
     expect(response.status).toBe(415);
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(store).not.toHaveBeenCalled();
   });
 
   it("rejects oversized bodies", async () => {
-    const fetchMock = stubCatbox();
+    const store = stubStore();
     const cookie = await authCookie(nextViewerId++);
     const oversized = Buffer.concat([PNG_BYTES, Buffer.alloc(10 * 1024 * 1024)]);
-    const response = await handleCatboxUploadPost(postRequest(oversized, "image/png", { cookie }));
+    const response = await handleCatboxUploadPost(postRequest(oversized, "image/png", { cookie }), { store });
     expect(response.status).toBe(413);
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(store).not.toHaveBeenCalled();
   });
 
   // Cloudflare replaces 502 and 504 origin responses with its own error page,
-  // body included, so reporting an upstream refusal with either code costs the
+  // body included, so reporting a storage failure with either code costs the
   // user the only sentence that explains it. This is not hypothetical: catbox
   // paused uploads on 2026-08-03 and the editor showed a bare "Bad gateway".
-  it("reports a catbox refusal with a status the edge forwards, quoting its reason", async () => {
+  it("reports a storage failure with a status the edge forwards, quoting the reason", async () => {
     const cookie = await authCookie(nextViewerId++);
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("Invalid uploader", { status: 412 })));
-    const response = await handleCatboxUploadPost(postRequest(PNG_BYTES, "image/png", { cookie }));
+    const response = await handleCatboxUploadPost(postRequest(PNG_BYTES, "image/png", { cookie }), {
+      store: async () => {
+        throw new Error("NoSuchBucket: the specified bucket does not exist");
+      },
+    });
     expect(response.status).not.toBe(502);
     expect(response.status).not.toBe(504);
     expect(response.status).toBe(503);
-    expect((await response.json()).error).toContain("Invalid uploader");
+    expect((await response.json()).error).toContain("NoSuchBucket");
   });
 
-  it("treats an OK response that is not a URL as a refusal too", async () => {
+  it("keeps a sprawling storage error out of the message it shows", async () => {
     const cookie = await authCookie(nextViewerId++);
-    const paused = "Uploads paused until I can resolve storage issues. Sorry!";
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(paused, { status: 200 })));
-    const response = await handleCatboxUploadPost(postRequest(PNG_BYTES, "image/png", { cookie }));
-    expect(response.status).toBe(503);
-    expect((await response.json()).error).toContain(paused);
-  });
-
-  it("keeps an upstream error page out of the message it shows", async () => {
-    const cookie = await authCookie(nextViewerId++);
-    const html = `<html><body><h1>${"nginx gateway error ".repeat(40)}</h1></body></html>`;
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(html, { status: 502 })));
-    const response = await handleCatboxUploadPost(postRequest(PNG_BYTES, "image/png", { cookie }));
+    const response = await handleCatboxUploadPost(postRequest(PNG_BYTES, "image/png", { cookie }), {
+      store: async () => {
+        throw new Error(`<html><body>${"upstream connect error ".repeat(40)}</body></html>`);
+      },
+    });
     const { error } = await response.json();
     expect(error).not.toContain("<");
     expect(error.length).toBeLessThan(220);
   });
 
-  it("says so plainly when catbox cannot be reached at all", async () => {
-    const cookie = await authCookie(nextViewerId++);
-    vi.stubGlobal("fetch", vi.fn(async () => {
-      throw new Error("getaddrinfo ENOTFOUND catbox.moe");
-    }));
-    const response = await handleCatboxUploadPost(postRequest(PNG_BYTES, "image/png", { cookie }));
-    expect(response.status).toBe(503);
-    expect((await response.json()).error).toContain("ENOTFOUND");
-  });
-
   it("rate limits repeated uploads per viewer", async () => {
-    stubCatbox();
+    const store = stubStore();
     const cookie = await authCookie(nextViewerId++);
     const statuses: number[] = [];
     for (let i = 0; i < 13; i += 1) {
-      const response = await handleCatboxUploadPost(postRequest(PNG_BYTES, "image/png", { cookie }));
+      const response = await handleCatboxUploadPost(postRequest(PNG_BYTES, "image/png", { cookie }), { store });
       statuses.push(response.status);
     }
     expect(statuses.slice(0, 12)).toEqual(Array(12).fill(200));

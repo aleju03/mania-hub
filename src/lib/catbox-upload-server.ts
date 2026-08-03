@@ -1,10 +1,14 @@
 // Server handlers for /api/catbox-upload, kept out of the route file so they
 // can be tested with plain Request objects (no TanStack server context).
 //
-// The BBCode editor pastes/drops images here; the browser can't POST to
-// catbox.moe directly because catbox serves no CORS headers. The GET side
-// re-fetches a remote image through our origin so the crop/resize canvas
-// stays untainted (catbox images aren't CORS-enabled either, so a
+// The BBCode editor pastes/drops images here. Uploads used to be forwarded to
+// catbox.moe; they now go to our own R2 bucket (see public-image-store.ts),
+// because catbox paused uploads over storage costs on 2026-08-03 and has been
+// deleting idle anonymous files - not a dependency to hang people's osu!
+// profiles on. The route path still says catbox for now, and the GET side
+// still legitimately serves catbox: it re-fetches a remote image through our
+// origin so the crop/resize canvas stays untainted, and the images already
+// pasted into profiles are catbox-hosted (they send no CORS headers, so a
 // cross-origin <img> would taint toBlob()).
 //
 // Hardening: both handlers require the signed osu! session (or the explicit
@@ -18,6 +22,7 @@ import { isLocalDevAccessGranted } from "./auth-local-dev";
 import { readViewerFromRequest } from "./auth-server";
 import { sniffImageMime } from "./image-sniff";
 import { isSameOriginRequest } from "./origin";
+import { storePublicImage } from "./public-image-store";
 import { createFixedWindowLimiter, readCappedBody } from "./upload-guards";
 import {
   fetchValidatedImage,
@@ -27,18 +32,16 @@ import {
   type PinnedTransport,
 } from "./safe-image-fetch";
 
-const CATBOX_API = "https://catbox.moe/user/api.php";
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // catbox allows 200MB; profile art stays small.
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // Profile art stays small; the cap is for abuse, not fidelity.
 const MAX_PROXY_BYTES = 20 * 1024 * 1024;
 const PROXY_FETCH_TIMEOUT_MS = 15_000;
 
 // Cloudflare swaps 502 and 504 origin responses for its own "Bad gateway" page
 // and discards our body along with them; every other status, 503 included,
 // reaches the browser untouched (probed against the live edge 2026-08-03).
-// Upstream failures therefore answer 503, so catbox's own explanation - it
-// replies "Invalid uploader" or "Uploads paused until I can resolve storage
-// issues" in plain text - still shows up in the editor rather than an
-// unexplained gateway error the site looks responsible for.
+// Upstream failures therefore answer 503, so the reason survives the trip and
+// the editor can show something better than an unexplained gateway error the
+// site looks responsible for.
 const UPSTREAM_FAILURE_STATUS = 503;
 
 /** Maps the two statuses the edge would swallow onto one it forwards. */
@@ -46,24 +49,15 @@ function edgeVisibleStatus(status: number): number {
   return status === 502 || status === 504 ? UPSTREAM_FAILURE_STATUS : status;
 }
 
-// catbox answers in plain text, but an error page or proxy in front of it can
-// answer in anything, so quote one readable line at most: enough to carry the
-// real reason, not enough to spill a whole HTML document into the UI.
-function describeUpstream(text: string): string {
-  const line = text.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+// Storage errors carry S3 codes and endpoints; quote one short readable line so
+// the editor can say something specific without pasting internals into the UI.
+function describeFailure(message: string): string {
+  const line = message.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
   return line.length > 160 ? `${line.slice(0, 160)}…` : line;
 }
 
-function upstreamRefused(text: string, fallback: string): Response {
-  const detail = describeUpstream(text);
-  return Response.json(
-    { error: detail ? `catbox.moe refused the upload: ${detail}` : fallback },
-    { status: UPSTREAM_FAILURE_STATUS },
-  );
-}
-
 // Per-instance fixed windows keyed by viewer id: enough to stop one account
-// from hammering catbox or the proxy. Per-instance only — the edge/WAF rule
+// from filling the bucket or hammering the proxy. Per-instance only — the edge/WAF rule
 // for /api/catbox-upload (tracked in findings/README.md Phase 2) is what
 // bounds the multi-instance total.
 const RATE_WINDOW_MS = 60_000;
@@ -78,15 +72,6 @@ const ALLOWED_IMAGE_MIME = new Set([
   "image/bmp",
   "image/avif",
 ]);
-
-const MIME_EXTENSION: Record<string, string> = {
-  "image/png": "png",
-  "image/jpeg": "jpg",
-  "image/gif": "gif",
-  "image/webp": "webp",
-  "image/bmp": "bmp",
-  "image/avif": "avif",
-};
 
 function normalizeImageMime(value: string | null): string | null {
   const mime = value?.split(";")[0]?.trim().toLowerCase();
@@ -117,8 +102,15 @@ function isRateLimited(key: string, limit: number): boolean {
   return rateLimiter.isRateLimited(key, limit);
 }
 
-// Upload raw image bytes to catbox and return the hosted URL.
-export async function handleCatboxUploadPost(request: Request): Promise<Response> {
+export interface UploadTestSeams {
+  store?: typeof storePublicImage;
+}
+
+// Store raw image bytes and return their public URL.
+export async function handleCatboxUploadPost(
+  request: Request,
+  { store = storePublicImage }: UploadTestSeams = {},
+): Promise<Response> {
   if (!isSameOriginRequest(request)) {
     return Response.json({ error: "Forbidden." }, { status: 403 });
   }
@@ -140,38 +132,23 @@ export async function handleCatboxUploadPost(request: Request): Promise<Response
   if (buffer.length === 0) {
     return Response.json({ error: "Image is empty." }, { status: 400 });
   }
-  // The claimed Content-Type only gates the request; what actually goes to
-  // catbox is named and typed from the sniffed bytes.
+  // The claimed Content-Type only gates the request; what is actually stored is
+  // named and typed from the sniffed bytes.
   const mime = sniffImageMime(buffer);
   if (!mime) {
     return Response.json({ error: "File does not look like a supported image." }, { status: 415 });
   }
 
-  const ext = MIME_EXTENSION[mime] ?? "png";
-  const form = new FormData();
-  form.append("reqtype", "fileupload");
-  const userhash = process.env.CATBOX_USERHASH?.trim();
-  if (userhash) form.append("userhash", userhash);
-  form.append("fileToUpload", new Blob([buffer as unknown as BlobPart], { type: mime }), `image.${ext}`);
-
-  let text: string;
   try {
-    const res = await fetch(CATBOX_API, { method: "POST", body: form });
-    text = (await res.text()).trim();
-    if (!res.ok) {
-      return upstreamRefused(text, "catbox.moe refused the upload.");
-    }
+    const { url } = await store(buffer, mime, rateKey);
+    return Response.json({ url });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "catbox upload failed.";
-    return Response.json({ error: `Could not reach catbox.moe: ${message}` }, { status: UPSTREAM_FAILURE_STATUS });
+    const message = error instanceof Error ? describeFailure(error.message) : "";
+    return Response.json(
+      { error: message ? `Could not save the image: ${message}` : "Could not save the image." },
+      { status: UPSTREAM_FAILURE_STATUS },
+    );
   }
-
-  // A 200 is no guarantee of a URL: catbox reports several refusals as plain
-  // text with an OK status.
-  if (!/^https?:\/\/(files\.)?catbox\.moe\/\S+$/i.test(text)) {
-    return upstreamRefused(text, "catbox.moe returned no URL.");
-  }
-  return Response.json({ url: text });
 }
 
 export interface CatboxProxyTestSeams {
