@@ -2,8 +2,9 @@ import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ImageOff, Loader2, LogIn, Recycle, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { getManiaCardTier, MANIA_TIER_STYLES, type ManiaCardTier, type ManiaSkills } from "#/lib/maniacard";
+import { MANIA_TIER_STYLES, type ManiaCardTier, type ManiaSkills } from "#/lib/maniacard";
 import {
+  collectedCardTier,
   duplicateShardTotal,
   duplicateShardValue,
   ownedCards,
@@ -105,6 +106,7 @@ async function renderCollectionThumbnail(card: CollectedCard): Promise<{ key: st
   const data = buildManiaCardRenderDataFromSkills({
     user: cardUserForRender(card),
     skills: card.skills,
+    tierOverride: collectedCardTier(card),
   });
   const key = cardThumbnailKeyForData(data, COLLECTION_CARD_THUMB_WIDTH);
   const blob = await throttleRender(() => renderCardThumbnailBlob(data, COLLECTION_CARD_THUMB_WIDTH));
@@ -116,11 +118,7 @@ function pageSignature(cards: CollectedCard[]) {
 }
 
 function resolveCollectionCardTier(card?: CollectedCard): ManiaCardTier {
-  if (card?.tier) return card.tier;
-  if (card?.skills && Number.isFinite(card.skills.cardPower)) {
-    return getManiaCardTier(card.skills.cardPower);
-  }
-  return "common";
+  return card ? collectedCardTier(card) : "common";
 }
 
 function placeholderTiersForPage({
@@ -327,6 +325,10 @@ async function backfillCardMint(card: CollectedCard, onApplyMint: (userId: numbe
         statistics: { global_rank: card.globalRank, pp: card.pp },
       },
       scores,
+      // A card that already knows what it was minted at keeps that tier: the
+      // backfill is here to recover a missing skills snapshot, not to re-tier
+      // a card because its player has since joined the honorary roster.
+      tierOverride: card.tier ?? undefined,
     });
     if (data.status !== "ready") return;
     onApplyMint(card.userId, { skills: data.skills, tier: data.tier, tierLabel: data.tierStyle.label });

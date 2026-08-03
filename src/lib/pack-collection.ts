@@ -1,4 +1,4 @@
-import type { ManiaCardTier, ManiaSkills } from "./maniacard";
+import { getManiaCardTier, type ManiaCardTier, type ManiaSkills } from "./maniacard";
 
 // Pack economy: charges regenerate over time (one every 30 seconds, capped
 // at 5), duplicate cards recycle into shards, and shards buy the paid pack
@@ -90,6 +90,25 @@ export function tierRank(tier: ManiaCardTier | null): number {
 
 export function shardValueForTier(tier: ManiaCardTier | null): number {
   return tier ? TIER_SHARD_VALUES[tier] : 1;
+}
+
+/* The tier a collected card shows, which is the tier it was minted at rather
+   than the tier its player carries today. The two diverge for the honorary
+   roster: several of them are live ranked players, so a card pulled out of the
+   ranked pool before they joined the roster is a World Class card of that
+   player and stays one, art and shard value included. Only a card that was
+   actually dealt as a GOAT is a GOAT.
+
+   Everything that draws a collected card resolves its tier through here, so
+   the badge, the thumbnail, the inspect view and the recycle value can never
+   disagree about what a card is. */
+export function collectedCardTier(card: {
+  tier?: ManiaCardTier | null;
+  skills?: ManiaSkills | null;
+}): ManiaCardTier {
+  if (card.tier) return card.tier;
+  if (card.skills && Number.isFinite(card.skills.cardPower)) return getManiaCardTier(card.skills.cardPower);
+  return "common";
 }
 
 export function createEmptyWallet(now: number): PackWallet {

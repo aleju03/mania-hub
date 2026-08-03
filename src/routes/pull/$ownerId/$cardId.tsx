@@ -105,6 +105,7 @@ function PulledCardArt({ shared }: { shared: LiveSharedPackCard }) {
         statistics: { global_rank: shared.card.globalRank, pp: shared.card.pp },
       },
       skills,
+      tierOverride: tier,
     });
     let cancelled = false;
     // The 2D front renders first so something card-shaped is visible while

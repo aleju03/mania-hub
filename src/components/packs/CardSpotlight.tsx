@@ -5,8 +5,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "#/lib/auth-context";
 import { fetchLivePackCardStats, isLiveBackendConfigured } from "#/lib/live-backend";
-import { getManiaCardTier, MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
-import type { CollectedCard } from "#/lib/pack-collection";
+import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
+import { collectedCardTier, type CollectedCard } from "#/lib/pack-collection";
 import { ManiaCardRenderer } from "../player/maniacard3d/ManiaCardRenderer";
 import { buildManiaCardRenderDataFromSkills } from "../player/maniacard3d/renderData";
 import { CountryFlag } from "../ui/CountryFlag";
@@ -43,11 +43,7 @@ function prefersReducedMotion() {
 }
 
 function spotlightCardTier(card: CollectedCard): ManiaCardTier {
-  if (card.tier) return card.tier;
-  if (card.skills && Number.isFinite(card.skills.cardPower)) {
-    return getManiaCardTier(card.skills.cardPower);
-  }
-  return "common";
+  return collectedCardTier(card);
 }
 
 /* The vivid rgb triplet of a tier's palette (from its badge halo), same
@@ -168,6 +164,7 @@ export function CardSpotlight({
         statistics: { global_rank: card.globalRank, pp: card.pp },
       },
       skills: card.skills,
+      tierOverride: collectedCardTier(card),
     });
     const fallbackTo2d = () => {
       rendererRef.current?.dispose();

@@ -1,4 +1,4 @@
-import type { CollectedCard } from "#/lib/pack-collection";
+import { collectedCardTier, type CollectedCard } from "#/lib/pack-collection";
 import {
   fetchR2PackCardThumbnails,
   fetchR2PackCardThumbnail,
@@ -166,6 +166,7 @@ function buildCollectionCardKey(
         statistics: { global_rank: card.globalRank, pp: card.pp },
       },
       skills,
+      tierOverride: collectedCardTier(card),
     }),
     width,
   );

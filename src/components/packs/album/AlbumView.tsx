@@ -2,8 +2,8 @@ import { Link } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, Globe, Info } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { getManiaCardTier, type ManiaCardTier } from "#/lib/maniacard";
-import { ownedCards, type CollectedCard, type PackWallet } from "#/lib/pack-collection";
+import type { ManiaCardTier } from "#/lib/maniacard";
+import { collectedCardTier, ownedCards, type CollectedCard, type PackWallet } from "#/lib/pack-collection";
 import {
   fetchServerPackCollectionOwnedIds,
   fetchServerPackCollectionPage,
@@ -170,9 +170,7 @@ function tierSkeletonThumb(tier: ManiaCardTier): string | null {
 }
 
 function cardTier(card: CollectedCard): ManiaCardTier {
-  if (card.tier) return card.tier;
-  if (card.skills && Number.isFinite(card.skills.cardPower)) return getManiaCardTier(card.skills.cardPower);
-  return "common";
+  return collectedCardTier(card);
 }
 
 /* Same two-at-a-time cap the collection grid uses for on-device card renders. */
@@ -200,6 +198,7 @@ async function renderAlbumThumbnail(card: CollectedCard): Promise<string | null>
       statistics: { global_rank: card.globalRank, pp: card.pp },
     },
     skills: card.skills,
+    tierOverride: collectedCardTier(card),
   });
   const key = cardThumbnailKeyForData(data, COLLECTION_CARD_THUMB_WIDTH);
   const blob = await throttleRender(() => renderCardThumbnailBlob(data, COLLECTION_CARD_THUMB_WIDTH));

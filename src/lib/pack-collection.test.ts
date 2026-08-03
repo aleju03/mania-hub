@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyCardMint,
+  collectedCardTier,
   createEmptyWallet,
   duplicateShardTotal,
   MAX_PACK_CHARGES,
@@ -294,5 +295,32 @@ describe("wallet merge and sanitize", () => {
     expect(wallet!.lastRefillAt).toBe(T0);
     expect(wallet!.openedPacks).toBe(0);
     expect(sanitizeWallet("junk", T0)).toBeNull();
+  });
+});
+
+/* Several honorary players are live ranked players too, so their card was
+   pullable from the ranked pool before they joined the roster. Those copies
+   are World Class cards and must keep reading as World Class everywhere -
+   badge, thumbnail, inspect view and the 40-shard recycle value - instead of
+   inheriting the GOAT their player carries today. */
+describe("collected card tier", () => {
+  const BOJII = 10083439; // on the honorary roster, and #4 in the ranked pool
+
+  it("keeps the tier a card was minted at, even for a player who is now honorary", () => {
+    expect(collectedCardTier({ tier: "worldClass", skills: null })).toBe("worldClass");
+  });
+
+  it("does not promote a stored tier to the player's honorary tier", () => {
+    const card = { userId: BOJII, tier: "worldClass" as const, skills: null };
+    expect(collectedCardTier(card)).not.toBe("goat");
+  });
+
+  it("still reads a genuine GOAT pull as GOAT", () => {
+    expect(collectedCardTier({ tier: "goat", skills: null })).toBe("goat");
+  });
+
+  it("falls back to card power when the mint left no tier behind", () => {
+    expect(collectedCardTier({ tier: null, skills: { cardPower: 720 } as never })).toBe("worldClass");
+    expect(collectedCardTier({ tier: null, skills: null })).toBe("common");
   });
 });
