@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   buildManiaCardRenderData,
+  buildManiaCardRenderDataFromSkills,
   getManiaCardRenderDataSignature,
   parseCssRgba,
   parseGradientStops,
@@ -81,6 +82,19 @@ describe("buildManiaCardRenderData", () => {
       message: "Need at least one ranked play with full beatmap data to mint a card.",
     });
   });
+
+  test("rebuilds the same card from precomputed full-window skills without raw scores", () => {
+    const computed = buildManiaCardRenderData({ user, scores: [score(6.2, 420)] });
+    if (computed.status !== "ready") throw new Error("expected ready data");
+
+    const rebuilt = buildManiaCardRenderDataFromSkills({
+      user,
+      skills: computed.skills,
+      scores: [],
+    });
+
+    expect(getManiaCardRenderDataSignature(rebuilt)).toBe(getManiaCardRenderDataSignature(computed));
+  });
 });
 
 describe("getManiaCardRenderDataSignature", () => {
@@ -107,6 +121,39 @@ describe("getManiaCardRenderDataSignature", () => {
     const stronger = buildManiaCardRenderData({ user, scores: [score(6.8, 560)] });
 
     expect(getManiaCardRenderDataSignature(baseline)).not.toBe(getManiaCardRenderDataSignature(stronger));
+  });
+});
+
+describe("honorary card art", () => {
+  function cardFor(id: number, username: string) {
+    const data = buildManiaCardRenderData({
+      user: { ...user, id, username } as OsuUser,
+      scores: [score(6.2, 420)],
+    });
+    if (data.status !== "ready") throw new Error("expected ready data");
+    return data;
+  }
+
+  test("prints the name the community knows the player by", () => {
+    // The osu! account is still [Crz]Player, and the profile link still uses
+    // that: only the card art carries the old name.
+    expect(cardFor(1089335, "[Crz]Player").user.username).toBe("Attang");
+  });
+
+  test("keeps the personalised badge on its own card only", () => {
+    expect(cardFor(2288363, "SillyFangirl").tierStyle.label).toBe("Manip GOAT");
+    expect(cardFor(10083439, "bojii").tierStyle.label).toBe("GOAT");
+    expect(cardFor(123, "PlayerWithAVeryLongName").user.username).toBe("PlayerWithAVeryLongName");
+  });
+
+  test("drops the override when something else forces the tier", () => {
+    const data = buildManiaCardRenderData({
+      user: { ...user, id: 2288363, username: "SillyFangirl" } as OsuUser,
+      scores: [score(6.2, 420)],
+      tierOverride: "mythic",
+    });
+    if (data.status !== "ready") throw new Error("expected ready data");
+    expect(data.tierStyle.label).toBe("Mythic");
   });
 });
 

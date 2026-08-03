@@ -1,4 +1,5 @@
 import { avatarImageSrc } from "#/components/ui/Avatar";
+import { honoraryPlayerById } from "#/lib/honorary-players";
 import {
   computeManiaSkills,
   getHonoraryTier,
@@ -50,14 +51,22 @@ export function buildManiaCardRenderDataFromSkills({
 }): ManiaCardReadyData {
   const honoraryTier = getHonoraryTier(user.id);
   const tier = tierOverride ?? honoraryTier ?? getManiaCardTier(skills.cardPower);
-  const tierStyle = MANIA_TIER_STYLES[tier];
+  const baseStyle = MANIA_TIER_STYLES[tier];
+  // Card-art overrides for the honorary roster: a name the community knows the
+  // player by, and a personalised badge. They apply to the card only - the
+  // profile link keeps the real username - and never to a forced tier.
+  const honorary = tier === honoraryTier ? honoraryPlayerById(user.id) : null;
+  const tierStyle = honorary?.cardTierLabel
+    ? { ...baseStyle, label: honorary.cardTierLabel }
+    : baseStyle;
+  const cardUser = honorary?.cardName ? { ...user, username: honorary.cardName } : user;
   // An honorary tier sits off the cardPower ladder, so there is nothing to
   // progress toward and the ladder strip stays hidden.
   const nextTier = tierOverride || honoraryTier ? null : getNextManiaCardTier(skills.cardPower);
 
   return {
     status: "ready",
-    user,
+    user: cardUser,
     // Card textures go onto a canvas, so they need the CORS-bearing proxy
     // rather than a.ppy.sh directly. Passing the stored avatar URL through
     // carries osu!'s version token into the proxy URL, which makes each one

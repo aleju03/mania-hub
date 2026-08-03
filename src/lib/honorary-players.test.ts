@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { HONORARY_PACK_POOL, HONORARY_PLAYERS, honoraryPlayerById, searchHonoraryPlayers } from "./honorary-players";
 import { applyHonoraryHit, PACK_TYPES, packTypeById, type PackPlayer } from "./packs";
@@ -61,9 +63,19 @@ describe("honorary roster", () => {
     expect(HONORARY_PACK_POOL.length).toBeGreaterThan(0);
   });
 
-  it("serves archived players a same-origin avatar only when osu! lost the image", () => {
+  it("serves a same-origin avatar only when osu! lost the image", () => {
     expect(honoraryPlayerById(259972)?.avatarUrl).toBe("/images/archived-players/jakads.jpg");
+    // Live account, deleted avatar: the profile still comes from the API.
+    expect(honoraryPlayerById(1089335)?.avatarUrl).toBe("/images/archived-players/attang.png");
     expect(honoraryPlayerById(86188)?.avatarUrl).toContain("a.ppy.sh");
+  });
+
+  it("checks in every same-origin avatar it points at", () => {
+    const local = HONORARY_PLAYERS.filter((player) => player.avatarUrl.startsWith("/"));
+    expect(local.length).toBeGreaterThan(0);
+    for (const player of local) {
+      expect(existsSync(fileURLToPath(new URL(`../../public${player.avatarUrl}`, import.meta.url)))).toBe(true);
+    }
   });
 });
 

@@ -1,13 +1,13 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
-import { recyclePackCollectionCards, savePackWallet } from "../src/features/pack-wallets.js";
+import { HONORARY_USER_IDS, recyclePackCollectionCards, savePackWallet } from "../src/features/pack-wallets.js";
 
 // Collection cards are client-supplied and their tier is otherwise trusted.
 // GOAT recycles for 1000 shards, so a forged `tier: "goat"` would mint shards
-// on demand. Only the ten honorary players may hold it.
+// on demand. Only the honorary roster may hold it.
 
 let dir = "";
 let db: Db;
@@ -55,6 +55,15 @@ async function storedTier(userId: number): Promise<string | null> {
 }
 
 describe("GOAT tier claims", () => {
+  it("mirrors the frontend roster exactly", async () => {
+    // The list here is a copy, so a player added to the roster but not to it
+    // would have their genuine GOAT card stripped on sync.
+    const source = await readFile(new URL("../../src/lib/honorary-players.ts", import.meta.url), "utf8");
+    const ids = [...source.matchAll(/^\s+id: (\d+),$/gm)].map((match) => Number(match[1]));
+    expect(ids.length).toBeGreaterThan(0);
+    expect([...HONORARY_USER_IDS].sort()).toEqual(ids.sort());
+  });
+
   it("strips a forged GOAT tier from a player who is not on the roster", async () => {
     await savePackWallet(db, OWNER, JSON.stringify({ cards: { [ORDINARY_ID]: card(ORDINARY_ID, "goat") }, shards: 0 }), 0);
     expect(await storedTier(ORDINARY_ID)).toBeNull();

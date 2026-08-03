@@ -15,10 +15,11 @@ interface DustMote {
   drift: number;
 }
 
-/* The GOAT pull. Ten players carry this tier and the best pack drops it 3% of
-   the time, so the reveal gets its own celebration rather than a louder copy of
-   TierBurst: the screen dims, three gold shockwaves go out, the card's own
-   laurel blooms behind it, and gold dust hangs in the air afterwards. It runs
+/* The GOAT pull. Only the honorary roster carries this tier and the best pack
+   drops it 3% of the time, so the reveal gets its own celebration rather than a
+   louder copy of TierBurst: the screen dims, three gold shockwaves go out, the
+   card's own laurel blooms behind it, and gold dust hangs in the air
+   afterwards. It runs
    roughly 2.5s against TierBurst's 0.85s, which is the point - a World Class
    pull should not feel like this.
 

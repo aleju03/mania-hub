@@ -135,15 +135,16 @@ function liveUserFieldSql(field: "username" | "avatar_url" | "country_code"): st
 const displayUsernameSql = `coalesce(nullif(${liveUserFieldSql("username")}, ''), username)`;
 
 /* The honorary roster, mirrored from src/lib/honorary-players.ts. Only these
-   ten players can hold the GOAT tier.
+   players can hold the GOAT tier.
 
    Collection cards arrive from the client and their tier is otherwise taken on
    trust, which was harmless when the rarest card recycled for 40 shards. GOAT
    recycles for 1000, so an unchecked `tier: "goat"` on any player is a shard
    printer: sync a forged card, recycle it, repeat. Membership is a fixed list
    of ids, so the check is exact and needs no tier index. */
-const HONORARY_USER_IDS = new Set([
+export const HONORARY_USER_IDS = new Set([
   259972, 1190879, 140148, 8474029, 86188, 5610085, 3360737, 2531335, 2520707, 4140104,
+  19970192, 10072733, 903155, 9452257, 22302283, 2288363, 10083439, 1089335,
 ]);
 
 function claimedTier(raw: { tier?: unknown }, userId: number): string | null {

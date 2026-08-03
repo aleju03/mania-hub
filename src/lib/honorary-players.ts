@@ -1,16 +1,17 @@
 /* The honorary roster: osu!mania's historical greats.
 
-   These ten carry the GOAT tier by user id (see maniacard.ts) rather than by
-   card power, and they are the only source of that tier. Most of them stopped
-   playing long before the current rating ladder existed, and the ranked pool
-   can't represent them:
+   These eighteen carry the GOAT tier by user id (see maniacard.ts) rather than
+   by card power, and they are the only source of that tier. Many of them
+   stopped playing long before the current rating ladder existed, and the
+   ranked pool can't represent them:
 
    - two accounts are deleted outright, so the osu! API 404s and their profiles
      are served from checked-in Wayback reconstructions
      (live-backend/seeds/archived-players);
-   - five more still exist but were wiped to 0pp and are unranked, so they are
+   - seven more still exist but were wiped to 0pp and are unranked, so they are
      absent from the global rankings snapshot the pack pool draws from;
-   - only three are still ranked, and a rank-ordered pool would bury them.
+   - the rest are still ranked, but a rank-ordered pool would bury the ones
+     whose peak is long behind them.
 
    So packs reach them through a dedicated honorary slot instead of the ranked
    pool. Rank/pp here are archival - the peak each player reached, not a live
@@ -35,6 +36,12 @@ export interface HonoraryPlayer {
      pull with no snapshot behind it is a broken reveal. Flip to true once the
      seed lands. */
   cardReady: boolean;
+  /* Name printed on the card, for players the community knows by something
+     other than their current osu! username. Only the card art changes:
+     `username` still keys the profile link, so it has to stay resolvable. */
+  cardName?: string;
+  /* Badge text on the card, replacing the plain GOAT label. */
+  cardTierLabel?: string;
 }
 
 export const HONORARY_PLAYERS: readonly HonoraryPlayer[] = [
@@ -141,6 +148,90 @@ export const HONORARY_PLAYERS: readonly HonoraryPlayer[] = [
     archived: false,
     cardReady: true,
   },
+  {
+    id: 19970192,
+    username: "saragi",
+    countryCode: "AR",
+    avatarUrl: "https://a.ppy.sh/19970192?1772470412.jpeg",
+    peakRank: 46,
+    peakPp: 21161.7,
+    archived: false,
+    cardReady: true,
+  },
+  {
+    id: 10072733,
+    username: "myucchii",
+    countryCode: "CL",
+    avatarUrl: "https://a.ppy.sh/10072733?1783553838.png",
+    peakRank: 53,
+    peakPp: 20301.9,
+    archived: false,
+    cardReady: true,
+  },
+  {
+    id: 903155,
+    username: "Transcendence",
+    countryCode: "KR",
+    avatarUrl: "https://a.ppy.sh/903155?1718724914.png",
+    peakRank: 67,
+    peakPp: 14513.2,
+    archived: false,
+    cardReady: true,
+  },
+  {
+    id: 9452257,
+    username: "[Crz]sel",
+    countryCode: "US",
+    avatarUrl: "https://a.ppy.sh/9452257?1740169726.jpeg",
+    peakRank: 248,
+    peakPp: 0,
+    archived: false,
+    cardReady: true,
+  },
+  {
+    id: 22302283,
+    username: "KaneMining",
+    countryCode: "US",
+    avatarUrl: "https://a.ppy.sh/22302283?1731378120.jpeg",
+    peakRank: 2412,
+    peakPp: 10131.2,
+    archived: false,
+    cardReady: true,
+  },
+  {
+    id: 2288363,
+    username: "SillyFangirl",
+    countryCode: "BR",
+    avatarUrl: "https://a.ppy.sh/2288363?1739186820.jpeg",
+    peakRank: 11,
+    peakPp: 21018.7,
+    archived: false,
+    cardReady: true,
+    cardTierLabel: "Manip GOAT",
+  },
+  {
+    id: 10083439,
+    username: "bojii",
+    countryCode: "PH",
+    avatarUrl: "https://a.ppy.sh/10083439?1785211081.png",
+    peakRank: 3,
+    peakPp: 27107.6,
+    archived: false,
+    cardReady: true,
+  },
+  {
+    id: 1089335,
+    username: "[Crz]Player",
+    countryCode: "KR",
+    // Account is live but the avatar is gone, so a.ppy.sh serves the guest
+    // default; this is the archived original.
+    avatarUrl: "/images/archived-players/attang.png",
+    peakRank: 28,
+    peakPp: 0,
+    archived: false,
+    cardReady: true,
+    cardName: "Attang",
+  },
 ];
 
 /* The subset packs can actually deal. Search and the tier badge cover the whole
@@ -159,9 +250,14 @@ export function isHonoraryPlayer(id: number | null | undefined): boolean {
 }
 
 /* Matches the roster against a search term, so deleted accounts (which the
-   osu! user search cannot return) still surface in the player search. */
+   osu! user search cannot return) still surface in the player search. Card
+   names match too: those are the names the community searches by. */
 export function searchHonoraryPlayers(query: string): HonoraryPlayer[] {
   const term = query.trim().toLowerCase();
   if (!term) return [];
-  return HONORARY_PLAYERS.filter((player) => player.username.toLowerCase().includes(term));
+  return HONORARY_PLAYERS.filter(
+    (player) =>
+      player.username.toLowerCase().includes(term) ||
+      !!player.cardName?.toLowerCase().includes(term),
+  );
 }
