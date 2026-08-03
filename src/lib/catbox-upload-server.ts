@@ -32,7 +32,10 @@ import {
   type PinnedTransport,
 } from "./safe-image-fetch";
 
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // Profile art stays small; the cap is for abuse, not fidelity.
+// Profile art stays small, so the cap is about abuse rather than fidelity: we
+// pay for this storage ourselves now, and 12 uploads a minute per account adds
+// up faster at a generous limit than any profile banner justifies.
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 const MAX_PROXY_BYTES = 20 * 1024 * 1024;
 const PROXY_FETCH_TIMEOUT_MS = 15_000;
 
@@ -127,7 +130,7 @@ export async function handleCatboxUploadPost(
 
   const buffer = await readCappedBody(request, MAX_UPLOAD_BYTES);
   if (!buffer) {
-    return Response.json({ error: "Image is too large (max 10MB)." }, { status: 413 });
+    return Response.json({ error: "Image is too large (max 5MB)." }, { status: 413 });
   }
   if (buffer.length === 0) {
     return Response.json({ error: "Image is empty." }, { status: 400 });

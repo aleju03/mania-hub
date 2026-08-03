@@ -138,7 +138,9 @@ describe("handleCatboxUploadPost", () => {
   it("rejects oversized bodies", async () => {
     const store = stubStore();
     const cookie = await authCookie(nextViewerId++);
-    const oversized = Buffer.concat([PNG_BYTES, Buffer.alloc(10 * 1024 * 1024)]);
+    // Sized to sit just past the cap, so this fails if the limit is raised
+    // without a deliberate decision rather than only on absurd inputs.
+    const oversized = Buffer.concat([PNG_BYTES, Buffer.alloc(5 * 1024 * 1024)]);
     const response = await handleCatboxUploadPost(postRequest(oversized, "image/png", { cookie }), { store });
     expect(response.status).toBe(413);
     expect(store).not.toHaveBeenCalled();
