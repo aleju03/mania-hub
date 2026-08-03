@@ -347,6 +347,131 @@ export async function listRecentPackPulls(db: Db, limit: number, notableOnly = t
   }));
 }
 
+export interface HonoraryCardOwner {
+  userId: number;
+  username: string;
+  copies: number;
+  firstPulledAt: number;
+  lastPulledAt: number;
+}
+
+export interface HonoraryCardPulls {
+  cardUserId: number;
+  cardUsername: string | null;
+  owners: HonoraryCardOwner[];
+  /* Every owner holding at least one copy, even when `owners` is truncated. */
+  ownerCount: number;
+  copies: number;
+  firstPulledAt: number | null;
+  lastPulledAt: number | null;
+}
+
+export interface HonoraryPullsReport {
+  rosterSize: number;
+  pulledCards: number;
+  distinctOwners: number;
+  totalCopies: number;
+  cards: HonoraryCardPulls[];
+  ownersPerCard: number;
+  capturedAt: number;
+}
+
+/* How the GOAT roster has actually landed: per card, who holds it and since
+   when. Admin-only.
+
+   Counts come from pack_collection_cards, not the pull log: the projection is
+   the durable record and covers cards pulled before the log existed. The owner
+   name is the live users row where there is one, falling back to the name the
+   pull log froze, since an owner outside a tracked roster has no users row. */
+export async function getHonoraryPullsReport(
+  db: Db,
+  cardUserIds: Iterable<number>,
+  ownersPerCard = 100,
+): Promise<HonoraryPullsReport> {
+  const ids = [...new Set([...cardUserIds].map((id) => Math.floor(Number(id) || 0)).filter((id) => id > 0))];
+  const capturedAt = Date.now();
+  const empty: HonoraryPullsReport = {
+    rosterSize: ids.length,
+    pulledCards: 0,
+    distinctOwners: 0,
+    totalCopies: 0,
+    cards: [],
+    ownersPerCard,
+    capturedAt,
+  };
+  if (ids.length === 0) return empty;
+
+  const placeholders = ids.map(() => "?").join(", ");
+  const args = ids as InValue[];
+  const rows = (await exec(
+    db,
+    `select card_user_id, owner_user_id, copies, first_pulled_at, last_pulled_at, username as card_username,
+       coalesce(
+         (select u.username from users u where u.user_id = c.owner_user_id),
+         (select e.owner_username from pack_pull_events e
+           where e.owner_user_id = c.owner_user_id order by e.pulled_at desc limit 1)
+       ) as owner_username
+     from pack_collection_cards c
+     where card_user_id in (${placeholders}) and copies > 0
+     order by card_user_id, first_pulled_at, owner_user_id`,
+    args,
+  )).rows;
+
+  const byCard = new Map<number, HonoraryCardPulls>();
+  const owners = new Set<number>();
+  let totalCopies = 0;
+
+  for (const row of rows) {
+    const cardUserId = Number(row.card_user_id);
+    const ownerUserId = Number(row.owner_user_id);
+    const copies = Number(row.copies) || 0;
+    const firstPulledAt = Number(row.first_pulled_at) || 0;
+    const lastPulledAt = Number(row.last_pulled_at) || 0;
+    let card = byCard.get(cardUserId);
+    if (!card) {
+      card = {
+        cardUserId,
+        cardUsername: nonEmptyString(row.card_username),
+        owners: [],
+        ownerCount: 0,
+        copies: 0,
+        firstPulledAt: null,
+        lastPulledAt: null,
+      };
+      byCard.set(cardUserId, card);
+    }
+    card.ownerCount += 1;
+    card.copies += copies;
+    if (firstPulledAt > 0 && (card.firstPulledAt === null || firstPulledAt < card.firstPulledAt)) {
+      card.firstPulledAt = firstPulledAt;
+    }
+    if (lastPulledAt > (card.lastPulledAt ?? 0)) card.lastPulledAt = lastPulledAt;
+    // Rows arrive oldest-first per card, so a truncated list keeps the earliest
+    // owners: who got there first is the part worth seeing.
+    if (card.owners.length < ownersPerCard) {
+      card.owners.push({
+        userId: ownerUserId,
+        username: nonEmptyString(row.owner_username) ?? `user ${ownerUserId}`,
+        copies,
+        firstPulledAt,
+        lastPulledAt,
+      });
+    }
+    owners.add(ownerUserId);
+    totalCopies += copies;
+  }
+
+  return {
+    rosterSize: ids.length,
+    pulledCards: byCard.size,
+    distinctOwners: owners.size,
+    totalCopies,
+    cards: [...byCard.values()].sort((a, b) => b.ownerCount - a.ownerCount || a.cardUserId - b.cardUserId),
+    ownersPerCard,
+    capturedAt,
+  };
+}
+
 function nonEmptyString(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }

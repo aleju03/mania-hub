@@ -28,8 +28,8 @@ import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalR
 import { enqueueGlobalMapsRefresh, enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRandomDraw, getMapsRefreshProgress, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, MAPS_RANDOM_DRAW_DEFAULT_COUNT, MAPS_RANDOM_DRAW_EXCLUDE_SETS_MAX, MAPS_RANDOM_DRAW_EXCLUDE_USERS_MAX, MAPS_RANDOM_DRAW_HIDE_USERS_MAX, MAPS_RANDOM_DRAW_MAX_COUNT, MAPS_RANDOM_DRAW_STAR_MAX, MAPS_RANDOM_KEY_BUCKETS, MAPS_RANDOM_PATTERN_NAMES, MAPS_RANDOM_STATUS_BUCKETS, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery, type MapsRandomDrawQuery } from "../features/maps.js";
 import { getMapSearchPage, getMapSearchSetEntry, MAP_SEARCH_PATTERNS, MAP_SEARCH_SUB_PATTERNS, type MapSearchQuery, type MapSearchSort } from "../features/map-search.js";
 import { getMapCollection, getMapCollections, getMapCollectionsRotation, rebuildMapCollections } from "../features/map-collections.js";
-import { getPackWallet, listPackCollectionCards, listPackCollectionOwnedUserIds, PACK_COLLECTION_MAX_PAGE_SIZE, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
-import { getPackCardStats, getPackPulledStats, getSharedPackCard, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../features/pack-pulls.js";
+import { getPackWallet, HONORARY_USER_IDS, listPackCollectionCards, listPackCollectionOwnedUserIds, PACK_COLLECTION_MAX_PAGE_SIZE, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
+import { getHonoraryPullsReport, getPackCardStats, getPackPulledStats, getSharedPackCard, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../features/pack-pulls.js";
 import { buildPackCardProfileSnapshot, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, warmProfileSnapshots } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
 import { getSnipesSnapshot } from "../features/snipes.js";
@@ -504,6 +504,16 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     sendJson(req, res, ctx, 200, await statusBody(ctx, { includeWorkerActivity: true, snapshotCountry: country }));
+    return true;
+  }
+  if (url.pathname === "/api/admin/honorary-pulls") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    // The roster comes from the same allowlist that guards the GOAT tier on
+    // sync, so this reports on exactly the ids that can hold it.
+    sendJson(req, res, ctx, 200, await getHonoraryPullsReport(ctx.db, HONORARY_USER_IDS));
     return true;
   }
   if (url.pathname === "/api/admin/storage-breakdown") {
