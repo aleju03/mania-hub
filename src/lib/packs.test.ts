@@ -6,6 +6,7 @@ import {
   DEEP_MAX_RANK,
   DEEP_MIN_RANK,
   drawDeepPackEntry,
+  drawPackPlayers,
   drawPackPlayersFromPool,
   fetchPackPlayerScores,
   isDeepRank,
@@ -31,21 +32,24 @@ import {
   toPackPlayer,
 } from "./packs";
 import {
+  fetchLiveGlobalRankings,
   fetchLivePackCardSnapshotDirect,
   fetchLivePlayerProfileSnapshotDirect,
   isLiveBackendConfigured,
 } from "./live-backend";
-import { getUserScoresBestWindow } from "./osu";
+import { getRankings, getUserScoresBestWindow } from "./osu";
 
 vi.mock("./live-backend", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./live-backend")>()),
   isLiveBackendConfigured: vi.fn(() => true),
+  fetchLiveGlobalRankings: vi.fn(),
   fetchLivePackCardSnapshotDirect: vi.fn(),
   fetchLivePlayerProfileSnapshotDirect: vi.fn(),
 }));
 
 vi.mock("./osu", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./osu")>()),
+  getRankings: vi.fn(),
   getUserScoresBestWindow: vi.fn(),
 }));
 
@@ -329,6 +333,25 @@ describe("tracked pool draws", () => {
   it("refuses tiny pools so a misconfigured backend cannot produce junk packs", async () => {
     const { fetchPage } = makePoolFetcher(40);
     await expect(drawPackPlayersFromPool(mulberry32(2), fetchPage)).rejects.toThrow();
+  });
+
+  it("refuses to spend osu! API calls on a pool-only draw", async () => {
+    // A duel deck is throwaway, so a pool hiccup must surface as an error
+    // rather than degrading to the deep-rank draw, which spends country
+    // ranking fetches on every slot past the five the bands cover.
+    vi.mocked(fetchLiveGlobalRankings).mockRejectedValue(new Error("backend down"));
+    vi.mocked(getRankings).mockClear();
+    await expect(drawPackPlayers(mulberry32(5), { count: 12, poolOnly: true })).rejects.toThrow();
+    expect(getRankings).not.toHaveBeenCalled();
+  });
+
+  it("still degrades to the osu! draw for an ordinary pack", async () => {
+    // The opposite case, and the reason poolOnly exists: a paid pack owes the
+    // viewer cards, so it does fall back.
+    vi.mocked(fetchLiveGlobalRankings).mockRejectedValue(new Error("backend down"));
+    vi.mocked(getRankings).mockClear();
+    await drawPackPlayers(mulberry32(5), { count: 5 }).catch(() => {});
+    expect(getRankings).toHaveBeenCalled();
   });
 
   it("maps live entries onto pack players, falling back to pool position", () => {

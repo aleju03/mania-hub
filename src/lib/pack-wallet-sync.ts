@@ -26,6 +26,10 @@ export interface ServerPackCollectionCard {
   recycledCopies: number;
   firstPulledAt: number;
   lastPulledAt: number;
+  /* Mint order for this collector, and the serials the card has handed out in
+     total. Server-side only: a browser-local wallet has no serials. */
+  serial?: number | null;
+  mintedTotal?: number;
 }
 
 export interface ServerPackCollectionPage {
@@ -186,6 +190,16 @@ function sanitizeCardKey(value: string): string | null {
   return match[2] ? `${userId}:goat` : String(userId);
 }
 
+/* What the pull log minted: the serial this account now holds each card at,
+   and how many serials that card has ever handed out. */
+export interface PackPullMint {
+  userId: number;
+  cardKey: string;
+  serial: number;
+  mintedTotal: number;
+  isFirstGlobal: boolean;
+}
+
 export interface PackPullRecordCard {
   userId: number;
   username: string;
@@ -219,7 +233,7 @@ export const recordServerPackPulls = createServerFn({ method: "POST" })
     if (!packType || cards.length === 0) throw new Error("Invalid pack pull record.");
     return { packType, cards };
   })
-  .handler(async ({ data }): Promise<{ recorded: number } | null> => {
+  .handler(async ({ data }): Promise<{ recorded: number; mints: PackPullMint[] } | null> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     setResponseHeader("Cache-Control", "private, no-store");
     const { readCurrentAuth } = await import("./auth-server");
@@ -242,8 +256,23 @@ export const recordServerPackPulls = createServerFn({ method: "POST" })
       }),
     });
     if (!response.ok) throw new Error(`Pack pull record failed (${response.status}).`);
-    const body = (await response.json()) as { recorded?: unknown };
-    return { recorded: Number(body.recorded) || 0 };
+    const body = (await response.json()) as { recorded?: unknown; mints?: unknown };
+    const mints: PackPullMint[] = (Array.isArray(body.mints) ? body.mints : [])
+      .map((raw: unknown) => {
+        const mint = raw as Partial<PackPullMint> | null;
+        const userId = Math.floor(Number(mint?.userId) || 0);
+        const serial = Math.floor(Number(mint?.serial) || 0);
+        if (userId <= 0 || serial <= 0 || typeof mint?.cardKey !== "string") return null;
+        return {
+          userId,
+          cardKey: mint.cardKey,
+          serial,
+          mintedTotal: Math.max(serial, Math.floor(Number(mint.mintedTotal) || 0)),
+          isFirstGlobal: mint.isFirstGlobal === true,
+        };
+      })
+      .filter((mint): mint is PackPullMint => mint !== null);
+    return { recorded: Number(body.recorded) || 0, mints };
   });
 
 export type ServerPackRecycleMode = "duplicates" | "whole" | "all_duplicates" | "whole_matching";

@@ -22,6 +22,8 @@ import { enqueuePlayerSkills, PLAYER_SKILLS_JOB, PLAYER_SKILLS_VERSION } from ".
 import { enqueueSkillBaselineIfDue } from "./features/skill-baseline.js";
 import { ensureTopScoresBackfillSeeded } from "./features/top-scores-backfill.js";
 import { ensureSkillVectorBackfillSeeded } from "./features/skill-vector-backfill.js";
+import { backfillPackCardSerials } from "./features/pack-pulls.js";
+import { ensurePackDuelsSchema } from "./features/pack-duels.js";
 import { ensurePackCollectionCardKeys } from "./features/pack-wallets.js";
 import { backfillSkinSlugs } from "./features/skins.js";
 import { ensureArchivedPlayers } from "./archived-players.js";
@@ -153,6 +155,15 @@ export async function createApp() {
     // rows are keyed (owner, card_key) now. Rebuilds the table once on a
     // database created before that; a no-op on every boot after.
     await bootWrite("rekey_pack_collection_cards", () => ensurePackCollectionCardKeys(db));
+    // Card serials arrived after people had been collecting for months, so the
+    // mint registry is seeded from the collections themselves (each row knows
+    // when its owner first pulled the card). Only fills gaps, so every boot
+    // after the first writes nothing.
+    await bootWrite("backfill_pack_card_serials", () => backfillPackCardSerials(db));
+    // Pack duels are still a prototype, and its table predates the blackjack
+    // columns on any database that saw the earlier draft mode. A no-op
+    // everywhere else.
+    await bootWrite("ensure_pack_duels_schema", () => ensurePackDuelsSchema(db));
     // Seeds the checked-in archived-player profiles (deleted osu! accounts we
     // reconstructed from the Wayback Machine). Content-addressed, so this is a
     // no-op on every boot after the first that sees a given file.

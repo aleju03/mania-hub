@@ -3,6 +3,7 @@ import { requireAdminAccess } from "./auth";
 import { harvestAvatarAccents } from "./avatar-accent-harvest";
 import { buildRandomDrawQuery } from "./maps-random-draw-params";
 import type { LiveMapsRandomDrawParams } from "./maps-random-draw-params";
+import type { ManiaSkills } from "./maniacard";
 import type { MyDataSkillBreakdown } from "./my-data";
 
 export type LivePlayerSkills = MyDataSkillBreakdown;
@@ -1986,6 +1987,14 @@ export interface LiveSharedPackCard {
     firstPulledAt: number;
   };
   owners: number;
+  /* Mint order: #1 is whoever pulled this card first, anywhere. Null for a
+     pull the log never saw (anonymous wallets, and anything from before the
+     serial registry existed). mintedTotal is the denominator, counting owners
+     who have since recycled the card away. */
+  /* Absent on a backend older than the serial registry, so read defensively
+     rather than trusting the field to be there. */
+  serial: number | null;
+  mintedTotal: number;
   /* Set only when the pull log recorded this card arriving at the GOAT tier.
      Null for a card pulled out of the ranked pool before the player joined the
      honorary roster, and for pulls older than the log. */
@@ -1996,6 +2005,61 @@ export interface LiveSharedPackCard {
    permalink page. Throws on 404 (card recycled away or never synced). */
 export async function fetchLivePackSharedCard(ownerId: number, cardId: number): Promise<LiveSharedPackCard> {
   return fetchLiveJson(`/api/packs/pulled-card/${Math.floor(ownerId)}/${Math.floor(cardId)}`);
+}
+
+export interface LivePackDuelCard {
+  userId: number;
+  username: string;
+  countryCode: string;
+  avatarUrl: string;
+  tier: string | null;
+  tierLabel: string | null;
+  cardPower: number;
+  /* What the card is worth at blackjack: the star rating printed on its
+     front. */
+  value: number;
+  globalRank: number;
+  pp: number;
+  /* The mint's skills snapshot, so a duel page can redraw the real card front
+     without refetching anyone's plays. */
+  skills: ManiaSkills | null;
+}
+
+export interface LivePackDuelSide {
+  userId: number | null;
+  username: string | null;
+  cards: LivePackDuelCard[];
+  /* Challenge: total card power. Blackjack: the hand's total value. */
+  score: number;
+  /* Truthful even while the cards themselves are hidden. */
+  cardCount: number;
+  /* Blackjack: this side has stopped, by standing or by busting. */
+  done: boolean;
+  bust: boolean;
+  /* The server is holding this hand back from the current reader. */
+  hidden?: boolean;
+}
+
+export interface LivePackDuel {
+  id: string;
+  kind: "challenge" | "blackjack";
+  packType: string;
+  status: "open" | "resolved";
+  challenger: LivePackDuelSide;
+  opponent: LivePackDuelSide;
+  /* Blackjack: the number to get closest to without going over. */
+  target: number;
+  winner: "challenger" | "opponent" | "tie" | null;
+  createdAt: number;
+  updatedAt: number;
+  resolvedAt: number | null;
+}
+
+/* A duel by link, read anonymously: every hand still in play is hidden. A
+   signed-in player reads their own hand through viewPackDuel instead. Throws
+   on 404. */
+export async function fetchLivePackDuel(duelId: string): Promise<LivePackDuel> {
+  return fetchLiveJson(`/api/packs/duels/${encodeURIComponent(duelId)}`);
 }
 
 /* The public pull feed: notable-only by default (high mints and first-ever

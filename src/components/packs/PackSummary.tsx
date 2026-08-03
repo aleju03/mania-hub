@@ -1,7 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
+import { Swords } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { shardValueForTier, type CollectedCard } from "#/lib/pack-collection";
+import { formatOrdinal } from "#/lib/format";
+import { packCardKey, shardValueForTier, type CollectedCard } from "#/lib/pack-collection";
 import { CountryFlag } from "../ui/CountryFlag";
 import { CardSpotlight, type CardSpotlightTarget } from "./CardSpotlight";
 import type { FlightRect, RevealedCard } from "./RevealStage";
@@ -16,6 +18,14 @@ interface PackSummaryProps {
   /* Shard price of that next pack, so a one-click purchase still shows its
      cost. Null for the charge-funded standard pack. */
   nextPackShardCost: number | null;
+  /* Serials for this pack's cards, keyed by wallet card key. Arrives a beat
+     after the summary does: the pull log is written in the background, and
+     the numbers land when it answers. */
+  serials: Map<string, { serial: number; mintedTotal: number }> | null;
+  /* Freezes this hand into a duel link. Absent when duelling is unavailable
+     (signed out, or no live backend). */
+  onChallenge?: () => void;
+  challengeBusy?: boolean;
   reducedMotion: boolean;
   /* Reveal-all handoff: where each card's tile sat when the reveal finished,
      keyed by card position. Present = the viewer already saw every card, so
@@ -58,6 +68,9 @@ export function PackSummary({
   onOpenNext,
   canOpenNext,
   nextPackShardCost,
+  serials,
+  onChallenge,
+  challengeBusy = false,
   reducedMotion,
   flyFrom = null,
 }: PackSummaryProps) {
@@ -228,6 +241,20 @@ export function PackSummary({
                   )}
                   <span className="text-osu-f1 tabular-nums">#{card.player.globalRank.toLocaleString()}</span>
                 </div>
+                {(() => {
+                  const mint = serials?.get(packCardKey(card.player.user.id, card.tier));
+                  if (!mint) return null;
+                  // Being first is the whole point of printing these: you
+                  // pulled this player's card before anyone else ever did.
+                  const first = mint.serial === 1;
+                  return (
+                    <div
+                      className={`mt-0.5 text-[11px] tabular-nums ${first ? "font-bold text-amber-300" : "text-osu-f1"}`}
+                    >
+                      {first ? "first ever to pull this" : `${formatOrdinal(mint.serial)} to pull this`}
+                    </div>
+                  );
+                })()}
               </div>
             </motion.div>
           );
@@ -257,6 +284,17 @@ export function PackSummary({
         >
           Back to packs
         </button>
+        {onChallenge && (
+          <button
+            type="button"
+            onClick={onChallenge}
+            disabled={challengeBusy}
+            className="inline-flex items-center gap-1.5 rounded-full border border-osu-b3/50 px-6 py-2.5 text-sm font-bold text-osu-f1 transition-colors hover:border-osu-f1/40 hover:text-white cursor-pointer"
+          >
+            <Swords className="h-4 w-4" />
+            {challengeBusy ? "Sealing the hand..." : "Duel this hand"}
+          </button>
+        )}
       </div>
       <div className="mt-3 text-[11px] text-osu-f1">
         {newCount > 0

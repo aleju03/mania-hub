@@ -4,6 +4,7 @@ import { Check, Share2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "#/lib/auth-context";
+import { formatOrdinal } from "#/lib/format";
 import { fetchLivePackCardStats, isLiveBackendConfigured } from "#/lib/live-backend";
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
 import { collectedCardTier, type CollectedCard } from "#/lib/pack-collection";
@@ -331,6 +332,24 @@ export function CardSpotlight({
                   <> &middot; in {ownerCount.toLocaleString()} {ownerCount === 1 ? "collection" : "collections"}</>
                 )}
               </div>
+              {card.serial ? (
+                // Pull order, only known for a synced collection: the registry
+                // that hands out these numbers lives on the server.
+                <div
+                  className={`text-[12px] tabular-nums ${card.serial === 1 ? "font-bold text-amber-300" : "text-osu-f1"}`}
+                >
+                  {card.serial === 1 ? (
+                    "First person ever to pull this"
+                  ) : (
+                    <>
+                      {formatOrdinal(card.serial)} person to pull this
+                      {card.mintedTotal ? (
+                        <span className="text-osu-f1"> out of {card.mintedTotal.toLocaleString()}</span>
+                      ) : null}
+                    </>
+                  )}
+                </div>
+              ) : null}
               <div className="mt-1.5 flex items-center gap-2">
                 <Link
                   to="/player/$username"

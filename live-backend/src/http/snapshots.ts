@@ -31,6 +31,7 @@ import { getMapCollection, getMapCollections, getMapCollectionsRotation, rebuild
 import { getPackWallet, HONORARY_USER_IDS, listPackCollectionCards, listPackCollectionOwnedCardKeys,
   normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
 import { getHonoraryPullsReport, getPackCardStats, getPackPulledStats, getSharedPackCard, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../features/pack-pulls.js";
+import { createPackDuel, getPackDuel, hitPackBlackjack, joinPackBlackjack, joinPackDuel, redactDuelFor, standPackBlackjack } from "../features/pack-duels.js";
 import { buildPackCardProfileSnapshot, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, warmProfileSnapshots } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
 import { getSnipesSnapshot } from "../features/snipes.js";
@@ -1429,6 +1430,103 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     const limit = Number(url.searchParams.get("limit")) || 20;
     const notableOnly = url.searchParams.get("all") !== "1";
     sendJson(req, res, ctx, 200, { pulls: await listRecentPackPulls(ctx.db, limit, notableOnly) });
+    return true;
+  }
+  if (url.pathname === "/api/packs/duels" && req.method === "POST") {
+    // Opening a duel. Server-to-server like the pull log: the frontend's
+    // server function authenticates the osu! cookie and forwards the verified
+    // viewer, so a duel can only ever be opened as yourself.
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
+    const userId = Math.floor(Number(body.userId) || 0);
+    const username = typeof body.username === "string" ? body.username : "";
+    if (userId <= 0 || !username) {
+      sendJson(req, res, ctx, 400, { error: "invalid_duel_challenger" });
+      return true;
+    }
+    const created = await createPackDuel(ctx.serveWriteDb ?? ctx.db, userId, username, {
+      kind: body.kind,
+      packType: body.packType,
+      cards: body.cards,
+    });
+    if (!created.ok) {
+      sendJson(req, res, ctx, created.error === "rate_limited" ? 429 : 400, { error: created.error });
+      return true;
+    }
+    sendJson(req, res, ctx, 201, created.duel);
+    return true;
+  }
+  const packDuelActionMatch = url.pathname.match(/^\/api\/packs\/duels\/([a-z0-9]{6,16})\/(join|hit|stand|view)$/);
+  if (packDuelActionMatch) {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
+    const userId = Math.floor(Number(body.userId) || 0);
+    const username = typeof body.username === "string" ? body.username : "";
+    if (userId <= 0 || !username) {
+      sendJson(req, res, ctx, 400, { error: "invalid_duel_player" });
+      return true;
+    }
+    const duelId = packDuelActionMatch[1];
+    const writeDb = ctx.serveWriteDb ?? ctx.db;
+    // Dev-only: one osu! account is enough to play both sides locally. Never
+    // granted in production, where duelling yourself stays refused.
+    const allowSelfDuel = ctx.config.nodeEnv !== "production";
+    const action = packDuelActionMatch[2];
+    // A blackjack opponent joins by arriving rather than by submitting a hand,
+    // so "join" means two different things per kind and the kind decides which.
+    if (action === "view") {
+      // The signed-in read: your own hand is visible to you, the other side's
+      // is not until both have stopped.
+      const duel = await getPackDuel(ctx.db, duelId);
+      if (!duel) {
+        sendJson(req, res, ctx, 404, { error: "duel_not_found" });
+        return true;
+      }
+      sendJson(req, res, ctx, 200, redactDuelFor(duel, userId));
+      return true;
+    }
+    const result = action === "hit"
+      ? await hitPackBlackjack(writeDb, duelId, userId)
+      : action === "stand"
+        ? await standPackBlackjack(writeDb, duelId, userId)
+        : body.kind === "blackjack"
+          ? await joinPackBlackjack(writeDb, duelId, userId, username, Date.now(), { allowSelfDuel })
+          : await joinPackDuel(writeDb, duelId, userId, username, body.cards, Date.now(), { allowSelfDuel });
+    if (!result.ok) {
+      const status = result.error === "not_found" ? 404 : 409;
+      sendJson(req, res, ctx, status, { error: result.error });
+      return true;
+    }
+    // The mover sees their own hand; everything else stays hidden until both
+    // sides are done.
+    sendJson(req, res, ctx, 200, redactDuelFor(result.duel, userId));
+    return true;
+  }
+  const packDuelMatch = url.pathname.match(/^\/api\/packs\/duels\/([a-z0-9]{6,16})$/);
+  if (packDuelMatch) {
+    // Public read: a duel link is meant to be opened by whoever it was sent
+    // to, and the page shows nothing but two hands of cards.
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    if (!checkRate(req, res, ctx, "publicApi")) return true;
+    const duel = await getPackDuel(ctx.db, packDuelMatch[1]);
+    if (!duel) {
+      sendJson(req, res, ctx, 404, { error: "duel_not_found" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, redactDuelFor(duel, null));
     return true;
   }
   const packWalletMatch = url.pathname.match(/^\/api\/pack-wallet\/(\d+)$/);

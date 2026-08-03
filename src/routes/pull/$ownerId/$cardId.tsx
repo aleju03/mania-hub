@@ -6,7 +6,7 @@ import { renderCardSkeletonThumbnail, renderCardThumbnail } from "../../../compo
 import { ManiaCardRenderer } from "../../../components/player/maniacard3d/ManiaCardRenderer";
 import { buildManiaCardRenderDataFromSkills } from "../../../components/player/maniacard3d/renderData";
 import { CountryFlag } from "../../../components/ui/CountryFlag";
-import { formatDate } from "../../../lib/format";
+import { formatDate, formatOrdinal } from "../../../lib/format";
 import {
   fetchLivePackSharedCard,
   isLiveBackendConfigured,
@@ -277,6 +277,24 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
             <> &middot; in {shared.owners.toLocaleString()} {shared.owners === 1 ? "collection" : "collections"}</>
           )}
         </div>
+        {typeof shared.serial === "number" && shared.serial > 0 && (
+          // Pull order, not copy count: first means nobody anywhere had pulled
+          // this player's card before this collector did.
+          <div
+            className={`text-[13px] tabular-nums ${shared.serial === 1 ? "font-bold text-amber-300" : "text-osu-f1"}`}
+          >
+            {shared.serial === 1 ? (
+              "First person ever to pull this card"
+            ) : (
+              <>
+                {formatOrdinal(shared.serial)} person to pull this card
+                {shared.mintedTotal > 0 && (
+                  <span className="text-osu-f1"> out of {shared.mintedTotal.toLocaleString()}</span>
+                )}
+              </>
+            )}
+          </div>
+        )}
         <div className="text-[12px] text-osu-f1">
           Pulled by <span className="font-bold text-white">{shared.owner.username}</span>
           {shared.card.firstPulledAt > 0 && (

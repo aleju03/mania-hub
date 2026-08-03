@@ -2,6 +2,16 @@ export function formatNumber(n: number): string {
   return n.toLocaleString("en-US");
 }
 
+/* 1st, 2nd, 3rd, 4th, and the 11th-13th exceptions. */
+export function formatOrdinal(n: number): string {
+  const value = Math.floor(n);
+  const lastTwo = Math.abs(value) % 100;
+  const last = Math.abs(value) % 10;
+  const suffix =
+    lastTwo >= 11 && lastTwo <= 13 ? "th" : last === 1 ? "st" : last === 2 ? "nd" : last === 3 ? "rd" : "th";
+  return `${value.toLocaleString("en-US")}${suffix}`;
+}
+
 export function formatPP(pp: number | null): string {
   if (pp == null) return "-";
   return `${Math.round(pp).toLocaleString("en-US")}pp`;

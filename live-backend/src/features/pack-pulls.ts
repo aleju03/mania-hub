@@ -1,7 +1,7 @@
 import type { InValue } from "@libsql/client";
 import type { Db } from "../db.js";
 import { exec } from "../db.js";
-import { tierRankSql } from "./pack-wallets.js";
+import { packCardKey, tierRankSql } from "./pack-wallets.js";
 
 // Append-only log of pack pulls, the community layer on top of the per-owner
 // pack_collection_cards projection. Rows are self-reported by the client
@@ -69,6 +69,17 @@ export interface PackCardStats {
   copies: number;
 }
 
+/* What a logged pull minted: the serial this owner now holds the card at, and
+   how many serials that card has ever handed out. Returned so a just-opened
+   pack can print "#7 of 132" without a second round trip. */
+export interface PackPullMint {
+  userId: number;
+  cardKey: string;
+  serial: number;
+  mintedTotal: number;
+  isFirstGlobal: boolean;
+}
+
 export interface PackPulledStats {
   userId: number;
   owners: number;
@@ -102,6 +113,100 @@ function liveUserFieldSql(idColumn: string, field: "username" | "avatar_url"): s
   return `(select u.${field} from users u where u.user_id = pack_pull_events.${idColumn})`;
 }
 
+/* Hands this owner their serial for a card, or returns the one they already
+   hold. The number is computed inside the insert rather than read first and
+   written after, so two pulls landing together cannot claim the same serial,
+   and the (card, owner) primary key makes a repeat pull a no-op: a duplicate
+   never renumbers you, and neither does recycling and repulling.
+
+   mintedTotal counts every serial the card has ever handed out, including
+   owners who have since recycled it, which is the honest denominator for
+   "#7 of 132". */
+export async function assignPackCardSerial(
+  db: Db,
+  cardKey: string,
+  cardUserId: number,
+  ownerUserId: number,
+  now: number,
+): Promise<{ serial: number; mintedTotal: number }> {
+  await exec(
+    db,
+    `insert or ignore into pack_card_serials (card_key, card_user_id, owner_user_id, serial, minted_at)
+     select ?, ?, ?, coalesce((select max(serial) from pack_card_serials where card_key = ?), 0) + 1, ?`,
+    [cardKey, cardUserId, ownerUserId, cardKey, now],
+  );
+  const row = (await exec(
+    db,
+    `select
+       (select serial from pack_card_serials where card_key = ? and owner_user_id = ?) as serial,
+       (select max(serial) from pack_card_serials where card_key = ?) as minted_total`,
+    [cardKey, ownerUserId, cardKey],
+  )).rows[0];
+  return { serial: Number(row?.serial) || 0, mintedTotal: Number(row?.minted_total) || 0 };
+}
+
+/* Seeds the mint registry from the collections that already exist.
+
+   Serials were added long after people started collecting, and an empty
+   registry makes every pull read as a first mint, which is worthless as a flex
+   and wrong as a fact. pack_collection_cards is the durable record of who
+   holds what and when they first pulled it, so mint order can be recovered
+   exactly: per card, order the owners by first_pulled_at and hand out 1..N.
+   Ties (two owners with the same stamp, or a zero stamp from an old row) fall
+   back to owner id, which is arbitrary but stable across reruns.
+
+   Safe to run on every boot: only owners with no serial yet are numbered, and
+   they start after the card's highest serial so far, so a rerun can only ever
+   append. On the first run against a registry that is still empty that is
+   simply 1..N in historical order. Returns how many serials it wrote. */
+export async function backfillPackCardSerials(db: Db, now = Date.now()): Promise<number> {
+  const before = Number((await exec(db, "select count(*) as n from pack_card_serials")).rows[0]?.n) || 0;
+  await exec(
+    db,
+    `insert or ignore into pack_card_serials (card_key, card_user_id, owner_user_id, serial, minted_at)
+     select c.card_key, c.card_user_id, c.owner_user_id,
+       coalesce((select max(s.serial) from pack_card_serials s where s.card_key = c.card_key), 0)
+         + row_number() over (partition by c.card_key order by c.first_pulled_at asc, c.owner_user_id asc),
+       case when c.first_pulled_at > 0 then c.first_pulled_at else ? end
+     from pack_collection_cards c
+     where c.copies > 0
+       and not exists (
+         select 1 from pack_card_serials mine
+         where mine.card_key = c.card_key and mine.owner_user_id = c.owner_user_id
+       )`,
+    [now],
+  );
+  const after = Number((await exec(db, "select count(*) as n from pack_card_serials")).rows[0]?.n) || 0;
+  return Math.max(0, after - before);
+}
+
+/* The serials one owner holds, keyed by card key, for a hand of cards. */
+export async function getPackCardSerials(
+  db: Db,
+  ownerUserId: number,
+  cardKeys: string[],
+): Promise<Map<string, { serial: number; mintedTotal: number }>> {
+  const keys = [...new Set(cardKeys)].slice(0, 500);
+  const result = new Map<string, { serial: number; mintedTotal: number }>();
+  if (keys.length === 0 || !Number.isInteger(ownerUserId) || ownerUserId <= 0) return result;
+  const placeholders = keys.map(() => "?").join(", ");
+  const rows = (await exec(
+    db,
+    `select mine.card_key as card_key, mine.serial as serial,
+       (select max(other.serial) from pack_card_serials other where other.card_key = mine.card_key) as minted_total
+     from pack_card_serials mine
+     where mine.owner_user_id = ? and mine.card_key in (${placeholders})`,
+    [ownerUserId, ...keys] as InValue[],
+  )).rows;
+  for (const row of rows) {
+    result.set(String(row.card_key), {
+      serial: Number(row.serial) || 0,
+      mintedTotal: Number(row.minted_total) || 0,
+    });
+  }
+  return result;
+}
+
 export async function recordPackPullEvents(
   db: Db,
   ownerUserId: number,
@@ -109,14 +214,14 @@ export async function recordPackPullEvents(
   packType: unknown,
   cards: unknown,
   now = Date.now(),
-): Promise<{ recorded: number }> {
+): Promise<{ recorded: number; mints: PackPullMint[] }> {
   const type = normalizePackType(packType);
-  if (!type || !Number.isInteger(ownerUserId) || ownerUserId <= 0) return { recorded: 0 };
+  if (!type || !Number.isInteger(ownerUserId) || ownerUserId <= 0) return { recorded: 0, mints: [] };
   const normalized = (Array.isArray(cards) ? cards : [])
     .map(normalizePullCard)
     .filter((card): card is PackPullCardInput => Boolean(card))
     .slice(0, PACK_PULL_MAX_CARDS_PER_EVENT);
-  if (normalized.length === 0) return { recorded: 0 };
+  if (normalized.length === 0) return { recorded: 0, mints: [] };
 
   const hourAgo = now - 60 * 60 * 1000;
   const recent = (await exec(
@@ -124,9 +229,12 @@ export async function recordPackPullEvents(
     "select count(*) as n from pack_pull_events where owner_user_id = ? and pulled_at > ?",
     [ownerUserId, hourAgo],
   )).rows[0];
-  if ((Number(recent?.n) || 0) + normalized.length > PACK_PULL_OWNER_HOURLY_CAP) return { recorded: 0 };
+  if ((Number(recent?.n) || 0) + normalized.length > PACK_PULL_OWNER_HOURLY_CAP) {
+    return { recorded: 0, mints: [] };
+  }
 
   let recorded = 0;
+  const mints: PackPullMint[] = [];
   for (const card of normalized) {
     // First-global means nobody, anywhere, holds or ever pulled this card:
     // no prior event and no other owner's collection row (the caller's own
@@ -166,8 +274,14 @@ export async function recordPackPullEvents(
       ],
     );
     recorded += 1;
+    // Serials are only handed out here, so they exist for signed-in collectors
+    // (the only ones whose pulls are logged). An anonymous wallet's cards are
+    // unserialled until that browser logs in and pulls them again.
+    const cardKey = packCardKey(card.userId, card.tier);
+    const mint = await assignPackCardSerial(db, cardKey, card.userId, ownerUserId, now);
+    mints.push({ userId: card.userId, cardKey, isFirstGlobal, ...mint });
   }
-  return { recorded };
+  return { recorded, mints };
 }
 
 /* Community ownership counts for a hand of cards ("owned by N collectors").
@@ -244,6 +358,12 @@ export interface SharedPackCard {
     firstPulledAt: number;
   };
   owners: number;
+  /* Where this owner sits in the card's mint order (#1 pulled it first,
+     anywhere). Null for a card whose owner never had a pull logged, which is
+     every pull from before the registry existed. */
+  serial: number | null;
+  /* Serials this card has ever handed out, recycled ones included. */
+  mintedTotal: number;
   /* Set only when the pull log recorded this card arriving at the GOAT tier,
      which is the one case where the pack it came from is worth naming. Absent
      for a card pulled out of the ranked pool before the player joined the
@@ -305,6 +425,19 @@ export async function getSharedPackCard(
      order by pulled_at asc limit 1`,
     [ownerUserId, cardUserId],
   )).rows[0];
+  // The permalink resolved a player to whichever card key the owner holds at
+  // the higher tier, so the serial has to be looked up under that same key.
+  const cardKey = typeof row.card_key === "string" && row.card_key
+    ? row.card_key
+    : packCardKey(cardUserId, typeof row.tier === "string" ? row.tier : null);
+  const mintRow = (await exec(
+    db,
+    `select
+       (select serial from pack_card_serials where card_key = ? and owner_user_id = ?) as serial,
+       (select max(serial) from pack_card_serials where card_key = ?) as minted_total`,
+    [cardKey, ownerUserId, cardKey],
+  )).rows[0];
+  const serial = Number(mintRow?.serial) || 0;
   let skills: unknown | null = null;
   if (typeof row.skills_json === "string" && row.skills_json) {
     try {
@@ -329,6 +462,8 @@ export async function getSharedPackCard(
       firstPulledAt: Number(row.first_pulled_at) || 0,
     },
     owners: Number(ownersRow?.owners) || 0,
+    serial: serial > 0 ? serial : null,
+    mintedTotal: Number(mintRow?.minted_total) || 0,
     goatPull: goatRow
       ? { packType: String(goatRow.pack_type ?? ""), pulledAt: Number(goatRow.pulled_at) || 0 }
       : null,

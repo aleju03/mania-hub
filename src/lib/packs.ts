@@ -415,6 +415,15 @@ export interface PackDrawOptions {
   /* Players already held *as a GOAT*. Distinct from ownedUserIds because the
      ordinary card and the GOAT card of a roster member are two cards. */
   ownedGoatUserIds?: ReadonlySet<number>;
+  /* Fail instead of degrading to the direct osu! rankings draw when the
+     tracked pool is unavailable.
+
+     The fallback is right for a pack (the viewer paid a charge and is owed
+     cards), but it is not free: for a draw bigger than PACK_SLOT_BANDS it pads
+     with deep-rank slots, and every deep rank spends osu! API calls on country
+     ranking pages. Callers dealing throwaway cards - a duel deck, which never
+     enters a collection - would rather show an error than spend the budget. */
+  poolOnly?: boolean;
 }
 
 function shuffleInPlace<T>(items: T[], rng: () => number): T[] {
@@ -612,12 +621,14 @@ export async function drawPackPlayers(
   if (isLiveBackendConfigured()) {
     try {
       return await drawPackPlayersFromPool(rng, defaultPoolPageFetcher, options);
-    } catch {
+    } catch (error) {
       if (needsDuplicateProtection) throw new Error("Duplicate-protected packs require the tracked player pool.");
+      if (options.poolOnly) throw error;
       // Backend hiccup: degrade to the direct osu! rankings draw below.
     }
   }
   if (needsDuplicateProtection) throw new Error("Duplicate-protected packs require the tracked player pool.");
+  if (options.poolOnly) throw new Error("This draw requires the tracked player pool.");
   const players = await drawPackPlayersFromOsuApi(rng, options.count ?? PACK_SIZE);
   return {
     players: applyHonoraryHit(players, rng, options.honoraryChance ?? 0, options.ownedGoatUserIds),

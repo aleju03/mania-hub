@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
-import { Recycle } from "lucide-react";
+import { Recycle, Swords } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -23,6 +23,7 @@ import {
 import { ShuffleStage } from "../components/packs/ShuffleStage";
 import { usePackWallet } from "../components/packs/usePackWallet";
 import { useAuth } from "../lib/auth-context";
+import { canUseAdminFeatures } from "../lib/auth-shared";
 import {
   MAX_PACK_CHARGES,
   msUntilNextCharge,
@@ -39,6 +40,8 @@ import {
   writePendingPack,
 } from "../lib/pack-pending";
 import { fetchServerPackCollectionOwnedKeys, recordServerPackPulls } from "../lib/pack-wallet-sync";
+import { duelCardsFromRevealed, mintDuelCards } from "../components/packs/duelMint";
+import { BLACKJACK_DECK_SIZE, createPackDuel, duelErrorMessage } from "../lib/pack-duels";
 import { PackPulse, refreshPackPulseFeed } from "../components/packs/PackPulse";
 import {
   drawPackPlayers,
@@ -358,6 +361,14 @@ function PacksPage() {
   /* Set by "Open another" on the summary: the next deal skips the pack stage
      and charges itself as soon as it has cards. */
   const autoOpenRef = useRef(false);
+  /* Serials for the pack on screen, keyed by wallet card key. Filled in when
+     the pull log answers, a beat after the summary appears. */
+  const [serials, setSerials] = useState<Map<string, { serial: number; mintedTotal: number }> | null>(null);
+  const [duelBusy, setDuelBusy] = useState<null | "challenge" | "blackjack">(null);
+  /* Minting a deck is one osu! fetch per cold player, so the button counts
+     them off instead of sitting there looking hung. */
+  const [duelProgress, setDuelProgress] = useState<{ done: number; total: number } | null>(null);
+  const [duelError, setDuelError] = useState<string | null>(null);
   const [collectionPanelReady, setCollectionPanelReady] = useState(true);
   const [collectionPanelMounted, setCollectionPanelMounted] = useState(true);
   // Holds the last wallet the visible collection rendered. Spending a pack
@@ -510,9 +521,74 @@ function PacksPage() {
     }, reducedMotion);
   }, [phase, reducedMotion]);
 
+  /* Freezes the hand just revealed into a challenge link. The opponent opens
+     their own pack of the same type on the duel page; nothing here touches
+     either collection. */
+  const startChallengeDuel = () => {
+    if (!auth.viewer || duelBusy) return;
+    const cards = duelCardsFromRevealed(revealed);
+    if (cards.length === 0) {
+      setDuelError("None of these cards minted, so there is nothing to duel with.");
+      return;
+    }
+    setDuelBusy("challenge");
+    setDuelError(null);
+    void createPackDuel({ data: { kind: "challenge", packType: selectedType.id, cards } })
+      .then((result) => {
+        if (result.ok) void navigate({ to: "/duel/$duelId", params: { duelId: result.duel.id } });
+        else setDuelError(duelErrorMessage(result.error));
+      })
+      .catch(() => setDuelError("Could not open that duel."))
+      .finally(() => setDuelBusy(null));
+  };
+
+  /* Deals the deck for a blackjack duel: each side plays its own half against
+     21. Free and outside the wallet, so it draws its own players rather than
+     spending a pack. */
+  const startBlackjackDuel = () => {
+    if (!auth.viewer || duelBusy) return;
+    setDuelBusy("blackjack");
+    setDuelError(null);
+    setDuelProgress({ done: 0, total: BLACKJACK_DECK_SIZE + 2 });
+    void (async () => {
+      try {
+        // A few spares: a player whose plays cannot be fetched mints nothing,
+        // and the deck has to be full for both halves to be dealt.
+        // Pool only, and from its top slice: a duel deck is throwaway, so it
+        // must never spend osu! API budget on the deep-rank fallback, and the
+        // top of the pool is the part the backend already has cached.
+        const draw = await drawPackPlayers(Math.random, {
+          count: BLACKJACK_DECK_SIZE + 2,
+          topFraction: 0.15,
+          poolOnly: true,
+        });
+        if (isLiveBackendConfigured()) {
+          void warmLivePackPlayers(draw.players.map((player) => player.user.id)).catch(() => {});
+        }
+        const minted = await mintDuelCards(draw.players, (done, total) => setDuelProgress({ done, total }));
+        if (minted.length < BLACKJACK_DECK_SIZE) {
+          setDuelError("Could not deal a full deck. Try again in a moment.");
+          return;
+        }
+        const result = await createPackDuel({
+          data: { kind: "blackjack", packType: "wild", cards: minted.slice(0, BLACKJACK_DECK_SIZE) },
+        });
+        if (result.ok) void navigate({ to: "/duel/$duelId", params: { duelId: result.duel.id } });
+        else setDuelError(duelErrorMessage(result.error));
+      } catch {
+        setDuelError("Could not deal a deck. The tracked player pool is unavailable.");
+      } finally {
+        setDuelBusy(null);
+        setDuelProgress(null);
+      }
+    })();
+  };
+
   const openAnother = () => {
     setRevealed([]);
     setSummaryFlyFrom(null);
+    setSerials(null);
+    setDuelError(null);
     autoOpenRef.current = false;
     // Keep the chosen pack type across packs while it stays affordable.
     if (!canAffordPack(walletApi.wallet, packTypeById(packTypeId))) setPackTypeId("standard");
@@ -527,6 +603,8 @@ function PacksPage() {
     if (!canAffordPack(walletApi.wallet, selectedType)) return;
     setRevealed([]);
     setSummaryFlyFrom(null);
+    setSerials(null);
+    setDuelError(null);
     autoOpenRef.current = true;
     setPhase("reveal");
     setPackId((id) => id + 1);
@@ -543,6 +621,9 @@ function PacksPage() {
   };
 
   const canOpen = canAffordPack(wallet, selectedType);
+  /* Duelling is an unfinished prototype, so both entry points are admin-only
+     for now. The server functions refuse a non-admin caller regardless. */
+  const canDuel = canUseAdminFeatures(auth) && Boolean(auth.viewer) && isLiveBackendConfigured();
   const showCollectionPanel = phase === "pack" || (phase === "summary" && collectionPanelReady);
   const collectionWallet = collectionWalletRef.current;
 
@@ -582,7 +663,25 @@ function PacksPage() {
                   <span>shards</span>
                 </div>
                 <GoatHoldersButton />
+                {canDuel && (
+                  <button
+                    type="button"
+                    onClick={startBlackjackDuel}
+                    disabled={duelBusy !== null}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-osu-b3/40 px-3 py-1 text-[11px] font-semibold text-osu-f1 transition-colors hover:border-osu-pink/50 hover:text-white cursor-pointer"
+                  >
+                    <Swords className="h-3 w-3" />
+                    {duelBusy === "blackjack"
+                      ? duelProgress
+                        ? `Dealing ${duelProgress.done}/${duelProgress.total}...`
+                        : "Dealing the deck..."
+                      : "Blackjack duel"}
+                  </button>
+                )}
               </div>
+            )}
+            {duelError && phase !== "reveal" && (
+              <div className="mb-6 text-center text-[12px] text-osu-pink-light">{duelError}</div>
             )}
 
             {dealError ? (
@@ -668,6 +767,9 @@ function PacksPage() {
                         nextPackShardCost={
                           selectedType.cost.kind === "shards" ? selectedType.cost.amount : null
                         }
+                        serials={serials}
+                        onChallenge={canDuel ? startChallengeDuel : undefined}
+                        challengeBusy={duelBusy === "challenge"}
                       />
                     ) : cards ? (
                       <RevealStage
@@ -700,7 +802,20 @@ function PacksPage() {
                               // so your own pack lands in the rail alongside
                               // the summary instead of on the next poll.
                               .then((result) => {
-                                if (result && result.recorded > 0) refreshPackPulseFeed();
+                                if (!result) return;
+                                if (result.recorded > 0) refreshPackPulseFeed();
+                                // Serials come back with the log write, so the
+                                // summary can print them without asking again.
+                                if (result.mints.length > 0) {
+                                  setSerials(
+                                    new Map(
+                                      result.mints.map((mint) => [
+                                        mint.cardKey,
+                                        { serial: mint.serial, mintedTotal: mint.mintedTotal },
+                                      ]),
+                                    ),
+                                  );
+                                }
                               })
                               .catch(() => {});
                           }

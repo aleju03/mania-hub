@@ -32,6 +32,12 @@ export interface StoredPackCard {
   recycledCopies: number;
   firstPulledAt: number;
   lastPulledAt: number;
+  /* Mint order for this owner (#1 pulled the card first, anywhere), and how
+     many serials the card has ever handed out. Null on cards whose pulls were
+     never logged: anonymous wallets, and everything from before the registry.
+     See pack_card_serials in pack-pulls.ts. */
+  serial?: number | null;
+  mintedTotal?: number;
 }
 
 export interface PackCollectionPage {
@@ -361,6 +367,8 @@ function cardFromRow(row: Record<string, unknown>): StoredPackCard {
     recycledCopies: Number(row.recycled_copies) || 0,
     firstPulledAt: Number(row.first_pulled_at) || 0,
     lastPulledAt: Number(row.last_pulled_at) || 0,
+    serial: Number(row.serial) > 0 ? Number(row.serial) : null,
+    mintedTotal: Number(row.minted_total) || 0,
   };
 }
 
@@ -421,7 +429,10 @@ export async function listPackCollectionCards(
 ): Promise<PackCollectionPage> {
   const pageSize = Math.min(PACK_COLLECTION_MAX_PAGE_SIZE, Math.max(1, Math.floor(options.pageSize)));
   const page = Math.max(0, Math.floor(options.page));
-  const where = ["owner_user_id = ?", "copies > 0"];
+  // Table-qualified because the paged read joins the serial registry, which
+  // carries an owner_user_id of its own; the unjoined count queries below take
+  // the qualified form just as happily.
+  const where = ["pack_collection_cards.owner_user_id = ?", "pack_collection_cards.copies > 0"];
   const args: InValue[] = [userId];
   const query = options.query?.trim().toLowerCase() ?? "";
   if (query) {
@@ -429,9 +440,9 @@ export async function listPackCollectionCards(
     args.push(`%${query}%`);
   }
   if (options.tier && options.tier !== "all") {
-    if (options.tier === "unrated") where.push("tier is null");
+    if (options.tier === "unrated") where.push("pack_collection_cards.tier is null");
     else {
-      where.push("tier = ?");
+      where.push("pack_collection_cards.tier = ?");
       args.push(options.tier);
     }
   }
@@ -442,8 +453,14 @@ export async function listPackCollectionCards(
     `select pack_collection_cards.*,
        ${liveUserFieldSql("username")} as live_username,
        ${liveUserFieldSql("avatar_url")} as live_avatar_url,
-       ${liveUserFieldSql("country_code")} as live_country_code
+       ${liveUserFieldSql("country_code")} as live_country_code,
+       serials.serial as serial,
+       (select max(other.serial) from pack_card_serials other
+         where other.card_key = pack_collection_cards.card_key) as minted_total
      from pack_collection_cards
+     left join pack_card_serials serials
+       on serials.card_key = pack_collection_cards.card_key
+       and serials.owner_user_id = pack_collection_cards.owner_user_id
      where ${whereSql}
      order by ${tierRankSql("tier")} desc, pp desc, global_rank asc, username collate nocase asc
      limit ? offset ?`,

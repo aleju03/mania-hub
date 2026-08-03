@@ -31,6 +31,13 @@ export interface CollectedCard {
   recycledCopies: number;
   firstPulledAt: number;
   lastPulledAt: number;
+  /* Mint order: #1 is whoever pulled this card first, anywhere, and
+     mintedTotal is how many serials it has handed out. Both come from the
+     server's mint registry, so they are only present on a synced collection;
+     sanitizeCard deliberately drops them rather than persisting a server fact
+     into localStorage. */
+  serial?: number | null;
+  mintedTotal?: number;
 }
 
 export interface PackWallet {

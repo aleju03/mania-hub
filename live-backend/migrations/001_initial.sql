@@ -670,6 +670,68 @@ create index if not exists idx_pack_pull_events_time
 create index if not exists idx_pack_pull_events_notable_time
   on pack_pull_events(pulled_at desc) where notable = 1;
 
+-- Mint registry: the serial number a collector holds a card at. #1 is whoever
+-- pulled that card first, anywhere. One row per (card, owner), written once on
+-- the owner's first pull and never renumbered, so a serial survives duplicates,
+-- recycling and pull-event retention alike. card_key mirrors the wallet key, so
+-- a player's GOAT is serialled separately from their ordinary card.
+create table if not exists pack_card_serials (
+  card_key text not null,
+  card_user_id integer not null,
+  owner_user_id integer not null,
+  serial integer not null,
+  minted_at integer not null,
+  primary key(card_key, owner_user_id)
+);
+create index if not exists idx_pack_card_serials_card
+  on pack_card_serials(card_key, serial);
+create index if not exists idx_pack_card_serials_owner
+  on pack_card_serials(owner_user_id, minted_at desc);
+
+-- Pack duels: two collectors' hands compared for bragging rights. A challenge
+-- duel freezes the hand from a pack each side opened, while a blackjack duel
+-- deals a deck and each side plays it against a target of 21. Nothing here
+-- touches the economy: duel cards are never added to a collection, and card
+-- values are client-reported the same way the pull log is. The deck is the
+-- exception and is server-held: it is frozen at creation, the server deals
+-- from each side's own half of it, and neither hand is readable by the other
+-- player until both have stopped.
+create table if not exists pack_duels (
+  id text primary key,
+  kind text not null,
+  pack_type text not null,
+  status text not null,
+  challenger_user_id integer not null,
+  challenger_username text not null,
+  challenger_cards_json text,
+  challenger_score real not null default 0,
+  -- Blackjack: the side has stopped, by standing or by busting.
+  challenger_done integer not null default 0,
+  opponent_user_id integer,
+  opponent_username text,
+  opponent_cards_json text,
+  opponent_score real not null default 0,
+  opponent_done integer not null default 0,
+  -- Blackjack: the deck, and the log of which side each dealt card went to.
+  pool_json text,
+  deals_json text,
+  -- Mirrors deals_json's length so a hit can guard on it: two hits fired at
+  -- once, and only the one that matched the count it read gets to land.
+  deals_count integer not null default 0,
+  winner text,
+  created_at integer not null,
+  updated_at integer not null,
+  resolved_at integer
+);
+create index if not exists idx_pack_duels_created
+  on pack_duels(created_at desc);
+create index if not exists idx_pack_duels_challenger
+  on pack_duels(challenger_user_id, created_at desc);
+create index if not exists idx_pack_duels_opponent
+  on pack_duels(opponent_user_id, created_at desc);
+create index if not exists idx_pack_duels_resolved
+  on pack_duels(resolved_at desc) where status = 'resolved';
+
 -- Discord bot: live-feed channel subscriptions. A row means "post events of
 -- feed_type for `country` into Discord channel_id". The unique key keeps a
 -- channel from being subscribed twice to the same feed/country pair.

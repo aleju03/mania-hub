@@ -46,6 +46,7 @@ import { Route as ApiOszRouteImport } from './routes/api/osz'
 import { Route as ApiReplayUploadRouteImport } from './routes/api/replay-upload'
 import { Route as ApiSyncRouteImport } from './routes/api/sync'
 import { Route as DevOptInPreviewRouteImport } from './routes/dev.opt-in-preview'
+import { Route as DuelDuelIdRouteImport } from './routes/duel/$duelId'
 import { Route as PlayerUsernameRouteImport } from './routes/player/$username'
 import { Route as SkinsIdRouteImport } from './routes/skins_.$id'
 import { Route as ApiAuthLogoutRouteImport } from './routes/api/auth/logout'
@@ -245,6 +246,11 @@ const DevOptInPreviewRoute = DevOptInPreviewRouteImport.update({
   path: '/dev/opt-in-preview',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DuelDuelIdRoute = DuelDuelIdRouteImport.update({
+  id: '/duel/$duelId',
+  path: '/duel/$duelId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PlayerUsernameRoute = PlayerUsernameRouteImport.update({
   id: '/player/$username',
   path: '/player/$username',
@@ -349,6 +355,7 @@ export interface FileRoutesByFullPath {
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/sync': typeof ApiSyncRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
+  '/duel/$duelId': typeof DuelDuelIdRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
   '/skins/$id': typeof SkinsIdRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
@@ -401,6 +408,7 @@ export interface FileRoutesByTo {
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/sync': typeof ApiSyncRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
+  '/duel/$duelId': typeof DuelDuelIdRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
   '/skins/$id': typeof SkinsIdRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
@@ -454,6 +462,7 @@ export interface FileRoutesById {
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/sync': typeof ApiSyncRoute
   '/dev/opt-in-preview': typeof DevOptInPreviewRoute
+  '/duel/$duelId': typeof DuelDuelIdRoute
   '/player/$username': typeof PlayerUsernameRouteWithChildren
   '/skins_/$id': typeof SkinsIdRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
@@ -508,6 +517,7 @@ export interface FileRouteTypes {
     | '/api/replay-upload'
     | '/api/sync'
     | '/dev/opt-in-preview'
+    | '/duel/$duelId'
     | '/player/$username'
     | '/skins/$id'
     | '/api/auth/logout'
@@ -560,6 +570,7 @@ export interface FileRouteTypes {
     | '/api/replay-upload'
     | '/api/sync'
     | '/dev/opt-in-preview'
+    | '/duel/$duelId'
     | '/player/$username'
     | '/skins/$id'
     | '/api/auth/logout'
@@ -612,6 +623,7 @@ export interface FileRouteTypes {
     | '/api/replay-upload'
     | '/api/sync'
     | '/dev/opt-in-preview'
+    | '/duel/$duelId'
     | '/player/$username'
     | '/skins_/$id'
     | '/api/auth/logout'
@@ -665,6 +677,7 @@ export interface RootRouteChildren {
   ApiReplayUploadRoute: typeof ApiReplayUploadRoute
   ApiSyncRoute: typeof ApiSyncRoute
   DevOptInPreviewRoute: typeof DevOptInPreviewRoute
+  DuelDuelIdRoute: typeof DuelDuelIdRoute
   PlayerUsernameRoute: typeof PlayerUsernameRouteWithChildren
   SkinsIdRoute: typeof SkinsIdRoute
   ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
@@ -934,6 +947,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DevOptInPreviewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/duel/$duelId': {
+      id: '/duel/$duelId'
+      path: '/duel/$duelId'
+      fullPath: '/duel/$duelId'
+      preLoaderRoute: typeof DuelDuelIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/player/$username': {
       id: '/player/$username'
       path: '/player/$username'
@@ -1110,6 +1130,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiReplayUploadRoute: ApiReplayUploadRoute,
   ApiSyncRoute: ApiSyncRoute,
   DevOptInPreviewRoute: DevOptInPreviewRoute,
+  DuelDuelIdRoute: DuelDuelIdRoute,
   PlayerUsernameRoute: PlayerUsernameRouteWithChildren,
   SkinsIdRoute: SkinsIdRoute,
   ApiAuthLogoutRoute: ApiAuthLogoutRoute,
