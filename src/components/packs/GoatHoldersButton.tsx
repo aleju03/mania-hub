@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
+import { ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { CountryFlag } from "../ui/CountryFlag";
 import { useAuth } from "../../lib/auth-context";
@@ -40,6 +41,9 @@ function GoatHoldersModal({ onClose }: { onClose: () => void }) {
   const [report, setReport] = useState<LiveBackendHonoraryPulls | null>(null);
   const [unsupported, setUnsupported] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // One card open at a time: a popular card's holder list is long enough that
+  // two of them expanded would bury the rest of the roster.
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -126,13 +130,15 @@ function GoatHoldersModal({ onClose }: { onClose: () => void }) {
               <div className="mt-1 text-[11px] text-osu-f1">
                 Holders of each card, including copies pulled before the player joined the roster.
               </div>
-              <div className="mt-4 space-y-1.5">
+              <div className="mt-4">
                 {rows.map(({ player, pulls }) => (
                   <GoatHolderRow
                     key={player.id}
                     player={player}
                     pulls={pulls}
                     ownersPerCard={report.ownersPerCard}
+                    expanded={expandedId === player.id}
+                    onToggle={() => setExpandedId(expandedId === player.id ? null : player.id)}
                   />
                 ))}
               </div>
@@ -144,50 +150,71 @@ function GoatHoldersModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+/* Collapsed by default: the roster reads as a scannable list of counts, and
+   the names (which can run to hundreds on a popular card) only unfold when
+   asked for, into their own bounded scroll area. */
 function GoatHolderRow({
   player,
   pulls,
   ownersPerCard,
+  expanded,
+  onToggle,
 }: {
   player: HonoraryPlayer;
   pulls: LiveBackendHonoraryCardPulls | null;
   ownersPerCard: number;
+  expanded: boolean;
+  onToggle: () => void;
 }) {
   const owners = pulls?.owners ?? [];
   const hidden = (pulls?.ownerCount ?? 0) - owners.length;
+  const label = player.cardName ?? player.username;
+
   return (
-    <div className={`rounded-lg bg-osu-b5/60 px-3 py-2 ${pulls ? "" : "opacity-50"}`}>
-      <div className="flex items-center gap-2 min-w-0">
+    <div className="border-b border-osu-b3/15 last:border-b-0">
+      <button
+        type="button"
+        onClick={pulls ? onToggle : undefined}
+        aria-expanded={pulls ? expanded : undefined}
+        className={`flex w-full items-center gap-2.5 py-2 text-left ${pulls ? "cursor-pointer hover:text-white" : "cursor-default"}`}
+      >
+        <ChevronRight
+          className={`h-3 w-3 flex-shrink-0 transition-transform ${expanded ? "rotate-90" : ""} ${pulls ? "text-osu-f1" : "text-transparent"}`}
+          aria-hidden="true"
+        />
         <CountryFlag code={player.countryCode} size="sm" />
-        <span className="min-w-0 flex-1 truncate text-[12px] font-bold text-white">
-          {player.cardName ?? player.username}
+        <span className={`min-w-0 flex-1 truncate text-[13px] font-bold ${pulls ? "text-white" : "text-osu-f1"}`}>
+          {label}
         </span>
-        {pulls ? (
-          <>
-            <span className="flex-shrink-0 text-[13px] font-bold tabular-nums text-amber-200">
-              {formatNumber(pulls.ownerCount)}
-            </span>
-            <span className="flex-shrink-0 text-[11px] text-osu-f1">
-              holder{pulls.ownerCount === 1 ? "" : "s"} &middot; {formatNumber(pulls.copies)} copies
-            </span>
-          </>
-        ) : (
-          <span className="flex-shrink-0 text-[11px] text-osu-f1">never pulled</span>
-        )}
         {pulls?.firstPulledAt ? (
           <span
             className="flex-shrink-0 text-[11px] text-osu-f1"
             title={new Date(pulls.firstPulledAt).toLocaleString()}
           >
-            first {formatTimeAgo(new Date(pulls.firstPulledAt).toISOString())}
+            {formatTimeAgo(new Date(pulls.firstPulledAt).toISOString())}
           </span>
         ) : null}
-      </div>
-      {owners.length > 0 ? (
+        {pulls ? (
+          <span className="flex-shrink-0 text-[11px] text-osu-f1">
+            <span className="text-[15px] font-bold tabular-nums text-amber-200">{formatNumber(pulls.ownerCount)}</span>
+            {" "}
+            holder{pulls.ownerCount === 1 ? "" : "s"}
+            {pulls.copies > pulls.ownerCount ? ` · ${formatNumber(pulls.copies)} copies` : ""}
+          </span>
+        ) : (
+          <span className="flex-shrink-0 text-[11px] text-osu-f1">never pulled</span>
+        )}
+      </button>
+      {expanded && owners.length > 0 ? (
         // Oldest first, so the name at the front is whoever pulled it first.
-        <div className="mt-1 text-[11px] text-osu-l2/80 break-words">
+        <div className="max-h-44 overflow-y-auto pb-2.5 pl-[26px] pr-1 text-[11px] leading-relaxed text-osu-l2/80 [scrollbar-gutter:stable]">
           {owners.map((owner) => `${owner.username}${owner.copies > 1 ? ` x${owner.copies}` : ""}`).join(" · ")}
-          {hidden > 0 ? ` · +${formatNumber(hidden)} more (capped at ${formatNumber(ownersPerCard)})` : ""}
+          {hidden > 0 ? (
+            <span className="text-osu-f1">
+              {" "}
+              &middot; +{formatNumber(hidden)} more (list capped at {formatNumber(ownersPerCard)})
+            </span>
+          ) : null}
         </div>
       ) : null}
     </div>
