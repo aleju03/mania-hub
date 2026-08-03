@@ -189,16 +189,6 @@ export const HONORARY_PLAYERS: readonly HonoraryPlayer[] = [
     cardReady: true,
   },
   {
-    id: 22302283,
-    username: "KaneMining",
-    countryCode: "US",
-    avatarUrl: "https://a.ppy.sh/22302283?1731378120.jpeg",
-    peakRank: 2412,
-    peakPp: 10131.2,
-    archived: false,
-    cardReady: true,
-  },
-  {
     id: 2288363,
     username: "SillyFangirl",
     countryCode: "BR",
