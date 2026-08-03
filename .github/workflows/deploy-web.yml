@@ -74,22 +74,47 @@ jobs:
           REL="$WEB_DIR/releases/${{ github.sha }}"
           ssh "$VPS_USER@$VPS_HOST" "ln -sfn '$REL' '$WEB_DIR/current.new' && mv -T '$WEB_DIR/current.new' '$WEB_DIR/current'"
 
-      # inputs.* is undefined on a push, which would silently skip both of these
-      # and leave the old release running against a freshly flipped symlink.
-      - name: Restart
-        if: github.event_name != 'workflow_dispatch' || inputs.restart
-        run: ssh "$VPS_USER@$VPS_HOST" "sudo -n systemctl restart mania-hub-web"
-
-      - name: Health check
+      # Rolling restart, one instance at a time. Caddy load-balances 3000 and
+      # 3001, so waiting for each to serve before touching the next means there
+      # is always a live upstream and visitors never see the gap. Restarting
+      # both at once would drop every request for the ~15s node takes to boot
+      # on this box, which is what used to surface as a 502 mid-deploy.
+      #
+      # inputs.* is undefined on a push, which would silently skip this and
+      # leave the old release running against a freshly flipped symlink.
+      - name: Rolling restart
         if: github.event_name != 'workflow_dispatch' || inputs.restart
         run: |
           ssh "$VPS_USER@$VPS_HOST" '
-            for i in $(seq 1 30); do
-              code=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: ninja.mania-tracker.com" http://127.0.0.1:3000/ || true)
-              if [ "$code" = "200" ]; then echo "healthy after ${i}s"; exit 0; fi
-              sleep 1
+            set -e
+            wait_ready() {
+              for i in $(seq 1 90); do
+                code=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: ninja.mania-tracker.com" "http://127.0.0.1:$1/" || true)
+                if [ "$code" = "200" ]; then echo "  port $1 ready after ${i}s"; return 0; fi
+                sleep 1
+              done
+              echo "  port $1 never returned 200 (last: $code)"
+              systemctl --no-pager -n 40 status "mania-hub-web@$1" || true
+              return 1
+            }
+            for port in 3000 3001; do
+              echo "restarting mania-hub-web@$port"
+              sudo -n systemctl restart "mania-hub-web@$port"
+              wait_ready "$port"
             done
-            echo "never returned 200 (last: $code)"; systemctl --no-pager -n 40 status mania-hub-web || true; exit 1
+          '
+
+      # Through Caddy this time, not the loopback ports: catches a config or
+      # TLS problem that a direct-to-node check would sail straight past.
+      - name: Health check via Caddy
+        if: github.event_name != 'workflow_dispatch' || inputs.restart
+        run: |
+          ssh "$VPS_USER@$VPS_HOST" '
+            for host in ninja.mania-tracker.com mania-tracker.com; do
+              code=$(curl -s -o /dev/null -w "%{http_code}" --resolve "$host:443:127.0.0.1" "https://$host/" || true)
+              if [ "$code" != "200" ]; then echo "$host returned $code"; exit 1; fi
+              echo "  $host ok"
+            done
           '
 
       # Keep the 3 newest releases; older ones are just disk. Never touches
