@@ -9,6 +9,13 @@ import type { FlightRect, RevealedCard } from "./RevealStage";
 interface PackSummaryProps {
   cards: RevealedCard[];
   onOpenAnother: () => void;
+  /* Deals and tears the next pack of the same type straight from here,
+     skipping the trip back to the pack stage. */
+  onOpenNext: () => void;
+  canOpenNext: boolean;
+  /* Shard price of that next pack, so a one-click purchase still shows its
+     cost. Null for the charge-funded standard pack. */
+  nextPackShardCost: number | null;
   reducedMotion: boolean;
   /* Reveal-all handoff: where each card's tile sat when the reveal finished,
      keyed by card position. Present = the viewer already saw every card, so
@@ -45,7 +52,15 @@ function toSpotlightCard(card: RevealedCard): CollectedCard {
   };
 }
 
-export function PackSummary({ cards, onOpenAnother, reducedMotion, flyFrom = null }: PackSummaryProps) {
+export function PackSummary({
+  cards,
+  onOpenAnother,
+  onOpenNext,
+  canOpenNext,
+  nextPackShardCost,
+  reducedMotion,
+  flyFrom = null,
+}: PackSummaryProps) {
   const instant = flyFrom !== null;
   const bestRank = Math.min(...cards.map((card) => card.player.globalRank));
   const newCount = cards.filter((card) => card.isNew).length;
@@ -219,13 +234,30 @@ export function PackSummary({ cards, onOpenAnother, reducedMotion, flyFrom = nul
         })}
       </div>
 
-      <button
-        type="button"
-        onClick={onOpenAnother}
-        className="mt-8 rounded-full bg-osu-pink px-7 py-2.5 text-sm font-bold text-white hover:brightness-110 transition cursor-pointer"
-      >
-        Back to packs
-      </button>
+      <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+        <button
+          type="button"
+          onClick={onOpenNext}
+          disabled={!canOpenNext}
+          className={`rounded-full px-7 py-2.5 text-sm font-bold transition ${
+            canOpenNext
+              ? "bg-osu-pink text-white hover:brightness-110 cursor-pointer"
+              : "bg-osu-b4/60 text-osu-f1/70"
+          }`}
+        >
+          Open another
+          {nextPackShardCost !== null && (
+            <span className="ml-1.5 font-semibold tabular-nums opacity-80">{nextPackShardCost} shards</span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={onOpenAnother}
+          className="rounded-full border border-osu-b3/50 px-6 py-2.5 text-sm font-bold text-osu-f1 transition-colors hover:border-osu-f1/40 hover:text-white cursor-pointer"
+        >
+          Back to packs
+        </button>
+      </div>
       <div className="mt-3 text-[11px] text-osu-f1">
         {newCount > 0
           ? `${newCount} new card${newCount === 1 ? "" : "s"} added to your collection.`

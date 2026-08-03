@@ -12,9 +12,9 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 // Cache growth is bounded by R2 lifecycle rules configured per prefix in the Cloudflare
-// dashboard. As of 2026-07-30 the only rules are: parsed/ 90d, uploaded-replay-desc/ 90d,
-// and the default multipart-abort (7d). Everything else (audio/, background/, blob/, og/,
-// maniacards/, replays/, community-beatmaps/, uploaded-replays/, videos/) never expires.
+// dashboard. As of 2026-08-03 the rules are: parsed/ 90d, uploaded-replay-desc/ 90d,
+// maniacards/ 90d, and the default multipart-abort (7d). Everything else (audio/,
+// background/, blob/, og/, replays/, community-beatmaps/, uploaded-replays/, videos/) never expires.
 // uploaded-replays/, community-beatmaps/, and videos/ hold user data with no other durable
 // copy and must NEVER get a lifecycle rule; the rest is re-derivable cache, so adding a
 // rule later is safe (a miss re-uploads and refreshes the object's age). Replay endpoint
@@ -334,6 +334,7 @@ export async function putJsonArtifact(storageKey: string, value: unknown): Promi
 
 const MANIACARD_THUMBNAIL_CACHE_PREFIX = `${REPLAY_CACHE_PREFIX}maniacards/`;
 const MANIACARD_THUMBNAIL_CONTENT_TYPE = "image/webp";
+const MANIACARD_THUMBNAIL_KEY_PATTERN = /^(v\d+)-w\d+-u(\d+)-[a-f0-9]{16}$/;
 
 function getPublicReplayCacheUrl(storageKey: string): string | null {
   const publicBaseUrl = getPublicReplayCacheBaseUrl();
@@ -343,8 +344,16 @@ function getPublicReplayCacheUrl(storageKey: string): string | null {
 }
 
 export function getManiaCardThumbnailStorageKey(cacheKey: string): string {
+  const match = MANIACARD_THUMBNAIL_KEY_PATTERN.exec(cacheKey);
+  if (!match) throw new Error("Invalid maniacard thumbnail cache key.");
+  const version = match[1]!;
+  const userId = match[2]!;
   const hash = crypto.createHash("sha256").update(cacheKey).digest("hex").slice(0, 40);
-  return `${MANIACARD_THUMBNAIL_CACHE_PREFIX}${hash}.webp`;
+  // v1 objects predate the inspectable hierarchy. Preserve their address for
+  // old clients while every newer renderer writes into its own removable
+  // namespace and groups a player's variants together in the R2 browser.
+  if (version === "v1") return `${MANIACARD_THUMBNAIL_CACHE_PREFIX}${hash}.webp`;
+  return `${MANIACARD_THUMBNAIL_CACHE_PREFIX}${version}/${userId}/${hash}.webp`;
 }
 
 export async function getManiaCardThumbnailUrl(cacheKey: string): Promise<string | null> {
@@ -1155,4 +1164,3 @@ export async function deleteR2AdminPrefix(prefixInput: string): Promise<R2AdminD
     deletedBytes,
   };
 }
-

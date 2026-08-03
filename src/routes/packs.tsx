@@ -355,6 +355,9 @@ function PacksPage() {
      summary skips its enter ceremony and flies the cards into place. */
   const [summaryFlyFrom, setSummaryFlyFrom] = useState<Map<number, FlightRect> | null>(null);
   const [dealError, setDealError] = useState(false);
+  /* Set by "Open another" on the summary: the next deal skips the pack stage
+     and charges itself as soon as it has cards. */
+  const autoOpenRef = useRef(false);
   const [collectionPanelReady, setCollectionPanelReady] = useState(true);
   const [collectionPanelMounted, setCollectionPanelMounted] = useState(true);
   // Holds the last wallet the visible collection rendered. Spending a pack
@@ -385,6 +388,18 @@ function PacksPage() {
   const charges = wallet?.charges ?? 0;
   const shards = wallet?.shards ?? 0;
   const nextChargeMs = wallet ? msUntilNextCharge(wallet, walletApi.nowMs || Date.now()) : null;
+
+  /* The moment of purchase: one charge or the pack's shard price. False means
+     the wallet could not pay (a charge burned on another tab, shards spent
+     elsewhere), and the caller keeps the pack unopened. */
+  const chargeForPack = (type: PackTypeDef): boolean => {
+    if (!walletApi.openPack(type.cost)) return false;
+    track("pack_open", {
+      pack_type: type.id,
+      pack_username: auth.viewer?.username,
+    });
+    return true;
+  };
 
   // Build and encode the neutral reveal back while the unopened pack is idle.
   // RevealStage can then mount without a synchronous canvas + PNG spike.
@@ -447,7 +462,15 @@ function PacksPage() {
           void warmLivePackPlayers(draw.players.map((player) => player.user.id)).catch(() => {});
         }
         setCards(buildCardStates(draw.players));
+        /* A pack opened straight from the summary pays here rather than at the
+           slash, because there is no slash: charging only once the draw
+           succeeded keeps a failed deal from eating the price. */
+        if (autoOpenRef.current) {
+          autoOpenRef.current = false;
+          setPhase(chargeForPack(type) ? "reveal" : "pack");
+        }
       } catch {
+        autoOpenRef.current = false;
         if (!cancelled) setDealError(true);
       }
     })();
@@ -490,23 +513,32 @@ function PacksPage() {
   const openAnother = () => {
     setRevealed([]);
     setSummaryFlyFrom(null);
+    autoOpenRef.current = false;
     // Keep the chosen pack type across packs while it stays affordable.
     if (!canAffordPack(walletApi.wallet, packTypeById(packTypeId))) setPackTypeId("standard");
     setPhase("pack");
     setPackId((id) => id + 1);
   };
 
+  /* Straight from the summary into the next pack of the same type: the deal
+     starts now and tears itself open once it lands, so the shuffle stands in
+     for the pack stage. */
+  const openNextPack = () => {
+    if (!canAffordPack(walletApi.wallet, selectedType)) return;
+    setRevealed([]);
+    setSummaryFlyFrom(null);
+    autoOpenRef.current = true;
+    setPhase("reveal");
+    setPackId((id) => id + 1);
+  };
+
   const handleOpened = () => {
-    // The slash is the moment of purchase: one charge or the shard price.
-    if (!walletApi.openPack(selectedType.cost)) {
+    // The slash is the moment of purchase.
+    if (!chargeForPack(selectedType)) {
       setPackTypeId("standard");
       setPackId((id) => id + 1);
       return;
     }
-    track("pack_open", {
-      pack_type: selectedType.id,
-      pack_username: auth.viewer?.username,
-    });
     setPhase("reveal");
   };
 
@@ -631,6 +663,11 @@ function PacksPage() {
                         reducedMotion={reducedMotion}
                         flyFrom={summaryFlyFrom}
                         onOpenAnother={openAnother}
+                        onOpenNext={openNextPack}
+                        canOpenNext={canOpen}
+                        nextPackShardCost={
+                          selectedType.cost.kind === "shards" ? selectedType.cost.amount : null
+                        }
                       />
                     ) : cards ? (
                       <RevealStage

@@ -4,15 +4,15 @@ import {
   fetchR2PackCardThumbnail,
   uploadR2PackCardThumbnail,
 } from "#/lib/pack-card-thumbnails";
-import {
-  buildManiaCardRenderDataFromSkills,
-  getManiaCardRenderDataSignature,
-} from "../player/maniacard3d/renderData";
+import { buildManiaCardRenderDataFromSkills } from "../player/maniacard3d/renderData";
 import type { ManiaCardReadyData } from "../player/maniacard3d/types";
 
 export const COLLECTION_CARD_THUMB_WIDTH = 240;
 
-const CACHE_VERSION = "v1";
+/* This version describes the pixels in a cached thumbnail, not the wider
+   maniacard data model. Bump it whenever cardTexture/textureLayout changes in
+   a way that can change the rendered front while these inputs stay equal. */
+const CACHE_VERSION = "v2";
 const CACHE_NAME = `mania-hub-maniacard-thumbs-${CACHE_VERSION}`;
 const CACHE_ROUTE = "/__mania-card-thumbnails/";
 const MAX_MEMORY_THUMBNAILS = 180;
@@ -119,17 +119,41 @@ async function uploadThumbnailToR2(key: string, blob: Blob): Promise<void> {
 }
 
 export function cardThumbnailKeyForData(data: ManiaCardReadyData, width = COLLECTION_CARD_THUMB_WIDTH): string {
-  const sourceSignature = [
-    getManiaCardRenderDataSignature(data),
-    data.user.avatar_url ?? "",
-  ].join("|avatar:");
+  const sourceSignature = getCardThumbnailRenderSignature(data);
   return `${CACHE_VERSION}-w${width}-u${data.user.id}-${hashString(sourceSignature)}`;
 }
 
-/* Building a key means rebuilding the whole render data, parsing two CSS
-   colours and a gradient, serializing a ~400-character signature and hashing
-   it. The album asks for the same cards' keys twice on every one of its
-   renders -- once for the spread signature, once per slot, both outside the
+/* Deliberately narrower than getManiaCardRenderDataSignature: the thumbnail
+   is only the card's front texture. Country, next-tier progress and the
+   non-displayed skill axes belong to the full 3D panel, so keying on them
+   caused identical thumbnails to be re-uploaded when unrelated card data or
+   UI behavior changed. The avatar render URL already carries osu!'s version
+   token, making the raw source URL redundant here. */
+function getCardThumbnailRenderSignature(data: ManiaCardReadyData): string {
+  return [
+    data.user.username,
+    data.avatarUrl,
+    data.tier,
+    data.tierStyle.label,
+    signatureColor(data.glowColor),
+    data.badgeGradientStops.map((stop) => `${stop.color}:${signatureNumber(stop.offset)}`).join(","),
+    signatureNumber(data.skills.starAvg),
+    data.stats.map((stat) => `${stat.label}:${signatureNumber(stat.value)}`).join(","),
+  ].join("|");
+}
+
+function signatureColor(color: { r: number; g: number; b: number; a: number }): string {
+  return [color.r, color.g, color.b, color.a].map(signatureNumber).join(",");
+}
+
+function signatureNumber(value: number): string {
+  return Number.isFinite(value) ? String(value) : "";
+}
+
+/* Building a key means rebuilding the render data, parsing the tier colours
+   and hashing the front texture's inputs. The album asks for the same cards'
+   keys twice on every one of its renders -- once for the spread signature,
+   once per slot, both outside the
    memoized slot itself -- so the answer is cached per card object. The wallet
    and the server collection are copy-on-write, so a card whose data changed is
    always a different object and can never be served a stale key. Keyed by

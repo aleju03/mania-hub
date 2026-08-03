@@ -236,12 +236,13 @@ function CollectionPager({
       </button>
       {jumpOpen ? (
         <form
-          className="flex min-w-[118px] items-center justify-center gap-1"
+          className="flex min-w-[132px] items-center justify-center gap-1"
           onSubmit={(event) => {
             event.preventDefault();
             submitJump();
           }}
         >
+          <span>Page</span>
           <input
             type="number"
             min={1}
@@ -257,8 +258,9 @@ function CollectionPager({
             autoFocus
             placeholder={String(page + 1)}
             className="w-12 rounded-md border border-osu-b3/60 bg-osu-b5/70 px-1.5 py-0.5 text-center tabular-nums text-white outline-none focus:border-osu-pink/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            aria-label={`Page number, 1 to ${totalPages}`}
           />
-          <span>/ {totalPages}</span>
+          <span>of {totalPages}</span>
         </form>
       ) : (
         <button
@@ -267,10 +269,12 @@ function CollectionPager({
             setJumpValue("");
             setJumpOpen(true);
           }}
-          className="min-w-[118px] rounded-md px-2 py-0.5 text-center tabular-nums transition-colors hover:bg-osu-b4/60 hover:text-white cursor-pointer"
+          className="min-w-[132px] rounded-md px-2 py-0.5 text-center tabular-nums transition-colors hover:bg-osu-b4/60 hover:text-white cursor-pointer"
           title="Jump to a page"
         >
-          {total === 0 ? "0" : `${pageStart + 1}-${pageEnd}`} / {total}
+          {total === 0
+            ? "No cards"
+            : `${pageStart + 1}–${pageEnd} of ${total.toLocaleString("en-US")} cards`}
         </button>
       )}
       <button
