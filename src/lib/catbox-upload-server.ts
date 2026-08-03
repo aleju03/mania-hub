@@ -20,6 +20,7 @@
 
 import { isLocalDevAccessGranted } from "./auth-local-dev";
 import { readViewerFromRequest } from "./auth-server";
+import { MAX_IMAGE_UPLOAD_BYTES, TOO_LARGE_MESSAGE } from "./catbox-upload";
 import { sniffImageMime } from "./image-sniff";
 import { isSameOriginRequest } from "./origin";
 import { storePublicImage } from "./public-image-store";
@@ -34,8 +35,9 @@ import {
 
 // Profile art stays small, so the cap is about abuse rather than fidelity: we
 // pay for this storage ourselves now, and 12 uploads a minute per account adds
-// up faster at a generous limit than any profile banner justifies.
-const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+// up faster at a generous limit than any profile banner justifies. Shared with
+// the client, which checks it first so nobody uploads 5MB to be told no.
+const MAX_UPLOAD_BYTES = MAX_IMAGE_UPLOAD_BYTES;
 const MAX_PROXY_BYTES = 20 * 1024 * 1024;
 const PROXY_FETCH_TIMEOUT_MS = 15_000;
 
@@ -130,7 +132,7 @@ export async function handleCatboxUploadPost(
 
   const buffer = await readCappedBody(request, MAX_UPLOAD_BYTES);
   if (!buffer) {
-    return Response.json({ error: "Image is too large (max 5MB)." }, { status: 413 });
+    return Response.json({ error: TOO_LARGE_MESSAGE }, { status: 413 });
   }
   if (buffer.length === 0) {
     return Response.json({ error: "Image is empty." }, { status: 400 });

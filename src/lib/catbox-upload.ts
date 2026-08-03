@@ -4,6 +4,13 @@
 
 const ENDPOINT = "/api/catbox-upload";
 
+// The server enforces this too and is the real gate; checking here first saves
+// pushing megabytes up a slow connection only to be refused, and avoids the
+// mid-upload connection reset an early server rejection causes. The server
+// imports this constant so the two can't drift apart.
+export const MAX_IMAGE_UPLOAD_BYTES = 5 * 1024 * 1024;
+export const TOO_LARGE_MESSAGE = "Image is too large (max 5MB).";
+
 const ALLOWED_IMAGE_MIME = new Set([
   "image/png",
   "image/jpeg",
@@ -19,6 +26,9 @@ export function isUploadableImage(file: { type: string }): boolean {
 
 /** Uploads image bytes to catbox via our proxy; resolves to the hosted URL. */
 export async function uploadImageToCatbox(file: Blob): Promise<string> {
+  if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+    throw new Error(TOO_LARGE_MESSAGE);
+  }
   const type = file.type && isUploadableImage(file) ? file.type : "image/png";
   const res = await fetch(ENDPOINT, {
     method: "POST",
