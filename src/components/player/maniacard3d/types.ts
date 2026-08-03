@@ -6,6 +6,8 @@ export interface ManiaCardPanelProps {
     statistics?: { global_rank: number | null; pp?: number };
   };
   scores: OsuScore[];
+  /** Full-window skills supplied by surfaces that intentionally carry only a partial score list. */
+  precomputedSkills?: ManiaSkills;
   loading: boolean;
   /** True only when the signed-in viewer is looking at their own card. Gates the "You" ladder badge. */
   isOwnProfile?: boolean;

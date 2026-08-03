@@ -7,7 +7,11 @@ import {
   type NextManiaCardTier,
 } from "#/lib/maniacard";
 import { ManiaCardRenderer } from "./ManiaCardRenderer";
-import { buildManiaCardRenderData, getManiaCardRenderDataSignature } from "./renderData";
+import {
+  buildManiaCardRenderData,
+  buildManiaCardRenderDataFromSkills,
+  getManiaCardRenderDataSignature,
+} from "./renderData";
 import type { ManiaCardPanelProps, ManiaCardReadyData } from "./types";
 import { isWindowActive, subscribeWindowActivity } from "#/lib/window-activity";
 
@@ -133,6 +137,7 @@ const TIER_LADDER: Array<{ tier: ManiaCardTier; min: number }> = [
 export function ManiaCard3DPanel({
   user,
   scores,
+  precomputedSkills,
   loading,
   isOwnProfile = false,
   tierOverride,
@@ -148,8 +153,10 @@ export function ManiaCard3DPanel({
   const [ratingModalOpen, setRatingModalOpen] = useState(false);
   const reducedMotion = useReducedMotion();
   const data = useMemo(
-    () => buildManiaCardRenderData({ user, scores, tierOverride }),
-    [user, scores, tierOverride],
+    () => precomputedSkills
+      ? buildManiaCardRenderDataFromSkills({ user, skills: precomputedSkills, scores, tierOverride })
+      : buildManiaCardRenderData({ user, scores, tierOverride }),
+    [precomputedSkills, scores, tierOverride, user],
   );
   const dataSignature = useMemo(() => getManiaCardRenderDataSignature(data), [data]);
   const rendererReady = readySignature === dataSignature;

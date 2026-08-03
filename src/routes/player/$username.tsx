@@ -1,7 +1,7 @@
 import { Link, createFileRoute, useLocation, useNavigate } from "@tanstack/react-router";
 import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, Pencil, RefreshCw, X } from "lucide-react";
+import { Check, ExternalLink, Pencil, RefreshCw, X } from "lucide-react";
 import {
   getUser,
   getUserScoresBestWindow,
@@ -53,13 +53,15 @@ import { showTrackingStartedToast } from "../../components/me/TrackingToasts";
 import { GradeImg } from "../../components/ui/GradeImg";
 import { OsuLogo } from "../../components/ui/OsuLogo";
 import { CountryFlag } from "../../components/ui/CountryFlag";
+import { StarRatingBadge } from "../../components/ui/StarRating";
+import { getManiaJudgementStats } from "../../components/ui/ManiaJudgementStats";
 import { ModBadge } from "../../components/ui/ModBadge";
 import { LazerBadge } from "../../components/ui/LazerBadge";
 import { DanBadge } from "../../components/ui/DanBadge";
 import { ScoreRowSkeleton, Skeleton } from "../../components/ui/LoadingSkeleton";
 import { UsernameText } from "../../components/ui/UsernameText";
 import { ManiaCard3DPanel as ManiaCardPanel } from "../../components/player/maniacard3d/ManiaCard3DPanel";
-import type { ManiaCardTier } from "../../lib/maniacard";
+import { computeManiaSkills, type ManiaCardTier, type ManiaSkills } from "../../lib/maniacard";
 import { SkillBreakdownBody, SkillModePanel, qualifyingSkillModes, skillRatingAccent } from "../../components/player/SkillBreakdown";
 import type { InsightScoreSnapshot, OsuCovers, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
 import { buildPpDistribution, calculateUserProfileInsights } from "../../lib/profile-insights";
@@ -230,6 +232,18 @@ function hasLegacyShowCountryParam(searchStr: string): boolean {
 export type PlayerLoaderData = {
   cachedSnapshot: LivePlayerProfileSnapshot | null;
   cachedInsights: UserProfileInsights | null;
+  cachedBestFilters: PlayerBestFilterMetadata | null;
+  cachedManiaCardSkills: ManiaSkills | null;
+};
+
+type PlayerBestFilterMetadata = {
+  keyModes: string[];
+  mods: string[];
+};
+
+const EMPTY_PLAYER_BEST_FILTERS: PlayerBestFilterMetadata = {
+  keyModes: [],
+  mods: [],
 };
 
 // The cached snapshot is dehydrated into the SSR HTML, so every byte here is
@@ -330,15 +344,21 @@ function slimLoaderSnapshot(snapshot: LivePlayerProfileSnapshot): LivePlayerProf
   };
 }
 
-// Keep the SSR score payload capped without changing the meaning of the
-// profile-wide insight cards. Those cards summarize the whole top-200 window,
-// so calculate their small projection before trimming the scores used to paint
-// the initial list.
+// Keep the SSR score payload capped without changing full-window UI: insights,
+// filter options, and Maniacard skills are tiny projections calculated before
+// trimming the scores used to paint the initial list.
 export function buildPlayerLoaderData(snapshot: LivePlayerProfileSnapshot | null): PlayerLoaderData {
+  const bestScores = snapshot ? dedupeScores(snapshot.bestScores) : [];
   return {
-    cachedSnapshot: snapshot ? slimLoaderSnapshot(snapshot) : null,
-    cachedInsights: snapshot?.bestScores.length
-      ? calculateUserProfileInsights(snapshot.bestScores)
+    cachedSnapshot: snapshot ? slimLoaderSnapshot({ ...snapshot, bestScores }) : null,
+    cachedInsights: bestScores.length
+      ? calculateUserProfileInsights(bestScores)
+      : null,
+    cachedBestFilters: bestScores.length
+      ? buildPlayerBestFilterMetadata(bestScores)
+      : null,
+    cachedManiaCardSkills: bestScores.length
+      ? computeManiaSkills(bestScores, { globalPp: snapshot?.user.statistics?.pp })
       : null,
   };
 }
@@ -640,6 +660,13 @@ function getRelevantMods(scores: OsuScore[]): string[] {
 
   if (noModCount > 0) sorted.unshift(NO_MOD_KEY);
   return sorted;
+}
+
+function buildPlayerBestFilterMetadata(scores: OsuScore[]): PlayerBestFilterMetadata {
+  return {
+    keyModes: getAvailableKeyModes(scores),
+    mods: getRelevantMods(scores),
+  };
 }
 
 function dedupeScores(scores: OsuScore[]): OsuScore[] {
@@ -1019,8 +1046,12 @@ export function PlayerProfilePage({
   // caps that list at 50, while these cards promise to describe the full
   // top-play window.
   const loaderProfileInsights = loaderData?.cachedInsights ?? null;
+  const loaderBestFilters = loaderData?.cachedBestFilters ?? EMPTY_PLAYER_BEST_FILTERS;
+  const loaderManiaCardSkills = loaderData?.cachedManiaCardSkills ?? null;
   const [user, setUser] = useState<OsuUser | null>(() => loaderSnapshot?.user ?? null);
   const [best, setBest] = useState<OsuScore[]>(() => loaderBestScores);
+  const [bestFilters, setBestFilters] = useState<PlayerBestFilterMetadata>(() => loaderBestFilters);
+  const [maniaCardSkills, setManiaCardSkills] = useState<ManiaSkills | null>(() => loaderManiaCardSkills);
   const [recent, setRecent] = useState<OsuScore[]>([]);
   const [aboutHtml, setAboutHtml] = useState<string | null>(null);
   const [aboutRaw, setAboutRaw] = useState<string | null>(null);
@@ -1066,6 +1097,9 @@ export function PlayerProfilePage({
     readPpDistributionModePreference(),
   );
   const [ppKeyFilter, setPpKeyFilter] = useState<KeyFilter>("all");
+  // The score a row was clicked on; its details take over the modal layer
+  // instead of the row sending everyone off to osu!.
+  const [detailScore, setDetailScore] = useState<OsuScore | null>(null);
   const [recentPlayAt, setRecentPlayAt] = useState<string | null>(null);
   const [recentHasMore, setRecentHasMore] = useState(false);
   const [bestVisibleCount, setBestVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
@@ -1129,18 +1163,19 @@ export function PlayerProfilePage({
   }, [username]);
 
   useEffect(() => {
-    if (!avatarOpen && !modModalOpen && !bpmModalOpen && !ppModalOpen) return;
+    if (!avatarOpen && !modModalOpen && !bpmModalOpen && !ppModalOpen && !detailScore) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setAvatarOpen(false);
         setModModalOpen(false);
         setBpmModalOpen(false);
         setPpModalOpen(false);
+        setDetailScore(null);
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [avatarOpen, modModalOpen, bpmModalOpen, ppModalOpen]);
+  }, [avatarOpen, modModalOpen, bpmModalOpen, ppModalOpen, detailScore]);
 
   useEffect(() => {
     const rail = tabsRailRef.current;
@@ -1177,6 +1212,8 @@ export function PlayerProfilePage({
     if (isNewProfile) {
       setUser(seededUser);
       setBest(loaderBestScores);
+      setBestFilters(loaderBestFilters);
+      setManiaCardSkills(loaderManiaCardSkills);
       setProfileInsights(loaderProfileInsights);
       setBestWindowLoaded(hasLoaderBestScores);
       setWaitingForSnapshotBest(!hasLoaderBestScores);
@@ -1242,6 +1279,8 @@ export function PlayerProfilePage({
       if (result.bestScores.length > 0) {
         const dedupedScores = dedupeScores(result.bestScores);
         setBest((current) => scoreListsAreEquivalent(current, dedupedScores) ? current : dedupedScores);
+        setBestFilters(buildPlayerBestFilterMetadata(dedupedScores));
+        setManiaCardSkills(computeManiaSkills(dedupedScores, { globalPp: result.user.statistics?.pp }));
         setBestWindowLoaded(true);
         setBestError(null);
         setProfileInsights(calculateUserProfileInsights(dedupedScores));
@@ -1334,7 +1373,7 @@ export function PlayerProfilePage({
       if (snapshotTimer) window.clearTimeout(snapshotTimer);
       clearMetadataRetry();
     };
-  }, [initialTab, loaderBestScores, loaderProfileInsights, loaderSnapshot, username]);
+  }, [initialTab, loaderBestFilters, loaderBestScores, loaderManiaCardSkills, loaderProfileInsights, loaderSnapshot, username]);
 
   useEffect(() => {
     if (!user || bestWindowLoaded || waitingForSnapshotBest) return;
@@ -1353,6 +1392,8 @@ export function PlayerProfilePage({
           if (cancelled) return;
           const dedupedScores = dedupeScores(windowScores);
           setBest((current) => scoreListsAreEquivalent(current, dedupedScores) ? current : dedupedScores);
+          setBestFilters(buildPlayerBestFilterMetadata(dedupedScores));
+          setManiaCardSkills(computeManiaSkills(dedupedScores, { globalPp: user!.statistics?.pp }));
           setBestWindowLoaded(true);
           setBestError(null);
           setProfileInsights(calculateUserProfileInsights(dedupedScores));
@@ -1490,7 +1531,7 @@ export function PlayerProfilePage({
     }
   }, [loadingOsuRecent, user]);
 
-  const relevantBestMods = useMemo(() => getRelevantMods(best), [best]);
+  const relevantBestMods = bestFilters.mods;
   const bestPositionByIdentity = useMemo(() => {
     const positions = new Map<string, number>();
     best.forEach((score, index) => {
@@ -1499,10 +1540,10 @@ export function PlayerProfilePage({
     return positions;
   }, [best]);
 
-  const availableKeyModes = useMemo(
-    () => getAvailableKeyModes([...best, ...recent]),
-    [best, recent],
-  );
+  const availableKeyModes = useMemo(() => {
+    const modes = new Set([...bestFilters.keyModes, ...getAvailableKeyModes(recent)]);
+    return [...modes].sort((a, b) => Number(a.replace("k", "")) - Number(b.replace("k", "")));
+  }, [bestFilters.keyModes, recent]);
   const displayedProfileInsights = profileInsights;
   const cachedAboutFallback = user ? readCachedPlayerAbout(user.id) : undefined;
   const displayedAboutHtml = aboutHtml ?? cachedAboutFallback?.html;
@@ -1579,6 +1620,7 @@ export function PlayerProfilePage({
     )
     : keyFilteredScores;
   const visibleScores = filteredScores.slice(0, currentVisibleCount);
+  const scoreRowLayout = getScoreRowLayout(visibleScores);
   const loadingBest = best.length === 0 && !bestWindowLoaded && !bestError;
   const loadingScores = tab === "best" ? loadingBest : loadingRecent;
   const scoresError = tab === "best" ? bestError : recentError;
@@ -2138,6 +2180,13 @@ export function PlayerProfilePage({
         )}
       </AnimatePresence>
 
+      {/* Score details modal */}
+      <AnimatePresence>
+        {detailScore && (
+          <ScoreDetailModal score={detailScore} onClose={() => setDetailScore(null)} />
+        )}
+      </AnimatePresence>
+
       {/* Hero: cover art, identity, and the headline ranks share one band, with
           the 90-day rank trend drawn edge to edge underneath them. */}
       <header className="relative isolate overflow-hidden bg-osu-b4">
@@ -2557,6 +2606,7 @@ export function PlayerProfilePage({
                 <ManiaCardPanel
                   user={user}
                   scores={best}
+                  precomputedSkills={maniaCardSkills ?? undefined}
                   loading={!bestWindowLoaded}
                   isOwnProfile={!!auth.viewer && !!user && auth.viewer.id === user.id}
                   tierOverride={cardTierPreview}
@@ -2605,7 +2655,15 @@ export function PlayerProfilePage({
                   visibleScores.map((s: OsuScore, i: number) => {
                     const identity = getScoreIdentity(s);
                     const position = tab === "best" ? (bestPositionByIdentity.get(identity) ?? i + 1) : i + 1;
-                    return <ScoreRow key={identity} score={s} position={position} />;
+                    return (
+                      <ScoreRow
+                        key={identity}
+                        score={s}
+                        position={position}
+                        layout={scoreRowLayout}
+                        onOpenDetails={setDetailScore}
+                      />
+                    );
                   })
                 ) : (
                   <div className="text-center py-8 text-osu-f1 text-sm">
@@ -5071,9 +5129,55 @@ function ScoreThumbnail({ score }: { score: OsuScore }) {
   );
 }
 
-function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
+/** Which desktop metadata cells the current list needs. Reserving a cell that
+ *  no visible row fills just pushes the map title away from its numbers, and
+ *  skipping one a single row fills makes that row's numbers drift out of line
+ *  with the rest, so the whole list agrees on the columns up front. */
+type ScoreRowLayout = {
+  /** Badge count of the widest mod set on screen; 0 drops the column. */
+  modColumns: number;
+  showLazer: boolean;
+  showPp: boolean;
+  showReplay: boolean;
+};
+
+const EMPTY_SCORE_ROW_LAYOUT: ScoreRowLayout = {
+  modColumns: 0,
+  showLazer: false,
+  showPp: false,
+  showReplay: false,
+};
+
+/** Keep in sync with ModBadge's intrinsic size and the gap-0.5 between badges. */
+const MOD_BADGE_WIDTH = 36;
+const MOD_BADGE_GAP = 2;
+
+function getScoreRowLayout(scores: OsuScore[]): ScoreRowLayout {
+  const layout = { ...EMPTY_SCORE_ROW_LAYOUT };
+  for (const score of scores) {
+    layout.modColumns = Math.max(layout.modColumns, getModDisplayList(score.mods).length);
+    if (getScoreDisplayValues(score).isLazer) layout.showLazer = true;
+    if (score.pp != null) layout.showPp = true;
+    if (scoreHasReplay(score)) layout.showReplay = true;
+  }
+  return layout;
+}
+
+const REPLAY_BUTTON_CLASS =
+  "relative z-20 hidden flex-shrink-0 rounded-md border border-osu-pink/20 bg-osu-pink/15 px-2.5 py-1.5 text-[10px] font-semibold text-osu-pink-light sm:block";
+
+function ScoreRow({
+  score,
+  position,
+  layout = EMPTY_SCORE_ROW_LAYOUT,
+  onOpenDetails,
+}: {
+  score: OsuScore;
+  position: number;
+  layout?: ScoreRowLayout;
+  onOpenDetails: (score: OsuScore) => void;
+}) {
   const keymodeLabel = getBeatmapKeymodeLabel(score.beatmap);
-  const linkUrl = getScoreUrl(score) ?? getBeatmapUrl(score);
   const canReplay = scoreHasReplay(score);
   const display = getScoreDisplayValues(score);
   const hasPp = score.pp != null;
@@ -5102,14 +5206,14 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
           {/* Fresh scores are minutes old, so this half drifts between SSR and
               hydration; the artist name stays hydration-checked. */}
           {/* pointer-events-auto opts this one span back into hit testing: the
-              content layer is inert so the full-row link overlay can take the
+              content layer is inert so the full-row overlay can take the
               clicks, and an element that never sees the pointer never shows its
               title. The click handler keeps the patch acting like the row. */}
           <span
             suppressHydrationWarning
             title={formatTimeAgoTooltip(getScoreTimestamp(score))}
             className="pointer-events-auto"
-            onClick={() => linkUrl && window.open(linkUrl, "_blank", "noopener,noreferrer")}
+            onClick={() => onOpenDetails(score)}
           >
             {formatTimeAgo(getScoreTimestamp(score))}
           </span>
@@ -5143,36 +5247,47 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
         </div>
       </div>
       {/* Desktop metadata. The numeric cells get fixed widths so accuracy,
-          combo and pp line up down the list instead of drifting per row. */}
+          combo and pp line up down the list instead of drifting per row; the
+          mod and pp cells only exist when some visible row fills them. */}
       <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
-        <div className="flex gap-0.5 justify-end w-24">
-          {getModDisplayList(score.mods).map((m) => (
-            <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
-          ))}
-        </div>
-        {display.isLazer && (
-          <LazerBadge />
+        {layout.modColumns > 0 && (
+          <div
+            className="flex flex-shrink-0 gap-0.5 justify-end"
+            style={{ width: layout.modColumns * MOD_BADGE_WIDTH + (layout.modColumns - 1) * MOD_BADGE_GAP }}
+          >
+            {getModDisplayList(score.mods).map((m) => (
+              <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
+            ))}
+          </div>
         )}
-        <span className="w-16 text-right text-xs tabular-nums text-osu-l2">{formatAccuracy(display.accuracy)}</span>
-        <span className="w-16 text-right text-xs tabular-nums text-osu-f1">{formatNumber(score.max_combo)}x</span>
-        <span className="w-16 text-right text-sm font-bold tabular-nums text-osu-pink-light">
-          {hasPp ? formatPP(score.pp) : ""}
-        </span>
+        {layout.showLazer && (
+          <div className="flex w-11 flex-shrink-0 justify-end">{display.isLazer && <LazerBadge />}</div>
+        )}
+        {/* Accuracy, combo and pp read as one cluster, so they sit tighter
+            together than the badge cells beside them. */}
+        <div className="flex items-center gap-2">
+          <span className="w-14 text-right text-xs tabular-nums text-osu-l2">{formatAccuracy(display.accuracy)}</span>
+          <span className="w-14 text-right text-xs tabular-nums text-osu-f1">{formatNumber(score.max_combo)}x</span>
+          {layout.showPp && (
+            <span className="w-16 text-right text-sm font-bold tabular-nums text-osu-pink-light">
+              {hasPp ? formatPP(score.pp) : ""}
+            </span>
+          )}
+        </div>
       </div>
     </>
   );
 
   return (
-    <div className={`player-score-row relative flex items-center gap-2 sm:gap-3 py-2.5 px-3 rounded-lg bg-osu-b4/50 hover:bg-osu-b4 transition-colors duration-[120ms] ${linkUrl ? "cursor-pointer" : ""}`}>
-      {linkUrl && (
-        <a
-          href={linkUrl}
-          target="_blank"
-          rel="noreferrer"
-          aria-label={`Open ${score.beatmapset?.title || "score"} on osu!`}
-          className="absolute inset-0 z-0 rounded-lg"
-        />
-      )}
+    <div className="player-score-row relative flex items-center gap-2 sm:gap-3 py-2.5 px-3 rounded-lg bg-osu-b4/50 hover:bg-osu-b4 transition-colors duration-[120ms] cursor-pointer">
+      {/* Full-row hit target. The osu! score page moved into the details modal,
+          so this opens that instead of navigating away. */}
+      <button
+        type="button"
+        onClick={() => onOpenDetails(score)}
+        aria-label={`Show details for ${score.beatmapset?.title || "score"}`}
+        className="absolute inset-0 z-0 rounded-lg cursor-pointer"
+      />
       {/* Mobile inline position number */}
       <span className="pointer-events-none relative z-10 sm:hidden text-xs text-osu-f1 font-bold flex-shrink-0">{position}.</span>
       {/* Desktop hover position number */}
@@ -5185,17 +5300,229 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
       <div className="pointer-events-none relative z-10 flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
         {content}
       </div>
-      {canReplay && (
+      {canReplay ? (
         <Link
           to="/replay"
           search={{ scoreId: score.id, beatmapsetId: score.beatmapset?.id }}
           title="Watch replay"
           aria-label="Watch replay"
-          className="pointer-events-auto relative z-20 hidden flex-shrink-0 rounded-md border border-osu-pink/20 bg-osu-pink/15 px-2.5 py-1.5 text-[10px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/25 sm:block"
+          className={`pointer-events-auto transition-colors hover:bg-osu-pink/25 ${REPLAY_BUTTON_CLASS}`}
         >
           Replay
         </Link>
-      )}
+      ) : layout.showReplay ? (
+        // Rows without a stored replay still hold the slot, otherwise their
+        // numbers sit a button-width right of the rows that have one.
+        <span aria-hidden="true" className={`pointer-events-none invisible ${REPLAY_BUTTON_CLASS}`}>
+          Replay
+        </span>
+      ) : null}
     </div>
+  );
+}
+
+/** Value first, label under it: the number is what people came for, so it
+ *  carries the weight and the caption stays out of the way. */
+function ScoreDetailStat({ label, value, color }: { label: string; value: ReactNode; color?: string }) {
+  return (
+    <div>
+      <div className={`text-base font-bold leading-none tabular-nums ${color ?? "text-white"}`}>{value}</div>
+      <div className="mt-1 text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</div>
+    </div>
+  );
+}
+
+/** Everything the row can't fit: total score, judgement spread, map metadata,
+ *  and the links (osu! page, replay) the row used to navigate to on its own. */
+function ScoreDetailModal({ score, onClose }: { score: OsuScore; onClose: () => void }) {
+  const display = getScoreDisplayValues(score);
+  const judgements = getManiaJudgementStats(score);
+  const mods = getModDisplayList(score.mods);
+  const keymodeLabel = getBeatmapKeymodeLabel(score.beatmap);
+  const scoreUrl = getScoreUrl(score);
+  const beatmapUrl = getBeatmapUrl(score);
+  const canReplay = scoreHasReplay(score);
+  const hasPp = score.pp != null;
+  const playedAt = getScoreTimestamp(score);
+  const cover = score.beatmapset?.covers?.["cover@2x"] || score.beatmapset?.covers?.cover;
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 sm:backdrop-blur-sm cursor-pointer p-4"
+      onClick={onClose}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+    >
+      <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${score.beatmapset?.title ?? "Score"} details`}
+        className="modal-card-mobile-safe relative isolate bg-osu-b4 border border-osu-b3/20 rounded-2xl w-[520px] max-w-full max-h-[85vh] overflow-hidden shadow-[0_12px_60px_rgba(0,0,0,0.7)] cursor-default"
+        onClick={(e) => e.stopPropagation()}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 8 }}
+        transition={{ duration: 0.16, ease: "easeOut" }}
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute top-3 right-3 z-20 w-7 h-7 flex items-center justify-center rounded-full bg-black/30 text-white/80 hover:text-white hover:bg-black/50 transition-colors cursor-pointer"
+        >
+          <X size={14} />
+        </button>
+
+        <div className="max-h-[85vh] overflow-y-auto">
+          {/* The cover gets a banner of its own instead of washing over the
+              whole card, where it fought every number for contrast. */}
+          <div className="relative h-[104px] overflow-hidden">
+            {cover && (
+              <img
+                src={cover}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover"
+                style={{ filter: "brightness(0.42) saturate(1.1)" }}
+              />
+            )}
+            <div className="absolute inset-0 bg-gradient-to-b from-osu-b4/10 via-osu-b4/55 to-osu-b4" />
+            {/* Mods belong with the map they were played on, not floating in
+                the middle of the numbers row. */}
+            <div className="relative flex h-full items-end justify-between gap-3 px-4 pb-3 sm:px-5">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  {beatmapUrl ? (
+                    <a
+                      href={beatmapUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-lg font-semibold text-white truncate hover:text-osu-pink-light underline-offset-2 hover:underline"
+                      title="Open beatmap on osu!"
+                    >
+                      {score.beatmapset?.title || "Unknown"}
+                    </a>
+                  ) : (
+                    <span className="text-lg font-semibold text-white truncate">
+                      {score.beatmapset?.title || "Unknown"}
+                    </span>
+                  )}
+                  {keymodeLabel && (
+                    <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 text-osu-yellow flex-shrink-0">
+                      {keymodeLabel}
+                    </span>
+                  )}
+                  <DanBadge score={score} />
+                </div>
+                <div className="mt-0.5 truncate text-[11px] text-osu-f1">
+                  {score.beatmapset?.artist}
+                  {score.beatmap?.version ? ` · [${score.beatmap.version}]` : ""}
+                  {score.beatmapset?.creator ? ` · mapped by ${score.beatmapset.creator}` : ""}
+                </div>
+              </div>
+              {(mods.length > 0 || display.isLazer) && (
+                <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-1 pb-0.5">
+                  {mods.map((m) => (
+                    <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
+                  ))}
+                  {display.isLazer && <LazerBadge />}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="px-4 pt-4 pb-5 sm:px-5">
+            {/* Grade, accuracy and the headline number carry the card; pp is
+                the headline where it exists, total score where it doesn't. */}
+            <div className="flex items-center gap-3 sm:gap-4">
+              <GradeImg grade={display.rank} size={46} />
+              <div>
+                <div className="text-2xl font-bold leading-none tabular-nums text-white sm:text-3xl">
+                  {formatAccuracy(display.accuracy)}
+                </div>
+                <div className="mt-1.5 text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Accuracy</div>
+              </div>
+              <div className="ml-auto text-right">
+                <div
+                  className={`text-2xl font-bold leading-none tabular-nums sm:text-3xl ${hasPp ? "text-osu-pink-light" : "text-white"}`}
+                >
+                  {hasPp ? formatPP(score.pp) : display.totalScore != null ? formatNumber(display.totalScore) : "-"}
+                </div>
+                <div className="mt-1.5 text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">
+                  {/* Best-play rows know how much of this actually reaches the
+                      profile total, which beats repeating the raw pp. */}
+                  {hasPp ? (score.weight ? `${Math.round(score.weight.percentage)}% weighted` : "PP") : "Score"}
+                </div>
+              </div>
+            </div>
+
+            {/* Narrow screens wrap these into 3x2 and 2x2 blocks; centring the
+                cells there keeps the wrapped rows reading as a grid instead of
+                as columns with ragged space to their right. */}
+            <div className="mt-5 grid grid-cols-3 gap-3 text-center sm:grid-cols-6 sm:text-left">
+              {judgements.map((judgement) => (
+                <ScoreDetailStat
+                  key={judgement.label}
+                  label={judgement.label}
+                  value={formatNumber(judgement.value)}
+                  color={judgement.className}
+                />
+              ))}
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-3 text-center sm:grid-cols-4 sm:text-left">
+              <ScoreDetailStat label="Combo" value={`${formatNumber(score.max_combo)}x`} />
+              {hasPp && (
+                <ScoreDetailStat
+                  label="Score"
+                  value={display.totalScore != null ? formatNumber(display.totalScore) : "-"}
+                />
+              )}
+              <ScoreDetailStat
+                label="Stars"
+                value={
+                  score.beatmap?.difficulty_rating != null
+                    ? <StarRatingBadge stars={score.beatmap.difficulty_rating} size={1.4} />
+                    : "-"
+                }
+              />
+              <ScoreDetailStat
+                label="BPM"
+                value={score.beatmap?.bpm != null ? String(Math.round(score.beatmap.bpm)) : "-"}
+              />
+            </div>
+
+            <div className="mt-5 flex flex-col gap-3 border-t border-osu-b3/20 pt-3 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+              <span className="text-[11px] text-osu-f1" suppressHydrationWarning title={formatDate(playedAt)}>
+                Played {formatDetailedTimeAgo(playedAt)} on {display.isLazer ? "Lazer" : "Stable"}
+              </span>
+              <div className="flex items-center justify-between gap-3 sm:justify-end">
+                {scoreUrl && (
+                  <a
+                    href={scoreUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] text-osu-f1 hover:text-osu-pink-light transition-colors"
+                  >
+                    View on osu!
+                    <ExternalLink size={11} className="shrink-0" />
+                  </a>
+                )}
+                {canReplay && (
+                  <Link
+                    to="/replay"
+                    search={{ scoreId: score.id, beatmapsetId: score.beatmapset?.id }}
+                    className="rounded-md border border-osu-pink/20 bg-osu-pink/15 px-2.5 py-1.5 text-[10px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/25"
+                  >
+                    Watch replay
+                  </Link>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }
