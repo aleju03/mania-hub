@@ -6,6 +6,7 @@ import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { PageHeader } from "../components/layout/PageHeader";
 import { AlbumView } from "../components/packs/album/AlbumView";
 import { CollectionPanel } from "../components/packs/CollectionPanel";
+import { GoatHoldersButton } from "../components/packs/GoatHoldersButton";
 import {
   getCachedCardBackDataUrl,
   getCachedPackFrontCanvas,
@@ -529,6 +530,7 @@ function PacksPage() {
                   <span className="font-semibold text-white tabular-nums">{shards.toLocaleString()}</span>
                   <span>shards</span>
                 </div>
+                <GoatHoldersButton />
               </div>
             )}
 

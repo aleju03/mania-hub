@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { canUseAdminFeatures } from "../../lib/auth-shared";
 import {
   fetchLiveBackendAdminStatus,
-  fetchLiveBackendHonoraryPulls,
   fetchLiveBackendStorageBreakdown,
   fetchLiveBackendSweeps,
   fetchLiveBackendTableRows,
@@ -13,8 +12,6 @@ import {
   runLiveBackendAdminAction,
   setLiveBackendUserActive,
   wipeLiveBackendUserData,
-  type LiveBackendHonoraryCardPulls,
-  type LiveBackendHonoraryPulls,
   type LiveBackendStorageBreakdown,
   type LiveBackendSweep,
   type LiveBackendTableCell,
@@ -26,7 +23,6 @@ import {
 import { formatNumber, formatTimeAgo } from "../../lib/format";
 import { COUNTRY_OPTIONS, getCountryName } from "../../lib/country";
 import { CountryFlag } from "../../components/ui/CountryFlag";
-import { HONORARY_PLAYERS, type HonoraryPlayer } from "../../lib/honorary-players";
 import { SectionCard } from "../../components/admin/SectionCard";
 import { AnalyticsMonitorPanel } from "../../components/admin/analytics/AnalyticsMonitorPanel";
 
@@ -710,10 +706,6 @@ function LiveBackendPage() {
           <Section title="Users" subtitle="Two controls: a reversible soft-deactivate/reactivate (untracks the player and marks them inactive, deletes nothing), and an irreversible wipe that also deletes their board/score projections.">
             <UserModerationCard />
             <UserWipeCard />
-          </Section>
-
-          <Section title="GOAT pulls" subtitle="Which honorary cards have been pulled, and who holds them">
-            <HonoraryPullsCard />
           </Section>
             </>
           ) : (
@@ -3453,9 +3445,6 @@ function QueueSummaryRow({ row }: { row: NonNullable<LiveBackendStatus["queueSum
 }
 
 const SWEEPS_REFRESH_MS = 30_000;
-// Slower than the sweeps poll: GOAT pulls are rare enough that a minute-old
-// number is never misleading, and this is a full scan of the collection rows.
-const HONORARY_PULLS_REFRESH_MS = 60_000;
 
 const SWEEP_STATUS_CHIP: Record<LiveBackendSweep["status"], string> = {
   done: "bg-osu-green/15 text-osu-green-light",
@@ -3576,129 +3565,6 @@ function SweepRow({ sweep }: { sweep: LiveBackendSweep }) {
         <span className="min-w-0 flex-1 truncate text-[10px] text-osu-f1">{sweep.description}</span>
         {sweep.detail ? <span className="flex-shrink-0 max-w-[45%] truncate text-[10px] font-mono text-osu-l2/75">{sweep.detail}</span> : null}
       </div>
-    </div>
-  );
-}
-
-/* The honorary roster crossed with who actually holds each card. The roster
-   itself comes from the frontend list, so cards nobody has pulled still get a
-   row: "which of them have landed" is half the question. */
-function HonoraryPullsCard() {
-  const [report, setReport] = useState<LiveBackendHonoraryPulls | null>(null);
-  const [unsupported, setUnsupported] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const result = await fetchLiveBackendHonoraryPulls();
-        if (cancelled) return;
-        setUnsupported(result === null);
-        setReport(result);
-        setError(null);
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
-      }
-    };
-    void load();
-    const id = window.setInterval(() => {
-      void load();
-    }, HONORARY_PULLS_REFRESH_MS);
-    return () => {
-      cancelled = true;
-      window.clearInterval(id);
-    };
-  }, []);
-
-  const rows = useMemo(() => {
-    const byCard = new Map((report?.cards ?? []).map((card) => [card.cardUserId, card]));
-    return HONORARY_PLAYERS
-      .map((player) => ({ player, pulls: byCard.get(player.id) ?? null }))
-      .sort((a, b) => (b.pulls?.ownerCount ?? 0) - (a.pulls?.ownerCount ?? 0));
-  }, [report]);
-
-  return (
-    <SectionCard
-      title="Honorary roster"
-      subtitle="Who holds each card, counted from the synced collections. Includes copies pulled from the ranked pool before the player joined the roster. Refreshes every 60s."
-      actions={
-        report ? (
-          <span className="text-[10px] text-osu-f1">
-            {formatNumber(report.distinctOwners)} collector{report.distinctOwners === 1 ? "" : "s"} ·{" "}
-            {formatNumber(report.totalCopies)} copies
-          </span>
-        ) : null
-      }
-    >
-      {error ? (
-        <div className="text-[11px] text-osu-red-light">{error}</div>
-      ) : unsupported ? (
-        <div className="text-[11px] text-osu-f1">The backend does not expose /api/admin/honorary-pulls yet (deploy pending).</div>
-      ) : report === null ? (
-        <div className="text-[11px] text-osu-f1 text-center py-6">Loading pulls...</div>
-      ) : (
-        <>
-          <div className="flex items-baseline gap-2 pb-3">
-            <span className="text-2xl font-bold tabular-nums text-white">
-              {formatNumber(report.pulledCards)}/{formatNumber(HONORARY_PLAYERS.length)}
-            </span>
-            <span className="text-[11px] text-osu-f1">pulled at least once</span>
-          </div>
-          <div className="space-y-1.5">
-            {rows.map(({ player, pulls }) => (
-              <HonoraryPullRow key={player.id} player={player} pulls={pulls} ownersPerCard={report.ownersPerCard} />
-            ))}
-          </div>
-        </>
-      )}
-    </SectionCard>
-  );
-}
-
-function HonoraryPullRow({
-  player,
-  pulls,
-  ownersPerCard,
-}: {
-  player: HonoraryPlayer;
-  pulls: LiveBackendHonoraryCardPulls | null;
-  ownersPerCard: number;
-}) {
-  const owners = pulls?.owners ?? [];
-  const hidden = (pulls?.ownerCount ?? 0) - owners.length;
-  return (
-    <div className={`rounded-md bg-osu-b5/60 border border-osu-b3/20 px-3 py-2 ${pulls ? "" : "opacity-60"}`}>
-      <div className="flex items-center gap-2 min-w-0">
-        <CountryFlag code={player.countryCode} className="flex-shrink-0" />
-        <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-white">
-          {player.cardName ?? player.username}
-        </span>
-        {pulls ? (
-          <>
-            <span className="flex-shrink-0 text-[11px] font-bold tabular-nums text-white">
-              {formatNumber(pulls.ownerCount)}
-            </span>
-            <span className="flex-shrink-0 text-[10px] text-osu-f1">
-              owner{pulls.ownerCount === 1 ? "" : "s"} · {formatNumber(pulls.copies)} copies
-            </span>
-          </>
-        ) : (
-          <span className="flex-shrink-0 text-[10px] text-osu-f1">never pulled</span>
-        )}
-        {pulls?.firstPulledAt ? (
-          <span className="flex-shrink-0 text-[10px] text-osu-f1" title={new Date(pulls.firstPulledAt).toLocaleString()}>
-            first {formatTimeAgo(new Date(pulls.firstPulledAt).toISOString())}
-          </span>
-        ) : null}
-      </div>
-      {owners.length > 0 ? (
-        // Oldest first, so the name at the front is whoever pulled it first.
-        <div className="mt-1 text-[10px] font-mono text-osu-c2 break-words">
-          {owners.map((owner) => `${owner.username}${owner.copies > 1 ? ` x${owner.copies}` : ""}`).join(" · ")}
-          {hidden > 0 ? ` · +${formatNumber(hidden)} more (capped at ${formatNumber(ownersPerCard)})` : ""}
-        </div>
-      ) : null}
     </div>
   );
 }
