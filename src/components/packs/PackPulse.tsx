@@ -293,13 +293,13 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.25 }}
               >
-                {/* Deliberately anonymous: the ticker shows what was pulled,
-                    never who pulled it (and links to the card's player, not
-                    the pull permalink, which would name the owner). Owners
-                    only get named when they share their own pull link. */}
+                {/* The rail itself stays anonymous (it shows what was pulled,
+                    not who pulled it), but each entry links to that pull's
+                    permalink so you can go look at the card that just landed.
+                    The pull page names the owner. */}
                 <Link
-                  to="/player/$username"
-                  params={{ username: pull.cardUsername }}
+                  to="/pull/$ownerId/$cardId"
+                  params={{ ownerId: String(pull.ownerUserId), cardId: String(pull.cardUserId) }}
                   className="pointer-events-auto -mx-1.5 flex items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-white/5 hover:opacity-100"
                   aria-label={`${pull.cardUsername} was pulled`}
                 >
