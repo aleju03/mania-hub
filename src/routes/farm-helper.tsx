@@ -1949,7 +1949,7 @@ function PreviewSheet({
         >
           <div className="absolute inset-0 bg-black/70" onClick={onClose} />
           <motion.div
-            className="relative z-10 w-full max-w-[520px] px-2 pb-2"
+            className="relative z-10 w-full max-w-[520px] px-2 pb-2 will-change-transform"
             initial={{ y: 24, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 24, opacity: 0 }}
@@ -1964,7 +1964,10 @@ function PreviewSheet({
               feedback={feedback}
               onOpenDetail={onOpenDetail ?? onClose}
               onClose={onClose}
-              className="max-h-[86dvh] shadow-2xl ring-1 ring-white/10"
+              // Keep the clipped, scrollable card on its own paint layer while
+              // its parent translates. Without this, mobile compositors can
+              // briefly drop only the card's inner tiles during the enter.
+              className="modal-card-mobile-safe max-h-[86dvh] shadow-2xl ring-1 ring-white/10"
             />
           </motion.div>
         </motion.div>

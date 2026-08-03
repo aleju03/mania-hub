@@ -18,6 +18,33 @@ type AppRateBucket = "api" | "serverFn" | "costly";
 const appRateWindows = new Map<string, { count: number; resetAt: number }>();
 let appRateChecksSincePrune = 0;
 
+// Mania Hub never talks to software or devices on a visitor's machine or LAN.
+// Deny both address spaces at the document boundary so Chromium cannot show
+// its alarming "apps and services on this device" permission prompt, even if
+// stale or injected client code ever attempts such a request. The legacy alias
+// covers Chromium versions from before the two address spaces were split.
+export const DEVICE_ACCESS_PERMISSIONS_POLICY =
+  "local-network=(), loopback-network=(), local-network-access=()";
+
+const deviceAccessPolicyMiddleware = createMiddleware().server(
+  async ({ next }) => {
+    const result = await next();
+    const response = (result as { response?: Response } | undefined)?.response;
+    if (!response || typeof response.headers?.set !== "function") return result;
+
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!contentType.toLowerCase().includes("text/html")) return result;
+
+    try {
+      response.headers.set("Permissions-Policy", DEVICE_ACCESS_PERMISSIONS_POLICY);
+    } catch {
+      // Some framework response objects expose immutable headers. The normal
+      // document response is mutable; leave exceptional responses untouched.
+    }
+    return result;
+  },
+);
+
 function readPositiveInt(name: string, fallback: number): number {
   const value = Number(process.env[name]);
   return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
@@ -355,5 +382,5 @@ const shareTrackingMiddleware = createMiddleware().server(
 );
 
 export const startInstance = createStart(() => ({
-  requestMiddleware: [requestRateLimitMiddleware, documentCacheMiddleware, shareTrackingMiddleware],
+  requestMiddleware: [deviceAccessPolicyMiddleware, requestRateLimitMiddleware, documentCacheMiddleware, shareTrackingMiddleware],
 }));

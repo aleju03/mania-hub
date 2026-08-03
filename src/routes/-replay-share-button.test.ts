@@ -43,7 +43,15 @@ describe("replay share button", () => {
     expect(timestampSeek).toBeGreaterThan(-1);
     expect(timestampAutoplay).toBeGreaterThan(timestampSeek);
     expect(queuedPlay).toBeGreaterThan(timestampAutoplay);
-    expect(routeSource).toContain("startPlayback(allowSilentAutoplayFallback);");
-    expect(routeSource).toContain("setAudioEnabled(false);");
+    expect(routeSource).toContain("startPlayback(isTimestampAutoplay);");
+  });
+
+  it("keeps a browser-blocked timestamp paused until one audible play click", () => {
+    const routeSource = fs.readFileSync(path.resolve(__dirname, "replay.tsx"), "utf8");
+
+    expect(routeSource).toContain("setTimestampAutoplayBlocked(true);");
+    expect(routeSource).toContain("Play from {formatReplayStartTime(initialTime)}");
+    expect(routeSource).toContain("Start with sound");
+    expect(routeSource).toContain('aria-label={`Play replay from ${formatReplayStartTime(initialTime)} with sound`}');
   });
 });

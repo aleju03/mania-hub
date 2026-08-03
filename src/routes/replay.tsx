@@ -207,6 +207,13 @@ function skinPauseButtonHeightPercent(asset: ReplaySkinImageAsset): number {
   return Math.max(4, Math.min(30, (height / MANIA_SKIN_SCREEN_HEIGHT) * 100));
 }
 
+function formatReplayStartTime(seconds: number): string {
+  const wholeSeconds = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(wholeSeconds / 60);
+  const remainingSeconds = String(wholeSeconds % 60).padStart(2, "0");
+  return `${minutes}:${remainingSeconds}`;
+}
+
 function replayAudioNeedsDefaultSamples(settings: ReplayAudioSettings): boolean {
   return settings.hitsoundsEnabled && (
     settings.beatmapHitsounds ||
@@ -2091,10 +2098,10 @@ function ReplayViewer({
   const [rendererError, setRendererError] = useState<string | null>(null);
   const [audioReady, setAudioReady] = useState(false);
   const [pendingPlay, setPendingPlay] = useState(false);
+  const [timestampAutoplayBlocked, setTimestampAutoplayBlocked] = useState(false);
   // Timestamped share links begin as soon as the renderer and audio are ready.
   // This ref distinguishes that queued start from a user's ordinary play click
-  // so only autoplay may fall back to silent playback when the browser blocks
-  // starting audible media without a gesture.
+  // so a browser-rejected autoplay can fall back to one clear, audible start.
   const timestampAutoplayPendingRef = useRef(false);
   const [buffering, setBuffering] = useState(false);
   // Full copy of the song downloaded in the background once playback starts;
@@ -3405,6 +3412,7 @@ function ReplayViewer({
     // too so it can't run ahead while the new judgement build finishes.
     setIsPlaying(false);
     setPendingPlay(false);
+    setTimestampAutoplayBlocked(false);
     timestampAutoplayPendingRef.current = false;
     audioRef.current?.pause();
 
@@ -3818,10 +3826,11 @@ function ReplayViewer({
     }
   };
 
-  const startPlayback = useCallback((allowSilentAutoplayFallback = false) => {
+  const startPlayback = useCallback((isTimestampAutoplay = false) => {
     const r = rendererRef.current;
     if (!r) return;
     cancelReplayEndAudioFade();
+    setTimestampAutoplayBlocked(false);
     // A manual start carries a user gesture and can unlock the hitsound
     // AudioContext; an autoplay start safely leaves it suspended if blocked.
     hitsoundPlayerRef.current?.resume();
@@ -3836,13 +3845,16 @@ function ReplayViewer({
       audioRef.current.volume = volume;
       const audio = audioRef.current;
       audio.play().catch(() => {
-        if (allowSilentAutoplayFallback && rendererRef.current === r && r.isPlaying) {
-          // Browsers commonly reject audible autoplay on a freshly opened
-          // shared link. Keep the replay moving without sound; the existing
-          // audio toggle can re-enable and resync it from a user gesture.
+        if (isTimestampAutoplay && rendererRef.current === r && r.isPlaying && audio.paused) {
+          // Do not let a shared moment run past in silence when the browser
+          // rejects audible autoplay. Freeze exactly there and ask for the one
+          // gesture that lets the replay and its audio start together.
           shouldResumeAudioRef.current = false;
+          r.pause();
           audio.pause();
-          setAudioEnabled(false);
+          setBuffering(false);
+          setIsPlaying(false);
+          setTimestampAutoplayBlocked(true);
           return;
         }
         shouldResumeAudioRef.current = true;
@@ -3883,10 +3895,10 @@ function ReplayViewer({
   useEffect(() => {
     if (!pendingPlay || isPlaying) return;
     if (audioEnabled && audioUrl && !audioReady && !audioError) return;
-    const allowSilentAutoplayFallback = timestampAutoplayPendingRef.current;
+    const isTimestampAutoplay = timestampAutoplayPendingRef.current;
     timestampAutoplayPendingRef.current = false;
     setPendingPlay(false);
-    startPlayback(allowSilentAutoplayFallback);
+    startPlayback(isTimestampAutoplay);
   }, [pendingPlay, isPlaying, audioEnabled, audioUrl, audioReady, audioError, startPlayback]);
 
   const toggleAudio = () => {
@@ -4735,6 +4747,29 @@ function ReplayViewer({
             </div>
           </button>
         )}
+        <AnimatePresence>
+          {timestampAutoplayBlocked && initialTime != null && initialTime > 0 && (
+            <motion.button
+              key="timestamp-autoplay-blocked"
+              type="button"
+              onClick={() => startPlayback()}
+              aria-label={`Play replay from ${formatReplayStartTime(initialTime)} with sound`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.16 }}
+              className="absolute inset-0 z-[16] flex cursor-pointer items-center justify-center bg-black/45 text-white backdrop-blur-[1px]"
+            >
+              <span className="flex flex-col items-center gap-3 rounded-2xl border border-white/15 bg-black/65 px-7 py-5 shadow-2xl transition-transform hover:scale-[1.02] active:scale-95">
+                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-osu-pink shadow-lg shadow-black/40">
+                  <Play className="ml-1 h-6 w-6" fill="currentColor" strokeWidth={2.4} />
+                </span>
+                <span className="text-base font-bold">Play from {formatReplayStartTime(initialTime)}</span>
+                <span className="text-xs font-medium text-white/60">Start with sound</span>
+              </span>
+            </motion.button>
+          )}
+        </AnimatePresence>
         {/* osu!-style pause screen for playfield-click pauses: the dimmed
             backdrop stays click-through so clicking the lanes still resumes;
             only the three buttons capture the pointer. It sits above the
