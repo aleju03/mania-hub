@@ -6,6 +6,7 @@ import { Readable } from "node:stream";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
+import { packCardKey } from "../src/features/pack-wallets.js";
 import { AbuseGuard } from "../src/http/abuse-guard.js";
 import { routeHttp } from "../src/http/snapshots.js";
 import { JobQueue } from "../src/jobs/queue.js";
@@ -53,14 +54,19 @@ function pullCard(userId: number, tier: string | null, overrides: Partial<{ user
   };
 }
 
-async function seedCollectionCard(ownerUserId: number, cardUserId: number, copies = 1): Promise<void> {
+async function seedCollectionCard(
+  ownerUserId: number,
+  cardUserId: number,
+  copies = 1,
+  tier = "rare",
+): Promise<void> {
   await exec(
     db,
     `insert into pack_collection_cards (
-       owner_user_id, card_user_id, username, avatar_url, country_code, tier, tier_label, skills_json,
+       owner_user_id, card_user_id, card_key, username, avatar_url, country_code, tier, tier_label, skills_json,
        pp, global_rank, copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at
-     ) values (?, ?, ?, '', 'CR', 'rare', 'Rare', null, 1000, 500, ?, 0, 1000, 2000, 2000)`,
-    [ownerUserId, cardUserId, `player${cardUserId}`, copies],
+     ) values (?, ?, ?, ?, '', 'CR', ?, ?, null, 1000, 500, ?, 0, 1000, 2000, 2000)`,
+    [ownerUserId, cardUserId, packCardKey(cardUserId, tier), `player${cardUserId}`, tier, tier, copies],
   );
 }
 

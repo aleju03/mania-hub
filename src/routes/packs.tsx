@@ -28,6 +28,7 @@ import {
   msUntilNextCharge,
   ownedCards,
   PACK_OPEN_SHARD_REWARD,
+  parsePackCardKey,
   type PackWallet,
 } from "../lib/pack-collection";
 import { isLiveBackendConfigured, warmLivePackPlayers } from "../lib/live-backend";
@@ -37,7 +38,7 @@ import {
   readPendingPack,
   writePendingPack,
 } from "../lib/pack-pending";
-import { fetchServerPackCollectionOwnedIds, recordServerPackPulls } from "../lib/pack-wallet-sync";
+import { fetchServerPackCollectionOwnedKeys, recordServerPackPulls } from "../lib/pack-wallet-sync";
 import { PackPulse, refreshPackPulseFeed } from "../components/packs/PackPulse";
 import {
   drawPackPlayers,
@@ -167,19 +168,36 @@ function canAffordPack(wallet: PackWallet | null, type: PackTypeDef): boolean {
   return wallet.shards >= type.cost.amount;
 }
 
-async function getDuplicateProtectionOwnedIds(
+/* Two different questions, so two different sets.
+
+   `ownedUserIds` drives the ranked pool's "new cards first": holding any card
+   of a player means the pool should deal someone else. `ownedGoatUserIds`
+   drives the honorary slot, where holding a player's ordinary card is not
+   holding their GOAT - those are separate cards, so a World Class bojii must
+   not make the roster's one GOAT bojii count as already collected. */
+async function getDuplicateProtectionOwned(
   type: PackTypeDef,
   wallet: PackWallet | null,
   syncStatus: "local" | "syncing" | "synced",
-): Promise<Set<number> | undefined> {
+): Promise<{ ownedUserIds: Set<number>; ownedGoatUserIds: Set<number> } | undefined> {
   if (!type.guaranteesNew || !wallet) return undefined;
-  const owned = new Set(ownedCards(wallet).map((card) => card.userId));
-  if (syncStatus === "local") return owned;
+  const ownedUserIds = new Set<number>();
+  const ownedGoatUserIds = new Set<number>();
+  for (const card of ownedCards(wallet)) {
+    ownedUserIds.add(card.userId);
+    if (card.tier === "goat") ownedGoatUserIds.add(card.userId);
+  }
+  if (syncStatus === "local") return { ownedUserIds, ownedGoatUserIds };
 
-  const serverOwnedIds = await fetchServerPackCollectionOwnedIds();
-  if (!serverOwnedIds) throw new Error("Synced collection is unavailable.");
-  for (const userId of serverOwnedIds) owned.add(userId);
-  return owned;
+  const serverOwnedKeys = await fetchServerPackCollectionOwnedKeys();
+  if (!serverOwnedKeys) throw new Error("Synced collection is unavailable.");
+  for (const key of serverOwnedKeys) {
+    const parsed = parsePackCardKey(key);
+    if (!parsed) continue;
+    ownedUserIds.add(parsed.userId);
+    if (parsed.goat) ownedGoatUserIds.add(parsed.userId);
+  }
+  return { ownedUserIds, ownedGoatUserIds };
 }
 
 /* Thumbnail renders of each pack type's foil art, generated once per session
@@ -415,12 +433,13 @@ function PacksPage() {
     const currentWallet = walletApi.wallet;
     void (async () => {
       try {
-        const ownedUserIds = await getDuplicateProtectionOwnedIds(type, currentWallet, walletApi.syncStatus);
+        const owned = await getDuplicateProtectionOwned(type, currentWallet, walletApi.syncStatus);
         const draw = await drawPackPlayers(Math.random, {
           topFraction: type.topFraction,
           count: type.cardCount,
           honoraryChance: devForceGoatPull() ? 1 : type.honoraryChance,
-          ownedUserIds,
+          ownedUserIds: owned?.ownedUserIds,
+          ownedGoatUserIds: owned?.ownedGoatUserIds,
         });
         if (cancelled) return;
         walletApi.notePoolTotal(draw.poolTotal);

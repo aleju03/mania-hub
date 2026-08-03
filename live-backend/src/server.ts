@@ -22,6 +22,7 @@ import { enqueuePlayerSkills, PLAYER_SKILLS_JOB, PLAYER_SKILLS_VERSION } from ".
 import { enqueueSkillBaselineIfDue } from "./features/skill-baseline.js";
 import { ensureTopScoresBackfillSeeded } from "./features/top-scores-backfill.js";
 import { ensureSkillVectorBackfillSeeded } from "./features/skill-vector-backfill.js";
+import { ensurePackCollectionCardKeys } from "./features/pack-wallets.js";
 import { backfillSkinSlugs } from "./features/skins.js";
 import { ensureArchivedPlayers } from "./archived-players.js";
 import { AbuseGuard } from "./http/abuse-guard.js";
@@ -148,6 +149,10 @@ export async function createApp() {
     // Data backfill rides with schema ownership: assign slugs to skins
     // published before the slug column existed.
     await bootWrite("backfill_skin_slugs", () => backfillSkinSlugs(db));
+    // GOAT cards split off from their player's ordinary card, so collection
+    // rows are keyed (owner, card_key) now. Rebuilds the table once on a
+    // database created before that; a no-op on every boot after.
+    await bootWrite("rekey_pack_collection_cards", () => ensurePackCollectionCardKeys(db));
     // Seeds the checked-in archived-player profiles (deleted osu! accounts we
     // reconstructed from the Wayback Machine). Content-addressed, so this is a
     // no-op on every boot after the first that sees a given file.

@@ -18,6 +18,8 @@ export type SavePackWalletResult =
 
 export interface StoredPackCard {
   userId: number;
+  /* Wallet key of this card ("<id>" or "<id>:goat"); see packCardKey. */
+  cardKey?: string;
   username: string;
   avatarUrl: string;
   countryCode: string;
@@ -86,7 +88,7 @@ const TIER_SHARD_VALUES: Record<string, number> = {
   unrated: 1,
 };
 
-function tierRankSql(alias = "tier") {
+export function tierRankSql(alias = "tier") {
   return `case ${alias}
     when 'goat' then 9
     when 'worldClass' then 8
@@ -146,6 +148,27 @@ export const HONORARY_USER_IDS = new Set([
   259972, 1190879, 140148, 8474029, 86188, 5610085, 3360737, 2531335, 2520707, 4140104,
   19970192, 10072733, 903155, 9452257, 12253636, 2288363, 10083439, 1089335,
 ]);
+
+/* A card's identity, mirroring packCardKey in the frontend's pack-collection.
+   GOAT is awarded by roster membership rather than card power, and several
+   roster members are live ranked players, so one player can be held both as
+   the card the ranked pool dealt and as the GOAT the honorary slot dealt.
+   Only the GOAT variant is suffixed, so every key already in a wallet stays
+   exactly as it was. */
+export function packCardKey(cardUserId: number, tier: string | null): string {
+  return tier === "goat" ? `${cardUserId}:goat` : String(cardUserId);
+}
+
+/* Accepts a client-supplied key, rejecting anything that is not a player id
+   with an optional ":goat" suffix. */
+export function normalizePackCardKey(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const match = /^(\d+)(:goat)?$/.exec(value.trim());
+  if (!match) return null;
+  const userId = Math.floor(Number(match[1]));
+  if (!Number.isInteger(userId) || userId <= 0) return null;
+  return match[2] ? `${userId}:goat` : String(userId);
+}
 
 function claimedTier(raw: { tier?: unknown }, userId: number): string | null {
   if (typeof raw.tier !== "string") return null;
@@ -268,10 +291,10 @@ async function upsertPackCard(
   await exec(
     db,
     `insert into pack_collection_cards (
-       owner_user_id, card_user_id, username, avatar_url, country_code, tier, tier_label, skills_json,
+       owner_user_id, card_user_id, card_key, username, avatar_url, country_code, tier, tier_label, skills_json,
        pp, global_rank, copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at
-     ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     on conflict(owner_user_id, card_user_id) do update set
+     ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     on conflict(owner_user_id, card_key) do update set
        username = excluded.username,
        avatar_url = excluded.avatar_url,
        country_code = excluded.country_code,
@@ -300,6 +323,7 @@ async function upsertPackCard(
     [
       ownerUserId,
       card.userId,
+      packCardKey(card.userId, card.tier),
       card.username,
       card.avatarUrl,
       card.countryCode,
@@ -324,6 +348,7 @@ function nonEmptyString(value: unknown): string | null {
 function cardFromRow(row: Record<string, unknown>): StoredPackCard {
   return {
     userId: Number(row.card_user_id),
+    cardKey: typeof row.card_key === "string" ? row.card_key : packCardKey(Number(row.card_user_id), typeof row.tier === "string" ? row.tier : null),
     username: nonEmptyString(row.live_username) ?? String(row.username ?? ""),
     avatarUrl: nonEmptyString(row.live_avatar_url) ?? String(row.avatar_url ?? ""),
     countryCode: nonEmptyString(row.live_country_code) ?? String(row.country_code ?? ""),
@@ -455,18 +480,88 @@ export async function listPackCollectionCards(
   };
 }
 
-export async function listPackCollectionOwnedUserIds(db: Db, userId: number): Promise<number[]> {
+/* Card keys rather than player ids: holding an ordinary card of a roster
+   member is not holding their GOAT, and duplicate protection has to tell
+   those apart. */
+export async function listPackCollectionOwnedCardKeys(db: Db, userId: number): Promise<string[]> {
   const rows = (await exec(
     db,
-    `select card_user_id
+    `select card_key
      from pack_collection_cards
      where owner_user_id = ? and copies > 0
-     order by card_user_id asc`,
+     order by card_key asc`,
     [userId],
   )).rows;
   return rows
-    .map((row) => Number(row.card_user_id))
-    .filter((id) => Number.isInteger(id) && id > 0);
+    .map((row) => (typeof row.card_key === "string" ? row.card_key : null))
+    .filter((key): key is string => key !== null);
+}
+
+/* pack_collection_cards used to be keyed (owner, player), one row per player.
+   GOAT cards now stand apart from their player's ordinary card, so the key is
+   (owner, card_key) instead. SQLite cannot alter a primary key, so a database
+   created before this rebuilds the table once, deriving each row's key from
+   the tier it already stores. Existing rows are all distinct by (owner,
+   player), so no row can collide on the way in.
+
+   Guarded on the column rather than a marker: the check is a pragma read, and
+   tying it to the schema means a restored or hand-repaired database can never
+   skip a rebuild it actually needs. */
+export async function ensurePackCollectionCardKeys(db: Db): Promise<boolean> {
+  const columns = (await exec(db, "pragma table_info(pack_collection_cards)")).rows;
+  if (columns.length === 0) return false;
+  if (columns.some((column) => String(column.name) === "card_key")) return false;
+
+  await exec(db, "drop table if exists pack_collection_cards_rekey");
+  await exec(
+    db,
+    `create table pack_collection_cards_rekey (
+       owner_user_id integer not null,
+       card_user_id integer not null,
+       card_key text not null,
+       username text not null,
+       avatar_url text not null,
+       country_code text not null,
+       tier text,
+       tier_label text,
+       skills_json text,
+       pp real not null,
+       global_rank integer not null,
+       copies integer not null,
+       recycled_copies integer not null,
+       first_pulled_at integer not null,
+       last_pulled_at integer not null,
+       updated_at integer not null,
+       primary key(owner_user_id, card_key)
+     )`,
+  );
+  await exec(
+    db,
+    `insert into pack_collection_cards_rekey
+       (owner_user_id, card_user_id, card_key, username, avatar_url, country_code, tier, tier_label,
+        skills_json, pp, global_rank, copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at)
+     select owner_user_id, card_user_id,
+       case when tier = 'goat' then card_user_id || ':goat' else cast(card_user_id as text) end,
+       username, avatar_url, country_code, tier, tier_label, skills_json, pp, global_rank, copies,
+       recycled_copies, first_pulled_at, last_pulled_at, updated_at
+     from pack_collection_cards`,
+  );
+  await exec(db, "drop table pack_collection_cards");
+  await exec(db, "alter table pack_collection_cards_rekey rename to pack_collection_cards");
+  // The indexes went with the old table.
+  await exec(
+    db,
+    "create index if not exists idx_pack_collection_owner_rank on pack_collection_cards(owner_user_id, copies, global_rank)",
+  );
+  await exec(
+    db,
+    "create index if not exists idx_pack_collection_owner_tier on pack_collection_cards(owner_user_id, tier, copies, pp desc)",
+  );
+  await exec(
+    db,
+    "create index if not exists idx_pack_collection_owner_username on pack_collection_cards(owner_user_id, username)",
+  );
+  return true;
 }
 
 export function shardValueForStoredTier(tier: string | null): number {
@@ -476,7 +571,7 @@ export function shardValueForStoredTier(tier: string | null): number {
 export async function recyclePackCollectionCards(
   db: Db,
   userId: number,
-  options: { mode: PackRecycleMode; cardUserId?: number; cardUserIds?: number[]; tier?: string | null; query?: string | null },
+  options: { mode: PackRecycleMode; cardKey?: string; cardKeys?: string[]; tier?: string | null; query?: string | null },
   now = Date.now(),
 ): Promise<PackRecycleResult> {
   let gained = 0;
@@ -522,16 +617,16 @@ export async function recyclePackCollectionCards(
     return { gained, wallet: await addWalletShards(db, userId, gained, now) };
   }
 
-  if (options.mode === "whole" && options.cardUserIds && options.cardUserIds.length > 0) {
-    const ids = [...new Set(options.cardUserIds.map((id) => Math.floor(Number(id) || 0)).filter((id) => id > 0))];
-    if (ids.length === 0) return { gained: 0, wallet: await getOrCreatePackWallet(db, userId, now) };
-    const placeholders = ids.map(() => "?").join(", ");
+  if (options.mode === "whole" && options.cardKeys && options.cardKeys.length > 0) {
+    const keys = [...new Set(options.cardKeys.map(normalizePackCardKey).filter((key): key is string => key !== null))];
+    if (keys.length === 0) return { gained: 0, wallet: await getOrCreatePackWallet(db, userId, now) };
+    const placeholders = keys.map(() => "?").join(", ");
     const row = (await exec(
       db,
       `select coalesce(sum(copies * ${shardValueSql("tier")}), 0) as gained
        from pack_collection_cards
-       where owner_user_id = ? and card_user_id in (${placeholders}) and copies > 0`,
-      [userId, ...ids],
+       where owner_user_id = ? and card_key in (${placeholders}) and copies > 0`,
+      [userId, ...keys],
     )).rows[0];
     gained = Number(row?.gained) || 0;
     if (gained > 0) {
@@ -541,8 +636,8 @@ export async function recyclePackCollectionCards(
          set recycled_copies = recycled_copies + copies,
              copies = 0,
              updated_at = ?
-         where owner_user_id = ? and card_user_id in (${placeholders}) and copies > 0`,
-        [now, userId, ...ids],
+         where owner_user_id = ? and card_key in (${placeholders}) and copies > 0`,
+        [now, userId, ...keys],
       );
     }
     return { gained, wallet: await addWalletShards(db, userId, gained, now) };
@@ -571,12 +666,12 @@ export async function recyclePackCollectionCards(
     return { gained, wallet: await addWalletShards(db, userId, gained, now) };
   }
 
-  const cardUserId = Math.floor(Number(options.cardUserId) || 0);
-  if (cardUserId <= 0) return { gained: 0, wallet: await getOrCreatePackWallet(db, userId, now) };
+  const cardKey = normalizePackCardKey(options.cardKey);
+  if (!cardKey) return { gained: 0, wallet: await getOrCreatePackWallet(db, userId, now) };
   const card = (await exec(
     db,
-    "select copies, tier from pack_collection_cards where owner_user_id = ? and card_user_id = ? and copies > 0",
-    [userId, cardUserId],
+    "select copies, tier from pack_collection_cards where owner_user_id = ? and card_key = ? and copies > 0",
+    [userId, cardKey],
   )).rows[0];
   if (!card) return { gained: 0, wallet: await getOrCreatePackWallet(db, userId, now) };
 
@@ -592,8 +687,8 @@ export async function recyclePackCollectionCards(
          set recycled_copies = recycled_copies + ?,
              copies = 1,
              updated_at = ?
-         where owner_user_id = ? and card_user_id = ?`,
-        [recycled, now, userId, cardUserId],
+         where owner_user_id = ? and card_key = ?`,
+        [recycled, now, userId, cardKey],
       );
     }
   } else {
@@ -604,8 +699,8 @@ export async function recyclePackCollectionCards(
        set recycled_copies = recycled_copies + copies,
            copies = 0,
            updated_at = ?
-       where owner_user_id = ? and card_user_id = ?`,
-      [now, userId, cardUserId],
+       where owner_user_id = ? and card_key = ?`,
+      [now, userId, cardKey],
     );
   }
 

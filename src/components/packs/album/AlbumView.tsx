@@ -3,9 +3,9 @@ import { ChevronLeft, ChevronRight, Globe, Info } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { ManiaCardTier } from "#/lib/maniacard";
-import { collectedCardTier, ownedCards, type CollectedCard, type PackWallet } from "#/lib/pack-collection";
+import { collectedCardTier, ownedCards, parsePackCardKey, type CollectedCard, type PackWallet } from "#/lib/pack-collection";
 import {
-  fetchServerPackCollectionOwnedIds,
+  fetchServerPackCollectionOwnedKeys,
   fetchServerPackCollectionPage,
   PACK_COLLECTION_MAX_PAGE_SIZE,
 } from "#/lib/pack-wallet-sync";
@@ -981,9 +981,13 @@ export function AlbumView({
   useEffect(() => {
     if (syncStatus === "local") return;
     let cancelled = false;
-    void fetchServerPackCollectionOwnedIds()
-      .then((ids) => {
-        if (!cancelled && ids) setServerOwned(new Set(ids));
+    void fetchServerPackCollectionOwnedKeys()
+      .then((keys) => {
+        // The album has one page per player, so a GOAT and an ordinary card of
+        // the same player both just mean "owned".
+        if (!cancelled && keys) {
+          setServerOwned(new Set(keys.map(parsePackCardKey).filter(Boolean).map((parsed) => parsed!.userId)));
+        }
       })
       .catch(() => {});
     void loadFullServerCollection()

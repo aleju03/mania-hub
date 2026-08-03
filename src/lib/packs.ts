@@ -412,6 +412,9 @@ export interface PackDrawOptions {
      unowned player from the same draw slice when one exists. Near-complete
      collections keep only the repeats that have no unowned replacement. */
   ownedUserIds?: ReadonlySet<number>;
+  /* Players already held *as a GOAT*. Distinct from ownedUserIds because the
+     ordinary card and the GOAT card of a roster member are two cards. */
+  ownedGoatUserIds?: ReadonlySet<number>;
 }
 
 function shuffleInPlace<T>(items: T[], rng: () => number): T[] {
@@ -549,14 +552,14 @@ export function applyHonoraryHit(
   players: PackPlayer[],
   rng: () => number,
   chance: number,
-  ownedUserIds?: ReadonlySet<number>,
+  ownedGoatUserIds?: ReadonlySet<number>,
 ): PackPlayer[] {
   if (!(chance > 0) || players.length === 0) return players;
   if (rng() >= chance) return players;
 
   const dealt = new Set(players.map((player) => player.user.id));
   const candidates = HONORARY_PACK_POOL.filter((player) => !dealt.has(player.id));
-  const unowned = ownedUserIds ? candidates.filter((player) => !ownedUserIds.has(player.id)) : [];
+  const unowned = ownedGoatUserIds ? candidates.filter((player) => !ownedGoatUserIds.has(player.id)) : [];
   // Prefer one they don't have; fall back to the whole roster rather than
   // silently dropping the hit once the set is complete.
   const pool = unowned.length > 0 ? unowned : candidates;
@@ -596,7 +599,7 @@ export async function drawPackPlayersFromPool(
 
   const players = sortIntoRevealOrder(entries.map(liveEntryToPackPlayer));
   return {
-    players: applyHonoraryHit(players, rng, options.honoraryChance ?? 0, options.ownedUserIds),
+    players: applyHonoraryHit(players, rng, options.honoraryChance ?? 0, options.ownedGoatUserIds),
     poolTotal: total,
   };
 }
@@ -617,7 +620,7 @@ export async function drawPackPlayers(
   if (needsDuplicateProtection) throw new Error("Duplicate-protected packs require the tracked player pool.");
   const players = await drawPackPlayersFromOsuApi(rng, options.count ?? PACK_SIZE);
   return {
-    players: applyHonoraryHit(players, rng, options.honoraryChance ?? 0, options.ownedUserIds),
+    players: applyHonoraryHit(players, rng, options.honoraryChance ?? 0, options.ownedGoatUserIds),
     poolTotal: null,
   };
 }

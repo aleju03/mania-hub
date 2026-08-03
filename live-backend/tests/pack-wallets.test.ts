@@ -4,9 +4,10 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
 import {
+  ensurePackCollectionCardKeys,
   getPackWallet,
   listPackCollectionCards,
-  listPackCollectionOwnedUserIds,
+  listPackCollectionOwnedCardKeys,
   recyclePackCollectionCards,
   savePackWallet,
 } from "../src/features/pack-wallets.js";
@@ -101,7 +102,7 @@ describe("pack wallets", () => {
     const page = await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 });
     expect(page.total).toBe(1);
     expect(page.cards[0]).toMatchObject({ userId: 42, username: "delta", copies: 2, recycledCopies: 0 });
-    expect(await listPackCollectionOwnedUserIds(db, USER_ID)).toEqual([42]);
+    expect(await listPackCollectionOwnedCardKeys(db, USER_ID)).toEqual(["42"]);
   });
 
   it("treats full wallet imports as snapshots and post-strip imports as deltas", async () => {
@@ -167,5 +168,144 @@ describe("pack wallets", () => {
 
     const page = await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 });
     expect(page.cards[0].copies).toBe(2);
+  });
+});
+
+/* A collection card is (player, GOAT-or-not), not just player. Several
+   honorary players are live ranked players, so their ordinary card and their
+   GOAT are two collectibles that must survive alongside each other through a
+   sync and recycle independently. */
+describe("GOAT cards alongside their player's ordinary card", () => {
+  const BOJII = 10083439; // on the honorary roster and in the ranked pool
+
+  function bothCardsPayload(): string {
+    const card = (tier: string, copies: number) => ({
+      userId: BOJII,
+      username: "bojii",
+      avatarUrl: "https://a.ppy.sh/10083439",
+      countryCode: "PH",
+      tier,
+      tierLabel: tier,
+      skills: null,
+      pp: 27107,
+      globalRank: 4,
+      copies,
+      recycledCopies: 0,
+      firstPulledAt: 100,
+      lastPulledAt: 200,
+    });
+    return JSON.stringify({
+      cards: { [String(BOJII)]: card("worldClass", 2), [`${BOJII}:goat`]: card("goat", 1) },
+      shards: 0,
+      shardsSpent: 0,
+      charges: 5,
+      lastRefillAt: 0,
+      openedPacks: 0,
+      poolTotal: null,
+    });
+  }
+
+  it("stores both as separate rows instead of collapsing them", async () => {
+    await savePackWallet(db, USER_ID, bothCardsPayload(), 0, 1000);
+    const page = await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 });
+    expect(page.total).toBe(2);
+    expect(page.cards.map((card) => card.tier).sort()).toEqual(["goat", "worldClass"]);
+    expect(await listPackCollectionOwnedCardKeys(db, USER_ID)).toEqual([String(BOJII), `${BOJII}:goat`]);
+  });
+
+  it("recycles one without touching the other, each at its own rate", async () => {
+    await savePackWallet(db, USER_ID, bothCardsPayload(), 0, 1000);
+
+    const ordinary = await recyclePackCollectionCards(db, USER_ID, { mode: "whole", cardKey: String(BOJII) });
+    expect(ordinary.gained).toBe(2 * 40);
+
+    const remaining = await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 });
+    expect(remaining.total).toBe(1);
+    expect(remaining.cards[0].tier).toBe("goat");
+
+    const goat = await recyclePackCollectionCards(db, USER_ID, { mode: "whole", cardKey: `${BOJII}:goat` });
+    expect(goat.gained).toBe(1000);
+    expect((await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 })).total).toBe(0);
+  });
+});
+
+/* Databases created before GOAT cards split off key pack_collection_cards by
+   (owner, player). SQLite cannot alter a primary key, so the table is rebuilt
+   once on boot; getting that wrong would drop every collection in prod. */
+describe("pack collection rekey", () => {
+  async function createLegacyTable(): Promise<void> {
+    await exec(db, "drop table if exists pack_collection_cards");
+    await exec(
+      db,
+      `create table pack_collection_cards (
+         owner_user_id integer not null,
+         card_user_id integer not null,
+         username text not null,
+         avatar_url text not null,
+         country_code text not null,
+         tier text,
+         tier_label text,
+         skills_json text,
+         pp real not null,
+         global_rank integer not null,
+         copies integer not null,
+         recycled_copies integer not null,
+         first_pulled_at integer not null,
+         last_pulled_at integer not null,
+         updated_at integer not null,
+         primary key(owner_user_id, card_user_id)
+       )`,
+    );
+  }
+
+  async function seedLegacyCard(cardUserId: number, tier: string | null): Promise<void> {
+    await exec(
+      db,
+      `insert into pack_collection_cards (
+         owner_user_id, card_user_id, username, avatar_url, country_code, tier, tier_label, skills_json,
+         pp, global_rank, copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at
+       ) values (?, ?, ?, '', 'CR', ?, ?, null, 1000, 500, 2, 1, 100, 200, 300)`,
+      [USER_ID, cardUserId, `player${cardUserId}`, tier, tier],
+    );
+  }
+
+  it("derives each row's key from its tier, keeping every card and its counts", async () => {
+    await createLegacyTable();
+    await seedLegacyCard(42, "rare");
+    await seedLegacyCard(7, "goat");
+    await seedLegacyCard(9, null);
+
+    expect(await ensurePackCollectionCardKeys(db)).toBe(true);
+
+    const rows = (await exec(db, "select card_user_id, card_key, copies, recycled_copies from pack_collection_cards order by card_user_id")).rows;
+    expect(rows.map((row) => [Number(row.card_user_id), String(row.card_key)])).toEqual([
+      [7, "7:goat"],
+      [9, "9"],
+      [42, "42"],
+    ]);
+    // Copy counts are the economy; a rebuild that resets them would hand out
+    // free recycles.
+    expect(rows.every((row) => Number(row.copies) === 2 && Number(row.recycled_copies) === 1)).toBe(true);
+  });
+
+  it("is a no-op once the table already carries keys", async () => {
+    await createLegacyTable();
+    await seedLegacyCard(42, "rare");
+    expect(await ensurePackCollectionCardKeys(db)).toBe(true);
+    expect(await ensurePackCollectionCardKeys(db)).toBe(false);
+    expect((await exec(db, "select count(*) as c from pack_collection_cards")).rows[0]?.c).toBe(1);
+  });
+
+  it("leaves a rebuilt table writable through the normal sync path", async () => {
+    await createLegacyTable();
+    await seedLegacyCard(42, "rare");
+    await ensurePackCollectionCardKeys(db);
+
+    await savePackWallet(db, USER_ID, cardPayload(3), 0, 1000);
+    const page = await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 });
+    expect(page.total).toBe(1);
+    // Snapshot reconcile against the rebuilt row: 3 pulled ever, 1 already
+    // recycled, so 2 held. The conflict target resolved, which is the point.
+    expect(page.cards[0]).toMatchObject({ userId: 42, copies: 2, recycledCopies: 1 });
   });
 });

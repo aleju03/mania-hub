@@ -616,12 +616,32 @@ export interface LiveBackendHonoraryCardPulls {
   lastPulledAt: number | null;
 }
 
+export interface LiveBackendHonoraryCollector {
+  userId: number;
+  username: string;
+  cards: number;
+  copies: number;
+  lastPulledAt: number;
+}
+
+export interface LiveBackendHonoraryLatestPull {
+  ownerUserId: number;
+  ownerUsername: string;
+  cardUserId: number;
+  cardUsername: string | null;
+  pulledAt: number;
+}
+
 export interface LiveBackendHonoraryPulls {
   rosterSize: number;
   pulledCards: number;
   distinctOwners: number;
   totalCopies: number;
   cards: LiveBackendHonoraryCardPulls[];
+  /* Absent from a backend that predates the leaderboard. */
+  collectors?: LiveBackendHonoraryCollector[];
+  collectorsListed?: number;
+  latest?: LiveBackendHonoraryLatestPull | null;
   ownersPerCard: number;
   capturedAt: number;
 }

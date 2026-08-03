@@ -6,6 +6,7 @@ import {
   loadWalletForViewer,
   MAX_PACK_CHARGES,
   ownedCards,
+  packCardKeyOf,
   packWalletStorageKey,
   reconcileWallets,
   recordPull,
@@ -40,17 +41,19 @@ export interface PackWalletApi {
   syncStatus: PackSyncStatus;
   openPack: (cost: PackCost) => boolean;
   recordPull: (pull: PulledCard) => boolean;
-  /* Recycles a card's duplicate copies, keeping one. */
-  recycleCard: (userId: number) => number | Promise<number>;
+  /* Recycles a card's duplicate copies, keeping one. Cards are addressed by
+     their wallet key (see packCardKey), not by player: a GOAT and an ordinary
+     card of the same player are two cards and recycle separately. */
+  recycleCard: (cardKey: string) => number | Promise<number>;
   /* Recycles every copy; the card leaves the collection. */
-  recycleWhole: (userId: number) => number | Promise<number>;
+  recycleWhole: (cardKey: string) => number | Promise<number>;
   /* Whole-recycles a batch of cards in one server round-trip. */
-  recycleWholeMany: (userIds: number[]) => number | Promise<number>;
+  recycleWholeMany: (cardKeys: string[]) => number | Promise<number>;
   recycleWholeMatching: (filter: { tier: ManiaCardTier | "all" | "unrated"; query: string }) => number | Promise<number>;
   recycleAll: () => number | Promise<number>;
   /* Backfills a recomputed mint (skills snapshot + tier) onto an owned
      card; used to upgrade legacy cards collected before snapshots existed. */
-  applyMint: (userId: number, mint: Parameters<typeof applyCardMint>[2]) => boolean;
+  applyMint: (cardKey: string, mint: Parameters<typeof applyCardMint>[2]) => boolean;
   notePoolTotal: (total: number | null) => void;
 }
 
@@ -264,8 +267,8 @@ export function usePackWallet(): PackWalletApi {
 
   const recycleOnServer = async (
     mode: "duplicates" | "whole" | "all_duplicates" | "whole_matching",
-    userId?: number,
-    userIds?: number[],
+    cardKey?: string,
+    cardKeys?: string[],
     filter?: { tier: ManiaCardTier | "all" | "unrated"; query: string },
   ) => {
     const sync = syncRef.current;
@@ -282,8 +285,8 @@ export function usePackWallet(): PackWalletApi {
       const result = await recycleServerPackCollection({
         data: {
           mode,
-          cardUserId: userId,
-          cardUserIds: userIds,
+          cardKey,
+          cardKeys,
           tier: filter?.tier,
           query: filter?.query,
         },
@@ -409,49 +412,49 @@ export function usePackWallet(): PackWalletApi {
       commit(result.wallet);
       return result.isNew;
     },
-    recycleCard: (userId) => {
+    recycleCard: (cardKey) => {
       if (syncRef.current.enabled) {
         return (async () => {
-          const gained = await recycleOnServer("duplicates", userId);
+          const gained = await recycleOnServer("duplicates", cardKey);
           if (gained !== null) return gained;
           const current = walletRef.current;
           if (!current) return 0;
-          const result = recycleDuplicates(current, userId);
+          const result = recycleDuplicates(current, cardKey);
           if (result.gained > 0) commit(result.wallet);
           return result.gained;
         })();
       }
       const current = walletRef.current;
       if (!current) return 0;
-      const result = recycleDuplicates(current, userId);
+      const result = recycleDuplicates(current, cardKey);
       if (result.gained > 0) commit(result.wallet);
       return result.gained;
     },
-    recycleWhole: (userId) => {
+    recycleWhole: (cardKey) => {
       if (syncRef.current.enabled) {
         return (async () => {
-          const gained = await recycleOnServer("whole", userId);
+          const gained = await recycleOnServer("whole", cardKey);
           if (gained !== null) return gained;
           const current = walletRef.current;
           if (!current) return 0;
-          const result = recycleAllCopies(current, userId);
+          const result = recycleAllCopies(current, cardKey);
           if (result.gained > 0) commit(result.wallet);
           return result.gained;
         })();
       }
       const current = walletRef.current;
       if (!current) return 0;
-      const result = recycleAllCopies(current, userId);
+      const result = recycleAllCopies(current, cardKey);
       if (result.gained > 0) commit(result.wallet);
       return result.gained;
     },
-    recycleWholeMany: (userIds) => {
+    recycleWholeMany: (cardKeys) => {
       const recycleManyLocally = () => {
         let working = walletRef.current;
         if (!working) return 0;
         let gained = 0;
-        for (const userId of userIds) {
-          const result = recycleAllCopies(working, userId);
+        for (const cardKey of cardKeys) {
+          const result = recycleAllCopies(working, cardKey);
           gained += result.gained;
           working = result.wallet;
         }
@@ -460,7 +463,7 @@ export function usePackWallet(): PackWalletApi {
       };
       if (syncRef.current.enabled) {
         return (async () => {
-          const gained = await recycleOnServer("whole", undefined, userIds);
+          const gained = await recycleOnServer("whole", undefined, cardKeys);
           return gained !== null ? gained : recycleManyLocally();
         })();
       }
@@ -471,11 +474,11 @@ export function usePackWallet(): PackWalletApi {
         let working = walletRef.current;
         if (!working) return 0;
         let gained = 0;
-        const userIds = ownedCards(working)
+        const cardKeys = ownedCards(working)
           .filter((card) => collectionCardMatchesFilter(card, filter))
-          .map((card) => card.userId);
-        for (const userId of userIds) {
-          const result = recycleAllCopies(working, userId);
+          .map(packCardKeyOf);
+        for (const cardKey of cardKeys) {
+          const result = recycleAllCopies(working, cardKey);
           gained += result.gained;
           working = result.wallet;
         }
@@ -508,10 +511,10 @@ export function usePackWallet(): PackWalletApi {
       if (result.gained > 0) commit(result.wallet);
       return result.gained;
     },
-    applyMint: (userId, mint) => {
+    applyMint: (cardKey, mint) => {
       const current = walletRef.current;
       if (!current) return false;
-      const next = applyCardMint(current, userId, mint);
+      const next = applyCardMint(current, cardKey, mint);
       if (!next) return false;
       commit(next);
       return true;

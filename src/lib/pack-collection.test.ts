@@ -9,6 +9,8 @@ import {
   msUntilNextCharge,
   ownedCards,
   PACK_CHARGE_REGEN_MS,
+  packCardKey,
+  parsePackCardKey,
   PACK_OPEN_SHARD_REWARD,
   reconcileWallets,
   recordPull,
@@ -106,11 +108,11 @@ describe("pulls and recycling", () => {
     for (let i = 0; i < 4; i += 1) wallet = recordPull(wallet, pull(7, "elite"), T0 + i).wallet;
     expect(duplicateShardTotal(wallet)).toBe(3 * shardValueForTier("elite"));
 
-    const result = recycleDuplicates(wallet, 7);
+    const result = recycleDuplicates(wallet, "7");
     expect(result.gained).toBe(3 * shardValueForTier("elite"));
     expect(result.wallet.cards["7"].copies).toBe(1);
     expect(result.wallet.shards).toBe(result.gained);
-    expect(recycleDuplicates(result.wallet, 7).gained).toBe(0);
+    expect(recycleDuplicates(result.wallet, "7").gained).toBe(0);
   });
 
   it("recycles every duplicate at once", () => {
@@ -142,11 +144,11 @@ describe("pulls and recycling", () => {
 
   it("recycles a card entirely, leaving a tombstone that a repull revives as new", () => {
     let wallet = recordPull(createEmptyWallet(T0), pull(7, "rare"), T0).wallet;
-    const result = recycleAllCopies(wallet, 7);
+    const result = recycleAllCopies(wallet, "7");
     expect(result.gained).toBe(shardValueForTier("rare"));
     expect(result.wallet.cards["7"].copies).toBe(0);
     expect(ownedCards(result.wallet)).toHaveLength(0);
-    expect(recycleAllCopies(result.wallet, 7).gained).toBe(0);
+    expect(recycleAllCopies(result.wallet, "7").gained).toBe(0);
 
     const repull = recordPull(result.wallet, pull(7, "rare"), T0 + 1000);
     expect(repull.isNew).toBe(true);
@@ -155,7 +157,7 @@ describe("pulls and recycling", () => {
 
   it("keeps fully recycled cards gone after reconciling with a stale device", () => {
     const base = recordPull(createEmptyWallet(T0), pull(7), T0).wallet;
-    const deviceA = recycleAllCopies(base, 7).wallet;
+    const deviceA = recycleAllCopies(base, "7").wallet;
     const merged = reconcileWallets(deviceA, base, T0 + 5000);
     expect(merged.cards["7"].copies).toBe(0);
     expect(ownedCards(merged)).toHaveLength(0);
@@ -183,18 +185,18 @@ describe("mint backfills", () => {
 
     // Legacy card: fresh mint wins even at a lower tier (it is the only
     // version that can actually be drawn).
-    const backfilled = applyCardMint(wallet, 7, { skills, tier: "elite", tierLabel: "Elite" });
+    const backfilled = applyCardMint(wallet, "7", { skills, tier: "elite", tierLabel: "Elite" });
     expect(backfilled).not.toBeNull();
     expect(backfilled!.cards["7"].skills).toEqual(skills);
     expect(backfilled!.cards["7"].tier).toBe("elite");
 
     // With a snapshot in place, equal or lower tiers are refused...
-    expect(applyCardMint(backfilled!, 7, { skills, tier: "rare", tierLabel: "Rare" })).toBeNull();
+    expect(applyCardMint(backfilled!, "7", { skills, tier: "rare", tierLabel: "Rare" })).toBeNull();
     // ...and higher tiers upgrade.
-    const upgraded = applyCardMint(backfilled!, 7, { skills, tier: "mythic", tierLabel: "Mythic" });
+    const upgraded = applyCardMint(backfilled!, "7", { skills, tier: "mythic", tierLabel: "Mythic" });
     expect(upgraded!.cards["7"].tier).toBe("mythic");
     // Unknown or fully recycled cards are untouched.
-    expect(applyCardMint(backfilled!, 999, { skills, tier: "rare", tierLabel: "Rare" })).toBeNull();
+    expect(applyCardMint(backfilled!, "999", { skills, tier: "rare", tierLabel: "Rare" })).toBeNull();
   });
 });
 
@@ -203,7 +205,7 @@ describe("cross-device reconcile", () => {
     let wallet = createEmptyWallet(T0);
     wallet = recordPull(wallet, pull(7, "rare"), T0).wallet;
     wallet = recordPull(wallet, pull(7, "rare"), T0 + 1).wallet;
-    wallet = recycleDuplicates(wallet, 7).wallet;
+    wallet = recycleDuplicates(wallet, "7").wallet;
     wallet = spendShards({ ...wallet, shards: wallet.shards + 10 }, 8)!;
 
     const reconciled = reconcileWallets(wallet, wallet, T0 + 5000);
@@ -228,7 +230,7 @@ describe("cross-device reconcile", () => {
     let base = createEmptyWallet(T0);
     for (let i = 0; i < 3; i += 1) base = recordPull(base, pull(7, "elite"), T0 + i).wallet;
 
-    const deviceA = recycleDuplicates(base, 7).wallet;
+    const deviceA = recycleDuplicates(base, "7").wallet;
     const merged = reconcileWallets(deviceA, base, T0 + 5000);
     expect(merged.cards["7"].copies).toBe(1);
     expect(merged.cards["7"].recycledCopies).toBe(2);
@@ -322,5 +324,107 @@ describe("collected card tier", () => {
   it("falls back to card power when the mint left no tier behind", () => {
     expect(collectedCardTier({ tier: null, skills: { cardPower: 720 } as never })).toBe("worldClass");
     expect(collectedCardTier({ tier: null, skills: null })).toBe("common");
+  });
+});
+
+/* GOAT is awarded by honorary-roster membership rather than card power, and
+   several roster members are live ranked players, so one player can be held
+   both as the card the ranked pool dealt and as the GOAT the honorary slot
+   dealt. Those are two cards: pulling the GOAT must not overwrite (or absorb)
+   the ordinary one, and each recycles on its own. */
+describe("GOAT cards alongside their player's ordinary card", () => {
+  const BOJII = 10083439;
+
+  function goatPull(userId: number): PulledCard {
+    return { ...pull(userId, "goat"), tierLabel: "GOAT" };
+  }
+
+  it("keys only the GOAT variant apart, leaving every existing key untouched", () => {
+    expect(packCardKey(BOJII, "worldClass")).toBe(String(BOJII));
+    expect(packCardKey(BOJII, null)).toBe(String(BOJII));
+    expect(packCardKey(BOJII, "goat")).toBe(`${BOJII}:goat`);
+    expect(parsePackCardKey(`${BOJII}:goat`)).toEqual({ userId: BOJII, goat: true });
+    expect(parsePackCardKey(String(BOJII))).toEqual({ userId: BOJII, goat: false });
+    expect(parsePackCardKey("nonsense")).toBeNull();
+  });
+
+  it("holds both cards at once, counting the GOAT as a new card", () => {
+    let wallet = recordPull(createEmptyWallet(T0), pull(BOJII, "worldClass"), T0).wallet;
+    const goat = recordPull(wallet, goatPull(BOJII), T0 + 1000);
+    wallet = goat.wallet;
+
+    expect(goat.isNew).toBe(true);
+    expect(ownedCards(wallet)).toHaveLength(2);
+    expect(wallet.cards[String(BOJII)].tier).toBe("worldClass");
+    expect(wallet.cards[`${BOJII}:goat`].tier).toBe("goat");
+    expect(wallet.cards[String(BOJII)].copies).toBe(1);
+    expect(wallet.cards[`${BOJII}:goat`].copies).toBe(1);
+  });
+
+  it("recycles each of them separately, at its own tier's rate", () => {
+    let wallet = recordPull(createEmptyWallet(T0), pull(BOJII, "worldClass"), T0).wallet;
+    wallet = recordPull(wallet, goatPull(BOJII), T0 + 1000).wallet;
+
+    const ordinary = recycleAllCopies(wallet, String(BOJII));
+    expect(ordinary.gained).toBe(shardValueForTier("worldClass"));
+    // The GOAT is untouched by the ordinary card leaving the collection.
+    expect(ownedCards(ordinary.wallet)).toHaveLength(1);
+    expect(ownedCards(ordinary.wallet)[0].tier).toBe("goat");
+
+    const goat = recycleAllCopies(ordinary.wallet, `${BOJII}:goat`);
+    expect(goat.gained).toBe(shardValueForTier("goat"));
+    expect(ownedCards(goat.wallet)).toHaveLength(0);
+  });
+
+  it("moves a wallet written before the split onto the new key", () => {
+    const legacy = {
+      cards: {
+        [String(BOJII)]: {
+          userId: BOJII,
+          username: "bojii",
+          avatarUrl: "",
+          countryCode: "PH",
+          tier: "goat",
+          tierLabel: "GOAT",
+          skills: null,
+          pp: 27107,
+          globalRank: 4,
+          copies: 1,
+          recycledCopies: 0,
+          firstPulledAt: T0,
+          lastPulledAt: T0,
+        },
+      },
+      shards: 0,
+      shardsSpent: 0,
+      charges: MAX_PACK_CHARGES,
+      lastRefillAt: T0,
+      openedPacks: 0,
+      poolTotal: null,
+    };
+    const wallet = sanitizeWallet(legacy, T0)!;
+    expect(Object.keys(wallet.cards)).toEqual([`${BOJII}:goat`]);
+    expect(wallet.cards[`${BOJII}:goat`].copies).toBe(1);
+  });
+
+  it("moves a mint that lands on GOAT onto the GOAT key", () => {
+    const skills = {
+      starAvg: 5,
+      fingerControl: 400,
+      speed: 420,
+      accuracy: 380,
+      stamina: 300,
+      versatility: 310,
+      peak: 350,
+      cardPower: 250,
+      mainKeyMode: 4,
+      archetype: "all-rounder",
+      sampleSize: 80,
+    } as never;
+    // A legacy card with no tier at all, whose player turns out to be honorary.
+    const wallet = recordPull(createEmptyWallet(T0), pull(BOJII, null), T0).wallet;
+    const minted = applyCardMint(wallet, String(BOJII), { skills, tier: "goat", tierLabel: "GOAT" })!;
+    expect(Object.keys(minted.cards)).toEqual([`${BOJII}:goat`]);
+    expect(minted.cards[`${BOJII}:goat`].tier).toBe("goat");
   });
 });

@@ -611,9 +611,16 @@ create table if not exists pack_wallets (
   updated_at integer not null
 );
 
+-- One row per card held, and a card is (player, GOAT-or-not) rather than just
+-- player: GOAT is awarded by honorary-roster membership instead of card power,
+-- and several roster members are live ranked players, so the same player can be
+-- held both as the card the ranked pool dealt and as the GOAT the honorary slot
+-- dealt. card_key mirrors the browser wallet's key exactly ("<id>" or
+-- "<id>:goat"), so the two sides address the same card the same way.
 create table if not exists pack_collection_cards (
   owner_user_id integer not null,
   card_user_id integer not null,
+  card_key text not null,
   username text not null,
   avatar_url text not null,
   country_code text not null,
@@ -627,7 +634,7 @@ create table if not exists pack_collection_cards (
   first_pulled_at integer not null,
   last_pulled_at integer not null,
   updated_at integer not null,
-  primary key(owner_user_id, card_user_id)
+  primary key(owner_user_id, card_key)
 );
 create index if not exists idx_pack_collection_owner_rank
   on pack_collection_cards(owner_user_id, copies, global_rank);

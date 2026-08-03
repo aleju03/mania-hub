@@ -77,7 +77,7 @@ describe("GOAT tier claims", () => {
 
   it("does not pay out GOAT shards for a forged card", async () => {
     await savePackWallet(db, OWNER, JSON.stringify({ cards: { [ORDINARY_ID]: card(ORDINARY_ID, "goat") }, shards: 0 }), 0);
-    const { gained } = await recyclePackCollectionCards(db, OWNER, { mode: "duplicates", cardUserId: ORDINARY_ID });
+    const { gained } = await recyclePackCollectionCards(db, OWNER, { mode: "duplicates", cardKey: String(ORDINARY_ID) });
     // Two duplicates at the unrated rate (1 each), not 2 x 1000.
     expect(gained).toBeLessThanOrEqual(2);
   });
@@ -181,5 +181,90 @@ describe("shared pull provenance", () => {
     await logPull("goat", "standard", 3000);
     const shared = await getSharedPackCard(db, OWNER, HONORARY_ID);
     expect(shared?.goatPull?.packType).toBe("legend");
+  });
+});
+
+/* The report answers "who holds the GOAT card", and several roster members are
+   live ranked players whose ordinary card is a separate collectible. A World
+   Class bojii is not a GOAT holding and must not be counted as one. */
+describe("honorary pulls report scope", () => {
+  it("counts GOAT cards only, not the ordinary card of the same player", async () => {
+    await savePackWallet(
+      db,
+      OWNER,
+      JSON.stringify({
+        cards: {
+          [String(HONORARY_ID)]: card(HONORARY_ID, "worldClass"),
+          [`${HONORARY_ID}:goat`]: card(HONORARY_ID, "goat"),
+        },
+        shards: 0,
+      }),
+      0,
+    );
+    await savePackWallet(
+      db,
+      OTHER_OWNER,
+      JSON.stringify({ cards: { [String(HONORARY_ID)]: card(HONORARY_ID, "worldClass") }, shards: 0 }),
+      0,
+    );
+
+    const report = await getHonoraryPullsReport(db, HONORARY_USER_IDS);
+    // Two owners hold a card of this player; only one holds the GOAT.
+    expect(report.distinctOwners).toBe(1);
+    expect(report.cards[0]?.ownerCount).toBe(1);
+    expect(report.cards[0]?.owners[0]?.userId).toBe(OWNER);
+  });
+});
+
+/* The readout leads with "what was the newest GOAT" and "who holds the most",
+   so both are computed over every row rather than the per-card owner lists,
+   which are truncated. */
+describe("honorary pulls leaderboard", () => {
+  /* One write per owner: savePackWallet is revision-checked, so a second call
+     with the same base rev would be rejected as a conflict. */
+  async function ownCards(owner: number, held: Array<{ cardUserId: number; pulledAt: number; copies?: number }>) {
+    const cards: Record<string, unknown> = {};
+    for (const entry of held) {
+      cards[`${entry.cardUserId}:goat`] = {
+        ...card(entry.cardUserId, "goat"),
+        copies: entry.copies ?? 1,
+        firstPulledAt: entry.pulledAt,
+        lastPulledAt: entry.pulledAt,
+      };
+    }
+    await savePackWallet(db, owner, JSON.stringify({ cards, shards: 0 }), 0);
+  }
+
+  it("names the newest GOAT in anyone's collection", async () => {
+    await ownCards(OWNER, [{ cardUserId: HONORARY_ID, pulledAt: 1000 }]);
+    await ownCards(OTHER_OWNER, [{ cardUserId: OTHER_HONORARY_ID, pulledAt: 5000 }]);
+
+    const report = await getHonoraryPullsReport(db, HONORARY_USER_IDS);
+    expect(report.latest?.cardUserId).toBe(OTHER_HONORARY_ID);
+    expect(report.latest?.ownerUserId).toBe(OTHER_OWNER);
+    expect(report.latest?.pulledAt).toBe(5000);
+  });
+
+  it("ranks collectors by how much of the roster they hold", async () => {
+    await ownCards(OWNER, [
+      { cardUserId: HONORARY_ID, pulledAt: 1000, copies: 2 },
+      { cardUserId: OTHER_HONORARY_ID, pulledAt: 2000 },
+    ]);
+    await ownCards(OTHER_OWNER, [{ cardUserId: HONORARY_ID, pulledAt: 3000 }]);
+
+    const report = await getHonoraryPullsReport(db, HONORARY_USER_IDS);
+    expect(report.collectors.map((collector) => collector.userId)).toEqual([OWNER, OTHER_OWNER]);
+    expect(report.collectors[0]).toMatchObject({ cards: 2, copies: 3 });
+    expect(report.collectors[1]).toMatchObject({ cards: 1, copies: 1 });
+  });
+
+  it("counts a collector once per card even when the owner list is capped", async () => {
+    await ownCards(OWNER, [{ cardUserId: HONORARY_ID, pulledAt: 1000 }]);
+    await ownCards(OTHER_OWNER, [{ cardUserId: HONORARY_ID, pulledAt: 2000 }]);
+
+    const report = await getHonoraryPullsReport(db, HONORARY_USER_IDS, 1);
+    expect(report.cards[0]?.owners).toHaveLength(1);
+    // Truncation is a display cap on one card's list, not on the leaderboard.
+    expect(report.collectors).toHaveLength(2);
   });
 });

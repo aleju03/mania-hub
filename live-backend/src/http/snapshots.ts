@@ -28,7 +28,8 @@ import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalR
 import { enqueueGlobalMapsRefresh, enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRandomDraw, getMapsRefreshProgress, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, MAPS_RANDOM_DRAW_DEFAULT_COUNT, MAPS_RANDOM_DRAW_EXCLUDE_SETS_MAX, MAPS_RANDOM_DRAW_EXCLUDE_USERS_MAX, MAPS_RANDOM_DRAW_HIDE_USERS_MAX, MAPS_RANDOM_DRAW_MAX_COUNT, MAPS_RANDOM_DRAW_STAR_MAX, MAPS_RANDOM_KEY_BUCKETS, MAPS_RANDOM_PATTERN_NAMES, MAPS_RANDOM_STATUS_BUCKETS, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery, type MapsRandomDrawQuery } from "../features/maps.js";
 import { getMapSearchPage, getMapSearchSetEntry, MAP_SEARCH_PATTERNS, MAP_SEARCH_SUB_PATTERNS, type MapSearchQuery, type MapSearchSort } from "../features/map-search.js";
 import { getMapCollection, getMapCollections, getMapCollectionsRotation, rebuildMapCollections } from "../features/map-collections.js";
-import { getPackWallet, HONORARY_USER_IDS, listPackCollectionCards, listPackCollectionOwnedUserIds, PACK_COLLECTION_MAX_PAGE_SIZE, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
+import { getPackWallet, HONORARY_USER_IDS, listPackCollectionCards, listPackCollectionOwnedCardKeys,
+  normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
 import { getHonoraryPullsReport, getPackCardStats, getPackPulledStats, getSharedPackCard, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../features/pack-pulls.js";
 import { buildPackCardProfileSnapshot, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, warmProfileSnapshots } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
@@ -1496,28 +1497,24 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         body.mode === "whole_matching"
         ? body.mode
         : null;
-      const cardUserId = Number(body.cardUserId);
-      const cardUserIds = mode === "whole" && Array.isArray(body.cardUserIds)
-        ? body.cardUserIds
+      // Cards are addressed by wallet key ("<id>" or "<id>:goat"), so a GOAT
+      // and an ordinary card of the same player recycle independently.
+      const cardKey = normalizePackCardKey(body.cardKey);
+      const cardKeys = mode === "whole" && Array.isArray(body.cardKeys)
+        ? body.cardKeys
             .slice(0, 500)
-            .map((id) => Math.floor(Number(id) || 0))
-            .filter((id) => id > 0)
+            .map(normalizePackCardKey)
+            .filter((key): key is string => key !== null)
         : null;
-      const hasBulkIds = cardUserIds !== null && cardUserIds.length > 0;
-      if (
-        !mode ||
-        (mode !== "all_duplicates" &&
-          mode !== "whole_matching" &&
-          !hasBulkIds &&
-          (!Number.isFinite(cardUserId) || cardUserId <= 0))
-      ) {
+      const hasBulkKeys = cardKeys !== null && cardKeys.length > 0;
+      if (!mode || (mode !== "all_duplicates" && mode !== "whole_matching" && !hasBulkKeys && !cardKey)) {
         sendJson(req, res, ctx, 400, { error: "invalid_recycle_request" });
         return true;
       }
       const result = await recyclePackCollectionCards(ctx.serveWriteDb ?? ctx.db, walletUserId, {
         mode,
-        cardUserId: Number.isFinite(cardUserId) ? Math.floor(cardUserId) : undefined,
-        cardUserIds: hasBulkIds ? cardUserIds : undefined,
+        cardKey: cardKey ?? undefined,
+        cardKeys: hasBulkKeys ? cardKeys : undefined,
         tier: typeof body.tier === "string" ? body.tier : "all",
         query: typeof body.query === "string" ? body.query.slice(0, 120) : "",
       });
@@ -1529,7 +1526,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     if (url.searchParams.get("ownedIds") === "1") {
-      sendJson(req, res, ctx, 200, { userIds: await listPackCollectionOwnedUserIds(ctx.db, walletUserId) });
+      sendJson(req, res, ctx, 200, { cardKeys: await listPackCollectionOwnedCardKeys(ctx.db, walletUserId) });
       return true;
     }
     const page = Math.max(0, Math.floor(Number(url.searchParams.get("page")) || 0));

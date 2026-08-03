@@ -8,11 +8,13 @@ import {
   duplicateShardTotal,
   duplicateShardValue,
   ownedCards,
+  packCardKeyOf,
   shardValueForTier,
   tierRank,
   type CollectedCard,
   type PackWallet,
 } from "#/lib/pack-collection";
+import { HONORARY_PLAYERS } from "#/lib/honorary-players";
 import { fetchServerPackCollectionPage, type ServerPackCollectionPage } from "#/lib/pack-wallet-sync";
 import { fetchPackPlayerScores } from "#/lib/packs";
 import {
@@ -44,12 +46,12 @@ interface CollectionPanelProps {
   syncStatus: "local" | "syncing" | "synced";
   /* Recycle callbacks return the shards gained so the panel can play the
      clink and spawn the "+N" burst at the click point. */
-  onRecycleCard: (userId: number) => number | Promise<number>;
-  onRecycleWhole: (userId: number) => number | Promise<number>;
-  onRecycleWholeMany: (userIds: number[]) => number | Promise<number>;
+  onRecycleCard: (cardKey: string) => number | Promise<number>;
+  onRecycleWhole: (cardKey: string) => number | Promise<number>;
+  onRecycleWholeMany: (cardKeys: string[]) => number | Promise<number>;
   onRecycleWholeMatching: (filter: { tier: ManiaCardTier | "all" | "unrated"; query: string }) => number | Promise<number>;
   onRecycleAll: () => number | Promise<number>;
-  onApplyMint: (userId: number, mint: CardMint) => boolean;
+  onApplyMint: (cardKey: string, mint: CardMint) => boolean;
 }
 
 interface LoadedServerCollectionPage {
@@ -297,7 +299,7 @@ function CollectionPager({
    re-mint themselves when scrolled into view: fetch the player's plays once,
    compute the skills, store them in the wallet. One attempt per session per
    card, two in flight at a time. */
-const attemptedBackfills = new Set<number>();
+const attemptedBackfills = new Set<string>();
 let activeBackfills = 0;
 const backfillQueue: Array<() => void> = [];
 async function throttleBackfill<T>(task: () => Promise<T>): Promise<T> {
@@ -311,9 +313,10 @@ async function throttleBackfill<T>(task: () => Promise<T>): Promise<T> {
   }
 }
 
-async function backfillCardMint(card: CollectedCard, onApplyMint: (userId: number, mint: CardMint) => boolean) {
-  if (attemptedBackfills.has(card.userId)) return;
-  attemptedBackfills.add(card.userId);
+async function backfillCardMint(card: CollectedCard, onApplyMint: (cardKey: string, mint: CardMint) => boolean) {
+  const cardKey = packCardKeyOf(card);
+  if (attemptedBackfills.has(cardKey)) return;
+  attemptedBackfills.add(cardKey);
   try {
     const scores = await throttleBackfill(() => fetchPackPlayerScores(card.userId));
     const data = buildManiaCardRenderData({
@@ -331,10 +334,10 @@ async function backfillCardMint(card: CollectedCard, onApplyMint: (userId: numbe
       tierOverride: card.tier ?? undefined,
     });
     if (data.status !== "ready") return;
-    onApplyMint(card.userId, { skills: data.skills, tier: data.tier, tierLabel: data.tierStyle.label });
+    onApplyMint(cardKey, { skills: data.skills, tier: data.tier, tierLabel: data.tierStyle.label });
   } catch {
     // The sketch tile remains; another session can retry.
-    attemptedBackfills.delete(card.userId);
+    attemptedBackfills.delete(cardKey);
   }
 }
 
@@ -352,7 +355,7 @@ function CollectionCardTile({
 }: {
   card: CollectedCard;
   thumbnail: string | null;
-  onApplyMint: (userId: number, mint: CardMint) => boolean;
+  onApplyMint: (cardKey: string, mint: CardMint) => boolean;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const previousThumbnailRef = useRef<string | null>(thumbnail);
@@ -474,7 +477,7 @@ export function CollectionPanel({
   const [tierFilter, setTierFilter] = useState<ManiaCardTier | "all" | "unrated">("all");
   // Recycling the last copy removes the card from the collection, so it
   // takes a second tap to confirm.
-  const [confirmUserId, setConfirmUserId] = useState<number | null>(null);
+  const [confirmCardKey, setConfirmCardKey] = useState<string | null>(null);
   // Right-click menu on a card tile; whole-recycle inside it confirms on a
   // second click too.
   const [menu, setMenu] = useState<{ card: CollectedCard; x: number; y: number } | null>(null);
@@ -489,7 +492,9 @@ export function CollectionPanel({
   // Select mode: tiles toggle instead of navigating, and the floating bar
   // recycles every selected card at once (all copies, second click confirms).
   const [selecting, setSelecting] = useState(false);
-  const [selected, setSelected] = useState<Set<number>>(new Set());
+  // Keyed by wallet card key, not player: a GOAT and an ordinary card of the
+  // same player are two tiles and select, confirm and recycle independently.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectionScope, setSelectionScope] = useState<"manual" | "all">("manual");
   const [confirmBulk, setConfirmBulk] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -546,10 +551,10 @@ export function CollectionPanel({
     });
   };
   useEffect(() => {
-    if (confirmUserId === null) return;
-    const timer = setTimeout(() => setConfirmUserId(null), 3000);
+    if (confirmCardKey === null) return;
+    const timer = setTimeout(() => setConfirmCardKey(null), 3000);
     return () => clearTimeout(timer);
-  }, [confirmUserId]);
+  }, [confirmCardKey]);
   useEffect(() => {
     if (!confirmBulk) return;
     const timer = setTimeout(() => setConfirmBulk(false), 3000);
@@ -572,37 +577,37 @@ export function CollectionPanel({
     return () => window.removeEventListener("keydown", onKey);
   }, [menu, selecting]);
 
-  const toggleSelected = (userId: number) => {
+  const toggleSelected = (cardKey: string) => {
     if (selectionScope === "all") {
       setSelectionScope("manual");
-      setSelected(new Set(pageCards.filter((card) => card.userId !== userId).map((card) => card.userId)));
+      setSelected(new Set(pageCards.map(packCardKeyOf).filter((key) => key !== cardKey)));
       setConfirmBulk(false);
       return;
     }
     setSelected((previous) => {
       const next = new Set(previous);
-      if (next.has(userId)) next.delete(userId);
-      else next.add(userId);
+      if (next.has(cardKey)) next.delete(cardKey);
+      else next.add(cardKey);
       return next;
     });
     setConfirmBulk(false);
   };
 
-  const applySelect = (userId: number, on: boolean) => {
+  const applySelect = (cardKey: string, on: boolean) => {
     if (selectionScope === "all") {
-      const next = new Set(pageCards.map((card) => card.userId));
-      if (on) next.add(userId);
-      else next.delete(userId);
+      const next = new Set(pageCards.map(packCardKeyOf));
+      if (on) next.add(cardKey);
+      else next.delete(cardKey);
       setSelectionScope("manual");
       setSelected(next);
       setConfirmBulk(false);
       return;
     }
     setSelected((previous) => {
-      if (on === previous.has(userId)) return previous;
+      if (on === previous.has(cardKey)) return previous;
       const next = new Set(previous);
-      if (on) next.add(userId);
-      else next.delete(userId);
+      if (on) next.add(cardKey);
+      else next.delete(cardKey);
       return next;
     });
     setConfirmBulk(false);
@@ -626,8 +631,8 @@ export function CollectionPanel({
     const onMove = (event: PointerEvent) => {
       if (!dragRef.current || !(event.target instanceof Element)) return;
       const tile = event.target.closest("[data-card-id]");
-      const userId = tile ? Number(tile.getAttribute("data-card-id")) : Number.NaN;
-      if (Number.isFinite(userId)) applySelect(userId, dragRef.current.mode);
+      const cardKey = tile?.getAttribute("data-card-id");
+      if (cardKey) applySelect(cardKey, dragRef.current.mode);
     };
     const onUp = () => {
       dragRef.current = null;
@@ -742,7 +747,7 @@ export function CollectionPanel({
     : [];
   const recyclable = useServerCollection ? serverMetaPage?.duplicateShardTotal ?? 0 : wallet ? duplicateShardTotal(wallet) : 0;
   const selectedShardTotal = cards
-    .filter((card) => selected.has(card.userId))
+    .filter((card) => selected.has(packCardKeyOf(card)))
     .reduce((sum, card) => sum + duplicateShardValue(card) + shardValueForTier(card.tier), 0);
   const filteredShardTotal = useServerCollection
     ? serverMetaPage?.filteredShardTotal ?? 0
@@ -1006,7 +1011,11 @@ export function CollectionPanel({
                     aria-pressed={selected}
                   >
                     {label}
-                    <span className="font-semibold tabular-nums opacity-65">{count}</span>
+                    {/* GOAT is a fixed, finite set, so the count reads as
+                        progress against the roster rather than a bare total. */}
+                    <span className="font-semibold tabular-nums opacity-65">
+                      {tier === "goat" ? `${count}/${HONORARY_PLAYERS.length}` : count}
+                    </span>
                   </button>
                 );
               })}
@@ -1064,15 +1073,16 @@ export function CollectionPanel({
           {showSkeletonGrid
             ? placeholderTiers.map((tier, index) => <CollectionCardPlaceholder key={`placeholder-${index}`} tier={tier} />)
             : pageCards.map((card) => {
+            const cardKey = packCardKeyOf(card);
             const dupValue = duplicateShardValue(card);
             const lastCopyValue = shardValueForTier(card.tier);
-            const confirming = confirmUserId === card.userId;
+            const confirming = confirmCardKey === cardKey;
             const thumbnail = simulateSkeletons ? null : getMemoryCardThumbnail(cardThumbnailKeyForCollectionCard(card));
-            const cardSelected = selectionScope === "all" || selected.has(card.userId);
+            const cardSelected = selectionScope === "all" || selected.has(cardKey);
             return (
               <div
-                key={card.userId}
-                data-card-id={card.userId}
+                key={cardKey}
+                data-card-id={cardKey}
                 data-select-keep=""
                 onContextMenu={(event) => {
                   event.preventDefault();
@@ -1097,7 +1107,7 @@ export function CollectionPanel({
                       event.preventDefault();
                       suppressClickRef.current = true;
                       dragRef.current = { mode: !cardSelected };
-                      applySelect(card.userId, dragRef.current.mode);
+                      applySelect(cardKey, dragRef.current.mode);
                     }}
                     onClick={() => {
                       // Touch taps and keyboard activation; mouse was already
@@ -1106,7 +1116,7 @@ export function CollectionPanel({
                         suppressClickRef.current = false;
                         return;
                       }
-                      toggleSelected(card.userId);
+                      toggleSelected(cardKey);
                     }}
                     className="relative block w-full cursor-pointer"
                     aria-pressed={cardSelected}
@@ -1146,7 +1156,7 @@ export function CollectionPanel({
                 {selecting ? null : card.copies > 1 ? (
                   <button
                     type="button"
-                    onClick={(event) => runRecycle(() => onRecycleCard(card.userId), event.currentTarget)}
+                    onClick={(event) => runRecycle(() => onRecycleCard(cardKey), event.currentTarget)}
                     className="mx-auto mt-1.5 flex items-center gap-1 text-[10px] text-osu-f1 transition-colors hover:text-white cursor-pointer"
                     title={`Recycle ${card.copies - 1} duplicate ${card.copies - 1 === 1 ? "copy" : "copies"}`}
                   >
@@ -1158,11 +1168,11 @@ export function CollectionPanel({
                     type="button"
                     onClick={(event) => {
                       if (!confirming) {
-                        setConfirmUserId(card.userId);
+                        setConfirmCardKey(cardKey);
                         return;
                       }
-                      setConfirmUserId(null);
-                      runRecycle(() => onRecycleWhole(card.userId), event.currentTarget);
+                      setConfirmCardKey(null);
+                      runRecycle(() => onRecycleWhole(cardKey), event.currentTarget);
                     }}
                     className={`mx-auto mt-1.5 flex items-center gap-1 text-[10px] transition-colors cursor-pointer ${
                       confirming ? "font-bold text-osu-pink-light" : "text-osu-f1/70 hover:text-white"
@@ -1208,7 +1218,7 @@ export function CollectionPanel({
               type="button"
               onClick={() => {
                 setSelectionScope("manual");
-                setSelected(new Set(pageCards.map((card) => card.userId)));
+                setSelected(new Set(pageCards.map(packCardKeyOf)));
                 setConfirmBulk(false);
               }}
               className="text-[12px] text-osu-f1 transition-colors hover:text-white cursor-pointer"
@@ -1346,7 +1356,7 @@ export function CollectionPanel({
               role="menuitem"
               onClick={() => {
                 setSelecting(true);
-                setSelected(new Set([menu.card.userId]));
+                setSelected(new Set([packCardKeyOf(menu.card)]));
                 setConfirmBulk(false);
                 setMenu(null);
               }}
@@ -1360,7 +1370,7 @@ export function CollectionPanel({
                 type="button"
                 role="menuitem"
                 onClick={(event) => {
-                  runRecycle(() => onRecycleCard(menu.card.userId), event.currentTarget);
+                  runRecycle(() => onRecycleCard(packCardKeyOf(menu.card)), event.currentTarget);
                   setMenu(null);
                 }}
                 className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-osu-f1 transition-colors hover:bg-osu-b4/60 hover:text-white cursor-pointer"
@@ -1377,7 +1387,7 @@ export function CollectionPanel({
                   setMenuConfirm(true);
                   return;
                 }
-                runRecycle(() => onRecycleWhole(menu.card.userId), event.currentTarget);
+                runRecycle(() => onRecycleWhole(packCardKeyOf(menu.card)), event.currentTarget);
                 setMenu(null);
               }}
               className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] transition-colors hover:bg-osu-b4/60 cursor-pointer ${

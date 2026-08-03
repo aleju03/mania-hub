@@ -156,8 +156,11 @@ export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
     };
   });
 
-export const fetchServerPackCollectionOwnedIds = createServerFn({ method: "GET" }).handler(
-  async (): Promise<number[] | null> => {
+/* The wallet keys the synced collection already holds, for duplicate
+   protection. Keys rather than player ids: holding an ordinary card of a
+   roster member does not mean holding their GOAT. */
+export const fetchServerPackCollectionOwnedKeys = createServerFn({ method: "GET" }).handler(
+  async (): Promise<string[] | null> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     setResponseHeader("Cache-Control", "private, no-store");
     const target = await getSyncTarget();
@@ -166,12 +169,22 @@ export const fetchServerPackCollectionOwnedIds = createServerFn({ method: "GET" 
     url.searchParams.set("ownedIds", "1");
     const response = await fetch(url, { headers: target.headers });
     if (!response.ok) throw new Error(`Pack collection owned ids fetch failed (${response.status}).`);
-    const body = (await response.json()) as { userIds?: unknown };
-    return Array.isArray(body.userIds)
-      ? body.userIds.map((id) => Math.floor(Number(id) || 0)).filter((id) => id > 0)
+    const body = (await response.json()) as { cardKeys?: unknown };
+    return Array.isArray(body.cardKeys)
+      ? body.cardKeys.map((key) => (typeof key === "string" ? sanitizeCardKey(key) : null)).filter((key): key is string => key !== null)
       : [];
   },
 );
+
+/* Normalizes a wallet card key, rejecting anything that is not a player id
+   with an optional ":goat" suffix. */
+function sanitizeCardKey(value: string): string | null {
+  const match = /^(\d+)(:goat)?$/.exec(value.trim());
+  if (!match) return null;
+  const userId = Math.floor(Number(match[1]));
+  if (!Number.isInteger(userId) || userId <= 0) return null;
+  return match[2] ? `${userId}:goat` : String(userId);
+}
 
 export interface PackPullRecordCard {
   userId: number;
@@ -236,7 +249,7 @@ export const recordServerPackPulls = createServerFn({ method: "POST" })
 export type ServerPackRecycleMode = "duplicates" | "whole" | "all_duplicates" | "whole_matching";
 
 export const recycleServerPackCollection = createServerFn({ method: "POST" })
-  .validator((input: { mode?: unknown; cardUserId?: unknown; cardUserIds?: unknown; tier?: unknown; query?: unknown }) => {
+  .validator((input: { mode?: unknown; cardKey?: unknown; cardKeys?: unknown; tier?: unknown; query?: unknown }) => {
     const mode =
       input?.mode === "duplicates" ||
       input?.mode === "whole" ||
@@ -244,29 +257,25 @@ export const recycleServerPackCollection = createServerFn({ method: "POST" })
       input?.mode === "whole_matching"
       ? input.mode
       : null;
-    const cardUserId = Number(input?.cardUserId);
-    const cardUserIds = mode === "whole" && Array.isArray(input?.cardUserIds)
-      ? input.cardUserIds
+    // Cards are addressed by wallet key ("<id>" or "<id>:goat"), so a GOAT and
+    // an ordinary card of the same player recycle independently.
+    const cardKey = typeof input?.cardKey === "string" ? sanitizeCardKey(input.cardKey) : null;
+    const cardKeys = mode === "whole" && Array.isArray(input?.cardKeys)
+      ? input.cardKeys
           .slice(0, 500)
-          .map((id) => Math.floor(Number(id) || 0))
-          .filter((id) => id > 0)
+          .map((key) => (typeof key === "string" ? sanitizeCardKey(key) : null))
+          .filter((key): key is string => key !== null)
       : null;
-    const hasBulkIds = cardUserIds !== null && cardUserIds.length > 0;
-    if (
-      !mode ||
-      (mode !== "all_duplicates" &&
-        mode !== "whole_matching" &&
-        !hasBulkIds &&
-        (!Number.isFinite(cardUserId) || cardUserId <= 0))
-    ) {
+    const hasBulkKeys = cardKeys !== null && cardKeys.length > 0;
+    if (!mode || (mode !== "all_duplicates" && mode !== "whole_matching" && !hasBulkKeys && !cardKey)) {
       throw new Error("Invalid recycle request.");
     }
     const tier = typeof input?.tier === "string" ? input.tier : "all";
     const query = typeof input?.query === "string" ? input.query.slice(0, 120) : "";
     return {
       mode,
-      cardUserId: Number.isFinite(cardUserId) ? Math.floor(cardUserId) : undefined,
-      cardUserIds: hasBulkIds ? cardUserIds : undefined,
+      cardKey: cardKey ?? undefined,
+      cardKeys: hasBulkKeys ? cardKeys : undefined,
       tier,
       query,
     };

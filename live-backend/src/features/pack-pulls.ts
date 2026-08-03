@@ -1,6 +1,7 @@
 import type { InValue } from "@libsql/client";
 import type { Db } from "../db.js";
 import { exec } from "../db.js";
+import { tierRankSql } from "./pack-wallets.js";
 
 // Append-only log of pack pulls, the community layer on top of the per-owner
 // pack_collection_cards projection. Rows are self-reported by the client
@@ -179,7 +180,7 @@ export async function getPackCardStats(db: Db, cardUserIds: number[]): Promise<P
   const placeholders = ids.map(() => "?").join(", ");
   const rows = (await exec(
     db,
-    `select card_user_id, count(*) as owners, coalesce(sum(copies), 0) as copies
+    `select card_user_id, count(distinct owner_user_id) as owners, coalesce(sum(copies), 0) as copies
      from pack_collection_cards
      where card_user_id in (${placeholders}) and copies > 0
      group by card_user_id`,
@@ -202,7 +203,7 @@ export async function getPackCardStats(db: Db, cardUserIds: number[]): Promise<P
 export async function getPackPulledStats(db: Db, cardUserId: number): Promise<PackPulledStats> {
   const collectionRow = (await exec(
     db,
-    `select count(*) as owners, coalesce(sum(copies), 0) as copies, max(last_pulled_at) as last_pulled_at
+    `select count(distinct owner_user_id) as owners, coalesce(sum(copies), 0) as copies, max(last_pulled_at) as last_pulled_at
      from pack_collection_cards
      where card_user_id = ? and copies > 0`,
     [cardUserId],
@@ -255,6 +256,9 @@ export interface SharedPackCard {
    collection row (with the minted tier and skills snapshot), so share links
    outlive pull-event retention; they only die if the card is fully
    recycled. */
+/* The permalink addresses a player, not a card key, so an owner holding both
+   a player's ordinary card and their GOAT resolves to the GOAT: it is the
+   rarer pull and the one worth sharing. */
 export async function getSharedPackCard(
   db: Db,
   ownerUserId: number,
@@ -270,7 +274,9 @@ export async function getSharedPackCard(
        (select u.country_code from users u where u.user_id = pack_collection_cards.card_user_id) as live_country_code,
        (select u.username from users u where u.user_id = pack_collection_cards.owner_user_id) as live_owner_username
      from pack_collection_cards
-     where owner_user_id = ? and card_user_id = ? and copies > 0`,
+     where owner_user_id = ? and card_user_id = ? and copies > 0
+     order by ${tierRankSql("tier")} desc
+     limit 1`,
     [ownerUserId, cardUserId],
   )).rows[0];
   if (!row) return null;
@@ -287,7 +293,7 @@ export async function getSharedPackCard(
   }
   const ownersRow = (await exec(
     db,
-    "select count(*) as owners from pack_collection_cards where card_user_id = ? and copies > 0",
+    "select count(distinct owner_user_id) as owners from pack_collection_cards where card_user_id = ? and copies > 0",
     [cardUserId],
   )).rows[0];
   // The first time this owner pulled this card as a GOAT. Earliest rather than
@@ -383,15 +389,42 @@ export interface HonoraryCardPulls {
   lastPulledAt: number | null;
 }
 
+/* A collector's whole GOAT haul, counted across every card rather than per
+   card, so "who has the most" is answerable without walking the roster. */
+export interface HonoraryCollector {
+  userId: number;
+  username: string;
+  cards: number;
+  copies: number;
+  lastPulledAt: number;
+}
+
+/* The newest GOAT in anyone's collection: the first question the readout gets
+   asked, and the one the per-card list buries. */
+export interface HonoraryLatestPull {
+  ownerUserId: number;
+  ownerUsername: string;
+  cardUserId: number;
+  cardUsername: string | null;
+  pulledAt: number;
+}
+
 export interface HonoraryPullsReport {
   rosterSize: number;
   pulledCards: number;
   distinctOwners: number;
   totalCopies: number;
   cards: HonoraryCardPulls[];
+  collectors: HonoraryCollector[];
+  collectorsListed: number;
+  latest: HonoraryLatestPull | null;
   ownersPerCard: number;
   capturedAt: number;
 }
+
+/* The leaderboard is a summary, not a browse: past a couple of dozen names it
+   is scroll rather than signal. distinctOwners still reports the true total. */
+const HONORARY_COLLECTORS_LISTED = 25;
 
 /* How the GOAT roster has actually landed: per card, who holds it and since
    when. Admin-only.
@@ -399,7 +432,11 @@ export interface HonoraryPullsReport {
    Counts come from pack_collection_cards, not the pull log: the projection is
    the durable record and covers cards pulled before the log existed. The owner
    name is the live users row where there is one, falling back to the name the
-   pull log froze, since an owner outside a tracked roster has no users row. */
+   pull log froze, since an owner outside a tracked roster has no users row.
+
+   Only GOAT-keyed rows count. Several roster members are live ranked players
+   whose ordinary card is a separate collectible, and a World Class bojii is
+   not a GOAT holding. */
 export async function getHonoraryPullsReport(
   db: Db,
   cardUserIds: Iterable<number>,
@@ -413,6 +450,9 @@ export async function getHonoraryPullsReport(
     distinctOwners: 0,
     totalCopies: 0,
     cards: [],
+    collectors: [],
+    collectorsListed: HONORARY_COLLECTORS_LISTED,
+    latest: null,
     ownersPerCard,
     capturedAt,
   };
@@ -429,12 +469,16 @@ export async function getHonoraryPullsReport(
            where e.owner_user_id = c.owner_user_id order by e.pulled_at desc limit 1)
        ) as owner_username
      from pack_collection_cards c
-     where card_user_id in (${placeholders}) and copies > 0
+     where card_user_id in (${placeholders}) and copies > 0 and tier = 'goat'
      order by card_user_id, first_pulled_at, owner_user_id`,
     args,
   )).rows;
 
   const byCard = new Map<number, HonoraryCardPulls>();
+  // Every row is here, so both of these are exact: only the per-card `owners`
+  // array is ever truncated.
+  const byCollector = new Map<number, HonoraryCollector>();
+  let latest: HonoraryLatestPull | null = null;
   const owners = new Set<number>();
   let totalCopies = 0;
 
@@ -474,6 +518,25 @@ export async function getHonoraryPullsReport(
         lastPulledAt,
       });
     }
+    const ownerUsername = nonEmptyString(row.owner_username) ?? `user ${ownerUserId}`;
+    const collector = byCollector.get(ownerUserId);
+    if (collector) {
+      collector.cards += 1;
+      collector.copies += copies;
+      collector.lastPulledAt = Math.max(collector.lastPulledAt, lastPulledAt);
+    } else {
+      byCollector.set(ownerUserId, { userId: ownerUserId, username: ownerUsername, cards: 1, copies, lastPulledAt });
+    }
+    if (lastPulledAt > 0 && lastPulledAt > (latest?.pulledAt ?? 0)) {
+      latest = {
+        ownerUserId,
+        ownerUsername,
+        cardUserId,
+        cardUsername: nonEmptyString(row.card_username),
+        pulledAt: lastPulledAt,
+      };
+    }
+
     owners.add(ownerUserId);
     totalCopies += copies;
   }
@@ -484,6 +547,11 @@ export async function getHonoraryPullsReport(
     distinctOwners: owners.size,
     totalCopies,
     cards: [...byCard.values()].sort((a, b) => b.ownerCount - a.ownerCount || a.cardUserId - b.cardUserId),
+    collectors: [...byCollector.values()]
+      .sort((a, b) => b.cards - a.cards || b.copies - a.copies || b.lastPulledAt - a.lastPulledAt)
+      .slice(0, HONORARY_COLLECTORS_LISTED),
+    collectorsListed: HONORARY_COLLECTORS_LISTED,
+    latest,
     ownersPerCard,
     capturedAt,
   };

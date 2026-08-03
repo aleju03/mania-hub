@@ -111,6 +111,34 @@ export function collectedCardTier(card: {
   return "common";
 }
 
+/* A collected card's identity, and the key it lives under in `wallet.cards`.
+
+   A player is normally one card: pull them again and the copy count goes up,
+   and if their card power has climbed since, the card upgrades in place. GOAT
+   is the exception. It is awarded by roster membership rather than by card
+   power, and several roster members are live ranked players, so the same
+   player can legitimately be held both as the card they were dealt from the
+   ranked pool and as the GOAT the honorary slot deals. Those are two different
+   cards and must not collapse into one, or a GOAT pull would silently destroy
+   a World Class card its owner may want to keep (or recycle separately).
+
+   Only the GOAT variant takes a suffix, so every key an existing wallet has
+   already written stays byte-identical and nothing has to be migrated. */
+export function packCardKey(userId: number, tier: ManiaCardTier | null): string {
+  return tier === "goat" ? `${userId}:goat` : String(userId);
+}
+
+export function packCardKeyOf(card: { userId: number; tier: ManiaCardTier | null }): string {
+  return packCardKey(card.userId, card.tier);
+}
+
+export function parsePackCardKey(key: string): { userId: number; goat: boolean } | null {
+  const goat = key.endsWith(":goat");
+  const userId = Number(goat ? key.slice(0, -":goat".length) : key);
+  if (!Number.isInteger(userId) || userId <= 0) return null;
+  return { userId, goat };
+}
+
 export function createEmptyWallet(now: number): PackWallet {
   return {
     cards: {},
@@ -173,7 +201,7 @@ export function recordPull(
   pull: PulledCard,
   now: number,
 ): { wallet: PackWallet; isNew: boolean } {
-  const key = String(pull.userId);
+  const key = packCardKey(pull.userId, pull.tier);
   const existing = wallet.cards[key];
   if (!existing) {
     const card: CollectedCard = { ...pull, copies: 1, recycledCopies: 0, firstPulledAt: now, lastPulledAt: now };
@@ -213,20 +241,33 @@ export function ownedCards(wallet: PackWallet): CollectedCard[] {
    when nothing should change. */
 export function applyCardMint(
   wallet: PackWallet,
-  userId: number,
+  key: string,
   mint: { skills: ManiaSkills; tier: ManiaCardTier | null; tierLabel: string | null },
 ): PackWallet | null {
-  const key = String(userId);
   const card = wallet.cards[key];
   if (!card || card.copies <= 0) return null;
   if (card.skills && tierRank(card.tier) >= tierRank(mint.tier)) return null;
-  return {
-    ...wallet,
-    cards: {
-      ...wallet.cards,
-      [key]: { ...card, skills: mint.skills, tier: mint.tier, tierLabel: mint.tierLabel },
-    },
-  };
+  const minted: CollectedCard = { ...card, skills: mint.skills, tier: mint.tier, tierLabel: mint.tierLabel };
+  const mintedKey = packCardKeyOf(minted);
+  // A tierless legacy card whose player is on the roster mints as a GOAT, which
+  // belongs under the GOAT key. Merge rather than overwrite: the owner may
+  // already hold a GOAT of that player.
+  if (mintedKey !== key) {
+    const cards = { ...wallet.cards };
+    delete cards[key];
+    const existing = cards[mintedKey];
+    cards[mintedKey] = existing
+      ? {
+          ...minted,
+          copies: existing.copies + minted.copies,
+          recycledCopies: existing.recycledCopies + minted.recycledCopies,
+          firstPulledAt: Math.min(existing.firstPulledAt, minted.firstPulledAt),
+          lastPulledAt: Math.max(existing.lastPulledAt, minted.lastPulledAt),
+        }
+      : minted;
+    return { ...wallet, cards };
+  }
+  return { ...wallet, cards: { ...wallet.cards, [key]: minted } };
 }
 
 export function duplicateShardValue(card: CollectedCard): number {
@@ -239,9 +280,8 @@ export function duplicateShardTotal(wallet: PackWallet): number {
 
 export function recycleDuplicates(
   wallet: PackWallet,
-  userId: number,
+  key: string,
 ): { wallet: PackWallet; gained: number } {
-  const key = String(userId);
   const card = wallet.cards[key];
   if (!card || card.copies <= 1) return { wallet, gained: 0 };
   const gained = duplicateShardValue(card);
@@ -263,9 +303,8 @@ export function recycleDuplicates(
    devices cannot resurrect it). */
 export function recycleAllCopies(
   wallet: PackWallet,
-  userId: number,
+  key: string,
 ): { wallet: PackWallet; gained: number } {
-  const key = String(userId);
   const card = wallet.cards[key];
   if (!card || card.copies <= 0) return { wallet, gained: 0 };
   const gained = card.copies * shardValueForTier(card.tier);
@@ -442,7 +481,10 @@ export function sanitizeWallet(value: unknown, now: number): PackWallet | null {
   if (raw.cards && typeof raw.cards === "object") {
     for (const entry of Object.values(raw.cards)) {
       const card = sanitizeCard(entry);
-      if (card) cards[String(card.userId)] = card;
+      // Re-keyed from the card itself, so a wallet written before GOAT cards
+      // split off from their player's ordinary card moves to the new key here,
+      // with no separate migration step.
+      if (card) cards[packCardKeyOf(card)] = card;
     }
   }
   return {
