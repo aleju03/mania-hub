@@ -9,6 +9,7 @@
     "postinstall": "node scripts/prune-onnxruntime-web.mjs",
     "dev": "vite dev --port 3000",
     "dev:all": "node scripts/dev/run-dev-stack.mjs",
+    "dev:all:host": "node scripts/dev/run-dev-stack.mjs --host",
     "build": "node scripts/build-replay-hitsound-bundle.mjs && vite build && node scripts/verify-build-assets.mjs",
     "preview": "vite preview",
     "test": "vitest run",

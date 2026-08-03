@@ -1,6 +1,7 @@
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig, type Plugin, type ServerOptions } from 'vite'
 import { devtools } from '@tanstack/devtools-vite'
 import tsconfigPaths from 'vite-tsconfig-paths'
+import { readFileSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
 import { tanstackStart } from '@tanstack/react-start/plugin/vite'
@@ -52,10 +53,38 @@ function suppressDependencyBuildWarnings(warning: any, warn: (warning: any) => v
   warn(warning)
 }
 
+// `scripts/dev/run-dev-stack.mjs --host` sets these so LAN devices get a secure
+// context (see the comment there). The live backend is proxied through this
+// same origin: an https page cannot fetch its plain-http origin, and one origin
+// means one cert to trust instead of two.
+function devServerOptions(): ServerOptions {
+  const options: ServerOptions = { allowedHosts: ['.loca.lt'] }
+
+  const keyPath = process.env.DEV_HTTPS_KEY
+  const certPath = process.env.DEV_HTTPS_CERT
+  if (keyPath && certPath) {
+    options.https = { key: readFileSync(keyPath), cert: readFileSync(certPath) }
+  }
+
+  const proxyTarget = process.env.DEV_LIVE_BACKEND_PROXY
+  const proxyPrefix = process.env.DEV_LIVE_BACKEND_PROXY_PREFIX
+  if (proxyTarget && proxyPrefix) {
+    options.proxy = {
+      [proxyPrefix]: {
+        target: proxyTarget,
+        // Keep the browser's Host/Origin so the backend's origin allowlist and
+        // its SSE endpoints see the request they would see without the proxy.
+        changeOrigin: false,
+        rewrite: (path) => path.slice(proxyPrefix.length) || '/',
+      },
+    }
+  }
+
+  return options
+}
+
 const config = defineConfig({
-  server: {
-    allowedHosts: ['.loca.lt'],
-  },
+  server: devServerOptions(),
   build: {
     chunkSizeWarningLimit: 1500,
     rollupOptions: {
