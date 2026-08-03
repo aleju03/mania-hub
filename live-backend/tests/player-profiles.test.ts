@@ -41,7 +41,7 @@ describe("player profile snapshots", () => {
     expect(snapshot?.user.last_visit).toBe(trackedPlayAt);
   });
 
-  it("keeps a newer osu! last visit", async () => {
+  it("drops a stale payload's newer osu! last visit for the tracked play", async () => {
     const snapshotFetchedAt = "2026-06-01T03:28:53Z";
     const trackedPlayAt = "2026-06-07T22:24:05Z";
     const osuLastVisit = "2026-06-08T10:00:00Z";
@@ -56,7 +56,59 @@ describe("player profile snapshots", () => {
 
     const snapshot = await getCachedPlayerProfileSnapshot(db, "MnShiny");
 
+    expect(snapshot?.user.last_visit).toBe(trackedPlayAt);
+    expect(snapshot?.user.is_online).toBe(false);
+  });
+
+  it("keeps the last visit of a payload that was just fetched, but not its online flag", async () => {
+    // Online on Bancho without a play is not a session, so it reads as a last
+    // seen rather than a green dot.
+    const osuLastVisit = new Date(Date.now() - 60_000).toISOString();
+    await insertProfileSnapshot({
+      snapshotFetchedAt: "2026-06-01T03:28:53Z",
+      userFetchedAt: new Date().toISOString(),
+      lastVisit: osuLastVisit,
+      isOnline: true,
+    });
+    await insertTrackedScore(score({
+      id: 1,
+      beatmapId: 101,
+      title: "Ancient tracked play",
+      pp: 40,
+      endedAt: "2026-06-07T22:24:05Z",
+    }));
+
+    const snapshot = await getCachedPlayerProfileSnapshot(db, "MnShiny");
+
     expect(snapshot?.user.last_visit).toBe(osuLastVisit);
+    expect(snapshot?.user.is_online).toBe(false);
+  });
+
+  it("reads a play inside the session window as still online", async () => {
+    const trackedPlayAt = new Date(Date.now() - 2 * 60_000).toISOString();
+    await insertProfileSnapshot({ snapshotFetchedAt: "2026-06-01T03:28:53Z", lastVisit: null });
+    await insertTrackedScore(score({
+      id: 1,
+      beatmapId: 101,
+      title: "Mid-session play",
+      pp: 40,
+      endedAt: trackedPlayAt,
+    }));
+
+    const snapshot = await getCachedPlayerProfileSnapshot(db, "MnShiny");
+
+    expect(snapshot?.user.is_online).toBe(true);
+  });
+
+  it("has no last seen for a player we have never tracked a play for", async () => {
+    // The stored payload's own last_visit aged out with it, and nothing in our
+    // projections can stand in for it, so the profile shows no last seen at all.
+    await insertProfileSnapshot({ snapshotFetchedAt: "2026-06-01T03:28:53Z", lastVisit: "2026-06-06T10:00:00Z" });
+
+    const snapshot = await getCachedPlayerProfileSnapshot(db, "MnShiny");
+
+    expect(snapshot?.user.last_visit).toBeNull();
+    expect(snapshot?.user.is_online).toBe(false);
   });
 
   it("uses durable activity after the raw tracked score has expired", async () => {
@@ -461,10 +513,14 @@ describe("pack card snapshot projection", () => {
 
 async function insertProfileSnapshot({
   snapshotFetchedAt,
+  userFetchedAt = snapshotFetchedAt,
   lastVisit,
+  isOnline = false,
 }: {
   snapshotFetchedAt: string;
+  userFetchedAt?: string;
   lastVisit: string | null;
+  isOnline?: boolean;
 }): Promise<void> {
   await exec(
     db,
@@ -480,10 +536,11 @@ async function insertProfileSnapshot({
         country_code: "CR",
         avatar_url: "https://example.test/avatar.png",
         last_visit: lastVisit,
+        is_online: isOnline,
         statistics: { pp: 1000 },
       }),
       snapshotFetchedAt,
-      snapshotFetchedAt,
+      userFetchedAt,
       snapshotFetchedAt,
     ],
   );

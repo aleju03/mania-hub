@@ -665,14 +665,17 @@ export async function drawPackPlayersFromOsuApi(
   return sortIntoRevealOrder(entries.map(toPackPlayer));
 }
 
-export async function fetchPackPlayerScores(userId: number): Promise<OsuScore[]> {
+/* Cheap first half of a card mint. Kept separate from the cold fallback so a
+   whole dealt hand can probe the local backend cache at once without letting
+   cold players consume every one of the limited osu! fetch slots. */
+export async function fetchCachedPackPlayerScores(userId: number): Promise<OsuScore[] | null> {
   if (isLiveBackendConfigured()) {
     try {
       // Stored best scores (profile snapshot or the user_top_scores
       // projection): a pure DB read on the backend, so a card flips
       // instantly for any player the backend has ever fetched. Staleness is
       // fine for minting a card, and the deal-time warm refreshes cold or
-      // expired players in the background anyway. The card view trims each
+      // never-seen players in the background anyway. The card view trims each
       // score to the fields the maniacard reads, roughly a tenth of the
       // full snapshot payload.
       const cached = await fetchLivePackCardSnapshotDirect(String(userId));
@@ -680,15 +683,21 @@ export async function fetchPackPlayerScores(userId: number): Promise<OsuScore[]>
         return cached.bestScores;
       }
     } catch {
-      // Fall through to the blocking snapshot fetch below.
+      // A cache miss and an unavailable cache both use the bounded cold path.
     }
+  }
+  return null;
+}
+
+async function fetchColdPackPlayerScores(userId: number): Promise<OsuScore[]> {
+  if (isLiveBackendConfigured()) {
     try {
       // Truly cold player: this waits on the backend's live osu! fetch, but
       // coalesces with the deal-time warm's in-flight request for the same
       // player. An EMPTY bestScores list falls through to the direct osu!
       // window - it usually means the player's plays were never fetched, and
       // returning it would mint a blank card.
-      const snapshot = await fetchLivePlayerProfileSnapshotDirect(String(userId));
+      const snapshot = await fetchLivePlayerProfileSnapshotDirect(String(userId), { lookup: "id" });
       if (snapshot && Array.isArray(snapshot.bestScores) && snapshot.bestScores.length > 0) {
         return snapshot.bestScores;
       }
@@ -699,12 +708,60 @@ export async function fetchPackPlayerScores(userId: number): Promise<OsuScore[]>
   return getUserScoresBestWindow({ data: { userId, totalLimit: 200, parallel: true } });
 }
 
-/* How many pack card prefetches run at once. Warm players cost one backend DB
-   read each, but a truly cold player falls through to the blocking /snapshot
-   endpoint and direct osu! fetches, and the cached endpoint can itself kick
-   off a background warm, so the fan-out stays bounded to protect the osu! API
-   budget instead of going fully parallel. */
+export async function fetchPackPlayerScores(userId: number): Promise<OsuScore[]> {
+  return (await fetchCachedPackPlayerScores(userId)) ?? fetchColdPackPlayerScores(userId);
+}
+
+/* How many cold pack-card fetches run at once. Cached DB probes are allowed to
+   cover the whole hand immediately; only the blocking /snapshot endpoint and
+   direct osu! fallback use this bound. */
 export const PACK_SCORE_PREFETCH_CONCURRENCY = 4;
+
+/* On-demand semaphore for the expensive half of card fetching. Unlike
+   startBoundedPrefetches, tasks only enter this queue after their cheap cache
+   probe misses. That distinction matters for a ten-card hand: one run of four
+   cold players must not prevent the other six from even checking whether
+   their cards are already in the local DB. */
+function createBoundedTaskRunner(concurrency: number) {
+  const limit = Math.max(1, Math.floor(concurrency));
+  const queued: Array<() => void> = [];
+  let active = 0;
+
+  const drain = () => {
+    while (active < limit) {
+      const start = queued.shift();
+      if (!start) return;
+      start();
+    }
+  };
+
+  return <T>(task: () => Promise<T>): Promise<T> =>
+    new Promise<T>((resolve, reject) => {
+      queued.push(() => {
+        active += 1;
+        void Promise.resolve()
+          .then(task)
+          .then(resolve, reject)
+          .finally(() => {
+            active -= 1;
+            drain();
+          });
+      });
+      drain();
+    });
+}
+
+/* Starts cache probes for the complete hand immediately, then admits only
+   genuine misses to the four-wide cold lane. Results stay indexed to the
+   dealt order even though hot cards may settle ahead of earlier cold ones. */
+export function prefetchPackPlayerScores(userIds: readonly number[]): Array<Promise<OsuScore[] | null>> {
+  const runCold = createBoundedTaskRunner(PACK_SCORE_PREFETCH_CONCURRENCY);
+  return userIds.map(async (userId) => {
+    const cached = await fetchCachedPackPlayerScores(userId);
+    if (cached) return cached;
+    return runCold(() => fetchColdPackPlayerScores(userId)).catch(() => null);
+  });
+}
 
 /* Starts `run` for every item with at most `concurrency` calls in flight,
    dispatching in item order, and returns one promise per item (same order).

@@ -21,6 +21,7 @@ import {
   pickPackEntries,
   pickUnownedPoolEntry,
   POOL_SLICE_MIN_PLAYERS,
+  prefetchPackPlayerScores,
   poolSliceSize,
   rankIndexInPage,
   rankToPage,
@@ -498,6 +499,7 @@ describe("fetchPackPlayerScores", () => {
     directFetch.mockResolvedValue(snapshotWith(scores));
     await expect(fetchPackPlayerScores(101)).resolves.toEqual(scores);
     expect(directFetch).toHaveBeenCalledTimes(1);
+    expect(directFetch).toHaveBeenCalledWith("101", { lookup: "id" });
     expect(osuWindowFetch).not.toHaveBeenCalled();
   });
 
@@ -506,6 +508,7 @@ describe("fetchPackPlayerScores", () => {
     directFetch.mockResolvedValue(snapshotWith(scores));
     await expect(fetchPackPlayerScores(101)).resolves.toEqual(scores);
     expect(directFetch).toHaveBeenCalledTimes(1);
+    expect(directFetch).toHaveBeenCalledWith("101", { lookup: "id" });
   });
 
   it("degrades to the direct osu! window when the backend errors end to end", async () => {
@@ -514,6 +517,31 @@ describe("fetchPackPlayerScores", () => {
     osuWindowFetch.mockResolvedValue(scores);
     await expect(fetchPackPlayerScores(101)).resolves.toEqual(scores);
     expect(osuWindowFetch).toHaveBeenCalledWith({ data: { userId: 101, totalLimit: 200, parallel: true } });
+  });
+
+  it("probes the whole hand's cache without trapping later hot cards behind four cold ones", async () => {
+    let releaseCold!: () => void;
+    const coldGate = new Promise<void>((resolve) => {
+      releaseCold = resolve;
+    });
+    cachedFetch.mockImplementation(async (key) =>
+      Number(key) >= 5 ? snapshotWith([{ id: Number(key), pp: 100 } as OsuScore]) : null,
+    );
+    directFetch.mockImplementation(async (key) => {
+      await coldGate;
+      return snapshotWith([{ id: Number(key), pp: 100 } as OsuScore]);
+    });
+
+    const prefetched = prefetchPackPlayerScores([1, 2, 3, 4, 5, 6]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(cachedFetch).toHaveBeenCalledTimes(6);
+    expect(directFetch).toHaveBeenCalledTimes(4);
+    await expect(prefetched[4]).resolves.toEqual([{ id: 5, pp: 100 }]);
+    await expect(prefetched[5]).resolves.toEqual([{ id: 6, pp: 100 }]);
+
+    releaseCold();
+    await expect(Promise.all(prefetched)).resolves.toHaveLength(6);
   });
 });
 

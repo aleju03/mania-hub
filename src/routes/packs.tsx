@@ -45,11 +45,9 @@ import { BLACKJACK_DECK_SIZE, createPackDuel, duelErrorMessage } from "../lib/pa
 import { PackPulse, refreshPackPulseFeed } from "../components/packs/PackPulse";
 import {
   drawPackPlayers,
-  fetchPackPlayerScores,
-  PACK_SCORE_PREFETCH_CONCURRENCY,
   PACK_TYPES,
   packTypeById,
-  startBoundedPrefetches,
+  prefetchPackPlayerScores,
   type PackPlayer,
   type PackTypeDef,
   type PackTypeId,
@@ -137,19 +135,13 @@ function scheduleCollectionPanelMount(callback: () => void, reducedMotion: boole
   };
 }
 
-/* Starts each player's best-scores prefetch in card order with a small
-   concurrency bound (coalescing server-side, so nothing fetches twice). Warm
-   players are one backend DB read each, so a few in parallel makes reveal-all
-   near-instant; the bound protects the cold-player path, which blocks on
-   osu! API fetches. A resolved null = the fetch failed (network, rate
-   limit), as opposed to a player with genuinely no ranked plays; the reveal
-   retries it. */
+/* Probes every player's local snapshot immediately, then sends only genuine
+   cache misses through the small osu! concurrency bound. That lets a hot card
+   near the end of a ten-card hand become ready even when four earlier players
+   are cold. A resolved null = the fetch failed (network, rate limit), as
+   opposed to a player with genuinely no ranked plays; the reveal retries it. */
 function buildCardStates(players: PackPlayer[]): PackCardState[] {
-  const scoresPromises = startBoundedPrefetches(
-    players,
-    (player) => fetchPackPlayerScores(player.user.id),
-    PACK_SCORE_PREFETCH_CONCURRENCY,
-  );
+  const scoresPromises = prefetchPackPlayerScores(players.map((player) => player.user.id));
   return players.map((player, index) => ({
     player,
     scoresPromise: scoresPromises[index] ?? Promise.resolve(null),
@@ -633,10 +625,10 @@ function PacksPage() {
         <OsuTriangleBackdrop />
         <div className="relative z-10 flex flex-1 flex-col">
           <PageHeader iconSrc="/images/icons/packs.svg" title="Maniacard packs" />
-          {/* Ambient side rails (live pull ticker + your-card fun fact).
-              Stays mounted and merely hides during the reveal: unmounting
-              would reset the feed and replay its whole cascade afterwards. */}
-          <PackPulse viewerId={auth.viewer?.id ?? null} hidden={phase === "reveal"} />
+          {/* Ambient side rails: the live pull ticker runs through every
+              phase (including the reveal), only the your-card fun fact hides
+              while cards are flipping. */}
+          <PackPulse viewerId={auth.viewer?.id ?? null} revealing={phase === "reveal"} />
 
           <div className="mx-auto w-full max-w-[960px] flex-1 px-4 py-8 sm:px-5 sm:py-12">
             {wallet && phase !== "reveal" && (

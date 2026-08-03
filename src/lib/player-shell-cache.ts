@@ -1,6 +1,8 @@
 import type { LeanRankingEntry, OsuUser } from "./types";
 
-const PLAYER_SHELL_CACHE_KEY = "mania-hub-player-shell-cache-v1";
+// v2 invalidates shells written before rankings presence was stripped. Those
+// v1 entries may contain osu!'s `is_online: true`, which profiles must not use.
+const PLAYER_SHELL_CACHE_KEY = "mania-hub-player-shell-cache-v2";
 const PLAYER_SHELL_CACHE_TTL_MS = 10 * 60 * 1000;
 const PLAYER_SHELL_CACHE_MAX_ENTRIES = 150;
 
@@ -23,6 +25,16 @@ const PLAYER_RECENT_PLAY_MAX_ENTRIES = 150;
 export const RECENT_PLAY_ONLINE_WINDOW_MS = 10 * 60 * 1000;
 
 const recentPlayMemoryCache = new Map<string, string>();
+
+/**
+ * A direct osu! user read is only a metadata fallback when the live profile
+ * snapshot is unavailable. It has no database-backed presence provenance, so
+ * neither osu!'s Bancho/site online flag nor its last_visit belongs in the
+ * profile hero.
+ */
+export function stripUntrackedProfilePresence(user: OsuUser): OsuUser {
+  return { ...user, is_online: false, last_visit: null };
+}
 
 export function seedPlayerShellFromRankingEntry(entry: LeanRankingEntry, countryRank?: number | null): void {
   writePlayerShell(buildPlayerShellFromRankingEntry(entry, countryRank));
@@ -115,7 +127,12 @@ function buildPlayerShellFromRankingEntry(entry: LeanRankingEntry, countryRank?:
     join_date: "",
     last_visit: null,
     is_active: entry.user.is_active ?? true,
-    is_online: entry.user.is_online,
+    // Presence is deliberately dropped. The rankings pages get `is_online` from
+    // the osu! API, but the profile reports presence from our own ingest (a
+    // tracked play inside the session window), so carrying the ranking's flag
+    // over would flash a green dot the profile snapshot then contradicts - and
+    // would leave it standing for good if that snapshot never arrives.
+    is_online: false,
     is_supporter: false,
     statistics: {
       count_300: 0,

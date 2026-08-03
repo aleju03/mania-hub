@@ -295,7 +295,13 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     if (profileRoute.kind === "snapshot") {
       if (!checkRate(req, res, ctx, "publicCostly")) return true;
-      await sendAccentEnrichedJson(req, res, ctx, 200, await getPlayerProfileSnapshot(ctx.serveWriteDb ?? ctx.db, ctx.osu, profileRoute.key));
+      const lookupMode = url.searchParams.get("lookup") === "id" ? "userId" : "auto";
+      await sendAccentEnrichedJson(req, res, ctx, 200, await getPlayerProfileSnapshot(
+        ctx.serveWriteDb ?? ctx.db,
+        ctx.osu,
+        profileRoute.key,
+        { queue: ctx.serveWriteQueue ?? ctx.queue, lookupMode },
+      ));
       return true;
     }
     const userId = Number(profileRoute.key);
@@ -1164,6 +1170,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         beatmapId,
         parseFarmHelperSpeedBucket(url.searchParams.get("speed")),
         parseFarmHelperKeyMode(url.searchParams.get("key")),
+        ctx.serveWriteQueue ?? ctx.queue,
       );
       res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
       await sendAccentEnrichedJson(req, res, ctx, 200, result);
@@ -1189,6 +1196,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         ctx.osu,
         userKey,
         parseFarmHelperKeyMode(url.searchParams.get("key")),
+        ctx.serveWriteQueue ?? ctx.queue,
       );
       res.setHeader("cache-control", "public, max-age=300, stale-while-revalidate=600");
       sendJson(req, res, ctx, 200, result);
@@ -4194,6 +4202,7 @@ async function handleCachedProfileSnapshot(
   // view=card serves the slim pack-card projection; the default stays the
   // full snapshot the profile page consumes.
   const view = url.searchParams.get("view") === "card" ? "card" : "full";
+  const lookupMode = url.searchParams.get("lookup") === "id" ? "userId" : "auto";
   const db = ctx.serveWriteDb ?? ctx.db;
   const encoding = negotiateEncoding(req);
   const state = getProfileSnapshotResponseState(db);
@@ -4202,11 +4211,16 @@ async function handleCachedProfileSnapshot(
   await serveMapsResponseCached(req, res, ctx, {
     cache: state.responses,
     inflight: state.inflight,
-    key: [key.toLowerCase(), view, encoding ?? "identity"].join("|"),
+    key: [lookupMode, key.toLowerCase(), view, encoding ?? "identity"].join("|"),
     freshnessKey: "",
     staleServeMs: 0,
     build: async () => {
-      const snapshot = await getCachedPlayerProfileSnapshot(db, key, ctx.osu);
+      // Deliberately never warms a cold profile. Both callers follow an empty
+      // response with /snapshot milliseconds later (the profile page's client
+      // after its SSR read, the pack card when bestScores comes back empty),
+      // and that mints the player inline. Kicking off a warm here would race
+      // that mint from another lane and pay for the whole profile twice.
+      const snapshot = await getCachedPlayerProfileSnapshot(db, key, { lookupMode });
       if (!snapshot) {
         return {
           prepared: await prepareJsonResponse(404, { error: "not_cached" }, encoding),

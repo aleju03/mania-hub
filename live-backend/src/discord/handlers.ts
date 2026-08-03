@@ -394,7 +394,7 @@ const playerHandler: CommandHandler = async (deps, interaction) => {
   const subject = stringOption(interaction, "username") ?? "your linked account";
   try {
     const key = await resolveTargetKey(deps, interaction);
-    const snapshot = await getPlayerProfileSnapshot(deps.db, deps.osu, key);
+    const snapshot = await getPlayerProfileSnapshot(deps.db, deps.osu, key, { queue: deps.queue });
     const username = String((snapshot.user as { username?: string }).username ?? key);
     return withNavRow(playerEmbed(snapshot, deps.config.discordSiteOrigin), refreshRow("player", { username }));
   } catch (error) {
@@ -406,7 +406,7 @@ const maniacardHandler: CommandHandler = async (deps, interaction) => {
   const subject = stringOption(interaction, "username") ?? "your linked account";
   try {
     const key = await resolveTargetKey(deps, interaction);
-    const snapshot = await getPlayerProfileSnapshot(deps.db, deps.osu, key);
+    const snapshot = await getPlayerProfileSnapshot(deps.db, deps.osu, key, { queue: deps.queue });
     return maniacardEmbed(snapshot, deps.config.discordSiteOrigin);
   } catch (error) {
     return friendlyError(error, subject);
@@ -419,7 +419,7 @@ const recentHandler: CommandHandler = async (deps, interaction) => {
   const pageSize = 5;
   try {
     const key = await resolveTargetKey(deps, interaction);
-    const snapshot = await getPlayerProfileSnapshot(deps.db, deps.osu, key);
+    const snapshot = await getPlayerProfileSnapshot(deps.db, deps.osu, key, { queue: deps.queue });
     const userId = Number((snapshot.user as { id?: number }).id ?? 0);
     const username = String((snapshot.user as { username?: string }).username ?? key);
     const section = await getPlayerRecentScoresFromOsu(deps.db, deps.osu, userId);
@@ -442,7 +442,7 @@ const activityHandler: CommandHandler = async (deps, interaction) => {
   const subject = stringOption(interaction, "username") ?? "your linked account";
   try {
     const key = await resolveTargetKey(deps, interaction);
-    const snapshot = await getPlayerProfileSnapshot(deps.db, deps.osu, key);
+    const snapshot = await getPlayerProfileSnapshot(deps.db, deps.osu, key, { queue: deps.queue });
     const userId = Number((snapshot.user as { id?: number }).id ?? 0);
     const username = String((snapshot.user as { username?: string }).username ?? key);
     const country = String((snapshot.user as { country_code?: string }).country_code ?? "");
@@ -461,7 +461,7 @@ const goalsHandler: CommandHandler = async (deps, interaction) => {
   const subject = stringOption(interaction, "username") ?? "your linked account";
   try {
     const key = await resolveTargetKey(deps, interaction);
-    const snapshot = await getPlayerProfileSnapshot(deps.db, deps.osu, key);
+    const snapshot = await getPlayerProfileSnapshot(deps.db, deps.osu, key, { queue: deps.queue });
     const userId = Number((snapshot.user as { id?: number }).id ?? 0);
     const username = String((snapshot.user as { username?: string }).username ?? key);
     const goals = await listUserGoalsWithProgress(deps.db, userId);
@@ -499,8 +499,8 @@ const compareHandler: CommandHandler = async (deps, interaction) => {
   }
   try {
     const [snapA, snapB] = await Promise.all([
-      getPlayerProfileSnapshot(deps.db, deps.osu, keyA),
-      getPlayerProfileSnapshot(deps.db, deps.osu, b),
+      getPlayerProfileSnapshot(deps.db, deps.osu, keyA, { queue: deps.queue }),
+      getPlayerProfileSnapshot(deps.db, deps.osu, b, { queue: deps.queue }),
     ]);
     // The 4K/7K weighted-pp split comes from the farm-helper projections.
     // Players outside the pool render as "-"; a failed read just drops the

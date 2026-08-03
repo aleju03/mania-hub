@@ -97,7 +97,7 @@ describe("archived players", () => {
     const [seed] = await readArchivedPlayerSnapshots();
     if (!seed) throw new Error("expected a seeded archived player");
 
-    const cached = await getCachedPlayerProfileSnapshot(db, seed.username_key, throwingOsu);
+    const cached = await getCachedPlayerProfileSnapshot(db, seed.username_key);
     expect(cached?.user.id).toBe(seed.user_id);
     expect(cached?.bestScores.length).toBe(seed.best_scores.length);
 

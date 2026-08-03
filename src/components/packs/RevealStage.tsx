@@ -11,6 +11,7 @@ import {
 import type { ManiaCardTier, ManiaSkills } from "#/lib/maniacard";
 import { tierRank, type PulledCard } from "#/lib/pack-collection";
 import { fetchPackPlayerScores, type PackPlayer } from "#/lib/packs";
+import { withTimeout } from "#/lib/promise-timeout";
 import type { OsuScore } from "#/lib/types";
 import { useWindowActive } from "#/lib/window-activity";
 import { CountryFlag } from "../ui/CountryFlag";
@@ -109,6 +110,24 @@ const CASCADE_MAX_PER_ROW = 6;
 // already hot, so a cached pack still cascades instead of slapping all
 // the faces over in the same frame.
 const CASCADE_FLIP_GAP_MS = 170;
+
+// A cold profile is allowed a useful window to finish, but it cannot hold an
+// already-paid pack hostage forever. A failed card is still recorded in the
+// wallet and mints itself later from the collection view.
+const CARD_SCORE_WAIT_TIMEOUT_MS = 15_000;
+
+async function resolveCardScores(card: PackCardState): Promise<OsuScore[] | null> {
+  const deadline = Date.now() + CARD_SCORE_WAIT_TIMEOUT_MS;
+  const wait = (promise: Promise<OsuScore[] | null>) => {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return Promise.resolve(null);
+    return withTimeout(promise, remaining, "Pack card scores timed out").catch(() => null);
+  };
+
+  const prefetched = await wait(card.scoresPromise);
+  if (prefetched !== null) return prefetched;
+  return wait(fetchPackPlayerScores(card.player.user.id).catch(() => null));
+}
 
 function isMobileViewport() {
   return (
@@ -465,7 +484,11 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
       }
     });
 
-  const recordRevealed = (entry: Omit<RevealedCard, "isNew" | "skills">, skills: ManiaSkills | null) => {
+  const recordRevealed = (
+    position: number,
+    entry: Omit<RevealedCard, "isNew" | "skills">,
+    skills: ManiaSkills | null,
+  ) => {
     const isNew = onCardRevealed
       ? onCardRevealed({
           userId: entry.player.user.id,
@@ -479,7 +502,9 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
           globalRank: entry.player.globalRank,
         })
       : false;
-    revealedRef.current = [...revealedRef.current, { ...entry, skills, isNew }];
+    const next = revealedRef.current.slice();
+    next[position] = { ...entry, skills, isNew };
+    revealedRef.current = next;
     setRevealed(revealedRef.current);
   };
 
@@ -498,17 +523,11 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     setPhase("preparing");
     playCardDraw();
 
-    let scores = await card.scoresPromise;
+    const scores = await resolveCardScores(card);
     if (cancelledRef.current) return;
-    if (scores === null) {
-      // The pre-deal fetch failed (flaky network, rate limit); one more try
-      // now that the card is actually being revealed.
-      scores = await fetchPackPlayerScores(card.player.user.id).catch(() => null);
-      if (cancelledRef.current) return;
-    }
 
     if (scores === null) {
-      recordRevealed({ player: card.player, tier: null, tierLabel: null, glowColor: null, thumbnail: null }, null);
+      recordRevealed(position, { player: card.player, tier: null, tierLabel: null, glowColor: null, thumbnail: null }, null);
       setActiveData(null);
       setActiveFallback(null);
       setMintFailure("fetch");
@@ -519,7 +538,7 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     const data = buildManiaCardRenderData({ user: card.player.user, scores });
 
     if (data.status !== "ready") {
-      recordRevealed({ player: card.player, tier: null, tierLabel: null, glowColor: null, thumbnail: null }, null);
+      recordRevealed(position, { player: card.player, tier: null, tierLabel: null, glowColor: null, thumbnail: null }, null);
       setActiveData(null);
       setActiveFallback(null);
       setMintFailure("no-data");
@@ -528,6 +547,7 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     }
 
     recordRevealed(
+      position,
       {
         player: card.player,
         tier: data.tier,
@@ -537,7 +557,7 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
       },
       data.skills,
     );
-    const cardIndex = revealedRef.current.length - 1;
+    const cardIndex = position;
 
     try {
       await ensureRendererReady(data);
@@ -732,14 +752,23 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     const dealMs = reducedMotion ? 0 : 300 + count * 60;
     let nextFlipAt = performance.now() + dealMs;
 
+    // Resolve score promises concurrently and consume whichever card becomes
+    // ready first. The old position-ordered await made one cold card leave all
+    // later (often already-cached) cards face-down, which looked exactly like
+    // reveal-all was loading in frozen batches of four.
+    const pending = new Map<number, Promise<{ position: number; scores: OsuScore[] | null }>>();
     for (let position = startAt; position < cards.length; position += 1) {
-      const card = cards[position];
-      let scores = await card.scoresPromise;
+      pending.set(
+        position,
+        resolveCardScores(cards[position]).then((scores) => ({ position, scores })),
+      );
+    }
+
+    while (pending.size > 0) {
+      const { position, scores } = await Promise.race(pending.values());
+      pending.delete(position);
       if (cancelledRef.current) return;
-      if (scores === null) {
-        scores = await fetchPackPlayerScores(card.player.user.id).catch(() => null);
-        if (cancelledRef.current) return;
-      }
+      const card = cards[position];
 
       let entry: Omit<RevealedCard, "isNew" | "skills"> = {
         player: card.player,
@@ -776,7 +805,7 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
         await new Promise((resolve) => setTimeout(resolve, holdMs));
         if (cancelledRef.current) return;
       }
-      recordRevealed(entry, skills);
+      recordRevealed(position, entry, skills);
       nextFlipAt = performance.now() + (reducedMotion ? 0 : CASCADE_FLIP_GAP_MS);
     }
     if (cancelledRef.current) return;
@@ -799,6 +828,7 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
   /* While the cascade runs, cards from `start` on live in the dealt-out row,
      not the tray; only the ones revealed before the skip stay below. */
   const trayEntries = revealed.slice(0, skipping ? (cascade?.start ?? revealed.length) : index);
+  const revealedCount = revealed.reduce((count, entry) => count + (entry ? 1 : 0), 0);
   const tierColor = current?.glowColor
     ? `rgb(${current.glowColor.r}, ${current.glowColor.g}, ${current.glowColor.b})`
     : "rgb(226, 232, 240)";
@@ -807,7 +837,7 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     <div className="flex flex-col items-center">
       <div className="text-[11px] font-semibold uppercase tracking-wider text-osu-f1 tabular-nums">
         {/* During the cascade the counter runs with the flips as they land. */}
-        card {skipping ? Math.max(1, revealed.length) : Math.min(index + 1, cards.length)} / {cards.length}
+        card {skipping ? Math.max(1, revealedCount) : Math.min(index + 1, cards.length)} / {cards.length}
       </div>
 
       {/* The stage holds the stack's 5/7 footprint while revealing one by

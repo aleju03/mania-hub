@@ -554,7 +554,7 @@ async function buildShowcase(
   const idAt = (i: number): number => players[i]?.id ?? 0;
 
   // players[1]: full profile -> top plays (and a richer stat block incl. level).
-  const profile = idAt(1) ? await safe("profile", () => getPlayerProfileSnapshot(db, osu, String(idAt(1)))) : null;
+  const profile = idAt(1) ? await safe("profile", () => getPlayerProfileSnapshot(db, osu, String(idAt(1)), { queue })) : null;
   if (profile && players[1]) {
     players[1] = toShowcasePlayer(profile.user);
     players[1].topMod = showcaseMostUsedMod(profile.bestScores ?? []);

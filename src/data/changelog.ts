@@ -56,6 +56,3 @@ export const UPDATES: ChangelogUpdate[] = [
   { date: "2026-07-18", text: "Skill ratings for each keymode", to: "/my-stats" },
   { date: "2026-07-16", text: "Compare two replays side by side on one clock", to: "/replay" },
 ];
-
-/** Newest update date, used for the footer's unseen-updates dot. */
-export const LATEST_UPDATE_DATE = UPDATES[0]?.date ?? "";

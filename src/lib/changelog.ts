@@ -1,19 +1,6 @@
-import { useEffect, useState } from "react";
-import { LATEST_UPDATE_DATE, type ChangelogUpdate } from "../data/changelog";
-
-// Own tiny localStorage key rather than the main `mania-hub-cache-v5` blob: a
-// quota eviction there would resurrect the footer dot for every entry the
-// reader has already seen.
-export const CHANGELOG_SEEN_STORAGE_KEY = "mania-hub-changelog-seen-v1";
-/** Fired after markChangelogSeen so an already-mounted footer drops its dot. */
-export const CHANGELOG_SEEN_EVENT = "mania-hub:changelog-seen";
+import { type ChangelogUpdate } from "../data/changelog";
 
 const DAY_MS = 86_400_000;
-
-function warnStorageIssue(action: string, error: unknown): void {
-  const message = error instanceof Error ? error.message : String(error);
-  console.warn(`[changelog] ${action} failed: ${message}`);
-}
 
 /** Midnight UTC of a YYYY-MM-DD day, or NaN when the input is not a date. */
 function utcDayStart(date: string): number {
@@ -71,54 +58,4 @@ export function groupUpdatesByDay(updates: readonly ChangelogUpdate[]): Changelo
     else days.push({ date: update.date, updates: [update] });
   }
   return days;
-}
-
-export function readChangelogSeenDate(): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return localStorage.getItem(CHANGELOG_SEEN_STORAGE_KEY);
-  } catch (error) {
-    warnStorageIssue(`read "${CHANGELOG_SEEN_STORAGE_KEY}"`, error);
-    return null;
-  }
-}
-
-export function markChangelogSeen(date: string = LATEST_UPDATE_DATE): void {
-  if (typeof window === "undefined" || !date) return;
-  try {
-    localStorage.setItem(CHANGELOG_SEEN_STORAGE_KEY, date);
-  } catch (error) {
-    warnStorageIssue(`write "${CHANGELOG_SEEN_STORAGE_KEY}"`, error);
-  }
-  window.dispatchEvent(new Event(CHANGELOG_SEEN_EVENT));
-}
-
-export function hasUnseenChangelog(seenDate: string | null, latestDate = LATEST_UPDATE_DATE): boolean {
-  if (!latestDate) return false;
-  // A reader who has never opened it gets no dot: the changelog is not news to
-  // someone who has never been told it exists, and a permanent dot in the
-  // footer reads as a bug.
-  if (!seenDate) return false;
-  return seenDate < latestDate;
-}
-
-/**
- * Whether to mark the footer link as having updates the reader has not opened.
- *
- * Always false on the first render: the footer is server-rendered and the
- * answer lives in localStorage, so deciding before mount would mismatch
- * hydration (which resets <html> and strips the theme vars, see
- * reapplyThemeToDom).
- */
-export function useHasUnseenChangelog(): boolean {
-  const [unseen, setUnseen] = useState(false);
-
-  useEffect(() => {
-    const sync = () => setUnseen(hasUnseenChangelog(readChangelogSeenDate()));
-    sync();
-    window.addEventListener(CHANGELOG_SEEN_EVENT, sync);
-    return () => window.removeEventListener(CHANGELOG_SEEN_EVENT, sync);
-  }, []);
-
-  return unseen;
 }

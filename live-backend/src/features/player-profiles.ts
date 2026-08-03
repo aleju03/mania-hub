@@ -3,6 +3,7 @@
 import type sanitizeHtml from "sanitize-html";
 import type { Db } from "../db.js";
 import { exec, json, parseJson, writeVariantPps } from "../db.js";
+import type { JobQueue } from "../jobs/queue.js";
 import { errorContext, logWarn } from "../logger.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { calculateWeightedPpTotal, getScoreIdentity, getScoreTimestamp, nowIso, scoreHasPublicLeaderboard } from "../shared/score.js";
@@ -22,7 +23,28 @@ const PROFILE_TRACKED_OVERLAY_LIMIT = 50;
 // Exported for the farm helper: whether a best-scores snapshot filled the whole
 // window decides if a keymode's play list can be truncated from below.
 export const PROFILE_BEST_SCORES_LIMIT = 200;
-const PROFILE_USER_INLINE_REFRESH_BUDGET_MS = 150;
+
+// Opening a profile serves the stored snapshot and queues the osu! work instead
+// of paying for it inline. Two job types because the two refreshes cost very
+// different amounts and only one of them has someone waiting on it: the user
+// payload is a single call the page's stale-metadata retry is polling for, the
+// full snapshot is a user + best-200 window (~3 calls) nobody is blocked on
+// because the stored top scores already rendered.
+export const PROFILE_USER_REFRESH_JOB = "refresh_profile_user";
+export const PROFILE_SNAPSHOT_REFRESH_JOB = "refresh_profile_snapshot";
+// Above ingest enrichment (100): a viewer is on the page right now.
+const PROFILE_USER_REFRESH_PRIORITY = 120;
+const PROFILE_SNAPSHOT_REFRESH_PRIORITY = 80;
+// Floor between full snapshot refreshes for one player, so a profile being
+// hammered (or a projection that keeps asking to be baked in) can't turn views
+// into a stream of best-200 fetches.
+const PROFILE_SNAPSHOT_MIN_REFRESH_MS = 60_000;
+/**
+ * A tracked play this recent means the player is mid-session, which is what the
+ * profile's green dot reports now that presence never costs an osu! call. Kept
+ * in step with the client's RECENT_PLAY_ONLINE_WINDOW_MS.
+ */
+const PROFILE_SESSION_ACTIVE_WINDOW_MS = 10 * 60_000;
 
 type ProfileScoreProvenance = "osu_snapshot" | "live_top_play_event" | "tracked_recent_score";
 type ProfileLookupMode = "auto" | "userId";
@@ -135,11 +157,15 @@ const PROFILE_PAGE_SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
 
 export async function getPlayerProfileSnapshot(
   db: Db,
-  osu: Pick<OsuApiClient, "getUser" | "getUserByKey" | "getUserBestScoresWindow">,
+  // Only the cold mint is left on this path; every refresh of an already stored
+  // profile goes through the queue.
+  osu: Pick<OsuApiClient, "getUserByKey" | "getUserBestScoresWindow">,
   rawKey: string,
+  options: { queue?: JobQueue | null; lookupMode?: ProfileLookupMode } = {},
 ): Promise<PlayerProfileSnapshot> {
   const key = normalizeProfileKey(rawKey);
-  const row = await getStoredProfileSnapshot(db, key);
+  const lookupMode = options.lookupMode ?? "auto";
+  const row = await getStoredProfileSnapshot(db, key, lookupMode);
   if (row) {
     // Archived players have no live osu! account, so every refresh path would
     // 404 and stamp refresh_error over a reconstruction that will never get
@@ -148,18 +174,27 @@ export async function getPlayerProfileSnapshot(
       return buildServedSnapshot(db, row, false, []);
     }
     const snapshotExpired = isExpired(row.fetched_at, PROFILE_SNAPSHOT_TTL_MS);
-    const servedRow = await refreshProfileUserForServe(db, osu, row);
-    const trackedRecentScores = await getTrackedProfileRecentScores(db, servedRow.user_id, PROFILE_TRACKED_OVERLAY_LIMIT);
-    if (snapshotExpired) {
-      refreshProfileSnapshotInBackground(db, osu, key, servedRow);
-      return buildServedSnapshot(db, servedRow, true, trackedRecentScores);
+    const trackedRecentScores = await getTrackedProfileRecentScores(db, row.user_id, PROFILE_TRACKED_OVERLAY_LIMIT);
+    const snapshot = await buildServedSnapshot(db, row, snapshotExpired, trackedRecentScores);
+    // Serve what we stored, then let the workers catch it up. The page renders
+    // off this response either way and its stale-metadata retry picks the fresh
+    // numbers up a beat later.
+    const queue = options.queue ?? null;
+    if (queue && !await isUserKnownMissing(db, row.user_id)) {
+      // A full re-mint rewrites user_json and user_fetched_at on its way to the
+      // best-200, so queueing both would spend two /users calls on one profile.
+      if (snapshotExpired || snapshot.projection.appliedRecentScores > 0) {
+        enqueueProfileRefresh(queue, PROFILE_SNAPSHOT_REFRESH_JOB, row.user_id, PROFILE_SNAPSHOT_REFRESH_PRIORITY);
+      } else if (await isProfileUserRefreshDue(db, row)) {
+        enqueueProfileRefresh(queue, PROFILE_USER_REFRESH_JOB, row.user_id, PROFILE_USER_REFRESH_PRIORITY);
+      }
     }
-    const snapshot = await buildServedSnapshot(db, servedRow, false, trackedRecentScores);
-    if (snapshot.projection.appliedRecentScores > 0) refreshProfileSnapshotInBackground(db, osu, key, servedRow);
     return snapshot;
   }
 
-  const fetchedRow = await fetchAndStoreProfileSnapshotShared(db, osu, key);
+  // Nothing stored at all (someone searched a player we have never seen), so
+  // there is no snapshot to serve and the mint has to happen inline.
+  const fetchedRow = await fetchAndStoreProfileSnapshotShared(db, osu, key, lookupMode);
   return buildServedSnapshot(
     db,
     fetchedRow,
@@ -168,41 +203,42 @@ export async function getPlayerProfileSnapshot(
   );
 }
 
-// First-ever profile views used to wait for the browser to hydrate and call
-// the live snapshot endpoint before any osu! API work started. When the cached
-// endpoint can only serve a known user with no stored top scores, start the
-// real snapshot fetch in the background so the data is ready (for this visitor
-// and everyone after) by the time the client asks. Guarded to known users only
-// (crawler requests for junk usernames never reach this) and rate-limited per
-// key so repeated misses cannot drain the osu! API budget.
-const FALLBACK_WARM_COOLDOWN_MS = 10 * 60_000;
-const FALLBACK_WARM_MAX_TRACKED_KEYS = 1_000;
-const fallbackWarmLastAttempt = new Map<string, number>();
-
-function warmProfileSnapshotInBackground(
-  db: Db,
-  osu: Pick<OsuApiClient, "getUserByKey" | "getUserBestScoresWindow">,
-  key: string,
-): void {
-  const now = Date.now();
-  const last = fallbackWarmLastAttempt.get(key);
-  if (last != null && now - last < FALLBACK_WARM_COOLDOWN_MS) return;
-  if (fallbackWarmLastAttempt.size >= FALLBACK_WARM_MAX_TRACKED_KEYS) {
-    const oldest = fallbackWarmLastAttempt.keys().next().value;
-    if (oldest != null) fallbackWarmLastAttempt.delete(oldest);
-  }
-  fallbackWarmLastAttempt.delete(key);
-  fallbackWarmLastAttempt.set(key, now);
-  void fetchAndStoreProfileSnapshotShared(db, osu, key).catch(() => {});
+/* Best-effort by contract: a queue write must never fail or delay a page load,
+   and a dropped enqueue only costs this viewer a beat of staleness. */
+function enqueueProfileRefresh(queue: JobQueue, type: string, userId: number, priority: number): void {
+  void queue
+    .enqueue(type, `${type}:${userId}`, { userId }, { priority, replaceDone: true })
+    .catch((error) => {
+      logWarn("profile_refresh_enqueue_failed", { job_type: type, user_id: userId, ...errorContext(error) });
+    });
 }
 
+async function isProfileUserRefreshDue(db: Db, row: ProfileSnapshotRow): Promise<boolean> {
+  return isExpired(row.user_fetched_at ?? row.fetched_at, await getProfileUserTtlMs(db, row.user_id));
+}
+
+/* A deleted or banned account 404s on every refresh. The worker's missing-user
+   handling already flips users.is_active to 0 and drops the queued jobs, but the
+   profile_snapshots row stays (it is the last known state, and still served), so
+   without this check each later view would queue another doomed /users call.
+   Same predicate as isUserKnownInactive in users.ts, inlined to keep this module
+   off the users.ts -> farm-helper.ts -> here import cycle. */
+async function isUserKnownMissing(db: Db, userId: number): Promise<boolean> {
+  const row = (await exec(db, "select is_active from users where user_id = ? limit 1", [userId])).rows[0];
+  return row != null && Number(row.is_active ?? 1) === 0;
+}
+
+// Read-only by contract: callers that receive no snapshot (or an empty top-score
+// projection) may follow with the blocking snapshot endpoint. Starting osu! work
+// here would race that request and duplicate a cold mint.
 export async function getCachedPlayerProfileSnapshot(
   db: Db,
   rawKey: string,
-  osu?: Pick<OsuApiClient, "getUserByKey" | "getUserBestScoresWindow">,
+  options: { lookupMode?: ProfileLookupMode } = {},
 ): Promise<PlayerProfileSnapshot | null> {
   const key = normalizeProfileKey(rawKey);
-  const row = await getStoredProfileSnapshot(db, key);
+  const lookupMode = options.lookupMode ?? "auto";
+  const row = await getStoredProfileSnapshot(db, key, lookupMode);
   if (row) {
     return buildServedSnapshot(
       db,
@@ -212,13 +248,14 @@ export async function getCachedPlayerProfileSnapshot(
     );
   }
 
-  const userRow = await getStoredProfileUser(db, key);
+  const userRow = await getStoredProfileUser(db, key, lookupMode);
   if (!userRow) return null;
 
   const fetchedAt = typeof userRow.updated_at === "string" ? userRow.updated_at : nowIso();
   const user = buildCachedProfileUser(userRow);
+  // No warm here even when there are no stored top scores: this endpoint's
+  // callers fall through to /snapshot, which mints the player inline.
   const bestScores = await getStoredUserTopScores(db, Number(userRow.user_id));
-  if (osu && bestScores.length === 0) warmProfileSnapshotInBackground(db, osu, key);
   return buildServedSnapshot(db, {
     user_id: Number(userRow.user_id),
     username_key: normalizeProfileKey(String(user.username ?? userRow.username)),
@@ -701,68 +738,31 @@ async function fetchProfileUserByKey(
   }
 }
 
-function refreshProfileSnapshotInBackground(
-  db: Db,
-  osu: Pick<OsuApiClient, "getUserByKey" | "getUserBestScoresWindow">,
-  key: string,
-  row: ProfileSnapshotRow,
-): void {
-  void fetchAndStoreProfileSnapshotShared(db, osu, key).catch(async (error) => {
-    // Recording the failure must never itself throw: when the refresh died to
-    // writer saturation (SQLITE_BUSY past the retry budget) this bookkeeping
-    // write tends to hit the same wall, and a rejection escaping this voided
-    // chain is an unhandled rejection that kills the whole process.
-    await exec(db, "update profile_snapshots set refresh_error = ?, updated_at = ? where user_id = ?", [
-      error instanceof Error ? error.message : String(error),
-      nowIso(),
-      row.user_id,
-    ]).catch((recordError) => {
-      logWarn("profile_refresh_error_record_failed", { user_id: row.user_id, ...errorContext(recordError) });
-    });
-  });
-}
-
-async function refreshProfileUserForServe(
+/**
+ * PROFILE_USER_REFRESH_JOB: re-fetch the osu! user payload (stats, avatar,
+ * supporter status) behind a profile view. One call, and the only refresh a
+ * viewer is actually waiting on, which is why it outranks ingest enrichment.
+ *
+ * Idempotent on the TTL, so a job that lands after a mint or a duplicate
+ * enqueue already refreshed the row costs nothing.
+ */
+export async function runProfileUserRefreshJob(
   db: Db,
   osu: Pick<OsuApiClient, "getUser">,
-  row: ProfileSnapshotRow,
-): Promise<ProfileSnapshotRow> {
-  return withInlineRefreshBudget(refreshProfileUserIfDue(db, osu, row), row, PROFILE_USER_INLINE_REFRESH_BUDGET_MS);
-}
-
-async function withInlineRefreshBudget<T>(
-  refresh: Promise<T>,
-  fallbackValue: T,
-  timeoutMs: number,
-): Promise<T> {
-  let timeout: ReturnType<typeof setTimeout> | null = null;
-  const fallback = new Promise<T>((resolve) => {
-    timeout = setTimeout(() => resolve(fallbackValue), timeoutMs);
-    timeout.unref?.();
-  });
+  userId: number,
+): Promise<void> {
+  const row = await getStoredProfileSnapshot(db, String(userId), "userId");
+  // Archived reconstructions have no live osu! account to refresh from, and
+  // neither do accounts we already know are gone.
+  if (!row || isArchivedProfileRow(row)) return;
+  if (await isUserKnownMissing(db, userId)) return;
+  if (!await isProfileUserRefreshDue(db, row)) return;
 
   try {
-    return await Promise.race([refresh, fallback]);
-  } finally {
-    if (timeout) clearTimeout(timeout);
-    void refresh.catch(() => {});
-  }
-}
-
-async function refreshProfileUserIfDue(
-  db: Db,
-  osu: Pick<OsuApiClient, "getUser">,
-  row: ProfileSnapshotRow,
-): Promise<ProfileSnapshotRow> {
-  const ttlMs = await getProfileUserTtlMs(db, row.user_id);
-  const userFetchedAt = row.user_fetched_at ?? row.fetched_at;
-  if (!isExpired(userFetchedAt, ttlMs)) return row;
-
-  try {
-    const user = await osu.getUser(row.user_id, "api:profile_snapshot:user");
-    const userId = Number(user.id);
+    const user = await osu.getUser(row.user_id, "job:refresh_profile_user");
+    const fetchedUserId = Number(user.id);
     const username = typeof user.username === "string" ? user.username : unpackJson<Record<string, unknown>>(row.user_json, {}).username;
-    if (userId !== row.user_id || typeof username !== "string") return row;
+    if (fetchedUserId !== row.user_id || typeof username !== "string") return;
 
     const storedUser = stripProfilePage(user);
     const fetchedAt = nowIso();
@@ -774,15 +774,49 @@ async function refreshProfileUserIfDue(
       [normalizeProfileKey(username), packJson(storedUser), fetchedAt, fetchedAt, row.user_id],
     );
     await upsertDisplayUser(db, row.user_id, username, storedUser, fetchedAt);
-    return await getStoredProfileSnapshot(db, String(row.user_id)) ?? row;
   } catch (error) {
-    await exec(db, "update profile_snapshots set refresh_error = ?, updated_at = ? where user_id = ?", [
-      error instanceof Error ? error.message : String(error),
-      nowIso(),
-      row.user_id,
-    ]);
-    return row;
+    await recordProfileRefreshError(db, row.user_id, error);
+    // Rethrown so the queue applies its own backoff, and so a 404 reaches the
+    // worker's missing-user handling instead of being swallowed here.
+    throw error;
   }
+}
+
+/**
+ * PROFILE_SNAPSHOT_REFRESH_JOB: re-mint the whole snapshot (user + best-200).
+ * Runs behind the user refresh because the page already rendered the stored top
+ * scores; this only decides how soon they stop being a day old.
+ */
+export async function runProfileSnapshotRefreshJob(
+  db: Db,
+  osu: Pick<OsuApiClient, "getUserByKey" | "getUserBestScoresWindow">,
+  userId: number,
+): Promise<void> {
+  const row = await getStoredProfileSnapshot(db, String(userId), "userId");
+  if (row && isArchivedProfileRow(row)) return;
+  if (row && !isExpired(row.fetched_at, PROFILE_SNAPSHOT_MIN_REFRESH_MS)) return;
+  if (await isUserKnownMissing(db, userId)) return;
+
+  try {
+    await fetchAndStoreProfileSnapshotShared(db, osu, String(userId), "userId", "job:refresh_profile_snapshot");
+  } catch (error) {
+    await recordProfileRefreshError(db, userId, error);
+    throw error;
+  }
+}
+
+/* Recording the failure must never itself throw: when the refresh died to
+   writer saturation (SQLITE_BUSY past the retry budget) this bookkeeping write
+   tends to hit the same wall, and the job's own last_error already carries the
+   reason. */
+async function recordProfileRefreshError(db: Db, userId: number, error: unknown): Promise<void> {
+  await exec(db, "update profile_snapshots set refresh_error = ?, updated_at = ? where user_id = ?", [
+    error instanceof Error ? error.message : String(error),
+    nowIso(),
+    userId,
+  ]).catch((recordError) => {
+    logWarn("profile_refresh_error_record_failed", { user_id: userId, ...errorContext(recordError) });
+  });
 }
 
 async function getProfileUserTtlMs(db: Db, userId: number): Promise<number> {
@@ -835,9 +869,9 @@ async function upsertDisplayUser(
 
 async function buildServedSnapshot(db: Db, row: ProfileSnapshotRow, forceStale: boolean, recentScores: OscScore[] = []): Promise<PlayerProfileSnapshot> {
   const storedUser = unpackJson<Record<string, unknown>>(row.user_json, {});
-  const user = mergeTrackedLastVisit(storedUser, await getLatestTrackedPlayAt(db, row.user_id));
-  const rawBestScores = await hydrateScoresDisplayMetadata(db, unpackJson<OscScore[]>(row.best_scores_json, []));
   const userFetchedAt = row.user_fetched_at ?? row.fetched_at;
+  const user = applyProfilePresence(storedUser, await getLatestTrackedPlayAt(db, row.user_id), userFetchedAt);
+  const rawBestScores = await hydrateScoresDisplayMetadata(db, unpackJson<OscScore[]>(row.best_scores_json, []));
   const projectionBaselineAt = latestValidTimestamp(row.fetched_at, userFetchedAt);
   const projection = await projectTopPlays(db, row.user_id, rawBestScores, row.fetched_at, projectionBaselineAt, recentScores);
   await attachNoteBpms(db, projection.scores);
@@ -868,6 +902,8 @@ async function buildServedSnapshot(db: Db, row: ProfileSnapshotRow, forceStale: 
  *
  * Activity refs outlive raw score_events; score_events cover the small window
  * before a freshly ingested score has reached the activity projection.
+ *
+ * @see applyProfilePresence for how far the stored osu! payload is trusted.
  */
 async function getLatestTrackedPlayAt(db: Db, userId: number): Promise<string | null> {
   const row = (await exec(
@@ -892,13 +928,44 @@ async function getLatestTrackedPlayAt(db: Db, userId: number): Promise<string | 
   return playedAt && Number.isFinite(Date.parse(playedAt)) ? playedAt : null;
 }
 
-function mergeTrackedLastVisit(user: Record<string, unknown>, trackedPlayAt: string | null): Record<string, unknown> {
-  if (!trackedPlayAt) return user;
-  const lastVisit = readString(user.last_visit);
-  const lastVisitMs = lastVisit ? Date.parse(lastVisit) : NaN;
-  const trackedPlayMs = Date.parse(trackedPlayAt);
-  if (Number.isFinite(lastVisitMs) && lastVisitMs >= trackedPlayMs) return user;
-  return { ...user, last_visit: trackedPlayAt };
+/**
+ * Presence for the profile hero (green dot, "Last seen X ago") without spending
+ * an osu! call on it.
+ *
+ * The green dot means one thing here: a tracked play inside the session window,
+ * so the player is mid-session right now. osu!'s own `is_online` is deliberately
+ * ignored, because it also counts someone idling in the client or reading the
+ * website, and a stored copy of it would pin a permanent dot on a player who
+ * logged off hours ago. Rankings still show osu! presence; that list is built
+ * from a live call and says something different on purpose.
+ *
+ * Last seen is the newest thing we can stand behind: the last tracked play, or
+ * the payload's `last_visit` while the payload is inside its refresh TTL (a
+ * profile searched cold minted seconds ago and still reads live). A player we
+ * have never ingested a score for and whose payload has aged out gets no last
+ * seen at all rather than a timestamp we can't stand behind.
+ *
+ * Archived players are exempt: their reconstructions never refresh by design,
+ * so their seeded last_visit is the only presence they will ever have.
+ */
+function applyProfilePresence(
+  user: Record<string, unknown>,
+  trackedPlayAt: string | null,
+  userFetchedAt: string,
+): Record<string, unknown> {
+  if (user.archived === true) return user;
+  const payloadIsLive = !isExpired(userFetchedAt, PROFILE_USER_TTL_MS);
+  const lastSeenAt = newerTimestamp(trackedPlayAt, payloadIsLive ? readString(user.last_visit) : null);
+  const isOnline = trackedPlayAt != null && !isExpired(trackedPlayAt, PROFILE_SESSION_ACTIVE_WINDOW_MS);
+  return { ...user, last_visit: lastSeenAt, is_online: isOnline };
+}
+
+function newerTimestamp(a: string | null, b: string | null): string | null {
+  const aMs = a ? Date.parse(a) : NaN;
+  const bMs = b ? Date.parse(b) : NaN;
+  if (!Number.isFinite(aMs)) return Number.isFinite(bMs) ? b : null;
+  if (!Number.isFinite(bMs)) return a;
+  return aMs >= bMs ? a : b;
 }
 
 // Attaches the note-weighted song tempo from chart analysis onto each served

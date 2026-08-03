@@ -8,7 +8,8 @@ import { getSnipesSnapshot, updateSnipeProjection } from "../src/features/snipes
 import { ACTIVITY_SKILL_ANALYSIS_VERSION, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../src/features/activity.js";
 import { enqueueMapsRefresh, enqueueMapsRefreshIfDue, getGlobalFarmedBoardCacheStatsForTests, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, recordMapsFarmedScore, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores, waitForGlobalFarmedBoardBuild, type MapsPageQuery } from "../src/features/maps.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
-import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu } from "../src/features/player-profiles.js";
+import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, PROFILE_SNAPSHOT_REFRESH_JOB, PROFILE_USER_REFRESH_JOB, runProfileSnapshotRefreshJob, runProfileUserRefreshJob } from "../src/features/player-profiles.js";
+import { markUserMissing } from "../src/users.js";
 import { getRankDeltaSnapshot } from "../src/features/rank-snapshots.js";
 import { confirmTopPlay, getTopPlaysSnapshot, TopPlayConfirmationPendingError } from "../src/features/top-plays.js";
 import { getTrackerSnapshot } from "../src/features/tracker.js";
@@ -2825,20 +2826,16 @@ describe("live backend", () => {
       statistics: { pp: 1234, global_rank: 100, country_rank: 1 },
       page: { html: "<b>about</b>", raw: "about" },
     }));
-    const getUser = vi.fn(async () => {
-      throw new Error("fresh profile users should not refresh within the short user TTL");
-    });
     const getUserBestScoresWindow = vi.fn(async () => best);
 
-    const first = await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
-    const second = await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "sniper");
+    const first = await getPlayerProfileSnapshot(db, { getUserByKey, getUserBestScoresWindow }, "Sniper");
+    const second = await getPlayerProfileSnapshot(db, { getUserByKey, getUserBestScoresWindow }, "sniper");
 
     expect(first.user).toMatchObject({ id: 101, username: "Sniper", page: null });
     expect(first.bestScores).toHaveLength(best.length);
     expect(first.userFetchedAt).toBe(first.fetchedAt);
     expect(second.bestScores[0].id).toBe(first.bestScores[0].id);
     expect(getUserByKey).toHaveBeenCalledTimes(1);
-    expect(getUser).not.toHaveBeenCalled();
     expect(getUserBestScoresWindow).toHaveBeenCalledTimes(1);
   });
 
@@ -2856,13 +2853,10 @@ describe("live backend", () => {
         page: null,
       };
     });
-    const getUser = vi.fn(async () => {
-      throw new Error("fresh profile users should not refresh within the short user TTL");
-    });
     const getUserBestScoresWindow = vi.fn(async () => best);
 
-    const first = await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "4044");
-    const second = await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "4044");
+    const first = await getPlayerProfileSnapshot(db, { getUserByKey, getUserBestScoresWindow }, "4044");
+    const second = await getPlayerProfileSnapshot(db, { getUserByKey, getUserBestScoresWindow }, "4044");
 
     expect(first.user).toMatchObject({ id: 9090, username: "4044" });
     expect(second.user).toMatchObject({ id: 9090, username: "4044" });
@@ -2885,12 +2879,9 @@ describe("live backend", () => {
         page: null,
       };
     });
-    const getUser = vi.fn(async () => {
-      throw new Error("fresh profile users should not refresh within the short user TTL");
-    });
     const getUserBestScoresWindow = vi.fn(async () => best);
 
-    const snapshot = await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "4044");
+    const snapshot = await getPlayerProfileSnapshot(db, { getUserByKey, getUserBestScoresWindow }, "4044");
 
     expect(snapshot.user).toMatchObject({ id: 4044, username: "IdPlayer" });
     expect(getUserByKey).toHaveBeenNthCalledWith(1, "4044", "api:profile_snapshot", "username");
@@ -2909,19 +2900,15 @@ describe("live backend", () => {
       statistics: { pp: 1234, global_rank: 100, country_rank: 1 },
       page: null,
     }));
-    const getUser = vi.fn(async () => {
-      throw new Error("cached lookup should not refresh users");
-    });
     const getUserBestScoresWindow = vi.fn(async () => best);
 
-    await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
+    await getPlayerProfileSnapshot(db, { getUserByKey, getUserBestScoresWindow }, "Sniper");
     const cached = await getCachedPlayerProfileSnapshot(db, "sniper");
 
     expect(cached?.user).toMatchObject({ id: 101, username: "Sniper", page: null });
     expect(cached?.bestScores).toHaveLength(best.length);
     expect(cached?.isStale).toBe(false);
     expect(getUserByKey).toHaveBeenCalledTimes(1);
-    expect(getUser).not.toHaveBeenCalled();
     expect(getUserBestScoresWindow).toHaveBeenCalledTimes(1);
   });
 
@@ -2948,8 +2935,8 @@ describe("live backend", () => {
     expect(cached?.isStale).toBe(true);
   });
 
-  it("uses a fast stale profile user refresh before serving browser snapshots", async () => {
-    const { db } = await setup();
+  it("queues the stale profile user refresh instead of fetching it inline", async () => {
+    const { db, queue } = await setup();
     const best = await fixture<OscScore[]>("top-best.json");
     const getUserByKey = vi.fn(async () => ({
       id: 101,
@@ -2973,8 +2960,8 @@ describe("live backend", () => {
     }));
     const getUserBestScoresWindow = vi.fn(async () => best);
 
-    await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
-    // user_fetched_at stale (>10min) triggers a user refresh; fetched_at stays an
+    await getPlayerProfileSnapshot(db, { getUserByKey, getUserBestScoresWindow }, "Sniper");
+    // user_fetched_at stale (>10min) makes a user refresh due; fetched_at stays an
     // earlier-but-fresh time (24h TTL) so the section timestamp and the refreshed
     // user timestamp stay distinct even when the test runs within one millisecond.
     await exec(db, "update profile_snapshots set user_fetched_at = ?, fetched_at = ? where user_id = 101", [
@@ -2982,9 +2969,26 @@ describe("live backend", () => {
       new Date(Date.now() - 5 * 60_000).toISOString(),
     ]);
 
-    const snapshot = await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
+    const served = await getPlayerProfileSnapshot(db, { getUserByKey, getUserBestScoresWindow }, "Sniper", { queue });
 
-    expect(snapshot.user).toMatchObject({
+    // The view itself spends nothing: the browser gets the stored payload, and a
+    // stale one no longer gets to claim the player is online.
+    expect(getUser).not.toHaveBeenCalled();
+    expect(served.user).toMatchObject({
+      avatar_url: "https://assets.example/sniper.png",
+      last_visit: null,
+      is_online: false,
+      statistics: expect.objectContaining({ global_rank: 100, play_count: 10 }),
+    });
+    await vi.waitFor(async () => {
+      const queued = (await exec(db, "select type from jobs where dedupe_key = ?", [`${PROFILE_USER_REFRESH_JOB}:101`])).rows;
+      expect(queued).toHaveLength(1);
+    });
+
+    await runProfileUserRefreshJob(db, { getUser }, 101);
+
+    const refreshed = await getCachedPlayerProfileSnapshot(db, "Sniper");
+    expect(refreshed?.user).toMatchObject({
       avatar_url: "https://assets.example/sniper-new.png",
       last_visit: "2026-05-12T00:00:00+00:00",
       is_online: false,
@@ -2994,10 +2998,39 @@ describe("live backend", () => {
     expect(getUserByKey).toHaveBeenCalledTimes(1);
     expect(getUser).toHaveBeenCalledTimes(1);
     expect(getUserBestScoresWindow).toHaveBeenCalledTimes(1);
-    expect(snapshot.fetchedAt).not.toBe(snapshot.userFetchedAt);
+    expect(refreshed?.fetchedAt).not.toBe(refreshed?.userFetchedAt);
   });
 
-  it("serves cached profile user stats when the refresh is slow", async () => {
+  it("queues only the full re-mint when the whole snapshot expired", async () => {
+    const { db, queue } = await setup();
+    const best = await fixture<OscScore[]>("top-best.json");
+    const getUserByKey = vi.fn(async () => ({
+      id: 101,
+      username: "Sniper",
+      avatar_url: "https://assets.example/sniper.png",
+      country_code: "CR",
+      statistics: { pp: 1000, global_rank: 100, country_rank: 1, play_count: 10 },
+      page: null,
+    }));
+    const getUserBestScoresWindow = vi.fn(async () => best);
+
+    await getPlayerProfileSnapshot(db, { getUserByKey, getUserBestScoresWindow }, "Sniper");
+    const expired = new Date(Date.now() - 25 * 60 * 60_000).toISOString();
+    await exec(db, "update profile_snapshots set fetched_at = ?, user_fetched_at = ? where user_id = 101", [expired, expired]);
+
+    await getPlayerProfileSnapshot(db, { getUserByKey, getUserBestScoresWindow }, "Sniper", { queue });
+
+    // The re-mint fetches the user on its way to the best-200, so a separate
+    // user refresh would just be a second /users call for the same view.
+    await vi.waitFor(async () => {
+      const rows = (await exec(db, "select dedupe_key from jobs where type = ?", [PROFILE_SNAPSHOT_REFRESH_JOB])).rows;
+      expect(rows).toHaveLength(1);
+    });
+    const userJobs = (await exec(db, "select dedupe_key from jobs where type = ?", [PROFILE_USER_REFRESH_JOB])).rows;
+    expect(userJobs).toHaveLength(0);
+  });
+
+  it("does not spend osu! calls refreshing a profile whose account is gone", async () => {
     const { db } = await setup();
     const best = await fixture<OscScore[]>("top-best.json");
     const getUserByKey = vi.fn(async () => ({
@@ -3005,58 +3038,46 @@ describe("live backend", () => {
       username: "Sniper",
       avatar_url: "https://assets.example/sniper.png",
       country_code: "CR",
-      last_visit: "2026-05-01T00:00:00+00:00",
-      is_online: true,
       statistics: { pp: 1000, global_rank: 100, country_rank: 1, play_count: 10 },
       page: null,
     }));
-    let resolveUserRefresh: (value: Record<string, unknown>) => void = () => {};
-    const getUser = vi.fn(() => new Promise<Record<string, unknown>>((resolve) => {
-      resolveUserRefresh = resolve;
-    }));
+    const getUser = vi.fn(async () => ({ id: 101, username: "Sniper", statistics: { pp: 1100 } }));
     const getUserBestScoresWindow = vi.fn(async () => best);
 
-    await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
+    await getPlayerProfileSnapshot(db, { getUserByKey, getUserBestScoresWindow }, "Sniper");
     await exec(db, "update profile_snapshots set user_fetched_at = ? where user_id = 101", [
       new Date(Date.now() - 11 * 60_000).toISOString(),
     ]);
+    // What the worker's 404 handling leaves behind: the account is flagged gone
+    // but the snapshot row stays as the last known state.
+    await markUserMissing(db, 101, "test: deleted account");
 
-    const startedAt = Date.now();
-    const snapshot = await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
+    await runProfileUserRefreshJob(db, { getUser }, 101);
+    await runProfileSnapshotRefreshJob(db, { getUserByKey, getUserBestScoresWindow }, 101);
 
-    expect(Date.now() - startedAt).toBeLessThan(1000);
-    expect(snapshot.user).toMatchObject({
-      avatar_url: "https://assets.example/sniper.png",
-      last_visit: "2026-05-01T00:00:00+00:00",
-      is_online: true,
-      page: null,
-      statistics: expect.objectContaining({ global_rank: 100, play_count: 10 }),
-    });
+    expect(getUser).not.toHaveBeenCalled();
     expect(getUserByKey).toHaveBeenCalledTimes(1);
-    expect(getUser).toHaveBeenCalledTimes(1);
     expect(getUserBestScoresWindow).toHaveBeenCalledTimes(1);
+  });
 
-    resolveUserRefresh({
+  it("skips a queued profile user refresh that a mint already covered", async () => {
+    const { db } = await setup();
+    const best = await fixture<OscScore[]>("top-best.json");
+    const getUserByKey = vi.fn(async () => ({
       id: 101,
       username: "Sniper",
-      avatar_url: "https://assets.example/sniper-new.png",
+      avatar_url: "https://assets.example/sniper.png",
       country_code: "CR",
-      last_visit: "2026-05-12T00:00:00+00:00",
-      is_online: false,
-      statistics: { pp: 1100, global_rank: 90, country_rank: 1, play_count: 20 },
-      page: { html: "<b>fresh but stripped</b>" },
-    });
+      statistics: { pp: 1000, global_rank: 100, country_rank: 1, play_count: 10 },
+      page: null,
+    }));
+    const getUser = vi.fn(async () => ({ id: 101, username: "Sniper", statistics: { pp: 1100 } }));
+    const getUserBestScoresWindow = vi.fn(async () => best);
 
-    await vi.waitFor(async () => {
-      const refreshed = await getCachedPlayerProfileSnapshot(db, "Sniper");
-      expect(refreshed?.user).toMatchObject({
-        avatar_url: "https://assets.example/sniper-new.png",
-        last_visit: "2026-05-12T00:00:00+00:00",
-        is_online: false,
-        page: null,
-        statistics: expect.objectContaining({ global_rank: 90, play_count: 20 }),
-      });
-    });
+    await getPlayerProfileSnapshot(db, { getUserByKey, getUserBestScoresWindow }, "Sniper");
+    await runProfileUserRefreshJob(db, { getUser }, 101);
+
+    expect(getUser).not.toHaveBeenCalled();
   });
 
   it("does not refresh the optional osu! recent cache while serving profile snapshots", async () => {
@@ -3081,7 +3102,7 @@ describe("live backend", () => {
     const getUserBestScoresWindow = vi.fn(async () => best);
     const cachedRecent = { ...best[0], id: 9901 };
 
-    await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
+    await getPlayerProfileSnapshot(db, { getUserByKey, getUserBestScoresWindow }, "Sniper");
     await getPlayerRecentScoresFromOsu(db, {
       getUserRecentScores: vi.fn(async () => [{
         ...cachedRecent,
@@ -3130,17 +3151,9 @@ describe("live backend", () => {
       statistics: { pp: 1000, global_rank: 100, country_rank: 1 },
       page: null,
     }));
-    const getUser = vi.fn(async () => ({
-      id: 101,
-      username: "Sniper",
-      avatar_url: "https://assets.example/sniper.png",
-      country_code: "CR",
-      statistics: { pp: 1000, global_rank: 100, country_rank: 1 },
-      page: null,
-    }));
     const getUserBestScoresWindow = vi.fn(async () => [oldSameMap, { ...base, id: 8002, beatmap_id: 999, pp: 150 }]);
 
-    const baseSnapshot = await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
+    const baseSnapshot = await getPlayerProfileSnapshot(db, { getUserByKey, getUserBestScoresWindow }, "Sniper");
     const staleTop = { ...base, id: 6601, beatmap_id: 6601, pp: 999 };
     await exec(
       db,
@@ -3158,7 +3171,7 @@ describe("live backend", () => {
       [liveTop.id, liveTop.pp, liveTop.pp, JSON.stringify({ user: { id: 101, username: "Sniper", avatar_url: "https://assets.example/sniper.png" }, score: liveTop, pp: liveTop.pp, weightedPP: liveTop.pp, ppGain: 50, time: liveTop.ended_at }), new Date(Date.parse(baseSnapshot.fetchedAt) + 1000).toISOString()],
     );
 
-    const snapshot = await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
+    const snapshot = await getPlayerProfileSnapshot(db, { getUserByKey, getUserBestScoresWindow }, "Sniper");
     const scoreIds = snapshot.bestScores.map((score) => score.id);
 
     expect(scoreIds).toContain(9001);
@@ -3206,7 +3219,7 @@ describe("live backend", () => {
     }));
     const getUserBestScoresWindow = vi.fn(async () => [oldSameMap, { ...base, id: 8002, beatmap_id: 999, pp: 150 }]);
 
-    await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
+    await getPlayerProfileSnapshot(db, { getUserByKey, getUserBestScoresWindow }, "Sniper");
     const snapshotFetchedAt = new Date(Date.now() - 15 * 60_000).toISOString();
     const eventDetectedAt = new Date(Date.parse(snapshotFetchedAt) + 60_000).toISOString();
     await exec(db, "update profile_snapshots set fetched_at = ?, user_fetched_at = ? where user_id = 101", [
@@ -3220,12 +3233,12 @@ describe("live backend", () => {
       [liveTop.id, liveTop.pp, liveTop.pp, JSON.stringify({ user: { id: 101, username: "Sniper", avatar_url: "https://assets.example/sniper.png" }, score: liveTop, pp: liveTop.pp, weightedPP: liveTop.pp, ppGain: 50, time: liveTop.ended_at }), eventDetectedAt],
     );
 
-    const firstServed = await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
+    const firstServed = await getPlayerProfileSnapshot(db, { getUserByKey, getUserBestScoresWindow }, "Sniper");
     expect(firstServed.bestScores.map((score) => score.id)).toContain(9001);
     expect(firstServed.projection.appliedTopPlayEvents).toBe(1);
 
-    await vi.waitFor(() => expect(getUser).toHaveBeenCalledTimes(1));
-    const snapshot = await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
+    await runProfileUserRefreshJob(db, { getUser }, 101);
+    const snapshot = await getPlayerProfileSnapshot(db, { getUserByKey, getUserBestScoresWindow }, "Sniper");
 
     expect(snapshot.bestScores.map((score) => score.id)).toContain(9001);
     expect(snapshot.projection.appliedTopPlayEvents).toBe(1);

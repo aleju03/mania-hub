@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronRight, X } from "lucide-react";
 
 import { UPDATES, WIP } from "#/data/changelog";
-import { formatReleaseAge, groupUpdatesByDay, markChangelogSeen } from "#/lib/changelog";
+import { formatReleaseAge, groupUpdatesByDay } from "#/lib/changelog";
 import { formatDate } from "#/lib/format";
 
 const DAYS = groupUpdatesByDay(UPDATES);
@@ -30,8 +30,6 @@ export function ChangelogModal({ open, onClose }: { open: boolean; onClose: () =
 
   useEffect(() => {
     if (!open) return;
-    // Opening the modal is the read receipt the footer dot waits on.
-    markChangelogSeen();
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };

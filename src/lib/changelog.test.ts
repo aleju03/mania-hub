@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatReleaseAge, groupUpdatesByDay, hasUnseenChangelog } from "./changelog";
+import { formatReleaseAge, groupUpdatesByDay } from "./changelog";
 import { UPDATES, WIP } from "../data/changelog";
 
 const NOW = Date.parse("2026-07-29T09:00:00Z");
@@ -62,21 +62,6 @@ describe("groupUpdatesByDay", () => {
   it("covers every update exactly once for the real content", () => {
     const flat = groupUpdatesByDay(UPDATES).flatMap((group) => group.updates);
     expect(flat).toEqual(UPDATES);
-  });
-});
-
-describe("hasUnseenChangelog", () => {
-  it("flags an update newer than the last one the reader opened", () => {
-    expect(hasUnseenChangelog("2026-07-25", "2026-07-29")).toBe(true);
-  });
-
-  it("stays quiet once the newest update has been seen", () => {
-    expect(hasUnseenChangelog("2026-07-29", "2026-07-29")).toBe(false);
-    expect(hasUnseenChangelog("2026-08-01", "2026-07-29")).toBe(false);
-  });
-
-  it("stays quiet for a reader who has never opened the changelog", () => {
-    expect(hasUnseenChangelog(null, "2026-07-29")).toBe(false);
   });
 });
 

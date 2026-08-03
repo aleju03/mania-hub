@@ -10,6 +10,8 @@ const USER_SCOPED_JOB_TYPES = [
   "refresh_user_top_scores",
   "reconcile_user_recent_scores",
   "refresh_user_maps_farmed_scores",
+  "refresh_profile_user",
+  "refresh_profile_snapshot",
 ];
 
 export async function markUserMissing(db: Db, userId: number, reason: string): Promise<{ untrackedRosters: number; deletedJobs: number }> {

@@ -65,7 +65,12 @@ import { computeManiaSkills, type ManiaCardTier, type ManiaSkills } from "../../
 import { SkillBreakdownBody, SkillModePanel, qualifyingSkillModes, skillRatingAccent } from "../../components/player/SkillBreakdown";
 import type { InsightScoreSnapshot, OsuCovers, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
 import { buildPpDistribution, calculateUserProfileInsights } from "../../lib/profile-insights";
-import { playedWithinOnlineWindow, readPlayerRecentPlay, readPlayerShell } from "../../lib/player-shell-cache";
+import {
+  playedWithinOnlineWindow,
+  readPlayerRecentPlay,
+  readPlayerShell,
+  stripUntrackedProfilePresence,
+} from "../../lib/player-shell-cache";
 import { pageSeo, playerOgImagePath } from "../../lib/seo";
 import { getRankTierClass } from "../../lib/rankings";
 import { getCountryName, isSupportedCountryCode } from "../../lib/country";
@@ -758,13 +763,6 @@ function profileSnapshotUserMetadataIsStale(snapshot: Pick<PlayerSnapshotData, "
   return !Number.isFinite(fetchedAt) || Date.now() - fetchedAt >= PROFILE_USER_METADATA_STALE_MS;
 }
 
-function mergeOnlinePresenceSignal(user: OsuUser, presenceUser: OsuUser | null): OsuUser;
-function mergeOnlinePresenceSignal(user: OsuUser | null, presenceUser: OsuUser | null): OsuUser | null;
-function mergeOnlinePresenceSignal(user: OsuUser | null, presenceUser: OsuUser | null): OsuUser | null {
-  if (!user || !presenceUser || !presenceUser.is_online || user.is_online || user.id !== presenceUser.id) return user;
-  return { ...user, is_online: true, last_visit: null };
-}
-
 function loadUserCached(username: string): Promise<OsuUser> {
   const cacheKey = username.trim().toLowerCase();
   const now = Date.now();
@@ -781,11 +779,12 @@ function loadUserCached(username: string): Promise<OsuUser> {
 
   const request = getUser({ data: { key: username } })
     .then((user) => {
+      const profileUser = stripUntrackedProfilePresence(user);
       userDataCache.set(cacheKey, {
-        data: user,
+        data: profileUser,
         expiresAt: Date.now() + USER_CLIENT_CACHE_TTL,
       });
-      return user;
+      return profileUser;
     })
     .finally(() => {
       userRequestCache.delete(cacheKey);
@@ -1135,22 +1134,11 @@ export function PlayerProfilePage({
     writePpDistributionModePreference(mode);
   }, []);
 
-  // Read after mount so SSR keeps rendering osu!'s own presence and hydration
-  // stays byte-identical; the seeded play only takes over on the client.
+  // Read after mount so SSR and hydration stay byte-identical; a locally seeded
+  // tracked play only takes over once the client can read the navigation cache.
   useLayoutEffect(() => {
     setRecentPlayAt(readPlayerRecentPlay(username));
   }, [username]);
-
-  useLayoutEffect(() => {
-    if (!loaderSnapshot?.user || !profileSnapshotUserMetadataIsStale(loaderSnapshot)) return;
-    const playerShell = readPlayerShell(username);
-    if (!playerShell?.is_online) return;
-
-    setUser((current) => {
-      const nextUser = mergeOnlinePresenceSignal(current ?? loaderSnapshot.user, playerShell);
-      return profileUsersAreEquivalent(current, nextUser) ? current : nextUser;
-    });
-  }, [loaderSnapshot, username]);
 
   useLayoutEffect(() => {
     const resetScroll = () => window.scrollTo({ top: 0, left: 0, behavior: "auto" });
@@ -1194,12 +1182,7 @@ export function PlayerProfilePage({
     const hasLoaderBestScores = loaderBestScores.length > 0;
     const hasLoaderInsights = loaderProfileInsights !== null;
     const playerShell = readPlayerShell(username);
-    const seededUser = loaderSnapshot?.user
-      ? mergeOnlinePresenceSignal(
-        loaderSnapshot.user,
-        profileSnapshotUserMetadataIsStale(loaderSnapshot) ? playerShell : null,
-      )
-      : mergeOnlinePresenceSignal(readCachedUser(username) ?? playerShell, playerShell);
+    const seededUser = loaderSnapshot?.user ?? readCachedUser(username) ?? playerShell;
 
     // Tab navigation re-runs this effect with the SSR cached snapshot, which
     // can lag the freshly fetched one already on screen (the newest-top-play
@@ -1248,12 +1231,8 @@ export function PlayerProfilePage({
     let snapshotApplied = false;
     if (loaderSnapshot?.user) {
       const cacheKey = username.trim().toLowerCase();
-      const cachedUser = mergeOnlinePresenceSignal(
-        loaderSnapshot.user,
-        profileSnapshotUserMetadataIsStale(loaderSnapshot) ? playerShell : null,
-      );
       userDataCache.set(cacheKey, {
-        data: cachedUser,
+        data: loaderSnapshot.user,
         expiresAt: Date.now() + USER_CLIENT_CACHE_TTL,
       });
       if (hasLoaderBestScores) {
@@ -1267,11 +1246,7 @@ export function PlayerProfilePage({
     const applySnapshot = (result: PlayerSnapshotData | null) => {
       if (cancelled || !result) return;
       snapshotApplied = true;
-      const nextUser = mergeOnlinePresenceSignal(
-        result.user,
-        profileSnapshotUserMetadataIsStale(result) ? playerShell : null,
-      );
-      setUser((current) => profileUsersAreEquivalent(current, nextUser) ? current : nextUser);
+      setUser((current) => profileUsersAreEquivalent(current, result.user) ? current : result.user);
       setUserError(null);
       setLoadingUser(false);
       setLoadingRankHistory(false);

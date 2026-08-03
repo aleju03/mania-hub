@@ -1080,10 +1080,14 @@ export const fetchLivePlayerAbout = createServerFn({ method: "GET" })
 
 // Direct browser fetch: the backend allows CORS from the site origins, so the
 // post-hydration snapshot refresh skips the SSR server hop entirely.
-export async function fetchLivePlayerProfileSnapshotDirect(key: string): Promise<LivePlayerProfileSnapshot | null> {
+export async function fetchLivePlayerProfileSnapshotDirect(
+  key: string,
+  options: { lookup?: "id" } = {},
+): Promise<LivePlayerProfileSnapshot | null> {
   const trimmed = key.trim().slice(0, 120);
   if (!trimmed) throw new Error("Invalid profile key.");
-  return fetchLiveJson(`/api/profiles/${encodeURIComponent(trimmed)}/snapshot`);
+  const query = options.lookup === "id" ? "?lookup=id" : "";
+  return fetchLiveJson(`/api/profiles/${encodeURIComponent(trimmed)}/snapshot${query}`);
 }
 
 export async function fetchLivePlayerCachedProfileSnapshotDirect(key: string): Promise<LivePlayerProfileSnapshot | null> {
@@ -1125,7 +1129,7 @@ export async function fetchLivePackCardSnapshotDirect(key: string): Promise<Live
   if (!trimmed) throw new Error("Invalid profile key.");
   const base = getLiveBackendUrl();
   if (!base) throw new Error("Server is not configured.");
-  const response = await fetch(`${base}/api/profiles/${encodeURIComponent(trimmed)}/cached-snapshot?view=card`, { credentials: "omit" });
+  const response = await fetch(`${base}/api/profiles/${encodeURIComponent(trimmed)}/cached-snapshot?view=card&lookup=id`, { credentials: "omit" });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`Server ${response.status}`);
   const snapshot = await response.json() as LivePackCardSnapshot;

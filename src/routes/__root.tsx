@@ -12,7 +12,6 @@ import { GoalToasts } from "../components/me/GoalToasts";
 import { TrackingToasts } from "../components/me/TrackingToasts";
 import { AuthContext } from "../lib/auth-context";
 import { getCurrentAuth } from "../lib/auth";
-import { useHasUnseenChangelog } from "../lib/changelog";
 import { InitialCountryContext } from "../lib/country-context";
 import type { AuthState } from "../lib/auth-shared";
 import {
@@ -547,26 +546,16 @@ function KofiSupportButton() {
   );
 }
 
-// A dot marks releases the reader hasn't opened yet. It only ever appears after
-// the changelog has been opened once, so it reads as "something new since you
-// last looked" rather than as a permanent decoration.
 function ChangelogFooterLink() {
   const [open, setOpen] = useState(false);
-  const unseen = useHasUnseenChangelog();
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`inline-flex cursor-pointer items-center gap-1 transition-colors hover:text-osu-pink-light/60${unseen ? " text-osu-pink-light/55" : ""}`}
+        className="inline-flex cursor-pointer items-center gap-1 transition-colors hover:text-osu-pink-light/60"
       >
         changelog
-        {unseen ? (
-          <>
-            <span aria-hidden className="h-1 w-1 rounded-full bg-osu-pink shadow-[0_0_6px_var(--color-osu-pink)]" />
-            <span className="sr-only">(new updates)</span>
-          </>
-        ) : null}
       </button>
       <ChangelogModal open={open} onClose={() => setOpen(false)} />
     </>

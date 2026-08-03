@@ -38,6 +38,13 @@ const SHEDDABLE_TYPES: string[] = [];
 
 const ACTIVE_TYPE_CAPS: Record<string, number> = {
   refresh_user_top_scores: 80,
+  // Profile views enqueue their own osu! refresh, so a traffic spike is the one
+  // thing that can turn page loads into queue depth. Only bites above
+  // QUEUE_TARGET_DEPTH, and the profile still serves its stored snapshot while
+  // the overflow waits, so this trades a little staleness for keeping ingest
+  // and top-play confirmation moving.
+  refresh_profile_user: 30,
+  refresh_profile_snapshot: 10,
 };
 
 // Types with a reserved lane: invisible to the shared depth/shedding pool so

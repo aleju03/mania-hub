@@ -544,7 +544,7 @@ export async function getFarmHelperSnapshot(
   const view = params.view ?? "gain";
   const limit = clampLimit(params.limit);
 
-  const profile = await resolveProfile(db, osu, rawKey);
+  const profile = await resolveProfile(db, osu, rawKey, queue);
   const user = profile.user;
   const userId = Number(user.id ?? 0);
   if (!Number.isInteger(userId) || userId <= 0) throw new FarmHelperUserNotFoundError(rawKey);
@@ -655,9 +655,11 @@ export async function buildFarmHelperSnapshotForBacktest(
   });
 }
 
-async function resolveProfile(db: Db, osu: ProfileOsuClient, rawKey: string) {
+async function resolveProfile(db: Db, osu: ProfileOsuClient, rawKey: string, queue?: JobQueue) {
   try {
-    return await getPlayerProfileSnapshot(db, osu, rawKey);
+    // The queue is how a stored profile gets refreshed at all now, so passing
+    // it is what keeps farm-helper subjects from serving a frozen snapshot.
+    return await getPlayerProfileSnapshot(db, osu, rawKey, { queue });
   } catch (error) {
     if (error instanceof OsuApiError && error.status === 404) throw new FarmHelperUserNotFoundError(rawKey);
     throw error;
@@ -2045,8 +2047,9 @@ export async function getFarmHelperFarmers(
   beatmapId: number,
   speedBucket?: ScoreSpeedBucket,
   requestedKeyMode?: FarmHelperKeyMode,
+  queue?: JobQueue,
 ): Promise<FarmHelperFarmersResult> {
-  const profile = await resolveProfile(db, osu, rawKey);
+  const profile = await resolveProfile(db, osu, rawKey, queue);
   const user = profile.user;
   const userId = Number(user.id ?? 0);
   if (!Number.isInteger(userId) || userId <= 0) throw new FarmHelperUserNotFoundError(rawKey);
@@ -2146,8 +2149,9 @@ export async function getFarmHelperNeighbors(
   osu: ProfileOsuClient,
   rawKey: string,
   requestedKeyMode: FarmHelperKeyMode = "any",
+  queue?: JobQueue,
 ): Promise<FarmHelperNeighborsResult> {
-  const profile = await resolveProfile(db, osu, rawKey);
+  const profile = await resolveProfile(db, osu, rawKey, queue);
   const user = profile.user;
   const userId = Number(user.id ?? 0);
   if (!Number.isInteger(userId) || userId <= 0) throw new FarmHelperUserNotFoundError(rawKey);

@@ -6,6 +6,7 @@ import { createDb, exec, migrate, type Db } from "../src/db.js";
 import {
   fetchAndStoreProfileSnapshotShared,
   getCachedPlayerProfileSnapshot,
+  getPlayerProfileSnapshot,
   persistSessionProfileSnapshot,
   warmProfileSnapshots,
 } from "../src/features/player-profiles.js";
@@ -121,6 +122,44 @@ describe("warmProfileSnapshots no longer re-mints served players", () => {
     // Let the background mint for the one cold id settle before teardown.
     await new Promise((r) => setTimeout(r, 30));
     expect(osuCalls).toBeGreaterThan(0);
+  });
+
+  it("coalesces a cold pack warm with its overlapping user-id reveal", async () => {
+    let resolveUser!: (user: Record<string, unknown>) => void;
+    const userPending = new Promise<Record<string, unknown>>((resolve) => {
+      resolveUser = resolve;
+    });
+    let userCalls = 0;
+    let bestCalls = 0;
+    const lookupModes: Array<"id" | "username" | undefined> = [];
+    const osu = {
+      getUserByKey: async (_key: string, _caller: string, lookup?: "id" | "username") => {
+        userCalls++;
+        lookupModes.push(lookup);
+        return userPending;
+      },
+      getUserBestScoresWindow: async () => {
+        bestCalls++;
+        return [score({ id: 77, beatmapId: 707, pp: 300 })];
+      },
+    };
+
+    const { warming } = await warmProfileSnapshots(db, osu, [USER_ID]);
+    expect(warming).toBe(1);
+    expect(userCalls).toBe(1);
+
+    // The reveal begins before the warm's user lookup settles. Both callers use
+    // the explicit user-id mode, so it must join the existing in-flight mint.
+    const reveal = getPlayerProfileSnapshot(db, osu, String(USER_ID), { lookupMode: "userId" });
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(userCalls).toBe(1);
+
+    resolveUser({ id: USER_ID, username: "Cold" });
+    const snapshot = await reveal;
+    expect(snapshot.bestScores.map((item) => item.id)).toEqual([77]);
+    expect(lookupModes).toEqual(["id"]);
+    expect(userCalls).toBe(1);
+    expect(bestCalls).toBe(1);
   });
 });
 

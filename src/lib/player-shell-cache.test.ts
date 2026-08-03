@@ -4,8 +4,12 @@ import {
   RECENT_PLAY_ONLINE_WINDOW_MS,
   playedWithinOnlineWindow,
   readPlayerRecentPlay,
+  readPlayerShell,
   seedPlayerRecentPlay,
+  seedPlayerShellFromRankingEntry,
+  stripUntrackedProfilePresence,
 } from "./player-shell-cache";
+import type { LeanRankingEntry, OsuUser } from "./types";
 
 const NOW = Date.parse("2026-07-21T12:00:00.000Z");
 const iso = (offsetMs: number) => new Date(NOW + offsetMs).toISOString();
@@ -70,5 +74,56 @@ describe("seedPlayerRecentPlay", () => {
   it("has nothing to say about a player who was never seen playing", () => {
     expect(readPlayerRecentPlay("neverseen")).toBeNull();
     expect(readPlayerRecentPlay("")).toBeNull();
+  });
+});
+
+describe("seedPlayerShellFromRankingEntry", () => {
+  const rankingEntry = (username: string, isOnline: boolean): LeanRankingEntry => ({
+    user: {
+      id: 4242,
+      username,
+      avatar_url: "https://a.ppy.sh/4242",
+      cover_url: "",
+      country_code: "CR",
+      is_online: isOnline,
+    },
+    hit_accuracy: 98.5,
+    play_count: 1234,
+    pp: 5000,
+    global_rank: 12,
+    ranked_score: 1,
+    grade_counts: { ss: 0, ssh: 0, s: 0, sh: 0, a: 0 },
+  });
+
+  it("does not carry the rankings page's osu! presence over to the profile", () => {
+    seedPlayerShellFromRankingEntry(rankingEntry("OnlineRanker", true), 1);
+
+    const shell = readPlayerShell("onlineranker");
+    expect(shell?.username).toBe("OnlineRanker");
+    // The profile's green dot means a tracked play inside the session window,
+    // which only the backend snapshot knows about.
+    expect(shell?.is_online).toBe(false);
+    expect(shell?.last_visit).toBeNull();
+  });
+});
+
+describe("stripUntrackedProfilePresence", () => {
+  it("drops osu! presence while preserving fallback profile metadata", () => {
+    const user = {
+      id: 4242,
+      username: "IdlePlayer",
+      avatar_url: "https://a.ppy.sh/4242",
+      is_online: true,
+      last_visit: "2026-07-21T11:55:00.000Z",
+      statistics: { pp: 5000 },
+    } as OsuUser;
+
+    const stripped = stripUntrackedProfilePresence(user);
+
+    expect(stripped).not.toBe(user);
+    expect(stripped.is_online).toBe(false);
+    expect(stripped.last_visit).toBeNull();
+    expect(stripped.username).toBe("IdlePlayer");
+    expect(stripped.statistics?.pp).toBe(5000);
   });
 });

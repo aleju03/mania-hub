@@ -18,6 +18,7 @@ import { PLAYER_SKILLS_JOB, computePlayerSkillsJob } from "./features/player-ski
 import { SKILL_VECTOR_BACKFILL_JOB, runSkillVectorBackfillJob } from "./features/skill-vector-backfill.js";
 import { SKILL_BASELINE_JOB, runSkillBaselineJob } from "./features/skill-baseline.js";
 import { PROFILE_POOL_WARM_JOB, runProfilePoolWarmJob } from "./features/profile-pool-warm.js";
+import { PROFILE_SNAPSHOT_REFRESH_JOB, PROFILE_USER_REFRESH_JOB, runProfileSnapshotRefreshJob, runProfileUserRefreshJob } from "./features/player-profiles.js";
 import { confirmTopPlay, TopPlayConfirmationPendingError } from "./features/top-plays.js";
 import { TOP_SCORES_BACKFILL_JOB, runTopScoresBackfillJob } from "./features/top-scores-backfill.js";
 import { getHydratedScoresForMetadata } from "./features/tracker.js";
@@ -81,7 +82,10 @@ const REPLAY_VIDEO_LANE_NAMES = new Set(["replay-video-render", "replay-video-fi
 const DEFAULT_WORKER_LANES: WorkerLane[] = [
   {
     name: "fast",
-    jobTypes: ["refresh_user_top_scores", "refresh_country_roster", "enrich_user", "enrich_beatmap", "reconcile_user_recent_scores"],
+    // PROFILE_USER_REFRESH_JOB rides here because someone is looking at that
+    // profile right now: the page served the stored snapshot and its
+    // stale-metadata retry is polling for what this job writes.
+    jobTypes: ["refresh_user_top_scores", "refresh_country_roster", "enrich_user", "enrich_beatmap", "reconcile_user_recent_scores", PROFILE_USER_REFRESH_JOB, PROFILE_SNAPSHOT_REFRESH_JOB],
     claimLimit: 3,
     intervalMs: 750,
   },
@@ -232,6 +236,8 @@ const OSU_API_JOB_TYPES = new Set([
   // wholesale here.
   BEATMAP_OSU_FILE_BACKFILL_JOB,
   PROFILE_POOL_WARM_JOB,
+  PROFILE_USER_REFRESH_JOB,
+  PROFILE_SNAPSHOT_REFRESH_JOB,
   TOP_SCORES_BACKFILL_JOB,
   // Mostly local CPU over the cached .osu corpus, but a cache miss falls
   // through to an osu! download inside the shared compute path, so it pauses
@@ -454,6 +460,14 @@ export class WorkerRunner {
     }
     if (job.type === PROFILE_POOL_WARM_JOB) {
       await runProfilePoolWarmJob(this.db, this.queue, this.osu, job.payload as { seq?: number });
+      return;
+    }
+    if (job.type === PROFILE_USER_REFRESH_JOB) {
+      await runProfileUserRefreshJob(this.db, this.osu, (job.payload as { userId: number }).userId);
+      return;
+    }
+    if (job.type === PROFILE_SNAPSHOT_REFRESH_JOB) {
+      await runProfileSnapshotRefreshJob(this.db, this.osu, (job.payload as { userId: number }).userId);
       return;
     }
     if (job.type === TOP_SCORES_BACKFILL_JOB) {
@@ -1017,7 +1031,7 @@ function getRetryDelayMs(type: string, attempts: number, error: unknown): number
       ? 10 * 60_000
       : type === "compute_dan_estimate" || type === "analyze_activity_beatmap" || type === CHART_ANALYSIS_JOB
         ? 5 * 60_000
-        : type === "enrich_user"
+        : type === "enrich_user" || type === PROFILE_USER_REFRESH_JOB || type === PROFILE_SNAPSHOT_REFRESH_JOB
           ? 60_000
           : type === "enrich_beatmap"
             ? 5 * 60_000

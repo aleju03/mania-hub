@@ -138,10 +138,12 @@ function tierAccentRgb(tier: string | null): string {
   return match ? `${match[1]}, ${match[2]}, ${match[3]}` : "148, 163, 184";
 }
 
-/* hidden visually conceals the rails (during the pack reveal) while the
-   feed keeps running underneath, so returning shows the current state
-   instead of replaying the entrance cascade. */
-export function PackPulse({ viewerId, hidden = false }: { viewerId: number | null; hidden?: boolean }) {
+/* revealing marks the pack reveal. The pull ticker keeps running and stays
+   on screen through it (the rail lives well outside the reveal column, and
+   watching other people's pulls land while your own cards flip is half the
+   fun); only the your-card fun fact steps aside, since it is static trivia
+   that would just compete with the cards. */
+export function PackPulse({ viewerId, revealing = false }: { viewerId: number | null; revealing?: boolean }) {
   // Resume from the saved rail, dropping whatever expired while away. On a
   // full page load this is empty (matching the server-rendered HTML); the
   // sessionStorage restore happens post-hydration in the effect below.
@@ -260,7 +262,7 @@ export function PackPulse({ viewerId, hidden = false }: { viewerId: number | nul
     <>
       {/* Live pull ticker, top left. No boxes or glows: floating avatar +
           text, tier carried by the avatar ring and the tier word alone. */}
-      <div className={`pointer-events-none absolute left-12 top-[84px] z-20 hidden w-[190px] flex-col gap-2 ${hidden ? "" : "min-[1450px]:flex"}`}>
+      <div className="pointer-events-none absolute left-12 top-[84px] z-20 hidden w-[190px] flex-col gap-2 min-[1450px]:flex">
         <AnimatePresence initial={false}>
           {entries.length > 0 && (
             <motion.div
@@ -349,7 +351,7 @@ export function PackPulse({ viewerId, hidden = false }: { viewerId: number | nul
 
       {/* Fun fact, top right: how the community holds your own card. */}
       {showPulledStats && pulledStats && (
-        <div className={`pointer-events-none absolute right-12 top-[84px] z-20 hidden max-w-[200px] ${hidden ? "" : "min-[1450px]:block"}`}>
+        <div className={`pointer-events-none absolute right-12 top-[84px] z-20 hidden max-w-[200px] ${revealing ? "" : "min-[1450px]:block"}`}>
           <div className="flex items-start justify-end gap-1.5 text-right text-[11px] leading-snug text-osu-f1/80">
             <Users className="mt-px h-3 w-3 shrink-0" aria-hidden="true" />
             <span className="tabular-nums">
