@@ -2091,6 +2091,11 @@ function ReplayViewer({
   const [rendererError, setRendererError] = useState<string | null>(null);
   const [audioReady, setAudioReady] = useState(false);
   const [pendingPlay, setPendingPlay] = useState(false);
+  // Timestamped share links begin as soon as the renderer and audio are ready.
+  // This ref distinguishes that queued start from a user's ordinary play click
+  // so only autoplay may fall back to silent playback when the browser blocks
+  // starting audible media without a gesture.
+  const timestampAutoplayPendingRef = useRef(false);
   const [buffering, setBuffering] = useState(false);
   // Full copy of the song downloaded in the background once playback starts;
   // now fetched only as a recovery path after a sustained stream stall.
@@ -3399,6 +3404,8 @@ function ReplayViewer({
     // A rebuild always starts paused (the fresh renderer is); stop the audio
     // too so it can't run ahead while the new judgement build finishes.
     setIsPlaying(false);
+    setPendingPlay(false);
+    timestampAutoplayPendingRef.current = false;
     audioRef.current?.pause();
 
     void (async () => {
@@ -3515,6 +3522,8 @@ function ReplayViewer({
         } else if (initialTime != null && initialTime > 0) {
           const gameTimeMs = initialTime * 1000 * modRate;
           renderer.seek(gameTimeMs);
+          timestampAutoplayPendingRef.current = true;
+          setPendingPlay(true);
           // ReplayProgressBar polls the renderer on an interval, so it will pick
           // up the seeked position on its next tick.
         }
@@ -3809,11 +3818,12 @@ function ReplayViewer({
     }
   };
 
-  const startPlayback = useCallback(() => {
+  const startPlayback = useCallback((allowSilentAutoplayFallback = false) => {
     const r = rendererRef.current;
     if (!r) return;
     cancelReplayEndAudioFade();
-    // User gesture: let the hitsound AudioContext start producing sound.
+    // A manual start carries a user gesture and can unlock the hitsound
+    // AudioContext; an autoplay start safely leaves it suspended if blocked.
     hitsoundPlayerRef.current?.resume();
     if (r.time >= r.duration) r.seek(0);
     r.play();
@@ -3824,7 +3834,17 @@ function ReplayViewer({
       audioRef.current.playbackRate = effectiveRate;
       setAudioPreservesPitch(audioRef.current, audioPreservesPitch);
       audioRef.current.volume = volume;
-      audioRef.current.play().catch(() => {
+      const audio = audioRef.current;
+      audio.play().catch(() => {
+        if (allowSilentAutoplayFallback && rendererRef.current === r && r.isPlaying) {
+          // Browsers commonly reject audible autoplay on a freshly opened
+          // shared link. Keep the replay moving without sound; the existing
+          // audio toggle can re-enable and resync it from a user gesture.
+          shouldResumeAudioRef.current = false;
+          audio.pause();
+          setAudioEnabled(false);
+          return;
+        }
         shouldResumeAudioRef.current = true;
       });
     }
@@ -3842,11 +3862,13 @@ function ReplayViewer({
     }
     // Second click while already queued cancels the pending start
     if (pendingPlay) {
+      timestampAutoplayPendingRef.current = false;
       setPendingPlay(false);
       return;
     }
     // Audio is expected but hasn't loaded metadata yet — queue the play.
     if (audioEnabled && audioUrl && !audioReady && !audioError) {
+      timestampAutoplayPendingRef.current = false;
       setPendingPlay(true);
       return;
     }
@@ -3856,13 +3878,15 @@ function ReplayViewer({
   // a ref that always points at the current closure.
   togglePlayRef.current = togglePlay;
 
-  // Auto-start playback once the audio has metadata (or failed, or audio was
-  // disabled) after the user already clicked play.
+  // Start playback once the audio has metadata (or failed, or audio was
+  // disabled), whether queued by a user click or a timestamped share link.
   useEffect(() => {
     if (!pendingPlay || isPlaying) return;
     if (audioEnabled && audioUrl && !audioReady && !audioError) return;
+    const allowSilentAutoplayFallback = timestampAutoplayPendingRef.current;
+    timestampAutoplayPendingRef.current = false;
     setPendingPlay(false);
-    startPlayback();
+    startPlayback(allowSilentAutoplayFallback);
   }, [pendingPlay, isPlaying, audioEnabled, audioUrl, audioReady, audioError, startPlayback]);
 
   const toggleAudio = () => {

@@ -33,4 +33,17 @@ describe("replay share button", () => {
     // The right-click-a-timestamp popover shares the same canonical link.
     expect(controlsSource).toContain("withReplayShareTime(replayShareUrl ?? window.location.href, wallMs / 1000)");
   });
+
+  it("queues autoplay after seeking a timestamped share link", () => {
+    const routeSource = fs.readFileSync(path.resolve(__dirname, "replay.tsx"), "utf8");
+    const timestampSeek = routeSource.indexOf("renderer.seek(gameTimeMs);");
+    const timestampAutoplay = routeSource.indexOf("timestampAutoplayPendingRef.current = true;", timestampSeek);
+    const queuedPlay = routeSource.indexOf("setPendingPlay(true);", timestampAutoplay);
+
+    expect(timestampSeek).toBeGreaterThan(-1);
+    expect(timestampAutoplay).toBeGreaterThan(timestampSeek);
+    expect(queuedPlay).toBeGreaterThan(timestampAutoplay);
+    expect(routeSource).toContain("startPlayback(allowSilentAutoplayFallback);");
+    expect(routeSource).toContain("setAudioEnabled(false);");
+  });
 });
