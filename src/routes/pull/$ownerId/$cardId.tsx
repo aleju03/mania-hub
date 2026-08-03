@@ -293,7 +293,7 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
             title={`${(odds.slotChance * 100).toFixed(2).replace(/\.?0+$/, "")}% GOAT slot, then 1 of ${HONORARY_PACK_POOL.length} on the roster`}
           >
             From a {odds.pack} pack &middot;{" "}
-            <span className="font-bold tabular-nums text-amber-200">{odds.percent}</span>
+            <span className="font-bold tabular-nums text-amber-200">{odds.percent}</span> chance of this card
           </div>
         )}
         <div className="mt-3 flex items-center gap-2">
