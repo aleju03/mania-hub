@@ -62,13 +62,16 @@ function sharedCardTier(shared: LiveSharedPackCard): ManiaCardTier {
    own chance and then picks uniformly from the dealable roster, so the odds of
    any one of them is the product. Figures are today's: the roster grows, and
    the pull log records the pack rather than the odds that applied then. */
-function goatPullOdds(packType: string): { pack: string; slotChance: number; oneIn: number } | null {
+function goatPullOdds(packType: string): { pack: string; slotChance: number; percent: string } | null {
   const definition = PACK_TYPES.find((type) => type.id === packType);
   const poolSize = HONORARY_PACK_POOL.length;
   if (!definition || poolSize === 0) return null;
   const chance = definition.honoraryChance / poolSize;
   if (!(chance > 0)) return null;
-  return { pack: definition.name, slotChance: definition.honoraryChance, oneIn: Math.round(1 / chance) };
+  // Two significant figures: these run from 0.015% to 0.18%, so a fixed number
+  // of decimals either rounds the small ones to zero or pads the large ones.
+  const percent = Number((chance * 100).toPrecision(2));
+  return { pack: definition.name, slotChance: definition.honoraryChance, percent: `${percent}%` };
 }
 
 function tierAccentRgb(tier: ManiaCardTier): string {
@@ -289,8 +292,8 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
             className="text-[12px] text-osu-f1"
             title={`${(odds.slotChance * 100).toFixed(2).replace(/\.?0+$/, "")}% GOAT slot, then 1 of ${HONORARY_PACK_POOL.length} on the roster`}
           >
-            {odds.pack} pack &middot;{" "}
-            <span className="font-bold tabular-nums text-amber-200">1 in {odds.oneIn.toLocaleString()}</span>
+            From a {odds.pack} pack &middot;{" "}
+            <span className="font-bold tabular-nums text-amber-200">{odds.percent}</span>
           </div>
         )}
         <div className="mt-3 flex items-center gap-2">
