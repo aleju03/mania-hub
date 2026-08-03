@@ -283,18 +283,14 @@ function PulledCardDetails({ shared }: { shared: LiveSharedPackCard }) {
         {odds && (
           // Only shown when the log says this card arrived as a GOAT, so a
           // ranked-pool pull from before the roster change never claims odds
-          // it did not face.
-          <div className="mt-2 flex flex-col items-center gap-0.5">
-            <div className="text-[12px] text-osu-f1">
-              Out of a <span className="font-bold text-white">{odds.pack} pack</span>
-            </div>
-            <div className="text-[12px] text-osu-f1 tabular-nums">
-              {(odds.slotChance * 100).toFixed(2).replace(/\.?0+$/, "")}% GOAT slot, then 1 of{" "}
-              {HONORARY_PACK_POOL.length} on the roster
-            </div>
-            <div className="text-[15px] font-bold tabular-nums text-amber-200">
-              about 1 in {odds.oneIn.toLocaleString()}
-            </div>
+          // it did not face. The derivation lives in the tooltip: the headline
+          // is the pack and the long odds.
+          <div
+            className="text-[12px] text-osu-f1"
+            title={`${(odds.slotChance * 100).toFixed(2).replace(/\.?0+$/, "")}% GOAT slot, then 1 of ${HONORARY_PACK_POOL.length} on the roster`}
+          >
+            {odds.pack} pack &middot;{" "}
+            <span className="font-bold tabular-nums text-amber-200">1 in {odds.oneIn.toLocaleString()}</span>
           </div>
         )}
         <div className="mt-3 flex items-center gap-2">
