@@ -644,7 +644,78 @@ describe("pack card snapshot projection", () => {
     expect(cards[1].bestScores.map((entry) => entry.id)).toEqual([52]);
     expect(cards[1].isStale).toBe(true);
   });
+
+  it("bounds the overlay read per player, not per hand", async () => {
+    // Both overlay tables are per player, so one player active since their
+    // snapshot must not drag their whole retention window through a read that
+    // only ever keeps the newest 100 rows of it.
+    const OVERLAY_SCAN_LIMIT = 100;
+    const ROWS = 120;
+    const other = 42;
+    const snapshotFetchedAt = "2026-06-01T00:00:00.000Z";
+    const at = (index: number) => new Date(Date.parse(snapshotFetchedAt) + (index + 1) * 60_000).toISOString();
+    // The rows past the limit are the oldest, and they are the valuable ones:
+    // if the bound is missing they get read, and then they win the card.
+    const ppFor = (index: number) => (index < ROWS - OVERLAY_SCAN_LIMIT ? 999 : 200);
+
+    await insertPackCardSnapshot(USER_ID, "mnshiny", "MnShiny", snapshotFetchedAt);
+    await insertPackCardSnapshot(other, "runner", "Runner", snapshotFetchedAt);
+    for (let index = 0; index < ROWS; index += 1) {
+      await insertTrackedScore(score({
+        id: 1000 + index,
+        beatmapId: 2000 + index,
+        title: `Tracked ${index}`,
+        pp: ppFor(index),
+        endedAt: at(index),
+      }));
+      const event = { ...score({ id: 5000 + index, beatmapId: 6000 + index, title: `Confirmed ${index}`, pp: ppFor(index), endedAt: at(index) }), user_id: other };
+      await exec(
+        db,
+        `insert into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at)
+         values ('CR', ?, ?, ?, ?, 10, ?, ?)`,
+        [event.id, other, event.pp, event.pp, JSON.stringify({ score: event }), at(index)],
+      );
+    }
+
+    const reads: { sql: string; rows: number }[] = [];
+    const cards = await getCachedPackCardSnapshots(spyOnReads(db, reads), [USER_ID, other]);
+
+    const rowsFrom = (table: string) => reads.filter((read) => read.sql.includes(`from ${table}`)).map((read) => read.rows);
+    expect(rowsFrom("score_events")).toEqual([OVERLAY_SCAN_LIMIT]);
+    expect(rowsFrom("top_play_events")).toEqual([OVERLAY_SCAN_LIMIT]);
+    // And the dropped rows really were out of the window, not merely unread.
+    expect(cards[0].bestScores.every((entry) => entry.pp !== 999)).toBe(true);
+    expect(cards[1].bestScores.every((entry) => entry.pp !== 999)).toBe(true);
+  });
 });
+
+/* Counts the rows each statement actually hands back, so a missing per-player
+   LIMIT shows up as the read it is rather than as a slow test. */
+function spyOnReads(target: Db, reads: { sql: string; rows: number }[]): Db {
+  return new Proxy(target, {
+    get(db, prop) {
+      const value = Reflect.get(db, prop);
+      if (prop !== "execute" || typeof value !== "function") {
+        return typeof value === "function" ? value.bind(db) : value;
+      }
+      return async (statement: { sql: string } | string) => {
+        const result = await target.execute(statement as never);
+        reads.push({ sql: typeof statement === "string" ? statement : statement.sql, rows: result.rows.length });
+        return result;
+      };
+    },
+  });
+}
+
+async function insertPackCardSnapshot(userId: number, usernameKey: string, username: string, fetchedAt: string): Promise<void> {
+  await exec(
+    db,
+    `insert into profile_snapshots
+     (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at)
+     values (?, ?, ?, '[]', 200, ?, ?, ?)`,
+    [userId, usernameKey, JSON.stringify({ id: userId, username, statistics: { pp: 1000 } }), fetchedAt, fetchedAt, fetchedAt],
+  );
+}
 
 async function insertProfileSnapshot({
   snapshotFetchedAt,

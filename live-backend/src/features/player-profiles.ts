@@ -20,6 +20,10 @@ const PROFILE_SECTION_TTL_MS = 2 * 60_000;
 const PROFILE_TRACKED_RECENT_LIMIT = 100;
 const PROFILE_TRACKED_RECENT_SCAN_LIMIT = 400;
 const PROFILE_TRACKED_OVERLAY_LIMIT = 50;
+// Per player, per table, for a whole hand of cards. Same headroom the single
+// player overlay scans (getTrackedProfileRecentScores) so repeats of one map
+// cannot crowd out the window, and it caps the hand at a few hundred rows.
+const PACK_CARD_OVERLAY_SCAN_LIMIT = 2 * PROFILE_TRACKED_OVERLAY_LIMIT;
 // Exported for the farm helper: whether a best-scores snapshot filled the whole
 // window decides if a keymode's play list can be truncated from below.
 export const PROFILE_BEST_SCORES_LIMIT = 200;
@@ -459,21 +463,26 @@ async function buildPackCardSnapshots(db: Db, sources: PackCardSource[]): Promis
  * list matters here — the projection's pp/provenance bookkeeping is for the
  * profile page.
  *
- * Two queries for the whole hand, each with the player's own cutoff inline:
- * both tables are indexed on (user_id, time), and the cutoff is what keeps
- * this cheap — for a player who has not played since their snapshot, both
- * reads return nothing.
+ * Two queries for the whole hand, one arm per player so each carries its own
+ * cutoff and its own LIMIT. The arms matter: a single OR'd WHERE has no way to
+ * bound rows per player, so one player active since their snapshot would drag
+ * their whole retention window into memory for a window that only ever keeps
+ * PACK_CARD_OVERLAY_SCAN_LIMIT of it. Both tables are indexed on (user_id,
+ * time), so an arm stops at its limit, and a player who has not played since
+ * their snapshot reads nothing.
  */
 async function applyPackCardScoreOverlays(db: Db, sources: PackCardSource[]): Promise<void> {
   const dated = sources.filter((source) => Number.isFinite(Date.parse(source.fetchedAt)));
   if (dated.length === 0) return;
   const cutoffs = dated.flatMap((source) => [source.userId, source.fetchedAt]);
-  const perUser = dated.map(() => "(user_id = ? and %COL% > ?)").join(" or ");
+  const armsFor = (sql: string) => dated.map(() => `select * from (${sql})`).join(" union all ");
 
+  // Newest events per player, replayed oldest-first so a later event wins.
   const topPlayRows = (await exec(
     db,
-    `select user_id, payload_json from top_play_events
-     where ${perUser.replaceAll("%COL%", "detected_at")}
+    `${armsFor(`select user_id, payload_json, detected_at from top_play_events
+       where user_id = ? and detected_at > ?
+       order by detected_at desc limit ${PACK_CARD_OVERLAY_SCAN_LIMIT}`)}
      order by user_id asc, detected_at asc`,
     cutoffs,
   )).rows;
@@ -489,19 +498,26 @@ async function applyPackCardScoreOverlays(db: Db, sources: PackCardSource[]): Pr
 
   const recentRows = (await exec(
     db,
-    `select user_id, score_json from score_events
-     where ruleset_id = 3 and (${perUser.replaceAll("%COL%", "ended_at")})
+    `${armsFor(`select user_id, score_json, ended_at from score_events
+       where user_id = ? and ruleset_id = 3 and ended_at > ?
+       order by ended_at desc limit ${PACK_CARD_OVERLAY_SCAN_LIMIT}`)}
      order by user_id asc, ended_at desc`,
     cutoffs,
   )).rows;
   const recentByUser = new Map<number, OscScore[]>();
+  const seenByUser = new Map<number, Set<string>>();
   for (const row of recentRows) {
     const userId = Number(row.user_id);
     const kept = recentByUser.get(userId) ?? [];
-    // Same window the profile overlay takes, newest first.
+    // Same window the profile overlay takes: newest first, distinct plays only.
     if (kept.length >= PROFILE_TRACKED_OVERLAY_LIMIT) continue;
     const score = parseJson<OscScore | null>(row.score_json, null);
     if (!score) continue;
+    const seen = seenByUser.get(userId) ?? new Set<string>();
+    const identity = getScoreIdentity(score);
+    if (seen.has(identity)) continue;
+    seen.add(identity);
+    seenByUser.set(userId, seen);
     kept.push(score);
     recentByUser.set(userId, kept);
   }
