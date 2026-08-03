@@ -5,7 +5,7 @@
    stopped playing long before the current rating ladder existed, and the
    ranked pool can't represent them:
 
-   - two accounts are deleted outright, so the osu! API 404s and their profiles
+   - three accounts are deleted outright, so the osu! API 404s and their profiles
      are served from checked-in Wayback reconstructions
      (live-backend/seeds/archived-players);
    - seven more still exist but were wiped to 0pp and are unranked, so they are
@@ -187,6 +187,21 @@ export const HONORARY_PLAYERS: readonly HonoraryPlayer[] = [
     peakPp: 0,
     archived: false,
     cardReady: true,
+  },
+  {
+    id: 12253636,
+    // The name the account carried until it was deleted. A different, live
+    // account holds "KaneMining" today, and profiles are keyed by name, so
+    // the card prints the name he is known by while the link stays his.
+    username: "silicosis et",
+    countryCode: "US",
+    // Deleted account, but a.ppy.sh still serves the original image.
+    avatarUrl: "https://a.ppy.sh/12253636?1564086634.jpeg",
+    peakRank: 64,
+    peakPp: 14183.5,
+    archived: true,
+    cardReady: true,
+    cardName: "KaneMining",
   },
   {
     id: 2288363,

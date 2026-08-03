@@ -109,31 +109,44 @@ export async function ensureArchivedPlayers(db: Db): Promise<void> {
     })).rows.length > 0;
     if (stored.includes(hash) && rowPresent) continue;
 
-    await db.execute({
-      sql: `insert into profile_snapshots
-              (user_id, username_key, user_json, best_scores_json, best_scores_limit,
-               fetched_at, user_fetched_at, updated_at, refresh_error)
-            values (?, ?, ?, ?, ?, ?, ?, ?, null)
-            on conflict(user_id) do update set
-              username_key = excluded.username_key,
-              user_json = excluded.user_json,
-              best_scores_json = excluded.best_scores_json,
-              best_scores_limit = excluded.best_scores_limit,
-              fetched_at = excluded.fetched_at,
-              user_fetched_at = excluded.user_fetched_at,
-              updated_at = excluded.updated_at,
-              refresh_error = null`,
-      args: [
-        snapshot.user_id,
-        snapshot.username_key,
-        userJson,
-        scoresJson,
-        snapshot.best_scores_limit || snapshot.best_scores.length,
-        now,
-        now,
-        now,
-      ],
-    });
+    try {
+      await db.execute({
+        sql: `insert into profile_snapshots
+                (user_id, username_key, user_json, best_scores_json, best_scores_limit,
+                 fetched_at, user_fetched_at, updated_at, refresh_error)
+              values (?, ?, ?, ?, ?, ?, ?, ?, null)
+              on conflict(user_id) do update set
+                username_key = excluded.username_key,
+                user_json = excluded.user_json,
+                best_scores_json = excluded.best_scores_json,
+                best_scores_limit = excluded.best_scores_limit,
+                fetched_at = excluded.fetched_at,
+                user_fetched_at = excluded.user_fetched_at,
+                updated_at = excluded.updated_at,
+                refresh_error = null`,
+        args: [
+          snapshot.user_id,
+          snapshot.username_key,
+          userJson,
+          scoresJson,
+          snapshot.best_scores_limit || snapshot.best_scores.length,
+          now,
+          now,
+          now,
+        ],
+      });
+    } catch (error) {
+      // `username_key` is unique, so a seed named after a player who is live
+      // under that name now would abort the insert. That is one broken profile
+      // link, not a reason to take the boot down with it: log and move on
+      // without the sentinel, so a corrected seed lands on the next boot.
+      logWarn("archived_player_seed_failed", {
+        userId: snapshot.user_id,
+        usernameKey: snapshot.username_key,
+        error: (error as Error).message,
+      });
+      continue;
+    }
     await db.execute({
       sql: `insert into live_meta (key, value_json, updated_at) values (?, ?, ?)
             on conflict(key) do update set value_json = excluded.value_json, updated_at = excluded.updated_at`,

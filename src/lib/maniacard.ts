@@ -582,6 +582,7 @@ export const HONORARY_TIER_USER_IDS: ReadonlyMap<number, string> = new Map([
   [10072733, "myucchii"],
   [903155, "Transcendence"],
   [9452257, "[Crz]sel"],
+  [12253636, "silicosis et (KaneMining)"],
   [2288363, "SillyFangirl"],
   [10083439, "bojii"],
   [1089335, "[Crz]Player"],

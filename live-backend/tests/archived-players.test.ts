@@ -63,6 +63,29 @@ describe("archived players", () => {
     expect((await exec(db, "select count(*) as c from profile_snapshots")).rows[0]?.c).toBeGreaterThan(0);
   });
 
+  it("skips a seed whose username is taken rather than failing the boot", async () => {
+    const [seed, ...rest] = await readArchivedPlayerSnapshots();
+    if (!seed || rest.length === 0) throw new Error("expected at least two seeded archived players");
+
+    // `username_key` is unique, so a live player under that name occupies it.
+    await exec(
+      db,
+      `insert into profile_snapshots
+         (user_id, username_key, user_json, best_scores_json, best_scores_limit,
+          fetched_at, user_fetched_at, updated_at)
+       values (?, ?, '{}', '[]', 0, ?, ?, ?)`,
+      [999999, seed.username_key, "2026-01-01", "2026-01-01", "2026-01-01"],
+    );
+
+    await expect(ensureArchivedPlayers(db)).resolves.toBeUndefined();
+    const seeded = (await exec(db, "select user_id from profile_snapshots where user_id = ?", [seed.user_id])).rows;
+    expect(seeded).toHaveLength(0);
+    for (const other of rest) {
+      const row = (await exec(db, "select user_id from profile_snapshots where user_id = ?", [other.user_id])).rows;
+      expect(row).toHaveLength(1);
+    }
+  });
+
   it("never adds a users row, keeping archived players out of rankings and the pack pool", async () => {
     await ensureArchivedPlayers(db);
     expect((await exec(db, "select count(*) as c from users")).rows[0]?.c).toBe(0);
