@@ -23,6 +23,7 @@ import {
 } from "#/lib/pack-collection";
 import {
   fetchServerPackWallet,
+  mintServerPackCollectionCard,
   pushServerPackWallet,
   recycleServerPackCollection,
   type PackWalletCardsMode,
@@ -52,8 +53,9 @@ export interface PackWalletApi {
   recycleWholeMatching: (filter: { tier: ManiaCardTier | "all" | "unrated"; query: string }) => number | Promise<number>;
   recycleAll: () => number | Promise<number>;
   /* Backfills a recomputed mint (skills snapshot + tier) onto an owned
-     card; used to upgrade legacy cards collected before snapshots existed. */
-  applyMint: (cardKey: string, mint: Parameters<typeof applyCardMint>[2]) => boolean;
+     card; used to upgrade legacy cards collected before snapshots existed.
+     Resolves false when there was nothing to repair (or the repair failed). */
+  applyMint: (cardKey: string, mint: Parameters<typeof applyCardMint>[2]) => boolean | Promise<boolean>;
   notePoolTotal: (total: number | null) => void;
 }
 
@@ -512,6 +514,13 @@ export function usePackWallet(): PackWalletApi {
       return result.gained;
     },
     applyMint: (cardKey, mint) => {
+      // A synced wallet holds no cards in its blob (they live in server rows),
+      // so the repair has to be written server-side or it is lost.
+      if (syncRef.current.enabled) {
+        return mintServerPackCollectionCard({
+          data: { cardKey, tier: mint.tier, tierLabel: mint.tierLabel, skills: mint.skills },
+        }).catch(() => false);
+      }
       const current = walletRef.current;
       if (!current) return false;
       const next = applyCardMint(current, cardKey, mint);

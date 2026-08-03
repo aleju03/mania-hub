@@ -2107,14 +2107,25 @@ export async function runGlobalFarmedBoardRepackJob(db: Db): Promise<{ built: bo
     return { built: false, reason: "disk_snapshot_fresh", revision: header.projectionRevision };
   }
   const stamps = await readGlobalFarmedBoardStampsFromSnapshotRow(db, projectionState);
-  const board = await buildGlobalFarmedProjectionBoard(db, projectionState, stamps);
-  // The build's own persist is best-effort (the serving-process inline path
-  // treats the file as an optional cache), but for this job the file IS the
-  // deliverable: a silently failed write would leave the serving process
-  // re-requesting packs forever while this worker reports success. Write it
-  // again ourselves — post-trailing-deltas, so it is even fresher than the
-  // build's copy — and let a failure fail the job into its retry backoff.
-  await saveGlobalFarmedBoardToDisk(filePath, { ...board, projectionRevision: board.projectionRevision ?? 0 });
+  // Publish exactly once, and publish the clean pre-delta board.
+  //
+  // Two reasons this job must not write the file a second time after the
+  // trailing catch-up. The snapshot format carries only the typed columns, so
+  // a post-delta write would stamp the patched revision onto columns that
+  // still hold the pre-delta data (patched maps live in `overrides`, which is
+  // not serialized) — every revision in between would be silently skipped by
+  // whoever adopts it. And the intermediate publish is itself adoptable: the
+  // serving process polls this file, so two writes per pack means it can load
+  // 60+ MB twice for one repack.
+  //
+  // `persist: "required"` is what makes the single write the job's deliverable
+  // instead of a best-effort cache: a silently failed write would leave the
+  // serving process re-requesting packs forever while this worker reports
+  // success, so a failure fails the job into its retry backoff.
+  const board = await buildGlobalFarmedProjectionBoard(db, projectionState, stamps, {
+    persist: "required",
+    applyTrailingDeltas: false,
+  });
   return {
     built: true,
     revision: board.projectionRevision ?? 0,
@@ -2148,19 +2159,25 @@ async function adoptRepackedGlobalFarmedBoardFromDisk(
     // shedding an oversized override map — and only when the snapshot is
     // recent enough that the load-time delta patch reaches the projection
     // head. Adopting an unpatchable snapshot would regress the served data
-    // to the snapshot's revision. The bound is strictly below the repack
-    // threshold, not the patch limit: the patched-forward maps become the
-    // adopted board's overrides, and change rows are keyed per map, so a
-    // backlog of exactly REPACK_OVERRIDES would produce a board that
-    // triggers the repack again immediately — re-adopting this same
-    // snapshot every tick and never asking the worker for a fresh pack.
+    // to the snapshot's revision, so the bound is what that patch will
+    // actually apply in one pass: a delegating process (the serving one)
+    // patches at most GLOBAL_FARMED_DELEGATED_MAX_DELTA_MAPS, so measuring
+    // against the far wider repack threshold meant loading 60+ MB from disk
+    // only to log adopt_regressed and drop it, every tick. It also stays
+    // strictly below the repack threshold: change rows are keyed per map, so
+    // a backlog of exactly REPACK_OVERRIDES would produce a board that
+    // triggers the repack again immediately — re-adopting this same snapshot
+    // every tick and never asking the worker for a fresh pack.
     if (!boardNeedsOverrideShed(current)) return null;
+    const patchBudget = globalFarmedBoardRepackDelegates.has(db)
+      ? GLOBAL_FARMED_DELEGATED_MAX_DELTA_MAPS
+      : GLOBAL_FARMED_PROJECTION_REPACK_OVERRIDES;
     const backlog = (await exec(
       db,
       "select count(*) as n from (select 1 from global_maps_farmed_changes where revision > ? limit ?)",
-      [header.projectionRevision, GLOBAL_FARMED_PROJECTION_REPACK_OVERRIDES],
+      [header.projectionRevision, patchBudget],
     )).rows[0];
-    if (Number(backlog?.n ?? Number.POSITIVE_INFINITY) >= GLOBAL_FARMED_PROJECTION_REPACK_OVERRIDES) return null;
+    if (Number(backlog?.n ?? Number.POSITIVE_INFINITY) >= patchBudget) return null;
   }
   const restored = await restoreGlobalFarmedProjectionBoardFromDisk(db, projectionState);
   if (!restored) return null;
@@ -2552,6 +2569,7 @@ async function buildGlobalFarmedProjectionBoard(
   db: Db,
   projectionState: GlobalMapsFarmedProjectionState,
   stamps: GlobalFarmedBoardStamps,
+  options: { persist?: "best-effort" | "required"; applyTrailingDeltas?: boolean } = {},
 ): Promise<GlobalFarmedBoard> {
   const startedAt = Date.now();
   const baseRevision = await readGlobalFarmedChangeRevision(db);
@@ -2571,10 +2589,22 @@ async function buildGlobalFarmedProjectionBoard(
   // after encode but the metadata/override maps do, and a clean board plus the
   // load-time delta patch is strictly simpler than serializing overrides. The
   // write streams views over the live arrays, so no second board copy exists.
-  await persistGlobalFarmedBoardToDisk(db, board);
-  const latestState = await readGlobalMapsFarmedProjectionState(db);
-  if (latestState && latestState.revision > baseRevision) {
-    await applyGlobalFarmedProjectionDeltas(db, board, latestState);
+  // This is the ONLY write of the file per build; a post-delta one would claim
+  // a revision the serialized columns do not hold.
+  if (options.persist === "required") {
+    const filePath = globalFarmedBoardDiskPaths.get(db);
+    if (!filePath) throw new Error("global farmed board disk cache is unregistered");
+    await saveGlobalFarmedBoardToDisk(filePath, { ...board, projectionRevision: board.projectionRevision ?? 0 });
+  } else {
+    await persistGlobalFarmedBoardToDisk(db, board);
+  }
+  // Skipped by the delegated repack job, whose board is discarded the moment
+  // the file lands: patching it would materialize changed maps for nobody.
+  if (options.applyTrailingDeltas !== false) {
+    const latestState = await readGlobalMapsFarmedProjectionState(db);
+    if (latestState && latestState.revision > baseRevision) {
+      await applyGlobalFarmedProjectionDeltas(db, board, latestState);
+    }
   }
   logInfo("global_farmed_projection_board_built", {
     revision: board.projectionRevision,

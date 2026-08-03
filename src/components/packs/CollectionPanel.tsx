@@ -51,7 +51,8 @@ interface CollectionPanelProps {
   onRecycleWholeMany: (cardKeys: string[]) => number | Promise<number>;
   onRecycleWholeMatching: (filter: { tier: ManiaCardTier | "all" | "unrated"; query: string }) => number | Promise<number>;
   onRecycleAll: () => number | Promise<number>;
-  onApplyMint: (cardKey: string, mint: CardMint) => boolean;
+  /* Resolves true when the repair actually landed (locally or server-side). */
+  onApplyMint: (cardKey: string, mint: CardMint) => boolean | Promise<boolean>;
 }
 
 interface LoadedServerCollectionPage {
@@ -317,7 +318,10 @@ async function throttleBackfill<T>(task: () => Promise<T>): Promise<T> {
   }
 }
 
-async function backfillCardMint(card: CollectedCard, onApplyMint: (cardKey: string, mint: CardMint) => boolean) {
+async function backfillCardMint(
+  card: CollectedCard,
+  onApplyMint: (cardKey: string, mint: CardMint) => boolean | Promise<boolean>,
+) {
   const cardKey = packCardKeyOf(card);
   if (attemptedBackfills.has(cardKey)) return;
   attemptedBackfills.add(cardKey);
@@ -338,7 +342,7 @@ async function backfillCardMint(card: CollectedCard, onApplyMint: (cardKey: stri
       tierOverride: card.tier ?? undefined,
     });
     if (data.status !== "ready") return;
-    onApplyMint(cardKey, { skills: data.skills, tier: data.tier, tierLabel: data.tierStyle.label });
+    await onApplyMint(cardKey, { skills: data.skills, tier: data.tier, tierLabel: data.tierStyle.label });
   } catch {
     // The sketch tile remains; another session can retry.
     attemptedBackfills.delete(cardKey);
@@ -355,18 +359,23 @@ function tierChipRgb(tier: ManiaCardTier): string {
 function CollectionCardTile({
   card,
   thumbnail,
+  canBackfill,
   onApplyMint,
 }: {
   card: CollectedCard;
   thumbnail: string | null;
-  onApplyMint: (cardKey: string, mint: CardMint) => boolean;
+  canBackfill: boolean;
+  onApplyMint: (cardKey: string, mint: CardMint) => boolean | Promise<boolean>;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const previousThumbnailRef = useRef<string | null>(thumbnail);
   const animateThumbnail = Boolean(thumbnail && !previousThumbnailRef.current);
 
   useEffect(() => {
-    if (card.skills) return;
+    // Mid-sync the wallet does not yet know whether the repair belongs in
+    // localStorage or in the server rows, and a backfill only gets one attempt
+    // per card per session — so wait for the answer rather than burn it.
+    if (card.skills || !canBackfill) return;
     let cancelled = false;
     const work = () => {
       if (!cancelled) void backfillCardMint(card, onApplyMint);
@@ -393,7 +402,7 @@ function CollectionCardTile({
       observer.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [card.userId, card.skills]);
+  }, [card.userId, card.skills, canBackfill]);
 
   useEffect(() => {
     previousThumbnailRef.current = thumbnail;
@@ -552,6 +561,26 @@ export function CollectionPanel({
     void Promise.resolve(action()).then((gained) => {
       celebrateRecycle(gained, anchor);
       if (gained > 0 && useServerCollection) setServerRefreshKey((key) => key + 1);
+    });
+  };
+  /* A synced collection renders server rows, so a repaired card only shows its
+     real face once the page is re-read. Tiles repair one at a time, so the
+     re-read is coalesced into a single fetch. */
+  const mintRefreshTimerRef = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (mintRefreshTimerRef.current !== null) window.clearTimeout(mintRefreshTimerRef.current);
+  }, []);
+  const applyMintAndRefresh = (cardKey: string, mint: CardMint) => {
+    const result = onApplyMint(cardKey, mint);
+    if (typeof result === "boolean") return result;
+    return result.then((applied) => {
+      if (applied && mintRefreshTimerRef.current === null) {
+        mintRefreshTimerRef.current = window.setTimeout(() => {
+          mintRefreshTimerRef.current = null;
+          setServerRefreshKey((key) => key + 1);
+        }, 1500);
+      }
+      return applied;
     });
   };
   useEffect(() => {
@@ -1126,7 +1155,7 @@ export function CollectionPanel({
                     aria-pressed={cardSelected}
                     aria-label={`${cardSelected ? "Deselect" : "Select"} ${card.username}`}
                   >
-                    <CollectionCardTile card={card} thumbnail={thumbnail} onApplyMint={onApplyMint} />
+                    <CollectionCardTile card={card} thumbnail={thumbnail} canBackfill={syncStatus !== "syncing"} onApplyMint={applyMintAndRefresh} />
                     <span
                       className={`pointer-events-none absolute inset-0 rounded-[10px] ${
                         cardSelected ? "ring-2 ring-osu-pink" : "bg-black/45"
@@ -1154,7 +1183,7 @@ export function CollectionPanel({
                     style={liftedCardId === card.userId ? { visibility: "hidden" } : undefined}
                     aria-label={`View ${card.username}'s card`}
                   >
-                    <CollectionCardTile card={card} thumbnail={thumbnail} onApplyMint={onApplyMint} />
+                    <CollectionCardTile card={card} thumbnail={thumbnail} canBackfill={syncStatus !== "syncing"} onApplyMint={applyMintAndRefresh} />
                   </button>
                 )}
                 {selecting ? null : card.copies > 1 ? (

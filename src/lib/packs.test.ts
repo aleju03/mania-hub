@@ -35,6 +35,7 @@ import {
 import {
   fetchLiveGlobalRankings,
   fetchLivePackCardSnapshotDirect,
+  fetchLivePackCardSnapshotsDirect,
   fetchLivePlayerProfileSnapshotDirect,
   isLiveBackendConfigured,
 } from "./live-backend";
@@ -45,6 +46,7 @@ vi.mock("./live-backend", async (importOriginal) => ({
   isLiveBackendConfigured: vi.fn(() => true),
   fetchLiveGlobalRankings: vi.fn(),
   fetchLivePackCardSnapshotDirect: vi.fn(),
+  fetchLivePackCardSnapshotsDirect: vi.fn(),
   fetchLivePlayerProfileSnapshotDirect: vi.fn(),
 }));
 
@@ -470,6 +472,7 @@ describe("reveal order", () => {
 
 describe("fetchPackPlayerScores", () => {
   const cachedFetch = vi.mocked(fetchLivePackCardSnapshotDirect);
+  const batchFetch = vi.mocked(fetchLivePackCardSnapshotsDirect);
   const directFetch = vi.mocked(fetchLivePlayerProfileSnapshotDirect);
   const osuWindowFetch = vi.mocked(getUserScoresBestWindow);
 
@@ -478,11 +481,17 @@ describe("fetchPackPlayerScores", () => {
       Awaited<ReturnType<typeof fetchLivePackCardSnapshotDirect>>;
   }
 
+  function cardWith(scores: OsuScore[]) {
+    return { bestScores: scores } as NonNullable<Awaited<ReturnType<typeof fetchLivePackCardSnapshotDirect>>>;
+  }
+
   const scores = [{ id: 1, pp: 100 } as OsuScore];
 
   beforeEach(() => {
     vi.mocked(isLiveBackendConfigured).mockReturnValue(true);
     cachedFetch.mockReset();
+    batchFetch.mockReset();
+    batchFetch.mockResolvedValue(new Map());
     directFetch.mockReset();
     osuWindowFetch.mockReset();
   });
@@ -519,14 +528,17 @@ describe("fetchPackPlayerScores", () => {
     expect(osuWindowFetch).toHaveBeenCalledWith({ data: { userId: 101, totalLimit: 200, parallel: true } });
   });
 
-  it("probes the whole hand's cache without trapping later hot cards behind four cold ones", async () => {
+  it("probes the whole hand's cache in one request, without trapping hot cards behind cold ones", async () => {
     let releaseCold!: () => void;
     const coldGate = new Promise<void>((resolve) => {
       releaseCold = resolve;
     });
-    cachedFetch.mockImplementation(async (key) =>
-      Number(key) >= 5 ? snapshotWith([{ id: Number(key), pp: 100 } as OsuScore]) : null,
-    );
+    // Only the last two players are cached; the first four are cold.
+    batchFetch.mockImplementation(async (userIds) => new Map(
+      [...userIds]
+        .filter((id) => id >= 5)
+        .map((id) => [id, cardWith([{ id, pp: 100 } as OsuScore])]),
+    ));
     directFetch.mockImplementation(async (key) => {
       await coldGate;
       return snapshotWith([{ id: Number(key), pp: 100 } as OsuScore]);
@@ -535,13 +547,33 @@ describe("fetchPackPlayerScores", () => {
     const prefetched = prefetchPackPlayerScores([1, 2, 3, 4, 5, 6]);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(cachedFetch).toHaveBeenCalledTimes(6);
+    expect(batchFetch).toHaveBeenCalledTimes(1);
+    expect(batchFetch).toHaveBeenCalledWith([1, 2, 3, 4, 5, 6]);
+    expect(cachedFetch).not.toHaveBeenCalled();
     expect(directFetch).toHaveBeenCalledTimes(4);
     await expect(prefetched[4]).resolves.toEqual([{ id: 5, pp: 100 }]);
     await expect(prefetched[5]).resolves.toEqual([{ id: 6, pp: 100 }]);
 
     releaseCold();
     await expect(Promise.all(prefetched)).resolves.toHaveLength(6);
+  });
+
+  it("sends every player to the cold lane when the batch probe fails", async () => {
+    batchFetch.mockRejectedValue(new Error("backend down"));
+    directFetch.mockImplementation(async (key) => snapshotWith([{ id: Number(key), pp: 100 } as OsuScore]));
+
+    await expect(Promise.all(prefetchPackPlayerScores([1, 2]))).resolves.toEqual([
+      [{ id: 1, pp: 100 }],
+      [{ id: 2, pp: 100 }],
+    ]);
+  });
+
+  it("treats an empty cached window as a miss so no card mints blank", async () => {
+    batchFetch.mockResolvedValue(new Map([[1, cardWith([])]]));
+    directFetch.mockResolvedValue(snapshotWith([{ id: 9, pp: 100 } as OsuScore]));
+
+    await expect(Promise.all(prefetchPackPlayerScores([1]))).resolves.toEqual([[{ id: 9, pp: 100 }]]);
+    expect(directFetch).toHaveBeenCalledTimes(1);
   });
 });
 

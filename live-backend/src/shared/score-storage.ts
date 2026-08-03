@@ -293,7 +293,7 @@ function readRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-async function selectRowsByIntegerSet(db: Db, sqlPrefix: string, values: number[], sqlSuffix = ""): Promise<Record<string, unknown>[]> {
+export async function selectRowsByIntegerSet(db: Db, sqlPrefix: string, values: number[], sqlSuffix = ""): Promise<Record<string, unknown>[]> {
   const ids = uniquePositiveIntegers(values);
   const rows: Record<string, unknown>[] = [];
   for (let index = 0; index < ids.length; index += 900) {

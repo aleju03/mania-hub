@@ -1124,6 +1124,26 @@ export interface LivePackCardSnapshot {
   isStale: boolean;
 }
 
+/* A whole dealt hand in one request. The backend reads the players' stored
+   rows together (shared beatmap lookup, one trip through the rate limiter),
+   and players it has nothing cached for are simply absent from the result. */
+export async function fetchLivePackCardSnapshotsDirect(userIds: readonly number[]): Promise<Map<number, LivePackCardSnapshot>> {
+  const ids = [...new Set(userIds.filter((id) => Number.isInteger(id) && id > 0))];
+  const cards = new Map<number, LivePackCardSnapshot>();
+  if (ids.length === 0) return cards;
+  const base = getLiveBackendUrl();
+  if (!base) throw new Error("Server is not configured.");
+  const response = await fetch(`${base}/api/packs/cards?ids=${ids.join(",")}`, { credentials: "omit" });
+  if (!response.ok) throw new Error(`Server ${response.status}`);
+  const payload = await response.json() as { cards?: LivePackCardSnapshot[] };
+  harvestAvatarAccents(payload);
+  for (const card of payload.cards ?? []) {
+    const id = Number(card?.user?.id);
+    if (Number.isInteger(id) && id > 0) cards.set(id, card);
+  }
+  return cards;
+}
+
 export async function fetchLivePackCardSnapshotDirect(key: string): Promise<LivePackCardSnapshot | null> {
   const trimmed = key.trim().slice(0, 120);
   if (!trimmed) throw new Error("Invalid profile key.");

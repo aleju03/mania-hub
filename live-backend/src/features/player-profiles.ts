@@ -7,7 +7,7 @@ import type { JobQueue } from "../jobs/queue.js";
 import { errorContext, logWarn } from "../logger.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { calculateWeightedPpTotal, getScoreIdentity, getScoreTimestamp, nowIso, scoreHasPublicLeaderboard } from "../shared/score.js";
-import { compactScoresForStorage, hydrateScoresDisplayMetadata, persistScoresDisplayMetadata } from "../shared/score-storage.js";
+import { compactScoresForStorage, hydrateScoresDisplayMetadata, persistScoresDisplayMetadata, selectRowsByIntegerSet } from "../shared/score-storage.js";
 import { packJson, unpackJson } from "../shared/compressed-json.js";
 import { readNoteBpms } from "./chart-analysis.js";
 import type { OscScore, OsuMod, OsuScoreStatistics } from "../shared/types.js";
@@ -311,15 +311,273 @@ export interface PackCardProfileSnapshot {
   isStale: boolean;
 }
 
-export function buildPackCardProfileSnapshot(snapshot: PlayerProfileSnapshot): PackCardProfileSnapshot {
-  return {
+/* The stored halves a card is built from. Deliberately NOT a
+   PlayerProfileSnapshot: see getCachedPackCardSnapshots. */
+interface PackCardSource {
+  userId: number;
+  user: Record<string, unknown>;
+  scores: OscScore[];
+  fetchedAt: string;
+  userFetchedAt: string;
+  isStale: boolean;
+}
+
+/* One dealt hand's worth of players. The endpoint clamps to this so a public
+   caller cannot turn one request into an arbitrarily wide read. */
+export const PACK_CARD_SNAPSHOT_MAX_IDS = 10;
+
+/**
+ * Cached pack-card reads, straight off the stored rows.
+ *
+ * Minting a card needs two things: the player's identity numbers and their
+ * best scores with each map's difficulty fields. It does not need presence,
+ * projected pp, provenance, per-score user rows, beatmapset covers or note
+ * BPMs — all of which getCachedPlayerProfileSnapshot computes before this view
+ * throws them away. A ten-card hand paid for ten of those, which is what made
+ * a pack open read like a burst of profile loads. The one thing it does keep
+ * is the live overlay on the stored window (applyPackCardScoreOverlays), which
+ * a mint's accuracy depends on.
+ *
+ * Batched because local libsql runs queries synchronously on the event loop:
+ * ten concurrent single-card requests interleave rather than parallelize, and
+ * a hand's players share farm maps, so one beatmap read over the union beats
+ * ten overlapping ones.
+ */
+export async function getCachedPackCardSnapshots(
+  db: Db,
+  userIds: readonly number[],
+): Promise<PackCardProfileSnapshot[]> {
+  const ids = [...new Set(userIds.map((id) => Math.floor(Number(id))).filter((id) => Number.isSafeInteger(id) && id > 0))];
+  if (ids.length === 0) return [];
+  const sources = new Map<number, PackCardSource>();
+  const snapshotRows = await selectRowsByIntegerSet(
+    db,
+    // Named columns, not `select *`: the compressed blobs are most of the row,
+    // and best_scores_limit/refresh_error/updated_at are not part of a card.
+    "select user_id, user_json, best_scores_json, fetched_at, user_fetched_at from profile_snapshots where user_id in",
+    ids,
+  );
+  for (const row of snapshotRows) {
+    const userId = Number(row.user_id);
+    if (!Number.isSafeInteger(userId) || userId <= 0) continue;
+    const fetchedAt = String(row.fetched_at ?? "");
+    sources.set(userId, {
+      userId,
+      user: unpackJson<Record<string, unknown>>(row.user_json, {}),
+      scores: unpackJson<OscScore[]>(row.best_scores_json, []),
+      fetchedAt,
+      userFetchedAt: readString(row.user_fetched_at) ?? fetchedAt,
+      isStale: isExpired(fetchedAt, PROFILE_SNAPSHOT_TTL_MS),
+    });
+  }
+
+  // Players with no snapshot row can still have the user_top_scores projection
+  // (ingest wrote it, nobody has opened their profile). Same contract as
+  // getCachedPlayerProfileSnapshot: read what is stored, warm nothing.
+  const missing = ids.filter((id) => !sources.has(id));
+  if (missing.length > 0) {
+    const userRows = await selectRowsByIntegerSet(
+      db,
+      // Only what a card prints: the full cached profile (cover, badges, rank
+      // history) would be built and then trimmed away.
+      "select user_id, username, avatar_url, country_code, pp, global_rank, updated_at from users where user_id in",
+      missing,
+    );
+    const topScores = await readStoredTopScoresByUser(db, userRows.map((row) => Number(row.user_id)));
+    for (const row of userRows) {
+      const userId = Number(row.user_id);
+      const scores = topScores.get(userId);
+      if (!scores?.length) continue;
+      const fetchedAt = readString(row.updated_at) ?? nowIso();
+      sources.set(userId, {
+        userId,
+        user: {
+          id: userId,
+          username: readString(row.username) ?? `User ${userId}`,
+          avatar_url: readString(row.avatar_url) ?? "",
+          country_code: readString(row.country_code) ?? "",
+          statistics: { pp: readNumber(row.pp), global_rank: readInteger(row.global_rank) },
+        },
+        scores,
+        fetchedAt,
+        userFetchedAt: fetchedAt,
+        // No snapshot row means nothing has ever baked this player's window;
+        // the caller's cold path owns freshness from here.
+        isStale: true,
+      });
+    }
+  }
+
+  return buildPackCardSnapshots(db, ids.flatMap((id) => {
+    const source = sources.get(id);
+    return source ? [source] : [];
+  }));
+}
+
+export async function getCachedPackCardSnapshot(
+  db: Db,
+  rawKey: string,
+  options: { lookupMode?: ProfileLookupMode } = {},
+): Promise<PackCardProfileSnapshot | null> {
+  const key = normalizeProfileKey(rawKey);
+  const lookupMode = options.lookupMode ?? "auto";
+  const numericKey = Number(key);
+  if (lookupMode === "userId" && Number.isInteger(numericKey) && numericKey > 0) {
+    return (await getCachedPackCardSnapshots(db, [numericKey]))[0] ?? null;
+  }
+  // Username lookups resolve the id first, then take the same batched path.
+  const row = await getStoredProfileSnapshot(db, key, lookupMode) ?? await getStoredProfileUser(db, key, lookupMode);
+  const userId = Number(row?.user_id);
+  if (!Number.isSafeInteger(userId) || userId <= 0) return null;
+  return (await getCachedPackCardSnapshots(db, [userId]))[0] ?? null;
+}
+
+async function buildPackCardSnapshots(db: Db, sources: PackCardSource[]): Promise<PackCardProfileSnapshot[]> {
+  await applyPackCardScoreOverlays(db, sources);
+  const beatmaps = await readPackCardBeatmaps(
+    db,
+    sources.flatMap((source) => source.scores.map((score) => score.beatmap_id ?? score.beatmap?.id ?? 0)),
+  );
+  return sources.map((source) => ({
     view: "card",
-    user: buildPackCardUser(snapshot.user),
-    bestScores: snapshot.bestScores.map(toPackCardScore),
-    fetchedAt: snapshot.fetchedAt,
-    userFetchedAt: snapshot.userFetchedAt,
-    isStale: snapshot.isStale,
-  };
+    user: buildPackCardUser(source.user),
+    bestScores: source.scores.map((score) => toPackCardScore(score, beatmaps)),
+    fetchedAt: source.fetchedAt,
+    userFetchedAt: source.userFetchedAt,
+    isStale: source.isStale,
+  }));
+}
+
+/**
+ * Brings each stored best-play window up to date, the way the profile page's
+ * projection does: top-play events confirmed since the snapshot was baked,
+ * then tracked scores newer than it that would enter the top 200.
+ *
+ * A card mints from this window, so skipping it would under-rate any player
+ * whose snapshot has aged (a stored window is 12 days old on average, and the
+ * session-end bake never touches a player who stops playing). Only the score
+ * list matters here — the projection's pp/provenance bookkeeping is for the
+ * profile page.
+ *
+ * Two queries for the whole hand, each with the player's own cutoff inline:
+ * both tables are indexed on (user_id, time), and the cutoff is what keeps
+ * this cheap — for a player who has not played since their snapshot, both
+ * reads return nothing.
+ */
+async function applyPackCardScoreOverlays(db: Db, sources: PackCardSource[]): Promise<void> {
+  const dated = sources.filter((source) => Number.isFinite(Date.parse(source.fetchedAt)));
+  if (dated.length === 0) return;
+  const cutoffs = dated.flatMap((source) => [source.userId, source.fetchedAt]);
+  const perUser = dated.map(() => "(user_id = ? and %COL% > ?)").join(" or ");
+
+  const topPlayRows = (await exec(
+    db,
+    `select user_id, payload_json from top_play_events
+     where ${perUser.replaceAll("%COL%", "detected_at")}
+     order by user_id asc, detected_at asc`,
+    cutoffs,
+  )).rows;
+  const eventsByUser = new Map<number, OscScore[]>();
+  for (const row of topPlayRows) {
+    const score = parseJson<{ score?: OscScore }>(row.payload_json, {}).score;
+    if (!score) continue;
+    const userId = Number(row.user_id);
+    const existing = eventsByUser.get(userId);
+    if (existing) existing.push(score);
+    else eventsByUser.set(userId, [score]);
+  }
+
+  const recentRows = (await exec(
+    db,
+    `select user_id, score_json from score_events
+     where ruleset_id = 3 and (${perUser.replaceAll("%COL%", "ended_at")})
+     order by user_id asc, ended_at desc`,
+    cutoffs,
+  )).rows;
+  const recentByUser = new Map<number, OscScore[]>();
+  for (const row of recentRows) {
+    const userId = Number(row.user_id);
+    const kept = recentByUser.get(userId) ?? [];
+    // Same window the profile overlay takes, newest first.
+    if (kept.length >= PROFILE_TRACKED_OVERLAY_LIMIT) continue;
+    const score = parseJson<OscScore | null>(row.score_json, null);
+    if (!score) continue;
+    kept.push(score);
+    recentByUser.set(userId, kept);
+  }
+
+  for (const source of dated) {
+    let scores = dedupeScores(source.scores);
+    let applied = false;
+    for (const eventScore of eventsByUser.get(source.userId) ?? []) {
+      if (eventScore.user_id !== source.userId || eventScore.pp == null || eventScore.pp <= 0) continue;
+      const next = applyTopPlayEvent(scores, eventScore);
+      if (next === scores) continue;
+      scores = next;
+      applied = true;
+    }
+    for (const recentScore of dedupeScores(recentByUser.get(source.userId) ?? []).sort(compareScoresByTimeAsc)) {
+      if (!isProfileRecentTopScoreCandidate(recentScore, source.userId) || !isScoreAfter(recentScore, source.fetchedAt)) continue;
+      const next = applyTopPlayEvent(scores, recentScore);
+      if (next === scores) continue;
+      scores = next;
+      applied = true;
+    }
+    if (applied) source.scores = rankBestScores(scores);
+  }
+}
+
+/* One chunked read of every top-200 the callers asked for. Rows come back
+   ordered per player so the per-user slice keeps mint order. */
+async function readStoredTopScoresByUser(db: Db, userIds: number[]): Promise<Map<number, OscScore[]>> {
+  const byUser = new Map<number, OscScore[]>();
+  if (userIds.length === 0) return byUser;
+  const rows = await selectRowsByIntegerSet(
+    db,
+    "select user_id, score_json from user_top_scores where user_id in",
+    userIds,
+    `and position <= ${PROFILE_BEST_SCORES_LIMIT} order by user_id asc, position asc`,
+  );
+  for (const row of rows) {
+    const userId = Number(row.user_id);
+    const score = parseJson<OscScore | null>(row.score_json, null);
+    if (!score || !Number.isSafeInteger(userId) || userId <= 0) continue;
+    const existing = byUser.get(userId);
+    if (existing) existing.push(score);
+    else byUser.set(userId, [score]);
+  }
+  return byUser;
+}
+
+/* The card's slice of the beatmaps table: difficulty numbers only, no
+   beatmapset join (covers, title and artist are not on a card) and no
+   per-score user rows (a card has exactly one player, already in user_json). */
+async function readPackCardBeatmaps(db: Db, beatmapIds: number[]): Promise<Map<number, PackCardScore["beatmap"]>> {
+  const rows = await selectRowsByIntegerSet(
+    db,
+    "select beatmap_id, difficulty_rating, cs, bpm, max_combo, metadata_json from beatmaps where beatmap_id in",
+    beatmapIds,
+  );
+  const byId = new Map<number, PackCardScore["beatmap"]>();
+  for (const row of rows) {
+    const id = Number(row.beatmap_id);
+    if (!Number.isSafeInteger(id) || id <= 0) continue;
+    // OD, HP, length and note counts live only in the stored osu! payload.
+    const metadata = parseJson<Record<string, unknown>>(row.metadata_json, {});
+    byId.set(id, {
+      id,
+      difficulty_rating: readNumber(row.difficulty_rating) ?? readNumber(metadata.difficulty_rating) ?? 0,
+      cs: readNumber(row.cs) ?? readNumber(metadata.cs) ?? 0,
+      bpm: readNumber(row.bpm) ?? readNumber(metadata.bpm) ?? 0,
+      accuracy: readNumber(metadata.accuracy) ?? undefined,
+      drain: readNumber(metadata.drain) ?? undefined,
+      total_length: readNumber(metadata.total_length) ?? undefined,
+      count_circles: readNumber(metadata.count_circles) ?? undefined,
+      count_sliders: readNumber(metadata.count_sliders) ?? undefined,
+      max_combo: readNumber(row.max_combo) ?? readNumber(metadata.max_combo) ?? undefined,
+    });
+  }
+  return byId;
 }
 
 function buildPackCardUser(user: Record<string, unknown>): Record<string, unknown> {
@@ -336,11 +594,29 @@ function buildPackCardUser(user: Record<string, unknown>): Record<string, unknow
   };
 }
 
-function toPackCardScore(score: OscScore): PackCardScore {
-  /* The lean OsuBeatmap type omits the difficulty fields the card computes
-     traits from (OD, HP, note counts, length), but the hydrated beatmap spreads
-     the stored osu! metadata_json, so they are present at runtime. */
-  const beatmap = score.beatmap as (NonNullable<OscScore["beatmap"]> & Record<string, unknown>) | undefined;
+function toPackCardScore(score: OscScore, beatmaps: Map<number, PackCardScore["beatmap"]>): PackCardScore {
+  /* Stored scores are compacted (no inline beatmap), so the difficulty numbers
+     come from readPackCardBeatmaps. Scores that do carry a beatmap (the seeded
+     archived players, which are also the GOAT pool) are merged field by field,
+     not object by object: `beatmaps.max_combo` is null for most rows, and the
+     score's own copy is often the only place that number exists. */
+  const inline = score.beatmap as (NonNullable<OscScore["beatmap"]> & Record<string, unknown>) | undefined;
+  const beatmapId = score.beatmap_id ?? inline?.id;
+  const stored = beatmapId == null ? undefined : beatmaps.get(beatmapId);
+  const beatmap = stored || inline
+    ? {
+      id: stored?.id ?? Number(inline?.id),
+      difficulty_rating: stored?.difficulty_rating || readNumber(inline?.difficulty_rating) || 0,
+      cs: stored?.cs || readNumber(inline?.cs) || 0,
+      bpm: stored?.bpm || readNumber(inline?.bpm) || 0,
+      accuracy: stored?.accuracy ?? readNumber(inline?.accuracy) ?? undefined,
+      drain: stored?.drain ?? readNumber(inline?.drain) ?? undefined,
+      total_length: stored?.total_length ?? readNumber(inline?.total_length) ?? undefined,
+      count_circles: stored?.count_circles ?? readNumber(inline?.count_circles) ?? undefined,
+      count_sliders: stored?.count_sliders ?? readNumber(inline?.count_sliders) ?? undefined,
+      max_combo: stored?.max_combo ?? readNumber(inline?.max_combo) ?? undefined,
+    }
+    : undefined;
   return {
     id: score.id,
     legacy_score_id: score.legacy_score_id ?? null,
@@ -356,20 +632,7 @@ function toPackCardScore(score: OscScore): PackCardScore {
     statistics: score.statistics,
     pp: score.pp,
     type: score.type,
-    beatmap: beatmap
-      ? {
-        id: beatmap.id,
-        difficulty_rating: beatmap.difficulty_rating,
-        cs: beatmap.cs,
-        bpm: beatmap.bpm,
-        accuracy: readNumber(beatmap.accuracy) ?? undefined,
-        drain: readNumber(beatmap.drain) ?? undefined,
-        total_length: readNumber(beatmap.total_length) ?? undefined,
-        count_circles: readNumber(beatmap.count_circles) ?? undefined,
-        count_sliders: readNumber(beatmap.count_sliders) ?? undefined,
-        max_combo: beatmap.max_combo,
-      }
-      : undefined,
+    beatmap,
   };
 }
 

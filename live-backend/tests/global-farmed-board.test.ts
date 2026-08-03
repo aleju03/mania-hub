@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -24,11 +24,29 @@ import {
   type PersistedGlobalFarmedBoard,
 } from "../src/features/maps-farmed-board-disk.js";
 
+/* Counts publishes of the shared snapshot file. The serving process polls it,
+   so every extra write is a 60+ MB load someone may pick up mid-build. */
+const diskSaves: number[] = [];
+let failDiskSave = false;
+vi.mock("../src/features/maps-farmed-board-disk.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../src/features/maps-farmed-board-disk.js")>();
+  return {
+    ...original,
+    saveGlobalFarmedBoardToDisk: async (filePath: string, board: PersistedGlobalFarmedBoard) => {
+      diskSaves.push(board.projectionRevision);
+      if (failDiskSave) throw new Error("disk full");
+      return original.saveGlobalFarmedBoardToDisk(filePath, board);
+    },
+  };
+});
+
 let dir = "";
 
 afterEach(async () => {
   if (dir) await rm(dir, { recursive: true, force: true });
   dir = "";
+  diskSaves.length = 0;
+  failDiskSave = false;
 });
 
 const NOW = "2026-05-12T12:00:00.000Z";
@@ -484,6 +502,51 @@ describe("delegated global farmed board repack", () => {
     registerGlobalFarmedBoardDiskCache(workerDb, databaseUrl);
     const result = await runGlobalFarmedBoardRepackJob(workerDb);
     expect(result).toMatchObject({ built: false, reason: "disk_snapshot_fresh" });
+  });
+
+  it("publishes the packed board exactly once, at the revision its columns hold", async () => {
+    const { db, queue, databaseUrl } = await setupDb();
+    registerGlobalFarmedBoardDiskCache(db, databaseUrl);
+    registerGlobalFarmedBoardRepackDelegation(db, async () => {});
+    await seedFarmedMap(db, 10, 11, [{ id: 101, pp: 650 }]);
+    await refreshGlobalMaps(db);
+    await getMapsPageSnapshot(db, queue, "GLOBAL", WEEK_MS, QUERY);
+    const changeRevision = await injectBulkBacklog(db, 501);
+    // The projection state runs ahead of the change rows (a bulk refresh that
+    // bumped the state before its rows landed). The old post-delta write took
+    // this inflated revision from the empty-delta branch and stamped it onto
+    // columns that stop at changeRevision, so an adopter would skip everything
+    // in between.
+    await exec(db, "update global_maps_farmed_state set revision = ? where singleton = 1", [changeRevision + 5]);
+
+    const workerDb = await createDb({ databaseUrl });
+    registerGlobalFarmedBoardDiskCache(workerDb, databaseUrl);
+    diskSaves.length = 0;
+    const result = await runGlobalFarmedBoardRepackJob(workerDb);
+
+    expect(result.built).toBe(true);
+    expect(result.revision).toBe(changeRevision);
+    // One write, and the header revision is the one the columns actually hold.
+    expect(diskSaves).toEqual([changeRevision]);
+    const header = await readGlobalFarmedBoardDiskHeader(join(dir, "global-farmed-board-cache.bin"));
+    expect(header?.projectionRevision).toBe(changeRevision);
+  });
+
+  it("fails the repack job when its one publish fails, instead of reporting a snapshot nobody got", async () => {
+    const { db, queue, databaseUrl } = await setupDb();
+    registerGlobalFarmedBoardDiskCache(db, databaseUrl);
+    await seedFarmedMap(db, 10, 11, [{ id: 101, pp: 650 }]);
+    await refreshGlobalMaps(db);
+    await getMapsPageSnapshot(db, queue, "GLOBAL", WEEK_MS, QUERY);
+    await injectBulkBacklog(db, 501);
+
+    const workerDb = await createDb({ databaseUrl });
+    registerGlobalFarmedBoardDiskCache(workerDb, databaseUrl);
+    failDiskSave = true;
+
+    // A swallowed failure would leave the serving process re-requesting packs
+    // forever while the worker's job row reads "done".
+    await expect(runGlobalFarmedBoardRepackJob(workerDb)).rejects.toThrow("disk full");
   });
 
   it("repack job declines without a registered disk cache", async () => {

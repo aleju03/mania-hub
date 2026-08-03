@@ -328,3 +328,41 @@ export const recycleServerPackCollection = createServerFn({ method: "POST" })
       rev: Number(body.rev) || 0,
     };
   });
+
+/* Persists a re-minted card's skills snapshot for a synced wallet. A synced
+   wallet's cards live in server rows, not in the pushed blob, so the client
+   cannot repair a legacy card by mutating its own wallet: without this call
+   the backfill's work is thrown away and refetched next session. */
+export const mintServerPackCollectionCard = createServerFn({ method: "POST" })
+  .validator((input: { cardKey?: unknown; tier?: unknown; tierLabel?: unknown; skills?: unknown }) => {
+    const cardKey = typeof input?.cardKey === "string" ? sanitizeCardKey(input.cardKey) : null;
+    if (!cardKey) throw new Error("Invalid card key.");
+    const skills = input?.skills && typeof input.skills === "object" && !Array.isArray(input.skills)
+      ? input.skills as Record<string, unknown>
+      : null;
+    if (!skills) throw new Error("Invalid card mint.");
+    return {
+      mode: "mint" as const,
+      cardKey,
+      tier: typeof input?.tier === "string" ? input.tier : null,
+      tierLabel: typeof input?.tierLabel === "string" ? input.tierLabel : null,
+      skills,
+    };
+  })
+  .handler(async ({ data }): Promise<boolean> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const target = await getSyncTarget();
+    if (!target) return false;
+    const url = target.url.replace("/api/pack-wallet/", "/api/pack-collection/");
+    const response = await fetch(url, {
+      method: "POST",
+      headers: target.headers,
+      body: JSON.stringify(data),
+    });
+    // A failed repair is not worth an error surface: the card keeps its sketch
+    // tile and a later session tries again.
+    if (!response.ok) return false;
+    const body = (await response.json()) as { applied?: unknown };
+    return body.applied === true;
+  });

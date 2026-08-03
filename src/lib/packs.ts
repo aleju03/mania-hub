@@ -1,6 +1,7 @@
 import {
   fetchLiveGlobalRankings,
   fetchLivePackCardSnapshotDirect,
+  fetchLivePackCardSnapshotsDirect,
   fetchLivePlayerProfileSnapshotDirect,
   isLiveBackendConfigured,
   type LiveGlobalRankingEntry,
@@ -689,6 +690,26 @@ export async function fetchCachedPackPlayerScores(userId: number): Promise<OsuSc
   return null;
 }
 
+/* The hand-wide form of fetchCachedPackPlayerScores. Never rejects: an
+   unavailable cache is just an empty map, and every player falls through to
+   the bounded cold lane. */
+async function fetchCachedPackPlayerScoresBatch(userIds: readonly number[]): Promise<Map<number, OsuScore[]>> {
+  const scoresByUserId = new Map<number, OsuScore[]>();
+  if (!isLiveBackendConfigured()) return scoresByUserId;
+  try {
+    for (const [userId, card] of await fetchLivePackCardSnapshotsDirect(userIds)) {
+      // An empty stored window means the player's plays were never fetched;
+      // returning it would mint a blank card, so treat it as a miss.
+      if (Array.isArray(card.bestScores) && card.bestScores.length > 0) {
+        scoresByUserId.set(userId, card.bestScores);
+      }
+    }
+  } catch {
+    // A cache miss and an unavailable cache both use the bounded cold path.
+  }
+  return scoresByUserId;
+}
+
 async function fetchColdPackPlayerScores(userId: number): Promise<OsuScore[]> {
   if (isLiveBackendConfigured()) {
     try {
@@ -751,13 +772,18 @@ function createBoundedTaskRunner(concurrency: number) {
     });
 }
 
-/* Starts cache probes for the complete hand immediately, then admits only
-   genuine misses to the four-wide cold lane. Results stay indexed to the
-   dealt order even though hot cards may settle ahead of earlier cold ones. */
+/* Probes the complete hand's cache in ONE request, then admits only genuine
+   misses to the four-wide cold lane. Results stay indexed to the dealt order
+   even though hot cards settle together, ahead of the cold ones.
+
+   One request, not one per player: the backend reads these rows off a single
+   synchronous SQLite connection, so ten parallel probes only interleave there
+   while costing ten rate-limiter slots and ten overlapping beatmap reads. */
 export function prefetchPackPlayerScores(userIds: readonly number[]): Array<Promise<OsuScore[] | null>> {
+  const cachedHand = fetchCachedPackPlayerScoresBatch(userIds);
   const runCold = createBoundedTaskRunner(PACK_SCORE_PREFETCH_CONCURRENCY);
   return userIds.map(async (userId) => {
-    const cached = await fetchCachedPackPlayerScores(userId);
+    const cached = (await cachedHand).get(userId);
     if (cached) return cached;
     return runCold(() => fetchColdPackPlayerScores(userId)).catch(() => null);
   });

@@ -1,6 +1,6 @@
 import type { InValue } from "@libsql/client";
 import type { Db } from "../db.js";
-import { exec, parseJson } from "../db.js";
+import { exec, execBatch, parseJson } from "../db.js";
 
 // Synced maniacard pack wallets now keep economy metadata in pack_wallets and
 // collection cards in pack_collection_cards. The legacy blob shape is still
@@ -94,20 +94,41 @@ const TIER_SHARD_VALUES: Record<string, number> = {
   unrated: 1,
 };
 
+/* Tier strength, mirroring tierRank in the frontend's pack-collection.
+   Anything unknown (including a tierless legacy card) ranks below every real
+   tier, so a mint always wins over "unrated". */
+const TIER_RANKS: Record<string, number> = {
+  common: 0,
+  rare: 1,
+  elite: 2,
+  superRare: 3,
+  ultraRare: 4,
+  legendary: 5,
+  mythic: 6,
+  ascendant: 7,
+  worldClass: 8,
+  goat: 9,
+};
+
+/* hasOwnProperty, not `TIER_RANKS[tier] ?? -1`: an inherited key ("constructor",
+   "toString", "__proto__") would otherwise resolve to a function and make every
+   rank comparison against it false, opening the "only a better tier overwrites"
+   guard. Card tiers arrive from clients, so they reach this lookup. */
+export function tierRank(tier: string | null): number {
+  return tier !== null && Object.prototype.hasOwnProperty.call(TIER_RANKS, tier) ? TIER_RANKS[tier] : -1;
+}
+
+/* The only tiers that may be stored. Everything else is a card the server
+   treats as unrated. */
+export function isKnownTier(tier: unknown): tier is string {
+  return typeof tier === "string" && Object.prototype.hasOwnProperty.call(TIER_RANKS, tier);
+}
+
+// Generated from TIER_RANKS so the SQL and JS orderings cannot drift apart.
+// The tier names are module constants, never caller input.
 export function tierRankSql(alias = "tier") {
-  return `case ${alias}
-    when 'goat' then 9
-    when 'worldClass' then 8
-    when 'ascendant' then 7
-    when 'mythic' then 6
-    when 'legendary' then 5
-    when 'ultraRare' then 4
-    when 'superRare' then 3
-    when 'elite' then 2
-    when 'rare' then 1
-    when 'common' then 0
-    else -1
-  end`;
+  const cases = Object.entries(TIER_RANKS).map(([tier, rank]) => `    when '${tier}' then ${rank}`);
+  return `case ${alias}\n${cases.join("\n")}\n    else -1\n  end`;
 }
 
 function shardValueSql(alias = "tier") {
@@ -177,9 +198,11 @@ export function normalizePackCardKey(value: unknown): string | null {
 }
 
 function claimedTier(raw: { tier?: unknown }, userId: number): string | null {
-  if (typeof raw.tier !== "string") return null;
   // A rejected claim falls back to unrated (1 shard) rather than erroring, so a
-  // stale or hand-edited local wallet still syncs.
+  // stale or hand-edited local wallet still syncs. Anything outside the real
+  // tier list is rejected here so no invented tier string ever reaches a rank
+  // or shard-value lookup.
+  if (!isKnownTier(raw.tier)) return null;
   if (raw.tier === "goat" && !HONORARY_USER_IDS.has(userId)) return null;
   return raw.tier;
 }
@@ -497,6 +520,99 @@ export async function listPackCollectionCards(
   };
 }
 
+/**
+ * Persists a re-mint of one collected card: the skills snapshot (and the tier
+ * it implies) for a card collected before snapshots existed, or one whose mint
+ * failed at pull time.
+ *
+ * A synced wallet keeps no cards in its blob — they live in these rows — so the
+ * client cannot repair such a card by writing to its own wallet and pushing.
+ * Without this the same card refetched its player's plays once per session,
+ * every session, and threw the result away.
+ *
+ * Mirrors applyCardMint in the frontend's pack-collection, including the two
+ * rules that matter: a card that already has skills is only overwritten by a
+ * strictly better tier, and a tierless card that mints as GOAT changes key, so
+ * it merges into any GOAT of that player the owner already holds.
+ */
+export async function applyPackCollectionCardMint(
+  db: Db,
+  ownerUserId: number,
+  rawCardKey: unknown,
+  mint: { tier?: unknown; tierLabel?: unknown; skills?: unknown },
+  now = Date.now(),
+): Promise<{ applied: boolean; cardKey: string | null }> {
+  const cardKey = normalizePackCardKey(rawCardKey);
+  if (!cardKey || !Number.isInteger(ownerUserId) || ownerUserId <= 0) return { applied: false, cardKey: null };
+  const skills = mint.skills && typeof mint.skills === "object" && !Array.isArray(mint.skills) ? mint.skills : null;
+  if (!skills) return { applied: false, cardKey: null };
+  const row = (await exec(
+    db,
+    `select card_user_id, tier, skills_json, copies, recycled_copies, first_pulled_at, last_pulled_at
+     from pack_collection_cards
+     where owner_user_id = ? and card_key = ? and copies > 0`,
+    [ownerUserId, cardKey],
+  )).rows[0];
+  if (!row) return { applied: false, cardKey: null };
+
+  const cardUserId = Number(row.card_user_id);
+  if (!Number.isInteger(cardUserId) || cardUserId <= 0) return { applied: false, cardKey: null };
+  // Same GOAT guard the wallet import applies: a claimed tier is otherwise
+  // taken on trust, and GOAT recycles for 1000 shards.
+  const tier = claimedTier(mint, cardUserId);
+  const currentTier = typeof row.tier === "string" ? row.tier : null;
+  if (row.skills_json != null && tierRank(currentTier) >= tierRank(tier)) return { applied: false, cardKey };
+  const tierLabel = tier === null ? null : (typeof mint.tierLabel === "string" ? mint.tierLabel.slice(0, 60) : null);
+  const skillsJson = JSON.stringify(skills);
+  if (skillsJson.length > PACK_CARD_SKILLS_MAX_CHARS) return { applied: false, cardKey };
+
+  const nextKey = packCardKey(cardUserId, tier);
+  if (nextKey === cardKey) {
+    await exec(
+      db,
+      `update pack_collection_cards
+       set tier = ?, tier_label = ?, skills_json = ?, updated_at = ?
+       where owner_user_id = ? and card_key = ?`,
+      [tier, tierLabel, skillsJson, now, ownerUserId, cardKey],
+    );
+    return { applied: true, cardKey };
+  }
+
+  // Key move: fold this card's copies into the destination key, then drop the
+  // old row. One batch so a crash can never leave the copies duplicated across
+  // both keys (or lost from both).
+  await execBatch(db, [
+    {
+      sql: `insert into pack_collection_cards (
+              owner_user_id, card_user_id, card_key, username, avatar_url, country_code, tier, tier_label, skills_json,
+              pp, global_rank, copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at
+            )
+            select owner_user_id, card_user_id, ?, username, avatar_url, country_code, ?, ?, ?,
+              pp, global_rank, copies, recycled_copies, first_pulled_at, last_pulled_at, ?
+            from pack_collection_cards
+            where owner_user_id = ? and card_key = ?
+            on conflict(owner_user_id, card_key) do update set
+              tier = excluded.tier,
+              tier_label = excluded.tier_label,
+              skills_json = excluded.skills_json,
+              copies = pack_collection_cards.copies + excluded.copies,
+              recycled_copies = pack_collection_cards.recycled_copies + excluded.recycled_copies,
+              first_pulled_at = min(pack_collection_cards.first_pulled_at, excluded.first_pulled_at),
+              last_pulled_at = max(pack_collection_cards.last_pulled_at, excluded.last_pulled_at),
+              updated_at = excluded.updated_at`,
+      args: [nextKey, tier, tierLabel, skillsJson, now, ownerUserId, cardKey],
+    },
+    {
+      sql: "delete from pack_collection_cards where owner_user_id = ? and card_key = ?",
+      args: [ownerUserId, cardKey],
+    },
+  ]);
+  return { applied: true, cardKey: nextKey };
+}
+
+/* A skills snapshot is a handful of named numbers; anything larger is not one. */
+const PACK_CARD_SKILLS_MAX_CHARS = 2_000;
+
 /* Card keys rather than player ids: holding an ordinary card of a roster
    member is not holding their GOAT, and duplicate protection has to tell
    those apart. */
@@ -582,7 +698,11 @@ export async function ensurePackCollectionCardKeys(db: Db): Promise<boolean> {
 }
 
 export function shardValueForStoredTier(tier: string | null): number {
-  return TIER_SHARD_VALUES[tier ?? "unrated"] ?? 1;
+  const key = tier ?? "unrated";
+  // Own-property check for the same reason tierRank uses one: an inherited key
+  // would return a function, and `copies * fn` is NaN — which walks straight
+  // past addWalletShards' `gained <= 0` bail and writes a NaN shard balance.
+  return Object.prototype.hasOwnProperty.call(TIER_SHARD_VALUES, key) ? TIER_SHARD_VALUES[key] : 1;
 }
 
 export async function recyclePackCollectionCards(

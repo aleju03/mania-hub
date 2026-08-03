@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
 import {
+  applyPackCollectionCardMint,
   ensurePackCollectionCardKeys,
   getPackWallet,
   listPackCollectionCards,
@@ -307,5 +308,131 @@ describe("pack collection rekey", () => {
     // Snapshot reconcile against the rebuilt row: 3 pulled ever, 1 already
     // recycled, so 2 held. The conflict target resolved, which is the point.
     expect(page.cards[0]).toMatchObject({ userId: 42, copies: 2, recycledCopies: 1 });
+  });
+});
+
+/* Legacy cards (collected before skills snapshots existed) repair themselves
+   when the owner scrolls past them. A synced wallet keeps no cards in its
+   pushed blob, so unless the repair lands in these rows it is simply lost and
+   refetched next session. */
+describe("collection card mints", () => {
+  const BOJII = 10083439; // on the honorary roster, so eligible for GOAT
+  const skills = { stream: 60, jack: 50, ln: 40, speed: 55, stamina: 45, precision: 35 };
+
+  function legacyPayload(userId: number, tier: string | null, copies = 1): string {
+    return JSON.stringify({
+      cards: {
+        [String(userId)]: {
+          userId,
+          username: "legacy",
+          avatarUrl: "https://a.ppy.sh/1",
+          countryCode: "CR",
+          tier,
+          tierLabel: tier,
+          skills: null,
+          pp: 5000,
+          globalRank: 900,
+          copies,
+          recycledCopies: 0,
+          firstPulledAt: 100,
+          lastPulledAt: 200,
+        },
+      },
+      shards: 0,
+      shardsSpent: 0,
+      charges: 5,
+      lastRefillAt: 0,
+      openedPacks: 0,
+      poolTotal: null,
+    });
+  }
+
+  it("writes the skills snapshot and tier onto the stored card", async () => {
+    await savePackWallet(db, USER_ID, legacyPayload(42, null), 0, 1000);
+
+    const result = await applyPackCollectionCardMint(db, USER_ID, "42", { tier: "elite", tierLabel: "Elite", skills });
+
+    expect(result).toEqual({ applied: true, cardKey: "42" });
+    const card = (await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 })).cards[0];
+    expect(card.tier).toBe("elite");
+    expect(card.tierLabel).toBe("Elite");
+    expect(card.skills).toEqual(skills);
+  });
+
+  it("leaves a card that already minted at a better tier alone", async () => {
+    await savePackWallet(db, USER_ID, legacyPayload(42, "mythic"), 0, 1000);
+    await applyPackCollectionCardMint(db, USER_ID, "42", { tier: "mythic", tierLabel: "Mythic", skills });
+
+    const again = await applyPackCollectionCardMint(db, USER_ID, "42", { tier: "rare", tierLabel: "Rare", skills });
+
+    expect(again.applied).toBe(false);
+    expect((await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 })).cards[0].tier).toBe("mythic");
+  });
+
+  it("merges into the GOAT key when a tierless card mints as GOAT", async () => {
+    await savePackWallet(db, USER_ID, legacyPayload(BOJII, null, 2), 0, 1000);
+    // The owner already holds a GOAT of that player, pulled from the honorary slot.
+    await exec(
+      db,
+      `insert into pack_collection_cards
+       (owner_user_id, card_user_id, card_key, username, avatar_url, country_code, tier, tier_label, skills_json,
+        pp, global_rank, copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at)
+       values (?, ?, ?, 'bojii', '', 'PH', 'goat', 'GOAT', null, 27107, 4, 1, 3, 50, 300, 1000)`,
+      [USER_ID, BOJII, `${BOJII}:goat`],
+    );
+
+    const result = await applyPackCollectionCardMint(db, USER_ID, String(BOJII), { tier: "goat", tierLabel: "GOAT", skills });
+
+    expect(result).toEqual({ applied: true, cardKey: `${BOJII}:goat` });
+    expect(await listPackCollectionOwnedCardKeys(db, USER_ID)).toEqual([`${BOJII}:goat`]);
+    const card = (await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 })).cards[0];
+    expect(card.copies).toBe(3);
+    expect(card.recycledCopies).toBe(3);
+    expect(card.firstPulledAt).toBe(50);
+    expect(card.lastPulledAt).toBe(300);
+    expect(card.skills).toEqual(skills);
+  });
+
+  it("refuses a GOAT claim for a player who is not on the honorary roster", async () => {
+    await savePackWallet(db, USER_ID, legacyPayload(42, null), 0, 1000);
+
+    const result = await applyPackCollectionCardMint(db, USER_ID, "42", { tier: "goat", tierLabel: "GOAT", skills });
+
+    // The mint still lands, just unrated: a forged tier can never print shards.
+    expect(result).toEqual({ applied: true, cardKey: "42" });
+    const card = (await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 })).cards[0];
+    expect(card.tier).toBeNull();
+    expect(card.skills).toEqual(skills);
+  });
+
+  it("refuses an invented tier, including inherited object keys", async () => {
+    await savePackWallet(db, USER_ID, legacyPayload(BOJII, "mythic"), 0, 1000);
+    await applyPackCollectionCardMint(db, USER_ID, String(BOJII), { tier: "mythic", tierLabel: "Mythic", skills });
+
+    // "constructor" resolves on any object literal, so a rank lookup that is
+    // not an own-property check would compare a number against a function
+    // (always false) and let this overwrite an already-minted better tier.
+    const result = await applyPackCollectionCardMint(db, USER_ID, String(BOJII), {
+      tier: "constructor",
+      tierLabel: "x",
+      skills: { stream: 1 },
+    });
+
+    expect(result.applied).toBe(false);
+    expect(await listPackCollectionOwnedCardKeys(db, USER_ID)).toEqual([String(BOJII)]);
+    const card = (await listPackCollectionCards(db, USER_ID, { page: 0, pageSize: 15 })).cards[0];
+    expect(card.tier).toBe("mythic");
+    expect(card.skills).toEqual(skills);
+    // A recycle of that card still values it as a real tier, never NaN.
+    expect((await recyclePackCollectionCards(db, USER_ID, { mode: "whole", cardKey: String(BOJII) })).gained).toBe(20);
+  });
+
+  it("ignores a mint for a card the owner does not hold", async () => {
+    await savePackWallet(db, USER_ID, legacyPayload(42, null), 0, 1000);
+
+    expect(await applyPackCollectionCardMint(db, USER_ID, "77", { tier: "rare", tierLabel: "Rare", skills }))
+      .toEqual({ applied: false, cardKey: null });
+    expect(await applyPackCollectionCardMint(db, USER_ID, "42", { tier: "rare", tierLabel: "Rare", skills: null }))
+      .toEqual({ applied: false, cardKey: null });
   });
 });

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDb, exec, migrate, type Db } from "../src/db.js";
 import { CHART_ANALYSIS_VERSION } from "../src/features/chart-analysis.js";
-import { buildPackCardProfileSnapshot, getCachedPlayerProfileSnapshot, getPlayerRecentScoresFromOsu } from "../src/features/player-profiles.js";
+import { getCachedPackCardSnapshot, getCachedPackCardSnapshots, getCachedPlayerProfileSnapshot, getPlayerRecentScoresFromOsu } from "../src/features/player-profiles.js";
 import type { OscScore } from "../src/shared/types.js";
 
 let dir = "";
@@ -460,13 +460,12 @@ describe("pack card snapshot projection", () => {
       ],
     );
 
-    const snapshot = await getCachedPlayerProfileSnapshot(db, "MnShiny");
-    expect(snapshot).not.toBeNull();
-    const card = buildPackCardProfileSnapshot(snapshot!);
+    const card = await getCachedPackCardSnapshot(db, "MnShiny");
+    expect(card).not.toBeNull();
 
-    expect(card.view).toBe("card");
-    expect(card.isStale).toBe(false);
-    expect(card.user).toEqual({
+    expect(card!.view).toBe("card");
+    expect(card!.isStale).toBe(false);
+    expect(card!.user).toEqual({
       id: USER_ID,
       username: "MnShiny",
       avatar_url: "https://example.test/avatar.png",
@@ -474,8 +473,8 @@ describe("pack card snapshot projection", () => {
       statistics: { pp: 1000, global_rank: 777 },
     });
 
-    expect(card.bestScores).toHaveLength(1);
-    const entry = card.bestScores[0];
+    expect(card!.bestScores).toHaveLength(1);
+    const entry = card!.bestScores[0];
     expect(entry).toMatchObject({
       id: 41,
       pp: 412.5,
@@ -508,6 +507,142 @@ describe("pack card snapshot projection", () => {
     expect(rawBeatmap.version).toBeUndefined();
     const rawUser = raw.user as Record<string, unknown>;
     expect((rawUser.statistics as Record<string, unknown>).play_count).toBeUndefined();
+  });
+
+  it("keeps a score's own beatmap numbers where the stored row has none", async () => {
+    // The seeded archived players (the GOAT pool) store uncompacted scores, and
+    // the beatmaps table has no max_combo for most maps - so the merge has to
+    // be per field, or those cards mint against a different combo ratio.
+    const fetchedAt = new Date().toISOString();
+    const best = score({ id: 71, beatmapId: 701, title: "Archived play", pp: 700, endedAt: fetchedAt });
+    best.beatmap = { ...best.beatmap!, max_combo: 13516, count_circles: 3023, count_sliders: 2510 } as typeof best.beatmap;
+    await exec(
+      db,
+      `insert into profile_snapshots
+       (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at)
+       values (?, 'mnshiny', ?, ?, 200, ?, ?, ?)`,
+      [USER_ID, JSON.stringify({ id: USER_ID, username: "MnShiny" }), JSON.stringify([best]), fetchedAt, fetchedAt, fetchedAt],
+    );
+    await exec(
+      db,
+      `insert into beatmaps (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, max_combo, version, url, metadata_json, updated_at)
+       values (701, 801, 'mania', 'ranked', 4, 6.5, 200, null, '[4K] Insane', 'https://osu.ppy.sh/beatmaps/701', '{}', ?)`,
+      [fetchedAt],
+    );
+
+    const card = await getCachedPackCardSnapshot(db, String(USER_ID), { lookupMode: "userId" });
+
+    expect(card!.bestScores[0].beatmap).toMatchObject({
+      // Stored row wins where it has a value...
+      difficulty_rating: 6.5,
+      bpm: 200,
+      // ...and the score's copy fills the rest.
+      max_combo: 13516,
+      count_circles: 3023,
+      count_sliders: 2510,
+    });
+  });
+
+  it("mints from the live window: top-play events and tracked plays newer than the snapshot", async () => {
+    // A stored window is 12 days old on average, so a card that ignored the
+    // overlay would under-rate every player who has played since.
+    const snapshotFetchedAt = "2026-06-01T00:00:00.000Z";
+    const stored = score({ id: 61, beatmapId: 601, title: "Old best", pp: 300, endedAt: "2026-05-30T00:00:00.000Z" });
+    const confirmed = score({ id: 62, beatmapId: 602, title: "New top play", pp: 500, endedAt: "2026-06-02T00:00:00.000Z" });
+    const tracked = score({ id: 63, beatmapId: 603, title: "Just set", pp: 400, endedAt: "2026-06-03T00:00:00.000Z" });
+    // Older than the snapshot: already inside the stored window, never re-added.
+    const older = score({ id: 64, beatmapId: 604, title: "Before the bake", pp: 900, endedAt: "2026-05-20T00:00:00.000Z" });
+    await exec(
+      db,
+      `insert into profile_snapshots
+       (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at)
+       values (?, 'mnshiny', ?, ?, 200, ?, ?, ?)`,
+      [
+        USER_ID,
+        JSON.stringify({ id: USER_ID, username: "MnShiny", statistics: { pp: 1000 } }),
+        JSON.stringify([stored]),
+        snapshotFetchedAt,
+        snapshotFetchedAt,
+        snapshotFetchedAt,
+      ],
+    );
+    await exec(
+      db,
+      `insert into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at)
+       values ('CR', 62, ?, 500, 500, 200, ?, '2026-06-02T00:05:00.000Z')`,
+      [USER_ID, JSON.stringify({ score: confirmed })],
+    );
+    await insertTrackedScore(tracked);
+    await insertTrackedScore(older);
+
+    const card = await getCachedPackCardSnapshot(db, String(USER_ID), { lookupMode: "userId" });
+
+    expect(card!.bestScores.map((entry) => entry.id)).toEqual([62, 63, 61]);
+  });
+
+  it("reads a whole hand at once, from snapshots and from the top-score projection", async () => {
+    const fetchedAt = new Date().toISOString();
+    const other = 42;
+    // Player one: a stored snapshot, with the score compacted the way the
+    // storage path writes it (no inline beatmap).
+    const stored = score({ id: 51, beatmapId: 501, title: "Stored", pp: 300, endedAt: fetchedAt });
+    delete stored.beatmap;
+    delete stored.beatmapset;
+    await exec(
+      db,
+      `insert into profile_snapshots
+       (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at)
+       values (?, 'mnshiny', ?, ?, 200, ?, ?, ?)`,
+      [
+        USER_ID,
+        JSON.stringify({ id: USER_ID, username: "MnShiny", statistics: { pp: 1000, global_rank: 7 } }),
+        JSON.stringify([stored]),
+        fetchedAt,
+        fetchedAt,
+        fetchedAt,
+      ],
+    );
+    await exec(
+      db,
+      `insert into beatmaps (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, max_combo, version, url, metadata_json, updated_at)
+       values (501, 601, 'mania', 'ranked', 7, 5.25, 190, 2200, '[7K] Hard', 'https://osu.ppy.sh/beatmaps/501', ?, ?)`,
+      [JSON.stringify({ accuracy: 8.5, drain: 8, total_length: 140, count_circles: 1500, count_sliders: 300 }), fetchedAt],
+    );
+
+    // Player two: no snapshot row, only the user_top_scores projection.
+    await exec(
+      db,
+      "insert into users (user_id, username, country_code, avatar_url, updated_at) values (?, 'Runner', 'CR', 'https://example.test/r.png', ?)",
+      [other, fetchedAt],
+    );
+    await exec(
+      db,
+      `insert into user_top_scores (user_id, score_id, position, score_json, pp, weighted_pp, ended_at, refreshed_at)
+       values (?, 52, 1, ?, 250, 250, ?, ?)`,
+      [other, JSON.stringify({ ...score({ id: 52, beatmapId: 501, title: "Projected", pp: 250, endedAt: fetchedAt }), user_id: other }), fetchedAt, fetchedAt],
+    );
+
+    const cards = await getCachedPackCardSnapshots(db, [USER_ID, other, 999999]);
+
+    // Uncached players are absent rather than blank; the client mints them.
+    expect(cards).toHaveLength(2);
+    expect(cards.map((card) => card.user.id)).toEqual([USER_ID, other]);
+    // Compacted scores get their difficulty numbers from the beatmaps table,
+    // including the fields that live only in the stored osu! payload.
+    expect(cards[0].bestScores[0].beatmap).toEqual({
+      id: 501,
+      difficulty_rating: 5.25,
+      cs: 7,
+      bpm: 190,
+      accuracy: 8.5,
+      drain: 8,
+      total_length: 140,
+      count_circles: 1500,
+      count_sliders: 300,
+      max_combo: 2200,
+    });
+    expect(cards[1].bestScores.map((entry) => entry.id)).toEqual([52]);
+    expect(cards[1].isStale).toBe(true);
   });
 });
 

@@ -28,11 +28,11 @@ import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalR
 import { enqueueGlobalMapsRefresh, enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRandomDraw, getMapsRefreshProgress, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, MAPS_RANDOM_DRAW_DEFAULT_COUNT, MAPS_RANDOM_DRAW_EXCLUDE_SETS_MAX, MAPS_RANDOM_DRAW_EXCLUDE_USERS_MAX, MAPS_RANDOM_DRAW_HIDE_USERS_MAX, MAPS_RANDOM_DRAW_MAX_COUNT, MAPS_RANDOM_DRAW_STAR_MAX, MAPS_RANDOM_KEY_BUCKETS, MAPS_RANDOM_PATTERN_NAMES, MAPS_RANDOM_STATUS_BUCKETS, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery, type MapsRandomDrawQuery } from "../features/maps.js";
 import { getMapSearchPage, getMapSearchSetEntry, MAP_SEARCH_PATTERNS, MAP_SEARCH_SUB_PATTERNS, type MapSearchQuery, type MapSearchSort } from "../features/map-search.js";
 import { getMapCollection, getMapCollections, getMapCollectionsRotation, rebuildMapCollections } from "../features/map-collections.js";
-import { getPackWallet, HONORARY_USER_IDS, listPackCollectionCards, listPackCollectionOwnedCardKeys,
+import { applyPackCollectionCardMint, getPackWallet, HONORARY_USER_IDS, listPackCollectionCards, listPackCollectionOwnedCardKeys,
   normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
 import { getHonoraryPullsReport, getPackCardStats, getPackPulledStats, getSharedPackCard, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../features/pack-pulls.js";
 import { createPackDuel, getPackDuel, hitPackBlackjack, joinPackBlackjack, joinPackDuel, redactDuelFor, standPackBlackjack } from "../features/pack-duels.js";
-import { buildPackCardProfileSnapshot, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, warmProfileSnapshots } from "../features/player-profiles.js";
+import { getCachedPackCardSnapshot, getCachedPackCardSnapshots, PACK_CARD_SNAPSHOT_MAX_IDS, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, warmProfileSnapshots } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
 import { getSnipesSnapshot } from "../features/snipes.js";
 import { getSweepReports } from "../features/sweeps-status.js";
@@ -165,6 +165,11 @@ export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: 
           method: req.method ?? "",
           status: res.statusCode,
           country: /[?&]country=([A-Za-z]{2,6})/.exec(req.url ?? "")?.[1]?.toUpperCase() ?? null,
+          // One path can serve very different work (cached-snapshot's card vs
+          // full view, a lookup by id vs username). Without these, a stall hunt
+          // can only guess which caller is behind the slow path.
+          view: /[?&]view=([A-Za-z]{1,16})/.exec(req.url ?? "")?.[1] ?? null,
+          lookup: /[?&]lookup=([A-Za-z]{1,16})/.exec(req.url ?? "")?.[1] ?? null,
           duration_ms: Math.round(durationMs),
         });
       }
@@ -1344,6 +1349,32 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     sendJson(req, res, ctx, 202, await warmProfileSnapshots(ctx.serveWriteDb ?? ctx.db, ctx.osu, userIds));
     return true;
   }
+  if (url.pathname === "/api/packs/cards") {
+    // One hand of cards in one read. The per-player alternative is ten
+    // concurrent cached-snapshot?view=card requests, which on a single-writer
+    // SQLite process is ten interleaved reads that share no beatmap work and
+    // spend ten trips through the rate limiter (see getCachedPackCardSnapshots).
+    // Costly bucket, not the general one: a hand covers up to ten players, and
+    // no honest client opens 30 packs a minute.
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    if (!checkRate(req, res, ctx, "publicCostly")) return true;
+    const userIds = (url.searchParams.get("ids") ?? "")
+      .split(",")
+      .map((raw) => Math.floor(Number(raw) || 0))
+      .filter((id) => id > 0)
+      .slice(0, PACK_CARD_SNAPSHOT_MAX_IDS);
+    if (userIds.length === 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user_ids" });
+      return true;
+    }
+    res.setHeader("cache-control", "public, max-age=15");
+    // Uncached players are simply absent; the client's cold path mints them.
+    await sendAccentEnrichedJson(req, res, ctx, 200, { cards: await getCachedPackCardSnapshots(ctx.db, userIds) });
+    return true;
+  }
   if (url.pathname === "/api/packs/pulls") {
     // Server-to-server only, like the wallet sync: the frontend's server
     // function authenticates the osu! login cookie and forwards the verified
@@ -1596,6 +1627,22 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         (await readBodyBuffer(req, DEFAULT_BODY_LIMIT_BYTES)).toString("utf8") || "{}",
         {},
       );
+      // Repairing a card's missing skills snapshot: no economy change, so it
+      // returns the card key rather than a wallet, and never bumps the rev.
+      if (body.mode === "mint") {
+        const result = await applyPackCollectionCardMint(
+          ctx.serveWriteDb ?? ctx.db,
+          walletUserId,
+          body.cardKey,
+          {
+            tier: body.tier,
+            tierLabel: body.tierLabel,
+            skills: body.skills,
+          },
+        );
+        sendJson(req, res, ctx, 200, result);
+        return true;
+      }
       const mode =
         body.mode === "duplicates" ||
         body.mode === "whole" ||
@@ -4203,7 +4250,11 @@ async function handleCachedProfileSnapshot(
   // full snapshot the profile page consumes.
   const view = url.searchParams.get("view") === "card" ? "card" : "full";
   const lookupMode = url.searchParams.get("lookup") === "id" ? "userId" : "auto";
-  const db = ctx.serveWriteDb ?? ctx.db;
+  // A pure read belongs on the read connection. serveWriteDb is the tiny
+  // write-only side connection (2 MiB cache, no mmap) for the serving path's
+  // bookkeeping writes; this handler deliberately warms nothing, and running
+  // its reads there gave a sweep across distinct players no page cache to hit.
+  const db = ctx.db;
   const encoding = negotiateEncoding(req);
   const state = getProfileSnapshotResponseState(db);
   pruneMapsResponseCache(state.responses, Date.now());
@@ -4220,14 +4271,17 @@ async function handleCachedProfileSnapshot(
       // after its SSR read, the pack card when bestScores comes back empty),
       // and that mints the player inline. Kicking off a warm here would race
       // that mint from another lane and pay for the whole profile twice.
-      const snapshot = await getCachedPlayerProfileSnapshot(db, key, { lookupMode });
-      if (!snapshot) {
+      // The card view never builds a profile: it reads the stored rows and
+      // projects them (see getCachedPackCardSnapshot).
+      const body = view === "card"
+        ? await getCachedPackCardSnapshot(db, key, { lookupMode })
+        : await getCachedPlayerProfileSnapshot(db, key, { lookupMode });
+      if (!body) {
         return {
           prepared: await prepareJsonResponse(404, { error: "not_cached" }, encoding),
           cacheTtlMs: PROFILE_SNAPSHOT_RESPONSE_CACHE_TTL_MS,
         };
       }
-      const body = view === "card" ? buildPackCardProfileSnapshot(snapshot) : snapshot;
       await enrichPayloadAvatarAccents(ctx.db, ctx.queue ?? null, body);
       return {
         prepared: await prepareJsonResponse(200, body, encoding),
