@@ -481,14 +481,7 @@ export function BBCodeEditor({
   const draftKey = `${DRAFT_KEY_PREFIX}${userId ?? "guest"}`;
   const baseSource = initialSource ?? "";
   const [restoredDraft, setRestoredDraft] = useState(false);
-  const [source, setSource] = useState<string>(() => {
-    const draft = readDraft(draftKey);
-    if (draft != null && draft !== baseSource) {
-      setRestoredDraft(true);
-      return draft;
-    }
-    return baseSource;
-  });
+  const [source, setSource] = useState<string>(baseSource);
   const [editMode, setEditMode] = useState<EditMode>("visual");
   const [dialog, setDialog] = useState<ToolDialog | null>(null);
   const [mobilePane, setMobilePane] = useState<"write" | "preview">("write");
@@ -559,6 +552,22 @@ export function BBCodeEditor({
     sourceRef.current = next;
     setSource(next);
   }, []);
+
+  // The draft only exists in localStorage, so restoring it while rendering would
+  // make the first client render disagree with the server's (the "load a me!
+  // page" row keys off an empty source) and React would throw the hydrated tree
+  // away. Restore right after mount instead, and rebuild the visual surface the
+  // same way every other out-of-band source change does.
+  const draftRestoredRef = useRef(false);
+  useEffect(() => {
+    if (draftRestoredRef.current) return;
+    draftRestoredRef.current = true;
+    const draft = readDraft(draftKey);
+    if (draft == null || draft === baseSource) return;
+    setRestoredDraft(true);
+    updateSource(draft);
+    setVisualEpoch((epoch) => epoch + 1);
+  }, [baseSource, draftKey, updateSource]);
 
   // Build (or rebuild) the visual editing surface from the current source.
   useEffect(() => {
