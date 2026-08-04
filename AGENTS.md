@@ -156,7 +156,7 @@ Replies are Components V2 (`components.ts` converts the embed shape into contain
 
 A class of per-user endpoints is gated by `LIVE_ADMIN_TOKEN` but lives outside `/api/admin/*`: the frontend server fn injects the shared token plus the osu!-verified viewer id (so a user only ever touches their own data). These are goals (`/api/goals`, `/api/goals/create`, `/api/goals/delete`), my-data (`/api/my-data/{summary,dashboard,feed,top-plays}`), roster self opt-in/out (`/api/roster/self-add`, `/api/roster/self-remove`), and pack wallet/collection/pull-log/duels (`/api/pack-wallet/{id}`, `/api/pack-collection/{id}`, `/api/packs/pulls`, `POST /api/packs/duels` and `/api/packs/duels/{id}/{join,pick}`). The osu! API proxies `/api/osu/v2` and `/api/osu/beatmap-file` are also `LIVE_ADMIN_TOKEN`-gated and called server-to-server (not from browsers). Admin Discord controls live under `/api/admin/discord/*`.
 
-All public endpoints are rate-limited per IP by `abuse-guard.ts` with separate buckets (general, costly, dan estimates, country activation with per-IP/global/new-country sub-limits, SSE connections with per-IP and total caps, replay video jobs). CORS allows origins from `ALLOWED_ORIGINS`. `/api/admin/*` requires `LIVE_ADMIN_TOKEN`.
+All public endpoints are rate-limited per IP by `abuse-guard.ts` with separate buckets (general, costly, pack hands, dan estimates, country activation with per-IP/global/new-country sub-limits, SSE connections with per-IP and total caps, replay video jobs). Note the general bucket applies to every `/api/` path, so a route with its own bucket spends both. CORS allows origins from `ALLOWED_ORIGINS`. `/api/admin/*` requires `LIVE_ADMIN_TOKEN`.
 
 ## Replay Video Export
 

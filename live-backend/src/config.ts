@@ -56,6 +56,7 @@ export interface Config {
   countryWarmTtlMs: number;
   publicApiRatePerMinute: number;
   publicCostlyRatePerMinute: number;
+  packCardsRatePerMinute: number;
   countryActivateRatePerMinute: number;
   countryActivateGlobalRatePerMinute: number;
   countryActivateNewPerHour: number;
@@ -292,6 +293,11 @@ export function readConfig(): Config {
     countryWarmTtlMs: readInt("COUNTRY_WARM_TTL_MS", 72 * 60 * 60 * 1000),
     publicApiRatePerMinute: readInt("PUBLIC_API_RATE_PER_MINUTE", 120),
     publicCostlyRatePerMinute: readInt("PUBLIC_COSTLY_RATE_PER_MINUTE", 30),
+    // Opening a pack is one batched hand request, so this is roughly "packs per
+    // minute". Its own bucket because pack bursts and ordinary browsing
+    // (profiles, farm helper, maps) used to spend the same costly budget: a few
+    // Wild packs left the rest of the site 429ing for the remainder of a minute.
+    packCardsRatePerMinute: readInt("PACK_CARDS_RATE_PER_MINUTE", 30),
     countryActivateRatePerMinute: readInt("COUNTRY_ACTIVATE_RATE_PER_MINUTE", 10),
     countryActivateGlobalRatePerMinute: readInt("COUNTRY_ACTIVATE_GLOBAL_RATE_PER_MINUTE", 120),
     countryActivateNewPerHour: readInt("COUNTRY_ACTIVATE_NEW_PER_HOUR", 12),

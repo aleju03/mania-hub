@@ -1382,13 +1382,16 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     // concurrent cached-snapshot?view=card requests, which on a single-writer
     // SQLite process is ten interleaved reads that share no beatmap work and
     // spend ten trips through the rate limiter (see getCachedPackCardSnapshots).
-    // Costly bucket, not the general one: a hand covers up to ten players, and
-    // no honest client opens 30 packs a minute.
+    // Its own bucket rather than the shared costly one: a hand covers up to ten
+    // players, and when pack bursts and ordinary browsing drew on the same
+    // budget, a few Wild packs in a row left the rest of the site 429ing for the
+    // remainder of the minute. No honest client opens 30 packs a minute either
+    // way, and the blanket publicApi bucket still applies on top.
     if (req.method !== "GET") {
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
       return true;
     }
-    if (!checkRate(req, res, ctx, "publicCostly")) return true;
+    if (!checkRate(req, res, ctx, "packCards")) return true;
     const userIds = (url.searchParams.get("ids") ?? "")
       .split(",")
       .map((raw) => Math.floor(Number(raw) || 0))

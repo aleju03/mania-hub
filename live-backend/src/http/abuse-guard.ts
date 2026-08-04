@@ -4,6 +4,7 @@ import type { Config } from "../config.js";
 export type AbuseBucket =
   | "publicApi"
   | "publicCostly"
+  | "packCards"
   | "countryActivate"
   | "countryActivateGlobal"
   | "countryActivateNew"
@@ -139,6 +140,8 @@ function limitForBucket(config: Config, bucket: AbuseBucket): number {
       return Math.max(1, config.publicApiRatePerMinute ?? 120);
     case "publicCostly":
       return Math.max(1, config.publicCostlyRatePerMinute ?? 30);
+    case "packCards":
+      return Math.max(1, config.packCardsRatePerMinute ?? 30);
     case "countryActivate":
       return Math.max(1, config.countryActivateRatePerMinute ?? 10);
     case "countryActivateGlobal":
