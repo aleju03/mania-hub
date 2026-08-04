@@ -7,6 +7,7 @@ import { useAuth } from "../../lib/auth-context";
 import { fetchMyGoals } from "../../lib/goals";
 import { openLiveEventSource } from "../../lib/live-backend";
 import { playGoalClearedSound } from "../../lib/ui-sounds";
+import { useDocumentVisible } from "../../lib/window-activity";
 import { celebrationLabel, type GoalCompletedPayload } from "../../lib/goal-format";
 import {
   getGoalDeleteToast,
@@ -20,11 +21,13 @@ import type { GoalKind } from "../../lib/goals";
 
 // Site-wide goal toasts, mounted once in the root layout so they follow the user across pages:
 // the delete-undo bar (backed by the module-level store in lib/goal-toasts) and the goal-cleared
-// celebration (backed by the viewer's country SSE feed).
+// celebration (backed by the viewer's country SSE feed). The feed shares its socket with a page
+// listening to the same country and disconnects while the tab is hidden.
 
 export function GoalToasts() {
   const auth = useAuth();
   const viewer = auth.viewer;
+  const documentVisible = useDocumentVisible();
 
   const [celebration, setCelebration] = useState<Celebration | null>(null);
   const celebrationSeq = useRef(0);
@@ -36,7 +39,7 @@ export function GoalToasts() {
   const viewerId = viewer?.id;
   const viewerCountry = viewer?.countryCode;
   useEffect(() => {
-    if (!viewerId || !viewerCountry) return;
+    if (!viewerId || !viewerCountry || !documentVisible) return;
     const source = openLiveEventSource(viewerCountry);
     if (!source) return;
     source.addEventListener("goal_completed", (event) => {
@@ -63,7 +66,7 @@ export function GoalToasts() {
     if (source.readyState === EventSource.OPEN) settle();
     else source.addEventListener("open", settle, { once: true });
     return () => source.close();
-  }, [viewerId, viewerCountry]);
+  }, [documentVisible, viewerId, viewerCountry]);
 
   const deleteToast = useSyncExternalStore(subscribeGoalDeleteToast, getGoalDeleteToast, () => null);
 

@@ -5,6 +5,7 @@ import { buildRandomDrawQuery } from "./maps-random-draw-params";
 import type { LiveMapsRandomDrawParams } from "./maps-random-draw-params";
 import type { ManiaSkills } from "./maniacard";
 import type { MyDataSkillBreakdown } from "./my-data";
+import { SharedEventSourcePool, type SharedEventSource } from "./shared-event-source";
 
 export type LivePlayerSkills = MyDataSkillBreakdown;
 import type {
@@ -2130,32 +2131,29 @@ export function openReplayPresenceEventSource(key: string, options?: { observe?:
   return new EventSource(`${base}/api/replay/presence?${query.toString()}`);
 }
 
-export function openLiveEventSource(country: string, options?: { observe?: boolean }): EventSource | null {
+const AVATAR_LIVE_EVENT_NAMES: LiveEventName[] = ["tracker_score", "score_gain", "top_play", "snipe"];
+
+const liveEventSourcePool = new SharedEventSourcePool((url) => {
+  const source = new EventSource(url);
+  const harvest = (event: Event) => {
+    const data = (event as MessageEvent).data;
+    if (typeof data !== "string" || !data.includes("avatar")) return;
+    try {
+      harvestAvatarAccents(JSON.parse(data));
+    } catch {
+      // Not JSON or malformed: the consumer decides how to handle it.
+    }
+  };
+  for (const type of AVATAR_LIVE_EVENT_NAMES) source.addEventListener(type, harvest);
+  return source;
+});
+
+export function openLiveEventSource(country: string, options?: { observe?: boolean }): SharedEventSource | null {
   const base = getLiveBackendUrl();
   if (!base || typeof EventSource === "undefined") return null;
-  const query = new URLSearchParams({ country });
+  const query = new URLSearchParams({ country: country.trim().toUpperCase() });
   if (options?.observe) query.set("observe", "1");
-  const source = new EventSource(`${base}/api/live?${query.toString()}`);
-  // Event payloads carry avatar accents like snapshots do. Harvesting here, before the caller's
-  // listener runs, means every SSE consumer gets colored names with zero per-consumer code. No
-  // consumer uses removeEventListener on these sources, so wrapping the listener is safe.
-  const originalAddEventListener = source.addEventListener.bind(source);
-  source.addEventListener = ((type: string, listener: EventListenerOrEventListenerObject, listenerOptions?: boolean | AddEventListenerOptions) => {
-    const wrapped = (event: Event) => {
-      const data = (event as MessageEvent).data;
-      if (typeof data === "string" && data.includes("avatar")) {
-        try {
-          harvestAvatarAccents(JSON.parse(data));
-        } catch {
-          // Not JSON or malformed: the caller's listener decides how to handle it.
-        }
-      }
-      if (typeof listener === "function") listener(event);
-      else listener.handleEvent(event);
-    };
-    originalAddEventListener(type, wrapped, listenerOptions);
-  }) as typeof source.addEventListener;
-  return source;
+  return liveEventSourcePool.open(`${base}/api/live?${query.toString()}`);
 }
 
 async function fetchLiveJson<T>(path: string, init?: RequestInit): Promise<T> {
