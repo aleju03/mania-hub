@@ -11,14 +11,16 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-// Cache growth is bounded by R2 lifecycle rules configured per prefix in the Cloudflare
-// dashboard. As of 2026-08-03 the rules are: parsed/ 90d, uploaded-replay-desc/ 90d,
-// maniacards/ 90d, and the default multipart-abort (7d). Everything else (audio/,
-// background/, blob/, og/, replays/, community-beatmaps/, uploaded-replays/, videos/) never expires.
-// uploaded-replays/, community-beatmaps/, and videos/ hold user data with no other durable
-// copy and must NEVER get a lifecycle rule; the rest is re-derivable cache, so adding a
-// rule later is safe (a miss re-uploads and refreshes the object's age). Replay endpoint
-// kind rides on S3 object metadata.
+// Cache growth is bounded by R2 lifecycle rules configured per prefix (Cloudflare
+// dashboard or the S3 lifecycle API). As of 2026-08-04 the rules are: parsed/ 90d,
+// uploaded-replay-desc/ 90d, maniacards/ 90d, blob/ 90d, og/ 30d, and the default
+// multipart-abort (7d). Everything else (audio/, background/, replays/,
+// community-beatmaps/, uploaded-replays/, videos/) never expires; audio/ and
+// background/ are zero-byte pointers whose expired blobs read as misses and heal on
+// the next put. uploaded-replays/, community-beatmaps/, and videos/ hold user data
+// with no other durable copy and must NEVER get a lifecycle rule; the rest is
+// re-derivable cache, so adding a rule later is safe (a miss re-uploads and
+// refreshes the object's age). Replay endpoint kind rides on S3 object metadata.
 const REPLAY_CACHE_BUCKET = "mania-hub-replay-cache";
 const REPLAY_CACHE_PREFIX = "replay-cache/";
 const SIGNED_URL_EXPIRES_SECONDS = 6 * 60 * 60;

@@ -133,6 +133,9 @@ describe("replay upload validation", () => {
     expect(result.beatmapHash).toBe("a".repeat(32));
     expect(result.playerName).toBe("TestPlayer");
     expect(result.frameCount).toBeGreaterThan(0);
+    // The decode is handed back so upload-time description derivation never
+    // has to parse the same buffer twice.
+    expect(result.parsed.replay.frames.length).toBe(result.frameCount);
   });
 
   it("rejects non-mania replays", async () => {

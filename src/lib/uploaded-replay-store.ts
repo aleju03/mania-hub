@@ -55,7 +55,7 @@ function getLocalUploadMetaPath(id: string): string {
   return path.join(getLocalUploadDir(), `${normalized}.json`);
 }
 
-function normalizeOriginalFilename(filename: string | null | undefined): string | undefined {
+export function normalizeUploadedReplayFilename(filename: string | null | undefined): string | undefined {
   const value = filename?.replace(/\\/g, "/").split("/").pop()?.trim() ?? "";
   if (!value || value.includes("\0")) return undefined;
   return value.replace(/["\r\n]+/g, "_").slice(0, 180);
@@ -66,7 +66,7 @@ export async function saveUploadedReplay(
   metadata: UploadedReplayMetadata = {},
 ): Promise<{ id: string; storage: UploadedReplayStorage }> {
   const id = createUploadedReplayId();
-  const safeFilename = normalizeOriginalFilename(metadata.originalFilename);
+  const safeFilename = normalizeUploadedReplayFilename(metadata.originalFilename);
   const production = process.env.NODE_ENV === "production";
 
   if (isR2ReplayCacheConfigured()) {
@@ -151,7 +151,7 @@ export async function readUploadedReplay(id: string): Promise<StoredUploadedRepl
         id: normalized,
         buffer: stored.buffer,
         storage: "r2",
-        originalFilename: normalizeOriginalFilename(stored.originalFilename),
+        originalFilename: normalizeUploadedReplayFilename(stored.originalFilename),
       };
     }
   }
@@ -164,7 +164,7 @@ export async function readUploadedReplay(id: string): Promise<StoredUploadedRepl
       id: normalized,
       buffer: await readFile(getLocalUploadPath(normalized)),
       storage: "local",
-      originalFilename: normalizeOriginalFilename(meta.originalFilename),
+      originalFilename: normalizeUploadedReplayFilename(meta.originalFilename),
     };
   } catch {
     return null;

@@ -11,7 +11,8 @@
 
 import { isLocalDevAccessGranted } from "./auth-local-dev";
 import { readViewerFromRequest } from "./auth-server";
-import { parseUploadedReplayBuffer } from "./replay-upload";
+import { parseUploadedReplayBuffer, type UploadedReplayParseResult } from "./replay-upload";
+import { persistUploadedReplayDescription } from "./uploaded-replay-describe";
 import {
   normalizeUploadedReplayId,
   readUploadedReplay,
@@ -165,6 +166,9 @@ export interface ValidatedReplayUpload {
   beatmapHash: string;
   playerName: string;
   frameCount: number;
+  // The full decode the validation already paid for, so callers can derive
+  // data from the replay (upload-time description) without a second parse.
+  parsed: UploadedReplayParseResult;
 }
 
 export async function validateUploadedReplayOsr(
@@ -212,6 +216,7 @@ export async function validateUploadedReplayOsr(
     beatmapHash: parsed.replay.header.beatmapHash ?? "",
     playerName: parsed.replay.header.playerName,
     frameCount: parsed.replay.frames.length,
+    parsed,
   };
 }
 
@@ -270,8 +275,9 @@ export async function handleReplayUploadPost(request: Request): Promise<Response
     return Response.json({ error: "Replay file is empty." }, { status: 400 });
   }
 
+  let validated: ValidatedReplayUpload;
   try {
-    await validateUploadedReplayOsr(buffer);
+    validated = await validateUploadedReplayOsr(buffer);
   } catch (error) {
     if (error instanceof ReplayValidationError) {
       return Response.json({ error: error.message }, { status: error.status });
@@ -279,13 +285,25 @@ export async function handleReplayUploadPost(request: Request): Promise<Response
     return Response.json({ error: "This is not a valid .osr replay file." }, { status: 422 });
   }
 
+  const originalFilename = readUploadFilename(request);
   const uploaderId = rateKey.startsWith("user:") ? Number(rateKey.slice(5)) : null;
   try {
     const saved = await saveUploadedReplay(buffer, {
-      originalFilename: readUploadFilename(request),
+      originalFilename,
       uploaderId,
       uploadedAt: new Date().toISOString(),
     });
+    // Store the derived description while the parse is in hand, so the
+    // community list reads it back instead of re-downloading and re-parsing
+    // the .osr. Best-effort: the upload already succeeded, and a miss just
+    // means the first list rebuild derives it the slow way.
+    if (saved.storage === "r2") {
+      try {
+        await persistUploadedReplayDescription(saved.id, validated.parsed, originalFilename);
+      } catch {
+        // Descriptions are derived data; never fail the upload over one.
+      }
+    }
     return Response.json({
       id: saved.id,
       url: getShareUrl(request, saved.id),
