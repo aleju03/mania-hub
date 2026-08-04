@@ -94,6 +94,16 @@ const RESERVED_LANE_TYPES: Record<string, number> = {
   // in the tracker while still playing. A reserve keeps a trickle runnable
   // under any pressure, same remedy as every other former shared-pool type.
   reconcile_user_recent_scores: 10,
+  // Roster/cohort enrichment. The drip enqueues sit at priority 10, which the
+  // fast lane's priority-desc claim never reaches while interactive work
+  // (profile refresh 80/120, top scores 50, reconcile 25-70) keeps its three
+  // slots busy: on prod 64 of these sat at attempts=0 for three days. Starved
+  // rows are still *runnable*, so they counted toward the shared depth and
+  // pinned it above QUEUE_TARGET_DEPTH permanently -- which meant the deferred
+  // pool (4k parked profile refreshes) could never reactivate, since that only
+  // happens below QUEUE_SOFT_PRESSURE_DEPTH. The reserve takes them out of the
+  // shared count; the dedicated "enrich" worker lane is what drains them.
+  enrich_user: 10,
   // Both backfills chain their next page from inside the running job:
   // runner + queued continuation.
   osc_backfill: 2,

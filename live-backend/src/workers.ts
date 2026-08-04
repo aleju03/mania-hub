@@ -90,6 +90,19 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     intervalMs: 750,
   },
   {
+    // enrich_user also rides the fast lane, where a priority-100 interactive
+    // enrichment wins a slot immediately -- but the priority-10 drip enqueues
+    // never do, because that lane claims priority-desc and ingest keeps it
+    // busy. Its queue reserve keeps those rows out of the shared depth count
+    // (see RESERVED_LANE_TYPES); this lane is what actually drains them, so a
+    // backlog can no longer sit at attempts=0 for days. Local DB work plus one
+    // /users call, and the osu! token bucket still paces the requests.
+    name: "enrich",
+    jobTypes: ["enrich_user"],
+    claimLimit: 1,
+    intervalMs: 2_000,
+  },
+  {
     // Keep global backfill separate and slow so socket outages can be repaired
     // without letting JSON catch-up crowd out interactive enrichment jobs.
     name: "osc-backfill",

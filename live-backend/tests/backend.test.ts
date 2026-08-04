@@ -1157,10 +1157,13 @@ describe("live backend", () => {
       );
     }
 
-    await queue.enqueue("enrich_user", "user:101", { userId: 101 }, { priority: 100 });
+    // enrich_beatmap is the stand-in for "a plain shared-pool type": no reserve,
+    // no active cap. (enrich_user cannot play that role -- it has a reserved
+    // lane of its own, precisely so a starved backlog cannot inflate depth.)
+    await queue.enqueue("enrich_beatmap", "beatmap:101", { beatmapId: 101 }, { priority: 100 });
 
     // The farmed-score flood is invisible to the shared pool: depth counts
-    // only the enrich job, and the flood is trimmed back to its reserve of 2.
+    // only the enrich_beatmap job, and the flood is trimmed back to its reserve of 2.
     expect(await queue.depth()).toBe(1);
     expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_user_maps_farmed_scores' and status = 'queued'")).rows[0].count)).toBe(2);
     expect(Number((await exec(db, "select count(*) as count from jobs where status = 'deferred_pressure'")).rows[0].count)).toBe(118);
@@ -1205,8 +1208,8 @@ describe("live backend", () => {
       await exec(
         db,
         `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at)
-         values ('enrich_user', ?, 'deferred_pressure', 35, ?, 0, '{}', ?, ?)`,
-        [`user:${index}`, now, now, now],
+         values ('enrich_beatmap', ?, 'deferred_pressure', 35, ?, 0, '{}', ?, ?)`,
+        [`beatmap:${index}`, now, now, now],
       );
     }
 
@@ -1214,6 +1217,81 @@ describe("live backend", () => {
 
     expect(await queue.depth()).toBe(5);
     expect(Number((await exec(db, "select count(*) as count from jobs where status = 'deferred_pressure'")).rows[0].count)).toBe(0);
+  });
+
+  // The 2026-08-03 freeze: 64 priority-10 enrich_user rows the fast lane never
+  // reached (it claims priority-desc) sat runnable for three days, holding the
+  // shared depth above QUEUE_TARGET_DEPTH forever. Reactivation only happens
+  // below QUEUE_SOFT_PRESSURE_DEPTH, so 4k parked profile refreshes could never
+  // come back. Its reserve must keep a starved backlog out of the shared count.
+  it("keeps a starved enrich_user backlog out of shared depth so parked jobs can still revive", async () => {
+    const { db, queue } = await setup();
+    const now = new Date().toISOString();
+    for (let index = 0; index < 64; index += 1) {
+      await exec(
+        db,
+        `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at)
+         values ('enrich_user', ?, 'queued', 10, ?, 0, '{}', ?, ?)`,
+        [`user:starved:${index}`, now, now, now],
+      );
+    }
+    for (let index = 0; index < 30; index += 1) {
+      await exec(
+        db,
+        `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at)
+         values ('refresh_profile_snapshot', ?, 'deferred_pressure', 80, ?, 0, '{}', ?, ?)`,
+        [`refresh_profile_snapshot:${index}`, now, now, now],
+      );
+    }
+
+    await queue.shedPressure();
+
+    // The backlog is trimmed to its reserve and counts for nothing in the
+    // shared pool, so the parked profile refreshes all come back.
+    expect(await queue.depth()).toBe(30);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'enrich_user' and status in ('queued', 'failed', 'running')")).rows[0].count)).toBe(10);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_profile_snapshot' and status = 'deferred_pressure'")).rows[0].count)).toBe(0);
+  });
+
+  // The cost of the reserve: an enqueue past it parks regardless of priority,
+  // so ingest's priority-100 enrichment can land behind a drip backlog. It must
+  // come back FIRST when a slot frees, or a reserve would trade three days of
+  // starvation for a slower version of the same thing.
+  it("revives an interactive enrich_user ahead of the priority-10 backlog", async () => {
+    const { db, queue } = await setup();
+    const now = new Date().toISOString();
+    for (let index = 0; index < 12; index += 1) {
+      await exec(
+        db,
+        `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at)
+         values ('enrich_user', ?, 'deferred_pressure', 10, ?, 0, '{}', ?, ?)`,
+        [`user:drip:${index}`, now, now, now],
+      );
+    }
+    await exec(
+      db,
+      `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at)
+       values ('enrich_user', 'user:ingest', 'deferred_pressure', 100, ?, 0, '{}', ?, ?)`,
+      [now, now, now],
+    );
+
+    await queue.shedPressure();
+
+    const revived = (await exec(db, "select dedupe_key from jobs where type = 'enrich_user' and status = 'queued'")).rows
+      .map((row) => String(row.dedupe_key));
+    expect(revived).toContain("user:ingest");
+    expect(revived).toHaveLength(10);
+  });
+
+  // A reserve only keeps rows runnable; the dedicated lane is what claims them,
+  // since the fast lane's priority-desc claim never reaches priority 10.
+  it("gives enrich_user a lane that claims it regardless of higher-priority work", async () => {
+    const { db, queue, events, ingestor } = await setup();
+
+    const worker = new WorkerRunner(db, queue, events, {} as never, ingestor, "test-worker");
+    const enrichLane = worker.status().lanes.find((lane) => lane.name === "enrich");
+
+    expect(enrichLane?.jobTypes).toEqual(["enrich_user"]);
   });
 
   it("ignores future-scheduled jobs when measuring queue pressure", async () => {
@@ -1229,9 +1307,9 @@ describe("live backend", () => {
       );
     }
 
-    await queue.enqueue("enrich_user", "user:123", { userId: 123 }, { priority: 5 });
+    await queue.enqueue("enrich_beatmap", "beatmap:123", { beatmapId: 123 }, { priority: 5 });
 
-    const enrichJob = (await exec(db, "select status from jobs where type = 'enrich_user'")).rows[0];
+    const enrichJob = (await exec(db, "select status from jobs where type = 'enrich_beatmap'")).rows[0];
     expect(enrichJob.status).toBe("queued");
     expect(await queue.depth()).toBe(1);
   });
