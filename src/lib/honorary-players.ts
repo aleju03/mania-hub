@@ -1,14 +1,14 @@
 /* The honorary roster: osu!mania's historical greats.
 
-   These eighteen carry the GOAT tier by user id (see maniacard.ts) rather than
-   by card power, and they are the only source of that tier. Many of them
+   These twenty-three carry the GOAT tier by user id (see maniacard.ts) rather
+   than by card power, and they are the only source of that tier. Many of them
    stopped playing long before the current rating ladder existed, and the
    ranked pool can't represent them:
 
    - three accounts are deleted outright, so the osu! API 404s and their profiles
      are served from checked-in Wayback reconstructions
      (live-backend/seeds/archived-players);
-   - seven more still exist but were wiped to 0pp and are unranked, so they are
+   - eight more still exist but were wiped to 0pp and are unranked, so they are
      absent from the global rankings snapshot the pack pool draws from;
    - the rest are still ranked, but a rank-ordered pool would bury the ones
      whose peak is long behind them.
@@ -236,6 +236,59 @@ export const HONORARY_PLAYERS: readonly HonoraryPlayer[] = [
     archived: false,
     cardReady: true,
     cardName: "Attang",
+  },
+  {
+    id: 9530019,
+    username: "Lothus",
+    countryCode: "BR",
+    avatarUrl: "https://a.ppy.sh/9530019?1746485399.jpeg",
+    peakRank: 35,
+    peakPp: 12595.4,
+    archived: false,
+    cardReady: true,
+  },
+  {
+    id: 1824775,
+    username: "inteliser",
+    countryCode: "JP",
+    avatarUrl: "https://a.ppy.sh/1824775?1627877794.jpeg",
+    peakRank: 22,
+    peakPp: 14582.8,
+    archived: false,
+    cardReady: true,
+  },
+  {
+    id: 15806513,
+    username: "jkzu123",
+    countryCode: "DE",
+    avatarUrl: "https://a.ppy.sh/15806513?1782161482.jpeg",
+    peakRank: 97,
+    peakPp: 17179.2,
+    archived: false,
+    cardReady: true,
+  },
+  {
+    id: 3817144,
+    username: "cheetose",
+    countryCode: "KR",
+    // Inactive account with no avatar left: a.ppy.sh serves the guest default
+    // and no archived original survives, so the card carries the default until
+    // one turns up.
+    avatarUrl: "https://a.ppy.sh/3817144",
+    peakRank: null,
+    peakPp: 0,
+    archived: false,
+    cardReady: true,
+  },
+  {
+    id: 4477497,
+    username: "cheewee10",
+    countryCode: "MY",
+    avatarUrl: "https://a.ppy.sh/4477497?1706963836.jpeg",
+    peakRank: 4,
+    peakPp: 26429.1,
+    archived: false,
+    cardReady: true,
   },
 ];
 
