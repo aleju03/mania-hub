@@ -178,6 +178,20 @@ describe("AnalyticsLiveBoard", () => {
     expect(screen.getByText("no earlier steps")).toBeTruthy();
   });
 
+  it("holds each visitor's place when a new event reshuffles them", () => {
+    const cardOrder = (container: HTMLElement) =>
+      Array.from(container.querySelectorAll("[title^='visitor id:']")).map((node) => node.getAttribute("title"));
+    const { container, rerender } = render(
+      <AnalyticsLiveBoard sessions={buildAnalyticsSessions(ROWS, NOW)} replayMaps={new Map()} now={NOW} />,
+    );
+    expect(cardOrder(container)).toEqual(["visitor id: a", "visitor id: b"]);
+
+    // b is now the most recently active, so the sessions arrive b-first.
+    const reshuffled = [row({ distinctId: "b", ts: NOW - 1_000, path: "/maps" }), ...ROWS];
+    rerender(<AnalyticsLiveBoard sessions={buildAnalyticsSessions(reshuffled, NOW)} replayMaps={new Map()} now={NOW} />);
+    expect(cardOrder(container)).toEqual(["visitor id: a", "visitor id: b"]);
+  });
+
   it("falls back to a calm empty state when the site is quiet", () => {
     const stale = [row({ distinctId: "a", ts: NOW - 60 * 60_000 })];
     const sessions = buildAnalyticsSessions(stale, NOW);

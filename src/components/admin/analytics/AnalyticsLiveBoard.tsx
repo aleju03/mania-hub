@@ -19,7 +19,9 @@ import { ACTIVITY_KIND_STYLES, VisitorChip, visitorColor } from "./shared";
    The board sits above a long feed, so its geometry is deliberately frozen:
    every card reserves room for the most it can say, so it is the same height
    whether the visitor has one step or four. Cards resizing under every event
-   used to drag a phone reading the feed up the page a few times a minute. */
+   used to drag a phone reading the feed up the page a few times a minute.
+
+   Positions are frozen the same way - see useStableCells. */
 
 const MAX_CARDS = 12;
 const TRAIL_LENGTH = 3;
@@ -37,7 +39,7 @@ export function AnalyticsLiveBoard({
   useSteadyScrollBelow(rootRef);
 
   const online = sessions.filter((session) => session.online);
-  const shown = online.slice(0, MAX_CARDS);
+  const shown = useStableCells(online);
   const overflow = online.length - shown.length;
 
   if (online.length === 0) {
@@ -69,14 +71,52 @@ export function AnalyticsLiveBoard({
   );
 }
 
+/* The board is a wall of cells, not a leaderboard. Sessions arrive ordered by
+   most recent event, so rendering them in that order re-sorted the whole board
+   every time anybody clicked anything - and a browser that scroll-anchors will
+   follow the card it anchored to as it moves, which throws the page around
+   under whoever is reading. So a visitor keeps the cell they were given for as
+   long as they are on the board, a leaver's cell goes to the next arrival, and
+   nothing under the reader moves: cells only ever swap their contents. */
+function useStableCells(online: AnalyticsSession[]): AnalyticsSession[] {
+  const cellsRef = useRef(new Map<string, number>());
+  const cells = cellsRef.current;
+
+  const present = new Set(online.map((session) => session.distinctId));
+  for (const id of Array.from(cells.keys())) {
+    if (!present.has(id)) cells.delete(id);
+  }
+
+  // Visitors already on the board keep their place; free cells go to the most
+  // recently active newcomers, so a busy board does not churn its occupants.
+  const held = online.filter((session) => cells.has(session.distinctId));
+  const arriving = online.filter((session) => !cells.has(session.distinctId));
+  const shown = held.concat(arriving).slice(0, MAX_CARDS);
+
+  const taken = new Set(cells.values());
+  for (const session of shown) {
+    if (cells.has(session.distinctId)) continue;
+    let cell = 0;
+    while (taken.has(cell)) cell += 1;
+    taken.add(cell);
+    cells.set(session.distinctId, cell);
+  }
+
+  return shown.sort((a, b) => (cells.get(a.distinctId) ?? 0) - (cells.get(b.distinctId) ?? 0));
+}
+
 /* Cards are a fixed size now, but a visitor arriving or leaving still resizes
    the board, and the board is metres of page above the feed on a phone.
-   Chromium's scroll anchoring absorbs that; Safari has none. So when the whole
-   board sits above the fold - everything that moved is behind the reader - hand
-   the scroll position the difference back and they never feel it. */
+   Chromium and Firefox absorb that with scroll anchoring; Safari has none. So
+   when the whole board sits above the fold - everything that moved is behind
+   the reader - hand the scroll position the difference back and they never
+   feel it. Only where the browser is not already doing it: correcting on top
+   of scroll anchoring moved the page by the full difference instead of
+   holding it still. */
 function useSteadyScrollBelow(ref: React.RefObject<HTMLDivElement | null>) {
   const bottomRef = useRef<number | null>(null);
   useLayoutEffect(() => {
+    if (browserAnchorsScroll()) return;
     const root = ref.current;
     if (!root) return;
     const rect = root.getBoundingClientRect();
@@ -89,6 +129,13 @@ function useSteadyScrollBelow(ref: React.RefObject<HTMLDivElement | null>) {
     if (rect.bottom > 0) return;
     window.scrollBy(0, bottom - previous);
   });
+}
+
+/* WebKit ships neither the property nor the behaviour, so supporting
+   `overflow-anchor` is the same question as "does this browser hold the scroll
+   position for me". */
+function browserAnchorsScroll(): boolean {
+  return typeof CSS !== "undefined" && typeof CSS.supports === "function" && CSS.supports("overflow-anchor", "auto");
 }
 
 function LiveVisitorCard({
