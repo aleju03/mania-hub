@@ -23,6 +23,9 @@ const QUEUE_TARGET_DEPTH = 100;
 const QUEUE_SOFT_PRESSURE_DEPTH = 80;
 const QUEUE_RECOVERY_DEPTH = 60;
 const PRESSURE_DEFER_MS = 30 * 60_000;
+// Share of each shared-pool wake-up handed out evenly across the parked types
+// before the rest goes by priority. See reactivateDeferred.
+const REACTIVATE_FAIR_SHARE = 0.5;
 
 // Empty by design. Globally-sheddable background types repeatedly starved on
 // prod: the queue's steady state sits AT the soft-pressure cap (recent-score
@@ -436,13 +439,57 @@ export class JobQueue {
     return Number(result.rowsAffected ?? 0);
   }
 
+  // Reviving the shared pool strictly by priority starves a whole type whenever a
+  // bigger, higher-priority pool never empties. Observed 2026-08-03: 1,369
+  // top-score refreshes (priority 50) sat untouched behind 4k pack-driven profile
+  // refreshes (priority 80) that drain at 1-2/min, so top-play confirmation
+  // stopped for days while the queue looked like it was recovering. Half of each
+  // wake-up is now split evenly across the parked types (priority-desc within
+  // each) and the rest still goes by global priority: priority keeps leading, but
+  // no type can be held at zero indefinitely.
   private async reactivateDeferred(limit: number, type?: string): Promise<number> {
+    if (limit <= 0) return 0;
+    const now = nowIso();
+    // A reserved-lane refill targets one type and owns its whole limit.
+    if (type != null) return this.reactivateSlice(limit, now, type);
+    const parkedTypes = await this.deferredSharedTypes();
+    let revived = 0;
+    if (parkedTypes.length > 1) {
+      const perType = Math.max(1, Math.floor((limit * REACTIVATE_FAIR_SHARE) / parkedTypes.length));
+      for (const parkedType of parkedTypes) {
+        if (revived >= limit) break;
+        revived += await this.reactivateSlice(Math.min(perType, limit - revived), now, parkedType);
+      }
+    }
+    // Remainder by global priority, which is also the whole limit when only one
+    // type is parked (the old behaviour, unchanged).
+    if (revived < limit) revived += await this.reactivateSlice(limit - revived, now);
+    return revived;
+  }
+
+  // The distinct parked types the shared pool is allowed to revive. Reserved-lane
+  // types are excluded: they only re-enter through their own lane's refill.
+  private async deferredSharedTypes(): Promise<string[]> {
+    const reserved = Object.keys(RESERVED_LANE_TYPES);
+    const filter = reserved.length > 0 ? ` and type not in (${reserved.map(() => "?").join(", ")})` : "";
+    const rows = (await exec(
+      this.db,
+      `select type, max(priority) as top_priority
+       from jobs
+       where status = 'deferred_pressure'${filter}
+       group by type
+       order by top_priority desc, type asc`,
+      reserved,
+    )).rows;
+    return rows.map((row) => String(row.type));
+  }
+
+  private async reactivateSlice(limit: number, now: string, type?: string): Promise<number> {
     if (limit <= 0) return 0;
     // run_after is reset so reactivated jobs are runnable immediately and count
     // toward depth; the parked run_after was only the +30min pressure stamp.
     // Without a type this serves the shared pool, so reserved-lane types are
     // excluded; they only re-enter through their own lane's refill.
-    const now = nowIso();
     const reserved = Object.keys(RESERVED_LANE_TYPES);
     const typeFilter = type != null
       ? { sql: "and type = ?", args: [type] }
