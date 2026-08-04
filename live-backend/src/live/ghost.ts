@@ -64,6 +64,10 @@ export interface GhostVisual {
   x: number;
   y: number;
   anchor: GhostAnchor;
+  /** Which character the overlay draws. Opaque here: the roster and its clip
+      names live in src/lib/ghost-shared.ts, and the overlay falls back to its
+      default for an id it does not know. */
+  character: string;
   clip: string;
   facing: GhostFacing;
   moving: boolean;
@@ -145,6 +149,7 @@ const DEFAULT_VISUAL: GhostVisual = {
   x: 0.5,
   y: 0.7,
   anchor: "page",
+  character: "ralsei",
   clip: "idle",
   facing: "down",
   moving: false,
@@ -444,10 +449,14 @@ function mergeVisual(base: GhostVisual, patch: Partial<GhostVisual> | undefined)
     x: clamp01(patch.x ?? base.x),
     y: clamp01(patch.y ?? base.y),
     anchor: patch.anchor === "page" || patch.anchor === "screen" ? patch.anchor : base.anchor,
+    character: typeof patch.character === "string" && patch.character ? patch.character.slice(0, 32) : base.character,
     clip: typeof patch.clip === "string" && patch.clip ? patch.clip.slice(0, 32) : base.clip,
     facing: isFacing(patch.facing) ? patch.facing : base.facing,
     moving: typeof patch.moving === "boolean" ? patch.moving : base.moving,
-    scale: Number.isFinite(patch.scale) ? Math.max(1, Math.min(8, Number(patch.scale))) : base.scale,
+    /* Sprite pixels per step. The ceiling covers the smallest character on the
+       roster (a 19px dog needs a bigger number than a 43px Ralsei to stand the
+       same height); every viewer caps it against their own width anyway. */
+    scale: Number.isFinite(patch.scale) ? Math.max(1, Math.min(12, Number(patch.scale))) : base.scale,
     speech: patch.speech === undefined ? base.speech : normalizeSpeech(patch.speech),
     action: patch.action === undefined ? base.action : normalizeAction(patch.action),
   };

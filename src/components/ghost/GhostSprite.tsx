@@ -2,25 +2,26 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefO
 import { playGhostActionSfx, playGhostSpeechSfx, preloadGhostSfx } from "#/lib/ghost-sfx";
 import {
   findGhostAction,
-  GHOST_ANCHOR,
-  GHOST_ATLAS_COLS,
-  GHOST_ATLAS_ROWS,
-  GHOST_ATLAS_URL,
-  GHOST_CLIPS,
-  GHOST_FRAME,
+  GHOST_CHARACTER_LIST,
   GHOST_REPLY_MAX_LENGTH,
   GHOST_WALK_SPEED,
   directionalGhostFrame,
   fitGhostScale,
+  ghostAtlasCols,
+  ghostAtlasRows,
+  ghostAtlasUrl,
   ghostBubbleLift,
+  ghostCharacter,
+  ghostClip,
+  ghostClipBounds,
   ghostHitboxRect,
   ghostSpeechDurationMs,
   ghostWrapDelta,
-  isGhostClip,
   isLoopingGhostPose,
+  resolveGhostClip,
   shouldFlipGhostClip,
   wrapGhostX,
-  type GhostClipName,
+  type GhostCharacter,
   type GhostEffect,
   type GhostVisual,
 } from "#/lib/ghost-shared";
@@ -39,6 +40,9 @@ const FOLLOW_RATE = 14;
 
 export interface GhostSpriteProps {
   visualRef: MutableRefObject<GhostVisual>;
+  /* The roster id off the stream. Discrete, so it arrives as a prop and the
+     draw loop below reads the resolved entry from the ref. */
+  character: string;
   speech: { id: number; text: string } | null;
   action: { id: number; kind: string } | null;
   scale: number;
@@ -47,7 +51,7 @@ export interface GhostSpriteProps {
   onSay: ((text: string) => void) | null;
 }
 
-export function GhostSprite({ visualRef, speech, action, scale, onSay }: GhostSpriteProps) {
+export function GhostSprite({ visualRef, character, speech, action, scale, onSay }: GhostSpriteProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const spriteRef = useRef<HTMLDivElement>(null);
   const hitboxRef = useRef<HTMLButtonElement>(null);
@@ -70,16 +74,21 @@ export function GhostSprite({ visualRef, speech, action, scale, onSay }: GhostSp
   }, []);
 
   /* He only mounts while the owner is actually on the page, so warming the
-     samples here costs nothing on an ordinary visit. */
+     samples here costs nothing on an ordinary visit. The other atlases are
+     warmed with them: they are a few KB each, and the owner switching character
+     mid-visit should not leave a hole where the sprite was. */
   useEffect(() => {
     preloadGhostSfx();
+    for (const entry of GHOST_CHARACTER_LIST) new Image().src = ghostAtlasUrl(entry);
   }, []);
 
   useEffect(() => {
-    if (!action || !findGhostAction(action.kind)) return;
+    // Resolved off the ref, not the prop: depending on the character here would
+    // replay the last action every time the owner switches sprite.
+    if (!action || !findGhostAction(ghostCharacter(visualRef.current.character), action.kind)) return;
     setPlaying({ ...action, startedAt: performance.now() });
     playGhostActionSfx(action.kind);
-  }, [action]);
+  }, [action, visualRef]);
 
   useEffect(() => {
     setSaying(speech);
@@ -108,6 +117,11 @@ export function GhostSprite({ visualRef, speech, action, scale, onSay }: GhostSp
        a sprint has to look like one without another field on the wire. */
     let rate = 0;
     let phase = 0;
+    /* The atlas in the element right now. Swapping characters is rare and the
+       url is only rewritten when it actually changes. */
+    let drawn: GhostCharacter | null = null;
+    let cols = 1;
+    let rows = 1;
 
     const draw = (now: number) => {
       raf = requestAnimationFrame(draw);
@@ -146,10 +160,21 @@ export function GhostSprite({ visualRef, speech, action, scale, onSay }: GhostSp
       rate += (travelled - rate) * Math.min(1, dt * 8);
       container.style.transform = `translate3d(${(x * page.w).toFixed(1)}px, ${(y * page.h).toFixed(1)}px, 0)`;
 
+      /* Which sprite is on the page. The clip names below are that character's,
+         so both are resolved together: a tick that still carries the previous
+         character's clip draws its idle rather than a missing row. */
+      const character = ghostCharacter(next.character);
+      if (character !== drawn) {
+        drawn = character;
+        cols = ghostAtlasCols(character);
+        rows = ghostAtlasRows(character);
+        sprite.style.backgroundImage = `url(${ghostAtlasUrl(character)})`;
+      }
+
       const active = playingRef.current;
-      const spec = active ? findGhostAction(active.kind) : null;
-      const clipName = resolveClip(spec?.clip ?? next.clip);
-      const clip = GHOST_CLIPS[clipName];
+      const spec = active ? findGhostAction(character, active.kind) : null;
+      const clipName = resolveGhostClip(character, spec?.clip ?? next.clip);
+      const clip = ghostClip(character, clipName);
       let frame = 0;
       if (active && spec) {
         const index = Math.floor(((now - active.startedAt) / 1000) * clip.fps);
@@ -159,10 +184,14 @@ export function GhostSprite({ visualRef, speech, action, scale, onSay }: GhostSp
           frame = index % clip.frames;
           if (spec.reverse) frame = clip.frames - 1 - frame;
         }
-      } else if (directionalGhostFrame(clipName, next.facing) != null) {
+      } else if (active) {
+        /* The action belongs to whoever was on screen a moment ago: drop it
+           rather than holding it against a character that has no such move. */
+        if (playingRef.current?.id === active.id) setPlaying(null);
+      } else if (directionalGhostFrame(character, clipName, next.facing) != null) {
         // Two drawings, one per side: the frame is the direction, not the time.
-        frame = directionalGhostFrame(clipName, next.facing)!;
-      } else if (next.moving || isLoopingGhostPose(clipName)) {
+        frame = directionalGhostFrame(character, clipName, next.facing)!;
+      } else if (next.moving || isLoopingGhostPose(character, clipName)) {
         /* Legs keep up with the actual pace: nominal at a walk, faster at a
            run, so a sprint reads as one. Poses just run at their own rate. */
         const pace = next.moving ? Math.min(2, Math.max(0.7, rate / GHOST_WALK_SPEED)) : 1;
@@ -175,19 +204,19 @@ export function GhostSprite({ visualRef, speech, action, scale, onSay }: GhostSp
       /* The owner picks one size for everyone, in sprite pixels. Each viewer
          caps it against their own width so he is a character on a phone rather
          than most of the screen. */
-      const spriteScale = fitGhostScale(next.scale, window.innerWidth);
-      const flip = shouldFlipGhostClip(clipName, next.facing);
-      sprite.style.width = `${GHOST_FRAME.w * spriteScale}px`;
-      sprite.style.height = `${GHOST_FRAME.h * spriteScale}px`;
-      sprite.style.backgroundSize = `${GHOST_FRAME.w * GHOST_ATLAS_COLS * spriteScale}px ${GHOST_FRAME.h * GHOST_ATLAS_ROWS * spriteScale}px`;
-      sprite.style.backgroundPosition = `${-frame * GHOST_FRAME.w * spriteScale}px ${-clip.row * GHOST_FRAME.h * spriteScale}px`;
+      const spriteScale = fitGhostScale(character, next.scale, window.innerWidth);
+      const flip = shouldFlipGhostClip(character, clipName, next.facing);
+      sprite.style.width = `${character.frame.w * spriteScale}px`;
+      sprite.style.height = `${character.frame.h * spriteScale}px`;
+      sprite.style.backgroundSize = `${character.frame.w * cols * spriteScale}px ${character.frame.h * rows * spriteScale}px`;
+      sprite.style.backgroundPosition = `${-frame * character.frame.w * spriteScale}px ${-clip.row * character.frame.h * spriteScale}px`;
       /* Read right to left: park the anchor (his feet) on the container origin,
          then mirror about it, so facing left never shifts where he stands. */
-      sprite.style.transform = `${flip ? "scaleX(-1) " : ""}translate(${-GHOST_ANCHOR.x * spriteScale}px, ${-GHOST_ANCHOR.y * spriteScale}px)`;
+      sprite.style.transform = `${flip ? "scaleX(-1) " : ""}translate(${-character.anchor.x * spriteScale}px, ${-character.anchor.y * spriteScale}px)`;
       /* The bubble hangs off whatever clip is drawn this frame, so a pose that
          changes his height moves it with him rather than at the next render. */
-      if (bubbleRef.current) bubbleRef.current.style.bottom = `${ghostBubbleLift(clipName, spriteScale)}px`;
-      const hitboxRect = ghostHitboxRect(clipName, spriteScale, flip);
+      if (bubbleRef.current) bubbleRef.current.style.bottom = `${ghostBubbleLift(character, clipName, spriteScale)}px`;
+      const hitboxRect = ghostHitboxRect(character, clipName, spriteScale, flip);
       hitbox.style.left = `${hitboxRect.x}px`;
       hitbox.style.top = `${hitboxRect.y}px`;
       hitbox.style.width = `${hitboxRect.w}px`;
@@ -198,14 +227,19 @@ export function GhostSprite({ visualRef, speech, action, scale, onSay }: GhostSp
     return () => cancelAnimationFrame(raf);
   }, [visualRef]);
 
-  const spec = playing ? findGhostAction(playing.kind) : null;
+  const drawn = ghostCharacter(character);
+  const spec = playing ? findGhostAction(drawn, playing.kind) : null;
   /* The bubble and the shadow hang off the drawn size, so they need the same
      cap the loop draws him at, re-read when the window changes (a phone turned
      on its side is a different screen). */
-  const drawScale = fitGhostScale(scale, viewportWidth);
+  const drawScale = fitGhostScale(drawn, scale, viewportWidth);
   /* Where the bubble starts out. The loop takes it over on the next frame, off
      whatever clip is actually drawn. */
-  const lift = ghostBubbleLift(resolveClip(spec?.clip ?? visualRef.current.clip), drawScale);
+  const lift = ghostBubbleLift(drawn, spec?.clip ?? visualRef.current.clip, drawScale);
+  /* Sized off the character rather than a fixed 16px: the same ellipse under a
+     37px star and a 22px dog reads as a puddle under one and a smudge under the
+     other. Taken from the idle clip so it holds still while he moves. */
+  const shadowWidth = Math.round(ghostClipBounds(drawn, drawn.idle).w * 0.7);
   return (
     <>
       {spec?.effect ? <GhostEffectLayer key={playing?.id} effect={spec.effect} /> : null}
@@ -217,6 +251,7 @@ export function GhostSprite({ visualRef, speech, action, scale, onSay }: GhostSp
           {saying ? <GhostBubble key={saying.id} containerRef={bubbleRef} text={saying.text} lift={lift} /> : null}
           {answering && onSay ? (
             <GhostReplyBox
+              name={drawn.name}
               onClose={() => setAnswering(false)}
               onSend={(text) => {
                 onSay(text);
@@ -230,27 +265,32 @@ export function GhostSprite({ visualRef, speech, action, scale, onSay }: GhostSp
           <div
             aria-hidden
             className="absolute rounded-[50%] bg-black/35 blur-[2px]"
-            style={{ width: 16 * drawScale, height: 4 * drawScale, left: -8 * drawScale, top: -3 * drawScale }}
+            style={{
+              width: shadowWidth * drawScale,
+              height: (shadowWidth / 4) * drawScale,
+              left: (-shadowWidth / 2) * drawScale,
+              top: (-shadowWidth / 5) * drawScale,
+            }}
           />
           {/* origin-top-left is load-bearing: the flip has to mirror about the
               container origin, not about the frame's own centre. */}
           <div
             ref={spriteRef}
             role={onSay ? undefined : "img"}
-            aria-label={onSay ? undefined : "Ralsei"}
+            aria-label={onSay ? undefined : drawn.name}
             aria-hidden={onSay ? true : undefined}
             className="pointer-events-none absolute origin-top-left [image-rendering:pixelated]"
-            style={{ backgroundImage: `url(${GHOST_ATLAS_URL})`, backgroundRepeat: "no-repeat" }}
+            style={{ backgroundImage: `url(${ghostAtlasUrl(drawn)})`, backgroundRepeat: "no-repeat" }}
           />
           {/* The atlas frame is mostly transparent padding. Keep interaction on
               a separate rectangle matching the current clip's visible pixels
-              so Ralsei cannot be clicked from hundreds of pixels above him. */}
+              so he cannot be clicked from hundreds of pixels above himself. */}
           <button
             ref={hitboxRef}
             type="button"
             disabled={!onSay}
             tabIndex={onSay ? 0 : -1}
-            aria-label="Say something to Ralsei"
+            aria-label={`Say something to ${drawn.name}`}
             aria-hidden={onSay ? undefined : true}
             onClick={onSay ? () => setAnswering((open) => !open) : undefined}
             className={`absolute appearance-none border-0 bg-transparent p-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300 ${
@@ -263,37 +303,35 @@ export function GhostSprite({ visualRef, speech, action, scale, onSay }: GhostSp
   );
 }
 
-function resolveClip(name: string): GhostClipName {
-  return isGhostClip(name) ? name : "idle";
-}
-
-/* One atlas frame, for surfaces that place him themselves (the control panel's
-   stage). Same anchor rules as the overlay, so what the owner aims at is where
-   he lands on the visitor's screen. */
+/* One atlas frame, for surfaces that place a character themselves (the control
+   panel's stage and its picker). Same anchor rules as the overlay, so what the
+   owner aims at is where he lands on the visitor's screen. */
 export function GhostAtlasFrame({
+  character,
   clip,
   frame,
   scale,
   flip = false,
 }: {
-  clip: GhostClipName;
+  character: GhostCharacter;
+  clip: string;
   frame: number;
   scale: number;
   flip?: boolean;
 }) {
-  const definition = GHOST_CLIPS[clip];
+  const definition = ghostClip(character, clip);
   return (
     <div
       aria-hidden
       className="pointer-events-none absolute origin-top-left [image-rendering:pixelated]"
       style={{
-        width: GHOST_FRAME.w * scale,
-        height: GHOST_FRAME.h * scale,
-        backgroundImage: `url(${GHOST_ATLAS_URL})`,
+        width: character.frame.w * scale,
+        height: character.frame.h * scale,
+        backgroundImage: `url(${ghostAtlasUrl(character)})`,
         backgroundRepeat: "no-repeat",
-        backgroundSize: `${GHOST_FRAME.w * GHOST_ATLAS_COLS * scale}px ${GHOST_FRAME.h * GHOST_ATLAS_ROWS * scale}px`,
-        backgroundPosition: `${-(frame % definition.frames) * GHOST_FRAME.w * scale}px ${-definition.row * GHOST_FRAME.h * scale}px`,
-        transform: `${flip ? "scaleX(-1) " : ""}translate(${-GHOST_ANCHOR.x * scale}px, ${-GHOST_ANCHOR.y * scale}px)`,
+        backgroundSize: `${character.frame.w * ghostAtlasCols(character) * scale}px ${character.frame.h * ghostAtlasRows(character) * scale}px`,
+        backgroundPosition: `${-(frame % definition.frames) * character.frame.w * scale}px ${-definition.row * character.frame.h * scale}px`,
+        transform: `${flip ? "scaleX(-1) " : ""}translate(${-character.anchor.x * scale}px, ${-character.anchor.y * scale}px)`,
       }}
     />
   );
@@ -354,7 +392,7 @@ export function GhostBubbleBox({ children }: { children: ReactNode }) {
 /* Answering him. The box is deliberately small and unstyled beyond the same
    black-and-white box his own lines use: it is a whisper to whoever is driving,
    not a chat feature. */
-function GhostReplyBox({ onSend, onClose }: { onSend: (text: string) => void; onClose: () => void }) {
+function GhostReplyBox({ name, onSend, onClose }: { name: string; onSend: (text: string) => void; onClose: () => void }) {
   const [text, setText] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -380,7 +418,7 @@ function GhostReplyBox({ onSend, onClose }: { onSend: (text: string) => void; on
           }}
           maxLength={GHOST_REPLY_MAX_LENGTH}
           placeholder="say something back"
-          aria-label="Say something to Ralsei"
+          aria-label={`Say something to ${name}`}
           className="w-[min(240px,55vw)] bg-transparent text-[13px] font-semibold text-white outline-none placeholder:text-white/40"
         />
         <button

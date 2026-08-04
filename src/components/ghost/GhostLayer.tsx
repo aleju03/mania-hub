@@ -2,7 +2,7 @@ import { useRouterState } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useAuth } from "#/lib/auth-context";
 import { getGhostViewerTicket, type GhostViewerTicket } from "#/lib/ghost";
-import { DEFAULT_GHOST_VISUAL, normalizeGhostRoute, type GhostVisual } from "#/lib/ghost-shared";
+import { DEFAULT_GHOST_VISUAL, ghostSpeechDurationMs, normalizeGhostRoute, type GhostVisual } from "#/lib/ghost-shared";
 import { getLiveBackendUrl } from "#/lib/live-backend";
 import { useDocumentVisible } from "#/lib/window-activity";
 
@@ -50,10 +50,19 @@ export function GhostLayer() {
   const [speech, setSpeech] = useState<GhostVisual["speech"]>(null);
   const [action, setAction] = useState<GhostVisual["action"]>(null);
   const [scale, setScale] = useState(DEFAULT_GHOST_VISUAL.scale);
+  const [character, setCharacter] = useState(DEFAULT_GHOST_VISUAL.character);
   /* The connection id doubles as the capability to answer him: it is only ever
      sent down this stream, and the backend only accepts it while this same
      connection is being shown a ghost. */
   const [connectionId, setConnectionId] = useState<string | null>(null);
+  /* What this visitor has already been shown. A line and an action stay on the
+     session until the owner replaces them, which is what lets someone arriving
+     late still see them - but the stream also closes with a hidden tab, and the
+     state frame that reseeds it on return would otherwise type out a bubble
+     they had already read and watched disappear. Keyed by content as well as
+     id, because a reloaded control panel starts numbering from one again. */
+  const shownSpeechRef = useRef<{ key: string; at: number } | null>(null);
+  const shownActionRef = useRef<string | null>(null);
 
   /* A navigation mid-flight would otherwise reconnect once per intermediate
      route; settle first, then move the stream. */
@@ -118,8 +127,30 @@ export function GhostLayer() {
              panel starts numbering again from one. */
           setPresent(true);
           setScale(visual.scale);
-          setSpeech((current) => (current?.id === visual.speech?.id && current?.text === visual.speech?.text ? current : visual.speech));
-          setAction((current) => (current?.id === visual.action?.id && current?.kind === visual.action?.kind ? current : visual.action));
+          setCharacter(visual.character ?? DEFAULT_GHOST_VISUAL.character);
+
+          /* A line this visitor already sat through is not replayed. One they
+             were part way through when the tab went away still finishes: the
+             bubble is on its own clock, so the only thing being suppressed is
+             a rerun of one that had already timed out. */
+          const line = visual.speech;
+          let saying = line;
+          if (line) {
+            const key = `${line.id}:${line.text}`;
+            const shown = shownSpeechRef.current;
+            if (shown?.key !== key) shownSpeechRef.current = { key, at: Date.now() };
+            else if (Date.now() - shown.at >= ghostSpeechDurationMs(line.text)) saying = null;
+          }
+          setSpeech((current) => (current?.id === saying?.id && current?.text === saying?.text ? current : saying));
+
+          /* Actions are one-shots, so a second delivery of the same one is only
+             ever the session being replayed, never the owner firing again: the
+             panel gives every press its own id. */
+          const fired = visual.action;
+          const firedKey = fired ? `${fired.id}:${fired.kind}` : null;
+          const playing = firedKey && shownActionRef.current === firedKey ? null : fired;
+          shownActionRef.current = firedKey;
+          setAction((current) => (current?.id === playing?.id && current?.kind === playing?.kind ? current : playing));
         } catch {
           // A malformed frame is not worth tearing the connection down for.
         }
@@ -155,6 +186,7 @@ export function GhostLayer() {
     <Suspense fallback={null}>
       <GhostSprite
         visualRef={visualRef}
+        character={character}
         speech={speech}
         action={action}
         scale={scale}

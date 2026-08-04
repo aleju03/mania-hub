@@ -1,38 +1,20 @@
 /* The admin ghost: shared vocabulary between the visitor overlay
    (components/ghost) and the control panel (routes/admin/ghost).
 
-   The sprite is a Ralsei sheet packed into one atlas (public/images/ghost/
-   ralsei.png): a grid of uniform 81x49 frames, one clip per row, every frame
-   aligned on the same anchor so switching clips never makes him hop. Route
-   normalization mirrors live-backend/src/live/ghost.ts and must stay in step
-   with it: the backend matches a session's route against what the overlay
-   reports, so both sides have to fold a path the same way. */
+   Each character is one atlas under public/images/ghost/: a grid of uniform
+   frames, one clip per row, every frame aligned on the same anchor so switching
+   clips never makes the sprite hop. The characters differ in frame size, clip
+   set, poses and actions, so everything below is looked up through the roster
+   rather than read off a single sheet. Route normalization mirrors
+   live-backend/src/live/ghost.ts and must stay in step with it: the backend
+   matches a session's route against what the overlay reports, so both sides
+   have to fold a path the same way. */
 
-/* Bump whenever the atlas image changes. The service worker serves /images/*
-   cache-first with no expiry, so swapping the picture under the same URL leaves
-   every returning visitor drawing the new frame grid over the old sheet, which
-   renders as a pile of sprite fragments. */
-export const GHOST_ATLAS_VERSION = 4;
-export const GHOST_ATLAS_URL = `/images/ghost/ralsei.png?v=${GHOST_ATLAS_VERSION}`;
-export const GHOST_FRAME = { w: 84, h: 100 } as const;
-/* Where the character's feet sit inside a frame: the point placed exactly on
-   the ghost's (x, y) so a position means the same thing for every clip. */
-export const GHOST_ANCHOR = { x: 28, y: 95 } as const;
-
-/* How much of a screen he may span. The scale on the wire is in raw sprite
-   pixels, which is the same number of pixels on a phone as on a desktop: 84 per
-   step is a sixth of a wide screen and most of a narrow one, so every viewer
-   caps it against their own width. */
+/* How much of a screen a character may span. The scale on the wire is in raw
+   sprite pixels, which is the same number of pixels on a phone as on a desktop:
+   84 per step is a sixth of a wide screen and most of a narrow one, so every
+   viewer caps it against their own width. */
 export const GHOST_MAX_WIDTH_RATIO = 0.3;
-
-/** The drawn scale for one viewer, never wider than the ratio above. The floor
-    of 1 wins on a screen too narrow to honour the cap, since a sprite scaled
-    below its own pixels is not worth showing. */
-export function fitGhostScale(scale: number, viewportWidth: number): number {
-  if (!Number.isFinite(scale)) return 1;
-  if (!Number.isFinite(viewportWidth) || viewportWidth <= 0) return scale;
-  return Math.max(1, Math.min(scale, (viewportWidth * GHOST_MAX_WIDTH_RATIO) / GHOST_FRAME.w));
-}
 
 /* Under this many CSS pixels across, count a viewer as being on a phone. Same
    breakpoint the site's own layout switches at. */
@@ -51,9 +33,14 @@ export interface GhostClip {
   /* Frames are a right-facing and a left-facing drawing rather than an
      animation, so the frame is picked by facing and never advances on a timer. */
   directional?: boolean;
+  /* Frames are steps rather than an idle animation: they advance while the
+     character is moving and hold still when he is not. What separates the dog
+     on stilts, who should only stride when he is going somewhere, from the dog
+     with maracas, who shakes them standing still. */
+  gait?: boolean;
 }
 
-export const GHOST_CLIPS = {
+const RALSEI_CLIPS = {
   idle: { row: 0, frames: 1, fps: 1, native: "down" },
   "walk-down": { row: 1, frames: 4, fps: 8, native: "down" },
   "walk-up": { row: 2, frames: 4, fps: 8, native: "up" },
@@ -87,8 +74,6 @@ export const GHOST_CLIPS = {
   sleep: { row: 24, frames: 4, fps: 2, native: "down" },
 } as const satisfies Record<string, GhostClip>;
 
-export type GhostClipName = keyof typeof GHOST_CLIPS;
-
 export interface GhostClipBounds {
   x: number;
   y: number;
@@ -100,7 +85,7 @@ export interface GhostClipBounds {
    atlas leaves a large transparent ceiling above most drawings so every pose
    can share one anchor; using the whole 84x100 frame as a pointer target makes
    Ralsei clickable far above where he is actually drawn. */
-export const GHOST_CLIP_BOUNDS = {
+const RALSEI_BOUNDS = {
   idle: { x: 16, y: 52, w: 23, h: 43 },
   "walk-down": { x: 16, y: 52, w: 23, h: 44 },
   "walk-up": { x: 16, y: 52, w: 23, h: 44 },
@@ -126,82 +111,55 @@ export const GHOST_CLIP_BOUNDS = {
   tiny: { x: 16, y: 56, w: 25, h: 39 },
   squashed: { x: 4, y: 64, w: 48, h: 31 },
   sleep: { x: 0, y: 21, w: 55, h: 74 },
-} as const satisfies Record<GhostClipName, GhostClipBounds>;
+} as const satisfies Record<keyof typeof RALSEI_CLIPS, GhostClipBounds>;
 
-/* How far above his feet a speech bubble hangs, in drawn pixels. Measured from
-   the clip's painted pixels rather than the frame: the frame is mostly
-   transparent padding above his head, and clearing that leaves the bubble
-   floating half a sprite too high. Clips differ a lot here (asleep is tall,
-   knocked out is a heap), so this follows whatever he is doing. */
-export function ghostBubbleLift(name: GhostClipName, scale: number): number {
-  return (GHOST_ANCHOR.y - GHOST_CLIP_BOUNDS[name].y + 4) * scale;
-}
+/* Starwalker, the yellow star person from the Cyber World, who introduces
+   himself as "the original star walker". One walk animation covers every
+   direction on purpose: he is a flat star with no back to draw. */
+const STARWALKER_CLIPS = {
+  idle: { row: 0, frames: 1, fps: 1, native: "down" },
+  walk: { row: 1, frames: 8, fps: 10, native: "down" },
+  /* Turning side-on until he is a sliver, which is how he arrives and leaves. */
+  edge: { row: 2, frames: 2, fps: 6, native: "down" },
+  final: { row: 3, frames: 1, fps: 1, native: "down" },
+  shadow: { row: 4, frames: 1, fps: 1, native: "down" },
+} as const satisfies Record<string, GhostClip>;
 
-export function ghostHitboxRect(name: GhostClipName, scale: number, flipped: boolean): GhostClipBounds {
-  const bounds = GHOST_CLIP_BOUNDS[name];
-  return {
-    x: (flipped ? GHOST_ANCHOR.x - bounds.x - bounds.w : bounds.x - GHOST_ANCHOR.x) * scale,
-    y: (bounds.y - GHOST_ANCHOR.y) * scale,
-    w: bounds.w * scale,
-    h: bounds.h * scale,
-  };
-}
+const STARWALKER_BOUNDS = {
+  idle: { x: 2, y: 3, w: 37, h: 36 },
+  walk: { x: 5, y: 2, w: 32, h: 37 },
+  edge: { x: 2, y: 3, w: 37, h: 36 },
+  final: { x: 2, y: 3, w: 37, h: 36 },
+  shadow: { x: 2, y: 3, w: 37, h: 36 },
+} as const satisfies Record<keyof typeof STARWALKER_CLIPS, GhostClipBounds>;
 
-/* The atlas is a plain grid, so its size follows from the clip table: one row
-   per clip, as many columns as the longest clip. */
-export const GHOST_ATLAS_ROWS = Math.max(...Object.values(GHOST_CLIPS).map((clip) => clip.row)) + 1;
-export const GHOST_ATLAS_COLS = Math.max(...Object.values(GHOST_CLIPS).map((clip) => clip.frames));
+/* The Annoying Dog. Small, white, and the only one of the three with a real
+   front and back, so all four directions are drawn. The frame is 224 tall
+   because of the stilts: every other clip is a 19px dog with a lot of
+   transparent air above it, which costs nothing to draw. */
+const DOG_CLIPS = {
+  idle: { row: 0, frames: 1, fps: 1, native: "left" },
+  "walk-left": { row: 1, frames: 2, fps: 7, native: "left" },
+  "walk-down": { row: 2, frames: 2, fps: 7, native: "down" },
+  "walk-up": { row: 3, frames: 2, fps: 7, native: "up" },
+  sleep: { row: 4, frames: 1, fps: 1, native: "left" },
+  car: { row: 5, frames: 2, fps: 4, native: "left", gait: true },
+  maracas: { row: 6, frames: 2, fps: 5, native: "left" },
+  stilts: { row: 7, frames: 4, fps: 6, native: "left", gait: true },
+  "stilts-long": { row: 8, frames: 4, fps: 6, native: "left", gait: true },
+} as const satisfies Record<string, GhostClip>;
 
-export function isGhostClip(name: string): name is GhostClipName {
-  return Object.hasOwn(GHOST_CLIPS, name);
-}
-
-/* Mirroring is only ever needed when a clip is drawn facing the way it was not
-   painted. Both walk cycles ship as real art, so neither is ever mirrored. */
-export function shouldFlipGhostClip(name: GhostClipName, facing: GhostFacing): boolean {
-  const native = GHOST_CLIPS[name].native;
-  if (native === "right") return facing === "left";
-  if (native === "left") return facing === "right";
-  return false;
-}
-
-/* Sustained clips the owner can park him in, as opposed to the walk cycles the
-   panel picks automatically from movement. */
-export const GHOST_POSES = [
-  { kind: "auto", label: "Walk", clip: null },
-  { kind: "stand", label: "Stand", clip: "stand" },
-  { kind: "wave", label: "Wave", clip: "wave" },
-  { kind: "hide", label: "Hide", clip: "hide" },
-  { kind: "sing", label: "Sing", clip: "sing" },
-  { kind: "bow", label: "Bow", clip: "bow" },
-  { kind: "aura", label: "Aura", clip: "aura" },
-  { kind: "sleep", label: "Sleep", clip: "sleep" },
-  { kind: "hooded", label: "Hooded", clip: "hooded" },
-  { kind: "hat", label: "Hat off", clip: "hat" },
-  { kind: "tiny", label: "Under the hat", clip: "tiny" },
-  { kind: "squashed", label: "Squashed", clip: "squashed" },
-  { kind: "down", label: "Knocked out", clip: "down" },
-  { kind: "heap", label: "Heap", clip: "heap" },
-] as const satisfies ReadonlyArray<{ kind: string; label: string; clip: GhostClipName | null }>;
-
-export type GhostPoseKind = (typeof GHOST_POSES)[number]["kind"];
-
-/* A pose with more than one frame keeps cycling while he stands still; a single
-   frame one, or a pair that is really two directions, is just held. */
-export function isLoopingGhostPose(name: GhostClipName): boolean {
-  // Widened to the interface: `as const satisfies` narrows each entry to its own
-  // literal shape, which drops the optional keys the entry does not set.
-  const clip: GhostClip = GHOST_CLIPS[name];
-  return clip.frames > 1 && !clip.directional && GHOST_POSES.some((pose) => pose.clip === name);
-}
-
-/* Which drawing a two-sided clip should show, or null when the clip is a real
-   animation and the frame comes from the clock instead. */
-export function directionalGhostFrame(name: GhostClipName, facing: GhostFacing): number | null {
-  const clip: GhostClip = GHOST_CLIPS[name];
-  if (!clip.directional) return null;
-  return facing === "left" ? 1 : 0;
-}
+const DOG_BOUNDS = {
+  idle: { x: 14, y: 203, w: 22, h: 19 },
+  "walk-left": { x: 14, y: 203, w: 22, h: 19 },
+  "walk-down": { x: 17, y: 203, w: 16, h: 19 },
+  "walk-up": { x: 17, y: 203, w: 16, h: 19 },
+  sleep: { x: 11, y: 210, w: 27, h: 12 },
+  car: { x: 5, y: 180, w: 40, h: 42 },
+  maracas: { x: 3, y: 162, w: 44, h: 60 },
+  stilts: { x: 15, y: 150, w: 19, h: 72 },
+  "stilts-long": { x: 15, y: 2, w: 19, h: 220 },
+} as const satisfies Record<keyof typeof DOG_CLIPS, GhostClipBounds>;
 
 export type GhostEffect = "sparkles" | "hearts" | "notes" | "shake" | "dark" | null;
 
@@ -209,7 +167,7 @@ export interface GhostActionSpec {
   kind: string;
   label: string;
   /* The one-shot clip that takes over while the action plays. */
-  clip: GhostClipName;
+  clip: string;
   effect: GhostEffect;
   /* Plays the clip backwards, which is how "appear" becomes "vanish". */
   reverse?: boolean;
@@ -218,21 +176,275 @@ export interface GhostActionSpec {
   caption?: string;
 }
 
-export const GHOST_ACTIONS = [
-  { kind: "heal", label: "Heal Prayer", clip: "heal", effect: "sparkles", caption: "* Ralsei healed you!" },
-  { kind: "pacify", label: "Pacify", clip: "pacify", effect: "hearts", caption: "* You feel calm." },
-  { kind: "cheer", label: "Cheer", clip: "cheer", effect: "sparkles" },
-  { kind: "sing", label: "Sing", clip: "sing", effect: "notes", loops: 3 },
-  { kind: "spin", label: "Spin", clip: "spin", effect: null, loops: 3 },
-  { kind: "scarf", label: "Scarf whip", clip: "scarf", effect: "shake" },
-  { kind: "dark", label: "Dark World", clip: "spin", effect: "dark", loops: 2, caption: "* The world goes dark." },
-  { kind: "appear", label: "Appear", clip: "appear", effect: null },
-  { kind: "vanish", label: "Vanish", clip: "appear", effect: null, reverse: true },
-] as const satisfies ReadonlyArray<GhostActionSpec>;
-
-export function findGhostAction(kind: string): GhostActionSpec | null {
-  return GHOST_ACTIONS.find((action) => action.kind === kind) ?? null;
+/* Sustained clips the owner can park a character in, as opposed to the walk
+   cycles the panel picks automatically from movement. Every roster entry opens
+   with "auto", which hands the clip back to whatever the movement wants. */
+export interface GhostPoseSpec {
+  kind: string;
+  label: string;
+  clip: string | null;
 }
+
+const WALK_POSE = { kind: "auto", label: "Walk", clip: null } as const;
+
+export interface GhostCharacter {
+  id: string;
+  name: string;
+  /* One line for the picker, so choosing between them is not guesswork. */
+  blurb: string;
+  atlas: { file: string; version: number };
+  frame: { w: number; h: number };
+  /* Where the character's feet sit inside a frame: the point placed exactly on
+     the ghost's (x, y) so a position means the same thing for every clip. */
+  anchor: { x: number; y: number };
+  clips: Record<string, GhostClip>;
+  bounds: Record<string, GhostClipBounds>;
+  /* Which clip each direction walks in. Characters drawn from one side point
+     several directions at the same clip. */
+  walk: Record<GhostFacing, string>;
+  idle: string;
+  poses: readonly GhostPoseSpec[];
+  actions: readonly GhostActionSpec[];
+  /* Sprite pixels per step. The three are drawn at wildly different sizes (a
+     19px dog against a 43px Ralsei), so each carries the size that puts it on a
+     page looking like itself rather than a speck or a billboard. */
+  scale: { default: number; min: number; max: number };
+}
+
+/* The roster. The wire carries the id, and anything unknown falls back to the
+   first entry, so a browser on an older build never draws a sprite it has no
+   atlas for. */
+export const GHOST_CHARACTERS = {
+  ralsei: {
+    id: "ralsei",
+    name: "Ralsei",
+    blurb: "Every pose: heals, sings, sleeps, gets squashed.",
+    /* Bump the version whenever the picture changes. The service worker serves
+       /images/* cache-first with no expiry, so swapping the art under the same
+       URL leaves every returning visitor drawing the new frame grid over the old
+       sheet, which renders as a pile of sprite fragments. */
+    atlas: { file: "ralsei.png", version: 4 },
+    frame: { w: 84, h: 100 },
+    anchor: { x: 28, y: 95 },
+    clips: RALSEI_CLIPS,
+    bounds: RALSEI_BOUNDS,
+    walk: { down: "walk-down", up: "walk-up", left: "walk-left", right: "walk-right" },
+    idle: "idle",
+    poses: [
+      WALK_POSE,
+      { kind: "stand", label: "Stand", clip: "stand" },
+      { kind: "wave", label: "Wave", clip: "wave" },
+      { kind: "hide", label: "Hide", clip: "hide" },
+      { kind: "sing", label: "Sing", clip: "sing" },
+      { kind: "bow", label: "Bow", clip: "bow" },
+      { kind: "aura", label: "Aura", clip: "aura" },
+      { kind: "sleep", label: "Sleep", clip: "sleep" },
+      { kind: "hooded", label: "Hooded", clip: "hooded" },
+      { kind: "hat", label: "Hat off", clip: "hat" },
+      { kind: "tiny", label: "Under the hat", clip: "tiny" },
+      { kind: "squashed", label: "Squashed", clip: "squashed" },
+      { kind: "down", label: "Knocked out", clip: "down" },
+      { kind: "heap", label: "Heap", clip: "heap" },
+    ],
+    actions: [
+      { kind: "heal", label: "Heal Prayer", clip: "heal", effect: "sparkles", caption: "* Ralsei healed you!" },
+      { kind: "pacify", label: "Pacify", clip: "pacify", effect: "hearts", caption: "* You feel calm." },
+      { kind: "cheer", label: "Cheer", clip: "cheer", effect: "sparkles" },
+      { kind: "sing", label: "Sing", clip: "sing", effect: "notes", loops: 3 },
+      { kind: "spin", label: "Spin", clip: "spin", effect: null, loops: 3 },
+      { kind: "scarf", label: "Scarf whip", clip: "scarf", effect: "shake" },
+      { kind: "dark", label: "Dark World", clip: "spin", effect: "dark", loops: 2, caption: "* The world goes dark." },
+      { kind: "appear", label: "Appear", clip: "appear", effect: null },
+      { kind: "vanish", label: "Vanish", clip: "appear", effect: null, reverse: true },
+    ],
+    scale: { default: 3, min: 2, max: 6 },
+  },
+  starwalker: {
+    id: "starwalker",
+    name: "Starwalker",
+    blurb: "The original star walker. Struts, and leaves side-on.",
+    atlas: { file: "starwalker.png", version: 2 },
+    frame: { w: 42, h: 41 },
+    anchor: { x: 21, y: 39 },
+    clips: STARWALKER_CLIPS,
+    bounds: STARWALKER_BOUNDS,
+    walk: { down: "walk", up: "walk", left: "walk", right: "walk" },
+    idle: "idle",
+    poses: [
+      WALK_POSE,
+      { kind: "stand", label: "Stand", clip: "idle" },
+      { kind: "final", label: "The final one", clip: "final" },
+      { kind: "shadow", label: "Shadow", clip: "shadow" },
+    ],
+    actions: [
+      { kind: "shine", label: "Shine", clip: "idle", effect: "sparkles", caption: "* The star is shining." },
+      { kind: "strut", label: "Strut", clip: "walk", effect: "notes", loops: 3 },
+      { kind: "dark", label: "Dark World", clip: "shadow", effect: "dark", caption: "* The world goes dark." },
+      { kind: "appear", label: "Appear", clip: "edge", effect: null, reverse: true },
+      { kind: "vanish", label: "Vanish", clip: "edge", effect: null },
+    ],
+    scale: { default: 3, min: 2, max: 6 },
+  },
+  dog: {
+    id: "dog",
+    name: "Annoying Dog",
+    blurb: "Small, white, walks all four ways. Drives, shakes maracas, walks on stilts.",
+    atlas: { file: "dog.png", version: 5 },
+    frame: { w: 50, h: 224 },
+    anchor: { x: 25, y: 222 },
+    clips: DOG_CLIPS,
+    bounds: DOG_BOUNDS,
+    /* One side is drawn and mirrored for the other, which is what the clip's
+       native facing is for. */
+    walk: { down: "walk-down", up: "walk-up", left: "walk-left", right: "walk-left" },
+    idle: "idle",
+    /* No actions: he is a dog, and the poses are the whole act. */
+    poses: [
+      WALK_POSE,
+      { kind: "sleep", label: "Sleep", clip: "sleep" },
+      { kind: "car", label: "Car", clip: "car" },
+      { kind: "maracas", label: "Maracas", clip: "maracas" },
+      { kind: "stilts", label: "Stilts", clip: "stilts" },
+      { kind: "stilts-long", label: "Long stilts", clip: "stilts-long" },
+    ],
+    actions: [],
+    scale: { default: 6, min: 3, max: 12 },
+  },
+} as const satisfies Record<string, GhostCharacter>;
+
+export type GhostCharacterId = keyof typeof GHOST_CHARACTERS;
+
+export const GHOST_CHARACTER_LIST: readonly GhostCharacter[] = Object.values(GHOST_CHARACTERS);
+export const DEFAULT_GHOST_CHARACTER: GhostCharacterId = "ralsei";
+
+export function isGhostCharacter(id: string): id is GhostCharacterId {
+  return Object.hasOwn(GHOST_CHARACTERS, id);
+}
+
+/** The roster entry to draw. Anything unrecognised is the default rather than
+    nothing: a visitor on a cached build must not be left with a blank page
+    where the ghost is, and the wire is a plain string. */
+export function ghostCharacter(id: string | null | undefined): GhostCharacter {
+  return typeof id === "string" && isGhostCharacter(id)
+    ? GHOST_CHARACTERS[id]
+    : GHOST_CHARACTERS[DEFAULT_GHOST_CHARACTER];
+}
+
+export function ghostAtlasUrl(character: GhostCharacter): string {
+  return `/images/ghost/${character.atlas.file}?v=${character.atlas.version}`;
+}
+
+/* The atlas is a plain grid, so its size follows from the clip table: one row
+   per clip, as many columns as the longest clip. */
+export function ghostAtlasRows(character: GhostCharacter): number {
+  return Math.max(...Object.values(character.clips).map((clip) => clip.row)) + 1;
+}
+
+export function ghostAtlasCols(character: GhostCharacter): number {
+  return Math.max(...Object.values(character.clips).map((clip) => clip.frames));
+}
+
+export function isGhostClip(character: GhostCharacter, name: string): boolean {
+  return Object.hasOwn(character.clips, name);
+}
+
+/** The clip that will actually be drawn. Clip names are per character and the
+    wire can still be carrying the previous one for a tick after a switch, so an
+    unknown name resolves to standing still rather than to a missing row. */
+export function resolveGhostClip(character: GhostCharacter, name: string): string {
+  return isGhostClip(character, name) ? name : character.idle;
+}
+
+export function ghostClip(character: GhostCharacter, name: string): GhostClip {
+  return character.clips[resolveGhostClip(character, name)];
+}
+
+export function ghostClipBounds(character: GhostCharacter, name: string): GhostClipBounds {
+  return character.bounds[resolveGhostClip(character, name)];
+}
+
+/** The drawn scale for one viewer, never wider than the ratio above. The floor
+    of 1 wins on a screen too narrow to honour the cap, since a sprite scaled
+    below its own pixels is not worth showing. */
+export function fitGhostScale(character: GhostCharacter, scale: number, viewportWidth: number): number {
+  if (!Number.isFinite(scale)) return 1;
+  if (!Number.isFinite(viewportWidth) || viewportWidth <= 0) return scale;
+  return Math.max(1, Math.min(scale, (viewportWidth * GHOST_MAX_WIDTH_RATIO) / character.frame.w));
+}
+
+/* How far above the feet a speech bubble hangs, in drawn pixels. Measured from
+   the clip's painted pixels rather than the frame: the frame is mostly
+   transparent padding above the head, and clearing that leaves the bubble
+   floating half a sprite too high. Clips differ a lot here (asleep is tall,
+   knocked out is a heap), so this follows whatever the character is doing. */
+export function ghostBubbleLift(character: GhostCharacter, name: string, scale: number): number {
+  return (character.anchor.y - ghostClipBounds(character, name).y + 4) * scale;
+}
+
+export function ghostHitboxRect(
+  character: GhostCharacter,
+  name: string,
+  scale: number,
+  flipped: boolean,
+): GhostClipBounds {
+  const bounds = ghostClipBounds(character, name);
+  return {
+    x: (flipped ? character.anchor.x - bounds.x - bounds.w : bounds.x - character.anchor.x) * scale,
+    y: (bounds.y - character.anchor.y) * scale,
+    w: bounds.w * scale,
+    h: bounds.h * scale,
+  };
+}
+
+/* Mirroring is only ever needed when a clip is drawn facing the way it was not
+   painted. Ralsei's two walk cycles ship as real art, so neither is ever
+   mirrored; the dog's one side is. */
+export function shouldFlipGhostClip(character: GhostCharacter, name: string, facing: GhostFacing): boolean {
+  const native = ghostClip(character, name).native;
+  if (native === "right") return facing === "left";
+  if (native === "left") return facing === "right";
+  return false;
+}
+
+/* A pose with more than one frame keeps cycling while the character stands
+   still; a single frame one, a pair that is really two directions, and a gait
+   are just held. */
+export function isLoopingGhostPose(character: GhostCharacter, name: string): boolean {
+  const clip = ghostClip(character, name);
+  return clip.frames > 1
+    && !clip.directional
+    && !clip.gait
+    && character.poses.some((pose) => pose.clip === name);
+}
+
+/** Whether a clip's frames are steps, so they only advance while he moves. A
+    pose that is one keeps the movement flag alive on the wire, which a held
+    pose otherwise clears. */
+export function isGhostGait(character: GhostCharacter, name: string): boolean {
+  return ghostClip(character, name).gait === true;
+}
+
+/* Which drawing a two-sided clip should show, or null when the clip is a real
+   animation and the frame comes from the clock instead. */
+export function directionalGhostFrame(character: GhostCharacter, name: string, facing: GhostFacing): number | null {
+  if (!ghostClip(character, name).directional) return null;
+  return facing === "left" ? 1 : 0;
+}
+
+export function findGhostPose(character: GhostCharacter, kind: string): GhostPoseSpec | null {
+  return character.poses.find((pose) => pose.kind === kind) ?? null;
+}
+
+export function findGhostAction(character: GhostCharacter, kind: string): GhostActionSpec | null {
+  return character.actions.find((action) => action.kind === kind) ?? null;
+}
+
+/** Every action kind on the roster, which is what the sound layer keys its cues
+    off. Kinds are shared where the cue should be (every character's "vanish"
+    sounds the same). */
+export const GHOST_ACTION_KINDS: readonly string[] = [
+  ...new Set(GHOST_CHARACTER_LIST.flatMap((character) => character.actions.map((action) => action.kind))),
+];
 
 /* Where (x, y) is measured against.
 
@@ -253,6 +465,9 @@ export interface GhostVisual {
   x: number;
   y: number;
   anchor: GhostAnchor;
+  /* Which roster entry is on screen. A plain string on the wire: an id from a
+     newer build resolves to the default rather than breaking the overlay. */
+  character: string;
   clip: string;
   facing: GhostFacing;
   moving: boolean;
@@ -330,6 +545,7 @@ export const DEFAULT_GHOST_VISUAL: GhostVisual = {
   x: 0.5,
   y: 0.72,
   anchor: "page",
+  character: DEFAULT_GHOST_CHARACTER,
   clip: "idle",
   facing: "down",
   moving: false,
@@ -375,8 +591,8 @@ export function matchesGhostRoute(pattern: string, route: string): boolean {
 
 /* Which clip a walking ghost should be in. Standing still on a walk cycle is
    its first frame, so the wire format never needs a per-direction idle clip. */
-export function walkClipFor(facing: GhostFacing): GhostClipName {
-  return facing === "down" ? "walk-down" : `walk-${facing}`;
+export function walkClipFor(character: GhostCharacter, facing: GhostFacing): string {
+  return character.walk[facing];
 }
 
 /* Deltarune pacing: a deliberate walk, and a run on Shift that is about twice

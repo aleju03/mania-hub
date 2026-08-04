@@ -250,16 +250,40 @@ describe("ghost hub targeting", () => {
         x: 9,
         y: -3,
         scale: 99,
+        character: "x".repeat(80),
         speech: { id: 1, text: `  hey   there  ${"!".repeat(400)}` },
         facing: "sideways" as never,
       },
     });
     expect(session!.visual.x).toBe(1);
     expect(session!.visual.y).toBe(0);
-    expect(session!.visual.scale).toBe(8);
+    // The ceiling covers the smallest character on the roster: the scale is in
+    // raw sprite pixels, so a 19px dog needs a bigger number than Ralsei to
+    // stand the same height. src/lib/ghost-shared.ts holds the per-character
+    // ranges and a test there keeps them under this.
+    expect(session!.visual.scale).toBe(12);
     expect(session!.visual.facing).toBe("down");
+    // Which character is opaque here, but it is still a bounded string: the
+    // overlay resolves an id it does not know to its default.
+    expect(session!.visual.character).toHaveLength(32);
     expect(session!.visual.speech!.text.length).toBeLessThanOrEqual(240);
     expect(session!.visual.speech!.text.startsWith("hey there !")).toBe(true);
+  });
+
+  it("carries the character through to whoever is watching", async () => {
+    const hub = ctx();
+    const viewer = connect(hub, "/tracker");
+    await viewer.handled;
+    // Unset on the first tick: a session starts on the default rather than on
+    // nothing, so an old panel that never sends one still draws somebody.
+    hub.hub!.applyControl({ route: "/tracker", audience: { mode: "everyone" } });
+    expect(events(viewer.res, "ghost").at(-1)).toMatchObject({ visual: { character: "ralsei" } });
+
+    hub.hub!.applyControl({ route: "/tracker", visual: { character: "dog" } });
+    expect(events(viewer.res, "ghost").at(-1)).toMatchObject({ visual: { character: "dog" } });
+    // A tick that says nothing about the character leaves it alone.
+    hub.hub!.applyControl({ route: "/tracker", visual: { x: 0.2 } });
+    expect(events(viewer.res, "ghost").at(-1)).toMatchObject({ visual: { character: "dog", x: 0.2 } });
   });
 
   it("treats a user audience with no id as nobody", () => {

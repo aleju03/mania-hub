@@ -8,14 +8,19 @@ import { canUseAdminFeatures } from "../../lib/auth-shared";
 import { getGhostControlTicket } from "../../lib/ghost";
 import { playGhostActionSfx, preloadGhostSfx, setGhostSfxMuted } from "../../lib/ghost-sfx";
 import {
-  DEFAULT_GHOST_VISUAL,
+  DEFAULT_GHOST_CHARACTER,
   EMPTY_GHOST_PRESENCE,
-  GHOST_ACTIONS,
-  GHOST_CLIPS,
-  GHOST_POSES,
+  GHOST_CHARACTER_LIST,
   directionalGhostFrame,
+  findGhostAction,
+  findGhostPose,
   fitGhostScale,
+  isGhostGait,
+  isLoopingGhostPose,
   followGhostCamera,
+  ghostCharacter,
+  ghostClip,
+  ghostClipBounds,
   ghostMoveStep,
   ghostBubbleLift,
   ghostSpeechDurationMs,
@@ -25,9 +30,8 @@ import {
   wrapGhostX,
   type GhostAnchor,
   type GhostAudience,
-  type GhostClipName,
+  type GhostCharacter,
   type GhostFacing,
-  type GhostPoseKind,
   type GhostPresence,
   type GhostReply,
   type GhostVisual,
@@ -124,13 +128,17 @@ function GhostAdminPage() {
   const [connected, setConnected] = useState(false);
   const [routeInput, setRouteInput] = useState("/");
   const [audience, setAudience] = useState<GhostAudience>({ mode: "none" });
-  const [pose, setPose] = useState<GhostPoseKind>("auto");
+  /* Who is being driven. Poses, actions and the size range all come off the
+     roster entry, so switching swaps the whole control set below. */
+  const [characterId, setCharacterId] = useState<string>(DEFAULT_GHOST_CHARACTER);
+  const character = ghostCharacter(characterId);
+  const [pose, setPose] = useState<string>("auto");
   /* What his position is measured against on the far side. Standing in the page
      is the default and the right one when aiming at a person; sticking to the
      screen is what makes a placement mean the same thing to a phone and a
      desktop looking at the same page. */
   const [anchor, setAnchor] = useState<GhostAnchor>("page");
-  const [scale, setScale] = useState(DEFAULT_GHOST_VISUAL.scale);
+  const [scale, setScale] = useState(ghostCharacter(DEFAULT_GHOST_CHARACTER).scale.default);
   const [message, setMessage] = useState("");
   const [presence, setPresence] = useState<GhostPresence>(EMPTY_GHOST_PRESENCE);
   const [preview, setPreview] = useState(true);
@@ -176,7 +184,10 @@ function GhostAdminPage() {
   const cameraRef = useRef(0);
   /* Page geometry the movement loop needs every frame, kept off React state. */
   const pageMetricsRef = useRef({ viewW: 1536, viewH: 864, pageH: 864 });
-  const driveRef = useRef<DriveState>({ x: DEFAULT_GHOST_VISUAL.x, y: DEFAULT_GHOST_VISUAL.y, facing: "down", moving: false });
+  const driveRef = useRef<DriveState>({ x: 0.5, y: 0.72, facing: "down", moving: false });
+  /* The size each character was last driven at, so switching back to one does
+     not undo the size it was tuned to. */
+  const scaleMemoryRef = useRef<Record<string, number>>({});
   const keysRef = useRef(new Set<string>());
   const speechRef = useRef<GhostVisual["speech"]>(null);
   const actionRef = useRef<GhostVisual["action"]>(null);
@@ -188,8 +199,8 @@ function GhostAdminPage() {
   const activeRouteRef = useRef<string | null>(null);
   /* Loop-visible copy of everything the send payload needs, so the rAF loop
      never has to be torn down and rebuilt on a settings change. */
-  const settingsRef = useRef({ route: "/", audience, pose, scale, anchor, connected, ticket });
-  settingsRef.current = { route: normalizeGhostRoute(routeInput) ?? "/", audience, pose, scale, anchor, connected, ticket };
+  const settingsRef = useRef({ route: "/", audience, character, pose, scale, anchor, connected, ticket });
+  settingsRef.current = { route: normalizeGhostRoute(routeInput) ?? "/", audience, character, pose, scale, anchor, connected, ticket };
 
   const route = normalizeGhostRoute(routeInput);
   /* Their newest tab that is not the control panel, so testing on yourself
@@ -332,14 +343,19 @@ function GhostAdminPage() {
   const buildVisual = useCallback((): GhostVisual => {
     const state = driveRef.current;
     const settings = settingsRef.current;
-    const posed = GHOST_POSES.find((entry) => entry.kind === settings.pose)?.clip ?? null;
+    const posed = findGhostPose(settings.character, settings.pose)?.clip ?? null;
+    /* A held pose stops the walk cycle, except where the pose is itself a way
+       of walking: the dog on stilts takes a stride per step and stands still
+       between them, rather than marching on the spot. */
+    const striding = posed != null && isGhostGait(settings.character, posed);
     return {
       x: state.x,
       y: state.y,
       anchor: settings.anchor,
-      clip: posed ?? walkClipFor(state.facing),
+      character: settings.character.id,
+      clip: posed ?? walkClipFor(settings.character, state.facing),
       facing: state.facing,
-      moving: posed ? false : state.moving,
+      moving: posed && !striding ? false : state.moving,
       scale: settings.scale,
       speech: speechRef.current,
       action: actionRef.current,
@@ -425,6 +441,24 @@ function GhostAdminPage() {
     return () => cancelAnimationFrame(raf);
   }, [connected, sendNow]);
 
+  /* Swapping who is on the page. Everything character-shaped moves together and
+     lands in settingsRef before the push, because state set here is not
+     readable until the next render and the tick goes out now. */
+  const pickCharacter = useCallback((next: GhostCharacter) => {
+    const current = settingsRef.current;
+    if (next.id === current.character.id) return;
+    scaleMemoryRef.current[current.character.id] = current.scale;
+    // A pose only survives the switch if the new character has one by that name.
+    const keptPose = findGhostPose(next, current.pose) ? current.pose : "auto";
+    const nextScale = scaleMemoryRef.current[next.id] ?? next.scale.default;
+    setCharacterId(next.id);
+    setPose(keptPose);
+    setScale(nextScale);
+    settingsRef.current = { ...current, character: next, pose: keptPose, scale: nextScale };
+    dirtyRef.current = true;
+    sendNow();
+  }, [sendNow]);
+
   useEffect(() => {
     const isTyping = (target: EventTarget | null) => target instanceof HTMLElement
       && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
@@ -445,6 +479,15 @@ function GhostAdminPage() {
         setComposing(true);
         return;
       }
+      /* Number keys swap character, in the order the picker shows them. */
+      if (key >= "1" && key <= "9") {
+        const picked = GHOST_CHARACTER_LIST[Number(key) - 1];
+        if (picked) {
+          event.preventDefault();
+          pickCharacter(picked);
+        }
+        return;
+      }
       // Shift is the run key, so it is tracked alongside the direction keys.
       if (!KEY_DIRECTIONS[key] && key !== "shift") return;
       event.preventDefault();
@@ -462,7 +505,7 @@ function GhostAdminPage() {
       window.removeEventListener("keyup", up);
       window.removeEventListener("blur", blur);
     };
-  }, []);
+  }, [pickCharacter]);
 
   /* Presence is the point of the roster: who is on which page right now, and
      which of them can currently see him. */
@@ -606,7 +649,9 @@ function GhostAdminPage() {
       at: Date.now(),
       route: settingsRef.current.route,
       userId: null,
-      name: null,
+      // Whoever was on the page at the time, so the log still reads correctly
+      // after a switch.
+      name: settingsRef.current.character.name,
       text,
     });
   };
@@ -631,8 +676,8 @@ function GhostAdminPage() {
       at: Date.now(),
       route: settingsRef.current.route,
       userId: null,
-      name: null,
-      text: GHOST_ACTIONS.find((action) => action.kind === kind)?.label ?? kind,
+      name: settingsRef.current.character.name,
+      text: findGhostAction(settingsRef.current.character, kind)?.label ?? kind,
     });
   };
 
@@ -676,15 +721,21 @@ function GhostAdminPage() {
     sendNow();
   };
 
-  const poseClip = GHOST_POSES.find((entry) => entry.kind === pose)?.clip ?? null;
-  const stageClip: GhostClipName = poseClip ?? walkClipFor(look.facing);
-  const sided = directionalGhostFrame(stageClip, look.facing);
-  const animated = useAnimatedFrame(stageClip, sided == null && (look.moving || poseClip != null));
+  const poseClip = findGhostPose(character, pose)?.clip ?? null;
+  const stageClip = poseClip ?? walkClipFor(character, look.facing);
+  const sided = directionalGhostFrame(character, stageClip, look.facing);
+  /* Same rule the overlay draws by: a pose animates on its own only if it
+     is not a gait, and a gait moves when he does. */
+  const animated = useAnimatedFrame(
+    character,
+    stageClip,
+    sided == null && (look.moving || (poseClip != null && isLoopingGhostPose(character, poseClip))),
+  );
   const frame = sided ?? animated;
   /* Same on-screen size he has for the viewer, shrunk by whatever the preview is
      shrunk by, and the bubble sits above his head off the same number. It keeps
      a floor so a heavily shrunk stage still shows a readable line. */
-  const stageSpriteScale = Math.max(0.75, fitGhostScale(scale, viewport.w) * (previewScale || 0.6));
+  const stageSpriteScale = Math.max(0.75, fitGhostScale(character, scale, viewport.w) * (previewScale || 0.6));
   const bubbleScale = Math.max(0.6, previewScale || 0.6);
 
   return (
@@ -693,7 +744,7 @@ function GhostAdminPage() {
         <div>
           <h1 className="text-2xl font-bold text-white">Ghost</h1>
           <p className="text-xs text-osu-f1">
-            Appear on a page as Ralsei. WASD moves him, everything is live for whoever is in the audience.
+            Appear on a page as {character.name}. WASD moves him, everything is live for whoever is in the audience.
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs">
@@ -774,7 +825,7 @@ function GhostAdminPage() {
                      readable size rather than scaled down with the preview. */
                   <div
                     className="absolute left-0 w-max -translate-x-1/2"
-                    style={{ bottom: ghostBubbleLift(stageClip, stageSpriteScale) }}
+                    style={{ bottom: ghostBubbleLift(character, stageClip, stageSpriteScale) }}
                     onClick={(event) => event.stopPropagation()}
                   >
                     <div className="rounded-md border-2 border-white bg-black px-2 py-1.5">
@@ -795,7 +846,7 @@ function GhostAdminPage() {
                         }}
                         maxLength={240}
                         placeholder="say something"
-                        aria-label="Say something as Ralsei"
+                        aria-label={`Say something as ${character.name}`}
                         className="w-[min(240px,40vw)] bg-transparent text-[13px] font-semibold text-white outline-none placeholder:text-white/40"
                       />
                     </div>
@@ -808,7 +859,7 @@ function GhostAdminPage() {
                   <div
                     className="absolute left-0 w-max max-w-[320px]"
                     style={{
-                      bottom: ghostBubbleLift(stageClip, stageSpriteScale),
+                      bottom: ghostBubbleLift(character, stageClip, stageSpriteScale),
                       transform: `translateX(-50%) scale(${bubbleScale})`,
                       transformOrigin: "bottom center",
                     }}
@@ -817,10 +868,11 @@ function GhostAdminPage() {
                   </div>
                 ) : null}
                 <GhostAtlasFrame
+                  character={character}
                   clip={stageClip}
                   frame={frame}
                   scale={stageSpriteScale}
-                  flip={shouldFlipGhostClip(stageClip, look.facing)}
+                  flip={shouldFlipGhostClip(character, stageClip, look.facing)}
                 />
               </div>
               {!connected ? (
@@ -830,7 +882,7 @@ function GhostAdminPage() {
               ) : null}
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-osu-f1">
-              <span>WASD to walk, shift to run, click the stage to place him, enter or T to talk on the stage, esc to close it</span>
+              <span>WASD to walk, shift to run, 1-{GHOST_CHARACTER_LIST.length} to swap character, click the stage to place him, enter or T to talk, esc to close it</span>
               <button
                 type="button"
                 onClick={() => setPreview((value) => !value)}
@@ -872,8 +924,10 @@ function GhostAdminPage() {
                 size
                 <input
                   type="range"
-                  min={2}
-                  max={6}
+                  /* Per character: the dog needs a bigger number than Ralsei to
+                     stand the same height, because the number is sprite pixels. */
+                  min={character.scale.min}
+                  max={character.scale.max}
                   step={0.5}
                   value={scale}
                   onChange={(event) => {
@@ -887,23 +941,42 @@ function GhostAdminPage() {
             </div>
           </div>
 
-          <div className="mb-2 flex flex-wrap gap-2">
-            {GHOST_ACTIONS.map((action) => (
-              <button
-                key={action.kind}
-                type="button"
-                onClick={() => act(action.kind)}
-                disabled={!connected}
-                className="cursor-pointer rounded-md bg-osu-b3/60 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-osu-b3 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {action.label}
-              </button>
+          {/* Who to be. Each one draws itself rather than being named in a
+              dropdown: the sprite is the thing being picked, and the poses and
+              actions underneath change with it. */}
+          <div className="mb-3 flex flex-wrap gap-2">
+            {GHOST_CHARACTER_LIST.map((entry, index) => (
+              <CharacterCard
+                key={entry.id}
+                character={entry}
+                index={index}
+                active={entry.id === character.id}
+                onClick={() => pickCharacter(entry)}
+              />
             ))}
           </div>
 
+          {/* A character with no one-shot moves shows no row rather than an
+              empty one: the dog's whole act is its poses. */}
+          {character.actions.length > 0 ? (
+            <div className="mb-2 flex flex-wrap gap-2">
+              {character.actions.map((action) => (
+                <button
+                  key={action.kind}
+                  type="button"
+                  onClick={() => act(action.kind)}
+                  disabled={!connected}
+                  className="cursor-pointer rounded-md bg-osu-b3/60 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-osu-b3 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
           <div className="mb-6 flex flex-wrap items-center gap-2 text-xs">
             <span className="text-osu-f1">Pose</span>
-            {GHOST_POSES.map((entry) => (
+            {character.poses.map((entry) => (
               <Segment
                 key={entry.kind}
                 active={pose === entry.kind}
@@ -1146,7 +1219,7 @@ function ChatRow({ line, activeRoute, onAim }: {
       ) : (
         <>
           {line.kind === "said" ? (
-            <span className="font-semibold text-osu-pink-light">Ralsei</span>
+            <span className="font-semibold text-osu-pink-light">{line.name ?? "Ghost"}</span>
           ) : (
             <button
               type="button"
@@ -1183,6 +1256,55 @@ function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
+/* One entry in the picker: the character drawn at its own idle, its name, and
+   the number key that selects it. Sprites are scaled towards a common height so
+   a 19px dog and a 43px Ralsei are both worth looking at here, which is the one
+   place their real sizes are not the point. */
+const CARD_ART_HEIGHT = 34;
+
+/* Whole numbers only: a pixel sprite at 1.7x is a smeared pixel sprite. */
+function cardScale(character: GhostCharacter): number {
+  return Math.max(1, Math.round(CARD_ART_HEIGHT / ghostClipBounds(character, character.idle).h));
+}
+
+/* Every card is the size of the biggest drawing on the roster, so the row is
+   one line of even boxes and nobody's hat pokes out of the top. */
+const CARD_BOX = {
+  w: Math.max(...GHOST_CHARACTER_LIST.map((entry) => ghostClipBounds(entry, entry.idle).w * cardScale(entry))),
+  h: Math.max(...GHOST_CHARACTER_LIST.map((entry) => ghostClipBounds(entry, entry.idle).h * cardScale(entry))),
+};
+
+function CharacterCard({ character, index, active, onClick }: {
+  character: GhostCharacter;
+  index: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={character.blurb}
+      aria-pressed={active}
+      className={`flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-left transition-colors ${
+        active ? "bg-osu-pink/25" : "bg-osu-b3/60 hover:bg-osu-b3"
+      }`}
+    >
+      <span className="relative block" style={{ width: CARD_BOX.w, height: CARD_BOX.h }}>
+        {/* The frame draws itself up and left of its own anchor, so the anchor
+            is parked where the feet belong: bottom centre of the box. */}
+        <span className="absolute bottom-0 left-1/2 block">
+          <GhostAtlasFrame character={character} clip={character.idle} frame={0} scale={cardScale(character)} />
+        </span>
+      </span>
+      <span className="flex flex-col">
+        <span className={`text-sm font-semibold ${active ? "text-white" : "text-osu-f1"}`}>{character.name}</span>
+        <span className="text-[10px] text-osu-f1/60">{index + 1}</span>
+      </span>
+    </button>
+  );
+}
+
 function Segment({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
   return (
     <button
@@ -1216,15 +1338,16 @@ function useOwnViewport(): { w: number; h: number } {
 
 /* Stage-only animation: the overlay runs its own rAF loop, this just keeps the
    preview from being a frozen frame. */
-function useAnimatedFrame(clip: GhostClipName, animating: boolean): number {
+function useAnimatedFrame(character: GhostCharacter, clip: string, animating: boolean): number {
   const [frame, setFrame] = useState(0);
+  const fps = ghostClip(character, clip).fps;
   useEffect(() => {
     if (!animating) {
       setFrame(0);
       return;
     }
-    const timer = window.setInterval(() => setFrame((value) => value + 1), 1000 / GHOST_CLIPS[clip].fps);
+    const timer = window.setInterval(() => setFrame((value) => value + 1), 1000 / fps);
     return () => window.clearInterval(timer);
-  }, [animating, clip]);
+  }, [animating, fps]);
   return frame;
 }

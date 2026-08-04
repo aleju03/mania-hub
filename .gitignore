@@ -18,6 +18,7 @@ inspirations
 tmp-*.mjs
 tmp-*.js
 tmp-*.ts
+__pycache__/
 cache/replay-fixtures/
 cache/replay-captures/
 capture-replays/*
