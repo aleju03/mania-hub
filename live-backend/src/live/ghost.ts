@@ -30,6 +30,8 @@ const TICKET_TTL_MS = 60 * 60_000;
 // A session with no control traffic is a closed tab: stop haunting the page.
 const SESSION_IDLE_MS = 10 * 60_000;
 const MAX_SESSIONS = 8;
+/* Phone-width, matching GHOST_NARROW_WIDTH in src/lib/ghost-shared.ts. */
+const NARROW_VIEWPORT_WIDTH = 768;
 const PRESENCE_MAX_ROUTES = 40;
 const PRESENCE_MAX_NAMED = 120;
 const MAX_REPLY_LENGTH = 200;
@@ -52,10 +54,16 @@ export interface GhostAudience {
   userId?: number;
 }
 
+/** Whether (x, y) is a place in the document or a place on the screen. Mirrors
+    GhostAnchor in src/lib/ghost-shared.ts. */
+export type GhostAnchor = "page" | "screen";
+
 export interface GhostVisual {
-  /** Viewport-normalized so one position reads the same on every screen. */
+  /** Normalized against whatever the anchor measures, so one position reads the
+      same on every screen of that kind. */
   x: number;
   y: number;
+  anchor: GhostAnchor;
   clip: string;
   facing: GhostFacing;
   moving: boolean;
@@ -115,6 +123,9 @@ export interface GhostPresenceRoute {
   viewers: number;
   named: number;
   showing: number;
+  /** How many are on a phone-width screen. One placement cannot mean the same
+      thing to those and to a desktop at once, so the panel says so. */
+  narrow: number;
   /** Newest connection's screen size, which is what the panel stages against. */
   viewport: { w: number; h: number } | null;
 }
@@ -133,6 +144,7 @@ export interface GhostPresence {
 const DEFAULT_VISUAL: GhostVisual = {
   x: 0.5,
   y: 0.7,
+  anchor: "page",
   clip: "idle",
   facing: "down",
   moving: false,
@@ -303,10 +315,12 @@ export class GhostHub {
     for (const client of this.clients.values()) {
       let entry = routes.get(client.route);
       if (!entry) {
-        entry = { route: client.route, viewers: 0, named: 0, showing: 0, viewport: null, newestAt: -1 };
+        entry = { route: client.route, viewers: 0, named: 0, showing: 0, narrow: 0, viewport: null, newestAt: -1 };
         routes.set(client.route, entry);
       }
       entry.viewers += 1;
+      // Only what a client reported: an unknown viewport is not a phone.
+      if (client.viewport && client.viewport.w < NARROW_VIEWPORT_WIDTH) entry.narrow += 1;
       if (client.showing) {
         entry.showing += 1;
         showing += 1;
@@ -389,11 +403,20 @@ export class GhostHub {
   }
 
   private broadcast(session: GhostSessionState): void {
+    /* One movement tick reaches every client on the route with the same bytes.
+       Serialized once here: a wildcard session over 15 Hz would otherwise
+       re-stringify the frame per connection, per tick. */
+    const frame = sseFrame("ghost", { present: true, seq: session.seq, visual: session.visual });
     for (const client of this.clientsCovering(session.route)) {
       // A more specific session on the same page wins, so a wildcard tick must
       // not overwrite what an exact one is showing.
       if (this.sessionForRoute(client.route) !== session) continue;
-      this.resync(client);
+      if (this.canSee(session, client)) {
+        client.showing = true;
+        writeFrame(client.res, frame);
+      } else if (client.showing) {
+        this.hide(client);
+      }
     }
   }
 
@@ -420,6 +443,7 @@ function mergeVisual(base: GhostVisual, patch: Partial<GhostVisual> | undefined)
   return {
     x: clamp01(patch.x ?? base.x),
     y: clamp01(patch.y ?? base.y),
+    anchor: patch.anchor === "page" || patch.anchor === "screen" ? patch.anchor : base.anchor,
     clip: typeof patch.clip === "string" && patch.clip ? patch.clip.slice(0, 32) : base.clip,
     facing: isFacing(patch.facing) ? patch.facing : base.facing,
     moving: typeof patch.moving === "boolean" ? patch.moving : base.moving,
@@ -520,12 +544,20 @@ export function ghostViewerSignature(userId: number, username: string, expiresAt
   return createHmac("sha256", secret).update(`ghost:${userId}:${username}:${expiresAt}`).digest("hex");
 }
 
-function write(res: ServerResponse, event: string, payload: unknown): void {
+function sseFrame(event: string, payload: unknown): string {
+  return `event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`;
+}
+
+function writeFrame(res: ServerResponse, frame: string): void {
   try {
-    res.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
+    res.write(frame);
   } catch {
     // A dead socket is cleaned up by its own close handler.
   }
+}
+
+function write(res: ServerResponse, event: string, payload: unknown): void {
+  writeFrame(res, sseFrame(event, payload));
 }
 
 function isGhostAdmin(req: IncomingMessage, ctx: HttpContext): boolean {

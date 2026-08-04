@@ -19,6 +19,25 @@ export const GHOST_FRAME = { w: 84, h: 100 } as const;
    the ghost's (x, y) so a position means the same thing for every clip. */
 export const GHOST_ANCHOR = { x: 28, y: 95 } as const;
 
+/* How much of a screen he may span. The scale on the wire is in raw sprite
+   pixels, which is the same number of pixels on a phone as on a desktop: 84 per
+   step is a sixth of a wide screen and most of a narrow one, so every viewer
+   caps it against their own width. */
+export const GHOST_MAX_WIDTH_RATIO = 0.3;
+
+/** The drawn scale for one viewer, never wider than the ratio above. The floor
+    of 1 wins on a screen too narrow to honour the cap, since a sprite scaled
+    below its own pixels is not worth showing. */
+export function fitGhostScale(scale: number, viewportWidth: number): number {
+  if (!Number.isFinite(scale)) return 1;
+  if (!Number.isFinite(viewportWidth) || viewportWidth <= 0) return scale;
+  return Math.max(1, Math.min(scale, (viewportWidth * GHOST_MAX_WIDTH_RATIO) / GHOST_FRAME.w));
+}
+
+/* Under this many CSS pixels across, count a viewer as being on a phone. Same
+   breakpoint the site's own layout switches at. */
+export const GHOST_NARROW_WIDTH = 768;
+
 export type GhostFacing = "down" | "up" | "left" | "right";
 
 export interface GhostClip {
@@ -109,6 +128,15 @@ export const GHOST_CLIP_BOUNDS = {
   sleep: { x: 0, y: 21, w: 55, h: 74 },
 } as const satisfies Record<GhostClipName, GhostClipBounds>;
 
+/* How far above his feet a speech bubble hangs, in drawn pixels. Measured from
+   the clip's painted pixels rather than the frame: the frame is mostly
+   transparent padding above his head, and clearing that leaves the bubble
+   floating half a sprite too high. Clips differ a lot here (asleep is tall,
+   knocked out is a heap), so this follows whatever he is doing. */
+export function ghostBubbleLift(name: GhostClipName, scale: number): number {
+  return (GHOST_ANCHOR.y - GHOST_CLIP_BOUNDS[name].y + 4) * scale;
+}
+
 export function ghostHitboxRect(name: GhostClipName, scale: number, flipped: boolean): GhostClipBounds {
   const bounds = GHOST_CLIP_BOUNDS[name];
   return {
@@ -142,7 +170,6 @@ export function shouldFlipGhostClip(name: GhostClipName, facing: GhostFacing): b
 export const GHOST_POSES = [
   { kind: "auto", label: "Walk", clip: null },
   { kind: "stand", label: "Stand", clip: "stand" },
-  { kind: "shy", label: "Shy", clip: "shy" },
   { kind: "wave", label: "Wave", clip: "wave" },
   { kind: "hide", label: "Hide", clip: "hide" },
   { kind: "sing", label: "Sing", clip: "sing" },
@@ -207,13 +234,25 @@ export function findGhostAction(kind: string): GhostActionSpec | null {
   return GHOST_ACTIONS.find((action) => action.kind === kind) ?? null;
 }
 
+/* Where (x, y) is measured against.
+
+   "page" is the original: he stands in the document like a character in a room,
+   so parking him beside someone's avatar keeps him there while they scroll, and
+   he can be somewhere they have not scrolled to yet. That only means the same
+   thing to viewers whose layout matches the one being aimed at.
+
+   "screen" measures against the visible window instead, which puts him in the
+   same spot for everyone regardless of layout or scroll position. It is the
+   honest choice for an audience of everyone, where there is no single layout to
+   aim at. */
+export type GhostAnchor = "page" | "screen";
+
 export interface GhostVisual {
-  /* Page-normalized: x across the page width, y down the whole scrollable
-     document, not the visible screen. He stands in the page like a character in
-     a room, so parking him next to someone's avatar keeps him there when they
-     scroll, and he can be somewhere they have not scrolled to yet. */
+  /* Normalized: x across the width, y down the height of whatever the anchor
+     below measures against. */
   x: number;
   y: number;
+  anchor: GhostAnchor;
   clip: string;
   facing: GhostFacing;
   moving: boolean;
@@ -251,6 +290,9 @@ export interface GhostPresenceRoute {
   viewers: number;
   named: number;
   showing: number;
+  /* How many of them are on a phone-width screen, so the panel can say whether
+     one placement can serve the whole page at once. */
+  narrow: number;
   viewport: { w: number; h: number } | null;
 }
 
@@ -287,6 +329,7 @@ export const EMPTY_GHOST_PRESENCE: GhostPresence = {
 export const DEFAULT_GHOST_VISUAL: GhostVisual = {
   x: 0.5,
   y: 0.72,
+  anchor: "page",
   clip: "idle",
   facing: "down",
   moving: false,
@@ -356,6 +399,28 @@ export function ghostMoveStep(
     dx: (input.dx / length) * step,
     dy: (input.dy / length) * step * (options.viewWidth / Math.max(1, options.pageHeight)),
   };
+}
+
+/* Sideways the page has no edges: walking off the right brings him back on the
+   left. Only x wraps, because the top and bottom of a page are real places and
+   falling off them would just lose him. */
+export function wrapGhostX(value: number): number {
+  if (!Number.isFinite(value)) return 0.5;
+  /* Anything already on the page is left exactly alone: the modulo round trip
+     below is lossy in binary floating point, and a position that drifts by a
+     hair every frame is a position that never settles. */
+  if (value >= 0 && value < 1) return value;
+  return ((value % 1) + 1) % 1;
+}
+
+/** The shorter way round from one x to another. Following a wrap without this
+    slides him back across the whole page instead of over the edge, and any
+    move of more than half a page takes the outside route. */
+export function ghostWrapDelta(from: number, to: number): number {
+  const delta = to - from;
+  if (delta > 0.5) return delta - 1;
+  if (delta < -0.5) return delta + 1;
+  return delta;
 }
 
 /* Keeps him inside a comfortable band of the stage and never scrolls past the

@@ -16,17 +16,24 @@ import {
   GHOST_POSES,
   GHOST_SPRINT_SPEED,
   GHOST_WALK_SPEED,
+  GHOST_MAX_WIDTH_RATIO,
+  GHOST_NARROW_WIDTH,
   directionalGhostFrame,
+  fitGhostScale,
   followGhostCamera,
   ghostHitboxRect,
   ghostMoveStep,
+  ghostBubbleLift,
   ghostSpeechDurationMs,
+  ghostWrapDelta,
   isGhostClip,
   isLoopingGhostPose,
   matchesGhostRoute,
   normalizeGhostRoute,
   shouldFlipGhostClip,
   walkClipFor,
+  wrapGhostX,
+  type GhostClipName,
 } from "./ghost-shared";
 
 /* Route folding is duplicated in live-backend/src/live/ghost.ts on purpose (the
@@ -208,6 +215,72 @@ describe("ghost pacing", () => {
     expect(run.dx / walk.dx).toBeCloseTo(GHOST_SPRINT_SPEED / GHOST_WALK_SPEED, 6);
     expect(GHOST_SPRINT_SPEED).toBeGreaterThan(GHOST_WALK_SPEED * 1.8);
     expect(GHOST_SPRINT_SPEED).toBeLessThan(GHOST_WALK_SPEED * 3);
+  });
+});
+
+/* The scale on the wire is one number for every viewer, in raw sprite pixels,
+   so the same 3x that reads as a character on a desktop was two thirds of a
+   phone's width. Each viewer caps it against their own screen. */
+describe("ghost scale fitting", () => {
+  it("leaves a desktop alone and cuts a phone down", () => {
+    expect(fitGhostScale(3, 1536)).toBe(3);
+    const phone = fitGhostScale(3, 390);
+    expect(phone).toBeLessThan(3);
+    expect(GHOST_FRAME.w * phone).toBeLessThanOrEqual(390 * GHOST_MAX_WIDTH_RATIO);
+  });
+
+  it("never scales him below his own pixels, however narrow the screen", () => {
+    expect(fitGhostScale(6, 120)).toBe(1);
+  });
+
+  it("holds the cap at every size the panel can send", () => {
+    for (const scale of [2, 3, 4, 5, 6]) {
+      for (const width of [320, 390, GHOST_NARROW_WIDTH, 1024, 1536, 2560]) {
+        const fitted = fitGhostScale(scale, width);
+        expect(fitted).toBeLessThanOrEqual(scale);
+        expect(GHOST_FRAME.w * fitted).toBeLessThanOrEqual(Math.max(GHOST_FRAME.w, width * GHOST_MAX_WIDTH_RATIO));
+      }
+    }
+  });
+});
+
+/* The frame is 100 tall and he is painted in the bottom half of it, so a bubble
+   cleared of the frame floats half a sprite above his head. */
+describe("ghost bubble lift", () => {
+  it("clears the drawn pixels of every clip, not the padding above them", () => {
+    for (const name of Object.keys(GHOST_CLIP_BOUNDS) as GhostClipName[]) {
+      const head = GHOST_ANCHOR.y - GHOST_CLIP_BOUNDS[name].y;
+      const lift = ghostBubbleLift(name, 1);
+      expect(lift).toBeGreaterThan(head);
+      // A gap, not a chasm: the old frame-based lift is the thing being fixed.
+      expect(lift - head).toBeLessThanOrEqual(GHOST_ANCHOR.y - head);
+    }
+  });
+
+  it("scales with him", () => {
+    expect(ghostBubbleLift("idle", 3)).toBeCloseTo(ghostBubbleLift("idle", 1) * 3, 6);
+  });
+
+  it("follows a pose that changes how tall he is", () => {
+    // Asleep he is a tall sprite, knocked out he is a heap on the floor.
+    expect(ghostBubbleLift("sleep", 3)).toBeGreaterThan(ghostBubbleLift("down", 3));
+  });
+});
+
+describe("ghost horizontal wrap", () => {
+  it("brings him back on the other side", () => {
+    expect(wrapGhostX(1.02)).toBeCloseTo(0.02, 6);
+    expect(wrapGhostX(-0.02)).toBeCloseTo(0.98, 6);
+    expect(wrapGhostX(1)).toBe(0);
+    expect(wrapGhostX(0.4)).toBe(0.4);
+  });
+
+  it("crosses the edge rather than walking back across the page", () => {
+    // Off the right edge and onto the left: a short hop, not a long slide.
+    expect(ghostWrapDelta(0.98, 0.02)).toBeCloseTo(0.04, 6);
+    expect(ghostWrapDelta(0.02, 0.98)).toBeCloseTo(-0.04, 6);
+    // Ordinary moves are untouched.
+    expect(ghostWrapDelta(0.2, 0.5)).toBeCloseTo(0.3, 6);
   });
 });
 

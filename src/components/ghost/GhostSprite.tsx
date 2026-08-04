@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
+import { playGhostActionSfx, playGhostSpeechSfx, preloadGhostSfx } from "#/lib/ghost-sfx";
 import {
   findGhostAction,
   GHOST_ANCHOR,
@@ -10,11 +11,15 @@ import {
   GHOST_REPLY_MAX_LENGTH,
   GHOST_WALK_SPEED,
   directionalGhostFrame,
+  fitGhostScale,
+  ghostBubbleLift,
   ghostHitboxRect,
   ghostSpeechDurationMs,
+  ghostWrapDelta,
   isGhostClip,
   isLoopingGhostPose,
   shouldFlipGhostClip,
+  wrapGhostX,
   type GhostClipName,
   type GhostEffect,
   type GhostVisual,
@@ -46,6 +51,7 @@ export function GhostSprite({ visualRef, speech, action, scale, onSay }: GhostSp
   const containerRef = useRef<HTMLDivElement>(null);
   const spriteRef = useRef<HTMLDivElement>(null);
   const hitboxRef = useRef<HTMLButtonElement>(null);
+  const bubbleRef = useRef<HTMLDivElement>(null);
   /* The action currently playing, which ends on its own clip length rather
      than waiting for the owner to send anything else. */
   const [playing, setPlaying] = useState<{ id: number; kind: string; startedAt: number } | null>(null);
@@ -55,10 +61,24 @@ export function GhostSprite({ visualRef, speech, action, scale, onSay }: GhostSp
   const [answered, setAnswered] = useState<{ id: number; text: string } | null>(null);
   const playingRef = useRef(playing);
   playingRef.current = playing;
+  const [viewportWidth, setViewportWidth] = useState(() => (typeof window === "undefined" ? 1536 : window.innerWidth));
+
+  useEffect(() => {
+    const read = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", read);
+    return () => window.removeEventListener("resize", read);
+  }, []);
+
+  /* He only mounts while the owner is actually on the page, so warming the
+     samples here costs nothing on an ordinary visit. */
+  useEffect(() => {
+    preloadGhostSfx();
+  }, []);
 
   useEffect(() => {
     if (!action || !findGhostAction(action.kind)) return;
     setPlaying({ ...action, startedAt: performance.now() });
+    playGhostActionSfx(action.kind);
   }, [action]);
 
   useEffect(() => {
@@ -83,6 +103,7 @@ export function GhostSprite({ visualRef, speech, action, scale, onSay }: GhostSp
        scrollHeight forces layout, and it only changes when content does. */
     let page = { w: window.innerWidth, h: window.innerHeight };
     let measuredAt = 0;
+    let anchored: GhostVisual["anchor"] = visualRef.current.anchor;
     /* How fast he is actually travelling, which is what sets the leg speed:
        a sprint has to look like one without another field on the wire. */
     let rate = 0;
@@ -94,21 +115,33 @@ export function GhostSprite({ visualRef, speech, action, scale, onSay }: GhostSp
       last = now;
       const next = visualRef.current;
 
-      if (now - measuredAt > 500) {
+      /* What the position is measured against. Anchored to the screen he is
+         placed in the window and rides it, which is the only way one placement
+         can mean the same thing to a phone and a desktop reading the same page;
+         anchored to the page he is placed in the document and scrolls with it.
+         Both are read on a timer rather than every frame, because scrollHeight
+         forces layout and only changes when the content does. */
+      if (now - measuredAt > 500 || next.anchor !== anchored) {
         measuredAt = now;
+        anchored = next.anchor;
         const root = document.documentElement;
-        page = { w: root.clientWidth, h: Math.max(root.scrollHeight, window.innerHeight) };
+        page = next.anchor === "screen"
+          ? { w: window.innerWidth, h: window.innerHeight }
+          : { w: root.clientWidth, h: Math.max(root.scrollHeight, window.innerHeight) };
+        container.style.position = next.anchor === "screen" ? "fixed" : "absolute";
       }
 
       const follow = 1 - Math.exp(-FOLLOW_RATE * dt);
-      const fromX = x;
-      const fromY = y;
-      x += (next.x - x) * follow;
-      y += (next.y - y) * follow;
+      /* Chased the short way round, so walking off the right edge crosses to
+         the left rather than sliding back over everything in between. */
+      const movedX = ghostWrapDelta(x, next.x) * follow;
+      const movedY = (next.y - y) * follow;
+      x = wrapGhostX(x + movedX);
+      y += movedY;
       /* Real distance travelled, in screen widths per second: the same unit the
          walk and sprint speeds are expressed in, so the comparison below holds
          whichever way he is going and however long the page is. */
-      const movedPx = Math.hypot((x - fromX) * page.w, (y - fromY) * page.h);
+      const movedPx = Math.hypot(movedX * page.w, movedY * page.h);
       const travelled = dt > 0 ? movedPx / window.innerWidth / dt : 0;
       rate += (travelled - rate) * Math.min(1, dt * 8);
       container.style.transform = `translate3d(${(x * page.w).toFixed(1)}px, ${(y * page.h).toFixed(1)}px, 0)`;
@@ -139,7 +172,10 @@ export function GhostSprite({ visualRef, speech, action, scale, onSay }: GhostSp
         phase = 0;
       }
 
-      const spriteScale = next.scale;
+      /* The owner picks one size for everyone, in sprite pixels. Each viewer
+         caps it against their own width so he is a character on a phone rather
+         than most of the screen. */
+      const spriteScale = fitGhostScale(next.scale, window.innerWidth);
       const flip = shouldFlipGhostClip(clipName, next.facing);
       sprite.style.width = `${GHOST_FRAME.w * spriteScale}px`;
       sprite.style.height = `${GHOST_FRAME.h * spriteScale}px`;
@@ -148,6 +184,9 @@ export function GhostSprite({ visualRef, speech, action, scale, onSay }: GhostSp
       /* Read right to left: park the anchor (his feet) on the container origin,
          then mirror about it, so facing left never shifts where he stands. */
       sprite.style.transform = `${flip ? "scaleX(-1) " : ""}translate(${-GHOST_ANCHOR.x * spriteScale}px, ${-GHOST_ANCHOR.y * spriteScale}px)`;
+      /* The bubble hangs off whatever clip is drawn this frame, so a pose that
+         changes his height moves it with him rather than at the next render. */
+      if (bubbleRef.current) bubbleRef.current.style.bottom = `${ghostBubbleLift(clipName, spriteScale)}px`;
       const hitboxRect = ghostHitboxRect(clipName, spriteScale, flip);
       hitbox.style.left = `${hitboxRect.x}px`;
       hitbox.style.top = `${hitboxRect.y}px`;
@@ -160,7 +199,13 @@ export function GhostSprite({ visualRef, speech, action, scale, onSay }: GhostSp
   }, [visualRef]);
 
   const spec = playing ? findGhostAction(playing.kind) : null;
-  const lift = GHOST_ANCHOR.y * scale + 12;
+  /* The bubble and the shadow hang off the drawn size, so they need the same
+     cap the loop draws him at, re-read when the window changes (a phone turned
+     on its side is a different screen). */
+  const drawScale = fitGhostScale(scale, viewportWidth);
+  /* Where the bubble starts out. The loop takes it over on the next frame, off
+     whatever clip is actually drawn. */
+  const lift = ghostBubbleLift(resolveClip(spec?.clip ?? visualRef.current.clip), drawScale);
   return (
     <>
       {spec?.effect ? <GhostEffectLayer key={playing?.id} effect={spec.effect} /> : null}
@@ -169,7 +214,7 @@ export function GhostSprite({ visualRef, speech, action, scale, onSay }: GhostSp
           whatever he was put beside while the visitor scrolls. */}
       <div ref={containerRef} className="pointer-events-none absolute left-0 top-0 z-[200] will-change-transform">
         <div className="relative">
-          {saying ? <GhostBubble key={saying.id} text={saying.text} lift={lift} /> : null}
+          {saying ? <GhostBubble key={saying.id} containerRef={bubbleRef} text={saying.text} lift={lift} /> : null}
           {answering && onSay ? (
             <GhostReplyBox
               onClose={() => setAnswering(false)}
@@ -185,7 +230,7 @@ export function GhostSprite({ visualRef, speech, action, scale, onSay }: GhostSp
           <div
             aria-hidden
             className="absolute rounded-[50%] bg-black/35 blur-[2px]"
-            style={{ width: 16 * scale, height: 4 * scale, left: -8 * scale, top: -3 * scale }}
+            style={{ width: 16 * drawScale, height: 4 * drawScale, left: -8 * drawScale, top: -3 * drawScale }}
           />
           {/* origin-top-left is load-bearing: the flip has to mirror about the
               container origin, not about the frame's own centre. */}
@@ -256,7 +301,13 @@ export function GhostAtlasFrame({
 
 const TYPE_MS_PER_CHAR = 32;
 
-function GhostBubble({ text, lift }: { text: string; lift: number }) {
+function GhostBubble({ text, lift, containerRef }: {
+  text: string;
+  lift: number;
+  /* The draw loop keeps this in step with the clip he is in; the lift above is
+     only where it starts. */
+  containerRef: MutableRefObject<HTMLDivElement | null>;
+}) {
   const [shown, setShown] = useState(0);
 
   useEffect(() => {
@@ -273,17 +324,30 @@ function GhostBubble({ text, lift }: { text: string; lift: number }) {
   }, [text]);
 
   useEffect(() => {
-    if (shown > 0) playGhostBlip(text[shown - 1] ?? "");
+    if (shown > 0) playGhostSpeechSfx(text[shown - 1] ?? "");
   }, [shown, text]);
 
   return (
-    <div className="absolute left-1/2 w-max max-w-[min(320px,70vw)] -translate-x-1/2" style={{ bottom: lift }}>
-      <div className="rounded-md border-2 border-white bg-black px-3 py-2 text-left text-[13px] font-semibold leading-snug text-white">
+    <div ref={containerRef} className="absolute left-1/2 w-max max-w-[min(320px,70vw)] -translate-x-1/2" style={{ bottom: lift }}>
+      <GhostBubbleBox>
         {text.slice(0, shown)}
         <span className="opacity-0">{text.slice(shown)}</span>
+      </GhostBubbleBox>
+    </div>
+  );
+}
+
+/* The box a line sits in, without any placement of its own. Exported so the
+   control panel's stage can draw the same bubble the page draws instead of
+   leaving the owner to guess at what everyone else is reading. */
+export function GhostBubbleBox({ children }: { children: ReactNode }) {
+  return (
+    <>
+      <div className="rounded-md border-2 border-white bg-black px-3 py-2 text-left text-[13px] font-semibold leading-snug text-white">
+        {children}
       </div>
       <div className="mx-auto h-0 w-0 border-x-[7px] border-t-[8px] border-x-transparent border-t-white" />
-    </div>
+    </>
   );
 }
 
@@ -346,33 +410,6 @@ function GhostAnsweredBubble({ text, onDone }: { text: string; onDone: () => voi
       </div>
     </div>
   );
-}
-
-let audioContext: AudioContext | null = null;
-
-/* The Deltarune text blip, synthesized so the overlay ships no audio file. Does
-   nothing when autoplay policy keeps the context suspended. */
-function playGhostBlip(character: string): void {
-  if (character === "" || character === " " || character === "\n") return;
-  try {
-    const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctor) return;
-    audioContext ??= new Ctor();
-    if (audioContext.state === "suspended") void audioContext.resume().catch(() => undefined);
-    if (audioContext.state !== "running") return;
-    const now = audioContext.currentTime;
-    const oscillator = audioContext.createOscillator();
-    const gain = audioContext.createGain();
-    oscillator.type = "square";
-    oscillator.frequency.setValueAtTime(620, now);
-    gain.gain.setValueAtTime(0.025, now);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
-    oscillator.connect(gain).connect(audioContext.destination);
-    oscillator.start(now);
-    oscillator.stop(now + 0.06);
-  } catch {
-    // No audio is fine; the bubble carries the line on its own.
-  }
 }
 
 function GhostCaption({ text }: { text: string }) {
