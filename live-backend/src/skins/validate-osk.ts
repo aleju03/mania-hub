@@ -110,7 +110,10 @@ export function hasSpecialColumnSeparator(block: Record<string, string>, keys: n
     for (let index = 1; index < keys; index += 1) {
       if (index !== edge) othersMax = Math.max(othersMax, widths[index]);
     }
-    if (widths[edge] >= 2 && widths[edge] >= othersMax + 2) return true;
+    // The only line drawn counts at any width (pl0x marks its scratch lane
+    // with a 1-unit line and nothing else); against other lines it has to
+    // stand clearly heavier.
+    if (widths[edge] >= 1 && (othersMax === 0 || widths[edge] >= othersMax + 2)) return true;
   }
   return false;
 }

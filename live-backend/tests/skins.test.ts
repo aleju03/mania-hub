@@ -707,8 +707,10 @@ describe("hasSpecialColumnSeparator", () => {
     expect(hasSpecialColumnSeparator(block("0,4,0,0,0,0,0,0,0"), 8)).toBe(true);
     // ...or left side of the last column (right-hand scratch).
     expect(hasSpecialColumnSeparator(block("0,0,0,0,0,0,0,4,0"), 8)).toBe(true);
-    // A thin edge line still counts when it is the only line drawn.
+    // An edge line still counts at any width when it is the only line drawn
+    // (pl0x marks its scratch lane with a single 1-unit line).
     expect(hasSpecialColumnSeparator(block("0,2,0,0,0,0,0,0,0"), 8)).toBe(true);
+    expect(hasSpecialColumnSeparator(block("0,1,0,0,0,0,0,0,0"), 8)).toBe(true);
     // Doubled-up against stable's 2-unit default everywhere else.
     expect(hasSpecialColumnSeparator(block("2,4,2,2,2,2,2,2,2"), 8)).toBe(true);
   });
@@ -723,6 +725,9 @@ describe("hasSpecialColumnSeparator", () => {
     expect(hasSpecialColumnSeparator(block("3"), 8)).toBe(false);
     // Symmetric heavy edges read as decoration, not a scratch lane.
     expect(hasSpecialColumnSeparator(block("0,4,0,0,0,0,0,4,0"), 8)).toBe(false);
+    expect(hasSpecialColumnSeparator(block("0,1,0,0,0,0,0,1,0"), 8)).toBe(false);
+    // A faint edge line does not stand out against other drawn lines.
+    expect(hasSpecialColumnSeparator(block("0,1,1,1,1,1,1,1,0"), 8)).toBe(false);
     // A line between middle columns is not an edge separator.
     expect(hasSpecialColumnSeparator(block("0,0,0,0,4,0,0,0,0"), 8)).toBe(false);
   });
@@ -758,7 +763,7 @@ describe("backfillSkinSpecialKeymodes", () => {
     await createPublishedSkin({ ownerUserId: 1, ownerUsername: "alpha", name: "Unreachable", keymodes: [8] });
     expect(await backfillSkinSpecialKeymodes(db, async () => null)).toBe(0);
     // No marker was written, so the next boot scans again.
-    const meta = (await exec(db, "select 1 from live_meta where key = 'skin_special_keymodes_backfill:v1'")).rows;
+    const meta = (await exec(db, "select 1 from live_meta where key like 'skin_special_keymodes_backfill:%'")).rows;
     expect(meta).toHaveLength(0);
   });
 });

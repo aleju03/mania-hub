@@ -4,7 +4,10 @@ import { logWarn } from "../logger.js";
 import { nowIso } from "../shared/score.js";
 import { validateOskBuffer } from "./validate-osk.js";
 
-const META_KEY = "skin_special_keymodes_backfill:v1";
+// v2: v1 shipped with a 2-unit minimum line width, which missed skins that
+// mark the scratch lane with a single 1-unit line (pl0x). Bumping the marker
+// re-runs the scan once with the relaxed rule.
+const META_KEY = "skin_special_keymodes_backfill:v2";
 
 // One-time classification of skins uploaded before 7K+1 detection existed:
 // re-reads each stored .osk's skin.ini and records which keymodes are really
