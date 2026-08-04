@@ -639,7 +639,6 @@ export class ManiaReplayRenderer {
   private judgmentCounts: number[] = [0, 0, 0, 0, 0, 0, 0];
   private scoreSimulator: ManiaScoreSimulator | null = null;
   private modAcronyms: string[] = [];
-  private firstNoteTime = 0;
   private failTime: number | null = null;
   private leaderboardEntries: ReplayLeaderboardEntry[] = [];
   private leaderboardHidden = false;
@@ -759,7 +758,6 @@ export class ManiaReplayRenderer {
       timingPoints: options?.timingPoints,
     });
     this.ruleset = getManiaReplayRuleset(options?.isLazer ?? false, [...mods], options?.isConvert ?? false, this.modRate);
-    this.firstNoteTime = this.computeFirstNoteTime();
 
     this.backgroundImage = options?.backgroundImage ?? null;
     this.backgroundDim = options?.backgroundDim ?? 80;
@@ -1021,12 +1019,6 @@ export class ManiaReplayRenderer {
       previousState = frame.keyState;
     }
     return out;
-  }
-
-  private computeFirstNoteTime(): number {
-    let min = Infinity;
-    for (const note of this.notes) min = Math.min(min, note.time);
-    return Number.isFinite(min) ? min : 0;
   }
 
   // A failed replay's life bar graph ends at zero and its inputs stop well
@@ -1723,7 +1715,6 @@ export class ManiaReplayRenderer {
     this.frames = frames;
     this.keyCount = Math.max(1, Math.floor(keyCount));
     this.notes = [...notes];
-    this.firstNoteTime = this.computeFirstNoteTime();
     this.colors = COLUMN_COLORS[this.keyCount] || this.generateColors(this.keyCount);
     for (const c of this.colors) hexToNumber(c);
 
@@ -4400,20 +4391,15 @@ export class ManiaReplayRenderer {
 
   // Mod badges under the score block, drawn with the real client art: stable
   // stamps its classic selection-mod sprites, lazer its tinted shield badges.
-  // Stable fades the stack out a few seconds into the map; lazer keeps it up.
+  // Both stacks stay up for the whole play: stable's early fade-out belongs to
+  // a client without a seek bar, and here it just hid the mods from anyone who
+  // seeked.
   private renderModIcons(layout: Layout, rightX: number, topY: number) {
     const mods = this.modAcronyms.filter((mod) => mod && mod !== "CL");
     if (mods.length === 0) return;
 
     const isLazer = this.ruleset.accuracyMode === "lazer";
-    let alpha = isLazer ? 0.94 : 1;
-    if (!isLazer) {
-      const fadeStart = this.firstNoteTime + 3000;
-      const fadeProgress = (this.currentTime - fadeStart) / 800;
-      alpha *= 1 - Math.max(0, Math.min(1, fadeProgress));
-      if (alpha <= 0.01) return;
-    }
-
+    const alpha = isLazer ? 0.94 : 1;
     const hudScale = this.getHudScale(layout);
     if (isLazer) this.renderLazerModBadges(mods, rightX, topY, hudScale, alpha);
     else this.renderStableModBadges(mods, rightX, topY, hudScale, alpha);

@@ -269,8 +269,10 @@ describe("ManiaReplayRenderer skin customization", () => {
     expect(source).toContain("/images/badges/mods/stable/");
     expect(source).toContain("MOD_BADGE_TYPE_COLORS[acronym]");
     expect(source).toContain("MOD_BADGE_FILE_NAMES[acronym]");
-    // Stable fades the stack out after the map starts; lazer keeps it.
-    expect(source).toContain("const fadeStart = this.firstNoteTime + 3000;");
+    // Both stacks persist for the whole play; stable's start-of-map fade-out
+    // would hide the mods from anyone who seeks.
+    expect(source).toContain("const alpha = isLazer ? 0.94 : 1;");
+    expect(source).not.toContain("this.firstNoteTime");
   });
 
   it("simulates the ingame score counter and pins it to the real total", () => {
