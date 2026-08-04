@@ -4,6 +4,7 @@ import {
   fetchLivePackCardSnapshotsDirect,
   fetchLivePlayerProfileSnapshotDirect,
   isLiveBackendConfigured,
+  LiveBackendRequestError,
   type LiveGlobalRankingEntry,
 } from "./live-backend";
 import { HONORARY_PACK_POOL, type HonoraryPlayer } from "./honorary-players";
@@ -692,22 +693,46 @@ export async function fetchCachedPackPlayerScores(userId: number): Promise<OsuSc
 
 /* The hand-wide form of fetchCachedPackPlayerScores. Never rejects: an
    unavailable cache is just an empty map, and every player falls through to
-   the bounded cold lane. */
+   the bounded cold lane.
+
+   Retried once, because a rejected probe is not the same answer as "nothing
+   stored". On 2026-08-03 a run of pack opens tripped the shared per-IP costly
+   limiter, and every rejected hand probe pushed five players down the cold
+   lane -- players who all had stored windows -- which is how 4k profile
+   refreshes ended up queued. A 429 asking for longer than
+   PACK_PROBE_RETRY_MAX_WAIT_MS is not worth stalling a reveal for: the cold
+   lane reads the same stored rows anyway, and no longer schedules anything. */
+const PACK_PROBE_RETRY_DELAY_MS = 250;
+const PACK_PROBE_RETRY_MAX_WAIT_MS = 1_500;
+
 async function fetchCachedPackPlayerScoresBatch(userIds: readonly number[]): Promise<Map<number, OsuScore[]>> {
   const scoresByUserId = new Map<number, OsuScore[]>();
   if (!isLiveBackendConfigured()) return scoresByUserId;
-  try {
-    for (const [userId, card] of await fetchLivePackCardSnapshotsDirect(userIds)) {
-      // An empty stored window means the player's plays were never fetched;
-      // returning it would mint a blank card, so treat it as a miss.
-      if (Array.isArray(card.bestScores) && card.bestScores.length > 0) {
-        scoresByUserId.set(userId, card.bestScores);
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      for (const [userId, card] of await fetchLivePackCardSnapshotsDirect(userIds)) {
+        // An empty stored window means the player's plays were never fetched;
+        // returning it would mint a blank card, so treat it as a miss.
+        if (Array.isArray(card.bestScores) && card.bestScores.length > 0) {
+          scoresByUserId.set(userId, card.bestScores);
+        }
       }
+      return scoresByUserId;
+    } catch (error) {
+      const waitMs = attempt === 0 ? probeRetryWaitMs(error) : null;
+      // Out of retries (or told to wait too long): the bounded cold path owns it.
+      if (waitMs == null) return scoresByUserId;
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
     }
-  } catch {
-    // A cache miss and an unavailable cache both use the bounded cold path.
   }
-  return scoresByUserId;
+}
+
+/* How long to hold a rejected hand probe before its one retry, or null for
+   "don't retry". A 429 sets the pace itself when it asks for a short wait. */
+function probeRetryWaitMs(error: unknown): number | null {
+  const retryAfterMs = error instanceof LiveBackendRequestError ? error.retryAfterMs : null;
+  if (retryAfterMs == null) return PACK_PROBE_RETRY_DELAY_MS;
+  return retryAfterMs <= PACK_PROBE_RETRY_MAX_WAIT_MS ? retryAfterMs : null;
 }
 
 async function fetchColdPackPlayerScores(userId: number): Promise<OsuScore[]> {
@@ -718,7 +743,11 @@ async function fetchColdPackPlayerScores(userId: number): Promise<OsuScore[]> {
       // player. An EMPTY bestScores list falls through to the direct osu!
       // window - it usually means the player's plays were never fetched, and
       // returning it would mint a blank card.
-      const snapshot = await fetchLivePlayerProfileSnapshotDirect(String(userId), { lookup: "id" });
+      // refresh: false because a card renders happily off a stale profile. The
+      // reader that DOES want freshness (the profile page) keeps the default;
+      // here it only meant a rejected hand probe queued five interactive
+      // re-mints for players whose stored rows were perfectly usable.
+      const snapshot = await fetchLivePlayerProfileSnapshotDirect(String(userId), { lookup: "id", refresh: false });
       if (snapshot && Array.isArray(snapshot.bestScores) && snapshot.bestScores.length > 0) {
         return snapshot.bestScores;
       }

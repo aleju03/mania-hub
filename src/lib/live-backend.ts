@@ -1082,12 +1082,18 @@ export const fetchLivePlayerAbout = createServerFn({ method: "GET" })
 // post-hydration snapshot refresh skips the SSR server hop entirely.
 export async function fetchLivePlayerProfileSnapshotDirect(
   key: string,
-  options: { lookup?: "id" } = {},
+  options: { lookup?: "id"; refresh?: boolean } = {},
 ): Promise<LivePlayerProfileSnapshot | null> {
   const trimmed = key.trim().slice(0, 120);
   if (!trimmed) throw new Error("Invalid profile key.");
-  const query = options.lookup === "id" ? "?lookup=id" : "";
-  return fetchLiveJson(`/api/profiles/${encodeURIComponent(trimmed)}/snapshot${query}`);
+  const params = new URLSearchParams();
+  if (options.lookup === "id") params.set("lookup", "id");
+  // refresh: false keeps the read from scheduling a background profile refresh.
+  // For a caller that already accepts staleness (the pack card path) one dealt
+  // hand would otherwise queue a priority-80 re-mint per card.
+  if (options.refresh === false) params.set("refresh", "0");
+  const query = params.toString();
+  return fetchLiveJson(`/api/profiles/${encodeURIComponent(trimmed)}/snapshot${query ? `?${query}` : ""}`);
 }
 
 export async function fetchLivePlayerCachedProfileSnapshotDirect(key: string): Promise<LivePlayerProfileSnapshot | null> {
@@ -1124,6 +1130,21 @@ export interface LivePackCardSnapshot {
   isStale: boolean;
 }
 
+/* Carries the HTTP status (and a 429's retry-after) so a caller can tell a
+   rejected request from a real "nothing stored" answer, instead of collapsing
+   both into an empty result. */
+export class LiveBackendRequestError extends Error {
+  constructor(readonly status: number, readonly retryAfterMs: number | null) {
+    super(`Server ${status}`);
+    this.name = "LiveBackendRequestError";
+  }
+}
+
+function retryAfterMs(response: Response): number | null {
+  const seconds = Number(response.headers.get("retry-after"));
+  return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : null;
+}
+
 /* A whole dealt hand in one request. The backend reads the players' stored
    rows together (shared beatmap lookup, one trip through the rate limiter),
    and players it has nothing cached for are simply absent from the result. */
@@ -1134,7 +1155,7 @@ export async function fetchLivePackCardSnapshotsDirect(userIds: readonly number[
   const base = getLiveBackendUrl();
   if (!base) throw new Error("Server is not configured.");
   const response = await fetch(`${base}/api/packs/cards?ids=${ids.join(",")}`, { credentials: "omit" });
-  if (!response.ok) throw new Error(`Server ${response.status}`);
+  if (!response.ok) throw new LiveBackendRequestError(response.status, retryAfterMs(response));
   const payload = await response.json() as { cards?: LivePackCardSnapshot[] };
   harvestAvatarAccents(payload);
   for (const card of payload.cards ?? []) {

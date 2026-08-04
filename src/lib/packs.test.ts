@@ -38,6 +38,7 @@ import {
   fetchLivePackCardSnapshotsDirect,
   fetchLivePlayerProfileSnapshotDirect,
   isLiveBackendConfigured,
+  LiveBackendRequestError,
 } from "./live-backend";
 import { getRankings, getUserScoresBestWindow } from "./osu";
 
@@ -508,7 +509,7 @@ describe("fetchPackPlayerScores", () => {
     directFetch.mockResolvedValue(snapshotWith(scores));
     await expect(fetchPackPlayerScores(101)).resolves.toEqual(scores);
     expect(directFetch).toHaveBeenCalledTimes(1);
-    expect(directFetch).toHaveBeenCalledWith("101", { lookup: "id" });
+    expect(directFetch).toHaveBeenCalledWith("101", { lookup: "id", refresh: false });
     expect(osuWindowFetch).not.toHaveBeenCalled();
   });
 
@@ -517,7 +518,7 @@ describe("fetchPackPlayerScores", () => {
     directFetch.mockResolvedValue(snapshotWith(scores));
     await expect(fetchPackPlayerScores(101)).resolves.toEqual(scores);
     expect(directFetch).toHaveBeenCalledTimes(1);
-    expect(directFetch).toHaveBeenCalledWith("101", { lookup: "id" });
+    expect(directFetch).toHaveBeenCalledWith("101", { lookup: "id", refresh: false });
   });
 
   it("degrades to the direct osu! window when the backend errors end to end", async () => {
@@ -566,6 +567,35 @@ describe("fetchPackPlayerScores", () => {
       [{ id: 1, pp: 100 }],
       [{ id: 2, pp: 100 }],
     ]);
+  });
+
+  // A rejected probe is not the same answer as "nothing stored": one retry is
+  // what stops a tripped rate limiter from converting a whole hand of cached
+  // players into cold mints (and, before refresh=0, priority-80 queue jobs).
+  it("retries the hand probe once before admitting anyone to the cold lane", async () => {
+    batchFetch.mockRejectedValueOnce(new Error("backend down"));
+    batchFetch.mockResolvedValueOnce(new Map([[1, cardWith([{ id: 1, pp: 100 } as OsuScore])]]));
+
+    await expect(Promise.all(prefetchPackPlayerScores([1]))).resolves.toEqual([[{ id: 1, pp: 100 }]]);
+    expect(batchFetch).toHaveBeenCalledTimes(2);
+    expect(directFetch).not.toHaveBeenCalled();
+  });
+
+  it("skips the retry when a 429 asks for longer than a reveal can wait", async () => {
+    batchFetch.mockRejectedValue(new LiveBackendRequestError(429, 30_000));
+    directFetch.mockResolvedValue(snapshotWith([{ id: 1, pp: 100 } as OsuScore]));
+
+    await expect(Promise.all(prefetchPackPlayerScores([1]))).resolves.toEqual([[{ id: 1, pp: 100 }]]);
+    expect(batchFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("opts the cold card path out of the read's background refresh", async () => {
+    batchFetch.mockResolvedValue(new Map());
+    directFetch.mockResolvedValue(snapshotWith([{ id: 1, pp: 100 } as OsuScore]));
+
+    await Promise.all(prefetchPackPlayerScores([1]));
+
+    expect(directFetch).toHaveBeenCalledWith("1", { lookup: "id", refresh: false });
   });
 
   it("treats an empty cached window as a miss so no card mints blank", async () => {
