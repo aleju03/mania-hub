@@ -1953,9 +1953,13 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     // that viewer's private skins, so neither may land in a shared cache.
     if (scope.tokened) res.setHeader("cache-control", "private, no-store");
     else res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
+    const variant = url.searchParams.get("variant");
     const list = await listSkins(ctx.db, {
       q: (url.searchParams.get("q") ?? "").slice(0, 80),
       keymode: Number.isInteger(keymode) && keymode >= 1 && keymode <= 10 ? keymode : null,
+      // "special" is the 7K+1 filter (keymode 8 whose layout is really 7+1);
+      // "regular" makes the plain keymode filter mean actual 8K.
+      keymodeVariant: variant === "special" || variant === "regular" ? variant : null,
       page: Number.isFinite(page) ? page : 0,
       pageSize: Number.isFinite(pageSize) ? pageSize : 24,
       includeHidden,
@@ -2387,6 +2391,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
           sizeBytes: uploaded.sizeBytes,
           sha256: validation.info.sha256,
           keymodes: validation.info.keymodes,
+          specialKeymodes: validation.info.specialKeymodes,
           iniAuthor: validation.info.author,
         });
         if (skin.oskKey && skin.oskKey !== key) {
@@ -2406,6 +2411,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         sizeBytes: uploaded.sizeBytes,
         sha256: validation.info.sha256,
         keymodes: validation.info.keymodes,
+        specialKeymodes: validation.info.specialKeymodes,
         accentColor: validation.info.accentColor,
         iniAuthor: validation.info.author,
       });

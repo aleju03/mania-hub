@@ -17,6 +17,10 @@ export interface OskInfo {
   name: string | null;
   author: string | null;
   keymodes: number[];
+  // Keymodes whose layout is really (N-1)+1: the block draws a separator line
+  // against the first or last column, the way 7K+1 skins mark the scratch
+  // lane inside their 8K block.
+  specialKeymodes: number[];
   accentColor: string | null;
   sha256: string;
 }
@@ -72,10 +76,43 @@ export async function validateOskBuffer(buffer: Buffer): Promise<OskValidation> 
       name: parsed.name,
       author: parsed.author,
       keymodes,
+      specialKeymodes: detectSpecialKeymodes(parsed.mania),
       accentColor: pickAccentColor(parsed.mania),
       sha256: crypto.createHash("sha256").update(buffer).digest("hex"),
     },
   };
+}
+
+export function detectSpecialKeymodes(maniaBlocks: Array<Record<string, string>>): number[] {
+  return [...new Set(
+    maniaBlocks
+      .map((block) => ({ keys: parseInteger(block.Keys), block }))
+      .filter((entry): entry is { keys: number; block: Record<string, string> } =>
+        entry.keys != null && entry.keys >= 1 && entry.keys <= MAX_KEYMODE)
+      .filter(({ keys, block }) => hasSpecialColumnSeparator(block, keys))
+      .map(({ keys }) => keys),
+  )].sort((a, b) => a - b);
+}
+
+// ColumnLineWidth is keys+1 boundary line widths (outer stage edges included);
+// absent entries keep stable's 2-unit default. An (N-1)+1 skin marks its
+// special column by drawing the line on that column's inside edge - the right
+// side of the first column or the left side of the last - clearly heavier than
+// every other line between columns. A uniform grid (every boundary equal, the
+// default) never qualifies.
+export function hasSpecialColumnSeparator(block: Record<string, string>, keys: number): boolean {
+  if (keys < 3 || block.ColumnLineWidth == null) return false;
+  const parsed = block.ColumnLineWidth.split(",").map((part) => Number(part.trim()));
+  const widths = Array.from({ length: keys + 1 }, (_, index) =>
+    Number.isFinite(parsed[index]) ? clampInteger(parsed[index], 0, 20) : 2);
+  for (const edge of [1, keys - 1]) {
+    let othersMax = 0;
+    for (let index = 1; index < keys; index += 1) {
+      if (index !== edge) othersMax = Math.max(othersMax, widths[index]);
+    }
+    if (widths[edge] >= 2 && widths[edge] >= othersMax + 2) return true;
+  }
+  return false;
 }
 
 export function sniffImage(buffer: Buffer): { ext: "png" | "jpeg" | "webp"; mime: string } | null {

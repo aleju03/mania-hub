@@ -1736,6 +1736,12 @@ async function migrateSkins(db: Db): Promise<void> {
     // archive. Orthogonal to status, which stays the publish/moderation axis.
     await db.execute("alter table skins add column visibility text not null default 'public'");
   }
+  if (!skinColumns.includes("special_keymodes_json")) {
+    // Keymodes whose layout is really (N-1)+1 (a 7K+1 skin inside its 8K
+    // block), detected from skin.ini's ColumnLineWidth at upload time and
+    // backfilled once for the existing catalog by backfillSkinSpecialKeymodes.
+    await db.execute("alter table skins add column special_keymodes_json text not null default '[]'");
+  }
   if (!skinColumns.includes("private_secret")) {
     // The capability behind a private skin's stored objects: it is a segment of
     // every R2 key the skin writes (so the public bucket URL cannot be guessed

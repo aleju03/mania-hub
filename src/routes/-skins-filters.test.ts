@@ -4,11 +4,11 @@ import { parseSkinsSearch } from "./skins";
 
 describe("skins search params", () => {
   it("returns defaults for an empty search", () => {
-    expect(parseSkinsSearch({})).toEqual({ q: "", page: 0, sort: "newest", k: 0 });
+    expect(parseSkinsSearch({})).toEqual({ q: "", page: 0, sort: "newest", k: 0, special: false });
   });
 
   it("keeps a valid query and page", () => {
-    expect(parseSkinsSearch({ q: "rainbow", page: "2" })).toEqual({ q: "rainbow", page: 2, sort: "newest", k: 0 });
+    expect(parseSkinsSearch({ q: "rainbow", page: "2" })).toEqual({ q: "rainbow", page: 2, sort: "newest", k: 0, special: false });
   });
 
   it("accepts the downloads sort and rejects unknown sorts", () => {
@@ -23,6 +23,15 @@ describe("skins search params", () => {
     expect(parseSkinsSearch({ k: "11" }).k).toBe(0);
     expect(parseSkinsSearch({ k: "4.5" }).k).toBe(0);
     expect(parseSkinsSearch({ k: "x" }).k).toBe(0);
+  });
+
+  it("keeps the 7K+1 refinement only on an 8K filter", () => {
+    expect(parseSkinsSearch({ k: "8", special: true }).special).toBe(true);
+    expect(parseSkinsSearch({ k: "8", special: "1" }).special).toBe(true);
+    expect(parseSkinsSearch({ k: "8" }).special).toBe(false);
+    // Off 8K the refinement means nothing and is dropped.
+    expect(parseSkinsSearch({ k: "7", special: true }).special).toBe(false);
+    expect(parseSkinsSearch({ special: true }).special).toBe(false);
   });
 
   it("caps the query at 80 characters", () => {

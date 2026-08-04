@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { readConfig } from "./config.js";
-import { errorContext, logWarn } from "./logger.js";
+import { errorContext, logInfo, logWarn } from "./logger.js";
 import { ensurePinnedCountries, getIndexedCountryCodes, getMapsWarmCountryCodes, getRosterRefreshCountryCodes } from "./countries.js";
 import { createDb, exec, getSqliteBusyRetryStats, logApiCall, migrate, SQLITE_MIGRATION_TOTAL_BUSY_WAIT_MS } from "./db.js";
 import { AnalyticsStore } from "./features/analytics.js";
@@ -26,7 +26,8 @@ import { backfillPackCardSerials } from "./features/pack-pulls.js";
 import { ensurePackDuelsSchema } from "./features/pack-duels.js";
 import { ensurePackCollectionCardKeys } from "./features/pack-wallets.js";
 import { backfillSkinSlugs } from "./features/skins.js";
-import { isSkinStorageConfigured, skinObjectDeletesEnabled } from "./skins/r2.js";
+import { isSkinStorageConfigured, readSkinObject, skinObjectDeletesEnabled } from "./skins/r2.js";
+import { backfillSkinSpecialKeymodes } from "./skins/special-backfill.js";
 import { ensureArchivedPlayers } from "./archived-players.js";
 import { AbuseGuard } from "./http/abuse-guard.js";
 import { CountryClientTracker } from "./live/country-clients.js";
@@ -163,6 +164,17 @@ export async function createApp() {
     // Data backfill rides with schema ownership: assign slugs to skins
     // published before the slug column existed.
     await bootWrite("backfill_skin_slugs", () => backfillSkinSlugs(db));
+    // Classify skins uploaded before 7K+1 detection existed by re-reading each
+    // stored .osk's skin.ini (metadata only; the uploads themselves stay as
+    // they are). One-shot like the slug backfill, but it downloads the whole
+    // catalog from R2, so it runs behind boot instead of holding it up.
+    if (isSkinStorageConfigured(config)) {
+      void backfillSkinSpecialKeymodes(db, (key) => readSkinObject(config, key, config.skinOskMaxBytes))
+        .then((updated) => {
+          if (updated > 0) logInfo("skin_special_keymodes_backfilled", { updated });
+        })
+        .catch((error) => logWarn("skin_special_keymodes_backfill_failed", errorContext(error)));
+    }
     // GOAT cards split off from their player's ordinary card, so collection
     // rows are keyed (owner, card_key) now. Rebuilds the table once on a
     // database created before that; a no-op on every boot after.

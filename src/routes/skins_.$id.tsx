@@ -20,7 +20,7 @@ import {
   writeMyReplaySkinMemory,
 } from "../lib/replay-owner-skin";
 import { importReplaySkinFromOsk } from "../lib/replay-skin-import";
-import { deleteMySkin, fetchSkinById, formatKeymodes, formatSkinFileSize, markSkinsListStale, moderateSkin, readSkinsBrowseEntry, renameSkin, setMySkinVisibility, SKIN_NAME_MAX_LENGTH, skinDownloadUrl, skinOskFileUrl, type SkinSummary } from "../lib/skins";
+import { deleteMySkin, fetchSkinById, formatKeymodes, formatSkinFileSize, keymodeLabel, markSkinsListStale, moderateSkin, readSkinsBrowseEntry, renameSkin, setMySkinVisibility, SKIN_NAME_MAX_LENGTH, skinDownloadUrl, skinOskFileUrl, type SkinSummary } from "../lib/skins";
 import { pageSeo } from "../lib/seo";
 
 export const Route = createFileRoute("/skins_/$id")({
@@ -46,7 +46,7 @@ export const Route = createFileRoute("/skins_/$id")({
     return pageSeo({
       title: skin.name,
       description: skin.description?.replace(/\s+/g, " ").slice(0, 160)
-        || `${skin.name}, an osu!mania skin for ${formatKeymodes(skin.keymodes) || "mania"} uploaded by ${skin.ownerUsername}. Download the .osk or browse more skins.`,
+        || `${skin.name}, an osu!mania skin for ${formatKeymodes(skin.keymodes, skin.specialKeymodes) || "mania"} uploaded by ${skin.ownerUsername}. Download the .osk or browse more skins.`,
       path: `/skins/${skin.slug ?? skin.id}`,
       origin: match.context.origin,
       // A private skin only ever renders for its uploader, so the page must not
@@ -178,7 +178,7 @@ function SkinDetailPage() {
   const gallery = useMemo<GalleryItem[]>(() => {
     if (!skin) return [];
     const previews: GalleryItem[] = skin.previews.length > 0
-      ? skin.previews.map((preview) => ({ url: preview.url, width: preview.width, height: preview.height, label: `${preview.keys}K` }))
+      ? skin.previews.map((preview) => ({ url: preview.url, width: preview.width, height: preview.height, label: keymodeLabel(preview.keys, skin.specialKeymodes) }))
       : skin.previewUrl
         ? [{ url: skin.previewUrl, width: skin.previewWidth, height: skin.previewHeight, label: "Preview" }]
         : [];
@@ -475,7 +475,7 @@ function SkinDetailPage() {
 
                   <dl className="rounded-xl border border-osu-b3/20 bg-osu-b4 px-4 py-1 text-[12.5px]">
                     <FactRow label="Keymodes">
-                      <SkinKeymodeTags keymodes={skin.keymodes} max={10} />
+                      <SkinKeymodeTags keymodes={skin.keymodes} specialKeymodes={skin.specialKeymodes} max={10} />
                     </FactRow>
                     {isPrivate ? (
                       <FactRow label="Visible to">

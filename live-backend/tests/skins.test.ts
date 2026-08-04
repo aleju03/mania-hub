@@ -37,7 +37,8 @@ import {
   upsertSkinKeymodePreview,
 } from "../src/features/skins.js";
 import { runRetention } from "../src/retention.js";
-import { sniffImage, validateOskBuffer } from "../src/skins/validate-osk.js";
+import { hasSpecialColumnSeparator, sniffImage, validateOskBuffer } from "../src/skins/validate-osk.js";
+import { backfillSkinSpecialKeymodes } from "../src/skins/special-backfill.js";
 import { copySkinObject, deleteSkinObjects, isPrivateSkinKey, nextSkinOskRevision, nextSkinPreviewRevision, oskFilename, privateSkinKey, skinKeymodePreviewKey, skinObjectDeletesEnabled, skinOskKey, skinPreviewKey } from "../src/skins/r2.js";
 import { collectReplaySkinAssetPaths, replaySkinBundleVersion } from "../src/skins/replay-bundle.js";
 import { slugifySkinName } from "../src/skins/slug.js";
@@ -62,6 +63,7 @@ async function createPublishedSkin(input: {
   ownerUsername: string;
   name: string;
   keymodes?: number[];
+  specialKeymodes?: number[];
   sha256?: string;
   visibility?: "public" | "private";
 }): Promise<string> {
@@ -80,6 +82,7 @@ async function createPublishedSkin(input: {
     sizeBytes: 1024,
     sha256: input.sha256 ?? "ab".repeat(32),
     keymodes: input.keymodes ?? [4],
+    specialKeymodes: input.specialKeymodes ?? [],
     accentColor: "#ff66aa",
     iniAuthor: null,
   });
@@ -165,6 +168,7 @@ describe("skins feature", () => {
       sizeBytes: 2048,
       sha256: "cd".repeat(32),
       keymodes: [4],
+      specialKeymodes: [],
       accentColor: "#ff0000",
       iniAuthor: null,
     });
@@ -181,6 +185,7 @@ describe("skins feature", () => {
       sizeBytes: 2048,
       sha256: "cd".repeat(32),
       keymodes: [4],
+      specialKeymodes: [],
       accentColor: "#ff0000",
       iniAuthor: null,
     });
@@ -207,6 +212,7 @@ describe("skins feature", () => {
       sizeBytes: 2048,
       sha256: "cd".repeat(32),
       keymodes: [4, 7],
+      specialKeymodes: [],
       accentColor: "#aabbcc",
       iniAuthor: null,
     });
@@ -240,6 +246,7 @@ describe("skins feature", () => {
       sizeBytes: 2048,
       sha256: "cd".repeat(32),
       keymodes: [4],
+      specialKeymodes: [],
       accentColor: null,
       iniAuthor: "  Guden  ",
     });
@@ -255,6 +262,7 @@ describe("skins feature", () => {
       sizeBytes: 2048,
       sha256: "cd".repeat(32),
       keymodes: [4],
+      specialKeymodes: [],
       accentColor: null,
       iniAuthor: "Guden",
     });
@@ -404,6 +412,21 @@ describe("skins feature", () => {
     const paged = await listSkins(db, { page: 1, pageSize: 2 });
     expect(paged.total).toBe(3);
     expect(paged.skins).toHaveLength(1);
+  });
+
+  it("splits an 8K keymode filter into real 8K and 7K+1 via keymodeVariant", async () => {
+    await createPublishedSkin({ ownerUserId: 1, ownerUsername: "alpha", name: "True Eight", keymodes: [4, 8] });
+    await createPublishedSkin({ ownerUserId: 2, ownerUsername: "bravo", name: "Scratch Eight", keymodes: [4, 8], specialKeymodes: [8] });
+
+    expect((await listSkins(db, { keymode: 8 })).total).toBe(2);
+    expect((await listSkins(db, { keymode: 8, keymodeVariant: "regular" })).skins.map((skin) => skin.name)).toEqual(["True Eight"]);
+    expect((await listSkins(db, { keymode: 8, keymodeVariant: "special" })).skins.map((skin) => skin.name)).toEqual(["Scratch Eight"]);
+    // The variant only refines a keymode filter; 4K sees both skins.
+    expect((await listSkins(db, { keymode: 4, keymodeVariant: "special" })).total).toBe(0);
+    expect((await listSkins(db, { keymode: 4, keymodeVariant: "regular" })).total).toBe(2);
+    // And the summary carries the layout for the cards to label.
+    const special = (await listSkins(db, { keymode: 8, keymodeVariant: "special" })).skins[0];
+    expect(special.specialKeymodes).toEqual([8]);
   });
 
   it("hides and unhides skins, excluding hidden ones from the public list", async () => {
@@ -566,7 +589,7 @@ describe("duplicate .osk guard", () => {
     if (!pendingRow) throw new Error("pending row missing");
     await attachSkinOsk(db, pendingRow, {
       key: "k", url: "https://cdn.example/skin.osk", sizeBytes: 1, sha256: HASH,
-      keymodes: [4], accentColor: null, iniAuthor: null,
+      keymodes: [4], specialKeymodes: [], accentColor: null, iniAuthor: null,
     });
 
     // Its own half-finished row must not look like somebody else's upload.
@@ -659,6 +682,84 @@ describe("validateOskBuffer", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.info.accentColor).toBe("#c82878");
+  });
+
+  it("flags an 8K block with a scratch-lane separator as 7K+1", async () => {
+    // A line only on the right side of the first column: 7K+1. The plain 4K
+    // block stays regular.
+    const buffer = await buildOsk({
+      "skin.ini": "[Mania]\nKeys: 4\n\n[Mania]\nKeys: 8\nColumnLineWidth: 0,4,0,0,0,0,0,0,0\n",
+    });
+    const result = await validateOskBuffer(buffer);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.info.keymodes).toEqual([4, 8]);
+    expect(result.info.specialKeymodes).toEqual([8]);
+  });
+});
+
+describe("hasSpecialColumnSeparator", () => {
+  const block = (columnLineWidth?: string): Record<string, string> =>
+    columnLineWidth == null ? {} : { ColumnLineWidth: columnLineWidth };
+
+  it("detects a separator on either inside edge of the field", () => {
+    // Right side of the first column (left-hand scratch)...
+    expect(hasSpecialColumnSeparator(block("0,4,0,0,0,0,0,0,0"), 8)).toBe(true);
+    // ...or left side of the last column (right-hand scratch).
+    expect(hasSpecialColumnSeparator(block("0,0,0,0,0,0,0,4,0"), 8)).toBe(true);
+    // A thin edge line still counts when it is the only line drawn.
+    expect(hasSpecialColumnSeparator(block("0,2,0,0,0,0,0,0,0"), 8)).toBe(true);
+    // Doubled-up against stable's 2-unit default everywhere else.
+    expect(hasSpecialColumnSeparator(block("2,4,2,2,2,2,2,2,2"), 8)).toBe(true);
+  });
+
+  it("keeps uniform grids and undeclared widths as regular layouts", () => {
+    // No ColumnLineWidth at all: stable's uniform default.
+    expect(hasSpecialColumnSeparator(block(), 8)).toBe(false);
+    // Every boundary equal is a grid, not a scratch separator.
+    expect(hasSpecialColumnSeparator(block("2,2,2,2,2,2,2,2,2"), 8)).toBe(false);
+    expect(hasSpecialColumnSeparator(block("0,0,0,0,0,0,0,0,0"), 8)).toBe(false);
+    // A short list pads with the 2-unit default, burying the first entry.
+    expect(hasSpecialColumnSeparator(block("3"), 8)).toBe(false);
+    // Symmetric heavy edges read as decoration, not a scratch lane.
+    expect(hasSpecialColumnSeparator(block("0,4,0,0,0,0,0,4,0"), 8)).toBe(false);
+    // A line between middle columns is not an edge separator.
+    expect(hasSpecialColumnSeparator(block("0,0,0,0,4,0,0,0,0"), 8)).toBe(false);
+  });
+});
+
+describe("backfillSkinSpecialKeymodes", () => {
+  it("classifies stored .osk archives once and skips rows on later boots", async () => {
+    const special = await createPublishedSkin({ ownerUserId: 1, ownerUsername: "alpha", name: "Scratch Eight", keymodes: [8] });
+    const regular = await createPublishedSkin({ ownerUserId: 2, ownerUsername: "bravo", name: "True Eight", keymodes: [8] });
+    const archives: Record<string, Buffer> = {
+      [(await getSkin(db, special))!.oskKey!]: await buildOsk({
+        "skin.ini": "[Mania]\nKeys: 8\nColumnLineWidth: 0,4,0,0,0,0,0,0,0\n",
+      }),
+      [(await getSkin(db, regular))!.oskKey!]: await buildOsk({ "skin.ini": "[Mania]\nKeys: 8\n" }),
+    };
+    const reads: string[] = [];
+    const readOsk = async (key: string) => {
+      reads.push(key);
+      return archives[key] ?? null;
+    };
+
+    expect(await backfillSkinSpecialKeymodes(db, readOsk)).toBe(1);
+    expect((await getSkin(db, special))?.specialKeymodes).toEqual([8]);
+    expect((await getSkin(db, regular))?.specialKeymodes).toEqual([]);
+
+    // The one-shot marker holds: a second boot downloads nothing.
+    reads.length = 0;
+    expect(await backfillSkinSpecialKeymodes(db, readOsk)).toBe(0);
+    expect(reads).toEqual([]);
+  });
+
+  it("retries on the next boot when every read failed (storage down)", async () => {
+    await createPublishedSkin({ ownerUserId: 1, ownerUsername: "alpha", name: "Unreachable", keymodes: [8] });
+    expect(await backfillSkinSpecialKeymodes(db, async () => null)).toBe(0);
+    // No marker was written, so the next boot scans again.
+    const meta = (await exec(db, "select 1 from live_meta where key = 'skin_special_keymodes_backfill:v1'")).rows;
+    expect(meta).toHaveLength(0);
   });
 });
 
@@ -868,6 +969,7 @@ describe("editing a published skin's previews", () => {
       sizeBytes: 4096,
       sha256: "cd".repeat(32),
       keymodes: [4, 5],
+      specialKeymodes: [],
       iniAuthor: "someone else",
     });
 
@@ -895,6 +997,7 @@ describe("editing a published skin's previews", () => {
       sizeBytes: 2048,
       sha256: "ef".repeat(32),
       keymodes: [7],
+      specialKeymodes: [],
       iniAuthor: null,
     });
     const started = await startSkinEdit(db, id, OWNER.ownerUserId, "replace");

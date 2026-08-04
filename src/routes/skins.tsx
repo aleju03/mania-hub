@@ -33,6 +33,9 @@ interface SkinsSearch {
   page?: number;
   sort?: SkinsSort;
   k?: number;
+  // The 7K+1 refinement of k=8: true narrows to skins whose eighth column is
+  // a scratch lane; false makes 8K mean actual 8K. Meaningless off k=8.
+  special?: boolean;
 }
 
 const DEFAULT_SKINS_SEARCH = {
@@ -40,20 +43,33 @@ const DEFAULT_SKINS_SEARCH = {
   page: 0,
   sort: "newest" as SkinsSort,
   k: 0,
+  special: false,
 };
 
-// 0 means no keymode filter; the options cover the keymodes skins realistically declare.
-const KEYMODE_FILTERS = [4, 5, 6, 7, 8, 9, 10];
+// 0 means no keymode filter; the options cover the keymodes skins realistically
+// declare. 8K splits into 7K+1 (scratch-lane layouts) and actual 8K.
+const KEYMODE_FILTERS: Array<{ label: string; k: number; special: boolean }> = [
+  { label: "4K", k: 4, special: false },
+  { label: "5K", k: 5, special: false },
+  { label: "6K", k: 6, special: false },
+  { label: "7K", k: 7, special: false },
+  { label: "7K+1", k: 8, special: true },
+  { label: "8K", k: 8, special: false },
+  { label: "9K", k: 9, special: false },
+  { label: "10K", k: 10, special: false },
+];
 
 export function parseSkinsSearch(search: Record<string, unknown>): SkinsSearch {
   const q = typeof search.q === "string" ? search.q.slice(0, 80) : DEFAULT_SKINS_SEARCH.q;
   const page = Number(search.page);
-  const k = Number(search.k);
+  const rawK = Number(search.k);
+  const k = Number.isInteger(rawK) && rawK >= 1 && rawK <= 10 ? rawK : DEFAULT_SKINS_SEARCH.k;
   return {
     q,
     page: Number.isInteger(page) && page > 0 ? page : DEFAULT_SKINS_SEARCH.page,
     sort: search.sort === "downloads" ? "downloads" : DEFAULT_SKINS_SEARCH.sort,
-    k: Number.isInteger(k) && k >= 1 && k <= 10 ? k : DEFAULT_SKINS_SEARCH.k,
+    k,
+    special: k === 8 && (search.special === true || search.special === "true" || search.special === 1 || search.special === "1"),
   };
 }
 
@@ -107,15 +123,19 @@ function FilterOption({
 }
 
 function SkinsPage() {
-  const { q = "", page = 0, sort = "newest", k = 0 } = Route.useSearch();
+  const { q = "", page = 0, sort = "newest", k = 0, special = false } = Route.useSearch();
   const navigate = useNavigate();
   const location = useLocation();
   const auth = useAuth();
   const admin = isAdmin(auth);
 
+  // Only an 8K filter carries a layout refinement: "special" is the 7K+1 chip,
+  // "regular" keeps actual-8K skins ahead of the 7K+1 ones sharing the keymode.
+  const variant = k === 8 ? (special ? "special" as const : "regular" as const) : undefined;
+
   // Seeded from the in-memory list cache so walking back from a skin page
   // paints the same grid it left, not a screen of skeletons.
-  const [data, setData] = useState<SkinsListResult | null>(() => readCachedSkinsList(skinsListCacheKey({ q, page, sort, k })));
+  const [data, setData] = useState<SkinsListResult | null>(() => readCachedSkinsList(skinsListCacheKey({ q, page, sort, k, variant })));
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [showUploader, setShowUploader] = useState(false);
@@ -131,11 +151,11 @@ function SkinsPage() {
     (patch: SkinsSearch) => {
       void navigate({
         to: "/skins",
-        search: { q, sort, k, page: 0, ...patch },
+        search: { q, sort, k, special, page: 0, ...patch },
         replace: true,
       });
     },
-    [navigate, q, sort, k],
+    [navigate, q, sort, k, special],
   );
 
   // Debounced text search: typing updates local state, the URL follows.
@@ -155,7 +175,7 @@ function SkinsPage() {
       return;
     }
     const controller = new AbortController();
-    const cacheKey = skinsListCacheKey({ q, page, sort, k });
+    const cacheKey = skinsListCacheKey({ q, page, sort, k, variant });
     // A cached page shows immediately and the fetch behind it only swaps the
     // data in; without one this is a cold load and the skeletons are honest.
     const cached = readCachedSkinsList(cacheKey);
@@ -163,7 +183,7 @@ function SkinsPage() {
     setLoading(!cached);
     setFailed(false);
     // One list for everyone, straight from the backend and cacheable there.
-    fetchSkinsListDirect({ q, page, sort, k }, { signal: controller.signal })
+    fetchSkinsListDirect({ q, page, sort, k, variant }, { signal: controller.signal })
       .then((result) => {
         writeCachedSkinsList(cacheKey, result);
         if (controller.signal.aborted) return;
@@ -177,7 +197,7 @@ function SkinsPage() {
         setLoading(false);
       });
     return () => controller.abort();
-  }, [q, page, sort, k, reloadTick]);
+  }, [q, page, sort, k, variant, reloadTick]);
 
   const viewerId = auth.viewer?.id ?? null;
   useEffect(() => {
@@ -291,14 +311,21 @@ function SkinsPage() {
 
               <div className="mt-3 flex flex-col gap-1.5">
                 <FilterRow label="keys">
-                  <FilterOption active={k === 0} onClick={() => applySearch({ k: 0 })}>
+                  <FilterOption active={k === 0} onClick={() => applySearch({ k: 0, special: false })}>
                     any
                   </FilterOption>
-                  {KEYMODE_FILTERS.map((keys) => (
-                    <FilterOption key={keys} active={k === keys} onClick={() => applySearch({ k: k === keys ? 0 : keys })}>
-                      {keys}K
-                    </FilterOption>
-                  ))}
+                  {KEYMODE_FILTERS.map((option) => {
+                    const active = k === option.k && special === option.special;
+                    return (
+                      <FilterOption
+                        key={option.label}
+                        active={active}
+                        onClick={() => applySearch(active ? { k: 0, special: false } : { k: option.k, special: option.special })}
+                      >
+                        {option.label}
+                      </FilterOption>
+                    );
+                  })}
                 </FilterRow>
                 <FilterRow label="sort by">
                   <FilterOption active={sort === "newest"} onClick={() => applySearch({ sort: "newest" })}>
@@ -371,7 +398,9 @@ function SkinsPage() {
               <div className={loading ? "opacity-60 transition-opacity" : "transition-opacity"} aria-busy={loading}>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {skins.map((skin) => (
-                    <SkinCard key={skin.id} skin={skin} />
+                    // Cards front the filtered keymode's own render (7K+1 is
+                    // the 8K one) instead of whatever cover the uploader chose.
+                    <SkinCard key={skin.id} skin={skin} previewKeys={k >= 1 ? k : undefined} />
                   ))}
                 </div>
                 <Pagination page={page} totalPages={totalPages} onPageChange={(next) => applySearch({ page: next })} />

@@ -31,6 +31,11 @@ export interface SkinSummary {
   ownerUserId: number;
   ownerUsername: string;
   keymodes: number[];
+  // Keymodes whose layout is really (N-1)+1, e.g. [8] on a 7K+1 skin. Derived
+  // server-side from skin.ini's ColumnLineWidth (a separator line against the
+  // first or last column marks the scratch lane). Optional because summaries
+  // cached before the field existed lack it.
+  specialKeymodes?: number[];
   accentColor: string | null;
   // Public: everyone reads every skin's count.
   downloadCount: number;
@@ -77,11 +82,16 @@ export const SKIN_MAX_PER_USER = 30;
 
 export type SkinsSort = "newest" | "downloads";
 
+// Refines a keymode filter by layout: "special" is the 7K+1 filter (8K skins
+// whose eighth column is a scratch lane), "regular" makes 8K mean actual 8K.
+export type SkinsKeymodeVariant = "special" | "regular";
+
 export interface SkinsListParams {
   q?: string;
   page?: number;
   sort?: SkinsSort;
   k?: number;
+  variant?: SkinsKeymodeVariant;
 }
 
 // The list endpoint is browser-cached (max-age=60 + stale-while-revalidate
@@ -110,7 +120,7 @@ const SKINS_LIST_MEMORY_MAX = 12;
 const skinsListMemory = new Map<string, { at: number; result: SkinsListResult }>();
 
 export function skinsListCacheKey(params: SkinsListParams): string {
-  return [params.q?.trim() ?? "", params.page ?? 0, params.sort ?? "newest", params.k ?? 0].join("|");
+  return [params.q?.trim() ?? "", params.page ?? 0, params.sort ?? "newest", params.k ?? 0, params.variant ?? ""].join("|");
 }
 
 export function readCachedSkinsList(key: string): SkinsListResult | null {
@@ -182,7 +192,10 @@ export async function fetchSkinsListDirect(params: SkinsListParams, init?: Reque
   if (q) query.set("q", q.slice(0, 80));
   if (params.page) query.set("page", String(params.page));
   if (params.sort === "downloads") query.set("sort", "downloads");
-  if (params.k && Number.isInteger(params.k) && params.k >= 1 && params.k <= 10) query.set("k", String(params.k));
+  if (params.k && Number.isInteger(params.k) && params.k >= 1 && params.k <= 10) {
+    query.set("k", String(params.k));
+    if (params.variant) query.set("variant", params.variant);
+  }
   query.set("pageSize", String(SKINS_PAGE_SIZE));
   const response = await fetch(`${base}/api/skins/list?${query.toString()}`, { credentials: "omit", cache: skinsListCacheMode(), ...init });
   if (!response.ok) throw new Error(`Server ${response.status}`);
@@ -727,9 +740,16 @@ export function formatSkinFileSize(bytes: number | null | undefined): string {
   return mb >= 10 ? `${Math.round(mb)} MB` : `${mb.toFixed(1)} MB`;
 }
 
-export function formatKeymodes(keymodes: number[]): string {
+// "8K" ordinarily, "7K+1" when the skin declares that keymode as a scratch
+// layout; every pill and preview label goes through this so the two never
+// disagree about what an 8K block really is.
+export function keymodeLabel(keys: number, specialKeymodes?: number[]): string {
+  return specialKeymodes?.includes(keys) ? `${keys - 1}K+1` : `${keys}K`;
+}
+
+export function formatKeymodes(keymodes: number[], specialKeymodes?: number[]): string {
   if (keymodes.length === 0) return "";
-  const labels = keymodes.map((keys) => `${keys}K`);
+  const labels = keymodes.map((keys) => keymodeLabel(keys, specialKeymodes));
   if (labels.length === 1) return labels[0];
   return `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
 }

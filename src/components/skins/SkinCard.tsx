@@ -4,13 +4,13 @@ import type { CSSProperties } from "react";
 import { rememberSkinName, skinEventProperties } from "../../lib/analytics-skins";
 import { track } from "../../lib/analytics";
 import { formatTimeAgo } from "../../lib/format";
-import { formatSkinFileSize, rememberSkinsBrowseEntry, skinDownloadUrl, type SkinSummary } from "../../lib/skins";
+import { formatSkinFileSize, keymodeLabel, rememberSkinsBrowseEntry, skinDownloadUrl, type SkinSummary } from "../../lib/skins";
 import { Avatar } from "../ui/Avatar";
 
 const MAX_KEYMODE_TAGS = 3;
 export const SKIN_FALLBACK_ACCENT = "#ff66ab";
 
-export function SkinKeymodeTags({ keymodes, overlay = false, max = MAX_KEYMODE_TAGS }: { keymodes: number[]; overlay?: boolean; max?: number }) {
+export function SkinKeymodeTags({ keymodes, specialKeymodes, overlay = false, max = MAX_KEYMODE_TAGS }: { keymodes: number[]; specialKeymodes?: number[]; overlay?: boolean; max?: number }) {
   const shown = keymodes.slice(0, max);
   const rest = keymodes.length - shown.length;
   const pill = overlay
@@ -23,7 +23,7 @@ export function SkinKeymodeTags({ keymodes, overlay = false, max = MAX_KEYMODE_T
     <div className={`flex items-center gap-1 ${overlay ? "shrink-0" : "flex-wrap justify-end gap-y-1"}`}>
       {shown.map((keys) => (
         <span key={keys} className={pill}>
-          {keys}K
+          {keymodeLabel(keys, specialKeymodes)}
         </span>
       ))}
       {rest > 0 && <span className={pill}>+{rest}</span>}
@@ -34,9 +34,16 @@ export function SkinKeymodeTags({ keymodes, overlay = false, max = MAX_KEYMODE_T
 // onClick is for callers that render the card outside the browse grid (the
 // upload modal's publish confirmation) and need to tear their own UI down as
 // the navigation happens.
-export function SkinCard({ skin, onClick }: { skin: SkinSummary; onClick?: () => void }) {
+// previewKeys is the browse grid's keymode filter: with it set the card fronts
+// that keymode's own render when the skin has one, so filtering 4K shows every
+// skin's 4K playfield even where a 7K render was chosen as the cover.
+export function SkinCard({ skin, previewKeys, onClick }: { skin: SkinSummary; previewKeys?: number; onClick?: () => void }) {
   const accent = skin.accentColor ?? SKIN_FALLBACK_ACCENT;
   const isPrivate = skin.visibility === "private";
+  const keymodePreview = previewKeys != null ? skin.previews.find((preview) => preview.keys === previewKeys) : undefined;
+  const preview = keymodePreview
+    ? { url: keymodePreview.url, width: keymodePreview.width, height: keymodePreview.height }
+    : { url: skin.previewUrl, width: skin.previewWidth, height: skin.previewHeight };
   // A private skin has no counted download, and only its owner is ever handed
   // a card for one: the corner button links straight at the capability URL on
   // their own copy of the summary.
@@ -61,18 +68,18 @@ export function SkinCard({ skin, onClick }: { skin: SkinSummary; onClick?: () =>
         className="flex h-full flex-col overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4 transition-[border-color,box-shadow] group-hover:border-(--skin-accent) group-hover:shadow-[0_0_18px_-8px_var(--skin-accent)]"
       >
         <div className="relative aspect-video w-full bg-osu-b5">
-          {skin.previewUrl ? (
+          {preview.url ? (
             <img
-              src={skin.previewUrl}
+              src={preview.url}
               alt={`${skin.name} preview`}
-              width={skin.previewWidth ?? 1280}
-              height={skin.previewHeight ?? 720}
+              width={preview.width ?? 1280}
+              height={preview.height ?? 720}
               loading="lazy"
               className="h-full w-full object-cover transition-[filter] duration-150 group-hover:brightness-110"
             />
           ) : null}
           <div className="absolute right-1.5 top-1.5">
-            <SkinKeymodeTags keymodes={skin.keymodes} overlay />
+            <SkinKeymodeTags keymodes={skin.keymodes} specialKeymodes={skin.specialKeymodes} overlay />
           </div>
           {(skin.status === "hidden" || isPrivate) && (
             <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-extrabold uppercase leading-none tracking-wide text-white/80">

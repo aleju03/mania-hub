@@ -27,6 +27,8 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-04", text: "Skins now know about 7k+1, when you upload one and when you filter for it", to: "/skins" },
+  { date: "2026-08-04", text: "Sort skins by a keymode and every cover shows that keymode's thumbnail", to: "/skins" },
   { date: "2026-08-04", text: "Skin thumbnails load faster", to: "/skins" },
   { date: "2026-08-04", text: "New game: higher or lower. The longer your streak, the more shards you earn", to: "/streak" },
   { date: "2026-08-04", text: "See the latest replays other people uploaded, on the upload tab", to: "/replay" },

@@ -54,6 +54,9 @@ export interface SkinRow {
   author: string | null;
   description: string | null;
   keymodes: number[];
+  // Keymodes whose layout is really (N-1)+1, e.g. [8] on a 7K+1 skin; always
+  // a subset of keymodes. Derived from skin.ini alongside them.
+  specialKeymodes: number[];
   accentColor: string | null;
   downloadCount: number;
   status: "pending" | "published" | "hidden";
@@ -91,6 +94,7 @@ export interface SkinSummary {
   ownerUserId: number;
   ownerUsername: string;
   keymodes: number[];
+  specialKeymodes: number[];
   accentColor: string | null;
   // Public: every reader sees every skin's count, the same number the
   // downloads sort orders by.
@@ -232,7 +236,7 @@ export async function getSkinForUpload(db: Db, id: string, token: string): Promi
 export async function attachSkinOsk(
   db: Db,
   skin: SkinRow,
-  patch: { key: string; url: string; sizeBytes: number; sha256: string; keymodes: number[]; accentColor: string | null; iniAuthor: string | null },
+  patch: { key: string; url: string; sizeBytes: number; sha256: string; keymodes: number[]; specialKeymodes: number[]; accentColor: string | null; iniAuthor: string | null },
 ): Promise<void> {
   // An author typed in the upload form wins; skin.ini's Author fills the gap.
   const author = skin.author ?? (cleanText(patch.iniAuthor ?? "", SKIN_AUTHOR_MAX_LENGTH) || null);
@@ -240,10 +244,10 @@ export async function attachSkinOsk(
     db,
     `update skins set
        osk_key = ?, osk_url = ?, osk_size_bytes = ?, osk_sha256 = ?,
-       keymodes_json = ?, accent_color = coalesce(accent_color, ?),
+       keymodes_json = ?, special_keymodes_json = ?, accent_color = coalesce(accent_color, ?),
        author = ?, search_text = ?, updated_at = ?
      where id = ?`,
-    [patch.key, patch.url, patch.sizeBytes, patch.sha256, JSON.stringify(patch.keymodes), patch.accentColor,
+    [patch.key, patch.url, patch.sizeBytes, patch.sha256, JSON.stringify(patch.keymodes), JSON.stringify(normalizeKeymodes(patch.specialKeymodes)), patch.accentColor,
      author, buildSearchText(skin.name, skin.ownerUsername, author), nowIso(), skin.id],
   );
 }
@@ -256,7 +260,7 @@ export async function attachSkinOsk(
 export async function replaceSkinOsk(
   db: Db,
   skin: SkinRow,
-  patch: { key: string; url: string; sizeBytes: number; sha256: string; keymodes: number[]; iniAuthor: string | null },
+  patch: { key: string; url: string; sizeBytes: number; sha256: string; keymodes: number[]; specialKeymodes: number[]; iniAuthor: string | null },
 ): Promise<void> {
   const author = skin.author ?? (cleanText(patch.iniAuthor ?? "", SKIN_AUTHOR_MAX_LENGTH) || null);
   const now = nowIso();
@@ -264,9 +268,10 @@ export async function replaceSkinOsk(
     db,
     `update skins set
        osk_key = ?, osk_url = ?, osk_size_bytes = ?, osk_sha256 = ?,
-       keymodes_json = ?, author = ?, search_text = ?, osk_updated_at = ?, updated_at = ?
+       keymodes_json = ?, special_keymodes_json = ?, author = ?, search_text = ?, osk_updated_at = ?, updated_at = ?
      where id = ?`,
     [patch.key, patch.url, patch.sizeBytes, patch.sha256, JSON.stringify(normalizeKeymodes(patch.keymodes)),
+     JSON.stringify(normalizeKeymodes(patch.specialKeymodes)),
      author, buildSearchText(skin.name, skin.ownerUsername, author), now, now, skin.id],
   );
 }
@@ -553,6 +558,10 @@ export async function getSkinByRef(db: Db, ref: string): Promise<SkinRow | null>
 export interface SkinsListQuery {
   q?: string | null;
   keymode?: number | null;
+  // Refines a keymode filter by layout: "special" keeps only skins whose
+  // keymode block is really (N-1)+1 (the 7K+1 filter, with keymode 8), and
+  // "regular" excludes those (so 8K means actual 8K). Ignored without keymode.
+  keymodeVariant?: "special" | "regular" | null;
   page?: number;
   pageSize?: number;
   includeHidden?: boolean;
@@ -603,6 +612,13 @@ export async function listSkins(db: Db, query: SkinsListQuery): Promise<SkinsLis
   if (keymode != null) {
     where.push("exists (select 1 from json_each(skins.keymodes_json) je where je.value = ?)");
     args.push(keymode);
+    if (query.keymodeVariant === "special") {
+      where.push("exists (select 1 from json_each(skins.special_keymodes_json) js where js.value = ?)");
+      args.push(keymode);
+    } else if (query.keymodeVariant === "regular") {
+      where.push("not exists (select 1 from json_each(skins.special_keymodes_json) js where js.value = ?)");
+      args.push(keymode);
+    }
   }
   const whereSql = where.join(" and ");
 
@@ -741,6 +757,7 @@ export function toSkinSummary(row: SkinRow, options?: { asOwner?: boolean }): Sk
     ownerUserId: row.ownerUserId,
     ownerUsername: row.ownerUsername,
     keymodes: row.keymodes,
+    specialKeymodes: row.specialKeymodes,
     accentColor: row.accentColor,
     downloadCount: row.downloadCount,
     previewUrl: row.previewUrl,
@@ -819,6 +836,7 @@ function rowToSkin(row: Record<string, unknown>): SkinRow {
     author: textOrNull(row.author),
     description: textOrNull(row.description),
     keymodes: normalizeKeymodes(parseJson<unknown>(String(row.keymodes_json ?? "[]"), [])),
+    specialKeymodes: normalizeKeymodes(parseJson<unknown>(String(row.special_keymodes_json ?? "[]"), [])),
     accentColor: textOrNull(row.accent_color),
     downloadCount: Math.max(0, Math.floor(Number(row.download_count) || 0)),
     status,
