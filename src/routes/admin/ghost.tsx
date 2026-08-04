@@ -33,6 +33,7 @@ import {
   type GhostCharacter,
   type GhostFacing,
   type GhostPresence,
+  type GhostPresenceViewer,
   type GhostReply,
   type GhostVisual,
 } from "../../lib/ghost-shared";
@@ -152,6 +153,9 @@ function GhostAdminPage() {
      his head, where you are already looking. */
   const [composing, setComposing] = useState(false);
   const [showAllRoutes, setShowAllRoutes] = useState(false);
+  /* The quick "is X here" lookup over the roster. Only signed-in viewers have
+     names, so anyone browsing signed out is findable as a count, not by name. */
+  const [viewerQuery, setViewerQuery] = useState("");
   const [chat, setChat] = useState<ChatLine[]>([]);
   /* Whether the log is parked at the newest line. Ref for the scroll handler,
      state for the button that offers to go back down. */
@@ -212,6 +216,19 @@ function GhostAdminPage() {
     : null;
   /* The roster only names signed-in viewers; everyone else is a count. */
   const routeHere = route ? presence.routes.find((entry) => entry.route === route) ?? null : null;
+  /* One row per matched person, their open tabs gathered under them, so the
+     answer reads as "yes, and here is where" rather than one row per tab. */
+  const trimmedViewerQuery = viewerQuery.trim();
+  const foundViewers = new Map<number, GhostPresenceViewer[]>();
+  if (trimmedViewerQuery) {
+    const needle = trimmedViewerQuery.toLowerCase();
+    for (const viewer of presence.viewers) {
+      if (viewer.userId == null || !viewer.username?.toLowerCase().includes(needle)) continue;
+      const tabs = foundViewers.get(viewer.userId);
+      if (tabs) tabs.push(viewer);
+      else foundViewers.set(viewer.userId, [viewer]);
+    }
+  }
   const ownViewport = useOwnViewport();
   /* Aiming at one person stages against their screen, because then the pixels
      are the point: next to their avatar means next to their avatar. With nobody
@@ -992,13 +1009,55 @@ function GhostAdminPage() {
           </div>
 
           <div>
-            <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-osu-f1">
+            <div className="mb-2 flex flex-wrap items-center gap-2 text-xs font-semibold text-osu-f1">
               Who is where
               <span className="font-normal text-osu-f1/70">
                 {presence.totals.viewers} open across {presence.totals.routes} pages, {presence.totals.named} signed in
               </span>
+              <input
+                value={viewerQuery}
+                onChange={(event) => setViewerQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") setViewerQuery("");
+                }}
+                placeholder="is someone here?"
+                className="ml-auto w-44 rounded-md bg-osu-b3/60 px-2.5 py-1 font-normal text-white outline-none placeholder:text-osu-f1/60"
+              />
             </div>
-            {presence.routes.length === 0 ? (
+            {trimmedViewerQuery ? (
+              foundViewers.size === 0 ? (
+                <div className="text-xs text-osu-f1/70">
+                  Nobody signed in matches "{trimmedViewerQuery}".
+                  {presence.truncated ? " The roster is cut to the newest arrivals, so a quiet tab could still be out there." : ""}
+                </div>
+              ) : (
+                <div className="flex flex-col gap-1">
+                  {[...foundViewers.values()].map((tabs) => (
+                    <div key={tabs[0].userId} className="flex flex-wrap items-center gap-2 rounded-md bg-osu-b4/60 px-3 py-2">
+                      <span className="text-sm font-semibold text-white">{tabs[0].username}</span>
+                      <span className="text-[11px] text-osu-f1">
+                        here now, {tabs.length === 1 ? "1 tab open" : `${tabs.length} tabs open`}
+                      </span>
+                      <div className="ml-auto flex flex-wrap items-center gap-1.5">
+                        {tabs.map((viewer) => (
+                          <button
+                            key={viewer.id}
+                            type="button"
+                            onClick={() => aim({ mode: "user", userId: viewer.userId! }, viewer.route)}
+                            title={viewer.viewport ? `${viewer.viewport.w}x${viewer.viewport.h}` : "unknown viewport"}
+                            className={`cursor-pointer rounded px-1.5 py-0.5 text-[11px] font-semibold transition-colors ${
+                              viewer.showing ? "bg-osu-pink/25 text-osu-pink-light" : "bg-osu-b3/60 text-white hover:bg-osu-b3"
+                            }`}
+                          >
+                            {viewer.route}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : presence.routes.length === 0 ? (
               <div className="text-xs text-osu-f1/70">Nobody has a page open right now.</div>
             ) : (
               <div className="flex flex-col gap-1">
