@@ -174,6 +174,14 @@ async function applyConnectionPragmas(db: Db, config: PragmaConfig): Promise<voi
   const mmapBytes = (config.sqliteMmapMb ?? 256) * 1024 * 1024;
   const pragmas = [
     `pragma busy_timeout = ${busyTimeoutMs}`,
+    // Everything below assumes WAL, so make it true rather than hope the file
+    // was converted once by hand: the main DB already is (no-op), but the
+    // analytics DB ran in delete mode for months - meaning every 1s flush
+    // paid the full rollback-journal fsync dance, and any outside reader
+    // could lock the writer out entirely (which wedged the 2026-08-04
+    // serving process). journal_mode is persistent, so this converts a
+    // fresh or legacy file once at boot and no-ops after.
+    `pragma journal_mode = WAL`,
     `pragma synchronous = ${/^(OFF|NORMAL|FULL|EXTRA)$/.test(synchronous) ? synchronous : "NORMAL"}`,
     `pragma wal_autocheckpoint = 1000`,
     // The WAL file never shrinks on its own: checkpoints reset the write cursor

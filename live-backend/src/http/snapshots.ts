@@ -101,6 +101,11 @@ const HIDDEN_ADMIN_WORKER_LANE_NAMES = new Set([
   "replay-video-finalize",
 ]);
 
+// Admin-only viewer roster responses; see the /api/admin/analytics/viewers
+// handler. Process-wide is fine: one serving process owns the analytics store.
+const ANALYTICS_VIEWERS_CACHE_TTL_MS = 15_000;
+const analyticsViewersCache = new Map<string, { at: number; payload: unknown }>();
+
 export interface HttpContext {
   db: Db;
   queue: JobQueue;
@@ -492,16 +497,28 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     const requested = Number(url.searchParams.get("limit") ?? 500);
     const limit = Number.isFinite(requested) ? Math.min(2000, Math.max(1, Math.round(requested))) : 500;
     const sort = normalizeAnalyticsViewerSort(url.searchParams.get("sort"));
+    // The roster changes on the minutes scale but the rank attachment reads
+    // the main DB on the serving loop, so a short cache keeps tab switches and
+    // the two frontend instances from re-paying it back to back.
+    const viewersCacheKey = `${sort}:${limit}`;
+    const cachedViewers = analyticsViewersCache.get(viewersCacheKey);
+    if (cachedViewers && Date.now() - cachedViewers.at < ANALYTICS_VIEWERS_CACHE_TTL_MS) {
+      sendJson(req, res, ctx, 200, cachedViewers.payload);
+      return true;
+    }
     // "Best players on the site" has to mean best of everyone who signed in, so
     // pp and rank read the whole roster and cut it down after sorting. Recent
     // needs no such scan: the roster comes back in that order already.
     const scanned = await ctx.analytics.getViewers(sort === "recent" ? limit : MAX_VIEWER_ROWS);
     const ranked = sortRankedViewers(await attachViewerRanks(ctx.db, scanned), sort);
-    sendJson(req, res, ctx, 200, {
+    const viewersPayload = {
       total: await ctx.analytics.countViewers(),
       sort,
       viewers: ranked.slice(0, limit),
-    });
+    };
+    if (analyticsViewersCache.size > 16) analyticsViewersCache.clear();
+    analyticsViewersCache.set(viewersCacheKey, { at: Date.now(), payload: viewersPayload });
+    sendJson(req, res, ctx, 200, viewersPayload);
     return true;
   }
   // Short-lived ticket for the admin browser's live SSE stream: EventSource

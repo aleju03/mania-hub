@@ -17,6 +17,10 @@ const MAX_EVENTS_PER_CAPTURE = 50;
 const PRUNE_INTERVAL_MS = 60 * 60_000;
 const LIVE_TICKET_TTL_MS = 10 * 60_000;
 const ACTIVE_VISITOR_WINDOW_MS = 5 * 60_000;
+// Just under the admin page's 5s poll: every poll misses the previous poll's
+// entry, so each browser refreshes once per cycle while concurrent tabs and
+// the second frontend instance ride the same scan.
+const MONITOR_CACHE_TTL_MS = 4_000;
 /* Ceiling on one read of the signed-in roster. Not a display limit: the pp and
    rank sorts have to see every viewer to name the best of them. */
 export const MAX_VIEWER_ROWS = 20_000;
@@ -260,6 +264,8 @@ export class AnalyticsStore {
   private flushing: Promise<void> = Promise.resolve();
   private readonly listeners = new Set<(event: AnalyticsEventRecord) => void>();
   private readonly liveTickets = new Map<string, number>();
+  private readonly monitorCache = new Map<string, { at: number; data: AnalyticsMonitorResponse }>();
+  private readonly monitorInFlight = new Map<string, Promise<AnalyticsMonitorResponse>>();
 
   constructor(db: Db, options: AnalyticsStoreOptions = {}) {
     this.db = db;
@@ -627,7 +633,35 @@ export class AnalyticsStore {
 
   // --- queries ---
 
+  /* The monitor scan set is ~14 sequential aggregate queries, each pinning the
+     serving loop; the admin page re-asks every 5s and each of the two frontend
+     instances asks separately. A short cache turns that into one scan per
+     window for everyone. Tests pass an explicit `now` and bypass it. */
   async getMonitorData(params: { rangeHours: number; recentCountry?: string | null; recentLimit?: number; now?: number }): Promise<AnalyticsMonitorResponse> {
+    if (params.now != null) return this.computeMonitorData(params);
+    const key = [
+      Math.min(720, Math.max(1, Math.round(params.rangeHours || 24))),
+      normalizeCountryCode(params.recentCountry) ?? "all",
+      Math.min(1000, Math.max(1, Math.round(params.recentLimit ?? 1000))),
+    ].join(":");
+    const hit = this.monitorCache.get(key);
+    if (hit && Date.now() - hit.at < MONITOR_CACHE_TTL_MS) return hit.data;
+    const inflight = this.monitorInFlight.get(key);
+    if (inflight) return inflight;
+    const promise = this.computeMonitorData(params)
+      .then((data) => {
+        if (this.monitorCache.size > 32) this.monitorCache.clear();
+        this.monitorCache.set(key, { at: Date.now(), data });
+        return data;
+      })
+      .finally(() => {
+        this.monitorInFlight.delete(key);
+      });
+    this.monitorInFlight.set(key, promise);
+    return promise;
+  }
+
+  private async computeMonitorData(params: { rangeHours: number; recentCountry?: string | null; recentLimit?: number; now?: number }): Promise<AnalyticsMonitorResponse> {
     const now = params.now ?? Date.now();
     const rangeHours = Math.min(720, Math.max(1, Math.round(params.rangeHours || 24)));
     const since = now - rangeHours * 60 * 60_000;
