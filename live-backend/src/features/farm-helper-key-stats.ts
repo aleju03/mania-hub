@@ -134,6 +134,10 @@ export function clearFarmHelperKeyStatsCaches(db: Db): void {
 export async function getKeyModePeerPool(
   db: Db,
   keyCount: FarmHelperKeyCount,
+  // Dedicated write connection for the calibration's observability write (see
+  // getProxyCalibration). Omitted off the serving path, where the write is
+  // simply skipped rather than queued on a read connection.
+  writeDb?: Db,
 ): Promise<{ peers: RawKeyModePeer[]; calibration: ProxyCalibration }> {
   await ensureFarmHelperKeyStatsSeeded(db, keyCount);
   const cache = mapFor(poolCache, db);
@@ -171,15 +175,21 @@ export async function getKeyModePeerPool(
     const variantPp = row.variant_pp != null && Number.isFinite(variantRaw) && variantRaw > 0 ? variantRaw : null;
     peers.push({ userId, pp, weightedPp, variantPp, hasVariantsProfile: Number(row.has_variants_profile) === 1 });
   }
-  const calibration = await getProxyCalibration(db, keyCount);
+  const calibration = await getProxyCalibration(db, keyCount, writeDb);
   cache.set(keyCount, { peers, calibration, expiresAt: now + POOL_CACHE_TTL_MS });
   return { peers, calibration };
 }
 
 // Lazily computes (and caches 24h) the proxy->variant calibration from paired
-// users that have both a key-stat proxy and a real variant pp. Persisted to
-// live_meta purely for admin observability.
-export async function getProxyCalibration(db: Db, keyCount: FarmHelperKeyCount): Promise<ProxyCalibration> {
+// users that have both a key-stat proxy and a real variant pp.
+//
+// The live_meta copy is admin observability, never an input to serving: the
+// in-memory value returned here is authoritative. So the write is detached and
+// only ever runs on a dedicated write connection - on the page-serving read
+// connection it would put an optional write in front of the first peer-pool
+// build of every process, and with no write connection available it is skipped
+// entirely.
+export async function getProxyCalibration(db: Db, keyCount: FarmHelperKeyCount, writeDb?: Db): Promise<ProxyCalibration> {
   const cache = mapFor(calibrationCache, db);
   const now = Date.now();
   const cached = cache.get(keyCount);
@@ -207,7 +217,7 @@ export async function getProxyCalibration(db: Db, keyCount: FarmHelperKeyCount):
   }
   const calibration = buildCalibration(keyCount, pairs);
   cache.set(keyCount, { calibration, expiresAt: now + CALIBRATION_TTL_MS });
-  await persistCalibration(db, calibration);
+  if (writeDb) void persistCalibration(writeDb, calibration);
   return calibration;
 }
 
@@ -273,6 +283,9 @@ async function persistCalibration(db: Db, calibration: ProxyCalibration): Promis
       `insert into live_meta (key, value_json, updated_at) values (?, ?, ?)
        on conflict(key) do update set value_json = excluded.value_json, updated_at = excluded.updated_at`,
       [`farm_helper_proxy_calibration:v1:${calibration.keyCount}`, json(calibration), calibration.computedAt],
+      // Fail fast on a busy writer instead of holding the durable retry budget:
+      // the next calibration refresh rewrites this row anyway.
+      { bestEffort: true },
     );
   } catch {
     // Observability only; never fail peer selection because the meta write failed.

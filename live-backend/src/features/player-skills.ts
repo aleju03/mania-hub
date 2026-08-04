@@ -1106,11 +1106,24 @@ export async function enqueuePlayerSkillsAfterSession(queue: JobQueue, userId: n
  * row is missing, stale, or superseded by newer top-play events. Ready rows
  * keep serving their data while a refresh runs.
  */
+/**
+ * How the recompute enqueue relates to the caller's response.
+ *
+ * `await` (the default, and what every skills-surface caller wants) blocks on
+ * the queue write, so a page that renders queue position reports the truth.
+ * `detached` fires it without waiting: Farm Helper only needs the STORED
+ * breakdown for the response it is building, so a contended queue write must
+ * not sit in front of a page load - a dropped enqueue simply gets retried by
+ * the next request, which re-evaluates the same staleness conditions.
+ * `none` never enqueues (the read-only backtest and Discord paths).
+ */
+export type SkillEnqueueMode = "await" | "detached" | "none";
+
 export async function getPlayerSkillBreakdown(
   db: Db,
   queue: JobQueue,
   userId: number,
-  options: { allowEnqueue?: boolean } = {},
+  options: { allowEnqueue?: boolean; enqueueMode?: SkillEnqueueMode } = {},
 ): Promise<PlayerSkillBreakdown> {
   const row = (await exec(
     db,
@@ -1146,7 +1159,19 @@ export async function getPlayerSkillBreakdown(
       shouldEnqueue = newTopPlays > 0;
     }
   }
-  if (shouldEnqueue && options.allowEnqueue !== false) await enqueuePlayerSkills(queue, userId);
+  const enqueueMode: SkillEnqueueMode = options.allowEnqueue === false ? "none" : options.enqueueMode ?? "await";
+  if (shouldEnqueue && enqueueMode !== "none") {
+    if (enqueueMode === "await") {
+      await enqueuePlayerSkills(queue, userId);
+    } else {
+      // Detached: the failure is logged and the breakdown is returned anyway.
+      // `stale: true` below still tells the caller a recompute is wanted, so a
+      // lost enqueue costs this viewer nothing beyond one more stale read.
+      void enqueuePlayerSkills(queue, userId).catch((error) => {
+        logWarn("player_skills_enqueue_failed", { user_id: userId, ...errorContext(error) });
+      });
+    }
+  }
 
   if (status === "ready" && summary) {
     return {

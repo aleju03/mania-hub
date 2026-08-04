@@ -25,7 +25,9 @@
     "recompute:vibro:dist": "node --env-file-if-exists=.env dist/maintenance/recompute-vibro.js",
     "backtest:farm-helper": "node --env-file-if-exists=.env --import tsx src/maintenance/farm-helper-backtest.ts",
     "smoke:osc": "node --env-file-if-exists=.env --import tsx src/smoke-osc.ts",
-    "probe:boot-imports": "node --import tsx src/maintenance/boot-import-probe.ts"
+    "probe:boot-imports": "node --import tsx src/maintenance/boot-import-probe.ts",
+    "bench:farm-helper": "node --env-file-if-exists=.env --import tsx src/maintenance/farm-helper-benchmark.ts",
+    "golden:farm-helper": "node --env-file-if-exists=.env --import tsx src/maintenance/farm-helper-golden.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1045.0",

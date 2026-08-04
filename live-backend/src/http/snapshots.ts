@@ -22,6 +22,7 @@ import { getPlayerSkillBreakdown } from "../features/player-skills.js";
 import { decoratePlayerSkillBreakdown } from "../features/skill-baseline.js";
 import { FARM_HELPER_DEFAULT_LIMIT, FARM_HELPER_MAX_LIMIT, FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperNeighbors, getFarmHelperSnapshot, invalidateFarmHelperCacheForUser, type FarmHelperKeyMode, type FarmHelperView } from "../features/farm-helper.js";
 import { clearFarmHelperFeedback, listFarmHelperFeedback, normalizeFarmHelperFeedbackSpeedBucket, normalizeFarmHelperFeedbackVerdict, setFarmHelperFeedback } from "../features/farm-helper-feedback.js";
+import { FarmHelperTimings, timeStage } from "../features/farm-helper-timing.js";
 import type { ScoreSpeedBucket } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
 import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalRankingsSnapshot, type GlobalRankingsSort } from "../features/global-rankings.js";
@@ -129,7 +130,14 @@ export interface HttpContext {
 }
 
 const REQUEST_STARTED_AT = Symbol("maniaHubRequestStartedAt");
-type TimedRequest = IncomingMessage & { [REQUEST_STARTED_AT]?: number };
+// Stage-level Farm Helper timings, stashed on the request so both the response
+// header and the slow-request log in routeHttp's finally can read them without
+// threading a collector through every send helper.
+const REQUEST_FARM_HELPER_TIMINGS = Symbol("maniaHubFarmHelperTimings");
+type TimedRequest = IncomingMessage & {
+  [REQUEST_STARTED_AT]?: number;
+  [REQUEST_FARM_HELPER_TIMINGS]?: FarmHelperTimings;
+};
 
 // Local libsql runs queries synchronously on the event loop, so one slow
 // handler stalls every other request on the process. Log anything slow so the
@@ -171,6 +179,9 @@ export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: 
           view: /[?&]view=([A-Za-z]{1,16})/.exec(req.url ?? "")?.[1] ?? null,
           lookup: /[?&]lookup=([A-Za-z]{1,16})/.exec(req.url ?? "")?.[1] ?? null,
           duration_ms: Math.round(durationMs),
+          // Farm Helper only: which stage spent the time, plus the peer/row
+          // counts behind it. No profile payloads or score data.
+          ...((req as TimedRequest)[REQUEST_FARM_HELPER_TIMINGS]?.toLogFields() ?? {}),
         });
       }
     }
@@ -1142,6 +1153,10 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     if (!checkRate(req, res, ctx, "publicCostly")) return true;
+    // Stage timings: which part of a slow build actually cost the time. Kept on
+    // the request so setServerTiming and the slow log can both read it.
+    const timings = new FarmHelperTimings();
+    (req as TimedRequest)[REQUEST_FARM_HELPER_TIMINGS] = timings;
     try {
       const snapshot = await getFarmHelperSnapshot(ctx.db, ctx.osu, userKey, {
         keyMode: parseFarmHelperKeyMode(url.searchParams.get("key")),
@@ -1150,9 +1165,10 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         // The build's read-time feedback reconcile writes; keep those writes
         // off the read connection that serves page loads (the serveWriteDb
         // invariant, same as the feedback mutation endpoints below).
-      }, ctx.queue, { writeDb: ctx.serveWriteDb ?? ctx.db });
+      }, ctx.queue, { writeDb: ctx.serveWriteDb ?? ctx.db, timings });
       res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
-      await sendAccentEnrichedJson(req, res, ctx, 200, snapshot);
+      await timeStage(timings, "fh_accents", () => enrichPayloadAvatarAccents(ctx.db, ctx.queue ?? null, snapshot));
+      sendJson(req, res, ctx, 200, snapshot);
     } catch (error) {
       if (error instanceof FarmHelperUserNotFoundError) {
         sendJson(req, res, ctx, 404, { error: "user_not_found" });
@@ -3979,7 +3995,12 @@ function setServerTiming(req: IncomingMessage, res: ServerResponse): void {
   const startedAt = (req as TimedRequest)[REQUEST_STARTED_AT];
   if (startedAt == null) return;
   const durationMs = Math.max(0, performance.now() - startedAt);
-  res.setHeader("server-timing", `app;dur=${durationMs.toFixed(1)}`);
+  // Farm Helper stages append to the app total rather than replacing it, so
+  // the header still reads as one request with a breakdown underneath.
+  const stages = (req as TimedRequest)[REQUEST_FARM_HELPER_TIMINGS];
+  res.setHeader("server-timing", stages
+    ? `app;dur=${durationMs.toFixed(1)}, ${stages.toServerTiming()}`
+    : `app;dur=${durationMs.toFixed(1)}`);
 }
 
 // Prepared /maps-page responses are cached already serialized and compressed.

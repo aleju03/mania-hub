@@ -17,7 +17,6 @@ import {
   Gauge,
 } from "lucide-react";
 import {
-  fetchLiveFarmHelperSnapshot,
   isLiveBackendConfigured,
   type LiveFarmHelperKeyMode,
   type LiveFarmHelperRec,
@@ -31,6 +30,12 @@ import {
   type FarmHelperFeedbackFailReason,
   type FarmHelperFeedbackVerdict,
 } from "../lib/farm-helper-feedback";
+import {
+  invalidateFarmHelperSubject,
+  loadFarmHelperSnapshot,
+  peekFarmHelperSnapshot,
+  prefetchFarmHelperSnapshot,
+} from "../lib/farm-helper-snapshot-cache";
 import { searchUsers } from "../lib/osu";
 import { PageHeader } from "../components/layout/PageHeader";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
@@ -287,13 +292,49 @@ function recKey(rec: LiveFarmHelperRec): string {
   return `${rec.beatmapId}:${rec.speedBucket}`;
 }
 
+// What we already know about a subject before their snapshot arrives, from the
+// signed-in viewer or the recent-players list. Enough for the header; never a
+// substitute for the snapshot's own numbers.
+type KnownSubject = RecentPlayer;
+
+function findKnownSubject(subjectKey: string | null, viewer: ReturnType<typeof useAuth>["viewer"]): KnownSubject | null {
+  if (!subjectKey) return null;
+  const normalized = subjectKey.trim().toLowerCase();
+  if (viewer && (String(viewer.id) === normalized || viewer.username.trim().toLowerCase() === normalized)) {
+    return { userId: viewer.id, username: viewer.username, avatarUrl: viewer.avatarUrl };
+  }
+  return readRecentPlayers().find(
+    (player) => String(player.userId) === normalized || player.username.trim().toLowerCase() === normalized,
+  ) ?? null;
+}
+
+// Every still-fresh view of this subject the module cache already holds. Runs
+// once at mount, which is what makes back-navigation from a map detail paint
+// the board immediately (the cache is a no-op during SSR).
+function seedSnapshotsFromCache(subjectKey: string | null): Map<string, LiveFarmHelperSnapshot> {
+  const seeded = new Map<string, LiveFarmHelperSnapshot>();
+  if (!subjectKey) return seeded;
+  for (const keyMode of FARM_HELPER_KEY_MODES) {
+    for (const view of FARM_HELPER_VIEWS) {
+      const cached = peekFarmHelperSnapshot({ subjectKey, keyMode, view, limit: SNAPSHOT_LIMIT });
+      if (cached) seeded.set(farmHelperRequestKey(subjectKey, keyMode, view), cached);
+    }
+  }
+  return seeded;
+}
+
 function FarmHelperPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
   const auth = useAuth();
   const liveEnabled = isLiveBackendConfigured();
 
-  const [snapshotsByRequestKey, setSnapshotsByRequestKey] = useState<Map<string, LiveFarmHelperSnapshot>>(() => new Map());
+  // Seeded from the module cache so returning from a map detail (which unmounts
+  // this component) repaints the board it was already showing instead of the
+  // initial skeleton.
+  const [snapshotsByRequestKey, setSnapshotsByRequestKey] = useState<Map<string, LiveFarmHelperSnapshot>>(
+    () => seedSnapshotsFromCache(search.user ?? null),
+  );
   const [error, setError] = useState<string | null>(null);
 
   const subjectKey = search.user ?? null;
@@ -316,6 +357,13 @@ function FarmHelperPage() {
   const [freshEpochs, setFreshEpochs] = useState<Map<string, number>>(() => new Map());
   const visibleSnapshot = snapshotsByRequestKey.get(requestKey) ?? null;
   const shellSnapshot = visibleSnapshot ?? getFarmHelperShellSnapshot(snapshotsByRequestKey, subjectKey, keyMode, view);
+  // Resolved in a layout effect rather than during render: it reads
+  // localStorage, which does not exist during SSR and would otherwise make the
+  // first client render disagree with the server's.
+  const [knownSubject, setKnownSubject] = useState<KnownSubject | null>(null);
+  useIsoLayoutEffect(() => {
+    setKnownSubject(findKnownSubject(subjectKey, auth.viewer));
+  }, [subjectKey, auth.viewer]);
   const waitingForCurrentSnapshot = liveEnabled && !!subjectKey && !visibleSnapshot && !error;
   const waitingForInitialSnapshot = waitingForCurrentSnapshot && !shellSnapshot;
 
@@ -375,9 +423,14 @@ function FarmHelperPage() {
       return;
     }
     let cancelled = false;
-    const controller = new AbortController();
     setError(null);
-    fetchLiveFarmHelperSnapshot(subjectKey, {
+    // Through the module cache: it dedupes an in-flight request (so React's
+    // Strict Mode double-mount still issues one), and it survives this
+    // component's unmount when the map-detail child route takes over. The
+    // `cancelled` flag below is what keeps a late response for a subject the
+    // user has already left from ever being rendered as current.
+    loadFarmHelperSnapshot({
+      subjectKey,
       keyMode,
       view,
       limit: SNAPSHOT_LIMIT,
@@ -385,7 +438,6 @@ function FarmHelperPage() {
       // the browser HTTP cache without busting it on every call. Not an
       // effect dep on purpose; the mutation flow does its own fresh refetch.
       fresh: freshEpochs.get(subjectNorm),
-      signal: controller.signal,
     })
       .then((data) => {
         if (cancelled) return;
@@ -404,7 +456,6 @@ function FarmHelperPage() {
       })
     return () => {
       cancelled = true;
-      controller.abort();
     };
   }, [liveEnabled, subjectKey, keyMode, view, requestKey]);
 
@@ -534,8 +585,12 @@ function FarmHelperPage() {
       }
       const epoch = Date.now();
       setFreshEpochs((current) => new Map(current).set(subjectNorm, epoch));
+      // The module cache holds pre-mark bodies for every view of this subject
+      // and outlives this component, so it has to be dropped alongside the
+      // component's own map below.
+      invalidateFarmHelperSubject(subjectKey);
       try {
-        const data = await fetchLiveFarmHelperSnapshot(subjectKey, { keyMode, view, limit: SNAPSHOT_LIMIT, fresh: epoch });
+        const data = await loadFarmHelperSnapshot({ subjectKey, keyMode, view, limit: SNAPSHOT_LIMIT, fresh: epoch });
         setSnapshotsByRequestKey((current) => {
           const next = new Map<string, LiveFarmHelperSnapshot>();
           // Drop every other cached view of this subject: the browser may
@@ -735,9 +790,9 @@ function FarmHelperPage() {
               body="This tool reads cross-country farm data from the server, which isn't configured in this environment."
             />
           ) : !subjectKey ? (
-            <PlayerPicker viewer={auth.viewer} onPick={setSubject} />
+            <PlayerPicker viewer={auth.viewer} onPick={setSubject} keyMode={keyMode} view={view} />
           ) : waitingForInitialSnapshot ? (
-            <LoadingState />
+            <LoadingState subject={knownSubject} />
           ) : error === "not-found" && !shellSnapshot ? (
             <EmptyNotice
               eyebrow="not found"
@@ -1981,8 +2036,55 @@ function PreviewSheet({
 /* Landing picker (unchanged surface)                                  */
 /* ------------------------------------------------------------------ */
 
-function PlayerPicker({ viewer, onPick }: { viewer: ReturnType<typeof useAuth>["viewer"]; onPick: (key: string) => void }) {
+// A prefetch is only worth it if the visitor is likely to click, so hovering
+// waits out a short dwell: sweeping the mouse across the recent-players row
+// must not fire one uncached build per chip crossed. Pointer-down skips the
+// wait - by then the click is committed.
+const PREFETCH_DWELL_MS = 140;
+
+// Intent handlers for a picker button. Deliberately only for the two lists
+// naming a player the visitor has an established relationship with (themselves,
+// and someone they looked up before); putting this on every search result would
+// fire a costly build per keystroke result.
+//
+// keyMode/view come from the current search params because picking a player
+// preserves them (see navigateFarmHelper), so warming the defaults instead
+// would prefetch a board the click never asks for.
+function usePickIntent(keyMode: LiveFarmHelperKeyMode, view: LiveFarmHelperView) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancel = () => {
+    if (timerRef.current != null) clearTimeout(timerRef.current);
+    timerRef.current = null;
+  };
+  useEffect(() => cancel, []);
+
+  return (subjectKey: string) => {
+    const warm = () => prefetchFarmHelperSnapshot({ subjectKey, keyMode, view, limit: SNAPSHOT_LIMIT });
+    const warmAfterDwell = () => {
+      cancel();
+      timerRef.current = setTimeout(warm, PREFETCH_DWELL_MS);
+    };
+    return {
+      onPointerEnter: warmAfterDwell,
+      onPointerLeave: cancel,
+      onFocus: warmAfterDwell,
+      onBlur: cancel,
+      onPointerDown: () => {
+        cancel();
+        warm();
+      },
+    };
+  };
+}
+
+function PlayerPicker({ viewer, onPick, keyMode, view }: {
+  viewer: ReturnType<typeof useAuth>["viewer"];
+  onPick: (key: string) => void;
+  keyMode: LiveFarmHelperKeyMode;
+  view: LiveFarmHelperView;
+}) {
   const [recents, setRecents] = useState<RecentPlayer[]>([]);
+  const pickIntentProps = usePickIntent(keyMode, view);
   const viewerId = viewer?.id;
 
   useIsoLayoutEffect(() => {
@@ -2007,6 +2109,7 @@ function PlayerPicker({ viewer, onPick }: { viewer: ReturnType<typeof useAuth>["
                 <button
                   type="button"
                   onClick={() => onPick(String(viewer.id))}
+                  {...pickIntentProps(String(viewer.id))}
                   aria-label={`Find farm maps for ${viewer.username}`}
                   className="group inline-flex items-center gap-2.5 rounded-xl border border-osu-b3/30 bg-osu-b4 py-1.5 pl-2 pr-3 text-lg font-bold text-osu-c1 transition-colors duration-150 hover:border-osu-pink/60 hover:bg-osu-b3"
                 >
@@ -2059,6 +2162,7 @@ function PlayerPicker({ viewer, onPick }: { viewer: ReturnType<typeof useAuth>["
                   <button
                     type="button"
                     onClick={() => onPick(player.username)}
+                    {...pickIntentProps(player.username)}
                     className="flex items-center gap-2 py-1.5 pr-1"
                   >
                     <Avatar url={player.avatarUrl} userId={player.userId} size={24} />
@@ -2385,15 +2489,26 @@ function whySentence(rec: LiveFarmHelperRec): string {
 /* Loading / empty states                                              */
 /* ------------------------------------------------------------------ */
 
-function LoadingState() {
+// `subject` is whatever the click already told us about the player (their own
+// account, or a recent pick). Painting it straight away means the board is the
+// only thing waiting on the request, not the whole surface.
+function LoadingState({ subject }: { subject?: KnownSubject | null }) {
   return (
     <>
       <div className="overflow-hidden rounded-2xl border border-osu-b3/25 bg-osu-b4">
         <div className="flex flex-wrap items-center gap-x-5 gap-y-4 px-4 py-4 sm:px-5">
           <div className="flex min-w-0 flex-1 items-center gap-3">
-            <Skeleton className="h-12 w-12 shrink-0 rounded-full" />
+            {subject ? (
+              <Avatar url={subject.avatarUrl} userId={subject.userId} size={48} />
+            ) : (
+              <Skeleton className="h-12 w-12 shrink-0 rounded-full" />
+            )}
             <div className="min-w-0 flex-1 space-y-2">
-              <Skeleton className="h-4 w-40 max-w-full" />
+              {subject ? (
+                <div className="truncate text-base font-bold leading-none text-osu-c1">{subject.username}</div>
+              ) : (
+                <Skeleton className="h-4 w-40 max-w-full" />
+              )}
               <Skeleton className="h-2.5 w-56 max-w-full" />
             </div>
           </div>

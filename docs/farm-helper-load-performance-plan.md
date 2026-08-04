@@ -320,16 +320,21 @@ Each phase should be independently revertible. Keep slow-request timing through 
 
 ## Completion checklist
 
-- [ ] Stage-level `Server-Timing` and slow-log breakdown deployed.
-- [ ] Read-only benchmark covers representative player shapes.
-- [ ] Farm Helper skips note-BPM decoration.
-- [ ] Skill recompute enqueue cannot block Farm Helper responses.
-- [ ] Calibration observability persistence is off the serving critical path.
-- [ ] Snapshot cache is checked before full profile hydration.
-- [ ] Identical misses are single-flight.
-- [ ] Cache invalidation covers feedback, ingest resolution, and admin wipe.
-- [ ] Repeated candidate sorts are removed with exact-output tests.
-- [ ] Peer-row strategy meets uncached p95 target with documented storage cost.
-- [ ] Frontend restores/prefetches without duplicate or stale requests.
-- [ ] Full test/typecheck suites pass.
+Measured results in `farm-helper-load-performance-results.md`.
+
+- [x] Stage-level `Server-Timing` and slow-log breakdown deployed.
+- [x] Read-only benchmark covers representative player shapes (`npm run bench:farm-helper`).
+- [x] Farm Helper skips note-BPM decoration.
+- [x] Skill recompute enqueue cannot block Farm Helper responses.
+- [x] Calibration observability persistence is off the serving critical path.
+- [x] Snapshot cache is checked before full profile hydration.
+- [x] Identical misses are single-flight.
+- [x] Cache invalidation covers feedback, ingest resolution, and admin wipe.
+- [x] Repeated candidate sorts are removed with exact-output tests.
+- [x] Peer-row strategy meets uncached p95 target with documented storage cost.
+      No index was added: the alternatives were benchmarked, the targets are
+      already met, and the only faster option costs 110-150 MB on a database
+      near its cap. See the Phase 4.2 table in the results doc.
+- [x] Frontend restores/prefetches without duplicate or stale requests.
+- [x] Full test/typecheck suites pass (1201 backend, 2514 root).
 - [ ] Production p50/p95 targets are verified after rollout.

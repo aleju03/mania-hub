@@ -165,21 +165,24 @@ export async function getPlayerProfileSnapshot(
   // profile goes through the queue.
   osu: Pick<OsuApiClient, "getUserByKey" | "getUserBestScoresWindow">,
   rawKey: string,
-  options: { queue?: JobQueue | null; lookupMode?: ProfileLookupMode } = {},
+  options: { queue?: JobQueue | null; lookupMode?: ProfileLookupMode; includeNoteBpms?: boolean } = {},
 ): Promise<PlayerProfileSnapshot> {
   const key = normalizeProfileKey(rawKey);
   const lookupMode = options.lookupMode ?? "auto";
+  // Defaults to true so the profile page's response is unchanged; only Farm
+  // Helper opts out (see buildServedSnapshot).
+  const includeNoteBpms = options.includeNoteBpms !== false;
   const row = await getStoredProfileSnapshot(db, key, lookupMode);
   if (row) {
     // Archived players have no live osu! account, so every refresh path would
     // 404 and stamp refresh_error over a reconstruction that will never get
     // fresher. Serve the seeded row as-is.
     if (isArchivedProfileRow(row)) {
-      return buildServedSnapshot(db, row, false, []);
+      return buildServedSnapshot(db, row, false, [], includeNoteBpms);
     }
     const snapshotExpired = isExpired(row.fetched_at, PROFILE_SNAPSHOT_TTL_MS);
     const trackedRecentScores = await getTrackedProfileRecentScores(db, row.user_id, PROFILE_TRACKED_OVERLAY_LIMIT);
-    const snapshot = await buildServedSnapshot(db, row, snapshotExpired, trackedRecentScores);
+    const snapshot = await buildServedSnapshot(db, row, snapshotExpired, trackedRecentScores, includeNoteBpms);
     // Serve what we stored, then let the workers catch it up. The page renders
     // off this response either way and its stale-metadata retry picks the fresh
     // numbers up a beat later.
@@ -204,6 +207,7 @@ export async function getPlayerProfileSnapshot(
     fetchedRow,
     false,
     await getTrackedProfileRecentScores(db, fetchedRow.user_id, PROFILE_TRACKED_OVERLAY_LIMIT),
+    includeNoteBpms,
   );
 }
 
@@ -1146,14 +1150,27 @@ async function upsertDisplayUser(
   await writeVariantPps(db, userId, storedUser.statistics);
 }
 
-async function buildServedSnapshot(db: Db, row: ProfileSnapshotRow, forceStale: boolean, recentScores: OscScore[] = []): Promise<PlayerProfileSnapshot> {
+/* `includeNoteBpms` is the one part of a served snapshot a consumer may opt out
+   of. Only the profile page reads `beatmap.note_bpm`; Farm Helper resolves the
+   very same snapshot purely for the top-play list and paid ~100ms per request
+   for a column it never looks at. Everything else about the projection (score
+   selection, recent-score overlay, key counts, difficulty, mods, judgements,
+   timestamps) is identical either way, so the two callers still share one
+   stored row and one hydration path. */
+async function buildServedSnapshot(
+  db: Db,
+  row: ProfileSnapshotRow,
+  forceStale: boolean,
+  recentScores: OscScore[] = [],
+  includeNoteBpms = true,
+): Promise<PlayerProfileSnapshot> {
   const storedUser = unpackJson<Record<string, unknown>>(row.user_json, {});
   const userFetchedAt = row.user_fetched_at ?? row.fetched_at;
   const user = applyProfilePresence(storedUser, await getLatestTrackedPlayAt(db, row.user_id), userFetchedAt);
   const rawBestScores = await hydrateScoresDisplayMetadata(db, unpackJson<OscScore[]>(row.best_scores_json, []));
   const projectionBaselineAt = latestValidTimestamp(row.fetched_at, userFetchedAt);
   const projection = await projectTopPlays(db, row.user_id, rawBestScores, row.fetched_at, projectionBaselineAt, recentScores);
-  await attachNoteBpms(db, projection.scores);
+  if (includeNoteBpms) await attachNoteBpms(db, projection.scores);
   const basePp = readNumber(readRecord(user.statistics)?.pp);
   const projectedPp = calculateProjectedUserPp(basePp, projection.ppBaselineScores, projection.scores);
 

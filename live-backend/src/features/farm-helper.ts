@@ -12,6 +12,7 @@ import { enqueueMissingChartAnalyses, readDtRateMsd } from "./chart-analysis.js"
 import { getPlayerSkillBreakdown, type PlayerSkillBreakdown, type PlayerSkillModeBreakdown } from "./player-skills.js";
 import { ACC_MODEL_PRIOR_TYPICAL_ACC, predictPlayerAccuracy, predictPlayerChoke, readPlayerAccModel, type PlayerAccModel, type PlayerAccPrediction, type PlayerChokePrediction } from "./player-acc-model.js";
 import { getBaselineUserVectors, type BaselineUserVector } from "./skill-baseline.js";
+import { timeStage, timeStageSync, type FarmHelperTimings } from "./farm-helper-timing.js";
 import type { JobQueue } from "../jobs/queue.js";
 
 // Farm Helper recommends maps a player should farm, ranked by estimated pp gain.
@@ -411,6 +412,40 @@ interface CachedFarmHelper {
 // pool, cached subject-independently inside farm-helper-key-stats.
 const farmHelperCache = new WeakMap<Db, Map<string, CachedFarmHelper>>();
 
+// Raw request key -> canonical osu! user id.
+//
+// The snapshot cache is keyed by canonical user id, but the id used to be
+// known only AFTER full profile resolution, so every cache hit still paid for
+// a stored-profile read and its top-play projection (~110ms on prod-sized
+// data) before it could find out it had nothing to do. This alias map answers
+// "which user is `xX_player_Xx`?" first, so a hit skips hydration entirely.
+//
+// Aliases outlive snapshot invalidation on purpose: a feedback mark changes
+// what the snapshot says, never who the player is, and an osu! user id is
+// stable for the life of the account.
+//
+// The TTL matches the snapshot TTL rather than exceeding it, because an alias
+// pays off in exactly one place - letting a request find a still-cached
+// snapshot without hydrating the profile first. An alias that outlives every
+// snapshot it could match saves nothing, and only widens the window in which a
+// username freed by a rename still points at the account that gave it up.
+const IDENTITY_ALIAS_TTL_MS = CACHE_TTL_MS;
+const IDENTITY_ALIAS_MAX_ENTRIES = 1024;
+const identityAliasCache = new WeakMap<Db, Map<string, { userId: number; expiresAt: number }>>();
+
+// In-flight snapshot builds, so N simultaneous requests for the same subject
+// run one build instead of N. Entries are always removed in `finally`, so a
+// failed build is never retained and the next request retries it.
+const inFlightBuilds = new WeakMap<Db, Map<string, Promise<FarmHelperSnapshot>>>();
+
+// Bumped by every invalidation. A build that started before the bump must not
+// write its result into the cache afterwards, or a feedback mark set mid-build
+// would be undone by the older build landing a moment later. One counter for
+// the whole Db rather than one per user: invalidations are rare (a feedback
+// mutation, an ingest auto-resolve), so over-invalidating a concurrent build
+// costs one rebuild, while a per-user map would grow with every subject.
+const cacheGenerations = new WeakMap<Db, { value: number }>();
+
 const TOTAL_PP_POOL_TTL_MS = 5 * 60_000;
 interface CachedTotalPpPool {
   rows: Array<{ userId: number; pp: number }>;
@@ -530,6 +565,10 @@ export interface FarmHelperSnapshotOptions {
   // reads; see server.ts). Callers that omit it (Discord, tests) write on the
   // read connection, which is fine off the serving path.
   writeDb?: Db;
+  // Optional stage-level timing collector. The HTTP path always passes one so
+  // a slow request names the stage that cost the time; every other caller
+  // omits it and the instrumentation compiles away to one branch per stage.
+  timings?: FarmHelperTimings;
 }
 
 export async function getFarmHelperSnapshot(
@@ -543,11 +582,101 @@ export async function getFarmHelperSnapshot(
   const requestedKeyMode = params.keyMode ?? "any";
   const view = params.view ?? "gain";
   const limit = clampLimit(params.limit);
+  const timings = options.timings;
+  const variantKey = `${requestedKeyMode}:${view}:${limit}`;
+  const aliasKey = normalizeIdentityKey(rawKey);
 
-  const profile = await resolveProfile(db, osu, rawKey, queue);
+  // Identity first: with the canonical id already known, a fresh snapshot is
+  // served without touching the profile snapshot or its projection.
+  const aliasUserId = aliasKey ? readIdentityAlias(db, aliasKey) : null;
+  if (aliasUserId != null) {
+    timings?.setSubject({ userId: aliasUserId, keyMode: requestedKeyMode, view, limit });
+    const hit = takeFreshSnapshot(db, `${aliasUserId}:${variantKey}`);
+    if (hit) {
+      timings?.setCacheState("hit");
+      return hit;
+    }
+  }
+
+  // Single-flight. Keyed by canonical id when the alias resolved it, else by
+  // the raw key so simultaneous first-time requests for one username share a
+  // single cold mint instead of racing two osu! fetches.
+  const flightKey = aliasUserId != null ? `${aliasUserId}:${variantKey}` : `raw:${aliasKey ?? rawKey}:${variantKey}`;
+  const flights = getInFlightBuilds(db);
+  const running = flights.get(flightKey);
+  if (running) {
+    timings?.setCacheState("coalesced");
+    // Awaiting a build started elsewhere: this request cannot cancel it, and
+    // a rejection fans out to every waiter without being cached.
+    return running;
+  }
+
+  // A cold subject starts out registered under its raw key, because that is all
+  // this request knows. The moment the build resolves identity it registers the
+  // same promise under the canonical key too, so later requests naming the same
+  // player any other way coalesce onto it, and so invalidation - which can only
+  // look for the `<userId>:` prefix - can actually reach it.
+  const registeredKeys = [flightKey];
+  let build!: Promise<FarmHelperSnapshot>;
+  const onIdentityResolved = (userId: number) => {
+    const canonicalKey = `${userId}:${variantKey}`;
+    if (canonicalKey === flightKey || flights.has(canonicalKey)) return;
+    flights.set(canonicalKey, build);
+    registeredKeys.push(canonicalKey);
+  };
+
+  build = resolveAndBuildSnapshot(db, osu, rawKey, aliasKey, {
+    requestedKeyMode,
+    view,
+    limit,
+    variantKey,
+    queue,
+    options,
+    // Read before any I/O: an invalidation that lands while this request is
+    // still resolving identity must also stop it caching its result.
+    generation: readCacheGeneration(db),
+    onIdentityResolved,
+  }).finally(() => {
+    // Only ever unregister THIS build. An invalidation can drop the key
+    // mid-flight and a newer build can claim it, and a blind delete would
+    // then unregister the newer build and stop coalescing for its whole run.
+    for (const key of registeredKeys) {
+      if (flights.get(key) === build) flights.delete(key);
+    }
+  });
+  flights.set(flightKey, build);
+  return build;
+}
+
+// Everything a miss has to do: resolve the subject, re-check the canonical
+// cache (another raw key for the same player may have finished a build while
+// this one waited on identity), then build and store.
+async function resolveAndBuildSnapshot(
+  db: Db,
+  osu: ProfileOsuClient,
+  rawKey: string,
+  aliasKey: string | null,
+  request: {
+    requestedKeyMode: FarmHelperKeyMode;
+    view: FarmHelperView;
+    limit: number;
+    variantKey: string;
+    queue?: JobQueue;
+    options: FarmHelperSnapshotOptions;
+    generation: number;
+    // Called once the canonical user id is known, so the caller can register
+    // this build under its canonical single-flight key as well.
+    onIdentityResolved?: (userId: number) => void;
+  },
+): Promise<FarmHelperSnapshot> {
+  const { requestedKeyMode, view, limit, variantKey, queue, options, generation } = request;
+  const timings = options.timings;
+
+  const profile = await timeStage(timings, "fh_profile", () => resolveProfile(db, osu, rawKey, queue));
   const user = profile.user;
   const userId = Number(user.id ?? 0);
   if (!Number.isInteger(userId) || userId <= 0) throw new FarmHelperUserNotFoundError(rawKey);
+  request.onIdentityResolved?.(userId);
 
   const statistics = asRecord(user.statistics);
   const subjectPp = numberOr(statistics.pp, 0);
@@ -556,19 +685,35 @@ export async function getFarmHelperSnapshot(
   const avatarUrl = String(user.avatar_url ?? "");
   const coverUrl = String(user.cover_url ?? asRecord(user.cover).url ?? "");
 
+  // Identity is now known: record it so the next request naming this player the
+  // same way skips profile hydration.
+  //
+  // Only keys that PROVABLY resolve to this account are aliased, and
+  // `String(userId)` is deliberately not one of them. osu! usernames may be
+  // entirely numeric, and the resolver looks a raw key up as a username before
+  // it tries it as an id (getStoredProfileSnapshot, then getUserByKey). So if
+  // account 5092 is "indridcold" while some other account is *named* "5092",
+  // then "5092" as a request key means that other account - and aliasing
+  // "5092" -> 5092 here would answer their request with indridcold's board.
+  // `aliasKey` is safe because it is the key that just resolved to this user,
+  // and the username is safe because a username lookup is what the resolver
+  // tries first.
+  writeIdentityAlias(db, aliasKey, userId);
+  writeIdentityAlias(db, normalizeIdentityKey(username), userId);
+
   const cache = getCache(db);
   // Queue-less callers (Discord) share this per-Db cache with the HTTP path.
   // Snapshot content no longer depends on the queue - the feasibility gate
   // reads stored skill ratings either way - so one entry serves both; only
   // the fire-and-forget self-heal enqueues differ.
-  const cacheKey = `${userId}:${requestedKeyMode}:${view}:${limit}`;
-  const now = Date.now();
-  const cached = cache.get(cacheKey);
-  if (cached && cached.expiresAt > now) {
-    cache.delete(cacheKey);
-    cache.set(cacheKey, cached);
-    return cached.snapshot;
+  const cacheKey = `${userId}:${variantKey}`;
+  timings?.setSubject({ userId, keyMode: requestedKeyMode, view, limit });
+  const cached = takeFreshSnapshot(db, cacheKey);
+  if (cached) {
+    timings?.setCacheState("hit");
+    return cached;
   }
+  timings?.setCacheState(cache.has(cacheKey) ? "expired" : "miss");
 
   const snapshot = await buildSnapshot(db, profile.bestScores, {
     userId,
@@ -582,13 +727,20 @@ export async function getFarmHelperSnapshot(
     limit,
     queue,
     writeDb: options.writeDb,
+    timings,
   });
 
-  cache.set(cacheKey, { snapshot, expiresAt: now + CACHE_TTL_MS });
-  while (cache.size > CACHE_MAX_ENTRIES) {
-    const oldest = cache.keys().next().value;
-    if (oldest === undefined) break;
-    cache.delete(oldest);
+  // Only cache a build nothing invalidated while it ran. The caller still gets
+  // this snapshot (it is the best answer available for a request that started
+  // before the change); the next request rebuilds instead of reading it back.
+  if (readCacheGeneration(db) === generation) {
+    const store = getCache(db);
+    store.set(cacheKey, { snapshot, expiresAt: Date.now() + CACHE_TTL_MS });
+    while (store.size > CACHE_MAX_ENTRIES) {
+      const oldest = store.keys().next().value;
+      if (oldest === undefined) break;
+      store.delete(oldest);
+    }
   }
   return snapshot;
 }
@@ -659,7 +811,10 @@ async function resolveProfile(db: Db, osu: ProfileOsuClient, rawKey: string, que
   try {
     // The queue is how a stored profile gets refreshed at all now, so passing
     // it is what keeps farm-helper subjects from serving a frozen snapshot.
-    return await getPlayerProfileSnapshot(db, osu, rawKey, { queue });
+    // Note BPM is profile-page decoration read off a separate indexed lookup
+    // over ~200 beatmaps; nothing in the recommendation build consumes it, so
+    // skipping it takes that lookup off every Farm Helper request.
+    return await getPlayerProfileSnapshot(db, osu, rawKey, { queue, includeNoteBpms: false });
   } catch (error) {
     if (error instanceof OsuApiError && error.status === 404) throw new FarmHelperUserNotFoundError(rawKey);
     throw error;
@@ -717,6 +872,8 @@ interface BuildCtx {
   // and read by every mode run's gate. Absent when no adjustment applies
   // (popular view, backtest, breakdown not ready, or below the vote floor).
   feedbackMarginAdjust?: Partial<Record<ConcreteFarmHelperKeyMode, number>>;
+  // Optional stage-level timing collector (see FarmHelperSnapshotOptions).
+  timings?: FarmHelperTimings;
 }
 
 // Subject state prepared once per request and shared by every mode run.
@@ -762,7 +919,7 @@ interface FitBand {
 async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Promise<FarmHelperSnapshot> {
   const isPopular = ctx.view === "popular";
   const generatedAt = nowIso();
-  const subject = prepareSubject(bestScores, ctx.subjectVariantPps);
+  const subject = timeStageSync(ctx.timings, "fh_subject", () => prepareSubject(bestScores, ctx.subjectVariantPps));
   const keyMode = ctx.requestedKeyMode;
 
   // Player feedback marks ("too hard" / "too easy"), loaded once per request
@@ -773,7 +930,8 @@ async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Pro
   // caller provided one (the HTTP serving-path invariant).
   let activeMarks: ActiveFarmHelperFeedbackMark[] | undefined;
   if (ctx.asOf == null) {
-    const feedback = await loadActiveFeedbackForBuild(db, ctx.writeDb ?? db, ctx.userId, subject);
+    const feedback = await timeStage(ctx.timings, "fh_feedback", () =>
+      loadActiveFeedbackForBuild(db, ctx.writeDb ?? db, ctx.userId, subject));
     ctx.activeFeedback = feedback?.byLane;
     activeMarks = feedback?.marks;
   }
@@ -782,9 +940,13 @@ async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Pro
   // run: the feasibility gate and the modelsReady flag key off it. Queue-less
   // callers (backtest, Discord) read the stored row without enqueueing a
   // recompute.
-  const skillBreakdown = ctx.queue
-    ? await getPlayerSkillBreakdown(db, ctx.queue, ctx.userId)
-    : await getPlayerSkillBreakdown(db, NOOP_QUEUE, ctx.userId, { allowEnqueue: false });
+  const skillQueue = ctx.queue;
+  const skillBreakdown = await timeStage(ctx.timings, "fh_skills", () => (skillQueue
+    // Detached: the recompute is background work for the NEXT build. This one
+    // serves the stored breakdown either way, so a contended queue write must
+    // not sit in front of the response.
+    ? getPlayerSkillBreakdown(db, skillQueue, ctx.userId, { enqueueMode: "detached" })
+    : getPlayerSkillBreakdown(db, NOOP_QUEUE, ctx.userId, { allowEnqueue: false })));
   ctx.skillBreakdown = skillBreakdown;
 
   // Feedback generalization (see the FEEDBACK_MARGIN_* block): the active
@@ -812,7 +974,7 @@ async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Pro
     ? null
     : ctx.accModelOverride !== undefined
       ? ctx.accModelOverride
-      : await readPlayerAccModel(db, ctx.userId).catch(() => null);
+      : await timeStage(ctx.timings, "fh_acc_model", () => readPlayerAccModel(db, ctx.userId).catch(() => null));
 
   // "any" runs the concrete 4k and 7k pipelines separately (each with its own
   // strict keymode cohort) and merges the rec lists. A concrete request runs one
@@ -869,6 +1031,8 @@ async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Pro
 
   const merged = runs.flatMap((run) => run.scored);
   if (merged.length === 0) return base;
+  const rankTimings = ctx.timings;
+  const rankStartedAt = rankTimings ? performance.now() : 0;
 
   // Popular mode can surface the same chart under two speed lanes (e.g. NoMod and
   // DT); collapse to the most-farmed lane per beatmap so the browse grid shows one
@@ -920,8 +1084,13 @@ async function buildSnapshot(db: Db, bestScores: OscScore[], ctx: BuildCtx): Pro
     void recencyFit;
     return rec;
   });
+  if (rankTimings) {
+    rankTimings.add("fh_rank", performance.now() - rankStartedAt);
+    rankTimings.count("recs", top.length);
+    rankTimings.count("qualifying", ranked.length);
+  }
 
-  await hydrateTopPeers(db, top);
+  await timeStage(ctx.timings, "fh_top_peers", () => hydrateTopPeers(db, top));
 
   // The headline total simulates farming everything shown at once against the
   // same baseline the per-rec gains used, so it can never exceed what the list
@@ -1104,9 +1273,9 @@ async function buildModeRun(
   const subjectBenchmarkCap = getModeBenchmarkCap(subjectModeStats, subjectVariantPp, subject.subjectTopPp);
   const fit = computeFitBand(subject.rankedScores, mode);
 
-  const { peers, mode: peerMode } = await selectPeerBand(db, ctx.userId, ctx.subjectPp, mode, subjectPeerPp, {
-    strictKeyMode: true,
-  });
+  const { peers, mode: peerMode } = await timeStage(ctx.timings, "fh_peer_pool", () =>
+    selectPeerBand(db, ctx.userId, ctx.subjectPp, mode, subjectPeerPp, { strictKeyMode: true, writeDb: ctx.writeDb }));
+  ctx.timings?.count("peers", peers.length);
 
   // Cohort self-heal: proxy-only peers that were never variant-enriched can be
   // badly mis-placed. Enqueue their enrichment strongest-weight first so the
@@ -1119,21 +1288,23 @@ async function buildModeRun(
   // this mode (for per-candidate patternFit; null when too few plays are
   // analyzed) and their per-family demonstrated top-play pp (the family cap).
   const shapeContext = peers.length > 0
-    ? await computeShapeContext(db, peers, subject.rankedScores, mode, ctx.queue)
+    ? await timeStage(ctx.timings, "fh_shapes", () => computeShapeContext(db, peers, subject.rankedScores, mode, ctx.queue))
     : null;
   const subjectShape = shapeContext?.shape ?? null;
 
   const band = buildPeerBand(peerMode, peers);
   if (peers.length === 0) return { scored: [], band, feedbackHidden: 0 };
 
-  const peerFarmed = await aggregatePeerFarmedMaps(db, peers, asOf);
+  const peerFarmed = await timeStage(ctx.timings, "fh_farm_rows", () =>
+    aggregatePeerFarmedMaps(db, peers, asOf, ctx.timings));
   band.farmDataCount = peerFarmed.farmDataPeerCount;
   if (peerFarmed.farmDataPeerCount === 0) return { scored: [], band, feedbackHidden: 0 };
 
   const candidates = gateCandidates(peerFarmed, isPopular);
+  ctx.timings?.count("candidates", candidates.length);
   if (candidates.length === 0) return { scored: [], band, feedbackHidden: 0 };
 
-  const { scored, feedbackHidden } = await scoreCandidates(db, subject, ctx, {
+  const { scored, feedbackHidden } = await timeStage(ctx.timings, "fh_score", () => scoreCandidates(db, subject, ctx, {
     candidates,
     peerSampleSize: peerFarmed.eligiblePeerCount,
     mode,
@@ -1143,7 +1314,7 @@ async function buildModeRun(
     subjectShape,
     familyTopPp: shapeContext?.familyTopPp ?? null,
     accModel,
-  });
+  }));
   return { scored, band, feedbackHidden };
 }
 
@@ -1157,20 +1328,24 @@ async function buildTotalPpRun(db: Db, subject: PreparedSubject, ctx: BuildCtx, 
   const subjectBenchmarkCap = getModeBenchmarkCap(anyStats, null, subject.subjectTopPp);
   const fit = computeFitBand(subject.rankedScores, "any");
 
-  const { peers } = await selectPeerBand(db, ctx.userId, ctx.subjectPp, "any", 0, { strictKeyMode: false });
+  const { peers } = await timeStage(ctx.timings, "fh_peer_pool", () =>
+    selectPeerBand(db, ctx.userId, ctx.subjectPp, "any", 0, { strictKeyMode: false, writeDb: ctx.writeDb }));
+  ctx.timings?.count("peers", peers.length);
   if (ctx.queue && asOf == null) enqueueVariantSelfHeal(ctx.queue, peers);
 
   const band = buildPeerBand("total_pp_fallback", peers);
   if (peers.length === 0) return { scored: [], band, feedbackHidden: 0 };
 
-  const peerFarmed = await aggregatePeerFarmedMaps(db, peers, asOf);
+  const peerFarmed = await timeStage(ctx.timings, "fh_farm_rows", () =>
+    aggregatePeerFarmedMaps(db, peers, asOf, ctx.timings));
   band.farmDataCount = peerFarmed.farmDataPeerCount;
   if (peerFarmed.farmDataPeerCount === 0) return { scored: [], band, feedbackHidden: 0 };
 
   const candidates = gateCandidates(peerFarmed, isPopular);
+  ctx.timings?.count("candidates", candidates.length);
   if (candidates.length === 0) return { scored: [], band, feedbackHidden: 0 };
 
-  const { scored, feedbackHidden } = await scoreCandidates(db, subject, ctx, {
+  const { scored, feedbackHidden } = await timeStage(ctx.timings, "fh_score", () => scoreCandidates(db, subject, ctx, {
     candidates,
     peerSampleSize: peerFarmed.eligiblePeerCount,
     mode: null,
@@ -1180,7 +1355,7 @@ async function buildTotalPpRun(db: Db, subject: PreparedSubject, ctx: BuildCtx, 
     subjectShape: null,
     familyTopPp: null,
     accModel,
-  });
+  }));
   return { scored, band, feedbackHidden };
 }
 
@@ -1334,11 +1509,13 @@ async function scoreCandidates(
     // displays a 0pp median sourced from nothing.
     const wbEntryCount = agg.entries.reduce((count, e) => count + (e.wB > 0 ? 1 : 0), 0);
     if (!isPopular && wbEntryCount < 2) continue;
-    const benchPairs = wbEntryCount > 0
+    // Sorted once per lane, then queried for the median, the p75 and (for a
+    // missing map) the discovery quantile, instead of re-sorting per quantile.
+    const benchDistribution = prepareWeightedDistribution(wbEntryCount > 0
       ? agg.entries.map((e) => ({ v: e.pp, w: e.wB }))
-      : agg.entries.map((e) => ({ v: e.pp, w: 1 }));
-    const median = weightedQuantile(benchPairs, 0.5);
-    const p75 = weightedQuantile(benchPairs, 0.75);
+      : agg.entries.map((e) => ({ v: e.pp, w: 1 })));
+    const median = quantileOfDistribution(benchDistribution, 0.5);
+    const p75 = quantileOfDistribution(benchDistribution, 0.75);
     // Reason selection and the caps run on the accuracy-scaled quantiles; the
     // raw median/p75 stay on the rec (they describe the peers, not the target).
     const scaledMedian = median * accScale;
@@ -1378,13 +1555,16 @@ async function scoreCandidates(
     // row, so it is always fresh and would gate nothing. Rows written before
     // played_at existed leave the aggregate empty; fall back to updated_at
     // there rather than treating unknown as never-played.
-    const peerRecencyMs = peerRecencyPlayedAtMs(agg.playedAtMs) || agg.latestUpdatedMs;
+    // Sorted once and reused: the ranking's recency term wants the
+    // updated_at fallback, the response field wants the raw value.
+    const rawPeerRecencyMs = peerRecencyPlayedAtMs(agg.playedAtMs);
+    const peerRecencyMs = rawPeerRecencyMs || agg.latestUpdatedMs;
 
     let reason: FarmHelperReason;
     let benchmark: number;
     if (!subjectScore) {
       reason = "missing";
-      const rawBenchmark = weightedQuantile(benchPairs, MISSING_MAP_BENCHMARK_QUANTILE) * accScale;
+      const rawBenchmark = quantileOfDistribution(benchDistribution, MISSING_MAP_BENCHMARK_QUANTILE) * accScale;
       // Over-cap drops in the gain view - unless the player claimed the lane
       // with a "too easy" mark: trusting the player (which raises accScale)
       // must never vanish the rec, so a marked lane clamps to the cap
@@ -1515,12 +1695,11 @@ async function scoreCandidates(
       patternFit: patternFit == null ? null : round2(patternFit),
       peerPpMedian: round2(median),
       peerPpP75: round2(p75),
-      latestPeerPlayedAt: dateMsToIso(Math.max(0, ...agg.playedAtMs)),
-      peerRecencyPlayedAt: dateMsToIso(peerRecencyPlayedAtMs(agg.playedAtMs)),
-      topPeers: agg.entries
-        .slice()
-        .sort((a, b) => b.pp - a.pp)
-        .slice(0, TOP_PEERS_PER_REC)
+      // Plain loop, not Math.max(0, ...arr): a lane farmed by a large cohort
+      // would spread thousands of arguments onto the stack.
+      latestPeerPlayedAt: dateMsToIso(maxOf(agg.playedAtMs)),
+      peerRecencyPlayedAt: dateMsToIso(rawPeerRecencyMs),
+      topPeers: selectTopPeers(agg.entries)
         .map((p) => ({ userId: p.userId, username: "", avatarUrl: "", pp: round2(p.pp) })),
       scoreUrl: subjectScore ? `https://osu.ppy.sh/scores/${subjectScore.scoreId}` : null,
       mapUrl: meta.url,
@@ -1795,11 +1974,13 @@ async function selectPeerBand(
   subjectPp: number,
   keyMode: FarmHelperKeyMode,
   subjectModePp: number,
-  options: { strictKeyMode?: boolean } = {},
+  // writeDb: the dedicated write connection the pool's one-off calibration
+  // observability write may use; absent means that write is skipped.
+  options: { strictKeyMode?: boolean; writeDb?: Db } = {},
 ): Promise<{ peers: WeightedPeer[]; mode: string }> {
   if (keyMode !== "any") {
     if (subjectModePp > 0) {
-      const keyModeResult = await selectKeyModeKnn(db, userId, keyMode, subjectModePp);
+      const keyModeResult = await selectKeyModeKnn(db, userId, keyMode, subjectModePp, options.writeDb);
       // A strict request keeps the key-mode cohort even when thin; a non-strict
       // caller (e.g. the who-farms modal derived from a map's key count) only
       // falls back to the broader total-pp cohort when the key-mode pool is too
@@ -1820,9 +2001,10 @@ async function selectKeyModeKnn(
   userId: number,
   keyMode: ConcreteFarmHelperKeyMode,
   subjectModePp: number,
+  writeDb?: Db,
 ): Promise<{ peers: WeightedPeer[]; mode: string }> {
   const keyCount = keyModeToKeys(keyMode) as FarmHelperKeyCount;
-  const { peers: pool, calibration } = await getKeyModePeerPool(db, keyCount);
+  const { peers: pool, calibration } = await getKeyModePeerPool(db, keyCount, writeDb);
   const vectors = await getBaselineUserVectors(db, keyCount).catch(() => new Map<number, BaselineUserVector>());
   const subjectVector = vectors.get(userId) ?? null;
   const nowMs = Date.now();
@@ -2233,7 +2415,12 @@ export async function getFarmHelperNeighbors(
   };
 }
 
-async function aggregatePeerFarmedMaps(db: Db, peers: WeightedPeer[], asOf?: number): Promise<PeerFarmedAggregation> {
+async function aggregatePeerFarmedMaps(
+  db: Db,
+  peers: WeightedPeer[],
+  asOf?: number,
+  timings?: FarmHelperTimings,
+): Promise<PeerFarmedAggregation> {
   const weightById = new Map(peers.map((p) => [p.userId, { wD: p.wD, wB: p.wB }]));
   const peerIds = peers.map((p) => p.userId);
   const byPeerLane = new Map<string, CanonicalFarmedScore>();
@@ -2249,6 +2436,7 @@ async function aggregatePeerFarmedMaps(db: Db, peers: WeightedPeer[], asOf?: num
          and not exists (select 1 from users u where u.user_id = s.user_id and u.is_active = 0)`,
       chunk,
     )).rows;
+    timings?.count("farm_rows", rows.length);
     for (const row of rows) {
       const farmed = parseFarmedScoreRow(row);
       if (!farmed) continue;
@@ -2307,6 +2495,28 @@ async function aggregatePeerFarmedMaps(db: Db, peers: WeightedPeer[], asOf?: num
 
 function dateMsToIso(ms: number): string | null {
   return ms > 0 && Number.isFinite(ms) ? new Date(ms).toISOString() : null;
+}
+
+function maxOf(values: number[]): number {
+  let max = 0;
+  for (const value of values) if (value > max) max = value;
+  return max;
+}
+
+// The lane's top peers by pp. Selected incrementally rather than by sorting a
+// copy of every entry: only TOP_PEERS_PER_REC survive, and a lane can carry
+// hundreds of entries. Insertion is strictly-greater, which reproduces the
+// stable descending sort this replaced - equal-pp peers keep aggregation order.
+export function selectTopPeers(entries: CandidatePeerEntry[]): CandidatePeerEntry[] {
+  const top: CandidatePeerEntry[] = [];
+  for (const entry of entries) {
+    if (top.length === TOP_PEERS_PER_REC && entry.pp <= top[top.length - 1].pp) continue;
+    let index = 0;
+    while (index < top.length && top[index].pp >= entry.pp) index += 1;
+    top.splice(index, 0, entry);
+    if (top.length > TOP_PEERS_PER_REC) top.pop();
+  }
+  return top;
 }
 
 function peerRecencyPlayedAtMs(values: number[]): number {
@@ -2977,36 +3187,60 @@ function quantile(values: number[], q: number): number {
   return next === undefined ? sorted[base] : sorted[base] + rest * (next - sorted[base]);
 }
 
-// Weighted quantile over (value, weight) pairs. Each value's plotting position is
-// the center of its weight segment, normalized to [0,1]; interpolating there
-// reduces exactly to the unweighted type-7 `quantile` when all weights are equal.
-export function weightedQuantile(pairs: Array<{ v: number; w: number }>, q: number): number {
-  const valid = pairs.filter((p) => Number.isFinite(p.v) && Number.isFinite(p.w) && p.w > 0);
-  if (valid.length === 0) return 0;
-  if (valid.length === 1) return valid[0].v;
-  valid.sort((a, b) => a.v - b.v);
+// A validated, value-sorted weighted distribution: the reusable half of
+// `weightedQuantile`. Every candidate lane asks for two or three quantiles off
+// the same peer pp list, and each ask used to re-filter and re-sort it.
+export interface WeightedDistribution {
+  values: number[];
+  // Each value's plotting position: the center of its weight segment on the
+  // cumulative-weight axis.
+  positions: number[];
+}
 
-  const positions: number[] = [];
+export function prepareWeightedDistribution(pairs: Array<{ v: number; w: number }>): WeightedDistribution {
+  const valid = pairs.filter((p) => Number.isFinite(p.v) && Number.isFinite(p.w) && p.w > 0);
+  // Stable sort, same comparator, same input order as before: identical
+  // ordering (and therefore identical interpolation) for tied values.
+  valid.sort((a, b) => a.v - b.v);
+  const values = new Array<number>(valid.length);
+  const positions = new Array<number>(valid.length);
   let cum = 0;
-  for (const p of valid) {
+  for (let i = 0; i < valid.length; i++) {
+    const p = valid[i];
     cum += p.w;
-    positions.push(cum - p.w / 2);
+    values[i] = p.v;
+    positions[i] = cum - p.w / 2;
   }
+  return { values, positions };
+}
+
+// Weighted quantile over a prepared distribution. Interpolating at the weight
+// segment centers reduces exactly to the unweighted type-7 `quantile` when all
+// weights are equal.
+export function quantileOfDistribution(distribution: WeightedDistribution, q: number): number {
+  const { values, positions } = distribution;
+  if (values.length === 0) return 0;
+  if (values.length === 1) return values[0];
   const first = positions[0];
   const last = positions[positions.length - 1];
   const span = last - first;
-  if (span <= 0) return valid[0].v;
+  if (span <= 0) return values[0];
   const target = first + clamp01(q) * span;
-  if (target <= first) return valid[0].v;
-  if (target >= last) return valid[valid.length - 1].v;
-  for (let i = 1; i < valid.length; i++) {
+  if (target <= first) return values[0];
+  if (target >= last) return values[values.length - 1];
+  for (let i = 1; i < values.length; i++) {
     if (target <= positions[i]) {
       const lo = positions[i - 1];
       const t = (target - lo) / (positions[i] - lo);
-      return valid[i - 1].v + t * (valid[i].v - valid[i - 1].v);
+      return values[i - 1] + t * (values[i] - values[i - 1]);
     }
   }
-  return valid[valid.length - 1].v;
+  return values[values.length - 1];
+}
+
+// Weighted quantile over (value, weight) pairs.
+export function weightedQuantile(pairs: Array<{ v: number; w: number }>, q: number): number {
+  return quantileOfDistribution(prepareWeightedDistribution(pairs), q);
 }
 
 function clamp01(value: number): number {
@@ -3037,17 +3271,96 @@ function getCache(db: Db): Map<string, CachedFarmHelper> {
   return cache;
 }
 
+function getInFlightBuilds(db: Db): Map<string, Promise<FarmHelperSnapshot>> {
+  let flights = inFlightBuilds.get(db);
+  if (!flights) inFlightBuilds.set(db, (flights = new Map()));
+  return flights;
+}
+
+function readCacheGeneration(db: Db): number {
+  let generation = cacheGenerations.get(db);
+  if (!generation) cacheGenerations.set(db, (generation = { value: 0 }));
+  return generation.value;
+}
+
+function bumpCacheGeneration(db: Db): void {
+  const generation = cacheGenerations.get(db);
+  if (generation) generation.value += 1;
+  else cacheGenerations.set(db, { value: 1 });
+}
+
+// A fresh snapshot for this exact variant, refreshing its LRU position. An
+// expired entry is left in place so the caller can still distinguish
+// "expired" from "never built" for the timing header.
+function takeFreshSnapshot(db: Db, cacheKey: string): FarmHelperSnapshot | null {
+  const cache = getCache(db);
+  const cached = cache.get(cacheKey);
+  if (!cached || cached.expiresAt <= Date.now()) return null;
+  cache.delete(cacheKey);
+  cache.set(cacheKey, cached);
+  return cached.snapshot;
+}
+
+// Null for anything that cannot name a player (empty, or longer than osu!
+// allows): those simply skip the alias cache rather than filling it with junk.
+function normalizeIdentityKey(rawKey: string): string | null {
+  const normalized = rawKey.trim().toLowerCase();
+  if (!normalized || normalized.length > 120) return null;
+  return normalized;
+}
+
+function readIdentityAlias(db: Db, aliasKey: string): number | null {
+  const aliases = identityAliasCache.get(db);
+  const entry = aliases?.get(aliasKey);
+  if (!entry) return null;
+  if (entry.expiresAt <= Date.now()) {
+    aliases?.delete(aliasKey);
+    return null;
+  }
+  return entry.userId;
+}
+
+// Bounded by entry count AND time, so a run of failed searches can neither
+// grow this map without limit nor pin a rename forever.
+function writeIdentityAlias(db: Db, aliasKey: string | null, userId: number): void {
+  if (!aliasKey) return;
+  let aliases = identityAliasCache.get(db);
+  if (!aliases) identityAliasCache.set(db, (aliases = new Map()));
+  aliases.delete(aliasKey);
+  aliases.set(aliasKey, { userId, expiresAt: Date.now() + IDENTITY_ALIAS_TTL_MS });
+  while (aliases.size > IDENTITY_ALIAS_MAX_ENTRIES) {
+    const oldest = aliases.keys().next().value;
+    if (oldest === undefined) break;
+    aliases.delete(oldest);
+  }
+}
+
 // Evicts every cached snapshot for one subject (all keyMode/view/limit
 // variants) on this Db's cache. Called by the feedback set/clear endpoints and
 // the ingest auto-resolution so a mark reshapes the next snapshot immediately
 // instead of after the 5-minute TTL.
 export function invalidateFarmHelperCacheForUser(db: Db, userId: number): void {
-  const cache = farmHelperCache.get(db);
-  if (!cache) return;
+  // Bumped unconditionally, even with nothing cached yet: a build already
+  // running must not store a pre-mark snapshot after this returns.
+  bumpCacheGeneration(db);
   const prefix = `${userId}:`;
-  for (const key of [...cache.keys()]) {
-    if (key.startsWith(prefix)) cache.delete(key);
+  const cache = farmHelperCache.get(db);
+  if (cache) {
+    for (const key of [...cache.keys()]) {
+      if (key.startsWith(prefix)) cache.delete(key);
+    }
   }
+  // Unregister this subject's in-flight builds so the next request starts a
+  // fresh one instead of joining a build that predates the mark. The running
+  // promise still settles normally for whoever already awaits it.
+  const flights = inFlightBuilds.get(db);
+  if (flights) {
+    for (const key of [...flights.keys()]) {
+      if (key.startsWith(prefix)) flights.delete(key);
+    }
+  }
+  // Identity aliases deliberately survive: a mark changes what the snapshot
+  // says, never which osu! account the key names.
 }
 
 // Wholesale clear of this Db's farm-helper caches (every cached subject
@@ -3055,6 +3368,13 @@ export function invalidateFarmHelperCacheForUser(db: Db, userId: number): void {
 // purge, where the wiped user may sit inside OTHER subjects' cached snapshots;
 // wipes are rare, so dropping everything beats tracking cross-references.
 export function clearFarmHelperCache(db: Db): void {
+  bumpCacheGeneration(db);
   farmHelperCache.delete(db);
   totalPpPoolCache.delete(db);
+  // The wipe can remove the user rows an alias points at, so identities go
+  // too. In-flight builds are unregistered rather than cancelled: they settle
+  // for their existing waiters, and the generation bump stops them writing a
+  // pre-wipe snapshot back into the cache.
+  identityAliasCache.delete(db);
+  inFlightBuilds.delete(db);
 }
