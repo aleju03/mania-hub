@@ -51,6 +51,10 @@ export interface GlobalRankingsQuery {
   pageSize?: number;
   sort?: GlobalRankingsSort;
   dir?: GlobalRankingsSortDirection;
+  /* "packs" serves the card-pack draw pool: the ranked board with manual
+     opt-in roster members merged in by pp. Leaderboard reads omit it and stay
+     ranked-only. */
+  pool?: "packs";
 }
 
 export async function getCountryRankingsSnapshot(
@@ -296,6 +300,117 @@ async function getGlobalBoard(db: Db): Promise<GlobalBoardCache> {
   return refresh;
 }
 
+// Manual opt-in roster members carry rank null, which keeps them off every
+// ranking surface (see isRankedRosterMember) - but opting in is also the one
+// way a player outside the top N becomes a pullable maniacard, so the pack
+// pool deliberately includes them: the ranked board with manual members merged
+// in by pp and pool positions renumbered. Only `pool=packs` requests see this
+// merged board; leaderboards keep serving the ranked-only build above.
+const PACK_POOL_CACHE_TTL_MS = 60 * 1000;
+
+interface PackPoolMemory {
+  board: GlobalBoardCache;
+  /* builtAt of the ranked board this merge was computed from; a fresher board
+     invalidates the merge regardless of the TTL. */
+  boardBuiltAt: number;
+  checkedAt: number;
+}
+
+const packPoolCacheByDb = new WeakMap<Db, PackPoolMemory>();
+const packPoolBuildByDb = new WeakMap<Db, Promise<GlobalBoardCache>>();
+
+/* Manual opt-in members who never made a ranked roster slot anywhere. The
+   ranked-slot exclusion keeps a player who is manual in one country but ranked
+   in another from appearing twice; pp is required because a pool entry without
+   pp can neither be placed in the merge nor drawn into a slice honestly (the
+   opt-in's enrich_user fills it within minutes).
+
+   Roster-driven on purpose: country_rosters has no standalone user_id index,
+   so a users-driven correlated EXISTS scans the whole roster once per
+   pp-carrying user - ~7s of synchronous CPU on the serving connection. Driving
+   from the small manual set (one roster scan, then PK lookups) returns the
+   same rows in milliseconds. */
+async function readManualPoolEntries(db: Db): Promise<GlobalRankingEntry[]> {
+  const rows = (await exec(
+    db,
+    `select
+       u.user_id,
+       u.username,
+       u.avatar_url,
+       u.country_code,
+       u.pp,
+       u.global_rank,
+       u.country_rank,
+       u.profile_json
+     from (
+       select distinct m.user_id
+       from country_rosters m
+       where m.is_tracked = 1 and m.source = 'manual' and m.rank is null
+     ) manual
+     join users u on u.user_id = manual.user_id
+     where u.pp is not null
+       and coalesce(u.is_active, 1) = 1
+       and not exists (
+         select 1 from country_rosters ranked
+         where ranked.user_id = manual.user_id and ranked.is_tracked = 1 and ranked.rank is not null
+       )
+     order by u.pp desc`,
+  )).rows;
+  return rows.map((row) => ({
+    ...buildGlobalRankingEntry(row, 0),
+    global_change: null,
+    country_change: null,
+  }));
+}
+
+export function mergePackPoolEntries(
+  board: GlobalRankingEntry[],
+  manual: GlobalRankingEntry[],
+): GlobalRankingEntry[] {
+  if (manual.length === 0) return board;
+  const merged = [...board, ...manual].sort(
+    (a, b) =>
+      b.pp - a.pp ||
+      (a.global_rank ?? Number.MAX_SAFE_INTEGER) - (b.global_rank ?? Number.MAX_SAFE_INTEGER),
+  );
+  // Clone every entry whose pool position moved; untouched entries stay shared
+  // with the ranked board cache (both sides are read-only, the serve path
+  // clones before mutating).
+  return merged.map((entry, index) => (entry.rank === index + 1 ? entry : { ...entry, rank: index + 1 }));
+}
+
+async function buildPackPoolBoard(db: Db, board: GlobalBoardCache): Promise<GlobalBoardCache> {
+  try {
+    const manual = await readManualPoolEntries(db);
+    const pool: GlobalBoardCache = { entries: mergePackPoolEntries(board.entries, manual), builtAt: board.builtAt };
+    packPoolCacheByDb.set(db, { board: pool, boardBuiltAt: board.builtAt, checkedAt: Date.now() });
+    return pool;
+  } catch (error) {
+    // The pack pool must never be less available than the board itself: a
+    // failed manual-members read serves the ranked board alone (uncached, so
+    // the next request retries the merge).
+    logWarn("pack_pool_manual_read_failed", errorContext(error));
+    return board;
+  }
+}
+
+async function getPackPoolBoard(db: Db): Promise<GlobalBoardCache> {
+  const board = await getGlobalBoard(db);
+  const memory = packPoolCacheByDb.get(db);
+  if (memory && memory.boardBuiltAt === board.builtAt && Date.now() - memory.checkedAt < PACK_POOL_CACHE_TTL_MS) {
+    return memory.board;
+  }
+  // Pack opens fetch several pool pages at once; share one merge across them.
+  let build = packPoolBuildByDb.get(db);
+  if (!build) {
+    build = buildPackPoolBoard(db, board).finally(() => {
+      packPoolBuildByDb.delete(db);
+    });
+    packPoolBuildByDb.set(db, build);
+  }
+  return build;
+}
+
 // The Global leaderboard is the union of every tracked country's roster, ranked
 // by mania pp. Because the warmed rosters span the top mania countries, this is
 // effectively the real global mania top-N (limited to players we track).
@@ -304,7 +419,7 @@ export async function getGlobalRankingsSnapshot(db: Db, query: GlobalRankingsQue
   const pageSize = Math.max(1, Math.min(GLOBAL_RANKINGS_MAX_PAGE_SIZE, Math.floor(query.pageSize ?? 50) || 50));
   const sort = query.sort ?? "rank";
   const dir = query.dir ?? "desc";
-  const board = await getGlobalBoard(db);
+  const board = query.pool === "packs" ? await getPackPoolBoard(db) : await getGlobalBoard(db);
   const sortedEntries = sortGlobalRankingEntries(board.entries, sort, dir);
   const start = (page - 1) * pageSize;
   // Clones, not the cached rows: accent enrichment mutates response objects in

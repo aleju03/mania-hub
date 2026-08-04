@@ -117,7 +117,9 @@ export async function enqueueRosterRefreshes(queue: JobQueue, countries: string[
  * Ranked roster members carry a non-null country rank (the top-N pulled from osu! rankings).
  * Manual opt-in members and `score`-sourced members are tracked for activity but rank null,
  * so they are deliberately excluded from ranking surfaces (global rankings, the country maps
- * board, snipe boards, rank deltas). This is the shared discriminator for that.
+ * board, snipe boards, rank deltas). This is the shared discriminator for that. The one
+ * exception is the card-pack pool (`pool=packs` on the global rankings snapshot), which
+ * merges manual opt-in members back in so they are pullable maniacards.
  */
 export async function isRankedRosterMember(db: Db, country: string, userId: number): Promise<boolean> {
   const row = (await exec(
@@ -146,9 +148,10 @@ export interface ManualRosterMemberResult {
 
 /**
  * Opt a user into their country's roster as a durable `manual` member (rank null). They become
- * tracking-scope (scores ingested, activity analysed) but stay out of ranking surfaces until the
- * roster refresh ever places them in the real top N. The caller proves identity upstream: the
- * frontend server fn only ever forwards the osu!-verified viewer id.
+ * tracking-scope (scores ingested, activity analysed) and a pullable card in the pack pool, but
+ * stay out of ranking surfaces until the roster refresh ever places them in the real top N. The
+ * caller proves identity upstream: the frontend server fn only ever forwards the osu!-verified
+ * viewer id.
  */
 export async function addManualRosterMember(
   db: Db,

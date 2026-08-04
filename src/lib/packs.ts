@@ -16,9 +16,11 @@ export const PACK_SIZE = 5;
 
 // Packs draw from the server's tracked-player pool (the global
 // rankings snapshot, ~6k players whose data the backend already stores), so
-// opening a pack costs local DB reads instead of osu! API calls. The direct
-// osu! rankings path further down is the fallback when no server is
-// configured or the pool draw fails.
+// opening a pack costs local DB reads instead of osu! API calls. The pool=packs
+// variant additionally merges in manual roster opt-ins - a player who adds
+// themselves to their country's roster becomes a pullable card, even though
+// they stay off the ranking surfaces. The direct osu! rankings path further
+// down is the fallback when no server is configured or the pool draw fails.
 
 // Global mania performance rankings expose pages 1..200 of 50 rows (deeper
 // pages silently clamp to 200), so exact-rank picks stop at 10,000.
@@ -399,6 +401,7 @@ const defaultPoolPageFetcher: PoolPageFetcher = async (page) => {
     pageSize: RANKINGS_PAGE_SIZE,
     sort: "rank",
     dir: "desc",
+    pool: "packs",
   });
   return { ranking: snapshot.ranking, total: snapshot.total };
 };

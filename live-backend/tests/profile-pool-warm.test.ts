@@ -28,7 +28,7 @@ afterEach(async () => {
   if (dir) await rm(dir, { recursive: true, force: true });
 });
 
-async function seedPoolUser(userId: number, pp: number, options: { tracked?: boolean; active?: boolean } = {}): Promise<void> {
+async function seedPoolUser(userId: number, pp: number, options: { tracked?: boolean; active?: boolean; source?: string; rank?: number | null } = {}): Promise<void> {
   const now = new Date().toISOString();
   await exec(
     db,
@@ -39,8 +39,8 @@ async function seedPoolUser(userId: number, pp: number, options: { tracked?: boo
   await exec(
     db,
     `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
-     values ('CR', ?, ?, 'osu_rankings', ?, ?)`,
-    [userId, userId, options.tracked === false ? 0 : 1, now],
+     values ('CR', ?, ?, ?, ?, ?)`,
+    [userId, options.rank === undefined ? userId : options.rank, options.source ?? "osu_rankings", options.tracked === false ? 0 : 1, now],
   );
 }
 
@@ -91,6 +91,14 @@ describe("profile pool warm sweep", () => {
     );
 
     expect(await selectColdPoolUserIds(db, 10)).toEqual([1, 2]);
+  });
+
+  it("includes manual opt-in members (rank null) but not score-sourced rows", async () => {
+    await seedPoolUser(1, 5000);
+    await seedPoolUser(2, 6000, { source: "manual", rank: null });
+    await seedPoolUser(3, 7000, { source: "score", rank: null });
+
+    expect(await selectColdPoolUserIds(db, 10)).toEqual([2, 1]);
   });
 
   it("warms a batch, stores snapshots, and chains the next run", async () => {

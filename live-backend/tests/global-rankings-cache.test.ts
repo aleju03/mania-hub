@@ -106,6 +106,78 @@ describe("global rankings board cache", () => {
   });
 });
 
+async function seedManualMember(
+  userId: number,
+  username: string,
+  pp: number | null,
+  options: { country?: string; active?: boolean } = {},
+): Promise<void> {
+  const country = options.country ?? "CR";
+  await exec(
+    db,
+    `insert into users (user_id, username, avatar_url, country_code, is_active, pp, global_rank, country_rank, profile_json, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, null, '{}', ?)`,
+    [
+      userId,
+      username,
+      `https://a.ppy.sh/${userId}`,
+      country,
+      options.active === false ? 0 : 1,
+      pp,
+      pp == null ? null : Math.round(20_000_000 / pp),
+      new Date().toISOString(),
+    ],
+  );
+  await exec(
+    db,
+    `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+     values (?, ?, null, 'manual', 1, ?)`,
+    [country, userId, new Date().toISOString()],
+  );
+}
+
+describe("pack pool (pool=packs)", () => {
+  it("merges manual opt-in members into the pool by pp and keeps the default board ranked-only", async () => {
+    await seedPlayer(1, "alpha", 9000);
+    await seedPlayer(2, "beta", 12000);
+    await seedManualMember(3, "gamma", 10000);
+
+    const board = await getGlobalRankingsSnapshot(db, { page: 1, pageSize: 50 });
+    expect(board.total).toBe(2);
+    expect(board.ranking.map((entry) => entry.user.username)).toEqual(["beta", "alpha"]);
+
+    const pool = await getGlobalRankingsSnapshot(db, { page: 1, pageSize: 50, pool: "packs" });
+    expect(pool.total).toBe(3);
+    expect(pool.ranking.map((entry) => entry.user.username)).toEqual(["beta", "gamma", "alpha"]);
+    expect(pool.ranking.map((entry) => entry.rank)).toEqual([1, 2, 3]);
+  });
+
+  it("does not duplicate a member who holds a ranked slot somewhere", async () => {
+    await seedPlayer(1, "alpha", 9000);
+    // Same player also opted in manually in another country: the ranked slot wins.
+    await exec(
+      db,
+      `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+       values ('US', 1, null, 'manual', 1, ?)`,
+      [new Date().toISOString()],
+    );
+
+    const pool = await getGlobalRankingsSnapshot(db, { page: 1, pageSize: 50, pool: "packs" });
+    expect(pool.total).toBe(1);
+    expect(pool.ranking.map((entry) => entry.user.username)).toEqual(["alpha"]);
+  });
+
+  it("excludes inactive and never-enriched (pp null) manual members", async () => {
+    await seedPlayer(1, "alpha", 9000);
+    await seedManualMember(2, "banned", 8000, { active: false });
+    await seedManualMember(3, "cold", null);
+
+    const pool = await getGlobalRankingsSnapshot(db, { page: 1, pageSize: 50, pool: "packs" });
+    expect(pool.total).toBe(1);
+    expect(pool.ranking.map((entry) => entry.user.username)).toEqual(["alpha"]);
+  });
+});
+
 describe("packed global board", () => {
   it("serves snapshots from the packed board written by the worker", async () => {
     await seedPlayer(1, "alpha", 9000);

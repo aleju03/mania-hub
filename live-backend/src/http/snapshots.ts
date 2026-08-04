@@ -1139,12 +1139,18 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   }
   if (url.pathname === "/api/snapshots/rankings") {
     if (isGlobalCountry(country)) {
-      const snapshot = await getGlobalRankingsSnapshot(ctx.db, parseGlobalRankingsQuery(url.searchParams));
+      const query = parseGlobalRankingsQuery(url.searchParams);
+      const snapshot = await getGlobalRankingsSnapshot(ctx.db, query);
       // Detached: repairs are background work and their queue writes must not
-      // delay the response under write contention.
-      void enqueueGlobalRankingStatRepairs(ctx.queue, snapshot.ranking).catch((error) => {
-        console.warn("[global-rankings] failed to queue stat repair", error);
-      });
+      // delay the response under write contention. Pack-pool reads skip them:
+      // the repairs feed leaderboard stat columns packs never show, and a
+      // manual member with a thin profile would re-enqueue their country's
+      // roster refresh on every pack open without ever gaining a rank.
+      if (query.pool !== "packs") {
+        void enqueueGlobalRankingStatRepairs(ctx.queue, snapshot.ranking).catch((error) => {
+          console.warn("[global-rankings] failed to queue stat repair", error);
+        });
+      }
       res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
       await sendAccentEnrichedJson(req, res, ctx, 200, snapshot);
       return true;
@@ -1161,12 +1167,16 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     return true;
   }
   if (url.pathname === "/api/snapshots/global-rankings") {
-    const snapshot = await getGlobalRankingsSnapshot(ctx.db, parseGlobalRankingsQuery(url.searchParams));
+    const query = parseGlobalRankingsQuery(url.searchParams);
+    const snapshot = await getGlobalRankingsSnapshot(ctx.db, query);
     // Detached: repairs are background work and their queue writes must not
-    // delay the response under write contention.
-    void enqueueGlobalRankingStatRepairs(ctx.queue, snapshot.ranking).catch((error) => {
-      console.warn("[global-rankings] failed to queue stat repair", error);
-    });
+    // delay the response under write contention. Pack-pool reads skip them
+    // (see the /api/snapshots/rankings GLOBAL branch).
+    if (query.pool !== "packs") {
+      void enqueueGlobalRankingStatRepairs(ctx.queue, snapshot.ranking).catch((error) => {
+        console.warn("[global-rankings] failed to queue stat repair", error);
+      });
+    }
     res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
     await sendAccentEnrichedJson(req, res, ctx, 200, snapshot);
     return true;
@@ -4761,6 +4771,7 @@ function parseGlobalRankingsQuery(params: URLSearchParams): {
   pageSize: number;
   sort: GlobalRankingsSort;
   dir: "asc" | "desc";
+  pool?: "packs";
 } {
   const rawSort = params.get("sort");
   const sort: GlobalRankingsSort =
@@ -4780,6 +4791,7 @@ function parseGlobalRankingsQuery(params: URLSearchParams): {
     pageSize: clampInteger(params.get("pageSize") ?? params.get("limit"), 1, 50, 50),
     sort,
     dir: params.get("dir") === "asc" ? "asc" : "desc",
+    ...(params.get("pool") === "packs" ? { pool: "packs" as const } : {}),
   };
 }
 
