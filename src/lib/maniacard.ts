@@ -591,6 +591,7 @@ export const HONORARY_TIER_USER_IDS: ReadonlyMap<number, string> = new Map([
   [15806513, "jkzu123"],
   [3817144, "cheetose"],
   [4477497, "cheewee10"],
+  [13601876, "Orost"],
 ]);
 
 export function getHonoraryTier(userId: number | null | undefined): ManiaCardTier | null {

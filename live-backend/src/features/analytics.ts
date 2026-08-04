@@ -17,6 +17,9 @@ const MAX_EVENTS_PER_CAPTURE = 50;
 const PRUNE_INTERVAL_MS = 60 * 60_000;
 const LIVE_TICKET_TTL_MS = 10 * 60_000;
 const ACTIVE_VISITOR_WINDOW_MS = 5 * 60_000;
+/* Ceiling on one read of the signed-in roster. Not a display limit: the pp and
+   rank sorts have to see every viewer to name the best of them. */
+export const MAX_VIEWER_ROWS = 20_000;
 const TIMELINE_BUCKETS = 48;
 
 // Query-side display defaults.
@@ -494,13 +497,18 @@ export class AnalyticsStore {
   }
 
   /* Every osu! account that has browsed while signed in, newest activity
-     first. Survives event pruning, so this really is "who has signed in". */
+     first. Survives event pruning, so this really is "who has signed in".
+
+     The cap is generous because sorting the roster by pp or rank happens after
+     the pp figures are read out of the other database, so that path has to ask
+     for the whole roster rather than the newest page of it. Rows are small and
+     this is an admin-only read. */
   async getViewers(limit = 500): Promise<AnalyticsViewerRow[]> {
     await this.flush();
     const rows = (await exec(this.db, `
       select viewer_id, username, first_seen, last_seen, events, last_country
       from analytics_viewers order by last_seen desc limit ?
-    `, [Math.min(2000, Math.max(1, Math.round(limit)))])).rows;
+    `, [Math.min(MAX_VIEWER_ROWS, Math.max(1, Math.round(limit)))])).rows;
     return rows.map((row) => ({
       viewerId: Number(row.viewer_id),
       username: String(row.username ?? ""),

@@ -80,7 +80,12 @@ import { getDiscordShowcase } from "../discord/showcase.js";
 import { listAllSubscriptions, removeSubscriptionById } from "../discord/subscriptions.js";
 import { countUserLinks } from "../discord/identity.js";
 import { OSU_API_BOUND_JOB_TYPES } from "../workers.js";
-import type { AnalyticsStore } from "../features/analytics.js";
+import { MAX_VIEWER_ROWS, type AnalyticsStore } from "../features/analytics.js";
+import {
+  attachViewerRanks,
+  normalizeAnalyticsViewerSort,
+  sortRankedViewers,
+} from "../features/analytics-viewer-ranks.js";
 
 const HIDDEN_ADMIN_WORKER_LANE_NAMES = new Set([
   "dan-estimates",
@@ -476,10 +481,18 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 404, { error: "analytics_disabled" });
       return true;
     }
-    const limit = Number(url.searchParams.get("limit") ?? 500);
+    const requested = Number(url.searchParams.get("limit") ?? 500);
+    const limit = Number.isFinite(requested) ? Math.min(2000, Math.max(1, Math.round(requested))) : 500;
+    const sort = normalizeAnalyticsViewerSort(url.searchParams.get("sort"));
+    // "Best players on the site" has to mean best of everyone who signed in, so
+    // pp and rank read the whole roster and cut it down after sorting. Recent
+    // needs no such scan: the roster comes back in that order already.
+    const scanned = await ctx.analytics.getViewers(sort === "recent" ? limit : MAX_VIEWER_ROWS);
+    const ranked = sortRankedViewers(await attachViewerRanks(ctx.db, scanned), sort);
     sendJson(req, res, ctx, 200, {
       total: await ctx.analytics.countViewers(),
-      viewers: await ctx.analytics.getViewers(Number.isFinite(limit) ? limit : 500),
+      sort,
+      viewers: ranked.slice(0, limit),
     });
     return true;
   }

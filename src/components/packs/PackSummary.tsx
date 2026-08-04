@@ -280,7 +280,7 @@ export function PackSummary({
         <button
           type="button"
           onClick={onOpenAnother}
-          className="rounded-full border border-osu-b3/50 px-6 py-2.5 text-sm font-bold text-osu-f1 transition-colors hover:border-osu-f1/40 hover:text-white cursor-pointer"
+          className="rounded-full bg-osu-h2 px-6 py-2.5 text-sm font-bold text-white transition-colors hover:bg-osu-pink-dark cursor-pointer"
         >
           Back to packs
         </button>
@@ -289,7 +289,7 @@ export function PackSummary({
             type="button"
             onClick={onChallenge}
             disabled={challengeBusy}
-            className="inline-flex items-center gap-1.5 rounded-full border border-osu-b3/50 px-6 py-2.5 text-sm font-bold text-osu-f1 transition-colors hover:border-osu-f1/40 hover:text-white cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-full bg-osu-h2 px-6 py-2.5 text-sm font-bold text-white transition-colors hover:bg-osu-pink-dark cursor-pointer"
           >
             <Swords className="h-4 w-4" />
             {challengeBusy ? "Sealing the hand..." : "Duel this hand"}

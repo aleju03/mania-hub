@@ -1,6 +1,6 @@
 /* The honorary roster: osu!mania's historical greats.
 
-   These twenty-three carry the GOAT tier by user id (see maniacard.ts) rather
+   These twenty-four carry the GOAT tier by user id (see maniacard.ts) rather
    than by card power, and they are the only source of that tier. Many of them
    stopped playing long before the current rating ladder existed, and the
    ranked pool can't represent them:
@@ -287,6 +287,16 @@ export const HONORARY_PLAYERS: readonly HonoraryPlayer[] = [
     avatarUrl: "https://a.ppy.sh/4477497?1706963836.jpeg",
     peakRank: 4,
     peakPp: 26429.1,
+    archived: false,
+    cardReady: true,
+  },
+  {
+    id: 13601876,
+    username: "Orost",
+    countryCode: "BR",
+    avatarUrl: "https://a.ppy.sh/13601876?1769691318.png",
+    peakRank: 139,
+    peakPp: 16712.3,
     archived: false,
     cardReady: true,
   },

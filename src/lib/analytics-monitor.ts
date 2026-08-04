@@ -81,11 +81,30 @@ export interface AnalyticsViewerRow {
   lastSeen: number;
   events: number;
   country: string | null;
+  /* Optional because a backend deployed behind this build does not send them
+     yet, and because only players the backend has ingested have them at all. */
+  pp?: number | null;
+  globalRank?: number | null;
+}
+
+/* How the signed-in roster is ordered. pp and rank are the backend's job: it
+   sorts the whole roster before cutting it to a page, so the top of the list
+   is the real top and not just the best of whoever visited recently. */
+export type AnalyticsViewerSort = "recent" | "pp" | "rank";
+
+const ANALYTICS_VIEWER_SORTS: readonly AnalyticsViewerSort[] = ["recent", "pp", "rank"];
+
+export function normalizeAnalyticsViewerSort(value: unknown): AnalyticsViewerSort {
+  const candidate = typeof value === "string" ? value.toLowerCase() : "";
+  return ANALYTICS_VIEWER_SORTS.includes(candidate as AnalyticsViewerSort)
+    ? candidate as AnalyticsViewerSort
+    : "recent";
 }
 
 export interface AnalyticsViewersResult {
   total: number;
   viewers: AnalyticsViewerRow[];
+  sort?: AnalyticsViewerSort;
 }
 
 export interface AnalyticsBounceStats {

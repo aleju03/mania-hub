@@ -10,11 +10,12 @@
  *   the plainest words that still say it.
  * - No commit subjects, no internals. Backend-only work stays out unless a
  *   player can tell the difference.
- * - Newest first. `date` is the UTC day it went live.
+ * - Newest first. `date` is the day it went live on the site clock (UTC-6),
+ *   which is the day the author lived, not the UTC day.
  */
 
 export interface ChangelogUpdate {
-  /** UTC day it went live, as YYYY-MM-DD. */
+  /** Day it went live on the site clock (UTC-6), as YYYY-MM-DD. */
   date: string;
   text: string;
   /** Optional in-app path, which makes the whole row clickable. */
@@ -26,7 +27,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
-  { date: "2026-08-04", text: "Upload a skin only you can open. Your replays still play in it", to: "/skins" },
+  { date: "2026-08-03", text: "Upload a skin only you can open. Your replays still play in it", to: "/skins" },
   { date: "2026-08-03", text: "Added a few more players to GOAT status", to: "/packs" },
   { date: "2026-08-03", text: "Tap a pull as it happens to open it", to: "/packs" },
   { date: "2026-08-03", text: "Performance optimizations for packs, player pages and the farm helper" },

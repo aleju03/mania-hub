@@ -1,12 +1,12 @@
 import { Search } from "lucide-react";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { Avatar } from "../../ui/Avatar";
 import { SectionCard } from "../SectionCard";
 import { getCountryName } from "../../../lib/country";
 import { formatNumber } from "../../../lib/format";
 import { analyticsInspectionHref, formatAnalyticsAgo } from "../../../lib/analytics-feed";
 import { getAnalyticsViewers } from "../../../lib/analytics-monitor-data";
-import type { AnalyticsViewerRow } from "../../../lib/analytics-monitor";
+import type { AnalyticsViewerRow, AnalyticsViewerSort } from "../../../lib/analytics-monitor";
 import { AnalyticsEmptyMessage, InlineCountryFlag, useTickingNow } from "./shared";
 
 /* Every osu! account that has signed in and browsed the site. The backend keeps
@@ -19,28 +19,49 @@ import { AnalyticsEmptyMessage, InlineCountryFlag, useTickingNow } from "./share
    mount plus a lot of work on every re-render. */
 const PAGE_SIZE = 100;
 
+/* Ordering is the backend's call, not this component's: it sorts the whole
+   roster before cutting it to a page, so "top by pp" is the best player who
+   has ever signed in rather than the best of the most recent page. */
+const SORTS: Array<{ id: AnalyticsViewerSort; label: string; title: string }> = [
+  { id: "recent", label: "Recent", title: "Newest visit first" },
+  { id: "pp", label: "PP", title: "Highest pp first" },
+  { id: "rank", label: "Rank", title: "Best global rank first" },
+];
+
 export function AnalyticsViewersCard() {
   const [result, setResult] = useState<{ total: number; viewers: AnalyticsViewerRow[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<AnalyticsViewerSort>("recent");
   const [limit, setLimit] = useState(PAGE_SIZE);
-  const mountedRef = useRef(true);
+  const [pending, setPending] = useState(true);
   // The roster changes slowly; a minute of drift on "last seen" is invisible.
   const now = useTickingNow(30_000);
 
   useEffect(() => {
-    mountedRef.current = true;
-    getAnalyticsViewers()
+    // Per-run rather than a shared mounted ref: switching sort twice in a row
+    // must not let the first answer land on top of the second.
+    let active = true;
+    setPending(true);
+    // Re-fetches per sort rather than reordering what is already here: the page
+    // in hand is only the top of one ordering, so sorting it locally would rank
+    // the wrong set of players.
+    getAnalyticsViewers({ data: { sort } })
       .then((data) => {
-        if (mountedRef.current) setResult(data);
+        if (!active) return;
+        setResult(data);
+        setError(null);
       })
       .catch((err: unknown) => {
-        if (mountedRef.current) setError(err instanceof Error ? err.message : "Could not load signed-in players.");
+        if (active) setError(err instanceof Error ? err.message : "Could not load signed-in players.");
+      })
+      .finally(() => {
+        if (active) setPending(false);
       });
     return () => {
-      mountedRef.current = false;
+      active = false;
     };
-  }, []);
+  }, [sort]);
 
   const filtered = useMemo(() => {
     const rows = result?.viewers ?? [];
@@ -59,25 +80,46 @@ export function AnalyticsViewersCard() {
 
   const total = result?.total ?? 0;
   const truncated = result != null && total > result.viewers.length;
+  // Says which end of the list was kept, since sorting happens over the whole
+  // roster: "the 2,000 most recent" is a lie once the order is by pp.
+  const shownEnd = sort === "recent" ? "most recent" : sort === "pp" ? "highest by pp" : "best ranked";
   const subtitle = result == null
     ? "loading..."
-    : `${formatNumber(total)} osu! account${total === 1 ? "" : "s"} have signed in${truncated ? `, showing the ${formatNumber(result.viewers.length)} most recent` : ""}`;
+    : `${formatNumber(total)} osu! account${total === 1 ? "" : "s"} have signed in${truncated ? `, showing the ${formatNumber(result.viewers.length)} ${shownEnd}` : ""}`;
 
   return (
     <SectionCard
       title="Signed-in players"
       subtitle={error ? "could not load" : subtitle}
       actions={result && result.viewers.length > 8 ? (
-        <label className="flex h-7 items-center gap-1.5 rounded-md border border-osu-b3/30 bg-osu-b5/70 px-2">
-          <Search className="h-3 w-3 flex-shrink-0 text-osu-f1" aria-hidden="true" />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.currentTarget.value)}
-            placeholder="Find a player"
-            aria-label="Find a signed-in player"
-            className="w-[120px] bg-transparent text-[11px] text-white placeholder:text-osu-f1 focus:outline-none"
-          />
-        </label>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1" role="group" aria-label="Sort signed-in players">
+            {SORTS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => setSort(option.id)}
+                title={option.title}
+                aria-pressed={sort === option.id}
+                className={`cursor-pointer rounded-md px-1.5 py-1 text-[10px] font-semibold transition-colors duration-[120ms] ${
+                  sort === option.id ? "text-white" : "text-osu-f1 hover:text-osu-l2"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <label className="flex h-7 items-center gap-1.5 rounded-md border border-osu-b3/30 bg-osu-b5/70 px-2">
+            <Search className="h-3 w-3 flex-shrink-0 text-osu-f1" aria-hidden="true" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.currentTarget.value)}
+              placeholder="Find a player"
+              aria-label="Find a signed-in player"
+              className="w-[120px] bg-transparent text-[11px] text-white placeholder:text-osu-f1 focus:outline-none"
+            />
+          </label>
+        </div>
       ) : null}
     >
       {error ? (
@@ -94,7 +136,9 @@ export function AnalyticsViewersCard() {
         />
       ) : (
         <>
-          <div className="max-h-[420px] space-y-1 overflow-y-auto pr-1">
+          <div
+            className={`max-h-[420px] space-y-1 overflow-y-auto pr-1 transition-opacity duration-[120ms] ${pending ? "opacity-50" : ""}`}
+          >
             {shown.map((row) => (
               <ViewerRow key={row.viewerId} row={row} now={now} />
             ))}
@@ -111,6 +155,30 @@ export function AnalyticsViewersCard() {
         </>
       )}
     </SectionCard>
+  );
+}
+
+/* Where a player stands in osu!, as the backend last saw them. Only players it
+   has ingested have these at all: a visitor from a country nobody tracks reads
+   "unranked", which is a gap in what the site knows rather than a statement
+   about the player. */
+function ViewerRank({ pp, globalRank }: { pp: number | null; globalRank: number | null }) {
+  if (pp == null && globalRank == null) {
+    return (
+      <span className="w-24 flex-shrink-0 text-right text-[10px] text-osu-f1/60" title="not in the backend's player table">
+        unranked
+      </span>
+    );
+  }
+  return (
+    <span
+      className="w-24 flex-shrink-0 text-right text-[11px] text-osu-l2"
+      title={globalRank == null ? "no global rank on record" : `global rank #${formatNumber(globalRank)}`}
+    >
+      {globalRank != null ? <span className="text-osu-f1">#{formatNumber(globalRank)}</span> : null}
+      {globalRank != null && pp != null ? " " : null}
+      {pp != null ? <span className="font-semibold text-white">{formatNumber(Math.round(pp))}pp</span> : null}
+    </span>
   );
 }
 
@@ -138,6 +206,7 @@ const ViewerRow = memo(function ViewerRow({ row, now }: { row: AnalyticsViewerRo
       <span className="hidden flex-shrink-0 text-[10px] text-osu-f1 sm:inline" title="time between their first and most recent visit">
         {seenFor >= 60_000 ? `around for ${formatAnalyticsAgo(seenFor)}` : "first visit"}
       </span>
+      <ViewerRank pp={row.pp ?? null} globalRank={row.globalRank ?? null} />
       <span className="w-16 flex-shrink-0 text-right text-[10px] text-osu-f1" title={`${formatNumber(row.events)} captured events`}>
         {formatNumber(row.events)} events
       </span>

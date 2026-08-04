@@ -2,10 +2,22 @@ import { type ChangelogUpdate } from "../data/changelog";
 
 const DAY_MS = 86_400_000;
 
-/** Midnight UTC of a YYYY-MM-DD day, or NaN when the input is not a date. */
-function utcDayStart(date: string): number {
+/**
+ * The day boundary the changelog counts from: UTC-6, the home country's clock,
+ * which has no DST so a fixed offset is exact all year.
+ *
+ * Not UTC, and not the reader's own timezone. Release days are written by hand
+ * as the author lives them, and an evening of work in UTC-6 crosses UTC
+ * midnight: bucketing by UTC split one working day into "today" and
+ * "yesterday". A fixed offset keeps a day whole and still renders the same
+ * string for every reader.
+ */
+const SITE_UTC_OFFSET_MS = -6 * 3_600_000;
+
+/** Instant of site midnight opening a YYYY-MM-DD day, NaN if not a date. */
+function siteDayStart(date: string): number {
   const parsed = Date.parse(`${date}T00:00:00Z`);
-  return Number.isFinite(parsed) ? parsed : Number.NaN;
+  return Number.isFinite(parsed) ? parsed - SITE_UTC_OFFSET_MS : Number.NaN;
 }
 
 /**
@@ -16,14 +28,16 @@ function utcDayStart(date: string): number {
  * eight to thirteen days apart would otherwise all read "last week" and the
  * column would stop telling the reader anything.
  *
- * Counted in whole UTC days so the same day always produces the same string in
- * every timezone. The exact date renders next to it, so the vagueness at the
- * top of each bucket never costs the reader anything.
+ * Counted in whole site days (see `SITE_UTC_OFFSET_MS`) so the same day always
+ * produces the same string in every timezone. The exact date renders next to
+ * it, so the vagueness at the top of each bucket never costs the reader
+ * anything.
  */
 export function formatReleaseAge(date: string, now: number = Date.now()): string {
-  const day = utcDayStart(date);
+  const day = siteDayStart(date);
   if (Number.isNaN(day)) return "";
-  const today = Math.floor(now / DAY_MS) * DAY_MS;
+  const today =
+    Math.floor((now + SITE_UTC_OFFSET_MS) / DAY_MS) * DAY_MS - SITE_UTC_OFFSET_MS;
   const days = Math.round((today - day) / DAY_MS);
   if (days <= 0) return "today";
   if (days === 1) return "yesterday";

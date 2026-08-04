@@ -4,7 +4,8 @@ import { formatReleaseAge, groupUpdatesByDay } from "./changelog";
 import { UPDATES, WIP } from "../data/changelog";
 
 const NOW = Date.parse("2026-07-29T09:00:00Z");
-const day = (iso: string) => Date.parse(`${iso}T00:00:00Z`);
+/** Instant a site day (UTC-6) opens, matching the module's own boundary. */
+const day = (iso: string) => Date.parse(`${iso}T06:00:00Z`);
 
 describe("formatReleaseAge", () => {
   it("labels the buckets a reader cares about", () => {
@@ -19,9 +20,16 @@ describe("formatReleaseAge", () => {
     expect(formatReleaseAge("2025-06-01", NOW)).toBe("last year");
   });
 
-  it("counts whole UTC days, so any time of day on the same day reads the same", () => {
+  it("counts whole site days, so any time of day on the same day reads the same", () => {
     expect(formatReleaseAge("2026-07-29", day("2026-07-29") + 1)).toBe("today");
     expect(formatReleaseAge("2026-07-29", day("2026-07-30") - 1)).toBe("today");
+  });
+
+  it("keeps an evening release on its own day instead of rolling into UTC tomorrow", () => {
+    // 23:00 in UTC-6 is already 05:00 the next day in UTC.
+    const lateEvening = Date.parse("2026-07-30T05:00:00Z");
+    expect(formatReleaseAge("2026-07-29", lateEvening)).toBe("today");
+    expect(formatReleaseAge("2026-07-28", lateEvening)).toBe("yesterday");
   });
 
   it("does not go negative on an update dated ahead of the clock", () => {

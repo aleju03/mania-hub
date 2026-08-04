@@ -6,6 +6,19 @@ import type { ManiaCardReadyData } from "./types";
 import type { ManiaCardTier } from "#/lib/maniacard";
 
 const FONT = "Torus, Arial, sans-serif";
+/* Every weight the faces below draw with.
+
+   Canvas text never triggers a webfont download the way DOM text does: it uses
+   whatever is already loaded and silently falls back to Arial for the rest, so
+   `font-display: swap` cannot save it either. Torus ships one file per weight,
+   so the weights the surrounding page happens to have rendered decide which
+   parts of the card get the real font: the username (900) came out in Torus
+   while the stats block and the star average (800) came out in Arial. Force
+   both in before measuring, and the card stops depending on that. */
+const FONT_WEIGHTS = [800, 900];
+/* Draw in the fallback rather than hang the card on a stalled font request,
+   which is what happened on every draw before the wait existed. */
+const FONT_LOAD_TIMEOUT_MS = 3000;
 const CARD_CORNER_RADIUS = 58;
 const TRIANGLE_HEIGHT_RATIO = 1.18;
 const MANIA_GLYPH_D =
@@ -93,10 +106,34 @@ export interface CardTextureSet {
   dispose: () => void;
 }
 
+/* Resolves once every weight in FONT_WEIGHTS is loaded, or once the timeout
+   gives up on one. Repeat calls are cheap: the browser dedupes a load already
+   in flight and returns immediately for a face it has. */
+export async function loadCardFonts(): Promise<void> {
+  if (typeof document === "undefined" || !document.fonts?.load) return;
+  const loads = FONT_WEIGHTS.map((weight) =>
+    // A missing or 404ing face is exactly the fallback case: draw anyway.
+    document.fonts.load(`${weight} 40px Torus`).catch(() => []),
+  );
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, FONT_LOAD_TIMEOUT_MS);
+  });
+  try {
+    await Promise.race([Promise.all(loads), timeout]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 export async function createCardTextures(
   data: ManiaCardReadyData,
   options: { textureScale?: number } = {},
 ): Promise<CardTextureSet> {
+  // Before measuring, not just before drawing: the username is auto-sized from
+  // its measured width, so Arial metrics would size it wrong even if the font
+  // landed in time for the draw.
+  await loadCardFonts();
   const textureScale = Math.max(0.5, Math.min(1, options.textureScale ?? 1));
   const frontCanvas = createCanvas(textureScale);
   const backCanvas = createCanvas(textureScale);
