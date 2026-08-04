@@ -26,6 +26,9 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-03", text: "Added a few more players to GOAT status", to: "/packs" },
+  { date: "2026-08-03", text: "Tap a pull as it happens to open it", to: "/packs" },
+  { date: "2026-08-03", text: "Performance optimizations for packs, player pages and the farm helper" },
   { date: "2026-08-02", text: "Added a new secret rarity for a few players", to: "/packs" },
   { date: "2026-08-02", text: "Share any replay with a friend, from the start or from the moment you are watching", to: "/replay" },
   { date: "2026-08-02", text: "Added import skin support to replays", to: "/replay" },
