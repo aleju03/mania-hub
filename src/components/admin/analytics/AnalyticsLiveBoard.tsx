@@ -1,5 +1,5 @@
-import { ArrowUpRight } from "lucide-react";
-import { useLayoutEffect, useRef } from "react";
+import { ArrowUpRight, Search, X } from "lucide-react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   analyticsEventHref,
   describeAnalyticsEvent,
@@ -10,6 +10,8 @@ import {
   type AnalyticsReplayMapIndex,
   type AnalyticsSession,
 } from "../../../lib/analytics-feed";
+import { getCountryName } from "../../../lib/country";
+import { formatNumber } from "../../../lib/format";
 import { ACTIVITY_KIND_STYLES, VisitorChip, visitorColor } from "./shared";
 
 /* Everyone who is on the site right now, one card each: what they are doing at
@@ -25,6 +27,9 @@ import { ACTIVITY_KIND_STYLES, VisitorChip, visitorColor } from "./shared";
 
 const MAX_CARDS = 12;
 const TRAIL_LENGTH = 3;
+// Searching an activity trail is the expensive half of a match, so only the
+// steps a card could plausibly be recognised by get formatted.
+const SEARCHED_STEPS = 40;
 
 export function AnalyticsLiveBoard({
   sessions,
@@ -35,40 +40,142 @@ export function AnalyticsLiveBoard({
   replayMaps: AnalyticsReplayMapIndex;
   now: number;
 }) {
-  const rootRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLElement>(null);
+  const [search, setSearch] = useState("");
   useSteadyScrollBelow(rootRef);
 
+  const query = search.trim().toLowerCase();
   const online = sessions.filter((session) => session.online);
-  const shown = useStableCells(online);
-  const overflow = online.length - shown.length;
+  const cells = useStableCells(online);
 
-  if (online.length === 0) {
-    const lastSeen = sessions[0];
-    const lastSeenAgo = lastSeen && Number.isFinite(lastSeen.lastTs) ? formatAnalyticsAgo(now - lastSeen.lastTs) : null;
-    return (
-      <div ref={rootRef} className="rounded-lg border border-dashed border-osu-b3/40 bg-osu-b4/20 px-4 py-8 text-center">
-        <div className="text-[12px] text-osu-l2">Nobody on the site right now.</div>
-        {lastSeenAgo ? (
-          <div className="mt-1 text-[11px] text-osu-f1">Last visitor was here {lastSeenAgo} ago.</div>
-        ) : null}
-      </div>
-    );
-  }
+  /* Matched against every session in range, not just the online ones: a name
+     typed in and found nowhere reads as broken, so a visitor who has just gone
+     quiet still gets accounted for below the board. Keyed off `sessions`
+     rather than `online` so the per-second clock doesn't re-run the trail
+     search. */
+  const matches = useMemo(() => (query ? rankSessions(sessions, query, replayMaps) : null), [sessions, query, replayMaps]);
+  const onlineMatches = matches?.filter((session) => session.online) ?? null;
+  const offlineMatches = matches ? matches.length - (onlineMatches?.length ?? 0) : 0;
+
+  const pool = onlineMatches ?? cells;
+  const shown = onlineMatches ? onlineMatches.slice(0, MAX_CARDS) : cells;
+  const overflow = (onlineMatches ? onlineMatches.length : online.length) - shown.length;
+
+  const lastSeen = sessions[0];
+  const lastSeenAgo = lastSeen && Number.isFinite(lastSeen.lastTs) ? formatAnalyticsAgo(now - lastSeen.lastTs) : null;
+  const subtitle = query
+    ? `${formatNumber(pool.length)} of ${formatNumber(online.length)} online visitor${online.length === 1 ? "" : "s"} match`
+    : online.length > 0
+      ? `${formatNumber(online.length)} visitor${online.length === 1 ? "" : "s"} active in the last 5 minutes`
+      : "nobody active in the last 5 minutes";
 
   return (
-    <div ref={rootRef}>
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-        {shown.map((session) => (
-          <LiveVisitorCard key={session.distinctId} session={session} replayMaps={replayMaps} now={now} />
-        ))}
+    <section ref={rootRef} className="space-y-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-osu-c2">Right now</h3>
+        <span className="text-[10px] text-osu-f1">{subtitle}</span>
+        {sessions.length > 0 ? <VisitorSearch value={search} onChange={setSearch} /> : null}
       </div>
-      {overflow > 0 ? (
-        <div className="mt-2 text-center text-[10px] text-osu-f1">
-          + {overflow} more visitor{overflow === 1 ? "" : "s"} online
+
+      {shown.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-osu-b3/40 bg-osu-b4/20 px-4 py-8 text-center">
+          {query ? (
+            <>
+              <div className="text-[12px] text-osu-l2">Nobody online matches "{search.trim()}".</div>
+              {offlineMatches > 0 ? (
+                <div className="mt-1 text-[11px] text-osu-f1">
+                  {formatNumber(offlineMatches)} visitor{offlineMatches === 1 ? "" : "s"} matched earlier in this range - they are in
+                  the activity feed below.
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <div className="text-[12px] text-osu-l2">Nobody on the site right now.</div>
+              {lastSeenAgo ? <div className="mt-1 text-[11px] text-osu-f1">Last visitor was here {lastSeenAgo} ago.</div> : null}
+            </>
+          )}
         </div>
+      ) : (
+        <div>
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+            {shown.map((session) => (
+              <LiveVisitorCard key={session.distinctId} session={session} replayMaps={replayMaps} now={now} />
+            ))}
+          </div>
+          {overflow > 0 ? (
+            <div className="mt-2 text-center text-[10px] text-osu-f1">
+              {query
+                ? `+ ${formatNumber(overflow)} more match${overflow === 1 ? "" : "es"} hidden`
+                : `+ ${formatNumber(overflow)} more visitor${overflow === 1 ? "" : "s"} online`}
+            </div>
+          ) : null}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* Type a name and the board narrows to that visitor. Identity is what the box
+   is for - a username, the V-number, a country - but the same query also
+   catches the trail, so "Yunarkm" finds the person and, failing that, whoever
+   is reading their profile. */
+function VisitorSearch({ value, onChange }: { value: string; onChange: (next: string) => void }) {
+  return (
+    <div className="relative ml-auto">
+      <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-osu-f1" aria-hidden="true" />
+      <input
+        type="search"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") onChange("");
+        }}
+        placeholder="Find a visitor"
+        aria-label="Find a visitor by name, country or activity"
+        className="h-7 w-[150px] rounded-md border border-osu-b3/30 bg-osu-b5/70 pl-7 pr-6 text-[11px] text-white placeholder:text-osu-f1 focus:border-osu-pink/40 focus:outline-none sm:w-[190px] [&::-webkit-search-cancel-button]:hidden"
+      />
+      {value ? (
+        <button
+          type="button"
+          onClick={() => onChange("")}
+          aria-label="Clear visitor search"
+          className="absolute right-1 top-1/2 flex h-5 w-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded text-osu-f1 transition-colors duration-[120ms] hover:text-white"
+        >
+          <X className="h-3 w-3" />
+        </button>
       ) : null}
     </div>
   );
+}
+
+/* Who the visitor is beats what they were doing, so identity hits sort above
+   trail hits; within a tier the feed's own recency order is kept. */
+function rankSessions(
+  sessions: AnalyticsSession[],
+  query: string,
+  replayMaps: AnalyticsReplayMapIndex,
+): AnalyticsSession[] {
+  const identity: AnalyticsSession[] = [];
+  const activity: AnalyticsSession[] = [];
+  for (const session of sessions) {
+    if (identityText(session).includes(query)) identity.push(session);
+    else if (activityText(session, replayMaps).includes(query)) activity.push(session);
+  }
+  return identity.concat(activity);
+}
+
+function identityText(session: AnalyticsSession): string {
+  const country = session.country ? `${session.country} ${getCountryName(session.country) || ""}` : "";
+  return `${session.viewerUsername ?? "guest"} ${session.label} ${country} ${session.distinctId}`.toLowerCase();
+}
+
+function activityText(session: AnalyticsSession, replayMaps: AnalyticsReplayMapIndex): string {
+  return session.events
+    .slice(0, SEARCHED_STEPS)
+    .map((row) => formatAnalyticsActivityText(describeAnalyticsEvent(row, replayMaps)))
+    .join(" ")
+    .toLowerCase();
 }
 
 /* The board is a wall of cells, not a leaderboard. Sessions arrive ordered by
@@ -113,7 +220,7 @@ function useStableCells(online: AnalyticsSession[]): AnalyticsSession[] {
    feel it. Only where the browser is not already doing it: correcting on top
    of scroll anchoring moved the page by the full difference instead of
    holding it still. */
-function useSteadyScrollBelow(ref: React.RefObject<HTMLDivElement | null>) {
+function useSteadyScrollBelow(ref: React.RefObject<HTMLElement | null>) {
   const bottomRef = useRef<number | null>(null);
   useLayoutEffect(() => {
     if (browserAnchorsScroll()) return;

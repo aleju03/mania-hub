@@ -813,6 +813,8 @@ describe("live backend", () => {
       replayVideoWorkDir: join(dir, "replay-video-jobs"),
       maxLocalDbBytes: Number.MAX_SAFE_INTEGER,
       targetLocalDbBytes: Number.MAX_SAFE_INTEGER,
+      nodeEnv: "test",
+      livePublicOrigin: "http://localhost:7227",
     });
 
     expect(deleted.activityScoreRefs).toBe(1);
@@ -858,6 +860,8 @@ describe("live backend", () => {
       replayVideoWorkDir: join(dir, "replay-video-jobs"),
       maxLocalDbBytes: Number.MAX_SAFE_INTEGER,
       targetLocalDbBytes: Number.MAX_SAFE_INTEGER,
+      nodeEnv: "test",
+      livePublicOrigin: "http://localhost:7227",
     });
 
     expect(deleted.parkedOnDemandJobs).toBe(2);

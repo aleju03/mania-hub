@@ -223,6 +223,33 @@ describe("AnalyticsLiveBoard", () => {
     expect(cardOrder(container)).toEqual(["visitor id: a", "visitor id: b"]);
   });
 
+  const searchBox = () => screen.getByLabelText("Find a visitor by name, country or activity");
+
+  it("narrows the board to the searched visitor", () => {
+    const rows = [row({ distinctId: "y", ts: NOW - 3_000, viewerUsername: "Yunarkm", path: "/maps", mapsQuery: "dt" }), ...ROWS];
+    render(<AnalyticsLiveBoard sessions={buildAnalyticsSessions(rows, NOW)} replayMaps={buildAnalyticsReplayMapIndex(rows)} now={NOW} />);
+    fireEvent.change(searchBox(), { target: { value: "yunar" } });
+    expect(screen.getByText("Yunarkm")).toBeTruthy();
+    expect(screen.getByText("1 of 3 online visitors match")).toBeTruthy();
+    expect(screen.queryByText("Camellia - Ghost [4K Insane]")).toBeNull();
+  });
+
+  it("also matches what a visitor is looking at", () => {
+    const sessions = buildAnalyticsSessions(ROWS, NOW);
+    render(<AnalyticsLiveBoard sessions={sessions} replayMaps={buildAnalyticsReplayMapIndex(ROWS)} now={NOW} />);
+    fireEvent.change(searchBox(), { target: { value: "juan" } });
+    expect(screen.getByText("juan's profile")).toBeTruthy();
+    expect(screen.queryByText("Camellia - Ghost [4K Insane]")).toBeNull();
+  });
+
+  it("accounts for a match who has already gone quiet", () => {
+    const rows = [...ROWS, row({ distinctId: "y", ts: NOW - 60 * 60_000, viewerUsername: "Yunarkm" })];
+    render(<AnalyticsLiveBoard sessions={buildAnalyticsSessions(rows, NOW)} replayMaps={new Map()} now={NOW} />);
+    fireEvent.change(searchBox(), { target: { value: "yunarkm" } });
+    expect(screen.getByText('Nobody online matches "yunarkm".')).toBeTruthy();
+    expect(screen.getByText("1 visitor matched earlier in this range - they are in the activity feed below.")).toBeTruthy();
+  });
+
   it("falls back to a calm empty state when the site is quiet", () => {
     const stale = [row({ distinctId: "a", ts: NOW - 60 * 60_000 })];
     const sessions = buildAnalyticsSessions(stale, NOW);

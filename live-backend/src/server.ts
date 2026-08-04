@@ -26,6 +26,7 @@ import { backfillPackCardSerials } from "./features/pack-pulls.js";
 import { ensurePackDuelsSchema } from "./features/pack-duels.js";
 import { ensurePackCollectionCardKeys } from "./features/pack-wallets.js";
 import { backfillSkinSlugs } from "./features/skins.js";
+import { isSkinStorageConfigured, skinObjectDeletesEnabled } from "./skins/r2.js";
 import { ensureArchivedPlayers } from "./archived-players.js";
 import { AbuseGuard } from "./http/abuse-guard.js";
 import { CountryClientTracker } from "./live/country-clients.js";
@@ -111,6 +112,16 @@ export async function createApp() {
     logWarn("live_admin_token_missing", {
       role: config.role,
       detail: "LIVE_ADMIN_TOKEN is not set; admin and user-scoped endpoints fail closed (401). Public endpoints are unaffected.",
+    });
+  }
+  // The skins bucket is shared with production, so a non-production process
+  // (dev build or loopback LIVE_PUBLIC_ORIGIN) never deletes or moves skin
+  // objects: rows still update, the objects just stay in the bucket.
+  if (isSkinStorageConfigured(config) && !skinObjectDeletesEnabled(config)) {
+    logWarn("skin_r2_deletes_disabled", {
+      role: config.role,
+      nodeEnv: config.nodeEnv,
+      origin: config.livePublicOrigin,
     });
   }
   const db = await createDb(config);

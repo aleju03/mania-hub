@@ -1,5 +1,6 @@
 import type { Readable } from "node:stream";
 import { loadS3Module, type S3Module } from "../shared/lazy-s3.js";
+import { logWarn } from "../logger.js";
 import type { Config } from "../config.js";
 
 const REPLAY_CACHE_BUCKET = "mania-hub-replay-cache";
@@ -7,7 +8,8 @@ const SKINS_PREFIX = "skins/";
 
 // Narrow config surface so retention (which receives a Pick of Config) can
 // clean up abandoned uploads without depending on the full config type.
-export type SkinStorageConfig = Pick<Config, "r2Endpoint" | "r2AccessKeyId" | "r2SecretAccessKey" | "r2Bucket" | "r2PublicBaseUrl">;
+// nodeEnv and livePublicOrigin are here for the destructive-op guard below.
+export type SkinStorageConfig = Pick<Config, "r2Endpoint" | "r2AccessKeyId" | "r2SecretAccessKey" | "r2Bucket" | "r2PublicBaseUrl" | "nodeEnv" | "livePublicOrigin">;
 
 export type UploadedSkinObject = {
   storageKey: string;
@@ -29,6 +31,36 @@ export function isSkinStorageConfigured(config: SkinStorageConfig): boolean {
     config.r2SecretAccessKey &&
     config.r2Bucket
   );
+}
+
+// There is exactly one skins bucket, and local dev runs against it with prod
+// credentials and (usually) a prod DB snapshot, so a delete or move issued
+// from a dev machine removes objects the live site is still serving - the
+// hourly retention sweep can even do it with no one at the keyboard, since an
+// aged snapshot's "pending" skins may be published on prod by now. Only a
+// process that is provably the live deployment (production build behind a
+// non-loopback public origin, both true of the VPS env today) may destroy or
+// relocate existing objects. Uploads are not gated: they only ever land on
+// fresh keys, and gating them would break testing the upload flow.
+export function skinObjectDeletesEnabled(config: SkinStorageConfig): boolean {
+  return config.nodeEnv === "production" && !isLoopbackOrigin(config.livePublicOrigin);
+}
+
+function isLoopbackOrigin(origin: string): boolean {
+  try {
+    const hostname = new URL(origin).hostname;
+    return (
+      hostname === "localhost" ||
+      hostname.endsWith(".localhost") ||
+      hostname === "127.0.0.1" ||
+      hostname === "0.0.0.0" ||
+      hostname === "::1" ||
+      hostname === "[::1]"
+    );
+  } catch {
+    // An origin that does not parse cannot be the live site; stay disarmed.
+    return true;
+  }
 }
 
 // The .osk is stored with the same immutable cache-control as the images, so
@@ -107,7 +139,7 @@ export function oskFilename(name: string): string {
 }
 
 export async function uploadSkinObject(
-  config: SkinStorageConfig & Pick<Config, "livePublicOrigin">,
+  config: SkinStorageConfig,
   key: string,
   buffer: Buffer,
   contentType: string,
@@ -141,7 +173,7 @@ export async function uploadSkinObject(
 // skin's objects always take the streaming form, whatever the bucket offers:
 // the public base serves anyone who holds the URL, and the whole point of the
 // endpoint is the ?t= check in front of the bytes.
-function skinObjectUrl(config: SkinStorageConfig & Pick<Config, "livePublicOrigin">, key: string): string {
+function skinObjectUrl(config: SkinStorageConfig, key: string): string {
   const encodedKey = key.split("/").map(encodeURIComponent).join("/");
   const publicBase = config.r2PublicBaseUrl?.replace(/\/+$/, "");
   if (publicBase && !isPrivateSkinKey(key)) return `${publicBase}/${encodedKey}`;
@@ -208,7 +240,7 @@ export async function readSkinObject(
 // the key a public URL already points at. Metadata is rewritten rather than
 // inherited so the new object keeps the download filename the row expects.
 export async function copySkinObject(
-  config: SkinStorageConfig & Pick<Config, "livePublicOrigin">,
+  config: SkinStorageConfig,
   fromKey: string,
   toKey: string,
   contentType: string,
@@ -216,6 +248,12 @@ export async function copySkinObject(
 ): Promise<UploadedSkinObject | null> {
   if (!fromKey.startsWith(SKINS_PREFIX) || !toKey.startsWith(SKINS_PREFIX)) return null;
   if (!isSkinStorageConfigured(config)) return null;
+  // Copies only exist to move an object (the caller deletes the source next),
+  // so they sit behind the same guard as deletes.
+  if (!skinObjectDeletesEnabled(config)) {
+    logWarn("skin_r2_copy_skipped_non_production", { fromKey, toKey });
+    return null;
+  }
   const s3 = await loadS3Module();
   const client = getClient(s3, config);
   const bucket = requireBucket(config);
@@ -239,6 +277,10 @@ export async function copySkinObject(
 export async function deleteSkinObjects(config: SkinStorageConfig, keys: string[]): Promise<void> {
   const valid = keys.filter((key) => key.startsWith(SKINS_PREFIX));
   if (valid.length === 0 || !isSkinStorageConfigured(config)) return;
+  if (!skinObjectDeletesEnabled(config)) {
+    logWarn("skin_r2_delete_skipped_non_production", { keys: valid.length });
+    return;
+  }
   const s3 = await loadS3Module();
   const client = getClient(s3, config);
   await client.send(new s3.DeleteObjectsCommand({

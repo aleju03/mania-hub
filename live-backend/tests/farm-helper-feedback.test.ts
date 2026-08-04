@@ -850,6 +850,8 @@ describe("farm helper feedback retention", () => {
       replayVideoWorkDir: join(dir, "replay-video-jobs"),
       maxLocalDbBytes: Number.MAX_SAFE_INTEGER,
       targetLocalDbBytes: Number.MAX_SAFE_INTEGER,
+      nodeEnv: "test",
+      livePublicOrigin: "http://localhost:7227",
     });
 
     expect(deleted.farmHelperFeedbackResolved).toBe(1);

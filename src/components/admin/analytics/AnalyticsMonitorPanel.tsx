@@ -271,7 +271,6 @@ export function AnalyticsMonitorPanel() {
     });
     return codes.size;
   }, [sessions]);
-  const onlineCount = useMemo(() => sessions.filter((session) => session.online).length, [sessions]);
 
   const countryOptions = useMemo<AnalyticsCountryRow[]>(() => {
     const byCountry = new Map<string, AnalyticsCountryRow>();
@@ -346,17 +345,7 @@ export function AnalyticsMonitorPanel() {
           <AnalyticsPulse data={currentData} range={range} onlineCountries={onlineCountries} />
           {view === "live" ? (
             <>
-              <section className="space-y-2">
-                <div className="flex items-baseline gap-2">
-                  <h3 className="text-[11px] font-semibold uppercase tracking-wider text-osu-c2">Right now</h3>
-                  <span className="text-[10px] text-osu-f1">
-                    {onlineCount > 0
-                      ? `${onlineCount} visitor${onlineCount === 1 ? "" : "s"} active in the last 5 minutes`
-                      : "nobody active in the last 5 minutes"}
-                  </span>
-                </div>
-                <AnalyticsLiveBoard sessions={sessions} replayMaps={replayMaps} now={now} />
-              </section>
+              <AnalyticsLiveBoard sessions={sessions} replayMaps={replayMaps} now={now} />
               <AnalyticsStream
                 rows={currentData.recentEvents}
                 sessions={sessions}

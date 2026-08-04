@@ -38,7 +38,7 @@ import {
 } from "../src/features/skins.js";
 import { runRetention } from "../src/retention.js";
 import { sniffImage, validateOskBuffer } from "../src/skins/validate-osk.js";
-import { isPrivateSkinKey, nextSkinOskRevision, nextSkinPreviewRevision, oskFilename, privateSkinKey, skinKeymodePreviewKey, skinOskKey, skinPreviewKey } from "../src/skins/r2.js";
+import { copySkinObject, deleteSkinObjects, isPrivateSkinKey, nextSkinOskRevision, nextSkinPreviewRevision, oskFilename, privateSkinKey, skinKeymodePreviewKey, skinObjectDeletesEnabled, skinOskKey, skinPreviewKey } from "../src/skins/r2.js";
 import { collectReplaySkinAssetPaths, replaySkinBundleVersion } from "../src/skins/replay-bundle.js";
 import { slugifySkinName } from "../src/skins/slug.js";
 
@@ -474,6 +474,8 @@ describe("skins feature", () => {
       replayVideoWorkDir: join(dir, "replay-video-jobs"),
       maxLocalDbBytes: Number.MAX_SAFE_INTEGER,
       targetLocalDbBytes: Number.MAX_SAFE_INTEGER,
+      nodeEnv: "test",
+      livePublicOrigin: "http://localhost:7227",
     });
 
     expect(results.skinsPendingExpired).toBe(1);
@@ -699,6 +701,35 @@ describe("skin storage keys", () => {
     // The stored object is versioned; what the browser saves is not.
     expect(oskFilename("My Cool Skin")).toBe("My Cool Skin.osk");
     expect(nextSkinOskRevision(null)).toBe(1);
+  });
+});
+
+// Local dev holds production R2 credentials and (usually) a prod DB snapshot,
+// so destructive object operations are only armed for the real deployment.
+describe("skin storage delete guard", () => {
+  const storage = {
+    r2Endpoint: "https://r2.example.invalid",
+    r2AccessKeyId: "key",
+    r2SecretAccessKey: "secret",
+    r2Bucket: "mania-hub-replay-cache",
+    r2PublicBaseUrl: undefined,
+  };
+
+  it("arms deletes only for a production build behind a non-loopback origin", () => {
+    expect(skinObjectDeletesEnabled({ ...storage, nodeEnv: "production", livePublicOrigin: "https://api.mania-tracker.com" })).toBe(true);
+    expect(skinObjectDeletesEnabled({ ...storage, nodeEnv: "development", livePublicOrigin: "http://localhost:7227" })).toBe(false);
+    expect(skinObjectDeletesEnabled({ ...storage, nodeEnv: "development", livePublicOrigin: "https://api.mania-tracker.com" })).toBe(false);
+    expect(skinObjectDeletesEnabled({ ...storage, nodeEnv: "production", livePublicOrigin: "http://localhost:7227" })).toBe(false);
+    expect(skinObjectDeletesEnabled({ ...storage, nodeEnv: "production", livePublicOrigin: "http://127.0.0.1:7227" })).toBe(false);
+    expect(skinObjectDeletesEnabled({ ...storage, nodeEnv: "production", livePublicOrigin: "http://[::1]:7227" })).toBe(false);
+    expect(skinObjectDeletesEnabled({ ...storage, nodeEnv: "production", livePublicOrigin: "not a url" })).toBe(false);
+  });
+
+  it("no-ops delete and move when disarmed, even with storage fully configured", async () => {
+    // The bogus endpoint proves the guard: reaching the S3 client would reject.
+    const config = { ...storage, nodeEnv: "development", livePublicOrigin: "http://localhost:7227" };
+    await expect(deleteSkinObjects(config, ["skins/abc-123/file.osk"])).resolves.toBeUndefined();
+    await expect(copySkinObject(config, "skins/abc-123/a.osk", "skins/abc-123/p-s3cret/a.osk", "application/octet-stream", "a.osk")).resolves.toBeNull();
   });
 });
 
