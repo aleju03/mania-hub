@@ -301,11 +301,18 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     if (profileRoute.kind === "snapshot") {
       if (!checkRate(req, res, ctx, "publicCostly")) return true;
       const lookupMode = url.searchParams.get("lookup") === "id" ? "userId" : "auto";
+      // refresh=0 opts out of the read's background refresh. Only the pack card
+      // path passes it: a card already accepts a stale profile, and a hand whose
+      // batch probe was rejected used to fan out into one priority-80 refresh
+      // per card (4k parked jobs on prod, 2026-08-03). The profile page and the
+      // farm helper must keep the default -- the queue is the only way a stored
+      // profile ever gets refreshed.
+      const wantsRefresh = url.searchParams.get("refresh") !== "0";
       await sendAccentEnrichedJson(req, res, ctx, 200, await getPlayerProfileSnapshot(
         ctx.serveWriteDb ?? ctx.db,
         ctx.osu,
         profileRoute.key,
-        { queue: ctx.serveWriteQueue ?? ctx.queue, lookupMode },
+        { queue: wantsRefresh ? ctx.serveWriteQueue ?? ctx.queue : null, lookupMode },
       ));
       return true;
     }
