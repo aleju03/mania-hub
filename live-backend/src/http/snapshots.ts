@@ -73,6 +73,7 @@ import { isReplayVideoStorageConfigured } from "../replay-video/r2.js";
 import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, findPublishedSkinByOskSha256, finishSkin, finishSkinEdit, getSkin, getSkinByRef, getSkinForEdit, getSkinForUpload, listSkins, moveSkinOskKey, privateSkinSecretMatches, recordSkinDownload, renameSkin, replaceSkinOsk, setSkinAccent, setSkinCoverKeymode, setSkinHidden, setSkinVisibility, SKIN_MAX_SCREENSHOTS, startSkinEdit, toSkinSummary, upsertSkinKeymodePreview, type SkinRow } from "../features/skins.js";
 import { clearUserReplaySkin, getUserReplaySkin, setUserReplaySkin, USER_REPLAY_SKIN_PAYLOAD_MAX_CHARS } from "../features/user-replay-skins.js";
 import { copySkinObject, deleteSkinObjects, getSkinObject, isPrivateSkinKey, isSkinStorageConfigured, nextSkinOskRevision, nextSkinPreviewRevision, oskFilename, privateSkinKey, skinKeymodePreviewKey, skinOskKey, skinPreviewKey, skinScreenshotKey, uploadSkinObject } from "../skins/r2.js";
+import { readCachedSkinImage } from "../skins/image-cache.js";
 import { getReplaySkinBundle, replaySkinBundleVersion } from "../skins/replay-bundle.js";
 import { sniffImage, validateOskBuffer } from "../skins/validate-osk.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
@@ -2038,6 +2039,30 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       ? [skin.oskKey, skin.previewKey, ...skin.previews.map((preview) => preview.key), ...skin.screenshots.map((shot) => shot.key)]
           .find((candidate): candidate is string => Boolean(candidate && candidate.split("/").pop() === filename))
       : undefined;
+    // Private objects are cached by the one browser allowed to hold them, never
+    // by a shared cache that would then serve them without the capability.
+    const cacheControl = skin?.visibility === "private"
+      ? "private, max-age=86400"
+      : "public, max-age=86400, s-maxage=31536000, immutable";
+    if (key && !key.toLowerCase().endsWith(".osk")) {
+      // Images (previews, screenshots) serve from the in-memory tier: their
+      // keys are immutable and the row check above already authorized this
+      // request, so a cached buffer is as safe as the R2 read it replaces and
+      // saves the grid a >1s round trip per card.
+      const image = await readCachedSkinImage(key, () => getSkinObject(ctx.config, key));
+      if (!image) {
+        sendJson(req, res, ctx, 404, { error: "not_found" });
+        return true;
+      }
+      sendCors(req, res, ctx);
+      res.statusCode = 200;
+      res.setHeader("content-type", image.contentType);
+      res.setHeader("content-length", String(image.buffer.length));
+      if (image.contentDisposition) res.setHeader("content-disposition", image.contentDisposition);
+      res.setHeader("cache-control", cacheControl);
+      res.end(image.buffer);
+      return true;
+    }
     const object = key ? await getSkinObject(ctx.config, key) : null;
     if (!object) {
       sendJson(req, res, ctx, 404, { error: "not_found" });
@@ -2048,14 +2073,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     res.setHeader("content-type", object.contentType);
     if (object.contentLength != null) res.setHeader("content-length", String(object.contentLength));
     if (object.contentDisposition) res.setHeader("content-disposition", object.contentDisposition);
-    // Private objects are cached by the one browser allowed to hold them, never
-    // by a shared cache that would then serve them without the capability.
-    res.setHeader(
-      "cache-control",
-      skin?.visibility === "private"
-        ? "private, max-age=86400"
-        : "public, max-age=86400, s-maxage=31536000, immutable",
-    );
+    res.setHeader("cache-control", cacheControl);
     object.body.on("error", () => res.destroy());
     object.body.pipe(res);
     return true;

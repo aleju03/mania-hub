@@ -48,6 +48,7 @@ vi.mock("../src/skins/r2.js", async (importOriginal) => {
 });
 
 import { copySkinObject, deleteSkinObjects, getSkinObject, readSkinObject, uploadSkinObject } from "../src/skins/r2.js";
+import { clearSkinImageCache } from "../src/skins/image-cache.js";
 
 let dir = "";
 let db: Db;
@@ -65,6 +66,7 @@ beforeEach(async () => {
   vi.mocked(uploadSkinObject).mockClear();
   vi.mocked(deleteSkinObjects).mockClear();
   vi.mocked(copySkinObject).mockClear();
+  clearSkinImageCache();
 });
 
 afterEach(async () => {
@@ -440,6 +442,35 @@ describe("skins HTTP endpoints", () => {
     await call(bodyReq("POST", "/api/admin/skins/moderate", JSON.stringify({ id, action: "hide" }), ADMIN));
     expect((await call(mockReq("GET", `/api/skins/file/${id}/preview.png`))).status).toBe(404);
     expect((await call(mockReq("GET", `/api/skins/file/${id}/preview.png`, ADMIN))).status).toBe(200);
+  });
+
+  it("serves images from memory after the first read but always re-checks the row", async () => {
+    const { id, token } = await startUpload();
+    await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=osk`, await buildOskBuffer()));
+    await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=preview`, PNG_BYTES));
+    await call(mockReq("POST", `/api/skins/finish?id=${id}&token=${token}`));
+    vi.mocked(getSkinObject).mockClear();
+
+    const first = await call(mockReq("GET", `/api/skins/file/${id}/preview.png`));
+    expect(first.status).toBe(200);
+    expect(first.headers["content-length"]).toBe(String(Buffer.byteLength(first.body)));
+    expect(vi.mocked(getSkinObject)).toHaveBeenCalledTimes(1);
+
+    const second = await call(mockReq("GET", `/api/skins/file/${id}/preview.png`));
+    expect(second.status).toBe(200);
+    expect(second.body).toBe(first.body);
+    expect(vi.mocked(getSkinObject)).toHaveBeenCalledTimes(1);
+
+    // The cached buffer never bypasses authorization: hiding the skin 404s
+    // the very next read even though the bytes are still in memory.
+    await call(bodyReq("POST", "/api/admin/skins/moderate", JSON.stringify({ id, action: "hide" }), ADMIN));
+    expect((await call(mockReq("GET", `/api/skins/file/${id}/preview.png`))).status).toBe(404);
+
+    // The .osk keeps streaming straight from storage, uncached.
+    vi.mocked(getSkinObject).mockClear();
+    await call(mockReq("GET", `/api/skins/file/${id}/${encodeURIComponent("Cloudy Skies.osk")}`, ADMIN));
+    await call(mockReq("GET", `/api/skins/file/${id}/${encodeURIComponent("Cloudy Skies.osk")}`, ADMIN));
+    expect(vi.mocked(getSkinObject)).toHaveBeenCalledTimes(2);
   });
 
   it("re-renders previews and moves the card cover after publishing", async () => {

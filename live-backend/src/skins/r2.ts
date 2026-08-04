@@ -289,10 +289,20 @@ export async function deleteSkinObjects(config: SkinStorageConfig, keys: string[
   }));
 }
 
+// One client per process: a fresh client per call cost every request a new
+// TLS handshake to the R2 endpoint, which dominated the latency of serving a
+// small preview. The credentials come from env so they cannot change under a
+// running process, but the guard rebuilds anyway if a caller ever passes a
+// different config (tests do).
+let cachedClient: { client: InstanceType<S3Module["S3Client"]>; endpoint?: string; accessKeyId?: string } | null = null;
+
 function getClient(s3: S3Module, config: SkinStorageConfig): InstanceType<S3Module["S3Client"]> {
   if (!isSkinStorageConfigured(config)) throw new Error("R2 skin storage is not configured");
   requireBucket(config);
-  return new s3.S3Client({
+  if (cachedClient && cachedClient.endpoint === config.r2Endpoint && cachedClient.accessKeyId === config.r2AccessKeyId) {
+    return cachedClient.client;
+  }
+  const client = new s3.S3Client({
     region: "auto",
     endpoint: config.r2Endpoint,
     forcePathStyle: true,
@@ -301,6 +311,8 @@ function getClient(s3: S3Module, config: SkinStorageConfig): InstanceType<S3Modu
       secretAccessKey: config.r2SecretAccessKey!,
     },
   });
+  cachedClient = { client, endpoint: config.r2Endpoint, accessKeyId: config.r2AccessKeyId };
+  return client;
 }
 
 function requireBucket(config: SkinStorageConfig): string {
