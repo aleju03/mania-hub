@@ -81,16 +81,13 @@ export function SkinCard({ skin, onClick }: { skin: SkinSummary; onClick?: () =>
         <div className="flex flex-1 flex-col gap-1 px-2.5 py-2">
           <div className="flex items-baseline justify-between gap-2">
             <div className="truncate text-[13px] font-bold leading-tight text-white">{skin.name}</div>
-            {/* The count comes back for your own skins only (and everything for
-                an admin), so this is on your own cards. Spelled out rather than
-                pilled behind an icon: the download button sits right above it,
-                and two download glyphs an inch apart read as a mistake. */}
-            {skin.downloadCount != null && (
-              <span className="shrink-0 text-[11px] text-osu-f1">
-                <span className="tabular-nums">{skin.downloadCount.toLocaleString()}</span>
-                {skin.downloadCount === 1 ? " download" : " downloads"}
-              </span>
-            )}
+            {/* Spelled out rather than pilled behind an icon: the download
+                button sits right above it, and two download glyphs an inch
+                apart read as a mistake. */}
+            <span className="shrink-0 text-[11px] text-osu-f1">
+              <span className="tabular-nums">{skin.downloadCount.toLocaleString()}</span>
+              {skin.downloadCount === 1 ? " download" : " downloads"}
+            </span>
           </div>
           {/* Primary credit goes to whoever made the skin; the uploader (with
               avatar) only fronts the card when no author is known. */}

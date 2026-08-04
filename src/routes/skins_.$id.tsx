@@ -239,9 +239,7 @@ function SkinDetailPage() {
     }
     // The browse list is browser-cached, so its card would keep the old title.
     markSkinsListStale();
-    // The endpoint drops the owner-only download count; carrying the loaded one
-    // across keeps the fact row from blinking out until the next page load.
-    setEdited({ ...result.skin, downloadCount: result.skin.downloadCount ?? skin.downloadCount });
+    setEdited(result.skin);
     setRenaming(false);
   };
 
@@ -448,12 +446,9 @@ function SkinDetailPage() {
                     <FactRow label="Keymodes">
                       <SkinKeymodeTags keymodes={skin.keymodes} max={10} />
                     </FactRow>
-                    {/* Owner-only, and null for everyone else. */}
-                    {skin.downloadCount != null && (
-                      <FactRow label="Downloads">
-                        <span className="tabular-nums text-osu-l1">{skin.downloadCount.toLocaleString()}</span>
-                      </FactRow>
-                    )}
+                    <FactRow label="Downloads">
+                      <span className="tabular-nums text-osu-l1">{skin.downloadCount.toLocaleString()}</span>
+                    </FactRow>
                     {skin.oskSizeBytes ? (
                       <FactRow label="File size">
                         <span className="tabular-nums text-osu-l1">{formatSkinFileSize(skin.oskSizeBytes)}</span>
@@ -603,10 +598,8 @@ function SkinDetailPage() {
                         skin={skin}
                         open={updatingFile}
                         onClose={() => setUpdatingFile(false)}
-                        // The endpoint drops the owner-only download count, so
-                        // the loaded one rides across like the rename does.
                         onUpdated={(next) => {
-                          setEdited({ ...next, downloadCount: next.downloadCount ?? skin.downloadCount });
+                          setEdited(next);
                           setHeroIndex(0);
                         }}
                       />

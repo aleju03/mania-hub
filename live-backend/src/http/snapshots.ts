@@ -59,7 +59,7 @@ import {
   writeReplayVideoUpload,
 } from "../replay-video/exports.js";
 import { isReplayVideoStorageConfigured } from "../replay-video/r2.js";
-import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, findPublishedSkinByOskSha256, withoutDownloadCount, finishSkin, finishSkinEdit, getSkin, getSkinByRef, getSkinForEdit, getSkinForUpload, listSkins, recordSkinDownload, renameSkin, replaceSkinOsk, setSkinAccent, setSkinCoverKeymode, setSkinHidden, SKIN_MAX_SCREENSHOTS, startSkinEdit, toSkinSummary, upsertSkinKeymodePreview } from "../features/skins.js";
+import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, findPublishedSkinByOskSha256, finishSkin, finishSkinEdit, getSkin, getSkinByRef, getSkinForEdit, getSkinForUpload, listSkins, recordSkinDownload, renameSkin, replaceSkinOsk, setSkinAccent, setSkinCoverKeymode, setSkinHidden, SKIN_MAX_SCREENSHOTS, startSkinEdit, toSkinSummary, upsertSkinKeymodePreview } from "../features/skins.js";
 import { clearUserReplaySkin, getUserReplaySkin, setUserReplaySkin, USER_REPLAY_SKIN_PAYLOAD_MAX_CHARS } from "../features/user-replay-skins.js";
 import { deleteSkinObjects, getSkinObject, isSkinStorageConfigured, nextSkinOskRevision, nextSkinPreviewRevision, oskFilename, skinKeymodePreviewKey, skinOskKey, skinPreviewKey, skinScreenshotKey, uploadSkinObject } from "../skins/r2.js";
 import { sniffImage, validateOskBuffer } from "../skins/validate-osk.js";
@@ -1829,8 +1829,8 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     const keymode = Number(url.searchParams.get("k"));
     const page = Number(url.searchParams.get("page") ?? 0);
     const pageSize = Number(url.searchParams.get("pageSize") ?? 24);
-    // A viewer-scoped list carries that viewer's own download counts, so it
-    // must never land in a shared cache.
+    // An admin list can carry hidden skins, so it must never land in a shared
+    // cache.
     if (scope.tokened) res.setHeader("cache-control", "private, no-store");
     else res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
     const list = await listSkins(ctx.db, {
@@ -1841,9 +1841,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       includeHidden,
       sort: url.searchParams.get("sort") === "downloads" ? "downloads" : "newest",
     });
-    sendJson(req, res, ctx, 200, scope.asAdmin
-      ? list
-      : { ...list, skins: list.skins.map((skin) => (scope.ownsSkin(skin.ownerUserId) ? skin : withoutDownloadCount(skin))) });
+    sendJson(req, res, ctx, 200, list);
     return true;
   }
   if (url.pathname === "/api/skins/get") {
@@ -1863,9 +1861,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     if (scope.tokened) res.setHeader("cache-control", "private, no-store");
     else res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
-    const summary = toSkinSummary(skin);
-    const seesCount = scope.asAdmin || scope.ownsSkin(skin.ownerUserId);
-    sendJson(req, res, ctx, 200, { skin: seesCount ? summary : withoutDownloadCount(summary) });
+    sendJson(req, res, ctx, 200, { skin: toSkinSummary(skin) });
     return true;
   }
   if (url.pathname === "/api/skins/download") {
@@ -1949,7 +1945,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     sendJson(req, res, ctx, 200, {
       replaySkin: {
-        skin: withoutDownloadCount(toSkinSummary(skin)),
+        skin: toSkinSummary(skin),
         settings: parseJson<unknown>(row.payloadJson, null),
         updatedAt: row.updatedAt,
       },
@@ -2080,7 +2076,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         return true;
       }
       logInfo("skin_upload_finish", { id, ownerUserId: result.skin.ownerUserId, keymodes: result.skin.keymodes });
-      sendJson(req, res, ctx, 200, { ok: true, skin: withoutDownloadCount(result.skin) });
+      sendJson(req, res, ctx, 200, { ok: true, skin: result.skin });
       return true;
     }
     if (url.pathname === "/api/skins/edit-finish") {
@@ -2097,7 +2093,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         });
       }
       logInfo("skin_previews_edited", { id, ownerUserId: result.skin.ownerUserId, droppedPreviews: result.staleKeys.length });
-      sendJson(req, res, ctx, 200, { ok: true, skin: withoutDownloadCount(result.skin) });
+      sendJson(req, res, ctx, 200, { ok: true, skin: result.skin });
       return true;
     }
     const pending = id && token ? await getSkinForUpload(ctx.db, id, token) : null;
@@ -2294,7 +2290,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         return true;
       }
       logInfo("skin_renamed", { id, by: ownerUserId == null ? "admin" : "owner" });
-      sendJson(req, res, ctx, 200, { ok: true, skin: withoutDownloadCount(result.skin) });
+      sendJson(req, res, ctx, 200, { ok: true, skin: result.skin });
       return true;
     }
     if (url.pathname === "/api/skins/cover") {
@@ -2309,7 +2305,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         return true;
       }
       logInfo("skin_cover_changed", { id, keys, by: ownerUserId == null ? "admin" : "owner" });
-      sendJson(req, res, ctx, 200, { ok: true, skin: withoutDownloadCount(result.skin) });
+      sendJson(req, res, ctx, 200, { ok: true, skin: result.skin });
       return true;
     }
     // "replace" also unlocks a new .osk on the ticket, which is how an
@@ -4914,10 +4910,10 @@ function parseImageDimension(value: string | null): number | null {
   return Number.isInteger(parsed) && parsed > 0 && parsed <= 8192 ? parsed : null;
 }
 
-// Who is asking for skin data, for the endpoints that hand back download
-// counts. The counts are private: an uploader sees them on their own skins and
-// an admin sees them everywhere, so the request has to carry an identity the
-// frontend server fn vouched for with the admin token (the goals bridge).
+// Who is asking for skin data, for the endpoints that can hand back hidden
+// skins. Only a true admin reads a hidden row, so the request has to carry an
+// identity the frontend server fn vouched for with the admin token (the goals
+// bridge).
 //
 // A tokened request with no viewer attached is the admin dashboard calling
 // server to server, which keeps the full view it has always had.
@@ -4925,12 +4921,12 @@ function skinViewerScope(
   req: IncomingMessage,
   ctx: HttpContext,
   url: URL,
-): { tokened: boolean; asAdmin: boolean; ownsSkin: (ownerUserId: number) => boolean } {
+): { tokened: boolean; asAdmin: boolean } {
   const tokened = isAdmin(req, ctx);
   const viewerUserId = tokened ? Number(url.searchParams.get("viewerUserId")) : Number.NaN;
   const viewer = Number.isInteger(viewerUserId) && viewerUserId > 0 ? viewerUserId : null;
   const asAdmin = tokened && (viewer == null || url.searchParams.get("asAdmin") === "1");
-  return { tokened, asAdmin, ownsSkin: (ownerUserId) => viewer != null && ownerUserId === viewer };
+  return { tokened, asAdmin };
 }
 
 const DEFAULT_BODY_LIMIT_BYTES = 1024 * 1024;

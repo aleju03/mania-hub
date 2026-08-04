@@ -80,11 +80,9 @@ export interface SkinSummary {
   ownerUsername: string;
   keymodes: number[];
   accentColor: string | null;
-  // Null unless the request identified the uploader of this very skin (or a
-  // true admin): the count is private, so it is dropped at the HTTP boundary
-  // rather than left for the client to hide. Sorting by downloads still works
-  // for everyone - it never exposes the numbers themselves.
-  downloadCount: number | null;
+  // Public: every reader sees every skin's count, the same number the
+  // downloads sort orders by.
+  downloadCount: number;
   previewUrl: string | null;
   previewWidth: number | null;
   previewHeight: number | null;
@@ -644,12 +642,6 @@ export function toSkinSummary(row: SkinRow): SkinSummary {
     status: row.status,
     publishedAt: row.publishedAt,
   };
-}
-
-// Applied to every skin a response's asker does not own; see
-// SkinSummary.downloadCount.
-export function withoutDownloadCount(summary: SkinSummary): SkinSummary {
-  return { ...summary, downloadCount: null };
 }
 
 function storageKeysOf(row: SkinRow): string[] {

@@ -165,13 +165,12 @@ describe("GET /api/replay-skin", () => {
     expect(res.headers["cache-control"]).toBe("public, no-cache");
   });
 
-  it("returns the published skin summary plus settings, without download counts", async () => {
+  it("returns the published skin summary plus settings", async () => {
     await setUserReplaySkin(db, USER, PUBLISHED, '{"noteImage":"mania/note1.png","volume":0.4}');
     const res = await call(mockReq("GET", `/api/replay-skin?userId=${USER}`));
     expect(res.status).toBe(200);
     expect(res.body.replaySkin.skin).toMatchObject({ id: PUBLISHED, name: `Skin ${PUBLISHED}`, status: "published" });
-    // The count is private even here: this is a public read of someone's skin.
-    expect(res.body.replaySkin.skin.downloadCount).toBeNull();
+    expect(res.body.replaySkin.skin.downloadCount).toBe(0);
     expect(res.body.replaySkin.settings).toEqual({ noteImage: "mania/note1.png", volume: 0.4 });
     expect(res.body.replaySkin.updatedAt).toBeTruthy();
     expect(res.headers["cache-control"]).toBe("public, no-cache");

@@ -32,10 +32,8 @@ export interface SkinSummary {
   ownerUsername: string;
   keymodes: number[];
   accentColor: string | null;
-  // Uploader-only: the backend nulls it unless the request carried the viewer
-  // who owns the skin (or a true admin), so the UI simply has nothing to show
-  // for everyone else.
-  downloadCount: number | null;
+  // Public: everyone reads every skin's count.
+  downloadCount: number;
   previewUrl: string | null;
   previewWidth: number | null;
   previewHeight: number | null;
@@ -100,10 +98,8 @@ const SKINS_LIST_MEMORY_TTL_MS = 5 * 60 * 1000;
 const SKINS_LIST_MEMORY_MAX = 12;
 const skinsListMemory = new Map<string, { at: number; result: SkinsListResult }>();
 
-// scope keeps one viewer's cached pages away from the next: the same page
-// carries download counts for whoever asked for it, and nobody else.
-export function skinsListCacheKey(params: SkinsListParams, scope: string): string {
-  return [scope || "p", params.q?.trim() ?? "", params.page ?? 0, params.sort ?? "newest", params.k ?? 0].join("|");
+export function skinsListCacheKey(params: SkinsListParams): string {
+  return [params.q?.trim() ?? "", params.page ?? 0, params.sort ?? "newest", params.k ?? 0].join("|");
 }
 
 export function readCachedSkinsList(key: string): SkinsListResult | null {
@@ -182,41 +178,6 @@ export async function fetchSkinsListDirect(params: SkinsListParams, init?: Reque
   return response.json() as Promise<SkinsListResult>;
 }
 
-// Same list as fetchSkinsListDirect, routed through the server so the viewer
-// resolved from the auth cookie can ride along with the admin token; that is
-// the only way download counts come back, and an uploader only gets them for
-// their own skins (an admin gets all of them). Throws for a signed-out visitor,
-// so callers fall back to the direct, cacheable fetch.
-export const fetchSkinsListAsViewer = createServerFn({ method: "GET" })
-  .validator((data: SkinsListParams) => ({
-    q: typeof data.q === "string" ? data.q.slice(0, 80) : "",
-    page: Number.isFinite(data.page) ? Math.max(0, Math.floor(Number(data.page))) : 0,
-    sort: data.sort === "downloads" ? ("downloads" as const) : ("newest" as const),
-    k: Number.isInteger(data.k) && Number(data.k) >= 1 && Number(data.k) <= 10 ? Number(data.k) : 0,
-  }))
-  .handler(async ({ data }): Promise<SkinsListResult> => {
-    const { readCurrentAuth } = await import("./auth-server");
-    const auth = await readCurrentAuth();
-    if (!auth.viewer) throw new Error("Not signed in.");
-    const { setResponseHeader } = await import("@tanstack/react-start/server");
-    setResponseHeader("Cache-Control", "private, no-store");
-    const base = getServerLiveBackendUrl();
-    if (!base) throw new Error("Server is not configured.");
-    const query = new URLSearchParams();
-    if (data.q) query.set("q", data.q);
-    if (data.page) query.set("page", String(data.page));
-    if (data.sort === "downloads") query.set("sort", "downloads");
-    if (data.k) query.set("k", String(data.k));
-    query.set("pageSize", String(SKINS_PAGE_SIZE));
-    query.set("viewerUserId", String(auth.viewer.id));
-    if (auth.isAdmin) query.set("asAdmin", "1");
-    const headers: HeadersInit = {};
-    if (process.env.LIVE_ADMIN_TOKEN) headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
-    const response = await fetch(`${base}/api/skins/list?${query.toString()}`, { headers });
-    if (!response.ok) throw new Error(`Server ${response.status}`);
-    return response.json() as Promise<SkinsListResult>;
-  });
-
 export const fetchSkinById = createServerFn({ method: "GET" })
   .validator((data: { id?: unknown }) => {
     // Accepts a slug or a raw row id; slugs with the short-id collision
@@ -228,10 +189,9 @@ export const fetchSkinById = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<SkinSummary | null> => {
     const base = getServerLiveBackendUrl();
     if (!base) return null;
-    // The signed-in viewer rides along with the admin token so the backend can
-    // hand this skin's download count back to whoever uploaded it. A true admin
-    // also sees hidden skins (to unhide them) and every count; everyone else
-    // gets the public, cacheable published-only view.
+    // The signed-in viewer rides along with the admin token so a true admin
+    // reads hidden skins back (to unhide them); everyone else gets the public,
+    // cacheable published-only view.
     const query = new URLSearchParams({ id: data.id });
     const headers: HeadersInit = {};
     try {

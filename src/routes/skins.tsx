@@ -14,7 +14,6 @@ import { useAuth } from "../lib/auth-context";
 import { isAdmin } from "../lib/auth-shared";
 import { isLiveBackendConfigured } from "../lib/live-backend";
 import {
-  fetchSkinsListAsViewer,
   fetchSkinsListDirect,
   readCachedSkinsList,
   skinsListCacheKey,
@@ -112,15 +111,10 @@ function SkinsPage() {
   const location = useLocation();
   const auth = useAuth();
   const admin = isAdmin(auth);
-  // Signed-in visitors read the list through the server fn, which is what
-  // carries their identity to the backend and brings back the download counts
-  // on their own skins. Everyone else takes the cacheable public list.
-  const viewerId = auth.viewer?.id ?? null;
-  const listScope = admin ? "a" : viewerId != null ? `v:${viewerId}` : "p";
 
   // Seeded from the in-memory list cache so walking back from a skin page
   // paints the same grid it left, not a screen of skeletons.
-  const [data, setData] = useState<SkinsListResult | null>(() => readCachedSkinsList(skinsListCacheKey({ q, page, sort, k }, listScope)));
+  const [data, setData] = useState<SkinsListResult | null>(() => readCachedSkinsList(skinsListCacheKey({ q, page, sort, k })));
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [showUploader, setShowUploader] = useState(false);
@@ -156,23 +150,15 @@ function SkinsPage() {
       return;
     }
     const controller = new AbortController();
-    const cacheKey = skinsListCacheKey({ q, page, sort, k }, listScope);
+    const cacheKey = skinsListCacheKey({ q, page, sort, k });
     // A cached page shows immediately and the fetch behind it only swaps the
     // data in; without one this is a cold load and the skeletons are honest.
     const cached = readCachedSkinsList(cacheKey);
     if (cached) setData(cached);
     setLoading(!cached);
     setFailed(false);
-    // Signed-in visitors take the server-fn route: it forwards their verified
-    // osu! id with the admin token, which is what makes the backend send the
-    // download counts of their own skins back. Everyone else (and anyone whose
-    // session just lapsed) reads the public list straight from the backend,
-    // counts omitted.
-    const load = viewerId != null
-      ? fetchSkinsListAsViewer({ data: { q, page, sort, k } })
-          .catch(() => fetchSkinsListDirect({ q, page, sort, k }, { signal: controller.signal }))
-      : fetchSkinsListDirect({ q, page, sort, k }, { signal: controller.signal });
-    load
+    // One list for everyone, straight from the backend and cacheable there.
+    fetchSkinsListDirect({ q, page, sort, k }, { signal: controller.signal })
       .then((result) => {
         writeCachedSkinsList(cacheKey, result);
         if (controller.signal.aborted) return;
@@ -186,7 +172,7 @@ function SkinsPage() {
         setLoading(false);
       });
     return () => controller.abort();
-  }, [q, page, sort, k, reloadTick, viewerId, listScope]);
+  }, [q, page, sort, k, reloadTick]);
 
   const handlePublished = useCallback((skin: SkinSummary) => {
     // Land the fresh skin at the top of an unfiltered first page.

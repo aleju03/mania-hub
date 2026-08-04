@@ -30,7 +30,7 @@ const SKIN: SkinSummary = {
   ownerUsername: "Aleju03",
   keymodes: [4, 7],
   accentColor: "#88ccff",
-  downloadCount: null,
+  downloadCount: 0,
   previewUrl: "https://cdn.test/preview-4k.webp",
   previewWidth: 1280,
   previewHeight: 720,

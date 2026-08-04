@@ -217,49 +217,36 @@ describe("skins HTTP endpoints", () => {
     const download = await call(mockReq("GET", `/api/skins/download?id=${id}`));
     expect(download.status).toBe(302);
     expect(download.headers.location).toContain("https://cdn.test/skins/");
-    // The counter still ticks; it just only comes back with the admin token.
-    expect((await call(mockReq("GET", `/api/skins/get?id=${id}`, ADMIN))).body.skin.downloadCount).toBe(1);
+    expect((await call(mockReq("GET", `/api/skins/get?id=${id}`))).body.skin.downloadCount).toBe(1);
     expect((await call(mockReq("GET", "/api/skins/download?id=missing"))).status).toBe(404);
   });
 
-  it("keeps download counts to the skin's own uploader and to admins", async () => {
+  it("hands download counts to every reader", async () => {
     // startUpload publishes as userId 101.
     const { id, token } = await startUpload();
     await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=osk`, await buildOskBuffer()));
     await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=preview`, PNG_BYTES));
-    // Publishing hands the uploader their own skin back, counts included in
-    // neither that response nor any public read.
+    // A freshly published skin starts at zero rather than at nothing.
     const finished = await call(mockReq("POST", `/api/skins/finish?id=${id}&token=${token}`));
-    expect(finished.body.skin.downloadCount).toBeNull();
+    expect(finished.body.skin.downloadCount).toBe(0);
     await call(mockReq("GET", `/api/skins/download?id=${id}`));
     await call(mockReq("GET", `/api/skins/download?id=${id}`));
 
+    // A signed-out visitor reads the same count the uploader does, off the
+    // shared cacheable responses.
     const publicList = await call(mockReq("GET", "/api/skins/list"));
-    expect((await call(mockReq("GET", `/api/skins/get?id=${id}`))).body.skin.downloadCount).toBeNull();
-    expect(publicList.body.skins[0].downloadCount).toBeNull();
-    // Nothing viewer-specific in it, so the public list stays cacheable.
+    expect(publicList.body.skins[0].downloadCount).toBe(2);
     expect(publicList.headers["cache-control"]).toContain("max-age=60");
+    expect((await call(mockReq("GET", `/api/skins/get?id=${id}`))).body.skin.downloadCount).toBe(2);
 
-    // The uploader, as the frontend server fn forwards them: their verified id
-    // alongside the admin token.
+    // Tokened reads (the uploader forwarded by the server fn, an admin server
+    // to server) see the count too, and stay out of shared caches because they
+    // can carry hidden skins.
     const ownList = await call(mockReq("GET", "/api/skins/list?viewerUserId=101", ADMIN));
     expect(ownList.body.skins[0].downloadCount).toBe(2);
-    expect((await call(mockReq("GET", `/api/skins/get?id=${id}&viewerUserId=101`, ADMIN))).body.skin.downloadCount).toBe(2);
-    // Counts belong to one viewer, so the response must not be shared.
     expect(ownList.headers["cache-control"]).toBe("private, no-store");
-
-    // Another signed-in visitor gets nothing back for a skin that is not theirs.
-    expect((await call(mockReq("GET", "/api/skins/list?viewerUserId=202", ADMIN))).body.skins[0].downloadCount).toBeNull();
-    expect((await call(mockReq("GET", `/api/skins/get?id=${id}&viewerUserId=202`, ADMIN))).body.skin.downloadCount).toBeNull();
-    // The id alone proves nothing: without the token it is just a query param.
-    expect((await call(mockReq("GET", `/api/skins/get?id=${id}&viewerUserId=101`))).body.skin.downloadCount).toBeNull();
-    expect((await call(mockReq("GET", "/api/skins/list?viewerUserId=101"))).body.skins[0].downloadCount).toBeNull();
-
-    // An admin sees every count: server to server with no viewer attached, and
-    // as a signed-in admin browsing someone else's skin.
-    expect((await call(mockReq("GET", `/api/skins/get?id=${id}`, ADMIN))).body.skin.downloadCount).toBe(2);
+    expect((await call(mockReq("GET", `/api/skins/get?id=${id}&viewerUserId=101`, ADMIN))).body.skin.downloadCount).toBe(2);
     expect((await call(mockReq("GET", "/api/skins/list", ADMIN))).body.skins[0].downloadCount).toBe(2);
-    expect((await call(mockReq("GET", "/api/skins/list?viewerUserId=202&asAdmin=1", ADMIN))).body.skins[0].downloadCount).toBe(2);
   });
 
   it("requires both osk and preview before finish", async () => {

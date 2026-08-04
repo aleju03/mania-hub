@@ -16,7 +16,7 @@ const SKIN: SkinSummary = {
   ownerUsername: "Aleju03",
   keymodes: [4],
   accentColor: null,
-  downloadCount: null,
+  downloadCount: 0,
   previewUrl: null,
   previewWidth: null,
   previewHeight: null,
