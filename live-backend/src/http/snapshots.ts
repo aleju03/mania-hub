@@ -3830,8 +3830,45 @@ function checkRate(req: IncomingMessage, res: ServerResponse, ctx: HttpContext, 
   return false;
 }
 
+// Rejections used to be silent, which is why the 2026-08-03 pack-probe fan-out
+// had to be reconstructed from queue rows: nothing recorded whether those hand
+// probes were 429ed, timed out, or died at the edge. One line per bucket+route
+// per interval, carrying the count suppressed since the last one, so a cascade
+// is visible without the log becoming the flood.
+const RATE_LIMIT_LOG_INTERVAL_MS = 10_000;
+const RATE_LIMIT_LOG_STATE_MAX = 256;
+const rateLimitLogState = new Map<string, { lastLoggedAtMs: number; suppressed: number }>();
+
+// Collapses the dynamic segment of the per-player routes so the state map holds
+// one entry per route shape, not one per player.
+function rateLimitRouteKey(rawUrl: string | undefined): string {
+  const pathname = (rawUrl ?? "").split("?")[0];
+  return pathname.replace(/^\/api\/profiles\/[^/]+\//, "/api/profiles/*/").slice(0, 120);
+}
+
+function logRateLimited(req: IncomingMessage, result: Exclude<RateLimitResult, { allowed: true }>): void {
+  const route = rateLimitRouteKey(req.url);
+  const key = `${result.bucket}:${route}`;
+  const nowMs = Date.now();
+  const state = rateLimitLogState.get(key);
+  if (state != null && nowMs - state.lastLoggedAtMs < RATE_LIMIT_LOG_INTERVAL_MS) {
+    state.suppressed += 1;
+    return;
+  }
+  if (rateLimitLogState.size >= RATE_LIMIT_LOG_STATE_MAX) rateLimitLogState.clear();
+  rateLimitLogState.set(key, { lastLoggedAtMs: nowMs, suppressed: 0 });
+  logWarn("rate_limited", {
+    bucket: result.bucket,
+    route,
+    limit: result.limit,
+    retry_after_ms: result.retryAfterMs,
+    suppressed_since_last: state?.suppressed ?? 0,
+  });
+}
+
 export function sendRateLimited(req: IncomingMessage, res: ServerResponse, ctx: Pick<HttpContext, "config">, result: Exclude<RateLimitResult, { allowed: true }>): void {
   res.setHeader("retry-after", String(Math.max(1, Math.ceil(result.retryAfterMs / 1000))));
+  logRateLimited(req, result);
   sendJson(req, res, ctx, 429, {
     error: "rate_limited",
     bucket: result.bucket,
