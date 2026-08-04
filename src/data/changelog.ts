@@ -27,9 +27,11 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
-  { date: "2026-08-03", text: "Upload a skin only you can open. Your replays still play in it", to: "/skins" },
+  { date: "2026-08-04", text: "New game: higher or lower. The longer your streak, the more shards you earn", to: "/streak" },
+  { date: "2026-08-04", text: "See the latest replays other people uploaded, on the upload tab", to: "/replay" },
+  { date: "2026-08-03", text: "Skins can be private now: only you can open or download one, and your replays still use it", to: "/skins" },
   { date: "2026-08-03", text: "Added a few more players to GOAT status", to: "/packs" },
-  { date: "2026-08-03", text: "Tap a pull as it happens to open it", to: "/packs" },
+  { date: "2026-08-03", text: "Tapping a pull in the live ticker now opens that pull, not the player's profile", to: "/packs" },
   { date: "2026-08-03", text: "Performance optimizations for packs, player pages and the farm helper" },
   { date: "2026-08-02", text: "Added a new secret rarity for a few players", to: "/packs" },
   { date: "2026-08-02", text: "Share any replay with a friend, from the start or from the moment you are watching", to: "/replay" },
