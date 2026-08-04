@@ -31,7 +31,7 @@ import { getMapSearchPage, getMapSearchSetEntry, MAP_SEARCH_PATTERNS, MAP_SEARCH
 import { getMapCollection, getMapCollections, getMapCollectionsRotation, rebuildMapCollections } from "../features/map-collections.js";
 import { applyPackCollectionCardMint, getPackWallet, HONORARY_USER_IDS, listPackCollectionCards, listPackCollectionOwnedCardKeys,
   normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
-import { getHonoraryPullsReport, getPackCardStats, getPackPulledStats, getSharedPackCard, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../features/pack-pulls.js";
+import { getHonoraryPullsReport, getPackCardCollectors, getPackCardStats, getPackPulledStats, getSharedPackCard, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../features/pack-pulls.js";
 import { createPackDuel, getPackDuel, hitPackBlackjack, joinPackBlackjack, joinPackDuel, redactDuelFor, standPackBlackjack } from "../features/pack-duels.js";
 import { getCachedPackCardSnapshot, getCachedPackCardSnapshots, PACK_CARD_SNAPSHOT_MAX_IDS, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, warmProfileSnapshots } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
@@ -1469,6 +1469,28 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     sendJson(req, res, ctx, 200, await getPackPulledStats(ctx.db, cardUserId));
+    return true;
+  }
+  const packPulledByMatch = url.pathname.match(/^\/api\/packs\/pulled-by\/(\d+)$/);
+  if (packPulledByMatch) {
+    // Who holds one player's card, by name. Server-to-server only, like the
+    // wallet sync: the frontend's server function resolves the id from the
+    // osu! login cookie, so you can only ever list the collectors of your own
+    // card. The public endpoint next to it stays a count.
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const cardUserId = Number(packPulledByMatch[1]);
+    if (!Number.isInteger(cardUserId) || cardUserId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, await getPackCardCollectors(ctx.db, cardUserId));
     return true;
   }
   const packPulledCardMatch = url.pathname.match(/^\/api\/packs\/pulled-card\/(\d+)\/(\d+)$/);

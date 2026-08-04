@@ -1,7 +1,7 @@
 import type { InValue } from "@libsql/client";
 import type { Db } from "../db.js";
 import { exec } from "../db.js";
-import { packCardKey, tierRankSql } from "./pack-wallets.js";
+import { packCardKey, tierRank, tierRankSql } from "./pack-wallets.js";
 
 // Append-only log of pack pulls, the community layer on top of the per-owner
 // pack_collection_cards projection. Rows are self-reported by the client
@@ -339,6 +339,128 @@ export async function getPackPulledStats(db: Db, cardUserId: number): Promise<Pa
     copies: Number(collectionRow?.copies) || 0,
     pullEvents7d: Number(eventRow?.recent) || 0,
     lastPulledAt: lastPulledAt > 0 ? lastPulledAt : null,
+  };
+}
+
+/* One collector holding a given player's card. Copies are summed across the
+   card keys they hold it under (an ordinary card and a GOAT are separate
+   collectibles of the same player), and the tier and serial are the ones from
+   the best of those keys, since that is the holding worth naming. */
+export interface PackCardCollector {
+  userId: number;
+  username: string;
+  copies: number;
+  tier: string | null;
+  /* Mint order under the tier above. Null for a holding that predates the
+     serial registry and was never backfilled, or an anonymous pull. */
+  serial: number | null;
+  firstPulledAt: number;
+  lastPulledAt: number;
+}
+
+export interface PackCardCollectors {
+  userId: number;
+  /* True totals across every holder, even when the list below is truncated. */
+  owners: number;
+  copies: number;
+  collectors: PackCardCollector[];
+  /* The cap applied to the list, so the client can say "first N of M". */
+  listed: number;
+}
+
+/* High enough that a real card's whole holder list fits (the site's entire
+   collector population is a few hundred people), because the client filters
+   the list by name and a truncated one would answer "who has my card" with a
+   silent no. The counts above the list stay exact either way. */
+export const PACK_CARD_COLLECTORS_LISTED = 500;
+/* Rows read before grouping. A collector holds at most one row per card key,
+   so this covers the listed cap with room for everyone holding both an
+   ordinary card and a GOAT. */
+const COLLECTOR_ROW_SCAN = PACK_CARD_COLLECTORS_LISTED * 3;
+
+/* "Who has my card": the collectors behind the owners count, oldest holding
+   first, so the list reads as mint order and a truncated one keeps the people
+   who got there first.
+
+   Same source as the counts (pack_collection_cards, the durable projection),
+   so it covers cards pulled before the pull log existed. The name is the live
+   users row where there is one, falling back to the name the pull log froze,
+   since a collector outside a tracked roster has no users row. */
+export async function getPackCardCollectors(
+  db: Db,
+  cardUserId: number,
+  listed = PACK_CARD_COLLECTORS_LISTED,
+): Promise<PackCardCollectors> {
+  const limit = Math.min(PACK_CARD_COLLECTORS_LISTED, Math.max(1, Math.floor(listed) || 1));
+  const empty: PackCardCollectors = { userId: cardUserId, owners: 0, copies: 0, collectors: [], listed: limit };
+  if (!Number.isInteger(cardUserId) || cardUserId <= 0) return empty;
+  const totals = (await exec(
+    db,
+    `select count(distinct owner_user_id) as owners, coalesce(sum(copies), 0) as copies
+     from pack_collection_cards
+     where card_user_id = ? and copies > 0`,
+    [cardUserId],
+  )).rows[0];
+  const owners = Number(totals?.owners) || 0;
+  if (owners === 0) return empty;
+
+  const rows = (await exec(
+    db,
+    `select c.owner_user_id as owner_user_id, c.copies as copies, c.tier as tier,
+       c.first_pulled_at as first_pulled_at, c.last_pulled_at as last_pulled_at,
+       (select s.serial from pack_card_serials s
+         where s.card_key = c.card_key and s.owner_user_id = c.owner_user_id) as serial,
+       coalesce(
+         (select u.username from users u where u.user_id = c.owner_user_id),
+         (select e.owner_username from pack_pull_events e
+           where e.owner_user_id = c.owner_user_id order by e.pulled_at desc limit 1)
+       ) as owner_username
+     from pack_collection_cards c
+     where c.card_user_id = ? and c.copies > 0
+     order by c.first_pulled_at asc, c.owner_user_id asc
+     limit ?`,
+    [cardUserId, COLLECTOR_ROW_SCAN],
+  )).rows;
+
+  const byOwner = new Map<number, PackCardCollector>();
+  for (const row of rows) {
+    const ownerUserId = Number(row.owner_user_id);
+    const tier = typeof row.tier === "string" ? row.tier : null;
+    const serial = Number(row.serial) || 0;
+    const copies = Number(row.copies) || 0;
+    const firstPulledAt = Number(row.first_pulled_at) || 0;
+    const lastPulledAt = Number(row.last_pulled_at) || 0;
+    const existing = byOwner.get(ownerUserId);
+    if (!existing) {
+      if (byOwner.size >= limit) continue;
+      byOwner.set(ownerUserId, {
+        userId: ownerUserId,
+        username: nonEmptyString(row.owner_username) ?? `user ${ownerUserId}`,
+        copies,
+        tier,
+        serial: serial > 0 ? serial : null,
+        firstPulledAt,
+        lastPulledAt,
+      });
+      continue;
+    }
+    existing.copies += copies;
+    if (firstPulledAt > 0 && (existing.firstPulledAt === 0 || firstPulledAt < existing.firstPulledAt)) {
+      existing.firstPulledAt = firstPulledAt;
+    }
+    if (lastPulledAt > existing.lastPulledAt) existing.lastPulledAt = lastPulledAt;
+    if (tierRank(tier) > tierRank(existing.tier)) {
+      existing.tier = tier;
+      existing.serial = serial > 0 ? serial : null;
+    }
+  }
+
+  return {
+    userId: cardUserId,
+    owners,
+    copies: Number(totals?.copies) || 0,
+    collectors: [...byOwner.values()],
+    listed: limit,
   };
 }
 

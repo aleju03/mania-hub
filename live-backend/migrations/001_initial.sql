@@ -642,6 +642,10 @@ create index if not exists idx_pack_collection_owner_tier
   on pack_collection_cards(owner_user_id, tier, copies, pp desc);
 create index if not exists idx_pack_collection_owner_username
   on pack_collection_cards(owner_user_id, username);
+-- The card side of the same table: ownership counts, "your card got pulled"
+-- stats and the collector list all read by card, oldest holding first.
+create index if not exists idx_pack_collection_card_pulled
+  on pack_collection_cards(card_user_id, first_pulled_at);
 
 -- Append-only pack pull log: the community layer (live feed, per-card
 -- ownership counts, "your card got pulled" stats). Self-reported by clients,

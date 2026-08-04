@@ -275,6 +275,78 @@ export const recordServerPackPulls = createServerFn({ method: "POST" })
     return { recorded: Number(body.recorded) || 0, mints };
   });
 
+/* One collector holding the viewer's own card. */
+export interface ServerPackCardCollector {
+  userId: number;
+  username: string;
+  copies: number;
+  tier: ManiaCardTier | null;
+  serial: number | null;
+  firstPulledAt: number;
+  lastPulledAt: number;
+}
+
+export interface ServerPackCardCollectors {
+  userId: number;
+  owners: number;
+  copies: number;
+  collectors: ServerPackCardCollector[];
+  listed: number;
+}
+
+/* Who has pulled your maniacard, by name. The card owner is the login cookie's
+   viewer and nothing else, so this only ever lists the collectors of your own
+   card; the public endpoint beside it stays a count. Null when signed out or
+   with no backend configured.
+
+   Admin-gated while it is being tried out, the same way pack duels are: the
+   trigger on /packs is behind canUseAdminFeatures and this refuses anyone
+   else regardless. */
+export const fetchServerPackCardCollectors = createServerFn({ method: "GET" }).handler(
+  async (): Promise<ServerPackCardCollectors | null> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const { requireAdminAccess } = await import("./auth");
+    await requireAdminAccess("Card collectors");
+    const { readCurrentAuth } = await import("./auth-server");
+    const auth = await readCurrentAuth();
+    if (!auth.viewer) return null;
+    const base = process.env.LIVE_BACKEND_URL?.trim().replace(/\/$/, "");
+    if (!base) return null;
+    const headers: HeadersInit = {};
+    if (process.env.LIVE_ADMIN_TOKEN) {
+      headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+    }
+    const response = await fetch(`${base}/api/packs/pulled-by/${auth.viewer.id}`, { headers });
+    if (!response.ok) throw new Error(`Card collectors fetch failed (${response.status}).`);
+    const body = (await response.json()) as Partial<ServerPackCardCollectors>;
+    const collectors: ServerPackCardCollector[] = (Array.isArray(body.collectors) ? body.collectors : [])
+      .map((raw: unknown) => {
+        const entry = raw as Partial<ServerPackCardCollector> | null;
+        const userId = Math.floor(Number(entry?.userId) || 0);
+        if (userId <= 0) return null;
+        const serial = Math.floor(Number(entry?.serial) || 0);
+        return {
+          userId,
+          username: typeof entry?.username === "string" && entry.username ? entry.username : `user ${userId}`,
+          copies: Math.max(0, Math.floor(Number(entry?.copies) || 0)),
+          tier: typeof entry?.tier === "string" ? (entry.tier as ManiaCardTier) : null,
+          serial: serial > 0 ? serial : null,
+          firstPulledAt: Math.floor(Number(entry?.firstPulledAt) || 0),
+          lastPulledAt: Math.floor(Number(entry?.lastPulledAt) || 0),
+        };
+      })
+      .filter((entry): entry is ServerPackCardCollector => entry !== null);
+    return {
+      userId: auth.viewer.id,
+      owners: Math.max(0, Math.floor(Number(body.owners) || 0)),
+      copies: Math.max(0, Math.floor(Number(body.copies) || 0)),
+      collectors,
+      listed: Math.max(0, Math.floor(Number(body.listed) || 0)),
+    };
+  },
+);
+
 export type ServerPackRecycleMode = "duplicates" | "whole" | "all_duplicates" | "whole_matching";
 
 export const recycleServerPackCollection = createServerFn({ method: "POST" })

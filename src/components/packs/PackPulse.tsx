@@ -12,6 +12,9 @@ import {
 import { formatPreciseTimeAgo } from "#/lib/format";
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "#/lib/maniacard";
 import { CountryFlag } from "../ui/CountryFlag";
+import { useAuth } from "#/lib/auth-context";
+import { canUseAdminFeatures } from "#/lib/auth-shared";
+import { CardCollectorsButton } from "./CardCollectors";
 
 /* People spam-open packs all day, so the feed is an ambient live ticker at
    the page's edge, not a section of the page: every pull that lands while you
@@ -143,7 +146,27 @@ function tierAccentRgb(tier: string | null): string {
    watching other people's pulls land while your own cards flip is half the
    fun); only the your-card fun fact steps aside, since it is static trivia
    that would just compete with the cards. */
+function PulledStatsLine({ stats }: { stats: LivePackPulledStats }) {
+  return (
+    <>
+      <Users className="mt-px h-3 w-3 shrink-0" aria-hidden="true" />
+      <span className="tabular-nums">
+        {stats.owners === 1
+          ? "1 person has your card"
+          : `${stats.owners.toLocaleString()} people have your card`}
+        {stats.pullEvents7d > 0 && (
+          <span className="text-osu-f1/60">, pulled {stats.pullEvents7d.toLocaleString()}x this week</span>
+        )}
+      </span>
+    </>
+  );
+}
+
 export function PackPulse({ viewerId, revealing = false }: { viewerId: number | null; revealing?: boolean }) {
+  // The collector list is an admin-only prototype for now; the fun fact
+  // itself stays visible to everyone.
+  const canSeeCollectors = canUseAdminFeatures(useAuth());
+
   // Resume from the saved rail, dropping whatever expired while away. On a
   // full page load this is empty (matching the server-rendered HTML); the
   // sessionStorage restore happens post-hydration in the effect below.
@@ -349,20 +372,21 @@ export function PackPulse({ viewerId, revealing = false }: { viewerId: number | 
         </AnimatePresence>
       </div>
 
-      {/* Fun fact, top right: how the community holds your own card. */}
+      {/* Fun fact, top right: how the community holds your own card. Admins
+          can click it to put names to the number, which is admin-gated while
+          the collector list is being tried out; for everyone else the line
+          stays what it always was, a fact you cannot open. */}
       {showPulledStats && pulledStats && (
         <div className={`pointer-events-none absolute right-12 top-[84px] z-20 hidden max-w-[200px] ${revealing ? "" : "min-[1450px]:block"}`}>
-          <div className="flex items-start justify-end gap-1.5 text-right text-[11px] leading-snug text-osu-f1/80">
-            <Users className="mt-px h-3 w-3 shrink-0" aria-hidden="true" />
-            <span className="tabular-nums">
-              {pulledStats.owners === 1
-                ? "1 person has your card"
-                : `${pulledStats.owners.toLocaleString()} people have your card`}
-              {pulledStats.pullEvents7d > 0 && (
-                <span className="text-osu-f1/60">, pulled {pulledStats.pullEvents7d.toLocaleString()}x this week</span>
-              )}
-            </span>
-          </div>
+          {canSeeCollectors ? (
+            <CardCollectorsButton className="pointer-events-auto flex items-start justify-end gap-1.5 text-right text-[11px] leading-snug text-osu-f1/80 transition-colors hover:text-white cursor-pointer">
+              <PulledStatsLine stats={pulledStats} />
+            </CardCollectorsButton>
+          ) : (
+            <div className="flex items-start justify-end gap-1.5 text-right text-[11px] leading-snug text-osu-f1/80">
+              <PulledStatsLine stats={pulledStats} />
+            </div>
+          )}
         </div>
       )}
     </>

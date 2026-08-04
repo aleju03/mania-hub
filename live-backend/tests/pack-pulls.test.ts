@@ -12,10 +12,12 @@ import { routeHttp } from "../src/http/snapshots.js";
 import { JobQueue } from "../src/jobs/queue.js";
 import { LiveEventLog } from "../src/live/event-log.js";
 import {
+  getPackCardCollectors,
   getPackCardStats,
   getPackPulledStats,
   getSharedPackCard,
   listRecentPackPulls,
+  PACK_CARD_COLLECTORS_LISTED,
   PACK_PULL_OWNER_HOURLY_CAP,
   recordPackPullEvents,
 } from "../src/features/pack-pulls.js";
@@ -59,14 +61,26 @@ async function seedCollectionCard(
   cardUserId: number,
   copies = 1,
   tier = "rare",
+  firstPulledAt = 1000,
+  lastPulledAt = 2000,
 ): Promise<void> {
   await exec(
     db,
     `insert into pack_collection_cards (
        owner_user_id, card_user_id, card_key, username, avatar_url, country_code, tier, tier_label, skills_json,
        pp, global_rank, copies, recycled_copies, first_pulled_at, last_pulled_at, updated_at
-     ) values (?, ?, ?, ?, '', 'CR', ?, ?, null, 1000, 500, ?, 0, 1000, 2000, 2000)`,
-    [ownerUserId, cardUserId, packCardKey(cardUserId, tier), `player${cardUserId}`, tier, tier, copies],
+     ) values (?, ?, ?, ?, '', 'CR', ?, ?, null, 1000, 500, ?, 0, ?, ?, 2000)`,
+    [
+      ownerUserId,
+      cardUserId,
+      packCardKey(cardUserId, tier),
+      `player${cardUserId}`,
+      tier,
+      tier,
+      copies,
+      firstPulledAt,
+      lastPulledAt,
+    ],
   );
 }
 
@@ -177,6 +191,87 @@ describe("getPackPulledStats", () => {
   it("returns zeros for a never-pulled player", async () => {
     const stats = await getPackPulledStats(db, 12345);
     expect(stats).toEqual({ userId: 12345, owners: 0, copies: 0, pullEvents7d: 0, lastPulledAt: null });
+  });
+});
+
+describe("getPackCardCollectors", () => {
+  it("lists holders oldest-first with their names, copies and serials", async () => {
+    await seedCollectionCard(OWNER_ID, CARD_A, 2, "rare", 5_000, 9_000);
+    await seedCollectionCard(OTHER_OWNER_ID, CARD_A, 1, "rare", 1_000, 1_000);
+    await seedCollectionCard(OWNER_ID, CARD_B, 1, "rare", 500, 500); // another card, ignored
+    // The early holder is a tracked player (live name); the later one is not,
+    // so their name comes from the pull log.
+    await exec(
+      db,
+      "insert into users (user_id, username, avatar_url, country_code, updated_at) values (?, 'tracked', '', 'CR', '2026-01-01')",
+      [OTHER_OWNER_ID],
+    );
+    await recordPackPullEvents(db, OWNER_ID, "opener", "standard", [pullCard(CARD_A, "rare")], 9_000);
+
+    const report = await getPackCardCollectors(db, CARD_A);
+    expect(report.owners).toBe(2);
+    expect(report.copies).toBe(3);
+    expect(report.collectors).toHaveLength(2);
+    expect(report.collectors[0]).toMatchObject({
+      userId: OTHER_OWNER_ID,
+      username: "tracked",
+      copies: 1,
+      tier: "rare",
+      // Only the pull log hands out serials, and this holder never pulled
+      // through it.
+      serial: null,
+      firstPulledAt: 1_000,
+    });
+    expect(report.collectors[1]).toMatchObject({
+      userId: OWNER_ID,
+      username: "opener",
+      copies: 2,
+      serial: 1,
+      firstPulledAt: 5_000,
+      lastPulledAt: 9_000,
+    });
+  });
+
+  it("folds an owner's ordinary card and GOAT into one holder, keeping the better tier", async () => {
+    await seedCollectionCard(OWNER_ID, CARD_A, 1, "rare", 5_000, 5_000);
+    await seedCollectionCard(OWNER_ID, CARD_A, 2, "goat", 8_000, 8_000);
+    await recordPackPullEvents(db, OWNER_ID, "opener", "legend", [pullCard(CARD_A, "goat")], 8_000);
+
+    const report = await getPackCardCollectors(db, CARD_A);
+    expect(report.owners).toBe(1);
+    expect(report.collectors).toHaveLength(1);
+    expect(report.collectors[0]).toMatchObject({
+      userId: OWNER_ID,
+      copies: 3,
+      tier: "goat",
+      serial: 1,
+      firstPulledAt: 5_000,
+      lastPulledAt: 8_000,
+    });
+  });
+
+  it("truncates the list but keeps the totals exact", async () => {
+    for (let i = 0; i < 5; i++) {
+      await seedCollectionCard(1_000 + i, CARD_A, 1, "rare", 1_000 + i, 1_000 + i);
+    }
+    const report = await getPackCardCollectors(db, CARD_A, 2);
+    expect(report.owners).toBe(5);
+    expect(report.copies).toBe(5);
+    expect(report.listed).toBe(2);
+    // Oldest first, so a truncated list keeps whoever got there first.
+    expect(report.collectors.map((collector) => collector.userId)).toEqual([1_000, 1_001]);
+  });
+
+  it("returns an empty report for a card nobody holds", async () => {
+    await seedCollectionCard(OWNER_ID, CARD_A, 0); // fully recycled tombstone
+    const report = await getPackCardCollectors(db, CARD_A);
+    expect(report).toEqual({
+      userId: CARD_A,
+      owners: 0,
+      copies: 0,
+      collectors: [],
+      listed: PACK_CARD_COLLECTORS_LISTED,
+    });
   });
 });
 
@@ -375,6 +470,20 @@ describe("pack pull endpoints", () => {
   it("GET /api/packs/card-stats without ids is a 400", async () => {
     const response = await call(mockReq("GET", "/api/packs/card-stats?ids=abc"));
     expect(response.status).toBe(400);
+  });
+
+  it("GET /api/packs/pulled-by/{id} needs the admin token and lists the holders", async () => {
+    await seedCollectionCard(OWNER_ID, CARD_A, 2);
+    const denied = await call(mockReq("GET", `/api/packs/pulled-by/${CARD_A}`));
+    expect(denied.status).toBe(401);
+
+    const allowed = await call(mockReq("GET", `/api/packs/pulled-by/${CARD_A}`, ADMIN));
+    expect(allowed.status).toBe(200);
+    expect(allowed.body.owners).toBe(1);
+    expect(allowed.body.collectors[0].userId).toBe(OWNER_ID);
+
+    const invalid = await call(mockReq("GET", "/api/packs/pulled-by/0", ADMIN));
+    expect(invalid.status).toBe(400);
   });
 
   it("GET /api/packs/pulled-card/{owner}/{card} serves the share payload and 404s when absent", async () => {
