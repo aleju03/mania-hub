@@ -126,6 +126,31 @@ describe("dealing the first board", () => {
   });
 });
 
+describe("the hard mode", () => {
+  it("re-deals when the pool switches", async () => {
+    render(<StreakGame onExit={() => {}} />);
+    await settle();
+    await screen.findByText(/have more or fewer/);
+    expect(sfx.playCardDraw).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Anyone" }));
+    await settle();
+    expect(screen.getByRole("button", { name: "Anyone" }).getAttribute("aria-pressed")).toBe("true");
+    // A fresh deal, not the old board with a different label on it.
+    expect(sfx.playCardDraw).toHaveBeenCalledTimes(2);
+  });
+
+  it("locks the switch while a streak is live", async () => {
+    render(<StreakGame onExit={() => {}} />);
+    await settle();
+
+    fireEvent.click(await screen.findByRole("button", { name: /more plays/i }));
+    // One right answer on the board: the run would be dumped by a switch, so
+    // the chips wait for it to end.
+    expect((screen.getByRole("button", { name: "Anyone" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
 describe("the sound of a guess", () => {
   it("climbs on a right answer and thuds on a wrong one", async () => {
     render(<StreakGame onExit={() => {}} />);

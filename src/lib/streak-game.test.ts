@@ -14,6 +14,9 @@ import {
   STREAK_POOL_PLAYERS,
   streakMetricValue,
   streakPageCount,
+  streakPageSlice,
+  streakPoolEntries,
+  streakRankPage,
   streakShardValue,
   toStreakPlayer,
   type StreakPlayerExtras,
@@ -73,6 +76,30 @@ describe("streak draw", () => {
     expect(streakPageCount(10_000)).toBe(STREAK_POOL_PLAYERS / STREAK_PAGE_SIZE);
     expect(streakPageCount(120)).toBe(3);
     expect(streakPageCount(0)).toBe(1);
+  });
+
+  it("opens the whole snapshot to the hard mode", () => {
+    expect(streakPageCount(10_000, "anyone")).toBe(200);
+    expect(pickUnloadedPage(10_000, new Set(), () => 0.999999, "anyone")).toBe(200);
+    // The classic game still stops at the pool depth.
+    expect(pickUnloadedPage(10_000, new Set(), () => 0.999999)).toBe(STREAK_POOL_PLAYERS / STREAK_PAGE_SIZE);
+    // A snapshot smaller than the depth plays the same in both.
+    expect(streakPageCount(120, "anyone")).toBe(3);
+  });
+
+  it("keeps a hard run's deep pages out of a top-1000 draw", () => {
+    const entries = [entry(3), entry(1_200), entry(5_000)];
+    expect(streakPoolEntries(entries, "top").map((e) => e.rank)).toEqual([3]);
+    expect(streakPoolEntries(entries, "anyone")).toHaveLength(3);
+  });
+
+  it("aims the hard draw at the page holding a pool position", () => {
+    expect(streakRankPage(1)).toBe(1);
+    expect(streakRankPage(50)).toBe(1);
+    expect(streakRankPage(51)).toBe(2);
+    expect(streakRankPage(9_001)).toBe(181);
+    // Page 24 covers positions 1151-1200: only its own entries qualify.
+    expect(streakPageSlice([entry(3), entry(1_200), entry(5_000)], 24).map((e) => e.rank)).toEqual([1_200]);
   });
 
   it("hands out a page nobody has loaded, then says so when they all are", () => {

@@ -27,11 +27,15 @@ import {
   STREAK_PAGE_SIZE,
   STREAK_REFILL_THRESHOLD,
   streakMetricValue,
+  streakPageSlice,
+  streakPoolEntries,
+  streakRankPage,
   streakShardValue,
   writeBestStreak,
   type StreakGuess,
   type StreakMetric,
   type StreakPlayer,
+  type StreakPool,
 } from "#/lib/streak-game";
 import { buildManiaCardRenderData } from "../player/maniacard3d/renderData";
 import { avatarImageSrc } from "../ui/Avatar";
@@ -260,6 +264,12 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
      the page knows not to promise shards. */
   const [earned, setEarned] = useState<number | null>(null);
   const [allowance, setAllowance] = useState<{ remainingToday: number; cap: number } | null>(null);
+  /* Which slice of the pool the run draws from: the top 1000 the community can
+     argue about, or the hard mode's whole tracked snapshot. Shadowed in a ref
+     because the deal pipeline reads it from callbacks that would otherwise
+     capture a stale value mid-run. */
+  const [mode, setMode] = useState<StreakPool>("top");
+  const modeRef = useRef<StreakPool>("top");
 
   /* The pool the game draws from, loaded a page at a time. Kept in a ref
      because it is bookkeeping the render never reads. */
@@ -283,7 +293,7 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
      allowed to touch state now. */
   const deal = useRef(0);
 
-  useEffect(() => setBest(readBestStreak()), []);
+  useEffect(() => setBest(readBestStreak(mode)), [mode]);
 
   useEffect(() => {
     if (!auth.viewer) {
@@ -295,9 +305,7 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
       .catch(() => setAllowance(null));
   }, [auth.viewer]);
 
-  const loadPage = useCallback(async (): Promise<boolean> => {
-    const page = pickUnloadedPage(pool.current.total, pool.current.loaded, Math.random);
-    if (page === null) return false;
+  const fetchPage = useCallback(async (page: number): Promise<boolean> => {
     const snapshot = await fetchLiveGlobalRankings({ page, pageSize: STREAK_PAGE_SIZE, sort: "rank", dir: "desc" });
     // Awaited so every player is picked with their full question set in hand;
     // a failure inside just narrows the questions to the snapshot's two.
@@ -308,21 +316,45 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
     return snapshot.ranking.length > 0;
   }, []);
 
+  const loadPage = useCallback(async (): Promise<boolean> => {
+    const page = pickUnloadedPage(pool.current.total, pool.current.loaded, Math.random, modeRef.current);
+    if (page === null) return false;
+    return fetchPage(page);
+  }, [fetchPage]);
+
   /* The next player on the board. Pulls another page in when the loaded ones
      are running thin, and once the whole pool has been seen, lets it come
      round again rather than ending a run that was going well. */
   const nextCard = useCallback(async (keep?: number): Promise<StreakCard | null> => {
-    const unseen = pool.current.entries.filter((entry) => !seen.current.has(entry.user.id)).length;
-    if (unseen < STREAK_REFILL_THRESHOLD) await loadPage();
-    let player = pickStreakPlayer(pool.current.entries, seen.current, Math.random, undefined, metricsCache);
+    let player: StreakPlayer | null = null;
+    /* The hard mode's draw is aimed, not sifted: a uniformly random pool
+       position, then the page that holds it. Picking from the pages already
+       loaded would favour the top, since those load first (and the classic
+       game shares them). One page fetch per round is the price of "literally
+       anyone", and the backend answers it from its own snapshot. */
+    if (modeRef.current === "anyone" && pool.current.total > 0) {
+      const page = streakRankPage(1 + Math.floor(Math.random() * pool.current.total));
+      if (!pool.current.loaded.has(page)) await fetchPage(page).catch(() => false);
+      player = pickStreakPlayer(streakPageSlice(pool.current.entries, page), seen.current, Math.random, undefined, metricsCache);
+    }
     if (!player) {
-      seen.current = new Set(keep ? [keep] : []);
-      player = pickStreakPlayer(pool.current.entries, seen.current, Math.random, undefined, metricsCache);
+      // The classic draw, and the hard mode's fallback when its aimed page
+      // failed to load or had nobody left: whoever is loaded, within the
+      // mode's slice of the pool, so rank-8000 pages never deal into a
+      // top-1000 game.
+      const drawable = () => streakPoolEntries(pool.current.entries, modeRef.current);
+      const unseen = drawable().filter((entry) => !seen.current.has(entry.user.id)).length;
+      if (unseen < STREAK_REFILL_THRESHOLD) await loadPage();
+      player = pickStreakPlayer(drawable(), seen.current, Math.random, undefined, metricsCache);
+      if (!player) {
+        seen.current = new Set(keep ? [keep] : []);
+        player = pickStreakPlayer(drawable(), seen.current, Math.random, undefined, metricsCache);
+      }
     }
     if (!player) return null;
     seen.current.add(player.userId);
     return mintStreakCard(player);
-  }, [loadPage]);
+  }, [fetchPage, loadPage]);
 
   const start = useCallback(async () => {
     const token = (deal.current += 1);
@@ -387,12 +419,24 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /* Changing the pool re-deals, so it is only offered while there is nothing
+     on the line: switching mid-streak would either dump the run or let a
+     top-1000 streak keep growing against easier or harder cards than it was
+     earned on. */
+  const switchMode = useCallback((next: StreakPool) => {
+    if (next === modeRef.current || dealing) return;
+    modeRef.current = next;
+    setMode(next);
+    void start();
+  }, [dealing, start]);
+
   /* Cashing in happens at the end of a run rather than per correct guess, so
      one claim covers the whole streak. */
   const claim = useCallback((finalStreak: number, ending: "wrong" | "cashout") => {
     track("streak_run", {
       streak: finalStreak,
       ended: ending,
+      pool: modeRef.current,
       streak_username: auth.viewer?.username,
     });
     if (!auth.viewer || finalStreak <= 0) return;
@@ -422,7 +466,7 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
         setNewBest(streak > best);
         if (streak > best) {
           setBest(streak);
-          writeBestStreak(streak);
+          writeBestStreak(streak, modeRef.current);
         }
         claim(streak, "wrong");
         busy.current = false;
@@ -471,7 +515,7 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
     setNewBest(streak > best);
     if (streak > best) {
       setBest(streak);
-      writeBestStreak(streak);
+      writeBestStreak(streak, modeRef.current);
     }
     claim(streak, "cashout");
   }, [auth.viewer, best, claim, over, streak]);
@@ -518,6 +562,32 @@ export function StreakGame({ onExit }: { onExit: () => void }) {
                 )}
               </div>
               <div className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-osu-f1">
+                {/* The pool the run draws from. Locked while a streak is
+                    live, since switching re-deals and a streak should not be
+                    carried between games of different difficulty. */}
+                <div className="flex items-center gap-1.5">
+                  {([["top", "Top 1000"], ["anyone", "Anyone"]] as const).map(([value, label]) => {
+                    const locked = dealing || (!over && streak > 0);
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => switchMode(value)}
+                        disabled={locked}
+                        aria-pressed={mode === value}
+                        className={`rounded-full border px-2.5 py-0.5 font-semibold transition-colors ${
+                          mode === value
+                            ? "border-osu-pink bg-osu-pink/15 text-white"
+                            : locked
+                              ? "border-osu-b3/30 text-osu-f1/60"
+                              : "border-osu-b3/40 text-osu-f1 hover:border-osu-pink/50 hover:text-white cursor-pointer"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
                 {!over && (
                   <span>
                     next bonus at {nextStreakMilestone(streak).at} in a row

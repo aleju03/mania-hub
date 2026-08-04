@@ -22,7 +22,10 @@ import type { LiveGlobalRankingEntry } from "./live-backend";
 
 /* How deep the game draws. The top of the pool is the part the community can
    actually argue about; too deep and a name means nothing and the read
-   turns into a coin flip. */
+   turns into a coin flip. Which is exactly what the hard mode sells: "anyone"
+   draws from the entire tracked snapshot, where most names mean nothing and
+   the guess has to come off rank, country and instinct alone. */
+export type StreakPool = "top" | "anyone";
 export const STREAK_POOL_PLAYERS = 1000;
 export const STREAK_PAGE_SIZE = 50;
 
@@ -30,7 +33,15 @@ export const STREAK_PAGE_SIZE = 50;
    pool, and repeats read as the game running out rather than as a challenge. */
 export const STREAK_REFILL_THRESHOLD = 12;
 
+/* One best per pool: a 20-streak against the top 1000 and a 20-streak against
+   the whole snapshot are different achievements, and overwriting one with the
+   other would erase whichever game someone is actually good at. */
 export const STREAK_BEST_STORAGE_KEY = "mania-hub-streak-best-v1";
+export const STREAK_BEST_ANYONE_STORAGE_KEY = "mania-hub-streak-best-anyone-v1";
+
+function bestStreakKey(pool: StreakPool): string {
+  return pool === "anyone" ? STREAK_BEST_ANYONE_STORAGE_KEY : STREAK_BEST_STORAGE_KEY;
+}
 
 /* Mirrors the backend's milestone spacing so the board can say what the next
    one is worth while you are still playing for it. What a finished run
@@ -251,22 +262,60 @@ export function streakMetricValue(player: StreakPlayer, metric: StreakMetric): n
   }
 }
 
-/* The pages the game may draw from: as much of the pool as the depth allows,
-   and never more than the snapshot actually holds. */
-export function streakPageCount(total: number): number {
-  const depth = Math.min(STREAK_POOL_PLAYERS, Math.max(0, Math.floor(total)));
+/* The pages the game may draw from: as much of the pool as the mode's depth
+   allows, and never more than the snapshot actually holds. */
+export function streakPageCount(total: number, pool: StreakPool = "top"): number {
+  const depth = Math.min(
+    pool === "anyone" ? Number.MAX_SAFE_INTEGER : STREAK_POOL_PLAYERS,
+    Math.max(0, Math.floor(total)),
+  );
   return Math.max(1, Math.ceil(depth / STREAK_PAGE_SIZE));
 }
 
 /* A page nobody has loaded yet, or null once they all are. Random rather than
    sequential so two runs in a row do not open on the same fifty players. */
-export function pickUnloadedPage(total: number, loaded: ReadonlySet<number>, rng: () => number): number | null {
+export function pickUnloadedPage(
+  total: number,
+  loaded: ReadonlySet<number>,
+  rng: () => number,
+  pool: StreakPool = "top",
+): number | null {
   const pages: number[] = [];
-  for (let page = 1; page <= streakPageCount(total); page += 1) {
+  for (let page = 1; page <= streakPageCount(total, pool); page += 1) {
     if (!loaded.has(page)) pages.push(page);
   }
   if (pages.length === 0) return null;
   return pages[Math.min(pages.length - 1, Math.floor(rng() * pages.length))];
+}
+
+/* Where the hard mode aims its next draw: the page holding a uniformly random
+   pool position, so a rank-9000 nobody and a rank-12 name are equally likely.
+   Drawing from whatever pages happen to be loaded would quietly favour the
+   top, since those pages load first. */
+export function streakRankPage(rank: number): number {
+  return Math.max(1, Math.ceil(rank / STREAK_PAGE_SIZE));
+}
+
+/* Just that page's entries, so a pick aimed at it stays uniform instead of
+   being diluted by everyone loaded before. */
+export function streakPageSlice(
+  entries: readonly LiveGlobalRankingEntry[],
+  page: number,
+): readonly LiveGlobalRankingEntry[] {
+  const first = (page - 1) * STREAK_PAGE_SIZE + 1;
+  const last = page * STREAK_PAGE_SIZE;
+  return entries.filter((entry) => entry.rank >= first && entry.rank <= last);
+}
+
+/* The loaded entries a mode is allowed to draw from. Pages are shared between
+   the two games (they come off the same rankings pagination), so a hard run's
+   deep pages must not leak rank-8000 names into a top-1000 draw. */
+export function streakPoolEntries(
+  entries: readonly LiveGlobalRankingEntry[],
+  pool: StreakPool,
+): readonly LiveGlobalRankingEntry[] {
+  if (pool === "anyone") return entries;
+  return entries.filter((entry) => entry.rank <= STREAK_POOL_PLAYERS);
 }
 
 /* The next player to put on the board: anyone loaded who has not appeared in
@@ -328,20 +377,20 @@ export function formatStreakValue(value: number, metric: StreakMetric): string {
   return Math.round(value).toLocaleString();
 }
 
-export function readBestStreak(): number {
+export function readBestStreak(pool: StreakPool = "top"): number {
   if (typeof window === "undefined") return 0;
   try {
-    const stored = Number(window.localStorage.getItem(STREAK_BEST_STORAGE_KEY));
+    const stored = Number(window.localStorage.getItem(bestStreakKey(pool)));
     return Number.isFinite(stored) && stored > 0 ? Math.floor(stored) : 0;
   } catch {
     return 0;
   }
 }
 
-export function writeBestStreak(streak: number): void {
+export function writeBestStreak(streak: number, pool: StreakPool = "top"): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(STREAK_BEST_STORAGE_KEY, String(Math.max(0, Math.floor(streak))));
+    window.localStorage.setItem(bestStreakKey(pool), String(Math.max(0, Math.floor(streak))));
   } catch {
     // A best streak is bragging rights on one device; a full quota is not
     // worth interrupting the game for.
