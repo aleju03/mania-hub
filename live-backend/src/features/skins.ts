@@ -35,6 +35,14 @@ export interface SkinKeymodePreview extends SkinScreenshot {
 // .osk, which is how an uploader ships an update without republishing.
 export type SkinTokenScope = "previews" | "replace";
 
+// Who a published skin is for. 'public' is the catalog skin: browsable on
+// /skins, downloadable by anyone. 'private' is the uploader's own copy - it
+// never enters the list, only its owner reads its page or its .osk, and the
+// only thing anyone else ever gets is the filtered asset bundle a replay of
+// theirs needs to draw. Independent of status, which stays the publish and
+// moderation axis.
+export type SkinVisibility = "public" | "private";
+
 export interface SkinRow {
   id: string;
   slug: string | null;
@@ -49,6 +57,10 @@ export interface SkinRow {
   accentColor: string | null;
   downloadCount: number;
   status: "pending" | "published" | "hidden";
+  visibility: SkinVisibility;
+  // Capability behind a private skin's stored objects: part of every R2 key it
+  // writes and the ?t= the file endpoint demands. Null on public skins.
+  privateSecret: string | null;
   uploadToken: string | null;
   tokenExpiresAt: string | null;
   tokenScope: SkinTokenScope | null;
@@ -93,6 +105,7 @@ export interface SkinSummary {
   oskSha256: string | null;
   oskUpdatedAt: string | null;
   status: "pending" | "published" | "hidden";
+  visibility: SkinVisibility;
   publishedAt: string | null;
 }
 
@@ -113,6 +126,10 @@ export type CreatePendingSkinResult =
 // pending rows are half-finished attempts (often the uploader's own retry) and
 // hidden ones are a moderation state that must not leak through a public
 // upload error. An owner who deletes a skin frees its hash with the row.
+// Private rows are excluded on both sides of the check: the answer names the
+// skin holding the bytes, which would expose a private upload to a stranger,
+// and a private copy of a skin already on the catalog is a legitimate thing to
+// keep (see the caller, which skips the check entirely for private uploads).
 export async function findPublishedSkinByOskSha256(
   db: Db,
   sha256: string,
@@ -122,7 +139,7 @@ export async function findPublishedSkinByOskSha256(
   const row = (await exec(
     db,
     `select id, slug, name, owner_username from skins
-     where osk_sha256 = ? and status = 'published' and id != ?
+     where osk_sha256 = ? and status = 'published' and visibility = 'public' and id != ?
      order by published_at asc limit 1`,
     [sha256, excludeId ?? ""],
   )).rows[0];
@@ -152,6 +169,9 @@ export async function createPendingSkin(
     // filling storage, and they would stop a seeding run at 30. The duplicate
     // guard still applies.
     bypassLimits?: boolean;
+    // 'private' keeps the finished skin off the catalog entirely; chosen in the
+    // upload form and changeable later from the skin's own page.
+    visibility?: SkinVisibility;
   },
 ): Promise<CreatePendingSkinResult> {
   const name = cleanText(input.name, SKIN_NAME_MAX_LENGTH);
@@ -160,7 +180,12 @@ export async function createPendingSkin(
   const author = cleanText(input.author ?? "", SKIN_AUTHOR_MAX_LENGTH) || null;
   const description = cleanMultilineText(input.description ?? "", SKIN_DESCRIPTION_MAX_LENGTH) || null;
 
-  if (input.oskSha256) {
+  const visibility: SkinVisibility = input.visibility === "private" ? "private" : "public";
+
+  // Keeping your own copy of a skin the catalog already carries is the point of
+  // a private upload, so the duplicate guard only stands in front of public
+  // ones.
+  if (input.oskSha256 && visibility === "public") {
     const duplicate = await findPublishedSkinByOskSha256(db, input.oskSha256.toLowerCase());
     if (duplicate) return { ok: false, error: "duplicate", duplicate };
   }
@@ -186,9 +211,10 @@ export async function createPendingSkin(
     db,
     `insert into skins (
        id, owner_user_id, owner_username, name, author, description, search_text,
-       status, upload_token, token_expires_at, created_at, updated_at
-     ) values (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`,
-    [id, input.ownerUserId, ownerUsername, name, author, description, buildSearchText(name, ownerUsername, author), token, expiresAt, now, now],
+       status, visibility, private_secret, upload_token, token_expires_at, created_at, updated_at
+     ) values (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)`,
+    [id, input.ownerUserId, ownerUsername, name, author, description, buildSearchText(name, ownerUsername, author),
+     visibility, visibility === "private" ? newPrivateSkinSecret() : null, token, expiresAt, now, now],
   );
   return { ok: true, id, token, expiresAt };
 }
@@ -320,7 +346,7 @@ export async function setSkinCoverKeymode(
   if (!entry) return { ok: false, error: "no_preview" };
   await attachSkinPreview(db, id, entry);
   const updated = await getSkin(db, id);
-  return updated ? { ok: true, skin: toSkinSummary(updated) } : { ok: false, error: "not_found" };
+  return updated ? { ok: true, skin: toSkinSummary(updated, { asOwner: true }) } : { ok: false, error: "not_found" };
 }
 
 export type RenameSkinResult =
@@ -349,7 +375,7 @@ export async function renameSkin(
     [name, buildSearchText(name, row.ownerUsername, row.author), nowIso(), id],
   );
   const updated = await getSkin(db, id);
-  return updated ? { ok: true, skin: toSkinSummary(updated) } : { ok: false, error: "not_found" };
+  return updated ? { ok: true, skin: toSkinSummary(updated, { asOwner: true }) } : { ok: false, error: "not_found" };
 }
 
 export type StartSkinEditResult =
@@ -407,7 +433,7 @@ export async function finishSkinEdit(db: Db, id: string, token: string): Promise
     [nowIso(), id],
   );
   const updated = await getSkin(db, id);
-  return updated ? { ok: true, skin: toSkinSummary(updated), staleKeys } : { ok: false, error: "not_found" };
+  return updated ? { ok: true, skin: toSkinSummary(updated, { asOwner: true }), staleKeys } : { ok: false, error: "not_found" };
 }
 
 // Drops the keymode previews of a skin whose new .osk no longer ships those
@@ -464,8 +490,10 @@ export async function finishSkin(db: Db, id: string, token: string): Promise<Fin
     [slug, now, now, id],
   );
   const published = await getSkin(db, id);
+  // The ticket holder is the uploader, so a private skin comes back whole -
+  // its own publish confirmation needs the page link and the file.
   return published
-    ? { ok: true, skin: toSkinSummary(published) }
+    ? { ok: true, skin: toSkinSummary(published, { asOwner: true }) }
     : { ok: false, error: "not_found" };
 }
 
@@ -529,6 +557,12 @@ export interface SkinsListQuery {
   pageSize?: number;
   includeHidden?: boolean;
   sort?: "newest" | "downloads";
+  // Whose private skins this list may carry. The browse grid passes nothing
+  // and stays public; the "your private skins" shelf passes the signed-in
+  // viewer, which the endpoint only trusts from an admin-token request.
+  privateOwnerUserId?: number | null;
+  // Restricts the list to that owner's private skins (the shelf itself).
+  onlyPrivate?: boolean;
 }
 
 export interface SkinsListResult {
@@ -543,6 +577,22 @@ export async function listSkins(db: Db, query: SkinsListQuery): Promise<SkinsLis
   const pageSize = Math.min(SKIN_LIST_MAX_PAGE_SIZE, Math.max(1, Math.floor(query.pageSize ?? 24)));
   const where = query.includeHidden ? ["status in ('published', 'hidden')"] : ["status = 'published'"];
   const args: InValue[] = [];
+
+  // Visibility gate. Without an owner the list is the public catalog; with one
+  // their private skins join it (or are all of it, for the shelf).
+  const privateOwner = Number.isInteger(query.privateOwnerUserId) && Number(query.privateOwnerUserId) > 0
+    ? Number(query.privateOwnerUserId)
+    : null;
+  if (query.onlyPrivate) {
+    if (privateOwner == null) return { skins: [], total: 0, page, pageSize };
+    where.push("visibility = 'private' and owner_user_id = ?");
+    args.push(privateOwner);
+  } else if (privateOwner != null) {
+    where.push("(visibility = 'public' or owner_user_id = ?)");
+    args.push(privateOwner);
+  } else {
+    where.push("visibility = 'public'");
+  }
 
   const q = query.q?.trim().toLowerCase() ?? "";
   if (q) {
@@ -569,18 +619,27 @@ export async function listSkins(db: Db, query: SkinsListQuery): Promise<SkinsLis
   )).rows;
 
   return {
-    skins: rows.map((row) => toSkinSummary(rowToSkin(row as Record<string, unknown>))),
+    // A private row is only ever in here because it belongs to the viewer the
+    // caller vouched for, so it serializes with its capability URLs attached -
+    // stated as an ownership check rather than inherited from the query, so a
+    // future filter cannot quietly widen who gets the whole skin.
+    skins: rows.map((row) => {
+      const skin = rowToSkin(row as Record<string, unknown>);
+      return toSkinSummary(skin, { asOwner: privateOwner != null && skin.ownerUserId === privateOwner });
+    }),
     total: Number(totalRow?.total) || 0,
     page,
     pageSize,
   };
 }
 
-// Counts a download and hands back the redirect target. Only published skins
-// count (and resolve): hidden or pending ones return null so the endpoint 404s.
+// Counts a download and hands back the redirect target. Only published public
+// skins count (and resolve): hidden, pending or private ones return null so the
+// endpoint 404s. A private skin has no counted download at all - its owner
+// fetches the file through the capability URL on their own page.
 export async function recordSkinDownload(db: Db, id: string): Promise<string | null> {
   const row = await getSkin(db, id);
-  if (!row || row.status !== "published" || !row.oskUrl) return null;
+  if (!row || row.status !== "published" || row.visibility !== "public" || !row.oskUrl) return null;
   await exec(db, "update skins set download_count = download_count + 1 where id = ?", [id]);
   return row.oskUrl;
 }
@@ -595,6 +654,52 @@ export async function deleteSkin(db: Db, id: string): Promise<{ keys: string[] }
   if (!row) return null;
   await exec(db, "delete from skins where id = ?", [id]);
   return { keys: storageKeysOf(row) };
+}
+
+// A private skin's objects live under a key segment nobody can guess, and the
+// same string is the ?t= that unlocks them. 24 random bytes, rotated on every
+// turn to private so a secret handed out before a public spell stops working.
+export function newPrivateSkinSecret(): string {
+  return crypto.randomBytes(24).toString("base64url");
+}
+
+export type SetSkinVisibilityResult =
+  | { ok: true; skin: SkinRow; changed: boolean }
+  | { ok: false; error: "not_found" | "forbidden" };
+
+// Flips a published skin between the catalog and the uploader's own shelf.
+// Turning private mints a fresh secret; the caller then moves the .osk onto a
+// key built from it (moveSkinOskKey) so the object a public URL already
+// pointed at stops resolving. ownerUserId null is the admin path.
+export async function setSkinVisibility(
+  db: Db,
+  id: string,
+  visibility: SkinVisibility,
+  ownerUserId: number | null,
+): Promise<SetSkinVisibilityResult> {
+  const row = await getSkin(db, id);
+  if (!row || row.status === "pending") return { ok: false, error: "not_found" };
+  if (ownerUserId != null && row.ownerUserId !== ownerUserId) return { ok: false, error: "forbidden" };
+  if (row.visibility === visibility) return { ok: true, skin: row, changed: false };
+  const secret = visibility === "private" ? newPrivateSkinSecret() : null;
+  await exec(
+    db,
+    "update skins set visibility = ?, private_secret = ?, updated_at = ? where id = ?",
+    [visibility, secret, nowIso(), id],
+  );
+  const updated = await getSkin(db, id);
+  return updated ? { ok: true, skin: updated, changed: true } : { ok: false, error: "not_found" };
+}
+
+// Records the .osk's new home after the caller has moved the object in R2.
+// Only the storage columns move: the file is the same build, so keymodes,
+// hash and osk_updated_at all stay as they were.
+export async function moveSkinOskKey(db: Db, id: string, patch: { key: string; url: string }): Promise<void> {
+  await exec(
+    db,
+    "update skins set osk_key = ?, osk_url = ?, updated_at = ? where id = ?",
+    [patch.key, patch.url, nowIso(), id],
+  );
 }
 
 export async function setSkinHidden(db: Db, id: string, hidden: boolean): Promise<boolean> {
@@ -618,8 +723,16 @@ export async function listExpiredPendingSkins(db: Db, cutoffIso: string): Promis
   });
 }
 
-export function toSkinSummary(row: SkinRow): SkinSummary {
-  return {
+// The wire shape of a skin. A private skin only ever leaves the server whole
+// for its uploader (asOwner), who gets its images and .osk carrying the ?t=
+// capability their browser needs to fetch them back. For everyone else a
+// private row is stripped down to what a replay credit shows - name, author,
+// keymodes, accent - with every URL and every download-shaped field dropped,
+// so the redaction lives here rather than in each endpoint that serves a skin.
+export function toSkinSummary(row: SkinRow, options?: { asOwner?: boolean }): SkinSummary {
+  const previews = row.previews.map(({ keys, url, width, height }) => ({ keys, url, width, height }));
+  const screenshots = row.screenshots.map(({ url, width, height }) => ({ url, width, height }));
+  const summary: SkinSummary = {
     id: row.id,
     slug: row.slug,
     name: row.name,
@@ -633,15 +746,61 @@ export function toSkinSummary(row: SkinRow): SkinSummary {
     previewUrl: row.previewUrl,
     previewWidth: row.previewWidth,
     previewHeight: row.previewHeight,
-    previews: row.previews.map(({ keys, url, width, height }) => ({ keys, url, width, height })),
-    screenshots: row.screenshots.map(({ url, width, height }) => ({ url, width, height })),
+    previews,
+    screenshots,
     oskUrl: row.oskUrl,
     oskSizeBytes: row.oskSizeBytes,
     oskSha256: row.oskSha256,
     oskUpdatedAt: row.oskUpdatedAt,
     status: row.status,
+    visibility: row.visibility,
     publishedAt: row.publishedAt,
   };
+  if (row.visibility !== "private") return summary;
+  if (options?.asOwner) {
+    const sign = (url: string | null) => signPrivateSkinUrl(url, row.privateSecret);
+    return {
+      ...summary,
+      previewUrl: sign(summary.previewUrl),
+      previews: previews.map((preview) => ({ ...preview, url: sign(preview.url) ?? preview.url })),
+      screenshots: screenshots.map((shot) => ({ ...shot, url: sign(shot.url) ?? shot.url })),
+      oskUrl: sign(summary.oskUrl),
+    };
+  }
+  return {
+    ...summary,
+    // A private skin has no page to link to and no bytes to hand out, so
+    // nothing that addresses either travels with it.
+    slug: null,
+    description: null,
+    downloadCount: 0,
+    previewUrl: null,
+    previewWidth: null,
+    previewHeight: null,
+    previews: [],
+    screenshots: [],
+    oskUrl: null,
+    oskSizeBytes: null,
+    oskSha256: null,
+  };
+}
+
+// Appends the private skin's capability to a URL the backend itself serves.
+// Public-bucket URLs never appear on a private skin (its objects are written
+// under a secret key prefix through the streaming endpoint), so a URL that is
+// not ours is left alone rather than leaking the secret to another origin.
+function signPrivateSkinUrl(url: string | null, secret: string | null): string | null {
+  if (!url || !secret) return url;
+  if (!url.includes("/api/skins/file/")) return url;
+  return `${url}${url.includes("?") ? "&" : "?"}t=${encodeURIComponent(secret)}`;
+}
+
+// Whether a request carrying this ?t= may read a private skin's stored
+// objects. Public skins have no secret and need no capability.
+export function privateSkinSecretMatches(row: SkinRow, provided: string | null): boolean {
+  if (row.visibility !== "private") return true;
+  if (!row.privateSecret || !provided) return false;
+  return tokenMatches(row.privateSecret, provided);
 }
 
 function storageKeysOf(row: SkinRow): string[] {
@@ -663,6 +822,8 @@ function rowToSkin(row: Record<string, unknown>): SkinRow {
     accentColor: textOrNull(row.accent_color),
     downloadCount: Math.max(0, Math.floor(Number(row.download_count) || 0)),
     status,
+    visibility: row.visibility === "private" ? "private" : "public",
+    privateSecret: textOrNull(row.private_secret),
     uploadToken: textOrNull(row.upload_token),
     tokenExpiresAt: textOrNull(row.token_expires_at),
     tokenScope: row.token_scope === "replace" ? "replace" : row.token_scope === "previews" ? "previews" : null,

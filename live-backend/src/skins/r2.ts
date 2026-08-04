@@ -76,6 +76,30 @@ export function skinScreenshotKey(id: string, index: number, ext: string): strin
   return `${SKINS_PREFIX}${safeId(id)}/shot-${Math.max(0, Math.floor(index))}.${safeExt(ext)}`;
 }
 
+// Where a private skin's objects go: the same key with the skin's secret as an
+// extra folder. The bucket has a public base URL, so a key derivable from the
+// skin id alone would be fetchable by anyone who learns the id from a replay;
+// this makes the whole path unguessable, and the streaming endpoint still
+// resolves it (it matches keys by their last segment, then checks the ?t=).
+// A key that already carries a secret folder gets it replaced rather than
+// nested: a skin can go private, public and private again, minting a new
+// secret each time.
+export function privateSkinKey(key: string, secret: string): string {
+  const parts = key.split("/");
+  const filename = parts.pop() ?? "";
+  return [...parts.filter((part) => !isPrivateSegment(part)), `p-${safeSecret(secret)}`, filename].join("/");
+}
+
+// The filename is excluded: a skin genuinely called "p-something" must not read
+// as a private object.
+export function isPrivateSkinKey(key: string): boolean {
+  return key.split("/").slice(0, -1).some(isPrivateSegment);
+}
+
+function isPrivateSegment(part: string): boolean {
+  return part.startsWith("p-") && part.length > 2;
+}
+
 export function oskFilename(name: string): string {
   const base = name.replace(/\\/g, "/").split("/").pop() ?? "skin";
   const safe = base.replace(/\.osk$/i, "").replace(/[^a-zA-Z0-9._ -]+/g, "_").trim().replace(/^_+|_+$/g, "").slice(0, 64) || "skin";
@@ -113,14 +137,19 @@ export async function uploadSkinObject(
 
 // Public R2 URL when a public base is configured, otherwise the backend's own
 // /api/skins/file endpoint streams the object (keeps the shared bucket
-// private and makes local dev work with just the R2 credentials).
+// private and makes local dev work with just the R2 credentials). A private
+// skin's objects always take the streaming form, whatever the bucket offers:
+// the public base serves anyone who holds the URL, and the whole point of the
+// endpoint is the ?t= check in front of the bytes.
 function skinObjectUrl(config: SkinStorageConfig & Pick<Config, "livePublicOrigin">, key: string): string {
   const encodedKey = key.split("/").map(encodeURIComponent).join("/");
   const publicBase = config.r2PublicBaseUrl?.replace(/\/+$/, "");
-  if (publicBase) return `${publicBase}/${encodedKey}`;
+  if (publicBase && !isPrivateSkinKey(key)) return `${publicBase}/${encodedKey}`;
   const origin = config.livePublicOrigin.replace(/\/+$/, "");
-  const [, id, filename] = key.split("/");
-  return `${origin}/api/skins/file/${encodeURIComponent(id ?? "")}/${encodeURIComponent(filename ?? "")}`;
+  const parts = key.split("/");
+  const filename = parts[parts.length - 1] ?? "";
+  const id = parts[1] ?? "";
+  return `${origin}/api/skins/file/${encodeURIComponent(id)}/${encodeURIComponent(filename)}`;
 }
 
 export async function getSkinObject(config: SkinStorageConfig, key: string): Promise<SkinObjectStream | null> {
@@ -142,6 +171,69 @@ export async function getSkinObject(config: SkinStorageConfig, key: string): Pro
   } catch {
     return null;
   }
+}
+
+// Reads a stored object into memory, refusing anything past the cap rather
+// than letting a large .osk decide how much RSS the serving process takes.
+export async function readSkinObject(
+  config: SkinStorageConfig,
+  key: string,
+  maxBytes: number,
+): Promise<Buffer | null> {
+  const object = await getSkinObject(config, key);
+  if (!object) return null;
+  if (object.contentLength != null && object.contentLength > maxBytes) {
+    object.body.destroy();
+    return null;
+  }
+  const chunks: Buffer[] = [];
+  let total = 0;
+  try {
+    for await (const chunk of object.body) {
+      const buffer: Buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      total += buffer.length;
+      if (total > maxBytes) {
+        object.body.destroy();
+        return null;
+      }
+      chunks.push(buffer);
+    }
+  } catch {
+    return null;
+  }
+  return Buffer.concat(chunks);
+}
+
+// Server-side copy, used when a skin turns private and its .osk has to move off
+// the key a public URL already points at. Metadata is rewritten rather than
+// inherited so the new object keeps the download filename the row expects.
+export async function copySkinObject(
+  config: SkinStorageConfig & Pick<Config, "livePublicOrigin">,
+  fromKey: string,
+  toKey: string,
+  contentType: string,
+  downloadFilename: string,
+): Promise<UploadedSkinObject | null> {
+  if (!fromKey.startsWith(SKINS_PREFIX) || !toKey.startsWith(SKINS_PREFIX)) return null;
+  if (!isSkinStorageConfigured(config)) return null;
+  const s3 = await loadS3Module();
+  const client = getClient(s3, config);
+  const bucket = requireBucket(config);
+  try {
+    const copied = await client.send(new s3.CopyObjectCommand({
+      Bucket: bucket,
+      CopySource: `${bucket}/${fromKey.split("/").map(encodeURIComponent).join("/")}`,
+      Key: toKey,
+      ContentType: contentType,
+      CacheControl: "public, max-age=31536000, immutable",
+      ContentDisposition: `attachment; filename="${downloadFilename}"`,
+      MetadataDirective: "REPLACE",
+    }));
+    if (!copied) return null;
+  } catch {
+    return null;
+  }
+  return { storageKey: toKey, sizeBytes: 0, url: skinObjectUrl(config, toKey) };
 }
 
 export async function deleteSkinObjects(config: SkinStorageConfig, keys: string[]): Promise<void> {
@@ -182,4 +274,10 @@ function safeId(id: string): string {
 
 function safeExt(ext: string): string {
   return /^(png|jpg|jpeg|webp)$/.test(ext) ? ext : "png";
+}
+
+// base64url already, but the secret becomes part of an object key, so anything
+// outside the alphabet is dropped rather than escaped into the path.
+function safeSecret(secret: string): string {
+  return secret.replace(/[^a-zA-Z0-9_-]+/g, "").slice(0, 64);
 }

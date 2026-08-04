@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Download } from "lucide-react";
+import { Download, Lock } from "lucide-react";
 import type { CSSProperties } from "react";
 import { rememberSkinName, skinEventProperties } from "../../lib/analytics-skins";
 import { track } from "../../lib/analytics";
@@ -36,7 +36,11 @@ export function SkinKeymodeTags({ keymodes, overlay = false, max = MAX_KEYMODE_T
 // the navigation happens.
 export function SkinCard({ skin, onClick }: { skin: SkinSummary; onClick?: () => void }) {
   const accent = skin.accentColor ?? SKIN_FALLBACK_ACCENT;
-  const downloadUrl = skin.oskUrl ? skinDownloadUrl(skin.id) ?? skin.oskUrl : null;
+  const isPrivate = skin.visibility === "private";
+  // A private skin has no counted download, and only its owner is ever handed
+  // a card for one: the corner button links straight at the capability URL on
+  // their own copy of the summary.
+  const downloadUrl = !skin.oskUrl ? null : isPrivate ? skin.oskUrl : skinDownloadUrl(skin.id) ?? skin.oskUrl;
   return (
     // The download sits outside the card link (an anchor cannot nest in
     // another), overlaid on the preview's corner, so a skin can be grabbed
@@ -70,9 +74,10 @@ export function SkinCard({ skin, onClick }: { skin: SkinSummary; onClick?: () =>
           <div className="absolute right-1.5 top-1.5">
             <SkinKeymodeTags keymodes={skin.keymodes} overlay />
           </div>
-          {skin.status === "hidden" && (
-            <span className="absolute left-1.5 top-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-extrabold uppercase leading-none tracking-wide text-white/80">
-              hidden
+          {(skin.status === "hidden" || isPrivate) && (
+            <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-extrabold uppercase leading-none tracking-wide text-white/80">
+              {isPrivate && <Lock className="h-2.5 w-2.5" aria-hidden="true" />}
+              {isPrivate ? "private" : "hidden"}
             </span>
           )}
         </div>
@@ -85,8 +90,14 @@ export function SkinCard({ skin, onClick }: { skin: SkinSummary; onClick?: () =>
                 button sits right above it, and two download glyphs an inch
                 apart read as a mistake. */}
             <span className="shrink-0 text-[11px] text-osu-f1">
-              <span className="tabular-nums">{skin.downloadCount.toLocaleString()}</span>
-              {skin.downloadCount === 1 ? " download" : " downloads"}
+              {isPrivate ? (
+                "only you"
+              ) : (
+                <>
+                  <span className="tabular-nums">{skin.downloadCount.toLocaleString()}</span>
+                  {skin.downloadCount === 1 ? " download" : " downloads"}
+                </>
+              )}
             </span>
           </div>
           {/* Primary credit goes to whoever made the skin; the uploader (with

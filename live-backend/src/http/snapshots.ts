@@ -63,9 +63,10 @@ import {
   writeReplayVideoUpload,
 } from "../replay-video/exports.js";
 import { isReplayVideoStorageConfigured } from "../replay-video/r2.js";
-import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, findPublishedSkinByOskSha256, finishSkin, finishSkinEdit, getSkin, getSkinByRef, getSkinForEdit, getSkinForUpload, listSkins, recordSkinDownload, renameSkin, replaceSkinOsk, setSkinAccent, setSkinCoverKeymode, setSkinHidden, SKIN_MAX_SCREENSHOTS, startSkinEdit, toSkinSummary, upsertSkinKeymodePreview } from "../features/skins.js";
+import { appendSkinScreenshot, attachSkinOsk, attachSkinPreview, createPendingSkin, deleteSkin, findPublishedSkinByOskSha256, finishSkin, finishSkinEdit, getSkin, getSkinByRef, getSkinForEdit, getSkinForUpload, listSkins, moveSkinOskKey, privateSkinSecretMatches, recordSkinDownload, renameSkin, replaceSkinOsk, setSkinAccent, setSkinCoverKeymode, setSkinHidden, setSkinVisibility, SKIN_MAX_SCREENSHOTS, startSkinEdit, toSkinSummary, upsertSkinKeymodePreview, type SkinRow } from "../features/skins.js";
 import { clearUserReplaySkin, getUserReplaySkin, setUserReplaySkin, USER_REPLAY_SKIN_PAYLOAD_MAX_CHARS } from "../features/user-replay-skins.js";
-import { deleteSkinObjects, getSkinObject, isSkinStorageConfigured, nextSkinOskRevision, nextSkinPreviewRevision, oskFilename, skinKeymodePreviewKey, skinOskKey, skinPreviewKey, skinScreenshotKey, uploadSkinObject } from "../skins/r2.js";
+import { copySkinObject, deleteSkinObjects, getSkinObject, isPrivateSkinKey, isSkinStorageConfigured, nextSkinOskRevision, nextSkinPreviewRevision, oskFilename, privateSkinKey, skinKeymodePreviewKey, skinOskKey, skinPreviewKey, skinScreenshotKey, uploadSkinObject } from "../skins/r2.js";
+import { getReplaySkinBundle, replaySkinBundleVersion } from "../skins/replay-bundle.js";
 import { sniffImage, validateOskBuffer } from "../skins/validate-osk.js";
 import { errorContext, logInfo, logWarn } from "../logger.js";
 import { COMPRESSIBLE_MIN_BYTES, prepareJsonResponse, type PreparedJsonResponse } from "./prepared-json.js";
@@ -1875,8 +1876,8 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     const keymode = Number(url.searchParams.get("k"));
     const page = Number(url.searchParams.get("page") ?? 0);
     const pageSize = Number(url.searchParams.get("pageSize") ?? 24);
-    // An admin list can carry hidden skins, so it must never land in a shared
-    // cache.
+    // An admin list can carry hidden skins, and an owner-scoped one carries
+    // that viewer's private skins, so neither may land in a shared cache.
     if (scope.tokened) res.setHeader("cache-control", "private, no-store");
     else res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
     const list = await listSkins(ctx.db, {
@@ -1886,6 +1887,10 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       pageSize: Number.isFinite(pageSize) ? pageSize : 24,
       includeHidden,
       sort: url.searchParams.get("sort") === "downloads" ? "downloads" : "newest",
+      // Only an admin-token request carries a vouched-for viewer, so a browser
+      // cannot ask for someone else's private shelf by guessing an id.
+      privateOwnerUserId: scope.viewerUserId,
+      onlyPrivate: url.searchParams.get("visibility") === "private",
     });
     sendJson(req, res, ctx, 200, list);
     return true;
@@ -1905,9 +1910,17 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 404, { error: "not_found" });
       return true;
     }
+    // A private skin has a page for exactly one person. Admins keep their read
+    // (a skin nobody can report still has to be moderatable), everyone else
+    // gets the same 404 a deleted skin gives.
+    const isOwner = scope.viewerUserId != null && scope.viewerUserId === skin.ownerUserId;
+    if (skin.visibility === "private" && !isOwner && !scope.asAdmin) {
+      sendJson(req, res, ctx, 404, { error: "not_found" });
+      return true;
+    }
     if (scope.tokened) res.setHeader("cache-control", "private, no-store");
     else res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
-    sendJson(req, res, ctx, 200, { skin: toSkinSummary(skin) });
+    sendJson(req, res, ctx, 200, { skin: toSkinSummary(skin, { asOwner: isOwner || scope.asAdmin }) });
     return true;
   }
   if (url.pathname === "/api/skins/download") {
@@ -1943,7 +1956,12 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     const id = decodeURIComponent(parts[3] ?? "");
     const filename = decodeURIComponent(parts[4] ?? "");
     const skin = id && filename ? await getSkin(ctx.db, id) : null;
-    const visible = skin && (skin.status === "published" || isAdmin(req, ctx));
+    // A private skin's objects answer only to the ?t= capability its owner-
+    // scoped reads carry. Nothing else about the request identifies anyone:
+    // these URLs are what an <img> and the asset explorer fetch straight from
+    // the browser, with no cookie and no admin token to check.
+    const unlocked = !skin || privateSkinSecretMatches(skin, url.searchParams.get("t"));
+    const visible = skin && unlocked && (skin.status === "published" || isAdmin(req, ctx));
     const key = visible
       ? [skin.oskKey, skin.previewKey, ...skin.previews.map((preview) => preview.key), ...skin.screenshots.map((shot) => shot.key)]
           .find((candidate): candidate is string => Boolean(candidate && candidate.split("/").pop() === filename))
@@ -1958,7 +1976,14 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     res.setHeader("content-type", object.contentType);
     if (object.contentLength != null) res.setHeader("content-length", String(object.contentLength));
     if (object.contentDisposition) res.setHeader("content-disposition", object.contentDisposition);
-    res.setHeader("cache-control", "public, max-age=86400, s-maxage=31536000, immutable");
+    // Private objects are cached by the one browser allowed to hold them, never
+    // by a shared cache that would then serve them without the capability.
+    res.setHeader(
+      "cache-control",
+      skin?.visibility === "private"
+        ? "private, max-age=86400"
+        : "public, max-age=86400, s-maxage=31536000, immutable",
+    );
     object.body.on("error", () => res.destroy());
     object.body.pipe(res);
     return true;
@@ -1985,17 +2010,88 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     res.setHeader("cache-control", "public, no-cache");
     const row = await getUserReplaySkin(ctx.db, userId);
     const skin = row ? await getSkin(ctx.db, row.skinId) : null;
-    if (!row || !skin || skin.status !== "published") {
+    // A private skin fronts its owner's replays and nobody else's. Someone who
+    // picked it while it was public keeps the stored row, but it reads back as
+    // "no skin" from the moment it turned private - otherwise turning a skin
+    // private would leave its art flowing through a stranger's replays.
+    if (!row || !skin || skin.status !== "published"
+      || (skin.visibility === "private" && skin.ownerUserId !== userId)) {
       sendJson(req, res, ctx, 200, { replaySkin: null });
       return true;
     }
+    // A private skin still fronts its owner's replays; what travels is the
+    // redacted summary (no .osk, no page to open) plus the pointer to the
+    // filtered bundle the viewer draws from instead.
+    const isPrivate = skin.visibility === "private";
     sendJson(req, res, ctx, 200, {
       replaySkin: {
         skin: toSkinSummary(skin),
         settings: parseJson<unknown>(row.payloadJson, null),
         updatedAt: row.updatedAt,
+        ...(isPrivate
+          ? {
+              private: true,
+              bundleVersion: replaySkinBundleVersion({
+                oskKey: skin.oskKey,
+                oskSha256: skin.oskSha256,
+                settingsUpdatedAt: row.updatedAt,
+              }),
+            }
+          : null),
       },
     });
+    return true;
+  }
+  if (url.pathname === "/api/replay-skin/bundle") {
+    // The only way a private skin's art reaches anyone but its owner: a zip of
+    // just the assets this player's stored settings draw, built from the .osk
+    // server-side. Public by osu! user id like /api/replay-skin itself, since
+    // any visitor watching the replay needs it.
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    if (!checkRate(req, res, ctx, "publicCostly")) return true;
+    const userId = Number(url.searchParams.get("userId"));
+    if (!Number.isInteger(userId) || userId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user" });
+      return true;
+    }
+    const row = await getUserReplaySkin(ctx.db, userId);
+    const skin = row ? await getSkin(ctx.db, row.skinId) : null;
+    // Public skins keep serving their whole .osk through /api/skins/file; only
+    // a private one has anything to filter, and only for the player who owns
+    // it (same rule as the pointer endpoint above).
+    if (!row || !skin || skin.status !== "published" || skin.visibility !== "private"
+      || skin.ownerUserId !== userId || !skin.oskKey) {
+      sendJson(req, res, ctx, 404, { error: "not_found" });
+      return true;
+    }
+    const version = replaySkinBundleVersion({
+      oskKey: skin.oskKey,
+      oskSha256: skin.oskSha256,
+      settingsUpdatedAt: row.updatedAt,
+    });
+    const bundle = await getReplaySkinBundle(ctx.config, {
+      skinId: skin.id,
+      oskKey: skin.oskKey,
+      version,
+      payload: parseJson<unknown>(row.payloadJson, null),
+      oskMaxBytes: ctx.config.skinOskMaxBytes,
+    });
+    if (!bundle) {
+      sendJson(req, res, ctx, 503, { error: "bundle_unavailable" });
+      return true;
+    }
+    sendCors(req, res, ctx);
+    res.statusCode = 200;
+    res.setHeader("content-type", "application/zip");
+    res.setHeader("content-length", String(bundle.length));
+    // Inline: this is art a page draws, not a file to save. The version is in
+    // the URL the client asks for, so a stale copy can only be a stale URL.
+    res.setHeader("content-disposition", "inline");
+    res.setHeader("cache-control", "public, max-age=86400");
+    res.end(bundle);
     return true;
   }
   if (url.pathname === "/api/replay-skin/set" || url.pathname === "/api/replay-skin/clear") {
@@ -2028,7 +2124,9 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     // same way an unknown id does instead of earning its own error shape.
     const skinId = typeof body.skinId === "string" ? body.skinId : "";
     const skin = skinId && skinId.length <= 64 ? await getSkin(ctx.db, skinId) : null;
-    if (!skin || skin.status !== "published") {
+    // Someone else's private skin is not a skin you can point your replays at:
+    // that would publish its art through your own replay bundle.
+    if (!skin || skin.status !== "published" || (skin.visibility === "private" && skin.ownerUserId !== userId)) {
       sendJson(req, res, ctx, 404, { error: "skin_not_found" });
       return true;
     }
@@ -2064,7 +2162,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 503, { error: "skin_storage_not_configured" });
       return true;
     }
-    const body = parseJson<{ userId?: unknown; username?: unknown; name?: unknown; author?: unknown; description?: unknown; oskSha256?: unknown; bypassLimits?: unknown }>((await readBody(req)) || "{}", {});
+    const body = parseJson<{ userId?: unknown; username?: unknown; name?: unknown; author?: unknown; description?: unknown; oskSha256?: unknown; bypassLimits?: unknown; visibility?: unknown; asAdmin?: unknown }>((await readBody(req)) || "{}", {});
     const userId = Number(body.userId);
     if (!Number.isInteger(userId) || userId <= 0) {
       sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
@@ -2083,6 +2181,11 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       // Only the admin bulk uploader asks for this, through a server fn that
       // verifies a true admin before forwarding it on this token-gated route.
       bypassLimits: body.bypassLimits === true,
+      // PRIVATE_SKINS_ADMIN_ONLY: private uploads are gated to the site owner
+      // while the feature is being tried out on develop. asAdmin is set only by
+      // a server fn that verified a true admin, the same trust as bypassLimits
+      // above. Drop the asAdmin term to open it to everyone.
+      visibility: body.visibility === "private" && body.asAdmin === true ? "private" : "public",
     });
     if (!result.ok) {
       if (result.error === "duplicate") {
@@ -2152,6 +2255,11 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 403, { ok: false, error: "invalid_ticket" });
       return true;
     }
+    // Private skins write every object under a folder named by their secret, so
+    // the bucket's public base URL cannot be derived from the skin id alone.
+    const storageKey = (key: string) => (
+      skin.visibility === "private" && skin.privateSecret ? privateSkinKey(key, skin.privateSecret) : key
+    );
     const part = url.searchParams.get("part") ?? "";
     if (editing && !(part === "preview" || (part === "osk" && editing.tokenScope === "replace"))) {
       // A previews ticket swaps renders and nothing else; a replace ticket also
@@ -2170,8 +2278,12 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       // Server-side duplicate check on the hash we computed ourselves: the one
       // at /api/skins/start trusts a client-sent hash, and the file can differ
       // from the one that minted the ticket. Runs before the R2 write, so a
-      // rejected duplicate leaves no object behind.
-      const duplicate = await findPublishedSkinByOskSha256(ctx.db, validation.info.sha256, skin.id);
+      // rejected duplicate leaves no object behind. Private uploads skip it for
+      // the same reason createPendingSkin does: a personal copy of a catalog
+      // skin is the point, and the answer would name a stranger's skin.
+      const duplicate = skin.visibility === "private"
+        ? null
+        : await findPublishedSkinByOskSha256(ctx.db, validation.info.sha256, skin.id);
       if (duplicate) {
         logInfo("skin_upload_duplicate", { ownerUserId: skin.ownerUserId, stage: "osk", existingId: duplicate.id });
         sendJson(req, res, ctx, 409, { ok: false, error: "duplicate", duplicate });
@@ -2181,7 +2293,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         // An update lands on a fresh key (the published object is cached
         // immutably) but keeps the skin's own download filename. The old build
         // goes once the row points at the new one.
-        const key = skinOskKey(skin.id, skin.name, nextSkinOskRevision(skin.oskKey));
+        const key = storageKey(skinOskKey(skin.id, skin.name, nextSkinOskRevision(skin.oskKey)));
         const uploaded = await uploadSkinObject(ctx.config, key, buffer, "application/octet-stream", "attachment", oskFilename(skin.name));
         await replaceSkinOsk(ctx.serveWriteDb ?? ctx.db, skin, {
           key,
@@ -2200,7 +2312,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         sendJson(req, res, ctx, 200, { ok: true, keymodes: validation.info.keymodes });
         return true;
       }
-      const key = skinOskKey(skin.id, skin.name);
+      const key = storageKey(skinOskKey(skin.id, skin.name));
       const uploaded = await uploadSkinObject(ctx.config, key, buffer, "application/octet-stream", "attachment");
       await attachSkinOsk(ctx.serveWriteDb ?? ctx.db, skin, {
         key,
@@ -2244,8 +2356,8 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
           // the fresh one.
           const previous = skin.previews.find((preview) => preview.keys === keys) ?? null;
           const key = previous
-            ? skinKeymodePreviewKey(skin.id, keys, sniffed.ext, nextSkinPreviewRevision(previous.key))
-            : skinKeymodePreviewKey(skin.id, keys, sniffed.ext);
+            ? storageKey(skinKeymodePreviewKey(skin.id, keys, sniffed.ext, nextSkinPreviewRevision(previous.key)))
+            : storageKey(skinKeymodePreviewKey(skin.id, keys, sniffed.ext));
           const uploaded = await uploadSkinObject(ctx.config, key, buffer, sniffed.mime, "inline");
           const isCover = url.searchParams.get("cover") === "1";
           const upserted = await upsertSkinKeymodePreview(
@@ -2279,12 +2391,12 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
             });
           }
         } else {
-          const key = skinPreviewKey(skin.id, sniffed.ext);
+          const key = storageKey(skinPreviewKey(skin.id, sniffed.ext));
           const uploaded = await uploadSkinObject(ctx.config, key, buffer, sniffed.mime, "inline");
           await attachSkinPreview(ctx.serveWriteDb ?? ctx.db, skin.id, { key, url: uploaded.url, width, height });
         }
       } else {
-        const key = skinScreenshotKey(skin.id, skin.screenshots.length, sniffed.ext);
+        const key = storageKey(skinScreenshotKey(skin.id, skin.screenshots.length, sniffed.ext));
         const uploaded = await uploadSkinObject(ctx.config, key, buffer, sniffed.mime, "inline");
         const appended = await appendSkinScreenshot(ctx.serveWriteDb ?? ctx.db, skin.id, { key, url: uploaded.url, width, height });
         if (!appended.ok) {
@@ -2299,7 +2411,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     sendJson(req, res, ctx, 400, { ok: false, error: "invalid_part" });
     return true;
   }
-  if (url.pathname === "/api/skins/edit-start" || url.pathname === "/api/skins/cover" || url.pathname === "/api/skins/rename") {
+  if (url.pathname === "/api/skins/edit-start" || url.pathname === "/api/skins/cover" || url.pathname === "/api/skins/rename" || url.pathname === "/api/skins/visibility") {
     // Admin-token gated like /api/skins/delete: the frontend server fn forwards the
     // osu!-verified viewer id, and the ownership check below keeps a user off anyone
     // else's skin. asAdmin is set only by the server fn that verified a true admin.
@@ -2315,7 +2427,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 503, { error: "skin_storage_not_configured" });
       return true;
     }
-    const body = parseJson<{ userId?: unknown; id?: unknown; keys?: unknown; name?: unknown; asAdmin?: unknown; scope?: unknown }>((await readBody(req)) || "{}", {});
+    const body = parseJson<{ userId?: unknown; id?: unknown; keys?: unknown; name?: unknown; asAdmin?: unknown; scope?: unknown; visibility?: unknown }>((await readBody(req)) || "{}", {});
     const userId = Number(body.userId);
     const id = typeof body.id === "string" ? body.id : "";
     if (!Number.isInteger(userId) || userId <= 0 || !id) {
@@ -2337,6 +2449,25 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       }
       logInfo("skin_renamed", { id, by: ownerUserId == null ? "admin" : "owner" });
       sendJson(req, res, ctx, 200, { ok: true, skin: result.skin });
+      return true;
+    }
+    if (url.pathname === "/api/skins/visibility") {
+      const visibility = body.visibility === "private" ? "private" : "public";
+      // PRIVATE_SKINS_ADMIN_ONLY: same gate as the upload route. Making a skin
+      // public again is never gated, so nothing can get stuck private if the
+      // gate outlives the skins behind it. Delete this block to release.
+      if (visibility === "private" && body.asAdmin !== true) {
+        sendJson(req, res, ctx, 403, { ok: false, error: "private_admin_only" });
+        return true;
+      }
+      const result = await setSkinVisibility(ctx.serveWriteDb ?? ctx.db, id, visibility, ownerUserId);
+      if (!result.ok) {
+        sendJson(req, res, ctx, result.error === "forbidden" ? 403 : 404, { ok: false, error: result.error });
+        return true;
+      }
+      const moved = result.changed ? await moveSkinOskForVisibility(ctx, result.skin) : result.skin;
+      logInfo("skin_visibility_changed", { id, visibility, by: ownerUserId == null ? "admin" : "owner" });
+      sendJson(req, res, ctx, 200, { ok: true, skin: toSkinSummary(moved, { asOwner: true }) });
       return true;
     }
     if (url.pathname === "/api/skins/cover") {
@@ -4961,6 +5092,61 @@ function parseImageDimension(value: string | null): number | null {
   return Number.isInteger(parsed) && parsed > 0 && parsed <= 8192 ? parsed : null;
 }
 
+// Moves a skin's .osk to the key its new visibility calls for, in both
+// directions.
+//
+// Going private, the file has to leave the key anyone could already have: the
+// bucket has a public base URL and the row's own osk_url pointed straight at
+// it. Going public it moves back out of the secret folder, so the download
+// takes the CDN again instead of streaming 65MB through this process for the
+// rest of the skin's life. The return trip lands on a fresh revision rather
+// than the original key, which an edge cache may have a 404 stored against
+// from the private spell.
+//
+// Only the .osk moves. The preview and screenshot objects keep the keys they
+// were written under: a preview shows no more than watching a replay does, the
+// streaming endpoint serves them either way (it is the only mode when no
+// public bucket is configured at all), and re-keying a dozen images per toggle
+// buys nothing for it.
+//
+// A copy that fails leaves the row on the old key. That is the safe direction
+// in both cases - the row's visibility has already changed, so the gate in
+// front of the bytes is already right - so it is logged, not rolled back.
+async function moveSkinOskForVisibility(ctx: HttpContext, skin: SkinRow): Promise<SkinRow> {
+  if (!skin.oskKey) return skin;
+  const nextKey = skin.visibility === "private"
+    ? (skin.privateSecret ? privateSkinKey(skin.oskKey, skin.privateSecret) : skin.oskKey)
+    : (isPrivateSkinKey(skin.oskKey)
+      ? skinOskKey(skin.id, skin.name, nextSkinOskRevision(skin.oskKey))
+      : skin.oskKey);
+  if (nextKey === skin.oskKey) return skin;
+  // Local development runs against the production bucket (there is only one,
+  // and the local DB is usually a snapshot of the live one), so a toggle here
+  // would copy a real skin's file and delete the original out from under the
+  // row production is still reading. The visibility flip itself is local and
+  // harmless; only the storage move is held back.
+  if (ctx.config.nodeEnv !== "production") {
+    logWarn("skin_osk_move_skipped_outside_production", { id: skin.id, visibility: skin.visibility });
+    return skin;
+  }
+  const copied = await copySkinObject(
+    ctx.config,
+    skin.oskKey,
+    nextKey,
+    "application/octet-stream",
+    oskFilename(skin.name),
+  ).catch(() => null);
+  if (!copied) {
+    logWarn("skin_osk_visibility_move_failed", { id: skin.id, visibility: skin.visibility });
+    return skin;
+  }
+  await moveSkinOskKey(ctx.serveWriteDb ?? ctx.db, skin.id, { key: nextKey, url: copied.url });
+  await deleteSkinObjects(ctx.config, [skin.oskKey]).catch((error) => {
+    logWarn("skin_osk_visibility_cleanup_failed", { id: skin.id, ...errorContext(error) });
+  });
+  return { ...skin, oskKey: nextKey, oskUrl: copied.url };
+}
+
 // Who is asking for skin data, for the endpoints that can hand back hidden
 // skins. Only a true admin reads a hidden row, so the request has to carry an
 // identity the frontend server fn vouched for with the admin token (the goals
@@ -4972,12 +5158,12 @@ function skinViewerScope(
   req: IncomingMessage,
   ctx: HttpContext,
   url: URL,
-): { tokened: boolean; asAdmin: boolean } {
+): { tokened: boolean; asAdmin: boolean; viewerUserId: number | null } {
   const tokened = isAdmin(req, ctx);
   const viewerUserId = tokened ? Number(url.searchParams.get("viewerUserId")) : Number.NaN;
   const viewer = Number.isInteger(viewerUserId) && viewerUserId > 0 ? viewerUserId : null;
   const asAdmin = tokened && (viewer == null || url.searchParams.get("asAdmin") === "1");
-  return { tokened, asAdmin };
+  return { tokened, asAdmin, viewerUserId: viewer };
 }
 
 const DEFAULT_BODY_LIMIT_BYTES = 1024 * 1024;

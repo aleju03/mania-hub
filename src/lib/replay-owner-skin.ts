@@ -24,6 +24,13 @@ export interface OwnerReplaySkinRecord {
   // with the skin's archive before use.
   settings: unknown;
   updatedAt: string;
+  // Set when the player's skin is a private one. The summary above is then the
+  // redacted copy (no .osk, no page), and the art comes from the backend's
+  // filtered bundle instead of the archive the catalog hosts.
+  private?: boolean;
+  // Identifies the bundle's contents, so a browser can cache it and a settings
+  // change or a newer .osk lands on a fresh URL.
+  bundleVersion?: string;
 }
 
 interface OwnerReplaySkinPayloadV1 {
@@ -456,7 +463,25 @@ const SKIN_ARCHIVE_CACHE_MAX = 3;
 // does not count as a download). The archive rides HTTP caching too: the
 // endpoint serves immutable cache headers.
 export function fetchSkinArchive(skin: SkinSummary, init?: RequestInit): Promise<OskArchive | null> {
-  const url = skinOskFileUrl(skin);
+  return fetchArchiveFrom(skinOskFileUrl(skin), init);
+}
+
+// The private-skin counterpart: a zip the backend assembled from just the
+// assets this player's settings draw. It opens exactly like an .osk, so
+// everything downstream - rehydration, sounds, the IndexedDB cache - is
+// unchanged; the difference is that no complete skin ever reaches the browser.
+function replaySkinBundleUrl(record: OwnerReplaySkinRecord): string | null {
+  const base = getLiveBackendUrl();
+  const ownerUserId = record.skin.ownerUserId;
+  if (!base || !Number.isInteger(ownerUserId) || ownerUserId <= 0) return null;
+  const query = new URLSearchParams({ userId: String(ownerUserId) });
+  // Cache-busts on a settings change or a newer .osk; the backend always
+  // serves what it holds now, so a stale v only costs one extra fetch.
+  if (record.bundleVersion) query.set("v", record.bundleVersion);
+  return `${base}/api/replay-skin/bundle?${query.toString()}`;
+}
+
+function fetchArchiveFrom(url: string | null, init?: RequestInit): Promise<OskArchive | null> {
   if (!url) return Promise.resolve(null);
   const cached = skinArchiveCache.get(url);
   if (cached) return cached;
@@ -479,13 +504,33 @@ export function fetchSkinArchive(skin: SkinSummary, init?: RequestInit): Promise
   return promise;
 }
 
+// Where a record's art comes from. "viewer" is anyone watching the replay: a
+// private skin gives them the filtered bundle and nothing else. "owner" is the
+// player editing their own skin, whose asset picker needs every image in the
+// archive - they get the real .osk, addressed through the capability URL their
+// own owner-scoped read of the skin carries.
+export type OwnerReplaySkinAccess = "viewer" | "owner";
+
+async function fetchRecordArchive(
+  record: OwnerReplaySkinRecord,
+  access: OwnerReplaySkinAccess,
+  init?: RequestInit,
+): Promise<OskArchive | null> {
+  if (!record.private) return fetchSkinArchive(record.skin, init);
+  if (access === "viewer") return fetchArchiveFrom(replaySkinBundleUrl(record), init);
+  const { fetchSkinById } = await import("./skins");
+  const owned = await fetchSkinById({ data: { id: record.skin.id } }).catch(() => null);
+  return owned ? fetchSkinArchive(owned, init) : null;
+}
+
 // Rebuilds the full settings + gameplay sounds for a player's replay skin.
 export async function loadOwnerReplaySkin(
   record: OwnerReplaySkinRecord,
   init?: RequestInit,
+  access: OwnerReplaySkinAccess = "owner",
 ): Promise<LoadedOwnerReplaySkin | null> {
   try {
-    const archive = await fetchSkinArchive(record.skin, init);
+    const archive = await fetchRecordArchive(record, access, init);
     if (!archive) return null;
     const settings = await rehydrateOwnerReplaySkinSettings(record.settings, archive);
     if (!settings) return null;
@@ -512,11 +557,16 @@ export async function loadOwnerReplaySkinCached(
   init?: RequestInit,
 ): Promise<CachedOwnerReplaySkin | null> {
   const { readCachedReplaySkin, writeCachedReplaySkin } = await import("./replay-skin-cache");
-  const key = `owner:${record.skin.id}:${record.updatedAt}`;
+  // The bundle version moves when the player's .osk does, so a private skin
+  // whose file was replaced without its settings being re-saved still lands on
+  // a fresh cache entry instead of redrawing the old art.
+  const key = `owner:${record.skin.id}:${record.updatedAt}${record.bundleVersion ? `:${record.bundleVersion}` : ""}`;
   const cached = await readCachedReplaySkin(key).catch(() => null);
   if (cached) return { record, settings: normalizeReplaySkinSettings(cached.settings), sounds: cached.sounds };
 
-  const loaded = await loadOwnerReplaySkin(record, init);
+  // The replay page's path: whoever is watching is not the owner, so a private
+  // skin resolves through its bundle.
+  const loaded = await loadOwnerReplaySkin(record, init, "viewer");
   if (!loaded) return null;
   void writeCachedReplaySkin(key, { settings: loaded.settings, sounds: loaded.sounds }, Date.now()).catch(() => {});
   return { record: loaded.record, settings: loaded.settings, sounds: loaded.sounds };

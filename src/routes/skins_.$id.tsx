@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { ArrowLeft, Check, Download, ImageIcon, MonitorPlay, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, Download, Globe, ImageIcon, Lock, MonitorPlay, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ManiaRain } from "../components/home/ManiaRain";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
@@ -20,7 +20,7 @@ import {
   writeMyReplaySkinMemory,
 } from "../lib/replay-owner-skin";
 import { importReplaySkinFromOsk } from "../lib/replay-skin-import";
-import { deleteMySkin, fetchSkinById, formatKeymodes, formatSkinFileSize, markSkinsListStale, moderateSkin, readSkinsBrowseEntry, renameSkin, SKIN_NAME_MAX_LENGTH, skinDownloadUrl, skinOskFileUrl, type SkinSummary } from "../lib/skins";
+import { canUsePrivateSkins, deleteMySkin, fetchSkinById, formatKeymodes, formatSkinFileSize, markSkinsListStale, moderateSkin, readSkinsBrowseEntry, renameSkin, setMySkinVisibility, SKIN_NAME_MAX_LENGTH, skinDownloadUrl, skinOskFileUrl, type SkinSummary } from "../lib/skins";
 import { pageSeo } from "../lib/seo";
 
 export const Route = createFileRoute("/skins_/$id")({
@@ -49,10 +49,15 @@ export const Route = createFileRoute("/skins_/$id")({
         || `${skin.name}, an osu!mania skin for ${formatKeymodes(skin.keymodes) || "mania"} uploaded by ${skin.ownerUsername}. Download the .osk or browse more skins.`,
       path: `/skins/${skin.slug ?? skin.id}`,
       origin: match.context.origin,
+      // A private skin only ever renders for its uploader, so the page must not
+      // be indexed and its art must not travel in an embed card.
+      noindex: skin.visibility === "private",
       // Skins without a rendered preview fall back to the falling-notes card.
       // The preview renders 16:9, not the 1.91:1 of the generated cards, so its
       // real size travels with it or scrapers crop the embed.
-      image: skin.previewUrl ?? undefined,
+      // The preview of a private skin is behind a capability URL no scraper
+      // holds, so it would render as a broken card anyway.
+      image: (skin.visibility === "private" ? null : skin.previewUrl) ?? undefined,
       imageWidth: skin.previewWidth,
       imageHeight: skin.previewHeight,
       imageKind: "skins",
@@ -159,6 +164,7 @@ function SkinDetailPage() {
         skin,
         settings: payload,
         updatedAt: new Date().toISOString(),
+        private: skin.visibility === "private",
       });
       setReplaySkinStatus("set");
     } catch {
@@ -191,6 +197,8 @@ function SkinDetailPage() {
   const hero = gallery[Math.min(heroIndex, Math.max(0, gallery.length - 1))];
 
   const isOwner = skin != null && auth.viewer?.id === skin.ownerUserId;
+  const isPrivate = skin?.visibility === "private";
+  const canUsePrivate = canUsePrivateSkins(auth);
 
   const removeSkin = async () => {
     if (!skin || busy) return;
@@ -241,6 +249,24 @@ function SkinDetailPage() {
     markSkinsListStale();
     setEdited(result.skin);
     setRenaming(false);
+  };
+
+  const toggleVisibility = async () => {
+    if (!skin || busy) return;
+    setBusy(true);
+    setActionError(null);
+    const next = isPrivate ? "public" : "private";
+    const result = await setMySkinVisibility({ data: { id: skin.id, visibility: next } })
+      .catch(() => ({ ok: false as const, skin: undefined }));
+    setBusy(false);
+    if (!result.ok || !result.skin) {
+      setActionError("Changing who can see this skin failed. Try again.");
+      return;
+    }
+    // The browse grid is browser-cached, so a skin that just left (or joined)
+    // the catalog would linger on it either way.
+    markSkinsListStale();
+    setEdited(result.skin);
   };
 
   return (
@@ -367,6 +393,12 @@ function SkinDetailPage() {
                           hidden
                         </span>
                       )}
+                      {isPrivate && (
+                        <span className="inline-flex items-center gap-1 rounded bg-osu-b5 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-osu-f1">
+                          <Lock className="h-2.5 w-2.5" aria-hidden="true" />
+                          private
+                        </span>
+                      )}
                     </div>
                     <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12.5px] text-osu-f1">
                       {skin.author && (
@@ -397,7 +429,7 @@ function SkinDetailPage() {
                     )}
                     {skin.oskUrl && (
                       <a
-                        href={skinDownloadUrl(skin.id) ?? skin.oskUrl}
+                        href={(isPrivate ? null : skinDownloadUrl(skin.id)) ?? skin.oskUrl}
                         onClick={() => track("skin_download", skinEventProperties(skin))}
                         className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-osu-pink px-5 py-2 text-[13px] font-bold text-white transition hover:brightness-110"
                       >
@@ -446,9 +478,15 @@ function SkinDetailPage() {
                     <FactRow label="Keymodes">
                       <SkinKeymodeTags keymodes={skin.keymodes} max={10} />
                     </FactRow>
-                    <FactRow label="Downloads">
-                      <span className="tabular-nums text-osu-l1">{skin.downloadCount.toLocaleString()}</span>
-                    </FactRow>
+                    {isPrivate ? (
+                      <FactRow label="Visible to">
+                        <span className="text-osu-l1">only you</span>
+                      </FactRow>
+                    ) : (
+                      <FactRow label="Downloads">
+                        <span className="tabular-nums text-osu-l1">{skin.downloadCount.toLocaleString()}</span>
+                      </FactRow>
+                    )}
                     {skin.oskSizeBytes ? (
                       <FactRow label="File size">
                         <span className="tabular-nums text-osu-l1">{formatSkinFileSize(skin.oskSizeBytes)}</span>
@@ -514,6 +552,24 @@ function SkinDetailPage() {
                               <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
                               Rename
                             </button>
+                            {/* PRIVATE_SKINS_ADMIN_ONLY: the switch is the
+                                owner's while the feature is being tried out.
+                                A skin that is already private can always be
+                                put back, gate or no gate. */}
+                            {(canUsePrivate || isPrivate) && (
+                            <button
+                              type="button"
+                              onClick={() => void toggleVisibility()}
+                              disabled={busy}
+                              title={isPrivate
+                                ? "Put this skin on /skins for anyone to download"
+                                : "Take this skin off /skins. Your replays keep playing in it"}
+                              className="inline-flex items-center gap-1.5 rounded-full border border-osu-b3/50 px-3 py-1.5 text-[12px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:border-osu-pink/45 hover:text-white disabled:opacity-50"
+                            >
+                              {isPrivate ? <Globe className="h-3.5 w-3.5" aria-hidden="true" /> : <Lock className="h-3.5 w-3.5" aria-hidden="true" />}
+                              {isPrivate ? "Make public" : "Make private"}
+                            </button>
+                            )}
                           </>
                         )}
                         {confirmingDelete ? (

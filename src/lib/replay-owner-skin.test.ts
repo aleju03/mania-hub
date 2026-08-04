@@ -12,10 +12,11 @@ import {
   readAppliedCommunityReplaySkin,
   rehydrateOwnerReplaySkinSettings,
   replaySkinSettingsEmbedAssets,
+  loadOwnerReplaySkinCached,
   writeMyReplaySkinMemory,
   writeAppliedCommunityReplaySkin,
 } from "./replay-owner-skin";
-import type { SkinSummary } from "./skins";
+import { skinOskFileUrl, type SkinSummary } from "./skins";
 import { loadOskImageAssetByPath, openOskArchive } from "./replay-skin-import";
 import { DEFAULT_REPLAY_SKIN_PROFILE, DEFAULT_REPLAY_SKIN_SETTINGS, EMPTY_REPLAY_SKIN_STAGE_ASSETS, normalizeReplaySkinSettings } from "./replay-skin";
 import type { ReplaySkinImageAsset, ReplaySkinSettings } from "./replay-skin";
@@ -330,5 +331,66 @@ describe("applied community replay skin pointer", () => {
     expect(readAppliedCommunityReplaySkin()).toBeNull();
     window.localStorage.setItem("mania-hub-replay-skin-community-v1", "{nope");
     expect(readAppliedCommunityReplaySkin()).toBeNull();
+  });
+});
+
+describe("private replay skins", () => {
+  const ownerUserId = 4242;
+  const privateSkin = {
+    id: "sk_private",
+    name: "Hoarded",
+    ownerUserId,
+    keymodes: [4],
+    // What the redacted summary looks like on the wire: no file, no page.
+    oskUrl: null,
+    slug: null,
+    previews: [],
+    screenshots: [],
+    visibility: "private",
+  } as unknown as SkinSummary;
+
+  beforeEach(() => {
+    vi.stubEnv("VITE_LIVE_BACKEND_URL", "https://live.test");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it("draws a viewer's copy from the bundle endpoint, never from an .osk", async () => {
+    const zip = new JSZip();
+    const bytes = Uint8Array.from(atob(PNG_BASE64), (char) => char.charCodeAt(0));
+    zip.file("mania/note1.png", bytes);
+    zip.file("skin.ini", "[General]\nName: Hoarded\n[Mania]\nKeys: 4\n");
+    const bundle = await zip.generateAsync({ type: "arraybuffer" });
+
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, arrayBuffer: async () => bundle } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const payload = dehydrateReplaySkinSettings(settingsWithAssets());
+    const loaded = await loadOwnerReplaySkinCached({
+      skin: privateSkin,
+      settings: payload,
+      updatedAt: "2026-08-03T10:00:00.000Z",
+      private: true,
+      bundleVersion: "abc123",
+    });
+
+    expect(loaded).not.toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      `https://live.test/api/replay-skin/bundle?userId=${ownerUserId}&v=abc123`,
+    );
+  });
+
+  it("keeps the capability on a private .osk URL when the owner reads their own skin", () => {
+    expect(skinOskFileUrl({
+      id: "sk_private",
+      oskUrl: "https://live.test/api/skins/file/sk_private/hoarded.osk?t=secret-token",
+    })).toBe("https://live.test/api/skins/file/sk_private/hoarded.osk?t=secret-token");
+    expect(skinOskFileUrl({ id: "sk_public", oskUrl: "https://cdn.test/skins/sk_public/mix.osk" }))
+      .toBe("https://live.test/api/skins/file/sk_public/mix.osk");
   });
 });

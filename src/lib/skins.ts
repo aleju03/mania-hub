@@ -46,7 +46,31 @@ export interface SkinSummary {
   // skin still carries the file it was published with.
   oskUpdatedAt: string | null;
   status: "pending" | "published" | "hidden";
+  // "private" is the uploader's own skin: off /skins, its page and its .osk
+  // answer only to them, and everyone else only ever meets it as the art on
+  // their replays. Every URL on a private summary carries the capability the
+  // backend asks for, so it is only ever filled in for the owner - a redacted
+  // copy has them all null.
+  visibility: SkinVisibility;
   publishedAt: string | null;
+}
+
+export type SkinVisibility = "public" | "private";
+
+// PRIVATE_SKINS_ADMIN_ONLY: private skins are being tried out on develop, so
+// only the site owner can create one or switch a skin to it. The server fns
+// below refuse a private request from anyone else and the UI hides the choice;
+// the live backend enforces the same thing on its own side, so this is not
+// only a hidden button.
+//
+// To release the feature: set this to false (or grep the name and delete every
+// use, including the two backend blocks marked with it). Nothing else about
+// private skins depends on it.
+export const PRIVATE_SKINS_ADMIN_ONLY = true;
+
+// Whether this viewer may put a skin on the private shelf.
+export function canUsePrivateSkins(auth: { isAdmin?: boolean } | null | undefined): boolean {
+  return PRIVATE_SKINS_ADMIN_ONLY ? auth?.isAdmin === true : true;
 }
 
 export interface SkinsListResult {
@@ -63,6 +87,9 @@ export const SKIN_DESCRIPTION_MAX_LENGTH = 500;
 export const SKIN_OSK_MAX_BYTES = 50 * 1024 * 1024;
 export const SKIN_SCREENSHOT_MAX_BYTES = 4 * 1024 * 1024;
 export const SKIN_MAX_SCREENSHOTS = 4;
+// Mirrors the backend's per-user cap; used as the page size for the private
+// shelf, which is never paginated.
+export const SKIN_MAX_PER_USER = 30;
 
 export type SkinsSort = "newest" | "downloads";
 
@@ -228,7 +255,7 @@ export interface DuplicateSkinRef {
 
 export type StartSkinUploadResult =
   | { ok: true; id: string; token: string; expiresAt: string }
-  | { ok: false; error: "not_logged_in" | "unavailable" | "storage_not_configured" | "invalid_name" | "pending_limit" | "skin_limit" }
+  | { ok: false; error: "not_logged_in" | "unavailable" | "storage_not_configured" | "invalid_name" | "pending_limit" | "skin_limit" | "private_admin_only" }
   | { ok: false; error: "duplicate"; duplicate: DuplicateSkinRef | null };
 
 // SHA-256 of the picked .osk, hex, computed while the archive is being parsed.
@@ -267,19 +294,26 @@ async function resolveSkinsBackend(): Promise<SkinsBackend | null> {
 }
 
 export const startSkinUpload = createServerFn({ method: "POST" })
-  .validator((data: { name?: unknown; author?: unknown; description?: unknown; oskSha256?: unknown }) => ({
+  .validator((data: { name?: unknown; author?: unknown; description?: unknown; oskSha256?: unknown; visibility?: unknown }) => ({
     name: typeof data.name === "string" ? data.name.slice(0, 80) : "",
     author: typeof data.author === "string" ? data.author.slice(0, SKIN_AUTHOR_MAX_LENGTH) : "",
     description: typeof data.description === "string" ? data.description.slice(0, SKIN_DESCRIPTION_MAX_LENGTH) : "",
     oskSha256: typeof data.oskSha256 === "string" && /^[0-9a-f]{64}$/i.test(data.oskSha256)
       ? data.oskSha256.toLowerCase()
       : null,
+    visibility: (data.visibility === "private" ? "private" : "public") as SkinVisibility,
   }))
   .handler(async ({ data }): Promise<StartSkinUploadResult> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     setResponseHeader("Cache-Control", "private, no-store");
     const cfg = await resolveSkinsBackend();
     if (!cfg) return { ok: false, error: "not_logged_in" };
+    // PRIVATE_SKINS_ADMIN_ONLY. Refused rather than quietly downgraded to
+    // public: an upload that was meant to be private must never end up on the
+    // catalog because a gate said no.
+    if (data.visibility === "private" && !canUsePrivateSkins(cfg)) {
+      return { ok: false, error: "private_admin_only" };
+    }
     try {
       const response = await fetch(`${cfg.base}/api/skins/start`, {
         method: "POST",
@@ -291,6 +325,8 @@ export const startSkinUpload = createServerFn({ method: "POST" })
           author: data.author,
           description: data.description,
           oskSha256: data.oskSha256,
+          visibility: data.visibility,
+          asAdmin: cfg.isAdmin,
         }),
       });
       const body = (await response.json().catch(() => null)) as
@@ -444,6 +480,63 @@ export const renameSkin = createServerFn({ method: "POST" })
       return { ok: true, skin: body.skin };
     } catch {
       return { ok: false };
+    }
+  });
+
+// Moves a published skin between the catalog and the uploader's own shelf.
+// Turning private takes the skin off /skins, closes its page to everyone else
+// and moves its .osk to a key the old download link no longer reaches; the
+// backend hands back the skin as it now stands, with the owner's capability
+// URLs on it.
+export const setMySkinVisibility = createServerFn({ method: "POST" })
+  .validator((data: { id?: unknown; visibility?: unknown }) => {
+    const id = typeof data.id === "string" ? data.id.trim() : "";
+    if (!id || id.length > 64) throw new Error("Invalid skin id.");
+    return { id, visibility: (data.visibility === "private" ? "private" : "public") as SkinVisibility };
+  })
+  .handler(async ({ data }): Promise<{ ok: boolean; skin?: SkinSummary }> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const cfg = await resolveSkinsBackend();
+    if (!cfg) return { ok: false };
+    // PRIVATE_SKINS_ADMIN_ONLY. Going back to public stays open to everyone.
+    if (data.visibility === "private" && !canUsePrivateSkins(cfg)) return { ok: false };
+    try {
+      const response = await fetch(`${cfg.base}/api/skins/visibility`, {
+        method: "POST",
+        headers: cfg.headers,
+        body: JSON.stringify({ userId: cfg.userId, id: data.id, visibility: data.visibility, asAdmin: cfg.isAdmin }),
+      });
+      const body = (await response.json().catch(() => null)) as { ok?: boolean; skin?: SkinSummary } | null;
+      if (!response.ok || !body?.ok || !body.skin) return { ok: false };
+      return { ok: true, skin: body.skin };
+    } catch {
+      return { ok: false };
+    }
+  });
+
+// The signed-in viewer's private skins. They are absent from the browse grid
+// by design, so this is the only way back to their pages; it goes through a
+// server fn because the list endpoint only trusts an owner id that arrives
+// with the admin token.
+export const fetchMyPrivateSkins = createServerFn({ method: "GET" })
+  .handler(async (): Promise<SkinSummary[]> => {
+    const { setResponseHeader } = await import("@tanstack/react-start/server");
+    setResponseHeader("Cache-Control", "private, no-store");
+    const cfg = await resolveSkinsBackend();
+    if (!cfg) return [];
+    const query = new URLSearchParams({
+      visibility: "private",
+      viewerUserId: String(cfg.userId),
+      pageSize: String(SKIN_MAX_PER_USER),
+    });
+    try {
+      const response = await fetch(`${cfg.base}/api/skins/list?${query.toString()}`, { headers: cfg.headers });
+      if (!response.ok) return [];
+      const body = (await response.json()) as SkinsListResult;
+      return Array.isArray(body.skins) ? body.skins : [];
+    } catch {
+      return [];
     }
   });
 
@@ -622,6 +715,8 @@ export function uploadErrorMessage(code: string, status?: number): string {
   return "The upload failed. Try again.";
 }
 
+// The counted download. Private skins have none: their file is not public, so
+// the owner's page links straight at the capability URL on the summary.
 export function skinDownloadUrl(id: string): string | null {
   const base = getLiveBackendUrl();
   return base ? `${base}/api/skins/download?id=${encodeURIComponent(id)}` : null;
@@ -629,20 +724,26 @@ export function skinDownloadUrl(id: string): string | null {
 
 // CORS-safe .osk fetch for in-page features (asset explorer, map preview):
 // the backend streams the stored object by filename without counting it as a
-// download the way /api/skins/download does.
+// download the way /api/skins/download does. A private skin's oskUrl carries
+// the ?t= capability that unlocks the object, and it has to survive the
+// rewrite - without it the endpoint 404s, which is the whole point.
 export function skinOskFileUrl(skin: Pick<SkinSummary, "id" | "oskUrl">): string | null {
   const base = getLiveBackendUrl();
+  if (!base || !skin.oskUrl) return null;
+  const [path, query] = skin.oskUrl.split("?");
   // The oskUrl path segment is already percent-encoded; decode before
   // re-encoding or filenames with spaces get double-encoded into 404s.
-  const encoded = skin.oskUrl?.split("/").pop();
-  if (!base || !encoded) return null;
+  const encoded = path.split("/").pop();
+  if (!encoded) return null;
   let filename = encoded;
   try {
     filename = decodeURIComponent(encoded);
   } catch {
     // Malformed escape: treat the segment as a literal filename.
   }
-  return `${base}/api/skins/file/${encodeURIComponent(skin.id)}/${encodeURIComponent(filename)}`;
+  const token = new URLSearchParams(query ?? "").get("t");
+  const suffix = token ? `?t=${encodeURIComponent(token)}` : "";
+  return `${base}/api/skins/file/${encodeURIComponent(skin.id)}/${encodeURIComponent(filename)}${suffix}`;
 }
 
 export function formatSkinFileSize(bytes: number | null | undefined): string {

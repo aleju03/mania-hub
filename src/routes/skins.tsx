@@ -1,5 +1,5 @@
 import { createFileRoute, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
-import { Layers, Upload } from "lucide-react";
+import { Layers, Lock, Upload } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { ManiaRain } from "../components/home/ManiaRain";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
@@ -14,6 +14,8 @@ import { useAuth } from "../lib/auth-context";
 import { isAdmin } from "../lib/auth-shared";
 import { isLiveBackendConfigured } from "../lib/live-backend";
 import {
+  canUsePrivateSkins,
+  fetchMyPrivateSkins,
   fetchSkinsListDirect,
   readCachedSkinsList,
   skinsListCacheKey,
@@ -111,6 +113,9 @@ function SkinsPage() {
   const location = useLocation();
   const auth = useAuth();
   const admin = isAdmin(auth);
+  // PRIVATE_SKINS_ADMIN_ONLY: while the gate is up only the owner can make a
+  // private skin, so nobody else has a shelf to load either.
+  const canUsePrivate = canUsePrivateSkins(auth);
 
   // Seeded from the in-memory list cache so walking back from a skin page
   // paints the same grid it left, not a screen of skeletons.
@@ -119,6 +124,10 @@ function SkinsPage() {
   const [failed, setFailed] = useState(false);
   const [showUploader, setShowUploader] = useState(false);
   const [showBulkUploader, setShowBulkUploader] = useState(false);
+  // Private skins are absent from the list everyone else reads, so their
+  // uploader gets them on a shelf of their own above the grid; without it
+  // there would be no way back to their pages.
+  const [privateSkins, setPrivateSkins] = useState<SkinSummary[]>([]);
   const [searchInput, setSearchInput] = useState(q);
   const [reloadTick, setReloadTick] = useState(0);
 
@@ -174,7 +183,30 @@ function SkinsPage() {
     return () => controller.abort();
   }, [q, page, sort, k, reloadTick]);
 
+  const viewerId = auth.viewer?.id ?? null;
+  useEffect(() => {
+    if (!viewerId || !canUsePrivate || !isLiveBackendConfigured()) {
+      setPrivateSkins([]);
+      return;
+    }
+    let cancelled = false;
+    void fetchMyPrivateSkins()
+      .then((mine) => {
+        if (!cancelled) setPrivateSkins(mine);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [viewerId, canUsePrivate, reloadTick]);
+
   const handlePublished = useCallback((skin: SkinSummary) => {
+    if (skin.visibility === "private") {
+      // It will never show up in the grid below, so the shelf is where the
+      // uploader sees that it landed.
+      setPrivateSkins((previous) => [skin, ...previous.filter((entry) => entry.id !== skin.id)]);
+      return;
+    }
     // Land the fresh skin at the top of an unfiltered first page.
     setData((previous) =>
       previous && page === 0 && !q && !k
@@ -294,6 +326,20 @@ function SkinsPage() {
           </div>
 
           <div className="mx-auto w-full max-w-[1200px] flex-1 px-4 py-5 sm:px-5">
+            {privateSkins.length > 0 && (
+              <div className="mb-6">
+                <div className="mb-2 flex items-baseline gap-2">
+                  <Lock className="h-3.5 w-3.5 shrink-0 self-center text-osu-f1/55" aria-hidden="true" />
+                  <h2 className="text-[13px] font-bold text-white">Your private skins</h2>
+                  <span className="text-[11px] text-osu-f1">only you can open these</span>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {privateSkins.map((skin) => (
+                    <SkinCard key={skin.id} skin={skin} />
+                  ))}
+                </div>
+              </div>
+            )}
             {loading && !data ? (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {Array.from({ length: 9 }, (_, index) => (
@@ -343,6 +389,7 @@ function SkinsPage() {
         open={showUploader && !!auth.viewer}
         onClose={() => setShowUploader(false)}
         onPublished={handlePublished}
+        canUsePrivate={canUsePrivate}
       />
       <SkinBulkUploadModal
         open={showBulkUploader && admin}

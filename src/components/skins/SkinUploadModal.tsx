@@ -40,7 +40,14 @@ import {
   uploadErrorMessage,
   uploadSkinPart,
   type SkinSummary,
+  type SkinVisibility,
 } from "../../lib/skins";
+
+
+const VISIBILITY_CHOICES: ReadonlyArray<{ value: SkinVisibility; label: string; hint: string }> = [
+  { value: "public", label: "Everyone", hint: "On /skins, anyone can download the .osk." },
+  { value: "private", label: "Only me", hint: "Off the list, no download. Your replays still play in it." },
+];
 
 // The publish flow, entirely client-driven: parse the .osk in the browser
 // (jszip via the replay-skin importer), compose the preview on a canvas, then
@@ -222,10 +229,14 @@ export function SkinUploadModal({
   open,
   onClose,
   onPublished,
+  // PRIVATE_SKINS_ADMIN_ONLY: false hides the visibility choice entirely and
+  // every upload publishes to the catalog, exactly as before the feature.
+  canUsePrivate = false,
 }: {
   open: boolean;
   onClose: () => void;
   onPublished: (skin: SkinSummary) => void;
+  canUsePrivate?: boolean;
 }) {
   const [step, setStep] = useState<UploadStep>("pick");
   const [dragActive, setDragActive] = useState(false);
@@ -255,6 +266,9 @@ export function SkinUploadModal({
   // credit this instead of the uploader.
   const [author, setAuthor] = useState("");
   const [description, setDescription] = useState("");
+  // Public puts the skin on /skins for anyone to download; private keeps it to
+  // the uploader and lets it front their replays without leaving the server.
+  const [visibility, setVisibility] = useState<SkinVisibility>("public");
   const [screenshots, setScreenshots] = useState<ProcessedScreenshot[]>([]);
   const screenshotUrlsRef = useRef<string[]>([]);
 
@@ -715,7 +729,7 @@ export function SkinUploadModal({
       if (!ticketRef.current) {
         const oskSha256 = oskHashRef.current?.file === file ? await oskHashRef.current.hash : null;
         const started = await startSkinUpload({
-          data: { name: trimmedName, author: author.trim(), description: description.trim(), oskSha256 },
+          data: { name: trimmedName, author: author.trim(), description: description.trim(), oskSha256, visibility },
         });
         if (!started.ok) {
           setStep("form");
@@ -800,7 +814,7 @@ export function SkinUploadModal({
       }
       setStep("form");
     }
-  }, [file, name, author, description, onPublished, previews, screenshots, coverKeymode]);
+  }, [file, name, author, description, visibility, onPublished, previews, screenshots, coverKeymode]);
 
   const uploading = step === "uploading";
 
@@ -885,6 +899,9 @@ export function SkinUploadModal({
                     setAuthor={setAuthor}
                     description={description}
                     setDescription={setDescription}
+                    visibility={visibility}
+                    setVisibility={setVisibility}
+                    canUsePrivate={canUsePrivate}
                     screenshots={screenshots}
                     screenshotInputRef={screenshotInputRef}
                     addScreenshots={addScreenshots}
@@ -1011,6 +1028,7 @@ function DoneStep({
 }) {
   const [copied, setCopied] = useState(false);
   const copyTimerRef = useRef<number | null>(null);
+  const isPrivate = published.visibility === "private";
   const path = `/skins/${published.slug ?? published.id}`;
   // Absolute, because the point of the button is pasting it somewhere else.
   const shareUrl = typeof window === "undefined" ? path : `${window.location.origin}${path}`;
@@ -1046,10 +1064,16 @@ function DoneStep({
       <div className="flex flex-col items-center gap-1">
         <span className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-[0.1em] text-osu-green">
           <Check size={13} aria-hidden="true" />
-          published
+          {isPrivate ? "saved" : "published"}
         </span>
-        <h3 className="text-[17px] font-bold leading-tight text-white">{published.name} is live</h3>
-        <p className="text-[12px] text-osu-f1">This is how it looks on the skins page.</p>
+        <h3 className="text-[17px] font-bold leading-tight text-white">
+          {published.name} is {isPrivate ? "yours" : "live"}
+        </h3>
+        <p className="text-[12px] text-osu-f1">
+          {isPrivate
+            ? "Nobody else can open it. Set it as your replay skin and it plays in your replays."
+            : "This is how it looks on the skins page."}
+        </p>
       </div>
 
       <div className="w-full max-w-[340px] text-left">
@@ -1069,14 +1093,18 @@ function DoneStep({
         >
           View the skin page
         </Link>
-        <button
-          type="button"
-          onClick={() => void copyLink()}
-          className="flex items-center gap-1.5 rounded-full border border-osu-b3/40 px-4 py-2 text-[12.5px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:border-osu-f1/40 hover:text-osu-l1"
-        >
-          {copied ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
-          {copied ? "Link copied" : "Copy link"}
-        </button>
+        {/* A private skin's link 404s for whoever it is sent to, so there is
+            nothing here worth copying. */}
+        {!isPrivate && (
+          <button
+            type="button"
+            onClick={() => void copyLink()}
+            className="flex items-center gap-1.5 rounded-full border border-osu-b3/40 px-4 py-2 text-[12.5px] font-semibold text-osu-l2 transition-colors cursor-pointer hover:border-osu-f1/40 hover:text-osu-l1"
+          >
+            {copied ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
+            {copied ? "Link copied" : "Copy link"}
+          </button>
+        )}
         <button
           type="button"
           onClick={onUploadAnother}
@@ -1086,7 +1114,7 @@ function DoneStep({
         </button>
       </div>
 
-      <code className="max-w-full truncate text-[10.5px] text-osu-f1/60">{shareUrl}</code>
+      {!isPrivate && <code className="max-w-full truncate text-[10.5px] text-osu-f1/60">{shareUrl}</code>}
     </div>
   );
 }
@@ -1119,6 +1147,9 @@ function FormStep({
   setAuthor,
   description,
   setDescription,
+  visibility,
+  setVisibility,
+  canUsePrivate,
   screenshots,
   screenshotInputRef,
   addScreenshots,
@@ -1160,6 +1191,9 @@ function FormStep({
   setAuthor: (author: string) => void;
   description: string;
   setDescription: (description: string) => void;
+  visibility: SkinVisibility;
+  setVisibility: (visibility: SkinVisibility) => void;
+  canUsePrivate: boolean;
   screenshots: ProcessedScreenshot[];
   screenshotInputRef: React.RefObject<HTMLInputElement | null>;
   addScreenshots: (files: FileList | null) => Promise<void>;
@@ -1406,6 +1440,32 @@ function FormStep({
             className="w-full resize-y rounded-lg border border-osu-b3/30 bg-osu-b4 px-3 py-2 text-[13px] leading-relaxed text-osu-l1 transition-colors placeholder:text-osu-f1/45 focus:border-osu-pink/50 focus:outline-none"
           />
         </label>
+        {canUsePrivate && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Who gets it</span>
+          <div className="flex gap-2">
+            {VISIBILITY_CHOICES.map((choice) => (
+              <button
+                key={choice.value}
+                type="button"
+                disabled={uploading}
+                onClick={() => setVisibility(choice.value)}
+                aria-pressed={visibility === choice.value}
+                className={`flex-1 rounded-lg border px-3 py-2 text-left transition-colors cursor-pointer disabled:opacity-50 ${
+                  visibility === choice.value
+                    ? "border-osu-pink/55 bg-osu-pink/10"
+                    : "border-osu-b3/30 bg-osu-b4 hover:border-osu-f1/40"
+                }`}
+              >
+                <span className={`block text-[12.5px] font-bold ${visibility === choice.value ? "text-white" : "text-osu-l2"}`}>
+                  {choice.label}
+                </span>
+                <span className="mt-0.5 block text-[11px] leading-snug text-osu-f1">{choice.hint}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        )}
         <div className="flex flex-col gap-1.5">
           <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
             Screenshots <span className="normal-case tracking-normal text-osu-f1/70">(optional, up to {SKIN_MAX_SCREENSHOTS})</span>
@@ -1549,10 +1609,14 @@ function DetectedAssets({
   );
 }
 
-function startErrorMessage(code: "not_logged_in" | "unavailable" | "storage_not_configured" | "invalid_name" | "pending_limit" | "skin_limit" | "duplicate"): string {
+function startErrorMessage(code: "not_logged_in" | "unavailable" | "storage_not_configured" | "invalid_name" | "pending_limit" | "skin_limit" | "duplicate" | "private_admin_only"): string {
   switch (code) {
     case "not_logged_in":
       return "The session expired. Log in with osu! again to publish.";
+    // PRIVATE_SKINS_ADMIN_ONLY. Only reachable by hand: the choice is hidden
+    // for everyone the gate excludes.
+    case "private_admin_only":
+      return "Private skins are not open yet.";
     case "duplicate":
       return "This exact .osk is already published on the site.";
     case "invalid_name":

@@ -20,8 +20,11 @@ import {
   getSkinForUpload,
   listExpiredPendingSkins,
   listSkins,
+  privateSkinSecretMatches,
+  recordSkinDownload,
   renameSkin,
   replaceSkinOsk,
+  setSkinVisibility,
   setSkinAccent,
   setSkinCoverKeymode,
   setSkinHidden,
@@ -35,7 +38,8 @@ import {
 } from "../src/features/skins.js";
 import { runRetention } from "../src/retention.js";
 import { sniffImage, validateOskBuffer } from "../src/skins/validate-osk.js";
-import { nextSkinOskRevision, nextSkinPreviewRevision, oskFilename, skinKeymodePreviewKey, skinOskKey, skinPreviewKey } from "../src/skins/r2.js";
+import { isPrivateSkinKey, nextSkinOskRevision, nextSkinPreviewRevision, oskFilename, privateSkinKey, skinKeymodePreviewKey, skinOskKey, skinPreviewKey } from "../src/skins/r2.js";
+import { collectReplaySkinAssetPaths, replaySkinBundleVersion } from "../src/skins/replay-bundle.js";
 import { slugifySkinName } from "../src/skins/slug.js";
 
 let dir = "";
@@ -59,11 +63,13 @@ async function createPublishedSkin(input: {
   name: string;
   keymodes?: number[];
   sha256?: string;
+  visibility?: "public" | "private";
 }): Promise<string> {
   const created = await createPendingSkin(db, {
     ownerUserId: input.ownerUserId,
     ownerUsername: input.ownerUsername,
     name: input.name,
+    visibility: input.visibility,
   });
   if (!created.ok) throw new Error(`createPendingSkin failed: ${created.error}`);
   const pendingRow = await getSkin(db, created.id);
@@ -895,5 +901,145 @@ describe("editing a published skin's previews", () => {
     await exec(db, "update skins set token_expires_at = ? where id = ?", [new Date(Date.now() - 48 * 3600_000).toISOString(), id]);
 
     expect(await listExpiredPendingSkins(db, new Date().toISOString())).toEqual([]);
+  });
+});
+
+describe("private skins", () => {
+  it("redacts everything that addresses a private skin, and only for other readers", async () => {
+    const id = await createPublishedSkin({ ...OWNER, visibility: "private" });
+    const row = (await getSkin(db, id))!;
+
+    expect(row.visibility).toBe("private");
+    expect(row.privateSecret).toBeTruthy();
+
+    const stranger = toSkinSummary(row);
+    expect(stranger).toMatchObject({
+      id,
+      name: "Cloudy Skies",
+      visibility: "private",
+      slug: null,
+      oskUrl: null,
+      oskSha256: null,
+      oskSizeBytes: null,
+      previewUrl: null,
+      downloadCount: 0,
+    });
+    // The credit a replay shows survives: name, author, keymodes, accent.
+    expect(stranger.keymodes).toEqual([4]);
+    expect(stranger.accentColor).toBe("#ff66aa");
+
+    // The owner's copy is whole, with the capability on the URLs the backend
+    // itself serves.
+    await exec(db, "update skins set osk_url = ?, preview_url = ? where id = ?", [
+      `https://live.test/api/skins/file/${id}/skin.osk`,
+      `https://live.test/api/skins/file/${id}/preview.webp`,
+      id,
+    ]);
+    const owner = toSkinSummary((await getSkin(db, id))!, { asOwner: true });
+    expect(owner.slug).toBe("cloudy-skies");
+    expect(owner.oskUrl).toBe(`https://live.test/api/skins/file/${id}/skin.osk?t=${encodeURIComponent(row.privateSecret!)}`);
+    expect(owner.previewUrl).toContain("?t=");
+  });
+
+  it("keeps private skins out of the catalog and its duplicate guard", async () => {
+    const sha256 = "cd".repeat(32);
+    const secret = await createPublishedSkin({ ...OWNER, name: "Secret Mix", sha256, visibility: "private" });
+    await createPublishedSkin({ ownerUserId: 202, ownerUsername: "echo", name: "Open Mix" });
+
+    expect((await listSkins(db, {})).skins.map((skin) => skin.name)).toEqual(["Open Mix"]);
+    // Its own uploader sees it; another signed-in reader does not.
+    expect((await listSkins(db, { privateOwnerUserId: 101 })).total).toBe(2);
+    expect((await listSkins(db, { privateOwnerUserId: 202 })).total).toBe(1);
+    expect((await listSkins(db, { privateOwnerUserId: 101, onlyPrivate: true })).skins.map((skin) => skin.id)).toEqual([secret]);
+    // The shelf query is meaningless without an owner and must not fall back
+    // to "every private skin".
+    expect((await listSkins(db, { onlyPrivate: true })).total).toBe(0);
+
+    // A private skin is never named as the duplicate behind someone else's
+    // upload, and never counted as one.
+    expect(await findPublishedSkinByOskSha256(db, sha256)).toBeNull();
+    const copy = await createPendingSkin(db, { ownerUserId: 303, ownerUsername: "foxtrot", name: "Same Bytes", oskSha256: sha256 });
+    expect(copy.ok).toBe(true);
+
+    // And it has no counted download.
+    expect(await recordSkinDownload(db, secret)).toBeNull();
+  });
+
+  it("rotates the secret every time a skin turns private", async () => {
+    const id = await createPublishedSkin({ ...OWNER });
+    expect((await getSkin(db, id))?.privateSecret).toBeNull();
+
+    const first = await setSkinVisibility(db, id, "private", 101);
+    expect(first.ok && first.changed).toBe(true);
+    const firstSecret = (await getSkin(db, id))!.privateSecret!;
+    expect(firstSecret).toBeTruthy();
+
+    // Someone else's skin is not theirs to hide.
+    const foreign = await setSkinVisibility(db, id, "public", 202);
+    expect(foreign).toMatchObject({ ok: false, error: "forbidden" });
+
+    await setSkinVisibility(db, id, "public", 101);
+    expect((await getSkin(db, id))?.privateSecret).toBeNull();
+    await setSkinVisibility(db, id, "private", 101);
+    const secondSecret = (await getSkin(db, id))!.privateSecret!;
+    // A capability handed out before the public spell must not come back to
+    // life with it.
+    expect(secondSecret).not.toBe(firstSecret);
+
+    const row = (await getSkin(db, id))!;
+    expect(privateSkinSecretMatches(row, secondSecret)).toBe(true);
+    expect(privateSkinSecretMatches(row, firstSecret)).toBe(false);
+    expect(privateSkinSecretMatches(row, null)).toBe(false);
+  });
+
+  it("hides a private skin's objects behind an unguessable key", () => {
+    const key = skinOskKey("sk_1", "Cloudy Skies");
+    expect(key).toBe("skins/sk_1/Cloudy Skies.osk");
+    expect(isPrivateSkinKey(key)).toBe(false);
+    const secret = "AbC-123_xyz";
+    expect(privateSkinKey(key, secret)).toBe(`skins/sk_1/p-${secret}/Cloudy Skies.osk`);
+    expect(isPrivateSkinKey(privateSkinKey(key, secret))).toBe(true);
+    // A secret that tried to climb out of its folder is scrubbed, not escaped.
+    expect(privateSkinKey(key, "../../etc")).toBe("skins/sk_1/p-etc/Cloudy Skies.osk");
+    // Going private, public and private again rotates the folder rather than
+    // nesting a second one inside the first.
+    expect(privateSkinKey(privateSkinKey(key, secret), "next-secret")).toBe("skins/sk_1/p-next-secret/Cloudy Skies.osk");
+    // A skin whose own name starts with the marker is not a private object.
+    expect(isPrivateSkinKey(skinOskKey("sk_1", "p-rojekt"))).toBe(false);
+  });
+
+  it("collects the asset paths a stored payload draws, and versions the bundle by them", () => {
+    const payload = {
+      v: 1,
+      settings: {
+        keymodeProfiles: {
+          4: {
+            assets: {
+              columns: [
+                { tap: { name: "note1.png", src: "", path: "mania/note1.png" } },
+                { tap: { name: "note1.png", src: "", path: "mania/note1.png" } },
+              ],
+              judgements: { hit300: { name: "hit300.png", src: "", path: "hit300.png" } },
+              combo: { digits: [{ name: "score-0.png", src: "", path: "score-0.png" }, null] },
+              stage: { hint: { name: "hint.png", src: "", path: "mania-stage-hint.png" } },
+            },
+          },
+        },
+      },
+    };
+    expect(collectReplaySkinAssetPaths(payload).sort()).toEqual([
+      "hit300.png",
+      "mania-stage-hint.png",
+      "mania/note1.png",
+      "score-0.png",
+    ]);
+    // A path that tries to climb out of the archive never becomes a lookup.
+    expect(collectReplaySkinAssetPaths({ path: "../../secrets.png" })).toEqual([]);
+
+    const version = replaySkinBundleVersion({ oskKey: "skins/a/x.osk", oskSha256: "ab", settingsUpdatedAt: "2026-08-03" });
+    expect(version).toHaveLength(16);
+    // A newer .osk or a re-saved payload has to land on a different URL.
+    expect(replaySkinBundleVersion({ oskKey: "skins/a/x-r1.osk", oskSha256: "ab", settingsUpdatedAt: "2026-08-03" })).not.toBe(version);
+    expect(replaySkinBundleVersion({ oskKey: "skins/a/x.osk", oskSha256: "ab", settingsUpdatedAt: "2026-08-04" })).not.toBe(version);
   });
 });

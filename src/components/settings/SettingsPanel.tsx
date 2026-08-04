@@ -697,7 +697,7 @@ function SkinPanel({
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[13px] font-semibold text-osu-l1">{myReplaySkin.skin.name}</div>
                   <div className="text-[11px] text-osu-f1">
-                    updated{" "}
+                    {myReplaySkin.private ? "private · " : ""}updated{" "}
                     {new Date(myReplaySkin.updatedAt).toLocaleDateString(undefined, {
                       year: "numeric",
                       month: "short",

@@ -1678,6 +1678,8 @@ async function migrateSkins(db: Db): Promise<void> {
       accent_color text,
       search_text text not null default '',
       status text not null default 'pending',
+      visibility text not null default 'public',
+      private_secret text,
       upload_token text,
       token_expires_at text,
       osk_key text,
@@ -1726,6 +1728,20 @@ async function migrateSkins(db: Db): Promise<void> {
     // When the .osk was last swapped for a newer build by its uploader; null
     // on skins that still carry the file they were published with.
     await db.execute("alter table skins add column osk_updated_at text");
+  }
+  if (!skinColumns.includes("visibility")) {
+    // 'public' is the catalog skin everyone browses and downloads. 'private'
+    // is the uploader's own: it stays off /skins, its page and its .osk answer
+    // only to them, and replay viewers get the filtered bundle instead of the
+    // archive. Orthogonal to status, which stays the publish/moderation axis.
+    await db.execute("alter table skins add column visibility text not null default 'public'");
+  }
+  if (!skinColumns.includes("private_secret")) {
+    // The capability behind a private skin's stored objects: it is a segment of
+    // every R2 key the skin writes (so the public bucket URL cannot be guessed
+    // from the id) and the ?t= the file endpoint checks. Handed out only in
+    // owner-scoped reads, and rotated whenever a skin turns private.
+    await db.execute("alter table skins add column private_secret text");
   }
   await db.execute(`
     create unique index if not exists idx_skins_slug

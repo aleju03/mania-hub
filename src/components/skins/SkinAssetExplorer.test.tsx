@@ -27,6 +27,7 @@ const SKIN: SkinSummary = {
   oskSha256: null,
   oskUpdatedAt: null,
   status: "published",
+  visibility: "public",
   publishedAt: null,
 };
 

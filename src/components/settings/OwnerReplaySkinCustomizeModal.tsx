@@ -75,7 +75,9 @@ export function OwnerReplaySkinCustomizeModal({
           updateSaveState("error");
           return;
         }
-        onSaved({ skin: record.skin, settings: payload, updatedAt: new Date().toISOString() });
+        // Spread the record so a private skin keeps its bundle pointer; only
+        // the settings and their timestamp have moved.
+        onSaved({ ...record, settings: payload, updatedAt: new Date().toISOString() });
         onClose();
       } catch {
         updateSaveState("error");

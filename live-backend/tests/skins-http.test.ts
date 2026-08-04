@@ -23,9 +23,21 @@ vi.mock("../src/skins/r2.js", async (importOriginal) => {
     uploadSkinObject: vi.fn(async (_config: unknown, key: string, buffer: Buffer) => ({
       storageKey: key,
       sizeBytes: buffer.length,
-      url: `https://cdn.test/${key}`,
+      // Mirrors the real skinObjectUrl: a private skin's objects never get a
+      // public bucket URL, they are addressed through the streaming endpoint.
+      url: original.isPrivateSkinKey(key)
+        ? `https://live.test/api/skins/file/${key.split("/")[1]}/${key.split("/").pop()}`
+        : `https://cdn.test/${key}`,
     })),
     deleteSkinObjects: vi.fn(async () => {}),
+    copySkinObject: vi.fn(async (_config: unknown, _from: string, to: string) => ({
+      storageKey: to,
+      sizeBytes: 0,
+      url: `https://live.test/api/skins/file/${to.split("/")[1]}/${to.split("/").pop()}`,
+    })),
+    // Reads the stored .osk back for the private replay bundle. Internal to
+    // r2.ts otherwise, so tests that need real bytes override it per case.
+    readSkinObject: vi.fn(async () => null),
     getSkinObject: vi.fn(async (_config: unknown, key: string) => ({
       body: Readable.from([Buffer.from(`object:${key}`)]),
       contentType: key.endsWith(".osk") ? "application/octet-stream" : "image/webp",
@@ -35,7 +47,7 @@ vi.mock("../src/skins/r2.js", async (importOriginal) => {
   };
 });
 
-import { deleteSkinObjects, getSkinObject, uploadSkinObject } from "../src/skins/r2.js";
+import { copySkinObject, deleteSkinObjects, getSkinObject, readSkinObject, uploadSkinObject } from "../src/skins/r2.js";
 
 let dir = "";
 let db: Db;
@@ -52,13 +64,14 @@ beforeEach(async () => {
   events = new LiveEventLog(db);
   vi.mocked(uploadSkinObject).mockClear();
   vi.mocked(deleteSkinObjects).mockClear();
+  vi.mocked(copySkinObject).mockClear();
 });
 
 afterEach(async () => {
   if (dir) await rm(dir, { recursive: true, force: true });
 });
 
-function ctx() {
+function ctx(configOverrides: Record<string, unknown> = {}) {
   return {
     db,
     queue,
@@ -75,6 +88,7 @@ function ctx() {
       skinUploadRatePerMinute: 60,
       skinOskMaxBytes: 65 * 1024 * 1024,
       skinImageMaxBytes: 4 * 1024 * 1024,
+      ...configOverrides,
     },
     osu: { limiter: { state: () => ({ hardPerMinute: 60, usedLastMinute: 0 }) } },
     oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
@@ -123,9 +137,39 @@ function mockRes() {
   return { res, writes, headers };
 }
 
-async function call(req: IncomingMessage) {
+// The zip the private replay bundle answers with does not survive the string
+// coercion the JSON helper below does, so binary responses get their own res
+// that keeps the chunks as buffers.
+async function callBinary(req: IncomingMessage) {
+  const chunks: Buffer[] = [];
+  const headers: Record<string, string> = {};
+  const res = Object.assign(new EventEmitter(), {
+    statusCode: 200,
+    setHeader: (key: string, value: number | string | readonly string[]) => {
+      headers[key.toLowerCase()] = Array.isArray(value) ? value.join(",") : String(value);
+    },
+    getHeader: (key: string) => headers[key.toLowerCase()],
+    writeHead: (status: number) => {
+      res.statusCode = status;
+      return res;
+    },
+    write: (chunk: string | Buffer) => {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+      return true;
+    },
+    destroy: () => {},
+    end: (chunk?: string | Buffer) => {
+      if (chunk != null) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+    },
+  }) as unknown as ServerResponse & { statusCode: number };
+  await routeHttp(req, res, ctx());
+  await new Promise((resolve) => setImmediate(resolve));
+  return { status: res.statusCode, body: Buffer.concat(chunks), headers };
+}
+
+async function call(req: IncomingMessage, configOverrides?: Record<string, unknown>) {
   const response = mockRes();
-  await routeHttp(req, response.res, ctx());
+  await routeHttp(req, response.res, ctx(configOverrides));
   // Let a piped stream (the file endpoint) flush before reading writes.
   await new Promise((resolve) => setImmediate(resolve));
   const raw = response.writes.join("");
@@ -481,4 +525,283 @@ describe("skins HTTP endpoints", () => {
     expect(oversized.status).toBe(413);
     expect(oversized.body).toMatchObject({ error: "payload_too_large" });
   });
+
+describe("private skins", () => {
+  // A .osk with real art in it, so the replay bundle has something to filter.
+  async function buildArtOskBuffer(): Promise<Buffer> {
+    const zip = new JSZip();
+    zip.file("skin.ini", "[General]\nName: Hoarded\nAuthor: sona\n\n[Mania]\nKeys: 4\nColourLight1: 255,102,170\n");
+    zip.file("mania/note1.png", PNG_BYTES);
+    zip.file("mania/note2.png", PNG_BYTES);
+    zip.file("menu-background.jpg", PNG_BYTES);
+    zip.file("normal-hitnormal.wav", Buffer.from("RIFF"));
+    return zip.generateAsync({ type: "nodebuffer" });
+  }
+
+  async function publishPrivateSkin(osk?: Buffer): Promise<{ id: string; skin: Record<string, string> }> {
+    const started = await call(bodyReq(
+      "POST",
+      "/api/skins/start",
+      // asAdmin is the PRIVATE_SKINS_ADMIN_ONLY gate; the server fn sets it
+      // only after verifying a true admin.
+      JSON.stringify({ userId: 101, username: "delta", name: "Hoarded", visibility: "private", asAdmin: true }),
+      ADMIN,
+    ));
+    expect(started.status).toBe(200);
+    const { id, token } = started.body as { id: string; token: string };
+    await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=osk`, osk ?? await buildOskBuffer([4])));
+    await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=preview`, PNG_BYTES));
+    const finished = await call(mockReq("POST", `/api/skins/finish?id=${id}&token=${token}`));
+    expect(finished.status).toBe(200);
+    return { id, skin: finished.body.skin };
+  }
+
+  it("refuses a private skin to anyone the admin gate excludes", async () => {
+    // PRIVATE_SKINS_ADMIN_ONLY. Delete this test with the gate.
+    const started = await call(bodyReq(
+      "POST",
+      "/api/skins/start",
+      JSON.stringify({ userId: 101, username: "delta", name: "Wishful", visibility: "private" }),
+      ADMIN,
+    ));
+    expect(started.status).toBe(200);
+    const { id, token } = started.body as { id: string; token: string };
+    await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=osk`, await buildOskBuffer([4])));
+    await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=preview`, PNG_BYTES));
+    const finished = await call(mockReq("POST", `/api/skins/finish?id=${id}&token=${token}`));
+    // Refused, not honoured: a skin asked for privately without the gate open
+    // publishes to the catalog exactly as an ordinary upload would.
+    expect(finished.body.skin.visibility).toBe("public");
+    expect((await call(mockReq("GET", "/api/skins/list"))).body.total).toBe(1);
+
+    // And it cannot be switched over afterwards either.
+    const flipped = await call(bodyReq(
+      "POST",
+      "/api/skins/visibility",
+      JSON.stringify({ userId: 101, id, visibility: "private" }),
+      ADMIN,
+    ));
+    expect(flipped.status).toBe(403);
+    expect(flipped.body).toMatchObject({ error: "private_admin_only" });
+    // Going back to public is never gated, so nothing can get stuck.
+    expect((await call(bodyReq(
+      "POST",
+      "/api/skins/visibility",
+      JSON.stringify({ userId: 101, id, visibility: "public" }),
+      ADMIN,
+    ))).status).toBe(200);
+  });
+
+  it("keeps a private skin off the catalog and its bytes behind the owner's capability", async () => {
+    const { id, skin } = await publishPrivateSkin();
+
+    // Every object lands under a folder named by the skin's secret, so the
+    // bucket's public base URL cannot be derived from the id.
+    const keys = vi.mocked(uploadSkinObject).mock.calls.map((args) => String(args[1]));
+    expect(keys.length).toBeGreaterThan(0);
+    for (const key of keys) expect(key).toMatch(new RegExp(`^skins/${id}/p-[A-Za-z0-9_-]+/`));
+
+    // The uploader's own copy carries the capability on the file URL.
+    expect(skin.visibility).toBe("private");
+    expect(String(skin.oskUrl)).toContain("?t=");
+    const token = new URL(String(skin.oskUrl)).searchParams.get("t") ?? "";
+    expect(token.length).toBeGreaterThan(10);
+
+    // Not on the public list, not on an admin's hidden-skins list either.
+    expect((await call(mockReq("GET", "/api/skins/list"))).body.total).toBe(0);
+    expect((await call(mockReq("GET", "/api/skins/list?includeHidden=1", ADMIN))).body.total).toBe(0);
+    // Its uploader gets it back on their own shelf, and only theirs.
+    expect((await call(mockReq("GET", "/api/skins/list?visibility=private&viewerUserId=101", ADMIN))).body.total).toBe(1);
+    expect((await call(mockReq("GET", "/api/skins/list?visibility=private&viewerUserId=202", ADMIN))).body.total).toBe(0);
+    // A browser cannot ask for someone else's shelf: without the admin token
+    // the viewer id is ignored entirely.
+    expect((await call(mockReq("GET", "/api/skins/list?visibility=private&viewerUserId=101"))).body.total).toBe(0);
+
+    // The page is the uploader's alone.
+    expect((await call(mockReq("GET", `/api/skins/get?id=${id}`))).status).toBe(404);
+    expect((await call(mockReq("GET", `/api/skins/get?id=${id}&viewerUserId=202`, ADMIN))).status).toBe(404);
+    const owned = await call(mockReq("GET", `/api/skins/get?id=${id}&viewerUserId=101`, ADMIN));
+    expect(owned.status).toBe(200);
+    expect(String(owned.body.skin.oskUrl)).toContain("?t=");
+
+    // No counted download at all.
+    expect((await call(mockReq("GET", `/api/skins/download?id=${id}`))).status).toBe(404);
+
+    // The bytes answer only to the capability.
+    const filename = String(skin.oskUrl).split("?")[0].split("/").pop();
+    expect((await call(mockReq("GET", `/api/skins/file/${id}/${filename}`))).status).toBe(404);
+    expect((await call(mockReq("GET", `/api/skins/file/${id}/${filename}?t=wrong`))).status).toBe(404);
+    const streamed = await call(mockReq("GET", `/api/skins/file/${id}/${filename}?t=${encodeURIComponent(token)}`));
+    expect(streamed.status).toBe(200);
+    expect(streamed.headers["cache-control"]).toBe("private, max-age=86400");
+  });
+
+  it("lets only the owner point their replays at a private skin", async () => {
+    const { id } = await publishPrivateSkin();
+    const set = (userId: number) => call(bodyReq(
+      "POST",
+      "/api/replay-skin/set",
+      JSON.stringify({ userId, skinId: id, settings: { v: 1, settings: {} } }),
+      ADMIN,
+    ));
+    expect((await set(202)).status).toBe(404);
+    expect((await set(101)).status).toBe(200);
+  });
+
+  it("drops a skin off other players' replays the moment it turns private", async () => {
+    // Published public, picked by two players, then hidden away by its owner.
+    const { id } = await publishPrivateSkin(await buildOskBuffer([4]));
+    expect((await call(bodyReq(
+      "POST",
+      "/api/skins/visibility",
+      JSON.stringify({ userId: 101, id, visibility: "public" }),
+      ADMIN,
+    ))).status).toBe(200);
+    for (const userId of [101, 202]) {
+      expect((await call(bodyReq(
+        "POST",
+        "/api/replay-skin/set",
+        JSON.stringify({ userId, skinId: id, settings: { v: 1, settings: {} } }),
+        ADMIN,
+      ))).status).toBe(200);
+    }
+    expect((await call(mockReq("GET", "/api/replay-skin?userId=202"))).body.replaySkin).not.toBeNull();
+
+    const madePrivate = await call(bodyReq(
+      "POST",
+      "/api/skins/visibility",
+      JSON.stringify({ userId: 101, id, visibility: "private", asAdmin: true }),
+      ADMIN,
+    ));
+    expect(madePrivate.status).toBe(200);
+    expect(madePrivate.body.skin.visibility).toBe("private");
+    // The .osk moved off the key the public download link pointed at.
+    expect(String(madePrivate.body.skin.oskUrl)).toContain("/api/skins/file/");
+    expect(String(madePrivate.body.skin.oskUrl)).toContain("?t=");
+
+    // Its owner keeps it; the other player's replays fall back to the default
+    // skin, and there is no bundle for them to pull the art out of either.
+    expect((await call(mockReq("GET", "/api/replay-skin?userId=101"))).body.replaySkin).toMatchObject({ private: true });
+    expect((await call(mockReq("GET", "/api/replay-skin?userId=202"))).body.replaySkin).toBeNull();
+    expect((await call(mockReq("GET", "/api/replay-skin/bundle?userId=202"))).status).toBe(404);
+
+    // Only the uploader (or a true admin) may flip it back.
+    expect((await call(bodyReq(
+      "POST",
+      "/api/skins/visibility",
+      JSON.stringify({ userId: 202, id, visibility: "public" }),
+      ADMIN,
+    ))).status).toBe(403);
+  });
+
+  it("moves the .osk back out of the secret folder when a skin goes public again", async () => {
+    const { id } = await publishPrivateSkin();
+    const privateKey = String(vi.mocked(uploadSkinObject).mock.calls
+      .map((args) => String(args[1]))
+      .find((key) => key.endsWith(".osk")));
+    expect(privateKey).toMatch(/\/p-[A-Za-z0-9_-]+\//);
+
+    const flip = (visibility: string) => call(bodyReq(
+      "POST",
+      "/api/skins/visibility",
+      JSON.stringify({ userId: 101, id, visibility, asAdmin: true }),
+      ADMIN,
+    ));
+
+    // Public again: the file leaves the secret folder so downloads take the
+    // CDN rather than streaming through this process forever, and it lands on
+    // a fresh revision instead of a key an edge cache may hold a 404 for.
+    const madePublic = await flip("public");
+    expect(madePublic.status).toBe(200);
+    const publicKey = `skins/${id}/Hoarded-r1.osk`;
+    expect(vi.mocked(copySkinObject)).toHaveBeenCalledWith(
+      expect.anything(),
+      privateKey,
+      publicKey,
+      "application/octet-stream",
+      "Hoarded.osk",
+    );
+    expect(vi.mocked(deleteSkinObjects)).toHaveBeenCalledWith(expect.anything(), [privateKey]);
+    expect(String(madePublic.body.skin.oskUrl)).not.toContain("?t=");
+    // And it downloads without a capability, through the counter again.
+    expect((await call(mockReq("GET", `/api/skins/download?id=${id}`))).status).toBe(302);
+
+    // Private a third time: a fresh secret, and the folder is replaced rather
+    // than nested inside the old one.
+    const madePrivateAgain = await flip("private");
+    expect(madePrivateAgain.status).toBe(200);
+    const finalKey = String(vi.mocked(copySkinObject).mock.calls.at(-1)?.[2]);
+    expect(finalKey).toMatch(new RegExp(`^skins/${id}/p-[A-Za-z0-9_-]+/Hoarded-r1\\.osk$`));
+    expect(finalKey).not.toBe(privateKey);
+    expect((await call(mockReq("GET", `/api/skins/download?id=${id}`))).status).toBe(404);
+  });
+
+  it("never moves a stored object when the process is not production", async () => {
+    // Local development runs against the same bucket as production, usually
+    // with a snapshot of the live DB, so a toggle here must not copy and
+    // delete a real skin's file out from under the production row.
+    const { id } = await publishPrivateSkin();
+    vi.mocked(copySkinObject).mockClear();
+    vi.mocked(deleteSkinObjects).mockClear();
+
+    const flipped = await call(bodyReq(
+      "POST",
+      "/api/skins/visibility",
+      JSON.stringify({ userId: 101, id, visibility: "public" }),
+      ADMIN,
+    ), { nodeEnv: "development" });
+
+    expect(flipped.status).toBe(200);
+    expect(flipped.body.skin.visibility).toBe("public");
+    expect(copySkinObject).not.toHaveBeenCalled();
+    expect(deleteSkinObjects).not.toHaveBeenCalled();
+  });
+
+  it("serves a replay viewer the redacted skin and a bundle of only what it draws", async () => {
+    const osk = await buildArtOskBuffer();
+    const { id } = await publishPrivateSkin(osk);
+    const settings = {
+      v: 1,
+      settings: { keymodeProfiles: { 4: { assets: { columns: [{ tap: { name: "note1.png", src: "", path: "mania/note1.png" } }] } } } },
+    };
+    expect((await call(bodyReq(
+      "POST",
+      "/api/replay-skin/set",
+      JSON.stringify({ userId: 101, skinId: id, settings }),
+      ADMIN,
+    ))).status).toBe(200);
+
+    // What a stranger watching the replay reads: enough to credit the skin,
+    // nothing that addresses the file or a page.
+    const replaySkin = await call(mockReq("GET", "/api/replay-skin?userId=101"));
+    expect(replaySkin.status).toBe(200);
+    expect(replaySkin.body.replaySkin).toMatchObject({ private: true });
+    expect(replaySkin.body.replaySkin.skin).toMatchObject({
+      id,
+      name: "Hoarded",
+      visibility: "private",
+      oskUrl: null,
+      oskSha256: null,
+      slug: null,
+      previewUrl: null,
+    });
+    expect(replaySkin.body.replaySkin.skin.previews).toEqual([]);
+    expect(replaySkin.body.replaySkin.skin.screenshots).toEqual([]);
+    expect(String(replaySkin.body.replaySkin.bundleVersion)).toHaveLength(16);
+
+    vi.mocked(readSkinObject).mockResolvedValueOnce(osk);
+    const bundle = await callBinary(mockReq("GET", `/api/replay-skin/bundle?userId=101&v=${replaySkin.body.replaySkin.bundleVersion}`));
+    expect(bundle.status).toBe(200);
+    expect(bundle.headers["content-type"]).toBe("application/zip");
+    const loadedBundle = await JSZip.loadAsync(bundle.body);
+    const entries = Object.values(loadedBundle.files).filter((file) => !file.dir).map((file) => file.name);
+    // The art this player's settings draw, the mania hitsounds and skin.ini -
+    // and not one file more.
+    expect(entries.sort()).toEqual(["mania/note1.png", "normal-hitnormal.wav", "skin.ini"]);
+
+    // A public skin has nothing to filter: it keeps serving its whole .osk.
+    expect((await call(mockReq("GET", "/api/replay-skin/bundle?userId=999"))).status).toBe(404);
+  });
+});
+
 });
