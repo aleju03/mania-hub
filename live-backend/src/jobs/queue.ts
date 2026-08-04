@@ -37,7 +37,6 @@ const PRESSURE_DEFER_MS = 30 * 60_000;
 const SHEDDABLE_TYPES: string[] = [];
 
 const ACTIVE_TYPE_CAPS: Record<string, number> = {
-  refresh_user_top_scores: 80,
   // Profile views enqueue their own osu! refresh, so a traffic spike is the one
   // thing that can turn page loads into queue depth. Only bites above
   // QUEUE_TARGET_DEPTH, and the profile still serves its stored snapshot while
@@ -94,6 +93,16 @@ const RESERVED_LANE_TYPES: Record<string, number> = {
   // in the tracker while still playing. A reserve keeps a trickle runnable
   // under any pressure, same remedy as every other former shared-pool type.
   reconcile_user_recent_scores: 10,
+  // Top-play confirmation: the job that decides whether a score entered the
+  // player's bests and records the PP gain. Formerly a shared-pool capped type
+  // (cap 80) and it starved exactly the way the SHEDDABLE_TYPES note describes
+  // -- on prod 1410 sat parked. Two things had to line up: profile-snapshot
+  // refreshes park at priority 80 and reactivation is priority-desc, so every
+  // wake-up went to those and never down to 50; and in the fast lane the same
+  // priority order meant the three slots went to profile work first. The
+  // reserve takes confirmations out of the shared count so a burst of them
+  // stops pinning depth, and the dedicated "top-scores" lane drains them.
+  refresh_user_top_scores: 10,
   // Roster/cohort enrichment. The drip enqueues sit at priority 10, which the
   // fast lane's priority-desc claim never reaches while interactive work
   // (profile refresh 80/120, top scores 50, reconcile 25-70) keeps its three

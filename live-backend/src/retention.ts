@@ -6,6 +6,7 @@ import type { Db } from "./db.js";
 import { exec } from "./db.js";
 import { pruneAvatarAccents } from "./features/avatar-accents.js";
 import { pruneOsuProxyCache } from "./features/osu-proxy-cache.js";
+import { PROFILE_SNAPSHOT_REFRESH_JOB, PROFILE_USER_REFRESH_JOB } from "./features/player-profiles.js";
 import { deleteSkin, listExpiredPendingSkins } from "./features/skins.js";
 import { logInfo, logWarn, errorContext } from "./logger.js";
 import { deleteSkinObjects, type SkinStorageConfig } from "./skins/r2.js";
@@ -24,6 +25,7 @@ export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | 
   const liveCutoff = daysAgo(config.liveEventRetentionDays);
   const doneJobCutoff = daysAgo(config.doneJobRetentionDays);
   const apiCutoff = daysAgo(config.apiCallLogRetentionDays);
+  const parkedOnDemandCutoff = new Date(Date.now() - PARKED_ON_DEMAND_JOB_RETENTION_HOURS * 60 * 60 * 1000).toISOString();
   const replayVideoCutoff = daysAgo(config.replayVideoJobRetentionDays);
   const rankSnapshotCutoff = daysAgo(config.rankSnapshotRetentionDays);
   const activityCutoffDay = activityRetentionCutoffDay(config.activityRetentionYears);
@@ -57,6 +59,14 @@ export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | 
     scoreEvents: Number((await exec(db, "delete from score_events where received_at < ?", [scoreCutoff])).rowsAffected ?? 0),
     liveEvents: Number((await exec(db, "delete from live_event_log where created_at < ?", [liveCutoff])).rowsAffected ?? 0),
     doneJobs: Number((await exec(db, "delete from jobs where status = 'done' and updated_at < ?", [doneJobCutoff])).rowsAffected ?? 0),
+    parkedOnDemandJobs: Number((await exec(
+      db,
+      `delete from jobs
+       where status = 'deferred_pressure'
+         and updated_at < ?
+         and type in (${PARKED_ON_DEMAND_JOB_TYPES.map(() => "?").join(", ")})`,
+      [parkedOnDemandCutoff, ...PARKED_ON_DEMAND_JOB_TYPES],
+    )).rowsAffected ?? 0),
     apiCalls: Number((await exec(db, "delete from api_call_log where started_at < ?", [apiCutoff])).rowsAffected ?? 0),
     replayVideoJobs: Number((await exec(db, "delete from replay_video_exports where status in ('done', 'failed', 'cancelled') and updated_at < ?", [replayVideoCutoff])).rowsAffected ?? 0),
     rankSnapshots: Number((await exec(db, "delete from country_rank_snapshots where captured_at < ?", [rankSnapshotCutoff])).rowsAffected ?? 0),
@@ -131,6 +141,17 @@ export const RESOLVED_FARM_HELPER_FEEDBACK_RETENTION_DAYS = 180;
 // community feed and are rare enough to keep for a year.
 export const PACK_PULL_EVENT_RETENTION_DAYS = 60;
 export const NOTABLE_PACK_PULL_EVENT_RETENTION_DAYS = 365;
+
+// Parked jobs whose only reason to exist was "someone is looking at this
+// profile right now". They are enqueued from the profile read path alone, and
+// enqueue()'s dedupe-key upsert flips a parked row straight back to queued, so
+// the next view revives the work by itself. Once one has sat parked for hours
+// nobody is waiting on it: draining it would spend an osu! call refreshing a
+// profile no one has open, and while it sits there it outranks real work in the
+// priority-desc reactivation order. Six hours is well past the point where the
+// viewer who triggered it has gone.
+export const PARKED_ON_DEMAND_JOB_RETENTION_HOURS = 6;
+export const PARKED_ON_DEMAND_JOB_TYPES = [PROFILE_SNAPSHOT_REFRESH_JOB, PROFILE_USER_REFRESH_JOB] as const;
 
 export function activityRetentionCutoffDay(retentionYears: number, now = new Date()): string {
   const years = Math.max(1, Math.floor(retentionYears));

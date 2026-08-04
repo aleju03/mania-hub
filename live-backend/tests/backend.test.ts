@@ -824,6 +824,47 @@ describe("live backend", () => {
     }
   });
 
+  it("expires parked profile refreshes but keeps fresh ones and other parked types", async () => {
+    const { db } = await setup();
+    const now = new Date();
+    const stale = new Date(now.getTime() - 7 * 60 * 60 * 1000).toISOString();
+    const fresh = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
+    const rows: Array<[string, string, string]> = [
+      ["refresh_profile_snapshot", "snapshot:stale", stale],
+      ["refresh_profile_user", "user:stale", stale],
+      ["refresh_profile_snapshot", "snapshot:fresh", fresh],
+      // Not demand-driven: nothing re-enqueues a top-play confirmation if it is
+      // dropped, so it has to survive the sweep.
+      ["refresh_user_top_scores", "top:stale", stale],
+    ];
+    for (const [type, dedupeKey, updatedAt] of rows) {
+      await exec(
+        db,
+        `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at)
+         values (?, ?, 'deferred_pressure', 50, ?, 0, '{}', ?, ?)`,
+        [type, dedupeKey, updatedAt, updatedAt, updatedAt],
+      );
+    }
+
+    const deleted = await runRetention(db, {
+      databaseUrl: `file:${join(dir, "test.db")}`,
+      scoreEventRetentionDays: 14,
+      liveEventRetentionDays: 7,
+      doneJobRetentionDays: 2,
+      apiCallLogRetentionDays: 7,
+      replayVideoJobRetentionDays: 2,
+      rankSnapshotRetentionDays: 14,
+      activityRetentionYears: 2,
+      replayVideoWorkDir: join(dir, "replay-video-jobs"),
+      maxLocalDbBytes: Number.MAX_SAFE_INTEGER,
+      targetLocalDbBytes: Number.MAX_SAFE_INTEGER,
+    });
+
+    expect(deleted.parkedOnDemandJobs).toBe(2);
+    const survivors = (await exec(db, "select dedupe_key from jobs order by dedupe_key")).rows.map((row) => String(row.dedupe_key));
+    expect(survivors).toEqual(["snapshot:fresh", "top:stale"]);
+  });
+
   it("reports connected page users on country registry status rows", async () => {
     const { db, queue, events } = await setup();
     const countryClients = new CountryClientTracker();
@@ -1049,12 +1090,15 @@ describe("live backend", () => {
   it("keeps global maps refresh runnable during queue pressure", async () => {
     const { db, queue } = await setup();
     const now = new Date().toISOString();
+    // refresh_profile_user is the shared-pool filler here (cap 30): it still
+    // counts toward shared depth and still gets trimmed by shedding, which is
+    // what puts the queue under pressure for this test.
     for (let index = 0; index < 120; index += 1) {
       await exec(
         db,
         `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at)
-         values ('refresh_user_top_scores', ?, 'queued', 50, ?, 0, '{}', ?, ?)`,
-        [`top:pressure:${index}`, now, now, now],
+         values ('refresh_profile_user', ?, 'queued', 120, ?, 0, '{}', ?, ?)`,
+        [`profile-user:pressure:${index}`, now, now, now],
       );
     }
 
@@ -1062,7 +1106,7 @@ describe("live backend", () => {
 
     const globalJob = (await exec(db, "select status from jobs where type = 'refresh_global_maps'")).rows[0];
     expect(globalJob.status).toBe("queued");
-    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_user_top_scores' and status = 'deferred_pressure'")).rows[0].count)).toBe(40);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_profile_user' and status = 'deferred_pressure'")).rows[0].count)).toBe(90);
   });
 
   it("keeps maps refresh priority below other backend jobs even for explicit refreshes", async () => {
@@ -1169,7 +1213,7 @@ describe("live backend", () => {
     expect(Number((await exec(db, "select count(*) as count from jobs where status = 'deferred_pressure'")).rows[0].count)).toBe(118);
   });
 
-  it("parks excess noisy top-play and recent-reconcile backlogs during emergency pressure", async () => {
+  it("holds noisy top-play and recent-reconcile backlogs at their reserve instead of pinning shared depth", async () => {
     const { db, queue } = await setup();
     const now = new Date().toISOString();
     for (let index = 0; index < 120; index += 1) {
@@ -1191,14 +1235,16 @@ describe("live backend", () => {
 
     await queue.shedPressure();
 
-    // 80, not 90: recent-reconcile runs in a reserved lane, and reserved lanes
-    // are deliberately invisible to the shared depth measure so keeping their
-    // reserve full cannot push the shared pool into shedding. Its 10 active
-    // jobs are still asserted below, just not counted here.
-    expect(await queue.depth()).toBe(80);
-    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_user_top_scores' and status in ('queued', 'failed', 'running')")).rows[0].count)).toBe(80);
+    // Both noisy types now run in reserved lanes, so each is held at its reserve
+    // of 10 with the rest parked, and neither shows up in the shared depth
+    // measure at all -- keeping a reserve full must not be able to push the
+    // shared pool into shedding. That is the whole point of the reserve: 150
+    // rows of background catch-up can no longer pin depth above the target and
+    // block the deferred pool from ever reactivating.
+    expect(await queue.depth()).toBe(0);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_user_top_scores' and status in ('queued', 'failed', 'running')")).rows[0].count)).toBe(10);
     expect(Number((await exec(db, "select count(*) as count from jobs where type = 'reconcile_user_recent_scores' and status in ('queued', 'failed', 'running')")).rows[0].count)).toBe(10);
-    expect(Number((await exec(db, "select count(*) as count from jobs where status = 'deferred_pressure'")).rows[0].count)).toBe(60);
+    expect(Number((await exec(db, "select count(*) as count from jobs where status = 'deferred_pressure'")).rows[0].count)).toBe(130);
   });
 
   it("reactivates parked pressure jobs when active queue is calm", async () => {
@@ -1292,6 +1338,26 @@ describe("live backend", () => {
     const enrichLane = worker.status().lanes.find((lane) => lane.name === "enrich");
 
     expect(enrichLane?.jobTypes).toEqual(["enrich_user"]);
+  });
+
+  it("keeps a top-play confirmation backlog out of shared depth and drains it from its own lane", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    const reserve = (await queue.pressure()).reservedLanes.refresh_user_top_scores;
+    expect(reserve).toBeGreaterThan(0);
+
+    for (let index = 0; index < reserve + 5; index += 1) {
+      await queue.enqueue("refresh_user_top_scores", `top:${index}:1`, { userId: index }, { priority: 50 });
+    }
+
+    // Only the reserve stays runnable; the overflow parks instead of piling into
+    // the shared depth count the way the old cap-80 behaviour did.
+    const runnable = Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_user_top_scores' and status = 'queued'")).rows[0].count);
+    expect(runnable).toBe(reserve);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_user_top_scores' and status = 'deferred_pressure'")).rows[0].count)).toBe(5);
+    expect(await queue.depth()).toBe(0);
+
+    const worker = new WorkerRunner(db, queue, events, {} as never, ingestor, "test-worker");
+    expect(worker.status().lanes.find((lane) => lane.name === "top-scores")?.jobTypes).toEqual(["refresh_user_top_scores"]);
   });
 
   it("ignores future-scheduled jobs when measuring queue pressure", async () => {

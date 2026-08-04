@@ -103,6 +103,18 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     intervalMs: 2_000,
   },
   {
+    // Same story as the enrich lane, one priority tier down. Top-play
+    // confirmations sit at priority 50 and lose every fast-lane slot to profile
+    // refreshes (80/120), so their queue reserve keeps them out of the shared
+    // depth count and this lane is what actually drains them. Deliberately slow:
+    // one osu! call each, and a backlog drains on the order of hours rather than
+    // spending the whole token bucket on catch-up.
+    name: "top-scores",
+    jobTypes: ["refresh_user_top_scores"],
+    claimLimit: 1,
+    intervalMs: 5_000,
+  },
+  {
     // Keep global backfill separate and slow so socket outages can be repaired
     // without letting JSON catch-up crowd out interactive enrichment jobs.
     name: "osc-backfill",
