@@ -480,7 +480,10 @@ export class WorkerRunner {
       // Skill recomputes ride the ingest-side session debounce (see
       // score-ingestor.ts), not this confirmation — one compute per session,
       // covering tracked-only sessions too.
-      await confirmTopPlay(this.db, this.events, this.osu, job.payload as { userId: number; scoreId: number; country: string });
+      // Batch: this job's best-scores fetch also confirms the user's other
+      // pending confirmations, so a burst of plays costs one window fetch
+      // instead of one per score.
+      await confirmTopPlay(this.db, this.events, this.osu, job.payload as { userId: number; scoreId: number; country: string }, { queue: this.queue, signal });
       return;
     }
     if (job.type === PROFILE_POOL_WARM_JOB) {

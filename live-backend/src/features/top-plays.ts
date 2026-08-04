@@ -71,11 +71,25 @@ export async function maybeEnqueueTopPlayRefresh(
   }
 }
 
+export interface TopPlayConfirmationBatch {
+  queue: Pick<JobQueue, "listPendingByDedupePrefix" | "resolvePending">;
+  signal?: AbortSignal;
+}
+
+type TopPlayConfirmationOutcome = "confirmed" | "unconfirmed" | "pending";
+
+interface TopPlayScoreWindow {
+  bestScores: OscScore[];
+  previousTopScores: OscScore[];
+  refreshedAt: string;
+}
+
 export async function confirmTopPlay(
   db: Db,
   events: LiveEventLog,
   osu: Pick<OsuApiClient, "getBeatmapUserScoresAll" | "getUserBestScores"> & Partial<Pick<OsuApiClient, "getUserBestScoresWindow">>,
   payload: { userId: number; scoreId: number; country: string },
+  batch?: TopPlayConfirmationBatch,
 ): Promise<boolean> {
   const bestScores = dedupeScoresById(await getUserBestScoresForPpGain(osu, payload.userId));
   const refreshedAt = nowIso();
@@ -92,16 +106,33 @@ export async function confirmTopPlay(
   // checks so even an unconfirmed refresh leaves the projection populated.
   await persistScoresDisplayMetadata(db, bestScores, refreshedAt);
   await replaceUserTopScores(db, payload.userId, bestScores, refreshedAt);
+  const window: TopPlayScoreWindow = { bestScores, previousTopScores, refreshedAt };
+  const outcome = await confirmTopPlayAgainstWindow(db, events, osu, payload, window);
+  // Siblings ride the window this job already paid for; before the pending
+  // rethrow so a not-yet-processed primary never starves them.
+  await confirmPendingSiblingTopPlays(db, events, osu, payload, window, batch);
+  if (outcome === "pending") throw new TopPlayConfirmationPendingError(payload.scoreId);
+  return outcome === "confirmed";
+}
+
+async function confirmTopPlayAgainstWindow(
+  db: Db,
+  events: LiveEventLog,
+  osu: Pick<OsuApiClient, "getBeatmapUserScoresAll">,
+  payload: { userId: number; scoreId: number; country: string },
+  window: TopPlayScoreWindow,
+): Promise<TopPlayConfirmationOutcome> {
+  const { bestScores, previousTopScores, refreshedAt } = window;
   const confirmation = await getTopPlayConfirmationScoreIdCandidates(db, payload);
   const confirmedIndex = bestScores.findIndex((score) => confirmation.ids.has(score.id));
   if (confirmedIndex < 0) {
     if (isFreshScoreEvent(confirmation.latestReceivedAt, refreshedAt)) {
-      throw new TopPlayConfirmationPendingError(payload.scoreId);
+      return "pending";
     }
-    return false;
+    return "unconfirmed";
   }
   const score = bestScores[confirmedIndex];
-  if (score.pp == null || !score.user) return false;
+  if (score.pp == null || !score.user) return "unconfirmed";
   const confirmedScoreId = score.id;
   const ppGain = await calculateTopPlayPpGain(osu, bestScores, score, previousTopScores);
   await upsertTopPlayUser(db, score.user, refreshedAt);
@@ -121,7 +152,7 @@ export async function confirmTopPlay(
      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [payload.country, confirmedScoreId, payload.userId, event.pp, event.weightedPP, event.ppGain, json(toStoredTopPlayEvent(event)), refreshedAt, event.time, scoreBeatmapId, scoreKeyCount],
   );
-  if (inserted.rowsAffected === 0) return false;
+  if (inserted.rowsAffected === 0) return "unconfirmed";
   // A fresh top play is what moves overall pp, so this is the natural moment to settle "reach N pp"
   // goals. The weighted top-200 total reflects the new score immediately (and slightly under-counts
   // by omitting bonus pp, so it never completes a goal early); fall back to the stored pp if higher.
@@ -144,7 +175,71 @@ export async function confirmTopPlay(
       `maps_farmed_update:${payload.country}:${confirmedScoreId}`,
     );
   }
-  return true;
+  return "confirmed";
+}
+
+// One running confirmation absorbs this many pending siblings for the same
+// user: they share one best-scores window fetch, so each extra score costs
+// only its pp-gain history call. Bounded so a burst still finishes well
+// inside the lane watchdog even with the token bucket saturated.
+const TOP_PLAY_BATCH_SIBLING_LIMIT = 10;
+
+/**
+ * Confirm the user's other pending confirmation jobs against the window the
+ * primary job already fetched, then mark the absorbed jobs done so they never
+ * spend their own osu! API calls. A sibling whose score is not in the window
+ * but is still fresh keeps its job: osu! may simply not have processed the
+ * score yet, and that retry needs a fresh window. Failures here never fail
+ * the primary confirmation - an unabsorbed sibling just runs on its own.
+ */
+async function confirmPendingSiblingTopPlays(
+  db: Db,
+  events: LiveEventLog,
+  osu: Pick<OsuApiClient, "getBeatmapUserScoresAll">,
+  payload: { userId: number; scoreId: number; country: string },
+  window: TopPlayScoreWindow,
+  batch: TopPlayConfirmationBatch | undefined,
+): Promise<void> {
+  if (!batch) return;
+  let siblings;
+  try {
+    siblings = await batch.queue.listPendingByDedupePrefix(
+      "refresh_user_top_scores",
+      `top:${payload.userId}:`,
+      TOP_PLAY_BATCH_SIBLING_LIMIT,
+    );
+  } catch (error) {
+    console.warn("[top-plays] failed to list sibling confirmations for batching", {
+      userId: payload.userId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return;
+  }
+  for (const job of siblings) {
+    if (batch.signal?.aborted) return;
+    const sibling = readSiblingConfirmationPayload(job.payload);
+    if (!sibling || sibling.userId !== payload.userId || sibling.scoreId === payload.scoreId) continue;
+    try {
+      const outcome = await confirmTopPlayAgainstWindow(db, events, osu, sibling, window);
+      if (outcome === "pending") continue;
+      await batch.queue.resolvePending(job.id, `absorbed by top:${payload.userId}:${payload.scoreId}`);
+    } catch (error) {
+      console.warn("[top-plays] batched sibling confirmation failed; leaving its job pending", {
+        userId: sibling.userId,
+        scoreId: sibling.scoreId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+}
+
+function readSiblingConfirmationPayload(payload: unknown): { userId: number; scoreId: number; country: string } | null {
+  if (payload == null || typeof payload !== "object") return null;
+  const { userId, scoreId, country } = payload as { userId?: unknown; scoreId?: unknown; country?: unknown };
+  if (typeof userId !== "number" || !Number.isFinite(userId)) return null;
+  if (typeof scoreId !== "number" || !Number.isFinite(scoreId)) return null;
+  if (typeof country !== "string" || country.length === 0) return null;
+  return { userId, scoreId, country };
 }
 
 /**

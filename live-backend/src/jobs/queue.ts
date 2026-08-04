@@ -238,6 +238,43 @@ export class JobQueue {
     await exec(this.db, "update jobs set status = 'done', locked_by = null, locked_until = null, last_error = null, updated_at = ? where id = ?", [nowIso(), id]);
   }
 
+  /**
+   * Jobs of one type still waiting to run (queued, failed, or parked under
+   * pressure) whose dedupe key starts with the given prefix, oldest first.
+   * Lets a running job absorb pending siblings that share its expensive
+   * setup (batched top-play confirmations reuse one best-scores fetch).
+   */
+  async listPendingByDedupePrefix(type: string, dedupePrefix: string, limit: number): Promise<Job[]> {
+    const likePrefix = dedupePrefix.replace(/[\\%_]/g, (char) => `\\${char}`);
+    const rows = (await exec(
+      this.db,
+      `select * from jobs
+       where type = ?
+         and dedupe_key like ? escape '\\'
+         and status in ('queued', 'failed', 'deferred_pressure')
+       order by id asc
+       limit ?`,
+      [type, `${likePrefix}%`, Math.max(0, Math.floor(limit))],
+    )).rows;
+    return rows.map(rowToJob);
+  }
+
+  /**
+   * Mark a still-pending job done without running it because another job
+   * already did its work. No-op once the job has started or finished, so a
+   * lane that claimed it concurrently keeps ownership.
+   */
+  async resolvePending(id: number, note: string): Promise<boolean> {
+    const result = await exec(
+      this.db,
+      `update jobs
+       set status = 'done', locked_by = null, locked_until = null, last_error = ?, updated_at = ?
+       where id = ? and status in ('queued', 'failed', 'deferred_pressure')`,
+      [note, nowIso(), id],
+    );
+    return Number(result.rowsAffected ?? 0) > 0;
+  }
+
   async fail(id: number, error: unknown, retryDelayMs = 30_000): Promise<void> {
     const message = error instanceof Error ? error.message : String(error);
     await exec(

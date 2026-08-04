@@ -2880,6 +2880,58 @@ describe("live backend", () => {
     expect(await confirmTopPlay(db, events, osu, { userId: 101, scoreId: 9001, country: "CR" })).toBe(false);
   });
 
+  it("absorbs the user's pending sibling confirmations into one best-scores fetch", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    await ingestor.ingestBatch([scores[0]]);
+    const best = await fixture<OscScore[]>("top-best.json");
+    const freshEndedAt = new Date(Date.now() - 60_000).toISOString();
+    const second: OscScore = { ...best[0], id: 9002, pp: 240, ended_at: freshEndedAt };
+    for (const bestScore of best) bestScore.ended_at = freshEndedAt;
+    let fetches = 0;
+    const osu = {
+      getBeatmapUserScoresAll: async (_beatmapId: number, _userId: number, _caller?: string) => [],
+      getUserBestScores: async (_userId: number, _caller?: string) => {
+        fetches += 1;
+        return [...best, second];
+      },
+    };
+    await queue.enqueue("refresh_user_top_scores", "top:101:9002", { userId: 101, scoreId: 9002, country: "CR" }, { priority: 50 });
+
+    const emitted = await confirmTopPlay(db, events, osu, { userId: 101, scoreId: 9001, country: "CR" }, { queue });
+    expect(emitted).toBe(true);
+    expect(fetches).toBe(1);
+    const eventScoreIds = (await exec(db, "select score_id from top_play_events order by score_id asc")).rows.map((row) => Number(row.score_id));
+    expect(eventScoreIds).toEqual([9001, 9002]);
+    const siblingJob = (await exec(db, "select status, last_error from jobs where dedupe_key = 'top:101:9002'")).rows[0];
+    expect(siblingJob.status).toBe("done");
+    expect(siblingJob.last_error).toBe("absorbed by top:101:9001");
+  });
+
+  it("leaves a fresh not-yet-processed sibling confirmation pending for its own retry", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    // Second play just ingested but missing from the best-scores window: osu!
+    // has not processed it yet, so its job must survive the batch and retry
+    // against a fresh window later.
+    const unprocessed: OscScore = { ...scores[0], id: 7777, ended_at: new Date().toISOString() };
+    await ingestor.ingestBatch([scores[0], unprocessed]);
+    const best = await fixture<OscScore[]>("top-best.json");
+    for (const bestScore of best) bestScore.ended_at = new Date(Date.now() - 60_000).toISOString();
+    const osu = {
+      getBeatmapUserScoresAll: async (_beatmapId: number, _userId: number, _caller?: string) => [],
+      getUserBestScores: async (_userId: number, _caller?: string) => best,
+    };
+    await queue.enqueue("refresh_user_top_scores", "top:101:7777", { userId: 101, scoreId: 7777, country: "CR" }, { priority: 50 });
+
+    const emitted = await confirmTopPlay(db, events, osu, { userId: 101, scoreId: 9001, country: "CR" }, { queue });
+    expect(emitted).toBe(true);
+    expect(Number((await exec(db, "select count(*) as count from top_play_events where score_id = 7777")).rows[0].count)).toBe(0);
+    const siblingJob = (await exec(db, "select status from jobs where dedupe_key = 'top:101:7777'")).rows[0];
+    expect(siblingJob).toBeDefined();
+    expect(String(siblingJob.status)).not.toBe("done");
+  });
+
   it("persists the fetched best-score window into user_top_scores", async () => {
     const { db, events, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");
