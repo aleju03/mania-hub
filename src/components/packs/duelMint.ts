@@ -18,9 +18,15 @@ function toDuelCard(player: PackPlayer, mint: { cardPower: number; tier: string;
     tier: mint.tier,
     tierLabel: mint.tierLabel,
     cardPower: mint.cardPower,
-    // Blackjack value: the card's star rating, the number already on its
-    // front, so nothing new has to be explained at the table.
-    value: Math.round(mint.skills.starAvg * 100) / 100,
+    // What a round is decided on: the three skills the card front prints,
+    // under the names it prints them under, plus its star average. Nothing
+    // here has to be explained at the table, because it is all on the card.
+    stats: {
+      control: mint.skills.fingerControl,
+      speed: mint.skills.speed,
+      precision: mint.skills.accuracy,
+      stars: Math.round(mint.skills.starAvg * 100) / 100,
+    },
     globalRank: player.globalRank,
     pp: player.pp,
     skills: mint.skills,

@@ -6,6 +6,7 @@
 // plays, then normalizes per keymode so 4K and 7K are not compared on the same
 // raw BPM/density scale.
 
+import type { CSSProperties } from "react";
 import type { OsuScore, OsuScoreStatistics } from "./types";
 import { calculateWeightedPpTotal, getModAcronyms, getScoreRate, getStableScaleManiaAccuracy, isLazerScore } from "./score";
 
@@ -648,6 +649,32 @@ export function getNextManiaCardTier(cardPower: number): NextManiaCardTier | nul
     threshold: next.threshold,
     remaining: next.threshold - cardPower,
     progress,
+  };
+}
+
+/* Tiers whose text colour cannot just be their glow. Ascendant's glow is pure
+   white, which on a dark page reads as "no tier at all" rather than as the top
+   of the ladder, so the name takes the card's own white-gold-violet sweep
+   instead. Only the bright end of a card's palette is usable here: these
+   gradients fade to near black on the card, and so would the text. */
+const TIER_TEXT_GRADIENTS: Partial<Record<ManiaCardTier, string>> = {
+  ascendant: "linear-gradient(100deg, #ffffff 0%, #fde68a 34%, #f0abfc 68%, #e9d5ff 100%)",
+};
+
+/* How to print a player's name in the colour of the card they are on. */
+export function maniaTierTextStyle(
+  tier: ManiaCardTier,
+  glow: { r: number; g: number; b: number },
+): CSSProperties {
+  const gradient = TIER_TEXT_GRADIENTS[tier];
+  if (!gradient) return { color: `rgb(${glow.r}, ${glow.g}, ${glow.b})` };
+  return {
+    backgroundImage: gradient,
+    WebkitBackgroundClip: "text",
+    backgroundClip: "text",
+    // Painting the gradient through the glyphs, so the name is the sweep.
+    WebkitTextFillColor: "transparent",
+    color: "transparent",
   };
 }
 

@@ -1,6 +1,6 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
-import { Recycle, Swords } from "lucide-react";
+import { ArrowUpDown, Recycle } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -13,6 +13,7 @@ import {
   PACK_ASPECT,
 } from "../components/packs/packArt";
 import { PackStage } from "../components/packs/PackStage";
+import { StreakGame } from "../components/packs/StreakGame";
 import { PackSummary } from "../components/packs/PackSummary";
 import {
   RevealStage,
@@ -32,7 +33,7 @@ import {
   parsePackCardKey,
   type PackWallet,
 } from "../lib/pack-collection";
-import { isLiveBackendConfigured, warmLivePackPlayers } from "../lib/live-backend";
+import { fetchLivePackDuel, isLiveBackendConfigured, warmLivePackPlayers, type LivePackDuel } from "../lib/live-backend";
 import {
   clearPendingPack,
   consumePendingPackCard,
@@ -40,8 +41,8 @@ import {
   writePendingPack,
 } from "../lib/pack-pending";
 import { fetchServerPackCollectionOwnedKeys, recordServerPackPulls } from "../lib/pack-wallet-sync";
-import { duelCardsFromRevealed, mintDuelCards } from "../components/packs/duelMint";
-import { BLACKJACK_DECK_SIZE, createPackDuel, duelErrorMessage } from "../lib/pack-duels";
+import { duelCardsFromRevealed } from "../components/packs/duelMint";
+import { createPackDuel, duelErrorMessage, joinPackDuel } from "../lib/pack-duels";
 import { PackPulse, refreshPackPulseFeed } from "../components/packs/PackPulse";
 import {
   drawPackPlayers,
@@ -56,8 +57,14 @@ import { pageSeo } from "../lib/seo";
 import { track } from "../lib/analytics";
 
 export const Route = createFileRoute("/packs")({
-  validateSearch: (search: Record<string, unknown>): { view?: "album" } =>
-    search.view === "album" ? { view: "album" } : {},
+  validateSearch: (search: Record<string, unknown>): { view?: "album" | "streak"; duel?: string } => {
+    const view = search.view === "album" || search.view === "streak" ? search.view : undefined;
+    // Answering a duel is opening a pack, so the duel travels as a search
+    // param and the summary hands the pulled cards straight to it.
+    const duel =
+      typeof search.duel === "string" && /^[a-z0-9]{6,16}$/.test(search.duel) ? search.duel : undefined;
+    return { ...(view ? { view } : {}), ...(duel ? { duel } : {}) };
+  },
   head: ({ match }) => pageSeo({
     title: "Card Packs",
     description: "Tear open booster packs of maniacards: random osu!mania players minted as collectible cards with skill stats and rarity tiers.",
@@ -335,7 +342,7 @@ function PackTypeSelector({
 function PacksPage() {
   const reducedMotion = useReducedMotion();
   const auth = useAuth();
-  const { view } = Route.useSearch();
+  const { view, duel: answeringDuelId } = Route.useSearch();
   const { countryFeatures } = Route.useRouteContext();
   const navigate = useNavigate();
   const walletApi = usePackWallet();
@@ -356,11 +363,11 @@ function PacksPage() {
   /* Serials for the pack on screen, keyed by wallet card key. Filled in when
      the pull log answers, a beat after the summary appears. */
   const [serials, setSerials] = useState<Map<string, { serial: number; mintedTotal: number }> | null>(null);
-  const [duelBusy, setDuelBusy] = useState<null | "challenge" | "blackjack">(null);
-  /* Minting a deck is one osu! fetch per cold player, so the button counts
-     them off instead of sitting there looking hung. */
-  const [duelProgress, setDuelProgress] = useState<{ done: number; total: number } | null>(null);
+  const [duelBusy, setDuelBusy] = useState(false);
   const [duelError, setDuelError] = useState<string | null>(null);
+  /* The duel this pack is being opened to answer, if any. Loaded from the
+     link so the page knows which pack type to force and who is waiting. */
+  const [answering, setAnswering] = useState<LivePackDuel | null>(null);
   const [collectionPanelReady, setCollectionPanelReady] = useState(true);
   const [collectionPanelMounted, setCollectionPanelMounted] = useState(true);
   // Holds the last wallet the visible collection rendered. Spending a pack
@@ -371,6 +378,9 @@ function PacksPage() {
      render; the router navigation (route re-match + full route re-render)
      only trails behind to keep the URL shareable. Waiting on it made the
      tab switch visibly lag. */
+  /* The game takes over the page's middle; everything around it (the ticker,
+     the wallet strip, the header) stays exactly where it was. */
+  const streakOpen = view === "streak";
   const [albumOpen, setAlbumOpen] = useState(view === "album");
   /* Once visited, the album stays mounted (hidden) so switching back keeps
      its shelf, open book, and loaded rosters. */
@@ -513,67 +523,81 @@ function PacksPage() {
     }, reducedMotion);
   }, [phase, reducedMotion]);
 
-  /* Freezes the hand just revealed into a challenge link. The opponent opens
-     their own pack of the same type on the duel page; nothing here touches
-     either collection. */
-  const startChallengeDuel = () => {
+  /* Duelling is an unfinished prototype, so every entry point is admin-only
+     for now. The server functions refuse a non-admin caller regardless. The
+     higher-or-lower game next to it is deliberately NOT behind this: it is
+     open to everyone, signed in or not. */
+  const canDuel = canUseAdminFeatures(auth) && Boolean(auth.viewer) && isLiveBackendConfigured();
+
+  useEffect(() => {
+    // Gated with the rest of duelling: without this a non-admin following a
+    // duel link would be told to open a pack and play it for the stake, and
+    // then find no button to do it with.
+    if (!answeringDuelId || !canDuel || !isLiveBackendConfigured()) {
+      setAnswering(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchLivePackDuel(answeringDuelId)
+      .then((duel) => {
+        if (cancelled) return;
+        // Already answered: nothing here to match, so it reads as an ordinary
+        // visit to the packs page rather than a broken banner.
+        setAnswering(duel.opponent.userId ? null : duel);
+      })
+      .catch(() => {
+        if (!cancelled) setAnswering(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [answeringDuelId, canDuel]);
+
+  /* An answer has to match the challenge: same pack type, same size of stake. */
+  useEffect(() => {
+    if (answering) setPackTypeId(answering.packType as PackTypeId);
+  }, [answering]);
+
+  /* Puts the pack that was just opened up against the challenge. The cards are
+     already in the collection by now (the wallet push is what put them there),
+     which is what the backend checks before it will take the stake. */
+  const answerDuel = () => {
+    if (!answering || duelBusy) return;
+    const cards = duelCardsFromRevealed(revealed);
+    if (cards.length === 0) {
+      setDuelError("None of these cards minted, so there is nothing to stake.");
+      return;
+    }
+    setDuelBusy(true);
+    setDuelError(null);
+    void joinPackDuel({ data: { duelId: answering.id, cards } })
+      .then((result) => {
+        if (result.ok) void navigate({ to: "/duel/$duelId", params: { duelId: answering.id } });
+        else setDuelError(duelErrorMessage(result.error));
+      })
+      .catch(() => setDuelError("Could not answer that duel."))
+      .finally(() => setDuelBusy(false));
+  };
+
+  /* Freezes the hand just revealed into a duel link. Whoever opens it answers
+     with their own pack of the same type, and the two hands play five rounds
+     out on the duel page; nothing here touches either collection. */
+  const startDuel = () => {
     if (!auth.viewer || duelBusy) return;
     const cards = duelCardsFromRevealed(revealed);
     if (cards.length === 0) {
       setDuelError("None of these cards minted, so there is nothing to duel with.");
       return;
     }
-    setDuelBusy("challenge");
+    setDuelBusy(true);
     setDuelError(null);
-    void createPackDuel({ data: { kind: "challenge", packType: selectedType.id, cards } })
+    void createPackDuel({ data: { packType: selectedType.id, cards } })
       .then((result) => {
         if (result.ok) void navigate({ to: "/duel/$duelId", params: { duelId: result.duel.id } });
         else setDuelError(duelErrorMessage(result.error));
       })
       .catch(() => setDuelError("Could not open that duel."))
-      .finally(() => setDuelBusy(null));
-  };
-
-  /* Deals the deck for a blackjack duel: each side plays its own half against
-     21. Free and outside the wallet, so it draws its own players rather than
-     spending a pack. */
-  const startBlackjackDuel = () => {
-    if (!auth.viewer || duelBusy) return;
-    setDuelBusy("blackjack");
-    setDuelError(null);
-    setDuelProgress({ done: 0, total: BLACKJACK_DECK_SIZE + 2 });
-    void (async () => {
-      try {
-        // A few spares: a player whose plays cannot be fetched mints nothing,
-        // and the deck has to be full for both halves to be dealt.
-        // Pool only, and from its top slice: a duel deck is throwaway, so it
-        // must never spend osu! API budget on the deep-rank fallback, and the
-        // top of the pool is the part the backend already has cached.
-        const draw = await drawPackPlayers(Math.random, {
-          count: BLACKJACK_DECK_SIZE + 2,
-          topFraction: 0.15,
-          poolOnly: true,
-        });
-        if (isLiveBackendConfigured()) {
-          void warmLivePackPlayers(draw.players.map((player) => player.user.id)).catch(() => {});
-        }
-        const minted = await mintDuelCards(draw.players, (done, total) => setDuelProgress({ done, total }));
-        if (minted.length < BLACKJACK_DECK_SIZE) {
-          setDuelError("Could not deal a full deck. Try again in a moment.");
-          return;
-        }
-        const result = await createPackDuel({
-          data: { kind: "blackjack", packType: "wild", cards: minted.slice(0, BLACKJACK_DECK_SIZE) },
-        });
-        if (result.ok) void navigate({ to: "/duel/$duelId", params: { duelId: result.duel.id } });
-        else setDuelError(duelErrorMessage(result.error));
-      } catch {
-        setDuelError("Could not deal a deck. The tracked player pool is unavailable.");
-      } finally {
-        setDuelBusy(null);
-        setDuelProgress(null);
-      }
-    })();
+      .finally(() => setDuelBusy(false));
   };
 
   const openAnother = () => {
@@ -613,10 +637,10 @@ function PacksPage() {
   };
 
   const canOpen = canAffordPack(wallet, selectedType);
-  /* Duelling is an unfinished prototype, so both entry points are admin-only
-     for now. The server functions refuse a non-admin caller regardless. */
-  const canDuel = canUseAdminFeatures(auth) && Boolean(auth.viewer) && isLiveBackendConfigured();
-  const showCollectionPanel = phase === "pack" || (phase === "summary" && collectionPanelReady);
+  /* The game owns the page's middle while it is open, so the collection does
+     not sit under it: the point of hosting it here is the ticker and the
+     wallet, not a second screen's worth of grid to scroll past. */
+  const showCollectionPanel = !streakOpen && (phase === "pack" || (phase === "summary" && collectionPanelReady));
   const collectionWallet = collectionWalletRef.current;
 
   return (
@@ -655,28 +679,49 @@ function PacksPage() {
                   <span>shards</span>
                 </div>
                 <GoatHoldersButton />
-                {canDuel && (
-                  <button
-                    type="button"
-                    onClick={startBlackjackDuel}
-                    disabled={duelBusy !== null}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-osu-b3/40 px-3 py-1 text-[11px] font-semibold text-osu-f1 transition-colors hover:border-osu-pink/50 hover:text-white cursor-pointer"
-                  >
-                    <Swords className="h-3 w-3" />
-                    {duelBusy === "blackjack"
-                      ? duelProgress
-                        ? `Dealing ${duelProgress.done}/${duelProgress.total}...`
-                        : "Dealing the deck..."
-                      : "Blackjack duel"}
-                  </button>
-                )}
+                {/* The solo game, played right here rather than on a page of
+                    its own: the pull ticker, the charges and the shard count
+                    are half of why the arcade is on the packs page at all. */}
+                {/* Toggles: the same chip that opens the game closes it, so
+                    the way out is where the way in was. */}
+                <Link
+                  to="/packs"
+                  search={streakOpen ? {} : { view: "streak" }}
+                  resetScroll={false}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold transition-colors ${
+                    streakOpen
+                      ? "border-osu-pink bg-osu-pink/15 text-white"
+                      : "border-osu-b3/40 text-osu-f1 hover:border-osu-pink/50 hover:text-white"
+                  }`}
+                  aria-pressed={streakOpen}
+                >
+                  <ArrowUpDown className="h-3 w-3" />
+                  {streakOpen ? "Leave the game" : "Higher or lower"}
+                </Link>
+              </div>
+            )}
+            {answering && phase !== "reveal" && (
+              <div className="mb-6 text-center text-[12px]">
+                <span className="font-bold text-white">
+                  {answering.challenger.username ?? "Someone"} has {answering.challenger.cardCount} cards on the line.
+                </span>{" "}
+                <span className="text-osu-f1">
+                  Open a {packTypeById(answering.packType as PackTypeId).name} pack and play them for it. The winner
+                  keeps both hands.
+                </span>
               </div>
             )}
             {duelError && phase !== "reveal" && (
               <div className="mb-6 text-center text-[12px] text-osu-pink-light">{duelError}</div>
             )}
 
-            {dealError ? (
+            {streakOpen ? (
+              <StreakGame
+                onExit={() => {
+                  void navigate({ to: "/packs", search: {}, resetScroll: false });
+                }}
+              />
+            ) : dealError ? (
               <div className="mx-auto max-w-[420px] text-center">
                 <div className="text-sm font-bold text-white">Couldn't deal a pack</div>
                 <div className="mt-2 text-[12px] text-osu-f1">The rankings lookup failed. Try again in a moment.</div>
@@ -760,8 +805,9 @@ function PacksPage() {
                           selectedType.cost.kind === "shards" ? selectedType.cost.amount : null
                         }
                         serials={serials}
-                        onChallenge={canDuel ? startChallengeDuel : undefined}
-                        challengeBusy={duelBusy === "challenge"}
+                        onChallenge={canDuel ? (answering ? answerDuel : startDuel) : undefined}
+                        challengeBusy={duelBusy}
+                        answeringUsername={answering?.challenger.username ?? null}
                       />
                     ) : cards ? (
                       <RevealStage

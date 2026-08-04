@@ -261,7 +261,9 @@ async function getOrCreatePackWallet(db: Db, userId: number, now: number): Promi
   return (await getPackWallet(db, userId)) ?? { payload: defaultWalletPayload(now), rev: 1, updatedAt: now };
 }
 
-async function addWalletShards(db: Db, userId: number, gained: number, now: number): Promise<StoredPackWallet> {
+/* Exported for the arcade, which pays shards for a duel win or a streak run
+   and needs the same single writer every other grant goes through. */
+export async function addWalletShards(db: Db, userId: number, gained: number, now: number): Promise<StoredPackWallet> {
   const wallet = await getOrCreatePackWallet(db, userId, now);
   if (gained <= 0) return wallet;
   const parsed = parseJson<WalletPayload | null>(wallet.payload, null) ?? {};
@@ -696,6 +698,122 @@ export async function ensurePackCollectionCardKeys(db: Db): Promise<boolean> {
     "create index if not exists idx_pack_collection_owner_username on pack_collection_cards(owner_user_id, username)",
   );
   return true;
+}
+
+/* Which of these cards an account actually holds a copy of right now.
+
+   Duels stake real cards, so a hand is no longer a claim the server takes on
+   trust the way the pull log is: what you put up has to be in your collection
+   when you put it up. */
+export async function heldPackCollectionCardKeys(
+  db: Db,
+  ownerUserId: number,
+  cardKeys: readonly string[],
+): Promise<Set<string>> {
+  const keys = [...new Set(cardKeys.map(normalizePackCardKey).filter((key): key is string => key !== null))];
+  if (keys.length === 0 || !Number.isInteger(ownerUserId) || ownerUserId <= 0) return new Set();
+  const rows = (await exec(
+    db,
+    `select card_key from pack_collection_cards
+     where owner_user_id = ? and copies > 0 and card_key in (${keys.map(() => "?").join(", ")})`,
+    [ownerUserId, ...keys],
+  )).rows;
+  return new Set(rows.map((row) => String(row.card_key)));
+}
+
+export interface PackCardTransfer {
+  cardKey: string;
+  username: string;
+  tier: string | null;
+  tierLabel: string | null;
+  /* A card the loser no longer holds (recycled since they staked it) moves as
+     its shard value instead, so getting rid of your stake mid-duel is not a
+     way to keep it. */
+  shards: number;
+}
+
+/* Moves one copy of each card from one collection to another.
+
+   Serials deliberately do not travel: `pack_card_serials` records who pulled a
+   card first, and a card you won is not a card you pulled. The loser keeps the
+   serial they earned even after the copy leaves them, exactly as it survives
+   recycling. */
+export async function transferPackCollectionCards(
+  db: Db,
+  fromUserId: number,
+  toUserId: number,
+  cardKeys: readonly string[],
+  now = Date.now(),
+): Promise<{ moved: PackCardTransfer[]; shards: number }> {
+  const keys = [...new Set(cardKeys.map(normalizePackCardKey).filter((key): key is string => key !== null))];
+  const moved: PackCardTransfer[] = [];
+  let shards = 0;
+  if (keys.length === 0 || fromUserId === toUserId) return { moved, shards };
+  if (!Number.isInteger(fromUserId) || fromUserId <= 0 || !Number.isInteger(toUserId) || toUserId <= 0) {
+    return { moved, shards };
+  }
+
+  for (const cardKey of keys) {
+    const row = (await exec(
+      db,
+      `select card_user_id, username, avatar_url, country_code, tier, tier_label, skills_json, pp, global_rank,
+              copies, first_pulled_at, last_pulled_at
+       from pack_collection_cards
+       where owner_user_id = ? and card_key = ?`,
+      [fromUserId, cardKey],
+    )).rows[0];
+    if (!row) continue;
+    const tier = typeof row.tier === "string" ? row.tier : null;
+    const username = String(row.username ?? "");
+    const tierLabel = typeof row.tier_label === "string" ? row.tier_label : null;
+    // Staked and then recycled: the copy is gone, so the winner is paid what
+    // the loser got for it.
+    if ((Number(row.copies) || 0) <= 0) {
+      const value = shardValueForStoredTier(tier);
+      shards += value;
+      moved.push({ cardKey, username, tier, tierLabel, shards: value });
+      continue;
+    }
+
+    const taken = (await exec(
+      db,
+      `update pack_collection_cards
+       set copies = copies - 1, updated_at = ?
+       where owner_user_id = ? and card_key = ? and copies > 0`,
+      [now, fromUserId, cardKey],
+    )).rowsAffected;
+    // Lost a race with a recycle: the shard fallback covers it next read.
+    if (taken === 0) continue;
+
+    await upsertPackCard(
+      db,
+      toUserId,
+      {
+        userId: Number(row.card_user_id) || 0,
+        cardKey,
+        username,
+        avatarUrl: String(row.avatar_url ?? ""),
+        countryCode: String(row.country_code ?? ""),
+        tier,
+        tierLabel,
+        skills: row.skills_json ? parseJson<unknown | null>(String(row.skills_json), null) : null,
+        pp: Number(row.pp) || 0,
+        globalRank: Number(row.global_rank) || 0,
+        copies: 1,
+        recycledCopies: 0,
+        // A won card is new to this collection today, but it was first pulled
+        // when the loser pulled it, and the album sorts on that.
+        firstPulledAt: Number(row.first_pulled_at) || now,
+        lastPulledAt: now,
+      },
+      now,
+      "delta",
+    );
+    moved.push({ cardKey, username, tier, tierLabel, shards: 0 });
+  }
+
+  if (shards > 0) await addWalletShards(db, toUserId, shards, now);
+  return { moved, shards };
 }
 
 export function shardValueForStoredTier(tier: string | null): number {

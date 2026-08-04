@@ -266,6 +266,7 @@ export const HONORARY_PLAYERS: readonly HonoraryPlayer[] = [
     peakPp: 17179.2,
     archived: false,
     cardReady: true,
+    cardTierLabel: "Push GOAT",
   },
   {
     id: 3817144,

@@ -6,10 +6,10 @@ import type { RevealedCard } from "./RevealStage";
 function skills(cardPower: number): ManiaSkills {
   return {
     archetype: "balanced",
-    starAvg: 5,
-    fingerControl: 400,
-    speed: 400,
-    accuracy: 400,
+    starAvg: 5.267,
+    fingerControl: 410,
+    speed: 420,
+    accuracy: 430,
     stamina: 400,
     versatility: 400,
     peak: 400,
@@ -46,6 +46,13 @@ describe("duelCardsFromRevealed", () => {
     const cards = duelCardsFromRevealed([revealed(1, 640), revealed(2, 880)]);
     expect(cards.map((card) => card.cardPower)).toEqual([640, 880]);
     expect(cards[0]).toMatchObject({ userId: 1, username: "player1", tier: "rare", tierLabel: "Rare" });
+  });
+
+  it("plays the numbers under the names the card front prints them under", () => {
+    // A round is decided on these four, so a crossed wire here would quietly
+    // score every duel on the wrong stat.
+    const [card] = duelCardsFromRevealed([revealed(1, 640)]);
+    expect(card.stats).toEqual({ control: 410, speed: 420, precision: 430, stars: 5.27 });
   });
 
   it("drops cards that never minted rather than duelling with a zero", () => {

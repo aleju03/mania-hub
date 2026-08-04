@@ -26,6 +26,7 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SkinsRouteImport } from './routes/skins'
 import { Route as SnipesRouteImport } from './routes/snipes'
+import { Route as StreakRouteImport } from './routes/streak'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as TopPlaysRouteImport } from './routes/top-plays'
 import { Route as TrackerRouteImport } from './routes/tracker'
@@ -145,6 +146,11 @@ const SkinsRoute = SkinsRouteImport.update({
 const SnipesRoute = SnipesRouteImport.update({
   id: '/snipes',
   path: '/snipes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StreakRoute = StreakRouteImport.update({
+  id: '/streak',
+  path: '/streak',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TermsRoute = TermsRouteImport.update({
@@ -341,6 +347,7 @@ export interface FileRoutesByFullPath {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/skins': typeof SkinsRoute
   '/snipes': typeof SnipesRoute
+  '/streak': typeof StreakRoute
   '/terms': typeof TermsRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
@@ -395,6 +402,7 @@ export interface FileRoutesByTo {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/skins': typeof SkinsRoute
   '/snipes': typeof SnipesRoute
+  '/streak': typeof StreakRoute
   '/terms': typeof TermsRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
@@ -450,6 +458,7 @@ export interface FileRoutesById {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/skins': typeof SkinsRoute
   '/snipes': typeof SnipesRoute
+  '/streak': typeof StreakRoute
   '/terms': typeof TermsRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
@@ -506,6 +515,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/skins'
     | '/snipes'
+    | '/streak'
     | '/terms'
     | '/top-plays'
     | '/tracker'
@@ -560,6 +570,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/skins'
     | '/snipes'
+    | '/streak'
     | '/terms'
     | '/top-plays'
     | '/tracker'
@@ -614,6 +625,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/skins'
     | '/snipes'
+    | '/streak'
     | '/terms'
     | '/top-plays'
     | '/tracker'
@@ -669,6 +681,7 @@ export interface RootRouteChildren {
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   SkinsRoute: typeof SkinsRoute
   SnipesRoute: typeof SnipesRoute
+  StreakRoute: typeof StreakRoute
   TermsRoute: typeof TermsRoute
   TopPlaysRoute: typeof TopPlaysRoute
   TrackerRoute: typeof TrackerRoute
@@ -818,6 +831,13 @@ declare module '@tanstack/react-router' {
       path: '/snipes'
       fullPath: '/snipes'
       preLoaderRoute: typeof SnipesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/streak': {
+      id: '/streak'
+      path: '/streak'
+      fullPath: '/streak'
+      preLoaderRoute: typeof StreakRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/terms': {
@@ -1130,6 +1150,7 @@ const rootRouteChildren: RootRouteChildren = {
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   SkinsRoute: SkinsRoute,
   SnipesRoute: SnipesRoute,
+  StreakRoute: StreakRoute,
   TermsRoute: TermsRoute,
   TopPlaysRoute: TopPlaysRoute,
   TrackerRoute: TrackerRoute,

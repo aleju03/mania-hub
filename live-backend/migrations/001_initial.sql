@@ -692,14 +692,14 @@ create index if not exists idx_pack_card_serials_card
 create index if not exists idx_pack_card_serials_owner
   on pack_card_serials(owner_user_id, minted_at desc);
 
--- Pack duels: two collectors' hands compared for bragging rights. A challenge
--- duel freezes the hand from a pack each side opened, while a blackjack duel
--- deals a deck and each side plays it against a target of 21. Nothing here
--- touches the economy: duel cards are never added to a collection, and card
--- values are client-reported the same way the pull log is. The deck is the
--- exception and is server-held: it is frozen at creation, the server deals
--- from each side's own half of it, and neither hand is readable by the other
--- player until both have stopped.
+-- Pack duels: two collectors' hands played against each other for keeps, one
+-- card per side per round, both attacking with a stat of their choice. Both
+-- sides stake the hand they play with (checked against pack_collection_cards
+-- when the duel opens and when it is answered, since losing moves those copies
+-- to the winner), while card stats stay client-reported the same way the pull
+-- log is. The pick log is the part that is server-held, so neither side can
+-- wait to see what the other attacked with, and no card is readable by the
+-- other player until the round it was played in is over.
 create table if not exists pack_duels (
   id text primary key,
   kind text not null,
@@ -709,19 +709,22 @@ create table if not exists pack_duels (
   challenger_username text not null,
   challenger_cards_json text,
   challenger_score real not null default 0,
-  -- Blackjack: the side has stopped, by standing or by busting.
-  challenger_done integer not null default 0,
   opponent_user_id integer,
   opponent_username text,
   opponent_cards_json text,
   opponent_score real not null default 0,
-  opponent_done integer not null default 0,
-  -- Blackjack: the deck, and the log of which side each dealt card went to.
-  pool_json text,
-  deals_json text,
-  -- Mirrors deals_json's length so a hit can guard on it: two hits fired at
+  -- What each side was paid when the duel resolved, so a player who comes back
+  -- to the link still sees what they earned.
+  challenger_shards integer not null default 0,
+  opponent_shards integer not null default 0,
+  -- Which of the loser's cards the winner took, written once when the duel
+  -- settles. Cards actually move between collections, so this is the receipt.
+  spoils_json text,
+  -- Every attack either side has made, in the round it was made.
+  picks_json text,
+  -- Mirrors picks_json's length so a pick can guard on it: both sides pick at
   -- once, and only the one that matched the count it read gets to land.
-  deals_count integer not null default 0,
+  picks_count integer not null default 0,
   winner text,
   created_at integer not null,
   updated_at integer not null,
@@ -735,6 +738,22 @@ create index if not exists idx_pack_duels_opponent
   on pack_duels(opponent_user_id, created_at desc);
 create index if not exists idx_pack_duels_resolved
   on pack_duels(resolved_at desc) where status = 'resolved';
+
+-- What the pack arcade (duels, the higher-or-lower streak game) has paid an
+-- account today, which is the only thing standing between a scripted client
+-- and free shards: both games are scored off data the client can read for
+-- itself, so the daily allowance is the protection rather than the scoring.
+-- One row per account per day per game, and the cap reads their sum.
+create table if not exists pack_game_rewards (
+  user_id integer not null,
+  day text not null,
+  source text not null,
+  shards integer not null default 0,
+  updated_at integer not null,
+  primary key (user_id, day, source)
+);
+create index if not exists idx_pack_game_rewards_day
+  on pack_game_rewards(day);
 
 -- Discord bot: live-feed channel subscriptions. A row means "post events of
 -- feed_type for `country` into Discord channel_id". The unique key keeps a

@@ -161,9 +161,9 @@ export async function createApp() {
     // when its owner first pulled the card). Only fills gaps, so every boot
     // after the first writes nothing.
     await bootWrite("backfill_pack_card_serials", () => backfillPackCardSerials(db));
-    // Pack duels are still a prototype, and its table predates the blackjack
-    // columns on any database that saw the earlier draft mode. A no-op
-    // everywhere else.
+    // Pack duels are still a prototype, and its table predates the pick log on
+    // any database that saw an earlier mode. Adds the missing columns and
+    // clears out rows nothing can read any more; a no-op everywhere else.
     await bootWrite("ensure_pack_duels_schema", () => ensurePackDuelsSchema(db));
     // Seeds the checked-in archived-player profiles (deleted osu! accounts we
     // reconstructed from the Wayback Machine). Content-addressed, so this is a

@@ -1,27 +1,41 @@
 import type { InValue } from "@libsql/client";
 import type { Db } from "../db.js";
 import { exec } from "../db.js";
+import { DUEL_LOSS_SHARDS, DUEL_TIE_SHARDS, DUEL_WIN_SHARDS, grantPackGameShards } from "./pack-games.js";
+import {
+  heldPackCollectionCardKeys,
+  packCardKey,
+  transferPackCollectionCards,
+  type PackCardTransfer,
+} from "./pack-wallets.js";
 
-// Pack duels: two collectors, two hands of maniacards, one winner. Bragging
-// rights only - no card here enters a collection, mints a serial or moves a
-// shard.
+// Pack duels: two collectors, two hands of maniacards, four rounds of top
+// trumps. No card here enters a collection or mints a serial; the only thing
+// that moves is the arcade's shard payout when a duel ends.
 //
-// Two kinds share one row shape:
+// A duel is one card from each side per round, and both sides attack at the
+// same time: you pick one stat off your own card, they pick one off theirs,
+// and an attack lands when your card beats theirs on the stat you chose. So a
+// round is worth up to two points, nobody waits for a turn, and neither seat
+// gets the advantage of picking last. The two cards and both picks open up the
+// moment the round resolves; until then you are choosing against a card you
+// cannot see, which is half the game.
 //
-// - challenge: each side opens a pack of the same type and the totals are
-//   compared. The challenger's hand is frozen at creation, the opponent's when
-//   they join, and it resolves the moment both are in.
-// - blackjack: one deck is dealt per duel, each side gets its own half, and
-//   each plays blackjack against a target of 21 - two cards to start, then hit
-//   or stand, bust if you go over. A card is worth its star rating. Both sides
-//   play at the same time and blind, so nobody waits for a turn and neither
-//   seat gets the dealer's advantage of acting last.
+// The other half, and the reason a duel is not just "attack with your biggest
+// number": each stat can be spent only once in a duel, and there are exactly
+// as many rounds as there are stats. Every attack therefore costs you that
+// stat for the rest of the duel, so the question is never "what is this card
+// good at" but "which of my four cards should spend my Speed" - and by the
+// last round both sides are down to the stat they held back, which each of
+// them can work out. Card fronts are calibrated so a card is a shape rather
+// than a single number, and reading those shapes is what wins the allocation.
 //
-// Card values are client-reported, exactly like the pull log, so a determined
+// Card stats are client-reported, exactly like the pull log, so a determined
 // client can inflate its own hand; that is the accepted trade for a feature
-// whose entire prize is bragging rights. The parts that would actually decide a
-// game are server-held: the deck is frozen at creation, the server deals from
-// it, and a side can only ever see its own cards until both are done.
+// whose entire prize is bragging rights. The parts that would actually decide
+// a game are server-held: each hand is frozen when its side arrives, a pick is
+// written before the other side's is revealed, and no card is visible to the
+// other player until the round it was played in is over.
 
 /* Brings an existing pack_duels table up to the current shape.
 
@@ -29,8 +43,8 @@ import { exec } from "../db.js";
    definition does nothing to a table that already exists, so a database that
    met an earlier version of this prototype keeps the old columns and every
    insert fails on the new ones. Adding the missing columns is enough: they are
-   all nullable or defaulted. Rows from the retired draft mode go with them,
-   since nothing can read them any more.
+   all nullable or defaulted. Rows from the retired modes go with them, since
+   nothing can read them any more.
 
    Prototype-only cleanup. Once the mode ships, schema changes belong in a
    numbered migration instead. */
@@ -39,10 +53,11 @@ export async function ensurePackDuelsSchema(db: Db): Promise<boolean> {
   if (columns.length === 0) return false;
   const present = new Set(columns.map((column) => String(column.name)));
   const additions: Array<[string, string]> = [
-    ["challenger_done", "integer not null default 0"],
-    ["opponent_done", "integer not null default 0"],
-    ["deals_json", "text"],
-    ["deals_count", "integer not null default 0"],
+    ["spoils_json", "text"],
+    ["picks_json", "text"],
+    ["picks_count", "integer not null default 0"],
+    ["challenger_shards", "integer not null default 0"],
+    ["opponent_shards", "integer not null default 0"],
   ];
   let changed = false;
   for (const [name, definition] of additions) {
@@ -50,37 +65,41 @@ export async function ensurePackDuelsSchema(db: Db): Promise<boolean> {
     await exec(db, `alter table pack_duels add column ${name} ${definition}`);
     changed = true;
   }
-  if (changed) await exec(db, "delete from pack_duels where kind = 'draft'");
-  return changed;
+  const retired = (await exec(db, "delete from pack_duels where kind <> 'trumps'")).rowsAffected;
+  return changed || retired > 0;
 }
 
-export type PackDuelKind = "challenge" | "blackjack";
+export type PackDuelKind = "trumps";
 export type PackDuelStatus = "open" | "resolved";
 export type PackDuelWinner = "challenger" | "opponent" | "tie";
 export type PackDuelSide = "challenger" | "opponent";
 
-/* A challenge freezes whatever the pack dealt, up to the Wild pack's ten. */
-export const PACK_DUEL_MAX_CARDS = 10;
+/* What a round can be decided on: the three skills printed on a card front
+   plus its star average. Everything you may attack with is a number the card
+   itself shows, so a pick never depends on knowing a hidden statistic. */
+export type TrumpStat = "control" | "speed" | "precision" | "stars";
+export const TRUMP_STATS = ["control", "speed", "precision", "stars"] as const;
 
-/* Blackjack. The target is 21 and a card is worth its star rating (roughly 3
-   to 8), so a hand is three to five cards. Five per side leaves room to keep
-   hitting past any sane stopping point while keeping the deck small: every
-   card in it has to be minted before the duel can start, and a cold player
-   costs an osu! API fetch. */
-export const BLACKJACK_TARGET = 21;
-export const BLACKJACK_CARDS_PER_SIDE = 5;
-export const BLACKJACK_DECK_SIZE = BLACKJACK_CARDS_PER_SIDE * 2;
-export const BLACKJACK_OPENING_CARDS = 2;
+/* One round per stat, because each stat is spent once: the duel is the
+   allocation of four attacks across four cards, and it ends when you are out
+   of stats to spend. Also fits the smallest pack's five cards. */
+export const TRUMPS_ROUNDS = TRUMP_STATS.length;
+
+/* A hand freezes whatever the pack dealt, up to the Wild pack's ten. Only the
+   first TRUMPS_ROUNDS of it are ever played. */
+export const PACK_DUEL_MAX_CARDS = 10;
 
 /* Duels a single account can open per hour. Generous next to any real use;
    it exists so the table cannot be used as free write amplification. */
 export const PACK_DUEL_HOURLY_CAP = 60;
 
-/* Card power is a mint statistic in the low hundreds to low thousands, and a
-   star rating tops out around 10. Both clamps keep a tampered client inside a
-   range where the scoreboard still reads as a scoreboard. */
+/* Card power is a mint statistic in the low hundreds to low thousands, skills
+   are drawn on a 0-1500 display scale, and a star rating tops out around 10.
+   The clamps keep a tampered client inside a range where the scoreboard still
+   reads as a scoreboard. */
 const MAX_CARD_POWER = 5000;
-const MAX_CARD_VALUE = 15;
+const MAX_SKILL_STAT = 2000;
+const MAX_STAR_STAT = 15;
 
 const VALID_TIERS = new Set([
   "common",
@@ -103,9 +122,8 @@ export interface PackDuelCard {
   tier: string | null;
   tierLabel: string | null;
   cardPower: number;
-  /* What this card is worth at blackjack: the star rating of the player's
-     card, which is the number already printed on its front. */
-  value: number;
+  /* The numbers a round is decided on, all of them printed on the card. */
+  stats: Record<TrumpStat, number>;
   globalRank: number;
   pp: number;
   /* The mint's skills snapshot, so the duel page can redraw the real card
@@ -113,20 +131,44 @@ export interface PackDuelCard {
   skills: unknown | null;
 }
 
+/* One round of the duel. The stats are nulled by redaction while a round is
+   still being played; the picked flags stay truthful either way, so the board
+   can say "they have locked theirs in" without saying what it was. */
+export interface PackDuelRound {
+  round: number;
+  challengerStat: TrumpStat | null;
+  opponentStat: TrumpStat | null;
+  challengerPicked: boolean;
+  opponentPicked: boolean;
+  /* Whether that side's attack landed. Meaningless until resolved. */
+  challengerPoint: boolean;
+  opponentPoint: boolean;
+  resolved: boolean;
+}
+
 export interface PackDuelSideState {
   userId: number | null;
   username: string | null;
   cards: PackDuelCard[];
-  /* Challenge: total card power. Blackjack: the hand's total value. */
+  /* Rounds won by this side's attacks, which is the duel's score. */
   score: number;
-  /* Blackjack: how many cards this side holds, which stays truthful even
-     while the cards themselves are hidden from the other player. */
+  /* How many cards this side holds, which stays truthful even while the cards
+     themselves are hidden from the other player. */
   cardCount: number;
-  /* Blackjack: the side has stopped, either by standing or by busting. */
-  done: boolean;
-  bust: boolean;
-  /* Set on a public or opposing read while a hand is still hidden. */
+  /* Shards this side was paid when the duel resolved. Zero until then, and
+     capped by the arcade's daily allowance, so it can be less than the duel's
+     face value. */
+  shards: number;
+  /* Set on a read where cards were held back from the reader. */
   hidden?: boolean;
+}
+
+export interface PackDuelSpoils {
+  winner: PackDuelSide;
+  /* Every card that changed hands, plus the ones paid out as shards because
+     the loser no longer held them. */
+  cards: PackCardTransfer[];
+  shards: number;
 }
 
 export interface PackDuel {
@@ -136,9 +178,15 @@ export interface PackDuel {
   status: PackDuelStatus;
   challenger: PackDuelSideState;
   opponent: PackDuelSideState;
-  /* Blackjack: the target to get closest to without going over. */
-  target: number;
+  rounds: PackDuelRound[];
+  /* Rounds this duel will play, once both hands are in. Zero while it waits. */
+  roundCount: number;
+  /* The round being played now, and the count of rounds already resolved. */
+  currentRound: number;
   winner: PackDuelWinner | null;
+  /* What the winner took, once there is a winner. Null on a tie, where both
+     sides keep what they staked. */
+  spoils: PackDuelSpoils | null;
   createdAt: number;
   updatedAt: number;
   resolvedAt: number | null;
@@ -148,6 +196,26 @@ function clampNumber(value: unknown, min: number, max: number): number {
   const num = Number(value);
   if (!Number.isFinite(num)) return min;
   return Math.min(max, Math.max(min, num));
+}
+
+/* The collection keys a hand puts on the line. */
+export function stakeKeysOf(cards: readonly PackDuelCard[]): string[] {
+  return [...new Set(cards.map((card) => packCardKey(card.userId, card.tier)))];
+}
+
+export function normalizeTrumpStat(value: unknown): TrumpStat | null {
+  return TRUMP_STATS.includes(value as TrumpStat) ? (value as TrumpStat) : null;
+}
+
+function normalizeStats(value: unknown): Record<TrumpStat, number> {
+  const raw = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
+  return {
+    control: Math.round(clampNumber(raw.control, 0, MAX_SKILL_STAT)),
+    speed: Math.round(clampNumber(raw.speed, 0, MAX_SKILL_STAT)),
+    precision: Math.round(clampNumber(raw.precision, 0, MAX_SKILL_STAT)),
+    // Two decimals, the precision a star rating is printed at.
+    stars: Math.round(clampNumber(raw.stars, 0, MAX_STAR_STAT) * 100) / 100,
+  };
 }
 
 function normalizeCard(value: unknown): PackDuelCard | null {
@@ -164,8 +232,7 @@ function normalizeCard(value: unknown): PackDuelCard | null {
     tier,
     tierLabel: typeof raw.tierLabel === "string" ? raw.tierLabel.slice(0, 40) : null,
     cardPower: clampNumber(raw.cardPower, 0, MAX_CARD_POWER),
-    // Two decimals, the precision a star rating is printed at.
-    value: Math.round(clampNumber(raw.value, 0, MAX_CARD_VALUE) * 100) / 100,
+    stats: normalizeStats(raw.stats),
     globalRank: Math.max(0, Math.floor(Number(raw.globalRank) || 0)),
     pp: clampNumber(raw.pp, 0, 100_000),
     // Kept opaque: the frontend owns the skills shape, and a duel row is
@@ -181,59 +248,165 @@ export function normalizeDuelCards(value: unknown, max = PACK_DUEL_MAX_CARDS): P
     .slice(0, max);
 }
 
-/* A challenge hand's score: total card power, rounded, because the card front
-   prints integers and a duel decided on a hundredth reads as a bug. */
-export function scoreDuelCards(cards: PackDuelCard[]): number {
-  return Math.round(cards.reduce((sum, card) => sum + card.cardPower, 0));
+/* The pick log: which stat each side attacked with, in the round it was
+   played. Append-only, so the whole board derives from the two hands plus
+   this, and a write only ever adds one entry. */
+interface TrumpPick {
+  round: number;
+  side: PackDuelSide;
+  stat: TrumpStat;
 }
 
-/* A blackjack hand's total: the sum of star values, to two decimals. */
-export function handTotal(cards: PackDuelCard[]): number {
-  return Math.round(cards.reduce((sum, card) => sum + card.value, 0) * 100) / 100;
+function parsePicks(value: unknown): TrumpPick[] {
+  if (typeof value !== "string" || !value) return [];
+  try {
+    const raw = JSON.parse(value);
+    if (!Array.isArray(raw)) return [];
+    const picks: TrumpPick[] = [];
+    const spent = { challenger: new Set<TrumpStat>(), opponent: new Set<TrumpStat>() };
+    for (const entry of raw.slice(0, TRUMPS_ROUNDS * 2)) {
+      const side = entry?.side === "opponent" ? "opponent" : entry?.side === "challenger" ? "challenger" : null;
+      const stat = normalizeTrumpStat(entry?.stat);
+      const round = Math.floor(Number(entry?.round));
+      if (!side || !stat || !Number.isInteger(round) || round < 0 || round >= TRUMPS_ROUNDS) continue;
+      // One pick per side per round, and one use per stat per duel. The write
+      // path enforces both; re-enforcing them on the read means a hand-edited
+      // row cannot score the same stat twice either.
+      if (picks.some((pick) => pick.round === round && pick.side === side)) continue;
+      if (spent[side].has(stat)) continue;
+      spent[side].add(stat);
+      picks.push({ round, side, stat });
+    }
+    return picks;
+  } catch {
+    return [];
+  }
 }
 
-export function isBust(cards: PackDuelCard[]): boolean {
-  return handTotal(cards) > BLACKJACK_TARGET;
+/* The stats a side has already spent, which is what stops the duel being four
+   rounds of "attack with your best number". Reading it off the pick log keeps
+   it derived rather than stored. */
+export function spentTrumpStats(picks: TrumpPick[], side: PackDuelSide): TrumpStat[] {
+  return picks.filter((pick) => pick.side === side).map((pick) => pick.stat);
 }
 
-/* Higher total card power wins a challenge; the tiebreak is the single best
-   card, the thing both sides were actually chasing. */
-export function resolveDuelWinner(
+function parseSpoils(value: unknown): PackDuelSpoils | null {
+  if (typeof value !== "string" || !value) return null;
+  try {
+    const raw = JSON.parse(value) as Record<string, unknown>;
+    const winner = raw.winner === "opponent" ? "opponent" : raw.winner === "challenger" ? "challenger" : null;
+    if (!winner) return null;
+    const cards = Array.isArray(raw.cards) ? (raw.cards as PackCardTransfer[]) : [];
+    return { winner, cards, shards: Math.max(0, Number(raw.shards) || 0) };
+  } catch {
+    return null;
+  }
+}
+
+function parseCards(value: unknown, max: number): PackDuelCard[] {
+  if (typeof value !== "string" || !value) return [];
+  try {
+    return normalizeDuelCards(JSON.parse(value), max);
+  } catch {
+    return [];
+  }
+}
+
+/* How many rounds these two hands play. A hand can come up short when a card
+   fails to mint, and playing more rounds than the shorter hand can fill would
+   hand the longer one free points. */
+export function trumpsRoundCount(challengerCards: PackDuelCard[], opponentCards: PackDuelCard[]): number {
+  if (challengerCards.length === 0 || opponentCards.length === 0) return 0;
+  return Math.min(TRUMPS_ROUNDS, challengerCards.length, opponentCards.length);
+}
+
+export interface TrumpsState {
+  roundCount: number;
+  rounds: PackDuelRound[];
+  challengerPoints: number;
+  opponentPoints: number;
+  currentRound: number;
+  complete: boolean;
+  winner: PackDuelWinner | null;
+}
+
+/* The whole board, derived from the two hands and the pick log.
+
+   An attack lands when your card is strictly higher on the stat you chose, so
+   two cards tied on a stat trade nothing: neither of you outplayed the other
+   there. */
+export function resolveTrumps(
   challengerCards: PackDuelCard[],
   opponentCards: PackDuelCard[],
+  picks: TrumpPick[],
+): TrumpsState {
+  const roundCount = trumpsRoundCount(challengerCards, opponentCards);
+  const pickAt = (round: number, side: PackDuelSide): TrumpStat | null =>
+    picks.find((pick) => pick.round === round && pick.side === side)?.stat ?? null;
+
+  const rounds: PackDuelRound[] = [];
+  let challengerPoints = 0;
+  let opponentPoints = 0;
+  let currentRound = roundCount;
+
+  for (let round = 0; round < roundCount; round += 1) {
+    const challengerStat = pickAt(round, "challenger");
+    const opponentStat = pickAt(round, "opponent");
+    const resolved = challengerStat !== null && opponentStat !== null;
+    const challengerCard = challengerCards[round];
+    const opponentCard = opponentCards[round];
+    const challengerPoint = Boolean(
+      resolved && challengerCard.stats[challengerStat] > opponentCard.stats[challengerStat],
+    );
+    const opponentPoint = Boolean(
+      resolved && opponentCard.stats[opponentStat] > challengerCard.stats[opponentStat],
+    );
+    if (challengerPoint) challengerPoints += 1;
+    if (opponentPoint) opponentPoints += 1;
+    if (!resolved && currentRound === roundCount) currentRound = round;
+    rounds.push({
+      round,
+      challengerStat,
+      opponentStat,
+      challengerPicked: challengerStat !== null,
+      opponentPicked: opponentStat !== null,
+      challengerPoint,
+      opponentPoint,
+      resolved,
+    });
+  }
+
+  const complete = roundCount > 0 && currentRound >= roundCount;
+  return {
+    roundCount,
+    rounds,
+    challengerPoints,
+    opponentPoints,
+    currentRound,
+    complete,
+    winner: complete
+      ? resolveTrumpsWinner(challengerPoints, opponentPoints, challengerCards, opponentCards, roundCount)
+      : null,
+  };
+}
+
+/* More landed attacks wins. A dead heat falls back to the total power of the
+   cards actually played, which is the hand you were dealt rather than the way
+   you played it, so it only ever settles a duel that was otherwise even. */
+export function resolveTrumpsWinner(
+  challengerPoints: number,
+  opponentPoints: number,
+  challengerCards: PackDuelCard[],
+  opponentCards: PackDuelCard[],
+  roundCount: number,
 ): PackDuelWinner {
-  const challengerScore = scoreDuelCards(challengerCards);
-  const opponentScore = scoreDuelCards(opponentCards);
-  if (challengerScore !== opponentScore) return challengerScore > opponentScore ? "challenger" : "opponent";
-  const bestOf = (cards: PackDuelCard[]) => cards.reduce((best, card) => Math.max(best, card.cardPower), 0);
-  const challengerBest = bestOf(challengerCards);
-  const opponentBest = bestOf(opponentCards);
-  if (challengerBest !== opponentBest) return challengerBest > opponentBest ? "challenger" : "opponent";
+  if (challengerPoints !== opponentPoints) return challengerPoints > opponentPoints ? "challenger" : "opponent";
+  const powerOf = (cards: PackDuelCard[]) =>
+    cards.slice(0, roundCount).reduce((sum, card) => sum + card.cardPower, 0);
+  const challengerPower = powerOf(challengerCards);
+  const opponentPower = powerOf(opponentCards);
+  if (challengerPower !== opponentPower) return challengerPower > opponentPower ? "challenger" : "opponent";
   return "tie";
-}
-
-/* Blackjack: a bust always loses, two busts is a tie, otherwise the higher
-   total is by definition the one closer to the target. */
-export function resolveBlackjackWinner(
-  challengerCards: PackDuelCard[],
-  opponentCards: PackDuelCard[],
-): PackDuelWinner {
-  const challengerBust = isBust(challengerCards);
-  const opponentBust = isBust(opponentCards);
-  if (challengerBust && opponentBust) return "tie";
-  if (challengerBust) return "opponent";
-  if (opponentBust) return "challenger";
-  const challengerTotal = handTotal(challengerCards);
-  const opponentTotal = handTotal(opponentCards);
-  if (challengerTotal === opponentTotal) return "tie";
-  return challengerTotal > opponentTotal ? "challenger" : "opponent";
-}
-
-/* Each side deals from its own half of the deck, so both can play at once
-   without racing for the next card. */
-export function deckSliceFor(side: PackDuelSide): { start: number; end: number } {
-  const start = side === "challenger" ? 0 : BLACKJACK_CARDS_PER_SIDE;
-  return { start, end: start + BLACKJACK_CARDS_PER_SIDE };
 }
 
 const DUEL_ID_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
@@ -260,88 +433,50 @@ function normalizePackType(value: unknown): string | null {
   return typeof value === "string" && /^[a-z_]{1,24}$/.test(value) ? value : null;
 }
 
-function parseCards(value: unknown, max: number): PackDuelCard[] {
-  if (typeof value !== "string" || !value) return [];
-  try {
-    return normalizeDuelCards(JSON.parse(value), max);
-  } catch {
-    return [];
-  }
-}
-
-/* The deal log: which side each dealt card went to, in deal order. The card
-   itself is deck[poolIndex]. */
-interface DuelDeal {
-  side: PackDuelSide;
-  poolIndex: number;
-}
-
-function parseDeals(value: unknown): DuelDeal[] {
-  if (typeof value !== "string" || !value) return [];
-  try {
-    const raw = JSON.parse(value);
-    if (!Array.isArray(raw)) return [];
-    return raw
-      .map((entry) => {
-        const side = entry?.side === "opponent" ? "opponent" : entry?.side === "challenger" ? "challenger" : null;
-        const poolIndex = Math.floor(Number(entry?.poolIndex));
-        if (!side || !Number.isInteger(poolIndex) || poolIndex < 0 || poolIndex >= BLACKJACK_DECK_SIZE) return null;
-        return { side, poolIndex } as DuelDeal;
-      })
-      .filter((entry): entry is DuelDeal => entry !== null)
-      .slice(0, BLACKJACK_DECK_SIZE);
-  } catch {
-    return [];
-  }
-}
-
 interface DuelRowState {
   duel: PackDuel;
-  /* Server-side only: the undealt deck never leaves this module. */
-  deck: PackDuelCard[];
-  deals: DuelDeal[];
+  picks: TrumpPick[];
+  state: TrumpsState;
 }
 
 function readRow(row: Record<string, unknown>): DuelRowState {
-  const kind: PackDuelKind = row.kind === "blackjack" ? "blackjack" : "challenge";
-  const deck = kind === "blackjack" ? parseCards(row.pool_json, BLACKJACK_DECK_SIZE) : [];
-  const deals = kind === "blackjack" ? parseDeals(row.deals_json) : [];
-  const handOf = (side: PackDuelSide) =>
-    deals.filter((deal) => deal.side === side).map((deal) => deck[deal.poolIndex]).filter(Boolean);
-  const challengerCards = kind === "blackjack" ? handOf("challenger") : parseCards(row.challenger_cards_json, PACK_DUEL_MAX_CARDS);
-  const opponentCards = kind === "blackjack" ? handOf("opponent") : parseCards(row.opponent_cards_json, PACK_DUEL_MAX_CARDS);
+  const challengerCards = parseCards(row.challenger_cards_json, PACK_DUEL_MAX_CARDS);
+  const opponentCards = parseCards(row.opponent_cards_json, PACK_DUEL_MAX_CARDS);
+  const picks = parsePicks(row.picks_json);
+  const state = resolveTrumps(challengerCards, opponentCards, picks);
   const opponentUserId = Number(row.opponent_user_id) || 0;
-  const status: PackDuelStatus = row.status === "resolved" ? "resolved" : "open";
-  const scoreOf = (cards: PackDuelCard[]) => (kind === "blackjack" ? handTotal(cards) : scoreDuelCards(cards));
   return {
-    deck,
-    deals,
+    picks,
+    state,
     duel: {
       id: String(row.id),
-      kind,
+      kind: "trumps",
       packType: String(row.pack_type ?? ""),
-      status,
+      // Derived rather than read back: the stored column is a convenience for
+      // querying, and the pick log is what actually decides whether a duel is
+      // over.
+      status: state.complete ? "resolved" : "open",
       challenger: {
         userId: Number(row.challenger_user_id) || 0,
         username: typeof row.challenger_username === "string" ? row.challenger_username : null,
         cards: challengerCards,
-        score: scoreOf(challengerCards),
+        score: state.challengerPoints,
         cardCount: challengerCards.length,
-        done: Number(row.challenger_done) === 1,
-        bust: kind === "blackjack" && isBust(challengerCards),
+        shards: Math.max(0, Number(row.challenger_shards) || 0),
       },
       opponent: {
         userId: opponentUserId > 0 ? opponentUserId : null,
         username: typeof row.opponent_username === "string" ? row.opponent_username : null,
         cards: opponentCards,
-        score: scoreOf(opponentCards),
+        score: state.opponentPoints,
         cardCount: opponentCards.length,
-        done: Number(row.opponent_done) === 1,
-        bust: kind === "blackjack" && isBust(opponentCards),
+        shards: Math.max(0, Number(row.opponent_shards) || 0),
       },
-      target: BLACKJACK_TARGET,
-      winner:
-        row.winner === "challenger" || row.winner === "opponent" || row.winner === "tie" ? row.winner : null,
+      rounds: state.rounds,
+      roundCount: state.roundCount,
+      currentRound: state.currentRound,
+      winner: state.winner,
+      spoils: parseSpoils(row.spoils_json),
       createdAt: Number(row.created_at) || 0,
       updatedAt: Number(row.updated_at) || 0,
       resolvedAt: Number(row.resolved_at) || null,
@@ -362,21 +497,39 @@ export async function getPackDuel(db: Db, id: string): Promise<PackDuel | null> 
 
 /* What one reader may see.
 
-   A challenge keeps the challenger's hand sealed until someone answers: a duel
-   you can size up before accepting is not a duel. Blackjack hides each side's
-   cards from the other until both have stopped, so neither can play against
-   the other's total. Your own hand is always yours to see, which is why this
-   takes a viewer; a public read passes null and sees neither hand. */
+   A card stays face down until the round it is played in is over: that is the
+   entire game, since a stat you pick against a card you can already read is
+   not a guess. Rounds reveal in order, so the visible part of a hand is always
+   its resolved prefix. The pick itself is held back the same way, so nobody
+   can wait to see what the other side attacked with.
+
+   Your own hand is always yours to see, which is why this takes a viewer; a
+   public read passes null and sees only what both players have already
+   played. */
 export function redactDuelFor(duel: PackDuel, viewerId: number | null): PackDuel {
   if (duel.status === "resolved") return duel;
-  const hide = (side: PackDuelSideState): PackDuelSideState =>
-    side.userId !== null && side.userId === viewerId
-      ? side
-      : { ...side, cards: [], score: 0, bust: false, hidden: true };
-  if (duel.kind === "challenge") {
-    return { ...duel, challenger: hide(duel.challenger) };
-  }
-  return { ...duel, challenger: hide(duel.challenger), opponent: hide(duel.opponent) };
+  const revealed = duel.currentRound;
+  const trim = (side: PackDuelSideState): PackDuelSideState => {
+    if (side.userId !== null && side.userId === viewerId) return side;
+    if (side.cards.length <= revealed) return side;
+    return { ...side, cards: side.cards.slice(0, revealed), hidden: true };
+  };
+  const showChallengerPicks = duel.challenger.userId !== null && duel.challenger.userId === viewerId;
+  const showOpponentPicks = duel.opponent.userId !== null && duel.opponent.userId === viewerId;
+  return {
+    ...duel,
+    challenger: trim(duel.challenger),
+    opponent: trim(duel.opponent),
+    rounds: duel.rounds.map((round) =>
+      round.resolved
+        ? round
+        : {
+            ...round,
+            challengerStat: showChallengerPicks ? round.challengerStat : null,
+            opponentStat: showOpponentPicks ? round.opponentStat : null,
+          },
+    ),
+  };
 }
 
 async function underHourlyCap(db: Db, userId: number, now: number): Promise<boolean> {
@@ -389,15 +542,14 @@ async function underHourlyCap(db: Db, userId: number, now: number): Promise<bool
 }
 
 export interface CreatePackDuelInput {
-  kind: unknown;
   packType: unknown;
-  /* challenge: the challenger's frozen hand. blackjack: the deck. */
+  /* The challenger's hand, frozen as it was pulled. */
   cards: unknown;
 }
 
 export type CreatePackDuelResult =
   | { ok: true; duel: PackDuel }
-  | { ok: false; error: "invalid_duel" | "rate_limited" };
+  | { ok: false; error: "invalid_duel" | "rate_limited" | "stake_not_held" };
 
 /* Dev-only escape hatch: lets one account sit on both sides of a duel, so the
    whole flow can be played through with a single osu! login. The HTTP layer
@@ -415,51 +567,25 @@ export async function createPackDuel(
   now = Date.now(),
   random: () => number = Math.random,
 ): Promise<CreatePackDuelResult> {
-  const kind: PackDuelKind | null =
-    input.kind === "blackjack" ? "blackjack" : input.kind === "challenge" ? "challenge" : null;
   const packType = normalizePackType(input.packType);
-  if (!kind || !packType || !Number.isInteger(challengerUserId) || challengerUserId <= 0) {
+  if (!packType || !Number.isInteger(challengerUserId) || challengerUserId <= 0) {
     return { ok: false, error: "invalid_duel" };
   }
-  const cards = normalizeDuelCards(input.cards, kind === "blackjack" ? BLACKJACK_DECK_SIZE : PACK_DUEL_MAX_CARDS);
-  // Blackjack needs its whole deck up front: hands are dealt from fixed
-  // per-side slices of it, so a short deck would quietly shorten a side.
-  if (kind === "blackjack" ? cards.length !== BLACKJACK_DECK_SIZE : cards.length === 0) {
-    return { ok: false, error: "invalid_duel" };
-  }
+  const cards = normalizeDuelCards(input.cards, PACK_DUEL_MAX_CARDS);
+  if (cards.length === 0) return { ok: false, error: "invalid_duel" };
+  // You can only put up cards you hold. Checked here rather than trusted,
+  // because losing this duel takes them out of your collection.
+  if (!(await holdsWholeStake(db, challengerUserId, cards))) return { ok: false, error: "stake_not_held" };
   if (!(await underHourlyCap(db, challengerUserId, now))) return { ok: false, error: "rate_limited" };
-
-  // The challenger's opening hand is dealt with the duel, so the board is
-  // never empty when they arrive.
-  const opening: DuelDeal[] =
-    kind === "blackjack"
-      ? Array.from({ length: BLACKJACK_OPENING_CARDS }, (_, index) => ({
-          side: "challenger" as PackDuelSide,
-          poolIndex: deckSliceFor("challenger").start + index,
-        }))
-      : [];
 
   const id = generateDuelId(random);
   await exec(
     db,
     `insert into pack_duels (
        id, kind, pack_type, status, challenger_user_id, challenger_username,
-       challenger_cards_json, challenger_score, pool_json, deals_json, deals_count, created_at, updated_at
-     ) values (?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      id,
-      kind,
-      packType,
-      challengerUserId,
-      challengerUsername.slice(0, 40),
-      kind === "blackjack" ? null : JSON.stringify(cards),
-      kind === "blackjack" ? 0 : scoreDuelCards(cards),
-      kind === "blackjack" ? JSON.stringify(cards) : null,
-      kind === "blackjack" ? JSON.stringify(opening) : null,
-      opening.length,
-      now,
-      now,
-    ],
+       challenger_cards_json, challenger_score, picks_json, picks_count, created_at, updated_at
+     ) values (?, 'trumps', ?, 'open', ?, ?, ?, 0, '[]', 0, ?, ?)`,
+    [id, packType, challengerUserId, challengerUsername.slice(0, 40), JSON.stringify(cards), now, now],
   );
   const duel = await getPackDuel(db, id);
   return duel ? { ok: true, duel } : { ok: false, error: "invalid_duel" };
@@ -467,10 +593,20 @@ export async function createPackDuel(
 
 export type JoinPackDuelResult =
   | { ok: true; duel: PackDuel }
-  | { ok: false; error: "not_found" | "already_joined" | "own_duel" | "invalid_cards" | "wrong_kind" };
+  | { ok: false; error: "not_found" | "already_joined" | "own_duel" | "invalid_cards" | "stake_not_held" };
 
-/* The opponent's side of a challenge duel: their hand lands, and the duel
-   resolves immediately because there is nothing else to wait for. */
+/* Whether this account holds every card in a hand. A stake is all or nothing:
+   half a hand on the line would quietly change what the duel is worth after
+   the other side has already agreed to it. */
+async function holdsWholeStake(db: Db, userId: number, cards: PackDuelCard[]): Promise<boolean> {
+  const keys = stakeKeysOf(cards);
+  const held = await heldPackCollectionCardKeys(db, userId, keys);
+  return keys.every((key) => held.has(key));
+}
+
+/* Taking the other seat: the opponent brings their own hand, and round one
+   opens the moment it lands. Nothing is compared yet, because neither side has
+   attacked. */
 export async function joinPackDuel(
   db: Db,
   id: string,
@@ -482,31 +618,22 @@ export async function joinPackDuel(
 ): Promise<JoinPackDuelResult> {
   const duel = await getPackDuel(db, id);
   if (!duel) return { ok: false, error: "not_found" };
-  if (duel.kind !== "challenge") return { ok: false, error: "wrong_kind" };
   if (duel.challenger.userId === opponentUserId && !options.allowSelfDuel) {
     return { ok: false, error: "own_duel" };
   }
   if (duel.opponent.userId) return { ok: false, error: "already_joined" };
   const hand = normalizeDuelCards(cards, PACK_DUEL_MAX_CARDS);
   if (hand.length === 0) return { ok: false, error: "invalid_cards" };
+  if (!options.allowSelfDuel && !(await holdsWholeStake(db, opponentUserId, hand))) {
+    return { ok: false, error: "stake_not_held" };
+  }
 
-  const winner = resolveDuelWinner(duel.challenger.cards, hand);
   const updated = (await exec(
     db,
     `update pack_duels
-     set opponent_user_id = ?, opponent_username = ?, opponent_cards_json = ?, opponent_score = ?,
-         status = 'resolved', winner = ?, updated_at = ?, resolved_at = ?
+     set opponent_user_id = ?, opponent_username = ?, opponent_cards_json = ?, updated_at = ?
      where id = ? and opponent_user_id is null`,
-    [
-      opponentUserId,
-      opponentUsername.slice(0, 40),
-      JSON.stringify(hand),
-      scoreDuelCards(hand),
-      winner,
-      now,
-      now,
-      duel.id,
-    ],
+    [opponentUserId, opponentUsername.slice(0, 40), JSON.stringify(hand), now, duel.id],
   )).rowsAffected;
   // Lost the race to another opponent between the read and the write.
   if (updated === 0) return { ok: false, error: "already_joined" };
@@ -514,186 +641,146 @@ export async function joinPackDuel(
   return fresh ? { ok: true, duel: fresh } : { ok: false, error: "not_found" };
 }
 
-export type BlackjackJoinResult =
-  | { ok: true; duel: PackDuel }
-  | { ok: false; error: "not_found" | "already_joined" | "own_duel" | "wrong_kind" };
-
-/* Taking the other seat at a blackjack duel. The opponent brings no hand: they
-   are dealt their opening two from their half of the deck on arrival. Coming
-   back to the link later is a no-op rather than a redeal. */
-export async function joinPackBlackjack(
-  db: Db,
-  id: string,
-  opponentUserId: number,
-  opponentUsername: string,
-  now = Date.now(),
-  options: PackDuelOptions = {},
-): Promise<BlackjackJoinResult> {
-  const state = await readDuel(db, id);
-  if (!state) return { ok: false, error: "not_found" };
-  const { duel, deals } = state;
-  if (duel.kind !== "blackjack") return { ok: false, error: "wrong_kind" };
-  if (duel.challenger.userId === opponentUserId && !options.allowSelfDuel) {
-    return { ok: false, error: "own_duel" };
-  }
-  if (duel.opponent.userId && duel.opponent.userId !== opponentUserId) {
-    return { ok: false, error: "already_joined" };
-  }
-  if (!duel.opponent.userId) {
-    const slice = deckSliceFor("opponent");
-    const opening: DuelDeal[] = [
-      ...deals,
-      ...Array.from({ length: BLACKJACK_OPENING_CARDS }, (_, index) => ({
-        side: "opponent" as PackDuelSide,
-        poolIndex: slice.start + index,
-      })),
-    ];
-    const updated = (await exec(
-      db,
-      `update pack_duels
-       set opponent_user_id = ?, opponent_username = ?, deals_json = ?, deals_count = ?, updated_at = ?
-       where id = ? and opponent_user_id is null`,
-      [opponentUserId, opponentUsername.slice(0, 40), JSON.stringify(opening), opening.length, now, duel.id],
-    )).rowsAffected;
-    if (updated === 0) return { ok: false, error: "already_joined" };
-  }
-  const fresh = await getPackDuel(db, duel.id);
-  return fresh ? { ok: true, duel: fresh } : { ok: false, error: "not_found" };
-}
-
-export type BlackjackMoveResult =
+export type PackDuelPickResult =
   | { ok: true; duel: PackDuel }
   | {
       ok: false;
-      error: "not_found" | "wrong_kind" | "not_a_player" | "already_done" | "no_cards_left" | "duel_over" | "retry";
+      error:
+        | "not_found"
+        | "not_a_player"
+        | "already_done"
+        | "duel_over"
+        | "wrong_round"
+        | "invalid_pick"
+        | "stat_spent"
+        | "retry";
     };
 
-function sideOfViewer(duel: PackDuel, userId: number): PackDuelSide | null {
-  // A self-duel (dev hatch) holds both seats; the side still in play is the
-  // one that move belongs to.
-  if (duel.challenger.userId === userId && duel.opponent.userId === userId) {
-    return duel.challenger.done ? "opponent" : "challenger";
+function sideOfViewer(duel: PackDuel, userId: number, round: number): PackDuelSide | null {
+  const isChallenger = duel.challenger.userId === userId;
+  const isOpponent = duel.opponent.userId === userId;
+  // A self-duel (dev hatch) holds both seats; the pick lands on whichever side
+  // still owes this round an attack.
+  if (isChallenger && isOpponent) {
+    const current = duel.rounds[round];
+    return current && current.challengerPicked ? "opponent" : "challenger";
   }
-  if (duel.challenger.userId === userId) return "challenger";
-  if (duel.opponent.userId === userId) return "opponent";
+  if (isChallenger) return "challenger";
+  if (isOpponent) return "opponent";
   return null;
 }
 
-/* Resolves the duel when both sides have stopped. */
-function blackjackOutcome(
-  challengerDone: boolean,
-  opponentDone: boolean,
-  challengerCards: PackDuelCard[],
-  opponentCards: PackDuelCard[],
-): { status: PackDuelStatus; winner: PackDuelWinner | null } {
-  if (!challengerDone || !opponentDone) return { status: "open", winner: null };
-  return { status: "resolved", winner: resolveBlackjackWinner(challengerCards, opponentCards) };
-}
-
-/* Takes one more card. Going over the target ends that side's hand there and
-   then: a bust has nothing left to decide. */
-export async function hitPackBlackjack(
+/* Attacks with one stat off your card for the round being played. The second
+   pick of a round resolves it, and the pick that resolves the last round ends
+   the duel. */
+export async function pickPackDuelStat(
   db: Db,
   id: string,
   userId: number,
+  round: unknown,
+  stat: unknown,
   now = Date.now(),
-): Promise<BlackjackMoveResult> {
+): Promise<PackDuelPickResult> {
   const state = await readDuel(db, id);
   if (!state) return { ok: false, error: "not_found" };
-  const { duel, deck, deals } = state;
-  if (duel.kind !== "blackjack") return { ok: false, error: "wrong_kind" };
+  const { duel, picks } = state;
   if (duel.status === "resolved") return { ok: false, error: "duel_over" };
-  const side = sideOfViewer(duel, userId);
+  if (!duel.opponent.userId || duel.roundCount === 0) return { ok: false, error: "duel_over" };
+  const pickStat = normalizeTrumpStat(stat);
+  if (!pickStat) return { ok: false, error: "invalid_pick" };
+  const side = sideOfViewer(duel, userId, duel.currentRound);
   if (!side) return { ok: false, error: "not_a_player" };
-  if (!duel.opponent.userId) return { ok: false, error: "duel_over" };
-  if (side === "challenger" ? duel.challenger.done : duel.opponent.done) {
+  // The round is named in the request so a stale board cannot land a pick on a
+  // round that has already moved on underneath it.
+  if (Math.floor(Number(round)) !== duel.currentRound) return { ok: false, error: "wrong_round" };
+  const current = duel.rounds[duel.currentRound];
+  if (side === "challenger" ? current.challengerPicked : current.opponentPicked) {
     return { ok: false, error: "already_done" };
   }
+  // Each stat is spent once per duel, so a side cannot ride its best number
+  // through all four rounds.
+  if (spentTrumpStats(picks, side).includes(pickStat)) return { ok: false, error: "stat_spent" };
 
-  const slice = deckSliceFor(side);
-  const dealt = deals.filter((deal) => deal.side === side).length;
-  const nextIndex = slice.start + dealt;
-  // Out of cards: the hand stands where it is rather than stalling.
-  if (nextIndex >= slice.end) {
-    return standPackBlackjack(db, id, userId, now);
-  }
-
-  const nextDeals = [...deals, { side, poolIndex: nextIndex }];
-  const handOf = (target: PackDuelSide) =>
-    nextDeals.filter((deal) => deal.side === target).map((deal) => deck[deal.poolIndex]).filter(Boolean);
-  const challengerCards = handOf("challenger");
-  const opponentCards = handOf("opponent");
-  const busted = isBust(side === "challenger" ? challengerCards : opponentCards);
-  const challengerDone = side === "challenger" ? duel.challenger.done || busted : duel.challenger.done;
-  const opponentDone = side === "opponent" ? duel.opponent.done || busted : duel.opponent.done;
-  const outcome = blackjackOutcome(challengerDone, opponentDone, challengerCards, opponentCards);
-
+  const nextPicks = [...picks, { round: duel.currentRound, side, stat: pickStat }];
+  const next = resolveTrumps(duel.challenger.cards, duel.opponent.cards, nextPicks);
   const updated = (await exec(
     db,
     `update pack_duels
-     set deals_json = ?, deals_count = ?, challenger_done = ?, opponent_done = ?,
-         challenger_score = ?, opponent_score = ?, status = ?, winner = ?, updated_at = ?, resolved_at = ?
-     where id = ? and deals_count = ?`,
+     set picks_json = ?, picks_count = ?, challenger_score = ?, opponent_score = ?,
+         status = ?, winner = ?, updated_at = ?, resolved_at = ?
+     where id = ? and picks_count = ?`,
     [
-      JSON.stringify(nextDeals),
-      nextDeals.length,
-      challengerDone ? 1 : 0,
-      opponentDone ? 1 : 0,
-      handTotal(challengerCards),
-      handTotal(opponentCards),
-      outcome.status,
-      outcome.winner,
+      JSON.stringify(nextPicks),
+      nextPicks.length,
+      next.challengerPoints,
+      next.opponentPoints,
+      next.complete ? "resolved" : "open",
+      next.winner,
       now,
-      outcome.status === "resolved" ? now : null,
+      next.complete ? now : null,
       duel.id,
-      deals.length,
+      picks.length,
     ] as InValue[],
   )).rowsAffected;
-  // The deal count in the where clause is the concurrency guard: two hits
-  // fired at once, only the first lands, and the second is told to look again.
+  // The pick count in the where clause is the concurrency guard: both sides
+  // pick at once, only the first write lands, and the second is told to look
+  // again rather than overwriting the log it never read.
   if (updated === 0) return { ok: false, error: "retry" };
+  // The pick that ends the duel is also the one that pays for it, and it only
+  // gets here after winning the picks_count guard, so a duel pays exactly once.
+  if (next.complete) await settleDuel(db, duel, next.winner, now);
   const fresh = await getPackDuel(db, duel.id);
   return fresh ? { ok: true, duel: fresh } : { ok: false, error: "not_found" };
 }
 
-/* Stops on the hand as it stands. The second side to stop resolves the duel. */
-export async function standPackBlackjack(
+/* Settling a finished duel: the winner takes the loser's staked cards, and
+   both sides are paid shards on top - the winner for winning, the loser for
+   answering at all (which cost them a pack). What each actually receives in
+   shards is trimmed by their own daily allowance, so the amounts are stored
+   per duel rather than inferred from the result.
+
+   Runs only for the pick that won the picks_count guard, so a duel settles
+   exactly once however many clients are polling it. */
+async function settleDuel(
   db: Db,
-  id: string,
-  userId: number,
-  now = Date.now(),
-): Promise<BlackjackMoveResult> {
-  const state = await readDuel(db, id);
-  if (!state) return { ok: false, error: "not_found" };
-  const { duel } = state;
-  if (duel.kind !== "blackjack") return { ok: false, error: "wrong_kind" };
-  if (duel.status === "resolved") return { ok: false, error: "duel_over" };
-  const side = sideOfViewer(duel, userId);
-  if (!side) return { ok: false, error: "not_a_player" };
-  if (!duel.opponent.userId) return { ok: false, error: "duel_over" };
-  if (side === "challenger" ? duel.challenger.done : duel.opponent.done) {
-    return { ok: false, error: "already_done" };
+  duel: PackDuel,
+  winner: PackDuelWinner | null,
+  now: number,
+): Promise<void> {
+  const owed = (side: PackDuelSide): number => {
+    if (winner === "tie") return DUEL_TIE_SHARDS;
+    return winner === side ? DUEL_WIN_SHARDS : DUEL_LOSS_SHARDS;
+  };
+  const pay = async (side: PackDuelSide): Promise<number> => {
+    const userId = duel[side].userId;
+    if (!userId) return 0;
+    return (await grantPackGameShards(db, userId, "duel", owed(side), now)).granted;
+  };
+  const challengerShards = await pay("challenger");
+  const opponentShards = await pay("opponent");
+
+  // A tie leaves both collections alone: nobody outplayed anybody.
+  let spoils: PackDuelSpoils | null = null;
+  if (winner === "challenger" || winner === "opponent") {
+    const loser: PackDuelSide = winner === "challenger" ? "opponent" : "challenger";
+    const winnerId = duel[winner].userId;
+    const loserId = duel[loser].userId;
+    if (winnerId && loserId) {
+      const taken = await transferPackCollectionCards(
+        db,
+        loserId,
+        winnerId,
+        stakeKeysOf(duel[loser].cards),
+        now,
+      );
+      if (taken.moved.length > 0) spoils = { winner, cards: taken.moved, shards: taken.shards };
+    }
   }
 
-  const challengerDone = side === "challenger" ? true : duel.challenger.done;
-  const opponentDone = side === "opponent" ? true : duel.opponent.done;
-  const outcome = blackjackOutcome(challengerDone, opponentDone, duel.challenger.cards, duel.opponent.cards);
-  const updated = (await exec(
+  if (challengerShards === 0 && opponentShards === 0 && !spoils) return;
+  await exec(
     db,
-    `update pack_duels
-     set challenger_done = ?, opponent_done = ?, status = ?, winner = ?, updated_at = ?, resolved_at = ?
-     where id = ? and ${side === "challenger" ? "challenger_done" : "opponent_done"} = 0`,
-    [
-      challengerDone ? 1 : 0,
-      opponentDone ? 1 : 0,
-      outcome.status,
-      outcome.winner,
-      now,
-      outcome.status === "resolved" ? now : null,
-      duel.id,
-    ] as InValue[],
-  )).rowsAffected;
-  if (updated === 0) return { ok: false, error: "retry" };
-  const fresh = await getPackDuel(db, duel.id);
-  return fresh ? { ok: true, duel: fresh } : { ok: false, error: "not_found" };
+    "update pack_duels set challenger_shards = ?, opponent_shards = ?, spoils_json = ? where id = ?",
+    [challengerShards, opponentShards, spoils ? JSON.stringify(spoils) : null, duel.id],
+  );
 }

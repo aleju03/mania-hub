@@ -244,6 +244,55 @@ export function playGoatFanfare() {
   playNoise(ctx, { at: landing, duration: 1.2, gain: 0.035, startFreq: 9000, q: 0.8 });
 }
 
+/* A pentatonic ladder for the higher-or-lower game: no two rungs can clash, so
+   a run of right answers reads as one climbing phrase however long it gets. */
+const STREAK_LADDER = [523.25, 587.33, 659.25, 783.99, 880];
+
+/* The note a given streak lands on. Each correct guess climbs a rung, and the
+   ladder jumps an octave every time it wraps, so a good run audibly builds
+   instead of repeating one ding. Capped two octaves up, past which it stops
+   sounding like a reward and starts sounding like a smoke alarm. */
+export function streakChimeFrequency(streak: number): number {
+  const step = Math.max(0, Math.floor(streak) - 1);
+  const octave = Math.min(2, Math.floor(step / STREAK_LADDER.length));
+  return STREAK_LADDER[step % STREAK_LADDER.length] * 2 ** octave;
+}
+
+/* Right answer. */
+export function playStreakCorrect(streak: number) {
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  const freq = streakChimeFrequency(streak);
+  playTone(ctx, { freq, duration: 0.34, gain: 0.1, type: "sine" });
+  // A fifth above, a beat late: enough body that the note reads as struck
+  // rather than beeped.
+  playTone(ctx, { at: 0.05, freq: freq * 1.5, duration: 0.26, gain: 0.042, type: "sine" });
+  playNoise(ctx, { duration: 0.09, gain: 0.02, startFreq: 5600, q: 0.9 });
+}
+
+/* Wrong answer, which is also the end of the run: the climb gives way to two
+   notes falling, over a thud. */
+export function playStreakWrong() {
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  playTone(ctx, { freq: 330, endFreq: 262, duration: 0.26, gain: 0.085, type: "triangle" });
+  playTone(ctx, { at: 0.15, freq: 247, endFreq: 156, duration: 0.44, gain: 0.075, type: "triangle" });
+  playTone(ctx, { freq: 110, endFreq: 55, duration: 0.5, gain: 0.085, type: "sine" });
+}
+
+/* Every fifth in a row, where the bonus is. Lands just after the note for the
+   guess that earned it, so the two read as one flourish. */
+export function playStreakMilestone() {
+  const ctx = ensureAudio();
+  if (!ctx) return;
+  [1046.5, 1318.5, 1568].forEach((freq, index) => {
+    const at = 0.14 + index * 0.07;
+    playTone(ctx, { at, freq, duration: 0.5, gain: 0.075, type: "sine" });
+    playTone(ctx, { at, freq: freq * 2, duration: 0.32, gain: 0.02, type: "sine" });
+  });
+  playNoise(ctx, { at: 0.14, duration: 0.4, gain: 0.03, startFreq: 7200, q: 0.7 });
+}
+
 /* Shard clinks when cards are recycled; a bigger haul jingles longer. */
 export function playRecycleClink(gained: number) {
   const ctx = ensureAudio();

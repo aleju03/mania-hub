@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { computeKeymodePpPrestige, computeManiaSkills, getNextManiaCardTier, resolveCardGlobalPp } from "./maniacard";
+import { computeKeymodePpPrestige, computeManiaSkills, getNextManiaCardTier, maniaTierTextStyle, resolveCardGlobalPp } from "./maniacard";
 import { calculateWeightedPpTotal } from "./score";
 import type { OsuScore } from "./types";
 
@@ -531,5 +531,24 @@ describe("getNextManiaCardTier", () => {
       tier: "mythic",
       threshold: 575,
     });
+  });
+});
+
+describe("maniaTierTextStyle", () => {
+  test("names a player in the colour their card glows", () => {
+    expect(maniaTierTextStyle("worldClass", { r: 34, g: 197, b: 94 })).toEqual({
+      color: "rgb(34, 197, 94)",
+    });
+  });
+
+  test("sweeps Ascendant rather than printing it white", () => {
+    // Ascendant's glow is pure white, and a white name on a dark page reads as
+    // an uncoloured name, which makes the top tier look like no tier.
+    const style = maniaTierTextStyle("ascendant", { r: 255, g: 255, b: 255 });
+    expect(style.color).toBe("transparent");
+    expect(style.backgroundImage).toContain("linear-gradient");
+    expect(style.WebkitTextFillColor).toBe("transparent");
+    // Painted through the glyphs, not behind them.
+    expect(style.backgroundClip).toBe("text");
   });
 });

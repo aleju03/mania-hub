@@ -22,10 +22,12 @@ interface PackSummaryProps {
      after the summary does: the pull log is written in the background, and
      the numbers land when it answers. */
   serials: Map<string, { serial: number; mintedTotal: number }> | null;
-  /* Freezes this hand into a duel link. Absent when duelling is unavailable
-     (signed out, or no live backend). */
+  /* Puts this hand up as a duel stake: opening a challenge, or answering one.
+     Absent when duelling is unavailable (signed out, or no live backend). */
   onChallenge?: () => void;
   challengeBusy?: boolean;
+  /* Who is being duelled, when this pack was opened to answer a challenge. */
+  answeringUsername?: string | null;
   reducedMotion: boolean;
   /* Reveal-all handoff: where each card's tile sat when the reveal finished,
      keyed by card position. Present = the viewer already saw every card, so
@@ -71,6 +73,7 @@ export function PackSummary({
   serials,
   onChallenge,
   challengeBusy = false,
+  answeringUsername = null,
   reducedMotion,
   flyFrom = null,
 }: PackSummaryProps) {
@@ -289,13 +292,28 @@ export function PackSummary({
             type="button"
             onClick={onChallenge}
             disabled={challengeBusy}
-            className="inline-flex items-center gap-1.5 rounded-full bg-osu-h2 px-6 py-2.5 text-sm font-bold text-white transition-colors hover:bg-osu-pink-dark cursor-pointer"
+            className={`inline-flex items-center gap-1.5 rounded-full px-6 py-2.5 text-sm font-bold text-white transition-colors cursor-pointer ${
+              answeringUsername ? "bg-osu-pink hover:brightness-110" : "bg-osu-h2 hover:bg-osu-pink-dark"
+            }`}
           >
             <Swords className="h-4 w-4" />
-            {challengeBusy ? "Sealing the hand..." : "Duel this hand"}
+            {challengeBusy
+              ? answeringUsername
+                ? "Putting them up..."
+                : "Sealing the hand..."
+              : answeringUsername
+                ? `Play ${answeringUsername} for these`
+                : "Duel this hand"}
           </button>
         )}
       </div>
+      {onChallenge && (
+        <div className="mt-3 text-[11px] text-osu-f1">
+          {answeringUsername
+            ? `Answering puts these ${cards.length} cards up against theirs. Win and you keep both hands.`
+            : "Duelling stakes these cards: the winner keeps the loser's."}
+        </div>
+      )}
       <div className="mt-3 text-[11px] text-osu-f1">
         {newCount > 0
           ? `${newCount} new card${newCount === 1 ? "" : "s"} added to your collection.`

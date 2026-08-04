@@ -2017,6 +2017,40 @@ export async function fetchLivePackPulledStats(userId: number): Promise<LivePack
   return fetchLiveJson(`/api/packs/pulled-stats/${userId}`);
 }
 
+/* The streak game's per-player question numbers (best-play stars, oldest top
+   play, DT/7K counts, playtime, join date, followers, replay views), read
+   from the backend's stored projections. Every field nullable: a null means
+   that question is not asked about this player, never that anything should be
+   fetched. Cheap by design (local projections + an hour of browser cache), so
+   the game can call it once per page of the pool. */
+export interface LiveStreakPlayerMetrics {
+  userId: number;
+  bestStars: number | null;
+  oldestTopAt: number | null;
+  dtTop: number | null;
+  k7Top: number | null;
+  playTimeHours: number | null;
+  joinedAt: number | null;
+  followers: number | null;
+  replayViews: number | null;
+}
+
+export async function fetchLiveStreakMetrics(userIds: number[]): Promise<Map<number, LiveStreakPlayerMetrics>> {
+  const uniqueUserIds = [...new Set(userIds)]
+    .filter((id) => Number.isInteger(id) && id > 0)
+    .slice(0, 50);
+  const metrics = new Map<number, LiveStreakPlayerMetrics>();
+  if (uniqueUserIds.length === 0) return metrics;
+  const body = await fetchLiveJson<{ players?: Record<string, LiveStreakPlayerMetrics> }>(
+    `/api/packs/streak-metrics?ids=${uniqueUserIds.join(",")}`,
+  );
+  for (const [key, value] of Object.entries(body.players ?? {})) {
+    const userId = Number(key);
+    if (Number.isInteger(userId) && userId > 0 && value && typeof value === "object") metrics.set(userId, value);
+  }
+  return metrics;
+}
+
 export interface LiveSharedPackCard {
   owner: { userId: number; username: string };
   card: {
@@ -2053,6 +2087,10 @@ export async function fetchLivePackSharedCard(ownerId: number, cardId: number): 
   return fetchLiveJson(`/api/packs/pulled-card/${Math.floor(ownerId)}/${Math.floor(cardId)}`);
 }
 
+/* The four numbers a duel round can be decided on, all of them printed on the
+   card front. */
+export type LiveTrumpStat = "control" | "speed" | "precision" | "stars";
+
 export interface LivePackDuelCard {
   userId: number;
   username: string;
@@ -2061,9 +2099,7 @@ export interface LivePackDuelCard {
   tier: string | null;
   tierLabel: string | null;
   cardPower: number;
-  /* What the card is worth at blackjack: the star rating printed on its
-     front. */
-  value: number;
+  stats: Record<LiveTrumpStat, number>;
   globalRank: number;
   pp: number;
   /* The mint's skills snapshot, so a duel page can redraw the real card front
@@ -2074,34 +2110,67 @@ export interface LivePackDuelCard {
 export interface LivePackDuelSide {
   userId: number | null;
   username: string | null;
+  /* Your own hand in full; of theirs, only the cards already played. */
   cards: LivePackDuelCard[];
-  /* Challenge: total card power. Blackjack: the hand's total value. */
+  /* Rounds this side's attacks have won. */
   score: number;
   /* Truthful even while the cards themselves are hidden. */
   cardCount: number;
-  /* Blackjack: this side has stopped, by standing or by busting. */
-  done: boolean;
-  bust: boolean;
-  /* The server is holding this hand back from the current reader. */
+  /* Shards this side was paid when the duel resolved, after the arcade's
+     daily allowance was applied. Zero until then. */
+  shards: number;
+  /* The server is holding part of this hand back from the current reader. */
   hidden?: boolean;
+}
+
+export interface LivePackDuelRound {
+  round: number;
+  /* Null while the round is still being played and the pick is not yours. */
+  challengerStat: LiveTrumpStat | null;
+  opponentStat: LiveTrumpStat | null;
+  challengerPicked: boolean;
+  opponentPicked: boolean;
+  challengerPoint: boolean;
+  opponentPoint: boolean;
+  resolved: boolean;
+}
+
+export interface LivePackCardTransfer {
+  cardKey: string;
+  username: string;
+  tier: string | null;
+  tierLabel: string | null;
+  /* Set when the loser had recycled the card by the time the duel ended, so
+     it moved as its shard value instead of as a card. */
+  shards: number;
+}
+
+export interface LivePackDuelSpoils {
+  winner: "challenger" | "opponent";
+  cards: LivePackCardTransfer[];
+  shards: number;
 }
 
 export interface LivePackDuel {
   id: string;
-  kind: "challenge" | "blackjack";
+  kind: "trumps";
   packType: string;
   status: "open" | "resolved";
   challenger: LivePackDuelSide;
   opponent: LivePackDuelSide;
-  /* Blackjack: the number to get closest to without going over. */
-  target: number;
+  rounds: LivePackDuelRound[];
+  /* Rounds this duel plays once both hands are in; zero while it waits. */
+  roundCount: number;
+  currentRound: number;
   winner: "challenger" | "opponent" | "tie" | null;
+  /* What the winner took out of the loser's collection. Null on a tie. */
+  spoils: LivePackDuelSpoils | null;
   createdAt: number;
   updatedAt: number;
   resolvedAt: number | null;
 }
 
-/* A duel by link, read anonymously: every hand still in play is hidden. A
+/* A duel by link, read anonymously: every card still face down is hidden. A
    signed-in player reads their own hand through viewPackDuel instead. Throws
    on 404. */
 export async function fetchLivePackDuel(duelId: string): Promise<LivePackDuel> {

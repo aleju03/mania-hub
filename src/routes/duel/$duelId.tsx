@@ -1,10 +1,10 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { LogIn, Swords } from "lucide-react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { AnimatePresence, motion } from "framer-motion";
+import { LogIn, Recycle, Swords } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { OsuTriangleBackdrop } from "../../components/layout/OsuTriangleBackdrop";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { renderCardSkeletonThumbnail, renderCardThumbnail } from "../../components/packs/cardSnapshot";
-import { mintDuelCards } from "../../components/packs/duelMint";
 import { buildManiaCardRenderDataFromSkills } from "../../components/player/maniacard3d/renderData";
 import { CountryFlag } from "../../components/ui/CountryFlag";
 import { useAuth } from "../../lib/auth-context";
@@ -12,29 +12,30 @@ import { canUseAdminFeatures } from "../../lib/auth-shared";
 import {
   fetchLivePackDuel,
   isLiveBackendConfigured,
-  warmLivePackPlayers,
   type LivePackDuel,
   type LivePackDuelCard,
+  type LivePackDuelRound,
 } from "../../lib/live-backend";
 import { MANIA_TIER_STYLES, type ManiaCardTier } from "../../lib/maniacard";
 import {
   duelErrorMessage,
   duelSideOf,
-  hitPackDuel,
-  joinPackBlackjack,
-  joinPackDuel,
-  standPackDuel,
+  pickPackDuelStat,
+  TRUMP_STAT_LABELS,
+  TRUMP_STATS,
+  TRUMPS_ROUNDS,
   viewPackDuel,
   type PackDuelSide,
+  type TrumpStat,
 } from "../../lib/pack-duels";
-import { drawPackPlayers, packTypeById, type PackTypeId } from "../../lib/packs";
+import { packTypeById, type PackTypeId } from "../../lib/packs";
 import { pageSeo } from "../../lib/seo";
 import { useWindowActive } from "../../lib/window-activity";
 
 export const Route = createFileRoute("/duel/$duelId")({
   head: ({ match }) => pageSeo({
     title: "Pack duel",
-    description: "Two collectors, two hands of maniacards, one score.",
+    description: "Two collectors, two hands of maniacards, and the winner keeps the loser's.",
     path: `/duel/${match.params.duelId}`,
     origin: match.context.origin,
     // An unfinished prototype behind an admin gate has no business in search
@@ -44,10 +45,10 @@ export const Route = createFileRoute("/duel/$duelId")({
   component: DuelPage,
 });
 
-/* How often an unfinished duel re-reads itself. A draft is a turn-based game
-   played over a link, so the wait for the other side to pick has to be short
-   enough to feel live; polling stops entirely once the duel resolves, and
-   pauses while the tab is in the background. */
+/* How often an unfinished duel re-reads itself. Both sides attack at the same
+   time, so the wait is only ever for the other player's pick and has to be
+   short enough to feel live; polling stops entirely once the duel resolves,
+   and pauses while the tab is in the background. */
 const DUEL_POLL_MS = 3000;
 
 /* Dev only: lets the challenger take the other seat and keep picking, so a
@@ -65,10 +66,18 @@ function tierColor(card: LivePackDuelCard): string {
   return match ? `rgb(${match[1]}, ${match[2]}, ${match[3]})` : "rgb(226, 232, 240)";
 }
 
+/* Stars are printed to two decimals on the card front and the skills as whole
+   numbers, so the board reads them back the same way. */
+function statText(card: LivePackDuelCard, stat: TrumpStat): string {
+  const value = card.stats[stat];
+  if (!Number.isFinite(value)) return "-";
+  return stat === "stars" ? value.toFixed(2) : Math.round(value).toLocaleString();
+}
+
 /* Card fronts are redrawn from each card's skills snapshot, the same way the
    collection redraws its thumbnails, so a duel page costs no card fetches.
    Cached across renders and duels: the same player shows up on both sides of
-   a draft board. */
+   a board often enough. */
 const duelThumbCache = new Map<string, string>();
 
 function thumbKey(card: LivePackDuelCard): string {
@@ -118,116 +127,79 @@ function useDuelThumbnails(cards: LivePackDuelCard[]): Map<string, string> {
   return thumbs;
 }
 
-function DuelCard({
+function CardArt({
   card,
   thumb,
-  showValue,
-  dimmed,
-  onPick,
+  width = "w-[104px] sm:w-[116px]",
+  showName = true,
 }: {
-  card: LivePackDuelCard;
+  card: LivePackDuelCard | null;
   thumb: string | undefined;
-  /* Blackjack counts stars, a challenge counts card power. */
-  showValue?: boolean;
-  dimmed?: boolean;
-  onPick?: () => void;
+  width?: string;
+  /* Off where the name is already printed beside the card, so a round row
+     does not say it twice. */
+  showName?: boolean;
 }) {
-  const body = (
-    <>
+  return (
+    <div className={width}>
       <div
         className="relative overflow-hidden rounded-[10px]"
-        style={{
-          aspectRatio: "5 / 7",
-          boxShadow: "0 10px 26px rgba(0,0,0,0.45)",
-          opacity: dimmed ? 0.35 : 1,
-        }}
+        style={{ aspectRatio: "5 / 7", boxShadow: "0 10px 26px rgba(0,0,0,0.45)" }}
       >
-        {thumb ? (
+        {card && thumb ? (
           <img src={thumb} alt={`${card.username} maniacard`} className="h-full w-full object-cover" draggable={false} />
         ) : (
-          <div className="h-full w-full bg-osu-b4/70" />
+          <div className="h-full w-full bg-osu-b4/60" />
         )}
       </div>
-      <div className="mt-1.5 text-center">
-        <div className="flex items-center justify-center gap-1">
+      {card && showName && (
+        <div className="mt-1.5 flex items-center justify-center gap-1">
           <CountryFlag code={card.countryCode} size="xs" decorative />
           <span className="truncate text-[12px] font-bold text-white">{card.username}</span>
         </div>
-        <div className="text-[13px] font-bold tabular-nums" style={{ color: tierColor(card) }}>
-          {showValue ? card.value.toFixed(2) : Math.round(card.cardPower).toLocaleString()}
-          <span className="ml-1 text-[10px] font-semibold text-osu-f1">{showValue ? "\u2605" : "power"}</span>
-        </div>
-      </div>
-    </>
-  );
-
-  if (!onPick) return <div className="w-[104px] sm:w-[116px]">{body}</div>;
-  return (
-    <button
-      type="button"
-      onClick={onPick}
-      className="w-[104px] cursor-pointer transition-transform duration-150 hover:-translate-y-1 sm:w-[116px]"
-      aria-label={`Draft ${card.username}`}
-    >
-      {body}
-    </button>
+      )}
+    </div>
   );
 }
 
-function SideColumn({
-  label,
-  side,
-  blackjack,
+/* One finished round: the two cards that met, what each side attacked with,
+   and whether it landed. */
+function PlayedRound({
+  round,
+  challengerCard,
+  opponentCard,
   thumbs,
-  outcome,
 }: {
-  label: string;
-  side: LivePackDuel["challenger"];
-  blackjack: boolean;
+  round: LivePackDuelRound;
+  challengerCard: LivePackDuelCard | undefined;
+  opponentCard: LivePackDuelCard | undefined;
   thumbs: Map<string, string>;
-  outcome: "won" | "lost" | "tie" | null;
 }) {
+  const side = (card: LivePackDuelCard | undefined, stat: TrumpStat | null, landed: boolean, mirrored: boolean) => (
+    <div className={`flex flex-1 items-center gap-2.5 ${mirrored ? "flex-row-reverse text-right" : ""}`}>
+      <CardArt
+        card={card ?? null}
+        thumb={card ? thumbs.get(thumbKey(card)) : undefined}
+        width="w-[52px]"
+        showName={false}
+      />
+      <div className="min-w-0">
+        <div className="truncate text-[12px] font-bold text-white">{card?.username ?? "?"}</div>
+        <div className={`text-[12px] font-semibold tabular-nums ${landed ? "text-osu-pink" : "text-osu-f1"}`}>
+          {stat ? `${TRUMP_STAT_LABELS[stat]} ${card ? statText(card, stat) : "-"}` : "-"}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="flex-1">
-      <div className="text-[11px] font-semibold uppercase tracking-wider text-osu-f1">{label}</div>
-      <div className="mt-1 flex items-baseline gap-2">
-        <span className="truncate text-lg font-bold text-white">{side.username ?? "Waiting"}</span>
-        {outcome === "won" && <span className="text-[11px] font-bold uppercase tracking-wide text-osu-pink">won</span>}
-        {outcome === "tie" && <span className="text-[11px] font-bold uppercase tracking-wide text-osu-f1">tie</span>}
-        {side.bust && <span className="text-[11px] font-bold uppercase tracking-wide text-osu-pink-light">bust</span>}
-      </div>
-      <div className="flex items-baseline gap-1.5">
-        {/* A hidden hand shows its size, never its total: that number is the
-            whole thing the other player must not know yet. */}
-        <span className="text-3xl font-bold text-white tabular-nums">
-          {side.hidden ? "?" : blackjack ? side.score.toFixed(2) : side.score.toLocaleString()}
-        </span>
-        <span className="text-[11px] text-osu-f1">
-          {blackjack ? `${side.cardCount} card${side.cardCount === 1 ? "" : "s"}` : "total power"}
-        </span>
-        {blackjack && side.done && !side.bust && (
-          <span className="text-[11px] text-osu-f1">standing</span>
-        )}
-      </div>
-      <div className="mt-4 flex flex-wrap gap-3">
-        {side.hidden
-          ? Array.from({ length: side.cardCount }, (_, index) => (
-              <div
-                key={`hidden-${index}`}
-                className="w-[104px] rounded-[10px] bg-osu-b4/50 sm:w-[116px]"
-                style={{ aspectRatio: "5 / 7" }}
-                aria-hidden="true"
-              />
-            ))
-          : side.cards.map((card, index) => (
-              <DuelCard
-                key={`${card.userId}-${index}`}
-                card={card}
-                thumb={thumbs.get(thumbKey(card))}
-                showValue={blackjack}
-              />
-            ))}
-      </div>
+    <div className="flex items-center gap-3 border-t border-osu-b3/30 py-3">
+      <span className="w-8 shrink-0 text-[11px] font-semibold text-osu-f1">R{round.round + 1}</span>
+      {side(challengerCard, round.challengerStat, round.challengerPoint, false)}
+      <span className="shrink-0 text-[11px] font-bold tabular-nums text-white">
+        {(round.challengerPoint ? 1 : 0)}-{(round.opponentPoint ? 1 : 0)}
+      </span>
+      {side(opponentCard, round.opponentStat, round.opponentPoint, true)}
     </div>
   );
 }
@@ -235,11 +207,12 @@ function SideColumn({
 function DuelPage() {
   const { duelId } = Route.useParams();
   const auth = useAuth();
+  const navigate = useNavigate();
   const windowActive = useWindowActive();
   const [duel, setDuel] = useState<LivePackDuel | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<null | "accepting" | "joining" | "moving">(null);
+  const [busy, setBusy] = useState<null | "joining" | "picking">(null);
   const [copied, setCopied] = useState(false);
   const busyRef = useRef(false);
 
@@ -256,7 +229,7 @@ function DuelPage() {
     }
     try {
       // Signed in, the authenticated read is the one that can show you your
-      // own hand; the public read hides every hand still in play.
+      // own hand; the public read hides every card still face down.
       if (auth.viewer) {
         const seat = await viewPackDuel({ data: { duelId } });
         if (seat.ok) {
@@ -296,7 +269,7 @@ function DuelPage() {
   const viewerId = auth.viewer?.id ?? null;
   const side = duel ? duelSideOf(duel, viewerId) : null;
 
-  const runAction = async (kind: "accepting" | "joining" | "moving", action: () => Promise<void>) => {
+  const runAction = async (kind: "joining" | "picking", action: () => Promise<void>) => {
     if (busyRef.current) return;
     busyRef.current = true;
     setBusy(kind);
@@ -311,47 +284,21 @@ function DuelPage() {
     }
   };
 
-  /* Answering a challenge: your own pack of the same type, dealt and minted
-     here, then submitted. Nothing enters your collection. */
-  const acceptChallenge = () => {
+  /* Answering means opening a real pack of the same type: the cards land in
+     your collection first and then go on the line, which is the only way a
+     duel for keeps is symmetrical. The packs page owns opening a pack (the
+     wallet, the charge, the reveal, the pull log), so answering happens
+     there and comes back here with a hand. */
+  const answerWithPack = () => {
     if (!duel) return;
-    void runAction("accepting", async () => {
-      const type = packTypeById(duel.packType as PackTypeId);
-      const draw = await drawPackPlayers(Math.random, {
-        topFraction: type.topFraction,
-        count: type.cardCount,
-        honoraryChance: type.honoraryChance,
-        // Answering a challenge deals throwaway cards, so it never falls back
-        // to the osu! API draw the way a real pack does.
-        poolOnly: true,
-      });
-      if (isLiveBackendConfigured()) {
-        void warmLivePackPlayers(draw.players.map((player) => player.user.id)).catch(() => {});
-      }
-      const cards = await mintDuelCards(draw.players);
-      if (cards.length === 0) {
-        setActionError("None of those cards would mint. Try again.");
-        return;
-      }
-      const result = await joinPackDuel({ data: { duelId, cards } });
-      if (result.ok) setDuel(result.duel);
-      else setActionError(duelErrorMessage(result.error));
-    });
+    void navigate({ to: "/packs", search: { duel: duelId } });
   };
 
-  const takeBlackjackSeat = () => {
-    void runAction("joining", async () => {
-      const result = await joinPackBlackjack({ data: { duelId } });
-      if (result.ok) setDuel(result.duel);
-      else setActionError(duelErrorMessage(result.error));
-    });
-  };
-
-  const move = (action: "hit" | "stand") => {
-    void runAction("moving", async () => {
-      const result = action === "hit"
-        ? await hitPackDuel({ data: { duelId } })
-        : await standPackDuel({ data: { duelId } });
+  const attack = (stat: TrumpStat) => {
+    if (!duel) return;
+    const round = duel.currentRound;
+    void runAction("picking", async () => {
+      const result = await pickPackDuelStat({ data: { duelId, round, stat } });
       if (result.ok) setDuel(result.duel);
       else {
         setActionError(duelErrorMessage(result.error));
@@ -371,29 +318,50 @@ function DuelPage() {
   const visibleCards = duel ? [...duel.challenger.cards, ...duel.opponent.cards] : [];
   const thumbs = useDuelThumbnails(visibleCards);
 
-  const blackjack = duel?.kind === "blackjack";
-  /* Dev self-duel: both seats are the same account, so the hand still in play
-     is the one your moves land on. */
+  /* Dev self-duel: both seats are the same account, so the side still owing an
+     attack this round is the one a pick lands on. */
   const selfDuel = Boolean(
     duel && viewerId && duel.challenger.userId === viewerId && duel.opponent.userId === viewerId,
   );
+  const liveRound = duel && duel.status === "open" ? duel.rounds[duel.currentRound] : undefined;
   const mySide: PackDuelSide | null = duel && selfDuel
-    ? (duel.challenger.done ? "opponent" : "challenger")
+    ? (liveRound?.challengerPicked ? "opponent" : "challenger")
     : side;
-  const myHand = duel && mySide ? duel[mySide] : null;
-  /* Your hand is live while the duel is open, you hold a seat, both seats are
-     filled, and you have neither stood nor busted. */
-  const canMove = Boolean(
-    duel && blackjack && duel.status === "open" && myHand && !myHand.done && duel.opponent.userId,
+  const myCard = duel && mySide ? duel[mySide].cards[duel.currentRound] : undefined;
+  const myPick = liveRound ? (mySide === "challenger" ? liveRound.challengerStat : liveRound.opponentStat) : null;
+  const theirPicked = liveRound
+    ? (mySide === "challenger" ? liveRound.opponentPicked : liveRound.challengerPicked)
+    : false;
+  const iPicked = liveRound
+    ? (mySide === "challenger" ? liveRound.challengerPicked : liveRound.opponentPicked)
+    : false;
+  /* Your attack is live while the duel is open, you hold a seat, both seats
+     are filled, and you have not already attacked this round. */
+  const canAttack = Boolean(duel && duel.status === "open" && mySide && duel.opponent.userId && liveRound && !iPicked && myCard);
+  /* Dev only: the challenger may also take the other seat. */
+  const canTakeOtherSeat = Boolean(
+    duel && duel.status === "open" && !duel.opponent.userId && auth.viewer && (!side || DEV_SELF_DUEL),
   );
-  /* Dev only: the challenger may answer or seat themselves. */
-  const canTakeOtherSeat = Boolean(duel && duel.status === "open" && auth.viewer && (!side || DEV_SELF_DUEL));
+
+  /* Which stats each side has already spent. Read straight off the rounds,
+     which the server has already redacted: your own picks are all visible to
+     you, and of theirs only the ones whose round is over. So the last round is
+     played with both sides knowing exactly what the other has left. */
+  const statsSpentBy = (target: PackDuelSide): TrumpStat[] =>
+    (duel?.rounds ?? [])
+      .map((entry) => (target === "challenger" ? entry.challengerStat : entry.opponentStat))
+      .filter((stat): stat is TrumpStat => stat !== null);
+  const mySpent = mySide ? statsSpentBy(mySide) : [];
+  const theirSpent = mySide ? statsSpentBy(mySide === "challenger" ? "opponent" : "challenger") : [];
+  const myShards = duel && mySide ? duel[mySide].shards : 0;
 
   const outcomeFor = (target: PackDuelSide): "won" | "lost" | "tie" | null => {
     if (!duel || duel.status !== "resolved" || !duel.winner) return null;
     if (duel.winner === "tie") return "tie";
     return duel.winner === target ? "won" : "lost";
   };
+
+  const playedRounds = duel?.rounds.filter((round) => round.resolved) ?? [];
 
   return (
     <div className="relative flex min-h-screen flex-col">
@@ -432,112 +400,216 @@ function DuelPage() {
                 {/* The rules first: nobody can play a game they have to infer
                     from the pieces. */}
                 <div className="text-[13px] text-white">
-                  {blackjack ? (
-                    <>
-                      Blackjack. Get as close to {duel.target} as you can without going over. A card is
-                      worth its star rating.
-                    </>
-                  ) : (
-                    <>
-                      Both sides open a {packTypeById(duel.packType as PackTypeId).name} pack. Highest total
-                      power wins.
-                    </>
-                  )}
+                  {duel.roundCount || TRUMPS_ROUNDS} rounds, one card each, and you can only attack with each stat
+                  once. Both of you pick at the same time, and an attack lands if your card beats theirs on the
+                  stat you chose.
                 </div>
-                {blackjack && (
-                  <div className="mt-1 text-[12px] text-osu-f1">
-                    You both play at the same time and neither hand is shown until both of you stop.
+                <div className="mt-1 text-[12px] text-osu-f1">
+                  Their card stays face down until the round is over, so the question is which of your cards
+                  should spend your best stat. Both hands are on the line: the winner keeps the loser's cards.
+                </div>
+
+                {/* The score, which is the only number that decides this. */}
+                <div className="mt-7 flex items-center gap-4">
+                  <div className="flex-1">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-osu-f1">
+                      {mySide === "challenger" ? "You" : "Challenger"}
+                    </div>
+                    <div className="mt-0.5 flex items-baseline gap-2">
+                      <span className="truncate text-lg font-bold text-white">
+                        {duel.challenger.username ?? "Waiting"}
+                      </span>
+                      {outcomeFor("challenger") === "won" && (
+                        <span className="text-[11px] font-bold uppercase tracking-wide text-osu-pink">won</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-baseline gap-2 text-3xl font-bold tabular-nums text-white">
+                    <span>{duel.challenger.score}</span>
+                    <Swords className="h-5 w-5 shrink-0 text-osu-f1" aria-hidden="true" />
+                    <span>{duel.opponent.score}</span>
+                  </div>
+                  <div className="flex-1 text-right">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-osu-f1">
+                      {mySide === "opponent" ? "You" : "Opponent"}
+                    </div>
+                    <div className="mt-0.5 flex items-baseline justify-end gap-2">
+                      {outcomeFor("opponent") === "won" && (
+                        <span className="text-[11px] font-bold uppercase tracking-wide text-osu-pink">won</span>
+                      )}
+                      <span className="truncate text-lg font-bold text-white">
+                        {duel.opponent.username ?? "Waiting"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {duel.status === "resolved" && duel.winner === "tie" && (
+                  <div className="mt-3 text-[12px] font-bold text-osu-f1">Dead heat, down to the last card.</div>
+                )}
+                {duel.status === "resolved" && duel.spoils && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: 0.1 }}
+                    className="mt-3 text-[13px] font-bold text-white"
+                  >
+                    {(() => {
+                      const won = mySide !== null && duel.spoils.winner === mySide;
+                      const cards = duel.spoils.cards.filter((entry) => entry.shards === 0);
+                      const names = cards.map((entry) => entry.username).join(", ");
+                      const shards = duel.spoils.shards;
+                      const winnerName =
+                        duel[duel.spoils.winner].username ?? (duel.spoils.winner === "challenger" ? "The challenger" : "The opponent");
+                      if (!mySide) {
+                        return `${winnerName} took ${cards.length} card${cards.length === 1 ? "" : "s"}: ${names}`;
+                      }
+                      return won
+                        ? `You took ${cards.length} card${cards.length === 1 ? "" : "s"}${names ? `: ${names}` : ""}${
+                            shards > 0 ? ` (+${shards} shards for the ones they had already recycled)` : ""
+                          }`
+                        : `They took ${cards.length} card${cards.length === 1 ? "" : "s"} out of your collection${
+                            names ? `: ${names}` : ""
+                          }`;
+                    })()}
+                  </motion.div>
+                )}
+                {duel.status === "resolved" && myShards > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: 0.15 }}
+                    className="mt-3 flex items-center gap-1.5 text-[12px] font-bold text-emerald-400"
+                  >
+                    <Recycle className="h-3.5 w-3.5" />
+                    <span className="tabular-nums">+{myShards}</span>
+                    <span>shards</span>
+                  </motion.div>
+                )}
+
+                {/* The round being played: your card, the four numbers on it,
+                    and the card you are guessing against. */}
+                {duel.status === "open" && duel.opponent.userId && liveRound && (
+                  <div className="mt-8">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-osu-f1">
+                      Round {duel.currentRound + 1} of {duel.roundCount}
+                    </div>
+                    <div className="mt-3 flex items-start gap-5 sm:gap-8">
+                      <CardArt card={myCard ?? null} thumb={myCard ? thumbs.get(thumbKey(myCard)) : undefined} />
+                      <div className="min-w-0 flex-1">
+                        {canAttack && myCard ? (
+                          <>
+                            <div className="text-[13px] font-bold text-white">
+                              Attack with{" "}
+                              <span className="font-semibold text-osu-f1">
+                                ({TRUMP_STATS.length - mySpent.length} left)
+                              </span>
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {TRUMP_STATS.map((stat) => {
+                                const spent = mySpent.includes(stat);
+                                return (
+                                  <motion.button
+                                    key={stat}
+                                    type="button"
+                                    onClick={() => attack(stat)}
+                                    disabled={busy !== null || spent}
+                                    whileTap={spent || busy !== null ? undefined : { scale: 0.94 }}
+                                    className={`rounded-full border px-4 py-2 text-[13px] font-bold transition-colors ${
+                                      spent
+                                        ? "border-osu-b3/20 text-osu-f1/40 line-through"
+                                        : busy === null
+                                          ? "border-osu-b3/50 text-white hover:border-osu-pink hover:bg-osu-pink/10 cursor-pointer"
+                                          : "border-osu-b3/30 text-osu-f1"
+                                    }`}
+                                  >
+                                    {TRUMP_STAT_LABELS[stat]}
+                                    <span
+                                      className="ml-1.5 tabular-nums"
+                                      style={spent ? undefined : { color: tierColor(myCard) }}
+                                    >
+                                      {statText(myCard, stat)}
+                                    </span>
+                                  </motion.button>
+                                );
+                              })}
+                            </div>
+                            {theirSpent.length > 0 && (
+                              <div className="mt-2.5 text-[12px] text-osu-f1">
+                                They have spent {theirSpent.map((stat) => TRUMP_STAT_LABELS[stat]).join(", ")}.
+                              </div>
+                            )}
+                            {theirPicked && (
+                              <div className="mt-3 text-[12px] text-osu-f1">
+                                They have already locked one in.
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div className="text-[13px] font-bold text-osu-f1">
+                            {myPick
+                              ? `You attacked with ${TRUMP_STAT_LABELS[myPick]}. Waiting for them.`
+                              : mySide
+                                ? "Waiting for the other player."
+                                : "Two collectors are playing this one out."}
+                          </div>
+                        )}
+                      </div>
+                      <CardArt card={null} thumb={undefined} />
+                    </div>
                   </div>
                 )}
 
-                <div className="mt-7 flex items-start gap-4 sm:gap-8">
-                  <SideColumn
-                    label={mySide === "challenger" ? "You" : "Challenger"}
-                    side={duel.challenger}
-                    blackjack={blackjack}
-                    thumbs={thumbs}
-                    outcome={outcomeFor("challenger")}
-                  />
-                  <Swords className="mt-8 h-5 w-5 shrink-0 text-osu-f1" aria-hidden="true" />
-                  <SideColumn
-                    label={mySide === "opponent" ? "You" : "Opponent"}
-                    side={duel.opponent}
-                    blackjack={blackjack}
-                    thumbs={thumbs}
-                    outcome={outcomeFor("opponent")}
-                  />
-                </div>
-
-                {blackjack && duel.status === "open" && (
+                {duel.status === "open" && !duel.opponent.userId && (
                   <div className="mt-8 text-[13px] font-bold text-osu-f1">
-                    {!duel.opponent.userId
-                      ? "Waiting for someone to take the other seat"
-                      : canMove
-                        ? `Your hand is at ${(myHand?.score ?? 0).toFixed(2)}. Hit or stand.`
-                        : myHand?.bust
-                          ? "You went over. Waiting for them to finish."
-                          : myHand?.done
-                            ? "You are standing. Waiting for them to finish."
-                            : "Waiting for the other player"}
+                    {side === "challenger"
+                      ? `Your ${duel.challenger.cardCount} cards are sealed until someone takes the other seat.`
+                      : `${duel.challenger.username ?? "The challenger"} has ${duel.challenger.cardCount} card${
+                          duel.challenger.cardCount === 1 ? "" : "s"
+                        } on the line. Open a ${packTypeById(duel.packType as PackTypeId).name} pack to match it.`}
                   </div>
                 )}
 
-                {duel.kind === "challenge" && duel.challenger.hidden ? (
-                  <div className="mt-8 text-[12px] text-osu-f1">
-                    {side === "challenger"
-                      ? `Your ${duel.challenger.cardCount} cards stay sealed until someone answers.`
-                      : `${duel.challenger.username ?? "The challenger"} sealed ${duel.challenger.cardCount} card${
-                          duel.challenger.cardCount === 1 ? "" : "s"
-                        }. Answer to see them.`}
-                  </div>
-                ) : null}
-
-                {blackjack && canMove && (
-                  <div className="mt-6 flex flex-wrap items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => move("hit")}
-                      disabled={busy !== null}
-                      className={`rounded-full px-7 py-2.5 text-sm font-bold text-white transition ${
-                        busy === null ? "bg-osu-pink hover:brightness-110 cursor-pointer" : "bg-osu-b4/60"
-                      }`}
-                    >
-                      {busy === "moving" ? "Dealing..." : "Hit"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => move("stand")}
-                      disabled={busy !== null}
-                      className="rounded-full border border-osu-b3/50 px-7 py-2.5 text-sm font-bold text-osu-f1 transition-colors hover:border-osu-f1/40 hover:text-white cursor-pointer"
-                    >
-                      Stand
-                    </button>
+                {playedRounds.length > 0 && (
+                  <div className="mt-9">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-osu-f1">
+                      {duel.status === "resolved" ? "How it went" : "Played so far"}
+                    </div>
+                    <div className="mt-2">
+                      <AnimatePresence initial={false}>
+                        {playedRounds.map((round) => (
+                          <motion.div
+                            key={round.round}
+                            // A round that has just resolved slides in under the
+                            // board, so the reveal is something you watch land.
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3, ease: [0.3, 0.7, 0.2, 1] }}
+                          >
+                            <PlayedRound
+                              round={round}
+                              challengerCard={duel.challenger.cards[round.round]}
+                              opponentCard={duel.opponent.cards[round.round]}
+                              thumbs={thumbs}
+                            />
+                          </motion.div>
+                        ))}
+                      </AnimatePresence>
+                    </div>
                   </div>
                 )}
 
                 <div className="mt-10 flex flex-wrap items-center gap-3">
-                  {canTakeOtherSeat && duel.kind === "challenge" && (
+                  {canTakeOtherSeat && (
                     <button
                       type="button"
-                      onClick={acceptChallenge}
+                      onClick={answerWithPack}
                       disabled={busy !== null}
                       className={`rounded-full px-7 py-2.5 text-sm font-bold text-white transition ${
                         busy === null ? "bg-osu-pink hover:brightness-110 cursor-pointer" : "bg-osu-b4/60"
                       }`}
                     >
-                      {busy === "accepting" ? "Opening your pack..." : "Answer with your own pack"}
-                    </button>
-                  )}
-                  {canTakeOtherSeat && blackjack && !duel.opponent.userId && (
-                    <button
-                      type="button"
-                      onClick={takeBlackjackSeat}
-                      disabled={busy !== null}
-                      className={`rounded-full px-7 py-2.5 text-sm font-bold text-white transition ${
-                        busy === null ? "bg-osu-pink hover:brightness-110 cursor-pointer" : "bg-osu-b4/60"
-                      }`}
-                    >
-                      {busy === "joining" ? "Sitting down..." : "Take the other seat"}
+                      {busy === "joining" ? "Opening your pack..." : "Answer with your own pack"}
                     </button>
                   )}
                   {duel.status === "open" && !auth.viewer && auth.loginAvailable && (

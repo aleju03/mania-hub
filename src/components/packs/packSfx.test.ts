@@ -4,10 +4,28 @@
    Math.random() noise, right in the middle of the turn. Opening an album warms
    it instead, and that tap is still a user gesture so autoplay policy is met. */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { warmPackAudio } from "./packSfx";
+import { streakChimeFrequency, warmPackAudio } from "./packSfx";
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe("the higher-or-lower chime", () => {
+  it("climbs a rung per correct guess and an octave per wrap", () => {
+    expect(streakChimeFrequency(1)).toBeCloseTo(523.25);
+    expect(streakChimeFrequency(5)).toBeCloseTo(880);
+    // Sixth in a row restarts the ladder an octave up, so the run keeps
+    // building instead of resetting to the note it opened on.
+    expect(streakChimeFrequency(6)).toBeCloseTo(523.25 * 2);
+    expect(streakChimeFrequency(11)).toBeCloseTo(523.25 * 4);
+  });
+
+  it("stops climbing before it turns into a smoke alarm", () => {
+    expect(streakChimeFrequency(16)).toBe(streakChimeFrequency(11));
+    expect(streakChimeFrequency(400)).toBeLessThanOrEqual(880 * 4);
+    // A run that somehow reports nothing still names a note rather than NaN.
+    expect(streakChimeFrequency(0)).toBeCloseTo(523.25);
+  });
 });
 
 describe("warmPackAudio", () => {

@@ -32,7 +32,14 @@ import { getMapCollection, getMapCollections, getMapCollectionsRotation, rebuild
 import { applyPackCollectionCardMint, getPackWallet, HONORARY_USER_IDS, listPackCollectionCards, listPackCollectionOwnedCardKeys,
   normalizePackCardKey, PACK_COLLECTION_MAX_PAGE_SIZE, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
 import { getHonoraryPullsReport, getPackCardCollectors, getPackCardStats, getPackPulledStats, getSharedPackCard, listRecentPackPulls, PACK_PULL_MAX_CARDS_PER_EVENT, recordPackPullEvents } from "../features/pack-pulls.js";
-import { createPackDuel, getPackDuel, hitPackBlackjack, joinPackBlackjack, joinPackDuel, redactDuelFor, standPackBlackjack } from "../features/pack-duels.js";
+import { createPackDuel, getPackDuel, joinPackDuel, pickPackDuelStat, redactDuelFor } from "../features/pack-duels.js";
+import {
+  getPackGameAllowance,
+  getStreakPlayerMetrics,
+  grantPackGameShards,
+  STREAK_METRICS_MAX_IDS,
+  streakShardReward,
+} from "../features/pack-games.js";
 import { getCachedPackCardSnapshot, getCachedPackCardSnapshots, PACK_CARD_SNAPSHOT_MAX_IDS, getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, getPlayerRecentScoresFromOsu, warmProfileSnapshots } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
 import { getSnipesSnapshot } from "../features/snipes.js";
@@ -1468,6 +1475,30 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     sendJson(req, res, ctx, 200, { cards: await getPackCardStats(ctx.db, ids) });
     return true;
   }
+  if (url.pathname === "/api/packs/streak-metrics") {
+    // The streak game's question numbers for one page of the pool. Public
+    // data (it all shows on osu! profiles), read entirely from local
+    // projections: no osu! call, no job, and slow-moving enough that the
+    // browser is told to keep a page of it for an hour on top of the
+    // feature's own in-memory cache.
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    if (!checkRate(req, res, ctx, "publicApi")) return true;
+    const ids = (url.searchParams.get("ids") ?? "")
+      .split(",")
+      .map((raw) => Math.floor(Number(raw) || 0))
+      .filter((id) => id > 0)
+      .slice(0, STREAK_METRICS_MAX_IDS);
+    if (ids.length === 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user_ids" });
+      return true;
+    }
+    res.setHeader("cache-control", "public, max-age=3600");
+    sendJson(req, res, ctx, 200, { players: await getStreakPlayerMetrics(ctx.db, ids) });
+    return true;
+  }
   const packPulledStatsMatch = url.pathname.match(/^\/api\/packs\/pulled-stats\/(\d+)$/);
   if (packPulledStatsMatch) {
     // How the community holds one player's card ("your card got pulled").
@@ -1554,7 +1585,6 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     const created = await createPackDuel(ctx.serveWriteDb ?? ctx.db, userId, username, {
-      kind: body.kind,
       packType: body.packType,
       cards: body.cards,
     });
@@ -1565,7 +1595,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     sendJson(req, res, ctx, 201, created.duel);
     return true;
   }
-  const packDuelActionMatch = url.pathname.match(/^\/api\/packs\/duels\/([a-z0-9]{6,16})\/(join|hit|stand|view)$/);
+  const packDuelActionMatch = url.pathname.match(/^\/api\/packs\/duels\/([a-z0-9]{6,16})\/(join|pick|view)$/);
   if (packDuelActionMatch) {
     if (!isAdmin(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
@@ -1588,11 +1618,9 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     // granted in production, where duelling yourself stays refused.
     const allowSelfDuel = ctx.config.nodeEnv !== "production";
     const action = packDuelActionMatch[2];
-    // A blackjack opponent joins by arriving rather than by submitting a hand,
-    // so "join" means two different things per kind and the kind decides which.
     if (action === "view") {
-      // The signed-in read: your own hand is visible to you, the other side's
-      // is not until both have stopped.
+      // The signed-in read: your own hand is visible to you, and of theirs
+      // only the cards already played.
       const duel = await getPackDuel(ctx.db, duelId);
       if (!duel) {
         sendJson(req, res, ctx, 404, { error: "duel_not_found" });
@@ -1601,21 +1629,52 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 200, redactDuelFor(duel, userId));
       return true;
     }
-    const result = action === "hit"
-      ? await hitPackBlackjack(writeDb, duelId, userId)
-      : action === "stand"
-        ? await standPackBlackjack(writeDb, duelId, userId)
-        : body.kind === "blackjack"
-          ? await joinPackBlackjack(writeDb, duelId, userId, username, Date.now(), { allowSelfDuel })
-          : await joinPackDuel(writeDb, duelId, userId, username, body.cards, Date.now(), { allowSelfDuel });
+    const result = action === "pick"
+      ? await pickPackDuelStat(writeDb, duelId, userId, body.round, body.stat)
+      : await joinPackDuel(writeDb, duelId, userId, username, body.cards, Date.now(), { allowSelfDuel });
     if (!result.ok) {
       const status = result.error === "not_found" ? 404 : 409;
       sendJson(req, res, ctx, status, { error: result.error });
       return true;
     }
-    // The mover sees their own hand; everything else stays hidden until both
-    // sides are done.
+    // The player who just moved sees their own hand; the rest of the other
+    // side stays face down until it is played.
     sendJson(req, res, ctx, 200, redactDuelFor(result.duel, userId));
+    return true;
+  }
+  const packGameMatch = url.pathname.match(/^\/api\/packs\/games\/(streak|allowance)$/);
+  if (packGameMatch) {
+    // The arcade's till. Server-to-server like the pull log and the wallet:
+    // the frontend's server function authenticates the osu! cookie and
+    // forwards the verified viewer, so a run can only ever be claimed as
+    // yourself. What stops a scripted run claiming all day is the daily
+    // allowance inside grantPackGameShards, not this route.
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
+    const userId = Math.floor(Number(body.userId) || 0);
+    if (userId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_game_player" });
+      return true;
+    }
+    if (packGameMatch[1] === "allowance") {
+      sendJson(req, res, ctx, 200, await getPackGameAllowance(ctx.db, userId));
+      return true;
+    }
+    const streak = Math.max(0, Math.floor(Number(body.streak) || 0));
+    const result = await grantPackGameShards(
+      ctx.serveWriteDb ?? ctx.db,
+      userId,
+      "streak",
+      streakShardReward(streak),
+    );
+    sendJson(req, res, ctx, 200, result);
     return true;
   }
   const packDuelMatch = url.pathname.match(/^\/api\/packs\/duels\/([a-z0-9]{6,16})$/);
