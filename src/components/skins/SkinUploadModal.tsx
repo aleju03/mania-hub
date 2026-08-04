@@ -229,14 +229,10 @@ export function SkinUploadModal({
   open,
   onClose,
   onPublished,
-  // PRIVATE_SKINS_ADMIN_ONLY: false hides the visibility choice entirely and
-  // every upload publishes to the catalog, exactly as before the feature.
-  canUsePrivate = false,
 }: {
   open: boolean;
   onClose: () => void;
   onPublished: (skin: SkinSummary) => void;
-  canUsePrivate?: boolean;
 }) {
   const [step, setStep] = useState<UploadStep>("pick");
   const [dragActive, setDragActive] = useState(false);
@@ -901,7 +897,6 @@ export function SkinUploadModal({
                     setDescription={setDescription}
                     visibility={visibility}
                     setVisibility={setVisibility}
-                    canUsePrivate={canUsePrivate}
                     screenshots={screenshots}
                     screenshotInputRef={screenshotInputRef}
                     addScreenshots={addScreenshots}
@@ -1149,7 +1144,6 @@ function FormStep({
   setDescription,
   visibility,
   setVisibility,
-  canUsePrivate,
   screenshots,
   screenshotInputRef,
   addScreenshots,
@@ -1193,7 +1187,6 @@ function FormStep({
   setDescription: (description: string) => void;
   visibility: SkinVisibility;
   setVisibility: (visibility: SkinVisibility) => void;
-  canUsePrivate: boolean;
   screenshots: ProcessedScreenshot[];
   screenshotInputRef: React.RefObject<HTMLInputElement | null>;
   addScreenshots: (files: FileList | null) => Promise<void>;
@@ -1440,7 +1433,6 @@ function FormStep({
             className="w-full resize-y rounded-lg border border-osu-b3/30 bg-osu-b4 px-3 py-2 text-[13px] leading-relaxed text-osu-l1 transition-colors placeholder:text-osu-f1/45 focus:border-osu-pink/50 focus:outline-none"
           />
         </label>
-        {canUsePrivate && (
         <div className="flex flex-col gap-1.5">
           <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">Who gets it</span>
           <div className="flex gap-2">
@@ -1465,7 +1457,6 @@ function FormStep({
             ))}
           </div>
         </div>
-        )}
         <div className="flex flex-col gap-1.5">
           <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-osu-f1/55">
             Screenshots <span className="normal-case tracking-normal text-osu-f1/70">(optional, up to {SKIN_MAX_SCREENSHOTS})</span>
@@ -1609,14 +1600,10 @@ function DetectedAssets({
   );
 }
 
-function startErrorMessage(code: "not_logged_in" | "unavailable" | "storage_not_configured" | "invalid_name" | "pending_limit" | "skin_limit" | "duplicate" | "private_admin_only"): string {
+function startErrorMessage(code: "not_logged_in" | "unavailable" | "storage_not_configured" | "invalid_name" | "pending_limit" | "skin_limit" | "duplicate"): string {
   switch (code) {
     case "not_logged_in":
       return "The session expired. Log in with osu! again to publish.";
-    // PRIVATE_SKINS_ADMIN_ONLY. Only reachable by hand: the choice is hidden
-    // for everyone the gate excludes.
-    case "private_admin_only":
-      return "Private skins are not open yet.";
     case "duplicate":
       return "This exact .osk is already published on the site.";
     case "invalid_name":

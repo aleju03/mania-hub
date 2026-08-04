@@ -20,7 +20,7 @@ import {
   writeMyReplaySkinMemory,
 } from "../lib/replay-owner-skin";
 import { importReplaySkinFromOsk } from "../lib/replay-skin-import";
-import { canUsePrivateSkins, deleteMySkin, fetchSkinById, formatKeymodes, formatSkinFileSize, markSkinsListStale, moderateSkin, readSkinsBrowseEntry, renameSkin, setMySkinVisibility, SKIN_NAME_MAX_LENGTH, skinDownloadUrl, skinOskFileUrl, type SkinSummary } from "../lib/skins";
+import { deleteMySkin, fetchSkinById, formatKeymodes, formatSkinFileSize, markSkinsListStale, moderateSkin, readSkinsBrowseEntry, renameSkin, setMySkinVisibility, SKIN_NAME_MAX_LENGTH, skinDownloadUrl, skinOskFileUrl, type SkinSummary } from "../lib/skins";
 import { pageSeo } from "../lib/seo";
 
 export const Route = createFileRoute("/skins_/$id")({
@@ -198,7 +198,6 @@ function SkinDetailPage() {
 
   const isOwner = skin != null && auth.viewer?.id === skin.ownerUserId;
   const isPrivate = skin?.visibility === "private";
-  const canUsePrivate = canUsePrivateSkins(auth);
 
   const removeSkin = async () => {
     if (!skin || busy) return;
@@ -552,11 +551,6 @@ function SkinDetailPage() {
                               <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
                               Rename
                             </button>
-                            {/* PRIVATE_SKINS_ADMIN_ONLY: the switch is the
-                                owner's while the feature is being tried out.
-                                A skin that is already private can always be
-                                put back, gate or no gate. */}
-                            {(canUsePrivate || isPrivate) && (
                             <button
                               type="button"
                               onClick={() => void toggleVisibility()}
@@ -569,7 +563,6 @@ function SkinDetailPage() {
                               {isPrivate ? <Globe className="h-3.5 w-3.5" aria-hidden="true" /> : <Lock className="h-3.5 w-3.5" aria-hidden="true" />}
                               {isPrivate ? "Make public" : "Make private"}
                             </button>
-                            )}
                           </>
                         )}
                         {confirmingDelete ? (

@@ -542,9 +542,7 @@ describe("private skins", () => {
     const started = await call(bodyReq(
       "POST",
       "/api/skins/start",
-      // asAdmin is the PRIVATE_SKINS_ADMIN_ONLY gate; the server fn sets it
-      // only after verifying a true admin.
-      JSON.stringify({ userId: 101, username: "delta", name: "Hoarded", visibility: "private", asAdmin: true }),
+      JSON.stringify({ userId: 101, username: "delta", name: "Hoarded", visibility: "private" }),
       ADMIN,
     ));
     expect(started.status).toBe(200);
@@ -555,42 +553,6 @@ describe("private skins", () => {
     expect(finished.status).toBe(200);
     return { id, skin: finished.body.skin };
   }
-
-  it("refuses a private skin to anyone the admin gate excludes", async () => {
-    // PRIVATE_SKINS_ADMIN_ONLY. Delete this test with the gate.
-    const started = await call(bodyReq(
-      "POST",
-      "/api/skins/start",
-      JSON.stringify({ userId: 101, username: "delta", name: "Wishful", visibility: "private" }),
-      ADMIN,
-    ));
-    expect(started.status).toBe(200);
-    const { id, token } = started.body as { id: string; token: string };
-    await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=osk`, await buildOskBuffer([4])));
-    await call(bodyReq("POST", `/api/skins/upload?id=${id}&token=${token}&part=preview`, PNG_BYTES));
-    const finished = await call(mockReq("POST", `/api/skins/finish?id=${id}&token=${token}`));
-    // Refused, not honoured: a skin asked for privately without the gate open
-    // publishes to the catalog exactly as an ordinary upload would.
-    expect(finished.body.skin.visibility).toBe("public");
-    expect((await call(mockReq("GET", "/api/skins/list"))).body.total).toBe(1);
-
-    // And it cannot be switched over afterwards either.
-    const flipped = await call(bodyReq(
-      "POST",
-      "/api/skins/visibility",
-      JSON.stringify({ userId: 101, id, visibility: "private" }),
-      ADMIN,
-    ));
-    expect(flipped.status).toBe(403);
-    expect(flipped.body).toMatchObject({ error: "private_admin_only" });
-    // Going back to public is never gated, so nothing can get stuck.
-    expect((await call(bodyReq(
-      "POST",
-      "/api/skins/visibility",
-      JSON.stringify({ userId: 101, id, visibility: "public" }),
-      ADMIN,
-    ))).status).toBe(200);
-  });
 
   it("keeps a private skin off the catalog and its bytes behind the owner's capability", async () => {
     const { id, skin } = await publishPrivateSkin();
@@ -670,7 +632,7 @@ describe("private skins", () => {
     const madePrivate = await call(bodyReq(
       "POST",
       "/api/skins/visibility",
-      JSON.stringify({ userId: 101, id, visibility: "private", asAdmin: true }),
+      JSON.stringify({ userId: 101, id, visibility: "private" }),
       ADMIN,
     ));
     expect(madePrivate.status).toBe(200);
@@ -704,7 +666,7 @@ describe("private skins", () => {
     const flip = (visibility: string) => call(bodyReq(
       "POST",
       "/api/skins/visibility",
-      JSON.stringify({ userId: 101, id, visibility, asAdmin: true }),
+      JSON.stringify({ userId: 101, id, visibility }),
       ADMIN,
     ));
 

@@ -57,22 +57,6 @@ export interface SkinSummary {
 
 export type SkinVisibility = "public" | "private";
 
-// PRIVATE_SKINS_ADMIN_ONLY: private skins are being tried out on develop, so
-// only the site owner can create one or switch a skin to it. The server fns
-// below refuse a private request from anyone else and the UI hides the choice;
-// the live backend enforces the same thing on its own side, so this is not
-// only a hidden button.
-//
-// To release the feature: set this to false (or grep the name and delete every
-// use, including the two backend blocks marked with it). Nothing else about
-// private skins depends on it.
-export const PRIVATE_SKINS_ADMIN_ONLY = true;
-
-// Whether this viewer may put a skin on the private shelf.
-export function canUsePrivateSkins(auth: { isAdmin?: boolean } | null | undefined): boolean {
-  return PRIVATE_SKINS_ADMIN_ONLY ? auth?.isAdmin === true : true;
-}
-
 export interface SkinsListResult {
   skins: SkinSummary[];
   total: number;
@@ -255,7 +239,7 @@ export interface DuplicateSkinRef {
 
 export type StartSkinUploadResult =
   | { ok: true; id: string; token: string; expiresAt: string }
-  | { ok: false; error: "not_logged_in" | "unavailable" | "storage_not_configured" | "invalid_name" | "pending_limit" | "skin_limit" | "private_admin_only" }
+  | { ok: false; error: "not_logged_in" | "unavailable" | "storage_not_configured" | "invalid_name" | "pending_limit" | "skin_limit" }
   | { ok: false; error: "duplicate"; duplicate: DuplicateSkinRef | null };
 
 // SHA-256 of the picked .osk, hex, computed while the archive is being parsed.
@@ -308,12 +292,6 @@ export const startSkinUpload = createServerFn({ method: "POST" })
     setResponseHeader("Cache-Control", "private, no-store");
     const cfg = await resolveSkinsBackend();
     if (!cfg) return { ok: false, error: "not_logged_in" };
-    // PRIVATE_SKINS_ADMIN_ONLY. Refused rather than quietly downgraded to
-    // public: an upload that was meant to be private must never end up on the
-    // catalog because a gate said no.
-    if (data.visibility === "private" && !canUsePrivateSkins(cfg)) {
-      return { ok: false, error: "private_admin_only" };
-    }
     try {
       const response = await fetch(`${cfg.base}/api/skins/start`, {
         method: "POST",
@@ -326,7 +304,6 @@ export const startSkinUpload = createServerFn({ method: "POST" })
           description: data.description,
           oskSha256: data.oskSha256,
           visibility: data.visibility,
-          asAdmin: cfg.isAdmin,
         }),
       });
       const body = (await response.json().catch(() => null)) as
@@ -499,8 +476,6 @@ export const setMySkinVisibility = createServerFn({ method: "POST" })
     setResponseHeader("Cache-Control", "private, no-store");
     const cfg = await resolveSkinsBackend();
     if (!cfg) return { ok: false };
-    // PRIVATE_SKINS_ADMIN_ONLY. Going back to public stays open to everyone.
-    if (data.visibility === "private" && !canUsePrivateSkins(cfg)) return { ok: false };
     try {
       const response = await fetch(`${cfg.base}/api/skins/visibility`, {
         method: "POST",

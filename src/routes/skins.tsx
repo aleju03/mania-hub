@@ -14,7 +14,6 @@ import { useAuth } from "../lib/auth-context";
 import { isAdmin } from "../lib/auth-shared";
 import { isLiveBackendConfigured } from "../lib/live-backend";
 import {
-  canUsePrivateSkins,
   fetchMyPrivateSkins,
   fetchSkinsListDirect,
   readCachedSkinsList,
@@ -113,9 +112,6 @@ function SkinsPage() {
   const location = useLocation();
   const auth = useAuth();
   const admin = isAdmin(auth);
-  // PRIVATE_SKINS_ADMIN_ONLY: while the gate is up only the owner can make a
-  // private skin, so nobody else has a shelf to load either.
-  const canUsePrivate = canUsePrivateSkins(auth);
 
   // Seeded from the in-memory list cache so walking back from a skin page
   // paints the same grid it left, not a screen of skeletons.
@@ -185,7 +181,7 @@ function SkinsPage() {
 
   const viewerId = auth.viewer?.id ?? null;
   useEffect(() => {
-    if (!viewerId || !canUsePrivate || !isLiveBackendConfigured()) {
+    if (!viewerId || !isLiveBackendConfigured()) {
       setPrivateSkins([]);
       return;
     }
@@ -198,7 +194,7 @@ function SkinsPage() {
     return () => {
       cancelled = true;
     };
-  }, [viewerId, canUsePrivate, reloadTick]);
+  }, [viewerId, reloadTick]);
 
   const handlePublished = useCallback((skin: SkinSummary) => {
     if (skin.visibility === "private") {
@@ -389,7 +385,6 @@ function SkinsPage() {
         open={showUploader && !!auth.viewer}
         onClose={() => setShowUploader(false)}
         onPublished={handlePublished}
-        canUsePrivate={canUsePrivate}
       />
       <SkinBulkUploadModal
         open={showBulkUploader && admin}

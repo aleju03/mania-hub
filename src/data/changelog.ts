@@ -26,6 +26,7 @@ export interface ChangelogUpdate {
 export const WIP: string[] = [];
 
 export const UPDATES: ChangelogUpdate[] = [
+  { date: "2026-08-04", text: "Upload a skin only you can open. Your replays still play in it", to: "/skins" },
   { date: "2026-08-03", text: "Added a few more players to GOAT status", to: "/packs" },
   { date: "2026-08-03", text: "Tap a pull as it happens to open it", to: "/packs" },
   { date: "2026-08-03", text: "Performance optimizations for packs, player pages and the farm helper" },

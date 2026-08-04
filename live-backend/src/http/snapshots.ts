@@ -2162,7 +2162,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 503, { error: "skin_storage_not_configured" });
       return true;
     }
-    const body = parseJson<{ userId?: unknown; username?: unknown; name?: unknown; author?: unknown; description?: unknown; oskSha256?: unknown; bypassLimits?: unknown; visibility?: unknown; asAdmin?: unknown }>((await readBody(req)) || "{}", {});
+    const body = parseJson<{ userId?: unknown; username?: unknown; name?: unknown; author?: unknown; description?: unknown; oskSha256?: unknown; bypassLimits?: unknown; visibility?: unknown }>((await readBody(req)) || "{}", {});
     const userId = Number(body.userId);
     if (!Number.isInteger(userId) || userId <= 0) {
       sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
@@ -2181,11 +2181,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       // Only the admin bulk uploader asks for this, through a server fn that
       // verifies a true admin before forwarding it on this token-gated route.
       bypassLimits: body.bypassLimits === true,
-      // PRIVATE_SKINS_ADMIN_ONLY: private uploads are gated to the site owner
-      // while the feature is being tried out on develop. asAdmin is set only by
-      // a server fn that verified a true admin, the same trust as bypassLimits
-      // above. Drop the asAdmin term to open it to everyone.
-      visibility: body.visibility === "private" && body.asAdmin === true ? "private" : "public",
+      visibility: body.visibility === "private" ? "private" : "public",
     });
     if (!result.ok) {
       if (result.error === "duplicate") {
@@ -2453,13 +2449,6 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     if (url.pathname === "/api/skins/visibility") {
       const visibility = body.visibility === "private" ? "private" : "public";
-      // PRIVATE_SKINS_ADMIN_ONLY: same gate as the upload route. Making a skin
-      // public again is never gated, so nothing can get stuck private if the
-      // gate outlives the skins behind it. Delete this block to release.
-      if (visibility === "private" && body.asAdmin !== true) {
-        sendJson(req, res, ctx, 403, { ok: false, error: "private_admin_only" });
-        return true;
-      }
       const result = await setSkinVisibility(ctx.serveWriteDb ?? ctx.db, id, visibility, ownerUserId);
       if (!result.ok) {
         sendJson(req, res, ctx, result.error === "forbidden" ? 403 : 404, { ok: false, error: result.error });
