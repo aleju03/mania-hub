@@ -1,5 +1,5 @@
 import { ArrowUpRight, ChevronDown, LayoutGrid, List } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCountryName } from "../../../lib/country";
 import { formatNumber } from "../../../lib/format";
 import {
@@ -31,6 +31,21 @@ import { ACTIVITY_KIND_STYLES, AnalyticsCountryFilter, AnalyticsEmptyMessage, Vi
 const PAGE_SIZE = 150;
 // Rows younger than this get a highlight so new arrivals catch the eye.
 const FRESH_MS = 4_000;
+// How long a finger has to stay on a chip before it means "hide this kind".
+const LONG_PRESS_MS = 400;
+
+function withToggled<T>(set: Set<T>, value: T) {
+  const next = new Set(set);
+  if (!next.delete(value)) next.add(value);
+  return next;
+}
+
+function without<T>(set: Set<T>, value: T) {
+  if (!set.has(value)) return set;
+  const next = new Set(set);
+  next.delete(value);
+  return next;
+}
 
 export function AnalyticsStream({
   rows,
@@ -54,7 +69,10 @@ export function AnalyticsStream({
   // Safe to read storage during init: this panel only ever mounts on the client,
   // after the first snapshot lands, so there is no server render to mismatch.
   const [mode, setMode] = useState<AnalyticsStreamMode>(() => readStoredAnalyticsStreamMode() ?? "stream");
+  // Two ways to narrow the feed: pick the kinds you want (tap), or drop the ones
+  // you don't (long press / right click). Picking wins when both are in play.
   const [kinds, setKinds] = useState<Set<AnalyticsActivityKind>>(new Set());
+  const [hidden, setHidden] = useState<Set<AnalyticsActivityKind>>(new Set());
   const [limit, setLimit] = useState(PAGE_SIZE);
 
   const selectMode = (next: AnalyticsStreamMode) => {
@@ -77,40 +95,57 @@ export function AnalyticsStream({
     return counts;
   }, [rows, replayMaps]);
 
+  const filtered = kinds.size > 0 || hidden.size > 0;
+  const showsKind = useCallback(
+    (kind: AnalyticsActivityKind) => (kinds.size > 0 ? kinds.has(kind) : !hidden.has(kind)),
+    [kinds, hidden],
+  );
+
   const filteredRows = useMemo(() => {
-    if (kinds.size === 0) return rows;
-    return rows.filter((row) => kinds.has(describeAnalyticsEvent(row, replayMaps).kind));
-  }, [rows, kinds, replayMaps]);
+    if (!filtered) return rows;
+    return rows.filter((row) => showsKind(describeAnalyticsEvent(row, replayMaps).kind));
+  }, [rows, filtered, showsKind, replayMaps]);
 
   const filteredSessions = useMemo(() => {
-    if (kinds.size === 0) return sessions;
+    if (!filtered) return sessions;
     return sessions
       .map((session) => ({
         ...session,
-        events: session.events.filter((row) => kinds.has(describeAnalyticsEvent(row, replayMaps).kind)),
+        events: session.events.filter((row) => showsKind(describeAnalyticsEvent(row, replayMaps).kind)),
       }))
       .filter((session) => session.events.length > 0);
-  }, [sessions, kinds, replayMaps]);
+  }, [sessions, filtered, showsKind, replayMaps]);
 
   // A narrowed view starts from the top again rather than deep in a long list.
   useEffect(() => {
     setLimit(PAGE_SIZE);
-  }, [kinds, country, mode]);
+  }, [kinds, hidden, country, mode]);
 
+  // Picking and hiding are opposites, so a kind never sits in both sets.
   const toggleKind = (kind: AnalyticsActivityKind) => {
-    setKinds((prev) => {
-      const next = new Set(prev);
-      if (next.has(kind)) next.delete(kind);
-      else next.add(kind);
-      return next;
-    });
+    setKinds((prev) => withToggled(prev, kind));
+    setHidden((prev) => without(prev, kind));
+  };
+
+  const toggleHidden = (kind: AnalyticsActivityKind) => {
+    setHidden((prev) => withToggled(prev, kind));
+    setKinds((prev) => without(prev, kind));
+  };
+
+  const clearFilters = () => {
+    setKinds(new Set());
+    setHidden(new Set());
   };
 
   const countryLabel = country ? ` in ${getCountryName(country) || country}` : "";
   const truncated = rows.length >= ANALYTICS_RECENT_EVENTS_LIMIT;
+  const shownSessions = filtered ? filteredSessions : sessions;
+  const countText = filtered
+    ? `${formatNumber(filteredRows.length)} of ${formatNumber(rows.length)} event${rows.length === 1 ? "" : "s"}`
+    : `${truncated ? "last " : ""}${formatNumber(rows.length)} event${rows.length === 1 ? "" : "s"}`;
   const subtitle = loading
     ? `loading${countryLabel || " all countries"}...`
-    : `${truncated ? "last " : ""}${formatNumber(rows.length)} event${rows.length === 1 ? "" : "s"}${countryLabel} from ${formatNumber(sessions.length)} visitor${sessions.length === 1 ? "" : "s"}`;
+    : `${countText}${countryLabel} from ${formatNumber(shownSessions.length)} visitor${shownSessions.length === 1 ? "" : "s"}`;
 
   return (
     <div className="rounded-lg border border-osu-b3/30 bg-osu-b4/30">
@@ -130,20 +165,22 @@ export function AnalyticsStream({
         </div>
 
         <div className="flex flex-wrap items-center gap-1">
-          <FilterChip active={kinds.size === 0} onClick={() => setKinds(new Set())} label="Everything" count={rows.length} />
+          <FilterChip state={filtered ? "idle" : "picked"} onClick={clearFilters} label="Everything" count={rows.length} />
           {ANALYTICS_ACTIVITY_KINDS.map((kind) => {
             const count = kindCounts.get(kind) ?? 0;
             if (count === 0) return null;
             const style = ACTIVITY_KIND_STYLES[kind];
             const Icon = style.icon;
+            const state = kinds.has(kind) ? "picked" : hidden.has(kind) ? "hidden" : "idle";
             return (
               <FilterChip
                 key={kind}
-                active={kinds.has(kind)}
+                state={state}
                 onClick={() => toggleKind(kind)}
+                onHide={() => toggleHidden(kind)}
                 label={style.label}
                 count={count}
-                icon={<Icon className={`h-3 w-3 ${style.text}`} />}
+                icon={<Icon className={`h-3 w-3 ${state === "hidden" ? "text-osu-f1/50" : style.text}`} />}
               />
             );
           })}
@@ -198,33 +235,91 @@ function ModeButton({ active, onClick, icon, label }: { active: boolean; onClick
   );
 }
 
+/* Tap picks a kind, holding it (or right clicking on a desktop) drops it from
+   the feed instead - the quickest way to say "everything except packs". */
 function FilterChip({
-  active,
+  state,
   onClick,
+  onHide,
   label,
   count,
   icon,
 }: {
-  active: boolean;
+  state: "picked" | "hidden" | "idle";
   onClick: () => void;
+  onHide?: () => void;
   label: string;
   count: number;
   icon?: React.ReactNode;
 }) {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const held = useRef(false);
+
+  const cancelHold = useCallback(() => {
+    if (timer.current == null) return;
+    clearTimeout(timer.current);
+    timer.current = null;
+  }, []);
+
+  useEffect(() => cancelHold, [cancelHold]);
+
+  const startHold = () => {
+    if (!onHide) return;
+    held.current = false;
+    cancelHold();
+    timer.current = setTimeout(() => {
+      timer.current = null;
+      held.current = true;
+      navigator.vibrate?.(12);
+      onHide();
+    }, LONG_PRESS_MS);
+  };
+
+  const hide = (event: React.MouseEvent) => {
+    if (!onHide) return;
+    // Android raises this at the end of a long press too, and the hold already
+    // did the work - keep it from toggling straight back.
+    event.preventDefault();
+    if (held.current) return;
+    cancelHold();
+    onHide();
+  };
+
   return (
     <button
       type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`flex h-6 items-center gap-1.5 rounded-md border px-2 text-[10px] font-medium transition-colors duration-[120ms] cursor-pointer ${
-        active
+      onClick={(event) => {
+        cancelHold();
+        // The press already hid the kind; the click that follows it is noise.
+        if (held.current) {
+          held.current = false;
+          return;
+        }
+        if (onHide && (event.altKey || event.metaKey)) {
+          onHide();
+          return;
+        }
+        onClick();
+      }}
+      onPointerDown={startHold}
+      onPointerUp={cancelHold}
+      onPointerLeave={cancelHold}
+      onPointerCancel={cancelHold}
+      onContextMenu={hide}
+      aria-pressed={state === "picked"}
+      title={onHide ? `${label} - hold or right click to hide` : undefined}
+      style={{ WebkitTouchCallout: "none" }}
+      className={`flex h-6 select-none items-center gap-1.5 rounded-md border px-2 text-[10px] font-medium transition-colors duration-[120ms] cursor-pointer ${
+        state === "picked"
           ? "border-osu-pink/40 bg-osu-pink/15 text-white"
-          : "border-osu-b3/25 bg-osu-b5/50 text-osu-l2 hover:border-osu-b3/50 hover:text-white"
+          : state === "hidden"
+            ? "border-osu-b3/20 bg-osu-b5/30 text-osu-f1/60 hover:text-osu-l2"
+            : "border-osu-b3/25 bg-osu-b5/50 text-osu-l2 hover:border-osu-b3/50 hover:text-white"
       }`}
     >
       {icon}
-      {label}
-      <span className="font-mono text-osu-f1">{formatNumber(count)}</span>
+      <span className={state === "hidden" ? "line-through" : undefined}>{label}</span>
+      <span className={`font-mono ${state === "hidden" ? "text-osu-f1/50" : "text-osu-f1"}`}>{formatNumber(count)}</span>
     </button>
   );
 }

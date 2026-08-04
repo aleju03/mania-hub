@@ -3,8 +3,8 @@
    fed straight from captured events: a visitor with an odd row shape (no
    timestamp, no map details, an event kind we have no phrasing for) must never
    blank the admin dashboard. */
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ANALYTICS_STREAM_MODE_STORAGE_KEY } from "../../../lib/analytics-monitor";
 import {
   buildAnalyticsReplayMapIndex,
@@ -122,6 +122,37 @@ describe("AnalyticsStream", () => {
     expect(screen.getByText("Camellia - Ghost [4K Insane]")).toBeTruthy();
     expect(screen.queryByText('"camellia"')).toBeNull();
     expect(screen.queryByText("juan's profile")).toBeNull();
+  });
+
+  it("drops one kind of activity and keeps the rest when a chip is right clicked", () => {
+    renderStream();
+    fireEvent.contextMenu(screen.getByRole("button", { name: /^Replays/ }));
+    expect(screen.queryByText("Camellia - Ghost [4K Insane]")).toBeNull();
+    expect(screen.getByText('"camellia"')).toBeTruthy();
+    expect(screen.getByText("juan's profile")).toBeTruthy();
+    expect(screen.getByText("3 of 4 events from 3 visitors")).toBeTruthy();
+    // "Everything" puts the hidden kind back.
+    fireEvent.click(screen.getByRole("button", { name: /^Everything/ }));
+    expect(screen.getByText("Camellia - Ghost [4K Insane]")).toBeTruthy();
+  });
+
+  it("hides a kind on a long press and ignores the click that ends it", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      renderStream();
+      const chip = screen.getByRole("button", { name: /^Replays/ });
+      fireEvent.pointerDown(chip);
+      await act(async () => {
+        vi.advanceTimersByTime(500);
+      });
+      fireEvent.pointerUp(chip);
+      fireEvent.click(chip);
+      // Held, not tapped: the replay is gone and the other kinds stayed.
+      expect(screen.queryByText("Camellia - Ghost [4K Insane]")).toBeNull();
+      expect(screen.getByText('"camellia"')).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("folds the same events back into per-visitor journeys", () => {
