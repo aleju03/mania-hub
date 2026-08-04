@@ -172,6 +172,12 @@ describe("AnalyticsLiveBoard", () => {
     expect(screen.queryByText("V3")).toBeNull();
   });
 
+  it("keeps the trail area reserved for a visitor with a single step", () => {
+    const sessions = buildAnalyticsSessions([row({ distinctId: "a", ts: NOW - 5_000 })], NOW);
+    render(<AnalyticsLiveBoard sessions={sessions} replayMaps={new Map()} now={NOW} />);
+    expect(screen.getByText("no earlier steps")).toBeTruthy();
+  });
+
   it("falls back to a calm empty state when the site is quiet", () => {
     const stale = [row({ distinctId: "a", ts: NOW - 60 * 60_000 })];
     const sessions = buildAnalyticsSessions(stale, NOW);
