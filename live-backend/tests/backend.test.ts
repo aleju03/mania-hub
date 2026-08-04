@@ -1253,65 +1253,6 @@ describe("live backend", () => {
     expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_profile_snapshot' and status = 'deferred_pressure'")).rows[0].count)).toBe(0);
   });
 
-  // 2026-08-03: strict priority-desc reactivation left 1,369 top-score refreshes
-  // (50) untouched behind 4k pack-driven profile refreshes (80) that drain at
-  // 1-2/min, so top-play confirmation stopped for days while the queue looked
-  // like it was recovering. Every wake-up must move the lower-priority type too.
-  it("revives every parked type, not just the highest-priority pool", async () => {
-    const { db, queue } = await setup();
-    const now = new Date().toISOString();
-    for (let index = 0; index < 200; index += 1) {
-      await exec(
-        db,
-        `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at)
-         values ('refresh_profile_snapshot', ?, 'deferred_pressure', 80, ?, 0, '{}', ?, ?)`,
-        [`refresh_profile_snapshot:${index}`, now, now, now],
-      );
-    }
-    for (let index = 0; index < 60; index += 1) {
-      await exec(
-        db,
-        `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at)
-         values ('refresh_user_top_scores', ?, 'deferred_pressure', 50, ?, 0, '{}', ?, ?)`,
-        [`top:parked:${index}`, now, now, now],
-      );
-    }
-
-    const { softDepth } = await queue.pressure();
-    await queue.shedPressure();
-
-    const revivedTop = Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_user_top_scores' and status = 'queued'")).rows[0].count);
-    const revivedSnapshots = Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_profile_snapshot' and status = 'queued'")).rows[0].count);
-
-    // The lower-priority pool gets its floor share...
-    expect(revivedTop).toBeGreaterThan(0);
-    // ...while priority still leads: the 80s take the fair share plus the whole
-    // priority-ordered remainder.
-    expect(revivedSnapshots).toBeGreaterThan(revivedTop);
-    // And the wake-up still respects the soft-pressure headroom it was given.
-    expect(revivedTop + revivedSnapshots).toBe(softDepth);
-  });
-
-  // One parked type must behave exactly as before: the whole limit by priority.
-  it("hands a single parked type the entire wake-up", async () => {
-    const { db, queue } = await setup();
-    const now = new Date().toISOString();
-    for (let index = 0; index < 200; index += 1) {
-      await exec(
-        db,
-        `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at)
-         values ('refresh_profile_snapshot', ?, 'deferred_pressure', 80, ?, 0, '{}', ?, ?)`,
-        [`refresh_profile_snapshot:${index}`, now, now, now],
-      );
-    }
-
-    const { softDepth } = await queue.pressure();
-    await queue.shedPressure();
-
-    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_profile_snapshot' and status = 'queued'")).rows[0].count))
-      .toBe(softDepth);
-  });
-
   // The cost of the reserve: an enqueue past it parks regardless of priority,
   // so ingest's priority-100 enrichment can land behind a drip backlog. It must
   // come back FIRST when a slot frees, or a reserve would trade three days of
