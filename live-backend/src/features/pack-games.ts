@@ -21,18 +21,20 @@ import { addWalletShards } from "./pack-wallets.js";
 // recycled, and nothing caps that: an account left open all day earns several
 // thousand for doing nothing. The arcade is capped, so the cap has to be worth
 // sitting down for. A day's allowance is about five hours of idling, which a
-// player reaches in one long streak run (a hundred correct is 1,150) or a
-// couple of dozen duels, and is still a fraction of what the idle loop next to
-// it pays over the same day. Farming it is possible and pointless.
+// player reaches in one long streak run (eighty-five correct caps it) or a
+// couple of dozen duels, and is still a fraction of what the idle loop next
+// to it pays over the same day. Farming it is possible and pointless.
 
 export const GAME_SHARD_DAILY_CAP = 1200;
 
-/* A shard per correct guess, plus a bonus at every fifth in a row that grows
-   each time it is hit: 5 at the first milestone, 10 at the second, 15 at the
-   third. Growing is the point. A flat bonus would pay two runs of five exactly
-   what it pays one run of ten, which makes restarting the optimal play in a
-   game whose whole appeal is not wanting to stop. */
-export const STREAK_SHARDS_PER_CORRECT = 1;
+/* Five shards per correct guess, plus a bonus at every fifth in a row that
+   grows each time it is hit: 5 at the first milestone, 10 at the second, 15
+   at the third. Growing is the point. A flat bonus would pay two runs of five
+   exactly what it pays one run of ten, which makes restarting the optimal
+   play in a game whose whole appeal is not wanting to stop. Per-guess is
+   where the buff lives: one right answer paying a single shard read as an
+   insult next to a pack open paying 2 for a click. */
+export const STREAK_SHARDS_PER_CORRECT = 5;
 export const STREAK_MILESTONE = 5;
 export const STREAK_MILESTONE_BONUS = 5;
 
@@ -138,8 +140,6 @@ export const STREAK_METRICS_MAX_IDS = 50;
 
 export interface StreakPlayerMetrics {
   userId: number;
-  /* Star rating of the #1 top play (position 1, joined against beatmaps). */
-  bestStars: number | null;
   /* Epoch ms of the oldest stored top play. */
   oldestTopAt: number | null;
   /* DT/NC plays among the stored top plays. Zero is an answer, not a gap. */
@@ -169,7 +169,6 @@ export function clearStreakMetricsCache(): void {
 function emptyStreakMetrics(userId: number): StreakPlayerMetrics {
   return {
     userId,
-    bestStars: null,
     oldestTopAt: null,
     dtTop: null,
     k7Top: null,
@@ -227,8 +226,7 @@ export async function getStreakPlayerMetrics(
     `select uts.user_id,
             min(uts.ended_at) as oldest_top,
             sum(case when uts.score_json like '%"acronym":"DT"%' or uts.score_json like '%"acronym":"NC"%' then 1 else 0 end) as dt_top,
-            sum(case when b.cs = 7 then 1 else 0 end) as k7_top,
-            max(case when uts.position = 1 then b.difficulty_rating end) as best_stars
+            sum(case when b.cs = 7 then 1 else 0 end) as k7_top
      from user_top_scores uts
      left join beatmaps b on b.beatmap_id = cast(json_extract(uts.score_json, '$.beatmap_id') as integer)
      where uts.user_id in`,
@@ -241,7 +239,6 @@ export async function getStreakPlayerMetrics(
     entry.oldestTopAt = parseEpochMs(typeof row.oldest_top === "string" ? row.oldest_top : null);
     entry.dtTop = readCount(row.dt_top);
     entry.k7Top = readCount(row.k7_top);
-    entry.bestStars = readPositiveNumber(row.best_stars);
   }
 
   /* One row per player, unpacked in JS because user_json may be gzipped. Only

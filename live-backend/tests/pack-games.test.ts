@@ -39,16 +39,16 @@ async function walletShards(userId: number): Promise<number> {
 }
 
 describe("what a streak is worth", () => {
-  it("pays a shard a guess, plus a growing bonus every five in a row", () => {
+  it("pays five shards a guess, plus a growing bonus every five in a row", () => {
     expect(streakShardReward(0)).toBe(0);
-    expect(streakShardReward(1)).toBe(1);
-    expect(streakShardReward(4)).toBe(4);
-    // Fifth in a row: 5 guesses plus the first milestone.
-    expect(streakShardReward(5)).toBe(10);
-    expect(streakShardReward(9)).toBe(14);
-    // Tenth: 10 guesses plus 5 and 10.
-    expect(streakShardReward(10)).toBe(25);
-    expect(streakShardReward(20)).toBe(70);
+    expect(streakShardReward(1)).toBe(5);
+    expect(streakShardReward(4)).toBe(20);
+    // Fifth in a row: 25 for the guesses plus the first milestone.
+    expect(streakShardReward(5)).toBe(30);
+    expect(streakShardReward(9)).toBe(50);
+    // Tenth: 50 for the guesses plus milestones of 5 and 10.
+    expect(streakShardReward(10)).toBe(65);
+    expect(streakShardReward(20)).toBe(150);
   });
 
   it("is worth going deep rather than restarting", () => {
@@ -158,7 +158,6 @@ describe("the streak question numbers", () => {
     await seedTopScore(PLAYER, 3, 12, ["NC"], "2025-01-01T00:00:00Z");
 
     const metrics = (await getStreakPlayerMetrics(db, [PLAYER]))[PLAYER];
-    expect(metrics.bestStars).toBeCloseTo(9.81);
     expect(metrics.oldestTopAt).toBe(Date.parse("2019-10-05T00:00:00Z"));
     // NC is DT with a different sound.
     expect(metrics.dtTop).toBe(2);
@@ -199,7 +198,7 @@ describe("the streak question numbers", () => {
     // Zero DT plays is an answer; a player with no stored plays has none.
     expect(metrics[PLAYER].dtTop).toBe(0);
     expect(metrics[PLAYER].k7Top).toBe(0);
-    expect(metrics[999999]).toMatchObject({ bestStars: null, dtTop: null, joinedAt: null, playTimeHours: null });
+    expect(metrics[999999]).toMatchObject({ oldestTopAt: null, dtTop: null, joinedAt: null, playTimeHours: null });
   });
 
   it("serves repeat asks from memory instead of re-reading the database", async () => {

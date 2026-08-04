@@ -98,7 +98,6 @@ describe("streak draw", () => {
 
 function extras(overrides: Partial<StreakPlayerExtras> = {}): StreakPlayerExtras {
   return {
-    bestStars: null,
     oldestTopAt: null,
     dtTop: null,
     k7Top: null,
@@ -112,13 +111,12 @@ function extras(overrides: Partial<StreakPlayerExtras> = {}): StreakPlayerExtras
 
 describe("the projection-backed questions", () => {
   it("carries the extra numbers onto the player, keeping zero counts as answers", () => {
-    const player = toStreakPlayer(entry(1), extras({ dtTop: 0, k7Top: 12, bestStars: 9.81, joinedAt: 0 }));
+    const player = toStreakPlayer(entry(1), extras({ dtTop: 0, k7Top: 12, joinedAt: 0 }));
     expect(player.dtTop).toBe(0);
     expect(player.k7Top).toBe(12);
-    expect(player.bestStars).toBeCloseTo(9.81);
     // A zero timestamp is missing data, not the epoch.
     expect(player.joinedAt).toBeNull();
-    expect(playableMetrics(player)).toEqual(["plays", "score", "bestStars", "dtTop", "k7Top"]);
+    expect(playableMetrics(player)).toEqual(["plays", "score", "dtTop", "k7Top"]);
   });
 
   it("plays on without them", () => {
@@ -196,10 +194,10 @@ describe("what the cash-out button promises", () => {
     // stopping is worth, which is the one number a press-your-luck decision
     // rests on.
     expect(streakShardValue(0)).toBe(0);
-    expect(streakShardValue(4)).toBe(4);
-    expect(streakShardValue(5)).toBe(10);
-    expect(streakShardValue(10)).toBe(25);
-    expect(streakShardValue(20)).toBe(70);
+    expect(streakShardValue(4)).toBe(20);
+    expect(streakShardValue(5)).toBe(30);
+    expect(streakShardValue(10)).toBe(65);
+    expect(streakShardValue(20)).toBe(150);
   });
 });
 

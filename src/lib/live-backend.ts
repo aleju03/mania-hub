@@ -2017,15 +2017,14 @@ export async function fetchLivePackPulledStats(userId: number): Promise<LivePack
   return fetchLiveJson(`/api/packs/pulled-stats/${userId}`);
 }
 
-/* The streak game's per-player question numbers (best-play stars, oldest top
-   play, DT/7K counts, playtime, join date, followers, replay views), read
-   from the backend's stored projections. Every field nullable: a null means
-   that question is not asked about this player, never that anything should be
+/* The streak game's per-player question numbers (oldest top play, DT/7K
+   counts, playtime, join date, followers, replay views), read from the
+   backend's stored projections. Every field nullable: a null means that
+   question is not asked about this player, never that anything should be
    fetched. Cheap by design (local projections + an hour of browser cache), so
    the game can call it once per page of the pool. */
 export interface LiveStreakPlayerMetrics {
   userId: number;
-  bestStars: number | null;
   oldestTopAt: number | null;
   dtTop: number | null;
   k7Top: number | null;

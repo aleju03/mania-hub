@@ -38,6 +38,7 @@ export const STREAK_BEST_STORAGE_KEY = "mania-hub-streak-best-v1";
    only ever the sign on the wall. */
 export const STREAK_MILESTONE = 5;
 export const STREAK_MILESTONE_BONUS = 5;
+export const STREAK_SHARDS_PER_CORRECT = 5;
 
 export function nextStreakMilestone(streak: number): { at: number; bonus: number } {
   const passed = Math.floor(Math.max(0, streak) / STREAK_MILESTONE);
@@ -51,7 +52,7 @@ export function nextStreakMilestone(streak: number): { at: number; bonus: number
 export function streakShardValue(streak: number): number {
   const correct = Math.floor(Math.max(0, streak));
   const milestones = Math.floor(correct / STREAK_MILESTONE);
-  return correct + (STREAK_MILESTONE_BONUS * milestones * (milestones + 1)) / 2;
+  return correct * STREAK_SHARDS_PER_CORRECT + (STREAK_MILESTONE_BONUS * milestones * (milestones + 1)) / 2;
 }
 
 export type StreakGuess = "more" | "less";
@@ -65,7 +66,6 @@ export type StreakGuess = "more" | "less";
 export type StreakMetric =
   | "plays"
   | "score"
-  | "bestStars"
   | "oldestTop"
   | "dtTop"
   | "k7Top"
@@ -76,7 +76,6 @@ export type StreakMetric =
 export const STREAK_METRICS = [
   "plays",
   "score",
-  "bestStars",
   "oldestTop",
   "dtTop",
   "k7Top",
@@ -124,14 +123,6 @@ export const STREAK_METRIC_COPY: Record<StreakMetric, StreakMetricCopy> = {
     value: (v) => `${formatStreakValue(v, "score")} ranked score`,
     unknown: "? ranked score",
     reveal: (name, v) => `${name} had ${formatStreakValue(v, "score")} ranked score.`,
-  },
-  bestStars: {
-    q: { prefix: "Is ", middle: "'s best play on a harder or easier chart than ", suffix: "'s?" },
-    more: "Harder",
-    less: "Easier",
-    value: (v) => `${v.toFixed(2)}★ best play`,
-    unknown: "? ★ best play",
-    reveal: (name, v) => `${name}'s best play is ${v.toFixed(2)}★.`,
   },
   oldestTop: {
     q: { prefix: "Is ", middle: "'s oldest top play older or newer than ", suffix: "'s?" },
@@ -195,7 +186,6 @@ export const STREAK_METRIC_COPY: Record<StreakMetric, StreakMetricCopy> = {
    snapshot. Mirrors /api/packs/streak-metrics; every field nullable, and a
    null takes that question off the table for rounds this player is in. */
 export interface StreakPlayerExtras {
-  bestStars: number | null;
   oldestTopAt: number | null;
   dtTop: number | null;
   k7Top: number | null;
@@ -237,7 +227,6 @@ export function toStreakPlayer(entry: LiveGlobalRankingEntry, extras?: StreakPla
     pp: entry.pp,
     plays: positive(entry.play_count),
     score: positive(entry.ranked_score),
-    bestStars: positive(extras?.bestStars),
     oldestTopAt: positive(extras?.oldestTopAt),
     dtTop: count(extras?.dtTop),
     k7Top: count(extras?.k7Top),
@@ -252,7 +241,6 @@ export function streakMetricValue(player: StreakPlayer, metric: StreakMetric): n
   switch (metric) {
     case "plays": return player.plays;
     case "score": return player.score;
-    case "bestStars": return player.bestStars;
     case "oldestTop": return player.oldestTopAt;
     case "dtTop": return player.dtTop;
     case "k7Top": return player.k7Top;
