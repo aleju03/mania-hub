@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { getUploadedReplay, isR2ReplayCacheConfigured, putUploadedReplay } from "./r2-cache";
+import { getUploadedReplay, isR2ReplayCacheConfigured, listUploadedReplayObjects, putUploadedReplay } from "./r2-cache";
 
 export const UPLOADED_REPLAY_ID_PATTERN = /^[A-Za-z0-9_-]{16,64}$/;
 
@@ -100,6 +100,44 @@ export async function saveUploadedReplay(
     "utf8",
   );
   return { id, storage: "local" };
+}
+
+export type UploadedReplayListEntry = { id: string; uploadedAt: number };
+
+// Newest-first upload ids, for the community recent-uploads list on /replay's
+// Upload tab. R2 is the durable store; the local-disk directory only backs
+// development. Listing failures read as "nothing recent", never an error.
+export async function listRecentUploadedReplays(limit: number): Promise<UploadedReplayListEntry[]> {
+  const entries: UploadedReplayListEntry[] = [];
+
+  if (isR2ReplayCacheConfigured()) {
+    try {
+      for (const object of await listUploadedReplayObjects()) {
+        const base = object.key.split("/").pop() ?? "";
+        if (!/\.osr$/i.test(base)) continue;
+        const id = normalizeUploadedReplayId(base.slice(0, -4));
+        if (!id) continue;
+        entries.push({ id, uploadedAt: object.uploadedAt });
+      }
+    } catch {
+      return [];
+    }
+  } else {
+    try {
+      const dir = getLocalUploadDir();
+      for (const name of await readdir(dir)) {
+        if (!name.endsWith(".osr")) continue;
+        const id = normalizeUploadedReplayId(name.slice(0, -4));
+        if (!id) continue;
+        const stats = await stat(path.join(dir, name));
+        entries.push({ id, uploadedAt: stats.mtimeMs });
+      }
+    } catch {
+      return [];
+    }
+  }
+
+  return entries.sort((a, b) => b.uploadedAt - a.uploadedAt).slice(0, Math.max(0, limit));
 }
 
 export async function readUploadedReplay(id: string): Promise<StoredUploadedReplay | null> {

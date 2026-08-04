@@ -219,10 +219,39 @@ export function getReplayVideoStorageKey(id: string, filename: string): string {
   return `${REPLAY_CACHE_PREFIX}videos/${safeId}/${sanitizeFilename(filename)}`;
 }
 
+const UPLOADED_REPLAY_PREFIX = `${REPLAY_CACHE_PREFIX}uploaded-replays/`;
+
 export function getUploadedReplayStorageKey(id: string): string {
   const safeId = id.replace(/[^a-zA-Z0-9_-]+/g, "").slice(0, 64);
   if (!safeId) throw new Error("Invalid uploaded replay id.");
-  return `${REPLAY_CACHE_PREFIX}uploaded-replays/${safeId}.osr`;
+  return `${UPLOADED_REPLAY_PREFIX}${safeId}.osr`;
+}
+
+export type UploadedReplayObject = { key: string; uploadedAt: number };
+
+// Every object under uploaded-replays/, with its upload time from LastModified.
+// The prefix holds a few dozen small .osr files, so a full paginated LIST per
+// call is fine; uploaded-replay-store turns keys into ids and callers cache the
+// assembled result.
+export async function listUploadedReplayObjects(): Promise<UploadedReplayObject[]> {
+  const r2 = getClient();
+  if (!r2) return [];
+
+  const objects: UploadedReplayObject[] = [];
+  let continuationToken: string | undefined;
+  do {
+    const response = await r2.send(new ListObjectsV2Command({
+      Bucket: REPLAY_CACHE_BUCKET,
+      Prefix: UPLOADED_REPLAY_PREFIX,
+      ContinuationToken: continuationToken,
+    }));
+    for (const object of response.Contents ?? []) {
+      if (!object.Key) continue;
+      objects.push({ key: object.Key, uploadedAt: object.LastModified?.getTime() ?? 0 });
+    }
+    continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
+  } while (continuationToken);
+  return objects;
 }
 
 // Durable user-contributed .osu files for unsubmitted/deleted maps (see

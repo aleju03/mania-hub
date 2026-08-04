@@ -66,7 +66,7 @@ export function ReplayRecentlyViewed({
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.02 }}
-              className="group relative overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4"
+              className="group relative shrink-0 overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4"
             >
               {entry.coverUrl && (
                 <img

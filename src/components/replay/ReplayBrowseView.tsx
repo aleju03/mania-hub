@@ -15,7 +15,8 @@ import { getDisplayedAccuracy, getDisplayedRank, getModDisplayList, getScoreTime
 import { getReplayScoreAvailability } from "#/lib/replay-score-availability";
 import { searchBeatmaps, getUserBeatmapScores } from "#/lib/osu";
 import { filterBeatmapSearchResults } from "#/lib/beatmap-search";
-import type { RecentReplayEntry } from "#/lib/replay-recent";
+import { recentReplayUploadKey, type RecentReplayEntry } from "#/lib/replay-recent";
+import { getRecentCommunityUploads, type CommunityUploadEntry } from "#/lib/uploaded-replay-community";
 import type { BeatmapScoreLookupStatus, OsuBeatmap, OsuBeatmapset, OsuScore } from "#/lib/types";
 
 export type ReplayBrowseMode = "player" | "beatmap" | "side-by-side" | "upload";
@@ -209,7 +210,9 @@ export function ReplayBrowseView({
         <ReplaySideBySidePicker recentReplays={recentReplays} onStart={onStartSideBySide} />
       )}
 
-      {mode === "upload" && <UploadReplayBrowser onUploadReplay={onUploadReplay} />}
+      {mode === "upload" && (
+        <UploadReplayBrowser onUploadReplay={onUploadReplay} onOpenRecentReplay={onOpenRecentReplay} />
+      )}
     </motion.div>
   );
 }
@@ -236,11 +239,64 @@ const UPLOAD_BG_TRIANGLES: UploadBgTriangle[] = [
   { points: "384,132 320,243 448,243", opacity: 0.17 },
 ];
 
-// Drop-your-own-file and nothing else: a list of replays watched from osu!
-// answers a different question than the one this tab asks.
-function UploadReplayBrowser({ onUploadReplay }: Pick<ReplayBrowseViewProps, "onUploadReplay">) {
+// The same card shape ReplayRecentlyViewed renders, built from an uploaded
+// replay's derived description instead of local watch history. viewedAt is
+// repurposed as the upload time, which is exactly what the card's "x ago"
+// column should read here.
+function communityUploadToRecentEntry(upload: CommunityUploadEntry): RecentReplayEntry {
+  return {
+    key: recentReplayUploadKey(upload.id),
+    uploadId: upload.id,
+    beatmapsetId: upload.beatmap?.beatmapsetId ?? undefined,
+    title: upload.beatmap?.title || upload.originalFilename || "Unknown beatmap",
+    artist: upload.beatmap?.artist || undefined,
+    version: upload.beatmap?.version || undefined,
+    keyCount: upload.keyCount,
+    playerName: upload.playerName,
+    coverUrl: upload.beatmap?.beatmapsetId
+      ? `https://assets.ppy.sh/beatmaps/${upload.beatmap.beatmapsetId}/covers/list.jpg`
+      : undefined,
+    grade: upload.grade,
+    accuracy: upload.accuracy,
+    mods: upload.mods.map((acronym) => ({ acronym })),
+    viewedAt: upload.uploadedAt,
+  };
+}
+
+// Survives tab switches so leaving Upload and coming back doesn't refetch;
+// the server function caches the expensive part, this only skips the round trip.
+let communityUploadsCache: { entries: RecentReplayEntry[]; fetchedAt: number } | null = null;
+const COMMUNITY_UPLOADS_CLIENT_TTL = 60 * 1000;
+
+// Drop-your-own-file plus what everyone else dropped: the tab is about
+// uploaded replays, so recent community uploads belong here (unlike the
+// watched-from-osu! history, which answers a different question).
+function UploadReplayBrowser({
+  onUploadReplay,
+  onOpenRecentReplay,
+}: Pick<ReplayBrowseViewProps, "onUploadReplay" | "onOpenRecentReplay">) {
   const [dragActive, setDragActive] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [communityUploads, setCommunityUploads] = useState<RecentReplayEntry[]>(
+    () => communityUploadsCache?.entries ?? [],
+  );
+
+  useEffect(() => {
+    if (communityUploadsCache && Date.now() - communityUploadsCache.fetchedAt < COMMUNITY_UPLOADS_CLIENT_TTL) return;
+    let cancelled = false;
+    getRecentCommunityUploads()
+      .then((result) => {
+        const entries = result.uploads.map(communityUploadToRecentEntry);
+        communityUploadsCache = { entries, fetchedAt: Date.now() };
+        if (!cancelled) setCommunityUploads(entries);
+      })
+      .catch(() => {
+        // The drop zone is the tab's job; the community list is a bonus.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleFiles = useCallback((files: FileList | null) => {
     const file = files?.[0];
@@ -250,87 +306,101 @@ function UploadReplayBrowser({ onUploadReplay }: Pick<ReplayBrowseViewProps, "on
   }, [onUploadReplay]);
 
   return (
-    <div className="mx-auto max-w-xl">
-      <h3 className="mb-3 text-center text-sm font-semibold uppercase tracking-wider text-osu-f1">
-        Drop your own .osr file
-      </h3>
+    <div>
+      <div className="mx-auto max-w-xl">
+        <h3 className="mb-3 text-center text-sm font-semibold uppercase tracking-wider text-osu-f1">
+          Drop your own .osr file
+        </h3>
 
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        onDragEnter={(event) => {
-          event.preventDefault();
-          setDragActive(true);
-        }}
-        onDragOver={(event) => {
-          event.preventDefault();
-          setDragActive(true);
-        }}
-        onDragLeave={(event) => {
-          event.preventDefault();
-          setDragActive(false);
-        }}
-        onDrop={(event) => {
-          event.preventDefault();
-          setDragActive(false);
-          handleFiles(event.dataTransfer.files);
-        }}
-        className={`relative block w-full overflow-hidden rounded-xl border transition-colors cursor-pointer ${
-          dragActive
-            ? "border-osu-pink/70 bg-osu-b5"
-            : "border-osu-b3/60 bg-osu-b4 hover:border-osu-pink/45"
-        }`}
-      >
-        <svg
-          viewBox="0 0 640 260"
-          preserveAspectRatio="xMidYMid slice"
-          className={`pointer-events-none absolute inset-0 h-full w-full transition-[color,opacity] duration-150 ${
-            dragActive ? "text-osu-pink-light opacity-100" : "text-osu-pink opacity-80"
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          onDragEnter={(event) => {
+            event.preventDefault();
+            setDragActive(true);
+          }}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setDragActive(true);
+          }}
+          onDragLeave={(event) => {
+            event.preventDefault();
+            setDragActive(false);
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragActive(false);
+            handleFiles(event.dataTransfer.files);
+          }}
+          className={`relative block w-full overflow-hidden rounded-xl border transition-colors cursor-pointer ${
+            dragActive
+              ? "border-osu-pink/70 bg-osu-b5"
+              : "border-osu-b3/60 bg-osu-b4 hover:border-osu-pink/45"
           }`}
-          aria-hidden="true"
         >
-          {UPLOAD_BG_TRIANGLES.map((triangle, index) => (
-            <polygon
-              key={index}
-              points={triangle.points}
-              fill="currentColor"
-              fillOpacity={triangle.opacity}
-            />
-          ))}
-        </svg>
-
-        <div className="relative z-10 flex min-h-[244px] flex-col items-center justify-center gap-2.5 px-6 py-12 text-center">
-          <Upload
-            className={`h-8 w-8 transition-colors ${dragActive ? "text-osu-pink-light" : "text-osu-f1"}`}
+          <svg
+            viewBox="0 0 640 260"
+            preserveAspectRatio="xMidYMid slice"
+            className={`pointer-events-none absolute inset-0 h-full w-full transition-[color,opacity] duration-150 ${
+              dragActive ? "text-osu-pink-light opacity-100" : "text-osu-pink opacity-80"
+            }`}
             aria-hidden="true"
-          />
-          <div>
-            <div className="text-sm font-semibold text-white">
-              {dragActive ? "Drop to load it" : "Drag an .osr here, or click to browse"}
+          >
+            {UPLOAD_BG_TRIANGLES.map((triangle, index) => (
+              <polygon
+                key={index}
+                points={triangle.points}
+                fill="currentColor"
+                fillOpacity={triangle.opacity}
+              />
+            ))}
+          </svg>
+
+          <div className="relative z-10 flex min-h-[244px] flex-col items-center justify-center gap-2.5 px-6 py-12 text-center">
+            <Upload
+              className={`h-8 w-8 transition-colors ${dragActive ? "text-osu-pink-light" : "text-osu-f1"}`}
+              aria-hidden="true"
+            />
+            <div>
+              <div className="text-sm font-semibold text-white">
+                {dragActive ? "Drop to load it" : "Drag an .osr here, or click to browse"}
+              </div>
+              <div className="mt-1 text-[11px] text-osu-f1">osu!mania replays only</div>
             </div>
-            <div className="mt-1 text-[11px] text-osu-f1">osu!mania replays only</div>
+          </div>
+        </button>
+
+        <input
+          ref={inputRef}
+          type="file"
+          accept=".osr,application/octet-stream"
+          className="sr-only"
+          onChange={(event) => handleFiles(event.target.files)}
+        />
+
+        <div className="mt-3 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-center sm:gap-5">
+          <div className="flex items-center gap-2 text-[11px] text-osu-f1">
+            <FileDown className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+            <span>In osu!, right-click a score and choose Export to file.</span>
+          </div>
+          <div className="flex items-center gap-2 text-[11px] text-osu-f1">
+            <Link2 className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+            <span>Uploading gives you a share link for the replay. Sign in with osu! to upload.</span>
           </div>
         </div>
-      </button>
-
-      <input
-        ref={inputRef}
-        type="file"
-        accept=".osr,application/octet-stream"
-        className="sr-only"
-        onChange={(event) => handleFiles(event.target.files)}
-      />
-
-      <div className="mt-3 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-center sm:gap-5">
-        <div className="flex items-center gap-2 text-[11px] text-osu-f1">
-          <FileDown className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
-          <span>In osu!, right-click a score and choose Export to file.</span>
-        </div>
-        <div className="flex items-center gap-2 text-[11px] text-osu-f1">
-          <Link2 className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
-          <span>Uploading gives you a share link for the replay. Sign in with osu! to upload.</span>
-        </div>
       </div>
+
+      {communityUploads.length > 0 && (
+        <ReplayRecentlyViewed
+          className="mt-10"
+          entries={communityUploads}
+          title="Recently Uploaded by the Community"
+          showRemove={false}
+          onOpen={onOpenRecentReplay}
+          onRemove={() => {}}
+          onClear={() => {}}
+        />
+      )}
     </div>
   );
 }
