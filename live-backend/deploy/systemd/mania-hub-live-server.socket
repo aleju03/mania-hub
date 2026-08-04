@@ -1,0 +1,25 @@
+# Owns port 7227 so it stays open across mania-hub-live-server.service
+# restarts: connections queue in the kernel during a deploy instead of being
+# refused (Caddy's lb_try covers browser traffic; this also covers the
+# frontend's loopback server fns that skip Caddy). The service falls back to
+# binding the port itself whenever this unit is absent or failed, so the
+# socket can only ever remove downtime, never add it.
+#
+# Install (as root):
+#   cp live-backend/deploy/systemd/mania-hub-live-server.socket /etc/systemd/system/
+#   cp live-backend/deploy/systemd/socket.conf /etc/systemd/system/mania-hub-live-server.service.d/
+#   systemctl daemon-reload && systemctl enable mania-hub-live-server.socket
+# then restart the service (the socket starts inside the same transaction).
+
+[Unit]
+Description=Mania Hub Live Backend listen socket
+
+[Socket]
+ListenStream=7227
+# Deploy queue depth, not steady-state: only fills during the seconds a
+# restart takes. Bounded so a genuinely dead service (crash-loop) sheds
+# connections instead of holding thousands of clients in limbo.
+Backlog=1024
+
+[Install]
+WantedBy=sockets.target

@@ -466,9 +466,23 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
 
   if (runServing) {
-    app.server.listen(app.config.port, () => {
-      console.log(`[live-backend] listening on ${app.config.livePublicOrigin} (port ${app.config.port}, role ${role})`);
-    });
+    const socketFd = systemdSocketFd();
+    if (socketFd != null) {
+      // systemd socket activation: pid 1 owns the listening socket, so it
+      // stays open (and the kernel keeps queueing connections) across a
+      // service restart - a deploy becomes a pause instead of refused
+      // connections, including for the frontend's loopback server fns that
+      // skip Caddy. Falls back to a plain port bind below whenever the
+      // socket unit is absent, so this path can never make boot worse.
+      app.server.listen({ fd: socketFd }, () => {
+        console.log(`[live-backend] listening on ${app.config.livePublicOrigin} (systemd socket, role ${role})`);
+      });
+    } else {
+      app.server.listen(app.config.port, () => {
+        console.log(`[live-backend] listening on ${app.config.livePublicOrigin} (port ${app.config.port}, role ${role})`);
+      });
+    }
+    installServingDrain(app.server);
   } else if (app.config.workerHttpPort != null) {
     // Optional internal-only listener so the worker process can be health-checked.
     app.server.listen(app.config.workerHttpPort, "127.0.0.1", () => {
@@ -482,6 +496,38 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     setInterval(() => {}, 1 << 30);
     console.log(`[live-backend] worker process started (role ${role}, no http listener)`);
   }
+}
+
+/* sd_listen_fds contract: LISTEN_PID names the process the fds were passed to
+   and numbering starts at 3 (SD_LISTEN_FDS_START). Anything else - direct
+   `node dist/server.js`, tests, the worker role, a box without the socket
+   unit - returns null and the server binds its port itself. */
+function systemdSocketFd(): number | null {
+  if (process.env.LISTEN_PID !== String(process.pid)) return null;
+  const count = Number(process.env.LISTEN_FDS ?? "");
+  return Number.isInteger(count) && count >= 1 ? 3 : null;
+}
+
+// SIGTERM used to kill in-flight responses mid-write on every deploy. Drain
+// instead: stop accepting (under socket activation the kernel keeps queueing
+// for the next process), let in-flight requests finish, then cut the
+// long-lived streams (SSE clients reconnect via Last-Event-ID). The hard exit
+// stays well inside the unit's TimeoutStopSec=30 so a drain bug can only ever
+// cost seconds, never stretch a deploy.
+const DRAIN_STREAM_CUTOFF_MS = 4_000;
+const DRAIN_HARD_EXIT_MS = 8_000;
+
+function installServingDrain(server: ReturnType<typeof createServer>): void {
+  let draining = false;
+  process.on("SIGTERM", () => {
+    if (draining) return;
+    draining = true;
+    console.log("[live-backend] SIGTERM: draining in-flight requests");
+    server.close(() => process.exit(0));
+    server.closeIdleConnections();
+    setTimeout(() => server.closeAllConnections(), DRAIN_STREAM_CUTOFF_MS).unref();
+    setTimeout(() => process.exit(0), DRAIN_HARD_EXIT_MS).unref();
+  });
 }
 
 // True only when every connection this process opens sees the same database on
