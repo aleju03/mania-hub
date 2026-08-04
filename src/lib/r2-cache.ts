@@ -377,6 +377,13 @@ export async function putManiaCardThumbnailAndGetUrl(cacheKey: string, buffer: B
   const r2 = getClient();
   if (!r2 || buffer.length === 0) return null;
 
+  // Every pack reveal re-posts the thumbnails it rendered, so most arrivals
+  // already exist. The key is content-addressed (CACHE_VERSION plus the render
+  // inputs), which makes an existing object byte-equivalent to this upload:
+  // answer with a Head instead of rewriting it.
+  const existing = await getManiaCardThumbnailUrl(cacheKey);
+  if (existing) return existing;
+
   const storageKey = getManiaCardThumbnailStorageKey(cacheKey);
   assertReplayCacheKey(storageKey);
   await r2.send(new PutObjectCommand({
