@@ -609,3 +609,38 @@ html[data-custom-cursor="true"] * {
   color: #fff; background: rgba(0, 0, 0, 0.65);
 }
 .bbcode-editor-embed--audio { border: none; overflow: visible; }
+
+/* Admin ghost overlay (components/ghost): a Ralsei sprite the site owner can
+   drive around a visitor's screen. Everything here is inert until a ghost
+   session actually reaches the page. */
+@keyframes ghost-float {
+  0% { opacity: 0; transform: translateY(0) scale(0.7); }
+  15% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-70vh) scale(1.1); }
+}
+.ghost-float { animation-name: ghost-float; animation-timing-function: linear; animation-fill-mode: forwards; }
+
+@keyframes ghost-dark {
+  0%, 100% { opacity: 0; }
+  25%, 70% { opacity: 0.82; }
+}
+.ghost-dark { animation: ghost-dark 2400ms ease-in-out forwards; }
+
+@keyframes ghost-caption {
+  0% { opacity: 0; transform: translateY(8px); }
+  10%, 80% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-4px); }
+}
+.ghost-caption { animation: ghost-caption 2600ms ease-out forwards; }
+
+@keyframes ghost-shake {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  20% { transform: translate3d(-6px, 2px, 0); }
+  40% { transform: translate3d(5px, -3px, 0); }
+  60% { transform: translate3d(-4px, -2px, 0); }
+  80% { transform: translate3d(3px, 3px, 0); }
+}
+/* Shakes the page content, never <body>: a transform on body would make it the
+   containing block for every fixed element (nav, the ghost itself), which snaps
+   them out of place for the length of the animation on a scrolled page. */
+:root.ghost-shake main { animation: ghost-shake 600ms ease-in-out; }

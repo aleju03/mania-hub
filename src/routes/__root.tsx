@@ -5,6 +5,7 @@ import { Coffee, X } from "lucide-react";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest, setCookie } from "@tanstack/react-start/server";
 import { ChangelogModal } from "../components/layout/ChangelogModal";
+import { GhostLayer } from "../components/ghost/GhostLayer";
 import { CustomCursor } from "../components/layout/CustomCursor";
 import { Nav } from "../components/layout/Nav";
 import { RouteLoadingBar } from "../components/layout/RouteLoadingBar";
@@ -579,6 +580,7 @@ function RootLayout() {
               </main>
               <GoalToasts />
               <TrackingToasts />
+              <GhostLayer />
             </>
           )}
           <footer className="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1 px-4 py-2 text-center text-[10px] text-osu-pink-light/30">

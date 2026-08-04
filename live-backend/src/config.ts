@@ -63,6 +63,12 @@ export interface Config {
   sseConnectRatePerMinute: number;
   sseMaxConnectionsPerIp: number;
   sseMaxConnectionsTotal: number;
+  // Admin ghost overlay. Every page open holds one ghost stream, so it gets its
+  // own connection budget instead of spending the live-feed one, and a master
+  // switch that takes the whole thing off the site in one restart.
+  enableGhost: boolean;
+  ghostMaxClients: number;
+  ghostMaxClientsPerIp: number;
   replayVideoRatePerMinute: number;
   skinUploadRatePerMinute: number;
   osuApiTargetPerMinute: number;
@@ -293,6 +299,9 @@ export function readConfig(): Config {
     sseConnectRatePerMinute: readInt("SSE_CONNECT_RATE_PER_MINUTE", 30),
     sseMaxConnectionsPerIp: readInt("SSE_MAX_CONNECTIONS_PER_IP", 6),
     sseMaxConnectionsTotal: readInt("SSE_MAX_CONNECTIONS_TOTAL", 500),
+    enableGhost: readBool("ENABLE_GHOST", true),
+    ghostMaxClients: readInt("GHOST_MAX_CLIENTS", 800),
+    ghostMaxClientsPerIp: readInt("GHOST_MAX_CLIENTS_PER_IP", 6),
     replayVideoRatePerMinute: readInt("REPLAY_VIDEO_RATE_PER_MINUTE", 2),
     // One publish is up to ~17 requests (start + a preview per keymode + up
     // to 4 screenshots + the .osk + finish), so the budget must cover a full

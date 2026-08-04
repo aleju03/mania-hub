@@ -44,6 +44,9 @@ import { type AbuseBucket, type AbuseGuard, normalizeCountryParam, type RateLimi
 import type { JobQueue } from "../jobs/queue.js";
 import type { CountryClientTracker } from "../live/country-clients.js";
 import type { LiveEventLog } from "../live/event-log.js";
+// Type-only: live/ghost.ts imports helpers from this module, so a value import
+// here would close the cycle.
+import type { GhostHub } from "../live/ghost.js";
 import { readJobMemoryMetric, readRuntimeStatus, setWorkersPaused, type RuntimeStatusSnapshot } from "../live/runtime-status.js";
 import type { OscStatus } from "../osc/client.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
@@ -127,6 +130,8 @@ export interface HttpContext {
   resumeWorkers?: () => void;
   discord?: DiscordRuntime;
   analytics?: AnalyticsStore;
+  // Admin ghost overlay sessions and viewer streams (serving process only).
+  ghost?: GhostHub;
 }
 
 const REQUEST_STARTED_AT = Symbol("maniaHubRequestStartedAt");

@@ -29,6 +29,7 @@ import { backfillSkinSlugs } from "./features/skins.js";
 import { ensureArchivedPlayers } from "./archived-players.js";
 import { AbuseGuard } from "./http/abuse-guard.js";
 import { CountryClientTracker } from "./live/country-clients.js";
+import { GhostHub, handleGhost } from "./live/ghost.js";
 import { handleReplayPresence } from "./live/replay-presence.js";
 import { handleSse } from "./live/sse.js";
 import { enqueueOscBackfill } from "./osc/backfill.js";
@@ -262,6 +263,11 @@ export async function createApp() {
   const ingestor = new ScoreIngestor(db, queue, events, config, osu.hasCredentials() ? osu : undefined);
   const abuse = new AbuseGuard();
   const countryClients = new CountryClientTracker();
+  // Serving-process only, like replay presence: in-memory sessions and streams
+  // that a worker process would never see a client for.
+  const ghost = config.role === "worker" || !config.enableGhost
+    ? null
+    : new GhostHub({ maxClients: config.ghostMaxClients, maxClientsPerIp: config.ghostMaxClientsPerIp });
   const osc = new OscSocketClient(
     config,
     ingestor,
@@ -303,11 +309,13 @@ export async function createApp() {
     resumeWorkers: () => worker.resume(),
     discord: discord ?? undefined,
     analytics: analytics ?? undefined,
+    ghost: ghost ?? undefined,
   };
   const server = createServer(async (req, res) => {
     try {
       if (await handleSse(req, res, ctx)) return;
       if (handleReplayPresence(req, res, ctx)) return;
+      if (await handleGhost(req, res, ctx)) return;
       if (await routeHttp(req, res, ctx)) return;
       sendNotFound(res);
     } catch (error) {
@@ -326,7 +334,7 @@ export async function createApp() {
     warmStatusBodyCache(ctx);
     warmGlobalMapsFarmedBoard(ctx);
   }
-  return { server, db, rateLimitDb, serveWriteDb, serveWriteQueue, queue, events, osu, scoresFallbackOsu, osc, worker, ingestor, config, countryClients, discord, analytics };
+  return { server, db, rateLimitDb, serveWriteDb, serveWriteQueue, queue, events, osu, scoresFallbackOsu, osc, worker, ingestor, config, countryClients, discord, analytics, ghost };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

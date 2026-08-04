@@ -32,6 +32,7 @@ import { Route as TrackerRouteImport } from './routes/tracker'
 import { Route as ValleyRouteImport } from './routes/valley'
 import { Route as AdminDanClassifierRouteImport } from './routes/admin/dan-classifier'
 import { Route as AdminDiscordRouteImport } from './routes/admin/discord'
+import { Route as AdminGhostRouteImport } from './routes/admin/ghost'
 import { Route as AdminLiveBackendRouteImport } from './routes/admin/live-backend'
 import { Route as AdminOgPreviewRouteImport } from './routes/admin/og-preview'
 import { Route as AdminR2RouteImport } from './routes/admin/r2'
@@ -174,6 +175,11 @@ const AdminDanClassifierRoute = AdminDanClassifierRouteImport.update({
 const AdminDiscordRoute = AdminDiscordRouteImport.update({
   id: '/admin/discord',
   path: '/admin/discord',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminGhostRoute = AdminGhostRouteImport.update({
+  id: '/admin/ghost',
+  path: '/admin/ghost',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminLiveBackendRoute = AdminLiveBackendRouteImport.update({
@@ -341,6 +347,7 @@ export interface FileRoutesByFullPath {
   '/valley': typeof ValleyRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
+  '/admin/ghost': typeof AdminGhostRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/admin/r2': typeof AdminR2Route
@@ -394,6 +401,7 @@ export interface FileRoutesByTo {
   '/valley': typeof ValleyRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
+  '/admin/ghost': typeof AdminGhostRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/admin/r2': typeof AdminR2Route
@@ -448,6 +456,7 @@ export interface FileRoutesById {
   '/valley': typeof ValleyRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/discord': typeof AdminDiscordRoute
+  '/admin/ghost': typeof AdminGhostRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/admin/r2': typeof AdminR2Route
@@ -503,6 +512,7 @@ export interface FileRouteTypes {
     | '/valley'
     | '/admin/dan-classifier'
     | '/admin/discord'
+    | '/admin/ghost'
     | '/admin/live-backend'
     | '/admin/og-preview'
     | '/admin/r2'
@@ -556,6 +566,7 @@ export interface FileRouteTypes {
     | '/valley'
     | '/admin/dan-classifier'
     | '/admin/discord'
+    | '/admin/ghost'
     | '/admin/live-backend'
     | '/admin/og-preview'
     | '/admin/r2'
@@ -609,6 +620,7 @@ export interface FileRouteTypes {
     | '/valley'
     | '/admin/dan-classifier'
     | '/admin/discord'
+    | '/admin/ghost'
     | '/admin/live-backend'
     | '/admin/og-preview'
     | '/admin/r2'
@@ -663,6 +675,7 @@ export interface RootRouteChildren {
   ValleyRoute: typeof ValleyRoute
   AdminDanClassifierRoute: typeof AdminDanClassifierRoute
   AdminDiscordRoute: typeof AdminDiscordRoute
+  AdminGhostRoute: typeof AdminGhostRoute
   AdminLiveBackendRoute: typeof AdminLiveBackendRoute
   AdminOgPreviewRoute: typeof AdminOgPreviewRoute
   AdminR2Route: typeof AdminR2Route
@@ -847,6 +860,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/discord'
       fullPath: '/admin/discord'
       preLoaderRoute: typeof AdminDiscordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/ghost': {
+      id: '/admin/ghost'
+      path: '/admin/ghost'
+      fullPath: '/admin/ghost'
+      preLoaderRoute: typeof AdminGhostRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/live-backend': {
@@ -1116,6 +1136,7 @@ const rootRouteChildren: RootRouteChildren = {
   ValleyRoute: ValleyRoute,
   AdminDanClassifierRoute: AdminDanClassifierRoute,
   AdminDiscordRoute: AdminDiscordRoute,
+  AdminGhostRoute: AdminGhostRoute,
   AdminLiveBackendRoute: AdminLiveBackendRoute,
   AdminOgPreviewRoute: AdminOgPreviewRoute,
   AdminR2Route: AdminR2Route,
