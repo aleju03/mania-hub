@@ -280,6 +280,9 @@ function UploadReplayBrowser({
   const [communityUploads, setCommunityUploads] = useState<RecentReplayEntry[]>(
     () => communityUploadsCache?.entries ?? [],
   );
+  // Skeleton gate: only the very first fetch has nothing to show; a stale
+  // cache keeps rendering its entries while the refresh runs behind them.
+  const [communityUploadsLoading, setCommunityUploadsLoading] = useState(() => communityUploadsCache === null);
 
   useEffect(() => {
     if (communityUploadsCache && Date.now() - communityUploadsCache.fetchedAt < COMMUNITY_UPLOADS_CLIENT_TTL) return;
@@ -292,6 +295,9 @@ function UploadReplayBrowser({
       })
       .catch(() => {
         // The drop zone is the tab's job; the community list is a bonus.
+      })
+      .finally(() => {
+        if (!cancelled) setCommunityUploadsLoading(false);
       });
     return () => {
       cancelled = true;
@@ -390,7 +396,7 @@ function UploadReplayBrowser({
         </div>
       </div>
 
-      {communityUploads.length > 0 && (
+      {communityUploads.length > 0 ? (
         <ReplayRecentlyViewed
           className="mt-10"
           entries={communityUploads}
@@ -400,7 +406,25 @@ function UploadReplayBrowser({
           onRemove={() => {}}
           onClear={() => {}}
         />
-      )}
+      ) : communityUploadsLoading ? (
+        // Placeholder with the section's real header and card footprint, so
+        // the community list doesn't pop into an already-settled page.
+        <div className="mx-auto mt-10 max-w-5xl">
+          <div className="mb-3 flex justify-center">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">
+              Recently Uploaded by the Community
+            </h4>
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 9 }, (_, index) => (
+              <div
+                key={index}
+                className="h-[57px] animate-pulse rounded-xl border border-osu-b3/20 bg-osu-b4"
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
