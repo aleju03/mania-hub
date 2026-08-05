@@ -364,6 +364,47 @@ describe("replay skin settings", () => {
     expect(read[1].community).toBeUndefined();
   });
 
+  it("carries a public community pointer through a share code", () => {
+    const skin = { id: "sk_1", name: "aleju03 lazer", visibility: "public" } as SkinSummary;
+    const payload = { v: 1, settings: { style: "bars" } };
+
+    const parsed = parseReplaySkinShareKey(
+      createReplaySkinShareKey("linked", DEFAULT_REPLAY_SKIN_SETTINGS, { skin, payload }),
+    );
+
+    expect(parsed?.community?.skin.id).toBe("sk_1");
+    expect(parsed?.community?.payload).toEqual(payload);
+  });
+
+  it("never puts a private skin's summary into a share code", () => {
+    // A private summary's URLs carry the owner's capability token; a code is
+    // made to be pasted around.
+    const skin = {
+      id: "sk_2",
+      name: "my private skin",
+      visibility: "private",
+      oskUrl: "/api/skins/file/sk_2/skin.osk?t=capability-secret",
+    } as SkinSummary;
+
+    const key = createReplaySkinShareKey("private", DEFAULT_REPLAY_SKIN_SETTINGS, { skin, payload: { v: 1 } });
+
+    const decoded = Buffer.from(key.slice("mhreplay3.".length), "base64url").toString();
+    expect(decoded).not.toContain("capability-secret");
+    expect(parseReplaySkinShareKey(key)?.community).toBeUndefined();
+  });
+
+  it("drops a forged community pointer that does not say it is public", () => {
+    const forged = `mhreplay3.${Buffer.from(JSON.stringify([
+      "forged",
+      {},
+      { skin: { id: "sk_3" }, payload: { v: 1 } },
+    ])).toString("base64url")}`;
+
+    const parsed = parseReplaySkinShareKey(forged);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.community).toBeUndefined();
+  });
+
   it("drops a malformed community link but keeps the preset", () => {
     window.localStorage.setItem(REPLAY_SKIN_PRESETS_STORAGE_KEY, JSON.stringify([
       { id: "p1", name: "broken link", settings: {}, community: { skin: {}, payload: { v: 1 } } },
@@ -438,7 +479,34 @@ describe("replay skin storage under quota pressure", () => {
     expect(stored.tapColor).toBe("#101820");
     expect(stored.hitPosition).toBe(137);
     expect(stored.keymodeProfiles["4"].columnWidth).toBe(91);
-    expect(stored.keymodeProfiles["4"].assets.columns).toEqual([]);
+    expect(stored.keymodeProfiles["4"].assets.columns[0]?.lnBody).toBeUndefined();
+    expect(JSON.stringify(stored)).not.toContain("data:image/");
+  });
+
+  it("strips only the pixels, not the stage metadata beside them", () => {
+    // LightingNWidth / ColourLight are skin.ini numbers riding in the assets
+    // block next to the images. Swapping the whole block for an empty one
+    // threw them out with the art they were meant to survive.
+    writeReplaySkinSettings(normalizeReplaySkinSettings({
+      ...DEFAULT_REPLAY_SKIN_SETTINGS,
+      keymodeProfiles: {
+        "4": {
+          assets: {
+            columns: [{ lnBody: { name: "LN_Body.png", src: ART } }],
+            stage: {
+              light: { name: "mania-stage-light.png", src: ART },
+              lightingWidths: [30, 30, 30, 30],
+              lightColors: ["#ff0000", "", "", "#00ff00"],
+            },
+          },
+        },
+      },
+    }));
+
+    const stage = readReplaySkinSettings().keymodeProfiles["4"].assets.stage;
+    expect(stage.light).toBeUndefined();
+    expect(stage.lightingWidths).toEqual([30, 30, 30, 30]);
+    expect(stage.lightColors).toEqual(["#ff0000", "", "", "#00ff00"]);
   });
 
   it("announces the settings it was handed, not the copy it could store", () => {
@@ -464,7 +532,7 @@ describe("replay skin storage under quota pressure", () => {
     const read = readReplaySkinPresets();
     expect(read.map((preset) => preset.name)).toEqual(["mokou skin", "plain"]);
     expect(read[0].settings.tapColor).toBe("#101820");
-    expect(read[0].settings.keymodeProfiles["4"].assets.columns).toEqual([]);
+    expect(read[0].settings.keymodeProfiles["4"].assets.columns[0]?.lnBody).toBeUndefined();
   });
 
   it("gives up rather than looping when there is no art to drop", () => {

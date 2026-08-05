@@ -106,6 +106,7 @@ import {
   loadAppliedReplaySkinSettings,
   loadOwnerReplaySkinCached,
   readAppliedCommunityReplaySkin,
+  replaySkinSettingsEmbedAssets,
   writeAppliedCommunityReplaySkin,
   type AppliedCommunityReplaySkin,
   type AppliedCommunitySkinDraft,
@@ -2462,10 +2463,16 @@ function ReplayViewer({
   const thumbLaneAvailable = replay.keyCount % 2 === 1;
 
   useEffect(() => {
-    const refreshSharedReplaySettings = () => {
+    const refreshSharedReplaySettings = (event?: Event) => {
       if (replayStableScrollSpeed == null || scrollSpeedUserOverrideRef.current) {
         applyScrollSpeed(readReplayScrollSpeed());
       }
+      // The change event carries the dispatcher's full in-memory settings
+      // (same tab, so always the latest write); cross-tab "storage" and focus
+      // land here without one.
+      const detail = event instanceof CustomEvent && event.type === REPLAY_SKIN_SETTINGS_CHANGE_EVENT && event.detail
+        ? normalizeReplaySkinSettings(event.detail)
+        : null;
       // The stored settings are asset-free while a community skin is applied;
       // re-reading them verbatim would strip the art off the stage. Serve the
       // in-memory full copy while the pointer matches, and rebuild it in the
@@ -2474,12 +2481,16 @@ function ReplayViewer({
       const cachedFull = appliedCommunityFullRef.current;
       if (applied && cachedFull && cachedFull.key === appliedCommunityReplaySkinKey(applied)) {
         setSkinSettings(cachedFull.settings);
+      } else if (detail && replaySkinSettingsEmbedAssets(detail)) {
+        // Art straight off the event: fresher than anything stored, and the
+        // only copy at all when the write overflowed the quota.
+        setSkinSettings(detail);
       } else if (applied) {
         // Keep the current full skin on screen until the replacement is ready;
         // dropping to the stored asset-free copy would flash the built-in bars.
         void hydrateAppliedCommunitySkin(applied);
       } else {
-        setSkinSettings(readReplaySkinSettings());
+        setSkinSettings(detail ?? readReplaySkinSettings());
       }
       setOverlaySettings(readReplayOverlaySettings());
       setMissThumbHand(readReplayMissThumbHand());

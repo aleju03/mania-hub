@@ -366,6 +366,11 @@ interface ReplaySkinSettingsModalProps {
   // individual draft assets for other images from the archive.
   assetArchive?: OskArchive | null;
   assetSourceName?: string | null;
+  // The catalog skin that assetArchive came from, when the caller knows it.
+  // Presets created inside that editor then carry a rebuild pointer instead
+  // of raw art (which localStorage may refuse, and stripped art without a
+  // pointer is gone for good).
+  assetSourceSkin?: SkinSummary | null;
   // The regular editor changes how this browser watches replays. The owner
   // customize flow publishes its primary save for everyone instead.
   saveScope?: "viewer" | "owner";
@@ -381,6 +386,7 @@ export function ReplaySkinSettingsModal({
   onClose,
   assetArchive = null,
   assetSourceName = null,
+  assetSourceSkin = null,
   saveScope = "viewer",
 }: ReplaySkinSettingsModalProps) {
   const modalRef = useRef<HTMLDivElement | null>(null);
@@ -447,7 +453,15 @@ export function ReplaySkinSettingsModal({
   // the Assets tab exactly like the assetArchive prop does; the prop (the
   // settings-page customize flow) acts as the seed until a session load
   // replaces it.
-  const [loadedCatalogSkin, setLoadedCatalogSkin] = useState<{ skin: SkinSummary; archive: OskArchive } | null>(null);
+  //
+  // Invariant: this is where the draft's embedded art came FROM, not merely
+  // an archive that happens to be open. Every path that replaces the draft
+  // wholesale keeps the two in step (or clears this), because it is what
+  // pairs a rebuild pointer with saved settings - a stale value here pairs
+  // skin B's settings with skin A's pointer, and the preset rebuilds wrong.
+  const [loadedCatalogSkin, setLoadedCatalogSkin] = useState<{ skin: SkinSummary; archive: OskArchive } | null>(
+    () => (assetSourceSkin && assetArchive ? { skin: assetSourceSkin, archive: assetArchive } : null),
+  );
   const [skinBrowserOpen, setSkinBrowserOpen] = useState(false);
   const [communityBusy, setCommunityBusy] = useState<null | "import" | "preset" | "load-mine" | "save-mine">(null);
   // Open archives by skin id, so re-selecting a community preset in the same
@@ -676,8 +690,11 @@ export function ReplaySkinSettingsModal({
     matchedInitialPresetRef.current = true;
     // An applied community skin re-selects its preset on open. The settings
     // comparison below cannot see it: the draft carries the rebuilt data-URL
-    // art while the preset stores the asset-free copy.
-    const applied = readAppliedCommunityReplaySkin();
+    // art while the preset stores the asset-free copy. Viewer scope only: the
+    // owner editor's draft is the record being customized, not the viewer's
+    // applied skin, and selecting that preset here let Apply overwrite it
+    // with the record's settings.
+    const applied = saveScope === "viewer" ? readAppliedCommunityReplaySkin() : null;
     if (applied) {
       const communityMatch = presets.find((preset) => preset.community?.skin.id === applied.skin.id);
       if (communityMatch) {
@@ -1045,7 +1062,9 @@ export function ReplaySkinSettingsModal({
     setActiveColor(null);
     const applyCached = (cached: HydratedCommunityPreset) => {
       setDraft(cached.settings);
-      if (cached.archive) setLoadedCatalogSkin({ skin: community.skin, archive: cached.archive });
+      // No archive yet -> null, never a leftover from the previous skin; the
+      // reopened-editor effect restores it for the Assets tab.
+      setLoadedCatalogSkin(cached.archive ? { skin: community.skin, archive: cached.archive } : null);
       if (cached.sounds) {
         pendingSkinSoundsRef.current = Object.keys(cached.sounds).length > 0
           ? { name: community.skin.name, sounds: cached.sounds }
@@ -1083,11 +1102,13 @@ export function ReplaySkinSettingsModal({
         ?? (archive ? await rehydrateOwnerReplaySkinSettings(community.payload, archive) : null);
       if (!settings) {
         setDraft(preset.settings);
+        setLoadedCatalogSkin(null);
         pushStatus(`${community.skin.name} could not be downloaded, applied colors only`, "error");
         return;
       }
       setDraft(settings);
       if (!archive) {
+        setLoadedCatalogSkin(null);
         rememberHydratedPreset(preset, settings, null, cached?.sounds ?? null);
         pushStatus(`Loaded ${preset.name}; archive tools are unavailable`, "error");
         return;
@@ -1325,6 +1346,10 @@ export function ReplaySkinSettingsModal({
       void applyCommunityPreset(preset, preset.community);
       return;
     }
+    // A plain preset replaces the draft wholesale, so whatever archive was
+    // open is no longer where the draft's art came from. Keeping it paired a
+    // later "New preset" or publish with the wrong skin.
+    setLoadedCatalogSkin(null);
     setDraft(preset.settings);
     setDraftPresetName(DEFAULT_DRAFT_PRESET_NAME);
     setActiveColor(null);
@@ -1347,11 +1372,15 @@ export function ReplaySkinSettingsModal({
   useEffect(() => {
     if (!communityPresetSkin) return;
     if (communityBusy) return;
-    if (loadedCatalogSkin && !draftMissingSkinArt) return;
+    // Id-compared, not presence-checked: an archive from a different skin
+    // being open must not satisfy this preset's need for its own.
+    if (loadedCatalogSkin?.skin.id === communityPresetSkin.id && !draftMissingSkinArt) return;
     let cancelled = false;
     void getArchiveForSkin(communityPresetSkin).then(async (archive) => {
       if (cancelled || !archive) return;
-      setLoadedCatalogSkin((current) => current ?? { skin: communityPresetSkin, archive });
+      setLoadedCatalogSkin((current) => (
+        current?.skin.id === communityPresetSkin.id ? current : { skin: communityPresetSkin, archive }
+      ));
       if (!draftMissingSkinArt || !communityPresetPayload) {
         if (selectedPreset) rememberHydratedPreset(selectedPreset, draft, archive);
         return;
@@ -1379,11 +1408,13 @@ export function ReplaySkinSettingsModal({
       onSubmit: (name) => {
         const trimmed = name.trim();
         if (!trimmed) return;
-        // With a community skin loaded, the new preset keeps the skin link
-        // and stores the dehydrated payload; embedded data URLs must never
-        // land in the localStorage preset store.
+        // With the draft's art coming from a community skin, the new preset
+        // keeps the skin link and stores the dehydrated payload; embedded
+        // data URLs must never land in the localStorage preset store. An
+        // art-free draft stays plain even with an archive open - a pointer
+        // would resurrect art the user does not have in front of them.
         let preset: ReplaySkinPreset;
-        if (loadedCatalogSkin) {
+        if (loadedCatalogSkin && replaySkinSettingsEmbedAssets(draft)) {
           const payload = dehydrateReplaySkinSettings(draft);
           preset = createReplaySkinPreset(trimmed, normalizeReplaySkinSettings(payload.settings), {
             skin: loadedCatalogSkin.skin,
@@ -1445,7 +1476,23 @@ export function ReplaySkinSettingsModal({
   };
 
   const exportDraft = () => {
-    const key = createReplaySkinShareKey(selectedPreset?.name ?? draftPresetName, draft);
+    const name = selectedPreset?.name ?? draftPresetName;
+    // Art from a community skin travels as its rebuild pointer: the code
+    // stays a pasteable size and the importer re-downloads the .osk instead
+    // of trusting megabytes of base64. Only public skins qualify (a private
+    // summary's URLs carry the owner's capability token); art with no known
+    // source still embeds, as the code is its only carrier.
+    const sourceSkin = loadedCatalogSkin?.skin ?? selectedPreset?.community?.skin ?? null;
+    let key: string;
+    if (sourceSkin && sourceSkin.visibility === "public" && replaySkinSettingsEmbedAssets(draft)) {
+      const payload = dehydrateReplaySkinSettings(draft);
+      key = createReplaySkinShareKey(name, normalizeReplaySkinSettings(payload.settings), {
+        skin: sourceSkin,
+        payload,
+      });
+    } else {
+      key = createReplaySkinShareKey(name, draft);
+    }
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(key).then(
         () => pushStatus("Share code copied"),
@@ -1472,6 +1519,19 @@ export function ReplaySkinSettingsModal({
           pushStatus("That share code could not be imported", "error");
           return;
         }
+        // A code carrying a community pointer imports as the same kind of
+        // preset the exporter had: asset-free settings in localStorage, art
+        // re-downloaded from the catalog.
+        if (payload.community) {
+          const preset = createReplaySkinPreset(payload.name, payload.settings, payload.community);
+          persistPresets([preset, ...presets].slice(0, 24));
+          setActiveColor(null);
+          void applyCommunityPreset(preset, payload.community);
+          return;
+        }
+        // The imported settings replace the draft wholesale; an archive left
+        // open from before is not where this art came from.
+        setLoadedCatalogSkin(null);
         const preset = createReplaySkinPreset(payload.name, payload.settings);
         persistPresets([preset, ...presets].slice(0, 24));
         setDraft(payload.settings);
@@ -1526,7 +1586,23 @@ export function ReplaySkinSettingsModal({
       }
       persistPresets(presets.map((preset) => preset.id === selectedPreset.id ? nextPreset : preset));
     } else if (namedDraft && namedDraft !== DEFAULT_DRAFT_PRESET_NAME) {
-      persistPresets([createReplaySkinPreset(namedDraft, normalized), ...presets].slice(0, 24));
+      // The named draft gets the same treatment as "New preset": art from a
+      // loaded community skin persists as a pointer, never as data URLs in
+      // the preset store (where a quota-stripped copy has nothing to rebuild
+      // from).
+      let preset: ReplaySkinPreset;
+      if (loadedCatalogSkin && replaySkinSettingsEmbedAssets(normalized)) {
+        const payload = dehydrateReplaySkinSettings(normalized);
+        preset = createReplaySkinPreset(namedDraft, normalizeReplaySkinSettings(payload.settings), {
+          skin: loadedCatalogSkin.skin,
+          payload,
+        });
+        rememberHydratedPreset(preset, normalized, loadedCatalogSkin.archive, pendingSounds?.sounds ?? null);
+        appliedCommunity = { skin: loadedCatalogSkin.skin, payload, assetFree: preset.settings };
+      } else {
+        preset = createReplaySkinPreset(namedDraft, normalized);
+      }
+      persistPresets([preset, ...presets].slice(0, 24));
     }
     // Draft slot with a community skin loaded: the applied settings still
     // embed its art, so they still need the pointer to persist.

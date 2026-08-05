@@ -135,7 +135,11 @@ describe("replay skin settings UI", () => {
     // Without the archive the Assets tab is hidden and "Set as my replay skin"
     // is dead, even though the preset and the art are right there.
     expect(source).toContain("const communityPresetSkin = selectedPreset?.community?.skin ?? null;");
-    expect(source).toContain("setLoadedCatalogSkin((current) => current ?? { skin: communityPresetSkin, archive });");
+    // Id-compared, not presence-checked: a leftover archive from a different
+    // skin must be replaced, not kept, or presets and publishes pair skin B's
+    // settings with skin A's pointer.
+    expect(source).toContain("current?.skin.id === communityPresetSkin.id ? current : { skin: communityPresetSkin, archive }");
+    expect(source).not.toContain("current ?? { skin: communityPresetSkin, archive }");
   });
 
   it("exposes ColumnStart in the layout tab and moves the preview with it", () => {

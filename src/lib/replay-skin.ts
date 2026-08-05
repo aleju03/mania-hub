@@ -241,6 +241,10 @@ export interface ReplaySkinSharePayload {
   version: 1;
   name: string;
   settings: ReplaySkinSettings;
+  // Set when the exported art came from a public community skin: the code
+  // carries this rebuild pointer instead of megabytes of pixels, and the
+  // importer recreates the same community-linked preset the exporter had.
+  community?: ReplaySkinPresetCommunityLink;
 }
 
 export const REPLAY_SKIN_MAX_COLUMNS = 10;
@@ -887,23 +891,45 @@ export const REPLAY_SKIN_SETTINGS_CHANGE_EVENT = "mania-hub:replay-skin-settings
 //
 // Walks the asset tree structurally rather than by a list of asset keys, so a
 // new kind of asset cannot quietly slip through it.
+function isDecodedArtAsset(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const src = (value as { src?: unknown }).src;
+  return typeof src === "string" && src.startsWith("data:");
+}
+
 function embedsDecodedArt(value: unknown, depth = 0): boolean {
   if (depth > 6 || !value || typeof value !== "object") return false;
+  if (isDecodedArtAsset(value)) return true;
   if (Array.isArray(value)) return value.some((entry) => embedsDecodedArt(entry, depth + 1));
-  const record = value as Record<string, unknown>;
-  if (typeof record.src === "string" && record.src.startsWith("data:")) return true;
-  return Object.values(record).some((entry) => embedsDecodedArt(entry, depth + 1));
+  return Object.values(value as Record<string, unknown>).some((entry) => embedsDecodedArt(entry, depth + 1));
 }
 
 function replaySkinSettingsEmbedDecodedArt(settings: ReplaySkinSettings): boolean {
   return Object.values(settings.keymodeProfiles).some((profile) => embedsDecodedArt(profile.assets));
 }
 
+// Removes only the nodes that hold decoded pixels. Positional slots (combo
+// digits) keep their place as null, and everything that is not an embedded
+// image - lighting widths, light colors, a combo font's prefix and overlap -
+// stays, so the stripped copy still lays the stage out the way the skin did.
+function withoutDecodedArt(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry) => (isDecodedArtAsset(entry) ? null : withoutDecodedArt(entry)));
+  }
+  if (!value || typeof value !== "object") return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (isDecodedArtAsset(entry)) continue;
+    out[key] = withoutDecodedArt(entry);
+  }
+  return out;
+}
+
 function replaySkinSettingsWithoutDecodedArt(settings: ReplaySkinSettings): ReplaySkinSettings {
   const keymodeProfiles: Record<string, ReplaySkinKeymodeProfile> = {};
   for (const [key, profile] of Object.entries(settings.keymodeProfiles)) {
     keymodeProfiles[key] = embedsDecodedArt(profile.assets)
-      ? { ...profile, assets: EMPTY_REPLAY_SKIN_ASSETS }
+      ? { ...profile, assets: withoutDecodedArt(profile.assets) as ReplaySkinKeymodeAssets }
       : profile;
   }
   return { ...settings, keymodeProfiles };
@@ -1218,12 +1244,19 @@ function expandReplaySkinSettingsV3(value: unknown): Record<string, unknown> {
   };
 }
 
-export function createReplaySkinShareKey(name: string, settings: ReplaySkinSettings): string {
+export function createReplaySkinShareKey(
+  name: string,
+  settings: ReplaySkinSettings,
+  community?: ReplaySkinPresetCommunityLink | null,
+): string {
   const normalized = normalizeReplaySkinSettings(settings);
-  const payload = [
+  const payload: unknown[] = [
     normalizePresetName(name),
     compactReplaySkinSettingsV3(normalized),
   ];
+  // Only public skins ride along: a private summary's URLs carry the owner's
+  // capability token, and a share code exists to be pasted around.
+  if (community && community.skin.visibility === "public") payload.push(community);
   return `mhreplay3.${encodeBase64Url(JSON.stringify(payload))}`;
 }
 
@@ -1233,11 +1266,17 @@ export function parseReplaySkinShareKey(key: string): ReplaySkinSharePayload | n
     try {
       const parsed = JSON.parse(decodeBase64Url(trimmed.slice("mhreplay3.".length)));
       if (!Array.isArray(parsed)) return null;
+      // The pointer in a pasted code is untrusted: a summary that does not
+      // say it is public (forged, or minted before the field) is dropped, and
+      // downloads go through the backend's /api/skins/file/<id> route either
+      // way, so a crafted oskUrl cannot point the importer anywhere else.
+      const community = normalizePresetCommunityLink(parsed[2]);
       return {
         type: "mania-hub-replay-settings",
         version: 1,
         name: normalizePresetName(parsed[0]),
         settings: normalizeReplaySkinSettings(expandReplaySkinSettingsV3(parsed[1])),
+        ...(community && community.skin.visibility === "public" ? { community } : {}),
       };
     } catch {
       return null;

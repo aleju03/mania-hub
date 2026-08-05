@@ -111,6 +111,10 @@ export function OwnerReplaySkinCustomizeModal({
         onClose={handleEditorClose}
         assetArchive={loaded.archive}
         assetSourceName={record.skin.name}
+        // Lets presets created inside this editor carry a rebuild pointer. A
+        // private skin's summary is the redacted copy with no .osk to rebuild
+        // from, so it stays unset and those presets embed their art instead.
+        assetSourceSkin={record.private ? null : record.skin}
         saveScope="owner"
       />
     );

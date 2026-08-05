@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { loadAppliedReplaySkinSettings } from "./replay-owner-skin";
 import {
   REPLAY_SKIN_SETTINGS_CHANGE_EVENT,
+  normalizeReplaySkinSettings,
   readReplaySkinSettings,
   type ReplaySkinSettings,
 } from "./replay-skin";
@@ -21,8 +22,16 @@ export function useReplaySkinSettings(): ReplaySkinSettings {
   const [revision, setRevision] = useState(0);
 
   useEffect(() => {
-    const refresh = () => {
-      setStored(readReplaySkinSettings());
+    const refresh = (event?: Event) => {
+      // The change event carries the dispatcher's full in-memory settings.
+      // Prefer them over a re-read: when a skin's art was too large for
+      // localStorage the stored copy is the stripped one, and re-reading it
+      // here would drop the art from every preview until the pointer rebuild
+      // lands (or forever, when the settings have no pointer).
+      const detail = event instanceof CustomEvent && event.type === REPLAY_SKIN_SETTINGS_CHANGE_EVENT && event.detail
+        ? normalizeReplaySkinSettings(event.detail)
+        : null;
+      setStored(detail ?? readReplaySkinSettings());
       setRevision((current) => current + 1);
     };
     window.addEventListener("storage", refresh);
