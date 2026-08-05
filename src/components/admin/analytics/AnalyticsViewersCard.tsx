@@ -14,8 +14,14 @@ import {
   type AnalyticsRecentEventRow,
 } from "../../../lib/analytics-feed";
 import { getAnalyticsViewerEvents, getAnalyticsViewers } from "../../../lib/analytics-monitor-data";
-import type { AnalyticsViewerRow, AnalyticsViewerSort } from "../../../lib/analytics-monitor";
-import { ACTIVITY_KIND_STYLES, AnalyticsEmptyMessage, InlineCountryFlag, useTickingNow } from "./shared";
+import type { AnalyticsCountryRow, AnalyticsViewersResult, AnalyticsViewerRow, AnalyticsViewerSort } from "../../../lib/analytics-monitor";
+import {
+  ACTIVITY_KIND_STYLES,
+  AnalyticsCountryFilter,
+  AnalyticsEmptyMessage,
+  InlineCountryFlag,
+  useTickingNow,
+} from "./shared";
 
 /* Every osu! account that has signed in and browsed the site. The backend keeps
    this as a durable projection, so it is not bounded by the event retention
@@ -37,10 +43,11 @@ const SORTS: Array<{ id: AnalyticsViewerSort; label: string; title: string }> = 
 ];
 
 export function AnalyticsViewersCard() {
-  const [result, setResult] = useState<{ total: number; viewers: AnalyticsViewerRow[] } | null>(null);
+  const [result, setResult] = useState<AnalyticsViewersResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<AnalyticsViewerSort>("recent");
+  const [country, setCountry] = useState<string | null>(null);
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [pending, setPending] = useState(true);
   // The roster changes slowly; a minute of drift on "last seen" is invisible.
@@ -51,10 +58,10 @@ export function AnalyticsViewersCard() {
     // must not let the first answer land on top of the second.
     let active = true;
     setPending(true);
-    // Re-fetches per sort rather than reordering what is already here: the page
-    // in hand is only the top of one ordering, so sorting it locally would rank
-    // the wrong set of players.
-    getAnalyticsViewers({ data: { sort } })
+    // Re-fetches per sort and country rather than reworking what is already
+    // here: the page in hand is only the top of one ordering of one filter, so
+    // doing either locally would answer for the wrong set of players.
+    getAnalyticsViewers({ data: { sort, country } })
       .then((data) => {
         if (!active) return;
         setResult(data);
@@ -69,38 +76,66 @@ export function AnalyticsViewersCard() {
     return () => {
       active = false;
     };
-  }, [sort]);
+  }, [sort, country]);
+
+  /* Every country the roster has players in. From the backend, which counts the
+     whole table; the rows in hand are the fallback for a backend deployed
+     behind this build. */
+  const countryOptions = useMemo<AnalyticsCountryRow[]>(() => {
+    if (result?.countries?.length) return result.countries;
+    const counts = new Map<string, number>();
+    (result?.viewers ?? []).forEach((row) => {
+      if (row.country) counts.set(row.country, (counts.get(row.country) ?? 0) + 1);
+    });
+    return Array.from(counts, ([code, count]) => ({ country: code, count })).sort((a, b) => b.count - a.count);
+  }, [result]);
+
+  /* The country is the backend's filter, applied again here so that an older
+     backend that ignored it still narrows the list rather than pretending to. */
+  const inCountry = useMemo(() => {
+    const rows = result?.viewers ?? [];
+    return country ? rows.filter((row) => row.country === country) : rows;
+  }, [result, country]);
 
   const filtered = useMemo(() => {
-    const rows = result?.viewers ?? [];
     const needle = query.trim().toLowerCase();
-    if (!needle) return rows;
-    return rows.filter((row) => row.username.toLowerCase().includes(needle) || String(row.viewerId).includes(needle));
-  }, [result, query]);
+    if (!needle) return inCountry;
+    return inCountry.filter((row) => row.username.toLowerCase().includes(needle) || String(row.viewerId).includes(needle));
+  }, [inCountry, query]);
 
-  // A narrowed search starts from the top again rather than deep in a long list.
+  // A narrowed list starts from the top again rather than deep in a long page.
   useEffect(() => {
     setLimit(PAGE_SIZE);
-  }, [query]);
+  }, [query, country]);
 
   const shown = filtered.slice(0, limit);
   const hidden = filtered.length - shown.length;
 
   const total = result?.total ?? 0;
-  const truncated = result != null && total > result.viewers.length;
+  // What the country filter matches across the whole roster, not just the page.
+  const matched = country ? result?.matched ?? inCountry.length : total;
+  const truncated = result != null && matched > inCountry.length;
   // Says which end of the list was kept, since sorting happens over the whole
   // roster: "the 2,000 most recent" is a lie once the order is by pp.
   const shownEnd = sort === "recent" ? "most recent" : sort === "pp" ? "highest by pp" : "best ranked";
+  const keptClause = truncated ? `, showing the ${formatNumber(inCountry.length)} ${shownEnd}` : "";
+  const countryName = country ? getCountryName(country) || country : null;
+  /* Keyed off the whole roster rather than the rows on screen: a country that
+     narrows the list down to two players must not take the controls with it and
+     strand whoever picked it. */
+  const showControls = result != null && (result.total > 8 || country != null);
   const subtitle = result == null
     ? "loading..."
-    : `${formatNumber(total)} osu! account${total === 1 ? "" : "s"} have signed in${truncated ? `, showing the ${formatNumber(result.viewers.length)} ${shownEnd}` : ""}`;
+    : countryName
+      ? `${formatNumber(matched)} of ${formatNumber(total)} signed-in accounts browse from ${countryName}${keptClause}`
+      : `${formatNumber(total)} osu! account${total === 1 ? "" : "s"} have signed in${keptClause}`;
 
   return (
     <SectionCard
       title="Signed-in players"
       subtitle={error ? "could not load" : subtitle}
-      actions={result && result.viewers.length > 8 ? (
-        <div className="flex items-center gap-2">
+      actions={showControls ? (
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <div
             className="flex flex-shrink-0 items-center gap-0.5 rounded-md border border-osu-b3/30 bg-osu-b5/50 p-0.5"
             role="group"
@@ -121,6 +156,12 @@ export function AnalyticsViewersCard() {
               </button>
             ))}
           </div>
+          <AnalyticsCountryFilter
+            country={country}
+            options={countryOptions}
+            onChange={setCountry}
+            label="Filter signed-in players by country"
+          />
           {/* Takes the rest of the row on a phone, where the controls have the
               width to themselves. */}
           <label className="flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-md border border-osu-b3/30 bg-osu-b5/70 px-2 sm:w-[150px] sm:flex-none">
@@ -146,7 +187,13 @@ export function AnalyticsViewersCard() {
         </div>
       ) : filtered.length === 0 ? (
         <AnalyticsEmptyMessage
-          text={query ? `No signed-in player matches "${query}".` : "Nobody has signed in yet."}
+          text={
+            query
+              ? `No signed-in player matches "${query}"${countryName ? ` in ${countryName}` : ""}.`
+              : countryName
+                ? `Nobody has signed in from ${countryName}.`
+                : "Nobody has signed in yet."
+          }
         />
       ) : (
         <>

@@ -195,15 +195,20 @@ export const getAnalyticsMonitorData = createServerFn({ method: "POST" })
 /* The signed-in roster. Not range-scoped and it changes slowly, so the card
    fetches it on its own rather than riding the 5s monitor poll. */
 export const getAnalyticsViewers = createServerFn({ method: "POST" })
-  .validator((data: { sort?: unknown } | undefined) => ({
+  .validator((data: { sort?: unknown; country?: unknown } | undefined) => ({
     sort: normalizeAnalyticsViewerSort(data?.sort),
+    country: normalizeAnalyticsCountryFilter(data?.country),
   }))
-  .handler(async ({ data }: { data: { sort: AnalyticsViewerSort } }): Promise<AnalyticsViewersResult> => {
+  .handler(async ({ data }: { data: { sort: AnalyticsViewerSort; country: string | null } }): Promise<AnalyticsViewersResult> => {
     await requireAdminAccess("Analytics viewers");
     const base = getServerLiveBackendUrl();
     const token = process.env.LIVE_ADMIN_TOKEN;
     if (!base || !token) throw new Error("Configure LIVE_BACKEND_URL + LIVE_ADMIN_TOKEN in .env to use analytics monitoring.");
-    const response = await fetch(`${base}/api/admin/analytics/viewers?limit=2000&sort=${data.sort}`, {
+    // The country narrows the roster on the backend, so a filtered list reaches
+    // players older than the cut an unfiltered page ends at.
+    const params = new URLSearchParams({ limit: "2000", sort: data.sort });
+    if (data.country) params.set("country", data.country);
+    const response = await fetch(`${base}/api/admin/analytics/viewers?${params}`, {
       headers: { authorization: `Bearer ${token}`, connection: "close" },
     });
     if (!response.ok) throw new Error(`Analytics viewers failed (${response.status}).`);

@@ -117,6 +117,8 @@ const SKINS_LIST_CACHE_WINDOW_MS = 6 * 60 * 1000;
 
 export function markSkinsListStale(): void {
   skinsListMemory.clear();
+  // A deleted or newly public skin leaves the private shelf too.
+  privateShelfMemory = null;
   if (typeof window === "undefined") return;
   try {
     window.sessionStorage.setItem(SKINS_LIST_STALE_UNTIL_KEY, String(Date.now() + SKINS_LIST_CACHE_WINDOW_MS));
@@ -595,6 +597,78 @@ export const fetchPrivateSkinsShelf = createServerFn({ method: "GET" })
       return { skins: [], total: 0 };
     }
   });
+
+// The shelf is a per-viewer read behind a server fn, so it lands a beat after
+// the grid and used to shove the grid down as it arrived. What it last held
+// stays in memory for the tab, which paints it with the grid on the way back
+// from a skin page, and its size is remembered across reloads, which is enough
+// to hold its space while the fetch runs. Browser only, deliberately: this
+// module also runs on the server, where one viewer's private skins must never
+// sit in something another request could read.
+const PRIVATE_SHELF_MEMORY_TTL_MS = 5 * 60 * 1000;
+const PRIVATE_SHELF_SIZE_KEY = "mania-hub-skins-private-size";
+const PRIVATE_SHELF_OPEN_KEY = "mania-hub-skins-private-open";
+let privateShelfMemory: { at: number; viewerId: number; shelf: PrivateSkinsShelf } | null = null;
+
+export function readCachedPrivateShelf(viewerId: number): PrivateSkinsShelf | null {
+  if (typeof window === "undefined") return null;
+  const entry = privateShelfMemory;
+  if (!entry || entry.viewerId !== viewerId) return null;
+  if (Date.now() - entry.at > PRIVATE_SHELF_MEMORY_TTL_MS) {
+    privateShelfMemory = null;
+    return null;
+  }
+  return entry.shelf;
+}
+
+export function writeCachedPrivateShelf(viewerId: number, shelf: PrivateSkinsShelf): void {
+  if (typeof window === "undefined") return;
+  privateShelfMemory = { at: Date.now(), viewerId, shelf };
+  try {
+    window.localStorage.setItem(PRIVATE_SHELF_SIZE_KEY, `${viewerId}:${shelf.skins.length}`);
+  } catch {
+    // Private-mode storage failures only cost the held space.
+  }
+}
+
+// How many cards the shelf held for this viewer last time, so a cold load can
+// stand the row up at its real height instead of inserting it mid-paint. 0
+// when nothing is remembered, which reads the same as an empty shelf.
+export function readRememberedPrivateShelfSize(viewerId: number): number {
+  if (typeof window === "undefined") return 0;
+  try {
+    const raw = window.localStorage.getItem(PRIVATE_SHELF_SIZE_KEY);
+    if (!raw) return 0;
+    const [id, size] = raw.split(":");
+    if (Number(id) !== viewerId) return 0;
+    const count = Number(size);
+    return Number.isFinite(count) && count > 0 ? count : 0;
+  } catch {
+    return 0;
+  }
+}
+
+// Whether the shelf is open, or null when the viewer has never said. The
+// caller picks the default: an admin's shelf is a moderation list of other
+// people's skins and starts shut, an uploader's own handful starts open.
+export function readPrivateShelfOpen(): boolean | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(PRIVATE_SHELF_OPEN_KEY);
+    return raw === "1" ? true : raw === "0" ? false : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writePrivateShelfOpen(open: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(PRIVATE_SHELF_OPEN_KEY, open ? "1" : "0");
+  } catch {
+    // A forgotten preference just falls back to the default next visit.
+  }
+}
 
 // Mints an upload ticket against a published skin. Scope "previews" only
 // unlocks preview re-renders (a different backdrop, say); "replace" also takes

@@ -105,6 +105,12 @@ export interface AnalyticsViewersResult {
   total: number;
   viewers: AnalyticsViewerRow[];
   sort?: AnalyticsViewerSort;
+  /* The country filter the backend applied, how many of the roster it matches,
+     and every country the roster has players in. Optional because a backend
+     deployed behind this build answers without them. */
+  country?: string | null;
+  matched?: number;
+  countries?: AnalyticsCountryRow[];
 }
 
 /* One player's own trail, read on demand from the roster. Empty is a real

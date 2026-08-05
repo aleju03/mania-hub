@@ -129,13 +129,13 @@ describe("AnalyticsViewersCard", () => {
     getAnalyticsViewers.mockResolvedValue(manyViewers());
     render(<AnalyticsViewersCard />);
     await waitFor(() => expect(screen.getByText("player0")).toBeTruthy());
-    expect(getAnalyticsViewers).toHaveBeenCalledWith({ data: { sort: "recent" } });
+    expect(getAnalyticsViewers).toHaveBeenCalledWith({ data: { sort: "recent", country: null } });
 
     fireEvent.click(screen.getByRole("button", { name: "PP" }));
-    await waitFor(() => expect(getAnalyticsViewers).toHaveBeenCalledWith({ data: { sort: "pp" } }));
+    await waitFor(() => expect(getAnalyticsViewers).toHaveBeenCalledWith({ data: { sort: "pp", country: null } }));
 
     fireEvent.click(screen.getByRole("button", { name: "Rank" }));
-    await waitFor(() => expect(getAnalyticsViewers).toHaveBeenCalledWith({ data: { sort: "rank" } }));
+    await waitFor(() => expect(getAnalyticsViewers).toHaveBeenCalledWith({ data: { sort: "rank", country: null } }));
     expect(screen.getByRole("button", { name: "Rank" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "PP" }).getAttribute("aria-pressed")).toBe("false");
   });
@@ -199,6 +199,59 @@ describe("AnalyticsViewersCard", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Show what juan has been doing" }));
     await waitFor(() => expect(screen.getByText("Analytics viewer events failed (500).")).toBeTruthy());
+  });
+
+  it("asks the backend for one country rather than filtering the page in hand", async () => {
+    const roster = { ...manyViewers(), countries: [{ country: "CR", count: 40 }, { country: "JP", count: 9 }] };
+    getAnalyticsViewers.mockResolvedValue(roster);
+    render(<AnalyticsViewersCard />);
+    await waitFor(() => expect(screen.getByText("player0")).toBeTruthy());
+
+    fireEvent.click(screen.getByLabelText("Filter signed-in players by country"));
+    // The countries on offer are counted over the whole roster, not the page.
+    expect(screen.getByRole("option", { name: /Costa Rica/ }).textContent).toContain("40");
+    fireEvent.mouseDown(screen.getByRole("option", { name: /Costa Rica/ }));
+
+    await waitFor(() => expect(getAnalyticsViewers).toHaveBeenCalledWith({ data: { sort: "recent", country: "CR" } }));
+  });
+
+  it("says how much of the roster the chosen country is", async () => {
+    getAnalyticsViewers.mockResolvedValue({
+      total: 900,
+      matched: 2,
+      country: "CR",
+      countries: [{ country: "CR", count: 2 }, { country: "JP", count: 1 }],
+      viewers: RESULT.viewers,
+    });
+    render(<AnalyticsViewersCard />);
+    await waitFor(() => expect(screen.getByText("juan")).toBeTruthy());
+    // Nothing is picked yet, so the country the backend echoes back means nothing.
+    expect(screen.getByText(/900 osu! accounts have signed in/)).toBeTruthy();
+
+    fireEvent.click(screen.getByLabelText("Filter signed-in players by country"));
+    fireEvent.mouseDown(screen.getByRole("option", { name: /Costa Rica/ }));
+    await waitFor(() => expect(screen.getByText(/2 of 900 signed-in accounts browse from Costa Rica/)).toBeTruthy());
+    // This mock answers every call with the whole roster; the card shows only CR
+    // anyway, so a backend that ignored the filter cannot mislead the reader.
+    expect(screen.queryByText("kanaria")).toBeNull();
+  });
+
+  it("keeps its controls reachable once a country narrows the roster", async () => {
+    getAnalyticsViewers.mockResolvedValue({
+      total: 900,
+      matched: 1,
+      country: null,
+      countries: [{ country: "JP", count: 1 }],
+      viewers: [RESULT.viewers[1]!],
+    });
+    render(<AnalyticsViewersCard />);
+    await waitFor(() => expect(screen.getByText("kanaria")).toBeTruthy());
+
+    fireEvent.click(screen.getByLabelText("Filter signed-in players by country"));
+    fireEvent.mouseDown(screen.getByRole("option", { name: /Japan/ }));
+    // One row left, and the filter is still there to undo it with.
+    await waitFor(() => expect(getAnalyticsViewers).toHaveBeenCalledWith({ data: { sort: "recent", country: "JP" } }));
+    expect(screen.getByLabelText("Filter signed-in players by country")).toBeTruthy();
   });
 
   it("says so plainly when nobody has signed in yet", async () => {

@@ -520,13 +520,18 @@ export class AnalyticsStore {
      The cap is generous because sorting the roster by pp or rank happens after
      the pp figures are read out of the other database, so that path has to ask
      for the whole roster rather than the newest page of it. Rows are small and
-     this is an admin-only read. */
-  async getViewers(limit = 500): Promise<AnalyticsViewerRow[]> {
+     this is an admin-only read.
+
+     A country narrows the read in SQL rather than after it, so asking for one
+     country reaches players far older than the cut a full-roster page ends at. */
+  async getViewers(limit = 500, country: string | null = null): Promise<AnalyticsViewerRow[]> {
     await this.flush();
+    const capped = Math.min(MAX_VIEWER_ROWS, Math.max(1, Math.round(limit)));
     const rows = (await exec(this.db, `
       select viewer_id, username, first_seen, last_seen, events, last_country
-      from analytics_viewers order by last_seen desc limit ?
-    `, [Math.min(MAX_VIEWER_ROWS, Math.max(1, Math.round(limit)))])).rows;
+      from analytics_viewers ${country ? "where last_country = ?" : ""}
+      order by last_seen desc limit ?
+    `, country ? [country, capped] : [capped])).rows;
     return rows.map((row) => ({
       viewerId: Number(row.viewer_id),
       username: String(row.username ?? ""),
@@ -537,9 +542,26 @@ export class AnalyticsStore {
     }));
   }
 
-  async countViewers(): Promise<number> {
-    const row = (await exec(this.db, "select count(*) as n from analytics_viewers")).rows[0];
+  async countViewers(country: string | null = null): Promise<number> {
+    const row = (await exec(
+      this.db,
+      `select count(*) as n from analytics_viewers ${country ? "where last_country = ?" : ""}`,
+      country ? [country] : [],
+    )).rows[0];
     return Number(row?.n ?? 0);
+  }
+
+  /* Which countries the roster has players in, biggest first. Counted over the
+     whole table rather than the page in hand, so a country whose players last
+     visited months ago is still offered as a filter. */
+  async getViewerCountries(): Promise<Array<{ country: string; count: number }>> {
+    await this.flush();
+    const rows = (await exec(this.db, `
+      select last_country as country, count(*) as n from analytics_viewers
+      where last_country is not null and last_country <> ''
+      group by last_country order by n desc, last_country asc
+    `)).rows;
+    return rows.map((row) => ({ country: String(row.country), count: Number(row.n ?? 0) }));
   }
 
   /* What one signed-in player has been doing, newest first. Narrower than the

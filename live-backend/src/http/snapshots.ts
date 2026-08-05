@@ -497,10 +497,14 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     const requested = Number(url.searchParams.get("limit") ?? 500);
     const limit = Number.isFinite(requested) ? Math.min(2000, Math.max(1, Math.round(requested))) : 500;
     const sort = normalizeAnalyticsViewerSort(url.searchParams.get("sort"));
+    // Where these players browsed from, which is the country their row already
+    // shows. GLOBAL is a scope name here, not a place anyone signs in from.
+    const requestedCountry = normalizeCountryParam(url.searchParams.get("country"));
+    const viewerCountry = requestedCountry && requestedCountry !== "GLOBAL" ? requestedCountry : null;
     // The roster changes on the minutes scale but the rank attachment reads
     // the main DB on the serving loop, so a short cache keeps tab switches and
     // the two frontend instances from re-paying it back to back.
-    const viewersCacheKey = `${sort}:${limit}`;
+    const viewersCacheKey = `${sort}:${limit}:${viewerCountry ?? "all"}`;
     const cachedViewers = analyticsViewersCache.get(viewersCacheKey);
     if (cachedViewers && Date.now() - cachedViewers.at < ANALYTICS_VIEWERS_CACHE_TTL_MS) {
       sendJson(req, res, ctx, 200, cachedViewers.payload);
@@ -509,10 +513,16 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     // "Best players on the site" has to mean best of everyone who signed in, so
     // pp and rank read the whole roster and cut it down after sorting. Recent
     // needs no such scan: the roster comes back in that order already.
-    const scanned = await ctx.analytics.getViewers(sort === "recent" ? limit : MAX_VIEWER_ROWS);
+    const scanned = await ctx.analytics.getViewers(sort === "recent" ? limit : MAX_VIEWER_ROWS, viewerCountry);
     const ranked = sortRankedViewers(await attachViewerRanks(ctx.db, scanned), sort);
+    const viewersTotal = await ctx.analytics.countViewers();
     const viewersPayload = {
-      total: await ctx.analytics.countViewers(),
+      total: viewersTotal,
+      // How many the filter matches at all, which is what the page in hand is
+      // cut from. Equal to the total when no country is asked for.
+      matched: viewerCountry ? await ctx.analytics.countViewers(viewerCountry) : viewersTotal,
+      country: viewerCountry,
+      countries: await ctx.analytics.getViewerCountries(),
       sort,
       viewers: ranked.slice(0, limit),
     };

@@ -1,5 +1,5 @@
 import { createFileRoute, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
-import { Layers, Lock, Upload } from "lucide-react";
+import { ChevronDown, Layers, Lock, Upload } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { ManiaRain } from "../components/home/ManiaRain";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
@@ -16,10 +16,15 @@ import { isLiveBackendConfigured } from "../lib/live-backend";
 import {
   fetchPrivateSkinsShelf,
   fetchSkinsListDirect,
+  readCachedPrivateShelf,
   readCachedSkinsList,
+  readPrivateShelfOpen,
+  readRememberedPrivateShelfSize,
   skinsListCacheKey,
   SKINS_PAGE_SIZE,
+  writeCachedPrivateShelf,
   writeCachedSkinsList,
+  writePrivateShelfOpen,
   type SkinsListResult,
   type SkinsSort,
   type SkinSummary,
@@ -122,6 +127,18 @@ function FilterOption({
   );
 }
 
+function SkinCardSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4">
+      <Skeleton className="aspect-video w-full rounded-none" />
+      <div className="space-y-1.5 px-2.5 py-2">
+        <Skeleton className="h-3.5 w-36" />
+        <Skeleton className="h-3 w-24" />
+      </div>
+    </div>
+  );
+}
+
 function SkinsPage() {
   const { q = "", page = 0, sort = "newest", k = 0, special = false } = Route.useSearch();
   const navigate = useNavigate();
@@ -146,6 +163,10 @@ function SkinsPage() {
   // uploader's private skins, for moderation.
   const [privateSkins, setPrivateSkins] = useState<SkinSummary[]>([]);
   const [privateTotal, setPrivateTotal] = useState(0);
+  // Cards the shelf is expected to hold while its fetch is in flight, taken
+  // from what it held last visit, so the grid below keeps its place.
+  const [privatePending, setPrivatePending] = useState(0);
+  const [privateOpen, setPrivateOpen] = useState(false);
   const [searchInput, setSearchInput] = useState(q);
   const [reloadTick, setReloadTick] = useState(0);
 
@@ -206,27 +227,48 @@ function SkinsPage() {
     if (!viewerId || !isLiveBackendConfigured()) {
       setPrivateSkins([]);
       setPrivateTotal(0);
+      setPrivatePending(0);
       return;
     }
+    setPrivateOpen(readPrivateShelfOpen() ?? !admin);
+    // Same trick the grid plays: a cached shelf shows at once and the fetch
+    // only swaps it, and failing that its remembered size stands in.
+    const cached = readCachedPrivateShelf(viewerId);
+    if (cached) {
+      setPrivateSkins(cached.skins);
+      setPrivateTotal(cached.total);
+    }
+    setPrivatePending(cached ? 0 : readRememberedPrivateShelfSize(viewerId));
     let cancelled = false;
     void fetchPrivateSkinsShelf()
       .then((shelf) => {
+        writeCachedPrivateShelf(viewerId, shelf);
         if (cancelled) return;
         setPrivateSkins(shelf.skins);
         setPrivateTotal(shelf.total);
+        setPrivatePending(0);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setPrivatePending(0);
+      });
     return () => {
       cancelled = true;
     };
-  }, [viewerId, reloadTick]);
+  }, [viewerId, admin, reloadTick]);
+
+  const togglePrivateShelf = useCallback(() => {
+    const next = !privateOpen;
+    setPrivateOpen(next);
+    writePrivateShelfOpen(next);
+  }, [privateOpen]);
 
   const handlePublished = useCallback((skin: SkinSummary) => {
     if (skin.visibility === "private") {
       // It will never show up in the grid below, so the shelf is where the
-      // uploader sees that it landed.
+      // uploader sees that it landed, open whether or not they left it shut.
       setPrivateSkins((previous) => [skin, ...previous.filter((entry) => entry.id !== skin.id)]);
       setPrivateTotal((previous) => previous + 1);
+      setPrivateOpen(true);
       return;
     }
     // Land the fresh skin at the top of an unfiltered first page.
@@ -355,38 +397,49 @@ function SkinsPage() {
           </div>
 
           <div className="mx-auto w-full max-w-[1200px] flex-1 px-4 py-5 sm:px-5">
-            {privateSkins.length > 0 && (
+            {(privateSkins.length > 0 || privatePending > 0) && (
               <div className="mb-6">
-                <div className="mb-2 flex items-baseline gap-2">
-                  <Lock className="h-3.5 w-3.5 shrink-0 self-center text-osu-f1/55" aria-hidden="true" />
-                  {/* An admin's shelf carries every uploader's private skins,
-                      so it says so rather than claiming they are theirs. */}
-                  <h2 className="text-[13px] font-bold text-white">{admin ? "Private skins" : "Your private skins"}</h2>
-                  <span className="text-[11px] text-osu-f1 tabular-nums">
-                    {admin
-                      ? privateTotal > privateSkins.length
-                        ? `${privateSkins.length} of ${privateTotal.toLocaleString()}, every uploader`
-                        : `${privateTotal.toLocaleString()} across every uploader`
-                      : "only you can open these"}
-                  </span>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {privateSkins.map((skin) => (
-                    <SkinCard key={skin.id} skin={skin} />
-                  ))}
-                </div>
+                <h2 className="mb-2">
+                  <button
+                    type="button"
+                    onClick={togglePrivateShelf}
+                    aria-expanded={privateOpen}
+                    className="group inline-flex items-center gap-2 text-left cursor-pointer"
+                  >
+                    <Lock className="h-3.5 w-3.5 shrink-0 text-osu-f1/55" aria-hidden="true" />
+                    {/* An admin's shelf carries every uploader's private skins,
+                        so it says so rather than claiming they are theirs. */}
+                    <span className="text-[13px] font-bold text-white transition-colors group-hover:text-osu-pink-light">
+                      {admin ? "Private skins" : "Your private skins"}
+                    </span>
+                    {privateSkins.length > 0 && (
+                      <span className="text-[11px] text-osu-f1 tabular-nums">
+                        {admin
+                          ? privateTotal > privateSkins.length
+                            ? `${privateSkins.length} of ${privateTotal.toLocaleString()}, every uploader`
+                            : `${privateTotal.toLocaleString()} across every uploader`
+                          : "only you can open these"}
+                      </span>
+                    )}
+                    <ChevronDown
+                      className={`h-3.5 w-3.5 shrink-0 text-osu-f1/55 transition-[transform,color] group-hover:text-osu-pink-light ${privateOpen ? "" : "-rotate-90"}`}
+                      aria-hidden="true"
+                    />
+                  </button>
+                </h2>
+                {privateOpen && (
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {privateSkins.length > 0
+                      ? privateSkins.map((skin) => <SkinCard key={skin.id} skin={skin} />)
+                      : Array.from({ length: privatePending }, (_, index) => <SkinCardSkeleton key={index} />)}
+                  </div>
+                )}
               </div>
             )}
             {loading && !data ? (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {Array.from({ length: 9 }, (_, index) => (
-                  <div key={index} className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4">
-                    <Skeleton className="aspect-video w-full rounded-none" />
-                    <div className="space-y-1.5 px-2.5 py-2">
-                      <Skeleton className="h-3.5 w-36" />
-                      <Skeleton className="h-3 w-24" />
-                    </div>
-                  </div>
+                  <SkinCardSkeleton key={index} />
                 ))}
               </div>
             ) : failed ? (

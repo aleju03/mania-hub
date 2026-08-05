@@ -263,6 +263,26 @@ describe("AnalyticsStore capture + monitor", () => {
     expect(juan.lastSeen - juan.firstSeen).toBeGreaterThan(50 * 60_000);
   });
 
+  it("narrows the roster to one country, and says which countries there are", async () => {
+    const signedIn = (username: string, viewerId: number, minutesAgo: number, country?: string) =>
+      pageview({ distinctId: `d${viewerId}`, minutesAgo, properties: { viewer_username: username, viewer_id: viewerId, ...(country ? { $geoip_country_code: country } : {}) } });
+
+    store.capture(signedIn("juan", 111, 60, "cr"), {});
+    store.capture(signedIn("kanaria", 222, 30, "jp"), {});
+    store.capture(signedIn("ranshii", 333, 10, "cr"), {});
+    // Nobody knows where this one browses from; it belongs to no country's list.
+    store.capture(signedIn("nowhere", 444, 5), {});
+    await store.flush();
+
+    const costaRica = await store.getViewers(500, "CR");
+    expect(costaRica.map((v) => v.username)).toEqual(["ranshii", "juan"]);
+    expect(await store.countViewers("CR")).toBe(2);
+    expect(await store.countViewers()).toBe(4);
+    // The filter narrows in SQL, so the page limit is a limit on the matches.
+    expect((await store.getViewers(1, "CR")).map((v) => v.username)).toEqual(["ranshii"]);
+    expect(await store.getViewerCountries()).toEqual([{ country: "CR", count: 2 }, { country: "JP", count: 1 }]);
+  });
+
   it("keeps counting a returning viewer across flushes and follows renames", async () => {
     const visit = (username: string, minutesAgo: number) =>
       pageview({ distinctId: "d1", minutesAgo, properties: { viewer_username: username, viewer_id: 111 } });

@@ -158,10 +158,14 @@ export function AnalyticsCountryFilter({
   country,
   options,
   onChange,
+  label = "Filter activity by physical country",
 }: {
   country: string | null;
   options: AnalyticsCountryRow[];
   onChange: (country: string | null) => void;
+  /* What the filter narrows, for anyone reading the page with a screen reader:
+     the same control sits over the event feed and over the signed-in roster. */
+  label?: string;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -196,7 +200,7 @@ export function AnalyticsCountryFilter({
         onClick={() => setOpen((value) => !value)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label="Filter activity by physical country"
+        aria-label={label}
         className={`flex h-7 max-w-[180px] items-center gap-1.5 rounded-md border px-2 text-[10px] font-semibold transition-colors duration-[120ms] cursor-pointer ${
           country
             ? "border-osu-pink/40 bg-osu-pink/15 text-white"
