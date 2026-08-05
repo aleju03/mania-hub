@@ -109,7 +109,7 @@ interface LoadedServerCollectionPage {
 }
 
 const COLLECTION_PAGE_SIZE = 15;
-const skeletonThumbnailCache = new Map<ManiaCardTier, string>();
+const skeletonThumbnailCache = new Map<ManiaCardTier | "neutral", string>();
 const serverCollectionPageCache = new Map<string, ServerPackCollectionPage>();
 const COLLECTION_TIER_ORDER: ManiaCardTier[] = [
   "goat",
@@ -226,18 +226,21 @@ function serverCollectionCacheKey({
   return `${page}:${pageSize}:${tier}:${sort}:${query}`;
 }
 
+/* Which rows the filter selects, not the order they come back in: totals,
+   rarity counts, shard sums and pool progress are all order-independent, so a
+   page loaded under the other sort still carries them. That keeps the pager
+   and the chips on screen while a sort switch loads instead of collapsing to
+   "0 cards" for a beat. */
 function serverCollectionFilterKey({
   pageSize,
   tier,
   query,
-  sort,
 }: {
   pageSize: number;
   tier: CollectionTierFilter;
   query: string;
-  sort: CollectionSortMode;
 }) {
-  return `${pageSize}:${tier}:${sort}:${query}`;
+  return `${pageSize}:${tier}:${query}`;
 }
 
 function CollectionPager({
@@ -485,12 +488,14 @@ function CollectionCardTile({
   );
 }
 
-function CollectionCardFacePlaceholder({ card, tier: forcedTier }: { card?: CollectedCard; tier?: ManiaCardTier }) {
-  const tier = forcedTier ?? resolveCollectionCardTier(card);
-  let thumbnail = skeletonThumbnailCache.get(tier) ?? null;
+function CollectionCardFacePlaceholder({ card, tier: forcedTier }: { card?: CollectedCard; tier?: ManiaCardTier | null }) {
+  // A null forcedTier is the rarity-less face; only an absent one falls back to
+  // the card's own tier.
+  const tier = forcedTier !== undefined ? forcedTier : resolveCollectionCardTier(card);
+  let thumbnail = skeletonThumbnailCache.get(tier ?? "neutral") ?? null;
   if (!thumbnail) {
     thumbnail = renderCardSkeletonThumbnail(tier, COLLECTION_CARD_THUMB_WIDTH);
-    if (thumbnail) skeletonThumbnailCache.set(tier, thumbnail);
+    if (thumbnail) skeletonThumbnailCache.set(tier ?? "neutral", thumbnail);
   }
   if (thumbnail) {
     return (
@@ -503,10 +508,12 @@ function CollectionCardFacePlaceholder({ card, tier: forcedTier }: { card?: Coll
     );
   }
 
-  const style = MANIA_TIER_STYLES[tier];
+  const style = tier ? MANIA_TIER_STYLES[tier] : null;
   return (
     <div
-      className={`relative overflow-hidden rounded-[10px] border bg-gradient-to-br ${style.background} ${style.border}`}
+      className={`relative overflow-hidden rounded-[10px] border bg-gradient-to-br ${
+        style ? `${style.background} ${style.border}` : "from-osu-b3 via-osu-b4 to-osu-b5 border-osu-b3/40"
+      }`}
       style={{ aspectRatio: "5 / 7" }}
     >
       <div className="absolute inset-0 bg-black/12" />
@@ -514,7 +521,7 @@ function CollectionCardFacePlaceholder({ card, tier: forcedTier }: { card?: Coll
   );
 }
 
-function CollectionCardPlaceholder({ tier }: { tier: ManiaCardTier }) {
+function CollectionCardPlaceholder({ tier }: { tier: ManiaCardTier | null }) {
   return (
     <div>
       <div className="relative" style={{ aspectRatio: "5 / 7" }}>
@@ -568,7 +575,10 @@ export function CollectionPanel({
   const [confirmBulk, setConfirmBulk] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [collectionPage, setCollectionPage] = useState(0);
-  const [simulateSkeletons, setSimulateSkeletons] = useState(false);
+  /* Dev-only skeleton sim. "cards" blanks the thumbnails on real tiles (the
+     face fallback while a thumbnail renders); "page" holds the placeholder
+     grid a pending page shows, which locally loads too fast to look at. */
+  const [skeletonSim, setSkeletonSim] = useState<"off" | "cards" | "page">("off");
   const collectionControlsRef = useRef<HTMLDivElement | null>(null);
   const [, setThumbnailRevision] = useState(0);
   const [serverPage, setServerPage] = useState<LoadedServerCollectionPage | null>(() => {
@@ -875,7 +885,7 @@ export function CollectionPanel({
   // a "Loading collection..." line instead of guessing a grid of cards.
   const knownCollectionShape = Object.keys(serverTierCounts).length > 0;
   const showLoadingMessage = showPagePlaceholders && (!knownCollectionShape || Boolean(trimmedQuery));
-  const showSkeletonGrid = showPagePlaceholders && !showLoadingMessage;
+  const showSkeletonGrid = skeletonSim === "page" || (showPagePlaceholders && !showLoadingMessage);
   // Skeletons mirror what the current filter will return. tierCounts are
   // filter-independent, so a rarity filter (without a search) resolves to
   // exactly that rarity's count rather than a full page of placeholders.
@@ -888,11 +898,12 @@ export function CollectionPanel({
           ? serverPoolProgress?.retiredOwnedCount ?? 0
           : Math.max(0, Math.floor(Number(serverTierCounts[tierFilter === "unrated" ? "unrated" : tierFilter]) || 0));
   const placeholderCount = Math.max(1, Math.min(COLLECTION_PAGE_SIZE, expectedFilterTotal - pageStart));
-  const placeholderTiers = showSkeletonGrid
+  const placeholderTiers: Array<ManiaCardTier | null> = showSkeletonGrid
     ? sortMode === "newest" && tierFilter === "all"
       // Sorted by pull date the page mixes rarities unpredictably, so the
-      // skeletons take the neutral common face instead of guessing an order.
-      ? Array.from({ length: placeholderCount }, () => "common" as ManiaCardTier)
+      // skeletons take a rarity-less face rather than claiming a page of
+      // commons that the loaded cards then contradict.
+      ? Array.from({ length: placeholderCount }, () => null)
       : placeholderTiersForPage({
           count: placeholderCount,
           pageStart,
@@ -1208,17 +1219,19 @@ export function CollectionPanel({
           {import.meta.env.DEV && (
             <button
               type="button"
-              onClick={() => setSimulateSkeletons((active) => !active)}
+              onClick={() =>
+                setSkeletonSim((mode) => (mode === "off" ? "cards" : mode === "cards" ? "page" : "off"))
+              }
               className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
-                simulateSkeletons
+                skeletonSim !== "off"
                   ? "border-osu-pink/50 bg-osu-pink/15 text-white"
                   : "border-osu-b3/40 bg-osu-b4/40 text-osu-f1 hover:bg-osu-b4/70 hover:text-white"
               }`}
-              aria-pressed={simulateSkeletons}
-              title="Dev only: show collection card skeletons"
+              aria-pressed={skeletonSim !== "off"}
+              title="Dev only: cycle card skeletons, then the pending-page grid"
             >
               <ImageOff className="h-3.5 w-3.5" />
-              Skeletons
+              {skeletonSim === "off" ? "Skeletons" : skeletonSim === "cards" ? "Skeletons: cards" : "Skeletons: page"}
             </button>
           )}
         </div>
@@ -1287,7 +1300,7 @@ export function CollectionPanel({
             const dupValue = duplicateShardValue(card);
             const lastCopyValue = shardValueForTier(card.tier);
             const confirming = confirmCardKey === cardKey;
-            const thumbnail = simulateSkeletons ? null : getMemoryCardThumbnail(cardThumbnailKeyForCollectionCard(card));
+            const thumbnail = skeletonSim === "cards" ? null : getMemoryCardThumbnail(cardThumbnailKeyForCollectionCard(card));
             const cardSelected = selectionScope === "all" || selected.has(cardKey);
             return (
               <div
