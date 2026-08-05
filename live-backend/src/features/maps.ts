@@ -5936,13 +5936,48 @@ async function replaceUserMapsFarmedOverlay(
   rows: MapsFarmedOverlayWriteRow[],
   updatedAt: string,
 ): Promise<void> {
-  const previousBeatmapIds = (await exec(
+  const previousByBeatmap = new Map<number, Record<string, unknown>>();
+  for (const row of (await exec(
     db,
-    "select beatmap_id from country_maps_farmed_scores where country = ? and user_id = ?",
+    `select beatmap_id, score_id, pp, mods_json, score_url, played_at, accuracy, note_count
+     from country_maps_farmed_scores where country = ? and user_id = ?`,
     [country, userId],
-  )).rows
-    .map((row) => Number(row.beatmap_id))
-    .filter((beatmapId) => Number.isSafeInteger(beatmapId) && beatmapId > 0);
+  )).rows) {
+    const beatmapId = Number(row.beatmap_id);
+    if (Number.isSafeInteger(beatmapId) && beatmapId > 0) previousByBeatmap.set(beatmapId, row);
+  }
+  // Every id passed to syncGlobalMapsFarmedUserBeatmaps lands in
+  // global_maps_farmed_changes, and each such "dirty" map makes every serving
+  // process re-materialize that map's full global player list on its next
+  // board patch. Pack probes re-run this refresh thousands of times a day for
+  // users whose top 200 did not move, so only rows that materially changed
+  // (or disappeared) may publish — passing previous ∪ current here flooded
+  // the change journal and ground the site down on 2026-08-04.
+  const affectedBeatmapIds = new Set<number>();
+  for (const row of rows) {
+    const previous = previousByBeatmap.get(row.beatmapId);
+    if (!previous || !mapsFarmedOverlayRowMatches(previous, row)) affectedBeatmapIds.add(row.beatmapId);
+  }
+  const currentBeatmapIds = new Set(rows.map((row) => row.beatmapId));
+  for (const beatmapId of previousByBeatmap.keys()) {
+    if (!currentBeatmapIds.has(beatmapId)) affectedBeatmapIds.add(beatmapId);
+  }
+  if (affectedBeatmapIds.size === 0) {
+    // Nothing moved. Leaving the stored rows untouched keeps detected_at /
+    // updated_at meaning "when this play changed", and skipping the farmed
+    // stamp keeps the country snapshot from re-minting over identical data.
+    // The seeded mark still advances — that is the scheduler's freshness
+    // signal. Key stats and the chart-analysis sweep keep running: both are
+    // user-scoped self-heals (shape_json folds in chart analyses that finish
+    // AFTER the seeding refresh, so a user who never improves would otherwise
+    // never pick them up), and neither touches the global change journal.
+    await markUserMapsFarmedOverlaySeeded(db, country, userId, updatedAt);
+    if (rows.length > 0) {
+      await refreshFarmHelperKeyStatsForUser(db, userId, updatedAt);
+      await enqueueMissingChartAnalyses(db, queue, rows.map((row) => row.beatmapId)).catch(() => {});
+    }
+    return;
+  }
   const statements: DbStatement[] = [
     { sql: "delete from country_maps_farmed_scores where country = ? and user_id = ?", args: [country, userId] },
   ];
@@ -5981,10 +6016,7 @@ async function replaceUserMapsFarmedOverlay(
   }
   const results = await execBatch(db, statements);
   const deleted = results[0];
-  const affectedBeatmapIds = [...new Set([...previousBeatmapIds, ...rows.map((row) => row.beatmapId)])];
-  if (affectedBeatmapIds.length > 0) {
-    await syncGlobalMapsFarmedUserBeatmaps(db, userId, affectedBeatmapIds, updatedAt);
-  }
+  await syncGlobalMapsFarmedUserBeatmaps(db, userId, [...affectedBeatmapIds], updatedAt);
   await markUserMapsFarmedOverlaySeeded(db, country, userId, updatedAt);
   if (rows.length > 0 || Number(deleted?.rowsAffected ?? 0) > 0) {
     await refreshFarmHelperKeyStatsForUser(db, userId, updatedAt);
@@ -5997,6 +6029,33 @@ async function replaceUserMapsFarmedOverlay(
   if (rows.length > 0) {
     await enqueueMissingChartAnalyses(db, queue, rows.map((row) => row.beatmapId)).catch(() => {});
   }
+}
+
+// Same play, same display: identity and display fields only. detected_at and
+// updated_at are refresh bookkeeping and score_json is a dropped payload
+// ('{}'), so none of them count as a change.
+function mapsFarmedOverlayRowMatches(previous: Record<string, unknown>, row: MapsFarmedOverlayWriteRow): boolean {
+  return Number(previous.score_id) === row.scoreId
+    && sameStoredNumber(previous.pp, row.pp)
+    && String(previous.mods_json ?? "") === row.modsJson
+    && sameStoredString(previous.score_url, row.scoreUrl)
+    && sameStoredString(previous.played_at, row.playedAt)
+    && sameStoredNumber(previous.accuracy, row.accuracy)
+    && sameStoredNumber(previous.note_count, row.noteCount);
+}
+
+// REAL and INTEGER round-trip bit-exactly through SQLite, so plain equality
+// is safe for every compared column (none can legitimately be NaN: pp and
+// ids are filtered positive-finite at build time, accuracy/note_count are
+// null-or-positive).
+function sameStoredNumber(stored: unknown, value: number | null): boolean {
+  if (stored == null) return value === null;
+  return value !== null && Object.is(Number(stored), value);
+}
+
+function sameStoredString(stored: unknown, value: string | null): boolean {
+  if (stored == null) return value === null;
+  return value !== null && String(stored) === value;
 }
 
 async function persistMapsFarmedScoreDisplayMetadata(db: Db, scores: OscScore[], updatedAt: string): Promise<void> {
